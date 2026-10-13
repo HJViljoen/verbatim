@@ -6,6 +6,7 @@ import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { platformLabel } from '../format'
 import { normalisePersona, type Persona } from '../profile-tiles'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, loadTrackedRivals } from '../rivals'
+import { subjectCalibration } from '../subjects/calibration-state'
 import { selectAll } from '../supabase-admin'
 import { monthChange } from './bands'
 import { TABLE_EVIDENCE_REFS } from './evidence-refs'
@@ -77,7 +78,8 @@ import { priorPrintable, type Verdict } from './verdicts'
 //   }): BrandPair[]
 //   loadBrandMonthVideos(handle, input: { month: string; audiences?: readonly string[] }): Promise<BrandMonthVideos[] | null>
 //   loadBrandCrosses(handle, input: { month: string; base?: BrandBase; brandKeys?: readonly string[]; audiences?: readonly string[] }):
-//       Promise<{ videos: BrandMonthVideos[]; kinds: BrandCrossRow[]; subjects: BrandCrossRow[] } | null>
+//       Promise<{ videos: BrandMonthVideos[]; kinds: BrandCrossRow[]; subjects: BrandCrossRow[]; pendingSubjects } | null>
+//       (subjects: READY ones only, ruling U6, `measuredSubjects`; pendingSubjects: the provisional ones, by name)
 //   loadBrandMonthPairs(handle, input: { month: string; now: string; pair?: PairOn; audiences?: readonly string[] }): Promise<BrandPair[] | null>
 //
 // Creators
@@ -91,7 +93,9 @@ import { priorPrintable, type Verdict } from './verdicts'
 //   groupSubjects(input: { month: string; personas: readonly GroupPersona[]; evidence: readonly GroupEvidence[];
 //     memberships: readonly GroupMembership[]; subjects: ReadonlyMap<string, string>; market: ReadonlyMap<string, string> }): GroupSubjectRow[]
 //   loadGroupSubjects(handle, input: { month: string; audiences?: readonly string[] }):
-//       Promise<{ runId: string | null; runDate: string | null; videos: GroupMonthVideos[]; groups: GroupSubjectRow[] } | null>
+//       Promise<{ runId: string | null; runDate: string | null; videos: GroupMonthVideos[]; groups: GroupSubjectRow[]; pendingSubjects } | null>
+//       (groups' subjects: READY ones only, ruling U6, `measuredSubjects`)
+//   measuredSubjects(rows: readonly SubjectStateRow[]): { names: Map<string, string>; pending: { id; label }[] }
 //
 // Conversations (a theme registry id)
 //   themePlatforms(input: { themeId: string; month: string; rows: readonly ThemePlatformRow[]; audiences?: readonly string[] }): ThemePlatforms | null
@@ -325,7 +329,8 @@ export function brandKinds(month: string, lens: readonly BrandLens[]): BrandCros
  * does, so a member a newer update superseded and the prune has not yet taken
  * still counts (Sealand, Patagonia, September: 3 of 8 subjects one video
  * higher than over `audience_insights_current`). Subjects not in `subjects`
- * (retired, or not named) are left out; largest first, the page takes the
+ * (retired, not named, or not ready: the loader passes the READY ones alone,
+ * `measuredSubjects`, ruling U6) are left out; largest first, the page takes the
  * top. No verdict, for the reason `brandKinds` gives. Pure.
  */
 export function brandSubjects(month: string, lens: readonly BrandLens[], subjects: ReadonlyMap<string, string>): BrandCrossRow[] {
@@ -650,7 +655,8 @@ export function groupMonthVideos(input: {
  * Group × subject: of each group's videos this month, how many carry the
  * group's own talk about each subject (its insights that are members of the
  * subject, cited on a comment dated in the month). A subject is counted only
- * where `subjects` names it (active ones). No share of the month and no
+ * where `subjects` names it (the loader passes the READY ones alone,
+ * `measuredSubjects`, ruling U6). No share of the month and no
  * comparison with last month (decision 2). Pure.
  */
 export function groupSubjects(input: {
@@ -905,12 +911,65 @@ export async function loadThemeRefs(handle: ReadingHandle, month: string, audien
   return rows.map((r) => ({ themeId: String(r.object_id), audience: String(r.audience), videoIds: (r.video_ids ?? []).map(String) }))
 }
 
-/** The tenant's active subjects, id → name. */
-async function loadSubjectNames(handle: ReadingHandle): Promise<Map<string, string>> {
-  const rows = await selectAll<{ id: string; name: string | null; status: string | null }>(() =>
-    handle.client.from('subjects').select('id, name, status').eq('client_id', handle.clientId).order('id'),
+/** A `subjects` row as the crosses read it: its name, its status and its
+ *  check (`subjectCalibration`'s columns). */
+export interface SubjectStateRow {
+  id: string
+  name: string | null
+  status: string | null
+  calibrated_at: string | null
+  calibration_precision: number | string | null
+  calibration_n?: number | string | null
+  calibration_judge_version: string | null
+}
+
+/** The subjects a cross may count, and the ones it may only say are there. */
+export interface MeasuredSubjects {
+  /** Active, named and READY: id → name. The only subjects any cross here
+   *  counts, ranks or picks as a top. */
+  names: Map<string, string>
+  /** Active and named, their check not passed (provisional), in the
+   *  subjects' own order: no count, no rank and no share. A page says
+   *  SUBJECT_NOT_MEASURED (lib/subjects/calibration-state.ts) for them. A
+   *  failed subject is in neither: it is hidden everywhere while it is
+   *  re-described (Your products' `crossesOf`, the same rule). */
+  pending: { id: string; label: string }[]
+}
+
+/**
+ * RULING U6, FOR EVERY CROSS IN THIS FILE, IN ONE PLACE. A subject whose
+ * check has not passed (`subjectCalibration(s) !== 'ready'`) prints no figure
+ * resting on its membership: not a count, not a rank, not a group's or a
+ * brand's "top subject". Membership is exactly what the check has not
+ * verified (one of Össur's subjects measured 9% precision on 13 Oct), so a
+ * count on it is not an unlabelled figure but a wrong one. Group × subject
+ * and brand × subject are both counted over `names` alone, and the pages say
+ * how many more are `pending`. Which subjects are pending is the tenant's
+ * list, never "the ones this group's videos hold": whether a set holds one
+ * at all rests on the same unverified membership. PURE.
+ */
+export function measuredSubjects(rows: readonly SubjectStateRow[]): MeasuredSubjects {
+  const names = new Map<string, string>()
+  const pending: { id: string; label: string }[] = []
+  for (const r of rows) {
+    const name = (r.name ?? '').trim()
+    if (r.status !== 'active' || !name) continue
+    const state = subjectCalibration(r)
+    if (state === 'ready') names.set(String(r.id), name)
+    else if (state === 'provisional') pending.push({ id: String(r.id), label: name })
+  }
+  return { names, pending }
+}
+
+/** The tenant's subjects, split by `measuredSubjects`, in their own order
+ *  (named first). */
+async function loadMeasuredSubjects(handle: ReadingHandle): Promise<MeasuredSubjects> {
+  const rows = await selectAll<SubjectStateRow>(() =>
+    handle.client.from('subjects')
+      .select('id, name, status, calibrated_at, calibration_precision, calibration_n, calibration_judge_version')
+      .eq('client_id', handle.clientId).order('named_at').order('id'),
   ).catch((e: unknown) => { throw fail('subjects', e) })
-  return new Map(rows.filter((r) => r.status === 'active' && r.name).map((r) => [String(r.id), String(r.name)]))
+  return measuredSubjects(rows)
 }
 
 /** Creator × conversation for one month, over the market's audiences unless
@@ -1056,14 +1115,14 @@ export async function loadBrandMonthVideos(
 export async function loadBrandCrosses(
   handle: ReadingHandle,
   input: { month: string; base?: BrandBase; brandKeys?: readonly string[]; audiences?: readonly string[]; market?: readonly MarketVideo[] },
-): Promise<{ videos: BrandMonthVideos[]; kinds: BrandCrossRow[]; subjects: BrandCrossRow[] } | null> {
+): Promise<{ videos: BrandMonthVideos[]; kinds: BrandCrossRow[]; subjects: BrandCrossRow[]; pendingSubjects: MeasuredSubjects['pending'] } | null> {
   const base: BrandBase = input.base ?? 'organic'
   const month = monthStartOf(input.month)
   const all = await loadBrandMonthVideos(handle, { month, audiences: input.audiences, market: input.market })
   if (!all) return null
   const wanted = input.brandKeys ? new Set(input.brandKeys) : null
   const videos = all.filter((b) => !wanted || wanted.has(b.brandKey))
-  const [lens, subjectNames] = await Promise.all([
+  const [lens, subjects] = await Promise.all([
     mapWithLimit([...videos], LENS_CONCURRENCY, async (b): Promise<BrandLens> => {
       const ids = b[base]
       // NEVER an empty or null set: `p_video_ids` null reads the whole market.
@@ -1075,9 +1134,10 @@ export async function loadBrandCrosses(
       ).catch((e: unknown) => { throw fail('lens', e) })
       return { brandKey: b.brandKey, label: b.label, base, rows }
     }),
-    loadSubjectNames(handle),
+    loadMeasuredSubjects(handle),
   ])
-  return { videos, kinds: brandKinds(month, lens), subjects: brandSubjects(month, lens, subjectNames) }
+  // Ruling U6: the ready subjects alone are counted (`measuredSubjects`).
+  return { videos, kinds: brandKinds(month, lens), subjects: brandSubjects(month, lens, subjects.names), pendingSubjects: subjects.pending }
 }
 
 /**
@@ -1150,7 +1210,7 @@ export async function loadGroupSubjects(
      *  subjects' names are not read, and `groups` comes back empty. */
     videosOnly?: boolean
   },
-): Promise<{ runId: string | null; runDate: string | null; videos: GroupMonthVideos[]; groups: GroupSubjectRow[]; marketVideos: number } | null> {
+): Promise<{ runId: string | null; runDate: string | null; videos: GroupMonthVideos[]; groups: GroupSubjectRow[]; pendingSubjects: MeasuredSubjects['pending']; marketVideos: number } | null> {
   const { client, clientId } = handle
   const month = monthStartOf(input.month)
   const profile = input.profile !== undefined ? input.profile : await loadLatestProfile(handle)
@@ -1181,7 +1241,7 @@ export async function loadGroupSubjects(
           .order('subject_id').order('audience_insight_id'),
       ),
     ).catch((e: unknown) => { throw fail('groupMemberships', e) }),
-    input.videosOnly ? Promise.resolve(new Map<string, string>()) : loadSubjectNames(handle),
+    input.videosOnly ? Promise.resolve<MeasuredSubjects>({ names: new Map(), pending: [] }) : loadMeasuredSubjects(handle),
     input.market ? Promise.resolve([...input.market]) : loadMarketVideos(handle, month, audiences),
   ])
   const evidence: GroupEvidence[] = evidencePages.flat().flatMap((r) => {
@@ -1195,7 +1255,9 @@ export async function loadGroupSubjects(
     runId: profile.run_id,
     runDate: profile.run_date,
     videos: groupMonthVideos({ month, personas, evidence, market: marketMap }),
-    groups: input.videosOnly ? [] : groupSubjects({ month, personas, evidence, memberships, subjects, market: marketMap }),
+    // Ruling U6: the ready subjects alone are counted (`measuredSubjects`).
+    groups: input.videosOnly ? [] : groupSubjects({ month, personas, evidence, memberships, subjects: subjects.names, market: marketMap }),
+    pendingSubjects: subjects.pending,
     marketVideos: new Set(market.map((v) => v.id)).size,
   }
 }

@@ -8,8 +8,9 @@ import { fmtInt, longMonth } from '@/lib/format'
 import { windowWords } from '@/lib/pages/brands'
 import { brandTable, PANEL_ID, type BrandPanel, type VoicesBrandRow, type VoicesBrands } from '@/lib/pages/v2/voices'
 import type { Verdict } from '@/lib/reading/verdicts'
+import { SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { cn } from '@/lib/utils'
-import { AskButton, CAPS, Fig, LevelText, MiniRow, PanelTag, QuoteCard } from './parts'
+import { AskButton, CAPS, Fig, LevelText, MiniRow, NotMeasuredRows, PanelTag, PendingSubjectsLine, QuoteCard } from './parts'
 
 // THE BRANDS (board E3-Voices, "Brands in your market"; its panel is the
 // Competitive brand pane re-laid out to the board's panel).
@@ -120,7 +121,11 @@ function BrandRow({ row, max, pending }: { row: VoicesBrandRow; max: number; pen
           <>
             {row.topSubject.label} <span className="whitespace-nowrap text-muted-foreground">· <LevelText k={row.topSubject.k} n={row.topSubject.n} /></span>
           </>
-        ) : row.state === 'counted' ? <span className="text-muted-foreground">no subject yet</span> : <EmptyTrack className="w-3/5" />}
+        ) : row.state === 'counted'
+          // Ruling U6: with subjects not measured yet, "no subject" would be
+          // a claim about a membership nobody has checked.
+          ? <span className="text-muted-foreground">{(row.subjectsPending ?? 0) > 0 ? SUBJECT_NOT_MEASURED : 'no subject yet'}</span>
+          : <EmptyTrack className="w-3/5" />}
       </div>
     </div>
   )
@@ -280,9 +285,17 @@ export function BrandPanelView({ panel, monthWords, notchAt }: { panel: BrandPan
             {panel.kinds.map((k) => <MiniRow key={k.kind} size="md" tone={panel.you ? 'you' : 'rival'} label={k.label} k={k.k} of={k.n} />)}
           </PanelSection>
         ) : null}
+        {/* Ruling U6: the ready subjects alone carry a count; the rest are
+            said once under them, and with none ready the column keeps its
+            place and says so. */}
         {panel.subjects.length > 0 ? (
           <PanelSection label={<>What they talk about · of its <Fig>{fmtInt(crossN)}</Fig></>}>
             {panel.subjects.map((s) => <MiniRow key={s.id} size="md" label={s.label} k={s.k} of={s.n} />)}
+            <PendingSubjectsLine count={panel.subjectsPending ?? 0} className="text-[12.5px]" />
+          </PanelSection>
+        ) : (panel.subjectsPending ?? 0) > 0 ? (
+          <PanelSection label="What they talk about">
+            <NotMeasuredRows size="md" rows={3} />
           </PanelSection>
         ) : null}
         {panel.asked ? (

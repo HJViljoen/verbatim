@@ -137,6 +137,8 @@ export const READING_CARDS: readonly ReadingCard[] = [
       'Under Brands, a brand is counted in a video when the video, or a comment on it written in the month, names it: the rule counts the brand’s name, its handles and its phrases, and never counts a brand in its own posts. “No video names it” means the rule found no such video that month; “not counted yet” means we have not yet checked its matches by hand.',
       `The count, “${BRANDS_HEAD_ORGANIC}”, leaves out every video our own brand searches found, so our searching for a brand does not add to its count. It is set against last month only where both months were read the same way.`,
       'What people did in the videos naming a brand, and what those videos are about, is a level with no change: a brand’s month holds too few videos to band.',
+      // Ruling U6 (14 Oct): `measuredSubjects`, lib/reading/cross.ts.
+      'What a group or a brand talks about counts only the subjects whose check has passed. A subject still being checked prints no figure here: the page says how many are not measured yet, and “Not measured yet” where none is.',
       'A brand’s figures are counts of the videos our searches found, never market share.',
       'A rival’s panel reads the ninety days ending at the last update of the month the page reads.',
       NINETY_DAY_NOTE,

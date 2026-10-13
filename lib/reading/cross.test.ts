@@ -6,9 +6,10 @@ import type { PlannedMention } from '../brands/mentions'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '../rivals'
 import {
   brandKinds, brandMonthPair, brandMonthVideos, brandSubjects, commentVideoKey, countedMentions, creatorFollowers, creatorThemes,
-  groupMonthVideos, groupSubjects, themeMonthLine, themePlatforms,
-  type BrandLens, type CreatorVideo, type GroupEvidence, type GroupPersona, type MentionRowIn, type StoredBrandMonthRow, type ThemePlatformRow,
+  groupMonthVideos, groupSubjects, measuredSubjects, themeMonthLine, themePlatforms,
+  type BrandLens, type SubjectStateRow, type CreatorVideo, type GroupEvidence, type GroupPersona, type MentionRowIn, type StoredBrandMonthRow, type ThemePlatformRow,
 } from './cross'
+import { JUDGE_VERSION } from '../subjects/types'
 import { refuseEveryPair, type PairOn } from './pairs'
 import type { MonthPoint, MonthSeries } from './series'
 
@@ -348,6 +349,60 @@ describe('groupMonthVideos and groupSubjects', () => {
     expect(groupMonthVideos({ month: SEP, personas: [], evidence: [], market: new Map() })).toEqual([])
     expect(groupSubjects({ month: SEP, personas, evidence: [], memberships: [], subjects: new Map(), market })
       .map((g) => [g.n, g.subjects.length])).toEqual([[0, 0], [0, 0], [0, 0]])
+  })
+})
+
+// ---- ruling U6: which subjects a cross counts ------------------------------------
+
+describe('measuredSubjects (ruling U6)', () => {
+  const row = (id: string, name: string, check: 'ready' | 'provisional' | 'failed' | 'unchecked', status = 'active'): SubjectStateRow => ({
+    id, name, status,
+    calibrated_at: check === 'unchecked' ? null : '2026-10-13T00:00:00Z',
+    calibration_judge_version: check === 'unchecked' ? null : JUDGE_VERSION,
+    // 0.80 on 25 still reaches the floor (provisional); 0.09 on 33 never does (failed).
+    calibration_precision: check === 'ready' ? 0.92 : check === 'provisional' ? 0.8 : check === 'failed' ? 0.09 : null,
+    calibration_n: check === 'unchecked' ? null : check === 'failed' ? 33 : 25,
+  })
+
+  it('counts the ready subjects alone; the open ones are pending by name, in their order; a failed one is neither', () => {
+    const m = measuredSubjects([
+      row('s-fit', 'Fit', 'ready'),
+      row('s-cost', 'Cost', 'provisional'),
+      row('s-look', 'Look', 'unchecked'),
+      row('s-repair', 'Repair', 'failed'),
+      row('s-old', 'Old', 'ready', 'retired'),
+      row('s-blank', '  ', 'ready'),
+    ])
+    expect([...m.names]).toEqual([['s-fit', 'Fit']])
+    expect(m.pending).toEqual([{ id: 's-cost', label: 'Cost' }, { id: 's-look', label: 'Look' }])
+  })
+
+  it('all six open (Össur, 13 Oct): nothing is counted', () => {
+    const six = ['a', 'b', 'c', 'd', 'e', 'f'].map((x) => row(`s-${x}`, x.toUpperCase(), 'unchecked'))
+    const m = measuredSubjects(six)
+    expect(m.names.size).toBe(0)
+    expect(m.pending).toHaveLength(6)
+  })
+
+  it('a group and a brand cross count only what it names', () => {
+    const m = measuredSubjects([row('s-fit', 'Fit', 'ready'), row('s-cost', 'Cost', 'provisional')])
+    const market = new Map([[commentVideoKey('tiktok', 'T1'), 'v1']])
+    const evidence: GroupEvidence[] = [{ insightId: 'i1', commentId: 'c1', platform: 'tiktok', platformVideoId: 'T1', commentDate: '2026-09-02T10:00:00Z' }]
+    const [g] = groupSubjects({
+      month: SEP, personas: [{ key: 'g', name: 'G', insightIds: ['i1'] }], evidence,
+      memberships: [{ subjectId: 's-fit', insightId: 'i1' }, { subjectId: 's-cost', insightId: 'i1' }], subjects: m.names, market,
+    })
+    expect(g.subjects.map((x) => x.label)).toEqual(['Fit'])
+    const lens: BrandLens = {
+      brandKey: COT, label: 'Cotopaxi', base: 'any',
+      rows: [
+        { audience: INDUSTRY_AUDIENCE, object_kind: 'denominator', object_id: 'videos', k: 10, n: 10 },
+        { audience: INDUSTRY_AUDIENCE, object_kind: 'subject', object_id: 's-cost', k: 9, n: 10 },
+        { audience: INDUSTRY_AUDIENCE, object_kind: 'subject', object_id: 's-fit', k: 2, n: 10 },
+      ],
+    }
+    // The provisional subject has more videos, and still never leads.
+    expect(brandSubjects(SEP, [lens], m.names)[0].cells).toEqual([{ id: 's-fit', label: 'Fit', k: 2, n: 10 }])
   })
 })
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
-import { ossurVoicesFixture } from '@/lib/pages/v2/voices-fixture'
+import { ossurVoicesFixture, VOICES_FIXTURES } from '@/lib/pages/v2/voices-fixture'
 import { mergeWho, type GroupPanel } from '@/lib/pages/v2/voices'
 import { GroupCard, GroupGrid, GroupPanelView, MixCard, WhoCard } from './groups'
 
@@ -59,6 +59,44 @@ describe('Who is in your market and the group cards (decision 2)', () => {
     const node = <GroupCard card={{ ...d.groups.cards[0], subjects: [] }} n={487} monthWords="September" />
     expect(renderText(node)).toContain('What they talk about · of their 96 No subject read in their videos yet.')
     assertCopyContract(node)
+  })
+
+  // Ruling U6 (13 Oct): Össur's six subjects are all provisional, and one of
+  // them measured 9% precision, so a count on any of them is wrong, not just
+  // unlabelled. The box keeps its frame and its height and says so once.
+  it('U6, all provisional: the box keeps its frame, says "Not measured yet" once and prints no subject count', () => {
+    const p = ossurVoicesFixture({}, 'provisional')
+    const node = <GroupCard card={p.groups.cards.find((c) => c.key === 'caregivers')!} n={p.videos} monthWords={p.monthWords} />
+    const text = renderText(node)
+    expect(text).toContain('What they talk about Not measured yet')
+    expect(text).not.toContain('of their 45')
+    expect(text).not.toMatch(/Fit & comfort|Cost & access|Community/)
+    // Its rows' empty tracks hold the box's height.
+    expect(render(node).match(/border-dashed/g)?.length).toBeGreaterThanOrEqual(4)
+    assertCopyContract(node)
+  })
+
+  it('U6, mixed: the ready rows with their counts first, then how many more are not measured yet', () => {
+    const p = ossurVoicesFixture({}, 'mixed')
+    const node = <GroupCard card={p.groups.cards.find((c) => c.key === 'caregivers')!} n={p.videos} monthWords={p.monthWords} />
+    const text = renderText(node)
+    expect(text).toContain('What they talk about · of their 45 Cost & access 14 4 more subjects not measured yet')
+    expect(text).not.toContain('Fit & comfort')
+    assertCopyContract(node)
+  })
+
+  it('U6, the group panel: no "are about" figure for an open subject; the place says so', () => {
+    const open = VOICES_FIXTURES['ossur-provisional-group']()
+    const panel = open.panel as GroupPanel
+    const node = <GroupPanelView panel={panel} monthWords={open.monthWords} />
+    const text = renderText(node)
+    expect(text).not.toMatch(/of 45 are about/)
+    expect(text).toContain('Not measured yet what their videos are about')
+    assertCopyContract(node)
+    const mixed = VOICES_FIXTURES['ossur-mixed-group']()
+    const t2 = renderText(<GroupPanelView panel={mixed.panel as GroupPanel} monthWords={mixed.monthWords} />)
+    expect(t2).toContain('14 of 45 are about Cost & access')
+    expect(t2).not.toMatch(/are about Fit|are about Community|Not measured yet/)
   })
 
   it('a card\'s verdict slot says the change is not compared (decision 2), never a direction', () => {

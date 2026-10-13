@@ -5,7 +5,7 @@ import type { PairComparability } from '../../reading/comparability'
 import type { RecCopy } from '../market-surface'
 import {
   adviceAims, adviceHistory, axisLine, compareMonths, conclusionViews, decisionLine, headerParts, largestStance, leadClaims, moveAxis, moveCards, movedMove,
-  recordRows, restsOnRows, streakLabel, adviceHref, adviceParam, adviceTitle, waitingAdvice, MOVES_PATH, UNTITLED_ADVICE,
+  recordRows, restsOnRows, streakLabel, adviceHref, adviceParam, adviceTitle, waitingAdvice, MOVES_PATH, MOVE_UNREAD, UNTITLED_ADVICE,
 } from './moves'
 import { buildAdviceRows } from '../market-surface'
 import { MOVE_CARDS, PLAN, THIN_MOVE, movesRecordFixture } from './moves-fixture'
@@ -98,7 +98,7 @@ describe('restsOnRows and conclusionViews', () => {
 })
 
 describe('moveCards', () => {
-  const subjects = new Map([['s1', { name: 'Cost & access', calibration: 'ready' as const }], ['s2', { name: 'Fit', calibration: 'provisional' as const }]])
+  const subjects = new Map([['s1', { name: 'Cost & access', calibration: 'ready' as const }], ['s2', { name: 'Fit', calibration: 'provisional' as const }], ['s3', { name: 'Repair', calibration: 'failed' as const }]])
   const N: Record<string, number> = { '2026-06-01': 600, '2026-07-01': 600, '2026-08-01': 600, '2026-09-01': 600, '2026-10-01': 300 }
   const K: Record<string, number> = { '2026-06-01': 60, '2026-07-01': 60, '2026-08-01': 70, '2026-09-01': 120, '2026-10-01': 50 }
   const base = {
@@ -153,10 +153,14 @@ describe('moveCards', () => {
         move({ id: 'a', subject_id: 's2' }),
         move({ id: 'b', kind: 'theme', subject_id: null, registry_ids: ['t1', 't2'] }),
         move({ id: 'c', kind: 'advice', subject_id: null, lineage_id: 'L1' }),
+        move({ id: 'd', subject_id: 's3' }),
       ],
     })
     const by = new Map(cards.map((c) => [c.id, c]))
-    expect(by.get('a')?.unread).toBe('not_ready')
+    // Ruling U6: an open check is "not measured yet", never "being re-described".
+    expect(by.get('a')?.unread).toBe('not_measured')
+    expect(MOVE_UNREAD.not_measured).not.toMatch(/re-described/)
+    expect(by.get('d')?.unread).toBe('not_ready')
     expect(by.get('b')?.unread).toBe('several')
     expect(by.get('c')?.label).toBe('Liner life')
     expect(by.get('c')?.openHref).toBe(adviceHref('L1'))
@@ -280,7 +284,7 @@ describe('moveAxis and axisLine: the board’s axis, the months not drawn and wh
   })
 
   it('a move with no line keeps the axis, and its own sentence says why', () => {
-    const socket = MOVE_CARDS.find((c) => c.unread === 'not_ready')!
+    const socket = MOVE_CARDS.find((c) => c.unread === 'not_measured')!
     const slots = moveAxis(socket, '2026-09-01')
     expect(slots.map((s) => s.month)).toEqual(['2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01'])
     expect(slots.every((s) => s.why === 'move')).toBe(true)

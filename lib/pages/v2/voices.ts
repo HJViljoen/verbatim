@@ -218,8 +218,17 @@ export interface VoicesGroupCard {
   oneLiner: string
   /** The month's market videos the group's own comments are on. */
   videos: number
-  /** The group's talk about each subject: of `videos`, largest first, three. */
+  /** The group's talk about each subject: of `videos`, largest first, three.
+   *  READY subjects only (ruling U6: `measuredSubjects`, lib/reading/cross.ts,
+   *  the one place the rule is applied). */
   subjects: { id: string; label: string; k: number }[]
+  /** How many of the client's subjects are not measured yet (their check
+   *  has not passed): no count for them, and the card says how many more
+   *  there are, or SUBJECT_NOT_MEASURED where none is ready. The tenant's
+   *  number, the same on every card: which of them a group's videos hold
+   *  rests on the membership the check has not verified. Absent (a dump from
+   *  before it): none. */
+  subjectsPending?: number
   /** The platforms of those videos (this month's, never the profile's
    *  all-time mix). */
   platforms: VoicesPlatform[]
@@ -270,8 +279,12 @@ export interface VoicesBrandRow {
    *  to the brand: the words say "in the videos naming it". */
   praised: Level | null
   complained: Level | null
-  /** The subject most of its videos carry. */
+  /** The READY subject most of its videos carry (ruling U6). */
   topSubject: { id: string; label: string; k: number; n: number } | null
+  /** Counted, and how many of the client's subjects are not measured yet
+   *  (`measuredSubjects`): where no ready subject is on its videos, the
+   *  column says SUBJECT_NOT_MEASURED, never "no subject". Absent: none. */
+  subjectsPending?: number
   href: string
   selected: boolean
 }
@@ -349,7 +362,10 @@ export interface GroupPanel {
   videos: number
   /** The market's videos this month. */
   n: number | null
+  /** READY subjects only (ruling U6), as on the card. */
   subjects: { id: string; label: string; k: number }[]
+  /** The card's `subjectsPending`. */
+  subjectsPending?: number
   platforms: VoicesPlatform[]
   wants: string
   stops: string
@@ -399,7 +415,10 @@ export interface BrandPanel {
   any: Level | null
   /** What people did in the comments of the videos naming it (base `any`). */
   kinds: { kind: string; label: string; k: number; n: number }[]
+  /** READY subjects only (ruling U6). */
   subjects: { id: string; label: string; k: number; n: number }[]
+  /** The row's `subjectsPending`, where it is counted. */
+  subjectsPending?: number
   /** The Competitive pane, a rival's alone: over the ninety days ending at
    *  the reading month's last update. */
   window: { from: string; to: string } | null
@@ -533,8 +552,10 @@ export const GROUPS_UNREAD = 'Who is talking could not be read just now.'
 
 export function buildGroups(input: {
   profile: GroupProfileRow | null
-  /** `loadGroupSubjects`' answer; null where it was not read. */
-  read: { videos: GroupMonthVideos[]; groups: GroupSubjectRow[] } | null
+  /** `loadGroupSubjects`' answer; null where it was not read. Its groups'
+   *  subjects are the READY ones alone, and `pendingSubjects` the rest
+   *  (ruling U6, `measuredSubjects`). */
+  read: { videos: GroupMonthVideos[]; groups: GroupSubjectRow[]; pendingSubjects?: readonly { id: string; label: string }[] } | null
   platformOf: ReadonlyMap<string, string>
   params: VoicesParams
   failed?: boolean
@@ -545,6 +566,7 @@ export function buildGroups(input: {
   if (personas.length === 0) return { state: 'no_personas', profileDate: input.profile.run_date, cards: [], empty: GROUPS_NONE }
   const videosOf = new Map((input.read?.videos ?? []).map((g) => [g.key, g.videoIds]))
   const subjectsOf = new Map((input.read?.groups ?? []).map((g) => [g.key, g.subjects]))
+  const pending = input.read?.pendingSubjects?.length ?? 0
   const cards: VoicesGroupCard[] = personas.map((p) => {
     const ids = videosOf.get(p.key) ?? []
     const selected = p.key === input.params.group
@@ -554,6 +576,7 @@ export function buildGroups(input: {
       oneLiner: p.oneLiner,
       videos: ids.length,
       subjects: (subjectsOf.get(p.key) ?? []).slice(0, 3).map((s) => ({ id: s.subjectId, label: s.label, k: s.k })),
+      ...(pending > 0 ? { subjectsPending: pending } : {}),
       platforms: platformsOf(ids, input.platformOf),
       wants: firstSentence(p.wants),
       stops: firstSentence(p.blockers),
@@ -649,6 +672,7 @@ export function buildGroupPanel(input: {
     videos: input.card.videos,
     n: input.n,
     subjects: input.subjects,
+    ...(input.card.subjectsPending ? { subjectsPending: input.card.subjectsPending } : {}),
     platforms: input.card.platforms,
     wants: input.persona.wants,
     stops: input.persona.blockers,
@@ -899,8 +923,9 @@ export function buildBrands(input: {
   /** Null: the tenant has no brand rules. */
   pairs: BrandPair[] | null
   /** The month sets and crosses of the brands that may print (a brand never
-   *  printed is not crossed); null where none was read. */
-  crosses: { videos: BrandMonthVideos[]; kinds: BrandCrossRow[]; subjects: BrandCrossRow[] } | null
+   *  printed is not crossed); null where none was read. The subject crosses
+   *  are the READY subjects alone, `pendingSubjects` the rest (ruling U6). */
+  crosses: { videos: BrandMonthVideos[]; kinds: BrandCrossRow[]; subjects: BrandCrossRow[]; pendingSubjects?: readonly { id: string; label: string }[] } | null
   note: { rival: string; title: string } | null
   params: VoicesParams
   failed?: boolean
@@ -919,6 +944,7 @@ export function buildBrands(input: {
   const videosOf = new Map((input.crosses?.videos ?? []).map((b) => [b.brandKey, b]))
   const kindsOf = new Map((input.crosses?.kinds ?? []).map((b) => [b.brandKey, b]))
   const subjectsOf = new Map((input.crosses?.subjects ?? []).map((b) => [b.brandKey, b]))
+  const pending = input.crosses?.pendingSubjects?.length ?? 0
   const counting = input.pairs.some((p) => p.curr != null)
   const clientSet = videosOf.get('client')
   const clientOk = input.clientCounts ?? (clientSet ? clientNameCounts(input.clientId, month, clientSet.any, input.nameReads) : false)
@@ -948,6 +974,7 @@ export function buildBrands(input: {
       praised: counted ? cellOf(kindsOf.get(p.brandKey), 'praise') : null,
       complained: counted ? cellOf(kindsOf.get(p.brandKey), 'pain_point') : null,
       topSubject: counted && top ? { id: top.id, label: top.label, k: top.k, n: top.n } : null,
+      ...(counted && pending > 0 ? { subjectsPending: pending } : {}),
       href: selected ? voicesHref(input.params) : voicesHref(input.params, { kind: 'brand', key: p.label }),
       selected,
     }
@@ -1103,6 +1130,7 @@ export function buildBrandPanel(input: {
     any: r.any,
     kinds,
     subjects,
+    ...(counted && r.subjectsPending ? { subjectsPending: r.subjectsPending } : {}),
     window: input.window,
     asked: input.asked && input.asked.themes.length > 0
       ? { themes: input.asked.themes.map((t) => ({ ...t, href: conversationHref(t.registryId) })) }
@@ -1361,8 +1389,8 @@ export interface VoicesContext {
   personas: VoicesPersona[]
   market: MarketVideo[]
   refs: ThemeRef[]
-  groupRead: { videos: GroupMonthVideos[]; groups: GroupSubjectRow[] } | null
-  crosses: { videos: BrandMonthVideos[]; kinds: BrandCrossRow[]; subjects: BrandCrossRow[] } | null
+  groupRead: { videos: GroupMonthVideos[]; groups: GroupSubjectRow[]; pendingSubjects?: readonly { id: string; label: string }[] } | null
+  crosses: { videos: BrandMonthVideos[]; kinds: BrandCrossRow[]; subjects: BrandCrossRow[]; pendingSubjects?: readonly { id: string; label: string }[] } | null
   creators: CreatorThemes | null
   labels: Map<string, string>
   brandSets: BrandSet[]

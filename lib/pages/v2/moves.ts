@@ -259,7 +259,7 @@ export interface MoveCard {
   compare: { before: MovePoint; after: MovePoint; verdict: Verdict } | null
   /** Why there is no line: a subject that is not ready, several themes, or
    *  nothing the market is read on. Null where there is one. */
-  unread: 'not_ready' | 'several' | 'nothing' | 'no_reading' | null
+  unread: 'not_measured' | 'not_ready' | 'several' | 'nothing' | 'no_reading' | null
   /** The move's own month, where it is after the reading month: the line
    *  holds the months before it, and its month reads with its own reading. */
   pending: string | null
@@ -494,7 +494,10 @@ export function moveCards(input: {
         direction: (m.direction === 'down' ? 'down' : 'up') as 'up' | 'down',
       }
       if (!object || notReady) {
-        const unread: MoveCard['unread'] = notReady ? 'not_ready' : m.kind === 'theme' && themeIds.length > 1 ? 'several' : 'nothing'
+        // Ruling U6: a subject whose check is open is "not measured yet"; only
+        // a failed one is being re-described.
+        const unread: MoveCard['unread'] = notReady ? (subject?.calibration === 'failed' ? 'not_ready' : 'not_measured')
+          : m.kind === 'theme' && themeIds.length > 1 ? 'several' : 'nothing'
         return { ...base, points: [], compare: null, unread, pending: null }
       }
       // Two months before the move to the reading month, at most six after.
@@ -738,6 +741,8 @@ export const sharePct = (k: number, n: number): string => (n > 0 ? `${Math.round
 
 /** What a move with no line says instead. */
 export const MOVE_UNREAD: Record<NonNullable<MoveCard['unread']>, string> = {
+  // SUBJECT_NOT_MEASURED's words (ruling U6), in a sentence.
+  not_measured: 'This subject is not measured yet: its line is drawn once its check has passed.',
   not_ready: 'This subject is being re-described, so its months are not read yet.',
   several: 'This move is on several themes, so no one line can be drawn for it.',
   nothing: 'This move names nothing the market is read on month by month.',

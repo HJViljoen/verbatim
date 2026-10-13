@@ -13,7 +13,7 @@ import {
   convOf, cutWindows, doingOf, leadDoing, marketWeeksOf, flagCardOf, flagVerdict, groupsOf, isRegistryId, insideOf, marketHref, marketMonths, marketParams,
   mergeMixes, monthsText, notchOf, ourReadOf, panelStats, periodHref, personasOf, pickHero, pickWeekSides, platformRows, subjectHref,
   flagBaseWords, monthSoFar, tableFilterOf, tableMonths, topSpans, unmeasuredOf, weekWindows, whoOf, windowLabel, withMonthPlatforms, MARKET_TABLE_ROWS,
-  alsoTalkedOf, earlierNewOf, placementTiers, placeSubject, sideIds, subjectAxis,
+  alsoTalkedOf, earlierNewOf, placementTiers, placeSubject, printableFlags, sideIds, subjectAxis,
   type MarketConv,
 } from './market'
 import {
@@ -297,6 +297,30 @@ describe('the subject board', () => {
       ['All', 17], ['Community & encouragement', 3], ['Function & movement', 3], ['Choosing the right device', 2], ['Look & style', 2],
       ['Cost & access', null], ['Fit & comfort', null],
     ])
+  })
+
+  // Ruling U6 (14 Oct sweep): the count a pending chip withholds is the
+  // count of the table filtered to it, so that is held too.
+  it('holds the table\'s total under the filter of a subject whose check is open, and prints it under a ready one', () => {
+    const pending = new Set([fixtureSubjectId('fit'), fixtureSubjectId('cost')])
+    const open = buildTable({ convs, params: marketParams({ in: fixtureSubjectId('fit') }), openId: null, months: [], pending })!
+    expect(open.filter).toBe(fixtureSubjectId('fit'))
+    expect(open.totalHeld).toBe(true)
+    const ready = buildTable({ convs, params: marketParams({ in: fixtureSubjectId('community') }), openId: null, months: [], pending })!
+    expect(ready.totalHeld).toBeUndefined()
+    expect(buildTable({ convs, params: marketParams({}), openId: null, months: [], pending })!.totalHeld).toBeUndefined()
+  })
+
+  // Ruling U6 (14 Oct sweep): the anomaly check flags every active subject;
+  // a flag on one that is not ready never leads Market or the tile.
+  it('a flag on a subject that is not ready never leads: the next flag does', () => {
+    const rows = [
+      { object_kind: 'subject', object_id: 's-open', rank: 1 },
+      { object_kind: 'theme', object_id: 't-1', rank: 2 },
+      { object_kind: 'subject', object_id: 's-ready', rank: 3 },
+    ]
+    expect(printableFlags(rows, new Set(['s-ready'])).map((r) => r.object_id)).toEqual(['t-1', 's-ready'])
+    expect(printableFlags(rows.slice(0, 1), new Set())).toEqual([])
   })
 
   it('draws no tick legend where no pair may be printed', () => {

@@ -1161,7 +1161,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
     says so; the flag's k of n is every audience together, the client's own
     posts included, and is named as such (`flagBaseWords`). The lead is
     `weekLead`; a set-apart theme (maker-led or off-topic) never leads as new
-    or biggest, and stays listed, tagged. The table lists a conversation at
+    or biggest, and stays listed, tagged. The anomaly check flags every
+    active subject whatever its check, so a flag on a subject that is not
+    ready never leads Market or the Dashboard's tile (`printableFlags` in
+    `loadWeekFlag`: the next flag does, ruling U6), and a table filtered to
+    a subject whose check is open prints no total (`totalHeld`, the count
+    its chip withholds). The table lists a conversation at
     `MARKET_TABLE_FLOOR` (`POOL_FLOOR`, 3) of the period's category videos,
     ten until `?all=1`. A subject that prints no level says why
     (`unmeasuredOf`: `SUBJECT_NOT_MEASURED` while its check is open,
@@ -1218,7 +1223,16 @@ This version has breaking changes — APIs, conventions, and file structure may 
     Nothing looser than equality ("Caretaker" and "Care worker" stay apart). Brands: named unprompted is
     `k_organic` of `n_organic` with its `Verdict` (`brandMonthPair`, on
     `BRANDS_PANEL`); praised, complained and the subject read base `any` and
-    carry no verdict. The client's own row needs its name checked
+    carry no verdict. RULING U6 IN ONE PLACE: every cross in
+    `lib/reading/cross.ts` (a group's and a brand's subjects) counts READY
+    subjects only (`measuredSubjects`, 14 Oct; until then
+    `loadSubjectNames` filtered on `status = 'active'` alone and Össur's six
+    provisional subjects, one measured at 9% precision, printed counts on
+    every group card and panel). The rest are the tenant's, never "the ones
+    this set holds": a box with no ready subject keeps its frame, says
+    `SUBJECT_NOT_MEASURED` and draws its rows' empty tracks
+    (`NotMeasuredRows`); a mixed one lists the ready rows, then how many more
+    are not measured yet (`PendingSubjectsLine`). The client's own row needs its name checked
     (`nameChecked`) and every month match read in `NAME_READS`
     (`clientNameCounts`; the Dashboard's tile uses
     `clientNameCountsByCount`). A tenant with rules and no rows says the

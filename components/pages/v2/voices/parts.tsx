@@ -6,6 +6,7 @@ import { TAG } from '@/components/colour-roles'
 import { fmtCompact, fmtInt } from '@/lib/format'
 import { quoteWords } from '@/lib/pages/brands'
 import type { VoicesPlatform, VoicesQuote } from '@/lib/pages/v2/voices'
+import { SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { cn } from '@/lib/utils'
 
 // The small pieces the Voices page draws more than once (depth v2, T4; boards
@@ -53,6 +54,37 @@ export function MiniRow({ label, k, of, tone = 'market', size = 'sm', className 
       <TickBar pct={pct} tone={tone} size={size === 'md' ? 'md' : 'sm'} label={`${fmtInt(k)} of ${fmtInt(of)}`} />
       <Fig className="text-right text-[12px] text-foreground">{fmtInt(k)}</Fig>
     </div>
+  )
+}
+
+/** RULING U6, a box's one quiet line under its ready rows: how many more of
+ *  the client's subjects are not measured yet (their check has not passed),
+ *  never which of them this set holds, which rests on their membership.
+ *  Nothing where none is pending. */
+export function PendingSubjectsLine({ count, className }: { count: number; className?: string }) {
+  if (count <= 0) return null
+  return (
+    <p className={cn('m-0 text-[12px] leading-[1.4] text-muted-foreground', className)}>
+      <Fig>{fmtInt(count)}</Fig> more {count === 1 ? 'subject' : 'subjects'} not measured yet
+    </p>
+  )
+}
+
+/** RULING U6, a box with no ready subject: SUBJECT_NOT_MEASURED in one quiet
+ *  line, and the rows' empty tracks under it, so the box keeps its frame and
+ *  roughly its height (the parity pass: the component carries the gap). */
+export function NotMeasuredRows({ rows = 2, size = 'sm' }: { rows?: number; size?: 'sm' | 'md' }) {
+  return (
+    <>
+      <p className={cn('m-0 leading-[1.4] text-muted-foreground', size === 'md' ? 'text-[13.5px]' : 'text-[12.5px]')}>{SUBJECT_NOT_MEASURED}</p>
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} aria-hidden className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_34px] items-center gap-2">
+          <span className="block h-2.5 w-3/5 rounded-full border border-dashed border-foreground/15" />
+          <span className="block h-2 rounded-full border border-dashed border-foreground/15" />
+          <span />
+        </div>
+      ))}
+    </>
   )
 }
 

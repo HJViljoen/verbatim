@@ -433,6 +433,10 @@ export interface TableFilter {
 
 export interface MarketTable {
   total: number
+  /** Ruling U6: the table is filtered to a subject whose check is open, so
+   *  how many conversations it holds is not printed (it is the count its
+   *  chip withholds). Absent on a dump from before it: printed. */
+  totalHeld?: boolean
   rows: { conv: MarketConv; href: string; open: boolean }[]
   filters: TableFilter[]
   filter: string | null
@@ -1187,6 +1191,7 @@ export function buildTable(input: {
   ]
   return {
     total: listed.length,
+    ...(filter != null && input.pending.has(filter) ? { totalHeld: true } : {}),
     rows: rows.map((c) => ({ conv: c, href: convHref(p, c.id, 'table'), open: c.id === input.openId })),
     filters: bySubject.size > 0 ? filters : [],
     filter,
@@ -1617,14 +1622,41 @@ async function loadThemeSeries(db: SupabaseClient, clientId: string, ids: readon
   return out
 }
 
-/** The anomaly check's first flag for the read's run, or null. */
+/**
+ * RULING U6 ON THE FLAG: the anomaly check flags every active subject,
+ * whatever its check (it measures; lib/pipeline/anomaly-check.ts), but a
+ * subject whose check has not passed prints no figure resting on its
+ * membership, and a flag card is nothing but such figures (its week's count,
+ * its months', its chip) and the page's headline. So a flag on a subject that
+ * is not READY never leads: the next flag the check raised does, in its
+ * order, or the slot's next rule where none is left. Pure.
+ */
+export function printableFlags<T extends { object_kind: string; object_id: string }>(rows: readonly T[], readySubjects: ReadonlySet<string>): T[] {
+  return rows.filter((r) => r.object_kind !== 'subject' || readySubjects.has(String(r.object_id)))
+}
+
+/** The tenant's READY subjects' ids (ruling U6). None where the subjects are
+ *  not recorded here: a subject flag then never leads (fail closed). */
+async function loadReadySubjectIds(db: SupabaseClient, clientId: string): Promise<Set<string>> {
+  try {
+    return new Set((await loadActiveSubjects(db as never, clientId)).filter((s) => subjectCalibration(s) === 'ready').map((s) => s.id))
+  } catch (error) {
+    if (isMissingSubjects(error)) return new Set()
+    throw error
+  }
+}
+
+/** The anomaly check's first printable flag for the read's run, or null. */
 async function loadWeekFlag(db: SupabaseClient, clientId: string, runId: string): Promise<Omit<UnusualFlag, 'quotes'> | null> {
   // This week's readers and rule (lib/pages/week.ts): a missing table is no
   // check; a failed read throws and `soft` drops the card. `weekFlagRows`
   // answers null for a check that flagged and whose flags could not be read:
   // no flag card then, and the slot leads with the next rule's answer.
   const [check, flags] = await Promise.all([loadCheckStrict(db, clientId, runId), loadFlagsStrict(db, clientId, runId)])
-  const first = weekFlagRows(check, flags)?.[0]
+  const rows = weekFlagRows(check, flags) ?? []
+  // The subjects are read only where a subject was flagged.
+  const ready = rows.some((r) => r.object_kind === 'subject') ? await loadReadySubjectIds(db, clientId) : new Set<string>()
+  const first = printableFlags(rows, ready)[0]
   return first ? flagOfRow(first) : null
 }
 

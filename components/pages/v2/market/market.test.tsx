@@ -302,6 +302,14 @@ describe('ConversationTable', () => {
     assertCopyContract(<ConversationTable table={WEEK.table!} data={WEEK} />)
   })
 
+  it('U6: filtered to a subject whose check is open, the table prints no total and Show all no number', () => {
+    const held = { ...WEEK.table!, totalHeld: true }
+    const text = renderText(<ConversationTable table={held} data={WEEK} />)
+    expect(text).toMatch(/^Every conversation this week Conversations, biggest first/)
+    expect(text).toMatch(/Show all$/)
+    assertCopyContract(<ConversationTable table={held} data={WEEK} />)
+  })
+
   // Phase 4 fix round: at 390 two figure columns beside a label did not fit
   // Sealand's table, and its own scroll cut "42" to "4" at the card's edge.
   // On a phone the month sits under the week's figure, in its cell (Content's

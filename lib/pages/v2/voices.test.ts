@@ -471,6 +471,35 @@ describe('the board\'s shape in a thin month', () => {
     expect(MIX_WHY).not.toMatch(/changed|against|compared/)
   })
 
+  // Ruling U6: a subject whose check has not passed prints no figure resting
+  // on its membership. The reader (`measuredSubjects`) counts the ready ones
+  // alone; the page carries how many more are not measured yet.
+  it('U6, all provisional (Össur, 13 Oct): no group, panel or brand carries a subject count', () => {
+    const d = VOICES_FIXTURES['ossur-provisional-group']()
+    for (const c of d.groups.cards) expect(c).toMatchObject({ subjects: [], subjectsPending: 6 })
+    expect(d.panel).toMatchObject({ kind: 'group', subjects: [], subjectsPending: 6 })
+    const thin = ossurThinVoicesFixture()
+    for (const c of thin.groups.cards) expect(c.subjects).toEqual([])
+  })
+
+  it('U6, mixed: the ready subjects alone are counted, and the rest are a number, never a row', () => {
+    const d = VOICES_FIXTURES['ossur-mixed-group']()
+    const ready = new Set(['Cost & access', 'Function & movement'])
+    for (const c of d.groups.cards) {
+      expect(c.subjectsPending).toBe(4)
+      for (const x of c.subjects) expect(ready.has(x.label)).toBe(true)
+    }
+    // Caregivers talk about Fit & comfort most (17), but Fit & comfort is not checked.
+    expect(d.groups.cards.find((c) => c.key === 'caregivers')!.subjects.map((x) => [x.label, x.k])).toEqual([['Cost & access', 14]])
+    const counted = VOICES_FIXTURES['ossur-counted-brand']()
+    const otto = counted.brands.all.find((r) => r.label === 'Ottobock')!
+    // The lens gave Fit & comfort 25 of Ottobock's videos: never its top.
+    expect(otto.topSubject).toMatchObject({ label: 'Cost & access', k: 21 })
+    expect(otto.subjectsPending).toBe(4)
+    expect(counted.panel).toMatchObject({ kind: 'brand', subjectsPending: 4 })
+    expect((counted.panel as { subjects: { label: string }[] }).subjects.map((x) => x.label)).toEqual(['Cost & access', 'Function & movement'])
+  })
+
   it('a thin Össur still has every group, one at no video and one with no subject', () => {
     const d = ossurThinVoicesFixture()
     expect(d.groups.cards).toHaveLength(5)

@@ -280,8 +280,12 @@ describe('the moves', () => {
     expect(markup).toMatch(/data-copy="verdict"[^>]*>[\s\S]*?▲/)
   })
 
-  it('a subject being re-described draws no line and says why', () => {
-    expect(markupText(render(<MovesSection data={movesFixture()} />))).toContain('This subject is being re-described, so its months are not read yet.')
+  // Ruling U6: the fixture's Fit & comfort is provisional, so its move says
+  // "not measured yet"; "being re-described" is a failed subject's alone.
+  it('a subject whose check is open draws no line and says it is not measured yet', () => {
+    const text = markupText(render(<MovesSection data={movesFixture()} />))
+    expect(text).toContain('This subject is not measured yet: its line is drawn once its check has passed.')
+    expect(text).not.toContain('being re-described')
   })
 
   it('draws the move’s day inside its month', () => {
@@ -413,7 +417,7 @@ describe('the board’s shape on thin data', () => {
   })
 
   it('a move with no line at all still draws its axis', () => {
-    const socket = MOVE_CARDS.find((c) => c.unread === 'not_ready')!
+    const socket = MOVE_CARDS.find((c) => c.unread === 'not_measured')!
     const markup = render(<MovesSection data={movesFixture({ moves: { cards: [socket], recorded: true } })} />)
     expect(markup).toContain('<svg')
     expect(markupText(markup)).toMatch(/Jun.*Jul.*Aug.*Sep/)

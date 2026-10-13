@@ -86,7 +86,7 @@ export function ConversationTable({ table, data }: { table: MarketTable; data: M
         icon={List}
         id="conversations-title"
         title={title(data)}
-        sub={<><span data-copy="figure">{fmtInt(table.total)}</span> conversations, biggest first, each counted in the category’s videos{data.period === 'week' && data.week?.category != null ? <> (<span data-copy="figure">{fmtInt(data.week.category)}</span> this week)</> : data.month.category != null ? <> (<span data-copy="figure">{fmtInt(data.month.category)}</span> in {data.month.text})</> : null}</>}
+        sub={<>{table.totalHeld ? 'Conversations' : <><span data-copy="figure">{fmtInt(table.total)}</span> conversations</>}, biggest first, each counted in the category’s videos{data.period === 'week' && data.week?.category != null ? <> (<span data-copy="figure">{fmtInt(data.week.category)}</span> this week)</> : data.month.category != null ? <> (<span data-copy="figure">{fmtInt(data.month.category)}</span> in {data.month.text})</> : null}</>}
       />
       {table.filters.length > 0 ? (
         <nav aria-label="Filter by subject" className="flex flex-wrap gap-1.5">
@@ -143,7 +143,7 @@ export function ConversationTable({ table, data }: { table: MarketTable; data: M
         <div className="flex flex-wrap gap-2.5">
           {table.showAllHref ? (
             <Link href={table.showAllHref} scroll={false} className="inline-flex min-h-[38px] cursor-pointer items-center rounded-lg bg-inner px-3.5 text-[13.5px] font-semibold text-foreground no-underline hover:bg-track">
-              Show all <span data-copy="figure" className="ml-1">{fmtInt(table.total)}</span>
+              Show all{table.totalHeld ? null : <span data-copy="figure" className="ml-1">{fmtInt(table.total)}</span>}
             </Link>
           ) : null}
         </div>

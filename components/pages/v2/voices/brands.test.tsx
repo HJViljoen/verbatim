@@ -5,6 +5,32 @@ import { ossurVoicesFixture, sealandVoicesFixture, VOICES_FIXTURES } from '@/lib
 import type { BrandPanel } from '@/lib/pages/v2/voices'
 import { BrandPanelView, BrandsCard, VerdictNote } from './brands'
 
+describe('Brands in your market: ruling U6', () => {
+  it('a counted brand\'s top subject and panel count the ready subjects alone, and say how many more are not measured', () => {
+    const d = VOICES_FIXTURES['ossur-counted-brand']()
+    const card = renderText(<BrandsCard brands={d.brands} monthWords={d.monthWords} />)
+    expect(card).toContain('Cost & access · 21 of 37')
+    expect(card).not.toContain('Fit & comfort')
+    const node = <BrandPanelView panel={d.panel as BrandPanel} monthWords={d.monthWords} />
+    const text = renderText(node)
+    expect(text).toContain('What they talk about · of its 37 Cost & access 21 Function & movement 9 4 more subjects not measured yet')
+    expect(text).not.toContain('Fit & comfort')
+    assertCopyContract(node)
+  })
+
+  it('with no subject ready, the column keeps its place and says "Not measured yet"; the table never says "no subject"', () => {
+    const d = VOICES_FIXTURES['ossur-counted-brand']()
+    const panel = { ...(d.panel as BrandPanel), subjects: [], subjectsPending: 6 }
+    const node = <BrandPanelView panel={panel} monthWords={d.monthWords} />
+    expect(renderText(node)).toContain('What they talk about Not measured yet')
+    assertCopyContract(node)
+    const brands = { ...d.brands, rows: d.brands.rows.map((r) => ({ ...r, topSubject: null, subjectsPending: 6 })) }
+    const t = renderText(<BrandsCard brands={brands} monthWords={d.monthWords} />)
+    expect(t).not.toContain('no subject yet')
+    expect(t).toContain('Not measured yet')
+  })
+})
+
 describe('Brands in your market', () => {
   it('Sealand: named unprompted with its verdict, praised and complained over every video naming it, the top subject', () => {
     const d = sealandVoicesFixture()

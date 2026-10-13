@@ -7,11 +7,12 @@ import {
 } from '@/components/v2'
 import { fmtInt, longMonth } from '@/lib/format'
 import { prevMonth } from '@/lib/reading/month-key'
+import { SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import {
   GROUP_NO_WHO, GROUP_NOT_COMPARED, GROUP_NOT_DESCRIBED, groupNoConversations, MIX_WHY, mixNotRead, mixTitle, PANEL_ID, slopeLabel, WHO_SHOWN, type GroupPanel, type GroupProducts, type VoicesData, type VoicesGroupCard, type VoicesGroups,
 } from '@/lib/pages/v2/voices'
 import { cn } from '@/lib/utils'
-import { AskButton, CAPS, EmptyLine, Fig, LevelText, MiniRow, OLINK, PanelTag, Phrase, PlatformStrip, QuoteCard } from './parts'
+import { AskButton, CAPS, EmptyLine, Fig, LevelText, MiniRow, NotMeasuredRows, OLINK, PanelTag, Phrase, PendingSubjectsLine, PlatformStrip, QuoteCard } from './parts'
 
 // THE GROUPS (board E3-Voices, "Who's in your market", the group cards and
 // "How the mix changed"; E3-Voices-Open, the group's panel). Decision 2
@@ -66,6 +67,9 @@ export function WhoCard({ groups, videos, monthWords }: { groups: VoicesGroups; 
 
 /** One group (the board's `.pcard`). */
 export function GroupCard({ card, n, monthWords, style }: { card: VoicesGroupCard; n: number | null; monthWords: string; style?: CSSProperties }) {
+  // No ready subject on their videos, and some not measured yet: the box
+  // cannot say "no subject", only that it is not measured (ruling U6).
+  const notMeasured = card.videos > 0 && card.subjects.length === 0 && (card.subjectsPending ?? 0) > 0
   return (
     <article
       data-group={card.key}
@@ -89,11 +93,20 @@ export function GroupCard({ card, n, monthWords, style }: { card: VoicesGroupCar
       ) : (
         <p className="m-0 text-[13.5px] text-muted-foreground">No video of the market’s in {monthWords} carries their comments.</p>
       )}
+      {/* RULING U6: the ready subjects alone carry a count (the reader's
+          `measuredSubjects`); the rest are said once, never counted. With
+          none ready the box keeps its frame and its height: one quiet line
+          and its rows' empty tracks. */}
       <div className="flex flex-col gap-2 rounded-[10px] bg-inner px-3.5 py-3">
-        <p className={cn(CAPS, 'mb-0.5')}>What they talk about{card.videos > 0 ? <> · of their <Fig>{fmtInt(card.videos)}</Fig></> : null}</p>
-        {card.subjects.length > 0
-          ? card.subjects.map((s) => <MiniRow key={s.id} label={s.label} k={s.k} of={card.videos} />)
-          : <p className="m-0 text-[12.5px] leading-[1.4] text-muted-foreground">{card.videos > 0 ? 'No subject read in their videos yet.' : `None of their comments in ${monthWords}.`}</p>}
+        <p className={cn(CAPS, 'mb-0.5')}>What they talk about{card.videos > 0 && !notMeasured ? <> · of their <Fig>{fmtInt(card.videos)}</Fig></> : null}</p>
+        {card.subjects.length > 0 ? (
+          <>
+            {card.subjects.map((s) => <MiniRow key={s.id} label={s.label} k={s.k} of={card.videos} />)}
+            <PendingSubjectsLine count={card.subjectsPending ?? 0} />
+          </>
+        ) : notMeasured ? (
+          <NotMeasuredRows />
+        ) : <p className="m-0 text-[12.5px] leading-[1.4] text-muted-foreground">{card.videos > 0 ? 'No subject read in their videos yet.' : `None of their comments in ${monthWords}.`}</p>}
       </div>
       {card.wants || card.stops ? (
         <div className="flex flex-col gap-1.5 text-[13.5px] leading-[1.45] text-foreground">
@@ -224,6 +237,14 @@ export function GroupPanelView({ panel, monthWords, notchAt }: { panel: GroupPan
         {panel.n ? <StatCell value={panel.videos} of={panel.n} label="videos they comment on" /> : <StatCell value={panel.videos} label="videos they comment on" />}
         {first && panel.videos > 0 ? <StatCell value={first.k} of={panel.videos} label={<>are about {first.label}</>} /> : null}
         {second && panel.videos > 0 ? <StatCell value={second.k} of={panel.videos} label={<>are about {second.label}</>} /> : null}
+        {/* Ruling U6: no ready subject, no "are about" figure; the two
+            cells' place says why, once, so the row keeps its four. */}
+        {!first && panel.videos > 0 && (panel.subjectsPending ?? 0) > 0 ? (
+          <div className="min-w-0 rounded-[10px] bg-inner px-4 pt-4 pb-3.5 xl:col-span-2">
+            <div className="text-[15px] font-medium leading-[30px] text-muted-foreground">{SUBJECT_NOT_MEASURED}</div>
+            <div className="mt-2 text-[12.5px] leading-[1.4] text-muted-foreground">what their videos are about</div>
+          </div>
+        ) : null}
         {where && panel.videos > 0 ? <StatCell value={where.k} of={panel.videos} label={<>are on {where.label}</>} /> : null}
       </StatRow>
 

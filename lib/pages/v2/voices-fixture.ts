@@ -1,6 +1,7 @@
 import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../../config'
 import { readingMonthLabel } from '../../reading/month-label'
-import { brandMonthPair, creatorThemes, type BrandCrossRow, type BrandMonthVideos, type CreatorVideo, type GroupMonthVideos, type GroupSubjectRow, type StoredBrandMonthRow, type ThemeRef } from '../../reading/cross'
+import { JUDGE_VERSION } from '../../subjects/types'
+import { brandMonthPair, creatorThemes, measuredSubjects, type BrandCrossRow, type BrandMonthVideos, type CreatorVideo, type GroupMonthVideos, type GroupSubjectRow, type StoredBrandMonthRow, type ThemeRef } from '../../reading/cross'
 import {
   buildBrandPanel, buildBrands, buildCreatorPanel, buildCreators, buildGroupPanel, buildGroups, clientCountsOf, creatorVideoIds, crossKeys, groupProducts, monthWordsOf, openOf,
   personasOf, themeVideoSets,
@@ -117,6 +118,35 @@ const OSSUR_PERSONAS: PersonaIn[] = [
   },
 ]
 
+/** Össur's six subjects, in their own order (the names production holds). */
+const OSSUR_SUBJECTS: [string, string][] = [
+  ['s-choose', 'Choosing the right device'], ['s-community', 'Community & encouragement'], ['s-cost', 'Cost & access'],
+  ['s-fit', 'Fit & comfort'], ['s-function', 'Function & movement'], ['s-look', 'Look & style'],
+]
+
+/** Which of Össur's subjects have passed their check: every one (the
+ *  board's month), none (production on 13 Oct: all six provisional), or two
+ *  of the six (a mixed month). */
+export type OssurSubjectChecks = 'ready' | 'provisional' | 'mixed'
+const MIXED_READY = new Set(['s-cost', 's-function'])
+
+/** Ruling U6 as the reader applies it: Össur's subjects through
+ *  `measuredSubjects` (lib/reading/cross.ts), the one rule. */
+function ossurMeasured(checks: OssurSubjectChecks) {
+  const passed = (id: string) => checks === 'ready' || (checks === 'mixed' && MIXED_READY.has(id))
+  return measuredSubjects(OSSUR_SUBJECTS.map(([id, name]) => ({
+    id, name, status: 'active', calibration_judge_version: passed(id) ? JUDGE_VERSION : null,
+    calibrated_at: passed(id) ? '2026-10-13T00:00:00.000Z' : null, calibration_precision: passed(id) ? 0.92 : null, calibration_n: passed(id) ? 40 : null,
+  })))
+}
+
+/** A read's subjects as the loader hands them on: the ready ones counted,
+ *  the rest pending by name (`loadGroupSubjects`). */
+function measuredRead<T extends { groups: GroupSubjectRow[] }>(read: T, checks: OssurSubjectChecks): T & { pendingSubjects: { id: string; label: string }[] } {
+  const m = ossurMeasured(checks)
+  return { ...read, groups: read.groups.map((g) => ({ ...g, subjects: g.subjects.filter((x) => m.names.has(x.subjectId)) })), pendingSubjects: m.pending }
+}
+
 const OSSUR_LABELS = new Map([
   ['reg-phantom', 'Phantom pain and itching'],
   ['reg-first-socket', 'Waiting for a first socket'],
@@ -184,10 +214,14 @@ function ossurGroupProducts(videoIds: readonly string[], params: VoicesParams) {
   return groupProducts({ state: 'ready', sets, products, month: SEP, monthWords: monthWordsOf(SEP, false), params })
 }
 
-/** Össur's September: groups and creators read; brand rules, no brand row. */
-export function ossurVoicesFixture(params: VoicesParams = {}): VoicesData {
+/** Össur's September: groups and creators read; brand rules, no brand row.
+ *  `checks`: which of its subjects have passed their check (every one, the
+ *  board's month, unless named). */
+export function ossurVoicesFixture(params: VoicesParams = {}, checks: OssurSubjectChecks = 'ready'): VoicesData {
   const market = marketOf(487, ['tiktok', 'instagram', 'youtube', 'reddit'])
-  const { profile, read } = groupsFrom(OSSUR_PERSONAS, market)
+  const built = groupsFrom(OSSUR_PERSONAS, market)
+  const profile = built.profile
+  const read = measuredRead(built.read, checks)
   const platformOf = new Map(market.map((m) => [m.id, m.platform]))
   const groups = buildGroups({ profile, read, platformOf, params })
   const tracked = [{ brandKey: 'client', label: 'Össur', countState: 'counted' as const }, { brandKey: '5ecfa431', label: 'Ottobock', countState: 'counted' as const }]
@@ -254,7 +288,9 @@ export function ossurVoicesFixture(params: VoicesParams = {}): VoicesData {
 // match of its name outside its own posts has been read by hand
 // (`clientNameCounts`, NAME_READS holds none for Össur).
 
-/** Össur today, thinner: every section drawn from very little. */
+/** Össur today, thinner: every section drawn from very little, and none of
+ *  its subjects checked (all six provisional, as production holds them on
+ *  13 Oct): no group carries a subject count (ruling U6). */
 export function ossurThinVoicesFixture(params: VoicesParams = {}): VoicesData {
   const market = marketOf(212, ['tiktok', 'instagram', 'youtube', 'reddit'])
   const personas = OSSUR_PERSONAS.map((p): PersonaIn => (
@@ -262,7 +298,9 @@ export function ossurThinVoicesFixture(params: VoicesParams = {}): VoicesData {
       : p.key === 'athlete' ? { ...p, videos: [100, 112], subjects: [] }
         : p
   ))
-  const { profile, read } = groupsFrom(personas, market)
+  const built = groupsFrom(personas, market)
+  const profile = built.profile
+  const read = measuredRead(built.read, 'provisional')
   const platformOf = new Map(market.map((m) => [m.id, m.platform]))
   const groups = buildGroups({ profile, read, platformOf, params })
   const tracked = [{ brandKey: 'client', label: 'Össur', countState: 'counted' as const }, { brandKey: '5ecfa431', label: 'Ottobock', countState: 'counted' as const }]
@@ -279,9 +317,11 @@ export function ossurThinVoicesFixture(params: VoicesParams = {}): VoicesData {
   }
 }
 
-/** Össur after the brand back-read: the rivals counted, its own row not yet. */
+/** Össur after the brand back-read: the rivals counted, its own row not yet,
+ *  and two of its six subjects checked (a mixed month, ruling U6). */
 export function ossurCountedVoicesFixture(params: VoicesParams = {}): VoicesData {
-  const base = ossurVoicesFixture(params)
+  const checks: OssurSubjectChecks = 'mixed'
+  const base = ossurVoicesFixture(params, checks)
   const market = marketOf(487, ['tiktok', 'instagram', 'youtube', 'reddit'])
   const OTTO = '5ecfa431'
   const tracked = [{ brandKey: 'client', label: 'Össur', countState: 'counted' as const }, { brandKey: OTTO, label: 'Ottobock', countState: 'counted' as const }]
@@ -301,9 +341,18 @@ export function ossurCountedVoicesFixture(params: VoicesParams = {}): VoicesData
     cells: cells.map(([id, label, k]) => ({ id, label, k, n })),
   })
   const kinds = [cross('client', 41, [['praise', 'praise', 24], ['pain_point', 'pain_point', 9]]), cross(OTTO, 37, [['praise', 'praise', 12], ['pain_point', 'pain_point', 18]])]
-  const subjects = [cross('client', 41, [['s-function', 'Function & movement', 16]]), cross(OTTO, 37, [['s-cost', 'Cost & access', 21]])]
+  // The lens's subject rows over each brand's videos, cut by the reader to
+  // the ready subjects (`measuredSubjects`): a provisional one's count, here
+  // Fit & comfort's, never reaches the page.
+  const measured = ossurMeasured(checks)
+  const lensSubjects = [
+    cross('client', 41, [['s-function', 'Function & movement', 16], ['s-fit', 'Fit & comfort', 30]]),
+    cross(OTTO, 37, [['s-cost', 'Cost & access', 21], ['s-fit', 'Fit & comfort', 25], ['s-function', 'Function & movement', 9]]),
+  ]
+  const subjects = lensSubjects.map((b) => ({ ...b, cells: b.cells.filter((c) => measured.names.has(c.id)) }))
+  const crosses = { videos, kinds, subjects, pendingSubjects: measured.pending }
   const brands = buildBrands({
-    clientId: OSSUR_CLIENT_ID, month: SEP, pairs, crosses: { videos, kinds, subjects },
+    clientId: OSSUR_CLIENT_ID, month: SEP, pairs, crosses,
     note: { rival: 'Ottobock', title: 'Ottobock’s talk turns on getting a knee paid for' }, params,
   })
   const counted = new Set(brands.rows.map((r) => r.brandKey))
@@ -316,7 +365,18 @@ export function ossurCountedVoicesFixture(params: VoicesParams = {}): VoicesData
   const read2 = creatorThemes({ month: SEP, videos: creatorVideos, refs })
   const videoIds = creatorVideoIds(creatorVideos.map((v) => ({ id: v.videoId, platform: v.platform, account: v.account })))
   const creators = buildCreators({ month: SEP, read: read2, labels: OSSUR_LABELS, videoIds, brands: brandSets, params })
-  return { ...base, brands, creators }
+  const data: VoicesData = { ...base, brands, creators }
+  const open = openOf(data, params)
+  if (open?.kind === 'brand') {
+    const row = brands.all.find((r) => r.brandKey === open.key)!
+    return {
+      ...data, open, panel: buildBrandPanel({
+        row, kinds: kinds.find((k) => k.brandKey === row.brandKey), subjects: subjects.find((k) => k.brandKey === row.brandKey), noun: null,
+        window: { from: '2026-07-03', to: '2026-10-01' }, asked: null, said: [], findings: [], params,
+      }),
+    }
+  }
+  return data
 }
 
 // ---- Sealand -----------------------------------------------------------------------
@@ -510,6 +570,11 @@ export const VOICES_FIXTURES = {
   // The parity pass (13 Oct): the board's shape in Össur's thin states.
   'ossur-thin': () => ossurThinVoicesFixture(),
   'ossur-counted': () => ossurCountedVoicesFixture(),
+  // Ruling U6: none of Össur's subjects checked (production, 13 Oct), and two
+  // of six checked, each with a group's panel and a counted rival's open.
+  'ossur-provisional-group': () => ossurVoicesFixture({ group: 'caregivers' }, 'provisional'),
+  'ossur-mixed-group': () => ossurVoicesFixture({ group: 'caregivers' }, 'mixed'),
+  'ossur-counted-brand': () => ossurCountedVoicesFixture({ brand: 'Ottobock' }),
   // Your own row counted with nobody naming it unprompted: still crossed.
   'sealand-you-quiet': () => sealandVoicesFixture({}, { youQuiet: true }),
 } as const
