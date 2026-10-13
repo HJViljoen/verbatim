@@ -6,7 +6,7 @@ import { INDUSTRY_AUDIENCE } from '../rivals'
 import type { DatedEvidence } from '../written/evidence'
 import type { PoolTheme, ThemeJudgement } from '../written/pool'
 import {
-  bestRow, choosePlay, ideaLength, isQuestionConversation, LENGTH_MAX_SECONDS, LENGTH_MIN_VIDEOS, POST_IDEA_CANDIDATES, POST_IDEA_MIN_MULTIPLE, POST_IDEAS_MAX,
+  bestRow, choosePlay, ideaLength, isQuestionConversation, isQuestionShaped, LENGTH_MAX_SECONDS, LENGTH_MIN_VIDEOS, POST_IDEA_CANDIDATES, POST_IDEA_MIN_MULTIPLE, POST_IDEA_MIN_RATED, POST_IDEAS_MAX,
   questionComments, rankQuestions, roundSeconds, untouchedQuestions, withHandles, type PlayVideo,
 } from './select'
 
@@ -72,6 +72,52 @@ const ASKS = [
   'Does the roll top on this backpack really keep the rain out?',
 ]
 
+describe('isQuestionShaped: only a comment that asks reaches the writer', () => {
+  it.each([
+    'Is this backpack waterproof enough for a laptop?',
+    'how long does it last',
+    'Do you think Osprey will not work with these airlines',
+    'Anyone know if it fits under the seat',
+    'これは機内に持ち込めますか？',
+    'هل هذه الحقيبة مقاومة للماء؟',
+    'Es impermeable? Me encanta',
+    'Precio?',
+  ])('asks: "%s"', (text) => {
+    expect(isQuestionShaped(text)).toBe(true)
+  })
+
+  it.each([
+    'make sure you are checking dimensions for any relevant airlines.',
+    'A carry on backpack can be larger than 30L for most airlines.',
+    'What a beautiful bag!',
+    'Do it, you will not regret it.',
+    'Love this colour',
+    '',
+  ])('does not ask: "%s"', (text) => {
+    expect(isQuestionShaped(text)).toBe(false)
+  })
+
+  it('Sealand\'s airline conversation (4 to 11 Oct): the advice and the answers stay out, the questions go in', () => {
+    const AIRLINE: PoolTheme = { ...WATERPROOF, themeId: 'th-airline', label: 'Will it fit airline rules', memberIds: ['a1', 'a2', 'a3'] }
+    const evidence = [
+      ev({ insight: 'a1', video: 1, text: 'make sure you are checking dimensions for any relevant airlines. that may steer your decision more than anything else.' }),
+      ev({ insight: 'a1', video: 1, text: 'Check the dimension and weight limits for all the airlines you will use, this backpack is a bit deep for many of them.' }),
+      ev({ insight: 'a2', video: 2, text: 'A carry on backpack can be larger than 30L for most airlines.' }),
+      ev({ insight: 'a2', video: 2, text: 'some airlines will scale you on carryons, I have heard of this a lot in Asia on these boards.' }),
+      ev({ insight: 'a3', video: 3, text: 'I will fly American airlines and Sky airlines. Do you think this backpack will not work with these airlines?' }),
+      ev({ insight: 'a3', video: 4, text: 'Will this backpack fit under the seat on a budget airline?' }),
+    ]
+    const out = questionComments(SEALAND, AIRLINE, evidence)
+    expect(out.map((c) => c.videoId).sort()).toEqual(['v-3', 'v-4'])
+    expect(out.every((c) => isQuestionShaped(c.text))).toBe(true)
+  })
+
+  it('sends the words as written where the English lost the question mark', () => {
+    const lost = { ...ev({ insight: 'q1', video: 1, text: 'このバックパックは機内に持ち込めますか？', english: 'This backpack can be carried on board as hand luggage.' }), lang: 'ja' }
+    expect(questionComments(SEALAND, WATERPROOF, [lost]).map((c) => c.text)).toEqual(['このバックパックは機内に持ち込めますか？'])
+  })
+})
+
 describe('questionComments: the conversation\'s question comments, as the writer reads them', () => {
   it('reads only this theme\'s members, on category videos of the read lane, never a maker\'s video or a brand insider', () => {
     const evidence = [
@@ -87,8 +133,8 @@ describe('questionComments: the conversation\'s question comments, as the writer
     expect(out.map((c) => c.videoId).sort()).toEqual(['v-1', 'v-2'])
   })
 
-  it('takes the question-kind citations where they reach three videos, and every counted one where they do not', () => {
-    const praise = ev({ insight: 'q4', video: 9, text: 'This backpack kept my laptop dry through a storm in Lisbon last week.', kind: 'praise' })
+  it('takes the question-kind citations where they reach three videos, and every counted one that asks where they do not', () => {
+    const praise = ev({ insight: 'q4', video: 9, text: 'How much did this backpack cost you in Lisbon?', kind: 'purchase_intent' })
     const asking = [ev({ insight: 'q1', video: 1, text: ASKS[0] }), ev({ insight: 'q2', video: 2, text: ASKS[1] }), ev({ insight: 'q3', video: 3, text: ASKS[2] })]
     expect(questionComments(SEALAND, WATERPROOF, [...asking, praise]).map((c) => c.videoId).sort()).toEqual(['v-1', 'v-2', 'v-3'])
     // Two videos of questions: a price conversation's "how much?" is often filed as buying intent.
@@ -195,34 +241,50 @@ const ON_QUESTION: PlayVideo[] = [
   play('rd3', { platform: 'reddit', classified_type: 'review', hook_style: 'bold-claim', engagement_rate: 97 }),
 ]
 
+/** A question with enough rated videos to choose from: twelve tutorials
+ *  (8 to 19), twelve reviews (2 to 13), four stories at 40 (under the floor of
+ *  ten, however high), and Reddit's three (never read). */
+const FLOORED: PlayVideo[] = [
+  ...Array.from({ length: 12 }, (_, i) => play(`t${i}`, { classified_type: 'tutorial', hook_style: 'question', engagement_rate: 8 + i, duration_seconds: 30 + i, upload_date: `202${5 + (i % 2)}-0${(i % 9) + 1}-10` })),
+  ...Array.from({ length: 12 }, (_, i) => play(`r${i}`, { classified_type: 'review', hook_style: 'bold-claim', engagement_rate: 2 + i, duration_seconds: 90 })),
+  ...Array.from({ length: 4 }, (_, i) => play(`s${i}`, { classified_type: 'story', hook_style: 'personal-story', engagement_rate: 40, duration_seconds: 20 })),
+  ...Array.from({ length: 3 }, (_, i) => play(`rd${i}`, { platform: 'reddit', classified_type: 'review', hook_style: 'bold-claim', engagement_rate: 99 })),
+]
+
 describe('choosePlay: the playbook\'s own reading over the market\'s videos on the question, whenever published', () => {
-  it('picks the format and the opening with the highest median at or above the floor multiple, against the question\'s own median video', () => {
-    const p = choosePlay(ON_QUESTION, '2026-10-01')
-    // Rated (Reddit out): 6 7 8 2 3 4 30 28, median 6.5. Tutorial 7 / 6.5.
+  it('picks the format and the opening with the highest median on ten or more rated videos and at or above the floor multiple, against the question\'s own median video', () => {
+    const p = choosePlay(FLOORED, '2026-10-01')
+    // Rated (Reddit out): 28 videos, median 11.5. Tutorial 13.5 / 11.5; the
+    // stories' 40 is on four videos and is never suggested.
     expect(p.format).toBe('tutorial')
-    expect(p.formatMultiple).toBe(1.1)
+    expect(p.formatMultiple).toBe(1.2)
     expect(p.opening).toBe('question')
-    expect(p.openingMultiple).toBe(1.1)
-    expect(p.videos).toBe(11)
-    expect(p.rated).toBe(8)
+    expect(p.openingMultiple).toBe(1.2)
+    expect(p.videos).toBe(31)
+    expect(p.rated).toBe(28)
   })
 
-  it('reads every video handed in, published in any month (a month slice would leave the tutorials under the floor)', () => {
-    const p = choosePlay(ON_QUESTION, '2026-10-01')
-    expect(p.format).not.toBeNull()
+  it('suggests no format off a handful of videos: the floor every surface rests a lead on', async () => {
+    const { LEAD_MIN_RATED } = await import('../pages/content-brief')
+    expect(POST_IDEA_MIN_RATED).toBe(LEAD_MIN_RATED)
+    expect(POST_IDEA_MIN_RATED).toBe(10)
+    // Three tutorials far above the typical video: no pick, null and null.
+    expect(choosePlay(ON_QUESTION, '2026-10-01')).toMatchObject({ format: null, formatMultiple: null, opening: null, openingMultiple: null })
   })
 
-  it('chooses nothing where no group clears three rated videos, or none runs above the typical video', () => {
-    expect(choosePlay(ON_QUESTION.filter((v) => v.classified_type !== 'tutorial'), '2026-10-01').format).toBeNull()
+  it('chooses nothing where no group clears the floors, or none runs above the typical video', () => {
+    expect(choosePlay(FLOORED.filter((v) => v.classified_type !== 'tutorial'), '2026-10-01').format).toBeNull()
     expect(choosePlay([], '2026-10-01')).toMatchObject({ format: null, formatMultiple: null, opening: null, openingMultiple: null, length: null, videos: 0, rated: 0 })
     expect(POST_IDEA_MIN_MULTIPLE).toBe(1.1)
   })
 
   it('bestRow: the highest median, then the most rated videos, then the key', () => {
-    const row = (key: string, median: number, n: number, multiple: number) => ({ key, label: key, value: { k: n, n: 10 }, pct: null, engagement: { median, n, band: null }, multiple })
-    expect(bestRow({ rows: [row('b', 5, 3, 1.5), row('a', 5, 3, 1.5), row('c', 5, 4, 1.5)] })?.key).toBe('c')
-    expect(bestRow({ rows: [row('b', 5, 3, 1.5), row('a', 5, 3, 1.5)] })?.key).toBe('a')
-    expect(bestRow({ rows: [row('a', 5, 3, 1.05)] })).toBeNull()
+    const row = (key: string, median: number, n: number, multiple: number) => ({ key, label: key, value: { k: n, n: 40 }, pct: null, engagement: { median, n, band: null }, multiple })
+    expect(bestRow({ rows: [row('b', 5, 10, 1.5), row('a', 5, 10, 1.5), row('c', 5, 11, 1.5)] })?.key).toBe('c')
+    expect(bestRow({ rows: [row('b', 5, 10, 1.5), row('a', 5, 10, 1.5)] })?.key).toBe('a')
+    expect(bestRow({ rows: [row('a', 5, 10, 1.05)] })).toBeNull()
+    expect(bestRow({ rows: [row('a', 9, 9, 3), row('b', 5, 10, 1.5)] })?.key).toBe('b')
+    expect(bestRow({ rows: [row('a', 9, 3, 3)] }, { minRated: 3 })?.key).toBe('a')
   })
 })
 

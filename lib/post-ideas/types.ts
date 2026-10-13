@@ -35,9 +35,12 @@ export interface PostIdeaCover {
    *  (`'question'`). Absent where too few videos carry one (T13, written by
    *  lib/post-ideas/select.ts `ideaLength`). */
   length?: PostIdeaLength
-  /** The comments the sub-questions were grouped from: the conversation's
-   *  question comments of the run's window that went to the model, and their
-   *  videos. A sub-question's figure is its videos "of `asked.videos`". */
+  /** The comments the sub-questions were grouped from: exactly the
+   *  conversation's question comments of the run's window that were SENT to
+   *  the model (a capped, video-spread sample), and the number of DISTINCT
+   *  videos those comments sit under. A sub-question can only be found among
+   *  them, so its figure prints as its videos "of `asked.videos`", never of
+   *  the conversation's week. */
   asked?: { comments: number; videos: number }
 }
 

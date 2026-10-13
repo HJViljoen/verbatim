@@ -1,3 +1,4 @@
+import { COMPETITIVE_MIN_VIDEOS } from '../config'
 import { questionTouch, type QuestionPost, type QuestionTouch } from '../pages/own-post-touch'
 import { ENGAGEMENT_EXCLUDED, formatReading, type FormatReading, type FormatRow, type FormatVideo } from '../reading/formats'
 import { INDUSTRY_AUDIENCE } from '../rivals'
@@ -25,12 +26,15 @@ import { POST_IDEA_RANKS, type PostIdeaLength } from './types'
 //
 // THE COMMENTS THE WRITER GROUPS. The conversation's citations in the window
 // that count for the week (`countsForTheWeek`: category, read lane, no maker's
-// video) and pass the lenient gate (no brand insider), of question-kind
-// insights where it has any: one per comment, at most
+// video), pass the lenient gate (no brand insider) and ASK (`isQuestionShaped`:
+// a question mark of any script anywhere, or an English question opener; an
+// answer or a piece of advice is never a sub-question), of question-kind
+// insights where those reach three videos: one per comment, at most
 // `POST_IDEA_COMMENTS_MAX`, drawn round the videos so the sample reaches as
-// many of them as it can. The writer reads them in English where the
-// translation cache has it; NOTHING HERE IS STORED: a sub-question keeps
-// comment and video ids, and its figure is counted from them.
+// many of them as it can. The writer reads each in English where the
+// translation cache has it and the English still asks, else as written;
+// NOTHING HERE IS STORED: a sub-question keeps comment and video ids, and its
+// figure is counted from them.
 //
 // THE FORMAT, THE OPENING AND THE LENGTH ARE CODE'S (`choosePlay`). The
 // playbook's own reading (`formatReading`, the engine of `buildPlaybook`:
@@ -42,7 +46,9 @@ import { POST_IDEA_RANKS, type PostIdeaLength } from './types'
 // client's posts or a video naming the client, never a rival's), read off the
 // conversation's member insights' own videos. The multiple is against the
 // median video ON THE QUESTION. The best group by median that runs at least
-// `POST_IDEA_MIN_MULTIPLE` above it is chosen; none, and the slot is null.
+// `POST_IDEA_MIN_MULTIPLE` above it, on at least `POST_IDEA_MIN_RATED` rated
+// videos (the floor every surface rests a format's lead on), is chosen; none,
+// and the slot is null rather than a pick off a handful of videos.
 
 /** At most three ideas a run (the table's ranks). */
 export const POST_IDEAS_MAX = POST_IDEA_RANKS.length
@@ -56,6 +62,11 @@ export const POST_IDEA_COMMENT_CHARS = 280
 export const POST_IDEA_SUBQUESTIONS_MAX = 5
 /** A format or opening is suggested only at this multiple or above. */
 export const POST_IDEA_MIN_MULTIPLE = 1.1
+/** …and only off this many rated videos in its group: the product's floor for
+ *  resting a finding on a bucket, the one `LEAD_MIN_RATED`
+ *  (lib/pages/content-brief.ts) names for the playbook's one takeaway. Read
+ *  from where it lives so the pipeline does not import a page. */
+export const POST_IDEA_MIN_RATED = COMPETITIVE_MIN_VIDEOS
 /** Durations a length is read off, at least: under five, the middle half is
  *  the whole range (three testimonials ran 30 s and 3:15 on Össur's week). */
 export const LENGTH_MIN_VIDEOS = 5
@@ -77,8 +88,28 @@ export interface IdeaComment {
   commentId: string
   /** `videos.id` of the video the comment sits under. */
   videoId: string
-  /** The English where the translation cache has it, else as written. */
+  /** The English where the translation cache has it and it still asks, else
+   *  as written. Always question-shaped (`isQuestionShaped`). */
   text: string
+}
+
+/** A question mark of any script: Latin, full-width (Chinese, Japanese) and
+ *  Arabic. Most comments are not in English, so this is the main signal. */
+const QUESTION_MARK = /[?？؟]/
+/** An English question's opener: a question word (never "what a…", which
+ *  exclaims), or an auxiliary before its subject ("do you", "is it", "can
+ *  anyone"); "Do it!" and "Do this" are not questions. */
+const QUESTION_OPENER = new RegExp(
+  String.raw`^[^\p{L}\p{N}]*(?:(?:what(?!\s+an?\b)|why|how|when|where|which|who|whom|whose)\b|(?!do\s+(?:it|that|this)\b)(?:is|are|am|was|were|do|does|did|can|could|will|would|should|shall|may|might|has|have|had|isn'?t|aren'?t|doesn'?t|don'?t|didn'?t|can'?t|won'?t|wouldn'?t|couldn'?t|shouldn'?t)\s+(?:i|you|he|she|it|we|they|this|that|these|those|there|anyone|anybody|someone|somebody|the|a|an|my|your|his|her|their|our|u)\b|any\s*(?:one|body)\s+(?:know|have|tried|else|use))`,
+  'iu',
+)
+
+/** Does this comment ASK? A question mark of any script anywhere in it, or an
+ *  English question opener. An answer, a piece of advice or a compliment is
+ *  never a sub-question. Pure. */
+export function isQuestionShaped(text: string | null | undefined): boolean {
+  const t = (text ?? '').trim()
+  return t !== '' && (QUESTION_MARK.test(t) || QUESTION_OPENER.test(t))
 }
 
 /** What code chose for the post. */
@@ -107,7 +138,9 @@ export interface IdeaCandidate {
   /** …with a citation the lenient gate passes: the rank key. */
   lenientVideos: number
   comments: IdeaComment[]
-  /** What the comments sent cover (the cover's `asked`). */
+  /** The comments sent to the writer, and the DISTINCT videos they sit
+   *  under: the cover's `asked`, the "of N" a sub-question's videos print
+   *  against (a sub-question can only be found among the comments sent). */
   asked: { comments: number; videos: number }
   play: IdeaPlay
   /** `none`, or `unread` where the client's posts could not be read (the
@@ -188,10 +221,11 @@ export function questionComments(
 ): Omit<IdeaComment, 'handle'>[] {
   const members = new Set(theme.memberIds)
   const gate = lenientGateFor(clientId, theme.label)
-  const counted = evidence.filter((e) => members.has(e.insightId) && countsForTheWeek(e) && judge(e, gate).ok && (e.english ?? e.text).trim() !== '')
-  // The questions where they reach as many videos as a conversation needs;
-  // otherwise every counted comment (a price conversation's "how much?" is
-  // often filed as buying intent), and the writer leaves out what asks nothing.
+  // Only a comment that asks, in its own words or its English.
+  const counted = evidence.filter((e) => members.has(e.insightId) && countsForTheWeek(e) && judge(e, gate).ok && (isQuestionShaped(e.english) || isQuestionShaped(e.text)))
+  // The question-kind ones where they reach as many videos as a conversation
+  // needs; otherwise every comment that asks (a price conversation's "how
+  // much?" is often filed as buying intent).
   const asking = counted.filter((e) => e.kind === QUESTION_KIND)
   const pool = new Set(asking.map((e) => e.video.uuid)).size >= POOL_MIN_VIDEOS ? asking : counted
   // One row per comment: its best-ranked citation.
@@ -215,7 +249,10 @@ export function questionComments(
     }
     if (!more) break
   }
-  return out.map((e) => ({ commentId: e.commentId, videoId: e.video.uuid, text: clip(e.english ?? e.text, POST_IDEA_COMMENT_CHARS) }))
+  // The English where it still asks (a translation that dropped the "？"),
+  // else the words as written: the writer reads either, and compose checks
+  // the very string it was sent.
+  return out.map((e) => ({ commentId: e.commentId, videoId: e.video.uuid, text: clip(isQuestionShaped(e.english) ? e.english! : e.text, POST_IDEA_COMMENT_CHARS) }))
 }
 
 // ---- The format, the opening, the length ----------------------------------------------
@@ -225,11 +262,17 @@ export interface PlayVideo extends FormatVideo {
   duration_seconds: number | string | null
 }
 
-/** The best group of a reading at or above the floor multiple: the highest
- *  median, then the most rated videos, then the key. Null where none clears. */
-export function bestRow(reading: Pick<FormatReading, 'rows'>, minMultiple = POST_IDEA_MIN_MULTIPLE): FormatRow | null {
+/** The best group of a reading on at least the floor of rated videos and at
+ *  or above the floor multiple: the highest median, then the most rated
+ *  videos, then the key. Null where none clears both. */
+export function bestRow(
+  reading: Pick<FormatReading, 'rows'>,
+  opts: { minMultiple?: number; minRated?: number } = {},
+): FormatRow | null {
+  const minMultiple = opts.minMultiple ?? POST_IDEA_MIN_MULTIPLE
+  const minRated = opts.minRated ?? POST_IDEA_MIN_RATED
   return [...reading.rows]
-    .filter((r) => r.engagement.median !== null && r.multiple !== null && r.multiple >= minMultiple)
+    .filter((r) => r.engagement.median !== null && r.engagement.n >= minRated && r.multiple !== null && r.multiple >= minMultiple)
     .sort((a, b) => (b.engagement.median ?? 0) - (a.engagement.median ?? 0) || b.engagement.n - a.engagement.n || a.key.localeCompare(b.key))[0] ?? null
 }
 
