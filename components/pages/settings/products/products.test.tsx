@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { fakeDb } from '@/lib/test/fake-db'
 import { render, renderText } from '@/lib/test/render'
-import { loadProductSettings, productSettingsView, PRODUCTS_NOT_APPLIED, type ProductSettingsView } from '@/lib/settings/products'
+import { loadProductSettings, productSettingsView, PRODUCTS_HELD, PRODUCTS_NOT_APPLIED, type ProductSettingsView } from '@/lib/settings/products'
 import { fid, FIXTURE_CLIENT, FIXTURE_NOW, productsFixtureRead, productsFixtureTables } from './fixture'
 import { ProductsTab } from './index'
 
@@ -95,6 +95,24 @@ describe('the Your products tab', () => {
     for (const gone of ['Add a', 'Rename', 'Edit', 'Check the list']) expect(t, gone).not.toContain(gone)
     expect(t).toContain('We filled this in from ossur.com on 11 Oct.')
     expect(t).toContain('seal in x')
+  })
+
+  it('lets an owner remove a category\'s word or range name, asked once, and a member see them only', () => {
+    const owner = render(<ProductsTab view={view()} />)
+    for (const word of ['liner', 'liners', 'prosthetic liner', 'Iceross']) expect(owner).toContain(`aria-label="Remove the name ${word}"`)
+    expect(render(<ProductsTab view={view(false)} />)).not.toContain('Remove the name')
+  })
+
+  it('shows a locked tenant\'s owner the lock\'s line and every control disabled, before anything is submitted', () => {
+    const v = productSettingsView(productsFixtureRead(), { selected: null, canEdit: true, locked: true })
+    const markup = render(<ProductsTab view={v} />)
+    const t = text(v)
+    expect(t).toContain(`We filled this in from ossur.com on 11 Oct. ${PRODUCTS_HELD}`)
+    expect(t).not.toContain('Check the list')
+    const buttons = markup.match(/<button[^>]*>/g) ?? []
+    expect(buttons.length).toBeGreaterThan(10)
+    for (const b of buttons) expect(b, b).toContain('disabled=""')
+    assertCopyContract(markup)
   })
 
   it('says an empty list is empty, to an owner and to a member', () => {

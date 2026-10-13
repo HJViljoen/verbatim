@@ -4,9 +4,10 @@ import { Info, Package } from 'lucide-react'
 import { IconTile, SELECTED } from '@/components/colour-roles'
 import { Card } from '@/components/pages/studio/ui'
 import { fmtInt } from '@/lib/format'
-import { PRODUCTS_NOT_APPLIED, type AliasChip, type OpenCategory, type ProductLine, type ProductSettingsView } from '@/lib/settings/products'
+import { PRODUCTS_HELD, PRODUCTS_NOT_APPLIED, type AliasChip, type OpenCategory, type ProductLine, type ProductSettingsView } from '@/lib/settings/products'
 import { cn } from '@/lib/utils'
-import { AddCategory, AddName, AddProduct, EditProduct, RenameCategory } from './controls'
+import { ALIAS_CHIP, CHECKED_TAG } from './chip'
+import { AddCategory, AddName, AddProduct, EditProduct, RemovableAlias, RenameCategory } from './controls'
 
 // Settings › Your products (depth redesign v2, T10b), drawn to the E8 board:
 // the note on where the list came from, then the categories on the left and
@@ -28,13 +29,13 @@ import { AddCategory, AddName, AddProduct, EditProduct, RenameCategory } from '.
 const MUTED = 'text-[#5F656B]'
 const ROW_RULE = 'border-[#ECEAE4]'
 
-/** The board's `.alias`: a name on the ground, in the mono. A common word
- *  carries "checked", and the key under the table says what that means. */
+/** The board's `.alias` (./chip): a name on the ground, in the mono. A common
+ *  word carries "checked", and the key under the table says what that means. */
 function Alias({ a }: { a: AliasChip }) {
   return (
-    <span data-alias={a.kind} className="mr-1.5 mb-1.5 inline-flex items-center rounded-[6px] bg-[#F7F6F2] px-2 py-1 font-mono text-[12.5px] leading-[1.3] text-[#26292C]">
+    <span data-alias={a.kind} className={ALIAS_CHIP}>
       {a.alias}
-      {a.needsConfirm ? <span className={`ml-1.5 font-sans text-[11px] font-semibold ${MUTED}`}>checked</span> : null}
+      {a.needsConfirm ? <span className={CHECKED_TAG}>checked</span> : null}
     </span>
   )
 }
@@ -48,9 +49,11 @@ function Note({ children }: { children: ReactNode }) {
   )
 }
 
-/** The note over the list: where it came from, and what to add. */
+/** The note over the list: where it came from, and what to add; for a
+ *  locked tenant's owner or admin, the lock's line in place of what to add. */
 function Seeded({ view }: { view: ProductSettingsView }) {
   const lead = view.seeded ? <b className="font-semibold">We filled this in from {view.seeded.from} on {view.seeded.on}. </b> : null
+  if (view.locked) return <Note>{lead}{PRODUCTS_HELD}</Note>
   if (!view.canEdit) return lead ? <Note>{lead}</Note> : null
   if (view.total === 0 && !lead) return null
   return (
@@ -93,7 +96,7 @@ function Categories({ view }: { view: ProductSettingsView }) {
       ) : (
         <p className={`m-0 px-2 pb-1 text-[14px] ${MUTED}`}>No categories yet.</p>
       )}
-      {view.canEdit ? <AddCategory /> : null}
+      {view.canEdit ? <AddCategory locked={view.locked} /> : null}
     </Card>
   )
 }
@@ -101,7 +104,7 @@ function Categories({ view }: { view: ProductSettingsView }) {
 /** The open category's own words: for the kind of product in general, and for
  *  the range as a whole. Not on the board, which draws a product's names only;
  *  drawn where there are any, or where they can be added. */
-function CategoryWords({ open, canEdit }: { open: OpenCategory; canEdit: boolean }) {
+function CategoryWords({ open, canEdit, locked }: { open: OpenCategory; canEdit: boolean; locked: boolean }) {
   const rows = [
     { key: 'words', label: 'Words for the category', items: open.words, kind: 'category_word' as const, add: 'Add a word' },
     { key: 'ranges', label: 'Names for the whole range', items: open.ranges, kind: 'nickname' as const, add: 'Add a name' },
@@ -113,8 +116,8 @@ function CategoryWords({ open, canEdit }: { open: OpenCategory; canEdit: boolean
         <div key={r.key} className="grid grid-cols-1 gap-1.5 sm:grid-cols-[190px_minmax(0,1fr)] sm:items-baseline">
           <dt className={`text-[11.5px] font-semibold uppercase tracking-[0.05em] ${MUTED}`}>{r.label}</dt>
           <dd className="m-0 flex flex-wrap items-center">
-            {r.items.map((a) => <Alias key={a.id} a={a} />)}
-            {canEdit ? <AddName groupId={open.id} kind={r.kind} label={r.add} owner={open.name} /> : null}
+            {r.items.map((a) => (canEdit ? <RemovableAlias key={a.id} alias={a} locked={locked} /> : <Alias key={a.id} a={a} />))}
+            {canEdit ? <AddName groupId={open.id} kind={r.kind} label={r.add} owner={open.name} locked={locked} /> : null}
           </dd>
         </div>
       ))}
@@ -143,11 +146,11 @@ function ProductRow({ p, open, view }: { p: ProductLine; open: OpenCategory; vie
       <span role="rowheader" className="col-start-1 row-start-1 min-w-0 self-center text-[14.5px] font-semibold">{p.name}</span>
       <div role="cell" className="col-span-2 col-start-1 row-start-2 flex min-w-0 flex-wrap items-center lg:col-span-1 lg:col-start-2 lg:row-start-1 [&>*:last-child]:mb-0 lg:[&>*]:mb-1.5">
         {p.aliases.map((a) => <Alias key={a.id} a={a} />)}
-        {view.canEdit ? <AddName productId={p.id} kind="nickname" label="Add a name" owner={p.name} /> : null}
+        {view.canEdit ? <AddName productId={p.id} kind="nickname" label="Add a name" owner={p.name} locked={view.locked} /> : null}
       </div>
       <div role="cell" className="col-start-1 row-start-3 lg:col-start-3 lg:row-start-1"><Month videos={p.videos} /></div>
       <div role="cell" className="col-start-2 row-start-1 flex justify-end lg:col-start-4">
-        {view.canEdit ? <EditProduct id={p.id} name={p.name} groupId={open.id} aliases={p.aliases} choices={view.choices} /> : null}
+        {view.canEdit ? <EditProduct id={p.id} name={p.name} groupId={open.id} aliases={p.aliases} choices={view.choices} locked={view.locked} /> : null}
       </div>
     </div>
   )
@@ -168,12 +171,12 @@ function OpenCategoryCard({ open, view }: { open: OpenCategory; view: ProductSet
         </div>
         {view.canEdit ? (
           <div className="flex gap-2">
-            <RenameCategory id={open.id} name={open.name} products={open.products} />
-            <AddProduct groupId={open.id} groupName={open.name} />
+            <RenameCategory id={open.id} name={open.name} products={open.products} locked={view.locked} />
+            <AddProduct groupId={open.id} groupName={open.name} locked={view.locked} />
           </div>
         ) : null}
       </div>
-      <CategoryWords open={open} canEdit={view.canEdit} />
+      <CategoryWords open={open} canEdit={view.canEdit} locked={view.locked} />
       {open.rows.length > 0 ? (
         <div role="table" aria-label={`Products in ${open.name}`} className="flex min-w-0 flex-col">
           <div role="row" className={`${GRID} hidden border-b border-[#E4E2DC] pb-2 text-[11.5px] font-semibold uppercase tracking-[0.05em] lg:grid ${MUTED}`}>
@@ -242,7 +245,9 @@ export function ProductsTab({ view }: { view: ProductSettingsView | null }) {
           <Card className="min-w-0 gap-2 px-[26px] py-6 max-sm:px-5">
             <h2 className="m-0 text-[17px] font-semibold leading-[1.3]">No products listed yet</h2>
             <p className={`m-0 text-[14px] leading-[1.5] ${MUTED}`}>
-              {view.canEdit
+              {view.locked
+                ? PRODUCTS_HELD
+                : view.canEdit
                 ? 'Add a category, then the products in it and the other names people use for them. What your market says about a product is placed under it once it is on this list.'
                 : 'Nothing is listed for this workspace yet. An owner or admin can add your products here.'}
             </p>

@@ -4,6 +4,7 @@ import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { surface } from '@/lib/nav'
 import { loadProductSettings, productSettingsView } from '@/lib/settings/products'
 import { settingsSubPage } from '@/lib/settings/rail'
+import { assertTenantMay } from '@/lib/tenant-locks'
 import type { Metadata } from 'next'
 
 // The tab's title is the page's own name (finish-list item 25 polish; the root
@@ -19,7 +20,10 @@ export const metadata: Metadata = { title: `${settingsSubPage('products').label}
 // is applied the read answers `missing` and the tab says the list is not
 // switched on; any other failure keeps the frame and says the settings did not
 // load. The writes are lib/actions/products.ts, each checking the role and the
-// tenant lock itself; `canEdit` here is the affordance, not the gate.
+// tenant lock itself; `canEdit` here is the affordance, not the gate. The lock
+// is a pure check on the session (`assertTenantMay`, the same call the actions
+// make), so a locked tenant's owner or admin sees the controls disabled under
+// the lock's line rather than a refusal after a submit.
 
 export default async function SettingsProductsPage({
   searchParams,
@@ -40,7 +44,11 @@ export default async function SettingsProductsPage({
       {read === null ? (
         <p className="m-0 text-[14px] text-[#5F656B]">Your settings did not load. Refresh the page.</p>
       ) : (
-        <ProductsTab view={read.state === 'missing' ? null : productSettingsView(read, { selected, canEdit: canManageTenant(role) })} />
+        <ProductsTab view={read.state === 'missing' ? null : productSettingsView(read, {
+          selected,
+          canEdit: canManageTenant(role),
+          locked: !assertTenantMay(session, clientId, 'tracking').ok,
+        })} />
       )}
     </SettingsFrame>
   )

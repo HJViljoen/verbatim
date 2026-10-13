@@ -16,6 +16,7 @@ import {
 } from '@/lib/actions/products'
 import type { AliasChip } from '@/lib/settings/products'
 import { cn } from '@/lib/utils'
+import { ALIAS_CHIP, CHECKED_TAG } from './chip'
 
 // The tab's controls (board E8-Settings-Products): "+ Add a category" under
 // the list, "Rename" and "+ Add a product" on the open category, "+ Add a
@@ -26,7 +27,12 @@ import { cn } from '@/lib/utils'
 //
 // REMOVING IS RETIRING. "Remove" asks once, says what goes with it, and
 // retires: the action never deletes, and what was already read keeps its
-// numbers.
+// numbers. A name is removed the same way, from the product's Edit card or
+// from the × on a category's word.
+//
+// LOCKED: an owner or admin the tenant lock holds sees every control
+// disabled, under the lock's own line on the tab (`locked`), rather than
+// learning about the lock from a refusal after a submit.
 
 type Action = (prev: ProductFormState, form: FormData) => Promise<ProductFormState>
 
@@ -92,7 +98,7 @@ function CommonWord({ id }: { id: string }) {
 // ---- Categories ---------------------------------------------------------------------
 
 /** "+ Add a category", under the list. */
-export function AddCategory() {
+export function AddCategory({ locked = false }: { locked?: boolean }) {
   const [open, setOpen] = useState(false)
   const [state, run, pending] = useSave(addProductGroup, () => setOpen(false))
   const input = useRef<HTMLInputElement>(null)
@@ -100,7 +106,7 @@ export function AddCategory() {
   if (!open) {
     return (
       <div className="flex flex-col gap-1.5 px-2 pt-2.5 pb-1">
-        <button type="button" onClick={() => setOpen(true)} className={cn(GROUND_BUTTON, 'w-full')}>
+        <button type="button" disabled={locked} onClick={() => setOpen(true)} className={cn(GROUND_BUTTON, 'w-full')}>
           <Plus aria-hidden className="size-[15px]" strokeWidth={2} />Add a category
         </button>
         {state.ok && state.message ? <p role="status" className="m-0 text-[12px] text-[#5F656B]">{state.message}</p> : null}
@@ -122,7 +128,7 @@ export function AddCategory() {
 }
 
 /** "Rename" on the open category, with its removal at the foot of the card. */
-export function RenameCategory({ id, name, products }: { id: string; name: string; products: number }) {
+export function RenameCategory({ id, name, products, locked = false }: { id: string; name: string; products: number; locked?: boolean }) {
   const [mode, setMode] = useState<'closed' | 'rename' | 'remove'>('closed')
   const close = () => setMode('closed')
   useEscape(mode !== 'closed', close)
@@ -130,7 +136,7 @@ export function RenameCategory({ id, name, products }: { id: string; name: strin
   const [removed, remove, removing] = useSave(retireProductGroup, close)
   return (
     <div className="relative">
-      <button type="button" aria-expanded={mode !== 'closed'} onClick={() => setMode((m) => (m === 'closed' ? 'rename' : 'closed'))} className={GROUND_BUTTON}>
+      <button type="button" disabled={locked} aria-expanded={mode !== 'closed'} onClick={() => setMode((m) => (m === 'closed' ? 'rename' : 'closed'))} className={GROUND_BUTTON}>
         Rename
       </button>
       {mode === 'rename' ? (
@@ -176,14 +182,14 @@ export function RenameCategory({ id, name, products }: { id: string; name: strin
 // ---- Products -----------------------------------------------------------------------
 
 /** "+ Add a product" on the open category. */
-export function AddProduct({ groupId, groupName }: { groupId: string; groupName: string }) {
+export function AddProduct({ groupId, groupName, locked = false }: { groupId: string; groupName: string; locked?: boolean }) {
   const [open, setOpen] = useState(false)
   const close = () => setOpen(false)
   useEscape(open, close)
   const [state, run, pending] = useSave(addProduct, close)
   return (
     <div className="relative">
-      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={INK_BUTTON}>
+      <button type="button" disabled={locked} aria-expanded={open} onClick={() => setOpen((o) => !o)} className={INK_BUTTON}>
         <Plus aria-hidden className="size-[15px]" strokeWidth={2} />Add a product
       </button>
       {open ? (
@@ -207,7 +213,8 @@ export function AddProduct({ groupId, groupName }: { groupId: string; groupName:
 
 /** "+ Add a name": another name for a product, or a word or a range name on a
  *  category. Opens one field in place of the chip. */
-export function AddName({ productId, groupId, kind, label, owner }: {
+export function AddName({ productId, groupId, kind, label, owner, locked = false }: {
+  locked?: boolean
   productId?: string
   groupId?: string
   kind: 'nickname' | 'category_word'
@@ -221,7 +228,7 @@ export function AddName({ productId, groupId, kind, label, owner }: {
   const key = productId ?? groupId ?? 'x'
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} className={ADD_CHIP}>
+      <button type="button" disabled={locked} onClick={() => setOpen(true)} className={cn(ADD_CHIP, 'disabled:opacity-50 disabled:hover:border-[#C9C6BE] disabled:hover:text-[#5F656B]')}>
         + {label}
       </button>
     )
@@ -245,23 +252,66 @@ export function AddName({ productId, groupId, kind, label, owner }: {
   )
 }
 
-/** One name in the Edit card, with its Remove. */
-function NameRow({ alias }: { alias: AliasChip }) {
+/** Remove a name, asked once (the action retires it): the confirm in place
+ *  of the × that opened it, and a refusal printed where it can be read. */
+function RemoveName({ alias, children }: { alias: AliasChip; children: (ask: () => void) => ReactNode }) {
+  const [asking, setAsking] = useState(false)
   const [state, run, pending] = useActionState(retireProductAlias, INITIAL)
   return (
-    <form action={run} className="flex items-center justify-between gap-2">
-      <input type="hidden" name="id" value={alias.id} />
-      <span className="min-w-0 truncate font-mono text-[12.5px]">{alias.alias}</span>
-      <button type="submit" disabled={pending} aria-label={`Remove the name ${alias.alias}`} className="inline-flex size-7 shrink-0 items-center justify-center rounded-[6px] text-[#5F656B] hover:bg-[#F7F6F2] hover:text-[#26292C] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#26292C]/40">
-        <X aria-hidden className="size-3.5" strokeWidth={2} />
-      </button>
-      {state.message && !state.ok ? <span role="status" className="sr-only">{state.message}</span> : null}
-    </form>
+    <>
+      {asking ? (
+        <form action={run} className="mb-1.5 mr-1.5 inline-flex flex-wrap items-center gap-2 rounded-[6px] bg-[#F7F6F2] px-2 py-1 text-[12.5px]">
+          <input type="hidden" name="id" value={alias.id} />
+          <span>Remove <span className="font-mono">{alias.alias}</span>?</span>
+          <button type="submit" disabled={pending} className="font-semibold text-[#26292C] underline underline-offset-2 disabled:opacity-50">{pending ? 'Removing' : 'Remove'}</button>
+          <button type="button" onClick={() => setAsking(false)} className="text-[#5F656B] underline underline-offset-2">Cancel</button>
+        </form>
+      ) : children(() => setAsking(true))}
+      {state.message && !state.ok ? <p role="status" className="m-0 w-full text-[12px] text-orange-text">{state.message}</p> : null}
+    </>
+  )
+}
+
+const REMOVE_X = 'inline-flex size-5 shrink-0 items-center justify-center rounded-[4px] text-[#5F656B] hover:bg-[#ECEAE4] hover:text-[#26292C] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#26292C]/40 disabled:opacity-50'
+
+/** One name in the Edit card, with its Remove. */
+function NameRow({ alias }: { alias: AliasChip }) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <RemoveName alias={alias}>
+        {(ask) => (
+          <>
+            <span className="min-w-0 truncate font-mono text-[12.5px]">{alias.alias}</span>
+            <button type="button" onClick={ask} aria-label={`Remove the name ${alias.alias}`} className={REMOVE_X}>
+              <X aria-hidden className="size-3.5" strokeWidth={2} />
+            </button>
+          </>
+        )}
+      </RemoveName>
+    </div>
+  )
+}
+
+/** A category's word or range name, with the × that removes it (asked once). */
+export function RemovableAlias({ alias, locked = false }: { alias: AliasChip; locked?: boolean }) {
+  return (
+    <RemoveName alias={alias}>
+      {(ask) => (
+        <span data-alias={alias.kind} className={cn(ALIAS_CHIP, 'gap-1 pr-1')}>
+          {alias.alias}
+          {alias.needsConfirm ? <span className={CHECKED_TAG}>checked</span> : null}
+          <button type="button" disabled={locked} onClick={ask} aria-label={`Remove the name ${alias.alias}`} className={REMOVE_X}>
+            <X aria-hidden className="size-3" strokeWidth={2} />
+          </button>
+        </span>
+      )}
+    </RemoveName>
   )
 }
 
 /** "Edit" on a product: its name and category, its names, and its removal. */
-export function EditProduct({ id, name, groupId, aliases, choices }: {
+export function EditProduct({ id, name, groupId, aliases, choices, locked = false }: {
+  locked?: boolean
   id: string
   name: string
   groupId: string
@@ -275,7 +325,7 @@ export function EditProduct({ id, name, groupId, aliases, choices }: {
   const [removed, remove, removing] = useSave(retireProduct, close)
   return (
     <div className="relative justify-self-end">
-      <button type="button" aria-label={`Edit ${name}`} aria-expanded={mode !== 'closed'} onClick={() => setMode((m) => (m === 'closed' ? 'edit' : 'closed'))} className={GROUND_BUTTON}>
+      <button type="button" disabled={locked} aria-label={`Edit ${name}`} aria-expanded={mode !== 'closed'} onClick={() => setMode((m) => (m === 'closed' ? 'edit' : 'closed'))} className={GROUND_BUTTON}>
         Edit
       </button>
       {mode === 'edit' ? (
