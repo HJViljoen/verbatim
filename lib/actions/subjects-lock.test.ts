@@ -3,8 +3,8 @@ import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../config'
-import { SUBJECT_WRITE_REFUSED, SUBJECTS_HELD } from '../subjects/types'
-import { tenantLocked } from '../tenant-locks'
+import { SUBJECT_WRITE_REFUSED } from '../subjects/types'
+import { SUBJECTS_HELD, tenantLocked } from '../tenant-locks'
 import { fakeDb, type FakeDb } from '../test/fake-db'
 
 // Decision 7 (13 Oct): Sealand's lock covers subject edits. Adding, renaming,

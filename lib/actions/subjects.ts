@@ -13,9 +13,9 @@ import {
   setMoveStatus,
   type WriteContext,
 } from '@/lib/subjects/moves'
-import { MOVE_STATUSES, SUBJECT_ORIGINS, SUBJECT_WRITE_REFUSED, SUBJECTS_HELD } from '@/lib/subjects/types'
+import { MOVE_STATUSES, SUBJECT_ORIGINS, SUBJECT_WRITE_REFUSED } from '@/lib/subjects/types'
 import { MOVES_WRITE_REFUSED, mayDecideMoves } from '@/lib/moves-access'
-import { assertTenantMay } from '@/lib/tenant-locks'
+import { assertTenantMay, SUBJECTS_HELD } from '@/lib/tenant-locks'
 
 // The subject and move write path (Phase 1 WP12, design §3 SU1 and SU2).
 //
