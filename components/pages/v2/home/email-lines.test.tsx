@@ -6,6 +6,7 @@ import type { TileRead } from '@/lib/pages/v2/home'
 import { topProductsOf } from '@/lib/pages/v2/products'
 import { ossurProductsFixture } from '@/lib/pages/v2/products-fixture'
 import { contentLine, movesLine, productsLine, voicesLine, type WeeklyReadLine } from '@/lib/reports/weekly-read-lines'
+import { barMonth } from '@/lib/reading/month-label'
 import { decodeEntities, markupText, render } from '@/lib/test/render'
 import { ContentTileView } from './content-tile'
 import { MovesTileView } from './moves-tile'
@@ -47,13 +48,29 @@ describe('each page line equals its Dashboard tile', () => {
   })
 
   it('Your products: the tile\'s standout, under its label, on the page\'s own basis', () => {
-    for (const top of [fixtureProductsTop(), topProductsOf(ossurProductsFixture())]) {
+    for (const top of [fixtureProductsTop(), topProductsOf(ossurProductsFixture()), fixtureProductsTop('ready', { september: true })]) {
       const line = productsLine(top)
       const text = expectLineIsTile(line, <ProductsTileView read={ok(top)} />)
       expect(text).toContain(top.standout!.label)
       expect(line!.lead).toBe(`${top.standout!.label}:`)
-      expect(text).toContain(words(line!.figure!))
+      // The tile names the month's label on its own line, under its head; the
+      // line says it inline (decision 3). The rest of the figure is the tile's.
+      const label = top.monthLabel ? `, ${top.monthLabel}` : ''
+      expect(text).toContain(words(line!.figure!.replace(label, '')))
+      if (top.monthLabel) {
+        expect(line!.figure).toContain(`in ${top.monthWords}, ${top.monthLabel}`)
+        expect(text).toContain(barMonth(top.monthWords, top.monthLabel))
+      }
     }
+  })
+
+  it('Voices: a whole-month line carries the tile\'s label where its month is not the current one (decision 3)', () => {
+    const top = fixtureVoicesTop({ september: true })
+    const line = voicesLine(top)
+    const text = expectLineIsTile(line, <VoicesTileView read={ok(top)} />)
+    expect(line!.lead).toBe('In the most videos in September, the last full month:')
+    expect(text).toContain(barMonth(top.monthWords, top.monthLabel))
+    expect(text).toContain('In the most videos in September')
   })
 
   it('Content: the first post idea, its four weeks of questions beside its month', () => {
