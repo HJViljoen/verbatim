@@ -253,6 +253,10 @@ paragraph); no gradient; the orange never as text (drift guard (h), `lib/palette
   rgba(38,41,44,.04), 4px 0 16px rgba(38,41,44,.06), 12px 0 40px rgba(38,41,44,.04)`, beside its hairline.
   Both are set in `.dark` (a white hairline at 6% and black layers). **Inner panels stay flat**: a quote on
   the ground, an inner block. No card writes a shadow literal (drift guard (g); `lib/palette-guard.test.ts`).
+- **The opened panel (depth v2, 13 Oct).** The full-width panel that opens in place under a clicked item
+  (`components/v2/panel.tsx`, the boards' `.panel`) is one step above the cards: `--shadow-panel` →
+  `shadow-panel`, `0 1px 2px rgba(38,41,44,.06), 0 8px 24px rgba(38,41,44,.10), 0 20px 48px rgba(38,41,44,.06)`,
+  set in `.dark` too and held by the same guards.
 - The legacy tiles, the shares and paper keep the **ambient** `--shadow-tile` (no offset, no negative
   spread): `0 0 0 1px rgba(38,41,44,.04), 0 1px 3px rgba(38,41,44,.05), 0 0 16px rgba(38,41,44,.09)`.
   `--shadow-tile-hover` is the same, deeper. `--shadow-block` is a hair of lift for a block inside

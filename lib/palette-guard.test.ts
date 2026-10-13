@@ -31,7 +31,8 @@ import { join } from 'path'
 //
 // (5) THE SHADOWS ARE BACK, AS ONE TOKEN (Heinrich, 1 Oct: "we don't really
 //     have drop shadows anymore, like for the sidebar or the large blocks").
-//     `--shadow-card` and `--shadow-sidebar` are set in both themes; every
+//     `--shadow-card` and `--shadow-sidebar` (and, since depth v2, the opened
+//     panel's `--shadow-panel`) are set in both themes; every
 //     large card of the ten client pages draws `shadow-card` and no card
 //     carries a shadow literal of its own; inner panels (a quote on the
 //     ground) stay flat.
@@ -183,9 +184,9 @@ describe('palette A guard', () => {
     expect(hits(STRIPE, FILES)).toEqual([])
   })
 
-  it('sets the card and sidebar shadows once, in both themes, and maps them to utilities', () => {
+  it('sets the card, sidebar and opened-panel shadows once, in both themes, and maps them to utilities', () => {
     const css = appText('app/globals.css')
-    for (const t of ['shadow-card', 'shadow-sidebar']) {
+    for (const t of ['shadow-card', 'shadow-sidebar', 'shadow-panel']) {
       expect(css, t).toContain(`--${t}: var(--${t});`)
       expect(css.match(new RegExp(`^\\s*--${t}: \\d`, 'gm')), t).toHaveLength(2)
     }
