@@ -1,5 +1,5 @@
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
-import { PeriodSwitch } from '@/components/v2'
+import { equalColumns, panelPlacement, PanelSlot, PeriodSwitch, type PanelLayout } from '@/components/v2'
 import { fmtInt, longMonth } from '@/lib/format'
 import { CONTENT_PERIODS, contentHref, daysPhrase, monthWords, type ContentPageData, type ContentState } from '@/lib/pages/v2/content'
 import { surface } from '@/lib/nav'
@@ -51,10 +51,19 @@ function Meta({ data }: { data: ContentPageData }) {
   return <>{parts.map((p, i) => <span key={i}>{i > 0 ? ' · ' : null}{p}</span>)}</>
 }
 
+/** What works beside Worth a reply over Your posts: stacked on a phone and
+ *  up to 1280, then 8 · 4 with the two in one column (a width of 0 stacks a
+ *  card in the cell before it). Their panels sit under the card on a phone and
+ *  under the pair from 1280, at the column. */
+export const LOWER_LAYOUT: PanelLayout = { base: equalColumns(1, 3), xl: { spans: [8, 4, 0], of: 12 } }
+
 export function ContentPage({ data }: { data: ContentPageData }) {
   const state: ContentState = { period: data.period, open: data.open, asked: data.asked.expanded }
   const weekWord = weekWordOf(data)
   const month = data.month
+  const lowerAt = data.open?.kind === 'replies' ? 1 : data.open?.kind === 'posts' ? 2 : -1
+  const lower = lowerAt >= 0 ? panelPlacement(lowerAt, LOWER_LAYOUT) : null
+  const ideaPanel = data.ideaPanel
   return (
     <PageFrame>
       <PageBar title={surface('content').label} meta={<Meta data={data} />}>
@@ -65,20 +74,33 @@ export function ContentPage({ data }: { data: ContentPageData }) {
         />
       </PageBar>
 
-      <IdeasSection block={data.ideas} state={state} month={month} weekWord={weekWord} />
-      {data.ideaPanel ? (
-        <IdeaPanelView panel={data.ideaPanel} state={state} count={data.ideas.cards.length} month={month} weekWord={weekWord} />
-      ) : null}
+      <IdeasSection
+        block={data.ideas}
+        state={state}
+        month={month}
+        weekWord={weekWord}
+        panel={ideaPanel
+          ? (notchAt) => <IdeaPanelView panel={ideaPanel} state={state} count={data.ideas.cards.length} month={month} weekWord={weekWord} notchAt={notchAt} />
+          : undefined}
+      />
 
+      {/* One grid at every width: on a phone (and up to 1280) the right-hand
+          column dissolves (`contents`) so Worth a reply and Your posts are
+          the grid's own cards and the open one's panel lands between them. */}
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
-        <WorksCard block={data.works} className="xl:col-span-8" />
-        <div className="flex min-w-0 flex-col gap-5 xl:col-span-4">
-          <RepliesCard view={data.replies} state={state} selected={data.open?.kind === 'replies'} />
-          <PostsCard block={data.posts} state={state} selected={data.open?.kind === 'posts'} />
+        <WorksCard block={data.works} className="order-0 xl:col-span-8" />
+        <div className="contents xl:order-2 xl:col-span-4 xl:flex xl:min-w-0 xl:flex-col xl:gap-5">
+          <RepliesCard view={data.replies} state={state} selected={data.open?.kind === 'replies'} className="order-2" />
+          <PostsCard block={data.posts} state={state} selected={data.open?.kind === 'posts'} className="order-4" />
         </div>
+        {lower ? (
+          <PanelSlot placement={lower}>
+            {data.open?.kind === 'replies'
+              ? <RepliesPanel view={data.replies} state={state} notchAt={lower.notch} />
+              : <PostsPanel block={data.posts} state={state} notchAt={lower.notch} />}
+          </PanelSlot>
+        ) : null}
       </div>
-      {data.open?.kind === 'replies' ? <RepliesPanel view={data.replies} state={state} /> : null}
-      {data.open?.kind === 'posts' ? <PostsPanel block={data.posts} state={state} /> : null}
 
       <AskedCard block={data.asked} state={state} month={month} weekWord={weekWord} weekHead={data.week && !data.week.isWeek ? data.week.label : 'This week'} afterIdeas={data.ideas.cards.length > 0} />
     </PageFrame>

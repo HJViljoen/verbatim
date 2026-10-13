@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { SquarePlay } from 'lucide-react'
 import { BrandChip } from '@/components/colour-roles'
-import { CARD, CardHead, InPlacePanel, PanelSection, PanelTitle, StatCell, StatRow } from '@/components/v2'
+import type { CSSProperties } from 'react'
+import { CARD, CardHead, InPlacePanel, PanelSection, PanelTitle, StatCell, StatRow, type PerBreakpoint } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
 import { PANEL_ID, type CreatorPanel, type VoicesCreatorRow, type VoicesCreators } from '@/lib/pages/v2/voices'
 import { cn } from '@/lib/utils'
@@ -53,9 +54,9 @@ function CreatorRow({ row }: { row: VoicesCreatorRow }) {
 }
 
 /** "Creators who drive the talk" (the board's right card of the pair). */
-export function CreatorsCard({ creators, monthWords }: { creators: VoicesCreators; monthWords: string }) {
+export function CreatorsCard({ creators, monthWords, style }: { creators: VoicesCreators; monthWords: string; style?: CSSProperties }) {
   return (
-    <article aria-labelledby="voices-creators" className={CARD}>
+    <article aria-labelledby="voices-creators" style={style} className={CARD}>
       <CardHead icon={SquarePlay} id="voices-creators" title="Creators who drive the talk" sub={`Accounts with the most of your market’s videos, ${monthWords}`} />
       {creators.empty ? <EmptyLine>{creators.empty}</EmptyLine> : (
         <>
@@ -79,13 +80,14 @@ export function CreatorsCard({ creators, monthWords }: { creators: VoicesCreator
 }
 
 /** The creator's panel (not drawn on the board; laid out as its panels are). */
-export function CreatorPanelView({ panel, monthWords }: { panel: CreatorPanel; monthWords: string }) {
+export function CreatorPanelView({ panel, monthWords, notchAt }: { panel: CreatorPanel; monthWords: string; notchAt?: number | PerBreakpoint }) {
   const top = panel.conversations[0]
   const brand = panel.brands[0]
   return (
     <InPlacePanel
       id={PANEL_ID.creator}
-      notchAt={panel.notchAt}
+      notchAt={notchAt ?? panel.notchAt}
+      openKey={panel.key}
       closeHref={panel.closeHref}
       labelledBy="creator-title"
       closeLabel="Close this creator"

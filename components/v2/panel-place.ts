@@ -156,14 +156,14 @@ export function sameEverywhere(notch: PerBreakpoint): boolean {
 }
 
 /**
- * The slot's classes, written out whole for Tailwind's scanner: it spans the
- * grid's every column and takes the order its custom property names at each
- * breakpoint (`panelSlotStyle`).
+ * The slot's classes: it spans the grid's every column, and `panel-slot`
+ * (app/globals.css) takes the order its custom property names at each
+ * breakpoint (`panelSlotStyle`). The breakpoints are plain CSS there, not
+ * Tailwind variants, because Tailwind sorts an arbitrary `min-[1180px]:`
+ * before the named breakpoints and `md:` would win over it at 1180 to 1279.
  */
-export const PANEL_SLOT_CLASS =
-  'col-span-full min-w-0 [order:var(--panel-o-base)] sm:[order:var(--panel-o-sm)] md:[order:var(--panel-o-md)] lg:[order:var(--panel-o-lg)] min-[1180px]:[order:var(--panel-o-w1180)] xl:[order:var(--panel-o-xl)]'
+export const PANEL_SLOT_CLASS = 'panel-slot col-span-full min-w-0'
 
-/** The notch's classes: `--notch` is the breakpoint's own place
- *  (`notchStyle`), which the notch's `left` reads. */
-export const NOTCH_VAR_CLASS =
-  '[--notch:var(--notch-base)] sm:[--notch:var(--notch-sm)] md:[--notch:var(--notch-md)] lg:[--notch:var(--notch-lg)] min-[1180px]:[--notch:var(--notch-w1180)] xl:[--notch:var(--notch-xl)]'
+/** The notch's class: `--notch` is the breakpoint's own place (`notchStyle`,
+ *  the rules in app/globals.css), which the notch's `left` reads. */
+export const NOTCH_VAR_CLASS = 'panel-notch'

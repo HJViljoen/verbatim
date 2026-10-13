@@ -39,11 +39,14 @@ export function WhoCard({ groups, videos, monthWords }: { groups: VoicesGroups; 
       ) : (
         <div role="list" className="flex flex-col gap-2.5">
           {groups.cards.map((c) => (
-            <div key={c.key} role="listitem" className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,2fr)_auto] items-center gap-3 text-[13.5px] max-sm:grid-cols-[minmax(0,1fr)_auto]">
-              <Link href={c.href} scroll={false} className={cn('min-w-0 truncate font-semibold text-foreground no-underline hover:underline hover:underline-offset-[3px]', c.selected ? 'underline underline-offset-[3px]' : null)}>
+            // The bar drops below 1024, where the sidebar leaves the card too
+            // narrow for the name beside it, and a long name wraps rather
+            // than being cut (T9: at 820 the names were cut to an ellipsis).
+            <div key={c.key} role="listitem" className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 text-[13.5px] lg:grid-cols-[minmax(0,1.1fr)_minmax(0,2fr)_auto]">
+              <Link href={c.href} scroll={false} className={cn('min-w-0 font-semibold text-foreground no-underline hover:underline hover:underline-offset-[3px]', c.selected ? 'underline underline-offset-[3px]' : null)}>
                 <span data-copy="subject" data-slot="pass_e_persona">{c.name}</span>
               </Link>
-              <TickBar pct={(100 * c.videos) / n} size="lg" tone="market" label={`${c.name}: ${fmtInt(c.videos)} of ${fmtInt(n)} videos`} className="max-sm:hidden" />
+              <TickBar pct={(100 * c.videos) / n} size="lg" tone="market" label={`${c.name}: ${fmtInt(c.videos)} of ${fmtInt(n)} videos`} className="max-lg:hidden" />
               <LevelText k={c.videos} n={n} unit="videos" className="text-right text-[12.5px] text-secondary-foreground" />
             </div>
           ))}
@@ -135,13 +138,13 @@ export function GroupPanelView({ panel, monthWords, notchAt }: { panel: GroupPan
         {where && panel.videos > 0 ? <StatCell value={where.k} of={panel.videos} label={<>are on {where.label}</>} /> : null}
       </StatRow>
 
-      <div className="grid grid-cols-1 gap-7 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-7 lg:grid-cols-3">
         {panel.wants ? <PanelSection label="What they want"><p className="m-0 text-[15px] leading-[1.6] text-foreground"><span data-copy="subject" data-slot="pass_e_persona">{panel.wants}</span></p></PanelSection> : null}
         {panel.stops ? <PanelSection label="What stops them"><p className="m-0 text-[15px] leading-[1.6] text-foreground"><span data-copy="subject" data-slot="pass_e_persona">{panel.stops}</span></p></PanelSection> : null}
         {panel.triggers ? <PanelSection label="What tips them into acting"><p className="m-0 text-[15px] leading-[1.6] text-foreground"><span data-copy="subject" data-slot="pass_e_persona">{panel.triggers}</span></p></PanelSection> : null}
       </div>
 
-      <div className="grid grid-cols-1 gap-7 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-7 lg:grid-cols-3">
         {panel.who.length > 0 ? (
           <PanelSection label="Who they say they are">
             {panel.who.slice(0, 5).map((w) => (
@@ -182,7 +185,7 @@ export function GroupPanelView({ panel, monthWords, notchAt }: { panel: GroupPan
 
       {panel.quotes.length > 0 ? (
         <PanelSection label={<>In their words · <Fig>{fmtInt(panel.quotes.length)}</Fig> of their comments in {monthWords}</>}>
-          <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-3">
             {panel.quotes.map((q) => <QuoteCard key={q.ref} quote={q} />)}
           </div>
         </PanelSection>

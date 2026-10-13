@@ -13,7 +13,8 @@ import {
 } from '@/lib/pages/v2/moves-fixture'
 import { ADVICE_GONE, ADVICE_NONE, ADVICE_PANEL_ID, RECORD_PANEL_ID } from '@/lib/pages/v2/moves'
 import { MovesV2Page, MOVES_FIRST_RUN } from './index'
-import { AdviceSection, OPEN_MORE_WAITING, panelPlacement, whyParagraphs } from './advice'
+import { panelPlacement } from '@/components/v2'
+import { AdviceSection, adviceLayout, OPEN_MORE_WAITING, whyParagraphs } from './advice'
 import { SAY_FIRST } from './say'
 import { TrackThisSubject } from '@/components/subjects/track-this'
 import { MovesSection, lineGeometry } from './moves'
@@ -141,11 +142,13 @@ describe('the advice', () => {
     expect(text).not.toContain('See the')
   })
 
-  it('places the panel after its card’s row wide, and after its card narrow', () => {
-    expect(panelPlacement(0, 3)).toEqual({ narrow: 1, wide: 5, notchAt: 1 / 6 })
-    expect(panelPlacement(1, 3)).toMatchObject({ narrow: 3, wide: 5, notchAt: 0.5 })
-    expect(panelPlacement(3, 5)).toMatchObject({ narrow: 7, wide: 9, notchAt: 1 / 6 })
-    expect(panelPlacement(4, 5)).toMatchObject({ narrow: 9, wide: 9 })
+  it('places the panel after its card’s row wide, and after its card narrow, its notch at the card', () => {
+    const at = (i: number, n: number) => panelPlacement(i, adviceLayout(n))
+    expect(at(0, 3).order).toMatchObject({ base: 1, md: 1, w1180: 5, xl: 5 })
+    expect(at(0, 3).notch).toMatchObject({ base: 0.5, w1180: 0.1667 })
+    expect(at(1, 3)).toMatchObject({ order: { base: 3, w1180: 5 }, notch: { base: 0.5, w1180: 0.5 } })
+    expect(at(3, 5)).toMatchObject({ order: { base: 7, w1180: 9 }, notch: { w1180: 0.1667 } })
+    expect(at(4, 5).order).toMatchObject({ base: 9, w1180: 9 })
   })
 
   it('sets the argument two sentences to a paragraph', () => {

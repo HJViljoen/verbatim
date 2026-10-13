@@ -2,7 +2,8 @@ import Link from 'next/link'
 import { ChartColumn } from 'lucide-react'
 import { BrandChip } from '@/components/colour-roles'
 import { MovementBadge } from '@/components/delta-badge'
-import { CARD, CardHead, InPlacePanel, PanelSection, PanelTitle, StatCell, StatRow, TickBar } from '@/components/v2'
+import type { CSSProperties } from 'react'
+import { CARD, CardHead, InPlacePanel, PanelSection, PanelTitle, StatCell, StatRow, TickBar, type PerBreakpoint } from '@/components/v2'
 import { fmtInt, longMonth } from '@/lib/format'
 import { windowWords } from '@/lib/pages/brands'
 import { PANEL_ID, type BrandPanel, type VoicesBrandRow, type VoicesBrands } from '@/lib/pages/v2/voices'
@@ -132,7 +133,7 @@ function Note({ note }: { note: NonNullable<VoicesBrands['note']> }) {
 }
 
 /** "Brands in your market" (the board's left card of the pair). */
-export function BrandsCard({ brands, monthWords }: { brands: VoicesBrands; monthWords: string }) {
+export function BrandsCard({ brands, monthWords, style }: { brands: VoicesBrands; monthWords: string; style?: CSSProperties }) {
   const max = Math.max(0, ...brands.rows.map((r) => r.named?.k ?? 0))
   const prev = longMonth(brands.prevMonth)
   const month = longMonth(brands.month)
@@ -140,7 +141,7 @@ export function BrandsCard({ brands, monthWords }: { brands: VoicesBrands; month
   // month that our searches for a brand did not find (`n_organic`).
   const unsearched = brands.rows.find((r) => r.named)?.named?.n ?? null
   return (
-    <article aria-labelledby="voices-brands" className={CARD}>
+    <article aria-labelledby="voices-brands" style={style} className={CARD}>
       <CardHead
         icon={ChartColumn}
         id="voices-brands"
@@ -206,7 +207,7 @@ export function BrandsCard({ brands, monthWords }: { brands: VoicesBrands; month
 }
 
 /** The brand's panel: its month in full, and a rival's Competitive pane. */
-export function BrandPanelView({ panel, monthWords }: { panel: BrandPanel; monthWords: string }) {
+export function BrandPanelView({ panel, monthWords, notchAt }: { panel: BrandPanel; monthWords: string; notchAt?: number | PerBreakpoint }) {
   // The crosses' own base (the lens's n: every video naming it this month),
   // for every k a cross printed, so a share's two sides come from one read.
   const crossN = panel.kinds[0]?.n ?? panel.subjects[0]?.n ?? 0
@@ -216,7 +217,8 @@ export function BrandPanelView({ panel, monthWords }: { panel: BrandPanel; month
   return (
     <InPlacePanel
       id={PANEL_ID.brand}
-      notchAt={panel.notchAt}
+      notchAt={notchAt ?? panel.notchAt}
+      openKey={panel.brandKey}
       closeHref={panel.closeHref}
       labelledBy="brand-title"
       closeLabel="Close this brand"
@@ -253,7 +255,7 @@ export function BrandPanelView({ panel, monthWords }: { panel: BrandPanel; month
       </StatRow>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-7 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-7 lg:grid-cols-3">
         {panel.kinds.length > 0 ? (
           <PanelSection label={<>What people did in the comments · of its <Fig>{fmtInt(crossN)}</Fig></>}>
             {panel.kinds.map((k) => <MiniRow key={k.kind} size="md" tone={panel.you ? 'you' : 'rival'} label={k.label} k={k.k} of={k.n} />)}

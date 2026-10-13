@@ -32,6 +32,9 @@ function Header({ data }: { data: MovesPageData }) {
   return (
     <PageBar
       title={PAGE_TITLE}
+      // Two buttons beside the title leave it one word a line on a phone, so
+      // there they go under the bar (T9).
+      phoneControls="below"
       meta={(
         <span className={cn(MONO, 'text-[12.5px] text-muted-foreground')}>
           {parts.map((p, i) => (

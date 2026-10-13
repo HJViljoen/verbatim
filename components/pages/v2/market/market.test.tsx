@@ -106,8 +106,22 @@ describe('TopRowView', () => {
 
   it('rings the card whose panel is open, and turns its link to Close', () => {
     const html = render(<TopRowView data={OPEN} />)
-    expect(html).toMatch(/id="top-0" class="[^"]*ring-2 ring-foreground/)
+    expect(html).toMatch(/id="top-0" style="order:0" class="[^"]*ring-2 ring-foreground/)
     expect(renderText(<TopRowView data={OPEN} />)).toContain('Close ↑')
+  })
+
+  it('draws the open panel under the card it was opened from, at every width (T9)', () => {
+    const html = render(<TopRowView data={OPEN} panel={(n) => (OPEN.panel ? <ConversationPanel panel={OPEN.panel} data={OPEN} notchAt={n} /> : null)} />)
+    // In the markup right after the hero, before the cards beside it.
+    const hero = html.indexOf('id="top-0"')
+    const slot = html.indexOf('data-panel-slot')
+    expect(slot).toBeGreaterThan(hero)
+    expect(slot).toBeLessThan(html.indexOf('id="top-1"'))
+    // Under the hero on a phone and from 768 (it is the row's width); under
+    // the 6 · 3 · 3 row from 1280.
+    expect(html).toContain('--panel-o-base:1;--panel-o-sm:1;--panel-o-md:1;--panel-o-lg:1;--panel-o-w1180:1;--panel-o-xl:5')
+    expect(html).toContain('--notch-base:50%;--notch-sm:50%;--notch-md:50%;--notch-lg:50%;--notch-w1180:50%;--notch-xl:25%')
+    expect(html.match(/id="conv-panel"/g)).toHaveLength(1)
   })
 
   it('with nothing flagged and nothing new, the week\'s most talked about leads, headed plainly', () => {

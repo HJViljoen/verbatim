@@ -3,7 +3,7 @@ import { Sparkles } from 'lucide-react'
 import { BrandChip, TAG } from '@/components/colour-roles'
 import { MovementBadge } from '@/components/delta-badge'
 import { ProportionBar } from '@/components/proportion-bar'
-import { FlagChip, InPlacePanel, MiniBars, PanelSection, PanelTitle, StatCell, StatRow, TickBarRow } from '@/components/v2'
+import { FlagChip, InPlacePanel, MiniBars, PanelSection, PanelTitle, StatCell, StatRow, TickBarRow, type PerBreakpoint } from '@/components/v2'
 import { fmtInt, fmtPct } from '@/lib/format'
 import { marketLabelsOf } from '@/lib/brands/labels'
 import { MARKET_PANEL_MONTHS, type ConvPanel, type MarketData, type MonthCount, type SubjectPanel } from '@/lib/pages/v2/market'
@@ -37,7 +37,9 @@ function shareBars(bars: readonly MonthCount[]) {
   })
 }
 
-export function ConversationPanel({ panel, data }: { panel: ConvPanel; data: MarketData }) {
+/** `notchAt`: the placement's notch where the page placed the panel among
+ *  its cards (T9); alone, the loader's. */
+export function ConversationPanel({ panel, data, notchAt }: { panel: ConvPanel; data: MarketData; notchAt?: number | PerBreakpoint }) {
   const whoTotal = panel.who?.n ?? 0
   const words = marketLabelsOf(data.noun)
   const whoSegments = (panel.who?.parts ?? []).map((p) => ({
@@ -54,7 +56,8 @@ export function ConversationPanel({ panel, data }: { panel: ConvPanel; data: Mar
   return (
     <InPlacePanel
       id="conv-panel"
-      notchAt={panel.notchAt}
+      notchAt={notchAt ?? panel.notchAt}
+      openKey={panel.id}
       closeHref={panel.closeHref}
       labelledBy="conv-panel-title"
       closeLabel="Close this conversation"
@@ -128,7 +131,7 @@ export function ConversationPanel({ panel, data }: { panel: ConvPanel; data: Mar
       </div>
       {panel.quotes.length > 0 ? (
         <PanelSection label={<>In their words · <span data-copy="figure">{panel.quotes.length}</span> of the comments</>}>
-          <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-3">
             {panel.quotes.map((q, i) => {
               const note = translationNote({ lang: q.lang, english: q.english })
               const label = translationLabel(note)
@@ -154,12 +157,13 @@ export function ConversationPanel({ panel, data }: { panel: ConvPanel; data: Mar
   )
 }
 
-export function SubjectPanelView({ panel, data }: { panel: SubjectPanel; data: MarketData }) {
+export function SubjectPanelView({ panel, data, notchAt }: { panel: SubjectPanel; data: MarketData; notchAt?: number | PerBreakpoint }) {
   const week = data.period === 'week'
   return (
     <InPlacePanel
       id="subject-panel"
-      notchAt={panel.notchAt}
+      notchAt={notchAt ?? panel.notchAt}
+      openKey={panel.id}
       closeHref={panel.closeHref}
       labelledBy="subject-panel-title"
       closeLabel="Close this subject"

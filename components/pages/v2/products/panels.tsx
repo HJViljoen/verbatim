@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { FlagChip, InPlacePanel, MiniBars, PairedBars, PanelSection, PanelTitle, StatCell, StatRow } from '@/components/v2'
+import { FlagChip, InPlacePanel, MiniBars, PairedBars, PanelSection, PanelTitle, StatCell, StatRow, type PerBreakpoint } from '@/components/v2'
 import { fmtInt, fmtPct, longMonth } from '@/lib/format'
 import { PRODUCT_TAG_COPY } from '@/lib/products/tags'
 import {
@@ -153,12 +153,13 @@ function Foot({ askHref, ask, settingsHref, settings }: { askHref: string; ask: 
   )
 }
 
-export function CategoryPanelView({ panel, monthName, canTag }: { panel: CategoryPanel; monthName: string; canTag: boolean }) {
+export function CategoryPanelView({ panel, monthName, canTag, notchAt }: { panel: CategoryPanel; monthName: string; canTag: boolean; notchAt?: number | PerBreakpoint }) {
   const word = panel.name.toLowerCase()
   return (
     <InPlacePanel
       id={PANEL_ID.group}
-      notchAt={panel.notchAt}
+      notchAt={notchAt ?? panel.notchAt}
+      openKey={panel.id}
       closeHref={panel.closeHref}
       labelledBy="category-title"
       closeLabel={`Close ${word}`}
@@ -209,7 +210,7 @@ function QuoteCard({ quote }: { quote: ProductsQuote }) {
   )
 }
 
-export function ProductPanelView({ panel, monthName }: { panel: ProductPanel; monthName: string }) {
+export function ProductPanelView({ panel, monthName, notchAt }: { panel: ProductPanel; monthName: string; notchAt?: number | PerBreakpoint }) {
   const top = panel.crosses?.subjects[0]
   // NOT READ IS NOT QUIET: a product with no row in a read month was not in
   // the list when the month was last read (null); quiet is a read zero.
@@ -218,7 +219,8 @@ export function ProductPanelView({ panel, monthName }: { panel: ProductPanel; mo
   return (
     <InPlacePanel
       id={PANEL_ID.product}
-      notchAt={panel.notchAt}
+      notchAt={notchAt ?? panel.notchAt}
+      openKey={panel.id}
       closeHref={panel.closeHref}
       labelledBy="product-title"
       closeLabel={`Close ${panel.name}`}
@@ -259,7 +261,7 @@ export function ProductPanelView({ panel, monthName }: { panel: ProductPanel; mo
 
       {panel.quotes.length > 0 ? (
         <PanelSection label={<>In their words · <Fig>{fmtInt(panel.quotes.length)}</Fig> {panel.quotes.length === 1 ? 'comment' : 'comments'} naming it in {monthName}</>}>
-          <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-3">
             {panel.quotes.map((q) => <QuoteCard key={q.key} quote={q} />)}
           </div>
         </PanelSection>

@@ -1,5 +1,5 @@
 import { User } from 'lucide-react'
-import { CARD, CardHead, InPlacePanel, PanelTitle, SELECTED_CARD_RING } from '@/components/v2'
+import { CARD, CardHead, InPlacePanel, PanelTitle, SELECTED_CARD_RING, type PerBreakpoint } from '@/components/v2'
 import { fmtInt, longMonth, platformLabel, shortDate } from '@/lib/format'
 import { POSTS_PANEL_ID, contentHref, fmtMultiple, monthWords, type ContentState, type PostsBlock } from '@/lib/pages/v2/content'
 import { cn } from '@/lib/utils'
@@ -79,12 +79,12 @@ export function PostsCard({ block, state, selected, className }: { block: PostsB
   )
 }
 
-export function PostsPanel({ block, state }: { block: PostsBlock; state: ContentState }) {
+export function PostsPanel({ block, state, notchAt }: { block: PostsBlock; state: ContentState; notchAt?: number | PerBreakpoint }) {
   const when = monthWords(block)
   return (
     <InPlacePanel
       id={POSTS_PANEL_ID}
-      notchAt={0.83}
+      notchAt={notchAt ?? 0.83}
       closeHref={contentHref({ ...state, open: null })}
       closeLabel="Close your posts"
       labelledBy="posts-panel-title"

@@ -1,9 +1,9 @@
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
-import { PERIODS, PeriodSwitch } from '@/components/v2'
+import { panelItemOrder, panelPlacement, PanelSlot, PERIODS, PeriodSwitch, type PanelLayout, type PerBreakpoint } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
 import { periodHref, type MarketData } from '@/lib/pages/v2/market'
 import { ConversationPanel, SubjectPanelView } from './panel'
-import { RailView } from './rail'
+import { RailView, railIsWide } from './rail'
 import { SubjectBoardView } from './subjects'
 import { ConversationTable } from './table'
 import { TopRowView } from './top'
@@ -44,6 +44,15 @@ function Meta({ data }: { data: MarketData }) {
   )
 }
 
+/** The subject board and the rail at each width: stacked on a phone and up
+ *  to 1280, then 8 · 4 (the rail spans the row under the board where it is
+ *  wide). A panel opened from the board sits under the board at every width:
+ *  before the rail where they stack, under the pair where they stand side by
+ *  side. */
+export function boardLayout(wide: boolean): PanelLayout {
+  return { base: { spans: [12, 12], of: 12 }, xl: { spans: wide ? [12, 12] : [8, 4], of: 12 } }
+}
+
 function periodSwitch(data: MarketData) {
   return <PeriodSwitch value={data.period} options={PERIODS} hrefFor={(p) => periodHref(data.params, p)} />
 }
@@ -58,27 +67,37 @@ export function MarketPage({ data }: { data: MarketData | null }) {
     )
   }
   const at = data.panel?.at ?? data.subjectPanel?.at ?? null
-  const convPanel = data.panel ? <ConversationPanel panel={data.panel} data={data} /> : null
+  const convPanel = (notchAt?: number | PerBreakpoint) => (data.panel ? <ConversationPanel panel={data.panel} data={data} notchAt={notchAt} /> : null)
+  // Opened from the subject board (a subject, or a conversation inside one):
+  // under the board, at every width.
+  const fromBoard = Boolean(data.subjects) && ((at === 'subjects' && data.panel) || data.subjectPanel)
+  const boardPlace = fromBoard ? panelPlacement(0, boardLayout(railIsWide(data))) : null
   return (
     <PageFrame className="text-foreground">
-      {/* The switch sits beside the title, and under the bar on a phone,
-          where the two do not fit one line. */}
+      {/* The switch sits beside the title, and under the bar below 1024,
+          where the two do not fit one line: a phone, and from 768 the pane
+          beside the sidebar, which left the meta line a column of five (T9). */}
       <PageBar title={MARKET_TITLE} meta={<Meta data={data} />}>
-        <div className="max-sm:hidden">{periodSwitch(data)}</div>
+        <div className="max-lg:hidden">{periodSwitch(data)}</div>
       </PageBar>
-      <div className="-mt-2 sm:hidden">{periodSwitch(data)}</div>
-      <TopRowView data={data} />
-      {at === 'top' && convPanel ? convPanel : null}
+      <div className="-mt-2 lg:hidden">{periodSwitch(data)}</div>
+      <TopRowView data={data} panel={at === 'top' && data.panel ? convPanel : undefined} />
       <section aria-label="What the market is talking about" className="grid grid-cols-12 items-start gap-5">
-        {data.subjects ? <SubjectBoardView board={data.subjects} data={data} /> : null}
-        <RailView data={data} />
+        {data.subjects ? <SubjectBoardView board={data.subjects} data={data} style={panelItemOrder(0)} /> : null}
+        {boardPlace ? (
+          <PanelSlot placement={boardPlace} className="flex flex-col gap-5">
+            {at === 'subjects' ? convPanel(boardPlace.notch) : null}
+            {data.subjectPanel ? <SubjectPanelView panel={data.subjectPanel} data={data} notchAt={boardPlace.notch} /> : null}
+          </PanelSlot>
+        ) : null}
+        <RailView data={data} style={panelItemOrder(1)} />
       </section>
-      {at === 'subjects' && convPanel ? convPanel : null}
-      {data.subjectPanel ? <SubjectPanelView panel={data.subjectPanel} data={data} /> : null}
+      {!boardPlace && at === 'subjects' ? convPanel() : null}
+      {!boardPlace && data.subjectPanel ? <SubjectPanelView panel={data.subjectPanel} data={data} /> : null}
       {data.table ? <ConversationTable table={data.table} data={data} /> : null}
       {/* An open conversation the table does not list and no card named
           (an old link to a quieter one) still opens, under the table. */}
-      {convPanel && at === 'table' && !data.table?.rows.some((r) => r.open) ? convPanel : null}
+      {data.panel && at === 'table' && !data.table?.rows.some((r) => r.open) ? convPanel() : null}
     </PageFrame>
   )
 }

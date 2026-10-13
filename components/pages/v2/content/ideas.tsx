@@ -1,4 +1,5 @@
-import { CARD, FlagChip, MiniBars, SELECTED_CARD_RING } from '@/components/v2'
+import { Fragment, type CSSProperties, type ReactNode } from 'react'
+import { CARD, equalColumns, FlagChip, MiniBars, panelItemOrder, panelPlacement, PanelSlot, SELECTED_CARD_RING, type PanelLayout, type PerBreakpoint } from '@/components/v2'
 import { fmtInt, longMonth } from '@/lib/format'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
 import {
@@ -54,17 +55,18 @@ function Demand({ card, monthLabel, weekWord }: { card: IdeaCard; monthLabel: st
   )
 }
 
-export function IdeaCardView({ card, state, selected, month, weekWord }: {
+export function IdeaCardView({ card, state, selected, month, weekWord, style }: {
   card: IdeaCard
   state: ContentState
   selected: boolean
   month: { month: string; complete: boolean }
   weekWord: string
+  style?: CSSProperties
 }) {
   const open = contentHref({ ...state, open: { kind: 'idea', rank: card.rank } })
   const close = contentHref({ ...state, open: null })
   return (
-    <article id={`idea-${card.rank}`} aria-labelledby={`idea-${card.rank}-title`} className={cn(CARD, 'scroll-mt-6', selected ? SELECTED_CARD_RING : null)}>
+    <article id={`idea-${card.rank}`} aria-labelledby={`idea-${card.rank}-title`} style={style} className={cn(CARD, 'scroll-mt-6', selected ? SELECTED_CARD_RING : null)}>
       <div className="flex items-start gap-3">
         <span aria-hidden className="flex size-[26px] shrink-0 items-center justify-center rounded-full bg-orange-text text-[13px] font-bold text-white">{card.rank}</span>
         <h3 id={`idea-${card.rank}-title`} className="m-0 text-[18px] leading-[1.35] font-semibold tracking-[-0.005em]">
@@ -125,14 +127,26 @@ function IdeasEmpty({ block }: { block: IdeasBlock }) {
   )
 }
 
-export function IdeasSection({ block, state, month, weekWord }: {
+/** The ideas' columns: one on a phone and up to 1280, three from there. */
+export function ideasLayout(count: number): PanelLayout {
+  return { base: equalColumns(1, count), xl: equalColumns(3, count) }
+}
+
+/** The week's ideas, and the open one's brief (`panel`) under its card at
+ *  every width: one grid, the brief a child of it placed after the card's row
+ *  (`panelPlacement`) and in the markup right after the card. A brief whose
+ *  card is not drawn opens under the row. */
+export function IdeasSection({ block, state, month, weekWord, panel }: {
   block: IdeasBlock
   state: ContentState
   month: { month: string; complete: boolean }
   weekWord: string
+  panel?: (notchAt?: number | PerBreakpoint) => ReactNode
 }) {
   const openRank = state.open?.kind === 'idea' ? state.open.rank : null
   const since = block.cards[0]?.own.since
+  const at = panel && openRank != null ? block.cards.findIndex((c) => c.rank === openRank) : -1
+  const place = panel && at >= 0 ? panelPlacement(at, ideasLayout(block.cards.length)) : null
   return (
     <section aria-labelledby="ideas-title" className="flex flex-col gap-3.5">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-0.5">
@@ -148,13 +162,17 @@ export function IdeasSection({ block, state, month, weekWord }: {
       ) : null}
       {block.cards.length > 0 ? (
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
-          {block.cards.map((c) => (
-            <IdeaCardView key={c.rank} card={c} state={state} selected={openRank === c.rank} month={month} weekWord={weekWord} />
+          {block.cards.map((c, i) => (
+            <Fragment key={c.rank}>
+              <IdeaCardView card={c} state={state} selected={openRank === c.rank} month={month} weekWord={weekWord} style={panelItemOrder(i)} />
+              {place && panel && i === at ? <PanelSlot placement={place}>{panel(place.notch)}</PanelSlot> : null}
+            </Fragment>
           ))}
         </div>
       ) : (
         <IdeasEmpty block={block} />
       )}
+      {panel && !place ? panel() : null}
     </section>
   )
 }

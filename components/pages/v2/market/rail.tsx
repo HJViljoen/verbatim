@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { BarChart3, ListChecks, Smartphone } from 'lucide-react'
 import { ProportionBar } from '@/components/proportion-bar'
 import { CARD, CardHead, SpikeBars, TickBarRow, TickKey } from '@/components/v2'
@@ -113,13 +114,17 @@ export function WatchCard({ lines }: { lines: readonly StoredLine[] }) {
   )
 }
 
-export function RailView({ data }: { data: MarketData }) {
+/** Beside the subject board, the rail is a column; with no board (no subject
+ *  named yet, or none measured), its cards share the row. */
+export function railIsWide(data: Pick<MarketData, 'subjects'>): boolean {
+  return !data.subjects || data.subjects.rows.length === 0
+}
+
+export function RailView({ data, style }: { data: MarketData; style?: CSSProperties }) {
   const { rail } = data
-  // Beside the subject board, the rail is a column; with no board (no subject
-  // named yet), its cards share the row.
-  const wide = !data.subjects || data.subjects.rows.length === 0
+  const wide = railIsWide(data)
   return (
-    <div className={cn('col-span-12 min-w-0 gap-5', wide ? 'grid grid-cols-1 items-start md:grid-cols-2 xl:grid-cols-3' : 'flex flex-col xl:col-span-4')}>
+    <div style={style} className={cn('col-span-12 min-w-0 gap-5', wide ? 'grid grid-cols-1 items-start md:grid-cols-2 xl:grid-cols-3' : 'flex flex-col xl:col-span-4')}>
       {rail.kinds ? <KindsCard block={rail.kinds} /> : null}
       <WeeksCard weeks={rail.weeks} />
       {rail.platforms ? <PlatformsCard block={rail.platforms} data={data} /> : null}

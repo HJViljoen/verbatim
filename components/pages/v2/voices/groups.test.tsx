@@ -46,16 +46,25 @@ describe('Who is in your market and the group cards (decision 2)', () => {
     assertCopyContract(node)
   })
 
-  it('the grid opens a group\'s panel in place, under the row its card is in', () => {
+  it('the grid opens a group\'s panel in place, under its card at every width (T9)', () => {
     const open = ossurVoicesFixture({ group: 'caregivers' })
     const m = render(<GroupGrid data={open} />)
     const card = m.indexOf('data-group="caregivers"')
     const panel = m.indexOf('id="group-panel"')
-    const nextRowCard = m.indexOf('data-group="clinicians"')
+    const nextCard = m.indexOf('data-group="clinicians"')
+    // In the markup right after its card; one grid, one panel.
     expect(card).toBeGreaterThan(0)
     expect(panel).toBeGreaterThan(card)
-    expect(nextRowCard).toBeGreaterThan(card)
-    expect(panel).toBeGreaterThan(nextRowCard)
+    expect(nextCard).toBeGreaterThan(panel)
+    expect(m.match(/aria-label="The groups"/g)).toHaveLength(1)
+    expect(m).not.toContain('The groups, continued')
+    expect(m.match(/id="group-panel"/g)).toHaveLength(1)
+    // The fourth of five: after itself on a phone (order 7), after the
+    // second row of two from 768 (cards 3 and 4: order 7), after the second
+    // row of three from 1280 (cards 4 and 5: order 9); its notch at its
+    // column: the middle, the right of two, the left of three.
+    expect(m).toContain('--panel-o-base:7;--panel-o-sm:7;--panel-o-md:7;--panel-o-lg:7;--panel-o-w1180:7;--panel-o-xl:9')
+    expect(m).toContain('--notch-base:50%;--notch-sm:50%;--notch-md:75%;--notch-lg:75%;--notch-w1180:75%;--notch-xl:16.67%')
     expect(m).toContain('ring-2 ring-foreground')
     expect(m).toContain('Close ↑')
     assertCopyContract(<GroupGrid data={open} />)

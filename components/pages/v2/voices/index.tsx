@@ -1,4 +1,5 @@
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
+import { panelItemOrder, panelPlacement, PanelSlot, type PanelLayout } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
 import { surface } from '@/lib/nav'
 import type { VoicesData } from '@/lib/pages/v2/voices'
@@ -33,19 +34,31 @@ export function VoicesMeta({ data }: { data: VoicesData }) {
   return <>{parts.map((p, i) => <span key={i}>{i > 0 ? ' · ' : null}{p}</span>)}</>
 }
 
+/** Brands beside creators: stacked on a phone and up to 1280, then 7 · 5. A
+ *  brand's or a creator's panel sits under its card at every width: between
+ *  the two where they stack, under the pair where they stand side by side. */
+export const PAIR_LAYOUT: PanelLayout = { base: { spans: [12, 12], of: 12 }, xl: { spans: [7, 5], of: 12 } }
+
 export function VoicesPage({ data }: { data: VoicesData }) {
   const panel = data.panel
+  const pairAt = panel?.kind === 'brand' ? 0 : panel?.kind === 'creator' ? 1 : -1
+  const pair = pairAt >= 0 ? panelPlacement(pairAt, PAIR_LAYOUT) : null
+  const pairPanel = pair && panel?.kind === 'brand'
+    ? <BrandPanelView panel={panel} monthWords={data.monthWords} notchAt={pair.notch} />
+    : pair && panel?.kind === 'creator'
+      ? <CreatorPanelView panel={panel} monthWords={data.monthWords} notchAt={pair.notch} />
+      : null
   return (
     <PageFrame className="gap-5 leading-[normal]">
       <PageBar title={surface('voices').label} meta={<VoicesMeta data={data} />} />
       <WhoCard groups={data.groups} videos={data.videos} monthWords={data.monthWords} />
       {data.groups.state === 'ready' ? <GroupGrid data={data} /> : null}
       <section aria-label="Brands and creators" className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
-        <BrandsCard brands={data.brands} monthWords={data.monthWords} />
-        <CreatorsCard creators={data.creators} monthWords={data.monthWords} />
+        <BrandsCard brands={data.brands} monthWords={data.monthWords} style={panelItemOrder(0)} />
+        {pair && pairAt === 0 ? <PanelSlot placement={pair}>{pairPanel}</PanelSlot> : null}
+        <CreatorsCard creators={data.creators} monthWords={data.monthWords} style={panelItemOrder(1)} />
+        {pair && pairAt === 1 ? <PanelSlot placement={pair}>{pairPanel}</PanelSlot> : null}
       </section>
-      {panel?.kind === 'brand' ? <BrandPanelView panel={panel} monthWords={data.monthWords} /> : null}
-      {panel?.kind === 'creator' ? <CreatorPanelView panel={panel} monthWords={data.monthWords} /> : null}
     </PageFrame>
   )
 }

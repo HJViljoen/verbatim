@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Play, Sparkles } from 'lucide-react'
-import { FlagChip, InPlacePanel, PanelSection, PanelTitle, StatCell, StatRow } from '@/components/v2'
+import { FlagChip, InPlacePanel, PanelSection, PanelTitle, StatCell, StatRow, type PerBreakpoint } from '@/components/v2'
 import { QuoteBlock } from '@/components/quote-block'
 import { fmtInt, longMonth, platformLabel, shortDate } from '@/lib/format'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
@@ -36,16 +36,19 @@ import { Fig, OLink } from './parts'
 
 const BRIEF_KEY = 'm-0 mb-1.5 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground'
 
-export function IdeaPanelView({ panel, state, count, month, weekWord }: {
+export function IdeaPanelView({ panel, state, count, month, weekWord, notchAt }: {
   panel: IdeaPanel
   state: ContentState
   /** How many ideas stand in the row, for where the notch points. */
   count: number
   month: { month: string; complete: boolean }
   weekWord: string
+  /** The grid's placement, per breakpoint (`IdeasSection`, T9); alone, the
+   *  rank across the row. */
+  notchAt?: number | PerBreakpoint
 }) {
   const { card } = panel
-  const at = (card.rank - 0.5) / Math.max(1, count)
+  const at = notchAt ?? (card.rank - 0.5) / Math.max(1, count)
   const when = monthWords(month)
   // A sub-question's figure is its videos of the videos whose comments went to
   // the writer (`cover.asked`): a sub-question can only be found among those.
@@ -57,6 +60,7 @@ export function IdeaPanelView({ panel, state, count, month, weekWord }: {
     <InPlacePanel
       id={IDEA_PANEL_ID}
       notchAt={at}
+      openKey={`idea-${card.rank}`}
       closeHref={contentHref({ ...state, open: null })}
       closeLabel="Close this post idea"
       labelledBy="idea-title"
@@ -77,11 +81,15 @@ export function IdeaPanelView({ panel, state, count, month, weekWord }: {
       <StatRow>
         {card.week ? <StatCell value={card.week.k} of={card.week.n} label={`videos in your market ${weekWord} where it came up`} /> : null}
         {card.month ? <StatCell value={card.month.k} of={card.month.n} label={`videos ${when}`} /> : null}
+        {/* The three weeks' counts are one figure ("9 · 14 · 23"), so below
+            1280, where the cells are two to a row, it takes the row's width
+            rather than break between its counts, and the cell after it takes
+            its own row too (T9). */}
         {card.weeks ? (
-          <StatCell value={card.weeks.map((w) => fmtInt(w.count)).join(' · ')} label={`videos a week, the weeks of ${card.weeks.map((w) => w.label).join(', ')}`} />
+          <StatCell className="max-xl:col-span-2" value={card.weeks.map((w) => fmtInt(w.count)).join(' · ')} label={`videos a week, the weeks of ${card.weeks.map((w) => w.label).join(', ')}`} />
         ) : null}
         {card.own.state === 'touched' || card.own.state === 'none' ? (
-          <StatCell value={card.own.touched} of={card.own.posts} label={`posts of yours since ${since} touched on it`} />
+          <StatCell className={card.weeks ? 'max-xl:col-span-2' : undefined} value={card.own.touched} of={card.own.posts} label={`posts of yours since ${since} touched on it`} />
         ) : null}
       </StatRow>
 

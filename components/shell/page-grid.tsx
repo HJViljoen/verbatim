@@ -189,7 +189,7 @@ export function TileColumns({ of, rule = true, rail, children, className }: {
 /** Page title, and under it the bar's ONE context line where the page has
  *  one; the right-hand controls sit at the end of the pair. */
 export function PageBar({
-  title, line, meta, children,
+  title, line, meta, children, phoneControls = 'beside',
 }: {
   title: ReactNode
   /**
@@ -215,6 +215,13 @@ export function PageBar({
   /** IGNORED: no question under the title (2026-09-24). */
   subtitle?: ReactNode
   children?: ReactNode
+  /**
+   * ON A PHONE (below 640; depth v2, T9): the controls stay `beside` the
+   * title (the default, every existing caller), or go `below` the title and
+   * its lines, on their own row at the left. For a bar whose controls would
+   * squeeze the 26px title onto two lines (Your moves' two buttons).
+   */
+  phoneControls?: 'beside' | 'below'
 }) {
   // THE APPROVED PREVIEW'S BAR, ON EVERY PAGE (WP1.6 design check, 26 Sep):
   // the title at MASTER's `text-2xl font-bold` (it had drifted to 17px), the
@@ -227,16 +234,24 @@ export function PageBar({
   // Truthiness, as the line alone was tested before the meta existed, so every
   // existing caller draws exactly what it drew.
   const under = Boolean(line) || Boolean(meta)
+  // Controls under the title on a phone: the title takes the whole row there,
+  // and the controls, auto-placed, land on the first free row after the
+  // title's lines.
+  const below = Boolean(children) && phoneControls === 'below'
   return (
     <div className={cn('grid shrink-0 items-center gap-y-2', children ? 'grid-cols-[minmax(0,1fr)_auto] gap-x-6' : 'grid-cols-1', children && under ? 'sm:items-end' : null)}>
       {/* 26px bold on a 40px line (the navigation of 1 Oct: every
           `Page-*.dc.html` artboard's title, `font-size: 26px; font-weight: 700`
           in a 40px-high bar). It was MASTER's `text-2xl`. */}
-      <h1 className="col-start-1 row-start-1 m-0 text-[26px] leading-10 font-bold">{title}</h1>
+      <h1 className={cn('col-start-1 row-start-1 m-0 text-[26px] leading-10 font-bold', below ? 'max-sm:col-span-2' : null)}>{title}</h1>
       {children ? (
         // 10px between the controls: the artboards' own gap (Your moves,
         // Settings), since the bar became every page's title (integration).
-        <div className={cn('col-start-2 row-start-1 flex shrink-0 items-center justify-end gap-2.5', line && meta ? 'sm:row-end-4' : under ? 'sm:row-end-3' : null)}>{children}</div>
+        <div className={cn(
+          'col-start-2 row-start-1 flex shrink-0 items-center justify-end gap-2.5',
+          line && meta ? 'sm:row-end-4' : under ? 'sm:row-end-3' : null,
+          below ? 'max-sm:col-span-2 max-sm:col-start-1 max-sm:row-start-auto max-sm:flex-wrap max-sm:justify-start' : null,
+        )}>{children}</div>
       ) : null}
       {/* THE CONTEXT WRAPS (Block D wave 3, SH17). It was `truncate`, with no
           wrap fallback, and it is the line that says what the page's numbers
