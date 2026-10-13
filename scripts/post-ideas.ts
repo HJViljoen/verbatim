@@ -43,6 +43,7 @@ import { resolve } from 'node:path'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 import { workedLabel } from '../lib/pages/week'
+import { POST_IDEA_MIN_COMMENTS, POST_IDEA_MIN_VIDEOS } from '../lib/post-ideas/select'
 import { subquestionCounts } from '../lib/post-ideas/types'
 import {
   buildPostIdeas, existingPostIdeas, finishPostIdeas, loadPostIdeaInputs, ownedFrom, savePostIdeas,
@@ -123,7 +124,9 @@ function render(built: BuiltPostIdeas, mode: string): string {
   for (const x of inputs.considered) {
     const handle = inputs.candidates.find((k) => k.themeId === x.themeId)?.handle
     const covered = inputs.covered.find((k) => k.themeId === x.themeId)
-    const fate = handle ? `sent as ${handle} (${x.asks ?? '?'} comments that ask)` : covered ? `left out: own posts touched it (${covered.posts.length})` : !x.eligible ? 'not eligible (the week pool\'s gate)' : x.asks === 0 ? 'not sent: none of its comments asks' : 'not sent (past the cap)'
+    const fate = handle ? `sent as ${handle} (${x.asks ?? '?'} comments that ask)` : covered ? `left out: own posts touched it (${covered.posts.length})` : !x.eligible ? 'not eligible (the week pool\'s gate)'
+      : x.asks != null && x.asks < POST_IDEA_MIN_COMMENTS ? `not sent: under the evidence floor (${x.asks} ${x.asks === 1 ? 'comment asks' : 'comments ask'}; ${POST_IDEA_MIN_COMMENTS} across ${POST_IDEA_MIN_VIDEOS} videos needed)`
+      : 'not sent (under the floor on videos, or past the cap)'
     out.push(`- "${x.label}" (filed as ${x.kind ?? '?'}, mostly ${x.dominantKind ?? '?'} this week): week ${x.weekVideos}, counted ${x.lenientVideos}; ${fate}`)
   }
   out.push(`Own posts read for the touch test: ${inputs.ownPosts ?? 'unread'}.`)
