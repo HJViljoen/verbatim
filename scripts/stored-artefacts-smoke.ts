@@ -93,8 +93,13 @@ async function main() {
       if (mod && !ref.tileKey) renderSection(label, ref.page, { id: 'ref', page: ref.page, params: {} } as ReportSection, snap.data, true)
     }
 
-    const sections = ((snap.data as { sections?: { section: ReportSection; data: unknown }[] } | null)?.sections) ?? []
-    for (const sec of sections) renderSection(label, sec.section.page, sec.section, sec.data, false)
+    // Only an arranged report's sections are `{ section, data }` pairs; other
+    // artefacts that carry a `sections` key (a brief, a document) are drawn by
+    // their own bodies and are not this check's (they crashed it before).
+    const sections = ((snap.data as { sections?: { section?: ReportSection; data: unknown }[] } | null)?.sections) ?? []
+    for (const sec of Array.isArray(sections) ? sections : []) {
+      if (sec?.section?.page) renderSection(label, sec.section.page, sec.section, sec.data, false)
+    }
     // The weekly read has no page key and no sections: its own body draws it.
     if (isWeeklyReadData(snap.data)) renderWeeklyRead(label, snap.data)
   }
