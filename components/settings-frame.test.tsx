@@ -11,7 +11,10 @@ describe('the settings tabs (the Page-Settings artboard, pages build 1 Oct; E8 i
     const text = renderText(<SettingsFrame active="tracking" title="Settings">x</SettingsFrame>)
     expect(text).toMatch(/What you track Your products Your subjects Team Billing/)
     for (const hidden of ['Readiness', 'The record', 'How to read', 'Reports and recipients']) expect(text).not.toContain(hidden)
-    expect(markup).toMatch(/<nav aria-label="Settings" class="flex gap-1 overflow-x-auto">/)
+    // The row wraps rather than scrolling sideways: at a phone's width five
+    // tabs do not fit, and a scrolling row cut one and hid two (E8, T10b).
+    expect(markup).toMatch(/<nav aria-label="Settings" class="flex flex-wrap gap-1">/)
+    expect(markup).not.toContain('overflow-x-auto')
     // No hairline under the row and no green rule: the lit tab is a pill.
     expect(markup).not.toContain('border-b border-border')
     expect(markup).not.toContain('bg-primary')
