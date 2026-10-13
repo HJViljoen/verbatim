@@ -1,0 +1,400 @@
+import type { ObjectReading } from '../../agent/movement'
+import { bandVerdict, type Verdict } from '../../reading/verdicts'
+import type { MonthSeries } from '../../reading/series'
+import type { HomeWeeks } from '../home'
+import type { UnusualFlag } from '../week'
+import {
+  buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, convHref, closeHref, flagCardOf, flagVerdict, groupsOf,
+  lineBars, marketMonths, marketParams, monthsText, notchOf, ourReadOf, panelStats, pickHero, pickWeekSides, platformRows, subjectHref,
+  tableMonths, convOf, doingOf,
+  type ConvInput, type ConvPanel, type MarketConv, type MarketData, type MarketMonth, type MarketParams, type MarketWeek, type MonthCount,
+  type PanelAt, type SubjectFact, type TopRow,
+} from './market'
+import type { WeekReadData } from '../../written/types'
+import type { ThemeMonthLine } from '../../reading/cross'
+
+// MARKET'S RENDER FIXTURE (depth v2, T3): an Össur-shaped week, drawn from the
+// E2 boards' own numbers and re-cut to decision 1 (no weekly direction words,
+// every week figure beside its month, the subjects against last month). The
+// page's pure builders assemble it, so the render tests exercise them too.
+// Illustrative: no tenant row is read.
+
+const id = (n: number): string => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
+
+/** The conversations: label, kind, subject, the three weekly counts and the
+ *  month so far (category videos). */
+const THEMES: [number, string, string, string, [number, number, number], number][] = [
+  [1, 'How long a liner lasts', 'question', 'fit', [9, 14, 23], 35],
+  [2, 'Sweat under the liner', 'pain_point', 'fit', [12, 15, 21], 30],
+  [3, 'Insurance refusals for powered knees', 'pain_point', 'cost', [6, 5, 19], 31],
+  [4, 'Running-blade stories', 'praise', 'community', [14, 16, 17], 26],
+  [5, 'Stairs and slopes', 'question', 'function', [11, 12, 16], 24],
+  [6, 'Paying out of pocket', 'pain_point', 'cost', [8, 10, 15], 22],
+  [7, 'Socket fit changing over time', 'pain_point', 'fit', [10, 13, 14], 20],
+  [8, 'First steps after amputation', 'question', 'community', [9, 11, 13], 19],
+  [9, 'Powered knees in daily life', 'praise', 'function', [10, 9, 12], 18],
+  [10, 'Which knee for my activity level', 'question', 'choosing', [7, 8, 10], 15],
+  [11, 'Waterproof knees', 'question', 'function', [0, 0, 8], 8],
+  [12, 'Support from other amputees', 'praise', 'community', [6, 7, 9], 13],
+  [13, 'Medical aid and liners', 'question', 'cost', [5, 6, 9], 12],
+  [14, 'What my prosthetist recommended', 'question', 'choosing', [6, 7, 8], 12],
+  [15, 'Covers and finishes', 'praise', 'look', [4, 5, 7], 10],
+  [16, 'Showing it or hiding it', 'question', 'look', [3, 4, 6], 9],
+  [17, 'Liner smell and cleaning', 'pain_point', 'fit', [0, 0, 5], 5],
+]
+
+const SUBJECTS: [string, string, [number, number], [number, number]][] = [
+  // id, name, October so far (k of n), September (k of n)
+  ['fit', 'Fit & comfort', [108, 318], [277, 839]],
+  ['function', 'Function & movement', [80, 318], [210, 839]],
+  ['cost', 'Cost & access', [70, 318], [126, 839]],
+  ['community', 'Community & encouragement', [54, 318], [118, 839]],
+  ['choosing', 'Choosing the right device', [35, 318], [92, 839]],
+  ['look', 'Look & style', [19, 318], [59, 839]],
+]
+
+const OCT = '2026-10-01'
+const SEP = '2026-09-01'
+const WINDOW = { from: '2026-10-05T00:00:00.000Z', to: '2026-10-12T00:00:00.000Z' }
+
+const subjectId = (key: string): string => `subj-${key}`
+
+/** Last month against this one, on the market (`monthChange`'s shape). */
+const monthVerdict = (objectKind: 'subject' | 'kind', objectId: string, label: string, now: [number, number], prev: [number, number]): Verdict => bandVerdict({
+  objectKind, objectId, objectLabel: label, audience: 'market',
+  window: { kind: 'month', from: OCT, to: '2026-11-01' }, basis: { from: SEP, to: OCT },
+  value: { k: now[0], n: now[1] }, baseline: { k: prev[0], n: prev[1] },
+})
+
+/** The anomaly check's first flag: insurance refusals. */
+export const FIXTURE_FLAG: Omit<UnusualFlag, 'quotes'> = {
+  objectKind: 'theme',
+  objectId: id(3),
+  label: 'Insurance refusals for powered knees',
+  denominator: 'every audience together',
+  week: { k: 19, n: 252 },
+  baseline: { k: 39, n: 1906 },
+  baselineMonths: ['2026-07-01', '2026-08-01', '2026-09-01'],
+  baselineFilling: [],
+  baselineRegime: 'one',
+  changePts: 5.5,
+  bandPts: 2.4,
+  sentences: [
+    'People describe appeals that drag on for months, with powered knees judged not medically necessary.',
+    'Whoever helps people through the paperwork earns their trust before the sale.',
+  ],
+  explanationModel: 'gpt-5.4',
+  rank: 1,
+}
+
+/** The published read's parts the page uses. */
+export function fixtureRead(): WeekReadData {
+  return {
+    version: 2,
+    promptVersion: 'week_read_v3',
+    window: WINDOW,
+    month: OCT,
+    headline: 'Insurance refusals were the talk of the week.',
+    story: [],
+    implications: [],
+    newThisWeek: [
+      { themeId: id(11), body: 'Swimmers asking whether a knee can go in a pool or the shower.', videos: { week: 8, month: 8 }, evidence: '' },
+      { themeId: id(17), body: 'How to keep a liner from smelling.', videos: { week: 5, month: 5 }, evidence: '' },
+    ],
+    watch: [{ body: 'Whether the insurance talk holds once the appeal stories settle.', basedOn: [id(3)] }],
+    market: { week: { videos: 241, comments: 3912 }, month: { videos: 318, comments: 5840 } },
+    monthComplete: false,
+    findings: [{
+      headline: 'Insurance refusals for powered knees',
+      saw: 'People describe appeals that drag on for months and powered knees judged not medically necessary. Several were told to accept a mechanical knee first and prove they need more.',
+      means: 'Access, not the knee itself, is what stands between interest and a fitting.',
+      basedOn: [id(3)],
+      quote: null,
+      videos: { week: 19, month: 31 },
+      subjectId: subjectId('cost'),
+      isNew: false,
+      sure: 'strong',
+      evidence: '',
+      context: '',
+    }],
+    standing: [{
+      subjectId: subjectId('cost'), sentence: 'People ask how to get a knee paid for, and what to do when a claim is refused.', name: 'Cost & access',
+      calibration: 'ready', rung: 'changed', line: '', quote: null,
+    }],
+    figures: {},
+    held: [],
+    model: 'gpt-5.4',
+    costUsd: 0,
+  } as WeekReadData
+}
+
+/** The conversations' inputs, as the loader assembles them. */
+export function fixtureConvInput(period: MarketParams['period'] = 'week'): ConvInput {
+  const themes = new Map(THEMES.map(([n, label, kind]) => [id(n), { label, kind, memberIds: [1, 2, 3, 4].map((i) => `ins-${n}-${i}`) }]))
+  const subjectsOf = new Map<string, string[]>()
+  for (const [n, , , subject] of THEMES) for (const i of [1, 2, 3, 4]) subjectsOf.set(`ins-${n}-${i}`, [subjectId(subject)])
+  const weekCounts = [0, 1, 2].map((w) => {
+    const m = new Map<string, { videos: number; mix: Record<string, number> | null }>()
+    for (const [n, , , , weeks] of THEMES) {
+      const v = weeks[w]
+      if (v <= 0) continue
+      const tiktok = Math.ceil(v * 0.58)
+      const instagram = Math.floor(v * 0.26)
+      m.set(id(n), { videos: v, mix: w === 2 ? { tiktok, instagram, youtube: v - tiktok - instagram } : null })
+    }
+    return m
+  })
+  const series = new Map<string, MonthSeries>()
+  for (const [n, , , , , month] of THEMES) {
+    const k = (m: number) => Math.max(0, Math.round(month * m))
+    series.set(id(n), {
+      objectId: id(n), objectLabel: null, audience: 'industry-other',
+      points: [
+        { month: '2026-07-01', k: k(0.45), videos: 455, pct: null, state: 'frozen', labels: [] },
+        { month: '2026-08-01', k: k(0.6), videos: 612, pct: null, state: 'frozen', labels: [] },
+        { month: SEP, k: k(0.9), videos: 780, pct: null, state: 'frozen', labels: [] },
+        { month: OCT, k: month, videos: 300, pct: null, state: 'filling', labels: [] },
+      ],
+      notes: [],
+    } as unknown as MonthSeries)
+  }
+  return {
+    period,
+    themes,
+    subjects: { names: new Map(SUBJECTS.map(([k, name]) => [subjectId(k), name])), order: SUBJECTS.map(([k]) => subjectId(k)), subjectsOf },
+    weekCounts,
+    weekCut: [false, false, false],
+    monthCounts: new Map(THEMES.map(([n, , , , , m]) => [id(n), m])),
+    monthMixes: new Map(THEMES.map(([n, , , , , m]) => [id(n), { tiktok: Math.ceil(m * 0.55), instagram: Math.floor(m * 0.3), youtube: m - Math.ceil(m * 0.55) - Math.floor(m * 0.3) }])),
+    series: period === 'week' ? new Map() : series,
+    month: OCT,
+    nowMonth: OCT,
+    newIds: new Set([id(11), id(17)]),
+    setApart: new Set(),
+    pair: null,
+  }
+}
+
+/** Who each conversation's videos are about (Ottobock and Össur named). */
+const WHO: Record<number, [number, number]> = { 1: [4, 0], 2: [2, 0], 3: [3, 5], 4: [6, 2], 5: [3, 3], 6: [0, 2], 9: [3, 4], 10: [2, 2] }
+function withWho(c: MarketConv, period: MarketParams['period']): MarketConv {
+  const n = Number(c.id.slice(-12))
+  const [you, rival] = WHO[n] ?? [0, 0]
+  const total = (period === 'week' ? c.week : c.month) ?? 0
+  const parts = [
+    ...(you ? [{ about: 'client' as const, videos: you }] : []),
+    ...(rival ? [{ about: 'rival:Ottobock' as const, videos: rival }] : []),
+    ...(total - you - rival > 0 ? [{ about: 'market' as const, videos: total - you - rival }] : []),
+  ]
+  return { ...c, who: parts }
+}
+
+/** The subjects' standing facts, as the readings give them. */
+export function fixtureFacts(): SubjectFact[] {
+  const facts: SubjectFact[] = SUBJECTS.map(([key, name, now, prev]) => ({
+    id: subjectId(key),
+    name,
+    calibration: 'ready',
+    level: { k: now[0], n: now[1] },
+    verdict: monthVerdict('subject', subjectId(key), name, now, prev),
+    trail: [
+      { month: '2026-05-01', k: Math.round(prev[0] * 0.3), n: 260 },
+      { month: '2026-06-01', k: Math.round(prev[0] * 0.38), n: 330 },
+      { month: '2026-07-01', k: Math.round(prev[0] * 0.52), n: 455 },
+      { month: '2026-08-01', k: Math.round(prev[0] * 0.7), n: 612 },
+      { month: SEP, k: prev[0], n: prev[1] },
+      { month: OCT, k: now[0], n: now[1] },
+    ],
+  }))
+  facts.push({ id: subjectId('sport'), name: 'Sport and running', calibration: 'provisional', level: null, verdict: null, trail: [] })
+  return facts
+}
+
+/** The six kinds' readings, October so far against September. */
+export function fixtureKindReadings(): ObjectReading[] {
+  const rows: [string, [number, number], [number, number]][] = [
+    ['question', [143, 318], [369, 839]],
+    ['praise', [118, 318], [319, 839]],
+    ['pain_point', [102, 318], [227, 839]],
+    ['feature_request', [38, 318], [101, 839]],
+    ['purchase_intent', [22, 318], [59, 839]],
+    ['objection', [19, 318], [50, 839]],
+  ]
+  return rows.map(([kind, now, prev]) => ({
+    object: { kind: 'kind', id: kind, label: kind },
+    state: 'read',
+    trail: [],
+    curr: { month: OCT, k: now[0], n: now[1] },
+    prev: { month: SEP, k: prev[0], n: prev[1] },
+    verdict: monthVerdict('kind', kind, kind, now, prev),
+    direction: null,
+    filling: true,
+  }))
+}
+
+/** The market's weeks, the Dashboard's chart. */
+export const FIXTURE_WEEKS: HomeWeeks = {
+  columns: [
+    ['2026-08-17', '17 Aug', 198, 3110], ['2026-08-24', '24 Aug', 205, 3240], ['2026-08-31', '31 Aug', 214, 3390], ['2026-09-07', '7 Sep', 188, 2980],
+    ['2026-09-14', '14 Sep', 230, 3610], ['2026-09-21', '21 Sep', 226, 3550], ['2026-09-28', '28 Sep', 219, 3480], ['2026-10-05', '5 Oct', 241, 3912],
+  ].map(([week, label, videos, comments], i) => ({ week: week as string, label: label as string, videos: videos as number, comments: comments as number, settled: i < 7 })),
+  maxVideos: 241,
+  maxComments: 3912,
+}
+
+export interface FixtureOptions {
+  period?: MarketParams['period']
+  /** The anomaly check flagged insurance refusals. Default true. */
+  flagged?: boolean
+  /** Open a conversation (by its fixture number) from here. */
+  open?: { n: number; at: PanelAt } | null
+  /** Open a subject (its key). */
+  subject?: string | null
+}
+
+const MONTH: MarketMonth = {
+  month: OCT,
+  soFar: true,
+  text: 'October so far',
+  market: { videos: 318, comments: 5840 },
+  category: 300,
+  prev: { month: SEP, text: 'September', category: 780 },
+}
+
+const WEEK: MarketWeek = {
+  window: WINDOW,
+  dates: '5 to 11 Oct',
+  month: OCT,
+  monthComplete: false,
+  inMonth: 'in October so far',
+  market: { videos: 241, comments: 3912 },
+  category: 226,
+  categoryWeeks: [205, 214, 226],
+  weekLabels: ['21 Sep', '28 Sep', '5 Oct'],
+}
+
+const PERSONAS = [
+  { key: 'long-time-users', name: 'Long-time users upgrading', registryIds: [id(3), id(1)] },
+  { key: 'caregivers', name: 'Caregivers and family', registryIds: [id(3)] },
+  { key: 'new-amputees', name: 'New amputees in their first year', registryIds: [id(1), id(8)] },
+  { key: 'active', name: 'Active and athletic users', registryIds: [id(11), id(4)] },
+]
+
+const HERO_KINDS = [{ kind: 'pain_point', videos: 14 }, { kind: 'question', videos: 9 }, { kind: 'objection', videos: 4 }]
+
+/** Market as the route would hand it to the page. */
+export function marketFixture(opts: FixtureOptions = {}): MarketData {
+  const period = opts.period ?? 'week'
+  const flagged = opts.flagged ?? true
+  const raw: Record<string, string> = {}
+  if (period !== 'week') raw.period = period
+  if (opts.open) {
+    raw.conv = id(opts.open.n)
+    raw.at = opts.open.at
+  }
+  if (opts.subject) {
+    raw.subject = subjectId(opts.subject)
+    raw.at = 'subjects'
+  }
+  const p: MarketParams = marketParams(raw)
+  const input = fixtureConvInput(period)
+  const convs = buildConvs(input).map((c) => withWho(c, period))
+  const read = fixtureRead()
+  const flag = flagged && period === 'week' ? flagCardOf({ flag: FIXTURE_FLAG, window: WINDOW, convs, convInput: input, monthCategory: MONTH.category, p, noun: null }) : null
+  const groups = (cid: string) => groupsOf(cid, PERSONAS)
+  const doing = (c: MarketConv | null) => (c ? doingOf(HERO_KINDS, c.month, null)[0] ?? null : null)
+
+  const top: TopRow = { hero: null, sides: [], months: null }
+  if (period === 'week') {
+    const pick = pickHero({ convs, flag, setApart: new Set() })
+    const heroId = flag ? flag.conv?.id ?? null : pick && pick.kind !== 'flag' ? pick.conv.id : null
+    if (flag) top.hero = { kind: 'flag', card: { ...flag, conv: convs.find((c) => c.id === flag.conv?.id) ?? flag.conv }, groups: groups(flag.flag.objectId), doing: doing(flag.conv) }
+    else if (pick && pick.kind !== 'flag') top.hero = { kind: pick.kind, conv: pick.conv, href: convHref(p, pick.conv.id, 'top'), groups: groups(pick.conv.id), doing: doing(pick.conv) }
+    const sides = pickWeekSides({ convs, heroId, setApart: new Set() })
+    if (sides.biggest) top.sides.push({ kind: 'biggest', convs: [sides.biggest], hrefs: [convHref(p, sides.biggest.id, 'top')], groups: groups(sides.biggest.id) })
+    if (sides.fresh.length > 0) top.sides.push({ kind: 'new_list', convs: sides.fresh, hrefs: sides.fresh.map((c) => convHref(p, c.id, 'top')), groups: groups(sides.fresh[0].id) })
+  } else if (period === 'month') {
+    const [first, ...rest] = convs.slice(0, 3)
+    top.hero = { kind: 'biggest', conv: first, href: convHref(p, first.id, 'top'), groups: groups(first.id), doing: doing(first) }
+    for (const c of rest) top.sides.push({ kind: 'month', convs: [c], hrefs: [convHref(p, c.id, 'top')], groups: groups(c.id) })
+  } else {
+    top.months = marketMonths(new Map([['2026-05-01', { videos: 262 }], ['2026-06-01', { videos: 331 }], ['2026-07-01', { videos: 455 }], ['2026-08-01', { videos: 612 }], [SEP, { videos: 839 }], [OCT, { videos: 318 }]]), OCT, OCT)
+  }
+
+  const facts = fixtureFacts()
+  const subjects = buildSubjectBoard({
+    facts, month: OCT, convs, period,
+    flag: flag?.conv ? { id: flag.conv.id, verdict: flag.verdict } : null,
+    convHref: (cid) => convHref(p, cid, 'subjects'), subjectHref: (sid) => subjectHref(p, sid), soFar: true,
+  })
+  const openId = opts.open ? id(opts.open.n) : null
+  const table = buildTable({
+    convs, params: p, openId: opts.open?.at === 'table' ? openId : null,
+    months: period === 'time' ? tableMonths(OCT, new Map([['2026-07-01', 455], ['2026-08-01', 612], [SEP, 780], [OCT, 300]]), OCT) : [],
+  })
+  const panel = opts.open ? fixturePanel(opts.open.n, opts.open.at, p, period, convs, input, read, flagged) : null
+  return {
+    brand: 'Össur',
+    noun: null,
+    period,
+    weekUnavailable: false,
+    params: p,
+    week: period === 'week' ? WEEK : null,
+    month: MONTH,
+    top,
+    subjects,
+    rail: {
+      kinds: buildKinds(fixtureKindReadings(), OCT, null, true),
+      weeks: FIXTURE_WEEKS,
+      platforms: period === 'week'
+        ? platformRows({ tiktok: 128, instagram: 76, youtube: 37 }, 'week')
+        : platformRows({ tiktok: 170, instagram: 98, youtube: 50 }, 'month'),
+      watch: period === 'week' ? read.version === 2 ? read.watch.map((w) => ({ body: w.body, figures: {} })) : [] : [],
+    },
+    table,
+    panel,
+    subjectPanel: opts.subject ? buildSubjectPanel({ id: subjectId(opts.subject), facts, convs, period, p, read, month: MONTH, flag: flag?.conv ? { id: flag.conv.id, verdict: flag.verdict } : null }) : null,
+  }
+}
+
+/** The open conversation in full. */
+function fixturePanel(n: number, at: PanelAt, p: MarketParams, period: MarketParams['period'], convs: readonly MarketConv[], input: ConvInput, read: WeekReadData, flagged: boolean): ConvPanel {
+  const cid = id(n)
+  const conv = convs.find((c) => c.id === cid) ?? convOf(cid, input)!
+  const flagHere = flagged && period === 'week' && FIXTURE_FLAG.objectId === cid ? FIXTURE_FLAG : null
+  const line: ThemeMonthLine = {
+    themeId: cid, label: conv.label, audience: 'industry-other', month: OCT, verdict: null, notes: [],
+    points: [
+      ['2026-05-01', 4, 262], ['2026-06-01', 6, 330], ['2026-07-01', 9, 455], ['2026-08-01', 13, 612], [SEP, 19, 780], [OCT, conv.month ?? 0, 300],
+    ].map(([month, k, nn]) => ({ month: month as string, state: month === OCT ? 'filling' : 'frozen', k: k as number, n: nn as number, pct: null, clusteringKey: 'c1', regimeStep: 'same', refusedStep: null })) as ThemeMonthLine['points'],
+  }
+  const bars: MonthCount[] = lineBars(line, OCT)
+  return {
+    id: cid,
+    label: conv.label,
+    kind: conv.kind,
+    subjectName: conv.subjectName,
+    at,
+    notchAt: notchOf(at, 0),
+    flag: flagHere ? flagVerdict(flagHere, WINDOW) : null,
+    isNew: conv.isNew,
+    stats: panelStats({ conv, period, week: period === 'week' ? WEEK : null, month: MONTH, prevK: 19, flag: flagHere, baselineText: flagHere ? monthsText(flagHere.baselineMonths) : null }),
+    ourRead: ourReadOf({ id: cid, read, flag: flagHere, description: 'People share how long their liners last before they lose grip, and when to replace one.' }),
+    line: { bars, verdict: null, basis: 'the category’s videos' },
+    who: conv.who.length > 0 ? { parts: conv.who, n: conv.who.reduce((s, x) => s + x.videos, 0) } : null,
+    doing: { rows: doingOf(HERO_KINDS, conv.month, null), n: conv.month ?? 0, text: 'in October so far' },
+    groups: groupsOf(cid, PERSONAS),
+    platforms: platformRows(conv.mix, period === 'week' ? 'week' : 'month')?.rows ? { rows: platformRows(conv.mix, period === 'week' ? 'week' : 'month')!.rows, n: platformRows(conv.mix, period === 'week' ? 'week' : 'month')!.n } : null,
+    quotes: [
+      { text: 'Third appeal denied. They say a mechanical knee is adequate. Adequate for sitting, maybe.', lang: null, english: null, source: 'TikTok · 7 Oct', about: null },
+      { text: 'My prosthetist wrote three letters. Still no.', lang: null, english: null, source: 'Instagram · 8 Oct', about: null },
+      { text: 'Got the C-Leg approved after a year of fighting. Worth it, but the fight nearly broke me.', lang: null, english: null, source: 'YouTube · 3 Oct', about: 'rival:Ottobock' },
+    ],
+    askHref: '/dashboard/agent?ask=What%20does%20my%20market%20say%20about%20insurance%20refusals%20for%20powered%20knees%3F',
+    closeHref: closeHref(p, at),
+  }
+}
+
+/** The fixture's ids, for tests. */
+export const fixtureId = id
+export const fixtureSubjectId = subjectId
