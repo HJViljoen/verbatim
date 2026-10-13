@@ -5,7 +5,7 @@ import { PageBar } from '@/components/shell/page-grid'
 import { longMonth } from '@/lib/format'
 import { canDate } from '@/lib/pages/date-move'
 import { barMonth } from '@/lib/reading/month-label'
-import { PAGE_TITLE, headerParts, type MovesPageData } from '@/lib/pages/v2/moves'
+import { CHECK_A_PLAN_HREF, PAGE_TITLE, headerParts, type MovesPageData } from '@/lib/pages/v2/moves'
 import type { StatementsBlockData } from '@/lib/statements/types'
 import { cn } from '@/lib/utils'
 import { AdviceSection } from './advice'
@@ -24,10 +24,13 @@ import { WhatYouSay } from './say'
 //
 // The data is `loadMovesPage` (lib/pages/v2/moves.ts); the statements are
 // read by the route behind `maySeeStatements` and drawn only where rows
-// exist. A section with nothing to show is not drawn (the moves, the plan,
-// the statements, the conclusions); the advice says so in one line.
+// exist or the reader may add the first (held from tenants, AGENTS.md).
+// THE BOARD'S LAYOUT IS FIXED (the parity pass, 13 Oct): every other section
+// keeps its card in every data state and shows its gap inside it, in its own
+// shape (the advice record's card, the next move's card, the plan card with
+// no plan, the conclusions' card with one calm line).
 
-export const CHECK_A_PLAN_HREF = '/dashboard/agent'
+export { CHECK_A_PLAN_HREF }
 
 function Header({ data }: { data: MovesPageData }) {
   const parts = headerParts(data.counts)
@@ -79,12 +82,14 @@ export function MovesV2Page({ data, statements }: { data: MovesPageData | null; 
       <Header data={data} />
       <AdviceSection data={data} />
       <MovesSection data={data} />
-      {say || data.plan ? (
-        <div className="grid grid-cols-1 gap-5 min-[1180px]:grid-cols-2">
-          {say ? <WhatYouSay data={say} className={data.plan ? undefined : 'min-[1180px]:col-span-2'} /> : null}
-          {data.plan ? <PlanCard plan={data.plan} className={say ? undefined : 'min-[1180px]:col-span-2'} /> : null}
-        </div>
-      ) : null}
+      {/* The board's two across: what you say beside the plan. The plan card
+          is always drawn (with no plan, its empty shape); the statements are
+          held from tenants (AGENTS.md, open ruling 7), so for a tenant the
+          plan takes the row. */}
+      <div className="grid grid-cols-1 gap-5 min-[1180px]:grid-cols-2">
+        {say ? <WhatYouSay data={say} /> : null}
+        <PlanCard plan={data.plan} failed={data.failed?.plan === true} className={say ? undefined : 'min-[1180px]:col-span-2'} />
+      </div>
       <ConclusionsSection data={data} />
     </div>
   )

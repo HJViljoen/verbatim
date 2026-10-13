@@ -93,7 +93,7 @@ import { VoicesPage } from '../components/pages/v2/voices'
 import { VOICES_FIXTURES } from '../lib/pages/v2/voices-fixture'
 import type { VoicesData } from '../lib/pages/v2/voices'
 import { MovesV2Page } from '../components/pages/v2/moves'
-import { movesFixture, movesOpenFixture, movesRecordFixture, statementsV2 } from '../lib/pages/v2/moves-fixture'
+import { movesFailedFixture, movesFixture, movesHistoryFixture, movesOpenFixture, movesQuietFixture, movesRecordFixture, movesThinFixture, movesThinOpenFixture, statementsV2 } from '../lib/pages/v2/moves-fixture'
 import type { MovesPageData } from '../lib/pages/v2/moves'
 import { MarketPage } from '../components/pages/v2/market'
 import { marketFixture, marketLongRowsFixture, marketThinFixture } from '../lib/pages/v2/market-fixture'
@@ -481,6 +481,23 @@ const PAGES: Page[] = [
   ...(flag('moves-dump', '') ? (['ossur', 'sealand'] as const).map((tenant): Page => ({
     key: `moves-v2-${tenant}`, path: '/dashboard/moves', artboard: 'E6-Moves.dc.html',
     page: () => h(MovesV2Page, { data: JSON.parse(readFileSync(join(resolve(flag('moves-dump', '.')), `${tenant}.json`), 'utf8')).data as MovesPageData, statements: null }),
+  })) : []),
+  // The parity pass (13 Oct): the thin real state as a fixture (one update,
+  // one move with one month read, no plan, no statements: a tenant), opened,
+  // and the barest (nothing waiting, no move, no plan, no conclusion); and
+  // the open dumps (`--moves-open-dump <dir>`), beside E6-Moves-Open.
+  { key: 'moves-v2-thin', path: '/dashboard/moves', artboard: 'E6-Moves.dc.html', page: () => h(MovesV2Page, { data: movesThinFixture(), statements: null }) },
+  { key: 'moves-v2-thin-open', path: '/dashboard/moves', artboard: 'E6-Moves-Open.dc.html', page: () => h(MovesV2Page, { data: movesThinOpenFixture(), statements: null }) },
+  { key: 'moves-v2-bare', path: '/dashboard/moves', artboard: 'E6-Moves.dc.html', page: () => h(MovesV2Page, { data: movesQuietFixture(), statements: null }) },
+  // The fresh check: the history row raised by 2, 4 and 8 of the latest
+  // nine updates (shoot at 390 and 1180), a member's thin page (no dating
+  // invited), and every read failed on one load.
+  ...[2, 4, 8].map((n): Page => ({ key: `moves-v2-history-${n}`, path: '/dashboard/moves', artboard: 'E6-Moves-Open.dc.html', page: () => h(MovesV2Page, { data: movesHistoryFixture(n), statements: null }) })),
+  { key: 'moves-v2-thin-member', path: '/dashboard/moves', artboard: 'E6-Moves.dc.html', page: () => h(MovesV2Page, { data: { ...movesThinFixture(), canDecide: false }, statements: null }) },
+  { key: 'moves-v2-failed', path: '/dashboard/moves', artboard: 'E6-Moves.dc.html', page: () => h(MovesV2Page, { data: movesFailedFixture(), statements: null }) },
+  ...(flag('moves-open-dump', '') ? (['ossur', 'sealand'] as const).map((tenant): Page => ({
+    key: `moves-v2-open-${tenant}`, path: '/dashboard/moves', artboard: 'E6-Moves-Open.dc.html',
+    page: () => h(MovesV2Page, { data: JSON.parse(readFileSync(join(resolve(flag('moves-open-dump', '.')), `${tenant}.json`), 'utf8')).data as MovesPageData, statements: null }),
   })) : []),
   // Market (depth v2, T3), to the E2 boards: the week with the check's flag,
   // the week with none (the biggest new conversation leads), a conversation

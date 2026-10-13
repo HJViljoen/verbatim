@@ -274,6 +274,92 @@ export function movesQuietFixture(): MovesPageData {
   })
 }
 
+// ---- the thin states (the parity pass, 13 Oct) -------------------------------------
+
+const T_COST = 'c1000000-0000-4000-8000-000000000002'
+const L_NAV = 'a1000000-0000-4000-8000-000000000005'
+
+/** Össur's move on 13 October: an advice move dated 5 Oct, so October reads
+ *  only once read; September read, August read but not the same way (a
+ *  change of ours in September), so the line has one month on it. */
+export const THIN_MOVE = moveCards({
+  moves: [
+    { id: 'm-access', kind: 'advice', subject_id: null, registry_ids: null, lineage_id: L_NAV, title: 'Create a guided access path, not a standalone price answer', declared_at: '2026-10-05', dated_on: null, status: 'active', direction: 'up' },
+  ],
+  month: SEPT,
+  now: OCT_13,
+  subjects: new Map(),
+  themes: new Map([[T_COST, 'Cost and affordability frustration']]),
+  adviceTargets: new Map([[L_NAV, T_COST]]),
+  levels: (_kind, _id, month) => ({ '2026-08-01': 23, '2026-09-01': 19 } as Record<string, number>)[month] ?? null,
+  n: (month) => ({ '2026-08-01': 533, '2026-09-01': 521 } as Record<string, number>)[month] ?? null,
+  joined: (prev) => prev !== '2026-08-01',
+  // The month-pair judge: our search change of 17 Sep refuses August against
+  // September (the record's `tracking_change`).
+  pair: (prevMonth, month) => (prevMonth === '2026-08-01'
+    ? { prevMonth, month, mode: 'refuse', row: null, reasons: [{ kind: 'searches', changeId: 'ch-0917', share: 0.3, changedAt: '2026-09-17T00:00:00Z', surface: null }] }
+    : { prevMonth, month, mode: 'comparable', row: null, reasons: [] }),
+})
+
+/** One update has raised each piece so far: a streak of one, one dot. */
+const ONE_UPDATE = { dates: ['2026-10-12'], streak: 1, since: '2026-10-12', recent: [false, false, false, false, false, false, false, false, true] }
+
+/**
+ * THE THIN REAL STATE (Össur and Sealand, 13 Oct): every piece raised by the
+ * one update since the advice was re-keyed, one move dated after the reading
+ * month with one month on its line, no plan checked (Sealand), statements
+ * held from the tenant, conclusions carrying several pieces each.
+ */
+export function movesThinFixture(): MovesPageData {
+  const card = (c: AdviceCard, over: Partial<AdviceCard>): AdviceCard => ({ ...c, history: ONE_UPDATE, firstMade: '2026-10-12', restsOn: c.restsOn.slice(0, 2), ...over })
+  const cards = [
+    card(DESK, { title: 'Create an access navigator for new amputees and caregivers', grounded: { videos: 203, pruned: false }, aim: { label: 'Cost and affordability frustration', month: SEPT, level: { k: 19, n: 521 } } }),
+    card(LINER, { title: 'Translate engineering into everyday outcomes before a rival defines the category', kind: 'competitive_response', grounded: { videos: 141, pruned: false }, aim: { label: 'How the prosthesis works', month: SEPT, level: { k: 37, n: 521 } } }),
+    card(SWEAT, { title: 'A piece of advice with no title', untitled: true, kind: 'customer_experience', grounded: { videos: 146, pruned: false }, aim: null }),
+  ]
+  return movesFixture({
+    counts: { waiting: 4, dated: 1, plans: 0 },
+    advice: { cards, more: 1, open: null, gone: false, total: 65, acted: 2 },
+    moves: { cards: THIN_MOVE, recorded: true },
+    plan: null,
+    conclusions: [
+      { id: 'mi-access', title: 'Access clarity is part of the product experience', videos: 203, advice: [{ lineageId: cards[0].lineageId, title: cards[0].title }] },
+      { id: 'mi-inspire', title: 'Inspiration opens attention, but education earns consideration', videos: 117, advice: [{ lineageId: cards[1].lineageId, title: cards[1].title }, { lineageId: 'a1000000-0000-4000-8000-000000000009', title: 'Replace pure inspiration with guided real-life stories' }] },
+      { id: 'mi-comfort', title: 'Daily wear comfort and fit remain unresolved', videos: 75, advice: [{ lineageId: cards[2].lineageId, title: cards[2].title }] },
+      { id: 'mi-friction', title: 'Hope sits beside friction', videos: 74, advice: [] },
+    ],
+  })
+}
+
+/** The thin state with the first piece open: no comment can be shown. */
+export function movesThinOpenFixture(): MovesPageData {
+  const base = movesThinFixture()
+  return { ...base, advice: { ...base.advice, open: { card: { ...base.advice.cards[0], quote: null }, index: 0, waiting: true } } }
+}
+
+/** The thin state opened, its piece raised by the last `n` of the latest
+ *  nine updates (the history row's phone and narrow-column cases). */
+export function movesHistoryFixture(n: number): MovesPageData {
+  const days = ['2026-08-10', '2026-08-17', '2026-08-24', '2026-08-31', '2026-09-07', '2026-09-14', '2026-09-21', '2026-09-28', '2026-10-05', '2026-10-12']
+  const dates = days.slice(-n)
+  const base = movesThinOpenFixture()
+  const card = { ...base.advice.open!.card, history: { dates, streak: n, since: dates[0], recent: Array.from({ length: 9 }, (_, i) => i >= 9 - n) } }
+  return { ...base, advice: { ...base.advice, open: { ...base.advice.open!, card } } }
+}
+
+/** Every read that can fail, failed on one load: each section says so once. */
+export function movesFailedFixture(): MovesPageData {
+  const base = movesThinFixture()
+  return {
+    ...base,
+    counts: { ...base.counts, plans: 2 },
+    advice: { ...base.advice, cards: base.advice.cards.map(({ aim: _aim, ...c }) => c) },
+    moves: { cards: [], recorded: true },
+    conclusions: [],
+    failed: { moves: true, aims: true, plan: true, conclusions: true },
+  }
+}
+
 /** A reader who may not decide (a member): no Accept, no Not for us, no Date a
  *  move, no status control. */
 export function movesMemberFixture(): MovesPageData {

@@ -4,11 +4,11 @@ import { priorPrintable } from '../../reading/verdicts'
 import type { PairComparability } from '../../reading/comparability'
 import type { RecCopy } from '../market-surface'
 import {
-  adviceHistory, compareMonths, conclusionViews, decisionLine, headerParts, largestStance, leadClaims, moveCards, movedMove,
+  adviceAims, adviceHistory, axisLine, compareMonths, conclusionViews, decisionLine, headerParts, largestStance, leadClaims, moveAxis, moveCards, movedMove,
   recordRows, restsOnRows, streakLabel, adviceHref, adviceParam, adviceTitle, waitingAdvice, MOVES_PATH, UNTITLED_ADVICE,
 } from './moves'
 import { buildAdviceRows } from '../market-surface'
-import { MOVE_CARDS, PLAN, movesRecordFixture } from './moves-fixture'
+import { MOVE_CARDS, PLAN, THIN_MOVE, movesRecordFixture } from './moves-fixture'
 
 // Your moves, Design v2 (T7): the page's pure half. The loader's reads feed
 // these, and the render tests draw what they return.
@@ -249,5 +249,64 @@ describe('compareMonths and the reading month\'s label', () => {
     expect(compareMonths(c('2026-09-01'), '2026-09-01', { month: '2026-09-01', label: null }).after).toBe('September, the month of the move')
     expect(compareMonths(c('2026-08-01'), '2026-07-01', sep).after).toBe('August')
     expect(compareMonths(c('2026-10-01', true), '2026-08-01', { month: '2026-10-01', label: null }).after).toBe('October so far')
+  })
+})
+
+// The parity pass (13 Oct): the board's chart whatever the data, and the
+// advice card's "Would move".
+describe('moveAxis and axisLine: the board’s axis, the months not drawn and why', () => {
+  it('a move dated after the reading month, one month read: August cut, September drawn, October to come', () => {
+    const [c] = THIN_MOVE
+    expect(c.points.map((p) => p.month)).toEqual(['2026-09-01'])
+    // Cut by the refused step at the run's near edge, for the record's reason.
+    expect(c.gaps).toEqual([{ month: '2026-08-01', why: 'cut', reason: 'tracking_change' }])
+    const slots = moveAxis(c, '2026-09-01')
+    expect(slots.map((s) => [s.month, s.why])).toEqual([['2026-08-01', 'cut'], ['2026-09-01', null], ['2026-10-01', 'pending']])
+    expect(axisLine(slots)).toBe('August is left off the line: what we track changed inside this window. October reads once the month has been read.')
+  })
+
+  it('a dump from before `gaps` still draws its axis, and says only what it can', () => {
+    const { gaps: _gaps, ...card } = THIN_MOVE[0]
+    const slots = moveAxis(card, '2026-09-01')
+    expect(slots.map((s) => s.why)).toEqual(['unknown', null, 'pending'])
+    expect(axisLine(slots)).toBe('August is left off the line. October reads once the month has been read.')
+  })
+
+  it('a month with no reading says so, and a full line says nothing', () => {
+    const slots = moveAxis({ day: '2026-08-14', points: [{ month: '2026-07-01', role: 'before', k: 1, n: 10, soFar: false }, { month: '2026-08-01', role: 'move', k: 2, n: 10, soFar: false }, { month: '2026-09-01', role: 'after', k: 3, n: 10, soFar: false }], unread: null, gaps: [{ month: '2026-06-01', why: 'unread' }] }, '2026-09-01')
+    expect(slots.map((s) => s.month)).toEqual(['2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01'])
+    expect(axisLine(slots)).toBe('June has no reading.')
+    expect(axisLine(slots.filter((s) => s.point))).toBeNull()
+  })
+
+  it('a move with no line keeps the axis, and its own sentence says why', () => {
+    const socket = MOVE_CARDS.find((c) => c.unread === 'not_ready')!
+    const slots = moveAxis(socket, '2026-09-01')
+    expect(slots.map((s) => s.month)).toEqual(['2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01'])
+    expect(slots.every((s) => s.why === 'move')).toBe(true)
+    expect(axisLine(slots)).toBeNull()
+  })
+
+  it('stops at the board’s nine months', () => {
+    expect(moveAxis({ day: '2025-11-02', points: [], unread: 'nothing' }, '2026-09-01')).toHaveLength(9)
+  })
+})
+
+describe('adviceAims: what a piece of advice would move', () => {
+  const base = {
+    targets: new Map([['L1', 't1'], ['L2', 't2'], ['L3', 't3']]),
+    labels: new Map([['t1', 'Cost and affordability'], ['t2', 'Liner life']]),
+    levels: (_k: 'theme', id: string) => (id === 't1' ? 19 : null),
+    n: (m: string) => (m === '2026-09-01' ? 521 : null),
+    month: '2026-09-01',
+  }
+  it('the conversation its evidence leads with, and its level in the reading month', () => {
+    const aims = adviceAims({ ...base, lineages: ['L1', 'L2', 'L3', 'L4'] })
+    expect(aims.get('L1')).toEqual({ label: 'Cost and affordability', month: '2026-09-01', level: { k: 19, n: 521 } })
+    // Named, with no reading of it that month: the name alone.
+    expect(aims.get('L2')).toEqual({ label: 'Liner life', month: '2026-09-01', level: null })
+    // A theme with no label, or no theme at all: nothing it would move.
+    expect(aims.get('L3')).toBeNull()
+    expect(aims.get('L4')).toBeNull()
   })
 })

@@ -2,9 +2,9 @@ import Link from 'next/link'
 import { FileText } from 'lucide-react'
 
 import { CARD, CardHead } from '@/components/v2'
-import type { PlanCheckCard, PlanClaimRow } from '@/lib/ask/plan-cards'
+import { PLAN_EMPTY, type PlanCheckCard, type PlanClaimRow } from '@/lib/ask/plan-cards'
 import { fmtInt, shortDate } from '@/lib/format'
-import { PLAN_TITLE, leadClaims } from '@/lib/pages/v2/moves'
+import { CHECK_A_PLAN_HREF, PLAN_TITLE, READ_FAILED, leadClaims } from '@/lib/pages/v2/moves'
 import { cn } from '@/lib/utils'
 import { MONO, OLINK } from './parts'
 
@@ -52,7 +52,45 @@ function ClaimRow({ c, first }: { c: PlanClaimRow; first: boolean }) {
   )
 }
 
-export function PlanCard({ plan, className }: { plan: PlanCheckCard; className?: string }) {
+/** The three counts' key, with or without their figures. */
+function Key({ counts }: { counts: PlanCheckCard['summary'] | null }) {
+  return (
+    <div className="flex flex-wrap items-center gap-3.5 text-[12px] text-muted-foreground">
+      {SEG.map((x) => (
+        <span key={x.key} className="inline-flex items-center gap-1.5">
+          <span aria-hidden className={cn('inline-block h-2 w-2.5 rounded-[2px]', x.fill)} />
+          {x.label}{counts ? <> <span data-copy="figure" className={MONO}>{fmtInt(counts[x.key])}</span></> : null}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * THE BOARD'S PLAN CARD WITH NO PLAN TO DRAW: its head, its bar as the empty
+ * track it fills from, its key, and ONE line for the one gap: none checked
+ * (the Agent's own words, `PLAN_EMPTY`, with the way to check one at its
+ * foot), or the read failed on this load (never "none checked" beside a
+ * count of plans). No count is drawn: nothing was read, which is not zero.
+ */
+function NoPlan({ className, failed }: { className?: string; failed: boolean }) {
+  return (
+    <section aria-labelledby="plan-title" data-plan-empty="" className={cn(CARD, className)}>
+      <CardHead icon={FileText} id="plan-title" title={PLAN_TITLE} />
+      <div aria-hidden className="h-3.5 rounded-[5px] bg-track" />
+      <Key counts={null} />
+      <p className="m-0 text-[14px] leading-[1.5] text-secondary-foreground">{failed ? `Your plan ${READ_FAILED}.` : PLAN_EMPTY}</p>
+      {failed ? null : (
+        <div className="mt-auto flex items-center justify-between gap-3" data-print-hide>
+          <Link href={CHECK_A_PLAN_HREF} className={OLINK}>Check a plan →</Link>
+        </div>
+      )}
+    </section>
+  )
+}
+
+export function PlanCard({ plan, className, failed = false }: { plan: PlanCheckCard | null; className?: string; failed?: boolean }) {
+  if (!plan || failed) return <NoPlan className={className} failed={failed} />
   const s = plan.summary
   const total = s.supported + s.contradicted + s.untested
   const claims = leadClaims(plan)
@@ -68,16 +106,14 @@ export function PlanCard({ plan, className }: { plan: PlanCheckCard; className?:
           <div role="img" aria-label={`${fmtInt(s.supported)} supported, ${fmtInt(s.contradicted)} contradicted, ${fmtInt(s.untested)} untested`} className="flex h-3.5 gap-0.5 overflow-hidden rounded-[5px]">
             {SEG.map((x) => (s[x.key] > 0 ? <div key={x.key} className={x.fill} style={{ width: `${(100 * s[x.key]) / total}%` }} /> : null))}
           </div>
-          <div className="flex flex-wrap items-center gap-3.5 text-[12px] text-muted-foreground">
-            {SEG.map((x) => (
-              <span key={x.key} className="inline-flex items-center gap-1.5">
-                <span aria-hidden className={cn('inline-block h-2 w-2.5 rounded-[2px]', x.fill)} />
-                {x.label} <span data-copy="figure" className={MONO}>{fmtInt(s[x.key])}</span>
-              </span>
-            ))}
-          </div>
+          <Key counts={s} />
         </>
-      ) : null}
+      ) : (
+        <>
+          <div aria-hidden className="h-3.5 rounded-[5px] bg-track" />
+          <Key counts={null} />
+        </>
+      )}
       {plan.moved.length > 0 ? (
         <div className="flex flex-col gap-1.5 rounded-[10px] bg-inner px-4 py-3.5">
           <p className="m-0 text-[11.5px] font-bold uppercase tracking-[0.06em] text-orange-text">Changed since you uploaded it</p>
