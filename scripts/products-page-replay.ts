@@ -81,7 +81,6 @@ async function main(): Promise<void> {
     .filter((r) => r.month <= month)
     .map((r) => ({ ...r, status: freezeStateFor(r.month, now) }))
   const market = (dump.monthVideos[month] ?? []).map((v) => ({ id: v.id, audience: v.audience, platform: v.platform }))
-  const audiences = [...new Set(Object.values(dump.monthVideos).flatMap((vs) => (vs ?? []).map((v) => v.audience)))].sort()
 
   // The open item, by name.
   const params: ProductsParams = {}
@@ -115,7 +114,7 @@ async function main(): Promise<void> {
 
   const data = buildProductsData({
     clientId: dump.clientId, client: dump.clientName, month, soFar: freezeStateFor(month, now) === 'filling' && now < `${month.slice(0, 7)}-31`,
-    catalogue: { state: 'ready', catalogue: dump.catalogue }, enabled: true, audiences, rows, market, standing: pass.standing,
+    catalogue: { state: 'ready', catalogue: dump.catalogue }, enabled: true, rows, market, standing: pass.standing,
     crosses: new Map(), pair: refuseEveryPair, params, canTag: true, panelReads,
   })
   writeFileSync(out, JSON.stringify(data))

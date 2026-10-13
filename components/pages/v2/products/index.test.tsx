@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { PRODUCTS_FIXTURES } from '@/lib/pages/v2/products-fixture'
-import { PRODUCTS_BASIS, PRODUCTS_NO_CATALOGUE, PRODUCTS_NOT_APPLIED, PRODUCTS_NOT_ON } from '@/lib/pages/v2/products'
+import { productsBasis, PRODUCTS_NO_CATALOGUE, PRODUCTS_NOT_APPLIED, PRODUCTS_NOT_ON } from '@/lib/pages/v2/products'
 import { ProductsEmpty, ProductsMeta, ProductsPage } from '.'
 
 describe('the Your products page (boards E4-Products and E4-Products-Liners)', () => {
@@ -35,7 +35,8 @@ describe('the Your products page (boards E4-Products and E4-Products-Liners)', (
     expect(at('Navii came up for the first time')).toBeLessThan(at('Your catalogue'))
     expect(at('Your catalogue')).toBeLessThan(at('About one of your products, but we couldn’t tell which'))
     expect(at('About one of your products')).toBeLessThan(at('Edit your products in Settings'))
-    expect(text).toContain(PRODUCTS_BASIS)
+    expect(text).toContain(productsBasis('Össur'))
+    expect(text).toContain('Counted on every video in your market, including creators’ videos about Össur and the comments on your own posts. What your own posts say (captions, hashtags, voice-over, on-screen text) is never counted.')
   })
 
   it('one panel at a time: a product\'s panel and no category\'s', () => {

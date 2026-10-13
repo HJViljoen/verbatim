@@ -19,10 +19,7 @@ import {
 } from '../products/types'
 import { marketProductMonth } from '../products/market-month'
 import { aliasProblem } from '../products/rules'
-import { marketAudiences } from '../reading/market'
 import { monthStartOf } from '../reading/month-key'
-import { loadMarketRivalAudiences } from '../reading/reading-view'
-import { CLIENT_AUDIENCE } from '../rivals'
 import { selectAll } from '../supabase-admin'
 import { settingsSubPage } from './rail'
 
@@ -47,11 +44,12 @@ import { settingsSubPage } from './rail'
 //
 // "THIS MONTH" IS THE COMMENT'S MONTH. A product's figure is its videos in the
 // calendar month `now` falls in, from `month_product_readings` (AGENTS.md: a
-// period is dated by the comment), pooled over THE MARKET'S audiences: the
-// tracked rivals' and the category's, the client's own posts left out
-// (`marketProductMonth`, lib/products/market-month.ts). Your products (T5)
-// pools through the same function, so the two surfaces never print two
-// numbers for one product (the lead's call, 13 Oct). A video sits in exactly
+// period is dated by the comment), pooled over EVERY audience, the client's
+// included: creators' videos about the client and the comments on its own
+// posts count, its own posts' words never place anything
+// (`marketProductMonth`, lib/products/market-month.ts; the lead's ruling, 13
+// Oct). Your products (T5) pools through the same function, so the two
+// surfaces never print two numbers for one product. A video sits in exactly
 // one audience, so the sum is the videos that named it, each once. Where the
 // month holds no product row at all, nothing has read it yet: the column
 // prints a dot, never "quiet", because quiet is a claim about the market and
@@ -135,10 +133,6 @@ export type ProductSettingsRead =
       /** The month the figures are about, 'YYYY-MM-01'. */
       month: string
       readings: MonthProductReadingRow[]
-      /** The market's audiences the figures pool (`marketAudiences`); null
-       *  where the tracked rivals could not be read, and the view then pools
-       *  every audience but the client's. */
-      audiences?: string[] | null
     }
 
 /**
@@ -158,10 +152,8 @@ export async function loadProductSettings(db: SupabaseClient, clientId: string, 
       selectAll<ProductAliasRow>(() =>
         db.from(TABLE_PRODUCT_ALIASES).select(PRODUCT_ALIAS_COLUMNS).eq('client_id', clientId).is('retired_at', null).order('created_at').order('id')),
     ])
-    const [readings, rivals] = groups.length > 0
-      ? await Promise.all([loadMonthProductReadings(db, clientId, [month]), loadMarketRivalAudiences(db, clientId)])
-      : [[], null]
-    return { state: 'ready', groups, products, aliases, month, readings, audiences: rivals ? marketAudiences(rivals) : null }
+    const readings = groups.length > 0 ? await loadMonthProductReadings(db, clientId, [month]) : []
+    return { state: 'ready', groups, products, aliases, month, readings }
   } catch (error) {
     if (isMissingProductsSchema(error)) return { state: 'missing' }
     throw error
@@ -272,12 +264,11 @@ export function productSettingsView(
   }))
 
   // A PRODUCT WITH NO ROW HAS NO FIGURE. Its videos are its own rows pooled
-  // over the market (`marketProductMonth`, Your products' own basis); where
-  // the month holds none for it, nothing has read it, and a missing row is
-  // never summed to zero ("quiet" is a claim about the market).
-  const audiences = new Set(read.audiences ?? read.readings.map((r) => r.audience).filter((a) => a !== CLIENT_AUDIENCE))
-  const pooled = (id: string) => marketProductMonth(read.readings, read.month, id, audiences)
-  const isRead = read.readings.some((r) => audiences.has(r.audience))
+  // over every audience (`marketProductMonth`, Your products' own basis);
+  // where the month holds none for it, nothing has read it, and a missing row
+  // is never summed to zero ("quiet" is a claim about the market).
+  const pooled = (id: string) => marketProductMonth(read.readings, read.month, id)
+  const isRead = read.readings.length > 0
   const productVideos = (id: string): number | null => pooled(id)?.k_named ?? null
 
   // THE SEED LINE names the website and the day the list was filled in, from

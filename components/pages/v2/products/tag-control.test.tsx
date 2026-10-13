@@ -53,7 +53,7 @@ describe('the control, drawn in each state', () => {
     const text = renderText(node)
     expect(text).toContain('Which is it about?')
     expect(text).toContain('Iceross Seal-In X')
-    expect(text).toContain('One of your liners, not sure which Liners in general Not about your products')
+    expect(text).toContain('One of your products in Liners, not sure which Liners in general Not about your products')
     expect(text).toContain('Cancel Save')
     assertCopyContract(node)
   })

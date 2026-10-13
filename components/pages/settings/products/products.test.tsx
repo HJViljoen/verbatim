@@ -60,7 +60,7 @@ describe('the Your products tab', () => {
       'Liners 8 products · 3 came up in October so far · 11 videos we couldn\'t place yet', 'Rename', 'Add a product',
       'Words for the category liner liners prosthetic liner + Add a word', 'Names for the whole range Iceross + Add a name',
       'Product Other names people use This month',
-      'Iceross Seal-In X seal in x sealin seal-in liner + Add a name 5 videos Edit',
+      'Iceross Seal-In X seal in x sealin seal-in liner + Add a name 6 videos Edit',
       'Iceross Seal-In V seal in v + Add a name quiet Edit',
       'Iceross Synergy synergy checked + Add a name 2 videos Edit',
       'Iceross Comfort Cushion',
@@ -75,7 +75,7 @@ describe('the Your products tab', () => {
   it('marks every count as a figure, lights the open category, and links the unclear videos to Your products', () => {
     const markup = render(<ProductsTab view={view()} />)
     expect(markup).toContain('<span data-copy="figure">38</span>')
-    expect(markup).toContain('<span data-copy="figure" class="font-mono text-[14px]">5</span>')
+    expect(markup).toContain('<span data-copy="figure" class="font-mono text-[14px]">6</span>')
     expect(markup).toMatch(/<a[^>]*aria-current="true"[^>]*href="\/dashboard\/settings\/products\?group=10000000-0000-4000-8000-000000000001"|<a[^>]*href="\/dashboard\/settings\/products\?group=10000000-0000-4000-8000-000000000001"[^>]*aria-current="true"/)
     expect(markup).toContain('href="/dashboard/products?group=10000000-0000-4000-8000-000000000001"')
     // A product's own name is not printed again among its other names.

@@ -72,7 +72,7 @@ describe('the catalogue (E4-Products, "Your catalogue")', () => {
     expect(text).toContain('Liners 117 videos 14% of the market no clear change')
     expect(text).toContain('Fit & comfort leads, 70 of 117')
     expect(text).toContain('Couldn’t tell which · 21')
-    expect(text).toContain('Counted over the videos Market counts')
+    expect(text).toContain('Counted on every video in your market, including creators’ videos about Össur')
     assertCopyContract(node)
   })
 

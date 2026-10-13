@@ -1,10 +1,9 @@
 import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../../config'
 import type { StandingText, TextKey } from '../../products/match'
-import { productReadingRows } from '../../products/readings'
+import { productReadingRows, type ProductMonthVideo } from '../../products/readings'
 import { compileCatalogue } from '../../products/rules'
 import { seedCatalogue } from '../../products/seed'
 import type { ProductCatalogue } from '../../products/types'
-import type { MonthVideo } from '../../provenance/searches'
 import type { PairComparability } from '../../reading/comparability'
 import type { PairOn } from '../../reading/pairs'
 import { OSSUR_PRODUCTS } from '../../../scripts/seeds/ossur-products'
@@ -31,7 +30,7 @@ const SEP = '2026-09-01'
 const MONTHS = ['2026-06-01', '2026-07-01', '2026-08-01', SEP] as const
 const OTTOBOCK = 'competitor:Ottobock'
 const CATEGORY = 'industry-other'
-const AUDIENCES = [OTTOBOCK, CATEGORY]
+const CLIENT = 'client'
 
 /** The seed as the catalogue reads once loaded (the seed's own ids). */
 export const OSSUR_CATALOGUE: ProductCatalogue = seedCatalogue(OSSUR_PRODUCTS)
@@ -112,12 +111,18 @@ const SPECS: Record<(typeof MONTHS)[number], MonthSpec> = {
  *  of its own, the rest of the market placed nowhere. In September, five of
  *  the Liners' unclear videos are placed by a comment rather than by the
  *  video (so the panel's list has words to show). */
-function monthOf(month: string, spec: MonthSpec): { market: MonthVideo[]; standing: [TextKey, StandingText][] } {
+function monthOf(month: string, spec: MonthSpec): { market: ProductMonthVideo[]; standing: [TextKey, StandingText][] } {
   const tag = month.slice(0, 7)
   const platforms = ['tiktok', 'instagram', 'youtube', 'reddit']
-  const market: MonthVideo[] = Array.from({ length: spec.market }, (_, i) => ({
-    id: `v-${tag}-${i}`, platform: platforms[i % platforms.length], audience: i % 13 === 0 && i / 13 < spec.rival ? OTTOBOCK : CATEGORY, dated: 6,
-  }))
+  // Every audience is in the month (the lead's ruling, 13 Oct): Ottobock's,
+  // the category's, and the client's (creators' videos about Össur, every
+  // ninth, and Össur's own posts, the month's last 25, placed by no word of
+  // their own and by none of their comments here).
+  const market: ProductMonthVideo[] = Array.from({ length: spec.market }, (_, i) => {
+    const owned = i >= spec.market - 25
+    const audience = owned || i % 9 === 4 ? CLIENT : i % 13 === 0 && i / 13 < spec.rival ? OTTOBOCK : CATEGORY
+    return { id: `v-${tag}-${i}`, platform: platforms[i % platforms.length], audience, dated: 6, ...(owned ? { owned: true } : {}) }
+  })
   const standing: [TextKey, StandingText][] = []
   let at = 0
   const take = () => market[at++].id
@@ -154,7 +159,7 @@ export function ossurProductRows(): ProductMonthRow[] {
 }
 
 /** September's market, as the page reads it. */
-export const SEP_MARKET = built.find((b) => b.month === SEP)!.market.map((v) => ({ id: v.id, audience: v.audience, platform: v.platform }))
+export const SEP_MARKET = built.find((b) => b.month === SEP)!.market.map((v) => ({ id: v.id, audience: v.audience, platform: v.platform, owned: v.owned === true }))
 
 const cross = (n: number, subjects: [string, number][], kinds: [string, number][]): Crosses => ({
   n,
@@ -237,7 +242,6 @@ const BASE = (over: Partial<ProductsInput> = {}): ProductsInput => ({
   soFar: false,
   catalogue: { state: 'ready', catalogue: OSSUR_CATALOGUE },
   enabled: true,
-  audiences: AUDIENCES,
   rows: ossurProductRows(),
   market: SEP_MARKET,
   standing: OSSUR_STANDING,

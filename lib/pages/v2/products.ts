@@ -16,18 +16,17 @@ import {
   type CatalogueRead, type ProductCatalogue, type ProductTagRow,
 } from '../../products/types'
 import { marketProductMonth, type PooledProductMonth, type ProductMonthRow } from '../../products/market-month'
-import { readMonthVideos } from '../../provenance/load'
+import { readProductMonthVideos } from '../../products/readings'
 import { readQuoteContext, gateFor } from '../../quote-context'
 import { quoteGate, type GateInput, type QuoteVideo } from '../../quote-gate'
 import { readingOf, readTranslations } from '../../quotes'
-import { brandKinds, brandSubjects, loadCompanyName, loadMarketAudiences, type BrandLens, type BrandCrossRow, type LensRowIn } from '../../reading/cross'
+import { brandKinds, brandSubjects, loadCompanyName, type BrandLens, type BrandCrossRow, type LensRowIn } from '../../reading/cross'
 import { KIND_LABELS } from '../../reading/kinds'
-import { marketAudiences } from '../../reading/market'
 import { monthStartOf, nextMonth, prevMonth } from '../../reading/month-key'
 import { loadPairOn, type ReadingHandle } from '../../reading/read'
 import type { PairOn } from '../../reading/pairs'
 import { monthChange } from '../../reading/bands'
-import { loadMarketRivalAudiences, loadReadingMonth } from '../../reading/reading-view'
+import { loadReadingMonth } from '../../reading/reading-view'
 import { bandVerdict, type Verdict } from '../../reading/verdicts'
 import { productsTabHref } from '../../settings/products'
 import { selectAll } from '../../supabase-admin'
@@ -54,13 +53,15 @@ import { WHAT_THEY_SELL } from '../market-frame'
 //      under one product, each line with its Tag control (owners and admins).
 //      Quotes print here and nowhere above.
 //
-// THE BASIS (the lead's call, 13 Oct). Product counts are the MARKET'S talk:
-// every audience the Market page pools (`marketAudiences`: the tracked
-// rivals' and the category's), so a category's "of 318 videos" is the
-// Market page's month. The client's own posts are never in it (the products
-// step reads `market_month_videos`, which leaves out every video filed under
-// the client), and Settings › Your products counts "this month" on the same
-// basis (`marketProductMonth`). The page says so once, in plain words.
+// THE BASIS (the lead's ruling, 13 Oct): EVERY video of the month, every
+// audience pooled, the client's included (`marketProductMonth`,
+// lib/products/market-month.ts; the month's videos are `product_month_videos`).
+// A creator's video that names the client is where talk about its products
+// lives, and the comments under the client's own posts are the market's; what
+// the client's own posts SAY (caption, hashtags, voice, on-screen text) never
+// places anything (lib/products/readings.ts `contentFields`). Settings › Your
+// products counts "this month" through the same function, so the two surfaces
+// never disagree. The page says so once, in plain words (`productsBasis`).
 //
 // THE MAIN READ IS `k_any`. The board shows no "named unprompted" figure, so
 // none is built: the organic columns (`k_organic`, `n_organic`) are left for
@@ -143,11 +144,13 @@ export function askHref(question: string): string {
 // ---- the words -------------------------------------------------------------------------
 
 /** The basis, said once (the catalogue card's line). */
-/** True to the code: the products step reads `market_month_videos`, which
- *  leaves out every video filed under the client (its own posts, and any
- *  other video whose words name it: lib/gather/tagging.ts `tagVideo`), and
- *  the page pools the Market page's audiences. */
-export const PRODUCTS_BASIS = 'Counted over the videos Market counts, those filed under your rivals or the category. Your own posts, and other videos filed under you, are left out.'
+/** The basis, said once (the catalogue card's line), true to the code: every
+ *  video of the month (`product_month_videos`, every audience), and never an
+ *  own post's own words (`contentFields`). */
+export function productsBasis(client: string): string {
+  const who = client && client !== 'You' ? client : 'you'
+  return `Counted on every video in your market, including creators’ videos about ${who} and the comments on your own posts. What your own posts say (captions, hashtags, voice-over, on-screen text) is never counted.`
+}
 
 /** The not-applied state (production today): the tables are not there. */
 export const PRODUCTS_NOT_APPLIED = 'Your products are not switched on for this workspace yet.'
@@ -429,15 +432,14 @@ export function monthsBack(month: string, count: number): string[] {
 
 export { marketProductMonth, type PooledProductMonth, type ProductMonthRow } from '../../products/market-month'
 
-/** The market's videos in a month, from any one object's rows (every object
- *  has a row in every audience of a month it was read in, zeros included).
- *  Null where the month holds no row. PURE. */
-export function marketVideosOf(rows: readonly ProductMonthRow[], month: string, audiences: readonly string[]): number | null {
+/** The month's videos, every audience, from any one object's rows (every
+ *  object has a row in every audience of a month it was read in, zeros
+ *  included). Null where the month holds no row. PURE. */
+export function marketVideosOf(rows: readonly ProductMonthRow[], month: string): number | null {
   const m = monthStartOf(month)
-  const keep = new Set(audiences)
   const n = new Map<string, number>()
   for (const r of rows) {
-    if (monthStartOf(r.month) !== m || !keep.has(r.audience) || n.has(r.audience)) continue
+    if (monthStartOf(r.month) !== m || n.has(r.audience)) continue
     n.set(r.audience, Number(r.n) || 0)
   }
   return n.size === 0 ? null : [...n.values()].reduce((s, x) => s + x, 0)
@@ -472,20 +474,24 @@ const RANK = { named: 3, unclear: 2, unbranded: 1 } as const
  * content stands under the category (in every month it is in the market) or a
  * comment on it dated in the month does; the split is exclusive per video,
  * named over unclear over unbranded; a product's set is its named videos.
- * `market` is the month's market videos over the market's audiences. PURE.
+ * `market` is the month's videos (`product_month_videos`, every audience); an
+ * own post (`owned`) stands only by its comments, never by its own words.
+ * PURE.
  */
 export function productMonthSets(input: {
   month: string
-  market: readonly { id: string }[]
+  market: readonly { id: string; owned?: boolean }[]
   standing: ReadonlyMap<TextKey, StandingText>
   groups: readonly string[]
   products: readonly string[]
 }): ProductMonthSets {
   const m = monthStartOf(input.month)
+  const owned = new Set(input.market.filter((v) => v.owned).map((v) => v.id))
   const content = new Map<string, StandingText['placements']>()
   const comments = new Map<string, StandingText['placements']>()
   for (const [key, t] of input.standing) {
     if (t.placements.length === 0) continue
+    if (key.startsWith('v:') && owned.has(t.videoId)) continue
     if (key.startsWith('v:')) content.set(t.videoId, [...(content.get(t.videoId) ?? []), ...t.placements])
     else if (t.month && monthStartOf(t.month) === m) comments.set(t.videoId, [...(comments.get(t.videoId) ?? []), ...t.placements])
   }
@@ -617,14 +623,13 @@ export function firstMonthOf(input: {
   product: { id: string; name: string }
   month: string
   rows: readonly ProductMonthRow[]
-  audiences: readonly string[]
 }): { verdict: Verdict; videos: number; n: number; months: { month: string; k: number }[] } | null {
   const m = monthStartOf(input.month)
-  const curr = marketProductMonth(input.rows, m, input.product.id, input.audiences)
+  const curr = marketProductMonth(input.rows, m, input.product.id)
   if (!curr || curr.k_named <= 0) return null
   const earlier: { month: string; k: number }[] = []
   for (const month of monthsOfRows(input.rows).filter((x) => x < m)) {
-    const p = marketProductMonth(input.rows, month, input.product.id, input.audiences)
+    const p = marketProductMonth(input.rows, month, input.product.id)
     if (!p) continue
     if (p.catalogueVersion !== curr.catalogueVersion) continue
     if (p.k_named > 0) return null
@@ -834,7 +839,6 @@ export function buildShelf(input: {
   month: string
   catalogue: Pick<ProductCatalogue, 'groups' | 'products'>
   rows: readonly ProductMonthRow[]
-  audiences: readonly string[]
   pair: PairOn | null
   firsts: ReadonlyMap<string, { verdict: Verdict }>
   crosses: ReadonlyMap<string, Crosses>
@@ -847,11 +851,11 @@ export function buildShelf(input: {
   const groups = [...input.catalogue.groups].sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name))
   const openGroup = input.open?.kind === 'group' ? input.open.id : input.open?.kind === 'product' ? input.groupOfProduct.get(input.open.id) ?? null : null
   return groups.map((g) => {
-    const curr = marketProductMonth(input.rows, m, g.id, input.audiences)
-    const prev = marketProductMonth(input.rows, before, g.id, input.audiences)
+    const curr = marketProductMonth(input.rows, m, g.id)
+    const prev = marketProductMonth(input.rows, before, g.id)
     const products = input.catalogue.products
       .filter((p) => p.group_id === g.id)
-      .map((p) => ({ p, videos: marketProductMonth(input.rows, m, p.id, input.audiences)?.k_named ?? 0 }))
+      .map((p) => ({ p, videos: marketProductMonth(input.rows, m, p.id)?.k_named ?? 0 }))
       .sort((a, b) => b.videos - a.videos || a.p.sort - b.p.sort || a.p.name.localeCompare(b.p.name))
       .map(({ p, videos }): ShelfProductView => ({
         id: p.id, name: p.name, videos, href: productsHref(input.params, { kind: 'product', id: p.id }), flag: input.firsts.get(p.id)?.verdict ?? null,
@@ -908,10 +912,10 @@ export function notchFor(groups: readonly { id: string }[], groupId: string): nu
 /** A month line: up to LINE_MONTHS months that hold a row for the object,
  *  ending at the reading month, `k` the object's videos (`pick`) of the
  *  market's. PURE. */
-export function monthLine(rows: readonly ProductMonthRow[], month: string, objectId: string, audiences: readonly string[], pick: (p: PooledProductMonth) => number, filling: (month: string) => boolean): LineBar[] {
+export function monthLine(rows: readonly ProductMonthRow[], month: string, objectId: string, pick: (p: PooledProductMonth) => number, filling: (month: string) => boolean): LineBar[] {
   const out: LineBar[] = []
   for (const m of monthsBack(month, LINE_MONTHS)) {
-    const p = marketProductMonth(rows, m, objectId, audiences)
+    const p = marketProductMonth(rows, m, objectId)
     if (!p || p.n <= 0) continue
     out.push({ month: m, label: longMonth(m).slice(0, 3), k: pick(p), n: p.n, filling: filling(m) })
   }
@@ -967,14 +971,12 @@ export interface ProductsInput {
   catalogue: CatalogueRead | null
   /** PRODUCT_READINGS_ENABLED for the tenant. */
   enabled: boolean
-  /** The market's audiences (`marketAudiences`). */
-  audiences: readonly string[]
   /** The stored product months, up to the reading month; null where the read
    *  failed. */
   rows: readonly ProductMonthRow[] | null
-  /** The month's market videos (the market's audiences), for the sets. Null
-   *  where not read. */
-  market: readonly { id: string; audience: string; platform: string }[] | null
+  /** The month's videos (`product_month_videos`, every audience, an own post
+   *  marked `owned`), for the sets. Null where not read. */
+  market: readonly { id: string; audience: string; platform: string; owned?: boolean }[] | null
   /** What stands on every text of the month (`standingPlacements`). Null
    *  where not read. */
   standing: ReadonlyMap<TextKey, StandingText> | null
@@ -1096,8 +1098,7 @@ export function buildProductsData(input: ProductsInput): ProductsData {
   if (!input.enabled) return { ...withCatalogue, state: 'not_on', empty: PRODUCTS_NOT_ON }
   if (!input.rows) return withCatalogue
   const rows = input.rows
-  const audiences = [...input.audiences]
-  const market = marketVideosOf(rows, month, audiences)
+  const market = marketVideosOf(rows, month)
   if (market == null) return { ...withCatalogue, state: 'unread', empty: productsUnread(month) }
 
   const filling = input.filling ?? ((m: string) => m === month && input.soFar)
@@ -1105,13 +1106,13 @@ export function buildProductsData(input: ProductsInput): ProductsData {
   const open = openOf(catalogue, input.params)
   const firsts = new Map<string, NonNullable<ReturnType<typeof firstMonthOf>>>()
   for (const p of catalogue.products) {
-    const f = firstMonthOf({ product: p, month, rows, audiences })
+    const f = firstMonthOf({ product: p, month, rows })
     if (f) firsts.set(p.id, f)
   }
-  const shelf = buildShelf({ month, catalogue, rows, audiences, pair: input.pair, firsts, crosses: input.crosses, params: input.params, open, groupOfProduct })
+  const shelf = buildShelf({ month, catalogue, rows, pair: input.pair, firsts, crosses: input.crosses, params: input.params, open, groupOfProduct })
   const splits = new Map<string, PooledProductMonth>()
   for (const g of catalogue.groups) {
-    const s = marketProductMonth(rows, month, g.id, audiences)
+    const s = marketProductMonth(rows, month, g.id)
     if (s) splits.set(g.id, s)
   }
   const standouts = pickStandouts({ month, params: input.params, catalogue, shelf, firsts, crosses: input.crosses, splits })
@@ -1134,7 +1135,7 @@ export function buildProductsData(input: ProductsInput): ProductsData {
     open,
   }
   if (!open) return data
-  return { ...data, panel: buildPanel({ input, data, catalogue, rows, audiences, open, filling, splits }) }
+  return { ...data, panel: buildPanel({ input, data, catalogue, rows, open, filling, splits }) }
 }
 
 function buildPanel(a: {
@@ -1142,12 +1143,11 @@ function buildPanel(a: {
   data: ProductsData
   catalogue: ProductCatalogue
   rows: readonly ProductMonthRow[]
-  audiences: string[]
   open: { kind: OpenKind; id: string }
   filling: (month: string) => boolean
   splits: ReadonlyMap<string, PooledProductMonth>
 }): ProductsPanel | null {
-  const { input, data, catalogue, rows, audiences, open } = a
+  const { input, data, catalogue, rows, open } = a
   const month = data.month
   const groups = [...catalogue.groups].sort((x, y) => x.sort - y.sort)
   const closeHref = productsHref(input.params)
@@ -1165,7 +1165,7 @@ function buildPanel(a: {
       askHref: askHref(`What does my market say about ${g.name.toLowerCase()}?`),
       settingsHref: productsTabHref(g.id),
       crosses: input.crosses.get(setKey('group', g.id)) ?? null,
-      line: monthLine(rows, month, g.id, audiences, (p) => p.k_any, a.filling),
+      line: monthLine(rows, month, g.id, (p) => p.k_any, a.filling),
       compare: buildCompare({ month, group: g, products: col.products, crosses: input.crosses }),
       share: col.share, verdict: col.verdict,
       products: col.products.length, cameUp: col.products.filter((p) => p.videos > 0).length,
@@ -1184,7 +1184,7 @@ function buildPanel(a: {
   if (!p) return null
   const g = catalogue.groups.find((x) => x.id === p.group_id)
   const col = data.shelf.find((c) => c.id === p.group_id)
-  const mine = marketProductMonth(rows, month, p.id, audiences)
+  const mine = marketProductMonth(rows, month, p.id)
   const tile = col?.products.find((x) => x.id === p.id)
   return {
     kind: 'product', id: p.id, name: p.name, groupId: p.group_id, groupName: g?.name ?? '',
@@ -1192,7 +1192,7 @@ function buildPanel(a: {
     askHref: askHref(`What does my market say about ${p.name}?`),
     settingsHref: productsTabHref(p.group_id),
     crosses: input.crosses.get(setKey('product', p.id)) ?? null,
-    line: monthLine(rows, month, p.id, audiences, (x) => x.k_named, a.filling),
+    line: monthLine(rows, month, p.id, (x) => x.k_named, a.filling),
     compare: g && col ? buildCompare({ month, group: g, products: col.products.filter((x) => x.id === p.id), crosses: input.crosses, focus: p.id }) : null,
     flag: tile?.flag ?? null,
     videos: mine?.k_named ?? null,
@@ -1314,14 +1314,6 @@ export async function loadMonthPlacements(db: SupabaseClient, clientId: string, 
   }
 }
 
-/** The month's market videos (`market_month_videos`), over the market's
- *  audiences. Null where the function is not there. */
-async function readMarket(db: SupabaseClient, clientId: string, month: string, audiences: readonly string[]): Promise<{ id: string; audience: string; platform: string }[] | null> {
-  const keep = new Set(audiences)
-  const rows = await readMonthVideos(db, clientId, monthStartOf(month), { n: 0 })
-  return rows ? rows.filter((v) => keep.has(v.audience)).map((v) => ({ id: v.id, audience: v.audience, platform: v.platform })) : null
-}
-
 const RPC_LENS_READINGS = 'lens_readings'
 const LENS_CONCURRENCY = 3
 
@@ -1409,11 +1401,6 @@ export interface ProductsLoadInput {
   now?: string
 }
 
-async function audiencesOf(supabase: SupabaseClient, handle: ReadingHandle): Promise<string[]> {
-  const rivals = await loadMarketRivalAudiences(supabase, handle.clientId)
-  return rivals ? marketAudiences(rivals) : loadMarketAudiences(handle)
-}
-
 /** The page's month (`loadReadingMonth`), its first read. */
 async function monthOf(supabase: SupabaseClient, handle: ReadingHandle, now: string, explicit: string | null): Promise<{ month: string; soFar: boolean }> {
   const rm = await loadReadingMonth(supabase, handle, now, { explicit }).catch((e: unknown) => { say('month', e); return null })
@@ -1422,7 +1409,7 @@ async function monthOf(supabase: SupabaseClient, handle: ReadingHandle, now: str
 
 /**
  * Level 1, and the open panel. Three waves, each part failing alone:
- *   1. the month, the catalogue, the market's audiences, the workspace's name;
+ *   1. the month, the catalogue, the workspace's name;
  *   2. the stored product months (back HISTORY_MONTHS), and, where the month
  *      holds rows: the month's market, its placements and the month-pair judge;
  *   3. the crosses: each category with a video, and each product with at
@@ -1436,28 +1423,27 @@ export async function loadProducts(input: ProductsLoadInput): Promise<ProductsDa
   const canTag = canManageTenant(input.role)
 
   // ---- wave 1
-  const [{ month, soFar }, catalogue, audiences, client] = await Promise.all([
+  const [{ month, soFar }, catalogue, client] = await Promise.all([
     monthOf(supabase, handle, now, params.month ?? null),
     loadProductCatalogue(handle.client, clientId).catch((e: unknown) => { say('catalogue', e); return null }),
-    audiencesOf(supabase, handle).catch((e: unknown) => { say('audiences', e); return null }),
     loadCompanyName(handle).catch(() => ''),
   ])
   const enabled = productReadingsEnabled(clientId)
   const shell: ProductsInput = {
-    clientId, client, month, soFar, catalogue, enabled, audiences: audiences ?? [], rows: null, market: null, standing: null,
+    clientId, client, month, soFar, catalogue, enabled, rows: null, market: null, standing: null,
     crosses: new Map(), pair: null, params, canTag,
   }
-  if (!catalogue || catalogue.state !== 'ready' || !enabled || !audiences) return buildProductsData(shell)
+  if (!catalogue || catalogue.state !== 'ready' || !enabled) return buildProductsData(shell)
   const cat = catalogue.catalogue
 
   // ---- wave 2
   const rows = await loadMonthProductReadings(handle.client, clientId, monthsBack(month, HISTORY_MONTHS))
     .then((r) => r as ProductMonthRow[])
     .catch((e: unknown) => { if (isMissingProductsSchema(e)) return [] as ProductMonthRow[]; say('months', e); return null })
-  if (!rows || marketVideosOf(rows, month, audiences) == null) return buildProductsData({ ...shell, rows })
+  if (!rows || marketVideosOf(rows, month) == null) return buildProductsData({ ...shell, rows })
   const version = versionOf(rows, month) ?? cat.version
   const [market, standing, pair] = await Promise.all([
-    readMarket(handle.client, clientId, month, audiences).catch((e: unknown) => { say('market', e); return null }),
+    readProductMonthVideos(handle.client, clientId, month).catch((e: unknown) => { say('month videos', e); return null }),
     loadMonthPlacements(handle.client, clientId, { month, version, catalogue: cat }).catch((e: unknown) => { say('placements', e); return null }),
     loadPairOn(handle, now),
   ])
@@ -1506,18 +1492,17 @@ export async function topProducts(input: { supabase: SupabaseClient; clientId: s
   const { supabase, clientId, reading: handle } = input
   const now = input.now ?? new Date().toISOString()
   try {
-    const [{ month, soFar }, catalogue, audiences] = await Promise.all([
+    const [{ month, soFar }, catalogue] = await Promise.all([
       monthOf(supabase, handle, now, null),
       loadProductCatalogue(handle.client, clientId).catch((e: unknown) => { say('top.catalogue', e); return null }),
-      audiencesOf(supabase, handle).catch((e: unknown) => { say('top.audiences', e); return null }),
     ])
     const enabled = productReadingsEnabled(clientId)
     const shell: ProductsInput = {
-      clientId, client: '', month, soFar, catalogue, enabled, audiences: audiences ?? [], rows: null, market: null, standing: null,
+      clientId, client: '', month, soFar, catalogue, enabled, rows: null, market: null, standing: null,
       crosses: new Map(), pair: null, params: {}, canTag: false,
     }
     let rows: ProductMonthRow[] | null = null
-    if (catalogue?.state === 'ready' && enabled && audiences) {
+    if (catalogue?.state === 'ready' && enabled) {
       rows = await loadMonthProductReadings(handle.client, clientId, monthsBack(month, HISTORY_MONTHS))
         .then((r) => r as ProductMonthRow[])
         .catch((e: unknown) => { if (isMissingProductsSchema(e)) return [] as ProductMonthRow[]; say('top.months', e); return null })

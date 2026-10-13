@@ -43,21 +43,23 @@ describe('the address', () => {
   })
 })
 
-describe('the market basis (one for this page and Settings)', () => {
+describe('the basis: every video of the month, every audience (one for this page and Settings)', () => {
   const row = (audience: string, k: number, n: number, month = SEP): ProductMonthRow => ({
     month, audience, object_kind: 'product', object_id: 'p', group_id: 'g', product_id: 'p',
     k_named: k, k_unclear: 0, k_unbranded: 0, k_any: k, comments: 0, n, catalogue_version: 'pc1_0000000000000000', status: 'filling',
   })
 
-  it('pools the market\'s audiences only: the client\'s own posts and an untracked rival are left out, a repeat counted once', () => {
+  it('pools every audience, the client\'s included (creators about the client, comments on its own posts), a repeat counted once', () => {
     const rows = [row('industry-other', 5, 300), row('client', 1, 20), row('competitor:Ottobock', 2, 40), row('competitor:Gone', 4, 10), row('industry-other', 5, 300)]
+    expect(marketProductMonth(rows, SEP, 'p')).toMatchObject({ k_named: 12, n: 370 })
+    expect(marketVideosOf(rows, SEP)).toBe(370)
+    // A caller may still name its audiences.
     expect(marketProductMonth(rows, SEP, 'p', AUD)).toMatchObject({ k_named: 7, n: 340 })
-    expect(marketVideosOf(rows, SEP, AUD)).toBe(340)
   })
 
   it('is null, never zero, for a month with no row', () => {
-    expect(marketProductMonth([row('industry-other', 5, 300)], '2026-08-01', 'p', AUD)).toBeNull()
-    expect(marketVideosOf([], SEP, AUD)).toBeNull()
+    expect(marketProductMonth([row('industry-other', 5, 300)], '2026-08-01', 'p')).toBeNull()
+    expect(marketVideosOf([], SEP)).toBeNull()
   })
 
   it('prints a share in whole percents, and a share that rounds to nothing as under 1%', () => {
@@ -77,11 +79,11 @@ describe('the month\'s video sets', () => {
     const sets = productMonthSets({ month: SEP, market: SEP_MARKET, standing: OSSUR_STANDING, groups: OSSUR_CATALOGUE.groups.map((g) => g.id), products: OSSUR_CATALOGUE.products.map((p) => p.id) })
     const rows = ossurProductRows()
     for (const g of OSSUR_CATALOGUE.groups) {
-      const p = marketProductMonth(rows, SEP, g.id, AUD)!
+      const p = marketProductMonth(rows, SEP, g.id)!
       const s = sets.groups.get(g.id)!
       expect([s.any.size, s.named.size, s.unclear.size, s.unbranded.size], g.name).toEqual([p.k_any, p.k_named, p.k_unclear, p.k_unbranded])
     }
-    for (const pr of OSSUR_CATALOGUE.products) expect(sets.products.get(pr.id)!.size, pr.name).toBe(marketProductMonth(rows, SEP, pr.id, AUD)!.k_named)
+    for (const pr of OSSUR_CATALOGUE.products) expect(sets.products.get(pr.id)!.size, pr.name).toBe(marketProductMonth(rows, SEP, pr.id)!.k_named)
     expect(sets.all.size).toBe([...sets.groups.values()].reduce((n, s) => n + s.any.size, 0))
   })
 
@@ -104,6 +106,17 @@ describe('the month\'s video sets', () => {
     expect(rows.find((r) => r.object_id === 'g1')!.k_unclear).toBe(0)
   })
 
+  it('an own post stands by its comments only, never by its own words (a placement from before included)', () => {
+    const standing = new Map([
+      ['v:own', { videoId: 'own', commentId: null, month: null, placements: [{ placement: 'named' as const, groupId: 'g1', productId: 'p1', method: 'rule' as const }] }],
+      ['c:q', { videoId: 'own', commentId: 'q', month: SEP, placements: [{ placement: 'unclear' as const, groupId: 'g2', productId: null, method: 'rule' as const }] }],
+    ])
+    const sets = productMonthSets({ month: SEP, market: [{ id: 'own', owned: true }], standing, groups: ['g1', 'g2'], products: ['p1'] })
+    expect(sets.products.get('p1')!.size).toBe(0)
+    expect(sets.groups.get('g1')!.any.size).toBe(0)
+    expect([...sets.groups.get('g2')!.unclear]).toEqual(['own'])
+  })
+
   it('stand on this catalogue\'s rule and model rows only, and drop a tag row (tags stand through standingPlacements)', () => {
     const base = { video_id: 'v', source: 'content' as const, comment_id: null, comment_month: null, placement: 'unbranded' as const, product_id: null, group_id: 'g' }
     const rows = [
@@ -121,18 +134,18 @@ describe('verdicts', () => {
 
   it('bands a category\'s share of the market against last month, with no clustering caveat (a placement is the catalogue\'s)', () => {
     const hands = g('Hands')
-    const v = categoryShareVerdict({ group: hands, month: SEP, curr: marketProductMonth(rows, SEP, hands.id, AUD), prev: marketProductMonth(rows, '2026-08-01', hands.id, AUD), pair: ACCEPT_PAIRS })!
+    const v = categoryShareVerdict({ group: hands, month: SEP, curr: marketProductMonth(rows, SEP, hands.id), prev: marketProductMonth(rows, '2026-08-01', hands.id), pair: ACCEPT_PAIRS })!
     expect(v).toMatchObject({ objectKind: 'product', objectId: hands.id, state: 'moved', value: { k: 110, n: 839 }, baseline: { k: 54, n: 612 } })
     expect(v.flags).not.toContain('clustering_unknown')
     expect(v.direction ?? null).toBeNull()
     const liners = g('Liners')
-    expect(categoryShareVerdict({ group: liners, month: SEP, curr: marketProductMonth(rows, SEP, liners.id, AUD), prev: marketProductMonth(rows, '2026-08-01', liners.id, AUD), pair: ACCEPT_PAIRS })!.state).toBe('no_clear_change')
+    expect(categoryShareVerdict({ group: liners, month: SEP, curr: marketProductMonth(rows, SEP, liners.id), prev: marketProductMonth(rows, '2026-08-01', liners.id), pair: ACCEPT_PAIRS })!.state).toBe('no_clear_change')
   })
 
   it('refuses a pair the month-pair judge refuses, and a pair read under two catalogues', () => {
     const hands = g('Hands')
-    const curr = marketProductMonth(rows, SEP, hands.id, AUD)!
-    const prev = marketProductMonth(rows, '2026-08-01', hands.id, AUD)!
+    const curr = marketProductMonth(rows, SEP, hands.id)!
+    const prev = marketProductMonth(rows, '2026-08-01', hands.id)!
     expect(categoryShareVerdict({ group: hands, month: SEP, curr, prev, pair: refuseEveryPair })!.state).toBe('refused')
     const edited = categoryShareVerdict({ group: hands, month: SEP, curr: { ...curr, catalogueVersion: 'pc1_ffffffffffffffff' }, prev, pair: ACCEPT_PAIRS })!
     expect(edited.state).toBe('refused')
@@ -142,17 +155,17 @@ describe('verdicts', () => {
 
   it('a product\'s first month: videos now, none in at least two earlier months read under the same catalogue', () => {
     const navii = { id: PRODUCT_IDS.navii(), name: 'Navii' }
-    const f = firstMonthOf({ product: navii, month: SEP, rows, audiences: AUD })!
+    const f = firstMonthOf({ product: navii, month: SEP, rows })!
     expect(f.verdict.flags).toEqual(['new'])
     expect(f.verdict.state).toBe('too_little_data')
     expect(f.months.map((m) => m.k)).toEqual([0, 0, 0, 3])
     // Seal-In X had videos before.
-    expect(firstMonthOf({ product: { id: PRODUCT_IDS.sealInX(), name: 'Seal-In X' }, month: SEP, rows, audiences: AUD })).toBeNull()
+    expect(firstMonthOf({ product: { id: PRODUCT_IDS.sealInX(), name: 'Seal-In X' }, month: SEP, rows })).toBeNull()
     // One earlier month is too few to say "the first time".
-    expect(firstMonthOf({ product: navii, month: SEP, rows: rows.filter((r) => r.month >= '2026-08-01'), audiences: AUD })).toBeNull()
+    expect(firstMonthOf({ product: navii, month: SEP, rows: rows.filter((r) => r.month >= '2026-08-01') })).toBeNull()
     // Earlier months read under another catalogue do not count.
     const other = rows.map((r) => (r.month < SEP ? { ...r, catalogue_version: 'pc1_ffffffffffffffff' } : r))
-    expect(firstMonthOf({ product: navii, month: SEP, rows: other, audiences: AUD })).toBeNull()
+    expect(firstMonthOf({ product: navii, month: SEP, rows: other })).toBeNull()
   })
 })
 
@@ -217,7 +230,7 @@ describe('the page, from its reads', () => {
     expect(p.unclear).toMatchObject({ videos: 21, more: 3, withheld: 1 })
     expect(p.unclear.lines).toHaveLength(3)
     expect(p.unclear.allHref).toBe(`/dashboard/products?group=${PRODUCT_IDS.liners()}&unclear=all#unclear`)
-    expect(p.unclear.options.map((o) => o.label).slice(-3)).toEqual(['One of your liners, not sure which', 'Liners in general', 'Not about your products'])
+    expect(p.unclear.options.map((o) => o.label).slice(-3)).toEqual(['One of your products in Liners, not sure which', 'Liners in general', 'Not about your products'])
     expect(p.notchAt).toBeCloseTo(notchFor(OSSUR_CATALOGUE.groups, PRODUCT_IDS.liners()))
   })
 
@@ -258,7 +271,7 @@ describe('the page, from its reads', () => {
 function baseInput(): ProductsInput {
   return {
     clientId: OSSUR_CLIENT_ID, client: 'Össur', month: SEP, soFar: false, catalogue: { state: 'ready', catalogue: OSSUR_CATALOGUE }, enabled: true,
-    audiences: AUD, rows: ossurProductRows(), market: SEP_MARKET, standing: OSSUR_STANDING, crosses: ossurCrosses(), pair: ACCEPT_PAIRS, params: {}, canTag: true,
+    rows: ossurProductRows(), market: SEP_MARKET, standing: OSSUR_STANDING, crosses: ossurCrosses(), pair: ACCEPT_PAIRS, params: {}, canTag: true,
   }
 }
 

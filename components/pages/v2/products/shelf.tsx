@@ -1,7 +1,7 @@
 import { Box } from 'lucide-react'
 import { CARD, CardHead, CatalogueShelf, ShelfLegend, type ShelfColumn } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
-import { PANEL_ID, PRODUCTS_BASIS, sharePct, shelfColumns, type ProductsData, type ShelfCategoryView } from '@/lib/pages/v2/products'
+import { PANEL_ID, productsBasis, sharePct, shelfColumns, type ProductsData, type ShelfCategoryView } from '@/lib/pages/v2/products'
 import { VerdictBadge } from './parts'
 
 // THE CATALOGUE (board E4-Products, "Your catalogue"): every category the
@@ -32,7 +32,7 @@ export function shelfColumn(c: ShelfCategoryView, monthName: string): ShelfColum
   }
 }
 
-export function CatalogueCard({ data }: { data: Pick<ProductsData, 'shelf' | 'monthName' | 'open'> }) {
+export function CatalogueCard({ data }: { data: Pick<ProductsData, 'shelf' | 'monthName' | 'open' | 'client'> }) {
   const selected = data.shelf.find((c) => c.selected)?.id ?? null
   return (
     <section aria-labelledby="catalogue-title" className={CARD}>
@@ -44,7 +44,7 @@ export function CatalogueCard({ data }: { data: Pick<ProductsData, 'shelf' | 'mo
             icon={Box}
             id="catalogue-title"
             title="Your catalogue"
-            sub={<>Every product, by category. The darker the tile, the more videos talked about it in {data.monthName}. Category counts include talk that names none of your products. {PRODUCTS_BASIS}</>}
+            sub={<>Every product, by category. The darker the tile, the more videos talked about it in {data.monthName}. Category counts include talk that names none of your products. {productsBasis(data.client)}</>}
           />
         </div>
         <div className="pt-1"><ShelfLegend /></div>

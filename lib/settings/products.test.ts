@@ -65,12 +65,6 @@ describe('loadProductSettings', () => {
     expect(db.calls.find((c) => c.table === 'month_product_readings')?.filters).toContain('month in 1')
   })
 
-  it('reads the market\'s audiences (the tracked rivals and the category) for its counts', async () => {
-    const db = fakeDb({ ...productsFixtureTables(), tracking_configs: [{ client_id: FIXTURE_CLIENT, competitor_names: ['Ottobock'] }] })
-    const read = await loadProductSettings(db.client as never, FIXTURE_CLIENT, FIXTURE_NOW)
-    expect(read).toMatchObject({ state: 'ready', audiences: ['competitor:Ottobock', 'industry-other'] })
-  })
-
   it('answers missing, never throws, where the migration is not applied', async () => {
     const db = fakeDb({ config_changes: [] })
     expect(await loadProductSettings(db.client as never, FIXTURE_CLIENT, FIXTURE_NOW)).toEqual({ state: 'missing' })
@@ -109,24 +103,16 @@ describe('productSettingsView', () => {
     expect(view({}, 'not-a-category').open?.name).toBe('Liners')
   })
 
-  it('counts a product\'s videos over the market (the client\'s own posts left out, Your products\' basis), and the category\'s unclear videos', () => {
+  it('counts a product\'s videos over every audience, the client\'s included (Your products\' basis), and the category\'s unclear videos', () => {
     const open = view().open!
     const by = Object.fromEntries(open.rows.map((r) => [r.name, r.videos]))
-    // Six rows name Seal-In X, one of them under the client's own audience:
-    // the market's count, the one Your products prints, is five.
-    expect(by['Iceross Seal-In X']).toBe(5)
+    // Six videos name Seal-In X, one of them filed under the client (a
+    // creator's video about Össur, or a comment on its own post): all six.
+    expect(by['Iceross Seal-In X']).toBe(6)
     expect(by['Iceross Comfort']).toBe(3)
     expect(by['Iceross Seal-In V']).toBe(0)
     expect(open.cameUp).toBe(3)
     expect(open.unclear).toBe(11)
-  })
-
-  it('pools over the market\'s audiences when the rivals are read: an untracked rival\'s row is left out, as Market leaves it out', () => {
-    const open = view({ audiences: ['competitor:Össur rival', 'industry-other'] }).open!
-    // Liners' one unclear video under Ottobock (not in this market) is left out.
-    expect(open.unclear).toBe(10)
-    expect(open.rows.find((r) => r.name === 'Iceross Seal-In X')!.videos).toBe(5)
-    expect(view({ audiences: ['competitor:Ottobock', 'industry-other'] }).open!.unclear).toBe(11)
   })
 
   it('prints no figure for a product the month holds no row for, even where other rows exist', () => {
