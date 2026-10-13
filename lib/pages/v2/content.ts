@@ -267,6 +267,12 @@ export interface IdeasWeek {
   current: boolean
   /** The days the ideas read their questions from: what the page prints. */
   read: IdeasRead
+  /** The month each idea's four-week figure is printed beside (decision 1):
+   *  the page's month where the ideas are the page's week's (`current`; their
+   *  run's window, `readingMonthOf`); for an older set, the month of THEIR
+   *  read window (`readingMonthOf` over `read`: the lead's ruling, 13 Oct),
+   *  so the four weeks and the month always share days. */
+  month: ContentMonth
 }
 
 /** The days a set of ideas read (`post_ideas.read_start` / `read_end`; the
@@ -707,14 +713,20 @@ export function ideasReadOf(idea: Pick<PostIdeaRow, 'read_start' | 'read_end'>):
  *  page, the tile and the panel print them. */
 export const askedPhrase = (read: Pick<IdeasRead, 'label'>): string => `From questions asked ${read.label}`
 
-/** The ideas' own week, against the page's, and the days they read. */
+/** The ideas' own week, against the page's, the days they read, and the
+ *  month their figures are printed beside. */
 export function ideasWeekOf(ideas: readonly PostIdeaRow[], page: ContentWeek | null): IdeasWeek | null {
   const idea = ideas[0]
   if (!idea) return null
   const w = contentWeek(idea.run_id, { from: idea.window_start, to: idea.window_end })
   const read = ideasReadOf(idea)
   if (!w || !read) return null
-  return { runId: idea.run_id, label: w.label, phrase: weekPhrase(w), current: page == null || page.runId === idea.run_id, read }
+  const current = page == null || page.runId === idea.run_id
+  // The page's month is its week's (`contentMonth`), and a current set's run
+  // window IS the page's week; an older set is beside its own read window's.
+  const r = readingMonthOf(current ? { from: w.from, to: w.to } : { from: read.from, to: read.to })
+  const month: ContentMonth = { month: r.month, complete: r.complete, from: `${r.month}T00:00:00.000Z`, to: r.to }
+  return { runId: idea.run_id, label: w.label, phrase: weekPhrase(w), current, read, month }
 }
 
 /** Are the ideas too old to print: written for a week that ended more than
@@ -1299,9 +1311,15 @@ interface WeekReads {
   themes: { week: Map<string, number> | null; month: Map<string, number> | null; weeks: (Map<string, number> | null)[] | null }
   weekLabels: string[] | null
   /** Over the days the ideas read (`IdeasRead`): the market's videos, every
-   *  theme's, and every theme's in each of its weeks. Null where there are no
-   *  ideas. */
-  ideas: { market: number | null; themes: Map<string, number> | null; weeks: (Map<string, number> | null)[] | null } | null
+   *  theme's, and every theme's in each of its weeks; and over the month
+   *  their figures are printed beside (`IdeasWeek.month`). Null where there
+   *  are no ideas. */
+  ideas: {
+    market: number | null
+    themes: Map<string, number> | null
+    weeks: (Map<string, number> | null)[] | null
+    month: { market: number | null; themes: Map<string, number> | null }
+  } | null
 }
 
 /** The window readings the page states: the market's videos this week and
@@ -1311,17 +1329,22 @@ interface WeekReads {
  *  clustering, each an arbitrary window read (never a sum of weeks).
  *  `week: false` leaves the page's week unread (the Dashboard's tile prints
  *  none). */
-async function readWindows(scope: Scope, week: ContentWeek | null, month: ContentMonth, audiences: string[], opts: { trend?: boolean; week?: boolean; ideas?: IdeasRead | null } = {}): Promise<WeekReads> {
+async function readWindows(scope: Scope, week: ContentWeek | null, month: ContentMonth, audiences: string[], opts: { trend?: boolean; week?: boolean; ideas?: Pick<IdeasWeek, 'read' | 'month'> | null } = {}): Promise<WeekReads> {
   const { client, clientId } = scope.reading
   const read = (from: string, to: string, runId: string | null) => loadWindowReading(client, clientId, { from, to, audiences, runId })
   const runId = week?.runId ?? null
   const weeks = week && opts.trend !== false && opts.week !== false ? threeWeeks(week) : null
-  const ideas = opts.ideas ?? null
+  const ideas = opts.ideas?.read ?? null
   const ideaWeeks = ideas && opts.trend !== false ? ideas.weeks : null
-  const [w, m, i, ...rest] = await Promise.all([
+  // The ideas' month: the page's where it is the same days (a current set),
+  // read once; an older set's own month, read beside it.
+  const ideasMonth = opts.ideas?.month ?? null
+  const ownMonth = ideasMonth && (ideasMonth.from !== month.from || ideasMonth.to !== month.to) ? ideasMonth : null
+  const [w, m, i, im, ...rest] = await Promise.all([
     week && opts.week !== false ? read(week.from, week.to, week.runId) : Promise.resolve(null),
     read(month.from, month.to, runId),
     ideas ? read(ideas.from, ideas.to, runId) : Promise.resolve(null),
+    ownMonth ? read(ownMonth.from, ownMonth.to, runId) : Promise.resolve(null),
     ...(weeks ? weeks.slice(0, 2).map((x) => read(x.from, x.to, runId)) : []),
     ...(ideaWeeks ? ideaWeeks.map((x) => read(x.from, x.to, runId)) : []),
   ])
@@ -1342,6 +1365,7 @@ async function readWindows(scope: Scope, week: ContentWeek | null, month: Conten
           market: pooledVideos(i.denominators, audiences),
           themes: pooledThemeVideos(i.themes, audiences),
           weeks: ideaSlices ? ideaSlices.map((p) => pooledThemeVideos(p.themes, audiences)) : null,
+          month: { market: pooledVideos((im ?? m).denominators, audiences), themes: pooledThemeVideos((im ?? m).themes, audiences) },
         }
       : null,
   }
@@ -1395,7 +1419,7 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
 
   // ---- wave 2
   const [windows, questions, flags, ownedRead, playbook, replies] = await Promise.all([
-    soft('windows', readWindows(scope, week, month, audiences, { ideas: ideasWeek?.read ?? null })),
+    soft('windows', readWindows(scope, week, month, audiences, { ideas: ideasWeek })),
     week ? soft('questions', readQuestions(db, clientId, week.runId)) : Promise.resolve(null),
     week ? soft('flags', readFlags(db, clientId, week.runId)) : Promise.resolve([] as FlagRowIn[]),
     // ONE READ of your posts, from the touch test's first month to the end of
@@ -1450,20 +1474,22 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
     : new Set<string>()
   const medical = printsMedicalLine(clientId)
   // An idea's counts are over THE DAYS ITS SET READ (`ideasWeek.read`, the
-  // four weeks to its run's end) and each of their weeks, beside the PAGE's
-  // month, all under the page's run's clustering (a registry id is the
-  // cross-run key); the days are printed above the cards.
+  // four weeks to its run's end) and each of their weeks, beside THEIR month
+  // (`ideasWeek.month`: the page's for a current set, the read window's own
+  // for an older one), all under the page's run's clustering (a registry id
+  // is the cross-run key); the days are printed above the cards. The week
+  // read's "New" stays on the page's month: it is the page's week's flag.
   const cards: IdeaCard[] = ideas.map((idea) => {
     const id = idea.registry_id
     const label = labelOf.get(id) ?? null
-    const monthLevel = counted(windows?.themes.month, id, windows?.market.month ?? null)
+    const pageMonthLevel = counted(windows?.themes.month, id, windows?.market.month ?? null)
     const f = flagOf.get(id)
-    const flag = f && week ? flagVerdict(f, week) : newIds.has(id) && monthLevel ? newVerdict(id, label ?? idea.title, month, monthLevel) : null
+    const flag = f && week ? flagVerdict(f, week) : newIds.has(id) && pageMonthLevel ? newVerdict(id, label ?? idea.title, month, pageMonthLevel) : null
     return ideaCard({
       idea,
       label,
       read: counted(windows?.ideas?.themes, id, windows?.ideas?.market ?? null),
-      month: monthLevel,
+      month: counted(windows?.ideas?.month.themes, id, windows?.ideas?.month.market ?? null),
       weeks: ideaWeeks(ideasWeek?.read ?? null, windows?.ideas?.weeks, id),
       flag,
       groups: groups.get(id) ?? [],
@@ -1521,8 +1547,8 @@ export interface TopContent {
   idea: {
     rank: PostIdeaRank
     title: string
-    /** Over the days the ideas read (`ideasWeek.read`) and the page's month
-     *  (the newest week's), as on Content. */
+    /** Over the days the ideas read (`ideasWeek.read`) and the month beside
+     *  them (`ideasWeek.month`), as on Content. */
     read: Counted | null
     month: Counted | null
     monthWords: string
@@ -1592,7 +1618,7 @@ export async function topContent(scope: Scope, opts: {
     week ? soft('top.label', readLabels(db, clientId, week.runId, [idea.registry_id])) : Promise.resolve(null),
   ])
   const audiences = marketAudiences(marketRivalAudiences(rivals ?? []))
-  const windows = await soft('top.windows', readWindows(scope, week, month, audiences, { trend: false, week: false, ideas: ideasWeek.read }))
+  const windows = await soft('top.windows', readWindows(scope, week, month, audiences, { trend: false, week: false, ideas: ideasWeek }))
   const id = idea.registry_id
   return {
     state: 'ready',
@@ -1600,8 +1626,8 @@ export async function topContent(scope: Scope, opts: {
       rank: idea.rank,
       title: idea.title,
       read: counted(windows?.ideas?.themes, id, windows?.ideas?.market ?? null),
-      month: counted(windows?.themes.month, id, windows?.market.month ?? null),
-      monthWords: monthWords(month),
+      month: counted(windows?.ideas?.month.themes, id, windows?.ideas?.month.market ?? null),
+      monthWords: monthWords(ideasWeek.month),
       format: recipe(idea.format, idea.format_multiple, 'format'),
       opening: recipe(idea.opening, idea.opening_multiple, 'opening'),
       own: ownTouch([label?.get(id) ?? idea.title], touchPosts(ownedRead, month.month, week?.to ?? (opts.now ?? new Date()).toISOString()), since),

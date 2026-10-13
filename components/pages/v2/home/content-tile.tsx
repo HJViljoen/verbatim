@@ -44,7 +44,9 @@ export function ContentTileView({ read }: { read: TileRead<TopContent> }) {
           <h3 className={TT}>
             Post next: <span data-copy="stored" data-slot={POST_IDEA_SLOT}>{idea.title}</span>
           </h3>
-          {idea.read ? (
+          {/* The four weeks only beside their month (decision 1), as on
+              Content and in the email. */}
+          {idea.read && idea.month ? (
             <div data-copy="level" className="flex flex-wrap items-baseline gap-x-2.5">
               <span className={MID}>{fmtInt(idea.read.k)}</span>
               <span className={MONO_MUTED}>of {fmtInt(idea.read.n)} videos, <span className="whitespace-nowrap">{idea.ideasWeek.read.label}</span></span>

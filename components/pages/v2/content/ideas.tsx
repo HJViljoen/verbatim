@@ -38,20 +38,22 @@ export function OwnTouchLine({ own }: { own: OwnTouch }) {
 }
 
 /** The figure over the days the ideas read, with its month under it, or the
- *  month's alone. */
+ *  month's alone. The four weeks never print without their month (decision
+ *  1): no month, no four-week figure. */
 function Demand({ card, monthLabel, readLabel }: { card: IdeaCard; monthLabel: string; readLabel: string | null }) {
+  const four = card.read && readLabel && card.month ? card.read : null
   return (
     <div className="min-w-0">
-      {card.read && readLabel ? (
+      {four ? (
         <div data-copy="level">
-          <div className="font-mono text-[30px] leading-none font-medium tracking-[-0.02em] tabular-nums">{fmtInt(card.read.k)}</div>
+          <div className="font-mono text-[30px] leading-none font-medium tracking-[-0.02em] tabular-nums">{fmtInt(four.k)}</div>
           {/* The days on a line of their own where the card is narrow: the
               dates never break inside. */}
-          <div className="mt-1.5 font-mono text-[12.5px] leading-[1.45] text-muted-foreground">of {fmtInt(card.read.n)} videos, <span className="whitespace-nowrap">{readLabel}</span></div>
+          <div className="mt-1.5 font-mono text-[12.5px] leading-[1.45] text-muted-foreground">of {fmtInt(four.n)} videos, <span className="whitespace-nowrap">{readLabel}</span></div>
         </div>
       ) : null}
       {card.month ? (
-        <p data-copy="level" className={cn('m-0 font-mono text-[12.5px] leading-[1.45] text-muted-foreground', card.read && readLabel ? null : 'text-[14px] text-foreground')}>
+        <p data-copy="level" className={cn('m-0 font-mono text-[12.5px] leading-[1.45] text-muted-foreground', four ? null : 'text-[14px] text-foreground')}>
           {fmtInt(card.month.k)} of {fmtInt(card.month.n)} {monthLabel}
         </p>
       ) : null}
@@ -151,6 +153,9 @@ export function IdeasSection({ block, state, month, panel }: {
   const openRank = state.open?.kind === 'idea' ? state.open.rank : null
   const since = block.cards[0]?.own.since
   const read = block.week?.read ?? null
+  // The month each card's figure sits beside: the ideas' own (the page's for
+  // this week's ideas; an older set's read window's).
+  const ideasMonth = block.week?.month ?? month
   const at = panel && openRank != null ? block.cards.findIndex((c) => c.rank === openRank) : -1
   const place = panel && at >= 0 ? panelPlacement(at, ideasLayout(block.cards.length)) : null
   return (
@@ -170,7 +175,7 @@ export function IdeasSection({ block, state, month, panel }: {
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
           {block.cards.map((c, i) => (
             <Fragment key={c.rank}>
-              <IdeaCardView card={c} state={state} selected={openRank === c.rank} month={month} readLabel={read?.label ?? null} style={panelItemOrder(i)} />
+              <IdeaCardView card={c} state={state} selected={openRank === c.rank} month={ideasMonth} readLabel={read?.label ?? null} style={panelItemOrder(i)} />
               {place && panel && i === at ? <PanelSlot placement={place}>{panel(place.notch)}</PanelSlot> : null}
             </Fragment>
           ))}

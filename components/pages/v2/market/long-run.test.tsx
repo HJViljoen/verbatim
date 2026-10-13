@@ -4,7 +4,7 @@ import { assertCopyContract, copyNodes, copyViolations } from '@/lib/test/copy-c
 import { fixtureLongRun, marketFixture } from '@/lib/pages/v2/market-fixture'
 import { marketLongRunFor, marketLongRunOf } from '@/lib/pages/v2/market'
 import { MarketPage } from './index'
-import { LONG_RUN_ID, LongRunSection, longRunSub } from './long-run'
+import { LONG_RUN_ID, LONG_RUN_UNREAD, LongRunSection, longRunSub } from './long-run'
 
 // THE MONTH'S LONG-RUN READ ON MARKET › THIS MONTH (Heinrich, 13 Oct): below
 // the month's data, never at the top, never on This week or Over time; no read
@@ -128,7 +128,7 @@ describe('marketLongRunOf: the read for exactly the month the view reads', () =>
   })
 })
 
-describe('a month still filling has no read of its own: the most recent closed month\'s stands in, headed with its month', () => {
+describe('a month still filling has no read of its own: the newest earlier month\'s stands in, headed with its month', () => {
   it('prints September\'s read under October so far, below the data, named as September\'s, never as this month\'s', () => {
     expect(EARLIER.month).toMatchObject({ month: '2026-10-01', soFar: true })
     expect(EARLIER.longRun).toMatchObject({ month: '2026-09-01', viewMonth: '2026-10-01', earlier: true, title: 'September’s long-run read' })
@@ -146,7 +146,7 @@ describe('a month still filling has no read of its own: the most recent closed m
     expect(copyViolations(<MarketPage data={EARLIER} />)).toEqual([])
   })
 
-  it('marketLongRunFor: the view\'s own read first; the last closed month\'s only on a filling month; none on a closed month without its own', () => {
+  it('marketLongRunFor: the view\'s own read first; the newest earlier month\'s only on a filling month; none on a closed month without its own', () => {
     const oct = { month: '2026-10-01', data: fixtureLongRun(), created_at: '2026-11-01T05:00:00.000Z' }
     const octPartial = { month: '2026-10-01', data: fixtureLongRun('2026-10-11'), created_at: '2026-10-11T18:00:00.000Z' }
     const sep = { month: '2026-09-01', data: fixtureLongRun(null, 'sep'), created_at: '2026-10-04T05:00:00.000Z' }
@@ -162,5 +162,21 @@ describe('a month still filling has no read of its own: the most recent closed m
     // Never a read of the month itself or after it as "earlier".
     expect(marketLongRunFor({ own: null, closed: oct, month: '2026-10-01', filling: true })).toBeNull()
     expect(marketLongRunFor({ own: null, closed: null, month: '2026-10-01', filling: true })).toBeNull()
+  })
+})
+
+describe('a long-run read that could not be read', () => {
+  it('says so in one calm line where the section would be, never the look of a month with no read', () => {
+    const data = marketFixture({ period: 'month', longRun: 'unread' })
+    expect(data.longRun).toBeNull()
+    expect(data.longRunUnread).toBe(true)
+    const html = render(<MarketPage data={data} />)
+    expect(html).toContain('data-long-run="unread"')
+    expect(renderText(<MarketPage data={data} />)).toMatch(new RegExp(`${LONG_RUN_UNREAD}$`))
+    expect(html).not.toContain(`id="${LONG_RUN_ID}"`)
+    expect(html.indexOf('data-long-run="unread"')).toBeGreaterThan(html.indexOf('id="conversations"'))
+    expect(copyViolations(<MarketPage data={data} />)).toEqual([])
+    // A month with no read says nothing at all.
+    expect(render(<MarketPage data={NONE} />)).not.toContain('data-long-run')
   })
 })

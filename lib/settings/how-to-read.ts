@@ -108,7 +108,7 @@ export const READING_CARDS: readonly ReadingCard[] = [
       'A subject still being checked prints no figure, only that it is counted and marked provisional; one whose check clearly failed prints no figure while it is re-described.',
       'The kinds of thing people did in the comments overlap: one video can carry several, so together they are more than its whole.',
       'It cannot tell you why anything moved. A number and a reason are different claims, and only one of them is counted.',
-      'Our read of what has held across the months sits below a month’s figures. It is written when the month closes, says so where it was written earlier, and compares no month with another. While a month is still under way, the last closed month’s read stands there, named as that month’s.',
+      'Our read of what has held across the months sits below a month’s figures. It is written when the month closes, says so where it was written earlier, and compares no month with another. While a month is still under way and has no read of its own, the newest read of any month before it stands there, named as that month’s.',
     ],
   },
   {

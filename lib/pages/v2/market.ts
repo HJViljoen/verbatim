@@ -87,8 +87,9 @@ import { frozenFlag } from '../../written/unusual'
 //      'month' for the month the view reads (`loadPublishedLongRun` with
 //      `month`; Heinrich, 13 Oct: below the month's data, never at the top,
 //      never on This week or Over time). A month still filling has none of
-//      its own until it closes, so there the most recent CLOSED month's read
-//      stands in, headed with its own month ("September’s long-run read"),
+//      its own until it closes, so there the newest ready read of any
+//      EARLIER month (usually last month's; `before: month`) stands in,
+//      headed with its own month ("September’s long-run read"),
 //      one read only (`marketLongRunFor`). A closed month with no read, no
 //      section. Stored `week_read` prose, read after the figures, so level 2
 //      by position.
@@ -487,6 +488,10 @@ export interface MarketData {
    *  data; null on the week and over time, and where none is published for
    *  the month the view reads. */
   longRun: MarketLongRun | null
+  /** This month only: the long-run read could not be read (a failed
+   *  `week_reads` read), so the page says so in one calm line rather than
+   *  look like a month with no read. */
+  longRunUnread: boolean
 }
 
 /** Whether the "about" split may print. */
@@ -499,11 +504,11 @@ export type BrandsState = 'counted' | 'not_counted' | 'not_read'
 export interface MarketLongRun {
   /** The read's month, `YYYY-MM-01`: the month the view reads, or, where the
    *  view reads a month still filling that has none of its own (`earlier`),
-   *  the most recent closed month with one. */
+   *  the newest earlier month with a ready read. */
   month: string
   /** The month the view reads, `YYYY-MM-01`. */
   viewMonth: string
-  /** The most recent closed month's read, standing in on a filling month
+  /** The newest earlier month's read, standing in on a filling month
    *  with no read of its own: the heading then names its month. */
   earlier: boolean
   /** The heading: "What holds across August and September" for the view's
@@ -1573,15 +1578,15 @@ export async function loadMarket(input: {
 
   // THIS MONTH's long-run read, for the month the view reads, read beside
   // everything else and printed below it (Heinrich, 13 Oct); where that month
-  // is still filling and has none of its own, the most recent closed month's
+  // is still filling and has none of its own, the newest earlier month's
   // (`marketLongRunFor`). A read that fails costs that section only.
   const noLongRun = { own: null, closed: null } as { own: StoredLongRun | null; closed: StoredLongRun | null }
-  const longRunAhead = period === 'month'
-    ? soft('longRun', (async () => {
+  const longRunAhead: Promise<typeof noLongRun | 'failed'> = period === 'month'
+    ? soft<typeof noLongRun | 'failed'>('longRun', (async () => {
         const own = await loadPublishedLongRun(db, clientId, { month })
         if (!soFar || marketLongRunOf(own, month)) return { own, closed: null }
         return { own, closed: await loadPublishedLongRun(db, clientId, { before: month }) }
-      })(), noLongRun)
+      })(), 'failed')
     : Promise.resolve(noLongRun)
 
   // ── wave 2: the period's readings ──
@@ -1771,7 +1776,8 @@ export async function loadMarket(input: {
   const subjectPanel = !openId && p.subject
     ? buildSubjectPanel({ id: p.subject, facts: subjectFacts, convs, period, p, read, month: monthBlock, flag: flagCard?.conv ? { id: flagCard.conv.id, verdict: flagCard.verdict } : null })
     : null
-  const longRun = marketLongRunFor({ ...(await longRunAhead), month, filling: soFar })
+  const longRunRead = await longRunAhead
+  const longRun = longRunRead === 'failed' ? null : marketLongRunFor({ ...longRunRead, month, filling: soFar })
 
   return {
     brand,
@@ -1789,6 +1795,7 @@ export async function loadMarket(input: {
     subjectPanel,
     brands,
     longRun,
+    longRunUnread: longRunRead === 'failed',
   }
 }
 
@@ -1827,8 +1834,9 @@ export function marketLongRunOf(read: StoredLongRun | null | undefined, month: s
  * The ONE long-run read This month prints (Heinrich, 13 Oct): the view's own
  * month's where it has one that prints; else, only where the view reads a
  * month still FILLING (`filling`, the month under way: its read is written
- * when it closes), the most recent closed month's (`closed`, an earlier
- * month's published read), headed with its own month so it never reads as
+ * when it closes), the newest ready read of any earlier month (`closed`:
+ * `loadPublishedLongRun` with `before`, usually last month's, an older one
+ * where last month has none), headed with its own month so it never reads as
  * this month's; else none. A closed month with no read of its own shows
  * none: `?month=` of a closed month only ever shows that month's. Pure.
  */

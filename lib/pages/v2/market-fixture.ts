@@ -259,9 +259,9 @@ export interface FixtureOptions {
   closed?: boolean
   /** This month's long-run read: `full` (written once the month closed),
    *  `partial` (written before it closed, `partialThrough`), `earlier`
-   *  (October still filling with none of its own: September's stands in), or
-   *  none. Only the month period prints it. */
-  longRun?: 'full' | 'partial' | 'earlier' | null
+   *  (October still filling with none of its own: September's stands in),
+   *  `unread` (the read failed), or none. Only the month period prints it. */
+  longRun?: 'full' | 'partial' | 'earlier' | 'unread' | null
 }
 
 const MONTH: MarketMonth = {
@@ -441,12 +441,13 @@ export function marketFixture(opts: FixtureOptions = {}): MarketData {
     brands: opts.brands ?? 'counted',
     subjectPanel: opts.subject ? buildSubjectPanel({ id: subjectId(opts.subject), facts, convs, period, p, read, month, flag: flag?.conv ? { id: flag.conv.id, verdict: flag.verdict } : null }) : null,
     // The loader's own rule (`marketLongRunFor`): the month period only, the
-    // view's month's read, or on a filling month the last closed month's.
-    longRun: period === 'month' && opts.longRun
+    // view's month's read, or on a filling month the newest earlier month's.
+    longRun: period === 'month' && opts.longRun && opts.longRun !== 'unread'
       ? marketLongRunFor(opts.longRun === 'earlier'
         ? { own: null, closed: { month: SEP, data: fixtureLongRun(null, 'sep'), created_at: '2026-10-04T05:00:00.000Z' }, month: month.month, filling: month.soFar }
         : { own: { month: OCT, data: fixtureLongRun(opts.longRun === 'partial' ? '2026-10-11' : null), created_at: '2026-11-01T05:00:00.000Z' }, closed: null, month: month.month, filling: month.soFar })
       : null,
+    longRunUnread: period === 'month' && opts.longRun === 'unread',
   }
 }
 

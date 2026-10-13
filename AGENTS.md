@@ -192,7 +192,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
   run's own window). `scripts/post-ideas.ts
   --write` does not check the switch: it writes, and the pages hide what it
   wrote while the switch is off. *When it does nothing:* a TEST run reads and
-  writes nothing. The switch off, no table (`isMissingPostIdeas`), no
+  writes nothing. The switch off, no table (`isMissingPostIdeas`: a
+  genuinely missing table only, `PGRST205` / `42P01`; a missing column is
+  an error, alerted, never read as "not there"), no
   candidate over the floor, or a run that already has its ideas is a silent
   no-op that spends nothing; a week whose written ideas are all held `thin`
   is silent too, and has spent its call. *Failure:* the week read's
@@ -922,12 +924,15 @@ This version has breaking changes — APIs, conventions, and file structure may 
     ONE routed reader since 13 Oct (Heinrich): Market › This month
     (`loadMarket`, `period === 'month'` only), which asks for the month the
     view reads (`loadPublishedLongRun(db, clientId, { month })`) and, only
-    where that month is still filling and has none, for the most recent
-    closed month's (`{ before: month }`, headed with that month;
+    where that month is still filling and has none, for the newest ready
+    read of any earlier month (`{ before: month }`: usually last month's, an
+    older one where last month has none; headed with its month;
     `marketLongRunFor`), and draws the one read last on the page, below the
     conversation table (`components/pages/v2/market/long-run.tsx`,
     `#long-run`). Never on This week or Over time; no read to show, no
-    section and no placeholder. This week
+    section and no placeholder; a read that FAILED says so in one calm line
+    in its place ("The long-run read could not be read just now.",
+    `longRunUnread`, `LongRunUnread`), never the look of a month with none. This week
     (`loadWeekReadPage`), the Subjects pane (`loadSubjectReadLine`) and Your
     market (`loadMarketPicture`, the newest long-run read of any month, for
     stored snapshots) still read through it and are on no route.
@@ -1070,8 +1075,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
     `LongRunSection`). It is the published read for the month the view
     reads; a month's read is written when it closes, so where the view reads
     a month still FILLING (`soFar`: from about the 16th, `readingMonthFor`,
-    decision A) with no read of its own, the most recent CLOSED month's read
-    stands in, in the same place, headed with its own month ("September’s
+    decision A) with no read of its own, the newest ready read of any
+    EARLIER month (usually last month's) stands in, in the same place, headed with its own month ("September’s
     long-run read", and "October has no read of its own yet"), one read and
     never a stack (`marketLongRunFor`, `loadPublishedLongRun` with
     `before`). A month with its own read shows its own, and `?month=` of a
@@ -1144,12 +1149,19 @@ This version has breaking changes — APIs, conventions, and file structure may 
     above the cards, on the open panel's head chip and on the Dashboard's
     tile ("of 640 videos, 14 Sep to 11 Oct"). Each idea's figure is its
     market videos over those days of the market's then (`IdeaCard.read`,
-    `TopContent.idea.read`: one window read, never a sum of weeks), beside
-    the page's month, and its bars are those four weeks as four bare counts
+    `TopContent.idea.read`: one window read, never a sum of weeks), and it
+    prints ONLY beside its month (no month, no four-week figure: page, panel,
+    tile and email alike). The month is `IdeasWeek.month`: the page's for a
+    set written for the page's week; for an OLDER set (`!current`, the
+    lead's ruling of 13 Oct), the month of its own read window,
+    `readingMonthOf` over `read_start` / `read_end` (14 Sep to 11 Oct reads
+    beside "September", in full), so the four weeks and the month always
+    share days. Its bars are those four weeks as four bare counts
     (`IdeasRead.weeks`, `ideaWeeks`; no weekly counts where the stored window
     is not whole weeks), all under the page's run's clustering
-    (`readWindows` with `ideas`; the tile reads the four weeks and the month
-    only). Ideas still say the week they were written for when it is not the
+    (`readWindows` with `ideas`, reading an older set's month beside the
+    page's; the tile reads the four weeks and the month only). The week
+    read's "New" stays on the page's month: it is the page's week's flag. Ideas still say the week they were written for when it is not the
     page's (`olderIdeasLine`) and stop printing once that week ended more than
     `IDEAS_STALE_DAYS` (28) before the page's (`stale`). Also asked keeps the
     page's week and its three weeks. Who asks is group

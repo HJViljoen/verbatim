@@ -80,8 +80,9 @@ export function IdeaPanelView({ panel, state, count, month, notchAt }: {
       }
     >
       <StatRow>
-        {card.read ? <StatCell value={card.read.k} of={card.read.n} label={`videos in your market where it came up, ${panel.week.read.label}`} /> : null}
-        {card.month ? <StatCell value={card.month.k} of={card.month.n} label={`videos ${when}`} /> : null}
+        {/* The four weeks only beside their month (decision 1). */}
+        {card.read && card.month ? <StatCell value={card.read.k} of={card.read.n} label={`videos in your market where it came up, ${panel.week.read.label}`} /> : null}
+        {card.month ? <StatCell value={card.month.k} of={card.month.n} label={`videos ${monthWords(panel.week.month)}`} /> : null}
         {/* The weeks' counts are one figure ("9 · 14 · 23 · 12"), so below
             1280, where the cells are two to a row, it takes the row's width
             rather than break between its counts, and the cell after it takes

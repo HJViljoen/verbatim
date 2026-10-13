@@ -233,7 +233,10 @@ describe('every page that prints a stored read asks the selector, and the select
     const text = src('lib/pages/v2/market.ts')
     expect(text).toMatch(/loadPublishedLongRun\(db, clientId, \{ month \}\)/)
     expect(text).toMatch(/loadPublishedLongRun\(db, clientId, \{ before: month \}\)/)
-    expect(text).toMatch(/period === 'month'\s*\?\s*soft\('longRun'/)
+    expect(text).toMatch(/period === 'month'\s*\?\s*soft(<[^>]*>)?\('longRun'/)
+    // A read that fails is told apart from no read (`longRunUnread`).
+    expect(text).toMatch(/\}\)\(\), 'failed'\)/)
+    expect(text).toMatch(/longRunUnread: longRunRead === 'failed'/)
     expect(text).not.toMatch(/from\(WEEK_READS_TABLE\)|from\('week_reads'\)/)
   })
 

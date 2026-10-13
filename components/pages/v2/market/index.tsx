@@ -2,7 +2,7 @@ import { PageBar, PageFrame } from '@/components/shell/page-grid'
 import { panelItemOrder, panelPlacement, PanelSlot, PERIODS, PeriodSwitch, type PanelLayout, type PerBreakpoint } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
 import { periodHref, type MarketData } from '@/lib/pages/v2/market'
-import { LongRunSection } from './long-run'
+import { LongRunSection, LongRunUnread } from './long-run'
 import { ConversationPanel, SubjectPanelView } from './panel'
 import { RailView, railIsWide } from './rail'
 import { SubjectBoardView } from './subjects'
@@ -103,6 +103,7 @@ export function MarketPage({ data }: { data: MarketData | null }) {
       {/* This month only, below the month's data: the month's long-run read,
           where one is published for the month the view reads. */}
       {data.period === 'month' && data.longRun ? <LongRunSection read={data.longRun} data={data} /> : null}
+      {data.period === 'month' && !data.longRun && data.longRunUnread ? <LongRunUnread /> : null}
     </PageFrame>
   )
 }

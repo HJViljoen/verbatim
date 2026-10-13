@@ -34,9 +34,11 @@ vi.mock('../../reading/read', async (orig) => ({
     asked.push({ from: o.from, to: o.to, runId: o.runId ?? null })
     const k = WEEKLY[o.from] ?? (o.from === '2026-09-13T04:02:00.000Z' ? 48 : 31)
     const four = o.from === '2026-09-13T04:02:00.000Z' && o.to === '2026-10-11T04:02:00.000Z'
+    // September in full (an older set's own month): 27 of 839.
+    const sep = o.from === '2026-09-01T00:00:00.000Z' && o.to === '2026-10-01T00:00:00.000Z'
     return {
-      denominators: [{ audience: INDUSTRY_AUDIENCE, videos: four ? 640 : 318, comments: 0, platform_mix: {}, dual_mention: 0, excluded_undated: 0 }],
-      themes: o.runId ? [{ audience: INDUSTRY_AUDIENCE, theme_id: LINER, videos: four ? 48 : k, comments: 0, platform_mix: {}, excluded_on_camera: 0, excluded_undated: 0 }] : null,
+      denominators: [{ audience: INDUSTRY_AUDIENCE, videos: four ? 640 : sep ? 839 : 318, comments: 0, platform_mix: {}, dual_mention: 0, excluded_undated: 0 }],
+      themes: o.runId ? [{ audience: INDUSTRY_AUDIENCE, theme_id: LINER, videos: four ? 48 : sep ? 27 : k, comments: 0, platform_mix: {}, excluded_on_camera: 0, excluded_undated: 0 }] : null,
     }
   }),
 }))
@@ -60,11 +62,18 @@ const idea = {
   model: 'gpt-5.4', prompt_version: 'post_ideas_v3', created_at: '2026-10-11T05:10:00.000Z',
 }
 
-function scope(): Parameters<typeof topContent>[0] {
+/** A newer run's published week (11 to 18 Oct), which wrote no ideas: the
+ *  ideas shown are then the older run's. */
+const RUN2 = 'r0000000-0000-4000-8000-000000000002'
+const NEWER = { from: '2026-10-11T04:03:00.000Z', to: '2026-10-18T04:02:00.000Z' }
+const newerRead = { client_id: OSSUR_CLIENT_ID, run_id: RUN2, kind: 'week', status: 'ready', month: '2026-10-01', window_end: NEWER.to, data: { version: 2, window: NEWER, newThisWeek: [] } }
+
+function scope(opts: { newer?: boolean } = {}): Parameters<typeof topContent>[0] {
   const db = fakeDb({
     post_ideas: [{ ...idea }],
     clients: [{ id: OSSUR_CLIENT_ID, company_name: 'Össur' }],
-    theme_observations: [{ client_id: OSSUR_CLIENT_ID, run_id: RUN, theme_id: LINER, label: 'Liner lifespan and replacement', category: 'question', member_insight_ids: [] }],
+    theme_observations: [RUN, RUN2].map((run) => ({ client_id: OSSUR_CLIENT_ID, run_id: run, theme_id: LINER, label: 'Liner lifespan and replacement', category: 'question', member_insight_ids: [] })),
+    ...(opts.newer ? { week_reads: [{ ...newerRead }] } : {}),
   }).client as SupabaseClient
   return { supabase: db, clientId: OSSUR_CLIENT_ID, reading: { client: db, clientId: OSSUR_CLIENT_ID }, params: {} } as Parameters<typeof topContent>[0]
 }
@@ -106,5 +115,40 @@ describe('the Dashboard\'s Content tile reads the same four weeks', () => {
     expect(top.idea?.read).toEqual({ k: 48, n: 640 })
     expect(top.idea?.month).toEqual({ k: 31, n: 318 })
     expect(top.idea?.ideasWeek.read.label).toBe('14 Sep to 11 Oct')
+  })
+})
+
+describe('an OLDER set of ideas sits beside its own month, never the page\'s (the lead\'s ruling, 13 Oct)', () => {
+  // The page's week is 11 to 18 Oct (October so far); the ideas are the 4 to
+  // 11 Oct run's, read 14 Sep to 11 Oct, so their month is September in full
+  // (`readingMonthOf` over their read window): the four weeks and the month
+  // always share days.
+  const SEPT = { from: '2026-09-01T00:00:00.000Z', to: '2026-10-01T00:00:00.000Z', runId: RUN2 }
+
+  it('on the page', async () => {
+    const data = await loadContentPage(scope({ newer: true }), { now: NOW })
+    expect(data.week?.runId).toBe(RUN2)
+    expect(data.month).toMatchObject({ month: '2026-10-01', complete: false })
+    expect(data.ideas.week).toMatchObject({ current: false, month: { month: '2026-09-01', complete: true }, read: { label: '14 Sep to 11 Oct' } })
+    expect(asked).toContainEqual({ ...FOUR, runId: RUN2 })
+    expect(asked).toContainEqual(SEPT)
+    const [card] = data.ideas.cards
+    expect(card.read).toEqual({ k: 48, n: 640 })
+    expect(card.month).toEqual({ k: 27, n: 839 })
+  })
+
+  it('on the tile', async () => {
+    const published = { runId: RUN2, month: '2026-10-01', windowEnd: NEWER.to, data: { window: NEWER } } as never
+    const top = await topContent(scope(), { now: NOW, published })
+    expect(asked).toEqual(expect.arrayContaining([{ ...FOUR, runId: RUN2 }, SEPT]))
+    expect(top.idea).toMatchObject({ read: { k: 48, n: 640 }, month: { k: 27, n: 839 }, monthWords: 'in September' })
+    expect(top.idea?.ideasWeek.current).toBe(false)
+    expect(top.line).toBe('No new ideas this week. These are from the week of 5 Oct.')
+  })
+
+  it('this week\'s ideas stay beside the page\'s month, read once', async () => {
+    const top = await topContent(scope(), { now: NOW, published: null })
+    expect(top.idea?.monthWords).toBe('in October so far')
+    expect(asked.filter((a) => a.from === '2026-10-01T00:00:00.000Z')).toHaveLength(1)
   })
 })

@@ -109,8 +109,8 @@ export async function loadPublishedWeekRead(
  * lib/written/store.ts); a row that is not a long-run read is passed over.
  * `month` (`YYYY-MM-01`) narrows it to that month's read, which is how Market
  * › This month asks for the month it shows; `before` to the months before
- * one, which is how it asks for the most recent closed month's read where the
- * month it shows is still filling and has none. Throws where `week_reads`
+ * one (the newest ready read of any earlier month), which is how it asks for
+ * a stand-in where the month it shows is still filling and has none. Throws where `week_reads`
  * cannot be read.
  */
 export async function loadPublishedLongRun(admin: SupabaseClient, clientId: string, opts: { month?: string; before?: string } = {}): Promise<StoredLongRun | null> {

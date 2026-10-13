@@ -6,7 +6,7 @@ import { summariseOwnedPosts, type OwnedPosts } from '../../reading/owned'
 import type { Verdict } from '../../reading/verdicts'
 import type { ReplyRow } from '../week'
 import {
-  agentHref, askedBlock, conversationHref, contentWeek, daysPhrase, ideaOwnedFrom, ideasReadOf, ideasWeekOf, weekPhrase, flagVerdict, groupsByConversation, ideaCard, mixSentence,
+  agentHref, askedBlock, conversationHref, contentWeek, daysPhrase, ideaOwnedFrom, ideasReadOf, ideasWeekOf, flagVerdict, groupsByConversation, ideaCard, mixSentence,
   newVerdict, postsBlock, repliesView, storedPersonas, subquestionRows, wordsToBorrow, worksBasis,
   type AskedBlock, type ContentMonth, type ContentOpen, type ContentPageData, type ContentPeriod, type IdeaCard,
   type IdeaPanel, type IdeasWeek, type MarketVideoCard, type PanelQuote, type PostsBlock, type WorksBlock, type WorksRow,
@@ -349,9 +349,11 @@ const OLDER_WINDOW = { from: '2026-09-20T04:03:00.000Z', to: '2026-09-27T04:02:0
  *  the four weeks each read. */
 export function ideasWeekFixture(older = false): IdeasWeek {
   if (!older) return ideasWeekOf(OSSUR_IDEAS, contentWeek(RUN, WINDOW))!
-  const w = contentWeek(OLDER_RUN, OLDER_WINDOW)!
+  // The same ideas, written two weeks before: their own week and four weeks,
+  // and so their own month (August in full: their four weeks began in it).
   const read = ideasReadWindow(OLDER_WINDOW)
-  return { runId: OLDER_RUN, label: w.label, phrase: weekPhrase(w), current: false, read: ideasReadOf({ read_start: read.from, read_end: read.to })! }
+  const rows = OSSUR_IDEAS.map((i) => ({ ...i, run_id: OLDER_RUN, window_start: OLDER_WINDOW.from, window_end: OLDER_WINDOW.to, read_start: read.from, read_end: read.to }))
+  return ideasWeekOf(rows, contentWeek(RUN, WINDOW))!
 }
 
 export function ideaPanelFixture(rank: 1 | 2 | 3 = 1, clientId = OSSUR_CLIENT_ID, older = false): IdeaPanel {

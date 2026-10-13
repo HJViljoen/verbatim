@@ -1,6 +1,15 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { describe, it, expect } from 'vitest'
 
-import { isMissingPostIdeas, parsePostIdeaRow, subquestionCounts } from './types'
+import { isMissingPostIdeas, loadPostIdeas, parsePostIdeaRow, subquestionCounts } from './types'
+
+/** A query that answers every chain with this error. */
+function fail(error: { code: string; message: string }) {
+  const q: Record<string, unknown> = {}
+  for (const m of ['select', 'eq', 'order', 'limit']) q[m] = () => q
+  q.then = (ok: (v: unknown) => unknown) => Promise.resolve({ data: null, error }).then(ok)
+  return q
+}
 
 const row = {
   id: '00000000-0000-4000-8000-0000000000e1',
@@ -75,6 +84,23 @@ describe('isMissingPostIdeas', () => {
     expect(isMissingPostIdeas({ code: '42P01', message: 'relation "public.post_ideas" does not exist' })).toBe(true)
     expect(isMissingPostIdeas({ code: '42501', message: 'permission denied for table post_ideas' })).toBe(false)
     expect(isMissingPostIdeas({ code: 'PGRST205', message: 'Could not find the table \'public.week_reads\' in the schema cache' })).toBe(false)
+    // Without a code, only the two phrasings of a missing table.
+    expect(isMissingPostIdeas(new Error('Could not find the table \'public.post_ideas\' in the schema cache'))).toBe(true)
+    expect(isMissingPostIdeas(new Error('relation "public.post_ideas" does not exist'))).toBe(true)
+  })
+
+  it('a missing COLUMN is not a missing table: it surfaces as an error, never hides the ideas', () => {
+    expect(isMissingPostIdeas({ code: '42703', message: 'column post_ideas.read_start does not exist' })).toBe(false)
+    expect(isMissingPostIdeas({ code: 'PGRST204', message: 'Could not find the \'read_start\' column of \'post_ideas\' in the schema cache' })).toBe(false)
+    expect(isMissingPostIdeas(new Error('column post_ideas.read_start does not exist'))).toBe(false)
+    expect(isMissingPostIdeas(new Error('Could not find the \'read_end\' column of \'post_ideas\' in the schema cache'))).toBe(false)
+  })
+
+  it('loadPostIdeas: no table reads as none; a missing column throws', async () => {
+    const tableGone = { from: () => fail({ code: '42P01', message: 'relation "public.post_ideas" does not exist' }) } as unknown as SupabaseClient
+    expect(await loadPostIdeas(tableGone, 'client')).toEqual([])
+    const columnGone = { from: () => fail({ code: '42703', message: 'column post_ideas.read_start does not exist' }) } as unknown as SupabaseClient
+    await expect(loadPostIdeas(columnGone, 'client')).rejects.toThrow(/post_ideas: column post_ideas\.read_start does not exist/)
   })
 })
 

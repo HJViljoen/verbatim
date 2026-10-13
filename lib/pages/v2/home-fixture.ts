@@ -134,8 +134,8 @@ export function fixtureContentTop(state: IdeasState | 'older' = 'ready', opts: {
       rank: 1,
       title: 'How long a liner lasts, and when it is time to replace one',
       read: { k: 48, n: 640 },
-      month: { k: 35, n: 318 },
-      monthWords: 'in October so far',
+      month: older ? { k: 64, n: 839 } : { k: 35, n: 318 },
+      monthWords: older ? 'in September' : 'in October so far',
       format: recipe('tutorial', 2.1, 'format'),
       opening: recipe('question', 1.8, 'opening'),
       own: { state: 'none', touched: 0, posts: 25, since: '2026-08-01' },
@@ -146,6 +146,11 @@ export function fixtureContentTop(state: IdeasState | 'older' = 'ready', opts: {
         read: ideasReadOf(older
           ? { read_start: '2026-09-06T04:02:00.000Z', read_end: '2026-10-04T04:02:00.000Z' }
           : { read_start: '2026-09-13T04:02:00.000Z', read_end: '2026-10-11T04:02:00.000Z' })!,
+        // The month the figure sits beside: the page's for this week's ideas,
+        // an older set's own read window's (September in full).
+        month: older
+          ? { month: '2026-09-01', complete: true, from: '2026-09-01T00:00:00.000Z', to: '2026-10-01T00:00:00.000Z' }
+          : { month: '2026-10-01', complete: false, from: '2026-10-01T00:00:00.000Z', to: '2026-10-11T04:02:00.000Z' },
       },
     },
     href: contentHref({ period: 'week', open: { kind: 'idea', rank: 1 }, asked: false }),

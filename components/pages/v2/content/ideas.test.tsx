@@ -45,6 +45,25 @@ describe('What to post next', () => {
     expect(renderText(<IdeaCardView card={card} state={STATE} selected={false} month={OCT} readLabel="14 Sep to 11 Oct" />)).not.toMatch(/Rising|usual level|trend/i)
   })
 
+  it('prints the four weeks only beside their month: no month, the four-week figure goes too (decision 1)', () => {
+    const [card] = ideaCards()
+    const noMonth = render(<IdeaCardView card={{ ...card, month: null }} state={STATE} selected={false} month={OCT} readLabel="14 Sep to 11 Oct" />)
+    expect(copyNodes(noMonth).filter((n) => n.kind === 'level')).toEqual([])
+    expect(noMonth).not.toContain('of 640 videos')
+    // The month alone where the four weeks were not read.
+    const noRead = render(<IdeaCardView card={{ ...card, read: null }} state={STATE} selected={false} month={OCT} readLabel="14 Sep to 11 Oct" />)
+    expect(copyNodes(noRead).filter((n) => n.kind === 'level').map((n) => n.text)).toEqual(['31 of 318 in October so far'])
+  })
+
+  it('an older set prints its figure beside ITS month, never the page’s', () => {
+    const older = contentFixture({ olderIdeas: true })
+    expect(older.ideas.week?.month).toMatchObject({ month: '2026-08-01', complete: true })
+    const levels = copyNodes(render(<IdeasSection block={older.ideas} state={STATE} month={OCT} />)).filter((n) => n.kind === 'level').map((n) => n.text)
+    expect(levels[0]).toBe('48 of 640 videos, 31 Aug to 27 Sep')
+    expect(levels[1]).toBe('31 of 318 in August')
+    expect(levels.join(' ')).not.toContain('October so far')
+  })
+
   it('prints a flag only where one was earned: the anomaly check’s, or the week read’s new', () => {
     const cards = ideaCards()
     const flag = (i: number) => copyNodes(render(<IdeaCardView card={cards[i]} state={STATE} selected={false} month={OCT} readLabel="14 Sep to 11 Oct" />)).filter((n) => n.kind === 'verdict').map((n) => n.text)

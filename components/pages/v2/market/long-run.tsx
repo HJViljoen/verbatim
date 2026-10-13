@@ -10,10 +10,11 @@ import { About } from './parts'
 // THE MONTH'S LONG-RUN READ, ON MARKET › THIS MONTH (Heinrich, 13 Oct: below
 // the month's data, never at the top, never on This week or Over time). The
 // published `week_reads` row of kind 'month' for the month the view reads;
-// where that month is still filling and has none of its own, the most recent
-// closed month's, headed with its month ("September’s long-run read") so it
-// never reads as this month's (`marketLongRunFor`). One read only; no read to
-// show, no section, and no placeholder.
+// where that month is still filling and has none of its own, the newest
+// ready read of any earlier month, headed with its month ("September’s
+// long-run read") so it never reads as this month's (`marketLongRunFor`).
+// One read only; no read to show, no section, and no placeholder; a read
+// that failed, one calm line (`LongRunUnread`).
 //
 // No board draws it, so it is drawn in the page's idiom: the kit's card and
 // head, the lead, then each idea as a row: its headline and sentences on the
@@ -44,6 +45,14 @@ export function longRunSub(read: Pick<MarketLongRun, 'month' | 'partialThrough' 
   return read.earlier
     ? `${read.across}: our read, ${when}. ${longMonth(read.viewMonth)} has no read of its own yet.`
     : `Our read of what has held across these months, ${when}.`
+}
+
+/** The one calm line where the long-run read could not be read (never the
+ *  look of a month with no read). */
+export const LONG_RUN_UNREAD = 'The long-run read could not be read just now.'
+
+export function LongRunUnread() {
+  return <p data-long-run="unread" className="m-0 px-0.5 text-[14px] leading-[1.5] text-muted-foreground">{LONG_RUN_UNREAD}</p>
 }
 
 export function LongRunSection({ read, data }: { read: MarketLongRun; data: Pick<MarketData, 'brand' | 'noun' | 'brands'> }) {

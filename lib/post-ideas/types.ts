@@ -181,14 +181,24 @@ export function subquestionCounts(s: PostIdeaSubquestion): { comments: number; v
   return { comments: new Set(s.commentIds).size, videos: new Set(s.videoIds).size }
 }
 
-/** Is this error "post_ideas is not there" (the migration not applied)? */
+/**
+ * Is this error "the post_ideas TABLE is not there" (the migration not
+ * applied)? Only a genuinely missing table: PostgREST's `PGRST205` ("Could
+ * not find the table 'public.post_ideas' in the schema cache") or Postgres's
+ * `42P01` (`relation "public.post_ideas" does not exist`), naming this table;
+ * without a code, only those two phrasings. A missing COLUMN (`42703`,
+ * PostgREST's `PGRST204`: a tree ahead of its migration, say `read_start`) is
+ * NOT a missing table: it surfaces as an error rather than quietly hiding the
+ * ideas as "not switched on".
+ */
 export function isMissingPostIdeas(error: unknown): boolean {
   if (!error) return false
   const { code, message } = (typeof error === 'object' ? error : {}) as { code?: string; message?: string }
   const text = message ?? (error instanceof Error ? error.message : String(error))
   if (!text.includes(TABLE_POST_IDEAS)) return false
-  if (code && ['PGRST205', '42P01'].includes(code)) return true
-  return /in the schema cache/i.test(text) || /does not exist/i.test(text)
+  if (code) return code === 'PGRST205' || code === '42P01'
+  return /could not find the table '(?:public\.)?post_ideas' in the schema cache/i.test(text)
+    || /relation "(?:public\.)?post_ideas" does not exist/i.test(text)
 }
 
 /**

@@ -65,6 +65,17 @@ describe('each page line equals its Dashboard tile', () => {
     expect(line!.figure).toContain('14 Sep to 11 Oct')
   })
 
+  it('Content: the four weeks only with their month, on the tile and in the line alike; an older set\'s beside its own month', () => {
+    const top = fixtureContentTop()
+    const noMonth = { ...top, idea: { ...top.idea!, month: null } }
+    expect(render(<ContentTileView read={ok(noMonth)} />)).not.toContain('of 640 videos')
+    expect(contentLine(noMonth)?.figure ?? null).toBeNull()
+    const older = fixtureContentTop('older')
+    const text = words(markupText(render(<ContentTileView read={ok(older)} />)))
+    expect(text).toContain('48 of 640 videos, 7 Sep to 4 Oct')
+    expect(text).toContain('64 of 839 in September')
+  })
+
   it('Your moves: the first advice waiting, and the updates that raised it', () => {
     const top = fixtureMovesTop('member')
     const line = movesLine(top)
