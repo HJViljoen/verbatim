@@ -147,7 +147,9 @@ export function MixCard({ cards, n, month, monthWords, style }: { cards: readonl
         rows={cards.map((c) => ({ key: c.key, label: slopeLabel(c.name), slot: 'pass_e_persona' as const, from: null, to: c.videos }))}
         format={fmtInt}
         label="Each group’s videos"
-        className="mx-auto max-w-[340px]"
+        // Last month's axis is the chart's empty slot: drawn dashed, as a
+        // column with no reading in it (the first <line> is that axis).
+        className="mx-auto max-w-[340px] [&>line:first-of-type]:[stroke-dasharray:3_4]"
       />
       <p className="m-0 text-[13.5px] leading-[1.5] text-secondary-foreground">{mixNotCompared(longMonth(before))}</p>
     </article>
