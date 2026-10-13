@@ -1643,3 +1643,90 @@ export async function topContent(scope: Scope, opts: {
 export function platformsLine(byPlatform: readonly { platform: string; posts: number }[]): string {
   return byPlatform.map((p) => `${platformLabel(p.platform)} ${fmtInt(p.posts)}`).join(', ')
 }
+
+// ---- The Dashboard's tile with no idea (parity pass, 13 Oct) -------------------------------
+
+/**
+ * WHAT THE CONTENT TILE PRINTS WHERE THERE IS NO POST IDEA (switched off, none
+ * written, too old, or unread): the first row of Content's own "Also asked"
+ * table, the question asked in the most of the week's videos that your posts
+ * have not touched, its week beside its month (decision 1) and your posts
+ * against it. The board's "Post next" card keeps its shape (a title, a count
+ * of the week's videos, your posts) on what the data holds without an idea
+ * (Heinrich, 13 Oct: "the page shouldn't look too different if everything
+ * isn't as populated as the design"). The rule is the page's: `askedBlock`
+ * over the same reads, with no idea to leave out, so the tile and the table
+ * agree.
+ */
+export interface TopAsked {
+  /** `theme_registry.id`. */
+  registryId: string
+  /** The conversation's label (a model's name for it, `pass_b_theme`). */
+  label: string
+  /** Its videos this week, of the market's; and in the month beside it. */
+  week: Counted | null
+  month: Counted | null
+  /** "in October so far". */
+  monthWords: string
+  /** Your posts against it (none touched it, by the table's rule); null where
+   *  they were not read. */
+  own: OwnTouch | null
+  /** Content's "Also asked". */
+  href: string
+}
+
+/** The tile's question from the table's own rows and reads. Pure. */
+export function topAskedOf(block: AskedBlock, market: { week: number | null; month: number | null }, month: Pick<ContentMonth, 'month' | 'complete'>, own: OwnTouch | null): TopAsked | null {
+  const row = block.rows[0]
+  if (!row) return null
+  const level = (k: number | null, n: number | null): Counted | null => (k != null && n != null && n > 0 ? { k, n } : null)
+  return {
+    registryId: row.registryId,
+    label: row.label,
+    week: level(row.week, market.week),
+    month: level(row.month, market.month),
+    monthWords: monthWords(month),
+    own,
+    href: `${CONTENT_PATH}#${ASKED_ID}`,
+  }
+}
+
+/**
+ * The tile's question, read the page's way: the week the page anchors on (the
+ * published read's; no ideas to anchor on), its month, the week's questions,
+ * the market's videos over both, and your posts. Null where there is no week
+ * or no question; never throws (each read is soft, as on the page).
+ */
+export async function topAsked(scope: Scope, opts: { now?: Date; published?: PublishedWeekRead | null } = {}): Promise<TopAsked | null> {
+  const db = scope.supabase as SupabaseClient
+  const { clientId } = scope
+  const published = opts.published !== undefined ? opts.published : await soft('asked.published', loadPublishedWeekRead(scope.reading.client, clientId))
+  const week = anchorOf([], published ?? null)
+  if (!week) return null
+  const month = contentMonth(week, opts.now ?? new Date())
+  const since = ideaOwnedFrom(month.month)
+  const [rivals, questions, ownedRead] = await Promise.all([
+    soft('asked.rivals', loadTrackedRivals(db, clientId)),
+    soft('asked.questions', readQuestions(db, clientId, week.runId)),
+    soft('asked.owned', ownedPosts({ supabase: db, clientId }, { from: since, to: ownedTo(month, week) })),
+  ])
+  if (!questions || questions.length === 0) return null
+  const audiences = marketAudiences(marketRivalAudiences(rivals ?? []))
+  const windows = await soft('asked.windows', readWindows(scope, week, month, audiences, { trend: false }))
+  if (!windows) return null
+  const touch = touchPosts(ownedRead, month.month, week.to)
+  const block = askedBlock({
+    period: 'week',
+    questions,
+    counts: { week: windows.themes.week, month: windows.themes.month },
+    weeks: null,
+    exclude: new Set(),
+    groups: new Map(),
+    subjects: new Map(),
+    owned: touch,
+    since,
+    expanded: false,
+  })
+  const row = block.rows[0]
+  return topAskedOf(block, windows.market, month, row ? ownTouch([row.label], touch, since) : null)
+}

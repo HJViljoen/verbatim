@@ -1059,6 +1059,28 @@ export interface TopMoves {
    *  prints it where it is the reading month. Optional: a dump from before it
    *  carries none. */
   reading?: ReadingLabel
+  /** OPTIONAL (parity pass, 13 Oct): where no move has a comparison to print
+   *  (`move` null), the newest move, with the month before it where that was
+   *  read, and why its own side is not printed yet (`pending`: its month has
+   *  not been read; `unread`: no line can be drawn for it). The tile keeps its
+   *  "After your move" panel on it. Null: no move at all. A dump from before
+   *  it carries none. */
+  newest?: (Pick<MoveCard, 'id' | 'title' | 'kind' | 'label' | 'day' | 'direction' | 'pending' | 'unread'> & {
+    before: MovePoint | null
+    href: string
+  }) | null
+}
+
+/** The newest move, for the tile's panel where none has a comparison to
+ *  print. Pure. */
+export function newestMove(cards: readonly MoveCard[]): TopMoves['newest'] {
+  const card = [...cards].sort((a, b) => b.day.localeCompare(a.day))[0]
+  if (!card) return null
+  const before = [...card.points].reverse().find((p) => p.role === 'before') ?? null
+  return {
+    id: card.id, title: card.title, kind: card.kind, label: card.label, day: card.day, direction: card.direction,
+    pending: card.pending, unread: card.unread, before, href: `${MOVES_PATH}#${moveAnchor(card.id)}`,
+  }
 }
 
 /** The move the tile shows, from the page's cards. Pure. */
@@ -1119,6 +1141,7 @@ export async function topMoves(scope: Scope, options: { canDecide: boolean }): P
       : null,
     canDecide: options.canDecide,
     reading: { month: core.month, label: readingMonthLabel(core.month, core.readingAt) },
+    newest: move && move.compare ? null : newestMove(cards),
   }
 }
 

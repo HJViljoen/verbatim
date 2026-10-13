@@ -1274,6 +1274,12 @@ export interface TopProducts {
   /** OPTIONAL. The board's small shelf: each category's products' videos, in
    *  the shelf's order. */
   columns?: { id: string; name: string; products: { id: string; videos: number }[] }[]
+  /** OPTIONAL (parity pass, 13 Oct): the catalogue's categories, in the
+   *  shelf's order, and how many products each holds, where the month's
+   *  videos were not read (`not_on`, or `quiet` with `note: 'unread'`): the
+   *  tile draws its mini shelf unshaded, the catalogue's shape with no count
+   *  on it. A dump from before it carries none. */
+  catalogue?: { id: string; name: string; products: number }[]
 }
 
 /** The standout's label on the tile, per card. */
@@ -1557,7 +1563,7 @@ export async function topProducts(input: { supabase: SupabaseClient; clientId: s
         .catch((e: unknown) => { if (isMissingProductsSchema(e)) return [] as ProductMonthRow[]; say('top.months', e); return null })
     }
     const data = buildProductsData({ ...shell, rows })
-    return topProductsOf(data, data.standouts.filter((s): s is FirstStandout => s.kind === 'first'))
+    return withCatalogueShelf(topProductsOf(data, data.standouts.filter((s): s is FirstStandout => s.kind === 'first')), catalogue)
   } catch (e) {
     say('top', e)
     return { state: 'quiet', monthWords: '', standout: null, href: PRODUCTS_HREF, note: 'failed' }
@@ -1567,3 +1573,16 @@ export async function topProducts(input: { supabase: SupabaseClient; clientId: s
 /** For a test: the figures a header prints, in words. */
 export const headerWords = (h: NonNullable<ProductsData['header']>): string =>
   `${fmtInt(h.cameUp)} of your ${fmtInt(h.products)} products came up${h.videos != null ? ` · ${fmtInt(h.videos)} videos about them or their categories` : ''}`
+
+/** The tile's unshaded shelf (parity pass, 13 Oct): where the month's videos
+ *  were not read but the catalogue was, each category in the shelf's order
+ *  with how many products it holds. Nothing changes where the tile already
+ *  carries its shaded shelf, or there is no catalogue. Pure. */
+export function withCatalogueShelf(top: TopProducts, read: CatalogueRead | null): TopProducts {
+  const unread = top.state === 'not_on' || (top.state === 'quiet' && top.note === 'unread')
+  if (!unread || top.columns || read?.state !== 'ready') return top
+  const per = new Map<string, number>()
+  for (const p of read.catalogue.products) per.set(p.group_id, (per.get(p.group_id) ?? 0) + 1)
+  const catalogue = read.catalogue.groups.map((g) => ({ id: g.id, name: g.name, products: per.get(g.id) ?? 0 })).filter((c) => c.products > 0)
+  return catalogue.length > 0 ? { ...top, catalogue } : top
+}

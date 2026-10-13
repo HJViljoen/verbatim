@@ -1031,6 +1031,11 @@ export interface TopVoices {
   groupsEmpty: string | null
   /** The brands' state: `unread` where their reads failed. */
   brandsState: VoicesBrands['state']
+  /** OPTIONAL (parity pass, 13 Oct): the brands the page tracks, you first,
+   *  at most `NAMED_MOST`, each with its panel, so a "Named most" row whose
+   *  brands are not counted yet keeps its chips (names, no counts). A dump
+   *  from before it carries none. */
+  tracked?: { label: string; you: boolean; href: string }[]
   href: string
 }
 
@@ -1062,6 +1067,10 @@ export function topVoicesOf(input: {
     groupsState: input.groups.state,
     groupsEmpty: input.groups.empty,
     brandsState: input.brands.state,
+    tracked: [...input.brands.all]
+      .sort((a, b) => Number(b.you) - Number(a.you))
+      .slice(0, NAMED_MOST)
+      .map((r) => ({ label: r.label, you: r.you, href: voicesHref({}, { kind: 'brand', key: r.param }) })),
     href: VOICES_HREF,
   }
 }

@@ -19,7 +19,7 @@ import { factsFromReadings, marketComparable } from '../../written/standing'
 import type { StandingFact } from '../../written/types'
 import { longMonth } from '../../format'
 import { homeWeeksFrame, loadHomeWeeks, WEEKS_FAILED, weeksFailed, type HomeWeeks, type WeeksRead } from '../home'
-import { topContent, type TopContent } from './content'
+import { topAsked, topContent, type TopAsked, type TopContent } from './content'
 import { marketParams, monthSoFar, subjectHref, topMarket, weekReadMonth, type MarketTop } from './market'
 import { topMoves, type TopMoves } from './moves'
 import { topProducts, type TopProducts } from './products'
@@ -50,7 +50,9 @@ import { topVoices, type TopVoices } from './voices'
 //      open panel; the catalogue's products that came up, and the mini shelf.
 //   6. CONTENT (`topContent`): the first post idea (`?idea=`), its week beside
 //      its month, its format and opening, whether your posts touched on it, and
-//      the medical team line where the market is medical; or why there is none.
+//      the medical team line where the market is medical; with no idea, the
+//      week's most-asked question your posts have not touched (`topAsked`,
+//      Content's "Also asked" rule) and why there is no idea.
 //   7. YOUR MOVES (`topMoves`): the first piece of advice waiting for a
 //      decision (`?advice=`), with Accept and Not for us for an owner or an
 //      admin, and the move whose market moved most since it was dated.
@@ -68,6 +70,15 @@ import { topVoices, type TopVoices } from './voices'
 // reading handle and one session client serve every tile, so the memoised
 // reads (delivered runs, cadence runs, the change log, the schedule, the
 // window readings: lib/reading/memo.ts) are made once a request.
+//
+// THE BOARD'S SHAPE IN EVERY DATA STATE (parity pass, 13 Oct; Heinrich: "the
+// page shouldn't look too different if everything isn't as populated as the
+// design"). A tile never collapses to a line because its data is thin: the
+// loader hands each tile what it can draw its parts with (the subjects'
+// reason, `WeekSubjects.gap`; the tracked brands, `TopVoices.tracked`; the
+// catalogue unshaded, `TopProducts.catalogue`; the week's top question,
+// `ContentTile.asked`; the newest move, `TopMoves.newest`), and each gap is
+// said inside its part in one quiet line.
 //
 // A TILE THAT FAILS LOSES ONLY ITSELF (AGENTS.md: a page that throws keeps
 // the shell). Each tile is `{ state: 'failed' }` where its read threw, and
@@ -125,6 +136,20 @@ export interface WeekSubjects {
   moved: (WeekSubject & { verdict: Verdict }) | null
   /** No subject moved beyond its band, and at least one was compared. */
   noneMoved: boolean
+  /** OPTIONAL (parity pass, 13 Oct): why the rows hold no subject, so the
+   *  block keeps both of the board's rows and says it inside them:
+   *  `calibrating`, subjects are named and none is calibrated yet (Össur
+   *  today); `none_named`, no subject is named; `failed`, the read threw.
+   *  Absent where the rows print what they read (a ready subject with no
+   *  month before to compare says that in its own row). */
+  gap?: 'calibrating' | 'none_named' | 'failed'
+}
+
+/** The subjects block where it holds no ready subject (parity pass): both
+ *  rows kept, the reason said inside them. Pure. */
+export function weekSubjectsGap(month: string, soFar: boolean, gap: NonNullable<WeekSubjects['gap']> | null): WeekSubjects {
+  const m = monthStartOf(month)
+  return { monthText: soFar ? `${longMonth(m)} so far` : longMonth(m), prevText: longMonth(prevMonth(m)), biggest: null, moved: null, noneMoved: false, ...(gap ? { gap } : {}) }
 }
 
 /** "Your market this week": the market's size, the month beside it, the
@@ -162,13 +187,18 @@ export interface AgentBox {
   tries: AgentTry[]
 }
 
+/** Content's tile: the first post idea, or where there is none, the
+ *  question the week asked most that your posts have not touched (`asked`,
+ *  parity pass, 13 Oct; optional, so a dump from before it still draws). */
+export type ContentTile = TopContent & { asked?: TopAsked | null }
+
 export interface DashboardData {
   bar: DashboardBar
   market: TileRead<MarketTile>
   week: TileRead<WeekTile>
   voices: TileRead<TopVoices | null>
   products: TileRead<TopProducts>
-  content: TileRead<TopContent>
+  content: TileRead<ContentTile>
   moves: TileRead<TopMoves | null>
   agent: AgentBox
 }
@@ -332,6 +362,21 @@ export function settleTile<T>(what: string, p: Promise<T>): Promise<TileRead<T>>
   )
 }
 
+/** Content's tile: the idea where one prints; with none, the week's
+ *  most-asked question your posts have not touched (`topAsked`, read only
+ *  then; parity pass). A failed question read costs the question, not the
+ *  tile. */
+export function withAsked(top: TopContent, read: () => Promise<TopAsked | null>): Promise<ContentTile> {
+  if (top.idea) return Promise.resolve(top)
+  return read().then(
+    (asked): ContentTile => ({ ...top, asked }),
+    (error: unknown): ContentTile => {
+      say('asked', error)
+      return { ...top, asked: null }
+    },
+  )
+}
+
 /** A read that may fail without failing its tile: logged, null. */
 function soft<T>(what: string, p: Promise<T>): Promise<T | null> {
   return p.catch((error: unknown) => {
@@ -360,15 +405,16 @@ async function loadWeekSubjects(input: {
   try {
     subjects = await loadActiveSubjects(db as never, input.clientId)
   } catch (error) {
-    if (isMissingSubjects(error)) return null
+    if (isMissingSubjects(error)) return weekSubjectsGap(input.month, input.soFar, 'none_named')
     throw error
   }
+  if (subjects.length === 0) return weekSubjectsGap(input.month, input.soFar, 'none_named')
   const all = subjects.map((s) => ({ subject: s, calibration: subjectCalibration(s) }))
   // Only a ready subject prints a level or a verdict here, so only they are read.
   const objects: MarketObjectRef[] = all
     .filter((x) => x.calibration === 'ready')
     .map(({ subject, calibration }) => ({ kind: 'subject' as const, id: subject.id, label: subject.name, calibration }))
-  if (objects.length === 0) return null
+  if (objects.length === 0) return weekSubjectsGap(input.month, input.soFar, 'calibrating')
   const pair = await loadAppPairOn(input.reading, input.nowIso)
   const readings = await loadObjectReadings(db, {
     clientId: input.clientId, objects, month: input.month, pair, asOf: input.nowIso, rivalAudiences: input.rivalAudiences,
@@ -378,7 +424,9 @@ async function loadWeekSubjects(input: {
     all.filter((x) => x.calibration === 'ready').map(({ subject, calibration }) => ({ subject, calibration, reading: readingOf.get(subject.id) ?? null })),
     marketComparable(pair, input.month),
   )
-  return weekSubjectsOf(facts, input.month, input.soFar)
+  // Ready subjects with neither a level nor a month to compare keep the rows,
+  // each saying so.
+  return weekSubjectsOf(facts, input.month, input.soFar) ?? weekSubjectsGap(input.month, input.soFar, null)
 }
 
 /**
@@ -407,22 +455,27 @@ export function startDashboard(session: DashboardSession): DashboardReads {
   const voices = settleTile('voices', topVoices({ supabase, clientId, reading, now: nowIso }))
   const products = settleTile('products', topProducts({ supabase, clientId, reading, now: nowIso }))
   // A failed week read costs Content its anchor week, not the tile: Content
-  // anchors on the ideas' own run where the read is missing.
-  const content = settleTile('content', publishedSoft.then((read) => topContent(scope, { now, published: read })))
+  // anchors on the ideas' own run where the read is missing. With no idea to
+  // print, the tile reads the question the week asked most (`topAsked`,
+  // Content's own "Also asked" rule; parity pass), so it keeps its shape.
+  const ideas = publishedSoft.then((read) => topContent(scope, { now, published: read }))
+  const content = settleTile('content', Promise.all([ideas, publishedSoft]).then(([top, read]) => withAsked(top, () => topAsked(scope, { now, published: read }))))
   const moves = settleTile('moves', topMoves(scope, { canDecide }))
 
   // A failed read is WEEKS_FAILED, never null: null is "too few clean weeks".
   const weeks: Promise<WeeksRead> = loadHomeWeeks({ supabase, clientId, reading: db, rivals }, nowIso)
     .catch((error: unknown) => { say('weeks', error); return WEEKS_FAILED })
-  const subjects = soft('subjects', Promise.all([publishedSoft, rivals]).then(([read, rv]) => {
+  // A read that throws keeps the block: its rows say it could not be read.
+  const subjects = Promise.all([publishedSoft, rivals]).then(([read, rv]) => {
     if (!read) return null
     const rm = readingMonthOf(read.data.window)
     const month = monthStartOf(rm.month)
+    const soFar = monthSoFar(month, monthStartOf(nowIso), rm.complete)
     return loadWeekSubjects({
-      reading, clientId, month, soFar: monthSoFar(month, monthStartOf(nowIso), rm.complete), nowIso,
+      reading, clientId, month, soFar, nowIso,
       rivalAudiences: rv ? marketRivalAudiences(rv) : null,
-    })
-  }))
+    }).catch((error: unknown) => { say('subjects', error); return weekSubjectsGap(month, soFar, 'failed') })
+  })
   const week = settleTile('week', Promise.all([publishedSoft, weeks, subjects])
     .then(([read, w, s]) => weekTileOf({ read, weeks: w, subjects: s, now: nowIso })))
 
