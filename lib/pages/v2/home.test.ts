@@ -65,7 +65,11 @@ describe('the week tile', () => {
     expect(src).toMatch(/loadHomeWeeks\([^)]*\)[^;]*\.catch\(\(error: unknown\) => \{ say\('weeks', error\); return WEEKS_FAILED \}\)/)
     const market = readFileSync(resolve(__dirname, 'market.ts'), 'utf8')
     expect(market).toMatch(/\('weeks', loadWeekRows\(db, clientId, nowIso\), WEEKS_FAILED\)/)
-    expect(market).toMatch(/weeks: !Array\.isArray\(weekRowsRaw\) \? WEEKS_FAILED/)
+    expect(market).toMatch(/weeks: marketWeeksOf\(\{ rows: weekRowsRaw, changes: changes === null \? null : ourChanges, cadence,/)
+    // The change log and the cadence fail to null, never to an empty list
+    // that would draw the bars uncut.
+    expect(market).toMatch(/\('changes', loadChanges\(db, clientId\), null\)/)
+    expect(market).toMatch(/\('cadence', loadCadenceRuns\(supabase, clientId\), null\)/)
   })
 
   it('a figure the read did not hold is null, never zero', () => {
