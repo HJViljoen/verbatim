@@ -161,7 +161,10 @@ describe('the Dashboard, as the board draws it (E1-Dashboard)', () => {
     expect(t).toMatch(/Named in the most videos Pro-Flex Pivot 9 of your 38 products came up in October so far .*Pro-Flex Pivot: 9 of 318 videos in October so far\./)
     const shelf = tileMarkup(markup, 'products')
     expect(shelf).toContain('aria-label="Your catalogue: Liners 3 of 8 named, Feet 2 of 9 named, Knees 3 of 6 named, Bracing 1 of 9 named, Sockets 0 of 6 named"')
-    expect(shelf.match(/data-tone="/g)).toHaveLength(38)
+    // The page's cut (`shelfCut`): at most SHELF_TILES bars a column, then
+    // "+N more" (Feet and Bracing hold nine: eight bars and "+1 more").
+    expect(shelf.match(/data-tone="/g)).toHaveLength(36)
+    expect(shelf.match(/<span data-more="" [^>]*>\+<span data-copy="figure">1<\/span> more<\/span>/g)).toHaveLength(2)
     expect(shelf).toMatch(/role="img"[^>]*class="grid gap-1\.5 max-sm:hidden"/)
   })
 
@@ -677,7 +680,8 @@ describe('the board\'s shape holds when the data is thin (parity pass)', () => {
   it('Your products, not switched on: the catalogue as the mini shelf, unshaded, its size, and why in one line', () => {
     const p = tileMarkup(markup, 'products')
     expect(markupText(p)).toMatch(/Your catalogue 38 products across 5 categories .*Product readings are not switched on for this workspace yet\.$/)
-    expect(p.match(/data-tone="unread"/g)).toHaveLength(38)
+    expect(p.match(/data-tone="unread"/g)).toHaveLength(36)
+    expect(p.match(/data-more=""/g)).toHaveLength(2)
     expect(p).not.toMatch(/data-tone="[0-3]"/)
     const none = tileMarkup(render(page(sealand)), 'products')
     expect(none).toContain('data-shelf="ghost"')
@@ -704,13 +708,13 @@ describe('the board\'s shape holds when the data is thin (parity pass)', () => {
     expect(tileMarkup(markup, 'moves')).toContain('href="/dashboard/moves#move-m-access"')
   })
 
-  it('a dump from before the parity pass (no `tracked`, `asked`, `catalogue` or `newest`) still draws, each part saying why', () => {
+  it('a dump from before the parity pass (no `tracked`, `asked`, unread shelf or `newest`) still draws, each part saying why', () => {
     const old = dashboardThinFixture()
     const strip = <T,>(r: { state: string; top?: T }, f: (t: T) => T) => (r.state === 'ok' ? { ...r, top: f(r.top as T) } : r)
     const data = {
       ...old,
       voices: strip(old.voices, (v) => (v ? { ...v, tracked: undefined } : v)),
-      products: strip(old.products, (p) => ({ ...p, catalogue: undefined })),
+      products: strip(old.products, (p) => ({ ...p, columns: undefined })),
       content: strip(old.content, (c) => ({ ...c, asked: undefined })),
       moves: strip(old.moves, (m) => (m ? { ...m, newest: undefined } : m)),
     } as DashboardData

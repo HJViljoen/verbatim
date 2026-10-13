@@ -8,56 +8,64 @@ import { weekSubjectsGap, withAsked } from './home'
 import { fixtureAsked } from './home-fixture'
 import { MOVE_CARDS } from './moves-fixture'
 import { MOVES_PATH, newestMove, type MoveCard } from './moves'
-import { withCatalogueShelf, type TopProducts } from './products'
+import { SHELF_TILES, shelfCut, topProductsOf, type ProductsData, type TopProducts } from './products'
+import { PRODUCTS_FIXTURES } from './products-fixture'
 import { topVoicesOf } from './voices'
 import { VOICES_FIXTURES } from './voices-fixture'
-import type { CatalogueRead, ProductCatalogue } from '../../products/types'
 
 // THE PARITY PASS (13 Oct): what the Dashboard's loader adds so each tile
 // keeps the board's shape when its data is thin. Each addition is optional on
 // its page's `top*()` type and read by that page's own rule.
 
-const CATALOGUE: CatalogueRead = {
-  state: 'ready',
-  catalogue: {
-    version: 'pc1_test',
-    groups: [{ id: 'g-liners', name: 'Liners', sort: 1 }, { id: 'g-feet', name: 'Feet', sort: 2 }, { id: 'g-empty', name: 'Empty', sort: 3 }],
-    products: [
-      { id: 'p1', group_id: 'g-liners', name: 'Seal-In', sort: 1 },
-      { id: 'p2', group_id: 'g-liners', name: 'Iceross', sort: 2 },
-      { id: 'p3', group_id: 'g-feet', name: 'Pro-Flex', sort: 1 },
-    ],
-    aliases: [],
-  },
-}
-const base = (o: Partial<TopProducts>): TopProducts => ({ state: 'not_on', monthWords: 'September', standout: null, href: '/dashboard/products', ...o })
-
-describe('Your products: the unshaded shelf where the month was not read', () => {
-  it('not switched on, or the month not read: every category in the page\'s order (sort, then name) with how many products it holds, an empty one kept', () => {
-    const want = [{ id: 'g-liners', name: 'Liners', products: 2 }, { id: 'g-feet', name: 'Feet', products: 1 }, { id: 'g-empty', name: 'Empty', products: 0 }]
-    expect(withCatalogueShelf(base({ state: 'not_on' }), CATALOGUE).catalogue).toEqual(want)
-    expect(withCatalogueShelf(base({ state: 'quiet', note: 'unread' }), CATALOGUE).catalogue).toEqual(want)
-  })
-
-  it('orders by sort, then name, whatever order the catalogue arrives in', () => {
-    const read: CatalogueRead = { state: 'ready', catalogue: { ...(CATALOGUE as { catalogue: ProductCatalogue }).catalogue, groups: [
-      { id: 'b', name: 'Bracing', sort: 2 }, { id: 'k', name: 'Knees', sort: 1 }, { id: 'a', name: 'Arms', sort: 2 },
-    ], products: [] } }
-    expect(withCatalogueShelf(base({ state: 'not_on' }), read).catalogue!.map((c) => c.name)).toEqual(['Knees', 'Arms', 'Bracing'])
-  })
-
-  it('leaves alone a tile that read its month, failed, or has no catalogue', () => {
-    for (const t of [
-      base({ state: 'ready', columns: [] }),
-      base({ state: 'quiet' }),
-      base({ state: 'quiet', note: 'failed' }),
-      base({ state: 'no_catalogue' }),
-      base({ state: 'not_applied' }),
-    ]) expect(withCatalogueShelf(t, CATALOGUE)).toBe(t)
-    for (const read of [null, { state: 'empty' } as const, { state: 'missing' } as const]) {
-      const t = base({ state: 'not_on' })
-      expect(withCatalogueShelf(t, read)).toBe(t)
+describe('Your products: the tile draws the page\'s own shelf, cut as the page cuts it', () => {
+  // Every state with a catalogue: the page's columns in the page's order, the
+  // first SHELF_TILES products of each, and the page's "+N more".
+  const same = (d: ProductsData, cols: NonNullable<TopProducts['columns']>) => {
+    expect(cols.map((c) => c.id)).toEqual(d.shelf.map((c) => c.id))
+    for (const [i, c] of cols.entries()) {
+      const page = d.shelf[i]
+      expect(c.products.map((p) => p.id)).toEqual(page.products.slice(0, SHELF_TILES).map((p) => p.id))
+      expect(c.more).toBe(Math.max(0, page.products.length - SHELF_TILES))
+      expect(c.products.length + (c.more ?? 0)).toBe(page.products.length)
     }
+  }
+
+  it('read: shaded by the month\'s videos, at most SHELF_TILES a column, then "+N more" (Össur\'s Feet hold 20)', () => {
+    const d = PRODUCTS_FIXTURES['ossur-today']()
+    const top = topProductsOf(d)
+    same(d, top.columns!)
+    expect(top.columns!.some((c) => (c.more ?? 0) > 0)).toBe(true)
+    expect(Math.max(...top.columns!.map((c) => c.products.length))).toBeLessThanOrEqual(SHELF_TILES)
+    // Its words count past the cut: every product that came up, of the whole column.
+    for (const [i, c] of top.columns!.entries()) expect(c.named).toBe(d.shelf[i].products.filter((p) => (p.videos ?? 0) > 0).length)
+  })
+
+  it('not switched on, or the month not read: the page\'s shelf unshaded (every count null), never a list the tile orders itself', () => {
+    for (const d of [PRODUCTS_FIXTURES['not-on'](), PRODUCTS_FIXTURES.unread()]) {
+      const top = topProductsOf(d)
+      expect(d.shelf.length).toBeGreaterThan(0)
+      same(d, top.columns!)
+      for (const c of top.columns!) {
+        expect(c.named).toBeNull()
+        for (const p of c.products) expect(p.videos).toBeNull()
+      }
+    }
+    expect(topProductsOf(PRODUCTS_FIXTURES['not-on']()).state).toBe('not_on')
+    expect(topProductsOf(PRODUCTS_FIXTURES.unread())).toMatchObject({ state: 'quiet', note: 'unread' })
+  })
+
+  it('no catalogue, the migration not applied, or a read that failed: no shelf', () => {
+    expect(topProductsOf(PRODUCTS_FIXTURES.sealand()).columns).toBeUndefined()
+    expect(topProductsOf(PRODUCTS_FIXTURES['not-applied']()).columns).toBeUndefined()
+    const failed = { ...PRODUCTS_FIXTURES['not-on'](), state: 'failed' as const }
+    expect(topProductsOf(failed).columns).toBeUndefined()
+  })
+
+  it('the page\'s shelf and the tile cut by one rule (`shelfCut`)', () => {
+    expect(shelfCut([1, 2, 3])).toEqual({ shown: [1, 2, 3], more: 0 })
+    const twenty = Array.from({ length: 20 }, (_, i) => i)
+    expect(shelfCut(twenty)).toEqual({ shown: twenty.slice(0, SHELF_TILES), more: 20 - SHELF_TILES })
+    expect(shelfCut(twenty.slice(0, SHELF_TILES))).toEqual({ shown: twenty.slice(0, SHELF_TILES), more: 0 })
   })
 })
 

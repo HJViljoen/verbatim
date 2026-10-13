@@ -1217,6 +1217,15 @@ export const PRODUCT_QUOTES = 3
  *  most-videos first, so a product with talk is shown before a quiet one. */
 export const SHELF_TILES = 8
 
+/** A shelf column as the page draws it: its first `SHELF_TILES` tiles, and
+ *  how many more ("+N more"). The page's shelf and the Dashboard's mini shelf
+ *  both cut by this, so the two draw the same tiles. PURE. */
+export function shelfCut<T>(products: readonly T[]): { shown: T[]; more: number } {
+  return products.length > SHELF_TILES
+    ? { shown: products.slice(0, SHELF_TILES), more: products.length - SHELF_TILES }
+    : { shown: [...products], more: 0 }
+}
+
 /** The shelf's columns at its widest: the kit's five (the board's five
  *  categories), six where the catalogue has six (Össur's: Hands joined), so
  *  no category wraps alone onto a second row. More than six wrap. */
@@ -1613,15 +1622,24 @@ export interface TopProducts {
   /** OPTIONAL. Products with a video this month, of the catalogue's. */
   cameUp?: number
   products?: number
-  /** OPTIONAL. The board's small shelf: each category's products' videos, in
-   *  the shelf's order. */
-  columns?: { id: string; name: string; products: { id: string; videos: number }[] }[]
-  /** OPTIONAL (parity pass, 13 Oct): the catalogue's categories, in the
-   *  shelf's order, and how many products each holds, where the month's
-   *  videos were not read (`not_on`, or `quiet` with `note: 'unread'`): the
-   *  tile draws its mini shelf unshaded, the catalogue's shape with no count
-   *  on it. A dump from before it carries none. */
-  catalogue?: { id: string; name: string; products: number }[]
+  /** OPTIONAL. The board's small shelf: the page's own shelf (`data.shelf`,
+   *  `buildShelf`), a column a category in its order, each product's videos
+   *  this month (null where it was not read: switched off, the month not read
+   *  yet, or no row for it), cut as the page cuts it (`shelfCut`: the first
+   *  SHELF_TILES tiles, then `more`, the page's "+N more"). Every state with
+   *  a catalogue carries it but a failed read. */
+  columns?: { id: string; name: string; products: { id: string; videos: number | null }[]; more?: number; named?: number | null }[]
+}
+
+/** The tile's mini shelf from the page's shelf, column by column, cut as the
+ *  page cuts it, with how many of the whole column came up (`named`; null
+ *  where none of it was read), so the shelf's words count past the cut. PURE. */
+export function miniShelfOf(shelf: readonly ShelfCategoryView[]): NonNullable<TopProducts['columns']> {
+  return shelf.map((c) => {
+    const { shown, more } = shelfCut(c.products)
+    const named = c.products.every((p) => p.videos == null) ? null : c.products.filter((p) => (p.videos ?? 0) > 0).length
+    return { id: c.id, name: c.name, products: shown.map((p) => ({ id: p.id, videos: p.videos })), more, named }
+  })
 }
 
 /** The standout's label on the tile, per card. */
@@ -1638,17 +1656,19 @@ export function topProductsOf(data: Pick<ProductsData, 'state' | 'monthWords' | 
   // A state that reads no month carries no month's label either.
   const readsMonth = data.state !== 'not_applied' && data.state !== 'no_catalogue' && data.state !== 'not_on'
   const base = { monthWords: data.monthWords, monthLabel: readsMonth ? data.monthLabel ?? null : null, standout: null, href }
+  // The page's shelf, as the page draws it, in every state that has one: the
+  // catalogue unshaded where its month was not read (`buildProductsData`
+  // fills the shelf with no count), shaded by the month's videos where it was.
+  const columns = miniShelfOf(data.shelf)
+  const shelf = columns.length > 0 ? { columns } : {}
   switch (data.state) {
     case 'not_applied': return { ...base, state: 'not_applied' }
     case 'no_catalogue': return { ...base, state: 'no_catalogue', href: productsTabHref() }
-    case 'not_on': return { ...base, state: 'not_on' }
-    case 'unread': return { ...base, state: 'quiet', note: 'unread' }
+    case 'not_on': return { ...base, state: 'not_on', ...shelf }
+    case 'unread': return { ...base, state: 'quiet', note: 'unread', ...shelf }
     case 'failed': return { ...base, state: 'quiet', note: 'failed' }
     default: break
   }
-  // A product not read yet is left off the small shelf (its tile would read
-  // as quiet, and nothing was read).
-  const columns = data.shelf.map((c) => ({ id: c.id, name: c.name, products: c.products.flatMap((p) => (p.videos == null ? [] : [{ id: p.id, videos: p.videos }])) }))
   const extra = { cameUp: data.header?.cameUp ?? 0, products: data.header?.products ?? 0, columns }
   const first = firsts[0]
   if (first) {
@@ -1907,7 +1927,7 @@ export async function topProducts(input: { supabase: SupabaseClient; clientId: s
         .catch((e: unknown) => { if (isMissingProductsSchema(e)) return [] as ProductMonthRow[]; say('top.months', e); return null })
     }
     const data = buildProductsData({ ...shell, rows })
-    return withCatalogueShelf(topProductsOf(data, data.standouts.filter((s): s is FirstStandout => s.kind === 'first')), catalogue)
+    return topProductsOf(data, data.standouts.filter((s): s is FirstStandout => s.kind === 'first'))
   } catch (e) {
     say('top', e)
     return { state: 'quiet', monthWords: '', standout: null, href: PRODUCTS_HREF, note: 'failed' }
@@ -1917,21 +1937,3 @@ export async function topProducts(input: { supabase: SupabaseClient; clientId: s
 /** For a test: the figures a header prints, in words. */
 export const headerWords = (h: NonNullable<ProductsData['header']>): string =>
   `${fmtInt(h.cameUp)} of your ${fmtInt(h.products)} products came up${h.videos != null ? ` · ${fmtInt(h.videos)} videos about them or their categories` : ''}`
-
-/** The tile's unshaded shelf (parity pass, 13 Oct): where the month's videos
- *  were not read but the catalogue was, every category, in the page's shelf
- *  order (by `sort`, then name), with how many products it holds, an empty
- *  one included. Nothing changes where the tile already carries its shaded
- *  shelf, or there is no catalogue. Pure. Unify at merge: the tile draws the
- *  page's own `data.shelf` once parity/products gives it one in these
- *  states. */
-export function withCatalogueShelf(top: TopProducts, read: CatalogueRead | null): TopProducts {
-  const unread = top.state === 'not_on' || (top.state === 'quiet' && top.note === 'unread')
-  if (!unread || top.columns || read?.state !== 'ready') return top
-  const per = new Map<string, number>()
-  for (const p of read.catalogue.products) per.set(p.group_id, (per.get(p.group_id) ?? 0) + 1)
-  const catalogue = [...read.catalogue.groups]
-    .sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name))
-    .map((g) => ({ id: g.id, name: g.name, products: per.get(g.id) ?? 0 }))
-  return catalogue.length > 0 ? { ...top, catalogue } : top
-}

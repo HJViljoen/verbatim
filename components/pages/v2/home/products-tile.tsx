@@ -53,12 +53,23 @@ export const PRODUCTS_TITLES = {
   invite: 'What your market says about each product you sell',
 } as const
 
+type MiniColumn = NonNullable<TopProducts['columns']>[number]
+
+/** Every product in a column, past the page's cut too. */
+const columnSize = (c: MiniColumn): number => c.products.length + (c.more ?? 0)
+/** How many came up in the whole column; null where none of it was read (a
+ *  dump from before `named` counts what it drew). */
+const columnNamed = (c: MiniColumn): number | null =>
+  c.named !== undefined ? c.named : c.products.every((p) => p.videos == null) ? null : c.products.filter((p) => (p.videos ?? 0) > 0).length
+
 /** The board's `.minishelf`: a column a category, a bar a product, shaded by
- *  its videos this month; unshaded where the month was not read. */
-function MiniShelf({ columns }: { columns: readonly { id: string; name: string; products: readonly { id: string; videos: number | null }[] }[] }) {
+ *  its videos this month; unshaded where it was not read. The page's own
+ *  shelf, cut as the page cuts it (`shelfCut`): at most SHELF_TILES bars a
+ *  column, then "+N more". */
+function MiniShelf({ columns }: { columns: readonly MiniColumn[] }) {
   const said = columns.map((c) => {
-    const read = c.products.every((p) => p.videos != null)
-    return read ? `${c.name} ${c.products.filter((p) => (p.videos ?? 0) > 0).length} of ${c.products.length} named` : `${c.name} ${c.products.length} products, not read`
+    const named = columnNamed(c)
+    return named != null ? `${c.name} ${named} of ${columnSize(c)} named` : `${c.name} ${columnSize(c)} products, not read`
   }).join(', ')
   return (
     <div role="img" aria-label={`Your catalogue: ${said}`} className="grid gap-1.5 max-sm:hidden" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))` }}>
@@ -68,6 +79,7 @@ function MiniShelf({ columns }: { columns: readonly { id: string; name: string; 
           {c.products.map((p) => p.videos == null
             ? <span key={p.id} data-tone="unread" className={cn('h-[9px] rounded-[2px]', UNREAD_SLOT)} />
             : <span key={p.id} data-tone={shelfTone(p.videos)} className={cn('h-[9px] rounded-[2px]', SHADE[shelfTone(p.videos)])} />)}
+          {c.more ? <span data-more="" className="text-[10.5px] leading-[1.2] text-muted-foreground">+<span data-copy="figure">{fmtInt(c.more)}</span> more</span> : null}
         </div>
       ))}
     </div>
@@ -175,29 +187,27 @@ function Thin({ top }: { top: TopProducts }) {
       </>
     )
   }
+  const columns = top.columns ?? []
+  const products = columns.reduce((n, c) => n + columnSize(c), 0)
   // Read, and nothing of yours named: the shelf drawn, every product quiet.
-  if (top.state === 'quiet' || top.state === 'ready') {
-    if (top.note !== 'unread' && top.columns && top.columns.length > 0) {
-      const products = top.columns.reduce((n, c) => n + c.products.length, 0)
-      return (
-        <>
-          <h3 className={TT}>{PRODUCTS_TITLES.quiet(month)}</h3>
-          <CatalogueFigure products={products} categories={top.columns.length} />
-          <MiniShelf columns={top.columns} />
-        </>
-      )
-    }
+  if ((top.state === 'quiet' || top.state === 'ready') && top.note !== 'unread' && columns.length > 0) {
+    return (
+      <>
+        <h3 className={TT}>{PRODUCTS_TITLES.quiet(month)}</h3>
+        <CatalogueFigure products={products} categories={columns.length} />
+        <MiniShelf columns={columns} />
+      </>
+    )
   }
-  // Not switched on, or the month not read yet: the catalogue unshaded.
+  // Not switched on, or the month not read yet: the page's shelf, unshaded.
   const words = top.state === 'not_on' ? PRODUCTS_LINES.not_on : top.note === 'unread' ? PRODUCTS_UNREAD : `${PRODUCTS_LINES.quiet}${month}.`
-  const cat = top.catalogue ?? []
   return (
     <>
       <h3 className={TT}>{top.state === 'quiet' && top.note !== 'unread' ? PRODUCTS_TITLES.quiet(month) : PRODUCTS_TITLES.catalogue}</h3>
-      {cat.length > 0 ? (
+      {columns.length > 0 ? (
         <>
-          <CatalogueFigure products={cat.reduce((n, c) => n + c.products, 0)} categories={cat.length} />
-          <MiniShelf columns={cat.map((c) => ({ id: c.id, name: c.name, products: Array.from({ length: c.products }, (_, i) => ({ id: `${c.id}-${i}`, videos: null })) }))} />
+          <CatalogueFigure products={products} categories={columns.length} />
+          <MiniShelf columns={columns} />
         </>
       ) : <GhostShelf />}
       <p className={CSUB}>{words}</p>

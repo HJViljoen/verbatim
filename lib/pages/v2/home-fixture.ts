@@ -11,6 +11,7 @@ import { buildConvs, convHref, flagCardOf, marketParams, pickHero, pickWeekSides
 import { FIXTURE_FLAG, FIXTURE_WEEKS, fixtureConvInput, fixtureFacts, fixtureId, fixtureRead } from './market-fixture'
 import { adviceHref, movedMove, MOVES_PATH, type TopMoves } from './moves'
 import { DESK, MOVE_CARDS } from './moves-fixture'
+import { shelfCut } from './products'
 import { VOICES_HREF, voicesHref, type TopVoices } from './voices'
 
 // THE DASHBOARD'S RENDER FIXTURES (Design v2, T8): Össur-shaped, from the
@@ -135,21 +136,32 @@ const SHELF: { id: string; name: string; videos: number[] }[] = [
   { id: 'g-sockets', name: 'Sockets', videos: [0, 0, 0, 0, 0, 0] },
 ]
 
+/** The fixture shelf as the tile carries it: the page's columns, each cut as
+ *  the page cuts it (`shelfCut`), its videos (`read`), all none (`quiet`) or
+ *  none read (`unread`). */
+function fixtureColumns(as: 'read' | 'quiet' | 'unread'): NonNullable<TopProducts['columns']> {
+  return SHELF.map((c) => {
+    const all = c.videos.map((videos, i) => ({ id: `${c.id}-${i}`, videos: as === 'read' ? videos : as === 'quiet' ? 0 : null }))
+    const { shown, more } = shelfCut(all)
+    return { id: c.id, name: c.name, products: shown, more, named: as === 'unread' ? null : all.filter((p) => (p.videos ?? 0) > 0).length }
+  })
+}
+
 export function fixtureProductsTop(state: TopProducts['state'] = 'ready', opts: { note?: TopProducts['note']; shelf?: boolean; september?: boolean } = {}): TopProducts {
   const href = '/dashboard/products'
   const shelf = opts.shelf === false ? {} : {
     cameUp: SHELF.reduce((n, c) => n + c.videos.filter((v) => v > 0).length, 0),
     products: SHELF.reduce((n, c) => n + c.videos.length, 0),
-    columns: SHELF.map((c) => ({ id: c.id, name: c.name, products: c.videos.map((videos, i) => ({ id: `${c.id}-${i}`, videos })) })),
+    columns: fixtureColumns('read'),
   }
   const words = opts.september ? 'September' : 'October so far'
   const label = opts.september ? { monthLabel: SEP_LABEL } : {}
-  // Not switched on, or the month not read: the catalogue unshaded
-  // (`withCatalogueShelf`); read and quiet: the shelf, every product none.
+  // Not switched on, or the month not read: the page's shelf unshaded (it
+  // carries no count); read and quiet: the shelf, every product none.
   const unshaded = state === 'not_on' || (state === 'quiet' && opts.note === 'unread')
-  const catalogue = unshaded && opts.shelf !== false ? { catalogue: SHELF.map((c) => ({ id: c.id, name: c.name, products: c.videos.length })) } : {}
+  const catalogue = unshaded && opts.shelf !== false ? { columns: fixtureColumns('unread') } : {}
   const quiet = state === 'quiet' && !opts.note && opts.shelf !== false
-    ? { cameUp: 0, products: SHELF.reduce((n, c) => n + c.videos.length, 0), columns: SHELF.map((c) => ({ id: c.id, name: c.name, products: c.videos.map((_, i) => ({ id: `${c.id}-${i}`, videos: 0 })) })) }
+    ? { cameUp: 0, products: SHELF.reduce((n, c) => n + c.videos.length, 0), columns: fixtureColumns('quiet') }
     : {}
   if (state !== 'ready') return { state, monthWords: state === 'quiet' ? words : '', ...(state === 'quiet' ? label : {}), standout: null, href, ...(opts.note ? { note: opts.note } : {}), ...catalogue, ...quiet }
   return {

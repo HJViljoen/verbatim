@@ -76,8 +76,9 @@ import { topVoices, type TopVoices } from './voices'
 // design"). A tile never collapses to a line because its data is thin: the
 // loader hands each tile what it can draw its parts with (the subjects'
 // reason, `WeekSubjects.gap`; the tracked brands, `TopVoices.tracked`; the
-// catalogue unshaded, `TopProducts.catalogue`; the week's top question,
-// `ContentTile.asked`; the newest move, `TopMoves.newest`), and each gap is
+// page's own shelf, unshaded where its month was not read,
+// `TopProducts.columns`; Content's first question card, `ContentTile.asked`;
+// the newest move, `TopMoves.newest`), and each gap is
 // said inside its part in one quiet line.
 //
 // A TILE THAT FAILS LOSES ONLY ITSELF (AGENTS.md: a page that throws keeps
