@@ -608,3 +608,51 @@ describe('the runner\'s products set (depth v2 T10, applied after costs)', () =>
     expect(runner).toMatch(/if \[\[ "\$SET" == "mf3" \|\| "\$SET" == "products" \]\]; then\n {2}echo "== pre-check 4: the existing guards/)
   })
 })
+
+describe('the runner\'s moves-role set (decision 6a, applied after products)', () => {
+  const runner = readFileSync(new URL('../scripts/apply-market-first-migrations.sh', import.meta.url), 'utf8')
+  const testRunner = readFileSync(new URL('../scripts/pg-shim/test-runner.sh', import.meta.url), 'utf8')
+  const FILE = '20261110090000_moves_role_gate.sql'
+  const sql = squash(code(FILE))
+  const policies = [...sql.matchAll(/create policy "([^"]+)" on public\.(\w+) for (insert|update) to authenticated/g)].map((m) => `${m[2]}:${m[3]}:${m[1]}`)
+
+  it('applies the role gate alone, after products', () => {
+    const block = runner.match(/\n {2}moves-role\)\n([\s\S]*?)\n {4};;/)?.[1] ?? ''
+    expect(block.match(/EXPECTED_FILES=\(([^)]*)\)/)?.[1]?.trim()).toBe(FILE)
+    expect(block.match(/LABELS=\(([^)]*)\)/)?.[1]?.trim()).toBe('MOVES_ROLE')
+    expect(block.match(/PREREQ_VERSION="(\d+)"/)?.[1]).toBe('20261109090000')
+    expect(testRunner).toMatch(/moves-role\) FIRST=20261110090000; HISTORY="[^"]*\('20261109090000', 'products'\)"; YES='y\\n'; PREREQ=20261109090000 ;;/)
+    expect(sql).not.toMatch(/^\s*(begin|commit)\s*;/im)
+    expect(sql).not.toMatch(/concurrently/i)
+  })
+
+  it('replaces exactly the four member write policies, and the runner verifies those four', () => {
+    expect(policies.sort()).toEqual([
+      'moves:insert:Owners and admins declare moves',
+      'moves:update:Owners and admins move moves along',
+      'rec_decisions:insert:Owners and admins record decisions',
+      'recommendations:update:Owners and admins update recommendations',
+    ])
+    const listed = [...(runner.match(/MOVES_ROLE_POLICIES="([^"]+)"/)?.[1] ?? '').matchAll(/'([^']+)'/g)].map((m) => m[1]).sort()
+    expect(listed).toEqual(policies.map((p) => p.split(':')[2]).sort())
+    for (const old of ['Members declare their own moves', 'Members move their moves along', 'Members record their own decisions', 'Users can update own recommendations']) {
+      expect(sql).toContain(`drop policy if exists "${old}"`)
+      expect(runner.match(/MOVES_ROLE_OLD="([^"]+)"/)?.[1]).toContain(`'${old}'`)
+    }
+  })
+
+  it('every new policy pins the tenant and asks the role, or a platform admin; no grant, no read changes', () => {
+    const bodies = [...sql.matchAll(/create policy "[^"]+" on public\.\w+ for (?:insert|update) to authenticated ([^;]+);/g)].map((m) => m[1])
+    expect(bodies).toHaveLength(4)
+    for (const b of bodies) {
+      expect(b).toContain('client_id = (select public.get_my_client_id())')
+      expect(b).toContain("((select public.get_my_role()) = any (array['owner', 'admin']) or (select public.is_superadmin()))")
+    }
+    // The actor stays pinned on the two inserts.
+    expect(sql).toMatch(/declared_by = \(select auth\.uid\(\)\)/)
+    expect(sql).toMatch(/decided_by = \(select auth\.uid\(\)\)/)
+    expect(sql).not.toMatch(/\b(grant|revoke)\b/i)
+    expect(sql).not.toMatch(/for select|for all|for delete/i)
+    expect(runner).toMatch(/verify_MOVES_ROLE\(\) \{[\s\S]*?check "member column grants kept" "\$OUT" "\$PRE_MOVES_GRANTS"/)
+  })
+})

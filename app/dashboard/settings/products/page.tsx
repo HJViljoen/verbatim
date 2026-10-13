@@ -56,6 +56,8 @@ export default async function SettingsProductsPage({
           selected,
           canEdit: canManageTenant(role),
           locked: !assertTenantMay(session, clientId, 'tracking').ok,
+          // The month's words and label at the clock the month was read at.
+          now: now.toISOString(),
         })} />
       )}
     </SettingsFrame>

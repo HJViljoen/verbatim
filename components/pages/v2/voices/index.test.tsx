@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { VOICES_FIXTURES } from '@/lib/pages/v2/voices-fixture'
+import { readingMonthLabel } from '@/lib/reading/month-label'
 import { VoicesMeta, VoicesPage } from '.'
 
 describe('the Voices page (boards E3-Voices and E3-Voices-Open)', () => {
@@ -21,10 +22,24 @@ describe('the Voices page (boards E3-Voices and E3-Voices-Open)', () => {
 
   it('the bar: the month, the market\'s videos, the groups, the regular creators, the brands; no period switch', () => {
     const d = VOICES_FIXTURES.ossur()
-    expect(renderText(<VoicesMeta data={d} />)).toBe('September · 487 videos · 5 groups · 6 regular creators · 2 brands')
+    expect(renderText(<VoicesMeta data={d} />)).toBe('September · the last full month · 487 videos · 5 groups · 6 regular creators · 2 brands')
     const m = render(<VoicesPage data={d} />)
     expect(m).toContain('>Voices</h1>')
     expect(m).not.toContain('aria-label="Period"')
+  })
+
+  // Decision 3: a whole-month reading of a month that is not the current one
+  // says so on the bar; the current month says nothing extra.
+  it('labels the month on the bar only where it is not the current calendar month', () => {
+    const d = VOICES_FIXTURES.ossur()
+    expect(renderText(<VoicesMeta data={{ ...d, monthLabel: readingMonthLabel(d.month, '2026-10-13T08:00:00.000Z') }} />)).toMatch(/^September · the last full month · /)
+    const current = { ...d, month: '2026-10-01', soFar: true, monthWords: 'October so far', monthLabel: readingMonthLabel('2026-10-01', '2026-10-17T08:00:00.000Z') }
+    expect(renderText(<VoicesMeta data={current} />)).toMatch(/^October so far · 487 videos/)
+    const older = { ...d, monthLabel: readingMonthLabel(d.month, '2026-12-02T08:00:00.000Z') }
+    expect(renderText(<VoicesMeta data={older} />)).toMatch(/^September · an earlier month · /)
+    // A dump from before the label carries none, and reads as it did.
+    expect(renderText(<VoicesMeta data={{ ...d, monthLabel: undefined }} />)).toMatch(/^September · 487 videos/)
+    for (const x of [d, current, older]) assertCopyContract(<VoicesPage data={x} />)
   })
 
   it('draws the sections in the board\'s order and no mix-change card (decision 2)', () => {

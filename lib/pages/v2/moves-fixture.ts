@@ -1,5 +1,6 @@
 import { marketLabels } from '../../brands/attribution'
 import { OSSUR_CLIENT_ID } from '../../config'
+import { readingMonthLabel } from '../../reading/month-label'
 import { planCard } from '../../ask/plan-cards'
 import type { ClaimResult } from '../../ask/types'
 import { READING_VERSION, type StatementReading, type StatementsBlockData } from '../../statements/types'
@@ -215,6 +216,9 @@ export function movesFixture(over: Partial<MovesPageData> = {}): MovesPageData {
   return {
     brand: 'Össur',
     month: SEPT,
+    // 13 October reads September (decision 3): the bar and the moves'
+    // latest month say so.
+    monthLabel: readingMonthLabel(SEPT, OCT_13),
     monthStatus: 'filling',
     readingAt: OCT_13,
     canDecide: true,

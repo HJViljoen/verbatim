@@ -280,9 +280,10 @@ export const subjectsSubject: Block<SubjectsData> = {
         lead={lead && !marketLead ? <span data-copy="level">{lead}</span> : undefined}
         actions={mode === 'app' ? (
           <>
-            {/* The move's status is an owner's or an admin's (T7): the list's
-                own session-derived permission, the one the editor reads. */}
-            <TrackThisSubject subjectId={pane.id} subjectName={pane.name} move={pane.move} canChangeStatus={data.list.canEdit} />
+            {/* Tracking a subject and a move's status are an owner's or an
+                admin's (T7; decision 6b): the list's own session-derived
+                permission, the one the editor reads. */}
+            <TrackThisSubject subjectId={pane.id} subjectName={pane.name} move={pane.move} canDecide={data.list.canEdit} />
             <Link href={href} className={PILL}>
               <CircleQuestionMark className="size-3.5" aria-hidden />
               Ask the Agent

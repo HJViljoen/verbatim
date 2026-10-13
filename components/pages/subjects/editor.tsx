@@ -14,6 +14,7 @@ import {
 } from '@/lib/actions/subjects'
 import { EMPTY_STATE } from '@/lib/subjects/form-state'
 import { SUBJECTS_MAX } from '@/lib/subjects/types'
+import { SUBJECTS_HELD } from '@/lib/tenant-locks'
 
 // The subjects editor, moved in from Settings (pages rebuild, 1 Oct;
 // Page-Subjects.dc.html): add, rename and stop lived on the Subjects page, on
@@ -28,8 +29,9 @@ import { SUBJECTS_MAX } from '@/lib/subjects/types'
 //  · "Edit" on the open subject (its name and what it covers).
 //
 // THE GATE IS THE WRITE PATH'S (`lib/actions/subjects.ts`: `canManageTenant`
-// on every subject write, and M4's policies under it). The page passes
-// `canEdit` as the affordance only, and draws no control a reader may not use.
+// on every subject write, M4's policies under it, then the tenant lock since
+// decision 7). The page passes `canEdit` and `locked` as the affordance only,
+// and draws no control a reader may not use.
 //
 // A SUBJECT YOU ADD HERE IS ONE YOU FOLLOW. Naming writes a `proposed` row and
 // confirming is what starts the counting (decision E); on this page the person
@@ -53,8 +55,10 @@ export interface EditableSubject {
   status: 'active' | 'proposed'
 }
 
-/** The "..." on a row: Rename and Stop, and Confirm on a subject waiting for it. */
-export function SubjectRowMenu({ subject }: { subject: EditableSubject }) {
+/** The "..." on a row: Rename and Stop, and Confirm on a subject waiting for it.
+ *  `locked`: the tenant lock holds the subjects (decision 7), so the menu is
+ *  drawn disabled under the tab's lock line. */
+export function SubjectRowMenu({ subject, locked = false }: { subject: EditableSubject; locked?: boolean }) {
   const [renaming, setRenaming] = useState(false)
   const [stopping, setStopping] = useState(false)
   const [said, setSaid] = useState<string | null>(null)
@@ -68,8 +72,8 @@ export function SubjectRowMenu({ subject }: { subject: EditableSubject }) {
       <DropdownMenu>
         <DropdownMenuTrigger
           aria-label={`Rename or stop ${subject.name}`}
-          disabled={pending}
-          className="inline-flex size-[30px] shrink-0 cursor-pointer items-center justify-center rounded-[8px] border-none bg-transparent text-[#5F656B] hover:bg-[rgba(38,41,44,0.07)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          disabled={pending || locked}
+          className="inline-flex size-[30px] shrink-0 cursor-pointer items-center justify-center rounded-[8px] border-none bg-transparent text-[#5F656B] hover:bg-[rgba(38,41,44,0.07)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
         >
           <Ellipsis className="size-4" aria-hidden />
         </DropdownMenuTrigger>
@@ -86,8 +90,9 @@ export function SubjectRowMenu({ subject }: { subject: EditableSubject }) {
   )
 }
 
-/** "Add a subject", under the list. */
-export function AddSubjectButton({ activeCount }: { activeCount: number }) {
+/** "Add a subject", under the list; drawn disabled under the tenant lock
+ *  (decision 7). */
+export function AddSubjectButton({ activeCount, locked = false }: { activeCount: number; locked?: boolean }) {
   const [open, setOpen] = useState(false)
   const atCeiling = activeCount >= SUBJECTS_MAX
   return (
@@ -95,8 +100,8 @@ export function AddSubjectButton({ activeCount }: { activeCount: number }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        disabled={atCeiling}
-        title={atCeiling ? `You follow ${SUBJECTS_MAX} subjects. Stop one before you add another.` : undefined}
+        disabled={atCeiling || locked}
+        title={locked ? SUBJECTS_HELD : atCeiling ? `You follow ${SUBJECTS_MAX} subjects. Stop one before you add another.` : undefined}
         className={`${OUTLINE_BUTTON} h-10 px-4 text-[14px]`}
       >
         <Plus className="size-4" aria-hidden />

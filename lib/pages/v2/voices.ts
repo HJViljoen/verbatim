@@ -22,6 +22,7 @@ import {
   type GroupProfileRow, type GroupSubjectRow, type MarketVideo, type ThemeRef,
 } from '../../reading/cross'
 import { monthStartOf, prevMonth } from '../../reading/month-key'
+import { readingMonthLabel } from '../../reading/month-label'
 import { refuseEveryPair } from '../../reading/pairs'
 import { loadPairOn, type ReadingHandle } from '../../reading/read'
 import { marketAudiences } from '../../reading/market'
@@ -419,6 +420,11 @@ export interface VoicesData {
   month: string
   soFar: boolean
   monthWords: string
+  /** Decision 3: "the last full month" where `month` is not the current
+   *  calendar month (`readingMonthLabel`, at the load's own clock), else null.
+   *  The bar prints it beside `monthWords`. Optional: a dump from before it
+   *  carries none. */
+  monthLabel?: string | null
   /** The market's videos this month (`market_month_videos` over the market's
    *  audiences); null where they could not be read. */
   videos: number | null
@@ -573,7 +579,9 @@ export function buildGroupPanel(input: {
     wants: input.persona.wants,
     stops: input.persona.blockers,
     triggers: input.persona.triggers,
-    who: input.persona.who.map((w) => ({ label: whoLabel(w.signal), count: w.count })).filter((w) => w.label),
+    // Decision 8: near-repeats ("Amputee community", "Amputee users") are one
+    // self-description, counted once with their counts added.
+    who: mergeWho(input.persona.who.map((w) => ({ label: whoLabel(w.signal), count: w.count })).filter((w) => w.label)),
     conversations,
     phrases: phrasesOf(input.persona.howTheyTalk, input.englishOf),
     quotes: input.quotes.slice(0, GROUP_QUOTES),
@@ -588,6 +596,71 @@ export function buildGroupPanel(input: {
 export function whoLabel(signal: string): string {
   const t = signal.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim()
   return t ? t[0].toUpperCase() + t.slice(1) : ''
+}
+
+// ---- "Who they say they are": one self-description, said several ways ---------------
+//
+// DECISION 8 (Heinrich, 13 Oct). Pass E writes a group's demographic signals
+// as free slugs, and the same self-description arrives in several wordings:
+// Össur's caretakers carried "Amputee community" 24, "Amputee" 14, "Amputee
+// users" 14, "Amputee type" 9 and "Amputee audience" 8 as five rows. A label
+// is normalised by lowercasing it, singularising each word simply and
+// dropping the filler words below; labels whose normal forms are EQUAL are one
+// row, their counts added, under the wording that came up most. Nothing looser
+// than equality: "Caretaker" and "Care worker", or "Child amputee" and
+// "Amputee child", stay apart, because a merge that guesses is a claim about
+// who these people are.
+
+/** Words that name the kind of row, not the person: "Amputee community" and
+ *  "Amputee users" are both "amputee". Singular forms: a word is singularised
+ *  before it is looked up. */
+export const WHO_FILLER_WORDS: ReadonlySet<string> = new Set([
+  'community', 'user', 'type', 'people', 'person', 'folk',
+  'audience', 'member', 'individual', 'identity',
+])
+// NOT 'group': "Support group" is not "Support" (the fresh check, 13 Oct).
+
+/** How many self-descriptions a group's panel lists (the top three distinct). */
+export const WHO_SHOWN = 3
+
+/** One word, singular, simply: "users" → "user", "families" → "family";
+ *  "ss", "us", "is" and "ws" endings and short words are left alone, so
+ *  "news" is never "new". */
+function singular(word: string): string {
+  if (word.length > 4 && word.endsWith('ies')) return `${word.slice(0, -3)}y`
+  if (word.length > 3 && word.endsWith('s') && !/(ss|us|is|ws)$/.test(word)) return word.slice(0, -1)
+  return word
+}
+
+/** A label's normal form: lowercase, each word singular, filler words out.
+ *  A label of filler alone keeps its own words, so two different ones
+ *  ("Community", "Users") never collapse into one empty key. PURE. */
+export function whoKey(label: string): string {
+  const words = label.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean).map(singular)
+  const kept = words.filter((w) => !WHO_FILLER_WORDS.has(w))
+  return (kept.length > 0 ? kept : words).join(' ')
+}
+
+/**
+ * The group's self-descriptions with near-repeats merged: equal normal forms
+ * (`whoKey`) are one row, counts added, labelled with the wording that came
+ * up most (the first of them on a tie). Most first; ties keep the order they
+ * came in. Every row is returned; the panel lists `WHO_SHOWN`. PURE.
+ */
+export function mergeWho(who: readonly { label: string; count: number }[]): { label: string; count: number }[] {
+  const merged = new Map<string, { at: number; count: number; best: { label: string; count: number } }>()
+  who.forEach((w, at) => {
+    const key = whoKey(w.label)
+    const row = merged.get(key)
+    if (!row) merged.set(key, { at, count: w.count, best: { label: w.label, count: w.count } })
+    else {
+      row.count += w.count
+      if (w.count > row.best.count) row.best = { label: w.label, count: w.count }
+    }
+  })
+  return [...merged.values()]
+    .sort((a, b) => b.count - a.count || a.at - b.at)
+    .map((r) => ({ label: r.best.label, count: r.count }))
 }
 
 // ---- 2. the brands -------------------------------------------------------------------
@@ -939,6 +1012,9 @@ export function buildCreatorPanel(input: {
 export interface TopVoices {
   month: string
   monthWords: string
+  /** Decision 3: the tile's label where `month` is not the current calendar
+   *  month (`readingMonthLabel`), else null. Optional, as on `VoicesData`. */
+  monthLabel?: string | null
   /** The market's videos this month. */
   videos: number | null
   /** The group with the most videos this month, and its panel. */
@@ -964,6 +1040,8 @@ export const NAMED_MOST = 2
 export function topVoicesOf(input: {
   month: string
   soFar: boolean
+  /** `readingMonthLabel(month, now)`, from the loader's clock. */
+  monthLabel?: string | null
   videos: number | null
   groups: VoicesGroups
   brands: VoicesBrands
@@ -972,6 +1050,7 @@ export function topVoicesOf(input: {
   return {
     month: input.month,
     monthWords: monthWordsOf(input.month, input.soFar),
+    monthLabel: input.monthLabel ?? null,
     videos: input.videos,
     group: lead ? { key: lead.key, name: lead.name, oneLiner: lead.oneLiner, videos: lead.videos, href: voicesHref({}, { kind: 'group', key: lead.key }) } : null,
     groups: input.groups.cards.map((c) => ({ key: c.key, name: c.name, videos: c.videos })),
@@ -1192,6 +1271,7 @@ export async function loadVoicesBase(input: VoicesLoadInput): Promise<{ data: Vo
     month,
     soFar,
     monthWords: monthWordsOf(month, soFar),
+    monthLabel: readingMonthLabel(month, now),
     videos: market ? new Set(market.map((v) => v.id)).size : null,
     groups,
     brands,
@@ -1380,7 +1460,7 @@ export async function topVoices(input: { supabase: SupabaseClient; clientId: str
     crosses: null, note: null, params: {}, failed: pairs === undefined,
     clientCounts: clientNameCountsByCount(clientId, month, clientPair?.currAny?.k ?? 0),
   })
-  return topVoicesOf({ month, soFar, videos: groupRead?.marketVideos ?? null, groups, brands })
+  return topVoicesOf({ month, soFar, monthLabel: readingMonthLabel(month, now), videos: groupRead?.marketVideos ?? null, groups, brands })
 }
 
 /** The client's name gate from counts: production checked the name, no read

@@ -83,6 +83,9 @@ export const READING_CARDS: readonly ReadingCard[] = [
       'Week by week draws only weeks read the same way: it starts after the latest change to our searches or to how we check relevance, and a week still filling is drawn faint.',
       'A subject moved only where its month so far differs from last month by more than its normal swing; where none did, the tile says so. A subject still being checked is not named.',
       'A tile that cannot be read says so on its own; the rest of the page still draws.',
+      // DECISION 3 (13 Oct): both clocks kept, the whole-month tiles labelled
+      // (`readingMonthLabel`, lib/reading/month-label.ts).
+      'A week’s figures sit beside the month so far, while who is talking, your products and your moves read a whole month: early in a month they still read the last full month, and those tiles say so.',
     ],
   },
   {
@@ -198,7 +201,7 @@ export const READING_CARDS: readonly ReadingCard[] = [
       'Each move earns one comparison: the month before it against the latest month read since. It is called a change only where the two were read the same way and it clears the band; otherwise the latest level prints alone.',
       'The videos a piece of advice rests on, how many updates in a row raised it and what we concluded are read over everything to date and dated by the update, so they can reach past the month on the page.',
       'Advice here is grounded in what people said, not in your sales figures.',
-      'Only an owner or an admin can accept advice, set it aside, date a move or change a move’s status.',
+      'Only an owner or an admin can accept advice, set it aside, date or track a move, or change a move’s status.',
       'What you say, and what comes back, is not shown to the workspace yet.',
     ],
   },
@@ -255,6 +258,9 @@ export const READING_CARDS: readonly ReadingCard[] = [
       'What a search term found is dated by the update that searched, not by when the comments were written.',
       'Nothing in your products is deleted: a product or one of its names is retired, and a name is retired and added again rather than edited.',
       'A workspace follows at most ten subjects. A subject is read in the months still filling when it is added; a month already final is not read for it.',
+      // DECISION 7 (13 Oct): the tenant lock holds subjects and products too
+      // (SUBJECTS_HELD, PRODUCTS_HELD).
+      'While your searches are held still, your subjects and your product list are held too: we make a change to them for you on request.',
     ],
   },
 ]
@@ -312,7 +318,7 @@ export const DEFINITIONS: readonly Definition[] = [
     // rulings), so what those words meant is said here.
     id: 'reading-month',
     title: 'The month a page reads',
-    body: 'Every reading page reads one month: the month that has just ended, until the next month is half over, has had two updates and holds enough videos to read, and then that month so far. The other month is one click away in the month selector, whose tooltip says where the month stands: so far, ended and still filling until a named update, final, read at setup, or too few to read, which is under 100 videos in your market. The line beside the selector names the update the page was read with and when the next one is due; it is never today’s date. Where no update has run since, a page reads the last month it has.',
+    body: 'Every reading page reads one month: the month that has just ended, until the next month is half over, has had two updates and holds enough videos to read, and then that month so far. The other month is one click away in the month selector, whose tooltip says where the month stands: so far, ended and still filling until a named update, final, read at setup, or too few to read, which is under 100 videos in your market. The line beside the selector names the update the page was read with and when the next one is due; it is never today’s date. Where no update has run since, a page reads the last month it has. A week’s figures sit beside the week’s own month instead, so early in a month a page can show the month so far beside a reading of the last full month, which names its month and says so.',
   },
   {
     // DECISION E, said once (lib/reading/market.ts pooledDenominators; the

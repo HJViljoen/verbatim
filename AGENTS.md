@@ -851,8 +851,13 @@ This version has breaking changes — APIs, conventions, and file structure may 
   idea's videos over the four weeks its ideas read, named by their days
   ("48 of 640 videos, 14 Sep to 11 Oct · 35 of 318 in October so far";
   `contentLine`), never "this week". Those months can differ from each
-  other, and from the read's own month, for a week that crosses a month
-  (Heinrich's open question on two month rules).
+  other, and from the read's own month, for a week that crosses a month or
+  early in a month, before the reading month switches (decision 3, "Two
+  clocks" below: both are kept). Voices'
+  and Your products' lines are whole-month readings, so where the tile's
+  month is not the current one they carry its label as the tile does ("In
+  the most videos in September, the last full month:", `inlineMonth` over
+  the tile's `monthLabel`); the week-based lines keep the week's own month.
   `components/pages/v2/home/email-lines.test.tsx` holds each line to its
   tile's markup. So a build long after its run (a backfill, a re-claim, Send
   now on an old run) carries that day's lines. *Rollback hazard:* code from before this deploy
@@ -999,6 +1004,34 @@ This version has breaking changes — APIs, conventions, and file structure may 
     stored snapshots, exports and the monthly; `loadMarketSurface` also feeds
     the quarterly and the briefs. A block leaves a page's list, not the
     registry.
+  - **Two clocks, labelled (decision 3; Heinrich, 13 Oct).** A WEEK's
+    figures (Market's week view, the week tile, Content, the weekly email's
+    week lines) sit beside the week's own month ("31 of 318 in October so far"). A
+    WHOLE-MONTH reading (Voices, Your products, Your moves' month lines and
+    their comparison, Settings › Your products) reads the reading month
+    (`readingMonthFor`; `loadReadingMonth`), which stays the month that has
+    just ended until the new month is half over, has had two updates and is
+    not thin (a paused workspace keeps the latest month it has rows for).
+    Both are kept. Wherever a whole-month reading
+    names a month that is not the current calendar month it says so in ONE
+    helper's words, `readingMonthLabel(month, now)` (`lib/reading/month-label.ts`:
+    "the last full month", "an earlier month" for an older one, null for the
+    current month), written on a bar or meta line by `barMonth` ("September ·
+    the last full month") and inside a sentence by `inlineMonth`
+    ("September, the last full month"); no page spells the words itself (a
+    test reads the pages' code for them). The loaders compute it at their
+    own clock and carry it as `monthLabel` beside `monthWords` (optional on
+    `TopVoices` / `TopProducts` and Your moves' data, so a dump from before it
+    renders as it did; Your moves' tile carries `reading: { month, label }`).
+    Where it prints: the Voices and Your products bars; Your moves' bar where
+    a move draws a line, and each move's latest month when it is the reading
+    month (`compareMonths`, `monthLabelOn`); Settings › Your products' "came
+    up in …" line and its column header (the month's name, not "This month");
+    the Dashboard's Voices and Your products tiles under their heads
+    (`TileMonth`, components/pages/v2/home/parts.tsx), and Your moves' tile in
+    its move's sentence; and the weekly email's Voices and Your products
+    lines, inline (`weeklyReadLines`, frozen into the snapshot at build). A
+    state that reads no month carries no label.
   - **Dashboard** (Design v2, T8; boards E1-Dashboard and -Phone;
     `lib/pages/v2/home.ts`, route `app/dashboard/(home)/page.tsx`).
     `startDashboard` starts every tile's reads in one wave on one session
@@ -1092,9 +1125,15 @@ This version has breaking changes — APIs, conventions, and file structure may 
     week's figure in its cell, and its own column shows from 640, so no
     figure column is cut at 390 (checked on Sealand's dump and the
     long-label fixture, `marketLongRowsFixture`).
-  - **Voices** (T4; `lib/pages/v2/voices.ts`), on the reading month. Groups
-    are today's profile with this month's comment-dated videos: a count,
-    never a share, never compared (decision 2). Brands: named unprompted is
+  - **Voices** (T4; `lib/pages/v2/voices.ts`), on the reading month, its
+    bar labelled where that is not the current month (decision 3, above).
+    Groups are today's profile with this month's comment-dated videos: a
+    count, never a share, never compared (decision 2). A group's "Who they
+    say they are" merges near-repeats (decision 8, `mergeWho`): each label
+    lowercased, each word singular, the filler words in `WHO_FILLER_WORDS`
+    dropped; labels whose normal forms are EQUAL are one row, counts added,
+    under the wording that came up most, and the panel lists `WHO_SHOWN` (3).
+    Nothing looser than equality ("Caretaker" and "Care worker" stay apart). Brands: named unprompted is
     `k_organic` of `n_organic` with its `Verdict` (`brandMonthPair`, on
     `BRANDS_PANEL`); praised, complained and the subject read base `any` and
     carry no verdict. The client's own row needs its name checked
@@ -1115,7 +1154,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
     audience through `marketProductMonth` (`lib/products/market-month.ts`),
     and the crosses pool every audience too (a local `poolLens`; Voices'
     brand cross is unchanged). Settings › Your products uses the same
-    function and the page's own month (`productsMonth`), and its "Tag them"
+    function and the page's own month (`productsMonth`), names it "{Month}
+    so far" only while it is the current month and with its label otherwise
+    (`productSettingsView`'s `now`, decision 3), and its "Tag them"
     link carries the month and `#unclear` (`lib/pages/v2/products-address.ts`).
     While `PRODUCT_READINGS_ENABLED` is off for the tenant (every tenant
     today; Heinrich's order is to back-read first), Settings reads no month
@@ -1187,11 +1228,27 @@ This version has breaking changes — APIs, conventions, and file structure may 
     `loadMarketSurface` and its blocks stay for stored snapshots, the briefs
     and the quarterly. `?advice=` takes a lineage, a recommendation id or
     `all`; the old `item` / `rec` / `ledger` are read too (`adviceParam`).
-    Accept, Not for us, Date a move and a move's status are an owner's or
-    admin's (`mayDecideMoves`); the database does not yet enforce it.
-    `TrackThisSubject` requires `canChangeStatus`. A move reads the market
-    from `MOVE_MONTHS_BEFORE` (2) months before it, and its one comparison
-    goes through `pairedVerdict` under the month-pair judge.
+    Accept, Not for us, Date a move, "Track this" (`trackSubjectAction`,
+    since decision 6b) and a move's status are an owner's or admin's
+    (`mayDecideMoves`, `MOVES_WRITE_REFUSED`), each refused before anything
+    is read. `TrackThisSubject` requires `canDecide` (no default): a member
+    is offered no Track this and sees a declared move without controls. The
+    database enforces it only once Heinrich applies
+    `20261110090000_moves_role_gate.sql` (decision 6a; the runner's
+    `moves-role` set, after `products`): it replaces the four member write
+    policies (moves INSERT and UPDATE, `rec_decisions` INSERT,
+    `recommendations` UPDATE) with ones that keep the tenant and actor pins
+    and add `get_my_role()` owner or admin, or `is_superadmin()`; no grant
+    or read changes, the service role untouched
+    (`scripts/pg-shim/moves-role-gate-checks.sql`; the undo, proved to give
+    back the catalogue line for line, is `moves-role-gate-undo.sql` beside
+    it). The rows are written on the session client, so for a tenant's own
+    session the policy is the boundary; an operator viewing a tenant writes
+    with the service role, where `mayDecideMoves` is the only gate. Until then a member's
+    own JWT can still write those four through PostgREST. A move reads the
+    market from `MOVE_MONTHS_BEFORE` (2) months before it to the reading
+    month, and its one comparison goes through `pairedVerdict` under the
+    month-pair judge.
     `theme_registry`'s label column is `canonical_label`. Your statements
     (`client_statements` / `client_statement_readings`, migration
     `20261105090000`; gloss, band at the subjects' 0.40/0.60, judge, stance),
@@ -1215,7 +1272,15 @@ This version has breaking changes — APIs, conventions, and file structure may 
     redirects into the Studio). Log out sits in its bar. The app's catalogue
     writes are `lib/actions/products.ts` only: role (`canManageTenant`), then
     the tracking tenant lock, then the service role, logged on surface
-    `products`; the seed (`scripts/products.ts --seed … --apply`) is the one
+    `products`. The subject writes (add, rename, confirm, stop following;
+    `lib/actions/subjects.ts` `manageContext`) take the same lock since
+    decision 7: role first (`SUBJECT_WRITE_REFUSED`), then
+    `assertTenantMay(session, clientId, 'tracking')` (`SUBJECTS_HELD`), both
+    before any read or write; the operator is let through, and "Track this"
+    is not a subject edit and is not held. Settings › Your subjects asks the
+    lock on the route and, like Your products, shows a locked owner or admin
+    the lock's line with every control disabled before anything is
+    submitted (`yourSubjectsView`'s `locked`); the seed (`scripts/products.ts --seed … --apply`) is the one
     other writer, append-only. Nothing is deleted: a product or an alias is
     retired, and an alias is retired and re-added, never edited, held to the
     matcher's one rule (`aliasProblem`, `lib/products/rules.ts`). How to read

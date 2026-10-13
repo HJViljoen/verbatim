@@ -21,6 +21,7 @@ import {
 import { marketProductMonth } from '../products/market-month'
 import { aliasProblem } from '../products/rules'
 import { monthStartOf } from '../reading/month-key'
+import { readingMonthLabel } from '../reading/month-label'
 import { productsHref } from '../pages/v2/products-address'
 import { selectAll } from '../supabase-admin'
 import { settingsSubPage } from './rail'
@@ -271,6 +272,13 @@ export interface ProductSettingsView {
   open: OpenCategory | null
   /** The month's name, "October". */
   monthName: string
+  /** The month as the counts name it: "October so far" while it is the
+   *  current calendar month, "September" once it has ended. */
+  monthWords: string
+  /** Decision 3: "the last full month" where the month the tab reads (Your
+   *  products' reading month) is not the current calendar month
+   *  (`readingMonthLabel`), else null. */
+  monthLabel: string | null
   /** Whether the month holds any product row. */
   read: boolean
   /** Whether the products page is switched on. Off, nothing on the tab is a
@@ -303,7 +311,15 @@ const byKindThenAdded = (a: ProductAliasRow, b: ProductAliasRow): number =>
  */
 export function productSettingsView(
   read: Extract<ProductSettingsRead, { state: 'ready' }>,
-  opts: { selected?: string | null; canEdit: boolean; locked?: boolean },
+  opts: {
+    selected?: string | null
+    canEdit: boolean
+    locked?: boolean
+    /** The instant the tab was read at: the month's words and label
+     *  (decision 3). Omitted: the month is taken as the current one, as the
+     *  tab read it before the label. */
+    now?: string
+  },
 ): ProductSettingsView {
   const groups = [...read.groups].sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
   const live = new Set(groups.map((g) => g.id))
@@ -368,6 +384,8 @@ export function productSettingsView(
     categories,
     open: openView,
     monthName: longMonth(read.month),
+    monthWords: !opts.now || monthStartOf(read.month) >= monthStartOf(opts.now) ? `${longMonth(read.month)} so far` : longMonth(read.month),
+    monthLabel: opts.now ? readingMonthLabel(read.month, opts.now) : null,
     read: isRead,
     readingsOn: read.readingsOn,
     choices: groups.map((g) => ({ id: g.id, name: g.name })),

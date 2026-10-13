@@ -66,9 +66,11 @@ function Advice({ top }: { top: TopMoves }) {
   )
 }
 
-function Move({ move }: { move: NonNullable<TopMoves['move']> }) {
+function Move({ move, reading }: { move: NonNullable<TopMoves['move']>; reading: TopMoves['reading'] }) {
   const c = move.compare
-  const m = compareMonths(c, monthStartOf(move.day))
+  // Decision 3: the later month carries the reading month's label where it is
+  // not the current calendar month ("September, the last full month").
+  const m = compareMonths(c, monthStartOf(move.day), reading)
   return (
     <Link href={move.href} className="flex min-w-0 flex-col gap-2 rounded-[10px] bg-inner px-4 py-3.5 text-foreground no-underline transition-colors hover:bg-track focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-sm:hidden">
       <p className="m-0 text-[11.5px] leading-[1.3] font-semibold uppercase tracking-[0.06em] text-orange-text">After your move</p>
@@ -101,7 +103,7 @@ export function MovesTileView({ read }: { read: TileRead<TopMoves | null> }) {
       {read.state === 'failed' ? <TileLine>{TILE_FAILED}</TileLine> : !top ? <TileLine>{MOVES_FIRST_RUN}</TileLine> : (
         <div className={cn('grid grid-cols-1 gap-7', top.move ? 'md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]' : null)}>
           <Advice top={top} />
-          {top.move ? <Move move={top.move} /> : null}
+          {top.move ? <Move move={top.move} reading={top.reading} /> : null}
         </div>
       )}
     </article>

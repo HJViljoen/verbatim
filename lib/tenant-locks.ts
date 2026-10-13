@@ -47,6 +47,14 @@
 // and the cadence (sending, not searching: its own words, CADENCE_HELD). Before
 // MF3 there is no queue, and the deploy-1 refusal stands for all of them.
 
+// AND THE CATALOGUE AND THE SUBJECTS (depth v2). The `tracking` lock also
+// holds the product list (lib/actions/products.ts, PRODUCTS_HELD) and, since
+// decision 7 (13 Oct), the subjects: adding, renaming, confirming and
+// stopping one (lib/actions/subjects.ts, SUBJECTS_HELD). Neither queues; both
+// refuse, and both Settings tabs draw their controls disabled under the line
+// before anything is submitted. "Track this" is not a subject edit and is not
+// held.
+
 import { CONTACT_EMAIL } from './legal'
 
 export type TenantLockKind = 'sends' | 'tracking'
@@ -69,6 +77,16 @@ export const TENANT_LOCK_REFUSAL: Readonly<Record<TenantLockKind, string>> = {
  *  WP1.2 left: it was refused with the searches' sentence). The report day and
  *  period are Verbatim's during the trial (decision J), as sending is. */
 export const CADENCE_HELD = `Your report day and cadence are set by Heinrich during your trial; write to ${CONTACT_EMAIL} with what you would like.`
+
+/**
+ * The subjects, held with the searches (decision 7, 13 Oct): what a locked
+ * tenant's owner or admin is told by Settings › Your subjects, before anything
+ * is submitted, and by the three subject writes (lib/actions/subjects.ts) when
+ * one is called anyway. Products' sentence, `PRODUCTS_HELD`
+ * (lib/settings/products.ts), is the model. Here, beside the lock, and not in
+ * lib/subjects/types.ts, which is on the freeze-months path.
+ */
+export const SUBJECTS_HELD = `Your subjects are held still during your trial. Write to ${CONTACT_EMAIL} and we will make the change for you.`
 
 /** Whether this tenant is locked for this kind of change. */
 export function tenantLocked(clientId: string, kind: TenantLockKind): boolean {

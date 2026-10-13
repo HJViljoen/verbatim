@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { ossurVoicesFixture } from '@/lib/pages/v2/voices-fixture'
-import type { GroupPanel } from '@/lib/pages/v2/voices'
+import { mergeWho, type GroupPanel } from '@/lib/pages/v2/voices'
 import { GroupCard, GroupGrid, GroupPanelView, WhoCard } from './groups'
 
 describe('Who is in your market and the group cards (decision 2)', () => {
@@ -92,6 +92,21 @@ describe('a group\'s panel (E3-Voices-Open)', () => {
     expect(m.match(/data-copy="quote"/g)?.length).toBe(5 + 3)
     expect(m).toContain('href="/dashboard/market?conv=reg-growing#conversation-panel"')
     expect(m).toContain('href="/dashboard/voices"')
+    assertCopyContract(node)
+  })
+
+  // Decision 8: the panel lists three distinct self-descriptions, the
+  // near-repeats merged under their commonest wording.
+  it('lists the top three self-descriptions, near-repeats merged', () => {
+    const who = mergeWho([
+      { label: 'Amputee community', count: 24 }, { label: 'Amputee', count: 14 }, { label: 'Amputee users', count: 14 },
+      { label: 'Prosthetic users', count: 11 }, { label: 'Amputee type', count: 9 }, { label: 'Prosthetic user', count: 8 },
+      { label: 'Bilateral amputee', count: 7 }, { label: 'Caretaker', count: 6 }, { label: 'Care worker', count: 5 },
+    ])
+    const node = <GroupPanelView panel={{ ...panel, who }} monthWords="September" />
+    const text = renderText(node)
+    expect(text).toContain('Who they say they are Amputee community 61 Prosthetic users 19 Bilateral amputee 7 How often each came up in what they said')
+    for (const gone of ['Amputee users', 'Amputee type', 'Prosthetic user ', 'Caretaker', 'Care worker']) expect(text, gone).not.toContain(gone)
     assertCopyContract(node)
   })
 

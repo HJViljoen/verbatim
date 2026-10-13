@@ -9,9 +9,10 @@ import { bansBroken } from '@/components/pages/moves/fixture'
 const bans = (markup: string) => bansBroken(markup.replace(/<span[^>]*data-notch=""[^>]*><\/span>/g, ''))
 import { MOVES_WRITE_REFUSED } from '@/lib/moves-access'
 import {
-  movesFixture, movesMemberFixture, movesOpenFixture, movesQuietFixture, movesRecordFixture, statementsV2, DESK, PLAN,
+  movesFixture, movesMemberFixture, movesOpenFixture, movesQuietFixture, movesRecordFixture, statementsV2, DESK, MOVE_CARDS, PLAN,
 } from '@/lib/pages/v2/moves-fixture'
-import { ADVICE_GONE, ADVICE_NONE, ADVICE_PANEL_ID, RECORD_PANEL_ID } from '@/lib/pages/v2/moves'
+import { ADVICE_GONE, ADVICE_NONE, ADVICE_PANEL_ID, RECORD_PANEL_ID, monthLabelOn } from '@/lib/pages/v2/moves'
+import { readingMonthLabel } from '@/lib/reading/month-label'
 import { MovesV2Page, MOVES_FIRST_RUN } from './index'
 import { panelPlacement } from '@/components/v2'
 import { AdviceSection, adviceLayout, OPEN_MORE_WAITING, whyParagraphs } from './advice'
@@ -196,19 +197,30 @@ describe('the board’s three cards, and the rest waiting', () => {
   })
 })
 
-describe('Track this on the legacy subject pane: the status is an owner’s or an admin’s', () => {
+describe('Track this on the legacy subject pane: tracking and the status are an owner’s or an admin’s', () => {
   const move = { id: 'm-1', title: 'Price page', declaredAt: '2026-09-02', status: 'active' as const }
   it('an owner or an admin sees Mark done and Drop it', () => {
-    const text = markupText(render(<TrackThisSubject subjectId="s-1" subjectName="Cost" move={move} canChangeStatus />))
+    const text = markupText(render(<TrackThisSubject subjectId="s-1" subjectName="Cost" move={move} canDecide />))
     expect(text).toContain('Mark done')
     expect(text).toContain('Drop it')
   })
   it('a member sees the move and no control', () => {
-    const text = markupText(render(<TrackThisSubject subjectId="s-1" subjectName="Cost" move={move} canChangeStatus={false} />))
+    const text = markupText(render(<TrackThisSubject subjectId="s-1" subjectName="Cost" move={move} canDecide={false} />))
     expect(text).toContain('Price page')
     expect(text).not.toContain('Mark done')
     expect(text).not.toContain('Drop it')
-    expect(markupText(render(<TrackThisSubject subjectId="s-1" subjectName="Cost" move={{ ...move, status: 'dropped' }} canChangeStatus={false} />))).not.toContain('Track it again')
+    expect(markupText(render(<TrackThisSubject subjectId="s-1" subjectName="Cost" move={{ ...move, status: 'dropped' }} canDecide={false} />))).not.toContain('Track it again')
+  })
+  // Decision 6b (13 Oct): "Track this" is an owner's or an admin's too.
+  it('an owner or an admin is offered Track this on a subject with no move', () => {
+    expect(markupText(render(<TrackThisSubject subjectId="s-1" subjectName="Cost" canDecide />))).toContain('Track this')
+    expect(markupText(render(<TrackThisSubject subjectId="s-1" subjectName="Cost" move={{ ...move, status: 'dropped' }} canDecide />))).toContain('Track this')
+  })
+  it('a member is offered no Track this: nothing on a subject with no move, the dropped move alone otherwise', () => {
+    expect(render(<TrackThisSubject subjectId="s-1" subjectName="Cost" canDecide={false} />)).toBe('')
+    const dropped = markupText(render(<TrackThisSubject subjectId="s-1" subjectName="Cost" move={{ ...move, status: 'dropped' }} canDecide={false} />))
+    expect(dropped).toContain('Price page')
+    expect(dropped).not.toContain('Track this')
   })
 })
 
@@ -243,10 +255,12 @@ describe('the moves', () => {
     expect(text).toContain('Active')
     // Jul and Aug before a mid-September move, then September.
     expect(text).toMatch(/Jul.*Aug.*Sep/)
-    expect(text).toContain('Share of market videos went from 11% (75 of 680) in August, the month before, to 14% (98 of 700) in September, the month of the move.')
+    // Decision 3: on 13 October the latest month read is September, the last
+    // full month, and the sentence says so.
+    expect(text).toContain('Share of market videos went from 11% (75 of 680) in August, the month before, to 14% (98 of 700) in September, the last full month and the month of the move.')
     expect(text).toContain('your move')
     // The price page: July against September, outside its band.
-    expect(text).toContain('in July, the month before, to 21% (150 of 700) in September.')
+    expect(text).toContain('in July, the month before, to 21% (150 of 700) in September, the last full month.')
     expect(markup).toMatch(/data-copy="verdict"[^>]*>[\s\S]*?▲/)
   })
 
@@ -266,6 +280,51 @@ describe('the moves', () => {
     expect(g.moveX!).toBeLessThan(g.xs[2])
     expect(g.moveX!).toBeGreaterThan(g.xs[1])
     expect(g.ys[2]).toBeLessThan(g.ys[0])
+  })
+})
+
+// Decision 3 (13 Oct): the moves read the reading month, which on days 1 to
+// 15 is the month that has just ended; the bar and the latest month say so.
+describe('the reading month, labelled where it is not the current one', () => {
+  /** The bar's meta line: its counts and, where it is labelled, the month. */
+  const head = (data: ReturnType<typeof movesFixture>) => {
+    const t = markupText(page(data))
+    const at = t.indexOf('pieces of advice waiting') - 2
+    return t.slice(at, t.indexOf('Advice to decide on') >= 0 ? t.indexOf('Advice to decide on') : at + 120)
+  }
+
+  it('the bar names September, the last full month, beside its counts', () => {
+    expect(head(movesFixture())).toContain('3 pieces of advice waiting · 3 moves dated · 1 plan checked · September · the last full month')
+  })
+
+  it('the current month prints nothing extra, on the bar or in a sentence', () => {
+    const current = movesFixture({ month: '2026-09-01', readingAt: '2026-09-20T08:00:00.000Z', monthLabel: readingMonthLabel('2026-09-01', '2026-09-20T08:00:00.000Z') })
+    expect(current.monthLabel).toBeNull()
+    const text = markupText(page(current))
+    expect(head(current)).toContain('3 pieces of advice waiting · 3 moves dated · 1 plan checked')
+    expect(text).not.toMatch(/last full month|earlier month/)
+    expect(text).toContain('to 14% (98 of 700) in September, the month of the move.')
+  })
+
+  it('a page with no move line names no month on its bar', () => {
+    expect(head(movesFixture({ moves: { cards: [], recorded: true } }))).not.toContain('September')
+  })
+
+  it('the latest level alone carries the label too, where the pair is refused', () => {
+    const price = MOVE_CARDS.find((c) => c.id === 'm-price')!
+    const refused = { ...price, compare: price.compare ? { ...price.compare, verdict: { ...price.compare.verdict, state: 'refused' as const } } : null }
+    const text = markupText(render(<MovesSection data={movesFixture({ moves: { cards: [refused], recorded: true } })} />))
+    expect(text).toContain('in September, the last full month.')
+  })
+
+  it('an earlier month on the line is never called the last full one', () => {
+    expect(monthLabelOn('2026-08-01', { month: '2026-09-01', label: 'the last full month' })).toBeNull()
+    expect(monthLabelOn('2026-09-01', { month: '2026-09-01', label: 'the last full month' })).toBe('the last full month')
+    expect(monthLabelOn('2026-09-01', { month: '2026-09-01', label: null })).toBeNull()
+  })
+
+  it('keeps the copy contract with the label', () => {
+    assertCopyContract(page())
   })
 })
 

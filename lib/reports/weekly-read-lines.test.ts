@@ -77,6 +77,21 @@ describe('the lines, from the pages\' tops', () => {
     expect(movesLine({ ...top, advice: { ...top.advice!, title: UNTITLED_ADVICE } })).toMatchObject({ name: UNTITLED_ADVICE, copy: { kind: 'plain' } })
   })
 
+  // Decision 3: Voices' and Your products' lines are whole-month readings,
+  // so a month that is not the current one carries the tile's label; the
+  // week-based Content line keeps the week's own month.
+  it('labels a whole-month line\'s month as its tile does, and only where it is not the current one', () => {
+    const voices = fixtureVoicesTop({ september: true })
+    expect(voicesLine(voices)?.lead).toBe('In the most videos in September, the last full month:')
+    expect(voicesLine(fixtureVoicesTop())?.lead).toBe('In the most videos in October so far:')
+    expect(voicesLine({ ...voices, monthLabel: undefined })?.lead).toBe('In the most videos in September:')
+    expect(productsLine(fixtureProductsTop('ready', { september: true }))?.figure).toBe('9 of 318 videos in September, the last full month')
+    expect(productsLine(fixtureProductsTop())?.figure).toBe('9 of 318 videos in October so far')
+    expect(contentLine(fixtureContentTop())?.figure).not.toMatch(/last full month/)
+    const lines = weeklyReadLines({ voices, products: fixtureProductsTop('ready', { september: true }), content: fixtureContentTop(), moves: fixtureMovesTop('member', { september: true }) })
+    expect(lines.filter((l) => /last full month/.test(`${l.lead} ${l.figure ?? ''}`)).map((l) => l.page)).toEqual(['voices', 'products'])
+  })
+
   it('one video is a video', () => {
     const top = fixtureVoicesTop()
     expect(voicesLine({ ...top, videos: null, group: { ...top.group!, videos: 1 } })?.figure).toBe('1 video')
@@ -92,7 +107,9 @@ describe('Your products\' line ranks on the page\'s own basis (fix 1)', () => {
     const most = Math.max(...named.map((p) => p.k))
     expect(line.name).toBe('Iceross Seal-In X')
     expect(named.find((p) => p.name === line.name)!.k).toBe(most)
-    expect(line.figure).toBe(`${most} of 839 videos in September`)
+    // On the fixture's day (13 October) September is the last full month,
+    // and the line says so, as the tile does (decision 3).
+    expect(line.figure).toBe(`${most} of 839 videos in September, the last full month`)
     // The month's first product, where there is one, as the tile leads.
     const first = productsLine(topProductsOf(d, d.standouts.filter((s) => s.kind === 'first') as never))!
     expect([first.lead, first.name]).toEqual(['Came up for the first time:', 'Navii'])

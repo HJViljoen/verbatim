@@ -6,8 +6,9 @@ import { confirmSubjectAction } from '@/lib/actions/subjects'
 
 /** "Confirm" on a suggestion: the write that starts the counting (decision E),
  *  the same action the row's menu offers, drawn where the reader looks first.
- *  A refusal (the ceiling, a member, a stopped subject) is said beside it. */
-export function ConfirmSubject({ id, name }: { id: string; name: string }) {
+ *  A refusal (the ceiling, a member, a stopped subject) is said beside it;
+ *  under the tenant lock it is drawn disabled (decision 7). */
+export function ConfirmSubject({ id, name, locked = false }: { id: string; name: string; locked?: boolean }) {
   const [said, setSaid] = useState<string | null>(null)
   const [pending, start] = useTransition()
   const confirm = () => start(async () => {
@@ -16,7 +17,7 @@ export function ConfirmSubject({ id, name }: { id: string; name: string }) {
   })
   return (
     <span className="inline-flex flex-col items-end gap-1">
-      <button type="button" disabled={pending} onClick={confirm} aria-label={`Confirm ${name}`} className={buttonClass('secondary', 'small')}>
+      <button type="button" disabled={pending || locked} onClick={confirm} aria-label={`Confirm ${name}`} className={buttonClass('secondary', 'small')}>
         {pending ? 'Confirming' : 'Confirm'}
       </button>
       {said ? <span role="status" className="max-w-[260px] text-right text-[12px] text-orange-text">{said}</span> : null}

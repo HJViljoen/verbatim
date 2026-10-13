@@ -6,6 +6,7 @@ import type { TopProducts } from '../pages/v2/products'
 import type { TopVoices } from '../pages/v2/voices'
 import { streakLabel, UNTITLED_ADVICE } from '../pages/v2/advice-words'
 import { scrubProse, type ProseSlot } from '../prose/scrub'
+import { inlineMonth } from '../reading/month-label'
 
 // "Across your pages": the level-1 weekly email's one line per page (depth
 // v2, T11b; board E7). PURE and small on purpose: each page's line is that
@@ -13,7 +14,8 @@ import { scrubProse, type ProseSlot } from '../prose/scrub'
 // lines-load.ts) calls the same `top<Page>()` reader the Dashboard calls
 // (`topVoices`, `topProducts`, `topContent`, `topMoves`; Phase 4 fix round),
 // and each function here turns one tile's data into its line: the same item,
-// the same panel, the same figures and the same month words. So the email can
+// the same panel, the same figures and the same month words (Voices' and Your
+// products' with the tile's label, decision 3). So the email can
 // never name a group, a product, an idea or a piece of advice the page does
 // not lead with, or count it on another base (the review found both: products
 // ranked without the client's audience, advice unfolded by its vectors).
@@ -79,13 +81,15 @@ const plural = (n: number, one: string, many: string) => `${fmtInt(n)} ${n === 1
 const inWords = (m: string): string => (/^in\s/i.test(m.trim()) ? m.trim() : `in ${m.trim()}`)
 
 /** Voices: the group in the most videos this month, as the Voices tile leads
- *  ("In the most videos in October so far", 86 of 318 videos). */
+ *  ("In the most videos in October so far", 86 of 318 videos). A whole-month
+ *  reading, so a month that is not the current one carries the tile's label
+ *  ("In the most videos in September, the last full month:", decision 3). */
 export function voicesLine(top: TopVoices | null | undefined): WeeklyReadLine | null {
   const g = top?.group
   if (!top || !g || top.groupsState === 'unread' || !g.name.trim() || g.videos <= 0) return null
   return {
     page: 'voices', label: surface('voices').label, href: g.href,
-    lead: `In the most videos in ${top.monthWords}:`, name: g.name.trim(), copy: { kind: 'subject', slot: 'pass_e_persona' },
+    lead: `In the most videos in ${inlineMonth(top.monthWords, top.monthLabel)}:`, name: g.name.trim(), copy: { kind: 'subject', slot: 'pass_e_persona' },
     figure: top.videos ? `${fmtInt(g.videos)} of ${plural(top.videos, 'video', 'videos')}` : plural(g.videos, 'video', 'videos'),
   }
 }
@@ -98,7 +102,9 @@ export function voicesLine(top: TopVoices | null | undefined): WeeklyReadLine | 
 export function productsLine(top: TopProducts | null | undefined): WeeklyReadLine | null {
   const s = top?.state === 'ready' ? top.standout : null
   if (!top || !s || top.note === 'failed' || !s.name.trim() || s.k <= 0) return null
-  const month = top.monthWords ? ` ${inWords(top.monthWords)}` : ''
+  // A whole-month reading: its month carries the tile's label where it is
+  // not the current one ("in September, the last full month", decision 3).
+  const month = top.monthWords ? ` ${inWords(inlineMonth(top.monthWords, top.monthLabel))}` : ''
   return {
     page: 'products', label: surface('products').label, href: s.href,
     lead: `${s.label}:`, name: s.name.trim(), copy: { kind: 'plain' },

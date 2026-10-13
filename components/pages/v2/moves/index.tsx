@@ -2,7 +2,9 @@ import Link from 'next/link'
 
 import { DateMove } from '@/components/pages/market-surface/date-move'
 import { PageBar } from '@/components/shell/page-grid'
+import { longMonth } from '@/lib/format'
 import { canDate } from '@/lib/pages/date-move'
+import { barMonth } from '@/lib/reading/month-label'
 import { PAGE_TITLE, headerParts, type MovesPageData } from '@/lib/pages/v2/moves'
 import type { StatementsBlockData } from '@/lib/statements/types'
 import { cn } from '@/lib/utils'
@@ -29,6 +31,11 @@ export const CHECK_A_PLAN_HREF = '/dashboard/agent'
 
 function Header({ data }: { data: MovesPageData }) {
   const parts = headerParts(data.counts)
+  // Decision 3: the month the moves' lines are read to, where it is not the
+  // current calendar month; only where a move draws a line at all.
+  const month = data.monthLabel && data.moves.cards.some((c) => c.points.length > 0)
+    ? barMonth(longMonth(data.month), data.monthLabel)
+    : null
   return (
     <PageBar
       title={PAGE_TITLE}
@@ -40,6 +47,7 @@ function Header({ data }: { data: MovesPageData }) {
           {parts.map((p, i) => (
             <span key={p.words}>{i > 0 ? ' · ' : null}<span data-copy="figure">{p.n}</span> {p.words}</span>
           ))}
+          {month ? <span> · {month}</span> : null}
         </span>
       )}
     >

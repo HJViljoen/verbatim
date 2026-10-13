@@ -2,7 +2,7 @@
 # The test of scripts/apply-market-first-migrations.sh (plan §4.0: "a tested
 # runner"). Run it before handing Heinrich a set:
 #
-#   bash scripts/pg-shim/test-runner.sh <scratch dir> [set]      # mf1 (the default), r12, mf2, mf4, mf3, mf5 or products
+#   bash scripts/pg-shim/test-runner.sh <scratch dir> [set]      # mf1 (the default), r12, mf2, mf4, mf3, mf5, products or moves-role
 #
 # 1. The refusal guards, with no connection at all: no set, an unknown set,
 #    another project's URL, the transaction pooler, and a --test-target that is
@@ -40,6 +40,7 @@ case "$SET" in
   mf3) FIRST=20261103090000; HISTORY="('20260924093000', 'steps_completed_dead'), ('20260928090000', 'market_first_s1'), ('20260928091000', 'market_first_r12_grants'), ('20261005090000', 'market_first_s2'), ('20261005091000', 'market_first_weeks')"; YES='y\n'; PREREQ=20261005091000 ;;
   mf5) FIRST=20261103091000; HISTORY="('20260924093000', 'steps_completed_dead'), ('20260928090000', 'market_first_s1'), ('20260928091000', 'market_first_r12_grants'), ('20261005090000', 'market_first_s2'), ('20261005091000', 'market_first_weeks'), ('20261103090000', 'market_first_s3')"; YES='y\n'; PREREQ=20261103090000 ;;
   products) FIRST=20261109090000; HISTORY="('20260924093000', 'steps_completed_dead'), ('20260928090000', 'market_first_s1'), ('20260928091000', 'market_first_r12_grants'), ('20261005090000', 'market_first_s2'), ('20261005091000', 'market_first_weeks'), ('20261103090000', 'market_first_s3'), ('20261103091000', 'market_first_moves'), ('20261108090000', 'costs')"; YES='y\n'; PREREQ=20261108090000 ;;
+  moves-role) FIRST=20261110090000; HISTORY="('20260924093000', 'steps_completed_dead'), ('20260928090000', 'market_first_s1'), ('20260928091000', 'market_first_r12_grants'), ('20261005090000', 'market_first_s2'), ('20261005091000', 'market_first_weeks'), ('20261103090000', 'market_first_s3'), ('20261103091000', 'market_first_moves'), ('20261108090000', 'costs'), ('20261109090000', 'products')"; YES='y\n'; PREREQ=20261109090000 ;;
   *) echo "test-runner: unknown set $SET"; exit 2 ;;
 esac
 
@@ -107,6 +108,14 @@ if [[ "$SET" == "products" ]]; then
   expect "PRODUCTS' four guards sit on its tables" "$out" '^  ok    guards on the new tables'
   expect "PRODUCTS' grants: RLS, one select policy, no tenant table grant, every column readable" "$out" '^  ok    tables[|]pol[|]tenant[|]hid[|]sel[+]ins +7[|]7[|]0[|]0[|]14$'
   expect "PRODUCTS' catalogue function, regate and surface" "$out" '^  ok    catalogue[|]regate[|]surface +1[|]2[|]1$'
+fi
+if [[ "$SET" == "moves-role" ]]; then
+  expect "MOVES_ROLE's four write policies carry the role, the old four are gone" "$out" '^  ok    gated[|]old[|]other +4[|]0[|]0$'
+  expect "MOVES_ROLE leaves the member's column grants as they were" "$out" '^  ok    member column grants kept'
+  expect "MOVES_ROLE leaves the reads as they were" "$out" '^  ok    SELECT policies kept'
+  bash "$TW" check "$DIR/pg" "$ROOT/scripts/pg-shim/moves-role-gate-checks.sql" > "$DIR/moves-role-checks.log" 2>&1 \
+    || { cat "$DIR/moves-role-checks.log" >&2; fail "moves-role-gate-checks.sql failed after the apply"; }
+  echo "ok    moves-role-gate-checks.sql passes after the apply: a member refused, owner, admin, operator and service role through, reads unchanged"
 fi
 [[ "$(applied)" != "0" ]] || fail "the history row was not recorded"
 bash "$TW" psql "$DIR/pg" -q -f "$ROOT/scripts/pg-shim/catalogue.sql" > "$DIR/cat-after-first.txt"

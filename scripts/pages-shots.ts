@@ -250,11 +250,12 @@ const settingsProductsPage = () => {
     children: h(ProductsTab, { view: read.state === 'missing' ? null : productSettingsView(read, { selected: null, canEdit: true }) }),
   })
 }
-const settingsSubjectsPage = () => {
+/** `locked`: a locked tenant's owner or admin (decision 7, Sealand). */
+const settingsSubjectsPage = (locked = false) => {
   const read = settingsDump ? settingsDump.subjects : { state: 'ready' as const, rows: subjectsFixtureRows() }
   return h(SettingsFrame, {
     active: 'subjects', title: 'Settings', operator: false,
-    children: h(YourSubjectsTab, { view: read.state === 'missing' ? null : yourSubjectsView(read.rows, true) }),
+    children: h(YourSubjectsTab, { view: read.state === 'missing' ? null : yourSubjectsView(read.rows, true, locked) }),
   })
 }
 
@@ -371,7 +372,7 @@ const PAGES: Page[] = [
     },
   },
   { key: 'settings-products', path: '/dashboard/settings/products', artboard: 'E8-Settings-Products.dc.html', page: settingsProductsPage },
-  { key: 'settings-subjects', path: '/dashboard/settings/subjects', artboard: 'no-board-settings-subjects.dc.html', page: settingsSubjectsPage },
+  { key: 'settings-subjects', path: '/dashboard/settings/subjects', artboard: 'no-board-settings-subjects.dc.html', page: () => settingsSubjectsPage() },
   // Voices (depth v2, T4), beside the boards E3-Voices and E3-Voices-Open.
   // `voices-real` draws a dump of the loader's production output
   // (`VOICES_JSON=<file>`, one per tenant, read once under the lock).
@@ -469,6 +470,12 @@ const PAGES: Page[] = [
   // October still filling with no read of its own: September's stands in,
   // headed as September's.
   { key: 'market-v2-month-longrun-earlier', path: '/dashboard/market', artboard: 'E2-Market.dc.html', page: () => h(MarketPage, { data: marketFixture({ period: 'month', longRun: 'earlier' }) }) },
+  // Decisions 3 and 7 (13 Oct): the Dashboard on a day it reads both clocks
+  // (Market and the week on October so far; Voices, Your products and Your
+  // moves on September, labelled the last full month), and Settings › Your
+  // subjects as a locked tenant's owner sees it.
+  { key: 'dashboard-two-clocks', path: '/dashboard', artboard: 'E1-Dashboard.dc.html', page: () => h(DashboardPage, { data: dashboardFixture({ twoClocks: true }) }) },
+  { key: 'settings-subjects-locked', path: '/dashboard/settings/subjects', artboard: 'no-board-settings-subjects.dc.html', page: () => settingsSubjectsPage(true) },
 ]
 
 // ---- the shell -----------------------------------------------------------------

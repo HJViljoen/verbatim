@@ -328,6 +328,18 @@ describe('the Dashboard\'s tile (T8)', () => {
     expect(topProductsOf(PRODUCTS_FIXTURES.unread())).toMatchObject({ state: 'quiet', note: 'unread' })
   })
 
+  // Decision 3: the label rides to the tile where the tile reads a month,
+  // and never on a state that reads none.
+  it('carries the month\'s label where the tile reads a month, and none where it reads none', () => {
+    const d = ossurProductsFixture()
+    expect(d.monthLabel).toBe('the last full month')
+    expect(topProductsOf(d).monthLabel).toBe('the last full month')
+    expect(topProductsOf(ossurProductsFixture({}, { now: '2026-09-20T08:00:00.000Z' })).monthLabel).toBeNull()
+    for (const key of ['not-applied', 'sealand', 'not-on'] as const) expect(topProductsOf(PRODUCTS_FIXTURES[key]()).monthLabel, key).toBeNull()
+    // The unread month is October, the fixture's current month: no label.
+    expect(topProductsOf(PRODUCTS_FIXTURES.unread()).monthLabel).toBeNull()
+  })
+
   it('never throws: a workspace with no migration answers not_applied off the fake database', async () => {
     const db = fakeDb({}, { product_catalogue: () => ({ error: { code: 'PGRST202', message: 'Could not find the function public.product_catalogue(p_client) in the schema cache' } }) })
     const top = await topProducts({ supabase: db.client as never, clientId: OSSUR_CLIENT_ID, reading: { client: db.client as never, clientId: OSSUR_CLIENT_ID }, now: '2026-10-13T10:00:00Z' })

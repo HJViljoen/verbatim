@@ -16,6 +16,7 @@ import { freezeStateFor } from '../../reading/monthly'
 import { joinedRun, type PairOn } from '../../reading/pairs'
 import { loadMonthSeries, type ReadingHandle } from '../../reading/read'
 import { MONTH_PARAM } from '../../reading/reading-month'
+import { inlineMonth, readingMonthLabel } from '../../reading/month-label'
 import { loadDeliveredRuns, loadMarketRivalAudiences, loadReadingSchedule, readingViewFrom } from '../../reading/reading-view'
 import type { MonthStatus } from '../../reading/types'
 import { priorPrintable, type Verdict } from '../../reading/verdicts'
@@ -261,6 +262,11 @@ export interface MovesPageData {
   brand: string
   /** The reading month, `YYYY-MM-01`. */
   month: string
+  /** Decision 3: "the last full month" where `month` is not the current
+   *  calendar month at `readingAt` (`readingMonthLabel`), else null: the
+   *  bar and each move's latest month print it. Optional: a dump from before
+   *  it carries none. */
+  monthLabel?: string | null
   monthStatus: MonthStatus
   readingAt: string
   /** The reader may accept, decline, date and set a move's status. */
@@ -563,9 +569,31 @@ export const MOVE_UNREAD: Record<NonNullable<MoveCard['unread']>, string> = {
   no_reading: 'Your market has no reading of this yet.',
 }
 
-/** "the month before" or "in September, the month before". */
-export function compareMonths(c: NonNullable<MoveCard['compare']>, moveMonth: string): { before: string; after: string } {
-  const after = c.after.month === moveMonth ? `${longMonth(c.after.month)}, the month of the move` : `${longMonth(c.after.month)}${c.after.soFar ? ' so far' : ''}`
+/** The page's reading month and its label (decision 3), as a move's
+ *  sentence takes it. */
+export interface ReadingLabel {
+  month: string
+  label?: string | null
+}
+
+/** The label a month on a move's line carries: the reading month's own,
+ *  where the line's month IS the reading month (the latest month read). An
+ *  earlier month on the line is named alone: "the month before" already says
+ *  which it is. */
+export function monthLabelOn(month: string, reading: ReadingLabel | null | undefined): string | null {
+  if (!reading?.label) return null
+  return monthStartOf(month) === monthStartOf(reading.month) ? reading.label : null
+}
+
+/** "the month before" or "in September, the month before"; the later month
+ *  labelled where it is the reading month and not the current calendar month
+ *  ("September, the last full month", decision 3). */
+export function compareMonths(c: NonNullable<MoveCard['compare']>, moveMonth: string, reading?: ReadingLabel | null): { before: string; after: string } {
+  const label = monthLabelOn(c.after.month, reading)
+  const name = longMonth(c.after.month)
+  const after = c.after.month === moveMonth
+    ? (label ? `${inlineMonth(name, label)} and the month of the move` : `${name}, the month of the move`)
+    : inlineMonth(`${name}${c.after.soFar ? ' so far' : ''}`, label)
   return { before: `${longMonth(c.before.month)}, the month before`, after }
 }
 
@@ -975,6 +1003,7 @@ export async function loadMovesPage(scope: Scope, options: { canDecide: boolean 
   return {
     brand: core.brand,
     month: core.month,
+    monthLabel: readingMonthLabel(core.month, core.readingAt),
     monthStatus: core.monthStatus,
     readingAt: core.readingAt,
     canDecide: options.canDecide,
@@ -1026,6 +1055,10 @@ export interface TopMoves {
   }) | null
   /** Whether the reader may Accept / Not for us on the tile. */
   canDecide: boolean
+  /** The reading month and its label (decision 3): the move's later month
+   *  prints it where it is the reading month. Optional: a dump from before it
+   *  carries none. */
+  reading?: ReadingLabel
 }
 
 /** The move the tile shows, from the page's cards. Pure. */
@@ -1085,6 +1118,7 @@ export async function topMoves(scope: Scope, options: { canDecide: boolean }): P
         }
       : null,
     canDecide: options.canDecide,
+    reading: { month: core.month, label: readingMonthLabel(core.month, core.readingAt) },
   }
 }
 

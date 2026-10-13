@@ -4,6 +4,7 @@ import { PageBar, PageFrame } from '@/components/shell/page-grid'
 import { CARD, CardHead, equalColumns, panelPlacement, type PanelLayout, type PerBreakpoint } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
 import { surface } from '@/lib/nav'
+import { barMonth } from '@/lib/reading/month-label'
 import { shelfColumns, type ProductsData } from '@/lib/pages/v2/products'
 import { Fig, OLINK } from './parts'
 import { CategoryPanelView, ProductPanelView } from './panels'
@@ -37,10 +38,12 @@ export { TagControl, TagControlView, tagSaid } from './tag-control'
  *  round: "September" printed over "not switched on"). */
 const READS_NO_MONTH: readonly ProductsData['state'][] = ['not_applied', 'not_on', 'no_catalogue']
 
-/** The bar's meta line: "September · 15 of your 65 products came up · 412
- *  videos about them or their categories". */
+/** The bar's meta line: "September · the last full month · 15 of your 65
+ *  products came up · 412 videos about them or their categories"; the month's
+ *  label only where the page reads a month that is not the current one
+ *  (decision 3, `readingMonthLabel`). */
 export function ProductsMeta({ data }: { data: ProductsData }) {
-  const parts: React.ReactNode[] = READS_NO_MONTH.includes(data.state) ? [] : [<span key="m">{data.monthWords}</span>]
+  const parts: React.ReactNode[] = READS_NO_MONTH.includes(data.state) ? [] : [<span key="m">{barMonth(data.monthWords, data.monthLabel)}</span>]
   if (data.state === 'ready' && data.header) {
     parts.push(<span key="p"><Fig>{fmtInt(data.header.cameUp)}</Fig> of your <Fig>{fmtInt(data.header.products)}</Fig> products came up</span>)
     if (data.header.videos != null) parts.push(<span key="v"><Fig>{fmtInt(data.header.videos)}</Fig> videos about them or their categories</span>)

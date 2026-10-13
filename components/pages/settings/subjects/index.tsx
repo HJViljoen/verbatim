@@ -7,6 +7,7 @@ import { AddSubjectButton, SubjectRowMenu } from '@/components/pages/subjects/ed
 import { fmtInt } from '@/lib/format'
 import { SUBJECTS_NOT_APPLIED } from '@/lib/subjects/moves'
 import { SUBJECT_WRITE_REFUSED } from '@/lib/subjects/types'
+import { SUBJECTS_HELD } from '@/lib/tenant-locks'
 import type { FollowedSubject, SuggestedSubject, YourSubjectsView } from '@/lib/settings/your-subjects'
 import { ConfirmSubject } from './confirm'
 
@@ -17,10 +18,13 @@ import { ConfirmSubject } from './confirm'
 // row (Confirm on a suggestion, Rename, Stop following) and "Add a subject",
 // with their sheets, exactly as they were (components/pages/subjects/editor.tsx).
 //
-// THE GATE IS THE WRITE PATH'S, UNCHANGED (lib/actions/subjects.ts:
-// `canManageTenant` on the three subject writes, M4's policies under it). The
-// page draws the controls for owners and admins only; everyone else reads the
-// lists. No tenant lock: subject writes never had one.
+// THE GATE IS THE WRITE PATH'S (lib/actions/subjects.ts: `canManageTenant`
+// on the three subject writes, M4's policies under it, then the tenant lock).
+// The page draws the controls for owners and admins only; everyone else reads
+// the lists. SINCE DECISION 7 (13 Oct) THE TENANT LOCK HOLDS SUBJECTS TOO: a
+// locked tenant's owner or admin (Sealand during its trial) sees the lock's
+// line (`SUBJECTS_HELD`) and every control disabled before anything is
+// submitted, as Settings › Your products does; the operator is not held.
 //
 // SETTINGS, NOT READINGS: a subject's level and its months are Market's, and a
 // followed subject's name links there.
@@ -89,14 +93,14 @@ function Following({ view }: { view: YourSubjectsView }) {
       <Head
         title="Subjects you follow"
         sub={<><span data-copy="figure">{fmtInt(n)}</span> {n === 1 ? 'subject' : 'subjects'} you follow, up to <span data-copy="figure">{fmtInt(view.max)}</span></>}
-        action={view.canEdit ? <AddSubjectButton activeCount={n} /> : null}
+        action={view.canEdit ? <AddSubjectButton activeCount={n} locked={view.locked} /> : null}
       />
       {view.following.length > 0 ? (
         <div role="table" aria-label="Subjects you follow" className="flex min-w-0 flex-col">
           <TableHead canEdit={view.canEdit} second="What it covers" />
           <div role="rowgroup">
             {view.following.map((s) => (
-              <Row key={s.id} name={s.name} href={s.href} covers={s.description} controls={view.canEdit ? <SubjectRowMenu subject={editable(s)} /> : null} />
+              <Row key={s.id} name={s.name} href={s.href} covers={s.description} controls={view.canEdit ? <SubjectRowMenu subject={editable(s)} locked={view.locked} /> : null} />
             ))}
           </div>
         </div>
@@ -128,7 +132,7 @@ function Waiting({ view }: { view: YourSubjectsView }) {
               name={s.name}
               covers={s.description}
               because={s.because}
-              controls={view.canEdit ? <><ConfirmSubject id={s.id} name={s.name} /><SubjectRowMenu subject={editable(s)} /></> : null}
+              controls={view.canEdit ? <><ConfirmSubject id={s.id} name={s.name} locked={view.locked} /><SubjectRowMenu subject={editable(s)} locked={view.locked} /></> : null}
             />
           ))}
         </div>
@@ -154,7 +158,9 @@ export function YourSubjectsTab({ view }: { view: YourSubjectsView | null }) {
     <div className="flex min-w-0 flex-col gap-5 text-[#26292C]">
       <Note>
         <b className="font-semibold">A subject is something your market talks about that you chose to follow.</b>{' '}
-        Renaming one starts a fresh subject from today; what was already reported about it stays as it was.
+        {/* A locked tenant's owner or admin reads the lock's line in place of
+            how to rename, before anything is submitted (decision 7). */}
+        {view.locked ? SUBJECTS_HELD : 'Renaming one starts a fresh subject from today; what was already reported about it stays as it was.'}
       </Note>
       <Following view={view} />
       <Waiting view={view} />

@@ -5,7 +5,7 @@ import { fmtInt } from '@/lib/format'
 import { tileHref } from '@/lib/pages/home'
 import type { TileRead, TopProducts } from '@/lib/pages/v2/home'
 import { cn } from '@/lib/utils'
-import { CSUB, MID, MONO_MUTED, OLINK, TILE, TILE_FAILED, TileHead, TileLine, TT } from './parts'
+import { CSUB, MID, MONO_MUTED, OLINK, TILE, TILE_FAILED, TileHead, TileLine, TileMonth, TT } from './parts'
 
 // THE DASHBOARD'S YOUR PRODUCTS TILE (Design v2, T8; E1-Dashboard's second
 // row), from T5's `TopProducts` (lib/pages/v2/products.ts, re-exported by
@@ -94,6 +94,9 @@ export function ProductsTileView({ read }: { read: TileRead<TopProducts> }) {
   return (
     <article aria-labelledby="home-products" data-tile="products" data-state={top?.state ?? 'failed'} className={cn(TILE, 'col-span-12 min-[1180px]:col-span-4')}>
       <TileHead icon={NAV_ICON.products} name="Your products" id="home-products" href={standout?.href ?? top?.href ?? tileHref('products')} />
+      {/* Decision 3: the month the tile reads, labelled where it is not the
+          current one (a state that reads no month carries no label). */}
+      {top && top.note !== 'failed' ? <TileMonth words={top.monthWords} label={top.monthLabel} /> : null}
       {!top || top.note === 'failed' ? <TileLine>{TILE_FAILED}</TileLine>
         : standout ? <Ready top={top} standout={standout} />
           : top.state === 'no_catalogue' ? (

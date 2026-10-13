@@ -4,7 +4,7 @@ import { priorPrintable } from '../../reading/verdicts'
 import type { PairComparability } from '../../reading/comparability'
 import type { RecCopy } from '../market-surface'
 import {
-  adviceHistory, conclusionViews, decisionLine, headerParts, largestStance, leadClaims, moveCards, movedMove,
+  adviceHistory, compareMonths, conclusionViews, decisionLine, headerParts, largestStance, leadClaims, moveCards, movedMove,
   recordRows, restsOnRows, streakLabel, adviceHref, adviceParam, adviceTitle, waitingAdvice, MOVES_PATH, UNTITLED_ADVICE,
 } from './moves'
 import { buildAdviceRows } from '../market-surface'
@@ -226,5 +226,28 @@ describe('the words', () => {
   })
   it('a piece of advice opens in place on Your moves', () => {
     expect(adviceHref('L1')).toBe(`${MOVES_PATH}?advice=L1#advice-panel`)
+  })
+})
+
+// Decision 3: a move's later month carries the reading month's label where it
+// IS the reading month and that is not the current calendar month.
+describe('compareMonths and the reading month\'s label', () => {
+  const c = (after: string, soFar = false) => ({
+    before: { month: '2026-07-01', role: 'before' as const, k: 1, n: 10, soFar: false },
+    after: { month: after, role: 'after' as const, k: 2, n: 10, soFar },
+    verdict: MOVE_CARDS.find((m) => m.compare)!.compare!.verdict,
+  })
+  const sep = { month: '2026-09-01', label: 'the last full month' }
+
+  it('labels the later month where it is the reading month', () => {
+    expect(compareMonths(c('2026-09-01'), '2026-08-01', sep)).toEqual({ before: 'July, the month before', after: 'September, the last full month' })
+    expect(compareMonths(c('2026-09-01'), '2026-09-01', sep).after).toBe('September, the last full month and the month of the move')
+  })
+
+  it('names it alone where there is no label, or the month is not the reading month', () => {
+    expect(compareMonths(c('2026-09-01'), '2026-08-01').after).toBe('September')
+    expect(compareMonths(c('2026-09-01'), '2026-09-01', { month: '2026-09-01', label: null }).after).toBe('September, the month of the move')
+    expect(compareMonths(c('2026-08-01'), '2026-07-01', sep).after).toBe('August')
+    expect(compareMonths(c('2026-10-01', true), '2026-08-01', { month: '2026-10-01', label: null }).after).toBe('October so far')
   })
 })
