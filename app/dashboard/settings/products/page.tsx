@@ -2,7 +2,7 @@ import { SettingsFrame } from '@/components/settings-frame'
 import { ProductsTab } from '@/components/pages/settings/products'
 import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { surface } from '@/lib/nav'
-import { loadProductSettings, productSettingsView } from '@/lib/settings/products'
+import { loadProductSettingsForPage, productSettingsView } from '@/lib/settings/products'
 import { productsMonth } from '@/lib/pages/v2/products'
 import { readingHandle } from '@/lib/reading/read'
 import { settingsSubPage } from '@/lib/settings/rail'
@@ -39,9 +39,10 @@ export default async function SettingsProductsPage({
   const selected = typeof sp.group === 'string' ? sp.group : null
   const session = await getSessionContext()
   const { supabase, clientId, role } = session
-  // The month Your products reads, so the two surfaces print one figure.
-  const { month } = await productsMonth(supabase, readingHandle(clientId), new Date().toISOString())
-  const read = await loadProductSettings(supabase, clientId, new Date(), { month }).catch((error: unknown) => {
+  // The month Your products reads, so the two surfaces print one figure; no
+  // month at all while the products page is off (no count prints then).
+  const now = new Date()
+  const read = await loadProductSettingsForPage(supabase, clientId, now, () => productsMonth(supabase, readingHandle(clientId), now.toISOString())).catch((error: unknown) => {
     console.error(`[settings] products did not load for ${clientId}: ${(error as { message?: string })?.message ?? String(error)}`)
     return null
   })

@@ -1,11 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   FIXTURE_CLIENT, FIXTURE_NOW, fid, productsFixtureRead, productsFixtureTables,
 } from '@/components/pages/settings/products/fixture'
 import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../config'
 import { fakeDb } from '../test/fake-db'
-import { aliasTextProblem, catalogueText, loadProductSettings, productSettingsView, productsTabHref } from './products'
+import { aliasTextProblem, catalogueText, loadProductSettings, loadProductSettingsForPage, productSettingsView, productsTabHref } from './products'
 
 // Settings › Your products: the read and the view (T10b). Pure, or over the
 // fake database: no network.
@@ -103,6 +103,16 @@ describe('loadProductSettings', () => {
     expect(v.open!.cameUp).toBeNull()
     expect(v.open!.unclear).toBeNull()
     expect(v.open!.rows.every((r) => r.videos === null)).toBe(true)
+  })
+
+  it('the route reads the page\'s month only while the products page is on', async () => {
+    const readMonth = vi.fn(async () => ({ month: '2026-09-01' }))
+    const off = await loadProductSettingsForPage(fakeDb(productsFixtureTables()).client as never, OSSUR_CLIENT_ID, FIXTURE_NOW, readMonth)
+    expect(readMonth).not.toHaveBeenCalled()
+    expect(off).toMatchObject({ state: 'ready', readingsOn: false, readings: [] })
+    const on = await loadProductSettingsForPage(fakeDb(productsFixtureTables()).client as never, FIXTURE_CLIENT, FIXTURE_NOW, readMonth, true)
+    expect(readMonth).toHaveBeenCalledTimes(1)
+    expect(on).toMatchObject({ state: 'ready', readingsOn: true, month: '2026-09-01' })
   })
 
   it('reads no month when there is no category', async () => {

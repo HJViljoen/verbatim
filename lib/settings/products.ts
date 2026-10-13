@@ -197,6 +197,24 @@ export async function loadProductSettings(
   }
 }
 
+/**
+ * The route's read: the page's month (`readMonth`, the route's
+ * `productsMonth`) only where the products page is switched on, then the
+ * catalogue. Off, it reads NO month at all (the page that would print the
+ * same count is off, so nothing here is a count of a month), as AGENTS.md
+ * says (Phase 4 fix check).
+ */
+export async function loadProductSettingsForPage(
+  db: SupabaseClient,
+  clientId: string,
+  now: Date,
+  readMonth: () => Promise<{ month: string }>,
+  readingsOn: boolean = productReadingsEnabled(clientId),
+): Promise<ProductSettingsRead> {
+  const month = readingsOn ? (await readMonth()).month : null
+  return loadProductSettings(db, clientId, now, { month, readingsOn })
+}
+
 // ---- The view -------------------------------------------------------------------
 
 export interface AliasChip {
