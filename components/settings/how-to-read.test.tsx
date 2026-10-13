@@ -25,9 +25,9 @@ function cardMarkup(key: string): string {
 }
 
 describe('How to read, the page cards', () => {
-  // Every sidebar page but the Dashboard, which owns nothing (lib/settings/
-  // how-to-read.test.ts).
-  const CARDED = SURFACES.filter((s) => s.key !== 'home')
+  // Every sidebar page, the Dashboard included since Design v2
+  // (lib/settings/how-to-read.test.ts).
+  const CARDED = SURFACES
 
   it('draws one card per sidebar page, in the cards’ order, each under its anchor', () => {
     const order = [...markup.matchAll(/<section id="([a-z]+)" data-search=/g)].map((m) => m[1])

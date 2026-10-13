@@ -7,7 +7,6 @@ import { DIRECTION_WORDS } from '../calibration'
 import { ASK_MONTHLY_CAP } from '../config'
 import { SURFACES } from '../nav'
 import { SLOT_HOUR } from '../pipeline/schedule-due'
-import { NEW_THEME_FLOOR } from '../pages/week'
 import { BASELINE_MONTHS } from '../reading/anomaly'
 import { TOUCH_MIN_WORDS } from '../reading/own-posts'
 import { LEAD_MAX_MAKER_SHARE, MAKER_GROUP_SHARE, MAKER_NOTE_SHARE } from '../pages/overview-market/board'
@@ -19,14 +18,22 @@ import { MONTH_READABLE_VIDEOS, READING_SWITCH_FRACTION, READING_SWITCH_UPDATES 
 import { MONTHLY_UPDATES_PAST_END } from '../reports/monthly'
 import { SUBJECT_PRECISION_FLOOR } from '../subjects/types'
 import { DEFINITIONS, READING_CARDS, READING_PATH } from './how-to-read'
+import { MARKET_TABLE_FLOOR } from '../pages/v2/market'
+import { IDEAS_STALE_DAYS } from '../pages/v2/content'
+import { MOVE_MONTHS_BEFORE } from '../pages/v2/moves'
+import { STANDOUT_MIN } from '../pages/v2/products'
+import { ACCOUNT_FLOOR } from '../pages/voice-surface-where'
+import { POST_IDEA_MIN_COMMENTS, POST_IDEA_MIN_RATED, POST_IDEA_MIN_VIDEOS, POST_IDEA_OWNED_MONTHS } from '../post-ideas/select'
+import { STATEMENTS_TENANT_VISIBLE } from '../statements/visibility'
+import { SUBJECTS_MAX } from '../subjects/types'
 import { QUEUE_FLOOR } from './queue'
 import { TERM_YIELD_BASIS } from './terms'
 
 describe('how to read', () => {
-  it('describes every surface the shell has but the Dashboard, and no other', () => {
-    // The Dashboard (1 Oct) owns nothing: it is one headline from each page,
-    // each linking through, so the page it points at is the one described.
-    expect(READING_CARDS.map((c) => c.key).sort()).toEqual(SURFACES.filter((s) => s.key !== 'home').map((s) => s.key).sort())
+  it('describes every surface the shell has, the Dashboard included, and no other (Design v2)', () => {
+    // The Dashboard owned nothing on 1 Oct and had no card; Design v2 gives it
+    // tiles a reader asks about, so it has one.
+    expect(READING_CARDS.map((c) => c.key).sort()).toEqual(SURFACES.map((s) => s.key).sort())
   })
 
   it('repeats neither the title nor the question — lib/nav.ts owns both', () => {
@@ -62,8 +69,8 @@ describe('how to read', () => {
     expect(words).toContain('Your search terms are yours')
   })
 
-  it('says what the brands rule counts, so "none found" reads as a zero by that rule (the lead’s ruling of 27 Sep)', () => {
-    const line = READING_CARDS.find((c) => c.key === 'market')!.cannot.find((l) => l.startsWith('Under Brands in your market'))!
+  it('says what the brands rule counts, so "none found" reads as a zero by that rule (the lead’s ruling of 27 Sep; Voices’ card since Design v2)', () => {
+    const line = READING_CARDS.find((c) => c.key === 'voices')!.cannot.find((l) => l.startsWith('Under Brands,'))!
     expect(line).toContain('the rule counts the brand’s name, its handles and its phrases')
     expect(line).toContain('“No video names it” means the rule found no such video that month')
     expect(line).toContain('“not counted yet” means we have not yet checked its matches by hand')
@@ -284,16 +291,55 @@ describe('how to read, market-first', () => {
     expect(cardText('settings')).toContain('dated by the update that searched, not by when the comments were written')
   })
 
-  it('states This week’s and Your moves’ floors at the constants that apply them', () => {
-    // "named only once they carry 10 videos in the month" (week.ts), "needs
-    // three months read the same way" (anomaly.ts), "two or more of the
-    // question’s words" (own-posts.ts's word check, which Your moves reads).
-    expect(NEW_THEME_FLOOR).toBe(10)
-    expect(cardText('content')).toContain('once they carry 10 videos in the month')
+  it('states the Design v2 pages’ floors at the constants that apply them', () => {
+    // Market: the table's floor (MARKET_TABLE_FLOOR, the week pool's) and the
+    // anomaly check's baseline (anomaly.ts), which leads the week.
+    expect(MARKET_TABLE_FLOOR).toBe(3)
+    expect(cardText('market')).toContain('listed once 3 of the period’s videos in the category carry it')
     expect(BASELINE_MONTHS).toBe(3)
-    expect(cardText('content')).toContain('needs three months read the same way')
+    expect(cardText('market')).toContain('needs three months read the same way')
+    // Voices: the creators' floor, Conversation's "Where your market talks".
+    expect(ACCOUNT_FLOOR).toBe(3)
+    expect(cardText('voices')).toContain('made 3 or more of the market’s videos')
+    // Your products: a standout's floor.
+    expect(STANDOUT_MIN).toBe(3)
+    expect(cardText('products')).toContain('A standout needs 3 or more videos')
+    // Content: the post ideas' evidence floor, the months a touch is read
+    // over, when ideas stop printing, the format's rated floor, and the
+    // word check (own-posts.ts), which Content reads since Design v2.
+    expect([POST_IDEA_MIN_COMMENTS, POST_IDEA_MIN_VIDEOS, POST_IDEA_OWNED_MONTHS]).toEqual([3, 2, 3])
+    expect(cardText('content')).toContain('asked at least 3 times on 2 or more videos that week')
+    expect(cardText('content')).toContain('from that month and the two before')
+    expect(IDEAS_STALE_DAYS).toBe(28)
+    expect(cardText('content')).toContain('four weeks older than the page’s')
+    expect(POST_IDEA_MIN_RATED).toBe(10)
+    expect(cardText('content')).toContain('10 or more rated videos')
     expect(TOUCH_MIN_WORDS).toBe(2)
-    expect(cardText('moves')).toContain('two or more of the question’s words')
+    expect(cardText('content')).toContain('two or more of the question’s words')
+    // Your moves: the months a move is read from.
+    expect(MOVE_MONTHS_BEFORE).toBe(2)
+    expect(cardText('moves')).toContain('from two months before the month you dated it')
+    // Settings: the subjects' ceiling.
+    expect(SUBJECTS_MAX).toBe(10)
+    expect(cardText('settings')).toContain('at most ten subjects')
+  })
+
+  it('describes the routed pages only: no card names a page Design v2 retired', () => {
+    // Your market, This week, Subjects, Conversation and Competitive redirect
+    // (lib/nav.ts redirectFor); their method is on the page that took it.
+    for (const c of READING_CARDS) {
+      expect([c.tells, ...c.cannot].join(' '), c.key).not.toMatch(/\b(?:This week|Conversation|Competitive|Subjects page|on Your market)\b/)
+    }
+    expect(def('brands').body).not.toMatch(/On Brands|Your market/)
+  })
+
+  it('names a product kind where it was found, as the products panels print it', () => {
+    expect(cardText('products')).toContain('praise in the comments may be about something else in the video')
+  })
+
+  it('says the statements are not shown to a workspace while they are held (open ruling #7)', () => {
+    expect(STATEMENTS_TENANT_VISIBLE).toBe(false)
+    expect(cardText('moves')).toContain('is not shown to the workspace yet')
   })
 
   it('names Your moves by its current sidebar label on the path (§4.0)', () => {
