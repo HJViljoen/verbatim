@@ -8,6 +8,7 @@ import { headToHead, type HeadToHead, type HeadToHeadSide } from '../reading/hea
 import type { PairOn } from '../reading/pairs'
 import type { FigureTable } from '../reading/verdicts'
 import { monthStartOf, nextMonth, prevMonth } from '../reading/month-key'
+import { isOwnedPost } from '../reading/owned'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, audienceOf, rivalKey } from '../rivals'
 import { selectAll } from '../supabase-admin'
 import { workedLabel } from './week'
@@ -81,6 +82,33 @@ export interface PlaybookBlock {
 
 const SENTIMENTS = new Set(['positive', 'negative', 'neutral', 'mixed'])
 
+/**
+ * Whose videos the client's column reads.
+ *
+ * `about` (the default, every surface before depth v2): `audienceOf`, so the
+ * column is the `client` audience: the brand's own posts AND every creator's
+ * video tagged to it by a brand keyword (`is_client`). On Össur's September
+ * that is 25 own posts and 136 creators' videos under one column headed
+ * "Össur".
+ *
+ * `owned` (the Content page, T6): the column is the brand's own posts alone,
+ * `source = 'owned'` (`isOwnedPost`, lib/reading/owned.ts, the one "your
+ * posts" rule). A creator's video naming the brand then sits in NO column: it
+ * is not the brand's post, and the market reading leaves the client audience
+ * out (decision E), so filing it under the category would make this page's
+ * category column disagree with every other one. Rivals and the category are
+ * read exactly as under `about`.
+ */
+export type PlaybookClientSide = 'about' | 'owned'
+
+/** The audience a video is read under, or null where it sits out. */
+export function playbookAudience(v: PlaybookVideo, clientSide: PlaybookClientSide = 'about'): string | null {
+  if (clientSide === 'about') return audienceOf(v)
+  if (isOwnedPost(v)) return CLIENT_AUDIENCE
+  const audience = audienceOf(v)
+  return audience === CLIENT_AUDIENCE ? null : audience
+}
+
 const inMonth = (v: PlaybookVideo, month: string): boolean => {
   const start = monthStartOf(month)
   const end = nextMonth(start)
@@ -113,9 +141,13 @@ export function buildPlaybook(input: {
    * passes the floor it is willing to rest a finding on.
    */
   conclusionMinRated?: number
+  /** Whose videos the client's column reads (`PlaybookClientSide`). Absent is
+   *  `about`, which every surface before depth v2 was built and stored on. */
+  clientSide?: PlaybookClientSide
 }): PlaybookBlock {
   const month = monthStartOf(input.month)
   const excludePlatforms = input.excludePlatforms ?? ENGAGEMENT_EXCLUDED
+  const clientSide = input.clientSide ?? 'about'
   const rivalAudience = input.rival ? rivalKey(input.rival) : null
   const published = input.videos.filter((v) => inMonth(v, month))
 
@@ -132,7 +164,7 @@ export function buildPlaybook(input: {
         audience: side.audience,
         audienceLabel: side.label,
         key,
-        videos: published.filter((v) => audienceOf(v) === side.audience),
+        videos: published.filter((v) => playbookAudience(v, clientSide) === side.audience),
         excludePlatforms,
         label: workedLabel,
       }),
@@ -356,7 +388,10 @@ export function ownSides(input: {
 
 /** The client's own published videos for one month — the narrow read §6 needs,
  *  which is tens of rows on every tenant we have rather than the two-month
- *  corpus CO3 and CO7 share. */
+ *  corpus CO3 and CO7 share. It reads `is_client`, so it is the `about` column
+ *  (`PlaybookClientSide`) and kept as such for the legacy week §6 and its
+ *  stored snapshots; a surface that means the brand's own posts reads
+ *  `ownedPosts` (lib/reading/owned.ts). */
 export async function loadOwnPublishedVideos(
   supabase: SupabaseClient,
   clientId: string,
