@@ -23,11 +23,14 @@ import { loadChanges, loadMonthSeries, loadWindowReading, type ReadingHandle, ty
 import { loadCadenceRuns, loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, readingViewFrom, updateInstant } from '../../reading/reading-view'
 import type { MonthSeries } from '../../reading/series'
 import { TABLE_THEME_READINGS, type PlatformMix } from '../../reading/types'
+import { readEvidenceRefs } from '../../reading/evidence-refs'
 import { WEEK_CUT_SURFACES, preGatherCutBefore } from '../../reading/weeks'
 import type { Verdict } from '../../reading/verdicts'
 import { INDUSTRY_AUDIENCE, loadCompetitors, loadTrackedRivals } from '../../rivals'
 import { selectAll } from '../../supabase-admin'
 import { coveredDays, inMonth, readingMonthOf } from '../../written/month'
+import { SLICE } from '../../reading/coverage'
+import { countedNote, FAILED_EXPLAINED } from '../../subjects/calibration-state'
 import { loadPublishedWeekRead, type PublishedWeekRead } from '../../written/published'
 import type { WeekReadData, WhoAbout, WhoPart } from '../../written/types'
 import { weekReadDates } from '../../reports/weekly-read'
@@ -35,8 +38,8 @@ import { factsFromReadings, marketComparable } from '../../written/standing'
 import { fetchRunningRunIds } from '../latest-video-run'
 import { WHAT_THEY_SELL } from '../market-frame'
 import { homeWeeks, loadWeekRows, type HomeWeeks } from '../home'
-import { loadThemeQuotes, loadThemeSegmentRows, makerRuleEnabled, themeSegmentsOf, voiceOf, type CiteCandidate } from '../overview'
-import { pickQuotes, POOL_FLOOR, segmentOf } from '../overview-market'
+import { loadThemeQuotes, loadThemeSegmentRows, makerRuleEnabled, voiceOf, type CiteCandidate } from '../overview'
+import { pickQuotes, POOL_FLOOR } from '../overview-market'
 import { talkKindLabel } from '../overview-market/kinds'
 import { loadMemberInsightIdsBySubject } from '../subjects'
 import { fetchThemedRunId } from '../themed-run'
@@ -294,6 +297,20 @@ export interface InsideRow {
   month: number | null
   isNew: boolean
   flag: Verdict | null
+  /** Set apart (decision F): listed and tagged, never leading. */
+  setApart: 'makers' | 'noise' | null
+  href: string
+}
+
+/** A subject that prints no level, and why (the calibration words). */
+export interface UnmeasuredSubject {
+  id: string
+  name: string
+  /** `provisional` (its check is open), `failed` (being re-described) or
+   *  `unread` (nothing read for it in the month). */
+  state: 'provisional' | 'failed' | 'unread'
+  /** Why, in the calibration's own words (`countedNote`, `FAILED_EXPLAINED`). */
+  note: string
   href: string
 }
 
@@ -303,8 +320,10 @@ export interface SubjectBoard {
   /** The market's videos in the month: every level's n. */
   n: number | null
   rows: SubjectRow[]
-  /** Subjects that print their name alone. */
-  alsoFollowing: string[]
+  /** Subjects that print no level, with why. */
+  unmeasured: UnmeasuredSubject[]
+  /** Whether any row draws last month's tick (the legend is printed only then). */
+  ticks: boolean
 }
 
 export interface KindRow {
@@ -322,6 +341,8 @@ export interface KindsBlock {
   prevText: string
   n: number
   rows: KindRow[]
+  /** Whether any row draws last month's tick (the key is printed only then). */
+  ticks: boolean
 }
 
 export interface PlatformRow {
@@ -336,6 +357,9 @@ export interface PlatformsBlock {
   basis: 'week' | 'month'
   n: number
   rows: PlatformRow[]
+  /** This week: each platform's videos in the month the week is stated
+   *  against (decision 1), and that month's n. */
+  month?: { counts: Record<string, number>; n: number; text: string } | null
 }
 
 /** A sentence stored with `[[key]]` figures, and the figures it names. */
@@ -368,6 +392,9 @@ export interface MarketTable {
   showAllHref: string | null
   /** Over time: the months the columns read, with their category n. */
   months: { month: string; label: string; n: number | null; filling: boolean }[]
+  /** Whether any conversation has a subject: no subject is measured, no
+   *  Subject column. */
+  subjects: boolean
 }
 
 export interface PanelQuote {
@@ -406,6 +433,9 @@ export interface ConvPanel {
 export interface SubjectPanel {
   id: string
   name: string
+  /** Not `ready`: no level, no conversations; `note` says why. */
+  state: 'ready' | 'provisional' | 'failed' | 'unread'
+  note: string | null
   at: PanelAt
   notchAt: number
   level: (Level & { pct: number }) | null
@@ -434,7 +464,14 @@ export interface MarketData {
   table: MarketTable | null
   panel: ConvPanel | null
   subjectPanel: SubjectPanel | null
+  /** Who the talk is about: `counted` (brand rules and their rows),
+   *  `not_counted` (rules, no rows written yet: Össur before its back-read) or
+   *  `not_read` (no brand rules). Only `counted` prints a split. */
+  brands: BrandsState
 }
+
+/** Whether the "about" split may print. */
+export type BrandsState = 'counted' | 'not_counted' | 'not_read'
 
 // ---- Params and addresses (pure) --------------------------------------------------------
 
@@ -704,6 +741,16 @@ export function convOf(id: string, input: ConvInput): MarketConv | null {
   }
 }
 
+/**
+ * THE ONE "SO FAR" RULE (the page, the tile and the email's months): a month
+ * reads "so far" while it is under way, and never once a week carried past
+ * its end (M2: the week is stated against that month in full) or the month
+ * has ended. Pure.
+ */
+export function monthSoFar(month: string, nowMonth: string, weekCarriedPast = false): boolean {
+  return monthStartOf(month) >= monthStartOf(nowMonth) && !weekCarriedPast
+}
+
 /** The count a period ranks by. */
 export const periodCount = (c: Pick<MarketConv, 'week' | 'month'>, period: Period): number =>
   (period === 'week' ? c.week : c.month) ?? 0
@@ -780,8 +827,9 @@ export function insideOf(subjectId: string, convs: readonly MarketConv[], period
   flag?: Verdict | null
   href: (id: string) => string
 }): InsideRow[] {
+  // A set-apart conversation is listed, tagged: only leading is barred.
   return convs
-    .filter((c) => c.subjectId === subjectId && !c.setApart)
+    .filter((c) => c.subjectId === subjectId)
     .slice(0, opts.limit ?? MARKET_INSIDE)
     .map((c) => ({
       id: c.id,
@@ -790,6 +838,7 @@ export function insideOf(subjectId: string, convs: readonly MarketConv[], period
       month: period === 'week' ? c.month : null,
       isNew: c.isNew,
       flag: opts.flagId === c.id ? opts.flag ?? null : null,
+      setApart: c.setApart,
       href: opts.href(c.id),
     }))
 }
@@ -798,6 +847,7 @@ export function insideOf(subjectId: string, convs: readonly MarketConv[], period
 export interface SubjectFact {
   id: string
   name: string
+  /** The standing fact's state (`ready`, `provisional`, `failed`, `unread`). */
   calibration: string
   level: Level | null
   verdict: Verdict | null
@@ -825,10 +875,11 @@ export function buildSubjectBoard(input: {
   const m = monthStartOf(input.month)
   const before = prevMonth(m)
   const rows: SubjectRow[] = []
-  const alsoFollowing: string[] = []
+  const unmeasured: UnmeasuredSubject[] = []
+  const monthText = input.soFar ? `${longMonth(m)} so far` : longMonth(m)
   for (const f of input.facts) {
     if (!f.level || f.level.n <= 0) {
-      alsoFollowing.push(f.name)
+      unmeasured.push(unmeasuredOf(f, monthText, input.subjectHref(f.id)))
       continue
     }
     const prev = f.trail.find((p) => monthStartOf(p.month) === before)
@@ -848,12 +899,25 @@ export function buildSubjectBoard(input: {
     })
   }
   return {
-    monthText: input.soFar ? `${longMonth(m)} so far` : longMonth(m),
+    monthText,
     prevText: longMonth(before),
     n: rows[0]?.level?.n ?? null,
     rows,
-    alsoFollowing: alsoFollowing.sort((a, b) => a.localeCompare(b)),
+    unmeasured: unmeasured.sort((a, b) => a.name.localeCompare(b.name)),
+    ticks: rows.some((r) => r.prevPct != null),
   }
+}
+
+/**
+ * Why a subject prints no level, in the calibration's own words
+ * (lib/subjects/calibration-state.ts): counted in your market and marked
+ * provisional while its check is open; being re-described where the check
+ * failed; no reading yet where the month was not read for it. Pure.
+ */
+export function unmeasuredOf(f: Pick<SubjectFact, 'id' | 'name' | 'calibration'>, monthText: string, href: string): UnmeasuredSubject {
+  const state = f.calibration === 'failed' ? 'failed' : f.calibration === 'unread' ? 'unread' : 'provisional'
+  const note = state === 'failed' ? FAILED_EXPLAINED : state === 'unread' ? `no reading in ${monthText} yet` : countedNote('provisional')
+  return { id: f.id, name: f.name, state, note, href }
 }
 
 // ---- The rail (pure) ----------------------------------------------------------------------
@@ -889,6 +953,7 @@ export function buildKinds(readings: readonly ObjectReading[], month: string, no
     prevText: longMonth(prevMonth(m)),
     n,
     rows: rows.sort((a, b) => b.k - a.k || a.kind.localeCompare(b.kind)),
+    ticks: rows.some((r) => r.prevPct != null),
   }
 }
 
@@ -929,6 +994,12 @@ export function mergeMixes(mixes: readonly (PlatformMix | null | undefined)[]): 
 
 // ---- The table (pure) ---------------------------------------------------------------------
 
+/** The table's subject filter: `?in=` where some conversation is in that
+ *  subject, else none (an unknown id shows every row, and drops nothing). */
+export function tableFilterOf(convs: readonly MarketConv[], wanted: string | null): string | null {
+  return wanted && convs.some((c) => c.subjectId === wanted) ? wanted : null
+}
+
 /**
  * The conversation table: the period's conversations, filtered to one subject
  * where `?in=` names one, ten shown until `?all=1`, every open row marked; and
@@ -949,7 +1020,7 @@ export function buildTable(input: {
     held.count += 1
     bySubject.set(c.subjectId, held)
   }
-  const filter = p.in && bySubject.has(p.in) ? p.in : null
+  const filter = tableFilterOf(input.convs, p.in)
   const listed = filter ? input.convs.filter((c) => c.subjectId === filter) : input.convs
   const shown = p.all ? listed : listed.slice(0, MARKET_TABLE_ROWS)
   // An open conversation further down the list is shown, so its panel has a
@@ -971,16 +1042,32 @@ export function buildTable(input: {
     all: p.all,
     showAllHref: !p.all && listed.length > MARKET_TABLE_ROWS ? marketHref({ ...base, in: filter, all: true }, 'conversations') : null,
     months: input.months,
+    subjects: bySubject.size > 0,
   }
 }
 
 // ---- The open panel (pure) ----------------------------------------------------------------
 
-/** Where the notch points: the centre of the clicked item, across the row. */
-export function notchOf(at: PanelAt, index = 0): number {
-  if (at === 'top') return index === 0 ? 0.25 : index === 1 ? 0.625 : 0.875
+/**
+ * Where the notch points: the centre of the clicked item, across the row. The
+ * top row is laid out by how many cards stand beside the hero (`topSpans`):
+ * 6 · 3 · 3 (the board's), 7 · 5 with one, the hero alone with none.
+ */
+export function notchOf(at: PanelAt, index = 0, sides = 2): number {
+  if (at === 'top') {
+    const spans = topSpans(sides)
+    const before = spans.slice(0, index).reduce((a, b) => a + b, 0)
+    return (before + (spans[index] ?? spans[0]) / 2) / 12
+  }
   if (at === 'subjects') return 0.3
   return 0.12
+}
+
+/** The top row's column spans (of twelve), hero first. Pure. */
+export function topSpans(sides: number): number[] {
+  if (sides <= 0) return [12]
+  if (sides === 1) return [7, 5]
+  return [6, ...Array.from({ length: sides }, () => 3)]
 }
 
 /**
@@ -1048,6 +1135,13 @@ export function personasOf(raw: unknown): { key: string; name: string; registryI
   })
 }
 
+/** The flag's base, named (anomaly-check.ts: every surface names the
+ *  denominator): the check's pooled slice is every audience together, your own
+ *  posts included. Pure. */
+export function flagBaseWords(denominator: string): string {
+  return denominator === SLICE ? 'every audience together, your own posts included' : denominator
+}
+
 /** "July to September", from the baseline's months. */
 export function monthsText(months: readonly string[]): string {
   const sorted = [...months].map(monthStartOf).sort()
@@ -1093,7 +1187,7 @@ export function panelStats(input: {
     out.push({ value: input.prevK, of: month.prev.category, label: `category videos in ${month.prev.text}` })
   }
   if (input.flag && input.baselineText) {
-    out.push({ value: input.flag.baseline.k, of: input.flag.baseline.n, label: `videos in ${input.baselineText}` })
+    out.push({ value: input.flag.baseline.k, of: input.flag.baseline.n, label: `videos in ${input.baselineText}, ${flagBaseWords(input.flag.denominator)}` })
   }
   return out
 }
@@ -1193,7 +1287,7 @@ async function loadRegistryLabels(db: SupabaseClient, clientId: string, ids: rea
 async function resolveSlug(db: SupabaseClient, clientId: string, slug: string, ordered: readonly string[]): Promise<string | null> {
   const linked = ordered.length > 0 ? await loadLinkedTheme(db, clientId, new Set([slug]), ordered) : null
   if (linked) return linked
-  const res = await db.from('theme_registry').select('id').eq('client_id', clientId).contains('member_slugs', [slug]).limit(1)
+  const res = await db.from('theme_registry').select('id').eq('client_id', clientId).contains('member_slugs', [slug]).order('id', { ascending: true }).limit(1)
   if (res.error) throw new Error(`theme_registry slug: ${res.error.message}`)
   return ((res.data ?? []) as { id: string }[])[0]?.id ?? null
 }
@@ -1231,11 +1325,11 @@ async function loadRefs(
 ): Promise<{ theme_id: string; video_ids: string[]; comment_ids: string[] }[]> {
   if (a.ids.length === 0) return []
   if (a.period === 'week' && a.window && a.runId) {
-    const res = await db.rpc('monthly_evidence_refs', { p_client: clientId, p_run: a.runId, p_from: a.window.from, p_to: a.window.to })
-    if (res.error) throw new Error(`monthly_evidence_refs: ${res.error.message}`)
+    // The freeze's own reader: paged past the 1,000-row cap on a unique order.
+    const rows = await readEvidenceRefs(db, clientId, a.runId, a.window)
     const want = new Set(a.ids)
     const byTheme = new Map<string, { videos: Set<string>; comments: Set<string> }>()
-    for (const r of (res.data ?? []) as { audience: string; theme_id: string; video_ids: string[] | null; comment_ids: string[] | null }[]) {
+    for (const r of rows) {
       const id = String(r.theme_id)
       if (r.audience !== INDUSTRY_AUDIENCE || !want.has(id)) continue
       const held = byTheme.get(id) ?? { videos: new Set<string>(), comments: new Set<string>() }
@@ -1256,21 +1350,33 @@ async function loadRefs(
   return parts.flat()
 }
 
-/** Who these themes' videos are about. A tenant with no brand rules has no
- *  namings to read: every video is the audience's. */
+/**
+ * Who these themes' videos are about, and whether that may print at all.
+ *
+ * A TENANT WITH NO BRAND RULES has nothing read (`not_read`); one with rules
+ * and no `brand_mentions` row written yet (Össur before its back-read) has
+ * nothing counted (`not_counted`). In both, "no brand named" would be a false
+ * absence, so no split prints and the page says which (Voices' words). Only
+ * where some row exists does an empty naming mean nobody named a brand.
+ */
 async function loadWho(
   db: SupabaseClient,
   clientId: string,
   a: { refs: readonly { theme_id: string; video_ids: string[]; comment_ids: string[] }[]; company: string; rivals: readonly { id: string; name: string }[] },
-): Promise<Map<string, WhoPart[]>> {
-  if (a.refs.length === 0) return new Map()
-  let mentions: { comment_id: string; video_id: string; name: string }[] = []
-  if (brandRulesFor(clientId).length > 0) {
-    const tracked = trackedBrands(clientId, a.company, a.rivals)
-    const namings = await loadCommentNamings(db, { clientId, commentIds: a.refs.flatMap((r) => r.comment_ids), brands: tracked })
-    mentions = namings.map((n) => ({ comment_id: n.commentId, video_id: n.videoId, name: n.name }))
+): Promise<{ who: Map<string, WhoPart[]>; brands: BrandsState }> {
+  if (brandRulesFor(clientId).length === 0) return { who: new Map(), brands: 'not_read' }
+  const tracked = trackedBrands(clientId, a.company, a.rivals)
+  const namings = a.refs.length > 0
+    ? await loadCommentNamings(db, { clientId, commentIds: a.refs.flatMap((r) => r.comment_ids), brands: tracked })
+    : []
+  if (namings.length === 0) {
+    // One row is enough to tell "nobody named one" from "nothing counted yet".
+    const probe = await db.from('brand_mentions').select('id').eq('client_id', clientId).limit(1)
+    if (probe.error) throw new Error(`brand_mentions probe: ${probe.error.message}`)
+    if ((probe.data ?? []).length === 0) return { who: new Map(), brands: 'not_counted' }
   }
-  return whoOf(a.refs, mentions, a.company)
+  const mentions = namings.map((n) => ({ comment_id: n.commentId, video_id: n.videoId, name: n.name }))
+  return { who: whoOf(a.refs, mentions, a.company), brands: 'counted' }
 }
 
 /** The latest consumer profile's personas (key, name, registry ids). */
@@ -1371,9 +1477,8 @@ export async function loadMarket(input: {
   const view = readingViewFrom({ now: nowIso, runs, denominators: history.denominators, rivalAudiences, schedule, explicit: p.month ? p.month.slice(0, 7) : null })
   const weekMonth = read ? readingMonthOf(read.window) : null
   const month = period === 'week' && weekMonth ? monthStartOf(weekMonth.month) : monthStartOf(view.reading.month)
-  // "So far" only while the month is under way: a week carried past its month
-  // states that month in full (M2), and an older read's month has ended.
-  const soFar = month >= nowMonth && !(period === 'week' && weekMonth?.complete)
+  // "So far" only while the month is under way (`monthSoFar`, the tile's too).
+  const soFar = monthSoFar(month, nowMonth, period === 'week' && (weekMonth?.complete ?? false))
   const pooled = pooledDenominators(history.denominators.map((d) => ({ month: d.month, audience: d.audience, videos: d.videos, comments: d.comments ?? 0 })), rivalAudiences)
   const categoryOf = new Map<string, number>()
   for (const d of history.denominators) if (d.audience === INDUSTRY_AUDIENCE) categoryOf.set(monthStartOf(d.month), d.videos)
@@ -1395,7 +1500,7 @@ export async function loadMarket(input: {
   const ourChanges = ourChangesWithoutGatherFlags(changes.filter((r) => !isFailOpenFix(r)))
   const cut = period === 'week' && windows ? cutWindows(windows, ourChanges, cadence ?? []) : []
   const windowReadsAhead = period === 'week' && windows && themedRunId
-    ? Promise.all(windows.map((w, i) => (cut[i] && i < windows.length - 1
+    ? Promise.all(windows.map((w, i) => (cut[i]
       ? Promise.resolve(null)
       : soft(`window${i}`, loadWindowReading(db, clientId, { from: w.from, to: w.to, runId: themedRunId, audiences: market }), null))))
     : Promise.resolve([] as (WindowReading | null)[])
@@ -1472,11 +1577,13 @@ export async function loadMarket(input: {
     clientId, objects: [...subjectObjects, ...kindObjects], month, pair, asOf: nowIso, rivalAudiences,
   }), [] as ObjectReading[])
 
-  // Who, for what prints a split: the hero, the table's shown rows, the open one.
-  const tableShown = (p.in ? convs.filter((c) => c.subjectId === p.in) : convs).slice(0, p.all ? undefined : MARKET_TABLE_ROWS)
+  // Who, for what prints a split: the hero, the table's shown rows (by the
+  // table's own filter rule), the open one.
+  const tableFilter = tableFilterOf(convs, p.in)
+  const tableShown = (tableFilter ? convs.filter((c) => c.subjectId === tableFilter) : convs).slice(0, p.all ? undefined : MARKET_TABLE_ROWS)
   const whoIds = [...new Set([...tableShown.map((c) => c.id), ...(heroId ? [heroId] : []), ...(openId ? [openId] : [])])]
   const whoAhead = soft('refs', loadRefs(db, clientId, { period, month, window: read?.window ?? null, runId: themedRunId, ids: whoIds }), [])
-    .then((refs) => soft('who', loadWho(db, clientId, { refs, company: brand, rivals: competitors.map((c) => ({ id: c.id, name: c.name })) }), new Map<string, WhoPart[]>()))
+    .then((refs) => soft('who', loadWho(db, clientId, { refs, company: brand, rivals: competitors.map((c) => ({ id: c.id, name: c.name })) }), { who: new Map<string, WhoPart[]>(), brands: 'not_counted' as BrandsState }))
   // What people did in a conversation: its month's videos (the stored refs).
   // Read once per conversation: the hero and its open panel share it.
   const kindsRead = new Map<string, Promise<{ kind: string; label: string; videos: number }[] | null>>()
@@ -1491,9 +1598,10 @@ export async function loadMarket(input: {
     kindsRead.set(id, read)
     return read
   }
-  const [readings, who, personas, heroKinds, weekRowsRaw] = await Promise.all([
+  const [readings, whoRead, personas, heroKinds, weekRowsRaw] = await Promise.all([
     readingsAhead, whoAhead, personasAhead, heroId ? kindsFor(heroId) : Promise.resolve(null), weekRowsAhead,
   ])
+  const { who, brands } = whoRead
   const withWho = (c: MarketConv): MarketConv => (who.has(c.id) ? { ...c, who: who.get(c.id) ?? [] } : c)
   convs = convs.map(withWho)
   const findConv = (id: string): MarketConv | null => {
@@ -1535,7 +1643,7 @@ export async function loadMarket(input: {
         })
       : null,
     platforms: period === 'week' && weekRead?.denominators
-      ? platformRows(mergeMixes(weekRead.denominators.filter((d) => market.includes(d.audience)).map((d) => d.platform_mix)), 'week')
+      ? withMonthPlatforms(platformRows(mergeMixes(weekRead.denominators.filter((d) => market.includes(d.audience)).map((d) => d.platform_mix)), 'week'), monthMix, inMonth(month, !soFar))
       : platformRows(monthMix, 'month'),
     watch: period === 'week' && read && read.version === 2
       ? read.watch.slice(0, MARKET_WATCH).map((w) => ({ body: w.body.trim(), figures: read.figures as unknown as PrintedFigures })).filter((l) => l.body)
@@ -1577,7 +1685,7 @@ export async function loadMarket(input: {
     ? await soft('panel', loadConvPanel({
         db, clientId, id: openId, at, p, period, month: monthBlock, week: weekBlock,
         conv: findConv(openId), read, flag, themedRunId, nowMonth, pair, personas, noun, kindsFor,
-        topIndex: topIndexOf(top, openId), runThemes,
+        topIndex: topIndexOf(top, openId), sides: top.sides.length, runThemes,
       }), null)
     : null
   const subjectPanel = !openId && p.subject
@@ -1598,7 +1706,15 @@ export async function loadMarket(input: {
     table,
     panel,
     subjectPanel,
+    brands,
   }
+}
+
+/** This week's platforms with each one's month beside it (decision 1). Pure. */
+export function withMonthPlatforms(block: PlatformsBlock | null, month: Record<string, number> | null, text: string): PlatformsBlock | null {
+  if (!block) return null
+  if (!month) return { ...block, month: null }
+  return { ...block, month: { counts: month, n: Object.values(month).reduce((a, b) => a + (Number(b) || 0), 0), text } }
 }
 
 /** The market's videos month by month, the last `MARKET_TIME_MONTHS` with a
@@ -1671,6 +1787,8 @@ async function loadConvPanel(a: {
   noun: string | null
   kindsFor: (id: string) => Promise<{ kind: string; label: string; videos: number }[] | null>
   topIndex: number
+  /** The cards beside the hero, which decide where the notch points. */
+  sides: number
   runThemes: ReadonlyMap<string, RunTheme>
 }): Promise<ConvPanel | null> {
   const { db, clientId, id } = a
@@ -1707,7 +1825,7 @@ async function loadConvPanel(a: {
     kind,
     subjectName: conv.subjectName,
     at: a.at,
-    notchAt: notchOf(a.at, Math.max(0, a.topIndex)),
+    notchAt: notchOf(a.at, Math.max(0, a.topIndex), a.sides),
     flag: flagHere && a.week ? flagVerdict(flagHere, a.week.window) : null,
     isNew: conv.isNew,
     stats: panelStats({ conv, period: a.period, week: a.week, month: a.month, prevK: prevPoint?.k ?? null, flag: flagHere, baselineText: flagHere ? monthsText(flagHere.baselineMonths) : null }),
@@ -1723,8 +1841,11 @@ async function loadConvPanel(a: {
   }
 }
 
-/** The open subject: its month line, every conversation inside it, and the
- *  week read's sentence on it where the read is of this month. Pure. */
+/** The open subject: its month line, every conversation inside it (a
+ *  set-apart one tagged), and the week read's sentence on it where the read is
+ *  of this month. A subject that prints no level (its check open, being
+ *  re-described, or not read this month) says why, and lists nothing: its
+ *  members are not counted toward any conversation. Pure. */
 export function buildSubjectPanel(a: {
   id: string
   facts: readonly SubjectFact[]
@@ -1739,6 +1860,8 @@ export function buildSubjectPanel(a: {
   const f = a.facts.find((x) => x.id === a.id)
   if (!f) return null
   const m = a.month.month
+  const measured = f.level != null && f.level.n > 0
+  const unmeasured = measured ? null : unmeasuredOf(f, a.month.text, '')
   const standing = a.read && monthStartOf(a.read.month) === m ? a.read.standing.find((s) => s.subjectId === a.id) : null
   const bars: MonthCount[] = f.trail
     .filter((pt) => monthStartOf(pt.month) <= m && pt.n != null)
@@ -1747,13 +1870,15 @@ export function buildSubjectPanel(a: {
   return {
     id: f.id,
     name: f.name,
+    state: unmeasured ? unmeasured.state : 'ready',
+    note: unmeasured ? unmeasured.note : null,
     at: 'subjects',
     notchAt: notchOf('subjects'),
-    level: f.level ? { ...f.level, pct: share(f.level.k, f.level.n) } : null,
-    verdict: f.verdict,
+    level: measured && f.level ? { ...f.level, pct: share(f.level.k, f.level.n) } : null,
+    verdict: measured ? f.verdict : null,
     monthText: a.month.text,
-    bars,
-    inside: insideOf(f.id, a.convs, a.period, { limit: 50, href: (id) => convHref(a.p, id, 'subjects'), flagId: a.flag?.id ?? null, flag: a.flag?.verdict ?? null }),
+    bars: measured ? bars : [],
+    inside: measured ? insideOf(f.id, a.convs, a.period, { limit: 50, href: (id) => convHref(a.p, id, 'subjects'), flagId: a.flag?.id ?? null, flag: a.flag?.verdict ?? null }) : [],
     sentence: standing?.sentence?.trim() ? { body: standing.sentence.trim(), figures: (a.read?.figures ?? {}) as unknown as PrintedFigures } : null,
     askHref: `/dashboard/agent?ask=${encodeURIComponent(`What does my market say about ${f.name}?`)}`,
     closeHref: closeHref(a.p, 'subjects'),
@@ -1799,11 +1924,16 @@ export async function topMarket(input: {
   clientId: string
   reading: ReadingHandle
   read?: PublishedWeekRead | null
+  /** The caller's own read of the published read's window (the newest week),
+   *  under the themed run, over the market's audiences, where it holds one:
+   *  the tile then reads only the two windows before it. */
+  windowRead?: WindowReading | null
   now?: Date
 }): Promise<MarketTop | null> {
   const { supabase, clientId } = input
   const db = input.reading.client
   const nowIso = (input.now ?? new Date()).toISOString()
+  const nowMonth = monthStartOf(nowIso)
   const published = input.read !== undefined ? input.read : await soft('top.read', loadPublishedWeekRead(db, clientId), null)
   if (!published) return null
   const read = published.data
@@ -1811,6 +1941,7 @@ export async function topMarket(input: {
   if (!windows) return null
   const weekMonth = readingMonthOf(read.window)
   const month = monthStartOf(weekMonth.month)
+  const soFar = monthSoFar(month, nowMonth, weekMonth.complete)
   const themedRunAhead = fetchRunningRunIds(supabase, clientId, 'market.top').then((ids) => fetchThemedRunId(supabase, clientId, ids, 'market.top')).catch(() => null)
   const segmentsAhead = themedRunAhead.then((runId) => (makerRuleEnabled(clientId) && runId ? soft('top.segments', loadThemeSegmentRows(db, clientId, month, runId), null) : null))
   const [themedRunId, rivals, changes, cadence, flag, monthRows, monthCategory] = await Promise.all([
@@ -1824,29 +1955,36 @@ export async function topMarket(input: {
   ])
   const market = marketAudiences(marketRivalAudiences(rivals))
   const cut = cutWindows(windows, ourChangesWithoutGatherFlags(changes.filter((r) => !isFailOpenFix(r))), cadence ?? [])
-  const [reads, runThemes, segmentRows] = await Promise.all([
+  const last = windows.length - 1
+  const [reads, segmentRows] = await Promise.all([
     themedRunId
-      ? Promise.all(windows.map((w, i) => (cut[i] && i < windows.length - 1
+      ? Promise.all(windows.map((w, i) => (cut[i]
         ? Promise.resolve(null)
-        : soft(`top.window${i}`, loadWindowReading(db, clientId, { from: w.from, to: w.to, runId: themedRunId, audiences: market }), null))))
+        : i === last && input.windowRead
+          ? Promise.resolve(input.windowRead)
+          : soft(`top.window${i}`, loadWindowReading(db, clientId, { from: w.from, to: w.to, runId: themedRunId, audiences: market }), null))))
       : Promise.resolve([] as (WindowReading | null)[]),
-    soft('top.themes', loadRunThemes(db, clientId, themedRunId), new Map<string, RunTheme>()),
     segmentsAhead,
   ])
-  const setApart = setApartOf(segmentRows)
   if (reads.length === 0) return null
+  const weekCounts = reads.map((r) => categoryThemeVideos(r))
+  // LABELS FOR THE WEEK'S THEMES ONLY (the theme, its label and its kind): the
+  // tile places no conversation in a subject, so no member list is read.
+  const ids = [...new Set([...(weekCounts[last]?.keys() ?? []), ...(flag?.objectKind === 'theme' ? [flag.objectId] : [])])]
+  const runThemes = await soft('top.labels', loadThemeLabels(db, clientId, themedRunId, ids), new Map<string, RunTheme>())
+  const setApart = setApartOf(segmentRows)
   const params = marketParams({})
   const convInput: ConvInput = {
     period: 'week',
     themes: runThemes,
     subjects: null,
-    weekCounts: reads.map((r) => categoryThemeVideos(r)),
+    weekCounts,
     weekCut: cut,
     monthCounts: new Map([...monthRows.entries()].map(([id, r]) => [id, r.videos])),
     monthMixes: new Map([...monthRows.entries()].map(([id, r]) => [id, r.mix])),
     series: new Map(),
     month,
-    nowMonth: monthStartOf(nowIso),
+    nowMonth,
     newIds: new Set(read.version === 2 ? read.newThisWeek.map((n) => n.themeId) : []),
     setApart,
     pair: null,
@@ -1865,10 +2003,25 @@ export async function topMarket(input: {
   return {
     hero,
     rows,
-    category: { week: categoryVideos(reads[reads.length - 1] ?? null), month: monthCategory },
-    week: { dates: weekReadDates(read.window), inMonth: inMonth(month, weekMonth.complete), labels: windows.map(windowLabel) },
+    category: { week: categoryVideos(reads[last] ?? null), month: monthCategory },
+    week: { dates: weekReadDates(read.window), inMonth: inMonth(month, !soFar), labels: windows.map(windowLabel) },
     href: MARKET,
   }
+}
+
+/** These themes' labels and kinds on the themed run, and nothing else (no
+ *  member ids: the tile places nothing in a subject). */
+async function loadThemeLabels(db: SupabaseClient, clientId: string, runId: string | null, ids: readonly string[]): Promise<Map<string, RunTheme>> {
+  const out = new Map<string, RunTheme>()
+  if (!runId || ids.length === 0) return out
+  const parts = await mapWithLimit(chunk([...ids], UUID_IN_CHUNK), READ_CONCURRENCY, async (part) => {
+    const res = await db.from('theme_observations').select('theme_id, label, category')
+      .eq('client_id', clientId).eq('run_id', runId).in('theme_id', part).order('theme_id', { ascending: true })
+    if (res.error) throw new Error(`theme_observations labels: ${res.error.message}`)
+    return (res.data ?? []) as { theme_id: string; label: string | null; category: string | null }[]
+  })
+  for (const r of parts.flat()) out.set(String(r.theme_id), { label: (r.label ?? '').trim(), kind: r.category ?? null, memberIds: [] })
+  return out
 }
 
 /** The category's videos in one month (`month_denominators`). */

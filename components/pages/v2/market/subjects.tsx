@@ -6,7 +6,7 @@ import { CARD, CardHead, TickBar } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
 import type { MarketData, SubjectBoard, SubjectRow } from '@/lib/pages/v2/market'
 import { cn } from '@/lib/utils'
-import { ConvChip, ConvRow, Label, MONO_MUTED } from './parts'
+import { ConvChip, ConvRow, Label, MONO_MUTED, SetApartTag } from './parts'
 
 // THE SUBJECT BOARD (depth v2, T3; E2-Market's "What the market is talking
 // about", re-cut to decision 1): every subject the client follows, its month
@@ -80,12 +80,36 @@ function Row({ row, data, selected }: { row: SubjectRow; data: MarketData; selec
               href={c.href}
               label={c.label}
               selected={data.panel?.at === 'subjects' && data.panel.id === c.id}
-              chip={<ConvChip flag={c.flag} isNew={c.isNew} id={c.id} label={c.label} k={c.month ?? c.count ?? 0} n={data.month.category ?? 0} month={data.month.month} />}
+              chip={<><ConvChip flag={c.flag} isNew={c.isNew} id={c.id} label={c.label} k={c.month ?? c.count ?? 0} n={data.month.category ?? 0} month={data.month.month} /><SetApartTag setApart={c.setApart} /></>}
               counts={week ? [c.count, c.month] : [c.count]}
             />
           ))
           : <p className="m-0 text-[13.5px] text-muted-foreground">No conversation in it reached three videos {week ? 'this week' : `in ${data.month.text}`}.</p>}
       </div>
+    </div>
+  )
+}
+
+/** The subjects that print no level, grouped by why (the calibration's own
+ *  words): counted in your market and marked provisional; being re-described;
+ *  not read this month. Each opens its panel, which says the same. */
+function Unmeasured({ board, selected }: { board: SubjectBoard; selected: string | null }) {
+  const groups = (['provisional', 'failed', 'unread'] as const)
+    .map((state) => ({ state, rows: board.unmeasured.filter((u) => u.state === state) }))
+    .filter((g) => g.rows.length > 0)
+  return (
+    <div className={cn('flex flex-col gap-2 text-[13px] leading-[1.5]', board.rows.length > 0 ? 'border-t border-track pt-3' : null)}>
+      {groups.map((g) => (
+        <p key={g.state} className="m-0 text-muted-foreground">
+          {g.rows.map((u, i) => (
+            <span key={u.id}>
+              {i > 0 ? ', ' : null}
+              <Link href={u.href} scroll={false} aria-current={selected === u.id ? 'true' : undefined} className="font-medium text-foreground no-underline underline-offset-[3px] hover:underline">{u.name}</Link>
+            </span>
+          ))}
+          <span>: {g.rows[0].note}</span>
+        </p>
+      ))}
     </div>
   )
 }
@@ -98,16 +122,16 @@ export function SubjectBoardView({ board, data }: { board: SubjectBoard; data: M
         icon={MessageSquareText}
         id="subjects-title"
         title="What the market is talking about"
-        sub={board.rows.length > 0 ? <>Your subjects, as a share of {board.monthText}’s {board.n != null ? <span data-copy="figure">{fmtInt(board.n)}</span> : null} videos. The black tick is {board.prevText}.</> : <>Your subjects in {board.monthText}</>}
+        sub={board.rows.length > 0
+          ? <>Your subjects, as a share of {board.monthText}’s {board.n != null ? <span data-copy="figure">{fmtInt(board.n)}</span> : null} videos.{board.ticks ? <> The black tick is {board.prevText}.</> : null}</>
+          : <>Your subjects in {board.monthText}</>}
       />
       {board.rows.length > 0 ? (
         <div>
           {board.rows.map((r) => <Row key={r.id} row={r} data={data} selected={openSubject === r.id} />)}
         </div>
       ) : null}
-      {board.alsoFollowing.length > 0 ? (
-        <p className={cn('m-0 text-[13px] text-muted-foreground', board.rows.length > 0 ? 'border-t border-track pt-3' : null)}>Also following: {board.alsoFollowing.join(', ')}</p>
-      ) : null}
+      {board.unmeasured.length > 0 ? <Unmeasured board={board} selected={openSubject} /> : null}
     </article>
   )
 }

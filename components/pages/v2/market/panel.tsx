@@ -9,7 +9,8 @@ import { marketLabelsOf } from '@/lib/brands/labels'
 import { MARKET_PANEL_MONTHS, type ConvPanel, type MarketData, type MonthCount, type SubjectPanel } from '@/lib/pages/v2/market'
 import { translationLabel, translationNote } from '@/components/quote-block'
 import { cn } from '@/lib/utils'
-import { About, ConvChip, ConvRow, Label, OLINK, Stored, newVerdict } from './parts'
+import { About, ConvChip, ConvRow, Label, OLINK, SetApartTag, Stored, newVerdict } from './parts'
+import { BRANDS_NOT_COUNTED, BRANDS_NOT_READ } from '@/lib/pages/v2/voices'
 
 // THE OPEN PANELS (depth v2, T3; E2-Market-Open): a conversation in full, or a
 // subject in full, in place under the row it was opened from, with a notch
@@ -89,7 +90,11 @@ export function ConversationPanel({ panel, data }: { panel: ConvPanel; data: Mar
           ) : null}
         </div>
         <div className="grid min-w-0 grid-cols-1 gap-x-7 gap-y-[26px] sm:grid-cols-2">
-          {panel.who ? (
+          {data.brands !== 'counted' ? (
+            <PanelSection label="Who it’s about">
+              <p className="m-0 text-[13.5px] text-muted-foreground">{data.brands === 'not_counted' ? BRANDS_NOT_COUNTED : BRANDS_NOT_READ}</p>
+            </PanelSection>
+          ) : panel.who ? (
             <PanelSection label="Who it’s about">
               {panel.who.parts.some((p) => p.about !== 'market') ? <ProportionBar of="videos" segments={whoSegments} /> : null}
               <About parts={panel.who.parts} brand={data.brand} noun={data.noun} />
@@ -165,6 +170,12 @@ export function SubjectPanelView({ panel, data }: { panel: SubjectPanel; data: M
         </>
       }
     >
+      {panel.state !== 'ready' && panel.note ? (
+        // Not measured: why, in the calibration's words, and nothing counted.
+        <p data-subject-state={panel.state} className="m-0 text-[15px] leading-[1.6] text-foreground">
+          {panel.state === 'failed' ? panel.note : `Not measured yet: ${panel.note}.`}
+        </p>
+      ) : null}
       {panel.level ? (
         <StatRow>
           <StatCell value={panel.level.k} of={panel.level.n} label={`videos in your market, ${panel.monthText}`} />
@@ -185,6 +196,7 @@ export function SubjectPanelView({ panel, data }: { panel: SubjectPanel; data: M
             </PanelSection>
           ) : null}
         </div>
+        {panel.state === 'ready' ? (
         <PanelSection label={<>Conversations inside it {week ? <span className="normal-case tracking-normal">· this week, and {data.month.text}</span> : null}</>}>
           {panel.inside.length > 0
             ? panel.inside.map((c) => (
@@ -192,12 +204,13 @@ export function SubjectPanelView({ panel, data }: { panel: SubjectPanel; data: M
                 key={c.id}
                 href={c.href}
                 label={c.label}
-                chip={<ConvChip flag={c.flag} isNew={c.isNew} id={c.id} label={c.label} k={c.month ?? c.count ?? 0} n={data.month.category ?? 0} month={data.month.month} />}
+                chip={<><ConvChip flag={c.flag} isNew={c.isNew} id={c.id} label={c.label} k={c.month ?? c.count ?? 0} n={data.month.category ?? 0} month={data.month.month} /><SetApartTag setApart={c.setApart} /></>}
                 counts={week ? [c.count, c.month] : [c.count]}
               />
             ))
             : <p className="m-0 text-[13.5px] text-muted-foreground">No conversation in it reached three videos.</p>}
         </PanelSection>
+        ) : null}
       </div>
       <div className="flex flex-wrap items-center gap-[18px] border-t border-track pt-5">
         <Link href={panel.askHref} className={ASK}><Sparkles className="size-3.5" aria-hidden />Ask the Agent about this</Link>

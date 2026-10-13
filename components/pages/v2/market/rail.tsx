@@ -42,7 +42,7 @@ export function KindsCard({ block }: { block: KindsBlock }) {
           />
         ))}
       </div>
-      <TickKey fill={block.monthText} tick={block.prevText} />
+      {block.ticks ? <TickKey fill={block.monthText} tick={block.prevText} /> : null}
     </article>
   )
 }
@@ -70,14 +70,37 @@ export function PlatformsCard({ block, data }: { block: PlatformsBlock; data: Ma
         ? <>This week’s <span data-copy="figure">{fmtInt(block.n)}</span> videos, by platform</>
         : <>The <span data-copy="figure">{fmtInt(block.n)}</span> videos in {data.month.text}, by platform</>} />
       <ProportionBar of="videos" segments={segments} />
-      <div className="flex flex-wrap justify-between gap-2.5 text-[13px]">
-        {segments.map((s) => (
-          <span key={s.label} className="inline-flex items-center gap-1.5">
-            <i aria-hidden className={cn('inline-block size-2 rounded-[2px]', s.color)} />{s.label} <span data-copy="figure" className="font-mono">{fmtInt(s.count)}</span>
-          </span>
-        ))}
-      </div>
+      {block.month ? (
+        // This week: each platform's week beside its month (decision 1).
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-baseline gap-x-4 gap-y-1.5 text-[13px]">
+          <span />
+          <span className="text-right text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">This week</span>
+          <span className="text-right text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{block.month.text.replace(/^in /, '')}</span>
+          {block.rows.map((r, i) => (
+            <PlatformMonthRow key={r.platform} label={r.label} color={segments[i].color} week={r.videos} month={block.month!.counts[r.platform] ?? 0} n={block.month!.n} />
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-wrap justify-between gap-2.5 text-[13px]">
+          {segments.map((s) => (
+            <span key={s.label} className="inline-flex items-center gap-1.5">
+              <i aria-hidden className={cn('inline-block size-2 rounded-[2px]', s.color)} />{s.label} <span data-copy="figure" className="font-mono">{fmtInt(s.count)}</span>
+            </span>
+          ))}
+        </div>
+      )}
     </article>
+  )
+}
+
+/** One platform's week, then its month with the month's n. */
+function PlatformMonthRow({ label, color, week, month, n }: { label: string; color: string; week: number; month: number; n: number }) {
+  return (
+    <>
+      <span className="inline-flex items-center gap-1.5"><i aria-hidden className={cn('inline-block size-2 rounded-[2px]', color)} />{label}</span>
+      <span data-copy="figure" className="text-right font-mono tabular-nums">{fmtInt(week)}</span>
+      <span data-copy="level" className="text-right font-mono tabular-nums text-muted-foreground">{fmtInt(month)} of {fmtInt(n)}</span>
+    </>
   )
 }
 

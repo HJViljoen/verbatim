@@ -74,7 +74,7 @@ describe('MarketPage', () => {
 describe('TopRowView', () => {
   it('leads with the flag: the chip and never an eyebrow beside it, the flag\'s own k of n, its baseline, the month', () => {
     const text = renderText(<TopRowView data={WEEK} />)
-    expect(text).toMatch(/^Unusual this week Insurance refusals for powered knees 19 of 252 videos this week 39 of 1,906 in July to September 31 in October so far/)
+    expect(text).toMatch(/^Unusual this week Insurance refusals for powered knees 19 of 252 videos this week, every audience together, your own posts included 39 of 1,906 in July to September, the same base 31 of 300 category videos in October so far/)
     expect(text.match(/Unusual this week/g)).toHaveLength(1)
     const html = render(<TopRowView data={WEEK} />)
     expect(html).toMatch(/data-copy="verdict" data-flag="unusual"/)
@@ -85,13 +85,21 @@ describe('TopRowView', () => {
 
   it('beside it, the week\'s biggest as three bare counts and the rest of the new', () => {
     const text = renderText(<TopRowView data={WEEK} />)
-    expect(text).toContain('Three weeks How long a liner lasts 23 of 226 category videos this week 35 in October so far 9 21 Sep 14 28 Sep 23 5 Oct')
-    expect(text).toContain('New this week Waterproof knees 8 of 226 category videos this week 8 in October so far Also new this week Liner smell and cleaning 5')
+    expect(text).toContain('Three weeks How long a liner lasts 23 of 226 category videos this week 35 of 300 in October so far 9 14 23 21 Sep 28 Sep 5 Oct')
+    expect(text).toContain('New this week Waterproof knees 8 of 226 category videos this week 8 of 300 in October so far Also new this week Liner smell and cleaning 5 this week · 5 of 300 in October so far')
+  })
+
+  it('draws a week our own change cut as a gap, never a printed 0', () => {
+    const cut = { ...WEEK, top: { ...WEEK.top, sides: WEEK.top.sides.map((s) => (s.kind === 'biggest' ? { ...s, convs: s.convs.map((c) => ({ ...c, weeks: [null, 14, 23] })) } : s)) } }
+    const side = render(<TopRowView data={cut} />)
+    const three = side.slice(side.indexOf('Three weeks'))
+    expect(three).toContain('21 Sep not read')
+    expect(renderText(<TopRowView data={cut} />)).toContain('Three weeks How long a liner lasts 23 of 226 category videos this week 35 of 300 in October so far 14 23 21 Sep 28 Sep 5 Oct')
   })
 
   it('with no flag, the biggest new conversation leads, "New this week" earned in a verdict node', () => {
     const html = render(<TopRowView data={QUIET} />)
-    expect(renderText(<TopRowView data={QUIET} />)).toMatch(/^New this week Waterproof knees 8 of 226 category videos this week 8 in October so far/)
+    expect(renderText(<TopRowView data={QUIET} />)).toMatch(/^New this week Waterproof knees 8 of 226 category videos this week 8 of 300 in October so far/)
     expect(html).toMatch(/<span data-copy="verdict">New this week<\/span>/)
     assertCopyContract(<TopRowView data={QUIET} />)
   })
@@ -105,7 +113,7 @@ describe('TopRowView', () => {
   it('with nothing flagged and nothing new, the week\'s most talked about leads, headed plainly', () => {
     const plain = marketFixture({ flagged: false, noNew: true })
     const text = renderText(<TopRowView data={plain} />)
-    expect(text).toMatch(/^Most talked about this week How long a liner lasts 23 of 226 category videos this week 35 in October so far/)
+    expect(text).toMatch(/^Most talked about this week How long a liner lasts 23 of 226 category videos this week 35 of 300 in October so far/)
     assertCopyContract(<TopRowView data={plain} />)
   })
 
@@ -134,7 +142,7 @@ describe('SubjectBoardView', () => {
     expect(text).toMatch(/^What the market is talking about Your subjects, as a share of October so far’s 318 videos\. The black tick is September\./)
     expect(text).toContain('Cost & access 22% 70 of 318 ▲ 7 pts')
     expect(text).toContain('Fit & comfort 34% 108 of 318 no clear change')
-    expect(text).toContain('Also following: Sport and running')
+    expect(text).toContain('Sport and running : counted in your market, marked provisional')
     assertCopyContract(<SubjectBoardView board={board} data={WEEK} />)
   })
 
@@ -159,6 +167,19 @@ describe('SubjectBoardView', () => {
 })
 
 describe('the rail', () => {
+  it('prints the tick legend only where a tick is drawn', () => {
+    const block = { ...WEEK.rail.kinds!, ticks: false, rows: WEEK.rail.kinds!.rows.map((r) => ({ ...r, prevPct: null })) }
+    expect(renderText(<KindsCard block={block} />)).not.toMatch(/September$/)
+    const board = { ...WEEK.subjects!, ticks: false }
+    expect(renderText(<SubjectBoardView board={board} data={WEEK} />)).not.toContain('The black tick')
+  })
+
+  it('this week, each platform\'s week sits beside its month', () => {
+    const block = { ...WEEK.rail.platforms!, month: { counts: { tiktok: 170, instagram: 98, youtube: 50 }, n: 318, text: 'in October so far' } }
+    expect(renderText(<PlatformsCard block={block} data={WEEK} />)).toContain('This week October so far TikTok 128 170 of 318 Instagram 76 98 of 318 YouTube 37 50 of 318')
+    assertCopyContract(<PlatformsCard block={block} data={WEEK} />)
+  })
+
   it('kinds: the month so far against last month, a badge only where it moved', () => {
     const block = WEEK.rail.kinds!
     expect(renderText(<KindsCard block={block} />)).toMatch(/^What people do in the comments Share of October so far’s 318 videos where at least one comment did it Asked a question 45%/)
@@ -173,7 +194,7 @@ describe('the rail', () => {
   })
 
   it('platforms: the week\'s, or the month\'s', () => {
-    expect(renderText(<PlatformsCard block={WEEK.rail.platforms!} data={WEEK} />)).toBe('Where it’s said This week’s 241 videos, by platform TikTok 128 Instagram 76 YouTube 37')
+    expect(renderText(<PlatformsCard block={{ ...WEEK.rail.platforms!, month: null }} data={WEEK} />)).toBe('Where it’s said This week’s 241 videos, by platform TikTok 128 Instagram 76 YouTube 37')
     expect(renderText(<PlatformsCard block={MONTH.rail.platforms!} data={MONTH} />)).toContain('The 318 videos in October so far, by platform')
     assertCopyContract(<PlatformsCard block={WEEK.rail.platforms!} data={WEEK} />)
   })
@@ -230,7 +251,7 @@ describe('ConversationPanel', () => {
   const panel = OPEN.panel!
   it('the conversation in full: its tags, its stats with their n, our read, its months, who, what, where', () => {
     const text = renderText(<ConversationPanel panel={panel} data={OPEN} />)
-    expect(text).toMatch(/^Cost & access Unusual this week Insurance refusals for powered knees Close 19 of 226 category videos this week 31 of 300 category videos in October so far 19 of 780 category videos in September 39 of 1,906 videos in July to September Our read People describe appeals/)
+    expect(text).toMatch(/^Cost & access Unusual this week Insurance refusals for powered knees Close 19 of 226 category videos this week 31 of 300 category videos in October so far 19 of 780 category videos in September 39 of 1,906 videos in July to September, every audience together, your own posts included Our read People describe appeals/)
     expect(text).toContain('Month by month · share of the category’s videos')
     expect(text).toContain('October so far · 31 of 300')
     expect(text).toContain('What people did · of 31 in October so far Complained about something 14')
@@ -259,7 +280,28 @@ describe('ConversationPanel', () => {
   })
 })
 
+describe('brands not counted yet (Össur before its back-read)', () => {
+  const NC = marketFixture({ brands: 'not_counted', open: { n: 3, at: 'top' } })
+  it('prints no "about" split anywhere, and says once why', () => {
+    const text = renderText(<MarketPage data={NC} />)
+    expect(text).not.toContain('no brand named')
+    expect(text).not.toMatch(/About Össur/)
+    expect(text).toContain('Who the talk is about: Brands are not counted for this workspace yet.')
+    expect(renderText(<ConversationPanel panel={NC.panel!} data={NC} />)).toContain('Who it’s about Brands are not counted for this workspace yet.')
+    expect(renderText(<ConversationTable table={NC.table!} data={NC} />)).toContain('Conversation Subject This week October so far')
+    assertCopyContract(<MarketPage data={NC} />)
+  })
+})
+
 describe('SubjectPanelView', () => {
+  it('a subject not measured yet says why and lists nothing', () => {
+    const data = marketFixture({ subject: 'sport' })
+    const text = renderText(<SubjectPanelView panel={data.subjectPanel!} data={data} />)
+    expect(text).toContain('Sport and running Close Not measured yet: counted in your market, marked provisional.')
+    expect(text).not.toContain('No conversation in it reached three videos')
+    assertCopyContract(<SubjectPanelView panel={data.subjectPanel!} data={data} />)
+  })
+
   it('the subject in full: its level, against last month, our read, its months and every conversation inside it', () => {
     const p = SUBJECT.subjectPanel!
     const text = renderText(<SubjectPanelView panel={p} data={SUBJECT} />)

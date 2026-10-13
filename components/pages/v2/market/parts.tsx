@@ -123,6 +123,15 @@ export function ConvChip({ flag, isNew, id, label, k, n, month }: { flag: Verdic
   return null
 }
 
+/** Why a conversation leads nothing (decision F): the board's own words. */
+export const SET_APART_WORDS = { makers: 'mostly makers’ own posts', noise: 'mostly off-topic videos' } as const
+
+/** The quiet tag a set-apart conversation carries wherever it is listed. */
+export function SetApartTag({ setApart }: { setApart: 'makers' | 'noise' | null }) {
+  if (!setApart) return null
+  return <span className="whitespace-nowrap text-[12px] text-muted-foreground">{SET_APART_WORDS[setApart]}</span>
+}
+
 /** A small caps section label (the boards' `.lbl` / `.dlabel`). */
 export function Label({ children, className }: { children: ReactNode; className?: string }) {
   return <p className={cn('m-0 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground', className)}>{children}</p>

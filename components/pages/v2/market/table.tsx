@@ -6,7 +6,8 @@ import { fmtInt, longMonth } from '@/lib/format'
 import type { MarketConv, MarketData, MarketTable } from '@/lib/pages/v2/market'
 import { cn } from '@/lib/utils'
 import { ConversationPanel } from './panel'
-import { About, ConvChip } from './parts'
+import { About, ConvChip, SetApartTag } from './parts'
+import { BRANDS_NOT_COUNTED, BRANDS_NOT_READ } from '@/lib/pages/v2/voices'
 
 // EVERY CONVERSATION (depth v2, T3; E2-Market's table): the period's
 // conversations at three of the category's videos or more, biggest first,
@@ -17,9 +18,6 @@ import { About, ConvChip } from './parts'
 // are the months. The board's "Against usual" column is not drawn: no rule
 // reads a week against a usual week (decision 1). A row opens its
 // conversation in place, as the table's own next row.
-
-/** Why a conversation leads nothing (decision F): the board's own words. */
-export const SET_APART_WORDS = { makers: 'mostly makers’ own posts', noise: 'mostly off-topic videos' } as const
 
 const TH = 'whitespace-nowrap border-b border-border pb-2.5 pr-3 text-left text-[11.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground'
 const TD = 'border-b border-track py-[11px] pr-3 align-middle'
@@ -59,7 +57,11 @@ function Cells({ conv, data, table }: { conv: MarketConv; data: MarketData; tabl
 
 export function ConversationTable({ table, data }: { table: MarketTable; data: MarketData }) {
   const time = data.period === 'time'
-  const cols = time ? 2 + table.months.length : 5
+  // No subject measured, no Subject column; no brand counted, no About column
+  // (and one line saying why, Voices' words).
+  const subjects = table.subjects
+  const about = !time && data.brands === 'counted'
+  const cols = 1 + (subjects ? 1 : 0) + (time ? table.months.length : (about ? 1 : 0) + 2)
   const shown = table.rows.length
   return (
     <section id="conversations" aria-labelledby="conversations-title" className={cn(CARD, 'scroll-mt-6')}>
@@ -69,6 +71,9 @@ export function ConversationTable({ table, data }: { table: MarketTable; data: M
         title={title(data)}
         sub={<><span data-copy="figure">{fmtInt(table.total)}</span> conversations, biggest first, each counted in the category’s videos{data.period === 'week' && data.week?.category != null ? <> (<span data-copy="figure">{fmtInt(data.week.category)}</span> this week)</> : data.month.category != null ? <> (<span data-copy="figure">{fmtInt(data.month.category)}</span> in {data.month.text})</> : null}</>}
       />
+      {!time && data.brands !== 'counted' ? (
+        <p className="m-0 text-[13px] text-muted-foreground">Who the talk is about: {data.brands === 'not_counted' ? BRANDS_NOT_COUNTED : BRANDS_NOT_READ}</p>
+      ) : null}
       {table.filters.length > 0 ? (
         <nav aria-label="Filter by subject" className="flex flex-wrap gap-1.5">
           {table.filters.map((f) => {
@@ -92,8 +97,8 @@ export function ConversationTable({ table, data }: { table: MarketTable; data: M
           <thead>
             <tr>
               <th scope="col" className={TH}>Conversation</th>
-              <th scope="col" className={cn(TH, 'max-md:hidden')}>Subject</th>
-              {time ? null : <th scope="col" className={cn(TH, 'max-md:hidden')}>About</th>}
+              {subjects ? <th scope="col" className={cn(TH, 'max-md:hidden')}>Subject</th> : null}
+              {about ? <th scope="col" className={cn(TH, 'max-md:hidden')}>About</th> : null}
               {time
                 ? table.months.map((m) => (
                   <th key={m.month} scope="col" className={cn(TH, 'text-right')}>
@@ -108,7 +113,7 @@ export function ConversationTable({ table, data }: { table: MarketTable; data: M
           </thead>
           <tbody>
             {table.rows.map(({ conv, href, open }) => (
-              <RowWithPanel key={conv.id} conv={conv} href={href} open={open} data={data} table={table} cols={cols} />
+              <RowWithPanel key={conv.id} conv={conv} href={href} open={open} data={data} table={table} cols={cols} subjects={subjects} about={about} />
             ))}
           </tbody>
         </table>
@@ -126,8 +131,9 @@ export function ConversationTable({ table, data }: { table: MarketTable; data: M
   )
 }
 
-function RowWithPanel({ conv, href, open, data, table, cols }: { conv: MarketConv; href: string; open: boolean; data: MarketData; table: MarketTable; cols: number }) {
-  const time = data.period === 'time'
+function RowWithPanel({ conv, href, open, data, table, cols, subjects, about }: {
+  conv: MarketConv; href: string; open: boolean; data: MarketData; table: MarketTable; cols: number; subjects: boolean; about: boolean
+}) {
   return (
     <>
       <tr id={`conv-${conv.id}`} className={cn('scroll-mt-6', open ? 'bg-accent/50' : null)}>
@@ -137,11 +143,11 @@ function RowWithPanel({ conv, href, open, data, table, cols }: { conv: MarketCon
               <span data-copy="subject" data-slot="pass_b_theme">{conv.label}</span>
             </Link>
             {data.period === 'week' ? <ConvChip flag={null} isNew={conv.isNew} id={conv.id} label={conv.label} k={conv.month ?? conv.week ?? 0} n={data.month.category ?? 0} month={data.month.month} /> : null}
-            {conv.setApart ? <span className="text-[12px] text-muted-foreground">{SET_APART_WORDS[conv.setApart]}</span> : null}
+            <SetApartTag setApart={conv.setApart} />
           </span>
         </td>
-        <td className={cn(TD, 'text-muted-foreground max-md:hidden')}>{conv.subjectName ?? ''}</td>
-        {time ? null : <td className={cn(TD, 'max-md:hidden')}>{conv.who.length > 0 ? <About parts={conv.who} brand={data.brand} noun={data.noun} /> : null}</td>}
+        {subjects ? <td className={cn(TD, 'text-muted-foreground max-md:hidden')}>{conv.subjectName ?? ''}</td> : null}
+        {about ? <td className={cn(TD, 'max-md:hidden')}>{conv.who.length > 0 ? <About parts={conv.who} brand={data.brand} noun={data.noun} /> : null}</td> : null}
         <Cells conv={conv} data={data} table={table} />
       </tr>
       {open && data.panel && data.panel.id === conv.id ? (

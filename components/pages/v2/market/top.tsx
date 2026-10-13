@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { BarChart3, CalendarRange, MessageSquareText, Sparkles, TrendingUp } from 'lucide-react'
 import { CARD, CardHead, FlagChip, MiniBars, SELECTED_CARD_RING, SpikeBars, type MiniBar } from '@/components/v2'
 import { fmtInt, fmtPct, longMonth } from '@/lib/format'
-import type { Doing, GroupLink, HeroCard, MarketConv, MarketData, MonthCount, SideCard } from '@/lib/pages/v2/market'
+import { flagBaseWords, topSpans, type Doing, type GroupLink, type HeroCard, type MarketConv, type MarketData, type MonthCount, type SideCard } from '@/lib/pages/v2/market'
 import { cn } from '@/lib/utils'
 import { About, BIG, Fig, Label, MID, MONO_MUTED, OLINK, newVerdict } from './parts'
 
@@ -20,15 +20,27 @@ import { About, BIG, Fig, Label, MID, MONO_MUTED, OLINK, newVerdict } from './pa
 
 const PILL_ROW = 'grid grid-cols-12 gap-5'
 
-/** "of 226 category videos this week" / "31 in October so far". */
+/** The spans `topSpans` names, written out whole for Tailwind's scanner. */
+const HERO_SPAN: Record<number, string> = { 12: 'col-span-12', 7: 'col-span-12 xl:col-span-7', 6: 'col-span-12 xl:col-span-6' }
+const SIDE_SPAN: Record<number, string> = { 5: 'col-span-12 md:col-span-6 xl:col-span-5', 3: 'col-span-12 md:col-span-6 xl:col-span-3' }
+
+/** "of 226 category videos this week" / "31 of 279 in October so far": the
+ *  week's count, and its month beside it with the month's own n (decision 1). */
 function WeekLines({ conv, data }: { conv: MarketConv; data: MarketData }) {
   const week = data.week
   return (
     <div className={cn(MONO_MUTED, 'leading-[1.5]')}>
       {week?.category != null ? <span data-copy="level" className="block">of {fmtInt(week.category)} category videos this week</span> : null}
-      {conv.month != null ? <span className="block"><Fig n={conv.month} /> {week?.inMonth ?? `in ${data.month.text}`}</span> : null}
+      <MonthLine k={conv.month} data={data} />
     </div>
   )
+}
+
+/** A count in the month the week is stated against, with that month's n:
+ *  "31 of 279 in October so far". Nothing where either is unread. */
+function MonthLine({ k, data, className = 'block' }: { k: number | null; data: MarketData; className?: string }) {
+  if (k == null || data.month.category == null) return null
+  return <span data-copy="level" className={className}>{fmtInt(k)} of {fmtInt(data.month.category)} {data.week?.inMonth ?? `in ${data.month.text}`}</span>
 }
 
 /** The three weekly windows as bars, oldest first: counts only. */
@@ -96,7 +108,7 @@ function Foot({ conv, href, selected, closeHref, data, open = 'Open the conversa
 }) {
   return (
     <div className="mt-auto flex flex-wrap items-center justify-between gap-3">
-      {conv && conv.who.length > 0 ? (
+      {conv && conv.who.length > 0 && data.brands === 'counted' ? (
         <div className="flex flex-wrap items-center gap-1.5 text-[12.5px] text-muted-foreground">
           <span>About</span>
           <About parts={conv.who} brand={data.brand} noun={data.noun} />
@@ -126,14 +138,14 @@ function FlagHero({ hero, data, selected, span }: { hero: Extract<HeroCard, { ki
       <div className="flex flex-wrap items-baseline gap-3.5">
         <div data-copy="figure" className={BIG}>{fmtInt(f.week.k)}</div>
         <div className={cn(MONO_MUTED, 'leading-[1.5]')}>
-          <span data-copy="level" className="block">of {fmtInt(f.week.n)} videos this week</span>
-          <span data-copy="level" className="block">{fmtInt(f.baseline.k)} of {fmtInt(f.baseline.n)} in {card.baselineText}</span>
-          {card.month ? <span className="block"><Fig n={card.month.k} /> {data.week?.inMonth ?? `in ${data.month.text}`}</span> : null}
+          <span data-copy="level" className="block">of {fmtInt(f.week.n)} videos this week, {flagBaseWords(f.denominator)}</span>
+          <span data-copy="level" className="block">{fmtInt(f.baseline.k)} of {fmtInt(f.baseline.n)} in {card.baselineText}, the same base</span>
+          {card.month ? <span data-copy="level" className="block">{fmtInt(card.month.k)} of {fmtInt(card.month.n)} category videos {data.week?.inMonth ?? `in ${data.month.text}`}</span> : null}
         </div>
       </div>
       {/* Drawn for its column: the half-card drawing, and a phone's. */}
-      <MiniBars bars={bars} size="lg" className="max-w-[560px] max-sm:hidden" label={`Share of the videos about ${title}, the months before against this week`} />
-      <MiniBars bars={bars} size="md" className="sm:hidden" label={`Share of the videos about ${title}, the months before against this week`} />
+      <MiniBars bars={bars} size="lg" className="max-w-[560px] max-sm:hidden" label={`Share of every audience's videos about ${title}, the months before against this week`} />
+      <MiniBars bars={bars} size="md" className="sm:hidden" label={`Share of every audience's videos about ${title}, the months before against this week`} />
       <Context groups={hero.groups} doing={hero.doing} monthText={data.week?.inMonth ?? `in ${data.month.text}`} />
       <Foot conv={card.conv} href={card.href} selected={selected} closeHref={data.panel?.closeHref ?? null} data={data} open={f.objectKind === 'subject' ? 'Open the subject' : 'Open the conversation'} />
     </article>
@@ -187,7 +199,10 @@ function Side({ side, data, index, span, selectedId }: { side: SideCard; data: M
             {rest.map((c, i) => (
               <Link key={c.id} href={side.hrefs[i + 1]} scroll={false} className="flex items-baseline justify-between gap-3 text-foreground no-underline hover:underline underline-offset-[3px]">
                 <span data-copy="subject" data-slot="pass_b_theme">{c.label}</span>
-                <Fig n={c.week} className="font-mono text-[12.5px] text-secondary-foreground" />
+                <span className="shrink-0 whitespace-nowrap font-mono text-[12px] text-muted-foreground">
+                  <Fig n={c.week} className="text-[12.5px] text-secondary-foreground" /> this week
+                  {c.month != null && data.month.category != null ? <> · <MonthLine k={c.month} data={data} className="" /></> : null}
+                </span>
               </Link>
             ))}
           </div>
@@ -208,10 +223,10 @@ function Side({ side, data, index, span, selectedId }: { side: SideCard; data: M
           : data.month.category != null ? <span data-copy="level" className={MONO_MUTED}>of {fmtInt(data.month.category)} category videos</span> : null}
       </div>
       {week
-        ? <MiniBars bars={weekBars(conv, data).map((w) => ({ label: w.label, value: w.count ?? 0 }))} className="max-w-[300px]" label={`Category videos a week about ${conv.label}`} />
+        ? <SpikeBars weeks={weekBars(conv, data)} counts="all" size="md" className="max-w-[300px]" label={`Category videos a week about ${conv.label}`} />
         : conv.months.length > 1 ? <MiniBars bars={monthBars(conv.months).map(({ sub: _sub, ...b }) => b)} className="max-w-[300px]" label={`Category videos a month about ${conv.label}`} /> : null}
       <GroupsLine groups={side.groups} />
-      {conv.who.length > 0 ? <div className="flex flex-wrap items-center gap-1.5 text-[12.5px] text-muted-foreground"><span>About</span><About parts={conv.who} brand={data.brand} noun={data.noun} /></div> : null}
+      {conv.who.length > 0 && data.brands === 'counted' ? <div className="flex flex-wrap items-center gap-1.5 text-[12.5px] text-muted-foreground"><span>About</span><About parts={conv.who} brand={data.brand} noun={data.noun} /></div> : null}
       <div className="mt-auto">{selected && data.panel ? <Link href={data.panel.closeHref} scroll={false} className={OLINK}>Close ↑</Link> : <Link href={href} scroll={false} className={OLINK}>Open →</Link>}</div>
     </article>
   )
@@ -235,8 +250,10 @@ export function TopRowView({ data }: { data: MarketData }) {
   if (!top.hero && top.sides.length === 0) return null
   const heroId = top.hero ? (top.hero.kind === 'flag' ? top.hero.card.conv?.id ?? null : top.hero.conv.id) : null
   // The board's 6 · 3 · 3; with one card beside the hero, 7 · 5; alone, the row.
-  const heroSpan = top.sides.length === 0 ? 'col-span-12' : top.sides.length === 1 ? 'col-span-12 xl:col-span-7' : 'col-span-12 xl:col-span-6'
-  const sideSpan = top.sides.length === 1 ? 'col-span-12 md:col-span-6 xl:col-span-5' : 'col-span-12 md:col-span-6 xl:col-span-3'
+  // `topSpans` (lib/pages/v2/market.ts) is the layout the panel's notch reads.
+  const spans = topSpans(top.sides.length)
+  const heroSpan = HERO_SPAN[spans[0]] ?? 'col-span-12 xl:col-span-6'
+  const sideSpan = SIDE_SPAN[spans[1] ?? 3] ?? 'col-span-12 md:col-span-6 xl:col-span-3'
   return (
     <section id="top-row" aria-label={data.period === 'week' ? 'What stood out this week' : `The biggest conversations in ${data.month.text}`} className={cn(PILL_ROW, 'scroll-mt-6')}>
       {top.hero?.kind === 'flag'

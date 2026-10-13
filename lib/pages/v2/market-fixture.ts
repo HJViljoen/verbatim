@@ -6,7 +6,7 @@ import type { UnusualFlag } from '../week'
 import {
   buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, convHref, closeHref, flagCardOf, flagVerdict, groupsOf,
   lineBars, marketMonths, marketParams, monthsText, notchOf, ourReadOf, panelStats, pickHero, pickWeekSides, platformRows, subjectHref,
-  tableMonths, convOf, doingOf,
+  tableMonths, convOf, doingOf, withMonthPlatforms,
   type ConvInput, type ConvPanel, type MarketConv, type MarketData, type MarketMonth, type MarketParams, type MarketWeek, type MonthCount,
   type PanelAt, type SubjectFact, type TopRow,
 } from './market'
@@ -252,6 +252,8 @@ export interface FixtureOptions {
   subject?: string | null
   /** Nothing was first heard this week. */
   noNew?: boolean
+  /** Who the talk is about: counted (the default), or not counted yet. */
+  brands?: MarketData['brands']
 }
 
 const MONTH: MarketMonth = {
@@ -349,12 +351,13 @@ export function marketFixture(opts: FixtureOptions = {}): MarketData {
       kinds: buildKinds(fixtureKindReadings(), OCT, null, true),
       weeks: FIXTURE_WEEKS,
       platforms: period === 'week'
-        ? platformRows({ tiktok: 128, instagram: 76, youtube: 37 }, 'week')
+        ? withMonthPlatforms(platformRows({ tiktok: 128, instagram: 76, youtube: 37 }, 'week'), { tiktok: 170, instagram: 98, youtube: 50 }, 'in October so far')
         : platformRows({ tiktok: 170, instagram: 98, youtube: 50 }, 'month'),
       watch: period === 'week' ? read.version === 2 ? read.watch.map((w) => ({ body: w.body, figures: {} })) : [] : [],
     },
     table,
     panel,
+    brands: opts.brands ?? 'counted',
     subjectPanel: opts.subject ? buildSubjectPanel({ id: subjectId(opts.subject), facts, convs, period, p, read, month: MONTH, flag: flag?.conv ? { id: flag.conv.id, verdict: flag.verdict } : null }) : null,
   }
 }
