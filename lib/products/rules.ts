@@ -21,12 +21,11 @@ import type { AliasKind, CatalogueAlias, Placement, ProductCatalogue } from './t
 //   a product's `name` or `nickname`        named: that product (and its category)
 //   a category's `name` or `nickname`       unclear: one of the client's products
 //     (a product family, "Pro-Flex")        in that category, not which
-//   a category's `category_word`            unbranded: the category in general,
-//                                           UNLESS the client's own name stands
-//                                           within CLIENT_NEAR characters of it,
-//                                           in the same phrase, as a word, not a
-//                                           hashtag ("my Össur liner"): then
-//                                           unclear
+//   a category's `category_word`            unbranded: the category in general
+//     (the client's own name beside it does NOT make it "one of yours": that
+//     rule was measured on Össur's production texts on 13 Oct, 4 of 7 right
+//     even with phrase and rival guards, and dropped; only a family, the
+//     confirm call or the classifier's checked answer makes "one of yours")
 // A match inside a longer match is not a match ("Pro-Flex" inside "Pro-Flex
 // XC"; "Pro-Flex XC" inside "Pro-Flex XC Torsion"): the longest name wins. In
 // one text, a category's strongest placement stands (named over unclear over
@@ -51,28 +50,43 @@ import type { AliasKind, CatalogueAlias, Placement, ProductCatalogue } from './t
 
 export const PRODUCT_RULE_VERSION = 'product_rules_v1'
 
-/** How near the client's own name must stand to a category word for the
- *  word to read as one of the client's products ("my Össur liner"), in
- *  characters between the two. Tighter than the brands' NEEDS_WINDOW (80): the
- *  name has to qualify the word, not share a long caption with it. */
-export const CLIENT_NEAR = 40
 
 /** The characters an alias may hold: letters, digits, spaces, and & . ' - +.
  *  Anything else is a character the two engines might read apart. */
-const ALIAS_CHARS = /^[\p{L}\p{N} &.'+-]+$/u
+export const ALIAS_CHARS = /^[\p{L}\p{N} &.'+-]+$/u
+
+/** Why the matcher would refuse this alias, or null where it reads it: a
+ *  character outside ALIAS_CHARS, or under two letters or digits. THE ONE RULE:
+ *  Settings (lib/settings/products.ts) and the seed check (lib/products/seed.ts)
+ *  ask this, so a name a person can save is a name the matcher reads. PURE. */
+export function aliasProblem(alias: string): 'characters' | 'too_short' | null {
+  const trimmed = alias.trim()
+  if (!ALIAS_CHARS.test(trimmed)) return 'characters'
+  if ([...trimmed.replace(/[^\p{L}\p{N}]/gu, '')].length < 2) return 'too_short'
+  return null
+}
 
 /**
  * An alias's pattern body (no word bounds): the words as written, lowercased,
  * `\s*` between them, a hyphen optional or a space, a dot and a plus literal;
- * a category word takes an optional plural. Null for an alias the matcher will
- * not read: under two characters with a letter or digit, or a character
- * outside ALIAS_CHARS. PURE.
+ * a category word takes an optional plural. A hyphen beside a one-letter part
+ * ("i-Limb") is optional but never a space: "i limb" is mostly "can I limb
+ * this tree" (the fresh check of 13 Oct). Null for an alias the matcher will
+ * not read (`aliasProblem`). PURE.
  */
 export function aliasBody(alias: string, kind: AliasKind): string | null {
   const trimmed = alias.trim()
-  if (!ALIAS_CHARS.test(trimmed)) return null
-  if ([...trimmed.replace(/[^\p{L}\p{N}]/gu, '')].length < 2) return null
-  const words = trimmed.toLowerCase().split(/\s+/).map((w) => w.replace(/[.+]/g, (c) => `\\${c}`).replace(/-/g, '[- ]?'))
+  if (aliasProblem(trimmed)) return null
+  const words = trimmed.toLowerCase().split(/\s+/).map((w) => {
+    const parts = w.split('-')
+    const esc = (x: string) => x.replace(/[.+]/g, (c) => `\\${c}`)
+    let out = esc(parts[0])
+    for (let i = 1; i < parts.length; i++) {
+      const short = [...parts[i - 1]].length === 1 || [...parts[i]].length === 1
+      out += `${short ? '-?' : '[- ]?'}${esc(parts[i])}`
+    }
+    return out
+  })
   const body = words.join('\\s*')
   return kind === 'category_word' ? `${body}(?:s|es)?` : body
 }
@@ -92,7 +106,7 @@ export interface CompiledAlias {
   productId: string | null
   /** The category: the alias's own, or its product's. */
   groupId: string
-  /** What a match places, before CLIENT_NEAR: named, unclear or unbranded. */
+  /** What a match places: named, unclear or unbranded. */
   placement: Exclude<Placement, 'none'>
   /** The alias's pattern body, before the word bounds (`aliasBody`). */
   body: string
@@ -112,7 +126,8 @@ export interface CompiledCatalogue {
   productName: ReadonlyMap<string, string>
   /** product id → its category. */
   productGroup: ReadonlyMap<string, string>
-  /** The client's own name (its brand rule), for CLIENT_NEAR; null without one. */
+  /** The client's own name (its brand rule), for the classifier's check of a
+   *  "one of yours" answer; null without one. */
   client: { rule: BrandRule; js: string; re: RegExp } | null
   /** Every alias at once ('isu'): a text it does not match holds none. */
   any: RegExp | null
@@ -124,8 +139,7 @@ const placementOf = (a: Pick<CatalogueAlias, 'kind' | 'product_id'>): Exclude<Pl
   a.product_id ? 'named' : a.kind === 'category_word' ? 'unbranded' : 'unclear'
 
 /** The catalogue as the matcher reads it. `clientId` picks the client's own
- *  brand rule (lib/brands/aliases.ts) for CLIENT_NEAR; a tenant without one
- *  reads every category word as the category in general. PURE. */
+ *  brand rule (lib/brands/aliases.ts), for the classifier's checks. PURE. */
 export function compileCatalogue(catalogue: ProductCatalogue, clientId: string | null): CompiledCatalogue {
   const productGroup = new Map(catalogue.products.map((p) => [p.id, p.group_id]))
   const groups = new Set(catalogue.groups.map((g) => g.id))
@@ -173,7 +187,7 @@ export function cataloguePattern(compiled: CompiledCatalogue, engine: RegexEngin
  *  PRODUCT_RULE_VERSION, so a compiler change without a new version fails. */
 export function compilerFingerprint(compiled: CompiledCatalogue): string {
   const lines = compiled.aliases.map((a) => [a.aliasId, a.placement, a.needsConfirm, a.pattern.are, a.pattern.js])
-  return createHash('sha256').update(JSON.stringify([lines, CLIENT_NEAR, compiled.client?.js ?? null])).digest('hex').slice(0, 16)
+  return createHash('sha256').update(JSON.stringify(lines)).digest('hex').slice(0, 16)
 }
 
 // ---- reading one text -----------------------------------------------------------
@@ -195,33 +209,6 @@ export function matchAliases(compiled: CompiledCatalogue, text: string | null | 
     }
   }
   return found.filter((f) => !found.some((g) => g !== f && g.start <= f.start && g.end >= f.end && g.end - g.start > f.end - f.start))
-}
-
-/** Where the client's own name stands in `text` (its brand rule's matches),
- *  as a word: a hashtag (#ossur) is a tag on the post, not a word qualifying
- *  the product beside it ("RoadKnee Hydraulic Knee … #ossur #HydraulicKnee"
- *  is not one of Össur's knees; the hand check of 13 Oct). */
-function clientSpans(compiled: CompiledCatalogue, text: string): { start: number; end: number }[] {
-  if (!compiled.client) return []
-  const out: { start: number; end: number }[] = []
-  const re = compiled.client.re
-  re.lastIndex = 0
-  for (let m = re.exec(text); m; m = re.exec(text)) {
-    if (text[m.index - 1] !== '#') out.push({ start: m.index, end: m.index + m[0].length })
-    if (m[0].length === 0) re.lastIndex++
-  }
-  return out
-}
-
-/** Characters that end a phrase: the client's name on one side of one and a
- *  category word on the other are two phrases ("Metiz Hydraulic Knee | Ossur
- *  Foot" is not an Össur knee; the hand check of 13 Oct). */
-const PHRASE_BREAK = /[|/•·\n.!?;]/
-
-const near = (text: string, a: { start: number; end: number }, b: { start: number; end: number }): boolean => {
-  const [x, y] = a.start <= b.start ? [a, b] : [b, a]
-  const gap = Math.max(0, y.start - x.end)
-  return gap <= CLIENT_NEAR && !PHRASE_BREAK.test(text.slice(x.end, y.start))
 }
 
 /** What a text's rules place: per category, its strongest placement, and
@@ -247,18 +234,15 @@ const RANK: Record<Exclude<Placement, 'none'>, number> = { named: 3, unclear: 2,
  * What the rules read in one text (see the header). A generic name's match is
  * set aside for the confirm call and places nothing here. PURE.
  */
-export function readText(compiled: CompiledCatalogue, text: string | null | undefined, opts: { clientNear?: boolean } = {}): TextReading {
+export function readText(compiled: CompiledCatalogue, text: string | null | undefined): TextReading {
   const matches = matchAliases(compiled, text)
   if (matches.length === 0) return { placements: [], generic: [] }
-  // A bag of tags (the hashtags field) has no phrases: nothing in it is near.
-  const client = opts.clientNear === false ? [] : clientSpans(compiled, text ?? '')
   const generic = new Map<string, CompiledAlias>()
   // category → the strongest rank seen, and what holds it
   const byGroup = new Map<string, { rank: number; named: Map<string, string[]>; aliases: string[] }>()
   for (const m of matches) {
     if (m.alias.needsConfirm) { generic.set(m.alias.aliasId, m.alias); continue }
-    let placement = m.alias.placement
-    if (placement === 'unbranded' && client.some((c) => near(text ?? '', c, m))) placement = 'unclear'
+    const placement = m.alias.placement
     const g = byGroup.get(m.alias.groupId) ?? { rank: 0, named: new Map<string, string[]>(), aliases: [] }
     if (placement === 'named' && m.alias.productId) {
       g.named.set(m.alias.productId, [...(g.named.get(m.alias.productId) ?? []), m.alias.alias])

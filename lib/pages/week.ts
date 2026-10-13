@@ -7,7 +7,7 @@ import {
   handleKey, intentCounts, perfVsMedian, pretty, roleByAccount, shapeInbox,
   type InboxRow, type InboxSource, type Intent, type PerfMultiple,
 } from '../content-tiles'
-import { engageDeepLink, engageVocab, loadEngageCandidates, rankEngageCandidates, type EngageCandidate } from '../engage'
+import { engageDeepLink, engageVocab, loadEngageCandidates, rankEngageCandidates, type EngageCandidate, type EngageUnder } from '../engage'
 import { citationLink } from '../evidence-cite'
 import { cap, fmtInt, longMonth, platformLabel, shortDate } from '../format'
 import { rowWindow } from '../pipeline/run-bookkeeping'
@@ -888,6 +888,11 @@ export interface ReplyRow {
    *  reader precedence): the preview's "a maker's own post" tag. Optional, so
    *  a stored copy carries none. */
   maker?: boolean
+  /** Whose video the comment sits under (`engageUnder`, lib/engage.ts: your
+   *  own post, a creator's video naming you, or anyone else's). Depth v2's
+   *  Content page splits its reply list by it. Optional: a stored copy, and a
+   *  row whose video was not read, carry none. */
+  under?: EngageUnder
 }
 
 /** §2 and §8: the work queue, and the claims that are not one. */
@@ -2148,8 +2153,12 @@ const REPLIES_NO_WINDOW =
  * reply under someone else's post is an invitation to argue in public;
  * `engageDeepLink` is not called for them, so the absence is structural and not
  * a rendering choice.
+ *
+ * EXPORTED FOR DEPTH V2's CONTENT PAGE (T6, lib/pages/v2/content.ts), which
+ * lists the same queue one click down, split by whose post a comment sits
+ * under (`ReplyRow.under`), over this week's or this month's days.
  */
-async function buildReplies(input: {
+export async function buildReplies(input: {
   supabase: SupabaseClient
   clientId: string
   runId: string
@@ -2293,6 +2302,7 @@ function toReplyRow(
     href: link.href,
     insightId: c.insightId,
     ...(makers.has(c.comment.id) ? { maker: true } : {}),
+    ...(c.comment.under ? { under: c.comment.under } : {}),
   }
 }
 

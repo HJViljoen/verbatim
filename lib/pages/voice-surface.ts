@@ -562,7 +562,7 @@ async function loadThemeRefs(client: SupabaseClient, clientId: string, month: st
 
 /** The biggest theme a stored `?themes=` link names (its member slugs), among
  *  these, in the order given. One read, only when such a link arrived. */
-async function loadLinkedTheme(supabase: SupabaseClient, clientId: string, slugs: ReadonlySet<string>, ordered: readonly string[]): Promise<string | null> {
+export async function loadLinkedTheme(supabase: SupabaseClient, clientId: string, slugs: ReadonlySet<string>, ordered: readonly string[]): Promise<string | null> {
   if (slugs.size === 0 || ordered.length === 0) return null
   const res = await supabase.from('theme_registry').select('id, member_slugs').eq('client_id', clientId).in('id', [...ordered])
   const named = new Set(
@@ -580,7 +580,7 @@ async function loadLinkedTheme(supabase: SupabaseClient, clientId: string, slugs
  * newer update superseded still resolves (AGENTS.md). Null where it cannot be
  * read.
  */
-async function loadThemeKinds(
+export async function loadThemeKinds(
   supabase: SupabaseClient,
   clientId: string,
   themedRunId: string | null,

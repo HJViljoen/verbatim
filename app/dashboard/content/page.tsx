@@ -1,7 +1,7 @@
 import { getSessionContext } from '@/lib/auth'
 import { readingHandle } from '@/lib/reading/read'
-import { loadWeekReadPage } from '@/lib/pages/week-read'
-import { WeekReadPage } from '@/components/pages/week/read-page'
+import { loadContentPage } from '@/lib/pages/v2/content'
+import { ContentPage } from '@/components/pages/v2/content'
 import type { Metadata } from 'next'
 import { surface } from '@/lib/nav'
 
@@ -9,23 +9,29 @@ import { surface } from '@/lib/nav'
 // layout's template adds ' · Verbatim').
 export const metadata: Metadata = { title: surface('content').label }
 
-// CONTENT AT /dashboard/content (Design v2, decision 6 of the depth plan):
-// what should we post, and what works?
+// CONTENT AT /dashboard/content (Design v2, depth plan T6; boards E5-Content
+// and E5-Content-Open): what should we post next, and what works?
 //
-// A PLACEHOLDER UNTIL THE CONTENT PAGE LANDS (depth plan T6): This week as it
-// was drawn at /dashboard/week, the latest weekly read in full (the pages
-// build, 1 Oct; the approved artboard Page-This-week.dc.html), which carried
-// what worked and the comments worth a reply. lib/pages/week-read.ts reads the
-// newest ready `week_reads` row for the session's client and who each item is
-// about; components/pages/week/read-page.tsx draws it. /dashboard/week itself
-// redirects to Market, which takes the week's news.
+// lib/pages/v2/content.ts reads the week's post ideas, what works in the
+// market's videos this month, the comments worth a reply, your own posts and
+// the other questions asked; components/pages/v2/content draws them. Opens a
+// post idea in place with `?idea=<rank>`, the reply list with `?replies=1`,
+// your posts with `?posts=1`; `?period=month` reads the month instead of the
+// week, `?asked=all` lists every question.
 //
-// The earlier page (`WeekPage`, `loadWeek`, `WEEK_BLOCKS`) stays in the tree
-// for the export module and stored snapshots that name its block keys; this
-// route no longer renders it.
+// THE PLACEHOLDER IT REPLACES. Until T6 this route drew This week
+// (`WeekReadPage`, lib/pages/week-read.ts), which stays in the tree for
+// /dashboard/week's history and the weekly read's own surfaces; page key
+// `content` and the legacy `WEEK_BLOCKS` / Content module stay registered for
+// stored snapshots and exports.
 
-export default async function Page() {
+export default async function Page({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | undefined>>
+}) {
+  const params = (await searchParams) ?? {}
   const { supabase, clientId } = await getSessionContext()
-  const data = await loadWeekReadPage({ supabase, clientId, reading: readingHandle(clientId), params: {} })
-  return <WeekReadPage data={data} title={surface('content').label} />
+  const data = await loadContentPage({ supabase, clientId, reading: readingHandle(clientId), params })
+  return <ContentPage data={data} />
 }

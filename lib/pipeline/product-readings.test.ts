@@ -107,19 +107,39 @@ describe('the product-readings step', () => {
     expect(f.tables.product_mentions).toHaveLength(3)
   })
 
-  it('writes a month that freezes on this run frozen, before freeze-months\' marker', async () => {
+  it('writes a month that freezes on this run frozen, before freeze-months\' marker, when the pass read it in full', async () => {
     const f = admin()
-    const r = await runProductMonth(f.client, { clientId: OSSUR_CLIENT_ID, runId: 'run-1', now: '2026-11-02T07:00:00.000Z', month: SEP, budgetUsd: 0, cap: 0 })
+    const r = await runProductMonth(f.client, { clientId: OSSUR_CLIENT_ID, runId: 'run-1', now: '2026-11-02T07:00:00.000Z', month: SEP, budgetUsd: 1, cap: 100, classifier: stub })
+    expect(r).toMatchObject({ deferred: 0, heldOpen: 0 })
     expect(r.frozen).toBe(r.written)
     expect(f.tables.month_product_readings.every((x) => x.status === 'frozen' && x.frozen_at === '2026-11-02T07:00:00.000Z')).toBe(true)
   })
 
-  it('a cap of nothing asks nothing and leaves the queue for the next run', async () => {
+  it('THE ONE-SHOT GUARD: a month this run would freeze, with items left (a 429), is written filling, and the next run reads it again and freezes it', async () => {
+    const f = admin()
+    const r = await runProductMonth(f.client, {
+      clientId: OSSUR_CLIENT_ID, runId: 'run-1', now: '2026-11-02T07:00:00.000Z', month: SEP, budgetUsd: 1, cap: 100,
+      classifier: async () => { throw new Error('429 rate limit reached') },
+    })
+    expect(r.deferred).toBeGreaterThan(0)
+    expect(r.heldOpen).toBe(r.written)
+    expect(f.tables.month_product_readings.every((x) => x.status === 'filling' && x.frozen_at === null && x.origin === 'live')).toBe(true)
+    expect(productSummary(r)).toMatch(/held filling because items were left: the next run freezes them/)
+    // the next run's plan finds the filling row, and a full read freezes it
+    const plan = await planProductReadings(f.client, OSSUR_CLIENT_ID, '2026-11-09T07:00:00.000Z')
+    expect(plan.months).toContain(SEP)
+    const again = await runProductMonth(f.client, { clientId: OSSUR_CLIENT_ID, runId: 'run-2', now: '2026-11-09T07:00:00.000Z', month: SEP, budgetUsd: 1, cap: 100, classifier: stub })
+    expect(again).toMatchObject({ deferred: 0, heldOpen: 0 })
+    expect(f.tables.month_product_readings.every((x) => x.status === 'frozen')).toBe(true)
+  })
+
+  it('a cap of nothing asks nothing and leaves the queue for the next run (a filling month is written as ever)', async () => {
     const f = admin()
     const call = vi.fn(stub)
     const r = await runProductMonth(f.client, { clientId: OSSUR_CLIENT_ID, runId: 'run-1', now: NOW, month: SEP, budgetUsd: 1, cap: 0, classifier: call })
     expect(call).not.toHaveBeenCalled()
-    expect(r).toMatchObject({ itemsAsked: 0, deferred: 1 })
+    expect(r).toMatchObject({ itemsAsked: 0, deferred: 1, heldOpen: 0 })
+    expect(r.written).toBeGreaterThan(0)
   })
 
   it('reads the run\'s product spend from the ledger, and nothing else\'s', async () => {

@@ -14,6 +14,8 @@ import {
 } from './classify'
 import { commentKey, contentKey, planRules, type QueueItem } from './match'
 import { compileCatalogue } from './rules'
+import { seedCatalogue } from './seed'
+import { OSSUR_PRODUCTS } from '../../scripts/seeds/ossur-products'
 
 // The model calls' contract on fixtures (depth v2 T11 "done when"): what each
 // call is shown, how its answers become rows, what the checks refuse, and the
@@ -85,10 +87,10 @@ describe('what the model is shown', () => {
 })
 
 describe('classifyRows: every answer held to what the comment says', () => {
-  it('named: kept when its words name the product, one slip allowed', () => {
-    const { rows, downgraded } = rowsOf([classify(q(1, 'is the proflex xc good for running?', V2)), classify(q(2, 'my reo knee beeps', V2))], [
+  it('named: kept when its words name the product (the slip rule is tested on the seed below)', () => {
+    const { rows, downgraded } = rowsOf([classify(q(1, 'is the proflex xc good for running?', V2)), classify(q(2, 'my rheo knee beeps', V2))], [
       answer(1, 'named', { products: [code(P('Pro-Flex XC'))], words: 'proflex xc' }),
-      answer(2, 'named', { products: [code(P('Rheo Knee'))], words: 'reo knee' }),
+      answer(2, 'named', { products: [code(P('Rheo Knee'))], words: 'rheo knee' }),
     ])
     expect(downgraded).toBe(0)
     expect(rows.map((r) => [r.comment_id, r.placement, r.product_id, r.group_id])).toEqual([
@@ -193,11 +195,23 @@ describe('the checks\' name matching', () => {
     // a swap of two letters is two slips, and is not taken
     for (const [a, b] of [['liner', 'lady'], ['rheoknee', 'rhoeknee']]) expect(withinOneEdit(a, b), `${a} ${b}`).toBe(false)
   })
-  it('a form of five or more letters may be misspelt once; a shorter one must be there', () => {
-    expect(wordsName('una prótesis con lainer', 'liner')).toBe(true)
-    expect(wordsName('my propio foot', 'Proprio Foot')).toBe(true)
-    expect(wordsName('a rhoe', 'Rheo')).toBe(false)
-    expect(wordsName('', 'liner')).toBe(false)
+  // On the real seed's names (scripts/seeds/ossur-products.ts): the fresh check's cases (13 Oct).
+  const ossur = compileCatalogue(seedCatalogue(OSSUR_PRODUCTS), OSSUR_CLIENT_ID)
+  const alias = (name: string) => ossur.aliases.find((a) => a.alias.toLowerCase() === name.toLowerCase())!
+  it('a whole word, as the rules read it: never inside another word', () => {
+    for (const [words, name] of [['what action do you take', 'CTi'], ['it is a function', 'CTi'], ['sealing the deal', 'Seal-In'], ['my bracelet', 'brace'], ['my phone pocket', 'socket'], ['my liver hurts', 'liner']]) {
+      expect(wordsName(words, alias(name)), `${words} / ${name}`).toBe(false)
+    }
+    for (const [words, name] of [['the CTi brace', 'CTi'], ['my seal in liner', 'Seal-In'], ['knee braces', 'brace'], ['the liners', 'liner']]) {
+      expect(wordsName(words, alias(name)), `${words} / ${name}`).toBe(true)
+    }
+  })
+  it('one slip only on a one-word name, the longer word six letters or more, the same first letter', () => {
+    expect(wordsName('una prótesis con lainer', alias('liner'))).toBe(true)
+    expect(wordsName('my propio is charging', alias('Proprio'))).toBe(true)
+    expect(wordsName('rhoe knee', alias('Rheo'))).toBe(false)
+    expect(wordsName('pocket', alias('socket'))).toBe(false)
+    expect(wordsName('', alias('liner'))).toBe(false)
   })
 })
 
@@ -262,10 +276,13 @@ describe('runClassifier: the calls, the hard cap and the clock', () => {
     expect(r.deferred).toBe(35)
   })
 
-  it('stops at the clock', async () => {
+  it('stops at the clock, and never lets a call wait past it', async () => {
     let t = 0
-    const call = vi.fn(async (req: Parameters<Classifier>[0]) => { t += 100; return answerAll(req) })
-    const r = await runClassifier({ ...base, items, budgetUsd: 10, classifier: call, parallel: 1, deadline: 150, now: () => t })
+    const timeouts: (number | undefined)[] = []
+    const call = vi.fn(async (req: Parameters<Classifier>[0]) => { timeouts.push(req.timeoutMs); t += 30_000; return answerAll(req) })
+    const r = await runClassifier({ ...base, items, budgetUsd: 10, classifier: call, parallel: 1, deadline: 65_000, now: () => t })
+    // 65 s left: a call capped at 60 s; 35 s left: capped at 35 s; 5 s left: under the 10 s floor, the rest waits
+    expect(timeouts).toEqual([60_000, 35_000])
     expect(call).toHaveBeenCalledTimes(2)
     expect(r.deferred).toBe(10)
   })

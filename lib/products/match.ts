@@ -144,7 +144,7 @@ export function planRules(clientId: string, compiled: CompiledCatalogue, content
     let generic: { field: ProductContentField; text: string; aliases: CompiledAlias[] } | null = null
     const genericAliases = new Map<string, CompiledAlias>()
     for (const f of fields) {
-      const r = readText(compiled, f.text, { clientNear: f.field !== 'hashtags' })
+      const r = readText(compiled, f.text)
       for (const p of r.placements) {
         const t = targetOf(p)
         if (seen.has(t)) continue

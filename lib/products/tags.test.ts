@@ -51,7 +51,14 @@ describe('the Tag control\'s options and values', () => {
   })
 })
 
-function admin(over: { schema?: boolean; refuseTag?: boolean } = {}) {
+/** October's rows as the last run left them: Liners, "in general", one video. */
+const lastRun = (version: string, kAny = 1) => t([{
+  month: '2026-10-01', audience: 'industry-other', object_kind: 'group', object_id: G('Liners'), group_id: G('Liners'), product_id: null,
+  k_named: 0, k_unclear: 0, k_unbranded: kAny, k_any: kAny, k_organic: kAny, comments: kAny, n: 1, n_organic: 1,
+  status: 'filling', origin: 'live', read_at: '2026-10-11T07:00:00Z', run_id: 'run-1', rule_version: PRODUCT_MODEL_RULE_VERSION, catalogue_version: version, frozen_at: null,
+}])
+
+function admin(over: { schema?: boolean; refuseTag?: boolean; months?: object[]; mentions?: object[] } = {}) {
   let n = 0
   const schema = over.schema ?? true
   return fakeAdmin({
@@ -62,11 +69,11 @@ function admin(over: { schema?: boolean; refuseTag?: boolean } = {}) {
         { id: C_AUG, platform: 'tiktok', video_id: 'tt1', comment_date: '2026-08-02T10:00:00Z', text: 'old one' },
       ]),
       ...(schema ? {
-        product_tags: [], product_mentions: t([{
+        product_tags: [], product_mentions: over.mentions ?? t([{
           video_id: V, source: 'comment', comment_id: C, comment_month: '2026-10-01', placement: 'unbranded', product_id: null, group_id: G('Liners'),
           method: 'rule', rule_version: 'product_rules_v1', catalogue_version: FIXTURE_CATALOGUE.version, tag_id: null,
         }]),
-        month_product_readings: [],
+        month_product_readings: over.months ?? lastRun(FIXTURE_CATALOGUE.version),
       } : {}),
       config_changes: [], month_denominators: [], tracking_configs: t([{ competitor_keywords: [] }]), keyword_performance: [], video_provenance: [],
     },
@@ -107,11 +114,40 @@ describe('writeProductTag', () => {
     expect(f.tables.month_product_readings.find((x) => x.object_id === G('Liners'))).toMatchObject({ k_any: 0, comments: 0 })
   })
 
-  it('a tag in a closed month is stored and moves nothing a page reads', async () => {
+  it('a tag in a closed month is stored, moves nothing a page reads, and says so', async () => {
     const f = admin()
+    const before = structuredClone(f.tables.month_product_readings)
     const r = await writeProductTag(f.client, { clientId: OSSUR_CLIENT_ID, videoId: V, commentId: C_AUG, choice: { placement: 'unbranded', groupId: G('Feet') }, actor, now: NOW })
+    expect(r).toMatchObject({ outcome: 'written_closed', reread: [] })
+    expect(f.tables.product_tags).toHaveLength(1)
+    expect(f.tables.month_product_readings).toEqual(before)
+    expect(PRODUCT_TAG_COPY.closedMonth).toBe("Tagged and kept. That comment's month is closed, so its counts stay as they were.")
+  })
+
+  it('after a catalogue edit, before the next run, a tag re-reads nothing: the open months keep their counts', async () => {
+    // The last run wrote October under the OLD catalogue: two liner videos.
+    const OLD = 'pc1_0000000000000000'
+    const old = (comment: string) => ({ video_id: V, source: 'comment', comment_id: comment, comment_month: '2026-10-01', placement: 'unbranded', product_id: null, group_id: G('Liners'), method: 'rule', rule_version: 'product_rules_v1', catalogue_version: OLD, tag_id: null })
+    const f = admin({ months: lastRun(OLD, 2), mentions: t([old(C), old('other')]) })
+    const r = await writeProductTag(f.client, { clientId: OSSUR_CLIENT_ID, videoId: V, commentId: C, choice: { placement: 'named', productId: P('Iceross Comfort') }, actor, now: NOW })
     expect(r).toMatchObject({ outcome: 'written', reread: [] })
-    expect(f.tables.month_product_readings).toEqual([])
+    expect(f.tables.month_product_readings.find((x) => x.object_id === G('Liners'))).toMatchObject({ k_any: 2, catalogue_version: OLD })
+  })
+
+  it('reads placements only of this matcher\'s and this prompt\'s version, as the run does', async () => {
+    const stale = { video_id: V, source: 'comment', comment_id: 'other', comment_month: '2026-10-01', placement: 'unbranded', product_id: null, group_id: G('Feet'), method: 'model', rule_version: 'product_rules_v1+product_classify_v0', catalogue_version: FIXTURE_CATALOGUE.version, tag_id: null, model: 'gpt-4.1-mini', prompt_version: 'product_classify_v0' }
+    const f = admin({ mentions: t([stale]) })
+    await writeProductTag(f.client, { clientId: OSSUR_CLIENT_ID, videoId: V, commentId: C, choice: { placement: 'none' }, actor, now: NOW })
+    expect(f.tables.month_product_readings.find((x) => x.object_id === G('Feet'))).toMatchObject({ k_any: 0 })
+  })
+
+  it('a retry that answers "already" makes sure the tag\'s placement row is there', async () => {
+    const f = admin()
+    await writeProductTag(f.client, { clientId: OSSUR_CLIENT_ID, videoId: V, commentId: C, choice: { placement: 'none' }, actor, now: NOW })
+    f.tables.product_mentions = f.tables.product_mentions.filter((m) => m.method !== 'tag')
+    const r = await writeProductTag(f.client, { clientId: OSSUR_CLIENT_ID, videoId: V, commentId: C, choice: { placement: 'none' }, actor, now: NOW })
+    expect(r.outcome).toBe('already')
+    expect(f.tables.product_mentions.filter((m) => m.method === 'tag')).toEqual([expect.objectContaining({ tag_id: f.tables.product_tags[0].id, catalogue_version: FIXTURE_CATALOGUE.version })])
   })
 
   it('refuses a comment that is not this tenant\'s or not on the video, a stale target, and says when the table is not there', async () => {

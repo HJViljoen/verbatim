@@ -58,6 +58,8 @@ export async function tagProduct(_prev: ProductTagState, formData: FormData): Pr
     case 'written':
       revalidatePath('/dashboard/products')
       return { ok: true, outcome: r.outcome, message: PRODUCT_TAG_COPY.done }
+    case 'written_closed':
+      return { ok: true, outcome: r.outcome, message: PRODUCT_TAG_COPY.closedMonth }
     case 'already':
       return { ok: true, outcome: r.outcome, message: PRODUCT_TAG_COPY.already }
     case 'changed':

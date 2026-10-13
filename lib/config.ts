@@ -819,6 +819,24 @@ export function ownPostAudienceEnabled(clientId?: string): boolean {
   return !off.includes(clientId.trim().toLowerCase())
 }
 
+/** The week's post ideas (depth v2, T13; the `write-post-ideas` step,
+ *  lib/post-ideas/step.ts). Default ON, the own-post audience's shape above:
+ *  `POST_IDEAS=0` stops the step everywhere; `POST_IDEAS_OFF` is a
+ *  comma-separated client-id list that stops it for ONE tenant without
+ *  touching the others. Read when the step runs, and the step's memoised
+ *  result ('disabled') records what it found. Until the products migration
+ *  is applied the missing `post_ideas` table stops it too. */
+export function postIdeasEnabled(clientId?: string): boolean {
+  const v = process.env.POST_IDEAS
+  if (v === '0' || v === 'false') return false
+  if (!clientId) return true
+  const off = (process.env.POST_IDEAS_OFF ?? '')
+    .split(',')
+    .map((x) => x.trim().toLowerCase())
+    .filter((x) => x !== '')
+  return !off.includes(clientId.trim().toLowerCase())
+}
+
 /** Incremental Pass A (Theme Registry shape A, 2026-08-17). OFF unless set, so
  *  merging the branch changes nothing until it is switched on in Vercel. Gates
  *  SELECTION only — with the flag off, plan-pass-a still selects every eligible

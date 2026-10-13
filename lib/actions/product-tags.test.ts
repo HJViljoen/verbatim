@@ -61,7 +61,7 @@ describe('tagProduct', () => {
 
   it('says what happened in the outcome\'s own words', async () => {
     for (const [outcome, message, ok] of [
-      ['already', PRODUCT_TAG_COPY.already, true], ['changed', PRODUCT_TAG_COPY.changed, false], ['unknown_text', PRODUCT_TAG_COPY.unknown, false],
+      ['written_closed', PRODUCT_TAG_COPY.closedMonth, true], ['already', PRODUCT_TAG_COPY.already, true], ['changed', PRODUCT_TAG_COPY.changed, false], ['unknown_text', PRODUCT_TAG_COPY.unknown, false],
       ['unknown_target', PRODUCT_TAG_COPY.unknownTarget, false], ['not_ready', PRODUCT_TAG_COPY.notReady, false], ['failed', PRODUCT_TAG_COPY.failed, false],
     ] as const) {
       h.write.mockResolvedValueOnce({ outcome, logged: false, reread: [] } as never)

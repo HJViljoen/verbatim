@@ -376,6 +376,9 @@ export const AFTER_GATHER_STEPS: readonly string[] = [
   'pass-a', 'replan-pass-a', 'replan-pass-a-ocr', 'replan-pass-a-translated',
   'themes', 'persist-themes', 'keyword-attribution',
   'owned-posts', 'owned-comments', 'owned-events',
+  // The week's post ideas (depth v2, T13): read off what was gathered, logged
+  // and never noteError'd; listed so a future counted error cannot cut a week.
+  'write-post-ideas',
   // Your products (depth v2 T11): read what was gathered, write placements
   // and month rows, and move no week count. Logged-only today (never
   // noteError'd); listed so a later counted error cannot cut a week.

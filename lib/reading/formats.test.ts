@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 
 import { directionRe } from '../test/copy-contract'
 import {
+  ANY_MONTH_BASIS,
   ENGAGEMENT_MIN_VIDEOS,
   EXCLUDED_NOTE,
   belowMedian,
@@ -168,6 +169,37 @@ describe('formatReading · the published clock', () => {
     const r = reading(OWN)
     const words = [r.basisLine, r.excludedNote, r.unread ?? '', ...r.rows.map((x) => x.label)].join(' ')
     expect(directionRe().test(words)).toBe(false)
+  })
+})
+
+describe('formatReading · a caller\'s own set, whenever published (published: \'any\')', () => {
+  // The post ideas read ONE conversation's videos, which are published across
+  // many months (lib/post-ideas/select.ts): a month's slice of them would
+  // leave almost every format under the floor.
+  const SPREAD = OWN.map((v, i) => ({ ...v, upload_date: `2026-0${(i % 7) + 3}-15` }))
+
+  it('reads every video handed in, whatever month it was published in, and undated ones too', () => {
+    const r = reading([...SPREAD, vid({ id: 'undated', upload_date: null, classified_type: 'unboxing' })], { published: 'any' })
+    expect(r.published).toBe(10)
+    expect(r.of).toBe(10)
+    expect(r.rows.find((x) => x.key === 'product-on-desk')?.value).toEqual({ k: 5, n: 10 })
+    // The month default still reads September alone.
+    expect(reading(SPREAD).published).toBe(1)
+  })
+
+  it('keeps the same floors, medians and multiples as the month reading of the same set', () => {
+    const any = reading(SPREAD, { published: 'any' })
+    const month = reading(OWN)
+    expect(any.median).toEqual(month.median)
+    expect(any.rows).toEqual(month.rows)
+  })
+
+  it('names no month in its lines', () => {
+    const r = reading([], { published: 'any' })
+    expect(r.basisLine).toBe(ANY_MONTH_BASIS)
+    expect(r.unread).toBe('Sealand published nothing we read, so there is nothing to read a format off.')
+    expect(reading([vid({ id: 'a', upload_date: '2025-01-02' })], { published: 'any' }).unread)
+      .toBe('Sealand published 1 video and none of them has been classified yet, so no share can be stated.')
   })
 })
 

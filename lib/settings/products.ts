@@ -18,6 +18,7 @@ import {
   type ProductRow,
 } from '../products/types'
 import { marketProductMonth } from '../products/market-month'
+import { aliasProblem } from '../products/rules'
 import { marketAudiences } from '../reading/market'
 import { monthStartOf } from '../reading/month-key'
 import { loadMarketRivalAudiences } from '../reading/reading-view'
@@ -79,18 +80,13 @@ export type CatalogueTextKind = keyof typeof CATALOGUE_LIMITS
 
 const WHAT: Record<CatalogueTextKind, string> = { group: 'category', product: 'product', alias: 'name' }
 
-/** The characters the matcher reads in an alias: letters, digits, spaces and
- *  & . ' + -. T11's `aliasBody` (lib/products/rules.ts) refuses anything else,
- *  and a name under two letters or digits, so an alias it would refuse never
- *  reaches the list. The same rule, in one place here, until the merge points
- *  this at T11's. */
-const ALIAS_CHARS = /^[\p{L}\p{N} &.'+-]+$/u
-
-/** Why the matcher could never read this as a name, or null where it can. PURE. */
+/** Why the matcher could never read this as a name, or null where it can:
+ *  the matcher's own rule (lib/products/rules.ts `aliasProblem`, one rule for
+ *  Settings, the seed and the compiler), said in words. PURE. */
 export function aliasTextProblem(text: string): string | null {
-  const t = text.trim()
-  if (!ALIAS_CHARS.test(t)) return "Use letters, numbers, spaces and & . ' + - only, so the name can be found as it is written."
-  if ([...t.replace(/[^\p{L}\p{N}]/gu, '')].length < 2) return 'Give the name at least two letters or numbers.'
+  const problem = aliasProblem(text)
+  if (problem === 'characters') return "Use letters, numbers, spaces and & . ' + - only, so the name can be found as it is written."
+  if (problem === 'too_short') return 'Give the name at least two letters or numbers.'
   return null
 }
 

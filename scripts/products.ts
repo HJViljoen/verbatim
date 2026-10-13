@@ -6,6 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import type { Candidate } from '../lib/brands/mentions'
 import { readRivalFound } from '../lib/brands/rival-searches'
+import { readSearchFound, readSearchTerms } from '../lib/products/organic'
 import { recordConfigChange, scriptActor } from '../lib/config-log'
 import { assertProject, MARKET_FIRST_PROJECTS } from '../lib/ops/market-first-args'
 import { readMonthVideos } from '../lib/provenance/load'
@@ -15,7 +16,7 @@ import { clientNameOf } from '../lib/pipeline/product-readings'
 import { runClassifier, type ClassifyItem, type RunClassifyResult } from '../lib/products/classify'
 import { excerptAround, keyOfRow, standingPlacements, type MentionInsert } from '../lib/products/match'
 import {
-  HELD_COLUMNS, mergeProductRows, placeProducts, pooledProductMonth, priceItems, PRODUCT_COMMENT_COLUMNS, PRODUCT_VIDEO_COLUMNS, productReadingRows,
+  CATEGORY_WORDS_ONLY_UNDER_RELEVANT, guardFreeze, HELD_COLUMNS, itemsLeft, mergeProductRows, placeProducts, pooledProductMonth, priceItems, PRODUCT_COMMENT_COLUMNS, PRODUCT_VIDEO_COLUMNS, productReadingRows,
   storedProductRows, writeProductRows, type Ask, type HeldRow, type PlaceResult, type ProductCommentRow, type ProductReadIO, type ProductVideoRow,
 } from '../lib/products/readings'
 import { matchAliases } from '../lib/products/rules'
@@ -226,6 +227,10 @@ interface Recording {
   videos: ProductVideoRow[]
   comments: ProductCommentRow[]
   rivalFound: string[]
+  /** Our search terms, and video → the category terms that found it (absent
+   *  in a dump made before the per-category base: replayed as none). */
+  searchTerms?: string[]
+  searchFound?: Record<string, string[]>
 }
 
 /** A dump's reads, replayed: no database. */
@@ -244,6 +249,11 @@ function replayIO(rec: Recording): ProductReadIO {
     held: async () => null,
     tags: async () => null,
     rivalFound: async () => found,
+    searchTerms: async () => rec.searchTerms ?? [],
+    searchFound: async (terms) => {
+      const want = new Set(terms.map((t) => t.trim().toLowerCase()))
+      return new Map(Object.entries(rec.searchFound ?? {}).filter(([, ts]) => ts.some((t) => want.has(t.trim().toLowerCase()))))
+    },
   }
 }
 
@@ -256,6 +266,8 @@ function recorded(io: ProductReadIO, rec: Recording): ProductReadIO {
     videos: async (ids) => { const r = await io.videos(ids); rec.videos.push(...r); return r },
     comments: async (vs) => { const r = await io.comments(vs); rec.comments.push(...r); return r },
     rivalFound: async () => { const r = await io.rivalFound(); rec.rivalFound.push(...r); return r },
+    searchTerms: async () => { const r = await io.searchTerms(); rec.searchTerms = [...r]; return r },
+    searchFound: async (terms) => { const r = await io.searchFound(terms); rec.searchFound = Object.fromEntries([...r].map(([k, v]) => [k, [...v]])); return r },
   }
 }
 
@@ -331,6 +343,8 @@ function scriptIO(admin: SupabaseClient, args: ProductsArgs, ration: Ration, fro
       console.log(`  rival searches: ${found.terms.size} terms (${[...found.terms].slice(0, 8).join(', ')}${found.terms.size > 8 ? ', …' : ''}), ${found.videos.size} videos found by them`)
       return found.videos
     },
+    searchTerms: () => readSearchTerms(admin, args.clientId, ration),
+    searchFound: (terms) => readSearchFound(admin, args.clientId, terms, ration),
   }
 }
 
@@ -340,7 +354,7 @@ function rulesOnlyRows(clientId: string, pass: PlaceResult, catalogue: ProductCa
     rows: pass.ruleRows,
     active: { groups: new Set(catalogue.groups.map((g) => g.id)), products: new Set(catalogue.products.map((p) => p.id)) },
   })
-  return productReadingRows({ clientId, compiled: pass.compiled, markets: pass.markets, rivalFound: pass.rivalFound, standing })
+  return productReadingRows({ clientId, compiled: pass.compiled, markets: pass.markets, rivalFound: pass.rivalFound, searchFinds: pass.searchFinds, standing })
 }
 
 function printMonths(rows: ReturnType<typeof rulesOnlyRows>, catalogue: ProductCatalogue, months: readonly string[], heading: string): void {
@@ -462,6 +476,12 @@ async function backRead(admin: SupabaseClient, args: ProductsArgs, ration: Ratio
   console.log(`\n  reads: ${ration.n} requests · scan rows ${pass.reads.candidates} · videos read in full ${pass.reads.videos} · comments read in full ${pass.reads.comments}`)
   console.log(`  the rules: ${pass.ruleRows.length} placements (${pass.ruleRows.filter((r) => r.placement === 'named').length} named, ${pass.ruleRows.filter((r) => r.placement === 'unclear').length} one of yours not which, ${pass.ruleRows.filter((r) => r.placement === 'unbranded').length} in general) on ${new Set(pass.ruleRows.map(keyOfRow)).size} texts`)
   console.log(`  category-relevant videos: ${pass.relevant.size}; ${pass.waitingOnConfirm.size} more wait on the confirm of a generic name`)
+  console.log(`  category words in comments under videos that are not category-relevant: ${pass.offTopicWords} (${CATEGORY_WORDS_ONLY_UNDER_RELEVANT ? 'not counted' : 'counted: CATEGORY_WORDS_ONLY_UNDER_RELEVANT is off'})`)
+  console.log('  the organic base, per category: beyond the rival searches\' finds, the market videos a search in its own words found')
+  for (const g of catalogue.groups) {
+    const o = pass.organic.get(g.id)
+    console.log(`    ${g.name.padEnd(22)} ${o && o.terms.length ? `${o.videos} videos left out, found by ${o.terms.map((t) => `"${t}"`).join(', ')}` : 'none of our searches is in its words'}`)
+  }
   console.log(`  the confirm call would read ${pass.confirm.length} texts holding a generic name (${[...new Set(pass.confirm.flatMap((c) => c.aliases.map((a) => a.alias)))].slice(0, 12).join(', ')})`)
   console.log(`  the classifier would read ${pass.queue.length} comments under the relevant videos (${avgQueuePerVideo.toFixed(1)} a video)`)
   if (priceAll) {
@@ -498,15 +518,25 @@ async function backRead(admin: SupabaseClient, args: ProductsArgs, ration: Ratio
   if (!mode.write) { console.log(`\n${NAME}: DRY: nothing written.`); return }
 
   // The months, each its own merge against what is stored and what has closed.
+  // THE ONE SHOT: a month this write would freeze is written only from a pass
+  // that read it in full (guardFreeze); with anything left, its rows wait.
   const now = new Date().toISOString()
+  const left = itemsLeft(pass, args.cap)
   let written = 0
   let refused = 0
+  const waiting: string[] = []
   for (const m of months) {
     const stored = await storedProductRows(admin, args.clientId, [m], isMissingProductsSchema)
     if (stored == null) throw new Error(`${NAME}: month_product_readings is not here. Nothing more written.`)
     const closed = await selectAll<{ month: string; audience: string }>(() => admin.from('month_denominators').select('month, audience')
       .eq('client_id', args.clientId).eq('month', m).eq('status', 'frozen').order('audience'))
-    const merged = mergeProductRows({ months: [m], fresh: pass.rows.filter((r) => monthStartOf(r.month) === m), stored, now, runId: null, closedAudienceMonths: closed.map(denominatorKey) })
+    const guarded = guardFreeze(mergeProductRows({ months: [m], fresh: pass.rows.filter((r) => monthStartOf(r.month) === m), stored, now, runId: null, closedAudienceMonths: closed.map(denominatorKey) }), left, 'skip')
+    if (!guarded.merged) {
+      waiting.push(m.slice(0, 7))
+      console.log(`  ${m.slice(0, 7)}: NOT written: it closes on this write, and the model left ${left} items. Its placements are in; its month rows wait.`)
+      continue
+    }
+    const merged = guarded.merged
     const w = await writeProductRows(admin, args.clientId, merged)
     written += w.written
     refused += merged.refusedLate.length
@@ -514,7 +544,10 @@ async function backRead(admin: SupabaseClient, args: ProductsArgs, ration: Ratio
   }
   const c = pass.confirmResult
   const k = pass.classifyResult
-  console.log(`\n${NAME}: WROTE ${pass.freshRuleRows.length} rule placements, ${pass.modelRows.length} model rows (confirm ${c?.asked ?? 0} asked, classifier ${k?.asked ?? 0} asked; ${(c?.deferred ?? 0) + (k?.deferred ?? 0) + (c?.failed ?? 0) + (k?.failed ?? 0)} left by the cap or a failure: run again to finish), ${written} month rows, ${refused} refused as late · spent ${usd(pass.costUsd)}`)
+  console.log(`\n${NAME}: WROTE ${pass.freshRuleRows.length} rule placements, ${pass.modelRows.length} model rows (confirm ${c?.asked ?? 0} asked, classifier ${k?.asked ?? 0} asked), ${written} month rows, ${refused} refused as late · spent ${usd(pass.costUsd)}`)
+  if (waiting.length) {
+    console.log(`${NAME}: NOT FINISHED. The model left ${left} items (a cap, the clock, a rate limit, a failed call or an unusable answer), so the closed months ${waiting.join(', ')} were NOT written. Run the same command again: it asks only what is left, and writes those months once nothing is.`)
+  }
 }
 
 async function insertRows(admin: SupabaseClient, rows: readonly MentionInsert[]): Promise<void> {
