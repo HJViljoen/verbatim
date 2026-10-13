@@ -12,9 +12,10 @@ import { cn } from '@/lib/utils'
  * default) is the orange. Its value prints over every bar, its label under,
  * and optionally a level under that ("9 of 455").
  *
- * A bar still filling (a month so far) is drawn as a tint of its colour with
- * an ink outline, so its state never rests on colour alone (MASTER: a week
- * still being read is outlined). A zero draws a 2px stub.
+ * A bar still filling (a month so far) is drawn as a tint of its colour under
+ * an outline (the orange's own, the yellow's in ink), so its state never rests
+ * on colour alone (MASTER: a week still being read is outlined). A zero draws
+ * a 2px stub.
  *
  * Every value is a figure node, every `sub` a LEVEL node: a sub that does not
  * read "of N" fails the copy contract, which is the point.
@@ -30,7 +31,7 @@ export interface MiniBar {
   /** A level under the label, which must read "of N" ("9 of 455",
    *  "so far · 31 of 318"). */
   sub?: string
-  /** Still filling: a tint with an ink outline. */
+  /** Still filling: a tint under an outline. */
   filling?: boolean
 }
 
@@ -87,7 +88,10 @@ export function MiniBars({ bars, highlight = 'last', size = 'sm', label, classNa
             {b.value <= 0 ? (
               <rect x={x} y={g.base - 2} width={w} height={2} className="fill-border" />
             ) : b.filling ? (
-              <rect x={x} y={y} width={w} height={bh} rx={2} fillOpacity={0.22} strokeWidth={1.5} className={cn(fill, 'stroke-foreground')} data-filling="" />
+              // The boards' tint: the orange at 18% under its own outline
+              // (E2-Market-Open); the yellow at 35% under the ink, because a
+              // yellow outline does not read on white.
+              <rect x={x} y={y} width={w} height={bh} rx={2} fillOpacity={on ? 0.18 : 0.35} strokeWidth={1.5} className={cn(fill, on ? 'stroke-orange' : 'stroke-foreground')} data-filling="" />
             ) : (
               <rect x={x} y={y} width={w} height={bh} rx={2} className={fill} />
             )}

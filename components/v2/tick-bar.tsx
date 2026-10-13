@@ -51,6 +51,9 @@ export interface TickBarProps {
 
 export function TickBar({ pct, tick = null, tone = 'market', size = 'md', figure, label, className }: TickBarProps) {
   const fill = clamp(pct)
+  // The figure starts 6px past the fill; where the tick stands just past the
+  // fill, it starts past the tick instead, so the two never overprint.
+  const figureAt = tick != null && clamp(tick) > fill && clamp(tick) - fill < 12 ? clamp(tick) : fill
   return (
     <div role="img" aria-label={label} className={cn('relative min-w-0 bg-track', HEIGHT[size], className)}>
       {fill > 0 ? <div className={cn('absolute inset-y-0 left-0', HEIGHT[size], FILL[tone])} style={{ width: `${fill}%` }} /> : null}
@@ -65,7 +68,7 @@ export function TickBar({ pct, tick = null, tone = 'market', size = 'md', figure
         <span
           data-copy="figure"
           className="absolute top-1/2 -translate-y-1/2 whitespace-nowrap font-mono text-[11.5px] leading-none font-semibold tabular-nums text-foreground"
-          style={{ left: `calc(${fill}% + 6px)` }}
+          style={{ left: `calc(${figureAt}% + 6px)` }}
         >
           {figure}
         </span>

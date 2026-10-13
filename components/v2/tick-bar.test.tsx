@@ -27,6 +27,8 @@ describe('TickBar', () => {
     expect(render(node)).toMatch(/<span data-copy="figure" class="[^"]*font-mono[^"]*" style="left:calc\(77\.5% \+ 6px\)">3\.1×<\/span>/)
     expect(render(node)).toContain('rounded-[4px]')
     assertCopyContract(node)
+    // A tick just past the fill: the figure starts past the tick.
+    expect(render(<TickBar pct={22} tick={25} size="xl" figure="0.9×" label="x" />)).toContain('left:calc(25% + 6px)')
   })
 })
 
