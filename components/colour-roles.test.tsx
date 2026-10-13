@@ -4,6 +4,22 @@ import { render, renderText } from '@/lib/test/render'
 import { BAR_FILL, BrandChip, ChipSep, EYEBROW, IconTile, KIND_ICON, NewNumber, SELECTED, TAG } from './colour-roles'
 import { DashboardPage } from './pages/v2/home'
 import { dashboardFixture } from '@/lib/pages/v2/home-fixture'
+import { MarketPage } from './pages/v2/market'
+import { marketFixture } from '@/lib/pages/v2/market-fixture'
+import { VoicesPage } from './pages/v2/voices'
+import { VOICES_FIXTURES } from '@/lib/pages/v2/voices-fixture'
+import { ProductsPage } from './pages/v2/products'
+import { PRODUCTS_FIXTURES } from '@/lib/pages/v2/products-fixture'
+import { ContentPage } from './pages/v2/content'
+import { contentFixture } from '@/lib/pages/v2/content-fixture'
+import { MovesV2Page } from './pages/v2/moves'
+import { movesFixture, movesOpenFixture, statementsV2 } from '@/lib/pages/v2/moves-fixture'
+import { ProductsTab } from './pages/settings/products'
+import { productsFixtureRead } from './pages/settings/products/fixture'
+import { productSettingsView } from '@/lib/settings/products'
+import { YourSubjectsTab } from './pages/settings/subjects'
+import { subjectsFixtureRows } from './pages/settings/subjects/fixture'
+import { yourSubjectsView } from '@/lib/settings/your-subjects'
 import { MarketPicturePage } from './pages/overview/picture'
 import { PICTURE_FIXTURE } from './pages/overview/picture/fixture'
 import { VoiceSurfacePage } from './pages/voice-surface'
@@ -63,19 +79,45 @@ describe('the colour roles', () => {
   })
 })
 
+/** Palette A's colours as a page may write them out (scripts/check-design-drift.sh
+ *  (e), the light block): ink, the muted words, white, the ground, the
+ *  hairline, the track, the brand yellow, its pale, the text-safe orange, the
+ *  orange, the gold, the rival grey and the sidebar's hover; and the boards'
+ *  dashed add-chip edge (`#C9C6BE`, E8-Settings-Products' `.addc`). */
+const PALETTE_A = new Set([
+  '#26292C', '#5F656B', '#FFFFFF', '#F7F6F2', '#E4E2DC', '#ECEAE4', '#FFD43B', '#FFF4C7',
+  '#C2410C', '#F2651D', '#9A6B00', '#8A9097', 'RGBA(38,41,44,0.07)', '#C9C6BE',
+])
+
 describe('the bans that hold with more colour, on the pages', () => {
-  const pages: [string, string][] = [
-    ['dashboard', render(<DashboardPage data={dashboardFixture()} />)],
-    ['your market', render(<MarketPicturePage data={PICTURE_FIXTURE} />)],
-    ['conversation', render(<VoiceSurfacePage data={conversationFixture()} params={{}} />)],
-    ['competitive', render(<CompetitivePage data={designFixture()} />)],
+  // [the page, its markup from its own fixture, whether it names a brand].
+  // The 1 Oct pages still render stored snapshots; Design v2's eight are the
+  // routed pages (integration, 13 Oct), each closed and with a panel open.
+  const pages: [string, string, boolean][] = [
+    ['your market (1 Oct)', render(<MarketPicturePage data={PICTURE_FIXTURE} />), true],
+    ['conversation (1 Oct)', render(<VoiceSurfacePage data={conversationFixture()} params={{}} />), true],
+    ['competitive (1 Oct)', render(<CompetitivePage data={designFixture()} />), true],
+    // The Dashboard's Voices tile names brands ("Named most", Design v2).
+    ['dashboard', render(<DashboardPage data={dashboardFixture()} />), true],
+    ['market', render(<MarketPage data={marketFixture()} />), true],
+    ['voices', render(<VoicesPage data={VOICES_FIXTURES.sealand()} />), true],
+    ['voices, a brand open', render(<VoicesPage data={VOICES_FIXTURES['sealand-brand']()} />), true],
+    ['voices, a group open', render(<VoicesPage data={VOICES_FIXTURES['ossur-group']()} />), false],
+    // Your products names the client's own products, never a brand by chip.
+    ['your products', render(<ProductsPage data={PRODUCTS_FIXTURES.ossur()} />), false],
+    ['your products, a category open', render(<ProductsPage data={PRODUCTS_FIXTURES['ossur-liners']()} />), false],
+    ['your products, a product open', render(<ProductsPage data={PRODUCTS_FIXTURES['ossur-product']()} />), false],
+    ['content', render(<ContentPage data={contentFixture()} />), false],
+    ['content, an idea open', render(<ContentPage data={contentFixture({ open: { kind: 'idea', rank: 1 } })} />), false],
+    ['your moves', render(<MovesV2Page data={movesFixture()} statements={statementsV2()} />), false],
+    ['your moves, advice open', render(<MovesV2Page data={movesOpenFixture()} statements={statementsV2()} />), false],
+    ['settings, your products', render(<ProductsTab view={productSettingsView(productsFixtureRead({}), { selected: null, canEdit: true })} />), false],
+    ['settings, your subjects', render(<YourSubjectsTab view={yourSubjectsView(subjectsFixtureRows(), true)} />), false],
   ]
 
   it('puts no chip inside a sentence: a brand chip is a label on a brand line, never a marker in prose', () => {
-    for (const [name, m] of pages) {
-      // Every page here names a brand (the Dashboard's Voices tile: "Named
-      // most", Design v2).
-      expect(m, name).toContain('data-who-chip')
+    for (const [name, m, namesBrand] of pages) {
+      if (namesBrand) expect(m, name).toContain('data-who-chip')
       // A paragraph, or any node of written prose, that holds a chip.
       expect(m, name).not.toMatch(/<p\b[^>]*>(?:(?!<\/p>)[\s\S])*data-who-chip/)
       expect(m, name).not.toMatch(/data-copy="(?:prose|stored)"[^>]*>[^<]*<[^>]*data-who-chip/)
@@ -86,12 +128,38 @@ describe('the bans that hold with more colour, on the pages', () => {
     for (const [name, m] of pages) expect(m, name).not.toMatch(/<(?:section|article|p)\b[^>]*class="[^"]*\bbg-accent\b/)
   })
 
-  it('lifts every card on the one card shadow', () => {
+  it('lifts every card on the one card shadow, and an opened panel on its own token a step above', () => {
     for (const [name, m] of pages) {
       // A card is a section, or a v2 tile's article (the kit's `CARD`).
       const cards = m.match(/<(?:section|article)\b[^>]*class="[^"]*rounded-\[1[46]px\][^"]*"/g) ?? []
       expect(cards.length, name).toBeGreaterThan(0)
-      for (const c of cards) expect(c, name).toContain('shadow-card')
+      for (const c of cards) {
+        // The kit's `InPlacePanel` (`data-panel`) is `shadow-panel`; every
+        // other card is `shadow-card`, and none is both.
+        if (/\bdata-panel=""/.test(c)) {
+          expect(c, name).toContain('shadow-panel')
+          expect(c, name).not.toContain('shadow-card')
+        } else {
+          expect(c, name).toContain('shadow-card')
+          expect(c, name).not.toContain('shadow-panel')
+        }
+      }
+      // No shadow written out by hand, on a card or anything else.
+      expect(m, name).not.toMatch(/\bshadow-\[/)
+    }
+  })
+
+  it('never sets the orange as a text colour: words in orange are the text-safe #C2410C', () => {
+    for (const [name, m] of pages) {
+      expect(m, name).not.toMatch(/\btext-orange(?!-text)\b/)
+      expect(m, name).not.toMatch(/\btext-\[#F2651D\]|color:\s*#F2651D/i)
+    }
+  })
+
+  it('writes no colour of its own: every literal on a Design v2 page is palette A\'s', () => {
+    for (const [name, m] of pages.slice(3)) {
+      const literals = (m.match(/#[0-9A-Fa-f]{6}\b|rgba?\([^)]*\)/g) ?? []).map((c) => c.toUpperCase().replace(/\s+/g, ''))
+      expect(literals.filter((c) => !PALETTE_A.has(c)), name).toEqual([])
     }
   })
 })
