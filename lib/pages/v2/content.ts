@@ -96,6 +96,10 @@ export const IDEA_PANEL_ID = 'idea-panel'
 export const REPLIES_PANEL_ID = 'replies-panel'
 export const POSTS_PANEL_ID = 'posts-panel'
 export const ASKED_ID = 'also-asked'
+/** A card on the ideas row that holds a question (`QuestionCardView`), by its
+ *  place on the row: the ideas' cards come first, then the questions in line
+ *  (`askedWithLead`). */
+export const questionSlotId = (rank: number): string => `idea-slot-${rank}`
 /** Worth a reply's card. The anchor This week's stored snapshots and emails
  *  link replies to (`WEEK_ANCHORS.reply`, `/dashboard/content#worth-a-reply`,
  *  written before Design v2 and never re-written), so an old link lands on
@@ -509,6 +513,14 @@ export function daysPhrase(first: string, last: string): string {
   const b = shortDate(`${last}T00:00:00.000Z`)
   if (first === last) return `on ${b}`
   return `between ${first.slice(0, 7) === last.slice(0, 7) ? a.split(' ')[0] : a} and ${b}`
+}
+
+/** "this week" for a seven-day window, else its days ("between 28 Sep and 4
+ *  Oct"): a window is not called a week unless it is one. The page's words
+ *  (`weekWordOf`) and the Dashboard tile's (`TopAsked.weekWords`). Pure. */
+export function weekWordsOf(week: Pick<ContentWeek, 'isWeek' | 'first' | 'last'> | null): string {
+  if (!week || week.isWeek) return 'this week'
+  return daysPhrase(week.first, week.last)
 }
 
 /** A run's window as the page's week, or null for one that is not a window. */
@@ -1856,15 +1868,18 @@ export function platformsLine(byPlatform: readonly { platform: string; posts: nu
 
 /**
  * WHAT THE CONTENT TILE PRINTS WHERE THERE IS NO POST IDEA (switched off, none
- * written, too old, or unread): the first row of Content's own "Also asked"
- * table, the question asked in the most of the week's videos that your posts
- * have not touched, its week beside its month (decision 1) and your posts
- * against it. The board's "Post next" card keeps its shape (a title, a count
- * of the week's videos, your posts) on what the data holds without an idea
- * (Heinrich, 13 Oct: "the page shouldn't look too different if everything
- * isn't as populated as the design"). The rule is the page's: `askedBlock`
- * over the same reads, with no idea to leave out, so the tile and the table
- * agree.
+ * written, too old, or unread): Content's first question card, the question
+ * asked in the most of the week's videos that your posts have not touched,
+ * its week beside its month (decision 1) and your posts against it. The
+ * board's "Post next" card keeps its shape (a title, a count of the week's
+ * videos, your posts) on what the data holds without an idea (Heinrich, 13
+ * Oct: "the page shouldn't look too different if everything isn't as
+ * populated as the design"). The rule is the page's: `askedWithLead` over the
+ * same reads. Where the tile prints no idea the page's row holds none either
+ * (switched off, unread, too old or none written: `ideasStale`, `readIdeas`),
+ * so its three cards are the top three questions, and the tile's question is
+ * the first of them (`lead[0]`, its card `questionSlotId(1)`), never the Also
+ * asked table, which goes on after the cards.
  */
 export interface TopAsked {
   /** `theme_registry.id`. */
@@ -1875,49 +1890,57 @@ export interface TopAsked {
   week: Counted | null
   month: Counted | null
   /** "this week" for a seven-day window, else its days ("between 28 Sep and
-   *  4 Oct"): Content's own rule (= `weekWordOf` on parity/content, unify at
-   *  merge). */
+   *  4 Oct"): Content's own rule (`weekWordsOf`). */
   weekWords: string
   /** "in October so far". */
   monthWords: string
   /** The groups whose conversations include it (names only, decision 5),
    *  as Content's "Who asks" column holds them. */
   groups: GroupName[]
-  /** The table's next rows (at most `ASKED_NEXT`), each its week beside its
-   *  month: what else the week asked that your posts have not touched. */
-  next: { registryId: string; label: string; week: number | null; month: number | null }[]
+  /** The next questions in line (at most `ASKED_NEXT`: the next question
+   *  card, then the Also asked table), each its week beside its month and
+   *  where it opens: what else the week asked that your posts have not
+   *  touched. */
+  next: { registryId: string; label: string; week: number | null; month: number | null; href: string }[]
   /** Your posts against it (none touched it, by the table's rule); null where
    *  they were not read. */
   own: OwnTouch | null
-  /** Content's "Also asked". */
+  /** Content's first question card (`questionSlotId(1)`). */
   href: string
 }
 
-/** The table's rows the tile lists under its question. */
+/** The questions the tile lists under its own. */
 export const ASKED_NEXT = 1
 
-/** The tile's question from the table's own rows and reads. Pure. */
+/** The tile's question from the page's own split (`askedWithLead` with no
+ *  idea on the row): the first question card, then the next in line, each
+ *  opening its own card, or the Also asked table once the cards run out.
+ *  Pure. */
 export function topAskedOf(
-  block: AskedBlock,
+  read: { asked: AskedBlock; lead: readonly AskedRow[] },
   market: { week: number | null; month: number | null },
   month: Pick<ContentMonth, 'month' | 'complete'>,
   own: OwnTouch | null,
   week: Pick<ContentWeek, 'isWeek' | 'first' | 'last'> | null = null,
 ): TopAsked | null {
-  const row = block.rows[0]
+  const row = read.lead[0]
   if (!row) return null
   const level = (k: number | null, n: number | null): Counted | null => (k != null && n != null && n > 0 ? { k, n } : null)
+  const inLine = [
+    ...read.lead.slice(1).map((r, i) => ({ r, href: `${CONTENT_PATH}#${questionSlotId(i + 2)}` })),
+    ...read.asked.rows.map((r) => ({ r, href: `${CONTENT_PATH}#${ASKED_ID}` })),
+  ]
   return {
     registryId: row.registryId,
     label: row.label,
     week: level(row.week, market.week),
     month: level(row.month, market.month),
-    weekWords: !week || week.isWeek ? 'this week' : daysPhrase(week.first, week.last),
+    weekWords: weekWordsOf(week),
     monthWords: monthWords(month),
     groups: row.groups,
-    next: block.rows.slice(1, 1 + ASKED_NEXT).map((r) => ({ registryId: r.registryId, label: r.label, week: r.week, month: r.month })),
+    next: inLine.slice(0, ASKED_NEXT).map(({ r, href }) => ({ registryId: r.registryId, label: r.label, week: r.week, month: r.month, href })),
     own,
-    href: `${CONTENT_PATH}#${ASKED_ID}`,
+    href: `${CONTENT_PATH}#${questionSlotId(1)}`,
   }
 }
 
@@ -1946,7 +1969,10 @@ export async function topAsked(scope: Scope, opts: { now?: Date; published?: Pub
   const windows = await soft('asked.windows', readWindows(scope, week, month, audiences, { trend: false }))
   if (!windows) return null
   const touch = touchPosts(ownedRead, month.month, week.to)
-  const block = askedBlock({
+  // The page's split with no idea on the row: its three cards hold the top
+  // questions, and the table goes on after them.
+  const split = askedWithLead({
+    lead: IDEA_SLOTS,
     period: 'week',
     questions,
     counts: { week: windows.themes.week, month: windows.themes.month },
@@ -1958,6 +1984,6 @@ export async function topAsked(scope: Scope, opts: { now?: Date; published?: Pub
     since,
     expanded: false,
   })
-  const row = block.rows[0]
-  return topAskedOf(block, windows.market, month, row ? ownTouch([row.label], touch, since) : null, week)
+  const row = split.lead[0]
+  return topAskedOf(split, windows.market, month, row ? ownTouch([row.label], touch, since) : null, week)
 }

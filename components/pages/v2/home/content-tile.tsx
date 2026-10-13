@@ -34,9 +34,9 @@ export function OwnLine({ own }: { own: OwnTouch }) {
 }
 
 /** The title where there is no idea: the question in the most of the week's
- *  videos that your posts have not touched (Content's "Also asked", its first
- *  row; a question your posts touched is left out, so the title says so
- *  rather than "asked most"). */
+ *  videos that your posts have not touched (Content's first question card; a
+ *  question your posts touched is left out, so the title says so rather than
+ *  "asked most"). */
 export const ASKED_TITLE = 'Not in your posts yet'
 /** The neutral title where your posts could not be read: nothing was left
  *  out, so the question is the week's own ("Asked this week"). */
@@ -81,12 +81,13 @@ function Asked({ asked, line }: { asked: TopAsked; line: string | null }) {
         </div>
       ) : null}
       {asked.own ? <p className="m-0 text-[13px] leading-[1.4] text-muted-foreground"><OwnLine own={asked.own} /></p> : null}
-      {/* What else the week asked, from the same table: the board's weight
-          in rows the data holds, each week beside its month (decision 1). */}
+      {/* What else the week asked, next in line on Content: the board's
+          weight in rows the data holds, each week beside its month
+          (decision 1), each opening its own card or the Also asked table. */}
       {asked.next.length > 0 ? (
         <div data-asked-next="" className="flex flex-col max-sm:hidden">
           {asked.next.map((r) => (
-            <Link key={r.registryId} href={asked.href} className="-mx-2 flex flex-col gap-0.5 rounded-md border-t border-track px-2 py-2 text-[14px] leading-[1.35] text-foreground no-underline hover:bg-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <Link key={r.registryId} href={r.href} className="-mx-2 flex flex-col gap-0.5 rounded-md border-t border-track px-2 py-2 text-[14px] leading-[1.35] text-foreground no-underline hover:bg-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               <span data-copy="subject" data-slot="pass_b_theme" className="min-w-0">{r.label}</span>
               {r.week != null && r.month != null && asked.week && asked.month ? (
                 <span className={MONO_MUTED}>
@@ -106,7 +107,7 @@ export function ContentTileView({ read }: { read: TileRead<ContentTile> }) {
   const top = read.state === 'ok' ? read.top : null
   const idea = top?.state === 'ready' ? top.idea : null
   const asked = !idea ? top?.asked ?? null : null
-  // Where no idea prints, the tile opens Content's "Also asked" on its question.
+  // Where no idea prints, the tile opens Content on its question's card.
   const href = asked ? asked.href : top?.href ?? tileHref('content')
   return (
     <article aria-labelledby="home-content" data-tile="content" data-state={top?.state ?? 'failed'} className={cn(TILE, 'col-span-12 min-[1180px]:col-span-4')}>

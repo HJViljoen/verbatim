@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-import { ASKED_ID, CONTENT_PATH, topAskedOf, type AskedBlock, type TopContent } from './content'
+import { ASKED_ID, CONTENT_PATH, IDEA_SLOTS, questionSlotId, topAskedOf, type AskedBlock, type AskedRow, type TopContent } from './content'
+import { askedSplit } from './content-fixture'
 import { weekSubjectsGap, withAsked } from './home'
 import { fixtureAsked } from './home-fixture'
 import { MOVE_CARDS } from './moves-fixture'
@@ -87,28 +88,48 @@ describe('Your moves: the newest move, where none has a comparison to print', ()
 
 describe('Content: the week\'s most-asked question your posts have not touched, where there is no idea', () => {
   const block = (rows: AskedBlock['rows']): AskedBlock => ({ period: 'week', rows, total: rows.length, touched: 1, since: '2026-08-01', expanded: false, unread: null })
-  const row = { registryId: 'r1', label: 'How the prosthesis works', groups: [], subject: null, week: 13, month: 22, weeks: null }
+  const row: AskedRow = { registryId: 'r1', label: 'How the prosthesis works', groups: [], subject: null, week: 13, month: 22, weeks: null }
+  const split = (lead: AskedRow[], rest: AskedRow[] = []) => ({ asked: block(rest), lead })
 
-  it('is the table\'s first row, its week and its month each out of the market\'s', () => {
+  it('is the first question card, its week and its month each out of the market\'s; the next in line opens its own card', () => {
     const own = { state: 'none' as const, touched: 0, posts: 25, since: '2026-08-01' }
     const groups = [{ key: 'first-time-buyer', name: 'First-time buyer' }]
-    expect(topAskedOf(block([{ ...row, groups }, { ...row, registryId: 'r2', week: 5 }]), { week: 153, month: 288 }, { month: '2026-10-01', complete: false }, own)).toEqual({
+    expect(topAskedOf(split([{ ...row, groups }, { ...row, registryId: 'r2', week: 5 }]), { week: 153, month: 288 }, { month: '2026-10-01', complete: false }, own)).toEqual({
       registryId: 'r1', label: 'How the prosthesis works', week: { k: 13, n: 153 }, month: { k: 22, n: 288 },
-      weekWords: 'this week', monthWords: 'in October so far', groups, own, href: `${CONTENT_PATH}#${ASKED_ID}`,
-      // The table's next row, under it.
-      next: [{ registryId: 'r2', label: 'How the prosthesis works', week: 5, month: 22 }],
+      weekWords: 'this week', monthWords: 'in October so far', groups, own, href: `${CONTENT_PATH}#idea-slot-1`,
+      // The next question card, under it.
+      next: [{ registryId: 'r2', label: 'How the prosthesis works', week: 5, month: 22, href: `${CONTENT_PATH}#idea-slot-2` }],
     })
+    // One card's question: the next in line is the Also asked table's first row.
+    expect(topAskedOf(split([row], [{ ...row, registryId: 'r9' }]), { week: 153, month: 288 }, { month: '2026-10-01', complete: false }, own)!.next)
+      .toEqual([{ registryId: 'r9', label: 'How the prosthesis works', week: 13, month: 22, href: `${CONTENT_PATH}#${ASKED_ID}` }])
     // A window that is not seven days is never called a week (Content's rule).
-    const days = topAskedOf(block([row]), { week: 153, month: 288 }, { month: '2026-10-01', complete: false }, own, { isWeek: false, first: '2026-09-28', last: '2026-10-11' })!
+    const days = topAskedOf(split([row]), { week: 153, month: 288 }, { month: '2026-10-01', complete: false }, own, { isWeek: false, first: '2026-09-28', last: '2026-10-11' })!
     expect(days.weekWords).toBe('between 28 Sep and 11 Oct')
   })
 
+  it('never the Also asked table\'s first row: the cards hold the top questions, and the table goes on after them', () => {
+    const s = askedSplit('week', false, 0)
+    const t = topAskedOf(s, { week: 153, month: 288 }, { month: '2026-10-01', complete: false }, null)!
+    expect(s.lead).toHaveLength(IDEA_SLOTS)
+    expect(t.registryId).toBe(s.lead[0].registryId)
+    expect(t.registryId).not.toBe(s.asked.rows[0]?.registryId)
+    expect(t.href).toBe(`${CONTENT_PATH}#${questionSlotId(1)}`)
+  })
+
+  it('the loader reads the page\'s split with no idea on the row, never the table alone', () => {
+    const src = readFileSync(resolve(__dirname, 'content.ts'), 'utf8')
+    const load = src.slice(src.indexOf('export async function topAsked('))
+    expect(load).toMatch(/askedWithLead\(\{\n\s+lead: IDEA_SLOTS,/)
+    expect(load).not.toMatch(/askedBlock\(/)
+  })
+
   it('prints no level whose side was not read, and nothing with no row', () => {
-    const t = topAskedOf(block([row]), { week: null, month: 288 }, { month: '2026-09-01', complete: true }, null)!
+    const t = topAskedOf(split([row]), { week: null, month: 288 }, { month: '2026-09-01', complete: true }, null)!
     expect(t.week).toBeNull()
     expect(t.month).toEqual({ k: 22, n: 288 })
     expect(t.monthWords).toBe('in September')
-    expect(topAskedOf(block([]), { week: 153, month: 288 }, { month: '2026-10-01', complete: false }, null)).toBeNull()
+    expect(topAskedOf(split([], [row]), { week: 153, month: 288 }, { month: '2026-10-01', complete: false }, null)).toBeNull()
   })
 
   it('is read only where no idea prints, and a failed read costs the question, not the tile', async () => {

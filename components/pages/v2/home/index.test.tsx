@@ -6,7 +6,9 @@ import { homeWeekDetail, homeWeeks, WEEKS_FAILED, type HomeWeeks } from '@/lib/p
 import { weekTileOf, type DashboardData, type DashboardReads } from '@/lib/pages/v2/home'
 import { DASHBOARD_NOW, dashboardEmptyFixture, dashboardFixture, dashboardThinFixture, fixtureMovesTop, fixturePublished } from '@/lib/pages/v2/home-fixture'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
-import { IDEAS_EMPTY } from '@/lib/pages/v2/content'
+import { CONTENT_PATH, IDEAS_EMPTY, topAskedOf } from '@/lib/pages/v2/content'
+import { contentThinFixture } from '@/lib/pages/v2/content-fixture'
+import { ContentPage } from '@/components/pages/v2/content'
 import type { MarketWeekRowRaw } from '@/lib/reading/weeks'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { decodeEntities, markupText, render, renderText } from '@/lib/test/render'
@@ -688,7 +690,12 @@ describe('the board\'s shape holds when the data is thin (parity pass)', () => {
     expect(t).toBe(`Content Open → ${ASKED_TITLE}: How long a liner lasts 23 of 226 videos this week 35 of 300 in October so far Who asks New amputees in their first year None of your 25 posts since August touched on it Sweat under the liner 21 this week · 30 of 300 in October so far ${IDEAS_EMPTY.not_on}`)
     // Nothing pins the why line to the tile's foot (it flows).
     expect(tileMarkup(markup, 'content')).not.toContain('mt-auto')
-    expect(tileMarkup(markup, 'content')).toContain('href="/dashboard/content#also-asked"')
+    // It opens Content's first question card, which holds its question (the
+    // cards hold the top questions; Also asked goes on after them), and the
+    // next question opens the next card.
+    expect(tileMarkup(markup, 'content')).toContain('href="/dashboard/content#idea-slot-1"')
+    expect(tileMarkup(markup, 'content')).toContain('href="/dashboard/content#idea-slot-2"')
+    expect(tileMarkup(markup, 'content')).not.toContain('#also-asked')
   })
 
   it('Your moves: the newest move keeps the panel, its month before printed and its own month left open', () => {
@@ -802,5 +809,25 @@ describe('the thin states, after the fresh check', () => {
     }
     const days = { ...base, content: { state: 'ok' as const, top: { ...c, asked: { ...c.asked!, own: null, weekWords: 'between 28 Sep and 11 Oct' } } } }
     expect(tileText(render(page(days)), 'content')).toMatch(/Asked between 28 Sep and 11 Oct: How long a liner lasts 23 of 226 videos between 28 Sep and 11 Oct/)
+  })
+})
+
+describe('the Content tile lands where it says (merge, 13 Oct)', () => {
+  it('its question opens the page\'s first question card, and that card holds the same question', () => {
+    const data = contentThinFixture()
+    const t = topAskedOf({ asked: data.asked, lead: data.ideas.questions }, data.market, data.month, null)!
+    const tile = tileMarkup(render(page({ ...dashboardFixture(), content: { state: 'ok', top: { state: 'not_on', idea: null, href: CONTENT_PATH, line: IDEAS_EMPTY.not_on, asked: t } } })), 'content')
+    expect(tile).toContain(`href="${t.href}"`)
+    const markup = render(<ContentPage data={data} />)
+    const id = t.href.split('#')[1]
+    const at = markup.indexOf(`<article id="${id}"`)
+    expect(at).toBeGreaterThan(-1)
+    const card = markup.slice(at, markup.indexOf('</article>', at))
+    expect(card).toContain('data-idea-slot="question"')
+    expect(decodeEntities(card)).toContain(t.label)
+    // The row's first card: no idea card and no question card before it.
+    expect(markup.slice(0, at)).not.toMatch(/<article id="idea-(slot-)?\d/)
+    // Not the Also asked table's first row, which goes on after the cards.
+    expect(data.asked.rows[0]?.registryId).not.toBe(t.registryId)
   })
 })

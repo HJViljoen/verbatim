@@ -1,7 +1,7 @@
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
 import { equalColumns, panelItemOrder, panelPlacement, PanelSlot, PeriodSwitch, type PanelLayout } from '@/components/v2'
 import { fmtInt, longMonth } from '@/lib/format'
-import { CONTENT_PERIODS, contentHref, daysPhrase, IDEA_SLOTS, monthWords, questionSlotsContext, type ContentPageData, type ContentState } from '@/lib/pages/v2/content'
+import { CONTENT_PERIODS, contentHref, IDEA_SLOTS, monthWords, questionSlotsContext, weekWordsOf, type ContentPageData, type ContentState } from '@/lib/pages/v2/content'
 import { surface } from '@/lib/nav'
 import { AskedCard } from './asked'
 import { IdeaPanelView } from './idea-panel'
@@ -24,9 +24,7 @@ import { WorksCard } from './works'
 /** "this week" for a seven-day window, else its days ("between 28 Sep and 4
  *  Oct"): a window is not called a week unless it is one. */
 export function weekWordOf(data: Pick<ContentPageData, 'week'>): string {
-  const w = data.week
-  if (!w) return 'this week'
-  return w.isWeek ? 'this week' : daysPhrase(w.first, w.last)
+  return weekWordsOf(data.week)
 }
 
 function Meta({ data }: { data: ContentPageData }) {

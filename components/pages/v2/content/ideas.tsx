@@ -3,7 +3,7 @@ import { CARD, equalColumns, FlagChip, MiniBars, panelItemOrder, panelPlacement,
 import { fmtInt, longMonth, platformLabel } from '@/lib/format'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
 import {
-  askedPhrase, conversationHref, IDEA_PANEL_ID, IDEA_SLOTS, IDEAS_EMPTY, contentHref, monthWords, olderIdeasLine, POST_IDEA_SLOT, QUESTION_IDEA_LINE, questionsAfterIdeas, questionsHeading,
+  askedPhrase, conversationHref, IDEA_PANEL_ID, IDEA_SLOTS, IDEAS_EMPTY, contentHref, monthWords, olderIdeasLine, POST_IDEA_SLOT, QUESTION_IDEA_LINE, questionsAfterIdeas, questionsHeading, questionSlotId,
   type ContentState, type IdeaCard, type IdeasBlock, type IdeasState, type OwnTouch, type QuestionSlot, type QuestionSlotsContext,
 } from '@/lib/pages/v2/content'
 import { cn } from '@/lib/utils'
@@ -189,10 +189,10 @@ export function QuestionCardView({ row, rank, state, ctx, style }: {
 }) {
   const bars = row.weeks && ctx.weekLabels && row.weeks.length === ctx.weekLabels.length ? row.weeks.map((n, i) => ({ label: ctx.weekLabels![i], value: n })) : null
   return (
-    <article id={`idea-slot-${rank}`} data-idea-slot="question" aria-labelledby={`idea-slot-${rank}-title`} style={style} className={CARD}>
+    <article id={questionSlotId(rank)} data-idea-slot="question" aria-labelledby={`${questionSlotId(rank)}-title`} style={style} className={cn(CARD, 'scroll-mt-6')}>
       <div className="flex items-start gap-3">
         <Rank n={rank} />
-        <h3 id={`idea-slot-${rank}-title`} className="m-0 text-[18px] leading-[1.35] font-semibold tracking-[-0.005em]">
+        <h3 id={`${questionSlotId(rank)}-title`} className="m-0 text-[18px] leading-[1.35] font-semibold tracking-[-0.005em]">
           <span className="sr-only">Question {rank}: </span>
           <span data-copy="subject" data-slot="pass_b_theme">{row.label}</span>
         </h3>

@@ -3,7 +3,7 @@ import { readingMonthLabel } from '../../reading/month-label'
 import type { PublishedWeekRead } from '../../written/published'
 import type { StandingFact, WeekReadDataV2 } from '../../written/types'
 import { homeWeeksFrame, type HomeWeeks } from '../home'
-import { ASKED_ID, CONTENT_PATH, contentHref, IDEAS_EMPTY, ideasReadOf, recipe, topContentEmpty, type IdeasState, type TopAsked } from './content'
+import { CONTENT_PATH, contentHref, IDEAS_EMPTY, ideasReadOf, questionSlotId, recipe, topContentEmpty, type IdeasState, type TopAsked } from './content'
 import {
   agentTries, weekSubjectsGap, weekSubjectsOf, weekTileOf, type ContentTile, type DashboardData, type MarketTile, type TileRead, type TopProducts, type WeekSubjects,
 } from './home'
@@ -173,9 +173,9 @@ export function fixtureAsked(): TopAsked {
     weekWords: 'this week',
     monthWords: 'in October so far',
     groups: [{ key: 'new-amputees', name: 'New amputees in their first year' }],
-    next: [{ registryId: fixtureId(2), label: 'Sweat under the liner', week: 21, month: 30 }],
+    next: [{ registryId: fixtureId(2), label: 'Sweat under the liner', week: 21, month: 30, href: `${CONTENT_PATH}#${questionSlotId(2)}` }],
     own: { state: 'none', touched: 0, posts: 25, since: '2026-08-01' },
-    href: `${CONTENT_PATH}#${ASKED_ID}`,
+    href: `${CONTENT_PATH}#${questionSlotId(1)}`,
   }
 }
 
