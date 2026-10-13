@@ -3,14 +3,14 @@ import { describe, expect, it } from 'vitest'
 import { OSSUR_CLIENT_ID } from '../../config'
 import { productReadingRows } from '../../products/readings'
 import { compileCatalogue } from '../../products/rules'
-import { refuseEveryPair } from '../../reading/pairs'
+import { BRANDS_PANEL, refuseEveryPair, viewForAudience, type PairOn } from '../../reading/pairs'
 import { fakeDb } from '../../test/fake-db'
 import {
   ACCEPT_PAIRS, linersUnclearTexts, OSSUR_CATALOGUE, OSSUR_STANDING, ossurCrosses, ossurLinersFixture, ossurProductRows, ossurProductsFixture,
   ossurSealInXFixture, PRODUCT_IDS, PRODUCTS_FIXTURES, SEP_MARKET, sealInXTexts,
 } from './products-fixture'
 import {
-  buildProductsData, categoryShareVerdict, firstMonthOf, loadMonthPlacements, marketProductMonth, marketVideosOf, monthsBack, notchFor,
+  buildProductsData, catalogueBreak, categoryShareVerdict, crossesOf, firstMonthOf, monthLine, poolLens, loadMonthPlacements, marketProductMonth, marketVideosOf, monthsBack, notchFor,
   openOf, parseProductsParams, pickStandouts, placementsInPlay, productMonthSets, productQuotes, productsHref, setKey, sharePct, shelfColumns,
   topProducts, topProductsOf, unclearLines, PRODUCTS_HREF, TOP_LABELS,
   type ProductMonthRow, type ProductsInput, type TextRead,
@@ -362,5 +362,92 @@ describe('loadMonthPlacements (the product_mentions loader)', () => {
 
   it('answers null where the products migration is not applied', async () => {
     expect(await loadMonthPlacements(fakeDb({}).client as never, OSSUR_CLIENT_ID, { month: SEP, version: V, catalogue: OSSUR_CATALOGUE })).toBeNull()
+  })
+})
+
+describe('the fresh check\'s fixes (13 Oct)', () => {
+  it('1. the quote gate takes the client\'s audience: one line, under an own post, a creator\'s video about the client and a market video, prints all three', () => {
+    const words = 'My liner keeps rolling down at the knee on hot days, any tips?'
+    const base = { lang: 'en', english: null, date: '2026-09-20', platform: 'tiktok', account: null, videoUrl: null, platformCommentId: null }
+    const video = (over: Record<string, unknown>) => ({ platform: 'tiktok', caption: 'A day with my leg', hashtags: [], topics: [], accountName: 'someone', isClient: false, isCompetitor: false, competitorName: null, source: 'discovered', segment: 'market', ...over })
+    const texts: TextRead[] = [
+      { ...base, key: 'c:own', videoId: 'v-own', commentId: 'own', text: words, video: video({ videoId: 'own', isClient: true, source: 'owned', accountName: 'ossur' }) },
+      { ...base, key: 'c:about', videoId: 'v-about', commentId: 'about', text: words, video: video({ videoId: 'about', isClient: true, caption: 'My new Össur liner' }) },
+      { ...base, key: 'c:market', videoId: 'v-market', commentId: 'market', text: words, video: video({ videoId: 'market' }) },
+    ]
+    const r = unclearLines(texts, OSSUR_CLIENT_ID, 10)
+    expect(r.lines.map((l) => l.key)).toEqual(['c:own', 'c:about', 'c:market'])
+    expect(r.withheld).toBe(0)
+    // A product's quotes print one wording once; three different lines under the three print all three.
+    const distinct = texts.map((t, i) => ({ ...t, text: `${words} (${['one', 'two', 'three'][i]})` }))
+    expect(productQuotes(distinct, OSSUR_CLIENT_ID).map((q) => q.key)).toEqual(['c:own', 'c:about', 'c:market'])
+  })
+
+  it('2. the crosses pool every audience, the client\'s included: 10 videos, 8 of them the client\'s, read as 10, as the stats count them', () => {
+    const rows = [
+      { audience: 'client', object_kind: 'denominator', object_id: 'videos', k: 8, n: 8 },
+      { audience: 'industry-other', object_kind: 'denominator', object_id: 'videos', k: 2, n: 2 },
+      { audience: 'client', object_kind: 'subject', object_id: 's1', k: 6, n: 8 },
+      { audience: 'industry-other', object_kind: 'subject', object_id: 's1', k: 1, n: 2 },
+      { audience: 'client', object_kind: 'kind', object_id: 'praise', k: 5, n: 8 },
+      { audience: 'client', object_kind: 'kind', object_id: 'misinformation', k: 1, n: 8 },
+      { audience: 'client', object_kind: 'subject', object_id: 'gone', k: 3, n: 8 },
+      // a repeated audience-object counted once
+      { audience: 'client', object_kind: 'denominator', object_id: 'videos', k: 8, n: 8 },
+    ]
+    expect(poolLens(rows)).toMatchObject({ n: 10 })
+    const c = crossesOf(rows, new Map([['s1', 'Fit & comfort']]), null)
+    expect(c.n).toBe(10)
+    expect(c.subjects).toEqual([{ id: 's1', label: 'Fit & comfort', k: 7 }])
+    expect(c.kinds.map((k) => [k.id, k.k])).toEqual([['praise', 5]])
+  })
+
+  it('5. a product with no row in a read month is not read yet (null), never quiet; its tile and the Dashboard\'s small shelf say so', () => {
+    const navii = PRODUCT_IDS.navii()
+    const rows = ossurProductRows().filter((r) => !(r.object_id === navii && r.month === SEP))
+    const d = buildProductsData({ ...baseInput(), rows, params: { product: navii } })
+    const tile = d.shelf.find((c) => c.name === 'Knees')!.products.find((p) => p.id === navii)!
+    expect(tile.videos).toBeNull()
+    expect(d.shelf.find((c) => c.name === 'Knees')!.products.at(-1)!.id).toBe(navii)
+    expect(d.panel?.kind === 'product' && d.panel.videos).toBeNull()
+    expect(topProductsOf(d).columns!.flatMap((c) => c.products).some((p) => p.id === navii)).toBe(false)
+    // A category with no row this month is not read either.
+    const knees = PRODUCT_IDS.knees()
+    const noKnees = ossurProductRows().filter((r) => !(r.month === SEP && (r.object_id === knees || r.group_id === knees)))
+    expect(buildProductsData({ ...baseInput(), rows: noKnees }).shelf.find((c) => c.id === knees)!.videos).toBeNull()
+  })
+
+  it('7. a first month needs STANDOUT_MIN videos: one or two is not a standout', () => {
+    const navii = { id: PRODUCT_IDS.navii(), name: 'Navii' }
+    const thin = ossurProductRows().map((r) => (r.object_id === navii.id && r.month === SEP ? { ...r, k_named: r.audience === 'industry-other' ? 2 : 0, k_any: r.audience === 'industry-other' ? 2 : 0 } : r))
+    expect(marketProductMonth(thin, SEP, navii.id)!.k_named).toBe(2)
+    expect(firstMonthOf({ product: navii, month: SEP, rows: thin })).toBeNull()
+    expect(buildProductsData({ ...baseInput(), rows: thin }).standouts.some((s) => s.kind === 'first')).toBe(false)
+  })
+
+  it('8. a category\'s share is judged on the brands view (cut by handles changes and every search change), never the market\'s', () => {
+    const asked: string[] = []
+    const pair: PairOn = (prevMonth, month, audience) => { asked.push(audience); return ACCEPT_PAIRS(prevMonth, month, audience) }
+    const rows = ossurProductRows()
+    const hands = OSSUR_CATALOGUE.groups.find((x) => x.name === 'Hands')!
+    categoryShareVerdict({ group: hands, month: SEP, curr: marketProductMonth(rows, SEP, hands.id), prev: marketProductMonth(rows, '2026-08-01', hands.id), pair })
+    expect(asked).toEqual([BRANDS_PANEL])
+    expect(viewForAudience(BRANDS_PANEL)).toBe('brands')
+  })
+
+  it('10. the month line: the reading month marked, a catalogue change named, the product line as a share with its n', () => {
+    const rows = ossurProductRows().map((r) => (r.month < '2026-08-01' ? { ...r, catalogue_version: 'pc1_ffffffffffffffff' } : r))
+    const line = monthLine(rows, SEP, PRODUCT_IDS.liners(), (p) => p.k_any, () => false)
+    expect(line.map((b) => b.current)).toEqual([false, false, false, true])
+    expect(catalogueBreak(line)).toBe('2026-08-01')
+    expect(catalogueBreak(monthLine(ossurProductRows(), SEP, PRODUCT_IDS.liners(), (p) => p.k_any, () => false))).toBeNull()
+  })
+
+  it('11. the comparison sets each product\'s own largest subject in weight', () => {
+    const p = ossurLinersFixture().panel
+    if (p?.kind !== 'group' || !p.compare) throw new Error('expected a comparison')
+    const fit = p.compare.rows.find((r) => r.label === 'Fit & comfort')!
+    expect(fit.cells.map((c) => c?.highlight ?? false)).toEqual([false, true, true, true])
+    expect(p.compare.rows.find((r) => r.label === 'Cost & access')!.cells.some((c) => c?.highlight)).toBe(false)
   })
 })

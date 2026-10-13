@@ -6,6 +6,7 @@ import { productReadingsEnabled } from '../../config'
 import { citationLink } from '../../evidence-cite'
 import { fmtInt, longMonth, platformLabel, shortDate } from '../../format'
 import { surface } from '../../nav'
+import { PRODUCTS_HREF, productsHref, type OpenKind, type ProductsParams } from './products-address'
 import { PRODUCT_MODEL_RULE_VERSION } from '../../products/classify'
 import { contentKey, standingPlacements, type PlacedRow, type StandingText, type TextKey } from '../../products/match'
 import { PRODUCT_RULE_VERSION } from '../../products/rules'
@@ -20,11 +21,11 @@ import { readProductMonthVideos } from '../../products/readings'
 import { readQuoteContext, gateFor } from '../../quote-context'
 import { quoteGate, type GateInput, type QuoteVideo } from '../../quote-gate'
 import { readingOf, readTranslations } from '../../quotes'
-import { brandKinds, brandSubjects, loadCompanyName, type BrandLens, type BrandCrossRow, type LensRowIn } from '../../reading/cross'
+import { loadCompanyName, type LensRowIn } from '../../reading/cross'
 import { KIND_LABELS } from '../../reading/kinds'
 import { monthStartOf, nextMonth, prevMonth } from '../../reading/month-key'
 import { loadPairOn, type ReadingHandle } from '../../reading/read'
-import type { PairOn } from '../../reading/pairs'
+import { BRANDS_PANEL, type PairOn } from '../../reading/pairs'
 import { monthChange } from '../../reading/bands'
 import { loadReadingMonth } from '../../reading/reading-view'
 import { bandVerdict, type Verdict } from '../../reading/verdicts'
@@ -78,63 +79,7 @@ import { WHAT_THEY_SELL } from '../market-frame'
 
 // ---- the address -------------------------------------------------------------------
 
-/** The page's own address. */
-export const PRODUCTS_HREF = surface('products').href
-
-export interface ProductsParams {
-  /** A category's id (`product_groups.id`). Settings' "Tag them" link names it. */
-  group?: string
-  /** A product's id (`products.id`). */
-  product?: string
-  /** `all` lists every line of the open category's couldn't-tell-which talk. */
-  unclear?: string
-  /** `?month=YYYY-MM`, as every reading page takes it. */
-  month?: string
-}
-
-/** One query value: the first of a repeated key, trimmed; empty is absent. */
-function paramValue(raw: string | string[] | undefined | null): string | undefined {
-  const v = Array.isArray(raw) ? raw[0] : raw
-  const t = typeof v === 'string' ? v.trim() : ''
-  return t === '' ? undefined : t
-}
-
-/** The page's params from a request's search params. */
-export function parseProductsParams(raw: Record<string, string | string[] | undefined> | null | undefined): ProductsParams {
-  const sp = raw ?? {}
-  const out: ProductsParams = {}
-  for (const k of ['group', 'product', 'unclear', 'month'] as const) {
-    const v = paramValue(sp[k])
-    if (v) out[k] = v
-  }
-  return out
-}
-
-export type OpenKind = 'group' | 'product'
-
-/** Each panel's anchor id. */
-export const PANEL_ID: Readonly<Record<OpenKind, string>> = {
-  group: 'category-panel',
-  product: 'product-panel',
-}
-
-/** The anchor of the couldn't-tell-which list inside a category's panel. */
-export const UNCLEAR_ID = 'unclear'
-
-/**
- * The page's address with the month kept and at most one item open. `all`
- * keeps the open category's full couldn't-tell-which list. The hash is the
- * open panel's anchor (or the list's), so the browser lands on it.
- */
-export function productsHref(params: Pick<ProductsParams, 'month'>, open: { kind: OpenKind; id: string } | null = null, opts: { all?: boolean; at?: 'unclear' } = {}): string {
-  const q = new URLSearchParams()
-  if (params.month) q.set('month', params.month)
-  if (open) q.set(open.kind, open.id)
-  if (open?.kind === 'group' && opts.all) q.set('unclear', 'all')
-  const s = q.toString()
-  const hash = open ? (opts.at === 'unclear' && open.kind === 'group' ? UNCLEAR_ID : PANEL_ID[open.kind]) : null
-  return `${PRODUCTS_HREF}${s ? `?${s}` : ''}${hash ? `#${hash}` : ''}`
-}
+export { PANEL_ID, parseProductsParams, PRODUCTS_HREF, productsHref, UNCLEAR_ID, type OpenKind, type ProductsParams } from './products-address'
 
 /** Where a question to the Agent goes, prefilled. */
 export function askHref(question: string): string {
@@ -194,8 +139,10 @@ export interface Crosses {
 export interface ShelfProductView {
   id: string
   name: string
-  /** Its videos this month (`k_named`, pooled over the market). */
-  videos: number
+  /** Its videos this month (`k_named`, pooled over every audience); null
+   *  where the month holds no row for it (not read yet: added to the list
+   *  after the month was last read), never a zero. */
+  videos: number | null
   href: string
   /** Its first month with videos: a `new` flag's verdict, else null. */
   flag: Verdict | null
@@ -204,8 +151,9 @@ export interface ShelfProductView {
 export interface ShelfCategoryView {
   id: string
   name: string
-  /** Videos about the category this month (`k_any`). */
-  videos: number
+  /** Videos about the category this month (`k_any`); null where the month
+   *  holds no row for it (not read yet). */
+  videos: number | null
   /** `k_any` of the market's videos. Null where the month holds no market. */
   share: Level | null
   /** This month's share against last month's, banded. Null where no
@@ -285,7 +233,13 @@ export interface LineBar {
   label: string
   k: number
   n: number
+  /** The month is still being read (so far). */
   filling: boolean
+  /** The month the page reads: drawn outlined (the board's "so far" bar). */
+  current: boolean
+  /** The catalogue this month was read under: where it differs from the
+   *  month before, the list changed between them (a footnote says so). */
+  version: string | null
 }
 
 /** A text placed under one of the client's products in a category, not which:
@@ -310,7 +264,8 @@ export interface ProductsQuote {
 }
 
 export interface CompareColumn { key: string; label: string; tone: 'market' | 'you' }
-export interface CompareRow { key: string; label: string; cells: (Level | null)[] }
+export interface CompareCell extends Level { highlight?: boolean }
+export interface CompareRow { key: string; label: string; cells: (CompareCell | null)[] }
 
 /** Rows of things people talk about, each counted in the category and in each
  *  of the client's products there (`PairedBars`). */
@@ -558,18 +513,46 @@ export function placementsInPlay<T extends PlacedRow & { rule_version: string; c
 /** The cross key of a set. */
 export const setKey = (kind: OpenKind, id: string): string => `${kind}:${id}`
 
-/** Subjects and kinds over one set, from its `lens_readings` rows (pooled
- *  over every audience but the client's, `brandKinds` / `brandSubjects`).
- *  Misinformation is never a kind a page ranks (decision T). PURE. */
-export function crossesOf(month: string, key: string, rows: readonly LensRowIn[], subjects: ReadonlyMap<string, string>, noun: string | null): Crosses {
-  const lens: BrandLens[] = [{ brandKey: key, label: key, base: 'any', rows }]
-  const kinds: BrandCrossRow = brandKinds(month, lens)[0]
-  const subs: BrandCrossRow = brandSubjects(month, lens, subjects)[0]
+/**
+ * One set's `lens_readings` rows pooled over EVERY audience, the client's
+ * included (the basis: a creator's video about the client and an own post
+ * with the market's comments are in the set, and the brand crosses' pooling,
+ * `brandKinds` / `brandSubjects`, leaves the client's audience out, which
+ * would read 10 videos with 8 of them the client's as 2). Audiences of one
+ * month are disjoint, so the sums are distinct videos; a repeated
+ * audience-object is counted once. PURE.
+ */
+export function poolLens(rows: readonly LensRowIn[]): { n: number; kinds: Map<string, number>; subjects: Map<string, number> } {
+  const num = (v: unknown): number => {
+    const x = typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : 0
+    return Number.isFinite(x) ? x : 0
+  }
+  const seen = new Set<string>()
+  let n = 0
+  const kinds = new Map<string, number>()
+  const subjects = new Map<string, number>()
+  for (const r of rows) {
+    const key = `${r.audience}\u0000${r.object_kind}\u0000${r.object_id}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    if (r.object_kind === 'denominator' && r.object_id === 'videos') n += num(r.k)
+    else if (r.object_kind === 'kind') kinds.set(String(r.object_id), (kinds.get(String(r.object_id)) ?? 0) + num(r.k))
+    else if (r.object_kind === 'subject') subjects.set(String(r.object_id), (subjects.get(String(r.object_id)) ?? 0) + num(r.k))
+  }
+  return { n, kinds, subjects }
+}
+
+/** Subjects and kinds over one set, from its `lens_readings` rows pooled over
+ *  every audience (`poolLens`). A subject not active (not in `subjects`) is
+ *  left out; misinformation is never a kind a page ranks (decision T). PURE. */
+export function crossesOf(rows: readonly LensRowIn[], subjects: ReadonlyMap<string, string>, noun: string | null): Crosses {
+  const pooled = poolLens(rows)
   return {
-    n: subs.n,
-    subjects: subs.cells.map((c) => ({ id: c.id, label: c.label, k: c.k })).sort(byNumberThenName),
-    kinds: kinds.cells.filter((c) => c.id !== 'misinformation' && KIND_LABELS[c.id])
-      .map((c) => ({ id: c.id, label: talkKindLabel(c.id, noun), k: c.k })).sort(byNumberThenName),
+    n: pooled.n,
+    subjects: [...pooled.subjects].filter(([id, k]) => k > 0 && subjects.has(id))
+      .map(([id, k]) => ({ id, label: subjects.get(id)!, k })).sort(byNumberThenName),
+    kinds: [...pooled.kinds].filter(([id, k]) => k > 0 && id !== 'misinformation' && KIND_LABELS[id])
+      .map(([id, k]) => ({ id, label: talkKindLabel(id, noun), k })).sort(byNumberThenName),
   }
 }
 
@@ -602,9 +585,12 @@ export function categoryShareVerdict(input: {
     // catalogue's own version is checked below).
     curr: { month: m, videos: curr.n, k: curr.k_any, audience: 'market', regime: 'n/a' },
     prev: { month: before, videos: prev?.n ?? null, k: prev?.k_any ?? null, audience: 'market', regime: 'n/a' },
-    // The market view: a category's share of the market moves with what we
-    // search and read, as the market's own month does.
-    comparability: input.pair ? input.pair(before, m, 'market') : null,
+    // The BRANDS view (lib/reading/comparability.ts: every search change, and
+    // the filing changes, FILING_VIEWS, handles among them). The month pools
+    // the client's own posts too, and a handles change moves which posts are
+    // the client's, so the market view, which a handles change does not cut,
+    // would compare two months read two ways.
+    comparability: input.pair ? input.pair(before, m, BRANDS_PANEL) : null,
   })
   if (prev && curr.catalogueVersion && prev.catalogueVersion && curr.catalogueVersion !== prev.catalogueVersion && verdict.state !== 'refused') {
     const { baseline: _prior, ...level } = verdict
@@ -626,7 +612,8 @@ export function firstMonthOf(input: {
 }): { verdict: Verdict; videos: number; n: number; months: { month: string; k: number }[] } | null {
   const m = monthStartOf(input.month)
   const curr = marketProductMonth(input.rows, m, input.product.id)
-  if (!curr || curr.k_named <= 0) return null
+  // A first month needs STANDOUT_MIN videos: one video is not a standout.
+  if (!curr || curr.k_named < STANDOUT_MIN) return null
   const earlier: { month: string; k: number }[] = []
   for (const month of monthsOfRows(input.rows).filter((x) => x < m)) {
     const p = marketProductMonth(input.rows, month, input.product.id)
@@ -855,8 +842,9 @@ export function buildShelf(input: {
     const prev = marketProductMonth(input.rows, before, g.id)
     const products = input.catalogue.products
       .filter((p) => p.group_id === g.id)
-      .map((p) => ({ p, videos: marketProductMonth(input.rows, m, p.id)?.k_named ?? 0 }))
-      .sort((a, b) => b.videos - a.videos || a.p.sort - b.p.sort || a.p.name.localeCompare(b.p.name))
+      .map((p) => ({ p, videos: marketProductMonth(input.rows, m, p.id)?.k_named ?? null }))
+      // Most videos first, then the quiet ones, then any not read yet.
+      .sort((a, b) => (b.videos ?? -1) - (a.videos ?? -1) || a.p.sort - b.p.sort || a.p.name.localeCompare(b.p.name))
       .map(({ p, videos }): ShelfProductView => ({
         id: p.id, name: p.name, videos, href: productsHref(input.params, { kind: 'product', id: p.id }), flag: input.firsts.get(p.id)?.verdict ?? null,
       }))
@@ -865,7 +853,7 @@ export function buildShelf(input: {
     return {
       id: g.id,
       name: g.name,
-      videos: curr?.k_any ?? 0,
+      videos: curr ? curr.k_any : null,
       share: curr && curr.n > 0 ? { k: curr.k_any, n: curr.n } : null,
       verdict: categoryShareVerdict({ group: g, month: m, curr, prev, pair: input.pair }),
       lead: top && c && c.n > 0 ? { label: top.label, k: top.k } : null,
@@ -909,6 +897,13 @@ export function notchFor(groups: readonly { id: string }[], groupId: string): nu
   return (((i % cols) + 0.5) / cols)
 }
 
+/** The first month of a line read under a different catalogue from the month
+ *  before it (the list changed between them), or null. PURE. */
+export function catalogueBreak(line: readonly LineBar[]): string | null {
+  for (let i = 1; i < line.length; i++) if (line[i].version && line[i - 1].version && line[i].version !== line[i - 1].version) return line[i].month
+  return null
+}
+
 /** A month line: up to LINE_MONTHS months that hold a row for the object,
  *  ending at the reading month, `k` the object's videos (`pick`) of the
  *  market's. PURE. */
@@ -917,7 +912,7 @@ export function monthLine(rows: readonly ProductMonthRow[], month: string, objec
   for (const m of monthsBack(month, LINE_MONTHS)) {
     const p = marketProductMonth(rows, m, objectId)
     if (!p || p.n <= 0) continue
-    out.push({ month: m, label: longMonth(m).slice(0, 3), k: pick(p), n: p.n, filling: filling(m) })
+    out.push({ month: m, label: longMonth(m).slice(0, 3), k: pick(p), n: p.n, filling: filling(m), current: m === monthStartOf(month), version: p.catalogueVersion })
   }
   return out
 }
@@ -929,14 +924,14 @@ export function monthLine(rows: readonly ProductMonthRow[], month: string, objec
 export function buildCompare(input: {
   month: string
   group: { id: string; name: string }
-  products: readonly { id: string; name: string; videos: number }[]
+  products: readonly { id: string; name: string; videos: number | null }[]
   crosses: ReadonlyMap<string, Crosses>
   focus?: string | null
 }): Compare | null {
   const gc = input.crosses.get(setKey('group', input.group.id))
   if (!gc || gc.n === 0 || gc.subjects.length === 0) return null
-  const ranked = [...input.products].filter((p) => p.videos > 0 && (input.crosses.get(setKey('product', p.id))?.n ?? 0) > 0)
-    .sort((a, b) => (a.id === input.focus ? -1 : b.id === input.focus ? 1 : 0) || b.videos - a.videos)
+  const ranked = [...input.products].filter((p) => (p.videos ?? 0) > 0 && (input.crosses.get(setKey('product', p.id))?.n ?? 0) > 0)
+    .sort((a, b) => (a.id === input.focus ? -1 : b.id === input.focus ? 1 : 0) || (b.videos ?? 0) - (a.videos ?? 0))
     .slice(0, COMPARE_PRODUCTS)
   if (ranked.length === 0) return null
   const columns: CompareColumn[] = [
@@ -944,12 +939,16 @@ export function buildCompare(input: {
     ...ranked.map((p) => ({ key: p.id, label: p.name, tone: 'you' as const })),
   ]
   const verdicts: Verdict[] = []
+  // THE BOLD CELL (the board's): each product's own largest subject, the
+  // cell to read first in its column. A weight, never a comparison claim:
+  // the pairs are banded below and worded only where one clears.
+  const topOf = new Map(ranked.map((p) => [p.id, input.crosses.get(setKey('product', p.id))!.subjects[0]?.id ?? null]))
   const rows: CompareRow[] = gc.subjects.slice(0, COMPARE_ROWS).map((s) => {
-    const cells: (Level | null)[] = [{ k: s.k, n: gc.n }]
+    const cells: (CompareCell | null)[] = [{ k: s.k, n: gc.n }]
     for (const p of ranked) {
       const pc = input.crosses.get(setKey('product', p.id))!
       const k = pc.subjects.find((x) => x.id === s.id)?.k ?? 0
-      cells.push({ k, n: pc.n })
+      cells.push({ k, n: pc.n, ...(k > 0 && topOf.get(p.id) === s.id ? { highlight: true } : {}) })
       verdicts.push(productAgainstCategory({ product: p, subject: s, month: input.month, product_: { k, n: pc.n }, category: { k: s.k, n: gc.n } }))
     }
     return { key: s.id, label: s.label, cells }
@@ -1043,7 +1042,9 @@ const gateInputOf = (t: TextRead): GateInput => ({ text: t.text ?? '', lang: t.l
  *  no commenter's words); a comment the gate refuses is counted, not shown.
  *  PURE. */
 export function unclearLines(texts: readonly TextRead[], clientId: string, limit: number): { lines: UnclearLine[]; more: number; withheld: number } {
-  const gate = gateFor(clientId, {})
+  // The client's own audience is the market here (the basis): a comment
+  // under a creator's video about the client, or under its own post, prints.
+  const gate = gateFor(clientId, { allowOwn: true })
   const lines: UnclearLine[] = []
   let withheld = 0
   for (const t of texts) {
@@ -1061,7 +1062,9 @@ export function unclearLines(texts: readonly TextRead[], clientId: string, limit
 /** A product's quotes: its comments that pass the gate, newest first, one a
  *  video, at most PRODUCT_QUOTES. PURE. */
 export function productQuotes(texts: readonly TextRead[], clientId: string): ProductsQuote[] {
-  const gate = gateFor(clientId, {})
+  // The client's own audience is the market here (the basis): a comment
+  // under a creator's video about the client, or under its own post, prints.
+  const gate = gateFor(clientId, { allowOwn: true })
   const out: ProductsQuote[] = []
   const videos = new Set<string>()
   const seen = new Set<string>()
@@ -1116,7 +1119,7 @@ export function buildProductsData(input: ProductsInput): ProductsData {
     if (s) splits.set(g.id, s)
   }
   const standouts = pickStandouts({ month, params: input.params, catalogue, shelf, firsts, crosses: input.crosses, splits })
-  const cameUp = shelf.reduce((s, c) => s + c.products.filter((p) => p.videos > 0).length, 0)
+  const cameUp = shelf.reduce((s, c) => s + c.products.filter((p) => (p.videos ?? 0) > 0).length, 0)
   const sets = input.market && input.standing
     ? productMonthSets({ month, market: input.market, standing: input.standing, groups: catalogue.groups.map((g) => g.id), products: catalogue.products.map((p) => p.id) })
     : null
@@ -1168,7 +1171,7 @@ function buildPanel(a: {
       line: monthLine(rows, month, g.id, (p) => p.k_any, a.filling),
       compare: buildCompare({ month, group: g, products: col.products, crosses: input.crosses }),
       share: col.share, verdict: col.verdict,
-      products: col.products.length, cameUp: col.products.filter((p) => p.videos > 0).length,
+      products: col.products.length, cameUp: col.products.filter((p) => (p.videos ?? 0) > 0).length,
       split: split ? { any: split.k_any, named: split.k_named, unclear: split.k_unclear, unbranded: split.k_unbranded } : null,
       unclear: {
         videos: split?.k_unclear ?? 0,
@@ -1257,17 +1260,19 @@ export function topProductsOf(data: Pick<ProductsData, 'state' | 'monthWords' | 
     case 'failed': return { ...base, state: 'quiet', note: 'failed' }
     default: break
   }
-  const columns = data.shelf.map((c) => ({ id: c.id, name: c.name, products: c.products.map((p) => ({ id: p.id, videos: p.videos })) }))
+  // A product not read yet is left off the small shelf (its tile would read
+  // as quiet, and nothing was read).
+  const columns = data.shelf.map((c) => ({ id: c.id, name: c.name, products: c.products.flatMap((p) => (p.videos == null ? [] : [{ id: p.id, videos: p.videos }])) }))
   const extra = { cameUp: data.header?.cameUp ?? 0, products: data.header?.products ?? 0, columns }
   const first = firsts[0]
   if (first) {
     return { ...base, ...extra, state: 'ready', standout: { label: TOP_LABELS.first, name: first.name, k: first.videos, n: null, href: first.href } }
   }
-  const products = data.shelf.flatMap((c) => c.products).filter((p) => p.videos > 0).sort((a, b) => b.videos - a.videos)
+  const products = data.shelf.flatMap((c) => c.products).flatMap((p) => ((p.videos ?? 0) > 0 ? [{ ...p, videos: p.videos as number }] : [])).sort((a, b) => b.videos - a.videos)
   if (products[0]) {
     return { ...base, ...extra, state: 'ready', standout: { label: TOP_LABELS.most, name: products[0].name, k: products[0].videos, n: data.market, href: products[0].href } }
   }
-  const groups = data.shelf.filter((c) => c.videos > 0).sort((a, b) => b.videos - a.videos)
+  const groups = data.shelf.flatMap((c) => ((c.videos ?? 0) > 0 ? [{ ...c, videos: c.videos as number }] : [])).sort((a, b) => b.videos - a.videos)
   if (groups[0]) {
     return { ...base, ...extra, state: 'ready', standout: { label: TOP_LABELS.most, name: groups[0].name, k: groups[0].videos, n: data.market, href: groups[0].href } }
   }
@@ -1401,6 +1406,13 @@ export interface ProductsLoadInput {
   now?: string
 }
 
+/** The page's month (`loadReadingMonth`, the month every reading page
+ *  reads), its first read; the calendar month where it cannot be read.
+ *  Settings › Your products reads the same month. */
+export function productsMonth(supabase: SupabaseClient, handle: ReadingHandle, now: string): Promise<{ month: string; soFar: boolean }> {
+  return monthOf(supabase, handle, now, null)
+}
+
 /** The page's month (`loadReadingMonth`), its first read. */
 async function monthOf(supabase: SupabaseClient, handle: ReadingHandle, now: string, explicit: string | null): Promise<{ month: string; soFar: boolean }> {
   const rm = await loadReadingMonth(supabase, handle, now, { explicit }).catch((e: unknown) => { say('month', e); return null })
@@ -1468,7 +1480,7 @@ export async function loadProducts(input: ProductsLoadInput): Promise<ProductsDa
     open && sets && standing ? readPanelTexts(handle, month, open, sets, standing).catch((e: unknown) => { say('panel texts', e); return null }) : Promise.resolve(null),
   ])
   const crosses = new Map<string, Crosses>()
-  for (const [key, r] of lens ?? []) crosses.set(key, crossesOf(month, key, r, subjectNames, noun))
+  for (const [key, r] of lens ?? []) crosses.set(key, crossesOf(r, subjectNames, noun))
   return buildProductsData({ ...shell, rows, market, standing, crosses, pair, panelReads })
 }
 

@@ -21,7 +21,9 @@ describe('the standouts (E4-Products, the four cards)', () => {
     expect(text).toContain('Navii came up for the first time 3 videos in September')
     expect(text).toContain('2 of its 3 videos are about Function & movement.')
     expect(text).toContain('Hands talk is mostly about hands in general Hands in general 98 of 110 · 89% One of yours 12 of 110 · 11%')
-    expect(text).toContain('Flex-Foot Cheetah is praised in almost every video 7 of its 9 videos')
+    // What is counted: videos naming it with praise in their comments, about anything.
+    expect(text).toContain('Praise in the comments Feet Almost every Flex-Foot Cheetah video has praise in its comments 7 of its 9 videos Videos that name it with praise in their comments, about it or about anything else in the video.')
+    expect(text).not.toMatch(/is praised|said it worked/)
     expect(text).toContain('Rheo Knee talk is mostly about Cost & access 5 of its 7 videos')
     expect(text.match(/Open →/g)).toHaveLength(4)
     expect(render(node)).not.toContain('data-copy="quote"')
@@ -52,7 +54,7 @@ describe('the standouts (E4-Products, the four cards)', () => {
   })
 
   it('words a share from the level alone', () => {
-    expect([shareWords(9, 9), shareWords(7, 9), shareWords(5, 9)]).toEqual(['every video', 'almost every video', 'most of its videos'])
+    expect([shareWords(9, 9), shareWords(7, 9), shareWords(5, 9)]).toEqual(['Every', 'Almost every', 'Most'])
   })
 
   it('draws nothing where nothing stood out', () => {
@@ -147,7 +149,7 @@ describe('a product\'s panel', () => {
     const text = renderText(node)
     expect(text).toContain('Product Liners Iceross Seal-In X 9 videos in September')
     expect(text).toContain('9 of 839 videos in your market name it 9 of 117 videos about liners name it 6 of 9 are about Fit & comfort')
-    expect(text).toContain('Videos naming it, month by month')
+    expect(text).toContain('Share of the market naming it, month by month 1.0% Jun 4 of 410 1.0% Jul 5 of 520 1.0% Aug 6 of 612 1.1% Sep 9 of 839')
     expect(text).toContain('Iceross Seal-In X against liners in general')
     expect(text).toContain('In their words · 3 comments naming it in September')
     expect(render(node).match(/data-copy="quote"/g)).toHaveLength(3)
@@ -162,5 +164,47 @@ describe('a product\'s panel', () => {
     expect(renderText(node)).toContain('Nobody in your market named it in September.')
     expect(render(node)).not.toContain('videos in your market name it')
     assertCopyContract(node)
+  })
+})
+
+describe('the fresh check\'s fixes, as drawn', () => {
+  it('the gap card\'s eyebrow says which side carries the subject', () => {
+    const v = bandVerdict({
+      objectKind: 'product', objectId: PRODUCT_IDS.sealInX(), objectLabel: 'x', audience: 'market',
+      window: { kind: 'month', from: '2026-09-01', to: '2026-10-01' }, value: { k: 80, n: 120 }, baseline: { k: 150, n: 400 },
+    })
+    const s: GapStandout = {
+      kind: 'gap', open: { kind: 'group', id: PRODUCT_IDS.liners() }, href: '/dashboard/products?group=x#category-panel', name: 'Liners', where: 'Liners',
+      subject: 'Grip', category: { k: 150, n: 400 }, product: { name: 'Iceross Seal-In X', k: 80, n: 120 }, verdict: v,
+    }
+    const text = renderText(<StandoutCard s={s} monthName="September" />)
+    expect(text).toContain('You, more than the category')
+    expect(text).toContain('Grip stands out on Iceross Seal-In X')
+    expect(text).not.toContain('Category, not you')
+    assertCopyContract(<StandoutCard s={s} monthName="September" />)
+  })
+
+  it('a product not read yet says so, never that nobody named it', () => {
+    const panel = { ...(ossurNaviiFixture().panel as ProductPanel), videos: null, flag: null, crosses: null, quotes: [] }
+    const node = <ProductPanelView panel={panel} monthName="September" />
+    const text = renderText(node)
+    expect(text).toContain('Not read yet for September: it was not in your list when September was last read.')
+    expect(text).not.toContain('Nobody in your market named it')
+    expect(render(node)).not.toContain('videos in your market name it')
+    assertCopyContract(node)
+  })
+
+  it('the month line outlines the reading month (the board\'s "so far" bar), never the orange; a catalogue change is footnoted', () => {
+    const panel = ossurLinersFixture().panel as CategoryPanel
+    const m = render(<CategoryPanelView panel={panel} monthName="September" canTag />)
+    expect(m).not.toContain('data-bar="picked"')
+    expect(m.match(/data-filling=""/g)).toHaveLength(1)
+    const changed = { ...panel, line: panel.line.map((b, i) => ({ ...b, version: i < 2 ? 'pc1_a' : 'pc1_b' })) }
+    expect(renderText(<CategoryPanelView panel={changed} monthName="September" canTag />)).toContain('Your product list changed before August: the months before it were read on the earlier list.')
+  })
+
+  it('the comparison sets each product\'s own largest subject in weight (the board\'s bold cells)', () => {
+    const m = render(<CategoryPanelView panel={ossurLinersFixture().panel as CategoryPanel} monthName="September" canTag />)
+    expect(m.match(/font-semibold">\d+ of \d+</g)?.length).toBeGreaterThanOrEqual(3)
   })
 })

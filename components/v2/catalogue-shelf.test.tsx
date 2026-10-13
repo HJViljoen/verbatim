@@ -26,6 +26,15 @@ describe('CatalogueShelf', () => {
     assertCopyContract(shelf())
   })
 
+  it('says "not read yet" for a product or a category the period holds no reading for, never a quiet zero', () => {
+    const cols = SHELF.map((c, i) => (i === 0 ? { ...c, products: c.products.map((p, j) => (j === 0 ? { ...p, videos: null } : p)) } : i === 1 ? { ...c, videos: null } : c))
+    const node = <CatalogueShelf columns={cols} />
+    const text = renderText(node)
+    expect(text).toContain('Iceross Seal-In X not read yet')
+    expect(text).toMatch(/Not read yet/)
+    assertCopyContract(node)
+  })
+
   it('rings the open column\'s head and ties it to the panel', () => {
     const m = render(shelf('liners'))
     expect(m).toMatch(/<a aria-expanded="true" aria-controls="group-panel" aria-current="true" class="[^"]*ring-2 ring-foreground" href="\?group=liners#group-panel"/)

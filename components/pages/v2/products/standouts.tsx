@@ -43,12 +43,12 @@ function Foot({ href }: { href: string }) {
   )
 }
 
-/** "almost every video", "most of its videos": the share in words, decided
- *  here from the level (never from a model). */
-export function shareWords(k: number, n: number): string {
-  if (n > 0 && k >= n) return 'every video'
-  if (n > 0 && k / n >= 0.75) return 'almost every video'
-  return 'most of its videos'
+/** "Every", "Almost every", "Most": the share in words, decided here from
+ *  the level (never from a model). */
+export function shareWords(k: number, n: number): 'Every' | 'Almost every' | 'Most' {
+  if (n > 0 && k >= n) return 'Every'
+  if (n > 0 && k / n >= 0.75) return 'Almost every'
+  return 'Most'
 }
 
 /** Month dots, oldest first: hollow for a month with none, the orange for
@@ -90,10 +90,12 @@ function FirstCard({ s, monthName }: { s: FirstStandout; monthName: string }) {
 }
 
 function GapCard({ s }: { s: GapStandout }) {
-  const less = (s.verdict.changePts ?? 0) < 0
+  // The eyebrow says which side carries the subject, from the pair itself
+  // (the product's share against the category's), in no direction word.
+  const less = s.product.k * s.category.n < s.category.k * s.product.n
   return (
     <>
-      <Eyebrow word="Category, not you" where={s.where} />
+      <Eyebrow word={less ? 'Category, not you' : 'You, more than the category'} where={s.where} />
       <Title>
         {less
           ? <>{s.subject} is a {s.where.toLowerCase()} matter, not a {s.product.name} one</>
@@ -123,14 +125,19 @@ function GeneralCard({ s, monthName }: { s: GeneralStandout; monthName: string }
   )
 }
 
+/** WHAT IS COUNTED: the videos that name it AND carry praise in their
+ *  comments (an insight of the praise kind, lib/reading/cross.ts). The
+ *  praise may be about something else in the video, so the card says
+ *  "praise in the comments", never that the product is praised. */
 function PraisedCard({ s }: { s: PraisedStandout }) {
+  const q = shareWords(s.praised.k, s.praised.n)
   return (
     <>
-      <Eyebrow word="Most praised" where={s.where} />
-      <Title>{s.name} is praised in {shareWords(s.praised.k, s.praised.n)}</Title>
+      <Eyebrow word="Praise in the comments" where={s.where} />
+      <Title>{q === 'Most' ? <>Most {s.name} videos have praise in their comments</> : <>{q} {s.name} video has praise in its comments</>}</Title>
       <MidFigure value={s.praised.k}>of its <span data-copy="figure">{fmtInt(s.praised.n)}</span> videos</MidFigure>
-      <UnitSquares k={s.praised.k} n={s.praised.n} tone="you" label={`${fmtInt(s.praised.k)} of ${fmtInt(s.praised.n)} videos praise ${s.name}`} />
-      <Sub>Videos where someone said it worked.</Sub>
+      <UnitSquares k={s.praised.k} n={s.praised.n} tone="you" label={`${fmtInt(s.praised.k)} of ${fmtInt(s.praised.n)} videos naming ${s.name} have praise in their comments`} />
+      <Sub>Videos that name it with praise in their comments, about it or about anything else in the video.</Sub>
     </>
   )
 }

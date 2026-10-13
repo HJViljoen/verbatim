@@ -120,7 +120,7 @@ async function main(): Promise<void> {
   writeFileSync(out, JSON.stringify(data))
   const header = data.header
   console.log(`products-page-replay: ${data.state} · ${data.monthWords} · ${header?.cameUp ?? 0} of ${header?.products ?? 0} products came up · ${header?.videos ?? '?'} videos · market ${data.market ?? '?'}`)
-  for (const c of data.shelf) console.log(`  ${c.name}: ${c.videos} (${c.unclear} not which) · ${c.products.filter((p) => p.videos > 0).map((p) => `${p.name} ${p.videos}`).join(', ') || 'no product named'}`)
+  for (const c of data.shelf) console.log(`  ${c.name}: ${c.videos} (${c.unclear} not which) · ${c.products.filter((p) => (p.videos ?? 0) > 0).map((p) => `${p.name} ${p.videos}`).join(', ') || 'no product named'}`)
   console.log(`  standouts: ${data.standouts.map((s) => `${s.kind} ${s.name}`).join(' · ') || 'none'}`)
   console.log(`  set keys read: ${[...sets.groups.keys()].map((g) => setKey('group', g)).length} categories; wrote ${out} (local only: it holds commenters' words)`)
 }

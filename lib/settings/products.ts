@@ -20,6 +20,7 @@ import {
 import { marketProductMonth } from '../products/market-month'
 import { aliasProblem } from '../products/rules'
 import { monthStartOf } from '../reading/month-key'
+import { productsHref } from '../pages/v2/products-address'
 import { selectAll } from '../supabase-admin'
 import { settingsSubPage } from './rail'
 
@@ -42,8 +43,10 @@ import { settingsSubPage } from './rail'
 // throws: a page that cannot read its settings says so, and never shows an
 // empty list as if it were the client's.
 //
-// "THIS MONTH" IS THE COMMENT'S MONTH. A product's figure is its videos in the
-// calendar month `now` falls in, from `month_product_readings` (AGENTS.md: a
+// "THIS MONTH" IS THE COMMENT'S MONTH, AND YOUR PRODUCTS' MONTH. A product's
+// figure is its videos in the month Your products reads (the reading month,
+// `productsMonth`; the calendar month only where it could not be read), from
+// `month_product_readings` (AGENTS.md: a
 // period is dated by the comment), pooled over EVERY audience, the client's
 // included: creators' videos about the client and the comments on its own
 // posts count, its own posts' words never place anything
@@ -118,8 +121,11 @@ export function productsTabHref(groupId?: string | null): string {
   return groupId ? `${base}?group=${encodeURIComponent(groupId)}` : base
 }
 
-/** Where "couldn't tell which" talk is tagged: Your products, the category open. */
-export const productsPageHref = (groupId: string): string => `/dashboard/products?group=${encodeURIComponent(groupId)}`
+/** Where "couldn't tell which" talk is tagged: Your products, the category
+ *  open on its list, in the month this tab reads (the page's own month, so the
+ *  figure here is the figure there). */
+export const productsPageHref = (groupId: string, month?: string | null): string =>
+  productsHref({ month: month ? month.slice(0, 7) : undefined }, { kind: 'group', id: groupId }, { at: 'unclear' })
 
 // ---- The read -------------------------------------------------------------------
 
@@ -141,8 +147,11 @@ export type ProductSettingsRead =
  * client: the tenant holds SELECT on every column of these tables under its
  * own-client policy, and an operator's session is already the service role.
  */
-export async function loadProductSettings(db: SupabaseClient, clientId: string, now: Date = new Date()): Promise<ProductSettingsRead> {
-  const month = monthStartOf(now.toISOString())
+export async function loadProductSettings(db: SupabaseClient, clientId: string, now: Date = new Date(), opts: { month?: string | null } = {}): Promise<ProductSettingsRead> {
+  // THE PAGE'S MONTH (`productsMonth`, lib/pages/v2/products.ts: the reading
+  // month every reading page reads), where the route read it; the calendar
+  // month only where it could not.
+  const month = monthStartOf(opts.month ?? now.toISOString())
   try {
     const [groups, products, aliases] = await Promise.all([
       selectAll<ProductGroupRow>(() =>
@@ -295,7 +304,7 @@ export function productSettingsView(
       products: rows.length,
       cameUp: isRead ? rows.filter((r) => (r.videos ?? 0) > 0).length : null,
       unclear: pooled(open.id)?.k_unclear ?? null,
-      tagHref: productsPageHref(open.id),
+      tagHref: productsPageHref(open.id, read.month),
       words: own.filter((a) => a.kind === 'category_word').map(chip),
       ranges: own.filter((a) => a.kind !== 'category_word').map(chip),
       rows,

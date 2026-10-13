@@ -19,12 +19,16 @@ export function shelfColumn(c: ShelfCategoryView, monthName: string): ShelfColum
     name: c.name,
     videos: c.videos,
     href: c.href,
-    line: c.videos === 0
+    // A category not read yet says so in the head itself (the kit's "Not read
+    // yet"): no second line.
+    line: c.videos == null
+      ? null
+      : c.videos === 0
       ? <>Quiet in {monthName}</>
       : c.share
         ? <><span data-copy="figure">{sharePct(c.share.k, c.share.n)}</span> of the market <VerdictBadge verdict={c.verdict} answersOnly /></>
         : null,
-    note: c.lead && c.videos > 0
+    note: c.lead && c.videos != null && c.videos > 0
       ? <>{c.lead.label} leads, <span data-copy="level">{fmtInt(c.lead.k)} of {fmtInt(c.videos)}</span></>
       : null,
     products: c.products.map((p) => ({ id: p.id, name: p.name, videos: p.videos, href: p.href, flag: p.flag })),

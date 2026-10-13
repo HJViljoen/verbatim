@@ -1,9 +1,9 @@
 import Link from 'next/link'
 import { FlagChip, InPlacePanel, MiniBars, PairedBars, PanelSection, PanelTitle, StatCell, StatRow } from '@/components/v2'
-import { fmtInt } from '@/lib/format'
+import { fmtInt, fmtPct, longMonth } from '@/lib/format'
 import { PRODUCT_TAG_COPY } from '@/lib/products/tags'
 import {
-  PANEL_ID, sharePct, UNCLEAR_ID,
+  catalogueBreak, PANEL_ID, sharePct, UNCLEAR_ID,
   type CategoryPanel, type Compare, type Crosses, type LineBar, type ProductPanel, type ProductsQuote, type UnclearLine,
 } from '@/lib/pages/v2/products'
 import { quoteWords } from '@/lib/pages/brands'
@@ -41,25 +41,40 @@ function CrossSection({ label, crosses, pick, empty }: { label: string; crosses:
   )
 }
 
-/** Month by month, the reading month last (still being read: outlined): a
- *  category's share of the market, or a product's videos (a product's share
- *  of the whole market is a percent or two, and its count reads better). */
-function LineSection({ line, name, mode }: { line: readonly LineBar[]; name: string; mode: 'share' | 'count' }) {
+/** Month by month, the reading month last and outlined (the board's "so far"
+ *  bar): a category's share of the market, or a product's share of it with
+ *  its k of n under each bar (a product's raw count would read as growth
+ *  wherever the month's videos doubled). Where the list of products changed
+ *  between two months, a footnote says the months before were read on the
+ *  earlier list. */
+function LineSection({ line, name, mode, monthName }: { line: readonly LineBar[]; name: string; mode: 'share' | 'product'; monthName: string }) {
+  const changed = catalogueBreak(line)
   return (
-    <PanelSection label={mode === 'share' ? 'Share of the market, month by month' : 'Videos naming it, month by month'}>
+    <PanelSection label={mode === 'share' ? 'Share of the market, month by month' : 'Share of the market naming it, month by month'}>
       {line.length > 0 ? (
-        <MiniBars
-          size="md"
-          label={mode === 'share' ? `${name}: share of the market's videos each month` : `${name}: videos naming it each month`}
-          bars={line.map((b) => ({
-            label: b.label,
-            value: mode === 'share' ? (b.n > 0 ? (100 * b.k) / b.n : 0) : b.k,
-            display: mode === 'share' ? sharePct(b.k, b.n) : fmtInt(b.k),
-            sub: `${b.filling ? 'so far · ' : ''}${fmtInt(b.k)} of ${fmtInt(b.n)}`,
-            filling: b.filling,
-          }))}
-        />
-      ) : <EmptyLine>No month read yet.</EmptyLine>}
+        <>
+          <MiniBars
+            size="md"
+            highlight={null}
+            label={mode === 'share' ? `${name}: share of the market's videos each month` : `${name}: share of the market's videos naming it each month`}
+            bars={line.map((b) => {
+              const pct = b.n > 0 ? (100 * b.k) / b.n : 0
+              return {
+                label: b.label,
+                value: pct,
+                display: mode === 'share' ? sharePct(b.k, b.n) : b.k > 0 && pct < 0.05 ? 'under 0.1%' : fmtPct(pct, 1),
+                sub: `${b.filling ? 'so far · ' : ''}${fmtInt(b.k)} of ${fmtInt(b.n)}`,
+                filling: b.current,
+              }
+            })}
+          />
+          {changed ? (
+            <p className="m-0 text-[12px] leading-[1.45] text-muted-foreground">
+              Your product list changed before {longMonth(changed)}: the months before it were read on the earlier list.
+            </p>
+          ) : null}
+        </>
+      ) : <EmptyLine>No month read yet{monthName ? ` up to ${monthName}` : ''}.</EmptyLine>}
     </PanelSection>
   )
 }
@@ -172,7 +187,7 @@ export function CategoryPanelView({ panel, monthName, canTag }: { panel: Categor
       <div className="grid grid-cols-1 gap-7 min-[1180px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)] min-[1180px]:gap-9">
         <CrossSection label="What it’s about" crosses={panel.crosses} pick="subjects" empty="No subject read for these videos yet." />
         <CrossSection label="What people did" crosses={panel.crosses} pick="kinds" empty="Not read for these videos yet." />
-        <LineSection line={panel.line} name={panel.name} mode="share" />
+        <LineSection line={panel.line} name={panel.name} mode="share" monthName={monthName} />
       </div>
 
       {panel.compare ? <CompareSection compare={panel.compare} title={`Your products against ${word} in general`} /> : null}
@@ -196,7 +211,10 @@ function QuoteCard({ quote }: { quote: ProductsQuote }) {
 
 export function ProductPanelView({ panel, monthName }: { panel: ProductPanel; monthName: string }) {
   const top = panel.crosses?.subjects[0]
-  const quiet = !panel.videos
+  // NOT READ IS NOT QUIET: a product with no row in a read month was not in
+  // the list when the month was last read (null); quiet is a read zero.
+  const unread = panel.videos == null
+  const quiet = panel.videos === 0
   return (
     <InPlacePanel
       id={PANEL_ID.product}
@@ -213,12 +231,16 @@ export function ProductPanelView({ panel, monthName }: { panel: ProductPanel; mo
           </div>
           <PanelTitle id="product-title">{panel.name}</PanelTitle>
           <p className="m-0 mt-1 text-[14px] leading-[1.4] text-muted-foreground">
-            {quiet ? <>Nobody in your market named it in {monthName}.</> : <><Fig>{fmtInt(panel.videos ?? 0)}</Fig> {panel.videos === 1 ? 'video' : 'videos'} in {monthName}</>}
+            {unread
+              ? <>Not read yet for {monthName}: it was not in your list when {monthName} was last read.</>
+              : quiet
+                ? <>Nobody in your market named it in {monthName}.</>
+                : <><Fig>{fmtInt(panel.videos ?? 0)}</Fig> {panel.videos === 1 ? 'video' : 'videos'} in {monthName}</>}
           </p>
         </>
       }
     >
-      {!quiet ? (
+      {!quiet && !unread ? (
         <StatRow>
           {panel.market ? <StatCell value={panel.videos ?? 0} of={panel.market} label="videos in your market name it" /> : null}
           {panel.categoryVideos ? <StatCell value={panel.videos ?? 0} of={panel.categoryVideos} label={<>videos about {panel.groupName.toLowerCase()} name it</>} /> : null}
@@ -228,9 +250,9 @@ export function ProductPanelView({ panel, monthName }: { panel: ProductPanel; mo
       ) : null}
 
       <div className="grid grid-cols-1 gap-7 min-[1180px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)] min-[1180px]:gap-9">
-        <CrossSection label="What it’s about" crosses={panel.crosses} pick="subjects" empty={quiet ? 'Nothing to read in a quiet month.' : 'No subject read for these videos yet.'} />
-        <CrossSection label="What people did" crosses={panel.crosses} pick="kinds" empty={quiet ? 'Nothing to read in a quiet month.' : 'Not read for these videos yet.'} />
-        <LineSection line={panel.line} name={panel.name} mode="count" />
+        <CrossSection label="What it’s about" crosses={panel.crosses} pick="subjects" empty={unread ? 'Not read yet.' : quiet ? 'Nothing to read in a quiet month.' : 'No subject read for these videos yet.'} />
+        <CrossSection label="What people did" crosses={panel.crosses} pick="kinds" empty={unread ? 'Not read yet.' : quiet ? 'Nothing to read in a quiet month.' : 'Not read for these videos yet.'} />
+        <LineSection line={panel.line} name={panel.name} mode="product" monthName={monthName} />
       </div>
 
       {panel.compare ? <CompareSection compare={panel.compare} title={`${panel.name} against ${panel.groupName.toLowerCase()} in general`} /> : null}
