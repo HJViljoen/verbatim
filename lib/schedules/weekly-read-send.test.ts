@@ -265,7 +265,7 @@ describe('review mode: the build stops at ready and the OPERATOR reads it first'
   })
 })
 
-describe('the run that closes a month: the operator\'s review email carries the long-run read Your market prints already (fresh review B1; 5 Oct)', () => {
+describe('the run that closes a month: the operator\'s review email carries the long-run read, which no page shows since Design v2 (fresh review B1; 5 Oct; 13 Oct)', () => {
   const longRun = (over: Record<string, unknown> = {}) => ({
     client_id: CLIENT, run_id: RUN, kind: 'month', status: 'ready', month: '2026-09-01', created_at: '2026-10-04T08:41:00Z',
     data: {
