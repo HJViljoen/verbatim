@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { voicePage } from './voice'
 import { profilePage } from './profile'
@@ -68,6 +68,9 @@ describe('the gated-tile list', () => {
   it('covers every page that gates a tile out of its registry', () => {
     const gating = readdirSync(dir, { withFileTypes: true })
       .filter((e) => e.isDirectory())
+      // A folder with no page module of its own (`v2/`, which holds the depth
+      // v2 pages one folder each) registers no tile.
+      .filter((e) => existsSync(`${dir}${e.name}/index.tsx`))
       .filter((e) => /\.\.\.\(\s*directionWordsFor\(/.test(readFileSync(`${dir}${e.name}/index.tsx`, 'utf8')))
       .map((e) => e.name)
     expect(gating.length).toBeGreaterThan(0)
