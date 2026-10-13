@@ -1,7 +1,12 @@
+import { LengthFinishReasonError } from 'openai/core/error'
 import { describe, expect, it } from 'vitest'
 import {
+  askSplittingOnLength,
   buildClassifySystemPrompt,
   buildClassifyUserPrompt,
+  CLASSIFY_META_BATCH,
+  CLASSIFY_META_ITEM_MAX_TOKENS,
+  CLASSIFY_META_MAX_OUTPUT_TOKENS,
   CLASSIFY_META_OWNED_CAP,
   CLASSIFY_META_SOURCES,
   classifyMetaLabels,
@@ -10,7 +15,7 @@ import {
   validateClassifyResponse,
   type ClassifyInput,
 } from './classify-meta'
-import type { ClassifyMetaItem, ClassifyMetaOutput } from './schemas'
+import { CLASSIFIED_TYPES, HOOK_STYLES, VIDEO_SENTIMENTS, type ClassifyMetaItem, type ClassifyMetaOutput } from './schemas'
 
 const input = (id: string, over: Partial<ClassifyInput> = {}): ClassifyInput => ({
   id,
@@ -220,5 +225,102 @@ describe('transcript blocks — English to understand, original to copy (2026-09
     ])
     expect(p).not.toContain('transcript:')
     expect(p).not.toContain('la la la')
+  })
+})
+
+// 13 Oct: Sealand's run 78a6eb3c closed partial on one classify-meta batch
+// whose answer ran to the model's 32,768-token window ("Could not parse
+// response content as the length limit was reached"). The call now has a
+// ceiling, and a batch that runs into it fails alone.
+describe('the output ceiling', () => {
+  it('fits a full batch of the widest honest entries, and is a quarter of the window', () => {
+    expect(CLASSIFY_META_BATCH * CLASSIFY_META_ITEM_MAX_TOKENS).toBeLessThanOrEqual(CLASSIFY_META_MAX_OUTPUT_TOKENS)
+    expect(CLASSIFY_META_MAX_OUTPUT_TOKENS).toBeLessThanOrEqual(32_768 / 4)
+  })
+
+  it('the widest honest entry fits its allowance, at a pessimistic three characters a token', () => {
+    const longest = (xs: readonly string[]) => xs.reduce((a, b) => (b.length > a.length ? b : a))
+    const widest: ClassifyMetaItem = {
+      ref: `v${CLASSIFY_META_BATCH}`,
+      classified_type: longest(CLASSIFIED_TYPES) as ClassifyMetaItem['classified_type'],
+      hook_style: longest(HOOK_STYLES) as ClassifyMetaItem['hook_style'],
+      // About forty words: a long spoken or typed opening, copied verbatim.
+      hook_text: 'Okay so I have been carrying this exact bag every single day for the last three years through airports, rain and two cross-country moves, and today I am finally going to tell you what actually held up and what fell apart',
+      topics: ['carry-on travel backpack', 'waterproof recycled sailcloth', 'everyday commuter bag', 'long-term durability review'],
+      sentiment: longest(VIDEO_SENTIMENTS) as ClassifyMetaItem['sentiment'],
+    }
+    expect(Math.ceil(JSON.stringify(widest).length / 3)).toBeLessThanOrEqual(CLASSIFY_META_ITEM_MAX_TOKENS)
+  })
+})
+
+describe('askSplittingOnLength: one batch that overruns fails alone', () => {
+  // The SDK's own error, as `chat.completions.parse` throws it on
+  // finish_reason 'length'.
+  const overrun = () => new LengthFinishReasonError()
+  const batch = Array.from({ length: CLASSIFY_META_BATCH }, (_, i) => `v${i + 1}`)
+
+  it('asks once for a batch that fits', async () => {
+    const asked: string[][] = []
+    const out = await askSplittingOnLength(batch, async (part) => { asked.push(part); return part.length })
+    expect(asked).toEqual([batch])
+    expect(out).toEqual({ results: [25], split: false, skipped: [] })
+  })
+
+  it('asks again in halves when the whole batch runs into the ceiling, and keeps both answers', async () => {
+    const asked: number[] = []
+    const out = await askSplittingOnLength(batch, async (part) => {
+      asked.push(part.length)
+      if (part.length === 25) throw overrun()
+      return part
+    })
+    expect(asked).toEqual([25, 13, 12])
+    expect(out.split).toBe(true)
+    expect(out.skipped).toEqual([])
+    expect(out.results.flat()).toEqual(batch)
+  })
+
+  it('leaves a half that runs into it again unclassified, keeps the other, and throws nothing', async () => {
+    const out = await askSplittingOnLength(batch, async (part) => {
+      if (part.length === 25 || part[0] === 'v14') throw overrun()
+      return part
+    })
+    expect(out.split).toBe(true)
+    expect(out.results).toEqual([batch.slice(0, 13)])
+    expect(out.skipped).toEqual(batch.slice(13))
+  })
+
+  it('never goes a third level: two halves that both overrun leave the batch unclassified after three asks', async () => {
+    let asks = 0
+    const out = await askSplittingOnLength(batch, async () => { asks++; throw overrun() })
+    expect(asks).toBe(3)
+    expect(out).toEqual({ results: [], split: true, skipped: batch })
+  })
+
+  it('a batch of one cannot be halved: it is left unclassified after one ask', async () => {
+    let asks = 0
+    const out = await askSplittingOnLength(['v1'], async () => { asks++; throw overrun() })
+    expect(asks).toBe(1)
+    expect(out).toEqual({ results: [], split: false, skipped: ['v1'] })
+  })
+
+  it('matches the error by its message too, as a re-thrown copy keeps it', async () => {
+    const out = await askSplittingOnLength(['a', 'b'], async (part) => {
+      if (part.length === 2) throw new Error('Could not parse response content as the length limit was reached')
+      return part[0]
+    })
+    expect(out).toEqual({ results: ['a', 'b'], split: true, skipped: [] })
+  })
+
+  it('throws any other failure, for Inngest to retry the step: the whole batch\'s, or a half\'s once the other half has finished', async () => {
+    await expect(askSplittingOnLength(batch, async () => { throw new Error('429 rate limit exceeded') })).rejects.toThrow('429')
+    let written = false
+    await expect(askSplittingOnLength(batch, async (part) => {
+      if (part.length === 25) throw overrun()
+      if (part[0] === 'v14') throw new Error('classify-meta persist: connection reset')
+      await new Promise((r) => setTimeout(r, 5))
+      written = true
+      return part
+    })).rejects.toThrow('connection reset')
+    expect(written).toBe(true)
   })
 })

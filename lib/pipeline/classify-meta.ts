@@ -1,6 +1,6 @@
 import { zodResponseFormat } from 'openai/helpers/zod'
 import { chunk } from '../chunk'
-import { openai } from '../openai'
+import { isLengthLimitError, openai } from '../openai'
 import { createAdminClient, selectAll, isMissingColumnError } from '../supabase-admin'
 import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, estimateCost } from '../config'
 import { logAiCall } from './ai-log'
@@ -58,6 +58,34 @@ import {
  *  indistinguishable; rows written before today stay null. */
 export const CLASSIFY_META_PROMPT_VERSION = 'classify_meta_v2'
 export const CLASSIFY_META_BATCH = 25
+
+/**
+ * THE OUTPUT CEILING OF ONE CALL (13 Oct). Until then the call set none, so
+ * the model's own 32,768-token window was the limit. Sealand's 11 Oct run
+ * (`78a6eb3c`) lost a batch to it: the answer ran to the window, the SDK
+ * threw `LengthFinishReasonError` ("Could not parse response content as the
+ * length limit was reached"), Inngest retried the step on the same prompt
+ * until it was out of retries, each attempt paying for the whole window, and
+ * the run closed partial on `classify-meta`. Nothing honest is that long: an
+ * answer is 25 short entries, and an answer that reaches the window has run
+ * away. So the ceiling is sized to the batch's widest honest answer,
+ * `CLASSIFY_META_BATCH` entries of `CLASSIFY_META_ITEM_MAX_TOKENS` (a test
+ * pins it), with headroom, and is a quarter of the window, Pass A's
+ * `PASS_A_MAX_OUTPUT_TOKENS`: a runaway stops there, and a batch that hits it
+ * is asked again in halves (`askSplittingOnLength`).
+ *
+ * Cost: an honest call is unchanged ($0.0055 to $0.0059 measured on 13 Oct;
+ * the own posts T14 added cost about $0.006 a run). A batch that hits the
+ * ceiling costs at most three calls at it, about $0.05 with their prompts,
+ * where the step's three attempts at the window (the function's `retries:
+ * 2`) cost about $0.17 and classified nothing.
+ */
+export const CLASSIFY_META_MAX_OUTPUT_TOKENS = 8000
+
+/** The widest honest entry for ONE video, in tokens: the ref, both labels at
+ *  their longest, the framing sentiment, four topics and a verbatim opening
+ *  line of about forty words. A test measures such an entry against it. */
+export const CLASSIFY_META_ITEM_MAX_TOKENS = 300
 
 /** The `videos.source` values the plan takes: the gathered corpus and the
  *  client's own posts. Never 'competitor_owned'. */
@@ -220,6 +248,55 @@ export function validateClassifyResponse(
   return out
 }
 
+/** What `askSplittingOnLength` did with a batch. */
+export interface LengthSplitOutcome<V, R> {
+  /** Each answered part's result: the whole batch, or the halves that fit. */
+  results: R[]
+  /** The batch ran into the output ceiling and was asked again in halves. */
+  split: boolean
+  /** The videos left unclassified: a half that ran into the ceiling again,
+   *  or a batch of one, which cannot be halved. */
+  skipped: V[]
+}
+
+/**
+ * ONE BATCH THAT OVERRUNS FAILS ALONE (13 Oct). Asks for the whole batch; if
+ * the answer runs into the output ceiling (`isLengthLimitError`), asks ONCE
+ * for each half, side by side, never a third level: a half that runs into it
+ * again is left unclassified (`skipped`), and so is a batch of one, which
+ * cannot be halved. Nothing about the length limit throws, so the step is not
+ * retried on the same prompt and the run does not close partial over one
+ * runaway answer; its videos stay unclassified, which the pages already
+ * report as coverage. Any other failure (a 429, a 5xx, a write) is thrown as
+ * before, for Inngest to retry the step, and only once both halves have
+ * settled, so a half that answered has written its rows (the retry's null
+ * guard then skips them). Pure over `ask`.
+ */
+export async function askSplittingOnLength<V, R>(
+  videos: readonly V[],
+  ask: (part: V[]) => Promise<R>,
+): Promise<LengthSplitOutcome<V, R>> {
+  try {
+    return { results: [await ask([...videos])], split: false, skipped: [] }
+  } catch (e) {
+    if (!isLengthLimitError(e)) throw e
+  }
+  if (videos.length < 2) return { results: [], split: false, skipped: [...videos] }
+  const mid = Math.ceil(videos.length / 2)
+  const halves = [videos.slice(0, mid), videos.slice(mid)]
+  const settled = await Promise.allSettled(halves.map((h) => ask(h)))
+  const results: R[] = []
+  const skipped: V[] = []
+  const failures: unknown[] = []
+  settled.forEach((s, i) => {
+    if (s.status === 'fulfilled') results.push(s.value)
+    else if (isLengthLimitError(s.reason)) skipped.push(...halves[i])
+    else failures.push(s.reason)
+  })
+  if (failures.length > 0) throw failures[0]
+  return { results, split: true, skipped }
+}
+
 // ---- I/O runner (one Inngest step = one batch) ------------------------------
 
 /** Plan step: this run's discovered corpus and the client's own posts it
@@ -246,6 +323,11 @@ export interface ClassifyMetaResult {
   nulls: number
   costUsd: number
   error?: string
+  /** The batch ran into `CLASSIFY_META_MAX_OUTPUT_TOKENS` and was asked again
+   *  in halves (`askSplittingOnLength`). Absent on a result stored before. */
+  lengthSplit?: boolean
+  /** Videos left unclassified because their part ran into the ceiling again. */
+  lengthSkipped?: number
 }
 
 /** Classify one batch of videos and persist. Only rows still unclassified are
@@ -289,81 +371,144 @@ export async function runClassifyMetaBatch(
   const pending = videos.filter((v) => v.classified_type == null)
   if (pending.length === 0) return { requested: videoIds.length, classified: 0, nulls: 0, costUsd: 0 }
 
-  const batchIds = pending.map((v) => v.id)
   const systemPrompt = buildClassifySystemPrompt()
-  const userPrompt = buildClassifyUserPrompt(pending)
-  const startedAt = Date.now()
-
-  const completion = await openai.chat.completions.parse({
-    model: ANALYSIS_MODEL,
-    temperature: ANALYSIS_TEMPERATURE,
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ],
-    response_format: zodResponseFormat(ClassifyMetaSchema, 'classify_meta'),
-  })
-  const msg = completion.choices[0]?.message
-  const parsed = (msg?.parsed ?? null) as ClassifyMetaOutput | null
-  const usage = completion.usage ?? { prompt_tokens: 0, completion_tokens: 0 }
-  const costUsd = estimateCost(ANALYSIS_MODEL, usage.prompt_tokens, usage.completion_tokens)
-
-  await logAiCall(admin, {
-    clientId,
-    runId,
-    pass: 'classify_meta',
-    callIndex,
-    model: ANALYSIS_MODEL,
-    promptVersion: CLASSIFY_META_PROMPT_VERSION,
-    systemPrompt,
-    userPrompt,
-    response: parsed,
-    error: msg?.refusal ?? (parsed ? null : 'no parsed output'),
-    usage: { prompt_tokens: usage.prompt_tokens, completion_tokens: usage.completion_tokens },
-    durationMs: Date.now() - startedAt,
-    validationStatus: parsed ? 'valid' : 'parse_error',
-  })
-  if (!parsed) return { requested: videoIds.length, classified: 0, nulls: 0, costUsd, error: msg?.refusal ?? 'no parsed output' }
-
-  const byId = validateClassifyResponse(parsed, batchIds)
   const byVideoId = new Map(videos.map((v) => [v.id, v]))
-  let classified = 0
-  let nulls = 0
+  // Shared by the parts of a split batch: once one write says a bookkeeping
+  // column is absent, every later write skips the attempt.
   let versionColumnMissing = false
   let hookSourceColumnMissing = false
-  for (const [id, item] of byId) {
-    if (item.classified_type == null && item.hook_style == null && item.topics.length === 0) {
-      nulls++
-      continue
-    }
-    const labels = classifyMetaLabels(item, byVideoId.get(id))
-    // Which regime chose these labels (null on every row written before
-    // 2026-09-11 — see the column's comment).
-    const write = (withVersion: boolean, withHookSource: boolean) => {
-      const { hook_source: derivedHookSource, ...rest } = labels
-      const patch: Record<string, unknown> = withHookSource ? { ...rest, hook_source: derivedHookSource } : { ...rest }
-      if (withVersion) patch.classified_prompt_version = CLASSIFY_META_PROMPT_VERSION
-      return admin.from('videos').update(patch).eq('id', id).is('classified_type', null)
-    }
+  // What the calls that ran into the ceiling cost: they throw, so their spend
+  // is not in any part's result.
+  let overrunUsd = 0
 
-    let { error } = await write(!versionColumnMissing, !hookSourceColumnMissing)
-    // The model call is already billed by the time we get here. If this deploy
-    // landed ahead of its migration, the bookkeeping column is the only thing
-    // missing — write the labels without it rather than throw the batch away,
-    // re-bill it on every Inngest retry and close the run `partial`. Once one
-    // row says the column is absent, the rest of the batch skips the attempt.
-    if (error && isMissingColumnError(error, 'classified_prompt_version')) {
-      versionColumnMissing = true
-      console.warn(`[classify-meta] videos.classified_prompt_version does not exist — apply supabase/migrations/20260911120000_classified_prompt_version.sql. Writing labels without it; those rows will read as the pre-2026-09-11 regime.`)
-      ;({ error } = await write(false, !hookSourceColumnMissing))
+  /** One call over `part`: asked, logged, its labels written. A call that runs
+   *  into the ceiling is logged and its error thrown, for
+   *  `askSplittingOnLength` to halve. */
+  const ask = async (part: Row[]): Promise<{ classified: number; nulls: number; costUsd: number; error?: string }> => {
+    const batchIds = part.map((v) => v.id)
+    const userPrompt = buildClassifyUserPrompt(part)
+    const startedAt = Date.now()
+
+    let completion
+    try {
+      completion = await openai.chat.completions.parse({
+        model: ANALYSIS_MODEL,
+        temperature: ANALYSIS_TEMPERATURE,
+        // The ceiling this call never had (CLASSIFY_META_MAX_OUTPUT_TOKENS).
+        max_completion_tokens: CLASSIFY_META_MAX_OUTPUT_TOKENS,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        response_format: zodResponseFormat(ClassifyMetaSchema, 'classify_meta'),
+      })
+    } catch (e) {
+      if (isLengthLimitError(e)) {
+        // Billed to the ceiling: a length stop is exactly that many output
+        // tokens. The SDK throws before it hands over the usage, so the
+        // prompt's tokens are not known and are not counted.
+        const usage = { prompt_tokens: 0, completion_tokens: CLASSIFY_META_MAX_OUTPUT_TOKENS }
+        overrunUsd += estimateCost(ANALYSIS_MODEL, usage.prompt_tokens, usage.completion_tokens)
+        const message = e instanceof Error ? e.message : String(e)
+        await logAiCall(admin, {
+          clientId,
+          runId,
+          pass: 'classify_meta',
+          callIndex,
+          model: ANALYSIS_MODEL,
+          promptVersion: CLASSIFY_META_PROMPT_VERSION,
+          systemPrompt,
+          userPrompt,
+          response: null,
+          error: `${message} (${part.length} videos, ${CLASSIFY_META_MAX_OUTPUT_TOKENS}-token ceiling)`,
+          usage,
+          durationMs: Date.now() - startedAt,
+          validationStatus: 'parse_error',
+        })
+      }
+      throw e
     }
-    if (error && isMissingColumnError(error, 'hook_source')) {
-      hookSourceColumnMissing = true
-      console.warn(`[classify-meta] videos.hook_source does not exist — apply supabase/migrations/20260912100000_ocr_text.sql. Writing labels without it; those rows will not say where their hook came from.`)
-      ;({ error } = await write(!versionColumnMissing, false))
+    const msg = completion.choices[0]?.message
+    const parsed = (msg?.parsed ?? null) as ClassifyMetaOutput | null
+    const usage = completion.usage ?? { prompt_tokens: 0, completion_tokens: 0 }
+    const costUsd = estimateCost(ANALYSIS_MODEL, usage.prompt_tokens, usage.completion_tokens)
+
+    await logAiCall(admin, {
+      clientId,
+      runId,
+      pass: 'classify_meta',
+      callIndex,
+      model: ANALYSIS_MODEL,
+      promptVersion: CLASSIFY_META_PROMPT_VERSION,
+      systemPrompt,
+      userPrompt,
+      response: parsed,
+      error: msg?.refusal ?? (parsed ? null : 'no parsed output'),
+      usage: { prompt_tokens: usage.prompt_tokens, completion_tokens: usage.completion_tokens },
+      durationMs: Date.now() - startedAt,
+      validationStatus: parsed ? 'valid' : 'parse_error',
+    })
+    if (!parsed) return { classified: 0, nulls: 0, costUsd, error: msg?.refusal ?? 'no parsed output' }
+
+    const byId = validateClassifyResponse(parsed, batchIds)
+    let classified = 0
+    let nulls = 0
+    for (const [id, item] of byId) {
+      if (item.classified_type == null && item.hook_style == null && item.topics.length === 0) {
+        nulls++
+        continue
+      }
+      const labels = classifyMetaLabels(item, byVideoId.get(id))
+      // Which regime chose these labels (null on every row written before
+      // 2026-09-11 — see the column's comment).
+      const write = (withVersion: boolean, withHookSource: boolean) => {
+        const { hook_source: derivedHookSource, ...rest } = labels
+        const patch: Record<string, unknown> = withHookSource ? { ...rest, hook_source: derivedHookSource } : { ...rest }
+        if (withVersion) patch.classified_prompt_version = CLASSIFY_META_PROMPT_VERSION
+        return admin.from('videos').update(patch).eq('id', id).is('classified_type', null)
+      }
+
+      let { error } = await write(!versionColumnMissing, !hookSourceColumnMissing)
+      // The model call is already billed by the time we get here. If this deploy
+      // landed ahead of its migration, the bookkeeping column is the only thing
+      // missing — write the labels without it rather than throw the batch away,
+      // re-bill it on every Inngest retry and close the run `partial`. Once one
+      // row says the column is absent, the rest of the batch skips the attempt.
+      if (error && isMissingColumnError(error, 'classified_prompt_version')) {
+        versionColumnMissing = true
+        console.warn(`[classify-meta] videos.classified_prompt_version does not exist — apply supabase/migrations/20260911120000_classified_prompt_version.sql. Writing labels without it; those rows will read as the pre-2026-09-11 regime.`)
+        ;({ error } = await write(false, !hookSourceColumnMissing))
+      }
+      if (error && isMissingColumnError(error, 'hook_source')) {
+        hookSourceColumnMissing = true
+        console.warn(`[classify-meta] videos.hook_source does not exist — apply supabase/migrations/20260912100000_ocr_text.sql. Writing labels without it; those rows will not say where their hook came from.`)
+        ;({ error } = await write(!versionColumnMissing, false))
+      }
+      if (error) throw new Error(`classify-meta persist: ${error.message}`)
+      classified++
     }
-    if (error) throw new Error(`classify-meta persist: ${error.message}`)
-    classified++
+    return { classified, nulls, costUsd }
   }
-  return { requested: videoIds.length, classified, nulls, costUsd }
+
+  // A batch whose answer runs into the ceiling is asked again in halves, and a
+  // half that runs into it again is left unclassified: it fails alone, never
+  // the step (askSplittingOnLength).
+  const { results, split, skipped } = await askSplittingOnLength(pending, ask)
+  if (split || skipped.length > 0) {
+    console.warn(
+      `[classify-meta] batch ${callIndex} (${pending.length} videos) ran into the ${CLASSIFY_META_MAX_OUTPUT_TOKENS}-token output ceiling` +
+      (split ? '; asked again in halves' : '') +
+      (skipped.length > 0 ? `; ${skipped.length} video(s) left unclassified: ${skipped.map((v) => v.id).join(', ')}` : ''),
+    )
+  }
+  const errors = results.map((r) => r.error).filter((e): e is string => !!e)
+  return {
+    requested: videoIds.length,
+    classified: results.reduce((n, r) => n + r.classified, 0),
+    nulls: results.reduce((n, r) => n + r.nulls, 0),
+    costUsd: results.reduce((n, r) => n + r.costUsd, 0) + overrunUsd,
+    ...(errors.length > 0 ? { error: errors.join('; ') } : {}),
+    ...(split ? { lengthSplit: true } : {}),
+    ...(skipped.length > 0 ? { lengthSkipped: skipped.length } : {}),
+  }
 }

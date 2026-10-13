@@ -652,7 +652,13 @@ This version has breaking changes — APIs, conventions, and file structure may 
   and one theme merge with every gather step complete, had broken its week,
   and the cut, which walks back from the newest gathered week and stops at the
   first break, drew nothing on either chart. The same-age line never reads the
-  list (below), so nothing it keeps moves. **A run that gathered nothing is not counted at all** (Heinrich,
+  list (below), so nothing it keeps moves. That batch's answer had run to the
+  model's whole window; a classify-meta call now stops at
+  `CLASSIFY_META_MAX_OUTPUT_TOKENS` (8,000), and a batch that reaches it is
+  asked again in halves and fails alone (`askSplittingOnLength`): a half that
+  reaches it again leaves its videos unclassified, recorded as a finding and
+  never an error, and nothing about the length limit retries the step. **A run
+  that gathered nothing is not counted at all** (Heinrich,
   5 Oct: "Why is the first bar on Sealand twenty eighth September when we've
   had earlier runs"): a fresh `skipGather` run (a rehearsal) plans no search
   and no own-posts census, so it moved no count in any week, and it is
