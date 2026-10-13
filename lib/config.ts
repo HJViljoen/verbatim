@@ -819,7 +819,7 @@ export function ownPostAudienceEnabled(clientId?: string): boolean {
   return !off.includes(clientId.trim().toLowerCase())
 }
 
-// The week's post ideas' switch is per tenant and OFF by default: see
+// The week's post ideas' switch is per tenant and opt-in: see
 // `POST_IDEAS_ENABLED` below, beside the other per-tenant step switches (it
 // needs the tenant ids, declared further down).
 
@@ -1854,15 +1854,19 @@ export const productReadingsEnabled = (clientId: string): boolean => PRODUCT_REA
 
 /**
  * The week's post ideas (depth v2, T13; the `write-post-ideas` step,
- * lib/post-ideas/step.ts), per tenant, and OFF for every tenant until Heinrich
- * turns one on: OPT-IN, the `PRODUCT_READINGS_ENABLED` pattern (Phase 4 fix
- * round). Until then it was on by default, so applying the products migration
- * (which creates `post_ideas`) would have started the step, and its model
- * spend, on both tenants unasked. Off, the step reads, spends and writes
- * nothing, and Content and the Dashboard say post ideas are not switched on
- * (`readIdeas`, `topContent`) and print no stored idea. Turn a tenant on only
- * after the products migration is applied, with a diff to this map and to
- * lib/config.test.ts, which pins it off.
+ * lib/post-ideas/step.ts), per tenant: OPT-IN, the `PRODUCT_READINGS_ENABLED`
+ * pattern (Phase 4 fix round). Until then it was on by default, so applying
+ * the products migration (which creates `post_ideas`) would have started the
+ * step, and its model spend, on both tenants unasked. Off, the step reads,
+ * spends and writes nothing, and Content and the Dashboard say post ideas are
+ * not switched on (`readIdeas`, `topContent`) and print no stored idea. A
+ * tenant is turned on only after the products migration is applied, with a
+ * diff to this map and to lib/config.test.ts, which pins it.
+ *
+ * ON FOR BOTH TENANTS since 13 Oct (approved by Heinrich): the products
+ * migration is applied, and the step, its `POST_IDEAS_BUDGET_USD` cap, its
+ * evidence floor and its four-week read are unchanged. The next scheduled run
+ * writes the ideas.
  *
  * The two environment switches stay as EMERGENCY OFF-SWITCHES only; neither
  * can turn a tenant on: `POST_IDEAS=0` (or `false`) stops the step everywhere,
@@ -1871,8 +1875,8 @@ export const productReadingsEnabled = (clientId: string): boolean => PRODUCT_REA
  * result ('disabled') records what it found.
  */
 export const POST_IDEAS_ENABLED: Readonly<Record<string, boolean>> = {
-  [SEALAND_CLIENT_ID]: false,
-  [OSSUR_CLIENT_ID]: false,
+  [SEALAND_CLIENT_ID]: true,
+  [OSSUR_CLIENT_ID]: true,
 }
 /** May this tenant's run write post ideas, and its pages show them? Read it;
  *  never read the map. `map` is for a test. */

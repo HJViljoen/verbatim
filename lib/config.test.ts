@@ -226,15 +226,24 @@ describe('PRODUCT_READINGS_ENABLED', () => {
   })
 })
 
-// The week's post ideas (T13; Phase 4 fix round): OPT-IN, off for every
-// tenant until Heinrich turns one on, so applying the products migration (which
-// creates `post_ideas`) starts no model spend. A yes is a diff to this test.
-// The cap and the run margin are pinned with it.
+// The week's post ideas (T13; Phase 4 fix round): OPT-IN, so applying the
+// products migration (which creates `post_ideas`) started no model spend. A
+// yes is a diff to this test: on for both tenants since 13 Oct (approved by
+// Heinrich). The cap and the run margin are pinned with it, unchanged.
 describe('POST_IDEAS_ENABLED', () => {
-  it('is off for every tenant, and an unknown one', () => {
-    expect(Object.values(POST_IDEAS_ENABLED).every((on) => on === false)).toBe(true)
-    expect(Object.keys(POST_IDEAS_ENABLED).sort()).toEqual([OSSUR_CLIENT_ID, SEALAND_CLIENT_ID].sort())
-    for (const id of [SEALAND_CLIENT_ID, OSSUR_CLIENT_ID, DEMO_CLIENT_ID, 'not-a-tenant']) expect(postIdeasEnabled(id)).toBe(false)
+  it('is on for Sealand and Össur (13 Oct), off for any other tenant and an unknown one', () => {
+    const saved = { on: process.env.POST_IDEAS, off: process.env.POST_IDEAS_OFF }
+    delete process.env.POST_IDEAS
+    delete process.env.POST_IDEAS_OFF
+    try {
+      expect(Object.keys(POST_IDEAS_ENABLED).sort()).toEqual([OSSUR_CLIENT_ID, SEALAND_CLIENT_ID].sort())
+      expect(Object.values(POST_IDEAS_ENABLED).every((on) => on === true)).toBe(true)
+      for (const id of [SEALAND_CLIENT_ID, OSSUR_CLIENT_ID]) expect(postIdeasEnabled(id)).toBe(true)
+      for (const id of [DEMO_CLIENT_ID, 'not-a-tenant']) expect(postIdeasEnabled(id)).toBe(false)
+    } finally {
+      if (saved.on !== undefined) process.env.POST_IDEAS = saved.on
+      if (saved.off !== undefined) process.env.POST_IDEAS_OFF = saved.off
+    }
   })
 
   it('caps the step at $0.50 a run, and starts it only with $0.50 more left under the run\'s budget', () => {

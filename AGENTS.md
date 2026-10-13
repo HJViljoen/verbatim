@@ -166,10 +166,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
   never stored: Content prints it (`MEDICAL_LINE`, `lib/post-ideas/medical.ts`,
   where `printsMedicalLine`). *The switch is OPT-IN per tenant* (Phase 4
   fix round): `POST_IDEAS_ENABLED` (`lib/config.ts`, the
-  `PRODUCT_READINGS_ENABLED` pattern) is off for Sealand and Össur and
-  pinned off by `lib/config.test.ts`, so applying the products migration
-  (which creates `post_ideas`) starts no model spend; turning a tenant on is
-  Heinrich's production step, a diff to the map and its test. Read it
+  `PRODUCT_READINGS_ENABLED` pattern) was off for every tenant, so applying
+  the products migration (which creates `post_ideas`) started no model spend;
+  turning a tenant on is Heinrich's call, a diff to the map and its pin in
+  `lib/config.test.ts`. **On for Sealand and Össur since 13 Oct** (approved
+  by Heinrich), with the step, its cap, its floor and its four weeks
+  unchanged; the next scheduled run writes the ideas. Read it
   through `postIdeasEnabled(clientId)`, never the map. `POST_IDEAS=0` (or
   `false`) and `POST_IDEAS_OFF` (a list of client ids) stay as emergency
   OFF-switches only: neither can turn a tenant on. Content and the
