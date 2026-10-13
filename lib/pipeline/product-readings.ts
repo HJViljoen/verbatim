@@ -34,7 +34,9 @@ import {
 // writes the denominator marker (the brand step's reason, which is why both
 // sit where they do).
 //
-// THE MODEL is gpt-4.1-mini (lib/products/classify.ts), held to the run's cap
+// THE MODEL (lib/products/classify.ts: the confirm on gpt-4.1, the classifier
+// on gpt-4.1-mini, every answer held by code to what the text says) is held
+// to the run's cap
 // (PRODUCT_CLASSIFY_CAP items) and hard dollar cap
 // (PRODUCT_CLASSIFY_BUDGET_USD): the pipeline hands each month what the
 // earlier months of the run left, from their memoised returns, and each step
@@ -179,7 +181,7 @@ export async function runProductMonth(admin: SupabaseClient, args: {
   cap: number
   /** When this step stops starting model calls (ms since the epoch). */
   deadline?: number
-  /** A test seam; production passes none (the real gpt-4.1-mini call). */
+  /** A test seam; production passes none (the real calls). */
   classifier?: Classifier
 }): Promise<ProductMonthResult> {
   const month = monthStartOf(args.month)

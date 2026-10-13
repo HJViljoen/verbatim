@@ -1847,9 +1847,11 @@ export const PRODUCT_READINGS_ENABLED: Readonly<Record<string, boolean>> = {
 export const productReadingsEnabled = (clientId: string): boolean => PRODUCT_READINGS_ENABLED[clientId] === true
 
 /** The product classifier's per-run cap, in ITEMS (confirm checks and
- *  comments): a runaway backstop, translate-quotes' shape. At about $0.0001 an
- *  item (gpt-4.1-mini, 25 a call), 3,000 is about $0.30. What the cap leaves
- *  is read next run, oldest month first. */
+ *  comments): a runaway backstop, translate-quotes' shape. At about $0.0001 a
+ *  comment (gpt-4.1-mini, 25 a call; the few confirm checks on gpt-4.1 cost
+ *  more each), 3,000 is about $0.30 to $0.40. What the cap leaves is read next
+ *  run, oldest month first. A weekly run reads about 300 (Össur, June to
+ *  October, measured 13 Oct). */
 export const PRODUCT_CLASSIFY_CAP = 3000
 
 /** The product classifier's HARD dollar cap per run: before each wave of
