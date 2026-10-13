@@ -12,7 +12,7 @@ import { catalogueCodes, PRODUCT_MODEL_RULE_VERSION, runClassifier, type Classif
 import { commentKey, contentKey, type MentionInsert, type StandingText } from './match'
 import {
   CATEGORY_WORDS_ONLY_UNDER_RELEVANT, categorySearchFinds, categorySearchTerms, contentFields, guardFreeze, itemsLeft, mergeProductRows, placeProducts, pooledProductMonth, productReadingKey, productReadingRows,
-  readProductMonthVideos, type Ask, type HeldRow, type ProductCommentRow, type ProductMonthVideo, type ProductReadIO, type ProductVideoRow,
+  isOwnAuthor, ownAuthorNames, readProductMonthVideos, type Ask, type HeldRow, type ProductCommentRow, type ProductMonthVideo, type ProductReadIO, type ProductVideoRow,
 } from './readings'
 import type { ProductTagRow } from './types'
 
@@ -389,5 +389,54 @@ describe('the client\'s own posts: their words never place, their comments do', 
     expect(fallback).toEqual([{ id: 'b', platform: 'youtube', audience: IND, dated: 2 }])
     expect(calls.slice(-2)).toEqual(['product_month_videos', 'market_month_videos'])
     await expect(readProductMonthVideos(db({ product_month_videos: () => ({ data: null, error: { code: '57014', message: 'statement timeout' } }) }) as never, OSSUR_CLIENT_ID, SEP)).rejects.toThrow('statement timeout')
+  })
+})
+
+describe('the client\'s own accounts: what they write never places; an own post is never relevant', () => {
+  const window = { from: SEP, to: OCT }
+
+  it('ownAuthorNames: the configured handles and the own posts\' accounts, case and @ aside', () => {
+    const names = ownAuthorNames({ tiktok: '@Ossur', instagram: 'ossur' }, [VIDEO(9, { platform: 'tiktok', account_name: 'ossur_usa', source: 'owned' }), VIDEO(8, { account_name: 'creator' })])
+    expect(isOwnAuthor(names, 'tiktok', 'OSSUR')).toBe(true)
+    expect(isOwnAuthor(names, 'tiktok', '@ossur_usa')).toBe(true)
+    expect(isOwnAuthor(names, 'tiktok', 'creator')).toBe(false)
+    expect(isOwnAuthor(names, 'youtube', 'ossur')).toBe(false)
+    expect(isOwnAuthor(names, 'tiktok', null)).toBe(false)
+  })
+
+  it('a comment the client\'s own account wrote places nothing, read in full or found by the scan', async () => {
+    const { io } = world()
+    const own: ProductReadIO = {
+      ...io,
+      comments: async (vs) => (await io.comments(vs)).map((c) => (c.id === 'k2' ? { ...c, author: '@Ossur' } : c)),
+      ownHandles: async () => ({ tiktok: 'ossur' }),
+      commentAuthors: async (ids) => new Map(ids.map((id) => [id, { platform: 'tiktok', author: id === 'k6' ? 'ossur' : 'someone' }])),
+    }
+    const inserted: MentionInsert[] = []
+    await placeProducts({ clientId: OSSUR_CLIENT_ID, clientName: 'Össur', io: own, catalogue: FIXTURE_CATALOGUE, window, ask: null, insert: async (rows) => { inserted.push(...rows) }, budgetUsd: 0 })
+    // k2 "my rheo knee beeps at night", read in full under video 1, is the brand's own reply.
+    expect(inserted.some((x) => x.comment_id === 'k2')).toBe(false)
+    // k6 "which prosthetic liner is that?", found by the scan under video 3, is too.
+    expect(inserted.some((x) => x.comment_id === 'k6')).toBe(false)
+    // Everyone else's still place.
+    expect(inserted.some((x) => x.comment_id === 'k7')).toBe(true)
+  })
+
+  it('an own post is never relevant, even where a whole-video tag from before stands on it', async () => {
+    const { io } = world()
+    const tag: ProductTagRow = {
+      id: 't9', client_id: OSSUR_CLIENT_ID, video_id: vid(3), comment_id: null, placement: 'unbranded', product_id: null, group_id: G('Feet'),
+      supersedes: null, actor_kind: 'user', actor_user_id: null, actor_label: 'member', created_at: '2026-10-13T10:00:00Z',
+    }
+    const own: ProductReadIO = {
+      ...io,
+      tags: async () => [tag],
+      monthVideos: async (m) => ((await io.monthVideos(m)) ?? []).map((v) => (v.id === vid(3) ? { ...v, audience: 'client', owned: true } : v)),
+    }
+    const r = await placeProducts({ clientId: OSSUR_CLIENT_ID, clientName: 'Össur', io: own, catalogue: FIXTURE_CATALOGUE, window, ask: null, budgetUsd: 0 })
+    expect(r.relevant.has(vid(3))).toBe(false)
+    expect(r.queue.some((q) => q.videoId === vid(3))).toBe(false)
+    // and its tag counts nowhere: an own post's content never stands.
+    expect(r.rows.find((x) => x.audience === 'client' && x.object_id === G('Feet'))).toMatchObject({ k_any: 0 })
   })
 })

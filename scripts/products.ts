@@ -11,7 +11,7 @@ import { recordConfigChange, scriptActor } from '../lib/config-log'
 import { assertProject, MARKET_FIRST_PROJECTS } from '../lib/ops/market-first-args'
 import { denominatorKey, monthStartOf } from '../lib/reading/monthly'
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
-import { clientNameOf } from '../lib/pipeline/product-readings'
+import { clientNameOf, readCommentAuthors, readOwnHandles } from '../lib/pipeline/product-readings'
 import { runClassifier, type ClassifyItem, type RunClassifyResult } from '../lib/products/classify'
 import { excerptAround, keyOfRow, standingPlacements, type MentionInsert } from '../lib/products/match'
 import {
@@ -344,6 +344,8 @@ function scriptIO(admin: SupabaseClient, args: ProductsArgs, ration: Ration, fro
     },
     searchTerms: () => readSearchTerms(admin, args.clientId, ration),
     searchFound: (terms) => readSearchFound(admin, args.clientId, terms, ration),
+    ownHandles: () => { ration.spend(1, 'the client\'s own handles'); return readOwnHandles(admin, args.clientId) },
+    commentAuthors: (ids) => { ration.spend(Math.max(1, Math.ceil(ids.length / 100)), 'who wrote the scan\'s comments'); return readCommentAuthors(admin, args.clientId, ids) },
   }
 }
 

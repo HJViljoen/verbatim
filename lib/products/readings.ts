@@ -94,8 +94,12 @@ export interface ProductCommentRow {
   text: string | null
   comment_date: string
   is_low_signal: boolean | null
+  /** Who wrote it: a comment by the client's own account is the brand's own
+   *  words and never places (`ownAuthorNames`). Absent on a row read before
+   *  T5 (a recorded dump). */
+  author?: string | null
 }
-export const PRODUCT_COMMENT_COLUMNS = 'id, platform, video_id, text, comment_date, is_low_signal'
+export const PRODUCT_COMMENT_COLUMNS = 'id, platform, video_id, text, comment_date, is_low_signal, author'
 
 /** A stored product_mentions row the pass reads back. */
 export type HeldRow = PlacedRow & Pick<MentionInsert, 'client_id' | 'rule_version' | 'catalogue_version' | 'tag_id'>
@@ -120,6 +124,13 @@ export interface ProductReadIO {
   held(version: string, months: readonly string[]): Promise<HeldRow[] | null>
   tags(): Promise<ProductTagRow[] | null>
   rivalFound(): Promise<ReadonlySet<string>>
+  /** `tracking_configs.own_handles` (platform → the client's handle): a
+   *  comment its own account wrote is the brand's words, never placed.
+   *  Optional: an IO without it (a recorded dump) leaves none out. */
+  ownHandles?(): Promise<Record<string, string> | null>
+  /** Who wrote each of these comments (the scan's excerpts carry no
+   *  author). Optional, as `ownHandles`. */
+  commentAuthors?(ids: readonly string[]): Promise<ReadonlyMap<string, { platform: string; author: string | null }>>
   /** Our search terms, current and retired: every term a gather ran
    *  (keyword_performance, any bucket) and every term configured now. */
   searchTerms(): Promise<string[]>
@@ -201,6 +212,33 @@ export function contentFields(v: ProductVideoRow): ContentField[] {
   }
   return out
 }
+
+const ownName = (x: string | null | undefined): string => (x ?? '').trim().toLowerCase().replace(/^@/, '')
+
+/**
+ * The client's own accounts, per platform, for "who wrote this comment": the
+ * configured handles (`tracking_configs.own_handles`, the list the owned read
+ * and the brand rules use) and the accounts of the own posts the pass read
+ * (an owned row's account, as lib/gather/owned.ts ownAccountNames adds them).
+ * A comment one of them wrote is the brand's own words, as a caption is
+ * (depth v2 T5): it never places. Case and a leading @ do not matter. PURE.
+ */
+export function ownAuthorNames(handles: Record<string, string> | null | undefined, rows: readonly Pick<ProductVideoRow, 'platform' | 'account_name' | 'source'>[]): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>()
+  for (const [platform, handle] of Object.entries(handles ?? {})) {
+    const h = ownName(handle)
+    if (h) out.set(platform, new Set([h]))
+  }
+  for (const r of rows) {
+    if (!isOwnedPost(r) || !r.account_name || !out.has(r.platform)) continue
+    out.get(r.platform)!.add(ownName(r.account_name))
+  }
+  return out
+}
+
+/** Did the client's own account write it? PURE. */
+export const isOwnAuthor = (names: ReadonlyMap<string, ReadonlySet<string>>, platform: string, author: string | null | undefined): boolean =>
+  !!author && (names.get(platform)?.has(ownName(author)) ?? false)
 
 /** What the model is asked, through the caller: the confirm items and the
  *  queue, each answered by rows (written by the caller as they return). */
@@ -317,7 +355,7 @@ export async function placeProducts(args: {
   const months = monthsIn(args.window.from, args.window.to)
   const reads = { candidates: 0, videos: 0, comments: 0 }
 
-  const markets = new Map<string, MonthVideo[]>()
+  const markets = new Map<string, ProductMonthVideo[]>()
   for (const m of months) {
     const set = await io.monthVideos(m)
     if (set) markets.set(m, set)
@@ -405,8 +443,12 @@ export async function placeProducts(args: {
   //    own words (`contentFields`), so it is never relevant: its comments are
   //    read by the rules (the scan) and the confirm call, never queued.
   let standing = standingNow(contentPlan.rows)
-  const relevant = new Set([...relevantVideos(standing)].filter((id) => inMarket.has(id)))
-  const waitingOnConfirm = new Set(contentConfirm.map((c) => c.videoId).filter((id) => !relevant.has(id) && inMarket.has(id)))
+  // An own post is never relevant (its words place nothing, and a content row
+  // or a whole-video tag on one from before must not open its comments to
+  // the classifier): marked owned by the month's read or by its own row.
+  const ownedIds = new Set([...[...markets.values()].flat().filter((v) => v.owned).map((v) => v.id), ...[...videoRows.values()].filter(isOwnedPost).map((v) => v.id)])
+  const relevant = new Set([...relevantVideos(standing)].filter((id) => inMarket.has(id) && !ownedIds.has(id)))
+  const waitingOnConfirm = new Set(contentConfirm.map((c) => c.videoId).filter((id) => !relevant.has(id) && inMarket.has(id) && !ownedIds.has(id)))
 
   // 4. The comments: in full under the relevant videos, the scan's excerpt
   //    elsewhere.
@@ -414,17 +456,23 @@ export async function placeProducts(args: {
   const commentRows = relevantRows.length ? await io.comments(relevantRows.map((v) => ({ platform: v.platform, video_id: v.video_id }))) : []
   reads.comments = commentRows.length
   const uuidOf = new Map(relevantRows.map((v) => [`${v.platform}\u0000${v.video_id}`, v.id]))
+  // The client's own accounts: what they write under any video is the
+  // brand's words, never placed (`ownAuthorNames`).
+  const ownNames = ownAuthorNames(io.ownHandles ? await io.ownHandles() : null, [...videoRows.values()])
   const fullComments: (CommentText & { lowSignal: boolean | null })[] = []
   for (const c of commentRows) {
     const videoId = uuidOf.get(`${c.platform}\u0000${c.video_id}`)
-    if (!videoId || !c.text) continue
+    if (!videoId || !c.text || isOwnAuthor(ownNames, c.platform, c.author)) continue
     fullComments.push({ commentId: c.id, videoId, month: monthStartOf(String(c.comment_date)), text: c.text, lowSignal: c.is_low_signal })
   }
   const readInFull = new Set(fullComments.map((c) => c.commentId))
   const commentText = new Map<string, string>(fullComments.map((c) => [c.commentId, c.text]))
   for (const c of candidates) if (c.source === 'comment' && c.comment_id && !commentText.has(c.comment_id)) commentText.set(c.comment_id, c.excerpt ?? '')
-  const excerpts: CommentText[] = candidates
-    .filter((c) => c.source === 'comment' && c.comment_id && c.comment_month && !readInFull.has(c.comment_id))
+  const ownRead = new Set(commentRows.filter((c) => isOwnAuthor(ownNames, c.platform, c.author)).map((c) => c.id))
+  const scanned = candidates.filter((c) => c.source === 'comment' && c.comment_id && c.comment_month && !readInFull.has(c.comment_id) && !ownRead.has(c.comment_id))
+  const authors = ownNames.size > 0 && io.commentAuthors && scanned.length > 0 ? await io.commentAuthors([...new Set(scanned.map((c) => c.comment_id!))]) : null
+  const excerpts: CommentText[] = scanned
+    .filter((c) => { const a = authors?.get(c.comment_id!); return !a || !isOwnAuthor(ownNames, a.platform, a.author) })
     .map((c) => ({ commentId: c.comment_id!, videoId: c.video_id, month: String(c.comment_month).slice(0, 10), text: c.excerpt ?? '' }))
   // A category word in a comment under a video no category stands on
   // (CATEGORY_WORDS_ONLY_UNDER_RELEVANT says why it still counts).

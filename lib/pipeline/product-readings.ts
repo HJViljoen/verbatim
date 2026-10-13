@@ -134,7 +134,30 @@ export function stepProductIO(admin: SupabaseClient, clientId: string, window: {
     },
     searchTerms: () => readSearchTerms(admin, clientId),
     searchFound: (terms) => readSearchFound(admin, clientId, terms),
+    ownHandles: () => readOwnHandles(admin, clientId),
+    commentAuthors: (ids) => readCommentAuthors(admin, clientId, ids),
   }
+}
+
+/** The client's own handles (`tracking_configs.own_handles`): a comment one
+ *  of them wrote is the brand's words and never places. */
+export async function readOwnHandles(admin: SupabaseClient, clientId: string): Promise<Record<string, string> | null> {
+  const { data, error } = await admin.from('tracking_configs').select('own_handles').eq('client_id', clientId).maybeSingle()
+  if (error) throw new Error(`tracking_configs own_handles: ${error.message}`)
+  const raw = (data as { own_handles?: unknown } | null)?.own_handles
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  return Object.fromEntries(Object.entries(raw as Record<string, unknown>).filter(([, v]) => typeof v === 'string' && v.trim() !== '')) as Record<string, string>
+}
+
+/** Who wrote each of these comments, 100 ids a read. */
+export async function readCommentAuthors(admin: SupabaseClient, clientId: string, ids: readonly string[]): Promise<Map<string, { platform: string; author: string | null }>> {
+  const out = new Map<string, { platform: string; author: string | null }>()
+  for (const part of chunk([...ids], 100)) {
+    const rows = await selectAll<{ id: string; platform: string; author: string | null }>(() => admin.from('comments').select('id, platform, author')
+      .eq('client_id', clientId).in('id', part).order('id'))
+    for (const r of rows) out.set(String(r.id), { platform: r.platform, author: r.author ?? null })
+  }
+  return out
 }
 
 export interface ProductMonthResult {
