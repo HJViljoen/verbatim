@@ -1,5 +1,3 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
-
 import { BRAND_RULE_VERSION, brandRulesFor, WATCHED_RULE_VERSION, watchedKey } from '../brands/aliases'
 import { ownerOfVideos, type IdentityRow } from '../brands/owners'
 import { brandCountState, type BrandCountState } from '../brands/precision'
