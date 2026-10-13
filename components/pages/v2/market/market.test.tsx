@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract, copyNodes, copyViolations } from '@/lib/test/copy-contract'
-import { fixtureId, marketFixture, FIXTURE_WEEKS } from '@/lib/pages/v2/market-fixture'
+import { fixtureId, marketFixture, marketLongRowsFixture, FIXTURE_WEEKS } from '@/lib/pages/v2/market-fixture'
 import type { MarketData } from '@/lib/pages/v2/market'
 import { MarketPage, MARKET_FIRST_RUN } from './index'
 import { ConversationPanel, SubjectPanelView } from './panel'
@@ -235,11 +235,27 @@ describe('ConversationTable', () => {
   it('this week: the week and the month, who it is about, subject filters, show all', () => {
     const text = renderText(<ConversationTable table={WEEK.table!} data={WEEK} />)
     expect(text).toMatch(/^Every conversation this week 17 conversations, biggest first, each counted in the category’s videos \( 226 this week\) All 17 Fit & comfort 4/)
-    expect(text).toContain('Conversation Subject About This week October so far How long a liner lasts Fit & comfort Össur 4 · others 19 23 35')
-    expect(text).toContain('Insurance refusals for powered knees Cost & access Össur 3 · Ottobock 5 · others 11 19 31')
+    // The month twice: under the week's figure for a phone, and in its own
+    // column from 640 (each shown at its width only).
+    expect(text).toContain('Conversation Subject About This week October so far How long a liner lasts Fit & comfort Össur 4 · others 19 23 35 in October so far 35')
+    expect(text).toContain('Insurance refusals for powered knees Cost & access Össur 3 · Ottobock 5 · others 11 19 31 in October so far 31')
     expect(text).toMatch(/Show all 17$/)
     expect(render(<ConversationTable table={WEEK.table!} data={WEEK} />)).toContain('href="/dashboard/market?all=1#conversations"')
     assertCopyContract(<ConversationTable table={WEEK.table!} data={WEEK} />)
+  })
+
+  // Phase 4 fix round: at 390 two figure columns beside a label did not fit
+  // Sealand's table, and its own scroll cut "42" to "4" at the card's edge.
+  // On a phone the month sits under the week's figure, in its cell (Content's
+  // Also asked); the month column shows from 640. Checked at 390, 360 and 320
+  // on the long-label fixture and Sealand's dump by scripts/pages-shots.ts.
+  it('on a phone the month sits under the week, so no figure column is cut, with long labels and three-digit figures', () => {
+    const d = marketLongRowsFixture()
+    const html = render(<ConversationTable table={d.table!} data={d} />)
+    expect(html).toMatch(/<th scope="col" class="[^"]*hidden text-right sm:table-cell">October so far<\/th>/)
+    expect(html).toMatch(/>123<\/span><span class="block whitespace-nowrap[^"]*sm:hidden"><span data-copy="figure" class="font-mono">456<\/span> in October so far<\/span><\/td><td class="[^"]*hidden text-right[^"]*sm:table-cell"><span data-copy="figure">456<\/span>/)
+    expect(renderText(<ConversationTable table={d.table!} data={d} />)).toContain('Whether the forty litre travel backpack really fits under the seat on budget airlines across Europe')
+    assertCopyContract(<ConversationTable table={d.table!} data={d} />)
   })
 
   it('marks a conversation set apart (makers\' own posts), which stays in the list', () => {

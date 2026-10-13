@@ -96,7 +96,7 @@ import { MovesV2Page } from '../components/pages/v2/moves'
 import { movesFixture, movesOpenFixture, movesRecordFixture, statementsV2 } from '../lib/pages/v2/moves-fixture'
 import type { MovesPageData } from '../lib/pages/v2/moves'
 import { MarketPage } from '../components/pages/v2/market'
-import { marketFixture } from '../lib/pages/v2/market-fixture'
+import { marketFixture, marketLongRowsFixture } from '../lib/pages/v2/market-fixture'
 import type { MarketData } from '../lib/pages/v2/market'
 import { ContentPage } from '../components/pages/v2/content'
 import { contentEmptyFixture, contentFixture } from '../lib/pages/v2/content-fixture'
@@ -410,6 +410,10 @@ const PAGES: Page[] = [
   { key: 'market-v2-subject', path: '/dashboard/market', artboard: 'E2-Market-Open.dc.html', page: () => h(MarketPage, { data: marketFixture({ subject: 'cost' }) }) },
   { key: 'market-v2-month', path: '/dashboard/market', artboard: 'E2-Market.dc.html', page: () => h(MarketPage, { data: marketFixture({ period: 'month' }) }) },
   { key: 'market-v2-time', path: '/dashboard/market', artboard: 'E2-Market.dc.html', page: () => h(MarketPage, { data: marketFixture({ period: 'time' }) }) },
+  // The table at its widest: long labels, three-digit figures (Phase 4 fix
+  // round: a 390 phone cut Sealand's month column at the card's edge).
+  { key: 'market-v2-long', path: '/dashboard/market', artboard: 'E2-Market.dc.html', page: () => h(MarketPage, { data: marketLongRowsFixture() }) },
+  { key: 'market-v2-long-month', path: '/dashboard/market', artboard: 'E2-Market.dc.html', page: () => h(MarketPage, { data: marketLongRowsFixture('month') }) },
   // Only where a dump is named (as Voices' `voices-real`).
   ...(process.env.MARKET_V2_JSON
     ? [{ key: 'market-v2-real', path: '/dashboard/market', artboard: 'E2-Market.dc.html', page: () => h(MarketPage, { data: marketDump() }) }]

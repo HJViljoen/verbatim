@@ -403,3 +403,18 @@ function fixturePanel(n: number, at: PanelAt, p: MarketParams, period: MarketPar
 /** The fixture's ids, for tests. */
 export const fixtureId = id
 export const fixtureSubjectId = subjectId
+
+/** The table at its widest (Phase 4 fix round, the 390 check): long labels
+ *  and three-digit figures, the week's and the month's, on the first rows. */
+export function marketLongRowsFixture(period: 'week' | 'month' = 'week'): MarketData {
+  const d = marketFixture({ period })
+  const LONG = 'Whether the forty litre travel backpack really fits under the seat on budget airlines across Europe'
+  const table = d.table!
+  return {
+    ...d,
+    table: {
+      ...table,
+      rows: table.rows.map((r, i) => (i < 3 ? { ...r, conv: { ...r.conv, label: i === 0 ? LONG : `${LONG} (${i})`, week: 123 + i, month: 456 + i } } : r)),
+    },
+  }
+}
