@@ -220,7 +220,7 @@ const OSSUR_RULES: readonly BrandRule[] = [
     key: { kind: 'rival', name: 'Ottobock' },
     strong: ['otto\\s*bock[a-z0-9_]*', 'ottobo(?:k|ch|c)'],
     weak: [],
-    why: 'no other meaning on production (13 Oct: every match read by hand is the company, 51 of its 171 rows and 26 transcript and on-screen matches), so every form counts anywhere: "Otto Bock", any ottobock handle or hashtag (@ottobockcare_northamerica, #ottobocklatam) and the misspellings production holds (ottobok, ottoboch, #ottoboc); OtterBox and "otto" alone do not match',
+    why: 'no other meaning on production (13 Oct: every match read by hand is the company, 51 of its 171 rows and 27 transcript and on-screen matches), so every form counts anywhere: "Otto Bock", any ottobock handle or hashtag (@ottobockcare_northamerica, #ottobocklatam) and the misspellings production holds (ottobok, ottoboch, #ottoboc); OtterBox and "otto" alone do not match',
   },
 ]
 
