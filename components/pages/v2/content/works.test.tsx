@@ -27,9 +27,26 @@ describe('What works in your market’s videos', () => {
     expect(text).toContain('Read from 412 of 640 market videos published in October so far that have a format.')
   })
 
-  it('says why it cannot be read where it cannot', () => {
+  it('keeps both charts’ frames where it cannot be read, and says why once', () => {
     const empty = { ...worksFixture(), formats: [], openings: [], sentence: null, basis: null, unread: 'Too few videos.' }
-    expect(renderText(<WorksCard block={empty} />)).toContain('Too few videos.')
+    const text = renderText(<WorksCard block={empty} />)
+    expect(text).toContain('How the video is made')
+    expect(text).toContain('How it opens')
+    expect(text.split('Too few videos.')).toHaveLength(2)
+    // Each chart keeps its axis: an empty track with the 1× tick.
+    expect(render(<WorksCard block={empty} />).match(/data-works-empty=""/g)).toHaveLength(2)
     assertCopyContract(<WorksCard block={empty} />)
+    // One chart empty: that chart says why, beside its axis.
+    const one = { ...worksFixture(), openings: [] }
+    expect(renderText(<WorksCard block={one} />)).toContain('How it opens Kind of video Response · 1× = typical Your 9 posts Too few rated videos of any one opening yet')
+  })
+
+  it('fits more posts than the board’s nine in one row of marks, and prints no “0 of 0” where you published nothing', () => {
+    const m = render(<WorksCard block={{ ...worksFixture(), posts: 13 }} />)
+    expect(m).toMatch(/data-units="6\/13" class="[^"]*flex-nowrap[^"]*\[&amp;&gt;span\]:flex-1/)
+    const none = <WorksCard block={{ ...worksFixture(), posts: 0, formats: worksFixture().formats.map((r) => ({ ...r, yours: 0 })) }} />
+    expect(renderText(none)).toContain('Response · 1× = typical Your posts')
+    expect(renderText(none)).not.toContain('0 of 0')
+    assertCopyContract(none)
   })
 })

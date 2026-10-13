@@ -34,67 +34,76 @@ export function AskedCard({ block, state, month, weekWord, weekHead, afterIdeas 
   weekWord: string
   /** The week column's heading: "This week", or the window's days. */
   weekHead: string
-  /** Post ideas stand above it: the table leaves their conversations out. */
+  /** Cards stand above it (ideas, or the questions in their places): the
+   *  table leaves their conversations out. */
   afterIdeas?: boolean
 }) {
   const period = block.period === 'month' ? monthWords(month) : weekWord
   const monthHead = `${longMonth(month.month)} ${month.complete ? 'in total' : 'so far'}`
   const trend = block.rows.some((r) => r.weeks != null)
+  // Where your posts could not be read (or there were none), nothing was
+  // left out as touched, and the line does not say so.
+  const touchRead = block.posts !== null && block.posts !== 0
+  const besides = afterIdeas ? ', besides those above,' : ''
+  const sub = touchRead
+    ? `Conversations filed as questions ${period}${besides} that none of your posts since ${longMonth(block.since)} touched on, the most videos first`
+    : `Conversations filed as questions ${period}${afterIdeas ? ', besides those above' : ''}, the most videos first`
+  // An empty table keeps its frame: the headings, and one line in a row.
+  const empty = block.unread ?? (block.rows.length === 0
+    ? block.touched > 0 ? 'Every other question people asked was touched on by one of your posts.' : `No ${afterIdeas ? 'other ' : ''}question came up ${period}.`
+    : null)
   return (
     <section id={ASKED_ID} aria-labelledby="asked-title" className={cn(CARD, 'scroll-mt-6')}>
       <CardHead
         icon={CircleHelp}
         id="asked-title"
         title="Also asked, and not yet in your posts"
-        sub={`Conversations filed as questions ${period}${afterIdeas ? ', besides the ideas above,' : ''} that none of your posts since ${longMonth(block.since)} touched on, the most videos first`}
+        sub={sub}
       />
-      {block.unread ? (
-        <p className="m-0 text-[14px] leading-[1.5] text-muted-foreground">{block.unread}</p>
-      ) : block.rows.length === 0 ? (
-        <p className="m-0 text-[14px] leading-[1.5] text-muted-foreground">
-          {block.touched > 0 ? 'Every other question people asked was touched on by one of your posts.' : `No other question came up ${period}.`}
-        </p>
-      ) : (
-        <table className="w-full border-collapse text-[14px]">
-          <thead>
-            <tr className="border-b border-border">
-              <th scope="col" className={TH}>Question people asked</th>
-              {/* The text columns show from 1280, where the sidebar leaves the
-                  card room for them beside the counts (T9: from 768 the
-                  sidebar takes 281px, and the table ran past the card). */}
-              <th scope="col" className={cn(TH, 'hidden xl:table-cell')}>Who asks</th>
-              <th scope="col" className={cn(TH, 'hidden xl:table-cell')}>Subject</th>
-              <th scope="col" className={cn(TH, 'text-right')}>{weekHead}</th>
-              {/* On a phone the month sits under the week's figure, in its cell. */}
-              <th scope="col" className={cn(TH, 'hidden text-right sm:table-cell')}>{monthHead}</th>
-              {trend ? <th scope="col" className={cn(TH, 'hidden pr-0 text-right sm:table-cell md:hidden lg:table-cell')}>The last three weeks</th> : null}
+      <table className="w-full border-collapse text-[14px]">
+        <thead>
+          <tr className="border-b border-border">
+            <th scope="col" className={TH}>Question people asked</th>
+            {/* The text columns show from 1280, where the sidebar leaves the
+                card room for them beside the counts (T9: from 768 the
+                sidebar takes 281px, and the table ran past the card). */}
+            <th scope="col" className={cn(TH, 'hidden xl:table-cell')}>Who asks</th>
+            <th scope="col" className={cn(TH, 'hidden xl:table-cell')}>Subject</th>
+            <th scope="col" className={cn(TH, 'text-right')}>{weekHead}</th>
+            {/* On a phone the month sits under the week's figure, in its cell. */}
+            <th scope="col" className={cn(TH, 'hidden text-right sm:table-cell')}>{monthHead}</th>
+            {trend || empty ? <th scope="col" className={cn(TH, 'hidden pr-0 text-right sm:table-cell md:hidden lg:table-cell')}>The last three weeks</th> : null}
+          </tr>
+        </thead>
+        <tbody>
+          {empty ? (
+            <tr>
+              <td colSpan={6} className={cn(TD, 'py-4 text-muted-foreground')}>{empty}</td>
             </tr>
-          </thead>
-          <tbody>
-            {block.rows.map((r) => (
-              <tr key={r.registryId} className="border-b border-track last:border-b-0">
-                <td className={TD}>
-                  <Link href={conversationHref(r.registryId)} className="font-medium no-underline hover:underline hover:underline-offset-[3px]">
-                    <span data-copy="subject" data-slot="pass_b_theme">{r.label}</span>
-                  </Link>
+          ) : null}
+          {block.rows.map((r) => (
+            <tr key={r.registryId} className="border-b border-track last:border-b-0">
+              <td className={TD}>
+                <Link href={conversationHref(r.registryId)} className="font-medium no-underline hover:underline hover:underline-offset-[3px]">
+                  <span data-copy="subject" data-slot="pass_b_theme">{r.label}</span>
+                </Link>
+              </td>
+              <td className={cn(TD, 'hidden text-muted-foreground xl:table-cell')}>{r.groups.length > 0 ? <GroupNames groups={r.groups} /> : <span aria-label="No group cites it">·</span>}</td>
+              <td className={cn(TD, 'hidden text-muted-foreground xl:table-cell')}>{r.subject ?? <span aria-label="No subject holds it">·</span>}</td>
+              <td className={cn(TD, 'text-right')}>
+                {r.week != null ? <Fig>{fmtInt(r.week)}</Fig> : <span className="text-muted-foreground">·</span>}
+                {r.month != null ? <span className="block text-[12px] text-muted-foreground sm:hidden"><Fig>{fmtInt(r.month)}</Fig> {monthWords(month)}</span> : null}
+              </td>
+              <td className={cn(TD, 'hidden text-right sm:table-cell')}>{r.month != null ? <Fig>{fmtInt(r.month)}</Fig> : <span className="text-muted-foreground">·</span>}</td>
+              {trend ? (
+                <td className={cn(TD, 'hidden pr-0 text-right sm:table-cell md:hidden lg:table-cell')}>
+                  {r.weeks ? <Fig className="text-[13px] text-muted-foreground">{r.weeks.map(fmtInt).join(' · ')}</Fig> : <span className="text-muted-foreground">·</span>}
                 </td>
-                <td className={cn(TD, 'hidden text-muted-foreground xl:table-cell')}>{r.groups.length > 0 ? <GroupNames groups={r.groups} /> : <span aria-label="No group cites it">·</span>}</td>
-                <td className={cn(TD, 'hidden text-muted-foreground xl:table-cell')}>{r.subject ?? <span aria-label="No subject holds it">·</span>}</td>
-                <td className={cn(TD, 'text-right')}>
-                  {r.week != null ? <Fig>{fmtInt(r.week)}</Fig> : <span className="text-muted-foreground">·</span>}
-                  {r.month != null ? <span className="block text-[12px] text-muted-foreground sm:hidden"><Fig>{fmtInt(r.month)}</Fig> {monthWords(month)}</span> : null}
-                </td>
-                <td className={cn(TD, 'hidden text-right sm:table-cell')}>{r.month != null ? <Fig>{fmtInt(r.month)}</Fig> : <span className="text-muted-foreground">·</span>}</td>
-                {trend ? (
-                  <td className={cn(TD, 'hidden pr-0 text-right sm:table-cell md:hidden lg:table-cell')}>
-                    {r.weeks ? <Fig className="text-[13px] text-muted-foreground">{r.weeks.map(fmtInt).join(' · ')}</Fig> : <span className="text-muted-foreground">·</span>}
-                  </td>
-                ) : null}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+              ) : null}
+            </tr>
+          ))}
+        </tbody>
+      </table>
       {!block.unread && (block.total > ASKED_SHOWN || block.touched > 0) ? (
         <div className="flex flex-wrap items-baseline gap-x-5 gap-y-2">
           {block.total > ASKED_SHOWN ? (

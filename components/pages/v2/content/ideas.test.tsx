@@ -3,9 +3,9 @@ import { render, renderText as rawText } from '@/lib/test/render'
 import { assertCopyContract, copyNodes } from '@/lib/test/copy-contract'
 import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '@/lib/config'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
-import { contentFixture, ideaCards, OCT } from '@/lib/pages/v2/content-fixture'
-import type { ContentState } from '@/lib/pages/v2/content'
-import { IdeaCardView, IdeasSection, OwnTouchLine } from './ideas'
+import { contentEmptyFixture, contentFixture, contentThinFixture, ideaCards, OCT } from '@/lib/pages/v2/content-fixture'
+import { IDEA_SLOTS, questionSlotsContext, type ContentPageData, type ContentState } from '@/lib/pages/v2/content'
+import { IdeaCardView, IdeasSection, OwnTouchLine, QuestionCardView } from './ideas'
 
 /** The page's words as read: a tag between a word and its comma is not a space. */
 const renderText = (node: Parameters<typeof rawText>[0]): string => rawText(node).replace(/\s+([,.])/g, '$1')
@@ -13,8 +13,12 @@ const renderText = (node: Parameters<typeof rawText>[0]): string => rawText(node
 const STATE: ContentState = { period: 'week', open: null, asked: false }
 const section = (clientId = OSSUR_CLIENT_ID, state = STATE) => {
   const data = contentFixture({ clientId })
-  return <IdeasSection block={data.ideas} state={state} month={OCT} />
+  return <IdeasSection block={data.ideas} state={state} month={OCT} ctx={questionSlotsContext(data)} />
 }
+/** The row as the page draws it for these data. */
+const row = (data: ContentPageData, state = STATE) => <IdeasSection block={data.ideas} state={state} month={OCT} ctx={questionSlotsContext(data)} />
+/** Each card's kind, in order (`idea`, `question` or `empty`). */
+const slots = (m: string): string[] => [...m.matchAll(/<article id="idea-\d"|data-idea-slot="(question|empty)"/g)].map((x) => x[1] ?? 'idea')
 
 describe('What to post next', () => {
   it('draws one card an idea, biggest first, and keeps the copy contract', () => {
@@ -58,7 +62,7 @@ describe('What to post next', () => {
   it('an older set prints its figure beside ITS month, never the page’s', () => {
     const older = contentFixture({ olderIdeas: true })
     expect(older.ideas.week?.month).toMatchObject({ month: '2026-08-01', complete: true })
-    const levels = copyNodes(render(<IdeasSection block={older.ideas} state={STATE} month={OCT} />)).filter((n) => n.kind === 'level').map((n) => n.text)
+    const levels = copyNodes(render(row(older))).filter((n) => n.kind === 'level').map((n) => n.text)
     expect(levels[0]).toBe('48 of 640 videos, 31 Aug to 27 Sep')
     expect(levels[1]).toBe('31 of 318 in August')
     expect(levels.join(' ')).not.toContain('October so far')
@@ -109,16 +113,73 @@ describe('What to post next', () => {
     expect(titles.map((n) => n.slot)).toEqual(['post_idea', 'post_idea', 'post_idea'])
   })
 
-  it('says honestly why there is no idea, and where the questions are', () => {
-    const notOn = contentFixture({ ideas: 'not_on' })
-    const text = renderText(<IdeasSection block={notOn.ideas} state={STATE} month={OCT} />)
-    expect(text).toContain('Post ideas are not switched on for this workspace.')
-    expect(text).toContain('The questions people asked are listed under Also asked.')
-    const none = renderText(<IdeasSection block={{ state: 'none', cards: [], week: null }} state={STATE} month={OCT} />)
-    expect(none).toContain('No post ideas were written for this week.')
-    const stale = contentFixture({ ideas: 'stale' })
-    expect(renderText(<IdeasSection block={stale.ideas} state={STATE} month={OCT} />)).toContain('No new post ideas in the last four weeks.')
-    assertCopyContract(<IdeasSection block={notOn.ideas} state={STATE} month={OCT} />)
+  it('keeps the board’s three cards in every state: ideas first, then the next questions in line, then empty cards (parity pass)', () => {
+    expect(slots(render(section()))).toEqual(['idea', 'idea', 'idea'])
+    expect(slots(render(row(contentFixture({ ideas: 'fewer' }))))).toEqual(['idea', 'question', 'question'])
+    for (const ideas of ['not_on', 'none', 'stale', 'unread'] as const) {
+      expect(slots(render(row(contentFixture({ ideas }))))).toEqual(['question', 'question', 'question'])
+      assertCopyContract(row(contentFixture({ ideas })))
+    }
+    expect(slots(render(row(contentThinFixture())))).toHaveLength(IDEA_SLOTS)
+    // No update yet: three cards still, each empty, the first two saying why.
+    const empty = contentEmptyFixture()
+    expect(slots(render(row(empty)))).toEqual(['empty', 'empty', 'empty'])
+    expect(renderText(row(empty))).toContain('1 Post ideas are not switched on for this workspace. 2 No update has covered a week yet. 3')
+    assertCopyContract(row(empty))
+  })
+
+  it('a question card draws the idea card’s anatomy from what the data holds, and says calmly why it holds no idea', () => {
+    const data = contentFixture({ ideas: 'not_on' })
+    const node = row(data)
+    const text = renderText(node)
+    // What the cards are, in the board's place over the row.
+    expect(text).toMatch(/^What to post next Questions people asked this week that none of your posts since August touched on, the most videos first/)
+    // The top of the also-asked list, the most videos first.
+    expect(text.indexOf('Liner lifespan and replacement')).toBeLessThan(text.indexOf('Insurance refusals for powered knees'))
+    const levels = copyNodes(render(node)).filter((n) => n.kind === 'level').map((n) => n.text)
+    // The week's figure beside its month (decision 1).
+    expect(levels.slice(0, 2)).toEqual(['23 of 241 videos this week', '31 of 318 in October so far'])
+    expect(text).toContain("Who's asking New amputees, first year, Caregivers and family")
+    expect(text).toContain('Your posts None of your 13 posts since August touched on it')
+    expect(text.split('Post idea Not switched on for this workspace')).toHaveLength(4)
+    expect(text).not.toContain('Open the brief')
+    expect(render(node)).toContain('href="/dashboard/market?conv=a1000000-0000-4000-8000-000000000001"')
+    // The flag an idea on it would wear, only where it was earned.
+    expect(copyNodes(render(node)).filter((n) => n.kind === 'verdict').map((n) => n.text)).toEqual(['Unusual this week'])
+    // The label is the conversation's own, never a quote, and the three weeks are bare counts.
+    expect(copyNodes(render(node)).filter((n) => n.kind === 'quote')).toEqual([])
+    expect(copyNodes(render(node)).filter((n) => n.kind === 'subject' && n.slot === 'pass_b_theme').map((n) => n.text)).toEqual(['Liner lifespan and replacement', 'Insurance refusals for powered knees', 'How a socket should fit as a child grows'])
+    expect(render(node)).toContain('the weeks of 21 Sep, 28 Sep, 5 Oct')
+    expect(text).not.toMatch(/Rising|usual level|trend/i)
+    assertCopyContract(node)
+  })
+
+  it('a question card keeps its facts where the data is thin: no group, no posts read, a month read', () => {
+    const data = contentThinFixture()
+    const [q] = data.ideas.questions
+    const ctx = questionSlotsContext(data)
+    const card = (c = ctx) => renderText(<QuestionCardView row={{ ...q, groups: [] }} rank={1} state="not_on" ctx={c} />)
+    expect(card()).toContain("Who's asking No group cites it")
+    expect(card({ ...ctx, posts: null })).toContain('Your posts could not be read just now')
+    expect(card({ ...ctx, posts: 0 })).toContain('You published nothing of your own since August')
+    // A page dumped before the count was carried says it without one.
+    expect(card({ ...ctx, posts: undefined })).toContain('None of your posts since August touched on it')
+    // The month's figure leads where the page reads the month.
+    const month = render(<QuestionCardView row={q} rank={1} state="not_on" ctx={{ ...ctx, period: 'month', when: 'in October so far' }} />)
+    expect(copyNodes(month).filter((n) => n.kind === 'level').map((n) => n.text)).toEqual(['31 of 288 videos in October so far'])
+    // A set with fewer ideas says it of the question, not of the workspace.
+    expect(renderText(<QuestionCardView row={q} rank={2} state="ready" ctx={ctx} />)).toContain('Post idea None was written for this question')
+  })
+
+  it('a set of fewer than three ideas keeps its own line over the row, and its cards after it hold questions', () => {
+    const data = contentFixture({ ideas: 'fewer' })
+    const text = renderText(row(data))
+    expect(text).toMatch(/^What to post next From questions asked 14 Sep to 11 Oct/)
+    expect(text).toContain('Open the brief')
+    expect(text.split('Post idea None was written for this question')).toHaveLength(3)
+    // The questions in the cards are not the idea's own.
+    expect(data.ideas.questions.map((q) => q.registryId)).not.toContain(data.ideas.cards[0].registryId)
+    assertCopyContract(row(data))
   })
 
   it('prints the days the ideas read, and says plainly when no newer ideas were written', () => {
@@ -126,7 +187,7 @@ describe('What to post next', () => {
     expect(current).toContain('From questions asked 14 Sep to 11 Oct')
     expect(current).not.toContain('No new ideas this week')
     const older = contentFixture({ olderIdeas: true })
-    const node = <IdeasSection block={older.ideas} state={STATE} month={OCT} />
+    const node = row(older)
     // An older set prints ITS four weeks, and the week it was written for.
     expect(renderText(node)).toContain('From questions asked 31 Aug to 27 Sep that none of your posts')
     expect(renderText(node)).toContain('of 640 videos, 31 Aug to 27 Sep')

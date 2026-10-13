@@ -6,14 +6,14 @@ import type { PostIdeaRow } from '../../post-ideas/types'
 import type { OwnedPosts } from '../../reading/owned'
 import { buildPlaybook, type PlaybookVideo } from '../playbook'
 import {
-  anchorOf, askedBlock, contentHref, contentMonth, contentWeek, daysLabel, daysPhrase, flagVerdict,
+  anchorOf, ASKED_NO_WEEK, askedBlock, askedWithLead, contentHref, QUESTION_IDEA_LINE, questionSlotsContext, questionsHeading, contentMonth, contentWeek, daysLabel, daysPhrase, flagVerdict,
   article, askedPhrase, ideaOwnedFrom, ideasReadOf, ideasStale, ideasWeekOf, ideaWeeks, IDEAS_STALE_DAYS, lengthWords, olderIdeasLine, ownedTo, readIdeas, repliesWindowOf, topContent, touchPosts,
   fmtMultiple, groupsByConversation, ideaCard, IDEAS_EMPTY, marketVideoCards, mixSentence, newVerdict, openingChip,
   openingLabel, ownTouch, parseContentParams, pooledThemeVideos, pooledVideos, postsBlock, postTitle, recipe,
   repliesView, storedPersonas, subquestionRows, threeWeeks, topContentEmpty, typicalRate, wordsToBorrow, worksBlock,
   worksRows, type PanelVideoRow, type WorksRow,
 } from './content'
-import { OCT, OSSUR_IDEAS, OSSUR_OWNED, OSSUR_OWNED_SINCE, OSSUR_PERSONAS, OSSUR_REPLIES, REG } from './content-fixture'
+import { contentFixture, OCT, OSSUR_IDEAS, OSSUR_OWNED, OSSUR_OWNED_SINCE, OSSUR_PERSONAS, OSSUR_REPLIES, REG } from './content-fixture'
 
 const WINDOW = { from: '2026-10-04T04:03:00.000Z', to: '2026-10-11T04:02:00.000Z' }
 
@@ -359,6 +359,12 @@ describe('your posts', () => {
     expect(postsBlock({ owned: OSSUR_OWNED, typical: null, month: OCT }).response).toBeNull()
     expect(postsBlock({ owned: null, typical: 3, month: OCT }).unread).toMatch(/could not be read/)
   })
+
+  it('counts the posts with a response figure, the card’s figure where no typical post is stated', () => {
+    expect(postsBlock({ owned: OSSUR_OWNED, typical: 3, month: OCT }).rated).toBe(6)
+    const few: OwnedPosts = { ...OSSUR_OWNED, posts: OSSUR_OWNED.posts.slice(0, 2), total: 2 }
+    expect(postsBlock({ owned: few, typical: 3, month: OCT })).toMatchObject({ response: null, rated: 2 })
+  })
 })
 
 describe('worth a reply', () => {
@@ -402,6 +408,53 @@ describe('also asked', () => {
     expect(askedBlock({ ...base, counts: { week: null, month: monthCounts } }).unread).toMatch(/could not be read/)
     expect(askedBlock({ ...base, weeks: [null, new Map(), counts] }).rows[0].weeks).toBeNull()
     expect(askedBlock({ ...base, questions: null }).unread).toMatch(/could not be read/)
+  })
+
+  it('sets the top of the list aside for the ideas row’s cards, and the table goes on after them: no question twice (parity pass)', () => {
+    const many = Array.from({ length: 10 }, (_, i) => ({ registryId: `q${i}`, label: `Question number ${i}` }))
+    const counts10 = new Map(many.map((q, i) => [q.registryId, 20 - i]))
+    const input = { ...base, questions: many, counts: { week: counts10, month: counts10 }, weeks: null, exclude: new Set<string>() }
+    const { asked, lead } = askedWithLead({ ...input, lead: 3 })
+    expect(lead.map((r) => r.registryId)).toEqual(['q0', 'q1', 'q2'])
+    expect(asked.rows.map((r) => r.registryId)).toEqual(['q3', 'q4', 'q5', 'q6', 'q7'])
+    // "All N" counts what the table can still show.
+    expect(asked.total).toBe(7)
+    expect(askedWithLead({ ...input, lead: 3, expanded: true }).asked.rows).toHaveLength(7)
+    // Nothing set aside where the ideas fill the row.
+    expect(askedWithLead({ ...input, lead: 0 }).asked).toEqual(askedBlock(input))
+    // Fewer questions than places: every one goes to a card, the table is empty.
+    const two = askedWithLead({ ...input, questions: many.slice(0, 2), lead: 3 })
+    expect([two.lead.length, two.asked.rows.length, two.asked.total]).toEqual([2, 0, 0])
+    expect(askedWithLead({ ...input, questions: null, lead: 3 })).toMatchObject({ lead: [], asked: { unread: expect.stringMatching(/could not be read/) } })
+  })
+
+  it('carries how many of your posts the touch test read, and null where they could not be read', () => {
+    expect(askedBlock(base).posts).toBe(OSSUR_OWNED.total)
+    expect(askedBlock({ ...base, owned: null }).posts).toBeNull()
+  })
+})
+
+describe('the ideas row’s question cards (parity pass)', () => {
+  const data = contentFixture({ ideas: 'not_on' })
+  it('names the period the way the page does, the three weeks, and the line for a card with nothing left', () => {
+    const ctx = questionSlotsContext(data)
+    expect(ctx).toMatchObject({ period: 'week', when: 'this week', market: { week: 241, month: 318 }, weekLabels: ['21 Sep', '28 Sep', '5 Oct'], since: '2026-08-01', posts: 13, emptyLine: 'No other question came up this week.' })
+    expect(questionSlotsContext({ ...data, period: 'month' })).toMatchObject({ when: 'in October so far' })
+    const long = { ...data.week!, isWeek: false, days: 30, first: '2026-09-10', last: '2026-10-10' }
+    expect(questionSlotsContext({ ...data, week: long })).toMatchObject({ when: 'between 10 Sep and 10 Oct', weekLabels: null })
+    expect(questionSlotsContext({ ...data, asked: { ...data.asked, unread: ASKED_NO_WEEK } }).emptyLine).toBe(ASKED_NO_WEEK)
+  })
+
+  it('says what the cards are over the row, and claims no touch test it could not run', () => {
+    expect(questionsHeading({ when: 'this week', since: '2026-08-01', posts: 13 })).toBe('Questions people asked this week that none of your posts since August touched on, the most videos first')
+    expect(questionsHeading({ when: 'this week', since: '2026-08-01', posts: null })).toBe('Questions people asked this week, the most videos first')
+    expect(questionsHeading({ when: 'in October so far', since: '2026-08-01', posts: 0 })).toBe('Questions people asked in October so far, the most videos first')
+  })
+
+  it('a card holds what a post idea is missing for, in calm words for each state', () => {
+    expect(QUESTION_IDEA_LINE.not_on).toBe('Not switched on for this workspace')
+    expect(QUESTION_IDEA_LINE.ready).toBe('None was written for this question')
+    for (const line of Object.values(QUESTION_IDEA_LINE)) expect(line).not.toMatch(/\bnew\b|—/i)
   })
 })
 

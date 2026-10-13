@@ -25,9 +25,9 @@ describe('Also asked, and not yet in your posts', () => {
     assertCopyContract(card())
   })
 
-  it('does not claim to be the step’s ranking: conversations filed as questions, besides the ideas', () => {
+  it('does not claim to be the step’s ranking: conversations filed as questions, besides the cards above', () => {
     const text = renderText(card())
-    expect(text).toContain('Conversations filed as questions this week, besides the ideas above, that none of your posts since August touched on, the most videos first')
+    expect(text).toContain('Conversations filed as questions this week, besides those above, that none of your posts since August touched on, the most videos first')
     expect(text).not.toMatch(/next questions|in line/)
     expect(renderText(card({ afterIdeas: false }))).toContain('Conversations filed as questions this week that none of your posts since August touched on, the most videos first')
   })
@@ -40,6 +40,22 @@ describe('Also asked, and not yet in your posts', () => {
     expect(month).toContain('Conversations filed as questions in October so far')
     // Ranked by the month: the knee question (14 in October) before the skin one (13).
     expect(month.indexOf('Which knee suits')).toBeLessThan(month.indexOf('Looking after the skin'))
+  })
+
+  it('keeps its frame where it has no row: the headings, and one line in the table', () => {
+    const none = { ...askedFixture(), rows: [], total: 0, touched: 0 }
+    const text = renderText(card({ block: none }))
+    expect(text).toContain('Question people asked Who asks Subject This week October so far The last three weeks No other question came up this week.')
+    expect(renderText(card({ block: none, afterIdeas: false }))).toContain('No question came up this week.')
+    const unread = { ...none, unread: 'The questions people asked could not be read just now.' }
+    expect(renderText(card({ block: unread }))).toContain('The last three weeks The questions people asked could not be read just now.')
+    assertCopyContract(card({ block: unread }))
+  })
+
+  it('claims nothing about your posts where they could not be read: nothing was left out as touched', () => {
+    const text = renderText(card({ block: { ...askedFixture(), posts: null } }))
+    expect(text).toContain('Conversations filed as questions this week, besides those above, the most videos first')
+    expect(text).not.toContain('none of your posts')
   })
 
   it('lists them all on request', () => {
