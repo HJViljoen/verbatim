@@ -62,7 +62,7 @@ function LineSection({ line, name, mode, monthName }: { line: readonly LineBar[]
               return {
                 label: b.label,
                 value: pct,
-                display: mode === 'share' ? sharePct(b.k, b.n) : b.k > 0 && pct < 0.05 ? 'under 0.1%' : fmtPct(pct, 1),
+                display: mode === 'share' ? sharePct(b.k, b.n) : b.k === 0 ? '0%' : pct < 0.05 ? 'under 0.1%' : fmtPct(pct, 1),
                 sub: `${b.filling ? 'so far · ' : ''}${fmtInt(b.k)} of ${fmtInt(b.n)}`,
                 filling: b.current,
               }
@@ -80,8 +80,19 @@ function LineSection({ line, name, mode, monthName }: { line: readonly LineBar[]
 }
 
 /** "Each count is videos …", and the one pair that clears its band, worded
- *  inside its verdict node, where one does. */
-function CompareSection({ compare, title }: { compare: Compare; title: string }) {
+ *  inside its verdict node, where one does. Where none of the products in
+ *  the columns was named (or what their videos are about was not read), the
+ *  table keeps its shape with their cells empty and says why once; where the
+ *  category's own subjects were not read, the section keeps its place with
+ *  that line. */
+function CompareSection({ compare, title, products, monthName }: { compare: Compare | null; title: string; products: string; monthName: string }) {
+  if (!compare) {
+    return (
+      <PanelSection label={title}>
+        <EmptyLine>What these videos are about has not been read for {monthName} yet.</EmptyLine>
+      </PanelSection>
+    )
+  }
   const cleared = compare.verdicts.filter((v) => v.state === 'moved')
   return (
     <PanelSection label={title}>
@@ -93,9 +104,13 @@ function CompareSection({ compare, title }: { compare: Compare; title: string })
       />
       <p className="m-0 text-[12.5px] leading-[1.5] text-muted-foreground">
         Each count is videos, out of that column’s total.{' '}
-        {cleared.length > 0
-          ? cleared.map((v) => <span key={v.objectLabel} className="mr-2 inline-block">{v.objectLabel} <VerdictBadge verdict={v} /></span>)
-          : 'Too few videos on any one product to call a difference from the category yet.'}
+        {compare.empty === 'none_named'
+          ? <>No video named {products} in {monthName}, so there is nothing yet to set against the category.</>
+          : compare.empty === 'not_read'
+            ? <>What the videos naming {products} are about has not been read yet.</>
+            : cleared.length > 0
+              ? cleared.map((v) => <span key={v.objectLabel} className="mr-2 inline-block">{v.objectLabel} <VerdictBadge verdict={v} /></span>)
+              : 'Too few videos on any one product to call a difference from the category yet.'}
       </p>
     </PanelSection>
   )
@@ -123,10 +138,18 @@ function UnclearRow({ line, options, category }: { line: UnclearLine; options: C
   )
 }
 
-function UnclearSection({ panel, canTag }: { panel: CategoryPanel; canTag: boolean }) {
+function UnclearSection({ panel, canTag, monthName }: { panel: CategoryPanel; canTag: boolean; monthName: string }) {
   const u = panel.unclear
   const category = panel.name.toLowerCase()
-  if (u.videos === 0) return null
+  // NONE IS AN ANSWER (the parity pass): the list keeps its place and says so.
+  if (u.videos === 0) {
+    return (
+      <section id={UNCLEAR_ID} aria-label="About one of yours, but we couldn’t tell which" className="flex scroll-mt-6 flex-col gap-1">
+        <p className={cn(CAPS, 'mb-1.5')}>About one of your products, but we couldn’t tell which · <Fig>0</Fig> videos</p>
+        <div className="border-t border-track pt-3"><EmptyLine>No video about {category} in {monthName} was about one of yours without saying which.</EmptyLine></div>
+      </section>
+    )
+  }
   return (
     <section id={UNCLEAR_ID} aria-label="About one of yours, but we couldn’t tell which" className="flex scroll-mt-6 flex-col gap-1">
       <p className={cn(CAPS, 'mb-1.5')}>About one of your products, but we couldn’t tell which · <Fig>{fmtInt(u.videos)}</Fig> {u.videos === 1 ? 'video' : 'videos'}</p>
@@ -144,13 +167,10 @@ function UnclearSection({ panel, canTag }: { panel: CategoryPanel; canTag: boole
   )
 }
 
+/** The board's foot: the Ask button and a link beside it, on one row
+ *  (wrapping under it on a phone). */
 function Foot({ askHref, ask, settingsHref, settings }: { askHref: string; ask: string; settingsHref: string; settings: string }) {
-  return (
-    <div className="flex flex-col gap-3">
-      <AskButton href={askHref}>{ask}</AskButton>
-      <Link href={settingsHref} className={OLINK}>{settings} →</Link>
-    </div>
-  )
+  return <AskButton href={askHref} after={<Link href={settingsHref} className={OLINK}>{settings} →</Link>}>{ask}</AskButton>
 }
 
 export function CategoryPanelView({ panel, monthName, canTag, notchAt }: { panel: CategoryPanel; monthName: string; canTag: boolean; notchAt?: number | PerBreakpoint }) {
@@ -191,9 +211,9 @@ export function CategoryPanelView({ panel, monthName, canTag, notchAt }: { panel
         <LineSection line={panel.line} name={panel.name} mode="share" monthName={monthName} />
       </div>
 
-      {panel.compare ? <CompareSection compare={panel.compare} title={`Your products against ${word} in general`} /> : null}
+      <CompareSection compare={panel.compare} title={`Your products against ${word} in general`} products={`one of your ${word}`} monthName={monthName} />
 
-      <UnclearSection panel={panel} canTag={canTag} />
+      <UnclearSection panel={panel} canTag={canTag} monthName={monthName} />
 
       <Foot askHref={panel.askHref} ask={`Ask the Agent about ${word}`} settingsHref={panel.settingsHref} settings={`Edit ${panel.name} in Settings`} />
     </InPlacePanel>
@@ -210,8 +230,25 @@ function QuoteCard({ quote }: { quote: ProductsQuote }) {
   )
 }
 
-export function ProductPanelView({ panel, monthName, notchAt }: { panel: ProductPanel; monthName: string; notchAt?: number | PerBreakpoint }) {
+/** A product's stats, the board's four where the month holds them: its
+ *  videos of the market's and of its category's, the comments naming it,
+ *  what most of its videos are about; where one of the last two has nothing
+ *  to say, its category's talk in general takes the place. */
+function productStats(panel: ProductPanel, quiet: boolean) {
   const top = panel.crosses?.subjects[0]
+  const word = panel.groupName.toLowerCase()
+  const cells: React.ReactNode[] = []
+  if (panel.market) cells.push(<StatCell key="market" value={panel.videos ?? 0} of={panel.market} label="videos in your market name it" />)
+  if (panel.categoryVideos) cells.push(<StatCell key="category" value={panel.videos ?? 0} of={panel.categoryVideos} label={<>videos about {word} name it</>} />)
+  if (panel.comments != null && (panel.comments > 0 || quiet)) cells.push(<StatCell key="comments" value={panel.comments} label={panel.comments === 1 ? 'comment names it' : 'comments name it'} />)
+  if (top && panel.crosses && !quiet) cells.push(<StatCell key="top" value={top.k} of={panel.crosses.n} label={<>are about {top.label}</>} />)
+  if (cells.length < 4 && panel.categoryUnbranded != null && panel.categoryVideos) {
+    cells.push(<StatCell key="general" value={panel.categoryUnbranded} of={panel.categoryVideos} label={<>are about {word} in general, none of yours named</>} />)
+  }
+  return cells
+}
+
+export function ProductPanelView({ panel, monthName, notchAt }: { panel: ProductPanel; monthName: string; notchAt?: number | PerBreakpoint }) {
   // NOT READ IS NOT QUIET: a product with no row in a read month was not in
   // the list when the month was last read (null); quiet is a read zero.
   const unread = panel.videos == null
@@ -242,14 +279,9 @@ export function ProductPanelView({ panel, monthName, notchAt }: { panel: Product
         </>
       }
     >
-      {!quiet && !unread ? (
-        <StatRow>
-          {panel.market ? <StatCell value={panel.videos ?? 0} of={panel.market} label="videos in your market name it" /> : null}
-          {panel.categoryVideos ? <StatCell value={panel.videos ?? 0} of={panel.categoryVideos} label={<>videos about {panel.groupName.toLowerCase()} name it</>} /> : null}
-          {panel.comments ? <StatCell value={panel.comments} label={panel.comments === 1 ? 'comment names it' : 'comments name it'} /> : null}
-          {top && panel.crosses ? <StatCell value={top.k} of={panel.crosses.n} label={<>are about {top.label}</>} /> : null}
-        </StatRow>
-      ) : null}
+      {/* A QUIET MONTH IS A READ ZERO (the parity pass): the stats keep their
+          row, each a count the month holds. Not read is not a zero: no row. */}
+      {!unread ? <StatRow>{productStats(panel, quiet)}</StatRow> : null}
 
       <div className="grid grid-cols-1 gap-7 min-[1180px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)] min-[1180px]:gap-9">
         <CrossSection label="What it’s about" crosses={panel.crosses} pick="subjects" empty={unread ? 'Not read yet.' : quiet ? 'Nothing to read in a quiet month.' : 'No subject read for these videos yet.'} />
@@ -257,7 +289,7 @@ export function ProductPanelView({ panel, monthName, notchAt }: { panel: Product
         <LineSection line={panel.line} name={panel.name} mode="product" monthName={monthName} />
       </div>
 
-      {panel.compare ? <CompareSection compare={panel.compare} title={`${panel.name} against ${panel.groupName.toLowerCase()} in general`} /> : null}
+      <CompareSection compare={panel.compare} title={`${panel.name} against ${panel.groupName.toLowerCase()} in general`} products={panel.name} monthName={monthName} />
 
       {panel.quotes.length > 0 ? (
         <PanelSection label={<>In their words · <Fig>{fmtInt(panel.quotes.length)}</Fig> {panel.quotes.length === 1 ? 'comment' : 'comments'} naming it in {monthName}</>}>
@@ -265,7 +297,11 @@ export function ProductPanelView({ panel, monthName, notchAt }: { panel: Product
             {panel.quotes.map((q) => <QuoteCard key={q.key} quote={q} />)}
           </div>
         </PanelSection>
-      ) : null}
+      ) : (
+        <PanelSection label="In their words">
+          <EmptyLine>{quiet || unread || !panel.comments ? `No comment named it in ${monthName}.` : 'None of the comments naming it can be quoted here.'}</EmptyLine>
+        </PanelSection>
+      )}
 
       <Foot askHref={panel.askHref} ask={`Ask the Agent about ${panel.name}`} settingsHref={panel.settingsHref} settings={`Edit the names of ${panel.name} in Settings`} />
     </InPlacePanel>

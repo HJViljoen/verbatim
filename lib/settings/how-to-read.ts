@@ -157,6 +157,8 @@ export const READING_CARDS: readonly ReadingCard[] = [
       'A product is placed where a video or a comment names it, by its name or another name in your catalogue. A comment about one of your products that does not say which is counted as such, never guessed, and an owner or an admin can tag it.',
       'What people did is found anywhere in the comments of the videos naming a product: praise in the comments may be about something else in the video.',
       'A standout needs 3 or more videos. A product is set against its category only where the difference clears the band, and with a product’s tens of videos it rarely does. A category’s share is set against last month the same way, and two months read on different product lists are not compared.',
+      // The four places (the parity pass, 13 Oct night: `standoutSlots`).
+      'The four cards at the top are always there. Where nothing reaches a standout, a card shows the nearest the month has and says what it is: a product named for the first time in one or two videos, or praise or one subject in under half of its videos. Where the month has nothing for a card, it says so.',
       'A product with no reading in a month reads “not read yet”, never quiet.',
       'Until your catalogue is loaded and its reading is switched on, the page says which is missing rather than printing a count.',
     ],

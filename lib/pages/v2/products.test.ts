@@ -9,13 +9,13 @@ import { fakeDb } from '../../test/fake-db'
 import { talkKindLabel } from '../overview-market/kinds'
 import {
   ACCEPT_PAIRS, linersUnclearTexts, OSSUR_CATALOGUE, OSSUR_STANDING, ossurCrosses, ossurLinersFixture, ossurProductRows, ossurProductsFixture,
-  ossurSealInXFixture, PRODUCT_IDS, PRODUCTS_FIXTURES, SEP_MARKET, sealInXTexts,
+  ossurSealInXFixture, ossurTodayFixture, ossurTodayLinersFixture, ossurTodayQuietFixture, ossurTodayRows, PRODUCT_IDS, PRODUCTS_FIXTURES, SEP_MARKET, sealInXTexts,
 } from './products-fixture'
 import {
-  buildProductsData, catalogueBreak, categoryShareVerdict, crossesOf, firstMonthOf, monthLine, poolLens, loadMonthPlacements, marketProductMonth, marketVideosOf, monthsBack, notchFor,
+  buildCompare, buildProductsData, catalogueBreak, categoryShareVerdict, crossesOf, firstMonthOf, monthLine, monthOptions, monthsToRead, poolLens, loadMonthPlacements, marketProductMonth, marketVideosOf, monthsBack, notchFor,
   openOf, parseProductsParams, pickStandouts, placementsInPlay, productKindLabel, productMonthSets, productQuotes, productsHref, PRODUCT_KIND_LABELS, setKey, sharePct, shelfColumns,
-  topProducts, topProductsOf, unclearLines, PRODUCTS_HREF, TOP_LABELS,
-  type ProductMonthRow, type ProductsInput, type TextRead,
+  SLOT_ORDER, STANDOUT_MIN, topProducts, topProductsOf, unclearLines, PRODUCTS_HREF, TOP_LABELS,
+  type CategoryPanel, type ProductMonthRow, type ProductPanel, type ProductsInput, type TextRead,
 } from './products'
 
 // Your products (depth v2, T5): the page's pure half over Össur's real
@@ -481,5 +481,106 @@ describe('the fresh check\'s fixes (13 Oct)', () => {
     const fit = p.compare.rows.find((r) => r.label === 'Fit & comfort')!
     expect(fit.cells.map((c) => c?.highlight ?? false)).toEqual([false, true, true, true])
     expect(p.compare.rows.find((r) => r.label === 'Cost & access')!.cells.some((c) => c?.highlight)).toBe(false)
+  })
+})
+
+// THE PARITY PASS (13 Oct night; Heinrich: "the page shouldn't look too
+// different if everything isn't as populated as the design"): the board's
+// shape in production's real state (Össur after the June to October
+// back-read, `ossur-today`, and a thinner one, `ossur-thin`).
+describe('the parity pass: the board\'s shape in the real, thin state', () => {
+  const places = (d: ReturnType<typeof ossurTodayFixture>) => d.slots.map((s) => `${s.slot}:${s.tier}:${s.card?.name ?? s.newest?.name ?? '-'}`)
+
+  it('Össur today: the real counts, no first month that reaches a standout, every product on the shelf', () => {
+    const d = ossurTodayFixture()
+    expect(d.state).toBe('ready')
+    expect(d.market).toBe(539)
+    expect(d.header).toEqual({ cameUp: 7, products: 65, videos: 195 })
+    expect(d.shelf.map((c) => `${c.name} ${c.videos}`)).toEqual(['Liners 23', 'Feet 29', 'Knees 22', 'Sockets & Locks 49', 'Hands 60', 'Bracing & Supports 12'])
+    expect(d.shelf.flatMap((c) => c.products)).toHaveLength(65)
+    expect(d.shelf.flatMap((c) => c.products).filter((p) => (p.videos ?? 0) > 0).map((p) => `${p.name} ${p.videos}`))
+      .toEqual(['Pro-Flex XC 2', 'Proprio Foot 1', 'Pro-Flex Terra 1', 'Power Knee 1', 'Total Knee 2000 1', 'Direct Socket 2', 'Rebound Post-Op Knee 1'])
+    // The strict picks the Dashboard and the email read: no first month.
+    expect(d.standouts.map((s) => s.kind)).toEqual(['general', 'praised', 'focus'])
+  })
+
+  it('always fills the board\'s four places, in its order: a pick, else the nearest honest card, else an empty frame', () => {
+    const today = ossurTodayFixture()
+    expect(today.slots.map((s) => s.slot)).toEqual([...SLOT_ORDER])
+    expect(places(today)).toEqual(['first:next:Proprio Foot', 'category:pick:Hands', 'praised:pick:Feet', 'focus:pick:Liners'])
+    // The first place under the floor: one video, and the others named for
+    // the first time beside it; never the Dashboard's standout.
+    const first = today.slots[0].card!
+    expect(first).toMatchObject({ kind: 'first', videos: 1 })
+    expect(first.kind === 'first' && first.videos).toBeLessThan(STANDOUT_MIN)
+    expect(first.kind === 'first' && first.others!.map((o) => o.name)).toEqual(['Pro-Flex Terra', 'Total Knee 2000', 'Rebound Post-Op Knee'])
+    expect(topProductsOf(today, today.standouts.filter((s) => s.kind === 'first') as never).standout).toMatchObject({ label: TOP_LABELS.most, name: 'Pro-Flex XC', k: 2 })
+
+    const thin = PRODUCTS_FIXTURES['ossur-thin']()
+    expect(places(thin)).toEqual(['first:none:Proprio Foot', 'category:pick:Hands', 'praised:next:Feet', 'focus:next:Bracing & Supports'])
+    // Nothing new: the months read for the strip, and the newest on the shelf.
+    expect(thin.slots[0]).toMatchObject({ tier: 'none', card: null, months: ['2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01'], newest: { name: 'Proprio Foot', month: '2026-08-01' } })
+    // Under half, and an object already shown is passed over where another
+    // has the figure (Hands' praise is the highest, and Hands is the
+    // category card).
+    expect(thin.slots[2].card).toMatchObject({ kind: 'praised', praised: { k: 12, n: 29 } })
+    expect(thin.slots[3].card).toMatchObject({ kind: 'focus', subject: 'Fit & comfort', level: { k: 5, n: 12 } })
+  })
+
+  it('an empty place says why: nothing to show, or not read (the crosses were not read at all)', () => {
+    const d = ossurTodayFixture({ over: { crosses: new Map() } })
+    expect(places(d)).toEqual(['first:next:Proprio Foot', 'category:pick:Hands', 'praised:none:-', 'focus:none:-'])
+    expect(d.slots.slice(2).map((s) => s.reason)).toEqual(['unread', 'unread'])
+  })
+
+  it('the bar\'s switch: the latest three months read, the page\'s marked, "so far" on the calendar month; an older month keeps its place', () => {
+    const d = ossurTodayFixture()
+    expect(d.months.map((m) => `${m.label}${m.current ? '*' : ''} ${m.href}`)).toEqual([
+      'August /dashboard/products?month=2026-08', 'September* /dashboard/products?month=2026-09', 'October so far /dashboard/products?month=2026-10',
+    ])
+    const read = ['2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01', '2026-10-01'].map((month) => ({ month } as ProductMonthRow))
+    expect(monthOptions(read, '2026-06-01', {}, '2026-10-13T08:00:00Z').map((m) => `${m.label}${m.current ? '*' : ''}`)).toEqual(['June*', 'September', 'October so far'])
+    expect(monthOptions([], '2026-09-01', {}, null)).toEqual([])
+    // The loader reads past the page's month up to the calendar month, for
+    // the switch alone.
+    expect(monthsToRead('2026-09-01', '2026-10-13T08:00:00Z').slice(-3)).toEqual(['2026-08-01', '2026-09-01', '2026-10-01'])
+    expect(monthsToRead('2026-09-01', '2026-09-20T08:00:00Z').at(-1)).toBe('2026-09-01')
+  })
+
+  it('reading past the page\'s month moves no figure of it', () => {
+    const all = ossurTodayFixture()
+    const upTo = ossurTodayFixture({ over: { rows: ossurTodayRows().filter((r) => r.month <= SEP) } })
+    expect(upTo.header).toEqual(all.header)
+    expect(upTo.shelf).toEqual(all.shelf)
+    expect(upTo.slots).toEqual(all.slots)
+    expect(upTo.months.map((m) => m.label)).toEqual(['July', 'August', 'September'])
+  })
+
+  it('a category with no product named keeps its comparison: the category\'s column counted, the products\' empty', () => {
+    const liners = ossurTodayLinersFixture().panel as CategoryPanel
+    expect(liners.compare).toMatchObject({ empty: 'none_named', verdicts: [] })
+    expect(liners.compare!.columns.map((c) => c.label)).toEqual(['All liners', 'Iceross Seal-In X', 'Iceross Dermo', 'Iceross Seal-In V'])
+    expect(liners.compare!.rows[0].cells).toEqual([{ k: 12, n: 23 }, null, null, null])
+    // A quiet product's own panel: its one column, empty.
+    const quiet = ossurTodayQuietFixture().panel as ProductPanel
+    expect(quiet.compare).toMatchObject({ empty: 'none_named' })
+    expect(quiet.compare!.columns.map((c) => c.label)).toEqual(['All liners', 'Iceross Seal-In X'])
+    expect(quiet).toMatchObject({ videos: 0, market: 539, categoryVideos: 23, categoryUnbranded: 20 })
+    // Named, but what their videos are about not read: said as such.
+    const g = { id: 'g', name: 'Feet' }
+    const crosses = new Map([[setKey('group', 'g'), { n: 5, subjects: [{ id: 's', label: 'Fit', k: 2 }], kinds: [] }]])
+    expect(buildCompare({ month: SEP, group: g, products: [{ id: 'p', name: 'P', videos: 2 }], crosses })).toMatchObject({ empty: 'not_read' })
+    expect(buildCompare({ month: SEP, group: g, products: [{ id: 'p', name: 'P', videos: 2 }], crosses: new Map() })).toBeNull()
+  })
+
+  it('a state with the catalogue and no reading still carries the catalogue for the shelf, every count null', () => {
+    for (const key of ['not-on', 'unread'] as const) {
+      const d = PRODUCTS_FIXTURES[key]()
+      expect(d.shelf, key).toHaveLength(6)
+      expect(d.shelf.flatMap((c) => c.products), key).toHaveLength(65)
+      expect(d.shelf.every((c) => c.videos === null && c.products.every((p) => p.videos === null)), key).toBe(true)
+      expect(d.slots, key).toEqual([])
+    }
+    expect(PRODUCTS_FIXTURES.sealand().shelf).toEqual([])
   })
 })

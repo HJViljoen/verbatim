@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { bandVerdict } from '@/lib/reading/verdicts'
-import { ossurLinersFixture, ossurNaviiFixture, ossurProductsFixture, ossurSealInXFixture, PRODUCT_IDS, PRODUCTS_FIXTURES } from '@/lib/pages/v2/products-fixture'
+import { ossurLinersFixture, ossurNaviiFixture, ossurProductsFixture, ossurSealInXFixture, ossurTodayFixture, PRODUCT_IDS, PRODUCTS_FIXTURES } from '@/lib/pages/v2/products-fixture'
 import type { CategoryPanel, GapStandout, ProductPanel } from '@/lib/pages/v2/products'
 import { PRODUCT_TAG_COPY } from '@/lib/products/tags'
-import { CatalogueCard, shelfColumn } from './shelf'
-import { shareWords, StandoutCard, Standouts } from './standouts'
+import { CatalogueCard, CatalogueFrame, shelfColumn } from './shelf'
+import { emptyTitle, shareWords, StandoutCard, StandoutFrames, Standouts, SQUARES_MAX } from './standouts'
 import { CategoryPanelView, ProductPanelView } from './panels'
 
 // Every block of Your products, rendered statically against the copy
@@ -16,7 +16,7 @@ const d = ossurProductsFixture()
 
 describe('the standouts (E4-Products, the four cards)', () => {
   it('each card says only what code counted: no model prose, no quote, no weekly word, every number marked', () => {
-    const node = <Standouts standouts={d.standouts} monthName={d.monthName} />
+    const node = <Standouts slots={d.slots} monthName={d.monthName} />
     const text = renderText(node)
     expect(text).toContain('Navii came up for the first time 3 videos in September')
     expect(text).toContain('2 of its 3 videos are about Function & movement.')
@@ -57,8 +57,8 @@ describe('the standouts (E4-Products, the four cards)', () => {
     expect([shareWords(9, 9), shareWords(7, 9), shareWords(5, 9)]).toEqual(['Every', 'Almost every', 'Most'])
   })
 
-  it('draws nothing where nothing stood out', () => {
-    expect(render(<Standouts standouts={[]} monthName="September" />)).toBe('')
+  it('draws nothing where the page has no places (a state that reads no month draws the frames)', () => {
+    expect(render(<Standouts slots={[]} monthName="September" />)).toBe('')
   })
 })
 
@@ -136,9 +136,12 @@ describe('a category\'s panel (E4-Products-Liners)', () => {
     expect(text).not.toContain('See all')
   })
 
-  it('leaves the list out where no video is about one of yours without saying which', () => {
+  it('keeps the list\'s place where no video is about one of yours without saying which, and says so once (the parity pass)', () => {
     const node = <CategoryPanelView panel={{ ...panel, unclear: { ...panel.unclear, videos: 0, lines: [] } }} monthName="September" canTag />
-    expect(render(node)).not.toContain('id="unclear"')
+    expect(render(node)).toContain('id="unclear"')
+    expect(renderText(node)).toContain('About one of your products, but we couldn’t tell which · 0 videos No video about liners in September was about one of yours without saying which.')
+    expect(renderText(node)).not.toContain('Tag the product')
+    assertCopyContract(node)
   })
 })
 
@@ -167,13 +170,15 @@ describe('a product\'s panel', () => {
     }
   })
 
-  it('a first month wears its flag; a quiet product says so and draws no stats', () => {
+  it('a first month wears its flag; a quiet product says so, its stats are read zeros (the parity pass)', () => {
     const navii = ossurNaviiFixture().panel as ProductPanel
     expect(render(<ProductPanelView panel={navii} monthName="September" />)).toContain('data-flag="new"')
-    const quiet = { ...navii, videos: 0, flag: null, crosses: null, quotes: [] }
+    const quiet = { ...navii, videos: 0, comments: 0, flag: null, crosses: null, quotes: [] }
     const node = <ProductPanelView panel={quiet} monthName="September" />
-    expect(renderText(node)).toContain('Nobody in your market named it in September.')
-    expect(render(node)).not.toContain('videos in your market name it')
+    const text = renderText(node)
+    expect(text).toContain('Nobody in your market named it in September.')
+    expect(text).toContain('0 of 839 videos in your market name it 0 of 76 videos about knees name it 0 comments name it 52 of 76 are about knees in general, none of yours named')
+    expect(text).toContain('In their words No comment named it in September.')
     assertCopyContract(node)
   })
 })
@@ -217,5 +222,90 @@ describe('the fresh check\'s fixes, as drawn', () => {
   it('the comparison sets each product\'s own largest subject in weight (the board\'s bold cells)', () => {
     const m = render(<CategoryPanelView panel={ossurLinersFixture().panel as CategoryPanel} monthName="September" canTag />)
     expect(m.match(/font-semibold">\d+ of \d+</g)?.length).toBeGreaterThanOrEqual(3)
+  })
+})
+
+// THE PARITY PASS (13 Oct night): every state keeps the board's shape. The
+// four places are always drawn, with what the month can honestly show.
+describe('the four places, in production\'s thin state', () => {
+  it('Össur today: the first place under the floor, then the three picks; four cards, each with its visual', () => {
+    const d = PRODUCTS_FIXTURES['ossur-today']()
+    const node = <Standouts slots={d.slots} monthName={d.monthName} />
+    const m = render(node)
+    expect(m.match(/<article /g)).toHaveLength(4)
+    expect([...m.matchAll(/data-standout="([a-z]+)" data-tier="([a-z]+)"/g)].map((x) => `${x[1]}:${x[2]}`)).toEqual(['first:next', 'general:pick', 'praised:pick', 'focus:pick'])
+    const text = renderText(node)
+    // Under the floor: the words "New", but no flag chip (one video earns no flag).
+    expect(text).toContain('New Feet Proprio Foot came up for the first time 1 video in September')
+    expect(text).toContain('Also new in September: Pro-Flex Terra, Total Knee 2000 and Rebound Post-Op Knee.')
+    expect(m).not.toContain('data-flag="new"')
+    expect(text).toContain('Hands talk is mostly about hands in general Hands in general 59 of 60 · 98% One of yours 1 of 60 · 2%')
+    expect(text).toContain('Most Feet videos have praise in their comments 16 of its 29 videos')
+    expect(text).toContain('Liners talk is mostly about Fit & comfort 12 of its 23 videos')
+    // Past SQUARES_MAX the marks are one bar the board's row long.
+    expect(m).toContain('data-units="16/29"')
+    expect(m.match(/data-units="16\/29"[^>]*><i /)).toBeTruthy()
+    expect(text.match(/Open →/g)).toHaveLength(4)
+    expect(m).not.toContain('data-copy="quote"')
+    assertCopyContract(node)
+  })
+
+  it('the thin state: nothing new (the strip, hollow, and the newest on the shelf), the praise and the subject under half, worded for it', () => {
+    const d = PRODUCTS_FIXTURES['ossur-thin']()
+    const node = <Standouts slots={d.slots} monthName={d.monthName} />
+    const text = renderText(node)
+    expect(text).toContain('New Nothing came up for the first time in September Jun Jul Sep Newest on your shelf: Proprio Foot, first named in August. Open →')
+    expect(render(node)).toContain('aria-label="No product came up for the first time in September."')
+    expect(text).toContain('Feet videos with praise in their comments 12 of its 29 videos')
+    expect(text).not.toMatch(/Most Feet videos/)
+    expect(text).toContain('Bracing & Supports talk is most often about Fit & comfort 5 of its 12 videos')
+    expect(render(node).match(/<article /g)).toHaveLength(4)
+    assertCopyContract(node)
+  })
+
+  it('an empty place keeps its eyebrow, its visual (empty) and one line; it opens nothing', () => {
+    const d = ossurTodayFixture({ over: { crosses: new Map() } })
+    const node = <Standouts slots={d.slots} monthName={d.monthName} />
+    const text = renderText(node)
+    expect(text).toContain('Praise in the comments Not read for September yet')
+    expect(text).toContain('Worth a look Not read for September yet')
+    expect(text.match(/Open →/g)).toHaveLength(2)
+    expect(emptyTitle({ slot: 'praised', reason: 'quiet' }, 'September')).toBe('No praise in the comments to show for September')
+    expect(emptyTitle({ slot: 'category' }, 'September')).toBe('No category came up in September')
+    assertCopyContract(node)
+  })
+
+  it('the frames for a page that reads no month: the four eyebrows, what each will show, no number and no link', () => {
+    const node = <StandoutFrames />
+    const text = renderText(node)
+    expect(text).toBe('New A product’s first month Category, not you A category against your products in it In general One of yours Praise in the comments Praise in the comments on a product Worth a look What one product’s talk is about')
+    expect(render(node)).not.toContain('href=')
+    expect(render(node)).not.toContain('data-copy="figure"')
+    assertCopyContract(node)
+  })
+
+  it('squares up to two of the board\'s rows', () => {
+    expect(SQUARES_MAX).toBe(18)
+  })
+})
+
+describe('the catalogue card where no month is read', () => {
+  it('no catalogue: the board\'s card, its one line and the way on, over the shelf\'s empty shape', () => {
+    const node = <CatalogueFrame data={PRODUCTS_FIXTURES.sealand()} link="Add your products in Settings" />
+    const text = renderText(node)
+    expect(text).toContain('Your catalogue Add the products you sell')
+    expect(text).toContain('Add your products in Settings →')
+    expect(render(node)).toContain('data-empty-shelf=""')
+    expect(render(node)).not.toContain('data-column=')
+    assertCopyContract(node)
+  })
+
+  it('a catalogue not read: every category a column, "Not read yet" once a column, every tile its name alone', () => {
+    const node = <CatalogueFrame data={PRODUCTS_FIXTURES['not-on']()} link="Review your products in Settings" />
+    const m = render(node)
+    expect(m.match(/data-column=/g)).toHaveLength(6)
+    expect(renderText(node).match(/Not read yet/g)).toHaveLength(6)
+    expect(renderText(node)).not.toContain('not read yet')
+    assertCopyContract(node)
   })
 })

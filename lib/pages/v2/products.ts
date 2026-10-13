@@ -41,8 +41,10 @@ import { selectAll } from '../../supabase-admin'
 // THE PAGE, TOP TO BOTTOM:
 //   1. the bar: the month, how many of the catalogue's products came up and
 //      the videos about them or their categories;
-//   2. up to four STANDOUTS, each picked by code from the month's counts and
-//      crosses, each opening its product's or category's panel. No model
+//   2. the board's four STANDOUT places, always drawn (`standoutSlots`): each
+//      a card picked by code from the month's counts and crosses, else the
+//      month's nearest honest card worded for what it is, else the place's
+//      empty frame; each opening its product's or category's panel. No model
 //      prose, no quote and no weekly direction word at level 1 (Heinrich's v2
 //      rules; decision 1); every comparison a card makes is a `Verdict`;
 //   3. THE SHELF: every category a column, every product a tile shaded by its
@@ -72,7 +74,9 @@ import { selectAll } from '../../supabase-admin'
 // (`not_applied`, production today), the client has no catalogue
 // (`no_catalogue`, Sealand), the products step is not switched on for the
 // tenant (`not_on`, PRODUCT_READINGS_ENABLED, every tenant today), and the
-// month has not been read (`unread`). Each says so and links to Settings.
+// month has not been read (`unread`). Each says so and links to Settings, in
+// the board's frame (the parity pass, 13 Oct night): the four places empty,
+// and the catalogue card over the catalogue itself where there is one.
 //
 // PURE HALF FIRST (every builder is tested over fixtures), THEN THE READS.
 
@@ -191,6 +195,9 @@ export interface FirstStandout extends StandoutBase {
   flag: Verdict
   /** What most of its videos are about, where read. */
   lead: { label: string; k: number; n: number } | null
+  /** The first card's place only (`standoutSlots`, tier `next`): the other
+   *  products whose first month with videos this also is, at most three. */
+  others?: { name: string; href: string }[]
 }
 
 /** A subject a category's talk carries far more, or less, than one of the
@@ -274,6 +281,10 @@ export interface Compare {
   /** The products' columns against the category's: each pair banded. Only a
    *  pair that clears its band is ever worded. */
   verdicts: Verdict[]
+  /** The products' cells are empty, and the table says why once: none of
+   *  them was named this month (nothing to count), or they were named but
+   *  what their videos are about was not read. */
+  empty?: 'none_named' | 'not_read'
 }
 
 interface PanelBase {
@@ -322,6 +333,9 @@ export interface ProductPanel extends PanelBase {
   market: number | null
   /** Its category's videos this month. */
   categoryVideos: number | null
+  /** Its category's videos this month that name none of the client's
+   *  products (`k_unbranded`): the stats' last cell where it has no subject. */
+  categoryUnbranded: number | null
   comments: number | null
   quotes: ProductsQuote[]
 }
@@ -350,13 +364,34 @@ export interface ProductsData {
   /** Products with a video this month, and the videos about any of the
    *  catalogue (distinct). `videos` is null where it was not read. */
   header: { cameUp: number; products: number; videos: number | null } | null
+  /** The strict picks (`pickStandouts`): what the Dashboard and the email
+   *  read. */
   standouts: Standout[]
+  /** The board's four places, always four when ready (`standoutSlots`);
+   *  empty in a state that reads no month (the page draws their frames). */
+  slots: StandoutSlot[]
+  /** The bar's month switch (the board's period switch, in the months the
+   *  page reads by): the latest months read, oldest first. Empty where no
+   *  month was read. */
+  months: MonthOption[]
+  /** Every category a column. Ready: the month's counts. Not switched on, or
+   *  the month not read: the catalogue with every count null ("not read
+   *  yet"). No catalogue: empty. */
   shelf: ShelfCategoryView[]
   /** Whether this reader may tag (owner or admin, and the operator). */
   canTag: boolean
   params: ProductsParams
   open: { kind: OpenKind; id: string } | null
   panel: ProductsPanel | null
+}
+
+/** One month in the bar's switch. */
+export interface MonthOption {
+  month: string
+  /** "September", "October so far". */
+  label: string
+  href: string
+  current: boolean
 }
 
 // ---- small helpers -----------------------------------------------------------------
@@ -383,6 +418,42 @@ export function monthsBack(month: string, count: number): string[] {
     out.unshift(m)
     m = prevMonth(m)
   }
+  return out
+}
+
+/** How many months the bar's switch offers. */
+export const SWITCH_MONTHS = 3
+
+/**
+ * THE BAR'S SWITCH (the boards' period switch, in the months this page reads
+ * by: products are read per month only, so "This week" and "Over time" would
+ * be views with nothing behind them): the latest SWITCH_MONTHS months that
+ * hold a reading, oldest first, the page's own month marked. Where the page
+ * reads an older month, it takes the oldest place so it is always marked.
+ * "so far" on the calendar month of `now`. PURE.
+ */
+export function monthOptions(rows: readonly ProductMonthRow[], month: string, params: ProductsParams, now: string | null): MonthOption[] {
+  const m = monthStartOf(month)
+  const read = [...new Set(rows.map((r) => monthStartOf(r.month)))].sort()
+  const latest = read.slice(-SWITCH_MONTHS)
+  const shown = latest.includes(m) || !read.includes(m) ? latest : [m, ...latest.slice(1)]
+  const calendar = now ? monthStartOf(now) : null
+  return shown.map((x) => ({
+    month: x,
+    label: monthWordsOf(x, x === calendar),
+    href: productsHref({ month: x.slice(0, 7) }),
+    current: x === m,
+  }))
+}
+
+/** The months the page reads: HISTORY_MONTHS back to its own month (a first
+ *  month, the month line), and every month after it up to the calendar
+ *  month of `now` (the switch's newer months; nothing else reads past the
+ *  page's month). */
+export function monthsToRead(month: string, now: string): string[] {
+  const out = monthsBack(month, HISTORY_MONTHS)
+  const end = monthStartOf(now)
+  for (let x = nextMonth(month); x <= end && out.length < HISTORY_MONTHS * 2; x = nextMonth(x)) out.push(x)
   return out
 }
 
@@ -638,11 +709,15 @@ export function firstMonthOf(input: {
   product: { id: string; name: string }
   month: string
   rows: readonly ProductMonthRow[]
+  /** The fewest videos it takes. STANDOUT_MIN for a standout (one video is
+   *  not a standout); 1 for the first card's place when nothing reached that
+   *  (`standoutSlots`, which says how many). */
+  min?: number
 }): { verdict: Verdict; videos: number; n: number; months: { month: string; k: number }[] } | null {
   const m = monthStartOf(input.month)
   const curr = marketProductMonth(input.rows, m, input.product.id)
   // A first month needs STANDOUT_MIN videos: one video is not a standout.
-  if (!curr || curr.k_named < STANDOUT_MIN) return null
+  if (!curr || curr.k_named < Math.max(1, input.min ?? STANDOUT_MIN)) return null
   const earlier: { month: string; k: number }[] = []
   for (const month of monthsOfRows(input.rows).filter((x) => x < m)) {
     const p = marketProductMonth(input.rows, month, input.product.id)
@@ -842,6 +917,175 @@ export function pickStandouts(input: {
   return out.slice(0, STANDOUTS_MAX)
 }
 
+// ---- the four places (the parity pass, 13 Oct night) --------------------------------
+
+/**
+ * THE BOARD'S FOUR CARDS ARE ALWAYS DRAWN, in its order (Heinrich, 13 Oct
+ * night: "the page shouldn't look too different if everything isn't as
+ * populated as the design"). A place is filled at one of three tiers:
+ *   pick  the code's standout (`pickStandouts`), unchanged: what the Dashboard
+ *         and the email read;
+ *   next  where nothing reached the pick's bar, the nearest honest card,
+ *         worded for what it is: a product's first month in fewer than
+ *         STANDOUT_MIN videos; the category whose talk is most in general,
+ *         under half; the most praise, under half; the commonest subject,
+ *         under half. Never the Dashboard's or the email's standout;
+ *   none  nothing the month can show there: the card keeps its frame and
+ *         its visual, empty, with one line.
+ */
+export type SlotKey = 'first' | 'category' | 'praised' | 'focus'
+export const SLOT_ORDER: readonly SlotKey[] = ['first', 'category', 'praised', 'focus']
+export type SlotTier = 'pick' | 'next' | 'none'
+
+export interface StandoutSlot {
+  slot: SlotKey
+  tier: SlotTier
+  card: Standout | null
+  /** `none`: `unread` where the crosses it reads were not read at all. */
+  reason?: 'quiet' | 'unread'
+  /** The first place's `none`: the months read, oldest first (its strip),
+   *  and the newest product on the shelf (the latest earlier month that was
+   *  a product's first with videos), where there is one. */
+  months?: string[]
+  newest?: { name: string; where: string; month: string; href: string } | null
+}
+
+/** Which place a picked standout fills. */
+export const slotOf = (s: Pick<Standout, 'kind'>): SlotKey => (s.kind === 'gap' || s.kind === 'general' ? 'category' : s.kind)
+
+/** At most this many other first-timers named on the first card. */
+export const FIRST_OTHERS = 3
+
+/**
+ * The four places, from the strict picks and the month's rows and crosses.
+ * An object is used once where another can stand; a `next` card may reuse
+ * one only where nothing else has the figure. PURE.
+ */
+export function standoutSlots(input: {
+  month: string
+  params: Pick<ProductsParams, 'month'>
+  catalogue: Pick<ProductCatalogue, 'groups' | 'products'>
+  shelf: readonly ShelfCategoryView[]
+  rows: readonly ProductMonthRow[]
+  crosses: ReadonlyMap<string, Crosses>
+  splits: ReadonlyMap<string, PooledProductMonth>
+  picked: readonly Standout[]
+}): StandoutSlot[] {
+  const m = monthStartOf(input.month)
+  const hrefOf = (kind: OpenKind, id: string) => productsHref(input.params, { kind, id })
+  const groupName = new Map(input.catalogue.groups.map((g) => [g.id, g.name]))
+  const groupSort = new Map(input.catalogue.groups.map((g) => [g.id, g.sort]))
+  const sortOfProduct = (p: { group_id: string; sort: number }) => (groupSort.get(p.group_id) ?? 0) * 1000 + p.sort
+  const used = new Set(input.picked.map((s) => setKey(s.open.kind, s.open.id)))
+  const picked = new Map<SlotKey, Standout>()
+  for (const s of input.picked) if (!picked.has(slotOf(s))) picked.set(slotOf(s), s)
+  const out: StandoutSlot[] = []
+
+  // 1. A product's first month with videos.
+  const first = picked.get('first')
+  if (first) out.push({ slot: 'first', tier: 'pick', card: first })
+  else {
+    const below = input.catalogue.products
+      .flatMap((p) => {
+        const f = firstMonthOf({ product: p, month: m, rows: input.rows, min: 1 })
+        return f && f.videos < STANDOUT_MIN ? [{ p, f }] : []
+      })
+      .sort((a, b) => b.f.videos - a.f.videos || sortOfProduct(a.p) - sortOfProduct(b.p))
+    const top = below[0]
+    if (top) {
+      const c = input.crosses.get(setKey('product', top.p.id))
+      const lead = c?.subjects[0]
+      out.push({
+        slot: 'first', tier: 'next',
+        card: {
+          kind: 'first', open: { kind: 'product', id: top.p.id }, href: hrefOf('product', top.p.id), name: top.p.name, where: groupName.get(top.p.group_id) ?? '',
+          videos: top.f.videos, months: top.f.months, flag: top.f.verdict,
+          lead: lead && c && c.n > 0 ? { label: lead.label, k: lead.k, n: c.n } : null,
+          others: below.slice(1, 1 + FIRST_OTHERS).map((x) => ({ name: x.p.name, href: hrefOf('product', x.p.id) })),
+        },
+      })
+    } else {
+      // The newest on the shelf: the latest earlier month that was a
+      // product's first with videos (the same rule, any number of videos).
+      let newest: StandoutSlot['newest'] = null
+      for (const e of monthsOfRows(input.rows).filter((x) => x < m).reverse()) {
+        const hits = input.catalogue.products
+          .flatMap((p) => {
+            const f = firstMonthOf({ product: p, month: e, rows: input.rows, min: 1 })
+            return f ? [{ p, f }] : []
+          })
+          .sort((a, b) => b.f.videos - a.f.videos || sortOfProduct(a.p) - sortOfProduct(b.p))
+        if (hits[0]) {
+          newest = { name: hits[0].p.name, where: groupName.get(hits[0].p.group_id) ?? '', month: e, href: hrefOf('product', hits[0].p.id) }
+          break
+        }
+      }
+      out.push({ slot: 'first', tier: 'none', card: null, reason: 'quiet', months: monthsOfRows(input.rows).filter((x) => x <= m).slice(-LINE_MONTHS), newest })
+    }
+  }
+
+  // 2. A category against your products in it.
+  const cat = picked.get('category')
+  if (cat) out.push({ slot: 'category', tier: 'pick', card: cat })
+  else {
+    const g = input.catalogue.groups
+      .map((x) => ({ g: x, s: input.splits.get(x.id) }))
+      .filter((x): x is { g: (typeof input.catalogue.groups)[number]; s: PooledProductMonth } => !!x.s && x.s.k_any > 0)
+      .sort((a, b) => Number(used.has(setKey('group', a.g.id))) - Number(used.has(setKey('group', b.g.id)))
+        || b.s.k_unbranded / b.s.k_any - a.s.k_unbranded / a.s.k_any || b.s.k_any - a.s.k_any || a.g.sort - b.g.sort)[0]
+    if (g) {
+      out.push({
+        slot: 'category', tier: 'next',
+        card: {
+          kind: 'general', open: { kind: 'group', id: g.g.id }, href: hrefOf('group', g.g.id), name: g.g.name, where: g.g.name,
+          inGeneral: { k: g.s.k_unbranded, n: g.s.k_any }, yours: { k: g.s.k_named + g.s.k_unclear, n: g.s.k_any },
+        },
+      })
+      used.add(setKey('group', g.g.id))
+    } else out.push({ slot: 'category', tier: 'none', card: null, reason: 'quiet' })
+  }
+
+  // 3 and 4. Praise, then one subject: products first, then categories, as
+  // the picks; an unused object before a used one.
+  const pool = [
+    ...input.catalogue.products.map((p) => ({ kind: 'product' as const, id: p.id, name: p.name, where: groupName.get(p.group_id) ?? '', sort: sortOfProduct(p), tier: 0 })),
+    ...input.catalogue.groups.map((g) => ({ kind: 'group' as const, id: g.id, name: g.name, where: g.name, sort: g.sort * 1000, tier: 1 })),
+  ]
+  const nearest = <T extends { k: number; n: number }>(read: (c: Crosses) => T | null) => pool
+    .map((o) => {
+      const c = input.crosses.get(setKey(o.kind, o.id))
+      const hit = c && c.n >= STANDOUT_MIN ? read(c) : null
+      return hit && hit.k > 0 ? { o, hit } : null
+    })
+    .filter((x): x is { o: (typeof pool)[number]; hit: T } => x != null)
+    .sort((a, b) => Number(used.has(setKey(a.o.kind, a.o.id))) - Number(used.has(setKey(b.o.kind, b.o.id)))
+      || a.o.tier - b.o.tier || b.hit.k / b.hit.n - a.hit.k / a.hit.n || b.hit.n - a.hit.n || a.o.sort - b.o.sort)[0] ?? null
+  const unread = input.crosses.size === 0
+  const praised = picked.get('praised')
+  if (praised) out.push({ slot: 'praised', tier: 'pick', card: praised })
+  else {
+    const x = nearest((c) => {
+      const k = c.kinds.find((r) => r.id === 'praise')?.k ?? 0
+      return { k, n: c.n }
+    })
+    if (x) {
+      out.push({ slot: 'praised', tier: 'next', card: { kind: 'praised', open: { kind: x.o.kind, id: x.o.id }, href: hrefOf(x.o.kind, x.o.id), name: x.o.name, where: x.o.where, praised: { k: x.hit.k, n: x.hit.n } } })
+      used.add(setKey(x.o.kind, x.o.id))
+    } else out.push({ slot: 'praised', tier: 'none', card: null, reason: unread ? 'unread' : 'quiet' })
+  }
+  const focus = picked.get('focus')
+  if (focus) out.push({ slot: 'focus', tier: 'pick', card: focus })
+  else {
+    const x = nearest((c) => {
+      const top = c.subjects[0]
+      return top ? { k: top.k, n: c.n, label: top.label } : null
+    })
+    if (x) out.push({ slot: 'focus', tier: 'next', card: { kind: 'focus', open: { kind: x.o.kind, id: x.o.id }, href: hrefOf(x.o.kind, x.o.id), name: x.o.name, where: x.o.where, subject: x.hit.label, level: { k: x.hit.k, n: x.hit.n } } })
+    else out.push({ slot: 'focus', tier: 'none', card: null, reason: unread ? 'unread' : 'quiet' })
+  }
+  return out
+}
+
 // ---- the shelf ---------------------------------------------------------------------
 
 /**
@@ -962,9 +1206,22 @@ export function buildCompare(input: {
   const ranked = [...input.products].filter((p) => (p.videos ?? 0) > 0 && (input.crosses.get(setKey('product', p.id))?.n ?? 0) > 0)
     .sort((a, b) => (a.id === input.focus ? -1 : b.id === input.focus ? 1 : 0) || (b.videos ?? 0) - (a.videos ?? 0))
     .slice(0, COMPARE_PRODUCTS)
-  if (ranked.length === 0) return null
+  const categoryColumn: CompareColumn = { key: input.group.id, label: `All ${input.group.name.toLowerCase()}`, tone: 'market' }
+  // NONE NAMED (the parity pass): the table keeps its shape. The category's
+  // column is counted; the products' columns (the open product, else the
+  // category's first in the shelf's order) are drawn with empty cells, since
+  // a product with no video has nothing to count, never "0 of 0".
+  if (ranked.length === 0) {
+    const empty = [...input.products].sort((a, b) => (a.id === input.focus ? -1 : b.id === input.focus ? 1 : 0)).slice(0, input.focus ? 1 : COMPARE_PRODUCTS)
+    return {
+      columns: [categoryColumn, ...empty.map((p) => ({ key: p.id, label: p.name, tone: 'you' as const }))],
+      rows: gc.subjects.slice(0, COMPARE_ROWS).map((s) => ({ key: s.id, label: s.label, cells: [{ k: s.k, n: gc.n }, ...empty.map(() => null)] })),
+      verdicts: [],
+      empty: empty.some((p) => (p.videos ?? 0) > 0) ? 'not_read' : 'none_named',
+    }
+  }
   const columns: CompareColumn[] = [
-    { key: input.group.id, label: `All ${input.group.name.toLowerCase()}`, tone: 'market' },
+    categoryColumn,
     ...ranked.map((p) => ({ key: p.id, label: p.name, tone: 'you' as const })),
   ]
   const verdicts: Verdict[] = []
@@ -1121,7 +1378,7 @@ export function buildProductsData(input: ProductsInput): ProductsData {
     state: 'failed', client: input.client || 'You', month, soFar: input.soFar,
     monthWords: monthWordsOf(month, input.soFar), monthLabel: input.now ? readingMonthLabel(month, input.now) : null, monthName: longMonth(month),
     catalogue: EMPTY_HEADER, settingsHref: productsTabHref(), empty: PRODUCTS_FAILED, market: null, header: null,
-    standouts: [], shelf: [], canTag: input.canTag, params: input.params, open: null, panel: null,
+    standouts: [], slots: [], months: [], shelf: [], canTag: input.canTag, params: input.params, open: null, panel: null,
   }
   const read = input.catalogue
   if (!read) return base
@@ -1129,15 +1386,19 @@ export function buildProductsData(input: ProductsInput): ProductsData {
   if (read.state === 'empty') return { ...base, state: 'no_catalogue', empty: PRODUCTS_NO_CATALOGUE }
   const catalogue = read.catalogue
   const counts = { categories: catalogue.groups.length, products: catalogue.products.length }
-  const withCatalogue = { ...base, catalogue: counts }
+  const groupOfProduct = new Map(catalogue.products.map((p) => [p.id, p.group_id]))
+  // The catalogue on the shelf with no count (every head "Not read yet"): a
+  // state that has the list but no reading of the month still draws it.
+  const unreadShelf = () => buildShelf({ month, catalogue, rows: [], pair: null, firsts: new Map(), crosses: new Map(), params: input.params, open: null, groupOfProduct })
+  const withCatalogue = { ...base, catalogue: counts, shelf: unreadShelf() }
   if (!input.enabled) return { ...withCatalogue, state: 'not_on', empty: PRODUCTS_NOT_ON }
   if (!input.rows) return withCatalogue
   const rows = input.rows
+  const months = monthOptions(rows, month, input.params, input.now ?? null)
   const market = marketVideosOf(rows, month)
-  if (market == null) return { ...withCatalogue, state: 'unread', empty: productsUnread(month) }
+  if (market == null) return { ...withCatalogue, months, state: 'unread', empty: productsUnread(month) }
 
   const filling = input.filling ?? ((m: string) => m === month && input.soFar)
-  const groupOfProduct = new Map(catalogue.products.map((p) => [p.id, p.group_id]))
   const open = openOf(catalogue, input.params)
   const firsts = new Map<string, NonNullable<ReturnType<typeof firstMonthOf>>>()
   for (const p of catalogue.products) {
@@ -1151,6 +1412,7 @@ export function buildProductsData(input: ProductsInput): ProductsData {
     if (s) splits.set(g.id, s)
   }
   const standouts = pickStandouts({ month, params: input.params, catalogue, shelf, firsts, crosses: input.crosses, splits })
+  const slots = standoutSlots({ month, params: input.params, catalogue, shelf, rows, crosses: input.crosses, splits, picked: standouts })
   const cameUp = shelf.reduce((s, c) => s + c.products.filter((p) => (p.videos ?? 0) > 0).length, 0)
   const sets = input.market && input.standing
     ? productMonthSets({ month, market: input.market, standing: input.standing, groups: catalogue.groups.map((g) => g.id), products: catalogue.products.map((p) => p.id) })
@@ -1166,6 +1428,8 @@ export function buildProductsData(input: ProductsInput): ProductsData {
     market,
     header: { cameUp, products: catalogue.products.length, videos: agrees ? sets!.all.size : null },
     standouts,
+    slots,
+    months,
     shelf,
     open,
   }
@@ -1233,6 +1497,7 @@ function buildPanel(a: {
     videos: mine?.k_named ?? null,
     market: mine?.n ?? null,
     categoryVideos: col?.videos ?? null,
+    categoryUnbranded: a.splits.get(p.group_id)?.k_unbranded ?? null,
     comments: mine?.comments ?? null,
     quotes: productQuotes(input.panelReads?.named ?? [], input.clientId),
   }
@@ -1487,7 +1752,7 @@ export async function loadProducts(input: ProductsLoadInput): Promise<ProductsDa
   const cat = catalogue.catalogue
 
   // ---- wave 2
-  const rows = await loadMonthProductReadings(handle.client, clientId, monthsBack(month, HISTORY_MONTHS))
+  const rows = await loadMonthProductReadings(handle.client, clientId, monthsToRead(month, now))
     .then((r) => r as ProductMonthRow[])
     .catch((e: unknown) => { if (isMissingProductsSchema(e)) return [] as ProductMonthRow[]; say('months', e); return null })
   if (!rows || marketVideosOf(rows, month) == null) return buildProductsData({ ...shell, rows })
