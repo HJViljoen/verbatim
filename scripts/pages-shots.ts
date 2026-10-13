@@ -329,7 +329,11 @@ const PAGES: Page[] = [
   { key: 'voices-sealand', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES.sealand() }) },
   { key: 'voices-sealand-brand', path: '/dashboard/voices', artboard: 'E3-Voices-Open.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['sealand-brand']() }) },
   { key: 'voices-sealand-creator', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['sealand-creator']() }) },
-  { key: 'voices-real', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: JSON.parse(readFileSync(process.env.VOICES_JSON ?? '', 'utf8')) as VoicesData }) },
+  // Only where a dump is named: unset, the entry is not listed, so a run of
+  // every page never stops on a missing file.
+  ...(process.env.VOICES_JSON
+    ? [{ key: 'voices-real', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: JSON.parse(readFileSync(process.env.VOICES_JSON as string, 'utf8')) as VoicesData }) }]
+    : []),
 ]
 
 // ---- the shell -----------------------------------------------------------------
