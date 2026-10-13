@@ -104,7 +104,10 @@ function NonAnswer({ word, title, change, bandPts, unit, bandTip = false }: { wo
     <span className={NON_ANSWER} title={title}>
       {word}
       {showable ? (
-        <span className="font-normal"> · {change > 0 ? '+' : change < 0 ? '−' : '±'}{Math.abs(change).toLocaleString('en-US')}{unit ? ` ${unit}` : ''}{bandTip ? '' : ` · ${band(bandPts, unit)}`}</span>
+        // The change is one unit on a line, as `Moved`'s arrow and change are:
+        // in a narrow head ("no clear change · +0.3 pts" under a shelf
+        // column's share) it wraps before the "·", never inside "+0.3 pts".
+        <span className="font-normal"> <span className="whitespace-nowrap">· {change > 0 ? '+' : change < 0 ? '−' : '±'}{Math.abs(change).toLocaleString('en-US')}{unit ? ` ${unit}` : ''}</span>{bandTip ? '' : ` · ${band(bandPts, unit)}`}</span>
       ) : null}
     </span>
   )
