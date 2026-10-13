@@ -192,12 +192,16 @@ export function BrandsCard({ brands, monthWords, style }: { brands: VoicesBrands
           <p className="m-0 py-4 text-[13.5px] leading-[1.5] text-muted-foreground">No brand you track was named without being asked in {monthWords}.</p>
         ) : null}
       </div>
-      {brands.state === 'ready' || brands.state === 'not_counted' ? (
+      {/* The key names the bars' colours, so it is drawn only where a bar is
+          (the fresh check, 13 Oct: never over a table of empty cells). */}
+      {counted || table.notNamed.length > 0 ? (
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 text-[12px] text-muted-foreground">
-          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span><i aria-hidden className="mr-1.5 inline-block h-2 w-2.5 rounded-[2px] bg-comp align-[0.05em]" />videos where people praised</span>
-            <span><i aria-hidden className="mr-1.5 inline-block h-2 w-2.5 rounded-[2px] bg-negative/85 align-[0.05em]" />complained</span>
-          </span>
+          {counted ? (
+            <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span><i aria-hidden className="mr-1.5 inline-block h-2 w-2.5 rounded-[2px] bg-comp align-[0.05em]" />videos where people praised</span>
+              <span><i aria-hidden className="mr-1.5 inline-block h-2 w-2.5 rounded-[2px] bg-negative/85 align-[0.05em]" />complained</span>
+            </span>
+          ) : null}
           {table.notNamed.length > 0 ? <span>Not named without being asked in {monthWords}: <NameLinks names={table.notNamed} /></span> : null}
         </div>
       ) : null}

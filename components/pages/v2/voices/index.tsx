@@ -1,10 +1,9 @@
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
-import { panelItemOrder, panelPlacement, PanelSlot, type PanelLayout } from '@/components/v2'
+import { panelItemOrder, panelPlacement, PanelSlot, PeriodSwitch, type PanelLayout, type Period, type PeriodOption } from '@/components/v2'
 import { fmtInt, longMonth } from '@/lib/format'
 import { surface } from '@/lib/nav'
 import { barMonth, monthHeading } from '@/lib/reading/month-label'
-import { VOICES_ONE_MONTH, type VoicesData } from '@/lib/pages/v2/voices'
-import { cn } from '@/lib/utils'
+import { VOICES_ONE_MONTH, voicesHref, type VoicesData } from '@/lib/pages/v2/voices'
 import { BrandPanelView, BrandsCard } from './brands'
 import { CreatorPanelView, CreatorsCard } from './creators'
 import { GroupGrid, WhoCard } from './groups'
@@ -39,31 +38,21 @@ export function VoicesMeta({ data }: { data: VoicesData }) {
   return <>{parts.map((p, i) => <span key={i}>{i > 0 ? ' · ' : null}{p}</span>)}</>
 }
 
-/** The segments' shape: the kit's `PeriodSwitch` (components/v2). */
-const SEGMENT = 'whitespace-nowrap rounded-[7px] px-[13px] py-[7px] text-[13.5px] leading-[1.2]'
-
 /**
  * The board's period switch, as Voices can honour it: the month it reads,
  * on, named as decision 3 names a column of the month's counts
  * (`monthHeading`: "This month" while it is, "September" once it is not),
- * and the week and over time shown but not offered, since a group has no
- * reading of either yet (decision 2). They are not links, so nothing promises
- * a view that is not there; the reason is their title and their screen-reader
- * words.
+ * and the week and over time shown but not offered (the kit's `disabled`),
+ * since a group has no reading of either yet (decision 2). The reason is
+ * their tooltip and their screen-reader words.
  */
-export function MonthSwitch({ data }: { data: Pick<VoicesData, 'month' | 'monthLabel'> }) {
-  const off = (label: string) => (
-    <span aria-disabled="true" title={VOICES_ONE_MONTH} className={cn(SEGMENT, 'cursor-default text-muted-foreground/70')}>
-      {label}<span className="sr-only"> (not read for Voices yet)</span>
-    </span>
-  )
-  return (
-    <nav aria-label="Period" data-print-hide className="inline-flex max-w-full shrink-0 flex-wrap gap-0.5 rounded-[9px] bg-card p-[3px] shadow-block ring-1 ring-foreground/6">
-      {off('This week')}
-      <span aria-current="page" className={cn(SEGMENT, 'bg-accent font-semibold text-accent-foreground')}>{monthHeading(longMonth(data.month), data.monthLabel)}</span>
-      {off('Over time')}
-    </nav>
-  )
+export function MonthSwitch({ data }: { data: Pick<VoicesData, 'month' | 'monthLabel' | 'params'> }) {
+  const options: PeriodOption<Period>[] = [
+    { value: 'week', label: 'This week', disabled: VOICES_ONE_MONTH },
+    { value: 'month', label: monthHeading(longMonth(data.month), data.monthLabel) },
+    { value: 'time', label: 'Over time', disabled: VOICES_ONE_MONTH },
+  ]
+  return <PeriodSwitch value="month" options={options} hrefFor={() => voicesHref(data.params)} />
 }
 
 /** Brands beside creators: stacked on a phone and up to 1280, then 7 · 5. A

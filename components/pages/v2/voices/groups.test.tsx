@@ -95,24 +95,27 @@ describe('Who is in your market and the group cards (decision 2)', () => {
   })
 })
 
-describe('How the mix changed (the board\'s sixth card; decision 2)', () => {
+describe('the mix card (the board\'s sixth; decision 2)', () => {
   const d = ossurVoicesFixture()
 
-  it('keeps its place: this month\'s column drawn, last month\'s axis empty, and one line saying why', () => {
+  it('keeps its place, named for what it shows: this month\'s column drawn, last month\'s axis empty and dashed', () => {
     const node = <MixCard cards={d.groups.cards} n={d.videos} month={d.month} monthWords={d.monthWords} />
     const text = renderText(node)
-    expect(text).toContain('How the mix changed Each group’s videos of the market’s 487 , August against September')
-    expect(text).toContain('Not compared yet: each update describes the groups afresh, so August has no reading of these groups.')
+    expect(text).toContain('The mix in September August isn’t read for these groups')
+    expect(text).toContain('Each update describes the groups afresh, so these groups have no earlier month to set this one beside.')
+    // No word that claims a comparison (the fresh check, 13 Oct).
+    expect(text).not.toMatch(/How the mix changed|against|changed|%|no clear change|moved/)
     const m = render(node)
     // Both columns are named; only September's carries points, and no line
-    // joins the two (a line needs both ends).
+    // joins the two (a line needs both ends). Last month's axis is dashed.
     expect(m).toContain('>Aug</text>')
     expect(m).toContain('>Sep</text>')
     expect(m.match(/<circle /g)).toHaveLength(d.groups.cards.length)
     expect(m).not.toMatch(/<line [^>]*stroke-cat/)
-    // Long names are shortened on the chart, whole on the cards.
+    expect(m).toContain('[&amp;&gt;line:first-of-type]:[stroke-dasharray:3_4]')
+    // Long names are shortened on the chart, whole for a screen reader.
     expect(m).toContain('New amputees…')
-    expect(text).not.toMatch(/%|no clear change|moved/)
+    expect(m).toMatch(/aria-label="[^"]*New amputees, first year none to 96/)
     assertCopyContract(node)
   })
 
@@ -186,10 +189,21 @@ describe('a group\'s panel (E3-Voices-Open)', () => {
     expect(renderText(<GroupPanelView panel={old} monthWords="September" />)).toContain('Where they comment · of 45')
   })
 
-  it('leaves out what a group does not have', () => {
+  // The fresh check (13 Oct): a column with nothing to list keeps its place
+  // and says so, so the panel's grids never reflow; the full-width rows (how
+  // they talk, their words) are left out.
+  it('keeps every column where a group has nothing to list, and leaves out the full-width rows', () => {
     const bare: GroupPanel = { ...panel, who: [], conversations: [], phrases: [], quotes: [], triggers: '' }
-    const text = renderText(<GroupPanelView panel={bare} monthWords="September" />)
-    expect(text).not.toMatch(/Who they say|conversations they|How they talk|In their words|tips them/)
-    assertCopyContract(<GroupPanelView panel={bare} monthWords="September" />)
+    const node = <GroupPanelView panel={bare} monthWords="September" />
+    const text = renderText(node)
+    expect(text).toContain('What tips them into acting Not described in the latest update.')
+    expect(text).toContain('Who they say they are Nothing they said told us who they are.')
+    expect(text).toContain('The conversations they’re in None of their videos in September is in a named conversation.')
+    expect(text).toContain('Products in their videos')
+    expect(text).not.toMatch(/How they talk|In their words/)
+    // Six column heads in the two grids, as with everything filled.
+    const heads = (m: string) => m.match(/<p class="m-0 text-\[11\.5px\] font-semibold uppercase/g)?.length ?? 0
+    expect(heads(render(node))).toBe(heads(render(<GroupPanelView panel={panel} monthWords="September" />)) - 2)
+    assertCopyContract(node)
   })
 })

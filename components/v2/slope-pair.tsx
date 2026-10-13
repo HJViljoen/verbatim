@@ -24,6 +24,9 @@ export interface SlopeRow {
   /** Stable key (a group's key, a brand's). */
   key: string
   label: string
+  /** The whole name, where `label` is shortened for the chart: what a screen
+   *  reader hears. */
+  fullLabel?: string
   /** The model slot that wrote `label`, where one did (`pass_e_persona`). */
   slot?: ProseSlot
   /** The two readings, in one unit. A null end is not drawn. */
@@ -80,7 +83,7 @@ export function SlopePair({ fromLabel, toLabel, rows, highlight = null, format =
   const rights = spread(rows.map((r) => (r.to == null ? -1 : y(r.to) + 4)), GAP).map(r1)
   // The picked row draws last, on top of the grey ones.
   const order = rows.map((r, i) => i).sort((a, b) => Number(rows[a].key === highlight) - Number(rows[b].key === highlight))
-  const aria = `${label}, ${fromLabel} to ${toLabel}: ${rows.map((r) => `${r.label} ${r.from == null ? 'none' : format(r.from)} to ${r.to == null ? 'none' : format(r.to)}`).join(', ')}.`
+  const aria = `${label}, ${fromLabel} to ${toLabel}: ${rows.map((r) => `${r.fullLabel ?? r.label} ${r.from == null ? 'none' : format(r.from)} to ${r.to == null ? 'none' : format(r.to)}`).join(', ')}.`
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={aria} className={cn('block h-auto w-full overflow-visible', className)}>

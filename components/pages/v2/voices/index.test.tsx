@@ -30,14 +30,17 @@ describe('the Voices page (boards E3-Voices and E3-Voices-Open)', () => {
     // The parity pass (13 Oct): the board's three, the month on and named as
     // decision 3 names a month column; the week and over time shown, not
     // offered (no link), each saying why.
+    // Drawn by the kit's `PeriodSwitch` (its `disabled` option): the month is
+    // the one link; the week and over time are not links.
     const sw = render(<MonthSwitch data={d} />)
-    expect(renderText(<MonthSwitch data={d} />)).toBe('This week (not read for Voices yet) September Over time (not read for Voices yet)')
+    expect(renderText(<MonthSwitch data={d} />)).toBe(`This week (${VOICES_ONE_MONTH}) September Over time (${VOICES_ONE_MONTH})`)
     expect(sw).toContain('aria-current="page"')
-    expect(sw).not.toContain('<a ')
+    expect(sw.match(/<a /g)).toHaveLength(1)
+    expect(sw).toContain('href="/dashboard/voices"')
     expect(sw.match(/aria-disabled="true"/g)).toHaveLength(2)
     expect(sw).toContain(`title="${VOICES_ONE_MONTH}"`)
     // The current month reads "This month", as the board's switch does.
-    expect(renderText(<MonthSwitch data={{ month: '2026-10-01', monthLabel: null }} />)).toContain('This month')
+    expect(renderText(<MonthSwitch data={{ month: '2026-10-01', monthLabel: null, params: {} }} />)).toContain('This month')
   })
 
   // Decision 3: a whole-month reading of a month that is not the current one
@@ -58,8 +61,9 @@ describe('the Voices page (boards E3-Voices and E3-Voices-Open)', () => {
     const text = renderText(<VoicesPage data={VOICES_FIXTURES.sealand()} />)
     const at = (s: string) => text.indexOf(s)
     expect(at('Who’s in your market')).toBeLessThan(at('One-bag travellers Pack light'))
-    expect(at('One-bag travellers Pack light')).toBeLessThan(at('How the mix changed'))
-    expect(at('How the mix changed')).toBeLessThan(at('Brands in your market'))
+    expect(at('One-bag travellers Pack light')).toBeLessThan(at('The mix in September'))
+    expect(at('The mix in September')).toBeLessThan(at('Brands in your market'))
+    expect(text).not.toContain('How the mix changed')
     expect(at('Brands in your market')).toBeLessThan(at('Creators who drive the talk'))
   })
 

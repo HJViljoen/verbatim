@@ -47,8 +47,8 @@ describe('Brands in your market', () => {
     const m = render(node)
     expect(m.match(/data-brand="/g)).toHaveLength(2)
     expect(m.match(/data-empty-track=""/g)).toHaveLength(2 * 3)
-    // The key stays, under the rows.
-    expect(text).toContain('videos where people praised complained')
+    // The key names the bars' colours: no bar, no key.
+    expect(text).not.toContain('videos where people praised')
     // Each tracked brand still opens, and the latest finding is the note.
     expect(m).toContain('href="/dashboard/voices?brand=Ottobock#brand-panel"')
     expect(text).toContain('Ottobock: Ottobock’s talk turns on getting a knee paid for Open Ottobock →')
@@ -65,6 +65,16 @@ describe('Brands in your market', () => {
     expect(text.match(/Össur/g)).toHaveLength(1)
     const m = render(node)
     expect(m.indexOf('data-brand="client"')).toBeLessThan(m.indexOf('data-brand="5ecfa431"'))
+    assertCopyContract(node)
+  })
+
+  it('your row named only when asked prints its 0 and how people treat it, never "not read"', () => {
+    const d = VOICES_FIXTURES['sealand-you-quiet']()
+    const node = <BrandsCard brands={d.brands} monthWords={d.monthWords} />
+    const text = renderText(node)
+    expect(text).toContain('Sealand You 0 of 743 videos')
+    expect(text).toContain('0 · 0 of 1 Durability · 1 of 1')
+    expect(text).not.toContain('not read')
     assertCopyContract(node)
   })
 

@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Fragment, type CSSProperties } from 'react'
+import { Fragment, type CSSProperties, type ReactNode } from 'react'
 import { Users } from 'lucide-react'
 import {
   CARD, CardHead, equalColumns, InPlacePanel, panelItemOrder, panelPlacement, PanelSection, PanelSlot, PanelTitle, SELECTED_CARD_RING, SlopePair, StatCell, StatRow, TickBar,
@@ -8,7 +8,7 @@ import {
 import { fmtInt, longMonth } from '@/lib/format'
 import { prevMonth } from '@/lib/reading/month-key'
 import {
-  GROUP_NOT_COMPARED, mixNotCompared, PANEL_ID, slopeLabel, WHO_SHOWN, type GroupPanel, type GroupProducts, type VoicesData, type VoicesGroupCard, type VoicesGroups,
+  GROUP_NO_WHO, GROUP_NOT_COMPARED, GROUP_NOT_DESCRIBED, groupNoConversations, MIX_WHY, mixNotRead, mixTitle, PANEL_ID, slopeLabel, WHO_SHOWN, type GroupPanel, type GroupProducts, type VoicesData, type VoicesGroupCard, type VoicesGroups,
 } from '@/lib/pages/v2/voices'
 import { cn } from '@/lib/utils'
 import { AskButton, CAPS, EmptyLine, Fig, LevelText, MiniRow, OLINK, PanelTag, Phrase, PlatformStrip, QuoteCard } from './parts'
@@ -45,14 +45,16 @@ export function WhoCard({ groups, videos, monthWords }: { groups: VoicesGroups; 
       ) : (
         <div role="list" className="flex flex-col gap-2.5">
           {groups.cards.map((c) => (
-            // The bar drops below 1024, where the sidebar leaves the card too
-            // narrow for the name beside it, and a long name wraps rather
-            // than being cut (T9: at 820 the names were cut to an ellipsis).
-            <div key={c.key} role="listitem" className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 text-[13.5px] lg:grid-cols-[minmax(0,1.1fr)_minmax(0,2fr)_auto]">
+            // Below 1024, where the sidebar leaves the card too narrow for the
+            // name beside the bar, the bar takes its own line under the name
+            // and the count, full width and compact (the fresh check, 13 Oct:
+            // the board's phone draws its band there), and a long name wraps
+            // rather than being cut (T9); from 1024 it sits between them.
+            <div key={c.key} role="listitem" className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 text-[13.5px] lg:grid-cols-[minmax(0,1.1fr)_minmax(0,2fr)_auto] lg:gap-y-0">
               <Link href={c.href} scroll={false} className={cn('min-w-0 font-semibold text-foreground no-underline hover:underline hover:underline-offset-[3px]', c.selected ? 'underline underline-offset-[3px]' : null)}>
                 <span data-copy="subject" data-slot="pass_e_persona">{c.name}</span>
               </Link>
-              <TickBar pct={(100 * c.videos) / n} size="lg" tone="market" label={`${c.name}: ${fmtInt(c.videos)} of ${fmtInt(n)} videos`} className="max-lg:hidden" />
+              <TickBar pct={(100 * c.videos) / n} size="lg" tone="market" label={`${c.name}: ${fmtInt(c.videos)} of ${fmtInt(n)} videos`} className="order-last col-span-2 max-lg:h-2 lg:order-none lg:col-span-1" />
               <LevelText k={c.videos} n={n} unit="videos" className="text-right text-[12.5px] text-secondary-foreground" />
             </div>
           ))}
@@ -123,38 +125,42 @@ export function GroupCard({ card, n, monthWords, style }: { card: VoicesGroupCar
   )
 }
 
+/** A panel column's one quiet line, where it has nothing to list. */
+function Quiet({ children }: { children: ReactNode }) {
+  return <p className="m-0 text-[13.5px] leading-[1.5] text-muted-foreground">{children}</p>
+}
+
 /** A month's short name on the chart's axis: "Sep". */
 const shortMonth = (month: string): string => longMonth(month).slice(0, 3)
 
 /**
- * "How the mix changed" (the board's sixth card): each group's videos, last
- * month against this one, on the kit's slope chart. Decision 2 reads no
- * group's month before this one (each update describes the groups afresh),
- * so the chart draws this month's column and leaves last month's axis empty,
- * and one line says why. Nothing is drawn between the two: a line needs both
- * ends.
+ * The board's sixth card ("How the mix changed" on E3-Voices): each group's
+ * videos on the kit's slope chart. Decision 2 reads no group's month before
+ * this one (each update describes the groups afresh), so the card is named
+ * for what it shows, "The mix in September" (the fresh check, 13 Oct: the
+ * board's words claimed a comparison), the chart draws this month's column
+ * and leaves last month's axis empty and dashed, and the subtitle and one
+ * line say why. Nothing is drawn between the two: a line needs both ends.
  */
 export function MixCard({ cards, n, month, monthWords, style }: { cards: readonly VoicesGroupCard[]; n: number | null; month: string; monthWords: string; style?: CSSProperties }) {
   const before = prevMonth(month)
   return (
     <article data-mix="" aria-labelledby="voices-mix" style={style} className={cn(CARD, 'gap-3.5 rounded-[14px] px-[22px] py-5')}>
       <div>
-        <h3 id="voices-mix" className="m-0 text-[16.5px] font-semibold leading-[1.3] text-foreground">How the mix changed</h3>
-        <p className="m-0 mt-[3px] text-[13.5px] leading-[1.45] text-muted-foreground">
-          Each group’s videos{n ? <> of the market’s <Fig>{fmtInt(n)}</Fig></> : null}, {longMonth(before)} against {monthWords}
-        </p>
+        <h3 id="voices-mix" className="m-0 text-[16.5px] font-semibold leading-[1.3] text-foreground">{mixTitle(monthWords)}</h3>
+        <p className="m-0 mt-[3px] text-[13.5px] leading-[1.45] text-muted-foreground">{mixNotRead(longMonth(before))}</p>
       </div>
       <SlopePair
         fromLabel={shortMonth(before)}
         toLabel={shortMonth(month)}
-        rows={cards.map((c) => ({ key: c.key, label: slopeLabel(c.name), slot: 'pass_e_persona' as const, from: null, to: c.videos }))}
+        rows={cards.map((c) => ({ key: c.key, label: slopeLabel(c.name), fullLabel: c.name, slot: 'pass_e_persona' as const, from: null, to: c.videos }))}
         format={fmtInt}
-        label="Each group’s videos"
+        label={`Each group’s videos of the market’s${n ? ` ${fmtInt(n)}` : ''}`}
         // Last month's axis is the chart's empty slot: drawn dashed, as a
         // column with no reading in it (the first <line> is that axis).
         className="mx-auto max-w-[340px] [&>line:first-of-type]:[stroke-dasharray:3_4]"
       />
-      <p className="m-0 text-[13.5px] leading-[1.5] text-secondary-foreground">{mixNotCompared(longMonth(before))}</p>
+      <p className="m-0 text-[13.5px] leading-[1.5] text-secondary-foreground">{MIX_WHY}</p>
     </article>
   )
 }
@@ -186,7 +192,7 @@ export function ProductsColumn({ products, videos }: { products: GroupProducts; 
           {products.rows.length > 0 ? <span className="text-[12px] text-muted-foreground">Each opens in Your products</span> : null}
         </>
       ) : (
-        <p className="m-0 text-[13.5px] leading-[1.5] text-muted-foreground">{products.line}</p>
+        <Quiet>{products.line}</Quiet>
       )}
     </PanelSection>
   )
@@ -221,46 +227,55 @@ export function GroupPanelView({ panel, monthWords, notchAt }: { panel: GroupPan
         {where && panel.videos > 0 ? <StatCell value={where.k} of={panel.videos} label={<>are on {where.label}</>} /> : null}
       </StatRow>
 
+      {/* THE PANEL'S TWO GRIDS NEVER REFLOW (the fresh check, 13 Oct): a
+          column with nothing to list keeps its place and says so in one
+          quiet line, so the next one never slides into its slot. */}
       <div className="grid grid-cols-1 gap-7 lg:grid-cols-3">
-        {panel.wants ? <PanelSection label="What they want"><p className="m-0 text-[15px] leading-[1.6] text-foreground"><span data-copy="subject" data-slot="pass_e_persona">{panel.wants}</span></p></PanelSection> : null}
-        {panel.stops ? <PanelSection label="What stops them"><p className="m-0 text-[15px] leading-[1.6] text-foreground"><span data-copy="subject" data-slot="pass_e_persona">{panel.stops}</span></p></PanelSection> : null}
-        {panel.triggers ? <PanelSection label="What tips them into acting"><p className="m-0 text-[15px] leading-[1.6] text-foreground"><span data-copy="subject" data-slot="pass_e_persona">{panel.triggers}</span></p></PanelSection> : null}
+        <PanelSection label="What they want">{panel.wants ? <p className="m-0 text-[15px] leading-[1.6] text-foreground"><span data-copy="subject" data-slot="pass_e_persona">{panel.wants}</span></p> : <Quiet>{GROUP_NOT_DESCRIBED}</Quiet>}</PanelSection>
+        <PanelSection label="What stops them">{panel.stops ? <p className="m-0 text-[15px] leading-[1.6] text-foreground"><span data-copy="subject" data-slot="pass_e_persona">{panel.stops}</span></p> : <Quiet>{GROUP_NOT_DESCRIBED}</Quiet>}</PanelSection>
+        <PanelSection label="What tips them into acting">{panel.triggers ? <p className="m-0 text-[15px] leading-[1.6] text-foreground"><span data-copy="subject" data-slot="pass_e_persona">{panel.triggers}</span></p> : <Quiet>{GROUP_NOT_DESCRIBED}</Quiet>}</PanelSection>
       </div>
 
       <div className="grid grid-cols-1 gap-7 lg:grid-cols-3">
-        {panel.who.length > 0 ? (
-          <PanelSection label="Who they say they are">
-            {/* The top three, near-repeats already merged (decision 8, `mergeWho`). */}
-            {panel.who.slice(0, WHO_SHOWN).map((w) => (
-              <div key={w.label} className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_30px] items-center gap-2.5 text-[13.5px]">
-                <span className="min-w-0"><span data-copy="stored" data-slot="pass_a_audience_insight">{w.label}</span></span>
-                <TickBar pct={(100 * w.count) / Math.max(1, ...panel.who.slice(0, WHO_SHOWN).map((x) => x.count))} size="md" label={`${w.label}: ${w.count}`} />
-                <Fig className="text-right text-[12.5px]">{fmtInt(w.count)}</Fig>
-              </div>
-            ))}
-            <span className="text-[12px] text-muted-foreground">How often each came up in what they said</span>
-          </PanelSection>
-        ) : null}
-        {panel.conversations.length > 0 ? (
-          <PanelSection label="The conversations they’re in">
-            <div className="flex flex-col gap-0.5">
-              {panel.conversations.map((c) => (
-                <Link key={c.registryId} href={c.href} className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-[14px] text-foreground no-underline hover:bg-inner">
-                  <span className="min-w-0"><span data-copy="subject" data-slot="pass_b_theme">{c.label}</span></span>
-                  <LevelText k={c.k} n={panel.videos} className="ml-auto shrink-0 whitespace-nowrap text-[13px] text-secondary-foreground" />
-                </Link>
+        <PanelSection label="Who they say they are">
+          {panel.who.length > 0 ? (
+            <>
+              {/* The top three, near-repeats already merged (decision 8, `mergeWho`). */}
+              {panel.who.slice(0, WHO_SHOWN).map((w) => (
+                <div key={w.label} className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_30px] items-center gap-2.5 text-[13.5px]">
+                  <span className="min-w-0"><span data-copy="stored" data-slot="pass_a_audience_insight">{w.label}</span></span>
+                  <TickBar pct={(100 * w.count) / Math.max(1, ...panel.who.slice(0, WHO_SHOWN).map((x) => x.count))} size="md" label={`${w.label}: ${w.count}`} />
+                  <Fig className="text-right text-[12.5px]">{fmtInt(w.count)}</Fig>
+                </div>
               ))}
-            </div>
-            <span className="text-[12px] text-muted-foreground">Each opens in Market</span>
-          </PanelSection>
-        ) : null}
-        {panel.products ? <ProductsColumn products={panel.products} videos={panel.videos} /> : panel.platforms.length > 0 && panel.videos > 0 ? (
+              <span className="text-[12px] text-muted-foreground">How often each came up in what they said</span>
+            </>
+          ) : <Quiet>{GROUP_NO_WHO}</Quiet>}
+        </PanelSection>
+        <PanelSection label="The conversations they’re in">
+          {panel.conversations.length > 0 ? (
+            <>
+              <div className="flex flex-col gap-0.5">
+                {panel.conversations.map((c) => (
+                  <Link key={c.registryId} href={c.href} className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-[14px] text-foreground no-underline hover:bg-inner">
+                    <span className="min-w-0"><span data-copy="subject" data-slot="pass_b_theme">{c.label}</span></span>
+                    <LevelText k={c.k} n={panel.videos} className="ml-auto shrink-0 whitespace-nowrap text-[13px] text-secondary-foreground" />
+                  </Link>
+                ))}
+              </div>
+              <span className="text-[12px] text-muted-foreground">Each opens in Market</span>
+            </>
+          ) : <Quiet>{groupNoConversations(monthWords)}</Quiet>}
+        </PanelSection>
+        {panel.products ? <ProductsColumn products={panel.products} videos={panel.videos} /> : (
           // A panel read before the products column (a stored dump) keeps
           // where the group comments in its place.
-          <PanelSection label={<>Where they comment · of <Fig>{fmtInt(panel.videos)}</Fig></>}>
-            {panel.platforms.map((p) => <MiniRow key={p.platform} size="md" tone="ink" label={p.label} k={p.k} of={panel.videos} />)}
+          <PanelSection label={<>Where they comment{panel.videos > 0 ? <> · of <Fig>{fmtInt(panel.videos)}</Fig></> : null}</>}>
+            {panel.platforms.length > 0 && panel.videos > 0
+              ? panel.platforms.map((p) => <MiniRow key={p.platform} size="md" tone="ink" label={p.label} k={p.k} of={panel.videos} />)
+              : <Quiet>None of their comments in {monthWords}.</Quiet>}
           </PanelSection>
-        ) : null}
+        )}
       </div>
 
       {panel.phrases.length > 0 ? (
