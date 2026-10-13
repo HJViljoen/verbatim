@@ -1,7 +1,7 @@
 import { zodResponseFormat } from 'openai/helpers/zod'
 import { createAdminClient, selectAll } from '../supabase-admin'
 import { chunk } from '../chunk'
-import { openai } from '../openai'
+import { isLengthLimitError, openai } from '../openai'
 import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, PASS_A_LENGTH_RETRY_REFS, PASS_A_MAX_OUTPUT_TOKENS, PASS_A_OCR_MIN_QUOTE_CHARS, PASS_A_VIDEO_QUOTE_MAX, estimateCost, ownPostAudienceEnabled, passAMinComments, transcriptsEnabled } from '../config'
 import { PassAVideoSchema, PassAVideoSchemaV4, CLASSIFIED_TYPES, CLASSIFIED_TYPE_DEFS, HOOK_STYLES, HOOK_STYLE_DEFS, enumDefLines, type PassAVideoOutput, type PassAInsight, type PassAClaim } from './schemas'
 import { filterComments } from './spam-filter'
@@ -257,25 +257,13 @@ function isRateLimitError(e: unknown): boolean {
   return /\b429\b|rate limit|insufficient_quota|no credits/i.test(msg)
 }
 
-/**
- * Did this call die because the model generated until it ran out of room?
- *
- * The SDK raises `LengthFinishReasonError` from `chat.completions.parse` when
- * `finish_reason === 'length'`, and that class carries nothing but its message
- * — no completion, no usage — so the name and the message are all there is to
- * match on. Matched by NAME first because the class is not exported from a
- * stable path, and by message second because a proxy or a re-thrown error
- * keeps the text and loses the prototype.
- *
- * It is a different failure from every other Pass A error: a 429 is about the
- * account and a refusal is about the content, but this one is about the SHAPE
- * of the answer, and it is the one failure a second, smaller attempt fixes.
- */
-export function isLengthLimitError(e: unknown): boolean {
-  if ((e as { name?: unknown })?.name === 'LengthFinishReasonError') return true
-  const msg = e instanceof Error ? e.message : String(e)
-  return /length limit was reached|finish_reason.*length/i.test(msg)
-}
+// `isLengthLimitError` (did the call stop at its output ceiling?) lives in
+// lib/openai.ts since classify-meta became its second caller (13 Oct), and is
+// re-exported here for the callers and the test that found it at this address.
+// It is a different failure from every other Pass A error: a 429 is about the
+// account and a refusal is about the content, but this one is about the SHAPE
+// of the answer, and it is the one failure a second, smaller attempt fixes.
+export { isLengthLimitError }
 
 /**
  * The comment refs the ONE length-limit retry shows the model.
