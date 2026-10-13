@@ -19,7 +19,8 @@ import { MOVE_STATUSES, SUBJECT_ORIGINS, SUBJECT_WRITE_REFUSED } from '@/lib/sub
 //
 // LIVES IN lib/actions/ BECAUSE THREE SURFACES CALL IT. The editor is shared —
 // SU1 on the Subjects page and Settings › Subjects (WP16) are the same
-// component — and "Track this" is on SU2 and on VO3 (WP13). An action imported
+// component, and since Design v2 it lives in Settings › Your subjects alone —
+// and "Track this" is on SU2 and on VO3 (WP13). An action imported
 // by module path from `app/dashboard/<page>/actions` moves house every time its
 // page does, which is exactly what happened to the rec-status action in WP9.
 //
@@ -91,9 +92,11 @@ const firstIssue = (e: z.ZodError): string => {
 /**
  * Everywhere a subject or a move is read.
  *
- * Four addresses and each of them is real: Market, which holds the subject
+ * Five addresses and each of them is real: Market, which holds the subject
  * board and Your market's subjects since Design v2 (the Subjects page and
- * /dashboard/overview redirect there), the Dashboard, Settings, and Your
+ * /dashboard/overview redirect there), the Dashboard, Settings, Settings ›
+ * Your subjects, where the editor lives since Design v2 (T10c; a literal path
+ * revalidates that page alone, so Settings' own does not cover it), and Your
  * moves, which is where a move is scored (WP14; /dashboard/moves since Design
  * v2). A router cache of 60 seconds (next.config.ts staleTimes.dynamic) is
  * long enough for a client to name a subject and then not see it on the next
@@ -103,6 +106,7 @@ function revalidateSubjects(): void {
   revalidatePath('/dashboard/market')
   revalidatePath('/dashboard')
   revalidatePath('/dashboard/settings')
+  revalidatePath('/dashboard/settings/subjects')
   revalidatePath('/dashboard/moves')
 }
 
