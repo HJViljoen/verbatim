@@ -160,6 +160,30 @@ describe('a group\'s panel (E3-Voices-Open)', () => {
     assertCopyContract(node)
   })
 
+  // The parity pass (13 Oct): the board's third column, "Products they
+  // mention", is drawn as what the count is: your products named in the
+  // group's videos, each opening in Your products.
+  it('lists your products in their videos, and the talk about one of yours it could not place', () => {
+    const node = <GroupPanelView panel={panel} monthWords="September" />
+    const text = renderText(node)
+    expect(text).toContain('Products in their videos · of their 45 Iceross Comfort 2 of 45 Iceross Seal-In 1 of 45 Couldn’t tell which product 7 of 45 Each opens in Your products')
+    expect(text).not.toContain('Rheo Knee')
+    expect(text).not.toContain('Where they comment')
+    expect(render(node)).toContain('href="/dashboard/products?product=p-comfort#product-panel"')
+    assertCopyContract(node)
+  })
+
+  it('keeps the products column where none is read, saying so in one line', () => {
+    const off = { ...panel, products: { state: 'off' as const, rows: [], unclear: 0, line: 'Your products are not read for this workspace yet.' } }
+    const text = renderText(<GroupPanelView panel={off} monthWords="September" />)
+    expect(text).toContain('Products in their videos Your products are not read for this workspace yet.')
+    assertCopyContract(<GroupPanelView panel={off} monthWords="September" />)
+    // A panel stored before the column (a dump) draws where they comment.
+    const { products: _drop, ...old } = panel
+    void _drop
+    expect(renderText(<GroupPanelView panel={old} monthWords="September" />)).toContain('Where they comment · of 45')
+  })
+
   it('leaves out what a group does not have', () => {
     const bare: GroupPanel = { ...panel, who: [], conversations: [], phrases: [], quotes: [], triggers: '' }
     const text = renderText(<GroupPanelView panel={bare} monthWords="September" />)

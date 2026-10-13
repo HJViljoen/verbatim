@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { nameChecked, NAME_READS, NONE_FOUND, noiseWords, NOT_COUNTED_YET } from '../../brands/precision'
+import { productReadingsEnabled } from '../../config'
 import { fmtInt, longMonth, platformLabel, shortDate } from '../../format'
 import { gateFor } from '../../quote-context'
 import { readingOf, readTranslations } from '../../quotes'
@@ -12,7 +13,10 @@ import { ACCOUNT_FLOOR } from '../voice-surface-where'
 import { talkKindLabel } from '../overview-market/kinds'
 import { WHAT_THEY_SELL } from '../market-frame'
 import { surface } from '../../nav'
+import { loadMonthProductReadings, loadProductCatalogue, type CatalogueProduct } from '../../products/types'
 import { normalisePersona, type Persona } from '../../profile-tiles'
+import { loadMonthPlacements, productMonthSets, type ProductMonthSets } from './products'
+import { productsHref } from './products-address'
 import { CLIENT_AUDIENCE, rivalKey } from '../../rivals'
 import { FLAGGED_KIND, KIND_ORDER } from '../../reading/kinds'
 import {
@@ -349,6 +353,10 @@ export interface GroupPanel {
   who: { label: string; count: number }[]
   /** The conversations the group is in: its videos this month in each. */
   conversations: { registryId: string; label: string; k: number; href: string }[]
+  /** Your products named in the group's videos this month (E3-Voices-Open's
+   *  "Products they mention"). Optional: a dump from before it carries none,
+   *  and its panel draws where the group comments instead. */
+  products?: GroupProducts
   /** Real phrases (Pass A checked each against a comment), short ones
    *  only, with their English where the comment was not. */
   phrases: { text: string; english: string | null }[]
@@ -604,6 +612,8 @@ export function buildGroupPanel(input: {
   params: VoicesParams
   /** A phrase's English, where the comment it came from was not. */
   englishOf?: (text: string) => string | null
+  /** The group's products (`readGroupProducts`), where read. */
+  products?: GroupProducts
 }): GroupPanel {
   const mine = new Set(input.videoIds)
   const conversations = [...new Set(input.persona.registryIds)]
@@ -632,11 +642,86 @@ export function buildGroupPanel(input: {
     // self-description, counted once with their counts added.
     who: mergeWho(input.persona.who.map((w) => ({ label: whoLabel(w.signal), count: w.count })).filter((w) => w.label)),
     conversations,
+    ...(input.products ? { products: input.products } : {}),
     phrases: phrasesOf(input.persona.howTheyTalk, input.englishOf),
     quotes: input.quotes.slice(0, GROUP_QUOTES),
     askHref: askHref(`What does the group "${input.persona.name}" in my market want, and what stops them?`),
     closeHref: voicesHref(input.params),
     notchAt: (col + 0.5) / input.perRow,
+  }
+}
+
+// ---- the group's products (E3-Voices-Open, "Products they mention") -----------------
+//
+// THE PARITY PASS (13 Oct): the board's panel names the products a group's
+// talk is about, and Your products now reads Össur's catalogue. A product
+// stands on one of the group's videos by Your products' own rule
+// (`productMonthSets`: its content names it, or a comment on it in the month
+// does), so the column is "Products in their videos", which is what the
+// count is, and not "they mention", which would claim the group's own
+// comments named it. Where no catalogue is read (Sealand, or Your products
+// switched off) the column keeps its place and says so in one line.
+
+/** How many products the column lists. */
+export const GROUP_PRODUCTS_SHOWN = 4
+export const GROUP_PRODUCTS_OFF = 'Your products are not read for this workspace yet.'
+export const GROUP_PRODUCTS_UNREAD = 'Your products could not be read just now.'
+export const groupProductsNone = (monthWords: string): string => `None of your products came up in their videos in ${monthWords}.`
+
+export interface GroupProducts {
+  state: 'ready' | 'off' | 'unread'
+  /** Each product named in the group's videos, most first: k of their videos. */
+  rows: { id: string; name: string; k: number; href: string }[]
+  /** Their videos about one of your products where we could not tell which. */
+  unclear: number
+  /** The column's one line where it lists nothing, else null. */
+  line: string | null
+}
+
+/** The column from the group's own product sets (`productMonthSets` over the
+ *  group's videos alone). PURE. */
+export function groupProducts(input: {
+  state: GroupProducts['state']
+  sets?: ProductMonthSets | null
+  products?: readonly Pick<CatalogueProduct, 'id' | 'name'>[]
+  monthWords: string
+  params: VoicesParams
+}): GroupProducts {
+  if (input.state === 'off') return { state: 'off', rows: [], unclear: 0, line: GROUP_PRODUCTS_OFF }
+  if (input.state === 'unread' || !input.sets) return { state: 'unread', rows: [], unclear: 0, line: GROUP_PRODUCTS_UNREAD }
+  const sets = input.sets
+  const rows = (input.products ?? [])
+    .map((p) => ({ id: p.id, name: p.name, k: sets.products.get(p.id)?.size ?? 0, href: productsHref({ month: input.params.month }, { kind: 'product', id: p.id }) }))
+    .filter((r) => r.k > 0)
+    .sort((a, b) => b.k - a.k || a.name.localeCompare(b.name))
+    .slice(0, GROUP_PRODUCTS_SHOWN)
+  const unclear = new Set([...sets.groups.values()].flatMap((g) => [...g.unclear])).size
+  return { state: 'ready', rows, unclear, line: rows.length === 0 && unclear === 0 ? groupProductsNone(input.monthWords) : null }
+}
+
+/** The group's products, read for its panel: the catalogue, the month's
+ *  catalogue version, and the month's placements (Your products' own reads),
+ *  then the sets over the group's videos. Off where Your products is not
+ *  switched on or no catalogue is read; never throws. */
+async function readGroupProducts(handle: ReadingHandle, clientId: string, month: string, monthWords: string, videoIds: readonly string[], params: VoicesParams): Promise<GroupProducts> {
+  const off = groupProducts({ state: 'off', monthWords, params })
+  if (!productReadingsEnabled(clientId)) return off
+  try {
+    const cat = await loadProductCatalogue(handle.client, clientId)
+    if (cat.state !== 'ready') return off
+    const m = monthStartOf(month)
+    const stored = await loadMonthProductReadings(handle.client, clientId, [m])
+    const version = stored.find((r) => monthStartOf(r.month) === m)?.catalogue_version ?? cat.catalogue.version
+    const standing = await loadMonthPlacements(handle.client, clientId, { month: m, version, catalogue: cat.catalogue })
+    if (!standing) return off
+    const sets = productMonthSets({
+      month: m, market: videoIds.map((id) => ({ id })), standing,
+      groups: cat.catalogue.groups.map((g) => g.id), products: cat.catalogue.products.map((p) => p.id),
+    })
+    return groupProducts({ state: 'ready', sets, products: cat.catalogue.products, monthWords, params })
+  } catch (e) {
+    say('group.products', e)
+    return groupProducts({ state: 'unread', monthWords, params })
   }
 }
 
@@ -1447,18 +1532,20 @@ export async function openPanel(ctx: VoicesContext, data: VoicesData, params: Vo
       const videoIds = ctx.groupRead?.videos.find((g) => g.key === open.key)?.videoIds ?? []
       const subjects = (ctx.groupRead?.groups.find((g) => g.key === open.key)?.subjects ?? []).map((s) => ({ id: s.subjectId, label: s.label, k: s.k }))
       const phrases = phrasesOf(persona.howTheyTalk).map((p) => p.text)
-      const [labels, readings, voices] = await Promise.all([
+      const [labels, readings, voices, products] = await Promise.all([
         readLabels(handle, persona.registryIds).catch((e: unknown) => { say('group.labels', e); return new Map<string, string>() }),
         phrases.length > 0 ? readTranslations(handle.client, phrases) : Promise.resolve(new Map<string, { lang: string; english: string | null }>()),
         loadVoicesMany(handle.client, clientId, [{ key: persona.key, insightIds: persona.insightIds }], {
           month: ctx.month.slice(0, 7), marketFirst: true, gate: gateFor(clientId, {}),
         }).catch((e: unknown) => { say('group.voices', e); return null }),
+        readGroupProducts(handle, clientId, ctx.month, data.monthWords, videoIds, params),
       ])
       const quotes = (voices?.get(persona.key)?.voices ?? []).map(groupQuote)
       const panel = buildGroupPanel({
         persona, card, index, perRow: 3, n: data.videos, subjects, videoIds,
         themeSets: themeVideoSets(ctx.refs), labels, quotes, params,
         englishOf: (text) => readingOf(readings, text).english ?? null,
+        products,
       })
       return { ...data, open, panel }
     }

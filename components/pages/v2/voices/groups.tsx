@@ -8,7 +8,7 @@ import {
 import { fmtInt, longMonth } from '@/lib/format'
 import { prevMonth } from '@/lib/reading/month-key'
 import {
-  GROUP_NOT_COMPARED, mixNotCompared, PANEL_ID, slopeLabel, WHO_SHOWN, type GroupPanel, type VoicesData, type VoicesGroupCard, type VoicesGroups,
+  GROUP_NOT_COMPARED, mixNotCompared, PANEL_ID, slopeLabel, WHO_SHOWN, type GroupPanel, type GroupProducts, type VoicesData, type VoicesGroupCard, type VoicesGroups,
 } from '@/lib/pages/v2/voices'
 import { cn } from '@/lib/utils'
 import { AskButton, CAPS, EmptyLine, Fig, LevelText, MiniRow, OLINK, PanelTag, Phrase, PlatformStrip, QuoteCard } from './parts'
@@ -154,6 +154,39 @@ export function MixCard({ cards, n, month, monthWords, style }: { cards: readonl
   )
 }
 
+/** E3-Voices-Open's "Products they mention", as the count is: your products
+ *  named in the group's videos this month, each opening in Your products,
+ *  and the videos about one of yours where we could not tell which. Where no
+ *  catalogue is read the column keeps its place and says so in one line. */
+export function ProductsColumn({ products, videos }: { products: GroupProducts; videos: number }) {
+  const listed = products.rows.length > 0 || products.unclear > 0
+  return (
+    <PanelSection label={<>Products in their videos{listed && videos > 0 ? <> · of their <Fig>{fmtInt(videos)}</Fig></> : null}</>}>
+      {listed ? (
+        <>
+          <div className="flex flex-col gap-0.5">
+            {products.rows.map((p) => (
+              <Link key={p.id} href={p.href} className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-[14px] text-foreground no-underline hover:bg-inner">
+                <span className="min-w-0">{p.name}</span>
+                <LevelText k={p.k} n={videos} className="ml-auto shrink-0 whitespace-nowrap text-[13px] text-secondary-foreground" />
+              </Link>
+            ))}
+            {products.unclear > 0 ? (
+              <div className="-mx-2 flex items-center justify-between gap-3 px-2 py-1.5 text-[14px] text-foreground">
+                <span className="min-w-0">Couldn’t tell which product</span>
+                <LevelText k={products.unclear} n={videos} className="ml-auto shrink-0 whitespace-nowrap text-[13px] text-secondary-foreground" />
+              </div>
+            ) : null}
+          </div>
+          {products.rows.length > 0 ? <span className="text-[12px] text-muted-foreground">Each opens in Your products</span> : null}
+        </>
+      ) : (
+        <p className="m-0 text-[13.5px] leading-[1.5] text-muted-foreground">{products.line}</p>
+      )}
+    </PanelSection>
+  )
+}
+
 /** The group's panel, in place under its row (E3-Voices-Open). `notchAt`
  *  is the grid's placement, per breakpoint (`GroupGrid`); alone, the
  *  loader's three-across notch. */
@@ -216,7 +249,9 @@ export function GroupPanelView({ panel, monthWords, notchAt }: { panel: GroupPan
             <span className="text-[12px] text-muted-foreground">Each opens in Market</span>
           </PanelSection>
         ) : null}
-        {panel.platforms.length > 0 && panel.videos > 0 ? (
+        {panel.products ? <ProductsColumn products={panel.products} videos={panel.videos} /> : panel.platforms.length > 0 && panel.videos > 0 ? (
+          // A panel read before the products column (a stored dump) keeps
+          // where the group comments in its place.
           <PanelSection label={<>Where they comment · of <Fig>{fmtInt(panel.videos)}</Fig></>}>
             {panel.platforms.map((p) => <MiniRow key={p.platform} size="md" tone="ink" label={p.label} k={p.k} of={panel.videos} />)}
           </PanelSection>

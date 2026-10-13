@@ -2,7 +2,7 @@ import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../../config'
 import { readingMonthLabel } from '../../reading/month-label'
 import { brandMonthPair, creatorThemes, type BrandCrossRow, type BrandMonthVideos, type CreatorVideo, type GroupMonthVideos, type GroupSubjectRow, type StoredBrandMonthRow, type ThemeRef } from '../../reading/cross'
 import {
-  buildBrandPanel, buildBrands, buildCreatorPanel, buildCreators, buildGroupPanel, buildGroups, creatorVideoIds, monthWordsOf, openOf,
+  buildBrandPanel, buildBrands, buildCreatorPanel, buildCreators, buildGroupPanel, buildGroups, creatorVideoIds, groupProducts, monthWordsOf, openOf,
   personasOf, themeVideoSets,
   type BrandSet, type VoicesData, type VoicesParams, type VoicesQuote,
 } from './voices'
@@ -170,6 +170,20 @@ const OSSUR_CREATORS: CreatorIn[] = [
   { platform: 'youtube', account: 'Stepping Forward', videos: [210, 213], followers: 3100 },
 ]
 
+/** A group's products, as the board's panel draws them ("Iceross Comfort 2
+ *  of 45 · Couldn't tell which product 7 of 45"): two named products and the
+ *  talk about a liner that could not tell which, over the group's videos. */
+function ossurGroupProducts(videoIds: readonly string[], params: VoicesParams) {
+  const ids = [...videoIds]
+  const sets = {
+    groups: new Map([['g-liners', { any: new Set(ids.slice(0, 11)), named: new Set(ids.slice(0, 3)), unclear: new Set(ids.slice(3, 10)), unbranded: new Set(ids.slice(10, 11)) }]]),
+    products: new Map([['p-comfort', new Set(ids.slice(0, 2))], ['p-seal', new Set(ids.slice(2, 3))], ['p-rheo', new Set<string>()]]),
+    all: new Set(ids.slice(0, 11)),
+  }
+  const products = [{ id: 'p-comfort', name: 'Iceross Comfort' }, { id: 'p-seal', name: 'Iceross Seal-In' }, { id: 'p-rheo', name: 'Rheo Knee' }]
+  return groupProducts({ state: 'ready', sets, products, monthWords: monthWordsOf(SEP, false), params })
+}
+
 /** Össur's September: groups and creators read; brand rules, no brand row. */
 export function ossurVoicesFixture(params: VoicesParams = {}): VoicesData {
   const market = marketOf(487, ['tiktok', 'instagram', 'youtube', 'reddit'])
@@ -204,6 +218,7 @@ export function ossurVoicesFixture(params: VoicesParams = {}): VoicesData {
         subjects: g.subjects.map((s) => ({ id: s.subjectId, label: s.label, k: s.k })),
         videoIds: read.videos.find((x) => x.key === open.key)!.videoIds, themeSets: themeVideoSets(refs), labels: OSSUR_LABELS,
         quotes: open.key === 'caregivers' ? OSSUR_QUOTES : OSSUR_QUOTES.slice(0, 1), params,
+        products: ossurGroupProducts(read.videos.find((x) => x.key === open.key)!.videoIds, params),
       }),
     }
   }

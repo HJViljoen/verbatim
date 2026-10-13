@@ -6,7 +6,7 @@ import {
   creatorVideoIds, crossKeys, findingsFor, firstSentence, groupRows, initialsOf, matchesBrand, noteOf, openOf, parseVoicesParams, personasOf,
   phrasesOf, PHRASE_MAX_WORDS, resolveCreator, themeVideoSets, topFinding, topVoicesOf, voicesHref, whoLabel, mergeWho, whoKey, WHO_FILLER_WORDS, WHO_SHOWN,
   BRANDS_NOT_COUNTED, BRANDS_NOT_READ, BRANDS_UNREAD, GROUPS_NOT_RUN, GROUPS_NONE, GROUPS_UNREAD, type FindingRow,
-  brandTable, mixNotCompared, slopeLabel, SLOPE_LABEL_MAX,
+  brandTable, mixNotCompared, slopeLabel, SLOPE_LABEL_MAX, groupProducts, GROUP_PRODUCTS_OFF, GROUP_PRODUCTS_SHOWN, GROUP_PRODUCTS_UNREAD,
 } from './voices'
 import { ossurCountedVoicesFixture, ossurThinVoicesFixture, ossurVoicesFixture, sealandVoicesFixture } from './voices-fixture'
 
@@ -467,5 +467,27 @@ describe('the board\'s shape in a thin month', () => {
     expect(d.groups.cards.find((c) => c.key === 'athlete')).toMatchObject({ videos: 12, subjects: [] })
     expect(d.brands).toMatchObject({ state: 'not_counted', note: null })
     expect(d.creators.atFloor).toBe(2)
+  })
+
+  it('reads a group\'s products off its own video sets: named most first, the unplaced talk apart', () => {
+    const v = (n: number) => Array.from({ length: n }, (_, i) => `v${i}`)
+    const sets = {
+      groups: new Map([['g', { any: new Set(v(12)), named: new Set(v(6)), unclear: new Set(['v6', 'v7', 'v8']), unbranded: new Set(['v9']) }], ['h', { any: new Set(['v8', 'v10']), named: new Set<string>(), unclear: new Set(['v8', 'v10']), unbranded: new Set<string>() }]]),
+      products: new Map([['a', new Set(['v0'])], ['b', new Set(['v1', 'v2', 'v3'])], ['c', new Set<string>()], ['d', new Set(['v4'])], ['e', new Set(['v5'])], ['f', new Set(['v5'])]]),
+      all: new Set(v(12)),
+    }
+    const products = ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => ({ id, name: `Product ${id.toUpperCase()}` }))
+    const g = groupProducts({ state: 'ready', sets, products, monthWords: 'September', params: { month: '2026-09' } })
+    expect(g.rows.map((r) => [r.name, r.k])).toEqual([['Product B', 3], ['Product A', 1], ['Product D', 1], ['Product E', 1]])
+    expect(g.rows).toHaveLength(GROUP_PRODUCTS_SHOWN)
+    expect(g.rows[0].href).toBe('/dashboard/products?month=2026-09&product=b#product-panel')
+    // Unplaced talk counts a video once across categories.
+    expect(g.unclear).toBe(4)
+    expect(g.line).toBeNull()
+    const none = groupProducts({ state: 'ready', sets: { groups: new Map(), products: new Map(), all: new Set() }, products, monthWords: 'September', params: {} })
+    expect(none).toMatchObject({ rows: [], unclear: 0, line: 'None of your products came up in their videos in September.' })
+    expect(groupProducts({ state: 'off', monthWords: 'September', params: {} })).toMatchObject({ state: 'off', line: GROUP_PRODUCTS_OFF })
+    expect(groupProducts({ state: 'unread', monthWords: 'September', params: {} })).toMatchObject({ state: 'unread', line: GROUP_PRODUCTS_UNREAD })
+    expect(groupProducts({ state: 'ready', sets: null, monthWords: 'September', params: {} }).state).toBe('unread')
   })
 })
