@@ -99,8 +99,8 @@ import { MarketPage } from '../components/pages/v2/market'
 import { marketFixture, marketLongRowsFixture } from '../lib/pages/v2/market-fixture'
 import type { MarketData } from '../lib/pages/v2/market'
 import { ContentPage } from '../components/pages/v2/content'
-import { contentEmptyFixture, contentFixture } from '../lib/pages/v2/content-fixture'
-import type { ContentPageData } from '../lib/pages/v2/content'
+import { contentEmptyFixture, contentFixture, contentThinFixture } from '../lib/pages/v2/content-fixture'
+import { IDEA_SLOTS, type ContentPageData } from '../lib/pages/v2/content'
 import { ProductsPage } from '../components/pages/v2/products'
 import { PRODUCTS_FIXTURES } from '../lib/pages/v2/products-fixture'
 import type { ProductsData } from '../lib/pages/v2/products'
@@ -318,6 +318,25 @@ const agentThread = (raw = agentFixture()) => {
  *  the lock). */
 const marketDump = (): MarketData => JSON.parse(readFileSync(process.env.MARKET_V2_JSON as string, 'utf8')) as MarketData
 
+/** Content (parity pass, 13 Oct) from a loader dump: `--content-dumps <dir>`
+ *  holding `<tenant>/content.json` (the Phase 4 dumps' layout). A dump written
+ *  before the ideas row kept its three cards carries no `ideas.questions`; it
+ *  is read as the loader now shapes it, the top of its also-asked rows moved
+ *  into the cards the ideas leave. THE HARNESS'S, NOT A FINDING: such a dump
+ *  holds only the table's first five rows, so its table shows what is left of
+ *  them (the loader's own goes on to five). */
+const contentDump = (tenant: string): ContentPageData => {
+  const raw = JSON.parse(readFileSync(join(resolve(flag('content-dumps', '.')), tenant, 'content.json'), 'utf8')) as ContentPageData
+  if (Array.isArray(raw.ideas.questions)) return raw
+  const n = Math.max(0, IDEA_SLOTS - raw.ideas.cards.length)
+  const lead = raw.asked.rows.slice(0, n)
+  return {
+    ...raw,
+    ideas: { ...raw.ideas, questions: lead.map((r) => ({ ...r, flag: null })) },
+    asked: { ...raw.asked, rows: raw.asked.rows.slice(lead.length), total: Math.max(0, raw.asked.total - lead.length) },
+  }
+}
+
 // ---- the pages, as their routes compose them -------------------------------------
 
 interface Page {
@@ -476,6 +495,16 @@ const PAGES: Page[] = [
   // subjects as a locked tenant's owner sees it.
   { key: 'dashboard-two-clocks', path: '/dashboard', artboard: 'E1-Dashboard.dc.html', page: () => h(DashboardPage, { data: dashboardFixture({ twoClocks: true }) }) },
   { key: 'settings-subjects-locked', path: '/dashboard/settings/subjects', artboard: 'no-board-settings-subjects.dc.html', page: () => settingsSubjectsPage(true) },
+  // Content's parity pass (13 Oct): the board's shape in the thin states.
+  // The thin real state (both tenants' rows on 13 Oct, as a fixture), a set
+  // of one idea, a week with none written, and, with `--content-dumps <dir>`,
+  // each tenant's production dump.
+  { key: 'content-parity-thin', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentThinFixture() }) },
+  { key: 'content-parity-fewer', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentFixture({ ideas: 'fewer' }) }) },
+  { key: 'content-parity-none', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentFixture({ ideas: 'none' }) }) },
+  ...(flag('content-dumps', '') ? (['ossur', 'sealand'] as const).map((tenant): Page => ({
+    key: `content-parity-${tenant}`, path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentDump(tenant) }),
+  })) : []),
 ]
 
 // ---- the shell -----------------------------------------------------------------
