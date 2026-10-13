@@ -1047,6 +1047,33 @@ This version has breaking changes — APIs, conventions, and file structure may 
     its move's sentence; and the weekly email's Voices and Your products
     lines, inline (`weeklyReadLines`, frozen into the snapshot at build). A
     state that reads no month carries no label.
+  - **Every v2 page keeps its board's shape in every data state** (the
+    parity pass, 13 Oct night; Heinrich: "the page shouldn't look too
+    different if everything isn't as populated as the design"). A component
+    is never removed, collapsed into a line of text or reflowed into another
+    grid because its data is thin: the board's grid, its components in their
+    places and roughly their sizes hold on every tenant, and a gap is said
+    INSIDE its component, in its own shape, in one calm line (a chart's
+    empty slots on its axis, rows that keep their tracks, a column head that
+    says "not counted yet"), never as a grey box and never with an invented
+    figure. Decision 1, no quotes at level 1, no model prose at the top of
+    Market, the copy contract and colour roles are unchanged; where a
+    board's words break them, the board's SHAPE stays with the decided
+    words. Each page's states are pinned by fixtures and render tests
+    (`marketThinFixture`, `VOICES_FIXTURES['ossur-thin']`,
+    `PRODUCTS_FIXTURES['ossur-today']`, `contentThinFixture`, the moves
+    fixtures' thin states, `dashboardThinFixture`) and drawn by
+    `scripts/pages-shots.ts`, Phase 4's production dumps included
+    (`--market-dump`, `--content-dumps`). WHERE A TILE AND ITS PAGE SAY THE
+    SAME THING THEY SHARE ONE SOURCE (the merge, 13 Oct), each pinned by a
+    test: a subject whose check has not passed prints `SUBJECT_NOT_MEASURED`
+    ("Not measured yet", `lib/subjects/calibration-state.ts`) on Market,
+    Your products and the Dashboard alike; the Market tile's stand-in is
+    Market's third card's `alsoTalkedOf`; the Content tile's question is the
+    page's first question card; the products tile draws the page's own shelf
+    (`miniShelfOf`, `shelfCut`); the moves tile's no-move words are Your
+    moves' (`noMoveWords`); the Voices tile's tracked brands are
+    `brandTable`'s rows.
   - **Dashboard** (Design v2, T8; boards E1-Dashboard and -Phone;
     `lib/pages/v2/home.ts`, route `app/dashboard/(home)/page.tsx`).
     `startDashboard` starts every tile's reads in one wave on one session
@@ -1099,7 +1126,31 @@ This version has breaking changes — APIs, conventions, and file structure may 
     "still filling" is `STILL_FILLING`); Market's rail draws the same chart.
     The two fail-open fixes (`gate_rule` / `relevance_gate`: the 24 Sep fix
     and the backfill's regate) cut no week, because `unchecked` counts
-    exactly their videos (`isFailOpenFix`).
+    exactly their videos (`isFailOpenFix`). EVERY TILE KEEPS THE BOARD'S
+    PARTS IN EVERY DATA STATE (parity pass): the loader hands a thin tile
+    what to draw with, each field optional so a dump from before it still
+    draws: `MarketTop.also` (nothing more new this week: the week's next
+    biggest conversation by Market's own `alsoTalkedOf`);
+    `WeekSubjects.gap` (`calibrating`, `none_named` or `failed`: both
+    subject rows kept, the reason said in them, `SUBJECT_NOT_MEASURED` for
+    the first); `TopVoices.tracked` (the brands table's first rows,
+    `brandTable`: names with no count while brands are not counted);
+    `TopProducts.columns` (the page's own shelf, `miniShelfOf` over
+    `data.shelf`, in every state with a catalogue but a failed read:
+    unshaded where the month was not read, cut as the page cuts it,
+    `shelfCut`: `SHELF_TILES` bars a column, then "+N more", its words
+    counting the whole column, `named`); `ContentTile.asked` via
+    `topAsked`, read only where no idea prints (the page's split with no
+    idea on the row, `askedWithLead` with `lead: IDEA_SLOTS`: the tile's
+    question is `lead[0]` and opens its card, `questionSlotId(1)`, never the
+    Also asked table, which goes on after the cards); and `TopMoves.newest`
+    (the newest move where none has a comparison to print) with
+    `TopMoves.invite`. With no move at all, "After your move" says Your
+    moves' words (`noMoveWords`: "No move dated yet.", with the invitation
+    to date one only where `invite`, the reader may decide and moves are
+    recorded); a member is never told to accept or date anything. Each gap
+    is said inside its part in one quiet line; `dashboardThinFixture` pins
+    this.
   - **Market** (T3; `lib/pages/v2/market.ts`, `app/dashboard/market/page.tsx`).
     Nav key `market`, page key `overview`, unchanged: the `overview` module
     (`overviewPage`) stays registered for stored snapshots, exports and the
@@ -1113,8 +1164,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
     or biggest, and stays listed, tagged. The table lists a conversation at
     `MARKET_TABLE_FLOOR` (`POOL_FLOOR`, 3) of the period's category videos,
     ten until `?all=1`. A subject that prints no level says why
-    (`unmeasuredOf`: `countedNote('provisional')`, `FAILED_EXPLAINED`, or no
-    reading in the month yet). `?conv=` takes a registry id or a slug;
+    (`unmeasuredOf`: `SUBJECT_NOT_MEASURED` while its check is open,
+    `FAILED_EXPLAINED`, or no reading in the month yet). `?conv=` takes a registry id or a slug;
     `?subject=`, `?period=week|month|time`, `?month=` (`YYYY-MM` or a date),
     `?at=` and `?in=` are read too (`marketParams`). THIS MONTH ENDS WITH
     THE MONTH'S LONG-RUN READ (Heinrich, 13 Oct): below the conversation
@@ -1139,7 +1190,23 @@ This version has breaking changes — APIs, conventions, and file structure may 
     praise by definition). On a phone the table's month sits under the
     week's figure in its cell, and its own column shows from 640, so no
     figure column is cut at 390 (checked on Sealand's dump and the
-    long-label fixture, `marketLongRowsFixture`).
+    long-label fixture, `marketLongRowsFixture`). E2-MARKET'S SHAPE IN EVERY
+    DATA STATE (parity pass): three top cards on This week, a row per
+    subject, the rail always a column, the weekly chart's eight slots
+    (`weeksAxis`, empty where a week is not drawn), and the table's Subject
+    and About columns. A card with nothing for it this week keeps its frame
+    and says so; with nothing new and no earlier week's new conversation
+    (`earlierNewOf`), the third card says "Nothing new this week" and names
+    the week's next biggest conversation not on the row under "Also talked
+    about" (`alsoTalkedOf`). A subject whose check is open keeps its row,
+    lists its conversations ("Inside it") and says `SUBJECT_NOT_MEASURED`
+    where its level goes. Market alone places a conversation in a subject
+    whose check is still open, and only where no ready subject takes it
+    (`placeSubject`: a ready subject always wins, a failed one is never
+    used); that subject keeps its row, its "Inside it" and the table's
+    Subject column, but prints no level, line, change or chip count until its
+    check clears (ruling U6). Every other surface places conversations in
+    ready subjects only (`loadReadySubjects`).
   - **Voices** (T4; `lib/pages/v2/voices.ts`), on the reading month, its
     bar labelled where that is not the current month (decision 3, above).
     Groups are today's profile with this month's comment-dated videos: a
@@ -1162,7 +1229,17 @@ This version has breaking changes — APIs, conventions, and file structure may 
     days ending at the reading month's last update. One panel opens at a
     time: `?group=` / `?persona=`, `?brand=` (a name, a key or
     `competitor:<name>`, for ANY tracked brand), `?creator=` (an account or
-    `platform|account`).
+    `platform|account`). THIN MONTHS KEEP E3-VOICES' SHAPE (parity pass):
+    the month switch shows the month, and This week and Over time are drawn
+    but not offered (the kit's `disabled`). Each group card's verdict slot
+    reads `GROUP_NOT_COMPARED` ("not compared yet"). "The mix in {month}"
+    draws this month's column with last month's axis empty and dashed
+    (decision 2). The brands table always draws its column heads with your
+    row first; before any month row exists, every tracked brand is a row
+    with empty cells and one "not counted yet" line (`brandTable`). A
+    group's panel lists "Products in their videos" by Your products' rule
+    (`productMonthSets` over the group's videos: named in the video or a
+    comment on it), never as the group's own words.
   - **Your products** (T5; `lib/pages/v2/products.ts`). `?group=` /
     `?product=` open in place; `?unclear=all` shows an open category's full
     couldn't-tell list. Counts pool `month_product_readings` over every
@@ -1191,7 +1268,19 @@ This version has breaking changes — APIs, conventions, and file structure may 
     "not read yet", never quiet. The panels' kinds are `productKindLabel`'s
     (above, "Who talk is about"). The Tag control is for owners and admins
     only. Honest states: not applied, no catalogue, not switched on, unread,
-    failed (`ProductsState`).
+    failed (`ProductsState`). THE BOARD'S SHAPE IN EVERY STATE (parity pass,
+    13 Oct night): the page always draws the board's four standout places
+    (`standoutSlots`): the code's pick, else the month's nearest honest card
+    worded for what it is, else the place's empty frame. Those stand-ins
+    never reach the Dashboard tile or the email, which read `standouts`
+    (the strict picks) and the shelf. The month switch reads `?month=`. A
+    subject that has not passed its check prints no figure on the page (U6):
+    it is named, with `SUBJECT_NOT_MEASURED` where its count would be. A
+    state with no reading still draws the frame, and every state with a
+    catalogue draws the shelf (`buildProductsData` fills `shelf` with no
+    count where the month was not read). A shelf column shows `SHELF_TILES`
+    (8) tiles, most videos first, then "+N more" into the category's panel
+    (`shelfCut`, which the Dashboard's mini shelf cuts by too).
   - **Content** (T6; `lib/pages/v2/content.ts`: `loadContentPage`,
     `topContent`). The week is a run's frozen window: the newer of the post
     ideas' run and the published week read's (`anchorOf`), either alone
@@ -1238,7 +1327,15 @@ This version has breaking changes — APIs, conventions, and file structure may 
     month, pinned by `lib/pages/week-replies-cost.test.ts`; the 117 it made
     before was measured once, offline, on the same tenant with the old code,
     with the same rows. In a
-    medical market every printed idea carries `MEDICAL_LINE`.
+    medical market every printed idea carries `MEDICAL_LINE`. THE IDEAS ROW
+    ALWAYS DRAWS THREE CARDS (`IDEA_SLOTS`; parity pass): the places the
+    ideas leave hold the next questions in line (`IdeasBlock.questions`, the
+    top of `askedWithLead`, each card's anchor `questionSlotId(rank)`), and
+    Also asked goes on after them, so no question prints twice; a slot with
+    neither is an empty card that says why. A thin card keeps its frame and
+    says the gap in one line. Question cards carry no medical line, because
+    they propose no post. A window is called "this week" only where it is
+    seven days (`weekWordsOf`, for the page and the Dashboard's tile).
   - **Your moves** (T7; `lib/pages/v2/moves.ts`, `loadMovesPage`).
     `loadMarketSurface` and its blocks stay for stored snapshots, the briefs
     and the quarterly. `?advice=` takes a lineage, a recommendation id or
@@ -1263,7 +1360,18 @@ This version has breaking changes — APIs, conventions, and file structure may 
     own JWT can still write those four through PostgREST. A move reads the
     market from `MOVE_MONTHS_BEFORE` (2) months before it to the reading
     month, and its one comparison goes through `pairedVerdict` under the
-    month-pair judge.
+    month-pair judge. THE BOARD'S LAYOUT IN EVERY DATA STATE (parity pass):
+    every section keeps its card. A move's chart is drawn on its axis
+    (`moveAxis`) whatever was read, with empty slots and one line. An odd
+    last move takes the next move's card (`NEXT_MOVE`) on its neighbour's
+    axis; no move at all is that card across the row (`NO_MOVE_YET`), which
+    invites a dated move only where the reader may date one (an owner or
+    admin, moves recorded, something to date it on: `canDate`). With fewer
+    than three pieces of advice waiting, the advice record's card fills the
+    row (`AdviceRest`). The plan card draws even with no plan
+    (`PLAN_EMPTY`). A card's "Would move" is the theme its evidence leads
+    with (`adviceTargets`), with its level in the reading month
+    (`adviceAims`), never a week.
     `theme_registry`'s label column is `canonical_label`. Your statements
     (`client_statements` / `client_statement_readings`, migration
     `20261105090000`; gloss, band at the subjects' 0.40/0.60, judge, stance),
