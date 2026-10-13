@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import { weekFlagRows, type CheckRow, type FlagRow } from '../pages/week'
 import { fakeDb } from '../test/fake-db'
-import { frozenFlag, loadWeekUnusual, unusualOf } from './unusual'
+import { AnomalyReadError, frozenFlag, readAnomalyRecord, unusualFrom, unusualOf } from './unusual'
 
 // The update's anomaly check, frozen into the week's read by `write-week-read`
 // (depth v2, T11b): the same flags This week prints, by the same rule
@@ -87,17 +87,42 @@ describe('the check, as the read keeps it', () => {
   })
 })
 
-describe('loadWeekUnusual', () => {
-  it('reads the run\'s own check and flags and freezes them', async () => {
+describe('the strict read the step freezes from', () => {
+  const read = (db: ReturnType<typeof fakeDb>) => readAnomalyRecord(db.client as SupabaseClient, { clientId: 'c1', runId: 'run-1' })
+
+  it('reads the run\'s own check and flags', async () => {
     const db = fakeDb({
       anomaly_checks: [{ ...check(), client_id: 'c1' }, { ...check(), run_id: 'run-0', client_id: 'c1' }],
       anomaly_flags: [{ ...flag(), client_id: 'c1' }, { ...flag({ run_id: 'run-0', object_id: 'old' }), client_id: 'c1' }],
     })
-    const u = await loadWeekUnusual(db.client as SupabaseClient, { clientId: 'c1', runId: 'run-1', window: WINDOW })
-    expect(u?.flags.map((f) => f.objectId)).toEqual(['reg-1'])
+    const record = await read(db)
+    expect(record.check?.run_id).toBe('run-1')
+    expect(unusualFrom(record, WINDOW).flags.map((f: { objectId: string }) => f.objectId)).toEqual(['reg-1'])
   })
-  it('survives a database without the anomaly tables: no row, no flags, no throw', async () => {
-    const db = fakeDb({})
-    expect(await loadWeekUnusual(db.client as SupabaseClient, { clientId: 'c1', runId: 'run-1', window: WINDOW })).toEqual({ outcome: null, flags: [], flaggedCount: 0 })
+
+  it('a database without the anomaly tables is no check: an answer, not a failure', async () => {
+    const record = await read(fakeDb({}))
+    expect(record).toEqual({ check: undefined, flags: null })
+    expect(unusualFrom(record, WINDOW)).toEqual({ outcome: null, flags: [], flaggedCount: 0 })
+  })
+
+  it('any other failure throws, as a transient read error, never "no check"', async () => {
+    const failing = {
+      from: () => {
+        const q: Record<string, unknown> = {}
+        for (const m of ['select', 'eq', 'order', 'range', 'limit']) q[m] = () => q
+        q.maybeSingle = async () => ({ data: null, error: { code: '57014', message: 'canceling statement due to statement timeout' } })
+        q.then = (ok: (v: unknown) => unknown) => Promise.resolve({ data: null, error: { code: '57014', message: 'canceling statement due to statement timeout' } }).then(ok)
+        return q
+      },
+    } as unknown as SupabaseClient
+    const thrown = await readAnomalyRecord(failing, { clientId: 'c1', runId: 'run-1' }).catch((e: unknown) => e)
+    expect(thrown).toBeInstanceOf(AnomalyReadError)
+    expect((thrown as AnomalyReadError).status).toBe(503)
+    expect((thrown as Error).message).toContain('statement timeout')
+  })
+
+  it('a record that could not be read is frozen unread', () => {
+    expect(unusualFrom(null, WINDOW)).toEqual({ outcome: null, flags: [], flaggedCount: 0, unread: true })
   })
 })

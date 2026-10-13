@@ -1672,7 +1672,8 @@ interface RunRow {
 }
 
 /** One update's `anomaly_checks` row. Exported for the weekly email, which
- *  freezes the same flags this page prints (lib/written/unusual.ts). */
+ *  freezes the same flags this page prints (lib/written/unusual.ts), through
+ *  the strict readers below. */
 export interface CheckRow {
   run_id: string
   week_start: string | null
@@ -1687,7 +1688,7 @@ export interface CheckRow {
   median_videos: number | null
 }
 
-/** One `anomaly_flags` row, as `loadFlags` reads it. */
+/** One `anomaly_flags` row, as `loadFlags` and `loadFlagsStrict` read it. */
 export interface FlagRow {
   run_id: string
   object_kind: string
@@ -3413,7 +3414,7 @@ async function loadOwnedRivalAudiences(supabase: SupabaseClient, clientId: strin
  *  installed here; `null` means it is and this update has no row — two
  *  different silences, and §1 prints them the same way only because both mean
  *  "nobody has looked at this update yet". */
-export async function loadCheck(supabase: SupabaseClient, clientId: string, runId: string): Promise<CheckRow | null | undefined> {
+async function loadCheck(supabase: SupabaseClient, clientId: string, runId: string): Promise<CheckRow | null | undefined> {
   try {
     const res = await supabase
       .from('anomaly_checks')
@@ -3434,7 +3435,7 @@ export async function loadCheck(supabase: SupabaseClient, clientId: string, runI
  *  not installed, or the read was refused — and never "there were none": a
  *  check row that says `flagged` beside an empty list is a record disagreeing
  *  with itself, and §1 says so rather than reading it as silence. */
-export async function loadFlags(supabase: SupabaseClient, clientId: string, runId: string): Promise<FlagRow[] | null> {
+async function loadFlags(supabase: SupabaseClient, clientId: string, runId: string): Promise<FlagRow[] | null> {
   try {
     return await selectAll<FlagRow>(() =>
       supabase.from('anomaly_flags').select('*')
@@ -3446,6 +3447,43 @@ export async function loadFlags(supabase: SupabaseClient, clientId: string, runI
       console.error(`[pages] week.flags: ${(error as { message?: string })?.message ?? String(error)}`)
     }
     return null
+  }
+}
+
+/**
+ * THE STRICT READERS, for a writer that FREEZES what it reads (the week's read
+ * keeps the update's flags for the level-1 email; lib/written/unusual.ts). A
+ * missing table answers as the lenient readers above do (`undefined`, `null`):
+ * the expected state before M7, and nothing to retry. Any other failure THROWS,
+ * because a frozen "no check" would outlive the blip that caused it. This
+ * page's own readers stay lenient: a page that loses its §1 to a blip prints
+ * "could not look" and reads again on the next load.
+ */
+export async function loadCheckStrict(supabase: SupabaseClient, clientId: string, runId: string): Promise<CheckRow | null | undefined> {
+  const res = await supabase
+    .from('anomaly_checks')
+    .select('*')
+    .eq('client_id', clientId)
+    .eq('run_id', runId)
+    .maybeSingle()
+  if (res.error) {
+    if (isMissingAnomalyRecord(res.error)) return undefined
+    throw new Error(`anomaly_checks: ${res.error.message}`, { cause: res.error })
+  }
+  return (res.data as CheckRow | null) ?? null
+}
+
+/** The flags, strictly: `null` only where the table is not installed. */
+export async function loadFlagsStrict(supabase: SupabaseClient, clientId: string, runId: string): Promise<FlagRow[] | null> {
+  try {
+    return await selectAll<FlagRow>(() =>
+      supabase.from('anomaly_flags').select('*')
+        .eq('client_id', clientId).eq('run_id', runId)
+        .order('rank', { ascending: true }),
+    )
+  } catch (error) {
+    if (isMissingAnomalyRecord(error)) return null
+    throw error
   }
 }
 

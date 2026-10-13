@@ -46,7 +46,7 @@ import { fetchQuoteResolutionsByRefs, type QuoteResolution } from '../lib/quotes
 import type { WeekCheck } from '../lib/written/check'
 import type { QuoteFit } from '../lib/written/fit'
 import { buildWeekRead, finishWeekRead, loadWeekReadInputs, rowOf, withUnusual, type BuiltWeekRead, type WeekReadInputs } from '../lib/written/step'
-import { loadWeekUnusual } from '../lib/written/unusual'
+import { readAnomalyRecord } from '../lib/written/unusual'
 import { loadWeekReadRow, saveWeekRead, weekReadsApplied } from '../lib/written/store'
 import { loadCompanyContext } from '../lib/written/company'
 import type { WeekReadDataV2 } from '../lib/written/types'
@@ -183,8 +183,13 @@ async function main() {
 
   if (write) {
     // The update's anomaly check goes with the read, as the step keeps it
-    // (T11b): the level-1 email's lead.
-    const stored = await withUnusual(built, (window) => loadWeekUnusual(db, { clientId, runId, window }))
+    // (T11b): the level-1 email's lead. No retry here: a check that cannot be
+    // read is frozen unread.
+    const record = await readAnomalyRecord(db, { clientId, runId }).catch((e: unknown) => {
+      console.error(e instanceof Error ? e.message : String(e))
+      return null
+    })
+    const stored = withUnusual(built, record)
     await saveWeekRead(db, rowOf(clientId, runId, stored))
     console.log(`Stored the run's week read (${built.status}).`)
   }

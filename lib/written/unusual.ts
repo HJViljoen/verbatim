@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { loadCheck, loadFlags, weekFlagRows, type CheckRow, type FlagRow } from '../pages/week'
+import { loadCheckStrict, loadFlagsStrict, weekFlagRows, type CheckRow, type FlagRow } from '../pages/week'
 import { anomalyVerdict, type AnomalyObjectKind, type AnomalyRow, type AnomalyVerdictInput } from '../reading/anomaly'
 import { nextMonth } from '../reading/month-key'
 import type { WeekReadFlag, WeekReadUnusual } from './types'
@@ -14,9 +14,16 @@ import type { WeekReadFlag, WeekReadUnusual } from './types'
 // run, so the step reads the check's rows for its own run and keeps them with
 // the read: inside the existing step, with no new step id.
 //
+// READ STRICTLY, AND FIRST. What is frozen outlives the blip that caused it,
+// so the step reads the check BEFORE it spends anything, through the strict
+// readers (`loadCheckStrict`, `loadFlagsStrict`): a missing table is no check
+// (the expected state before M7), and any other failure throws. The step
+// retries on that (`AnomalyReadError` is transient), and on its last attempt
+// freezes `unread`, which no surface reads as "nothing was unusual".
+//
 // NO SECOND RULE. Which flags are the week's, and in what order, is
 // `weekFlagRows` (lib/pages/week.ts), the rule This week's "Unusual this week"
-// prints by, over the same two readers (`loadCheck`, `loadFlags`). Each flag's
+// prints by, over the same two tables. Each flag's
 // verdict is `anomalyVerdict` (lib/reading/anomaly.ts), the check's own
 // adapter, so the chip's word is read off a Verdict like every other chip.
 // No quote ref is kept: the email prints no quote at level 1.
@@ -94,21 +101,44 @@ export function unusualOf(
   return { outcome, flags: frozen, flaggedCount }
 }
 
+/** The run's check and flags as the strict readers return them. */
+export interface AnomalyRecord {
+  /** `undefined`: the table is not installed; `null`: no row for the run. */
+  check: CheckRow | null | undefined
+  /** `null`: the table is not installed. */
+  flags: FlagRow[] | null
+}
+
 /**
- * Read the run's check and flags and freeze them. Never throws: the two
- * readers already answer a missing table and a failed read with "none" and
- * "unread", and anything else is logged and kept off the read, because the
- * week's read must not fail for its lead.
+ * The check could not be read (a failure, not a missing table). Carries a 503
+ * so `isTransient` (lib/written/deadline.ts) has the step retried: nothing has
+ * been spent when it is thrown, and another attempt may well read it.
  */
-export async function loadWeekUnusual(
-  admin: SupabaseClient,
-  a: { clientId: string; runId: string; window: { from: string; to: string } },
-): Promise<WeekReadUnusual | null> {
-  try {
-    const [check, flags] = await Promise.all([loadCheck(admin, a.clientId, a.runId), loadFlags(admin, a.clientId, a.runId)])
-    return unusualOf(check, flags, a.window)
-  } catch (e) {
-    console.error(`[write-week-read] the update's anomaly check could not be read: ${e instanceof Error ? e.message : String(e)}`)
-    return null
+export class AnomalyReadError extends Error {
+  readonly status = 503
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options)
+    this.name = 'AnomalyReadError'
   }
+}
+
+/** Read the run's check and flags. A missing table is an answer; any other
+ *  failure throws an `AnomalyReadError`. */
+export async function readAnomalyRecord(admin: SupabaseClient, a: { clientId: string; runId: string }): Promise<AnomalyRecord> {
+  try {
+    const [check, flags] = await Promise.all([loadCheckStrict(admin, a.clientId, a.runId), loadFlagsStrict(admin, a.clientId, a.runId)])
+    return { check, flags }
+  } catch (e) {
+    throw new AnomalyReadError(`the update's anomaly check could not be read: ${e instanceof Error ? e.message : String(e)}`, { cause: e })
+  }
+}
+
+/** The check could not be read on the step's last attempt: kept as such, so
+ *  the email leads with something else and never says the week was quiet. */
+export const UNREAD_CHECK: WeekReadUnusual = { outcome: null, flags: [], flaggedCount: 0, unread: true }
+
+/** What the read keeps: the record frozen over the read's window, or
+ *  `UNREAD_CHECK` where it could not be read. Pure. */
+export function unusualFrom(record: AnomalyRecord | null, window: { from: string; to: string }): WeekReadUnusual {
+  return record ? unusualOf(record.check, record.flags, window) : { ...UNREAD_CHECK }
 }
