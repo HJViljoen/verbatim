@@ -184,9 +184,15 @@ describe('the five old reading pages are redirect stubs that ask the mapping', (
     expect(read('lib/nav.ts')).toMatch(/export function frontRedirect[\s\S]*?return redirectFor\('\/dashboard', params\)/)
   })
 
-  it('Your moves reads `?advice=` as the old params its loader knows', () => {
+  // Design v2 (T7): the page's own loader reads `?advice=` (a lineage, a
+  // recommendation id from an old `?rec=`, or `all` for the record), so the
+  // route hands it the params as they came.
+  it('Your moves reads `?advice=` itself, `all` as the advice record', async () => {
     const src = read('app/dashboard/moves/page.tsx')
-    expect(src).toMatch(/const \{ advice, \.\.\.rest \}/)
-    expect(src).toContain('LEDGER_ALL_VALUE')
+    expect(src).toContain('loadMovesPage({ supabase, clientId, reading: readingHandle(clientId), params }')
+    const v2 = await import('./pages/v2/moves')
+    const { LEDGER_ALL_VALUE } = await import('./pages/market-surface')
+    expect(v2.ADVICE_PARAM).toBe('advice')
+    expect(v2.ADVICE_RECORD).toBe(LEDGER_ALL_VALUE)
   })
 })

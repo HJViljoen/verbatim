@@ -8,6 +8,10 @@ import { createAdminClient } from '@/lib/supabase-admin'
 import { declareMove } from '@/lib/subjects/moves'
 import { setRecommendationStatus } from '@/lib/actions/rec-status'
 import { planAfterMove } from '@/lib/actions/accept-plan'
+import { databaseToday } from '@/lib/subjects/moves'
+import { moveDay } from '@/lib/subjects/move-day'
+import { dateMoveSaid } from '@/lib/pages/date-move'
+import { MOVES_WRITE_REFUSED, mayDecideMoves } from '@/lib/moves-access'
 
 // "Accept this advice" — MK5's second live way of making a move (Phase 1 WP14,
 // design §3 MK5).
@@ -32,6 +36,15 @@ import { planAfterMove } from '@/lib/actions/accept-plan'
 // A SEPARATE FILE FROM lib/actions/moves.ts, which WP12 owns for Track this.
 // Two packages writing one file from two worktrees is a merge conflict for no
 // gain, and "accept this advice" is Market's own button.
+//
+// AN OWNER'S OR AN ADMIN'S (depth v2, T7; lib/moves-access.ts). Checked
+// before anything is read, in the words the page prints where the button
+// would have been.
+//
+// AND DATED WHERE THE READER SAYS (T7, "Accept and date it as a move"): the
+// open panel sends the day the change was made (MF5 `moves.dated_on`), which
+// `declareMove` checks against the window the database holds. No day, or
+// today's, is the declaration day, as before.
 
 export interface AcceptAdviceState {
   ok: boolean
@@ -43,11 +56,12 @@ const input = z.object({
   title: z.string().trim().min(1).max(120),
 })
 
-export async function acceptAdvice(lineageId: string, title: string): Promise<AcceptAdviceState> {
+export async function acceptAdvice(lineageId: string, title: string, datedOn?: string | null): Promise<AcceptAdviceState> {
   const parsed = input.safeParse({ lineageId, title })
   if (!parsed.success) return { ok: false, message: 'That piece of advice is no longer here.' }
 
-  const { supabase, clientId, userId, email, operator } = await getSessionContext()
+  const { supabase, clientId, userId, email, operator, role } = await getSessionContext()
+  if (!mayDecideMoves(role)) return { ok: false, message: MOVES_WRITE_REFUSED }
 
   // The lineage must be this tenant's, read through the session client so a
   // foreign id resolves to nothing here rather than reaching the write. Any
@@ -77,10 +91,13 @@ export async function acceptAdvice(lineageId: string, title: string): Promise<Ac
   const declared = await declareMove(
     { supabase, clientId, userId, email, operator },
     createAdminClient(),
-    { kind: 'advice', lineageId: parsed.data.lineageId, title: parsed.data.title },
+    { kind: 'advice', lineageId: parsed.data.lineageId, title: parsed.data.title, datedOn: datedOn ?? null },
   )
   const plan = planAfterMove(declared)
   if (plan.do === 'refuse') return { ok: false, message: plan.message }
+  // A day before today says so; today (or none) keeps the plan's sentence.
+  const day = moveDay(datedOn ?? null, databaseToday())
+  const said = plan.do === 'mark' && typeof day !== 'string' && day.day ? dateMoveSaid(day.day) : plan.message
 
   const status = await setRecommendationStatus(rec.id as string, 'acted_on')
   // Your moves (/dashboard/moves since Design v2), the Dashboard, and Market,
@@ -88,7 +105,7 @@ export async function acceptAdvice(lineageId: string, title: string): Promise<Ac
   revalidatePath('/dashboard/moves')
   revalidatePath('/dashboard')
   revalidatePath('/dashboard/market')
-  if (!status.ok) return { ok: false, message: `${plan.message} ${status.message}`.trim() }
-  return { ok: true, message: plan.message }
+  if (!status.ok) return { ok: false, message: `${said} ${status.message}`.trim() }
+  return { ok: true, message: said }
 }
 

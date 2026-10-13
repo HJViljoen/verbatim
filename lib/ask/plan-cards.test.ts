@@ -289,7 +289,7 @@ describe('planQuotePicker — a plan claim’s quote passes the quote gate', () 
     forComment: () => null,
     forVideo: () => null,
     forVideoUuid: () => null,
-    commentOfEvidence: () => null,
+    commentOfEvidence: () => null, dateOfEvidence: () => null,
   })
   const withQuote = (ref: string) => ({ ...claim(ref, 'echoes', 9, ['i1']), claim: `claim ${ref} about the bag lasting` })
 

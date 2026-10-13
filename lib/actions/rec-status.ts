@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { getSessionContext } from '@/lib/auth'
 import { REC_STATUSES, type RecStatus } from '@/lib/calibration'
 import { isMissingRecDecisions, REC_DECISIONS_TABLE } from '@/lib/rec-decisions'
+import { MOVES_WRITE_REFUSED, mayDecideMoves } from '@/lib/moves-access'
 
 // Lives in lib/actions/ rather than beside a page, since WP9: it is rendered
 // on the parked Market page AND on the legacy Dashboard's hero, and an action
@@ -14,12 +15,14 @@ import { isMissingRecDecisions, REC_DECISIONS_TABLE } from '@/lib/rec-decisions'
 // Moving a recommendation through its lifecycle — the write the `status`
 // column has been granted for since 2026-08-18 and never received.
 //
-// No role check, deliberately. Settings writes are owner/admin because they
-// move cost and quality knobs; this is a member saying "we did this one", which
-// is the whole point of the 2026-08-18 grant ("a tenant member may only move a
-// recommendation through its lifecycle"). The session client + RLS + the
-// column-level grant are the gate: even a crafted POST reaches exactly one
-// column on exactly one tenant's rows.
+// AN OWNER'S OR AN ADMIN'S SINCE DEPTH v2 (T7; lib/moves-access.ts). This
+// was open to any member on purpose ("a member saying we did this one", the
+// 2026-08-18 grant), and the approved depth plan closed it: a decision on a
+// piece of advice is on the record every page reads, the same kind of act as
+// dating a move. The session client + RLS + the column-level grant still say
+// WHAT may be written (exactly one column on exactly one tenant's rows); the
+// role check says WHO, one turn earlier, and the database does not yet (see
+// lib/moves-access.ts).
 //
 // TWO WRITES, IN THIS ORDER (2026-09-15). `rec_decisions` is the record and
 // `recommendations.status` is the copy the page reads. The ledger goes first
@@ -52,7 +55,8 @@ export async function setRecommendationStatus(id: string, status: string): Promi
   if (!(REC_STATUSES as readonly string[]).includes(status)) {
     return { ok: false, message: 'Unknown status.' }
   }
-  const { supabase, clientId, userId } = await getSessionContext()
+  const { supabase, clientId, userId, role } = await getSessionContext()
+  if (!mayDecideMoves(role)) return { ok: false, message: MOVES_WRITE_REFUSED }
 
   // The lineage and the update it belongs to, read through the same client the
   // write goes through: a foreign or deleted id resolves to nothing here rather

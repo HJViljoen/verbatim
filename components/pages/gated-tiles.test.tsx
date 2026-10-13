@@ -66,13 +66,16 @@ describe('the gated-tile list', () => {
   const covered = new Set(modules.map((m) => m.name as string))
 
   it('covers every page that gates a tile out of its registry', () => {
-    const gating = readdirSync(dir, { withFileTypes: true })
+    // Every page folder's index, and the depth v2 pages' too: `v2` is a folder
+    // of pages (components/pages/v2/<page>/index.tsx), not a page, so its
+    // pages are read one level down rather than the folder skipped.
+    const pages = (at: string, prefix = '') => readdirSync(at, { withFileTypes: true })
       .filter((e) => e.isDirectory())
-      // A folder with no page module of its own (`v2/`, which holds the depth
-      // v2 pages one folder each) registers no tile.
-      .filter((e) => existsSync(`${dir}${e.name}/index.tsx`))
-      .filter((e) => /\.\.\.\(\s*directionWordsFor\(/.test(readFileSync(`${dir}${e.name}/index.tsx`, 'utf8')))
-      .map((e) => e.name)
+      .map((e) => `${prefix}${e.name}`)
+    const folders = [...pages(dir).filter((name) => name !== 'v2'), ...(existsSync(`${dir}v2`) ? pages(`${dir}v2`, 'v2/') : [])]
+    const gating = folders
+      .filter((name) => /\.\.\.\(\s*directionWordsFor\(/.test(readFileSync(`${dir}${name}/index.tsx`, 'utf8')))
+    expect(folders).toContain('v2/moves')
     expect(gating.length).toBeGreaterThan(0)
     for (const name of gating) {
       expect(covered, `${name} gates a tile out of its registry — add it to the modules list above`).toContain(name)
