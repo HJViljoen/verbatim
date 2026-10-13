@@ -43,12 +43,9 @@ import { pickQuotes, POOL_FLOOR } from '../overview-market'
 import { talkKindLabel } from '../overview-market/kinds'
 import { fetchThemedRunId } from '../themed-run'
 import { askAboutTheme, loadLinkedTheme, loadThemeKinds } from '../voice-surface'
-import { loadSubjectPlacement, placeSubject, type SubjectPlacement } from '../subject-place'
-import { loadActiveSubjects } from '../../subjects/membership'
-import { subjectCalibration } from '../../subjects/calibration-state'
-import { isMissingSubjects } from '../../subjects/types'
+import { loadReadySubjectIds, loadSubjectPlacement, placeSubject, type SubjectPlacement } from '../subject-place'
 import { flagFigures, loadCheckStrict, loadFlagsStrict, weekFlagRows, type FlagRow, type UnusualFlag } from '../week'
-import { weekLead } from '../../reading/week-lead'
+import { flagPrints, weekLead } from '../../reading/week-lead'
 import { setApartOf } from '../../written/conversations'
 import { frozenFlag } from '../../written/unusual'
 
@@ -1558,27 +1555,13 @@ async function loadThemeSeries(db: SupabaseClient, clientId: string, ids: readon
 }
 
 /**
- * RULING U6 ON THE FLAG: the anomaly check flags every active subject,
- * whatever its check (it measures; lib/pipeline/anomaly-check.ts), but a
- * subject whose check has not passed prints no figure resting on its
- * membership, and a flag card is nothing but such figures (its week's count,
- * its months', its chip) and the page's headline. So a flag on a subject that
- * is not READY never leads: the next flag the check raised does, in its
- * order, or the slot's next rule where none is left. Pure.
+ * RULING U6 ON THE FLAG: a flag on a subject that is not READY never leads
+ * (`flagPrints`, lib/reading/week-lead.ts, the one predicate the weekly
+ * issue's frozen flags go through too): the next flag the check raised does,
+ * in its order, or the slot's next rule where none is left. Pure.
  */
 export function printableFlags<T extends { object_kind: string; object_id: string }>(rows: readonly T[], readySubjects: ReadonlySet<string>): T[] {
-  return rows.filter((r) => r.object_kind !== 'subject' || readySubjects.has(String(r.object_id)))
-}
-
-/** The tenant's READY subjects' ids (ruling U6). None where the subjects are
- *  not recorded here: a subject flag then never leads (fail closed). */
-async function loadReadySubjectIds(db: SupabaseClient, clientId: string): Promise<Set<string>> {
-  try {
-    return new Set((await loadActiveSubjects(db as never, clientId)).filter((s) => subjectCalibration(s) === 'ready').map((s) => s.id))
-  } catch (error) {
-    if (isMissingSubjects(error)) return new Set()
-    throw error
-  }
+  return rows.filter((r) => flagPrints({ objectKind: r.object_kind, objectId: String(r.object_id) }, readySubjects))
 }
 
 /** The anomaly check's first printable flag for the read's run, or null. */

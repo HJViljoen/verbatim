@@ -4,7 +4,9 @@ import { levelOneRead, olderRead, sealandFlag, sealandRead, sealandUnusual, SEAL
 import {
   ALSO_ROWS, BIGGEST_HEADING, flagFigure, levelOneView, objectHref, usualOver, WEEK_READ_HELD_MESSAGE, weekReadDates, weekReadSendState, weeklyReadSubject, weeklyReadView,
 } from './weekly-read'
-import { isLevelOne, isWeeklyReadData, staleWeeklyReadSnapshot, weeklyReadSnapshotData } from './weekly-read-build'
+import { isLevelOne, isWeeklyReadData, printableWeekRead, staleWeeklyReadSnapshot, weeklyReadSnapshotData } from './weekly-read-build'
+import { printableFlags } from '../pages/v2/market'
+import { weekLead } from '../reading/week-lead'
 
 // The weekly read's pure half (artefact `weekly_read`): the dates it names, the
 // subject it goes out under, the send rule, and its sections in the design's
@@ -192,6 +194,41 @@ describe('level 1 (depth v2, T11b): the email a new snapshot sends', () => {
     expect(none.also).toEqual([])
     expect(levelOneView(levelOneRead({ unusual: sealandUnusual([]), conversations: [] })).lead).toBeNull()
   })
+  // Ruling U6 in the issue (14 Oct): the read froze every flag the check
+  // raised, a subject's whatever its check; the snapshot drops a flag on a
+  // subject that is not ready, by Market's predicate, so the issue leads as
+  // Market does.
+  it('U6: a frozen read whose first flag is on a provisional subject leads with the next flag, as Market does', () => {
+    const open = sealandFlag({ objectKind: 'subject', objectId: 's-open', label: 'Comfort', rank: 1 })
+    const theme = sealandFlag({ rank: 2 })
+    const stored = levelOneRead({ unusual: sealandUnusual([open, theme]) })
+    const read = printableWeekRead(stored, new Set(['s-ready']))
+    const v = levelOneView(read)
+    expect(v.lead?.kind === 'flag' && v.lead.flag.objectId).toBe('t3')
+    expect(v.also.some((r) => r.label === 'Comfort')).toBe(false)
+    // Market's live flags, the same rows by the same predicate: the same lead.
+    const rows = [open, theme].map((f) => ({ object_kind: f.objectKind, object_id: f.objectId }))
+    expect(printableFlags(rows, new Set(['s-ready']))[0].object_id).toBe('t3')
+    // The stored read is untouched; a ready subject's flag still leads.
+    expect(stored.unusual?.flags).toHaveLength(2)
+    const ready = levelOneView(printableWeekRead(stored, new Set(['s-open'])))
+    expect(ready.lead?.kind === 'flag' && ready.lead.flag.objectId).toBe('s-open')
+  })
+
+  it('U6: a frozen read whose only flag is on a provisional subject leads with the biggest or the new conversation, as with no flag', () => {
+    const open = sealandFlag({ objectKind: 'subject', objectId: 's-open', label: 'Comfort', rank: 1 })
+    const v = levelOneView(printableWeekRead(levelOneRead({ unusual: sealandUnusual([open]) }), new Set()))
+    const none = levelOneView(levelOneRead({ unusual: sealandUnusual([]) }))
+    expect(v.lead).toEqual(none.lead)
+    expect(v.lead?.kind).toBe('biggest')
+    expect(v.also).toEqual(none.also)
+    const lead = weekLead({ flags: printableFlags([{ object_kind: 'subject', object_id: 's-open' }], new Set()), newThisWeek: [], conversations: [] })
+    expect(lead).toBeNull()
+    // An older read carries no flags and is returned as it is.
+    const older = sealandRead()
+    expect(printableWeekRead(older, new Set())).toBe(older)
+  })
+
   it('an older read leads with its first finding\'s headline', () => {
     expect(levelOneView(olderRead()).headline).toBe('Buyers ask for named alternatives that match exact bag needs.')
   })

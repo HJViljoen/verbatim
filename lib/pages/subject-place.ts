@@ -158,3 +158,15 @@ export async function loadSubjectPlacement(db: SupabaseClient, clientId: string)
     },
   }
 }
+
+/** The tenant's READY subjects' ids (ruling U6: the subjects a flag, a count
+ *  or a rank may rest on). None where the subjects are not recorded here, so
+ *  a subject flag then never leads (fail closed); another failure throws. */
+export async function loadReadySubjectIds(db: SupabaseClient, clientId: string): Promise<Set<string>> {
+  try {
+    return new Set((await loadActiveSubjects(db as never, clientId)).filter((s) => subjectCalibration(s) === 'ready').map((s) => s.id))
+  } catch (error) {
+    if (isMissingSubjects(error)) return new Set()
+    throw error
+  }
+}

@@ -52,6 +52,21 @@ export type WeekLead<F, C extends LeadConversation> =
   | { kind: 'flag'; flag: F }
   | { kind: 'new' | 'biggest'; conversation: C }
 
+/**
+ * RULING U6 ON EVERY FLAG A WEEK MAY LEAD WITH (14 Oct). The anomaly check
+ * flags every active subject whatever its check (it measures), but a subject
+ * whose check has not passed prints no figure resting on its membership, and
+ * a flag is nothing but such figures (its week's count, its months', its
+ * chip). So a flag on a subject that is not READY is left out before the
+ * lead is picked: the next flag leads, or the next rule. ONE predicate for
+ * Market's live flags (`printableFlags`, lib/pages/v2/market.ts) and the
+ * weekly issue's frozen ones (`printableWeekRead`,
+ * lib/reports/weekly-read-build.ts). Pure.
+ */
+export function flagPrints(flag: { objectKind: string; objectId: string }, readySubjects: ReadonlySet<string>): boolean {
+  return flag.objectKind !== 'subject' || readySubjects.has(String(flag.objectId))
+}
+
 /** The week's lead, or null. Pure. */
 export function weekLead<F, C extends LeadConversation>(input: {
   flags: readonly F[]

@@ -843,7 +843,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
   stored before T11b ranks on its own counts). A set-apart conversation
   (maker-led or off-topic, `setApartOf`, `lib/written/conversations.ts`)
   never leads as new or biggest; a flag leads whatever its conversation's
-  mark. *The check read:* `write-week-read` reads the update's check strictly
+  mark. A flag on a subject that is not ready never leads the issue nor is
+  listed in Also this week (14 Oct, ruling U6): the read freezes every flag
+  the check raised, and the snapshot drops those by Market's predicate when
+  it is built (`printableWeekRead` in `snapshotWeeklyRead`, `flagPrints`,
+  `lib/reading/week-lead.ts`); the stored read and a stored snapshot are
+  untouched. The anomaly check still flags every active subject and the
+  written read still groups by its one-tier rule: both are pipeline
+  follow-ups. *The check read:* `write-week-read` reads the update's check strictly
   before it builds anything (`loadCheckStrict` / `loadFlagsStrict`). A
   missing table is no check. A failure before the step's last attempt is
   retried as transient; on the last attempt it is frozen `unread`, never "no

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createSnapshot } from '../snapshots'
+import { flagPrints } from '../reading/week-lead'
 import { loadWeekRead } from '../written/store'
 import type { WeekReadData } from '../written/types'
 import { STALE_ARTEFACT_LINE } from './stale'
@@ -112,6 +113,38 @@ export function weeklyReadSnapshotData(a: { company: string; runId: string; read
   }
 }
 
+/**
+ * RULING U6 IN THE ISSUE (14 Oct). The read froze the update's anomaly flags
+ * as the check raised them (`write-week-read`, lib/written/unusual.ts), and
+ * the check flags every active subject whatever its check. A flag on a
+ * subject that is not READY prints no figure on Market (`printableFlags`),
+ * so the issue drops it when the snapshot is built, by the same predicate
+ * (`flagPrints`, lib/reading/week-lead.ts): the lead is then the next flag,
+ * or the new or biggest conversation, exactly as Market's, and Also this week
+ * never lists it. The stored `week_reads` row is untouched (the pipeline and
+ * its grouping stay as they are), and a snapshot already stored stays as it
+ * was sent. Only a version-2 read carries flags. Pure.
+ */
+export function printableWeekRead(read: WeekReadData, readySubjects: ReadonlySet<string>): WeekReadData {
+  if (read.version !== 2 || !read.unusual) return read
+  const flags = read.unusual.flags.filter((f) => flagPrints(f, readySubjects))
+  return flags.length === read.unusual.flags.length ? read : { ...read, unusual: { ...read.unusual, flags } }
+}
+
+/** The tenant's ready subjects for `printableWeekRead`, read only where the
+ *  read froze a subject flag. FAILS CLOSED: a read that fails leaves no
+ *  subject ready, so no subject flag leads the issue. Loaded on first use, as
+ *  the lines are, so the renderers never load the subjects' reader. */
+async function readySubjectsFor(admin: SupabaseClient, clientId: string): Promise<ReadonlySet<string>> {
+  try {
+    const { loadReadySubjectIds } = await import('../pages/subject-place')
+    return await loadReadySubjectIds(admin, clientId)
+  } catch (e) {
+    console.error(`[weekly-read subjects] ${e instanceof Error ? e.message : String(e)}; no subject flag leads`)
+    return new Set()
+  }
+}
+
 /** Every page's line for the snapshot (lib/reports/weekly-read-lines-load.ts),
  *  loaded on first use so the renderers and the offline preview, which import
  *  this file for the shape, never load the pages' readers. Never throws. */
@@ -136,11 +169,19 @@ export async function snapshotWeeklyRead(args: {
   userId?: string | null
   /** The page lines' reader, for a test. */
   lines?: (admin: SupabaseClient, a: { clientId: string; runId: string; read: WeekReadData }) => Promise<WeeklyReadLine[]>
+  /** The ready subjects' reader, for a test. */
+  readySubjects?: (admin: SupabaseClient, clientId: string) => Promise<ReadonlySet<string>>
 }): Promise<{ snapshotId: string; data: WeeklyReadSnapshotData; evidenceIds: string[] }> {
   const row = await loadWeekRead(args.admin, { clientId: args.clientId, runId: args.runId, kind: 'week' })
   const state = weekReadSendState(row)
   if (!state.ok) throw new WeeklyReadNotReadyError(state.reason, state.message)
-  const read = row!.data!
+  const stored = row!.data!
+  // Ruling U6: the issue never leads with, or lists, a flag on a subject
+  // whose check has not passed (`printableWeekRead`).
+  const subjectFlagged = stored.version === 2 && (stored.unusual?.flags ?? []).some((f) => f.objectKind === 'subject')
+  const read = subjectFlagged
+    ? printableWeekRead(stored, await (args.readySubjects ?? readySubjectsFor)(args.admin, args.clientId).catch(() => new Set<string>()))
+    : stored
   const lines = await (args.lines ?? loadLines)(args.admin, { clientId: args.clientId, runId: args.runId, read }).catch(() => [] as WeeklyReadLine[])
   const data = weeklyReadSnapshotData({ company: args.company, runId: args.runId, read, writtenAt: row!.created_at, lines })
   const snap = await createSnapshot(args.admin, {
