@@ -45,7 +45,7 @@ describe('the sidebar', () => {
     }
     expect(glyph('Market')).toContain('lucide-message-square-text')
     expect(glyph('Voices')).toContain('lucide-users')
-    expect(glyph('Your products')).toContain('lucide-package')
+    expect(glyph('Your products')).toContain('lucide-box')
     expect(glyph('Content')).toContain('lucide-square-play')
     expect(glyph('Your moves')).toContain('lucide-target')
   })

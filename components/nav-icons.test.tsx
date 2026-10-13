@@ -53,9 +53,15 @@ describe('the sidebar’s icons', () => {
     // Voices: two people (`circle cx9 cy7 r4` and a second figure behind).
     expect(draw('voices')).toContain('lucide-users')
     expect(draw('voices')).toContain('cx="9" cy="7" r="4"')
-    // Your products: a box (Lucide Package).
-    expect(draw('products')).toContain('lucide-package')
+    // Your products: a box (Lucide Box: the boards' outline, the fold
+    // `3.3 7 8.7 5 8.7-5` and the spine `M12 22V12`). Lucide Package is the
+    // same box with a strap across its lid (`m7.5 4.27 9 5.15`), which the
+    // boards do not draw.
+    expect(draw('products')).toContain('lucide-box')
     expect(draw('products')).toContain('M12 22V12')
+    expect(draw('products')).toContain('8.7 5 8.7-5')
+    expect(draw('products')).not.toContain('lucide-package')
+    expect(draw('products')).not.toContain('m7.5 4.27')
     // Content: a play button in a square.
     expect(draw('content')).toContain('lucide-square-play')
     expect(draw('content')).toContain('<rect x="3" y="3" width="18" height="18" rx="2"')
