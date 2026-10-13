@@ -12,6 +12,7 @@ import { TABLE_EVIDENCE_REFS } from './evidence-refs'
 import { marketAudiences } from './market'
 import { monthStartOf, nextMonth, prevMonth } from './month-key'
 import { BRANDS_PANEL, refusedSteps, type PairOn } from './pairs'
+import { memoRead } from './memo'
 import { loadMonthSeries, loadPairOn, type ReadingHandle } from './read'
 import { marketRivalAudiences } from './reading-view'
 import type { MonthLabel, MonthSeries, MonthState } from './series'
@@ -923,7 +924,7 @@ export async function loadCreatorThemes(handle: ReadingHandle, input: { month: s
   return creatorThemes({ month: input.month, videos, refs, audiences })
 }
 
-type Tracking = {
+export type Tracking = {
   competitor_names?: string[] | null
   competitor_keywords?: string[] | null
   own_handles?: Record<string, string> | null
@@ -933,27 +934,52 @@ type Tracking = {
 
 const norm = (s: string): string => s.trim().toLowerCase()
 
+/** The workspace's name (`clients.company_name`), trimmed; '' where none is
+ *  stored. Memoised per request on the handle's client, so a page that names
+ *  the client and reads its brands reads the row once. */
+export function loadCompanyName(handle: ReadingHandle): Promise<string> {
+  const { client, clientId } = handle
+  return memoRead(client, `cross:company:${clientId}`, async () => {
+    const res = await client.from('clients').select('company_name').eq('id', clientId).maybeSingle()
+    if (res.error) throw fail('clients', res.error)
+    return ((res.data as { company_name?: string | null } | null)?.company_name ?? '').trim()
+  })
+}
+
+/** The brand reads' identity: who the brands are, the tracking row and the
+ *  rivals' keys. */
+export interface BrandRefsRead {
+  brands: BrandRef[]
+  tracking: Tracking
+  rivalKeys: Map<string, string>
+}
+
 /** The tenant's brands as the brand read names them: the client (where it has
  *  a rule), each live tracked rival with a competitors row, each watched brand
- *  not already tracked. Null where the tenant has no brand rules. */
-async function loadBrandRefs(handle: ReadingHandle): Promise<{ brands: BrandRef[]; tracking: Tracking; rivalKeys: Map<string, string> } | null> {
+ *  not already tracked. Null where the tenant has no brand rules. Memoised per
+ *  request on the handle's client: the month sets and the month pairs read
+ *  the same three rows, once. Read-only to every caller. */
+export function loadBrandRefs(handle: ReadingHandle): Promise<BrandRefsRead | null> {
+  const rules = brandRulesFor(handle.clientId)
+  if (rules.length === 0) return Promise.resolve(null)
+  return memoRead(handle.client, `cross:brand-refs:${handle.clientId}`, () => readBrandRefs(handle))
+}
+
+async function readBrandRefs(handle: ReadingHandle): Promise<BrandRefsRead> {
   const { client, clientId } = handle
   const rules = brandRulesFor(clientId)
-  if (rules.length === 0) return null
   // `select('*')`: `watched_brands` arrives with MF3 and is an absent key, not
   // a 42703, where it has not.
-  const [tcRes, compRes, nameRes] = await Promise.all([
+  const [tcRes, compRes, company] = await Promise.all([
     client.from('tracking_configs').select('*').eq('client_id', clientId).maybeSingle(),
     client.from('competitors').select('id, name, retired_at').eq('client_id', clientId),
-    client.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
+    loadCompanyName(handle),
   ])
   if (tcRes.error) throw fail('tracking', tcRes.error)
   if (compRes.error) throw fail('competitors', compRes.error)
-  if (nameRes.error) throw fail('clients', nameRes.error)
   const tracking = (tcRes.data ?? {}) as Tracking
   const live = new Map(((compRes.data ?? []) as { id: string; name: string; retired_at: string | null }[])
     .filter((c) => !c.retired_at).map((c) => [norm(c.name), String(c.id)]))
-  const company = ((nameRes.data as { company_name?: string | null } | null)?.company_name ?? '').trim()
   const clientRule = rules.find((r) => r.key.kind === 'client')
   // The hand check is keyed by the name the rule reads ("Sealand"), which is
   // not always the company's name as stored.
@@ -1120,8 +1146,11 @@ export async function loadGroupSubjects(
     /** The latest profile row, where the caller has read it (a page that also
      *  prints the groups' own fields): not read again. Null is "no profile". */
     profile?: GroupProfileRow | null
+    /** Each group's videos alone (a tile): the subject memberships and the
+     *  subjects' names are not read, and `groups` comes back empty. */
+    videosOnly?: boolean
   },
-): Promise<{ runId: string | null; runDate: string | null; videos: GroupMonthVideos[]; groups: GroupSubjectRow[] } | null> {
+): Promise<{ runId: string | null; runDate: string | null; videos: GroupMonthVideos[]; groups: GroupSubjectRow[]; marketVideos: number } | null> {
   const { client, clientId } = handle
   const month = monthStartOf(input.month)
   const profile = input.profile !== undefined ? input.profile : await loadLatestProfile(handle)
@@ -1145,14 +1174,14 @@ export async function loadGroupSubjects(
           .order('id'),
       ),
     ).catch((e: unknown) => { throw fail('groupEvidence', e) }),
-    mapWithLimit(parts, READ_CONCURRENCY, (part) =>
+    input.videosOnly ? Promise.resolve([] as { subject_id: string; audience_insight_id: string }[][]) : mapWithLimit(parts, READ_CONCURRENCY, (part) =>
       selectAll<{ subject_id: string; audience_insight_id: string }>(() =>
         client.from('subject_memberships').select('subject_id, audience_insight_id')
           .eq('client_id', clientId).eq('member', true).in('audience_insight_id', part)
           .order('subject_id').order('audience_insight_id'),
       ),
     ).catch((e: unknown) => { throw fail('groupMemberships', e) }),
-    loadSubjectNames(handle),
+    input.videosOnly ? Promise.resolve(new Map<string, string>()) : loadSubjectNames(handle),
     input.market ? Promise.resolve([...input.market]) : loadMarketVideos(handle, month, audiences),
   ])
   const evidence: GroupEvidence[] = evidencePages.flat().flatMap((r) => {
@@ -1166,7 +1195,8 @@ export async function loadGroupSubjects(
     runId: profile.run_id,
     runDate: profile.run_date,
     videos: groupMonthVideos({ month, personas, evidence, market: marketMap }),
-    groups: groupSubjects({ month, personas, evidence, memberships, subjects, market: marketMap }),
+    groups: input.videosOnly ? [] : groupSubjects({ month, personas, evidence, memberships, subjects, market: marketMap }),
+    marketVideos: new Set(market.map((v) => v.id)).size,
   }
 }
 
