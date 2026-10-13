@@ -166,7 +166,7 @@ describe('one title for every page (integration, 1 Oct)', () => {
     readdirSync(join(ROOT, dir), { withFileTypes: true }).flatMap((e) =>
       e.isDirectory() ? files(join(dir, e.name)) : /\.tsx$/.test(e.name) && !/\.test\.tsx$/.test(e.name) ? [join(dir, e.name)] : [])
   const PAGES = [
-    'components/pages/home', 'components/pages/overview/picture', 'components/pages/week', 'components/pages/voice-surface',
+    'components/pages/v2/home', 'components/pages/overview/picture', 'components/pages/week', 'components/pages/voice-surface',
     'components/pages/competitive-surface/page', 'components/pages/subjects', 'components/pages/moves', 'components/pages/agent',
     'components/pages/studio', 'components/pages/settings', 'components/settings-frame.tsx', 'components/settings-skeleton.tsx', 'app/dashboard',
   ]

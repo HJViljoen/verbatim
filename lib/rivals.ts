@@ -5,6 +5,7 @@ import {
   type ConfigActor,
 } from './config-log'
 import { selectAll } from './supabase-admin'
+import { memoRead } from './reading/memo'
 
 // A rival's identity, and the one place the audience key is built (Phase 1 WP1,
 // design item 16 addendum, decision I).
@@ -254,6 +255,15 @@ export interface TrackedRival {
  * lib/pages/overview.ts is this function.
  */
 export async function loadTrackedRivals(client: SupabaseClient, clientId: string): Promise<TrackedRival[]> {
+  // ONCE PER REQUEST (lib/reading/memo.ts: the client object is the request's
+  // scope). The Dashboard's tiles each read the rivals (depth v2, T8); a
+  // failed read is not remembered. Every caller gets its own copy, so one
+  // that sorts or edits its list cannot change another's.
+  const rows = await memoRead(client, `rivals:tracked:${clientId}`, () => readTrackedRivals(client, clientId))
+  return rows.map((r) => ({ ...r }))
+}
+
+async function readTrackedRivals(client: SupabaseClient, clientId: string): Promise<TrackedRival[]> {
   let stored: Competitor[] = []
   try {
     stored = await loadCompetitors(client, clientId)

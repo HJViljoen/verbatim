@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { Hash } from 'lucide-react'
 import { render, renderText } from '@/lib/test/render'
 import { BAR_FILL, BrandChip, ChipSep, EYEBROW, IconTile, KIND_ICON, NewNumber, SELECTED, TAG } from './colour-roles'
-import { HomePage } from './pages/home'
-import { HOME_DATA } from '@/lib/pages/home-fixture'
+import { DashboardPage } from './pages/v2/home'
+import { dashboardFixture } from '@/lib/pages/v2/home-fixture'
 import { MarketPicturePage } from './pages/overview/picture'
 import { PICTURE_FIXTURE } from './pages/overview/picture/fixture'
 import { VoiceSurfacePage } from './pages/voice-surface'
@@ -65,7 +65,7 @@ describe('the colour roles', () => {
 
 describe('the bans that hold with more colour, on the pages', () => {
   const pages: [string, string][] = [
-    ['dashboard', render(<HomePage data={HOME_DATA} />)],
+    ['dashboard', render(<DashboardPage data={dashboardFixture()} />)],
     ['your market', render(<MarketPicturePage data={PICTURE_FIXTURE} />)],
     ['conversation', render(<VoiceSurfacePage data={conversationFixture()} params={{}} />)],
     ['competitive', render(<CompetitivePage data={designFixture()} />)],
@@ -73,8 +73,9 @@ describe('the bans that hold with more colour, on the pages', () => {
 
   it('puts no chip inside a sentence: a brand chip is a label on a brand line, never a marker in prose', () => {
     for (const [name, m] of pages) {
-      // The Dashboard names no brand; every other page here does.
-      if (name !== 'dashboard') expect(m, name).toContain('data-who-chip')
+      // Every page here names a brand (the Dashboard's Voices tile: "Named
+      // most", Design v2).
+      expect(m, name).toContain('data-who-chip')
       // A paragraph, or any node of written prose, that holds a chip.
       expect(m, name).not.toMatch(/<p\b[^>]*>(?:(?!<\/p>)[\s\S])*data-who-chip/)
       expect(m, name).not.toMatch(/data-copy="(?:prose|stored)"[^>]*>[^<]*<[^>]*data-who-chip/)
@@ -87,7 +88,8 @@ describe('the bans that hold with more colour, on the pages', () => {
 
   it('lifts every card on the one card shadow', () => {
     for (const [name, m] of pages) {
-      const cards = m.match(/<section\b[^>]*class="[^"]*rounded-\[1[46]px\][^"]*"/g) ?? []
+      // A card is a section, or a v2 tile's article (the kit's `CARD`).
+      const cards = m.match(/<(?:section|article)\b[^>]*class="[^"]*rounded-\[1[46]px\][^"]*"/g) ?? []
       expect(cards.length, name).toBeGreaterThan(0)
       for (const c of cards) expect(c, name).toContain('shadow-card')
     }

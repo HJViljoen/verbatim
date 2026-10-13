@@ -115,8 +115,9 @@ const read = (p: string) => readFileSync(p, 'utf8')
  *  drawn with. The Agent page's body is redesigned on its own branch and uses
  *  the token there. */
 const CARDS: [string, string][] = [
-  ['components/pages/home/index.tsx', "const SHADOW = 'shadow-card'"],
-  ['components/pages/home/skeleton.tsx', "const SHADOW = 'shadow-card'"],
+  // The Dashboard (Design v2, T8): every tile and every bone is the kit's card.
+  ['components/v2/card-head.tsx', 'rounded-[16px] bg-card px-[26px] py-6 shadow-card'],
+  ['components/pages/v2/home/parts.tsx', 'export const TILE = cn(CARD,'],
   ['components/pages/overview/picture/parts.tsx', 'rounded-[16px] bg-white shadow-card'],
   ['components/pages/week/read-page.tsx', 'rounded-[16px] bg-white shadow-card'],
   ['components/pages/voice-surface/conversation.tsx', 'rounded-[16px] bg-white shadow-card'],

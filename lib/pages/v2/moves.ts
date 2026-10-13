@@ -1038,7 +1038,7 @@ export interface TopMoves {
   waiting: number
   /** The move whose comparison cleared its band (the largest change), else the
    *  newest move with a comparison that may print. Null: none. */
-  move: (Pick<MoveCard, 'id' | 'title' | 'label' | 'day' | 'direction'> & {
+  move: (Pick<MoveCard, 'id' | 'title' | 'kind' | 'label' | 'day' | 'direction'> & {
     compare: NonNullable<MoveCard['compare']>
     moved: boolean
     /** Your moves, where the move's card is. */
@@ -1100,7 +1100,7 @@ export async function topMoves(scope: Scope, options: { canDecide: boolean }): P
     waiting: latest.length,
     move: move && move.compare
       ? {
-          id: move.id, title: move.title, label: move.label, day: move.day, direction: move.direction,
+          id: move.id, title: move.title, kind: move.kind, label: move.label, day: move.day, direction: move.direction,
           compare: move.compare, moved: move.compare.verdict.state === 'moved', href: `${MOVES_PATH}#move-${move.id}`,
         }
       : null,
