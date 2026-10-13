@@ -154,6 +154,11 @@ export interface IdeaScrubCounts {
   droppedFirstPerson: number
   /** A title or label held whole for running over its cap. */
   droppedLong: number
+  /** A title or label held for copying a sent comment (compose). */
+  droppedCopied: number
+  /** A comment the writer put under a sub-question that does not ask
+   *  (compose; none reach the writer, so this is a backstop). */
+  droppedNotAsking: number
   /** Direction words KEPT (the `digits` policy), counted for `ai_call_log`. */
   flaggedDirection: number
   /** The medical rules that dropped a sentence, by name. */
@@ -162,7 +167,8 @@ export interface IdeaScrubCounts {
 }
 
 export const NO_SCRUB: IdeaScrubCounts = {
-  dropped: 0, droppedDigits: 0, droppedMedical: 0, droppedMovement: 0, droppedBanned: 0, droppedFirstPerson: 0, droppedLong: 0, flaggedDirection: 0, medical: [], leaked: false,
+  dropped: 0, droppedDigits: 0, droppedMedical: 0, droppedMovement: 0, droppedBanned: 0, droppedFirstPerson: 0, droppedLong: 0,
+  droppedCopied: 0, droppedNotAsking: 0, flaggedDirection: 0, medical: [], leaked: false,
 }
 
 export function addScrubCounts(a: IdeaScrubCounts, b: IdeaScrubCounts): IdeaScrubCounts {
@@ -174,6 +180,8 @@ export function addScrubCounts(a: IdeaScrubCounts, b: IdeaScrubCounts): IdeaScru
     droppedBanned: a.droppedBanned + b.droppedBanned,
     droppedFirstPerson: a.droppedFirstPerson + b.droppedFirstPerson,
     droppedLong: a.droppedLong + b.droppedLong,
+    droppedCopied: a.droppedCopied + b.droppedCopied,
+    droppedNotAsking: a.droppedNotAsking + b.droppedNotAsking,
     flaggedDirection: a.flaggedDirection + b.flaggedDirection,
     medical: [...a.medical, ...b.medical],
     leaked: a.leaked || b.leaked,

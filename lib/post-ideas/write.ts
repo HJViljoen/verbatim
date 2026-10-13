@@ -27,7 +27,7 @@ import type { IdeaCandidate } from './select'
 
 export const POST_IDEAS_MODEL = SYNTHESIS_MODEL
 export const POST_IDEAS_PASS = 'post_ideas'
-export const POST_IDEAS_PROMPT_VERSION = 'post_ideas_v1'
+export const POST_IDEAS_PROMPT_VERSION = 'post_ideas_v2'
 /** The answer's ceiling, reasoning included: about $0.24 of output at most. */
 export const POST_IDEAS_MAX_OUTPUT_TOKENS = 16_000
 
@@ -80,6 +80,8 @@ export function buildPostIdeaPrompts(a: { company: string; sells?: string | null
     '- NEVER A MEDICAL OR CLINICAL CLAIM. Never say what a product, a treatment or a habit does to the body or to health: never that something heals, treats, cures, prevents, relieves, reduces or causes pain, swelling, an infection, a sore, an injury or a condition. Never say something is safe or unsafe. Never diagnose, and never say a sign means a condition. Never name a medicine, a painkiller or a dose. Never say something is clinically or medically proven, or that doctors or prosthetists recommend it. Never tell the reader to see a doctor or check with a medical team: that line is added by code. A health question is fine as a question; the cover says what the post explains, never the clinical answer.',
     '- Never say a question or a topic is growing, rising, trending, new, more common or anything else about how the conversation is changing.',
     `- Never use the first person (we, our, us). Call the company ${co}.`,
+    '- Write the title, the cover and every label in your own words: never copy a comment, or a run of its words. A comment\'s words are never ours to print.',
+    '- Put under a subquestion only a comment that asks something. A comment that answers, advises or praises asks nothing: leave it out.',
     '- No quotation marks. No dashes between clauses: use commas. British spelling.',
     '- Never mention the comments, the videos you were shown, the analysis, the data, or how the questions were found.',
   ].join('\n')

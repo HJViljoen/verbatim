@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { composePostIdeas, postIdeaRows, subquestionsOf } from './compose'
+import { composePostIdeas, copiesAComment, COPY_MIN_WORDS, postIdeaRows, subquestionsOf } from './compose'
 import type { IdeaCandidate, IdeaPlay } from './select'
 import { parsePostIdeaRow, subquestionCounts } from './types'
 import type { PostIdeasOutput } from './write'
@@ -20,7 +20,7 @@ const candidate = (n: number, comments: [string, string][], over: Partial<IdeaCa
   description: null,
   weekVideos: 10,
   lenientVideos: 8,
-  comments: comments.map(([handle, videoId], i) => ({ handle, commentId: `${handle}-id`, videoId, text: `comment ${n}.${i}` })),
+  comments: comments.map(([handle, videoId], i) => ({ handle, commentId: `${handle}-id`, videoId, text: `Does question ${n} part ${i} have an answer?` })),
   asked: { comments: comments.length, videos: new Set(comments.map(([, v]) => v)).size },
   play: PLAY,
   touch: 'none',
@@ -33,11 +33,12 @@ const WET = candidate(3, [['c8', 'v7'], ['c9', 'v8']])
 const SPARE = candidate(4, [['c10', 'v9']])
 
 const WORD: Record<string, string> = { Q1: 'liners', Q2: 'insurance', Q3: 'water', Q4: 'sockets' }
+const FIRST: Record<string, string> = { Q1: 'c1', Q2: 'c6', Q3: 'c8', Q4: 'c10' }
 const written = (handle: string, over: Partial<PostIdeasOutput['ideas'][number]> = {}): PostIdeasOutput['ideas'][number] => ({
   question: handle,
   title: `What about ${WORD[handle]}?`,
   cover: `What a post on ${WORD[handle]} explains and shows`,
-  subquestions: [],
+  subquestions: [{ label: `Questions on ${WORD[handle]}`, comments: [FIRST[handle]] }],
   ...over,
 })
 
@@ -116,6 +117,43 @@ describe('composePostIdeas', () => {
   it('writes nothing where the writer gave nothing', () => {
     expect(composePostIdeas([LINER], null).ideas).toEqual([])
   })
+
+  it('holds an idea left with no sub-question', () => {
+    const out = composePostIdeas([LINER, INSURANCE], { ideas: [written('Q1', { subquestions: [] }), written('Q2', { subquestions: [{ label: 'Whether insurance pays', comments: ['c99'] }] })] })
+    expect(out.ideas).toEqual([])
+    expect(out.held.map((h) => h.reason)).toEqual(['no sub-questions', 'no sub-questions'])
+  })
+
+  it('holds a title that copies a sent comment word for word, or sits inside one, and drops such a label', () => {
+    const asked = candidate(1, [['c1', 'v1'], ['c2', 'v2']])
+    asked.comments[0].text = 'How long should a silicone liner last before it stretches?'
+    asked.comments[1].text = 'Does insurance pay for a second liner?'
+    const copied = composePostIdeas([asked], { ideas: [written('Q1', { title: 'How long should a silicone liner last before it stretches?' })] })
+    expect(copied.held).toEqual([{ question: 'Q1', label: 'Questions 1', reason: 'title copies a comment' }])
+    const inside = composePostIdeas([asked], { ideas: [written('Q1', { title: 'How long should a silicone liner last?' })] })
+    expect(inside.held[0].reason).toBe('title copies a comment')
+    // Its own words pass, and a short ordinary phrase is not a copy.
+    const own = composePostIdeas([asked], {
+      ideas: [written('Q1', {
+        title: 'How long does a liner last?',
+        subquestions: [
+          { label: 'Does insurance pay for a second liner', comments: ['c2'] },
+          { label: 'Second liner', comments: ['c2'] },
+          { label: 'How long it should last', comments: ['c1'] },
+        ],
+      })],
+    })
+    expect(own.ideas[0].subquestions.map((x) => x.label)).toEqual(['How long it should last', 'Second liner'])
+    expect(own.scrub.droppedCopied).toBe(1)
+  })
+
+  it('never puts a comment that does not ask under a sub-question', () => {
+    const mixed = candidate(1, [['c1', 'v1'], ['c2', 'v2']])
+    mixed.comments[1].text = 'Make sure you check the airline dimensions first.'
+    const { subquestions, scrub } = subquestionsOf(mixed, [{ label: 'Checking the size rules', comments: ['c1', 'c2'] }])
+    expect(subquestions).toEqual([{ label: 'Checking the size rules', commentIds: ['c1-id'], videoIds: ['v1'] }])
+    expect(scrub.droppedNotAsking).toBe(1)
+  })
 })
 
 describe('postIdeaRows: what the step upserts', () => {
@@ -127,14 +165,28 @@ describe('postIdeaRows: what the step upserts', () => {
         written('Q3'),
       ],
     })
+    expect(out.ideas).toHaveLength(3)
     const rows = postIdeaRows({ clientId: 'client', runId: 'run', window: { from: '2026-10-05T00:00:00Z', to: '2026-10-12T00:00:00Z' }, ideas: out.ideas, model: 'gpt-5.4', promptVersion: 'post_ideas_v1' })
     expect(rows).toHaveLength(3)
     expect(rows.map((r) => r.rank)).toEqual([1, 2, 3])
     const parsed = parsePostIdeaRow({ ...rows[0], id: 'id-1', created_at: '2026-10-12T08:00:00Z' })
     expect(parsed?.subquestions).toEqual([{ label: 'How long it should last', commentIds: ['c1-id', 'c2-id'], videoIds: ['v1', 'v2'] }])
     expect(parsed?.cover.length).toEqual(PLAY.length)
-    expect(JSON.stringify(rows)).not.toMatch(/comment \d/)
+    expect(JSON.stringify(rows)).not.toMatch(/Does question/)
     // The CHECK: a format and its multiple are both set or both null.
     expect([rows[1].format, rows[1].format_multiple]).toEqual([null, null])
+  })
+})
+
+describe('copiesAComment', () => {
+  it('is a whole comment, or a phrase of four words or more inside one, case and punctuation aside', () => {
+    expect(COPY_MIN_WORDS).toBe(4)
+    const sent = ['how much does a transtibial prosthesis cost in sao paulo']
+    expect(copiesAComment('How much does a transtibial prosthesis cost in Sao Paulo?', sent)).toBe(true)
+    expect(copiesAComment('How much does a transtibial prosthesis cost', sent)).toBe(true)
+    expect(copiesAComment('Prosthesis cost', sent)).toBe(false)
+    expect(copiesAComment('What a prosthetic leg costs', sent)).toBe(false)
+    // A whole word only: "much does a trans" is not inside on a word boundary.
+    expect(copiesAComment('much does a trans', sent)).toBe(false)
   })
 })

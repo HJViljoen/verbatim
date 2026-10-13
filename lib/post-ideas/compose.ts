@@ -1,5 +1,5 @@
 import { addScrubCounts, NO_SCRUB, scrubIdeaText, type IdeaScrubCounts } from './scrub'
-import { POST_IDEA_SUBQUESTIONS_MAX, POST_IDEAS_MAX, type IdeaCandidate } from './select'
+import { isQuestionShaped, POST_IDEA_SUBQUESTIONS_MAX, POST_IDEAS_MAX, type IdeaCandidate } from './select'
 import { subquestionCounts, type PostIdeaCover, type PostIdeaRank, type PostIdeaRow, type PostIdeaSubquestion } from './types'
 import type { PostIdeasOutput, WrittenSubquestion } from './write'
 
@@ -13,10 +13,17 @@ import type { PostIdeasOutput, WrittenSubquestion } from './write'
 // every field (lib/post-ideas/scrub.ts), maps each handle back to the comment
 // and video ids of THAT conversation (a handle the writer invented or took
 // from another conversation is dropped, and a comment counts under one
-// sub-question at most), and orders the sub-questions by their videos, then
-// their comments, counted from the ids (`subquestionCounts`). The first three
-// conversations whose title and cover survive are the ideas, ranked 1 to 3;
+// sub-question at most, and only where it asks: `isQuestionShaped`), and
+// orders the sub-questions by their videos, then their comments, counted from
+// the ids (`subquestionCounts`). The first three conversations whose title,
+// cover and at least one sub-question survive are the ideas, ranked 1 to 3;
 // the format, the opening and the length are code's (`choosePlay`).
+//
+// NEVER A COMMENT'S WORDS AS OURS (AGENTS.md: the words resolve at render, a
+// stored artefact holds refs). A title or a sub-question label that is a sent
+// comment word for word, or sits inside one (`copiesAComment`), is held: the
+// writer is told to write in its own words, and this is what holds when it
+// does not.
 
 /** One idea, ready to store. */
 export interface PostIdeaDraft {
@@ -44,6 +51,27 @@ export type PostIdeaInsert = Omit<PostIdeaRow, 'id' | 'created_at'>
 const handleKey = (h: string): string => (h ?? '').trim().toLowerCase().replace(/^[[(]+|[\])]+$/g, '')
 const titleKey = (t: string): string => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
 
+/** A copied phrase is held where it is a whole comment, or sits inside one
+ *  and runs to this many words ("How much it costs" inside "how much it costs
+ *  in Sao Paulo"); under it, a phrase is ordinary English, not a copy. */
+export const COPY_MIN_WORDS = 4
+
+/**
+ * Is this title or label a sent comment word for word, or inside one? Case,
+ * punctuation and spacing aside (`titleKey`). `sent` is the comments' own
+ * normalised words. Pure.
+ */
+export function copiesAComment(text: string, sent: readonly string[]): boolean {
+  const key = titleKey(text)
+  if (!key) return false
+  const long = key.split(' ').length >= COPY_MIN_WORDS
+  return sent.some((c) => c === key || (long && ` ${c} `.includes(` ${key} `)))
+}
+
+/** The sent comments' words, normalised for `copiesAComment`. */
+export const sentWords = (candidates: readonly Pick<IdeaCandidate, 'comments'>[]): string[] =>
+  candidates.flatMap((c) => c.comments.map((x) => titleKey(x.text))).filter(Boolean)
+
 /**
  * One conversation's sub-questions: the writer's labels, scrubbed, over the
  * comments its handles name in THIS conversation, each comment once, merged
@@ -53,9 +81,10 @@ const titleKey = (t: string): string => t.toLowerCase().replace(/[^\p{L}\p{N}]+/
 export function subquestionsOf(
   candidate: Pick<IdeaCandidate, 'comments'>,
   written: readonly WrittenSubquestion[],
-  opts: { allow?: readonly string[] } = {},
+  opts: { allow?: readonly string[]; sent?: readonly string[] } = {},
 ): { subquestions: PostIdeaSubquestion[]; scrub: IdeaScrubCounts } {
   const byHandle = new Map(candidate.comments.map((c) => [handleKey(c.handle), c]))
+  const sent = opts.sent ?? sentWords([candidate])
   const used = new Set<string>()
   const merged = new Map<string, { label: string; commentIds: string[]; videoIds: Set<string> }>()
   let scrub = NO_SCRUB
@@ -63,7 +92,12 @@ export function subquestionsOf(
     const label = scrubIdeaText(s.label, 'label', opts)
     scrub = addScrubCounts(scrub, label.counts)
     if (!label.text) continue
-    const comments = (s.comments ?? []).map((h) => byHandle.get(handleKey(h))).filter((c): c is NonNullable<typeof c> => c != null && !used.has(c.commentId))
+    if (copiesAComment(label.text, sent)) { scrub = addScrubCounts(scrub, { ...NO_SCRUB, medical: [], dropped: 1, droppedCopied: 1, leaked: true }); continue }
+    const named = (s.comments ?? []).map((h) => byHandle.get(handleKey(h))).filter((c): c is NonNullable<typeof c> => c != null && !used.has(c.commentId))
+    // A comment that does not ask is never a sub-question's (none should
+    // reach the writer: lib/post-ideas/select.ts sends only those that do).
+    const comments = named.filter((c) => isQuestionShaped(c.text))
+    if (comments.length < named.length) scrub = addScrubCounts(scrub, { ...NO_SCRUB, medical: [], droppedNotAsking: named.length - comments.length })
     if (comments.length === 0) continue
     for (const c of comments) used.add(c.commentId)
     const key = titleKey(label.text)
@@ -84,8 +118,9 @@ export function subquestionsOf(
 
 /**
  * The ideas from the candidates (in rank order) and the writer's output. A
- * conversation with no written idea, or whose title or cover the scrub
- * empties, is held with the reason, and the next one takes its rank. Pure.
+ * conversation with no written idea, whose title or cover the scrub empties,
+ * whose title copies a comment, or left with no sub-question, is held with
+ * the reason, and the next one takes its rank. Pure.
  */
 export function composePostIdeas(
   candidates: readonly IdeaCandidate[],
@@ -95,6 +130,7 @@ export function composePostIdeas(
   const ideas: PostIdeaDraft[] = []
   const held: HeldIdea[] = []
   const titles = new Map<string, string>()
+  const sent = sentWords(candidates)
   let scrub = NO_SCRUB
   for (const c of candidates) {
     if (ideas.length >= POST_IDEAS_MAX) break
@@ -103,10 +139,12 @@ export function composePostIdeas(
     if (!written) { hold('not written'); continue }
     const title = scrubIdeaText(written.title, 'title', opts)
     const cover = scrubIdeaText(written.cover, 'cover', opts)
-    const subs = subquestionsOf(c, written.subquestions ?? [], opts)
+    const subs = subquestionsOf(c, written.subquestions ?? [], { ...opts, sent })
     scrub = addScrubCounts(addScrubCounts(addScrubCounts(scrub, title.counts), cover.counts), subs.scrub)
     if (!title.text) { hold(`title held${title.counts.medical.length ? ` (${title.counts.medical.join(', ')})` : ''}`); continue }
     if (!cover.text) { hold(`cover held${cover.counts.medical.length ? ` (${cover.counts.medical.join(', ')})` : ''}`); continue }
+    if (copiesAComment(title.text, sent)) { scrub = addScrubCounts(scrub, { ...NO_SCRUB, medical: [], dropped: 1, droppedCopied: 1, leaked: true }); hold('title copies a comment'); continue }
+    if (subs.subquestions.length === 0) { hold('no sub-questions'); continue }
     const same = titles.get(titleKey(title.text))
     if (same) { hold(`the same question as ${same}`); continue }
     titles.set(titleKey(title.text), c.handle)
