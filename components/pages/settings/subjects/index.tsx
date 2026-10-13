@@ -26,7 +26,9 @@ import { ConfirmSubject } from './confirm'
 // followed subject's name links there.
 
 const MUTED = 'text-[#5F656B]'
-const GRID = 'grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.6fr)_auto]'
+// The controls' column is a fixed width, the same in both cards, so the
+// header and every row (each its own grid) share one set of columns.
+const GRID = 'grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.6fr)_140px]'
 
 function Note({ children }: { children: ReactNode }) {
   return (

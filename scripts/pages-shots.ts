@@ -81,6 +81,12 @@ import { SearchTerms } from '../components/pages/settings/search-terms'
 import { YourAccounts } from '../components/pages/settings/your-accounts'
 import { BrandsYouTrack, Communities, NotYourMarket } from '../components/pages/settings/tracked-cards'
 import { whatYouTrack } from '../lib/pages/settings'
+import { ProductsTab } from '../components/pages/settings/products'
+import { productsFixtureRead } from '../components/pages/settings/products/fixture'
+import { productSettingsView, type ProductSettingsRead } from '../lib/settings/products'
+import { YourSubjectsTab } from '../components/pages/settings/subjects'
+import { subjectsFixtureRows } from '../components/pages/settings/subjects/fixture'
+import { yourSubjectsView, type SubjectSettingsRow } from '../lib/settings/your-subjects'
 
 const args = process.argv.slice(2)
 const flag = (n: string, d: string) => { const i = args.indexOf(`--${n}`); return i >= 0 && args[i + 1] ? args[i + 1] : d }
@@ -213,6 +219,28 @@ function settingsModel() {
 
 const noop = async <T,>(prev: T): Promise<T> => prev
 
+/** Settings › Your products and Your subjects (depth v2, T10b/T10c): the
+ *  fixtures, or a loader's production output dumped to JSON (`--settings-dump
+ *  <file>`: `{ products, subjects }`, as scripts the package ran wrote them). */
+const settingsDump = (() => {
+  const file = flag('settings-dump', '')
+  return file ? JSON.parse(readFileSync(resolve(file), 'utf8')) as { products: ProductSettingsRead; subjects: { state: 'missing' } | { state: 'ready'; rows: SubjectSettingsRow[] } } : null
+})()
+const settingsProductsPage = () => {
+  const read = settingsDump ? settingsDump.products : productsFixtureRead()
+  return h(SettingsFrame, {
+    active: 'products', title: 'Settings', operator: false,
+    children: h(ProductsTab, { view: read.state === 'missing' ? null : productSettingsView(read, { selected: null, canEdit: true }) }),
+  })
+}
+const settingsSubjectsPage = () => {
+  const read = settingsDump ? settingsDump.subjects : { state: 'ready' as const, rows: subjectsFixtureRows() }
+  return h(SettingsFrame, {
+    active: 'subjects', title: 'Settings', operator: false,
+    children: h(YourSubjectsTab, { view: read.state === 'missing' ? null : yourSubjectsView(read.rows, true) }),
+  })
+}
+
 /** The Agent's earlier questions: the fixture's threads and two more, newest
  *  first, as `loadAskHistory` hands the page twenty. */
 const AGENT_HISTORY = askHistory([
@@ -317,6 +345,8 @@ const PAGES: Page[] = [
       })
     },
   },
+  { key: 'settings-products', path: '/dashboard/settings/products', artboard: 'E8-Settings-Products.dc.html', page: settingsProductsPage },
+  { key: 'settings-subjects', path: '/dashboard/settings/subjects', artboard: 'no-board-settings-subjects.dc.html', page: settingsSubjectsPage },
 ]
 
 // ---- the shell -----------------------------------------------------------------
