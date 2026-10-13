@@ -3,7 +3,8 @@
  * that exercise a reader's I/O glue (market-first WP3.9 and WP3.11).
  *
  * WHAT IT ANSWERS. `from(table)` with `select`, `eq`, `neq`, `in`, `is`,
- * `not(col, 'is', null)`, `or` (eq / is.null / not.is.null), `gte`, `lte`,
+ * `not` (`is`, `in`, `eq`; any other operator throws), `or` (eq / is.null /
+ * not.is.null), `gte`, `lte`,
  * `lt`, `order`, `limit`, `range`,
  * `maybeSingle` and `single`, over rows handed in per table; and `rpc(fn,
  * args)` through a function handed in per name. A table the test did not name
@@ -19,8 +20,9 @@
  * select (no parentheses inside it), where the test hands in a `name` table.
  * The parent's `<name, singular>_id` (`comments` → `comment_id`) names the
  * related row's `id`; the related row's columns are attached under `name`;
- * a parent with no related row is dropped (`!inner`); and a filter on
- * `name.col` reads the attached row, as PostgREST's does. An embed whose table
+ * a parent with no related row is dropped (`!inner`); and every filter on
+ * `name.col` (`eq`, `neq`, `in`, `is`, `not`, `or`, `gte`, `lte`, `lt`) reads
+ * the attached row, as PostgREST's does. An embed whose table
  * the test did not hand in is left alone (rows that carry it already keep
  * theirs), and so is any nested embed.
  *
@@ -156,10 +158,19 @@ export function fakeDb(
       eq(col: string, v: unknown) { call.filters.push(`${col}=${String(v)}`); preds.push((r) => val(r, col) === v); return builder },
       neq(col: string, v: unknown) { call.filters.push(`${col}!=${String(v)}`); preds.push((r) => val(r, col) !== v); return builder },
       in(col: string, vs: readonly unknown[]) { call.filters.push(`${col} in ${vs.length}`); const set = new Set(vs); preds.push((r) => set.has(val(r, col))); return builder },
-      is(col: string, v: unknown) { call.filters.push(`${col} is ${String(v)}`); preds.push((r) => (r[col] ?? null) === v); return builder },
+      is(col: string, v: unknown) { call.filters.push(`${col} is ${String(v)}`); preds.push((r) => (val(r, col) ?? null) === v); return builder },
+      // `not` for the shapes the readers use: `is` (null or a value), `in`
+      // over PostgREST's `(a,b,"c")` list and `eq`. Any other operator
+      // THROWS rather than filter nothing, so a test cannot pass by a filter
+      // the fake ignored (Phase 4 fix check).
       not(col: string, op: string, v: unknown) {
         call.filters.push(`${col} not ${op} ${String(v)}`)
-        if (op === 'is' && v === null) preds.push((r) => r[col] != null)
+        if (op === 'is') preds.push((r) => (val(r, col) ?? null) !== v)
+        else if (op === 'in') {
+          const list = new Set(String(v).replace(/^\(|\)$/g, '').split(',').map((x) => x.trim().replace(/^"|"$/g, '')).filter((x) => x !== ''))
+          preds.push((r) => !list.has(String(val(r, col))))
+        } else if (op === 'eq') preds.push((r) => String(val(r, col)) !== String(v))
+        else throw new Error(`fakeDb: not(${col}, ${op}) is not supported`)
         return builder
       },
       // PostgREST's `or`, for the shapes the readers use: comma-separated
@@ -188,9 +199,9 @@ export function fakeDb(
           }
           const [col, ...rest] = t.split('.')
           const op = rest.join('.')
-          if (op === 'is.null') return (r: Row) => (r[col] ?? null) === null
-          if (op === 'not.is.null') return (r: Row) => r[col] != null
-          if (op.startsWith('eq.')) return (r: Row) => String(r[col]) === op.slice(3)
+          if (op === 'is.null') return (r: Row) => (val(r, col) ?? null) === null
+          if (op === 'not.is.null') return (r: Row) => val(r, col) != null
+          if (op.startsWith('eq.')) return (r: Row) => String(val(r, col)) === op.slice(3)
           throw new Error(`fakeDb: or() does not read "${t}"`)
         }
         const parts = split(expr).map(term)
