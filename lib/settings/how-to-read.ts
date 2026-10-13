@@ -160,17 +160,18 @@ export const READING_CARDS: readonly ReadingCard[] = [
     key: 'content',
     // CONTENT (Design v2, depth plan T6; lib/pages/v2/content.ts): five
     // blocks, each on its own clock. The week is a run's frozen window
-    // (`anchorOf`); post ideas are T13's (`post_ideas`: POST_IDEA_MIN_COMMENTS
-    // asking comments on POST_IDEA_MIN_VIDEOS videos, untouched by the
-    // client's posts over POST_IDEA_OWNED_MONTHS, hidden past
+    // (`anchorOf`); post ideas are T13's (`post_ideas`, written every week
+    // over the POST_IDEAS_READ_DAYS (28) to the update, `ideasReadWindow`:
+    // POST_IDEA_MIN_COMMENTS asking comments on POST_IDEA_MIN_VIDEOS videos,
+    // untouched by the client's posts over POST_IDEA_OWNED_MONTHS, hidden past
     // IDEAS_STALE_DAYS); the format and opening need POST_IDEA_MIN_RATED
     // rated videos; What works is `buildPlaybook` on the published clock;
     // a post touches a question on TOUCH_MIN_WORDS words (`questionTouch`).
-    tells: 'What to post next and what works in your market: the week’s post ideas, each a question your market asked that your posts have not touched on, the market’s formats and openings against your own posts, the comments worth a reply, your own posts this month, and the other questions asked.',
+    tells: 'What to post next and what works in your market: the post ideas, written each week from the questions your market asked over the four weeks to the latest update, each one your posts have not touched on, the market’s formats and openings against your own posts, the comments worth a reply, your own posts this month, and the other questions asked.',
     read: ['market', 'week', 'month', 'video', 'update'],
     cannot: [
-      'A week is the week the latest update read, not the last seven days. Every week figure sits beside its month, and three weeks are three counts with no word.',
-      'A post idea is written for a question your market asked at least 3 times on 2 or more videos that week, and only where none of your posts from that month and the two before touched on it. An idea prints its own week, and stops printing once it is four weeks older than the page’s.',
+      'A week is the week the latest update read, not the last seven days. Every week figure sits beside its month, and a run of weeks is bare counts with no word: three for a question asked, four for a post idea.',
+      'A post idea is written for a question your market asked at least 3 times on 2 or more videos in the four weeks to an update, and only where none of your posts from that month and the two before touched on it. The ideas print the days they read, and stop printing once they are four weeks older than the page’s week.',
       'A post touches a question when what it is about shares two or more of the question’s words, leaving out the common ones.',
       'Who asks names the groups, never a count of them.',
       'The format and opening on an idea are what worked in your market, chosen by counting, and only where 10 or more rated videos stand behind them.',

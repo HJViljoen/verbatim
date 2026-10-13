@@ -106,18 +106,19 @@ export function productsLine(top: TopProducts | null | undefined): WeeklyReadLin
   }
 }
 
-/** Content: this week's first post idea, its week beside its month as the
- *  tile counts them. */
+/** Content: this week's first post idea, its videos over the days the
+ *  ideas read beside its month, as the tile counts them. */
 export function contentLine(top: TopContent | null | undefined): WeeklyReadLine | null {
   const idea = top?.state === 'ready' ? top.idea : null
   if (!top || !idea || !idea.ideasWeek.current) return null
   const title = scrubProse('week_read', idea.title).text.trim()
   if (!title) return null
   const month = idea.month ? `${fmtInt(idea.month.k)} of ${fmtInt(idea.month.n)} ${idea.monthWords}` : null
-  // The week only beside its month (decision 1); the month alone where the
-  // week was not read, as the tile prints it.
-  const figure = idea.week && month
-    ? `${fmtInt(idea.week.k)} of ${plural(idea.week.n, 'video', 'videos')} this week · ${month}`
+  // The ideas' four weeks only beside the month (decision 1), named by their
+  // days ("14 Sep to 11 Oct"); the month alone where those days were not
+  // read, as the tile prints it.
+  const figure = idea.read && month
+    ? `${fmtInt(idea.read.k)} of ${plural(idea.read.n, 'video', 'videos')}, ${idea.ideasWeek.read.label} · ${month}`
     : idea.month ? `${fmtInt(idea.month.k)} of ${plural(idea.month.n, 'video', 'videos')} ${idea.monthWords}` : null
   return {
     page: 'content', label: surface('content').label, href: top.href,

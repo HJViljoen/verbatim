@@ -7,7 +7,7 @@ import type { OwnedPosts } from '../../reading/owned'
 import { buildPlaybook, type PlaybookVideo } from '../playbook'
 import {
   anchorOf, askedBlock, contentHref, contentMonth, contentWeek, daysLabel, daysPhrase, flagVerdict,
-  article, ideaOwnedFrom, ideasStale, ideasWeekOf, IDEAS_STALE_DAYS, lengthWords, olderIdeasLine, ownedTo, readIdeas, repliesWindowOf, topContent, touchPosts,
+  article, askedPhrase, ideaOwnedFrom, ideasReadOf, ideasStale, ideasWeekOf, ideaWeeks, IDEAS_STALE_DAYS, lengthWords, olderIdeasLine, ownedTo, readIdeas, repliesWindowOf, topContent, touchPosts,
   fmtMultiple, groupsByConversation, ideaCard, IDEAS_EMPTY, marketVideoCards, mixSentence, newVerdict, openingChip,
   openingLabel, ownTouch, parseContentParams, pooledThemeVideos, pooledVideos, postsBlock, postTitle, recipe,
   repliesView, storedPersonas, subquestionRows, threeWeeks, topContentEmpty, typicalRate, wordsToBorrow, worksBlock,
@@ -155,7 +155,7 @@ describe('an idea', () => {
 
   it('assembles a card from the stored row and code’s readings', () => {
     const card = ideaCard({
-      idea: OSSUR_IDEAS[0], label: 'Liner lifespan and replacement', week: { k: 23, n: 241 }, month: { k: 31, n: 318 },
+      idea: OSSUR_IDEAS[0], label: 'Liner lifespan and replacement', read: { k: 48, n: 640 }, month: { k: 31, n: 318 },
       weeks: [{ label: '20 Sep', count: 9 }], flag: null, groups: [{ key: 'a', name: 'A' }, { key: 'b', name: 'B' }, { key: 'c', name: 'C' }],
       owned: OSSUR_OWNED, since: '2026-08-01', subject: null, medical: true,
     })
@@ -189,7 +189,7 @@ describe('the anchor and the ideas’ week', () => {
 
   it('prints the ideas’ own week, and says so where it is not the page’s', () => {
     const page = anchorOf(OSSUR_IDEAS, older)
-    expect(ideasWeekOf(OSSUR_IDEAS, page)).toEqual({ runId: OSSUR_IDEAS[0].run_id, label: '5 to 11 Oct', phrase: 'the week of 5 Oct', current: true })
+    expect(ideasWeekOf(OSSUR_IDEAS, page)).toMatchObject({ runId: OSSUR_IDEAS[0].run_id, label: '5 to 11 Oct', phrase: 'the week of 5 Oct', current: true, read: { label: '14 Sep to 11 Oct' } })
     const two = ideasAt('2026-09-27T04:03:00.000Z', '2026-10-04T04:02:00.000Z')
     const week = ideasWeekOf(two, anchorOf(two, newer))!
     expect(week).toMatchObject({ label: '28 Sep to 4 Oct', current: false })
@@ -197,6 +197,37 @@ describe('the anchor and the ideas’ week', () => {
     // A window that is not a week is named by its days.
     expect(ideasWeekOf(ideasAt('2026-09-13T04:03:00.000Z', '2026-10-04T04:02:00.000Z'), null)?.phrase).toBe('14 Sep to 4 Oct')
     expect(ideasWeekOf([], page)).toBeNull()
+  })
+
+  it('names the four weeks the ideas read, and each of their weeks, from the stored window', () => {
+    const read = ideasReadOf(OSSUR_IDEAS[0])!
+    expect(read).toMatchObject({ from: '2026-09-13T04:02:00.000Z', to: '2026-10-11T04:02:00.000Z', label: '14 Sep to 11 Oct' })
+    expect(askedPhrase(read)).toBe('From questions asked 14 Sep to 11 Oct')
+    expect(read.weeks).toEqual([
+      { from: '2026-09-13T04:02:00.000Z', to: '2026-09-20T04:02:00.000Z', label: '14 Sep' },
+      { from: '2026-09-20T04:02:00.000Z', to: '2026-09-27T04:02:00.000Z', label: '21 Sep' },
+      { from: '2026-09-27T04:02:00.000Z', to: '2026-10-04T04:02:00.000Z', label: '28 Sep' },
+      { from: '2026-10-04T04:02:00.000Z', to: '2026-10-11T04:02:00.000Z', label: '5 Oct' },
+    ])
+    // Össur's real run end (not on the minute): the last week ends exactly
+    // where the read does.
+    const real = ideasReadOf({ read_start: '2026-09-13T04:00:32.885Z', read_end: '2026-10-11T04:00:32.885+00:00' })!
+    expect(real.label).toBe('14 Sep to 11 Oct')
+    expect(real.weeks?.at(-1)?.to).toBe('2026-10-11T04:00:32.885+00:00')
+    // A window that is not whole weeks (a row read one week, or a partial
+    // window) is named by its days and draws no weekly counts.
+    expect(ideasReadOf({ read_start: '2026-10-04T11:45:54.031Z', read_end: '2026-10-11T04:00:32.885Z' })).toMatchObject({ label: '5 to 11 Oct', weeks: null })
+    expect(ideasReadOf({ read_start: '2026-10-04', read_end: 'x' })).toBeNull()
+  })
+
+  it('reads an idea\'s weekly counts only where every week was read', () => {
+    const read = ideasReadOf(OSSUR_IDEAS[0])!
+    const m = (n: number) => new Map([[REG.liner, n]])
+    expect(ideaWeeks(read, [m(6), m(9), m(14), m(23)], REG.liner)?.map((w) => `${w.label} ${w.count}`)).toEqual(['14 Sep 6', '21 Sep 9', '28 Sep 14', '5 Oct 23'])
+    expect(ideaWeeks(read, [m(6), m(9), m(14), m(23)], REG.water)?.map((w) => w.count)).toEqual([0, 0, 0, 0])
+    expect(ideaWeeks(read, [m(6), null, m(14), m(23)], REG.liner)).toBeNull()
+    expect(ideaWeeks(read, [m(6), m(9), m(14)], REG.liner)).toBeNull()
+    expect(ideaWeeks({ weeks: null }, [m(6)], REG.liner)).toBeNull()
   })
 
   it('stops printing ideas more than four weeks older than the page’s week', () => {

@@ -5,7 +5,7 @@ import { QuoteBlock } from '@/components/quote-block'
 import { fmtInt, longMonth, platformLabel, shortDate } from '@/lib/format'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
 import {
-  IDEA_PANEL_ID, contentHref, fmtMultiple, groupHref, lengthWords, monthWords, POST_IDEA_SLOT,
+  askedPhrase, IDEA_PANEL_ID, contentHref, fmtMultiple, groupHref, lengthWords, monthWords, POST_IDEA_SLOT,
   type ContentState, type IdeaPanel,
 } from '@/lib/pages/v2/content'
 import { cn } from '@/lib/utils'
@@ -19,11 +19,13 @@ import { Fig, OLink } from './parts'
  * (Pass A's phrases off the idea's comments) and three of the comments
  * through the quote gate. Everything else is code's or the stored idea's:
  *
- *   the four figures   this week's videos of the week's market; the month's
- *                      beside it (decision 1; the board's "15 of the 23 are
- *                      new amputees" is not computable, no video belongs to
- *                      a group); the last three weeks as bare counts; your
- *                      posts this month that touched on it
+ *   the four figures   its videos over the days the ideas read ("From
+ *                      questions asked 14 Sep to 11 Oct", the head's chip)
+ *                      of the market's over those days; the month's beside
+ *                      it (decision 1; the board's "15 of the 23 are new
+ *                      amputees" is not computable, no video belongs to a
+ *                      group); each of those weeks as a bare count; your
+ *                      posts that touched on it
  *   the suggested post the format and opening code chose (with their
  *                      multiples), the cover and length the writer stored,
  *                      and in a medical market the medical team line
@@ -36,13 +38,12 @@ import { Fig, OLink } from './parts'
 
 const BRIEF_KEY = 'm-0 mb-1.5 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground'
 
-export function IdeaPanelView({ panel, state, count, month, weekWord, notchAt }: {
+export function IdeaPanelView({ panel, state, count, month, notchAt }: {
   panel: IdeaPanel
   state: ContentState
   /** How many ideas stand in the row, for where the notch points. */
   count: number
   month: { month: string; complete: boolean }
-  weekWord: string
   /** The grid's placement, per breakpoint (`IdeasSection`, T9); alone, the
    *  rank across the row. */
   notchAt?: number | PerBreakpoint
@@ -68,7 +69,7 @@ export function IdeaPanelView({ panel, state, count, month, weekWord, notchAt }:
         <>
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-[6px] bg-accent px-2 py-[3px] text-[12px] leading-[1.3]">Post idea {card.rank}</span>
-            <span className="rounded-[6px] bg-accent px-2 py-[3px] text-[12px] leading-[1.3]">For {panel.week.label}</span>
+            <span className="rounded-[6px] bg-accent px-2 py-[3px] text-[12px] leading-[1.3]">{askedPhrase(panel.week.read)}</span>
             <FlagChip verdict={card.flag} />
             {card.subject ? <span className="rounded-[6px] bg-accent px-2 py-[3px] text-[12px] leading-[1.3]">{card.subject.name}</span> : null}
           </div>
@@ -79,14 +80,21 @@ export function IdeaPanelView({ panel, state, count, month, weekWord, notchAt }:
       }
     >
       <StatRow>
-        {card.week ? <StatCell value={card.week.k} of={card.week.n} label={`videos in your market ${weekWord} where it came up`} /> : null}
+        {card.read ? <StatCell value={card.read.k} of={card.read.n} label={`videos in your market where it came up, ${panel.week.read.label}`} /> : null}
         {card.month ? <StatCell value={card.month.k} of={card.month.n} label={`videos ${when}`} /> : null}
-        {/* The three weeks' counts are one figure ("9 · 14 · 23"), so below
+        {/* The weeks' counts are one figure ("9 · 14 · 23 · 12"), so below
             1280, where the cells are two to a row, it takes the row's width
             rather than break between its counts, and the cell after it takes
             its own row too (T9). */}
         {card.weeks ? (
-          <StatCell className="max-xl:col-span-2" value={card.weeks.map((w) => fmtInt(w.count)).join(' · ')} label={`videos a week, the weeks of ${card.weeks.map((w) => w.label).join(', ')}`} />
+          <StatCell
+            // Four weeks' counts in one cell of four at 1280 and up: the
+            // figure a size down and on one line, so it never breaks between
+            // its counts (the other cells keep the board's 30px).
+            className={cn('max-xl:col-span-2', card.weeks.length > 3 ? 'xl:[&>div:first-child]:whitespace-nowrap xl:[&>div:first-child]:text-[22px]' : null)}
+            value={card.weeks.map((w) => fmtInt(w.count)).join(' · ')}
+            label={`videos a week, the weeks of ${card.weeks.map((w) => w.label).join(', ')}`}
+          />
         ) : null}
         {card.own.state === 'touched' || card.own.state === 'none' ? (
           <StatCell className={card.weeks ? 'max-xl:col-span-2' : undefined} value={card.own.touched} of={card.own.posts} label={`posts of yours since ${since} touched on it`} />

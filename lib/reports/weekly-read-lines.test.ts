@@ -28,7 +28,7 @@ describe('the lines, from the pages\' tops', () => {
     expect(lines.map((l) => [l.label, `${l.lead} ${l.name}`, l.figure, l.href])).toEqual([
       ['Voices', 'In the most videos in October so far: Long-time users upgrading', '86 of 318 videos', '/dashboard/voices?group=long-time-users#group-panel'],
       ['Your products', 'Named in the most videos: Pro-Flex Pivot', '9 of 318 videos in October so far', '/dashboard/products?product=p-pivot#product-panel'],
-      ['Content', 'Post next: How long a liner lasts, and when it is time to replace one', '23 of 241 videos this week · 35 of 318 in October so far', '/dashboard/content?idea=1#idea-panel'],
+      ['Content', 'Post next: How long a liner lasts, and when it is time to replace one', '48 of 640 videos, 14 Sep to 11 Oct · 35 of 318 in October so far', '/dashboard/content?idea=1#idea-panel'],
       ['Your moves', `Advice waiting: ${fixtureMovesTop().advice!.title}`, lines[3].figure, fixtureMovesTop().advice!.href],
     ])
     expect(lines[3].figure).toMatch(/^\d+ update/)
@@ -64,9 +64,11 @@ describe('the lines, from the pages\' tops', () => {
     expect(titled('How long a liner lasts')?.name).toBe('How long a liner lasts')
   })
 
-  it('the month alone where the week was not read, never the week alone', () => {
+  it('the ideas\' four weeks beside the month, named by their days; the month alone where those were not read, never the four weeks alone', () => {
     const top = fixtureContentTop()
-    expect(contentLine({ ...top, idea: { ...top.idea!, week: null } })?.figure).toBe('35 of 318 videos in October so far')
+    expect(contentLine(top)?.figure).toBe('48 of 640 videos, 14 Sep to 11 Oct · 35 of 318 in October so far')
+    expect(contentLine(top)?.figure).not.toMatch(/this week/)
+    expect(contentLine({ ...top, idea: { ...top.idea!, read: null } })?.figure).toBe('35 of 318 videos in October so far')
     expect(contentLine({ ...top, idea: { ...top.idea!, month: null } })?.figure).toBeNull()
   })
 

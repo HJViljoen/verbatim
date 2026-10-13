@@ -56,12 +56,13 @@ describe('each page line equals its Dashboard tile', () => {
     }
   })
 
-  it('Content: the first post idea, its week beside its month', () => {
+  it('Content: the first post idea, its four weeks of questions beside its month', () => {
     const top = fixtureContentTop()
     const line = contentLine(top)
     const text = expectLineIsTile(line, <ContentTileView read={ok(top)} />)
-    expect(text).toContain('23 of 241 videos this week')
+    expect(text).toContain('48 of 640 videos, 14 Sep to 11 Oct')
     expect(text).toContain('35 of 318 in October so far')
+    expect(line!.figure).toContain('14 Sep to 11 Oct')
   })
 
   it('Your moves: the first advice waiting, and the updates that raised it', () => {

@@ -37,13 +37,17 @@ import { buildReplies, loadCheckStrict, loadFlagsStrict, weekFlagRows, workedLab
 //
 // FIVE BLOCKS, EACH ON ITS OWN CLOCK, AND EACH SAYS WHICH.
 //
-//   What to post next   the week's post ideas (`post_ideas`, T13): one card a
-//                       question conversation, its videos this week beside
-//                       its month (decision 1), the last three weeks as three
-//                       bare counts, who asks (group names, no counts:
-//                       decision 5), whether your posts touched on it, and
-//                       the format and opening code chose with their
-//                       multiples. Opens in place with `?idea=<rank>`.
+//   What to post next   the week's post ideas (`post_ideas`, T13), which read
+//                       the question comments of the four weeks to their
+//                       run's end (Heinrich, 13 Oct: `read_start` /
+//                       `read_end`, printed "From questions asked 14 Sep to
+//                       11 Oct"): one card a question conversation, its
+//                       videos over those four weeks beside its month
+//                       (decision 1), the four weeks as four bare counts,
+//                       who asks (group names, no counts: decision 5),
+//                       whether your posts touched on it, and the format and
+//                       opening code chose with their multiples. Opens in
+//                       place with `?idea=<rank>`.
 //   What works          the month's market videos by format and by opening
 //                       (`buildPlaybook`, published clock), with your own
 //                       posts beside each row (`clientSide: 'owned'`) and a
@@ -61,7 +65,9 @@ import { buildReplies, loadCheckStrict, loadFlagsStrict, weekFlagRows, workedLab
 // THE WEEK IS A RUN'S FROZEN WINDOW, never the clock (AGENTS.md): the ideas'
 // own window where there are ideas, else the published week read's. Every
 // count over it is stated again beside its month (`readingMonthOf`), and the
-// three weekly counts carry no word.
+// three weekly counts carry no word. THE IDEAS' COUNTS ARE OVER THE DAYS THEY
+// READ (`IdeasRead`, the stored `read_start` / `read_end`), dated by the
+// comment, under the page's run's clustering, each beside the page's month.
 //
 // NO QUOTE AT LEVEL 1. The comments' words, the words to borrow and the reply
 // list's comments are all one click down, in a panel.
@@ -180,12 +186,15 @@ export interface IdeaCard {
   title: string
   /** The conversation's own label this run, where the run named it. */
   label: string | null
-  /** Videos in the market this week where it came up, of the week's market. */
-  week: Counted | null
-  /** The same over the month, so far or in full. */
+  /** Videos in the market where it came up over the days the ideas read
+   *  (`IdeasRead`), of the market's videos over those days. */
+  read: Counted | null
+  /** The same over the month, so far or in full: the read's figure is never
+   *  printed without it (decision 1). */
   month: Counted | null
-  /** The last three weeks, oldest first, as bare counts (decision 1). Null
-   *  where the window is not a week or the reading could not be made. */
+  /** The weeks the ideas read, oldest first, as bare counts (decision 1).
+   *  Null where the read window is not whole weeks or the reading could not
+   *  be made. */
   weeks: { label: string; count: number }[] | null
   /** The anomaly check's flag, or the week read's "new"; null for neither. */
   flag: Verdict | null
@@ -256,6 +265,22 @@ export interface IdeasWeek {
   /** "the week of 28 Sep", or the days where the window is not a week. */
   phrase: string
   current: boolean
+  /** The days the ideas read their questions from: what the page prints. */
+  read: IdeasRead
+}
+
+/** The days a set of ideas read (`post_ideas.read_start` / `read_end`; the
+ *  four weeks to its run's end, lib/post-ideas/select.ts `ideasReadWindow`). */
+export interface IdeasRead {
+  /** Half-open, as stored. */
+  from: string
+  to: string
+  /** "14 Sep to 11 Oct". */
+  label: string
+  /** Its whole weeks, oldest first, each named by its first day ("14 Sep"):
+   *  the four bare weekly counts. Null where it is not two or more whole
+   *  weeks (a row read under another rule). */
+  weeks: { from: string; to: string; label: string }[] | null
 }
 
 export interface IdeasBlock {
@@ -659,13 +684,37 @@ export function weekPhrase(week: Pick<ContentWeek, 'isWeek' | 'first' | 'last'>)
   return week.isWeek ? `the week of ${shortDate(`${week.first}T00:00:00.000Z`)}` : daysLabel(week.first, week.last)
 }
 
-/** The ideas' own week, against the page's. */
+/** The days the ideas read, named, and their whole weeks. Null where the
+ *  stored window is not a window. Pure. */
+export function ideasReadOf(idea: Pick<PostIdeaRow, 'read_start' | 'read_end'>): IdeasRead | null {
+  const covered = coveredDays({ from: idea.read_start, to: idea.read_end })
+  if (!covered) return null
+  const from = Date.parse(idea.read_start)
+  const span = Date.parse(idea.read_end) - from
+  const count = Math.round(span / (7 * DAY_MS))
+  // Whole weeks to the minute: the step stores exactly 28 days.
+  const whole = count >= 2 && Math.abs(span - count * 7 * DAY_MS) < 60_000
+  const weeks = whole
+    ? Array.from({ length: count }, (_, i) => {
+        const w = { from: new Date(from + i * 7 * DAY_MS).toISOString(), to: i === count - 1 ? idea.read_end : new Date(from + (i + 1) * 7 * DAY_MS).toISOString() }
+        return { ...w, label: shortDate(`${coveredDays(w)!.first}T00:00:00.000Z`) }
+      })
+    : null
+  return { from: idea.read_start, to: idea.read_end, label: daysLabel(covered.first, covered.last), weeks }
+}
+
+/** "From questions asked 14 Sep to 11 Oct": the days the ideas read, as the
+ *  page, the tile and the panel print them. */
+export const askedPhrase = (read: Pick<IdeasRead, 'label'>): string => `From questions asked ${read.label}`
+
+/** The ideas' own week, against the page's, and the days they read. */
 export function ideasWeekOf(ideas: readonly PostIdeaRow[], page: ContentWeek | null): IdeasWeek | null {
   const idea = ideas[0]
   if (!idea) return null
   const w = contentWeek(idea.run_id, { from: idea.window_start, to: idea.window_end })
-  if (!w) return null
-  return { runId: idea.run_id, label: w.label, phrase: weekPhrase(w), current: page == null || page.runId === idea.run_id }
+  const read = ideasReadOf(idea)
+  if (!w || !read) return null
+  return { runId: idea.run_id, label: w.label, phrase: weekPhrase(w), current: page == null || page.runId === idea.run_id, read }
 }
 
 /** Are the ideas too old to print: written for a week that ended more than
@@ -1043,7 +1092,7 @@ export function newVerdict(registryId: string, label: string, month: ContentMont
 export function ideaCard(input: {
   idea: PostIdeaRow
   label: string | null
-  week: Counted | null
+  read: Counted | null
   month: Counted | null
   weeks: { label: string; count: number }[] | null
   flag: Verdict | null
@@ -1061,7 +1110,7 @@ export function ideaCard(input: {
     registryId: idea.registry_id,
     title: idea.title,
     label: input.label,
-    week: input.week,
+    read: input.read,
     month: input.month,
     weeks: input.weeks,
     flag: input.flag,
@@ -1249,20 +1298,35 @@ interface WeekReads {
   market: { week: number | null; month: number | null }
   themes: { week: Map<string, number> | null; month: Map<string, number> | null; weeks: (Map<string, number> | null)[] | null }
   weekLabels: string[] | null
+  /** Over the days the ideas read (`IdeasRead`): the market's videos, every
+   *  theme's, and every theme's in each of its weeks. Null where there are no
+   *  ideas. */
+  ideas: { market: number | null; themes: Map<string, number> | null; weeks: (Map<string, number> | null)[] | null } | null
 }
 
 /** The window readings the page states: the market's videos this week and
  *  this month, and every theme's over the week, the month and the two weeks
- *  before (three bare counts), under the anchor run's clustering. */
-async function readWindows(scope: Scope, week: ContentWeek | null, month: ContentMonth, audiences: string[], opts: { trend?: boolean } = {}): Promise<WeekReads> {
+ *  before (three bare counts); and, where there are ideas, over the days
+ *  they read and each of its weeks (`ideas`). All under the anchor run's
+ *  clustering, each an arbitrary window read (never a sum of weeks).
+ *  `week: false` leaves the page's week unread (the Dashboard's tile prints
+ *  none). */
+async function readWindows(scope: Scope, week: ContentWeek | null, month: ContentMonth, audiences: string[], opts: { trend?: boolean; week?: boolean; ideas?: IdeasRead | null } = {}): Promise<WeekReads> {
   const { client, clientId } = scope.reading
   const read = (from: string, to: string, runId: string | null) => loadWindowReading(client, clientId, { from, to, audiences, runId })
-  const weeks = week && opts.trend !== false ? threeWeeks(week) : null
-  const [w, m, ...prior] = await Promise.all([
-    week ? read(week.from, week.to, week.runId) : Promise.resolve(null),
-    read(month.from, month.to, week?.runId ?? null),
-    ...(weeks ? weeks.slice(0, 2).map((x) => read(x.from, x.to, week!.runId)) : []),
+  const runId = week?.runId ?? null
+  const weeks = week && opts.trend !== false && opts.week !== false ? threeWeeks(week) : null
+  const ideas = opts.ideas ?? null
+  const ideaWeeks = ideas && opts.trend !== false ? ideas.weeks : null
+  const [w, m, i, ...rest] = await Promise.all([
+    week && opts.week !== false ? read(week.from, week.to, week.runId) : Promise.resolve(null),
+    read(month.from, month.to, runId),
+    ideas ? read(ideas.from, ideas.to, runId) : Promise.resolve(null),
+    ...(weeks ? weeks.slice(0, 2).map((x) => read(x.from, x.to, runId)) : []),
+    ...(ideaWeeks ? ideaWeeks.map((x) => read(x.from, x.to, runId)) : []),
   ])
+  const prior = weeks ? rest.slice(0, 2) : []
+  const ideaSlices = ideaWeeks ? rest.slice(prior.length) : null
   const weekThemes = pooledThemeVideos(w?.themes ?? null, audiences)
   return {
     audiences,
@@ -1273,7 +1337,21 @@ async function readWindows(scope: Scope, week: ContentWeek | null, month: Conten
       weeks: weeks ? [...prior.map((p) => pooledThemeVideos(p.themes, audiences)), weekThemes] : null,
     },
     weekLabels: weeks ? weeks.map((x) => x.label) : null,
+    ideas: i
+      ? {
+          market: pooledVideos(i.denominators, audiences),
+          themes: pooledThemeVideos(i.themes, audiences),
+          weeks: ideaSlices ? ideaSlices.map((p) => pooledThemeVideos(p.themes, audiences)) : null,
+        }
+      : null,
   }
+}
+
+/** An idea's weekly counts over the days its set read, oldest first, as bare
+ *  counts: null unless every week was read. Pure. */
+export function ideaWeeks(read: Pick<IdeasRead, 'weeks'> | null, series: readonly (Map<string, number> | null)[] | null | undefined, id: string): { label: string; count: number }[] | null {
+  if (!read?.weeks || !series || series.length !== read.weeks.length || series.some((s) => s == null)) return null
+  return read.weeks.map((w, i) => ({ label: w.label, count: series[i]!.get(id) ?? 0 }))
 }
 
 /** A theme's level over a window: null where either side was not read (a
@@ -1317,7 +1395,7 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
 
   // ---- wave 2
   const [windows, questions, flags, ownedRead, playbook, replies] = await Promise.all([
-    soft('windows', readWindows(scope, week, month, audiences)),
+    soft('windows', readWindows(scope, week, month, audiences, { ideas: ideasWeek?.read ?? null })),
     week ? soft('questions', readQuestions(db, clientId, week.runId)) : Promise.resolve(null),
     week ? soft('flags', readFlags(db, clientId, week.runId)) : Promise.resolve([] as FlagRowIn[]),
     // ONE READ of your posts, from the touch test's first month to the end of
@@ -1371,24 +1449,22 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
     ? new Set((published.data.newThisWeek ?? []).map((n) => n.themeId))
     : new Set<string>()
   const medical = printsMedicalLine(clientId)
-  // Every count on a card is over the PAGE's week and month, under its run's
-  // clustering (a registry id is the cross-run key), so an older idea still
-  // says how much it is asked now; the ideas' own week is printed beside them.
+  // An idea's counts are over THE DAYS ITS SET READ (`ideasWeek.read`, the
+  // four weeks to its run's end) and each of their weeks, beside the PAGE's
+  // month, all under the page's run's clustering (a registry id is the
+  // cross-run key); the days are printed above the cards.
   const cards: IdeaCard[] = ideas.map((idea) => {
     const id = idea.registry_id
     const label = labelOf.get(id) ?? null
     const monthLevel = counted(windows?.themes.month, id, windows?.market.month ?? null)
     const f = flagOf.get(id)
     const flag = f && week ? flagVerdict(f, week) : newIds.has(id) && monthLevel ? newVerdict(id, label ?? idea.title, month, monthLevel) : null
-    const series = windows?.themes.weeks
     return ideaCard({
       idea,
       label,
-      week: counted(windows?.themes.week, id, windows?.market.week ?? null),
+      read: counted(windows?.ideas?.themes, id, windows?.ideas?.market ?? null),
       month: monthLevel,
-      weeks: series && windows?.weekLabels && series.every((s) => s != null)
-        ? series.map((s, i) => ({ label: windows.weekLabels![i], count: s!.get(id) ?? 0 }))
-        : null,
+      weeks: ideaWeeks(ideasWeek?.read ?? null, windows?.ideas?.weeks, id),
       flag,
       groups: groups.get(id) ?? [],
       owned: touch,
@@ -1437,17 +1513,18 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
 // ---- the Dashboard's tile (T8) --------------------------------------------------------
 
 /** What the Dashboard's Content tile prints (E1-Dashboard): the first post
- *  idea, its week beside its month, its format and opening, and whether your
- *  posts touched on it; or the honest empty state. */
+ *  idea, its videos over the days the ideas read beside its month, its format
+ *  and opening, and whether your posts touched on it; or the honest empty
+ *  state. */
 export interface TopContent {
   state: IdeasState
   idea: {
     rank: PostIdeaRank
     title: string
-    /** Over the page's week and month (the newest), as on Content. */
-    week: Counted | null
+    /** Over the days the ideas read (`ideasWeek.read`) and the page's month
+     *  (the newest week's), as on Content. */
+    read: Counted | null
     month: Counted | null
-    weekLabel: string | null
     monthWords: string
     format: Recipe | null
     opening: Recipe | null
@@ -1481,9 +1558,9 @@ export const topContentEmpty = (state: Exclude<IdeasState, 'ready'>): string =>
 
 /**
  * The Dashboard's Content tile, light: the ideas (two round trips) beside the
- * published week read (one), then, for the first idea only, the week's and
- * the month's market and conversation counts, your posts and the rivals, in
- * parallel. No reply queue (it is four reads deep), no panel. The same rules
+ * published week read (one), then, for the first idea only, the market and
+ * conversation counts over the days the ideas read and over the month, your
+ * posts and the rivals, in parallel. No reply queue (it is four reads deep), no panel. The same rules
  * as the page: the newest week anchors, ideas more than four weeks older are
  * not shown, older ones say so.
  */
@@ -1515,16 +1592,15 @@ export async function topContent(scope: Scope, opts: {
     week ? soft('top.label', readLabels(db, clientId, week.runId, [idea.registry_id])) : Promise.resolve(null),
   ])
   const audiences = marketAudiences(marketRivalAudiences(rivals ?? []))
-  const windows = await soft('top.windows', readWindows(scope, week, month, audiences, { trend: false }))
+  const windows = await soft('top.windows', readWindows(scope, week, month, audiences, { trend: false, week: false, ideas: ideasWeek.read }))
   const id = idea.registry_id
   return {
     state: 'ready',
     idea: {
       rank: idea.rank,
       title: idea.title,
-      week: counted(windows?.themes.week, id, windows?.market.week ?? null),
+      read: counted(windows?.ideas?.themes, id, windows?.ideas?.market ?? null),
       month: counted(windows?.themes.month, id, windows?.market.month ?? null),
-      weekLabel: week?.label ?? null,
       monthWords: monthWords(month),
       format: recipe(idea.format, idea.format_multiple, 'format'),
       opening: recipe(idea.opening, idea.opening_multiple, 'opening'),

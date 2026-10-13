@@ -114,10 +114,12 @@ describe('the Dashboard, as the board draws it (E1-Dashboard)', () => {
     expect(shelf).toMatch(/role="img"[^>]*class="grid gap-1\.5 max-sm:hidden"/)
   })
 
-  it('Content: the first idea, its week beside its month, its format and opening, your posts, and the medical team line', () => {
+  it('Content: the first idea, its four weeks of questions beside its month, its format and opening, your posts, and the medical team line', () => {
     const t = tileText(markup, 'content')
     expect(t).toMatch(/Post next: How long a liner lasts, and when it is time to replace one/)
-    expect(t).toMatch(/23 of 241 videos this week 35 of 318 in October so far/)
+    // The ideas read the four weeks to their update (Heinrich, 13 Oct), named.
+    expect(t).toMatch(/48 of 640 videos, 14 Sep to 11 Oct 35 of 318 in October so far/)
+    expect(t).not.toMatch(/videos this week/)
     expect(t).toMatch(/Tutorial 2\.1× Open with a question 1\.8×/)
     expect(t).toContain('None of your 25 posts since August touched on it')
     expect(t).toContain(MEDICAL_LINE)
