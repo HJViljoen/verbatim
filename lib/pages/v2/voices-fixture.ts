@@ -228,6 +228,82 @@ export function ossurVoicesFixture(params: VoicesParams = {}): VoicesData {
   return data
 }
 
+// ---- Össur's thin states (the parity pass, 13 Oct) ---------------------------------
+//
+// The page keeps the board's shape when the month is thin: these two pin it.
+// `ossurThin` is Össur as production reads it today, and thinner: no brand
+// row (rules, no back-read), no finding to note, one group whose comments
+// fall on no video this month, one whose videos carry no subject, and two
+// creators at the floor. `ossurCounted` is the day after the brand back-read:
+// Ottobock counted, and Össur's own row still "not counted yet", because no
+// match of its name outside its own posts has been read by hand
+// (`clientNameCounts`, NAME_READS holds none for Össur).
+
+/** Össur today, thinner: every section drawn from very little. */
+export function ossurThinVoicesFixture(params: VoicesParams = {}): VoicesData {
+  const market = marketOf(212, ['tiktok', 'instagram', 'youtube', 'reddit'])
+  const personas = OSSUR_PERSONAS.map((p): PersonaIn => (
+    p.key === 'clinicians' ? { ...p, videos: [0, 0], subjects: [] }
+      : p.key === 'athlete' ? { ...p, videos: [100, 112], subjects: [] }
+        : p
+  ))
+  const { profile, read } = groupsFrom(personas, market)
+  const platformOf = new Map(market.map((m) => [m.id, m.platform]))
+  const groups = buildGroups({ profile, read, platformOf, params })
+  const tracked = [{ brandKey: 'client', label: 'Össur', countState: 'counted' as const }, { brandKey: '5ecfa431', label: 'Ottobock', countState: 'counted' as const }]
+  const pairs = brandMonthPair({ month: SEP, brands: tracked, rows: [], audiences: ['industry-other'], pair: null })
+  const brands = buildBrands({ clientId: OSSUR_CLIENT_ID, month: SEP, pairs, crosses: null, note: null, params })
+  const refs = refsOver(market, { 'reg-running': [[100, 110]], 'reg-insurance': [[150, 158]] })
+  const creatorVideos = creatorsFrom(market, OSSUR_CREATORS.slice(0, 3))
+  const read2 = creatorThemes({ month: SEP, videos: creatorVideos, refs })
+  const videoIds = creatorVideoIds(creatorVideos.map((v) => ({ id: v.videoId, platform: v.platform, account: v.account })))
+  const creators = buildCreators({ month: SEP, read: read2, labels: OSSUR_LABELS, videoIds, brands: [], params })
+  return {
+    client: 'Össur', month: SEP, soFar: false, monthWords: monthWordsOf(SEP, false), monthLabel: readingMonthLabel(SEP, VOICES_FIXTURE_NOW), videos: market.length,
+    groups, brands, creators, params, open: null, panel: null,
+  }
+}
+
+/** Össur after the brand back-read: the rivals counted, its own row not yet. */
+export function ossurCountedVoicesFixture(params: VoicesParams = {}): VoicesData {
+  const base = ossurVoicesFixture(params)
+  const market = marketOf(487, ['tiktok', 'instagram', 'youtube', 'reddit'])
+  const OTTO = '5ecfa431'
+  const tracked = [{ brandKey: 'client', label: 'Össur', countState: 'counted' as const }, { brandKey: OTTO, label: 'Ottobock', countState: 'counted' as const }]
+  const rows: StoredBrandMonthRow[] = [
+    { month: SEP, audience: 'industry-other', brand_key: 'client', k_any: 41, k_organic: 30, n: 487, n_organic: 402 },
+    { month: SEP, audience: 'industry-other', brand_key: OTTO, k_any: 37, k_organic: 12, n: 487, n_organic: 402 },
+    { month: AUG, audience: 'industry-other', brand_key: OTTO, k_any: 20, k_organic: 6, n: 330, n_organic: 270 },
+  ]
+  const pairs = brandMonthPair({ month: SEP, brands: tracked, rows, audiences: ['industry-other'], pair: null })
+  const setOf = (from: number, k: number): string[] => Array.from({ length: k }, (_, i) => market[(from + i * 5) % market.length].id)
+  const videos: BrandMonthVideos[] = [
+    { ...tracked[0], month: SEP, any: setOf(1, 41), organic: setOf(1, 30), n: 487, nOrganic: 402 },
+    { ...tracked[1], month: SEP, any: setOf(100, 37), organic: setOf(100, 12), n: 487, nOrganic: 402 },
+  ]
+  const cross = (key: string, n: number, cells: [string, string, number][]): BrandCrossRow => ({
+    brandKey: key, label: key === OTTO ? 'Ottobock' : 'Össur', month: SEP, base: 'any', n,
+    cells: cells.map(([id, label, k]) => ({ id, label, k, n })),
+  })
+  const kinds = [cross('client', 41, [['praise', 'praise', 24], ['pain_point', 'pain_point', 9]]), cross(OTTO, 37, [['praise', 'praise', 12], ['pain_point', 'pain_point', 18]])]
+  const subjects = [cross('client', 41, [['s-function', 'Function & movement', 16]]), cross(OTTO, 37, [['s-cost', 'Cost & access', 21]])]
+  const brands = buildBrands({
+    clientId: OSSUR_CLIENT_ID, month: SEP, pairs, crosses: { videos, kinds, subjects },
+    note: { rival: 'Ottobock', title: 'Ottobock’s talk turns on getting a knee paid for' }, params,
+  })
+  const counted = new Set(brands.rows.map((r) => r.brandKey))
+  const brandSets: BrandSet[] = videos.filter((b) => counted.has(b.brandKey)).map((b) => ({ label: b.label, you: b.brandKey === 'client', any: new Set(b.any) }))
+  const refs = refsOver(market, {
+    'reg-phantom': [[0, 10]], 'reg-first-socket': [[10, 30]], 'reg-skin': [[30, 45]], 'reg-insurance': [[60, 90], [150, 158]],
+    'reg-knee-choice': [[110, 125], [190, 200]], 'reg-running': [[100, 124]], 'reg-growing': [[150, 162]], 'reg-kids-wear': [[170, 177]],
+  })
+  const creatorVideos = creatorsFrom(market, OSSUR_CREATORS)
+  const read2 = creatorThemes({ month: SEP, videos: creatorVideos, refs })
+  const videoIds = creatorVideoIds(creatorVideos.map((v) => ({ id: v.videoId, platform: v.platform, account: v.account })))
+  const creators = buildCreators({ month: SEP, read: read2, labels: OSSUR_LABELS, videoIds, brands: brandSets, params })
+  return { ...base, brands, creators }
+}
+
 // ---- Sealand -----------------------------------------------------------------------
 
 const COTO = 'c0000000-0000-0000-0000-000000000001'
@@ -406,4 +482,7 @@ export const VOICES_FIXTURES = {
   'sealand-brand': () => sealandVoicesFixture({ brand: 'Patagonia' }),
   'sealand-creator': () => sealandVoicesFixture({ creator: 'Pack Hacker' }),
   'ossur-brand': () => ossurVoicesFixture({ brand: 'Ottobock' }),
+  // The parity pass (13 Oct): the board's shape in Össur's thin states.
+  'ossur-thin': () => ossurThinVoicesFixture(),
+  'ossur-counted': () => ossurCountedVoicesFixture(),
 } as const

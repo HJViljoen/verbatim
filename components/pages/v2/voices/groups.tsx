@@ -2,20 +2,26 @@ import Link from 'next/link'
 import { Fragment, type CSSProperties } from 'react'
 import { Users } from 'lucide-react'
 import {
-  CARD, CardHead, equalColumns, InPlacePanel, panelItemOrder, panelPlacement, PanelSection, PanelSlot, PanelTitle, SELECTED_CARD_RING, StatCell, StatRow, TickBar,
+  CARD, CardHead, equalColumns, InPlacePanel, panelItemOrder, panelPlacement, PanelSection, PanelSlot, PanelTitle, SELECTED_CARD_RING, SlopePair, StatCell, StatRow, TickBar,
   type PanelLayout, type PerBreakpoint,
 } from '@/components/v2'
-import { fmtInt } from '@/lib/format'
-import { PANEL_ID, WHO_SHOWN, type GroupPanel, type VoicesData, type VoicesGroupCard, type VoicesGroups } from '@/lib/pages/v2/voices'
+import { fmtInt, longMonth } from '@/lib/format'
+import { prevMonth } from '@/lib/reading/month-key'
+import {
+  GROUP_NOT_COMPARED, mixNotCompared, PANEL_ID, slopeLabel, WHO_SHOWN, type GroupPanel, type VoicesData, type VoicesGroupCard, type VoicesGroups,
+} from '@/lib/pages/v2/voices'
 import { cn } from '@/lib/utils'
 import { AskButton, CAPS, EmptyLine, Fig, LevelText, MiniRow, OLINK, PanelTag, Phrase, PlatformStrip, QuoteCard } from './parts'
 
-// THE GROUPS (board E3-Voices, "Who's in your market" and the group cards;
-// E3-Voices-Open, the group's panel). Decision 2 holds: each group is this
-// month's videos as a count of the market's, with no share of the market, no
-// change since last month and no "how the mix changed" card. A video can hold
+// THE GROUPS (board E3-Voices, "Who's in your market", the group cards and
+// "How the mix changed"; E3-Voices-Open, the group's panel). Decision 2
+// holds: each group is this month's videos as a count of the market's, with
+// no share of the market and no change since last month. A video can hold
 // more than one group, so the counts are drawn as separate bars, never one
-// stacked bar with an "Other" remainder.
+// stacked bar with an "Other" remainder. THE BOARD'S SHAPE HOLDS AROUND IT
+// (the parity pass, 13 Oct): a card's verdict slot says the change is not
+// compared yet, and the mix card keeps the grid's sixth place, this month's
+// column drawn and last month's left empty, with one line saying why.
 
 /** "Who's in your market": every group's videos this month, a bar each. */
 export function WhoCard({ groups, videos, monthWords }: { groups: VoicesGroups; videos: number | null; monthWords: string }) {
@@ -68,32 +74,37 @@ export function GroupCard({ card, n, monthWords, style }: { card: VoicesGroupCar
         <h3 className="m-0 text-[16.5px] font-semibold leading-[1.3] text-foreground"><span data-copy="subject" data-slot="pass_e_persona">{card.name}</span></h3>
         {card.oneLiner ? <p className="m-0 mt-[3px] text-[13.5px] leading-[1.45] text-muted-foreground"><span data-copy="subject" data-slot="pass_e_persona">{card.oneLiner}</span></p> : null}
       </div>
-      {card.videos > 0 && n ? (
-        <div data-copy="level" className="flex flex-wrap items-baseline gap-2">
-          <span className="font-mono text-[28px] font-medium leading-none tracking-[-0.02em] tabular-nums text-foreground">{fmtInt(card.videos)}</span>
-          <span className="font-mono text-[12.5px] text-muted-foreground">of {fmtInt(n)} videos</span>
+      {n ? (
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <span data-copy="level" className="flex items-baseline gap-2">
+            <span className="font-mono text-[28px] font-medium leading-none tracking-[-0.02em] tabular-nums text-foreground">{fmtInt(card.videos)}</span>
+            <span className="font-mono text-[12.5px] text-muted-foreground">of {fmtInt(n)} videos</span>
+          </span>
+          {/* The board's verdict slot ("no clear change"): decision 2 reads no
+              change for a group yet, and the slot says so. */}
+          <span className="ml-auto whitespace-nowrap text-[12.5px] font-medium text-muted-foreground">{GROUP_NOT_COMPARED}</span>
         </div>
       ) : (
         <p className="m-0 text-[13.5px] text-muted-foreground">No video of the market’s in {monthWords} carries their comments.</p>
       )}
-      {card.subjects.length > 0 ? (
-        <div className="flex flex-col gap-2 rounded-[10px] bg-inner px-3.5 py-3">
-          <p className={cn(CAPS, 'mb-0.5')}>What they talk about · of their <Fig>{fmtInt(card.videos)}</Fig></p>
-          {card.subjects.map((s) => <MiniRow key={s.id} label={s.label} k={s.k} of={card.videos} />)}
-        </div>
-      ) : null}
+      <div className="flex flex-col gap-2 rounded-[10px] bg-inner px-3.5 py-3">
+        <p className={cn(CAPS, 'mb-0.5')}>What they talk about{card.videos > 0 ? <> · of their <Fig>{fmtInt(card.videos)}</Fig></> : null}</p>
+        {card.subjects.length > 0
+          ? card.subjects.map((s) => <MiniRow key={s.id} label={s.label} k={s.k} of={card.videos} />)
+          : <p className="m-0 text-[12.5px] leading-[1.4] text-muted-foreground">{card.videos > 0 ? 'No subject read in their videos yet.' : `None of their comments in ${monthWords}.`}</p>}
+      </div>
       {card.wants || card.stops ? (
         <div className="flex flex-col gap-1.5 text-[13.5px] leading-[1.45] text-foreground">
           {card.wants ? <div><b className="font-semibold">Wants:</b> <span data-copy="subject" data-slot="pass_e_persona">{card.wants}</span></div> : null}
           {card.stops ? <div><b className="font-semibold">Stops them:</b> <span data-copy="subject" data-slot="pass_e_persona">{card.stops}</span></div> : null}
         </div>
       ) : null}
-      {card.platforms.length > 0 ? (
-        <div>
-          <p className={cn(CAPS, 'mb-1.5')}>Where</p>
-          <PlatformStrip platforms={card.platforms} label={`Where ${card.name} comment`} />
-        </div>
-      ) : null}
+      <div>
+        <p className={cn(CAPS, 'mb-1.5')}>Where</p>
+        {card.platforms.length > 0
+          ? <PlatformStrip platforms={card.platforms} label={`Where ${card.name} comment`} />
+          : <span aria-hidden className="block h-1.5 rounded-full bg-track" />}
+      </div>
       <div className="mt-auto flex items-center justify-between pt-1">
         <Link
           href={card.href}
@@ -105,6 +116,40 @@ export function GroupCard({ card, n, monthWords, style }: { card: VoicesGroupCar
           {card.selected ? 'Close ↑' : 'Open →'}
         </Link>
       </div>
+    </article>
+  )
+}
+
+/** A month's short name on the chart's axis: "Sep". */
+const shortMonth = (month: string): string => longMonth(month).slice(0, 3)
+
+/**
+ * "How the mix changed" (the board's sixth card): each group's videos, last
+ * month against this one, on the kit's slope chart. Decision 2 reads no
+ * group's month before this one (each update describes the groups afresh),
+ * so the chart draws this month's column and leaves last month's axis empty,
+ * and one line says why. Nothing is drawn between the two: a line needs both
+ * ends.
+ */
+export function MixCard({ cards, n, month, monthWords, style }: { cards: readonly VoicesGroupCard[]; n: number | null; month: string; monthWords: string; style?: CSSProperties }) {
+  const before = prevMonth(month)
+  return (
+    <article data-mix="" aria-labelledby="voices-mix" style={style} className={cn(CARD, 'gap-3.5 rounded-[14px] px-[22px] py-5')}>
+      <div>
+        <h3 id="voices-mix" className="m-0 text-[16.5px] font-semibold leading-[1.3] text-foreground">How the mix changed</h3>
+        <p className="m-0 mt-[3px] text-[13.5px] leading-[1.45] text-muted-foreground">
+          Each group’s videos{n ? <> of the market’s <Fig>{fmtInt(n)}</Fig></> : null}, {longMonth(before)} against {monthWords}
+        </p>
+      </div>
+      <SlopePair
+        fromLabel={shortMonth(before)}
+        toLabel={shortMonth(month)}
+        rows={cards.map((c) => ({ key: c.key, label: slopeLabel(c.name), slot: 'pass_e_persona' as const, from: null, to: c.videos }))}
+        format={fmtInt}
+        label="Each group’s videos"
+        className="mx-auto max-w-[340px]"
+      />
+      <p className="m-0 text-[13.5px] leading-[1.5] text-secondary-foreground">{mixNotCompared(longMonth(before))}</p>
     </article>
   )
 }
@@ -197,7 +242,8 @@ export function GroupPanelView({ panel, monthWords, notchAt }: { panel: GroupPan
   )
 }
 
-/** The group grid's columns: one on a phone, two from 768, three from 1280. */
+/** The group grid's columns: one on a phone, two from 768, three from 1280.
+ *  `count` is every item in the grid: the group cards and the mix card. */
 export function groupLayout(count: number): PanelLayout {
   return { base: equalColumns(1, count), md: equalColumns(2, count), xl: equalColumns(3, count) }
 }
@@ -206,11 +252,13 @@ export function groupLayout(count: number): PanelLayout {
  *  group's panel under the row its card is in at every width: one grid, the
  *  panel a child of it placed after the card's row (`panelPlacement`), and in
  *  the markup right after the card that opened it. */
-export function GroupGrid({ data }: { data: Pick<VoicesData, 'groups' | 'videos' | 'panel' | 'monthWords'> }) {
+export function GroupGrid({ data }: { data: Pick<VoicesData, 'groups' | 'videos' | 'panel' | 'monthWords' | 'month'> }) {
   const cards = data.groups.cards
   const panel = data.panel?.kind === 'group' ? data.panel : null
   const at = panel ? cards.findIndex((c) => c.key === panel.key) : -1
-  const place = at >= 0 ? panelPlacement(at, groupLayout(cards.length)) : null
+  // The mix card is the grid's last item (the board's sixth place), so a
+  // panel opened from its row lands after it.
+  const place = at >= 0 ? panelPlacement(at, groupLayout(cards.length + 1)) : null
   return (
     <>
       <section aria-label="The groups" className="grid grid-cols-1 gap-x-4 gap-y-5 md:grid-cols-2 xl:grid-cols-3">
@@ -222,6 +270,7 @@ export function GroupGrid({ data }: { data: Pick<VoicesData, 'groups' | 'videos'
             ) : null}
           </Fragment>
         ))}
+        <MixCard cards={cards} n={data.videos} month={data.month} monthWords={data.monthWords} style={panelItemOrder(cards.length)} />
       </section>
       {/* A group no card names (an old link) still opens, under the grid. */}
       {panel && at < 0 ? <GroupPanelView panel={panel} monthWords={data.monthWords} /> : null}

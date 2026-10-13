@@ -5,9 +5,10 @@ import {
   buildBrandPanel, buildBrands, buildCreatorPanel, buildCreators, buildGroupPanel, buildGroups, clientNameCounts, clientNameCountsByCount,
   creatorVideoIds, crossKeys, findingsFor, firstSentence, groupRows, initialsOf, matchesBrand, noteOf, openOf, parseVoicesParams, personasOf,
   phrasesOf, PHRASE_MAX_WORDS, resolveCreator, themeVideoSets, topFinding, topVoicesOf, voicesHref, whoLabel, mergeWho, whoKey, WHO_FILLER_WORDS, WHO_SHOWN,
-  BRANDS_NOT_COUNTED, BRANDS_NOT_READ, GROUPS_NOT_RUN, GROUPS_NONE, GROUPS_UNREAD, type FindingRow,
+  BRANDS_NOT_COUNTED, BRANDS_NOT_READ, BRANDS_UNREAD, GROUPS_NOT_RUN, GROUPS_NONE, GROUPS_UNREAD, type FindingRow,
+  brandTable, mixNotCompared, slopeLabel, SLOPE_LABEL_MAX,
 } from './voices'
-import { ossurVoicesFixture, sealandVoicesFixture } from './voices-fixture'
+import { ossurCountedVoicesFixture, ossurThinVoicesFixture, ossurVoicesFixture, sealandVoicesFixture } from './voices-fixture'
 
 const SEP = '2026-09-01'
 
@@ -401,5 +402,70 @@ describe('the page and the Dashboard tile', () => {
     expect(topVoicesOf({ month: d.month, soFar: true, videos: d.videos, groups: d.groups, brands: d.brands }).monthLabel).toBeNull()
     // The page's data carries it from the fixture's day, 13 October.
     expect(d.monthLabel).toBe('the last full month')
+  })
+})
+
+// The parity pass (13 Oct; Heinrich: "the page shouldn't look too different if
+// everything isn't as populated as the design"): the board's brands table, its
+// mix card and its card slots, in every data state.
+describe('the board\'s shape in a thin month', () => {
+  it('draws the brands table you first in every state, and never names your row twice', () => {
+    // Össur today: rules, no month row. Every tracked brand is a row, nothing
+    // counted, and the line under the heads is the card's own.
+    const today = brandTable(ossurVoicesFixture().brands)
+    expect(today.rows.map((r) => [r.label, r.state])).toEqual([['Össur', 'not_yet'], ['Ottobock', 'not_yet']])
+    expect(today).toMatchObject({ pending: true, line: BRANDS_NOT_COUNTED, notNamed: [], notCounted: [] })
+    // After the back-read: your row first and not counted yet (no match of
+    // your name outside your posts read by hand), the rival counted, and
+    // the lines under the table without you.
+    const after = ossurCountedVoicesFixture()
+    const t = brandTable(after.brands)
+    expect(t.rows.map((r) => [r.label, r.state, r.stateWords])).toEqual([['Össur', 'not_yet', 'not counted yet'], ['Ottobock', 'counted', null]])
+    expect(t).toMatchObject({ pending: false, line: null })
+    expect(after.brands.notCounted.map((r) => r.label)).toEqual(['Össur'])
+    expect(t.notCounted).toEqual([])
+    // Your row is not a counted row elsewhere: the Dashboard's "Named most"
+    // and the creators' chips read `rows`, which it never joins uncounted.
+    expect(after.brands.rows.map((r) => r.label)).toEqual(['Ottobock'])
+    expect(after.creators.rows.every((r) => r.brand == null || r.brand.label === 'Ottobock')).toBe(true)
+    // Sealand: your row is counted and printed first, as it was.
+    const s = brandTable(sealandVoicesFixture().brands)
+    expect(s.rows[0]).toMatchObject({ label: 'Sealand', you: true, state: 'counted' })
+    expect(s.rows.filter((r) => r.you)).toHaveLength(1)
+    // Counted and named by nobody unprompted: your row prints its 0, and the
+    // "not named" line under the table leaves you out.
+    const b = sealandVoicesFixture().brands
+    const quietYou = b.all.map((r) => (r.you ? { ...r, named: { k: 0, n: 743 } } : r))
+    const q = brandTable({ ...b, all: quietYou, rows: b.rows.filter((r) => !r.you), notNamed: [{ label: 'Sealand', href: '#' }, ...b.notNamed] })
+    expect(q.rows[0]).toMatchObject({ label: 'Sealand', named: { k: 0, n: 743 } })
+    expect(q.notNamed.map((x) => x.label)).not.toContain('Sealand')
+    // No rules, or a failed read: the heads and the one line.
+    for (const [state, line] of [['not_read', BRANDS_NOT_READ], ['unread', BRANDS_UNREAD]] as const) {
+      expect(brandTable({ ...b, state, empty: line })).toMatchObject({ rows: [], pending: true, line })
+    }
+  })
+
+  it('names a group on the mix chart whole where it fits, else cut at a word with an ellipsis', () => {
+    expect(slopeLabel('Caretaker')).toBe('Caretaker')
+    expect(slopeLabel('One-bag travellers')).toBe('One-bag travellers')
+    expect(slopeLabel('New amputees, first year')).toBe('New amputees…')
+    expect(slopeLabel('Long-time users upgrading')).toBe('Long-time users…')
+    // Never ending on a word that leaves the name hanging.
+    expect(slopeLabel('Clinicians and prosthetists')).toBe('Clinicians…')
+    expect(slopeLabel('Supercalifragilisticexpialidocious')).toBe('Supercalifragilis…')
+    for (const n of ['Sustainability-minded buyers', 'Parents of children growing out of sockets']) expect(slopeLabel(n).length).toBeLessThanOrEqual(SLOPE_LABEL_MAX)
+  })
+
+  it('says once why the mix is not compared, naming last month', () => {
+    expect(mixNotCompared('August')).toBe('Not compared yet: each update describes the groups afresh, so August has no reading of these groups.')
+  })
+
+  it('a thin Össur still has every group, one at no video and one with no subject', () => {
+    const d = ossurThinVoicesFixture()
+    expect(d.groups.cards).toHaveLength(5)
+    expect(d.groups.cards.find((c) => c.key === 'clinicians')).toMatchObject({ videos: 0, subjects: [], platforms: [] })
+    expect(d.groups.cards.find((c) => c.key === 'athlete')).toMatchObject({ videos: 12, subjects: [] })
+    expect(d.brands).toMatchObject({ state: 'not_counted', note: null })
+    expect(d.creators.atFloor).toBe(2)
   })
 })

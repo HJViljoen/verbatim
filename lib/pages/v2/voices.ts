@@ -37,11 +37,14 @@ import type { Verdict } from '../../reading/verdicts'
 //   1. THE GROUPS. Today's groups (the latest `consumer_profiles` row) with
 //      THIS MONTH'S videos (`loadGroupSubjects`, comment-dated evidence on
 //      the month's market videos). DECISION 2: a count of videos and no share
-//      of the market, no month-on-month change and no mix-change card. A
-//      profile is rebuilt every update over all-time insights, so a group's
-//      count here is "this month's videos for today's groups", never a point
-//      on a series. The groups overlap (a video can hold several), so no
-//      remainder ("Other") is taken from them either.
+//      of the market, and no month-on-month change. A profile is rebuilt
+//      every update over all-time insights, so a group's count here is "this
+//      month's videos for today's groups", never a point on a series. The
+//      groups overlap (a video can hold several), so no remainder ("Other")
+//      is taken from them either. THE PARITY PASS (13 Oct) keeps the board's
+//      shape around that: each card's verdict slot says the change is not
+//      compared yet, and the "How the mix changed" card keeps its place with
+//      this month's column drawn and last month's empty.
 //   2. THE BRANDS. Named unprompted (`k_organic` of `n_organic`, this month
 //      and last, judged as a `Verdict` by the month-pair rule:
 //      `loadBrandMonthPairs`), and, over every video naming the brand (base
@@ -66,8 +69,9 @@ import type { Verdict } from '../../reading/verdicts'
 //
 // BRANDS STAY HONEST FOR A TENANT WITH NO ROWS. Össur has brand rules since
 // T15 but no `brand_mentions` and no `month_brand_readings` until its
-// back-read: the brands card then says the brands are not counted yet, and
-// fills on its own once the month rows exist.
+// back-read: the brands card then draws its table with every tracked brand's
+// row and empty cells, says once that the brands are not counted yet, and
+// fills on its own once the month rows exist (`brandTable`).
 //
 // PURE HALF FIRST (every builder is tested over fixtures), THEN THE READS.
 
@@ -455,6 +459,51 @@ export function personasOf(profile: GroupProfileRow | null): VoicesPersona[] {
   })
 }
 
+/** THE PERIOD SWITCH'S TWO OTHER VIEWS (the parity pass, 13 Oct). The board
+ *  draws "This week · This month · Over time"; Voices reads one month, since a
+ *  group has no week reading and no month-by-month one (decision 2), so the
+ *  switch is drawn with the month on and the other two shown, not offered. */
+export const VOICES_ONE_MONTH = 'Voices reads one month at a time: groups have no weekly or month-by-month reading yet.'
+
+/** "How the mix changed" until a group has a month-by-month reading
+ *  (decision 2): the card keeps its place and its chart, this month's column
+ *  drawn and last month's empty, and says why in one line. */
+export const mixNotCompared = (prevMonthName: string): string =>
+  `Not compared yet: each update describes the groups afresh, so ${prevMonthName} has no reading of these groups.`
+
+/** Where a group card's verdict would stand ("no clear change" on the
+ *  board): the same quiet slot, saying the change is not read. */
+export const GROUP_NOT_COMPARED = 'not compared yet'
+
+/** The longest group name the mix chart sets beside its figure: the chart's
+ *  label column holds about this many characters at the board's 11px mono. */
+export const SLOPE_LABEL_MAX = 18
+
+/** WORDS THAT DO NOT END A SHORTENED NAME: "Clinicians and" reads as cut
+ *  mid-thought, "Clinicians" does not. */
+const DANGLING = new Set(['and', 'or', 'of', 'the', 'a', 'an', 'in', 'on', 'for', 'with', 'to', '&'])
+
+/**
+ * A group's name as the mix chart labels it: whole where it fits, else cut at
+ * a word and marked with an ellipsis, so a long name never runs past the
+ * card (the board's own chart shortens its names by hand: "Clinicians",
+ * "Active"). The card above it carries the whole name, and the chart's
+ * screen-reader words do too. PURE.
+ */
+export function slopeLabel(name: string, max = SLOPE_LABEL_MAX): string {
+  const t = name.replace(/\s+/g, ' ').trim()
+  if (t.length <= max) return t
+  const words = t.split(' ')
+  const kept: string[] = []
+  for (const w of words) {
+    if ([...kept, w].join(' ').length > max - 1) break
+    kept.push(w)
+  }
+  while (kept.length > 1 && DANGLING.has(kept[kept.length - 1].toLowerCase().replace(/[^\p{L}&]/gu, ''))) kept.pop()
+  const cut = (kept.length > 0 ? kept.join(' ') : t.slice(0, max - 1)).replace(/[\s,;:.·-]+$/u, '')
+  return `${cut}…`
+}
+
 export const GROUPS_NOT_RUN = 'Reading who is talking is not switched on for this workspace yet.'
 export const GROUPS_NONE = 'Too little conversation in the latest update to describe who is talking.'
 export const GROUPS_UNREAD = 'Who is talking could not be read just now.'
@@ -772,6 +821,55 @@ export function buildBrands(input: {
 /** A row the table prints: counted, and named without being asked in at
  *  least one video. */
 const printable = (r: VoicesBrandRow): boolean => r.state === 'counted' && (r.named?.k ?? 0) > 0
+
+/** What the brands table draws, in every state. */
+export interface BrandTable {
+  /** The rows, in the board's order: you first. */
+  rows: VoicesBrandRow[]
+  /** No row in the table is counted: each draws its cells empty, and the
+   *  line under the header says why, once. */
+  pending: boolean
+  /** That line (the card's `empty`), or null where the table holds counts. */
+  line: string | null
+  /** The lines under the table, never naming a brand its rows already draw. */
+  notNamed: VoicesBrands['notNamed']
+  notCounted: VoicesBrands['notCounted']
+}
+
+/**
+ * THE BRANDS TABLE IN THE BOARD'S SHAPE, IN EVERY STATE (the parity pass,
+ * 13 Oct; Heinrich: "the page shouldn't look too different if everything
+ * isn't as populated as the design"). E3-Voices draws a table: the four
+ * column heads, then a row per brand with your own first, then the key. A
+ * thin month keeps that table and lets its cells carry the gap:
+ *   - `ready`: your row first WHATEVER its state (the board always draws it:
+ *     "not counted yet" where your name's matches are not all read, "0 of
+ *     743" where it was counted and nobody named it unprompted), then the
+ *     rivals named without being asked, most first; the lines under the table
+ *     name the rest and never your row twice;
+ *   - `not_counted` (brand rules, no month row yet: Össur before its
+ *     back-read): every tracked brand is a row, you first, its cells drawn
+ *     empty, and the table says once, under its head, that brands are not
+ *     counted yet;
+ *   - `not_read` / `unread`: the head and that one line.
+ * PURE.
+ */
+export function brandTable(b: VoicesBrands): BrandTable {
+  if (b.state === 'ready') {
+    const you = b.all.find((r) => r.you) ?? null
+    const isYou = (x: { label: string }): boolean => you != null && x.label === you.label
+    return {
+      rows: you ? [you, ...b.rows.filter((r) => !r.you)] : b.rows,
+      pending: false,
+      line: null,
+      notNamed: b.notNamed.filter((x) => !isYou(x)),
+      notCounted: b.notCounted.filter((x) => !isYou(x)),
+    }
+  }
+  // A stable sort: you first, then the tracked order.
+  const rows = b.state === 'not_counted' ? [...b.all].sort((x, y) => Number(y.you) - Number(x.you)) : []
+  return { rows, pending: true, line: b.empty, notNamed: [], notCounted: [] }
+}
 
 /** The brands worth crossing (their kinds and subjects, one lens call each):
  *  those whose month row may print, before your own name's gate. A brand that

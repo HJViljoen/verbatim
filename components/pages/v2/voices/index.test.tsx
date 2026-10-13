@@ -3,7 +3,8 @@ import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { VOICES_FIXTURES } from '@/lib/pages/v2/voices-fixture'
 import { readingMonthLabel } from '@/lib/reading/month-label'
-import { VoicesMeta, VoicesPage } from '.'
+import { VOICES_ONE_MONTH } from '@/lib/pages/v2/voices'
+import { MonthSwitch, VoicesMeta, VoicesPage } from '.'
 
 describe('the Voices page (boards E3-Voices and E3-Voices-Open)', () => {
   it('keeps the copy contract on every fixture, open or not', () => {
@@ -20,12 +21,23 @@ describe('the Voices page (boards E3-Voices and E3-Voices-Open)', () => {
     }
   })
 
-  it('the bar: the month, the market\'s videos, the groups, the regular creators, the brands; no period switch', () => {
+  it('the bar: the month, the market\'s videos, the groups, the regular creators, the brands; the board\'s switch with the month on', () => {
     const d = VOICES_FIXTURES.ossur()
     expect(renderText(<VoicesMeta data={d} />)).toBe('September · the last full month · 487 videos · 5 groups · 6 regular creators · 2 brands')
     const m = render(<VoicesPage data={d} />)
     expect(m).toContain('>Voices</h1>')
-    expect(m).not.toContain('aria-label="Period"')
+    expect(m).toContain('aria-label="Period"')
+    // The parity pass (13 Oct): the board's three, the month on and named as
+    // decision 3 names a month column; the week and over time shown, not
+    // offered (no link), each saying why.
+    const sw = render(<MonthSwitch data={d} />)
+    expect(renderText(<MonthSwitch data={d} />)).toBe('This week (not read for Voices yet) September Over time (not read for Voices yet)')
+    expect(sw).toContain('aria-current="page"')
+    expect(sw).not.toContain('<a ')
+    expect(sw.match(/aria-disabled="true"/g)).toHaveLength(2)
+    expect(sw).toContain(`title="${VOICES_ONE_MONTH}"`)
+    // The current month reads "This month", as the board's switch does.
+    expect(renderText(<MonthSwitch data={{ month: '2026-10-01', monthLabel: null }} />)).toContain('This month')
   })
 
   // Decision 3: a whole-month reading of a month that is not the current one
@@ -42,13 +54,36 @@ describe('the Voices page (boards E3-Voices and E3-Voices-Open)', () => {
     for (const x of [d, current, older]) assertCopyContract(<VoicesPage data={x} />)
   })
 
-  it('draws the sections in the board\'s order and no mix-change card (decision 2)', () => {
+  it('draws the sections in the board\'s order, the mix card the groups\' last', () => {
     const text = renderText(<VoicesPage data={VOICES_FIXTURES.sealand()} />)
     const at = (s: string) => text.indexOf(s)
     expect(at('Who’s in your market')).toBeLessThan(at('One-bag travellers Pack light'))
-    expect(at('One-bag travellers Pack light')).toBeLessThan(at('Brands in your market'))
+    expect(at('One-bag travellers Pack light')).toBeLessThan(at('How the mix changed'))
+    expect(at('How the mix changed')).toBeLessThan(at('Brands in your market'))
     expect(at('Brands in your market')).toBeLessThan(at('Creators who drive the talk'))
-    expect(text).not.toContain('How the mix changed')
+  })
+
+  // The parity pass (13 Oct; Heinrich: "the page shouldn't look too different
+  // if everything isn't as populated as the design"): Össur's thin states keep
+  // every component of the board in its place.
+  it('keeps the board\'s shape in Össur\'s thin states, before and after its brand back-read', () => {
+    for (const key of ['ossur-thin', 'ossur-counted', 'ossur', 'sealand'] as const) {
+      const d = VOICES_FIXTURES[key]()
+      const m = render(<VoicesPage data={d} />)
+      const text = renderText(<VoicesPage data={d} />)
+      // The switch, the who card, five group cards and the mix card, the
+      // brands table (its four heads, you first) and the creators card.
+      expect(m, key).toContain('aria-label="Period"')
+      expect(m, key).toContain('id="cast"')
+      expect(m.match(/data-group="/g)?.length, key).toBe(d.groups.cards.length)
+      expect(m.match(/data-mix=""/g), key).toHaveLength(1)
+      expect(text, key).toContain('Brand Named in Praised · complained Talked about for')
+      expect(m.match(/data-brand="/g)?.length ?? 0, key).toBeGreaterThanOrEqual(2)
+      expect(m.indexOf('data-brand="client"'), key).toBe(m.indexOf('data-brand="'))
+      expect(text, key).toContain('Creators who drive the talk')
+      expect(m, key).not.toContain('data-copy="quote"')
+      assertCopyContract(<VoicesPage data={d} />)
+    }
   })
 
   it('a brand\'s or a creator\'s panel opens under its card, one at a time (T9)', () => {

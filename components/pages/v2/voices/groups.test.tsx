@@ -3,7 +3,7 @@ import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { ossurVoicesFixture } from '@/lib/pages/v2/voices-fixture'
 import { mergeWho, type GroupPanel } from '@/lib/pages/v2/voices'
-import { GroupCard, GroupGrid, GroupPanelView, WhoCard } from './groups'
+import { GroupCard, GroupGrid, GroupPanelView, MixCard, WhoCard } from './groups'
 
 describe('Who is in your market and the group cards (decision 2)', () => {
   const d = ossurVoicesFixture()
@@ -40,10 +40,28 @@ describe('Who is in your market and the group cards (decision 2)', () => {
     assertCopyContract(node)
   })
 
-  it('a card with no video this month says so and prints no level', () => {
+  // The parity pass (13 Oct): a thin card keeps the board's card. Its level
+  // row, its "What they talk about" box and its "Where" strip stay, each
+  // carrying the gap in its own frame.
+  it('a card with no video this month keeps the board\'s card: the level at 0, the box and the strip', () => {
     const node = <GroupCard card={{ ...d.groups.cards[0], videos: 0, subjects: [], platforms: [] }} n={487} monthWords="September" />
-    expect(renderText(node)).toContain('No video of the market’s in September carries their comments.')
+    const text = renderText(node)
+    expect(text).toContain('0 of 487 videos not compared yet')
+    expect(text).toContain('What they talk about None of their comments in September.')
+    expect(text).toContain('Where')
+    expect(text).not.toContain('of their 0')
     assertCopyContract(node)
+  })
+
+  it('a card whose videos carry no subject keeps its box and says so in it', () => {
+    const node = <GroupCard card={{ ...d.groups.cards[0], subjects: [] }} n={487} monthWords="September" />
+    expect(renderText(node)).toContain('What they talk about · of their 96 No subject read in their videos yet.')
+    assertCopyContract(node)
+  })
+
+  it('a card\'s verdict slot says the change is not compared (decision 2), never a direction', () => {
+    const text = renderText(<GroupCard card={d.groups.cards[0]} n={d.videos} monthWords={d.monthWords} />)
+    expect(text).toContain('96 of 487 videos not compared yet')
   })
 
   it('the grid opens a group\'s panel in place, under its card at every width (T9)', () => {
@@ -59,15 +77,47 @@ describe('Who is in your market and the group cards (decision 2)', () => {
     expect(m.match(/aria-label="The groups"/g)).toHaveLength(1)
     expect(m).not.toContain('The groups, continued')
     expect(m.match(/id="group-panel"/g)).toHaveLength(1)
-    // The fourth of five: after itself on a phone (order 7), after the
-    // second row of two from 768 (cards 3 and 4: order 7), after the second
-    // row of three from 1280 (cards 4 and 5: order 9); its notch at its
-    // column: the middle, the right of two, the left of three.
-    expect(m).toContain('--panel-o-base:7;--panel-o-sm:7;--panel-o-md:7;--panel-o-lg:7;--panel-o-w1180:7;--panel-o-xl:9')
+    // The fourth of five, the mix card the grid's sixth: after itself on a
+    // phone (order 7), after the second row of two from 768 (cards 3 and 4:
+    // order 7), after the second row of three from 1280 (cards 4 and 5 and
+    // the mix card: order 11); its notch at its column: the middle, the right
+    // of two, the left of three.
+    expect(m).toContain('--panel-o-base:7;--panel-o-sm:7;--panel-o-md:7;--panel-o-lg:7;--panel-o-w1180:7;--panel-o-xl:11')
+    // The panel lands before the mix card on a phone and after its row from 1280.
+    expect(m.indexOf('data-mix=""')).toBeGreaterThan(panel)
+    expect(m).toContain('data-mix="" aria-labelledby="voices-mix" style="order:10"')
     expect(m).toContain('--notch-base:50%;--notch-sm:50%;--notch-md:75%;--notch-lg:75%;--notch-w1180:75%;--notch-xl:16.67%')
     expect(m).toContain('ring-2 ring-foreground')
     expect(m).toContain('Close ↑')
     assertCopyContract(<GroupGrid data={open} />)
+  })
+})
+
+describe('How the mix changed (the board\'s sixth card; decision 2)', () => {
+  const d = ossurVoicesFixture()
+
+  it('keeps its place: this month\'s column drawn, last month\'s axis empty, and one line saying why', () => {
+    const node = <MixCard cards={d.groups.cards} n={d.videos} month={d.month} monthWords={d.monthWords} />
+    const text = renderText(node)
+    expect(text).toContain('How the mix changed Each group’s videos of the market’s 487 , August against September')
+    expect(text).toContain('Not compared yet: each update describes the groups afresh, so August has no reading of these groups.')
+    const m = render(node)
+    // Both columns are named; only September's carries points, and no line
+    // joins the two (a line needs both ends).
+    expect(m).toContain('>Aug</text>')
+    expect(m).toContain('>Sep</text>')
+    expect(m.match(/<circle /g)).toHaveLength(d.groups.cards.length)
+    expect(m).not.toMatch(/<line [^>]*stroke-cat/)
+    // Long names are shortened on the chart, whole on the cards.
+    expect(m).toContain('New amputees…')
+    expect(text).not.toMatch(/%|no clear change|moved/)
+    assertCopyContract(node)
+  })
+
+  it('sits in the grid after the group cards', () => {
+    const m = render(<GroupGrid data={d} />)
+    expect(m.indexOf('data-mix=""')).toBeGreaterThan(m.lastIndexOf('data-group='))
+    expect(m.match(/data-mix=""/g)).toHaveLength(1)
   })
 })
 
