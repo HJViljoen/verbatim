@@ -30,8 +30,16 @@ describe('the brands a tenant has', () => {
     expect(lines).toContain('  Patagonia: watched, but already counted as a tracked brand; skipped')
   })
 
-  it('a tenant with no brand rules reads none, watched or not (Össur)', () => {
-    expect(brandsOf(OSSUR_CLIENT_ID, tracking(['Ottobock']), []).brands).toEqual([])
+  it('a tenant with no brand rules reads none, watched or not', () => {
+    expect(brandsOf('a-tenant-with-no-rules', tracking(['Ottobock']), []).brands).toEqual([])
+  })
+
+  it("Össur: its name and Ottobock, by the rival's identity (production's tracking, 13 Oct)", () => {
+    const OTTOBOCK = '5ecfa431-c169-4d84-964a-bafe70b674da'
+    const ossur: Tracking = { competitor_names: ['Ottobock'], competitor_keywords: ['ottobock'], competitor_handles: {}, own_handles: {}, brand_keywords: ['ossur'], watched_brands: [] }
+    const { brands, lines } = brandsOf(OSSUR_CLIENT_ID, ossur, [{ id: OTTOBOCK, name: 'Ottobock', retired_at: null }])
+    expect(brands.map((b) => `${b.rule.brand}|${b.brandKey}|${b.ruleVersion}`)).toEqual(['Össur|client|brands_v1', `Ottobock|${OTTOBOCK}|brands_v1`])
+    expect(lines).toEqual([])
   })
 })
 

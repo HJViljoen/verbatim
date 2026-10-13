@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { SEALAND_CLIENT_ID } from '../config'
+import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../config'
 import { BRAND_RULE_VERSION, brandPattern, brandRulesFor, type BrandRule } from './aliases'
 import {
   CONTENT_FIELD_ORDER, excerptAt, handCheckList, handCheckTally, homonymVideosOf, mentionKey, monthBrandCounts, ownPostMentions,
@@ -65,6 +65,17 @@ describe('planMentions', () => {
     const strongElsewhere = homonymVideosOf(r, [content('v-y', 'caption', 'These Cotopaxi pants are everything to me!!! @COTOPAXI')],
       [content('v-y', 'transcript', 'we drove past Cotopaxi volcano on the way')])
     expect(strongElsewhere.size).toBe(0)
+  })
+
+  it("Össur: a video whose caption says \"ossur dilerim\" (Turkish, I'm sorry) is the other meaning; a handle on it still counts", () => {
+    // The caption is production's (13 Oct); the two comments are CONSTRUCTED.
+    const r = brandRulesFor(OSSUR_CLIENT_ID).find((x) => x.brand === 'Össur')!
+    const bare = [content('v-643f09', 'caption', 'ossur dilerim 2 kere attim ama siz gormuyorsunuz 🤍🤍 #ddlc #anime')]
+    const hits = [comment('v-643f09', 'c-5', '2026-09-01', 'ossur ne demek'), comment('v-643f09', 'c-6', '2026-09-01', 'bu @ossur reklamı mı')]
+    expect([...homonymVideosOf(r, hits, bare)]).toEqual(['v-643f09'])
+    const plan = planMentions(OSSUR_CLIENT_ID, BRAND_RULE_VERSION, [{ rule: r, brandKey: 'client', hits, bare }])
+    expect(plan.mentions.map((m) => m.row.comment_id)).toEqual(['c-6'])
+    expect(plan.dropped.map((d) => d.candidate.comment_id)).toEqual(['c-5'])
   })
 
   it('keys a row as the unique index does (a content row takes the zero uuid)', () => {

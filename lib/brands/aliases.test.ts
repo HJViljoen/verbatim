@@ -7,16 +7,23 @@ import {
 } from './aliases'
 
 const sealand = brandRulesFor(SEALAND_CLIENT_ID)
-const rule = (brand: string): BrandRule => {
-  const r = sealand.find((x) => x.brand === brand)
+const ossur = brandRulesFor(OSSUR_CLIENT_ID)
+const find = (rules: readonly BrandRule[], brand: string): BrandRule => {
+  const r = rules.find((x) => x.brand === brand)
   if (!r) throw new Error(`no rule for ${brand}`)
   return r
 }
+const rule = (brand: string): BrandRule => find(sealand, brand)
+const ossurRule = (brand: string): BrandRule => find(ossur, brand)
 
 describe('the brand rules: what they are', () => {
-  it('pins the rules as compiled to their version: a change is a new BRAND_RULE_VERSION', () => {
+  it('pins each tenant\'s rules as compiled to their version: a change is a new BRAND_RULE_VERSION', () => {
     expect(BRAND_RULE_VERSION).toBe('brands_v1')
-    expect(brandRulesFingerprint()).toBe('e307e0181d99b804')
+    // Sealand's alone is the fingerprint every brands_v1 row of it carries
+    // (deploy 3); Össur's first rules (13 Oct) changed no Sealand row.
+    expect(brandRulesFingerprint({ [SEALAND_CLIENT_ID]: sealand })).toBe('e307e0181d99b804')
+    expect(brandRulesFingerprint({ [OSSUR_CLIENT_ID]: ossur })).toBe('c238a91758508a97')
+    expect(Object.keys(BRAND_RULES).sort()).toEqual([OSSUR_CLIENT_ID, SEALAND_CLIENT_ID].sort())
   })
 
   it('holds the plan floor (WP2.6)', () => {
@@ -27,8 +34,11 @@ describe('the brand rules: what they are', () => {
     expect(sealand.map((r) => r.key.kind === 'client' ? 'client' : r.key.name).sort()).toEqual(
       ['Cotopaxi', 'Freedom of Movement', 'Freitag', 'Old School', 'Patagonia', 'Rareform', 'The North Face', 'client'].sort(),
     )
-    expect(brandRulesFor(OSSUR_CLIENT_ID)).toEqual([])
-    expect(Object.keys(BRAND_RULES)).toEqual([SEALAND_CLIENT_ID])
+  })
+
+  it("covers Össur and the one rival it tracks (production tracking_configs.competitor_names, 13 Oct), and nobody else's", () => {
+    expect(ossur.map((r) => r.key.kind === 'client' ? `client:${r.brand}` : r.key.name)).toEqual(['client:Össur', 'Ottobock'])
+    expect(brandRulesFor('a-tenant-with-no-rules')).toEqual([])
   })
 
   it('writes every form and guard in the syntax both engines read alike', () => {
@@ -36,7 +46,7 @@ describe('the brand rules: what they are', () => {
     // ARE and JS), no lookarounds or anchors (the compiler adds its own), no
     // unescaped dot (ARE's crosses lines), no literal space (write \s+).
     const bad = /\\[bmMyYwWpP]|\(\?[=!<]|\^|\$|(?<!\\)\.|\s/
-    for (const r of sealand) {
+    for (const r of [...sealand, ...ossur]) {
       for (const f of [...r.strong, ...r.weak, ...(r.notPreceded ?? []), ...(r.notFollowed ?? []), ...(r.notWith ?? []), ...(r.needs ?? [])]) {
         expect(f, `${r.brand}: ${f}`).not.toMatch(bad)
         expect(() => new RegExp(f, 'iu'), `${r.brand}: ${f}`).not.toThrow()
@@ -45,7 +55,7 @@ describe('the brand rules: what they are', () => {
   })
 
   it('compiles one pattern for both engines: they differ only in the word class', () => {
-    for (const r of sealand) {
+    for (const r of [...sealand, ...ossur]) {
       const js = brandPattern(r, 'are').replaceAll('[^[:alnum:]_]', '[^\\p{L}\\p{N}_]').replaceAll('[[:alnum:]_]', '[\\p{L}\\p{N}_]')
       expect(js).toBe(brandPattern(r, 'js'))
       expect(() => jsRegex(brandPattern(r, 'js'))).not.toThrow()
@@ -61,6 +71,10 @@ describe('the brand rules: what they are', () => {
       expect(negativePattern(rule(b), 'js')).not.toBeNull()
     }
     expect(strongPattern(rule('Cotopaxi'), 'js')).not.toBeNull()
+    // Össur's bare name is guarded (the Turkish words); Ottobock has none.
+    expect(barePattern(ossurRule('Össur'), 'js')).not.toBeNull()
+    expect(negativePattern(ossurRule('Össur'), 'js')).not.toBeNull()
+    expect(barePattern(ossurRule('Ottobock'), 'js')).toBeNull()
   })
 })
 
@@ -170,6 +184,80 @@ describe('the brand rules: what they count', () => {
     expect(counts('Freedom of Movement', 'my sling from @fombrand')).toBe(true)
     expect(counts('Rareform', 'the band was in rare form tonight')).toBe(false)
     expect(counts('Rareform', 'Rareform bag made from billboards')).toBe(true)
+  })
+})
+
+// Össur's rules (depth v2 T15). Every text below is a real production match
+// or near-miss (Össur, window June to October 2026, read 13 Oct), cut to the
+// words that decide it, except those marked CONSTRUCTED.
+describe("Össur's brand rules: what they count", () => {
+  const counts = (brand: string, text: string) => ruleMatches(ossurRule(brand), text)
+
+  it('Össur: the name, its handles and regional names count, in any language', () => {
+    for (const t of [
+      'Very cool!!! I have an Ossur foot as well, it is the pro-flex',
+      'my wife uses a power knee from ossur, do you prefer the non powered knee',
+      'I have the Össur terra foot which is a hybrid',
+      'Kaki palsu direct socket ossur dipadankan dengan aspire carbon foot',
+      'Pinli sistem değilde, össur x5 ıcecross kullansan çok daha iyi olur.',
+      'Bacağımızdaki güzellikler: @ossurturkiye @ossur',
+      'ÖSSUR LIFE WITHOUT LIMITATIONS',
+      'Hear the story behind the ride. #ÖssurZA #ÖssurSouthAfrica #WhatsYourEpic',
+      'Hoy comienza un nuevo y emocionante capítulo. Bienvenidos a @ossurlatam💙',
+      'Used once for shoulder surgery recover https://www.ossur.com/en-us/bracing-and-supports/cold-therapy/cold-rush',
+      "So here in Foz do Iguaçu, we have Ossur's latest release, which is the Aerofit system.",
+      'I’ve tried a lot of liners and ossurs I have found to be the best for me.',
+      '#OneLeggedPsychologist #OssurNaviiKnee #ProstheticLeg',
+    ]) expect(counts('Össur', t), t).toBe(true)
+  })
+
+  it('Össur: the Turkish words do not count', () => {
+    for (const t of [
+      // "özür dilerim" (I'm sorry), spelt by ear: a YouTube caption.
+      'ossur dilerim 2 kere attim ama siz gormuyorsunuz 🤍🤍 #ddlc #anime',
+      // Turkish for fart, in a comment and two captions.
+      'Muhammet ossurdu diyo bize ne suc atiyon😀😀😀',
+      'yaparken ossura ossura agladım..💔💔💔 #kesfetteyiz #akım #kesfet',
+      'titan camera man ossurada ossurada ben ossurada skibidi tuvalet ossurasa 67 canavarı',
+      'ossur bana bir osuruk daha', // CONSTRUCTED: the bare name beside a fart word
+    ]) expect(counts('Össur', t), t).toBe(false)
+  })
+
+  it('Össur: near-misses stay out by design (a product line alone, a single-s spelling)', () => {
+    for (const t of [
+      // A product line names a product, not the company (the products step's job).
+      'Pro flex XC?',
+      'Terra is great! Best foot on the market rn in my opinion, but proflex st and fillaur xts are good options too!!',
+      // A transcript's single-s spelling: Össur, but "osur" is Turkish for fart.
+      'I got to work, I talked to Osur, to my prosthetist, and for the last three months',
+      'Hello, Osurlatán! Hello, Latin America!',
+    ]) expect(counts('Össur', t), t).toBe(false)
+  })
+
+  it('Ottobock: the name, its old spelling, its handles and misspellings count', () => {
+    for (const t of [
+      'I have 2 feets i uses: The C161 Trition VS from Otto Bock and the Shock Wave.',
+      'I have an Ottobock c-leg 4 knee and it is expected to last 6 years',
+      'This knee is a 3R80 knee from the Ottobok brand.',
+      '@LimbLossBoss I first learned of Ottoboch in 2016 from My friend',
+      'Mi rodilla 3R80 ottobock #ottoboc #protesis #amputados',
+      "I'm missing both of my legs above the knee. I have OttobockC-Genium X4 knees.",
+      'Shoutout to @ottobockcare_northamerica for keeping me moving!',
+      'La parte más difícil casi nunca se ve. #ottobocklatam #protesis #cleg #amputee',
+      'В Ottobock Juvo B5 установлены свинцово-кислотные аккумуляторы (SLA).',
+      '[This is the kind of orthosis it is:](https://www.ottobock.com/de-de/product/28F10-62270)',
+    ]) expect(counts('Ottobock', t), t).toBe(true)
+  })
+
+  it('Ottobock: a product alone, OtterBox and "Otto" do not count', () => {
+    for (const t of [
+      'C-Leg my dream😢❤it',
+      'cuando el precio el 3R80',
+      'My brother if you make one for the cleg I’ll make a shrine in your honor',
+      'my OtterBox case cracked again', // CONSTRUCTED
+      'Otto from the clinic fitted my socket', // CONSTRUCTED
+      'на протезах в метро shorts отто бокк', // the Cyrillic spelling is not a form (production: always beside "ottobock")
+    ]) expect(counts('Ottobock', t), t).toBe(false)
   })
 })
 
