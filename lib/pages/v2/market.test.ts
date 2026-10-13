@@ -6,6 +6,7 @@ import { flagWordOf } from '@/components/v2/flag-chip'
 import type { OurChange } from '../../reading/comparability'
 import type { WindowReading } from '../../reading/read'
 import type { WeekReadData } from '../../written/types'
+import { MARKET_LONG_RUN_ANCHOR, marketMonthHref } from '../../nav'
 import {
   buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, categoryThemeVideos, categoryVideos, closeHref, convHref,
   convOf, cutWindows, doingOf, leadDoing, marketWeeksOf, flagCardOf, flagVerdict, groupsOf, isRegistryId, insideOf, marketHref, marketMonths, marketParams,
@@ -45,6 +46,14 @@ describe('marketParams and the addresses', () => {
     expect(closeHref(p, 'subjects')).toBe('/dashboard/market?period=month&month=2026-09&in=s1#subjects')
     expect(periodHref(p, 'week')).toBe('/dashboard/market')
     expect(periodHref(p, 'time')).toBe('/dashboard/market?period=time&month=2026-09')
+  })
+
+  it('writes This month\'s address as the review email\'s link does (`marketMonthHref`), and its long-run anchor', () => {
+    for (const m of ['2026-09-01', '2026-10-01', '2027-01-01']) {
+      expect(marketMonthHref(m)).toBe(marketHref({ period: 'month', month: m }))
+      expect(marketMonthHref(m, MARKET_LONG_RUN_ANCHOR)).toBe(marketHref({ period: 'month', month: m }, 'long-run'))
+    }
+    expect(marketParams({ period: 'month', month: '2026-09' })).toMatchObject({ period: 'month', month: '2026-09-01' })
   })
 })
 

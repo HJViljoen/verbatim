@@ -5,12 +5,12 @@ import type { HomeWeeks } from '../home'
 import type { UnusualFlag } from '../week'
 import {
   buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, convHref, closeHref, flagCardOf, flagVerdict, groupsOf,
-  lineBars, marketMonths, marketParams, monthsText, notchOf, ourReadOf, panelStats, pickHero, pickWeekSides, platformRows, subjectHref,
+  lineBars, marketLongRunOf, marketMonths, marketParams, monthsText, notchOf, ourReadOf, panelStats, pickHero, pickWeekSides, platformRows, subjectHref,
   tableMonths, convOf, doingOf, leadDoing, withMonthPlatforms,
   type ConvInput, type ConvPanel, type MarketConv, type MarketData, type MarketMonth, type MarketParams, type MarketWeek, type MonthCount,
   type PanelAt, type SubjectFact, type TopRow,
 } from './market'
-import type { WeekReadData } from '../../written/types'
+import type { LongRunReadData, WeekReadData } from '../../written/types'
 import type { ThemeMonthLine } from '../../reading/cross'
 
 // MARKET'S RENDER FIXTURE (depth v2, T3): an Össur-shaped week, drawn from the
@@ -254,6 +254,13 @@ export interface FixtureOptions {
   noNew?: boolean
   /** Who the talk is about: counted (the default), or not counted yet. */
   brands?: MarketData['brands']
+  /** The month the view reads has closed (early November, reading October
+   *  in full): "October", never "so far". */
+  closed?: boolean
+  /** This month's long-run read: `full` (written once the month closed),
+   *  `partial` (written before it closed, `partialThrough`), or none. Only
+   *  the month period prints it. */
+  longRun?: 'full' | 'partial' | null
 }
 
 const MONTH: MarketMonth = {
@@ -263,6 +270,63 @@ const MONTH: MarketMonth = {
   market: { videos: 318, comments: 5840 },
   category: 300,
   prev: { month: SEP, text: 'September', category: 780 },
+}
+
+/** October read in full, once it closed. */
+const MONTH_CLOSED: MarketMonth = { ...MONTH, soFar: false, text: 'October', market: { videos: 912, comments: 16_204 }, category: 861 }
+
+/**
+ * October's long-run read (`week_reads` kind 'month'), Össur-shaped and
+ * illustrative: what has held across September and October, in the writer's
+ * words as the scrub left them (no figure, no direction word), with code's
+ * counts. `partialThrough` where it was written before October closed.
+ */
+export function fixtureLongRun(partialThrough: string | null = null): LongRunReadData {
+  return {
+    version: 1,
+    kind: 'longrun',
+    promptVersion: 'longrun_read_v1',
+    month: OCT,
+    months: [SEP, OCT],
+    window: { from: `${SEP}T00:00:00.000Z`, to: '2026-11-01T00:00:00.000Z' },
+    inShort: 'People want to move freely with less fuss, and what stands in their way is mostly access and everyday comfort rather than the devices themselves.',
+    ideas: [
+      {
+        headline: 'Access, not the device, stands between interest and a fitting',
+        body: [
+          'People who already want a powered knee talk about refusals, appeals and paperwork long before they talk about the knee itself.',
+          'Whoever explains the route to being paid for is listened to first.',
+        ],
+        basedOn: [id(3), id(6)],
+        videos: 64,
+        months: [{ month: SEP, videos: 38 }, { month: OCT, videos: 31 }],
+        who: [{ about: 'client', videos: 6 }, { about: 'rival:Ottobock', videos: 9 }, { about: 'market', videos: 49 }],
+        sure: 'strong',
+      },
+      {
+        headline: 'Liners are where daily comfort is won or lost',
+        body: ['Sweat, a loose fit and sore skin are the everyday problems people bring up, and they ask how long a liner should last before it is replaced.'],
+        basedOn: [id(1), id(2), id(17)],
+        videos: 52,
+        months: [{ month: SEP, videos: 30 }, { month: OCT, videos: 27 }],
+        who: [{ about: 'rival:Ottobock', videos: 5 }, { about: 'market', videos: 47 }],
+        sure: 'strong',
+      },
+      {
+        headline: 'First steps and finish lines draw the warmest talk',
+        body: ['Under videos of people walking or running again, the comments are encouragement and shared experience rather than questions about a product.'],
+        basedOn: [id(4), id(8)],
+        videos: 41,
+        months: [{ month: SEP, videos: 25 }, { month: OCT, videos: 19 }],
+        who: [{ about: 'client', videos: 4 }, { about: 'market', videos: 37 }],
+        sure: 'reasonable',
+      },
+    ],
+    held: [],
+    model: 'gpt-5.4',
+    costUsd: 0.14,
+    ...(partialThrough ? { partialThrough } : {}),
+  }
 }
 
 const WEEK: MarketWeek = {
@@ -290,6 +354,8 @@ const HERO_KINDS = [{ kind: 'pain_point', videos: 14 }, { kind: 'question', vide
 export function marketFixture(opts: FixtureOptions = {}): MarketData {
   const period = opts.period ?? 'week'
   const flagged = opts.flagged ?? true
+  const month = opts.closed ? MONTH_CLOSED : MONTH
+  const soFar = !opts.closed
   const raw: Record<string, string> = {}
   if (period !== 'week') raw.period = period
   if (opts.open) {
@@ -329,7 +395,7 @@ export function marketFixture(opts: FixtureOptions = {}): MarketData {
   const subjects = buildSubjectBoard({
     facts, month: OCT, convs, period,
     flag: flag?.conv ? { id: flag.conv.id, verdict: flag.verdict } : null,
-    convHref: (cid) => convHref(p, cid, 'subjects'), subjectHref: (sid) => subjectHref(p, sid), soFar: true,
+    convHref: (cid) => convHref(p, cid, 'subjects'), subjectHref: (sid) => subjectHref(p, sid), soFar,
   })
   const openId = opts.open ? id(opts.open.n) : null
   const table = buildTable({
@@ -344,11 +410,11 @@ export function marketFixture(opts: FixtureOptions = {}): MarketData {
     weekUnavailable: false,
     params: p,
     week: period === 'week' ? WEEK : null,
-    month: MONTH,
+    month,
     top,
     subjects,
     rail: {
-      kinds: buildKinds(fixtureKindReadings(), OCT, null, true),
+      kinds: buildKinds(fixtureKindReadings(), OCT, null, soFar),
       weeks: FIXTURE_WEEKS,
       platforms: period === 'week'
         ? withMonthPlatforms(platformRows({ tiktok: 128, instagram: 76, youtube: 37 }, 'week'), { tiktok: 170, instagram: 98, youtube: 50 }, 'in October so far')
@@ -358,7 +424,11 @@ export function marketFixture(opts: FixtureOptions = {}): MarketData {
     table,
     panel,
     brands: opts.brands ?? 'counted',
-    subjectPanel: opts.subject ? buildSubjectPanel({ id: subjectId(opts.subject), facts, convs, period, p, read, month: MONTH, flag: flag?.conv ? { id: flag.conv.id, verdict: flag.verdict } : null }) : null,
+    subjectPanel: opts.subject ? buildSubjectPanel({ id: subjectId(opts.subject), facts, convs, period, p, read, month, flag: flag?.conv ? { id: flag.conv.id, verdict: flag.verdict } : null }) : null,
+    // The loader's own rule: the month period only, the view's month only.
+    longRun: period === 'month' && opts.longRun
+      ? marketLongRunOf({ month: OCT, data: fixtureLongRun(opts.longRun === 'partial' ? '2026-10-11' : null), created_at: '2026-11-01T05:00:00.000Z' }, month.month)
+      : null,
   }
 }
 

@@ -124,7 +124,7 @@ describe('loadPublishedWeekRead: the newest ready read, as soon as the run write
   })
 })
 
-describe('loadPublishedLongRun: Your market\'s long-run read, as soon as the run writes it', () => {
+describe('loadPublishedLongRun: the month\'s long-run read (Market › This month), as soon as the run writes it', () => {
   const longRun = (run: string, month: string, over: Record<string, unknown> = {}) => ({
     client_id: CLIENT, run_id: run, kind: 'month', status: 'ready', month,
     window_end: month === '2026-08-01' ? '2026-09-01T00:00:00Z' : '2026-10-01T00:00:00Z',
@@ -171,6 +171,27 @@ describe('loadPublishedLongRun: Your market\'s long-run read, as soon as the run
     expect(inShort(await loadPublishedLongRun(db.client as SupabaseClient, CLIENT))).toBe('What holds to 2026-08-01.')
   })
 
+  it('`month` narrows it to the month Market › This month reads: that month\'s read, or none', async () => {
+    const db = fakeDb({ week_reads: [...READS, ...LONG].map((r) => ({ ...r })) })
+    expect(inShort(await loadPublishedLongRun(db.client as SupabaseClient, CLIENT, { month: '2026-08-01' }))).toBe('What holds to 2026-08-01.')
+    expect(inShort(await loadPublishedLongRun(db.client as SupabaseClient, CLIENT, { month: '2026-09-01' }))).toBe('What holds to 2026-09-01.')
+    // October has no long-run read yet (it is written when October closes).
+    expect(await loadPublishedLongRun(db.client as SupabaseClient, CLIENT, { month: '2026-10-01' })).toBeNull()
+  })
+
+  it('a month read only before it closed (partialThrough) prints that read; once the month-closing run writes the full one, the full one', async () => {
+    const partial = longRun('rb', '2026-09-01', { window_end: '2026-09-27T04:00:00Z', created_at: '2026-10-01T18:00:00Z' })
+    partial.data = { ...partial.data, inShort: 'Partial.', partialThrough: '2026-09-26' } as typeof partial.data
+    const only = fakeDb({ week_reads: [{ ...partial }] })
+    const got = await loadPublishedLongRun(only.client as SupabaseClient, CLIENT, { month: '2026-09-01' })
+    expect(got?.data).toMatchObject({ inShort: 'Partial.', partialThrough: '2026-09-26' })
+    const full = longRun('r3', '2026-09-01', { created_at: '2026-10-04T05:00:00Z' })
+    const both = fakeDb({ week_reads: [{ ...partial }, { ...full }] })
+    const read = await loadPublishedLongRun(both.client as SupabaseClient, CLIENT, { month: '2026-09-01' })
+    expect(read?.data.inShort).toBe('What holds to 2026-09-01.')
+    expect(read?.data.partialThrough).toBeUndefined()
+  })
+
   it('fails closed: a week_reads read that fails throws; no table, nothing', async () => {
     const db = fakeDb({ week_reads: LONG.map((r) => ({ ...r })) })
     await expect(loadPublishedLongRun(failing(db, 'week_reads'), CLIENT)).rejects.toThrow(/week_reads published long run/)
@@ -195,10 +216,17 @@ describe('every page that prints a stored read asks the selector, and the select
     })
   }
 
-  it('Your market reads its long-run read through the selector too', () => {
+  it('Your market (legacy, stored snapshots) reads its long-run read through the selector too', () => {
     const text = src('lib/pages/overview-picture.ts')
     expect(text).toMatch(/loadPublishedLongRun\(/)
     expect(text).not.toMatch(/loadLatestLongRun/)
+  })
+
+  it('Market › This month reads the month\'s long-run read through the selector, for the month the view reads (Heinrich, 13 Oct)', () => {
+    const text = src('lib/pages/v2/market.ts')
+    expect(text).toMatch(/loadPublishedLongRun\(db, clientId, \{ month \}\)/)
+    expect(text).toMatch(/period === 'month'\s*\?\s*soft\('longRun', loadPublishedLongRun\(/)
+    expect(text).not.toMatch(/from\(WEEK_READS_TABLE\)|from\('week_reads'\)/)
   })
 
   it('the selector reads no schedule and no send', () => {

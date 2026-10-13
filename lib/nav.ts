@@ -132,6 +132,21 @@ export function surface(key: NavKey): Surface {
 /** The surfaces in one sidebar group, in table order. */
 export const surfacesIn = (group: NavGroup): Surface[] => SURFACES.filter((s) => s.group === group)
 
+/** The anchor of the month's long-run read on Market › This month
+ *  (components/pages/v2/market/long-run.tsx; Heinrich, 13 Oct). */
+export const MARKET_LONG_RUN_ANCHOR = 'long-run'
+
+/**
+ * Market › This month for one month (`?period=month&month=YYYY-MM`), with an
+ * anchor where given: where the operator's review email sends the reader of
+ * the month's long-run read. `month` is `YYYY-MM` or a date. The same address
+ * Market's own `marketHref({ period: 'month', month })` writes (pinned in
+ * lib/pages/v2/market.test.ts).
+ */
+export function marketMonthHref(month: string, hash?: string): string {
+  return `${surface('market').href}?period=month&month=${month.slice(0, 7)}${hash ? `#${hash}` : ''}`
+}
+
 /**
  * A READER'S NAME FOR EVERY PAGE KEY NO SURFACE STORES UNDER.
  *

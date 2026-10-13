@@ -461,6 +461,11 @@ const PAGES: Page[] = [
   // one open in the month-by-month table, which scrolls sideways on a phone.
   { key: 'market-v2-month-open', path: '/dashboard/market', artboard: 'E2-Market-Open.dc.html', page: () => h(MarketPage, { data: marketFixture({ period: 'month', open: { n: 2, at: 'top' } }) }) },
   { key: 'market-v2-time-open', path: '/dashboard/market', artboard: 'E2-Market-Open.dc.html', page: () => h(MarketPage, { data: marketFixture({ period: 'time', open: { n: 5, at: 'table' } }) }) },
+  // Market › This month with the month's long-run read at its foot (Heinrich,
+  // 13 Oct; no board draws it, so beside E2-Market for the page around it):
+  // October read in full once it closed, and a read written before it closed.
+  { key: 'market-v2-month-longrun', path: '/dashboard/market', artboard: 'E2-Market.dc.html', page: () => h(MarketPage, { data: marketFixture({ period: 'month', closed: true, longRun: 'full' }) }) },
+  { key: 'market-v2-month-longrun-partial', path: '/dashboard/market', artboard: 'E2-Market.dc.html', page: () => h(MarketPage, { data: marketFixture({ period: 'month', longRun: 'partial' }) }) },
 ]
 
 // ---- the shell -----------------------------------------------------------------

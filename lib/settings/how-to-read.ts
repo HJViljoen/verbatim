@@ -94,8 +94,9 @@ export const READING_CARDS: readonly ReadingCard[] = [
     // through a `Verdict`. Conversations are the category's (decision E);
     // the table's floor is MARKET_TABLE_FLOOR; the lead is `weekLead`, and a
     // flag needs the anomaly check (BASELINE_MONTHS read the same way). A
-    // subject that is not ready prints no level (`unmeasuredOf`).
-    tells: 'What your market is talking about, this week, this month or over time: the conversation that leads the week, the conversations first heard this week, each of your subjects this month so far against last month, what people did in the comments, your market’s videos week by week, where it is said, and every conversation, each opening in full with its own voices.',
+    // subject that is not ready prints no level (`unmeasuredOf`). This month
+    // ends with the month's long-run read (`marketLongRunOf`, 13 Oct).
+    tells: 'What your market is talking about, this week, this month or over time: the conversation that leads the week, the conversations first heard this week, each of your subjects this month so far against last month, what people did in the comments, your market’s videos week by week, where it is said, and every conversation, each opening in full with its own voices. A month ends with our read of what has held across the months behind it.',
     read: ['market', 'week', 'month', 'video', 'theme', 'subject', 'kind', 'level', 'change', 'new'],
     cannot: [
       'A week is the week the latest update read, never the last seven days, and every week figure sits beside its month. Three weeks of a conversation are three counts with no word: a week alone earns no direction.',
@@ -107,6 +108,7 @@ export const READING_CARDS: readonly ReadingCard[] = [
       'A subject still being checked prints no figure, only that it is counted and marked provisional; one whose check clearly failed prints no figure while it is re-described.',
       'The kinds of thing people did in the comments overlap: one video can carry several, so together they are more than its whole.',
       'It cannot tell you why anything moved. A number and a reason are different claims, and only one of them is counted.',
+      'Our read of what has held across the months sits below a month’s figures. It is written when the month closes, says so where it was written earlier, and compares no month with another. A month with no such read shows none.',
     ],
   },
   {

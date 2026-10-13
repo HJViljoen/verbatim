@@ -29,10 +29,11 @@ import type { ChartRun } from '../../reading/week-line'
 import type { Verdict } from '../../reading/verdicts'
 import { INDUSTRY_AUDIENCE, loadCompetitors, loadTrackedRivals } from '../../rivals'
 import { selectAll } from '../../supabase-admin'
-import { coveredDays, inMonth, readingMonthOf } from '../../written/month'
+import { coveredDays, inMonth, monthsPhrase, readingMonthOf } from '../../written/month'
 import { SLICE } from '../../reading/coverage'
 import { countedNote, FAILED_EXPLAINED } from '../../subjects/calibration-state'
-import { loadPublishedWeekRead, type PublishedWeekRead } from '../../written/published'
+import { loadPublishedLongRun, loadPublishedWeekRead, type PublishedWeekRead } from '../../written/published'
+import type { StoredLongRun } from '../../written/store'
 import type { WeekReadData, WhoAbout, WhoPart } from '../../written/types'
 import { weekReadDates } from '../../reports/weekly-read'
 import { factsFromReadings, marketComparable } from '../../written/standing'
@@ -81,6 +82,13 @@ import { frozenFlag } from '../../written/unusual'
 //   6. THE OPEN PANEL (`?conv=<registry id or slug>`, `?subject=<id>`): the
 //      conversation in full, in place, under the row it was opened from
 //      (`?at=top|subjects|table`).
+//   7. THIS MONTH ONLY, AT THE BOTTOM: the month's long-run read ("What holds
+//      across August and September"), the published `week_reads` row of kind
+//      'month' for exactly the month the view reads (`loadPublishedLongRun`
+//      with `month`; Heinrich, 13 Oct: below the month's data, never at the
+//      top, never on This week or Over time). No read for that month, no
+//      section. Stored `week_read` prose, read after the figures, so level 2
+//      by position (`marketLongRunOf`).
 //
 // DECISION 1 (13 Oct): no weekly direction words and no week figure on its
 // own. A week count is printed beside its month ("19 this week · 31 in
@@ -472,10 +480,41 @@ export interface MarketData {
    *  `not_counted` (rules, no rows written yet: Össur before its back-read) or
    *  `not_read` (no brand rules). Only `counted` prints a split. */
   brands: BrandsState
+  /** This month only: the month's long-run read, printed below the month's
+   *  data; null on the week and over time, and where none is published for
+   *  the month the view reads. */
+  longRun: MarketLongRun | null
 }
 
 /** Whether the "about" split may print. */
 export type BrandsState = 'counted' | 'not_counted' | 'not_read'
+
+/** The month's long-run read as This month prints it, below the month's data
+ *  (Heinrich, 13 Oct). The writer's words as stored (`week_read` prose,
+ *  scrubbed when written); the counts are code's. Never a change: nothing in
+ *  it compares one month with another. */
+export interface MarketLongRun {
+  /** The read's month, `YYYY-MM-01`: the month the view reads. */
+  month: string
+  /** "What holds across August and September" (the read's window months). */
+  title: string
+  /** The lead, where one survived the scrub. */
+  inShort: string | null
+  ideas: {
+    headline: string
+    body: string[]
+    /** Distinct videos behind it over the read's window. */
+    videos: number
+    /** The months it was heard in, oldest first. */
+    heard: string[]
+    /** Who those videos are about (one brand per video), as stored. */
+    who: WhoPart[]
+  }[]
+  /** Written before its month closed, on the comments to this day
+   *  (`partialThrough`, the backfill): it does not stand as the month's read
+   *  (`standsAsMonthRead`), and the page says which day it reads to. */
+  partialThrough: string | null
+}
 
 // ---- Params and addresses (pure) --------------------------------------------------------
 
@@ -1518,6 +1557,13 @@ export async function loadMarket(input: {
     .filter((d) => monthStartOf(d.month) === month && market.includes(d.audience))
     .map((d) => (d as { platform_mix?: PlatformMix | null }).platform_mix ?? null))
 
+  // THIS MONTH's long-run read, for exactly the month the view reads, read
+  // beside everything else and printed below it (Heinrich, 13 Oct). A read
+  // that fails costs that section only.
+  const longRunAhead = period === 'month'
+    ? soft('longRun', loadPublishedLongRun(db, clientId, { month }), null)
+    : Promise.resolve(null)
+
   // ── wave 2: the period's readings ──
   const [themedRunId, changes, cadence] = await Promise.all([themedRunAhead.catch(() => null), changesAhead, cadenceAhead])
   const ourChanges = ourChangesWithoutGatherFlags((changes ?? []).filter((r) => !isFailOpenFix(r)))
@@ -1705,6 +1751,7 @@ export async function loadMarket(input: {
   const subjectPanel = !openId && p.subject
     ? buildSubjectPanel({ id: p.subject, facts: subjectFacts, convs, period, p, read, month: monthBlock, flag: flagCard?.conv ? { id: flagCard.conv.id, verdict: flagCard.verdict } : null })
     : null
+  const longRun = marketLongRunOf(await longRunAhead, month)
 
   return {
     brand,
@@ -1721,6 +1768,34 @@ export async function loadMarket(input: {
     panel,
     subjectPanel,
     brands,
+    longRun,
+  }
+}
+
+/**
+ * The month's long-run read as This month prints it, or null: no read, a read
+ * of another month than the one the view reads (the selector is asked for the
+ * view's month; this holds it there), or a read with no idea to print. Ideas
+ * with no headline are left out. Pure.
+ */
+export function marketLongRunOf(read: StoredLongRun | null | undefined, month: string): MarketLongRun | null {
+  if (!read || monthStartOf(read.month) !== monthStartOf(month)) return null
+  const ideas = read.data.ideas
+    .filter((idea) => (idea.headline ?? '').trim())
+    .map((idea) => ({
+      headline: idea.headline.trim(),
+      body: (idea.body ?? []).map((p) => p.trim()).filter(Boolean),
+      videos: idea.videos,
+      heard: (idea.months ?? []).filter((m) => m.videos > 0).map((m) => monthStartOf(m.month)),
+      who: idea.who ?? [],
+    }))
+  if (ideas.length === 0) return null
+  return {
+    month: monthStartOf(read.month),
+    title: `What holds across ${monthsPhrase(read.data.months)}`,
+    inShort: (read.data.inShort ?? '').trim() || null,
+    ideas,
+    partialThrough: read.data.partialThrough ?? null,
   }
 }
 
