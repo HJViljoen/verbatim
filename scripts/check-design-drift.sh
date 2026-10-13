@@ -18,9 +18,10 @@
 #       mark and crowd art) is palette A, and the site's own (app/site's icon,
 #       apple-icon and share card, its static marks) is the site's green; each
 #       side's colours are on its own allow-list and no other
-#   (g) the shadows are back (colour pass, 1 Oct): --shadow-card and
-#       --shadow-sidebar are set in the light and the dark block and mapped to
-#       their utilities, and no client page writes a card shadow by hand
+#   (g) the shadows are back (colour pass, 1 Oct): --shadow-card,
+#       --shadow-sidebar and (depth v2) --shadow-panel are set in the light and
+#       the dark block and mapped to their utilities, and no client page writes
+#       a card shadow by hand
 #   (h) the colour roles' one hard rule: the orange (#F2651D, `--orange`) is a
 #       fill and never a text colour anywhere in the app
 set -euo pipefail
@@ -145,12 +146,14 @@ bad = []
 def block(selector):
     m = re.search(re.escape(selector) + r'\s*\{([^}]*)\}', css)
     return dict(re.findall(r'--([a-z0-9-]+):\s*([^;]+);', m.group(1))) if m else {}
-# (g) the two shadow tokens, in both themes, mapped to utilities
+# (g) the shadow tokens, in both themes, mapped to utilities (the opened
+# panel's since depth v2)
+SHADOWS = ('shadow-card', 'shadow-sidebar', 'shadow-panel')
 for name in (':root', '.dark'):
     vars_ = block(name)
-    for t in ('shadow-card', 'shadow-sidebar'):
+    for t in SHADOWS:
         if t not in vars_: bad.append(f'--{t} is not set in {name}')
-for t in ('shadow-card', 'shadow-sidebar'):
+for t in SHADOWS:
     if f'--{t}: var(--{t});' not in css: bad.append(f'--{t} has no utility mapping')
 # (g) no card shadow written by hand on a client page (the Agent's body is its own branch's)
 for root, _, files in os.walk('components/pages'):
@@ -173,7 +176,7 @@ for top in ('app', 'components', 'lib'):
                 if ORANGE_TEXT.search(line): bad.append(f'{p}:{i}: the orange as text; use text-orange-text (#C2410C)')
 if bad:
     print('design drift:'); [print('  -', x) for x in bad]; sys.exit(1)
-print('drift guard (g)(h): ok (one card shadow, one sidebar shadow; the orange never text)')
+print('drift guard (g)(h): ok (one card shadow, one sidebar shadow, one panel shadow; the orange never text)')
 PY
 
 if grep -rn "backdrop-blur" app components --include='*.tsx' --include='*.ts' --include='*.css' 2>/dev/null | grep -v '^app/site' ; then

@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
+import { assertCopyContract } from '@/lib/test/copy-contract'
 import { SurfacePageBar, HorizonControl } from './page-bar'
 import { SkeletonSurfaceBar } from './skeleton'
 import { PageBar } from './page-grid'
@@ -176,5 +177,40 @@ describe('one title for every page (integration, 1 Oct)', () => {
 
   it('the bar keeps the artboards\' 10px between its controls', () => {
     expect(render(<PageBar title="Your moves"><a>Check a plan</a><a>Date a move</a></PageBar>)).toContain('justify-end gap-2.5')
+  })
+})
+
+describe('the depth boards\' meta line (depth v2, T2)', () => {
+  // The v2 boards put one quiet mono line under the title and the period
+  // switch at the right-hand end, level with its foot. It is the shared bar's
+  // `meta`, not a second page header.
+  const meta = <><span data-copy="figure">241</span> videos · <span data-copy="figure">3,912</span> comments</>
+
+  it('prints the meta under the title in the mono, with the control at the foot of the pair', () => {
+    const markup = render(<PageBar title="Market" meta={meta}><a href="?period=week">This week</a></PageBar>)
+    expect(markup).toMatch(/<h1[^>]*>Market<\/h1>/)
+    expect(markup).toMatch(/<p data-bar-meta="" class="[^"]*row-start-2[^"]*font-mono[^"]*text-\[12\.5px\][^"]*text-muted-foreground/)
+    // The control spans the title and the meta, and the pair aligns at its foot.
+    expect(markup).toContain('sm:items-end')
+    expect(markup).toContain('sm:row-end-3')
+    expect(renderText(<PageBar title="Market" meta={meta} />)).toBe('Market 241 videos · 3,912 comments')
+    assertCopyContract(<PageBar title="Market" meta={meta}><a href="?period=week">This week</a></PageBar>)
+  })
+
+  it('sits under the context line where a page has both, the control spanning all three rows', () => {
+    const markup = render(<PageBar title="Market" line="Össur" meta={meta}><a>Export</a></PageBar>)
+    expect(markup).toMatch(/<p data-bar-meta="" class="[^"]*row-start-3/)
+    expect(markup).toContain('sm:row-end-4')
+  })
+
+  it('leaves every existing caller as it was: no meta, no meta row', () => {
+    const plain = render(<PageBar title="Your moves"><a>Check a plan</a></PageBar>)
+    expect(plain).not.toContain('data-bar-meta')
+    expect(plain).not.toContain('sm:items-end')
+    expect(plain).not.toContain('sm:row-end')
+    const lined = render(<PageBar title="Subjects" line="Sealand"><a>Export</a></PageBar>)
+    expect(lined).toContain('sm:items-end')
+    expect(lined).toContain('sm:row-end-3')
+    expect(lined).not.toContain('data-bar-meta')
   })
 })

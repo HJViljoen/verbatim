@@ -95,6 +95,9 @@
      ten pages, and the sidebar's edge. `shadow-card`, `shadow-sidebar`. */
   --shadow-card: var(--shadow-card);
   --shadow-sidebar: var(--shadow-sidebar);
+  /* The opened panel (depth v2, T2): the boards' in-place panel under a
+     clicked item sits a step above the cards around it. `shadow-panel`. */
+  --shadow-panel: var(--shadow-panel);
   --color-you-foreground: var(--you-foreground);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -215,6 +218,11 @@
      stay flat. The sidebar's edge has its own, cast to the right only. */
   --shadow-card: 0 1px 2px rgba(38, 41, 44, 0.06), 0 4px 14px rgba(38, 41, 44, 0.06), 0 12px 32px rgba(38, 41, 44, 0.04);
   --shadow-sidebar: 1px 0 0 rgba(38, 41, 44, 0.04), 4px 0 16px rgba(38, 41, 44, 0.06), 12px 0 40px rgba(38, 41, 44, 0.04);
+  /* THE OPENED PANEL (depth v2, T2; the boards' `.panel`): the full-width
+     card that opens in place under a clicked item, lifted a step above the
+     cards beside it so it reads as the thing in front. The boards' own value,
+     in the ink. */
+  --shadow-panel: 0 1px 2px rgba(38, 41, 44, 0.06), 0 8px 24px rgba(38, 41, 44, 0.10), 0 20px 48px rgba(38, 41, 44, 0.06);
 
   /* Sidebar (sidebar2.py): white, a hairline on its right edge and, since the
      colour pass, `--shadow-sidebar` beyond it; rows in ink; the active row is
@@ -301,6 +309,9 @@
      draws the edge and the black layers lift it. */
   --shadow-card: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 1px 2px rgba(0, 0, 0, 0.35), 0 4px 14px rgba(0, 0, 0, 0.3), 0 12px 32px rgba(0, 0, 0, 0.25);
   --shadow-sidebar: 1px 0 0 rgba(255, 255, 255, 0.05), 4px 0 16px rgba(0, 0, 0, 0.35), 12px 0 36px rgba(0, 0, 0, 0.25);
+  /* The opened panel on ink: the card's white hairline, a step brighter, and
+     deeper black layers. */
+  --shadow-panel: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.4), 0 20px 48px rgba(0, 0, 0, 0.3);
   --sidebar: #1B1D20;
   --sidebar-foreground: #ECEEF0;
   --sidebar-primary: #FFD43B;

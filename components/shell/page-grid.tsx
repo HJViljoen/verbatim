@@ -189,7 +189,7 @@ export function TileColumns({ of, rule = true, rail, children, className }: {
 /** Page title, and under it the bar's ONE context line where the page has
  *  one; the right-hand controls sit at the end of the pair. */
 export function PageBar({
-  title, line, children,
+  title, line, meta, children,
 }: {
   title: ReactNode
   /**
@@ -200,6 +200,14 @@ export function PageBar({
    * month and "as at" off every page along with the explanation.
    */
   line?: ReactNode
+  /**
+   * THE DEPTH BOARDS' META LINE (depth v2, T2): one quiet mono line under the
+   * title, "5 to 11 Oct · 241 videos · 3,912 comments", with the page's
+   * control (the period switch, or buttons) at the right-hand end, level with
+   * its foot. The caller composes the words and marks its numbers
+   * (`data-copy="figure"` or `"level"`). Under `line` where a page has both.
+   */
+  meta?: ReactNode
   /** IGNORED, as since 2026-09-24. A free-text context from a page that is
    *  not a reading (Studio, Settings, the parked pages) is not the ruled line,
    *  so it stays unprinted; the prop remains so those callers compile. */
@@ -215,8 +223,12 @@ export function PageBar({
   // it is the component's and not Your market's alone. On a phone the
   // controls stay beside the title and the line takes the whole width under
   // them, so the line is never squeezed into a column beside a button.
+  // Whatever stands under the title: the context line, the meta line, or both.
+  // Truthiness, as the line alone was tested before the meta existed, so every
+  // existing caller draws exactly what it drew.
+  const under = Boolean(line) || Boolean(meta)
   return (
-    <div className={cn('grid shrink-0 items-center gap-y-2', children ? 'grid-cols-[minmax(0,1fr)_auto] gap-x-6' : 'grid-cols-1', children && line ? 'sm:items-end' : null)}>
+    <div className={cn('grid shrink-0 items-center gap-y-2', children ? 'grid-cols-[minmax(0,1fr)_auto] gap-x-6' : 'grid-cols-1', children && under ? 'sm:items-end' : null)}>
       {/* 26px bold on a 40px line (the navigation of 1 Oct: every
           `Page-*.dc.html` artboard's title, `font-size: 26px; font-weight: 700`
           in a 40px-high bar). It was MASTER's `text-2xl`. */}
@@ -224,7 +236,7 @@ export function PageBar({
       {children ? (
         // 10px between the controls: the artboards' own gap (Your moves,
         // Settings), since the bar became every page's title (integration).
-        <div className={cn('col-start-2 row-start-1 flex shrink-0 items-center justify-end gap-2.5', line ? 'sm:row-end-3' : null)}>{children}</div>
+        <div className={cn('col-start-2 row-start-1 flex shrink-0 items-center justify-end gap-2.5', line && meta ? 'sm:row-end-4' : under ? 'sm:row-end-3' : null)}>{children}</div>
       ) : null}
       {/* THE CONTEXT WRAPS (Block D wave 3, SH17). It was `truncate`, with no
           wrap fallback, and it is the line that says what the page's numbers
@@ -234,6 +246,11 @@ export function PageBar({
           September 20…". It wraps and takes the lines it needs. */}
       {line ? (
         <p className={cn('row-start-2 m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-[14px] leading-6 text-secondary-foreground', children ? 'col-span-2 sm:col-span-1' : null)}>{line}</p>
+      ) : null}
+      {/* The depth boards' meta: 12.5px mono in the muted ink, 6px under the
+          title's own line on the board (the grid's 8px here). It wraps. */}
+      {meta ? (
+        <p data-bar-meta="" className={cn(line ? 'row-start-3' : 'row-start-2', 'm-0 font-mono text-[12.5px] leading-[1.5] text-muted-foreground', children ? 'col-span-2 sm:col-span-1' : null)}>{meta}</p>
       ) : null}
     </div>
   )
