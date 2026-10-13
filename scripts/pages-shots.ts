@@ -87,6 +87,9 @@ import { productSettingsView, type ProductSettingsRead } from '../lib/settings/p
 import { YourSubjectsTab } from '../components/pages/settings/subjects'
 import { subjectsFixtureRows } from '../components/pages/settings/subjects/fixture'
 import { yourSubjectsView, type SubjectSettingsRow } from '../lib/settings/your-subjects'
+import { VoicesPage } from '../components/pages/v2/voices'
+import { VOICES_FIXTURES } from '../lib/pages/v2/voices-fixture'
+import type { VoicesData } from '../lib/pages/v2/voices'
 
 const args = process.argv.slice(2)
 const flag = (n: string, d: string) => { const i = args.indexOf(`--${n}`); return i >= 0 && args[i + 1] ? args[i + 1] : d }
@@ -347,6 +350,20 @@ const PAGES: Page[] = [
   },
   { key: 'settings-products', path: '/dashboard/settings/products', artboard: 'E8-Settings-Products.dc.html', page: settingsProductsPage },
   { key: 'settings-subjects', path: '/dashboard/settings/subjects', artboard: 'no-board-settings-subjects.dc.html', page: settingsSubjectsPage },
+  // Voices (depth v2, T4), beside the boards E3-Voices and E3-Voices-Open.
+  // `voices-real` draws a dump of the loader's production output
+  // (`VOICES_JSON=<file>`, one per tenant, read once under the lock).
+  { key: 'voices-ossur', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES.ossur() }) },
+  { key: 'voices-ossur-group', path: '/dashboard/voices', artboard: 'E3-Voices-Open.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['ossur-group']() }) },
+  { key: 'voices-ossur-creator', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['ossur-creator']() }) },
+  { key: 'voices-sealand', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES.sealand() }) },
+  { key: 'voices-sealand-brand', path: '/dashboard/voices', artboard: 'E3-Voices-Open.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['sealand-brand']() }) },
+  { key: 'voices-sealand-creator', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['sealand-creator']() }) },
+  // Only where a dump is named: unset, the entry is not listed, so a run of
+  // every page never stops on a missing file.
+  ...(process.env.VOICES_JSON
+    ? [{ key: 'voices-real', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: JSON.parse(readFileSync(process.env.VOICES_JSON as string, 'utf8')) as VoicesData }) }]
+    : []),
 ]
 
 // ---- the shell -----------------------------------------------------------------
