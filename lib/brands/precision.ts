@@ -1,4 +1,4 @@
-import { SEALAND_CLIENT_ID } from '../config'
+import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../config'
 import { BRAND_PRECISION_FLOOR, BRAND_RULE_VERSION, brandRulesFor } from './aliases'
 
 // What the hand checks found (market-first WP2.6): which brands the page may
@@ -134,9 +134,30 @@ const PRODUCTION_27_SEP = {
   source: 'data/hand-check-brands-prod-20260927T135758Z.md',
 } as const satisfies HandCheckRecord
 
+/** What production's hand check of 13 Oct read for Össur (depth v2 T15):
+ *  Össur's first brands_v1 rules, every match of the name and of Ottobock's
+ *  headline set, and Ottobock's fixed sample of 30 (the script's hash order).
+ *  The draft rule read one Turkish caption ("ossur dilerim", I'm sorry) as
+ *  the name in the headline set (56 of 57); the guard that keeps it out went
+ *  in before these counts, which are the final rules' rows, every one the
+ *  brand. Two of the name's headline videos are Össur's own TikTok under its
+ *  display name, which own-post identity does not know (the file names
+ *  them); they are the brand, so they read as yes. */
+const PRODUCTION_13_OCT_OSSUR = {
+  on: '2026-10-13',
+  where: 'production',
+  ruleVersion: 'brands_v1',
+  of: 'brands_v1 matches (Össur rules of 13 Oct), window 2026-06-01 to 2026-11-01, every Össur match, every Ottobock headline match and 30 of its other 147',
+  source: '~/.claude/plans/verbatim-depth-v2/t15-handcheck.md',
+} as const satisfies HandCheckRecord
+
 /** Per tenant, per brand as the tenant names it (`competitor_names`, or the
  *  client's own name as its brand rule names it). */
 export const BRAND_HAND_CHECKS: Readonly<Record<string, Readonly<Record<string, BrandHandCheck>>>> = {
+  [OSSUR_CLIENT_ID]: {
+    'Össur': { headline: { read: 56, brand: 56 }, rest: { read: 9, brand: 9 }, ...PRODUCTION_13_OCT_OSSUR },
+    Ottobock: { headline: { read: 21, brand: 21 }, rest: { read: 30, brand: 30 }, ...PRODUCTION_13_OCT_OSSUR },
+  },
   [SEALAND_CLIENT_ID]: {
     Sealand: { headline: { read: 2, brand: 2 }, rest: { read: 0, brand: 0 }, ...PRODUCTION_27_SEP },
     Cotopaxi: { headline: { read: 7, brand: 7 }, rest: { read: 30, brand: 30 }, ...PRODUCTION_27_SEP },
