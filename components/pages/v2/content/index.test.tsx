@@ -46,14 +46,25 @@ describe('Content', () => {
     expect(copyNodes(render(<ContentPage data={contentFixture({ open: { kind: 'idea', rank: 1 } })} />)).filter((n) => n.kind === 'quote').length).toBeGreaterThan(3)
   })
 
-  it('opens one panel, in place, under its own row', () => {
+  it('opens one panel, in place, under its own card at every width (T9)', () => {
     const idea = render(<ContentPage data={contentFixture({ open: { kind: 'idea', rank: 1 } })} />)
-    expect(idea.indexOf('id="idea-panel"')).toBeGreaterThan(idea.indexOf('id="idea-3"'))
-    expect(idea.indexOf('id="idea-panel"')).toBeLessThan(idea.indexOf('id="works-title"'))
+    // In the markup right after the first idea, before the second; ordered
+    // after the card on a phone and after the row of three from 1280.
+    expect(idea.indexOf('id="idea-panel"')).toBeGreaterThan(idea.indexOf('id="idea-1"'))
+    expect(idea.indexOf('id="idea-panel"')).toBeLessThan(idea.indexOf('id="idea-2"'))
+    expect(idea).toContain('--panel-o-base:1;--panel-o-sm:1;--panel-o-md:1;--panel-o-lg:1;--panel-o-w1180:1;--panel-o-xl:5')
+    expect(idea).toContain('--notch-base:50%;--notch-sm:50%;--notch-md:50%;--notch-lg:50%;--notch-w1180:50%;--notch-xl:16.67%')
     const replies = render(<ContentPage data={contentFixture({ open: { kind: 'replies' } })} />)
+    // Between Worth a reply and Your posts on a phone; under the pair, at the
+    // right-hand column, from 1280.
     expect(replies.indexOf('id="replies-panel"')).toBeGreaterThan(replies.indexOf('id="posts-title"'))
     expect(replies.indexOf('id="replies-panel"')).toBeLessThan(replies.indexOf('id="also-asked"'))
+    expect(replies).toContain('--panel-o-base:3;--panel-o-sm:3;--panel-o-md:3;--panel-o-lg:3;--panel-o-w1180:3;--panel-o-xl:5')
+    expect(replies).toContain('--notch-xl:83.33%')
+    expect(replies).toMatch(/class="order-2 [^"]*" aria-labelledby="replies-title"|aria-labelledby="replies-title" class="[^"]*order-2/)
     expect(replies).not.toContain('id="idea-panel"')
+    const posts = render(<ContentPage data={contentFixture({ open: { kind: 'posts' }, period: 'month' })} />)
+    expect(posts).toContain('--panel-o-base:5;--panel-o-sm:5;--panel-o-md:5;--panel-o-lg:5;--panel-o-w1180:5;--panel-o-xl:5')
   })
 
   it('draws every block’s empty state for a workspace with no update yet', () => {

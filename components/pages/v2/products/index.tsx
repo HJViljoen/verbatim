@@ -1,10 +1,10 @@
 import Link from 'next/link'
 import { Box } from 'lucide-react'
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
-import { CARD, CardHead } from '@/components/v2'
+import { CARD, CardHead, equalColumns, panelPlacement, type PanelLayout, type PerBreakpoint } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
 import { surface } from '@/lib/nav'
-import type { ProductsData } from '@/lib/pages/v2/products'
+import { shelfColumns, type ProductsData } from '@/lib/pages/v2/products'
 import { Fig, OLINK } from './parts'
 import { CategoryPanelView, ProductPanelView } from './panels'
 import { CatalogueCard } from './shelf'
@@ -60,8 +60,28 @@ export function ProductsEmpty({ data }: { data: ProductsData }) {
   )
 }
 
+/** The shelf's columns at each width (the kit's `CatalogueShelf`: two on a
+ *  phone, three from 768, five or six from 1280). */
+export function shelfLayout(count: number): PanelLayout {
+  return { base: equalColumns(2, count), md: equalColumns(3, count), xl: equalColumns(shelfColumns(count), count) }
+}
+
+/**
+ * Where the open panel's notch points, at each width: the open category's
+ * column (a product's own category), wherever the shelf wraps it (T9). The
+ * panel itself stays under the catalogue card at every width, as the board
+ * draws it: the columns are inside the card, and a panel between two of its
+ * rows would be a card inside a card.
+ */
+export function shelfNotch(data: Pick<ProductsData, 'shelf' | 'panel'>): PerBreakpoint | undefined {
+  const id = data.panel?.kind === 'product' ? data.panel.groupId : data.panel?.kind === 'group' ? data.panel.id : null
+  const at = id ? data.shelf.findIndex((c) => c.id === id) : -1
+  return at >= 0 ? panelPlacement(at, shelfLayout(data.shelf.length)).notch : undefined
+}
+
 export function ProductsPage({ data }: { data: ProductsData }) {
   const panel = data.panel
+  const notch = shelfNotch(data)
   return (
     <PageFrame className="gap-5 leading-[normal]">
       <PageBar title={surface('products').label} meta={<ProductsMeta data={data} />} />
@@ -69,8 +89,8 @@ export function ProductsPage({ data }: { data: ProductsData }) {
         <>
           <Standouts standouts={data.standouts} monthName={data.monthName} />
           <CatalogueCard data={data} />
-          {panel?.kind === 'group' ? <CategoryPanelView panel={panel} monthName={data.monthName} canTag={data.canTag} /> : null}
-          {panel?.kind === 'product' ? <ProductPanelView panel={panel} monthName={data.monthName} /> : null}
+          {panel?.kind === 'group' ? <CategoryPanelView panel={panel} monthName={data.monthName} canTag={data.canTag} notchAt={notch} /> : null}
+          {panel?.kind === 'product' ? <ProductPanelView panel={panel} monthName={data.monthName} notchAt={notch} /> : null}
           <nav aria-label="More about your products" className="flex flex-wrap gap-x-6 gap-y-2 px-1">
             <Link href={data.settingsHref} className={OLINK}>Edit your products in Settings →</Link>
           </nav>

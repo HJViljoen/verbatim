@@ -1,6 +1,10 @@
 import Link from 'next/link'
+import { Fragment, type CSSProperties, type ReactNode } from 'react'
 import { BarChart3, CalendarRange, MessageSquareText, Sparkles, TrendingUp } from 'lucide-react'
-import { CARD, CardHead, FlagChip, MiniBars, SELECTED_CARD_RING, SpikeBars, type MiniBar } from '@/components/v2'
+import {
+  CARD, CardHead, FlagChip, MiniBars, panelItemOrder, panelPlacement, PanelSlot, SELECTED_CARD_RING, SpikeBars,
+  type MiniBar, type PanelLayout, type PerBreakpoint,
+} from '@/components/v2'
 import { fmtInt, fmtPct, longMonth } from '@/lib/format'
 import { flagBaseWords, topSpans, type Doing, type GroupLink, type HeroCard, type MarketConv, type MarketData, type MonthCount, type SideCard } from '@/lib/pages/v2/market'
 import { cn } from '@/lib/utils'
@@ -122,7 +126,7 @@ function Foot({ conv, href, selected, closeHref, data, open = 'Open the conversa
 }
 
 /** The anomaly check's flag, as the hero. */
-function FlagHero({ hero, data, selected, span }: { hero: Extract<HeroCard, { kind: 'flag' }>; data: MarketData; selected: boolean; span: string }) {
+function FlagHero({ hero, data, selected, span, style }: { hero: Extract<HeroCard, { kind: 'flag' }>; data: MarketData; selected: boolean; span: string; style?: CSSProperties }) {
   const { card } = hero
   const f = card.flag
   const weekPct = f.week.n > 0 ? (100 * f.week.k) / f.week.n : 0
@@ -133,7 +137,7 @@ function FlagHero({ hero, data, selected, span }: { hero: Extract<HeroCard, { ki
   ]
   const title = card.conv?.label ?? f.label
   return (
-    <article id="top-0" className={cn(CARD, span, 'scroll-mt-6', selected ? SELECTED_CARD_RING : null)}>
+    <article id="top-0" style={style} className={cn(CARD, span, 'scroll-mt-6', selected ? SELECTED_CARD_RING : null)}>
       <CardHead icon={TrendingUp} size="lg" flag={<FlagChip verdict={card.verdict} />} title={f.objectKind === 'theme' ? <span data-copy="subject" data-slot="pass_b_theme">{title}</span> : title} />
       <div className="flex flex-wrap items-baseline gap-3.5">
         <div data-copy="figure" className={BIG}>{fmtInt(f.week.k)}</div>
@@ -154,7 +158,7 @@ function FlagHero({ hero, data, selected, span }: { hero: Extract<HeroCard, { ki
 
 /** The week's biggest new conversation, or its biggest, or the month's
  *  biggest, as the hero. */
-function ConvHero({ hero, data, selected, span }: { hero: Extract<HeroCard, { kind: 'new' | 'biggest' }>; data: MarketData; selected: boolean; span: string }) {
+function ConvHero({ hero, data, selected, span, style }: { hero: Extract<HeroCard, { kind: 'new' | 'biggest' }>; data: MarketData; selected: boolean; span: string; style?: CSSProperties }) {
   const { conv } = hero
   const week = data.period === 'week'
   const eyebrow = week
@@ -162,7 +166,7 @@ function ConvHero({ hero, data, selected, span }: { hero: Extract<HeroCard, { ki
     : `Most talked about in ${data.month.text}`
   const figure = week ? conv.week : conv.month
   return (
-    <article id="top-0" className={cn(CARD, span, 'scroll-mt-6', selected ? SELECTED_CARD_RING : null)}>
+    <article id="top-0" style={style} className={cn(CARD, span, 'scroll-mt-6', selected ? SELECTED_CARD_RING : null)}>
       <CardHead icon={hero.kind === 'new' ? Sparkles : MessageSquareText} size="lg" eyebrow={eyebrow} title={<span data-copy="subject" data-slot="pass_b_theme">{conv.label}</span>} />
       <div className="flex flex-wrap items-baseline gap-3.5">
         <Fig n={figure} className={BIG} />
@@ -183,23 +187,25 @@ function ConvHero({ hero, data, selected, span }: { hero: Extract<HeroCard, { ki
 }
 
 /** A card beside the hero. */
-function Side({ side, data, index, span, selectedId }: { side: SideCard; data: MarketData; index: number; span: string; selectedId: string | null }) {
+function Side({ side, data, index, span, selectedId, style }: { side: SideCard; data: MarketData; index: number; span: string; selectedId: string | null; style?: CSSProperties }) {
   const conv = side.convs[0]
   const selected = selectedId != null && side.convs.some((c) => c.id === selectedId)
   const href = side.hrefs[0]
   if (side.kind === 'new_list') {
     const rest = side.convs.slice(1)
     return (
-      <article id={`top-${index}`} className={cn(CARD, span, 'scroll-mt-6', selected ? SELECTED_CARD_RING : null)}>
+      <article id={`top-${index}`} style={style} className={cn(CARD, span, 'scroll-mt-6', selected ? SELECTED_CARD_RING : null)}>
         <CardHead icon={Sparkles} eyebrow={<span data-copy="verdict">New this week</span>} title={<span data-copy="subject" data-slot="pass_b_theme">{conv.label}</span>} />
         <div className="flex flex-wrap items-baseline gap-2"><Fig n={conv.week} className={MID} /><WeekLines conv={conv} data={data} /></div>
         {rest.length > 0 ? (
           <div className="flex flex-col gap-1 border-t border-track pt-3 text-[13px] leading-[1.5]">
             <Label>Also new this week</Label>
             {rest.map((c, i) => (
-              <Link key={c.id} href={side.hrefs[i + 1]} scroll={false} className="flex items-baseline justify-between gap-3 text-foreground no-underline hover:underline underline-offset-[3px]">
+              // The counts wrap under the name where the two do not fit one
+              // line (a narrow card, a phone) rather than run past the card (T9).
+              <Link key={c.id} href={side.hrefs[i + 1]} scroll={false} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-foreground no-underline hover:underline underline-offset-[3px]">
                 <span data-copy="subject" data-slot="pass_b_theme">{c.label}</span>
-                <span className="shrink-0 whitespace-nowrap font-mono text-[12px] text-muted-foreground">
+                <span className="font-mono text-[12px] text-muted-foreground">
                   <Fig n={c.week} className="text-[12.5px] text-secondary-foreground" /> this week
                   {c.month != null && data.month.category != null ? <> · <MonthLine k={c.month} data={data} className="" /></> : null}
                 </span>
@@ -214,7 +220,7 @@ function Side({ side, data, index, span, selectedId }: { side: SideCard; data: M
   }
   const week = side.kind === 'biggest'
   return (
-    <article id={`top-${index}`} className={cn(CARD, span, 'scroll-mt-6', selected ? SELECTED_CARD_RING : null)}>
+    <article id={`top-${index}`} style={style} className={cn(CARD, span, 'scroll-mt-6', selected ? SELECTED_CARD_RING : null)}>
       <CardHead icon={week ? BarChart3 : CalendarRange} eyebrow={week ? 'Three weeks' : 'Month by month'} title={<span data-copy="subject" data-slot="pass_b_theme">{conv.label}</span>} />
       <div className="flex flex-wrap items-baseline gap-2">
         <Fig n={week ? conv.week : conv.month} className={MID} />
@@ -242,25 +248,64 @@ function MonthsCard({ months, data }: { months: readonly MonthCount[]; data: Mar
   )
 }
 
-/** The top row, or nothing where the period has nothing to lead with. */
-export function TopRowView({ data }: { data: MarketData }) {
+/** The top row's columns at each width, as `topSpans` and the cards' span
+ *  classes lay it out: every card the row's width on a phone; from 768 the
+ *  hero the row's width and each card beside it half; from 1280 the board's
+ *  6 · 3 · 3 (7 · 5 with one card, the hero alone with none). */
+export function topRowLayout(sides: number): PanelLayout {
+  const xl = topSpans(sides)
+  const count = xl.length
+  return {
+    base: { spans: Array.from({ length: count }, () => 12), of: 12 },
+    md: { spans: [12, ...Array.from({ length: count - 1 }, () => 6)], of: 12 },
+    xl: { spans: xl, of: 12 },
+  }
+}
+
+/** The top row, or nothing where the period has nothing to lead with. An
+ *  open conversation from the row (`panel`) draws under the card it was
+ *  opened from at every width (`panelPlacement`), and in the markup right
+ *  after that card; one the row does not hold draws under the row. */
+export function TopRowView({ data, panel }: { data: MarketData; panel?: (notchAt?: number | PerBreakpoint) => ReactNode }) {
   const { top } = data
   const openId = data.panel?.at === 'top' ? data.panel.id : null
-  if (top.months) return <section id="top-row" aria-label="The market over time" className={cn(PILL_ROW, 'scroll-mt-6')}><MonthsCard months={top.months} data={data} /></section>
-  if (!top.hero && top.sides.length === 0) return null
+  if (top.months) {
+    return (
+      <>
+        <section id="top-row" aria-label="The market over time" className={cn(PILL_ROW, 'scroll-mt-6')}><MonthsCard months={top.months} data={data} /></section>
+        {panel ? panel() : null}
+      </>
+    )
+  }
+  if (!top.hero && top.sides.length === 0) return panel ? <>{panel()}</> : null
   const heroId = top.hero ? (top.hero.kind === 'flag' ? top.hero.card.conv?.id ?? null : top.hero.conv.id) : null
   // The board's 6 · 3 · 3; with one card beside the hero, 7 · 5; alone, the row.
   // `topSpans` (lib/pages/v2/market.ts) is the layout the panel's notch reads.
   const spans = topSpans(top.sides.length)
   const heroSpan = HERO_SPAN[spans[0]] ?? 'col-span-12 xl:col-span-6'
   const sideSpan = SIDE_SPAN[spans[1] ?? 3] ?? 'col-span-12 md:col-span-6 xl:col-span-3'
+  // The open card: the hero (0) or a card beside it (1, 2), by the open id.
+  const heroOpen = openId != null && openId === heroId
+  const sideOpen = openId == null ? -1 : top.sides.findIndex((s) => s.convs.some((c) => c.id === openId))
+  const at = !top.hero ? -1 : heroOpen ? 0 : sideOpen >= 0 ? sideOpen + 1 : -1
+  const place = panel && at >= 0 ? panelPlacement(at, topRowLayout(top.sides.length)) : null
+  const slot = (i: number) => (place && panel && i === at ? <PanelSlot placement={place}>{panel(place.notch)}</PanelSlot> : null)
   return (
-    <section id="top-row" aria-label={data.period === 'week' ? 'What stood out this week' : `The biggest conversations in ${data.month.text}`} className={cn(PILL_ROW, 'scroll-mt-6')}>
-      {top.hero?.kind === 'flag'
-        ? <FlagHero hero={top.hero} data={data} selected={openId != null && openId === heroId} span={heroSpan} />
-        : top.hero ? <ConvHero hero={top.hero} data={data} selected={openId != null && openId === heroId} span={heroSpan} /> : null}
-      {top.sides.map((s, i) => <Side key={i} side={s} data={data} index={i + 1} span={sideSpan} selectedId={openId} />)}
-    </section>
+    <>
+      <section id="top-row" aria-label={data.period === 'week' ? 'What stood out this week' : `The biggest conversations in ${data.month.text}`} className={cn(PILL_ROW, 'scroll-mt-6')}>
+        {top.hero?.kind === 'flag'
+          ? <FlagHero hero={top.hero} data={data} selected={heroOpen} span={heroSpan} style={panelItemOrder(0)} />
+          : top.hero ? <ConvHero hero={top.hero} data={data} selected={heroOpen} span={heroSpan} style={panelItemOrder(0)} /> : null}
+        {slot(0)}
+        {top.sides.map((s, i) => (
+          <Fragment key={i}>
+            <Side side={s} data={data} index={i + 1} span={sideSpan} selectedId={openId} style={panelItemOrder(i + 1)} />
+            {slot(i + 1)}
+          </Fragment>
+        ))}
+      </section>
+      {panel && !place ? panel() : null}
+    </>
   )
 }
 

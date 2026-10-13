@@ -1,8 +1,12 @@
 import Link from 'next/link'
+import { Fragment, type CSSProperties } from 'react'
 import { Users } from 'lucide-react'
-import { CARD, CardHead, InPlacePanel, PanelSection, PanelTitle, SELECTED_CARD_RING, StatCell, StatRow, TickBar } from '@/components/v2'
+import {
+  CARD, CardHead, equalColumns, InPlacePanel, panelItemOrder, panelPlacement, PanelSection, PanelSlot, PanelTitle, SELECTED_CARD_RING, StatCell, StatRow, TickBar,
+  type PanelLayout, type PerBreakpoint,
+} from '@/components/v2'
 import { fmtInt } from '@/lib/format'
-import { groupRows, PANEL_ID, type GroupPanel, type VoicesData, type VoicesGroupCard, type VoicesGroups } from '@/lib/pages/v2/voices'
+import { PANEL_ID, type GroupPanel, type VoicesData, type VoicesGroupCard, type VoicesGroups } from '@/lib/pages/v2/voices'
 import { cn } from '@/lib/utils'
 import { AskButton, CAPS, EmptyLine, Fig, LevelText, MiniRow, OLINK, PanelTag, Phrase, PlatformStrip, QuoteCard } from './parts'
 
@@ -35,11 +39,14 @@ export function WhoCard({ groups, videos, monthWords }: { groups: VoicesGroups; 
       ) : (
         <div role="list" className="flex flex-col gap-2.5">
           {groups.cards.map((c) => (
-            <div key={c.key} role="listitem" className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,2fr)_auto] items-center gap-3 text-[13.5px] max-sm:grid-cols-[minmax(0,1fr)_auto]">
-              <Link href={c.href} scroll={false} className={cn('min-w-0 truncate font-semibold text-foreground no-underline hover:underline hover:underline-offset-[3px]', c.selected ? 'underline underline-offset-[3px]' : null)}>
+            // The bar drops below 1024, where the sidebar leaves the card too
+            // narrow for the name beside it, and a long name wraps rather
+            // than being cut (T9: at 820 the names were cut to an ellipsis).
+            <div key={c.key} role="listitem" className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 text-[13.5px] lg:grid-cols-[minmax(0,1.1fr)_minmax(0,2fr)_auto]">
+              <Link href={c.href} scroll={false} className={cn('min-w-0 font-semibold text-foreground no-underline hover:underline hover:underline-offset-[3px]', c.selected ? 'underline underline-offset-[3px]' : null)}>
                 <span data-copy="subject" data-slot="pass_e_persona">{c.name}</span>
               </Link>
-              <TickBar pct={(100 * c.videos) / n} size="lg" tone="market" label={`${c.name}: ${fmtInt(c.videos)} of ${fmtInt(n)} videos`} className="max-sm:hidden" />
+              <TickBar pct={(100 * c.videos) / n} size="lg" tone="market" label={`${c.name}: ${fmtInt(c.videos)} of ${fmtInt(n)} videos`} className="max-lg:hidden" />
               <LevelText k={c.videos} n={n} unit="videos" className="text-right text-[12.5px] text-secondary-foreground" />
             </div>
           ))}
@@ -50,10 +57,11 @@ export function WhoCard({ groups, videos, monthWords }: { groups: VoicesGroups; 
 }
 
 /** One group (the board's `.pcard`). */
-export function GroupCard({ card, n, monthWords }: { card: VoicesGroupCard; n: number | null; monthWords: string }) {
+export function GroupCard({ card, n, monthWords, style }: { card: VoicesGroupCard; n: number | null; monthWords: string; style?: CSSProperties }) {
   return (
     <article
       data-group={card.key}
+      style={style}
       className={cn(CARD, 'gap-3.5 rounded-[14px] px-[22px] py-5', card.selected ? SELECTED_CARD_RING : null)}
     >
       <div>
@@ -101,14 +109,17 @@ export function GroupCard({ card, n, monthWords }: { card: VoicesGroupCard; n: n
   )
 }
 
-/** The group's panel, in place under its row (E3-Voices-Open). */
-export function GroupPanelView({ panel, monthWords }: { panel: GroupPanel; monthWords: string }) {
+/** The group's panel, in place under its row (E3-Voices-Open). `notchAt`
+ *  is the grid's placement, per breakpoint (`GroupGrid`); alone, the
+ *  loader's three-across notch. */
+export function GroupPanelView({ panel, monthWords, notchAt }: { panel: GroupPanel; monthWords: string; notchAt?: number | PerBreakpoint }) {
   const [first, second] = panel.subjects
   const where = panel.platforms[0]
   return (
     <InPlacePanel
       id={PANEL_ID.group}
-      notchAt={panel.notchAt}
+      notchAt={notchAt ?? panel.notchAt}
+      openKey={panel.key}
       closeHref={panel.closeHref}
       labelledBy="group-title"
       closeLabel="Close this group"
@@ -127,13 +138,13 @@ export function GroupPanelView({ panel, monthWords }: { panel: GroupPanel; month
         {where && panel.videos > 0 ? <StatCell value={where.k} of={panel.videos} label={<>are on {where.label}</>} /> : null}
       </StatRow>
 
-      <div className="grid grid-cols-1 gap-7 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-7 lg:grid-cols-3">
         {panel.wants ? <PanelSection label="What they want"><p className="m-0 text-[15px] leading-[1.6] text-foreground"><span data-copy="subject" data-slot="pass_e_persona">{panel.wants}</span></p></PanelSection> : null}
         {panel.stops ? <PanelSection label="What stops them"><p className="m-0 text-[15px] leading-[1.6] text-foreground"><span data-copy="subject" data-slot="pass_e_persona">{panel.stops}</span></p></PanelSection> : null}
         {panel.triggers ? <PanelSection label="What tips them into acting"><p className="m-0 text-[15px] leading-[1.6] text-foreground"><span data-copy="subject" data-slot="pass_e_persona">{panel.triggers}</span></p></PanelSection> : null}
       </div>
 
-      <div className="grid grid-cols-1 gap-7 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-7 lg:grid-cols-3">
         {panel.who.length > 0 ? (
           <PanelSection label="Who they say they are">
             {panel.who.slice(0, 5).map((w) => (
@@ -174,7 +185,7 @@ export function GroupPanelView({ panel, monthWords }: { panel: GroupPanel; month
 
       {panel.quotes.length > 0 ? (
         <PanelSection label={<>In their words · <Fig>{fmtInt(panel.quotes.length)}</Fig> of their comments in {monthWords}</>}>
-          <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-3">
             {panel.quotes.map((q) => <QuoteCard key={q.ref} quote={q} />)}
           </div>
         </PanelSection>
@@ -185,21 +196,34 @@ export function GroupPanelView({ panel, monthWords }: { panel: GroupPanel; month
   )
 }
 
-/** The cards three to a row, and the open group's panel under the row its
- *  card is in. */
+/** The group grid's columns: one on a phone, two from 768, three from 1280. */
+export function groupLayout(count: number): PanelLayout {
+  return { base: equalColumns(1, count), md: equalColumns(2, count), xl: equalColumns(3, count) }
+}
+
+/** The cards three to a row (two from 768, one on a phone), and the open
+ *  group's panel under the row its card is in at every width: one grid, the
+ *  panel a child of it placed after the card's row (`panelPlacement`), and in
+ *  the markup right after the card that opened it. */
 export function GroupGrid({ data }: { data: Pick<VoicesData, 'groups' | 'videos' | 'panel' | 'monthWords'> }) {
-  const rows = groupRows(data.groups.cards, 3)
+  const cards = data.groups.cards
   const panel = data.panel?.kind === 'group' ? data.panel : null
+  const at = panel ? cards.findIndex((c) => c.key === panel.key) : -1
+  const place = at >= 0 ? panelPlacement(at, groupLayout(cards.length)) : null
   return (
     <>
-      {rows.map((row, i) => (
-        <div key={i} className="contents">
-          <section aria-label={i === 0 ? 'The groups' : 'The groups, continued'} className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {row.map((c) => <GroupCard key={c.key} card={c} n={data.videos} monthWords={data.monthWords} />)}
-          </section>
-          {panel && row.some((c) => c.key === panel.key) ? <GroupPanelView panel={panel} monthWords={data.monthWords} /> : null}
-        </div>
-      ))}
+      <section aria-label="The groups" className="grid grid-cols-1 gap-x-4 gap-y-5 md:grid-cols-2 xl:grid-cols-3">
+        {cards.map((c, i) => (
+          <Fragment key={c.key}>
+            <GroupCard card={c} n={data.videos} monthWords={data.monthWords} style={panelItemOrder(i)} />
+            {panel && place && i === at ? (
+              <PanelSlot placement={place}><GroupPanelView panel={panel} monthWords={data.monthWords} notchAt={place.notch} /></PanelSlot>
+            ) : null}
+          </Fragment>
+        ))}
+      </section>
+      {/* A group no card names (an old link) still opens, under the grid. */}
+      {panel && at < 0 ? <GroupPanelView panel={panel} monthWords={data.monthWords} /> : null}
     </>
   )
 }

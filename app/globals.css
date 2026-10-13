@@ -565,6 +565,39 @@
 }
 @media print { .crowd-bg { display: none; } }
 
+/* THE IN-PLACE PANEL'S PLACE AT EACH WIDTH (depth v2, T9; components/v2/
+   panel-place.ts). A panel opened from a card in a grid is one more child of
+   that grid (`PanelSlot`), ordered after the clicked card's row; the order,
+   and where its notch points, change with the grid's columns, so the page
+   sets one custom property per breakpoint and these rules pick the width's.
+   Plain CSS, in the components layer, so the breakpoints apply in THIS order:
+   Tailwind sorts an arbitrary `min-[1180px]:` variant before the named
+   breakpoints, which would let `md:` win over it at 1180 to 1279. */
+@layer components {
+  .panel-slot { order: var(--panel-o-base); }
+  .panel-notch { --notch: var(--notch-base); }
+  @media (width >= 40rem) {
+    .panel-slot { order: var(--panel-o-sm); }
+    .panel-notch { --notch: var(--notch-sm); }
+  }
+  @media (width >= 48rem) {
+    .panel-slot { order: var(--panel-o-md); }
+    .panel-notch { --notch: var(--notch-md); }
+  }
+  @media (width >= 64rem) {
+    .panel-slot { order: var(--panel-o-lg); }
+    .panel-notch { --notch: var(--notch-lg); }
+  }
+  @media (width >= 1180px) {
+    .panel-slot { order: var(--panel-o-w1180); }
+    .panel-notch { --notch: var(--notch-w1180); }
+  }
+  @media (width >= 80rem) {
+    .panel-slot { order: var(--panel-o-xl); }
+    .panel-notch { --notch: var(--notch-xl); }
+  }
+}
+
 /* A long log's "Show all N" (Settings › The record, components/settings/record/
    show-all.tsx): on paper every row prints, so a printed record is the whole
    record. The closed disclosure's content is made visible and its control goes. */

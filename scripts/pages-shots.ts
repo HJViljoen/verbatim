@@ -37,8 +37,9 @@ import { AppRouterContext } from 'next/dist/shared/lib/app-router-context.shared
 import { PathnameContext } from 'next/dist/shared/lib/hooks-client-context.shared-runtime'
 import { withBrowser } from '../lib/render/chromium'
 
-import { SidebarProvider, SidebarTrigger } from '../components/ui/sidebar'
+import { SidebarProvider } from '../components/ui/sidebar'
 import { AppSidebar } from '../components/app-sidebar'
+import { PhoneTopBar } from '../components/shell/phone-bar'
 import { VerbatimMark } from '../components/brand/mark'
 import { PageBar, PageFrame } from '../components/shell/page-grid'
 import { SEALAND_CLIENT_ID } from '../lib/config'
@@ -451,6 +452,11 @@ const PAGES: Page[] = [
     key: `dashboard-${tenant}`, path: '/dashboard', artboard: 'E1-Dashboard.dc.html',
     page: () => h(DashboardPage, { data: JSON.parse(readFileSync(join(resolve(flag('home-dump', '.')), `${tenant}.json`), 'utf8')).data as DashboardData }),
   })) : []),
+  // The phone pass (depth v2, T9): two more open states, for the panel's
+  // place at every width: a conversation open from the month's top row, and
+  // one open in the month-by-month table, which scrolls sideways on a phone.
+  { key: 'market-v2-month-open', path: '/dashboard/market', artboard: 'E2-Market-Open.dc.html', page: () => h(MarketPage, { data: marketFixture({ period: 'month', open: { n: 2, at: 'top' } }) }) },
+  { key: 'market-v2-time-open', path: '/dashboard/market', artboard: 'E2-Market-Open.dc.html', page: () => h(MarketPage, { data: marketFixture({ period: 'time', open: { n: 5, at: 'table' } }) }) },
 ]
 
 // ---- the shell -----------------------------------------------------------------
@@ -466,6 +472,17 @@ const wordmark = () =>
     ),
   )
 
+/** The phone top bar's brand as `PhoneWordmark` draws it (the wordmark, then
+ *  the workspace's name; `--workspace <name>`, Össur by default, as the
+ *  E1-Dashboard-Phone board). */
+const workspace = flag('workspace', 'Össur')
+const phoneBrand = () =>
+  h('div', { className: 'flex min-w-0 items-center gap-[7px]' },
+    h(VerbatimMark, { size: 20, className: 'shrink-0 text-brand' }),
+    h('span', { className: 'shrink-0 text-[18px] leading-[normal] font-bold tracking-[-0.02em] text-foreground', style: { fontFamily: "'Bricolage Grotesque', sans-serif" } }, 'Verbatim'),
+    workspace ? h('span', { className: 'ml-1 min-w-0 truncate text-[13px] text-muted-foreground' }, workspace) : null,
+  )
+
 /** app/dashboard/layout.tsx, as a client sees it. The harness's one change:
  *  the pane grows to the page (`h-dvh` and the inner scroll go, and with them
  *  the crowd backdrop), except for a `fixed` page or `--screen`, which is shot
@@ -479,8 +496,8 @@ const shell = (path: string, page: ReactNode, fixed = false) =>
           // The crowd holds still while <main> scrolls, which a page grown to
           // its full height cannot show; only the shipped pane draws it.
           fixed ? h('div', { className: 'crowd-bg crowd-bg--shell', 'aria-hidden': true }) : null,
-          h(SidebarTrigger, { 'aria-label': 'Open navigation', className: 'absolute left-3 top-3 z-20 size-9 rounded-full bg-tile text-foreground shadow-tile md:hidden' }),
-          h('main', { className: `relative z-10 flex-1 min-h-0 p-6 pt-14 md:px-10 md:pt-7 md:pb-10 ${fixed ? 'overflow-y-auto' : ''}` }, page),
+          h(PhoneTopBar, { brand: phoneBrand() }),
+          h('main', { className: `relative z-10 flex-1 min-h-0 px-4 pt-[18px] pb-12 md:px-10 md:pt-7 md:pb-10 ${fixed ? 'overflow-y-auto' : ''}` }, page),
         ),
       ),
     ),
@@ -515,6 +532,67 @@ h1{color:#e8e6df;font-size:26px;padding:24px 24px 0;margin:0}
 <figure><figcaption>the integration tree (pages/integration), from its fixture</figcaption><img src="file://${built}"></figure>
 </div></body></html>`
 
+/**
+ * THE PHONE PASS'S MEASURE (depth v2, T9): what a shot overflows, run in the
+ * page after it is drawn, at the shot's width:
+ *   - `scrollWidth`: the document's, against the viewport's width (a page
+ *     wider than its viewport scrolls sideways);
+ *   - `out`: elements in <main> past the viewport's edge, unless a scroller
+ *     between them and <main> holds them (a table scrolling inside its card);
+ *   - `poke`: elements past the edge of their card or panel (a chip or a
+ *     figure drawn over the card's edge), under the same exception;
+ *   - `scrollers`: horizontal scrollers that do scroll (allowed: a table's
+ *     own scroll inside its card), with how far;
+ *   - `clipped`: hidden or clipped overflow that cuts content off, a
+ *     `truncate` ellipsis included (reported; a cut label is judged by eye).
+ * Each element is named by its tag, its id or `data-*` hook and the start of
+ * its text, enough to find it in the shot. It is a string so the page runs it
+ * as written (tsx's helpers do not exist in the page).
+ */
+const MEASURE = `(w) => {
+  const main = document.querySelector('main')
+  const all = main ? [...main.querySelectorAll('*')] : []
+  const name = (el) => {
+    const id = el.id ? '#' + el.id : ''
+    const hook = [...el.attributes].filter((a) => a.name.startsWith('data-') && a.name !== 'data-copy' && a.name !== 'data-slot').map((a) => '[' + a.name + (a.value ? '=' + a.value : '') + ']').join('')
+    const text = (el.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 48)
+    return el.tagName.toLowerCase() + id + hook + ' "' + text + '"'
+  }
+  const scrollerBetween = (el, stop) => {
+    for (let p = el.parentElement; p && p !== stop && p !== main; p = p.parentElement) {
+      if (getComputedStyle(p).overflowX !== 'visible') return true
+    }
+    return false
+  }
+  const isCard = (el) => /\\bshadow-(card|panel)\\b/.test(el.getAttribute('class') || '')
+  const out = [], poke = [], scrollers = [], clipped = []
+  for (const el of all) {
+    const r = el.getBoundingClientRect()
+    if (r.width === 0 && r.height === 0) continue
+    const s = getComputedStyle(el)
+    if (s.visibility === 'hidden') continue
+    if ((r.right > w + 0.5 || r.left < -0.5) && !scrollerBetween(el, null)) out.push(name(el) + ' ' + Math.round(r.left) + '..' + Math.round(r.right))
+    let card = el.parentElement
+    while (card && card !== main && !isCard(card)) card = card.parentElement
+    if (card && card !== main) {
+      const c = card.getBoundingClientRect()
+      if ((r.right > c.right + 1 || r.left < c.left - 1) && !scrollerBetween(el, card) && !el.hasAttribute('data-notch')) {
+        poke.push(name(el) + ' ' + Math.round(r.left - c.left) + '..' + Math.round(r.right - c.left) + ' of ' + Math.round(c.width) + ' in ' + name(card).slice(0, 40))
+      }
+    }
+    const o = s.overflowX
+    if ((o === 'auto' || o === 'scroll') && el.scrollWidth > el.clientWidth + 1) scrollers.push(name(el) + ' ' + el.scrollWidth + '/' + el.clientWidth)
+    // A 1px box is a screen reader's (\`sr-only\`), not a cut label.
+    if ((o === 'hidden' || o === 'clip') && el.clientWidth > 1 && el.scrollWidth > el.clientWidth + 1) clipped.push(name(el) + ' ' + el.scrollWidth + '/' + el.clientWidth)
+  }
+  return {
+    scrollWidth: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth),
+    outCount: out.length, out: out.slice(0, 12), pokeCount: poke.length, poke: poke.slice(0, 12),
+    scrollers: scrollers.slice(0, 12), clipped: clipped.slice(0, 20),
+  }
+}`
+interface Measure { scrollWidth: number; outCount: number; out: string[]; pokeCount: number; poke: string[]; scrollers: string[]; clipped: string[] }
+
 async function main() {
   mkdirSync(out, { recursive: true })
   const style = await css()
@@ -522,6 +600,7 @@ async function main() {
   const tag = `${width === 1440 ? '' : `-${width}`}${scrolled ? '-scrolled' : ''}${fileTag}`
   for (const p of pages) writeFileSync(join(out, `built-${p.key}${tag}.html`), doc(style, renderToStaticMarkup(shell(p.path, p.page(), p.fixed || screen))))
 
+  const measures: Record<string, Measure> = {}
   await withBrowser(async (page) => {
     const tall = width < 768 ? 844 : 900
     const shoot = async (url: string, file: string, fixed = false) => {
@@ -537,6 +616,10 @@ async function main() {
     }
     for (const p of pages) {
       await shoot(`file://${join(out, `built-${p.key}${tag}.html`)}`, join(out, `built-${p.key}${tag}.png`), p.fixed || screen)
+      // The phone pass's measure (T9), on every built shot at its width.
+      const m = await page.evaluate(`(${MEASURE})(${width})`) as Measure
+      measures[`built-${p.key}${tag}`] = m
+      console.log(`  ${p.key}: scrollWidth ${m.scrollWidth}/${width}${m.scrollWidth > width ? ' OVERFLOWS' : ''} · past the edge ${m.outCount} · past a card ${m.pokeCount} · scrollers ${m.scrollers.length} · clipped ${m.clipped.length}`)
       if (tag || screen) { console.log(`built-${p.key}${tag}.png`); continue }
       const art = join(artboards, p.artboard)
       if (!existsSync(art)) { console.log(`no artboard for ${p.key}`); continue }
@@ -549,6 +632,7 @@ async function main() {
       console.log(`side-by-side-${p.key}.png`)
     }
   })
+  writeFileSync(join(out, `measure${tag || '-1440'}.json`), JSON.stringify(measures, null, 2))
 }
 
 main().catch((e) => { console.error(e); process.exit(1) })

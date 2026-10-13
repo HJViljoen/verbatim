@@ -1,8 +1,11 @@
 import Link from 'next/link'
-import type { CSSProperties } from 'react'
+import { Fragment, type CSSProperties } from 'react'
 
 import { BlockQuote } from '@/components/blocks/quote'
-import { CARD, InPlacePanel, PanelSection, PanelTitle, SELECTED_CARD_RING, StatCell, UnitSquares } from '@/components/v2'
+import {
+  CARD, equalColumns, InPlacePanel, panelItemOrder, panelPlacement, PanelSection, PanelSlot, PanelTitle, SELECTED_CARD_RING, StatCell, UnitSquares,
+  type PanelLayout, type PerBreakpoint,
+} from '@/components/v2'
 import { priorityLabel, typeLabel, whyLead } from '@/components/pages/moves/words'
 import { fmtInt, shortDate } from '@/lib/format'
 import { MOVES_WRITE_REFUSED } from '@/lib/moves-access'
@@ -32,14 +35,13 @@ import { BTN, MONO, OLINK, PRIORITY_CHIP, SECTION_SUB, SECTION_TITLE, TAG_CHIP }
 // from 1180px (the board's breakpoint) and one below; the panel is a child of
 // the same grid spanning every column, placed by CSS order after the row that
 // holds its card (wide) or directly after its card (narrow), so one element
-// serves both widths and its id stays unique.
+// serves both widths and its id stays unique. The kit works the order and the
+// notch out for every width (`panelPlacement`, T9): on one column the notch
+// points at the card's middle.
 
-const COLUMNS = 3
-
-/** The panel's place in the grid, at both widths, and where its notch points. */
-export function panelPlacement(index: number, count: number): { narrow: number; wide: number; notchAt: number } {
-  const rowEnd = Math.min(count - 1, Math.floor(index / COLUMNS) * COLUMNS + COLUMNS - 1)
-  return { narrow: 2 * index + 1, wide: 2 * rowEnd + 1, notchAt: ((index % COLUMNS) + 0.5) / COLUMNS }
+/** The advice grid's columns: one, then three from the board's 1180. */
+export function adviceLayout(count: number): PanelLayout {
+  return { base: equalColumns(1, count), w1180: equalColumns(3, count) }
 }
 
 /** The advice's title: the model's stored words, or the page's own where the
@@ -184,7 +186,7 @@ export const OPEN_FROM_RECORD = 'From the advice record: the latest update did n
 
 function AdvicePanel({ card, notchAt, canDecide, dating, note }: {
   card: AdviceCard
-  notchAt: number
+  notchAt: number | PerBreakpoint
   canDecide: boolean
   dating: MoveDating | null
   /** Said under the title where the piece has no card above. */
@@ -196,6 +198,7 @@ function AdvicePanel({ card, notchAt, canDecide, dating, note }: {
     <InPlacePanel
       id={ADVICE_PANEL_ID}
       notchAt={notchAt}
+      openKey={card.lineageId}
       closeHref={MOVES_PATH}
       labelledBy="advice-panel-title"
       closeLabel="Close this advice"
@@ -254,7 +257,7 @@ function AdvicePanel({ card, notchAt, canDecide, dating, note }: {
 export function AdviceSection({ data }: { data: MovesPageData }) {
   const { cards, open, gone } = data.advice
   const index = open?.index ?? null
-  const place = index != null ? panelPlacement(index, cards.length) : null
+  const place = index != null ? panelPlacement(index, adviceLayout(cards.length)) : null
   return (
     <section aria-labelledby="advice-title" className="flex min-w-0 flex-col gap-4">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-0.5">
@@ -271,18 +274,17 @@ export function AdviceSection({ data }: { data: MovesPageData }) {
       ) : (
         <div className="grid grid-cols-1 gap-5 min-[1180px]:grid-cols-3">
           {cards.map((c, i) => (
-            <div key={c.lineageId} className="flex min-w-0 flex-col [order:var(--o)]" style={{ '--o': 2 * i } as CSSProperties}>
-              <AdviceCardView card={c} open={open?.card.lineageId === c.lineageId} canDecide={data.canDecide} />
-            </div>
+            <Fragment key={c.lineageId}>
+              <div className="flex min-w-0 flex-col" style={panelItemOrder(i)}>
+                <AdviceCardView card={c} open={open?.card.lineageId === c.lineageId} canDecide={data.canDecide} />
+              </div>
+              {open && place && i === index ? (
+                <PanelSlot placement={place}>
+                  <AdvicePanel card={open.card} notchAt={place.notch} canDecide={data.canDecide} dating={data.dating} note={null} />
+                </PanelSlot>
+              ) : null}
+            </Fragment>
           ))}
-          {open && place ? (
-            <div
-              className="min-w-0 [order:var(--o)] min-[1180px]:col-span-3 min-[1180px]:[order:var(--ow)]"
-              style={{ '--o': place.narrow, '--ow': place.wide } as CSSProperties}
-            >
-              <AdvicePanel card={open.card} notchAt={place.notchAt} canDecide={data.canDecide} dating={data.dating} note={null} />
-            </div>
-          ) : null}
         </div>
       )}
       {data.advice.more > 0 ? (

@@ -214,3 +214,25 @@ describe('the depth boards\' meta line (depth v2, T2)', () => {
     expect(lined).not.toContain('data-bar-meta')
   })
 })
+
+describe('the controls on a phone (depth v2, T9)', () => {
+  it('stay beside the title by default, as every existing caller drew them', () => {
+    const m = render(<PageBar title="Content"><a href="?period=week">This week</a></PageBar>)
+    expect(m).not.toContain('max-sm:')
+  })
+
+  it('go under the title and its lines on their own row where a page asks, from 640 beside it again', () => {
+    const m = render(<PageBar title="Your moves" meta="3 pieces of advice waiting" phoneControls="below"><a>Check a plan</a><a>Date a move</a></PageBar>)
+    expect(m).toMatch(/<h1 class="[^"]*max-sm:col-span-2[^"]*">Your moves<\/h1>/)
+    expect(m).toMatch(/<div class="col-start-2 row-start-1 [^"]*max-sm:col-span-2 max-sm:col-start-1 max-sm:row-start-auto max-sm:flex-wrap max-sm:justify-start">/)
+    // The desk's placement is untouched: the controls span the title and the
+    // meta, at the foot of the pair.
+    expect(m).toContain('sm:row-end-3')
+    expect(m).toContain('sm:items-end')
+    assertCopyContract(<PageBar title="Your moves" phoneControls="below"><a>Check a plan</a></PageBar>)
+  })
+
+  it('a bar with no controls is unchanged by the option', () => {
+    expect(render(<PageBar title="Voices" phoneControls="below" />)).toBe(render(<PageBar title="Voices" />))
+  })
+})

@@ -1,9 +1,10 @@
 import { Suspense } from "react"
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
+import { SidebarProvider } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { AccessBannerLoader } from "@/components/access-banner-loader"
 import { OpsNavLoader } from "@/components/ops/ops-nav-loader"
-import { SidebarWordmark, WorkspaceSwitcherLoader } from "@/components/workspace-switcher-loader"
+import { PhoneTopBar } from "@/components/shell/phone-bar"
+import { PhoneWordmark, PhoneWordmarkLoader, SidebarWordmark, WorkspaceSwitcherLoader } from "@/components/workspace-switcher-loader"
 
 // Deliberately synchronous: no session, no DB. This layout wraps every
 // dashboard route, and an async layout sits ABOVE each route's loading.tsx
@@ -45,6 +46,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           2026-08-28 (MASTER.md rule 8): the 48px header — which only ever held
           the mobile sidebar trigger — is gone; on phones the trigger floats in
           the top-left corner.
+          13 Oct (depth v2, T9; E1-Dashboard-Phone): below 768 the phone's top
+          bar stands in for the sidebar (the wordmark, the workspace's name and
+          the menu button; components/shell/phone-bar.tsx), above <main> and
+          outside its scroll, and <main> keeps the board's 16px gutters and
+          18px above the title; the floating trigger is gone.
           1 Oct (the navigation build, every `Page-*.dc.html` artboard): the
           pane is the design's ground, Palette A `#F7F6F2`, and <main> sits
           28px from the top and 40px from the other three edges. Palette A is
@@ -62,11 +68,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           in print (`.crowd-bg`, app/globals.css). */}
       <div className="relative flex flex-col flex-1 min-w-0 h-dvh overflow-hidden bg-[#F7F6F2]">
         <div className="crowd-bg crowd-bg--shell" aria-hidden />
-        <SidebarTrigger
-          aria-label="Open navigation"
-          className="absolute left-3 top-3 z-20 size-9 rounded-full bg-tile text-foreground shadow-tile md:hidden"
+        <PhoneTopBar
+          brand={
+            <Suspense fallback={<PhoneWordmark />}>
+              <PhoneWordmarkLoader />
+            </Suspense>
+          }
         />
-        <main className="relative z-10 flex-1 min-h-0 overflow-y-auto p-6 pt-14 md:px-10 md:pt-7 md:pb-10">
+        <main className="relative z-10 flex-1 min-h-0 overflow-y-auto px-4 pt-[18px] pb-12 md:px-10 md:pt-7 md:pb-10">
           <Suspense fallback={null}>
             <AccessBannerLoader />
           </Suspense>

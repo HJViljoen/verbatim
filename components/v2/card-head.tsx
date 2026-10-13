@@ -12,13 +12,18 @@ import { cn } from '@/lib/utils'
  * and `components/colour-roles.test.tsx`'s "every card on the card shadow"
  * holds by construction. Pages add their grid span.
  *
+ * On a phone (below 640) it is E1-Dashboard-Phone's `.ph .card`: 18px of
+ * padding all round, 12px between its rows and a 14px radius (T9, the phone
+ * pass; the Dashboard's tiles drew it first, T8), so a card's content keeps
+ * 322 of a 390 screen's pixels rather than 290.
+ *
  * `CardHead` is the boards' `.chead`: the 28px icon tile (`IconTile`, the
  * colour roles' own, reused), then the title at 17px and an optional muted
  * line under it, and an optional action at the right-hand end (a key, a
  * link). A hero card's head carries an eyebrow and a flag chip over a 21px
  * title instead (`size="lg"`).
  */
-export const CARD = 'flex min-w-0 flex-col gap-4 rounded-[16px] bg-card px-[26px] py-6 shadow-card'
+export const CARD = 'flex min-w-0 flex-col gap-4 rounded-[16px] bg-card px-[26px] py-6 shadow-card max-sm:gap-3 max-sm:rounded-[14px] max-sm:p-[18px]'
 
 export interface CardHeadProps {
   /** The glyph in the pale-yellow tile. No icon, no tile. */

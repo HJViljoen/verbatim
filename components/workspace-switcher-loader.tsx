@@ -1,5 +1,6 @@
 import { Bricolage_Grotesque } from "next/font/google"
 import { getSessionContext } from "@/lib/auth"
+import { viewedClientRow } from "@/lib/shell/viewed-client"
 import { listWorkspaces } from "@/lib/workspaces"
 import { WorkspaceSwitcher } from "@/components/workspace-switcher"
 import { VerbatimMark } from "@/components/brand/mark"
@@ -47,4 +48,35 @@ export async function WorkspaceSwitcherLoader() {
   const { operator } = await getSessionContext()
   if (!operator) return <SidebarWordmark />
   return <WorkspaceSwitcher operator={operator} workspaces={await listWorkspaces()} />
+}
+
+/**
+ * THE PHONE TOP BAR'S BRAND (depth v2, T9; E1-Dashboard-Phone): the sidebar's
+ * wordmark, the same mark, face and sizes, and the workspace's name beside it
+ * in the muted ink, cut with an ellipsis where it would crowd the menu button.
+ * Without a name (the fallback while the session resolves, or a row that
+ * could not be read) it is the wordmark alone, so the bar never shifts by more
+ * than the name.
+ */
+export function PhoneWordmark({ name }: { name?: string | null }) {
+  return (
+    <div className="flex min-w-0 items-center gap-[7px]">
+      <VerbatimMark size={20} className="shrink-0 text-brand" />
+      <span className={`${wordmarkFace.className} shrink-0 text-[18px] leading-[normal] font-bold tracking-[-0.02em] text-foreground`}>Verbatim</span>
+      {name ? <span className="ml-1 min-w-0 truncate text-[13px] text-muted-foreground">{name}</span> : null}
+    </div>
+  )
+}
+
+/**
+ * The async half of the phone bar's brand, streamed like the sidebar header:
+ * the operator's viewed workspace (what the switcher names), else the
+ * workspace's own `company_name` from the row the billing banner reads in the
+ * same request (`viewedClientRow`, request-cached: no second query).
+ */
+export async function PhoneWordmarkLoader() {
+  const { operator } = await getSessionContext()
+  if (operator) return <PhoneWordmark name={operator.viewingName} />
+  const row = await viewedClientRow()
+  return <PhoneWordmark name={typeof row?.company_name === "string" ? row.company_name : null} />
 }

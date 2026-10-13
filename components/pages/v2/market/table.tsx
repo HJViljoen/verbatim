@@ -92,13 +92,16 @@ export function ConversationTable({ table, data }: { table: MarketTable; data: M
           })}
         </nav>
       ) : null}
-      <div className="-mx-1 overflow-x-auto px-1">
+      {/* A query container, so an open conversation's row can hold its panel
+          to the scroller's visible width (T9: month by month, the table
+          scrolls sideways on a phone, and the panel would scroll with it). */}
+      <div className="@container -mx-1 overflow-x-auto px-1">
         <table className={cn('w-full border-collapse text-[14px]', time ? 'min-w-[560px]' : null)}>
           <thead>
             <tr>
               <th scope="col" className={TH}>Conversation</th>
-              {subjects ? <th scope="col" className={cn(TH, 'max-md:hidden')}>Subject</th> : null}
-              {about ? <th scope="col" className={cn(TH, 'max-md:hidden')}>About</th> : null}
+              {subjects ? <th scope="col" className={cn(TH, 'max-lg:hidden')}>Subject</th> : null}
+              {about ? <th scope="col" className={cn(TH, 'max-lg:hidden')}>About</th> : null}
               {time
                 ? table.months.map((m) => (
                   <th key={m.month} scope="col" className={cn(TH, 'text-right')}>
@@ -146,14 +149,19 @@ function RowWithPanel({ conv, href, open, data, table, cols, subjects, about }: 
             <SetApartTag setApart={conv.setApart} />
           </span>
         </td>
-        {subjects ? <td className={cn(TD, 'text-muted-foreground max-md:hidden')}>{conv.subjectName ?? ''}</td> : null}
-        {about ? <td className={cn(TD, 'max-md:hidden')}>{conv.who.length > 0 ? <About parts={conv.who} brand={data.brand} noun={data.noun} /> : null}</td> : null}
+        {subjects ? <td className={cn(TD, 'text-muted-foreground max-lg:hidden')}>{conv.subjectName ?? ''}</td> : null}
+        {about ? <td className={cn(TD, 'max-lg:hidden')}>{conv.who.length > 0 ? <About parts={conv.who} brand={data.brand} noun={data.noun} /> : null}</td> : null}
         <Cells conv={conv} data={data} table={table} />
       </tr>
       {open && data.panel && data.panel.id === conv.id ? (
         <tr>
           <td colSpan={cols} className="py-4">
-            <ConversationPanel panel={data.panel} data={data} />
+            {/* The scroller's width, held at its left edge: the panel never
+                runs wider than what shows, nor scrolls out of view with the
+                table's columns. */}
+            <div className="sticky left-0 w-[100cqw]">
+              <ConversationPanel panel={data.panel} data={data} />
+            </div>
           </td>
         </tr>
       ) : null}

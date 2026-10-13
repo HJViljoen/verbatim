@@ -59,12 +59,15 @@ export function AskedCard({ block, state, month, weekWord, weekHead, afterIdeas 
           <thead>
             <tr className="border-b border-border">
               <th scope="col" className={TH}>Question people asked</th>
-              <th scope="col" className={cn(TH, 'hidden md:table-cell')}>Who asks</th>
-              <th scope="col" className={cn(TH, 'hidden lg:table-cell')}>Subject</th>
+              {/* The text columns show from 1280, where the sidebar leaves the
+                  card room for them beside the counts (T9: from 768 the
+                  sidebar takes 281px, and the table ran past the card). */}
+              <th scope="col" className={cn(TH, 'hidden xl:table-cell')}>Who asks</th>
+              <th scope="col" className={cn(TH, 'hidden xl:table-cell')}>Subject</th>
               <th scope="col" className={cn(TH, 'text-right')}>{weekHead}</th>
               {/* On a phone the month sits under the week's figure, in its cell. */}
               <th scope="col" className={cn(TH, 'hidden text-right sm:table-cell')}>{monthHead}</th>
-              {trend ? <th scope="col" className={cn(TH, 'hidden pr-0 text-right sm:table-cell')}>The last three weeks</th> : null}
+              {trend ? <th scope="col" className={cn(TH, 'hidden pr-0 text-right sm:table-cell md:hidden lg:table-cell')}>The last three weeks</th> : null}
             </tr>
           </thead>
           <tbody>
@@ -75,15 +78,15 @@ export function AskedCard({ block, state, month, weekWord, weekHead, afterIdeas 
                     <span data-copy="subject" data-slot="pass_b_theme">{r.label}</span>
                   </Link>
                 </td>
-                <td className={cn(TD, 'hidden text-muted-foreground md:table-cell')}>{r.groups.length > 0 ? <GroupNames groups={r.groups} /> : <span aria-label="No group cites it">·</span>}</td>
-                <td className={cn(TD, 'hidden text-muted-foreground lg:table-cell')}>{r.subject ?? <span aria-label="No subject holds it">·</span>}</td>
+                <td className={cn(TD, 'hidden text-muted-foreground xl:table-cell')}>{r.groups.length > 0 ? <GroupNames groups={r.groups} /> : <span aria-label="No group cites it">·</span>}</td>
+                <td className={cn(TD, 'hidden text-muted-foreground xl:table-cell')}>{r.subject ?? <span aria-label="No subject holds it">·</span>}</td>
                 <td className={cn(TD, 'text-right')}>
                   {r.week != null ? <Fig>{fmtInt(r.week)}</Fig> : <span className="text-muted-foreground">·</span>}
                   {r.month != null ? <span className="block text-[12px] text-muted-foreground sm:hidden"><Fig>{fmtInt(r.month)}</Fig> {monthWords(month)}</span> : null}
                 </td>
                 <td className={cn(TD, 'hidden text-right sm:table-cell')}>{r.month != null ? <Fig>{fmtInt(r.month)}</Fig> : <span className="text-muted-foreground">·</span>}</td>
                 {trend ? (
-                  <td className={cn(TD, 'hidden pr-0 text-right sm:table-cell')}>
+                  <td className={cn(TD, 'hidden pr-0 text-right sm:table-cell md:hidden lg:table-cell')}>
                     {r.weeks ? <Fig className="text-[13px] text-muted-foreground">{r.weeks.map(fmtInt).join(' · ')}</Fig> : <span className="text-muted-foreground">·</span>}
                   </td>
                 ) : null}

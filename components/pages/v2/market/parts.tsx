@@ -103,8 +103,12 @@ export function ConvRow({ href, label, chip, counts, selected }: {
         selected ? 'bg-accent' : null,
       )}
     >
-      <span data-copy="subject" data-slot="pass_b_theme" className="min-w-0">{label}</span>
-      {chip}
+      {/* The chip wraps under the name where the two do not fit one line (a
+          phone), so the name keeps its width (T9). */}
+      <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+        <span data-copy="subject" data-slot="pass_b_theme" className="min-w-0">{label}</span>
+        {chip}
+      </span>
       <span className="ml-auto flex shrink-0 items-baseline gap-3">
         {counts.map((c, i) => (
           <span key={i} className={cn('w-9 whitespace-nowrap text-right font-mono text-[13px] tabular-nums', i === 0 ? 'text-secondary-foreground' : 'text-muted-foreground')}>

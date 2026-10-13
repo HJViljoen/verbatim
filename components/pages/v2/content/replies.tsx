@@ -1,5 +1,5 @@
 import { MessageSquare } from 'lucide-react'
-import { CARD, CardHead, InPlacePanel, PanelSection, PanelTitle, StatCell, SELECTED_CARD_RING } from '@/components/v2'
+import { CARD, CardHead, InPlacePanel, PanelSection, PanelTitle, StatCell, SELECTED_CARD_RING, type PerBreakpoint } from '@/components/v2'
 import { QuoteBlock } from '@/components/quote-block'
 import { fmtInt, platformLabel, shortDate } from '@/lib/format'
 import { REPLIES_PANEL_ID, contentHref, type ContentState, type RepliesView } from '@/lib/pages/v2/content'
@@ -113,11 +113,11 @@ function ReplyItem({ row }: { row: ReplyRow }) {
   )
 }
 
-export function RepliesPanel({ view, state }: { view: RepliesView; state: ContentState }) {
+export function RepliesPanel({ view, state, notchAt }: { view: RepliesView; state: ContentState; notchAt?: number | PerBreakpoint }) {
   return (
     <InPlacePanel
       id={REPLIES_PANEL_ID}
-      notchAt={0.83}
+      notchAt={notchAt ?? 0.83}
       closeHref={contentHref({ ...state, open: null })}
       closeLabel="Close the replies"
       labelledBy="replies-panel-title"

@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import type { CSSProperties } from 'react'
 import { MessageSquareText } from 'lucide-react'
 import { MovementBadge } from '@/components/delta-badge'
 import { Sparkline } from '@/components/charts/sparkline'
@@ -114,10 +115,10 @@ function Unmeasured({ board, selected }: { board: SubjectBoard; selected: string
   )
 }
 
-export function SubjectBoardView({ board, data }: { board: SubjectBoard; data: MarketData }) {
+export function SubjectBoardView({ board, data, style }: { board: SubjectBoard; data: MarketData; style?: CSSProperties }) {
   const openSubject = data.subjectPanel?.id ?? null
   return (
-    <article id="subjects" aria-labelledby="subjects-title" className={cn(CARD, board.rows.length > 0 ? 'col-span-12 xl:col-span-8' : 'col-span-12', 'scroll-mt-6')}>
+    <article id="subjects" aria-labelledby="subjects-title" style={style} className={cn(CARD, board.rows.length > 0 ? 'col-span-12 xl:col-span-8' : 'col-span-12', 'scroll-mt-6')}>
       <CardHead
         icon={MessageSquareText}
         id="subjects-title"

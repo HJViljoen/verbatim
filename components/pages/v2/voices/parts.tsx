@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Sparkles } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { Fragment, type ReactNode } from 'react'
 import { TickBar } from '@/components/v2'
 import { TAG } from '@/components/colour-roles'
 import { fmtCompact, fmtInt } from '@/lib/format'
@@ -79,10 +79,12 @@ export function PlatformStrip({ platforms, label }: { platforms: readonly Voices
         ))}
       </div>
       <div className="text-[12.5px] leading-[1.4] text-muted-foreground">
+        {/* Each platform holds together; the line breaks between them, at
+            the separator, where a narrow card cannot hold all four (T9). */}
         {platforms.map((p, i) => (
-          <span key={p.platform} className="whitespace-nowrap">
-            {i > 0 ? ' · ' : null}{p.label} <Fig>{fmtInt(p.k)}</Fig>
-          </span>
+          <Fragment key={p.platform}>
+            {i > 0 ? ' · ' : null}<span className="whitespace-nowrap">{p.label} <Fig>{fmtInt(p.k)}</Fig></span>
+          </Fragment>
         ))}
       </div>
     </div>
