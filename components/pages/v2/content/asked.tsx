@@ -62,7 +62,8 @@ export function AskedCard({ block, state, month, weekWord, weekHead, afterIdeas 
               <th scope="col" className={cn(TH, 'hidden md:table-cell')}>Who asks</th>
               <th scope="col" className={cn(TH, 'hidden lg:table-cell')}>Subject</th>
               <th scope="col" className={cn(TH, 'text-right')}>{weekHead}</th>
-              <th scope="col" className={cn(TH, 'text-right')}>{monthHead}</th>
+              {/* On a phone the month sits under the week's figure, in its cell. */}
+              <th scope="col" className={cn(TH, 'hidden text-right sm:table-cell')}>{monthHead}</th>
               {trend ? <th scope="col" className={cn(TH, 'hidden pr-0 text-right sm:table-cell')}>The last three weeks</th> : null}
             </tr>
           </thead>
@@ -76,8 +77,11 @@ export function AskedCard({ block, state, month, weekWord, weekHead, afterIdeas 
                 </td>
                 <td className={cn(TD, 'hidden text-muted-foreground md:table-cell')}>{r.groups.length > 0 ? <GroupNames groups={r.groups} /> : <span aria-label="No group cites it">·</span>}</td>
                 <td className={cn(TD, 'hidden text-muted-foreground lg:table-cell')}>{r.subject ?? <span aria-label="No subject holds it">·</span>}</td>
-                <td className={cn(TD, 'text-right')}>{r.week != null ? <Fig>{fmtInt(r.week)}</Fig> : <span className="text-muted-foreground">·</span>}</td>
-                <td className={cn(TD, 'text-right')}>{r.month != null ? <Fig>{fmtInt(r.month)}</Fig> : <span className="text-muted-foreground">·</span>}</td>
+                <td className={cn(TD, 'text-right')}>
+                  {r.week != null ? <Fig>{fmtInt(r.week)}</Fig> : <span className="text-muted-foreground">·</span>}
+                  {r.month != null ? <span className="block text-[12px] text-muted-foreground sm:hidden"><Fig>{fmtInt(r.month)}</Fig> {monthWords(month)}</span> : null}
+                </td>
+                <td className={cn(TD, 'hidden text-right sm:table-cell')}>{r.month != null ? <Fig>{fmtInt(r.month)}</Fig> : <span className="text-muted-foreground">·</span>}</td>
                 {trend ? (
                   <td className={cn(TD, 'hidden pr-0 text-right sm:table-cell')}>
                     {r.weeks ? <Fig className="text-[13px] text-muted-foreground">{r.weeks.map(fmtInt).join(' · ')}</Fig> : <span className="text-muted-foreground">·</span>}
