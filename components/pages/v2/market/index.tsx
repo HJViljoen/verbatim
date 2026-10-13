@@ -44,6 +44,10 @@ function Meta({ data }: { data: MarketData }) {
   )
 }
 
+function periodSwitch(data: MarketData) {
+  return <PeriodSwitch value={data.period} options={PERIODS} hrefFor={(p) => periodHref(data.params, p)} />
+}
+
 export function MarketPage({ data }: { data: MarketData | null }) {
   if (!data) {
     return (
@@ -57,9 +61,12 @@ export function MarketPage({ data }: { data: MarketData | null }) {
   const convPanel = data.panel ? <ConversationPanel panel={data.panel} data={data} /> : null
   return (
     <PageFrame className="text-foreground">
+      {/* The switch sits beside the title, and under the bar on a phone,
+          where the two do not fit one line. */}
       <PageBar title={MARKET_TITLE} meta={<Meta data={data} />}>
-        <PeriodSwitch value={data.period} options={PERIODS} hrefFor={(p) => periodHref(data.params, p)} />
+        <div className="max-sm:hidden">{periodSwitch(data)}</div>
       </PageBar>
+      <div className="-mt-2 sm:hidden">{periodSwitch(data)}</div>
       <TopRowView data={data} />
       {at === 'top' && convPanel ? convPanel : null}
       <section aria-label="What the market is talking about" className="grid grid-cols-12 items-start gap-5">

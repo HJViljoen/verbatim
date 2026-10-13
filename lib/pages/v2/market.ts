@@ -28,7 +28,7 @@ import { WEEK_CUT_SURFACES, preGatherCutBefore } from '../../reading/weeks'
 import type { Verdict } from '../../reading/verdicts'
 import { INDUSTRY_AUDIENCE, loadCompetitors, loadTrackedRivals } from '../../rivals'
 import { selectAll } from '../../supabase-admin'
-import { inMonth, readingMonthOf } from '../../written/month'
+import { coveredDays, inMonth, readingMonthOf } from '../../written/month'
 import { loadPublishedWeekRead, type PublishedWeekRead } from '../../written/published'
 import type { WeekReadData, WhoAbout, WhoPart } from '../../written/types'
 import { weekReadDates } from '../../reports/weekly-read'
@@ -107,8 +107,10 @@ export const MARKET_WEEKS = 3
 export const MARKET_QUOTES = 3
 /** Months a card's bars and the over-time table read, the month included. */
 export const MARKET_CARD_MONTHS = 4
-/** Months the open panel's line draws at most. */
-export const MARKET_PANEL_MONTHS = 6
+/** Months the open panel's line draws at most (the board's four). */
+export const MARKET_PANEL_MONTHS = 4
+/** Months Over time's market card draws at most. */
+export const MARKET_TIME_MONTHS = 6
 /** Months the subject board's small line reads. */
 export const MARKET_SUBJECT_MONTHS = 6
 /** The six kinds the rail prints, Your market's own (`PICTURE_KINDS`). */
@@ -169,6 +171,9 @@ export interface MarketConv {
   isNew: boolean
   /** The month against the month before, where the line answered. */
   monthVerdict: Verdict | null
+  /** Half or more of its videos are makers' own posts, or off-topic: it stays
+   *  in every count and the table, and leads nothing (decision F). */
+  setApart: 'makers' | 'noise' | null
 }
 
 export interface MonthCount {
@@ -546,8 +551,13 @@ export function cutWindows<T extends { from: string }>(
   return windows.map((w) => Date.parse(w.from) < cut)
 }
 
-/** A window's label: its first day ("28 Sep"). */
-export const windowLabel = (w: { from: string }): string => shortDate(w.from)
+/** A window's label: the first day it covers, as the read's own dates count
+ *  them (`coveredDays`: a comment is dated by its day, so a window opening on
+ *  Sunday morning covers from Monday). */
+export function windowLabel(w: { from: string; to: string }): string {
+  const c = coveredDays(w)
+  return shortDate(c ? `${c.first}T12:00:00.000Z` : w.from)
+}
 
 // ---- Conversations (pure) -----------------------------------------------------------------
 
@@ -585,7 +595,7 @@ export function monthCounts(series: MonthSeries | null | undefined, month: strin
       label: monthShort(p.month),
       k: p.k ?? 0,
       n: p.videos,
-      filling: monthStartOf(p.month) >= nowMonth || p.state === 'filling',
+      filling: monthStartOf(p.month) >= nowMonth,
     }))
 }
 
@@ -596,7 +606,7 @@ export function lineBars(line: ThemeMonthLine | null, nowMonth: string): MonthCo
   return line.points
     .filter((p) => p.n != null)
     .slice(-MARKET_PANEL_MONTHS)
-    .map((p) => ({ month: p.month, label: longMonth(p.month), k: p.k ?? 0, n: p.n, filling: p.month >= nowMonth || p.state === 'filling' }))
+    .map((p) => ({ month: p.month, label: longMonth(p.month), k: p.k ?? 0, n: p.n, filling: p.month >= nowMonth }))
 }
 
 /** The theme facts the page needs of the themed run. */
@@ -628,7 +638,7 @@ export interface ConvInput {
   /** First heard this week (the week read). */
   newIds: ReadonlySet<string>
   /** Maker-led or off-topic themes, set apart from the picks. */
-  setApart: ReadonlySet<string>
+  setApart: ReadonlyMap<string, 'makers' | 'noise'>
   pair: PairOn | null
 }
 
@@ -680,6 +690,7 @@ export function convOf(id: string, input: ConvInput): MarketConv | null {
       : input.monthMixes?.get(id) ?? null,
     isNew: input.newIds.has(id),
     monthVerdict: line?.verdict ?? null,
+    setApart: input.setApart.get(id) ?? null,
   }
 }
 
@@ -695,7 +706,7 @@ export const periodCount = (c: Pick<MarketConv, 'week' | 'month'>, period: Perio
 export function pickHero(input: {
   convs: readonly MarketConv[]
   flag: FlagCard | null
-  setApart: ReadonlySet<string>
+  setApart: { has(id: string): boolean }
 }): { kind: 'flag' } | { kind: 'new' | 'biggest'; conv: MarketConv } | null {
   if (input.flag) return { kind: 'flag' }
   const eligible = input.convs.filter((c) => !input.setApart.has(c.id))
@@ -710,7 +721,7 @@ export function pickHero(input: {
  * its three weekly counts (unless the hero is it), then the rest of what was
  * first heard this week (up to three). Pure.
  */
-export function pickWeekSides(input: { convs: readonly MarketConv[]; heroId: string | null; setApart: ReadonlySet<string> }): { biggest: MarketConv | null; fresh: MarketConv[] } {
+export function pickWeekSides(input: { convs: readonly MarketConv[]; heroId: string | null; setApart: { has(id: string): boolean } }): { biggest: MarketConv | null; fresh: MarketConv[] } {
   const eligible = input.convs.filter((c) => !input.setApart.has(c.id) && c.id !== input.heroId)
   const biggest = eligible[0] ?? null
   const fresh = eligible.filter((c) => c.isNew && c.id !== biggest?.id).slice(0, 3)
@@ -732,7 +743,7 @@ export function insideOf(subjectId: string, convs: readonly MarketConv[], period
   href: (id: string) => string
 }): InsideRow[] {
   return convs
-    .filter((c) => c.subjectId === subjectId)
+    .filter((c) => c.subjectId === subjectId && !c.setApart)
     .slice(0, opts.limit ?? MARKET_INSIDE)
     .map((c) => ({
       id: c.id,
@@ -1108,6 +1119,20 @@ export function whoOf(
   return new Map([...videosOf.entries()].map(([id, videos]) => [id, whoSplit(videos, company)]))
 }
 
+/** The themes set apart (decision F): half or more of their videos makers'
+ *  own, or off-topic (`segmentOf`, the board's rule), from the month's
+ *  `theme_maker_shares` rows. Empty where they were not measured. Pure. */
+export function setApartOf(rows: Parameters<typeof themeSegmentsOf>[0] | null): Map<string, 'makers' | 'noise'> {
+  const out = new Map<string, 'makers' | 'noise'>()
+  if (!rows) return out
+  const shares = themeSegmentsOf(rows)
+  for (const id of new Set([...shares.maker.keys(), ...shares.noise.keys()])) {
+    const seg = segmentOf({ makerShare: shares.maker.get(id) ?? null, noiseShare: shares.noise.get(id) ?? null })
+    if (seg) out.set(id, seg)
+  }
+  return out
+}
+
 // ---- The reads ----------------------------------------------------------------------------
 
 /** A read beside the page that must not take it down: logged, and its block
@@ -1333,7 +1358,9 @@ export async function loadMarket(input: {
   const view = readingViewFrom({ now: nowIso, runs, denominators: history.denominators, rivalAudiences, schedule, explicit: p.month ? p.month.slice(0, 7) : null })
   const weekMonth = read ? readingMonthOf(read.window) : null
   const month = period === 'week' && weekMonth ? monthStartOf(weekMonth.month) : monthStartOf(view.reading.month)
-  const soFar = period === 'week' && weekMonth ? !weekMonth.complete : month >= nowMonth
+  // "So far" only while the month is under way: a week carried past its month
+  // states that month in full (M2), and an older read's month has ended.
+  const soFar = month >= nowMonth && !(period === 'week' && weekMonth?.complete)
   const pooled = pooledDenominators(history.denominators.map((d) => ({ month: d.month, audience: d.audience, videos: d.videos, comments: d.comments ?? 0 })), rivalAudiences)
   const categoryOf = new Map<string, number>()
   for (const d of history.denominators) if (d.audience === INDUSTRY_AUDIENCE) categoryOf.set(monthStartOf(d.month), d.videos)
@@ -1370,13 +1397,7 @@ export async function loadMarket(input: {
   ])
 
   // Maker-led and off-topic themes stay in every count and lead nothing.
-  const shares = segmentRows ? themeSegmentsOf(segmentRows) : null
-  const setApart = new Set<string>()
-  if (shares) {
-    for (const id of new Set([...shares.maker.keys(), ...shares.noise.keys()])) {
-      if (segmentOf({ makerShare: shares.maker.get(id) ?? null, noiseShare: shares.noise.get(id) ?? null })) setApart.add(id)
-    }
-  }
+  const setApart = setApartOf(segmentRows)
 
   const newIds = new Set(read && read.version === 2 ? read.newThisWeek.map((n) => n.themeId) : [])
   const base: Omit<ConvInput, 'series'> = {
@@ -1414,7 +1435,7 @@ export async function loadMarket(input: {
         dates: weekReadDates(read.window),
         month,
         monthComplete: weekMonth?.complete ?? false,
-        inMonth: inMonth(month, weekMonth?.complete ?? false),
+        inMonth: inMonth(month, !soFar),
         market: read.version === 2 && read.market ? read.market.week : { videos: null, comments: null },
         category: categoryVideos(windowReads[windowReads.length - 1] ?? null),
         categoryWeeks: windowReads.map((r, i) => (cut[i] ? null : categoryVideos(r))),
@@ -1567,12 +1588,12 @@ export async function loadMarket(input: {
   }
 }
 
-/** The market's videos month by month, the last `MARKET_PANEL_MONTHS` with a
+/** The market's videos month by month, the last `MARKET_TIME_MONTHS` with a
  *  reading, oldest first (Over time's top card). Pure. */
 export function marketMonths(pooled: ReadonlyMap<string, { videos: number | null }>, month: string, nowMonth: string): MonthCount[] | null {
   const out: MonthCount[] = []
   let m = monthStartOf(month)
-  for (let i = 0; i < MARKET_PANEL_MONTHS; i++) {
+  for (let i = 0; i < MARKET_TIME_MONTHS; i++) {
     const v = pooled.get(m)?.videos
     if (v != null) out.unshift({ month: m, label: longMonth(m), k: v, n: null, filling: m >= nowMonth })
     m = prevMonth(m)
@@ -1661,7 +1682,7 @@ async function loadConvPanel(a: {
   // A conversation the period does not list (an old link): its month only.
   const conv: MarketConv = a.conv ?? {
     id, label, kind, subjectId: null, subjectName: null, week: null, weeks: [],
-    month: monthRow?.videos ?? null, months: [], who: [], mix: monthRow?.mix ?? null, isNew: false, monthVerdict: line?.verdict ?? null,
+    month: monthRow?.videos ?? null, months: [], who: [], mix: monthRow?.mix ?? null, isNew: false, monthVerdict: line?.verdict ?? null, setApart: null,
   }
   const doing = doingOf(kinds, conv.month, a.noun)
   const platforms = platformRows(conv.mix, a.period === 'week' ? 'week' : 'month')
@@ -1735,9 +1756,8 @@ export function buildSubjectPanel(a: {
  * panel on Market. Null where no week has been read.
  *
  * The same builders as the page (`buildConvs`, `pickHero`, `pickWeekSides`,
- * `flagCardOf`), so the tile and Market's top row never disagree; the one
- * difference is that the tile sets no maker-led theme apart (the page reads
- * the makers' shares; the tile stays light).
+ * `flagCardOf`, `setApartOf`), so the tile and Market's top row never
+ * disagree.
  */
 export interface MarketTop {
   /** The flag card, or the lead conversation. */
@@ -1776,8 +1796,10 @@ export async function topMarket(input: {
   if (!windows) return null
   const weekMonth = readingMonthOf(read.window)
   const month = monthStartOf(weekMonth.month)
+  const themedRunAhead = fetchRunningRunIds(supabase, clientId, 'market.top').then((ids) => fetchThemedRunId(supabase, clientId, ids, 'market.top')).catch(() => null)
+  const segmentsAhead = themedRunAhead.then((runId) => (makerRuleEnabled(clientId) && runId ? soft('top.segments', loadThemeSegmentRows(db, clientId, month, runId), null) : null))
   const [themedRunId, rivals, changes, cadence, flag, monthRows, monthCategory] = await Promise.all([
-    fetchRunningRunIds(supabase, clientId, 'market.top').then((ids) => fetchThemedRunId(supabase, clientId, ids, 'market.top')).catch(() => null),
+    themedRunAhead,
     soft('top.rivals', loadTrackedRivals(supabase, clientId), []),
     soft('top.changes', loadChanges(db, clientId), []),
     soft('top.cadence', loadCadenceRuns(supabase, clientId), null),
@@ -1787,14 +1809,16 @@ export async function topMarket(input: {
   ])
   const market = marketAudiences(marketRivalAudiences(rivals))
   const cut = cutWindows(windows, ourChangesWithoutGatherFlags(changes.filter((r) => !isFailOpenFix(r))), cadence ?? [])
-  const [reads, runThemes] = await Promise.all([
+  const [reads, runThemes, segmentRows] = await Promise.all([
     themedRunId
       ? Promise.all(windows.map((w, i) => (cut[i] && i < windows.length - 1
         ? Promise.resolve(null)
         : soft(`top.window${i}`, loadWindowReading(db, clientId, { from: w.from, to: w.to, runId: themedRunId, audiences: market }), null))))
       : Promise.resolve([] as (WindowReading | null)[]),
     soft('top.themes', loadRunThemes(db, clientId, themedRunId), new Map<string, RunTheme>()),
+    segmentsAhead,
   ])
+  const setApart = setApartOf(segmentRows)
   if (reads.length === 0) return null
   const params = marketParams({})
   const convInput: ConvInput = {
@@ -1809,17 +1833,17 @@ export async function topMarket(input: {
     month,
     nowMonth: monthStartOf(nowIso),
     newIds: new Set(read.version === 2 ? read.newThisWeek.map((n) => n.themeId) : []),
-    setApart: new Set(),
+    setApart,
     pair: null,
   }
   const convs = buildConvs(convInput)
   const card = flag ? flagCardOf({ flag, window: read.window, convs, convInput, monthCategory, p: params, noun: WHAT_THEY_SELL[clientId] ?? null }) : null
-  const pick = pickHero({ convs, flag: card, setApart: new Set() })
+  const pick = pickHero({ convs, flag: card, setApart })
   const hero: MarketTop['hero'] = card
     ? { kind: 'flag', card }
     : pick && pick.kind !== 'flag' ? { kind: pick.kind, conv: pick.conv, href: convHref(params, pick.conv.id, 'top') } : null
   const heroId = card ? card.conv?.id ?? null : pick && pick.kind !== 'flag' ? pick.conv.id : null
-  const sides = pickWeekSides({ convs, heroId, setApart: new Set() })
+  const sides = pickWeekSides({ convs, heroId, setApart })
   const rows: MarketTop['rows'] = []
   if (sides.biggest) rows.push({ kind: 'biggest', conv: sides.biggest, href: convHref(params, sides.biggest.id, 'top') })
   if (sides.fresh[0]) rows.push({ kind: 'new', conv: sides.fresh[0], href: convHref(params, sides.fresh[0].id, 'top') })

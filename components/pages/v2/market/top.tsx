@@ -52,7 +52,7 @@ function monthBars(months: readonly MonthCount[]): MiniBar[] {
 function Context({ groups, doing, monthText }: { groups: readonly GroupLink[]; doing: Doing | null; monthText: string }) {
   if (groups.length === 0 && !doing) return null
   return (
-    <div className="grid grid-cols-1 gap-4 border-t border-track pt-3 text-[13px] leading-[1.5] sm:grid-cols-2">
+    <div className={cn('grid grid-cols-1 gap-4 border-t border-track pt-3 text-[13px] leading-[1.5]', groups.length > 0 && doing ? 'sm:grid-cols-2' : null)}>
       {groups.length > 0 ? (
         <div>
           <span className="text-muted-foreground">Who’s saying it</span><br />
@@ -63,7 +63,7 @@ function Context({ groups, doing, monthText }: { groups: readonly GroupLink[]; d
             </span>
           ))}
         </div>
-      ) : <div />}
+      ) : null}
       {doing ? (
         <div>
           <span className="text-muted-foreground">What they’re doing</span><br />
@@ -110,7 +110,7 @@ function Foot({ conv, href, selected, closeHref, data, open = 'Open the conversa
 }
 
 /** The anomaly check's flag, as the hero. */
-function FlagHero({ hero, data, selected }: { hero: Extract<HeroCard, { kind: 'flag' }>; data: MarketData; selected: boolean }) {
+function FlagHero({ hero, data, selected, span }: { hero: Extract<HeroCard, { kind: 'flag' }>; data: MarketData; selected: boolean; span: string }) {
   const { card } = hero
   const f = card.flag
   const weekPct = f.week.n > 0 ? (100 * f.week.k) / f.week.n : 0
@@ -121,7 +121,7 @@ function FlagHero({ hero, data, selected }: { hero: Extract<HeroCard, { kind: 'f
   ]
   const title = card.conv?.label ?? f.label
   return (
-    <article id="top-0" className={cn(CARD, 'col-span-12 xl:col-span-6 scroll-mt-6', selected ? SELECTED_CARD_RING : null)}>
+    <article id="top-0" className={cn(CARD, span, 'scroll-mt-6', selected ? SELECTED_CARD_RING : null)}>
       <CardHead icon={TrendingUp} size="lg" flag={<FlagChip verdict={card.verdict} />} title={f.objectKind === 'theme' ? <span data-copy="subject" data-slot="pass_b_theme">{title}</span> : title} />
       <div className="flex flex-wrap items-baseline gap-3.5">
         <div data-copy="figure" className={BIG}>{fmtInt(f.week.k)}</div>
@@ -131,7 +131,9 @@ function FlagHero({ hero, data, selected }: { hero: Extract<HeroCard, { kind: 'f
           {card.month ? <span className="block"><Fig n={card.month.k} /> {data.week?.inMonth ?? `in ${data.month.text}`}</span> : null}
         </div>
       </div>
-      <MiniBars bars={bars} size="lg" label={`Share of the videos about ${title}, the months before against this week`} />
+      {/* Drawn for its column: the half-card drawing, and a phone's. */}
+      <MiniBars bars={bars} size="lg" className="max-w-[560px] max-sm:hidden" label={`Share of the videos about ${title}, the months before against this week`} />
+      <MiniBars bars={bars} size="md" className="sm:hidden" label={`Share of the videos about ${title}, the months before against this week`} />
       <Context groups={hero.groups} doing={hero.doing} monthText={data.week?.inMonth ?? `in ${data.month.text}`} />
       <Foot conv={card.conv} href={card.href} selected={selected} closeHref={data.panel?.closeHref ?? null} data={data} open={f.objectKind === 'subject' ? 'Open the subject' : 'Open the conversation'} />
     </article>
@@ -140,7 +142,7 @@ function FlagHero({ hero, data, selected }: { hero: Extract<HeroCard, { kind: 'f
 
 /** The week's biggest new conversation, or its biggest, or the month's
  *  biggest, as the hero. */
-function ConvHero({ hero, data, selected }: { hero: Extract<HeroCard, { kind: 'new' | 'biggest' }>; data: MarketData; selected: boolean }) {
+function ConvHero({ hero, data, selected, span }: { hero: Extract<HeroCard, { kind: 'new' | 'biggest' }>; data: MarketData; selected: boolean; span: string }) {
   const { conv } = hero
   const week = data.period === 'week'
   const eyebrow = week
@@ -148,7 +150,7 @@ function ConvHero({ hero, data, selected }: { hero: Extract<HeroCard, { kind: 'n
     : `Biggest in ${data.month.text}`
   const figure = week ? conv.week : conv.month
   return (
-    <article id="top-0" className={cn(CARD, 'col-span-12 xl:col-span-6 scroll-mt-6', selected ? SELECTED_CARD_RING : null)}>
+    <article id="top-0" className={cn(CARD, span, 'scroll-mt-6', selected ? SELECTED_CARD_RING : null)}>
       <CardHead icon={hero.kind === 'new' ? Sparkles : MessageSquareText} size="lg" eyebrow={eyebrow} title={<span data-copy="subject" data-slot="pass_b_theme">{conv.label}</span>} />
       <div className="flex flex-wrap items-baseline gap-3.5">
         <Fig n={figure} className={BIG} />
@@ -157,8 +159,11 @@ function ConvHero({ hero, data, selected }: { hero: Extract<HeroCard, { kind: 'n
           : <div className={cn(MONO_MUTED, 'leading-[1.5]')}>{data.month.category != null ? <span data-copy="level" className="block">of {fmtInt(data.month.category)} category videos {data.month.soFar ? `in ${longMonth(data.month.month)} so far` : `in ${longMonth(data.month.month)}`}</span> : null}</div>}
       </div>
       {week
-        ? <SpikeBars weeks={weekBars(conv, data)} label={`Category videos a week about ${conv.label}`} />
-        : conv.months.length > 1 ? <MiniBars bars={monthBars(conv.months)} size="md" label={`Category videos a month about ${conv.label}`} /> : null}
+        ? <>
+          <SpikeBars weeks={weekBars(conv, data)} className="max-w-[560px] max-sm:hidden" label={`Category videos a week about ${conv.label}`} />
+          <SpikeBars weeks={weekBars(conv, data)} size="md" className="sm:hidden" label={`Category videos a week about ${conv.label}`} />
+        </>
+        : conv.months.length > 1 ? <MiniBars bars={monthBars(conv.months)} size="md" className="max-w-[420px]" label={`Category videos a month about ${conv.label}`} /> : null}
       <Context groups={hero.groups} doing={hero.doing} monthText={week ? data.week?.inMonth ?? '' : `in ${data.month.text}`} />
       <Foot conv={conv} href={hero.href} selected={selected} closeHref={data.panel?.closeHref ?? null} data={data} />
     </article>
@@ -203,8 +208,8 @@ function Side({ side, data, index, span, selectedId }: { side: SideCard; data: M
           : data.month.category != null ? <span data-copy="level" className={MONO_MUTED}>of {fmtInt(data.month.category)} category videos</span> : null}
       </div>
       {week
-        ? <MiniBars bars={weekBars(conv, data).map((w) => ({ label: w.label, value: w.count ?? 0 }))} label={`Category videos a week about ${conv.label}`} />
-        : conv.months.length > 1 ? <MiniBars bars={monthBars(conv.months)} label={`Category videos a month about ${conv.label}`} /> : null}
+        ? <MiniBars bars={weekBars(conv, data).map((w) => ({ label: w.label, value: w.count ?? 0 }))} className="max-w-[300px]" label={`Category videos a week about ${conv.label}`} />
+        : conv.months.length > 1 ? <MiniBars bars={monthBars(conv.months).map(({ sub: _sub, ...b }) => b)} className="max-w-[300px]" label={`Category videos a month about ${conv.label}`} /> : null}
       <GroupsLine groups={side.groups} />
       {conv.who.length > 0 ? <div className="flex flex-wrap items-center gap-1.5 text-[12.5px] text-muted-foreground"><span>About</span><About parts={conv.who} brand={data.brand} noun={data.noun} /></div> : null}
       <div className="mt-auto">{selected && data.panel ? <Link href={data.panel.closeHref} scroll={false} className={OLINK}>Close ↑</Link> : <Link href={href} scroll={false} className={OLINK}>Open →</Link>}</div>
@@ -217,7 +222,7 @@ function MonthsCard({ months, data }: { months: readonly MonthCount[]; data: Mar
   return (
     <article className={cn(CARD, 'col-span-12')}>
       <CardHead icon={CalendarRange} title="Your market, month by month" sub={<>The market’s videos each month, by the month people commented. {data.month.soFar ? <>{longMonth(data.month.month)} is still filling.</> : null}</>} />
-      <MiniBars bars={months.map((m) => ({ label: m.label, value: m.k ?? 0, filling: m.filling }))} size="lg" label="The market's videos each month" />
+      <MiniBars bars={months.map((m) => ({ label: m.label, value: m.k ?? 0, filling: m.filling }))} size="lg" className="max-w-[760px]" label="The market's videos each month" />
     </article>
   )
 }
@@ -229,12 +234,14 @@ export function TopRowView({ data }: { data: MarketData }) {
   if (top.months) return <section id="top-row" aria-label="The market over time" className={cn(PILL_ROW, 'scroll-mt-6')}><MonthsCard months={top.months} data={data} /></section>
   if (!top.hero && top.sides.length === 0) return null
   const heroId = top.hero ? (top.hero.kind === 'flag' ? top.hero.card.conv?.id ?? null : top.hero.conv.id) : null
-  const sideSpan = top.sides.length === 1 ? 'col-span-12 xl:col-span-6' : 'col-span-12 md:col-span-6 xl:col-span-3'
+  // The board's 6 · 3 · 3; with one card beside the hero, 7 · 5; alone, the row.
+  const heroSpan = top.sides.length === 0 ? 'col-span-12' : top.sides.length === 1 ? 'col-span-12 xl:col-span-7' : 'col-span-12 xl:col-span-6'
+  const sideSpan = top.sides.length === 1 ? 'col-span-12 md:col-span-6 xl:col-span-5' : 'col-span-12 md:col-span-6 xl:col-span-3'
   return (
     <section id="top-row" aria-label={data.period === 'week' ? 'What stood out this week' : `The biggest conversations in ${data.month.text}`} className={cn(PILL_ROW, 'scroll-mt-6')}>
       {top.hero?.kind === 'flag'
-        ? <FlagHero hero={top.hero} data={data} selected={openId != null && openId === heroId} />
-        : top.hero ? <ConvHero hero={top.hero} data={data} selected={openId != null && openId === heroId} /> : null}
+        ? <FlagHero hero={top.hero} data={data} selected={openId != null && openId === heroId} span={heroSpan} />
+        : top.hero ? <ConvHero hero={top.hero} data={data} selected={openId != null && openId === heroId} span={heroSpan} /> : null}
       {top.sides.map((s, i) => <Side key={i} side={s} data={data} index={i + 1} span={sideSpan} selectedId={openId} />)}
     </section>
   )

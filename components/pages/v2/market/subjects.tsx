@@ -55,10 +55,11 @@ function Row({ row, data, selected }: { row: SubjectRow; data: MarketData; selec
           </>
         ) : null}
         {months >= 2 ? (
-          <div className="mt-3 flex items-center gap-2.5">
-            <span className="whitespace-nowrap font-mono text-[10.5px] text-muted-foreground"><span data-copy="figure">{months}</span> months</span>
-            <Sparkline values={row.trail.map((t) => t.pct)} width={160} height={34} color="var(--foreground)" animate={false} />
-            {range ? <span data-copy="figure" className="whitespace-nowrap font-mono text-[10.5px] text-muted-foreground">{range}</span> : null}
+          <div className="mt-3 flex flex-col gap-1">
+            <Sparkline values={row.trail.map((t) => t.pct)} width={160} height={30} color="var(--foreground)" animate={false} />
+            <span className="whitespace-nowrap font-mono text-[10.5px] text-muted-foreground">
+              <span data-copy="figure">{months}</span> months{range ? <> · <span data-copy="figure">{range}</span></> : null}
+            </span>
           </div>
         ) : null}
       </div>
@@ -92,18 +93,20 @@ function Row({ row, data, selected }: { row: SubjectRow; data: MarketData; selec
 export function SubjectBoardView({ board, data }: { board: SubjectBoard; data: MarketData }) {
   const openSubject = data.subjectPanel?.id ?? null
   return (
-    <article id="subjects" aria-labelledby="subjects-title" className={cn(CARD, 'col-span-12 xl:col-span-8 scroll-mt-6')}>
+    <article id="subjects" aria-labelledby="subjects-title" className={cn(CARD, board.rows.length > 0 ? 'col-span-12 xl:col-span-8' : 'col-span-12', 'scroll-mt-6')}>
       <CardHead
         icon={MessageSquareText}
         id="subjects-title"
         title="What the market is talking about"
-        sub={<>Your subjects, as a share of {board.monthText}’s {board.n != null ? <span data-copy="figure">{fmtInt(board.n)}</span> : null} videos. The black tick is {board.prevText}.</>}
+        sub={board.rows.length > 0 ? <>Your subjects, as a share of {board.monthText}’s {board.n != null ? <span data-copy="figure">{fmtInt(board.n)}</span> : null} videos. The black tick is {board.prevText}.</> : <>Your subjects in {board.monthText}</>}
       />
-      <div>
-        {board.rows.map((r) => <Row key={r.id} row={r} data={data} selected={openSubject === r.id} />)}
-      </div>
+      {board.rows.length > 0 ? (
+        <div>
+          {board.rows.map((r) => <Row key={r.id} row={r} data={data} selected={openSubject === r.id} />)}
+        </div>
+      ) : null}
       {board.alsoFollowing.length > 0 ? (
-        <p className="m-0 border-t border-track pt-3 text-[13px] text-muted-foreground">Also following: {board.alsoFollowing.join(', ')}</p>
+        <p className={cn('m-0 text-[13px] text-muted-foreground', board.rows.length > 0 ? 'border-t border-track pt-3' : null)}>Also following: {board.alsoFollowing.join(', ')}</p>
       ) : null}
     </article>
   )

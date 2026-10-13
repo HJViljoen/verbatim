@@ -8,7 +8,7 @@ import {
   buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, categoryThemeVideos, categoryVideos, closeHref, convHref,
   convOf, cutWindows, doingOf, flagCardOf, flagVerdict, groupsOf, isRegistryId, insideOf, marketHref, marketMonths, marketParams,
   mergeMixes, monthsText, notchOf, ourReadOf, panelStats, periodHref, personasOf, pickHero, pickWeekSides, platformRows, subjectHref,
-  tableMonths, weekWindows, whoOf, MARKET_TABLE_ROWS,
+  setApartOf, tableMonths, weekWindows, whoOf, windowLabel, MARKET_TABLE_ROWS,
   type MarketConv,
 } from './market'
 import {
@@ -89,6 +89,29 @@ describe('the conversations', () => {
     const liner = convs.find((c) => c.id === fixtureId(1))!
     expect(liner).toMatchObject({ label: 'How long a liner lasts', week: 23, weeks: [9, 14, 23], month: 35, subjectName: 'Fit & comfort', isNew: false })
     expect(convs.find((c) => c.id === fixtureId(11))).toMatchObject({ isNew: true, weeks: [0, 0, 8] })
+  })
+
+  it('keeps a set-apart conversation in the list and out of a subject\'s inside', () => {
+    const input = { ...fixtureConvInput('week'), setApart: new Map([[fixtureId(1), 'makers' as const]]) }
+    const convs = buildConvs(input)
+    expect(convs.find((c) => c.id === fixtureId(1))?.setApart).toBe('makers')
+    expect(insideOf(fixtureSubjectId('fit'), convs, 'week', { href: String }).map((c) => c.id)).not.toContain(fixtureId(1))
+    expect(pickHero({ convs: convs.map((c) => ({ ...c, isNew: false })), flag: null, setApart: input.setApart })).toMatchObject({ conv: { id: fixtureId(2) } })
+  })
+
+  it('reads the makers\' shares into what is set apart', () => {
+    const rows = [
+      { registry_id: 'a', videos: 10, maker: 6, noise: 0 },
+      { registry_id: 'b', videos: 10, maker: 1, noise: 7 },
+      { registry_id: 'c', videos: 10, maker: 2, noise: 2 },
+    ]
+    expect([...setApartOf(rows as never).entries()]).toEqual([['a', 'makers'], ['b', 'noise']])
+    expect(setApartOf(null).size).toBe(0)
+  })
+
+  it('labels a window by the first day it covers', () => {
+    expect(windowLabel({ from: '2026-10-04T11:45:54.031Z', to: '2026-10-11T04:00:32.885Z' })).toBe('5 Oct')
+    expect(windowLabel({ from: '2026-10-05T00:00:00.000Z', to: '2026-10-12T00:00:00.000Z' })).toBe('5 Oct')
   })
 
   it('draws a cut window as null, never 0', () => {

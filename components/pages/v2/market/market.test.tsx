@@ -194,6 +194,12 @@ describe('ConversationTable', () => {
     assertCopyContract(<ConversationTable table={WEEK.table!} data={WEEK} />)
   })
 
+  it('marks a conversation set apart (makers\' own posts), which stays in the list', () => {
+    const rows = WEEK.table!.rows.map((r, i) => (i === 0 ? { ...r, conv: { ...r.conv, setApart: 'makers' as const } } : r))
+    const text = renderText(<ConversationTable table={{ ...WEEK.table!, rows }} data={WEEK} />)
+    expect(text).toContain('How long a liner lasts mostly makers’ own posts Fit & comfort')
+  })
+
   it('this month: the month against the month before, through the badge', () => {
     const text = renderText(<ConversationTable table={MONTH.table!} data={MONTH} />)
     expect(text).toContain('Videos Against September')

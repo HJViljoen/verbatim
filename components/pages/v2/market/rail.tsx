@@ -94,7 +94,7 @@ export function RailView({ data }: { data: MarketData }) {
   const { rail } = data
   // Beside the subject board, the rail is a column; with no board (no subject
   // named yet), its cards share the row.
-  const wide = !data.subjects
+  const wide = !data.subjects || data.subjects.rows.length === 0
   return (
     <div className={cn('col-span-12 min-w-0 gap-5', wide ? 'grid grid-cols-1 items-start md:grid-cols-2 xl:grid-cols-3' : 'flex flex-col xl:col-span-4')}>
       {rail.kinds ? <KindsCard block={rail.kinds} /> : null}

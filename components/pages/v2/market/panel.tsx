@@ -6,7 +6,7 @@ import { ProportionBar } from '@/components/proportion-bar'
 import { FlagChip, InPlacePanel, MiniBars, PanelSection, PanelTitle, StatCell, StatRow, TickBarRow } from '@/components/v2'
 import { fmtInt, fmtPct } from '@/lib/format'
 import { marketLabelsOf } from '@/lib/brands/labels'
-import type { ConvPanel, MarketData, MonthCount, SubjectPanel } from '@/lib/pages/v2/market'
+import { MARKET_PANEL_MONTHS, type ConvPanel, type MarketData, type MonthCount, type SubjectPanel } from '@/lib/pages/v2/market'
 import { translationLabel, translationNote } from '@/components/quote-block'
 import { cn } from '@/lib/utils'
 import { About, ConvChip, ConvRow, Label, OLINK, Stored, newVerdict } from './parts'
@@ -21,14 +21,17 @@ const ASK = 'inline-flex min-h-[38px] cursor-pointer items-center gap-2 rounded-
 
 /** The month bars of a share line: the share over each bar, "k of n" under. */
 function shareBars(bars: readonly MonthCount[]) {
-  return bars.map((b) => {
+  // The board's four months; only the newest can be "so far".
+  const shown = bars.slice(-MARKET_PANEL_MONTHS)
+  return shown.map((b, i) => {
     const pct = b.n ? (100 * (b.k ?? 0)) / b.n : 0
+    const soFar = b.filling && i === shown.length - 1
     return {
       label: b.label,
       value: pct,
       display: fmtPct(pct),
-      sub: b.n != null ? `${b.filling ? 'so far · ' : ''}${fmtInt(b.k ?? 0)} of ${fmtInt(b.n)}` : undefined,
-      filling: b.filling,
+      sub: b.n != null ? `${soFar ? 'so far · ' : ''}${fmtInt(b.k ?? 0)} of ${fmtInt(b.n)}` : undefined,
+      filling: soFar,
     }
   })
 }
@@ -56,10 +59,12 @@ export function ConversationPanel({ panel, data }: { panel: ConvPanel; data: Mar
       closeLabel="Close this conversation"
       head={
         <>
-          <div className="flex flex-wrap items-center gap-2">
-            {panel.subjectName ? <span className={cn(TAG, 'rounded-md px-2 py-[3px] text-[12px]')}>{panel.subjectName}</span> : null}
-            {chip}
-          </div>
+          {panel.subjectName || chip ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {panel.subjectName ? <span className={cn(TAG, 'rounded-md px-2 py-[3px] text-[12px]')}>{panel.subjectName}</span> : null}
+              {chip}
+            </div>
+          ) : null}
           <PanelTitle id="conv-panel-title"><span data-copy="subject" data-slot="pass_b_theme">{panel.label}</span></PanelTitle>
         </>
       }
@@ -78,14 +83,15 @@ export function ConversationPanel({ panel, data }: { panel: ConvPanel; data: Mar
           ) : null}
           {panel.line && panel.line.bars.length > 0 ? (
             <PanelSection label={<>Month by month · share of {panel.line.basis} {panel.line.verdict ? <span data-copy="verdict" className="ml-1 normal-case tracking-normal"><MovementBadge verdict={panel.line.verdict} unit="pts" good="neutral" bandTip /></span> : null}</>}>
-              <MiniBars bars={shareBars(panel.line.bars)} size="lg" label={`Share of the category's videos about ${panel.label}, month by month`} />
+              <MiniBars bars={shareBars(panel.line.bars)} size="lg" className="max-sm:hidden" label={`Share of the category's videos about ${panel.label}, month by month`} />
+              <MiniBars bars={shareBars(panel.line.bars).slice(-3)} size="md" className="sm:hidden" label={`Share of the category's videos about ${panel.label}, month by month`} />
             </PanelSection>
           ) : null}
         </div>
         <div className="grid min-w-0 grid-cols-1 gap-x-7 gap-y-[26px] sm:grid-cols-2">
           {panel.who ? (
             <PanelSection label="Who it’s about">
-              <ProportionBar of="videos" segments={whoSegments} />
+              {panel.who.parts.some((p) => p.about !== 'market') ? <ProportionBar of="videos" segments={whoSegments} /> : null}
               <About parts={panel.who.parts} brand={data.brand} noun={data.noun} />
             </PanelSection>
           ) : null}
@@ -174,7 +180,8 @@ export function SubjectPanelView({ panel, data }: { panel: SubjectPanel; data: M
           ) : null}
           {panel.bars.length > 0 ? (
             <PanelSection label="Month by month · share of your market’s videos">
-              <MiniBars bars={shareBars(panel.bars)} size="lg" label={`Share of the market's videos about ${panel.name}, month by month`} />
+              <MiniBars bars={shareBars(panel.bars)} size="lg" className="max-sm:hidden" label={`Share of the market's videos about ${panel.name}, month by month`} />
+              <MiniBars bars={shareBars(panel.bars).slice(-3)} size="md" className="sm:hidden" label={`Share of the market's videos about ${panel.name}, month by month`} />
             </PanelSection>
           ) : null}
         </div>

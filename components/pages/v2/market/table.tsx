@@ -18,6 +18,9 @@ import { About, ConvChip } from './parts'
 // reads a week against a usual week (decision 1). A row opens its
 // conversation in place, as the table's own next row.
 
+/** Why a conversation leads nothing (decision F): the board's own words. */
+export const SET_APART_WORDS = { makers: 'mostly makers’ own posts', noise: 'mostly off-topic videos' } as const
+
 const TH = 'whitespace-nowrap border-b border-border pb-2.5 pr-3 text-left text-[11.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground'
 const TD = 'border-b border-track py-[11px] pr-3 align-middle'
 
@@ -85,12 +88,12 @@ export function ConversationTable({ table, data }: { table: MarketTable; data: M
         </nav>
       ) : null}
       <div className="-mx-1 overflow-x-auto px-1">
-        <table className="w-full min-w-[560px] border-collapse text-[14px]">
+        <table className={cn('w-full border-collapse text-[14px]', time ? 'min-w-[560px]' : null)}>
           <thead>
             <tr>
               <th scope="col" className={TH}>Conversation</th>
-              <th scope="col" className={TH}>Subject</th>
-              {time ? null : <th scope="col" className={TH}>About</th>}
+              <th scope="col" className={cn(TH, 'max-md:hidden')}>Subject</th>
+              {time ? null : <th scope="col" className={cn(TH, 'max-md:hidden')}>About</th>}
               {time
                 ? table.months.map((m) => (
                   <th key={m.month} scope="col" className={cn(TH, 'text-right')}>
@@ -134,10 +137,11 @@ function RowWithPanel({ conv, href, open, data, table, cols }: { conv: MarketCon
               <span data-copy="subject" data-slot="pass_b_theme">{conv.label}</span>
             </Link>
             {data.period === 'week' ? <ConvChip flag={null} isNew={conv.isNew} id={conv.id} label={conv.label} k={conv.month ?? conv.week ?? 0} n={data.month.category ?? 0} month={data.month.month} /> : null}
+            {conv.setApart ? <span className="text-[12px] text-muted-foreground">{SET_APART_WORDS[conv.setApart]}</span> : null}
           </span>
         </td>
-        <td className={cn(TD, 'text-muted-foreground')}>{conv.subjectName ?? ''}</td>
-        {time ? null : <td className={TD}>{conv.who.length > 0 ? <About parts={conv.who} brand={data.brand} noun={data.noun} /> : null}</td>}
+        <td className={cn(TD, 'text-muted-foreground max-md:hidden')}>{conv.subjectName ?? ''}</td>
+        {time ? null : <td className={cn(TD, 'max-md:hidden')}>{conv.who.length > 0 ? <About parts={conv.who} brand={data.brand} noun={data.noun} /> : null}</td>}
         <Cells conv={conv} data={data} table={table} />
       </tr>
       {open && data.panel && data.panel.id === conv.id ? (

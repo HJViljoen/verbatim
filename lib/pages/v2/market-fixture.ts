@@ -170,7 +170,7 @@ export function fixtureConvInput(period: MarketParams['period'] = 'week'): ConvI
     month: OCT,
     nowMonth: OCT,
     newIds: new Set([id(11), id(17)]),
-    setApart: new Set(),
+    setApart: new Map(),
     pair: null,
   }
 }
