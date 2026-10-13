@@ -227,8 +227,9 @@ describe('the subject board', () => {
     expect(unmeasuredOf({ id: 's', name: 'S', calibration: 'failed' }, 'October so far', '#').note).toBe(FAILED_EXPLAINED)
     expect(unmeasuredOf({ id: 's', name: 'S', calibration: 'unread' }, 'October so far', '#').note).toBe('No reading in October so far yet')
     expect(unmeasuredOf({ id: 's', name: 'S', calibration: 'provisional' }, 'October so far', '#')).toMatchObject({ state: 'provisional', note: SUBJECT_PENDING })
-    // No "provisional" word on a client surface (ruling U6).
-    expect(SUBJECT_PENDING).not.toMatch(/provisional/i)
+    // No calibration or "provisional" word on a client surface (ruling U6).
+    expect(SUBJECT_PENDING).toBe('Not measured yet')
+    expect(SUBJECT_PENDING).not.toMatch(/provisional|calibrat/i)
   })
 
   // The parity pass (13 Oct): a subject with no level keeps the board's row.

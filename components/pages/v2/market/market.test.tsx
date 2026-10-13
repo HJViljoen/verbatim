@@ -415,7 +415,8 @@ describe('the board\'s shape in the thin state (Össur today)', () => {
     expect(copyViolations(<MarketPage data={THIN} />)).toEqual([])
     expect(copyViolations(<MarketPage data={marketThinFixture({ earlierNew: true })} />)).toEqual([])
     expect(text).not.toMatch(RETIRED)
-    expect(text).not.toMatch(/provisional|Insufficient data.*Insufficient data/)
+    expect(text).not.toMatch(/provisional|calibrat|Insufficient data.*Insufficient data/i)
+    expect(text).toContain('Fit & comfort Not measured yet Inside it')
     expect(quotesOutsidePanel(THIN)).toBe(0)
   })
 

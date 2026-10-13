@@ -934,9 +934,10 @@ export interface SubjectFact {
 }
 
 /** What a subject's row says in its level's place while its precision check
- *  is open (the parity pass, 13 Oct; the lead's words). The row keeps its
- *  name, its bar's track and the conversations inside it. */
-export const SUBJECT_PENDING = 'Level after calibration'
+ *  is open (the parity pass, 13 Oct). The row keeps its name, its bar's track
+ *  and the conversations inside it. No calibration word: ruling U6 keeps
+ *  "calibration" and "provisional" off client surfaces (`calibrationWord`). */
+export const SUBJECT_PENDING = 'Not measured yet'
 
 /** The months a subject's line spans, oldest first, ending at `month`. */
 export function subjectAxis(month: string, count = MARKET_SUBJECT_MONTHS): string[] {
@@ -1027,9 +1028,9 @@ export function buildSubjectBoard(input: {
 }
 
 /**
- * Why a subject prints no level: its level comes after calibration while its
- * check is open (`SUBJECT_PENDING`; the row carries no "provisional" word, as
- * no client surface does, ruling U6, `calibrationWord`); being re-described
+ * Why a subject prints no level: not measured yet while its check is open
+ * (`SUBJECT_PENDING`; the row carries no calibration or "provisional" word,
+ * as no client surface does, ruling U6, `calibrationWord`); being re-described
  * where the check failed (the calibration's own words, `FAILED_EXPLAINED`);
  * no reading yet where the month was not read for it. Pure.
  */
