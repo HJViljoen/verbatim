@@ -400,7 +400,8 @@ describe('4 · every new step is non-fatal, so freeze-months always runs after i
 
 /** The freeze-months path: lib/reading/monthly.ts and lib/subjects/read.ts and
  *  everything they import (tsconfig.freeze-months.json; scripts/pipeline-closure.sh
- *  lists the same 38 files through tsc). */
+ *  lists the same 39 files through tsc; the 39th, since 13 Oct, is
+ *  lib/reading/owned.ts, the own-post predicate classify-meta reads). */
 function freezePath(): Map<string, string> {
   const out = new Map<string, string>()
   const queue = ['lib/reading/monthly.ts', 'lib/subjects/read.ts']
@@ -427,8 +428,8 @@ describe('5 · the other freeze-path hunks', () => {
   const path = freezePath()
   const uses = (name: string) => [...path.entries()].filter(([, src]) => new RegExp(`\\b${name}\\b`).test(src)).map(([f]) => f)
 
-  it('walks the same path tsc lists (38 files)', () => {
-    expect(path.size).toBe(38)
+  it('walks the same path tsc lists (39 files)', () => {
+    expect(path.size).toBe(39)
   })
 
   it('lib/config.ts: the two spend switches are read by nothing on the path, and are off for every tenant', async () => {
