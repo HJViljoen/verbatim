@@ -12,7 +12,10 @@ import { AskButton, EmptyLine, Fig, Followers, LevelText, OLINK, PanelTag } from
 // creator's followers are as of the month's videos and never Reddit's (there
 // the field holds a subreddit's subscribers); the line names the conversation
 // the creator made most of, and the chip the brand named in most of its
-// videos. The board's "a clinic" has no source (no account is classified) and
+// videos. Reddit is not listed (the lead's ruling, 13 Oct): there a post's
+// account is its subreddit, a community and not a creator, and communities
+// show in each group's platforms; one line under the list says so. The
+// board's "a clinic" has no source (no account is classified) and
 // is not drawn.
 
 function CreatorRow({ row }: { row: VoicesCreatorRow }) {
@@ -59,6 +62,9 @@ export function CreatorsCard({ creators, monthWords }: { creators: VoicesCreator
           <div role="list">
             {creators.rows.map((r) => <div key={r.key} role="listitem"><CreatorRow row={r} /></div>)}
           </div>
+          {creators.communitiesLeftOut ? (
+            <p className="m-0 text-[12px] leading-[1.5] text-muted-foreground">Reddit is left out: there a post’s account is the community it was posted in, not who made it.</p>
+          ) : null}
           {creators.more > 0 || creators.expanded ? (
             <Link href={creators.toggleHref} scroll={false} className={OLINK}>
               {creators.expanded
@@ -89,7 +95,7 @@ export function CreatorPanelView({ panel, monthWords }: { panel: CreatorPanel; m
           <PanelTitle id="creator-title">{panel.account}</PanelTitle>
           <p className="m-0 mt-1 text-[14px] leading-[1.4] text-muted-foreground">
             {panel.platformLabel}
-            {panel.followers != null ? <> · <Followers n={panel.followers} word={panel.followerWord} /> as of their videos this month</> : null}
+            {panel.followers != null ? <> · <Followers n={panel.followers} word={panel.followerWord} /> as of their videos in {monthWords}</> : null}
           </p>
         </>
       }

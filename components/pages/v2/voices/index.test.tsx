@@ -9,6 +9,10 @@ describe('the Voices page (boards E3-Voices and E3-Voices-Open)', () => {
     for (const f of Object.values(VOICES_FIXTURES)) assertCopyContract(<VoicesPage data={f()} />)
   })
 
+  it('says "this month" nowhere: the page reads a named month', () => {
+    for (const f of Object.values(VOICES_FIXTURES)) expect(renderText(<VoicesPage data={f()} />)).not.toMatch(/this month/i)
+  })
+
   it('prints no quote at level 1: quotes are the panels\'', () => {
     for (const key of ['ossur', 'sealand'] as const) {
       expect(render(<VoicesPage data={VOICES_FIXTURES[key]()} />)).not.toContain('data-copy="quote"')
@@ -17,7 +21,7 @@ describe('the Voices page (boards E3-Voices and E3-Voices-Open)', () => {
 
   it('the bar: the month, the market\'s videos, the groups, the regular creators, the brands; no period switch', () => {
     const d = VOICES_FIXTURES.ossur()
-    expect(renderText(<VoicesMeta data={d} />)).toBe('September · 487 videos · 5 groups · 7 regular creators · 2 brands')
+    expect(renderText(<VoicesMeta data={d} />)).toBe('September · 487 videos · 5 groups · 6 regular creators · 2 brands')
     const m = render(<VoicesPage data={d} />)
     expect(m).toContain('>Voices</h1>')
     expect(m).not.toContain('aria-label="Period"')

@@ -105,10 +105,40 @@ function BrandRow({ row, max }: { row: VoicesBrandRow; max: number }) {
   )
 }
 
+/** Brand names, each a link to its panel: "Proteor, Old School". */
+function NameLinks({ names }: { names: readonly { label: string; href: string }[] }) {
+  return (
+    <>
+      {names.map((b, i) => (
+        <span key={b.label}>
+          {i > 0 ? ', ' : null}
+          <Link href={b.href} scroll={false} className="text-inherit underline decoration-foreground/25 underline-offset-[3px] hover:decoration-foreground">{b.label}</Link>
+        </span>
+      ))}
+    </>
+  )
+}
+
+/** The note: Pass C's weightiest finding, with its brand's panel a click
+ *  away (any tracked brand opens, printed as a row or not). */
+function Note({ note }: { note: NonNullable<VoicesBrands['note']> }) {
+  return (
+    <p className="m-0 rounded-[10px] bg-inner px-3.5 py-3 text-[13.5px] leading-[1.5] text-foreground">
+      <b className="font-semibold">{note.rival}:</b>{' '}
+      <span data-copy="stored" data-slot="pass_c_finding">{note.title}</span>{' '}
+      <Link href={note.href} scroll={false} className="whitespace-nowrap font-semibold text-orange-text no-underline hover:underline">Open {note.rival} →</Link>
+    </p>
+  )
+}
+
 /** "Brands in your market" (the board's left card of the pair). */
 export function BrandsCard({ brands, monthWords }: { brands: VoicesBrands; monthWords: string }) {
   const max = Math.max(0, ...brands.rows.map((r) => r.named?.k ?? 0))
   const prev = longMonth(brands.prevMonth)
+  const month = longMonth(brands.month)
+  // The one base every "Named in" level shares: the market's videos this
+  // month that our searches for a brand did not find (`n_organic`).
+  const unsearched = brands.rows.find((r) => r.named)?.named?.n ?? null
   return (
     <article aria-labelledby="voices-brands" className={CARD}>
       <CardHead
@@ -121,16 +151,24 @@ export function BrandsCard({ brands, monthWords }: { brands: VoicesBrands; month
         <div className="flex flex-col gap-1.5">
           <EmptyLine>{brands.empty}</EmptyLine>
           {brands.state === 'not_counted' && brands.tracked.length > 0 ? (
-            <EmptyLine>The brands this workspace tracks: {brands.tracked.join(', ')}.</EmptyLine>
+            <EmptyLine>The brands this workspace tracks: <NameLinks names={brands.tracked} />.</EmptyLine>
           ) : null}
+          {brands.state === 'not_counted' && brands.note ? <Note note={brands.note} /> : null}
         </div>
       ) : (
         <>
           {brands.rows.length > 0 ? (
             <div>
-              <div className={cn(CAPS, 'grid grid-cols-2 gap-x-[18px] border-b border-border pb-2 max-lg:hidden lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,0.9fr)_minmax(0,1.6fr)]')}>
+              {/* The board's header: four columns at lg, and below it two rows of
+                  two, over the rows' own two-by-two cells. */}
+              <div className={cn(CAPS, 'grid grid-cols-2 gap-x-[18px] gap-y-1 border-b border-border pb-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,0.9fr)_minmax(0,1.6fr)]')}>
                 <span>Brand</span><span>Named in</span><span>Praised · complained</span><span>Talked about for</span>
               </div>
+              {unsearched != null ? (
+                <p className="m-0 border-b border-track py-2 text-[12px] leading-[1.45] text-muted-foreground">
+                  Named in: of the <Fig>{fmtInt(unsearched)}</Fig> videos in {month} we did not find by searching for a brand, so a brand named in them was named without being asked.
+                </p>
+              ) : null}
               <div role="list">
                 {brands.rows.map((r) => <div key={r.brandKey} role="listitem"><BrandRow row={r} max={max} /></div>)}
               </div>
@@ -143,25 +181,24 @@ export function BrandsCard({ brands, monthWords }: { brands: VoicesBrands; month
               <span><i aria-hidden className="mr-1.5 inline-block h-2 w-2.5 rounded-[2px] bg-comp align-[0.05em]" />videos where people praised</span>
               <span><i aria-hidden className="mr-1.5 inline-block h-2 w-2.5 rounded-[2px] bg-negative/85 align-[0.05em]" />complained</span>
             </span>
-            {brands.notNamed.length > 0 ? <span>Not named without being asked this month: {brands.notNamed.join(', ')}</span> : null}
+            {brands.notNamed.length > 0 ? <span>Not named without being asked in {monthWords}: <NameLinks names={brands.notNamed} /></span> : null}
           </div>
           {brands.rows.length > 0 ? (
             <p className="m-0 text-[12px] leading-[1.5] text-muted-foreground">
-              Praised, complained and talked about are this month’s alone: each brand’s videos are too few to set against {prev}.
+              Praised, complained and talked about are {month}’s alone: each brand’s videos are too few to set against {prev}.
             </p>
           ) : null}
           {brands.notCounted.length > 0 ? (
             <p className="m-0 text-[12px] leading-[1.5] text-muted-foreground">
-              {brands.notCounted.map((b) => `${b.label}: ${b.words}`).join(' · ')}
+              {brands.notCounted.map((b, i) => (
+                <span key={b.label}>
+                  {i > 0 ? ' · ' : null}
+                  <Link href={b.href} scroll={false} className="text-inherit underline decoration-foreground/25 underline-offset-[3px] hover:decoration-foreground">{b.label}</Link>: {b.words}
+                </span>
+              ))}
             </p>
           ) : null}
-          {brands.note ? (
-            <p className="m-0 rounded-[10px] bg-inner px-3.5 py-3 text-[13.5px] leading-[1.5] text-foreground">
-              <b className="font-semibold">{brands.note.rival}:</b>{' '}
-              <span data-copy="stored" data-slot="pass_c_finding">{brands.note.title}</span>{' '}
-              <Link href={brands.note.href} scroll={false} className="whitespace-nowrap font-semibold text-orange-text no-underline hover:underline">Open {brands.note.rival} →</Link>
-            </p>
-          ) : null}
+          {brands.note ? <Note note={brands.note} /> : null}
         </>
       )}
     </article>
@@ -170,7 +207,9 @@ export function BrandsCard({ brands, monthWords }: { brands: VoicesBrands; month
 
 /** The brand's panel: its month in full, and a rival's Competitive pane. */
 export function BrandPanelView({ panel, monthWords }: { panel: BrandPanel; monthWords: string }) {
-  const any = panel.any?.k ?? 0
+  // The crosses' own base (the lens's n: every video naming it this month),
+  // for every k a cross printed, so a share's two sides come from one read.
+  const crossN = panel.kinds[0]?.n ?? panel.subjects[0]?.n ?? 0
   const praised = panel.kinds.find((k) => k.kind === 'praise')
   const complained = panel.kinds.find((k) => k.kind === 'pain_point')
   const window = panel.window ? windowWords(panel.window) : null
@@ -192,8 +231,14 @@ export function BrandPanelView({ panel, monthWords }: { panel: BrandPanel; month
         </>
       }
     >
+      {panel.stateWords ? (
+        <p className="m-0 text-[14px] leading-[1.5] text-muted-foreground">{panel.label} in {monthWords}: {panel.stateWords}.</p>
+      ) : null}
+      {panel.tooFew ? (
+        <p className="m-0 text-[14px] leading-[1.5] text-muted-foreground">No video named {panel.label} without being asked in {monthWords}: too few to say how people treat it.</p>
+      ) : null}
       <StatRow>
-        {panel.named ? (
+        {panel.named && !panel.tooFew ? (
           <StatCell value={panel.named.k} of={panel.named.n} label="videos named it without being asked">
             <div className="mt-1.5 text-[12px]"><VerdictNote verdict={panel.verdict} you={panel.you} /></div>
             {panel.prevNamed ? (
@@ -201,24 +246,24 @@ export function BrandPanelView({ panel, monthWords }: { panel: BrandPanel; month
             ) : null}
           </StatCell>
         ) : null}
-        {panel.any ? <StatCell value={panel.any.k} of={panel.any.n} label="videos named it at all" /> : null}
-        {praised && any > 0 ? <StatCell value={praised.k} of={any} label="videos naming it, where people praised something" /> : null}
-        {complained && any > 0 ? <StatCell value={complained.k} of={any} label="videos naming it, where people complained about something" /> : null}
+        {panel.any && !panel.tooFew ? <StatCell value={panel.any.k} of={panel.any.n} label="videos named it at all" /> : null}
+        {praised ? <StatCell value={praised.k} of={praised.n} label="videos naming it, where people praised something" /> : null}
+        {complained ? <StatCell value={complained.k} of={complained.n} label="videos naming it, where people complained about something" /> : null}
       </StatRow>
 
       <div className="grid grid-cols-1 gap-7 md:grid-cols-3">
         {panel.kinds.length > 0 ? (
-          <PanelSection label={<>What people did in the comments · of its <Fig>{fmtInt(any)}</Fig></>}>
+          <PanelSection label={<>What people did in the comments · of its <Fig>{fmtInt(crossN)}</Fig></>}>
             {panel.kinds.map((k) => <MiniRow key={k.kind} size="md" tone={panel.you ? 'you' : 'rival'} label={k.label} k={k.k} of={k.n} />)}
           </PanelSection>
         ) : null}
         {panel.subjects.length > 0 ? (
-          <PanelSection label={<>What they talk about · of its <Fig>{fmtInt(any)}</Fig></>}>
+          <PanelSection label={<>What they talk about · of its <Fig>{fmtInt(crossN)}</Fig></>}>
             {panel.subjects.map((s) => <MiniRow key={s.id} size="md" label={s.label} k={s.k} of={s.n} />)}
           </PanelSection>
         ) : null}
         {panel.asked ? (
-          <PanelSection label={<>Asked under its content · last <Fig>90</Fig> days</>}>
+          <PanelSection label={<>Asked under its content{window ? `, ${window}` : ''}</>}>
             <div className="flex flex-col gap-0.5">
               {panel.asked.themes.map((t) => (
                 <Link key={t.registryId} href={t.href} className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-[14px] text-foreground no-underline hover:bg-inner">
@@ -232,7 +277,7 @@ export function BrandPanelView({ panel, monthWords }: { panel: BrandPanel; month
       </div>
 
       {panel.findings.length > 0 ? (
-        <PanelSection label="Where its talk differs from the rest of the market">
+        <PanelSection label="Where its talk differs from the rest of the market · the latest update">
           <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
             {panel.findings.slice(0, 4).map((f) => (
               <div key={f.id} className="flex min-w-0 flex-col gap-1.5 rounded-[10px] bg-inner px-4 py-3.5">

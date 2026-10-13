@@ -10,11 +10,12 @@ describe('Creators who drive the talk', () => {
     const d = ossurVoicesFixture()
     const node = <CreatorsCard creators={d.creators} monthWords={d.monthWords} />
     const text = renderText(node)
-    expect(text).toContain('r/amputee Reddit · made 15 of the 20 videos in Waiting for a first socket 25 videos')
+    // A subreddit is a community, not a creator: left out, and said once.
+    expect(text).not.toContain('r/amputee')
+    expect(text).toContain('Reddit is left out: there a post’s account is the community it was posted in, not who made it.')
     expect(text).toContain('A L I S TikTok · 186K followers · made 8 of the 24 videos in Running on a blade 8 videos')
     expect(text).toContain('The Amputee Diaries YouTube · 96K subscribers')
-    expect(text).toContain('All 7 accounts with 3 or more videos →')
-    expect(text).not.toContain('16.1K')
+    expect(text).toContain('All 6 accounts with 3 or more videos →')
     expect(render(node)).not.toContain('data-copy="quote"')
     assertCopyContract(node)
   })
@@ -43,16 +44,15 @@ describe('Creators who drive the talk', () => {
 
 describe('a creator\'s panel', () => {
   it('its videos of the market, the conversations they are in, the brands they name', () => {
-    const d = sealandVoicesFixture({ creator: 'r/onebag' })
+    const d = sealandVoicesFixture({ creator: 'Pack Hacker' })
     const panel = d.panel as CreatorPanel
     const node = <CreatorPanelView panel={panel} monthWords={d.monthWords} />
     const text = renderText(node)
-    expect(text).toContain('Creator r/onebag Reddit')
-    expect(text).toContain('30 of 940 market videos in September')
-    expect(text).toContain('The conversations their videos are in · of their 30 Confusion over airline size rules 20 of 30 · 20 in the conversation')
+    expect(text).toContain('Creator Pack Hacker YouTube · 512K subscribers as of their videos in September')
+    expect(text).toContain('12 of 940 market videos in September')
     expect(text).toContain('Brands named in their videos')
     expect(text).toContain('Ask the Agent about this creator')
-    expect(text).not.toMatch(/followers/)
+    expect(text).not.toContain('this month')
     assertCopyContract(node)
   })
 })

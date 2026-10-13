@@ -12,8 +12,16 @@ describe('Brands in your market', () => {
     const text = renderText(node)
     expect(text).toContain('Sealand You 1 of 743 videos too few to compare')
     expect(text).toContain('Patagonia 13 of 743 videos too few to compare 50 · 43 of 65 Durability · 19 of 65')
-    expect(text).toContain('Not named without being asked this month: Freedom of Movement, Rareform')
-    expect(text).toContain('each brand’s videos are too few to set against August')
+    // (renderText spaces every tag: on the page the comma sits on the link.)
+    expect(text).toContain('Not named without being asked in September: Freedom of Movement , Rareform')
+    expect(text).toContain('Praised, complained and talked about are September’s alone: each brand’s videos are too few to set against August')
+    expect(text).not.toContain('this month')
+    // What the 743 are, said where the table starts.
+    expect(text).toContain('Brand Named in Praised · complained Talked about for Named in: of the 743 videos in September we did not find by searching for a brand')
+    const m0 = render(node)
+    // The board's header is drawn at every width (two rows of two below lg).
+    expect(m0).not.toContain('max-lg:hidden')
+    expect(m0).toContain('href="/dashboard/voices?brand=Freedom+of+Movement#brand-panel"')
     expect(text).toContain('Patagonia: Patagonia is praised for lasting for years')
     const m = render(node)
     expect(m).toMatch(/data-copy="verdict"[^>]*><span class="text-xs font-medium text-muted-foreground"[^>]*>too few to compare/)
@@ -28,8 +36,12 @@ describe('Brands in your market', () => {
   it('Össur: rules and no month row yet, so the card says the brands are not counted and names them', () => {
     const d = ossurVoicesFixture()
     const node = <BrandsCard brands={d.brands} monthWords={d.monthWords} />
-    expect(renderText(node)).toContain('Brands are not counted for this workspace yet. The brands this workspace tracks: Össur, Ottobock.')
+    expect(renderText(node)).toContain('Brands are not counted for this workspace yet. The brands this workspace tracks: Össur , Ottobock .')
     expect(renderText(node)).not.toMatch(/\d+ of \d+/)
+    // Each tracked brand still opens, and the latest finding is the note.
+    const m = render(node)
+    expect(m).toContain('href="/dashboard/voices?brand=Ottobock#brand-panel"')
+    expect(renderText(node)).toContain('Ottobock: Ottobock’s talk turns on getting a knee paid for Open Ottobock →')
     assertCopyContract(node)
   })
 
@@ -42,6 +54,18 @@ describe('Brands in your market', () => {
 })
 
 describe('a brand\'s panel', () => {
+  it('a rival not counted yet (Össur today): the count half says so, the Competitive half stands', () => {
+    const d = ossurVoicesFixture({ brand: 'Ottobock' })
+    const p = d.panel as BrandPanel
+    const node = <BrandPanelView panel={p} monthWords={d.monthWords} />
+    const text = renderText(node)
+    expect(text).toContain('Ottobock in September: not counted yet.')
+    expect(text).toContain('Asked under its content, 3 Jul to 30 Sep Insurance refusals for powered knees 7 videos')
+    expect(text).toContain('Said about Ottobock, 3 Jul to 30 Sep')
+    expect(text).not.toMatch(/named it without being asked|named it at all/)
+    assertCopyContract(node)
+  })
+
   const d = sealandVoicesFixture({ brand: 'Patagonia' })
   const panel = d.panel as BrandPanel
 
@@ -53,8 +77,8 @@ describe('a brand\'s panel', () => {
     expect(text).toContain('50 of 65 videos naming it, where people praised something')
     expect(text).toContain('What people did in the comments · of its 65 Praised a bag 50 Asked a question 45')
     expect(text).toContain('What they talk about · of its 65 Durability 19')
-    expect(text).toContain('Asked under its content · last 90 days Is the Black Hole worth it 9 videos')
-    expect(text).toContain('Where its talk differs from the rest of the market how the talk differs')
+    expect(text).toContain('Asked under its content, 30 Jun to 27 Sep Is the Black Hole worth it 9 videos')
+    expect(text).toContain('Where its talk differs from the rest of the market · the latest update how the talk differs')
     expect(text).toContain('Said about Patagonia, 30 Jun to 27 Sep')
     expect(text).toContain('Ask the Agent about Patagonia')
     const m = render(node)

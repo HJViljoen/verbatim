@@ -17,7 +17,9 @@ import { AskButton, CAPS, EmptyLine, Fig, LevelText, MiniRow, OLINK, PanelTag, P
 export function WhoCard({ groups, videos, monthWords }: { groups: VoicesGroups; videos: number | null; monthWords: string }) {
   const n = videos ?? 0
   return (
-    <section aria-labelledby="voices-who" className={CARD}>
+    // `id="cast"`: an old Conversation link (`/dashboard/voice#cast`, the cast
+    // of who is talking) lands here with its fragment (lib/nav.ts).
+    <section id="cast" aria-labelledby="voices-who" className={cn(CARD, 'scroll-mt-6')}>
       <CardHead
         icon={Users}
         id="voices-who"
@@ -48,7 +50,7 @@ export function WhoCard({ groups, videos, monthWords }: { groups: VoicesGroups; 
 }
 
 /** One group (the board's `.pcard`). */
-export function GroupCard({ card, n }: { card: VoicesGroupCard; n: number | null }) {
+export function GroupCard({ card, n, monthWords }: { card: VoicesGroupCard; n: number | null; monthWords: string }) {
   return (
     <article
       data-group={card.key}
@@ -64,7 +66,7 @@ export function GroupCard({ card, n }: { card: VoicesGroupCard; n: number | null
           <span className="font-mono text-[12.5px] text-muted-foreground">of {fmtInt(n)} videos</span>
         </div>
       ) : (
-        <p className="m-0 text-[13.5px] text-muted-foreground">No video of the market’s this month carries their comments.</p>
+        <p className="m-0 text-[13.5px] text-muted-foreground">No video of the market’s in {monthWords} carries their comments.</p>
       )}
       {card.subjects.length > 0 ? (
         <div className="flex flex-col gap-2 rounded-[10px] bg-inner px-3.5 py-3">
@@ -100,7 +102,7 @@ export function GroupCard({ card, n }: { card: VoicesGroupCard; n: number | null
 }
 
 /** The group's panel, in place under its row (E3-Voices-Open). */
-export function GroupPanelView({ panel }: { panel: GroupPanel }) {
+export function GroupPanelView({ panel, monthWords }: { panel: GroupPanel; monthWords: string }) {
   const [first, second] = panel.subjects
   const where = panel.platforms[0]
   return (
@@ -171,7 +173,7 @@ export function GroupPanelView({ panel }: { panel: GroupPanel }) {
       ) : null}
 
       {panel.quotes.length > 0 ? (
-        <PanelSection label={<>In their words · <Fig>{fmtInt(panel.quotes.length)}</Fig> of their comments this month</>}>
+        <PanelSection label={<>In their words · <Fig>{fmtInt(panel.quotes.length)}</Fig> of their comments in {monthWords}</>}>
           <div className="grid grid-cols-1 gap-3.5 md:grid-cols-3">
             {panel.quotes.map((q) => <QuoteCard key={q.ref} quote={q} />)}
           </div>
@@ -185,7 +187,7 @@ export function GroupPanelView({ panel }: { panel: GroupPanel }) {
 
 /** The cards three to a row, and the open group's panel under the row its
  *  card is in. */
-export function GroupGrid({ data }: { data: Pick<VoicesData, 'groups' | 'videos' | 'panel'> }) {
+export function GroupGrid({ data }: { data: Pick<VoicesData, 'groups' | 'videos' | 'panel' | 'monthWords'> }) {
   const rows = groupRows(data.groups.cards, 3)
   const panel = data.panel?.kind === 'group' ? data.panel : null
   return (
@@ -193,9 +195,9 @@ export function GroupGrid({ data }: { data: Pick<VoicesData, 'groups' | 'videos'
       {rows.map((row, i) => (
         <div key={i} className="contents">
           <section aria-label={i === 0 ? 'The groups' : 'The groups, continued'} className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {row.map((c) => <GroupCard key={c.key} card={c} n={data.videos} />)}
+            {row.map((c) => <GroupCard key={c.key} card={c} n={data.videos} monthWords={data.monthWords} />)}
           </section>
-          {panel && row.some((c) => c.key === panel.key) ? <GroupPanelView panel={panel} /> : null}
+          {panel && row.some((c) => c.key === panel.key) ? <GroupPanelView panel={panel} monthWords={data.monthWords} /> : null}
         </div>
       ))}
     </>
