@@ -46,7 +46,7 @@ import { SEALAND_CLIENT_ID } from '../lib/config'
 import { surface } from '../lib/nav'
 
 import { DashboardPage } from '../components/pages/v2/home'
-import { dashboardEmptyFixture, dashboardFixture } from '../lib/pages/v2/home-fixture'
+import { dashboardEmptyFixture, dashboardFixture, dashboardThinFixture } from '../lib/pages/v2/home-fixture'
 import type { DashboardData } from '../lib/pages/v2/home'
 import { MarketPicturePage } from '../components/pages/overview/picture'
 import { PICTURE_FIXTURE } from '../components/pages/overview/picture/fixture'
@@ -602,6 +602,16 @@ const PAGES: Page[] = [
   ...(flag('content-dumps', '') ? (['ossur', 'sealand'] as const).map((tenant): Page => ({
     key: `content-parity-${tenant}`, path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentDump(tenant) }),
   })) : []),
+  // The parity pass (13 Oct): the Dashboard's thin states, beside E1-Dashboard,
+  // as Össur and Sealand read today (no flag, nothing new, too few clean
+  // weeks, subjects not calibrated or not compared, brands not counted, no
+  // readings of products, no post ideas, a move waiting for its month).
+  { key: 'dashboard-thin', path: '/dashboard', artboard: 'E1-Dashboard.dc.html', page: () => h(DashboardPage, { data: dashboardThinFixture() }) },
+  { key: 'dashboard-thin-sealand', path: '/dashboard', artboard: 'E1-Dashboard.dc.html', page: () => h(DashboardPage, { data: dashboardThinFixture({ tenant: 'sealand' }) }) },
+  // The fresh check's states: some weeks drawn and some not, the flag leading
+  // with the week's biggest as its one new conversation, and a move whose
+  // comparison may not print.
+  { key: 'dashboard-thin-mixed', path: '/dashboard', artboard: 'E1-Dashboard.dc.html', page: () => h(DashboardPage, { data: dashboardThinFixture({ weeks: 'partial', market: 'flag_new_biggest', moves: 'refused' }) }) },
 ]
 
 // ---- the shell -----------------------------------------------------------------
