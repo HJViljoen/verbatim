@@ -513,7 +513,7 @@ export function headerParts(c: MovesPageData['counts']): { n: number; words: str
 /** The streak cell's label: "updates in a row, since 20 Jul". */
 export function streakLabel(h: AdviceHistory): string {
   if (h.streak === 0 || !h.since) return h.dates.length === 1 ? 'update raised it' : 'updates raised it'
-  return `${h.streak === 1 ? 'update' : 'updates in a row'}, since ${shortDate(h.since)}`
+  return h.streak === 1 ? `update, first raised ${shortDate(h.since)}` : `updates in a row, since ${shortDate(h.since)}`
 }
 
 /** The decision line under the history: "First suggested 20 Jul. Never

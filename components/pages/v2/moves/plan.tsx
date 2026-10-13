@@ -26,6 +26,9 @@ const SEG = [
   { key: 'untested', label: 'untested', fill: 'bg-track' },
 ] as const
 
+/** What changed since upload, printed here; the rest are claim by claim. */
+export const PLAN_MOVED_SHOWN = 3
+
 const VERDICT_TONE: Record<string, string> = {
   echoes: 'font-semibold text-foreground',
   contradicts: 'font-semibold text-negative',
@@ -78,12 +81,17 @@ export function PlanCard({ plan, className }: { plan: PlanCheckCard; className?:
       {plan.moved.length > 0 ? (
         <div className="flex flex-col gap-1.5 rounded-[10px] bg-inner px-4 py-3.5">
           <p className="m-0 text-[11.5px] font-bold uppercase tracking-[0.06em] text-orange-text">Changed since you uploaded it</p>
-          {plan.moved.map((m) => (
+          {plan.moved.slice(0, PLAN_MOVED_SHOWN).map((m) => (
             <p key={`${m.claim}:${m.to}`} className="m-0 text-[14px] leading-[1.5] text-foreground">
               <span data-copy="quote">“{m.claim}”</span> is now <b>{m.to.toLowerCase()}</b>, from {m.from.toLowerCase()}{' '}
               <span className={cn(MONO, 'text-[12px] text-muted-foreground')}>({m.on})</span>
             </p>
           ))}
+          {plan.moved.length > PLAN_MOVED_SHOWN ? (
+            <p className="m-0 text-[13px] text-muted-foreground">
+              And <span data-copy="figure">{fmtInt(plan.moved.length - PLAN_MOVED_SHOWN)}</span> more, claim by claim.
+            </p>
+          ) : null}
         </div>
       ) : null}
       {plan.empty ? <p className="m-0 text-[13.5px] text-muted-foreground">{plan.empty}</p> : null}

@@ -56,7 +56,8 @@ export function lineGeometry(points: readonly MovePoint[], moveDay: string): {
 
 function MoveLine({ card }: { card: MoveCard }) {
   const { points } = card
-  if (points.length === 0) return null
+  // ONE MONTH IS A LEVEL, NOT A LINE: the sentence under it says it.
+  if (points.length < 2) return null
   const { xs, ys, moveX } = lineGeometry(points, card.day)
   const solid = points.map((p, i) => ({ p, i })).filter(({ p }) => !p.soFar)
   const last = points.length - 1
@@ -100,7 +101,21 @@ function Level({ p }: { p: MovePoint }) {
 /** The one sentence a move earns. */
 function MoveSentence({ card }: { card: MoveCard }) {
   if (card.unread) return <p className="m-0 text-[13.5px] leading-[1.5] text-muted-foreground">{MOVE_UNREAD[card.unread]}</p>
-  if (card.pending) return <p className="m-0 text-[13.5px] leading-[1.5] text-muted-foreground">{pendingLine(card.pending)}</p>
+  if (card.pending) {
+    // The months before a move dated after the reading month: the latest of
+    // them as a level, and when the move's own month reads.
+    const last = card.points[card.points.length - 1]
+    return (
+      <div className="flex flex-col gap-1">
+        {last ? (
+          <p className="m-0 text-[13.5px] leading-[1.5] text-foreground">
+            Share of market videos: <Level p={last} /> in {longMonth(last.month)}, before the move.
+          </p>
+        ) : null}
+        <p className="m-0 text-[13.5px] leading-[1.5] text-muted-foreground">{pendingLine(card.pending)}</p>
+      </div>
+    )
+  }
   const moveMonth = monthStartOf(card.day)
   const c = card.compare
   if (comparePrintable(c)) {

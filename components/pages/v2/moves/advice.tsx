@@ -93,7 +93,9 @@ function AdviceCardView({ card, open, canDecide }: { card: AdviceCard; open: boo
     <article id={`advice-${card.lineageId}`} className={cn(CARD, 'flex-1 scroll-mt-6', open ? SELECTED_CARD_RING : null)}>
       <Chips card={card} />
       <h3 className={cn('m-0 text-[18px] font-semibold leading-[1.35]', card.untitled ? 'text-muted-foreground' : 'text-foreground')}><AdviceTitle card={card} /></h3>
-      {lead ? <p data-copy="stored" data-slot="pass_d_b_recommendation" className="m-0 text-[14px] leading-[1.55] text-secondary-foreground">{lead}</p> : null}
+      {/* The lead, four lines at most (the board's card): the whole
+          argument is one click down, in the panel. */}
+      {lead ? <p data-copy="stored" data-slot="pass_d_b_recommendation" className="m-0 line-clamp-4 text-[14px] leading-[1.55] text-secondary-foreground">{lead}</p> : null}
       <Evidence card={card} />
       <div className="mt-auto flex flex-wrap items-center gap-2" data-print-hide>
         {canDecide ? <AdviceAnswers lineageId={card.lineageId} recommendationId={card.recommendationId} title={card.title} /> : null}

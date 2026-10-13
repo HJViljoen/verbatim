@@ -134,7 +134,8 @@ describe('dashboard loading skeletons', () => {
   })
 
   it('Your moves took its skeleton to its new address, and the placeholders theirs', () => {
-    expect(readFileSync(join(ROOT, 'moves', 'loading.tsx'), 'utf8')).toContain("from '@/components/pages/moves/words'")
+    // Design v2 (T7): the skeleton takes its title off the v2 page's words.
+    expect(readFileSync(join(ROOT, 'moves', 'loading.tsx'), 'utf8')).toContain("from '@/lib/pages/v2/moves'")
     expect(readFileSync(join(ROOT, 'voices', 'loading.tsx'), 'utf8')).toContain('<ConversationTitle />')
     expect(readFileSync(join(ROOT, 'content', 'loading.tsx'), 'utf8')).toContain("surface('content')")
   })

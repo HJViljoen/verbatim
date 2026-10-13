@@ -77,25 +77,33 @@ export function ConclusionsSection({ data }: { data: MovesPageData }) {
         <section aria-labelledby="conclusions-title" className={CARD}>
           <CardHead icon={Lightbulb} id="conclusions-title" title={CONCLUSIONS_TITLE} sub={CONCLUSIONS_SUB} />
           <div className="flex flex-col">
-            {conclusions.map((c, i) => (
-              <div key={c.id} id={conclusionAnchor(c.id)} className={cn('grid scroll-mt-6 grid-cols-1 items-center gap-x-4 gap-y-1.5 py-[13px] text-[14px] sm:grid-cols-[minmax(0,1fr)_auto_auto]', i > 0 ? 'border-t border-track' : null)}>
-                <span data-copy="stored" data-slot="pass_d_a_insight" className="min-w-0 text-foreground">{c.title}</span>
-                {/* A conclusion resting on rival findings alone resolves to no
-                    video: it prints no count rather than "0 videos". */}
-                <span className={cn(MONO, 'whitespace-nowrap text-[12.5px] text-muted-foreground')}>
-                  {c.videos > 0 ? <><span data-copy="figure">{fmtInt(c.videos)}</span> {c.videos === 1 ? 'video' : 'videos'}, {GROUNDED_BASIS}</> : null}
-                </span>
-                <span className="flex min-w-0 flex-wrap gap-1.5 sm:justify-end">
+            {conclusions.map((c, i) => {
+              // One tag sits at the row's end, as the board draws it; several
+              // take their own line under the conclusion.
+              const inline = c.advice.length <= 1
+              const tags = (
+                <span className={cn('flex min-w-0 flex-wrap gap-1.5', inline ? 'sm:justify-end' : null)}>
                   {c.advice.length > 0
                     ? c.advice.map((a) => (
-                        <Link key={a.lineageId} href={adviceHref(a.lineageId)} scroll={false} title={a.title} className={cn(TAG_CHIP, 'max-w-[220px] truncate no-underline hover:underline underline-offset-2')}>
+                        <Link key={a.lineageId} href={adviceHref(a.lineageId)} scroll={false} title={a.title} className={cn(TAG_CHIP, 'max-w-[240px] truncate no-underline hover:underline underline-offset-2')}>
                           <span data-copy="stored" data-slot="pass_d_b_recommendation">{a.title}</span>
                         </Link>
                       ))
                     : <span className={cn(TAG_CHIP, 'bg-inner text-muted-foreground')}>{NO_ADVICE_YET}</span>}
                 </span>
-              </div>
-            ))}
+              )
+              return (
+                <div key={c.id} id={conclusionAnchor(c.id)} className={cn('grid scroll-mt-6 grid-cols-1 items-center gap-x-4 gap-y-1.5 py-[13px] text-[14px]', inline ? 'sm:grid-cols-[minmax(0,1fr)_auto_auto]' : 'sm:grid-cols-[minmax(0,1fr)_auto]', i > 0 ? 'border-t border-track' : null)}>
+                  <span data-copy="stored" data-slot="pass_d_a_insight" className="min-w-0 text-foreground">{c.title}</span>
+                  {/* A conclusion resting on rival findings alone resolves to no
+                      video: it prints no count rather than "0 videos". */}
+                  <span className={cn(MONO, 'whitespace-nowrap text-[12.5px] text-muted-foreground')}>
+                    {c.videos > 0 ? <><span data-copy="figure">{fmtInt(c.videos)}</span> {c.videos === 1 ? 'video' : 'videos'}, {GROUNDED_BASIS}</> : null}
+                  </span>
+                  {inline ? tags : <div className="sm:col-span-2">{tags}</div>}
+                </div>
+              )
+            })}
           </div>
           {total > 0 ? <RecordLink total={total} /> : null}
         </section>

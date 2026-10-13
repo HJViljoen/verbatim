@@ -166,6 +166,7 @@ describe('the words', () => {
   it('the streak and the decision', () => {
     expect(streakLabel({ dates: ['2026-08-01', '2026-08-08'], streak: 2, since: '2026-08-01', recent: [] })).toBe('updates in a row, since 1 Aug')
     expect(streakLabel({ dates: ['2026-08-01'], streak: 0, since: null, recent: [] })).toBe('update raised it')
+    expect(streakLabel({ dates: ['2026-10-12'], streak: 1, since: '2026-10-12', recent: [] })).toBe('update, first raised 12 Oct')
     expect(decisionLine({ firstMade: '2026-07-20', status: 'new', statusLabel: 'New', decidedAt: null })).toBe('First suggested 20 Jul. Nobody has decided on it yet.')
     expect(decisionLine({ firstMade: '2026-07-20', status: 'dismissed', statusLabel: 'Dismissed', decidedAt: '2026-08-02T10:00:00Z' })).toBe('First suggested 20 Jul. Dismissed since 2 Aug.')
   })
