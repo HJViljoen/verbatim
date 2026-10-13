@@ -3952,7 +3952,8 @@ async function loadLedger(
     status: recStatus(inherited ?? rec.status),
     statusLabel: REC_STATUS_LABEL[recStatus(inherited ?? rec.status)],
     decidedAt: decided?.decided_at ?? null,
-    href: '/dashboard/market',
+    // Your moves (/dashboard/moves since Design v2; Market took /dashboard/market).
+    href: '/dashboard/moves',
   }
   return { top, acted }
 }

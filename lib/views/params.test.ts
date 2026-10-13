@@ -25,7 +25,7 @@ describe('viewParams', () => {
     for (const id of [SEALAND_CLIENT_ID, OSSUR_CLIENT_ID]) {
       const p = viewParams(id, { month: '2026-09', view: 'buyers' })
       expect(p).toEqual({ month: '2026-09' })
-      expect(voiceSurfaceHref(p, { theme: 't1' })).toBe('/dashboard/voice?month=2026-09&theme=t1')
+      expect(voiceSurfaceHref(p, { theme: 't1' })).toBe('/dashboard/voices?month=2026-09&theme=t1')
     }
   })
 

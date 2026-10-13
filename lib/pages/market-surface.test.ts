@@ -226,8 +226,9 @@ describe('the five ways', () => {
 })
 describe('the surface’s own links', () => {
   it('carries the horizon and drops the legacy selection parameters', () => {
-    expect(marketSurfaceHref('L', { horizon: 'last_3', rec: 'old', item: 'other' })).toBe('/dashboard/market?horizon=last_3&item=L')
-    expect(marketSurfaceHref(null, {})).toBe('/dashboard/market')
+    // Your moves' address and deep link since Design v2.
+    expect(marketSurfaceHref('L', { horizon: 'last_3', rec: 'old', item: 'other', advice: 'older' })).toBe('/dashboard/moves?horizon=last_3&advice=L')
+    expect(marketSurfaceHref(null, {})).toBe('/dashboard/moves')
   })
 
   it('names the month a piece of advice was first made in', () => {
@@ -297,7 +298,7 @@ describe('ledgerRowsShown — the row a deep link named', () => {
 
   it('gives every row an anchor a link can land on', () => {
     expect(adviceAnchor('L3')).toBe('advice-L3')
-    expect(marketSurfaceHref('L3', { horizon: 'last_3', rec: 'r3' })).toBe('/dashboard/market?horizon=last_3&item=L3')
+    expect(marketSurfaceHref('L3', { horizon: 'last_3', rec: 'r3' })).toBe('/dashboard/moves?horizon=last_3&advice=L3')
   })
 })
 

@@ -19,25 +19,25 @@ import type { MarketTheme } from './overview-market'
 
 describe('voiceSurfaceHref', () => {
   it('keeps the reader’s month through a theme click, so a row never jumps the page back to the reading month', () => {
-    expect(voiceSurfaceHref({ month: '2026-08' }, { theme: 't1' })).toBe('/dashboard/voice?month=2026-08&theme=t1')
+    expect(voiceSurfaceHref({ month: '2026-08' }, { theme: 't1' })).toBe('/dashboard/voices?month=2026-08&theme=t1')
   })
 
   it('keeps the expanded board and the open theme together, and drops a key set to null', () => {
-    expect(voiceSurfaceHref({ board: 'all', theme: 't1' }, { board: null })).toBe('/dashboard/voice?theme=t1')
-    expect(voiceSurfaceHref({ theme: 't1' }, { board: 'all' })).toBe('/dashboard/voice?theme=t1&board=all')
+    expect(voiceSurfaceHref({ board: 'all', theme: 't1' }, { board: null })).toBe('/dashboard/voices?theme=t1')
+    expect(voiceSurfaceHref({ theme: 't1' }, { board: 'all' })).toBe('/dashboard/voices?theme=t1&board=all')
   })
 
   it('carries none of a stored link’s keys the page no longer reads (?themes=, ?horizon=, ?audience=)', () => {
-    expect(voiceSurfaceHref({ themes: 'wet_commute', horizon: 'last_3', audience: 'client' }, { theme: 't1' })).toBe('/dashboard/voice?theme=t1')
+    expect(voiceSurfaceHref({ themes: 'wet_commute', horizon: 'last_3', audience: 'client' }, { theme: 't1' })).toBe('/dashboard/voices?theme=t1')
   })
 
   it('is the bare address when nothing is selected', () => {
-    expect(voiceSurfaceHref({})).toBe('/dashboard/voice')
+    expect(voiceSurfaceHref({})).toBe('/dashboard/voices')
   })
 
   it('keeps every account listed ("Where your market talks", WP3.8) through a theme click, and drops it on null', () => {
-    expect(voiceSurfaceHref({ accounts: 'all' }, { theme: 't1' })).toBe('/dashboard/voice?theme=t1&accounts=all')
-    expect(voiceSurfaceHref({ accounts: 'all', theme: 't1' }, { accounts: null })).toBe('/dashboard/voice?theme=t1')
+    expect(voiceSurfaceHref({ accounts: 'all' }, { theme: 't1' })).toBe('/dashboard/voices?theme=t1&accounts=all')
+    expect(voiceSurfaceHref({ accounts: 'all', theme: 't1' }, { accounts: null })).toBe('/dashboard/voices?theme=t1')
   })
 })
 

@@ -138,7 +138,7 @@ describe('week by week (market-first WP2.9, week.weeks)', () => {
     expect(el.props.footerNote).toBeUndefined()
     const t = renderText(weekWeeks.render(cleanWeekFixture(), 'app', ctx))
     expect(t).toContain('How to read: Week by week →')
-    expect(t).toContain('Read at the same age, on Your market →')
+    expect(t).toContain('Read at the same age, on Market →')
     // No same-age reading to link to where the tenant keeps none (Össur).
     expect(renderText(weekWeeks.render(ossurWeeksFixture(), 'app', ctx))).not.toContain('Read at the same age')
   })
@@ -197,7 +197,7 @@ describe('WK §2 · your market’s subjects (market-first WP2.7)', () => {
     expect(el.props.meta).toBeUndefined()
     expect(el.props.footerNote).toBeUndefined()
     expect(el.props.question).toBeUndefined()
-    expect(renderText(weekSubjects.render(marketWeekFixture(), 'app', ctx))).toContain('Open Subjects →')
+    expect(renderText(weekSubjects.render(marketWeekFixture(), 'app', ctx))).toContain('Open Market →')
   })
 
   it('ranks by the market’s videos, largest first', () => {
@@ -445,7 +445,7 @@ describe('With this update (market-first WP3.7, week.came-in)', () => {
     expect(el.props.title).toBe('With this update')
     expect(el.props.meta).toBeUndefined()
     expect(el.props.footerNote).toBeUndefined()
-    expect(renderText(weekCameIn.render(marketWeekFixture(), 'app', ctx))).toContain('Open Your market →')
+    expect(renderText(weekCameIn.render(marketWeekFixture(), 'app', ctx))).toContain('Open Market →')
   })
 
   it('points at the tiles that hold what it counts, on screen only', () => {
@@ -525,7 +525,7 @@ describe('Heard for the first time (market-first WP3.7, week.heard)', () => {
     expect(text).not.toContain('From searches added')
     expect(Object.keys(blockAnswers(weekHeard, cleanWeekFixture()).figures).some((k) => k.endsWith('_new_searches'))).toBe(false)
     expect(text).not.toContain('0%')
-    expect(text).toContain('All themes on Conversation →')
+    expect(text).toContain('All themes on Voices →')
   })
 
   it('groups the ones led by makers (decision F) and names the lead ones', () => {
@@ -611,11 +611,11 @@ describe('Worth a reply (market-first WP3.7, week.reply)', () => {
     expect(text).not.toContain('Wedding bag interest')
   })
 
-  it('in an inbox counts the kinds in one sentence and opens This week', () => {
+  it('in an inbox counts the kinds in one sentence and opens Content, where the replies are (Design v2)', () => {
     const weekly = repliesSection<WeekData>('weekly.content', (x) => x.replies, 'weekly')
     const text = flat(renderText(weekly.render(marketWeekFixture(), 'email', ctx)))
     expect(text).toContain('12 comments are worth a reply: 6 buying signals, 3 questions and 3 objections.')
-    expect(text).toContain('Open all 12 on This week →')
+    expect(text).toContain('Open all 12 on Content →')
   })
 })
 
@@ -711,7 +711,7 @@ describe('What brands you track posted (market-first WP3.7, week.rival-posts)', 
   })
 
   it('opens the brands’ page under its current sidebar label', () => {
-    expect(renderText(weekRivalPosts.render(marketWeekFixture(), 'app', ctx))).toContain(`Open ${surface('competitive').label} →`)
+    expect(renderText(weekRivalPosts.render(marketWeekFixture(), 'app', ctx))).toContain(`Open ${surface('voices').label} →`)
   })
 })
 

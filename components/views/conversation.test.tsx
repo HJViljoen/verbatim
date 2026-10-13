@@ -35,7 +35,7 @@ describe('C1 on the Buyers view', () => {
     expect(text).toContain('355 are in the category, where themes are grouped, and 26 are filed under a brand you track.')
     expect(text).toContain('Everything Buyers Makers 273 makers’ and off-topic videos set aside')
     const html = render(voiceAudience.render(onBuyers(), 'app', ctx))
-    expect(html).toMatch(/<a aria-current="page"[^>]*href="\/dashboard\/voice\?view=buyers"/)
+    expect(html).toMatch(/<a aria-current="page"[^>]*href="\/dashboard\/voices\?view=buyers"/)
   })
 
   it('draws no platform split and no share of videos in themes, which the lens cannot say', () => {

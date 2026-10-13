@@ -6,7 +6,7 @@ import { VoiceSurfacePage } from './index'
 import { KindCard } from './conversation'
 import { allAccountsVoiceFixture, ossurVoiceFixture, refusedVoiceFixture } from './fixture'
 import { conversationFixture, SEALAND_KINDS } from './fixture-conversation'
-import VoiceLoading from '@/app/dashboard/voice/loading'
+import VoiceLoading from '@/app/dashboard/voices/loading'
 
 // Conversation, drawn to the approved artboard (Page-Conversation.dc.html,
 // the pages build of 1 Oct). Each block: the artboard's words and order, the
@@ -30,7 +30,8 @@ function bans(markup: string): string[] {
 describe('the Conversation page, as the artboard draws it', () => {
   it('prints its blocks in the artboard’s order, under the title alone', () => {
     const text = renderText(page())
-    const order = ['Conversation', 'Every conversation in September', 'A conversation in full', 'Where your market talks', 'Who is talking', 'The market’s words']
+    // The title is Voices': the page is Voices' placeholder since Design v2.
+    const order = ['Voices', 'Every conversation in September', 'A conversation in full', 'Where your market talks', 'Who is talking', 'The market’s words']
     let at = -1
     for (const word of order) {
       const i = text.indexOf(word, at + 1)
@@ -67,7 +68,7 @@ describe('Every conversation in {Month}', () => {
   it('opens the pane’s row as the selected pill and links each row to its conversation', () => {
     const markup = render(page())
     expect(markup).toContain('bg-accent text-accent-foreground')
-    expect(markup).toMatch(/href="\/dashboard\/voice\?theme=22e2445c#theme"/)
+    expect(markup).toMatch(/href="\/dashboard\/voices\?theme=22e2445c#theme"/)
   })
 
   it('sets makers’ own talk apart in one line, with a share only at 3% or more', () => {
@@ -183,7 +184,7 @@ describe('the empty workspace and the skeleton', () => {
 
   it('the skeleton draws the title and the artboard’s cards', () => {
     const markup = render(<VoiceLoading />)
-    expect(markup).toContain('Loading Conversation')
+    expect(markup).toContain('Loading Voices')
     expect(markup.match(/data-card=""/g)?.length).toBe(6)
   })
 })

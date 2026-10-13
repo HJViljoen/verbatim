@@ -8,7 +8,8 @@ import { Card } from './parts'
 import { YourStatements } from './statements'
 import { MovesWorthConsidering, consideringRows } from './considering'
 
-// Your moves (/dashboard/market, nav key `market`), rebuilt to the approved
+// Your moves (/dashboard/moves since Design v2, nav key `moves`, page key
+// `market`), rebuilt to the approved
 // artboard Page-Your-moves.dc.html (pages build, 1 Oct). In the artboard's
 // order:
 //

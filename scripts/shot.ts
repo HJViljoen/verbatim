@@ -25,22 +25,22 @@ const password = process.env.SHOT_PASSWORD ?? process.env.DEMO_PASSWORD ?? ''
 
 interface Shot { name: string; path: string; follow?: string }
 const SHOTS: Shot[] = [
-  // The nine surfaces (WP9). Overview, Voice, Market, Competitive, Subjects
-  // and This week are shells or legacy pages until WP11-WP15 fill them; they
-  // are shot anyway, because a route that stops routing is what this script is
-  // for.
+  // The six pages of Design v2 (lib/nav.ts SURFACES). Market, Voices and
+  // Content draw the 1 Oct pages until their own land, and Your products a
+  // placeholder; they are shot anyway, because a route that stops routing is
+  // what this script is for.
   { name: 'dashboard', path: '/dashboard' },
-  { name: 'overview', path: '/dashboard/overview' },
-  { name: 'overview-brief', path: '/dashboard/overview?detail=brief' },
-  { name: 'subjects', path: '/dashboard/subjects' },
-  { name: 'voice', path: '/dashboard/voice?seed=1', follow: 'a[href*="theme="]' },
-  { name: 'voice-filtered', path: '/dashboard/voice?seed=1&entity=client&type=pain_point&stage=consideration' },
-  { name: 'voice-list', path: '/dashboard/voice?seed=1&detail=list' },
   { name: 'market', path: '/dashboard/market' },
-  { name: 'competitive', path: '/dashboard/competitive' },
-  { name: 'week', path: '/dashboard/week' },
+  { name: 'voices', path: '/dashboard/voices', follow: 'a[href*="theme="]' },
+  { name: 'products', path: '/dashboard/products' },
+  { name: 'content', path: '/dashboard/content' },
+  { name: 'moves', path: '/dashboard/moves' },
   { name: 'reports', path: '/dashboard/reports' },
   { name: 'settings', path: '/dashboard/settings' },
+  // Three old addresses, to see that they land (lib/nav.ts redirectFor).
+  { name: 'old-voice-theme', path: '/dashboard/voice?themes=fit' },
+  { name: 'old-competitive', path: '/dashboard/competitive' },
+  { name: 'old-moves-rec', path: '/dashboard/market?rec=x' },
   // The parked pages, at the addresses they moved to.
   { name: 'market-intel', path: '/dashboard/market-intel', follow: 'a[href*="item="]' },
   { name: 'market-intel-insights', path: '/dashboard/market-intel?group=insights' },

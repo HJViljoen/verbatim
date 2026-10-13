@@ -6,6 +6,7 @@ import { viewsConfigFor, viewsLive, type ViewsConfig } from './config'
 import { lensCategoryVideos, lensCounts, lensThemes, loadViewLens, type ViewRead } from './lens'
 import { viewState, type ViewState } from './state'
 import { defaultView, parseView, VIEW_PARAM, type MarketView } from './view'
+import { surface } from '../nav'
 
 // Conversation's view (market-first decision F; plan §2.4 C1 "From D5, a view
 // switch: Everything · Buyers · Makers"; WP3.3). The page's loader
@@ -40,7 +41,8 @@ import { defaultView, parseView, VIEW_PARAM, type MarketView } from './view'
 // the identity, `view` is absent from the page's data, and the page is exactly
 // the page it is today.
 
-const BASE_PATH = '/dashboard/voice'
+// The Conversation page's own address: /dashboard/voices since Design v2.
+const BASE_PATH = surface('voices').href
 
 export interface ConversationView {
   read: ViewRead

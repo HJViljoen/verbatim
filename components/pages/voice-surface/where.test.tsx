@@ -54,11 +54,11 @@ describe('voiceWhere (C6)', () => {
     const first = voiceFixture()
     expect(first.where!.rows).toHaveLength(10)
     expect(renderText(voiceWhere.render(first, 'app', ctx))).toContain('All 19 accounts')
-    expect(render(voiceWhere.render(first, 'app', ctx))).toContain('href="/dashboard/voice?accounts=all#where"')
+    expect(render(voiceWhere.render(first, 'app', ctx))).toContain('href="/dashboard/voices?accounts=all#where"')
     const all = allAccountsVoiceFixture()
     expect(all.where!.rows).toHaveLength(17)
     expect(renderText(voiceWhere.render(all, 'app', ctx))).toContain('The 10 with the most videos')
-    expect(render(voiceWhere.render(all, 'app', ctx))).toContain('href="/dashboard/voice#where"')
+    expect(render(voiceWhere.render(all, 'app', ctx))).toContain('href="/dashboard/voices#where"')
   })
 
   it('sets nothing aside and marks nothing where the tenant has no maker rule (Össur)', () => {

@@ -54,9 +54,9 @@ describe('the board under ?brand=', () => {
 
   it('opens every theme from its footer, and goes back to the market’s board', () => {
     const markup = render(voiceBoard.render(cotopaxiVoiceFixture(), 'app', ctx))
-    expect(markup).toContain('href="/dashboard/voice?brand=Cotopaxi&amp;board=all#board"')
+    expect(markup).toContain('href="/dashboard/voices?brand=Cotopaxi&amp;board=all#board"')
     expect(text()).toContain('Show all 43 →')
-    expect(markup).toContain('href="/dashboard/voice#board"')
+    expect(markup).toContain('href="/dashboard/voices#board"')
     expect(text()).toContain('Your market’s themes at 10 or more →')
   })
 
@@ -70,8 +70,8 @@ describe('the board under ?brand=', () => {
   it('keeps the reader’s month on both footer links', () => {
     const data = cotopaxiVoiceFixture({ params: { month: '2026-08', brand: 'Cotopaxi' } })
     const markup = render(voiceBoard.render(data, 'app', ctx))
-    expect(markup).toContain('href="/dashboard/voice?month=2026-08&amp;brand=Cotopaxi&amp;board=all#board"')
-    expect(markup).toContain('href="/dashboard/voice?month=2026-08#board"')
+    expect(markup).toContain('href="/dashboard/voices?month=2026-08&amp;brand=Cotopaxi&amp;board=all#board"')
+    expect(markup).toContain('href="/dashboard/voices?month=2026-08#board"')
   })
 
   it('says so in one line where nothing was filed under the brand, or the themes were not read', () => {

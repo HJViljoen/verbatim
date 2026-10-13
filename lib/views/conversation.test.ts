@@ -118,7 +118,7 @@ describe('Buyers', () => {
     expect(out.market).toEqual({ videos: 381, comments: 9799, category: 355, rivalFiled: 26, platformMix: [] })
     expect(out.view?.view).toBe('buyers')
     expect(noteText(out.view?.note ?? null)).toBe('273 makers’ and off-topic videos set aside')
-    expect(out.view?.choices.map((c) => c.href)).toEqual(['/dashboard/voice', '/dashboard/voice?view=buyers', '/dashboard/voice?view=makers'])
+    expect(out.view?.choices.map((c) => c.href)).toEqual(['/dashboard/voices', '/dashboard/voices?view=buyers', '/dashboard/voices?view=makers'])
   })
 })
 
@@ -181,7 +181,7 @@ describe('a view not read yet', () => {
 
 describe('voiceSurfaceHref keeps the view', () => {
   it('so a theme opened on the Buyers view opens on the Buyers view', () => {
-    expect(voiceSurfaceHref({ month: '2026-09', view: 'buyers' }, { theme: 't1' })).toBe('/dashboard/voice?month=2026-09&theme=t1&view=buyers')
-    expect(voiceSurfaceHref({ theme: 't1' })).toBe('/dashboard/voice?theme=t1')
+    expect(voiceSurfaceHref({ month: '2026-09', view: 'buyers' }, { theme: 't1' })).toBe('/dashboard/voices?month=2026-09&theme=t1&view=buyers')
+    expect(voiceSurfaceHref({ theme: 't1' })).toBe('/dashboard/voices?theme=t1')
   })
 })

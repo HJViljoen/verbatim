@@ -14,6 +14,7 @@ import { printsMarket } from '@/lib/subjects/calibration-state'
 import { monthStartOf } from '@/lib/reading/month-key'
 import { marketLevel } from '@/lib/pages/overview-market/kinds'
 import { findingKey } from '@/lib/pages/agent-thread'
+import { surface } from '@/lib/nav'
 import { DirectionWord, FindingLevel, InferencePill } from './marks'
 
 // The answer, as the artboard draws it (Block D wave 2, E-ask · `ask.thread.*`,
@@ -437,15 +438,13 @@ function AnswerFooter({ f }: { f: FindingMeasure | null }) {
   if (!f || f.value.k <= 0) return null
   return (
     <>
-      {/* THE AUDIENCE TRAVELS WITH THE FIGURE. The k is the audience's own —
-          the category's, usually — and Voice picks its own audience when it is
-          not told one (`pickAudience` defaults to `industry-other`, which is
-          why this read right by accident). The HORIZON deliberately does not
-          travel: Voice's horizons are rolling windows and this figure is a
-          calendar month, so pinning one would be a claim that the two are the
-          same period. The footer note beside this names the month instead. */}
+      {/* THE CONVERSATION, OPEN ON MARKET (Design v2): the verdict's object
+          is a theme's registry id, and Market opens one with `?conv=`. It
+          was Conversation's `?theme=` with `&audience=`, which the page read
+          as nothing. The HORIZON deliberately does not travel: this figure
+          is a calendar month, and the footer note beside this names it. */}
       <Link
-        href={`/dashboard/voice?theme=${encodeURIComponent(f.verdict?.objectId ?? '')}&audience=${encodeURIComponent(f.audience)}`}
+        href={`${surface('market').href}?conv=${encodeURIComponent(f.verdict?.objectId ?? '')}`}
         className="hover:underline"
       >
         Open the <span data-copy="figure">{fmtInt(f.value.k)}</span> videos behind this →

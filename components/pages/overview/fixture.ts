@@ -532,7 +532,7 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
         status: 'in_progress',
         statusLabel: 'Working on it',
         decidedAt: '2026-09-02',
-        href: '/dashboard/market',
+        href: '/dashboard/moves',
       },
       // THE ARTBOARD'S TWO VOICES, with the tail `loadVoices` now composes:
       // platform · date · WHOSE video it was. The second carries the video's

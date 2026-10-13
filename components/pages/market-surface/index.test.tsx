@@ -688,7 +688,7 @@ describe('MK2 · the ledger', () => {
     const data = deepLinkFixture()
     const markup = render(marketAdvice.render(data, 'app', ctx))
     expect(markup).toContain(`id="advice-${data.advice.highlight}"`)
-    expect(markup).toContain(`/dashboard/market?item=${data.advice.highlight}`)
+    expect(markup).toContain(`/dashboard/moves?advice=${data.advice.highlight}`)
     expect(renderText(marketAdvice.render(data, 'app', ctx))).toContain('This is the piece of advice your link named.')
   })
 

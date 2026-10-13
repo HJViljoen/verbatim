@@ -133,7 +133,8 @@ export async function loadMonthly(scope: Scope): Promise<MonthlyData | null> {
       ledger: overview.sentence.ledger,
       // A paused tenant is promised no update, so no next monthly either.
       next: overview.reading?.paused ? null : nextMonthlyOf(overview.month, schedule ? scheduledUpdateAfter(schedule) : null),
-      href: '/dashboard/market',
+      // Your moves (/dashboard/moves since Design v2; Market took /dashboard/market).
+      href: '/dashboard/moves',
     },
     subject: monthlySubject(overview.brand, overview.month, market?.videos ?? null),
   }
