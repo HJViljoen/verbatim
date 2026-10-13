@@ -85,6 +85,7 @@ import { priorPrintable, type Verdict } from './verdicts'
 //   loadCreatorThemes(handle, input: { month: string; audiences?: readonly string[] }): Promise<CreatorThemes>
 //
 // Groups (personas: today's groups, this month's videos; never a series)
+//   commentVideoKey(platform: string, platformVideoId: string): string   the `market` map's key
 //   groupMonthVideos(input: { month: string; personas: readonly GroupPersona[]; evidence: readonly GroupEvidence[]; market: ReadonlyMap<string, string> }): GroupMonthVideos[]
 //   groupSubjects(input: { month: string; personas: readonly GroupPersona[]; evidence: readonly GroupEvidence[];
 //     memberships: readonly GroupMembership[]; subjects: ReadonlyMap<string, string>; market: ReadonlyMap<string, string> }): GroupSubjectRow[]
