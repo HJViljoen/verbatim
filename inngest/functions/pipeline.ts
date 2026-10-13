@@ -37,6 +37,7 @@ import { reevaluatePlanChecks } from '@/lib/ask/reevaluate'
 import { measureStatements, measureSummary, statementMonth, statementsBudget } from '@/lib/statements/measure'
 import { runWeekReadStep } from '@/lib/written/step'
 import { runLongRunStep } from '@/lib/written/longrun'
+import { runPostIdeasStep } from '@/lib/post-ideas/step'
 import { isTestRun } from '@/lib/schedules/due'
 import { briefComposeStep, briefIdeasStep, briefResearchStep, briefWriteStep, planBriefsStep, type BriefWave, type BriefWritten } from '@/lib/reports/briefs/step'
 import { BRIEF_ROLES } from '@/lib/reports/briefs/types'
@@ -2167,6 +2168,28 @@ export const runPipeline = inngest.createFunction(
       })
       .catch((e) => {
         console.error(`[write-week-read] out of retries: ${e instanceof Error ? e.message : String(e)}`)
+        return null
+      })
+
+    // The week's post ideas (depth v2, T13; lib/post-ideas/step.ts): up to
+    // three question conversations of the run's window that the client's own
+    // posts have not touched, each with a title, a cover and its sub-questions
+    // (the writer's words over comment ids; code counts them and picks the
+    // format, the opening and the length), upserted into `post_ideas`. An
+    // ADDITIVE id in its own position, after write-week-read and before
+    // write-longrun-read: 71 ids before it, 72 with it.
+    //
+    // NON-FATAL in the week read's way: a transient failure before the last
+    // attempt throws, so Inngest retries the step; on the last attempt, and
+    // on any other failure at once, the body never throws and alerts the
+    // operator ONCE, inside the step. A TEST run writes nothing; no table
+    // yet, or a thin week, is a no-op that spends nothing. Logged here, never
+    // noteError'd: a clean run must not read 'partial' over its post ideas.
+    await step
+      .run('write-post-ideas', () =>
+        runPostIdeasStep(createAdminClient(), { clientId, runId, testRun: isTestRun({ id: runId, options }), lastAttempt: attempt >= (maxAttempts ?? 3) - 1 }))
+      .catch((e) => {
+        console.error(`[write-post-ideas] out of retries: ${e instanceof Error ? e.message : String(e)}`)
         return null
       })
 

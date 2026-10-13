@@ -240,16 +240,18 @@ describe('the pipeline carries write-week-read', () => {
   const src = readFileSync(new URL('../../inngest/functions/pipeline.ts', import.meta.url), 'utf8')
   const ids = stepIds(src)
 
-  it('as one additive id, immediately after ask-reevaluate; the long-run read\'s own step follows it, then the month\'s briefs and close-run (71 in all: the pass-b wave family since 4 Oct, the briefs\' five since 5 Oct)', () => {
-    expect(ids).toHaveLength(71)
+  it('as one additive id, immediately after ask-reevaluate; the post ideas\' step follows it, then the long-run read\'s, the month\'s briefs and close-run (72 in all: the pass-b wave family since 4 Oct, the briefs\' five since 5 Oct, write-post-ideas since depth v2)', () => {
+    expect(ids).toHaveLength(72)
     expect(ids.filter((id) => id === 'write-week-read')).toHaveLength(1)
     const at = ids.indexOf('write-week-read')
     expect(ids[at - 1]).toBe('ask-reevaluate')
-    expect(ids[at + 1]).toBe('write-longrun-read')
+    // lib/post-ideas/step.test.ts pins write-post-ideas.
+    expect(ids[at + 1]).toBe('write-post-ideas')
+    expect(ids[at + 2]).toBe('write-longrun-read')
     // The briefs' own steps sit between it and close-run
     // (lib/reports/briefs/step.test.ts pins them).
-    expect(ids[at + 2]).toBe('plan-briefs')
-    expect(ids[at + 7]).toBe('close-run')
+    expect(ids[at + 3]).toBe('plan-briefs')
+    expect(ids[at + 8]).toBe('close-run')
   })
 
   it('write-longrun-read: one additive id in its own position, fail-soft like the week\'s, outside the consumer-profile flag', () => {
