@@ -259,6 +259,8 @@ describe('the step: a timeout is retried as a step, then a failed read, stored, 
     const alerts: string[] = []
     await expect(runWeekReadStep({} as SupabaseClient, { clientId: 'client-1', runId: 'run-27', company: 'Sealand', lastAttempt: false }, {
       applied: async () => true,
+      // The update's anomaly check (T11b): no table here, so no check.
+      anomaly: async () => ({ check: undefined, flags: null }),
       build: async () => { throw asTimeout(new Error('Ask verdict call failed: Request timed out.'), 'check') },
       save: async (_a, row) => { saved.push(row) },
       alert: async (subject) => { alerts.push(subject); return { sent: true } },
@@ -272,6 +274,8 @@ describe('the step: a timeout is retried as a step, then a failed read, stored, 
     const alerts: { subject: string; text: string }[] = []
     const r = await runWeekReadStep({} as SupabaseClient, { clientId: 'client-1', runId: 'run-27', company: 'Sealand', lastAttempt: true }, {
       applied: async () => true,
+      // The update's anomaly check (T11b): no table here, so no check.
+      anomaly: async () => ({ check: undefined, flags: null }),
       build: async (_admin, opts) => {
         // The step hands the build its clock.
         expect(opts.budget?.optionsFor('writer')).toEqual({ timeout: 150_000, maxRetries: 0 })

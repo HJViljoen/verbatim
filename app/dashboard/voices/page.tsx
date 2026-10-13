@@ -1,7 +1,7 @@
 import { getSessionContext } from '@/lib/auth'
 import { readingHandle } from '@/lib/reading/read'
-import { loadVoiceSurface, type VoiceSurfaceParams } from '@/lib/pages/voice-surface'
-import { VoiceSurfacePage } from '@/components/pages/voice-surface'
+import { loadVoices, parseVoicesParams } from '@/lib/pages/v2/voices'
+import { VoicesPage } from '@/components/pages/v2/voices'
 import type { Metadata } from 'next'
 import { surface } from '@/lib/nav'
 
@@ -9,29 +9,25 @@ import { surface } from '@/lib/nav'
 // layout's template adds ' · Verbatim').
 export const metadata: Metadata = { title: surface('voices').label }
 
-// VOICES AT /dashboard/voices (Design v2, decision 6 of the depth plan): who
-// is saying it, and who matters.
+// VOICES AT /dashboard/voices (Design v2, depth plan T4; boards E3-Voices and
+// E3-Voices-Open): who is saying it, and who matters. The groups in your
+// market this month, the brands it names and how it treats them, and the
+// creators behind most of its videos (lib/pages/v2/voices.ts). One item opens
+// in place under its row: `?group=<key>`, `?brand=<name>`, `?creator=<account>`.
 //
-// A PLACEHOLDER UNTIL THE VOICES PAGE LANDS (depth plan T4): Conversation as
-// it was drawn at /dashboard/voice ("everything your market talked about, in
-// full", market-first WP2.4), whose cast and brands' videos are Voices' now.
-// An old Conversation link lands here with its params (lib/nav.ts
-// `redirectFor`), except one that opened a theme, which Market opens
-// (`?conv=`). `?brand=` (Competitive's "Open {brand}'s videos →", and
-// Competitive's own `?vs=`) puts one tracked brand's videos over B2's ninety
-// days in the board's place; `?horizon=` and `?audience=` are read as nothing.
+// OLD LINKS LAND HERE (lib/nav.ts `redirectFor`): Conversation's
+// `/dashboard/voice` with its params (`?persona=` opens that group, `?brand=`
+// that brand), and Competitive's `?vs=` as `?brand=`, which takes the rival's
+// name or its audience key (`competitor:<name>`).
 //
-// The legacy Voice of Customer module stays registered under the page key
-// `voice` (components/pages/registry.ts) for the export route, the share page
-// and the Studio. This file is a ROUTE, not the module an artefact names.
+// THE LEGACY MODULES STAY REGISTERED, NOT ROUTED: the Voice of Customer module
+// (page key `voice`), its six `voice.*` blocks, `VoiceSurfacePage` and
+// `COMPETITIVE_BLOCKS` render stored snapshots, exports and share links. This
+// file is a ROUTE, not the module an artefact names.
 
-export default async function Page({ searchParams }: { searchParams?: Promise<VoiceSurfaceParams> }) {
+export default async function Page({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
   const { supabase, clientId } = await getSessionContext()
-  const sp = ((await searchParams) ?? {}) as Record<string, string | undefined>
-  const data = await loadVoiceSurface({ supabase, clientId, reading: readingHandle(clientId), params: sp })
-  // THE APPROVED ARTBOARD (the pages build, 1 Oct): the title alone at the
-  // top, no month chip, no "as at" line and no Export (the export route
-  // renders the legacy Voice module, so a PDF from here would not be this
-  // page).
-  return <VoiceSurfacePage data={data} params={sp} />
+  const params = parseVoicesParams((await searchParams) ?? {})
+  const data = await loadVoices({ supabase, clientId, reading: readingHandle(clientId), params })
+  return <VoicesPage data={data} />
 }

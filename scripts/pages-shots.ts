@@ -81,6 +81,15 @@ import { SearchTerms } from '../components/pages/settings/search-terms'
 import { YourAccounts } from '../components/pages/settings/your-accounts'
 import { BrandsYouTrack, Communities, NotYourMarket } from '../components/pages/settings/tracked-cards'
 import { whatYouTrack } from '../lib/pages/settings'
+import { ProductsTab } from '../components/pages/settings/products'
+import { productsFixtureRead } from '../components/pages/settings/products/fixture'
+import { productSettingsView, type ProductSettingsRead } from '../lib/settings/products'
+import { YourSubjectsTab } from '../components/pages/settings/subjects'
+import { subjectsFixtureRows } from '../components/pages/settings/subjects/fixture'
+import { yourSubjectsView, type SubjectSettingsRow } from '../lib/settings/your-subjects'
+import { VoicesPage } from '../components/pages/v2/voices'
+import { VOICES_FIXTURES } from '../lib/pages/v2/voices-fixture'
+import type { VoicesData } from '../lib/pages/v2/voices'
 import { MarketPage } from '../components/pages/v2/market'
 import { marketFixture } from '../lib/pages/v2/market-fixture'
 import type { MarketData } from '../lib/pages/v2/market'
@@ -216,6 +225,28 @@ function settingsModel() {
 
 const noop = async <T,>(prev: T): Promise<T> => prev
 
+/** Settings › Your products and Your subjects (depth v2, T10b/T10c): the
+ *  fixtures, or a loader's production output dumped to JSON (`--settings-dump
+ *  <file>`: `{ products, subjects }`, as scripts the package ran wrote them). */
+const settingsDump = (() => {
+  const file = flag('settings-dump', '')
+  return file ? JSON.parse(readFileSync(resolve(file), 'utf8')) as { products: ProductSettingsRead; subjects: { state: 'missing' } | { state: 'ready'; rows: SubjectSettingsRow[] } } : null
+})()
+const settingsProductsPage = () => {
+  const read = settingsDump ? settingsDump.products : productsFixtureRead()
+  return h(SettingsFrame, {
+    active: 'products', title: 'Settings', operator: false,
+    children: h(ProductsTab, { view: read.state === 'missing' ? null : productSettingsView(read, { selected: null, canEdit: true }) }),
+  })
+}
+const settingsSubjectsPage = () => {
+  const read = settingsDump ? settingsDump.subjects : { state: 'ready' as const, rows: subjectsFixtureRows() }
+  return h(SettingsFrame, {
+    active: 'subjects', title: 'Settings', operator: false,
+    children: h(YourSubjectsTab, { view: read.state === 'missing' ? null : yourSubjectsView(read.rows, true) }),
+  })
+}
+
 /** The Agent's earlier questions: the fixture's threads and two more, newest
  *  first, as `loadAskHistory` hands the page twenty. */
 const AGENT_HISTORY = askHistory([
@@ -272,10 +303,8 @@ const agentThread = (raw = agentFixture()) => {
 
 /** Market (depth v2, T3) from a loader dump: `MARKET_V2_JSON=<file>` names
  *  the JSON `scripts/market-v2-dump.ts` wrote (production, read once under
- *  the lock); without it, the fixture. */
-const marketDump = (): MarketData => (process.env.MARKET_V2_JSON
-  ? JSON.parse(readFileSync(process.env.MARKET_V2_JSON, 'utf8')) as MarketData
-  : marketFixture())
+ *  the lock). */
+const marketDump = (): MarketData => JSON.parse(readFileSync(process.env.MARKET_V2_JSON as string, 'utf8')) as MarketData
 
 // ---- the pages, as their routes compose them -------------------------------------
 
@@ -327,6 +356,22 @@ const PAGES: Page[] = [
       })
     },
   },
+  { key: 'settings-products', path: '/dashboard/settings/products', artboard: 'E8-Settings-Products.dc.html', page: settingsProductsPage },
+  { key: 'settings-subjects', path: '/dashboard/settings/subjects', artboard: 'no-board-settings-subjects.dc.html', page: settingsSubjectsPage },
+  // Voices (depth v2, T4), beside the boards E3-Voices and E3-Voices-Open.
+  // `voices-real` draws a dump of the loader's production output
+  // (`VOICES_JSON=<file>`, one per tenant, read once under the lock).
+  { key: 'voices-ossur', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES.ossur() }) },
+  { key: 'voices-ossur-group', path: '/dashboard/voices', artboard: 'E3-Voices-Open.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['ossur-group']() }) },
+  { key: 'voices-ossur-creator', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['ossur-creator']() }) },
+  { key: 'voices-sealand', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES.sealand() }) },
+  { key: 'voices-sealand-brand', path: '/dashboard/voices', artboard: 'E3-Voices-Open.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['sealand-brand']() }) },
+  { key: 'voices-sealand-creator', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['sealand-creator']() }) },
+  // Only where a dump is named: unset, the entry is not listed, so a run of
+  // every page never stops on a missing file.
+  ...(process.env.VOICES_JSON
+    ? [{ key: 'voices-real', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: JSON.parse(readFileSync(process.env.VOICES_JSON as string, 'utf8')) as VoicesData }) }]
+    : []),
   // Market (depth v2, T3), to the E2 boards: the week with the check's flag,
   // the week with none (the biggest new conversation leads), a conversation
   // open under the top row, under the table, a subject open, the month and
@@ -338,7 +383,10 @@ const PAGES: Page[] = [
   { key: 'market-v2-subject', path: '/dashboard/market', artboard: 'E2-Market-Open.dc.html', page: () => h(MarketPage, { data: marketFixture({ subject: 'cost' }) }) },
   { key: 'market-v2-month', path: '/dashboard/market', artboard: 'E2-Market.dc.html', page: () => h(MarketPage, { data: marketFixture({ period: 'month' }) }) },
   { key: 'market-v2-time', path: '/dashboard/market', artboard: 'E2-Market.dc.html', page: () => h(MarketPage, { data: marketFixture({ period: 'time' }) }) },
-  { key: 'market-v2-real', path: '/dashboard/market', artboard: 'E2-Market.dc.html', page: () => h(MarketPage, { data: marketDump() }) },
+  // Only where a dump is named (as Voices' `voices-real`).
+  ...(process.env.MARKET_V2_JSON
+    ? [{ key: 'market-v2-real', path: '/dashboard/market', artboard: 'E2-Market.dc.html', page: () => h(MarketPage, { data: marketDump() }) }]
+    : []),
 ]
 
 // ---- the shell -----------------------------------------------------------------

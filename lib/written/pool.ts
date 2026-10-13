@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { chunk, UUID_IN_CHUNK } from '../chunk'
 import { COMMENTS_READ_LANE } from '../pipeline/pass-a'
 import { rowWindow, type WindowColumns } from '../pipeline/run-bookkeeping'
-import { HEADLINE_MAX_MAKER_SHARE, loadRegimeOpened } from '../pages/overview'
+import { HEADLINE_MAX_MAKER_SHARE, loadRegimeOpened, loadThemeSegmentRows } from '../pages/overview'
 import { THEME_FLOOR, themeFlags } from '../pages/overview-market/board'
 import { accountKey } from '../pages/overview-market/voices'
 import { loadMemberInsightIdsBySubject } from '../pages/subjects'
@@ -21,7 +21,8 @@ import { loadActiveSubjects } from '../subjects/membership'
 import { isMissingSubjects } from '../subjects/types'
 import { gateInputOf, judge, loadDatedEvidence, loadTrackedBrands, passes, refOf, type DatedEvidence } from './evidence'
 import { quoteForm, type QuoteSubstance } from './substance'
-import type { Lens, PoolCandidate, QuoteOption, QuoteRef, WeekMarketFigures, WeekPool } from './types'
+import { setApartIds, weekConversations } from './conversations'
+import type { Lens, PoolCandidate, QuoteOption, QuoteRef, WeekMarketFigures, WeekPool, WeekReadConversation } from './types'
 
 // The week pool (plan T1): the themes a week's written findings may be built
 // from, each with the evidence code stands behind.
@@ -472,6 +473,8 @@ export interface PoolHead {
   market?: WeekMarketFigures | null
   /** The month is stated in full (a week that carried past its end, M2). */
   monthComplete?: boolean
+  /** The week's conversations as its lead ranks them (T11b). */
+  conversations?: WeekReadConversation[]
 }
 
 /** The per-theme facts read after eligibility, for the candidates kept. */
@@ -569,10 +572,15 @@ export async function loadWeekPool(
   const ranked = rankEligible(themes.map((t) => judgeTheme(clientId, t, evidence)))
   const kept = ranked.slice(0, POOL_CAP).map((j) => j.theme)
 
-  const [monthRead, subjectOf, monthHeard] = await Promise.all([
-    loadMonthFacts(admin, { clientId, runId, window, month, monthTo: reading.to, themes: kept, rivals }),
+  const [monthRead, subjectOf, monthHeard, segments] = await Promise.all([
+    // The month's category counts for EVERY theme read (the week's lead,
+    // T11b); `themeFlags`' inputs for the kept ones only, as before.
+    loadMonthFacts(admin, { clientId, runId, window, month, monthTo: reading.to, themes: kept, allThemes: themes, rivals }),
     loadThemeSubjects(admin, clientId, kept),
     loadMonthVideoIds(admin, { clientId, window, month, monthTo: reading.to, themes: kept, brands }),
+    // Market's set-apart mark (maker-led or off-topic in the month), under
+    // this run's clustering; none where the rule is off or unmeasured.
+    loadThemeSegmentRows(admin, clientId, month, runId),
   ])
   return buildWeekPool(
     {
@@ -585,6 +593,7 @@ export async function loadWeekPool(
       monthVideos: monthRead.monthN,
       market: marketFiguresOf({ week: week.denominators, month: monthRead.marketRows, rivals }),
       monthComplete: reading.complete,
+      conversations: weekConversations({ themes, monthK: monthRead.monthK, setApart: setApartIds(segments) }),
     },
     ranked,
     { monthK: monthRead.monthK, flags: monthRead.flags, subjectOf, monthVideoIds: monthHeard.ids, firstHeard: monthHeard.first },
@@ -696,18 +705,24 @@ export async function loadPoolThemes(
  */
 async function loadMonthFacts(
   admin: SupabaseClient,
-  a: { clientId: string; runId: string; window: { from: string; to: string }; month: string; monthTo: string; themes: readonly PoolTheme[]; rivals: readonly string[] },
+  a: {
+    clientId: string; runId: string; window: { from: string; to: string }; month: string; monthTo: string; themes: readonly PoolTheme[]; rivals: readonly string[]
+    /** Every theme read, for the month's counts alone (T11b); `themes` is
+     *  still the set `themeFlags`' inputs are read for. Absent is `themes`. */
+    allThemes?: readonly PoolTheme[]
+  },
 ): Promise<{ monthN: number; monthK: Map<string, number>; flags: PoolFacts['flags']; marketRows: { audience: string; videos: number; comments: number }[] | null }> {
   const ids = a.themes.map((t) => t.themeId)
+  const countIds = [...new Set([...ids, ...(a.allThemes ?? []).map((t) => t.themeId)])]
   const set = await loadMonthSeries(admin, a.clientId, {
     objectKind: 'theme',
-    objectIds: ids,
+    objectIds: countIds,
     from: FIRST_MONTH,
     to: a.month,
     updatesByMonth: {},
     firstRunMonth: null,
   })
-  if (set.substrate !== 'seeded' || (ids.length > 0 && set.numeratorSubstrate !== 'seeded')) {
+  if (set.substrate !== 'seeded' || (countIds.length > 0 && set.numeratorSubstrate !== 'seeded')) {
     throw new Error(`written pool: the month rows are ${set.substrate === 'seeded' ? set.numeratorSubstrate : set.substrate}`)
   }
   const denOf = (m: string) => set.denominators.find((d) => monthStartOf(d.month) === m && d.audience === INDUSTRY_AUDIENCE) ?? null
@@ -722,13 +737,13 @@ async function loadMonthFacts(
   const den = denOf(a.month)
   if (den && den.run_id === a.runId) {
     monthN = den.videos
-    for (const id of ids) monthK.set(id, categoryPoint(id, a.month)?.k ?? 0)
+    for (const id of countIds) monthK.set(id, categoryPoint(id, a.month)?.k ?? 0)
     marketRows = set.denominators.filter((d) => monthStartOf(d.month) === a.month)
   } else {
     const read = await loadWindowReading(admin, a.clientId, { from: `${a.month}T00:00:00.000Z`, to: a.monthTo, runId: a.runId, audiences: marketAudiences(a.rivals) })
     if (!read.denominators || !read.themes) throw new Error('written pool: the window reads are not applied here')
     monthN = read.denominators.find((d) => d.audience === INDUSTRY_AUDIENCE)?.videos ?? 0
-    for (const id of ids) monthK.set(id, read.themes.find((t) => t.audience === INDUSTRY_AUDIENCE && String(t.theme_id) === id)?.videos ?? 0)
+    for (const id of countIds) monthK.set(id, read.themes.find((t) => t.audience === INDUSTRY_AUDIENCE && String(t.theme_id) === id)?.videos ?? 0)
     marketRows = read.denominators
   }
 

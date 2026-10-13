@@ -27,6 +27,7 @@ const SHARED: Readonly<Record<string, string>> = {
   // sub-page, and components/settings-skeleton.tsx draws that shell.
   'settings/connections': 'settings', // redirects to /dashboard/settings
   'settings/how-to-read': 'settings',
+  'settings/products': 'settings', // Your products (depth v2, T10b)
   'settings/readiness': 'settings',
   'settings/record': 'settings',
   'settings/reports': 'settings',
@@ -135,7 +136,8 @@ describe('dashboard loading skeletons', () => {
 
   it('Your moves took its skeleton to its new address, and the placeholders theirs', () => {
     expect(readFileSync(join(ROOT, 'moves', 'loading.tsx'), 'utf8')).toContain("from '@/components/pages/moves/words'")
-    expect(readFileSync(join(ROOT, 'voices', 'loading.tsx'), 'utf8')).toContain('<ConversationTitle />')
+    // Voices drew Conversation's skeleton until its own page landed (T4).
+    expect(readFileSync(join(ROOT, 'voices', 'loading.tsx'), 'utf8')).toContain("surface('voices')")
     expect(readFileSync(join(ROOT, 'content', 'loading.tsx'), 'utf8')).toContain("surface('content')")
   })
 

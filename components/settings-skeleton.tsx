@@ -14,7 +14,7 @@ export function SettingsSkeleton({ title, cards = 3 }: { title: string; cards?: 
       <PageBar title={title}>
         <Bone className="h-10 w-[104px] rounded-[10px]" />
       </PageBar>
-      <nav aria-hidden className="flex gap-1 overflow-x-hidden">
+      <nav aria-hidden className="flex flex-wrap gap-1">
         {settingsTabs(false).map((s, i) => (
           <div key={s.key} className="flex h-[38px] shrink-0 items-center px-4">
             <Bone className={i === 0 ? 'h-3 w-24' : 'h-3 w-14'} />
