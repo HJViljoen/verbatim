@@ -84,6 +84,17 @@
 #         v2 reads it; depth v2's steps, pages and Settings each say "not
 #         there" and write nothing until it is in. Apply it BEFORE deploying
 #         depth v2's Settings (T10b), and before scripts/products.ts --apply.
+#   moves-role = 20261110090000_moves_role_gate.sql (decision 6a, 13 Oct),
+#         after products, from the deployed tree. Not additive: it replaces
+#         four write policies (moves INSERT and UPDATE, rec_decisions INSERT,
+#         recommendations UPDATE) with ones that add the role (owner or admin,
+#         or a platform admin) to the same tenant and actor pins, so a
+#         member's own JWT can no longer write them. No grant, no SELECT
+#         policy, no table and no function changes (the runner reads the
+#         member's column grants on the three tables before and after).
+#         Apply it once depth v2 is deployed: its app already refuses a
+#         member on every one of these writes, so no app write a person makes
+#         is lost; scripts/pg-shim/moves-role-gate-checks.sql is the proof.
 #
 # TESTED on a throwaway PG 17 cluster (scripts/pg-shim/throwaway.sh) through
 # --test-target, which takes MF_TEST_DB_URL, accepts ONLY a 127.0.0.1 or
@@ -154,8 +165,13 @@ case "$SET" in
     LABELS=(PRODUCTS)
     PREREQ_VERSION="20261108090000"; PREREQ_NAME="costs"
     ;;
-  "") echo "ABORT: --set is required (mf1 | r12 | mf2 | mf4 | mf3 | mf5 | products)."; exit 2 ;;
-  *) echo "ABORT: unknown set '$SET' (mf1 | r12 | mf2 | mf4 | mf3 | mf5 | products)."; exit 2 ;;
+  moves-role)
+    EXPECTED_FILES=(20261110090000_moves_role_gate.sql)
+    LABELS=(MOVES_ROLE)
+    PREREQ_VERSION="20261109090000"; PREREQ_NAME="products"
+    ;;
+  "") echo "ABORT: --set is required (mf1 | r12 | mf2 | mf4 | mf3 | mf5 | products | moves-role)."; exit 2 ;;
+  *) echo "ABORT: unknown set '$SET' (mf1 | r12 | mf2 | mf4 | mf3 | mf5 | products | moves-role)."; exit 2 ;;
 esac
 N=${#EXPECTED_FILES[@]}
 for f in "${EXPECTED_FILES[@]}"; do
@@ -788,6 +804,60 @@ SQL
   echo "  expect: 0 rows in each (scripts/products.ts --apply seeds the catalogue; the back-read and the steps write the rest)"
 }
 
+# MOVES_ROLE (decision 6a): the four write policies on moves, rec_decisions
+# and recommendations now carry the role; the old four are gone; the SELECT
+# policies and every member column grant on the three tables are as read
+# before the apply (pre-check 5).
+MOVES_ROLE_POLICIES="'Owners and admins declare moves','Owners and admins move moves along','Owners and admins record decisions','Owners and admins update recommendations'"
+MOVES_ROLE_OLD="'Members declare their own moves','Members move their moves along','Members record their own decisions','Users can update own recommendations'"
+MOVES_ROLE_GRANTS_SQL="select string_agg(table_name || '.' || privilege_type || '(' || column_name || ')', ', ' order by table_name, privilege_type, column_name)
+  from information_schema.role_column_grants where table_schema = 'public' and grantee = 'authenticated'
+   and table_name in ('moves', 'rec_decisions', 'recommendations') and privilege_type in ('INSERT', 'UPDATE');"
+MOVES_ROLE_READS_SQL="select string_agg(tablename || ':' || policyname, ', ' order by tablename, policyname) from pg_policies
+  where schemaname = 'public' and tablename in ('moves', 'rec_decisions', 'recommendations') and cmd = 'SELECT';"
+PRE_MOVES_GRANTS=""
+PRE_MOVES_READS=""
+
+verify_MOVES_ROLE() {
+  local sql
+  read -r -d '' sql <<SQL
+select
+  (select count(*) from pg_policies where schemaname = 'public' and roles = '{authenticated}'
+    and policyname in ($MOVES_ROLE_POLICIES)
+    and with_check like '%get_my_role()%' and with_check like '%is_superadmin()%' and with_check like '%get_my_client_id()%'
+    and (cmd = 'INSERT' or qual like '%get_my_role()%'))                                                  as gated,
+  (select count(*) from pg_policies where schemaname = 'public' and policyname in ($MOVES_ROLE_OLD))      as old_left,
+  (select count(*) from pg_policies where schemaname = 'public'
+    and tablename in ('moves', 'rec_decisions', 'recommendations') and cmd in ('INSERT', 'UPDATE', 'DELETE', 'ALL')
+    and policyname not in ($MOVES_ROLE_POLICIES))                                                         as other_writes;
+SQL
+  show "$sql"
+  echo "  expect: the four role-gated write policies, none of the old four, and no other write policy on the three tables"
+  check "gated|old|other" "$(sed "s/$FS/|/g" <<<"$OUT")" "4|0|0"
+
+  show "$MOVES_ROLE_GRANTS_SQL"
+  echo "  expect: the member's column grants on the three tables as read before the apply (pre-check 5)"
+  check "member column grants kept" "$OUT" "$PRE_MOVES_GRANTS"
+  show "$MOVES_ROLE_READS_SQL"
+  echo "  expect: the SELECT policies as read before the apply (reads unchanged)"
+  check "SELECT policies kept" "$OUT" "$PRE_MOVES_READS"
+
+  show "$TENANT_UPDATE_SQL"
+  echo "  expect: MOVES_ROLE changes no grant on tracking_configs, so the list read before it"
+  check "tenant UPDATE columns kept" "$OUT" "$PRE_TENANT_UPDATE"
+  finish_verify "$CURRENT"
+
+  echo
+  echo "  == MOVES_ROLE READING (human read): who in each tenant can now write Your moves =="
+  read -r -d '' sql <<'SQL'
+select c.company_name, u.role, count(*) as people
+from public.users u join public.clients c on c.id = u.client_id
+group by c.company_name, u.role order by c.company_name, u.role;
+SQL
+  show "$sql"
+  echo "  expect: every member row here can still read Your moves and no longer write it; owners and admins write as before"
+}
+
 # ------------------------------------------------------------ pre-checks ----
 echo "== plan: $N file(s), filename order, one psql + one transaction each =="
 for i in "${!EXPECTED_FILES[@]}"; do printf '  %-5s %s\n' "${LABELS[$i]}" "${EXPECTED_FILES[$i]}"; done
@@ -828,6 +898,15 @@ if [[ "$SET" == "mf3" || "$SET" == "products" ]]; then
   PRE_GUARDS="$(sed "s/$FS/|/g" <<<"$PRE_GUARDS")"
   echo "  functions and triggers | md5 = $PRE_GUARDS"
   echo "  (${LABELS[0]} must leave this line as it is: verify_${LABELS[0]} reads it again after the apply)"
+fi
+
+if [[ "$SET" == "moves-role" ]]; then
+  echo "== pre-check 5: the member's column grants and the SELECT policies on moves, rec_decisions and recommendations =="
+  if ! PRE_MOVES_GRANTS="$(q "$MOVES_ROLE_GRANTS_SQL")"; then echo "ABORT: grant query failed. Nothing applied."; exit 1; fi
+  if ! PRE_MOVES_READS="$(q "$MOVES_ROLE_READS_SQL")"; then echo "ABORT: policy query failed. Nothing applied."; exit 1; fi
+  echo "  member INSERT/UPDATE grants: ${PRE_MOVES_GRANTS:-(none)}"
+  echo "  SELECT policies:             ${PRE_MOVES_READS:-(none)}"
+  echo "  (${LABELS[0]} must leave both as they are: verify_${LABELS[0]} reads them again after the apply)"
 fi
 
 HCOLS=""
@@ -943,6 +1022,10 @@ case "$SET" in
   products)
   echo "DONE: $SET applied, verified and recorded. The products tables are in and empty."
   echo "  Next: scripts/products.ts --seed (dry), then --apply, once the catalogue seed is reviewed; the back-read after."
+  ;;
+  moves-role)
+  echo "DONE: $SET applied, verified and recorded. A member's session can no longer accept or set aside advice, date or track a move,"
+  echo "  or change a move's status; owners, admins, the operator and the service role write as before."
   ;;
 esac
 echo "Log: $LOG"
