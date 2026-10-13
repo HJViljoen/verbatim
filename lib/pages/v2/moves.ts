@@ -26,6 +26,7 @@ import { subjectCalibration } from '../../subjects/calibration-state'
 import { earliestMoveDay } from '../../subjects/move-day'
 import type { MoveStatus } from '../../subjects/types'
 import { adviceShortlist, adviceVectors, currentAdvice } from '../advice-shortlist'
+import { adviceTitle, streakLabel, UNTITLED_ADVICE, type AdviceHistory } from './advice-words'
 import type { MoveDating } from '../date-move'
 import { fetchRunningRunIds } from '../latest-video-run'
 import { loadRegistryLabels } from '../registry-labels'
@@ -142,20 +143,6 @@ export function waitingAdvice<R extends AdviceRow>(rows: readonly R[], vectors: 
   return list.lineages.map((id) => byLineage.get(id)).filter((r): r is R => r != null && r.status === 'new')
 }
 
-/** How long the product has been raising one piece of advice, in updates. */
-export interface AdviceHistory {
-  /** Each update that raised it, oldest first, `YYYY-MM-DD` (the update's own
-   *  date: when its advice was written). */
-  dates: string[]
-  /** Updates in a row, ending with the latest update that carried advice,
-   *  that raised it. 0 where the latest update did not. */
-  streak: number
-  /** The first update of the streak, `YYYY-MM-DD`; null with no streak. */
-  since: string | null
-  /** The latest updates that carried advice (at most `HISTORY_DOTS`), oldest
-   *  first: whether each raised this one. */
-  recent: boolean[]
-}
 
 /** The dots under "updates in a row": the board's nine. */
 export const HISTORY_DOTS = 9
@@ -531,12 +518,10 @@ export const PLAN_TITLE = 'Your plan, checked against the market'
 export const STATEMENTS_TITLE = 'What you say, and what comes back'
 export const ASK_ABOUT = 'Ask the Agent about this'
 
-/** What a piece of advice whose stored title is blank is called: one of
- *  Össur's current pieces (written 12 Oct) has an empty title, and a card,
- *  a tag or a dated move cannot be nameless (a move's title is 1 to 120
- *  characters). */
-export const UNTITLED_ADVICE = 'A piece of advice with no title'
-export const adviceTitle = (title: string | null | undefined): string => (title ?? '').trim() || UNTITLED_ADVICE
+// The advice's words a card, the Dashboard tile and the weekly email's line
+// share, in a module that reads nothing (./advice-words.ts).
+export { adviceTitle, streakLabel, UNTITLED_ADVICE, type AdviceHistory }
+
 
 /** "3 pieces of advice waiting · 2 moves dated · 1 plan checked", as parts:
  *  each count is a figure the page marks. */
@@ -548,11 +533,6 @@ export function headerParts(c: MovesPageData['counts']): { n: number; words: str
   ]
 }
 
-/** The streak cell's label: "updates in a row, since 20 Jul". */
-export function streakLabel(h: AdviceHistory): string {
-  if (h.streak === 0 || !h.since) return h.dates.length === 1 ? 'update raised it' : 'updates raised it'
-  return h.streak === 1 ? `update, first raised ${shortDate(h.since)}` : `updates in a row, since ${shortDate(h.since)}`
-}
 
 /** The decision line under the history: "First suggested 20 Jul. Never
  *  accepted or declined." */
