@@ -117,11 +117,24 @@ This version has breaking changes — APIs, conventions, and file structure may 
   (`lib/post-ideas/step.test.ts` pins its neighbours, the total, its `.catch`
   and its place in `AFTER_GATHER_STEPS`). *What it writes:* up to three
   `post_ideas` rows, upserted on (run_id, rank) (`lib/post-ideas/step.ts`
-  `runPostIdeasStep`). *Candidates:* the run window's question conversations,
+  `runPostIdeasStep`). *The window it reads* (Heinrich, 13 Oct evening):
+  the ideas still refresh on every run, but they read the question comments
+  of the FOUR WEEKS ending at the run's window end, `ideasReadWindow`
+  (`lib/post-ideas/select.ts`, `POST_IDEAS_READ_DAYS` = 28; never the clock,
+  never past the run's end), one week having given one idea a tenant under
+  the floor. It is one `window_theme_readings` read over those 28 days under
+  the run's clustering (`loadWindowReading`, never a sum of weeks) and the
+  dated evidence over the same days (`loadDatedEvidence`); every row stores
+  it as `read_start` / `read_end` beside the run's `window_start` /
+  `window_end` (columns of the unapplied products migration, granted to
+  tenants, CHECK `read_start < read_end <= window_end`), and
+  `lib/post-ideas/inputs.test.ts` pins which days each read asks for.
+  *Candidates:* the question conversations of those four weeks,
   filed as `question` or whose commonest kind is a question
   (`isQuestionConversation`), each passing the week pool's `rankEligible`,
   untouched by the client's own posts (`questionTouch` over `ownedPosts`, the
-  reading month and the two before: `POST_IDEA_OWNED_MONTHS`) and clearing
+  run's reading month and the two before, to the run's end:
+  `POST_IDEA_OWNED_MONTHS`, unchanged by the four weeks) and clearing
   the evidence floor, `POST_IDEA_MIN_COMMENTS` (3) asking comments on
   `POST_IDEA_MIN_VIDEOS` (2) videos; biggest first. The floor is read twice:
   on the comments sent, so a conversation under it costs no call, and on what
@@ -173,7 +186,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
   counted at two characters a token and the full output ceiling) fits.
   Either refusal stops fail-soft: no call, no rows, status `over_budget`,
   one alert, and the result reports what the attempt really spent (an
-  unparsed answer is paid for; so does `failed`). `scripts/post-ideas.ts
+  unparsed answer is paid for; so does `failed`). `scripts/post-ideas.ts`
+  reads through the step's own `loadPostIdeaInputs`, so its dry run reads
+  the same four weeks (a saved file from before 13 Oct says it read the
+  run's own window). `scripts/post-ideas.ts
   --write` does not check the switch: it writes, and the pages hide what it
   wrote while the switch is off. *When it does nothing:* a TEST run reads and
   writes nothing. The switch off, no table (`isMissingPostIdeas`), no
@@ -829,7 +845,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
   an idea from an older week gives no line. Each line's month is its tile's:
   the reading month for Voices and Your products (`loadReadingMonth`), and
   for Content the month its idea week is restated against (`contentMonth`,
-  the `readingMonthOf` rule over the anchor week). Those can differ from each
+  the `readingMonthOf` rule over the anchor week). Content's line states the
+  idea's videos over the four weeks its ideas read, named by their days
+  ("48 of 640 videos, 14 Sep to 11 Oct · 35 of 318 in October so far";
+  `contentLine`), never "this week". Those months can differ from each
   other, and from the read's own month, for a week that crosses a month
   (Heinrich's open question on two month rules).
   `components/pages/v2/home/email-lines.test.tsx` holds each line to its
@@ -898,21 +917,34 @@ This version has breaking changes — APIs, conventions, and file structure may 
     fails throws, and the page loses only that block. Since Design v2 the
     routed readers are the Dashboard (`startDashboard`, which reads it once
     and hands it to `topMarket` and `topContent`), Market (`loadMarket`,
-    `topMarket`) and Content (`loadContentPage`, `topContent`). This week
+    `topMarket`) and Content (`loadContentPage`, `topContent`). The month's
+    long-run read (`week_reads` kind 'month', `loadPublishedLongRun`) has
+    ONE routed reader since 13 Oct (Heinrich): Market › This month
+    (`loadMarket`, `period === 'month'` only), which asks for exactly the
+    month the view reads (`loadPublishedLongRun(db, clientId, { month })`;
+    `marketLongRunOf` holds it there) and draws it last on the page, below
+    the conversation table (`components/pages/v2/market/long-run.tsx`,
+    `#long-run`). Never on This week or Over time; no read for that month,
+    no section and no placeholder. This week
     (`loadWeekReadPage`), the Subjects pane (`loadSubjectReadLine`) and Your
-    market (`loadMarketPicture`, the one `loadPublishedLongRun` call) still
-    read through it and are on no route. `lib/written/published.test.ts` pins
-    all six files, Your market's long-run read, and that the selector reads
-    no schedule and no send. A weekly read's
+    market (`loadMarketPicture`, the newest long-run read of any month, for
+    stored snapshots) still read through it and are on no route.
+    `lib/written/published.test.ts` pins all six files, both long-run
+    readers (Market's with its month), and that the selector reads no
+    schedule and no send. A weekly read's
     review email says the read is on the platform already and Send emails the
     list (`readOnPlatform`); the run that closes a month also writes the
     long-run read, and that run's operator review email carries its title,
     lead, headlines and sentences (`readyForReview`, `lib/email.ts`) under
-    "The month's long-run read (written; not shown on a page yet)"
-    (`ALSO_PUBLISHED_HEADING`): no routed page prints the long-run read since
-    Design v2, and where it lives next is Heinrich's call, so the heading
-    names no page (it said "Already on Your market" until the Phase 4 fix
-    round). The client's email is unchanged. **"On the platform"
+    "The month's long-run read, already on Market › This month"
+    (`ALSO_PUBLISHED_HEADING`), with a link to its month there
+    (`alsoPublishedOf` with the app's base URL: `marketMonthHref(month,
+    MARKET_LONG_RUN_ANCHOR)`, `lib/nav.ts`, e.g.
+    `/dashboard/market?period=month&month=2026-09#long-run`); a read that
+    could not be read into the email says where a written one is
+    (`ALSO_PUBLISHED_UNREAD`) and links nowhere. It said "Already on Your
+    market" until Design v2, then named no page from the Phase 4 fix round
+    to 13 Oct. The client's email is unchanged. **"On the platform"
     is about the ISSUE, not the pages** (the backfill, 1 Oct evening;
     migration `20261106090000_platform_publish.sql`): sent, or put there
     WITHOUT its email (`report_sends.published_at` and `published_by`,
@@ -934,7 +966,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
     (`mayBuildReports` on `/api/schedules/[id]/publish`). A long-run read
     written before its month closed carries `partialThrough` and does not
     stand as the month's (`standsAsMonthRead`), so the month-closing run
-    still writes the full one. A read's facts worded against a month say "this
+    still writes the full one; until it does, Market › This month prints the
+    partial one and says the day it reads to (`longRunSub`), and the full
+    one takes its place (the newest ready row of the month). A read's facts worded against a month say "this
     month" only while the read's month is the calendar month, and its name
     otherwise (`monthPhrase`: This week's blocks and the legacy overview's
     subjects, which render stored snapshots; fresh review B2). The
@@ -1027,8 +1061,20 @@ This version has breaking changes — APIs, conventions, and file structure may 
     (`unmeasuredOf`: `countedNote('provisional')`, `FAILED_EXPLAINED`, or no
     reading in the month yet). `?conv=` takes a registry id or a slug;
     `?subject=`, `?period=week|month|time`, `?month=` (`YYYY-MM` or a date),
-    `?at=` and `?in=` are read too (`marketParams`). It reads no long-run
-    read. The lead card labels all three weeks' bars, as the side card and
+    `?at=` and `?in=` are read too (`marketParams`). THIS MONTH ENDS WITH
+    THE MONTH'S LONG-RUN READ (Heinrich, 13 Oct): below the conversation
+    table, the last thing on the page, never at the top and never on This
+    week or Over time (`MarketData.longRun`, `marketLongRunOf`,
+    `LongRunSection`). It is the published read for the month the view
+    reads, and a month's read is written when it closes: so the default This
+    month shows it while the reading month is still the month just closed
+    (`readingMonthFor`, decision A), none once the reading month is the
+    month still filling, and `?month=` of a closed month shows that month's. Its title ("What holds across September and
+    October"), lead, headlines and sentences are stored `week_read` prose;
+    each idea's months and videos are code's figures, and who they are
+    about prints only where the brands are `counted`. No board draws it:
+    the kit's card and head, the lead, then one row an idea (words left,
+    counts right). The lead card labels all three weeks' bars, as the side card and
     the Dashboard's tile do, and its "What they're doing" never names the
     conversation's own kind (`leadDoing`: a praise conversation's videos are
     praise by definition). On a phone the table's month sits under the
@@ -1086,9 +1132,21 @@ This version has breaking changes — APIs, conventions, and file structure may 
     (`readingMonthOf`). Ideas come from `post_ideas`, behind
     `postIdeasEnabled` (opt-in, off for every tenant today): a missing table
     or the switch off reads "not switched on", no rows "none written", a
-    failed read says so (`unread`). Ideas
-    print their own week and stop printing once their week ended more than
-    `IDEAS_STALE_DAYS` (28) before the page's (`stale`). Who asks is group
+    failed read says so (`unread`). THE IDEAS PRINT THE DAYS THEY READ
+    (Heinrich, 13 Oct): "From questions asked 14 Sep to 11 Oct"
+    (`askedPhrase` over `ideasReadOf`, the row's `read_start` / `read_end`),
+    above the cards, on the open panel's head chip and on the Dashboard's
+    tile ("of 640 videos, 14 Sep to 11 Oct"). Each idea's figure is its
+    market videos over those days of the market's then (`IdeaCard.read`,
+    `TopContent.idea.read`: one window read, never a sum of weeks), beside
+    the page's month, and its bars are those four weeks as four bare counts
+    (`IdeasRead.weeks`, `ideaWeeks`; no weekly counts where the stored window
+    is not whole weeks), all under the page's run's clustering
+    (`readWindows` with `ideas`; the tile reads the four weeks and the month
+    only). Ideas still say the week they were written for when it is not the
+    page's (`olderIdeasLine`) and stop printing once that week ended more than
+    `IDEAS_STALE_DAYS` (28) before the page's (`stale`). Also asked keeps the
+    page's week and its three weeks. Who asks is group
     names, never a count. "Your posts" is `ownedPosts`, and "touched on" is
     `questionTouch` over the reading month and the two before. What works is
     `buildPlaybook({ clientSide: 'owned' })`, dated by publish date, with the
