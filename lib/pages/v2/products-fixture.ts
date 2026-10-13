@@ -8,7 +8,7 @@ import type { PairComparability } from '../../reading/comparability'
 import type { PairOn } from '../../reading/pairs'
 import { OSSUR_PRODUCTS } from '../../../scripts/seeds/ossur-products'
 import {
-  buildProductsData, setKey,
+  buildProductsData, productKindLabel, setKey,
   type Crosses, type ProductMonthRow, type ProductsData, type ProductsInput, type ProductsParams, type TextRead,
 } from './products'
 
@@ -164,7 +164,7 @@ export const SEP_MARKET = built.find((b) => b.month === SEP)!.market.map((v) => 
 const cross = (n: number, subjects: [string, number][], kinds: [string, number][]): Crosses => ({
   n,
   subjects: subjects.map(([label, k]) => ({ id: `s-${label.toLowerCase().replace(/[^a-z]+/g, '-')}`, label, k })),
-  kinds: kinds.map(([id, k]) => ({ id, label: ({ praise: 'Praised it', pain_point: 'Complained about something', question: 'Asked a question', purchase_intent: 'Said they want to buy', objection: 'Pushed back' } as Record<string, string>)[id] ?? id, k })),
+  kinds: kinds.map(([id, k]) => ({ id, label: productKindLabel(id), k })),
 })
 
 /** September's crosses: what each category's and each product's videos are

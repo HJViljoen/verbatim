@@ -22,7 +22,7 @@ import { readQuoteContext, gateFor } from '../../quote-context'
 import { quoteGate, type GateInput, type QuoteVideo } from '../../quote-gate'
 import { readingOf, readTranslations } from '../../quotes'
 import { loadCompanyName, type LensRowIn } from '../../reading/cross'
-import { KIND_LABELS } from '../../reading/kinds'
+import { KIND_LABELS, kindLabel } from '../../reading/kinds'
 import { monthStartOf, nextMonth, prevMonth } from '../../reading/month-key'
 import { loadPairOn, type ReadingHandle } from '../../reading/read'
 import { BRANDS_PANEL, type PairOn } from '../../reading/pairs'
@@ -31,8 +31,6 @@ import { loadReadingMonth } from '../../reading/reading-view'
 import { bandVerdict, type Verdict } from '../../reading/verdicts'
 import { productsTabHref } from '../../settings/products'
 import { selectAll } from '../../supabase-admin'
-import { talkKindLabel } from '../overview-market/kinds'
-import { WHAT_THEY_SELL } from '../market-frame'
 
 // YOUR PRODUCTS (depth v2, T5; boards E4-Products and E4-Products-Liners):
 // what the market says about what the client sells, by the client's own
@@ -542,17 +540,43 @@ export function poolLens(rows: readonly LensRowIn[]): { n: number; kinds: Map<st
   return { n, kinds, subjects }
 }
 
+/**
+ * A kind's label on the Your products panels, in the words the page already
+ * uses for praise ("Praise in the comments", the praise standout's eyebrow).
+ * A kind's count here is the set's videos with that kind ANYWHERE in their
+ * comments: a video names the product, and its comments praise or ask about
+ * it or about anything else in the video. The shared `talkKindLabel`
+ * ("Praised it", "Asked a question") says the people did it to the thing,
+ * which a product's set cannot claim, so this page says where the kind was
+ * found and not what it was about. Every other page keeps `talkKindLabel`.
+ */
+export const PRODUCT_KIND_LABELS: Readonly<Record<string, string>> = {
+  praise: 'Praise in the comments',
+  question: 'Questions in the comments',
+  pain_point: 'Complaints in the comments',
+  purchase_intent: 'Talk of buying in the comments',
+  objection: 'Pushback in the comments',
+  feature_request: 'Wishes in the comments',
+  buying_trigger: 'What made them look, in the comments',
+  switching_signal: 'Talk of switching in the comments',
+  demographic_signal: 'Who they are, in the comments',
+}
+
+/** `PRODUCT_KIND_LABELS`, a kind it does not name in its general label. PURE. */
+export const productKindLabel = (kind: string): string => PRODUCT_KIND_LABELS[kind] ?? `${kindLabel(kind)}, in the comments`
+
 /** Subjects and kinds over one set, from its `lens_readings` rows pooled over
  *  every audience (`poolLens`). A subject not active (not in `subjects`) is
- *  left out; misinformation is never a kind a page ranks (decision T). PURE. */
-export function crossesOf(rows: readonly LensRowIn[], subjects: ReadonlyMap<string, string>, noun: string | null): Crosses {
+ *  left out; misinformation is never a kind a page ranks (decision T). The
+ *  kinds take the page's own words (`productKindLabel`). PURE. */
+export function crossesOf(rows: readonly LensRowIn[], subjects: ReadonlyMap<string, string>): Crosses {
   const pooled = poolLens(rows)
   return {
     n: pooled.n,
     subjects: [...pooled.subjects].filter(([id, k]) => k > 0 && subjects.has(id))
       .map(([id, k]) => ({ id, label: subjects.get(id)!, k })).sort(byNumberThenName),
     kinds: [...pooled.kinds].filter(([id, k]) => k > 0 && id !== 'misinformation' && KIND_LABELS[id])
-      .map(([id, k]) => ({ id, label: talkKindLabel(id, noun), k })).sort(byNumberThenName),
+      .map(([id, k]) => ({ id, label: productKindLabel(id), k })).sort(byNumberThenName),
   }
 }
 
@@ -1473,14 +1497,13 @@ export async function loadProducts(input: ProductsLoadInput): Promise<ProductsDa
       if (ids.length >= STANDOUT_MIN || (open && ids.length > 0 && (open.id === p.id || (open.kind === 'group' && open.id === p.group_id)))) wanted.push({ key: setKey('product', p.id), ids })
     }
   }
-  const noun = WHAT_THEY_SELL[clientId] ?? null
   const [lens, subjectNames, panelReads] = await Promise.all([
     wanted.length ? readLens(handle, month, wanted).catch((e: unknown) => { say('lens', e); return null }) : Promise.resolve(new Map<string, LensRowIn[]>()),
     wanted.length ? readSubjectNames(handle).catch((e: unknown) => { say('subjects', e); return new Map<string, string>() }) : Promise.resolve(new Map<string, string>()),
     open && sets && standing ? readPanelTexts(handle, month, open, sets, standing).catch((e: unknown) => { say('panel texts', e); return null }) : Promise.resolve(null),
   ])
   const crosses = new Map<string, Crosses>()
-  for (const [key, r] of lens ?? []) crosses.set(key, crossesOf(r, subjectNames, noun))
+  for (const [key, r] of lens ?? []) crosses.set(key, crossesOf(r, subjectNames))
   return buildProductsData({ ...shell, rows, market, standing, crosses, pair, panelReads })
 }
 
