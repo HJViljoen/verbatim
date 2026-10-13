@@ -182,8 +182,10 @@ export interface PlaceResult {
   /** Per category: our search terms in its own words, and the market videos
    *  they found (left out of its organic base). */
   organic: Map<string, { terms: string[]; videos: number }>
-  /** Category words in comments under a video that is not category-relevant:
-   *  not counted ("winged liner", "trash bag liner"). */
+  /** Per category, the videos its own searches found (out of its organic base). */
+  searchFinds: Map<string, Set<string>>
+  /** Category words in comments under a video that is not category-relevant
+   *  (counted unless CATEGORY_WORDS_ONLY_UNDER_RELEVANT is on). */
   offTopicWords: number
   /** Videos whose content holds only a generic name nobody has confirmed:
    *  relevant once the confirm says so (a dry run does not read them). */
@@ -287,7 +289,7 @@ export async function placeProducts(args: {
   }]))
   const empty = (): PlaceResult => ({
     compiled, markets, rivalFound, ruleRows: [], freshRuleRows: [], confirm: [], queue: [], modelRows: [],
-    standing: new Map(), relevant: new Set(), organic, offTopicWords: 0, waitingOnConfirm: new Set(), videoRows: new Map(), commentText: new Map(),
+    standing: new Map(), relevant: new Set(), organic, searchFinds, offTopicWords: 0, waitingOnConfirm: new Set(), videoRows: new Map(), commentText: new Map(),
     rows: productReadingRows({ clientId, compiled, markets, rivalFound, searchFinds, standing: new Map() }),
     costUsd: 0, priceUsd: 0, priced: { calls: 0, inputTokens: 0, outputTokens: 0 }, confirmResult: null, classifyResult: null, reads,
   })
@@ -378,22 +380,12 @@ export async function placeProducts(args: {
   const excerpts: CommentText[] = candidates
     .filter((c) => c.source === 'comment' && c.comment_id && c.comment_month && !readInFull.has(c.comment_id))
     .map((c) => ({ commentId: c.comment_id!, videoId: c.video_id, month: String(c.comment_month).slice(0, 10), text: c.excerpt ?? '' }))
-  // A category word in a comment counts only under a category-relevant video:
-  // under a makeup or a kitchen video, "liner" is a winged liner or a bin
-  // liner (the fresh check of 13 Oct). A product's or a family's name counts
-  // anywhere.
+  // A category word in a comment under a video no category stands on
+  // (CATEGORY_WORDS_ONLY_UNDER_RELEVANT says why it still counts).
   const planned = planRules(clientId, compiled, [], [...fullComments, ...excerpts])
   const offTopic = (r: MentionInsert) => r.placement === 'unbranded' && !relevant.has(r.video_id)
   const offTopicWords = planned.rows.filter(offTopic).length
-  const commentPlan = { ...planned, rows: planned.rows.filter((r) => !offTopic(r)) }
-  for (const [key, ps] of planned.placed) {
-    const v = planned.rows.find((r) => keyOfRow(r) === key)?.video_id
-    if (v && !relevant.has(v)) {
-      const kept = ps.filter((p) => p.placement !== 'unbranded')
-      if (kept.length) commentPlan.placed.set(key, kept)
-      else commentPlan.placed.delete(key)
-    }
-  }
+  const commentPlan = CATEGORY_WORDS_ONLY_UNDER_RELEVANT ? dropOffTopic(planned, offTopic, relevant) : planned
   await writeRules(commentPlan.rows)
 
   // 5. The confirm call on the comments' generic names.
@@ -422,8 +414,38 @@ export async function placeProducts(args: {
   const confirmResult = mergeResults(confirmContent, confirmComments)
   return {
     compiled, markets, rivalFound, ruleRows, freshRuleRows, confirm: [...contentConfirm, ...commentConfirm], queue: fullQueue,
-    modelRows, standing, relevant, organic, offTopicWords, waitingOnConfirm, videoRows, commentText, rows, costUsd, priceUsd, priced, confirmResult, classifyResult, reads,
+    modelRows, standing, relevant, organic, searchFinds, offTopicWords, waitingOnConfirm, videoRows, commentText, rows, costUsd, priceUsd, priced, confirmResult, classifyResult, reads,
   }
+}
+
+/**
+ * Should a category word in a comment count only under a category-relevant
+ * video (one whose content stands under a category), so that "liner" under a
+ * makeup or a kitchen video (a winged liner, a bin liner) is not liners talk?
+ * NO, on the evidence: on Össur's June to October (the recorded dump, 13 Oct)
+ * it would drop 72 comment placements, and every one of them, read by hand,
+ * is talk about the category ("You dont use a gel liner?", "I get a new test
+ * socket today", "When are you planning on getting a prosthetic arm?"): the
+ * market Össur gathers is prosthetics talk, and most of it sits under videos
+ * whose caption names no category. The dry run prints the count either way
+ * (`offTopicWords`), so a tenant whose market is broader can be measured
+ * before this is turned on.
+ */
+export const CATEGORY_WORDS_ONLY_UNDER_RELEVANT = false
+
+/** The plan without its category words under videos that are not
+ *  category-relevant. PURE. */
+function dropOffTopic<P extends ReturnType<typeof planRules>>(planned: P, offTopic: (r: MentionInsert) => boolean, relevant: ReadonlySet<string>): P {
+  const out = { ...planned, rows: planned.rows.filter((r) => !offTopic(r)), placed: new Map(planned.placed) }
+  for (const [key, ps] of planned.placed) {
+    const v = planned.rows.find((r) => keyOfRow(r) === key)?.video_id
+    if (v && !relevant.has(v)) {
+      const kept = ps.filter((p) => p.placement !== 'unbranded')
+      if (kept.length) out.placed.set(key, kept)
+      else out.placed.delete(key)
+    }
+  }
+  return out
 }
 
 function mergeResults(a: RunClassifyResult | null, b: RunClassifyResult | null): RunClassifyResult | null {

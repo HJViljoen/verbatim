@@ -87,17 +87,16 @@ describe('the product-readings step', () => {
     const plan = await planProductReadings(f.client, OSSUR_CLIENT_ID, NOW)
     expect(plan.months).toEqual(['2026-09-01', '2026-10-01'])
     const r = await runProductMonth(f.client, { clientId: OSSUR_CLIENT_ID, runId: 'run-1', now: NOW, month: SEP, budgetUsd: 1, cap: 100, classifier: stub })
-    expect(r).toMatchObject({ status: 'written', ruleRowsInserted: 1, classified: 1, itemsAsked: 1, deferred: 0, frozen: 0 })
+    expect(r).toMatchObject({ status: 'written', ruleRowsInserted: 2, classified: 1, itemsAsked: 1, deferred: 0, frozen: 0 })
     expect(r.costUsd).toBeGreaterThan(0)
     expect(f.tables.product_mentions.map((m) => [m.method, m.comment_id ?? m.video_id, m.placement])).toEqual([
-      ['rule', vid(1), 'named'], ['model', 'k1', 'named'],
+      ['rule', vid(1), 'named'], ['rule', 'k2', 'unbranded'], ['model', 'k1', 'named'],
     ])
     const row = (id: string) => f.tables.month_product_readings.find((x) => x.object_id === id)!
     expect(row(G('Feet'))).toMatchObject({ k_named: 1, k_any: 1, k_organic: 1, comments: 1, n: 2, n_organic: 2, status: 'filling', origin: 'live', run_id: 'run-1' })
-    // "which prosthetic liner is that" sits under a video no category stands on: not counted
-    expect(row(G('Liners'))).toMatchObject({ k_unbranded: 0, k_any: 0, comments: 0 })
+    expect(row(G('Liners'))).toMatchObject({ k_unbranded: 1, k_any: 1, comments: 1 })
     expect(row(P('Pro-Flex XC'))).toMatchObject({ k_named: 1, comments: 1 })
-    expect(productSummary(r)).toMatch(/^2026-09: 1 new rule placements, 0 generic names checked, 1 comments classified/)
+    expect(productSummary(r)).toMatch(/^2026-09: 2 new rule placements, 0 generic names checked, 1 comments classified/)
     expect(h.parse).not.toHaveBeenCalled()
 
     // A replay inserts nothing twice and asks the model nothing.
@@ -105,7 +104,7 @@ describe('the product-readings step', () => {
     const again = await runProductMonth(f.client, { clientId: OSSUR_CLIENT_ID, runId: 'run-1', now: NOW, month: SEP, budgetUsd: 1, cap: 100, classifier: call })
     expect(again).toMatchObject({ ruleRowsInserted: 0, itemsAsked: 0 })
     expect(call).not.toHaveBeenCalled()
-    expect(f.tables.product_mentions).toHaveLength(2)
+    expect(f.tables.product_mentions).toHaveLength(3)
   })
 
   it('writes a month that freezes on this run frozen, before freeze-months\' marker, when the pass read it in full', async () => {

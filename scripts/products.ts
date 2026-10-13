@@ -16,7 +16,7 @@ import { clientNameOf } from '../lib/pipeline/product-readings'
 import { runClassifier, type ClassifyItem, type RunClassifyResult } from '../lib/products/classify'
 import { excerptAround, keyOfRow, standingPlacements, type MentionInsert } from '../lib/products/match'
 import {
-  guardFreeze, HELD_COLUMNS, itemsLeft, mergeProductRows, placeProducts, pooledProductMonth, priceItems, PRODUCT_COMMENT_COLUMNS, PRODUCT_VIDEO_COLUMNS, productReadingRows,
+  CATEGORY_WORDS_ONLY_UNDER_RELEVANT, guardFreeze, HELD_COLUMNS, itemsLeft, mergeProductRows, placeProducts, pooledProductMonth, priceItems, PRODUCT_COMMENT_COLUMNS, PRODUCT_VIDEO_COLUMNS, productReadingRows,
   storedProductRows, writeProductRows, type Ask, type HeldRow, type PlaceResult, type ProductCommentRow, type ProductReadIO, type ProductVideoRow,
 } from '../lib/products/readings'
 import { matchAliases } from '../lib/products/rules'
@@ -354,7 +354,7 @@ function rulesOnlyRows(clientId: string, pass: PlaceResult, catalogue: ProductCa
     rows: pass.ruleRows,
     active: { groups: new Set(catalogue.groups.map((g) => g.id)), products: new Set(catalogue.products.map((p) => p.id)) },
   })
-  return productReadingRows({ clientId, compiled: pass.compiled, markets: pass.markets, rivalFound: pass.rivalFound, standing })
+  return productReadingRows({ clientId, compiled: pass.compiled, markets: pass.markets, rivalFound: pass.rivalFound, searchFinds: pass.searchFinds, standing })
 }
 
 function printMonths(rows: ReturnType<typeof rulesOnlyRows>, catalogue: ProductCatalogue, months: readonly string[], heading: string): void {
@@ -476,7 +476,7 @@ async function backRead(admin: SupabaseClient, args: ProductsArgs, ration: Ratio
   console.log(`\n  reads: ${ration.n} requests · scan rows ${pass.reads.candidates} · videos read in full ${pass.reads.videos} · comments read in full ${pass.reads.comments}`)
   console.log(`  the rules: ${pass.ruleRows.length} placements (${pass.ruleRows.filter((r) => r.placement === 'named').length} named, ${pass.ruleRows.filter((r) => r.placement === 'unclear').length} one of yours not which, ${pass.ruleRows.filter((r) => r.placement === 'unbranded').length} in general) on ${new Set(pass.ruleRows.map(keyOfRow)).size} texts`)
   console.log(`  category-relevant videos: ${pass.relevant.size}; ${pass.waitingOnConfirm.size} more wait on the confirm of a generic name`)
-  console.log(`  category words in comments under videos that are not category-relevant, not counted: ${pass.offTopicWords}`)
+  console.log(`  category words in comments under videos that are not category-relevant: ${pass.offTopicWords} (${CATEGORY_WORDS_ONLY_UNDER_RELEVANT ? 'not counted' : 'counted: CATEGORY_WORDS_ONLY_UNDER_RELEVANT is off'})`)
   console.log('  the organic base, per category: beyond the rival searches\' finds, the market videos a search in its own words found')
   for (const g of catalogue.groups) {
     const o = pass.organic.get(g.id)

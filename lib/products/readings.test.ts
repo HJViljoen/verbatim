@@ -11,7 +11,7 @@ import { cataloguePattern, compileCatalogue } from './rules'
 import { catalogueCodes, PRODUCT_MODEL_RULE_VERSION, runClassifier, type Classifier } from './classify'
 import { commentKey, contentKey, type MentionInsert, type StandingText } from './match'
 import {
-  categorySearchFinds, categorySearchTerms, guardFreeze, itemsLeft, mergeProductRows, placeProducts, pooledProductMonth, productReadingKey, productReadingRows,
+  CATEGORY_WORDS_ONLY_UNDER_RELEVANT, categorySearchFinds, categorySearchTerms, guardFreeze, itemsLeft, mergeProductRows, placeProducts, pooledProductMonth, productReadingKey, productReadingRows,
   type Ask, type HeldRow, type ProductCommentRow, type ProductReadIO, type ProductVideoRow,
 } from './readings'
 import type { ProductTagRow } from './types'
@@ -199,6 +199,7 @@ describe('placeProducts: the pass', () => {
     expect(inserted.map((x) => [x.source, x.comment_id, x.placement, x.product_id ?? x.group_id])).toEqual([
       ['content', null, 'named', P('Pro-Flex XC')],
       ['comment', 'k2', 'named', P('Rheo Knee')],
+      ['comment', 'k6', 'unbranded', G('Liners')],
       ['comment', 'k7', 'unbranded', G('Liners')],
     ])
     expect(written.map((x) => [x.method, x.comment_id ?? x.video_id, x.placement])).toEqual([
@@ -210,10 +211,11 @@ describe('placeProducts: the pass', () => {
     expect(one(G('Feet'))).toMatchObject({ k_named: 1, k_any: 1, comments: 1, n: 3 })
     expect(one(G('Sockets'))).toMatchObject({ k_named: 1, k_unclear: 0, k_any: 1, comments: 1 })
     expect(one(G('Knees'))).toMatchObject({ k_named: 1, comments: 1 })
-    expect(one(G('Liners'))).toMatchObject({ k_unbranded: 1, k_any: 1, comments: 1 })
-    // "which prosthetic liner is that?" sits under a video no category stands on: not counted
+    // "which prosthetic liner is that?" sits under a video no category stands on: counted
+    // (CATEGORY_WORDS_ONLY_UNDER_RELEVANT is off), and the pass says how many such there are
+    expect(CATEGORY_WORDS_ONLY_UNDER_RELEVANT).toBe(false)
+    expect(one(G('Liners'))).toMatchObject({ k_unbranded: 2, k_any: 2, comments: 2 })
     expect(r.offTopicWords).toBe(1)
-    expect(inserted.some((x) => x.comment_id === 'k6')).toBe(false)
     expect(r.costUsd).toBeGreaterThan(0)
   })
 
