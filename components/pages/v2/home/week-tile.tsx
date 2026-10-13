@@ -32,7 +32,9 @@ function Numbers({ tile }: { tile: WeekTile }) {
   const { week, month } = tile
   // Nothing read: said once. Where the chart has no week either, its frame
   // says it below, and a phone (which draws no chart) says it here.
-  if (week.videos == null) return <TileLine className={weeksDrawable(tile.weeks) ? undefined : 'sm:hidden'}>{INSUFFICIENT}</TileLine>
+  // (A failed weekly read says so in the chart's place, so the missing week
+  // is said here at every width.)
+  if (week.videos == null) return <TileLine className={weeksDrawable(tile.weeks) || tile.weeksFailed ? undefined : 'sm:hidden'}>{INSUFFICIENT}</TileLine>
   const comments = week.comments != null ? <> · <span data-copy="figure">{fmtInt(week.comments)}</span> comments</> : null
   const inMonth = month.videos != null && tile.inMonth
   return (
@@ -76,7 +78,9 @@ function Weeks({ tile }: { tile: WeekTile }) {
         details={weeks.columns.map(homeWeekDetail)}
         label={drawable ? `Videos and comments in your market, week by week. ${summary.join('; ')}.` : null}
       />
-      {drawable ? null : <p className="m-0 text-[12px] text-muted-foreground">{INSUFFICIENT}</p>}
+      {/* A read that failed is a failure, never "Insufficient data" (which
+          is too few clean weeks). */}
+      {drawable ? null : <p className="m-0 text-[12px] text-muted-foreground">{tile.weeksFailed ? TILE_FAILED : INSUFFICIENT}</p>}
     </div>
   )
 }

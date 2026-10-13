@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { WEEKS_FAILED } from '../home'
 import { setApartOf } from '../../written/conversations'
 import { countedNote, FAILED_EXPLAINED } from '../../subjects/calibration-state'
 import { flagWordOf } from '@/components/v2/flag-chip'
@@ -7,7 +8,7 @@ import type { WindowReading } from '../../reading/read'
 import type { WeekReadData } from '../../written/types'
 import {
   buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, categoryThemeVideos, categoryVideos, closeHref, convHref,
-  convOf, cutWindows, doingOf, flagCardOf, flagVerdict, groupsOf, isRegistryId, insideOf, marketHref, marketMonths, marketParams,
+  convOf, cutWindows, doingOf, leadDoing, marketWeeksOf, flagCardOf, flagVerdict, groupsOf, isRegistryId, insideOf, marketHref, marketMonths, marketParams,
   mergeMixes, monthsText, notchOf, ourReadOf, panelStats, periodHref, personasOf, pickHero, pickWeekSides, platformRows, subjectHref,
   flagBaseWords, monthSoFar, tableFilterOf, tableMonths, topSpans, unmeasuredOf, weekWindows, whoOf, windowLabel, withMonthPlatforms, MARKET_TABLE_ROWS,
   type MarketConv,
@@ -380,6 +381,13 @@ describe('the open panel', () => {
   it('counts what people did over the month\'s videos, at most four kinds', () => {
     expect(doingOf([{ kind: 'pain_point', videos: 14 }, { kind: 'question', videos: 0 }], 31, null)).toEqual([{ kind: 'pain_point', label: 'Complained about something', k: 14, n: 31 }])
     expect(doingOf(null, 31, null)).toEqual([])
+    // The lead card never says a conversation does what it is (Phase 4 fix
+    // round: Össur's praise conversation read "Praised it · 35 of 35").
+    const rows = doingOf([{ kind: 'praise', videos: 35 }, { kind: 'question', videos: 9 }], 35, null)
+    expect(leadDoing(rows, 'praise')).toMatchObject({ kind: 'question', k: 9, n: 35 })
+    expect(leadDoing(rows, 'pain_point')).toMatchObject({ kind: 'praise' })
+    expect(leadDoing(rows, null)).toMatchObject({ kind: 'praise' })
+    expect(leadDoing(doingOf([{ kind: 'praise', videos: 35 }], 35, null), 'praise')).toBeNull()
     expect(doingOf([{ kind: 'praise', videos: 3 }], 0, null)).toEqual([])
   })
 
@@ -421,5 +429,21 @@ describe('the fixture, end to end', () => {
   it('a read stored before v3 has no new and no watch', () => {
     const v1 = { ...fixtureRead(), version: 1, inShort: '', promptVersion: 'week_read_v2' } as unknown as WeekReadData
     expect(v1.version).toBe(1)
+  })
+})
+
+// Phase 4 fix check: Market drew its weekly bars UNCUT when the change log or
+// the cadence read failed (each fell back to an empty list), where the
+// Dashboard said the read failed. Any of the three reads failing is the
+// block's failure.
+describe('marketWeeksOf: the weekly bars, or WEEKS_FAILED', () => {
+  const base = { rows: [] as never[], changes: [], cadence: [], rivalAudiences: [], updates: [], now: '2026-10-13T10:00:00.000Z' }
+  it('is WEEKS_FAILED where the rows, the change log or the cadence failed', () => {
+    expect(marketWeeksOf({ ...base, rows: WEEKS_FAILED })).toBe(WEEKS_FAILED)
+    expect(marketWeeksOf({ ...base, changes: null })).toBe(WEEKS_FAILED)
+    expect(marketWeeksOf({ ...base, cadence: null })).toBe(WEEKS_FAILED)
+  })
+  it('is the chart, or null for too few clean weeks, where all three read', () => {
+    expect(marketWeeksOf(base)).not.toBe(WEEKS_FAILED)
   })
 })

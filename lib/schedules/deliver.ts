@@ -71,7 +71,7 @@ const EMAIL_FAILED = 'email not sent, provider not configured or the send failed
 
 /** The month's long-run read as the operator's review email shows it (fresh
  *  review B1): its title, lead and every idea's headline and sentences, as
- *  Your market prints them. Null where it prints nothing. Pure. */
+ *  stored. Null where it holds nothing to print. Pure. */
 export function alsoPublishedOf(read: LongRunReadData): AlsoPublished | null {
   const ideas = read.ideas
     .filter((idea) => (idea.headline ?? '').trim())
@@ -81,14 +81,14 @@ export function alsoPublishedOf(read: LongRunReadData): AlsoPublished | null {
 }
 
 /**
- * WHAT THE RUN ALSO PUT ON THE PLATFORM (fresh review B1, 1 Oct evening; 5
- * Oct). The run that closes a month writes the month's long-run read beside
- * its week read, and Your market prints it as soon as it is written
- * (`loadPublishedLongRun`: review holds the email only). The Studio does not
- * show it, so the operator's review email for that run carries it, for
- * Heinrich to read. Null where the run wrote none that prints (every other
- * week); `unread` where it could not be read, so the email says so rather
- * than leave it out.
+ * WHAT THE RUN ALSO WROTE (fresh review B1, 1 Oct evening; 5 Oct). The run
+ * that closes a month writes the month's long-run read beside its week read.
+ * Your market printed it until Design v2 retired that page; no routed page
+ * reads it now (where it lives next is Heinrich's call), and the Studio does
+ * not show it, so the operator's review email for that run carries it, for
+ * Heinrich to read, under a heading that names no page. Null where the run
+ * wrote none that prints (every other week); `unread` where it could not be
+ * read, so the email says so rather than leave it out.
  */
 async function loadAlsoPublished(admin: SupabaseClient, clientId: string, runId: string): Promise<AlsoPublished | null> {
   try {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { flagWordOf } from '@/components/v2'
-import { OSSUR_CLIENT_ID } from '../../config'
+import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../../config'
 import type { PostIdeaRow } from '../../post-ideas/types'
 import type { OwnedPosts } from '../../reading/owned'
 import { buildPlaybook, type PlaybookVideo } from '../playbook'
@@ -23,6 +23,8 @@ describe('the URL', () => {
     expect(parseContentParams({ period: 'month', idea: '2' })).toEqual({ period: 'month', open: { kind: 'idea', rank: 2 }, asked: false })
     expect(parseContentParams({ idea: '7' }).open).toBeNull()
     expect(parseContentParams({ replies: '1' }).open).toEqual({ kind: 'replies' })
+    // An old reply link's tab (`?reply=question#worth-a-reply`) opens the list.
+    expect(parseContentParams({ reply: 'question' }).open).toEqual({ kind: 'replies' })
     expect(parseContentParams({ posts: '1', asked: 'all' })).toEqual({ period: 'week', open: { kind: 'posts' }, asked: true })
     expect(parseContentParams({ period: 'year' }).period).toBe('week')
   })
@@ -406,19 +408,14 @@ describe('the clocks of the reply list and your posts', () => {
   })
 })
 
-describe('post ideas switched off for a workspace', () => {
+describe('post ideas switched off for a workspace (opt-in: every tenant today, POST_IDEAS_ENABLED)', () => {
   const untouchable = new Proxy({}, { get: () => { throw new Error('read') } }) as never
-  const scope = { supabase: untouchable, clientId: OSSUR_CLIENT_ID, reading: { client: untouchable, clientId: OSSUR_CLIENT_ID }, params: {} }
+  const scope = (clientId: string) => ({ supabase: untouchable, clientId, reading: { client: untouchable, clientId }, params: {} })
 
-  it('reads nothing, prints no stored idea and says so, on the page and on the tile', async () => {
-    const before = process.env.POST_IDEAS_OFF
-    process.env.POST_IDEAS_OFF = OSSUR_CLIENT_ID
-    try {
-      expect(await readIdeas(untouchable, OSSUR_CLIENT_ID)).toEqual({ state: 'not_on', rows: [] })
-      expect(await topContent(scope)).toEqual({ state: 'not_on', idea: null, href: '/dashboard/content', line: 'Post ideas are not switched on for this workspace. The questions people asked are on Content.' })
-    } finally {
-      if (before === undefined) delete process.env.POST_IDEAS_OFF
-      else process.env.POST_IDEAS_OFF = before
+  it('reads nothing, prints no stored idea and says so, on the page and on the tile, for both tenants by default', async () => {
+    for (const id of [OSSUR_CLIENT_ID, SEALAND_CLIENT_ID]) {
+      expect(await readIdeas(untouchable, id)).toEqual({ state: 'not_on', rows: [] })
+      expect(await topContent(scope(id))).toEqual({ state: 'not_on', idea: null, href: '/dashboard/content', line: 'Post ideas are not switched on for this workspace. The questions people asked are on Content.' })
     }
   })
 })

@@ -2181,12 +2181,14 @@ export async function buildReplies(input: {
 
   try {
     const [candidates, configRes] = await Promise.all([
-      // BOUNDED BY THE RUN'S OWN WINDOW, which is the same cut
-      // `rankEngageCandidates` applies below — so the read returns the same
-      // digest off the comments of these days rather than off the corpus.
-      // This page is a second reader of a digest the Content page already
-      // loads whole, and until Content retires both run on every page view.
-      loadEngageCandidates(supabase, clientId, runId, { commentsSince: window.from }),
+      // BOUNDED BY THE WINDOW AT BOTH ENDS, which is the same cut
+      // `rankEngageCandidates` applies below, so the read returns the same
+      // digest off the comments of these days rather than off the corpus, in
+      // one statement a chunk (Phase 4 fix round: Sealand's Content load was
+      // 143 statements, 99 of them this read's evidence and comments). The
+      // upper end also keeps a comment written after the window from taking
+      // a thread's one place from a comment inside it (`gateEngage`).
+      loadEngageCandidates(supabase, clientId, runId, { commentsSince: window.from, commentsBefore: window.to }),
       supabase.from('tracking_configs')
         .select('own_handles, brand_keywords, competitor_keywords, industry_keywords')
         .eq('client_id', clientId).maybeSingle(),
@@ -2218,7 +2220,7 @@ export async function buildReplies(input: {
     const contextAhead = input.gate
       ? readQuoteContext(supabase, clientId, engageContextWant(printable)).catch(() => null)
       : Promise.resolve(null)
-    const segments = await replySegments(supabase, clientId, candidates.map((c) => c.comment.id))
+    const segments = await replySegments(supabase, clientId, candidates.map((c) => c.comment))
     const unGated = skipNoise(candidates, (c) => c.comment.id, segments.noise)
     const [translations] = await Promise.all([translationsAhead, contextAhead])
     // The context read above is memoised on the client, so the gate's own read
@@ -3768,28 +3770,41 @@ export async function loadHeard(input: {
  * (lib/pages/noise.ts), taken once for both answers: each comment's video,
  * then the segments. Only for a tenant with the rule switched on; fails open
  * (nothing skipped, nothing tagged), and says so in the log.
+ *
+ * NO SECOND READ OF WHAT THE CANDIDATES CARRY (Phase 4 fix round): each
+ * candidate already holds its comment's platform and video, and its video's
+ * row id where the candidates' read found the row (`videoRowId`), so the
+ * comments and videos are read here only for a candidate without them.
  */
 async function replySegments(
   supabase: SupabaseClient,
   clientId: string,
-  commentIds: readonly string[],
+  held: readonly { id: string; platform?: string | null; videoId?: string | null; videoRowId?: string | null }[],
 ): Promise<{ noise: Set<string>; maker: Set<string> }> {
   const out = { noise: new Set<string>(), maker: new Set<string>() }
-  const ids = [...new Set(commentIds.filter(Boolean))]
-  if (!segmentRulesEnabled(clientId) || ids.length === 0) return out
+  const byId = new Map(held.filter((c) => c.id).map((c) => [c.id, c]))
+  if (!segmentRulesEnabled(clientId) || byId.size === 0) return out
   try {
-    const comments = (await Promise.all(chunk(ids, UUID_IN_CHUNK).map(async (part) => {
-      const res = await supabase.from('comments').select('id, platform, video_id').eq('client_id', clientId).in('id', part)
-      if (res.error) throw res.error
-      return (res.data ?? []) as { id: string; platform: string; video_id: string }[]
-    }))).flat()
-    const native = [...new Set(comments.map((c) => c.video_id).filter(Boolean))]
+    const known = [...byId.values()].filter((c) => c.platform && c.videoId)
+    const knownIds = new Set(known.map((c) => c.id))
+    const unknownIds = [...byId.keys()].filter((id) => !knownIds.has(id))
+    const comments: { id: string; platform: string; video_id: string }[] = [
+      ...known.map((c) => ({ id: c.id, platform: c.platform as string, video_id: c.videoId as string })),
+      ...(await Promise.all(chunk(unknownIds, UUID_IN_CHUNK).map(async (part) => {
+        const res = await supabase.from('comments').select('id, platform, video_id').eq('client_id', clientId).in('id', part)
+        if (res.error) throw res.error
+        return (res.data ?? []) as { id: string; platform: string; video_id: string }[]
+      }))).flat(),
+    ]
+    const uuidOf = new Map<string, string>()
+    for (const c of known) if (c.videoRowId) uuidOf.set(`${c.platform}::${c.videoId}`, c.videoRowId)
+    const native = [...new Set(comments.filter((c) => c.video_id && !uuidOf.has(`${c.platform}::${c.video_id}`)).map((c) => c.video_id))]
     const videos = (await Promise.all(chunk(native, UUID_IN_CHUNK).map(async (part) => {
       const res = await supabase.from('videos').select('id, platform, video_id').eq('client_id', clientId).in('video_id', part)
       if (res.error) throw res.error
       return (res.data ?? []) as { id: string; platform: string; video_id: string }[]
     }))).flat()
-    const uuidOf = new Map(videos.map((v) => [`${v.platform}::${v.video_id}`, v.id]))
+    for (const v of videos) uuidOf.set(`${v.platform}::${v.video_id}`, v.id)
     if (uuidOf.size === 0) return out
     const res = await supabase.rpc(RPC_SEGMENTS_FOR_VIDEOS, { p_client: clientId, p_video_ids: [...new Set(uuidOf.values())] })
     if (res.error) throw res.error

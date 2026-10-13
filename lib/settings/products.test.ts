@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   FIXTURE_CLIENT, FIXTURE_NOW, fid, productsFixtureRead, productsFixtureTables,
 } from '@/components/pages/settings/products/fixture'
+import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../config'
 import { fakeDb } from '../test/fake-db'
-import { aliasTextProblem, catalogueText, loadProductSettings, productSettingsView, productsTabHref } from './products'
+import { aliasTextProblem, catalogueText, loadProductSettings, loadProductSettingsForPage, productSettingsView, productsTabHref } from './products'
 
 // Settings › Your products: the read and the view (T10b). Pure, or over the
 // fake database: no network.
@@ -52,7 +53,7 @@ describe('aliasTextProblem', () => {
 describe('loadProductSettings', () => {
   it('reads the live catalogue and this month\'s readings, on the session\'s client', async () => {
     const db = fakeDb(productsFixtureTables())
-    const read = await loadProductSettings(db.client as never, FIXTURE_CLIENT, FIXTURE_NOW)
+    const read = await loadProductSettings(db.client as never, FIXTURE_CLIENT, FIXTURE_NOW, { readingsOn: true })
     expect(read.state).toBe('ready')
     if (read.state !== 'ready') return
     expect(read.month).toBe('2026-10-01')
@@ -67,7 +68,7 @@ describe('loadProductSettings', () => {
 
   it('reads the month Your products reads where the route names it (the reading month), else the calendar month', async () => {
     const db = fakeDb(productsFixtureTables())
-    const read = await loadProductSettings(db.client as never, FIXTURE_CLIENT, FIXTURE_NOW, { month: '2026-09-01' })
+    const read = await loadProductSettings(db.client as never, FIXTURE_CLIENT, FIXTURE_NOW, { month: '2026-09-01', readingsOn: true })
     expect(read.state === 'ready' && read.month).toBe('2026-09-01')
     // September holds no fixture row: nothing read, so no figure, never a zero.
     if (read.state === 'ready') expect(productSettingsView(read, { canEdit: true }).open!.rows.every((r) => r.videos === null)).toBe(true)
@@ -86,6 +87,32 @@ describe('loadProductSettings', () => {
   it('throws any other failure, so a page never shows an empty list as the client\'s', async () => {
     const broken = { from: () => ({ select: () => { throw Object.assign(new Error('connection reset'), { code: '08006' }) } }) }
     await expect(loadProductSettings(broken as never, FIXTURE_CLIENT, FIXTURE_NOW)).rejects.toThrow('connection reset')
+  })
+
+  it('reads no month and prints no count while the products page is off (PRODUCT_READINGS_ENABLED: every tenant today), whatever rows a back-read left', async () => {
+    for (const client of [FIXTURE_CLIENT, SEALAND_CLIENT_ID, OSSUR_CLIENT_ID]) {
+      const db = fakeDb(productsFixtureTables())
+      const read = await loadProductSettings(db.client as never, client, FIXTURE_NOW)
+      expect(read).toMatchObject({ state: 'ready', readings: [], readingsOn: false })
+      expect(db.calls.some((c) => c.table === 'month_product_readings')).toBe(false)
+    }
+    // A read that holds rows (a back-read written before the switch) still
+    // prints none while it is off.
+    const v = productSettingsView(productsFixtureRead({ readingsOn: false }), { canEdit: true })
+    expect(v).toMatchObject({ readingsOn: false, read: false })
+    expect(v.open!.cameUp).toBeNull()
+    expect(v.open!.unclear).toBeNull()
+    expect(v.open!.rows.every((r) => r.videos === null)).toBe(true)
+  })
+
+  it('the route reads the page\'s month only while the products page is on', async () => {
+    const readMonth = vi.fn(async () => ({ month: '2026-09-01' }))
+    const off = await loadProductSettingsForPage(fakeDb(productsFixtureTables()).client as never, OSSUR_CLIENT_ID, FIXTURE_NOW, readMonth)
+    expect(readMonth).not.toHaveBeenCalled()
+    expect(off).toMatchObject({ state: 'ready', readingsOn: false, readings: [] })
+    const on = await loadProductSettingsForPage(fakeDb(productsFixtureTables()).client as never, FIXTURE_CLIENT, FIXTURE_NOW, readMonth, true)
+    expect(readMonth).toHaveBeenCalledTimes(1)
+    expect(on).toMatchObject({ state: 'ready', readingsOn: true, month: '2026-09-01' })
   })
 
   it('reads no month when there is no category', async () => {

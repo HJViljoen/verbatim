@@ -176,8 +176,10 @@ function ConvHero({ hero, data, selected, span, style }: { hero: Extract<HeroCar
       </div>
       {week
         ? <>
-          <SpikeBars weeks={weekBars(conv, data)} className="max-w-[560px] max-sm:hidden" label={`Category videos a week about ${conv.label}`} />
-          <SpikeBars weeks={weekBars(conv, data)} size="md" className="sm:hidden" label={`Category videos a week about ${conv.label}`} />
+          {/* Every week's count labelled, as the side card and the
+              Dashboard's tile label theirs (Phase 4 fix round). */}
+          <SpikeBars weeks={weekBars(conv, data)} counts="all" className="max-w-[560px] max-sm:hidden" label={`Category videos a week about ${conv.label}`} />
+          <SpikeBars weeks={weekBars(conv, data)} counts="all" size="md" className="sm:hidden" label={`Category videos a week about ${conv.label}`} />
         </>
         : conv.months.length > 1 ? <MiniBars bars={monthBars(conv.months)} size="md" className="max-w-[420px]" label={`Category videos a month about ${conv.label}`} /> : null}
       <Context groups={hero.groups} doing={hero.doing} monthText={week ? data.week?.inMonth ?? '' : `in ${data.month.text}`} />

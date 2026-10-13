@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { fakeDb } from '@/lib/test/fake-db'
 import { render, renderText } from '@/lib/test/render'
-import { loadProductSettings, productSettingsView, PRODUCTS_HELD, PRODUCTS_NOT_APPLIED, type ProductSettingsView } from '@/lib/settings/products'
+import { loadProductSettings, productSettingsView, PRODUCTS_HELD, PRODUCTS_NOT_APPLIED, PRODUCTS_PAGE_OFF, type ProductSettingsView } from '@/lib/settings/products'
 import { fid, FIXTURE_CLIENT, FIXTURE_NOW, productsFixtureRead, productsFixtureTables } from './fixture'
 import { ProductsTab } from './index'
 
@@ -121,6 +121,19 @@ describe('the Your products tab', () => {
     expect(text(view(false, empty))).toContain('An owner or admin can add your products here.')
   })
 
+  it('says plainly that the products page is not switched on, and prints no count, while it is off', () => {
+    const off = productSettingsView(productsFixtureRead({ readingsOn: false }), { selected: fid(1, 1), canEdit: true })
+    const node = <ProductsTab view={off} />
+    const t = text(off)
+    expect(t.startsWith(PRODUCTS_PAGE_OFF)).toBe(true)
+    expect(t).not.toMatch(/This month|came up in|quiet|couldn.t place|Tag them|\d+ videos?\b/)
+    // The only figures are the list's own sizes: products per category.
+    const on = text(productSettingsView(productsFixtureRead(), { selected: fid(1, 1), canEdit: true }))
+    expect(on).toContain('This month')
+    expect(on).not.toContain(PRODUCTS_PAGE_OFF)
+    assertCopyContract(node)
+  })
+
   it('says the list is not switched on where the migration is not applied', () => {
     expect(text(null)).toBe(`Your products ${PRODUCTS_NOT_APPLIED} When they are, this is where you keep the list of your products and the other names people use for them.`)
   })
@@ -136,7 +149,7 @@ describe('the Your products tab', () => {
     expect(await addProductAlias({ ok: false, message: '' }, f)).toMatchObject({ ok: true })
     expect(tables.config_changes).toEqual([expect.objectContaining({ surface: 'products', field: 'product_aliases', actor_kind: 'user', actor_user_id: owner.userId })])
 
-    const read = await loadProductSettings(db.client as never, FIXTURE_CLIENT, FIXTURE_NOW)
+    const read = await loadProductSettings(db.client as never, FIXTURE_CLIENT, FIXTURE_NOW, { readingsOn: true })
     if (read.state !== 'ready') throw new Error('expected a catalogue')
     const t = text(productSettingsView(read, { selected: fid(1, 1), canEdit: true }))
     expect(t).toMatch(/Iceross Sport iceross sport liner \+ Add a name quiet Edit/)

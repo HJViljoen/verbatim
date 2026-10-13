@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach } from 'vitest'
-import { passAMinComments, PASS_A_MIN_COMMENTS_DEFAULT, captureRunFlags, transcriptsEnabled, translationEnabled, ocrEnabled, effectivePeriod, periodWindowDays, periodSince, PERSONA_MAX, PERSONA_MIN_INSIGHTS, PERSONA_MIN_VIDEOS, PERSONA_DIGEST_THEMES, EVIDENCE_FLOOR, directionWordsFor, DIRECTION_READERS, DIRECTION_WORDS_BY_READER, OLD_PAGES_RETIRE_ON, SEGMENT_JUDGE_ENABLED, BRAND_CONFIRM_ENABLED, segmentJudgeEnabled, brandConfirmEnabled, PRODUCT_READINGS_ENABLED, productReadingsEnabled, PRODUCT_CLASSIFY_BUDGET_USD, PRODUCT_CLASSIFY_CAP, SEALAND_CLIENT_ID, OSSUR_CLIENT_ID, DEMO_CLIENT_ID } from './config'
+import { passAMinComments, PASS_A_MIN_COMMENTS_DEFAULT, captureRunFlags, transcriptsEnabled, translationEnabled, ocrEnabled, effectivePeriod, periodWindowDays, periodSince, PERSONA_MAX, PERSONA_MIN_INSIGHTS, PERSONA_MIN_VIDEOS, PERSONA_DIGEST_THEMES, EVIDENCE_FLOOR, directionWordsFor, DIRECTION_READERS, DIRECTION_WORDS_BY_READER, OLD_PAGES_RETIRE_ON, SEGMENT_JUDGE_ENABLED, BRAND_CONFIRM_ENABLED, segmentJudgeEnabled, brandConfirmEnabled, PRODUCT_READINGS_ENABLED, productReadingsEnabled, PRODUCT_CLASSIFY_BUDGET_USD, POST_IDEAS_ENABLED, postIdeasEnabled, POST_IDEAS_BUDGET_USD, POST_IDEAS_RUN_MARGIN_USD, PRODUCT_CLASSIFY_CAP, SEALAND_CLIENT_ID, OSSUR_CLIENT_ID, DEMO_CLIENT_ID } from './config'
 
 // Pass A's comment floor is per-platform (Wave 3). One global 5 was tuned for
 // TikTok/Instagram; Reddit threads run 3-8 comments but are far denser per
@@ -223,6 +223,23 @@ describe('PRODUCT_READINGS_ENABLED', () => {
   it('caps the classifier at 3,000 items and $0.75 a run', () => {
     expect(PRODUCT_CLASSIFY_CAP).toBe(3000)
     expect(PRODUCT_CLASSIFY_BUDGET_USD).toBe(0.75)
+  })
+})
+
+// The week's post ideas (T13; Phase 4 fix round): OPT-IN, off for every
+// tenant until Heinrich turns one on, so applying the products migration (which
+// creates `post_ideas`) starts no model spend. A yes is a diff to this test.
+// The cap and the run margin are pinned with it.
+describe('POST_IDEAS_ENABLED', () => {
+  it('is off for every tenant, and an unknown one', () => {
+    expect(Object.values(POST_IDEAS_ENABLED).every((on) => on === false)).toBe(true)
+    expect(Object.keys(POST_IDEAS_ENABLED).sort()).toEqual([OSSUR_CLIENT_ID, SEALAND_CLIENT_ID].sort())
+    for (const id of [SEALAND_CLIENT_ID, OSSUR_CLIENT_ID, DEMO_CLIENT_ID, 'not-a-tenant']) expect(postIdeasEnabled(id)).toBe(false)
+  })
+
+  it('caps the step at $0.50 a run, and starts it only with $0.50 more left under the run\'s budget', () => {
+    expect(POST_IDEAS_BUDGET_USD).toBe(0.5)
+    expect(POST_IDEAS_RUN_MARGIN_USD).toBe(0.5)
   })
 })
 

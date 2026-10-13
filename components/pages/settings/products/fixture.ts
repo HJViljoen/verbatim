@@ -125,6 +125,7 @@ export function productsFixtureRead(over: Partial<Extract<ProductSettingsRead, {
     aliases: fixtureAliases(),
     month: FIXTURE_MONTH,
     readings: fixtureReadings(),
+    readingsOn: true,
     ...over,
   }
 }

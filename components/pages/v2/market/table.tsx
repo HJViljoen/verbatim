@@ -40,10 +40,17 @@ function Cells({ conv, data, table }: { conv: MarketConv; data: MarketData; tabl
     )
   }
   if (data.period === 'week') {
+    // ON A PHONE THE MONTH SITS UNDER THE WEEK, IN ITS CELL (Content's Also
+    // asked, T9; Phase 4 fix round): two figure columns beside a label did not
+    // fit 390 on Sealand, and the table's own scroll cut "42" to "4" at the
+    // card's edge. The week stays beside its month (decision 1).
     return (
       <>
-        <td className={cn(TD, 'text-right font-mono tabular-nums')}>{conv.week != null ? <span data-copy="figure">{fmtInt(conv.week)}</span> : ''}</td>
-        <td className={cn(TD, 'text-right font-mono tabular-nums text-muted-foreground')}>{conv.month != null ? <span data-copy="figure">{fmtInt(conv.month)}</span> : ''}</td>
+        <td className={cn(TD, 'text-right font-mono tabular-nums')}>
+          {conv.week != null ? <span data-copy="figure">{fmtInt(conv.week)}</span> : ''}
+          {conv.month != null ? <span className="block whitespace-nowrap font-sans text-[12px] leading-[1.35] text-muted-foreground sm:hidden"><span data-copy="figure" className="font-mono">{fmtInt(conv.month)}</span> in {data.month.text}</span> : null}
+        </td>
+        <td className={cn(TD, 'hidden text-right font-mono tabular-nums text-muted-foreground sm:table-cell')}>{conv.month != null ? <span data-copy="figure">{fmtInt(conv.month)}</span> : ''}</td>
       </>
     )
   }
@@ -110,7 +117,7 @@ export function ConversationTable({ table, data }: { table: MarketTable; data: M
                   </th>
                 ))
                 : data.period === 'week'
-                  ? <><th scope="col" className={cn(TH, 'text-right')}>This week</th><th scope="col" className={cn(TH, 'text-right')}>{data.month.text}</th></>
+                  ? <><th scope="col" className={cn(TH, 'text-right')}>This week</th><th scope="col" className={cn(TH, 'hidden text-right sm:table-cell')}>{data.month.text}</th></>
                   : <><th scope="col" className={cn(TH, 'text-right')}>Videos</th><th scope="col" className={cn(TH, 'text-right')}>Against {data.month.prev.text}</th></>}
             </tr>
           </thead>

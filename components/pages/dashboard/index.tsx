@@ -114,7 +114,9 @@ const hero: R = (d, mode) => {
   const h = d.hero
   const app = mode === 'app'
   const claimEvidence = h.oneThing && h.voices > 0
-    ? { voices: h.voices, platforms: h.platforms, quotes: h.quotes.map((q) => q.text), href: `/dashboard/moves?advice=${encodeURIComponent(h.oneThing.id)}`, hrefLabel: 'See all the voices in Market →' }
+    // The link opens the advice in place on Your moves, so its words name
+    // Your moves (the voices are in the advice's panel there).
+    ? { voices: h.voices, platforms: h.platforms, quotes: h.quotes.map((q) => q.text), href: `/dashboard/moves?advice=${encodeURIComponent(h.oneThing.id)}`, hrefLabel: 'See this advice in Your moves →' }
     : null
   return (
     <Tile exportKey="dashboard.hero" col={7} row={3} variant="hero" distribute="between" eyebrow="Executive brief · this update" meta={weekdayDate(d.runDate)}

@@ -1,149 +1,124 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
+import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../config'
+import { fixtureContentTop, fixtureMovesTop, fixtureProductsTop, fixtureVoicesTop } from '../pages/v2/home-fixture'
+import { UNTITLED_ADVICE } from '../pages/v2/advice-words'
+import { marketProductMonth, topProductsOf } from '../pages/v2/products'
+import { ossurProductRows, ossurProductsFixture, OSSUR_CATALOGUE, PRODUCTS_FIXTURES } from '../pages/v2/products-fixture'
 import { fakeDb } from '../test/fake-db'
-import { levelOneRead, sealandRead } from '../test/weekly-read-fixture'
-import { conversationFigure, movesTop, productsTop, weeklyReadLines, LINE_PAGES } from './weekly-read-lines'
-import { loadWeeklyReadLines, readContentTop, readMovesTop, readProductsTop } from './weekly-read-lines-load'
+import { sealandRead } from '../test/weekly-read-fixture'
+import { contentLine, LINE_PAGES, movesLine, productsLine, voicesLine, weeklyReadLines } from './weekly-read-lines'
+import { loadWeeklyReadLines } from './weekly-read-lines-load'
 
-// "Across your pages" (depth v2, T11b): one line per page that has
-// something, frozen into the snapshot when it is built.
+// "Across your pages" (depth v2, T11b; Phase 4 fix round): one line per page
+// that has something, each that page's Dashboard tile said in a line, frozen
+// into the snapshot when it is built. That each line prints exactly what its
+// tile prints is checked against the tiles themselves in
+// components/pages/v2/home/email-lines.test.tsx.
 
 const SEP = '2026-09-01'
 
-describe('the lines', () => {
-  it('one per page that has something, in the board\'s order, each opening its page\'s panel', () => {
+describe('the lines, from the pages\' tops', () => {
+  it('one per page that has something, in the board\'s order, each opening its tile\'s panel', () => {
     const lines = weeklyReadLines({
-      month: SEP,
-      read: levelOneRead(),
-      voices: { key: 'commuters', name: 'Daily commuters', videos: 41 },
-      products: { productId: 'p1', name: 'Kirby backpack', videos: 9 },
-      content: { rank: 1, title: 'Which bag fits a carry-on rule', registryId: 't7' },
-      moves: { lineageId: 'lin 1', title: 'Publish a colour roadmap', timesMade: 4 },
+      voices: fixtureVoicesTop(), products: fixtureProductsTop(), content: fixtureContentTop(), moves: fixtureMovesTop('member'),
     })
     expect(lines.map((l) => l.page)).toEqual([...LINE_PAGES])
     expect(lines.map((l) => [l.label, `${l.lead} ${l.name}`, l.figure, l.href])).toEqual([
-      ['Voices', 'In the most videos in September: Daily commuters', '41 videos', '/dashboard/voices?group=commuters'],
-      ['Your products', 'Named most in September: Kirby backpack', '9 videos', '/dashboard/products?product=p1'],
-      ['Content', 'Post next: Which bag fits a carry-on rule', '12 videos this week · 30 in September so far', '/dashboard/content?idea=1'],
-      ['Your moves', 'Advice waiting: Publish a colour roadmap', 'raised in 4 updates', '/dashboard/moves?advice=lin%201'],
+      ['Voices', 'In the most videos in October so far: Long-time users upgrading', '86 of 318 videos', '/dashboard/voices?group=long-time-users#group-panel'],
+      ['Your products', 'Named in the most videos: Pro-Flex Pivot', '9 of 318 videos in October so far', '/dashboard/products?product=p-pivot#product-panel'],
+      ['Content', 'Post next: How long a liner lasts, and when it is time to replace one', '23 of 241 videos this week · 35 of 318 in October so far', '/dashboard/content?idea=1#idea-panel'],
+      ['Your moves', `Advice waiting: ${fixtureMovesTop().advice!.title}`, lines[3].figure, fixtureMovesTop().advice!.href],
     ])
+    expect(lines[3].figure).toMatch(/^\d+ update/)
     expect(lines.map((l) => l.copy)).toEqual([
       { kind: 'subject', slot: 'pass_e_persona' }, { kind: 'plain' }, { kind: 'prose' }, { kind: 'stored', slot: 'pass_d_b_recommendation' },
     ])
   })
-  it('drops a line whose page has nothing: no top, an empty name, no videos', () => {
-    expect(weeklyReadLines({ month: SEP, read: null })).toEqual([])
-    expect(weeklyReadLines({
-      month: SEP, read: null,
-      voices: { key: 'g', name: ' ', videos: 3 },
-      products: { productId: 'p', name: 'X', videos: 0 },
-      content: { rank: 1, title: '', registryId: 't' },
-      moves: null,
-    })).toEqual([])
-  })
-  it('advice raised once says nothing about how often; a post idea\'s conversation outside the read has no figure', () => {
-    const [moves] = weeklyReadLines({ month: SEP, read: null, moves: { lineageId: 'l', title: 'Do a thing', timesMade: 1 } })
-    expect(moves.figure).toBeNull()
-    const [content] = weeklyReadLines({ month: SEP, read: sealandRead(), content: { rank: 2, title: 'An idea', registryId: 'nowhere' } })
-    expect(content.figure).toBeNull()
-    expect(content.href).toBe('/dashboard/content?idea=2')
-  })
-})
 
-describe('a conversation\'s week beside its month, off the read', () => {
-  it('from the read\'s conversations where it kept them: the category\'s counts, the week\'s lead\'s', () => {
-    const read = levelOneRead()
-    expect(conversationFigure(read, 't7')).toBe('12 videos this week · 30 in September so far')
-    expect(conversationFigure(read, 'nowhere')).toBeNull()
-    expect(conversationFigure(levelOneRead({ conversations: [{ registryId: 'x', label: 'X', week: 4, month: null, setApart: false }] }), 'x')).toBeNull()
+  it('drops a line whose page has nothing, has failed, or is not switched on', () => {
+    expect(weeklyReadLines({})).toEqual([])
+    // Voices: no group, or the groups' read failed.
+    expect(voicesLine({ ...fixtureVoicesTop(), group: null })).toBeNull()
+    expect(voicesLine({ ...fixtureVoicesTop(), groupsState: 'unread' })).toBeNull()
+    // Your products: every state with no standout, the switch off among them.
+    for (const state of ['not_applied', 'not_on', 'no_catalogue', 'quiet'] as const) expect(productsLine(fixtureProductsTop(state)), state).toBeNull()
+    expect(productsLine(fixtureProductsTop('quiet', { note: 'failed' }))).toBeNull()
+    // Content: not switched on (every tenant today), none, too old, unread.
+    for (const state of ['not_on', 'none', 'stale', 'unread'] as const) expect(contentLine(fixtureContentTop(state)), state).toBeNull()
+    // Your moves: nothing waiting.
+    expect(movesLine(fixtureMovesTop('no_advice'))).toBeNull()
   })
-  it('on an older read: from what was also heard, from what was new, from a finding resting on it alone; else none', () => {
-    const read = levelOneRead({ conversations: undefined, newThisWeek: [{ themeId: 'tn', label: 'L', body: 'B', videos: { week: 3, month: 4 }, evidence: '' }] })
-    expect(conversationFigure(read, 't7')).toBe('9 videos this week · 21 in September so far')
-    expect(conversationFigure(read, 'tn')).toBe('3 videos this week · 4 in September so far')
-    expect(conversationFigure(read, 't1')).toBe('7 videos this week · 16 in September so far')
-    // The third finding rests on two conversations: neither is it alone.
-    expect(conversationFigure(read, 't4')).toBeNull()
-    expect(conversationFigure(null, 't7')).toBeNull()
+
+  it('a post idea from an older week gives no line: the email is about this week', () => {
+    expect(fixtureContentTop('older').idea).not.toBeNull()
+    expect(contentLine(fixtureContentTop('older'))).toBeNull()
   })
-  it('a week that carried into the next month is restated against the month in full', () => {
-    expect(conversationFigure(levelOneRead({ monthComplete: true }), 't7')).toBe('12 videos this week · 30 in September')
+
+  it('a post idea\'s title goes through the written read\'s scrub: one that claims a direction or types a number drops the line', () => {
+    const top = fixtureContentTop()
+    const titled = (title: string) => contentLine({ ...top, idea: { ...top.idea!, title } })
+    expect(titled('Liner questions are rising fast.')).toBeNull()
+    expect(titled('The 3 things to ask.')).toBeNull()
+    expect(titled('How long a liner lasts')?.name).toBe('How long a liner lasts')
   })
+
+  it('the month alone where the week was not read, never the week alone', () => {
+    const top = fixtureContentTop()
+    expect(contentLine({ ...top, idea: { ...top.idea!, week: null } })?.figure).toBe('35 of 318 videos in October so far')
+    expect(contentLine({ ...top, idea: { ...top.idea!, month: null } })?.figure).toBeNull()
+  })
+
+  it('an untitled piece of advice prints the page\'s words, marked as code\'s', () => {
+    const top = fixtureMovesTop('member')
+    expect(movesLine({ ...top, advice: { ...top.advice!, title: UNTITLED_ADVICE } })).toMatchObject({ name: UNTITLED_ADVICE, copy: { kind: 'plain' } })
+  })
+
   it('one video is a video', () => {
-    const read = levelOneRead({ conversations: [{ registryId: 'one', label: 'One', week: 1, month: 1, setApart: false }] })
-    expect(conversationFigure(read, 'one')).toBe('1 video this week · 1 in September so far')
+    const top = fixtureVoicesTop()
+    expect(voicesLine({ ...top, videos: null, group: { ...top.group!, videos: 1 } })?.figure).toBe('1 video')
   })
 })
 
-describe('the tops, from what the build read', () => {
-  it('products: named most across the market\'s audiences this month, never the client\'s own posts; ties by name', () => {
-    const rows = [
-      { month: SEP, audience: 'industry-other', object_kind: 'product', product_id: 'a', k_named: 4 },
-      { month: SEP, audience: 'competitor:Osprey', object_kind: 'product', product_id: 'a', k_named: 2 },
-      { month: SEP, audience: 'client', object_kind: 'product', product_id: 'b', k_named: 50 },
-      { month: SEP, audience: 'industry-other', object_kind: 'product', product_id: 'b', k_named: 6 },
-      { month: SEP, audience: 'industry-other', object_kind: 'group', product_id: null, k_named: 90 },
-      { month: '2026-08-01', audience: 'industry-other', object_kind: 'product', product_id: 'c', k_named: 99 },
-    ]
-    const names = new Map([['a', 'Alpha'], ['b', 'Beta'], ['c', 'Gamma']])
-    expect(productsTop({ month: SEP, rows, names, clientAudience: 'client' })).toEqual({ productId: 'a', name: 'Alpha', videos: 6 })
-    expect(productsTop({ month: SEP, rows: [], names, clientAudience: 'client' })).toBeNull()
-    // A product the catalogue no longer names is not printed.
-    expect(productsTop({ month: SEP, rows, names: new Map([['b', 'Beta']]), clientAudience: 'client' })).toEqual({ productId: 'b', name: 'Beta', videos: 6 })
+describe('Your products\' line ranks on the page\'s own basis (fix 1)', () => {
+  it('names what Your products and its tile name, counted over every audience, the client\'s included (`marketProductMonth`)', () => {
+    const d = ossurProductsFixture()
+    const line = productsLine(topProductsOf(d))!
+    const rows = ossurProductRows()
+    const named = OSSUR_CATALOGUE.products.map((p) => ({ name: p.name, k: marketProductMonth(rows, SEP, p.id)?.k_named ?? 0 }))
+    const most = Math.max(...named.map((p) => p.k))
+    expect(line.name).toBe('Iceross Seal-In X')
+    expect(named.find((p) => p.name === line.name)!.k).toBe(most)
+    expect(line.figure).toBe(`${most} of 839 videos in September`)
+    // The month's first product, where there is one, as the tile leads.
+    const first = productsLine(topProductsOf(d, d.standouts.filter((s) => s.kind === 'first') as never))!
+    expect([first.lead, first.name]).toEqual(['Came up for the first time:', 'Navii'])
   })
-  it('moves: the first undecided advice in the short list\'s order', () => {
-    const rows = [
-      { lineageId: 'x', title: 'Done already', status: 'acted_on', timesMade: 3 },
-      { lineageId: 'y', title: 'Waiting', status: 'new', timesMade: 2 },
-      { lineageId: 'z', title: 'Also waiting', status: 'new', timesMade: 5 },
-    ]
-    expect(movesTop(rows, ['x', 'y', 'z'])).toEqual({ lineageId: 'y', title: 'Waiting', timesMade: 2 })
-    expect(movesTop(rows, ['x'])).toBeNull()
+
+  it('prints nothing while the page is not switched on (PRODUCT_READINGS_ENABLED), even with a catalogue and its rows', () => {
+    expect(productsLine(topProductsOf(PRODUCTS_FIXTURES['not-on']()))).toBeNull()
   })
 })
 
-describe('the build\'s reads survive what is not there yet', () => {
+describe('the build\'s reads', () => {
   const admin = (db: ReturnType<typeof fakeDb>) => db.client as SupabaseClient
 
-  it('no post_ideas, no products migration, no advice: no lines, and nothing throws', async () => {
-    const db = fakeDb({})
-    expect(await loadWeeklyReadLines(admin(db), { clientId: 'c1', runId: 'run-1', read: sealandRead() })).toEqual([])
-    expect(await readContentTop(admin(db), 'c1', 'run-1')).toBeNull()
-    expect(await readProductsTop(admin(db), 'c1', SEP)).toBeNull()
+  it('hands every page\'s top to the lines, and a failed read of them is no lines, never a throw', async () => {
+    const tops = vi.fn(async () => ({ voices: fixtureVoicesTop(), products: null, content: fixtureContentTop('not_on'), moves: fixtureMovesTop('member') }))
+    const lines = await loadWeeklyReadLines(admin(fakeDb({})), { clientId: 'c1', runId: 'run-1', read: sealandRead() }, tops)
+    expect(tops).toHaveBeenCalledWith(expect.anything(), 'c1')
+    expect(lines.map((l) => l.page)).toEqual(['voices', 'moves'])
+    const broken = vi.fn(async () => { throw new Error('connection reset') })
+    expect(await loadWeeklyReadLines(admin(fakeDb({})), { clientId: 'c1', runId: 'run-1', read: sealandRead() }, broken)).toEqual([])
   })
 
-  it('content: the run\'s first idea, its title through the written read\'s scrub', async () => {
-    const idea = (rank: number, title: string) => ({
-      id: `i${rank}`, client_id: 'c1', run_id: 'run-1', window_start: 'a', window_end: 'b', rank, registry_id: `t${rank}`, title,
-      cover: { text: 'c' }, subquestions: [], format: null, format_multiple: null, opening: null, opening_multiple: null,
-      model: 'm', prompt_version: 'p', created_at: 'x',
-    })
-    const db = fakeDb({ post_ideas: [idea(2, 'Second'), idea(1, 'How long a liner lasts, and when it is time')] })
-    expect(await readContentTop(admin(db), 'c1', 'run-1')).toEqual({ rank: 1, title: 'How long a liner lasts, and when it is time', registryId: 't1' })
-    // A title that claims a direction, or types a number, is dropped whole.
-    const loud = fakeDb({ post_ideas: [idea(1, 'Liner questions are rising fast.')] })
-    expect(await readContentTop(admin(loud), 'c1', 'run-1')).toBeNull()
-    const digit = fakeDb({ post_ideas: [idea(1, 'The 3 things to ask.')] })
-    expect(await readContentTop(admin(digit), 'c1', 'run-1')).toBeNull()
-  })
-
-  it('moves: the advice ledger read as Your moves reads it; rec_decisions absent is no decisions', async () => {
-    const db = fakeDb({
-      recommendations: [
-        { id: 'r1', client_id: 'c1', lineage_id: 'l1', title: 'Older idea', type: 'content', status: 'new', priority: 'low', created_at: '2026-09-01T00:00:00Z', run_id: 'run-0' },
-        { id: 'r2', client_id: 'c1', lineage_id: 'l2', title: 'Set up a reimbursement help desk', type: 'product', status: 'new', priority: 'high', created_at: '2026-10-04T00:00:00Z', run_id: 'run-1' },
-        { id: 'r3', client_id: 'c1', lineage_id: 'l2', title: 'Set up a reimbursement help desk', type: 'product', status: 'new', priority: 'high', created_at: '2026-09-27T00:00:00Z', run_id: 'run-9' },
-      ],
-    })
-    expect(await readMovesTop(admin(db), 'c1')).toEqual({ lineageId: 'l2', title: 'Set up a reimbursement help desk', timesMade: 2 })
-  })
-
-  it('products: a ready catalogue and its month\'s rows', async () => {
-    const catalogue = { version: 'pc1_0123456789abcdef', groups: [{ id: 'g1', name: 'Liners', sort: 1 }], products: [{ id: 'p1', group_id: 'g1', name: 'Iceross Seal-In', sort: 1 }], aliases: [] }
-    const rows = [{ client_id: 'c1', month: SEP, audience: 'industry-other', object_kind: 'product', object_id: 'p1', group_id: 'g1', product_id: 'p1', k_named: 7 }]
-    const db = fakeDb({ month_product_readings: rows })
-    const client = { from: (t: string) => (db.client as SupabaseClient).from(t), rpc: async () => ({ data: catalogue, error: null }) } as unknown as SupabaseClient
-    expect(await readProductsTop(client, 'c1', SEP)).toEqual({ productId: 'p1', name: 'Iceross Seal-In', videos: 7 })
+  it('reads through the pages\' own tops: on a database with none of their tables, no lines and nothing throws, for both tenants', async () => {
+    for (const clientId of [OSSUR_CLIENT_ID, SEALAND_CLIENT_ID]) {
+      const db = fakeDb({})
+      expect(await loadWeeklyReadLines(admin(db), { clientId, runId: 'run-1', read: sealandRead() })).toEqual([])
+      // Post ideas are switched off for every tenant: the table is never read.
+      expect(db.calls.some((c) => c.table === 'post_ideas')).toBe(false)
+    }
   })
 })

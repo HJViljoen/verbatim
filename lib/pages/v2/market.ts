@@ -24,7 +24,8 @@ import { loadCadenceRuns, loadDeliveredRuns, loadReadingSchedule, marketRivalAud
 import type { MonthSeries } from '../../reading/series'
 import { TABLE_THEME_READINGS, type PlatformMix } from '../../reading/types'
 import { readEvidenceRefs } from '../../reading/evidence-refs'
-import { WEEK_CUT_SURFACES, preGatherCutBefore } from '../../reading/weeks'
+import { WEEK_CUT_SURFACES, preGatherCutBefore, type MarketWeekRowRaw } from '../../reading/weeks'
+import type { ChartRun } from '../../reading/week-line'
 import type { Verdict } from '../../reading/verdicts'
 import { INDUSTRY_AUDIENCE, loadCompetitors, loadTrackedRivals } from '../../rivals'
 import { selectAll } from '../../supabase-admin'
@@ -36,8 +37,9 @@ import type { WeekReadData, WhoAbout, WhoPart } from '../../written/types'
 import { weekReadDates } from '../../reports/weekly-read'
 import { factsFromReadings, marketComparable } from '../../written/standing'
 import { fetchRunningRunIds } from '../latest-video-run'
+import { loadRegistryLabels } from '../registry-labels'
 import { WHAT_THEY_SELL } from '../market-frame'
-import { homeWeeks, loadWeekRows, type HomeWeeks } from '../home'
+import { homeWeeks, loadWeekRows, WEEKS_FAILED, type WeeksFailed, type WeeksRead } from '../home'
 import { loadThemeQuotes, loadThemeSegmentRows, makerRuleEnabled, voiceOf, type CiteCandidate } from '../overview'
 import { pickQuotes, POOL_FLOOR } from '../overview-market'
 import { talkKindLabel } from '../overview-market/kinds'
@@ -370,7 +372,9 @@ export interface StoredLine {
 
 export interface MarketRail {
   kinds: KindsBlock | null
-  weeks: HomeWeeks | null
+  /** The weekly volume: the chart, null where too few clean weeks were read
+   *  (`homeWeeks`), `WEEKS_FAILED` where the read threw. */
+  weeks: WeeksRead
   platforms: PlatformsBlock | null
   /** The week read's "worth watching" (stored `week_read` prose). */
   watch: StoredLine[]
@@ -1202,6 +1206,34 @@ export function doingOf(kinds: readonly { kind: string; videos: number }[] | nul
     .map((k) => ({ kind: k.kind, label: talkKindLabel(k.kind, noun), k: Math.min(k.videos, n), n }))
 }
 
+/**
+ * The rail's weekly bars (`homeWeeks`), or `WEEKS_FAILED` where ANY read the
+ * chart's cut rests on failed: the weeks' rows, the change log or the
+ * cadence runs (each null, or the rows the marker, on a failure). Without the
+ * changes or the cadence the bars would be drawn uncut, across a change that
+ * cuts them, so a failure there is the block's failure too, as the
+ * Dashboard's (`loadHomeWeeks` throws on any of the three). Pure.
+ */
+export function marketWeeksOf(input: {
+  rows: readonly MarketWeekRowRaw[] | WeeksFailed
+  changes: readonly OurChange[] | null
+  cadence: readonly ChartRun[] | null
+  rivalAudiences: readonly string[]
+  updates: readonly string[]
+  now: string
+}): WeeksRead {
+  if (!Array.isArray(input.rows) || input.changes === null || input.cadence === null) return WEEKS_FAILED
+  return homeWeeks({ rows: input.rows, rivalAudiences: input.rivalAudiences, changes: input.changes, updates: input.updates, runs: input.cadence, now: input.now })
+}
+
+/** What the lead card says they're doing: the conversation's biggest kind
+ *  that is NOT its own (Phase 4 fix round). A praise conversation's videos
+ *  are praise by what the conversation is, so "Praised it · 35 of 35" says
+ *  nothing; the next kind does. Null where no other kind was read. Pure. */
+export function leadDoing(rows: readonly Doing[], ownKind: string | null): Doing | null {
+  return rows.find((d) => !ownKind || d.kind !== ownKind) ?? null
+}
+
 /** The over-time months a table reads, oldest first, from the category's
  *  denominators. */
 export function tableMonths(month: string, category: ReadonlyMap<string, number>, nowMonth: string, count = MARKET_CARD_MONTHS): MarketTable['months'] {
@@ -1267,18 +1299,6 @@ async function loadMonthThemeRows(db: SupabaseClient, clientId: string, month: s
       .eq('client_id', clientId).eq('month', monthStartOf(month)).eq('audience', INDUSTRY_AUDIENCE)
       .order('theme_id', { ascending: true }))
   return new Map(rows.map((r) => [String(r.theme_id), { videos: Number(r.videos) || 0, mix: r.platform_mix ?? null }]))
-}
-
-/** Labels from the registry, for themes the run does not name (an old link). */
-async function loadRegistryLabels(db: SupabaseClient, clientId: string, ids: readonly string[]): Promise<Map<string, string>> {
-  const out = new Map<string, string>()
-  if (ids.length === 0) return out
-  const res = await db.from('theme_registry').select('id, canonical_label').eq('client_id', clientId).in('id', [...ids])
-  if (res.error) throw new Error(`theme_registry: ${res.error.message}`)
-  for (const r of (res.data ?? []) as { id: string; canonical_label: string | null }[]) {
-    if (r.canonical_label?.trim()) out.set(String(r.id), r.canonical_label.trim())
-  }
-  return out
 }
 
 /** A slug's theme: the biggest of the period's conversations whose members
@@ -1445,10 +1465,13 @@ export async function loadMarket(input: {
   themedRunAhead.catch(() => {})
   const subjectsAhead = soft('subjects', loadSubjects(db, clientId), { all: [], ready: null })
   const pairAhead = loadAppPairOn(input.reading, nowIso)
-  const changesAhead = soft('changes', loadChanges(db, clientId), [])
-  const cadenceAhead = soft('cadence', loadCadenceRuns(supabase, clientId), null)
+  // A failed change-log or cadence read is null (both read an array or
+  // throw): the weekly bars are then WEEKS_FAILED, never drawn uncut.
+  const changesAhead = soft<Awaited<ReturnType<typeof loadChanges>> | null>('changes', loadChanges(db, clientId), null)
+  const cadenceAhead = soft<Awaited<ReturnType<typeof loadCadenceRuns>> | null>('cadence', loadCadenceRuns(supabase, clientId), null)
   const personasAhead = soft('personas', loadPersonas(db, clientId), [])
-  const weekRowsAhead = soft('weeks', loadWeekRows(db, clientId, nowIso), null)
+  // A failed read is WEEKS_FAILED, never null: null is "too few clean weeks".
+  const weekRowsAhead = soft<Awaited<ReturnType<typeof loadWeekRows>> | typeof WEEKS_FAILED>('weeks', loadWeekRows(db, clientId, nowIso), WEEKS_FAILED)
   const [clientRes, runs, rivals, competitors, published, history, schedule] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     loadDeliveredRuns(supabase, clientId),
@@ -1497,7 +1520,7 @@ export async function loadMarket(input: {
 
   // ── wave 2: the period's readings ──
   const [themedRunId, changes, cadence] = await Promise.all([themedRunAhead.catch(() => null), changesAhead, cadenceAhead])
-  const ourChanges = ourChangesWithoutGatherFlags(changes.filter((r) => !isFailOpenFix(r)))
+  const ourChanges = ourChangesWithoutGatherFlags((changes ?? []).filter((r) => !isFailOpenFix(r)))
   const cut = period === 'week' && windows ? cutWindows(windows, ourChanges, cadence ?? []) : []
   const windowReadsAhead = period === 'week' && windows && themedRunId
     ? Promise.all(windows.map((w, i) => (cut[i]
@@ -1632,16 +1655,7 @@ export async function loadMarket(input: {
   const weekRead = windowReads[windowReads.length - 1] ?? null
   const rail: MarketRail = {
     kinds: buildKinds(readings, month, noun, soFar),
-    weeks: weekRowsRaw
-      ? homeWeeks({
-          rows: weekRowsRaw,
-          rivalAudiences,
-          changes: ourChanges,
-          updates: runs.map(updateInstant),
-          runs: cadence ?? undefined,
-          now: nowIso,
-        })
-      : null,
+    weeks: marketWeeksOf({ rows: weekRowsRaw, changes: changes === null ? null : ourChanges, cadence, rivalAudiences, updates: runs.map(updateInstant), now: nowIso }),
     platforms: period === 'week' && weekRead?.denominators
       ? withMonthPlatforms(platformRows(mergeMixes(weekRead.denominators.filter((d) => market.includes(d.audience)).map((d) => d.platform_mix)), 'week'), monthMix, inMonth(month, !soFar))
       : platformRows(monthMix, 'month'),
@@ -1651,7 +1665,7 @@ export async function loadMarket(input: {
   }
 
   // ── the top row ──
-  const doing = (conv: MarketConv | null): Doing | null => (conv ? doingOf(heroKinds, conv.month, noun)[0] ?? null : null)
+  const doing = (conv: MarketConv | null): Doing | null => (conv ? leadDoing(doingOf(heroKinds, conv.month, noun), conv.kind) : null)
   const top: TopRow = { hero: null, sides: [], months: null }
   if (period === 'week' && heroPick) {
     if (heroPick.kind === 'flag' && flagCard) {

@@ -6,7 +6,7 @@ import type { UnusualFlag } from '../week'
 import {
   buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, convHref, closeHref, flagCardOf, flagVerdict, groupsOf,
   lineBars, marketMonths, marketParams, monthsText, notchOf, ourReadOf, panelStats, pickHero, pickWeekSides, platformRows, subjectHref,
-  tableMonths, convOf, doingOf, withMonthPlatforms,
+  tableMonths, convOf, doingOf, leadDoing, withMonthPlatforms,
   type ConvInput, type ConvPanel, type MarketConv, type MarketData, type MarketMonth, type MarketParams, type MarketWeek, type MonthCount,
   type PanelAt, type SubjectFact, type TopRow,
 } from './market'
@@ -306,7 +306,7 @@ export function marketFixture(opts: FixtureOptions = {}): MarketData {
   const read = fixtureRead()
   const flag = flagged && period === 'week' ? flagCardOf({ flag: FIXTURE_FLAG, window: WINDOW, convs, convInput: input, monthCategory: MONTH.category, p, noun: null }) : null
   const groups = (cid: string) => groupsOf(cid, PERSONAS)
-  const doing = (c: MarketConv | null) => (c ? doingOf(HERO_KINDS, c.month, null)[0] ?? null : null)
+  const doing = (c: MarketConv | null) => (c ? leadDoing(doingOf(HERO_KINDS, c.month, null), c.kind) : null)
 
   const top: TopRow = { hero: null, sides: [], months: null }
   if (period === 'week') {
@@ -403,3 +403,18 @@ function fixturePanel(n: number, at: PanelAt, p: MarketParams, period: MarketPar
 /** The fixture's ids, for tests. */
 export const fixtureId = id
 export const fixtureSubjectId = subjectId
+
+/** The table at its widest (Phase 4 fix round, the 390 check): long labels
+ *  and three-digit figures, the week's and the month's, on the first rows. */
+export function marketLongRowsFixture(period: 'week' | 'month' = 'week'): MarketData {
+  const d = marketFixture({ period })
+  const LONG = 'Whether the forty litre travel backpack really fits under the seat on budget airlines across Europe'
+  const table = d.table!
+  return {
+    ...d,
+    table: {
+      ...table,
+      rows: table.rows.map((r, i) => (i < 3 ? { ...r, conv: { ...r.conv, label: i === 0 ? LONG : `${LONG} (${i})`, week: 123 + i, month: 456 + i } } : r)),
+    },
+  }
+}

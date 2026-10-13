@@ -13,7 +13,7 @@
 // then dedupe: one slot per comment, max 2 per video, category + total caps.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { chunk } from './chunk'
+import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from './chunk'
 import { selectAll } from './supabase-admin'
 import { cleanQuote, readableQuote } from './quotes'
 import { isOwnedPost } from './reading/owned'
@@ -51,6 +51,9 @@ export interface EngageComment {
   /** The platform's id of the video it sits under (`comments.video_id`), where
    *  the read had it: the quote gate's context read starts at the videos. */
   videoId?: string | null
+  /** The video's row id (`videos.id`), where its row was read: the reply
+   *  queue's segments read starts there (lib/pages/week.ts `replySegments`). */
+  videoRowId?: string | null
   /** Whose video it sits under (`engageUnder`). Null where the video row was
    *  not read; absent on rows built before depth v2 (T14). */
   under?: EngageUnder | null
@@ -247,6 +250,19 @@ async function chunkedIn<T>(
   return pages.flat()
 }
 
+/** The comment columns a candidate is built from. */
+const ENGAGE_COMMENT_COLUMNS = 'id, author, text, likes, comment_date, platform, video_id, comment_id'
+type EngageCommentRow = {
+  id: string; author: string | null; text: string; likes: number | null
+  comment_date: string | null; platform: string; video_id: string; comment_id: string
+}
+
+/** The evidence chunk the unbounded read uses (`chunkedIn`). The windowed read
+ *  chunks wider, and puts its rows back in the order this size gave, because
+ *  the ranking's ties (same kind, strength and likes: common, most comments
+ *  have no likes) keep their input order, and the list must not change. */
+const EVIDENCE_ORDER_CHUNK = 100
+
 export async function loadEngageCandidates(
   db: SupabaseClient,
   clientId: string,
@@ -267,8 +283,28 @@ export async function loadEngageCandidates(
      *
      * This week passes the run's own frozen `window_start`, which is the same
      * clock every other figure on that page is dated by.
+     *
+     * WITH IT, ONE STATEMENT A CHUNK, NOT TWO (Phase 4 fix round). The read
+     * takes each chunk's evidence with its comment embedded and bounded by
+     * the window (`comments!inner(…)`, the `loadGroupSubjects` precedent,
+     * lib/reading/cross.ts), so no comment outside the window is fetched by
+     * id. Measured offline on a tenant sized like Sealand's 13 Oct dump
+     * (2,750 current engage insights, 6,875 cited comments; Content was 143
+     * statements there): the reply list makes 24 statements for a week and
+     * 26 for a month, pinned by lib/pages/week-replies-cost.test.ts; the 117
+     * it made before was measured once, offline, with the old code, and gave
+     * the same rows.
      */
     commentsSince?: string
+    /**
+     * And before this instant, exclusive: the window's END, where the caller
+     * states a closed window (This week and Content pass the window the list
+     * reads). `rankEngageCandidates` drops a comment past it anyway; read here
+     * it is never fetched, and it can no longer take a comment thread's one
+     * place from a comment inside the window (`gateEngage` keeps one
+     * candidate per thread before the ranking cuts the window).
+     */
+    commentsBefore?: string
   } = {},
 ): Promise<EngageCandidate[]> {
   const insights = await selectAll<{
@@ -287,45 +323,74 @@ export async function loadEngageCandidates(
   if (insights.length === 0) return []
   const byInsight = new Map(insights.map((i) => [i.id, i]))
 
-  const evidence = await chunkedIn<{ id: string; audience_insight_id: string; comment_id: string | null }>(
-    (ids) => () =>
-      db.from('insight_evidence')
-        .select('id, audience_insight_id, comment_id')
-        .in('audience_insight_id', ids)
-        .eq('source', 'comment')
-        .order('id'),
-    insights.map((i) => i.id),
-  )
-
-  const comments = await chunkedIn<{
-    id: string; author: string | null; text: string; likes: number | null
-    comment_date: string | null; platform: string; video_id: string; comment_id: string
-  }>(
-    (ids) => () => {
-      const q = db.from('comments')
-        .select('id, author, text, likes, comment_date, platform, video_id, comment_id')
-        .in('id', ids)
-      return (opts.commentsSince ? q.gte('comment_date', opts.commentsSince) : q).order('id')
-    },
-    // Retention nulls the author on cited comments and deletes uncited ones
-    // past 30 days (T0-9), so an evidence row can outlive its comment; a null
-    // id must never reach the `in.()` filter.
-    [...new Set(evidence.map((e) => e.comment_id).filter((id): id is string => Boolean(id)))],
-  )
+  let evidence: { id: string; audience_insight_id: string; comment_id: string | null }[]
+  let comments: EngageCommentRow[]
+  if (opts.commentsSince) {
+    // THE WINDOWED READ: each chunk's evidence with its comment embedded and
+    // bounded by the window, one statement a chunk (`comments!inner`: an
+    // evidence row whose comment is outside the window, or gone, is not
+    // returned). Wider chunks than the unbounded read, because a chunk now
+    // returns only the window's rows; `selectAll` pages any that do not.
+    const since = opts.commentsSince
+    const before = opts.commentsBefore ?? null
+    type Joined = { id: string; audience_insight_id: string; comment_id: string | null; comments: EngageCommentRow | EngageCommentRow[] | null }
+    const pages = await mapWithLimit(chunk(insights.map((i) => i.id), UUID_IN_CHUNK), READ_CONCURRENCY, (part) =>
+      selectAll<Joined>(() => {
+        const q = db.from('insight_evidence')
+          .select(`id, audience_insight_id, comment_id, comments!inner(${ENGAGE_COMMENT_COLUMNS})`)
+          .in('audience_insight_id', part)
+          .eq('source', 'comment')
+          .gte('comments.comment_date', since)
+        return (before ? q.lt('comments.comment_date', before) : q).order('id')
+      }),
+    )
+    // Back in the unbounded read's order (see EVIDENCE_ORDER_CHUNK).
+    const insightAt = new Map(insights.map((i, n) => [i.id, n]))
+    const orderOf = (e: Joined) => Math.floor((insightAt.get(e.audience_insight_id) ?? 0) / EVIDENCE_ORDER_CHUNK)
+    const joined = pages.flat().sort((a, b) => orderOf(a) - orderOf(b) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    evidence = joined.map((e) => ({ id: e.id, audience_insight_id: e.audience_insight_id, comment_id: e.comment_id }))
+    const seen = new Map<string, EngageCommentRow>()
+    for (const e of joined) {
+      const c = Array.isArray(e.comments) ? e.comments[0] : e.comments
+      if (c && !seen.has(c.id)) seen.set(c.id, c)
+    }
+    comments = [...seen.values()]
+  } else {
+    evidence = await chunkedIn<{ id: string; audience_insight_id: string; comment_id: string | null }>(
+      (ids) => () =>
+        db.from('insight_evidence')
+          .select('id, audience_insight_id, comment_id')
+          .in('audience_insight_id', ids)
+          .eq('source', 'comment')
+          .order('id'),
+      insights.map((i) => i.id),
+    )
+    comments = await chunkedIn<EngageCommentRow>(
+      (ids) => () => db.from('comments').select(ENGAGE_COMMENT_COLUMNS).in('id', ids).order('id'),
+      // Retention nulls the author on cited comments and deletes uncited ones
+      // past 30 days (T0-9), so an evidence row can outlive its comment; a null
+      // id must never reach the `in.()` filter.
+      [...new Set(evidence.map((e) => e.comment_id).filter((id): id is string => Boolean(id)))],
+    )
+  }
   const byComment = new Map(comments.map((c) => [c.id, c]))
 
-  const videos = await chunkedIn<{
-    video_id: string; platform: string; video_url: string; account_name: string; topics: string[] | null
-    source: string | null; is_client: boolean | null
-  }>(
-    (ids) => () =>
+  // The videos by their platform ids (short strings, so a uuid's chunk is
+  // well inside the URL cap); unique per (client, platform, video id), so a
+  // chunk never pages for size.
+  const videoIds = [...new Set(comments.map((c) => c.video_id))]
+  const videos = (await mapWithLimit(chunk(videoIds, UUID_IN_CHUNK), READ_CONCURRENCY, (part) =>
+    selectAll<{
+      id: string; video_id: string; platform: string; video_url: string; account_name: string; topics: string[] | null
+      source: string | null; is_client: boolean | null
+    }>(() =>
       db.from('videos')
-        .select('video_id, platform, video_url, account_name, topics, source, is_client')
+        .select('id, video_id, platform, video_url, account_name, topics, source, is_client')
         .eq('client_id', clientId)
-        .in('video_id', ids)
+        .in('video_id', part)
         .order('id'),
-    [...new Set(comments.map((c) => c.video_id))],
-  )
+    ),
+  )).flat()
   const videoByKey = new Map(videos.map((v) => [`${v.platform}::${v.video_id}`, v]))
 
   const candidates: EngageCandidate[] = []
@@ -355,6 +420,7 @@ export async function loadEngageCandidates(
         account: video?.account_name ?? null,
         platformCommentId: comment.comment_id,
         videoId: comment.video_id ?? null,
+        videoRowId: video?.id ?? null,
         under: video ? engageUnder(video) : null,
       },
     })

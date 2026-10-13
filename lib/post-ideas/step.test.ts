@@ -3,14 +3,15 @@ import { readFileSync } from 'node:fs'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { postIdeasEnabled } from '../config'
+import { POST_IDEAS_BUDGET_USD, POST_IDEAS_RUN_MARGIN_USD, postIdeasEnabled, RUN_MODEL_BUDGET_USD } from '../config'
 import { AFTER_GATHER_STEPS } from '../reading/week-line'
 import { WeekReadTimeoutError } from '../written/deadline'
 import type { ParseClient } from '../written/write-model'
 import type { PostIdeaInsert } from './compose'
 import { choosePlay, withHandles } from './select'
-import { buildPostIdeas, finishPostIdeas, ownedFrom, runPostIdeasStep, type BuiltPostIdeas, type PostIdeaInputs, type PostIdeasStepDeps } from './step'
-import { buildPostIdeaPrompts, generatePostIdeas, POST_IDEAS_MODEL, POST_IDEAS_PROMPT_VERSION, PostIdeasWriteError, type PostIdeasOutput } from './write'
+import { buildPostIdeas, finishPostIdeas, ownedFrom, postIdeasCapLeft, postIdeasHeadroom, postIdeasRoom, postIdeasSpendSoFar, runPostIdeasStep, type BuiltPostIdeas, type PostIdeaInputs, type PostIdeasStepDeps } from './step'
+import { fakeDb } from '../test/fake-db'
+import { buildPostIdeaPrompts, generatePostIdeas, POST_IDEAS_MODEL, POST_IDEAS_PROMPT_VERSION, postIdeasAttemptMaxUsd, PostIdeasBudgetError, PostIdeasWriteError, type PostIdeasOutput } from './write'
 
 // The `write-post-ideas` step (T13): silent where it should be, fail-soft in
 // the week read's way, one alert inside the step and never in its `.catch`,
@@ -51,6 +52,8 @@ function deps(over: Partial<PostIdeasStepDeps> = {}) {
     company: vi.fn(async () => 'Össur'),
     existing: vi.fn(async () => 0),
     build: vi.fn(async () => READY) as unknown as PostIdeasStepDeps['build'],
+    spent: vi.fn(async () => 2.4),
+    ideasSpent: vi.fn(async () => 0),
     save: vi.fn(async (_a, rows) => { saved.push([...rows]) }),
     alert: vi.fn(async (subject: string) => { alerts.push(subject); return { sent: true } }),
     ...over,
@@ -167,7 +170,7 @@ describe('buildPostIdeas', () => {
     expect(parse).not.toHaveBeenCalled()
   })
 
-  it('one strict structured call on the synthesis model, a second only for an answer that would not parse', async () => {
+  it('one strict structured call on the synthesis model, a second for an answer that would not parse', async () => {
     const parse = vi.fn()
       .mockResolvedValueOnce({ choices: [{ message: { parsed: null } }], usage: { prompt_tokens: 100, completion_tokens: 10 } })
       .mockResolvedValueOnce({ choices: [{ message: { parsed: OUTPUT } }], usage: { prompt_tokens: 4_000, completion_tokens: 3_000 } })
@@ -182,11 +185,148 @@ describe('buildPostIdeas', () => {
     expect(out.costUsd).toBeCloseTo((4_100 * 2.5 + 3_010 * 15) / 1e6, 4)
   })
 
+  it('a second also for a failed call that was not a timeout (a 429, a 5xx), never a third', async () => {
+    const rateLimited = Object.assign(new Error('429 Rate limit reached'), { status: 429 })
+    const parse = vi.fn()
+      .mockRejectedValueOnce(rateLimited)
+      .mockResolvedValueOnce({ choices: [{ message: { parsed: OUTPUT } }], usage: { prompt_tokens: 4_000, completion_tokens: 3_000 } })
+    const out = await buildPostIdeas(admin, { clientId: CLIENT, runId: RUN, log: false, inputs: INPUTS, client: { chat: { completions: { parse } } } as unknown as ParseClient })
+    expect(parse).toHaveBeenCalledTimes(2)
+    expect(out.status).toBe('ready')
+    const fivexx = vi.fn().mockRejectedValue(Object.assign(new Error('502 Bad gateway'), { status: 502 }))
+    await expect(generatePostIdeas(null, { clientId: CLIENT, runId: RUN, prompts: { system: 's', user: 'u' }, client: { chat: { completions: { parse: fivexx } } } as unknown as ParseClient }))
+      .rejects.toBeInstanceOf(PostIdeasWriteError)
+    expect(fivexx).toHaveBeenCalledTimes(2)
+  })
+
   it('a call that timed out is thrown as a timeout (transient), never retried inside', async () => {
     const parse = vi.fn().mockRejectedValue(Object.assign(new Error('Request timed out.'), { name: 'APIConnectionTimeoutError' }))
     await expect(generatePostIdeas(null, { clientId: CLIENT, runId: RUN, prompts: { system: 's', user: 'u' }, client: { chat: { completions: { parse } } } as unknown as ParseClient }))
       .rejects.toBeInstanceOf(WeekReadTimeoutError)
     expect(parse).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('the post ideas\' dollar cap and the run\'s headroom (Phase 4 fix round)', () => {
+  // A week with a few hundred asking comments: about eleven thousand prompt
+  // tokens at the dense count.
+  const base = buildPostIdeaPrompts({ company: 'Össur', candidates: CANDIDATES })
+  const prompts = { system: base.system, user: `${base.user}\n${'c9: How long should a liner last before it wears through?\n'.repeat(400)}` }
+  const unparsed = (completion: number) => ({ choices: [{ message: { parsed: null } }], usage: { prompt_tokens: 1_000, completion_tokens: completion } })
+
+  it('an attempt\'s worst case is its prompt, counted densely, and the whole output ceiling', () => {
+    const worst = postIdeasAttemptMaxUsd(prompts)
+    const chars = prompts.system.length + prompts.user.length
+    expect(worst).toBeCloseTo((Math.ceil(chars / 2) * 2.5 + 16_000 * 15) / 1e6, 6)
+    // One attempt fits the cap; on a prompt this size, two worst cases do not.
+    expect(worst).toBeLessThan(POST_IDEAS_BUDGET_USD)
+    expect(2 * worst).toBeGreaterThan(POST_IDEAS_BUDGET_USD)
+    // An empty prompt is the output ceiling alone: $0.24 on gpt-5.4.
+    expect(postIdeasAttemptMaxUsd({ system: '', user: '' })).toBeCloseTo(0.24, 6)
+  })
+
+  it('makes no call whose worst case the room cannot cover', async () => {
+    const parse = vi.fn()
+    await expect(generatePostIdeas(null, { clientId: CLIENT, runId: RUN, prompts, maxUsd: 0.1, client: { chat: { completions: { parse } } } as unknown as ParseClient }))
+      .rejects.toBeInstanceOf(PostIdeasBudgetError)
+    expect(parse).not.toHaveBeenCalled()
+  })
+
+  it('makes the second attempt only where the first\'s spend and the second\'s worst case still fit', async () => {
+    const worst = postIdeasAttemptMaxUsd(prompts)
+    // A first attempt that used its whole output and would not parse: the
+    // second cannot fit, and is not made.
+    const big = vi.fn().mockResolvedValueOnce(unparsed(16_000))
+    const refused = await generatePostIdeas(null, { clientId: CLIENT, runId: RUN, prompts, client: { chat: { completions: { parse: big } } } as unknown as ParseClient }).catch((e: unknown) => e)
+    expect(refused).toBeInstanceOf(PostIdeasBudgetError)
+    expect((refused as Error).message).toMatch(/attempt 2 may cost up to/)
+    // The paid first attempt is carried, so the step reports what it spent.
+    expect((refused as PostIdeasBudgetError).spentUsd).toBeCloseTo((1_000 * 2.5 + 16_000 * 15) / 1e6, 6)
+    expect(big).toHaveBeenCalledTimes(1)
+    // A cheap first attempt leaves room for the second.
+    const small = vi.fn().mockResolvedValueOnce(unparsed(100)).mockResolvedValueOnce({ choices: [{ message: { parsed: OUTPUT } }], usage: { prompt_tokens: 1_000, completion_tokens: 100 } })
+    expect((await generatePostIdeas(null, { clientId: CLIENT, runId: RUN, prompts, client: { chat: { completions: { parse: small } } } as unknown as ParseClient })).attempts).toBe(2)
+    // Never more than the cap, whatever a caller hands in.
+    const parse = vi.fn()
+    await expect(generatePostIdeas(null, { clientId: CLIENT, runId: RUN, prompts: { system: 'x'.repeat(300_000), user: 'y' }, maxUsd: 99, client: { chat: { completions: { parse } } } as unknown as ParseClient }))
+      .rejects.toBeInstanceOf(PostIdeasBudgetError)
+    expect(parse).not.toHaveBeenCalled()
+    expect(worst).toBeGreaterThan(0)
+  })
+
+  it('starts only with the cap and the margin left under the run\'s budget, and holds the call to what is left', () => {
+    const need = POST_IDEAS_BUDGET_USD + POST_IDEAS_RUN_MARGIN_USD
+    expect(postIdeasHeadroom(RUN_MODEL_BUDGET_USD - need)).toBe(true)
+    expect(postIdeasHeadroom(RUN_MODEL_BUDGET_USD - need + 0.01)).toBe(false)
+    expect(postIdeasRoom(0)).toBe(POST_IDEAS_BUDGET_USD)
+    expect(postIdeasRoom(RUN_MODEL_BUDGET_USD - need)).toBeCloseTo(POST_IDEAS_BUDGET_USD, 6)
+    expect(postIdeasRoom(RUN_MODEL_BUDGET_USD - 0.7)).toBeCloseTo(0.2, 6)
+    expect(postIdeasRoom(RUN_MODEL_BUDGET_USD + 5)).toBe(0)
+  })
+
+  it('a run without the headroom: nothing built, nothing stored, one alert, never a throw', async () => {
+    const { d, saved, alerts } = deps({ spent: vi.fn(async () => RUN_MODEL_BUDGET_USD - 0.9) })
+    const out = await runPostIdeasStep(admin, { clientId: CLIENT, runId: RUN, testRun: false, lastAttempt: false }, d)
+    expect(out).toMatchObject({ status: 'over_budget', ideas: 0, costUsd: 0 })
+    expect(out.error).toMatch(/model budget/)
+    expect(d.build).not.toHaveBeenCalled()
+    expect(saved).toEqual([])
+    expect(alerts).toEqual(['Verbatim post ideas not written: Össur'])
+  })
+
+  it('reads the run\'s spend after the cheap checks, and hands the build what the run can afford', async () => {
+    const { d } = deps({ spent: vi.fn(async () => 2.4) })
+    await runPostIdeasStep(admin, { clientId: CLIENT, runId: RUN, testRun: false }, d)
+    expect(d.spent).toHaveBeenCalledWith(CLIENT, RUN)
+    const call = (d.build as unknown as { mock: { calls: [SupabaseClient, { maxUsd?: number }][] } }).mock.calls[0][1]
+    expect(call.maxUsd).toBe(POST_IDEAS_BUDGET_USD)
+    const off = deps({ enabled: vi.fn(() => false) })
+    await runPostIdeasStep(admin, { clientId: CLIENT, runId: RUN, testRun: false }, off.d)
+    expect(off.d.spent).not.toHaveBeenCalled()
+  })
+
+  it('THE CAP IS PER RUN: a retry after a paid attempt gets only what is left of it, and none once it is spent', async () => {
+    expect(postIdeasCapLeft(0.3)).toBeCloseTo(0.2, 6)
+    expect(postIdeasRoom(2.4, RUN_MODEL_BUDGET_USD, 0.3)).toBeCloseTo(0.2, 6)
+    expect(postIdeasHeadroom(2.4, RUN_MODEL_BUDGET_USD, 0.3)).toBe(true)
+    expect(postIdeasHeadroom(2.4, RUN_MODEL_BUDGET_USD, 0.5)).toBe(false)
+    const retry = deps({ ideasSpent: vi.fn(async () => 0.3) })
+    await runPostIdeasStep(admin, { clientId: CLIENT, runId: RUN, testRun: false }, retry.d)
+    expect(retry.d.ideasSpent).toHaveBeenCalledWith(admin, CLIENT, RUN)
+    const call = (retry.d.build as unknown as { mock: { calls: [SupabaseClient, { maxUsd?: number }][] } }).mock.calls[0][1]
+    expect(call.maxUsd).toBeCloseTo(0.2, 6)
+    const spentOut = deps({ ideasSpent: vi.fn(async () => POST_IDEAS_BUDGET_USD) })
+    const out = await runPostIdeasStep(admin, { clientId: CLIENT, runId: RUN, testRun: false, lastAttempt: false }, spentOut.d)
+    expect(out).toMatchObject({ status: 'over_budget', costUsd: 0 })
+    expect(out.error).toMatch(/earlier attempts already spent \$0\.50/)
+    expect(spentOut.d.build).not.toHaveBeenCalled()
+    expect(spentOut.alerts).toEqual(['Verbatim post ideas not written: Össur'])
+  })
+
+  it('reads this run\'s post-ideas spend from the ledger, its own pass only', async () => {
+    const db = fakeDb({ ai_call_log: [
+      { id: 1, client_id: CLIENT, run_id: RUN, pass: 'post_ideas', cost_usd: 0.21 },
+      { id: 2, client_id: CLIENT, run_id: RUN, pass: 'post_ideas', cost_usd: 0.04 },
+      { id: 3, client_id: CLIENT, run_id: RUN, pass: 'pass_a', cost_usd: 3 },
+      { id: 4, client_id: CLIENT, run_id: 'other-run', pass: 'post_ideas', cost_usd: 1 },
+    ] })
+    expect(await postIdeasSpendSoFar(db.client as never, CLIENT, RUN)).toBe(0.25)
+  })
+
+  it('a refusal or a failure after a paid attempt reports what it spent, never 0', async () => {
+    const refused = deps({ build: vi.fn(async () => { throw new PostIdeasBudgetError('the post ideas\' call was not made', 0.2712) }) as unknown as PostIdeasStepDeps['build'] })
+    expect(await runPostIdeasStep(admin, { clientId: CLIENT, runId: RUN, testRun: false }, refused.d)).toMatchObject({ status: 'over_budget', costUsd: 0.2712 })
+    const unparsed = new PostIdeasWriteError('could not be written twice over: no parsed output')
+    unparsed.spentUsd = 0.31
+    const failed = deps({ build: vi.fn(async () => { throw unparsed }) as unknown as PostIdeasStepDeps['build'] })
+    expect(await runPostIdeasStep(admin, { clientId: CLIENT, runId: RUN, testRun: false }, failed.d)).toMatchObject({ status: 'failed', costUsd: 0.31 })
+  })
+
+  it('a call the cap refuses mid-build stops the same way, even before the step\'s last attempt', async () => {
+    const { d, saved, alerts } = deps({ build: vi.fn(async () => { throw new PostIdeasBudgetError('the post ideas\' call was not made') }) as unknown as PostIdeasStepDeps['build'] })
+    expect(await runPostIdeasStep(admin, { clientId: CLIENT, runId: RUN, testRun: false, lastAttempt: false }, d)).toMatchObject({ status: 'over_budget' })
+    expect(saved).toEqual([])
+    expect(alerts).toEqual(['Verbatim post ideas not written: Össur'])
   })
 })
 
@@ -279,7 +419,7 @@ describe('the pipeline carries write-post-ideas', () => {
   })
 })
 
-describe('postIdeasEnabled: the per-tenant switch (the own-post audience\'s shape)', () => {
+describe('postIdeasEnabled: OPT-IN per tenant (PRODUCT_READINGS_ENABLED\'s shape), the env switches off-only', () => {
   const saved = { on: process.env.POST_IDEAS, off: process.env.POST_IDEAS_OFF }
   afterEach(() => {
     if (saved.on === undefined) delete process.env.POST_IDEAS
@@ -287,26 +427,37 @@ describe('postIdeasEnabled: the per-tenant switch (the own-post audience\'s shap
     if (saved.off === undefined) delete process.env.POST_IDEAS_OFF
     else process.env.POST_IDEAS_OFF = saved.off
   })
+  const OTHER = '00000000-0000-4000-8000-0000000000c9'
+  const ON = { [CLIENT]: true, [OTHER]: true }
 
-  it('is on by default, for every tenant', () => {
+  it('is off for every tenant the map does not turn on, whatever the environment says', () => {
     delete process.env.POST_IDEAS
     delete process.env.POST_IDEAS_OFF
-    expect(postIdeasEnabled()).toBe(true)
-    expect(postIdeasEnabled(CLIENT)).toBe(true)
+    expect(postIdeasEnabled(CLIENT)).toBe(false)
+    process.env.POST_IDEAS = '1'
+    expect(postIdeasEnabled(CLIENT)).toBe(false)
+    expect(postIdeasEnabled(CLIENT, { [CLIENT]: false })).toBe(false)
   })
 
-  it('turns off for one tenant through POST_IDEAS_OFF, leaving the others on', () => {
+  it('is on for a tenant the map turns on', () => {
+    delete process.env.POST_IDEAS
+    delete process.env.POST_IDEAS_OFF
+    expect(postIdeasEnabled(CLIENT, ON)).toBe(true)
+    expect(postIdeasEnabled('not-in-the-map', ON)).toBe(false)
+  })
+
+  it('POST_IDEAS_OFF turns one tenant off, leaving the others on', () => {
     delete process.env.POST_IDEAS
     process.env.POST_IDEAS_OFF = ` ${CLIENT.toUpperCase()} , someone-else`
-    expect(postIdeasEnabled(CLIENT)).toBe(false)
-    expect(postIdeasEnabled('00000000-0000-4000-8000-0000000000c9')).toBe(true)
+    expect(postIdeasEnabled(CLIENT, ON)).toBe(false)
+    expect(postIdeasEnabled(OTHER, ON)).toBe(true)
   })
 
-  it('turns off everywhere with POST_IDEAS=0 or false', () => {
+  it('POST_IDEAS=0 or false turns it off everywhere: the emergency off-switch', () => {
     for (const v of ['0', 'false']) {
       process.env.POST_IDEAS = v
-      expect(postIdeasEnabled(CLIENT)).toBe(false)
-      expect(postIdeasEnabled()).toBe(false)
+      expect(postIdeasEnabled(CLIENT, ON)).toBe(false)
+      expect(postIdeasEnabled(OTHER, ON)).toBe(false)
     }
   })
 })

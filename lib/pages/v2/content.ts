@@ -90,6 +90,15 @@ export const IDEA_PANEL_ID = 'idea-panel'
 export const REPLIES_PANEL_ID = 'replies-panel'
 export const POSTS_PANEL_ID = 'posts-panel'
 export const ASKED_ID = 'also-asked'
+/** Worth a reply's card. The anchor This week's stored snapshots and emails
+ *  link replies to (`WEEK_ANCHORS.reply`, `/dashboard/content#worth-a-reply`,
+ *  written before Design v2 and never re-written), so an old link lands on
+ *  the card. A hash never reaches the server, so the anchor alone cannot open
+ *  the list: it scrolls to the card, whose "Open the replies" is one click. */
+export const REPLIES_ANCHOR = 'worth-a-reply'
+/** The old reply list's tab (`?reply=<intent>`, components/pages/week/reply.tsx
+ *  REPLY_PARAM): an old link that carries it opens the list in place. */
+const LEGACY_REPLY_PARAM = 'reply'
 
 /** The also-asked table's rows before "all" is asked for. */
 export const ASKED_SHOWN = 5
@@ -386,7 +395,7 @@ export function parseContentParams(params: Record<string, string | undefined>): 
   const rank = Number(params.idea)
   const open: ContentOpen = rank === 1 || rank === 2 || rank === 3
     ? { kind: 'idea', rank }
-    : params.replies != null ? { kind: 'replies' }
+    : params.replies != null || params[LEGACY_REPLY_PARAM] != null ? { kind: 'replies' }
       : params.posts != null ? { kind: 'posts' }
         : null
   return { period, open, asked: params.asked === 'all' }

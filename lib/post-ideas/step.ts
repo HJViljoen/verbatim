@@ -6,7 +6,9 @@ import { WHAT_THEY_SELL } from '../pages/market-frame'
 import type { QuestionPost } from '../pages/own-post-touch'
 import { playbookAudience, type PlaybookVideo } from '../pages/playbook'
 import { rowWindow, type WindowColumns } from '../pipeline/run-bookkeeping'
-import { postIdeasEnabled } from '../config'
+import { POST_IDEAS_BUDGET_USD, POST_IDEAS_RUN_MARGIN_USD, postIdeasEnabled, RUN_MODEL_BUDGET_USD } from '../config'
+import { runSpendSoFar } from '../pipeline/run-costs'
+import { selectAll } from '../supabase-admin'
 import { allowTokens } from '../prose/scrub'
 import { prevMonth } from '../reading/month-key'
 import { ownedPosts } from '../reading/owned'
@@ -25,7 +27,7 @@ import {
 } from './select'
 import { isMissingPostIdeas, POST_IDEAS_ON_CONFLICT, TABLE_POST_IDEAS } from './types'
 import {
-  buildPostIdeaPrompts, generatePostIdeas, POST_IDEAS_MODEL, POST_IDEAS_PROMPT_VERSION, type PostIdeasOutput,
+  buildPostIdeaPrompts, generatePostIdeas, POST_IDEAS_MODEL, POST_IDEAS_PASS, POST_IDEAS_PROMPT_VERSION, PostIdeasBudgetError, PostIdeasWriteError, type PostIdeasOutput,
 } from './write'
 
 // The week's post ideas, built and stored (depth v2, T13; plan decision 5).
@@ -43,8 +45,10 @@ import {
 // SILENT WHERE IT SHOULD BE. A TEST run (`isTestRun`: a rehearsal that
 // gathered nothing, a capped run, `publish: false`) writes nothing and reads
 // nothing: the next real run writes its own ideas, so nobody is told. A
-// tenant switched off (`postIdeasEnabled`, lib/config.ts: `POST_IDEAS=0`
-// everywhere, or its id in `POST_IDEAS_OFF`; on by default) is the same. No
+// tenant switched off (`postIdeasEnabled`, lib/config.ts: OFF unless
+// `POST_IDEAS_ENABLED` turns it on, which it does for no tenant today; and
+// `POST_IDEAS=0` everywhere or its id in `POST_IDEAS_OFF` as emergency
+// off-switches) is the same. No
 // `post_ideas` table (`isMissingPostIdeas`: the products migration not
 // applied) is a no-op that spends nothing, logged and never alerted, because
 // it is every run's state until Heinrich applies it. A run that already has
@@ -65,6 +69,22 @@ import {
 // same: no rows, one alert naming why. Every model call is capped on the
 // step's own clock (`POST_IDEAS_STEP_BUDGET_MS`, lib/written/deadline.ts) with
 // no SDK retry.
+//
+// A DOLLAR CAP AND THE RUN'S HEADROOM (Phase 4 fix round; the briefs' rule,
+// lib/reports/briefs/step.ts `briefHeadroom`). Before anything is called the
+// step reads the run's model spend (`runSpendSoFar`) and starts only where the
+// run has `POST_IDEAS_BUDGET_USD` plus `POST_IDEAS_RUN_MARGIN_USD` left under
+// `RUN_MODEL_BUDGET_USD` (`postIdeasHeadroom`), so it can never trip the run's
+// own budget stop; the call is then held to what is left (`postIdeasRoom`, at
+// most the cap), attempt by attempt (lib/post-ideas/write.ts). Either refusal
+// stops FAIL-SOFT: no call, no rows, status `over_budget`, one alert.
+//
+// THE CAP IS PER RUN, NOT PER ATTEMPT (the fix round's check): each Inngest
+// retry of the step starts a fresh call, so the step also reads what this
+// run's earlier attempts already spent on post ideas (`postIdeasSpendSoFar`:
+// `ai_call_log`, pass `post_ideas`, every call logged as it returns) and holds
+// the call to the cap less that. A refusal reports what the attempt really
+// spent (an unparsed answer is paid for), never 0.
 
 /** The step's clock for its one model call, the week read's: the call ends
  *  by 250 s, the save and the alert well inside the route's 300 s. */
@@ -239,6 +259,30 @@ export async function loadPostIdeaInputs(admin: SupabaseClient, opts: { clientId
   }
 }
 
+/** What is left of the step's per-run cap after this run's earlier post-ideas
+ *  calls (`ideasSpent`). Pure. */
+export const postIdeasCapLeft = (ideasSpent = 0): number => Math.max(0, POST_IDEAS_BUDGET_USD - ideasSpent)
+
+/** May the step start, with the run having spent `spent` of `budget` and
+ *  `ideasSpent` of that on post ideas? It needs what is left of its cap, and
+ *  the margin, left under the run's budget, and something left of the cap.
+ *  Pure. */
+export const postIdeasHeadroom = (spent: number, budget = RUN_MODEL_BUDGET_USD, ideasSpent = 0): boolean =>
+  postIdeasCapLeft(ideasSpent) > 0 && budget - spent >= postIdeasCapLeft(ideasSpent) + POST_IDEAS_RUN_MARGIN_USD
+
+/** What the call may spend: what is left of the cap, or what the run's budget
+ *  leaves after the margin, whichever is less. Pure. */
+export const postIdeasRoom = (spent: number, budget = RUN_MODEL_BUDGET_USD, ideasSpent = 0): number =>
+  Math.max(0, Math.min(postIdeasCapLeft(ideasSpent), budget - POST_IDEAS_RUN_MARGIN_USD - spent))
+
+/** What this run has spent on post ideas so far, from the ledger
+ *  (`ai_call_log`, pass `post_ideas`; `productSpendSoFar`'s shape). */
+export async function postIdeasSpendSoFar(admin: SupabaseClient, clientId: string, runId: string): Promise<number> {
+  const rows = await selectAll<{ id: string; cost_usd: number | null }>(() => admin.from('ai_call_log').select('id, cost_usd')
+    .eq('client_id', clientId).eq('run_id', runId).eq('pass', POST_IDEAS_PASS).order('id'))
+  return Math.round(rows.reduce((s, r) => s + Number(r.cost_usd ?? 0), 0) * 10_000) / 10_000
+}
+
 export type PostIdeasStatus = 'ready' | 'thin' | 'held'
 
 export interface BuiltPostIdeas {
@@ -283,6 +327,9 @@ export async function buildPostIdeas(
     /** The step's time for its call (lib/written/deadline.ts). Absent (the
      *  script), the call keeps its cap and no SDK retry. */
     budget?: CallBudget
+    /** The most the call may spend (the step's `postIdeasRoom`). Absent (the
+     *  script), `POST_IDEAS_BUDGET_USD`. */
+    maxUsd?: number
   },
 ): Promise<BuiltPostIdeas> {
   const inputs = opts.inputs ?? (await loadPostIdeaInputs(admin, opts))
@@ -290,7 +337,7 @@ export async function buildPostIdeas(
     return { status: 'thin', ideas: [], held: [], rows: [], called: false, costUsd: 0, scrub: null, raw: null, inputs }
   }
   const prompts = buildPostIdeaPrompts({ company: inputs.company, sells: inputs.sells, candidates: inputs.candidates })
-  const call = await generatePostIdeas(admin, { clientId: opts.clientId, runId: opts.runId, prompts, log: opts.log, client: opts.client, budget: opts.budget })
+  const call = await generatePostIdeas(admin, { clientId: opts.clientId, runId: opts.runId, prompts, log: opts.log, client: opts.client, budget: opts.budget, maxUsd: opts.maxUsd })
   return finishPostIdeas(inputs, call.output, call.costUsd)
 }
 
@@ -318,7 +365,7 @@ export async function savePostIdeas(admin: SupabaseClient, rows: readonly PostId
 // ---- The step --------------------------------------------------------------------------
 
 export interface PostIdeasStepResult {
-  status: PostIdeasStatus | 'failed' | 'test_run' | 'disabled' | 'missing_migration' | 'exists'
+  status: PostIdeasStatus | 'failed' | 'test_run' | 'disabled' | 'missing_migration' | 'exists' | 'over_budget'
   ideas: number
   held: number
   costUsd: number
@@ -333,12 +380,16 @@ export interface PostIdeasStepDeps {
   company: (admin: SupabaseClient, clientId: string) => Promise<string>
   existing: (admin: SupabaseClient, clientId: string, runId: string) => Promise<number | null>
   build: typeof buildPostIdeas
+  /** The run's model spend so far (`runSpendSoFar`, ai_call_log). */
+  spent: (clientId: string, runId: string) => Promise<number>
+  /** This run's post-ideas spend so far (`postIdeasSpendSoFar`). */
+  ideasSpent: (admin: SupabaseClient, clientId: string, runId: string) => Promise<number>
   save: (admin: SupabaseClient, rows: readonly PostIdeaInsert[]) => Promise<void>
   alert: (subject: string, text: string) => Promise<{ sent: boolean }>
 }
 
 const DEFAULT_DEPS: PostIdeasStepDeps = {
-  enabled: postIdeasEnabled, company: companyOf, existing: existingPostIdeas, build: buildPostIdeas, save: savePostIdeas, alert: sendAlertEmail,
+  enabled: (clientId) => postIdeasEnabled(clientId), company: companyOf, existing: existingPostIdeas, build: buildPostIdeas, spent: runSpendSoFar, ideasSpent: postIdeasSpendSoFar, save: savePostIdeas, alert: sendAlertEmail,
 }
 
 const FALLBACK = (clientId: string, runId: string) =>
@@ -372,7 +423,7 @@ export async function runPostIdeasStep(
   // The per-tenant switch (lib/config.ts `postIdeasEnabled`): off, nothing is
   // read, spent or written, and nobody is told, as for a test run.
   if (!d.enabled(opts.clientId)) {
-    console.log('[write-post-ideas] post ideas are switched off for this tenant (POST_IDEAS / POST_IDEAS_OFF)')
+    console.log('[write-post-ideas] post ideas are switched off for this tenant (POST_IDEAS_ENABLED, or POST_IDEAS / POST_IDEAS_OFF)')
     return { status: 'disabled', ideas: 0, held: 0, costUsd: 0 }
   }
   // THE STEP'S CLOCK STARTS HERE: its one call is capped and done by 250 s.
@@ -380,6 +431,16 @@ export async function runPostIdeasStep(
   // The alert names the company, as the week read's does; a failed read of
   // the name never fails the step.
   const who = opts.company ?? (await d.company(admin, opts.clientId).catch(() => opts.clientId))
+  // A stop for money: nothing called or stored, the operator told once, and
+  // never a throw (a retry would meet the same cap).
+  const overBudget = async (why: string, costUsd = 0): Promise<PostIdeasStepResult> => {
+    console.warn(`[write-post-ideas] over budget ($${costUsd} spent by this attempt): ${why}`)
+    await d.alert(
+      `Verbatim post ideas not written: ${who}`,
+      `The week's post ideas for run ${opts.runId} were not written: ${why}. The run itself is unaffected; the Content page goes on showing the last ideas stored.\n\nClient: ${who} (${opts.clientId})\n\n${FALLBACK(opts.clientId, opts.runId)}`,
+    ).catch(() => ({ sent: false }))
+    return { status: 'over_budget', ideas: 0, held: 0, costUsd: Math.round(costUsd * 10_000) / 10_000, error: why }
+  }
   try {
     const existing = await d.existing(admin, opts.clientId, opts.runId)
     if (existing === null) {
@@ -390,7 +451,18 @@ export async function runPostIdeasStep(
       console.log(`[write-post-ideas] run ${opts.runId} already has its ${existing} idea(s); nothing was written or spent`)
       return { status: 'exists', ideas: existing, held: 0, costUsd: 0 }
     }
-    const built = await d.build(admin, { clientId: opts.clientId, runId: opts.runId, log: true, budget: callBudget({ startedAt, budgetMs: POST_IDEAS_STEP_BUDGET_MS }) })
+    // THE RUN'S HEADROOM, read before anything is called: the step starts
+    // only where the run can afford its whole cap and the margin.
+    // And what this run's earlier attempts of the step spent on post ideas:
+    // the cap is the run's, not each retry's.
+    const [spent, ideasSpent] = await Promise.all([d.spent(opts.clientId, opts.runId), d.ideasSpent(admin, opts.clientId, opts.runId)])
+    if (postIdeasCapLeft(ideasSpent) <= 0) {
+      return await overBudget(`this run's earlier attempts already spent $${ideasSpent.toFixed(2)} of the post ideas' $${POST_IDEAS_BUDGET_USD.toFixed(2)} cap`)
+    }
+    if (!postIdeasHeadroom(spent, RUN_MODEL_BUDGET_USD, ideasSpent)) {
+      return await overBudget(`the run has spent $${spent.toFixed(2)} of its $${RUN_MODEL_BUDGET_USD} model budget, and the post ideas may cost up to $${postIdeasCapLeft(ideasSpent).toFixed(2)} more with $${POST_IDEAS_RUN_MARGIN_USD.toFixed(2)} kept spare; they were not started, so the run could not trip its budget`)
+    }
+    const built = await d.build(admin, { clientId: opts.clientId, runId: opts.runId, log: true, budget: callBudget({ startedAt, budgetMs: POST_IDEAS_STEP_BUDGET_MS }), maxUsd: postIdeasRoom(spent, RUN_MODEL_BUDGET_USD, ideasSpent) })
     if (built.status === 'thin') {
       console.log(`[write-post-ideas] thin: no question conversation clears the evidence floor; ${built.called ? `the call held every idea as thin ($${built.costUsd})` : 'no call'}, nothing stored`)
       return { status: 'thin', ideas: 0, held: built.held.length, costUsd: built.costUsd }
@@ -407,6 +479,7 @@ export async function runPostIdeasStep(
     return result
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)
+    if (e instanceof PostIdeasBudgetError) return await overBudget(message, e.spentUsd)
     if (!lastAttempt && isTransient(e)) {
       console.warn(`[write-post-ideas] transient failure, the step is retried: ${message}`)
       throw e
@@ -416,6 +489,8 @@ export async function runPostIdeasStep(
       `Verbatim post ideas failed: ${who}`,
       `The week's post ideas for run ${opts.runId} could not be written. The run itself is unaffected; the Content page goes on showing the last ideas stored.\n\nError: ${message}\n\nClient: ${who} (${opts.clientId})\n\n${FALLBACK(opts.clientId, opts.runId)}`,
     ).catch(() => ({ sent: false }))
-    return { status: 'failed', ideas: 0, held: 0, costUsd: 0, error: message }
+    // What the attempts really cost: an answer that would not parse is paid for.
+    const paid = e instanceof PostIdeasWriteError ? Math.round(e.spentUsd * 10_000) / 10_000 : 0
+    return { status: 'failed', ideas: 0, held: 0, costUsd: paid, error: message }
   }
 }

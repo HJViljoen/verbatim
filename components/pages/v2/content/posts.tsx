@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { User } from 'lucide-react'
 import { CARD, CardHead, InPlacePanel, PanelTitle, SELECTED_CARD_RING, type PerBreakpoint } from '@/components/v2'
 import { fmtInt, longMonth, platformLabel, shortDate } from '@/lib/format'
@@ -21,10 +22,10 @@ import { Fig, Lvl, OLink, PlatformCounts } from './parts'
 const CELL = 'min-w-0 rounded-[10px] bg-inner px-3.5 py-3'
 const VALUE = 'font-mono text-[24px] leading-none font-medium tracking-[-0.02em] tabular-nums'
 
-export function PostsCard({ block, state, selected, className }: { block: PostsBlock; state: ContentState; selected: boolean; className?: string }) {
+export function PostsCard({ block, state, selected, className, style }: { block: PostsBlock; state: ContentState; selected: boolean; className?: string; style?: CSSProperties }) {
   const when = monthWords(block)
   return (
-    <article aria-labelledby="posts-title" className={cn(CARD, selected ? SELECTED_CARD_RING : null, className)}>
+    <article aria-labelledby="posts-title" style={style} className={cn(CARD, selected ? SELECTED_CARD_RING : null, className)}>
       <CardHead
         icon={User}
         id="posts-title"

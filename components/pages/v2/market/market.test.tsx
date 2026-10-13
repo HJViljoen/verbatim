@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract, copyNodes, copyViolations } from '@/lib/test/copy-contract'
-import { fixtureId, marketFixture, FIXTURE_WEEKS } from '@/lib/pages/v2/market-fixture'
+import { fixtureId, marketFixture, marketLongRowsFixture, FIXTURE_WEEKS } from '@/lib/pages/v2/market-fixture'
 import type { MarketData } from '@/lib/pages/v2/market'
 import { MarketPage, MARKET_FIRST_RUN } from './index'
 import { ConversationPanel, SubjectPanelView } from './panel'
-import { KindsCard, PlatformsCard, RailView, WatchCard, WeeksCard } from './rail'
+import { KindsCard, PlatformsCard, RailView, WatchCard, WeeksCard, WEEKS_UNREAD } from './rail'
+import { WEEKS_FAILED } from '@/lib/pages/home'
 import { SubjectBoardView } from './subjects'
 import { ConversationTable } from './table'
 import { TopRowView } from './top'
@@ -79,7 +80,9 @@ describe('TopRowView', () => {
     const html = render(<TopRowView data={WEEK} />)
     expect(html).toMatch(/data-copy="verdict" data-flag="unusual"/)
     expect(text).toContain('Who’s saying it Long-time users upgrading , Caregivers and family')
-    expect(text).toContain('What they’re doing Complained about something · 14 of 31 in October so far')
+    // A complaint conversation: its lead card names the next kind, never
+    // "Complained about something" over its own videos (Phase 4 fix round).
+    expect(text).toContain('What they’re doing Asked a question · 9 of 31 in October so far')
     assertCopyContract(<TopRowView data={WEEK} />)
   })
 
@@ -102,6 +105,17 @@ describe('TopRowView', () => {
     expect(renderText(<TopRowView data={QUIET} />)).toMatch(/^New this week Waterproof knees 8 of 226 category videos this week 8 of 300 in October so far/)
     expect(html).toMatch(/<span data-copy="verdict">New this week<\/span>/)
     assertCopyContract(<TopRowView data={QUIET} />)
+  })
+
+  it('the lead card labels every week\'s bar, as the side card and the Dashboard\'s tile do', () => {
+    const hero = QUIET.top.hero
+    if (!hero || hero.kind === 'flag') throw new Error('expected a conversation lead')
+    const html = render(<TopRowView data={QUIET} />)
+    const card = html.slice(html.indexOf('id="top-0"'), html.indexOf('id="top-1"'))
+    const counts = hero.conv.weeks.filter((w): w is number => w != null)
+    expect(counts.length).toBe(3)
+    // Both drawings (the half-card's and the phone's) print all three.
+    for (const n of counts) expect(card.match(new RegExp(`>${n}<`, 'g'))?.length ?? 0, String(n)).toBeGreaterThanOrEqual(2)
   })
 
   it('rings the card whose panel is open, and turns its link to Close', () => {
@@ -201,10 +215,15 @@ describe('the rail', () => {
     assertCopyContract(<KindsCard block={block} />)
   })
 
-  it('weeks: the Dashboard\'s chart, or "Insufficient data"', () => {
+  it('weeks: the Dashboard\'s chart, or "Insufficient data" for too few clean weeks, or the failure where the read failed', () => {
     expect(renderText(<WeeksCard weeks={FIXTURE_WEEKS} />)).toContain('198 205 214 188 230 226 219 241')
     expect(renderText(<WeeksCard weeks={null} />)).toContain('Insufficient data')
+    expect(renderText(<WeeksCard weeks={null} />)).not.toContain(WEEKS_UNREAD)
+    // Phase 4 fix round: a read that threw is a failure, never an absence.
+    expect(renderText(<WeeksCard weeks={WEEKS_FAILED} />)).toContain(WEEKS_UNREAD)
+    expect(renderText(<WeeksCard weeks={WEEKS_FAILED} />)).not.toContain('Insufficient data')
     assertCopyContract(<WeeksCard weeks={FIXTURE_WEEKS} />)
+    assertCopyContract(<WeeksCard weeks={WEEKS_FAILED} />)
   })
 
   it('platforms: the week\'s, or the month\'s', () => {
@@ -229,11 +248,27 @@ describe('ConversationTable', () => {
   it('this week: the week and the month, who it is about, subject filters, show all', () => {
     const text = renderText(<ConversationTable table={WEEK.table!} data={WEEK} />)
     expect(text).toMatch(/^Every conversation this week 17 conversations, biggest first, each counted in the category’s videos \( 226 this week\) All 17 Fit & comfort 4/)
-    expect(text).toContain('Conversation Subject About This week October so far How long a liner lasts Fit & comfort Össur 4 · others 19 23 35')
-    expect(text).toContain('Insurance refusals for powered knees Cost & access Össur 3 · Ottobock 5 · others 11 19 31')
+    // The month twice: under the week's figure for a phone, and in its own
+    // column from 640 (each shown at its width only).
+    expect(text).toContain('Conversation Subject About This week October so far How long a liner lasts Fit & comfort Össur 4 · others 19 23 35 in October so far 35')
+    expect(text).toContain('Insurance refusals for powered knees Cost & access Össur 3 · Ottobock 5 · others 11 19 31 in October so far 31')
     expect(text).toMatch(/Show all 17$/)
     expect(render(<ConversationTable table={WEEK.table!} data={WEEK} />)).toContain('href="/dashboard/market?all=1#conversations"')
     assertCopyContract(<ConversationTable table={WEEK.table!} data={WEEK} />)
+  })
+
+  // Phase 4 fix round: at 390 two figure columns beside a label did not fit
+  // Sealand's table, and its own scroll cut "42" to "4" at the card's edge.
+  // On a phone the month sits under the week's figure, in its cell (Content's
+  // Also asked); the month column shows from 640. Checked at 390, 360 and 320
+  // on the long-label fixture and Sealand's dump by scripts/pages-shots.ts.
+  it('on a phone the month sits under the week, so no figure column is cut, with long labels and three-digit figures', () => {
+    const d = marketLongRowsFixture()
+    const html = render(<ConversationTable table={d.table!} data={d} />)
+    expect(html).toMatch(/<th scope="col" class="[^"]*hidden text-right sm:table-cell">October so far<\/th>/)
+    expect(html).toMatch(/>123<\/span><span class="block whitespace-nowrap[^"]*sm:hidden"><span data-copy="figure" class="font-mono">456<\/span> in October so far<\/span><\/td><td class="[^"]*hidden text-right[^"]*sm:table-cell"><span data-copy="figure">456<\/span>/)
+    expect(renderText(<ConversationTable table={d.table!} data={d} />)).toContain('Whether the forty litre travel backpack really fits under the seat on budget airlines across Europe')
+    assertCopyContract(<ConversationTable table={d.table!} data={d} />)
   })
 
   it('marks a conversation set apart (makers\' own posts), which stays in the list', () => {

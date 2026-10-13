@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 import { bandVerdict } from '../../reading/verdicts'
 import type { StandingFact, WeekReadDataV2 } from '../../written/types'
-import { homeWeeksFrame } from '../home'
+import { homeWeeksFrame, WEEKS_FAILED } from '../home'
 import { parseContentParams } from './content'
 import { topProducts } from './products'
 import {
@@ -49,6 +49,27 @@ describe('the week tile', () => {
     const t = weekTileOf({ read: null, weeks: null, subjects: null, now: DASHBOARD_NOW })
     expect(t).toMatchObject({ dates: null, week: { videos: null, comments: null }, month: { videos: null, comments: null }, inMonth: null })
     expect(t.weeks).toEqual(homeWeeksFrame(DASHBOARD_NOW))
+  })
+
+  it('a weekly read that failed is told apart from too few clean weeks (Phase 4 fix round)', () => {
+    const failed = weekTileOf({ read: null, weeks: WEEKS_FAILED, subjects: null, now: DASHBOARD_NOW })
+    expect(failed.weeksFailed).toBe(true)
+    expect(failed.weeks).toEqual(homeWeeksFrame(DASHBOARD_NOW))
+    const thin = weekTileOf({ read: null, weeks: null, subjects: null, now: DASHBOARD_NOW })
+    expect(thin.weeksFailed).toBeUndefined()
+    expect(weekTileOf({ read: null, weeks: FIXTURE_WEEKS, subjects: null, now: DASHBOARD_NOW }).weeksFailed).toBeUndefined()
+  })
+
+  it('the loader turns a weekly read that throws into WEEKS_FAILED, never null', () => {
+    const src = readFileSync(resolve(__dirname, 'home.ts'), 'utf8')
+    expect(src).toMatch(/loadHomeWeeks\([^)]*\)[^;]*\.catch\(\(error: unknown\) => \{ say\('weeks', error\); return WEEKS_FAILED \}\)/)
+    const market = readFileSync(resolve(__dirname, 'market.ts'), 'utf8')
+    expect(market).toMatch(/\('weeks', loadWeekRows\(db, clientId, nowIso\), WEEKS_FAILED\)/)
+    expect(market).toMatch(/weeks: marketWeeksOf\(\{ rows: weekRowsRaw, changes: changes === null \? null : ourChanges, cadence,/)
+    // The change log and the cadence fail to null, never to an empty list
+    // that would draw the bars uncut.
+    expect(market).toMatch(/\('changes', loadChanges\(db, clientId\), null\)/)
+    expect(market).toMatch(/\('cadence', loadCadenceRuns\(supabase, clientId\), null\)/)
   })
 
   it('a figure the read did not hold is null, never zero', () => {

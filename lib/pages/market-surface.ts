@@ -7,6 +7,7 @@ import { fmtInt, monthName, shortDate } from '../format'
 import { claimVerdictFor, distinctVideos, groundedTier, insightTiers, labelsBySlug, ledgerRows, themeChips, tierCounts, type GroundingThemeRow, type ThemeChip } from '../market-tiles'
 import type { SayVsHearEntry } from '../pipeline/schemas'
 import { loadClaimEchoes, loadMarketMonthVideos } from './claim-echo'
+import { loadRegistryLabels } from './registry-labels'
 import { ADVICE_SHORTLIST, adviceShortlist, adviceVectors, currentAdvice as currentAdviceRows } from './advice-shortlist'
 import { cleanQuote, createCitedQuotePicker, fetchInsightsByIds, readingOf, readTranslations, type QuoteRow, type ThemeBucketRow } from '../quotes'
 import { inheritedStatus, isMissingRecDecisions, REC_DECISIONS_TABLE, type RecDecision } from '../rec-decisions'
@@ -2612,29 +2613,9 @@ export async function loadSubjects(supabase: SupabaseClient, clientId: string): 
   }
 }
 
-/** Registry labels, for a theme-move's "on what". A registry id is the stable
- *  identity (AGENTS.md); the label is what a reader is shown.
- *
- *  THE COLUMN IS `canonical_label` (depth v2, T7). This read asked for
- *  `label`, which `theme_registry` has never had, so PostgREST refused it, the
- *  catch below turned the refusal into an empty map, and every theme move and
- *  advice move printed no "on what" (Y4's label, the Date-a-move list's) on
- *  both tenants. Measured 13 Oct: every one of Össur's 1,471 and Sealand's
- *  3,590 registry rows carries a `canonical_label`. A failed read is still an
- *  empty map, now logged. */
-export async function loadRegistryLabels(supabase: SupabaseClient, clientId: string, ids: readonly string[]): Promise<Map<string, string>> {
-  // ONLY THE IDS A PAGE NAMES (depth v2, T7): a move's themes, an advice's
-  // leading theme. Chunked like every `.in()` here (lib/chunk.ts); none named,
-  // no read.
-  const unique = [...new Set(ids.filter(Boolean))]
-  if (unique.length === 0) return new Map()
-  const parts = await mapWithLimit(chunk(unique, UUID_IN_CHUNK), READ_CONCURRENCY, (part) =>
-    selectAll<{ id: string; canonical_label: string | null }>(() =>
-      supabase.from('theme_registry').select('id, canonical_label').eq('client_id', clientId).in('id', part).order('id', { ascending: true }),
-    ).catch(logAs('registryLabels', [] as { id: string; canonical_label: string | null }[])),
-  )
-  return new Map(parts.flat().filter((r) => r.canonical_label?.trim()).map((r) => [r.id, (r.canonical_label as string).trim()]))
-}
+// Registry labels by id: one shared, chunked, fail-soft read (Phase 4 fix
+// round), re-exported here for the importers that named this module.
+export { loadRegistryLabels }
 
 /** The ledger's own deep link, so the digest's `?rec=<id>` keeps landing on the
  *  row it names once that link points here. Your moves is at /dashboard/moves

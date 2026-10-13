@@ -33,6 +33,18 @@ const FILL: Record<BarWho | 'ink', string> = { ...BAR_FILL, ink: 'bg-foreground'
 
 const clamp = (v: number): number => Math.min(100, Math.max(0, Number.isFinite(v) ? v : 0))
 
+/** The narrowest a bar with a figure is drawn: Content's What works on a 390
+ *  phone, about 170px of track. */
+const FIGURE_BAR_MIN_PX = 160
+
+/** How far past the fill, as a share of the track, a tick must stand for the
+ *  figure to fit between them on the narrowest bar: the figure's width (mono
+ *  11.5px, about 7px a character) and 6px either side. Nearer than that, the
+ *  figure starts past the tick (Phase 4 fix round: "0.5×" printed over the
+ *  1× marker, which stands 12.5 points past a 0.5× fill, inside the old fixed
+ *  12). */
+export const figureClearPct = (figure: string): number => Math.max(12, ((figure.length * 7 + 12) / FIGURE_BAR_MIN_PX) * 100)
+
 export interface TickBarProps {
   /** The fill, 0 to 100 of the track. */
   pct: number
@@ -51,9 +63,10 @@ export interface TickBarProps {
 
 export function TickBar({ pct, tick = null, tone = 'market', size = 'md', figure, label, className }: TickBarProps) {
   const fill = clamp(pct)
-  // The figure starts 6px past the fill; where the tick stands just past the
-  // fill, it starts past the tick instead, so the two never overprint.
-  const figureAt = tick != null && clamp(tick) > fill && clamp(tick) - fill < 12 ? clamp(tick) : fill
+  // The figure starts 6px past the fill; where the tick stands too close past
+  // the fill for the figure to fit between them (`figureClearPct`), it starts
+  // past the tick instead, so the two never overprint.
+  const figureAt = tick != null && figure && clamp(tick) > fill && clamp(tick) - fill < figureClearPct(figure) ? clamp(tick) : fill
   return (
     <div role="img" aria-label={label} className={cn('relative min-w-0 bg-track', HEIGHT[size], className)}>
       {fill > 0 ? <div className={cn('absolute inset-y-0 left-0', HEIGHT[size], FILL[tone])} style={{ width: `${fill}%` }} /> : null}

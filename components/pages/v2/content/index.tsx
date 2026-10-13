@@ -1,5 +1,5 @@
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
-import { equalColumns, panelPlacement, PanelSlot, PeriodSwitch, type PanelLayout } from '@/components/v2'
+import { equalColumns, panelItemOrder, panelPlacement, PanelSlot, PeriodSwitch, type PanelLayout } from '@/components/v2'
 import { fmtInt, longMonth } from '@/lib/format'
 import { CONTENT_PERIODS, contentHref, daysPhrase, monthWords, type ContentPageData, type ContentState } from '@/lib/pages/v2/content'
 import { surface } from '@/lib/nav'
@@ -86,12 +86,15 @@ export function ContentPage({ data }: { data: ContentPageData }) {
 
       {/* One grid at every width: on a phone (and up to 1280) the right-hand
           column dissolves (`contents`) so Worth a reply and Your posts are
-          the grid's own cards and the open one's panel lands between them. */}
+          the grid's own cards and the open one's panel lands between them.
+          Every order is the kit's (`panelItemOrder`, the cards' in
+          LOWER_LAYOUT's order): the column's own is read only from 1280,
+          where it is a grid item, and is inert while it is `contents`. */}
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
-        <WorksCard block={data.works} className="order-0 xl:col-span-8" />
-        <div className="contents xl:order-2 xl:col-span-4 xl:flex xl:min-w-0 xl:flex-col xl:gap-5">
-          <RepliesCard view={data.replies} state={state} selected={data.open?.kind === 'replies'} className="order-2" />
-          <PostsCard block={data.posts} state={state} selected={data.open?.kind === 'posts'} className="order-4" />
+        <WorksCard block={data.works} className="xl:col-span-8" style={panelItemOrder(0)} />
+        <div className="contents xl:col-span-4 xl:flex xl:min-w-0 xl:flex-col xl:gap-5" style={panelItemOrder(1)}>
+          <RepliesCard view={data.replies} state={state} selected={data.open?.kind === 'replies'} style={panelItemOrder(1)} />
+          <PostsCard block={data.posts} state={state} selected={data.open?.kind === 'posts'} style={panelItemOrder(2)} />
         </div>
         {lower ? (
           <PanelSlot placement={lower}>

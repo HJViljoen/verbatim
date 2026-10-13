@@ -62,6 +62,11 @@ describe('the Your products page (boards E4-Products and E4-Products-Liners)', (
     }
     expect(render(<ProductsPage data={PRODUCTS_FIXTURES.sealand()} />)).toContain('href="/dashboard/settings/products"')
     // Not switched on: the catalogue's size, never a count of talk.
-    expect(renderText(<ProductsMeta data={PRODUCTS_FIXTURES['not-on']()} />)).toMatch(/^September · \d+ products in 6 categories$/)
+    // Not switched on: no month over a page that reads none (Phase 4 fix round).
+    expect(renderText(<ProductsMeta data={PRODUCTS_FIXTURES['not-on']()} />)).toMatch(/^\d+ products in 6 categories$/)
+    expect(renderText(<ProductsMeta data={PRODUCTS_FIXTURES['not-applied']()} />)).not.toMatch(/September|October/)
+    expect(renderText(<ProductsMeta data={PRODUCTS_FIXTURES.sealand()} />)).not.toMatch(/September|October/)
+    // Read but not yet for the month: the month is what is missing, so it stays.
+    expect(renderText(<ProductsMeta data={PRODUCTS_FIXTURES.unread()} />)).toMatch(/^October/)
   })
 })

@@ -168,7 +168,8 @@ describe('reviewEmailLines: the review email, to the members or to the operator'
   })
 
   // Fresh review B1: the operator's email for the run that closes a month
-  // carries the long-run read, which Your market prints already (5 Oct).
+  // carries the long-run read, which no page shows since Design v2 (13 Oct),
+  // under a heading that names no page.
   const also = {
     title: 'What holds across August and September',
     inShort: 'Buyers ask harder questions before they commit.',
@@ -178,10 +179,10 @@ describe('reviewEmailLines: the review email, to the members or to the operator'
     ],
   }
 
-  it('adds "Already on Your market" with the read\'s title, lead, headlines and sentences, after the button', () => {
+  it('adds the long-run read with its title, lead, headlines and sentences, after the button, naming no page', () => {
     const body = reviewEmailBody({ ...base, forOperator: true, editable: false, readOnPlatform: true, alsoPublished: also })
     expect(body.text).toContain([
-      'Already on Your market: What holds across August and September',
+      "The month's long-run read (written; not shown on a page yet): What holds across August and September",
       '',
       'Buyers ask harder questions before they commit.',
       '',
@@ -192,7 +193,10 @@ describe('reviewEmailLines: the review email, to the members or to the operator'
       '2. Rivals are known for concrete jobs',
       'Cotopaxi is talked about as a travel tool.',
     ].join('\n'))
-    expect(body.html.indexOf('Already on Your market: What holds across August and September')).toBeGreaterThan(body.html.indexOf('Open in the Studio'))
+    expect(body.html.indexOf('long-run read (written; not shown on a page yet): What holds across August and September')).toBeGreaterThan(body.html.indexOf('Open in the Studio'))
+    // No page prints the long-run read now: the email never sends the
+    // operator to one.
+    expect(body.text + body.html).not.toMatch(/Your market|read it there/)
     // Never the old promise that Send publishes it: it is on the platform already.
     expect(body.text + body.html).not.toMatch(/published when you send/i)
     expect(body.html).toContain('2. Rivals are known for concrete jobs')
@@ -202,10 +206,11 @@ describe('reviewEmailLines: the review email, to the members or to the operator'
 
   it('says so where the read could not be read, and adds nothing on any other review', () => {
     expect(reviewEmailBody({ ...base, forOperator: true, alsoPublished: { unread: true } }).text).toContain(ALSO_PUBLISHED_UNREAD)
-    expect(ALSO_PUBLISHED_UNREAD).toMatch(/^Already on Your market: /)
+    expect(ALSO_PUBLISHED_UNREAD).toMatch(/^The month's long-run read \(written; not shown on a page yet\): /)
+    expect(ALSO_PUBLISHED_UNREAD).not.toMatch(/Your market|read it there/)
     const plain = reviewEmailBody({ ...base, forOperator: true })
-    expect(plain.text).not.toContain('Already on Your market')
-    expect(plain.html).not.toContain('Already on Your market')
+    expect(plain.text).not.toContain('long-run read')
+    expect(plain.html).not.toContain('long-run read')
     expect(plain.subject).toBe('Sealand: This week in your market is ready for review')
   })
 })

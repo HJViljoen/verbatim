@@ -8,16 +8,19 @@
 //
 // DRY BY DEFAULT (`--dry-run` says so out loud). Nothing is written to any
 // database: no `post_ideas` row and no `ai_call_log` row. The call is still
-// paid for (gpt-5.4 at medium effort, typically $0.05 to $0.15 a run; the
-// answer is capped at 16,000 tokens, so never more than about $0.55 with its
-// one retry). Without --run it reads the client's newest finished run with a
-// window.
+// paid for (gpt-5.4 at medium effort, typically $0.05 to $0.15 a run), and
+// held to `POST_IDEAS_BUDGET_USD` ($0.50) across its attempts, each made only
+// where its worst case still fits. Without --run it reads the client's newest
+// finished run with a window.
 //
 // --write stores the run's ideas as the step does (upsert on run_id, rank),
 // logging the call to `ai_call_log`. It is a paste for Heinrich against
 // production, the fallback when the step failed or was not deployed, and it
 // refuses a run that already has ideas: `post_ideas` grants no DELETE, so a
-// smaller set could not take back a rank a larger one wrote.
+// smaller set could not take back a rank a larger one wrote. --write does NOT
+// check `POST_IDEAS_ENABLED` (lib/config.ts): it writes for a tenant whose
+// switch is off, and Content and the Dashboard then hide what it wrote ("not
+// switched on", no stored idea) until the switch is turned on for that tenant.
 //
 // --out <file.md> writes the rendering there and the JSON beside it
 // (<file>.json). The rendering prints up to two of the comments behind each

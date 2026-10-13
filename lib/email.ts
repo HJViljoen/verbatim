@@ -156,9 +156,10 @@ export interface ReviewEmail {
    *  weekly read the runner builds is put there at once (5 Oct;
    *  lib/schedules/run.ts), before this email is written. */
   inPastIssues?: boolean
-  /** The month's long-run read this run also wrote, for the operator to read:
-   *  Your market prints it already, as soon as the run wrote it (fresh review
-   *  B1; 5 Oct). Absent on every other review. */
+  /** The month's long-run read this run also wrote, for the operator to read
+   *  (fresh review B1; 5 Oct). No page prints it since Design v2 retired Your
+   *  market (where it lives next is Heinrich's call), so the email names no
+   *  page. Absent on every other review. */
   alsoPublished?: AlsoPublished | null
 }
 
@@ -168,22 +169,27 @@ export interface ReviewEmail {
  * headline and sentences, the writer's words as stored (scrubbed when they
  * were written; no comment's words, no figure). `unread` where the run's
  * long-run read could not be read into the email: the email then says so
- * rather than leave it out, because Your market prints it either way.
+ * rather than leave it out, because it was written either way.
  */
 export type AlsoPublished =
   | { title: string; inShort: string; ideas: { headline: string; body: string[] }[] }
   | { unread: true }
 
+/** The section's heading. The long-run read (`week_reads` kind 'month') has
+ *  no routed reader since Design v2 retired Your market, and where it lives
+ *  next is Heinrich's call (Phase 4), so the heading names no page. */
+export const ALSO_PUBLISHED_HEADING = "The month's long-run read (written; not shown on a page yet)"
+
 /** The section's heading where the long-run read could not be read. */
 export const ALSO_PUBLISHED_UNREAD =
-  'Already on Your market: the long-run read, if this update wrote one. It could not be read into this email, so read it there.'
+  `${ALSO_PUBLISHED_HEADING}: this update may have written one, and it could not be read into this email.`
 
-/** The review email's "Already on Your market" section, as plain paragraphs
- *  in order (pure, for the test and the text body). */
+/** The review email's long-run read section, as plain paragraphs in order
+ *  (pure, for the test and the text body). */
 export function alsoPublishedLines(also: AlsoPublished): { heading: string; lead: string | null; ideas: { headline: string; body: string[] }[] } {
   if ('unread' in also) return { heading: ALSO_PUBLISHED_UNREAD, lead: null, ideas: [] }
   return {
-    heading: `Already on Your market: ${also.title}`,
+    heading: `${ALSO_PUBLISHED_HEADING}: ${also.title}`,
     lead: also.inShort.trim() || null,
     ideas: also.ideas.map((idea, i) => ({ headline: `${i + 1}. ${idea.headline}`, body: idea.body })),
   }
@@ -215,9 +221,9 @@ export function reviewEmailLines(review: ReviewEmail): { lead: string; steps: st
 // and the body stays free of anything an erasure would have to chase. Same
 // optional posture as the rest of this module. ONE exception (fresh review
 // B1): the operator's email for a run that also wrote the month's long-run
-// read carries that read's own words, because Your market prints it already
-// and the Studio does not show it. They are the writer's sentences, never a
-// comment's, so there is still nothing for an erasure to chase.
+// read carries that read's own words, because neither the Studio nor any page
+// shows it. They are the writer's sentences, never a comment's, so there is
+// still nothing for an erasure to chase.
 /** The review email's subject, text and HTML (pure, for the test). */
 export function reviewEmailBody(review: ReviewEmail): { subject: string; text: string; html: string } {
   const subject = review.companyName ? `${review.companyName}: ${review.reportTitle} is ready for review` : `${review.reportTitle} is ready for review`
@@ -240,7 +246,7 @@ export function reviewEmailBody(review: ReviewEmail): { subject: string; text: s
       : []),
   ].join('\n')
   // Below the button, after a hairline: the long-run read the run also wrote,
-  // on Your market already, for the operator to read.
+  // for the operator to read (no page shows it yet).
   const alsoHtml = also
     ? `
           <tr><td style="padding-top:24px">

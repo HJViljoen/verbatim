@@ -4,7 +4,7 @@ import { Box, Info } from 'lucide-react'
 import { IconTile, SELECTED } from '@/components/colour-roles'
 import { Card } from '@/components/pages/studio/ui'
 import { fmtInt } from '@/lib/format'
-import { PRODUCTS_HELD, PRODUCTS_NOT_APPLIED, type AliasChip, type OpenCategory, type ProductLine, type ProductSettingsView } from '@/lib/settings/products'
+import { PRODUCTS_HELD, PRODUCTS_NOT_APPLIED, PRODUCTS_PAGE_OFF, type AliasChip, type OpenCategory, type ProductLine, type ProductSettingsView } from '@/lib/settings/products'
 import { cn } from '@/lib/utils'
 import { ALIAS_CHIP, CHECKED_TAG } from './chip'
 import { AddCategory, AddName, AddProduct, EditProduct, RemovableAlias, RenameCategory } from './controls'
@@ -148,7 +148,7 @@ function ProductRow({ p, open, view }: { p: ProductLine; open: OpenCategory; vie
         {p.aliases.map((a) => <Alias key={a.id} a={a} />)}
         {view.canEdit ? <AddName productId={p.id} kind="nickname" label="Add a name" owner={p.name} locked={view.locked} /> : null}
       </div>
-      <div role="cell" className="col-start-1 row-start-3 lg:col-start-3 lg:row-start-1"><Month videos={p.videos} /></div>
+      <div role="cell" className="col-start-1 row-start-3 lg:col-start-3 lg:row-start-1">{view.readingsOn ? <Month videos={p.videos} /> : null}</div>
       <div role="cell" className="col-start-2 row-start-1 flex justify-end lg:col-start-4">
         {view.canEdit ? <EditProduct id={p.id} name={p.name} groupId={open.id} aliases={p.aliases} choices={view.choices} locked={view.locked} /> : null}
       </div>
@@ -182,7 +182,7 @@ function OpenCategoryCard({ open, view }: { open: OpenCategory; view: ProductSet
           <div role="row" className={`${GRID} hidden border-b border-[#E4E2DC] pb-2 text-[11.5px] font-semibold uppercase tracking-[0.05em] lg:grid ${MUTED}`}>
             <span role="columnheader">Product</span>
             <span role="columnheader">Other names people use</span>
-            <span role="columnheader">This month</span>
+            <span role="columnheader">{view.readingsOn ? 'This month' : null}</span>
             <span role="columnheader">{view.canEdit ? <span className="sr-only">Edit</span> : null}</span>
           </div>
           <div role="rowgroup">
@@ -236,6 +236,9 @@ export function ProductsTab({ view }: { view: ProductSettingsView | null }) {
   }
   return (
     <div className="flex min-w-0 flex-col gap-5 text-[#26292C]">
+      {/* The page that counts these products is off: no count prints here
+          either, and the tab says so. */}
+      {view.readingsOn ? null : <Note>{PRODUCTS_PAGE_OFF}</Note>}
       <Seeded view={view} />
       <section aria-label="Your products" className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[280px_minmax(0,1fr)]">
         <Categories view={view} />
