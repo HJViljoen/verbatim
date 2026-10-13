@@ -214,11 +214,25 @@ describe('the words', () => {
     expect(rows.find((r) => r.status === 'dismissed')?.decidedAt).toBe('2026-08-02T10:00:00.000Z')
     expect(recordRows([], 5)).toEqual([])
   })
-  it('a blank stored title is named by the page, never left empty', () => {
+  it('a blank stored title is named by its body\'s first clause, and by the page only where both are blank', () => {
     expect(adviceTitle('')).toBe(UNTITLED_ADVICE)
     expect(adviceTitle('  ')).toBe(UNTITLED_ADVICE)
     expect(adviceTitle(null)).toBe(UNTITLED_ADVICE)
+    expect(adviceTitle('', '  ')).toBe(UNTITLED_ADVICE)
     expect(adviceTitle(' Help desk ')).toBe('Help desk')
+    expect(adviceTitle(' Help desk ', 'Put a help desk on every reel.')).toBe('Help desk')
+    expect(adviceTitle('', 'Put a help desk on every reel. Buyers ask there.')).toBe('Put a help desk on every reel')
+  })
+
+  it('names a blank-titled piece of advice by its body in the record and the conclusions\' chips', () => {
+    const rows = movesRecordFixture().record.rows
+    expect(rows.every((r) => r.title !== UNTITLED_ADVICE)).toBe(true)
+    const views = conclusionViews(
+      [{ id: 'm1', title: 'Access decides', evidence: { supporting_theme_ids: [] } }],
+      [{ lineageId: 'L1', title: '', why: 'Create a guided access path, not a standalone price answer. It reads as a path.', basedOn: ['m1'] }],
+      new Map(),
+    )
+    expect(views[0].advice[0].title).toBe('Create a guided access path, not a standalone price answer')
   })
   it('reads `?advice=`, and the old item, rec and ledger that stored links carry', () => {
     expect(adviceParam({ advice: 'L1', ledger: 'all' })).toBe('L1')

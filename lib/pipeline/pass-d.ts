@@ -7,6 +7,7 @@ import { SYNTHESIS_MODEL, CITATION_RELEVANCE_FLOOR, estimateCost } from '../conf
 import { PassDaSchema, PassDaSchemaV5, PassDbSchema, type PassDaOutput, type PassDbOutput, type CiSummary, type ExecutiveBrief, type SayVsHearItemOut, type SayVsHearEntry } from './schemas'
 import { priorityForRank } from '../calibration'
 import { allowTokens } from '../prose/scrub'
+import { titleOrBody } from '../prose/advice-title'
 import { CALIBRATED_PROSE_RULE, noDirectionRule, slotScrubber } from './prose-rules'
 import { validateBrief } from './narrative'
 import { logAiCall } from './ai-log'
@@ -841,13 +842,20 @@ async function runDbCall(args: RunDbCallArgs): Promise<RunDbCallResult> {
     // lineage carries `lineage_id = id` in ONE insert — and so a lineage read
     // that fails still leaves every row with a valid identity of its own.
     const id = randomUUID()
+    // The slot's scrub drops a sentence whole where the model typed a digit
+    // in it, so a title that was one such sentence comes back empty (one of
+    // Össur's, 12 Oct). Its reasoning names the same advice: the stored title
+    // is then its first clause (`titleOrBody`, lib/prose/advice-title.ts, the
+    // rule every surface names advice by), and '' only where both are empty.
+    const title = proseB.run(rec.title)
+    const reasoning = proseB.run(rec.reasoning)
     return {
       id,
       client_id: clientId,
       run_id: runId,
       type: (rec.type === 'other' && rec.custom_category && slugify(rec.custom_category)) || rec.type,
-      title: proseB.run(rec.title),
-      reasoning: proseB.run(rec.reasoning),
+      title: titleOrBody(title, reasoning) ?? '',
+      reasoning,
       priority: priorityForRank(rank),
       based_on: { insight_ids: [...new Set(ids)] },
       hero_quote: validateQuote(rec.hero_quote),

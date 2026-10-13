@@ -1366,6 +1366,15 @@ This version has breaking changes — APIs, conventions, and file structure may 
     `loadMarketSurface` and its blocks stay for stored snapshots, the briefs
     and the quarterly. `?advice=` takes a lineage, a recommendation id or
     `all`; the old `item` / `rec` / `ledger` are read too (`adviceParam`).
+    A piece of advice is named by `adviceTitle(title, body)` everywhere
+    (cards, the conclusions' chips, the record, the Dashboard's tile, the
+    weekly email's line, a dated move's default title): its stored title,
+    else its body's first clause cut on a word boundary at about 70
+    characters (`titleFromBody`, `lib/prose/advice-title.ts`; one of
+    Össur's, 12 Oct, was stored blank because the slot's scrub dropped it
+    whole), and `UNTITLED_ADVICE` only where both are blank. Pass D-b now
+    stores by the same rule (`titleOrBody` in `lib/pipeline/pass-d.ts`, no
+    step id changed).
     Accept, Not for us, Date a move, "Track this" (`trackSubjectAction`,
     since decision 6b) and a move's status are an owner's or admin's
     (`mayDecideMoves`, `MOVES_WRITE_REFUSED`), each refused before anything

@@ -180,11 +180,11 @@ export interface AdviceCard {
   lineageId: string
   /** The newest copy: what a status write names. */
   recommendationId: string
-  /** Stored, `pass_d_b_recommendation`; `UNTITLED_ADVICE` where the stored
-   *  title is blank (`untitled`). */
+  /** Stored, `pass_d_b_recommendation` (`adviceTitle`): the stored title,
+   *  else its body's first clause, else `UNTITLED_ADVICE` (`untitled`). */
   title: string
-  /** The stored title was blank (one of Össur's, 12 Oct): the words are the
-   *  page's, not the model's. */
+  /** The stored title and body were both blank: the words are the page's,
+   *  not the model's. */
   untitled?: boolean
   kind: string
   priority: string | null
@@ -388,7 +388,7 @@ export function restsOnRows(input: {
  *  most videos first. Pure. */
 export function conclusionViews(
   insights: readonly { id: string; title: string; evidence: InsightRow['evidence'] }[],
-  advice: readonly Pick<AdviceRow, 'lineageId' | 'title' | 'basedOn'>[],
+  advice: readonly (Pick<AdviceRow, 'lineageId' | 'title' | 'basedOn'> & { why?: string | null })[],
   videoByInsight: Map<string, string | null>,
   shown = CONCLUSIONS_MAX,
 ): ConclusionView[] {
@@ -397,7 +397,7 @@ export function conclusionViews(
       id: mi.id,
       title: mi.title,
       videos: distinctVideos(mi.evidence?.supporting_theme_ids ?? [], videoByInsight),
-      advice: advice.filter((a) => a.basedOn.includes(mi.id)).map((a) => ({ lineageId: a.lineageId, title: adviceTitle(a.title) })),
+      advice: advice.filter((a) => a.basedOn.includes(mi.id)).map((a) => ({ lineageId: a.lineageId, title: adviceTitle(a.title, a.why) })),
     }))
     .sort((a, b) => (b.advice.length > 0 ? 1 : 0) - (a.advice.length > 0 ? 1 : 0) || b.videos - a.videos || a.id.localeCompare(b.id))
     .slice(0, shown)
@@ -409,7 +409,7 @@ export const CONCLUSIONS_MAX = 8
 export function recordRows(rows: readonly AdviceRow[], cap = LEDGER_ALL_CAP): RecordRow[] {
   return rows.slice(0, cap).map((r) => ({
     lineageId: r.lineageId,
-    title: adviceTitle(r.title),
+    title: adviceTitle(r.title, r.why),
     kind: r.kind,
     firstMade: r.firstMade,
     updates: r.timesMade,
@@ -1154,8 +1154,8 @@ export async function loadMovesPage(scope: Scope, options: { canDecide: boolean 
     return {
       lineageId: r.lineageId,
       recommendationId: r.recommendationId,
-      title: adviceTitle(r.title),
-      ...(r.title.trim() ? {} : { untitled: true }),
+      title: adviceTitle(r.title, r.why),
+      ...(adviceTitle(r.title, r.why) === UNTITLED_ADVICE ? { untitled: true } : {}),
       kind: r.kind,
       priority: r.priority ?? null,
       why: r.why,
@@ -1236,7 +1236,7 @@ export async function loadMovesPage(scope: Scope, options: { canDecide: boolean 
     month: core.month,
     subjects: askable,
     themes: asked.map((t) => ({ registryId: t.registryId, label: t.label })),
-    advice: topRow ? { lineageId: topRow.lineageId, title: adviceTitle(topRow.title) } : null,
+    advice: topRow ? { lineageId: topRow.lineageId, title: adviceTitle(topRow.title, topRow.why) } : null,
   }
 
   return {
@@ -1371,7 +1371,7 @@ export async function topMoves(scope: Scope, options: { canDecide: boolean }): P
       ? {
           lineageId: top.lineageId,
           recommendationId: top.recommendationId,
-          title: adviceTitle(top.title),
+          title: adviceTitle(top.title, top.why),
           kind: top.kind,
           priority: top.priority ?? null,
           grounded: grounded ? { videos: grounded.videos, pruned: grounded.pruned } : null,

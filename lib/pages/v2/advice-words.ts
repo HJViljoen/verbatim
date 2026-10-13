@@ -1,16 +1,26 @@
 import { shortDate } from '../../format'
+import { titleOrBody } from '../../prose/advice-title'
 
 // Your moves' words for a piece of advice that a card, the Dashboard's tile
 // and the weekly email's line (lib/reports/weekly-read-lines.ts) all print.
 // Pure and import-light ON PURPOSE: the email's line builder takes them
 // without loading the page's reader (lib/pages/v2/moves.ts re-exports them).
 
-/** What a piece of advice whose stored title is blank is called: one of
- *  Össur's current pieces (written 12 Oct) has an empty title, and a card,
- *  a tag or a dated move cannot be nameless (a move's title is 1 to 120
- *  characters). */
+/** What a piece of advice is called where its stored title AND its body are
+ *  blank: a card, a tag or a dated move cannot be nameless (a move's title is
+ *  1 to 120 characters). */
 export const UNTITLED_ADVICE = 'A piece of advice with no title'
-export const adviceTitle = (title: string | null | undefined): string => (title ?? '').trim() || UNTITLED_ADVICE
+
+/**
+ * The name every surface gives a piece of advice (cards, the conclusions'
+ * chips, the Dashboard's tile, the weekly email's line, the advice record, a
+ * dated move's default title): its stored title; where that is blank (one
+ * of Össur's current pieces, 12 Oct: the slot's scrub dropped it whole), its
+ * body's first clause, cut on a word boundary at about 70 characters with an
+ * ellipsis (`titleFromBody`, lib/prose/advice-title.ts, the rule the pipeline
+ * now stores by too); `UNTITLED_ADVICE` only where both are blank. Pure.
+ */
+export const adviceTitle = (title: string | null | undefined, body?: string | null): string => titleOrBody(title, body) ?? UNTITLED_ADVICE
 
 /** How long the product has been raising one piece of advice, in updates. */
 export interface AdviceHistory {
