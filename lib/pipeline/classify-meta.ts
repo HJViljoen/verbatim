@@ -6,6 +6,7 @@ import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, estimateCost } from '../config'
 import { logAiCall } from './ai-log'
 import { usableOcr, usableTranscript, usableTranslation } from './transcript-input'
 import { hookSource } from './hook-source'
+import { isOwnedPost, OWNED_SOURCE } from '../reading/owned'
 import {
   CLASSIFIED_TYPES,
   CLASSIFIED_TYPE_DEFS,
@@ -27,6 +28,24 @@ import {
 // never touches comment-derived fields (comment_quality_score, insights,
 // claims — claims coverage is Wave 3 scope).
 //
+// THE CLIENT'S OWN POSTS TOO (depth v2, T14). Until then the plan took
+// `source = 'discovered'` only, so an own post Pass A skips (under five
+// comments and no transcript: typically an Instagram photo or carousel) never
+// got a format or an opening, and "your posts by format" could not be read
+// (13 Oct: 11 of Össur's 25 September posts and 15 of Sealand's 27 had none).
+// Own posts take the format, the opening, the hook and the topics; never the
+// framing sentiment, which stays a property of the market's videos
+// (`classifyMetaLabels`). A rival's own posts stay out, as before.
+//
+// COST. A weekly run re-stamps the census window's own posts with its run id
+// (lib/gather/owned.ts), so the plan sees them every run they are in the
+// window, and only while unclassified: 13 Oct's runs carried 4 (Össur, 1
+// unclassified) and 9 (Sealand, 6). They join the discovered rows' batches of
+// 25, so that is at most one more call a run, about $0.006 at the runs'
+// measured $0.0055–0.0059 a call, and often none. `CLASSIFY_META_OWNED_CAP`
+// bounds the worst case (a census at its 200-post ceiling on three platforms)
+// at four calls; `RUN_MODEL_BUDGET_USD` still governs the run.
+//
 // Pure planning/prompt/validation logic up top (tested in
 // classify-meta.test.ts); the I/O runner for the Inngest step below.
 
@@ -39,6 +58,15 @@ import {
  *  indistinguishable; rows written before today stay null. */
 export const CLASSIFY_META_PROMPT_VERSION = 'classify_meta_v2'
 export const CLASSIFY_META_BATCH = 25
+
+/** The `videos.source` values the plan takes: the gathered corpus and the
+ *  client's own posts. Never 'competitor_owned'. */
+export const CLASSIFY_META_SOURCES = ['discovered', OWNED_SOURCE] as const
+
+/** At most this many own posts a run (four calls). A runaway guard, not a
+ *  sample: runs carry under ten, and a post left over is still unclassified
+ *  next run, which re-stamps it while it is in the census window. */
+export const CLASSIFY_META_OWNED_CAP = 100
 
 export interface ClassifyInput {
   id: string
@@ -58,13 +86,59 @@ export interface ClassifyInput {
 // here for the test and the readers who found it at this address first.
 export { isMissingColumnError }
 
-/** Ids of videos still unclassified, chunked into call-sized batches. */
+/** Ids of videos still unclassified, chunked into call-sized batches. Own
+ *  posts beyond `ownedCap` wait for a later run; the rest are never capped. */
 export function planClassifyBatches(
-  videos: { id: string; classified_type: string | null }[],
+  videos: { id: string; classified_type: string | null; source?: string | null }[],
   batchSize = CLASSIFY_META_BATCH,
+  ownedCap = CLASSIFY_META_OWNED_CAP,
 ): string[][] {
-  const pending = videos.filter((v) => v.classified_type == null).map((v) => v.id)
+  let owned = 0
+  const pending = videos
+    .filter((v) => v.classified_type == null)
+    .filter((v) => !isOwnedPost(v) || owned++ < ownedCap)
+    .map((v) => v.id)
   return chunk(pending, batchSize)
+}
+
+/**
+ * What one classified video's row is patched with.
+ *
+ * AN OWN POST TAKES NO SENTIMENT. This pass's sentiment is the video's own
+ * FRAMING (caption and transcript, no comments), stamped `framing` so
+ * run_summary never blends it with Pass A's audience read; the client's own
+ * posts have been outside this pass and every framing consumer since it moved
+ * before Pass A (2026-08-16), and taking their format and opening must not put
+ * them into run_summary's framing family. A row of unknown source keeps the
+ * discovered behaviour.
+ */
+export function classifyMetaLabels(
+  item: ClassifyMetaItem,
+  src: (ClassifyInput & { source?: string | null }) | undefined,
+): Record<string, unknown> & { hook_source: string | null } {
+  const labels = {
+    classified_type: item.classified_type,
+    hook_style: item.hook_style,
+    hook_text: item.hook_text,
+    // Derived, not asked for — see lib/pipeline/hook-source.ts.
+    hook_source: src
+      ? hookSource(item.hook_text, {
+          transcript: usableTranscript(src),
+          ocr: usableOcr(src),
+          caption: src.caption,
+        })
+      : null,
+    topics: item.topics.length ? item.topics : null,
+  }
+  if (src && isOwnedPost(src)) return labels
+  return {
+    ...labels,
+    // Framing sentiment (caption + transcript, no comments). Provenance is
+    // stamped so run_summary never blends it with Pass A's audience read
+    // (T0-8): the two families are different measurements.
+    sentiment: item.sentiment,
+    sentiment_source: item.sentiment == null ? null : 'framing',
+  }
 }
 
 export function buildClassifySystemPrompt(): string {
@@ -148,18 +222,19 @@ export function validateClassifyResponse(
 
 // ---- I/O runner (one Inngest step = one batch) ------------------------------
 
-/** Plan step: this run's discovered corpus, still-unclassified only. Run-scoped
- *  (unlike Pass A's whole-client plan) — the batch exists for the Content
- *  page's per-entity stats, which read the current gather. */
+/** Plan step: this run's discovered corpus and the client's own posts it
+ *  re-read, still-unclassified only. Run-scoped (unlike Pass A's whole-client
+ *  plan) — the batch exists for the Content page's per-entity stats, which
+ *  read the current gather. */
 export async function planClassifyMetaBatches(clientId: string, runId: string): Promise<string[][]> {
   const admin = createAdminClient()
-  const videos = await selectAll<{ id: string; classified_type: string | null }>(() =>
+  const videos = await selectAll<{ id: string; classified_type: string | null; source: string | null }>(() =>
     admin
       .from('videos')
-      .select('id, classified_type')
+      .select('id, classified_type, source')
       .eq('client_id', clientId)
       .eq('run_id', runId)
-      .eq('source', 'discovered')
+      .in('source', [...CLASSIFY_META_SOURCES])
       .order('id'),
   )
   return planClassifyBatches(videos)
@@ -182,7 +257,7 @@ export async function runClassifyMetaBatch(
   callIndex: number,
 ): Promise<ClassifyMetaResult> {
   const admin = createAdminClient()
-  type Row = ClassifyInput & { classified_type: string | null }
+  type Row = ClassifyInput & { classified_type: string | null; source: string | null }
   // The OCR columns are asked for separately so a deploy that lands before its
   // migration degrades to "classify without on-screen text" instead of failing
   // the batch — the same tolerance isMissingColumnError already gives
@@ -192,7 +267,7 @@ export async function runClassifyMetaBatch(
     videos = await selectAll<Row>(() =>
       admin
         .from('videos')
-        .select('id, platform, account_name, caption, hashtags, transcript, transcript_en, transcript_status, ocr_text, ocr_status, classified_type')
+        .select('id, platform, account_name, caption, hashtags, transcript, transcript_en, transcript_status, ocr_text, ocr_status, classified_type, source')
         .eq('client_id', clientId)
         .in('id', videoIds)
         .order('id'),
@@ -203,7 +278,7 @@ export async function runClassifyMetaBatch(
     videos = (await selectAll<Omit<Row, 'ocr_text' | 'ocr_status'>>(() =>
       admin
         .from('videos')
-        .select('id, platform, account_name, caption, hashtags, transcript, transcript_en, transcript_status, classified_type')
+        .select('id, platform, account_name, caption, hashtags, transcript, transcript_en, transcript_status, classified_type, source')
         .eq('client_id', clientId)
         .in('id', videoIds)
         .order('id'),
@@ -261,26 +336,7 @@ export async function runClassifyMetaBatch(
       nulls++
       continue
     }
-    const src = byVideoId.get(id)
-    const labels = {
-      classified_type: item.classified_type,
-      hook_style: item.hook_style,
-      hook_text: item.hook_text,
-      // Derived, not asked for — see lib/pipeline/hook-source.ts.
-      hook_source: src
-        ? hookSource(item.hook_text, {
-            transcript: usableTranscript(src),
-            ocr: usableOcr(src),
-            caption: src.caption,
-          })
-        : null,
-      topics: item.topics.length ? item.topics : null,
-      // Framing sentiment (caption + transcript, no comments). Provenance is
-      // stamped so run_summary never blends it with Pass A's audience read
-      // (T0-8): the two families are different measurements.
-      sentiment: item.sentiment,
-      sentiment_source: item.sentiment == null ? null : 'framing',
-    }
+    const labels = classifyMetaLabels(item, byVideoId.get(id))
     // Which regime chose these labels (null on every row written before
     // 2026-09-11 — see the column's comment).
     const write = (withVersion: boolean, withHookSource: boolean) => {
