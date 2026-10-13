@@ -143,7 +143,11 @@ export function askHref(question: string): string {
 // ---- the words -------------------------------------------------------------------------
 
 /** The basis, said once (the catalogue card's line). */
-export const PRODUCTS_BASIS = 'Counted over your market: rivals’ posts and everyone else’s, your own posts left out.'
+/** True to the code: the products step reads `market_month_videos`, which
+ *  leaves out every video filed under the client (its own posts, and any
+ *  other video whose words name it: lib/gather/tagging.ts `tagVideo`), and
+ *  the page pools the Market page's audiences. */
+export const PRODUCTS_BASIS = 'Counted over the videos Market counts, those filed under your rivals or the category. Your own posts, and other videos filed under you, are left out.'
 
 /** The not-applied state (production today): the tables are not there. */
 export const PRODUCTS_NOT_APPLIED = 'Your products are not switched on for this workspace yet.'

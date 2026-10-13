@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { PRODUCTS_FIXTURES } from '@/lib/pages/v2/products-fixture'
-import { PRODUCTS_NO_CATALOGUE, PRODUCTS_NOT_APPLIED, PRODUCTS_NOT_ON } from '@/lib/pages/v2/products'
+import { PRODUCTS_BASIS, PRODUCTS_NO_CATALOGUE, PRODUCTS_NOT_APPLIED, PRODUCTS_NOT_ON } from '@/lib/pages/v2/products'
 import { ProductsEmpty, ProductsMeta, ProductsPage } from '.'
 
 describe('the Your products page (boards E4-Products and E4-Products-Liners)', () => {
@@ -35,7 +35,7 @@ describe('the Your products page (boards E4-Products and E4-Products-Liners)', (
     expect(at('Navii came up for the first time')).toBeLessThan(at('Your catalogue'))
     expect(at('Your catalogue')).toBeLessThan(at('About one of your products, but we couldn’t tell which'))
     expect(at('About one of your products')).toBeLessThan(at('Edit your products in Settings'))
-    expect(text).toContain('Counted over your market: rivals’ posts and everyone else’s, your own posts left out.')
+    expect(text).toContain(PRODUCTS_BASIS)
   })
 
   it('one panel at a time: a product\'s panel and no category\'s', () => {
