@@ -97,7 +97,10 @@ function ReplyItem({ row }: { row: ReplyRow }) {
     <li className="flex min-w-0 flex-col gap-2 border-t border-track py-3.5 first:border-t-0 first:pt-0">
       <div className="flex flex-wrap items-center gap-2 text-[12px]">
         <span className="rounded-[6px] bg-accent px-2 py-[3px] leading-[1.3]">{INTENT_WORDS[row.intent] ?? 'Question'}</span>
-        {row.under ? <span className="text-muted-foreground">{UNDER_WORDS[row.under]}</span> : null}
+        {/* The context line under the words already says "under your post"
+            or whose post it is; a creator's video naming you is the one
+            thing it cannot say. */}
+        {row.under === 'names_you' ? <span className="text-muted-foreground">{UNDER_WORDS.names_you}</span> : null}
         <span className="text-muted-foreground">· about {row.reason.charAt(0).toLowerCase()}{row.reason.slice(1)}</span>
       </div>
       <QuoteBlock quote={row.quote} cite={cite} />

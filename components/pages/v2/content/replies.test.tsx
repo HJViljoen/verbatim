@@ -28,7 +28,6 @@ describe('Worth a reply', () => {
     const m = render(node)
     expect(m).toMatch(/^<section id="replies-panel"/)
     expect(copyNodes(m).filter((n) => n.kind === 'quote')).toHaveLength(12)
-    expect(renderText(node)).toContain('Under your post')
     expect(renderText(node)).toContain('Under a post about you')
     expect(renderText(node)).toContain('We cannot see whether you have replied')
     expect((m.match(/Reply on YouTube|Open the post on/g) ?? []).length).toBe(11)

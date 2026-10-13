@@ -1152,7 +1152,10 @@ async function readWindows(scope: Scope, week: ContentWeek | null, month: Conten
   }
 }
 
-const counted = (k: number | undefined, n: number | null): Counted | null => (n != null && n > 0 ? { k: k ?? 0, n } : null)
+/** A theme's level over a window: null where either side was not read (a
+ *  theme the read did not return is 0 only when the read itself came back). */
+const counted = (themes: Map<string, number> | null | undefined, id: string, n: number | null): Counted | null =>
+  themes && n != null && n > 0 ? { k: themes.get(id) ?? 0, n } : null
 
 /**
  * The Content page.
@@ -1239,14 +1242,14 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
   const cards: IdeaCard[] = ideas.map((idea) => {
     const id = idea.registry_id
     const label = labelOf.get(id) ?? null
-    const monthLevel = counted(windows?.themes.month?.get(id), windows?.market.month ?? null)
+    const monthLevel = counted(windows?.themes.month, id, windows?.market.month ?? null)
     const f = flagOf.get(id)
     const flag = f && week ? flagVerdict(f, week) : newIds.has(id) && monthLevel ? newVerdict(id, label ?? idea.title, month, monthLevel) : null
     const series = windows?.themes.weeks
     return ideaCard({
       idea,
       label,
-      week: counted(windows?.themes.week?.get(id), windows?.market.week ?? null),
+      week: counted(windows?.themes.week, id, windows?.market.week ?? null),
       month: monthLevel,
       weeks: series && windows?.weekLabels && series.every((s) => s != null)
         ? series.map((s, i) => ({ label: windows.weekLabels![i], count: s!.get(id) ?? 0 }))
@@ -1360,8 +1363,8 @@ export async function topContent(scope: Scope, opts: { now?: Date } = {}): Promi
     idea: {
       rank: idea.rank,
       title: idea.title,
-      week: counted(windows?.themes.week?.get(id), windows?.market.week ?? null),
-      month: counted(windows?.themes.month?.get(id), windows?.market.month ?? null),
+      week: counted(windows?.themes.week, id, windows?.market.week ?? null),
+      month: counted(windows?.themes.month, id, windows?.market.month ?? null),
       weekLabel: week?.label ?? null,
       monthWords: monthWords(month),
       format: recipe(idea.format, idea.format_multiple, 'format'),
