@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { PlaybookVideo } from '../pages/playbook'
+import { fakeDb } from '../test/fake-db'
 import { isOwnedPost, ownedPosts, OWNED_SOURCE, summariseOwnedPosts, type OwnedPost } from './owned'
 
 // The one "your posts" read (depth v2, T14), over Össur-shaped fixtures: its
@@ -139,26 +140,20 @@ describe('summariseOwnedPosts', () => {
 })
 
 describe('ownedPosts · the read', () => {
-  /** A query builder that records its filters and answers one page. */
-  const fakeClient = (rows: Row[]) => {
-    const calls: [string, unknown[]][] = []
-    const builder: Record<string, unknown> = {}
-    for (const m of ['from', 'select', 'eq', 'gte', 'lt', 'order']) {
-      builder[m] = (...args: unknown[]) => { calls.push([m, args]); return builder }
-    }
-    builder.range = () => Promise.resolve({ data: rows, error: null })
-    return { client: builder, calls }
-  }
-
   it('filters on source = owned and the window, never on is_client', async () => {
-    const { client, calls } = fakeClient([row({ id: 'own' })])
-    const out = await ownedPosts({ supabase: client, clientId: 'c1' }, { from: '2026-10-01T00:00:00Z', to: '2026-11-01' })
-    expect(calls).toContainEqual(['from', ['videos']])
-    expect(calls).toContainEqual(['eq', ['client_id', 'c1']])
-    expect(calls).toContainEqual(['eq', ['source', 'owned']])
-    expect(calls).toContainEqual(['gte', ['upload_date', '2026-10-01']])
-    expect(calls).toContainEqual(['lt', ['upload_date', '2026-11-01']])
-    expect(calls.some(([m, args]) => m === 'eq' && args[0] === 'is_client')).toBe(false)
-    expect(out.total).toBe(1)
+    const db = fakeDb({
+      videos: [
+        { ...row({ id: 'own' }), client_id: 'c1' },
+        { ...row({ id: 'creator', source: 'discovered', account_name: 'amputee.coach' }), client_id: 'c1' },
+        { ...row({ id: 'other-tenant' }), client_id: 'c2' },
+        { ...row({ id: 'september', upload_date: '2026-09-30' }), client_id: 'c1' },
+      ],
+    })
+    const out = await ownedPosts({ supabase: db.client, clientId: 'c1' }, { from: '2026-10-01T00:00:00Z', to: '2026-11-01' })
+    expect(out.posts.map((p) => p.id)).toEqual(['own'])
+    const [read] = db.calls
+    expect(read.table).toBe('videos')
+    expect(read.filters).toEqual(expect.arrayContaining(['client_id=c1', 'source=owned', 'upload_date>=2026-10-01', 'upload_date<2026-11-01']))
+    expect(read.filters.some((f) => f.startsWith('is_client'))).toBe(false)
   })
 })

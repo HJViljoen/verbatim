@@ -7,6 +7,7 @@ import {
   type PlaybookVideo,
 } from './playbook'
 import { ownedPosts } from '../reading/owned'
+import { fakeDb } from '../test/fake-db'
 
 // CO3 and CO7's two builders, over the rows the loader reads.
 //
@@ -241,10 +242,8 @@ describe('buildPlaybook · the client side on the brand’s own posts (T14)', ()
   it('takes the owned read’s posts as its client side as they stand', async () => {
     const rows = run('client', 3, { classified_type: 'story', engagement_rate: 2, source: 'owned' })
       .map((v) => ({ ...v, video_id: v.id, video_url: null, account_name: 'ossur', caption: null, hook_text: null, views: 100, likes: 2, comments_count: 0, topics: null }))
-    const builder: Record<string, unknown> = {}
-    for (const m of ['from', 'select', 'eq', 'gte', 'lt', 'order']) builder[m] = () => builder
-    builder.range = () => Promise.resolve({ data: rows, error: null })
-    const owned = await ownedPosts({ supabase: builder, clientId: 'c1' }, { from: '2026-09-01', to: '2026-10-01' })
+    const db = fakeDb({ videos: rows.map((r) => ({ ...r, client_id: 'c1' })) })
+    const owned = await ownedPosts({ supabase: db.client, clientId: 'c1' }, { from: '2026-09-01', to: '2026-10-01' })
     const p = buildPlaybook({ month: '2026-09-01', brand: 'Össur', rival: null, videos: [...VIDEOS.filter((v) => !v.is_client), ...owned.posts], clientSide: 'owned' })
     expect(p.formats.sides[1].published).toBe(3)
   })
