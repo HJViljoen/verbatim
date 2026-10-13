@@ -36,6 +36,7 @@ import type { WeekReadData, WhoAbout, WhoPart } from '../../written/types'
 import { weekReadDates } from '../../reports/weekly-read'
 import { factsFromReadings, marketComparable } from '../../written/standing'
 import { fetchRunningRunIds } from '../latest-video-run'
+import { loadRegistryLabels } from '../registry-labels'
 import { WHAT_THEY_SELL } from '../market-frame'
 import { homeWeeks, loadWeekRows, type HomeWeeks } from '../home'
 import { loadThemeQuotes, loadThemeSegmentRows, makerRuleEnabled, voiceOf, type CiteCandidate } from '../overview'
@@ -1267,18 +1268,6 @@ async function loadMonthThemeRows(db: SupabaseClient, clientId: string, month: s
       .eq('client_id', clientId).eq('month', monthStartOf(month)).eq('audience', INDUSTRY_AUDIENCE)
       .order('theme_id', { ascending: true }))
   return new Map(rows.map((r) => [String(r.theme_id), { videos: Number(r.videos) || 0, mix: r.platform_mix ?? null }]))
-}
-
-/** Labels from the registry, for themes the run does not name (an old link). */
-async function loadRegistryLabels(db: SupabaseClient, clientId: string, ids: readonly string[]): Promise<Map<string, string>> {
-  const out = new Map<string, string>()
-  if (ids.length === 0) return out
-  const res = await db.from('theme_registry').select('id, canonical_label').eq('client_id', clientId).in('id', [...ids])
-  if (res.error) throw new Error(`theme_registry: ${res.error.message}`)
-  for (const r of (res.data ?? []) as { id: string; canonical_label: string | null }[]) {
-    if (r.canonical_label?.trim()) out.set(String(r.id), r.canonical_label.trim())
-  }
-  return out
 }
 
 /** A slug's theme: the biggest of the period's conversations whose members

@@ -28,6 +28,7 @@ import type { MoveStatus } from '../../subjects/types'
 import { adviceShortlist, adviceVectors, currentAdvice } from '../advice-shortlist'
 import type { MoveDating } from '../date-move'
 import { fetchRunningRunIds } from '../latest-video-run'
+import { loadRegistryLabels } from '../registry-labels'
 import {
   attachQuotes,
   buildAdviceRows,
@@ -40,7 +41,6 @@ import {
   loadMoveDatable,
   loadMoves,
   loadQuestionThemes,
-  loadRegistryLabels,
   loadSubjects,
   orderedTargets,
   registryIdsByInsight,
