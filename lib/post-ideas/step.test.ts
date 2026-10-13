@@ -202,6 +202,7 @@ describe('the writer\'s prompt', () => {
     expect(system).toMatch(/Never use the first person/)
     expect(system).toMatch(/in your own words: never copy a comment/)
     expect(system).toMatch(/only a comment that asks something/)
+    expect(system).toMatch(/names the thing asked about in plain words .*never a bare this, that or it/)
   })
 
   it('hands the writer the conversations by handle and their comments by handle, and asks for no figure', () => {

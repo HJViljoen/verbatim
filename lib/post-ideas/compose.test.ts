@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { composePostIdeas, copiesAComment, COPY_MIN_WORDS, postIdeaRows, subquestionsOf } from './compose'
+import { composePostIdeas, copiesAComment, COPY_MIN_WORDS, namesNoSubject, postIdeaRows, subquestionsOf } from './compose'
 import { POST_IDEA_MIN_COMMENTS, POST_IDEA_MIN_VIDEOS } from './select'
 import type { IdeaCandidate, IdeaPlay } from './select'
 import { parsePostIdeaRow, subquestionCounts } from './types'
@@ -212,5 +212,47 @@ describe('copiesAComment', () => {
     expect(copiesAComment('What a prosthetic leg costs', sent)).toBe(false)
     // A whole word only: "much does a trans" is not inside on a word boundary.
     expect(copiesAComment('much does a trans', sent)).toBe(false)
+  })
+})
+
+describe('namesNoSubject: a title names what it is about', () => {
+  it.each([
+    'Why use this instead of a prosthesis, and how does it work?',
+    'How does it work?',
+    'Can you get it wet?',
+    'What does this do for you?',
+  ])('holds "%s"', (title) => {
+    expect(namesNoSubject(title)).toBe(true)
+  })
+
+  it.each([
+    // Every title the dry runs wrote that names its subject.
+    'What bag is this, what is it made from, and what does it cost?',
+    'How does a prosthetic leg fit, move, and feel day to day?',
+    'How much does a prosthetic leg cost, and where can you get one?',
+    'Will this bag fit airline carry on rules?',
+    'Where can I buy a leg like this, and what does it cost?',
+    'How heavy is a prosthetic leg, and what affects the feel?',
+    // A dummy "it", a "that" opening a clause, "this" before a noun.
+    'Is it safe to swim with a prosthetic leg?',
+    'How long does it take to get used to a running blade?',
+    'Does it hurt to wear a silicone liner all day?',
+    'How do you know that a liner is worn out?',
+    'Why use a wheelchair instead of a prosthesis on some days?',
+  ])('passes "%s"', (title) => {
+    expect(namesNoSubject(title)).toBe(false)
+  })
+
+  it('is narrow on purpose: no word list tells a verb or an adjective from a noun, so the prompt is the main guard', () => {
+    // A verb before the pronoun reads as a subject, and "that" before an
+    // adjective reads as "that" before a noun: both pass.
+    expect(namesNoSubject('When should you replace it?')).toBe(false)
+    expect(namesNoSubject('Is that normal?')).toBe(false)
+  })
+
+  it('holds such a title in compose, and the next conversation takes its rank', () => {
+    const out = composePostIdeas([LINER, INSURANCE], { ideas: [written('Q1', { title: 'How does it work?' }), written('Q2')] })
+    expect(out.held).toEqual([{ question: 'Q1', label: 'Questions 1', reason: 'title names no subject' }])
+    expect(out.ideas.map((i) => [i.rank, i.registryId])).toEqual([[1, 'th-2']])
   })
 })

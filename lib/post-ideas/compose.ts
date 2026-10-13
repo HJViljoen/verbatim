@@ -70,6 +70,46 @@ export function copiesAComment(text: string, sent: readonly string[]): boolean {
   return sent.some((c) => c === key || (long && ` ${c} `.includes(` ${key} `)))
 }
 
+/** Words that name nothing a title could be about: question words,
+ *  auxiliaries, pronouns, articles, prepositions and the commonest verbs. */
+const NOT_A_SUBJECT = new Set((
+  'what why how when where which who whose whom is are am was were be been being do does did can could will would should shall may '
+  + 'might must has have had you your yours i my me we our us they their them he she his her it its this that these those the a an '
+  + 'and or but to of for in on at with by from about as so if not no use using used get got getting make makes need needs want '
+  + 'wants know tell try work works really just still also ever even then than more most very much many long often soon there here '
+  + 'people someone anyone anybody one ones'
+).split(' '))
+/** After "this" or "that", the words that show it stands for a thing on its
+ *  own (a pronoun) rather than before a noun ("this bag"). */
+const AFTER_PRONOUN = /^(?:instead|is|isn'?t|was|does|do|did|really|actually|work|works|mean|means|feel|feels|look|looks|cost|costs|last|lasts|for|in|on|with|or|and|over|than|vs|versus)$/i
+/** After "it", the words of a dummy subject ("is it safe to…", "how long
+ *  does it take…"): the real subject comes later in the title. */
+const DUMMY_IT = /^(?:is|'s|was|take|takes|took|cost|costs|worth|possible|safe|normal|okay|ok|hard|easy|true|common|necessary|realistic|legal|matter|matters)$/i
+
+/**
+ * Does the title leave its subject unnamed? Its first "this", "that" or "it"
+ * stands for a thing ("Why use this instead of a prosthesis?", "How does it
+ * work?") and no word before it in the title names one. Kept narrow: "this"
+ * before a noun ("Will this bag fit…") passes, "that" opening a clause
+ * ("that a liner is worn") passes, a dummy "it" ("Is it safe to swim with a
+ * prosthetic leg?") passes, and any content word before the pronoun ("What
+ * bag is this?") is taken to be what it means. Pure.
+ */
+export function namesNoSubject(title: string): boolean {
+  const words = title.toLowerCase().replace(/[’]/g, "'").match(/[\p{L}\p{N}']+|[?,.;:!]/gu) ?? []
+  const at = words.findIndex((w) => w === 'this' || w === 'that' || w === 'it')
+  if (at < 0) return false
+  const word = words[at]
+  const next = words[at + 1] ?? '?'
+  const rest = words.slice(at + 1).join(' ')
+  if (word === 'it') {
+    if (DUMMY_IT.test(next) || /\bto [\p{L}]/u.test(rest)) return false
+  } else if (!/^[?,.;:!]$/.test(next) && !AFTER_PRONOUN.test(next)) {
+    return false
+  }
+  return !words.slice(0, at).some((w) => /^[\p{L}][\p{L}\p{N}']{2,}$/u.test(w) && !NOT_A_SUBJECT.has(w))
+}
+
 /** The sent comments' words, normalised for `copiesAComment`. */
 export const sentWords = (candidates: readonly Pick<IdeaCandidate, 'comments'>[]): string[] =>
   candidates.flatMap((c) => c.comments.map((x) => titleKey(x.text))).filter(Boolean)
@@ -146,6 +186,7 @@ export function composePostIdeas(
     if (!title.text) { hold(`title held${title.counts.medical.length ? ` (${title.counts.medical.join(', ')})` : ''}`); continue }
     if (!cover.text) { hold(`cover held${cover.counts.medical.length ? ` (${cover.counts.medical.join(', ')})` : ''}`); continue }
     if (copiesAComment(title.text, sent)) { scrub = addScrubCounts(scrub, { ...NO_SCRUB, medical: [], dropped: 1, droppedCopied: 1, leaked: true }); hold('title copies a comment'); continue }
+    if (namesNoSubject(title.text)) { hold('title names no subject'); continue }
     // The evidence floor, on what the sub-questions hold after every drop
     // (`POST_IDEA_MIN_COMMENTS` across `POST_IDEA_MIN_VIDEOS`): under it the
     // idea is thin, and a thin week prints its one line, never a padded idea.

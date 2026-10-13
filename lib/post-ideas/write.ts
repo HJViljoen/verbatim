@@ -27,7 +27,7 @@ import type { IdeaCandidate } from './select'
 
 export const POST_IDEAS_MODEL = SYNTHESIS_MODEL
 export const POST_IDEAS_PASS = 'post_ideas'
-export const POST_IDEAS_PROMPT_VERSION = 'post_ideas_v2'
+export const POST_IDEAS_PROMPT_VERSION = 'post_ideas_v3'
 /** The answer's ceiling, reasoning included: about $0.24 of output at most. */
 export const POST_IDEAS_MAX_OUTPUT_TOKENS = 16_000
 
@@ -71,7 +71,7 @@ export function buildPostIdeaPrompts(a: { company: string; sells?: string | null
     '',
     'For EVERY question given, write:',
     '- question: its handle, exactly as given (Q1).',
-    '- title: the question itself, as one plain question a viewer would ask, in the everyday words the comments use. One sentence, ending with a question mark, at most fourteen words. Not a headline, not a hook, not a claim, and never a quotation of one comment.',
+    '- title: the question itself, as one plain question a viewer would ask, in the everyday words the comments use. One sentence, ending with a question mark, at most fourteen words. It names the thing asked about in plain words (a wheelchair, a running blade, a silicone liner): never a bare this, that or it for it, because the title is read on its own, away from the video. Not a headline, not a hook, not a claim, and never a quotation of one comment.',
     `- cover: what a post answering it should cover, as one plain fragment that lists three or four things the post explains or shows, for example "How long liners usually last, the signs it is time to replace one, and what wears them out faster". Topics only: say WHAT the post explains, never the answer. Name ${co} or its products only as things to show, never with a claim about what they do.`,
     '- subquestions: the different things people want to know inside the question, two to five of them, the one the most comments ask first. Each has a label (at most six words, a plain phrase such as "How long it should last" or "Whether insurance pays") and the handles of the comments that ask it. Use only the handles listed under that question, put a comment under one subquestion at most, and leave out a comment that asks nothing.',
     '',
