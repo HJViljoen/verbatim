@@ -42,17 +42,19 @@ const DIRECTION_LABEL: Record<(typeof MOVE_DIRECTIONS)[number], string> = {
 }
 
 export function TrackThisSubject({
-  subjectId, subjectName, move, canChangeStatus,
+  subjectId, subjectName, move, canDecide,
 }: {
   subjectId: string
   subjectName: string
   /** The move already declared on this subject, where there is one. */
   move?: { id: string; title: string; declaredAt: string; status: MoveStatus } | null
-  /** May this reader mark the move done, dropped or running again? An owner's
-   *  or an admin's since depth v2 (T7, lib/moves-access.ts); the caller passes
-   *  the session's own answer, and there is no default, so no page can open
-   *  it by forgetting. Track this itself stays open. */
-  canChangeStatus: boolean
+  /** May this reader track the subject and mark its move done, dropped or
+   *  running again? An owner's or an admin's (`mayDecideMoves`,
+   *  lib/moves-access.ts): the status since depth v2 (T7), "Track this" itself
+   *  since 13 Oct (decision 6b). The caller passes the session's own answer,
+   *  and there is no default, so no page can open it by forgetting. A reader
+   *  who may not sees a declared move and no control. */
+  canDecide: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [state, action, pending] = useActionState(trackSubjectAction, EMPTY_STATE)
@@ -69,11 +71,13 @@ export function TrackThisSubject({
   // the ONLY affordance, so a differently-worded move on the same subject
   // could not be declared at all. Both are offered: pick the old line up, or
   // draw a new one.
-  if (move && move.status !== 'dropped') return <DeclaredMove move={move} canChangeStatus={canChangeStatus} />
+  if (move && move.status !== 'dropped') return <DeclaredMove move={move} canChangeStatus={canDecide} />
+  // A member is offered no new move: the action refuses one anyway.
+  if (!canDecide) return move ? <DeclaredMove move={move} canChangeStatus={false} /> : null
 
   return (
     <>
-      {move ? <DeclaredMove move={move} canChangeStatus={canChangeStatus} /> : null}
+      {move ? <DeclaredMove move={move} canChangeStatus={canDecide} /> : null}
       {/* THE MOCK'S PRIMARY PILL. The page's one green control (MASTER rule 1
           — green does four jobs and "primary button" is one of them), at the
           artboard's 32px height and full radius rather than the default

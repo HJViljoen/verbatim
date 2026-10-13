@@ -195,7 +195,7 @@ export const READING_CARDS: readonly ReadingCard[] = [
       'Each move earns one comparison: the month before it against the latest month read since. It is called a change only where the two were read the same way and it clears the band; otherwise the latest level prints alone.',
       'The videos a piece of advice rests on, how many updates in a row raised it and what we concluded are read over everything to date and dated by the update, so they can reach past the month on the page.',
       'Advice here is grounded in what people said, not in your sales figures.',
-      'Only an owner or an admin can accept advice, set it aside, date a move or change a move’s status.',
+      'Only an owner or an admin can accept advice, set it aside, date or track a move, or change a move’s status.',
       'What you say, and what comes back, is not shown to the workspace yet.',
     ],
   },

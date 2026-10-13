@@ -2,11 +2,14 @@ import { canManageTenant, type Role } from './roles'
 
 // WHO MAY DECIDE ON ADVICE AND DATE A MOVE (depth v2, T7).
 //
-// A LEAF, LIKE lib/roles.ts. The four writes Your moves offers call it before
+// A LEAF, LIKE lib/roles.ts. The writes Your moves offers call it before
 // they read anything (lib/actions/accept-advice.ts, rec-status.ts,
-// date-move.ts, and `setMoveStatusAction` in subjects.ts), and the page calls
-// it to decide whether the controls are drawn at all, so the affordance and
-// the refusal are one rule and one sentence.
+// date-move.ts, and `setMoveStatusAction` and `trackSubjectAction` in
+// subjects.ts), and the pages call it to decide whether the controls are
+// drawn at all, so the affordance and the refusal are one rule and one
+// sentence. "Track this" joined them on 13 Oct (decision 6b): it declares a
+// move as "Date a move" does, so one reader cannot be offered one and not the
+// other.
 //
 // THE RULE CHANGED HERE. Until T7 the four were open to any member: "a member
 // saying we did this one" (rec-status.ts) and "a move is the client SAYING
@@ -17,15 +20,19 @@ import { canManageTenant, type Role } from './roles'
 // act as changing the set of subjects. An operator viewing a tenant arrives
 // as its owner (lib/auth.ts applyOperatorView) and passes.
 //
-// THE DATABASE STILL LETS A MEMBER THROUGH. `moves` grants members INSERT and
-// UPDATE (status), `recommendations` grants them `status`, and `rec_decisions`
-// lets them insert, all under own-tenant policies that name no role. This is
-// the sentence, one turn earlier; the policy change that would make it the
-// boundary (the Block B shape `subjects` got: `get_my_role() = any
-// (array['owner','admin'])`) is a migration for Heinrich to decide on.
+// THE DATABASE, ONCE HEINRICH APPLIES IT (decision 6a, 13 Oct). Until then
+// `moves` grants members INSERT and UPDATE (status), `recommendations` grants
+// them `status`, and `rec_decisions` lets them insert, under own-tenant
+// policies that name no role, so this is the sentence and not the boundary.
+// supabase/migrations/20261110090000_moves_role_gate.sql (unapplied; the
+// runner's `moves-role` set) puts the Block B shape `subjects` got,
+// `get_my_role() = any (array['owner','admin'])` or a platform admin, into
+// those four write policies; the column grants are unchanged, and the service
+// role is untouched. Checked by scripts/pg-shim/moves-role-gate-checks.sql.
 
-/** May this reader accept or decline advice, date a move or change a move's
- *  status? The tenant's owners and admins (and the operator viewing it). */
+/** May this reader accept or decline advice, date or track a move, or change
+ *  a move's status? The tenant's owners and admins (and the operator viewing
+ *  it). */
 export function mayDecideMoves(role: Role): boolean {
   return canManageTenant(role)
 }
@@ -33,4 +40,4 @@ export function mayDecideMoves(role: Role): boolean {
 /** What a reader who may not is told: printed where the controls would have
  *  been, and returned by each of the four writes when it is called anyway. */
 export const MOVES_WRITE_REFUSED =
-  'Only an owner or an admin can accept advice, date a move or change how one stands.'
+  'Only an owner or an admin can accept advice, date or track a move, or change how one stands.'

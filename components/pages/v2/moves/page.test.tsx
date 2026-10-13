@@ -197,19 +197,30 @@ describe('the board’s three cards, and the rest waiting', () => {
   })
 })
 
-describe('Track this on the legacy subject pane: the status is an owner’s or an admin’s', () => {
+describe('Track this on the legacy subject pane: tracking and the status are an owner’s or an admin’s', () => {
   const move = { id: 'm-1', title: 'Price page', declaredAt: '2026-09-02', status: 'active' as const }
   it('an owner or an admin sees Mark done and Drop it', () => {
-    const text = markupText(render(<TrackThisSubject subjectId="s-1" subjectName="Cost" move={move} canChangeStatus />))
+    const text = markupText(render(<TrackThisSubject subjectId="s-1" subjectName="Cost" move={move} canDecide />))
     expect(text).toContain('Mark done')
     expect(text).toContain('Drop it')
   })
   it('a member sees the move and no control', () => {
-    const text = markupText(render(<TrackThisSubject subjectId="s-1" subjectName="Cost" move={move} canChangeStatus={false} />))
+    const text = markupText(render(<TrackThisSubject subjectId="s-1" subjectName="Cost" move={move} canDecide={false} />))
     expect(text).toContain('Price page')
     expect(text).not.toContain('Mark done')
     expect(text).not.toContain('Drop it')
-    expect(markupText(render(<TrackThisSubject subjectId="s-1" subjectName="Cost" move={{ ...move, status: 'dropped' }} canChangeStatus={false} />))).not.toContain('Track it again')
+    expect(markupText(render(<TrackThisSubject subjectId="s-1" subjectName="Cost" move={{ ...move, status: 'dropped' }} canDecide={false} />))).not.toContain('Track it again')
+  })
+  // Decision 6b (13 Oct): "Track this" is an owner's or an admin's too.
+  it('an owner or an admin is offered Track this on a subject with no move', () => {
+    expect(markupText(render(<TrackThisSubject subjectId="s-1" subjectName="Cost" canDecide />))).toContain('Track this')
+    expect(markupText(render(<TrackThisSubject subjectId="s-1" subjectName="Cost" move={{ ...move, status: 'dropped' }} canDecide />))).toContain('Track this')
+  })
+  it('a member is offered no Track this: nothing on a subject with no move, the dropped move alone otherwise', () => {
+    expect(render(<TrackThisSubject subjectId="s-1" subjectName="Cost" canDecide={false} />)).toBe('')
+    const dropped = markupText(render(<TrackThisSubject subjectId="s-1" subjectName="Cost" move={{ ...move, status: 'dropped' }} canDecide={false} />))
+    expect(dropped).toContain('Price page')
+    expect(dropped).not.toContain('Track this')
   })
 })
 

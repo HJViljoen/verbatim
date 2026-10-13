@@ -4,8 +4,9 @@ import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../config'
 import { MOVES_WRITE_REFUSED, mayDecideMoves } from '../moves-access'
 import { fakeDb, type FakeDb } from '../test/fake-db'
 
-// Your moves' four writes are an owner's or an admin's (depth v2, T7): Accept,
-// Not for us, Date a move and a move's status. Each is called as a member, an
+// Your moves' writes are an owner's or an admin's (depth v2, T7): Accept,
+// Not for us, Date a move and a move's status, and since 13 Oct "Track this"
+// (decision 6b). Each is called as a member, an
 // admin, an owner and the operator viewing the tenant, against an in-memory
 // database, and a member's call must write nothing and read nothing.
 
@@ -18,12 +19,13 @@ vi.mock('@/lib/supabase-admin', async (orig) => ({ ...(await orig<typeof import(
 const { acceptAdvice } = await import('./accept-advice')
 const { setRecommendationStatus } = await import('./rec-status')
 const { dateMoveAction } = await import('./date-move')
-const { setMoveStatusAction } = await import('./subjects')
+const { setMoveStatusAction, trackSubjectAction } = await import('./subjects')
 
 const CLIENT = SEALAND_CLIENT_ID
 const LINEAGE = '0b6f2a5e-7c1d-4e8f-9a3b-2c4d5e6f7a8b'
 const REC = '1c7a3b6f-8d2e-4f90-ab4c-3d5e6f7a8b9c'
 const MOVE = '2d8b4c7a-9e3f-4a01-bc5d-4e6f7a8b9cad'
+const SUBJECT = '4fad6e9c-b051-4c23-9e7f-6a8b9cadbecf'
 const THEME = '3e9c5d8b-af40-4b12-8d6e-5f7a8b9cadbe'
 
 let db: FakeDb
@@ -46,11 +48,20 @@ beforeEach(() => {
     recommendations: [{ id: REC, client_id: CLIENT, lineage_id: LINEAGE, run_id: 'run-1', status: 'new' }],
     rec_decisions: [],
     moves: [{ id: MOVE, client_id: CLIENT, title: 'Price page', status: 'active' }],
+    subjects: [{ id: SUBJECT, client_id: CLIENT, name: 'Cost & access', status: 'active' }],
     theme_registry: [{ id: THEME, client_id: CLIENT }],
   })
   admin = fakeDb({ config_changes: [] })
   h.admin = admin.client
 })
+
+const trackForm = () => {
+  const f = new FormData()
+  f.append('subject_id', SUBJECT)
+  f.append('title', 'A clearer price page')
+  f.append('direction', 'up')
+  return f
+}
 
 const dateForm = (dated?: string) => {
   const f = new FormData()
@@ -88,6 +99,16 @@ describe('a member is refused before anything is read or written', () => {
     expect(db.calls).toEqual([])
     expect(admin.calls).toEqual([])
   })
+  // Decision 6b (13 Oct).
+  it('Track this', async () => {
+    expect(await trackSubjectAction({ ok: false, message: '' }, trackForm())).toEqual({ ok: false, message: MOVES_WRITE_REFUSED })
+    expect(db.calls).toEqual([])
+    expect(admin.calls).toEqual([])
+  })
+  it('Track this with a form that would not parse still gets the refusal, not a form error', async () => {
+    expect(await trackSubjectAction({ ok: false, message: '' }, new FormData())).toEqual({ ok: false, message: MOVES_WRITE_REFUSED })
+    expect(db.calls).toEqual([])
+  })
 })
 
 describe.each([
@@ -121,6 +142,13 @@ describe.each([
     expect((await setMoveStatusAction(MOVE, 'done')).ok).toBe(true)
     expect(writes().map((c) => [c.table, c.op])).toEqual([['moves', 'update']])
     expect(admin.calls.map((c) => [c.table, c.op])).toEqual([['config_changes', 'insert']])
+  })
+
+  it('Track this declares the move on the subject', async () => {
+    const r = await trackSubjectAction({ ok: false, message: '' }, trackForm())
+    expect(r.ok).toBe(true)
+    expect(writes().map((c) => [c.table, c.op])).toEqual([['moves', 'insert']])
+    expect((writes()[0].values as Record<string, unknown>[])[0]).toMatchObject({ kind: 'subject', subject_id: SUBJECT, title: 'A clearer price page' })
   })
 })
 
