@@ -386,7 +386,14 @@ interface EvaluationRow {
  * NAMING that column re-reads without it and any other failure is still a
  * failure.
  */
-export async function loadPlanChecks(scope: Scope, corpusVideos: number | null = null): Promise<PlanCheckCard[]> {
+export async function loadPlanChecks(
+  scope: Scope,
+  corpusVideos: number | null = null,
+  /** `quotes: false` skips the quote pass (two reads): a page that prints no
+   *  quote under a claim (Your moves since depth v2: no quotes at level 1)
+   *  asks for none. On by default, so every other caller is unchanged. */
+  options: { quotes?: boolean } = {},
+): Promise<PlanCheckCard[]> {
   const supabase = scope.supabase as SupabaseClient
   const { clientId } = scope
 
@@ -436,7 +443,7 @@ export async function loadPlanChecks(scope: Scope, corpusVideos: number | null =
   // upload's ids would hand a chip from September a comment shortlisted in
   // August.
   const printed = (c: CheckRow) => currentReading(claimsOf(c), c.summary, evalsByCheck.get(c.id) ?? []).claims
-  const insightIds = [
+  const insightIds = options.quotes === false ? [] : [
     ...new Set(
       checks.flatMap((c) =>
         printed(c)

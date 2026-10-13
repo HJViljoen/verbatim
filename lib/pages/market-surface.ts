@@ -1268,7 +1268,7 @@ export function moveMonthLevel(m: MoveMarketMonth): string {
 
 // ---- the loader ---------------------------------------------------------------
 
-interface InsightRow {
+export interface InsightRow {
   id: string
   insight_type: string
   title: string
@@ -1847,7 +1847,7 @@ function logAs<T>(what: string, fallback: T): (error: unknown) => T {
  * so this is the question list's copy of it: month tables through the reading
  * client, the observations through the tenant's.
  */
-async function loadQuestionThemes(
+export async function loadQuestionThemes(
   reading: ReadingHandle,
   supabase: SupabaseClient,
   clientId: string,
@@ -2387,7 +2387,7 @@ const HERO_ONLY = 0
  * prose would either lose the speaker's own number or smuggle it past the rule.
  * Two fields, two nodes.
  */
-async function attachQuotes(
+export async function attachQuotes(
   supabase: SupabaseClient,
   rows: readonly AdviceRow[],
   heroByLineage: Map<string, string>,
@@ -2521,7 +2521,7 @@ export async function adviceTally(supabase: SupabaseClient, clientId: string): P
 /** The decision ledger. NULL — never [] — when `rec_decisions` is not applied
  *  here, so the block can tell "nobody has decided anything" apart from "we are
  *  not writing decisions down", which are different sentences. */
-async function loadDecisions(supabase: SupabaseClient, clientId: string): Promise<RecDecision[] | null> {
+export async function loadDecisions(supabase: SupabaseClient, clientId: string): Promise<RecDecision[] | null> {
   try {
     // NO `.limit()` HERE. `REC_DECISIONS_READ_LIMIT` is PostgREST's silent
     // 1,000-row cap written down for a caller that uses a bare `.select()`;
@@ -2548,9 +2548,9 @@ async function loadDecisions(supabase: SupabaseClient, clientId: string): Promis
 /** A move as `select('*')` reads it: with MF5's `dated_on` once it is applied
  *  (lib/subjects/types.ts `Move` is on the freeze path, so the column rides
  *  here). */
-type DatedMove = Move & { dated_on?: string | null }
+export type DatedMove = Move & { dated_on?: string | null }
 
-async function loadMoves(supabase: SupabaseClient, clientId: string): Promise<DatedMove[] | null> {
+export async function loadMoves(supabase: SupabaseClient, clientId: string): Promise<DatedMove[] | null> {
   try {
     return await selectAll<DatedMove>(() =>
       supabase.from(TABLE_MOVES).select('*').eq('client_id', clientId)
@@ -2568,7 +2568,7 @@ async function loadMoves(supabase: SupabaseClient, clientId: string): Promise<Da
  * know answers 42703; so does a table it does not know (M4), and neither is an
  * error worth logging.
  */
-async function loadMoveDatable(supabase: SupabaseClient, clientId: string): Promise<boolean> {
+export async function loadMoveDatable(supabase: SupabaseClient, clientId: string): Promise<boolean> {
   const { error } = await supabase.from(TABLE_MOVES).select('dated_on').eq('client_id', clientId).limit(0)
   if (!error) return true
   if (!isMissingColumnError(error, 'dated_on') && !isMissingSubjects(error)) {
@@ -2583,9 +2583,9 @@ async function loadMoveDatable(supabase: SupabaseClient, clientId: string): Prom
  *  counts a subject's match on your own posts, and a move on a subject is
  *  read, only when the subject is ready, so the loader needs its state. Still
  *  no `select('*')`: nothing else on the row is printed here. */
-type SubjectName = Pick<Subject, 'id' | 'name' | 'status' | 'calibrated_at' | 'calibration_precision' | 'calibration_n' | 'calibration_judge_version'>
+export type SubjectName = Pick<Subject, 'id' | 'name' | 'status' | 'calibrated_at' | 'calibration_precision' | 'calibration_n' | 'calibration_judge_version'>
 
-async function loadSubjects(supabase: SupabaseClient, clientId: string): Promise<SubjectName[] | null> {
+export async function loadSubjects(supabase: SupabaseClient, clientId: string): Promise<SubjectName[] | null> {
   try {
     return await selectAll<SubjectName>(() =>
       supabase.from(TABLE_SUBJECTS)
@@ -2600,7 +2600,7 @@ async function loadSubjects(supabase: SupabaseClient, clientId: string): Promise
 
 /** Registry labels, for a theme-move's "on what". A registry id is the stable
  *  identity (AGENTS.md); the label is what a reader is shown. */
-async function loadRegistryLabels(supabase: SupabaseClient, clientId: string): Promise<Map<string, string>> {
+export async function loadRegistryLabels(supabase: SupabaseClient, clientId: string): Promise<Map<string, string>> {
   const rows = await selectAll<{ id: string; label: string | null }>(() =>
     supabase.from('theme_registry').select('id, label').eq('client_id', clientId).order('id', { ascending: true }),
   ).catch(() => [] as { id: string; label: string | null }[])
@@ -2635,7 +2635,7 @@ export function marketSurfaceHref(lineageId?: string | null, params: Record<stri
  * A head count, so nothing is transferred to count rows. Null on failure —
  * "we could not read it" is not "zero", and the block says the honest one.
  */
-async function countAnalysedVideos(supabase: SupabaseClient, clientId: string): Promise<number | null> {
+export async function countAnalysedVideos(supabase: SupabaseClient, clientId: string): Promise<number | null> {
   const { count, error } = await supabase
     .from('videos')
     .select('id', { count: 'exact', head: true })
