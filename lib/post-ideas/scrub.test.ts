@@ -26,11 +26,25 @@ describe('medicalHits: never a medical or clinical claim', () => {
     ['Prosthetists recommend replacing the liner every season.', 'proven or recommended'],
     ['Redness that lasts is a sign of infection.', 'diagnosis'],
     ['Take ibuprofen for the ache after a long day.', 'medicine'],
-    ['Check with your medical team before changing anything.', 'sent to a doctor'],
+    ['Check with your medical team before changing anything.', 'the medical team line'],
     ['See your prosthetist about any rubbing.', 'sent to a doctor'],
+    // The fresh check's cases (13 Oct): each was kept before.
+    ['A microprocessor knee lowers the risk of falls on uneven ground.', 'effect on the body'],
+    ['A good liner cuts the risk of skin breakdown.', 'effect on the body'],
+    ['A vacuum socket protects the skin.', 'effect on the body'],
+    ['The Rheo Knee improves gait and reduces strain on the hips.', 'effect on the body'],
+    ['The Pro-Flex foot is gentler on the knees.', 'kind to the body'],
+    ['A powered ankle is safer on slopes.', 'safety'],
+    ['Walking down stairs safely with a new knee.', 'safety'],
+    ['A good socket improves balance and posture.', 'effect on the body'],
+    ['Silicone is good for your skin.', 'kind to the body'],
+    ['A lighter foot takes the pressure off the sound side.', 'effect on the body'],
   ]
   it.each(claims)('drops "%s" (%s)', (sentence, rule) => {
     expect(medicalHits(sentence)).toContain(rule)
+    // As the cover and a label store it: nothing left.
+    expect(scrubIdeaText(sentence, 'cover').text).toBe('')
+    expect(scrubIdeaText(sentence.replace(/\.$/, ''), 'label').text).toBe('')
   })
 
   const fine = [
@@ -46,14 +60,33 @@ describe('medicalHits: never a medical or clinical claim', () => {
     'What causes skin irritation under a liner',
     'How to reduce rubbing on a long walk',
     'When to see a prosthetist about a new socket',
+    // Topics about the device, which must survive the wider rules.
+    'How a microprocessor knee works on stairs',
+    'How a microprocessor knee bends, locks and swings on stairs and slopes',
+    'What a vacuum socket is and how it holds the limb',
+    'Living with lower back pain after an amputation is a topic people raise',
+    'How to choose a lower-limb socket and what affects balance on a new foot',
+    'How the knee supports the user on a ramp',
+    'Whether a powered ankle is safer on slopes',
+    'How heavy a prosthetic leg is, and what changes the weight',
   ]
   it.each(fine)('keeps "%s"', (sentence) => {
     expect(medicalHits(sentence)).toEqual([])
+    expect(scrubIdeaText(sentence, 'cover').counts.droppedMedical).toBe(0)
   })
 
-  it('lets a question through every rule but the medicine one', () => {
+  it('lets a question through every rule but the medicine and the medical-team ones', () => {
     expect(medicalHits('Do prosthetists recommend a pin lock or suction?')).toEqual([])
+    expect(medicalHits('Is it safer to wear the leg in the shower?')).toEqual([])
     expect(medicalHits('Which painkillers help with phantom pain?')).toContain('medicine')
+  })
+
+  it('never lets the medical team be named: the Content page prints that line itself', () => {
+    expect(medicalHits('What to check with your medical team before switching liners')).toEqual(['the medical team line'])
+    expect(medicalHits('Should I ask my care team about a new liner?')).toEqual(['the medical team line'])
+    expect(scrubIdeaText('How long a liner lasts. What to check with your medical team before switching liners.', 'cover').text).toBe('How long a liner lasts.')
+    // "medical aid" is insurance, not the team.
+    expect(medicalHits('Whether medical aid pays for a second liner')).toEqual([])
   })
 
   it('does not let "how" or "why" alone excuse a claim: they presume the answer', () => {
@@ -62,7 +95,7 @@ describe('medicalHits: never a medical or clinical claim', () => {
   })
 
   it('names every rule', () => {
-    expect(MEDICAL_CLAIMS.map((r) => r.name)).toEqual(['cures', 'effect on the body', 'safety', 'proven or recommended', 'diagnosis', 'medicine', 'sent to a doctor'])
+    expect(MEDICAL_CLAIMS.map((r) => r.name)).toEqual(['cures', 'effect on the body', 'kind to the body', 'safety', 'proven or recommended', 'diagnosis', 'medicine', 'the medical team line', 'sent to a doctor'])
   })
 })
 
@@ -85,7 +118,7 @@ describe('scrubIdeaText', () => {
     const out = scrubIdeaText('Why does my liner keep slipping on a lower-limb socket?', 'title')
     expect(out.text).toBe('Why does my liner keep slipping on a lower-limb socket?')
     expect(out.counts.flaggedDirection).toBeGreaterThan(0)
-    expect(scrubIdeaText('What a child needs as they grow, and climbing stairs safely', 'cover').text).toBe('What a child needs as they grow, and climbing stairs safely')
+    expect(scrubIdeaText('What a child needs as they grow, and climbing stairs on a new knee', 'cover').text).toBe('What a child needs as they grow, and climbing stairs on a new knee')
   })
 
   it('drops a claim that the conversation moved from the cover and the labels, never from the title', () => {

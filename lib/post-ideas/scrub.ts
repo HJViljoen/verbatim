@@ -16,16 +16,19 @@ import { britishSpelling } from '../written/spelling'
 //     slipping", "lower limb", "drop foot");
 //  3. NEVER A MEDICAL CLAIM (`MEDICAL_CLAIMS`): a sentence saying what a
 //     product, a treatment or a habit does to the body (heals, prevents,
-//     relieves, causes pain or an infection), that something is safe, that it
-//     is clinically proven or recommended by doctors, a diagnosis, a medicine
-//     or a dose, or a line sending the reader to a doctor, drops whole. The
-//     Content page prints the "check with your medical team" line itself
-//     (lib/post-ideas/medical.ts, T6); the writer never does. A QUESTION ASKS
-//     RATHER THAN CLAIMS: a sentence ending in a question mark, or a clause
-//     opened by a neutral question word ("what causes", "whether it is safe",
-//     "how to"), is let through every rule but the medicine one; "how" and
-//     "why" alone are not neutral ("how silicone prevents sores" presumes it
-//     does) and let nothing through;
+//     relieves, lowers the risk of falls, protects the skin, improves gait or
+//     balance, reduces strain on the hips, is gentler on the knees), that
+//     something is safe (or safer, or done safely), that it is clinically
+//     proven or recommended by doctors, a diagnosis, a medicine or a dose, or
+//     a line sending the reader to a doctor, drops whole. Any mention of the
+//     medical team drops too: the Content page prints the "check with your
+//     medical team" line itself (lib/post-ideas/medical.ts, T6), so a stored
+//     one would print twice. A QUESTION ASKS RATHER THAN CLAIMS: a sentence
+//     ending in a question mark, or a clause opened by a neutral question word
+//     ("what causes", "whether it is safe", "how to"), is let through every
+//     rule but the medicine and the medical-team ones; "how" and "why" alone
+//     are not neutral ("how silicone prevents sores" presumes it does) and let
+//     nothing through;
 //  4. on the cover and the labels: the words that only ever claim the
 //     conversation moved (`MOVEMENT`: "trending", "on the rise", "more and
 //     more") drop their sentence, and so does the first person (the product
@@ -48,22 +51,35 @@ interface Rule {
   asks: boolean
 }
 
-/** What a body, a health problem or a recovery is, as the effect rule reads it. */
-const HEALTH = String.raw`(?:pain|aches?|soreness|swelling|infections?|irritation|sores?|blisters?|ulcers?|rash(?:es)?|wounds?|inflammation|circulation|symptoms?|injur(?:y|ies)|conditions?|diseases?|nerve\s+(?:pain|damage)|phantom(?:\s+(?:limb\s+)?(?:pain|sensations?))?|skin\s+(?:breakdown|damage|problems?|issues?|conditions?)|arthritis|atrophy|falls|recovery|healing)`
-const EFFECT_VERBS = String.raw`(?:prevent\w*|reliev\w*|reduc\w*|eliminat\w*|eas(?:e|es|ed|ing)|sooth\w*|stop(?:s|ped|ping)?|avoid\w*|revers\w*|treat(?:s|ed|ing)?|improv\w*|caus\w*|trigger\w*|worsen\w*|help(?:s|ed|ing)?(?:\s+with)?|fix(?:es|ed|ing)?|leads?\s+to|led\s+to|protects?\s+against)`
+/** What a body, a health problem, a body's function or a recovery is, as
+ *  the effect rule reads it. A prosthetic knee is a product, so only the
+ *  plural ("the knees") is the body; "lower back" is, "lower limb" is not. */
+const HEALTH = String.raw`(?:pain|aches?|soreness|swelling|infections?|irritation|sores?|blisters?|ulcers?|rash(?:es)?|wounds?|inflammation|circulation|symptoms?|injur(?:y|ies)|conditions?|diseases?|nerve\s+(?:pain|damage)|phantom(?:\s+(?:limb\s+)?(?:pain|sensations?))?|skin|arthritis|atrophy|falls?|falling|recovery|healing|risks?|gait|balance|posture|mobility|stability|strain|stress|fatigue|tiredness|joints?|hips?|knees|lower\s+back|back\s+(?:pain|problems?)|residual\s+limbs?|stumps?|muscles?|sound\s+(?:side|limb|leg|knee)|energy\s+(?:use|expenditure|cost)|health|well-?being)`
+/** What a claim says a thing does to the body. "lower" is a verb here only
+ *  where no body part follows it ("lower back", "lower limb"). */
+const EFFECT_VERBS = String.raw`(?:prevent\w*|reliev\w*|reduc\w*|eliminat\w*|eas(?:e|es|ed|ing)|sooth\w*|stop(?:s|ped|ping)?|avoid\w*|revers\w*|treat(?:s|ed|ing)?|improv\w*|caus\w*|trigger\w*|worsen\w*|help(?:s|ed|ing)?(?:\s+with)?|fix(?:es|ed|ing)?|leads?\s+to|led\s+to|lower(?:s|ed|ing)?(?!\s+(?:back|limbs?|legs?|body|half))|cut(?:s|ting)?|minimi[sz]\w*|protect\w*|limit(?:s|ed|ing)?|decreas\w*|lessen\w*|increas\w*|rais(?:e|es|ed|ing)|boost\w*|strengthen\w*|restor\w*|correct(?:s|ed|ing)?|support(?:s|ed|ing)?|spar(?:e|es|ed|ing)|off-?load\w*|takes?\s+(?:the\s+)?(?:pressure|load|weight)\s+off)`
+/** The body, as a comparison names it: "gentler on the knees", "good for
+ *  your joints". */
+const BODY = String.raw`(?:knees?|hips?|joints?|back|skin|body|residual\s+limbs?|stumps?|limbs?|sound\s+side|muscles?|feet|legs?|health|circulation|posture|balance)`
 
 /**
  * A medical or clinical claim, by kind. Each entry is written to drop a
  * CLAIM and to step round the market's own words: "medical aid" (South
  * Africa's insurance) names no claim, "the signs it's worn out" is about a
- * liner, and "a powered knee" is a product.
+ * liner, "a powered knee" is a product, and "how a microprocessor knee works
+ * on stairs" is a topic.
  */
 export const MEDICAL_CLAIMS: readonly Rule[] = [
   { name: 'cures', re: /\b(?:cure[sd]?|curing|heal(?:s|ed|ing)?|remed(?:y|ies|ied))\b/i, asks: true },
-  { name: 'effect on the body', re: new RegExp(String.raw`\b${EFFECT_VERBS}\s+(?:\w+\s+){0,3}?${HEALTH}\b`, 'i'), asks: true },
+  { name: 'effect on the body', re: new RegExp(String.raw`\b${EFFECT_VERBS}\s+(?:[\w'-]+\s+){0,3}?${HEALTH}\b`, 'i'), asks: true },
+  {
+    name: 'kind to the body',
+    re: new RegExp(String.raw`\b(?:gentler|easier|kinder|softer|harder|tougher|rougher|better|worse|lighter|heavier|good|bad|great)\s+(?:\w+\s+)?(?:on|for)\s+(?:the\s+|your\s+|their\s+|my\s+|his\s+|her\s+)?${BODY}\b`, 'i'),
+    asks: true,
+  },
   {
     name: 'safety',
-    re: /\b(?:is|are|it'?s|they'?re|be|being|stays?|remains?|feels?)\s+(?:\w+\s+)?(?:safe|unsafe|harmless|dangerous|risk[- ]free)\b|\bsafe\s+(?:to|for|with)\b|\bno\s+(?:health\s+)?risks?\b|\bwithout\s+(?:any\s+)?risk\b/i,
+    re: /\b(?:is|are|it'?s|they'?re|be|being|stays?|remains?|feels?)\s+(?:\w+\s+)?(?:safe|unsafe|harmless|dangerous|risk[- ]free)\b|\bsafe\s+(?:to|for|with)\b|\bsaf(?:er|est|ely)\b|\bno\s+(?:health\s+)?risks?\b|\bwithout\s+(?:any\s+)?risk\b/i,
     asks: true,
   },
   {
@@ -81,9 +97,17 @@ export const MEDICAL_CLAIMS: readonly Rule[] = [
     re: /\b(?:medications?|medicines?|dosages?|doses|dosing|ibuprofen|paracetamol|acetaminophen|painkillers?|pain\s+(?:relievers?|killers?|medication)|antibiotics?|opioids?|steroids?|prescri(?:be|bed|bing|ption|ptions))\b/i,
     asks: false,
   },
+  // The Content page prints the medical-team line under every idea
+  // (lib/post-ideas/medical.ts, T6): a stored mention would print it twice, so
+  // no question word excuses it ("What to check with your medical team").
+  {
+    name: 'the medical team line',
+    re: /\bmedical\s+(?:advice|teams?|professionals?|guidance|staff)\b|\b(?:care|clinical)\s+teams?\b|\bhealth\s*care\s+(?:teams?|providers?|professionals?)\b/i,
+    asks: false,
+  },
   {
     name: 'sent to a doctor',
-    re: /\bmedical\s+(?:advice|team|professional|guidance)\b|\b(?:see|ask|consult|check\s+with|talk\s+to|speak\s+to|speak\s+with)\s+(?:a|your)\s+(?:doctor|physician|gp|clinician|surgeon|prosthetist|medical\s+team|care\s+team|physio(?:therapist)?)\b/i,
+    re: /\b(?:see|ask|consult|check\s+with|talk\s+to|speak\s+to|speak\s+with)\s+(?:a|your)\s+(?:doctor|physician|gp|clinician|surgeon|prosthetist|physio(?:therapist)?)\b/i,
     asks: true,
   },
 ]
