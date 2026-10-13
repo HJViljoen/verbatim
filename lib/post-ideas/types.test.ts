@@ -67,3 +67,17 @@ describe('isMissingPostIdeas', () => {
     expect(isMissingPostIdeas({ code: 'PGRST205', message: 'Could not find the table \'public.week_reads\' in the schema cache' })).toBe(false)
   })
 })
+
+describe('parsePostIdeaRow · the cover code writes beside the words', () => {
+  it('keeps a length and the comments asked where they are the shape code writes', () => {
+    const cover = { ...row.cover, length: { fromSeconds: 30, toSeconds: 45, videos: 6, basis: 'format' }, asked: { comments: 41, videos: 23 } }
+    expect(parsePostIdeaRow({ ...row, cover })?.cover).toEqual(cover)
+  })
+
+  it('leaves a malformed length or count out rather than print a guess, and keeps the row', () => {
+    const cover = { ...row.cover, length: { fromSeconds: 45, toSeconds: 30, videos: 6, basis: 'format' }, asked: { comments: '41', videos: 23 } }
+    const parsed = parsePostIdeaRow({ ...row, cover })
+    expect(parsed?.cover).toEqual({ text: row.cover.text })
+    expect(parsePostIdeaRow({ ...row, cover: { ...row.cover, length: { fromSeconds: 30, toSeconds: 45, videos: 6, basis: 'model' } } })?.cover.length).toBeUndefined()
+  })
+})

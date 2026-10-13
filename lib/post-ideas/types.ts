@@ -23,10 +23,31 @@ export const POST_IDEAS_ON_CONFLICT = 'run_id,rank'
 export const POST_IDEA_RANKS = [1, 2, 3] as const
 export type PostIdeaRank = (typeof POST_IDEA_RANKS)[number]
 
-/** What the post should cover, as the model wrote it after the scrub. An
- *  object so the writer can add to it without a migration. */
+/** What the post should cover, as the model wrote it after the scrub, and
+ *  what code adds beside it. An object so the writer can add to it without a
+ *  migration. */
 export interface PostIdeaCover {
   text: string
+  /** The board's "Length", from CODE, never the model (a figure is code's):
+   *  the middle half of the durations of the market's videos on the question
+   *  that drew at least the typical response on it, in the chosen format where
+   *  enough of them carry a duration (`basis: 'format'`), else in any format
+   *  (`'question'`). Absent where too few videos carry one (T13, written by
+   *  lib/post-ideas/select.ts `ideaLength`). */
+  length?: PostIdeaLength
+  /** The comments the sub-questions were grouped from: the conversation's
+   *  question comments of the run's window that went to the model, and their
+   *  videos. A sub-question's figure is its videos "of `asked.videos`". */
+  asked?: { comments: number; videos: number }
+}
+
+/** How long the post should run, in seconds: `fromSeconds` to `toSeconds`
+ *  (equal where the range closes on one length), over `videos` videos. */
+export interface PostIdeaLength {
+  fromSeconds: number
+  toSeconds: number
+  videos: number
+  basis: 'format' | 'question'
 }
 
 /** One thing people want to know inside the conversation: the model's label
@@ -51,7 +72,12 @@ export interface PostIdeaRow {
   cover: PostIdeaCover
   subquestions: PostIdeaSubquestion[]
   /** A classified_type value and its response multiple; null where the
-   *  market's videos on the question are too few to choose one. */
+   *  market's videos on the question are too few to choose one, or none runs
+   *  above the typical response on it. THE MULTIPLE IS ON THE QUESTION: the
+   *  format's median response over the median video on the question (the
+   *  playbook's own rule, `formatReading`, read over the conversation's
+   *  market videos whenever published; lib/post-ideas/select.ts `choosePlay`),
+   *  so "1× = a typical video on this question". */
   format: string | null
   format_multiple: number | null
   /** A hook_style value and its response multiple, likewise. */
@@ -106,7 +132,7 @@ export function parsePostIdeaRow(raw: unknown): PostIdeaRow | null {
     rank: rank as PostIdeaRank,
     registry_id: raw.registry_id as string,
     title: raw.title as string,
-    cover: { ...cover, text: cover.text } as PostIdeaCover,
+    cover: coverOf(cover),
     subquestions,
     format,
     format_multiple: format === null ? null : num(raw.format_multiple),
@@ -116,6 +142,24 @@ export function parsePostIdeaRow(raw: unknown): PostIdeaRow | null {
     prompt_version: raw.prompt_version as string,
     created_at: raw.created_at as string,
   }
+}
+
+const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0
+
+/** The stored cover, with code's `length` and `asked` kept only where they
+ *  are the shape this code writes (a reader never prints a guessed figure). */
+function coverOf(cover: Record<string, unknown>): PostIdeaCover {
+  const out: PostIdeaCover = { ...cover, text: cover.text as string }
+  delete out.length
+  delete out.asked
+  const len = cover.length
+  if (isObj(len) && isCount(len.fromSeconds) && isCount(len.toSeconds) && isCount(len.videos)
+    && len.fromSeconds > 0 && len.fromSeconds <= len.toSeconds && (len.basis === 'format' || len.basis === 'question')) {
+    out.length = { fromSeconds: len.fromSeconds, toSeconds: len.toSeconds, videos: len.videos, basis: len.basis }
+  }
+  const asked = cover.asked
+  if (isObj(asked) && isCount(asked.comments) && isCount(asked.videos)) out.asked = { comments: asked.comments, videos: asked.videos }
+  return out
 }
 
 /** A sub-question's counts, from its ids: distinct comments and distinct
