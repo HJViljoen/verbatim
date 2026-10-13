@@ -182,7 +182,7 @@ function MoodTable({ m, mode }: { m: MarketKinds; mode: RenderMode }) {
 /** The block, on a page built as "Your market". */
 export function renderMarketKinds(data: OverviewData, mode: RenderMode, appUrl: string) {
   const m = data.category.market
-  const voice = surface('voice')
+  const voice = surface('voices')
   const footer = openLink(mode, `${appUrl}${voice.href}`, `Open ${voice.label} →`)
   if (!m || (m.kinds.length === 0 && m.mood.length === 0)) {
     return (

@@ -90,8 +90,8 @@ describe('buildBrandView', () => {
 
 describe('voiceSurfaceHref under a brand', () => {
   it('keeps the brand through the page’s own links, after the month, and drops it on null', () => {
-    expect(voiceSurfaceHref({ month: '2026-08', brand: 'Cotopaxi' }, { persona: 'p1' })).toBe('/dashboard/voice?month=2026-08&brand=Cotopaxi&persona=p1')
-    expect(voiceSurfaceHref({ brand: 'The North Face' }, { board: 'all' })).toBe('/dashboard/voice?brand=The+North+Face&board=all')
-    expect(voiceSurfaceHref({ brand: 'Cotopaxi', board: 'all' }, { brand: null, board: null })).toBe('/dashboard/voice')
+    expect(voiceSurfaceHref({ month: '2026-08', brand: 'Cotopaxi' }, { persona: 'p1' })).toBe('/dashboard/voices?month=2026-08&brand=Cotopaxi&persona=p1')
+    expect(voiceSurfaceHref({ brand: 'The North Face' }, { board: 'all' })).toBe('/dashboard/voices?brand=The+North+Face&board=all')
+    expect(voiceSurfaceHref({ brand: 'Cotopaxi', board: 'all' }, { brand: null, board: null })).toBe('/dashboard/voices')
   })
 })

@@ -163,7 +163,7 @@ export const weekCameIn: Block<WeekData> = {
   render(data, mode = 'app', ctx) {
     const m = data.cameIn.market ?? null
     const email = mode === 'email'
-    const nav = surface('overview')
+    const nav = surface('market')
     const footer = openLink(mode, `${ctx.appUrl}${nav.href}`, `Open ${nav.label} →`)
     const empty = weekCameIn.emptyState(data)
     if (empty || !m) {

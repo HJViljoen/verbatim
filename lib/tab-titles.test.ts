@@ -4,9 +4,10 @@ import { join } from 'node:path'
 import { SURFACES } from './nav'
 
 // Every app tab read "Verbatim · Consumer Intelligence", whichever page it held
-// (finish-list item 25 polish). Each of the ten now titles itself from the
+// (finish-list item 25 polish). Each surface now titles itself from the
 // same table the sidebar reads (lib/nav.ts), and the root layout's template
-// adds the product. A page that drops its metadata fails here.
+// adds the product. A page that drops its metadata fails here. Design v2 made
+// the table nine (lib/nav.ts); the old addresses only redirect and title nothing.
 
 const ROOT = join(__dirname, '..')
 const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8')

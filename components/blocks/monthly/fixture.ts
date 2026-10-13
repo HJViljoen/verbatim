@@ -89,7 +89,7 @@ export const STAGING_LEDGER: LedgerRow = {
   status: 'in_progress',
   statusLabel: 'Working on it',
   decidedAt: '2026-09-15T12:20:21.531616+00:00',
-  href: '/dashboard/market',
+  href: '/dashboard/moves',
 }
 
 /** Össur's current recommendation on staging (85dd4fde): made once, 72 videos
@@ -103,7 +103,7 @@ export const OSSUR_STAGING_LEDGER: LedgerRow = {
   status: 'new',
   statusLabel: 'New',
   decidedAt: null,
-  href: '/dashboard/market',
+  href: '/dashboard/moves',
 }
 
 /** Össur's own search-change days inside the pair on staging, as the front
@@ -149,7 +149,7 @@ function monthly(overview: OverviewData, over: Partial<MonthlyData>): MonthlyDat
     decide: {
       ledger: overview.sentence.ledger,
       next: overview.reading.paused ? null : nextMonthlyOf(overview.month, SUNDAYS),
-      href: '/dashboard/market',
+      href: '/dashboard/moves',
     },
     subject: monthlySubject(overview.brand, overview.month, market?.videos ?? null),
   }

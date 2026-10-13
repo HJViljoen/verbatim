@@ -220,7 +220,7 @@ export const monthlyYou = slotSection({
   title: 'What it means for you',
   slot: 'you',
   link: () => {
-    const page = surface('market')
+    const page = surface('moves')
     return { href: page.href, label: `Open ${page.label} →` }
   },
   stub: 'What your market means for you, and what you published, is read here once it is counted.',

@@ -129,16 +129,17 @@ export async function setRecommendationStatus(id: string, status: string): Promi
   if ((data ?? []).length === 0) return { ok: false, message: 'That recommendation is no longer here.' }
 
   // Both surfaces show it: the agenda list and the dashboard's top-
-  // recommendation tile. THREE paths while the old and the new Market coexist
-  // (WP9): the control is rendered on the parked page at /dashboard/market-intel
-  // AND the new Market takes /dashboard/market and reads the same ledger, so
-  // revalidating one address would leave a client who marked a recommendation
-  // "Working on it" looking at a stale answer on the other for a router-cache
-  // minute (next.config.ts staleTimes.dynamic = 60). The parked path drops out
-  // with the parked page.
+  // recommendation tile. Paths on both sides while the parked page and Your
+  // moves coexist (WP9): the control is rendered on the parked page at
+  // /dashboard/market-intel AND Your moves reads the same ledger (at
+  // /dashboard/moves since Design v2), so revalidating one address would leave
+  // a client who marked a recommendation "Working on it" looking at a stale
+  // answer on the other for a router-cache minute (next.config.ts
+  // staleTimes.dynamic = 60). The parked path drops out with the parked page.
+  // Market took Your market's address and its moves line with it.
   revalidatePath('/dashboard/market-intel')
-  revalidatePath('/dashboard/market')
+  revalidatePath('/dashboard/moves')
   revalidatePath('/dashboard')
-  revalidatePath('/dashboard/overview')
+  revalidatePath('/dashboard/market')
   return { ok: true, message: '' }
 }

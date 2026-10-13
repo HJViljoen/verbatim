@@ -209,7 +209,7 @@ export const overviewThemes: Block<OverviewData> = {
     // board rule): Conversation lists every theme at 10 or more, so the link
     // names how many it holds, under the page's CURRENT sidebar label
     // (plan §4.0). With nothing at 10 it is a plain link to the page.
-    const voice = surface('voice')
+    const voice = surface('voices')
     const atTen = board?.atTen ?? 0
     const footer = openLink(mode, `${ctx.appUrl}${voice.href}`, atTen > 0 ? `All ${fmtInt(atTen)} on ${voice.label} →` : `Open ${voice.label} →`)
     const empty = overviewThemes.emptyState(data)

@@ -73,8 +73,9 @@ describe('the actions refuse a tenant before anything is written or measured', (
 })
 
 describe('the page reads no statement for a tenant', () => {
-  it('app/dashboard/market/page.tsx asks maySeeStatements before loadStatements', () => {
-    const page = readFileSync(resolve(__dirname, '../../app/dashboard/market/page.tsx'), 'utf8')
+  // Your moves' route, at /dashboard/moves since Design v2.
+  it('app/dashboard/moves/page.tsx asks maySeeStatements before loadStatements', () => {
+    const page = readFileSync(resolve(__dirname, '../../app/dashboard/moves/page.tsx'), 'utf8')
     expect(page).toMatch(/maySeeStatements\(\{ operator \}\) \? loadStatements\(/)
   })
 })

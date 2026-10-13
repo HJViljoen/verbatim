@@ -11,6 +11,7 @@ import { REPLIES_SHOWN, type RepliesBlock, type ReplyRow, type WeekData } from '
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { MakerMark } from '@/components/pages/overview/market'
 import { WEEK_ANCHORS } from './came-in'
+import { surface as nav } from '@/lib/nav'
 
 // "Worth a reply" (market-first WP3.7; the approved preview's This week and
 // the weekly's WR5): the comments from the update's own days that somebody can
@@ -64,7 +65,7 @@ function Tabs({ r, tab, ctx }: { r: RepliesBlock; tab: Intent | 'all'; ctx: Bloc
     const q = new URLSearchParams(Object.entries(ctx.params ?? {}).filter((e): e is [string, string] => e[1] != null && e[0] !== REPLY_PARAM))
     if (v !== 'all') q.set(REPLY_PARAM, v)
     const qs = q.toString()
-    return `${ctx.appUrl}/dashboard/week${qs ? `?${qs}` : ''}#${WEEK_ANCHORS.reply}`
+    return `${ctx.appUrl}${nav('content').href}${qs ? `?${qs}` : ''}#${WEEK_ANCHORS.reply}`
   }
   const tabs: { v: Intent | 'all'; label: string; n: number }[] = [
     { v: 'all', label: 'All', n: r.total },
@@ -177,10 +178,13 @@ export function repliesSection<D>(key: string, pick: (data: D) => RepliesBlock, 
     render(data, mode = 'app', ctx) {
       const r = pick(data)
       const empty = block.emptyState(data)
-      // This week either way: the parked Content page that listed every reply
-      // retired for clients on 1 Oct and only redirects there (lib/nav.ts).
-      const all = surface === 'page' ? `${ctx.appUrl}/dashboard/week` : `${ctx.appUrl}/dashboard/week#${WEEK_ANCHORS.reply}`
-      const words = surface === 'page' ? `Open all ${fmtInt(r.total)} →` : `Open all ${fmtInt(r.total)} on This week →`
+      // Content either way (Design v2): the comments worth a reply are
+      // Content's, and until its own page lands it draws This week, which
+      // carries them. The parked Content page that listed every reply retired
+      // for clients on 1 Oct and redirects there too (lib/nav.ts).
+      const content = nav('content')
+      const all = surface === 'page' ? `${ctx.appUrl}${content.href}` : `${ctx.appUrl}${content.href}#${WEEK_ANCHORS.reply}`
+      const words = surface === 'page' ? `Open all ${fmtInt(r.total)} →` : `Open all ${fmtInt(r.total)} on ${content.label} →`
       const footer: ReactNode = r.rows.length === 0 ? undefined : mode === 'email' ? <WeeklyLink href={all} label={words} /> : openLink(mode, all, words)
       if (empty) return <BlockFrame title={REPLY_TITLE} mode={mode} footer={footer} roomy card><BlockEmpty mode={mode}>{empty}</BlockEmpty></BlockFrame>
       const { tab, rows } = replyRowsFor(r, mode === 'app' ? ctx.params?.[REPLY_PARAM] : undefined)

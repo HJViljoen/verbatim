@@ -198,8 +198,8 @@ describe('OV4 · rivals, read from outside the workspace', () => {
 
   it('draws no in-app affordance on paper', () => {
     // The page by its current sidebar label: "Competitive" again since 1 Oct.
-    expect(render(overviewRivals.render(overviewFixture(), 'print', ctx))).not.toContain('Open Competitive')
-    expect(render(overviewRivals.render(overviewFixture(), 'app', ctx))).toContain('Open Competitive')
+    expect(render(overviewRivals.render(overviewFixture(), 'print', ctx))).not.toContain('Open Voices')
+    expect(render(overviewRivals.render(overviewFixture(), 'app', ctx))).toContain('Open Voices')
   })
 })
 

@@ -21,7 +21,7 @@ describe('Competitive · the artboard', () => {
   it('prints the artboard’s blocks in its order, with its words', () => {
     const t = text(<CompetitivePage data={designFixture()} />)
     const order = [
-      surface('competitive').label,
+      surface('voices').label,
       'Brands in your market',
       'Videos that named the brand unprompted, September so far',
       'Patagonia 13 videos',
@@ -134,7 +134,7 @@ describe('Competitive · only what has something to say', () => {
       works: null,
     })
     expect(competitiveBlocks(empty.brands!, 'Sealand')).toEqual([])
-    expect(text(<CompetitivePage data={empty} />).trim()).toBe(surface('competitive').label)
+    expect(text(<CompetitivePage data={empty} />).trim()).toBe(surface('voices').label)
   })
 
   it('draws the pane without its right column where nothing is said or asked', () => {
@@ -145,7 +145,7 @@ describe('Competitive · only what has something to say', () => {
   })
 
   it('prints the title alone with nothing read', () => {
-    expect(text(<CompetitiveSurfacePage data={null} />).trim()).toBe(surface('competitive').label)
+    expect(text(<CompetitiveSurfacePage data={null} />).trim()).toBe(surface('voices').label)
   })
 
   it('a finding with no client side ends at its brands', () => {

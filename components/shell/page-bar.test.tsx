@@ -28,13 +28,13 @@ const UPDATE = {
 
 describe('SurfacePageBar', () => {
   it('prints the label and no question', () => {
-    const text = renderText(<SurfacePageBar nav="subjects" context={CONTEXT} />)
-    expect(text).toContain('Subjects')
-    expect(text).not.toContain('How are we seen on this subject?') // title only, 2026-09-24
+    const text = renderText(<SurfacePageBar nav="voices" context={CONTEXT} />)
+    expect(text).toContain('Voices')
+    expect(text).not.toContain('Who is saying it, and who matters?') // title only, 2026-09-24
   })
 
   it('carries the brand, the month selector and the one line on a reading surface', () => {
-    const text = renderText(<SurfacePageBar nav="overview" context={CONTEXT} />)
+    const text = renderText(<SurfacePageBar nav="market" context={CONTEXT} />)
     expect(text).toContain('Sealand')
     expect(text).toContain('September 2026')
     expect(text).toContain('as at the 24 Sep update · next update Sun 27 Sep')
@@ -44,7 +44,7 @@ describe('SurfacePageBar', () => {
   })
 
   it('puts the month\'s state in the selector\'s tooltip, and the chip opens a menu of months', () => {
-    const markup = render(<SurfacePageBar nav="overview" context={CONTEXT} params={{ horizon: 'last_3' }} />)
+    const markup = render(<SurfacePageBar nav="market" context={CONTEXT} params={{ horizon: 'last_3' }} />)
     expect(markup).toContain('title="September so far · 24 days · 4 updates"')
     // The months themselves are the menu's (`monthOptions`, lib/shell/bar.ts),
     // drawn when it opens; the chip says it has one.
@@ -52,28 +52,28 @@ describe('SurfacePageBar', () => {
   })
 
   it('draws no menu where the market has no other month at all', () => {
-    const markup = render(<SurfacePageBar nav="competitive" context={{ ...CONTEXT, others: [] }} />)
+    const markup = render(<SurfacePageBar nav="voices" context={{ ...CONTEXT, others: [] }} />)
     expect(markup).toContain('September 2026')
     expect(markup).not.toContain('aria-haspopup')
   })
 
   it('draws the preview\'s selector: a 32px chip with its chevron, a button reached by keyboard', () => {
-    const menu = render(<SurfacePageBar nav="overview" context={CONTEXT} />)
+    const menu = render(<SurfacePageBar nav="market" context={CONTEXT} />)
     expect(menu).toMatch(/<button [^>]*class="[^"]*h-8[^"]*rounded-lg[^"]*bg-inner[^"]*"[^>]*>September 2026<svg[^>]*lucide-chevron-down/)
     // A button (Tab reaches it, Enter or Space opens it) with a focus ring.
     expect(menu).toMatch(/<button type="button"[^>]*aria-haspopup="menu"[^>]*class="[^"]*focus-visible:ring-2[^"]*"/)
     // Nothing to change to: the month's name and its tooltip, and no chevron
     // promising a menu.
-    const alone = render(<SurfacePageBar nav="overview" context={{ ...CONTEXT, others: [] }} />)
+    const alone = render(<SurfacePageBar nav="market" context={{ ...CONTEXT, others: [] }} />)
     expect(alone).toMatch(/<span title="[^"]*" class="[^"]*h-8[^"]*bg-inner[^"]*">September 2026<\/span>/)
     expect(alone).not.toContain('lucide-chevron-down')
   })
 
   it('steps back on 1 to 3 Oct too: September, ended, with the chevron, and the line unchanged (default M-d)', () => {
     const october = { brand: 'Sealand', reading: sealandReading('2026-10-02T06:00:00.000Z'), others: EARLIER }
-    const markup = render(<SurfacePageBar nav="overview" context={october} />)
+    const markup = render(<SurfacePageBar nav="market" context={october} />)
     expect(markup).toMatch(/aria-haspopup="menu"[^>]*>September 2026<svg[^>]*lucide-chevron-down/)
-    const text = renderText(<SurfacePageBar nav="overview" context={october} />)
+    const text = renderText(<SurfacePageBar nav="market" context={october} />)
     expect(text).toContain('as at the 27 Sep update · next update Sun 4 Oct')
     // The state words stay the tooltip's: none in the bar (§5.1).
     expect(text).not.toContain('so far')
@@ -81,13 +81,13 @@ describe('SurfacePageBar', () => {
   })
 
   it('breaks the one line at its " · " on a phone, never inside a date', () => {
-    const markup = render(<SurfacePageBar nav="overview" context={CONTEXT} />)
+    const markup = render(<SurfacePageBar nav="market" context={CONTEXT} />)
     expect(markup).toContain('<span class="whitespace-nowrap">as at the 24 Sep update</span> · <span class="whitespace-nowrap">next update Sun 27 Sep</span>')
-    expect(renderText(<SurfacePageBar nav="overview" context={CONTEXT} />)).toContain('as at the 24 Sep update · next update Sun 27 Sep')
+    expect(renderText(<SurfacePageBar nav="market" context={CONTEXT} />)).toContain('as at the 24 Sep update · next update Sun 27 Sep')
   })
 
-  it('dates This week by its update and its comment window, and offers no horizon', () => {
-    const text = renderText(<SurfacePageBar nav="week" brand="Sealand" updates={UPDATE} />)
+  it('dates Content (This week\'s bar) by its update and its comment window, and offers no horizon', () => {
+    const text = renderText(<SurfacePageBar nav="content" brand="Sealand" updates={UPDATE} />)
     expect(text).toContain('The 20 Sep update')
     expect(text).toContain('comments written 10 to 20 Sep · next update Sun 27 Sep')
     expect(text).not.toContain('Last 3 months')
@@ -102,7 +102,7 @@ describe('SurfacePageBar', () => {
 
   it('shows no month on a reading surface that has not been given one', () => {
     // An honest blank, not a fabricated date.
-    const text = renderText(<SurfacePageBar nav="market" />)
+    const text = renderText(<SurfacePageBar nav="moves" />)
     expect(text).not.toContain('as at')
     expect(text).not.toContain('2026')
   })
@@ -124,13 +124,13 @@ describe('SurfacePageBar', () => {
 })
 
 describe('SkeletonSurfaceBar', () => {
-  it('holds Your market\'s bar at the height it lands at: the 40px Export button and the 24px line', () => {
-    const markup = render(<SkeletonSurfaceBar nav="overview" button />)
+  it('holds a reading page\'s bar at the height it lands at: the 40px Export button and the 24px line', () => {
+    const markup = render(<SkeletonSurfaceBar nav="market" button />)
     expect(markup).toContain('h-10 w-[98px] rounded-lg')
     expect(markup).not.toContain('rounded-full')
     expect(markup).toContain('my-1.5 h-3')
     // A page whose bar still pairs the pills keeps their bones.
-    expect(render(<SkeletonSurfaceBar nav="subjects" pills={2} />).match(/h-\[26px\] w-20 rounded-full/g)?.length).toBe(2)
+    expect(render(<SkeletonSurfaceBar nav="voices" pills={2} />).match(/h-\[26px\] w-20 rounded-full/g)?.length).toBe(2)
   })
 })
 

@@ -1,5 +1,5 @@
 import { BrandChip } from '@/components/colour-roles'
-import { NAV_ICON } from '@/components/nav-icons'
+import { Tag } from 'lucide-react'
 import { longMonth } from '@/lib/format'
 import { LIST_TITLE, monthSoFar, type BrandList } from '@/lib/pages/brands'
 import { Card, CountWords, GOLD, TitleStack } from './ui'
@@ -13,7 +13,7 @@ import { Card, CountWords, GOLD, TitleStack } from './ui'
 export function BrandListCard({ list, soFar }: { list: BrandList; soFar: boolean }) {
   return (
     <Card className="gap-3 px-[26px] pt-6 pb-[22px]">
-      <TitleStack icon={NAV_ICON.competitive} title={LIST_TITLE} sub={`Videos that named the brand unprompted, ${monthSoFar(list.month, soFar)}`} />
+      <TitleStack icon={Tag} title={LIST_TITLE} sub={`Videos that named the brand unprompted, ${monthSoFar(list.month, soFar)}`} />
       {list.rows.length > 0 ? (
         <div role="list" className="flex flex-col">
           {list.rows.map((r) => (

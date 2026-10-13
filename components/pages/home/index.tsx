@@ -1,10 +1,9 @@
 import Link from 'next/link'
-import { Sparkles } from '@/components/design-icons'
+import { CalendarDays, List, MessageSquareText, Sparkles } from '@/components/design-icons'
 import type { ReactNode } from 'react'
-import { ChartColumn, Hash } from 'lucide-react'
+import { ChartColumn, Globe, Hash, Tag, Target, type LucideIcon } from 'lucide-react'
 
 import { BAR_FILL, IconTile, NewNumber } from '@/components/colour-roles'
-import { NAV_ICON } from '@/components/nav-icons'
 
 import { PageBar } from '@/components/shell/page-grid'
 import { fmtInt } from '@/lib/format'
@@ -199,6 +198,19 @@ function AgentBlock() {
 
 // ---- 4. The tiles --------------------------------------------------------------------
 
+/** Each tile's glyph: the one its page wore in the 1 Oct sidebar, which is the
+ *  artboard's (Page-Dashboard.dc.html). The sidebar's map is Design v2's and
+ *  no longer has these pages (components/nav-icons.ts); the tiles keep theirs
+ *  until the Dashboard is rebuilt (depth plan T8). */
+const TILE_ICON: Readonly<Record<HomeTile['key'], LucideIcon>> = {
+  overview: Globe,
+  week: CalendarDays,
+  voice: MessageSquareText,
+  competitive: Tag,
+  subjects: List,
+  market: Target,
+}
+
 function PageTile({ tile }: { tile: HomeTile }) {
   const bars = tile.rows.filter((r): r is Extract<HomeTileRow, { kind: 'bar' }> => r.kind === 'bar')
   const texts = tile.rows.filter((r): r is Extract<HomeTileRow, { kind: 'text' }> => r.kind === 'text')
@@ -206,7 +218,7 @@ function PageTile({ tile }: { tile: HomeTile }) {
     <section className={`flex min-w-0 flex-col gap-2.5 rounded-[14px] bg-white px-[22px] py-5 ${SHADOW}`} aria-label={tile.title}>
       <div className="flex items-center justify-between">
         <div className="flex min-w-0 items-baseline gap-2.5">
-          <IconTile icon={NAV_ICON[tile.key]} />
+          <IconTile icon={TILE_ICON[tile.key]} />
           <h2 className="m-0 text-[15px] font-bold">{tile.title}</h2>
         </div>
         <Link

@@ -421,7 +421,8 @@ export const overviewMoves: Block<OverviewData> = {
     if (data.published) return publishedCensus(data, mode, ctx.appUrl)
     const m = data.moves
     const email = mode === 'email'
-    const href = `${ctx.appUrl}/dashboard/market`
+    // Your moves, at /dashboard/moves since Design v2 (Market took /dashboard/market).
+    const href = `${ctx.appUrl}${surface('moves').href}`
     const empty = overviewMoves.emptyState(data)
     // `?? []` BECAUSE A FROZEN ARTEFACT MAY PREDATE THE FIELD (merge, Block D
     // wave 2). `MovesBlock.readings` is wave 1's, the briefs borrow this block
@@ -572,7 +573,7 @@ function CensusNote({ words, under, mode }: { words: string; under: string; mode
  */
 function publishedCensus(data: OverviewData, mode: RenderMode, appUrl: string) {
   const p = data.published!
-  const moves = surface('market')
+  const moves = surface('moves')
   const footer = openLink(mode, `${appUrl}${moves.href}`, `Open ${moves.label} →`)
   const month = longMonth(p.month)
   const prev = p.prevPosts

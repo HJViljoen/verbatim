@@ -3,14 +3,14 @@ import { ConvCard } from '@/components/pages/voice-surface/conversation'
 import { ConversationTitle } from '@/components/pages/voice-surface'
 import { surface } from '@/lib/nav'
 
-// Mirrors app/dashboard/voice/page.tsx, the approved artboard (the pages
-// build, 1 Oct): the title, then every conversation beside one in full and
+// Mirrors app/dashboard/voices/page.tsx, Conversation's approved artboard
+// (the pages build, 1 Oct) until the Voices page lands: the title, then every conversation beside one in full and
 // where the market talks, who is talking, and the market's words in pairs of
 // cards. Plain bones, no numbers.
 export default function VoiceLoading() {
   return (
     <div className="flex flex-col gap-[22px]">
-      <span role="status" className="sr-only">Loading {surface('voice').label}…</span>
+      <span role="status" className="sr-only">Loading {surface('voices').label}…</span>
       <ConversationTitle />
       <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.12fr)_minmax(0,1fr)]">
         <ConvCard className="gap-3 px-7 py-6">

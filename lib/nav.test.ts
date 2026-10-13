@@ -1,41 +1,64 @@
 import { describe, expect, it } from 'vitest'
 import {
-  OLD_PAGES, PARKED_INITIATIVES, RETIRED_ADDRESSES, SURFACES, TENANT_RETIRED, frontRedirect, hasHorizon, oldPageBanner,
-  retireDate, surface, surfaceForPath, surfacesIn, tenantAway, withQuery,
+  OLD_PAGES, PARKED_INITIATIVES, RETIRED_ADDRESSES, RETIRED_PAGE_NAMES, SURFACES, TENANT_RETIRED, frontRedirect, hasHorizon,
+  oldPageBanner, pageKeyName, retireDate, retiredTo, surface, surfaceForPath, surfacesIn, tenantAway, withQuery, type NavKey,
 } from './nav'
 import { OLD_PAGES_RETIRE_ON } from './config'
 import { SETTINGS_ADDRESSES } from './settings/rail'
 import { PAGE_KEYS } from './renderables/types'
 
-describe('the ten surfaces', () => {
-  it('are in the sidebar\'s order (the navigation of 1 Oct, page review §4)', () => {
+describe('the nine surfaces (Design v2)', () => {
+  it('are in the sidebar\'s order (every E*.dc.html board; decision 6 of the depth plan)', () => {
     expect(SURFACES.map((s) => s.key)).toEqual([
-      'home', 'overview', 'week', 'voice', 'competitive', 'subjects', 'market', 'ask', 'studio', 'settings',
+      'home', 'market', 'voices', 'products', 'content', 'moves', 'ask', 'studio', 'settings',
     ])
   })
 
-  it('carry the design\'s labels: Competitive again, Agent for Ask, and no Reports', () => {
+  it('carry the boards\' labels, which are the page titles too', () => {
     expect(SURFACES.map((s) => s.label)).toEqual([
-      'Dashboard', 'Your market', 'This week', 'Conversation', 'Competitive', 'Subjects', 'Your moves', 'Agent', 'Studio', 'Settings',
+      'Dashboard', 'Market', 'Voices', 'Your products', 'Content', 'Your moves', 'Agent', 'Studio', 'Settings',
     ])
-    // Labels only: the keys, the addresses and the page keys stay, so no
-    // stored link or report breaks.
-    expect(surface('competitive')).toMatchObject({ href: '/dashboard/competitive', page: 'competitive' })
-    expect(surface('ask')).toMatchObject({ href: '/dashboard/agent', page: 'agent' })
-    expect(SURFACES.map((s) => s.label)).not.toContain('Brands')
-    expect(SURFACES.map((s) => s.label)).not.toContain('Ask')
-    expect(SURFACES.map((s) => s.label)).not.toContain('Reports')
-    expect(surface('competitive').question).toBe('Which brands come up in your market, and what is said around them?')
-    expect(surface('voice').question).toBe('Everything your market talked about, in full')
+    for (const gone of ['Your market', 'This week', 'Conversation', 'Competitive', 'Subjects', 'Brands', 'Ask', 'Reports']) {
+      expect(SURFACES.map((s) => s.label)).not.toContain(gone)
+    }
   })
 
-  it('gives the Dashboard /dashboard and no page key, and moves Your market to /dashboard/overview', () => {
+  it('sit at the boards\' addresses: Market takes /dashboard/market, Your moves moves to /dashboard/moves', () => {
+    expect(SURFACES.map((s) => s.href)).toEqual([
+      '/dashboard', '/dashboard/market', '/dashboard/voices', '/dashboard/products', '/dashboard/content', '/dashboard/moves',
+      '/dashboard/agent', '/dashboard/studio', '/dashboard/settings',
+    ])
+  })
+
+  it('ask the boards\' questions', () => {
+    expect(Object.fromEntries(SURFACES.map((s) => [s.key, s.question]))).toEqual({
+      home: 'What matters this week, across everything?',
+      market: 'What is the market talking about?',
+      voices: 'Who is saying it, and who matters?',
+      products: 'What is being said about what you sell?',
+      content: 'What should we post, and what works?',
+      moves: 'What should we do as a business, and is it working?',
+      ask: 'What does the conversation say about this?',
+      studio: 'Which reports go to whom, and where are the past issues?',
+      settings: null,
+    })
+  })
+
+  it('keeps every page key where it was: Market stores as Your market, Voices as Conversation, Your moves as `market`', () => {
+    // A page key is a stored contract (snapshots, reports, share links); only
+    // the addresses moved. Your products is new and stores under nothing.
+    expect(Object.fromEntries(SURFACES.map((s) => [s.key, s.page ?? null]))).toEqual({
+      home: null, market: 'overview', voices: 'voice', products: null, content: 'content', moves: 'market',
+      ask: 'agent', studio: null, settings: 'settings',
+    })
+  })
+
+  it('gives the Dashboard /dashboard and no page key', () => {
     // Page key `dashboard` is a stored contract naming the legacy module; the
     // Dashboard must never store under it (page review §5.2).
     expect(surface('home').href).toBe('/dashboard')
     expect(surface('home').page).toBeUndefined()
     expect(SURFACES.map((s) => s.page)).not.toContain('dashboard')
-    expect(surface('overview')).toMatchObject({ href: '/dashboard/overview', page: 'overview', label: 'Your market' })
   })
 
   it('every address is unique and under /dashboard', () => {
@@ -44,8 +67,10 @@ describe('the ten surfaces', () => {
     for (const h of hrefs) expect(h.startsWith('/dashboard')).toBe(true)
   })
 
-  it('every page key a surface names is a real page key', () => {
-    for (const s of SURFACES) if (s.page) expect(PAGE_KEYS).toContain(s.page)
+  it('every page key a surface names is a real page key, named once', () => {
+    const pages = SURFACES.flatMap((s) => (s.page ? [s.page] : []))
+    for (const p of pages) expect(PAGE_KEYS).toContain(p)
+    expect(new Set(pages).size).toBe(pages.length)
   })
 
   it('asks its one question everywhere but Settings', () => {
@@ -55,39 +80,72 @@ describe('the ten surfaces', () => {
     }
   })
 
-  it('offers a horizon on no page today', () => {
-    // Every reading page reads its month in every block, so the four pills
-    // would return a byte-identical page.
+  it('offers a horizon on no page: each reading page switches its own period', () => {
     expect(SURFACES.filter(hasHorizon).map((s) => s.key)).toEqual([])
-    expect(SURFACES.find((s) => s.key === 'market')?.bar).toBe('reading')
   })
 
-  it('gives the bar\'s one line to every reading and to This week, and to nothing else (25 Sep rulings)', () => {
-    expect(SURFACES.filter((s) => s.bar === 'reading').map((s) => s.key)).toEqual(['overview', 'voice', 'competitive', 'subjects', 'market'])
-    expect(SURFACES.filter((s) => s.bar === 'week').map((s) => s.key)).toEqual(['week'])
+  it('gives the bar\'s reading line to the reading pages, the week\'s to Content, and the title alone to the rest', () => {
+    expect(SURFACES.filter((s) => s.bar === 'reading').map((s) => s.key)).toEqual(['market', 'voices', 'products', 'moves'])
+    expect(SURFACES.filter((s) => s.bar === 'week').map((s) => s.key)).toEqual(['content'])
     expect(SURFACES.filter((s) => s.bar === 'title').map((s) => s.key)).toEqual(['home', 'ask', 'studio', 'settings'])
   })
 
-  it('splits into the design\'s four groups: the market, what you steer, the Agent, the foot', () => {
-    expect(surfacesIn('read').map((s) => s.key)).toEqual(['home', 'overview', 'week', 'voice', 'competitive'])
-    expect(surfacesIn('steer').map((s) => s.key)).toEqual(['subjects', 'market'])
+  it('splits into the boards\' three groups: the six pages, the Agent, the foot', () => {
+    expect(surfacesIn('read').map((s) => s.key)).toEqual(['home', 'market', 'voices', 'products', 'content', 'moves'])
     expect(surfacesIn('agent').map((s) => s.key)).toEqual(['ask'])
     expect(surfacesIn('foot').map((s) => s.key)).toEqual(['studio', 'settings'])
   })
 
-  it('looks one up by key and refuses an unknown one', () => {
-    expect(surface('voice').label).toBe('Conversation')
+  it('looks one up by key and refuses an unknown one, the 1 Oct keys included', () => {
+    expect(surface('voices').label).toBe('Voices')
+    expect(surface('moves')).toMatchObject({ href: '/dashboard/moves', label: 'Your moves', page: 'market' })
     // @ts-expect-error not a nav key
     expect(() => surface('reports')).toThrow()
+    for (const old of ['overview', 'week', 'voice', 'competitive', 'subjects']) {
+      expect(() => surface(old as NavKey)).toThrow()
+    }
+  })
+})
+
+describe('a reader\'s name for every page key', () => {
+  it('is its surface\'s label where a surface stores under it, and the retired page\'s name otherwise', () => {
+    expect(Object.fromEntries(PAGE_KEYS.map((k) => [k, pageKeyName(k)]))).toEqual({
+      overview: 'Market',
+      subjects: 'Subjects',
+      voice: 'Voices',
+      market: 'Your moves',
+      competitive: 'Competitive',
+      week: 'This week',
+      agent: 'Agent',
+      settings: 'Settings',
+      dashboard: 'Dashboard',
+      content: 'Content',
+      profile: 'Consumer Profile',
+    })
+  })
+
+  it('names no key a surface already names, so the two never disagree', () => {
+    for (const s of SURFACES) if (s.page) expect(RETIRED_PAGE_NAMES[s.page]).toBeUndefined()
   })
 })
 
 describe('surfaceForPath', () => {
   it('matches /dashboard exactly, so every page does not light the Dashboard', () => {
     expect(surfaceForPath('/dashboard')?.key).toBe('home')
-    expect(surfaceForPath('/dashboard/overview')?.key).toBe('overview')
-    expect(surfaceForPath('/dashboard/voice')?.key).toBe('voice')
     expect(surfaceForPath('/dashboard/market')?.key).toBe('market')
+    expect(surfaceForPath('/dashboard/voices')?.key).toBe('voices')
+    expect(surfaceForPath('/dashboard/products')?.key).toBe('products')
+    expect(surfaceForPath('/dashboard/content')?.key).toBe('content')
+    expect(surfaceForPath('/dashboard/moves')?.key).toBe('moves')
+  })
+
+  it('lights nothing on an old address for the moment its redirect takes, and never a page by prefix', () => {
+    // `/dashboard/voice` is not a prefix of `/dashboard/voices`' match: the
+    // rule is the address or the address and a slash.
+    for (const old of ['/dashboard/overview', '/dashboard/week', '/dashboard/voice', '/dashboard/competitive', '/dashboard/subjects']) {
+      expect(surfaceForPath(old)).toBeNull()
+    }
+    expect(surfaceForPath('/dashboard/market-intel')).toBeNull()
   })
 
   it('lights the surface a sub-path belongs to', () => {
@@ -125,11 +183,17 @@ describe('the redirects that keep a query', () => {
     expect(withQuery('/x', { k: ['1', '2'] })).toBe('/x?k=1&k=2')
   })
 
-  it('sends /dashboard?month= to Your market with its whole query, and leaves the Dashboard alone otherwise (page review §5.1)', () => {
-    expect(frontRedirect({ month: '2026-09' })).toBe('/dashboard/overview?month=2026-09')
-    expect(frontRedirect({ month: '2026-09', theme: 't1' })).toBe('/dashboard/overview?month=2026-09&theme=t1')
+  it('withQuery keeps a fragment at the end, after the query', () => {
+    expect(withQuery('/dashboard/voices#cast', { month: '2026-09' })).toBe('/dashboard/voices?month=2026-09#cast')
+    expect(withQuery('/dashboard/voices#cast')).toBe('/dashboard/voices#cast')
+  })
+
+  it('sends /dashboard?month= to Market\'s month view with its whole query, and leaves the Dashboard alone otherwise (page review §5.1)', () => {
+    expect(frontRedirect({ month: '2026-09' })).toBe('/dashboard/market?period=month&month=2026-09')
+    expect(frontRedirect({ month: '2026-09', theme: 't1' })).toBe('/dashboard/market?period=month&month=2026-09&theme=t1')
     expect(frontRedirect({})).toBeNull()
     expect(frontRedirect({ ask: 'x' })).toBeNull()
+    expect(frontRedirect({ month: '' })).toBeNull()
   })
 })
 
@@ -144,7 +208,12 @@ describe('the addresses a tenant no longer reaches (U12, U7)', () => {
       '/dashboard/videos',
     ])
     for (const p of OLD_PAGES) expect(TENANT_RETIRED[p.href]).toBe(surface(p.replacedBy).href)
-    expect(TENANT_RETIRED[PARKED_INITIATIVES.href]).toBe(surface('market').href)
+    expect(TENANT_RETIRED[PARKED_INITIATIVES.href]).toBe(surface('moves').href)
+    // Design v2: Market Intelligence and Initiatives land on Your moves at its
+    // new address, Competitive Intelligence on Voices, the old Content on Content.
+    expect(TENANT_RETIRED['/dashboard/market-intel']).toBe('/dashboard/moves')
+    expect(TENANT_RETIRED['/dashboard/competitive-intel']).toBe('/dashboard/voices')
+    expect(TENANT_RETIRED['/dashboard/videos']).toBe('/dashboard/content')
   })
 
   it('land a tenant on an address something serves, and let the operator stay', () => {
@@ -157,7 +226,7 @@ describe('the addresses a tenant no longer reaches (U12, U7)', () => {
   })
 
   it('refuses an address that is not retired: a page asking for its way out must have one', () => {
-    expect(() => tenantAway(tenant, '/dashboard/week')).toThrow()
+    expect(() => tenantAway(tenant, '/dashboard/content')).toThrow()
   })
 })
 
@@ -169,10 +238,11 @@ describe('the old pages', () => {
 
   it('parks Settings › Initiatives apart from the three, with the same banner', () => {
     const b = oldPageBanner(PARKED_INITIATIVES)
-    // The replacement by its CURRENT label (deploy 2 renames Market "Your moves").
+    // The replacement by its CURRENT label and address (Your moves, at
+    // /dashboard/moves since Design v2).
     expect(b.title).toBe('Initiatives is being replaced by Your moves')
     expect(b.body).toBe('This page stays available until 30 Nov 2026. Renaming, finishing and stopping one happens here until Your moves can do it.')
-    expect(b.href).toBe('/dashboard/market')
+    expect(b.href).toBe('/dashboard/moves')
     // It is a Settings sub-page, not one of the three parked reading pages.
     expect(OLD_PAGES.map((p) => p.href)).not.toContain(PARKED_INITIATIVES.href)
     // And it is not redirected any more.
@@ -190,31 +260,40 @@ describe('the old pages', () => {
     expect(market.title).toBe('Market Intelligence is being replaced by Your moves')
     expect(market.body).toBe('This page stays available until 30 Nov 2026.')
     expect(market.cta).toBe('Go to Your moves')
-    expect(market.href).toBe('/dashboard/market')
+    expect(market.href).toBe('/dashboard/moves')
 
+    expect(oldPageBanner(OLD_PAGES[1])).toMatchObject({ title: 'Competitive Intelligence is being replaced by Voices', href: '/dashboard/voices' })
+
+    // Content's label went to the page that replaces it, so the parked one is
+    // "Old Content": "Content is being replaced by Content" says nothing.
     const content = oldPageBanner(OLD_PAGES[2])
-    expect(content.title).toBe('Content is being replaced by This week')
-    // Comments worth a reply are on This week now, so nothing stays behind.
+    expect(content.title).toBe('Old Content is being replaced by Content')
+    expect(content.cta).toBe('Go to Content')
+    expect(content.href).toBe('/dashboard/content')
+    // What worked and the comments worth a reply are Content's, so nothing stays behind.
     expect(content.body).toBe('This page stays available until 30 Nov 2026.')
   })
 })
 
 describe('the addresses that lose their page', () => {
-  it('are the three nothing stored points at AND nothing is lost by, plus Reports, and land on a live surface', () => {
+  it('are Phase 1\'s orphans, Reports, and the five reading pages Design v2 moved, each landing on a live surface', () => {
     // Settings › Initiatives is not one: it retires for tenants only
     // (TENANT_RETIRED) and the operator keeps it. Reports folded into the
     // Studio on 1 Oct, and its page carries the query across.
     expect(Object.keys(RETIRED_ADDRESSES).sort()).toEqual([
-      '/dashboard/guide', '/dashboard/profile', '/dashboard/reports', '/dashboard/settings/connections',
+      '/dashboard/competitive', '/dashboard/guide', '/dashboard/overview', '/dashboard/profile', '/dashboard/reports',
+      '/dashboard/settings/connections', '/dashboard/subjects', '/dashboard/voice', '/dashboard/week',
     ])
     expect(RETIRED_ADDRESSES['/dashboard/reports']).toBe('/dashboard/studio')
     // How to read is cut for clients, so the Guide lands on Settings.
     expect(RETIRED_ADDRESSES['/dashboard/guide']).toBe('/dashboard/settings')
+    // Consumer Profile's personas are Voices' groups (they were Conversation's cast).
+    expect(RETIRED_ADDRESSES['/dashboard/profile']).toBe('/dashboard/voices')
     // An address something actually SERVES, not a sub-path of one that happens
     // to prefix-match: the looser rule once passed for
     // `/dashboard/settings/how-to-read` while no such route existed, and a
     // redirect to a route that does not exist is a bare Next 404 — this app
-    // has no `app/not-found.tsx`. The legal targets are the ten's own
+    // has no `app/not-found.tsx`. The legal targets are the nine's own
     // addresses plus the settings area's seven, which WP16 built.
     const served = [...SURFACES.map((s) => s.href), ...SETTINGS_ADDRESSES]
     for (const to of Object.values(RETIRED_ADDRESSES)) {
@@ -227,5 +306,11 @@ describe('the addresses that lose their page', () => {
     for (const from of Object.keys(RETIRED_ADDRESSES)) {
       expect(SURFACES.some((s) => s.href === from)).toBe(false)
     }
+  })
+
+  it('gives each retired address its landing, and refuses one that is not retired', () => {
+    for (const from of Object.keys(RETIRED_ADDRESSES)) expect(retiredTo(from).startsWith(RETIRED_ADDRESSES[from].split('#')[0])).toBe(true)
+    expect(() => retiredTo('/dashboard/market')).toThrow()
+    expect(() => retiredTo('/dashboard/moves')).toThrow()
   })
 })

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { CircleHelp, MessagesSquare, type LucideIcon } from 'lucide-react'
 import { BAR_FILL, IconTile, SELECTED, TAG } from '@/components/colour-roles'
-import { NAV_ICON } from '@/components/nav-icons'
+import { List } from '@/components/design-icons'
 import { fmtInt } from '@/lib/format'
 import { surface } from '@/lib/nav'
 import { quoteCite, type SubjectPaneView, type SubjectsRow, type SubjectsView } from '@/lib/pages/subjects-view'
@@ -48,7 +48,7 @@ export function SubjectsList({ view }: { view: SubjectsView }) {
   return (
     <section aria-label="Your subjects" className={`${CARD} gap-3 px-5 pt-5 pb-[22px]`}>
       <div className="flex items-baseline gap-2.5">
-        <IconTile icon={NAV_ICON.subjects} />
+        <IconTile icon={List} />
         <h2 className="m-0 text-[17px] font-bold text-[#26292C]">Your subjects</h2>
       </div>
       {view.rows.length > 0 ? (
@@ -210,7 +210,7 @@ export function SubjectAsks({ pane }: { pane: SubjectPaneView }) {
 export const SUBJECTS_FIRST_RUN = 'Your market’s first month will appear here.'
 
 export function SubjectsPage({ view }: { view: SubjectsView | null }) {
-  const title = surface('subjects').label
+  const title = surface('market').label
   if (!view) {
     return (
       <PageFrame className="gap-[22px] leading-[normal]">

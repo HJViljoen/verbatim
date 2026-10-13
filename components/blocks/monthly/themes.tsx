@@ -90,7 +90,7 @@ export const monthlyThemes = fromFrontPage({
   title: overviewThemes.title,
   block: overviewThemes,
   link: () => {
-    const page = surface('voice')
+    const page = surface('voices')
     return { href: page.href, label: `Open ${page.label} →` }
   },
   email: themesEmail,

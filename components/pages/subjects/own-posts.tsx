@@ -143,7 +143,7 @@ export const subjectsOwnPosts: Block<SubjectsData> = {
     const c = data.ownPosts
     const empty = subjectsOwnPosts.emptyState(data)
     const email = mode === 'email'
-    const moves = surface('market')
+    const moves = surface('moves')
     const footer = openLink(mode, `${ctx.appUrl}${moves.href}`, `Open ${moves.label} →`)
 
     if (!c || empty) {

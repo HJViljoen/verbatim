@@ -430,7 +430,8 @@ describe('the tiles', () => {
     ])
     expect(tiles.map((t) => t.title)).toEqual(['Your market', 'This week', 'Conversation', 'Competitive', 'Subjects', 'Your moves'])
     const conversation = tiles.find((t) => t.key === 'voice')!
-    expect(conversation).toMatchObject({ href: '/dashboard/voice', big: '', rows: [] })
+    // Conversation's tile opens Voices, where /dashboard/voice lands (Design v2).
+    expect(conversation).toMatchObject({ href: '/dashboard/voices', big: '', rows: [] })
     expect(tileInsufficient(conversation)).toBe(true)
     // Competitive keeps its number and says the rest is insufficient.
     expect(tiles.find((t) => t.key === 'competitive')).toMatchObject({ big: '9', sub: 'brands you track', rows: [] })

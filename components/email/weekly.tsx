@@ -6,6 +6,7 @@ import { staleWeeklySnapshot, type WeeklySnapshotData } from '@/lib/reports/week
 import { weeklyBlocksFor } from '@/components/blocks/weekly'
 import { Button, Hairline, text } from './primitives'
 import { withCurrentWords } from '@/lib/reports/legacy-words'
+import { surface } from '@/lib/nav'
 
 /**
  * The weekly report as an email (Phase 1 WP17, design §3 Artefact WR).
@@ -62,7 +63,7 @@ export function WeeklyEmail({ data, shareUrl, appUrl, attached, ctx, preheader }
     keys: data.keys,
     flagHref: data.reading.section1.check.flags[0]?.href ?? null,
     weekHref: data.reading.content.weekHref,
-    subjectsHref: '/dashboard/subjects',
+    subjectsHref: surface('market').href,
     briefHref: data.reading.sales.brief.href,
     recordHref: data.reading.coverage.href,
   })

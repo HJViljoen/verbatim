@@ -1,8 +1,7 @@
 import { renameTrackedRival } from '@/app/dashboard/settings/rivals-actions'
 import { updateCommunity, updateTrackingConfig } from '@/app/dashboard/settings/actions'
 import { RIVALS_PRESENT } from '@/app/dashboard/settings/constants'
-import { Ban, Users } from 'lucide-react'
-import { NAV_ICON } from '@/components/nav-icons'
+import { Ban, Tag, Users } from 'lucide-react'
 import { Card, CardTitle } from '@/components/pages/studio/ui'
 import type { BrandRow } from '@/lib/pages/settings'
 import { InlineAdd } from './inline-add'
@@ -18,7 +17,7 @@ export function BrandsYouTrack({ brands, names, canEdit }: { brands: readonly Br
   return (
     <Card className="gap-3.5 px-[30px] pt-[26px] pb-3.5">
       <div className="flex items-center justify-between gap-3">
-        <CardTitle icon={NAV_ICON.competitive}>Brands you track</CardTitle>
+        <CardTitle icon={Tag}>Brands you track</CardTitle>
         {canEdit ? (
           <InlineAdd
             label="Add a brand"

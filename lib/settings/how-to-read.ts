@@ -58,14 +58,19 @@ export interface ReadingCard {
 
 export const READING_CARDS: readonly ReadingCard[] = [
   {
-    key: 'overview',
+    key: 'market',
+    // MARKET (Design v2): until the Market page lands (depth plan T3) the
+    // address draws Your market's bigger picture, so this is Your market's
+    // card, with the Subjects card's method folded in below: the subject
+    // board is Market's (the Subjects page redirects here).
+    //
     // YOUR MARKET (market-first WP1.6, deploy 2; blocks 3, 7 and 8 with
     // deploy 3). The front page reads the market in full, then what it means
     // for you, then the brands, then what changed and which changes were
     // ours. Levels with the month before beside them; no direction word (none
     // can be earned before late January, plan §2.11).
     tells: 'Your market in the month the page reads: how big it was, what it talked about biggest first, what came in with the latest update and week by week, what people did and asked for in the comments, how it read on each of your subjects, what it means for you and what you published, the brands it named, and what changed, including the changes that were ours.',
-    read: ['market', 'month', 'video', 'theme', 'kind', 'level', 'change', 'new'],
+    read: ['market', 'month', 'video', 'theme', 'kind', 'subject', 'level', 'change', 'new'],
     cannot: [
       'It is a reading of a calendar month. The page bar names the month and the update it was read with; the month selector’s tooltip says whether the month is still filling.',
       'Themes are grouped within the category, so a theme is a share of the category’s videos, never of the whole market. Makers’ videos stay in every count and are marked.',
@@ -77,56 +82,43 @@ export const READING_CARDS: readonly ReadingCard[] = [
       // rule; "not counted yet" waits for the hand check (lib/brands/precision.ts).
       'Under Brands in your market, a brand is counted in a video when the video, or a comment on it written in the month, names it: the rule counts the brand’s name, its handles and its phrases, and never counts a brand in its own posts. “No video names it” means the rule found no such video that month; “not counted yet” means we have not yet checked its matches by hand.',
       'It cannot tell you why anything moved. A number and a reason are different claims, and only one of them is counted.',
-    ],
-  },
-  {
-    key: 'subjects',
-    // SUBJECTS ON THE MARKET (WP2.2, deploy 3). The method sentences the page
-    // no longer prints under its blocks (25 Sep rulings) are said here once.
-    // "Your subjects", not "the subjects picked for you" (decision G, WP3.1):
-    // a subject is something your market talks about that you chose to
-    // follow, and Settings › Subjects prints who chose each one.
-    tells: 'How big each of your subjects is in your market, month by month: in how many of the market’s videos people talked about it, what they said about it, the questions they asked on it and their own words.',
-    read: ['subject', 'market', 'level', 'month', 'video'],
-    cannot: [
+      // SUBJECTS ON THE MARKET (WP2.2, deploy 3), the Subjects card's method
+      // as it was, less the levels sentence the lines above already say.
       'A subject is counted by the same rule a theme is, which means it counts what people SAID, not what they bought.',
       'A subject still being checked prints its figure marked provisional; one whose check clearly failed prints no figure while it is re-described.',
       'Makers’ videos stay in every count. A subject where a fifth or more of the videos are makers’ says so beside its figure.',
-      'Two months sit side by side as levels. A line joins two months only where both were read the same way; until then each month stands alone.',
       'The questions asked on a subject are counted over the period you pick, each video placed by the day it was posted, and matched against what your own posts are about: two or more words in common count as a post touching a question. What your posts claim is not read for this yet.',
       'The kinds of thing said about a subject overlap: one video can carry several, so together they are more than its whole.',
       'Your own posts are counted by the day you posted them, while every other figure on the page is dated by the comment. Say vs hear reads the latest update.',
     ],
   },
   {
-    key: 'voice',
+    key: 'voices',
+    // VOICES (Design v2): until the Voices page lands (depth plan T4) the
+    // address draws Conversation, so this is Conversation's card, with the
+    // Competitive card's method folded in below: the brands are Voices' (the
+    // Competitive page redirects here).
+    //
     // CONVERSATION (market-first WP2.4, plan §2.4). Every theme the category
     // read on 10 videos or more in the month, biggest first and nothing
     // skipped; the month before beside each as a level; New and Now 10+ as
     // flags, never as change; one theme in full; who is talking.
     tells: 'Everything your market talked about in the month the page reads: every theme at 10 videos or more, biggest first, with the month before beside each, which ones were first heard or are newly at 10, how many of each theme’s videos came from searches we added that month, one theme in full with its own voices, and who is talking.',
-    read: ['market', 'theme', 'kind', 'video', 'month', 'level', 'new'],
+    read: ['market', 'theme', 'kind', 'video', 'month', 'level', 'new', 'brand', 'rival'],
     cannot: [
       'Themes are grouped within the category, so a theme is a share of the category’s videos, never of the whole market. Makers’ videos stay in every count; a theme that is half or more makers’ own is listed with the other maker-led ones at the end.',
       '“New” means no earlier month holds the theme, and “Now 10+” that it had fewer than 10 videos the month before. Neither is a change: the month before had too few to call one.',
       'The grouping into themes is ours and it can change. When an update re-groups every theme, the names it gives are not marked “New”.',
       'Where a theme’s videos came from counts only the searches we first ran that month, so a theme found mostly by them may be ours as much as the market’s.',
       'Who is talking is grouped at an update over everything read to date, not over the month, and a video can carry more than one group, so those counts overlap and do not sum to a whole.',
-    ],
-  },
-  {
-    key: 'competitive',
-    // BRANDS (plan §2.5; the page is rebuilt with deploy 5, WP3.5, and the
-    // label follows lib/nav.ts). The counting rules are decision E's and the
-    // code's (lib/brands/mentions.ts, lib/brands/owners.ts,
-    // lib/pages/overview-market/brands.ts): every video a brand comes up in,
-    // counted once its hand check has passed, its own posts never counted as the
-    // market naming it, and the headline count without the videos our brand
-    // searches found, named by its column head (BRANDS_HEAD_ORGANIC). S17's
-    // ninety-day note is said here, never under a block.
-    tells: 'Which brands your market names and what is said around them: how many of the market’s videos named each brand you track, one brand in full over the last 90 days, what your market asks under their content, and what they post and say about themselves.',
-    read: ['brand', 'rival', 'market', 'video', 'level'],
-    cannot: [
+      // BRANDS (plan §2.5; the page is rebuilt with deploy 5, WP3.5, and the
+      // label follows lib/nav.ts). The counting rules are decision E's and the
+      // code's (lib/brands/mentions.ts, lib/brands/owners.ts,
+      // lib/pages/overview-market/brands.ts): every video a brand comes up in,
+      // counted once its hand check has passed, its own posts never counted as the
+      // market naming it, and the headline count without the videos our brand
+      // searches found, named by its column head (BRANDS_HEAD_ORGANIC). S17's
+      // ninety-day note is said here, never under a block.
       'A brand is counted in every video that names it, not every time it is said: in the caption, the hashtags, the account, what is said or shown on screen, or a comment written that month. It is counted only once a hand check of its matches has passed, because some names mean other things: until then it reads “not counted yet”, and a name that mostly means something else is not counted.',
       'A brand’s own posts are its posts, never your market naming it, so they are counted apart.',
       `The count, “${BRANDS_HEAD_ORGANIC}”, leaves out every video our own brand searches found, so our searching for a brand does not add to its count.`,
@@ -136,8 +128,36 @@ export const READING_CARDS: readonly ReadingCard[] = [
     ],
   },
   {
-    key: 'market',
-    // YOUR MOVES (plan §2.6, WP3.6): what you say and do, set against what
+    key: 'products',
+    // YOUR PRODUCTS (Design v2): a placeholder until the page lands (depth
+    // plan T5), so the card says what it is for and that nothing is read yet.
+    tells: 'What your market says about the products you sell. Nothing is read for them yet, and the page says so.',
+    read: ['market'],
+    cannot: [
+      'Until your products are read, it cannot tell you anything about them.',
+    ],
+  },
+  {
+    key: 'content',
+    // CONTENT (Design v2): until the Content page lands (depth plan T6) the
+    // address draws This week, so this is This week's card.
+    //
+    // THIS WEEK (plan §2.7): dated by the update, not by the month. Nothing is
+    // computed over a week alone (§9.1 #5): what came in are counts that add
+    // to months, and week by week counts videos and comments, never a share.
+    tells: 'What came in with the latest update: the videos and comments it brought into your market’s month, the themes heard for the first time, your market’s subjects, week by week, what is worth a reply, what worked, and anything unusual against the months before.',
+    read: ['update', 'week', 'market', 'month'],
+    cannot: [
+      'An update is not a period. Every figure on this page belongs to the month its comments were written in; the update is how much of that month arrived since the last one.',
+      'Nothing here is computed over a week alone. Week by week counts videos and comments, never a share of them.',
+      'Themes are re-grouped over everything we have read for you at every update, so most names first heard in an update are the same conversation under a different label. They are named only once they carry 10 videos in the month.',
+      'Moving now sets the month against the months before only where they were read the same way; until then it says why not.',
+      'Most weeks nothing is unusual, and the page says so rather than finding something. The unusual-week check needs three months read the same way, and says it is forming until then.',
+    ],
+  },
+  {
+    key: 'moves',
+    // YOUR MOVES (plan §2.6, WP3.6; /dashboard/moves since Design v2): what you say and do, set against what
     // your market asks. The rules are the page's: a post touches a question
     // on two or more words that are not common ones (the words checked are
     // listed), a dated move is read in the market as levels, and a
@@ -150,21 +170,6 @@ export const READING_CARDS: readonly ReadingCard[] = [
       'What the conversation did after you acted on advice is compared only once two months have been read in your audience since you decided. The month you decided in is on neither side.',
       'What we concluded is read over everything to date and dated by the update that concluded it, so it can reach past the month on the page.',
       'Advice here is grounded in what people said, not in your sales figures.',
-    ],
-  },
-  {
-    key: 'week',
-    // THIS WEEK (plan §2.7): dated by the update, not by the month. Nothing is
-    // computed over a week alone (§9.1 #5): what came in are counts that add
-    // to months, and week by week counts videos and comments, never a share.
-    tells: 'What came in with the latest update: the videos and comments it brought into your market’s month, the themes heard for the first time, your market’s subjects, week by week, what is worth a reply, what worked, and anything unusual against the months before.',
-    read: ['update', 'week', 'market', 'month'],
-    cannot: [
-      'An update is not a period. Every figure on this page belongs to the month its comments were written in; the update is how much of that month arrived since the last one.',
-      'Nothing here is computed over a week alone. Week by week counts videos and comments, never a share of them.',
-      'Themes are re-grouped over everything we have read for you at every update, so most names first heard in an update are the same conversation under a different label. They are named only once they carry 10 videos in the month.',
-      'Moving now sets the month against the months before only where they were read the same way; until then it says why not.',
-      'Most weeks nothing is unusual, and the page says so rather than finding something. The unusual-week check needs three months read the same way, and says it is forming until then.',
     ],
   },
   {
@@ -223,7 +228,7 @@ export const READING_PATH: readonly { when: string; what: string[] }[] = [
   {
     when: 'Each week',
     what: [
-      `Once Sunday’s update has landed, open ${surface('week').label}: what the latest update brought into your market’s month. Most weeks nothing is unusual, and that is the answer.`,
+      `Once Sunday’s update has landed, open ${surface('market').label}: what the latest update brought into your market’s month. Most weeks nothing is unusual, and that is the answer.`,
       'Answer what is worth a reply while the comments are still warm.',
     ],
   },
@@ -231,7 +236,7 @@ export const READING_PATH: readonly { when: string; what: string[] }[] = [
     when: 'Each month, once the month is done',
     what: [
       'Read the monthly report: your market in the month just ended, what it talked about and asked for, your subjects in it, the brands it named, and what changed and what was ours.',
-      `Date what you are going to do about it on ${surface('market').label}, so the months after it can be read beside it.`,
+      `Date what you are going to do about it on ${surface('moves').label}, so the months after it can be read beside it.`,
     ],
   },
   {

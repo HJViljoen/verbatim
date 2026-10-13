@@ -115,9 +115,9 @@ export const subjectsVoices: Block<SubjectsData> = {
     }
     const empty = subjectsVoices.emptyState(data)
     // The page's CURRENT sidebar label (plan §4.0; Conversation from WP2.4).
-    const conversation = surface('voice')
+    const conversation = surface('voices')
     const href = `${ctx.appUrl}${conversation.href}`
-    const footer = openLink(mode, href, `Hear these voices in ${conversation.label} →`)
+    const footer = openLink(mode, href, `Open ${conversation.label} →`)
     // THE SUBJECT IS IN THE TITLE. "Voices on this subject" is a caption on a
     // tile whose subject is named two tiles away and, in an export, on another
     // slide entirely.
@@ -253,8 +253,8 @@ function marketCite(v: SubjectVoice, mode: RenderMode): ReactNode {
  */
 function MarketVoices({ data, mode, appUrl }: { data: SubjectsData; mode: RenderMode; appUrl: string }) {
   const pane = data.selected
-  const voice = surface('voice')
-  const footer = openLink(mode, `${appUrl}${voice.href}`, `Hear these voices in ${voice.label} →`)
+  const voice = surface('voices')
+  const footer = openLink(mode, `${appUrl}${voice.href}`, `Open ${voice.label} →`)
   const title = pane ? `Voices on ${pane.name}` : subjectsVoices.title
   const empty = subjectsVoices.emptyState(data)
   if (!pane || empty) {

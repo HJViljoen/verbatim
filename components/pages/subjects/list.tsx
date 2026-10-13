@@ -215,7 +215,7 @@ export const subjectsList: Block<SubjectsData> = {
     // THE MARKET'S RAIL (WP2.2): every list the loader builds carries its
     // base; a list stored before WP2.2 has none and renders as sent (below).
     if (l.base) {
-      const voice = surface('voice')
+      const voice = surface('voices')
       const footer = empty ? null : openLink(mode, `${ctx?.appUrl ?? ''}${voice.href}`, `The rest is on ${voice.label} →`)
       // NO SUBJECT NAMED (Össur): one line (§2.13), in the plan's words, inside
       // a drawn block as the front page draws it (decision B 2: a waiting

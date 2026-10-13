@@ -415,7 +415,8 @@ export const overviewCategory: Block<OverviewData> = {
     if (isMarketPage(data)) return renderMarketKinds(data, mode, ctx.appUrl)
     const c = data.category
     const email = mode === 'email'
-    const href = `${ctx.appUrl}/dashboard/voice`
+    // Conversation's page, where /dashboard/voice lands since Design v2 (Voices).
+    const href = `${ctx.appUrl}${surface('voices').href}`
     const series = attentionSeries(c, data.month)
     // ONE REFUSAL, SAID ONCE (deploy 1 review). Where the block's verdicts
     // (kinds, mood, attention, movers) are all refused for the same month
@@ -509,7 +510,7 @@ export const overviewCategory: Block<OverviewData> = {
             behaviour rather than catching it. A control under N rows either
             belongs on each row or belongs to none of them; this one goes to
             the page unfiltered, and the reader chooses there. */}
-        {openLink(mode, `${ctx.appUrl}/dashboard/voice`, 'more · one click down →')}
+        {openLink(mode, `${ctx.appUrl}${surface('voices').href}`, 'more · one click down →')}
       </>
     ) : (
       <BlockEmpty mode={mode}>{c.kindsNote ?? `No kind carried a reading in ${longMonth(data.month)}.`}</BlockEmpty>
@@ -709,7 +710,7 @@ export const overviewCategory: Block<OverviewData> = {
         // what stops is drawing it a second time inside the block.
         mode={mode}
         meta={categoryMeta(c, data.month)}
-        footer={openLink(mode, href, `Open ${surface('voice').label} →`)}
+        footer={openLink(mode, href, `Open ${surface('voices').label} →`)}
         // "Nothing else moved clearly this month." into the footer note
         // (`main.category.footer`). It is a statement about what the block
         // DECLINED to say, which is metadata about the reading and not one of

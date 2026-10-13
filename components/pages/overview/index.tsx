@@ -168,7 +168,7 @@ export function OverviewPage({
   if (!data) {
     return (
       <PageFrame>
-        <SurfacePageBar nav="overview" params={params} />
+        <SurfacePageBar nav="market" params={params} />
         <PageGrid>
           <Tile col={12} row={2}>
             <TileEmpty>
@@ -196,7 +196,7 @@ export function OverviewPage({
     >
       <PageFrame className={market ? 'gap-6' : undefined}>
         <SurfacePageBar
-          nav="overview"
+          nav="market"
           params={params}
           // The brand, the month selector and "as at the {update} update ·
           // next update {date}" (25 Sep rulings, market-first WP1.2). No "How

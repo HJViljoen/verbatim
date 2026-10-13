@@ -630,16 +630,28 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - **The pages and navigation (pages build, 1 Oct).** Every client page is
   drawn to its approved artboard (`Page-*.dc.html`); a deviation is Heinrich's
   call, never a builder's. What the build fixed in place:
-  - **Navigation** (`lib/nav.ts`): ten surfaces in four unlabelled groups. The
+  - **Navigation** (`lib/nav.ts`; Design v2, depth plan T1, 13 Oct): nine
+    surfaces in three unlabelled groups: Dashboard · Market · Voices · Your
+    products · Content · Your moves, the Agent, then Studio · Settings. The
     Dashboard is `/dashboard` (nav key `home`, NO page key: page key
     `dashboard` names the legacy module that stored snapshots and Össur's
-    digest still render); Your market is `/dashboard/overview` (page key
-    `overview`), and `/dashboard?month=` lands there (`frontRedirect`). A
-    `revalidatePath('/dashboard')` revalidates `/dashboard/overview` too.
-    Brands is labelled Competitive and Ask is labelled Agent; keys and
-    routes are unchanged. Parked pages leave clients through
-    `TENANT_RETIRED` / `tenantAway` (the operator keeps them); Reports
-    redirects into the Studio with its query (`?group=sent&item=`, `?view=`).
+    digest still render). Market is `/dashboard/market` (page key
+    `overview`), Voices `/dashboard/voices` (`voice`), Content
+    `/dashboard/content` (`content`), Your moves `/dashboard/moves` (`market`,
+    deep link `?advice=`); Your products stores under nothing yet. PAGE KEYS
+    DID NOT MOVE, only addresses. The 1 Oct reading addresses
+    (`/dashboard/overview`, `/week`, `/voice`, `/competitive`, `/subjects`)
+    are redirect stubs with no loader, and ONE pure function maps every old
+    address with its params, `redirectFor` (`voice?theme=` → `market?conv=`,
+    `competitive?vs=` → `voices?brand=`, `subjects?item=` →
+    `market?subject=`, a month → `market?period=month&month=`, Your moves'
+    `market?rec|item|ledger` → `moves?advice=`, `/dashboard?month=` too),
+    pinned by `lib/nav-redirects.test.ts`. A bare `/dashboard/market` is
+    Market now, so a link meaning Your moves must say `/dashboard/moves`.
+    Parked pages leave clients through `TENANT_RETIRED` / `tenantAway` (the
+    operator keeps them); Reports redirects into the Studio with its query
+    (`?group=sent&item=`, `?view=`). Studio names a page key by
+    `pageKeyName` (a surface's label, else `RETIRED_PAGE_NAMES`).
   - **Studio** is shown to clients (`STUDIO_TENANT_VISIBLE`), but who reviews
     a build is ONE separate switch, `STUDIO_TENANT_REVIEWS` (false):
     `reviewAudience` and `mayReadHeld` read it, so a held build stays the

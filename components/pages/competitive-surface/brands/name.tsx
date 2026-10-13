@@ -98,7 +98,7 @@ export const competitiveName: Block<CompetitiveSurfaceData> = {
 
   render(data, mode = 'app', ctx) {
     const b = data.brands?.name ?? null
-    const moves = surface('market')
+    const moves = surface('moves')
     const footer = openLink(mode, `${ctx.appUrl}${moves.href}`, `See your own posts on ${moves.label} →`)
     return (
       <BlockFrame title={NAME_TITLE} mode={mode} footer={footer} roomy>

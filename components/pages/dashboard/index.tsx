@@ -114,7 +114,7 @@ const hero: R = (d, mode) => {
   const h = d.hero
   const app = mode === 'app'
   const claimEvidence = h.oneThing && h.voices > 0
-    ? { voices: h.voices, platforms: h.platforms, quotes: h.quotes.map((q) => q.text), href: `/dashboard/market?rec=${encodeURIComponent(h.oneThing.id)}`, hrefLabel: 'See all the voices in Market →' }
+    ? { voices: h.voices, platforms: h.platforms, quotes: h.quotes.map((q) => q.text), href: `/dashboard/moves?advice=${encodeURIComponent(h.oneThing.id)}`, hrefLabel: 'See all the voices in Market →' }
     : null
   return (
     <Tile exportKey="dashboard.hero" col={7} row={3} variant="hero" distribute="between" eyebrow="Executive brief · this update" meta={weekdayDate(d.runDate)}
@@ -127,7 +127,7 @@ const hero: R = (d, mode) => {
             {app
               ? (claimEvidence
                   ? <ClaimPopover evidence={claimEvidence}>{h.oneThing.title}</ClaimPopover>
-                  : <Link href="/dashboard/market" className="hover:underline">{h.oneThing.title}</Link>)
+                  : <Link href="/dashboard/moves" className="hover:underline">{h.oneThing.title}</Link>)
               : <span>{h.oneThing.title}</span>}
           </span>
         </span>
@@ -297,7 +297,7 @@ const recommendation: R = ({ hero: h }, mode) => {
       ) : undefined}
       footer={h.oneThing ? (
         app ? (
-          <Link href={`/dashboard/market?rec=${encodeURIComponent(h.oneThing.id)}`} className="after:absolute after:inset-0">
+          <Link href={`/dashboard/moves?advice=${encodeURIComponent(h.oneThing.id)}`} className="after:absolute after:inset-0">
             {grounded ? `${grounded} →` : 'Why, and the voices →'}
           </Link>
         ) : (grounded ?? undefined)
@@ -410,7 +410,7 @@ function BriefBody({ d, mode }: { d: D; mode: RenderMode }) {
           <p className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{priorityLabel(h.oneThing.priority)}</p>
           <p className="mt-1 text-[13.5px] font-semibold">{h.oneThing.title}</p>
           <p className="mt-1 text-[12.5px] text-secondary-foreground">{h.oneThing.reasoning}</p>
-          {app && <Link href={`/dashboard/market?rec=${encodeURIComponent(h.oneThing.id)}`} className="mt-2 inline-block text-[12px] font-medium underline underline-offset-2">See the full picture →</Link>}
+          {app && <Link href={`/dashboard/moves?advice=${encodeURIComponent(h.oneThing.id)}`} className="mt-2 inline-block text-[12px] font-medium underline underline-offset-2">See the full picture →</Link>}
         </div>
       )}
       {h.quotes.length > 0 && (
@@ -550,7 +550,7 @@ export function DashboardPage({ data: d, detail, params }: { data: DashboardData
       <PageBar title="Dashboard" context={d.context}>
         {d.updatesCount > 1 && <BarPill>Last {d.updatesCount} updates</BarPill>}
         <ExportMenu />
-        <HowToRead items={d.legendItems} open={detail === 'legend'} basePath="/dashboard" anchor="overview" />
+        <HowToRead items={d.legendItems} open={detail === 'legend'} basePath="/dashboard" anchor="market" />
       </PageBar>
 
       <PageGrid>

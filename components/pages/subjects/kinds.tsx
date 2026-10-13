@@ -218,7 +218,7 @@ export const subjectsKinds: Block<SubjectsData> = {
     // matters now that this page exports (a PDF and a share page have no
     // session to open Conversation with). The page's CURRENT sidebar label
     // (plan §4.0): Voice became Conversation with deploy 3 (WP2.4).
-    const conversation = surface('voice')
+    const conversation = surface('voices')
     const footer = openLink(mode, `${ctx.appUrl}${conversation.href}`, `Open ${conversation.label} →`)
 
     if (!pane || empty) {
@@ -336,7 +336,7 @@ export const subjectKindsTitle = (name: string | null): string => (name ? `What 
 function SubjectKinds({ data, mode, appUrl }: { data: SubjectsData; mode: RenderMode; appUrl: string }) {
   const pane = data.selected
   const email = mode === 'email'
-  const voice = surface('voice')
+  const voice = surface('voices')
   const footer = openLink(mode, `${appUrl}${voice.href}`, `Open ${voice.label} →`)
   const title = subjectKindsTitle(pane?.name ?? null)
   const k = pane?.kindsIn ?? null

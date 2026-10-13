@@ -66,7 +66,7 @@ export const weekSubjects: Block<WeekData> = {
     const s = { ...data.subjects, rows: split.rows, withheld: split.withheld }
     const email = mode === 'email'
     const empty = weekSubjects.emptyState(data)
-    const href = `${ctx.appUrl}/dashboard/subjects`
+    const href = `${ctx.appUrl}${surface('market').href}`
     const max = Math.max(1, ...s.rows.map((r) => r.monthVideos))
     // ONE SCALE ACROSS THE STRIP, NOT ONE PER COLUMN (review W2). `top` was
     // `Math.max(1, added, typical)` INSIDE each column, so six bars of one
@@ -396,7 +396,7 @@ function renderMarket(data: WeekData, mode: RenderMode, appUrl: string) {
   const s = { ...data.subjects, rows: split.rows, withheld: split.withheld }
   const n = s.market?.n ?? null
   const month = shortMonthName(s.market?.month ?? s.month)
-  const nav = surface('subjects')
+  const nav = surface('market')
   const footer = openLink(mode, `${appUrl}${nav.href}`, `Open ${nav.label} →`)
   const empty = weekSubjects.emptyState(data)
   const withheld = s.withheld ?? []

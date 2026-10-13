@@ -51,11 +51,12 @@ export async function dateMoveAction(_prev: SubjectFormState, form: FormData): P
     { ...target, title: String(form.get('title') ?? ''), datedOn },
   )
   if (!result.ok) return { ok: false, message: result.message }
-  // Where the move is read: Your moves (Y4 and the hero), and the front
-  // page's moves line.
-  revalidatePath('/dashboard/market')
+  // Where the move is read: Your moves (Y4 and the hero; /dashboard/moves
+  // since Design v2), the Dashboard, and Market, which took Your market's
+  // moves line with its address.
+  revalidatePath('/dashboard/moves')
   revalidatePath('/dashboard')
-  revalidatePath('/dashboard/overview')
+  revalidatePath('/dashboard/market')
   const day = moveDay(datedOn, databaseToday())
   return { ok: true, message: dateMoveSaid(typeof day === 'string' ? null : day.day), ...(result.value?.id ? { id: result.value.id } : {}) }
 }

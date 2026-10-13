@@ -205,7 +205,7 @@ export const marketSayHear: Block<MarketSurfaceData> = {
     const w = data.ways
     const email = mode === 'email'
     const empty = marketSayHear.emptyState(data)
-    const voice = surface('voice')
+    const voice = surface('voices')
     const footer = w.claims.length > 0 ? openLink(mode, `${ctx.appUrl}${voice.href}`, 'Hear these voices →') : undefined
     const subjects = w.claimSubjects ?? null
 

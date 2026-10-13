@@ -101,18 +101,18 @@ describe('voiceBoard (C2): nothing skipped', () => {
   it('opens the pane on the lead’s row with "in full below", and every other row is a link to its theme', () => {
     const markup = render(voiceBoard.render(voiceFixture(), 'app', ctx))
     expect(markup).toContain('in full below')
-    expect(markup).toContain('href="/dashboard/voice?theme=03cabe7e#theme"')
-    expect(markup).not.toContain('href="/dashboard/voice?theme=22e2445c#theme"')
+    expect(markup).toContain('href="/dashboard/voices?theme=03cabe7e#theme"')
+    expect(markup).not.toContain('href="/dashboard/voices?theme=22e2445c#theme"')
   })
 
   it('keeps the reader’s month on every theme link', () => {
     const data = voiceFixture({ params: { month: '2026-08' } })
-    expect(render(voiceBoard.render(data, 'app', ctx))).toContain('href="/dashboard/voice?month=2026-08&amp;theme=03cabe7e#theme"')
+    expect(render(voiceBoard.render(data, 'app', ctx))).toContain('href="/dashboard/voices?month=2026-08&amp;theme=03cabe7e#theme"')
   })
 
   it('counts the 83 themes at 3 to 9 in its footer link, and lists them only when asked', () => {
     const markup = render(voiceBoard.render(voiceFixture(), 'app', ctx))
-    expect(markup).toContain('href="/dashboard/voice?board=all#board"')
+    expect(markup).toContain('href="/dashboard/voices?board=all#board"')
     expect(renderText(voiceBoard.render(voiceFixture(), 'app', ctx))).toContain('83 more themes at 3 to 9 videos →')
     expect(render(voiceBoard.render(voiceFixture(), 'print', ctx))).not.toContain('more themes at 3 to 9')
   })

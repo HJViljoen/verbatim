@@ -7,12 +7,12 @@ import { AppSidebar } from './app-sidebar'
 import { LogOutButton } from './log-out-button'
 import { OpsNavGroup } from './ops/ops-nav'
 
-// THE SIDEBAR OF 1 OCT, AS IT PRINTS (`sidebar2.py`; the sidebar of every
-// `Page-*.dc.html` artboard). What a static render can pin: the ten rows in the
-// design's order and groups, no group label, the hairlines, the Agent's yellow
-// row, the active pill with no left bar, and Log out gone from the foot.
+// THE SIDEBAR OF DESIGN V2, AS IT PRINTS (the sidebar of every `E*.dc.html`
+// board). What a static render can pin: the nine rows in the design's order
+// and groups, no group label, the hairlines, the Agent's yellow row, the
+// active pill with no left bar, and Log out gone from the foot.
 
-const path = vi.hoisted(() => ({ current: '/dashboard/voice' }))
+const path = vi.hoisted(() => ({ current: '/dashboard/voices' }))
 vi.mock('next/navigation', () => ({ usePathname: () => path.current }))
 vi.mock('@/app/login/actions', () => ({ signOut: async () => {} }))
 
@@ -23,47 +23,60 @@ const sidebar = (at: string, ops?: React.ReactNode) => {
 const rows = (html: string) => [...html.matchAll(/<a [^>]*href="([^"]+)"[^>]*>.*?<span>([^<]+)<\/span><\/a>/g)].map((m) => [m[2], m[1]])
 
 describe('the sidebar', () => {
-  it('draws the ten in the design\'s order, at their addresses', () => {
-    expect(rows(sidebar('/dashboard/voice'))).toEqual([
+  it('draws the nine in the design\'s order, at their addresses', () => {
+    expect(rows(sidebar('/dashboard/voices'))).toEqual([
       ['Dashboard', '/dashboard'],
-      ['Your market', '/dashboard/overview'],
-      ['This week', '/dashboard/week'],
-      ['Conversation', '/dashboard/voice'],
-      ['Competitive', '/dashboard/competitive'],
-      ['Subjects', '/dashboard/subjects'],
-      ['Your moves', '/dashboard/market'],
+      ['Market', '/dashboard/market'],
+      ['Voices', '/dashboard/voices'],
+      ['Your products', '/dashboard/products'],
+      ['Content', '/dashboard/content'],
+      ['Your moves', '/dashboard/moves'],
       ['Agent', '/dashboard/agent'],
       ['Studio', '/dashboard/studio'],
       ['Settings', '/dashboard/settings'],
     ])
   })
 
-  it('carries no group label, no Logout, no Reports and none of the old labels', () => {
-    const text = renderText(<SidebarProvider><AppSidebar /></SidebarProvider>)
-    for (const gone of ['Intelligence', 'Account', 'Logout', 'Log out', 'Reports', 'Brands', 'Ask']) {
-      expect(text.split(' '), gone).not.toContain(gone)
+  it('draws each row with its board glyph', () => {
+    const html = sidebar('/dashboard')
+    const glyph = (label: string) => {
+      const end = html.indexOf(`<span>${label}</span>`)
+      return html.slice(html.lastIndexOf('<a ', end), end)
     }
+    expect(glyph('Market')).toContain('lucide-message-square-text')
+    expect(glyph('Voices')).toContain('lucide-users')
+    expect(glyph('Your products')).toContain('lucide-package')
+    expect(glyph('Content')).toContain('lucide-square-play')
+    expect(glyph('Your moves')).toContain('lucide-target')
   })
 
-  it('separates the groups by two hairlines, 12px in and 8px above and below', () => {
+  it('carries no group label, no Logout, no Reports and none of the old labels', () => {
+    const text = renderText(<SidebarProvider><AppSidebar /></SidebarProvider>)
+    for (const gone of ['Intelligence', 'Account', 'Logout', 'Log out', 'Reports', 'Brands', 'Ask', 'Conversation', 'Competitive', 'Subjects']) {
+      expect(text.split(' '), gone).not.toContain(gone)
+    }
+    for (const gone of ['Your market', 'This week']) expect(text, gone).not.toContain(gone)
+  })
+
+  it('separates the groups by two hairlines, 12px in and 8px above and below: under the six, and over the foot', () => {
     const html = sidebar('/dashboard')
     const hairlines = html.match(/<div aria-hidden="true" class="mx-3 my-2 h-px shrink-0 bg-\[#E4E2DC\]"><\/div>/g) ?? []
     expect(hairlines).toHaveLength(2)
-    // In order: Competitive · hairline · Subjects … Your moves · hairline · Agent.
+    // In order: … Your moves · hairline · Agent … hairline · Studio · Settings.
     const at = (s: string) => html.indexOf(s)
-    expect(at('>Competitive<')).toBeLessThan(html.indexOf('h-px'))
-    expect(html.indexOf('h-px')).toBeLessThan(at('>Subjects<'))
-    expect(html.lastIndexOf('h-px')).toBeGreaterThan(at('>Your moves<'))
-    expect(html.lastIndexOf('h-px')).toBeLessThan(at('>Agent<'))
+    expect(at('>Your moves<')).toBeLessThan(html.indexOf('h-px'))
+    expect(html.indexOf('h-px')).toBeLessThan(at('>Agent<'))
+    expect(html.lastIndexOf('h-px')).toBeGreaterThan(at('>Agent<'))
+    expect(html.lastIndexOf('h-px')).toBeLessThan(at('>Studio<'))
   })
 
   it('marks the active page with the pale-yellow pill (a selected state), weight and an orange-text icon, and no left bar (the stripe ban)', () => {
-    const html = sidebar('/dashboard/voice')
+    const html = sidebar('/dashboard/voices')
     expect(html).toContain('aria-current="page"')
     expect(html.match(/aria-current="page"/g)).toHaveLength(1)
     const active = html.slice(html.lastIndexOf('<a ', html.indexOf('aria-current="page"')), html.indexOf('</a>', html.indexOf('aria-current="page"')))
     expect(active).toContain('data-active="true"')
-    expect(active).toContain('>Conversation<')
+    expect(active).toContain('>Voices<')
     expect(active).toContain('data-[active=true]:bg-accent')
     expect(active).toContain('data-[active=true]:font-semibold')
     expect(active).toContain('text-orange-text')
@@ -82,9 +95,12 @@ describe('the sidebar', () => {
     }
   })
 
-  it('lights the Dashboard on /dashboard alone, and the Studio from Reports\' redirect', () => {
+  it('lights the Dashboard on /dashboard alone, each page on its own address, and the Studio from Reports\' redirect', () => {
     expect(sidebar('/dashboard')).toMatch(/aria-current="page"[^>]*>.*?<span>Dashboard<\/span>/)
-    expect(sidebar('/dashboard/overview')).toMatch(/aria-current="page"[^>]*>.*?<span>Your market<\/span>/)
+    expect(sidebar('/dashboard/market')).toMatch(/aria-current="page"[^>]*>.*?<span>Market<\/span>/)
+    expect(sidebar('/dashboard/products')).toMatch(/aria-current="page"[^>]*>.*?<span>Your products<\/span>/)
+    expect(sidebar('/dashboard/content')).toMatch(/aria-current="page"[^>]*>.*?<span>Content<\/span>/)
+    expect(sidebar('/dashboard/moves')).toMatch(/aria-current="page"[^>]*>.*?<span>Your moves<\/span>/)
     expect(sidebar('/dashboard/reports')).toMatch(/aria-current="page"[^>]*>.*?<span>Studio<\/span>/)
   })
 

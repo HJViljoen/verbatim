@@ -166,7 +166,7 @@ export const overviewForYou: Block<OverviewData> = {
   question: 'What does your market say that your posts have or have not taken up?',
 
   render(data, mode = 'app', ctx) {
-    const moves = surface('market')
+    const moves = surface('moves')
     const footer = openLink(mode, `${ctx.appUrl}${moves.href}`, `Open ${moves.label} →`)
     const empty = overviewForYou.emptyState(data)
     // No line resting on a subject that is not ready (T0a, OV-49; ruling U6),

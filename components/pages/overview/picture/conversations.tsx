@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { fmtInt } from '@/lib/format'
+import { surface } from '@/lib/nav'
 import type { ConversationsBlock, KindsBlock } from '@/lib/pages/overview-picture'
 import { Bar, Card, HAIR, MUTED, numberWord, TitleRow, TitleStack, WhoLine } from './parts'
 
@@ -8,8 +9,10 @@ import { Bar, Card, HAIR, MUTED, numberWord, TitleRow, TitleStack, WhoLine } fro
 // every conversation. (d) "What people do in the comments": the six kinds on
 // the market's base, levels only, each with who the videos are about.
 
-/** Where "Every conversation" goes: the Conversation page. */
-export const CONVERSATION_HREF = '/dashboard/voice'
+/** Where "Every conversation" goes: the Conversation page, which Voices
+ *  draws until the Market and Voices pages land (Design v2; the old
+ *  `/dashboard/voice` redirects there). */
+export const CONVERSATION_HREF = surface('voices').href
 
 export function ConversationsBlockView({ block, brand, noun }: { block: ConversationsBlock; brand: string; noun: string | null }) {
   if (block.rows.length === 0) return null

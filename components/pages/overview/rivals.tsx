@@ -189,7 +189,7 @@ export const overviewRivals: Block<OverviewData> = {
     const r = data.rivals
     const email = mode === 'email'
     // The page by its current sidebar label (§4.0): Brands from deploy 5.
-    const nav = surface('competitive')
+    const nav = surface('voices')
     const href = `${ctx.appUrl}${nav.href}`
     const footer = email
       ? null
@@ -541,7 +541,7 @@ export function MarketBrandsBody({ b, mode, wider }: { b: BrandsRead; mode: Rend
  *  Until then, Competitive lists …") inside a drawn block (decision B 2). The
  *  footer links Competitive by its current sidebar label. */
 function renderMarketBrands(data: OverviewData, mode: RenderMode, appUrl: string) {
-  const nav = surface('competitive')
+  const nav = surface('voices')
   const footer = openLink(mode, `${appUrl}${nav.href}`, `Open ${nav.label} →`)
   const b = data.brands ?? brandsBlockFor(data.reading?.asAt ?? null, { paused: data.reading?.paused ?? false })
   return (

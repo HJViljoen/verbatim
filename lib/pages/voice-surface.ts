@@ -16,6 +16,7 @@ import { loadAppPairOn } from '../reading/gather-flags'
 import { pooledDenominators } from '../reading/market'
 import { freezeStateFor, isMissingMonthTable } from '../reading/monthly'
 import { MONTH_PARAM, readingAnchor, windowEnd, type ReadingMonth } from '../reading/reading-month'
+import { surface } from '../nav'
 import { loadDeliveredRuns, loadReadingSchedule, marketRivalAudiences, readingViewFrom, type OtherMonth } from '../reading/reading-view'
 import { monthStartOf } from '../reading/month-key'
 import { loadMonthSeries, type ReadingHandle } from '../reading/read'
@@ -308,8 +309,14 @@ const round1 = (n: number): number => Math.round(n * 10) / 10
 const pctOf = (k: number | null | undefined, n: number | null | undefined): number | null =>
   k == null || n == null || n <= 0 ? null : round1((k / n) * 100)
 
+/** This page's own address (Voices draws it until its own page lands). */
+const VOICES = surface('voices').href
+
 /**
- * Every href on this page, with the reader's month kept.
+ * Every href on this page, with the reader's month kept. The page is at
+ * /dashboard/voices since Design v2 (Voices draws it until its own page
+ * lands), so its links stay on it; an old `/dashboard/voice` link lands there
+ * too, or on Market for a theme (lib/nav.ts `redirectFor`).
  *
  * `?month=` travels (the bar's month selector wrote it, and a click on a
  * theme must not jump the page back to the reading month), and so do the brand
@@ -329,7 +336,7 @@ export function voiceSurfaceHref(
     if (value) qs.set(key, value)
   }
   const s = qs.toString()
-  return s ? `/dashboard/voice?${s}` : '/dashboard/voice'
+  return s ? `${VOICES}?${s}` : VOICES
 }
 
 /** The platform mix of one month, largest first, with a share each. */
@@ -1013,16 +1020,16 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
         voices: paneVoices.map((c) => voiceOf(c)),
         chip,
         isLead,
-        // The theme in full on Conversation (`?theme=`): the parked Content
+        // The theme in full on this page (`?theme=`): the parked Content
         // page retired for clients on 1 Oct and only redirects.
-        videosHref: `/dashboard/voice?theme=${encodeURIComponent(open.registryId)}`,
+        videosHref: `${VOICES}?theme=${encodeURIComponent(open.registryId)}`,
         askHref: askAboutTheme(open),
         notes: [],
       }
     : {
         state: 'none', id: null, label: 'No theme is open', kind: null, kindLabel: null, makerSentence: null,
         flags: [], k: null, n: null, prev: null, provenance: null, kinds: null, voices: [], chip,
-        isLead: false, videosHref: '/dashboard/voice', askHref: '/dashboard/agent', notes: [noThemeOpen(month)],
+        isLead: false, videosHref: VOICES, askHref: '/dashboard/agent', notes: [noThemeOpen(month)],
       }
 
   // ── the market in the month ─────────────────────────────────────────────

@@ -72,7 +72,7 @@ export const monthlySubjects = fromFrontPage({
   title: MARKET_SUBJECTS_TITLE,
   block: overviewSubjects,
   link: () => {
-    const page = surface('subjects')
+    const page = surface('market')
     return { href: page.href, label: `Open ${page.label} →` }
   },
   email: subjectsEmail,

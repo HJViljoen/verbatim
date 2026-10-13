@@ -2607,13 +2607,16 @@ async function loadRegistryLabels(supabase: SupabaseClient, clientId: string): P
 }
 
 /** The ledger's own deep link, so the digest's `?rec=<id>` keeps landing on the
- *  row it names once that link points here. */
+ *  row it names once that link points here. Your moves is at /dashboard/moves
+ *  since Design v2 and names a row with `?advice=` (its route hands that to
+ *  this loader as `?item=`); an old `?item=` or `?rec=` link to
+ *  /dashboard/market lands there too (lib/nav.ts `redirectFor`). */
 export function marketSurfaceHref(lineageId?: string | null, params: Record<string, string | undefined> = {}): string {
   const q = new URLSearchParams()
-  for (const [k, v] of Object.entries(params)) if (typeof v === 'string' && v !== '' && k !== 'item' && k !== 'rec') q.set(k, v)
-  if (lineageId) q.set('item', lineageId)
+  for (const [k, v] of Object.entries(params)) if (typeof v === 'string' && v !== '' && k !== 'item' && k !== 'rec' && k !== 'advice') q.set(k, v)
+  if (lineageId) q.set('advice', lineageId)
   const s = q.toString()
-  return s ? `/dashboard/market?${s}` : '/dashboard/market'
+  return s ? `/dashboard/moves?${s}` : '/dashboard/moves'
 }
 
 /**

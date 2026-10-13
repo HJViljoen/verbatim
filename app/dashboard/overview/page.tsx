@@ -1,35 +1,18 @@
-// YOUR MARKET AT /dashboard/overview (1 Oct; page review §5.1). It was the
-// front page, in the `(front)` route group so its loader wrapped it alone
-// (sw-2 item 8); the Dashboard took `/dashboard`, and this folder is its own
-// segment now, so the loader beside it still wraps this page and no other.
-//
-// "THE BIGGER PICTURE" (pages build, MARKET, to Page-Your-market.dc.html):
-// what holds across the record (the newest long-run read), where your market
-// stands, the biggest conversations, and what people do in the comments
-// (lib/pages/overview-picture.ts, components/pages/overview/picture).
-//
-// THE LEGACY OVERVIEW IS STILL REGISTERED, AND IS NO LONGER ON A ROUTE.
-// `OverviewPage` / `loadOverview` stay for the monthly, the export module and
-// stored snapshots (`components/pages/overview`), as the legacy dashboard did
-// before it: they keep rendering inside the artefacts that already name them.
-import { getSessionContext } from '@/lib/auth'
-import { readingHandle } from '@/lib/reading/read'
-import { loadMarketPicture } from '@/lib/pages/overview-picture'
-import { MarketPicturePage } from '@/components/pages/overview/picture'
-import type { Metadata } from 'next'
-import { surface } from '@/lib/nav'
+import { redirect } from 'next/navigation'
+import { retiredTo, type SearchProps } from '@/lib/nav'
 
-// The tab's title is the page's own name (finish-list item 25 polish; the root
-// layout's template adds ' · Verbatim').
-export const metadata: Metadata = { title: surface('overview').label }
-
-export default async function Page({
-  searchParams,
-}: {
-  searchParams?: Promise<Record<string, string | undefined>>
-}) {
-  const sp = (await searchParams) ?? {}
-  const { supabase, clientId } = await getSessionContext()
-  const data = await loadMarketPicture({ supabase, clientId, reading: readingHandle(clientId), params: sp })
-  return <MarketPicturePage data={data} />
+// YOUR MARKET MOVED INTO MARKET (Design v2, decision 6 of the depth plan).
+// Its month, where the market stands and the biggest conversations are
+// Market's. `?month=` lands on Market's month view (`?period=month&month=`):
+// the monthly email linked a month here from 1 Oct.
+//
+// Its page keys, modules and block keys stay registered, so a stored report
+// or share link renders as it did; only the address moved. A thin page.tsx
+// calling redirect() (the house pattern, never next.config.ts), with NO
+// loading.tsx above it: a Suspense boundary would stream the shell first and
+// turn the 307 into a client-side hop (lib/dashboard-loading.test.ts INHERITS).
+// The mapping is lib/nav.ts `redirectFor`, held to a table of old links by
+// lib/nav-redirects.test.ts.
+export default async function Page({ searchParams }: SearchProps) {
+  redirect(retiredTo('/dashboard/overview', (await searchParams) ?? {}))
 }

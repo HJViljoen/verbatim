@@ -207,7 +207,7 @@ export const overviewArrivals: Block<OverviewData> = {
   question: 'What came into your market with the latest update?',
 
   render(data, mode = 'app', ctx) {
-    const week = surface('week')
+    const week = surface('market')
     const open = openLink(mode, `${ctx.appUrl}${week.href}`, `Open ${week.label} →`)
     // THE METHOD IS HOW TO READ'S (25 Sep rulings): a link, beside the other.
     const weeks = overviewWeeksShown(data.weeks)

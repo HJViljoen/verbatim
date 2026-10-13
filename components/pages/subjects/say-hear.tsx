@@ -129,7 +129,7 @@ export const subjectsSayHear: Block<SubjectsData> = {
   render(data, mode = 'app', ctx) {
     const empty = subjectsSayHear.emptyState(data)
     const email = mode === 'email'
-    const moves = surface('market')
+    const moves = surface('moves')
     const footer = openLink(mode, `${ctx.appUrl}${moves.href}`, `Open ${moves.label} →`)
     const rows = data.sayHearClaims.slice(0, SAY_HEAR_SHOWN)
 

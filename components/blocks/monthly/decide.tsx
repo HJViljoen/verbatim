@@ -88,7 +88,7 @@ export const monthlyDecide: MonthlyBlock = {
   question: 'What does this month ask of us?',
 
   render(data, mode, ctx) {
-    const page = surface('market')
+    const page = surface('moves')
     const footer = sectionFooter(mode, ctx, { href: page.href, label: `Open ${page.label} →` })
     const empty = monthlyDecide.emptyState(data)
     let body: ReactNode

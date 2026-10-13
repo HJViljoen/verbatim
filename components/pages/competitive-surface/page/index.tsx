@@ -33,7 +33,7 @@ export function competitiveBlocks(b: BrandsPageData, client: string): Competitiv
 
 export function CompetitivePage({ data }: { data: CompetitiveSurfaceData }) {
   const b = data.brands
-  const title = surface('competitive').label
+  const title = surface('voices').label
   if (!b) {
     return (
       <PageFrame className="gap-[22px] leading-[normal]">

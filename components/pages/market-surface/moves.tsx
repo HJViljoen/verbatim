@@ -345,7 +345,7 @@ export const marketMoves: Block<MarketSurfaceData> = {
     const m = data.moves
     const email = mode === 'email'
     const empty = marketMoves.emptyState(data)
-    const subjects = surface('subjects')
+    const subjects = surface('market')
     const footer = openLink(mode, `${ctx.appUrl}${subjects.href}`, 'Track a subject →')
 
     // WP3.6 Y4: A PAGE BUILT BY THE MARKET-FIRST LOADER CARRIES `market`, and
