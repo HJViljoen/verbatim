@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { Box } from 'lucide-react'
 import { CARD, CardHead, CatalogueShelf, ShelfLegend, type ShelfColumn } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
-import { PANEL_ID, productsBasis, sharePct, shelfColumns, SUBJECT_NOT_MEASURED, type ProductsData, type ShelfCategoryView } from '@/lib/pages/v2/products'
+import { PANEL_ID, productsBasis, sharePct, SHELF_TILES, shelfColumns, SUBJECT_NOT_MEASURED, type ProductsData, type ShelfCategoryView } from '@/lib/pages/v2/products'
 import { cn } from '@/lib/utils'
 import { OLINK, VerdictBadge } from './parts'
 
@@ -36,11 +36,14 @@ export function shelfColumn(c: ShelfCategoryView, monthName: string): ShelfColum
     note: c.videos == null || c.videos === 0
       ? null
       : c.lead
-        ? <>{c.lead.label}{c.subjectsPending ? ',' : ' leads,'} <span data-copy="level">{fmtInt(c.lead.k)} of {fmtInt(c.videos)}</span></>
+        ? <>{c.lead.label}{c.leads ? ' leads,' : ','} <span data-copy="level">{fmtInt(c.lead.k)} of {fmtInt(c.videos)}</span></>
         : c.subjectsPending
           ? <span className="text-muted-foreground">What it’s about · {SUBJECT_NOT_MEASURED}</span>
           : null,
-    products: c.products.map((p) => ({ id: p.id, name: p.name, videos: p.videos, href: p.href, flag: p.flag })),
+    // The board's height: the first SHELF_TILES tiles (the most videos
+    // first, `buildShelf`), then "+N more" into the category's panel.
+    products: c.products.slice(0, c.products.length > SHELF_TILES ? SHELF_TILES : c.products.length).map((p) => ({ id: p.id, name: p.name, videos: p.videos, href: p.href, flag: p.flag })),
+    more: c.products.length > SHELF_TILES ? { count: c.products.length - SHELF_TILES, href: c.href } : null,
     unclear: c.unclear > 0 ? { count: c.unclear, href: c.unclearHref } : null,
   }
 }

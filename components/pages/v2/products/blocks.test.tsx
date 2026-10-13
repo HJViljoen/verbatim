@@ -3,7 +3,7 @@ import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { bandVerdict } from '@/lib/reading/verdicts'
 import { ossurLinersFixture, ossurNaviiFixture, ossurProductsFixture, ossurSealInXFixture, ossurTodayFixture, PRODUCT_IDS, PRODUCTS_FIXTURES } from '@/lib/pages/v2/products-fixture'
-import type { CategoryPanel, GapStandout, ProductPanel } from '@/lib/pages/v2/products'
+import { SHELF_TILES, type CategoryPanel, type FocusStandout, type GapStandout, type ProductPanel } from '@/lib/pages/v2/products'
 import { PRODUCT_TAG_COPY } from '@/lib/products/tags'
 import { CatalogueCard, CatalogueFrame, shelfColumn } from './shelf'
 import { emptyTitle, shareWords, StandoutCard, StandoutFrames, Standouts, SQUARES_MAX } from './standouts'
@@ -262,7 +262,8 @@ describe('the four places, in production\'s thin state', () => {
     const d = PRODUCTS_FIXTURES['ossur-thin']()
     const node = <Standouts slots={d.slots} monthName={d.monthName} />
     const text = renderText(node)
-    expect(text).toContain('New Nothing came up for the first time in September Jun Jul Sep Newest on your shelf: Proprio Foot, first named in August. Open →')
+    // Every dot of a short strip is named.
+    expect(text).toContain('New Nothing came up for the first time in September Jun Jul Aug Sep Newest on your shelf: Proprio Foot, first named in August. Open →')
     expect(render(node)).toContain('aria-label="No product came up for the first time in September."')
     expect(text).toContain('Feet videos with praise in their comments 12 of its 29 videos')
     expect(text).not.toMatch(/Most Feet videos/)
@@ -328,9 +329,9 @@ describe('ruling U6, as drawn: a provisional subject prints its name and "Not me
     expect(text.match(/What it’s about · Not measured yet/g)).toHaveLength(6)
     assertCopyContract(<CatalogueCard data={d} />)
     // Some ready, some not: the ready one's level, but not "leads" over the rest.
-    const partial = { ...d.shelf[0], lead: { label: 'Fit & comfort', k: 12 }, subjectsPending: true }
+    const partial = { ...d.shelf[0], lead: { label: 'Fit & comfort', k: 12 }, subjectsPending: true, leads: false }
     expect(renderText(<>{shelfColumn(partial, 'September').note}</>)).toBe('Fit & comfort, 12 of 23')
-    expect(renderText(<>{shelfColumn({ ...partial, subjectsPending: false }, 'September').note}</>)).toBe('Fit & comfort leads, 12 of 23')
+    expect(renderText(<>{shelfColumn({ ...partial, subjectsPending: false, leads: true }, 'September').note}</>)).toBe('Fit & comfort leads, 12 of 23')
   })
 
   it('the panel: each subject by name with "Not measured yet" where its bar and count would be; the comparison keeps its rows, every cell empty', () => {
@@ -338,11 +339,51 @@ describe('ruling U6, as drawn: a provisional subject prints its name and "Not me
     const node = <CategoryPanelView panel={panel} monthName="September" canTag />
     const text = renderText(node)
     expect(text).toContain('What it’s about · of 23 Choosing the right device Not measured yet Community & encouragement Not measured yet Cost & access Not measured yet Fit & comfort Not measured yet')
-    expect(text).toContain('Your products against liners in general What it’s about All liners Iceross Seal-In X Iceross Dermo Iceross Seal-In V Choosing the right device – none')
+    expect(text).toContain('Your products against liners in general What it’s about All liners Iceross Seal-In X Iceross Dermo Iceross Seal-In V Choosing the right device · not measured yet · not measured yet')
+    expect(text).not.toContain('– none')
     expect(text).toContain('What these videos are about: Not measured yet. A subject is counted here once its check has passed.')
     expect(text).not.toContain('Each count is videos')
     // Kinds are not subjects: still counted.
     expect(text).toContain('What people did · of 23 Complaints in the comments 11')
     assertCopyContract(node)
+  })
+})
+
+describe('the fresh check\'s fixes on the parity pass, as drawn', () => {
+  const focus = (over: Partial<FocusStandout>): FocusStandout => ({
+    kind: 'focus', open: { kind: 'group', id: 'g' }, href: '/dashboard/products?group=g#category-panel', name: 'Bracing & Supports', where: 'Bracing & Supports',
+    subject: 'Fit & comfort', level: { k: 5, n: 12 }, ranked: true, ...over,
+  })
+
+  it('the subject card says a rank only where the subject leads outright; otherwise the level alone', () => {
+    const ranked = renderText(<StandoutCard s={focus({})} monthName="September" tier="next" />)
+    expect(ranked).toContain('Bracing & Supports talk is most often about Fit & comfort 5 of its 12 videos')
+    expect(ranked).toContain('More than any other subject in its videos.')
+    // A tie, or a pending subject beside it: no "most often", no "more than any other".
+    const level = renderText(<StandoutCard s={focus({ ranked: false })} monthName="September" tier="next" />)
+    expect(level).toContain('Bracing & Supports videos about Fit & comfort 5 of its 12 videos')
+    expect(level).not.toMatch(/most often|more than any other/i)
+    // The pick's "mostly" is its level (half or more); the rank still needs `ranked`.
+    const pick = renderText(<StandoutCard s={focus({ ranked: false, level: { k: 7, n: 12 } })} monthName="September" tier="pick" />)
+    expect(pick).toContain('Bracing & Supports talk is mostly about Fit & comfort 7 of its 12 videos')
+    expect(pick).not.toMatch(/more than any other/i)
+    assertCopyContract(<StandoutCard s={focus({ ranked: false })} monthName="September" tier="next" />)
+  })
+
+  it('the shelf keeps the board\'s height: eight tiles, the most videos first, then "+N more" into the category\'s panel', () => {
+    const d = PRODUCTS_FIXTURES['ossur-today']()
+    const feet = d.shelf.find((c) => c.name === 'Feet')!
+    expect(feet.products).toHaveLength(20)
+    const col = shelfColumn(feet, 'September')
+    expect(col.products).toHaveLength(SHELF_TILES)
+    expect(col.products.slice(0, 3).map((p) => p.name)).toEqual(['Pro-Flex XC', 'Proprio Foot', 'Pro-Flex Terra'])
+    expect(col.more).toEqual({ count: 12, href: feet.href })
+    const m = render(<CatalogueCard data={d} />)
+    // Liners (10), Feet (20), Knees (10) and Bracing & Supports (15).
+    expect(m.match(/data-more=""/g)).toHaveLength(4)
+    expect(renderText(<CatalogueCard data={d} />)).toContain('Pro-Flex LP Align – no videos + 12 more →')
+    // A column at the cap or under it has no "more".
+    expect(shelfColumn(d.shelf.find((c) => c.name === 'Hands')!, 'September').more).toBeNull()
+    assertCopyContract(<CatalogueCard data={d} />)
   })
 })

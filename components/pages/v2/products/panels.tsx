@@ -119,6 +119,7 @@ function CompareSection({ compare, title, products, monthName }: { compare: Comp
         columns={compare.columns}
         rows={compare.rows.map((r) => ({ key: r.key, label: r.label, cells: r.cells }))}
         label={title}
+        emptyLabel={compare.empty === 'pending' ? 'not measured yet' : compare.empty === 'not_read' ? 'not read' : 'none'}
       />
       <p className="m-0 text-[12.5px] leading-[1.5] text-muted-foreground">
         {compare.empty === 'pending' ? null : <>Each count is videos, out of that column’s total.{' '}</>}

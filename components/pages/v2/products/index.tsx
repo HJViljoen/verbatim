@@ -117,12 +117,15 @@ export function shelfNotch(data: Pick<ProductsData, 'shelf' | 'panel'>): PerBrea
 export function ProductsPage({ data }: { data: ProductsData }) {
   const panel = data.panel
   const notch = shelfNotch(data)
+  // The switch, wherever there is a month to switch to (a month not read
+  // yet included: the way back to one that is).
+  const showSwitch = data.months.length >= 2 && data.months.some((m) => m.current)
   return (
     <PageFrame className="gap-5 leading-[normal]">
       <PageBar title={surface('products').label} meta={<ProductsMeta data={data} />}>
-        {data.months.length >= 2 ? <div className="max-lg:hidden"><MonthSwitch data={data} /></div> : null}
+        {showSwitch ? <div className="max-lg:hidden"><MonthSwitch data={data} /></div> : null}
       </PageBar>
-      {data.months.length >= 2 ? <div className="-mt-2 lg:hidden"><MonthSwitch data={data} /></div> : null}
+      {showSwitch ? <div className="-mt-2 lg:hidden"><MonthSwitch data={data} /></div> : null}
       {data.state !== 'ready' ? <ProductsEmpty data={data} /> : (
         <>
           <Standouts slots={data.slots} monthName={data.monthName} />

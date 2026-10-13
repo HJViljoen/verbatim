@@ -186,9 +186,11 @@ export interface ShelfCategoryView {
   /** What most of its videos are about (the top READY subject), where read. */
   lead: { label: string; k: number } | null
   /** Some of the client's subjects are not measured yet (`Crosses.pending`):
-   *  the head names no subject as leading over them, and with no ready one
-   *  says SUBJECT_NOT_MEASURED. */
+   *  with no ready one, the head says SUBJECT_NOT_MEASURED. */
   subjectsPending: boolean
+  /** The lead leads (`topRanked`): strictly ahead of every other subject,
+   *  none pending. Otherwise the head prints its level without "leads". */
+  leads: boolean
   /** Videos about one of the client's products here, not which. */
   unclear: number
   products: ShelfProductView[]
@@ -254,6 +256,11 @@ export interface FocusStandout extends StandoutBase {
   kind: 'focus'
   subject: string
   level: Level
+  /** The subject is ahead of every other the set could hold: strictly more
+   *  videos than the next ready one, and no subject of the client's is
+   *  pending (`topRanked`). Only then may the card say "more than any
+   *  other"; otherwise it prints the level alone. */
+  ranked: boolean
 }
 
 export type Standout = FirstStandout | GapStandout | GeneralStandout | PraisedStandout | FocusStandout
@@ -453,18 +460,21 @@ export const SWITCH_MONTHS = 3
 /**
  * THE BAR'S SWITCH (the boards' period switch, in the months this page reads
  * by: products are read per month only, so "This week" and "Over time" would
- * be views with nothing behind them): the latest SWITCH_MONTHS months that
- * hold a reading, oldest first, the page's own month marked. Where the page
- * reads an older month, it takes the oldest place so it is always marked.
- * "so far" on the calendar month of `now`. PURE.
+ * be views with nothing behind them): SWITCH_MONTHS contiguous months around
+ * the page's own (the months read, and the page's month even where it is not
+ * read yet, so a month with no reading still has a way back), oldest first,
+ * the page's marked; "so far" on the calendar month of `now`. Empty where
+ * there is nothing to switch to. PURE.
  */
 export function monthOptions(rows: readonly ProductMonthRow[], month: string, params: ProductsParams, now: string | null): MonthOption[] {
+  void params
   const m = monthStartOf(month)
-  const read = [...new Set(rows.map((r) => monthStartOf(r.month)))].sort()
-  const latest = read.slice(-SWITCH_MONTHS)
-  const shown = latest.includes(m) || !read.includes(m) ? latest : [m, ...latest.slice(1)]
+  const months = [...new Set([...rows.map((r) => monthStartOf(r.month)), m])].sort()
+  if (months.length < 2) return []
+  const at = months.indexOf(m)
+  const start = Math.max(0, Math.min(at - 1, months.length - SWITCH_MONTHS))
   const calendar = now ? monthStartOf(now) : null
-  return shown.map((x) => ({
+  return months.slice(start, start + SWITCH_MONTHS).map((x) => ({
     month: x,
     label: monthWordsOf(x, x === calendar),
     href: productsHref({ month: x.slice(0, 7) }),
@@ -666,6 +676,16 @@ export const PRODUCT_KIND_LABELS: Readonly<Record<string, string>> = {
 
 /** `PRODUCT_KIND_LABELS`, a kind it does not name in its general label. PURE. */
 export const productKindLabel = (kind: string): string => PRODUCT_KIND_LABELS[kind] ?? `${kindLabel(kind)}, in the comments`
+
+/** Does the set's top subject lead every other it could hold? Strictly more
+ *  videos than the next ready subject, and none of the client's subjects
+ *  pending: a pending subject's count is withheld (ruling U6), so a lead over
+ *  it cannot be claimed, and a tie is no lead. PURE. */
+export function topRanked(c: Pick<Crosses, 'subjects' | 'pending'> | null | undefined): boolean {
+  const top = c?.subjects[0]
+  if (!top || (c?.pending?.length ?? 0) > 0) return false
+  return top.k > (c?.subjects[1]?.k ?? 0)
+}
 
 /** Subjects and kinds over one set, from its `lens_readings` rows pooled over
  *  every audience (`poolLens`). A subject not active (not in `subjects`) is
@@ -946,7 +966,7 @@ export function pickStandouts(input: {
   if (focus) {
     out.push({
       kind: 'focus', open: { kind: focus.o.kind, id: focus.o.id }, href: hrefOf(focus.o.kind, focus.o.id),
-      name: focus.o.name, where: focus.o.groupName, subject: focus.hit.label, level: { k: focus.hit.k, n: focus.hit.n },
+      name: focus.o.name, where: focus.o.groupName, subject: focus.hit.label, level: { k: focus.hit.k, n: focus.hit.n }, ranked: topRanked(focus.o.crosses),
     })
   }
   return out.slice(0, STANDOUTS_MAX)
@@ -1097,7 +1117,9 @@ export function standoutSlots(input: {
     .filter((x): x is { o: (typeof pool)[number]; hit: T } => x != null)
     .sort((a, b) => Number(used.has(setKey(a.o.kind, a.o.id))) - Number(used.has(setKey(b.o.kind, b.o.id)))
       || a.o.tier - b.o.tier || b.hit.k / b.hit.n - a.hit.k / a.hit.n || b.hit.n - a.hit.n || a.o.sort - b.o.sort)[0] ?? null
-  const unread = input.crosses.size === 0
+  // Not read: no cross at all where the month has talk to cross. A quiet
+  // month (no category with a video) was read, and has nothing to show.
+  const unread = input.crosses.size === 0 && input.shelf.some((c) => (c.videos ?? 0) > 0)
   const praised = picked.get('praised')
   if (praised) out.push({ slot: 'praised', tier: 'pick', card: praised })
   else {
@@ -1118,7 +1140,7 @@ export function standoutSlots(input: {
       return top ? { k: top.k, n: c.n, label: top.label } : null
     })
     const pending = [...input.crosses.values()].some((c) => (c.pending?.length ?? 0) > 0)
-    if (x) out.push({ slot: 'focus', tier: 'next', card: { kind: 'focus', open: { kind: x.o.kind, id: x.o.id }, href: hrefOf(x.o.kind, x.o.id), name: x.o.name, where: x.o.where, subject: x.hit.label, level: { k: x.hit.k, n: x.hit.n } } })
+    if (x) out.push({ slot: 'focus', tier: 'next', card: { kind: 'focus', open: { kind: x.o.kind, id: x.o.id }, href: hrefOf(x.o.kind, x.o.id), name: x.o.name, where: x.o.where, subject: x.hit.label, level: { k: x.hit.k, n: x.hit.n }, ranked: topRanked(input.crosses.get(setKey(x.o.kind, x.o.id))) } })
     else out.push({ slot: 'focus', tier: 'none', card: null, reason: unread ? 'unread' : pending ? 'pending' : 'quiet' })
   }
   return out
@@ -1169,6 +1191,7 @@ export function buildShelf(input: {
       verdict: categoryShareVerdict({ group: g, month: m, curr, prev, pair: input.pair }),
       lead: top && c && c.n > 0 ? { label: top.label, k: top.k } : null,
       subjectsPending: (c?.pending?.length ?? 0) > 0 && (curr?.k_any ?? 0) > 0,
+      leads: topRanked(c),
       unclear: curr?.k_unclear ?? 0,
       products,
       href: productsHref(input.params, { kind: 'group', id: g.id }),
@@ -1194,6 +1217,11 @@ export const UNCLEAR_SHOWN = 3
 export const UNCLEAR_ALL = 30
 /** Quotes in a product's panel. */
 export const PRODUCT_QUOTES = 3
+
+/** Tiles a shelf column shows before "+N more" (the lead's ruling, 13 Oct
+ *  night: the board's column height; Össur's Feet hold 20 products). The
+ *  most-videos first, so a product with talk is shown before a quiet one. */
+export const SHELF_TILES = 8
 
 /** The shelf's columns at its widest: the kit's five (the board's five
  *  categories), six where the catalogue has six (Össur's: Hands joined), so

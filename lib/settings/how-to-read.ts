@@ -160,7 +160,7 @@ export const READING_CARDS: readonly ReadingCard[] = [
       // The four places (the parity pass, 13 Oct night: `standoutSlots`).
       // Ruling U6 (`printsMarket`): the crosses count ready subjects only.
       'A subject still being checked prints no figure here either: it is named, and reads “Not measured yet” where its count would be, and no card or column says what the talk is mostly about until its check has passed.',
-      'The four cards at the top are always there. Where nothing reaches a standout, a card shows the nearest the month has and says what it is: a product named for the first time in one or two videos, or praise or one subject in under half of its videos. Where the month has nothing for a card, it says so.',
+      'The four cards at the top are always there. Where nothing reaches a standout, a card shows the nearest the month has and says what it is: a product named for the first time in one or two videos; the category with the largest share of talk that names none of your products; the product, else the category, with 3 or more videos and the largest share with praise in their comments; and the product, else the category, with 3 or more videos and the largest share about one subject. Each is one not already shown in another card, where there is one. A subject is said to lead only where it leads every other outright. Where the month has nothing for a card, it says so.',
       'A product with no reading in a month reads “not read yet”, never quiet.',
       'Until your catalogue is loaded and its reading is switched on, the page says which is missing rather than printing a count.',
     ],

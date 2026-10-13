@@ -56,6 +56,9 @@ export interface ShelfColumn {
   /** The last line: what it is mostly about ("Fit & comfort leads, 34 of 52"). */
   note?: ReactNode
   products: readonly ShelfProduct[]
+  /** Products the column leaves off (a long category is cut to the board's
+   *  height): one last tile, "+N more", into the category's panel. */
+  more?: { count: number; href: string } | null
   /** About the category, but no product named. Null or zero: no link. */
   unclear?: { count: number; href: string } | null
 }
@@ -144,6 +147,16 @@ export function CatalogueShelf({ columns, selected = null, panelId, unread = fal
               {c.note ? <div className="text-[12.5px] leading-[1.35]">{c.note}</div> : null}
             </Link>
             {c.products.map((p) => <Tile key={p.id} p={p} unread={unread} />)}
+            {c.more && c.more.count > 0 ? (
+              <Link
+                href={c.more.href}
+                data-more=""
+                className="flex min-h-[38px] items-center justify-between gap-2 rounded-lg border border-dashed border-foreground/20 px-[11px] py-[9px] text-[13px] leading-[1.3] text-muted-foreground transition-colors hover:bg-inner hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <span>+<span data-copy="figure" className="tabular-nums">{fmtInt(c.more.count)}</span> more</span>
+                <span aria-hidden>→</span>
+              </Link>
+            ) : null}
             {c.unclear && c.unclear.count > 0 ? (
               <Link href={c.unclear.href} className="px-0.5 pt-1 text-[12px] text-muted-foreground underline decoration-foreground/25 underline-offset-[3px] hover:text-foreground">
                 Couldn’t tell which · <span data-copy="figure" className="tabular-nums">{fmtInt(c.unclear.count)}</span>

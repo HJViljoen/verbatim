@@ -46,6 +46,15 @@ describe('CatalogueShelf', () => {
     assertCopyContract(node)
   })
 
+  it('cuts a long column to a "+N more" tile into its category\'s panel', () => {
+    const cols = SHELF.map((c, i) => (i === 0 ? { ...c, products: c.products.slice(0, 2), more: { count: 6, href: '?group=liners#group-panel' } } : c))
+    const node = <CatalogueShelf columns={cols} />
+    const m = render(node)
+    expect(m).toMatch(/<a data-more="" class="[^"]*border-dashed[^"]*" href="\?group=liners#group-panel"><span>\+<span data-copy="figure"[^>]*>6<\/span> more<\/span>/)
+    expect(m.match(/data-more=""/g)).toHaveLength(1)
+    assertCopyContract(node)
+  })
+
   it('rings the open column\'s head and ties it to the panel', () => {
     const m = render(shelf('liners'))
     expect(m).toMatch(/<a aria-expanded="true" aria-controls="group-panel" aria-current="true" class="[^"]*ring-2 ring-foreground" href="\?group=liners#group-panel"/)

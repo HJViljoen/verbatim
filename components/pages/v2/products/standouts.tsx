@@ -71,7 +71,8 @@ export function shareWords(k: number, n: number): 'Every' | 'Almost every' | 'Mo
 
 /** Month dots, oldest first: hollow for a month with none, the orange for
  *  the month it came up (the board's strip). `hollow` draws every dot
- *  hollow: no product's first month among them. */
+ *  hollow: no product's first month among them. Every dot is named up to
+ *  six; past that, as the board's eight, the first, the middle and the last. */
 function MonthDots({ months, label, hollow = false }: { months: readonly string[]; label: string; hollow?: boolean }) {
   const n = months.length
   if (n < 2) return null
@@ -84,7 +85,7 @@ function MonthDots({ months, label, hollow = false }: { months: readonly string[
       {months.map((m, i) => (i === n - 1 && !hollow
         ? <circle key={m} cx={x(i)} cy={18} r={7} className="fill-orange" />
         : <circle key={m} cx={x(i)} cy={18} r={5} className="fill-card stroke-foreground/25" strokeWidth={1.5} />))}
-      {[0, mid, n - 1].filter((i, j, xs) => xs.indexOf(i) === j).map((i) => (
+      {(n <= 6 ? months.map((_, i) => i) : [0, mid, n - 1]).filter((i, j, xs) => xs.indexOf(i) === j).map((i) => (
         <text key={i} x={x(i)} y={40} textAnchor="middle" fontSize={9.5} fontWeight={i === n - 1 ? 600 : 400}
           className={cn('font-mono', i === n - 1 ? 'fill-foreground' : 'fill-muted-foreground')}>
           {longMonth(months[i]).slice(0, 3)}
@@ -227,14 +228,22 @@ function PraisedCard({ s, tier }: { s: PraisedStandout; tier: SlotTier }) {
   )
 }
 
+/** "Mostly" is the level's own word (half or more of its videos, the pick's
+ *  bar). A rank ("most often", "more than any other") is said only where the
+ *  subject leads every other it could hold (`ranked`: no tie, none pending);
+ *  otherwise the card prints the level alone. */
 function FocusCard({ s, tier }: { s: FocusStandout; tier: SlotTier }) {
   return (
     <>
       <Eyebrow word={SLOT_WORDS.focus} where={s.where} />
-      <Title>{s.name} talk is {tier === 'pick' ? 'mostly' : 'most often'} about {s.subject}</Title>
+      <Title>
+        {tier === 'pick'
+          ? <>{s.name} talk is mostly about {s.subject}</>
+          : s.ranked ? <>{s.name} talk is most often about {s.subject}</> : <>{s.name} videos about {s.subject}</>}
+      </Title>
       <MidFigure value={s.level.k}>of its <span data-copy="figure">{fmtInt(s.level.n)}</span> videos</MidFigure>
       <Marks k={s.level.k} n={s.level.n} tone="ink" label={`${fmtInt(s.level.k)} of ${fmtInt(s.level.n)} ${s.name} videos are about ${s.subject}`} />
-      <Sub>More than any other subject in its videos.</Sub>
+      {s.ranked ? <Sub>More than any other subject in its videos.</Sub> : null}
     </>
   )
 }

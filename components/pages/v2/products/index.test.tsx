@@ -32,6 +32,12 @@ describe('the Your products page (boards E4-Products and E4-Products-Liners)', (
     const today = render(<ProductsPage data={PRODUCTS_FIXTURES['ossur-today']()} />)
     expect(today).toMatch(/<a aria-current="page" [^>]*href="\/dashboard\/products\?month=2026-09">September<\/a>/)
     expect(renderText(<ProductsPage data={PRODUCTS_FIXTURES['ossur-today']()} />)).toContain('August September October so far')
+    // A month not read yet keeps the switch: the way back to one that is.
+    const unread = render(<ProductsPage data={PRODUCTS_FIXTURES.unread()} />)
+    expect(unread).toMatch(/<a aria-current="page" [^>]*href="\/dashboard\/products\?month=2026-10">October so far<\/a>/)
+    expect(unread).toContain('href="/dashboard/products?month=2026-09"')
+    // No switch, no empty wrapper.
+    expect(render(<ProductsPage data={PRODUCTS_FIXTURES.sealand()} />)).not.toContain('-mt-2')
   })
 
   // Decision 3: the month's label on the bar only where the page reads a

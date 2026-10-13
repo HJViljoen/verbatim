@@ -428,6 +428,9 @@ function todayCrosses(thin: boolean, products: readonly string[] = [], calibrate
   return calibrated ? all : new Map([...all].map(([k, c]) => [k, pendingCross(c)]))
 }
 
+/** Össur today's level-1 crosses (for a test that edits one set). */
+export const ossurTodayCrosses = (opts: { thin?: boolean; calibrated?: boolean } = {}): Map<string, Crosses> => todayCrosses(opts.thin ?? false, [], opts.calibrated ?? false)
+
 function todayCrossesCounted(thin: boolean, products: readonly string[] = []): Map<string, Crosses> {
   const g = (name: string) => setKey('group', groupId(name))
   const p = (name: string) => setKey('product', productId(name))
