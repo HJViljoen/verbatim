@@ -1,21 +1,26 @@
-// THE DASHBOARD AT /dashboard (the navigation of 1 Oct; page review §2). Nav
-// key `home` and NO page key: page key `dashboard` is a stored contract (a
-// sent snapshot, a share link, Össur's digest schedule) that names the legacy
-// module, which stays in the registry and is never a route.
+// THE DASHBOARD AT /dashboard (Design v2, depth plan T8; boards E1-Dashboard
+// and E1-Dashboard-Phone). Nav key `home` and NO page key: page key
+// `dashboard` is a stored contract (a sent snapshot, a share link, Össur's
+// digest schedule) that names the legacy module, which stays in the registry
+// and is never a route.
 //
 // In a route group with its own loader, as Your market was (sw-2 item 8): a
 // loader at app/dashboard/loading.tsx would wrap every dashboard address, the
 // catch-all's 404 included, and stream it as a 200.
 //
-// HOME builds the page (`components/pages/home`, `lib/pages/home.ts`): one
-// wave of light reads, and the published weekly read (lib/written/published.ts)
-// behind its numbers and tiles.
+// ONE WAVE, STREAMED (lib/pages/v2/home.ts `startDashboard`): every tile's
+// reads start here, together, on one session client and one reading handle,
+// and nothing is awaited before the page is drawn; each tile streams in
+// behind its own bones as its read settles (`DashboardStream`), and a tile
+// whose read fails loses only itself.
 import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
-import { HomePage } from '@/components/pages/home'
+import { DashboardStream } from '@/components/pages/v2/home'
 import { getSessionContext } from '@/lib/auth'
+import { mayDecideMoves } from '@/lib/moves-access'
 import { frontRedirect, surface, type SearchProps } from '@/lib/nav'
-import { loadHome } from '@/lib/pages/home'
+import { readingHandle } from '@/lib/reading/read'
+import { startDashboard } from '@/lib/pages/v2/home'
 
 // The tab's title is the page's own name (the root layout's template adds
 // ' · Verbatim').
@@ -26,6 +31,7 @@ export default async function Page({ searchParams }: SearchProps) {
   // email linked it until 1 Oct): it lands there, query and all.
   const away = frontRedirect((await searchParams) ?? {})
   if (away) redirect(away)
-  const { supabase, clientId } = await getSessionContext()
-  return <HomePage data={await loadHome({ supabase, clientId })} />
+  const { supabase, clientId, role } = await getSessionContext()
+  const reads = startDashboard({ supabase, clientId, reading: readingHandle(clientId), canDecide: mayDecideMoves(role) })
+  return <DashboardStream reads={reads} />
 }

@@ -949,6 +949,12 @@ export interface TopVoices {
   /** Named most this month, unprompted: the two brands named in most videos
    *  (you only where your name is counted), each with its panel. */
   named: { label: string; k: number; n: number; you: boolean; href: string }[]
+  /** The groups' state, and Voices' own words where none prints
+   *  (`unread`: the read failed, which the tile says as a failure). */
+  groupsState: VoicesGroups['state']
+  groupsEmpty: string | null
+  /** The brands' state: `unread` where their reads failed. */
+  brandsState: VoicesBrands['state']
   href: string
 }
 
@@ -974,6 +980,9 @@ export function topVoicesOf(input: {
       .sort((a, b) => (b.named?.k ?? 0) - (a.named?.k ?? 0) || Number(b.you) - Number(a.you) || a.label.localeCompare(b.label))
       .slice(0, NAMED_MOST)
       .map((r) => ({ label: r.label, k: r.named!.k, n: r.named!.n, you: r.you, href: voicesHref({}, { kind: 'brand', key: r.param }) })),
+    groupsState: input.groups.state,
+    groupsEmpty: input.groups.empty,
+    brandsState: input.brands.state,
     href: VOICES_HREF,
   }
 }

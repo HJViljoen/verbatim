@@ -1478,14 +1478,19 @@ export const topContentEmpty = (state: Exclude<IdeasState, 'ready'>): string =>
  * as the page: the newest week anchors, ideas more than four weeks older are
  * not shown, older ones say so.
  */
-export async function topContent(scope: Scope, opts: { now?: Date } = {}): Promise<TopContent> {
+export async function topContent(scope: Scope, opts: {
+  now?: Date
+  /** The published week read where the caller already holds it (the
+   *  Dashboard reads it once for several tiles); read here when omitted. */
+  published?: PublishedWeekRead | null
+} = {}): Promise<TopContent> {
   const db = scope.supabase as SupabaseClient
   const { clientId } = scope
   // Switched off for this workspace: nothing is read and no stored idea shows.
   if (!postIdeasEnabled(clientId)) return { state: 'not_on', idea: null, href: CONTENT_PATH, line: topContentEmpty('not_on') }
   const [read, published] = await Promise.all([
     soft('top.ideas', readIdeas(db, clientId)),
-    soft('top.published', loadPublishedWeekRead(scope.reading.client, clientId)),
+    opts.published !== undefined ? Promise.resolve(opts.published) : soft('top.published', loadPublishedWeekRead(scope.reading.client, clientId)),
   ])
   if (!read) return { state: 'unread', idea: null, href: CONTENT_PATH, line: topContentEmpty('unread') }
   const week = anchorOf(read.rows, published)

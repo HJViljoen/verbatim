@@ -179,11 +179,12 @@ describe('loadPublishedLongRun: Your market\'s long-run read, as soon as the run
 })
 
 describe('every page that prints a stored read asks the selector, and the selector asks no send', () => {
-  // This week, the Dashboard's numbers and tiles, the Subjects pane, and Your
-  // market's subject sentences and long-run read. A page reading `week_reads`
-  // itself could print a read that is not ready.
+  // This week, the Dashboard's tiles (Design v2: lib/pages/v2/home.ts, which
+  // hands the read to Market's and Content's tiles), Market, the Subjects
+  // pane, and Your market's subject sentences and long-run read. A page
+  // reading `week_reads` itself could print a read that is not ready.
   const src = (p: string) => readFileSync(resolve(__dirname, '../..', p), 'utf8')
-  for (const file of ['lib/pages/week-read.ts', 'lib/pages/home.ts', 'lib/pages/subjects-read.ts', 'lib/pages/overview-picture.ts', 'lib/pages/v2/content.ts']) {
+  for (const file of ['lib/pages/week-read.ts', 'lib/pages/v2/home.ts', 'lib/pages/v2/market.ts', 'lib/pages/subjects-read.ts', 'lib/pages/overview-picture.ts', 'lib/pages/v2/content.ts']) {
     it(file, () => {
       const text = src(file)
       expect(text).toMatch(/loadPublishedWeekRead\(/)

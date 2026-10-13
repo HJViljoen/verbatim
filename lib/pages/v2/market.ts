@@ -1917,7 +1917,9 @@ export interface MarketTop {
  * The tile's data. LIGHT: the read (pass the one the Dashboard already holds),
  * then one wave (the flag, the themed run, the change log, the runs, the
  * month's rows and its category), then the three window reads beside the
- * run's labels.
+ * run's labels. Null where no week has been read; THROWS where the themed run,
+ * the newest week or its labels could not be read, so the caller prints a
+ * failure, not "nothing yet".
  */
 export async function topMarket(input: {
   supabase: SupabaseClient
@@ -1942,8 +1944,12 @@ export async function topMarket(input: {
   const weekMonth = readingMonthOf(read.window)
   const month = monthStartOf(weekMonth.month)
   const soFar = monthSoFar(month, nowMonth, weekMonth.complete)
-  const themedRunAhead = fetchRunningRunIds(supabase, clientId, 'market.top').then((ids) => fetchThemedRunId(supabase, clientId, ids, 'market.top')).catch(() => null)
-  const segmentsAhead = themedRunAhead.then((runId) => (makerRuleEnabled(clientId) && runId ? soft('top.segments', loadThemeSegmentRows(db, clientId, month, runId), null) : null))
+  // A RUN LOOKUP THAT FAILS IS A FAILURE, NOT "NO WEEK YET" (T8's check): it
+  // rejects out of the tile's read, so the Dashboard prints its failure line
+  // rather than the first-run words. No themed run at all is still null.
+  const themedRunAhead = fetchRunningRunIds(supabase, clientId, 'market.top').then((ids) => fetchThemedRunId(supabase, clientId, ids, 'market.top'))
+  themedRunAhead.catch(() => {})
+  const segmentsAhead = themedRunAhead.then((runId) => (makerRuleEnabled(clientId) && runId ? soft('top.segments', loadThemeSegmentRows(db, clientId, month, runId), null) : null), () => null)
   const [themedRunId, rivals, changes, cadence, flag, monthRows, monthCategory] = await Promise.all([
     themedRunAhead,
     soft('top.rivals', loadTrackedRivals(supabase, clientId), []),
@@ -1967,11 +1973,15 @@ export async function topMarket(input: {
     segmentsAhead,
   ])
   if (reads.length === 0) return null
+  // The newest window not read (where no change of ours cut it) is a failure
+  // the tile says, never a week with nothing in it.
+  if (!cut[last] && reads[last] == null) throw new Error('market.top: the newest week could not be read')
   const weekCounts = reads.map((r) => categoryThemeVideos(r))
   // LABELS FOR THE WEEK'S THEMES ONLY (the theme, its label and its kind): the
-  // tile places no conversation in a subject, so no member list is read.
+  // tile places no conversation in a subject, so no member list is read. A
+  // failed read throws (no label, no conversation to lead with).
   const ids = [...new Set([...(weekCounts[last]?.keys() ?? []), ...(flag?.objectKind === 'theme' ? [flag.objectId] : [])])]
-  const runThemes = await soft('top.labels', loadThemeLabels(db, clientId, themedRunId, ids), new Map<string, RunTheme>())
+  const runThemes = await loadThemeLabels(db, clientId, themedRunId, ids)
   const setApart = setApartOf(segmentRows)
   const params = marketParams({})
   const convInput: ConvInput = {

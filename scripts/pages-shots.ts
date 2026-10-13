@@ -44,8 +44,9 @@ import { PageBar, PageFrame } from '../components/shell/page-grid'
 import { SEALAND_CLIENT_ID } from '../lib/config'
 import { surface } from '../lib/nav'
 
-import { HomePage } from '../components/pages/home'
-import { HOME_DATA, HOME_EMPTY, HOME_NO_WEEKS } from '../lib/pages/home-fixture'
+import { DashboardPage } from '../components/pages/v2/home'
+import { dashboardEmptyFixture, dashboardFixture } from '../lib/pages/v2/home-fixture'
+import type { DashboardData } from '../lib/pages/v2/home'
 import { MarketPicturePage } from '../components/pages/overview/picture'
 import { PICTURE_FIXTURE } from '../components/pages/overview/picture/fixture'
 import { WeekReadPage } from '../components/pages/week/read-page'
@@ -324,9 +325,12 @@ interface Page {
   fixed?: boolean
 }
 const PAGES: Page[] = [
-  { key: 'dashboard', path: '/dashboard', artboard: 'Page-Dashboard.dc.html', page: () => h(HomePage, { data: HOME_DATA }) },
-  { key: 'dashboard-empty', path: '/dashboard', artboard: 'Page-Dashboard.dc.html', page: () => h(HomePage, { data: HOME_EMPTY }) },
-  { key: 'dashboard-no-weeks', path: '/dashboard', artboard: 'Page-Dashboard.dc.html', page: () => h(HomePage, { data: HOME_NO_WEEKS }) },
+  // The Dashboard (Design v2, T8), beside E1-Dashboard (`--artboards
+  // ~/Documents/Heinrich/Verbatim-Design/depth-2026-10/canvas/project`); its
+  // other states and the loader dumps are at the end of the list.
+  { key: 'dashboard', path: '/dashboard', artboard: 'E1-Dashboard.dc.html', page: () => h(DashboardPage, { data: dashboardFixture() }) },
+  { key: 'dashboard-empty', path: '/dashboard', artboard: 'E1-Dashboard.dc.html', page: () => h(DashboardPage, { data: dashboardEmptyFixture() }) },
+  { key: 'dashboard-no-weeks', path: '/dashboard', artboard: 'E1-Dashboard.dc.html', page: () => h(DashboardPage, { data: dashboardFixture({ flagged: false, products: 'quiet', content: 'older', moves: 'no_move', named: false }) }) },
   { key: 'your-market', path: '/dashboard/market', artboard: 'Page-Your-market.dc.html', page: () => h(MarketPicturePage, { data: PICTURE_FIXTURE }) },
   { key: 'this-week', path: '/dashboard/content', artboard: 'Page-This-week.dc.html', page: () => h(WeekReadPage, { data: weekData(), title: surface('content').label }) },
   { key: 'conversation', path: '/dashboard/voices', artboard: 'Page-Conversation.dc.html', page: () => h(VoiceSurfacePage, { data: conversationFixture(), params: {} }) },
@@ -437,6 +441,16 @@ const PAGES: Page[] = [
   ...(process.env.PRODUCTS_JSON
     ? [{ key: 'products-real', path: '/dashboard/products', artboard: 'E4-Products.dc.html', page: () => h(ProductsPage, { data: JSON.parse(readFileSync(process.env.PRODUCTS_JSON as string, 'utf8')) as ProductsData }) }]
     : []),
+  // The Dashboard's other states (Design v2, T8): every tile's empty, failed
+  // and member states on one page each, and one real render per tenant from
+  // the loader's dump (`--home-dump <dir>` holding ossur.json and
+  // sealand.json, written by scripts/home-v2-dump.ts).
+  { key: 'dashboard-states', path: '/dashboard', artboard: 'E1-Dashboard.dc.html', page: () => h(DashboardPage, { data: dashboardFixture({ products: 'not_applied', content: 'not_on', moves: 'member', failed: ['week'] }) }) },
+  { key: 'dashboard-failed', path: '/dashboard', artboard: 'E1-Dashboard.dc.html', page: () => h(DashboardPage, { data: dashboardFixture({ failed: ['market', 'voices', 'products', 'content', 'moves'] }) }) },
+  ...(flag('home-dump', '') ? (['ossur', 'sealand'] as const).map((tenant): Page => ({
+    key: `dashboard-${tenant}`, path: '/dashboard', artboard: 'E1-Dashboard.dc.html',
+    page: () => h(DashboardPage, { data: JSON.parse(readFileSync(join(resolve(flag('home-dump', '.')), `${tenant}.json`), 'utf8')).data as DashboardData }),
+  })) : []),
 ]
 
 // ---- the shell -----------------------------------------------------------------
