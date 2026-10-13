@@ -1,10 +1,11 @@
 import { getSessionContext } from '@/lib/auth'
 import { canManageTenant } from '@/lib/roles'
 import { readingHandle } from '@/lib/reading/read'
-import { LEDGER_ALL_PARAM, LEDGER_ALL_VALUE, loadMarketSurface } from '@/lib/pages/market-surface'
 import { loadStatements } from '@/lib/pages/moves-statements'
+import { loadMovesPage } from '@/lib/pages/v2/moves'
+import { mayDecideMoves } from '@/lib/moves-access'
 import { maySeeStatements } from '@/lib/statements/visibility'
-import { MovesPage } from '@/components/pages/moves'
+import { MovesV2Page } from '@/components/pages/v2/moves'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Metadata } from 'next'
 import { surface } from '@/lib/nav'
@@ -18,38 +19,36 @@ export const metadata: Metadata = { title: surface('moves').label }
 // run on this route's clock.
 export const maxDuration = 300
 
-// Your moves (pages build, 1 Oct; Page-Your-moves.dc.html), at
-// /dashboard/moves since Design v2 (decision 6 of the depth plan: Market took
-// /dashboard/market). The advice, the moves and the plans come off the Market
-// surface's loader (page key `market`, unchanged), the statements off their
-// own two reads, in ONE wave with the workspace's name.
+// Your moves, Design v2 (depth plan T7; boards E6-Moves and E6-Moves-Open), at
+// /dashboard/moves (decision 6: Market took /dashboard/market). Page key
+// `market` is unchanged, and so are its blocks, `MARKET_BLOCKS`,
+// `MarketSurfacePage` and `loadMarketSurface`, which stored snapshots, share
+// links, the briefs and the quarterly still read; this route reads its own
+// loader (lib/pages/v2/moves.ts).
 //
-// `?advice=` IS YOUR MOVES' DEEP LINK NOW. The old `?rec=<id>` (four sent
+// `?advice=` IS THE PAGE'S ONE SELECTION: a lineage opens that piece of advice
+// in place, `all` opens the advice record. The old `?rec=<id>` (four sent
 // emails and every digest until WP17), `?item=<lineage>` and `?ledger=all`
-// still name Your moves at /dashboard/market, which sends them here as
-// `?advice=` (lib/nav.ts `redirectFor`). Until this page reads it itself
-// (depth plan T7) it is handed to the loader as the param it reads: `all` as
-// `?ledger=all`, anything else as `?item=`, which the loader resolves as a
-// recommendation id or a lineage, and the named row keeps its anchor in
-// "Moves worth considering" while it is current.
+// name Your moves at /dashboard/market, which sends them here as `?advice=`
+// (lib/nav.ts `redirectFor`); a recommendation id resolves to its lineage.
+//
+// WHO MAY DECIDE (lib/moves-access.ts): Accept, Not for us, Date a move and a
+// move's status are drawn for an owner or an admin only, and the actions
+// refuse anyone else. Your statements stays held from tenants until Heinrich
+// decides (open ruling #7, lib/statements/visibility.ts): a tenant's page
+// reads no statement; the operator's is as built.
 
 export default async function Page({
   searchParams,
 }: {
   searchParams?: Promise<Record<string, string | undefined>>
 }) {
-  const { advice, ...rest } = (await searchParams) ?? {}
-  const sp = advice === undefined ? rest : advice === LEDGER_ALL_VALUE ? { ...rest, [LEDGER_ALL_PARAM]: advice } : { ...rest, item: advice }
+  const params = (await searchParams) ?? {}
   const { supabase, clientId, role, operator } = await getSessionContext()
   const db = supabase as SupabaseClient
-  // Your statements is held from tenants until Heinrich decides (open ruling
-  // #7, lib/statements/visibility.ts): a tenant's page reads no statement and
-  // draws neither the section nor the add form; the operator's is as built.
-  const [market, client, statements] = await Promise.all([
-    loadMarketSurface({ supabase, clientId, reading: readingHandle(clientId), params: sp }, { shortlist: true }),
-    db.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
+  const [data, statements] = await Promise.all([
+    loadMovesPage({ supabase, clientId, reading: readingHandle(clientId), params }, { canDecide: mayDecideMoves(role) }),
     maySeeStatements({ operator }) ? loadStatements(db, clientId, { canEdit: canManageTenant(role), brand: '' }) : Promise.resolve(null),
   ])
-  const brand = market?.brand || ((client.data as { company_name?: string | null } | null)?.company_name ?? '').trim() || 'your brand'
-  return <MovesPage market={market} statements={statements ? { ...statements, brand } : null} params={sp} />
+  return <MovesV2Page data={data} statements={statements ? { ...statements, brand: data?.brand ?? 'your brand' } : null} />
 }

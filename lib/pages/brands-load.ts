@@ -483,7 +483,7 @@ async function readWindow(db: SupabaseClient, clientId: string, window: { from: 
  *  (`window_theme_readings`, filtered to the brands' audiences so it is one
  *  page, on the latest themed update; each theme's kind and label from that
  *  update's observations). */
-async function readQuestions(
+export async function readQuestions(
   db: SupabaseClient,
   clientId: string,
   month: string,
@@ -531,7 +531,7 @@ async function readQuestions(
  * analysed videos (1), their current insights (per 250), the insights'
  * evidence (chunked), the comments' dates (chunked), and the gate's context.
  */
-async function readSaidAbout(
+export async function readSaidAbout(
   db: SupabaseClient,
   clientId: string,
   brand: { name: string; audience: string },
@@ -585,7 +585,7 @@ async function readSaidAbout(
 
 // ---- B4 -------------------------------------------------------------------------
 
-interface FindingRead {
+export interface FindingRead {
   id: string
   rival: string
   category: string
@@ -629,7 +629,7 @@ export function findingAbout(input: {
   return { brands: others, market, client }
 }
 
-async function readFindings(db: SupabaseClient, clientId: string, month: string, live: readonly { name: string; audience: string }[], running: readonly string[]): Promise<FindingRead[]> {
+export async function readFindings(db: SupabaseClient, clientId: string, month: string, live: readonly { name: string; audience: string }[], running: readonly string[]): Promise<FindingRead[]> {
   const [res, clientRes] = await Promise.all([
     db.from('competitive_insights').select('id, run_id, category, competitor_name, title, finding, evidence, impact_level, created_at')
       .eq('client_id', clientId).order('created_at', { ascending: false }).limit(60),

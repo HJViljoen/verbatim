@@ -42,12 +42,17 @@ const DIRECTION_LABEL: Record<(typeof MOVE_DIRECTIONS)[number], string> = {
 }
 
 export function TrackThisSubject({
-  subjectId, subjectName, move,
+  subjectId, subjectName, move, canChangeStatus,
 }: {
   subjectId: string
   subjectName: string
   /** The move already declared on this subject, where there is one. */
   move?: { id: string; title: string; declaredAt: string; status: MoveStatus } | null
+  /** May this reader mark the move done, dropped or running again? An owner's
+   *  or an admin's since depth v2 (T7, lib/moves-access.ts); the caller passes
+   *  the session's own answer, and there is no default, so no page can open
+   *  it by forgetting. Track this itself stays open. */
+  canChangeStatus: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [state, action, pending] = useActionState(trackSubjectAction, EMPTY_STATE)
@@ -64,11 +69,11 @@ export function TrackThisSubject({
   // the ONLY affordance, so a differently-worded move on the same subject
   // could not be declared at all. Both are offered: pick the old line up, or
   // draw a new one.
-  if (move && move.status !== 'dropped') return <DeclaredMove move={move} />
+  if (move && move.status !== 'dropped') return <DeclaredMove move={move} canChangeStatus={canChangeStatus} />
 
   return (
     <>
-      {move ? <DeclaredMove move={move} /> : null}
+      {move ? <DeclaredMove move={move} canChangeStatus={canChangeStatus} /> : null}
       {/* THE MOCK'S PRIMARY PILL. The page's one green control (MASTER rule 1
           — green does four jobs and "primary button" is one of them), at the
           artboard's 32px height and full radius rather than the default
@@ -133,7 +138,7 @@ export function TrackThisSubject({
 }
 
 /** The declared state: what was said, when, and the only thing left to change. */
-function DeclaredMove({ move }: { move: { id: string; title: string; declaredAt: string; status: MoveStatus } }) {
+function DeclaredMove({ move, canChangeStatus }: { move: { id: string; title: string; declaredAt: string; status: MoveStatus }; canChangeStatus: boolean }) {
   const [pending, start] = useTransition()
   const [said, setSaid] = useState<{ ok: boolean; message: string } | null>(null)
   const set = (status: MoveStatus) =>
@@ -145,7 +150,7 @@ function DeclaredMove({ move }: { move: { id: string; title: string; declaredAt:
         {move.status === 'active' ? 'Tracking' : move.status === 'done' ? 'Done' : 'Dropped'} · {move.title}
       </span>
       <span className="font-mono text-[10.5px] text-muted-foreground">since {fullDate(move.declaredAt)}</span>
-      {move.status === 'active' ? (
+      {!canChangeStatus ? null : move.status === 'active' ? (
         <>
           <button type="button" disabled={pending} onClick={() => set('done')}
             className="text-[11.5px] font-medium text-foreground underline-offset-2 hover:underline disabled:opacity-50">

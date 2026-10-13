@@ -1,0 +1,405 @@
+import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../../config'
+import { brandMonthPair, creatorThemes, type BrandCrossRow, type BrandMonthVideos, type CreatorVideo, type GroupMonthVideos, type GroupSubjectRow, type StoredBrandMonthRow, type ThemeRef } from '../../reading/cross'
+import {
+  buildBrandPanel, buildBrands, buildCreatorPanel, buildCreators, buildGroupPanel, buildGroups, creatorVideoIds, monthWordsOf, openOf,
+  personasOf, themeVideoSets,
+  type BrandSet, type VoicesData, type VoicesParams, type VoicesQuote,
+} from './voices'
+
+// The Voices page's render fixtures (depth v2, T4): an Össur-shaped month
+// (five groups, brand rules and no brand rows yet, the creators of its
+// market) and a Sealand-shaped one (its brands counted). Every figure is
+// built through the page's own builders from row-shaped inputs, so the
+// fixtures exercise the same code the loader runs. Illustrative: the groups'
+// names and words follow the board (E3-Voices), and the brand numbers follow
+// the T16 spot-checks of Sealand's September (Patagonia 65 videos naming it,
+// 13 of 743 unprompted).
+
+const SEP = '2026-09-01'
+const AUG = '2026-08-01'
+
+const ids = (prefix: string, n: number, from = 0): string[] => Array.from({ length: n }, (_, i) => `${prefix}${from + i}`)
+
+/** A market of `n` videos, each on a platform in turn. */
+function marketOf(n: number, platforms: readonly string[]): { id: string; platform: string }[] {
+  return ids('v', n).map((id, i) => ({ id, platform: platforms[i % platforms.length] }))
+}
+
+interface PersonaIn {
+  key: string
+  name: string
+  oneLiner: string
+  wants: string
+  blockers: string
+  triggers: string
+  howTheyTalk: string[]
+  who: { signal: string; count: number }[]
+  registryIds: string[]
+  /** The group's videos this month: indexes into the market. */
+  videos: [number, number]
+  subjects: [string, string, number][]
+}
+
+function groupsFrom(personas: PersonaIn[], market: { id: string }[]): {
+  profile: { personas: unknown; run_id: string; run_date: string }
+  read: { videos: GroupMonthVideos[]; groups: GroupSubjectRow[] }
+} {
+  const videos: GroupMonthVideos[] = personas.map((p) => {
+    const v = market.slice(p.videos[0], p.videos[1]).map((m) => m.id).sort()
+    return { key: p.key, name: p.name, month: SEP, videoIds: v, n: v.length }
+  })
+  return {
+    profile: {
+      run_id: 'run-0927',
+      run_date: '2026-09-27T05:00:00.000Z',
+      personas: personas.map((p) => ({
+        key: p.key, name: p.name, oneLiner: p.oneLiner, scope: 'category', wants: p.wants, blockers: p.blockers, triggers: p.triggers,
+        howTheyTalk: p.howTheyTalk, who: p.who, insightIds: ids(`i-${p.key}-`, 30), evidenceCount: 30, sourceVideoCount: 60,
+        prevalence: 'Common', platformMix: { tiktok: 30, instagram: 20 }, registryIds: p.registryIds, themeIds: [],
+      })),
+    },
+    read: {
+      videos,
+      groups: personas.map((p, i) => ({
+        key: p.key, name: p.name, month: SEP, n: videos[i].n,
+        subjects: p.subjects.map(([subjectId, label, k]) => ({ subjectId, label, k, n: videos[i].n })),
+      })),
+    },
+  }
+}
+
+// ---- Össur ------------------------------------------------------------------------
+
+const OSSUR_PERSONAS: PersonaIn[] = [
+  {
+    key: 'new-amputees', name: 'New amputees, first year', oneLiner: 'Learning everything at once: fit, skin, what’s normal.',
+    wants: 'Know what’s normal while learning to walk again. Someone who has been there to say so.',
+    blockers: 'Pain and skin problems nobody warned them about. Waiting months for a first socket.',
+    triggers: 'Another amputee showing the same problem, and how they solved it.',
+    howTheyTalk: ['is this normal?', 'my first socket', 'how long did it take you', 'my prosthetist said'],
+    who: [{ signal: 'below knee amputee', count: 14 }, { signal: 'recent amputation', count: 9 }, { signal: 'diabetic amputee', count: 4 }],
+    registryIds: ['reg-phantom', 'reg-first-socket', 'reg-skin'],
+    videos: [0, 96], subjects: [['s-fit', 'Fit & comfort', 46], ['s-function', 'Function & movement', 29], ['s-cost', 'Cost & access', 17]],
+  },
+  {
+    key: 'long-time', name: 'Long-time users upgrading', oneLiner: 'Know what they want; fighting to get it paid for.',
+    wants: 'The next device, and someone to pay for it.', blockers: 'Insurance refusals and appeals that take months.',
+    triggers: 'A clinician who will write the letter.', howTheyTalk: ['denied again', 'my third leg', 'worth the fight'],
+    who: [{ signal: 'above knee amputee', count: 8 }], registryIds: ['reg-insurance', 'reg-knee-choice'],
+    videos: [60, 130], subjects: [['s-cost', 'Cost & access', 31], ['s-choose', 'Choosing the right device', 22], ['s-function', 'Function & movement', 18]],
+  },
+  {
+    key: 'athlete', name: 'Active and athletic', oneLiner: 'Want proof a device keeps up: running, hiking, sport.',
+    wants: 'Proof a device keeps up with their sport.', blockers: 'Sports gear judged ‘not medically necessary’.',
+    triggers: 'Seeing a blade or knee used in the sport they do.', howTheyTalk: ['running blade', 'back on the trail'],
+    who: [], registryIds: ['reg-running', 'reg-phantom'],
+    videos: [100, 157], subjects: [['s-function', 'Function & movement', 29], ['s-community', 'Community & encouragement', 23], ['s-fit', 'Fit & comfort', 11]],
+  },
+  {
+    key: 'caregivers', name: 'Caregivers and family', oneLiner: 'Parents and partners asking on someone’s behalf.',
+    wants: 'Clear answers they can act on for someone else: what to buy, what’s covered, what recovery looks like.',
+    blockers: 'Not knowing whom to trust, and costs they didn’t expect, like liners and new sockets as a child grows.',
+    triggers: 'A clinician or another parent saying it worked for them.',
+    howTheyTalk: ['my son’s leg', 'his prosthetist said', 'is this normal for kids?', 'we’re still waiting on insurance', 'she outgrew it already'],
+    who: [{ signal: 'parent of child amputee', count: 12 }, { signal: 'partner of amputee', count: 5 }, { signal: 'adult child caregiver', count: 3 }],
+    registryIds: ['reg-growing', 'reg-insurance', 'reg-kids-wear'],
+    videos: [150, 195], subjects: [['s-fit', 'Fit & comfort', 17], ['s-cost', 'Cost & access', 14], ['s-community', 'Community & encouragement', 11]],
+  },
+  {
+    key: 'clinicians', name: 'Clinicians and prosthetists', oneLiner: 'Answer questions in the comments; share fittings.',
+    wants: 'To correct myths and show good fittings.', blockers: 'Patients arriving with expectations set by social videos.',
+    triggers: 'A wrong claim in a popular video.', howTheyTalk: [], who: [], registryIds: ['reg-knee-choice'],
+    videos: [190, 219], subjects: [['s-choose', 'Choosing the right device', 15], ['s-fit', 'Fit & comfort', 10], ['s-function', 'Function & movement', 6]],
+  },
+]
+
+const OSSUR_LABELS = new Map([
+  ['reg-phantom', 'Phantom pain and itching'],
+  ['reg-first-socket', 'Waiting for a first socket'],
+  ['reg-skin', 'Skin problems under the liner'],
+  ['reg-insurance', 'Insurance refusals for powered knees'],
+  ['reg-knee-choice', 'Choosing a microprocessor knee'],
+  ['reg-running', 'Running on a blade'],
+  ['reg-growing', 'Growing out of a socket'],
+  ['reg-kids-wear', 'Getting kids to wear it'],
+])
+
+/** Each conversation's month videos (`month_evidence_refs` theme rows). */
+function refsOver(market: { id: string }[], spans: Record<string, [number, number][]>): ThemeRef[] {
+  return Object.entries(spans).map(([themeId, ranges]) => ({
+    themeId, audience: 'industry-other', videoIds: ranges.flatMap(([a, b]) => market.slice(a, b).map((m) => m.id)),
+  }))
+}
+
+const OSSUR_QUOTES: VoicesQuote[] = [
+  { ref: 'e:q1', text: 'My daughter outgrew her socket in four months. Is that normal?', english: null, lang: null, platform: 'instagram', cite: 'Instagram · 14 Sep · under a category video' },
+  { ref: 'e:q2', text: 'He refuses to wear it to school. Any tips from other parents?', english: null, lang: null, platform: 'tiktok', cite: 'TikTok · 16 Sep · under a category video' },
+  { ref: 'e:q3', text: 'Insurance covered the leg but not the liners. Nobody warned us.', english: null, lang: null, platform: 'instagram', cite: 'Instagram · 19 Sep · under a category video' },
+]
+
+interface CreatorIn {
+  platform: string
+  account: string
+  videos: [number, number]
+  followers: number | null
+}
+
+function creatorsFrom(market: { id: string; platform: string }[], creators: CreatorIn[]): CreatorVideo[] {
+  const owner = new Map<string, CreatorIn>()
+  for (const c of creators) for (const m of market.slice(c.videos[0], c.videos[1])) if (!owner.has(m.id)) owner.set(m.id, c)
+  return market.map((m, i) => {
+    const c = owner.get(m.id)
+    return {
+      videoId: m.id, audience: 'industry-other', platform: c?.platform ?? m.platform,
+      account: c?.account ?? `account${i}`, followers: c?.followers ?? 0, scrapedAt: '2026-09-28T06:00:00.000Z',
+    }
+  })
+}
+
+const OSSUR_CREATORS: CreatorIn[] = [
+  { platform: 'reddit', account: 'r/amputee', videos: [0, 25], followers: 16126 },
+  { platform: 'tiktok', account: 'A L I S', videos: [100, 108], followers: 186221 },
+  { platform: 'youtube', account: 'The Amputee Diaries', videos: [150, 157], followers: 96000 },
+  { platform: 'instagram', account: 'runningon.carbon', videos: [110, 116], followers: 41200 },
+  { platform: 'instagram', account: 'limbcare.clinic', videos: [190, 195], followers: 12000 },
+  { platform: 'tiktok', account: 'newleg.newlife', videos: [200, 204], followers: 58000 },
+  { platform: 'youtube', account: 'Stepping Forward', videos: [210, 213], followers: 3100 },
+]
+
+/** Össur's September: groups and creators read; brand rules, no brand row. */
+export function ossurVoicesFixture(params: VoicesParams = {}): VoicesData {
+  const market = marketOf(487, ['tiktok', 'instagram', 'youtube', 'reddit'])
+  const { profile, read } = groupsFrom(OSSUR_PERSONAS, market)
+  const platformOf = new Map(market.map((m) => [m.id, m.platform]))
+  const groups = buildGroups({ profile, read, platformOf, params })
+  const tracked = [{ brandKey: 'client', label: 'Össur', countState: 'counted' as const }, { brandKey: '5ecfa431', label: 'Ottobock', countState: 'counted' as const }]
+  const pairs = brandMonthPair({ month: SEP, brands: tracked, rows: [], audiences: ['industry-other'], pair: null })
+  // No month row yet (the back-read has not run): every brand "not counted
+  // yet", and the latest update's finding about Ottobock still the note.
+  const brands = buildBrands({ clientId: OSSUR_CLIENT_ID, month: SEP, pairs, crosses: null, note: { rival: 'Ottobock', title: 'Ottobock’s talk turns on getting a knee paid for' }, params })
+  const refs = refsOver(market, {
+    'reg-phantom': [[0, 10]], 'reg-first-socket': [[10, 30]], 'reg-skin': [[30, 45]], 'reg-insurance': [[60, 90], [150, 158]],
+    'reg-knee-choice': [[110, 125], [190, 200]], 'reg-running': [[100, 124]], 'reg-growing': [[150, 162]], 'reg-kids-wear': [[170, 177]],
+  })
+  const creatorVideos = creatorsFrom(market, OSSUR_CREATORS)
+  const read2 = creatorThemes({ month: SEP, videos: creatorVideos, refs })
+  const videoIds = creatorVideoIds(creatorVideos.map((v) => ({ id: v.videoId, platform: v.platform, account: v.account })))
+  const creators = buildCreators({ month: SEP, read: read2, labels: OSSUR_LABELS, videoIds, brands: [], params })
+  const data: VoicesData = {
+    client: 'Össur', month: SEP, soFar: false, monthWords: monthWordsOf(SEP, false), videos: market.length,
+    groups, brands, creators, params, open: null, panel: null,
+  }
+  const open = openOf(data, params, { creators: read2 })
+  if (open?.kind === 'group') {
+    const index = groups.cards.findIndex((c) => c.key === open.key)
+    const persona = personasOf(profile).find((p) => p.key === open.key)!
+    const g = read.groups.find((x) => x.key === open.key)!
+    return {
+      ...data, open, panel: buildGroupPanel({
+        persona, card: groups.cards[index], index, perRow: 3, n: market.length,
+        subjects: g.subjects.map((s) => ({ id: s.subjectId, label: s.label, k: s.k })),
+        videoIds: read.videos.find((x) => x.key === open.key)!.videoIds, themeSets: themeVideoSets(refs), labels: OSSUR_LABELS,
+        quotes: open.key === 'caregivers' ? OSSUR_QUOTES : OSSUR_QUOTES.slice(0, 1), params,
+      }),
+    }
+  }
+  if (open?.kind === 'creator') {
+    const c = read2.creators.find((x) => x.key === open.key)!
+    return { ...data, open, panel: buildCreatorPanel({ creator: c, n: market.length, labels: OSSUR_LABELS, videoIds: videoIds.get(c.key) ?? [], brands: [], params }) }
+  }
+  if (open?.kind === 'brand') {
+    // A rival not counted yet: its count half says so, its Competitive half
+    // (filed videos over ninety days, findings) stands.
+    const row = brands.all.find((r) => r.brandKey === open.key)!
+    return {
+      ...data, open, panel: buildBrandPanel({
+        row, kinds: undefined, subjects: undefined, noun: null, window: { from: '2026-07-03', to: '2026-10-01' },
+        asked: { themes: [{ registryId: 'reg-insurance', label: 'Insurance refusals for powered knees', videos: 7 }] },
+        said: [{ ref: 'c:o1', text: 'The Genium changed my life but the fight with insurance took a year.', english: null, lang: null, platform: 'youtube', cite: 'YouTube · 18 Sep' }],
+        findings: [{ id: 'of1', category: 'topic_ownership', title: 'Ottobock’s talk turns on getting a knee paid for', body: 'Where the rest of the market talks about fit and daily life, talk about Ottobock gathers around appeals and coverage.' }],
+        params,
+      }),
+    }
+  }
+  return data
+}
+
+// ---- Sealand -----------------------------------------------------------------------
+
+const COTO = 'c0000000-0000-0000-0000-000000000001'
+const FREI = 'c0000000-0000-0000-0000-000000000002'
+const PATA = 'c0000000-0000-0000-0000-000000000003'
+const RARE = 'c0000000-0000-0000-0000-000000000004'
+const TNF = 'c0000000-0000-0000-0000-000000000005'
+const FOM = 'c0000000-0000-0000-0000-000000000006'
+
+/** Sealand's one September name read (lib/brands/precision.ts NAME_READS). */
+const SEALAND_NAMED = 'a8fdd6fe-e2d6-434c-a207-6f17eb3f9b26'
+
+const SEALAND_BRANDS = [
+  { brandKey: 'client', label: 'Sealand', countState: 'counted' as const },
+  { brandKey: COTO, label: 'Cotopaxi', countState: 'counted' as const },
+  { brandKey: 'c-fom', label: 'Freedom of Movement', countState: 'none' as const },
+  { brandKey: FREI, label: 'Freitag', countState: 'counted' as const },
+  { brandKey: PATA, label: 'Patagonia', countState: 'counted' as const },
+  { brandKey: RARE, label: 'Rareform', countState: 'counted' as const },
+  { brandKey: TNF, label: 'The North Face', countState: 'counted' as const },
+]
+void FOM
+
+/** month_brand_readings, pooled into one audience: [k_any, k_organic] for
+ *  September (n 940, n_organic 743) and August (n 412, n_organic 250). */
+const STORED: Record<string, { sep: [number, number]; aug: [number, number] }> = {
+  client: { sep: [1, 1], aug: [0, 0] },
+  [COTO]: { sep: [52, 5], aug: [20, 1] },
+  [FREI]: { sep: [7, 2], aug: [3, 0] },
+  [PATA]: { sep: [65, 13], aug: [30, 4] },
+  [RARE]: { sep: [1, 0], aug: [0, 0] },
+  [TNF]: { sep: [64, 10], aug: [28, 5] },
+}
+
+function storedRows(): StoredBrandMonthRow[] {
+  return Object.entries(STORED).flatMap(([brand_key, v]) => [
+    { month: SEP, audience: 'industry-other', brand_key, k_any: v.sep[0], k_organic: v.sep[1], n: 940, n_organic: 743 },
+    { month: AUG, audience: 'industry-other', brand_key, k_any: v.aug[0], k_organic: v.aug[1], n: 412, n_organic: 250 },
+  ])
+}
+
+const KIND_CELLS: Record<string, [string, number][]> = {
+  client: [['question', 1]],
+  [COTO]: [['praise', 31], ['question', 30], ['pain_point', 19], ['purchase_intent', 22]],
+  [FREI]: [['praise', 4], ['pain_point', 2], ['question', 3]],
+  [PATA]: [['praise', 50], ['question', 45], ['pain_point', 43], ['purchase_intent', 43], ['feature_request', 28], ['objection', 26], ['switching_signal', 13], ['demographic_signal', 6]],
+  [RARE]: [['praise', 1]],
+  [TNF]: [['praise', 38], ['pain_point', 33], ['question', 29], ['objection', 12]],
+}
+
+const SUBJECT_CELLS: Record<string, [string, string, number][]> = {
+  client: [['s-dura', 'Durability', 1]],
+  [COTO]: [['s-looks', 'Looks & style', 18], ['s-dura', 'Durability', 12], ['s-price', 'Price', 9]],
+  [FREI]: [['s-purpose', 'Community & purpose', 3]],
+  [PATA]: [['s-dura', 'Durability', 19], ['s-comfort', 'Comfort', 17], ['s-repair', 'Repair & warranty', 14], ['s-water', 'Waterproofing', 10], ['s-price', 'Price', 6], ['s-buy', 'Buying & delivery', 5]],
+  [RARE]: [],
+  [TNF]: [['s-comfort', 'Comfort', 21], ['s-dura', 'Durability', 15], ['s-water', 'Waterproofing', 8]],
+}
+
+const SEALAND_PERSONAS: PersonaIn[] = [
+  {
+    key: 'one-bag', name: 'One-bag travellers', oneLiner: 'Pack light for long trips and compare every litre.',
+    wants: 'One bag that does carry-on, day trips and the office.', blockers: 'Airline size rules and bags that look bigger than they are.',
+    triggers: 'A packing video that fits a whole trip into one bag.', howTheyTalk: ['carry-on only', 'fits under the seat', 'how many litres'],
+    who: [{ signal: 'frequent traveller', count: 11 }], registryIds: ['reg-airline', 'reg-laundry'],
+    videos: [0, 74], subjects: [['s-dura', 'Durability', 22], ['s-comfort', 'Comfort', 19], ['s-water', 'Waterproofing', 9]],
+  },
+  {
+    key: 'eco', name: 'Sustainability-minded buyers', oneLiner: 'Want to know what a bag is made of and who made it.',
+    wants: 'Proof a recycled bag lasts as long as a new one.', blockers: 'Claims they cannot check.',
+    triggers: 'A maker showing the material up close.', howTheyTalk: ['made from sails', 'upcycled'],
+    who: [], registryIds: ['reg-material'],
+    videos: [60, 110], subjects: [['s-purpose', 'Community & purpose', 21], ['s-dura', 'Durability', 12]],
+  },
+  {
+    key: 'commuters', name: 'Daily commuters', oneLiner: 'Laptop, lunch and rain, every day.',
+    wants: 'A bag that keeps a laptop dry on a bike.', blockers: 'Straps that dig in and zips that fail.',
+    triggers: 'A wet-weather test.', howTheyTalk: ['laptop sleeve', 'rain cover'], who: [], registryIds: ['reg-laptop'],
+    videos: [120, 158], subjects: [['s-water', 'Waterproofing', 14], ['s-comfort', 'Comfort', 11]],
+  },
+]
+
+const SEALAND_LABELS = new Map([
+  ['reg-airline', 'Confusion over airline size rules'],
+  ['reg-laundry', 'Laundry planning while traveling'],
+  ['reg-material', 'What recycled sailcloth feels like'],
+  ['reg-laptop', 'Keeping a laptop dry'],
+  ['reg-question-patagonia', 'Is the Black Hole worth it'],
+])
+
+const SEALAND_CREATORS: CreatorIn[] = [
+  { platform: 'reddit', account: 'r/onebag', videos: [0, 30], followers: 951602 },
+  { platform: 'youtube', account: 'Pack Hacker', videos: [30, 42], followers: 512000 },
+  { platform: 'tiktok', account: 'travelwithkate', videos: [42, 50], followers: 88400 },
+  { platform: 'instagram', account: 'patagonia', videos: [50, 56], followers: 5800000 },
+  { platform: 'reddit', account: 'r/backpacks', videos: [56, 61], followers: 210000 },
+  { platform: 'youtube', account: 'Bag Lab', videos: [61, 64], followers: 23000 },
+]
+
+/** Sealand's September: brands counted, Patagonia's Competitive pane on its
+ *  panel. */
+export function sealandVoicesFixture(params: VoicesParams = {}): VoicesData {
+  const market = marketOf(940, ['tiktok', 'youtube', 'instagram', 'reddit'])
+  const { profile, read } = groupsFrom(SEALAND_PERSONAS, market)
+  const platformOf = new Map(market.map((m) => [m.id, m.platform]))
+  const groups = buildGroups({ profile, read, platformOf, params })
+  const pairs = brandMonthPair({ month: SEP, brands: SEALAND_BRANDS, rows: storedRows(), audiences: ['industry-other'], pair: null })
+  // The month sets: each brand's k_any videos, the client's the one name read.
+  // Spread over the month's market (every seventh video, from each brand's
+  // own offset), so the creators' chips name more than one brand.
+  const videos: BrandMonthVideos[] = SEALAND_BRANDS.map((b, bi) => {
+    const v = STORED[b.brandKey]
+    const any = b.brandKey === 'client' ? [SEALAND_NAMED] : v ? Array.from({ length: v.sep[0] }, (_, i) => market[(bi * 3 + i * 7) % market.length].id) : []
+    return { ...b, month: SEP, any, organic: any.slice(0, v?.sep[1] ?? 0), n: 940, nOrganic: 743 }
+  })
+  const cross = (cells: Record<string, [string, number][]>): BrandCrossRow[] => SEALAND_BRANDS.map((b) => ({
+    brandKey: b.brandKey, label: b.label, month: SEP, base: 'any', n: STORED[b.brandKey]?.sep[0] ?? 0,
+    cells: (cells[b.brandKey] ?? []).map(([id, k]) => ({ id, label: id, k, n: STORED[b.brandKey]?.sep[0] ?? 0 })),
+  }))
+  const kinds = cross(KIND_CELLS)
+  const subjects: BrandCrossRow[] = SEALAND_BRANDS.map((b) => ({
+    brandKey: b.brandKey, label: b.label, month: SEP, base: 'any', n: STORED[b.brandKey]?.sep[0] ?? 0,
+    cells: (SUBJECT_CELLS[b.brandKey] ?? []).map(([id, label, k]) => ({ id, label, k, n: STORED[b.brandKey]?.sep[0] ?? 0 })),
+  }))
+  const crosses = { videos, kinds, subjects }
+  const brands = buildBrands({
+    clientId: SEALAND_CLIENT_ID, month: SEP, pairs, crosses,
+    note: { rival: 'Patagonia', title: 'Patagonia is praised for lasting for years, and the repair promise is what people repeat' },
+    params,
+  })
+  const refs = refsOver(market, { 'reg-airline': [[0, 20]], 'reg-laundry': [[3, 11], [100, 108]], 'reg-material': [[60, 75]], 'reg-laptop': [[120, 140]] })
+  const creatorVideos = creatorsFrom(market, SEALAND_CREATORS)
+  const read2 = creatorThemes({ month: SEP, videos: creatorVideos, refs })
+  const videoIds = creatorVideoIds(creatorVideos.map((v) => ({ id: v.videoId, platform: v.platform, account: v.account })))
+  const counted = new Set(brands.rows.map((r) => r.brandKey))
+  const brandSets: BrandSet[] = videos.filter((b) => counted.has(b.brandKey)).map((b) => ({ label: b.label, you: b.brandKey === 'client', any: new Set(b.any) }))
+  const creators = buildCreators({ month: SEP, read: read2, labels: SEALAND_LABELS, videoIds, brands: brandSets, params })
+  const data: VoicesData = {
+    client: 'Sealand', month: SEP, soFar: false, monthWords: monthWordsOf(SEP, false), videos: market.length,
+    groups, brands, creators, params, open: null, panel: null,
+  }
+  const open = openOf(data, params, { creators: read2 })
+  if (open?.kind === 'brand') {
+    const row = brands.rows.find((r) => r.brandKey === open.key)!
+    const rival = !row.you
+    return {
+      ...data, open, panel: buildBrandPanel({
+        row, kinds: kinds.find((k) => k.brandKey === row.brandKey), subjects: subjects.find((k) => k.brandKey === row.brandKey), noun: 'bags',
+        window: rival ? { from: '2026-06-30', to: '2026-09-28' } : null,
+        asked: rival ? { themes: [{ registryId: 'reg-question-patagonia', label: 'Is the Black Hole worth it', videos: 9 }, { registryId: 'reg-airline', label: 'Confusion over airline size rules', videos: 4 }] } : null,
+        said: rival ? [
+          { ref: 'c:s1', text: 'Mine is ten years old and they still fixed the zip for free.', english: null, lang: null, platform: 'youtube', cite: 'YouTube · 12 Sep' },
+          { ref: 'c:s2', text: 'The duffel is great but it is not waterproof in real rain.', english: null, lang: null, platform: 'reddit', cite: 'Reddit · 20 Sep' },
+        ] : [],
+        findings: rival ? [
+          { id: 'f1', category: 'sentiment_differential', title: 'Patagonia is praised for lasting for years, and the repair promise is what people repeat', body: 'Where the rest of the market argues about price, talk about Patagonia turns on how long a bag lasts and the free repairs that keep it going.' },
+          { id: 'f2', category: 'topic_ownership', title: 'Waterproofing questions gather under its duffels', body: null },
+        ] : [],
+        params,
+      }),
+    }
+  }
+  if (open?.kind === 'creator') {
+    const c = read2.creators.find((x) => x.key === open.key)!
+    return { ...data, open, panel: buildCreatorPanel({ creator: c, n: market.length, labels: SEALAND_LABELS, videoIds: videoIds.get(c.key) ?? [], brands: brandSets, params }) }
+  }
+  return data
+}
+
+/** The fixture each shot and render test draws. */
+export const VOICES_FIXTURES = {
+  ossur: () => ossurVoicesFixture(),
+  'ossur-group': () => ossurVoicesFixture({ group: 'caregivers' }),
+  'ossur-creator': () => ossurVoicesFixture({ creator: 'A L I S' }),
+  sealand: () => sealandVoicesFixture(),
+  'sealand-brand': () => sealandVoicesFixture({ brand: 'Patagonia' }),
+  'sealand-creator': () => sealandVoicesFixture({ creator: 'Pack Hacker' }),
+  'ossur-brand': () => ossurVoicesFixture({ brand: 'Ottobock' }),
+} as const

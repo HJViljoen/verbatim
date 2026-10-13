@@ -14,12 +14,14 @@ import {
   type WriteContext,
 } from '@/lib/subjects/moves'
 import { MOVE_STATUSES, SUBJECT_ORIGINS, SUBJECT_WRITE_REFUSED } from '@/lib/subjects/types'
+import { MOVES_WRITE_REFUSED, mayDecideMoves } from '@/lib/moves-access'
 
 // The subject and move write path (Phase 1 WP12, design §3 SU1 and SU2).
 //
 // LIVES IN lib/actions/ BECAUSE THREE SURFACES CALL IT. The editor is shared —
 // SU1 on the Subjects page and Settings › Subjects (WP16) are the same
-// component — and "Track this" is on SU2 and on VO3 (WP13). An action imported
+// component, and since Design v2 it lives in Settings › Your subjects alone —
+// and "Track this" is on SU2 and on VO3 (WP13). An action imported
 // by module path from `app/dashboard/<page>/actions` moves house every time its
 // page does, which is exactly what happened to the rec-status action in WP9.
 //
@@ -43,8 +45,11 @@ import { MOVE_STATUSES, SUBJECT_ORIGINS, SUBJECT_WRITE_REFUSED } from '@/lib/sub
 //
 // A move is the other kind of act: it is the client SAYING they did something,
 // scored later against readings nobody here can touch, and `moves` grants a
-// member `status` and nothing that says what was measured. That stays open to
-// anyone who can see the page.
+// member `status` and nothing that says what was measured. "Track this" stays
+// open to anyone who can see the page; a move's STATUS is an owner's or an
+// admin's since depth v2 (T7, lib/moves-access.ts), with accepting advice and
+// "Date a move", because Your moves offers the three side by side and one
+// page cannot answer two readers two ways.
 //
 // Every one of these writes carries an actor into `config_changes`
 // (lib/subjects/moves.ts), written with the service-role client because a log a
@@ -91,9 +96,11 @@ const firstIssue = (e: z.ZodError): string => {
 /**
  * Everywhere a subject or a move is read.
  *
- * Four addresses and each of them is real: Market, which holds the subject
+ * Five addresses and each of them is real: Market, which holds the subject
  * board and Your market's subjects since Design v2 (the Subjects page and
- * /dashboard/overview redirect there), the Dashboard, Settings, and Your
+ * /dashboard/overview redirect there), the Dashboard, Settings, Settings ›
+ * Your subjects, where the editor lives since Design v2 (T10c; a literal path
+ * revalidates that page alone, so Settings' own does not cover it), and Your
  * moves, which is where a move is scored (WP14; /dashboard/moves since Design
  * v2). A router cache of 60 seconds (next.config.ts staleTimes.dynamic) is
  * long enough for a client to name a subject and then not see it on the next
@@ -103,6 +110,7 @@ function revalidateSubjects(): void {
   revalidatePath('/dashboard/market')
   revalidatePath('/dashboard')
   revalidatePath('/dashboard/settings')
+  revalidatePath('/dashboard/settings/subjects')
   revalidatePath('/dashboard/moves')
 }
 
@@ -199,7 +207,9 @@ export async function setMoveStatusAction(id: string, status: string): Promise<S
   if (!(MOVE_STATUSES as readonly string[]).includes(status)) {
     return { ok: false, message: 'Say whether it is done, dropped, or still running.' }
   }
-  const ctx = await context()
+  const { supabase, clientId, userId, email, operator, role } = await getSessionContext()
+  if (!mayDecideMoves(role)) return { ok: false, message: MOVES_WRITE_REFUSED }
+  const ctx: WriteContext = { supabase, clientId, userId, email, operator }
   const result = await setMoveStatus(ctx, createAdminClient(), {
     id,
     status: status as (typeof MOVE_STATUSES)[number],

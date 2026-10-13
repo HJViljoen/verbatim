@@ -18,6 +18,10 @@
 //              mints one (default <app>/r/preview).
 // --page-out   also write the share page (the web version, findings in full)
 //              as a standalone HTML file.
+// --lines      the page lines a build would freeze, as a JSON array of
+//              WeeklyReadLine (lib/reports/weekly-read-lines.ts); none without.
+// --report     draw it as a snapshot stored before level 1 (version 1, the
+//              report), for comparing the two; level 1 (version 2) otherwise.
 //
 // The mark is inlined, so the file reads the same opened from disk. Nothing
 // is written but --out; the read must be `ready` (a thin, failed or empty one
@@ -33,7 +37,8 @@ import { renderStaticHtml } from '../lib/email/render-html'
 import { renderWeeklyReadEmail } from '../lib/email/weekly-read'
 import { resolveQuotes } from '../lib/renderables/quotes-freeze'
 import { weekReadSendState } from '../lib/reports/weekly-read'
-import { weeklyReadSnapshotData } from '../lib/reports/weekly-read-build'
+import { WEEKLY_READ_REPORT_VERSION, weeklyReadSnapshotData } from '../lib/reports/weekly-read-build'
+import type { WeeklyReadLine } from '../lib/reports/weekly-read-lines'
 import type { WeekReadData } from '../lib/written/types'
 
 const args = process.argv.slice(2)
@@ -72,10 +77,14 @@ function main(): void {
   const quotesFrom = flag('quotes-from')
   const words = quotesFrom ? quotesFromRendering(readFileSync(resolve(process.cwd(), quotesFrom), 'utf8')) : new Map<string, string>()
   const read = resolveQuotes(stored.data, words)
-  const data = weeklyReadSnapshotData({ company: flag('company', 'Sealand'), runId: flag('run', 'preview'), read, writtenAt: new Date().toISOString() })
+  const linesPath = flag('lines')
+  const lines = linesPath ? (JSON.parse(readFileSync(resolve(process.cwd(), linesPath), 'utf8')) as WeeklyReadLine[]) : []
+  const built = weeklyReadSnapshotData({ company: flag('company', 'Sealand'), runId: flag('run', 'preview'), read, writtenAt: new Date().toISOString(), lines })
+  const data = args.includes('--report') ? (({ lines: _lines, ...rest }) => ({ ...rest, version: WEEKLY_READ_REPORT_VERSION }))(built) : built
   const mark = `data:image/png;base64,${readFileSync(resolve(process.cwd(), 'public/brand/verbatim-mark-ink.png')).toString('base64')}`
+  const markOnInk = `data:image/png;base64,${readFileSync(resolve(process.cwd(), 'public/brand/verbatim-mark-yellow.png')).toString('base64')}`
   const app = flag('app', 'https://app.verbatimintel.com')
-  const email = renderWeeklyReadEmail({ data, appUrl: app, markSrc: mark, shareUrl: flag('share', `${app}/r/preview`) })
+  const email = renderWeeklyReadEmail({ data, appUrl: app, markSrc: mark, markOnInkSrc: markOnInk, shareUrl: flag('share', `${app}/r/preview`) })
   writeFileSync(resolve(process.cwd(), outPath), email.html)
   const pageOut = flag('page-out')
   if (pageOut) {

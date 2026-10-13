@@ -206,6 +206,16 @@ describe('review mode: the build stops at ready and the OPERATOR reads it first'
     expect(snap.evidence_ids).toEqual(expect.arrayContaining(['e:bd2a2f71-2240-4365-9c44-01d685e970b1', 'e:e2e1146c-be79-452f-b943-2f3381a662f9']))
   })
 
+  it('a new build is level 1 (version 2) and freezes its page lines; a page with nothing, or no table, has no line', async () => {
+    const w = world({ status: 'ready', data: frozen(sealandRead()) })
+    await runSchedule({ admin: w.admin, schedule: schedule(), runId: RUN, baseUrl: APP, mode: 'send' })
+    const snap = w.tables.report_snapshots[0] as { data: { version: number; lines: unknown[] } }
+    expect(snap.data.version).toBe(2)
+    // No post ideas, no catalogue, no advice in this world: no lines, and the
+    // build stands.
+    expect(snap.data.lines).toEqual([])
+  })
+
   it("the operator's Send delivers it to the list, under the read's subject, with the words resolved and no figures recorded", async () => {
     const w = world({ status: 'ready', data: frozen(sealandRead()) })
     const held = await runSchedule({ admin: w.admin, schedule: schedule(), runId: RUN, baseUrl: APP, mode: 'send' })
@@ -214,7 +224,10 @@ describe('review mode: the build stops at ready and the OPERATOR reads it first'
     expect(mail.report).toHaveLength(1)
     expect(mail.report[0].to).toEqual(RECIPIENTS)
     expect(mail.report[0].subject).toBe(held.subject)
-    expect(mail.report[0].html).toContain('the words of e:bd2a2f71-2240-4365-9c44-01d685e970b1')
+    // Level 1 (T11b): the email prints no quote; the words are the share
+    // page's, one click down.
+    expect(mail.report[0].html).toContain('Open this week in Verbatim')
+    expect(mail.report[0].html).not.toContain('the words of')
     // "Read this week in full" is the share link minted at the Send.
     const token = (w.tables.share_links[0] as { token: string }).token
     expect(mail.report[0].html).toContain(`${APP}/r/${token}`)
@@ -231,21 +244,22 @@ describe('review mode: the build stops at ready and the OPERATOR reads it first'
     expect(mail.report[0].to).toEqual(RECIPIENTS)
     expect(mail.review).toEqual([])
     expect(w.db.calls.some((c) => c.table === 'sent_figures')).toBe(false)
-    // The quotes' words, resolved for this render (the stored read has none).
-    expect(mail.report[0].html).toContain('the words of e:bd2a2f71-2240-4365-9c44-01d685e970b1')
-    expect(mail.report[0].html).toContain('the words of e:e2e1146c-be79-452f-b943-2f3381a662f9')
+    // Level 1: no quote at all in the email.
+    expect(mail.report[0].html).toContain('Open this week in Verbatim')
+    expect(mail.report[0].html).not.toContain('the words of')
   })
 
-  it('a test send and the Studio preview render the quotes too, and keep no snapshot', async () => {
+  it('a test send and the Studio preview render the level-1 email the list would get, and keep no snapshot', async () => {
     const w = world({ status: 'ready', data: frozen(sealandRead()) })
     const t = await runSchedule({ admin: w.admin, schedule: schedule(), runId: RUN, baseUrl: APP, mode: 'test', to: ['heinrich@verbatim.test'] })
     expect(t.status).toBe('sent')
     expect(mail.report).toHaveLength(1)
     expect(mail.report[0].to).toEqual(['heinrich@verbatim.test'])
-    expect(mail.report[0].html).toContain('the words of e:bd2a2f71-2240-4365-9c44-01d685e970b1')
+    expect(mail.report[0].html).toContain('Open this week in Verbatim')
+    expect(mail.report[0].html).not.toContain('the words of')
     const p = await runSchedule({ admin: w.admin, schedule: schedule(), runId: RUN, baseUrl: APP, mode: 'preview' })
     expect(p.status).toBe('preview')
-    expect(p.html).toContain('the words of e:e2e1146c-be79-452f-b943-2f3381a662f9')
+    expect(p.html).toContain('Open this week in Verbatim')
     expect(w.tables.report_snapshots).toEqual([])
     expect(w.tables.report_sends).toEqual([])
   })
