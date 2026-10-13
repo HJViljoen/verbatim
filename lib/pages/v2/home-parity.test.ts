@@ -10,7 +10,7 @@ import { MOVE_CARDS } from './moves-fixture'
 import { MOVES_PATH, newestMove, type MoveCard } from './moves'
 import { SHELF_TILES, shelfCut, topProductsOf, type ProductsData, type TopProducts } from './products'
 import { PRODUCTS_FIXTURES } from './products-fixture'
-import { topVoicesOf } from './voices'
+import { brandTable, NAMED_MOST, topVoicesOf } from './voices'
 import { VOICES_FIXTURES } from './voices-fixture'
 
 // THE PARITY PASS (13 Oct): what the Dashboard's loader adds so each tile
@@ -159,6 +159,14 @@ describe('Voices: the tracked brands, for a "Named most" row with no count yet',
     expect(top.tracked!.length).toBeLessThanOrEqual(2)
     expect(top.tracked![0].you).toBe(true)
     for (const b of top.tracked!) expect(b.href).toMatch(/^\/dashboard\/voices\?brand=[^#]+#brand-panel$/)
+  })
+
+  it('brands not counted yet: the chips are the brands table\'s first rows, in its order (`brandTable`)', () => {
+    const d = VOICES_FIXTURES['ossur-thin']()
+    expect(d.brands.state).toBe('not_counted')
+    const top = topVoicesOf({ month: d.month, soFar: d.soFar, videos: d.videos, groups: d.groups, brands: d.brands })
+    expect(top.tracked!.map((b) => b.label)).toEqual(brandTable(d.brands).rows.slice(0, NAMED_MOST).map((r) => r.label))
+    expect(top.tracked![0].you).toBe(true)
   })
 })
 
