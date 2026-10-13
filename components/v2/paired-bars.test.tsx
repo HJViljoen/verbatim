@@ -31,6 +31,23 @@ describe('PairedBars', () => {
     expect(zero).not.toContain('<i ')
   })
 
+  it('draws an empty cell as a dash over the bare track, never "0 of 0" (the parity pass)', () => {
+    const node = <PairedBars rowHeader="What it’s about" label="x" columns={[{ key: 'a', label: 'All liners', tone: 'market' }, { key: 'b', label: 'Iceross Seal-In X', tone: 'you' }]} rows={[{ key: 'r', label: 'Fit & comfort', cells: [{ k: 12, n: 23 }, null] }]} />
+    expect(renderText(node)).toBe('x What it’s about All liners Iceross Seal-In X Fit & comfort 12 of 23 – none')
+    expect(copyNodes(render(node)).filter((n) => n.kind === 'level').map((n) => n.text)).toEqual(['12 of 23'])
+    assertCopyContract(node)
+  })
+
+  it('says why a cell is empty, and a figure withheld is a quiet dot, never the dash a zero gets', () => {
+    const cols = [{ key: 'a', label: 'All liners', tone: 'market' as const }, { key: 'b', label: 'Iceross Seal-In X', tone: 'you' as const }]
+    const rows = [{ key: 'r', label: 'Fit & comfort', cells: [null, null] }]
+    const pending = <PairedBars rowHeader="What it’s about" label="x" columns={cols} rows={rows} emptyLabel="not measured yet" />
+    expect(renderText(pending)).toBe('x What it’s about All liners Iceross Seal-In X Fit & comfort · not measured yet · not measured yet')
+    expect(render(pending)).not.toContain('–')
+    expect(renderText(<PairedBars rowHeader="What it’s about" label="x" columns={cols} rows={rows} emptyLabel="not read" />)).toContain('Fit & comfort · not read · not read')
+    assertCopyContract(pending)
+  })
+
   it('sets the cell the page reads first in weight, never in a hue of its own', () => {
     expect(render(table)).toMatch(/<span data-copy="level" class="[^"]*font-semibold">4 of 6<\/span>/)
   })

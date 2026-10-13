@@ -161,6 +161,10 @@ export const READING_CARDS: readonly ReadingCard[] = [
       'A product is placed where a video or a comment names it, by its name or another name in your catalogue. A comment about one of your products that does not say which is counted as such, never guessed, and an owner or an admin can tag it.',
       'What people did is found anywhere in the comments of the videos naming a product: praise in the comments may be about something else in the video.',
       'A standout needs 3 or more videos. A product is set against its category only where the difference clears the band, and with a product’s tens of videos it rarely does. A category’s share is set against last month the same way, and two months read on different product lists are not compared.',
+      // The four places (the parity pass, 13 Oct night: `standoutSlots`).
+      // Ruling U6 (`printsMarket`): the crosses count ready subjects only.
+      'A subject still being checked prints no figure here either: it is named, and reads “Not measured yet” where its count would be, and no card or column says what the talk is mostly about until its check has passed.',
+      'The four cards at the top are always there. Where nothing reaches a standout, a card shows the nearest the month has and says what it is: a product named for the first time in one or two videos; the category with the largest share of talk that names none of your products; the product, else the category, with 3 or more videos and the largest share with praise in their comments; and the product, else the category, with 3 or more videos and the largest share about one subject. Each is one not already shown in another card, where there is one. A subject is said to lead only where it leads every other outright. Where the month has nothing for a card, it says so.',
       'A product with no reading in a month reads “not read yet”, never quiet.',
       'Until your catalogue is loaded and its reading is switched on, the page says which is missing rather than printing a count.',
     ],

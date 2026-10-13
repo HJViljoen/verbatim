@@ -490,7 +490,7 @@ const PAGES: Page[] = [
   // loader's output (or the near-real replay, scripts the package ran).
   ...(Object.keys(PRODUCTS_FIXTURES) as (keyof typeof PRODUCTS_FIXTURES)[]).map((k): Page => ({
     key: `products-${k}`, path: '/dashboard/products',
-    artboard: k.startsWith('ossur-liners') || k === 'ossur-product' || k === 'ossur-navii' ? 'E4-Products-Liners.dc.html' : 'E4-Products.dc.html',
+    artboard: /-(liners|product|navii|feet|quiet)/.test(k) ? 'E4-Products-Liners.dc.html' : 'E4-Products.dc.html',
     page: () => h(ProductsPage, { data: PRODUCTS_FIXTURES[k]() }),
   })),
   ...(process.env.PRODUCTS_JSON

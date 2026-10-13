@@ -9,13 +9,13 @@ import { fakeDb } from '../../test/fake-db'
 import { talkKindLabel } from '../overview-market/kinds'
 import {
   ACCEPT_PAIRS, linersUnclearTexts, OSSUR_CATALOGUE, OSSUR_STANDING, ossurCrosses, ossurLinersFixture, ossurProductRows, ossurProductsFixture,
-  ossurSealInXFixture, PRODUCT_IDS, PRODUCTS_FIXTURES, SEP_MARKET, sealInXTexts,
+  ossurSealInXFixture, ossurTodayFixture, ossurTodayLinersFixture, ossurTodayCrosses, ossurTodayQuietFixture, ossurTodayRows, PRODUCT_IDS, PRODUCTS_FIXTURES, SEP_MARKET, sealInXTexts,
 } from './products-fixture'
 import {
-  buildProductsData, catalogueBreak, categoryShareVerdict, crossesOf, firstMonthOf, monthLine, poolLens, loadMonthPlacements, marketProductMonth, marketVideosOf, monthsBack, notchFor,
+  buildCompare, buildProductsData, catalogueBreak, categoryShareVerdict, crossesOf, firstMonthOf, monthLine, monthOptions, monthsToRead, poolLens, loadMonthPlacements, marketProductMonth, marketVideosOf, monthsBack, notchFor,
   openOf, parseProductsParams, pickStandouts, placementsInPlay, productKindLabel, productMonthSets, productQuotes, productsHref, PRODUCT_KIND_LABELS, setKey, sharePct, shelfColumns,
-  topProducts, topProductsOf, unclearLines, PRODUCTS_HREF, TOP_LABELS,
-  type ProductMonthRow, type ProductsInput, type TextRead,
+  SLOT_ORDER, STANDOUT_MIN, standoutSlots, topProducts, topRanked, topProductsOf, unclearLines, PRODUCTS_HREF, TOP_LABELS,
+  type CategoryPanel, type ProductMonthRow, type ProductPanel, type ProductsInput, type TextRead,
 } from './products'
 
 // Your products (depth v2, T5): the page's pure half over Össur's real
@@ -410,9 +410,10 @@ describe('the fresh check\'s fixes (13 Oct)', () => {
       { audience: 'client', object_kind: 'denominator', object_id: 'videos', k: 8, n: 8 },
     ]
     expect(poolLens(rows)).toMatchObject({ n: 10 })
-    const c = crossesOf(rows, new Map([['s1', 'Fit & comfort']]))
+    const c = crossesOf(rows, new Map([['s1', { name: 'Fit & comfort', state: 'ready' as const }]]))
     expect(c.n).toBe(10)
     expect(c.subjects).toEqual([{ id: 's1', label: 'Fit & comfort', k: 7 }])
+    expect(c.pending).toBeUndefined()
     expect(c.kinds.map((k) => [k.id, k.k])).toEqual([['praise', 5]])
     expect(c.kinds[0].label).toBe('Praise in the comments')
   })
@@ -483,3 +484,220 @@ describe('the fresh check\'s fixes (13 Oct)', () => {
     expect(p.compare.rows.find((r) => r.label === 'Cost & access')!.cells.some((c) => c?.highlight)).toBe(false)
   })
 })
+
+// THE PARITY PASS (13 Oct night; Heinrich: "the page shouldn't look too
+// different if everything isn't as populated as the design"): the board's
+// shape in production's real state (Össur after the June to October
+// back-read, `ossur-today`, and a thinner one, `ossur-thin`).
+describe('the parity pass: the board\'s shape in the real, thin state', () => {
+  const places = (d: ReturnType<typeof ossurTodayFixture>) => d.slots.map((s) => `${s.slot}:${s.tier}:${s.card?.name ?? s.newest?.name ?? '-'}`)
+
+  it('Össur today: the real counts, no first month that reaches a standout, every product on the shelf', () => {
+    const d = ossurTodayFixture()
+    expect(d.state).toBe('ready')
+    expect(d.market).toBe(539)
+    expect(d.header).toEqual({ cameUp: 7, products: 65, videos: 195 })
+    expect(d.shelf.map((c) => `${c.name} ${c.videos}`)).toEqual(['Liners 23', 'Feet 29', 'Knees 22', 'Sockets & Locks 49', 'Hands 60', 'Bracing & Supports 12'])
+    expect(d.shelf.flatMap((c) => c.products)).toHaveLength(65)
+    expect(d.shelf.flatMap((c) => c.products).filter((p) => (p.videos ?? 0) > 0).map((p) => `${p.name} ${p.videos}`))
+      .toEqual(['Pro-Flex XC 2', 'Proprio Foot 1', 'Pro-Flex Terra 1', 'Power Knee 1', 'Total Knee 2000 1', 'Direct Socket 2', 'Rebound Post-Op Knee 1'])
+    // The strict picks the Dashboard and the email read: no first month, and
+    // no subject (every one of Össur's is provisional: ruling U6).
+    expect(d.standouts.map((s) => s.kind)).toEqual(['general', 'praised'])
+    expect(ossurTodayFixture({ calibrated: true }).standouts.map((s) => s.kind)).toEqual(['general', 'praised', 'focus'])
+  })
+
+  it('always fills the board\'s four places, in its order: a pick, else the nearest honest card, else an empty frame', () => {
+    const today = ossurTodayFixture()
+    expect(today.slots.map((s) => s.slot)).toEqual([...SLOT_ORDER])
+    expect(places(today)).toEqual(['first:next:Proprio Foot', 'category:pick:Hands', 'praised:pick:Feet', 'focus:none:-'])
+    // Össur's subjects are provisional: the subject place names none.
+    expect(today.slots[3].reason).toBe('pending')
+    expect(places(ossurTodayFixture({ calibrated: true }))).toEqual(['first:next:Proprio Foot', 'category:pick:Hands', 'praised:pick:Feet', 'focus:pick:Liners'])
+    // The first place under the floor: one video, and the others named for
+    // the first time beside it; never the Dashboard's standout.
+    const first = today.slots[0].card!
+    expect(first).toMatchObject({ kind: 'first', videos: 1 })
+    expect(first.kind === 'first' && first.videos).toBeLessThan(STANDOUT_MIN)
+    expect(first.kind === 'first' && first.others!.map((o) => o.name)).toEqual(['Pro-Flex Terra', 'Total Knee 2000', 'Rebound Post-Op Knee'])
+    expect(topProductsOf(today, today.standouts.filter((s) => s.kind === 'first') as never).standout).toMatchObject({ label: TOP_LABELS.most, name: 'Pro-Flex XC', k: 2 })
+
+    const thin = PRODUCTS_FIXTURES['ossur-thin']()
+    expect(places(thin)).toEqual(['first:none:Proprio Foot', 'category:pick:Hands', 'praised:next:Feet', 'focus:none:-'])
+    const thinCalibrated = ossurTodayFixture({ thin: true, calibrated: true })
+    expect(places(thinCalibrated)).toEqual(['first:none:Proprio Foot', 'category:pick:Hands', 'praised:next:Feet', 'focus:next:Bracing & Supports'])
+    // Nothing new: the months read for the strip, and the newest on the shelf.
+    expect(thin.slots[0]).toMatchObject({ tier: 'none', card: null, months: ['2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01'], newest: { name: 'Proprio Foot', month: '2026-08-01' } })
+    // Under half, and an object already shown is passed over where another
+    // has the figure (Hands' praise is the highest, and Hands is the
+    // category card).
+    expect(thin.slots[2].card).toMatchObject({ kind: 'praised', praised: { k: 12, n: 29 } })
+    expect(thinCalibrated.slots[3].card).toMatchObject({ kind: 'focus', subject: 'Fit & comfort', level: { k: 5, n: 12 } })
+  })
+
+  it('an empty place says why: nothing to show, or not read (the crosses were not read at all)', () => {
+    const d = ossurTodayFixture({ over: { crosses: new Map() } })
+    expect(places(d)).toEqual(['first:next:Proprio Foot', 'category:pick:Hands', 'praised:none:-', 'focus:none:-'])
+    expect(d.slots.slice(2).map((s) => s.reason)).toEqual(['unread', 'unread'])
+  })
+
+  it('the bar\'s switch: three contiguous months around the page\'s, marked, "so far" on the calendar month', () => {
+    const d = ossurTodayFixture()
+    expect(d.months.map((m) => `${m.label}${m.current ? '*' : ''} ${m.href}`)).toEqual([
+      'August /dashboard/products?month=2026-08', 'September* /dashboard/products?month=2026-09', 'October so far /dashboard/products?month=2026-10',
+    ])
+    const read = ['2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01', '2026-10-01'].map((month) => ({ month } as ProductMonthRow))
+    // Contiguous months around the page's own, clipped to what is read.
+    expect(monthOptions(read, '2026-06-01', {}, '2026-10-13T08:00:00Z').map((m) => `${m.label}${m.current ? '*' : ''}`)).toEqual(['June*', 'July', 'August'])
+    expect(monthOptions(read, '2026-08-01', {}, '2026-10-13T08:00:00Z').map((m) => `${m.label}${m.current ? '*' : ''}`)).toEqual(['July', 'August*', 'September'])
+    expect(monthOptions(read, '2026-10-01', {}, '2026-10-13T08:00:00Z').map((m) => `${m.label}${m.current ? '*' : ''}`)).toEqual(['August', 'September', 'October so far*'])
+    // A month with no reading yet keeps its place, so the way back is there.
+    expect(monthOptions(read.slice(0, 4), '2026-10-01', {}, '2026-10-13T08:00:00Z').map((m) => `${m.label}${m.current ? '*' : ''}`)).toEqual(['August', 'September', 'October so far*'])
+    expect(PRODUCTS_FIXTURES.unread().months.map((m) => `${m.label}${m.current ? '*' : ''}`)).toEqual(['August', 'September', 'October so far*'])
+    expect(monthOptions([], '2026-09-01', {}, null)).toEqual([])
+    // The loader reads past the page's month up to the calendar month, for
+    // the switch alone.
+    expect(monthsToRead('2026-09-01', '2026-10-13T08:00:00Z').slice(-3)).toEqual(['2026-08-01', '2026-09-01', '2026-10-01'])
+    expect(monthsToRead('2026-09-01', '2026-09-20T08:00:00Z').at(-1)).toBe('2026-09-01')
+  })
+
+  it('reading past the page\'s month moves no figure of it', () => {
+    const all = ossurTodayFixture()
+    const upTo = ossurTodayFixture({ over: { rows: ossurTodayRows().filter((r) => r.month <= SEP) } })
+    expect(upTo.header).toEqual(all.header)
+    expect(upTo.shelf).toEqual(all.shelf)
+    expect(upTo.standouts).toEqual(all.standouts)
+    expect(upTo.slots).toEqual(all.slots)
+    expect(upTo.months.map((m) => m.label)).toEqual(['July', 'August', 'September'])
+    // An open panel too: its split, crosses, line and comparison.
+    const open = { params: { group: PRODUCT_IDS.liners() } }
+    const panelAll = ossurTodayFixture({ ...open, calibrated: true }).panel
+    const panelUpTo = ossurTodayFixture({ ...open, calibrated: true, over: { rows: ossurTodayRows().filter((r) => r.month <= SEP) } }).panel
+    expect(panelAll).not.toBeNull()
+    expect(panelUpTo).toEqual(panelAll)
+    const product = { params: { product: PRODUCT_IDS.sealInX() } }
+    expect(ossurTodayFixture({ ...product, over: { rows: ossurTodayRows().filter((r) => r.month <= SEP) } }).panel).toEqual(ossurTodayFixture(product).panel)
+  })
+
+  it('a category with no product named keeps its comparison: the category\'s column counted, the products\' empty', () => {
+    const liners = ossurTodayLinersFixture(false, true).panel as CategoryPanel
+    expect(liners.compare).toMatchObject({ empty: 'none_named', verdicts: [] })
+    expect(liners.compare!.columns.map((c) => c.label)).toEqual(['All liners', 'Iceross Seal-In X', 'Iceross Dermo', 'Iceross Seal-In V'])
+    expect(liners.compare!.rows[0].cells).toEqual([{ k: 12, n: 23 }, null, null, null])
+    // Subjects not measured yet (today): the same table, each row a subject's
+    // name, every cell empty, the category's included.
+    const today = ossurTodayLinersFixture().panel as CategoryPanel
+    expect(today.compare).toMatchObject({ empty: 'pending', verdicts: [] })
+    expect(today.compare!.rows.map((r) => r.label)).toEqual(['Choosing the right device', 'Community & encouragement', 'Cost & access', 'Fit & comfort', 'Function & movement'])
+    expect(today.compare!.rows.every((r) => r.cells.every((c) => c === null))).toBe(true)
+    // A quiet product's own panel: its one column, empty.
+    const quiet = ossurTodayQuietFixture().panel as ProductPanel
+    expect(quiet.compare).toMatchObject({ empty: 'pending' })
+    expect(quiet.compare!.columns.map((c) => c.label)).toEqual(['All liners', 'Iceross Seal-In X'])
+    expect(quiet).toMatchObject({ videos: 0, market: 539, categoryVideos: 23, categoryUnbranded: 20 })
+    // Named, but what their videos are about not read: said as such.
+    const g = { id: 'g', name: 'Feet' }
+    const crosses = new Map([[setKey('group', 'g'), { n: 5, subjects: [{ id: 's', label: 'Fit', k: 2 }], kinds: [] }]])
+    expect(buildCompare({ month: SEP, group: g, products: [{ id: 'p', name: 'P', videos: 2 }], crosses })).toMatchObject({ empty: 'not_read' })
+    expect(buildCompare({ month: SEP, group: g, products: [{ id: 'p', name: 'P', videos: 2 }], crosses: new Map() })).toBeNull()
+  })
+
+  it('a state with the catalogue and no reading still carries the catalogue for the shelf, every count null', () => {
+    for (const key of ['not-on', 'unread'] as const) {
+      const d = PRODUCTS_FIXTURES[key]()
+      expect(d.shelf, key).toHaveLength(6)
+      expect(d.shelf.flatMap((c) => c.products), key).toHaveLength(65)
+      expect(d.shelf.every((c) => c.videos === null && c.products.every((p) => p.videos === null)), key).toBe(true)
+      expect(d.slots, key).toEqual([])
+    }
+    expect(PRODUCTS_FIXTURES.sealand().shelf).toEqual([])
+  })
+})
+
+// RULING U6 (`printsMarket`, lib/subjects/calibration-state.ts): a subject
+// whose check has not passed prints no figure that rests on its membership,
+// on this page as on Market: no count, no share, no "leads", no "mostly
+// about". Its name stands where the layout needs one.
+describe('ruling U6: Össur\'s provisional subjects print no figure', () => {
+  it('the crosses count only a ready subject; a provisional one is pending by name, whatever its count; a failed one is left out', () => {
+    const rows = [
+      { audience: 'industry-other', object_kind: 'denominator', object_id: 'videos', k: 10, n: 10 },
+      { audience: 'industry-other', object_kind: 'subject', object_id: 'ready', k: 4, n: 10 },
+      { audience: 'industry-other', object_kind: 'subject', object_id: 'prov', k: 9, n: 10 },
+      { audience: 'industry-other', object_kind: 'subject', object_id: 'bad', k: 8, n: 10 },
+    ]
+    const subjects = new Map([
+      ['quiet', { name: 'Quiet one', state: 'provisional' as const }],
+      ['ready', { name: 'Ready one', state: 'ready' as const }],
+      ['prov', { name: 'Provisional one', state: 'provisional' as const }],
+      ['bad', { name: 'Failed one', state: 'failed' as const }],
+    ])
+    const c = crossesOf(rows, subjects)
+    expect(c.subjects).toEqual([{ id: 'ready', label: 'Ready one', k: 4 }])
+    // In the subjects' own order, a provisional one with no video here too.
+    expect(c.pending).toEqual([{ id: 'quiet', label: 'Quiet one' }, { id: 'prov', label: 'Provisional one' }])
+  })
+
+  it('Össur today: no shelf head names a subject as leading, and none prints a subject\'s count', () => {
+    const d = ossurTodayFixture()
+    expect(d.shelf.every((c) => c.lead === null && c.subjectsPending)).toBe(true)
+    const calibrated = ossurTodayFixture({ calibrated: true })
+    expect(calibrated.shelf.find((c) => c.name === 'Liners')).toMatchObject({ lead: { label: 'Fit & comfort', k: 12 }, subjectsPending: false })
+  })
+
+  it('no card, panel or comparison draws a provisional subject\'s figure', () => {
+    const d = ossurTodayLinersFixture()
+    expect(d.slots.some((s) => s.card?.kind === 'focus' || s.card?.kind === 'gap')).toBe(false)
+    expect(d.slots.find((s) => s.slot === 'first')!.card).toMatchObject({ lead: null })
+    const panel = d.panel as CategoryPanel
+    expect(panel.crosses!.subjects).toEqual([])
+    expect(panel.crosses!.pending!.map((x) => x.label)).toEqual(['Choosing the right device', 'Community & encouragement', 'Cost & access', 'Fit & comfort', 'Function & movement', 'Look & style'])
+    const product = PRODUCTS_FIXTURES['ossur-today-product']().panel as ProductPanel
+    expect(product.crosses!.subjects).toEqual([])
+  })
+})
+
+// THE FRESH CHECK ON THE PARITY PASS (13 Oct night).
+describe('the fresh check\'s fixes on the parity pass', () => {
+  const cross = (subjects: [string, number][], pending: string[] = []) => ({
+    n: 12, kinds: [], subjects: subjects.map(([label, k]) => ({ id: label, label, k })),
+    ...(pending.length ? { pending: pending.map((label) => ({ id: label, label })) } : {}),
+  })
+
+  it('a subject leads only outright: no tie, and none of the client\'s subjects pending', () => {
+    expect(topRanked(cross([['Fit', 5], ['Function', 3]]))).toBe(true)
+    expect(topRanked(cross([['Fit', 5], ['Function', 5]]))).toBe(false)
+    expect(topRanked(cross([['Fit', 5]], ['Cost']))).toBe(false)
+    expect(topRanked(cross([]))).toBe(false)
+  })
+
+  it('the subject card on a tie and beside a pending subject says the level, not a rank; the shelf head says no "leads"', () => {
+    const base = ossurTodayFixture({ thin: true, calibrated: true })
+    expect(base.slots[3].card).toMatchObject({ kind: 'focus', subject: 'Fit & comfort', ranked: true })
+    const bracing = setKey('group', base.shelf.find((c) => c.name === 'Bracing & Supports')!.id)
+    for (const [why, edit] of [
+      ['a tie', { subjects: [{ id: 'fit', label: 'Fit & comfort', k: 5 }, { id: 'fn', label: 'Function & movement', k: 5 }] }],
+      ['a pending subject beside it', { subjects: [{ id: 'fit', label: 'Fit & comfort', k: 5 }], pending: [{ id: 'cost', label: 'Cost & access' }] }],
+    ] as const) {
+      const d = ossurTodayFixture({ thin: true, calibrated: true, over: { crosses: withCross(bracing, edit) } })
+      expect(d.slots[3].card, why).toMatchObject({ kind: 'focus', subject: 'Fit & comfort', ranked: false })
+      expect(d.shelf.find((c) => c.name === 'Bracing & Supports'), why).toMatchObject({ lead: { label: 'Fit & comfort', k: 5 }, leads: false })
+    }
+  })
+
+  it('a quiet month that was read is not "not read": unread only where some category has a video and nothing was crossed', () => {
+    const d = ossurTodayFixture()
+    const args = { month: SEP, params: {}, catalogue: OSSUR_CATALOGUE, rows: [] as ProductMonthRow[], crosses: new Map(), splits: new Map(), picked: [] }
+    const quietShelf = d.shelf.map((c) => ({ ...c, videos: 0 }))
+    expect(standoutSlots({ ...args, shelf: quietShelf }).slice(2).map((s) => s.reason)).toEqual(['quiet', 'quiet'])
+    expect(standoutSlots({ ...args, shelf: d.shelf }).slice(2).map((s) => s.reason)).toEqual(['unread', 'unread'])
+  })
+})
+
+/** Össur's thin, calibrated crosses with one set's subjects replaced. */
+function withCross(key: string, edit: { readonly subjects: readonly { id: string; label: string; k: number }[]; readonly pending?: readonly { id: string; label: string }[] }) {
+  const crosses = new Map(ossurTodayCrosses({ thin: true, calibrated: true }))
+  const c = crosses.get(key)!
+  crosses.set(key, { ...c, subjects: [...edit.subjects], ...(edit.pending ? { pending: [...edit.pending] } : {}) })
+  return crosses
+}

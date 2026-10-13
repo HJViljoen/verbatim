@@ -35,6 +35,26 @@ describe('CatalogueShelf', () => {
     assertCopyContract(node)
   })
 
+  it('a whole period not read says so once a column, and its tiles print their names alone (the parity pass)', () => {
+    const cols = SHELF.map((c) => ({ ...c, videos: null, line: null, note: null, unclear: null, products: c.products.map((p) => ({ ...p, videos: null, flag: null })) }))
+    const node = <CatalogueShelf columns={cols} unread />
+    const text = renderText(node)
+    expect(text.match(/Not read yet/g)).toHaveLength(SHELF.length)
+    expect(text).not.toContain('not read yet')
+    expect(text).toContain('Liners Not read yet Iceross Seal-In X Iceross Comfort')
+    expect(render(node)).not.toMatch(/data-tone="[123]"/)
+    assertCopyContract(node)
+  })
+
+  it('cuts a long column to a "+N more" tile into its category\'s panel', () => {
+    const cols = SHELF.map((c, i) => (i === 0 ? { ...c, products: c.products.slice(0, 2), more: { count: 6, href: '?group=liners#group-panel' } } : c))
+    const node = <CatalogueShelf columns={cols} />
+    const m = render(node)
+    expect(m).toMatch(/<a data-more="" class="[^"]*border-dashed[^"]*" href="\?group=liners#group-panel"><span>\+<span data-copy="figure"[^>]*>6<\/span> more<\/span>/)
+    expect(m.match(/data-more=""/g)).toHaveLength(1)
+    assertCopyContract(node)
+  })
+
   it('rings the open column\'s head and ties it to the panel', () => {
     const m = render(shelf('liners'))
     expect(m).toMatch(/<a aria-expanded="true" aria-controls="group-panel" aria-current="true" class="[^"]*ring-2 ring-foreground" href="\?group=liners#group-panel"/)

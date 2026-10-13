@@ -20,12 +20,24 @@ describe('the Your products page (boards E4-Products and E4-Products-Liners)', (
     expect(open.indexOf('data-copy="quote"')).toBeGreaterThan(open.indexOf('id="category-panel"'))
   })
 
-  it('the bar: the month, the products that came up of the catalogue, the videos about them; no period switch', () => {
+  it('the bar: the month, the products that came up of the catalogue, the videos about them; the board\'s switch in months', () => {
     const d = PRODUCTS_FIXTURES.ossur()
     expect(renderText(<ProductsMeta data={d} />)).toBe('September · the last full month · 15 of your 66 products came up · 412 videos about them or their categories'.replace('66', String(d.catalogue.products)))
     const m = render(<ProductsPage data={d} />)
     expect(m).toContain('>Your products</h1>')
     expect(m).not.toContain('aria-label="Period"')
+    // THE SWITCH (the parity pass): the board's control, in the months the
+    // page reads by; the page's month marked; each option an address.
+    expect(m).toContain('aria-label="Month"')
+    const today = render(<ProductsPage data={PRODUCTS_FIXTURES['ossur-today']()} />)
+    expect(today).toMatch(/<a aria-current="page" [^>]*href="\/dashboard\/products\?month=2026-09">September<\/a>/)
+    expect(renderText(<ProductsPage data={PRODUCTS_FIXTURES['ossur-today']()} />)).toContain('August September October so far')
+    // A month not read yet keeps the switch: the way back to one that is.
+    const unread = render(<ProductsPage data={PRODUCTS_FIXTURES.unread()} />)
+    expect(unread).toMatch(/<a aria-current="page" [^>]*href="\/dashboard\/products\?month=2026-10">October so far<\/a>/)
+    expect(unread).toContain('href="/dashboard/products?month=2026-09"')
+    // No switch, no empty wrapper.
+    expect(render(<ProductsPage data={PRODUCTS_FIXTURES.sealand()} />)).not.toContain('-mt-2')
   })
 
   // Decision 3: the month's label on the bar only where the page reads a
@@ -59,6 +71,27 @@ describe('the Your products page (boards E4-Products and E4-Products-Liners)', (
     expect(m).not.toContain('id="category-panel"')
   })
 
+  it('the honest states keep the board\'s frame: the four places, the catalogue card with its line, the catalogue where there is one (the parity pass)', () => {
+    for (const key of ['not-applied', 'sealand', 'not-on', 'unread'] as const) {
+      const m = render(<ProductsPage data={PRODUCTS_FIXTURES[key]()} />)
+      expect(m, key).toContain('data-frames=""')
+      expect(m.match(/data-standout="/g), key).toHaveLength(4)
+      expect(m, key).toContain('id="catalogue-title"')
+      // No count of talk: no shaded tile, no "Open" into a reading.
+      expect(m, key).not.toMatch(/data-tone="[123]"/)
+      expect(renderText(<ProductsPage data={PRODUCTS_FIXTURES[key]()} />), key).not.toContain('Open →')
+      assertCopyContract(<ProductsPage data={PRODUCTS_FIXTURES[key]()} />)
+    }
+    // No catalogue: the shelf's empty shape, no name. A catalogue not read:
+    // every category a column, every product its name alone.
+    expect(render(<ProductsPage data={PRODUCTS_FIXTURES.sealand()} />)).toContain('data-empty-shelf=""')
+    const notOn = render(<ProductsPage data={PRODUCTS_FIXTURES['not-on']()} />)
+    expect(notOn.match(/data-column=/g)).toHaveLength(6)
+    expect(renderText(<ProductsPage data={PRODUCTS_FIXTURES['not-on']()} />)).toContain('Liners Not read yet Iceross Seal-In X')
+    expect(renderText(<ProductsPage data={PRODUCTS_FIXTURES['not-on']()} />)).not.toContain('not read yet')
+    expect(renderText(<ProductsMeta data={PRODUCTS_FIXTURES.sealand()} />)).toBe('No products added yet')
+  })
+
   it('the honest states print their line and no count, and a missing catalogue links to Settings', () => {
     const cases = [
       ['not-applied', PRODUCTS_NOT_APPLIED, null],
@@ -71,7 +104,6 @@ describe('the Your products page (boards E4-Products and E4-Products-Liners)', (
       const text = renderText(<ProductsPage data={d} />)
       expect(text, key).toContain(line)
       if (link) expect(text, key).toContain(link)
-      expect(render(<ProductsPage data={d} />), key).not.toContain('data-column=')
       assertCopyContract(<ProductsEmpty data={d} />)
     }
     expect(render(<ProductsPage data={PRODUCTS_FIXTURES.sealand()} />)).toContain('href="/dashboard/settings/products"')

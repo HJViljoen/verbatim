@@ -1,15 +1,14 @@
 import Link from 'next/link'
-import { Box } from 'lucide-react'
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
-import { CARD, CardHead, equalColumns, panelPlacement, type PanelLayout, type PerBreakpoint } from '@/components/v2'
+import { equalColumns, panelPlacement, PeriodSwitch, type PanelLayout, type PerBreakpoint } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
 import { surface } from '@/lib/nav'
 import { barMonth } from '@/lib/reading/month-label'
 import { shelfColumns, type ProductsData } from '@/lib/pages/v2/products'
 import { Fig, OLINK } from './parts'
 import { CategoryPanelView, ProductPanelView } from './panels'
-import { CatalogueCard } from './shelf'
-import { Standouts } from './standouts'
+import { CatalogueCard, CatalogueFrame } from './shelf'
+import { StandoutFrames, Standouts } from './standouts'
 
 // YOUR PRODUCTS (depth v2, T5), drawn to the boards E4-Products and
 // E4-Products-Liners:
@@ -23,13 +22,20 @@ import { Standouts } from './standouts'
 // migration, or the tenant's switch), no catalogue (a link to Settings), not
 // read for the month, or not read just now.
 //
-// The board's period switch is not drawn: products are read per month only
-// (`month_product_readings`), so "This week" and "Over time" would offer
-// views with nothing behind them; the month line in each panel is the
-// over-time view.
+// THE BOARD'S PERIOD SWITCH, IN MONTHS: products are read per month only
+// (`month_product_readings`), so "This week" and "Over time" would offer views
+// with nothing behind them. The switch in the board's place offers the latest
+// months read (`monthOptions`), each an address (`?month=`); the month line
+// in each panel is the over-time view.
+//
+// EVERY STATE KEEPS THE BOARD'S FRAME (the parity pass, 13 Oct night): the
+// four standout places, the catalogue card and the links under it. A state
+// that reads no month draws the four frames (`StandoutFrames`) and the
+// catalogue card with its line: the catalogue itself where there is one (every
+// count "not read yet"), or an empty shelf where there is none.
 
-export { CatalogueCard, shelfColumn } from './shelf'
-export { StandoutCard, Standouts, shareWords } from './standouts'
+export { CatalogueCard, CatalogueFrame, shelfColumn } from './shelf'
+export { StandoutCard, StandoutFrames, Standouts, shareWords } from './standouts'
 export { CategoryPanelView, ProductPanelView } from './panels'
 export { TagControl, TagControlView, tagSaid } from './tag-control'
 
@@ -49,22 +55,43 @@ export function ProductsMeta({ data }: { data: ProductsData }) {
     if (data.header.videos != null) parts.push(<span key="v"><Fig>{fmtInt(data.header.videos)}</Fig> videos about them or their categories</span>)
   } else if (data.catalogue.products > 0) {
     parts.push(<span key="c"><Fig>{fmtInt(data.catalogue.products)}</Fig> products in <Fig>{fmtInt(data.catalogue.categories)}</Fig> {data.catalogue.categories === 1 ? 'category' : 'categories'}</span>)
+  } else if (data.state === 'no_catalogue') {
+    parts.push(<span key="c">No products added yet</span>)
   }
   return <>{parts.map((p, i) => <span key={i}>{i > 0 ? ' · ' : null}{p}</span>)}</>
 }
 
-/** The one card a state that prints no count draws, with its way on. */
-export function ProductsEmpty({ data }: { data: ProductsData }) {
-  const link = data.state === 'no_catalogue'
+/** The way on from a state that prints no count. */
+export function emptyLink(state: ProductsData['state']): string | null {
+  return state === 'no_catalogue'
     ? 'Add your products in Settings'
-    : data.state === 'not_on' || data.state === 'unread'
+    : state === 'not_on' || state === 'unread'
       ? 'Review your products in Settings'
       : null
+}
+
+/** The page a state that prints no count draws: the four frames, then the
+ *  catalogue card with the state's one line and its way on. */
+export function ProductsEmpty({ data }: { data: ProductsData }) {
   return (
-    <section aria-labelledby="products-empty" className={CARD}>
-      <CardHead icon={Box} id="products-empty" title={data.state === 'no_catalogue' ? 'No products yet' : 'Your products'} sub={data.empty} />
-      {link ? <div><Link href={data.settingsHref} className={OLINK}>{link} →</Link></div> : null}
-    </section>
+    <>
+      <StandoutFrames />
+      <CatalogueFrame data={data} link={emptyLink(data.state)} />
+    </>
+  )
+}
+
+/** The bar's month switch (the board's period switch, in months). */
+function MonthSwitch({ data }: { data: ProductsData }) {
+  const current = data.months.find((m) => m.current)
+  if (!current || data.months.length < 2) return null
+  return (
+    <PeriodSwitch
+      value={current.month}
+      options={data.months.map((m) => ({ value: m.month, label: m.label }))}
+      hrefFor={(month) => data.months.find((m) => m.month === month)?.href ?? '#'}
+      label="Month"
+    />
   )
 }
 
@@ -90,19 +117,27 @@ export function shelfNotch(data: Pick<ProductsData, 'shelf' | 'panel'>): PerBrea
 export function ProductsPage({ data }: { data: ProductsData }) {
   const panel = data.panel
   const notch = shelfNotch(data)
+  // The switch, wherever there is a month to switch to (a month not read
+  // yet included: the way back to one that is).
+  const showSwitch = data.months.length >= 2 && data.months.some((m) => m.current)
   return (
     <PageFrame className="gap-5 leading-[normal]">
-      <PageBar title={surface('products').label} meta={<ProductsMeta data={data} />} />
+      <PageBar title={surface('products').label} meta={<ProductsMeta data={data} />}>
+        {showSwitch ? <div className="max-lg:hidden"><MonthSwitch data={data} /></div> : null}
+      </PageBar>
+      {showSwitch ? <div className="-mt-2 lg:hidden"><MonthSwitch data={data} /></div> : null}
       {data.state !== 'ready' ? <ProductsEmpty data={data} /> : (
         <>
-          <Standouts standouts={data.standouts} monthName={data.monthName} />
+          <Standouts slots={data.slots} monthName={data.monthName} />
           <CatalogueCard data={data} />
           {panel?.kind === 'group' ? <CategoryPanelView panel={panel} monthName={data.monthName} canTag={data.canTag} notchAt={notch} /> : null}
           {panel?.kind === 'product' ? <ProductPanelView panel={panel} monthName={data.monthName} notchAt={notch} /> : null}
-          <nav aria-label="More about your products" className="flex flex-wrap gap-x-6 gap-y-2 px-1">
-            <Link href={data.settingsHref} className={OLINK}>Edit your products in Settings →</Link>
-          </nav>
         </>
+      )}
+      {data.state !== 'ready' ? null : (
+        <nav aria-label="More about your products" className="flex flex-wrap gap-x-6 gap-y-2 px-1">
+          <Link href={data.settingsHref} className={OLINK}>Edit your products in Settings →</Link>
+        </nav>
       )}
     </PageFrame>
   )
