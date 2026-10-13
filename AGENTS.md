@@ -644,8 +644,15 @@ This version has breaking changes — APIs, conventions, and file structure may 
   after (`chartCadenceBroken`, the line's own `cadenceBroken` on the clock;
   `loadCadenceRuns` reads every run, any status, with its window and its
   options). A partial run counts as a completed gather only when every
-  recorded error is a step after the gather (`AFTER_GATHER_STEPS`, fail
-  closed). **A run that gathered nothing is not counted at all** (Heinrich,
+  recorded error is a step after the gather (`AFTER_GATHER_STEPS`: a label
+  not on it fails closed). Classification (`plan-classify`, `classify-meta`)
+  joined the list on 13 Oct: the week counts read videos, comments and gate
+  verdicts and never a classification column, and Sealand's 11 Oct update
+  (`78a6eb3c`), partial on the own-posts census, one `classify-meta` batch
+  and one theme merge with every gather step complete, had broken its week,
+  and the cut, which walks back from the newest gathered week and stops at the
+  first break, drew nothing on either chart. The same-age line never reads the
+  list (below), so nothing it keeps moves. **A run that gathered nothing is not counted at all** (Heinrich,
   5 Oct: "Why is the first bar on Sealand twenty eighth September when we've
   had earlier runs"): a fresh `skipGather` run (a rehearsal) plans no search
   and no own-posts census, so it moved no count in any week, and it is

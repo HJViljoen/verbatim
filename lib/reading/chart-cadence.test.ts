@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+
 import { describe, expect, it } from 'vitest'
 
 import { changesFromLog, isFailOpenFix, type OurChange } from './comparability'
@@ -57,10 +59,86 @@ describe('gatherCompleted: a partial run counts as a completed gather only on it
     expect(gatherCompleted({ ...SEALAND_RUNS[4], errors: ['product-readings: 2026-10 out of retries', 'plan-product-readings: catalogue read failed'] })).toBe(true)
   })
 
-  it('names no gather step as after the gather', () => {
-    for (const gather of ['comments', 'platform', 'gate', 'discover-subreddits', 'classify-meta', 'plan-classify']) {
+  it('names no gather step as after the gather (the pipeline\'s gather labels: a search, a platform, its comments, the gate, discovery)', () => {
+    for (const gather of ['search', 'platform', 'comments', 'gate', 'discover-subreddits']) {
       expect(AFTER_GATHER_STEPS).not.toContain(gather)
     }
+  })
+})
+
+// 13 Oct: both tenants' "Videos, week by week" was empty. On Sealand the 11 Oct
+// update closed partial on the own-posts census, one classify-meta batch that
+// ran into the output limit, and one theme merge; every gather step completed,
+// but classification was not a step after the gather, so the run was not a
+// completed gather, its week (5 Oct) broke, and the cut, which walks back from
+// the newest gathered week and stops at the first break, drew nothing at all.
+describe('classification is a step after the gather (13 Oct)', () => {
+  // Sealand's 11 Oct update, its errors as production recorded them; its
+  // window and finish as the 13 Oct page dumps read them.
+  const RUN_11_OCT: ChartRun = {
+    id: '78a6eb3c', status: 'partial', startedAt: '2026-10-11T04:00:32Z', finishedAt: '2026-10-11T07:29:44Z',
+    windowStart: '2026-10-04T04:01:17Z', windowEnd: '2026-10-11T04:00:32Z',
+    options: { sendReport: true, scheduledFor: '2026-10-11T04:00:00.000Z' },
+    errors: [
+      'owned-posts:instagram:rareform: instagram census read returned 0 posts; fell back to the profile summary (0 in window)',
+      'classify-meta: Could not parse response content as the length limit was reached',
+      'themes:industry-other: the merge call failed on the last attempt; this bucket\'s themes are unmerged this run',
+    ],
+  }
+  // The 4 Oct update, resumed analysis-only the same day (lib/pages/home.test.ts).
+  const RUN_4_OCT: ChartRun = {
+    id: '393b95df', status: 'completed', startedAt: '2026-10-04T11:45:46Z', finishedAt: '2026-10-04T12:13:08Z',
+    windowStart: '2026-09-27T04:03:42Z', windowEnd: '2026-10-04T04:01:17Z', errors: [], options: { runId: '393b95df', sendReport: true, skipGather: true },
+  }
+  const RUNS = [...SEALAND_RUNS, RUN_4_OCT, RUN_11_OCT]
+  const NOW_13 = '2026-10-13T16:42:37Z'
+
+  it('lists the labels the pipeline notes a classification failure under', () => {
+    expect(AFTER_GATHER_STEPS).toContain('plan-classify')
+    expect(AFTER_GATHER_STEPS).toContain('classify-meta')
+    const pipeline = readFileSync(new URL('../../inngest/functions/pipeline.ts', import.meta.url), 'utf8')
+    const labels = [...pipeline.matchAll(/noteError\('((?:plan-)?classify[^':`]*)'/g)].map((m) => m[1])
+    expect([...new Set(labels)].sort()).toEqual(['classify-meta', 'plan-classify'])
+    // Classification is planned after the gather has stored its videos.
+    const gathered = pipeline.indexOf("if (totalVideos === 0)")
+    expect(gathered).toBeGreaterThan(0)
+    expect(pipeline.indexOf(".run('plan-classify'")).toBeGreaterThan(gathered)
+  })
+
+  it('Sealand\'s 11 Oct update completed its gather: own posts, classification and a theme merge are all after it', () => {
+    expect(gatherCompleted(RUN_11_OCT)).toBe(true)
+    expect(gatherCompleted({ ...RUN_11_OCT, errors: ['plan-classify: plan failed'] })).toBe(true)
+  })
+
+  it('a real gather error beside them still makes it no completed gather', () => {
+    for (const gather of ['comments:tiktok:4: actor failed', 'platform:youtube: quota', 'gate:instagram: refused', 'discover-subreddits: probe timed out', 'something-new: x']) {
+      expect(gatherCompleted({ ...RUN_11_OCT, errors: [...RUN_11_OCT.errors!, gather] }), gather).toBe(false)
+    }
+  })
+
+  it('so the weeks of 21 Sep, 28 Sep and 5 Oct keep their cadence on 13 Oct; 14 Sep stays broken', () => {
+    for (const week of ['2026-09-21', '2026-09-28', '2026-10-05']) expect(chartCadenceBroken(week, RUNS, NOW_13), week).toBeNull()
+    expect(chartCadenceBroken('2026-09-14', RUNS, NOW_13)).toBe('week of 14 Sep: 2 updates in the week')
+    // With a gather step failed instead, every one of the three breaks.
+    const broken = [...SEALAND_RUNS, RUN_4_OCT, { ...RUN_11_OCT, errors: ['comments:tiktok:4: actor failed'] }]
+    for (const week of ['2026-09-21', '2026-09-28', '2026-10-05']) expect(chartCadenceBroken(week, broken, NOW_13), week).toMatch(/not a completed Sunday update/)
+  })
+
+  it('the same-age line never reads the list: it counts the partial run off-cadence exactly as before, so nothing it keeps moves', () => {
+    const { read } = keepWeekPoints({
+      candidate: { week: '2026-09-28', ageDays: 14, cutoff: '2026-10-12T00:00:00Z', ageRun: RUN_11_OCT },
+      runs: [RUN_4_OCT, RUN_11_OCT],
+      volumes: [], readings: [], promptVersion: 'v1', laneRule: 'l1', methodVersion: 'm1', computedAt: '2026-10-12T08:00:00Z',
+    })
+    expect(read.runsInWeek).toBe(1)
+    expect(read.runsAfter).toEqual([1, 0])
+    // The 11 Oct run is partial, and the line reads status alone.
+    expect(read.offCadence).toBe(1)
+    const src = readFileSync(new URL('./week-line.ts', import.meta.url), 'utf8')
+    const callers = src.split('\n').filter((l) => /gatherCompleted\(/.test(l) && !/export function gatherCompleted/.test(l))
+    expect(callers).toHaveLength(1)
+    expect(callers[0]).toContain('status: gatherCompleted(r)')
+    expect(src.slice(src.indexOf('export function chartCadenceBroken'))).toContain('status: gatherCompleted(r)')
   })
 })
 
