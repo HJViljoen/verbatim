@@ -1,4 +1,4 @@
-import type { WeekReadDataV1, WeekReadDataV2, WeekReadFlag, WeekReadUnusual, QuoteRef } from '../written/types'
+import type { WeekReadConversation, WeekReadDataV1, WeekReadDataV2, WeekReadFlag, WeekReadUnusual, QuoteRef } from '../written/types'
 import { WEEKLY_READ_REPORT_VERSION, weeklyReadSnapshotData, type WeeklyReadSnapshotData } from '../reports/weekly-read-build'
 import type { WeeklyReadLine } from '../reports/weekly-read-lines'
 
@@ -186,8 +186,20 @@ export function sealandLines(): WeeklyReadLine[] {
   ]
 }
 
-/** The level-1 read: the report's read, its check flagged, two conversations
- *  also heard this week. */
+/** The week's conversations as the read keeps them (T11b): the category's
+ *  window and month counts, a makers' theme set apart (and the biggest). */
+export function sealandConversations(): WeekReadConversation[] {
+  return [
+    { registryId: 'tm', label: 'Makers showing their own builds', week: 30, month: 70, setApart: true },
+    { registryId: 't3', label: 'Asking for the bag in more colours', week: 24, month: 61, setApart: false },
+    { registryId: 't1', label: 'Comparing named bags by trip fit', week: 18, month: 47, setApart: false },
+    { registryId: 't7', label: 'Laptop sleeves that fit a 16-inch machine', week: 12, month: 30, setApart: false },
+    { registryId: 't8', label: 'Straps that dig in on a long walk', week: 8, month: 15, setApart: false },
+  ]
+}
+
+/** The level-1 read: the report's read, its check flagged, its
+ *  conversations kept, two conversations also heard this week. */
 export function levelOneRead(over: Partial<WeekReadDataV2> = {}): WeekReadDataV2 {
   return sealandRead({
     unusual: sealandUnusual(),
@@ -195,6 +207,7 @@ export function levelOneRead(over: Partial<WeekReadDataV2> = {}): WeekReadDataV2
       { themeId: 't7', label: 'Laptop sleeves that fit a 16-inch machine', videos: 9, videoIds: [], monthVideos: 21 },
       { themeId: 't8', label: 'Straps that dig in on a long walk', videos: 6, videoIds: [], monthVideos: 11 },
     ],
+    conversations: sealandConversations(),
     ...over,
   })
 }

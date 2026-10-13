@@ -8,7 +8,7 @@ import { evidenceOf, monthEvidenceOf, sureOf } from './sure'
 import {
   firstHeardThisWeek,
   type HeldSection, type PoolCandidate, type QuoteOption, type QuoteRef, type StandingFact, type TokenSentence,
-  type WeekMarketFigures, type WeekPool, type WeekReadAlsoHeard, type WeekReadDataV2, type WeekReadFinding, type WeekReadHeld,
+  type WeekMarketFigures, type WeekPool, type WeekReadAlsoHeard, type WeekReadConversation, type WeekReadDataV2, type WeekReadFinding, type WeekReadHeld,
   type WeekReadImplication, type WeekReadNewItem, type WeekReadParagraph, type WeekReadStanding, type WeekReadWatchItem,
 } from './types'
 import { WEEK_FINDINGS_MAX, WEEK_READ_MAX, WEEK_READ_PROMPT_VERSION, type WriterSubject } from './write'
@@ -307,6 +307,12 @@ export function composeWeekRead(a: ComposeWeekArgs): WeekReadDataV2 {
     .filter((c) => !printedThemes.has(c.themeId) && c.label.trim())
     .map((c) => ({ themeId: c.themeId, label: c.label.trim(), videos: c.lenientVideos, videoIds: [...c.lenientVideoIds].sort(), monthVideos: new Set(c.monthVideoIds).size }))
 
+  // The week's conversations as its lead ranks them (T11b, additive; read by
+  // the pool, lib/written/conversations.ts). A pool saved before them gives
+  // its candidates, on the same counts, none set apart.
+  const conversations: WeekReadConversation[] = findings.length === 0 ? [] : pool.conversations
+    ?? pool.candidates.map((c) => ({ registryId: c.themeId, label: c.label.trim(), week: c.weekVideos, month: c.monthK, setApart: false }))
+
   // ---- The report (v3): only on a week whose findings print ------------------------------
   const report = findings.length > 0 && a.written != null
   if (!report && a.written) {
@@ -450,6 +456,7 @@ export function composeWeekRead(a: ComposeWeekArgs): WeekReadDataV2 {
     figures,
     held,
     alsoHeard,
+    conversations,
     model: a.model,
     promptVersion: WEEK_READ_PROMPT_VERSION,
     costUsd: a.costUsd,

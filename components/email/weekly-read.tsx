@@ -5,7 +5,7 @@ import { fmtInt, fmtPct, platformLabel, shortDate } from '@/lib/format'
 import { FONT } from '@/lib/email/theme'
 import { substituteFigures } from '@/lib/reports/cover'
 import type { FigureTable } from '@/lib/reports/types'
-import { WEEKLY_READ_TITLE, weeklyReadView, levelOneView, type LevelOneLead, type LevelOneRow, type LevelOneView, type ResolvedQuote, type WeeklyReadView } from '@/lib/reports/weekly-read'
+import { BIGGEST_HEADING, WEEKLY_READ_TITLE, weeklyReadView, levelOneView, type LevelOneLead, type LevelOneRow, type LevelOneView, type ResolvedQuote, type WeeklyReadView } from '@/lib/reports/weekly-read'
 import { isLevelOne, staleWeeklyReadSnapshot, type WeeklyReadSnapshotData } from '@/lib/reports/weekly-read-build'
 import type { WeeklyReadLine } from '@/lib/reports/weekly-read-lines'
 import { FLAG_WORDS, flagWordOf } from '@/components/v2/flag-chip'
@@ -70,7 +70,7 @@ const s = {
 /** A writer's sentence, with any `[[key]]` it carries put back as code's
  *  figure. A sentence naming a key the read's table does not hold is not
  *  printed (`substituteFigures`), so no placeholder reaches a reader. */
-function Prose({ body, figures, style, as = 'p' }: { body: string; figures: FigureTable; style: CSSProperties; as?: 'p' | 'div' }) {
+function Prose({ body, figures, style, as = 'p' }: { body: string; figures: FigureTable; style?: CSSProperties; as?: 'p' | 'div' | 'span' }) {
   const Tag = as
   if (!body.includes('[[')) return <Tag data-copy="prose" style={style}>{body}</Tag>
   const parts = substituteFigures(body, figures)
@@ -484,7 +484,7 @@ function Lead({ lead, figures, where, appUrl }: { lead: LevelOneLead; figures: F
                 <div style={{ ...mono, fontSize: 12 }}>
                   of <span data-copy="figure">{fmtInt(f.week.n)}</span> videos this week
                   {lead.usual ? (
-                    <><br />usually about <span data-copy="figure">{fmtInt(lead.usual.k)}</span> of <span data-copy="figure">{fmtInt(lead.usual.n)}</span> a month</>
+                    <><br />usually <span data-copy="figure">{fmtInt(lead.usual.k)}</span> of <span data-copy="figure">{fmtInt(lead.usual.n)}</span> over {lead.usual.months}</>
                   ) : null}
                 </div>
               </td>
@@ -501,23 +501,35 @@ function Lead({ lead, figures, where, appUrl }: { lead: LevelOneLead; figures: F
       </>
     )
   }
+  // The new conversation, or the week's biggest: its count beside its month.
+  // "Most talked about this week" is a plain heading, never a flag word.
+  const fresh = lead.kind === 'new'
   return (
     <>
-      <div data-copy="verdict" style={lab}>{FLAG_WORDS.new} this week</div>
-      {lead.label ? <div style={title}><a href={`${appUrl}${lead.href}`} style={link}><Named label={lead.label} theme /></a></div> : null}
+      {fresh ? <div data-copy="verdict" style={lab}>{FLAG_WORDS.new} this week</div> : <div style={lab}>{BIGGEST_HEADING}</div>}
+      {lead.label ? (
+        <div style={title}>
+          <a href={`${appUrl}${lead.href}`} style={link}>
+            {lead.labelKind === 'finding'
+              ? <Prose as="span" body={lead.label} figures={figures} />
+              : <Named label={lead.label} theme />}
+          </a>
+        </div>
+      ) : null}
       <table {...presentation} style={T}>
         <tbody>
           <tr>
             <td style={{ verticalAlign: 'bottom', paddingRight: 14 }}><div data-copy="figure" style={big}>{fmtInt(lead.videos.week)}</div></td>
             <td style={{ verticalAlign: 'bottom' }}>
               <div style={{ ...mono, fontSize: 12 }}>
-                {lead.videos.week === 1 ? 'video' : 'videos'} this week<br /><span data-copy="figure">{fmtInt(lead.videos.month)}</span> {where}
+                {lead.videos.week === 1 ? 'video' : 'videos'} this week
+                {lead.videos.month != null ? <><br /><span data-copy="figure">{fmtInt(lead.videos.month)}</span> {where}</> : null}
               </div>
             </td>
           </tr>
         </tbody>
       </table>
-      <Prose body={lead.body} figures={figures} style={{ margin: '14px 0 0', fontFamily: FONT.sans, fontSize: 14.5, lineHeight: '1.5', color: P.ink }} />
+      {lead.body ? <Prose body={lead.body} figures={figures} style={{ margin: '14px 0 0', fontFamily: FONT.sans, fontSize: 14.5, lineHeight: '1.5', color: P.ink }} /> : null}
     </>
   )
 }
@@ -657,7 +669,7 @@ function LevelOneCard({ data, appUrl, markSrc, fullUrl }: { data: WeeklyReadSnap
                 </tr>
 
                 {/* The week in one line, and the market's week beside its month. */}
-                <Section first padding="26px 30px 6px">
+                <Section first padding={view.lead ? '26px 30px 6px' : '26px 30px 24px'}>
                   <div style={{ fontFamily: FONT.mono, fontSize: 13, lineHeight: '1.4', color: P.muted }}>{data.period ? `${WEEKLY_READ_TITLE} · ${data.period}` : WEEKLY_READ_TITLE}</div>
                   {view.headline ? <Prose as="div" body={view.headline} figures={view.figures} style={{ margin: '8px 0 0', fontFamily: FONT.sans, fontSize: 24, fontWeight: 700, lineHeight: '1.25', letterSpacing: '-.01em', color: P.ink }} /> : null}
                   {n ? (

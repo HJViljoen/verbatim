@@ -150,6 +150,17 @@ describe('composeWeekRead: what the This week page needs (pages build, additive)
     const p = pool([candidate({ id: 'C1' })])
     const read = composeWeekRead({ pool: p, standing: [], written: null, subjects: [], writerFigures: writerFigures(p), model: '', costUsd: 0 })
     expect(read.alsoHeard).toEqual([])
+    expect(read.conversations).toEqual([])
+  })
+
+  it('keeps the week\'s conversations as the lead ranks them (T11b): the pool\'s own list, else its candidates on the category\'s counts', () => {
+    const c1 = candidate({ id: 'C1', gated: 8 })
+    const kept = [{ registryId: 'th-x', label: 'X', week: 40, month: 90, setApart: true }]
+    const p = { ...pool([c1]), conversations: kept }
+    const read = composeWeekRead({ pool: p, standing: [], written: written({ findings: [finding({ based_on: ['C1'] })], week_in_one_line: 'x.' }), subjects: [], writerFigures: writerFigures(p), model: 'm', costUsd: 0 })
+    expect(read.conversations).toEqual(kept)
+    const older = compose([c1], [finding({ based_on: ['C1'] })])
+    expect(older.conversations).toEqual([{ registryId: c1.themeId, label: c1.label, week: c1.weekVideos, month: c1.monthK, setApart: false }])
   })
 })
 

@@ -25,7 +25,7 @@ describe('the lines', () => {
     expect(lines.map((l) => [l.label, `${l.lead} ${l.name}`, l.figure, l.href])).toEqual([
       ['Voices', 'In the most videos in September: Daily commuters', '41 videos', '/dashboard/voices?group=commuters'],
       ['Your products', 'Named most in September: Kirby backpack', '9 videos', '/dashboard/products?product=p1'],
-      ['Content', 'Post next: Which bag fits a carry-on rule', '9 videos this week · 21 in September so far', '/dashboard/content?idea=1'],
+      ['Content', 'Post next: Which bag fits a carry-on rule', '12 videos this week · 30 in September so far', '/dashboard/content?idea=1'],
       ['Your moves', 'Advice waiting: Publish a colour roadmap', 'raised in 4 updates', '/dashboard/moves?advice=lin%201'],
     ])
     expect(lines.map((l) => l.copy)).toEqual([
@@ -52,8 +52,14 @@ describe('the lines', () => {
 })
 
 describe('a conversation\'s week beside its month, off the read', () => {
-  it('from what was also heard, from what was new, from a finding resting on it alone; else none', () => {
-    const read = levelOneRead({ newThisWeek: [{ themeId: 'tn', label: 'L', body: 'B', videos: { week: 3, month: 4 }, evidence: '' }] })
+  it('from the read\'s conversations where it kept them: the category\'s counts, the week\'s lead\'s', () => {
+    const read = levelOneRead()
+    expect(conversationFigure(read, 't7')).toBe('12 videos this week · 30 in September so far')
+    expect(conversationFigure(read, 'nowhere')).toBeNull()
+    expect(conversationFigure(levelOneRead({ conversations: [{ registryId: 'x', label: 'X', week: 4, month: null, setApart: false }] }), 'x')).toBeNull()
+  })
+  it('on an older read: from what was also heard, from what was new, from a finding resting on it alone; else none', () => {
+    const read = levelOneRead({ conversations: undefined, newThisWeek: [{ themeId: 'tn', label: 'L', body: 'B', videos: { week: 3, month: 4 }, evidence: '' }] })
     expect(conversationFigure(read, 't7')).toBe('9 videos this week · 21 in September so far')
     expect(conversationFigure(read, 'tn')).toBe('3 videos this week · 4 in September so far')
     expect(conversationFigure(read, 't1')).toBe('7 videos this week · 16 in September so far')
@@ -62,11 +68,10 @@ describe('a conversation\'s week beside its month, off the read', () => {
     expect(conversationFigure(null, 't7')).toBeNull()
   })
   it('a week that carried into the next month is restated against the month in full', () => {
-    const read = levelOneRead({ monthComplete: true })
-    expect(conversationFigure(read, 't7')).toBe('9 videos this week · 21 in September')
+    expect(conversationFigure(levelOneRead({ monthComplete: true }), 't7')).toBe('12 videos this week · 30 in September')
   })
   it('one video is a video', () => {
-    const read = levelOneRead({ alsoHeard: [{ themeId: 'one', label: 'One', videos: 1, videoIds: [], monthVideos: 1 }] })
+    const read = levelOneRead({ conversations: [{ registryId: 'one', label: 'One', week: 1, month: 1, setApart: false }] })
     expect(conversationFigure(read, 'one')).toBe('1 video this week · 1 in September so far')
   })
 })

@@ -1,6 +1,8 @@
 import { fmtInt, longMonth } from '../format'
 import type { Verdict } from '../reading/verdicts'
-import { coveredDays, inMonth, monthHeading } from '../written/month'
+import { coveredDays, inMonth, monthHeading, monthsPhrase } from '../written/month'
+import { weekLead } from '../reading/week-lead'
+import { rivalNameOf } from '../rivals'
 import type { FigureTable } from './types'
 import type { StoredWeekRead } from '../written/store'
 import type { QuoteRef, WeekMarketFigures, WeekReadData, WeekReadFlag } from '../written/types'
@@ -210,33 +212,45 @@ export function weeklyReadView(read: WeekReadData): WeeklyReadView {
 export const ALSO_ROWS = 3
 
 /** Where an object opens: a conversation or a subject in Market's open
- *  panel, anything else Market itself. An app path. */
+ *  panel, a rival in Voices' brand panel (it takes the name), anything else
+ *  Market itself. An app path. */
 export function objectHref(kind: string, id: string): string {
   const market = '/dashboard/market'
   if (kind === 'theme' && id) return `${market}?conv=${encodeURIComponent(id)}`
   if (kind === 'subject' && id) return `${market}?subject=${encodeURIComponent(id)}`
+  if (kind === 'rival' && id) return `/dashboard/voices?brand=${encodeURIComponent(rivalNameOf(id) ?? id)}`
   return market
 }
 
-/** A flag's months, pooled, as one month's worth: "about 13 of 363 a
- *  month", the k and n the check compared the week with, over the months it
- *  pooled. Null without months. */
-export function usualMonth(flag: Pick<WeekReadFlag, 'baseline' | 'baselineMonths'>): { k: number; n: number } | null {
-  const m = flag.baselineMonths.length
-  if (m === 0 || flag.baseline.n <= 0) return null
-  return { k: Math.round(flag.baseline.k / m), n: Math.round(flag.baseline.n / m) }
+/**
+ * What the check compared a flag's week with, said as it is: the plain total
+ * over the months it pooled ("usually 38 of 1,089 over June, July and
+ * August"). Not a month's average: a small baseline divided by its months
+ * rounds to "0 of 363", which is not what anyone saw. Null without months.
+ */
+export function usualOver(flag: Pick<WeekReadFlag, 'baseline' | 'baselineMonths'>): { k: number; n: number; months: string } | null {
+  if (flag.baselineMonths.length === 0 || flag.baseline.n <= 0) return null
+  return { k: flag.baseline.k, n: flag.baseline.n, months: monthsPhrase(flag.baselineMonths) }
 }
 
-/** "19 of 241 videos this week · usually about 6 of 363 a month". */
+/** "19 of 241 videos this week · usually 38 of 1,089 over June, July and August". */
 export function flagFigure(flag: Pick<WeekReadFlag, 'week' | 'baseline' | 'baselineMonths'>): string {
-  const usual = usualMonth(flag)
+  const usual = usualOver(flag)
   const week = `${fmtInt(flag.week.k)} of ${fmtInt(flag.week.n)} videos this week`
-  return usual ? `${week} · usually about ${fmtInt(usual.k)} of ${fmtInt(usual.n)} a month` : week
+  return usual ? `${week} · usually ${fmtInt(usual.k)} of ${fmtInt(usual.n)} over ${usual.months}` : week
 }
+
+/** "Most talked about this week": the lead when nothing was flagged or new. */
+export const BIGGEST_HEADING = 'Most talked about this week'
 
 export type LevelOneLead =
-  | { kind: 'flag'; flag: WeekReadFlag; usual: { k: number; n: number } | null; href: string }
-  | { kind: 'new'; themeId: string; label: string | null; body: string; videos: { week: number; month: number }; evidence: string; href: string }
+  | { kind: 'flag'; flag: WeekReadFlag; usual: { k: number; n: number; months: string } | null; href: string }
+  /** A conversation first heard this week (`body`, the writer's sentence on
+   *  it), or the week's biggest: its count this week beside its month. The
+   *  label is Pass B's (`theme`), or, on a read stored before its
+   *  conversations were kept, the headline of the finding that rests on it
+   *  alone (`finding`, the writer's). */
+  | { kind: 'new' | 'biggest'; themeId: string; label: string | null; labelKind: 'theme' | 'finding'; body: string | null; videos: { week: number; month: number | null }; href: string }
 
 export interface LevelOneRow {
   kind: 'flag' | 'new' | 'heard'
@@ -271,6 +285,34 @@ export interface LevelOneView {
   where: string
 }
 
+/** A conversation of the week, as the lead's rule reads it, with its month
+ *  and where its label came from. */
+interface LeadConversationRow { registryId: string; label: string; labelKind: 'theme' | 'finding'; week: number; month: number | null; setApart: boolean }
+
+/**
+ * The week's conversations: the read's own list where it kept one
+ * (`conversations`: the category's window and month counts, Market's set-apart
+ * mark; the counts the lead ranks on). A read stored before T11b has none, and
+ * gives what it holds instead, ranked on its own lenient-gated counts: the
+ * conversations also heard, and each finding that rests on one conversation
+ * alone (named by its headline).
+ */
+function leadConversations(read: WeekReadData): { rows: LeadConversationRow[]; kept: boolean } {
+  const kept = read.version === 2 ? read.conversations : undefined
+  if (kept) return { kept: true, rows: kept.filter((c) => c.label.trim()).map((c) => ({ ...c, label: c.label.trim(), labelKind: 'theme' as const })) }
+  return {
+    kept: false,
+    rows: [
+      ...(read.alsoHeard ?? [])
+        .filter((h) => h.label.trim() && typeof h.monthVideos === 'number')
+        .map((h) => ({ registryId: h.themeId, label: h.label.trim(), labelKind: 'theme' as const, week: h.videos, month: h.monthVideos as number, setApart: false })),
+      ...(read.findings ?? [])
+        .filter((f) => f.basedOn.length === 1 && (f.headline ?? '').trim() && f.videos)
+        .map((f) => ({ registryId: f.basedOn[0], label: f.headline.trim(), labelKind: 'finding' as const, week: f.videos.week, month: f.videos.month, setApart: false })),
+    ],
+  }
+}
+
 /** The level-1 email from a version-2 snapshot. Pure. */
 export function levelOneView(read: WeekReadData, lines: readonly WeeklyReadLine[] = []): LevelOneView {
   const figures = read.figures ?? {}
@@ -287,42 +329,74 @@ export function levelOneView(read: WeekReadData, lines: readonly WeeklyReadLine[
       }
     : null
 
-  // THE LEAD: the update's first flag (the check's own rank order,
-  // `weekFlagRows`), else the week's biggest new conversation, else none.
-  const flags = (v2?.unusual?.flags ?? []).filter((f) => f.label.trim() && f.verdict?.state === 'moved')
-  const fresh = [...(v2?.newThisWeek ?? [])]
-    .filter((x) => (x.body ?? '').trim())
-    .sort((a, b) => b.videos.week - a.videos.week || a.themeId.localeCompare(b.themeId))
+  // THE LEAD (lib/reading/week-lead.ts, the one rule, Market's too): the
+  // update's first flag, else the conversation first heard this week with the
+  // most videos this week, else the conversation with the most; both ranked on
+  // the category's window count, a set-apart one never. A check that could not
+  // be read gives no flag.
+  const unusual = v2?.unusual
+  const flags = unusual?.unread ? [] : (unusual?.flags ?? []).filter((f) => f.label.trim() && f.verdict?.state === 'moved')
+  const fresh = (v2?.newThisWeek ?? []).filter((x) => (x.body ?? '').trim())
+  const freshById = new Map(fresh.map((x) => [x.themeId, x]))
+  const convs = leadConversations(read)
+  const picked = weekLead({ flags, newThisWeek: fresh.map((x) => ({ registryId: x.themeId })), conversations: convs.rows })
   let lead: LevelOneLead | null = null
-  if (flags[0]) lead = { kind: 'flag', flag: flags[0], usual: usualMonth(flags[0]), href: objectHref(flags[0].objectKind, flags[0].objectId) }
-  else if (fresh[0]) {
-    const x = fresh[0]
-    lead = { kind: 'new', themeId: x.themeId, label: x.label?.trim() || null, body: x.body.trim(), videos: x.videos, evidence: (x.evidence ?? '').trim(), href: objectHref('theme', x.themeId) }
+  if (picked?.kind === 'flag') {
+    const f = picked.flag
+    lead = { kind: 'flag', flag: f, usual: usualOver(f), href: objectHref(f.objectKind, f.objectId) }
+  } else if (picked) {
+    const c = picked.conversation
+    const x = picked.kind === 'new' ? freshById.get(c.registryId) ?? null : null
+    lead = {
+      kind: picked.kind,
+      themeId: c.registryId,
+      label: c.label,
+      labelKind: c.labelKind,
+      body: x ? x.body.trim() : null,
+      videos: { week: c.week, month: c.month },
+      href: objectHref('theme', c.registryId),
+    }
   }
+  const leadFlag = lead?.kind === 'flag' ? lead.flag : null
+  const rest = flags.filter((f) => f !== leadFlag)
 
   // ALSO THIS WEEK: the other flags, then the other new conversations, then
   // what else was heard most; each object once, at most ALSO_ROWS.
   const shown = new Set<string>()
   if (lead?.kind === 'flag' && lead.flag.objectKind === 'theme') shown.add(lead.flag.objectId)
-  if (lead?.kind === 'new') shown.add(lead.themeId)
+  if (lead?.kind === 'new' || lead?.kind === 'biggest') shown.add(lead.themeId)
   const also: LevelOneRow[] = []
   const push = (row: LevelOneRow, themeId: string | null) => {
     if (also.length >= ALSO_ROWS || (themeId && shown.has(themeId))) return
     if (themeId) shown.add(themeId)
     also.push(row)
   }
-  for (const f of flags.slice(1)) {
+  for (const f of rest) {
     push({ kind: 'flag', label: f.label.trim(), theme: f.objectKind === 'theme', verdict: f.verdict, figure: flagFigure(f), href: objectHref(f.objectKind, f.objectId) }, f.objectKind === 'theme' ? f.objectId : null)
   }
-  for (const x of fresh) {
-    if (!x.label?.trim()) continue
-    push({ kind: 'new', label: x.label.trim(), theme: true, verdict: null, figure: weekMonth(x.videos.week, x.videos.month), href: objectHref('theme', x.themeId) }, x.themeId)
-  }
-  const heard = [...(read.alsoHeard ?? [])]
-    .filter((h) => h.label.trim() && typeof h.monthVideos === 'number' && h.videos > 0)
-    .sort((a, b) => b.videos - a.videos || a.label.localeCompare(b.label))
-  for (const h of heard) {
-    push({ kind: 'heard', label: h.label.trim(), theme: true, verdict: null, figure: weekMonth(h.videos, h.monthVideos as number), href: objectHref('theme', h.themeId) }, h.themeId)
+  // The other new conversations, then what else was heard most: on the
+  // conversations' own counts where the read kept them (the lead's), a
+  // set-apart one never; on an older read, its own.
+  if (convs.kept) {
+    const ranked = convs.rows.filter((c) => !c.setApart && c.week > 0 && c.month != null).sort((a, b) => b.week - a.week || a.registryId.localeCompare(b.registryId))
+    for (const c of ranked.filter((c) => freshById.has(c.registryId))) {
+      push({ kind: 'new', label: c.label, theme: true, verdict: null, figure: weekMonth(c.week, c.month as number), href: objectHref('theme', c.registryId) }, c.registryId)
+    }
+    for (const c of ranked) {
+      push({ kind: 'heard', label: c.label, theme: true, verdict: null, figure: weekMonth(c.week, c.month as number), href: objectHref('theme', c.registryId) }, c.registryId)
+    }
+  } else {
+    const freshRows = [...fresh].sort((a, b) => b.videos.week - a.videos.week || a.themeId.localeCompare(b.themeId))
+    for (const x of freshRows) {
+      if (!x.label?.trim()) continue
+      push({ kind: 'new', label: x.label.trim(), theme: true, verdict: null, figure: weekMonth(x.videos.week, x.videos.month), href: objectHref('theme', x.themeId) }, x.themeId)
+    }
+    const heard = [...(read.alsoHeard ?? [])]
+      .filter((h) => h.label.trim() && typeof h.monthVideos === 'number' && h.videos > 0)
+      .sort((a, b) => b.videos - a.videos || a.label.localeCompare(b.label))
+    for (const h of heard) {
+      push({ kind: 'heard', label: h.label.trim(), theme: true, verdict: null, figure: weekMonth(h.videos, h.monthVideos as number), href: objectHref('theme', h.themeId) }, h.themeId)
+    }
   }
 
   const first = (read.findings ?? []).find((f) => (f.headline ?? '').trim())

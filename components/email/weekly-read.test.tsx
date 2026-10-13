@@ -280,10 +280,11 @@ describe('the level-1 email: the board, top to bottom', () => {
       'This week in your market · 21 to 27 September',
       'Buyers treated bag choice as a practical match',
       '274 videos and 4,777 comments in your market this week · 852 videos and 21,468 comments in September so far.',
-      'Unusual this week', 'Asking for the bag in more colours', '19', 'of 241 videos this week', 'usually about 13 of 363 a month',
+      'Unusual this week', 'Asking for the bag in more colours', '19', 'of 241 videos this week', 'usually 38 of 1,089 over June, July and August',
       'This week 7.9%', 'Usually 3.5%', 'A difference of 4.4 points, on a band of 2.1',
-      'Also this week', 'Laptop sleeves that fit a 16-inch machine', '9 videos this week · 21 in September so far',
-      'Straps that dig in on a long walk', '6 videos this week · 11 in September so far',
+      'Also this week', 'Comparing named bags by trip fit', '18 videos this week · 47 in September so far',
+      'Laptop sleeves that fit a 16-inch machine', '12 videos this week · 30 in September so far',
+      'Straps that dig in on a long walk', '8 videos this week · 15 in September so far',
       'Across your pages',
       'Voices', 'In the most videos in September: Daily commuters', '41 videos',
       'Your products', 'Named most in September: Kirby backpack', '9 videos',
@@ -345,7 +346,7 @@ describe('the level-1 email: the board, top to bottom', () => {
   it('every line opens where it is: Market\'s conversation, each page\'s panel, the Dashboard, who gets this', () => {
     const html = l1Email()
     for (const href of [
-      `${APP}/dashboard/market?conv=t3`, `${APP}/dashboard/market?conv=t7`, `${APP}/dashboard/market?conv=t8`,
+      `${APP}/dashboard/market?conv=t3`, `${APP}/dashboard/market?conv=t1`, `${APP}/dashboard/market?conv=t7`, `${APP}/dashboard/market?conv=t8`,
       `${APP}/dashboard/voices?group=commuters`, `${APP}/dashboard/products?product=p1`, `${APP}/dashboard/content?idea=1`,
       `${APP}/dashboard/moves?advice=lin-1`, `${APP}/dashboard`, `${APP}/dashboard/settings/reports`, SHARE,
     ]) expect(html, href).toContain(`href="${href}"`)
@@ -353,36 +354,63 @@ describe('the level-1 email: the board, top to bottom', () => {
     expect(markupText(l1Email(levelOne(), null))).not.toContain('Read this week in full')
   })
 
-  it('with no flag, the lead is the week\'s biggest new conversation, its week beside its month', () => {
+  it('with no flag, the lead is the new conversation with the most videos this week, its week beside its month, its sentence under it', () => {
     const read = levelOneRead({
       unusual: sealandUnusual([]),
       newThisWeek: [
-        { themeId: 't9', label: 'Roll-top bags in heavy rain', body: 'People asked whether the roll top keeps a laptop dry in a downpour.', videos: { week: 5, month: 5 }, evidence: '' },
-        { themeId: 't10', label: 'Bags for a pram', body: 'Parents asked which bag hangs from a pram.', videos: { week: 3, month: 4 }, evidence: '' },
+        { themeId: 't7', label: 'Laptop sleeves that fit a 16-inch machine', body: 'People asked whether a sleeve fits a sixteen-inch machine.', videos: { week: 5, month: 5 }, evidence: '' },
+        { themeId: 't8', label: 'Straps that dig in on a long walk', body: 'Straps.', videos: { week: 3, month: 4 }, evidence: '' },
       ],
     })
     const t = l1Text(levelOne(read))
     expect(t).not.toContain('Unusual this week')
-    const marks = ['New this week', 'Roll-top bags in heavy rain', 'videos this week', '5 in September so far', 'People asked whether the roll top keeps a laptop dry', 'Also this week', 'Bags for a pram', 'New', '3 videos this week · 4 in September so far']
-    expectInOrder(t, marks)
+    expectInOrder(t, ['New this week', 'Laptop sleeves that fit a 16-inch machine', '12', 'videos this week', '30 in September so far', 'People asked whether a sleeve fits', 'Also this week', 'Straps that dig in on a long walk', 'New', '8 videos this week · 15 in September so far'])
     assertCopyContract(l1Email(levelOne(read)))
+  })
+
+  it('with nothing flagged or new, the week\'s biggest conversation leads under a plain heading, never one set apart', () => {
+    const t = l1Text(levelOne(levelOneRead({ unusual: sealandUnusual([]) })))
+    expect(t).not.toContain('Unusual this week')
+    expect(t).not.toContain('New this week')
+    expect(t).not.toContain('Makers showing their own builds')
+    expectInOrder(t, ['Most talked about this week', 'Asking for the bag in more colours', '24', 'videos this week', '61 in September so far', 'Also this week', 'Comparing named bags by trip fit'])
+    const html = l1Email(levelOne(levelOneRead({ unusual: sealandUnusual([]) })))
+    assertCopyContract(html)
+    // The heading is a plain heading, not a flag word in a verdict node.
+    expect(copyNodes(html).filter((n) => n.kind === 'verdict')).toEqual([])
+  })
+
+  it('an older read leads with the finding that rests on one conversation alone, named by its headline as prose', () => {
+    const html = l1Email(levelOne(sealandRead(), []))
+    expectInOrder(markupText(html), ['Most talked about this week', 'Buyers ask for named alternatives that match exact bag needs', '7', 'videos this week', '16 in September so far'])
+    expect(copyNodes(html).some((n) => n.kind === 'prose' && n.text.startsWith('Buyers ask for named alternatives'))).toBe(true)
+    assertCopyContract(html)
   })
 
   it('the other flags are also this week, each with its chip and its months; a kind is named in code\'s words', () => {
     const second = sealandFlag({ objectKind: 'kind', objectId: 'question', label: 'Questions', week: { k: 40, n: 241 }, baseline: { k: 120, n: 1089 }, rank: 2 })
     const t = l1Text(levelOne(levelOneRead({ unusual: sealandUnusual([sealandFlag(), second]) })))
     expect(t).toContain('Questions')
-    expect(t).toContain('40 of 241 videos this week · usually about 40 of 363 a month')
-    expect(t.indexOf('Questions')).toBeLessThan(t.indexOf('Laptop sleeves'))
+    expect(t).toContain('40 of 241 videos this week · usually 120 of 1,089 over June, July and August')
+    expect(t.indexOf('Questions')).toBeLessThan(t.indexOf('Comparing named bags'))
     const nodes = copyNodes(l1Email(levelOne(levelOneRead({ unusual: sealandUnusual([sealandFlag(), second]) }))))
     expect(nodes.filter((n) => n.kind === 'verdict' && n.text === 'Unusual this week')).toHaveLength(2)
   })
 
-  it('prints no section that has nothing to say: no flag and nothing new, no lines, no market', () => {
-    const t = l1Text(sealandSnapshot(sealandRead({ market: null }), []))
-    for (const m of ['Unusual this week', 'New this week', 'Also this week', 'Across your pages', 'in your market this week']) expect(t).not.toContain(m)
+  it('prints no section that has nothing to say: no lead, no rows, no lines, no market; and the line above the button keeps its space', () => {
+    const empty = sealandRead({ market: null, findings: sealandRead().findings.map((f) => ({ ...f, basedOn: ['a', 'b'] })) })
+    const t = l1Text(sealandSnapshot(empty, []))
+    for (const m of ['Unusual this week', 'New this week', 'Most talked about this week', 'Also this week', 'Across your pages', 'in your market this week']) expect(t).not.toContain(m)
     expect(t).toContain('Buyers treated bag choice as a practical match')
     expect(t).toContain('Open this week in Verbatim')
+    // With no lead under it, the opening section closes on its own padding.
+    expect(render(<WeeklyReadReport data={sealandSnapshot(empty, [])} appUrl={APP} />)).toContain('padding:26px 30px 24px')
+    expect(render(<WeeklyReadReport data={levelOne()} appUrl={APP} />)).toContain('padding:26px 30px 6px')
+  })
+
+  it('a rival flag opens its brand panel in Voices', () => {
+    const rival = sealandFlag({ objectKind: 'rival', objectId: 'competitor:Osprey', label: 'Osprey' })
+    expect(l1Email(levelOne(levelOneRead({ unusual: sealandUnusual([rival]) })))).toContain(`href="${APP}/dashboard/voices?brand=Osprey"`)
   })
 
   it('goes out under the same frozen subject, with a plain-text mirror', () => {

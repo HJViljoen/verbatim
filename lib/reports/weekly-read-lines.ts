@@ -81,14 +81,20 @@ const withParam = (page: NavKey, key: string, value: string | number) =>
 
 /**
  * A conversation's week beside its month, off the week's own read: "12 videos
- * this week · 31 in October so far". The same measure the read prints its
- * findings in (lenient-gated videos), so the two halves are one count read
- * twice. Null where the read does not hold the conversation.
+ * this week · 31 in October so far". The read's conversations where it kept
+ * them (the category's window and month counts, the counts the week's lead
+ * and Market rank on); on an older read, the measure it prints its findings
+ * in (lenient-gated videos). Either way one count read twice. Null where the
+ * read does not hold the conversation.
  */
 export function conversationFigure(read: WeekReadData | null, registryId: string): string | null {
   if (!read || !registryId) return null
   const where = inMonth(read.month, read.version === 2 ? read.monthComplete : false)
   const pair = (week: number, month: number) => `${plural(week, 'video', 'videos')} this week · ${fmtInt(month)} ${where}`
+  if (read.version === 2 && read.conversations) {
+    const c = read.conversations.find((x) => x.registryId === registryId)
+    return c && c.month != null ? pair(c.week, c.month) : null
+  }
   const heard = (read.alsoHeard ?? []).find((h) => h.themeId === registryId)
   if (heard && typeof heard.monthVideos === 'number') return pair(heard.videos, heard.monthVideos)
   if (read.version === 2) {
