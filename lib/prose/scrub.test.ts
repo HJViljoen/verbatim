@@ -215,6 +215,7 @@ describe('the policy table — every prose slot is listed with its policy', () =
     week_read: 'both',
     statement_says: 'both',
     monthly_brief: 'both',
+    post_idea: 'both',
     interpretation_monthly: 'both',
     interpretation_quarterly: 'both',
     interpretation_anomaly: 'both',

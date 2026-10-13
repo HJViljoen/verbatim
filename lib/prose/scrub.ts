@@ -436,6 +436,7 @@ export const PROSE_SLOTS = [
   'week_read',
   'statement_says',
   'monthly_brief',
+  'post_idea',
   'interpretation_monthly',
   'interpretation_quarterly',
   'interpretation_anomaly',
@@ -552,6 +553,12 @@ export const PROSE_POLICY: Record<ProseSlot, ProsePolicy> = {
   // (lib/reports/briefs/scrub.ts `scrubBriefText`, `scrubProse('week_read')`
   // with no verdicts), and replayed by the brief deck as `stored`.
   monthly_brief: 'both',
+  // The week's post ideas (depth v2, T13 writes them, T6 prints them): the
+  // title, the cover and the sub-question labels the model wrote over a
+  // question conversation, read back from `post_ideas` as `stored`. Written
+  // with no verdicts, so a direction word drops its sentence; code's counts
+  // and multiples sit beside them as figures.
+  post_idea: 'both',
   interpretation_monthly: 'both',
   interpretation_quarterly: 'both',
   interpretation_anomaly: 'both',
