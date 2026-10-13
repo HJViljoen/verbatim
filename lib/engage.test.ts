@@ -183,3 +183,62 @@ describe('loadEngageCandidates — each candidate says whose video it sits under
     expect(db.calls.find((c) => c.table === 'videos')?.columns).toContain('source, is_client')
   })
 })
+
+// THE WINDOWED READ (Phase 4 fix round): Content's reply list read every
+// current engage insight's evidence, then every cited comment by id, on every
+// view (Sealand's Content load: 143 statements, 99 of them these two stages).
+// With a window it reads each chunk's evidence with its comment embedded and
+// bounded by the window, one statement a chunk, and must hand back exactly
+// the candidates the unbounded read gives inside the window, in the same order
+// (the ranking's ties keep their input order).
+describe('loadEngageCandidates: the windowed read', () => {
+  const CLIENT = 'c1'
+  const SINCE = '2026-10-04T04:03:00.000Z'
+  const BEFORE = '2026-10-11T04:02:00.000Z'
+  function tables() {
+    const videos = Array.from({ length: 40 }, (_, i) => ({
+      id: `vrow-${i}`, client_id: CLIENT, video_id: `nv${i}`, platform: ['tiktok', 'instagram'][i % 2], video_url: `https://x.example/${i}`,
+      account_name: `acct${i}`, topics: ['prosthetic knee'], source: 'discovered', is_client: false,
+    }))
+    const insights: Record<string, unknown>[] = []
+    const evidence: Record<string, unknown>[] = []
+    const comments: Record<string, unknown>[] = []
+    let j = 0
+    for (let i = 0; i < 600; i++) {
+      // Ids that do not sort with the insight order, so the chunking shows.
+      insights.push({ id: `ins-${String((i * 37) % 600).padStart(4, '0')}`, client_id: CLIENT, category: 'question', theme: 'fitting', description: 'd', strength_score: (i % 3) + 1 })
+      for (let k = 0; k < 2 + (i % 2); k++, j++) {
+        const r = (j * 7919) % 100
+        const date = r < 8 ? `2026-10-0${5 + (r % 4)}T10:00:00Z` : r < 10 ? '2026-10-11T09:00:00Z' : `2026-0${6 + (r % 3)}-1${r % 9}T10:00:00Z`
+        comments.push({ id: `cm-${j}`, client_id: CLIENT, author: '@a', text: 'Where can I get fitted for one of these knees?', likes: j % 3, comment_date: date, platform: videos[j % 40].platform, video_id: videos[j % 40].video_id, comment_id: `n${j}` })
+        evidence.push({ id: `ev-${String((j * 53) % 2000).padStart(5, '0')}-${j}`, audience_insight_id: insights[i].id, comment_id: `cm-${j}`, source: 'comment' })
+      }
+    }
+    return { audience_insights_current: insights, insight_evidence: evidence, comments, videos }
+  }
+
+  it('gives the unbounded read\'s candidates inside the window, in its order, from far fewer statements', async () => {
+    const all = fakeDb(tables())
+    const unbounded = await loadEngageCandidates(all.client as never, CLIENT, 'run-1', {})
+    const inWindow = unbounded.filter((c) => c.comment.commentDate! >= SINCE && c.comment.commentDate! < BEFORE)
+    const windowed = fakeDb(tables())
+    const got = await loadEngageCandidates(windowed.client as never, CLIENT, 'run-1', { commentsSince: SINCE, commentsBefore: BEFORE })
+    expect(inWindow.length).toBeGreaterThan(20)
+    expect(got.map((c) => c.evidenceId)).toEqual(inWindow.map((c) => c.evidenceId))
+    expect(got.map((c) => c.comment.videoRowId)).toEqual(inWindow.map((c) => c.comment.videoRowId))
+    expect(got.every((c) => c.comment.videoRowId?.startsWith('vrow-'))).toBe(true)
+    // No comment is read by id; each chunk is one statement with its comment.
+    const count = (db: ReturnType<typeof fakeDb>, t: string) => db.calls.filter((c) => c.table === t).length
+    expect(count(windowed, 'comments')).toBe(0)
+    expect(count(windowed, 'insight_evidence')).toBe(3) // 600 insights at 250 a chunk
+    expect(count(all, 'insight_evidence') + count(all, 'comments')).toBeGreaterThan(20)
+    expect(windowed.calls.find((c) => c.table === 'insight_evidence')?.columns).toContain('comments!inner(')
+  })
+
+  it('a lower bound alone reads to the present, as before', async () => {
+    const db = fakeDb(tables())
+    const got = await loadEngageCandidates(db.client as never, CLIENT, 'run-1', { commentsSince: SINCE })
+    expect(got.some((c) => c.comment.commentDate! >= BEFORE)).toBe(true)
+    expect(got.every((c) => c.comment.commentDate! >= SINCE)).toBe(true)
+  })
+})

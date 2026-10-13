@@ -11,9 +11,18 @@
  * missing-table guard is exercised by leaving the table out. Every call is
  * recorded, so a test can assert what was (and was not) read.
  *
- * NOT A DATABASE. No joins, no counts beyond `head: true` over the filtered
- * rows, no ordering beyond one column at a time. It is the smallest thing
- * that lets a loader run end to end without a network.
+ * NOT A DATABASE. No counts beyond `head: true` over the filtered rows, no
+ * ordering beyond one column at a time. It is the smallest thing that lets a
+ * loader run end to end without a network.
+ *
+ * ONE KIND OF JOIN: a flat `name!inner(col, col, alias:col)` embed in a
+ * select (no parentheses inside it), where the test hands in a `name` table.
+ * The parent's `<name, singular>_id` (`comments` → `comment_id`) names the
+ * related row's `id`; the related row's columns are attached under `name`;
+ * a parent with no related row is dropped (`!inner`); and a filter on
+ * `name.col` reads the attached row, as PostgREST's does. An embed whose table
+ * the test did not hand in is left alone (rows that carry it already keep
+ * theirs), and so is any nested embed.
  *
  * AND THE THREE WRITES, for a writer's glue (writing back, the weekly read's
  * send path): `insert(row | rows)` appends to the table (an `id` is made up
@@ -64,6 +73,38 @@ export function fakeDb(
     let to = Number.POSITIVE_INFINITY
     let head = false
     let wantCount = false
+    let embeds: { name: string; cols: string[] }[] = []
+
+    /** A column's value: a `name.col` filter reads the attached row. */
+    const val = (r: Row, col: string): unknown => {
+      if (col in r || !col.includes('.')) return r[col]
+      const [rel, field] = [col.slice(0, col.indexOf('.')), col.slice(col.indexOf('.') + 1)]
+      const o = r[rel]
+      const one = Array.isArray(o) ? o[0] : o
+      return one && typeof one === 'object' ? (one as Row)[field] : undefined
+    }
+
+    /** The parent row with its `!inner` embeds attached, or null where one
+     *  has no related row. */
+    const attach = (r: Row, byId: Map<string, Map<unknown, Row>>): Row | null => {
+      let out = r
+      for (const e of embeds) {
+        if (e.name in tables) {
+          const fk = `${e.name.replace(/s$/, '')}_id`
+          const rel = r[fk] == null ? undefined : byId.get(e.name)?.get(r[fk])
+          const picked = rel
+            ? Object.fromEntries(e.cols.flatMap((c) => {
+              if (c === '*') return Object.entries(rel)
+              const [alias, col] = c.includes(':') ? c.split(':').map((x) => x.trim()) : [c, c]
+              return [[alias, rel[col]]]
+            }))
+            : null
+          out = { ...out, [e.name]: picked }
+        }
+        if (out[e.name] == null) return null
+      }
+      return out
+    }
 
     const run = () => {
       if (!(table in tables)) return { data: null, error: missing(table), count: null }
@@ -79,7 +120,9 @@ export function fakeDb(
         tables[table].splice(0, tables[table].length, ...keep)
         return { data: null, error: null, count: gone }
       }
-      let rows = tables[table].filter((r) => preds.every((p) => p(r)))
+      const byId = new Map(embeds.filter((e) => e.name in tables).map((e) => [e.name, new Map(tables[e.name].map((x) => [x.id, x] as [unknown, Row]))]))
+      let rows = (embeds.length > 0 ? tables[table].map((r) => attach(r, byId)).filter((r): r is Row => r != null) : tables[table])
+        .filter((r) => preds.every((p) => p(r)))
       if (orderCol) {
         const col = orderCol
         rows = [...rows].sort((a, b) => {
@@ -105,13 +148,14 @@ export function fakeDb(
       delete() { call.op = 'delete'; removing = true; return builder },
       select(columns?: string, opts?: { count?: string; head?: boolean }) {
         call.columns = columns
+        embeds = [...(columns ?? '').matchAll(/(\w+)!inner\(([^()]*)\)/g)].map((m) => ({ name: m[1], cols: m[2].split(',').map((c) => c.trim()).filter(Boolean) }))
         head = Boolean(opts?.head)
         wantCount = Boolean(opts?.count)
         return builder
       },
-      eq(col: string, v: unknown) { call.filters.push(`${col}=${String(v)}`); preds.push((r) => r[col] === v); return builder },
-      neq(col: string, v: unknown) { call.filters.push(`${col}!=${String(v)}`); preds.push((r) => r[col] !== v); return builder },
-      in(col: string, vs: readonly unknown[]) { call.filters.push(`${col} in ${vs.length}`); const set = new Set(vs); preds.push((r) => set.has(r[col])); return builder },
+      eq(col: string, v: unknown) { call.filters.push(`${col}=${String(v)}`); preds.push((r) => val(r, col) === v); return builder },
+      neq(col: string, v: unknown) { call.filters.push(`${col}!=${String(v)}`); preds.push((r) => val(r, col) !== v); return builder },
+      in(col: string, vs: readonly unknown[]) { call.filters.push(`${col} in ${vs.length}`); const set = new Set(vs); preds.push((r) => set.has(val(r, col))); return builder },
       is(col: string, v: unknown) { call.filters.push(`${col} is ${String(v)}`); preds.push((r) => (r[col] ?? null) === v); return builder },
       not(col: string, op: string, v: unknown) {
         call.filters.push(`${col} not ${op} ${String(v)}`)
@@ -153,9 +197,9 @@ export function fakeDb(
         preds.push((r) => parts.some((p) => p(r)))
         return builder
       },
-      gte(col: string, v: string) { call.filters.push(`${col}>=${v}`); preds.push((r) => String(r[col]) >= v); return builder },
-      lte(col: string, v: string) { call.filters.push(`${col}<=${v}`); preds.push((r) => String(r[col]) <= v); return builder },
-      lt(col: string, v: string) { call.filters.push(`${col}<${v}`); preds.push((r) => String(r[col]) < v); return builder },
+      gte(col: string, v: string) { call.filters.push(`${col}>=${v}`); preds.push((r) => String(val(r, col)) >= v); return builder },
+      lte(col: string, v: string) { call.filters.push(`${col}<=${v}`); preds.push((r) => String(val(r, col)) <= v); return builder },
+      lt(col: string, v: string) { call.filters.push(`${col}<${v}`); preds.push((r) => String(val(r, col)) < v); return builder },
       order(col: string, opts?: { ascending?: boolean }) { if (!orderCol) { orderCol = col; asc = opts?.ascending !== false } return builder },
       limit(n: number) { to = from + n - 1; return builder },
       range(a: number, b: number) { from = a; to = b; return Promise.resolve(run()) },
