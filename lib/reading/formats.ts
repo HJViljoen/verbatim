@@ -136,7 +136,20 @@ export interface FormatInput {
    *  none gets the stored value through unchanged, which is a slug on the page
    *  and therefore a bug a test catches, not a silent prettification. */
   label?: (key: string) => string
+  /**
+   * Which of the videos handed in are read. `'month'` (the default, and every
+   * surface's): those published in `month`. `'any'`: every one, whenever it
+   * was published, for a reading whose set the CALLER has already drawn. The
+   * post ideas (lib/post-ideas/select.ts) read one conversation's videos this
+   * way: they are published across many months, and a month's slice of them
+   * leaves almost every format under the three-video floor. Same floors,
+   * medians, bands and multiples; the lines then name no month.
+   */
+  published?: 'month' | 'any'
 }
+
+/** The basis line of a reading over a caller's own set (`published: 'any'`). */
+export const ANY_MONTH_BASIS = 'videos, whenever published'
 
 const round1 = (n: number): number => Math.round(n * 10) / 10
 
@@ -251,9 +264,10 @@ export function formatReading(input: FormatInput): FormatReading {
   const excludePlatforms = input.excludePlatforms ?? ENGAGEMENT_EXCLUDED
   const minRated = input.minRated ?? ENGAGEMENT_MIN_VIDEOS
   const label = input.label ?? ((k: string) => k)
-  const basisLine = basisLineFor(month)
+  const anyMonth = input.published === 'any'
+  const basisLine = anyMonth ? ANY_MONTH_BASIS : basisLineFor(month)
 
-  const published = input.videos.filter((v) => inMonth(v.upload_date, month))
+  const published = anyMonth ? [...input.videos] : input.videos.filter((v) => inMonth(v.upload_date, month))
   const classified = published.filter((v) => (v[key] ?? null) !== null && v[key] !== '')
   const of = classified.length
 
@@ -315,16 +329,16 @@ export function formatReading(input: FormatInput): FormatReading {
     median: { value: audienceMedian === null ? null : round1(audienceMedian), n: rates.length },
     excluded: excludePlatforms.map(platformLabel),
     excludedNote: EXCLUDED_NOTE,
-    unread: unreadLine({ audienceLabel, month, published: published.length, of }),
+    unread: unreadLine({ audienceLabel, month, published: published.length, of, anyMonth }),
   }
 }
 
-function unreadLine(input: { audienceLabel: string; month: string; published: number; of: number }): string | null {
+function unreadLine(input: { audienceLabel: string; month: string; published: number; of: number; anyMonth?: boolean }): string | null {
   const { audienceLabel, published, of } = input
-  const when = longMonth(input.month)
-  if (published === 0) return `${audienceLabel} published nothing we read in ${when}, so there is nothing to read a format off.`
+  const when = input.anyMonth ? '' : ` in ${longMonth(input.month)}`
+  if (published === 0) return `${audienceLabel} published nothing we read${when}, so there is nothing to read a format off.`
   if (of === 0) {
-    return `${audienceLabel} published ${fmtInt(published)} ${published === 1 ? 'video' : 'videos'} in ${when} and none of them has been classified yet, so no share can be stated.`
+    return `${audienceLabel} published ${fmtInt(published)} ${published === 1 ? 'video' : 'videos'}${when} and none of them has been classified yet, so no share can be stated.`
   }
   return null
 }
