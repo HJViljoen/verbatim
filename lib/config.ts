@@ -819,23 +819,9 @@ export function ownPostAudienceEnabled(clientId?: string): boolean {
   return !off.includes(clientId.trim().toLowerCase())
 }
 
-/** The week's post ideas (depth v2, T13; the `write-post-ideas` step,
- *  lib/post-ideas/step.ts). Default ON, the own-post audience's shape above:
- *  `POST_IDEAS=0` stops the step everywhere; `POST_IDEAS_OFF` is a
- *  comma-separated client-id list that stops it for ONE tenant without
- *  touching the others. Read when the step runs, and the step's memoised
- *  result ('disabled') records what it found. Until the products migration
- *  is applied the missing `post_ideas` table stops it too. */
-export function postIdeasEnabled(clientId?: string): boolean {
-  const v = process.env.POST_IDEAS
-  if (v === '0' || v === 'false') return false
-  if (!clientId) return true
-  const off = (process.env.POST_IDEAS_OFF ?? '')
-    .split(',')
-    .map((x) => x.trim().toLowerCase())
-    .filter((x) => x !== '')
-  return !off.includes(clientId.trim().toLowerCase())
-}
+// The week's post ideas' switch is per tenant and OFF by default: see
+// `POST_IDEAS_ENABLED` below, beside the other per-tenant step switches (it
+// needs the tenant ids, declared further down).
 
 /** Incremental Pass A (Theme Registry shape A, 2026-08-17). OFF unless set, so
  *  merging the branch changes nothing until it is switched on in Vercel. Gates
@@ -1863,6 +1849,55 @@ export const PRODUCT_READINGS_ENABLED: Readonly<Record<string, boolean>> = {
 }
 /** May this tenant's run place talk under its products? */
 export const productReadingsEnabled = (clientId: string): boolean => PRODUCT_READINGS_ENABLED[clientId] === true
+
+/**
+ * The week's post ideas (depth v2, T13; the `write-post-ideas` step,
+ * lib/post-ideas/step.ts), per tenant, and OFF for every tenant until Heinrich
+ * turns one on: OPT-IN, the `PRODUCT_READINGS_ENABLED` pattern (Phase 4 fix
+ * round). Until then it was on by default, so applying the products migration
+ * (which creates `post_ideas`) would have started the step, and its model
+ * spend, on both tenants unasked. Off, the step reads, spends and writes
+ * nothing, and Content and the Dashboard say post ideas are not switched on
+ * (`readIdeas`, `topContent`) and print no stored idea. Turn a tenant on only
+ * after the products migration is applied, with a diff to this map and to
+ * lib/config.test.ts, which pins it off.
+ *
+ * The two environment switches stay as EMERGENCY OFF-SWITCHES only; neither
+ * can turn a tenant on: `POST_IDEAS=0` (or `false`) stops the step everywhere,
+ * and `POST_IDEAS_OFF`, a comma-separated client-id list, stops it for one
+ * tenant without a deploy. Read when the step runs, and the step's memoised
+ * result ('disabled') records what it found.
+ */
+export const POST_IDEAS_ENABLED: Readonly<Record<string, boolean>> = {
+  [SEALAND_CLIENT_ID]: false,
+  [OSSUR_CLIENT_ID]: false,
+}
+/** May this tenant's run write post ideas, and its pages show them? Read it;
+ *  never read the map. `map` is for a test. */
+export function postIdeasEnabled(clientId: string, map: Readonly<Record<string, boolean>> = POST_IDEAS_ENABLED): boolean {
+  if (map[clientId] !== true) return false
+  const v = process.env.POST_IDEAS
+  if (v === '0' || v === 'false') return false
+  const off = (process.env.POST_IDEAS_OFF ?? '')
+    .split(',')
+    .map((x) => x.trim().toLowerCase())
+    .filter((x) => x !== '')
+  return !off.includes(clientId.trim().toLowerCase())
+}
+
+/** The post ideas' HARD dollar cap per run (Phase 4 fix round): before each
+ *  attempt of the writer's call, the step's spend so far plus that attempt's
+ *  worst case (its prompt and `POST_IDEAS_MAX_OUTPUT_TOKENS` of output,
+ *  lib/post-ideas/write.ts) must fit, or the call is not made. The dry runs
+ *  cost $0.035 for both tenants together (13 Oct); one attempt's worst case is
+ *  about $0.28, so a parse failure can still be retried once inside the cap. */
+export const POST_IDEAS_BUDGET_USD = 0.5
+
+/** What must stay unspent under `RUN_MODEL_BUDGET_USD` after the post ideas,
+ *  the briefs' `BRIEF_RUN_MARGIN_USD`: the step starts only where the run has
+ *  `POST_IDEAS_BUDGET_USD` plus this left, so it can never trip the run's own
+ *  budget stop. */
+export const POST_IDEAS_RUN_MARGIN_USD = 0.5
 
 /** The product classifier's per-run cap, in ITEMS (confirm checks and
  *  comments): a runaway backstop, translate-quotes' shape. At about $0.0001 a

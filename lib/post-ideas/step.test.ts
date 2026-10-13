@@ -279,7 +279,7 @@ describe('the pipeline carries write-post-ideas', () => {
   })
 })
 
-describe('postIdeasEnabled: the per-tenant switch (the own-post audience\'s shape)', () => {
+describe('postIdeasEnabled: OPT-IN per tenant (PRODUCT_READINGS_ENABLED\'s shape), the env switches off-only', () => {
   const saved = { on: process.env.POST_IDEAS, off: process.env.POST_IDEAS_OFF }
   afterEach(() => {
     if (saved.on === undefined) delete process.env.POST_IDEAS
@@ -287,26 +287,37 @@ describe('postIdeasEnabled: the per-tenant switch (the own-post audience\'s shap
     if (saved.off === undefined) delete process.env.POST_IDEAS_OFF
     else process.env.POST_IDEAS_OFF = saved.off
   })
+  const OTHER = '00000000-0000-4000-8000-0000000000c9'
+  const ON = { [CLIENT]: true, [OTHER]: true }
 
-  it('is on by default, for every tenant', () => {
+  it('is off for every tenant the map does not turn on, whatever the environment says', () => {
     delete process.env.POST_IDEAS
     delete process.env.POST_IDEAS_OFF
-    expect(postIdeasEnabled()).toBe(true)
-    expect(postIdeasEnabled(CLIENT)).toBe(true)
+    expect(postIdeasEnabled(CLIENT)).toBe(false)
+    process.env.POST_IDEAS = '1'
+    expect(postIdeasEnabled(CLIENT)).toBe(false)
+    expect(postIdeasEnabled(CLIENT, { [CLIENT]: false })).toBe(false)
   })
 
-  it('turns off for one tenant through POST_IDEAS_OFF, leaving the others on', () => {
+  it('is on for a tenant the map turns on', () => {
+    delete process.env.POST_IDEAS
+    delete process.env.POST_IDEAS_OFF
+    expect(postIdeasEnabled(CLIENT, ON)).toBe(true)
+    expect(postIdeasEnabled('not-in-the-map', ON)).toBe(false)
+  })
+
+  it('POST_IDEAS_OFF turns one tenant off, leaving the others on', () => {
     delete process.env.POST_IDEAS
     process.env.POST_IDEAS_OFF = ` ${CLIENT.toUpperCase()} , someone-else`
-    expect(postIdeasEnabled(CLIENT)).toBe(false)
-    expect(postIdeasEnabled('00000000-0000-4000-8000-0000000000c9')).toBe(true)
+    expect(postIdeasEnabled(CLIENT, ON)).toBe(false)
+    expect(postIdeasEnabled(OTHER, ON)).toBe(true)
   })
 
-  it('turns off everywhere with POST_IDEAS=0 or false', () => {
+  it('POST_IDEAS=0 or false turns it off everywhere: the emergency off-switch', () => {
     for (const v of ['0', 'false']) {
       process.env.POST_IDEAS = v
-      expect(postIdeasEnabled(CLIENT)).toBe(false)
-      expect(postIdeasEnabled()).toBe(false)
+      expect(postIdeasEnabled(CLIENT, ON)).toBe(false)
+      expect(postIdeasEnabled(OTHER, ON)).toBe(false)
     }
   })
 })

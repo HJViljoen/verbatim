@@ -43,8 +43,10 @@ import {
 // SILENT WHERE IT SHOULD BE. A TEST run (`isTestRun`: a rehearsal that
 // gathered nothing, a capped run, `publish: false`) writes nothing and reads
 // nothing: the next real run writes its own ideas, so nobody is told. A
-// tenant switched off (`postIdeasEnabled`, lib/config.ts: `POST_IDEAS=0`
-// everywhere, or its id in `POST_IDEAS_OFF`; on by default) is the same. No
+// tenant switched off (`postIdeasEnabled`, lib/config.ts: OFF unless
+// `POST_IDEAS_ENABLED` turns it on, which it does for no tenant today; and
+// `POST_IDEAS=0` everywhere or its id in `POST_IDEAS_OFF` as emergency
+// off-switches) is the same. No
 // `post_ideas` table (`isMissingPostIdeas`: the products migration not
 // applied) is a no-op that spends nothing, logged and never alerted, because
 // it is every run's state until Heinrich applies it. A run that already has
@@ -372,7 +374,7 @@ export async function runPostIdeasStep(
   // The per-tenant switch (lib/config.ts `postIdeasEnabled`): off, nothing is
   // read, spent or written, and nobody is told, as for a test run.
   if (!d.enabled(opts.clientId)) {
-    console.log('[write-post-ideas] post ideas are switched off for this tenant (POST_IDEAS / POST_IDEAS_OFF)')
+    console.log('[write-post-ideas] post ideas are switched off for this tenant (POST_IDEAS_ENABLED, or POST_IDEAS / POST_IDEAS_OFF)')
     return { status: 'disabled', ideas: 0, held: 0, costUsd: 0 }
   }
   // THE STEP'S CLOCK STARTS HERE: its one call is capped and done by 250 s.
