@@ -6,7 +6,7 @@ import type { UnusualFlag } from '../week'
 import {
   buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, convHref, closeHref, flagCardOf, flagVerdict, groupsOf,
   lineBars, marketMonths, marketParams, monthsText, notchOf, ourReadOf, panelStats, pickHero, pickWeekSides, platformRows, subjectHref,
-  tableMonths, convOf, doingOf, withMonthPlatforms,
+  tableMonths, convOf, doingOf, leadDoing, withMonthPlatforms,
   type ConvInput, type ConvPanel, type MarketConv, type MarketData, type MarketMonth, type MarketParams, type MarketWeek, type MonthCount,
   type PanelAt, type SubjectFact, type TopRow,
 } from './market'
@@ -306,7 +306,7 @@ export function marketFixture(opts: FixtureOptions = {}): MarketData {
   const read = fixtureRead()
   const flag = flagged && period === 'week' ? flagCardOf({ flag: FIXTURE_FLAG, window: WINDOW, convs, convInput: input, monthCategory: MONTH.category, p, noun: null }) : null
   const groups = (cid: string) => groupsOf(cid, PERSONAS)
-  const doing = (c: MarketConv | null) => (c ? doingOf(HERO_KINDS, c.month, null)[0] ?? null : null)
+  const doing = (c: MarketConv | null) => (c ? leadDoing(doingOf(HERO_KINDS, c.month, null), c.kind) : null)
 
   const top: TopRow = { hero: null, sides: [], months: null }
   if (period === 'week') {

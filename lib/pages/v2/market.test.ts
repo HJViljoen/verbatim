@@ -7,7 +7,7 @@ import type { WindowReading } from '../../reading/read'
 import type { WeekReadData } from '../../written/types'
 import {
   buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, categoryThemeVideos, categoryVideos, closeHref, convHref,
-  convOf, cutWindows, doingOf, flagCardOf, flagVerdict, groupsOf, isRegistryId, insideOf, marketHref, marketMonths, marketParams,
+  convOf, cutWindows, doingOf, leadDoing, flagCardOf, flagVerdict, groupsOf, isRegistryId, insideOf, marketHref, marketMonths, marketParams,
   mergeMixes, monthsText, notchOf, ourReadOf, panelStats, periodHref, personasOf, pickHero, pickWeekSides, platformRows, subjectHref,
   flagBaseWords, monthSoFar, tableFilterOf, tableMonths, topSpans, unmeasuredOf, weekWindows, whoOf, windowLabel, withMonthPlatforms, MARKET_TABLE_ROWS,
   type MarketConv,
@@ -380,6 +380,13 @@ describe('the open panel', () => {
   it('counts what people did over the month\'s videos, at most four kinds', () => {
     expect(doingOf([{ kind: 'pain_point', videos: 14 }, { kind: 'question', videos: 0 }], 31, null)).toEqual([{ kind: 'pain_point', label: 'Complained about something', k: 14, n: 31 }])
     expect(doingOf(null, 31, null)).toEqual([])
+    // The lead card never says a conversation does what it is (Phase 4 fix
+    // round: Össur's praise conversation read "Praised it · 35 of 35").
+    const rows = doingOf([{ kind: 'praise', videos: 35 }, { kind: 'question', videos: 9 }], 35, null)
+    expect(leadDoing(rows, 'praise')).toMatchObject({ kind: 'question', k: 9, n: 35 })
+    expect(leadDoing(rows, 'pain_point')).toMatchObject({ kind: 'praise' })
+    expect(leadDoing(rows, null)).toMatchObject({ kind: 'praise' })
+    expect(leadDoing(doingOf([{ kind: 'praise', videos: 35 }], 35, null), 'praise')).toBeNull()
     expect(doingOf([{ kind: 'praise', videos: 3 }], 0, null)).toEqual([])
   })
 

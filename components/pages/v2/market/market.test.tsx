@@ -80,7 +80,9 @@ describe('TopRowView', () => {
     const html = render(<TopRowView data={WEEK} />)
     expect(html).toMatch(/data-copy="verdict" data-flag="unusual"/)
     expect(text).toContain('Who’s saying it Long-time users upgrading , Caregivers and family')
-    expect(text).toContain('What they’re doing Complained about something · 14 of 31 in October so far')
+    // A complaint conversation: its lead card names the next kind, never
+    // "Complained about something" over its own videos (Phase 4 fix round).
+    expect(text).toContain('What they’re doing Asked a question · 9 of 31 in October so far')
     assertCopyContract(<TopRowView data={WEEK} />)
   })
 
@@ -103,6 +105,17 @@ describe('TopRowView', () => {
     expect(renderText(<TopRowView data={QUIET} />)).toMatch(/^New this week Waterproof knees 8 of 226 category videos this week 8 of 300 in October so far/)
     expect(html).toMatch(/<span data-copy="verdict">New this week<\/span>/)
     assertCopyContract(<TopRowView data={QUIET} />)
+  })
+
+  it('the lead card labels every week\'s bar, as the side card and the Dashboard\'s tile do', () => {
+    const hero = QUIET.top.hero
+    if (!hero || hero.kind === 'flag') throw new Error('expected a conversation lead')
+    const html = render(<TopRowView data={QUIET} />)
+    const card = html.slice(html.indexOf('id="top-0"'), html.indexOf('id="top-1"'))
+    const counts = hero.conv.weeks.filter((w): w is number => w != null)
+    expect(counts.length).toBe(3)
+    // Both drawings (the half-card's and the phone's) print all three.
+    for (const n of counts) expect(card.match(new RegExp(`>${n}<`, 'g'))?.length ?? 0, String(n)).toBeGreaterThanOrEqual(2)
   })
 
   it('rings the card whose panel is open, and turns its link to Close', () => {

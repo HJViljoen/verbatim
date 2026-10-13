@@ -1205,6 +1205,14 @@ export function doingOf(kinds: readonly { kind: string; videos: number }[] | nul
     .map((k) => ({ kind: k.kind, label: talkKindLabel(k.kind, noun), k: Math.min(k.videos, n), n }))
 }
 
+/** What the lead card says they're doing: the conversation's biggest kind
+ *  that is NOT its own (Phase 4 fix round). A praise conversation's videos
+ *  are praise by what the conversation is, so "Praised it · 35 of 35" says
+ *  nothing; the next kind does. Null where no other kind was read. Pure. */
+export function leadDoing(rows: readonly Doing[], ownKind: string | null): Doing | null {
+  return rows.find((d) => !ownKind || d.kind !== ownKind) ?? null
+}
+
 /** The over-time months a table reads, oldest first, from the category's
  *  denominators. */
 export function tableMonths(month: string, category: ReadonlyMap<string, number>, nowMonth: string, count = MARKET_CARD_MONTHS): MarketTable['months'] {
@@ -1642,7 +1650,7 @@ export async function loadMarket(input: {
   }
 
   // ── the top row ──
-  const doing = (conv: MarketConv | null): Doing | null => (conv ? doingOf(heroKinds, conv.month, noun)[0] ?? null : null)
+  const doing = (conv: MarketConv | null): Doing | null => (conv ? leadDoing(doingOf(heroKinds, conv.month, noun), conv.kind) : null)
   const top: TopRow = { hero: null, sides: [], months: null }
   if (period === 'week' && heroPick) {
     if (heroPick.kind === 'flag' && flagCard) {
