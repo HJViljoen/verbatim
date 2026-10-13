@@ -229,6 +229,12 @@ describe('the surface’s own links', () => {
     // Your moves' address and deep link since Design v2.
     expect(marketSurfaceHref('L', { horizon: 'last_3', rec: 'old', item: 'other', advice: 'older' })).toBe('/dashboard/moves?horizon=last_3&advice=L')
     expect(marketSurfaceHref(null, {})).toBe('/dashboard/moves')
+    // The old selections are written as `?advice=`, the one the v2 page reads
+    // (depth v2, T7): "Show all" is the advice record.
+    expect(marketSurfaceHref(null, { ledger: 'all' })).toBe('/dashboard/moves?advice=all')
+    expect(marketSurfaceHref(null, { horizon: 'last_3', item: 'L9', ledger: 'all' })).toBe('/dashboard/moves?horizon=last_3&advice=all')
+    expect(marketSurfaceHref(null, { rec: 'r1' })).toBe('/dashboard/moves?advice=r1')
+    expect(marketSurfaceHref(null, { item: 'L2', rec: 'r1' })).toBe('/dashboard/moves?advice=L2')
   })
 
   it('names the month a piece of advice was first made in', () => {

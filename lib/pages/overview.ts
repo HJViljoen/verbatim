@@ -81,6 +81,7 @@ import { monthsWrittenAt, subjectBackRead, subjectCountedFrom, subjectReadIn, un
 import { chunk, mapWithLimit, MULTI_ROW_IN_CHUNK, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import type { KeywordRow } from '../provenance/searches'
 import { selectAll } from '../supabase-admin'
+import { ownedPosts } from '../reading/owned'
 import { row, rows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
@@ -2948,27 +2949,29 @@ export type ClientPost = {
 
 /** One of your posts over the last three months, with what it is about
  *  (`videos.topics`), for WP2.5's line-ups and census. */
-interface RecentPost { id: string; upload_date: string | null; comments_count: number | null; topics: string[] | null; analyzed_run_id: string | null }
+export interface RecentPost { id: string; upload_date: string | null; comments_count: number | null; topics: string[] | null }
 
 /**
  * Your posts over the three months ending with the reading month, dated by the
- * post (`upload_date`), as the Subjects page's questions read them
- * (`is_client`): the questions line's "your 56 posts", the lead line's posts
- * of the month, and the census's month before. One read. Null where it failed.
+ * post (`upload_date`): the questions line's "your 56 posts", the lead line's
+ * posts of the month, and the census's month before. One read. Null where it
+ * failed.
+ *
+ * YOUR POSTS ARE THE ONES OFF YOUR OWN ACCOUNTS (depth v2, T7 for T14):
+ * `ownedPosts` (lib/reading/owned.ts, `source = 'owned'`), the one read every
+ * page asks "what did you publish" through. This read `is_client`, which is
+ * also true of every creator's video naming the brand (Össur's September: 25
+ * posts of its own and 136 creators' videos tagged `is_client`), so the
+ * questions line and the census counted those creators as Össur's posts. In
+ * id order, as the read was, so the lists it feeds keep their order.
  */
-async function loadRecentOwnPosts(supabase: SupabaseClient, clientId: string, month: string): Promise<RecentPost[] | null> {
+export async function loadRecentOwnPosts(supabase: SupabaseClient, clientId: string, month: string): Promise<RecentPost[] | null> {
   const from = previousMonthOf(previousMonthOf(monthStartOf(month)))
   try {
-    return await selectAll<RecentPost>(() =>
-      supabase
-        .from('videos')
-        .select('id, upload_date, comments_count, topics, analyzed_run_id')
-        .eq('client_id', clientId)
-        .eq('is_client', true)
-        .gte('upload_date', from)
-        .lt('upload_date', nextMonth(month))
-        .order('id', { ascending: true }),
-    )
+    const owned = await ownedPosts({ supabase, clientId }, { from, to: nextMonth(month) })
+    return owned.posts
+      .map((p) => ({ id: p.id, upload_date: p.upload_date, comments_count: p.comments_count, topics: p.topics }))
+      .sort((a, b) => a.id.localeCompare(b.id))
   } catch (error) {
     console.error(`[pages] overview.recentPosts: ${(error as { message?: string })?.message ?? String(error)}`)
     return null
@@ -3149,18 +3152,24 @@ async function buildForYouAndPublished(input: {
  *
  * Six columns, never `*`: `videos` carries transcripts and OCR text.
  */
-async function loadOwnPosts(supabase: SupabaseClient, clientId: string, month: string): Promise<ClientPost[] | null> {
+export async function loadOwnPosts(supabase: SupabaseClient, clientId: string, month: string): Promise<ClientPost[] | null> {
+  // OFF YOUR OWN ACCOUNTS (depth v2, T7 for T14): `ownedPosts`, the read
+  // `loadRecentOwnPosts` above makes too, so one Your market load counts "your
+  // posts" one way. It read `is_client`, which every creator's video naming
+  // the brand carries: Össur's September card counted 161 "posts you
+  // published" where 25 were Össur's own. In id order, as before.
   try {
-    return await selectAll<ClientPost>(() =>
-      supabase
-        .from('videos')
-        .select('id, upload_date, comments_count, hook_style, classified_type, analyzed_run_id')
-        .eq('client_id', clientId)
-        .eq('is_client', true)
-        .gte('upload_date', monthStartOf(month))
-        .lt('upload_date', nextMonth(month))
-        .order('id', { ascending: true }),
-    )
+    const owned = await ownedPosts({ supabase, clientId }, { from: monthStartOf(month), to: nextMonth(month) })
+    return owned.posts
+      .map((p) => ({
+        id: p.id,
+        upload_date: p.upload_date,
+        comments_count: p.comments_count,
+        hook_style: p.hook_style,
+        classified_type: p.classified_type,
+        analyzed_run_id: p.analyzed_run_id ?? null,
+      }))
+      .sort((a, b) => a.id.localeCompare(b.id))
   } catch (error) {
     console.error(`[pages] overview.ownPosts: ${(error as { message?: string })?.message ?? String(error)}`)
     return null

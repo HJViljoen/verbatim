@@ -14,6 +14,7 @@ import {
   type WriteContext,
 } from '@/lib/subjects/moves'
 import { MOVE_STATUSES, SUBJECT_ORIGINS, SUBJECT_WRITE_REFUSED } from '@/lib/subjects/types'
+import { MOVES_WRITE_REFUSED, mayDecideMoves } from '@/lib/moves-access'
 
 // The subject and move write path (Phase 1 WP12, design §3 SU1 and SU2).
 //
@@ -44,8 +45,11 @@ import { MOVE_STATUSES, SUBJECT_ORIGINS, SUBJECT_WRITE_REFUSED } from '@/lib/sub
 //
 // A move is the other kind of act: it is the client SAYING they did something,
 // scored later against readings nobody here can touch, and `moves` grants a
-// member `status` and nothing that says what was measured. That stays open to
-// anyone who can see the page.
+// member `status` and nothing that says what was measured. "Track this" stays
+// open to anyone who can see the page; a move's STATUS is an owner's or an
+// admin's since depth v2 (T7, lib/moves-access.ts), with accepting advice and
+// "Date a move", because Your moves offers the three side by side and one
+// page cannot answer two readers two ways.
 //
 // Every one of these writes carries an actor into `config_changes`
 // (lib/subjects/moves.ts), written with the service-role client because a log a
@@ -203,7 +207,9 @@ export async function setMoveStatusAction(id: string, status: string): Promise<S
   if (!(MOVE_STATUSES as readonly string[]).includes(status)) {
     return { ok: false, message: 'Say whether it is done, dropped, or still running.' }
   }
-  const ctx = await context()
+  const { supabase, clientId, userId, email, operator, role } = await getSessionContext()
+  if (!mayDecideMoves(role)) return { ok: false, message: MOVES_WRITE_REFUSED }
+  const ctx: WriteContext = { supabase, clientId, userId, email, operator }
   const result = await setMoveStatus(ctx, createAdminClient(), {
     id,
     status: status as (typeof MOVE_STATUSES)[number],

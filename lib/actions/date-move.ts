@@ -8,6 +8,7 @@ import { databaseToday, declareMove } from '@/lib/subjects/moves'
 import { moveDay } from '@/lib/subjects/move-day'
 import { dateMoveSaid, parseMoveTarget } from '@/lib/pages/date-move'
 import type { SubjectFormState } from '@/lib/actions/subjects'
+import { MOVES_WRITE_REFUSED, mayDecideMoves } from '@/lib/moves-access'
 
 // "Date a move" on Your moves (the approved preview, WP3.6 wave 2): what you
 // changed, what it is about and the day you changed it, declared as a move.
@@ -15,18 +16,20 @@ import type { SubjectFormState } from '@/lib/actions/subjects'
 // THE SAME WRITE EVERY MOVE TAKES. `declareMove` writes on the SESSION client
 // (RLS pins the tenant and `declared_by`), checks the target is this tenant's,
 // and logs an actor through the admin client; the day is MF5's
-// `moves.dated_on`, checked against the window its CHECK holds. Like "Track
-// this", it is open to anyone who can see the page: a move is the workspace
-// saying what it did, and it changes nothing that is measured.
+// `moves.dated_on`, checked against the window its CHECK holds. Since depth
+// v2 (T7) it is an owner's or an admin's (lib/moves-access.ts), checked
+// before the form is read: a dated move is a line on the record every page
+// reads.
 //
 // A separate file from lib/actions/subjects.ts and accept-advice.ts, so the
 // packages writing those do not share a file with this one.
 
 export async function dateMoveAction(_prev: SubjectFormState, form: FormData): Promise<SubjectFormState> {
+  const { supabase, clientId, userId, email, operator, role } = await getSessionContext()
+  if (!mayDecideMoves(role)) return { ok: false, message: MOVES_WRITE_REFUSED }
   const target = parseMoveTarget(String(form.get('target') ?? ''))
   if (typeof target === 'string') return { ok: false, message: target }
   const datedOn = String(form.get('dated_on') ?? '').trim() || null
-  const { supabase, clientId, userId, email, operator } = await getSessionContext()
   // THE ADVICE MUST BE THIS TENANT'S, read the way "Accept this advice" reads
   // it (coalesce(lineage_id, id) on the session client): declareMove checks a
   // subject or a theme, and has nothing to check a lineage against. The id is

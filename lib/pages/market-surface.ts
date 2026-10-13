@@ -48,6 +48,7 @@ import { quotesUntranslated } from './evidence-untranslated'
 import { quoteGate } from '../quote-gate'
 import { gateFor, readQuoteContext, type QuoteContext } from '../quote-context'
 import { earliestMoveDay } from '../subjects/move-day'
+import { ownedPosts } from '../reading/owned'
 import type { MoveDating } from './date-move'
 
 // Market — the decision surface (Phase 1 WP14, design §3 MK1-MK7, item 42's
@@ -1267,7 +1268,7 @@ export function moveMonthLevel(m: MoveMarketMonth): string {
 
 // ---- the loader ---------------------------------------------------------------
 
-interface InsightRow {
+export interface InsightRow {
   id: string
   insight_type: string
   title: string
@@ -1373,7 +1374,7 @@ export async function loadMarketSurface(
   const datableAhead = loadMoveDatable(supabase, clientId)
   for (const p of [questionThemesAhead, postsAhead, filingsAhead, claimsAhead, marketVideosAhead, datableAhead]) p.catch(() => {})
 
-  const [insightRes, recRows, decisions, summaryRes, bucketRows, moves, subjects, themeLabels, corpusVideos] = await Promise.all([
+  const [insightRes, recRows, decisions, summaryRes, bucketRows, moves, subjects, corpusVideos] = await Promise.all([
     supabase.from('market_insights')
       .select('id, insight_type, title, description, evidence, confidence_score, opportunity_score')
       .eq('client_id', clientId).eq('run_id', runId)
@@ -1413,9 +1414,14 @@ export async function loadMarketSurface(
     ),
     loadMoves(supabase, clientId),
     loadSubjects(supabase, clientId),
-    loadRegistryLabels(supabase, clientId),
     countAnalysedVideos(supabase, clientId),
   ])
+  // THE LABELS OF THE THEMES THIS PAGE NAMES, NOT THE REGISTRY (depth v2, T7):
+  // the moves' themes now, the advice's leading themes once the ledger rows
+  // are grounded (`targetLabelsAhead`). A whole-registry read is 3,590 rows on
+  // Sealand, on every load.
+  const moveLabelsAhead = loadRegistryLabels(supabase, clientId, (moves ?? []).flatMap((m) => m.registry_ids ?? []))
+  moveLabelsAhead.catch(() => {})
 
   const insights = (insightRes.data ?? []) as InsightRow[]
   const summary = row<{ say_vs_hear: SayVsHearEntry[] | null }>(summaryRes, 'market-surface.runSummary')
@@ -1440,7 +1446,7 @@ export async function loadMarketSurface(
   // lands before the await from being an unhandled rejection; the await
   // still rejects with it.
   const subjectsActive = (subjects ?? []).filter((x) => x.status === 'active')
-  const extrasAhead = judgeAhead.then((pair) => loadMovesExtras({
+  const extrasAhead = Promise.all([judgeAhead, moveLabelsAhead]).then(([pair, themeLabels]) => loadMovesExtras({
     supabase,
     reading,
     clientId,
@@ -1592,10 +1598,14 @@ export async function loadMarketSurface(
   // only for rows that have been decided on and name something (an undecided
   // row's answer is a sentence); the conclusions ask for the leading theme of
   // every row they draw. One query, two blocks — see `loadTargetPoints`.
+  // The ledger rows' leading themes, labelled beside the month read.
+  const targetLabelsAhead = loadRegistryLabels(supabase, clientId, groundedRows.flatMap((r) => r.targetIds.slice(0, 1)))
+  targetLabelsAhead.catch(() => {})
   const monthPoints = await loadTargetPoints(reading, clientId, month, [
     ...groundedRows.filter((r) => r.decidedAt && r.targetIds.length > 0).map((r) => r.targetIds[0]),
     ...shownConclusions.map((c) => conclusionTarget.get(c.id)).filter((t): t is string => Boolean(t)),
   ])
+  const themeLabels = new Map([...(await moveLabelsAhead), ...(await targetLabelsAhead)])
   const pair = await judgeAhead
   const withAfterwards = readAfterwards(groundedRows, monthPoints, themeLabels, pair)
 
@@ -1846,7 +1856,7 @@ function logAs<T>(what: string, fallback: T): (error: unknown) => T {
  * so this is the question list's copy of it: month tables through the reading
  * client, the observations through the tenant's.
  */
-async function loadQuestionThemes(
+export async function loadQuestionThemes(
   reading: ReadingHandle,
   supabase: SupabaseClient,
   clientId: string,
@@ -1913,19 +1923,19 @@ async function loadQuestionThemes(
 }
 
 /** Your posts over the window, dated by the post (`upload_date`), with what
- *  each is about (`videos.topics`): the question rows' haystack. Null where the
- *  read failed. Five columns, never `*`. */
-async function loadRecentOwnPosts(supabase: SupabaseClient, clientId: string, from: string, to: string): Promise<QuestionPost[] | null> {
-  return selectAll<QuestionPost>(() =>
-    supabase
-      .from('videos')
-      .select('id, upload_date, topics, video_url')
-      .eq('client_id', clientId)
-      .eq('is_client', true)
-      .gte('upload_date', from)
-      .lt('upload_date', to)
-      .order('id', { ascending: true }),
-  )
+ *  each is about (`videos.topics`): the question rows' haystack.
+ *
+ *  OFF YOUR OWN ACCOUNTS (depth v2, T7 for T14): `ownedPosts`
+ *  (lib/reading/owned.ts, `source = 'owned'`), the one read every page asks
+ *  "what did you publish" through. It read `is_client`, which a creator's
+ *  video naming the brand carries too, so a creator's review could "touch" a
+ *  question as one of your posts. In id order, as before; a failed read
+ *  rejects, and the caller turns that into "could not read your posts". */
+export async function loadRecentOwnPosts(supabase: SupabaseClient, clientId: string, from: string, to: string): Promise<QuestionPost[] | null> {
+  const owned = await ownedPosts({ supabase, clientId }, { from, to })
+  return owned.posts
+    .map((p) => ({ id: p.id, upload_date: p.upload_date, topics: p.topics, video_url: p.video_url }))
+    .sort((a, b) => a.id.localeCompare(b.id))
 }
 
 /**
@@ -2386,13 +2396,17 @@ const HERO_ONLY = 0
  * prose would either lose the speaker's own number or smuggle it past the rule.
  * Two fields, two nodes.
  */
-async function attachQuotes(
+export async function attachQuotes(
   supabase: SupabaseClient,
   rows: readonly AdviceRow[],
   heroByLineage: Map<string, string>,
   evidenceByInsight: Map<string, string[]>,
   themeSlugById: Map<string, string>,
   clientId: string,
+  /** Filled, where given, with each kept quote's platform and comment day,
+   *  by lineage (depth v2, T7: the open panel's cite). Off the gate's own
+   *  context read: no read of its own. */
+  cites?: Map<string, { platform: string | null; date: string | null }>,
 ): Promise<AdviceRow[]> {
   const audienceIdsFor = (r: AdviceRow) => [...new Set(r.basedOn.flatMap((id) => evidenceByInsight.get(id) ?? []))]
   const heroOf = (r: AdviceRow) => (heroByLineage.get(r.lineageId) ?? '').trim()
@@ -2442,6 +2456,7 @@ async function attachQuotes(
       : null
     if (!verdict?.ok || (verdict.thread && threads.has(verdict.thread))) return { ...r, quote: null }
     if (verdict.thread) threads.add(verdict.thread)
+    if (cites && ctx) cites.set(r.lineageId, { platform: ctx.forEvidence(id)?.platform ?? null, date: ctx.dateOfEvidence(id) })
     return r
   })
 }
@@ -2520,7 +2535,7 @@ export async function adviceTally(supabase: SupabaseClient, clientId: string): P
 /** The decision ledger. NULL — never [] — when `rec_decisions` is not applied
  *  here, so the block can tell "nobody has decided anything" apart from "we are
  *  not writing decisions down", which are different sentences. */
-async function loadDecisions(supabase: SupabaseClient, clientId: string): Promise<RecDecision[] | null> {
+export async function loadDecisions(supabase: SupabaseClient, clientId: string): Promise<RecDecision[] | null> {
   try {
     // NO `.limit()` HERE. `REC_DECISIONS_READ_LIMIT` is PostgREST's silent
     // 1,000-row cap written down for a caller that uses a bare `.select()`;
@@ -2547,9 +2562,9 @@ async function loadDecisions(supabase: SupabaseClient, clientId: string): Promis
 /** A move as `select('*')` reads it: with MF5's `dated_on` once it is applied
  *  (lib/subjects/types.ts `Move` is on the freeze path, so the column rides
  *  here). */
-type DatedMove = Move & { dated_on?: string | null }
+export type DatedMove = Move & { dated_on?: string | null }
 
-async function loadMoves(supabase: SupabaseClient, clientId: string): Promise<DatedMove[] | null> {
+export async function loadMoves(supabase: SupabaseClient, clientId: string): Promise<DatedMove[] | null> {
   try {
     return await selectAll<DatedMove>(() =>
       supabase.from(TABLE_MOVES).select('*').eq('client_id', clientId)
@@ -2567,7 +2582,7 @@ async function loadMoves(supabase: SupabaseClient, clientId: string): Promise<Da
  * know answers 42703; so does a table it does not know (M4), and neither is an
  * error worth logging.
  */
-async function loadMoveDatable(supabase: SupabaseClient, clientId: string): Promise<boolean> {
+export async function loadMoveDatable(supabase: SupabaseClient, clientId: string): Promise<boolean> {
   const { error } = await supabase.from(TABLE_MOVES).select('dated_on').eq('client_id', clientId).limit(0)
   if (!error) return true
   if (!isMissingColumnError(error, 'dated_on') && !isMissingSubjects(error)) {
@@ -2582,9 +2597,9 @@ async function loadMoveDatable(supabase: SupabaseClient, clientId: string): Prom
  *  counts a subject's match on your own posts, and a move on a subject is
  *  read, only when the subject is ready, so the loader needs its state. Still
  *  no `select('*')`: nothing else on the row is printed here. */
-type SubjectName = Pick<Subject, 'id' | 'name' | 'status' | 'calibrated_at' | 'calibration_precision' | 'calibration_n' | 'calibration_judge_version'>
+export type SubjectName = Pick<Subject, 'id' | 'name' | 'status' | 'calibrated_at' | 'calibration_precision' | 'calibration_n' | 'calibration_judge_version'>
 
-async function loadSubjects(supabase: SupabaseClient, clientId: string): Promise<SubjectName[] | null> {
+export async function loadSubjects(supabase: SupabaseClient, clientId: string): Promise<SubjectName[] | null> {
   try {
     return await selectAll<SubjectName>(() =>
       supabase.from(TABLE_SUBJECTS)
@@ -2598,23 +2613,49 @@ async function loadSubjects(supabase: SupabaseClient, clientId: string): Promise
 }
 
 /** Registry labels, for a theme-move's "on what". A registry id is the stable
- *  identity (AGENTS.md); the label is what a reader is shown. */
-async function loadRegistryLabels(supabase: SupabaseClient, clientId: string): Promise<Map<string, string>> {
-  const rows = await selectAll<{ id: string; label: string | null }>(() =>
-    supabase.from('theme_registry').select('id, label').eq('client_id', clientId).order('id', { ascending: true }),
-  ).catch(() => [] as { id: string; label: string | null }[])
-  return new Map(rows.filter((r) => r.label).map((r) => [r.id, r.label as string]))
+ *  identity (AGENTS.md); the label is what a reader is shown.
+ *
+ *  THE COLUMN IS `canonical_label` (depth v2, T7). This read asked for
+ *  `label`, which `theme_registry` has never had, so PostgREST refused it, the
+ *  catch below turned the refusal into an empty map, and every theme move and
+ *  advice move printed no "on what" (Y4's label, the Date-a-move list's) on
+ *  both tenants. Measured 13 Oct: every one of Össur's 1,471 and Sealand's
+ *  3,590 registry rows carries a `canonical_label`. A failed read is still an
+ *  empty map, now logged. */
+export async function loadRegistryLabels(supabase: SupabaseClient, clientId: string, ids: readonly string[]): Promise<Map<string, string>> {
+  // ONLY THE IDS A PAGE NAMES (depth v2, T7): a move's themes, an advice's
+  // leading theme. Chunked like every `.in()` here (lib/chunk.ts); none named,
+  // no read.
+  const unique = [...new Set(ids.filter(Boolean))]
+  if (unique.length === 0) return new Map()
+  const parts = await mapWithLimit(chunk(unique, UUID_IN_CHUNK), READ_CONCURRENCY, (part) =>
+    selectAll<{ id: string; canonical_label: string | null }>(() =>
+      supabase.from('theme_registry').select('id, canonical_label').eq('client_id', clientId).in('id', part).order('id', { ascending: true }),
+    ).catch(logAs('registryLabels', [] as { id: string; canonical_label: string | null }[])),
+  )
+  return new Map(parts.flat().filter((r) => r.canonical_label?.trim()).map((r) => [r.id, (r.canonical_label as string).trim()]))
 }
 
 /** The ledger's own deep link, so the digest's `?rec=<id>` keeps landing on the
  *  row it names once that link points here. Your moves is at /dashboard/moves
- *  since Design v2 and names a row with `?advice=` (its route hands that to
- *  this loader as `?item=`); an old `?item=` or `?rec=` link to
- *  /dashboard/market lands there too (lib/nav.ts `redirectFor`). */
+ *  since Design v2 and names a row with `?advice=`; an old `?item=` or `?rec=`
+ *  link to /dashboard/market lands there too (lib/nav.ts `redirectFor`).
+ *
+ *  `?advice=` IS THE ONE SELECTION THE v2 PAGE READS (depth v2, T7), so the
+ *  old three are written as it, as `redirectFor` maps them, where no lineage
+ *  is named: the legacy block's "Show all" passed `{ ledger: 'all' }` and
+ *  wrote `?ledger=all`, which the v2 page did not read. `ledger` leads here
+ *  (`redirectFor` reads `item` first): the one caller that sets it means the
+ *  record, whatever row the page it was drawn on had open. (The v2 loader
+ *  also reads the old three, for HTML already stored.) */
+const OLD_SELECTION = ['ledger', 'item', 'rec'] as const
+
 export function marketSurfaceHref(lineageId?: string | null, params: Record<string, string | undefined> = {}): string {
   const q = new URLSearchParams()
-  for (const [k, v] of Object.entries(params)) if (typeof v === 'string' && v !== '' && k !== 'item' && k !== 'rec' && k !== 'advice') q.set(k, v)
-  if (lineageId) q.set('advice', lineageId)
+  const dropped = new Set<string>([...OLD_SELECTION, 'advice'])
+  for (const [k, v] of Object.entries(params)) if (typeof v === 'string' && v !== '' && !dropped.has(k)) q.set(k, v)
+  const named = lineageId || OLD_SELECTION.map((k) => params[k]).find((v) => typeof v === 'string' && v !== '')
+  if (named) q.set('advice', named)
   const s = q.toString()
   return s ? `/dashboard/moves?${s}` : '/dashboard/moves'
 }
@@ -2634,7 +2675,7 @@ export function marketSurfaceHref(lineageId?: string | null, params: Record<stri
  * A head count, so nothing is transferred to count rows. Null on failure —
  * "we could not read it" is not "zero", and the block says the honest one.
  */
-async function countAnalysedVideos(supabase: SupabaseClient, clientId: string): Promise<number | null> {
+export async function countAnalysedVideos(supabase: SupabaseClient, clientId: string): Promise<number | null> {
   const { count, error } = await supabase
     .from('videos')
     .select('id', { count: 'exact', head: true })

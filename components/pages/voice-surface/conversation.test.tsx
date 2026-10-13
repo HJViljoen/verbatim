@@ -6,7 +6,6 @@ import { VoiceSurfacePage } from './index'
 import { KindCard } from './conversation'
 import { allAccountsVoiceFixture, ossurVoiceFixture, refusedVoiceFixture } from './fixture'
 import { conversationFixture, SEALAND_KINDS } from './fixture-conversation'
-import VoiceLoading from '@/app/dashboard/voices/loading'
 
 // Conversation, drawn to the approved artboard (Page-Conversation.dc.html,
 // the pages build of 1 Oct). Each block: the artboard's words and order, the
@@ -182,9 +181,6 @@ describe('the empty workspace and the skeleton', () => {
     expect(text).toContain('Your market’s first month will appear here.')
   })
 
-  it('the skeleton draws the title and the artboard’s cards', () => {
-    const markup = render(<VoiceLoading />)
-    expect(markup).toContain('Loading Voices')
-    expect(markup.match(/data-card=""/g)?.length).toBe(6)
-  })
+  // The route's skeleton is Voices' own since Design v2 (T4); it is pinned in
+  // lib/dashboard-loading.test.ts and components/pages/v2/voices, not here.
 })
