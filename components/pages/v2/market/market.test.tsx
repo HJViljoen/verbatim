@@ -6,11 +6,11 @@ import { SUBJECT_PENDING } from '@/lib/pages/v2/market'
 import type { MarketData } from '@/lib/pages/v2/market'
 import { MarketPage, MARKET_FIRST_RUN } from './index'
 import { ConversationPanel, SubjectPanelView } from './panel'
-import { KindsCard, KindsFrame, PlatformsCard, PlatformsFrame, RailView, WatchCard, WeeksCard, WEEKS_UNREAD } from './rail'
+import { KindsCard, KindsFrame, PlatformsCard, PlatformsFrame, RailView, WatchCard, WeeksCard, weeksLine, WEEKS_UNREAD } from './rail'
 import { WEEKS_FAILED } from '@/lib/pages/home'
 import { SubjectBoardView } from './subjects'
 import { ConversationTable } from './table'
-import { NO_GROUP, NOTHING_NEW, TopRowView } from './top'
+import { ALSO_TALKED, NO_GROUP, NOTHING_ELSE_NEW, NOTHING_NEW, TopRowView } from './top'
 import { MarketSkeleton } from './skeleton'
 
 // MARKET'S RENDER TIER (depth v2, T3): every block, from the fixture, against
@@ -188,6 +188,15 @@ describe('SubjectBoardView', () => {
     expect(text).not.toContain('Week Oct')
   })
 
+  it('draws one month\'s point on the axis\'s centre line, with no range repeating the level', () => {
+    const one = marketFixture({ subjects: 'one_month' })
+    const t = renderText(<SubjectBoardView board={one.subjects!} data={one} />)
+    expect(t).toContain('Fit & comfort 34% 108 of 318 1 month Inside it')
+    const html = render(<SubjectBoardView board={one.subjects!} data={one} />)
+    expect(html).toContain('<line x1="0" y1="17" x2="160" y2="17"')
+    expect(html).toContain('<circle cx="156" cy="17"')
+  })
+
   it('draws the tick at last month and a month line where there are two readings', () => {
     const html = render(<SubjectBoardView board={board} data={WEEK} />)
     expect(html.match(/data-tick=""/g)?.length).toBe(6)
@@ -245,6 +254,17 @@ describe('the rail', () => {
     const html = render(<RailView data={{ ...WEEK, subjects: null }} />)
     expect(html).toMatch(/^<div class="col-span-12 flex min-w-0 flex-col gap-5 xl:col-span-4">/)
     expect(html).not.toContain('xl:grid-cols-3')
+  })
+
+  it('weeks: one set of words for the chart\'s line', () => {
+    const c = (videos: number | null, settled = true) => ({ videos, settled })
+    expect(weeksLine(null)).toBe('Insufficient data: only weeks read the same way are drawn.')
+    expect(weeksLine([c(null), c(null)])).toBe('Insufficient data: only weeks read the same way are drawn.')
+    expect(weeksLine([c(null), c(5)])).toBe('Only weeks read the same way are drawn.')
+    expect(weeksLine([c(null), c(5, false)])).toBe('Only weeks read the same way are drawn; the newest are still filling.')
+    expect(weeksLine([c(4), c(5, false)])).toBe('The newest weeks are still filling.')
+    expect(weeksLine([c(4), c(5)])).toBeNull()
+    expect(weeksLine(null, true)).toBe(WEEKS_UNREAD)
   })
 
   it('weeks: with no week to draw, the eight weeks\' axis with empty slots and one line', () => {
@@ -418,6 +438,33 @@ describe('the board\'s shape in the thin state (Össur today)', () => {
     expect(text).not.toMatch(/provisional|calibrat|Insufficient data.*Insufficient data/i)
     expect(text).toContain('Fit & comfort Not measured yet Inside it')
     expect(quotesOutsidePanel(THIN)).toBe(0)
+  })
+
+  it('the third card keeps the board\'s weight: nothing new, then the week\'s next biggest not on the row', () => {
+    const third = renderText(<TopRowView data={THIN} />).split('New this week')[1]
+    expect(third).toBe(` ${NOTHING_NEW} ${ALSO_TALKED} Insurance refusals for powered knees 19 of 226 category videos this week 31 of 300 in October so far Who’s asking ${NO_GROUP} Open →`)
+    const top = render(<TopRowView data={THIN} />)
+    expect(top).toMatch(/<span data-copy="verdict">New this week<\/span>/)
+    // Each conversation on one card only.
+    expect(renderText(<TopRowView data={THIN} />).match(/Insurance refusals for powered knees/g)).toHaveLength(1)
+  })
+
+  it('says "nothing else" where a conversation off the cards was first heard this week, never against a New chip', () => {
+    const d = marketFixture({ flagged: false, noNew: true, flagNew: true })
+    expect(renderText(<TopRowView data={d} />)).toContain(`New this week ${NOTHING_ELSE_NEW} ${ALSO_TALKED}`)
+    assertCopyContract(<TopRowView data={d} />)
+  })
+
+  it('a flag on a kind of comment draws no group and no "doing": those are a conversation\'s', () => {
+    const d = marketFixture({ flagKind: true })
+    const hero = renderText(<TopRowView data={d} />).split('Three weeks')[0]
+    expect(hero).toMatch(/^Unusual this week Complained about something 61 of 252 videos this week/)
+    expect(hero).not.toMatch(/Who’s saying it|What they’re doing|Not linked to a group|Not read yet/)
+    assertCopyContract(<TopRowView data={d} />)
+  })
+
+  it('a subject whose check is open has a chip with no count, after the ready ones, by name', () => {
+    expect(text).toContain('All 17 Choosing the right device Community & encouragement Cost & access Fit & comfort Function & movement Look & style Conversation')
   })
 
   it('draws the top row\'s three cards, 6 · 3 · 3, the third saying nothing is new', () => {

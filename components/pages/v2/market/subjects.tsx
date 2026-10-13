@@ -22,19 +22,33 @@ import { ConvChip, ConvRow, Label, MONO_MUTED, SetApartTag } from './parts'
 // inside it) with why in the level's place; the card keeps its column beside
 // the rail even with no subject named.
 
-/** "14 to 22%": the month line's range, in whole percent; one month alone
- *  is its own figure. */
+/** "14 to 22%": the month line's range, in whole percent. Null for one
+ *  point: its range would repeat the level printed above it. */
 function rangeOf(row: SubjectRow): string | null {
   const v = row.trail.map((t) => t.pct).filter((x): x is number => x != null)
-  if (v.length === 0) return null
+  if (v.length < 2) return null
   const lo = Math.round(Math.min(...v))
   const hi = Math.round(Math.max(...v))
   return lo === hi ? `${lo}%` : `${lo} to ${hi}%`
 }
 
+/** One month read: the axis's hairline and that month's point on its slot,
+ *  both at the row's centre line, level with the labels beside them. */
+function OnePoint({ trail }: { trail: SubjectRow['trail'] }) {
+  const at = trail.findIndex((t) => t.pct != null)
+  const n = trail.length
+  const x = n <= 1 ? 80 : 4 + (at * 152) / (n - 1)
+  return (
+    <svg viewBox="0 0 160 34" aria-hidden className="block h-auto w-full overflow-visible">
+      <line x1={0} y1={17} x2={160} y2={17} className="stroke-border" strokeWidth={1} />
+      <circle cx={x} cy={17} r={3.4} className="fill-foreground stroke-card" strokeWidth={1.5} />
+    </svg>
+  )
+}
+
 /** The board's month line: the months read, the line on the board's axis (a
- *  month with no reading keeps its slot), the range. Drawn from one month: a
- *  subject read for one month draws its one point on the axis's hairline. */
+ *  month with no reading keeps its slot), the range. A subject read for one
+ *  month draws its one point on the axis's hairline, and no range. */
 function MonthLine({ row }: { row: SubjectRow }) {
   const months = row.trail.filter((t) => t.pct != null).length
   const range = rangeOf(row)
@@ -45,7 +59,9 @@ function MonthLine({ row }: { row: SubjectRow }) {
       {/* The board's 160 by 34, given way where the column is narrower, so
           the range never runs into "Inside it". */}
       <span className="min-w-0 max-w-[160px] flex-1">
-        <Sparkline values={row.trail.map((t) => t.pct)} width={160} height={34} color="var(--foreground)" animate={false} rule={months === 1} className="block h-auto w-full" />
+        {months === 1
+          ? <OnePoint trail={row.trail} />
+          : <Sparkline values={row.trail.map((t) => t.pct)} width={160} height={34} color="var(--foreground)" animate={false} className="block h-auto w-full" />}
       </span>
       {range ? <span data-copy="figure" className="whitespace-nowrap font-mono text-[10.5px] text-muted-foreground">{range}</span> : null}
     </div>

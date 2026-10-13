@@ -85,17 +85,27 @@ export function PlatformsFrame({ data }: { data: MarketData }) {
  *  honest word for too few clean weeks (Phase 4 fix round). */
 export const WEEKS_UNREAD = 'The weekly counts could not be read just now.'
 
-/** The drawn chart's one quiet line: why some slots are empty (only weeks
- *  read one way are drawn, `homeWeeks`), and that the newest weeks are still
- *  filling, where either holds. */
-function weeksNote(columns: readonly { videos: number | null; settled: boolean }[]) {
+/** The chart's rule, said wherever a slot is empty: only weeks read one way
+ *  are drawn (`homeWeeks`). */
+export const WEEKS_RULE = 'Only weeks read the same way are drawn'
+
+/**
+ * THE CHART'S ONE QUIET LINE, one set of words for every state (the parity
+ * pass, 13 Oct): no week to draw is Heinrich's "Insufficient data" with the
+ * rule; slots left empty, the rule; the newest weeks still filling, said once
+ * beside it where it holds. A read that failed says so instead
+ * (`WEEKS_UNREAD`). Null where every slot is drawn and settled.
+ */
+export function weeksLine(columns: readonly { videos: number | null; settled: boolean }[] | null, failed = false): string | null {
+  if (failed) return WEEKS_UNREAD
+  const drawn = columns?.some((c) => c.videos != null) ?? false
+  if (!columns || !drawn) return `${INSUFFICIENT}: ${WEEKS_RULE.charAt(0).toLowerCase()}${WEEKS_RULE.slice(1)}.`
   const gaps = columns.some((c) => c.videos == null)
   const filling = columns.some((c) => c.videos != null && !c.settled)
-  if (!gaps && !filling) return null
-  const words = gaps && filling
-    ? 'Only weeks read the same way are drawn; the newest are still filling.'
-    : gaps ? 'Only weeks read the same way are drawn.' : 'The newest weeks are still filling: a week settles two updates after it ends.'
-  return <p className="m-0 text-[13px] text-muted-foreground">{words}</p>
+  if (gaps && filling) return `${WEEKS_RULE}; the newest are still filling.`
+  if (gaps) return `${WEEKS_RULE}.`
+  if (filling) return 'The newest weeks are still filling.'
+  return null
 }
 
 export function WeeksCard({ weeks: read, axis = [] }: { weeks: WeeksRead; axis?: readonly string[] }) {
@@ -105,6 +115,7 @@ export function WeeksCard({ weeks: read, axis = [] }: { weeks: WeeksRead; axis?:
   // THE BOARD'S CHART IN EVERY STATE (the parity pass, 13 Oct): with no week
   // to draw (too few clean weeks, or a read that failed) the card still draws
   // its eight weeks' axis with the slots empty, and one quiet line says why.
+  const line = weeksLine(weeks?.columns ?? null, failed)
   const columns = weeks && drawn
     ? weeks.columns.map((c) => ({ label: c.label, count: c.videos }))
     : (weeks?.columns.map((c) => c.label) ?? axis).map((label) => ({ label, count: null }))
@@ -114,9 +125,7 @@ export function WeeksCard({ weeks: read, axis = [] }: { weeks: WeeksRead; axis?:
       {columns.length > 0
         ? <SpikeBars weeks={columns} variant="ink" counts="all" size="md" ghost label="The market's videos a week" />
         : null}
-      {weeks && drawn
-        ? weeksNote(weeks.columns)
-        : <p className="m-0 text-[13px] text-muted-foreground">{failed ? WEEKS_UNREAD : INSUFFICIENT}</p>}
+      {line ? <p className="m-0 text-[13px] text-muted-foreground">{line}</p> : null}
     </article>
   )
 }

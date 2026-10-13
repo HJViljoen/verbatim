@@ -100,7 +100,7 @@ export function ConversationTable({ table, data }: { table: MarketTable; data: M
                 aria-current={on ? 'page' : undefined}
                 className={cn('cursor-pointer rounded-full px-3 py-1.5 text-[13px] no-underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', on ? 'bg-accent font-semibold text-accent-foreground' : 'bg-inner text-secondary-foreground hover:bg-track')}
               >
-                {f.name} <span data-copy="figure">{fmtInt(f.count)}</span>
+                {f.name}{f.count != null ? <> <span data-copy="figure">{fmtInt(f.count)}</span></> : null}
               </Link>
             )
           })}

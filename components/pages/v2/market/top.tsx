@@ -7,7 +7,7 @@ import {
 } from '@/components/v2'
 import { fmtInt, fmtPct, longMonth } from '@/lib/format'
 import { talkKindLabel } from '@/lib/pages/overview-market/kinds'
-import { flagBaseWords, topSpans, type Doing, type GroupLink, type HeroCard, type MarketConv, type MarketData, type MonthCount, type SideCard } from '@/lib/pages/v2/market'
+import { flagBaseWords, sideIds, topSpans, type Doing, type GroupLink, type HeroCard, type MarketConv, type MarketData, type MonthCount, type SideCard } from '@/lib/pages/v2/market'
 import { cn } from '@/lib/utils'
 import { About, ABOUT_NOT_COUNTED, ABOUT_NOT_READ, BIG, Fig, Label, MID, MONO_MUTED, OLINK, newVerdict } from './parts'
 
@@ -163,7 +163,9 @@ function FlagHero({ hero, data, selected, span, style }: { hero: Extract<HeroCar
       {/* Drawn for its column: the half-card drawing, and a phone's. */}
       <MiniBars bars={bars} size="lg" className="max-w-[560px] max-sm:hidden" label={`Share of every audience's videos about ${title}, the months before against this week`} />
       <MiniBars bars={bars} size="md" className="sm:hidden" label={`Share of every audience's videos about ${title}, the months before against this week`} />
-      <Context groups={hero.groups} doing={hero.doing} kind={card.conv?.kind ?? null} noun={data.noun} monthText={data.week?.inMonth ?? `in ${data.month.text}`} />
+      {/* Who and what are a conversation's: a flag on a kind or a subject
+          names neither, so its card draws them only for a theme. */}
+      {card.conv ? <Context groups={hero.groups} doing={hero.doing} kind={card.conv.kind} noun={data.noun} monthText={data.week?.inMonth ?? `in ${data.month.text}`} /> : null}
       <Foot conv={card.conv} href={card.href} selected={selected} closeHref={data.panel?.closeHref ?? null} data={data} open={f.objectKind === 'subject' ? 'Open the subject' : 'Open the conversation'} />
     </article>
   )
@@ -202,31 +204,38 @@ function ConvHero({ hero, data, selected, span, style }: { hero: Extract<HeroCar
 }
 
 /** The new card with nothing first heard this week (the parity pass, 13 Oct):
- *  it keeps its place, says so as its title, and names the newest
- *  conversation an earlier week first heard, with this week's counts, where
- *  there is one. */
+ *  it keeps its place and says so as its title ("Nothing else new" where a
+ *  conversation off the cards was, so it never contradicts a New chip), then
+ *  keeps the board's weight with one conversation not already on the row:
+ *  the newest an earlier week first heard where nothing at all is new, else
+ *  the week's next biggest (the lead's ruling). With neither, its one line. */
 function NothingNew({ side, data, index, span, selected, style }: { side: SideCard; data: MarketData; index: number; span: string; selected: boolean; style?: CSSProperties }) {
   const e = side.earlier ?? null
-  const shownNew = data.top.hero?.kind === 'new' || data.top.sides.some((s) => s.kind === 'biggest' && s.convs[0]?.isNew)
+  const a = e ? null : side.also ?? null
+  const pick = e ?? a
   return (
     <article id={`top-${index}`} data-top-card="new-none" style={style} className={cn(CARD, span, 'scroll-mt-6', selected ? SELECTED_CARD_RING : null)}>
-      <CardHead icon={Sparkles} eyebrow="New this week" title={<span data-copy="verdict">{shownNew ? NOTHING_ELSE_NEW : NOTHING_NEW}</span>} />
-      {e ? (
+      <CardHead icon={Sparkles} eyebrow={<span data-copy="verdict">New this week</span>} title={<span data-copy="verdict">{side.anyNew ? NOTHING_ELSE_NEW : NOTHING_NEW}</span>} />
+      {pick ? (
         <>
           <div className="flex flex-col gap-2.5 border-t border-track pt-3">
-            <Label>Newest</Label>
-            <Link href={e.href} scroll={false} className="text-[15px] font-semibold leading-[1.35] text-foreground no-underline underline-offset-[3px] hover:underline">
-              <span data-copy="subject" data-slot="pass_b_theme">{e.conv.label}</span>
+            <Label>{e ? 'Newest' : ALSO_TALKED}</Label>
+            <Link href={pick.href} scroll={false} className="text-[15px] font-semibold leading-[1.35] text-foreground no-underline underline-offset-[3px] hover:underline">
+              <span data-copy="subject" data-slot="pass_b_theme">{pick.conv.label}</span>
             </Link>
-            <div className="flex flex-wrap items-baseline gap-2"><Fig n={e.conv.week} className={MID} /><WeekLines conv={e.conv} data={data} /></div>
-            <p className="m-0 text-[13px] leading-[1.5] text-muted-foreground">First heard the week of {e.week}</p>
+            <div className="flex flex-wrap items-baseline gap-2"><Fig n={pick.conv.week} className={MID} /><WeekLines conv={pick.conv} data={data} /></div>
+            {e ? <p className="m-0 text-[13px] leading-[1.5] text-muted-foreground">First heard the week of {e.week}</p> : null}
           </div>
-          <div className="mt-auto">{selected && data.panel ? <Link href={data.panel.closeHref} scroll={false} className={OLINK}>Close ↑</Link> : <Link href={e.href} scroll={false} className={OLINK}>Open →</Link>}</div>
+          {a?.groups ? <GroupsLine groups={a.groups} /> : null}
+          <div className="mt-auto">{selected && data.panel ? <Link href={data.panel.closeHref} scroll={false} className={OLINK}>Close ↑</Link> : <Link href={pick.href} scroll={false} className={OLINK}>Open →</Link>}</div>
         </>
       ) : null}
     </article>
   )
 }
+
+/** The new card's stand-in's label: the week's next biggest conversation. */
+export const ALSO_TALKED = 'Also talked about'
 
 /** Another card with nothing for it this week: the week's second-biggest,
  *  where no other conversation reached the floor. */
@@ -246,7 +255,7 @@ export const NOTHING_ELSE_NEW = 'Nothing else new this week'
 /** A card beside the hero. */
 function Side({ side, data, index, span, selectedId, style }: { side: SideCard; data: MarketData; index: number; span: string; selectedId: string | null; style?: CSSProperties }) {
   const conv = side.convs[0]
-  const selected = selectedId != null && (side.convs.some((c) => c.id === selectedId) || side.earlier?.conv.id === selectedId)
+  const selected = selectedId != null && sideIds(side).includes(selectedId)
   const href = side.hrefs[0]
   if (!conv) {
     return side.kind === 'new_list'
@@ -348,7 +357,7 @@ export function TopRowView({ data, panel }: { data: MarketData; panel?: (notchAt
   const sideSpan = SIDE_SPAN[spans[1] ?? 3] ?? 'col-span-12 md:col-span-6 xl:col-span-3'
   // The open card: the hero (0) or a card beside it (1, 2), by the open id.
   const heroOpen = openId != null && openId === heroId
-  const sideOpen = openId == null ? -1 : top.sides.findIndex((s) => s.convs.some((c) => c.id === openId) || s.earlier?.conv.id === openId)
+  const sideOpen = openId == null ? -1 : top.sides.findIndex((s) => sideIds(s).includes(openId))
   const at = !top.hero ? -1 : heroOpen ? 0 : sideOpen >= 0 ? sideOpen + 1 : -1
   const place = panel && at >= 0 ? panelPlacement(at, topRowLayout(top.sides.length)) : null
   const slot = (i: number) => (place && panel && i === at ? <PanelSlot placement={place}>{panel(place.notch)}</PanelSlot> : null)

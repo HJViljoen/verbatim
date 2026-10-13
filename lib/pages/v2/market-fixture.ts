@@ -6,7 +6,7 @@ import type { UnusualFlag } from '../week'
 import {
   buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, convHref, closeHref, flagCardOf, flagVerdict, groupsOf,
   lineBars, marketLongRunFor, marketMonths, marketParams, monthsText, notchOf, ourReadOf, panelStats, pickHero, pickWeekSides, platformRows, subjectHref,
-  tableMonths, convOf, doingOf, earlierNewOf, leadDoing, withMonthPlatforms,
+  tableMonths, convOf, doingOf, alsoTalkedOf, earlierNewOf, leadDoing, withMonthPlatforms,
   type ConvInput, type ConvPanel, type MarketConv, type MarketData, type MarketMonth, type MarketParams, type MarketWeek, type MonthCount,
   type PanelAt, type SubjectFact, type TopRow,
 } from './market'
@@ -85,6 +85,17 @@ export const FIXTURE_FLAG: Omit<UnusualFlag, 'quotes'> = {
   ],
   explanationModel: 'gpt-5.4',
   rank: 1,
+}
+
+/** A flag on a kind of comment (complaints), not a conversation. */
+export const FIXTURE_KIND_FLAG: Omit<UnusualFlag, 'quotes'> = {
+  ...FIXTURE_FLAG,
+  objectKind: 'kind',
+  objectId: 'pain_point',
+  label: 'pain_point',
+  week: { k: 61, n: 252 },
+  baseline: { k: 286, n: 1906 },
+  sentences: [],
 }
 
 /** The published read's parts the page uses. */
@@ -283,6 +294,12 @@ export interface FixtureOptions {
   earlierNew?: boolean
   /** No Voices group lists the lead conversation. */
   noGroups?: boolean
+  /** The check flagged a kind of comment (complaints), not a conversation:
+   *  the lead card names no group and no "doing". */
+  flagKind?: boolean
+  /** The week's flag is on a conversation first heard this week (Waterproof
+   *  knees), so a New chip sits outside the new card. */
+  flagNew?: boolean
   /** This month's long-run read: `full` (written once the month closed),
    *  `partial` (written before it closed, `partialThrough`), `earlier`
    *  (October still filling with none of its own: September's stands in),
@@ -411,10 +428,17 @@ export function marketFixture(opts: FixtureOptions = {}): MarketData {
     raw.at = 'subjects'
   }
   const p: MarketParams = marketParams(raw)
-  const input = { ...fixtureConvInput(period), ...(opts.noNew ? { newIds: new Set<string>() } : {}) }
+  const base = fixtureConvInput(period)
+  // Every check open: the subjects place conversations only as the second
+  // tier (`placeSubject`), as the loader hands them.
+  const pendingTier = opts.subjects === 'provisional' && base.subjects
+    ? { ...base.subjects, order: [] as string[], subjectsOf: new Map<string, string[]>(), pending: { order: base.subjects.order, subjectsOf: base.subjects.subjectsOf } }
+    : base.subjects
+  const input = { ...base, subjects: pendingTier, ...(opts.noNew ? { newIds: new Set<string>(opts.flagNew ? [id(11)] : []) } : {}) }
   const convs = buildConvs(input).map((c) => withWho(c, period))
   const read = fixtureRead()
-  const flag = flagged && period === 'week' ? flagCardOf({ flag: FIXTURE_FLAG, window: WINDOW, convs, convInput: input, monthCategory: MONTH.category, p, noun: null }) : null
+  const theFlag = opts.flagKind ? FIXTURE_KIND_FLAG : opts.flagNew ? { ...FIXTURE_FLAG, objectId: id(11), label: 'Waterproof knees' } : FIXTURE_FLAG
+  const flag = (flagged || opts.flagKind || opts.flagNew) && period === 'week' ? flagCardOf({ flag: theFlag, window: WINDOW, convs, convInput: input, monthCategory: MONTH.category, p, noun: null }) : null
   const groups = (cid: string) => (opts.noGroups ? [] : groupsOf(cid, PERSONAS))
   const doing = (c: MarketConv | null) => (c ? leadDoing(doingOf(HERO_KINDS, c.month, null), c.kind) : null)
 
@@ -429,12 +453,18 @@ export function marketFixture(opts: FixtureOptions = {}): MarketData {
     top.sides.push(sides.biggest
       ? { kind: 'biggest', convs: [sides.biggest], hrefs: [convHref(p, sides.biggest.id, 'top')], groups: groups(sides.biggest.id) }
       : { kind: 'biggest', convs: [], hrefs: [], groups: [] })
-    top.sides.push(sides.fresh.length > 0
-      ? { kind: 'new_list', convs: sides.fresh, hrefs: sides.fresh.map((c) => convHref(p, c.id, 'top')), groups: groups(sides.fresh[0].id) }
-      : {
-          kind: 'new_list', convs: [], hrefs: [], groups: [],
-          earlier: opts.earlierNew ? earlierNewOf([{ window: PREV_WINDOW, themeIds: [id(16)] }], input, (cid) => convHref(p, cid, 'top')) : null,
-        })
+    if (sides.fresh.length > 0) {
+      top.sides.push({ kind: 'new_list', convs: sides.fresh, hrefs: sides.fresh.map((c) => convHref(p, c.id, 'top')), groups: groups(sides.fresh[0].id) })
+    } else {
+      const anyNew = convs.some((c) => c.isNew)
+      const onRow = new Set([heroId, sides.biggest?.id].filter((x): x is string => x != null))
+      const earlier = !anyNew && opts.earlierNew ? earlierNewOf([{ window: PREV_WINDOW, themeIds: [id(16)] }], input, (cid) => convHref(p, cid, 'top'), onRow) : null
+      const next = earlier ? null : alsoTalkedOf(convs, onRow, new Set())
+      top.sides.push({
+        kind: 'new_list', convs: [], hrefs: [], groups: [], anyNew, earlier,
+        also: next ? { conv: next, href: convHref(p, next.id, 'top'), groups: groups(next.id) } : null,
+      })
+    }
   } else if (period === 'month') {
     const [first, ...rest] = convs.slice(0, 3)
     top.hero = { kind: 'biggest', conv: first, href: convHref(p, first.id, 'top'), groups: groups(first.id), doing: doing(first) }
@@ -452,6 +482,7 @@ export function marketFixture(opts: FixtureOptions = {}): MarketData {
   const openId = opts.open ? id(opts.open.n) : null
   const table = buildTable({
     convs, params: p, openId: opts.open?.at === 'table' ? openId : null,
+    pending: new Set(input.subjects?.pending?.order ?? []),
     months: period === 'time' ? tableMonths(OCT, new Map([['2026-07-01', 455], ['2026-08-01', 612], [SEP, 780], [OCT, 300]]), OCT) : [],
   })
   const panel = opts.open ? fixturePanel(opts.open.n, opts.open.at, p, period, convs, input, read, flagged) : null

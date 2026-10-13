@@ -281,11 +281,24 @@ export interface SideCard {
   hrefs: string[]
   /** The groups whose conversations include the card's first (names only). */
   groups: GroupLink[]
-  /** `new_list` with nothing first heard this week: the newest conversation
-   *  an earlier week's published read first heard (`newThisWeek`), with that
-   *  week's label ("28 Sep"). Null where none of the last few weeks had one. */
+  /** `new_list` with nothing (else) first heard this week: whether ANY of the
+   *  period's conversations was (the flag's, one set apart), so the card says
+   *  "Nothing else new this week" and never contradicts a New chip. */
+  anyNew?: boolean
+  /** `new_list` with nothing first heard this week at all: the newest
+   *  conversation an earlier week's published read first heard
+   *  (`newThisWeek`), with that week's label ("28 Sep"), never one already on
+   *  the row. Null where none of the last few weeks had one. */
   earlier?: { conv: MarketConv; href: string; week: string } | null
+  /** `new_list` with no earlier one to name: the week's next biggest
+   *  conversation not already on the row (`alsoTalkedOf`), so the card keeps
+   *  the board's weight. Null where there is none. `groups` is absent where
+   *  the groups were not read. */
+  also?: { conv: MarketConv; href: string; groups?: GroupLink[] } | null
 }
+
+/** Every conversation a top card holds, its stand-ins included. */
+export const sideIds = (s: SideCard): string[] => [...s.convs.map((c) => c.id), ...(s.earlier ? [s.earlier.conv.id] : []), ...(s.also ? [s.also.conv.id] : [])]
 
 export interface TopRow {
   hero: HeroCard | null
@@ -412,7 +425,9 @@ export interface MarketRail {
 export interface TableFilter {
   id: string | null
   name: string
-  count: number
+  /** The conversations in it; null for a subject whose check is open (the
+   *  count rests on a membership not yet verified, ruling U6). */
+  count: number | null
   href: string
 }
 
@@ -748,7 +763,16 @@ export interface ConvInput {
   themes: ReadonlyMap<string, RunTheme>
   /** registry id → label, for a theme the themed run does not name. */
   registryLabels?: ReadonlyMap<string, string>
-  subjects: { names: ReadonlyMap<string, string>; order: readonly string[]; subjectsOf: ReadonlyMap<string, readonly string[]> } | null
+  /** The subjects a conversation is placed in (`placeSubject`): the READY ones
+   *  (`order`, `subjectsOf`), and, on Market only, the ones whose check is
+   *  open (`pending`), used only where no ready subject takes the
+   *  conversation. `names` holds both. */
+  subjects: {
+    names: ReadonlyMap<string, string>
+    order: readonly string[]
+    subjectsOf: ReadonlyMap<string, readonly string[]>
+    pending?: { order: readonly string[]; subjectsOf: ReadonlyMap<string, readonly string[]> } | null
+  } | null
   /** The three windows' category counts (oldest first), each a map by theme. */
   weekCounts: (ReadonlyMap<string, { videos: number; mix?: PlatformMix | null }> | null)[]
   /** Which windows our changes cut. */
@@ -794,7 +818,7 @@ export function convOf(id: string, input: ConvInput): MarketConv | null {
   const t = input.themes.get(id)
   const label = (t?.label || input.registryLabels?.get(id) || '').trim()
   if (!label) return null
-  const subjectId = t && input.subjects ? subjectOfTheme(t.memberIds, input.subjects.subjectsOf, input.subjects.order) : null
+  const subjectId = t && input.subjects ? placeSubject(t.memberIds, input.subjects) : null
   const weeks = input.period === 'week'
     ? input.weekCounts.map((m, i) => (input.weekCut[i] || !m ? null : m.get(id)?.videos ?? 0))
     : []
@@ -1123,13 +1147,17 @@ export function tableFilterOf(convs: readonly MarketConv[], wanted: string | nul
 /**
  * The conversation table: the period's conversations, filtered to one subject
  * where `?in=` names one, ten shown until `?all=1`, every open row marked; and
- * the subject filters, biggest first. Pure.
+ * the subject filters: the ready subjects biggest first with their counts,
+ * then the subjects whose check is open (`pending`) by name with no count
+ * (ruling U6: the count rests on a membership not yet verified). Pure.
  */
 export function buildTable(input: {
   convs: readonly MarketConv[]
   params: MarketParams
   openId: string | null
   months: MarketTable['months']
+  /** Subjects whose check is open: their chips print no count. */
+  pending: ReadonlySet<string>
 }): MarketTable | null {
   if (input.convs.length === 0) return null
   const p = input.params
@@ -1148,11 +1176,19 @@ export function buildTable(input: {
   const openRow = input.openId && !shown.some((c) => c.id === input.openId) ? listed.find((c) => c.id === input.openId) : null
   const rows = [...shown, ...(openRow ? [openRow] : [])]
   const base = { period: p.period, month: p.month }
+  const chip = ([id, s]: [string, { name: string; count: number }], counted: boolean): TableFilter =>
+    ({ id, name: s.name, count: counted ? s.count : null, href: marketHref({ ...base, in: id, all: p.all }, 'conversations') })
+  const subjectChips = [...bySubject.entries()]
   const filters: TableFilter[] = [
     { id: null, name: 'All', count: input.convs.length, href: marketHref({ ...base, all: p.all }, 'conversations') },
-    ...[...bySubject.entries()]
+    ...subjectChips
+      .filter(([id]) => !input.pending.has(id))
       .sort((a, b) => b[1].count - a[1].count || a[1].name.localeCompare(b[1].name))
-      .map(([id, s]) => ({ id, name: s.name, count: s.count, href: marketHref({ ...base, in: id, all: p.all }, 'conversations') })),
+      .map((e) => chip(e, true)),
+    ...subjectChips
+      .filter(([id]) => input.pending.has(id))
+      .sort((a, b) => a[1].name.localeCompare(b[1].name))
+      .map((e) => chip(e, false)),
   ]
   return {
     total: listed.length,
@@ -1429,24 +1465,33 @@ async function resolveSlug(db: SupabaseClient, clientId: string, slug: string, o
 }
 
 /**
- * The subjects a conversation may be placed in, their names and order, and
- * which subjects each insight is a member of; and every active subject with
- * its calibration.
- *
- * PLACED IN ANY SUBJECT BUT A FAILED ONE (the parity pass, 13 Oct). Membership
- * is written for every active subject whatever its calibration (the check
- * reads it), and placing a conversation prints only the conversation's own
- * counts, so a subject whose check is still open keeps its "Inside it" and the
- * table its Subject column; its own level, line and change still wait for the
- * check (`printsMarket`). A subject being re-described is not used: its check
- * found it catching comments about other things. Ready subjects come first in
- * the order, so a tie goes to the checked one (`subjectOfTheme`).
+ * The subjects a conversation may be placed in, in two tiers (the parity
+ * pass, 13 Oct; ruling U6): the READY ones, and the ones whose check is still
+ * open. A subject being re-described is in neither: its check found it
+ * catching comments about other things. Pure.
  */
-export function placeableSubjects<S extends { id: string }>(all: readonly { subject: S; calibration: string }[]): S[] {
-  return [
-    ...all.filter((x) => x.calibration === 'ready'),
-    ...all.filter((x) => x.calibration !== 'ready' && x.calibration !== 'failed'),
-  ].map((x) => x.subject)
+export function placementTiers<S extends { id: string }>(all: readonly { subject: S; calibration: string }[]): { ready: S[]; pending: S[] } {
+  return {
+    ready: all.filter((x) => x.calibration === 'ready').map((x) => x.subject),
+    pending: all.filter((x) => x.calibration !== 'ready' && x.calibration !== 'failed').map((x) => x.subject),
+  }
+}
+
+/**
+ * THE SUBJECT A CONVERSATION IS PLACED IN, ON MARKET (the parity pass, 13 Oct;
+ * ruling U6): a READY subject always wins. `subjectOfTheme` over the ready
+ * subjects alone first; only where no ready subject takes the conversation (3
+ * of its member insights and 15% of them) is it read against the subjects
+ * whose check is open, so a subject whose matching is not verified never
+ * takes a conversation from one whose matching is. Membership is written for
+ * every active subject whatever its check (the check reads it), and placing a
+ * conversation prints only the conversation's own counts: a subject whose
+ * check is open keeps its "Inside it" and the table its Subject column, while
+ * its own level, line, change and chip count wait for the check. Pure.
+ */
+export function placeSubject(memberIds: readonly string[], s: NonNullable<ConvInput['subjects']>): string | null {
+  return subjectOfTheme(memberIds, s.subjectsOf, s.order)
+    ?? (s.pending ? subjectOfTheme(memberIds, s.pending.subjectsOf, s.pending.order) : null)
 }
 
 async function loadSubjects(db: SupabaseClient, clientId: string): Promise<{
@@ -1461,13 +1506,27 @@ async function loadSubjects(db: SupabaseClient, clientId: string): Promise<{
     throw error
   }
   const all = subjects.map((s) => ({ subject: s, calibration: subjectCalibration(s) }))
-  const placeable = placeableSubjects(all)
+  const tiers = placementTiers(all)
+  const placeable = [...tiers.ready, ...tiers.pending]
   if (placeable.length === 0) return { all, placed: null }
+  // One membership read for both tiers, split by subject.
   const bySubject = await loadMemberInsightIdsBySubject(db, clientId, placeable.map((s) => s.id))
   if (!bySubject) return { all, placed: null }
-  const subjectsOf = new Map<string, string[]>()
-  for (const [subject, ids] of bySubject) for (const id of ids) subjectsOf.set(id, [...(subjectsOf.get(id) ?? []), subject])
-  return { all, placed: { names: new Map(placeable.map((s) => [s.id, s.name])), order: placeable.map((s) => s.id), subjectsOf } }
+  const tierOf = (list: readonly Subject[]) => {
+    const subjectsOf = new Map<string, string[]>()
+    for (const sub of list) for (const id of bySubject.get(sub.id) ?? []) subjectsOf.set(id, [...(subjectsOf.get(id) ?? []), sub.id])
+    return { order: list.map((x) => x.id), subjectsOf }
+  }
+  const ready = tierOf(tiers.ready)
+  return {
+    all,
+    placed: {
+      names: new Map(placeable.map((x) => [x.id, x.name])),
+      order: ready.order,
+      subjectsOf: ready.subjectsOf,
+      pending: tiers.pending.length > 0 ? tierOf(tiers.pending) : null,
+    },
+  }
 }
 
 /** The evidence refs of these themes for the period: the stored month's
@@ -1769,9 +1828,11 @@ export async function loadMarket(input: {
     kindsRead.set(id, read)
     return read
   }
-  // Nothing first heard this week: the newest conversation an earlier week's
-  // read first heard, for the third card (read only then).
-  const nothingNew = period === 'week' && heroPick != null && heroPick.kind !== 'new' && (sides?.fresh.length ?? 0) === 0 && !sides?.biggest?.isNew
+  // Nothing first heard this week, anywhere in the week (a New chip anywhere
+  // means something was): the newest conversation an earlier week's read
+  // first heard, for the third card (read only then).
+  const anyNew = convs.some((c) => c.isNew)
+  const nothingNew = period === 'week' && heroPick != null && !anyNew && (sides?.fresh.length ?? 0) === 0
   const earlierNewAhead = nothingNew && read
     ? soft('earlierNew', loadEarlierNewThisWeek(db, clientId, { before: read.window.from }), [] as EarlierNew[])
     : Promise.resolve([] as EarlierNew[])
@@ -1840,9 +1901,18 @@ export async function loadMarket(input: {
     top.sides.push(sides?.biggest
       ? { kind: 'biggest', convs: [withWho(sides.biggest)], hrefs: [convHref(p, sides.biggest.id, 'top')], groups: groupsOf(sides.biggest.id, personas) }
       : { kind: 'biggest', convs: [], hrefs: [], groups: [] })
-    top.sides.push(sides && sides.fresh.length > 0
-      ? { kind: 'new_list', convs: sides.fresh, hrefs: sides.fresh.map((c) => convHref(p, c.id, 'top')), groups: groupsOf(sides.fresh[0].id, personas) }
-      : { kind: 'new_list', convs: [], hrefs: [], groups: [], earlier: earlierNewOf(earlierNew, convInput, (id) => convHref(p, id, 'top')) })
+    if (sides && sides.fresh.length > 0) {
+      top.sides.push({ kind: 'new_list', convs: sides.fresh, hrefs: sides.fresh.map((c) => convHref(p, c.id, 'top')), groups: groupsOf(sides.fresh[0].id, personas) })
+    } else {
+      // Never a conversation the row already holds (one card each).
+      const onRow = new Set([heroId, sides?.biggest?.id].filter((x): x is string => x != null))
+      const earlier = anyNew ? null : earlierNewOf(earlierNew, convInput, (id) => convHref(p, id, 'top'), onRow)
+      const next = earlier ? null : alsoTalkedOf(convs, onRow, setApart)
+      top.sides.push({
+        kind: 'new_list', convs: [], hrefs: [], groups: [], anyNew, earlier,
+        also: next ? { conv: withWho(next), href: convHref(p, next.id, 'top'), groups: groupsOf(next.id, personas) } : null,
+      })
+    }
   } else if (period === 'month' && monthPicks[0]) {
     const conv = findConv(monthPicks[0].id) ?? monthPicks[0]
     top.hero = { kind: 'biggest', conv, href: convHref(p, conv.id, 'top'), groups: groupsOf(conv.id, personas), doing: doing(conv) }
@@ -1858,6 +1928,7 @@ export async function loadMarket(input: {
     params: p,
     openId: openId && at === 'table' ? openId : null,
     months: period === 'time' ? tableMonths(month, categoryOf, nowMonth) : [],
+    pending: new Set(subjects.placed?.pending?.order ?? []),
   })
 
   // ── the open panels ──
@@ -1970,14 +2041,26 @@ export function marketMonths(pooled: ReadonlyMap<string, { videos: number | null
  * order within it, with this period's counts; one the themed run cannot name
  * is passed over. Null where none of them can be named. Pure.
  */
-export function earlierNewOf(earlier: readonly EarlierNew[], input: ConvInput, href: (id: string) => string): SideCard['earlier'] {
+export function earlierNewOf(earlier: readonly EarlierNew[], input: ConvInput, href: (id: string) => string, onRow: ReadonlySet<string> = new Set()): SideCard['earlier'] {
   for (const e of earlier) {
     for (const id of e.themeIds) {
+      if (onRow.has(id)) continue
       const conv = convOf(id, input)
       if (conv) return { conv, href: href(id), week: windowLabel(e.window) }
     }
   }
   return null
+}
+
+/**
+ * The new card's stand-in where nothing is new and no earlier week named one
+ * (the lead's ruling, 13 Oct): the week's next biggest conversation not
+ * already on the row, never one set apart (it leads nothing, decision F). The
+ * card prints it under "Also talked about", its week beside its month, with
+ * no word of movement. Null where there is none. Pure.
+ */
+export function alsoTalkedOf(convs: readonly MarketConv[], onRow: ReadonlySet<string>, setApart: { has(id: string): boolean }): MarketConv | null {
+  return convs.find((c) => !onRow.has(c.id) && c.setApart == null && !setApart.has(c.id)) ?? null
 }
 
 /** The flag card: the check's verdict, the conversation a theme flag names
@@ -2011,7 +2094,7 @@ export function flagCardOf(a: {
 function topIndexOf(top: TopRow, id: string): number {
   const ids: (string | null)[] = [
     top.hero ? (top.hero.kind === 'flag' ? top.hero.card.conv?.id ?? null : top.hero.conv.id) : null,
-    ...top.sides.map((s) => (s.convs.some((c) => c.id === id) || s.earlier?.conv.id === id ? id : s.convs[0]?.id ?? s.earlier?.conv.id ?? null)),
+    ...top.sides.map((s) => (sideIds(s).includes(id) ? id : sideIds(s)[0] ?? null)),
   ]
   return ids.indexOf(id)
 }

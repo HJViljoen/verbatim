@@ -13,7 +13,7 @@ import {
   convOf, cutWindows, doingOf, leadDoing, marketWeeksOf, flagCardOf, flagVerdict, groupsOf, isRegistryId, insideOf, marketHref, marketMonths, marketParams,
   mergeMixes, monthsText, notchOf, ourReadOf, panelStats, periodHref, personasOf, pickHero, pickWeekSides, platformRows, subjectHref,
   flagBaseWords, monthSoFar, tableFilterOf, tableMonths, topSpans, unmeasuredOf, weekWindows, whoOf, windowLabel, withMonthPlatforms, MARKET_TABLE_ROWS,
-  earlierNewOf, placeableSubjects, subjectAxis, SUBJECT_PENDING,
+  alsoTalkedOf, earlierNewOf, placementTiers, placeSubject, sideIds, subjectAxis, SUBJECT_PENDING,
   type MarketConv,
 } from './market'
 import {
@@ -258,11 +258,45 @@ describe('the subject board', () => {
     expect(fit.verdict).toBeNull()
   })
 
-  it('places a conversation in any subject but one being re-described, the checked ones first', () => {
+  it('splits the subjects into the ready and the ones whose check is open; a failed one is neither', () => {
     const all = [
       { subject: { id: 'p' }, calibration: 'provisional' }, { subject: { id: 'f' }, calibration: 'failed' }, { subject: { id: 'r' }, calibration: 'ready' },
     ]
-    expect(placeableSubjects(all).map((s) => s.id)).toEqual(['r', 'p'])
+    const t = placementTiers(all)
+    expect([t.ready.map((x) => x.id), t.pending.map((x) => x.id)]).toEqual([['r'], ['p']])
+  })
+
+  // Ruling U6 on a mixed tenant: a ready subject always wins placement, even
+  // where a subject whose check is open holds more of the members.
+  it('places a conversation in a ready subject wherever one qualifies, else in one whose check is open', () => {
+    const members = Array.from({ length: 10 }, (_, i) => `m${i}`)
+    const of = (pairs: [string, string[]][]) => {
+      const m = new Map<string, string[]>()
+      for (const [subject, ids] of pairs) for (const id of ids) m.set(id, [...(m.get(id) ?? []), subject])
+      return m
+    }
+    const subjects = {
+      names: new Map([['ready', 'Ready'], ['open', 'Open']]),
+      order: ['ready'],
+      subjectsOf: of([['ready', members.slice(0, 3)]]),
+      pending: { order: ['open'], subjectsOf: of([['open', members.slice(0, 8)]]) },
+    }
+    // Ready holds 3 of 10 (it qualifies): it wins over 8 of 10 still open.
+    expect(placeSubject(members, subjects)).toBe('ready')
+    // Ready holds 2 (it does not qualify): the open one takes it.
+    expect(placeSubject(members, { ...subjects, subjectsOf: of([['ready', members.slice(0, 2)]]) })).toBe('open')
+    // Neither qualifies: no subject.
+    expect(placeSubject(members.slice(0, 2), subjects)).toBeNull()
+    // With no second tier (every other surface), ready only.
+    expect(placeSubject(members, { ...subjects, subjectsOf: of([['ready', members.slice(0, 2)]]), pending: null })).toBeNull()
+  })
+
+  it('prints no count on the chip of a subject whose check is open, and lists those chips by name after the ready ones', () => {
+    const t = buildTable({ convs, params: marketParams({}), openId: null, months: [], pending: new Set([fixtureSubjectId('fit'), fixtureSubjectId('cost')]) })!
+    expect(t.filters.map((f) => [f.name, f.count])).toEqual([
+      ['All', 17], ['Community & encouragement', 3], ['Function & movement', 3], ['Choosing the right device', 2], ['Look & style', 2],
+      ['Cost & access', null], ['Fit & comfort', null],
+    ])
   })
 
   it('draws no tick legend where no pair may be printed', () => {
@@ -336,38 +370,38 @@ describe('the table', () => {
   const p = marketParams({})
 
   it('shows ten until all, with the subjects as filters', () => {
-    const t = buildTable({ convs, params: p, openId: null, months: [] })!
+    const t = buildTable({ convs, params: p, openId: null, months: [], pending: new Set() })!
     expect(t.rows).toHaveLength(MARKET_TABLE_ROWS)
     expect(t.total).toBe(convs.length)
     expect(t.showAllHref).toBe('/dashboard/market?all=1#conversations')
     expect(t.filters[0]).toMatchObject({ id: null, name: 'All', count: convs.length })
     expect(t.filters[1]).toMatchObject({ name: 'Fit & comfort', count: 4 })
-    const all = buildTable({ convs, params: marketParams({ all: '1' }), openId: null, months: [] })!
+    const all = buildTable({ convs, params: marketParams({ all: '1' }), openId: null, months: [], pending: new Set() })!
     expect(all.rows).toHaveLength(convs.length)
     expect(all.showAllHref).toBeNull()
   })
 
   it('filters by subject, and keeps an open row further down', () => {
-    const t = buildTable({ convs, params: marketParams({ in: fixtureSubjectId('cost') }), openId: null, months: [] })!
+    const t = buildTable({ convs, params: marketParams({ in: fixtureSubjectId('cost') }), openId: null, months: [], pending: new Set() })!
     expect(t.rows.map((r) => r.conv.subjectName)).toEqual(['Cost & access', 'Cost & access', 'Cost & access'])
     expect(t.filter).toBe(fixtureSubjectId('cost'))
-    const open = buildTable({ convs, params: p, openId: fixtureId(16), months: [] })!
+    const open = buildTable({ convs, params: p, openId: fixtureId(16), months: [], pending: new Set() })!
     expect(open.rows.at(-1)).toMatchObject({ open: true, conv: { id: fixtureId(16) } })
   })
 
   it('is nothing with no conversation', () => {
-    expect(buildTable({ convs: [], params: p, openId: null, months: [] })).toBeNull()
+    expect(buildTable({ convs: [], params: p, openId: null, months: [], pending: new Set() })).toBeNull()
   })
 
   it('ignores an unknown ?in= (every row, and its who, stays)', () => {
     expect(tableFilterOf(convs, 'nope')).toBeNull()
-    expect(buildTable({ convs, params: marketParams({ in: 'nope' }), openId: null, months: [] })!.rows).toHaveLength(MARKET_TABLE_ROWS)
+    expect(buildTable({ convs, params: marketParams({ in: 'nope' }), openId: null, months: [], pending: new Set() })!.rows).toHaveLength(MARKET_TABLE_ROWS)
   })
 
   it('has no Subject column where no conversation is in a measured subject', () => {
     const none = convs.map((c) => ({ ...c, subjectId: null, subjectName: null }))
-    expect(buildTable({ convs: none, params: p, openId: null, months: [] })!.subjects).toBe(false)
-    expect(buildTable({ convs, params: p, openId: null, months: [] })!.subjects).toBe(true)
+    expect(buildTable({ convs: none, params: p, openId: null, months: [], pending: new Set() })!.subjects).toBe(false)
+    expect(buildTable({ convs, params: p, openId: null, months: [], pending: new Set() })!.subjects).toBe(true)
   })
 
   it('reads the over-time months off the category', () => {
@@ -521,10 +555,33 @@ describe('the newest conversation an earlier week first heard', () => {
     expect(earlierNewOf([], input, String)).toBeNull()
     expect(earlierNewOf([{ window: w, themeIds: ['unknown'] }], input, String)).toBeNull()
   })
-  it('draws the board\'s three cards in the thin state', () => {
+  it('never names a conversation the row already holds', () => {
+    const e = earlierNewOf([{ window: w, themeIds: [fixtureId(1), fixtureId(16)] }], input, String, new Set([fixtureId(1)]))
+    expect(e?.conv.id).toBe(fixtureId(16))
+    expect(earlierNewOf([{ window: w, themeIds: [fixtureId(1)] }], input, String, new Set([fixtureId(1)]))).toBeNull()
+  })
+
+  it('stands in the week\'s next biggest not on the row, never one set apart, where no earlier week named one', () => {
+    const convs = buildConvs(input)
+    expect(alsoTalkedOf(convs, new Set([fixtureId(1), fixtureId(2)]), new Set())?.label).toBe('Insurance refusals for powered knees')
+    expect(alsoTalkedOf(convs, new Set([fixtureId(1), fixtureId(2)]), new Set([fixtureId(3)]))?.label).toBe('Running-blade stories')
+    expect(alsoTalkedOf(convs.slice(0, 2), new Set([fixtureId(1), fixtureId(2)]), new Set())).toBeNull()
+  })
+
+  it('draws the board\'s three cards in the thin state, each conversation on one card only', () => {
     const thin = marketThinFixture()
     expect(thin.top.sides.map((x) => [x.kind, x.convs.length])).toEqual([['biggest', 1], ['new_list', 0]])
-    expect(thin.top.sides[1].earlier).toBeNull()
-    expect(marketThinFixture({ earlierNew: true }).top.sides[1].earlier?.conv.label).toBe('Showing it or hiding it')
+    const third = thin.top.sides[1]
+    expect(third).toMatchObject({ anyNew: false, earlier: null, also: { conv: { label: 'Insurance refusals for powered knees' } } })
+    const ids = [thin.top.hero && thin.top.hero.kind !== 'flag' ? thin.top.hero.conv.id : null, ...thin.top.sides.flatMap(sideIds)]
+    expect(new Set(ids).size).toBe(ids.length)
+    const earlier = marketThinFixture({ earlierNew: true }).top.sides[1]
+    expect(earlier).toMatchObject({ earlier: { conv: { label: 'Showing it or hiding it' } }, also: null })
+  })
+
+  it('says "nothing else" where a conversation off the cards was first heard this week (the flag\'s)', () => {
+    const d = marketFixture({ flagged: false, noNew: true, flagNew: true })
+    expect(d.top.hero?.kind).toBe('flag')
+    expect(d.top.sides[1]).toMatchObject({ kind: 'new_list', anyNew: true, earlier: null })
   })
 })

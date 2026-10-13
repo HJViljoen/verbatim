@@ -99,7 +99,7 @@ export const READING_CARDS: readonly ReadingCard[] = [
     // flag needs the anomaly check (BASELINE_MONTHS read the same way). A
     // subject that is not ready prints no level (`unmeasuredOf`), and one
     // whose check is open keeps its row and "Inside it" (the parity pass,
-    // 13 Oct; `placeableSubjects`). This month
+    // 13 Oct; `placeSubject`). This month
     // ends with the month's long-run read (`marketLongRunOf`, 13 Oct).
     tells: 'What your market is talking about, this week, this month or over time: the conversation that leads the week, the conversations first heard this week, each of your subjects this month so far against last month, what people did in the comments, your market’s videos week by week, where it is said, and every conversation, each opening in full with its own voices. A month ends with our read of what has held across the months behind it.',
     read: ['market', 'week', 'month', 'video', 'theme', 'subject', 'kind', 'level', 'change', 'new'],

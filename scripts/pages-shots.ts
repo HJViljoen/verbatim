@@ -97,7 +97,7 @@ import { movesFixture, movesOpenFixture, movesRecordFixture, statementsV2 } from
 import type { MovesPageData } from '../lib/pages/v2/moves'
 import { MarketPage } from '../components/pages/v2/market'
 import { marketFixture, marketLongRowsFixture, marketThinFixture } from '../lib/pages/v2/market-fixture'
-import { subjectAxis, SUBJECT_PENDING, type MarketData, type SubjectRow } from '../lib/pages/v2/market'
+import { alsoTalkedOf, convHref, subjectAxis, SUBJECT_PENDING, type MarketData, type SubjectRow } from '../lib/pages/v2/market'
 import { homeWeeksFrame } from '../lib/pages/home'
 import { ContentPage } from '../components/pages/v2/content'
 import { contentEmptyFixture, contentFixture } from '../lib/pages/v2/content-fixture'
@@ -324,7 +324,8 @@ const marketDump = (): MarketData => JSON.parse(readFileSync(process.env.MARKET_
  * HARNESS ONLY, so a pre-change production dump draws as the page would draw
  * the same reads now. It adds what the loader now always hands the page and
  * the dump could not hold: the weekly chart's axis (from the dump's own read
- * time), the board's three top cards (empty where the dump had none), and a
+ * time), the board's three top cards (the third with the loader's stand-in,
+ * read off the dump's own table rows), and a
  * subject with no level as its own row (`pending`) with its line on the
  * board's axis. It invents nothing: the conversations inside a subject whose
  * check is open were not read by the old loader, so those rows list none
@@ -344,7 +345,16 @@ function marketDumpNow(raw: MarketData, readAt: string): MarketData {
   }
   if (d.period === 'week' && d.top.hero) {
     if (!d.top.sides.some((x) => x.kind === 'biggest')) d.top.sides.unshift({ kind: 'biggest', convs: [], hrefs: [], groups: [] })
-    if (!d.top.sides.some((x) => x.kind === 'new_list')) d.top.sides.push({ kind: 'new_list', convs: [], hrefs: [], groups: [], earlier: null })
+    if (!d.top.sides.some((x) => x.kind === 'new_list')) {
+      // The loader's rule (`alsoTalkedOf`) over what the dump holds: the
+      // table's rows, biggest first. Its groups were not dumped, so none print.
+      const hero = d.top.hero
+      const onRow = new Set([hero ? (hero.kind === 'flag' ? hero.card.conv?.id : hero.conv.id) : null, ...d.top.sides.flatMap((x) => x.convs.map((c) => c.id))].filter((x): x is string => x != null))
+      const convs = d.table?.rows.map((r) => r.conv) ?? []
+      const anyNew = convs.some((c) => c.isNew) || (hero?.kind === 'new')
+      const next = alsoTalkedOf(convs, onRow, new Set())
+      d.top.sides.push({ kind: 'new_list', convs: [], hrefs: [], groups: [], anyNew, earlier: null, also: next ? { conv: next, href: convHref(d.params, next.id, 'top') } : null })
+    }
   }
   return d
 }
@@ -522,6 +532,7 @@ const PAGES: Page[] = [
   { key: 'market-v2-thin', path: '/dashboard/market', artboard: 'E2-Market.dc.html', page: () => h(MarketPage, { data: marketThinFixture() }) },
   { key: 'market-v2-thin-earlier', path: '/dashboard/market', artboard: 'E2-Market.dc.html', page: () => h(MarketPage, { data: marketThinFixture({ earlierNew: true }) }) },
   { key: 'market-v2-one-month', path: '/dashboard/market', artboard: 'E2-Market.dc.html', page: () => h(MarketPage, { data: marketFixture({ flagged: false, subjects: 'one_month', weeks: 'failed' }) }) },
+  { key: 'market-v2-flag-kind', path: '/dashboard/market', artboard: 'E2-Market.dc.html', page: () => h(MarketPage, { data: marketFixture({ flagKind: true, noNew: true }) }) },
   ...(flag('market-dump', '') ? (['ossur', 'sealand'] as const).map((tenant): Page => ({
     key: `market-v2-${tenant}`, path: '/dashboard/market', artboard: 'E2-Market.dc.html',
     page: () => h(MarketPage, { data: marketDumpOf(flag('market-dump', '.'), tenant) }),
