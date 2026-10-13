@@ -51,8 +51,12 @@ export type VerdictState = 'moved' | 'no_clear_change' | 'too_little_data' | 'ba
 /** What a verdict can be about. A superset of `AnomalyObjectKind`, which is the
  *  four the pre-registered weekly set can hold; `audience` (a rival's or the
  *  category's share of the whole) and `mood` (a sentiment share) are read on the
- *  monthly series and are never pre-registered. */
-export type ObjectKind = 'subject' | 'theme' | 'kind' | 'rival' | 'audience' | 'mood'
+ *  monthly series and are never pre-registered. `product` is one of the
+ *  client's products or product categories (Your products, depth v2 T5: a
+ *  category's share of the market month on month, a product's first month,
+ *  a product against its category), read on `month_product_readings`; the
+ *  object id is the product's or the category's row id, never its name. */
+export type ObjectKind = 'subject' | 'theme' | 'kind' | 'rival' | 'audience' | 'mood' | 'product'
 
 /** Why a comparison that could be drawn is not being drawn. Each one is a break
  *  in the record rather than a property of the conversation:

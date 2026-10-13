@@ -17,7 +17,11 @@ import {
   type ProductGroupRow,
   type ProductRow,
 } from '../products/types'
+import { marketProductMonth } from '../products/market-month'
+import { marketAudiences } from '../reading/market'
 import { monthStartOf } from '../reading/month-key'
+import { loadMarketRivalAudiences } from '../reading/reading-view'
+import { CLIENT_AUDIENCE } from '../rivals'
 import { selectAll } from '../supabase-admin'
 import { settingsSubPage } from './rail'
 
@@ -42,12 +46,15 @@ import { settingsSubPage } from './rail'
 //
 // "THIS MONTH" IS THE COMMENT'S MONTH. A product's figure is its videos in the
 // calendar month `now` falls in, from `month_product_readings` (AGENTS.md: a
-// period is dated by the comment), summed over the audiences. A video sits in
-// exactly one audience (client, a rival, the rest of the market:
-// `monthly_denominators`' rule), so the sum is the videos that named it, each
-// once. Where the month holds no product row at all, nothing has read it yet:
-// the column prints a dot, never "quiet", because quiet is a claim about the
-// market and an unread month is ours.
+// period is dated by the comment), pooled over THE MARKET'S audiences: the
+// tracked rivals' and the category's, the client's own posts left out
+// (`marketProductMonth`, lib/products/market-month.ts). Your products (T5)
+// pools through the same function, so the two surfaces never print two
+// numbers for one product (the lead's call, 13 Oct). A video sits in exactly
+// one audience, so the sum is the videos that named it, each once. Where the
+// month holds no product row at all, nothing has read it yet: the column
+// prints a dot, never "quiet", because quiet is a claim about the market and
+// an unread month is ours.
 
 /** What a person is told when the products migration is not applied here. */
 export const PRODUCTS_NOT_APPLIED = 'Your products are not switched on for this workspace yet.'
@@ -132,6 +139,10 @@ export type ProductSettingsRead =
       /** The month the figures are about, 'YYYY-MM-01'. */
       month: string
       readings: MonthProductReadingRow[]
+      /** The market's audiences the figures pool (`marketAudiences`); null
+       *  where the tracked rivals could not be read, and the view then pools
+       *  every audience but the client's. */
+      audiences?: string[] | null
     }
 
 /**
@@ -151,8 +162,10 @@ export async function loadProductSettings(db: SupabaseClient, clientId: string, 
       selectAll<ProductAliasRow>(() =>
         db.from(TABLE_PRODUCT_ALIASES).select(PRODUCT_ALIAS_COLUMNS).eq('client_id', clientId).is('retired_at', null).order('created_at').order('id')),
     ])
-    const readings = groups.length > 0 ? await loadMonthProductReadings(db, clientId, [month]) : []
-    return { state: 'ready', groups, products, aliases, month, readings }
+    const [readings, rivals] = groups.length > 0
+      ? await Promise.all([loadMonthProductReadings(db, clientId, [month]), loadMarketRivalAudiences(db, clientId)])
+      : [[], null]
+    return { state: 'ready', groups, products, aliases, month, readings, audiences: rivals ? marketAudiences(rivals) : null }
   } catch (error) {
     if (isMissingProductsSchema(error)) return { state: 'missing' }
     throw error
@@ -237,8 +250,6 @@ const KIND_ORDER: Record<AliasKind, number> = { name: 0, nickname: 1, category_w
 const byKindThenAdded = (a: ProductAliasRow, b: ProductAliasRow): number =>
   KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)
 
-const sum = (rows: readonly MonthProductReadingRow[], pick: (r: MonthProductReadingRow) => number): number =>
-  rows.reduce((n, r) => n + pick(r), 0)
 
 /**
  * The tab, from the read. `selected` is the `?group=` param; an unknown or
@@ -264,14 +275,14 @@ export function productSettingsView(
     selected: g.id === open?.id,
   }))
 
-  // A PRODUCT WITH NO ROW HAS NO FIGURE. Its videos are the sum of its own
-  // rows; where the month holds none for it, nothing has read it, and a
-  // missing row is never summed to zero ("quiet" is a claim about the market).
-  const isRead = read.readings.length > 0
-  const productVideos = (id: string): number | null => {
-    const rows = read.readings.filter((r) => r.object_kind === 'product' && r.object_id === id)
-    return rows.length > 0 ? sum(rows, (r) => r.k_named) : null
-  }
+  // A PRODUCT WITH NO ROW HAS NO FIGURE. Its videos are its own rows pooled
+  // over the market (`marketProductMonth`, Your products' own basis); where
+  // the month holds none for it, nothing has read it, and a missing row is
+  // never summed to zero ("quiet" is a claim about the market).
+  const audiences = new Set(read.audiences ?? read.readings.map((r) => r.audience).filter((a) => a !== CLIENT_AUDIENCE))
+  const pooled = (id: string) => marketProductMonth(read.readings, read.month, id, audiences)
+  const isRead = read.readings.some((r) => audiences.has(r.audience))
+  const productVideos = (id: string): number | null => pooled(id)?.k_named ?? null
 
   // THE SEED LINE names the website and the day the list was filled in, from
   // the rows themselves (`seeded_from`, `created_at`): the earliest seeded
@@ -291,13 +302,12 @@ export function productSettingsView(
       videos: productVideos(p.id),
     }))
     const own = read.aliases.filter((a) => a.group_id === open.id && a.product_id === null).sort(byKindThenAdded)
-    const groupRows = read.readings.filter((r) => r.object_kind === 'group' && r.object_id === open.id)
     openView = {
       id: open.id,
       name: open.name,
       products: rows.length,
       cameUp: isRead ? rows.filter((r) => (r.videos ?? 0) > 0).length : null,
-      unclear: groupRows.length > 0 ? sum(groupRows, (r) => r.k_unclear) : null,
+      unclear: pooled(open.id)?.k_unclear ?? null,
       tagHref: productsPageHref(open.id),
       words: own.filter((a) => a.kind === 'category_word').map(chip),
       ranges: own.filter((a) => a.kind !== 'category_word').map(chip),

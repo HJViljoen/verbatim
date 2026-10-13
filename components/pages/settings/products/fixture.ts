@@ -96,7 +96,8 @@ const reading = (
   return row
 }
 
-/** October so far: Seal-In X in six videos (one of them Össur's own), Comfort
+/** October so far: Seal-In X in six videos (one of them Össur's own, which
+ *  the market's count leaves out: five, Your products' basis), Comfort
  *  in three, Synergy in two, five liners read and named by none (the board's
  *  "quiet"), and eleven videos about one of the liners the rules could not
  *  tell. The other categories' products have no row: not read. */
