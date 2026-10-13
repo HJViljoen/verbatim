@@ -452,6 +452,11 @@ const PAGES: Page[] = [
     key: `dashboard-${tenant}`, path: '/dashboard', artboard: 'E1-Dashboard.dc.html',
     page: () => h(DashboardPage, { data: JSON.parse(readFileSync(join(resolve(flag('home-dump', '.')), `${tenant}.json`), 'utf8')).data as DashboardData }),
   })) : []),
+  // The phone pass (depth v2, T9): two more open states, for the panel's
+  // place at every width: a conversation open from the month's top row, and
+  // one open in the month-by-month table, which scrolls sideways on a phone.
+  { key: 'market-v2-month-open', path: '/dashboard/market', artboard: 'E2-Market-Open.dc.html', page: () => h(MarketPage, { data: marketFixture({ period: 'month', open: { n: 2, at: 'top' } }) }) },
+  { key: 'market-v2-time-open', path: '/dashboard/market', artboard: 'E2-Market-Open.dc.html', page: () => h(MarketPage, { data: marketFixture({ period: 'time', open: { n: 5, at: 'table' } }) }) },
 ]
 
 // ---- the shell -----------------------------------------------------------------
