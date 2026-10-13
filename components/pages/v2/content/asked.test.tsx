@@ -30,7 +30,11 @@ describe('Also asked, and not yet in your posts', () => {
 
   it('is not "the next" questions where no idea stands above it', () => {
     const text = renderText(<AskedCard block={askedFixture()} state={STATE} month={OCT} weekWord="this week" afterIdeas={false} />)
-    expect(text).toContain('The questions people asked this week that none of your posts in October touched on, the most videos first')
+    expect(text).toContain('The questions people asked this week that none of your posts since August touched on, the most videos first')
     expect(text).not.toContain('after the ideas above')
+  })
+
+  it('reads your posts over the post-ideas step’s window', () => {
+    expect(renderText(<AskedCard block={askedFixture()} state={STATE} month={OCT} weekWord="this week" />)).toContain('that none of your posts since August touched on')
   })
 })

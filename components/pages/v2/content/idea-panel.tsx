@@ -2,10 +2,10 @@ import Link from 'next/link'
 import { Play, Sparkles } from 'lucide-react'
 import { FlagChip, InPlacePanel, PanelSection, PanelTitle, StatCell, StatRow } from '@/components/v2'
 import { QuoteBlock } from '@/components/quote-block'
-import { fmtInt, platformLabel, shortDate } from '@/lib/format'
+import { fmtInt, longMonth, platformLabel, shortDate } from '@/lib/format'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
 import {
-  IDEA_PANEL_ID, contentHref, fmtMultiple, groupHref, monthWords, POST_IDEA_SLOT,
+  IDEA_PANEL_ID, contentHref, fmtMultiple, groupHref, lengthWords, monthWords, POST_IDEA_SLOT,
   type ContentState, type IdeaPanel,
 } from '@/lib/pages/v2/content'
 import { cn } from '@/lib/utils'
@@ -46,8 +46,12 @@ export function IdeaPanelView({ panel, state, count, month, weekWord }: {
 }) {
   const { card } = panel
   const at = (card.rank - 0.5) / Math.max(1, count)
-  const most = Math.max(1, ...panel.subquestions.map((s) => s.videos))
   const when = monthWords(month)
+  // A sub-question's figure is its videos of the videos whose comments went to
+  // the writer (`cover.asked`): a sub-question can only be found among those.
+  const of = panel.asked?.videos ?? null
+  const scale = Math.max(1, of ?? Math.max(0, ...panel.subquestions.map((s) => s.videos)))
+  const since = longMonth(card.own.since)
   return (
     <InPlacePanel
       id={IDEA_PANEL_ID}
@@ -59,6 +63,7 @@ export function IdeaPanelView({ panel, state, count, month, weekWord }: {
         <>
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-[6px] bg-accent px-2 py-[3px] text-[12px] leading-[1.3]">Post idea {card.rank}</span>
+            <span className="rounded-[6px] bg-accent px-2 py-[3px] text-[12px] leading-[1.3]">For {panel.week.label}</span>
             <FlagChip verdict={card.flag} />
             {card.subject ? <span className="rounded-[6px] bg-accent px-2 py-[3px] text-[12px] leading-[1.3]">{card.subject.name}</span> : null}
           </div>
@@ -75,7 +80,7 @@ export function IdeaPanelView({ panel, state, count, month, weekWord }: {
           <StatCell value={card.weeks.map((w) => fmtInt(w.count)).join(' · ')} label={`videos a week, the weeks of ${card.weeks.map((w) => w.label).join(', ')}`} />
         ) : null}
         {card.own.state === 'touched' || card.own.state === 'none' ? (
-          <StatCell value={card.own.touched} of={card.own.posts} label={`posts of yours ${when} touched on it`} />
+          <StatCell value={card.own.touched} of={card.own.posts} label={`posts of yours since ${since} touched on it`} />
         ) : null}
       </StatRow>
 
@@ -100,23 +105,26 @@ export function IdeaPanelView({ panel, state, count, month, weekWord }: {
           {panel.length ? (
             <div>
               <p className={BRIEF_KEY}>Length</p>
-              <p className="m-0 text-[15px] leading-[1.45]" data-copy="stored" data-slot={POST_IDEA_SLOT}>{panel.length}</p>
+              <p className="m-0 text-[15px] leading-[1.45]"><Fig className="font-sans">{lengthWords(panel.length)}</Fig></p>
+              <p className="m-0 mt-1 text-[12.5px] leading-[1.4] text-muted-foreground">
+                The middle half of <Fig>{fmtInt(panel.length.videos)}</Fig> {panel.length.basis === 'format' && card.format ? `${card.format.name.toLowerCase()} videos` : 'videos, in any format,'} on this question that drew at least a typical response
+              </p>
             </div>
           ) : null}
         </div>
         <p className="m-0 text-[13px] leading-[1.4] text-muted-foreground">
-          The multiples are how the market’s videos made that way, and opening that way, did against a typical video in your market.
+          The multiples are the response of the market’s videos on this question made that way, and opening that way, against a typical market video on this question.
           {card.medical ? <> {MEDICAL_LINE}</> : null}
         </p>
       </PanelSection>
 
       <div className="grid grid-cols-1 gap-8 xl:grid-cols-3">
-        <PanelSection label={<>What they want to know · in <Fig>{fmtInt(panel.asking)}</Fig> {panel.asking === 1 ? 'video' : 'videos'}</>}>
+        <PanelSection label={of != null ? <>What they want to know · of <Fig>{fmtInt(of)}</Fig> {of === 1 ? 'video' : 'videos'}</> : 'What they want to know'}>
           {panel.subquestions.length > 0 ? panel.subquestions.map((s) => (
             <div key={s.label} className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_30px] items-center gap-2.5 text-[13.5px] leading-[1.35]">
               <span data-copy="stored" data-slot={POST_IDEA_SLOT}>{s.label}</span>
-              <div role="img" aria-label={`${s.videos} of ${panel.asking} videos`} className="relative h-2 rounded-full bg-track">
-                <div className="absolute inset-y-0 left-0 rounded-full bg-brand" style={{ width: `${Math.round((s.videos / most) * 100)}%` }} />
+              <div role="img" aria-label={of != null ? `${s.videos} of ${of} videos` : `${s.videos} videos`} className="relative h-2 rounded-full bg-track">
+                <div className="absolute inset-y-0 left-0 rounded-full bg-brand" style={{ width: `${Math.min(100, Math.round((s.videos / scale) * 100))}%` }} />
               </div>
               <Fig className="text-right text-[12.5px]">{fmtInt(s.videos)}</Fig>
             </div>

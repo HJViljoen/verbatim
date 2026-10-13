@@ -2,7 +2,7 @@ import { CARD, FlagChip, MiniBars, SELECTED_CARD_RING } from '@/components/v2'
 import { fmtInt, longMonth } from '@/lib/format'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
 import {
-  ASKED_ID, IDEA_PANEL_ID, IDEAS_EMPTY, contentHref, monthWords, POST_IDEA_SLOT,
+  ASKED_ID, IDEA_PANEL_ID, IDEAS_EMPTY, contentHref, monthWords, olderIdeasLine, POST_IDEA_SLOT,
   type ContentState, type IdeaCard, type IdeasBlock, type OwnTouch,
 } from '@/lib/pages/v2/content'
 import { cn } from '@/lib/utils'
@@ -22,9 +22,10 @@ import { Fact, GroupNames, LABEL, Fig, OLink, RecipeChip } from './parts'
  * line. "Open the brief" opens the idea in place (`?idea=<rank>`).
  */
 
-/** "None of your 9 posts in October so far touched on it". */
-export function OwnTouchLine({ own, month }: { own: OwnTouch; month: { month: string; complete: boolean } }) {
-  const when = monthWords(month)
+/** "None of your 61 posts since August touched on it": the post-ideas step's
+ *  own test over its own window (`ownTouch`). */
+export function OwnTouchLine({ own }: { own: OwnTouch }) {
+  const when = `since ${longMonth(own.since)}`
   if (own.state === 'unread') return <span className="text-muted-foreground">Your posts could not be read just now</span>
   if (own.state === 'no_posts') return <span className="text-muted-foreground">You published nothing of your own {when}</span>
   if (own.state === 'none') {
@@ -84,7 +85,7 @@ export function IdeaCardView({ card, state, selected, month, weekWord }: {
       </div>
       <div className="flex flex-col border-t border-track">
         {card.groups.length > 0 ? <Fact name="Who's asking"><GroupNames groups={card.groups} /></Fact> : null}
-        <Fact name="Your posts"><OwnTouchLine own={card.own} month={month} /></Fact>
+        <Fact name="Your posts"><OwnTouchLine own={card.own} /></Fact>
       </div>
       {card.format || card.opening ? (
         <div>
@@ -93,6 +94,8 @@ export function IdeaCardView({ card, state, selected, month, weekWord }: {
             {card.format ? <RecipeChip recipe={card.format} /> : null}
             {card.opening ? <RecipeChip recipe={card.opening} /> : null}
           </div>
+          {/* The multiples are T13's: on the question, never the whole market. */}
+          <p className="m-0 mt-2 text-[12px] leading-[1.4] text-muted-foreground">1× is a typical market video on this question</p>
         </div>
       ) : null}
       {card.medical ? <p className="m-0 text-[12px] leading-[1.4] text-muted-foreground">{MEDICAL_LINE}</p> : null}
@@ -127,16 +130,20 @@ export function IdeasSection({ block, state, month, weekWord }: {
   weekWord: string
 }) {
   const openRank = state.open?.kind === 'idea' ? state.open.rank : null
+  const since = block.cards[0]?.own.since
   return (
     <section aria-labelledby="ideas-title" className="flex flex-col gap-3.5">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-0.5">
         <h2 id="ideas-title" className="m-0 text-[19px] leading-[1.3] font-semibold">What to post next</h2>
-        {block.cards.length > 0 ? (
+        {block.cards.length > 0 && block.week ? (
           <span className="text-[13px] leading-[1.4] text-muted-foreground">
-            Questions people asked {weekWord} that your posts in {longMonth(month.month)} have not touched on, biggest first
+            For {block.week.label}: questions people asked that your posts since {longMonth(since ?? month.month)} have not touched on, biggest first
           </span>
         ) : null}
       </div>
+      {block.cards.length > 0 && block.week && !block.week.current ? (
+        <p data-ideas-older="" className="m-0 px-0.5 text-[14px] leading-[1.5]">{olderIdeasLine(block.week)}</p>
+      ) : null}
       {block.cards.length > 0 ? (
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
           {block.cards.map((c) => (

@@ -33,6 +33,8 @@ describe('Content', () => {
     assertCopyContract(<ContentPage data={contentFixture({ open: { kind: 'posts' }, period: 'month', asked: true })} />)
     assertCopyContract(<ContentPage data={contentFixture({ ideas: 'not_on' })} />)
     assertCopyContract(<ContentPage data={contentEmptyFixture()} />)
+    assertCopyContract(<ContentPage data={contentFixture({ olderIdeas: true, open: { kind: 'idea', rank: 2 } })} />)
+    assertCopyContract(<ContentPage data={contentFixture({ ideas: 'stale' })} />)
   })
 
   it('prints no quote at level 1: every comment’s words are one click down', () => {

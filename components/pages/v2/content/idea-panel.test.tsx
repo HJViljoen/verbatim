@@ -31,7 +31,7 @@ describe('A post idea, opened in place', () => {
     expect(levels).toEqual([
       '23 of 241 videos in your market this week where it came up',
       '31 of 318 videos in October so far',
-      '0 of 9 posts of yours in October so far touched on it',
+      '0 of 13 posts of yours since August touched on it',
     ])
     const text = renderText(panel(1))
     expect(text).toContain('9 · 14 · 23 videos a week, the weeks of 21 Sep, 28 Sep, 5 Oct')
@@ -43,16 +43,23 @@ describe('A post idea, opened in place', () => {
     expect(text).toContain('Format Tutorial · 2.1×')
     expect(text).toContain('Open with A question · 1.8×')
     expect(text).toContain('Cover How long liners usually last, the signs it is time, and what wears them out faster')
-    expect(text).toContain('Length 30 to 45 seconds')
+    // The length is code's numbers (T13's `cover.length`), a figure, with its basis.
+    expect(text).toContain('Length 30 to 45 seconds The middle half of 9 tutorial videos on this question that drew at least a typical response')
+    expect(renderText(panel(2))).toContain('Length 25 to 75 seconds The middle half of 50 videos, in any format, on this question that drew at least a typical response')
+    expect(copyNodes(render(panel(1))).filter((n) => n.kind === 'figure').map((n) => n.text)).toContain('30 to 45 seconds')
+    expect(text).toContain('against a typical market video on this question')
     expect(text).toContain(MEDICAL_LINE)
     expect(renderText(panel(1, SEALAND_CLIENT_ID))).not.toContain(MEDICAL_LINE)
     // No length stored: no Length.
-    expect(renderText(panel(2))).not.toContain('Length')
+    expect(renderText(panel(3))).not.toContain('Length')
   })
 
   it('counts what they want to know off the ids, and names who asks with no count, each opening in Voices', () => {
     const text = renderText(panel(1))
-    expect(text).toContain('What they want to know · in 20 videos How long it should last 11 The signs it is worn out 8 Whether liners differ 5 Whether medical aid pays 4')
+    // Each sub-question's videos are OF the videos whose comments went to the
+    // writer (`cover.asked.videos`), never the union of their own.
+    expect(text).toContain('What they want to know · of 23 videos How long it should last 11 The signs it is worn out 8 Whether liners differ 5 Whether medical aid pays 4')
+    expect(render(panel(1))).toContain('aria-label="11 of 23 videos"')
     expect(text).toContain("Who's asking New amputees, first year → Caregivers and family → Long-time users upgrading → Each opens in Voices")
     expect(render(panel(1))).toContain('href="/dashboard/voices?group=new-amputees"')
   })
@@ -74,5 +81,11 @@ describe('A post idea, opened in place', () => {
     const m = render(panel(1))
     expect(m).toContain('href="/dashboard/agent?ask=Draft%20an%20outline')
     expect(m).toContain(`href="/dashboard/market?conv=`)
+  })
+
+  it('names the week the idea was written for', () => {
+    expect(renderText(panel(1))).toMatch(/^Post idea 1 For 5 to 11 Oct Fit & comfort/)
+    const older = <IdeaPanelView panel={ideaPanelFixture(1, undefined, true)} state={STATE} count={3} month={OCT} weekWord="this week" />
+    expect(renderText(older)).toMatch(/^Post idea 1 For 21 to 27 Sep/)
   })
 })

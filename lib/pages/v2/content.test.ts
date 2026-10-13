@@ -6,13 +6,14 @@ import type { PostIdeaRow } from '../../post-ideas/types'
 import type { OwnedPosts } from '../../reading/owned'
 import { buildPlaybook, type PlaybookVideo } from '../playbook'
 import {
-  anchorOf, askedBlock, contentHref, contentMonth, contentWeek, coverLength, daysLabel, daysPhrase, flagVerdict,
+  anchorOf, askedBlock, contentHref, contentMonth, contentWeek, coverAsked, coverLength, daysLabel, daysPhrase, flagVerdict,
+  ideaOwnedFrom, ideasStale, ideasWeekOf, IDEAS_STALE_DAYS, lengthWords, olderIdeasLine, touchPosts,
   fmtMultiple, groupsByConversation, ideaCard, IDEAS_EMPTY, marketVideoCards, mixSentence, newVerdict, openingChip,
   openingLabel, ownTouch, parseContentParams, pooledThemeVideos, pooledVideos, postsBlock, postTitle, recipe,
   repliesView, storedPersonas, subquestionRows, threeWeeks, topContentEmpty, typicalRate, wordsToBorrow, worksBlock,
   worksRows, type PanelVideoRow, type WorksRow,
 } from './content'
-import { OCT, OSSUR_IDEAS, OSSUR_OWNED, OSSUR_PERSONAS, OSSUR_REPLIES, REG } from './content-fixture'
+import { OCT, OSSUR_IDEAS, OSSUR_OWNED, OSSUR_OWNED_SINCE, OSSUR_PERSONAS, OSSUR_REPLIES, REG } from './content-fixture'
 
 const WINDOW = { from: '2026-10-04T04:03:00.000Z', to: '2026-10-11T04:02:00.000Z' }
 
@@ -109,17 +110,30 @@ describe('formats and openings', () => {
 })
 
 describe('your posts against a conversation', () => {
-  it('runs the one word check: touched, none, no posts, unread', () => {
-    expect(ownTouch(['Getting a prosthetic leg wet'], OSSUR_OWNED)).toEqual({ state: 'touched', touched: 1, posts: 9 })
-    expect(ownTouch(['Liner lifespan and replacement'], OSSUR_OWNED)).toEqual({ state: 'none', touched: 0, posts: 9 })
-    expect(ownTouch(['x'], { ...OSSUR_OWNED, posts: [], total: 0, byPlatform: [] })).toEqual({ state: 'no_posts', touched: 0, posts: 0 })
-    expect(ownTouch(['x'], null)).toEqual({ state: 'unread', touched: 0, posts: 0 })
+  const AUG = '2026-08-01'
+  it('runs the step’s word check: touched, none, no posts, unread', () => {
+    expect(ownTouch(['Getting a prosthetic leg wet'], OSSUR_OWNED, AUG)).toEqual({ state: 'touched', touched: 1, posts: 9, since: AUG })
+    expect(ownTouch([' Liner lifespan and replacement '], OSSUR_OWNED, AUG)).toEqual({ state: 'none', touched: 0, posts: 9, since: AUG })
+    expect(ownTouch(['x'], { ...OSSUR_OWNED, posts: [], total: 0, byPlatform: [] }, AUG)).toEqual({ state: 'no_posts', touched: 0, posts: 0, since: AUG })
+    expect(ownTouch(['x'], null, AUG)).toEqual({ state: 'unread', touched: 0, posts: 0, since: AUG })
+  })
+
+  it('reads the step’s window: the reading month and the two before, to the week’s end', () => {
+    expect(ideaOwnedFrom('2026-10-01')).toBe('2026-08-01')
+    expect(ideaOwnedFrom('2026-01-15')).toBe('2025-11-01')
+    expect(OSSUR_OWNED_SINCE.total).toBe(13)
+    const cut = touchPosts(OSSUR_OWNED_SINCE, '2026-10-01', '2026-10-08T04:00:00.000Z')!
+    // The week ends on the 8th: posts of the 8th onwards are out, as in the
+    // step's `ownedPosts({ from: ownedFrom(month), to: window.to })`.
+    expect(cut.posts.map((p) => p.upload_date).every((d) => d >= '2026-08-01' && d < '2026-10-08')).toBe(true)
+    expect(cut.total).toBe(9)
+    expect(touchPosts(null, '2026-10-01', WINDOW.to)).toBeNull()
   })
 })
 
 describe('an idea', () => {
   it('counts its sub-questions off their ids, most asked first, and the videos they were asked under', () => {
-    const { rows, asking } = subquestionRows({
+    const rows = subquestionRows({
       subquestions: [
         { label: 'B', commentIds: ['c1', 'c1', 'c2'], videoIds: ['v1'] },
         { label: 'A', commentIds: ['c3', 'c4', 'c5'], videoIds: ['v1', 'v2', 'v2'] },
@@ -128,20 +142,32 @@ describe('an idea', () => {
       ],
     })
     expect(rows).toEqual([{ label: 'A', videos: 2, comments: 3 }, { label: 'B', videos: 1, comments: 2 }])
-    expect(asking).toBe(3)
   })
 
-  it('reads a length the writer put in the cover, and nothing else', () => {
-    expect(coverLength({ text: 'x', length: ' 30 to 45 seconds ' })).toBe('30 to 45 seconds')
+  it('reads code’s length and asked off the cover only where they are T13’s shape', () => {
+    const length = { fromSeconds: 25, toSeconds: 75, videos: 50, basis: 'question' }
+    expect(coverLength({ text: 'x', length })).toEqual(length)
+    expect(coverLength({ text: 'x', length: '30 to 45 seconds' })).toBeNull()
+    expect(coverLength({ text: 'x', length: { ...length, fromSeconds: 80 } })).toBeNull()
+    expect(coverLength({ text: 'x', length: { ...length, basis: 'vibes' } })).toBeNull()
     expect(coverLength({ text: 'x' })).toBeNull()
-    expect(coverLength({ text: 'x', length: 30 })).toBeNull()
+    expect(coverAsked({ text: 'x', asked: { comments: 21, videos: 10 } })).toEqual({ comments: 21, videos: 10 })
+    expect(coverAsked({ text: 'x', asked: { comments: 21 } })).toBeNull()
+    expect(coverAsked(null)).toBeNull()
+  })
+
+  it('says a length in seconds, and in minutes past ninety', () => {
+    expect(lengthWords({ fromSeconds: 30, toSeconds: 45 })).toBe('30 to 45 seconds')
+    expect(lengthWords({ fromSeconds: 45, toSeconds: 45 })).toBe('45 seconds')
+    expect(lengthWords({ fromSeconds: 25, toSeconds: 75 })).toBe('25 to 75 seconds')
+    expect(lengthWords({ fromSeconds: 90, toSeconds: 165 })).toBe('1:30 to 2:45 minutes')
   })
 
   it('assembles a card from the stored row and code’s readings', () => {
     const card = ideaCard({
       idea: OSSUR_IDEAS[0], label: 'Liner lifespan and replacement', week: { k: 23, n: 241 }, month: { k: 31, n: 318 },
       weeks: [{ label: '20 Sep', count: 9 }], flag: null, groups: [{ key: 'a', name: 'A' }, { key: 'b', name: 'B' }, { key: 'c', name: 'C' }],
-      owned: OSSUR_OWNED, subject: null, medical: true,
+      owned: OSSUR_OWNED, since: '2026-08-01', subject: null, medical: true,
     })
     expect(card).toMatchObject({ rank: 1, registryId: REG.liner, groups: [{ key: 'a', name: 'A' }, { key: 'b', name: 'B' }], medical: true })
     expect(card.format).toMatchObject({ label: 'Tutorial', multiple: 2.1 })
@@ -157,12 +183,40 @@ describe('an idea', () => {
   })
 })
 
-describe('the anchor', () => {
-  const published = { runId: 'pub', month: '2026-10-01', windowEnd: WINDOW.to, data: { window: { from: '2026-09-27T04:03:00.000Z', to: '2026-10-04T04:02:00.000Z' } } } as never
-  it('is the ideas’ run where there are ideas, else the published read’s, else none', () => {
-    expect(anchorOf(OSSUR_IDEAS, published)?.runId).toBe(OSSUR_IDEAS[0].run_id)
-    expect(anchorOf([], published)).toMatchObject({ runId: 'pub', label: '28 Sep to 4 Oct' })
+describe('the anchor and the ideas’ week', () => {
+  const read = (from: string, to: string) => ({ runId: 'pub', month: '2026-10-01', windowEnd: to, data: { window: { from, to } } }) as never
+  const older = read('2026-09-27T04:03:00.000Z', '2026-10-04T04:02:00.000Z')
+  const newer = read('2026-10-11T04:03:00.000Z', '2026-10-18T04:02:00.000Z')
+  const ideasAt = (from: string, to: string): PostIdeaRow[] => OSSUR_IDEAS.map((i) => ({ ...i, run_id: 'old', window_start: from, window_end: to }))
+
+  it('is the newest of the published read’s week and the ideas’ week', () => {
+    expect(anchorOf(OSSUR_IDEAS, older)?.runId).toBe(OSSUR_IDEAS[0].run_id)
+    expect(anchorOf(OSSUR_IDEAS, newer)).toMatchObject({ runId: 'pub', label: '12 to 18 Oct' })
+    expect(anchorOf([], older)).toMatchObject({ runId: 'pub', label: '28 Sep to 4 Oct' })
+    expect(anchorOf(OSSUR_IDEAS, null)?.runId).toBe(OSSUR_IDEAS[0].run_id)
     expect(anchorOf([], null)).toBeNull()
+  })
+
+  it('prints the ideas’ own week, and says so where it is not the page’s', () => {
+    const page = anchorOf(OSSUR_IDEAS, older)
+    expect(ideasWeekOf(OSSUR_IDEAS, page)).toEqual({ runId: OSSUR_IDEAS[0].run_id, label: '5 to 11 Oct', phrase: 'the week of 5 Oct', current: true })
+    const two = ideasAt('2026-09-27T04:03:00.000Z', '2026-10-04T04:02:00.000Z')
+    const week = ideasWeekOf(two, anchorOf(two, newer))!
+    expect(week).toMatchObject({ label: '28 Sep to 4 Oct', current: false })
+    expect(olderIdeasLine(week)).toBe('No new ideas this week. These are from the week of 28 Sep.')
+    // A window that is not a week is named by its days.
+    expect(ideasWeekOf(ideasAt('2026-09-13T04:03:00.000Z', '2026-10-04T04:02:00.000Z'), null)?.phrase).toBe('14 Sep to 4 Oct')
+    expect(ideasWeekOf([], page)).toBeNull()
+  })
+
+  it('stops printing ideas more than four weeks older than the page’s week', () => {
+    const page = anchorOf([], newer)
+    expect(ideasStale(ideasAt('2026-09-20T04:03:00.000Z', '2026-09-27T04:02:00.000Z'), page)).toBe(false)
+    expect(ideasStale(ideasAt('2026-09-13T04:03:00.000Z', '2026-09-20T04:02:00.000Z'), page)).toBe(false)
+    expect(ideasStale(ideasAt('2026-09-06T04:03:00.000Z', '2026-09-13T04:02:00.000Z'), page)).toBe(true)
+    expect(ideasStale(OSSUR_IDEAS, null)).toBe(false)
+    expect(ideasStale([], page)).toBe(false)
+    expect(IDEAS_STALE_DAYS).toBe(28)
   })
 })
 
@@ -307,13 +361,13 @@ describe('also asked', () => {
     { registryId: 'z', label: 'Nobody this week' },
   ]
   const counts = new Map([['idea', 30], ['a', 12], ['b', 9], ['c', 11]])
-  const base = { period: 'week' as const, questions, counts, weeks: [new Map([['a', 1]]), new Map(), counts], exclude: new Set(['idea']), groups: new Map([['a', [{ key: 'g', name: 'G' }]]]), subjects: new Map([['a', 'Fit']]), owned: OSSUR_OWNED, expanded: false }
+  const base = { period: 'week' as const, questions, counts, weeks: [new Map([['a', 1]]), new Map(), counts], exclude: new Set(['idea']), groups: new Map([['a', [{ key: 'g', name: 'G' }]]]), subjects: new Map([['a', 'Fit']]), owned: OSSUR_OWNED, since: '2026-08-01', expanded: false }
 
   it('leaves out the ideas, what nobody asked and what your posts touched on, most videos first', () => {
     const block = askedBlock(base)
     expect(block.rows.map((r) => [r.registryId, r.videos, r.weeks])).toEqual([['a', 12, [1, 0, 12]], ['c', 11, [0, 0, 11]]])
     expect(block.rows[0]).toMatchObject({ groups: [{ key: 'g', name: 'G' }], subject: 'Fit' })
-    expect(block).toMatchObject({ total: 2, touched: 1 })
+    expect(block).toMatchObject({ total: 2, touched: 1, since: '2026-08-01' })
   })
 
   it('shows five until asked for all, and drops the weeks where any week is unread', () => {
@@ -329,6 +383,7 @@ describe('also asked', () => {
 describe('the empty states', () => {
   it('say why there is no idea, and the Dashboard tile says where the questions are', () => {
     expect(IDEAS_EMPTY.not_on).toBe('Post ideas are not switched on for this workspace yet.')
+    expect(topContentEmpty('stale')).toBe('No new post ideas in the last four weeks. The questions people asked are on Content.')
     expect(topContentEmpty('none')).toBe('No post ideas were written for this week. The questions people asked are on Content.')
     expect(topContentEmpty('unread')).toBe(IDEAS_EMPTY.unread)
   })

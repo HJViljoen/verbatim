@@ -1,14 +1,14 @@
 import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../../config'
 import type { PostIdeaRow } from '../../post-ideas/types'
 import { printsMedicalLine } from '../../post-ideas/medical'
-import type { OwnedPosts } from '../../reading/owned'
+import { summariseOwnedPosts, type OwnedPosts } from '../../reading/owned'
 import type { Verdict } from '../../reading/verdicts'
 import type { ReplyRow } from '../week'
 import {
-  agentHref, askedBlock, conversationHref, contentWeek, daysPhrase, flagVerdict, groupsByConversation, ideaCard, mixSentence,
+  agentHref, askedBlock, conversationHref, contentWeek, coverAsked, coverLength, daysPhrase, ideaOwnedFrom, ideasWeekOf, weekPhrase, flagVerdict, groupsByConversation, ideaCard, mixSentence,
   newVerdict, postsBlock, repliesView, storedPersonas, subquestionRows, wordsToBorrow, worksBasis,
   type AskedBlock, type ContentMonth, type ContentOpen, type ContentPageData, type ContentPeriod, type IdeaCard,
-  type IdeaPanel, type MarketVideoCard, type PanelQuote, type PostsBlock, type WorksBlock, type WorksRow,
+  type IdeaAsked, type IdeaLength, type IdeaPanel, type IdeasWeek, type MarketVideoCard, type PanelQuote, type PostsBlock, type WorksBlock, type WorksRow,
 } from './content'
 
 // The Content page's fixtures (depth v2, T6): Össur-shaped, drawn from the
@@ -19,6 +19,13 @@ import {
 // Demonstration is `how-to`, Answering a comment `educational`, Day in the
 // life `behind-the-scenes`, Product showcase `promotional`; the opening "The
 // brand's name" has no nearest value and the fixture shows `before-after`.
+//
+// THE IDEA ROWS ARE T13'S SHAPE (lib/post-ideas/types.ts on depth/t13-ideas,
+// copied from an Össur dry-run row's structure, not its words): `cover.text`
+// is the writer's, `cover.length` and `cover.asked` are code's, a
+// sub-question's `commentIds` are `comments.id` and its `videoIds`
+// `videos.id`, and the multiples are on the question (1× = a typical market
+// video on it).
 
 const RUN = 'r0000000-0000-4000-8000-000000000001'
 const WINDOW = { from: '2026-10-04T04:03:00.000Z', to: '2026-10-11T04:02:00.000Z' }
@@ -37,6 +44,11 @@ export const REG = {
   blade: 'a1000000-0000-4000-8000-000000000008',
   clean: 'a1000000-0000-4000-8000-000000000009',
 }
+
+/** A cover as T13 stores it. MERGE: T13's `PostIdeaCover` carries these
+ *  fields itself and the cast goes. */
+const cover = (text: string, length: IdeaLength | null, asked: IdeaAsked): PostIdeaRow['cover'] =>
+  ({ text, ...(length ? { length } : {}), asked }) as PostIdeaRow['cover']
 
 const idea = (over: Partial<PostIdeaRow> & Pick<PostIdeaRow, 'rank' | 'registry_id' | 'title'>): PostIdeaRow => ({
   id: `i000000${over.rank}-0000-4000-8000-000000000000`,
@@ -62,7 +74,7 @@ export const OSSUR_IDEAS: PostIdeaRow[] = [
     rank: 1,
     registry_id: REG.liner,
     title: 'How long does a liner last, and how do you know it is time to replace it?',
-    cover: { text: 'How long liners usually last, the signs it is time, and what wears them out faster', length: '30 to 45 seconds, like the market’s best tutorials on this' } as PostIdeaRow['cover'],
+    cover: cover('How long liners usually last, the signs it is time, and what wears them out faster', { fromSeconds: 30, toSeconds: 45, videos: 9, basis: 'format' }, { comments: 33, videos: 23 }),
     subquestions: [
       { label: 'How long it should last', commentIds: ids(1, 14), videoIds: ids(1, 11, VID) },
       { label: 'The signs it is worn out', commentIds: ids(20, 9), videoIds: ids(5, 8, VID) },
@@ -75,7 +87,7 @@ export const OSSUR_IDEAS: PostIdeaRow[] = [
     rank: 2,
     registry_id: REG.insurance,
     title: 'What to do when insurance says no to a powered knee',
-    cover: { text: 'What people were told, what they tried next, and who to ask for help with an appeal' },
+    cover: cover('What people were told, what they tried next, and who to ask for help with an appeal', { fromSeconds: 25, toSeconds: 75, videos: 50, basis: 'question' }, { comments: 17, videos: 15 }),
     subquestions: [
       { label: 'How to appeal a refusal', commentIds: ids(100, 10), videoIds: ids(30, 9, VID) },
       { label: 'Which paperwork helps', commentIds: ids(120, 7), videoIds: ids(36, 6, VID) },
@@ -86,7 +98,7 @@ export const OSSUR_IDEAS: PostIdeaRow[] = [
     rank: 3,
     registry_id: REG.water,
     title: 'Can you get a prosthetic leg wet?',
-    cover: { text: 'Which parts can get wet, which cannot, and what people use at the beach and in the shower' },
+    cover: cover('Which parts can get wet, which cannot, and what people use at the beach and in the shower', null, { comments: 9, videos: 8 }),
     subquestions: [
       { label: 'Showering with it on', commentIds: ids(200, 5), videoIds: ids(50, 5, VID) },
       { label: 'Swimming legs', commentIds: ids(210, 4), videoIds: ids(53, 4, VID) },
@@ -148,6 +160,16 @@ export const OSSUR_OWNED: OwnedPosts = {
   total: 9,
   byPlatform: [{ platform: 'instagram', posts: 5 }, { platform: 'tiktok', posts: 2 }, { platform: 'youtube', posts: 2 }],
 }
+
+/** Your posts since August (the touch test's window: the reading month and
+ *  the two before, to the week's end): October's nine and four older. */
+export const OSSUR_OWNED_SINCE: OwnedPosts = summariseOwnedPosts([
+  ...OSSUR_OWNED.posts,
+  post(10, 'instagram', '2026-09-24', 'promotional', 'before-after', null, 'Pro-Flex, for every step.', ['pro-flex']),
+  post(11, 'youtube', '2026-09-12', 'educational', 'question', 2.2, 'How we fit a socket, step by step.', ['socket', 'fitting']),
+  post(12, 'tiktok', '2026-08-28', 'promotional', 'bold-claim', 1.1, 'Meet the team behind Rheo.', ['rheo', 'team']),
+  post(13, 'instagram', '2026-08-03', 'story', 'personal-story', null, 'Back on the trail.', ['hiking']),
+], { from: ideaOwnedFrom('2026-10-01'), to: '2026-10-11T04:02:00.000Z' })
 
 /** The market's typical rate this month (the category's median video). */
 export const OSSUR_TYPICAL = 3.0
@@ -255,7 +277,8 @@ export function askedFixture(period: ContentPeriod = 'week', expanded = false): 
     exclude: new Set([REG.liner, REG.insurance, REG.water]),
     groups: groupsByConversation(OSSUR_PERSONAS),
     subjects: SUBJECTS,
-    owned: OSSUR_OWNED,
+    owned: OSSUR_OWNED_SINCE,
+    since: ideaOwnedFrom('2026-10-01'),
     expanded,
   })
   return block
@@ -289,7 +312,8 @@ export function ideaCards(clientId = OSSUR_CLIENT_ID): IdeaCard[] {
     weeks: weeks(i.registry_id),
     flag: i.registry_id === REG.insurance ? INSURANCE_FLAG : i.registry_id === REG.water ? newVerdict(REG.water, 'Getting a prosthetic leg wet', OCT, month(REG.water)) : null,
     groups: groups.get(i.registry_id) ?? [],
-    owned: OSSUR_OWNED,
+    owned: OSSUR_OWNED_SINCE,
+    since: ideaOwnedFrom('2026-10-01'),
     subject: subjects[i.registry_id] ?? null,
     medical: printsMedicalLine(clientId),
   }))
@@ -307,16 +331,27 @@ const QUOTES: PanelQuote[] = [
   { ref: `m:${ID(3)}`, text: 'How do you all know when to replace it? My clinic never said.', platform: 'youtube', date: '2026-10-09T10:00:00.000Z' },
 ]
 
-export function ideaPanelFixture(rank: 1 | 2 | 3 = 1, clientId = OSSUR_CLIENT_ID): IdeaPanel {
+/** The run two weeks before: the week an older set of ideas was written for. */
+const OLDER_RUN = 'r0000000-0000-4000-8000-000000000000'
+const OLDER_WINDOW = { from: '2026-09-20T04:03:00.000Z', to: '2026-09-27T04:02:00.000Z' }
+
+/** The ideas' own week: this page's (`current`), or two weeks before. */
+export function ideasWeekFixture(older = false): IdeasWeek {
+  if (!older) return ideasWeekOf(OSSUR_IDEAS, contentWeek(RUN, WINDOW))!
+  const w = contentWeek(OLDER_RUN, OLDER_WINDOW)!
+  return { runId: OLDER_RUN, label: w.label, phrase: weekPhrase(w), current: false }
+}
+
+export function ideaPanelFixture(rank: 1 | 2 | 3 = 1, clientId = OSSUR_CLIENT_ID, older = false): IdeaPanel {
   const row = OSSUR_IDEAS.find((i) => i.rank === rank)!
   const card = ideaCards(clientId).find((c) => c.rank === rank)!
-  const subs = subquestionRows(row)
   return {
     card: { ...card, groups: groupsByConversation(OSSUR_PERSONAS).get(row.registry_id) ?? [] },
     cover: row.cover.text,
-    length: (row.cover as { length?: string }).length ?? null,
-    subquestions: subs.rows,
-    asking: subs.asking,
+    length: coverLength(row.cover),
+    subquestions: subquestionRows(row),
+    asked: coverAsked(row.cover),
+    week: ideasWeekFixture(older),
     videos: rank === 1 ? VIDEOS : VIDEOS.slice(1),
     words: wordsToBorrow([
       { id: 'w1', phrase: 'feels loose' },
@@ -335,7 +370,9 @@ export interface ContentFixtureOptions {
   period?: ContentPeriod
   open?: ContentOpen
   asked?: boolean
-  ideas?: 'ready' | 'not_on' | 'none'
+  ideas?: 'ready' | 'not_on' | 'none' | 'stale'
+  /** The ideas were written for an earlier week (the step stored none since). */
+  olderIdeas?: boolean
 }
 
 /** The page as the board draws it: Össur's week of 4 to 10 October. */
@@ -353,13 +390,13 @@ export function contentFixture(opts: ContentFixtureOptions = {}): ContentPageDat
     week,
     month: OCT,
     market: { week: 241, month: 318 },
-    ideas: { state: ideasState, cards },
+    ideas: { state: ideasState, cards, week: cards.length > 0 ? ideasWeekFixture(opts.olderIdeas) : null },
     works: worksFixture(),
     replies: repliesView(OSSUR_REPLIES, repliesWindow),
     posts: postsFixture(),
     asked: askedFixture(period, opts.asked ?? false),
     open: open?.kind === 'idea' && ideasState !== 'ready' ? null : open,
-    ideaPanel: open?.kind === 'idea' && ideasState === 'ready' ? ideaPanelFixture(open.rank, clientId) : null,
+    ideaPanel: open?.kind === 'idea' && ideasState === 'ready' ? ideaPanelFixture(open.rank, clientId, opts.olderIdeas) : null,
   }
 }
 
@@ -372,11 +409,11 @@ export function contentEmptyFixture(): ContentPageData {
     week: null,
     month,
     market: { week: null, month: null },
-    ideas: { state: 'not_on', cards: [] },
+    ideas: { state: 'not_on', cards: [], week: null },
     works: { month: month.month, complete: false, formats: [], openings: [], posts: 0, sentence: null, basis: null, unread: 'Too few of the market’s videos published in October so far have a format and a response figure to compare yet.' },
     replies: { ...repliesView(null, null), unread: 'No update has covered a week yet, so there is no reply list.' },
     posts: { month: month.month, complete: false, total: 0, byPlatform: [], response: null, best: null, rows: [], unread: null },
-    asked: { period: 'week', rows: [], total: 0, touched: 0, expanded: false, unread: null },
+    asked: { period: 'week', rows: [], total: 0, touched: 0, since: ideaOwnedFrom(month.month), expanded: false, unread: null },
     open: null,
     ideaPanel: null,
   }

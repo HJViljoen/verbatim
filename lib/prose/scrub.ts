@@ -553,12 +553,19 @@ export const PROSE_POLICY: Record<ProseSlot, ProsePolicy> = {
   // (lib/reports/briefs/scrub.ts `scrubBriefText`, `scrubProse('week_read')`
   // with no verdicts), and replayed by the brief deck as `stored`.
   monthly_brief: 'both',
-  // The week's post ideas (depth v2, T13 writes them, T6 prints them): the
-  // title, the cover and the sub-question labels the model wrote over a
-  // question conversation, read back from `post_ideas` as `stored`. Written
-  // with no verdicts, so a direction word drops its sentence; code's counts
-  // and multiples sit beside them as figures.
-  post_idea: 'both',
+  // The week's post ideas (depth v2, T13; lib/post-ideas/scrub.ts): a title
+  // that is the market's own question, what a post should cover, and the
+  // sub-questions' labels. `digits`, on the recommendation's precedent: a post
+  // idea is a suggestion and a question, never a reading of the market, and
+  // the direction list's words are the subject's own nouns in Össur's market
+  // ("a liner that keeps slipping", "a lower-limb socket", "drop foot",
+  // "climbing stairs", "fear of falls"), where deleting the sentence would
+  // delete the idea. The breach is counted (`flaggedDirection`) and the step
+  // runs a narrower rule of its own over the cover and the labels: the words
+  // that only ever claim movement ("growing", "trending", "on the rise") drop
+  // their sentence. A third rule is the step's too: a medical or clinical
+  // claim drops its sentence (`MEDICAL_CLAIMS`).
+  post_idea: 'digits',
   interpretation_monthly: 'both',
   interpretation_quarterly: 'both',
   interpretation_anomaly: 'both',

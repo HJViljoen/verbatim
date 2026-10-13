@@ -329,6 +329,7 @@ const PAGES: Page[] = [
   { key: 'content-v2-posts', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentFixture({ open: { kind: 'posts' }, period: 'month' }) }) },
   { key: 'content-v2-not-on', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentFixture({ ideas: 'not_on' }) }) },
   { key: 'content-v2-empty', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentEmptyFixture() }) },
+  { key: 'content-v2-older', path: '/dashboard/content', artboard: 'E5-Content-Open.dc.html', page: () => h(ContentPage, { data: contentFixture({ olderIdeas: true, open: { kind: 'idea', rank: 2 } }) }) },
   { key: 'content-dump', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: JSON.parse(readFileSync(process.env.CONTENT_DUMP ?? '', 'utf8')) as ContentPageData }) },
 ]
 

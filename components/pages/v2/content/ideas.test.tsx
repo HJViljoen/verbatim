@@ -19,7 +19,7 @@ const section = (clientId = OSSUR_CLIENT_ID, state = STATE) => {
 describe('What to post next', () => {
   it('draws one card an idea, biggest first, and keeps the copy contract', () => {
     const text = renderText(section())
-    expect(text).toMatch(/^What to post next Questions people asked this week that your posts in October have not touched on, biggest first/)
+    expect(text).toMatch(/^What to post next For 5 to 11 Oct: questions people asked that your posts since August have not touched on, biggest first/)
     expect(text.indexOf('How long does a liner last')).toBeLessThan(text.indexOf('What to do when insurance'))
     expect(text.indexOf('What to do when insurance')).toBeLessThan(text.indexOf('Can you get a prosthetic leg wet?'))
     assertCopyContract(section())
@@ -52,14 +52,17 @@ describe('What to post next', () => {
     const one = renderText(<IdeaCardView card={cards[0]} state={STATE} selected={false} month={OCT} weekWord="this week" />)
     expect(one).toContain("Who's asking New amputees, first year, Caregivers and family")
     expect(one).not.toMatch(/\d+ of \d+ new amputees/i)
-    expect(one).toContain('Your posts None of your 9 posts in October so far touched on it')
-    expect(renderText(<IdeaCardView card={cards[2]} state={STATE} selected={false} month={OCT} weekWord="this week" />)).toContain('1 of your 9 posts in October so far touched on it')
-    expect(renderText(<OwnTouchLine own={{ state: 'no_posts', touched: 0, posts: 0 }} month={OCT} />)).toBe('You published nothing of your own in October so far')
+    // The post-ideas step's own test and window: the reading month and the
+    // two before (since August), to the week's end.
+    expect(one).toContain('Your posts None of your 13 posts since August touched on it')
+    expect(renderText(<IdeaCardView card={cards[2]} state={STATE} selected={false} month={OCT} weekWord="this week" />)).toContain('1 of your 13 posts since August touched on it')
+    expect(renderText(<OwnTouchLine own={{ state: 'no_posts', touched: 0, posts: 0, since: '2026-08-01' }} />)).toBe('You published nothing of your own since August')
   })
 
   it('suggests the format and the opening with their multiples', () => {
     const text = renderText(<IdeaCardView card={ideaCards()[0]} state={STATE} selected={false} month={OCT} weekWord="this week" />)
-    expect(text).toContain('Suggested format and opening Tutorial 2.1× Open with a question 1.8×')
+    // T13's multiples are on the question: 1× is a typical market video on it.
+    expect(text).toContain('Suggested format and opening Tutorial 2.1× Open with a question 1.8× 1× is a typical market video on this question')
   })
 
   it('carries the medical team line on every Össur idea, and on no Sealand one', () => {
@@ -86,8 +89,21 @@ describe('What to post next', () => {
     const text = renderText(<IdeasSection block={notOn.ideas} state={STATE} month={OCT} weekWord="this week" />)
     expect(text).toContain('Post ideas are not switched on for this workspace yet.')
     expect(text).toContain('The questions people asked are listed under Also asked.')
-    const none = renderText(<IdeasSection block={{ state: 'none', cards: [] }} state={STATE} month={OCT} weekWord="this week" />)
+    const none = renderText(<IdeasSection block={{ state: 'none', cards: [], week: null }} state={STATE} month={OCT} weekWord="this week" />)
     expect(none).toContain('No post ideas were written for this week.')
+    const stale = contentFixture({ ideas: 'stale' })
+    expect(renderText(<IdeasSection block={stale.ideas} state={STATE} month={OCT} weekWord="this week" />)).toContain('No new post ideas in the last four weeks.')
     assertCopyContract(<IdeasSection block={notOn.ideas} state={STATE} month={OCT} weekWord="this week" />)
+  })
+
+  it('prints the ideas’ own week, and says plainly when no newer ideas were written', () => {
+    const current = renderText(section())
+    expect(current).toContain('For 5 to 11 Oct')
+    expect(current).not.toContain('No new ideas this week')
+    const older = contentFixture({ olderIdeas: true })
+    const node = <IdeasSection block={older.ideas} state={STATE} month={OCT} weekWord="this week" />
+    expect(renderText(node)).toContain('For 21 to 27 Sep: questions people asked')
+    expect(renderText(node)).toContain('No new ideas this week. These are from the week of 21 Sep.')
+    assertCopyContract(node)
   })
 })

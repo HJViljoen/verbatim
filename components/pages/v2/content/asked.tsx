@@ -39,8 +39,8 @@ export function AskedCard({ block, state, month, weekWord, afterIdeas = true }: 
         id="asked-title"
         title="Also asked, and not yet in your posts"
         sub={afterIdeas
-          ? `The next questions people asked ${period}, after the ideas above, that none of your posts in ${longMonth(month.month)} touched on`
-          : `The questions people asked ${period} that none of your posts in ${longMonth(month.month)} touched on, the most videos first`}
+          ? `The next questions people asked ${period}, after the ideas above, that none of your posts since ${longMonth(block.since)} touched on`
+          : `The questions people asked ${period} that none of your posts since ${longMonth(block.since)} touched on, the most videos first`}
       />
       {block.unread ? (
         <p className="m-0 text-[14px] leading-[1.5] text-muted-foreground">{block.unread}</p>

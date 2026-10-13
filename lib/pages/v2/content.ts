@@ -13,8 +13,8 @@ import { pickEligible } from '../../quote-gate'
 import { gateFor, readQuoteContext } from '../../quote-context'
 import { ENGAGEMENT_EXCLUDED } from '../../reading/formats'
 import { marketAudiences } from '../../reading/market'
-import { monthStartOf, nextMonth } from '../../reading/month-key'
-import { isOwnedPost, ownedPosts, type OwnedPost, type OwnedPosts } from '../../reading/owned'
+import { monthStartOf, nextMonth, prevMonth } from '../../reading/month-key'
+import { isOwnedPost, ownedPosts, summariseOwnedPosts, type OwnedPost, type OwnedPosts } from '../../reading/owned'
 import { loadWindowReading, type WindowDenominator, type WindowThemeReading } from '../../reading/read'
 import { marketRivalAudiences } from '../../reading/reading-view'
 import { bandVerdict, type Counted, type Verdict } from '../../reading/verdicts'
@@ -152,6 +152,9 @@ export interface OwnTouch {
   state: 'touched' | 'none' | 'no_posts' | 'unread'
   touched: number
   posts: number
+  /** The first month the posts were read from (`ideaOwnedFrom`): the step's
+   *  own window, so the page and the step agree on "already touched". */
+  since: string
 }
 
 export interface GroupName {
@@ -215,10 +218,14 @@ export interface PanelQuote {
 export interface IdeaPanel {
   card: IdeaCard
   cover: string
-  length: string | null
+  length: IdeaLength | null
   subquestions: IdeaSubquestion[]
-  /** Distinct videos the sub-questions were asked under: their "of". */
-  asking: number
+  /** The comments the sub-questions were grouped from and their videos
+   *  (`cover.asked`): a sub-question's figure is its videos of these. Null on
+   *  a row that does not carry them, which then prints no "of". */
+  asked: IdeaAsked | null
+  /** The week the idea was written for (its run's window). */
+  week: IdeasWeek
   videos: MarketVideoCard[]
   words: { ref: string; text: string }[]
   quotes: PanelQuote[]
@@ -226,11 +233,42 @@ export interface IdeaPanel {
   conversationHref: string
 }
 
-export type IdeasState = 'ready' | 'not_on' | 'none' | 'unread'
+export type IdeasState = 'ready' | 'not_on' | 'none' | 'stale' | 'unread'
+
+/** The week the ideas were written for: their run's window. `current` where
+ *  that run is the one whose week the page shows; otherwise the step stored
+ *  nothing newer (a thin week tells nobody) and the page says so. */
+export interface IdeasWeek {
+  runId: string
+  /** "5 to 11 Oct". */
+  label: string
+  /** "the week of 28 Sep", or the days where the window is not a week. */
+  phrase: string
+  current: boolean
+}
 
 export interface IdeasBlock {
   state: IdeasState
   cards: IdeaCard[]
+  /** The ideas' own week; null where none print. */
+  week: IdeasWeek | null
+}
+
+/** Ideas this many days older than the page's week stop printing. */
+export const IDEAS_STALE_DAYS = 28
+
+/** What T13 stores in `cover` beside the model's text (lib/post-ideas/types.ts
+ *  on depth/t13-ideas, `PostIdeaLength` and `cover.asked`). MERGE: these two
+ *  shapes become T13's own exports. */
+export interface IdeaLength {
+  fromSeconds: number
+  toSeconds: number
+  videos: number
+  basis: 'format' | 'question'
+}
+export interface IdeaAsked {
+  comments: number
+  videos: number
 }
 
 export interface WorksRow {
@@ -318,6 +356,8 @@ export interface AskedBlock {
   total: number
   /** Conversations your posts touched on, left out of the table. */
   touched: number
+  /** The first month of your posts the touch test read (`ideaOwnedFrom`). */
+  since: string
   expanded: boolean
   unread: string | null
 }
@@ -549,31 +589,105 @@ export function recipe(key: string | null, multiple: number | null, kind: 'forma
 }
 
 /** Whether your posts this month touched on a conversation. */
-export function ownTouch(labels: readonly string[], owned: OwnedPosts | null): OwnTouch {
-  if (!owned) return { state: 'unread', touched: 0, posts: 0 }
-  if (owned.total === 0) return { state: 'no_posts', touched: 0, posts: 0 }
+/**
+ * The months of your own posts the "already touched" test reads: the reading
+ * month and the two before it. MERGE: T13's `POST_IDEA_OWNED_MONTHS`
+ * (lib/post-ideas/select.ts) and `ownedFrom` (lib/post-ideas/step.ts) are this
+ * rule; import them and delete these two.
+ */
+export const IDEA_OWNED_MONTHS = 3
+export function ideaOwnedFrom(month: string): string {
+  let m = monthStartOf(month)
+  for (let i = 1; i < IDEA_OWNED_MONTHS; i++) m = prevMonth(m)
+  return m
+}
+
+/**
+ * Whether your posts touched on a conversation: the step's own test
+ * (lib/post-ideas/step.ts on depth/t13-ideas: `questionTouch({ labels:
+ * [label], posts })` over `ownedPosts` from `ownedFrom(month)` to the week's
+ * end), so the page and the step agree. `owned` is that window's posts.
+ */
+export function ownTouch(labels: readonly string[], owned: OwnedPosts | null, since: string): OwnTouch {
+  if (!owned) return { state: 'unread', touched: 0, posts: 0, since }
+  if (owned.total === 0) return { state: 'no_posts', touched: 0, posts: 0, since }
   const posts: QuestionPost[] = owned.posts.map((p) => ({ id: p.id, topics: p.topics, upload_date: p.upload_date, video_url: p.video_url }))
-  const t = questionTouch({ labels: labels.filter(Boolean), posts })
-  return { state: t.state === 'touched' ? 'touched' : 'none', touched: t.matched.length, posts: owned.total }
+  const t = questionTouch({ labels: labels.map((l) => l.trim()).filter(Boolean), posts })
+  return { state: t.state === 'touched' ? 'touched' : 'none', touched: t.matched.length, posts: owned.total, since }
+}
+
+/** The posts the touch test reads, out of a wider read: from `ideaOwnedFrom`
+ *  to the week's end, exclusive (the step's `{ from: ownedFrom(month), to:
+ *  window.to }`). */
+export function touchPosts(owned: OwnedPosts | null, month: string, to: string): OwnedPosts | null {
+  return owned ? summariseOwnedPosts(owned.posts, { from: ideaOwnedFrom(month), to }) : null
 }
 
 /** The sub-questions as the panel draws them: counted off their ids, the most
  *  asked first. */
-export function subquestionRows(idea: Pick<PostIdeaRow, 'subquestions'>): { rows: IdeaSubquestion[]; asking: number } {
-  const rows = idea.subquestions
+export function subquestionRows(idea: Pick<PostIdeaRow, 'subquestions'>): IdeaSubquestion[] {
+  return idea.subquestions
     .map((s) => ({ label: s.label, ...subquestionCounts(s) }))
     .filter((s) => s.label.trim() && (s.videos > 0 || s.comments > 0))
     .sort((a, b) => b.videos - a.videos || b.comments - a.comments || a.label.localeCompare(b.label))
-  const asking = new Set(idea.subquestions.flatMap((s) => s.videoIds)).size
-  return { rows, asking }
 }
 
-/** What the idea's `cover` jsonb says about length, where the writer put it. */
-export function coverLength(cover: unknown): string | null {
-  if (!cover || typeof cover !== 'object') return null
-  const v = (cover as Record<string, unknown>).length
-  return typeof v === 'string' && v.trim() ? v.trim() : null
+const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+
+/** The length code stored in `cover`, only where it is the shape T13 writes
+ *  (its `coverOf` keeps the same rule; a reader never prints a guessed
+ *  figure). */
+export function coverLength(cover: unknown): IdeaLength | null {
+  const len = isObj(cover) ? cover.length : null
+  if (!isObj(len) || !isCount(len.fromSeconds) || !isCount(len.toSeconds) || !isCount(len.videos)) return null
+  if (!(len.fromSeconds > 0 && len.fromSeconds <= len.toSeconds) || (len.basis !== 'format' && len.basis !== 'question')) return null
+  return { fromSeconds: len.fromSeconds, toSeconds: len.toSeconds, videos: len.videos, basis: len.basis }
 }
+
+/** The comments the sub-questions were grouped from, and their videos. */
+export function coverAsked(cover: unknown): IdeaAsked | null {
+  const asked = isObj(cover) ? cover.asked : null
+  return isObj(asked) && isCount(asked.comments) && isCount(asked.videos) ? { comments: asked.comments, videos: asked.videos } : null
+}
+
+/** "30 to 45 seconds", "45 seconds", "1:30 to 2:45 minutes" past ninety
+ *  seconds. */
+export function lengthWords(len: Pick<IdeaLength, 'fromSeconds' | 'toSeconds'>): string {
+  const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+  if (len.toSeconds > 90) {
+    return len.fromSeconds === len.toSeconds ? `${mmss(len.toSeconds)} minutes` : `${mmss(len.fromSeconds)} to ${mmss(len.toSeconds)} minutes`
+  }
+  return len.fromSeconds === len.toSeconds ? `${len.toSeconds} seconds` : `${len.fromSeconds} to ${len.toSeconds} seconds`
+}
+
+// ---- which week the ideas are ---------------------------------------------------------
+
+/** "the week of 28 Sep" for a week, else its days ("13 Sep to 3 Oct"). */
+export function weekPhrase(week: Pick<ContentWeek, 'isWeek' | 'first' | 'last'>): string {
+  return week.isWeek ? `the week of ${shortDate(`${week.first}T00:00:00.000Z`)}` : daysLabel(week.first, week.last)
+}
+
+/** The ideas' own week, against the page's. */
+export function ideasWeekOf(ideas: readonly PostIdeaRow[], page: ContentWeek | null): IdeasWeek | null {
+  const idea = ideas[0]
+  if (!idea) return null
+  const w = contentWeek(idea.run_id, { from: idea.window_start, to: idea.window_end })
+  if (!w) return null
+  return { runId: idea.run_id, label: w.label, phrase: weekPhrase(w), current: page == null || page.runId === idea.run_id }
+}
+
+/** Are the ideas too old to print: written for a week that ended more than
+ *  `IDEAS_STALE_DAYS` before the page's week did? */
+export function ideasStale(ideas: readonly PostIdeaRow[], page: ContentWeek | null): boolean {
+  const idea = ideas[0]
+  if (!idea || !page) return false
+  const gap = Date.parse(page.to) - Date.parse(idea.window_end)
+  return Number.isFinite(gap) && gap > IDEAS_STALE_DAYS * 86_400_000
+}
+
+/** "No new ideas this week. These are from the week of 28 Sep." */
+export const olderIdeasLine = (week: Pick<IdeasWeek, 'phrase'>): string => `No new ideas this week. These are from ${week.phrase}.`
 
 /** A post or a video's title: there is no title column, so the opening
  *  where the classifier read one, else the caption's first line, hashtags and
@@ -839,18 +953,21 @@ export function askedBlock(input: {
   exclude: ReadonlySet<string>
   groups: Map<string, GroupName[]>
   subjects: Map<string, string | null>
+  /** Your posts the touch test reads (`touchPosts`) and the month they are
+   *  read from. */
   owned: OwnedPosts | null
+  since: string
   expanded: boolean
 }): AskedBlock {
   const { period, questions, counts } = input
-  const base = { period, rows: [], total: 0, touched: 0, expanded: input.expanded }
+  const base = { period, rows: [], total: 0, touched: 0, since: input.since, expanded: input.expanded }
   if (!questions || !counts) return { ...base, unread: 'The questions people asked could not be read just now.' }
   const asked = questions
     .filter((q) => !input.exclude.has(q.registryId) && (counts.get(q.registryId) ?? 0) > 0)
     .sort((a, b) => (counts.get(b.registryId) ?? 0) - (counts.get(a.registryId) ?? 0) || a.label.localeCompare(b.label))
   let touched = 0
   const open = asked.filter((q) => {
-    const t = ownTouch([q.label], input.owned)
+    const t = ownTouch([q.label], input.owned, input.since)
     if (t.state === 'touched') { touched += 1; return false }
     return true
   })
@@ -925,7 +1042,10 @@ export function ideaCard(input: {
   weeks: { label: string; count: number }[] | null
   flag: Verdict | null
   groups: GroupName[]
+  /** Your posts the touch test reads (`touchPosts`) and the month they are
+   *  read from. */
   owned: OwnedPosts | null
+  since: string
   subject: { id: string; name: string } | null
   medical: boolean
 }): IdeaCard {
@@ -940,7 +1060,7 @@ export function ideaCard(input: {
     weeks: input.weeks,
     flag: input.flag,
     groups: input.groups.slice(0, GROUPS_SHOWN),
-    own: ownTouch([input.label ?? idea.title], input.owned),
+    own: ownTouch([input.label ?? idea.title], input.owned, input.since),
     format: recipe(idea.format, idea.format_multiple, 'format'),
     opening: recipe(idea.opening, idea.opening_multiple, 'opening'),
     subject: input.subject,
@@ -1056,21 +1176,14 @@ async function readSubjects(handle: Scope['reading'], runId: string, ids: readon
 }
 
 const PANEL_VIDEO_COLUMNS = 'id, video_id, platform, video_url, account_name, caption, hook_text, classified_type, hook_style, engagement_rate, source, is_client, views'
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-/** The idea's videos. `videoIds` may name a video by its row id or by the
- *  platform's own id; both are read. */
+/** The idea's videos. A sub-question's `videoIds` are `videos.id` (T13's
+ *  `IdeaComment.videoId`, lib/post-ideas/select.ts), its `commentIds`
+ *  `comments.id`. */
 async function readPanelVideos(db: SupabaseClient, clientId: string, ids: readonly string[]): Promise<PanelVideoRow[]> {
-  const uuids = ids.filter((id) => UUID_RE.test(id))
-  const native = ids.filter((id) => !UUID_RE.test(id))
-  const reads: Promise<PanelVideoRow[]>[] = []
-  for (const part of chunk(uuids, UUID_IN_CHUNK)) {
-    reads.push(selectAll<PanelVideoRow>(() => db.from('videos').select(PANEL_VIDEO_COLUMNS).eq('client_id', clientId).in('id', part).order('id')))
-  }
-  for (const part of chunk(native, 100)) {
-    reads.push(selectAll<PanelVideoRow>(() => db.from('videos').select(PANEL_VIDEO_COLUMNS).eq('client_id', clientId).in('video_id', part).order('id')))
-  }
-  return (await Promise.all(reads)).flat()
+  const parts = await Promise.all(chunk([...ids], UUID_IN_CHUNK).map((part) =>
+    selectAll<PanelVideoRow>(() => db.from('videos').select(PANEL_VIDEO_COLUMNS).eq('client_id', clientId).in('id', part).order('id'))))
+  return parts.flat()
 }
 
 /** Three of the idea's comments, through the quote gate (the market's words,
@@ -1110,14 +1223,18 @@ async function readWords(db: SupabaseClient, clientId: string, commentIds: reado
   return parts.flat().sort((a, b) => a.id.localeCompare(b.id))
 }
 
-/** The anchor: the ideas' run where there are ideas, else the published week
- *  read's. Its window is the page's week. */
+/** The page's week: the newest of the published week read's run and the
+ *  ideas' run (a thin week stores no ideas, and a week read that is not ready
+ *  publishes none, so either can be the older). Its window is the page's
+ *  week, its run the clustering the week's counts are read under. */
 export function anchorOf(ideas: readonly PostIdeaRow[], published: PublishedWeekRead | null): ContentWeek | null {
   const idea = ideas[0]
-  if (idea) return contentWeek(idea.run_id, { from: idea.window_start, to: idea.window_end })
+  const fromIdea = idea ? contentWeek(idea.run_id, { from: idea.window_start, to: idea.window_end }) : null
   const w = published?.data?.window
-  if (published && w?.from && w?.to) return contentWeek(published.runId, { from: w.from, to: w.to })
-  return null
+  const fromRead = published && w?.from && w?.to ? contentWeek(published.runId, { from: w.from, to: w.to }) : null
+  if (!fromIdea) return fromRead
+  if (!fromRead) return fromIdea
+  return Date.parse(fromIdea.to) > Date.parse(fromRead.to) ? fromIdea : fromRead
 }
 
 interface WeekReads {
@@ -1179,26 +1296,35 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
     soft('personas', readPersonas(db, clientId)),
     soft('rivals', loadTrackedRivals(db, clientId)),
   ])
-  const ideas = ideasRead?.rows ?? []
-  const week = anchorOf(ideas, published)
+  const week = anchorOf(ideasRead?.rows ?? [], published)
+  // Ideas written for a week more than four weeks before the page's are not
+  // printed: the step stores nothing for a thin week and tells nobody.
+  const stale = ideasStale(ideasRead?.rows ?? [], week)
+  const ideas = stale ? [] : ideasRead?.rows ?? []
+  const ideasWeek = ideasWeekOf(ideas, week)
   const month = contentMonth(week, now)
   const audiences = marketAudiences(marketRivalAudiences(rivals ?? []))
   const groups = groupsByConversation(personas ?? [])
   const repliesWindow: DaysWindow | null = state.period === 'month'
     ? { from: month.from, to: week?.to ?? month.to, phrase: monthWords(month) }
     : week ? { from: week.from, to: week.to, phrase: daysPhrase(week.first, week.last) } : null
+  const since = ideaOwnedFrom(month.month)
 
   // ---- wave 2
-  const [windows, questions, flags, owned, playbook, replies] = await Promise.all([
+  const [windows, questions, flags, ownedRead, playbook, replies] = await Promise.all([
     soft('windows', readWindows(scope, week, month, audiences)),
     week ? soft('questions', readQuestions(db, clientId, week.runId)) : Promise.resolve(null),
     week ? soft('flags', readFlags(db, clientId, week.runId)) : Promise.resolve([] as FlagRowIn[]),
-    soft('owned', ownedPosts({ supabase: db, clientId }, { from: month.month, to: nextMonth(month.month) })),
+    // ONE READ of your posts, from the touch test's first month to the end of
+    // the page's month: the touch test's window and the month's are cut from it.
+    soft('owned', ownedPosts({ supabase: db, clientId }, { from: since, to: nextMonth(month.month) })),
     soft('playbook', async () => buildPlaybook({ month: month.month, brand: brand ?? 'You', rival: null, videos: await loadPlaybookVideos(db, clientId, month.month), clientSide: 'owned' })),
     repliesWindow
       ? soft('replies', buildReplies({ supabase: db, clientId, runId: week?.runId ?? '', window: { from: repliesWindow.from, to: repliesWindow.to, basis: 'content' }, videos: Promise.resolve([]), gate: true }))
       : Promise.resolve(null),
   ])
+  const owned = ownedRead ? summariseOwnedPosts(ownedRead.posts, { from: month.month, to: nextMonth(month.month) }) : null
+  const touch = touchPosts(ownedRead, month.month, week?.to ?? now.toISOString())
 
   // Labels for ideas the question read did not name.
   const labelOf = new Map((questions ?? []).map((q) => [q.registryId, q.label]))
@@ -1217,7 +1343,8 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
     exclude: ideaIds,
     groups,
     subjects: new Map(),
-    owned,
+    owned: touch,
+    since,
     expanded: state.asked,
   })
 
@@ -1239,6 +1366,9 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
     ? new Set((published.data.newThisWeek ?? []).map((n) => n.themeId))
     : new Set<string>()
   const medical = printsMedicalLine(clientId)
+  // Every count on a card is over the PAGE's week and month, under its run's
+  // clustering (a registry id is the cross-run key), so an older idea still
+  // says how much it is asked now; the ideas' own week is printed beside them.
   const cards: IdeaCard[] = ideas.map((idea) => {
     const id = idea.registry_id
     const label = labelOf.get(id) ?? null
@@ -1256,7 +1386,8 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
         : null,
       flag,
       groups: groups.get(id) ?? [],
-      owned,
+      owned: touch,
+      since,
       subject: subjects?.get(id) ?? null,
       medical,
     })
@@ -1264,15 +1395,15 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
 
   const typical = typicalRate(playbook)
   let ideaPanel: IdeaPanel | null = null
-  if (openIdea) {
+  if (openIdea && ideasWeek) {
     const card = cards.find((c) => c.rank === openIdea.rank)!
-    const subs = subquestionRows(openIdea)
     ideaPanel = {
       card: { ...card, groups: groups.get(openIdea.registry_id) ?? [] },
       cover: openIdea.cover.text,
       length: coverLength(openIdea.cover),
-      subquestions: subs.rows,
-      asking: subs.asking,
+      subquestions: subquestionRows(openIdea),
+      asked: coverAsked(openIdea.cover),
+      week: ideasWeek,
       videos: marketVideoCards(panelVideos ?? [], typical),
       words: wordsToBorrow(panelWords ?? []),
       quotes: panelQuotes ?? [],
@@ -1281,13 +1412,14 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
     }
   }
 
+  const ideasState: IdeasState = !ideasRead ? 'unread' : stale ? 'stale' : ideasRead.state === 'ready' && cards.length === 0 ? 'none' : ideasRead.state
   return {
     brand: brand ?? 'You',
     period: state.period,
     week,
     month,
     market: windows?.market ?? { week: null, month: null },
-    ideas: { state: ideasRead ? (ideasRead.state === 'ready' && cards.length === 0 ? 'none' : ideasRead.state) : 'unread', cards },
+    ideas: { state: ideasState, cards, week: cards.length > 0 ? ideasWeek : null },
     works: worksBlock({ playbook, owned, month }),
     replies: repliesWindow ? repliesView(replies, repliesWindow) : { ...repliesView(null, null), unread: REPLIES_NO_WEEK },
     posts: postsBlock({ owned, typical, month }),
@@ -1303,10 +1435,11 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
  *  idea, its week beside its month, its format and opening, and whether your
  *  posts touched on it; or the honest empty state. */
 export interface TopContent {
-  state: IdeasState | 'no_update'
+  state: IdeasState
   idea: {
     rank: PostIdeaRank
     title: string
+    /** Over the page's week and month (the newest), as on Content. */
     week: Counted | null
     month: Counted | null
     weekLabel: string | null
@@ -1315,19 +1448,25 @@ export interface TopContent {
     opening: Recipe | null
     own: OwnTouch
     medical: boolean
+    /** The week the idea was written for; `current` false where no newer
+     *  ideas were stored (the tile then prints `olderIdeasLine`). */
+    ideasWeek: IdeasWeek
   } | null
   /** The idea's open panel, or the page where there is no idea. */
   href: string
-  /** The empty state's line, where there is no idea. */
+  /** The empty state's line where there is no idea; where the idea is from an
+   *  older week, the line saying so. */
   line: string | null
 }
 
 /** Why there is no idea, in the reader's words. The table not there yet
- *  (`not_on`) is today's state in production; `none` is a week the step
- *  wrote nothing for. */
+ *  (`not_on`) is today's state in production; `none` is a workspace the step
+ *  has written nothing for; `stale` ideas more than four weeks older than the
+ *  newest week. */
 export const IDEAS_EMPTY: Record<Exclude<IdeasState, 'ready'>, string> = {
   not_on: 'Post ideas are not switched on for this workspace yet.',
   none: 'No post ideas were written for this week.',
+  stale: 'No new post ideas in the last four weeks.',
   unread: 'The post ideas could not be read just now.',
 }
 
@@ -1336,24 +1475,32 @@ export const topContentEmpty = (state: Exclude<IdeasState, 'ready'>): string =>
   state === 'unread' ? IDEAS_EMPTY.unread : `${IDEAS_EMPTY[state]} The questions people asked are on Content.`
 
 /**
- * The Dashboard's Content tile, light: the ideas (one round trip for the
- * newest run and one for its rows), then, for the first idea only, the week's
- * and the month's market and conversation counts and your posts this month,
- * in parallel. No reply queue (it is four reads deep), no panel.
+ * The Dashboard's Content tile, light: the ideas (two round trips) beside the
+ * published week read (one), then, for the first idea only, the week's and
+ * the month's market and conversation counts, your posts and the rivals, in
+ * parallel. No reply queue (it is four reads deep), no panel. The same rules
+ * as the page: the newest week anchors, ideas more than four weeks older are
+ * not shown, older ones say so.
  */
 export async function topContent(scope: Scope, opts: { now?: Date } = {}): Promise<TopContent> {
   const db = scope.supabase as SupabaseClient
   const { clientId } = scope
-  const read = await soft('top.ideas', readIdeas(db, clientId))
+  const [read, published] = await Promise.all([
+    soft('top.ideas', readIdeas(db, clientId)),
+    soft('top.published', loadPublishedWeekRead(scope.reading.client, clientId)),
+  ])
   if (!read) return { state: 'unread', idea: null, href: CONTENT_PATH, line: topContentEmpty('unread') }
+  const week = anchorOf(read.rows, published)
+  if (ideasStale(read.rows, week)) return { state: 'stale', idea: null, href: CONTENT_PATH, line: topContentEmpty('stale') }
   const idea = read.rows[0]
-  if (!idea) return { state: read.state === 'ready' ? 'none' : read.state, idea: null, href: CONTENT_PATH, line: topContentEmpty(read.state === 'ready' ? 'none' : read.state) }
-  const week = contentWeek(idea.run_id, { from: idea.window_start, to: idea.window_end })
+  const ideasWeek = ideasWeekOf(read.rows, week)
+  if (!idea || !ideasWeek) return { state: read.state === 'ready' ? 'none' : read.state, idea: null, href: CONTENT_PATH, line: topContentEmpty(read.state === 'ready' ? 'none' : read.state) }
   const month = contentMonth(week, opts.now ?? new Date())
-  const [rivals, owned, label] = await Promise.all([
+  const since = ideaOwnedFrom(month.month)
+  const [rivals, ownedRead, label] = await Promise.all([
     soft('top.rivals', loadTrackedRivals(db, clientId)),
-    soft('top.owned', ownedPosts({ supabase: db, clientId }, { from: month.month, to: nextMonth(month.month) })),
-    soft('top.label', readLabels(db, clientId, idea.run_id, [idea.registry_id])),
+    soft('top.owned', ownedPosts({ supabase: db, clientId }, { from: since, to: nextMonth(month.month) })),
+    week ? soft('top.label', readLabels(db, clientId, week.runId, [idea.registry_id])) : Promise.resolve(null),
   ])
   const audiences = marketAudiences(marketRivalAudiences(rivals ?? []))
   const windows = await soft('top.windows', readWindows(scope, week, month, audiences, { trend: false }))
@@ -1369,11 +1516,12 @@ export async function topContent(scope: Scope, opts: { now?: Date } = {}): Promi
       monthWords: monthWords(month),
       format: recipe(idea.format, idea.format_multiple, 'format'),
       opening: recipe(idea.opening, idea.opening_multiple, 'opening'),
-      own: ownTouch([label?.get(id) ?? idea.title], owned),
+      own: ownTouch([label?.get(id) ?? idea.title], touchPosts(ownedRead, month.month, week?.to ?? (opts.now ?? new Date()).toISOString()), since),
       medical: printsMedicalLine(clientId),
+      ideasWeek,
     },
     href: contentHref({ period: 'week', open: { kind: 'idea', rank: idea.rank }, asked: false }),
-    line: null,
+    line: ideasWeek.current ? null : olderIdeasLine(ideasWeek),
   }
 }
 

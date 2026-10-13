@@ -215,7 +215,9 @@ describe('the policy table — every prose slot is listed with its policy', () =
     week_read: 'both',
     statement_says: 'both',
     monthly_brief: 'both',
-    post_idea: 'both',
+    // The post ideas (T13): a suggestion and the market's own question, never a
+    // reading; the step adds its movement and medical rules (lib/post-ideas/scrub.ts).
+    post_idea: 'digits',
     interpretation_monthly: 'both',
     interpretation_quarterly: 'both',
     interpretation_anomaly: 'both',
