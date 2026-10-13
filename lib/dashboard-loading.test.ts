@@ -56,6 +56,15 @@ const INHERITS: Readonly<Record<string, string>> = {
   reports: 'redirects to /dashboard/studio',
   'reports/[id]': 'redirects to /dashboard/studio',
   'reports/new': 'redirects to /dashboard/studio',
+  // Design v2 (decision 6 of the depth plan): the five 1 Oct reading pages
+  // only redirect, their params mapped by lib/nav.ts `redirectFor`. Each lost
+  // its loader, which would stream the shell and turn the 307 into a
+  // client-side hop.
+  overview: 'redirects to /dashboard/market',
+  week: 'redirects to /dashboard/market',
+  voice: 'redirects to /dashboard/market (an open theme) or /dashboard/voices',
+  competitive: 'redirects to /dashboard/voices',
+  subjects: 'redirects to /dashboard/market',
 }
 
 function pages(dir: string): string[] {
@@ -76,7 +85,7 @@ const ALL = pages(ROOT).sort()
 describe('dashboard loading skeletons', () => {
   it('finds the dashboard pages', () => {
     expect(ALL).toContain('(home)')
-    expect(ALL).toContain('overview')
+    for (const page of ['market', 'voices', 'products', 'content', 'moves']) expect(ALL).toContain(page)
     expect(ALL.length).toBeGreaterThan(20)
   })
 
@@ -118,10 +127,16 @@ describe('dashboard loading skeletons', () => {
     if (!LEGACY.has(folder)) expect(html).toMatch(/role="status"/)
   })
 
-  it('Your market\'s skeleton is the bigger picture\'s, not the pre-redesign dashboard', () => {
-    const src = readFileSync(join(ROOT, 'overview', 'loading.tsx'), 'utf8')
+  it('Market\'s skeleton is the bigger picture\'s, which it draws until its own page lands', () => {
+    const src = readFileSync(join(ROOT, 'market', 'loading.tsx'), 'utf8')
     expect(src).toMatch(/<MarketPictureSkeleton \/>/)
     expect(src).not.toMatch(/SkeletonStrip|title="Dashboard"/)
+  })
+
+  it('Your moves took its skeleton to its new address, and the placeholders theirs', () => {
+    expect(readFileSync(join(ROOT, 'moves', 'loading.tsx'), 'utf8')).toContain("from '@/components/pages/moves/words'")
+    expect(readFileSync(join(ROOT, 'voices', 'loading.tsx'), 'utf8')).toContain('<ConversationTitle />')
+    expect(readFileSync(join(ROOT, 'content', 'loading.tsx'), 'utf8')).toContain("surface('content')")
   })
 
   it('the Dashboard\'s skeleton is HOME\'s', () => {

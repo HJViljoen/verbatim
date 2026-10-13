@@ -1,7 +1,7 @@
 import { PAGES } from '../../components/pages/registry'
 import { isStaticKey } from './compose'
 import { ALL_SECTION_PAGES, isPickablePage } from './types'
-import { SURFACES } from '../nav'
+import { pageKeyName } from '../nav'
 import type { PageKey } from '../renderables/types'
 
 /** The Studio's catalogue: every page a section MAY NAME and its STATIC tiles,
@@ -75,12 +75,14 @@ export function pickableCatalogue(catalogue: CataloguePage[] = studioCatalogue()
  * screen.
  *
  * `lib/nav.ts` is the one table that maps a surface to its page key, so this
- * reads it rather than keeping a second list. Where no surface names the page
- * — `profile` is parked and `content` is not in the Intelligence group — the
- * module's own title stands, because there is no reader's name to prefer.
+ * reads it rather than keeping a second list (`pageKeyName`). Design v2 left
+ * keys that no surface names (Subjects, Competitive, This week, the legacy
+ * Dashboard, Consumer Profile): those keep the name the reader knew the page
+ * by, written beside the surfaces (`RETIRED_PAGE_NAMES`), so every key has a
+ * reader's name. The module's own title is only a fallback no key reaches.
  */
 export function catalogueReaderTitle(page: PageKey, title?: string): string {
-  return SURFACES.find((s) => s.page === page)?.label ?? title ?? PAGES[page]?.title ?? page
+  return pageKeyName(page) ?? title ?? PAGES[page]?.title ?? page
 }
 
 /** The chips the Studio card draws: what a new section may name, in the

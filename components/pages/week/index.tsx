@@ -105,7 +105,7 @@ export function WeekPage({
   if (!data) {
     return (
       <PageFrame>
-        <SurfacePageBar nav="week" params={params} />
+        <SurfacePageBar nav="content" params={params} />
         <PageGrid>
           <Tile col={12} row={2}>
             <TileEmpty>
@@ -128,7 +128,7 @@ export function WeekPage({
     <ExportScope page="week" params={params} tiles={shown.map(({ block: b }) => ({ key: b.key, title: b.title }))}>
       <PageFrame className="gap-6">
         <SurfacePageBar
-          nav="week"
+          nav="content"
           params={params}
           brand={data.brand}
           // THE ONE LINE, THIS WEEK'S FORM (25 Sep rulings, item 2): the slot

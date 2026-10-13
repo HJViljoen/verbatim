@@ -70,11 +70,11 @@ describe('Subjects on the market: every block, every mode', () => {
 
   it('names each footer link by the page\'s current sidebar label', () => {
     const data = marketSubjectsFixture()
-    const voice = surface('voice').label
-    const moves = surface('market').label
+    const voice = surface('voices').label
+    const moves = surface('moves').label
     expect(text(subjectsList.render(data, 'app', ctx))).toContain(`The rest is on ${voice} →`)
     expect(text(subjectsKinds.render(data, 'app', ctx))).toContain(`Open ${voice} →`)
-    expect(text(subjectsVoices.render(data, 'app', ctx))).toContain(`Hear these voices in ${voice} →`)
+    expect(text(subjectsVoices.render(data, 'app', ctx))).toContain(`Open ${voice} →`)
     expect(text(subjectsOwnPosts.render(data, 'app', ctx))).toContain(`Open ${moves} →`)
     expect(text(subjectsSayHear.render(data, 'app', ctx))).toContain(`Open ${moves} →`)
   })
@@ -132,7 +132,7 @@ describe('S1 · the rail reads the market', () => {
   // purpose): no figure, no word, no "no reading yet".
   it('prints a failed subject and a provisional one by name alone, with no figure and no word', () => {
     const t = text(subjectsList.render(marketSubjectsFixture(), 'app', ctx))
-    expect(t).toMatch(/Community & purpose Repair & warranty The rest is on Conversation/)
+    expect(t).toMatch(/Community & purpose Repair & warranty The rest is on Voices/)
     expect(t).not.toContain('being re-described')
     expect(t).not.toMatch(/Repair & warranty 36/)
     expect(t).not.toContain('no reading yet')

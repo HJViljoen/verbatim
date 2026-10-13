@@ -61,7 +61,7 @@ export const weekRising: Block<WeekData> = {
     const r = data.rising
     const email = mode === 'email'
     const empty = weekRising.emptyState(data)
-    const conversation = surface('voice')
+    const conversation = surface('voices')
     const href = `${ctx.appUrl}${conversation.href}`
 
     const max = Math.max(1, ...r.rows.map((row) => (row.month.n > 0 ? row.month.k / row.month.n : 0)))

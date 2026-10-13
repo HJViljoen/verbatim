@@ -1,8 +1,8 @@
-import { LayoutDashboard, Globe, Target, Tag, LayoutTemplate, type LucideIcon } from "lucide-react"
+import { LayoutDashboard, LayoutTemplate, Package, SquarePlay, Target, Users, type LucideIcon } from "lucide-react"
 
-// Four are the artboards' own paths (the installed Lucide redrew them since
+// Three are the artboards' own paths (the installed Lucide redrew them since
 // `sidebar2.py`): components/design-icons.ts.
-import { CalendarDays, List, MessageSquareText, SlidersVertical, Sparkles } from "@/components/design-icons"
+import { MessageSquareText, SlidersVertical, Sparkles } from "@/components/design-icons"
 
 import type { NavKey } from "@/lib/nav"
 
@@ -72,14 +72,23 @@ import type { NavKey } from "@/lib/nav"
  * Agent" row), and the Studio is one of the ten with the `LayoutTemplate` it
  * always had. Reports left the table, and its `FileText` with it.
  */
+/*
+ * DESIGN V2 (the depth redesign, Oct 2026; every `E*.dc.html` sidebar) keeps
+ * the Dashboard, the Agent, the Studio and Settings, and draws the six pages
+ * as: Market, the speech square with two lines of text that Conversation wore
+ * (it is the conversation now); Voices, two people (Lucide `Users`); Your
+ * products, a box (Lucide `Package`); Content, a play button in a square
+ * (Lucide `SquarePlay`); Your moves, the target it always had. The 1 Oct
+ * glyphs that went with their pages (the globe, the calendar, the list, the
+ * tag) are imported where a page still draws one, never from this map.
+ */
 export const NAV_ICON: Record<NavKey, LucideIcon> = {
   home: LayoutDashboard,
-  overview: Globe,
-  week: CalendarDays,
-  voice: MessageSquareText,
-  competitive: Tag,
-  subjects: List,
-  market: Target,
+  market: MessageSquareText,
+  voices: Users,
+  products: Package,
+  content: SquarePlay,
+  moves: Target,
   ask: Sparkles,
   studio: LayoutTemplate,
   settings: SlidersVertical,

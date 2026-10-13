@@ -12,7 +12,7 @@ import { NAV_ICON } from './nav-icons'
 // `"use client"` and wired to the router, `next/link` and a server action — so
 // `scripts/wave2-shots.ts`, which photographs every ported page beside its
 // artboard, could not import them and drew nine 16px grey squares instead.
-// Every Block D side-by-side shows a sidebar with no icons; the app has had
+// Every Block D side-by-side showed a sidebar with no icons; the app has had
 // them since it had a sidebar. A shot that shows a defect the product does not
 // have costs a reviewer exactly what one that hides a real defect costs.
 //
@@ -31,46 +31,45 @@ describe('the sidebar’s icons', () => {
   it('renders an SVG the browser can draw, at the app’s own 16px', () => {
     // `size-4` in the app; 16 × 16 in `Main.dc.html`. The harness passes the
     // number because it has no Tailwind class to hand a static string.
-    const markup = renderToStaticMarkup(createElement(NAV_ICON.overview, { width: 16, height: 16 }))
+    const markup = renderToStaticMarkup(createElement(NAV_ICON.market, { width: 16, height: 16 }))
     expect(markup).toContain('<svg')
     expect(markup).toContain('width="16"')
     expect(markup).toContain('height="16"')
   })
 
-  it('draws the artboard’s glyph on each of the ten, not a near-enough one', () => {
-    // THE MOCK IS THE SPEC (the lead's ruling, 2026-09-19), and five of these
-    // nine were something else until 2026-09-24 — Layers, MessageCircle,
-    // Swords, Sparkles and a gear. A name in a map is not a shape, so each
-    // line below is a fragment of the path lucide actually emits, chosen to be
-    // unique to that glyph: swap the component back and the fragment goes.
-    //
-    // The artboard's own paths are quoted beside each, read off
-    // `mock-sealand/artboards/Main.dc.html`, where the sidebar is static HTML.
-    // Lucide's coordinates differ by a pixel or two from the mock's redrawn
-    // ones — the test pins the GLYPH, which is what a reader sees, not a
-    // byte-match the mock never promised.
+  it('draws the boards’ glyph on each of the nine, not a near-enough one (Design v2)', () => {
+    // A name in a map is not a shape, so each line below is a fragment of the
+    // path the component actually emits, chosen to be unique to that glyph:
+    // swap the component back and the fragment goes. The boards' own paths
+    // are every `E*.dc.html` sidebar's.
     const draw = (key: keyof typeof NAV_ICON) =>
       renderToStaticMarkup(createElement(NAV_ICON[key], { width: 16, height: 16 }))
 
-    // M8 6h13 / M8 12h13 / M8 18h13 + three dots — a list, not stacked planes.
-    expect(draw('subjects')).toContain('M8 12h13')
-    expect(draw('subjects')).not.toContain('lucide-layers')
-    // The market-first preview (design-mf2): talk, a speech square with lines
-    // of text in it, not two people.
-    expect(draw('voice')).toContain('lucide-message-square-text')
-    expect(draw('voice')).not.toContain('lucide-users')
-    // Brands (design-mf2): a tag, `M12.6 2.6A2 2 0 0 0 11.2 2H4 … z` with a
-    // dot, not three columns on an axis (deploy 5).
-    expect(draw('competitive')).toContain('lucide-tag')
-    expect(draw('competitive')).not.toContain('M13 17V5')
-    expect(draw('competitive')).not.toContain('lucide-swords')
-    // The Agent is the original Lucide Sparkles again (Heinrich, 30 Sep; the
-    // navigation of 1 Oct), no longer the question mark it wore as Ask.
+    // Market is the conversation: the speech square with two lines of text
+    // that Conversation wore (`M21 15a2 2 … z · M13 8H7 · M17 12H7`).
+    expect(draw('market')).toContain('lucide-message-square-text')
+    expect(draw('market')).toContain('M13 8H7')
+    expect(draw('market')).not.toContain('lucide-globe')
+    // Voices: two people (`circle cx9 cy7 r4` and a second figure behind).
+    expect(draw('voices')).toContain('lucide-users')
+    expect(draw('voices')).toContain('cx="9" cy="7" r="4"')
+    // Your products: a box (Lucide Package).
+    expect(draw('products')).toContain('lucide-package')
+    expect(draw('products')).toContain('M12 22V12')
+    // Content: a play button in a square.
+    expect(draw('content')).toContain('lucide-square-play')
+    expect(draw('content')).toContain('<rect x="3" y="3" width="18" height="18" rx="2"')
+    // Your moves keeps the target it always had (three rings).
+    expect(draw('moves')).toContain('lucide-target')
+    expect(draw('moves').match(/<circle/g)).toHaveLength(3)
+
+    // The four Design v2 keeps, so a future sweep cannot quietly move them.
+    // The Agent is the original Lucide Sparkles (Heinrich, 30 Sep).
     expect(draw('ask')).toContain('lucide-sparkles')
     expect(draw('ask')).not.toContain('M12 17h.01')
     // The Dashboard (1 Oct): Lucide's LayoutDashboard, four tiles.
     expect(draw('home')).toContain('lucide-layout-dashboard')
-    // The Studio, one of the ten since 1 Oct, keeps the template it always had.
+    // The Studio keeps the template it always had.
     expect(draw('studio')).toContain('lucide-layout-template')
     // Three VERTICAL tracks crossed by horizontal handles. `SlidersHorizontal`
     // is the same glyph turned 90° and would pass a looser assertion, so the
@@ -78,27 +77,17 @@ describe('the sidebar’s icons', () => {
     // form does not.
     expect(draw('settings')).toContain('M12 21v-9')
     expect(draw('settings')).not.toContain('lucide-sliders-horizontal')
-
-    // The four that already matched, so a future sweep cannot quietly move
-    // them either.
-    // Your market is the market (design-mf2): a globe, not a dashboard grid.
-    expect(draw('overview')).toContain('lucide-globe')
-    expect(draw('market')).toContain('lucide-target')
-    expect(draw('week')).toContain('lucide-calendar-days')
   })
 
-  it('draws four glyphs with the artboards\' exact paths, not the installed Lucide\'s newer ones', () => {
+  it('draws three glyphs with the artboards\' exact paths, not the installed Lucide\'s newer ones', () => {
     // components/design-icons.ts, copied from `sidebar2.py` (integration, 1 Oct).
     const draw = (key: keyof typeof NAV_ICON) => renderToStaticMarkup(createElement(NAV_ICON[key], { width: 16, height: 16 }))
     // The Agent: a small "+" at the lower left (M4 17v2 / M5 18H3), not the newer ring.
     expect(draw('ask')).toContain('M4 17v2')
     expect(draw('ask')).not.toMatch(/<circle/)
-    // Conversation: two lines of text in the square.
-    expect(draw('voice')).toContain('M13 8H7')
-    expect(draw('voice')).toContain('M17 12H7')
-    // Subjects: rows at 6, 12 and 18.
-    expect(draw('subjects')).toContain('M8 6h13')
-    expect(draw('subjects')).toContain('M8 18h13')
+    // Market: two lines of text in the square, not the installed three.
+    expect(draw('market')).toContain('M13 8H7')
+    expect(draw('market')).toContain('M17 12H7')
     // Settings: the handles at 14, 8 and 16.
     expect(draw('settings')).toContain('M2 14h4')
     expect(draw('settings')).toContain('M18 16h4')

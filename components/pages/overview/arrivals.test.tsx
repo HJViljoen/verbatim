@@ -139,7 +139,7 @@ describe('With this update (WP2.7)', () => {
       expect(el.props.meta).toBeUndefined()
       expect(el.props.footerNote).toBeUndefined()
     }
-    expect(text(marketArrivalsFixture())).toContain('Open This week →')
+    expect(text(marketArrivalsFixture())).toContain('Open Market →')
   })
 
   it('computes nothing over a week alone: no share, no arrow, no verdict word', () => {

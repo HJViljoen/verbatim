@@ -198,7 +198,7 @@ export const marketConclusions: Block<MarketSurfaceData> = {
     // the head of the cards since WP1.9, not the footer's right-hand note: a
     // footer holds links only (the 25 Sep rulings).
     const concluded = c.concludedOn && !empty ? concludedTag(c.concludedOn) : null
-    const voice = surface('voice')
+    const voice = surface('voices')
     const voiceLink = empty ? undefined : openLink(mode, `${ctx.appUrl}${voice.href}`, `Open ${voice.label} →`)
 
     return (

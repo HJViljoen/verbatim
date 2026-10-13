@@ -1,31 +1,17 @@
-import { getSessionContext } from '@/lib/auth'
-import { readingHandle } from '@/lib/reading/read'
-import { loadCompetitiveSurface } from '@/lib/pages/competitive-surface'
-import { CompetitiveSurfacePage } from '@/components/pages/competitive-surface'
-import type { Metadata } from 'next'
-import { surface } from '@/lib/nav'
+import { redirect } from 'next/navigation'
+import { retiredTo, type SearchProps } from '@/lib/nav'
 
-// The tab's title is the page's own name (finish-list item 25 polish; the root
-// layout's template adds ' · Verbatim').
-export const metadata: Metadata = { title: surface('competitive').label }
-
-// Competitive (renamed from Brands; pages build, 1 Oct), drawn to the approved
-// artboard Page-Competitive.dc.html by components/pages/competitive-surface/
-// page. The address Competitive Intelligence used to hold; that page is parked
-// at /dashboard/competitive-intel until OLD_PAGES_RETIRE_ON.
+// COMPETITIVE FOLDED INTO VOICES (Design v2, decision 6 of the depth plan):
+// the brands are Voices'. `?vs=` (the brand read in full) lands as
+// `?brand=`.
 //
-// `?vs=<brand>` names the brand read in full. Neither this page nor its loader reads
-// `run_summary.period_share_of_voice`: the parked page keeps that layer, and
-// this one is the monthly reading. The page asks its loader for the Brands
-// readings (`{ brands: true }`); the quarterly and the briefs do not.
-
-export default async function Page({
-  searchParams,
-}: {
-  searchParams?: Promise<Record<string, string | undefined>>
-}) {
-  const sp = (await searchParams) ?? {}
-  const { supabase, clientId } = await getSessionContext()
-  const data = await loadCompetitiveSurface({ supabase, clientId, reading: readingHandle(clientId), params: sp }, { brands: true })
-  return <CompetitiveSurfacePage data={data} params={sp} />
+// Its page keys, modules and block keys stay registered, so a stored report
+// or share link renders as it did; only the address moved. A thin page.tsx
+// calling redirect() (the house pattern, never next.config.ts), with NO
+// loading.tsx above it: a Suspense boundary would stream the shell first and
+// turn the 307 into a client-side hop (lib/dashboard-loading.test.ts INHERITS).
+// The mapping is lib/nav.ts `redirectFor`, held to a table of old links by
+// lib/nav-redirects.test.ts.
+export default async function Page({ searchParams }: SearchProps) {
+  redirect(retiredTo('/dashboard/competitive', (await searchParams) ?? {}))
 }

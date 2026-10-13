@@ -168,7 +168,7 @@ function renderMarketMonth(data: OverviewData, mode: RenderMode, appUrl: string)
   const voices = data.heroVoices ?? []
   // A stored lead our new searches found prints no voices (T0a, mechanism 4).
   const lead = printedLead(data.hero)
-  const voice = surface('voice')
+  const voice = surface('voices')
   const footer = openLink(mode, `${appUrl}${voice.href}`, `Open ${voice.label} →`)
   // THE HEADLINE BREAKS AT ITS COLON (design pass): "Your market in
   // September:" over "654 videos and 16,204 comments.", never "654" at the end
@@ -268,7 +268,8 @@ export const overviewSentence: Block<OverviewData> = {
     if (isMarketPage(data)) return renderMarketMonth(data, mode, ctx.appUrl)
     const s = data.sentence
     const email = mode === 'email'
-    const market = `${ctx.appUrl}/dashboard/market`
+    // Your moves, at /dashboard/moves since Design v2 (Market took /dashboard/market).
+    const market = `${ctx.appUrl}${surface('moves').href}`
     const week = `${ctx.appUrl}/dashboard/week`
 
     // THE MONTH'S SENTENCE, AT THE HERO RAMP. Serif 17px/500, `1.35`,

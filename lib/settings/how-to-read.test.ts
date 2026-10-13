@@ -63,7 +63,7 @@ describe('how to read', () => {
   })
 
   it('says what the brands rule counts, so "none found" reads as a zero by that rule (the lead’s ruling of 27 Sep)', () => {
-    const line = READING_CARDS.find((c) => c.key === 'overview')!.cannot.find((l) => l.startsWith('Under Brands in your market'))!
+    const line = READING_CARDS.find((c) => c.key === 'market')!.cannot.find((l) => l.startsWith('Under Brands in your market'))!
     expect(line).toContain('the rule counts the brand’s name, its handles and its phrases')
     expect(line).toContain('“No video names it” means the rule found no such video that month')
     expect(line).toContain('“not counted yet” means we have not yet checked its matches by hand')
@@ -167,8 +167,10 @@ describe('how to read, market-first', () => {
   })
 
   it('describes Your subjects as yours, not as "picked for you" (decision G)', () => {
-    expect(card('subjects').tells).toContain('each of your subjects')
-    expect(cardText('subjects')).not.toContain('picked for you')
+    // The Subjects card's method is Market's since Design v2 (the subject board is Market's).
+    expect(card('market').tells).toContain('each of your subjects')
+    expect(cardText('market')).toContain('A subject is counted by the same rule a theme is')
+    for (const c of READING_CARDS) expect([c.tells, ...c.cannot].join(' ')).not.toContain('picked for you')
   })
 
   it('holds the method the pages stopped printing under their blocks, once each (25 Sep rulings)', () => {
@@ -222,13 +224,13 @@ describe('how to read, market-first', () => {
     expect(b).toContain('always marked provisional')
   })
 
-  it('says S17’s ninety-day note in the words the brands block carries for it, on the Brands card and its definition', () => {
-    expect(card('competitive').cannot).toContain(NINETY_DAY_NOTE)
+  it('says S17’s ninety-day note in the words the brands block carries for it, on the Brands method (Voices’ card since Design v2) and its definition', () => {
+    expect(card('voices').cannot).toContain(NINETY_DAY_NOTE)
     expect(def('brands').body).toContain(NINETY_DAY_NOTE)
   })
 
   it('names the brand table’s one count by its column head, never “our own rival searches” and never “in all” (T0 ruling U10)', () => {
-    for (const t of [def('brands').body, card('competitive').cannot.join(' ')]) {
+    for (const t of [def('brands').body, card('voices').cannot.join(' ')]) {
       expect(t).toContain(`“${BRANDS_HEAD_ORGANIC}”`)
       expect(t).not.toContain(`“${BRANDS_HEAD_ALL}”`)
       expect(t).not.toContain('rival searches')
@@ -250,7 +252,7 @@ describe('how to read, market-first', () => {
 
   it('promises no check it does not make: a brand counts only once its hand check has passed', () => {
     // The definition and the Brands card say it the same way.
-    for (const b of [def('brands').body, card('competitive').cannot.join(' ')]) {
+    for (const b of [def('brands').body, card('voices').cannot.join(' ')]) {
       expect(b).not.toContain('Each name is checked for its other meanings first')
       expect(b).toContain('only once a hand check of its matches has passed')
       expect(b).toContain('“not counted yet”')
@@ -287,16 +289,16 @@ describe('how to read, market-first', () => {
     // three months read the same way" (anomaly.ts), "two or more of the
     // question’s words" (own-posts.ts's word check, which Your moves reads).
     expect(NEW_THEME_FLOOR).toBe(10)
-    expect(cardText('week')).toContain('once they carry 10 videos in the month')
+    expect(cardText('content')).toContain('once they carry 10 videos in the month')
     expect(BASELINE_MONTHS).toBe(3)
-    expect(cardText('week')).toContain('needs three months read the same way')
+    expect(cardText('content')).toContain('needs three months read the same way')
     expect(TOUCH_MIN_WORDS).toBe(2)
-    expect(cardText('market')).toContain('two or more of the question’s words')
+    expect(cardText('moves')).toContain('two or more of the question’s words')
   })
 
   it('names Your moves by its current sidebar label on the path (§4.0)', () => {
     const month = READING_PATH.find((p) => p.when.startsWith('Each month'))!
-    expect(month.what.join(' ')).toContain(`on ${SURFACES.find((s) => s.key === 'market')!.label},`)
+    expect(month.what.join(' ')).toContain(`on ${SURFACES.find((s) => s.key === 'moves')!.label},`)
   })
 })
 
@@ -329,9 +331,9 @@ describe('How-to-read legend pills', () => {
     for (const p of pills) expect(anchors.has(p.anchor), `${p.file} → #${p.anchor}`).toBe(true)
   })
 
-  it('keeps the same pill where a page still draws one: Competitive’s stored copy', () => {
+  it('keeps the same pill where a page still draws one: Competitive’s stored copy, on Voices’ card since Design v2', () => {
     const pages = {
-      competitive: 'components/pages/competitive-surface/index.tsx',
+      voices: 'components/pages/competitive-surface/index.tsx',
     }
     for (const [key, file] of Object.entries(pages)) {
       const text = readFileSync(join(ROOT, file), 'utf8')
@@ -353,7 +355,7 @@ describe('How-to-read legend pills', () => {
   it('leaves Conversation’s bar with no pill, as the approved preview draws it (d3 polish)', () => {
     // Voice mounted its pill from the route (useSearchParams must sit under
     // the page's Suspense boundary there), so the route file is the one read.
-    const text = readFileSync(join(ROOT, 'app/dashboard/voice/page.tsx'), 'utf8')
+    const text = readFileSync(join(ROOT, 'app/dashboard/voices/page.tsx'), 'utf8')
     expect(text).not.toMatch(/<HowToRead\b/)
   })
 

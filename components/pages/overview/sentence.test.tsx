@@ -126,7 +126,8 @@ describe('OV1 · in one sentence', () => {
 
   it('links onward to Market, absolutely', () => {
     const markup = render(overviewSentence.render(overviewFixture(), 'email', ctx))
-    expect(markup).toContain('https://app.verbatimintel.com/dashboard/market')
+    // Your moves, at /dashboard/moves since Design v2.
+    expect(markup).toContain('https://app.verbatimintel.com/dashboard/moves')
   })
 
   it('heads the voices with two of N, and links the cite where there is somewhere to go', () => {

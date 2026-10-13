@@ -5,7 +5,7 @@
 // numbers would face Sealand's owners from the first day. So, while this is
 // false:
 //   · a tenant's Your moves draws no Your statements section and no add form
-//     (app/dashboard/market/page.tsx does not even read the statements);
+//     (app/dashboard/moves/page.tsx does not even read the statements);
 //   · the add, edit and remove actions refuse a tenant's session before
 //     anything is written, so nothing is measured on a tenant's behalf
 //     (lib/actions/statements.ts: the measurement on add runs only after a

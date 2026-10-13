@@ -295,8 +295,9 @@ export function clientReadiness(
     const by = opts.by?.[r.id] ?? null
     const base: ClientReadinessRow = {
       ...r,
-      // The page by its name in the menu: "Competitive" is Brands now.
-      block: r.block === 'Competitive' ? surface('competitive').label : r.block,
+      // The page by its name in the menu: Competitive's brands are Voices'
+      // since Design v2.
+      block: r.block === 'Competitive' ? surface('voices').label : r.block,
       detail: r.clientDetail ?? r.detail,
       // The set-aside and read-before-the-flags history is the record's
       // (Settings › The record › Coverage says it word for word); Readiness is
@@ -319,15 +320,16 @@ export function clientReadiness(
  */
 export const NOT_BUILT: readonly { page: string; what: string }[] = [
   // THE PAGES BY THEIR NAMES IN THE MENU, AND ONLY WHAT IS STILL NOT BUILT
-  // (sw-2 item 6): "Market" and "Competitive" are Your moves and Brands now;
-  // plans ARE re-read against every update (Your moves › Upload a plan), and
-  // This week prints how much of each subject came in with the update.
-  { page: surface('market').label, what: 'Confirming this month’s card as a move in one press.' },
-  { page: surface('market').label, what: 'Registering a claim, and keeping a claim’s identity across updates.' },
-  { page: surface('market').label, what: 'A claim’s verdict per month, held across two updates before it is printed.' },
-  { page: surface('subjects').label, what: 'Reading what your own posts claim, beside the subjects they match.' },
-  { page: surface('week').label, what: 'Which way a switching signal ran, toward you or away.' },
-  { page: surface('competitive').label, what: 'Rivals’ own claims beside what their audience says. This is a decision we have not taken yet, not a gap in your workspace.' },
-  { page: surface('competitive').label, what: 'Cross-brand findings marked “seen in N of the last 6 months”, which needs a finding identity that survives an update.' },
-  { page: surface('competitive').label, what: 'Grouping rivals’ questions, and matching them to your subjects.' },
+  // (sw-2 item 6): plans ARE re-read against every update (Your moves ›
+  // Upload a plan), and This week printed how much of each subject came in
+  // with the update. Since Design v2 Subjects and This week are Market's, and
+  // Competitive's brands are Voices'.
+  { page: surface('moves').label, what: 'Confirming this month’s card as a move in one press.' },
+  { page: surface('moves').label, what: 'Registering a claim, and keeping a claim’s identity across updates.' },
+  { page: surface('moves').label, what: 'A claim’s verdict per month, held across two updates before it is printed.' },
+  { page: surface('market').label, what: 'Reading what your own posts claim, beside the subjects they match.' },
+  { page: surface('market').label, what: 'Which way a switching signal ran, toward you or away.' },
+  { page: surface('voices').label, what: 'Rivals’ own claims beside what their audience says. This is a decision we have not taken yet, not a gap in your workspace.' },
+  { page: surface('voices').label, what: 'Cross-brand findings marked “seen in N of the last 6 months”, which needs a finding identity that survives an update.' },
+  { page: surface('voices').label, what: 'Grouping rivals’ questions, and matching them to your subjects.' },
 ]

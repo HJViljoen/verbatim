@@ -200,7 +200,7 @@ export function CompetitiveSurfacePage({
   if (!data) {
     return (
       <PageFrame className="gap-[22px]">
-        <PageBar title={surface('competitive').label} />
+        <PageBar title={surface('voices').label} />
       </PageFrame>
     )
   }
@@ -215,11 +215,11 @@ export function CompetitiveSurfacePage({
   return (
     <PageFrame>
       <SurfacePageBar
-        nav="competitive"
+        nav="voices"
         params={params}
         context={barContext(data)}
       >
-        <HowToRead items={LEGEND} basePath="/dashboard/competitive" anchor="competitive" />
+        <HowToRead items={LEGEND} basePath={surface('voices').href} anchor="voices" />
       </SurfacePageBar>
       {/* CO1, inline: the artboard's RIVAL pill row, under the band and
           outside any card. */}

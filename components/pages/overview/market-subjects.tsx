@@ -119,7 +119,7 @@ export function marketSubjectsLine(data: OverviewData): string | null {
 
 export function renderMarketSubjects(data: OverviewData, mode: RenderMode, appUrl: string) {
   const b = data.subjects
-  const nav = surface('subjects')
+  const nav = surface('market')
   const footer = openLink(mode, `${appUrl}${nav.href}`, `Open ${nav.label} →`)
   const line = marketSubjectsLine(data)
   if (line) {

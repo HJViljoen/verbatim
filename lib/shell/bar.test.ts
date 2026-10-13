@@ -55,14 +55,14 @@ describe('the month selector', () => {
 
   it('points at the other month, carrying the page\'s own selection', () => {
     expect(monthHref('/dashboard', {}, { month: '2026-08-01', isDefault: false })).toBe('/dashboard?month=2026-08')
-    expect(monthHref('/dashboard/voice', { horizon: 'last_3', theme: 't1' }, { month: '2026-10-01', isDefault: false }))
-      .toBe('/dashboard/voice?horizon=last_3&theme=t1&month=2026-10')
+    expect(monthHref('/dashboard/market', { horizon: 'last_3', conv: 't1' }, { month: '2026-10-01', isDefault: false }))
+      .toBe('/dashboard/market?horizon=last_3&conv=t1&month=2026-10')
   })
 
   it('back to the default month writes no parameter, and never doubles one', () => {
     expect(monthHref('/dashboard', { month: '2026-10' }, { month: '2026-09-01', isDefault: true })).toBe('/dashboard')
-    expect(monthHref('/dashboard/subjects', { month: '2026-10', item: 's1' }, { month: '2026-09-01', isDefault: false }))
-      .toBe('/dashboard/subjects?item=s1&month=2026-09')
+    expect(monthHref('/dashboard/market', { month: '2026-10', subject: 's1' }, { month: '2026-09-01', isDefault: false }))
+      .toBe('/dashboard/market?subject=s1&month=2026-09')
   })
 })
 
@@ -83,26 +83,27 @@ describe('monthOptions: the selector\'s menu', () => {
     expect(options[2].href).toBe('/dashboard?horizon=last_3&month=2026-07')
   })
 
-  // Subjects has no horizon control (the deploy-3 fresh review): a
-  // `?horizon=` in its address rides no month switch, and the questions
-  // pane's own `?questions=` does.
+  // Subjects had no horizon control (the deploy-3 fresh review), and since
+  // Design v2 no page has one: each switches its own period. A `?horizon=` in
+  // an address rides no month switch, and the questions pane's own
+  // `?questions=` does.
   it('on a surface with no horizon control, carries no ?horizon= from month to month', () => {
-    expect(hasHorizon(surface('subjects'))).toBe(false)
-    const params = selectorParams({ item: 's-water', horizon: 'last_3', questions: 'last_3' }, hasHorizon(surface('subjects')))
-    const options = monthOptions('/dashboard/subjects', params, sealandReading('2026-10-02T06:00:00.000Z'), EARLIER)
+    expect(hasHorizon(surface('market'))).toBe(false)
+    const params = selectorParams({ subject: 's-water', horizon: 'last_3', questions: 'last_3' }, hasHorizon(surface('market')))
+    const options = monthOptions('/dashboard/market', params, sealandReading('2026-10-02T06:00:00.000Z'), EARLIER)
     for (const o of options) expect(o.href, o.month).not.toContain('horizon=')
-    expect(options[1].href).toBe('/dashboard/subjects?item=s-water&questions=last_3&month=2026-08')
+    expect(options[1].href).toBe('/dashboard/market?subject=s-water&questions=last_3&month=2026-08')
     // A surface with the control keeps it.
     expect(selectorParams({ horizon: 'last_3' }, true)).toEqual({ horizon: 'last_3' })
   })
 
   it('under a ?month=, the month read keeps its parameter and the default drops it', () => {
-    const options = monthOptions('/dashboard/subjects', { month: '2026-07', item: 's1' }, sealandReading('2026-10-02T06:00:00.000Z', '2026-07'), [
+    const options = monthOptions('/dashboard/market', { month: '2026-07', subject: 's1' }, sealandReading('2026-10-02T06:00:00.000Z', '2026-07'), [
       { month: '2026-09-01', isDefault: true }, ...EARLIER.filter((o) => o.month !== '2026-07-01'),
     ])
     expect(options.map((o) => o.month)).toEqual(['2026-09-01', '2026-08-01', '2026-07-01', '2026-06-01', '2026-05-01', '2026-04-01'])
-    expect(options.find((o) => o.current)?.href).toBe('/dashboard/subjects?item=s1&month=2026-07')
-    expect(options[0].href).toBe('/dashboard/subjects?item=s1')
+    expect(options.find((o) => o.current)?.href).toBe('/dashboard/market?subject=s1&month=2026-07')
+    expect(options[0].href).toBe('/dashboard/market?subject=s1')
   })
 
   it('labels months by name only: no "so far" and no "still filling", so none reaches the bar', () => {
@@ -166,19 +167,19 @@ describe('horizonHref', () => {
   })
 
   it('carries the page’s own selection through', () => {
-    expect(horizonHref('/dashboard/market', { item: 'mi-1', group: 'recs' }, 'last_3'))
-      .toBe('/dashboard/market?item=mi-1&group=recs&horizon=last_3')
+    expect(horizonHref('/dashboard/moves', { advice: 'mi-1', group: 'recs' }, 'last_3'))
+      .toBe('/dashboard/moves?advice=mi-1&group=recs&horizon=last_3')
   })
 
   it('replaces a horizon already in the params rather than doubling it', () => {
-    expect(horizonHref('/dashboard/voice', { horizon: 'last_12', theme: 't' }, 'since_start'))
-      .toBe('/dashboard/voice?theme=t&horizon=since_start')
-    expect(horizonHref('/dashboard/voice', { horizon: 'last_12' }, 'this_month')).toBe('/dashboard/voice')
+    expect(horizonHref('/dashboard/market', { horizon: 'last_12', conv: 't' }, 'since_start'))
+      .toBe('/dashboard/market?conv=t&horizon=since_start')
+    expect(horizonHref('/dashboard/market', { horizon: 'last_12' }, 'this_month')).toBe('/dashboard/market')
   })
 
   it('drops empty params instead of writing bare keys', () => {
-    expect(horizonHref('/dashboard/subjects', { item: '', vs: undefined }, 'last_12'))
-      .toBe('/dashboard/subjects?horizon=last_12')
+    expect(horizonHref('/dashboard/voices', { subject: '', brand: undefined }, 'last_12'))
+      .toBe('/dashboard/voices?horizon=last_12')
   })
 })
 
@@ -194,13 +195,13 @@ describe('horizonOptions', () => {
 
 describe('detailHref', () => {
   it('opens the record at the reading the reader is looking at', () => {
-    expect(detailHref('/dashboard/voice', { themes: 'product_usefulness', horizon: 'last_3' }, 'record'))
-      .toBe('/dashboard/voice?themes=product_usefulness&horizon=last_3&detail=record')
+    expect(detailHref('/dashboard/voices', { group: 'product_usefulness', horizon: 'last_3' }, 'record'))
+      .toBe('/dashboard/voices?group=product_usefulness&horizon=last_3&detail=record')
   })
 
   it('closes back to the same reading, not to the page’s default', () => {
-    expect(detailHref('/dashboard/voice', { themes: 'product_usefulness', horizon: 'last_3', detail: 'record' }, null))
-      .toBe('/dashboard/voice?themes=product_usefulness&horizon=last_3')
+    expect(detailHref('/dashboard/voices', { group: 'product_usefulness', horizon: 'last_3', detail: 'record' }, null))
+      .toBe('/dashboard/voices?group=product_usefulness&horizon=last_3')
   })
 
   it('leaves a plain page plain', () => {

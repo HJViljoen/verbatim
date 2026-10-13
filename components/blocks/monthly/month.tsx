@@ -135,7 +135,7 @@ export const monthlyMonth = fromFrontPage({
   title: MARKET_SENTENCE_TITLE,
   block: overviewSentence,
   link: () => {
-    const page = surface('overview')
+    const page = surface('market')
     return { href: page.href, label: `Open ${page.label} →` }
   },
   email: monthEmail,

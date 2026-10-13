@@ -111,9 +111,9 @@ describe('In one line: the block', () => {
   it('is the title alone over the answer, and a link alone under it (25 Sep rulings)', () => {
     const text = renderText(marketLine.render(sealandMovesFixture(), 'app', ctx))
     expect(text.startsWith('In one line In September people in the market you sell into asked most about')).toBe(true)
-    expect(text.endsWith('Open Conversation →')).toBe(true)
+    expect(text.endsWith('Open Voices →')).toBe(true)
     // Print has no link to follow.
-    expect(renderText(marketLine.render(sealandMovesFixture(), 'print', ctx))).not.toContain('Open Conversation')
+    expect(renderText(marketLine.render(sealandMovesFixture(), 'print', ctx))).not.toContain('Open Voices')
   })
 
   it('sets the answer at the preview’s weight', () => {

@@ -37,7 +37,7 @@ export function DeltaBlock({ delta, dashboard, appUrl }: { delta: RunDelta | nul
       // or the two read as one metric contradicting itself.
       const s = delta.sentiment
       rows.push(
-        <Row key="s" label="Sentiment" chip={verdictChip(s.verdict, ' pts')} href={`${appUrl}${surface('overview').href}`} linkText="See where you stand">
+        <Row key="s" label="Sentiment" chip={verdictChip(s.verdict, ' pts')} href={`${appUrl}${surface('market').href}`} linkText="See where you stand">
           <strong>{s.now}%</strong> of the {fmtInt(s.nowJudged)} conversations rated for sentiment this update read positive
         </Row>,
       )
@@ -46,7 +46,7 @@ export function DeltaBlock({ delta, dashboard, appUrl }: { delta: RunDelta | nul
       const sh = delta.share
       const comp = sh.now.competitor
       rows.push(
-        <Row key="sh" label="Share of tracked conversation" chip={verdictChip(sh.verdict, ' pts')} href={`${appUrl}/dashboard/competitive`} linkText="See the competitive picture">
+        <Row key="sh" label="Share of tracked conversation" chip={verdictChip(sh.verdict, ' pts')} href={`${appUrl}${surface('voices').href}`} linkText="See the competitive picture">
           You <strong>{sh.now.client}%</strong>{comp ? <> · {comp.name} <strong>{comp.pct}%</strong></> : null} of the {fmtInt(sh.now.totalVideos)} videos tracked
         </Row>,
       )
@@ -54,7 +54,7 @@ export function DeltaBlock({ delta, dashboard, appUrl }: { delta: RunDelta | nul
     if (delta.newThemes && delta.newThemes.count > 0) {
       const n = delta.newThemes
       rows.push(
-        <Row key="t" label="New themes" chip={<Chip tone="neutral">{n.count} new</Chip>} href={`${appUrl}/dashboard/voice`} linkText="Hear them">
+        <Row key="t" label="New themes" chip={<Chip tone="neutral">{n.count} new</Chip>} href={`${appUrl}${surface('voices').href}`} linkText="Hear them">
           {n.labels.length ? <>{n.labels.join(' · ')}{n.count > n.labels.length ? ` and ${n.count - n.labels.length} more` : ''}</> : `${n.count} theme${n.count === 1 ? '' : 's'} not heard in your previous update`}
         </Row>,
       )
@@ -86,12 +86,12 @@ export function DeltaBlock({ delta, dashboard, appUrl }: { delta: RunDelta | nul
   return (
     <Section title="Where you stand" meta="your first update">
       {s ? (
-        <Row label="Sentiment" href={`${appUrl}${surface('overview').href}`} linkText="See where you stand">
+        <Row label="Sentiment" href={`${appUrl}${surface('market').href}`} linkText="See where you stand">
           <strong>{Math.round(s.positivePct)}%</strong> of the {fmtInt(s.judged)} conversations rated for sentiment read positive
         </Row>
       ) : null}
       {sh?.client ? (
-        <Row label="Share of tracked conversation" href={`${appUrl}/dashboard/competitive`} linkText="See the competitive picture">
+        <Row label="Share of tracked conversation" href={`${appUrl}${surface('voices').href}`} linkText="See the competitive picture">
           You <strong>{Math.round(sh.client.pct * 10) / 10}%</strong>{sh.topCompetitor ? <> · {sh.topCompetitor.name} <strong>{Math.round(sh.topCompetitor.pct * 10) / 10}%</strong></> : null} of the videos tracked
         </Row>
       ) : null}

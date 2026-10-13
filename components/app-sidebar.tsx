@@ -11,22 +11,23 @@ import { NAV_ICON } from "@/components/nav-icons"
 import { cn } from "@/lib/utils"
 import { surfaceForPath, surfacesIn, type NavGroup } from "@/lib/nav"
 
-// THE NAVIGATION OF 1 OCT (`sidebar2.py`; the sidebar of every `Page-*.dc.html`
-// artboard). Ten surfaces from lib/nav.ts, the one table the page bars and the
-// redirects read too, in four groups:
+// THE NAVIGATION OF DESIGN V2 (the depth redesign, Oct 2026; the sidebar of
+// every `E*.dc.html` board). Nine surfaces from lib/nav.ts, the one table the
+// page bars and the redirects read too, in three groups:
 //
-//   Dashboard · Your market · This week · Conversation · Competitive
-//   ──
-//   Subjects · Your moves
+//   Dashboard · Market · Voices · Your products · Content · Your moves
 //   ──
 //   Agent                      (a filled yellow row)
 //
+//   ──
 //   Studio · Settings          (at the foot)
 //
 // The groups are separated by space and a hairline and carry NO label (page
-// review §4: "Intelligence" and "Account" said nothing a reader needs). Log out
-// left the foot for Settings' bar (components/log-out-button.tsx), and the
-// Studio is a row of its own now that clients see it (STUDIO_TENANT_VISIBLE).
+// review §4: "Intelligence" and "Account" said nothing a reader needs). The
+// 1 Oct navigation's hairline between the reading pages and "what you steer"
+// went with Subjects; the boards draw one over the foot instead. Log out left
+// the foot for Settings' bar (components/log-out-button.tsx), and the Studio is
+// a row of its own now that clients see it (STUDIO_TENANT_VISIBLE).
 //
 // THE ICONS ARE `components/nav-icons.ts`, a leaf, so `scripts/wave2-shots.ts`
 // can draw what ships.
@@ -128,12 +129,12 @@ export function AppSidebar({ header, ops }: { header?: React.ReactNode; ops?: Re
       <SidebarContent className="gap-1 px-3 pt-1">
         {group("read")}
         <NavHairline />
-        {group("steer")}
-        <NavHairline />
         {group("agent")}
       </SidebarContent>
 
       <SidebarFooter className="gap-1 px-3 pt-2 pb-4">
+        {/* The boards' hairline over the foot (Design v2). */}
+        <NavHairline />
         {/* The operator's group (operator only, above the Studio: page review
             §4) arrives as a slot: who is looking is async, and this component
             is "use client". Absent for every user who is not a platform

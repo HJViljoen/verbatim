@@ -28,7 +28,7 @@ const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
 
 /** The page's own subtitle, out of `lib/nav.ts` — main's file, and the string
  *  this page's detail pane used to repeat verbatim. */
-const NAV_SUBTITLE = surface('subjects').question!
+const NAV_SUBTITLE = surface('market').question!
 
 describe('the Subjects blocks, all of them', () => {
   it('render in all three modes on a reading, a refusal and a candidate set, and keep the copy contract', () => {
@@ -1364,14 +1364,14 @@ describe('the Subjects blocks, read from outside the workspace', () => {
   it('draw no in-app affordance on paper', () => {
     const data = subjectsFixture()
     expect(render(subjectsUnanswered.render(data, 'print', ctx))).not.toContain('Open the content brief')
-    expect(render(subjectsVoices.render(data, 'print', ctx))).not.toContain('Hear these voices in Conversation')
-    expect(render(subjectsVoices.render(data, 'app', ctx))).toContain('Hear these voices in Conversation')
+    expect(render(subjectsVoices.render(data, 'print', ctx))).not.toContain('Open Voices')
+    expect(render(subjectsVoices.render(data, 'app', ctx))).toContain('Open Voices')
     // The chart's and the kind mix's footers were hand-rolled `email ? a :
     // Link` pairs, so PRINT got the app's control. This page exports now, so
     // print is a PDF and a `/r/<token>` page.
     expect(render(subjectsLine.render(data, 'print', ctx))).not.toContain('Compare another subject')
-    expect(render(subjectsKinds.render(data, 'print', ctx))).not.toContain('Open Conversation')
-    expect(render(subjectsKinds.render(data, 'app', ctx))).toContain('Open Conversation')
+    expect(render(subjectsKinds.render(data, 'print', ctx))).not.toContain('Open Voices')
+    expect(render(subjectsKinds.render(data, 'app', ctx))).toContain('Open Voices')
     expect(render(subjectsSubject.render(data, 'print', ctx))).not.toContain('videos behind your figure')
   })
 

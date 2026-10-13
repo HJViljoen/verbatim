@@ -84,7 +84,7 @@ export const overviewAsks: Block<OverviewData> = {
 
   render(data, mode = 'app', ctx) {
     const asks = data.asks ?? null
-    const voice = surface('voice')
+    const voice = surface('voices')
     const footer = openLink(mode, `${ctx.appUrl}${voice.href}`, `Open ${voice.label} →`)
     const empty = overviewAsks.emptyState(data)
     return (

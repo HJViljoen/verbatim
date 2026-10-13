@@ -39,7 +39,7 @@ export const weekWeeks: Block<WeekData> = {
     const howTo = openLink(mode, `${ctx.appUrl}${WEEK_BY_WEEK_HREF}`, 'How to read: Week by week →')
     // THE SAME-AGE READING IS THE FRONT PAGE'S (§2.7): one link to it, where
     // the tenant keeps one.
-    const front = surface('overview')
+    const front = surface('market')
     const sameAge = b?.line ? openLink(mode, `${ctx.appUrl}${front.href}`, `Read at the same age, on ${front.label} →`) : null
     const footer = sameAge
       ? mode === 'email' ? <>{howTo}<span style={{ display: 'inline-block', width: 24 }} />{sameAge}</> : <span className="flex flex-wrap gap-x-8 gap-y-1">{howTo}{sameAge}</span>

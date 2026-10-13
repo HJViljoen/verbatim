@@ -65,7 +65,7 @@ const FONTS = 'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;5
 // THE ROWS COME OFF `lib/nav.ts`, not a list retyped here — the labels, the
 // order and the four groups are the one table's, which is what the app reads
 // too, so a surface renamed in the table is renamed in the shot.
-const GROUPS: NavGroup[] = ['read', 'steer', 'agent']
+const GROUPS: NavGroup[] = ['read', 'agent']
 const rowsOf = (g: NavGroup) => surfacesIn(g).map((s) => ({ key: s.key, label: s.label }))
 
 // The shipped row's icon, at the shipped size: 16px, stroke 2, ink on the
@@ -157,7 +157,7 @@ const PAGES: Page[] = [
       // "Invalid hook call". As an element `renderToStaticMarkup` runs it, and
       // the hook returns null with no router mounted, which is the case the
       // component is written for.
-      controls: createElement(HowToRead, { items: VOICE_LEGEND, basePath: '/dashboard/voice', anchor: 'voice' }),
+      controls: createElement(HowToRead, { items: VOICE_LEGEND, basePath: '/dashboard/voices', anchor: 'voices' }),
     })),
   },
   { key: 'market', nav: 'Your moves', artboard: 'Market.dc.html', markup: () => renderToStaticMarkup(MarketSurfacePage({ data: marketFixture() })) },

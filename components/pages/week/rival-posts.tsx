@@ -105,7 +105,7 @@ export const weekRivalPosts: Block<WeekData> = {
   question: 'What did the brands you track post in these days, and what drew the talk?',
 
   render(data, mode = 'app', ctx) {
-    const nav = surface('competitive')
+    const nav = surface('voices')
     const footer = openLink(mode, `${ctx.appUrl}${nav.href}`, `Open ${nav.label} →`)
     const empty = weekRivalPosts.emptyState(data)
     if (empty) return <BlockFrame title={BRANDS_POSTED_TITLE} mode={mode} footer={footer} roomy card><BlockEmpty mode={mode}>{empty}</BlockEmpty></BlockFrame>

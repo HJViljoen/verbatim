@@ -120,7 +120,7 @@ describe('market.questions (Y1) · three modes, an empty state, a fixture state'
   })
 
   it('links to Subjects by its current label, and is email-safe', () => {
-    expect(render(marketQuestions.render(sealandMovesFixture(), 'app', ctx))).toContain('Open Subjects')
+    expect(render(marketQuestions.render(sealandMovesFixture(), 'app', ctx))).toContain('Open Market')
     const email = render(marketQuestions.render(sealandMovesFixture(), 'email', ctx))
     expect(email).toContain('<table')
     expect(email).not.toContain('class=')

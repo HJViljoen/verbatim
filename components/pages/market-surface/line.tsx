@@ -45,7 +45,7 @@ export const marketLine: Block<MarketSurfaceData> = {
   render(data, mode = 'app', ctx) {
     const email = mode === 'email'
     const line = readLine(data)
-    const voice = surface('voice')
+    const voice = surface('voices')
     if (!line) {
       return (
         <BlockFrame title={marketLine.title} mode={mode} roomy>

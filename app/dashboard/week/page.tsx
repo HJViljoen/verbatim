@@ -1,25 +1,18 @@
-import { getSessionContext } from '@/lib/auth'
-import { readingHandle } from '@/lib/reading/read'
-import { loadWeekReadPage } from '@/lib/pages/week-read'
-import { WeekReadPage } from '@/components/pages/week/read-page'
-import type { Metadata } from 'next'
-import { surface } from '@/lib/nav'
+import { redirect } from 'next/navigation'
+import { retiredTo, type SearchProps } from '@/lib/nav'
 
-// The tab's title is the page's own name (finish-list item 25 polish; the root
-// layout's template adds ' · Verbatim').
-export const metadata: Metadata = { title: surface('week').label }
-
-// This week: the latest weekly read, in full (the pages build, 1 Oct; the
-// approved artboard Page-This-week.dc.html). lib/pages/week-read.ts reads the
-// newest ready `week_reads` row for the session's client and who each item is
-// about; components/pages/week/read-page.tsx draws it.
+// THIS WEEK MOVED INTO MARKET (Design v2, decision 6 of the depth plan): the
+// week's news, its flag and what is new this week are Market's, and what
+// worked and the comments worth a reply are Content's. The old address lands
+// on Market, its query kept.
 //
-// The earlier page (`WeekPage`, `loadWeek`, `WEEK_BLOCKS`) stays in the tree
-// for the export module and stored snapshots that name its block keys; this
-// route no longer renders it.
-
-export default async function Page() {
-  const { supabase, clientId } = await getSessionContext()
-  const data = await loadWeekReadPage({ supabase, clientId, reading: readingHandle(clientId), params: {} })
-  return <WeekReadPage data={data} title={surface('week').label} />
+// Its page keys, modules and block keys stay registered, so a stored report
+// or share link renders as it did; only the address moved. A thin page.tsx
+// calling redirect() (the house pattern, never next.config.ts), with NO
+// loading.tsx above it: a Suspense boundary would stream the shell first and
+// turn the 307 into a client-side hop (lib/dashboard-loading.test.ts INHERITS).
+// The mapping is lib/nav.ts `redirectFor`, held to a table of old links by
+// lib/nav-redirects.test.ts.
+export default async function Page({ searchParams }: SearchProps) {
+  redirect(retiredTo('/dashboard/week', (await searchParams) ?? {}))
 }

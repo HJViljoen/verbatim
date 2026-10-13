@@ -27,7 +27,8 @@ describe('who builds the Overview as "Your market"', () => {
   })
 
   it('the route draws the bigger picture and pays for none of them', () => {
-    const route = read('app/dashboard/overview/page.tsx')
+    // Market's address since Design v2, which draws it until its own page lands.
+    const route = read('app/dashboard/market/page.tsx')
     expect(route).toMatch(/loadMarketPicture\(/)
     expect(route).not.toContain('marketFront')
   })

@@ -31,7 +31,7 @@ export const monthlyArrivals = slotSection({
   title: 'With this update',
   slot: 'arrivals',
   link: () => {
-    const page = surface('week')
+    const page = surface('market')
     return { href: page.href, label: `Open ${page.label} →` }
   },
   stub: 'What came in with the latest update is read here once it is counted.',

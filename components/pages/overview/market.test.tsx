@@ -226,12 +226,12 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
     }
   })
 
-  it('its footer names every theme at 10+ on Conversation (WP2.4), under the current label', () => {
+  it('its footer names every theme at 10+ on the page that lists them (WP2.4), under its current label', () => {
     const data = marketFrontFixture()
     expect(data.themes?.atTen).toBe(21)
-    expect(renderText(overviewThemes.render(data, 'app', ctx))).toContain('All 21 on Conversation →')
-    expect(renderText(overviewThemes.render(data, 'email', ctx))).toContain('All 21 on Conversation →')
-    expect(renderText(overviewThemes.render(data, 'app', ctx))).not.toContain('Voice')
+    expect(renderText(overviewThemes.render(data, 'app', ctx))).toContain('All 21 on Voices →')
+    expect(renderText(overviewThemes.render(data, 'email', ctx))).toContain('All 21 on Voices →')
+    expect(renderText(overviewThemes.render(data, 'app', ctx))).not.toMatch(/\bVoice\b/)
   })
 
   it('wraps a long theme rather than cutting it with "…" (at 1024 the theme track is about 210px)', () => {
@@ -266,7 +266,7 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
   // each prints its name and no figure, word or tag.
   it('the subjects on the market, each by its name alone while none is ready', () => {
     expect(text).toContain('The market by subject')
-    expect(text).toMatch(/Buying & delivery Comfort Community & purpose Durability Looks & style Price Repair & warranty Waterproofing Open Subjects/)
+    expect(text).toMatch(/Buying & delivery Comfort Community & purpose Durability Looks & style Price Repair & warranty Waterproofing Open Market/)
     expect(text).not.toContain('Looks & style provisional')
   })
 
@@ -341,7 +341,7 @@ describe('Your market prints §2.2’s blocks on the 24 Sep figures', () => {
 
   it('brands in one line, naming the brands page by its current label', () => {
     // "Competitive" again since 1 Oct (it was "Brands" from deploy 5).
-    expect(text).toContain('Brands in your market, counted in every video they come up in, arrive with the 4 Oct update. Until then, Competitive lists what was filed under each brand you track.')
+    expect(text).toContain('Brands in your market, counted in every video they come up in, arrive with the 4 Oct update. Until then, Voices lists what was filed under each brand you track.')
   })
 
   it('what changed: the refusal, the first pair read the same way, and the link to the dated list', () => {

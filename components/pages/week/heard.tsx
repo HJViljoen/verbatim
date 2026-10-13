@@ -175,7 +175,7 @@ export const weekHeard: Block<WeekData> = {
 
   render(data, mode = 'app', ctx) {
     const h = data.heard ?? null
-    const voice = surface('voice')
+    const voice = surface('voices')
     const footer = openLink(mode, `${ctx.appUrl}${voice.href}`, `All themes on ${voice.label} →`)
     // Every theme it would list was our new searches' and nothing else is
     // counted: omitted (T0a, mechanism 4).

@@ -93,7 +93,8 @@ describe('VoiceSurfacePage (the approved artboard; ./conversation.test.tsx has e
 
   it('prints the title alone: no "as at" line, no horizon, no footnote', () => {
     const text = renderText(<VoiceSurfacePage data={voiceFixture()} params={{}} />)
-    expect(text).toContain('Conversation')
+    // Voices' title: the page is Voices' placeholder since Design v2.
+    expect(text.startsWith('Voices ')).toBe(true)
     expect(text).not.toContain('as at the')
     expect(text).not.toContain('This month')
     expect(text.toLowerCase()).not.toContain('how sound')

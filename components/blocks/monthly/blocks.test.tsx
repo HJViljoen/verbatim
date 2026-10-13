@@ -210,7 +210,7 @@ describe('the four slots (WP2.3, WP2.5, WP2.6, WP2.7)', () => {
     // Minted by the 20 Sep update but held by August: not heard for the first time.
     expect(t).not.toContain('Interest in shipping and locations')
     expect(t).not.toMatch(/week by week/i)
-    expect(t).toContain('Open This week')
+    expect(t).toContain('Open Market')
   })
 
   it('the change section adds WP2.3’s check line once its slot is filled', () => {
@@ -292,14 +292,14 @@ describe('1 · the month', () => {
     const t = text('monthly.month')
     expect(t).toMatch(/One voice on “\s*Confusion over airline bag sizes\s*”/)
     expect(t).toContain('About time they do something')
-    expect(t).toContain('Open Your market')
+    expect(t).toContain('Open Market')
   })
 
   it('keeps the page’s words in the app and on paper, under the section’s link', () => {
     const app = text('monthly.month', monthlyFixture(), 'app')
     expect(app).toContain('Your market in September')
-    expect(app).toContain('Open Your market')
-    expect(text('monthly.month', monthlyFixture(), 'print')).not.toContain('Open Your market')
+    expect(app).toContain('Open Market')
+    expect(text('monthly.month', monthlyFixture(), 'print')).not.toContain('Open Market')
   })
 
   it('cuts the page’s clause where the table goes, never rewording it', () => {
@@ -328,9 +328,10 @@ describe('2 · 4 · 5 · 6 · the front page’s other blocks', () => {
     expect(t).not.toMatch(/Ready to buy handmade bags\s*about a third makers\s*69\s*11%\s*7%/)
     expect(t).toContain('Makers and DIY, grouped:')
     expect(t).not.toContain('Not read as a change')
-    // The page's current sidebar label (plan §4.0): Conversation from WP2.4.
-    expect(t).toContain('Open Conversation')
-    expect(t).not.toContain('Voice')
+    // The page's current sidebar label (plan §4.0): Conversation from WP2.4,
+    // Voices since Design v2 (where /dashboard/voice lands); never the old Voice.
+    expect(t).toContain('Open Voices')
+    expect(t).not.toMatch(/\bVoice\b/)
     expect(MONTHLY_BLOCKS['monthly.themes'].title).toBe(overviewThemes.title)
   })
 
@@ -359,7 +360,7 @@ describe('2 · 4 · 5 · 6 · the front page’s other blocks', () => {
     const t = text('monthly.subjects')
     expect(t).toMatch(/Looks & style/)
     expect(t).not.toMatch(/\b104\b|17%|provisional|of 626|Videos/)
-    expect(t).toContain('Open Subjects')
+    expect(t).toContain('Open Market')
     // HYPOTHETICAL: Looks & style checked and ready prints its figures.
     const base = monthlyFixture()
     const rows = base.overview.subjects.rows.map((r) => (r.id === 's-looks' ? { ...r, calibration: 'ready' as const } : r))

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { catalogueChips, catalogueReaderTitle, pickableCatalogue, studioCatalogue } from './catalogue'
+import { PAGE_KEYS } from '../renderables/types'
 import { SURFACES } from '../nav'
 import { ALL_SECTION_PAGES, SECTION_PAGES, isPickablePage } from './types'
 
@@ -80,16 +81,29 @@ describe('pickableCatalogue', () => {
 // Market, Voice and Competitive.
 describe('catalogueReaderTitle', () => {
   it('prefers the sidebar’s own label for a page a reader can visit', () => {
-    // "Your moves" since deploy 2 (market-first WP1.6, decision K).
+    // Your moves since deploy 2 (market-first WP1.6, decision K), at
+    // /dashboard/moves since Design v2.
     expect(catalogueReaderTitle('market', 'Market Intelligence')).toBe('Your moves')
-    // "Conversation" since deploy 3 (market-first WP2.4).
-    expect(catalogueReaderTitle('voice', 'Voice of Customer')).toBe('Conversation')
-    // "Competitive" again since 1 Oct (it was "Brands" from deploy 5).
-    expect(catalogueReaderTitle('competitive', 'Competitive Intelligence')).toBe('Competitive')
+    // Design v2: Your market's key is Market's, Conversation's is Voices'.
+    expect(catalogueReaderTitle('overview')).toBe('Market')
+    expect(catalogueReaderTitle('voice', 'Voice of Customer')).toBe('Voices')
+    expect(catalogueReaderTitle('content')).toBe('Content')
   })
 
-  it('keeps the module’s own title where no surface names the page', () => {
+  it('names the pages Design v2 folded away as the reader knew them, not by a renderer’s heading or a bare key', () => {
+    expect(catalogueReaderTitle('competitive', 'Competitive Intelligence')).toBe('Competitive')
+    expect(catalogueReaderTitle('subjects')).toBe('Subjects')
+    expect(catalogueReaderTitle('week')).toBe('This week')
     expect(catalogueReaderTitle('profile', 'Consumer Profile')).toBe('Consumer Profile')
+  })
+
+  it('gives every page key a reader’s name, and no two keys the same one', () => {
+    const names = PAGE_KEYS.map((k) => catalogueReaderTitle(k))
+    for (const [i, k] of PAGE_KEYS.entries()) {
+      expect(names[i], k).toBeTruthy()
+      expect(names[i], k).not.toBe(k)
+    }
+    expect(new Set(names).size).toBe(names.length)
   })
 })
 

@@ -120,9 +120,7 @@ export interface HomeData {
 
 // ---- The tiles' titles, in the artboard's order --------------------------------------
 
-/** The six tiles, in the artboard's order, with the artboard's titles. The link
- *  is the page's own address in lib/nav.ts, so a route that moves (Your market
- *  to /dashboard/overview) moves the link with it. */
+/** The six tiles, in the artboard's order, with the artboard's titles. */
 export const HOME_TILES: readonly { key: HomeTileKey; title: string }[] = [
   { key: 'overview', title: 'Your market' },
   { key: 'week', title: 'This week' },
@@ -131,6 +129,20 @@ export const HOME_TILES: readonly { key: HomeTileKey; title: string }[] = [
   { key: 'subjects', title: 'Subjects' },
   { key: 'market', title: 'Your moves' },
 ]
+
+/** The page each tile opens: its address in lib/nav.ts, so a route that moves
+ *  moves the link with it. Design v2 moved every one (decision 6 of the depth
+ *  plan; the Dashboard itself is rebuilt by its T8), and each tile opens where
+ *  its old address now lands (`redirectFor`). The keys are the tiles' own and
+ *  stay. */
+export const TILE_NAV: Readonly<Record<HomeTileKey, NavKey>> = {
+  overview: 'market',
+  week: 'market',
+  voice: 'voices',
+  competitive: 'voices',
+  subjects: 'market',
+  market: 'moves',
+}
 
 /** Rows a tile prints at most (the artboard: three). */
 export const TILE_ROWS = 3
@@ -169,7 +181,7 @@ export function homeAxis(now: string): string[] {
  *  re-exported for the Dashboard's callers and tests. */
 export { isFailOpenFix }
 
-const hrefOf = (key: HomeTileKey): string => surface(key as NavKey).href
+const hrefOf = (key: HomeTileKey): string => surface(TILE_NAV[key]).href
 const titleOf = (key: HomeTileKey): string => HOME_TILES.find((t) => t.key === key)?.title ?? key
 const plural = (n: number, one: string, many: string): string => (n === 1 ? one : many)
 

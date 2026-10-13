@@ -43,7 +43,7 @@ export const VOICE_BLOCKS: readonly Block<VoiceSurfaceData>[] = [
  * is a column of full-width sections wearing the tile's own surface.
  *
  * `flush` is the page's: each block draws its own 32px inset (`roomy` on its
- * frame), as the front page's do. The skeleton (app/dashboard/voice/
+ * frame), as the front page's do. The skeleton (app/dashboard/voices/
  * loading.tsx) takes the padded form, since bones have no frame.
  */
 export function GrowingTile({ children, flush = false, id }: { children: ReactNode; flush?: boolean; id?: string }) {
@@ -82,7 +82,7 @@ export const VOICE_LEGEND = [...THIRTEEN_WORDS, ...READER_FLAGS]
 /** The page's title row: the artboard's 26px title, and whatever control the
  *  route puts at its right-hand end (none today). */
 export function ConversationTitle({ controls }: { controls?: ReactNode }) {
-  return <PageBar title={surface('voice').label}>{controls}</PageBar>
+  return <PageBar title={surface('voices').label}>{controls}</PageBar>
 }
 
 /**

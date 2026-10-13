@@ -408,7 +408,7 @@ export function VoicePage({ data: d, detail, params }: { data: VoiceData | Voice
     return (
       <PageFrame>
         <PageBar title="Voice of Customer" context="What are they saying?">
-          <HowToRead items={d.legendItems} open={showLegend} basePath="/dashboard/voice" anchor="voice" />
+          <HowToRead items={d.legendItems} open={showLegend} basePath="/dashboard/voices" anchor="voices" />
         </PageBar>
         <PageGrid>
           <Tile col={12} row={2} eyebrow="The conversation, by theme">
@@ -430,7 +430,7 @@ export function VoicePage({ data: d, detail, params }: { data: VoiceData | Voice
       <PageBar title="Voice of Customer" context={`What are they saying? · ${weekdayDate(d.runDate)}`}>
         {d.pillsInBar && <EntityPills d={d} />}
         <ExportMenu />
-        <HowToRead items={d.legendItems} open={showLegend} basePath="/dashboard/voice" anchor="voice" />
+        <HowToRead items={d.legendItems} open={showLegend} basePath="/dashboard/voices" anchor="voices" />
       </PageBar>
 
       <PageGrid>

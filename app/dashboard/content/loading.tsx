@@ -3,11 +3,12 @@ import { PageTitle } from '@/components/pages/week/read-page'
 import { surface } from '@/lib/nav'
 
 // Mirrors components/pages/week/read-page.tsx (the artboard
-// Page-This-week.dc.html): the title, then the read's card (In short, then
-// findings with the quote beside them), then "Also heard this week". The
-// title is the page's own words, so nothing changes when the page lands.
-export default function WeekLoading() {
-  const title = surface('week').label
+// Page-This-week.dc.html), which Content draws until its own page lands: the
+// title, then the read's card (In short, then findings with the quote beside
+// them), then "Also heard this week". The title is the page's own words, so
+// nothing changes when the page lands.
+export default function ContentLoading() {
+  const title = surface('content').label
   return (
     <div className="flex flex-col gap-[22px]" aria-busy="true">
       <span role="status" className="sr-only">Loading {title}…</span>

@@ -17,7 +17,6 @@ import { SHARE_BAND } from '../report-bands'
 import { carriesShare, levelText } from '../reading/level'
 import { directionWord, monthChange, thinMonth, type Direction, type SeriesPoint } from '../reading/bands'
 import { chartMonths, DEFAULT_HORIZON, horizonWindow, HORIZON_LABEL, parseHorizon, readAxisOf, sinceStart, type Horizon } from '../reading/horizon'
-import { hasHorizon, surface } from '../nav'
 import { KIND_ORDER, kindChange, kindShares, redditRead, type KindShare, type RedditRead } from '../reading/kinds'
 import {
   followersLine,
@@ -1155,8 +1154,9 @@ export function unansweredLeadText(lead: UnansweredLead | null): string | null {
  */
 /**
  * THE QUESTIONS PANE'S OWN PERIOD (`?questions=`; the deploy-3 fresh review).
- * Subjects has no horizon control (lib/nav.ts `horizon: false`, the lead's
- * ruling of 27 Sep), so nothing on the page shows or undoes a horizon: the
+ * Subjects has no horizon control (it was `horizon: false` in lib/nav.ts, the
+ * lead's ruling of 27 Sep, and its board is Market's since Design v2), so
+ * nothing on the page shows or undoes a horizon: the
  * page reads the default month whatever `?horizon=` says, and the bar's month
  * selector does not carry it. The questions pane's "Asked most, last 3 months"
  * links ask for their period in their own parameter, which moves the pane and
@@ -1167,7 +1167,7 @@ export const QUESTIONS_PARAM = 'questions'
 
 /** The page's horizon and the questions pane's, from the URL. */
 export function subjectsHorizons(params: Readonly<Record<string, string | undefined>>): { horizon: Horizon; questions: Horizon } {
-  const horizon = hasHorizon(surface('subjects')) ? parseHorizon(params.horizon) : DEFAULT_HORIZON
+  const horizon = DEFAULT_HORIZON
   const asked = params[QUESTIONS_PARAM]
   return { horizon, questions: asked ? parseHorizon(asked) : horizon }
 }

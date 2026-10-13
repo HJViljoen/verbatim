@@ -255,8 +255,8 @@ describe('the Overview page', () => {
 
   it('links inside the app relatively, so a page change is not a page load', () => {
     const markup = render(<OverviewPage data={marketFrontFixture()} />)
-    expect(markup).toContain('href="/dashboard/voice"')
-    expect(markup).not.toContain('href="https://app.verbatimintel.com/dashboard/voice"')
+    expect(markup).toContain('href="/dashboard/voices"')
+    expect(markup).not.toContain('href="https://app.verbatimintel.com/dashboard/voices"')
   })
 
   it('says so plainly when the workspace has never been read', () => {

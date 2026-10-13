@@ -167,7 +167,7 @@ describe('What it means for you (overview.foryou)', () => {
 
   it('prints no "you" column, no direction word and no advice; its footer names Your moves by its label', () => {
     const t = text(overviewForYou.render(readyFront(), 'app', ctx))
-    expect(t).toContain(`Open ${surface('market').label} →`)
+    expect(t).toContain(`Open ${surface('moves').label} →`)
     for (const w of ['growing', 'fading', 'rising', 'you should', 'Add a']) expect(t.toLowerCase()).not.toContain(w.toLowerCase())
   })
 

@@ -161,7 +161,7 @@ export const monthlyBrands = slotSection({
   title: MARKET_BRANDS_TITLE,
   slot: 'brands',
   link: () => {
-    const page = surface('competitive')
+    const page = surface('voices')
     return { href: page.href, label: `Open ${page.label} →` }
   },
   stub: 'Brands counted in every video they come up in are read here once they are measured.',

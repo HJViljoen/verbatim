@@ -274,7 +274,7 @@ export const marketQuestions: Block<MarketSurfaceData> = {
 
   render(data, mode = 'app', ctx) {
     const q = data.questions ?? null
-    const subjects = surface('subjects')
+    const subjects = surface('market')
     const footer = openLink(mode, `${ctx.appUrl}${subjects.href}`, `Open ${subjects.label} →`)
     const empty = marketQuestions.emptyState(data)
     return (
