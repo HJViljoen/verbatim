@@ -22,6 +22,7 @@ import { homeWeeksFrame, loadHomeWeeks, type HomeWeeks } from '../home'
 import { topContent, type TopContent } from './content'
 import { marketParams, monthSoFar, subjectHref, topMarket, weekReadMonth, type MarketTop } from './market'
 import { topMoves, type TopMoves } from './moves'
+import { topProducts, type TopProducts } from './products'
 import { topVoices, type TopVoices } from './voices'
 
 // THE DASHBOARD (Design v2, depth plan T8; boards E1-Dashboard and
@@ -44,8 +45,9 @@ import { topVoices, type TopVoices } from './voices'
 //   4. VOICES (`topVoices`): the group in the most videos this month and its
 //      panel (`?group=`), every group's videos as separate bars (decision 2:
 //      never a share, never stacked), and the two brands named most.
-//   5. YOUR PRODUCTS (`TopProducts`, below): T5's tile type, stubbed until it
-//      merges (see the marker).
+//   5. YOUR PRODUCTS (`topProducts`, lib/pages/v2/products.ts): a product's
+//      first month with videos, else the product talked about most, into its
+//      open panel; the catalogue's products that came up, and the mini shelf.
 //   6. CONTENT (`topContent`): the first post idea (`?idea=`), its week beside
 //      its month, its format and opening, whether your posts touched on it, and
 //      the medical team line where the market is medical; or why there is none.
@@ -71,37 +73,11 @@ import { topVoices, type TopVoices } from './voices'
 // the shell). Each tile is `{ state: 'failed' }` where its read threw, and
 // the page prints one calm line in it.
 
-// ---- Your products (T5's tile, stubbed) ----------------------------------------------
+// ---- Your products (T5's tile) -------------------------------------------------------
 
-// switch to import from lib/pages/v2/products at merge
-/** What the Dashboard's Your products tile prints (pinned for T5 and T8; T5's
- *  `topProducts({supabase, clientId, reading, now})` returns it, with the
- *  optional fields where it has them). */
-export interface TopProducts {
-  state: 'not_applied' | 'no_catalogue' | 'not_on' | 'quiet' | 'ready'
-  monthWords: string
-  standout: { label: string; name: string; k: number; n: number | null; href: string } | null
-  href: string
-  /** Why a `quiet` tile has nothing: its month was not read yet, or its read
-   *  failed. Absent: read, and nothing of yours was named. */
-  note?: 'unread' | 'failed'
-  /** Products of yours named this month, and how many you list (the board's
-   *  "9 of your 38"). */
-  cameUp?: number
-  products?: number
-  /** The catalogue by category, each product's videos this month (the board's
-   *  mini shelf). */
-  columns?: { id: string; name: string; products: { id: string; videos: number }[] }[]
-}
-
-/**
- * STUB UNTIL T5 MERGES: switch to `topProducts` from lib/pages/v2/products at
- * merge. The products migration is applied nowhere yet, so `not_applied` is
- * every tenant's honest state today; T5's reader replaces this one call.
- */
-export async function topProductsStub(_scope: Scope): Promise<TopProducts> {
-  return { state: 'not_applied', monthWords: '', standout: null, href: surface('products').href }
-}
+// T5's reader and its pinned type (lib/pages/v2/products.ts): the tile's
+// figures are the page's own, read the page's way.
+export type { TopProducts } from './products'
 
 // ---- What the page prints ---------------------------------------------------------------
 
@@ -422,7 +398,7 @@ export function startDashboard(session: DashboardSession): DashboardReads {
   const market = settleTile('market', published.then((read) => topMarket({ supabase, clientId, reading, read, now })
     .then((top): MarketTile => ({ top, month: read ? weekReadMonth(read.data) : null, marketWeek: marketWeekOf(read) }))))
   const voices = settleTile('voices', topVoices({ supabase, clientId, reading, now: nowIso }))
-  const products = settleTile('products', topProductsStub(scope))
+  const products = settleTile('products', topProducts({ supabase, clientId, reading, now: nowIso }))
   // A failed week read costs Content its anchor week, not the tile: Content
   // anchors on the ideas' own run where the read is missing.
   const content = settleTile('content', publishedSoft.then((read) => topContent(scope, { now, published: read })))
