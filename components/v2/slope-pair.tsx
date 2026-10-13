@@ -11,8 +11,9 @@ import { cn } from '@/lib/utils'
  * category grey. The slope is a picture of two levels and says nothing more:
  * no arrow, no word. Whether the two months may be compared at all is the
  * caller's `Verdict`, printed beside the chart, and a page with a refused pair
- * does not draw one (plan decision 2 holds this chart back from Voices until
- * the monthly group reading exists).
+ * does not draw one. Voices (plan decision 2) draws its later column alone,
+ * every `from` null, until the monthly group reading exists: the earlier
+ * axis stands empty and the card says why.
  *
  * Labels that would collide are nudged apart, never dropped. Every value is
  * a figure; a row's name that a model wrote names its slot (`slot`), so the
