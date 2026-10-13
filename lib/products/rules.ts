@@ -33,7 +33,9 @@ import type { AliasKind, CatalogueAlias, Placement, ProductCatalogue } from './t
 // A GENERIC NAME (`needs_confirm`: "Unity", "Comfort", "Total Knee") places
 // nothing by rule. Its hit goes to the confirm call (lib/products/classify.ts),
 // and only a confirmed hit places, as a 'confirmed' row; until then the text
-// counts as it would without that word.
+// counts as it would without that word. A generic name the text's other names
+// already cover asks nothing (its product named, or its category standing as
+// strongly: "Unloader One brace").
 //
 // A product name on its own never names the BRAND (Heinrich, 13 Oct; T15 as
 // built): nothing here writes a brand_mentions row, and the client's own name
@@ -262,5 +264,13 @@ export function readText(compiled: CompiledCatalogue, text: string | null | unde
     }
   }
   placements.sort((a, b) => `${a.groupId}|${a.productId ?? ''}`.localeCompare(`${b.groupId}|${b.productId ?? ''}`))
-  return { placements, generic: [...generic.values()] }
+  // A generic name the text's placements already cover asks nothing: its
+  // product is already named, or its category already stands as strongly
+  // ("Unloader One brace": the brace is the named product's category).
+  const covered = (a: CompiledAlias): boolean => {
+    const g = byGroup.get(a.groupId)
+    if (!g) return false
+    return a.productId ? g.named.has(a.productId) : g.rank >= RANK[a.placement]
+  }
+  return { placements, generic: [...generic.values()].filter((a) => !covered(a)) }
 }

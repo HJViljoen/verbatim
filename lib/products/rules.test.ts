@@ -123,6 +123,12 @@ describe('readText: what one text places', () => {
       expect(placed('new prosthetic socket today')).toEqual(['unbranded:Sockets'])
     })
 
+    it('a generic name the text already covers asks nothing: its product named, or its category as strong', () => {
+      expect(generic('the Iceross Comfort and comfort matter')).toEqual([])
+      expect(generic('a prosthetic socket, the socket fit')).toEqual([])
+      expect(placed('a prosthetic socket, the socket fit')).toEqual(['unbranded:Sockets'])
+    })
+
     it('a generic name beside a placed one: the placed one stands, the generic waits', () => {
       expect(placed('Unity with my Iceross Seal-In X5')).toEqual(['named:Iceross Seal-In X5'])
       expect(generic('Unity with my Iceross Seal-In X5')).toEqual(['Unity'])
