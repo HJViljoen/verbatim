@@ -1,10 +1,10 @@
 import { Fragment, type CSSProperties, type ReactNode } from 'react'
 import { CARD, equalColumns, FlagChip, MiniBars, panelItemOrder, panelPlacement, PanelSlot, SELECTED_CARD_RING, type PanelLayout, type PerBreakpoint } from '@/components/v2'
-import { fmtInt, longMonth } from '@/lib/format'
+import { fmtInt, longMonth, platformLabel } from '@/lib/format'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
 import {
-  ASKED_ID, askedPhrase, IDEA_PANEL_ID, IDEAS_EMPTY, contentHref, monthWords, olderIdeasLine, POST_IDEA_SLOT,
-  type ContentState, type IdeaCard, type IdeasBlock, type OwnTouch,
+  askedPhrase, conversationHref, IDEA_PANEL_ID, IDEA_SLOTS, IDEAS_EMPTY, contentHref, monthWords, olderIdeasLine, POST_IDEA_SLOT, QUESTION_IDEA_LINE, questionsAfterIdeas, questionsHeading,
+  type ContentState, type IdeaCard, type IdeasBlock, type IdeasState, type OwnTouch, type QuestionSlot, type QuestionSlotsContext,
 } from '@/lib/pages/v2/content'
 import { cn } from '@/lib/utils'
 import { Fact, GroupNames, LABEL, Fig, OLink, RecipeChip } from './parts'
@@ -94,7 +94,7 @@ export function IdeaCardView({ card, state, selected, month, readLabel, style }:
         ) : null}
       </div>
       <div className="flex flex-col border-t border-track">
-        {card.groups.length > 0 ? <Fact name="Who's asking"><GroupNames groups={card.groups} /></Fact> : null}
+        <Fact name="Who's asking"><WhoAsks groups={card.groups} /></Fact>
         <Fact name="Your posts"><OwnTouchLine own={card.own} /></Fact>
       </div>
       {card.format || card.opening ? (
@@ -122,15 +122,126 @@ export function IdeaCardView({ card, state, selected, month, readLabel, style }:
   )
 }
 
-/** Why there are no cards, honestly, and where the questions are. */
-function IdeasEmpty({ block }: { block: IdeasBlock }) {
-  const line = block.state === 'ready' ? IDEAS_EMPTY.none : IDEAS_EMPTY[block.state]
+/** Who asks, by group name (decision 5); where no group's profile cites the
+ *  conversation, the fact stays and says so. */
+function WhoAsks({ groups }: { groups: IdeaCard['groups'] }) {
+  return groups.length > 0 ? <GroupNames groups={groups} /> : <span className="text-muted-foreground">No group cites it</span>
+}
+
+/** The rank's disc: the orange-text ground for a card that holds something,
+ *  the track for an empty one. */
+function Rank({ n, muted = false }: { n: number; muted?: boolean }) {
   return (
-    <div className={cn(CARD, 'gap-2 max-sm:gap-2')} data-ideas-empty={block.state}>
-      <p className="m-0 text-[15px] leading-[1.5]">{line}</p>
-      <p className="m-0 text-[13.5px] text-muted-foreground">
-        The questions people asked are listed under <a href={`#${ASKED_ID}`} className="font-semibold text-orange-text no-underline hover:underline">Also asked</a>.
-      </p>
+    <span aria-hidden className={cn('flex size-[26px] shrink-0 items-center justify-center rounded-full text-[13px] font-bold', muted ? 'bg-track text-muted-foreground' : 'bg-orange-text text-white')}>{n}</span>
+  )
+}
+
+/** Its videos over the page's period with the month beside them (decision
+ *  1: a week's figure never prints without its month), as an idea's. */
+function QuestionDemand({ row, ctx }: { row: QuestionSlot; ctx: QuestionSlotsContext }) {
+  const month = row.month != null && ctx.market.month ? { k: row.month, n: ctx.market.month } : null
+  const week = ctx.period === 'week' && month && row.week != null && ctx.market.week ? { k: row.week, n: ctx.market.week } : null
+  const big = week ?? month
+  return (
+    <div className="min-w-0">
+      {big ? (
+        <div data-copy="level">
+          <div className="font-mono text-[30px] leading-none font-medium tracking-[-0.02em] tabular-nums">{fmtInt(big.k)}</div>
+          <div className="mt-1.5 font-mono text-[12.5px] leading-[1.45] text-muted-foreground">of {fmtInt(big.n)} videos {week ? ctx.when : monthWords(ctx.month)}</div>
+        </div>
+      ) : null}
+      {week && month ? (
+        <p data-copy="level" className="m-0 font-mono text-[12.5px] leading-[1.45] text-muted-foreground">{fmtInt(month.k)} of {fmtInt(month.n)} {monthWords(ctx.month)}</p>
+      ) : null}
+      {row.flag ? <div className="mt-2.5"><FlagChip verdict={row.flag} /></div> : null}
+    </div>
+  )
+}
+
+/** "None of your 61 posts since August touched on it": every question in a
+ *  card passed the touch test (it is the top of the also-asked list). */
+function QuestionTouchLine({ ctx }: { ctx: QuestionSlotsContext }) {
+  const when = `since ${longMonth(ctx.since)}`
+  if (ctx.posts === null) return <span className="text-muted-foreground">Your posts could not be read just now</span>
+  if (ctx.posts === 0) return <span className="text-muted-foreground">You published nothing of your own {when}</span>
+  return (
+    <span className="text-[12.5px] font-semibold text-orange-text">
+      {ctx.posts === undefined ? <>None of your posts {when} touched on it</> : <>None of your <Fig>{fmtInt(ctx.posts)}</Fig> posts {when} touched on it</>}
+    </span>
+  )
+}
+
+/**
+ * A CARD THE IDEAS LEFT, HOLDING THE NEXT QUESTION IN LINE (parity pass): the
+ * idea card's anatomy, fed by what the data holds without a post idea. The
+ * conversation's own label in the title's place (a `subject` node, Pass B's),
+ * its videos beside the month, the three weeks as bare counts, the flag an
+ * idea would wear, who asks and your posts; and, where the idea's format and
+ * opening would be, one calm line saying why there is no idea for it. It
+ * opens the conversation in Market, where its evidence is.
+ */
+export function QuestionCardView({ row, rank, state, ctx, style }: {
+  row: QuestionSlot
+  rank: number
+  state: IdeasState
+  ctx: QuestionSlotsContext
+  style?: CSSProperties
+}) {
+  const bars = row.weeks && ctx.weekLabels && row.weeks.length === ctx.weekLabels.length ? row.weeks.map((n, i) => ({ label: ctx.weekLabels![i], value: n })) : null
+  return (
+    <article id={`idea-slot-${rank}`} data-idea-slot="question" aria-labelledby={`idea-slot-${rank}-title`} style={style} className={CARD}>
+      <div className="flex items-start gap-3">
+        <Rank n={rank} />
+        <h3 id={`idea-slot-${rank}-title`} className="m-0 text-[18px] leading-[1.35] font-semibold tracking-[-0.005em]">
+          <span className="sr-only">Question {rank}: </span>
+          <span data-copy="subject" data-slot="pass_b_theme">{row.label}</span>
+        </h3>
+      </div>
+      <div className="flex items-end justify-between gap-3">
+        <QuestionDemand row={row} ctx={ctx} />
+        {bars ? (
+          <div className="w-[118px] shrink-0">
+            <MiniBars bars={bars} label={`Market videos a week where it came up, the weeks of ${bars.map((b) => b.label).join(', ')}`} />
+          </div>
+        ) : null}
+      </div>
+      {/* The facts the question carries, flowing from the top as an idea's
+          do: who asks, where it came up, its comments, its subject, your
+          posts, and why it holds no idea (where that is not said over the
+          row). A fact the page could not read is left out. */}
+      <div className="flex flex-col border-t border-track">
+        <Fact name="Who's asking"><WhoAsks groups={row.groups} /></Fact>
+        {row.platforms && row.platforms.length > 0 ? (
+          <Fact name="Came up on">
+            {row.platforms.map((p, i) => <span key={p.platform}>{i > 0 ? ', ' : null}{platformLabel(p.platform)} <Fig>{fmtInt(p.videos)}</Fig></span>)}
+          </Fact>
+        ) : null}
+        {row.comments?.month != null ? (
+          <Fact name="Comments">
+            {ctx.period === 'week' && row.comments.week != null ? <><Fig>{fmtInt(row.comments.week)}</Fig> {ctx.when}, </> : null}
+            <Fig>{fmtInt(row.comments.month)}</Fig> {monthWords(ctx.month)}
+          </Fact>
+        ) : null}
+        <Fact name="Subject">{row.subject ?? <span className="text-muted-foreground">No subject holds it</span>}</Fact>
+        <Fact name="Your posts"><QuestionTouchLine ctx={ctx} /></Fact>
+        {QUESTION_IDEA_LINE[state] ? <Fact name="Post idea"><span className="text-muted-foreground">{QUESTION_IDEA_LINE[state]}</span></Fact> : null}
+      </div>
+      <div className="mt-auto flex flex-wrap items-center justify-between gap-3">
+        <OLink href={conversationHref(row.registryId)}>Open in Market →</OLink>
+      </div>
+    </article>
+  )
+}
+
+/** A card with neither an idea nor a question left for it: its rank and,
+ *  on the first such card, the one line saying why. */
+function EmptySlotCard({ rank, line, style }: { rank: number; line: string | null; style?: CSSProperties }) {
+  return (
+    <div data-idea-slot="empty" style={style} className={CARD}>
+      <div className="flex items-start gap-3">
+        <Rank n={rank} muted />
+        {line ? <p className="m-0 pt-0.5 text-[14px] leading-[1.5] text-muted-foreground">{line}</p> : null}
+      </div>
     </div>
   )
 }
@@ -140,49 +251,80 @@ export function ideasLayout(count: number): PanelLayout {
   return { base: equalColumns(1, count), xl: equalColumns(3, count) }
 }
 
-/** The week's ideas, and the open one's brief (`panel`) under its card at
- *  every width: one grid, the brief a child of it placed after the card's row
- *  (`panelPlacement`) and in the markup right after the card. A brief whose
- *  card is not drawn opens under the row. */
-export function IdeasSection({ block, state, month, panel }: {
+/** The line over the row, in the board's place: the days the ideas read, or,
+ *  where every card is a question, what the questions are. */
+function RowLine({ block, ctx, month }: { block: IdeasBlock; ctx: QuestionSlotsContext; month: { month: string } }) {
+  const read = block.week?.read ?? null
+  const since = block.cards[0]?.own.since
+  if (block.cards.length > 0 && read) {
+    // A row of fewer ideas says what its other cards are too.
+    const after = block.questions.length > 0 ? questionsAfterIdeas(ctx) : ''
+    return <>{askedPhrase(read)} that none of your posts since {longMonth(since ?? month.month)} had touched on when they were picked, biggest first{after}</>
+  }
+  if (block.cards.length === 0 && block.questions.length > 0) return <>{questionsHeading(ctx, block.state)}</>
+  return null
+}
+
+/**
+ * The week's ideas, and the open one's brief (`panel`) under its card at
+ * every width: one grid, the brief a child of it placed after the card's row
+ * (`panelPlacement`) and in the markup right after the card. A brief whose
+ * card is not drawn opens under the row.
+ *
+ * ALWAYS THREE CARDS (the board's row, in every state): the ideas, then a
+ * question card for each place they leave (`IdeasBlock.questions`), then an
+ * empty card for any place no question is left for.
+ */
+export function IdeasSection({ block, state, month, ctx, panel }: {
   block: IdeasBlock
   state: ContentState
   month: { month: string; complete: boolean }
+  /** What the question cards print beside their figures. */
+  ctx: QuestionSlotsContext
   panel?: (notchAt?: number | PerBreakpoint) => ReactNode
 }) {
   const openRank = state.open?.kind === 'idea' ? state.open.rank : null
-  const since = block.cards[0]?.own.since
   const read = block.week?.read ?? null
   // The month each card's figure sits beside: the ideas' own (the page's for
   // this week's ideas; an older set's read window's).
   const ideasMonth = block.week?.month ?? month
-  const at = panel && openRank != null ? block.cards.findIndex((c) => c.rank === openRank) : -1
-  const place = panel && at >= 0 ? panelPlacement(at, ideasLayout(block.cards.length)) : null
+  const cards = block.cards.slice(0, IDEA_SLOTS)
+  const questions = block.questions.slice(0, IDEA_SLOTS - cards.length)
+  const empty = IDEA_SLOTS - cards.length - questions.length
+  // An empty card says one thing each: where no card holds anything, why
+  // there is no idea (no question card says it), then why no question is
+  // left; the rest keep the row's place.
+  const emptyLines = [
+    ...(cards.length === 0 && questions.length === 0 && block.state !== 'ready' ? [IDEAS_EMPTY[block.state]] : []),
+    ctx.emptyLine,
+  ]
+  const at = panel && openRank != null ? cards.findIndex((c) => c.rank === openRank) : -1
+  const place = panel && at >= 0 ? panelPlacement(at, ideasLayout(IDEA_SLOTS)) : null
+  const line = RowLine({ block, ctx, month })
   return (
     <section aria-labelledby="ideas-title" className="flex flex-col gap-3.5">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-0.5">
         <h2 id="ideas-title" className="m-0 text-[19px] leading-[1.3] font-semibold">What to post next</h2>
-        {block.cards.length > 0 && read ? (
-          <span className="text-[13px] leading-[1.4] text-muted-foreground">
-            {askedPhrase(read)} that none of your posts since {longMonth(since ?? month.month)} had touched on when they were picked, biggest first
-          </span>
-        ) : null}
+        {line ? <span className="text-[13px] leading-[1.4] text-muted-foreground">{line}</span> : null}
       </div>
-      {block.cards.length > 0 && block.week && !block.week.current ? (
+      {cards.length > 0 && block.week && !block.week.current ? (
         <p data-ideas-older="" className="m-0 px-0.5 text-[14px] leading-[1.5]">{olderIdeasLine(block.week)}</p>
       ) : null}
-      {block.cards.length > 0 ? (
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
-          {block.cards.map((c, i) => (
-            <Fragment key={c.rank}>
-              <IdeaCardView card={c} state={state} selected={openRank === c.rank} month={ideasMonth} readLabel={read?.label ?? null} style={panelItemOrder(i)} />
-              {place && panel && i === at ? <PanelSlot placement={place}>{panel(place.notch)}</PanelSlot> : null}
-            </Fragment>
-          ))}
-        </div>
-      ) : (
-        <IdeasEmpty block={block} />
-      )}
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-3" data-ideas-state={block.state}>
+        {cards.map((c, i) => (
+          <Fragment key={c.rank}>
+            <IdeaCardView card={c} state={state} selected={openRank === c.rank} month={ideasMonth} readLabel={read?.label ?? null} style={panelItemOrder(i)} />
+            {place && panel && i === at ? <PanelSlot placement={place}>{panel(place.notch)}</PanelSlot> : null}
+          </Fragment>
+        ))}
+        {questions.map((q, i) => (
+          <QuestionCardView key={q.registryId} row={q} rank={cards.length + i + 1} state={block.state} ctx={ctx} style={panelItemOrder(cards.length + i)} />
+        ))}
+        {Array.from({ length: empty }, (_, i) => {
+          const rank = cards.length + questions.length + i + 1
+          return <EmptySlotCard key={`empty-${rank}`} rank={rank} line={emptyLines[i] ?? null} style={panelItemOrder(rank - 1)} />
+        })}
+      </div>
       {panel && !place ? panel() : null}
     </section>
   )

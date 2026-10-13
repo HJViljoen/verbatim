@@ -294,7 +294,37 @@ export interface IdeasBlock {
   cards: IdeaCard[]
   /** The ideas' own week; null where none print. */
   week: IdeasWeek | null
+  /**
+   * THE ROW KEEPS THE BOARD'S THREE CARDS (parity pass, 13 Oct: "the page
+   * shouldn't look too different if everything isn't as populated as the
+   * design"). Where fewer than `IDEA_SLOTS` ideas print (none written, fewer
+   * cleared the step's floor, the step not switched on), each card the ideas
+   * leave holds the next question in line instead: the top of the also-asked
+   * list (conversations filed as questions over the page's period that none of
+   * your posts touched on), which then leaves them out. A question card draws
+   * what the data feeds (the question, its videos beside its month, its three
+   * weeks, who asks, your posts) and says in the format's place that the
+   * format comes with a post idea. Never padded: a slot with no question left
+   * is an empty card that says so.
+   */
+  questions: QuestionSlot[]
 }
+
+/** A question in a card the ideas left: its also-asked row, and the flag an
+ *  idea on it would wear (the anomaly check's, or the week read's new). */
+export interface QuestionSlot extends AskedRow {
+  flag: Verdict | null
+  /** Where it came up: its videos by platform over the page's period, the
+   *  most first (each video counted on its own platform; they sum to its
+   *  figure). Null where not read. */
+  platforms: { platform: string; videos: number }[] | null
+  /** The comments it holds over the page's week and its month (decision 1:
+   *  the week's never alone). Null where not read. */
+  comments: { week: number | null; month: number | null } | null
+}
+
+/** The cards the ideas row always draws (E5-Content's three). */
+export const IDEA_SLOTS = 3
 
 /** Ideas this many days older than the page's week stop printing. */
 export const IDEAS_STALE_DAYS = 28
@@ -364,6 +394,14 @@ export interface PostsBlock {
   byPlatform: { platform: string; posts: number }[]
   /** Your typical post's response against a typical market video. */
   response: { multiple: number; rated: number } | null
+  /** Your posts with a response figure (Reddit and a photo have none), the
+   *  typical post's floor read against `OWN_RESPONSE_MIN`. Absent on a page
+   *  dumped before the parity pass. */
+  rated?: number
+  /** Whether the market's typical video was read: without it no post has a
+   *  multiple, whatever its own figures. Absent on a page dumped before the
+   *  parity pass (read as true). */
+  marketTypical?: boolean
   best: PostRow | null
   rows: PostRow[]
   unread: string | null
@@ -384,12 +422,17 @@ export interface AskedRow {
 export interface AskedBlock {
   period: ContentPeriod
   rows: AskedRow[]
-  /** The conversations not yet in your posts, beyond the ideas. */
+  /** The conversations not yet in your posts, beyond the ideas and the
+   *  questions the ideas row holds. */
   total: number
   /** Conversations your posts touched on, left out of the table. */
   touched: number
   /** The first month of your posts the touch test read (`ideaOwnedFrom`). */
   since: string
+  /** Your posts the touch test read (since `since`); null where they could
+   *  not be read, and then nothing was left out as touched. Absent on a page
+   *  dumped before the parity pass. */
+  posts?: number | null
   expanded: boolean
   unread: string | null
 }
@@ -545,6 +588,47 @@ export function pooledVideos(rows: readonly WindowDenominator[] | null, audience
   let n = 0
   for (const r of rows) if (keep.has(r.audience)) n += Number(r.videos) || 0
   return n
+}
+
+/** Each theme's comments pooled over the market's audiences. */
+export function pooledThemeComments(rows: readonly WindowThemeReading[] | null, audiences: readonly string[]): Map<string, number> | null {
+  if (!rows) return null
+  const keep = new Set(audiences)
+  const out = new Map<string, number>()
+  for (const r of rows) {
+    if (!keep.has(r.audience)) continue
+    const n = Number(r.comments)
+    if (!Number.isFinite(n) || n <= 0) continue
+    out.set(String(r.theme_id), (out.get(String(r.theme_id)) ?? 0) + n)
+  }
+  return out
+}
+
+/** Each theme's videos by platform, pooled over the market's audiences (each
+ *  video sits on one platform in one audience, so the mixes add). */
+export function pooledThemeMix(rows: readonly WindowThemeReading[] | null, audiences: readonly string[]): Map<string, Map<string, number>> | null {
+  if (!rows) return null
+  const keep = new Set(audiences)
+  const out = new Map<string, Map<string, number>>()
+  for (const r of rows) {
+    if (!keep.has(r.audience) || !r.platform_mix) continue
+    const mix = out.get(String(r.theme_id)) ?? new Map<string, number>()
+    for (const [platform, v] of Object.entries(r.platform_mix)) {
+      const n = Number(v)
+      if (Number.isFinite(n) && n > 0) mix.set(platform, (mix.get(platform) ?? 0) + n)
+    }
+    out.set(String(r.theme_id), mix)
+  }
+  return out
+}
+
+/** A platform mix as a card's rows, the most videos first. Null where the
+ *  read did not come back; an empty list where it came back with none. */
+export function platformsOf(mixes: Map<string, Map<string, number>> | null | undefined, id: string): { platform: string; videos: number }[] | null {
+  if (!mixes) return null
+  return [...(mixes.get(id) ?? new Map<string, number>()).entries()]
+    .map(([platform, videos]) => ({ platform, videos }))
+    .sort((a, b) => b.videos - a.videos || a.platform.localeCompare(b.platform))
 }
 
 /** A persona as the stored profile holds it, defensively (the row is jsonb a
@@ -952,7 +1036,7 @@ export const OWN_RESPONSE_MIN = 3
 export function postsBlock(input: { owned: OwnedPosts | null; typical: number | null; month: ContentMonth }): PostsBlock {
   const { owned, typical, month } = input
   const base = { month: month.month, complete: month.complete }
-  if (!owned) return { ...base, total: 0, byPlatform: [], response: null, best: null, rows: [], unread: 'Your posts could not be read just now.' }
+  if (!owned) return { ...base, total: 0, byPlatform: [], response: null, rated: 0, marketTypical: typical != null, best: null, rows: [], unread: 'Your posts could not be read just now.' }
   const rates = owned.posts.map(rateOf).filter((r): r is number => r != null)
   const own = median(rates)
   const rows = owned.posts.map((p) => postRow(p, typical))
@@ -962,6 +1046,8 @@ export function postsBlock(input: { owned: OwnedPosts | null; typical: number | 
     total: owned.total,
     byPlatform: owned.byPlatform,
     response: own != null && typical != null && rates.length >= OWN_RESPONSE_MIN ? { multiple: round1(own / typical), rated: rates.length } : null,
+    rated: rates.length,
+    marketTypical: typical != null,
     best,
     rows,
     unread: null,
@@ -971,6 +1057,9 @@ export function postsBlock(input: { owned: OwnedPosts | null; typical: number | 
 // ---- Worth a reply ------------------------------------------------------------------
 
 export const REPLIES_NO_WEEK = 'No update has covered a week yet, so there is no reply list.'
+/** Also asked (and the ideas row's empty cards) before any update has
+ *  covered a week. */
+export const ASKED_NO_WEEK = 'No update has covered a week yet.'
 
 /** The days the reply list is picked from: the run's week, or the month it is
  *  restated against, and never past that month's end (a week that runs into
@@ -1008,7 +1097,7 @@ export interface QuestionConversation {
   label: string
 }
 
-export function askedBlock(input: {
+export interface AskedInput {
   period: ContentPeriod
   questions: readonly QuestionConversation[] | null
   /** Each conversation's videos over the week and over the month; the
@@ -1023,11 +1112,26 @@ export function askedBlock(input: {
   owned: OwnedPosts | null
   since: string
   expanded: boolean
-}): AskedBlock {
+}
+
+/** The also-asked table, as the page draws it beside ideas that fill all
+ *  three cards. */
+export function askedBlock(input: AskedInput): AskedBlock {
+  return askedWithLead({ ...input, lead: 0 }).asked
+}
+
+/**
+ * The also-asked list, its first `lead` rows set aside for the ideas row's
+ * empty cards (`IdeasBlock.questions`) and the table holding the rest: the
+ * cards are the top of the list and the table goes on after them, so no
+ * question prints twice.
+ */
+export function askedWithLead(input: AskedInput & { lead: number }): { asked: AskedBlock; lead: AskedRow[] } {
   const { period, questions } = input
   const counts = period === 'month' ? input.counts.month : input.counts.week
-  const base = { period, rows: [], total: 0, touched: 0, since: input.since, expanded: input.expanded }
-  if (!questions || !counts) return { ...base, unread: 'The questions people asked could not be read just now.' }
+  const posts = input.owned ? input.owned.total : null
+  const base = { period, rows: [], total: 0, touched: 0, since: input.since, posts, expanded: input.expanded }
+  if (!questions || !counts) return { asked: { ...base, unread: 'The questions people asked could not be read just now.' }, lead: [] }
   const asked = questions
     .filter((q) => !input.exclude.has(q.registryId) && (counts.get(q.registryId) ?? 0) > 0)
     .sort((a, b) => (counts.get(b.registryId) ?? 0) - (counts.get(a.registryId) ?? 0) || a.label.localeCompare(b.label))
@@ -1037,25 +1141,25 @@ export function askedBlock(input: {
     if (t.state === 'touched') { touched += 1; return false }
     return true
   })
-  const shown = input.expanded ? open : open.slice(0, ASKED_SHOWN)
+  const lead = open.slice(0, Math.max(0, input.lead))
+  const rest = open.slice(lead.length)
+  const shown = input.expanded ? rest : rest.slice(0, ASKED_SHOWN)
   const weeksOf = (id: string): number[] | null => {
     if (!input.weeks || input.weeks.some((w) => w == null)) return null
     return input.weeks.map((w) => w!.get(id) ?? 0)
   }
+  const row = (q: QuestionConversation): AskedRow => ({
+    registryId: q.registryId,
+    label: q.label,
+    groups: (input.groups.get(q.registryId) ?? []).slice(0, GROUPS_SHOWN),
+    subject: input.subjects.get(q.registryId) ?? null,
+    week: input.counts.week ? input.counts.week.get(q.registryId) ?? 0 : null,
+    month: input.counts.month ? input.counts.month.get(q.registryId) ?? 0 : null,
+    weeks: weeksOf(q.registryId),
+  })
   return {
-    ...base,
-    rows: shown.map((q) => ({
-      registryId: q.registryId,
-      label: q.label,
-      groups: (input.groups.get(q.registryId) ?? []).slice(0, GROUPS_SHOWN),
-      subject: input.subjects.get(q.registryId) ?? null,
-      week: input.counts.week ? input.counts.week.get(q.registryId) ?? 0 : null,
-      month: input.counts.month ? input.counts.month.get(q.registryId) ?? 0 : null,
-      weeks: weeksOf(q.registryId),
-    })),
-    total: open.length,
-    touched,
-    unread: null,
+    asked: { ...base, rows: shown.map(row), total: rest.length, touched, unread: null },
+    lead: lead.map(row),
   }
 }
 
@@ -1309,6 +1413,10 @@ interface WeekReads {
   audiences: string[]
   market: { week: number | null; month: number | null }
   themes: { week: Map<string, number> | null; month: Map<string, number> | null; weeks: (Map<string, number> | null)[] | null }
+  /** Every theme's comments over the week and the month, and its videos by
+   *  platform over each (the ideas row's question cards). */
+  comments: { week: Map<string, number> | null; month: Map<string, number> | null }
+  mixes: { week: Map<string, Map<string, number>> | null; month: Map<string, Map<string, number>> | null }
   weekLabels: string[] | null
   /** Over the days the ideas read (`IdeasRead`): the market's videos, every
    *  theme's, and every theme's in each of its weeks; and over the month
@@ -1359,6 +1467,8 @@ async function readWindows(scope: Scope, week: ContentWeek | null, month: Conten
       month: pooledThemeVideos(m.themes, audiences),
       weeks: weeks ? [...prior.map((p) => pooledThemeVideos(p.themes, audiences)), weekThemes] : null,
     },
+    comments: { week: pooledThemeComments(w?.themes ?? null, audiences), month: pooledThemeComments(m.themes, audiences) },
+    mixes: { week: pooledThemeMix(w?.themes ?? null, audiences), month: pooledThemeMix(m.themes, audiences) },
     weekLabels: weeks ? weeks.map((x) => x.label) : null,
     ideas: i
       ? {
@@ -1442,7 +1552,9 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
   }
 
   const ideaIds = new Set(ideas.map((i) => i.registry_id))
-  const asked = askedBlock({
+  // The cards the ideas leave hold the next questions in line (IdeasBlock.questions).
+  const { asked: askedRead, lead } = askedWithLead({
+    lead: Math.max(0, IDEA_SLOTS - ideas.length),
     period: state.period,
     questions,
     counts: { week: windows?.themes.week ?? null, month: windows?.themes.month ?? null },
@@ -1454,9 +1566,12 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
     since,
     expanded: state.asked,
   })
+  // No update has covered a week: there are no questions to list, which is
+  // not a read that failed.
+  const asked: AskedBlock = week ? askedRead : { ...askedRead, unread: ASKED_NO_WEEK }
 
   // ---- wave 3: the subjects of what is shown, and the open panel's reads
-  const shownIds = [...ideaIds, ...asked.rows.map((r) => r.registryId)]
+  const shownIds = [...ideaIds, ...lead.map((r) => r.registryId), ...asked.rows.map((r) => r.registryId)]
   const openIdea = state.open?.kind === 'idea' ? ideas.find((i) => i.rank === (state.open as { rank: number }).rank) ?? null : null
   const commentIds = openIdea ? [...new Set(openIdea.subquestions.flatMap((s) => s.commentIds))] : []
   const videoIds = openIdea ? [...new Set(openIdea.subquestions.flatMap((s) => s.videoIds))] : []
@@ -1466,7 +1581,7 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
     openIdea ? soft('panelQuotes', readPanelQuotes(db, admin, clientId, commentIds, openIdea.title)) : Promise.resolve(null),
     openIdea ? soft('panelWords', readWords(db, clientId, commentIds)) : Promise.resolve(null),
   ])
-  for (const r of asked.rows) r.subject = subjects?.get(r.registryId)?.name ?? null
+  for (const r of [...lead, ...asked.rows]) r.subject = subjects?.get(r.registryId)?.name ?? null
 
   const flagOf = new Map((flags ?? []).map((f) => [String(f.object_id), f]))
   const newIds = published && week && published.runId === week.runId && 'newThisWeek' in published.data
@@ -1500,6 +1615,23 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
     })
   })
 
+  // The questions in the cards the ideas leave wear the flag an idea would.
+  const questionSlots: QuestionSlot[] = lead.map((r) => {
+    const f = flagOf.get(r.registryId)
+    const level = counted(windows?.themes.month, r.registryId, windows?.market.month ?? null)
+    const flag = f && week ? flagVerdict(f, week) : newIds.has(r.registryId) && level ? newVerdict(r.registryId, r.label, month, level) : null
+    const weekComments = windows?.comments.week
+    const monthComments = windows?.comments.month
+    return {
+      ...r,
+      flag,
+      platforms: platformsOf(state.period === 'month' ? windows?.mixes.month : windows?.mixes.week, r.registryId),
+      comments: weekComments || monthComments
+        ? { week: weekComments ? weekComments.get(r.registryId) ?? 0 : null, month: monthComments ? monthComments.get(r.registryId) ?? 0 : null }
+        : null,
+    }
+  })
+
   const typical = typicalRate(playbook)
   let ideaPanel: IdeaPanel | null = null
   if (openIdea && ideasWeek) {
@@ -1526,7 +1658,7 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
     week,
     month,
     market: windows?.market ?? { week: null, month: null },
-    ideas: { state: ideasState, cards, week: cards.length > 0 ? ideasWeek : null },
+    ideas: { state: ideasState, cards, week: cards.length > 0 ? ideasWeek : null, questions: questionSlots },
     works: worksBlock({ playbook, owned, month }),
     replies: repliesWindow ? repliesView(replies, repliesWindow) : { ...repliesView(null, null), unread: REPLIES_NO_WEEK },
     posts: postsBlock({ owned, typical, month }),
@@ -1581,6 +1713,82 @@ export const IDEAS_EMPTY: Record<Exclude<IdeasState, 'ready'>, string> = {
 /** The Dashboard tile's empty line: the reason, and where the questions are. */
 export const topContentEmpty = (state: Exclude<IdeasState, 'ready'>): string =>
   state === 'unread' ? IDEAS_EMPTY.unread : `${IDEAS_EMPTY[state]} The questions people asked are on Content.`
+
+// ---- the ideas row's other cards (parity pass, 13 Oct) ------------------------------
+
+/** What a question card prints as its "Post idea" fact: why this card holds
+ *  a question and not an idea, in a few calm words. `ready` is a set with
+ *  fewer than three ideas; `not_on` prints no fact, the row's line says it
+ *  once. */
+export const QUESTION_IDEA_LINE: Record<IdeasState, string | null> = {
+  ready: 'None was written for this question',
+  // Said once, over the row (`questionsHeading`), never on each card.
+  not_on: null,
+  none: 'None was written this week',
+  stale: 'None written in the last four weeks',
+  unread: 'Could not be read just now',
+}
+
+/** What the ideas row's question cards need from the page: the period and
+ *  its words, the market's videos and the month beside them, the three
+ *  weeks' names, the touch test's window, and the line for a card with no
+ *  question left. */
+export interface QuestionSlotsContext {
+  period: ContentPeriod
+  /** "this week", "between 28 Sep and 4 Oct", or the month's words. */
+  when: string
+  market: { week: number | null; month: number | null }
+  month: Pick<ContentMonth, 'month' | 'complete'>
+  /** The three weeks' names, oldest first ("21 Sep"); null where the week is
+   *  not seven days. */
+  weekLabels: string[] | null
+  since: string
+  /** Your posts the touch test read; null where they could not be read. */
+  posts: number | null | undefined
+  /** The line on a card with neither an idea nor a question. */
+  emptyLine: string
+}
+
+export function questionSlotsContext(data: Pick<ContentPageData, 'period' | 'week' | 'month' | 'market' | 'asked' | 'ideas'>): QuestionSlotsContext {
+  const { week, month, asked } = data
+  const weekWords = !week || week.isWeek ? 'this week' : daysPhrase(week.first, week.last)
+  const when = data.period === 'month' ? monthWords(month) : weekWords
+  // "other" only where a card before it holds an idea or a question.
+  const other = data.ideas.cards.length + data.ideas.questions.length > 0 ? 'other ' : ''
+  const emptyLine = asked.unread
+    ? asked.unread
+    : !week && data.period === 'week'
+      ? ASKED_NO_WEEK
+      : asked.touched > 0
+        ? `Every ${other}question people asked was touched on by one of your posts.`
+        : `No ${other}question came up ${when}.`
+  return {
+    period: data.period,
+    when,
+    market: data.market,
+    month,
+    weekLabels: week ? threeWeeks(week)?.map((w) => w.label) ?? null : null,
+    since: asked.since,
+    posts: asked.posts,
+    emptyLine,
+  }
+}
+
+/** The ideas row's line where every card is a question (no idea printed):
+ *  what the cards are, in the board's place for "Questions people keep
+ *  asking that your posts don't answer yet, biggest first". */
+export function questionsHeading(ctx: Pick<QuestionSlotsContext, 'when' | 'since' | 'posts'>, state?: IdeasState): string {
+  // Where your posts could not be read, or there were none, nothing was left
+  // out as touched, and the line does not say so.
+  const what = ctx.posts === null || ctx.posts === 0
+    ? `Questions people asked ${ctx.when}, the most videos first`
+    : `Questions people asked ${ctx.when} that none of your posts since ${longMonth(ctx.since)} touched on, the most videos first`
+  // Post ideas not switched on is said here, once, and on no card.
+  return state === 'not_on' ? `Post ideas are not switched on. ${what}` : what
+}
+
+/** The clause a row of fewer ideas adds for the questions after them. */
+export const questionsAfterIdeas = (ctx: Pick<QuestionSlotsContext, 'when'>): string => `, then the next questions asked ${ctx.when}`
 
 /**
  * The Dashboard's Content tile, light: the ideas (two round trips) beside the

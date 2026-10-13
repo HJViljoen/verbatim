@@ -6,10 +6,11 @@ import { summariseOwnedPosts, type OwnedPosts } from '../../reading/owned'
 import type { Verdict } from '../../reading/verdicts'
 import type { ReplyRow } from '../week'
 import {
-  agentHref, askedBlock, conversationHref, contentWeek, daysPhrase, ideaOwnedFrom, ideasReadOf, ideasWeekOf, flagVerdict, groupsByConversation, ideaCard, mixSentence,
+  agentHref, askedWithLead, conversationHref, contentWeek, daysPhrase, ideaOwnedFrom, ideasReadOf, ideasWeekOf, flagVerdict, groupsByConversation, ideaCard, mixSentence,
   newVerdict, postsBlock, repliesView, storedPersonas, subquestionRows, wordsToBorrow, worksBasis,
+  ASKED_NO_WEEK, IDEA_SLOTS,
   type AskedBlock, type ContentMonth, type ContentOpen, type ContentPageData, type ContentPeriod, type IdeaCard,
-  type IdeaPanel, type IdeasWeek, type MarketVideoCard, type PanelQuote, type PostsBlock, type WorksBlock, type WorksRow,
+  type IdeaPanel, type IdeasState, type IdeasWeek, type MarketVideoCard, type PanelQuote, type PostsBlock, type QuestionSlot, type WorksBlock, type WorksRow, type AskedRow,
 } from './content'
 
 // The Content page's fixtures (depth v2, T6): Össur-shaped, drawn from the
@@ -274,20 +275,31 @@ const SUBJECTS = new Map<string, string | null>([
 ])
 
 export function askedFixture(period: ContentPeriod = 'week', expanded = false): AskedBlock {
-  const block = askedBlock({
+  return askedSplit(period, expanded, 3).asked
+}
+
+/** The also-asked list beside `ideas` printed ideas (the first ones, by
+ *  rank): the table, and the questions the ideas row's other cards hold. */
+export function askedSplit(period: ContentPeriod, expanded: boolean, ideas: number, opts: { groups?: boolean; subjects?: boolean } = {}): { asked: AskedBlock; lead: AskedRow[] } {
+  return askedWithLead({
+    lead: Math.max(0, IDEA_SLOTS - ideas),
     period,
     questions: ASKED_LABELS,
     counts: { week: WEEK_COUNTS, month: MONTH_COUNTS },
     weeks: [W1, W2, WEEK_COUNTS],
-    exclude: new Set([REG.liner, REG.insurance, REG.water]),
-    groups: groupsByConversation(OSSUR_PERSONAS),
-    subjects: SUBJECTS,
+    exclude: new Set(OSSUR_IDEAS.slice(0, ideas).map((i) => i.registry_id)),
+    groups: opts.groups === false ? THIN_GROUPS : groupsByConversation(OSSUR_PERSONAS),
+    subjects: opts.subjects === false ? THIN_SUBJECTS : SUBJECTS,
     owned: OSSUR_OWNED_SINCE,
     since: ideaOwnedFrom('2026-10-01'),
     expanded,
   })
-  return block
 }
+
+/** The thin real state's groups and subjects (Össur and Sealand on 13 Oct):
+ *  most questions cited by no group, and some held by no subject. */
+const THIN_GROUPS = groupsByConversation(storedPersonas([{ key: 'first-time', name: 'First-time buyer', registryIds: [REG.insurance, REG.knee] }]))
+const THIN_SUBJECTS = new Map<string, string | null>([[REG.liner, 'Fit & comfort'], [REG.insurance, 'Cost & access'], [REG.knee, 'Choosing']])
 
 /** The anomaly check's flag on insurance refusals this week. */
 const INSURANCE_FLAG: Verdict = flagVerdict({
@@ -384,9 +396,34 @@ export interface ContentFixtureOptions {
   period?: ContentPeriod
   open?: ContentOpen
   asked?: boolean
-  ideas?: 'ready' | 'not_on' | 'none' | 'stale'
+  /** `fewer`: a set of one idea (the step's floor held the rest back). */
+  ideas?: IdeasState | 'fewer'
   /** The ideas were written for an earlier week (the step stored none since). */
   olderIdeas?: boolean
+}
+
+/** The question cards a row of `ideas` ideas leaves, as the loader shapes
+ *  them: the top of the also-asked list, each with the flag an idea on it
+ *  would wear. */
+function questionSlots(lead: readonly AskedRow[], flags = true): QuestionSlot[] {
+  return lead.map((r) => ({
+    ...r,
+    flag: flags && r.registryId === REG.insurance ? INSURANCE_FLAG : null,
+    platforms: splitAcross(r.week ?? 0),
+    comments: { week: (r.week ?? 0) * 3 + 2, month: (r.month ?? 0) * 3 + 4 },
+  }))
+}
+
+/** A question's videos this week spread over the platforms, the most first
+ *  (illustrative: TikTok about half, then YouTube, Instagram, Reddit). */
+function splitAcross(videos: number): { platform: string; videos: number }[] {
+  const tiktok = Math.ceil(videos / 2)
+  const youtube = Math.ceil((videos - tiktok) / 2)
+  const instagram = Math.ceil((videos - tiktok - youtube) / 2)
+  const reddit = videos - tiktok - youtube - instagram
+  return [['tiktok', tiktok], ['youtube', youtube], ['instagram', instagram], ['reddit', reddit]]
+    .filter(([, n]) => (n as number) > 0)
+    .map(([platform, n]) => ({ platform: platform as string, videos: n as number }))
 }
 
 /** The page as the board draws it: Össur's week of 4 to 10 October. */
@@ -394,9 +431,10 @@ export function contentFixture(opts: ContentFixtureOptions = {}): ContentPageDat
   const clientId = opts.clientId ?? OSSUR_CLIENT_ID
   const period = opts.period ?? 'week'
   const open = opts.open ?? null
-  const ideasState = opts.ideas ?? 'ready'
+  const ideasState: IdeasState = opts.ideas === 'fewer' ? 'ready' : opts.ideas ?? 'ready'
   const week = contentWeek(RUN, WINDOW)!
-  const cards = ideasState === 'ready' ? ideaCards(clientId) : []
+  const cards = ideasState === 'ready' ? ideaCards(clientId).slice(0, opts.ideas === 'fewer' ? 1 : 3) : []
+  const { asked, lead } = askedSplit(period, opts.asked ?? false, cards.length)
   const repliesWindow = period === 'month' ? { from: OCT.from, to: WINDOW.to, phrase: 'in October so far' } : { from: week.from, to: week.to, phrase: daysPhrase(week.first, week.last) }
   return {
     brand: clientId === SEALAND_CLIENT_ID ? 'Sealand' : 'Össur',
@@ -404,13 +442,49 @@ export function contentFixture(opts: ContentFixtureOptions = {}): ContentPageDat
     week,
     month: OCT,
     market: { week: 241, month: 318 },
-    ideas: { state: ideasState, cards, week: cards.length > 0 ? ideasWeekFixture(opts.olderIdeas) : null },
+    ideas: { state: ideasState, cards, week: cards.length > 0 ? ideasWeekFixture(opts.olderIdeas) : null, questions: questionSlots(lead) },
     works: worksFixture(),
     replies: repliesView(OSSUR_REPLIES, repliesWindow),
     posts: postsFixture(),
-    asked: askedFixture(period, opts.asked ?? false),
-    open: open?.kind === 'idea' && ideasState !== 'ready' ? null : open,
-    ideaPanel: open?.kind === 'idea' && ideasState === 'ready' ? ideaPanelFixture(open.rank, clientId, opts.olderIdeas) : null,
+    asked,
+    open: open?.kind === 'idea' && !cards.some((c) => c.rank === open.rank) ? null : open,
+    ideaPanel: open?.kind === 'idea' && cards.some((c) => c.rank === open.rank) ? ideaPanelFixture(open.rank, clientId, opts.olderIdeas) : null,
+  }
+}
+
+/**
+ * THE THIN REAL STATE (parity pass, 13 Oct): the page as both tenants'
+ * production rows drew it on 13 Oct, through the loader's own builders. Post
+ * ideas not switched on (so three question cards), nothing flagged, most
+ * questions cited by no group and some held by no subject, every comment worth
+ * a reply under someone else's post, thirteen posts of your own (more than the
+ * board's nine marks) none of which has a response figure (Sealand's
+ * Instagram photos), so no typical post and no best one. The board's shape
+ * must hold in it.
+ */
+export function contentThinFixture(): ContentPageData {
+  const base = contentFixture({ ideas: 'not_on' })
+  const { asked, lead } = askedSplit('week', false, 0, { groups: false, subjects: false })
+  const owned13: OwnedPosts = summariseOwnedPosts(
+    Array.from({ length: 13 }, (_, i) => ({ ...OSSUR_OWNED.posts[i % 9], id: `p${String(100 + i).padStart(7, '0')}-0000-4000-8000-000000000000`, platform: 'instagram', engagement_rate: null })),
+    { from: '2026-10-01', to: '2026-11-01' },
+  )
+  const elsewhere = { ...OSSUR_REPLIES, rows: OSSUR_REPLIES.rows.slice(0, 9).map((r) => ({ ...r, under: 'elsewhere' as const })), flagged: [] }
+  const formats = OSSUR_FORMATS.map((r, i) => ({ ...r, yours: [2, 0, 0, 0, 0, 3][i] }))
+  const openings = OSSUR_OPENINGS.map((r, i) => ({ ...r, yours: [0, 2, 0, 3, 0, 0][i] }))
+  return {
+    ...base,
+    market: { week: 153, month: 288 },
+    ideas: { state: 'not_on', cards: [], week: null, questions: questionSlots(lead, false) },
+    works: {
+      ...worksFixture(),
+      formats, openings, posts: 13,
+      sentence: mixSentence({ formats, openings, posts: 13, unclassified: 8, month: OCT.month, complete: false }),
+      basis: worksBasis(690, 757, OCT),
+    },
+    replies: repliesView(elsewhere, base.replies.window),
+    posts: postsBlock({ owned: owned13, typical: OSSUR_TYPICAL, month: OCT }),
+    asked,
   }
 }
 
@@ -423,11 +497,11 @@ export function contentEmptyFixture(): ContentPageData {
     week: null,
     month,
     market: { week: null, month: null },
-    ideas: { state: 'not_on', cards: [], week: null },
+    ideas: { state: 'not_on', cards: [], week: null, questions: [] },
     works: { month: month.month, complete: false, formats: [], openings: [], posts: 0, sentence: null, basis: null, unread: 'Too few of the market’s videos published in October so far have a format and a response figure to compare yet.' },
     replies: { ...repliesView(null, null), unread: 'No update has covered a week yet, so there is no reply list.' },
     posts: { month: month.month, complete: false, total: 0, byPlatform: [], response: null, best: null, rows: [], unread: null },
-    asked: { period: 'week', rows: [], total: 0, touched: 0, since: ideaOwnedFrom(month.month), expanded: false, unread: null },
+    asked: { period: 'week', rows: [], total: 0, touched: 0, since: ideaOwnedFrom(month.month), posts: 0, expanded: false, unread: ASKED_NO_WEEK },
     open: null,
     ideaPanel: null,
   }

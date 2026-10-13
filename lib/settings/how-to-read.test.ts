@@ -312,6 +312,8 @@ describe('how to read, market-first', () => {
     expect(POST_IDEAS_READ_DAYS).toBe(28)
     expect(cardText('content')).toContain('asked at least 3 times on 2 or more videos in the four weeks to an update')
     expect(cardText('content')).toContain('from that month and the two before')
+    // The ideas row keeps three cards (parity pass): questions take the places.
+    expect(cardText('content')).toContain('Where fewer than three post ideas print, the next questions asked that week that your posts have not touched on take their places')
     expect(IDEAS_STALE_DAYS).toBe(28)
     expect(cardText('content')).toContain('four weeks older than the page’s')
     expect(POST_IDEA_MIN_RATED).toBe(10)

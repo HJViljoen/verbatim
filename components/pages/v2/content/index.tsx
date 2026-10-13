@@ -1,7 +1,7 @@
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
 import { equalColumns, panelItemOrder, panelPlacement, PanelSlot, PeriodSwitch, type PanelLayout } from '@/components/v2'
 import { fmtInt, longMonth } from '@/lib/format'
-import { CONTENT_PERIODS, contentHref, daysPhrase, monthWords, type ContentPageData, type ContentState } from '@/lib/pages/v2/content'
+import { CONTENT_PERIODS, contentHref, daysPhrase, IDEA_SLOTS, monthWords, questionSlotsContext, type ContentPageData, type ContentState } from '@/lib/pages/v2/content'
 import { surface } from '@/lib/nav'
 import { AskedCard } from './asked'
 import { IdeaPanelView } from './idea-panel'
@@ -78,8 +78,9 @@ export function ContentPage({ data }: { data: ContentPageData }) {
         block={data.ideas}
         state={state}
         month={month}
+        ctx={questionSlotsContext(data)}
         panel={ideaPanel
-          ? (notchAt) => <IdeaPanelView panel={ideaPanel} state={state} count={data.ideas.cards.length} month={month} notchAt={notchAt} />
+          ? (notchAt) => <IdeaPanelView panel={ideaPanel} state={state} count={IDEA_SLOTS} month={month} notchAt={notchAt} />
           : undefined}
       />
 
@@ -104,7 +105,7 @@ export function ContentPage({ data }: { data: ContentPageData }) {
         ) : null}
       </div>
 
-      <AskedCard block={data.asked} state={state} month={month} weekWord={weekWord} weekHead={data.week && !data.week.isWeek ? data.week.label : 'This week'} afterIdeas={data.ideas.cards.length > 0} />
+      <AskedCard block={data.asked} state={state} month={month} weekWord={weekWord} weekHead={data.week && !data.week.isWeek ? data.week.label : 'This week'} afterIdeas={data.ideas.cards.length + data.ideas.questions.length > 0} />
     </PageFrame>
   )
 }

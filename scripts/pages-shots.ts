@@ -100,8 +100,8 @@ import { marketFixture, marketLongRowsFixture, marketThinFixture } from '../lib/
 import { alsoTalkedOf, convHref, subjectAxis, SUBJECT_PENDING, type MarketData, type SubjectRow } from '../lib/pages/v2/market'
 import { homeWeeksFrame } from '../lib/pages/home'
 import { ContentPage } from '../components/pages/v2/content'
-import { contentEmptyFixture, contentFixture } from '../lib/pages/v2/content-fixture'
-import type { ContentPageData } from '../lib/pages/v2/content'
+import { contentEmptyFixture, contentFixture, contentThinFixture } from '../lib/pages/v2/content-fixture'
+import { IDEA_SLOTS, type ContentPageData } from '../lib/pages/v2/content'
 import { ProductsPage } from '../components/pages/v2/products'
 import { PRODUCTS_FIXTURES } from '../lib/pages/v2/products-fixture'
 import type { ProductsData } from '../lib/pages/v2/products'
@@ -367,6 +367,39 @@ function marketDumpOf(dir: string, tenant: string): MarketData {
   return marketDumpNow(JSON.parse(readFileSync(join(root, tenant, 'market.json'), 'utf8')) as MarketData, meta.readAt)
 }
 
+/** Content (parity pass, 13 Oct) from a loader dump: `--content-dumps <dir>`
+ *  holding `<tenant>/content.json` (the Phase 4 dumps' layout). A dump written
+ *  before the ideas row kept its three cards carries no `ideas.questions`; it
+ *  is read as the loader now shapes it, the top of its also-asked rows moved
+ *  into the cards the ideas leave. THE HARNESS'S, NOT A FINDING: such a dump
+ *  holds only the table's first five rows, so its table shows what is left of
+ *  them (the loader's own goes on to five). */
+const contentDump = (tenant: string): ContentPageData => {
+  const dir = join(resolve(flag('content-dumps', '.')), tenant)
+  const raw = JSON.parse(readFileSync(join(dir, 'content.json'), 'utf8')) as ContentPageData
+  if (Array.isArray(raw.ideas.questions)) return raw
+  const n = Math.max(0, IDEA_SLOTS - raw.ideas.cards.length)
+  const lead = raw.asked.rows.slice(0, n)
+  // Where it came up: the same tenant's Market dump holds each conversation
+  // in its table with the week's platform mix (production's, the same read);
+  // taken only where it sums to the row's own week figure. A conversation
+  // outside Market's table, and the comments, are not in a dump: the card
+  // then leaves those facts out, as the loader does for a read it lacks.
+  const market = existsSync(join(dir, 'market.json'))
+    ? JSON.parse(readFileSync(join(dir, 'market.json'), 'utf8')) as { table?: { rows?: { conv: { id: string; mix: Record<string, number> | null } }[] } }
+    : null
+  const mixOf = (id: string, week: number | null) => {
+    const mix = market?.table?.rows?.find((r) => r.conv.id === id)?.conv.mix
+    if (!mix || Object.values(mix).reduce((a, b) => a + b, 0) !== week) return null
+    return Object.entries(mix).map(([platform, videos]) => ({ platform, videos })).sort((a, b) => b.videos - a.videos || a.platform.localeCompare(b.platform))
+  }
+  return {
+    ...raw,
+    ideas: { ...raw.ideas, questions: lead.map((r) => ({ ...r, flag: null, platforms: mixOf(r.registryId, r.week), comments: null })) },
+    asked: { ...raw.asked, rows: raw.asked.rows.slice(lead.length), total: Math.max(0, raw.asked.total - lead.length) },
+  }
+}
+
 // ---- the pages, as their routes compose them -------------------------------------
 
 interface Page {
@@ -542,6 +575,16 @@ const PAGES: Page[] = [
   // creators), and the day after its brand back-read (its own row not yet).
   { key: 'voices-ossur-thin', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['ossur-thin']() }) },
   { key: 'voices-ossur-counted', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['ossur-counted']() }) },
+  // Content's parity pass (13 Oct): the board's shape in the thin states.
+  // The thin real state (both tenants' rows on 13 Oct, as a fixture), a set
+  // of one idea, a week with none written, and, with `--content-dumps <dir>`,
+  // each tenant's production dump.
+  { key: 'content-parity-thin', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentThinFixture() }) },
+  { key: 'content-parity-fewer', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentFixture({ ideas: 'fewer' }) }) },
+  { key: 'content-parity-none', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentFixture({ ideas: 'none' }) }) },
+  ...(flag('content-dumps', '') ? (['ossur', 'sealand'] as const).map((tenant): Page => ({
+    key: `content-parity-${tenant}`, path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentDump(tenant) }),
+  })) : []),
 ]
 
 // ---- the shell -----------------------------------------------------------------

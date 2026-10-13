@@ -27,8 +27,30 @@ describe('Your posts this month', () => {
     assertCopyContract(node)
   })
 
-  it('says so when you published nothing', () => {
-    const none = { ...postsFixture(), total: 0, byPlatform: [], response: null, best: null, rows: [] }
-    expect(renderText(<PostsCard block={none} state={STATE} selected={false} />)).toContain('You published nothing of your own in October so far.')
+  it('says so when you published nothing, in the board’s shape: both cells, and the best post’s place', () => {
+    const none = { ...postsFixture(), total: 0, byPlatform: [], response: null, rated: 0, best: null, rows: [] }
+    const text = renderText(<PostsCard block={none} state={STATE} selected={false} />)
+    expect(text).toContain('0 posts · response of your typical post against the market’s Best this month You published nothing of your own in October so far.')
+    expect(text).not.toContain('All your posts')
+    assertCopyContract(<PostsCard block={none} state={STATE} selected={false} />)
+    const unread = { ...none, unread: 'Your posts could not be read just now.' }
+    const u = renderText(<PostsCard block={unread} state={STATE} selected={false} />)
+    expect(u).toContain('Best this month Your posts could not be read just now.')
+    expect(copyNodes(render(<PostsCard block={unread} state={STATE} selected={false} />)).filter((n) => n.kind === 'figure')).toEqual([])
+  })
+
+  it('where too few posts have a response figure, states how many have one, of all, and names no best post', () => {
+    const none = { ...postsFixture(), response: null, rated: 0, best: null, rows: postsFixture().rows.map((r) => ({ ...r, multiple: null })) }
+    const node = <PostsCard block={none} state={STATE} selected={false} />
+    expect(renderText(node)).toContain('0 of 9 with a response figure, too few to state a typical one Best this month None to name without a response figure. All your posts')
+    expect(copyNodes(render(node)).filter((n) => n.kind === 'level').map((n) => n.text)).toEqual(['0 of 9 with a response figure, too few to state a typical one'])
+    assertCopyContract(node)
+    // The market's typical video not read: that is the reason, not too few.
+    const noTypical = <PostsCard block={{ ...none, rated: 6, marketTypical: false }} state={STATE} selected={false} />
+    expect(renderText(noTypical)).toContain('6 of 9 with a response figure; the market’s typical video could not be read to compare them Best this month None to name: the market’s typical video could not be read.')
+    assertCopyContract(noTypical)
+    // A page dumped before `rated` was carried counts the rows with a multiple.
+    const { rated: _drop, ...old } = { ...none, rated: 0 }
+    expect(renderText(<PostsCard block={old} state={STATE} selected={false} />)).toContain('0 of 9 with a response figure')
   })
 })

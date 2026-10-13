@@ -33,21 +33,28 @@ const INTENT_WORDS: Record<string, string> = {
   misinformation: 'Wrong information',
 }
 
-/** The split by whose post, "7 under your posts, 3 under posts about you, 2
- *  elsewhere", as its parts; none where it has one part or none, because "9
- *  comments · 9 elsewhere" says nothing the count does not (each comment's
- *  row in the panel still says where it sits). */
+/** The split by whose post (the board's "7 under your posts, 5 under
+ *  creators' posts about you"), as its parts with a count. */
 function underParts(under: RepliesView['under']): [number, string][] {
   const parts: [number, string][] = [
     [under.own, 'under your posts'],
     [under.about, 'under posts about you'],
     [under.elsewhere, 'elsewhere'],
   ]
-  const shown = parts.filter(([n]) => n > 0)
-  return shown.length > 1 ? shown : []
+  return parts.filter(([n]) => n > 0)
 }
 
-function UnderLine({ parts }: { parts: [number, string][] }) {
+/** "6 under your posts, 3 under posts about you, 3 elsewhere"; where every
+ *  comment sits in one place, where that is in words ("all elsewhere in your
+ *  market"), since "9 comments · 9 elsewhere" repeats the count and reads
+ *  oddly alone (Phase 4). */
+function UnderLine({ under }: { under: RepliesView['under'] }) {
+  const parts = underParts(under)
+  if (parts.length === 0) return null
+  if (parts.length === 1) {
+    const only = under.own > 0 ? 'all under your posts' : under.about > 0 ? 'all under posts about you' : 'all elsewhere in your market'
+    return <>{only}</>
+  }
   return (
     <>
       {parts.map(([n, words], i) => (
@@ -57,9 +64,19 @@ function UnderLine({ parts }: { parts: [number, string][] }) {
   )
 }
 
+/** A count's cell where the count could not be read: the cell's frame and
+ *  its label, a quiet dot for the number. */
+function UnreadCell({ label }: { label: string }) {
+  return (
+    <div className="min-w-0 rounded-[10px] bg-inner px-3.5 py-3">
+      <div aria-hidden className="font-mono text-[24px] leading-none font-medium text-muted-foreground">·</div>
+      <div className="mt-1.5 text-[12.5px] leading-[1.4] text-muted-foreground">{label}</div>
+    </div>
+  )
+}
+
 export function RepliesCard({ view, state, selected, className, style }: { view: RepliesView; state: ContentState; selected: boolean; className?: string; style?: CSSProperties }) {
   const when = view.window?.phrase ?? 'this week'
-  const split = underParts(view.under)
   const cells: [number, string][] = [
     [view.counts.buying, 'ready to buy'],
     [view.counts.question, view.counts.question === 1 ? 'question' : 'questions'],
@@ -75,21 +92,33 @@ export function RepliesCard({ view, state, selected, className, style }: { view:
         title="Worth a reply"
         sub={`Comments written ${when} worth an answer from you`}
       />
+      {/* The board's shape in every state: the count, the four cells and the
+          link's line. Where the list could not be read the cells keep their
+          frames and the count's place says why; where it is empty the zeros
+          are true and the link's place says so. */}
       {view.unread ? (
-        <p className="m-0 text-[14px] leading-[1.5] text-muted-foreground">{view.unread}</p>
-      ) : view.total === 0 ? (
-        <p className="m-0 text-[14px] leading-[1.5] text-muted-foreground">No comment from these days read as a question, an objection or someone ready to buy.</p>
+        <>
+          <p className="m-0 text-[14px] leading-[1.5] text-muted-foreground">{view.unread}</p>
+          <div className="grid grid-cols-2 gap-2.5">
+            {cells.map(([, words]) => <UnreadCell key={words} label={words} />)}
+          </div>
+        </>
       ) : (
         <>
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
             <Fig className="text-[30px] leading-none font-medium tracking-[-0.02em]">{fmtInt(view.total)}</Fig>
-            <span className="font-mono text-[12.5px] leading-[1.45] text-muted-foreground">{view.total === 1 ? 'comment' : 'comments'}{split.length > 0 ? <> · <UnderLine parts={split} /></> : null}</span>
+            <span className="font-mono text-[12.5px] leading-[1.45] text-muted-foreground">
+              {view.total === 1 ? 'comment' : 'comments'}
+              {view.total > 0 ? <> · <UnderLine under={view.under} /></> : null}
+            </span>
           </div>
           <div className="grid grid-cols-2 gap-2.5">
             {cells.map(([n, words]) => <StatCell key={words} value={n} label={words} size="md" />)}
           </div>
           <div className="mt-auto">
-            {selected ? (
+            {view.total === 0 ? (
+              <p className="m-0 text-[13.5px] leading-[1.5] text-muted-foreground">No comment from these days read as a question, an objection or someone ready to buy.</p>
+            ) : selected ? (
               <OLink href={contentHref({ ...state, open: null })} scroll={false} aria-expanded aria-controls={REPLIES_PANEL_ID}>Close ↑</OLink>
             ) : (
               <OLink href={contentHref({ ...state, open: { kind: 'replies' } })} aria-expanded={false} aria-controls={REPLIES_PANEL_ID}>Open the replies →</OLink>

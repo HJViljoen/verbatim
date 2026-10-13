@@ -10,6 +10,8 @@ import { RepliesCard, RepliesPanel } from './replies'
 const renderText = (node: Parameters<typeof rawText>[0]): string => rawText(node).replace(/\s+([,.])/g, '$1')
 
 const STATE: ContentState = { period: 'week', open: null, asked: false }
+/** A queue that read and found nothing. */
+const OSSUR_EMPTY_QUEUE = { rows: [], flagged: [], counts: [], total: 0, window: { from: '2026-10-04T04:03:00.000Z', to: '2026-10-11T04:02:00.000Z', basis: 'previous_run' as const }, unread: null }
 
 describe('Worth a reply', () => {
   const view = () => contentFixture().replies
@@ -40,18 +42,31 @@ describe('Worth a reply', () => {
     expect(render(<RepliesCard view={view()} state={STATE} selected={false} />)).toMatch(/^<article id="worth-a-reply"[^>]*class="[^"]*scroll-mt-6/)
   })
 
-  it('splits the comments by whose post only where there is more than one part', () => {
+  it('always says where the comments sit (the board’s line): in words where they all sit in one place', () => {
     const one = { ...view(), total: 9, under: { own: 0, about: 0, elsewhere: 9 } }
     const text = renderText(<RepliesCard view={one} state={STATE} selected={false} />)
-    expect(text).toContain('9 comments')
-    expect(text).not.toMatch(/9 comments ·|9 elsewhere/)
+    // "9 comments · 9 elsewhere" repeated the count and read oddly (Phase 4).
+    expect(text).toContain('9 comments · all elsewhere in your market')
+    expect(text).not.toContain('9 elsewhere')
     assertCopyContract(<RepliesCard view={one} state={STATE} selected={false} />)
+    expect(renderText(<RepliesCard view={{ ...one, under: { own: 9, about: 0, elsewhere: 0 } }} state={STATE} selected={false} />)).toContain('9 comments · all under your posts')
     const two = { ...view(), total: 9, under: { own: 2, about: 0, elsewhere: 7 } }
     expect(renderText(<RepliesCard view={two} state={STATE} selected={false} />)).toContain('9 comments · 2 under your posts, 7 elsewhere')
   })
 
-  it('says why there is no list', () => {
+  it('keeps its count, its four cells and its foot where there is no list, and says why once', () => {
     const none = repliesView(null, null)
-    expect(renderText(<RepliesCard view={{ ...none, unread: 'No update has covered a week yet, so there is no reply list.' }} state={STATE} selected={false} />)).toContain('No update has covered a week yet')
+    const unread = <RepliesCard view={{ ...none, unread: 'No update has covered a week yet, so there is no reply list.' }} state={STATE} selected={false} />
+    const text = renderText(unread)
+    expect(text).toContain('No update has covered a week yet')
+    // The cells keep their frames and labels, with no number they cannot know.
+    expect(text).toContain('· ready to buy · questions · objections · wrong information')
+    expect(copyNodes(render(unread)).filter((n) => n.kind === 'figure')).toEqual([])
+    assertCopyContract(unread)
+    const empty = <RepliesCard view={{ ...repliesView({ ...OSSUR_EMPTY_QUEUE }, view().window) }} state={STATE} selected={false} />
+    const zero = renderText(empty)
+    expect(zero).toContain('0 comments 0 ready to buy 0 questions 0 objections 0 wrong information No comment from these days read as a question')
+    expect(zero).not.toContain('Open the replies')
+    assertCopyContract(empty)
   })
 })

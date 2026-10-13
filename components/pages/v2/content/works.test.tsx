@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { render, renderText as rawText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { worksFixture } from '@/lib/pages/v2/content-fixture'
-import { WorksCard } from './works'
+import { MARKS_MAX, WorksCard } from './works'
 
 /** The page's words as read: a tag between a word and its comma is not a space. */
 const renderText = (node: Parameters<typeof rawText>[0]): string => rawText(node).replace(/\s+([,.])/g, '$1')
@@ -21,15 +21,53 @@ describe('What works in your market’s videos', () => {
     assertCopyContract(node)
   })
 
+  it('draws a kind below a typical video in the market yellow’s pale tint, as the board does', () => {
+    const m = render(<WorksCard block={worksFixture()} />)
+    // Promotional 0.7×, A statistic 0.9× and A before and after 0.6× (the
+    // board's three pale rows); 1.0× and up keep the full yellow.
+    expect(m.match(/data-below=""/g)).toHaveLength(3)
+    expect(m.match(/\[&amp;&gt;div:not\(\[data-tick\]\)\]:bg-brand\/35/g)).toHaveLength(3)
+    // As printed: 0.96× prints 1.0×, so it is not below; 0.94× prints 0.9× and is.
+    const one = (multiple: number) => render(<WorksCard block={{ ...worksFixture(), openings: [], formats: [{ key: 'x', label: 'Story', share: 10, multiple, yours: 0 }] }} />)
+    expect(one(0.96)).not.toContain('data-below=""')
+    expect(one(0.94)).toContain('data-below=""')
+  })
+
   it('prints the sentence about your mix with every number a figure', () => {
     const text = renderText(<WorksCard block={worksFixture()} />)
     expect(text).toContain('6 of your 9 posts in October so far were promotional videos, which draw 0.7× a typical video.')
     expect(text).toContain('Read from 412 of 640 market videos published in October so far that have a format.')
   })
 
-  it('says why it cannot be read where it cannot', () => {
+  it('keeps both charts’ frames where it cannot be read, and says why once', () => {
     const empty = { ...worksFixture(), formats: [], openings: [], sentence: null, basis: null, unread: 'Too few videos.' }
-    expect(renderText(<WorksCard block={empty} />)).toContain('Too few videos.')
+    const text = renderText(<WorksCard block={empty} />)
+    expect(text).toContain('How the video is made')
+    expect(text).toContain('How it opens')
+    expect(text.split('Too few videos.')).toHaveLength(2)
+    // Each chart keeps its axis: an empty track with the 1× tick.
+    expect(render(<WorksCard block={empty} />).match(/data-works-empty=""/g)).toHaveLength(2)
     assertCopyContract(<WorksCard block={empty} />)
+    // One chart empty: that chart says why, beside its axis.
+    const one = { ...worksFixture(), openings: [] }
+    expect(renderText(<WorksCard block={one} />)).toContain('How it opens Kind of video Response · 1× = typical Your 9 posts Too few rated videos of any one opening yet')
+  })
+
+  it('fits up to fourteen posts in one row of marks, prints “k of n” above that, and no “0 of 0” where you published nothing', () => {
+    const m = render(<WorksCard block={{ ...worksFixture(), posts: 13 }} />)
+    expect(m).toMatch(/data-units="6\/13" class="[^"]*flex-nowrap[^"]*\[&amp;&gt;span\]:flex-1/)
+    expect(MARKS_MAX).toBe(14)
+    expect(render(<WorksCard block={{ ...worksFixture(), posts: 14 }} />)).toContain('data-units="6/14"')
+    // The fresh check: 28 posts and up ran the marks past the card at 1440.
+    for (const posts of [15, 28, 35, 60]) {
+      const node = <WorksCard block={{ ...worksFixture(), posts }} />
+      expect(render(node)).not.toContain('data-units=')
+      expect(renderText(node)).toContain(`Story · 22% 3.1× 1 of ${posts}`)
+      assertCopyContract(node)
+    }
+    const none = <WorksCard block={{ ...worksFixture(), posts: 0, formats: worksFixture().formats.map((r) => ({ ...r, yours: 0 })) }} />
+    expect(renderText(none)).toContain('Response · 1× = typical Your posts')
+    expect(renderText(none)).not.toContain('0 of 0')
+    assertCopyContract(none)
   })
 })

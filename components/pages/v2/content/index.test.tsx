@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { render, renderText as rawText } from '@/lib/test/render'
 import { assertCopyContract, copyNodes } from '@/lib/test/copy-contract'
-import { contentEmptyFixture, contentFixture } from '@/lib/pages/v2/content-fixture'
+import { contentEmptyFixture, contentFixture, contentThinFixture } from '@/lib/pages/v2/content-fixture'
 import { ContentPage, weekWordOf } from './index'
 
 /** The page's words as read: a tag between a word and its comma is not a space. */
@@ -77,6 +77,26 @@ describe('Content', () => {
     expect(text).toContain('Post ideas are not switched on for this workspace.')
     expect(text).toContain('No update has covered a week yet, so there is no reply list.')
     expect(text).toContain('You published nothing of your own in October so far.')
+    // No update yet is not a read that failed.
+    expect(text).not.toContain('could not be read')
+  })
+
+  it('keeps the board’s shape in the thin real state (parity pass): three cards, both charts, four reply cells, two post cells and the best post’s line, the table’s headings', () => {
+    const node = <ContentPage data={contentThinFixture()} />
+    const m = render(node)
+    expect(m.match(/data-idea-slot="question"/g)).toHaveLength(3)
+    expect(m).not.toContain('data-ideas-empty')
+    const text = renderText(node)
+    expect(text).toContain('How the video is made')
+    expect(text).toContain('How it opens')
+    expect(text).toContain('9 comments · all elsewhere in your market 4 ready to buy 5 questions 0 objections 0 wrong information Open the replies')
+    // No post has a response figure: the cell states how many have one, of all, and the best post's place says why it names none.
+    expect(text).toContain('13 posts · Instagram 13 0 of 13 with a response figure, too few to state a typical one Best this month None to name without a response figure. All your posts')
+    expect(text).toContain('Question people asked Who asks Subject This week October so far The last three weeks')
+    // Thirteen posts' marks stay one row: each narrows rather than wraps.
+    expect(m).toContain('data-units="2/13"')
+    expect(m).toMatch(/data-units="2\/13" class="[^"]*flex-nowrap/)
+    assertCopyContract(node)
   })
 
   it('calls a window a week only when it is seven days', () => {

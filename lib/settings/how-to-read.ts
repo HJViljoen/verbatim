@@ -185,6 +185,7 @@ export const READING_CARDS: readonly ReadingCard[] = [
     cannot: [
       'A week is the week the latest update read, not the last seven days. Every week figure sits beside its month, and a run of weeks is bare counts with no word: three for a question asked, four for a post idea.',
       'A post idea is written for a question your market asked at least 3 times on 2 or more videos in the four weeks to an update, and only where none of your posts from that month and the two before touched on it. The ideas print the days they read, and stop printing once they are four weeks older than the page’s week.',
+      'Where fewer than three post ideas print, the next questions asked that week that your posts have not touched on take their places, with no idea of their own.',
       'A post touches a question when what it is about shares two or more of the question’s words, leaving out the common ones.',
       'Who asks names the groups, never a count of them.',
       'The format and opening on an idea are what worked in your market, chosen by counting, and only where 10 or more rated videos stand behind them.',
