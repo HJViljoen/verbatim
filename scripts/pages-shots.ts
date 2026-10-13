@@ -81,6 +81,9 @@ import { SearchTerms } from '../components/pages/settings/search-terms'
 import { YourAccounts } from '../components/pages/settings/your-accounts'
 import { BrandsYouTrack, Communities, NotYourMarket } from '../components/pages/settings/tracked-cards'
 import { whatYouTrack } from '../lib/pages/settings'
+import { VoicesPage } from '../components/pages/v2/voices'
+import { VOICES_FIXTURES } from '../lib/pages/v2/voices-fixture'
+import type { VoicesData } from '../lib/pages/v2/voices'
 
 const args = process.argv.slice(2)
 const flag = (n: string, d: string) => { const i = args.indexOf(`--${n}`); return i >= 0 && args[i + 1] ? args[i + 1] : d }
@@ -317,6 +320,16 @@ const PAGES: Page[] = [
       })
     },
   },
+  // Voices (depth v2, T4), beside the boards E3-Voices and E3-Voices-Open.
+  // `voices-real` draws a dump of the loader's production output
+  // (`VOICES_JSON=<file>`, one per tenant, read once under the lock).
+  { key: 'voices-ossur', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES.ossur() }) },
+  { key: 'voices-ossur-group', path: '/dashboard/voices', artboard: 'E3-Voices-Open.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['ossur-group']() }) },
+  { key: 'voices-ossur-creator', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['ossur-creator']() }) },
+  { key: 'voices-sealand', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES.sealand() }) },
+  { key: 'voices-sealand-brand', path: '/dashboard/voices', artboard: 'E3-Voices-Open.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['sealand-brand']() }) },
+  { key: 'voices-sealand-creator', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['sealand-creator']() }) },
+  { key: 'voices-real', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: JSON.parse(readFileSync(process.env.VOICES_JSON ?? '', 'utf8')) as VoicesData }) },
 ]
 
 // ---- the shell -----------------------------------------------------------------
