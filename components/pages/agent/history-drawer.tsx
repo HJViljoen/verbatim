@@ -61,10 +61,11 @@ export function HistoryDrawer({ history, defaultOpen = false }: {
 
   return (
     // Sticks to the bottom of the pane, flush with its edge: the negative
-    // margins and offset cancel <main>'s own padding (24px on a phone, 40px
-    // under it from md; a sticky box is held inside its scroller's padding),
-    // so the handle reads as the top of something below the screen.
-    <div className="pointer-events-none sticky -bottom-6 z-30 -mx-6 -mb-6 h-[58px] shrink-0 md:-bottom-10 md:mx-0 md:-mb-10">
+    // margins and offset cancel <main>'s own padding (16px either side and
+    // 48px under it on a phone since the top bar, T9; 40px under it from md;
+    // a sticky box is held inside its scroller's padding), so the handle reads
+    // as the top of something below the screen.
+    <div className="pointer-events-none sticky -bottom-12 z-30 -mx-4 -mb-12 h-[58px] shrink-0 md:-bottom-10 md:mx-0 md:-mb-10">
       {/* A light veil over the page while the sheet is up, so the list reads
           as the layer in front; a press on it closes the sheet. It reaches the
           pane's edges and is clipped by <main>, never over the sidebar. */}

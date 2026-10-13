@@ -1,6 +1,6 @@
 import { AccessBanner } from '@/components/access-banner'
-import { getSessionContext } from '@/lib/auth'
 import { billingAccess, type BillingClient } from '@/lib/billing'
+import { viewedClientRow } from '@/lib/shell/viewed-client'
 
 /**
  * The async half of the workspace-state banner, so the dashboard LAYOUT can
@@ -13,10 +13,11 @@ import { billingAccess, type BillingClient } from '@/lib/billing'
  * shares its resolution with the page.
  */
 export async function AccessBannerLoader() {
-  const { supabase, clientId } = await getSessionContext()
   // select('*'): the billing columns are optional on older rows, and this
-  // must render whether or not a given migration has landed.
-  const { data: clientRow } = await supabase.from('clients').select('*').eq('id', clientId).maybeSingle()
+  // must render whether or not a given migration has landed. Request-cached
+  // and shared with the phone's top bar (its workspace name), so the row is
+  // read once (lib/shell/viewed-client.ts).
+  const clientRow = await viewedClientRow()
   // No row (RLS hiccup, transient failure) is NOT the same as "no access":
   // billingAccess would read the missing approved_at as pending and tell a
   // comped design partner their workspace was never switched on. Say nothing
