@@ -93,13 +93,125 @@ This version has breaking changes — APIs, conventions, and file structure may 
   stores a `failed` row and alerts once with the script
   (`scripts/longrun-read.ts`), because no later run writes an ended month. It was a hook inside
   `write-week-read` on the market branch and moved out because the two reads
-  overran one step's 250 s. **The month's briefs (T8 wired, 5 Oct) add five,
+  overran one step's 250 s (since Design v2, `write-post-ideas` sits between
+  the two). **The month's briefs (T8 wired, 5 Oct) add five,
   after `write-longrun-read` and immediately before `close-run`, in this
   order:** `plan-briefs`, `briefs:research-${i}-of-${n}`, `briefs:ideas`,
   `briefs:write-${role}`, `briefs:compose` (66 ids before, 71 after;
   `scripts/pipeline-step-ids.sh origin/main --expect-before close-run briefs`
   is the check, and `lib/reports/briefs/step.test.ts` pins them; the bullet
-  "The monthly department briefs" below says what they do). Re-register
+  "The monthly department briefs" below says what they do). **Design v2 (the
+  depth plan, 13 Oct) adds three, 71 ids before and 74 after** (the
+  script's count, `request-report` included; `grep -c '\.run('` gives 70 and
+  73): `scripts/pipeline-step-ids.sh origin/main` (or `0d77e537`, the depth
+  branch's base) lists three pure insertions, zero removals, zero
+  reorderings. Each family's `--expect-before` passes only from a base that
+  already holds the other family, because the other's insertion reads as
+  "inserted elsewhere": `scripts/pipeline-step-ids.sh 23c4e424
+  --expect-before write-longrun-read write-post-ideas` (`23c4e424` is
+  `depth/t11-products`) and `scripts/pipeline-step-ids.sh b18dbc1a
+  --expect-before freeze-months plan-product-readings product-readings`
+  (`b18dbc1a` is `depth/t13-ideas`).
+  **The week's post ideas (T13) add one, immediately after `write-week-read`
+  and before `write-longrun-read`:** `write-post-ideas`
+  (`lib/post-ideas/step.test.ts` pins its neighbours, the total, its `.catch`
+  and its place in `AFTER_GATHER_STEPS`). *What it writes:* up to three
+  `post_ideas` rows, upserted on (run_id, rank) (`lib/post-ideas/step.ts`
+  `runPostIdeasStep`). *Candidates:* the run window's question conversations,
+  filed as `question` or whose commonest kind is a question
+  (`isQuestionConversation`), each passing the week pool's `rankEligible`,
+  untouched by the client's own posts (`questionTouch` over `ownedPosts`, the
+  reading month and the two before: `POST_IDEA_OWNED_MONTHS`) and clearing
+  the evidence floor, `POST_IDEA_MIN_COMMENTS` (3) asking comments on
+  `POST_IDEA_MIN_VIDEOS` (2) videos; biggest first. The floor is read twice:
+  on the comments sent, so a conversation under it costs no call, and on what
+  an idea's sub-questions hold after compose's drops, under which the idea is
+  held `thin`. *Model and code:* only question-shaped comments go to the
+  model (`isQuestionShaped`). One gpt-5.4 call (`POST_IDEAS_MODEL`; a second
+  only where the answer will not parse) writes each title and cover and
+  groups the comments, sent by handle, into sub-questions; comment words go
+  to a model here as in Pass A, never under `lib/reports/`. Code maps the
+  handles back to ids and counts them (`subquestionCounts`), and picks the
+  format and opening (`formatReading` with `published: 'any'`, only where a
+  group has `POST_IDEA_MIN_RATED` (10, the same floor as `LEAD_MIN_RATED`)
+  rated videos and a multiple of at least `POST_IDEA_MIN_MULTIPLE` (1.1),
+  else null) and the length (`cover.length`). *Scrub:* the `post_idea` prose
+  slot is `digits`. The step's scrub (`scrubIdeaText`,
+  `lib/post-ideas/scrub.ts`) drops a sentence holding a medical claim
+  (`MEDICAL_CLAIMS`: cures, effect on the body, kind to the body, safety,
+  proven or recommended, diagnosis, medicine, the medical team line, sent to
+  a doctor; a question passes all but medicine and the medical team line),
+  on the cover and the labels a movement claim (`MOVEMENT`) or the first
+  person, and on the cover `BANNED_PHRASES`. Compose (`composePostIdeas`,
+  `lib/post-ideas/compose.ts`) holds an idea whose title copies a sent
+  comment (the whole comment, or a run of `COPY_MIN_WORDS` (4) words inside
+  one) or names no subject (`namesNoSubject`); a label that copies a comment
+  drops only its sub-question. The "check with your medical team" line is
+  never stored: Content prints it (`MEDICAL_LINE`, `lib/post-ideas/medical.ts`,
+  where `printsMedicalLine`). *When it does nothing:* a TEST run reads and
+  writes nothing. `postIdeasEnabled(clientId)` off (`lib/config.ts`: on by
+  default, `POST_IDEAS=0` off everywhere, `POST_IDEAS_OFF` a list of client
+  ids), no table (`isMissingPostIdeas`), no candidate over the floor, or a run
+  that already has its ideas is a silent no-op that spends nothing; a week
+  whose written ideas are all held `thin` is silent too, and has spent its
+  call. *Failure:* the week read's contract: a transient failure before the
+  last attempt throws; otherwise the body never throws and alerts the
+  operator ONCE inside the step, naming the company and
+  `scripts/post-ideas.ts`. Its `.catch` only logs and is never `noteError`'d.
+  It is in `AFTER_GATHER_STEPS`.
+  **Your products (T11) adds two, after the `brand-readings:*` steps and
+  immediately before `freeze-months`:** `plan-product-readings` and
+  `product-readings:${i}-of-${n}`, one month a step
+  (`lib/pipeline/freeze-parity.test.ts` pins both, in order, each ending in a
+  `.catch` that logs and returns null). *Placement* (`placeProducts`,
+  `lib/products/readings.ts`): the rules first, then a gpt-4.1 confirm of a
+  generic name (`needs_confirm`), then a gpt-4.1-mini classifier on comments
+  under category-relevant videos. Code checks every answer against the text
+  (`classifyRows`): the words it gives must be in the comment, a named
+  product must be among them as a whole word (one slip for a one-word name
+  of six letters or more) or be the one product the video names, a
+  couldn't-tell-which answer needs the client's name, a product family or
+  one of its products in the comment or the video (else it reads as the
+  category in general), and a category-in-general answer must name the
+  category; paraphrase placements
+  are off (`MODEL_PLACES_PARAPHRASE`). Placements are appended to
+  `product_mentions`. The client's own words never place: every content
+  field of a `source='owned'` video (account, caption, hashtags, transcript,
+  `transcript_en`, OCR; `contentFields`), and any comment written by the
+  client's own accounts (`tracking_configs.own_handles`, plus, on a platform
+  with a configured handle, the account names of the own posts the pass
+  read; `ownAuthorNames`). Comments under its posts do place, by the rules
+  and the confirm only: an own post is never category-relevant, so they
+  never reach the classifier. A month's videos come from
+  `product_month_videos(p_client, p_month)` (in the products migration):
+  `market_month_videos`' rule over every audience, the client's included,
+  with an `owned` flag; `readProductMonthVideos` falls back to
+  `market_month_videos` where the migration is missing. A product name never
+  writes a `brand_mentions` row. *Readings:* `month_product_readings` per
+  audience, category and product: the exclusive split `k_named + k_unclear +
+  k_unbranded = k_any`, and `k_organic` / `n_organic` on a per-category
+  organic base (`categorySearchFinds` in `lib/products/readings.ts`, its
+  reads in `lib/products/organic.ts`): the rival searches' finds and every
+  video a search of ours in that category's own words found are left out,
+  and a product takes its category's base. *The one-shot guard:* a month
+  that would freeze is written frozen only from a pass with nothing left
+  (`guardFreeze`); otherwise it is written `filling` (the result's
+  `heldOpen`) and the next run freezes it. The back-read
+  (`scripts/products.ts`) skips such a month and says to run again. *When it
+  does nothing:* both are in `AFTER_GATHER_STEPS`, and each is a no-op that
+  reads and spends nothing until `20261109090000_products.sql` is applied,
+  for a tenant with no catalogue, and while `PRODUCT_READINGS_ENABLED` is
+  off, which it is for every tenant: turn one on only after its seed is
+  loaded and its back-read written. *Caps:* `PRODUCT_CLASSIFY_CAP` (3,000
+  items a run), `PRODUCT_CLASSIFY_BUDGET_USD` ($0.75, read from
+  `ai_call_log`), and each call capped at the lesser of `CALL_CAP_MS` (60 s)
+  and the step's own clock, with no retry; a model failure never throws.
+  *Tags:* a tag (`lib/actions/product-tags.ts`, owners and admins) supersedes
+  the last and re-reads open months only, and only where their rows are all
+  on the current catalogue version; a tag in a closed month is recorded and
+  changes nothing (`written_closed`). **The week read's level 1 (T11b)**
+  changed `write-week-read`'s body and not its id (the bullet "The weekly
+  read sends only a READY read" below). Re-register
   after ANY function change: `curl -X PUT https://app.verbatimintel.com/api/inngest`.
 - **A run's window is frozen once, at `open-run`** (`pipeline_runs.window_start`
   / `window_end` / `window_basis`, rule in `lib/pipeline/window.ts`). Steps read
@@ -350,7 +462,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
   WP3.13): each week's market share, read once at two updates old, kept in
   `week_line_reads` / `week_line_points` and compared only with a week read
   the same way, is the one reading computed over a week, and it prints only
-  where `WEEK_LINE.print` says so.
+  where `WEEK_LINE.print` says so. Since Design v2 This week is not a page
+  (its address lands on Market), and its rule is decision 1's on every page
+  that prints a week: the Dashboard, Market, Content and the weekly read's
+  level 1 state each week figure beside the month it falls in
+  (`readingMonthOf`), off a run's frozen window, and three weeks are three
+  bare counts with no word.
 - **New reading surfaces say "videos".** `conversations` keeps its meaning and
   its name on the legacy pages that still compute it (`lib/calibration.ts`
   GLOSSARY); a new surface counts videos, and a level without its "of N" is a
@@ -416,8 +533,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
   --regate --yes` (`lib/gather/rejudge.ts`, `scripts/backfill-regate.ts`)
   judges the market-lane ones with today's check, appends today's verdicts
   (`run_id` null; the default rows stay), and removes the ones it drops with
-  `regate_videos` (migration `20261106092000`), which copies every row it
-  takes (14 tables, embeddings included) into `regate_backup` first and logs
+  `regate_videos` (migration `20261106092000`; redefined by
+  `20261109090000_products.sql`), which copies every row it takes (16
+  tables, embeddings included: the products migration added `product_tags`
+  and `product_mentions`, and `regate_restore` puts all 16 back) into
+  `regate_backup` first and logs
   ONE `gate_rule` / `relevance_gate` change (the fix's own shape, so the pair
   judge measures it, `lib/provenance/measure.ts`, instead of counting an
   unmeasured `regate` as a tenth); undo is `regate_restore(batch)`. A video
@@ -626,10 +746,44 @@ This version has breaking changes — APIs, conventions, and file structure may 
   in full ("16 in September", "September in total"), never "October so far";
   a week inside one month, against that month so far (`readingMonthOf`,
   `lib/written/month.ts`). Offline preview of a stored read:
-  `scripts/weekly-read-email.ts`.
-- **The pages and navigation (pages build, 1 Oct).** Every client page is
-  drawn to its approved artboard (`Page-*.dc.html`); a deviation is Heinrich's
-  call, never a builder's. What the build fixed in place:
+  `scripts/weekly-read-email.ts`. **Level 1 (depth v2, T11b, 13 Oct).**
+  *Versions:* a `weekly_read` snapshot's `version` names its email
+  (`WEEKLY_READ_SNAPSHOT_VERSION`, `lib/reports/weekly-read-build.ts`). 1 is
+  the report, every snapshot stored before 13 Oct, and it renders byte for
+  byte as sent (`lib/test/weekly-read-golden/`, held by
+  `components/email/weekly-read.test.tsx`). 2 is level 1 (board E7): the
+  week in one line, the market's week beside its month, the lead, Also this
+  week, Across your pages, the way in. No quote. The share page, the viewer
+  and the PDF of a version 2 snapshot print the full report plus level 1's
+  flag, rows and page lines; that is where the full read lives now that This
+  week is not a page. *The lead* is ONE rule, shared with Market's top row:
+  `weekLead` (`lib/reading/week-lead.ts`): the first flag in `weekFlagRows`'
+  order, else the new conversation with the most videos this week, else the
+  conversation with the most ("Most talked about this week"). Both rank on
+  the category's window count (the read's frozen `conversations`; a read
+  stored before T11b ranks on its own counts). A set-apart conversation
+  (maker-led or off-topic, `setApartOf`, `lib/written/conversations.ts`)
+  never leads as new or biggest; a flag leads whatever its conversation's
+  mark. *The check read:* `write-week-read` reads the update's check strictly
+  before it builds anything (`loadCheckStrict` / `loadFlagsStrict`). A
+  missing table is no check. A failure before the step's last attempt is
+  retried as transient; on the last attempt it is frozen `unread`, never "no
+  check". The flags (`WeekReadDataV2.unusual`) and the week's conversations
+  (`conversations`) are frozen into the read, with no new step id. *Page
+  lines* are read when the snapshot is built (`snapshotWeeklyRead` through
+  `loadWeeklyReadLines`, `lib/reports/weekly-read-lines-load.ts`; the pure
+  builder is `weeklyReadLines`, `lib/reports/weekly-read-lines.ts`), because
+  post ideas are written after the read. So a build long after its run (a
+  backfill, a re-claim, Send now on an old run) carries that day's lines. A
+  page with nothing, or with no table yet, has no line, and Voices has none
+  yet (`voices: null`). *Rollback hazard:* code from before this deploy
+  accepts only version 1 and prints a version 2 snapshot as the stale line
+  (`staleWeeklyReadSnapshot`). Do not roll back past this deploy without
+  first holding v2 sends.
+- **The pages and navigation (pages build, 1 Oct; Design v2, 13 Oct).**
+  Every client page is drawn to its approved artboard (`Page-*.dc.html`;
+  since Design v2 the depth boards, `E*.dc.html`); a deviation is Heinrich's
+  call, never a builder's. What the builds fixed in place:
   - **Navigation** (`lib/nav.ts`; Design v2, depth plan T1, 13 Oct): nine
     surfaces in three unlabelled groups: Dashboard · Market · Voices · Your
     products · Content · Your moves, the Agent, then Studio · Settings. The
@@ -638,11 +792,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
     digest still render). Market is `/dashboard/market` (page key
     `overview`), Voices `/dashboard/voices` (`voice`), Content
     `/dashboard/content` (`content`), Your moves `/dashboard/moves` (`market`,
-    deep link `?advice=`); Your products stores under nothing yet. PAGE KEYS
-    DID NOT MOVE, only addresses. The 1 Oct reading addresses
-    (`/dashboard/overview`, `/week`, `/voice`, `/competitive`, `/subjects`)
-    are redirect stubs with no loader, and ONE pure function maps every old
-    address with its params, `redirectFor` (`voice?theme=` → `market?conv=`,
+    deep link `?advice=`); Your products (`/dashboard/products`) is new and
+    has no page key, so nothing stores under it. PAGE KEYS DID NOT MOVE, only
+    addresses. The 1 Oct reading addresses (`/dashboard/overview`, `/week`
+    and `/subjects` land on Market, `/voice` and `/competitive` on Voices)
+    are redirect stubs with no loader; `/dashboard/content` is no stub but
+    the live Content page, which replaced This week's read there. ONE pure
+    function maps every old address with its params, `redirectFor`
+    (`voice?theme=` → `market?conv=`,
     `competitive?vs=` → `voices?brand=`, `subjects?item=` →
     `market?subject=`, a month → `market?period=month&month=`, Your moves'
     `market?rec|item|ledger` → `moves?advice=`, `/dashboard?month=` too),
@@ -668,8 +825,6 @@ This version has breaking changes — APIs, conventions, and file structure may 
     schedule as it is and never switches one on or creates one switched on,
     and every row it creates is born with `review` on; arming is the
     operator's (`updateArtefactRecipients`, fresh review H1).
-    Settings' tabs are What you track, Team and Billing (Readiness, The record
-    and How to read are the operator's); Log out sits in its bar.
   - **The published read** (`lib/written/published.ts`): the ONLY way a page
     reads `week_reads`. A page prints the newest READY read as soon as the run
     writes it, whatever its schedule or its send (Heinrich, 5 Oct: "This
@@ -682,16 +837,22 @@ This version has breaking changes — APIs, conventions, and file structure may 
     Sealand's 4 Oct run never reached its pages and Össur, reviewed with no
     recipients, printed nothing. The ISSUE no longer waits either: every
     weekly read the runner builds is published at once (below). It fails closed: a `week_reads` read that
-    fails throws, and the page loses only that block. This week, the
-    Dashboard, the Subjects pane and Your market's subject sentences read the
-    week read through it, and Your market's long-run read comes through
-    `loadPublishedLongRun`; `lib/written/published.test.ts` pins every one,
-    and pins that the selector reads no schedule and no send. A weekly read's
+    fails throws, and the page loses only that block. Since Design v2 the
+    routed readers are the Dashboard (`startDashboard`, which reads it once
+    and hands it to `topMarket` and `topContent`), Market (`loadMarket`,
+    `topMarket`) and Content (`loadContentPage`, `topContent`). This week
+    (`loadWeekReadPage`), the Subjects pane (`loadSubjectReadLine`) and Your
+    market (`loadMarketPicture`, the one `loadPublishedLongRun` call) still
+    read through it and are on no route. `lib/written/published.test.ts` pins
+    all six files, Your market's long-run read, and that the selector reads
+    no schedule and no send. A weekly read's
     review email says the read is on the platform already and Send emails the
     list (`readOnPlatform`); the run that closes a month also writes the
     long-run read, and that run's operator review email carries its title,
     lead, headlines and sentences under "Already on Your market"
-    (`readyForReview`). The client's email is unchanged. **"On the platform"
+    (`readyForReview`, `lib/email.ts`). Those words are stale since Design
+    v2: no routed page prints the long-run read. The client's email is
+    unchanged. **"On the platform"
     is about the ISSUE, not the pages** (the backfill, 1 Oct evening;
     migration `20261106090000_platform_publish.sql`): sent, or put there
     WITHOUT its email (`report_sends.published_at` and `published_by`,
@@ -715,22 +876,59 @@ This version has breaking changes — APIs, conventions, and file structure may 
     stand as the month's (`standsAsMonthRead`), so the month-closing run
     still writes the full one. A read's facts worded against a month say "this
     month" only while the read's month is the calendar month, and its name
-    otherwise (`monthPhrase`: This week's context line, the Dashboard's
-    Subjects tile; fresh review B2).
+    otherwise (`monthPhrase`: This week's blocks and the legacy overview's
+    subjects, which render stored snapshots; fresh review B2). The
+    Dashboard's week tile words its month with `readingMonthOf` and
+    `inMonth` (`weekTileOf`), and its subjects as "{Month} so far" or
+    "{Month}" (`weekSubjectsOf`).
   - **Who talk is about** (`lib/brands/attribution.ts`): one rule (a tracked
     brand named in the item's own counted comments, else the audience; one
     brand per video; never a guess), one order (the client, rivals by
     videos, the market last; a kind's split prints most first), one wording
     (`marketLabels`). The kind words are `talkKindLabel`
-    (`lib/pages/overview-market/kinds.ts`). Every page title is the shared
+    (`lib/pages/overview-market/kinds.ts`), except on the Your products
+    panels, which name a kind by where it was found (`productKindLabel`,
+    `lib/pages/v2/products.ts`: "Praise in the comments", never "Praised
+    it"), because a product's kind count is its videos with that kind
+    anywhere in their comments. Every page title is the shared
     `PageBar` (26px on 40px).
   - **Legacy modules stay registered, never routed**: `OverviewPage`,
     `WeekPage` / `WEEK_BLOCKS`, the subjects module, `COMPETITIVE_BLOCKS`,
     `MARKET_BLOCKS` / `MarketSurfacePage` and the six `voice.*` blocks render
-    stored snapshots, exports and the monthly. A block leaves a page's list,
-    not the registry.
-  - **Per page.** Dashboard: `loadHome`, one wave of light reads; Week by
-    week draws from ONE clean week, the first the DATA shows, never a
+    stored snapshots, exports and the monthly; `loadMarketSurface` also feeds
+    the quarterly and the briefs. A block leaves a page's list, not the
+    registry.
+  - **Dashboard** (Design v2, T8; boards E1-Dashboard and -Phone;
+    `lib/pages/v2/home.ts`, route `app/dashboard/(home)/page.tsx`).
+    `startDashboard` starts every tile's reads in one wave on one session
+    client and one reading handle (the memoised reads, `lib/reading/memo.ts`,
+    made once a request); the published week read is read once and handed to
+    `topMarket` and `topContent`; `loadDashboard` awaits every tile, for
+    scripts and tests. `loadHome` is gone. The route streams each tile
+    behind its own bones, and a tile whose read or render throws prints one
+    line (`TILE_FAILED`) and loses only itself (`settleTile` plus a per-tile
+    error boundary, `components/pages/v2/home/tile-boundary.tsx`); the bar's
+    own read, the Agent box's questions, the weekly chart and the subjects
+    are soft and draw nothing, the empty frame or no subjects instead. The
+    tiles: Market (`topMarket`); Your market this week (the published read's
+    frozen market videos and comments this week beside the month,
+    `weekTileOf`; Week by week below them; the biggest ready subject and the
+    one that moved most against last month through its `Verdict`, or "No
+    subject moved beyond its normal swing", `weekSubjectsOf` over Market's
+    own subject facts; no head link); Voices (`topVoices`: the group in the
+    most videos, every group's videos as separate bars, the two brands named
+    most unprompted, `NAMED_MOST`, with no verdict); Your products
+    (`topProducts`); Content (`topContent`, with `MEDICAL_LINE` under the
+    idea in a medical market, `printsMedicalLine`); Your moves (`topMoves`:
+    Accept and Not for us for owners and admins, `mayDecideMoves`); and the
+    Agent box (two questions to try, `agentTries`, from the read's frozen
+    `conversations`). Each tile's head link opens its page's panel in place
+    where the tile has an item, else the page; the Agent box has none either.
+    There is no Subjects tile and no Competitive tile: "Named most in
+    {Month}" now prints only in the weekly email's Your products line
+    (`lib/reports/weekly-read-lines.ts`). **Week by week** (`homeWeeks`, drawn
+    by `HomeWeeksPlot`, `components/pages/v2/home/weeks-plot.tsx`, kept
+    exactly from 1 Oct) draws from ONE clean week, the first the DATA shows, never a
     constant (`homeAxis`: the last eight weeks; `weeksSinceOurChanges` cuts at
     the latest search or relevance change on them, a pipeline change made
     before its run's gather at that run, at weeks off the cadence (a run that
@@ -738,24 +936,90 @@ This version has breaking changes — APIs, conventions, and file structure may 
     a bar counts checked videos only, `checkedRows`), a filling week faint;
     a drawn week's numbers (the week, its videos and comments, "still
     filling" where faint) show on hover, on keyboard focus and on a tap, off
-    the column itself (`homeWeekDetail`, the client leaf `HomeWeeksPlot`),
-    with the weekly bars' card and the same behaviour as Your market's and
-    This week's (`useWeekTip`, `WEEK_TIP_CARD`, components/charts/week-tip.tsx;
-    their cards and panel say "still filling" too, `STILL_FILLING`);
-    the two fail-open fixes (`gate_rule` / `relevance_gate`: the 24 Sep fix
+    the column itself (`homeWeekDetail`), with the weekly bars' card and
+    behaviour (`useWeekTip`, `WEEK_TIP_CARD`, components/charts/week-tip.tsx;
+    "still filling" is `STILL_FILLING`); Market's rail draws the same chart.
+    The two fail-open fixes (`gate_rule` / `relevance_gate`: the 24 Sep fix
     and the backfill's regate) cut no week, because `unchecked` counts
-    exactly their videos (`isFailOpenFix`). The Competitive tile's row is "Named most in
-    {Month}" off Competitive's own brand list (`loadBrandList`, the page's
-    reader and `brandList`, over the page's reading month); no week reading
-    of who was named exists, so never "this week", and nothing says what
-    brands are "compared on", so that row is not drawn. Your market: the
-    PUBLISHED `kind = 'month'` long-run read (`data.kind = 'longrun'`,
-    `scripts/longrun-read.ts`, through `loadPublishedLongRun`), then
-    standing, the top five conversations and the kinds. This week: the published read in full, with additive
-    `monthVideoIds` / `alsoHeard` (a read stored before them prints no brand
-    line and no Also heard). Subjects: the editor moved in
-    (`/dashboard/settings/subjects` redirects), and the pane's lines come from
-    the read's additive `standing[].contents`. Your moves: Your statements
+    exactly their videos (`isFailOpenFix`).
+  - **Market** (T3; `lib/pages/v2/market.ts`, `app/dashboard/market/page.tsx`).
+    Nav key `market`, page key `overview`, unchanged: the `overview` module
+    (`overviewPage`) stays registered for stored snapshots, exports and the
+    monthly, on no route. Its week is the published read's run window plus
+    the two equal windows before it (`weekWindows`, `MARKET_WEEKS`), cut by
+    `WEEK_CUT_SURFACES` changes (`cutWindows`; the newest window is never
+    cut). A conversation's counts are the category's videos, and the page
+    says so; the flag's k of n is every audience together, the client's own
+    posts included, and is named as such (`flagBaseWords`). The lead is
+    `weekLead`; a set-apart theme (maker-led or off-topic) never leads as new
+    or biggest, and stays listed, tagged. The table lists a conversation at
+    `MARKET_TABLE_FLOOR` (`POOL_FLOOR`, 3) of the period's category videos,
+    ten until `?all=1`. A subject that prints no level says why
+    (`unmeasuredOf`: `countedNote('provisional')`, `FAILED_EXPLAINED`, or no
+    reading in the month yet). `?conv=` takes a registry id or a slug;
+    `?subject=`, `?period=week|month|time`, `?month=` (`YYYY-MM` or a date),
+    `?at=` and `?in=` are read too (`marketParams`). It reads no long-run
+    read.
+  - **Voices** (T4; `lib/pages/v2/voices.ts`), on the reading month. Groups
+    are today's profile with this month's comment-dated videos: a count,
+    never a share, never compared (decision 2). Brands: named unprompted is
+    `k_organic` of `n_organic` with its `Verdict` (`brandMonthPair`, on
+    `BRANDS_PANEL`); praised, complained and the subject read base `any` and
+    carry no verdict. The client's own row needs its name checked
+    (`nameChecked`) and every month match read in `NAME_READS`
+    (`clientNameCounts`; the Dashboard's tile uses
+    `clientNameCountsByCount`). A tenant with rules and no rows says the
+    brands are not counted yet (`BRANDS_NOT_COUNTED`). Creators are listed at
+    `ACCOUNT_FLOOR` (3) market videos; Reddit is left out
+    (`COMMUNITY_PLATFORMS`: its account is the community) and never shows
+    followers. A rival's panel carries Competitive's pane over the ninety
+    days ending at the reading month's last update. One panel opens at a
+    time: `?group=` / `?persona=`, `?brand=` (a name, a key or
+    `competitor:<name>`, for ANY tracked brand), `?creator=` (an account or
+    `platform|account`).
+  - **Your products** (T5; `lib/pages/v2/products.ts`). `?group=` /
+    `?product=` open in place; `?unclear=all` shows an open category's full
+    couldn't-tell list. Counts pool `month_product_readings` over every
+    audience through `marketProductMonth` (`lib/products/market-month.ts`),
+    and the crosses pool every audience too (a local `poolLens`; Voices'
+    brand cross is unchanged). Settings › Your products uses the same
+    function and the page's own month (`productsMonth`), and its "Tag them"
+    link carries the month and `#unclear` (`lib/pages/v2/products-address.ts`).
+    The quote gate runs with `allowOwn: true` here, because comments under
+    the client's posts are part of the basis. Standouts are picked by code
+    (`pickStandouts`) and need `STANDOUT_MIN` (3) videos, except the gap
+    card, which needs its band to clear. Every comparison is a `Verdict`
+    (`ObjectKind` `'product'`); the category share verdict is judged on the
+    brands view (`BRANDS_PANEL`), which handles changes cut, and is refused
+    across a catalogue change. A product with no row in a read month reads
+    "not read yet", never quiet. The panels' kinds are `productKindLabel`'s
+    (above, "Who talk is about"). The Tag control is for owners and admins
+    only. Honest states: not applied, no catalogue, not switched on, unread,
+    failed (`ProductsState`).
+  - **Content** (T6; `lib/pages/v2/content.ts`: `loadContentPage`,
+    `topContent`). The week is a run's frozen window: the newer of the post
+    ideas' run and the published week read's (`anchorOf`), either alone
+    where the other is missing. Every week count sits beside its month
+    (`readingMonthOf`). Ideas come from `post_ideas`, behind
+    `postIdeasEnabled`: a missing table or the switch off reads "not switched
+    on", no rows "none written", a failed read says so (`unread`). Ideas
+    print their own week and stop printing once their week ended more than
+    `IDEAS_STALE_DAYS` (28) before the page's (`stale`). Who asks is group
+    names, never a count. "Your posts" is `ownedPosts`, and "touched on" is
+    `questionTouch` over the reading month and the two before. What works is
+    `buildPlaybook({ clientSide: 'owned' })`, dated by publish date, with the
+    clock named. The reply list is one click down, never "N waiting". In a
+    medical market every printed idea carries `MEDICAL_LINE`.
+  - **Your moves** (T7; `lib/pages/v2/moves.ts`, `loadMovesPage`).
+    `loadMarketSurface` and its blocks stay for stored snapshots, the briefs
+    and the quarterly. `?advice=` takes a lineage, a recommendation id or
+    `all`; the old `item` / `rec` / `ledger` are read too (`adviceParam`).
+    Accept, Not for us, Date a move and a move's status are an owner's or
+    admin's (`mayDecideMoves`); the database does not yet enforce it.
+    `TrackThisSubject` requires `canChangeStatus`. A move reads the market
+    from `MOVE_MONTHS_BEFORE` (2) months before it, and its one comparison
+    goes through `pairedVerdict` under the month-pair judge.
+    `theme_registry`'s label column is `canonical_label`. Your statements
     (`client_statements` / `client_statement_readings`, migration
     `20261105090000`; gloss, band at the subjects' 0.40/0.60, judge, stance),
     re-measured inside `ask-reevaluate` (so only where `CONSUMER_PROFILE` is
@@ -770,16 +1034,41 @@ This version has breaking changes — APIs, conventions, and file structure may 
     anything is written, so nothing is measured on a tenant's behalf. The
     operator sees and uses it as built, on any workspace they view. Opening
     it to clients is that one constant.
+  - **Settings** (T10b, T10c; `lib/settings/rail.ts`). Five client tabs: What
+    you track, Your products (`/dashboard/settings/products`), Your subjects
+    (`/dashboard/settings/subjects`, the subject editor again; it no longer
+    redirects), Team, Billing. Readiness, The record and How to read are the
+    operator's tabs, and Reports and recipients has none (its address
+    redirects into the Studio). Log out sits in its bar. The app's catalogue
+    writes are `lib/actions/products.ts` only: role (`canManageTenant`), then
+    the tracking tenant lock, then the service role, logged on surface
+    `products`; the seed (`scripts/products.ts --seed … --apply`) is the one
+    other writer, append-only. Nothing is deleted: a product or an alias is
+    retired, and an alias is retired and re-added, never edited, held to the
+    matcher's one rule (`aliasProblem`, `lib/products/rules.ts`). How to read
+    (`lib/settings/how-to-read.ts`) carries one card per routed page, the
+    Dashboard's included.
+  - **Own posts.** "Your posts" on the v2 pages is `ownedPosts`
+    (`source='owned'`, `lib/reading/owned.ts`). Overview's
+    `loadRecentOwnPosts` / `loadOwnPosts` and Your moves' legacy
+    `loadRecentOwnPosts` (`lib/pages/market-surface.ts`) read through it;
+    the subjects module's census (`lib/pages/subjects.ts` `loadOwnPosts`)
+    still reads `is_client` or `source='owned'`, and `buildPlaybook` defaults
+    to `clientSide: 'about'` everywhere but Content.
   - **A page that throws keeps the shell**: `app/dashboard/error.tsx` draws
-    one calm line and Try again (`unstable_retry`) inside the sidebar, and
-    This week loses only its read to a failed `week_reads` read (logged),
-    as the Dashboard, Subjects and Your market lose only their block.
+    one calm line and Try again (`unstable_retry`) inside the sidebar; the
+    Dashboard loses only a tile, and Market and Content only the block whose
+    read failed (their `soft` reads).
   - **Dead after the build, not deleted** (one cleanup commit wants them):
     `components/sidebar-tenant-loader.tsx`; the old Settings forms
     (`app/dashboard/settings/{tracking-form,term-performance,config-shapes,rival-rename}`,
     most of `components/settings/tracking/*`, the What-we-read loaders in
     `lib/settings/*`); `StarterCards`, `AskIndexColumns`, `loadAskFront`,
-    `lib/agent/starters.ts`.
+    `lib/agent/starters.ts`. Since Design v2 also: `MarketPicturePage` /
+    `loadMarketPicture` (Your market's 1 Oct page; `scripts/pages-shots.ts`
+    still draws it), `WeekReadPage` / `loadWeekReadPage` and
+    `loadSubjectReadLine`, which no route calls and
+    `lib/written/published.test.ts` still pins.
 - **The monthly department briefs (T8 wired, 5 Oct; Heinrich: "a finished
   run reaches the platform by itself; review holds ONLY the email").** The
   engine is `lib/reports/briefs/` (one idea, one home; role sections; the
