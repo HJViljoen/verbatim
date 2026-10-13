@@ -662,13 +662,16 @@ describe('the mirror in the migration — the two have to keep saying the same t
     // one is read without editing this test. Until the 4 Oct run those three
     // are held in lib/config-surfaces-mf1.ts, not CONFIG_SURFACES (this file is
     // on the freeze-months path), so the two lists together are MF1's.
+    //
+    // The products migration (20261109090000_products.sql, depth v2 T10)
+    // re-adds it once more with 'products', which CONFIG_SURFACES carries.
     const dir = new URL('../supabase/migrations/', import.meta.url)
     const newest = readdirSync(dir)
       .filter((f) => f.endsWith('.sql'))
       .sort()
       .filter((f) => /add constraint config_changes_surface_check/i.test(readFileSync(new URL(f, dir), 'utf8')))
       .at(-1)
-    expect(newest).toBe('20260928090000_market_first_s1.sql')
+    expect(newest).toBe('20261109090000_products.sql')
     const rivalsSql = readFileSync(new URL(newest!, dir), 'utf8')
     const surfaces = rivalsSql.match(/check\s*\(surface in \(([\s\S]*?)\)\)/i)?.[1]
     const kinds = sql.match(/check\s*\(actor_kind in\s*\(([\s\S]*?)\)\)/i)?.[1]

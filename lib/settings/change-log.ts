@@ -130,6 +130,7 @@ export const SURFACE_WORDS: Record<LoggedSurface, string> = {
   prompt_version: 'How we read',
   rival_rename: 'A rival was renamed',
   other: 'Configuration',
+  products: 'Your products',
   // Three changes of ours that no setting records (MF1, WP1.4): the relevance
   // check's rule, how posts are filed under a brand, and how makers and
   // off-topic videos are marked. A mark never takes a video out of a count.

@@ -184,6 +184,15 @@ describe('changesFromLog: every surface mapped', () => {
     }
   })
 
+  it('drops a catalogue edit (products, depth v2 T10): it is no change of ours to any view', () => {
+    // Under `other` it would refuse every view's pair and cut every chart.
+    expect(NOT_OUR_CHANGES).toContain('products')
+    expect(OUR_CHANGE_SURFACES).not.toContain('products' as never)
+    const edit = row({ id: 'products-1013', changed_at: '2026-10-13T09:00:00.000Z', surface: 'products', field: 'alias', source: 'logged', actor_kind: 'user' })
+    const other = row({ id: 'other-1013', changed_at: '2026-10-13T09:00:30.000Z', surface: 'other', field: 'watched_brands', source: 'logged', actor_kind: 'operator' })
+    expect(changesFromLog([edit, other]).map((c) => c.id)).toEqual(['other-1013'])
+  })
+
   it('knows the three surfaces MF1 adds before the CHECK does', () => {
     for (const s of ['segment', 'gate_rule', 'attribution']) expect(OUR_CHANGE_SURFACES).toContain(s)
   })
