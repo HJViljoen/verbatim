@@ -31,10 +31,31 @@ async function main() {
   if (!clientId || !out) throw new Error('--client <uuid> --out <file.json>')
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
-  const db = createClient(url, key)
+  const raw0 = createClient(url, key)
+  // EVERY STATEMENT COUNTED: each `.from(table)` (a select page is one) and
+  // each `.rpc(name)`, by name, so a load's cost is a number, not a guess. A
+  // fresh client per load, so neither load is helped by the other's memo.
+  const counts = new Map<string, number>()
+  const bump = (k: string) => counts.set(k, (counts.get(k) ?? 0) + 1)
+  const counted = (): typeof raw0 => {
+    const target = createClient(url, key)
+    return new Proxy(target, {
+      get(t, prop, receiver) {
+        if (prop === 'from') return (name: string) => { bump(`from:${name}`); return t.from(name) }
+        if (prop === 'rpc') return (fn: string, ...rest: unknown[]) => { bump(`rpc:${fn}`); return (t.rpc as (...a: unknown[]) => unknown)(fn, ...rest) }
+        return Reflect.get(t, prop, receiver)
+      },
+    }) as typeof raw0
+  }
+  const report = (label: string) => {
+    const total = [...counts.values()].reduce((a, b) => a + b, 0)
+    console.log(`${label}: ${total} statements`)
+    for (const [k, v] of [...counts.entries()].sort((a, b) => b[1] - a[1])) console.log(`  ${v}  ${k}`)
+    counts.clear()
+  }
 
   const started = Date.now()
-  const probe = await db.from('clients').select('id').eq('id', clientId).maybeSingle()
+  const probe = await raw0.from('clients').select('id').eq('id', clientId).maybeSingle()
   const probeMs = Date.now() - started
   if (probe.error) throw new Error(`probe: ${probe.error.message} (${probeMs} ms): do not read this instance for fifteen minutes`)
   console.log(`Probe (PostgREST): ${probeMs} ms.`)
@@ -44,16 +65,20 @@ async function main() {
   const t0 = Date.now()
   let conv: string | undefined = raw.conv
   if (!conv && !args.includes('--no-open') && (raw.period ?? 'week') === 'week') {
-    const top = await topMarket({ supabase: db, clientId, reading: readingHandle(clientId, db) })
+    const tdb = counted()
+    const top = await topMarket({ supabase: tdb, clientId, reading: readingHandle(clientId, tdb) })
     const lead = top?.hero ? (top.hero.kind === 'flag' ? top.hero.card.conv?.id : top.hero.conv.id) : null
     console.log(`topMarket: ${Date.now() - t0} ms; lead ${lead ?? 'none'}`)
+    report('topMarket')
     writeFileSync(resolve(out.replace(/\.json$/, '.top.json')), JSON.stringify(top, null, 2))
     conv = lead ?? undefined
   }
   const params = marketParams({ ...raw, ...(conv ? { conv, at: raw.at ?? 'top' } : {}) })
   const t1 = Date.now()
+  const db = counted()
   const data = await loadMarket({ supabase: db, clientId, reading: readingHandle(clientId, db), params })
   console.log(`loadMarket: ${Date.now() - t1} ms`)
+  report('loadMarket')
   writeFileSync(resolve(out), JSON.stringify(data, null, 2))
   console.log(`Wrote ${resolve(out)}`)
 }
