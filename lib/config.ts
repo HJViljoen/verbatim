@@ -1825,3 +1825,43 @@ export const BRAND_CONFIRM_ENABLED: Readonly<Record<string, boolean>> = {
 export const segmentJudgeEnabled = (clientId: string): boolean => SEGMENT_JUDGE_ENABLED[clientId] === true
 /** May this tenant's run call the brand-mention confirm? */
 export const brandConfirmEnabled = (clientId: string): boolean => BRAND_CONFIRM_ENABLED[clientId] === true
+
+/**
+ * Your products' run steps (depth v2 T11, plan decision 3 option B), per
+ * tenant, and off for every tenant until Heinrich turns one on. Off,
+ * `plan-product-readings` returns no month and nothing is read, written or
+ * spent. It is a WHOLE-STEP switch, not a model switch, and on purpose: a
+ * month the step wrote with the rules alone and then froze could never gain
+ * the classifier's placements (the month tables' one-shot), so the steps run
+ * whole or not at all. Turn a tenant on only AFTER its catalogue is reviewed
+ * and loaded (scripts/products.ts --seed … --apply) and its back-read is
+ * written (scripts/products.ts --back-read --write): the run then refreshes
+ * the open months, and the model reads only what is new. Pinned off by
+ * lib/config.test.ts, as the two switches above are.
+ */
+export const PRODUCT_READINGS_ENABLED: Readonly<Record<string, boolean>> = {
+  [SEALAND_CLIENT_ID]: false,
+  [OSSUR_CLIENT_ID]: false,
+}
+/** May this tenant's run place talk under its products? */
+export const productReadingsEnabled = (clientId: string): boolean => PRODUCT_READINGS_ENABLED[clientId] === true
+
+/** The product classifier's per-run cap, in ITEMS (confirm checks and
+ *  comments): a runaway backstop, translate-quotes' shape. At about $0.0001 an
+ *  item (gpt-4.1-mini, 25 a call), 3,000 is about $0.30. What the cap leaves
+ *  is read next run, oldest month first. */
+export const PRODUCT_CLASSIFY_CAP = 3000
+
+/** The product classifier's HARD dollar cap per run: before each wave of
+ *  calls, the run's product spend so far plus the wave's worst case must fit
+ *  (lib/products/classify.ts runClassifier). The plan's estimate is $0.10 to
+ *  $0.50 a run; this stops a mistake at $0.75. */
+export const PRODUCT_CLASSIFY_BUDGET_USD = 0.75
+
+/** Calls in flight at once inside one product-readings step. */
+export const PRODUCT_CLASSIFY_PARALLEL = 4
+
+/** The model calls of one product-readings step stop being started after
+ *  this long on the step's own clock, leaving the month's write well inside
+ *  the route's 300 s. What is left waits for the next run. */
+export const PRODUCT_STEP_MODEL_MS = 170_000

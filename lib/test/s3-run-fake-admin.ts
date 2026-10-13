@@ -4,7 +4,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 // offline tests (lib/pipeline/*-step tests; AGENTS.md: offline only, no new
 // dependency). It answers the PostgREST shapes the steps use: select with eq,
 // in, gte, lt, lte, gt, is, overlaps, order, limit, range, maybeSingle; insert and
-// upsert (on a key list); update ... eq; and rpc through handlers. A table not
+// upsert (on a key list); update ... eq; and rpc through handlers (rows, or
+// `{ data }` for a function that returns one value). A table not
 // in `tables` answers the way PostgREST answers a missing migration
 // ("Could not find the table ... in the schema cache", PGRST205), and an rpc
 // with no handler the way a missing function does (PGRST202). Every write is
@@ -27,7 +28,7 @@ export interface FakeAdmin {
 
 export function fakeAdmin(init: {
   tables: Record<string, object[]>
-  rpc?: Record<string, (params: Row) => object[] | { error: { code?: string; message: string } }>
+  rpc?: Record<string, (params: Row) => object[] | { data: unknown } | { error: { code?: string; message: string } }>
   /** Table name → an error every insert or upsert into it returns (a guard's refusal). */
   refuse?: Record<string, (rows: Row[]) => { code?: string; message: string } | null>
   /** Table name → the columns the database fills on an insert (its default). */
@@ -136,7 +137,10 @@ export function fakeAdmin(init: {
       const all = (): { data: Row[] | null; error: unknown } => {
         if (!h) return { data: null, error: { code: 'PGRST202', message: `Could not find the function public.${fn} in the schema cache` } }
         const out = h(params)
-        return Array.isArray(out) ? { data: out as Row[], error: null } : { data: null, error: out.error }
+        if (Array.isArray(out)) return { data: out as Row[], error: null }
+        // A function returning one value (jsonb), not rows: `{ data: value }`.
+        if ('data' in out) return { data: (out as { data: unknown }).data as Row[], error: null }
+        return { data: null, error: out.error }
       }
       let from = 0
       let to = Number.POSITIVE_INFINITY

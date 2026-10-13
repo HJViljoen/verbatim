@@ -18,7 +18,9 @@
 -- month_pair_comparability, comparability_checks, week_line_reads and
 -- week_line_points, brand_mentions, month_lens_readings and
 -- month_brand_readings (August written FROZEN, before freeze-months' marker,
--- as the steps do on the run that closes it) and a queued tracking edit.
+-- as the steps do on the run that closes it) and a queued tracking edit; and
+-- since depth v2 (T11) the product step's too, after brand-readings: a
+-- catalogue, product_mentions and month_product_readings (August FROZEN).
 -- Then:
 --   D1. the six month functions freeze-months reads answer the same, row for
 --       row, on A and on B;
@@ -238,6 +240,38 @@ insert into public.month_brand_readings (client_id, month, audience, brand_key, 
 on conflict (client_id, month, audience, brand_key) do update
   set k_any = excluded.k_any, n = excluded.n, status = excluded.status, read_at = excluded.read_at, run_id = excluded.run_id, frozen_at = excluded.frozen_at;
 commit;
+-- product-readings (depth v2 T11): the catalogue (the seed script or Settings
+-- writes it), the month's placements, then August's rows FROZEN
+begin;
+set local role service_role;
+insert into public.product_groups (id, client_id, name, actor_kind, actor_label) values
+  (pg_temp.d4_id('00000000-0000-4000-8000-00000000d4b1', 'bags'), '00000000-0000-4000-8000-00000000d4b1', 'Bags', 'script', 'products --apply (check)');
+insert into public.products (id, client_id, group_id, name, actor_kind, actor_label) values
+  (pg_temp.d4_id('00000000-0000-4000-8000-00000000d4b1', 'tote'), '00000000-0000-4000-8000-00000000d4b1', pg_temp.d4_id('00000000-0000-4000-8000-00000000d4b1', 'bags'), 'Tote', 'script', 'products --apply (check)');
+insert into public.product_aliases (client_id, product_id, group_id, alias, kind, actor_kind, actor_label) values
+  ('00000000-0000-4000-8000-00000000d4b1', pg_temp.d4_id('00000000-0000-4000-8000-00000000d4b1', 'tote'), null, 'Tote', 'name', 'script', 'products --apply (check)'),
+  ('00000000-0000-4000-8000-00000000d4b1', null, pg_temp.d4_id('00000000-0000-4000-8000-00000000d4b1', 'bags'), 'bag', 'category_word', 'script', 'products --apply (check)');
+commit;
+begin;
+set local role service_role;
+insert into public.product_mentions (client_id, video_id, source, field, placement, product_id, group_id, method, rule_version, catalogue_version)
+  select client_id, id, 'content', 'caption', 'unbranded', null, pg_temp.d4_id(client_id, 'bags'), 'rule', 'product_rules_v1',
+         public.product_catalogue(client_id)->>'version'
+    from public.videos where client_id = '00000000-0000-4000-8000-00000000d4b1' and is_client is not true;
+commit;
+begin;
+set local role service_role;
+insert into public.month_product_readings (client_id, month, audience, object_kind, object_id, group_id, product_id, k_named, k_unclear, k_unbranded,
+                                           k_any, k_organic, comments, n, n_organic, status, origin, read_at, run_id, rule_version, catalogue_version, frozen_at)
+  select '00000000-0000-4000-8000-00000000d4b1', '2026-08-01', a.audience, a.kind, a.object_id, pg_temp.d4_id('00000000-0000-4000-8000-00000000d4b1', 'bags'), a.product_id, 0, 0, a.k, a.k, a.k, 0, a.n, a.n,
+         'frozen', 'live', '2026-10-04 07:45Z', pg_temp.d4_id('00000000-0000-4000-8000-00000000d4b1', 'run-1004'), 'product_rules_v1+product_classify_v1',
+         public.product_catalogue('00000000-0000-4000-8000-00000000d4b1')->>'version', '2026-10-04 07:45Z'
+    from (values ('industry-other', 'group', pg_temp.d4_id('00000000-0000-4000-8000-00000000d4b1', 'bags'), null::uuid, 15, 15),
+                 ('industry-other', 'product', pg_temp.d4_id('00000000-0000-4000-8000-00000000d4b1', 'tote'), pg_temp.d4_id('00000000-0000-4000-8000-00000000d4b1', 'tote'), 0, 15)) a(audience, kind, object_id, product_id, k, n)
+on conflict (client_id, month, audience, object_kind, object_id) do update
+  set k_unbranded = excluded.k_unbranded, k_any = excluded.k_any, n = excluded.n, status = excluded.status, read_at = excluded.read_at,
+      run_id = excluded.run_id, frozen_at = excluded.frozen_at;
+commit;
 
 -- D1. The six functions read the same on A and on B.
 create temp table d4_after as
@@ -257,10 +291,12 @@ begin
   end if;
   if (select count(*) from public.video_segments where client_id = '00000000-0000-4000-8000-00000000d4b1') <> 20
      or (select count(*) from public.month_lens_readings where client_id = '00000000-0000-4000-8000-00000000d4b1' and month = '2026-08-01' and status = 'frozen') <> 8
-     or (select count(*) from public.month_brand_readings where client_id = '00000000-0000-4000-8000-00000000d4b1' and status = 'frozen') <> 2 then
+     or (select count(*) from public.month_brand_readings where client_id = '00000000-0000-4000-8000-00000000d4b1' and status = 'frozen') <> 2
+     or (select count(*) from public.product_mentions where client_id = '00000000-0000-4000-8000-00000000d4b1') <> 19
+     or (select count(*) from public.month_product_readings where client_id = '00000000-0000-4000-8000-00000000d4b1' and status = 'frozen') <> 2 then
     raise exception 'D1 FAILED: the steps'' writes did not all land on B';
   end if;
-  raise notice 'ok  D1: after every deploy-4 write on B (20 segments, provenance, surfacings, pair, reach and check rows, a kept week, 3 mentions, August''s lens and brand rows frozen, a queued edit), the six month functions read the same on A and on B, % lines each', (select count(*) from d4_after where tenant = 'B');
+  raise notice 'ok  D1: after every deploy-4 write on B (20 segments, provenance, surfacings, pair, reach and check rows, a kept week, 3 mentions, August''s lens and brand rows frozen, a queued edit) and the product step''s (a catalogue, 19 placements, August''s product rows frozen), the six month functions read the same on A and on B, % lines each', (select count(*) from d4_after where tenant = 'B');
 end $$;
 
 -- D2. freeze-months' writes on each tenant: every numerator first (August
@@ -373,10 +409,12 @@ begin
     from pg_trigger t join pg_class c on c.oid = t.tgrelid join pg_proc p on p.oid = t.tgfoid
    where not t.tgisinternal
      and c.relname in ('video_segments', 'video_provenance', 'video_surfacings', 'config_change_reach', 'month_pair_comparability', 'comparability_checks',
-                       'week_line_reads', 'week_line_points', 'brand_mentions', 'month_lens_readings', 'month_brand_readings', 'tracking_config_queue')
-     and p.proname not in ('month_reading_frozen_guard', 'month_reading_frozen_insert_guard', 'month_lens_frozen_insert_guard', 'month_reading_delete_guard', 'tracking_config_queue_applied_once');
+                       'week_line_reads', 'week_line_points', 'brand_mentions', 'month_lens_readings', 'month_brand_readings', 'tracking_config_queue',
+                       'product_groups', 'products', 'product_aliases', 'product_mentions', 'product_tags', 'month_product_readings')
+     and p.proname not in ('month_reading_frozen_guard', 'month_reading_frozen_insert_guard', 'month_lens_frozen_insert_guard', 'month_reading_delete_guard', 'tracking_config_queue_applied_once',
+                           'product_aliases_retire_once');
   if bad is not null then raise exception 'D4 FAILED: a step''s table fires a trigger that is not a guard: %', bad; end if;
-  raise notice 'ok  D4: the tables deploy 4''s steps write carry guards only (no trigger that writes)';
+  raise notice 'ok  D4: the tables deploy 4''s steps and the product step write carry guards only (no trigger that writes)';
 end $$;
 
 -- The tenants go.
