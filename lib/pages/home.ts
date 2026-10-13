@@ -661,7 +661,7 @@ async function loadMonthThemes(
 }
 
 /** `market_week_volumes` over the chart's weeks. */
-async function loadWeekRows(reading: SupabaseClient, clientId: string, now: string): Promise<MarketWeekRowRaw[]> {
+export async function loadWeekRows(reading: SupabaseClient, clientId: string, now: string): Promise<MarketWeekRowRaw[]> {
   const to = addDays(isoWeekOf(now), 7)
   const res = await reading.rpc('market_week_volumes', { p_client: clientId, p_from: homeAxis(now)[0], p_to: to })
   if (res.error) throw new Error(`market_week_volumes: ${res.error.message}`)

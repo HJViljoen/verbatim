@@ -22,17 +22,28 @@ import type { WeekReadConversation } from './types'
 // The themes are the pool's (lib/written/pool.ts): every category theme on
 // three or more window videos, labelled under this run's clustering. Pure.
 
-/** The themes set apart in the month: `segmentOf` over the month's
- *  `theme_maker_shares` rows (the same composition as Market's `setApartOf`,
- *  lib/pages/v2/market.ts on the depth branch). Empty where not measured. */
-export function setApartIds(rows: readonly ThemeMakerShareRow[] | null): Set<string> {
-  const out = new Set<string>()
+/**
+ * THE ONE SET-APART RULE (decision F): a theme half or more of whose videos in
+ * the month are makers' own (`makers`), or off-topic (`noise`), by `segmentOf`,
+ * the board's rule, over the month's `theme_maker_shares` rows. Market tags
+ * these and never leads with one; the week's read freezes the same set
+ * (`setApartIds`), so the email and the page cannot disagree. Empty where not
+ * measured. Pure.
+ */
+export function setApartOf(rows: readonly ThemeMakerShareRow[] | null): Map<string, 'makers' | 'noise'> {
+  const out = new Map<string, 'makers' | 'noise'>()
   if (!rows) return out
   const shares = themeSegmentsOf(rows)
   for (const id of new Set([...shares.maker.keys(), ...shares.noise.keys()])) {
-    if (segmentOf({ makerShare: shares.maker.get(id) ?? null, noiseShare: shares.noise.get(id) ?? null })) out.add(id)
+    const seg = segmentOf({ makerShare: shares.maker.get(id) ?? null, noiseShare: shares.noise.get(id) ?? null })
+    if (seg) out.set(id, seg)
   }
   return out
+}
+
+/** The themes set apart in the month, by id (`setApartOf`'s keys). */
+export function setApartIds(rows: readonly ThemeMakerShareRow[] | null): Set<string> {
+  return new Set(setApartOf(rows).keys())
 }
 
 /** The week's conversations, the biggest this week first (ties by id). */

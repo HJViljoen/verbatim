@@ -128,9 +128,9 @@ describe('dashboard loading skeletons', () => {
     if (!LEGACY.has(folder)) expect(html).toMatch(/role="status"/)
   })
 
-  it('Market\'s skeleton is the bigger picture\'s, which it draws until its own page lands', () => {
+  it('Market\'s skeleton is its own page\'s (depth v2, T3)', () => {
     const src = readFileSync(join(ROOT, 'market', 'loading.tsx'), 'utf8')
-    expect(src).toMatch(/<MarketPictureSkeleton \/>/)
+    expect(src).toMatch(/<MarketSkeleton \/>/)
     expect(src).not.toMatch(/SkeletonStrip|title="Dashboard"/)
   })
 
