@@ -4,7 +4,7 @@ import { fmtInt } from '@/lib/format'
 import { periodHref, type MarketData } from '@/lib/pages/v2/market'
 import { LongRunSection, LongRunUnread } from './long-run'
 import { ConversationPanel, SubjectPanelView } from './panel'
-import { RailView, railIsWide } from './rail'
+import { RailView } from './rail'
 import { SubjectBoardView } from './subjects'
 import { ConversationTable } from './table'
 import { TopRowView } from './top'
@@ -47,12 +47,12 @@ function Meta({ data }: { data: MarketData }) {
 }
 
 /** The subject board and the rail at each width: stacked on a phone and up
- *  to 1280, then 8 · 4 (the rail spans the row under the board where it is
- *  wide). A panel opened from the board sits under the board at every width:
- *  before the rail where they stack, under the pair where they stand side by
- *  side. */
-export function boardLayout(wide: boolean): PanelLayout {
-  return { base: { spans: [12, 12], of: 12 }, xl: { spans: wide ? [12, 12] : [8, 4], of: 12 } }
+ *  to 1280, then the board's 8 · 4, in every data state (the parity pass, 13
+ *  Oct: the rail never leaves its column for a row). A panel opened from the
+ *  board sits under the board at every width: before the rail where they
+ *  stack, under the pair where they stand side by side. */
+export function boardLayout(): PanelLayout {
+  return { base: { spans: [12, 12], of: 12 }, xl: { spans: [8, 4], of: 12 } }
 }
 
 function periodSwitch(data: MarketData) {
@@ -72,8 +72,8 @@ export function MarketPage({ data }: { data: MarketData | null }) {
   const convPanel = (notchAt?: number | PerBreakpoint) => (data.panel ? <ConversationPanel panel={data.panel} data={data} notchAt={notchAt} /> : null)
   // Opened from the subject board (a subject, or a conversation inside one):
   // under the board, at every width.
-  const fromBoard = Boolean(data.subjects) && ((at === 'subjects' && data.panel) || data.subjectPanel)
-  const boardPlace = fromBoard ? panelPlacement(0, boardLayout(railIsWide(data))) : null
+  const fromBoard = Boolean((at === 'subjects' && data.panel) || data.subjectPanel)
+  const boardPlace = fromBoard ? panelPlacement(0, boardLayout()) : null
   return (
     <PageFrame className="text-foreground">
       {/* The switch sits beside the title, and under the bar below 1024,
@@ -85,7 +85,7 @@ export function MarketPage({ data }: { data: MarketData | null }) {
       <div className="-mt-2 lg:hidden">{periodSwitch(data)}</div>
       <TopRowView data={data} panel={at === 'top' && data.panel ? convPanel : undefined} />
       <section aria-label="What the market is talking about" className="grid grid-cols-12 items-start gap-5">
-        {data.subjects ? <SubjectBoardView board={data.subjects} data={data} style={panelItemOrder(0)} /> : null}
+        <SubjectBoardView board={data.subjects} data={data} style={panelItemOrder(0)} />
         {boardPlace ? (
           <PanelSlot placement={boardPlace} className="flex flex-col gap-5">
             {at === 'subjects' ? convPanel(boardPlace.notch) : null}

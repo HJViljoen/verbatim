@@ -97,7 +97,9 @@ export const READING_CARDS: readonly ReadingCard[] = [
     // through a `Verdict`. Conversations are the category's (decision E);
     // the table's floor is MARKET_TABLE_FLOOR; the lead is `weekLead`, and a
     // flag needs the anomaly check (BASELINE_MONTHS read the same way). A
-    // subject that is not ready prints no level (`unmeasuredOf`). This month
+    // subject that is not ready prints no level (`unmeasuredOf`), and one
+    // whose check is open keeps its row and "Inside it" (the parity pass,
+    // 13 Oct; `placeableSubjects`). This month
     // ends with the month's long-run read (`marketLongRunOf`, 13 Oct).
     tells: 'What your market is talking about, this week, this month or over time: the conversation that leads the week, the conversations first heard this week, each of your subjects this month so far against last month, what people did in the comments, your market’s videos week by week, where it is said, and every conversation, each opening in full with its own voices. A month ends with our read of what has held across the months behind it.',
     read: ['market', 'week', 'month', 'video', 'theme', 'subject', 'kind', 'level', 'change', 'new'],
@@ -108,7 +110,7 @@ export const READING_CARDS: readonly ReadingCard[] = [
       'A conversation is listed once 3 of the period’s videos in the category carry it.',
       'A subject is counted by the same rule a theme is, which means it counts what people SAID, not what they bought.',
       'A subject’s month so far is called a change against last month only where it clears the band, and reads “no clear change” where it does not; two months not read the same way are not compared.',
-      'A subject still being checked prints no figure, only that it is counted and marked provisional; one whose check clearly failed prints no figure while it is re-described.',
+      'A subject still being checked keeps its row and the conversations inside it, but prints no figure: its level comes after the check. One whose check clearly failed prints no figure and no conversations while it is re-described.',
       'The kinds of thing people did in the comments overlap: one video can carry several, so together they are more than its whole.',
       'It cannot tell you why anything moved. A number and a reason are different claims, and only one of them is counted.',
       'Our read of what has held across the months sits below a month’s figures. It is written when the month closes, says so where it was written earlier, and compares no month with another. While a month is still under way and has no read of its own, the newest read of any month before it stands there, named as that month’s.',

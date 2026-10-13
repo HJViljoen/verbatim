@@ -175,9 +175,10 @@ export function SubjectPanelView({ panel, data, notchAt }: { panel: SubjectPanel
       }
     >
       {panel.state !== 'ready' && panel.note ? (
-        // Not measured: why, in the calibration's words, and nothing counted.
+        // No level: why, in one line. Being re-described, nothing listed;
+        // otherwise the conversations inside it, as the board lists them.
         <p data-subject-state={panel.state} className="m-0 text-[15px] leading-[1.6] text-foreground">
-          {panel.state === 'failed' ? panel.note : `Not measured yet: ${panel.note}.`}
+          {panel.state === 'failed' ? panel.note : `${panel.note}.`}
         </p>
       ) : null}
       {panel.level ? (
@@ -200,7 +201,7 @@ export function SubjectPanelView({ panel, data, notchAt }: { panel: SubjectPanel
             </PanelSection>
           ) : null}
         </div>
-        {panel.state === 'ready' ? (
+        {panel.state !== 'failed' ? (
         <PanelSection label={<>Conversations inside it {week ? <span className="normal-case tracking-normal">· this week, and {data.month.text}</span> : null}</>}>
           {panel.inside.length > 0
             ? panel.inside.map((c) => (

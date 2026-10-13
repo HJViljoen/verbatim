@@ -1,15 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract, copyNodes, copyViolations } from '@/lib/test/copy-contract'
-import { fixtureId, marketFixture, marketLongRowsFixture, FIXTURE_WEEKS } from '@/lib/pages/v2/market-fixture'
+import { fixtureId, marketFixture, marketLongRowsFixture, marketThinFixture, FIXTURE_WEEKS } from '@/lib/pages/v2/market-fixture'
+import { SUBJECT_PENDING } from '@/lib/pages/v2/market'
 import type { MarketData } from '@/lib/pages/v2/market'
 import { MarketPage, MARKET_FIRST_RUN } from './index'
 import { ConversationPanel, SubjectPanelView } from './panel'
-import { KindsCard, PlatformsCard, RailView, WatchCard, WeeksCard, WEEKS_UNREAD } from './rail'
+import { KindsCard, KindsFrame, PlatformsCard, PlatformsFrame, RailView, WatchCard, WeeksCard, WEEKS_UNREAD } from './rail'
 import { WEEKS_FAILED } from '@/lib/pages/home'
 import { SubjectBoardView } from './subjects'
 import { ConversationTable } from './table'
-import { TopRowView } from './top'
+import { NO_GROUP, NOTHING_NEW, TopRowView } from './top'
 import { MarketSkeleton } from './skeleton'
 
 // MARKET'S RENDER TIER (depth v2, T3): every block, from the fixture, against
@@ -170,7 +171,7 @@ describe('SubjectBoardView', () => {
     expect(text).toMatch(/^What the market is talking about Your subjects, as a share of October so far’s 318 videos\. The black tick is September\./)
     expect(text).toContain('Cost & access 22% 70 of 318 ▲ 7 pts')
     expect(text).toContain('Fit & comfort 34% 108 of 318 no clear change')
-    expect(text).toContain('Sport and running : counted in your market, marked provisional')
+    expect(text).toContain('Sport and running : Being re-described')
     assertCopyContract(<SubjectBoardView board={board} data={WEEK} />)
   })
 
@@ -239,8 +240,32 @@ describe('the rail', () => {
     expect(render(<RailView data={MONTH} />)).not.toContain('Worth watching')
   })
 
-  it('takes the row where there is no subject board', () => {
-    expect(render(<RailView data={{ ...WEEK, subjects: null }} />)).toContain('xl:grid-cols-3')
+  // The parity pass (13 Oct): the rail never breaks out into a row of cards.
+  it('stays a column beside the board, with no subject board too', () => {
+    const html = render(<RailView data={{ ...WEEK, subjects: null }} />)
+    expect(html).toMatch(/^<div class="col-span-12 flex min-w-0 flex-col gap-5 xl:col-span-4">/)
+    expect(html).not.toContain('xl:grid-cols-3')
+  })
+
+  it('weeks: with no week to draw, the eight weeks\' axis with empty slots and one line', () => {
+    const axis = FIXTURE_WEEKS.columns.map((c) => c.label)
+    for (const weeks of [null, WEEKS_FAILED] as const) {
+      const html = render(<WeeksCard weeks={weeks} axis={axis} />)
+      expect(html.match(/data-slot-empty=""/g)).toHaveLength(8)
+      expect(renderText(<WeeksCard weeks={weeks} axis={axis} />)).toMatch(/17 Aug 7 Sep 5 Oct/)
+      assertCopyContract(<WeeksCard weeks={weeks} axis={axis} />)
+    }
+    // A drawn chart with a week our rules leave out: its slot, and why.
+    const gap = { ...FIXTURE_WEEKS, columns: FIXTURE_WEEKS.columns.map((c, i) => (i < 2 ? { ...c, videos: null, comments: null } : c)) }
+    expect(render(<WeeksCard weeks={gap} />).match(/data-slot-empty=""/g)).toHaveLength(2)
+    expect(renderText(<WeeksCard weeks={gap} />)).toContain('Only weeks read the same way are drawn; the newest are still filling.')
+  })
+
+  it('kinds and platforms keep their cards with nothing read', () => {
+    expect(renderText(<KindsFrame noun={null} monthText="October so far" />)).toBe('What people do in the comments Share of October so far’s videos where at least one comment did it Asked a question Praised it Complained about something Wished for something Said they want to buy Pushed back Not read for October so far yet.')
+    expect(renderText(<PlatformsFrame data={WEEK} />)).toContain('Where it’s said This week’s videos, by platform No video counted by platform yet.')
+    assertCopyContract(<KindsFrame noun="bags" monthText="October so far" />)
+    assertCopyContract(<PlatformsFrame data={WEEK} />)
   })
 })
 
@@ -335,19 +360,29 @@ describe('brands not counted yet (Össur before its back-read)', () => {
     const text = renderText(<MarketPage data={NC} />)
     expect(text).not.toContain('no brand named')
     expect(text).not.toMatch(/About Össur/)
-    expect(text).toContain('Who the talk is about: Brands are not counted for this workspace yet.')
+    // Once, in each block's own place: the lead card's About slot and the
+    // table's About header (the parity pass: the column stays).
+    expect(text).toContain('About · brands not counted yet Close ↑')
     expect(renderText(<ConversationPanel panel={NC.panel!} data={NC} />)).toContain('Who it’s about Brands are not counted for this workspace yet.')
-    expect(renderText(<ConversationTable table={NC.table!} data={NC} />)).toContain('Conversation Subject This week October so far')
+    expect(renderText(<ConversationTable table={NC.table!} data={NC} />)).toContain('Conversation Subject About · brands not counted yet This week October so far')
     assertCopyContract(<MarketPage data={NC} />)
   })
 })
 
 describe('SubjectPanelView', () => {
-  it('a subject not measured yet says why and lists nothing', () => {
+  it('a subject being re-described says why and lists nothing', () => {
     const data = marketFixture({ subject: 'sport' })
     const text = renderText(<SubjectPanelView panel={data.subjectPanel!} data={data} />)
-    expect(text).toContain('Sport and running Close Not measured yet: counted in your market, marked provisional.')
-    expect(text).not.toContain('No conversation in it reached three videos')
+    expect(text).toContain('Sport and running Close Being re-described: a check found the subject catching comments')
+    expect(text).not.toContain('Conversations inside it')
+    assertCopyContract(<SubjectPanelView panel={data.subjectPanel!} data={data} />)
+  })
+
+  it('a subject whose check is open says why and lists the conversations inside it', () => {
+    const data = marketThinFixture({ subject: 'cost' })
+    const text = renderText(<SubjectPanelView panel={data.subjectPanel!} data={data} />)
+    expect(text).toContain(`Cost & access Close ${SUBJECT_PENDING}.`)
+    expect(text).toContain('Conversations inside it · this week, and October so far Insurance refusals for powered knees 19 31 Paying out of pocket 15 22 Medical aid and liners 9 12')
     assertCopyContract(<SubjectPanelView panel={data.subjectPanel!} data={data} />)
   })
 
@@ -363,5 +398,56 @@ describe('SubjectPanelView', () => {
 describe('MarketSkeleton', () => {
   it('says it is loading', () => {
     expect(render(<MarketSkeleton />)).toMatch(/role="status"/)
+  })
+})
+
+// THE PARITY PASS (13 Oct; Heinrich: "I want the site to look like what we
+// designed"): Össur's thin state today keeps E2-Market's shape. No flag,
+// nothing new, every subject's check open, brands not counted yet, too few
+// clean weeks: the same three cards, a row per subject, the rail a column
+// beside the board, the weekly chart's frame, and the table's columns.
+describe('the board\'s shape in the thin state (Össur today)', () => {
+  const THIN = marketThinFixture()
+  const html = render(<MarketPage data={THIN} />)
+  const text = renderText(<MarketPage data={THIN} />)
+
+  it('keeps the copy contract and the decided words', () => {
+    expect(copyViolations(<MarketPage data={THIN} />)).toEqual([])
+    expect(copyViolations(<MarketPage data={marketThinFixture({ earlierNew: true })} />)).toEqual([])
+    expect(text).not.toMatch(RETIRED)
+    expect(text).not.toMatch(/provisional|Insufficient data.*Insufficient data/)
+    expect(quotesOutsidePanel(THIN)).toBe(0)
+  })
+
+  it('draws the top row\'s three cards, 6 · 3 · 3, the third saying nothing is new', () => {
+    expect(html).toMatch(/id="top-0"[^>]*class="[^"]*xl:col-span-6/)
+    expect(html).toMatch(/id="top-1"[^>]*class="[^"]*xl:col-span-3/)
+    expect(html).toMatch(/id="top-2"[^>]*data-top-card="new-none"|data-top-card="new-none"[^>]*id="top-2"|id="top-2" data-top-card="new-none"/)
+    expect(text).toContain(`New this week ${NOTHING_NEW}`)
+    // Both of the lead's columns, the group's with its own words.
+    expect(text).toContain(`Who’s saying it ${NO_GROUP} What they’re doing Complained about something · 14 of 35 in October so far`)
+    const earlier = renderText(<TopRowView data={marketThinFixture({ earlierNew: true })} />)
+    expect(earlier).toContain(`New this week ${NOTHING_NEW} Newest Showing it or hiding it 6 of 226 category videos this week 9 of 300 in October so far First heard the week of 21 Sep Open →`)
+  })
+
+  it('keeps a row per subject: its name, why in the level\'s place over the bar\'s track, and the conversations inside it', () => {
+    expect(html.match(/data-subject-row="provisional"/g)).toHaveLength(6)
+    expect(text).toContain(`Fit & comfort ${SUBJECT_PENDING} Inside it Week Oct How long a liner lasts 23 35 Sweat under the liner 21 30 Socket fit changing over time 14 20`)
+    expect(text).toContain(`Look & style ${SUBJECT_PENDING} Inside it Week Oct Covers and finishes 7 10 Showing it or hiding it 6 9`)
+    expect(html).toMatch(/<article id="subjects"[^>]*class="[^"]*col-span-12 xl:col-span-8/)
+  })
+
+  it('keeps the rail a column beside the board, the weekly chart drawn as its frame', () => {
+    expect(html).toContain('<div style="order:2" class="col-span-12 flex min-w-0 flex-col gap-5 xl:col-span-4">')
+    const weeks = html.slice(html.indexOf('id="weeks"'), html.indexOf('id="where"'))
+    expect(weeks.match(/data-slot-empty=""/g)).toHaveLength(8)
+    expect(text).toContain('Videos, week by week Your market’s videos, by the week people commented 17 Aug 7 Sep 5 Oct Insufficient data')
+  })
+
+  it('keeps the table\'s Subject and About columns, About saying once why it is empty', () => {
+    expect(text).toContain('Conversation Subject About · brands not counted yet This week October so far How long a liner lasts Fit & comfort 23')
+    // With no conversation in a subject, the Subject header says so too.
+    const none = { ...THIN, table: { ...THIN.table!, subjects: false, filters: [], rows: THIN.table!.rows.map((r) => ({ ...r, conv: { ...r.conv, subjectId: null, subjectName: null } })) } }
+    expect(renderText(<ConversationTable table={none.table} data={none} />)).toContain('Conversation Subject · none yet About · brands not counted yet This week')
   })
 })

@@ -96,8 +96,9 @@ import { MovesV2Page } from '../components/pages/v2/moves'
 import { movesFixture, movesOpenFixture, movesRecordFixture, statementsV2 } from '../lib/pages/v2/moves-fixture'
 import type { MovesPageData } from '../lib/pages/v2/moves'
 import { MarketPage } from '../components/pages/v2/market'
-import { marketFixture, marketLongRowsFixture } from '../lib/pages/v2/market-fixture'
-import type { MarketData } from '../lib/pages/v2/market'
+import { marketFixture, marketLongRowsFixture, marketThinFixture } from '../lib/pages/v2/market-fixture'
+import { subjectAxis, SUBJECT_PENDING, type MarketData, type SubjectRow } from '../lib/pages/v2/market'
+import { homeWeeksFrame } from '../lib/pages/home'
 import { ContentPage } from '../components/pages/v2/content'
 import { contentEmptyFixture, contentFixture } from '../lib/pages/v2/content-fixture'
 import type { ContentPageData } from '../lib/pages/v2/content'
@@ -318,6 +319,44 @@ const agentThread = (raw = agentFixture()) => {
  *  the lock). */
 const marketDump = (): MarketData => JSON.parse(readFileSync(process.env.MARKET_V2_JSON as string, 'utf8')) as MarketData
 
+/**
+ * A Market dump written before the parity pass (13 Oct), in today's shape:
+ * HARNESS ONLY, so a pre-change production dump draws as the page would draw
+ * the same reads now. It adds what the loader now always hands the page and
+ * the dump could not hold: the weekly chart's axis (from the dump's own read
+ * time), the board's three top cards (empty where the dump had none), and a
+ * subject with no level as its own row (`pending`) with its line on the
+ * board's axis. It invents nothing: the conversations inside a subject whose
+ * check is open were not read by the old loader, so those rows list none
+ * until a fresh dump.
+ */
+function marketDumpNow(raw: MarketData, readAt: string): MarketData {
+  const d = structuredClone(raw)
+  d.rail.weeksAxis ??= homeWeeksFrame(readAt).columns.map((c) => c.label)
+  if (d.subjects) {
+    const axis = subjectAxis(d.month.month)
+    const padded = (r: SubjectRow): SubjectRow => ({ ...r, pending: r.pending ?? null, trail: r.trail.length === 0 ? [] : axis.map((month) => ({ month, pct: r.trail.find((t) => t.month === month)?.pct ?? null })) })
+    const pending: SubjectRow[] = d.subjects.unmeasured.filter((u) => u.state !== 'failed').map((u) => ({
+      id: u.id, name: u.name, level: null, pending: { state: u.state as 'provisional' | 'unread', note: u.state === 'provisional' ? SUBJECT_PENDING : u.note },
+      prevPct: null, verdict: null, trail: [], inside: [], href: u.href,
+    }))
+    d.subjects = { ...d.subjects, rows: [...d.subjects.rows.map(padded), ...pending], unmeasured: d.subjects.unmeasured.filter((u) => u.state === 'failed') }
+  }
+  if (d.period === 'week' && d.top.hero) {
+    if (!d.top.sides.some((x) => x.kind === 'biggest')) d.top.sides.unshift({ kind: 'biggest', convs: [], hrefs: [], groups: [] })
+    if (!d.top.sides.some((x) => x.kind === 'new_list')) d.top.sides.push({ kind: 'new_list', convs: [], hrefs: [], groups: [], earlier: null })
+  }
+  return d
+}
+
+/** One tenant's Market from a Phase 4 dump folder (`--market-dump <dir>`,
+ *  holding `<tenant>/market.json` and `<tenant>/meta.json`). */
+function marketDumpOf(dir: string, tenant: string): MarketData {
+  const root = resolve(dir)
+  const meta = JSON.parse(readFileSync(join(root, tenant, 'meta.json'), 'utf8')) as { readAt: string }
+  return marketDumpNow(JSON.parse(readFileSync(join(root, tenant, 'market.json'), 'utf8')) as MarketData, meta.readAt)
+}
+
 // ---- the pages, as their routes compose them -------------------------------------
 
 interface Page {
@@ -476,6 +515,17 @@ const PAGES: Page[] = [
   // subjects as a locked tenant's owner sees it.
   { key: 'dashboard-two-clocks', path: '/dashboard', artboard: 'E1-Dashboard.dc.html', page: () => h(DashboardPage, { data: dashboardFixture({ twoClocks: true }) }) },
   { key: 'settings-subjects-locked', path: '/dashboard/settings/subjects', artboard: 'no-board-settings-subjects.dc.html', page: () => settingsSubjectsPage(true) },
+  // Market's parity pass (13 Oct): the board's shape in Össur's thin state
+  // today (no flag, nothing new, every subject's check open, brands not
+  // counted, too few clean weeks), with and without an earlier week's new
+  // conversation, and each tenant's Phase 4 dump (`--market-dump <dir>`).
+  { key: 'market-v2-thin', path: '/dashboard/market', artboard: 'E2-Market.dc.html', page: () => h(MarketPage, { data: marketThinFixture() }) },
+  { key: 'market-v2-thin-earlier', path: '/dashboard/market', artboard: 'E2-Market.dc.html', page: () => h(MarketPage, { data: marketThinFixture({ earlierNew: true }) }) },
+  { key: 'market-v2-one-month', path: '/dashboard/market', artboard: 'E2-Market.dc.html', page: () => h(MarketPage, { data: marketFixture({ flagged: false, subjects: 'one_month', weeks: 'failed' }) }) },
+  ...(flag('market-dump', '') ? (['ossur', 'sealand'] as const).map((tenant): Page => ({
+    key: `market-v2-${tenant}`, path: '/dashboard/market', artboard: 'E2-Market.dc.html',
+    page: () => h(MarketPage, { data: marketDumpOf(flag('market-dump', '.'), tenant) }),
+  })) : []),
 ]
 
 // ---- the shell -----------------------------------------------------------------

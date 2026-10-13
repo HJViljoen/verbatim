@@ -49,4 +49,15 @@ describe('SpikeBars', () => {
   it('draws nothing with no weeks', () => {
     expect(render(<SpikeBars weeks={[]} label="x" />)).toBe('')
   })
+
+  // The parity pass (13 Oct): a chart with few weeks keeps its rhythm.
+  it('with `ghost`, a week with no reading draws a faint empty slot and no count; without it, nothing', () => {
+    const weeks = [{ label: '21 Sep', count: null }, { label: '28 Sep', count: 0 }, { label: '5 Oct', count: 9 }]
+    const ghost = render(<SpikeBars weeks={weeks} ghost label="x" />)
+    expect(ghost.match(/data-slot-empty=""/g)).toHaveLength(1)
+    expect(ghost).toMatch(/<rect data-slot-empty="" [^>]*class="fill-inner"/)
+    expect(figures(ghost)).toEqual(['9'])
+    expect(render(<SpikeBars weeks={weeks} label="x" />)).not.toContain('data-slot-empty')
+    assertCopyContract(<SpikeBars weeks={weeks} ghost label="x" />)
+  })
 })

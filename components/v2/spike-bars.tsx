@@ -15,8 +15,9 @@ import { cn } from '@/lib/utils'
  * Counts only: no percentage, no arrow, no word. Server SVG (no chart
  * library), scaled to its column's width from the board's 480 by 132, every
  * count a `data-copy="figure"` text in the mono. A week with no reading
- * (null) keeps its slot and draws nothing; a week of zero draws a 2px stub,
- * so "none" and "not read" never look alike. `variant="ink"` is the rail's
+ * (null) keeps its slot and draws nothing (with `ghost`, a faint empty slot
+ * the plot's height); a week of zero draws a 2px stub, so "none" and "not
+ * read" never look alike. `variant="ink"` is the rail's
  * "Videos, week by week": ink bars and a count over every one.
  */
 
@@ -44,6 +45,10 @@ export interface SpikeBarsProps {
   size?: 'lg' | 'md'
   /** What the chart is, for a screen reader. The readings are appended. */
   label: string
+  /** A week with no reading draws a faint empty slot, the plot's height, so
+   *  a chart with few weeks keeps its axis and its rhythm (the parity pass,
+   *  13 Oct). Off by default: the slot then draws nothing. */
+  ghost?: boolean
   className?: string
 }
 
@@ -55,7 +60,7 @@ const GEOMETRY = {
   md: { W: 300, H: 112, BASE: 92, TOP: 16, small: 9.5, big: 9.5 },
 } as const
 
-export function SpikeBars({ weeks, compare = null, highlightLast, counts = 'last', variant = 'market', size = 'lg', label, className }: SpikeBarsProps) {
+export function SpikeBars({ weeks, compare = null, highlightLast, counts = 'last', variant = 'market', size = 'lg', label, ghost = false, className }: SpikeBarsProps) {
   const n = weeks.length
   if (n === 0) return null
   const { W, H, BASE, TOP, small, big } = GEOMETRY[size]
@@ -81,7 +86,9 @@ export function SpikeBars({ weeks, compare = null, highlightLast, counts = 'last
         </g>
       ) : null}
       {weeks.map((w, i) => {
-        if (w.count == null) return null
+        if (w.count == null) {
+          return ghost ? <rect key={i} data-slot-empty="" x={r1(i * slot + (slot - bw) / 2)} y={TOP} width={r1(bw)} height={BASE - TOP - 1} rx={2} className="fill-inner" /> : null
+        }
         const last = i === n - 1
         const x = r1(i * slot + (slot - bw) / 2)
         const fill = last && pick ? 'fill-orange' : variant === 'ink' ? 'fill-foreground' : 'fill-brand'

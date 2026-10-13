@@ -31,8 +31,8 @@ import { INDUSTRY_AUDIENCE, loadCompetitors, loadTrackedRivals } from '../../riv
 import { selectAll } from '../../supabase-admin'
 import { coveredDays, inMonth, monthsPhrase, readingMonthOf } from '../../written/month'
 import { SLICE } from '../../reading/coverage'
-import { countedNote, FAILED_EXPLAINED } from '../../subjects/calibration-state'
-import { loadPublishedLongRun, loadPublishedWeekRead, type PublishedWeekRead } from '../../written/published'
+import { FAILED_EXPLAINED } from '../../subjects/calibration-state'
+import { loadEarlierNewThisWeek, loadPublishedLongRun, loadPublishedWeekRead, type EarlierNew, type PublishedWeekRead } from '../../written/published'
 import type { StoredLongRun } from '../../written/store'
 import type { WeekReadData, WhoAbout, WhoPart } from '../../written/types'
 import { weekReadDates } from '../../reports/weekly-read'
@@ -40,7 +40,7 @@ import { factsFromReadings, marketComparable } from '../../written/standing'
 import { fetchRunningRunIds } from '../latest-video-run'
 import { loadRegistryLabels } from '../registry-labels'
 import { WHAT_THEY_SELL } from '../market-frame'
-import { homeWeeks, loadWeekRows, WEEKS_FAILED, type WeeksFailed, type WeeksRead } from '../home'
+import { homeWeeks, homeWeeksFrame, loadWeekRows, WEEKS_FAILED, type WeeksFailed, type WeeksRead } from '../home'
 import { loadThemeQuotes, loadThemeSegmentRows, makerRuleEnabled, voiceOf, type CiteCandidate } from '../overview'
 import { pickQuotes, POOL_FLOOR } from '../overview-market'
 import { talkKindLabel } from '../overview-market/kinds'
@@ -275,10 +275,16 @@ export interface GroupLink {
 
 export interface SideCard {
   kind: 'biggest' | 'new_list' | 'month'
+  /** Empty where the period has none for the card (the parity pass, 13 Oct:
+   *  the card keeps its place and says so in its own frame). */
   convs: MarketConv[]
   hrefs: string[]
   /** The groups whose conversations include the card's first (names only). */
   groups: GroupLink[]
+  /** `new_list` with nothing first heard this week: the newest conversation
+   *  an earlier week's published read first heard (`newThisWeek`), with that
+   *  week's label ("28 Sep"). Null where none of the last few weeks had one. */
+  earlier?: { conv: MarketConv; href: string; week: string } | null
 }
 
 export interface TopRow {
@@ -291,8 +297,13 @@ export interface TopRow {
 export interface SubjectRow {
   id: string
   name: string
-  /** Null where the subject prints its name alone. */
+  /** Null where the subject prints no level (`pending` says why). */
   level: (Level & { pct: number }) | null
+  /** A subject that keeps its row without a level (the parity pass, 13 Oct:
+   *  its name, its bar's track and the conversations inside it, the level's
+   *  place saying why): its check is open (`provisional`), or the month was
+   *  not read for it (`unread`). Null where the level prints. */
+  pending: { state: 'provisional' | 'unread'; note: string } | null
   /** Last month's share for the tick, where the pair answered. */
   prevPct: number | null
   verdict: Verdict | null
@@ -323,7 +334,7 @@ export interface UnmeasuredSubject {
   /** `provisional` (its check is open), `failed` (being re-described) or
    *  `unread` (nothing read for it in the month). */
   state: 'provisional' | 'failed' | 'unread'
-  /** Why, in the calibration's own words (`countedNote`, `FAILED_EXPLAINED`). */
+  /** Why (`SUBJECT_PENDING`, `FAILED_EXPLAINED`, or no reading this month). */
   note: string
   href: string
 }
@@ -333,8 +344,11 @@ export interface SubjectBoard {
   prevText: string
   /** The market's videos in the month: every level's n. */
   n: number | null
+  /** Every subject that keeps its row: the measured ones largest first, then
+   *  the ones with no level yet (`pending`), by state and name. */
   rows: SubjectRow[]
-  /** Subjects that print no level, with why. */
+  /** Subjects hidden as being re-described (a failed check), with why: named
+   *  in one line under the rows, never a row (decision C). */
   unmeasured: UnmeasuredSubject[]
   /** Whether any row draws last month's tick (the legend is printed only then). */
   ticks: boolean
@@ -387,6 +401,9 @@ export interface MarketRail {
   /** The weekly volume: the chart, null where too few clean weeks were read
    *  (`homeWeeks`), `WEEKS_FAILED` where the read threw. */
   weeks: WeeksRead
+  /** The chart's axis, the week labels oldest first (`homeAxis`): where no
+   *  week can be drawn, the card still draws these slots, empty. */
+  weeksAxis?: string[]
   platforms: PlatformsBlock | null
   /** The week read's "worth watching" (stored `week_read` prose). */
   watch: StoredLine[]
@@ -916,12 +933,32 @@ export interface SubjectFact {
   trail: { month: string; k: number | null; n: number | null }[]
 }
 
+/** What a subject's row says in its level's place while its precision check
+ *  is open (the parity pass, 13 Oct; the lead's words). The row keeps its
+ *  name, its bar's track and the conversations inside it. */
+export const SUBJECT_PENDING = 'Level after calibration'
+
+/** The months a subject's line spans, oldest first, ending at `month`. */
+export function subjectAxis(month: string, count = MARKET_SUBJECT_MONTHS): string[] {
+  const out: string[] = []
+  let m = monthStartOf(month)
+  for (let i = 0; i < count; i++) {
+    out.unshift(m)
+    m = prevMonth(m)
+  }
+  return out
+}
+
 /**
- * The subject board: every subject with a level, largest first (the standing
- * facts' order), each against last month through its `Verdict` (the tick at
- * last month's share only where the pair may be printed), its month line and
- * the period's conversations inside it; the rest by name in one quiet line.
- * Pure.
+ * The subject board (the parity pass, 13 Oct: the board's form in every data
+ * state): every subject with a level, largest first (the standing facts'
+ * order), each against last month through its `Verdict` (the tick at last
+ * month's share only where the pair may be printed), its month line on the
+ * board's axis and the period's conversations inside it; then every subject
+ * with no level yet in the same row, its name, the conversations inside it and
+ * why in the level's place (`pending`). A subject being re-described (a failed
+ * check) is named in one quiet line under the rows: decision C hides it
+ * everywhere, and the conversations its members point at are not its. Pure.
  */
 export function buildSubjectBoard(input: {
   facts: readonly SubjectFact[]
@@ -938,10 +975,29 @@ export function buildSubjectBoard(input: {
   const before = prevMonth(m)
   const rows: SubjectRow[] = []
   const unmeasured: UnmeasuredSubject[] = []
+  const pending: SubjectRow[] = []
   const monthText = input.soFar ? `${longMonth(m)} so far` : longMonth(m)
+  const axis = subjectAxis(m)
+  const inside = (id: string) => insideOf(id, input.convs, input.period, { href: input.convHref, flagId: input.flag?.id ?? null, flag: input.flag?.verdict ?? null })
+  // The line on the board's axis: a month with no reading keeps its slot.
+  const trailOf = (f: SubjectFact) => axis.map((month) => {
+    const p = f.trail.find((x) => monthStartOf(x.month) === month)
+    return { month, pct: p && p.k != null && p.n ? share(p.k, p.n) : null }
+  })
   for (const f of input.facts) {
     if (!f.level || f.level.n <= 0) {
-      unmeasured.push(unmeasuredOf(f, monthText, input.subjectHref(f.id)))
+      const u = unmeasuredOf(f, monthText, input.subjectHref(f.id))
+      if (u.state === 'failed') {
+        unmeasured.push(u)
+        continue
+      }
+      // Its check open: no figure resting on its membership prints (ruling
+      // U6, `printsMarket`), so no line either. Not read this month: its
+      // earlier months are a ready subject's and keep their line.
+      pending.push({
+        id: f.id, name: f.name, level: null, pending: { state: u.state, note: u.note }, prevPct: null, verdict: null,
+        trail: u.state === 'unread' ? trailOf(f) : [], inside: inside(f.id), href: u.href,
+      })
       continue
     }
     const prev = f.trail.find((p) => monthStartOf(p.month) === before)
@@ -950,13 +1006,11 @@ export function buildSubjectBoard(input: {
       id: f.id,
       name: f.name,
       level: { ...f.level, pct: share(f.level.k, f.level.n) },
+      pending: null,
       prevPct: printable && prev?.k != null && prev.n ? share(prev.k, prev.n) : null,
       verdict: f.verdict,
-      trail: f.trail
-        .filter((p) => monthStartOf(p.month) <= m)
-        .slice(-MARKET_SUBJECT_MONTHS)
-        .map((p) => ({ month: monthStartOf(p.month), pct: p.k != null && p.n ? share(p.k, p.n) : null })),
-      inside: insideOf(f.id, input.convs, input.period, { href: input.convHref, flagId: input.flag?.id ?? null, flag: input.flag?.verdict ?? null }),
+      trail: trailOf(f),
+      inside: inside(f.id),
       href: input.subjectHref(f.id),
     })
   }
@@ -964,21 +1018,24 @@ export function buildSubjectBoard(input: {
     monthText,
     prevText: longMonth(before),
     n: rows[0]?.level?.n ?? null,
-    rows,
+    // No rank rests on a membership that is not checked (ruling U6): the rows
+    // with no level stand by name, their check open first.
+    rows: [...rows, ...pending.sort((a, b) => (a.pending?.state === b.pending?.state ? 0 : a.pending?.state === 'provisional' ? -1 : 1) || a.name.localeCompare(b.name))],
     unmeasured: unmeasured.sort((a, b) => a.name.localeCompare(b.name)),
     ticks: rows.some((r) => r.prevPct != null),
   }
 }
 
 /**
- * Why a subject prints no level, in the calibration's own words
- * (lib/subjects/calibration-state.ts): counted in your market and marked
- * provisional while its check is open; being re-described where the check
- * failed; no reading yet where the month was not read for it. Pure.
+ * Why a subject prints no level: its level comes after calibration while its
+ * check is open (`SUBJECT_PENDING`; the row carries no "provisional" word, as
+ * no client surface does, ruling U6, `calibrationWord`); being re-described
+ * where the check failed (the calibration's own words, `FAILED_EXPLAINED`);
+ * no reading yet where the month was not read for it. Pure.
  */
 export function unmeasuredOf(f: Pick<SubjectFact, 'id' | 'name' | 'calibration'>, monthText: string, href: string): UnmeasuredSubject {
   const state = f.calibration === 'failed' ? 'failed' : f.calibration === 'unread' ? 'unread' : 'provisional'
-  const note = state === 'failed' ? FAILED_EXPLAINED : state === 'unread' ? `no reading in ${monthText} yet` : countedNote('provisional')
+  const note = state === 'failed' ? FAILED_EXPLAINED : state === 'unread' ? `No reading in ${monthText} yet` : SUBJECT_PENDING
   return { id: f.id, name: f.name, state, note, href }
 }
 
@@ -1370,27 +1427,46 @@ async function resolveSlug(db: SupabaseClient, clientId: string, slug: string, o
   return ((res.data ?? []) as { id: string }[])[0]?.id ?? null
 }
 
-/** The ready subjects, their names and order, and which subjects each
- *  insight is a member of; and every active subject with its calibration. */
+/**
+ * The subjects a conversation may be placed in, their names and order, and
+ * which subjects each insight is a member of; and every active subject with
+ * its calibration.
+ *
+ * PLACED IN ANY SUBJECT BUT A FAILED ONE (the parity pass, 13 Oct). Membership
+ * is written for every active subject whatever its calibration (the check
+ * reads it), and placing a conversation prints only the conversation's own
+ * counts, so a subject whose check is still open keeps its "Inside it" and the
+ * table its Subject column; its own level, line and change still wait for the
+ * check (`printsMarket`). A subject being re-described is not used: its check
+ * found it catching comments about other things. Ready subjects come first in
+ * the order, so a tie goes to the checked one (`subjectOfTheme`).
+ */
+export function placeableSubjects<S extends { id: string }>(all: readonly { subject: S; calibration: string }[]): S[] {
+  return [
+    ...all.filter((x) => x.calibration === 'ready'),
+    ...all.filter((x) => x.calibration !== 'ready' && x.calibration !== 'failed'),
+  ].map((x) => x.subject)
+}
+
 async function loadSubjects(db: SupabaseClient, clientId: string): Promise<{
   all: { subject: Subject; calibration: ReturnType<typeof subjectCalibration> }[]
-  ready: ConvInput['subjects']
+  placed: ConvInput['subjects']
 }> {
   let subjects: Subject[]
   try {
     subjects = await loadActiveSubjects(db as never, clientId)
   } catch (error) {
-    if (isMissingSubjects(error)) return { all: [], ready: null }
+    if (isMissingSubjects(error)) return { all: [], placed: null }
     throw error
   }
   const all = subjects.map((s) => ({ subject: s, calibration: subjectCalibration(s) }))
-  const readyOnes = all.filter((x) => x.calibration === 'ready').map((x) => x.subject)
-  if (readyOnes.length === 0) return { all, ready: null }
-  const bySubject = await loadMemberInsightIdsBySubject(db, clientId, readyOnes.map((s) => s.id))
-  if (!bySubject) return { all, ready: null }
+  const placeable = placeableSubjects(all)
+  if (placeable.length === 0) return { all, placed: null }
+  const bySubject = await loadMemberInsightIdsBySubject(db, clientId, placeable.map((s) => s.id))
+  if (!bySubject) return { all, placed: null }
   const subjectsOf = new Map<string, string[]>()
   for (const [subject, ids] of bySubject) for (const id of ids) subjectsOf.set(id, [...(subjectsOf.get(id) ?? []), subject])
-  return { all, ready: { names: new Map(readyOnes.map((s) => [s.id, s.name])), order: readyOnes.map((s) => s.id), subjectsOf } }
+  return { all, placed: { names: new Map(placeable.map((s) => [s.id, s.name])), order: placeable.map((s) => s.id), subjectsOf } }
 }
 
 /** The evidence refs of these themes for the period: the stored month's
@@ -1521,7 +1597,7 @@ export async function loadMarket(input: {
   for (let i = 0; i < 13; i++) from = prevMonth(from)
   const themedRunAhead = fetchRunningRunIds(supabase, clientId, 'market').then((ids) => fetchThemedRunId(supabase, clientId, ids, 'market'))
   themedRunAhead.catch(() => {})
-  const subjectsAhead = soft('subjects', loadSubjects(db, clientId), { all: [], ready: null })
+  const subjectsAhead = soft('subjects', loadSubjects(db, clientId), { all: [], placed: null })
   const pairAhead = loadAppPairOn(input.reading, nowIso)
   // A failed change-log or cadence read is null (both read an array or
   // throw): the weekly bars are then WEEKS_FAILED, never drawn uncut.
@@ -1615,7 +1691,7 @@ export async function loadMarket(input: {
   const base: Omit<ConvInput, 'series'> = {
     period,
     themes: runThemes,
-    subjects: subjects.ready,
+    subjects: subjects.placed,
     weekCounts: windowReads.map((r) => categoryThemeVideos(r)),
     weekCut: cut,
     monthCounts: new Map([...monthRows.entries()].map(([id, r]) => [id, r.videos])),
@@ -1692,8 +1768,14 @@ export async function loadMarket(input: {
     kindsRead.set(id, read)
     return read
   }
-  const [readings, whoRead, personas, heroKinds, weekRowsRaw] = await Promise.all([
-    readingsAhead, whoAhead, personasAhead, heroId ? kindsFor(heroId) : Promise.resolve(null), weekRowsAhead,
+  // Nothing first heard this week: the newest conversation an earlier week's
+  // read first heard, for the third card (read only then).
+  const nothingNew = period === 'week' && heroPick != null && heroPick.kind !== 'new' && (sides?.fresh.length ?? 0) === 0 && !sides?.biggest?.isNew
+  const earlierNewAhead = nothingNew && read
+    ? soft('earlierNew', loadEarlierNewThisWeek(db, clientId, { before: read.window.from }), [] as EarlierNew[])
+    : Promise.resolve([] as EarlierNew[])
+  const [readings, whoRead, personas, heroKinds, weekRowsRaw, earlierNew] = await Promise.all([
+    readingsAhead, whoAhead, personasAhead, heroId ? kindsFor(heroId) : Promise.resolve(null), weekRowsAhead, earlierNewAhead,
   ])
   const { who, brands } = whoRead
   const withWho = (c: MarketConv): MarketConv => (who.has(c.id) ? { ...c, who: who.get(c.id) ?? [] } : c)
@@ -1709,8 +1791,13 @@ export async function loadMarket(input: {
     subjects.all.map(({ subject, calibration }) => ({ subject, calibration, reading: readingOf.get(subject.id) ?? null })),
     marketComparable(pair, month),
   )
+  // A subject whose reading did not come back is never "being re-described"
+  // (`factsFromReadings` files a missing reading under failed): only its own
+  // check can fail it. Its check open, it waits for that; else it is unread.
+  const checkOf = new Map(subjects.all.map((x) => [x.subject.id, x.calibration]))
   const subjectFacts: SubjectFact[] = facts.map((f) => ({
-    id: f.subjectId, name: f.name, calibration: f.calibration,
+    id: f.subjectId, name: f.name,
+    calibration: f.calibration !== 'failed' || checkOf.get(f.subjectId) === 'failed' ? f.calibration : checkOf.get(f.subjectId) === 'provisional' ? 'provisional' : 'unread',
     level: f.calibration === 'ready' ? f.level : null, verdict: f.verdict, trail: f.trail,
   }))
   const subjectBoard = buildSubjectBoard({
@@ -1727,6 +1814,7 @@ export async function loadMarket(input: {
   const rail: MarketRail = {
     kinds: buildKinds(readings, month, noun, soFar),
     weeks: marketWeeksOf({ rows: weekRowsRaw, changes: changes === null ? null : ourChanges, cadence, rivalAudiences, updates: runs.map(updateInstant), now: nowIso }),
+    weeksAxis: homeWeeksFrame(nowIso).columns.map((c) => c.label),
     platforms: period === 'week' && weekRead?.denominators
       ? withMonthPlatforms(platformRows(mergeMixes(weekRead.denominators.filter((d) => market.includes(d.audience)).map((d) => d.platform_mix)), 'week'), monthMix, inMonth(month, !soFar))
       : platformRows(monthMix, 'month'),
@@ -1746,8 +1834,14 @@ export async function loadMarket(input: {
       const conv = findConv(heroPick.conv.id) ?? heroPick.conv
       top.hero = { kind: heroPick.kind, conv, href: convHref(p, conv.id, 'top'), groups: groupsOf(conv.id, personas), doing: doing(conv) }
     }
-    if (sides?.biggest) top.sides.push({ kind: 'biggest', convs: [withWho(sides.biggest)], hrefs: [convHref(p, sides.biggest.id, 'top')], groups: groupsOf(sides.biggest.id, personas) })
-    if (sides && sides.fresh.length > 0) top.sides.push({ kind: 'new_list', convs: sides.fresh, hrefs: sides.fresh.map((c) => convHref(p, c.id, 'top')), groups: groupsOf(sides.fresh[0].id, personas) })
+    // THE BOARD'S THREE CARDS, ALWAYS (the parity pass, 13 Oct): a card with
+    // nothing for it this week keeps its place and says so in its own frame.
+    top.sides.push(sides?.biggest
+      ? { kind: 'biggest', convs: [withWho(sides.biggest)], hrefs: [convHref(p, sides.biggest.id, 'top')], groups: groupsOf(sides.biggest.id, personas) }
+      : { kind: 'biggest', convs: [], hrefs: [], groups: [] })
+    top.sides.push(sides && sides.fresh.length > 0
+      ? { kind: 'new_list', convs: sides.fresh, hrefs: sides.fresh.map((c) => convHref(p, c.id, 'top')), groups: groupsOf(sides.fresh[0].id, personas) }
+      : { kind: 'new_list', convs: [], hrefs: [], groups: [], earlier: earlierNewOf(earlierNew, convInput, (id) => convHref(p, id, 'top')) })
   } else if (period === 'month' && monthPicks[0]) {
     const conv = findConv(monthPicks[0].id) ?? monthPicks[0]
     top.hero = { kind: 'biggest', conv, href: convHref(p, conv.id, 'top'), groups: groupsOf(conv.id, personas), doing: doing(conv) }
@@ -1868,6 +1962,23 @@ export function marketMonths(pooled: ReadonlyMap<string, { videos: number | null
   return out.length > 0 ? out : null
 }
 
+/**
+ * The third card's stand-in where nothing was first heard this week: the
+ * newest conversation an earlier week's published read first heard (that
+ * read's own rule, `firstHeardThisWeek`), newest week first and that read's
+ * order within it, with this period's counts; one the themed run cannot name
+ * is passed over. Null where none of them can be named. Pure.
+ */
+export function earlierNewOf(earlier: readonly EarlierNew[], input: ConvInput, href: (id: string) => string): SideCard['earlier'] {
+  for (const e of earlier) {
+    for (const id of e.themeIds) {
+      const conv = convOf(id, input)
+      if (conv) return { conv, href: href(id), week: windowLabel(e.window) }
+    }
+  }
+  return null
+}
+
 /** The flag card: the check's verdict, the conversation a theme flag names
  *  (whether or not it reaches the table's floor), its month, and where it
  *  opens. A kind flag is named in the rail's words. Pure. */
@@ -1899,7 +2010,7 @@ export function flagCardOf(a: {
 function topIndexOf(top: TopRow, id: string): number {
   const ids: (string | null)[] = [
     top.hero ? (top.hero.kind === 'flag' ? top.hero.card.conv?.id ?? null : top.hero.conv.id) : null,
-    ...top.sides.map((s) => (s.convs.some((c) => c.id === id) ? id : s.convs[0]?.id ?? null)),
+    ...top.sides.map((s) => (s.convs.some((c) => c.id === id) || s.earlier?.conv.id === id ? id : s.convs[0]?.id ?? s.earlier?.conv.id ?? null)),
   ]
   return ids.indexOf(id)
 }
@@ -1981,9 +2092,10 @@ async function loadConvPanel(a: {
 
 /** The open subject: its month line, every conversation inside it (a
  *  set-apart one tagged), and the week read's sentence on it where the read is
- *  of this month. A subject that prints no level (its check open, being
- *  re-described, or not read this month) says why, and lists nothing: its
- *  members are not counted toward any conversation. Pure. */
+ *  of this month. A subject that prints no level says why; one whose check is
+ *  open, or that was not read this month, still lists the conversations inside
+ *  it (the parity pass, 13 Oct: those are the conversations' own counts, and
+ *  exist without calibration); one being re-described lists nothing. Pure. */
 export function buildSubjectPanel(a: {
   id: string
   facts: readonly SubjectFact[]
@@ -2016,7 +2128,7 @@ export function buildSubjectPanel(a: {
     verdict: measured ? f.verdict : null,
     monthText: a.month.text,
     bars: measured ? bars : [],
-    inside: measured ? insideOf(f.id, a.convs, a.period, { limit: 50, href: (id) => convHref(a.p, id, 'subjects'), flagId: a.flag?.id ?? null, flag: a.flag?.verdict ?? null }) : [],
+    inside: unmeasured?.state !== 'failed' ? insideOf(f.id, a.convs, a.period, { limit: 50, href: (id) => convHref(a.p, id, 'subjects'), flagId: a.flag?.id ?? null, flag: a.flag?.verdict ?? null }) : [],
     sentence: standing?.sentence?.trim() ? { body: standing.sentence.trim(), figures: (a.read?.figures ?? {}) as unknown as PrintedFigures } : null,
     askHref: `/dashboard/agent?ask=${encodeURIComponent(`What does my market say about ${f.name}?`)}`,
     closeHref: closeHref(a.p, 'subjects'),

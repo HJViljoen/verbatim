@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { WEEKS_FAILED } from '../home'
 import { setApartOf } from '../../written/conversations'
-import { countedNote, FAILED_EXPLAINED } from '../../subjects/calibration-state'
+import { FAILED_EXPLAINED } from '../../subjects/calibration-state'
+import { earlierNewOfRows } from '../../written/published'
 import { flagWordOf } from '@/components/v2/flag-chip'
 import type { OurChange } from '../../reading/comparability'
 import type { WindowReading } from '../../reading/read'
@@ -12,10 +13,11 @@ import {
   convOf, cutWindows, doingOf, leadDoing, marketWeeksOf, flagCardOf, flagVerdict, groupsOf, isRegistryId, insideOf, marketHref, marketMonths, marketParams,
   mergeMixes, monthsText, notchOf, ourReadOf, panelStats, periodHref, personasOf, pickHero, pickWeekSides, platformRows, subjectHref,
   flagBaseWords, monthSoFar, tableFilterOf, tableMonths, topSpans, unmeasuredOf, weekWindows, whoOf, windowLabel, withMonthPlatforms, MARKET_TABLE_ROWS,
+  earlierNewOf, placeableSubjects, subjectAxis, SUBJECT_PENDING,
   type MarketConv,
 } from './market'
 import {
-  FIXTURE_FLAG, fixtureConvInput, fixtureFacts, fixtureId, fixtureKindReadings, fixtureRead, fixtureSubjectId, marketFixture,
+  FIXTURE_FLAG, fixtureConvInput, fixtureFacts, fixtureFactsIn, fixtureId, fixtureKindReadings, fixtureRead, fixtureSubjectId, marketFixture, marketThinFixture,
 } from './market-fixture'
 
 const OCT = '2026-10-01'
@@ -214,16 +216,52 @@ describe('the subject board', () => {
     convHref: (id) => `#c-${id}`, subjectHref: (id) => `#s-${id}`, soFar: true,
   })!
 
-  it('lists the subjects with a level, largest first, and the rest by name with why', () => {
+  it('lists the subjects with a level, largest first, and names a subject being re-described under them', () => {
     expect(board.rows.map((r) => r.name)).toEqual(['Fit & comfort', 'Function & movement', 'Cost & access', 'Community & encouragement', 'Choosing the right device', 'Look & style'])
-    expect(board.unmeasured).toEqual([{ id: fixtureSubjectId('sport'), name: 'Sport and running', state: 'provisional', note: 'counted in your market, marked provisional', href: `#s-${fixtureSubjectId('sport')}` }])
+    expect(board.rows.every((r) => r.pending === null)).toBe(true)
+    expect(board.unmeasured).toEqual([{ id: fixtureSubjectId('sport'), name: 'Sport and running', state: 'failed', note: FAILED_EXPLAINED, href: `#s-${fixtureSubjectId('sport')}` }])
     expect(board).toMatchObject({ monthText: 'October so far', prevText: 'September', n: 318, ticks: true })
   })
 
-  it('says why a subject prints no level: provisional, being re-described, or not read this month', () => {
+  it('says why a subject prints no level: its check open, being re-described, or not read this month', () => {
     expect(unmeasuredOf({ id: 's', name: 'S', calibration: 'failed' }, 'October so far', '#').note).toBe(FAILED_EXPLAINED)
-    expect(unmeasuredOf({ id: 's', name: 'S', calibration: 'unread' }, 'October so far', '#').note).toBe('no reading in October so far yet')
-    expect(unmeasuredOf({ id: 's', name: 'S', calibration: 'provisional' }, 'October so far', '#')).toMatchObject({ state: 'provisional', note: countedNote('provisional') })
+    expect(unmeasuredOf({ id: 's', name: 'S', calibration: 'unread' }, 'October so far', '#').note).toBe('No reading in October so far yet')
+    expect(unmeasuredOf({ id: 's', name: 'S', calibration: 'provisional' }, 'October so far', '#')).toMatchObject({ state: 'provisional', note: SUBJECT_PENDING })
+    // No "provisional" word on a client surface (ruling U6).
+    expect(SUBJECT_PENDING).not.toMatch(/provisional/i)
+  })
+
+  // The parity pass (13 Oct): a subject with no level keeps the board's row.
+  it('keeps a row for a subject whose check is open: its name, the conversations inside it, why in the level\'s place', () => {
+    const thin = buildSubjectBoard({
+      facts: fixtureFactsIn('provisional'), month: OCT, convs, period: 'week', flag: null,
+      convHref: (id) => `#c-${id}`, subjectHref: (id) => `#s-${id}`, soFar: true,
+    })!
+    expect(thin.rows.map((r) => r.name)).toEqual(['Choosing the right device', 'Community & encouragement', 'Cost & access', 'Fit & comfort', 'Function & movement', 'Look & style'])
+    const fit = thin.rows.find((r) => r.name === 'Fit & comfort')!
+    expect(fit).toMatchObject({ level: null, pending: { state: 'provisional', note: SUBJECT_PENDING }, verdict: null, prevPct: null, trail: [] })
+    expect(fit.inside.map((c) => [c.label, c.count, c.month])).toEqual([
+      ['How long a liner lasts', 23, 35], ['Sweat under the liner', 21, 30], ['Socket fit changing over time', 14, 20],
+    ])
+    expect(thin.unmeasured.map((u) => u.state)).toEqual(['failed'])
+    expect(thin).toMatchObject({ n: null, ticks: false })
+  })
+
+  it('draws a subject read for one month on the board\'s axis, the months before as gaps', () => {
+    const one = buildSubjectBoard({
+      facts: fixtureFactsIn('one_month'), month: OCT, convs, period: 'week', flag: null, convHref: String, subjectHref: String, soFar: true,
+    })!
+    expect(subjectAxis(OCT)).toEqual(['2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01', OCT])
+    const fit = one.rows.find((r) => r.name === 'Fit & comfort')!
+    expect(fit.trail.map((t) => t.pct == null)).toEqual([true, true, true, true, true, false])
+    expect(fit.verdict).toBeNull()
+  })
+
+  it('places a conversation in any subject but one being re-described, the checked ones first', () => {
+    const all = [
+      { subject: { id: 'p' }, calibration: 'provisional' }, { subject: { id: 'f' }, calibration: 'failed' }, { subject: { id: 'r' }, calibration: 'ready' },
+    ]
+    expect(placeableSubjects(all).map((s) => s.id)).toEqual(['r', 'p'])
   })
 
   it('draws no tick legend where no pair may be printed', () => {
@@ -409,9 +447,15 @@ describe('the open panel', () => {
     expect(who.get('t1')).toEqual([{ about: 'client', videos: 1 }, { about: 'market', videos: 2 }])
   })
 
-  it('a subject not measured yet opens with why and lists nothing', () => {
+  it('a subject being re-described opens with why and lists nothing', () => {
     const data = marketFixture({ subject: 'sport' })
-    expect(data.subjectPanel).toMatchObject({ state: 'provisional', note: 'counted in your market, marked provisional', inside: [], bars: [], level: null })
+    expect(data.subjectPanel).toMatchObject({ state: 'failed', note: FAILED_EXPLAINED, inside: [], bars: [], level: null })
+  })
+
+  it('a subject whose check is open opens with why and the conversations inside it', () => {
+    const data = marketThinFixture({ subject: 'cost' })
+    expect(data.subjectPanel).toMatchObject({ state: 'provisional', note: SUBJECT_PENDING, bars: [], level: null, verdict: null })
+    expect(data.subjectPanel!.inside.map((c) => c.label)).toEqual(['Insurance refusals for powered knees', 'Paying out of pocket', 'Medical aid and liners'])
   })
 
   it('lists a set-apart conversation inside its subject, tagged (only leading is barred)', () => {
@@ -454,5 +498,32 @@ describe('marketWeeksOf: the weekly bars, or WEEKS_FAILED', () => {
   })
   it('is the chart, or null for too few clean weeks, where all three read', () => {
     expect(marketWeeksOf(base)).not.toBe(WEEKS_FAILED)
+  })
+})
+
+// The parity pass (13 Oct): the third top card where nothing was first heard
+// this week names the newest conversation an earlier week's read first heard.
+describe('the newest conversation an earlier week first heard', () => {
+  const input = fixtureConvInput('week')
+  const w = { from: '2026-09-21T00:00:00.000Z', to: '2026-09-28T00:00:00.000Z' }
+  it('reads the stored rows defensively, newest week first', () => {
+    expect(earlierNewOfRows([
+      { window: w, fresh: [{ themeId: 'a' }, { themeId: '' }, null] },
+      { window: null, fresh: [{ themeId: 'b' }] },
+      { window: w, fresh: [] },
+      { window: w, fresh: 'nope' },
+    ])).toEqual([{ window: w, themeIds: ['a'] }])
+  })
+  it('takes the first one the themed run can name, with this week\'s counts', () => {
+    const e = earlierNewOf([{ window: w, themeIds: ['unknown', fixtureId(16)] }], input, (id) => `#${id}`)
+    expect(e).toMatchObject({ week: '21 Sep', href: `#${fixtureId(16)}`, conv: { label: 'Showing it or hiding it', week: 6, month: 9 } })
+    expect(earlierNewOf([], input, String)).toBeNull()
+    expect(earlierNewOf([{ window: w, themeIds: ['unknown'] }], input, String)).toBeNull()
+  })
+  it('draws the board\'s three cards in the thin state', () => {
+    const thin = marketThinFixture()
+    expect(thin.top.sides.map((x) => [x.kind, x.convs.length])).toEqual([['biggest', 1], ['new_list', 0]])
+    expect(thin.top.sides[1].earlier).toBeNull()
+    expect(marketThinFixture({ earlierNew: true }).top.sides[1].earlier?.conv.label).toBe('Showing it or hiding it')
   })
 })
