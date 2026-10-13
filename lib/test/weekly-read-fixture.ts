@@ -1,5 +1,6 @@
-import type { WeekReadDataV1, WeekReadDataV2, QuoteRef } from '../written/types'
-import { weeklyReadSnapshotData, type WeeklyReadSnapshotData } from '../reports/weekly-read-build'
+import type { WeekReadDataV1, WeekReadDataV2, WeekReadFlag, WeekReadUnusual, QuoteRef } from '../written/types'
+import { WEEKLY_READ_REPORT_VERSION, weeklyReadSnapshotData, type WeeklyReadSnapshotData } from '../reports/weekly-read-build'
+import type { WeeklyReadLine } from '../reports/weekly-read-lines'
 
 // The weekly read as the render tier sees it, built from Sealand's 27 Sep dry
 // read (v3b, `week_read_v3`, reads/2026-09-27-dry-v3b.json in the plan),
@@ -122,7 +123,78 @@ export function frozen<T>(read: T): T {
   return JSON.parse(JSON.stringify(read), (k, v) => (k === 'text' && typeof v === 'string' ? '' : v)) as T
 }
 
-/** The snapshot's data for a read, as the send path builds it. */
-export function sealandSnapshot(read: WeekReadDataV2 | WeekReadDataV1 = sealandRead()): WeeklyReadSnapshotData {
-  return weeklyReadSnapshotData({ company: 'Sealand', runId: 'run-27', read, writtenAt: '2026-09-27T07:20:00.000Z' })
+/** The snapshot's data for a read, as the send path builds it (level 1,
+ *  version 2, with the page lines given). */
+export function sealandSnapshot(read: WeekReadDataV2 | WeekReadDataV1 = sealandRead(), lines: WeeklyReadLine[] = []): WeeklyReadSnapshotData {
+  return weeklyReadSnapshotData({ company: 'Sealand', runId: 'run-27', read, writtenAt: '2026-09-27T07:20:00.000Z', lines })
+}
+
+/** A snapshot as every one stored before level 1 holds it (version 1, the
+ *  report): the same fields, no `lines`. */
+export function storedReportSnapshot(read: WeekReadDataV2 | WeekReadDataV1 = sealandRead()): WeeklyReadSnapshotData {
+  const { lines: _lines, ...rest } = sealandSnapshot(read)
+  return { ...rest, version: WEEKLY_READ_REPORT_VERSION }
+}
+
+/** One frozen flag, as `write-week-read` keeps it (lib/written/unusual.ts):
+ *  the colour conversation, 19 of 241 videos this week against 38 of 1,089
+ *  over June to August. */
+export function sealandFlag(over: Partial<WeekReadFlag> = {}): WeekReadFlag {
+  const week = over.week ?? { k: 19, n: 241 }
+  const baseline = over.baseline ?? { k: 38, n: 1089 }
+  return {
+    objectKind: 'theme',
+    objectId: 't3',
+    label: 'Asking for the bag in more colours',
+    denominator: 'every audience together',
+    week,
+    baseline,
+    baselineMonths: ['2026-06-01', '2026-07-01', '2026-08-01'],
+    changePts: 4.4,
+    bandPts: 2.1,
+    rank: 1,
+    verdict: {
+      objectKind: over.objectKind ?? 'theme',
+      objectId: over.objectId ?? 't3',
+      objectLabel: over.label ?? 'Asking for the bag in more colours',
+      audience: 'every audience together',
+      window: { kind: 'week', from: SEALAND_READ_WINDOW.from, to: SEALAND_READ_WINDOW.to },
+      basis: { from: '2026-06-01T00:00:00.000Z', to: '2026-09-01T00:00:00.000Z' },
+      value: week,
+      baseline,
+      changePts: 4.4,
+      bandPts: 2.1,
+      state: 'moved',
+      flags: [],
+    },
+    ...over,
+  }
+}
+
+/** The update's check as the read keeps it: flagged, the given flags. */
+export function sealandUnusual(flags: WeekReadFlag[] = [sealandFlag()]): WeekReadUnusual {
+  return { outcome: flags.length > 0 ? 'flagged' : 'nothing_unusual', flags, flaggedCount: flags.length }
+}
+
+/** The four page lines, as the build freezes them. */
+export function sealandLines(): WeeklyReadLine[] {
+  return [
+    { page: 'voices', label: 'Voices', href: '/dashboard/voices?group=commuters', lead: 'In the most videos in September:', name: 'Daily commuters', copy: { kind: 'subject', slot: 'pass_e_persona' }, figure: '41 videos' },
+    { page: 'products', label: 'Your products', href: '/dashboard/products?product=p1', lead: 'Named most in September:', name: 'Kirby backpack', copy: { kind: 'plain' }, figure: '9 videos' },
+    { page: 'content', label: 'Content', href: '/dashboard/content?idea=1', lead: 'Post next:', name: 'Which bag fits a carry-on rule, and how to check', copy: { kind: 'prose' }, figure: '7 videos this week · 16 in September so far' },
+    { page: 'moves', label: 'Your moves', href: '/dashboard/moves?advice=lin-1', lead: 'Advice waiting:', name: 'Publish a colour roadmap for the core bags', copy: { kind: 'stored', slot: 'pass_d_b_recommendation' }, figure: 'raised in 4 updates' },
+  ]
+}
+
+/** The level-1 read: the report's read, its check flagged, two conversations
+ *  also heard this week. */
+export function levelOneRead(over: Partial<WeekReadDataV2> = {}): WeekReadDataV2 {
+  return sealandRead({
+    unusual: sealandUnusual(),
+    alsoHeard: [
+      { themeId: 't7', label: 'Laptop sleeves that fit a 16-inch machine', videos: 9, videoIds: [], monthVideos: 21 },
+      { themeId: 't8', label: 'Straps that dig in on a long walk', videos: 6, videoIds: [], monthVideos: 11 },
+    ],
+    ...over,
+  })
 }

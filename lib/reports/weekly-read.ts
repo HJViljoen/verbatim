@@ -1,8 +1,10 @@
-import { longMonth } from '../format'
-import { coveredDays, monthHeading } from '../written/month'
+import { fmtInt, longMonth } from '../format'
+import type { Verdict } from '../reading/verdicts'
+import { coveredDays, inMonth, monthHeading } from '../written/month'
 import type { FigureTable } from './types'
 import type { StoredWeekRead } from '../written/store'
-import type { QuoteRef, WeekMarketFigures, WeekReadData } from '../written/types'
+import type { QuoteRef, WeekMarketFigures, WeekReadData, WeekReadFlag } from '../written/types'
+import type { WeeklyReadLine } from './weekly-read-lines'
 
 // The weekly read as a report (plan "Verbatim, writing back", T6/T7 as
 // re-decided on 30 Sep: ONE general weekly for everyone, no department lines).
@@ -192,4 +194,138 @@ export function weeklyReadView(read: WeekReadData): WeeklyReadView {
     figures,
     month: read.month,
   }
+}
+
+// ---- Level 1 (depth v2, T11b; board E7) ------------------------------------------------
+//
+// The email a new snapshot (version 2) sends: the week in one line, the
+// market's week beside its month, the lead (the flag the update's check
+// raised, else the week's biggest new conversation), what else came up, one
+// line per page, the way in. No quote at level 1 (Heinrich's v2 rule): the
+// quotes stay in the full read and on the pages. Decision 1 throughout: no
+// weekly direction word, and every week figure beside its month (a flag's
+// week beside the months the check compared it with).
+
+/** The most rows "Also this week" prints. */
+export const ALSO_ROWS = 3
+
+/** Where an object opens: a conversation or a subject in Market's open
+ *  panel, anything else Market itself. An app path. */
+export function objectHref(kind: string, id: string): string {
+  const market = '/dashboard/market'
+  if (kind === 'theme' && id) return `${market}?conv=${encodeURIComponent(id)}`
+  if (kind === 'subject' && id) return `${market}?subject=${encodeURIComponent(id)}`
+  return market
+}
+
+/** A flag's months, pooled, as one month's worth: "about 13 of 363 a
+ *  month", the k and n the check compared the week with, over the months it
+ *  pooled. Null without months. */
+export function usualMonth(flag: Pick<WeekReadFlag, 'baseline' | 'baselineMonths'>): { k: number; n: number } | null {
+  const m = flag.baselineMonths.length
+  if (m === 0 || flag.baseline.n <= 0) return null
+  return { k: Math.round(flag.baseline.k / m), n: Math.round(flag.baseline.n / m) }
+}
+
+/** "19 of 241 videos this week · usually about 6 of 363 a month". */
+export function flagFigure(flag: Pick<WeekReadFlag, 'week' | 'baseline' | 'baselineMonths'>): string {
+  const usual = usualMonth(flag)
+  const week = `${fmtInt(flag.week.k)} of ${fmtInt(flag.week.n)} videos this week`
+  return usual ? `${week} · usually about ${fmtInt(usual.k)} of ${fmtInt(usual.n)} a month` : week
+}
+
+export type LevelOneLead =
+  | { kind: 'flag'; flag: WeekReadFlag; usual: { k: number; n: number } | null; href: string }
+  | { kind: 'new'; themeId: string; label: string | null; body: string; videos: { week: number; month: number }; evidence: string; href: string }
+
+export interface LevelOneRow {
+  kind: 'flag' | 'new' | 'heard'
+  /** The conversation's or the object's name. */
+  label: string
+  /** A theme's label is Pass B's words (`subject`, `pass_b_theme`); a kind,
+   *  a subject or a rival is named by code or the client. */
+  theme: boolean
+  /** The flag's verdict, for its chip. */
+  verdict: Verdict | null
+  /** Code's figure: the week beside its month, or beside its months. */
+  figure: string
+  href: string
+}
+
+export interface LevelOneView {
+  /** The week in one line (the writer's, scrubbed), or ''. */
+  headline: string
+  /** The market's week beside its month. Null where either is not read. */
+  numbers: {
+    week: { videos: number; comments: number | null }
+    month: { videos: number; comments: number | null }
+    /** "in September so far", "in September". */
+    where: string
+  } | null
+  lead: LevelOneLead | null
+  also: LevelOneRow[]
+  lines: WeeklyReadLine[]
+  figures: FigureTable
+  month: string
+  /** "in September so far", "in September": what a week is restated against. */
+  where: string
+}
+
+/** The level-1 email from a version-2 snapshot. Pure. */
+export function levelOneView(read: WeekReadData, lines: readonly WeeklyReadLine[] = []): LevelOneView {
+  const figures = read.figures ?? {}
+  const v2 = read.version === 2 ? read : null
+  const where = inMonth(read.month, v2?.monthComplete)
+  const weekMonth = (w: number, m: number) => `${fmtInt(w)} ${w === 1 ? 'video' : 'videos'} this week · ${fmtInt(m)} ${where}`
+
+  const market = v2?.market ?? null
+  const numbers = market && market.week.videos != null && market.month.videos != null
+    ? {
+        week: { videos: market.week.videos, comments: market.week.comments != null && market.month.comments != null ? market.week.comments : null },
+        month: { videos: market.month.videos, comments: market.week.comments != null && market.month.comments != null ? market.month.comments : null },
+        where,
+      }
+    : null
+
+  // THE LEAD: the update's first flag (the check's own rank order,
+  // `weekFlagRows`), else the week's biggest new conversation, else none.
+  const flags = (v2?.unusual?.flags ?? []).filter((f) => f.label.trim() && f.verdict?.state === 'moved')
+  const fresh = [...(v2?.newThisWeek ?? [])]
+    .filter((x) => (x.body ?? '').trim())
+    .sort((a, b) => b.videos.week - a.videos.week || a.themeId.localeCompare(b.themeId))
+  let lead: LevelOneLead | null = null
+  if (flags[0]) lead = { kind: 'flag', flag: flags[0], usual: usualMonth(flags[0]), href: objectHref(flags[0].objectKind, flags[0].objectId) }
+  else if (fresh[0]) {
+    const x = fresh[0]
+    lead = { kind: 'new', themeId: x.themeId, label: x.label?.trim() || null, body: x.body.trim(), videos: x.videos, evidence: (x.evidence ?? '').trim(), href: objectHref('theme', x.themeId) }
+  }
+
+  // ALSO THIS WEEK: the other flags, then the other new conversations, then
+  // what else was heard most; each object once, at most ALSO_ROWS.
+  const shown = new Set<string>()
+  if (lead?.kind === 'flag' && lead.flag.objectKind === 'theme') shown.add(lead.flag.objectId)
+  if (lead?.kind === 'new') shown.add(lead.themeId)
+  const also: LevelOneRow[] = []
+  const push = (row: LevelOneRow, themeId: string | null) => {
+    if (also.length >= ALSO_ROWS || (themeId && shown.has(themeId))) return
+    if (themeId) shown.add(themeId)
+    also.push(row)
+  }
+  for (const f of flags.slice(1)) {
+    push({ kind: 'flag', label: f.label.trim(), theme: f.objectKind === 'theme', verdict: f.verdict, figure: flagFigure(f), href: objectHref(f.objectKind, f.objectId) }, f.objectKind === 'theme' ? f.objectId : null)
+  }
+  for (const x of fresh) {
+    if (!x.label?.trim()) continue
+    push({ kind: 'new', label: x.label.trim(), theme: true, verdict: null, figure: weekMonth(x.videos.week, x.videos.month), href: objectHref('theme', x.themeId) }, x.themeId)
+  }
+  const heard = [...(read.alsoHeard ?? [])]
+    .filter((h) => h.label.trim() && typeof h.monthVideos === 'number' && h.videos > 0)
+    .sort((a, b) => b.videos - a.videos || a.label.localeCompare(b.label))
+  for (const h of heard) {
+    push({ kind: 'heard', label: h.label.trim(), theme: true, verdict: null, figure: weekMonth(h.videos, h.monthVideos as number), href: objectHref('theme', h.themeId) }, h.themeId)
+  }
+
+  const first = (read.findings ?? []).find((f) => (f.headline ?? '').trim())
+  const headline = weekReadLine(read) || (first ? `${first.headline.trim().replace(/[.!?]+$/, '')}.` : '')
+  return { headline, numbers, lead, also, lines: [...lines], figures, month: read.month, where }
 }

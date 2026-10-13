@@ -28,10 +28,12 @@ export interface RenderWeeklyReadArgs {
   attached?: boolean
   /** The mark's address; absolute by default (`${appUrl}/brand/…`). */
   markSrc?: string
+  /** Level 1's mark on its ink tile; absolute by default. */
+  markOnInkSrc?: string
 }
 
 export function renderWeeklyReadEmail(a: RenderWeeklyReadArgs): { subject: string; html: string; text: string } {
   const preheader = a.data.subject.replace(/^[^:]*:\s*/, '')
-  const html = `<!doctype html>\n${renderStaticHtml(<WeeklyReadEmail data={a.data} appUrl={a.appUrl} markSrc={a.markSrc} fullUrl={a.shareUrl ?? null} preheader={preheader} />)}`
+  const html = `<!doctype html>\n${renderStaticHtml(<WeeklyReadEmail data={a.data} appUrl={a.appUrl} markSrc={a.markSrc} markOnInkSrc={a.markOnInkSrc} fullUrl={a.shareUrl ?? null} preheader={preheader} />)}`
   return { subject: a.data.subject, html, text: htmlToText(html) }
 }
