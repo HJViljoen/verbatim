@@ -238,6 +238,14 @@ describe('placeProducts: the pass', () => {
     expect(r.rows.find((x) => x.object_id === G('Feet'))).toMatchObject({ k_named: 1, k_unbranded: 0, comments: 1 })
   })
 
+  it('a video outside every month\'s market (a client\'s own post) is never relevant: its comments are not read', async () => {
+    const { io } = world()
+    const own: ProductReadIO = { ...io, monthVideos: async (m) => ((await io.monthVideos(m)) ?? []).filter((v) => v.id !== vid(1)) }
+    const r = await placeProducts({ clientId: OSSUR_CLIENT_ID, clientName: 'Össur', io: own, catalogue: FIXTURE_CATALOGUE, window, ask: null, budgetUsd: 0 })
+    expect([...r.relevant]).toEqual([])
+    expect(r.queue).toEqual([])
+  })
+
   it('the cap: the queue past it is left for the next run, priced', async () => {
     const { io } = world()
     const r = await placeProducts({ clientId: OSSUR_CLIENT_ID, clientName: 'Össur', io, catalogue: FIXTURE_CATALOGUE, window, ask: askWith(stub, []), budgetUsd: 1, queueCap: 1 })

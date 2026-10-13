@@ -299,9 +299,12 @@ export async function placeProducts(args: {
   // 3. The relevant videos. A video whose content holds only a generic name
   //    nobody confirmed waits on the confirm (a dry run reads none of them,
   //    and says how many there are).
+  //    Only the market's videos: a client's own post is in no month's count
+  //    (market_month_videos leaves it out), so its comments are not read.
   let standing = standingNow(contentPlan.rows)
-  const relevant = relevantVideos(standing)
-  const waitingOnConfirm = new Set(contentConfirm.map((c) => c.videoId).filter((id) => !relevant.has(id)))
+  const inMarket = new Set([...markets.values()].flat().map((v) => v.id))
+  const relevant = new Set([...relevantVideos(standing)].filter((id) => inMarket.has(id)))
+  const waitingOnConfirm = new Set(contentConfirm.map((c) => c.videoId).filter((id) => !relevant.has(id) && inMarket.has(id)))
 
   // 4. The comments: in full under the relevant videos, the scan's excerpt
   //    elsewhere.
