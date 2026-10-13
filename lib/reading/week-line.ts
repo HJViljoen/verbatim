@@ -432,9 +432,39 @@ export function chartRunGatheredNothing(r: Pick<ChartRun, 'id' | 'options'>): bo
   const o = r.options
   if (!o || typeof o !== 'object') return false
   const { skipGather, runId } = o as { skipGather?: unknown; runId?: unknown }
-  // A run id is a uuid: one typed in capitals still names the run itself.
-  const itself = typeof runId === 'string' && runId.toLowerCase() === String(r.id).toLowerCase()
-  return Boolean(skipGather) && !itself
+  return Boolean(skipGather) && !namesItself(r.id, runId)
+}
+
+/** Does `options.runId` name the run itself (the resume lever)? A run id is a
+ *  uuid: one typed in capitals still names the run itself. */
+const namesItself = (id: string, runId: unknown): boolean => typeof runId === 'string' && runId.toLowerCase() === String(id).toLowerCase()
+
+/**
+ * Is this run an ANALYSIS-ONLY RESUME of a gather it already made? `skipGather`
+ * truthy AND `options.runId` naming the run itself: the resume lever reopens
+ * the run's own row, whose gather already ran, and gathers nothing again. Its
+ * `started_at` and `completed_at` are the resume's, its gather is its
+ * opening (`window_end`, which a resume keeps). A self-resume WITHOUT
+ * `skipGather` gathers again at the resume, and is not one. Pure.
+ */
+export function chartAnalysisResume(r: Pick<ChartRun, 'id' | 'options'>): boolean {
+  const o = r.options
+  if (!o || typeof o !== 'object') return false
+  const { skipGather, runId } = o as { skipGather?: unknown; runId?: unknown }
+  return Boolean(skipGather) && namesItself(r.id, runId)
+}
+
+/**
+ * The run as the chart's cadence dates it (14 Oct): an analysis-only resume
+ * (`chartAnalysisResume`) is dated by its GATHER, its `windowEnd`, because
+ * the gather is what the bars count and the resume moved no count; that date
+ * sets its week, its on-day check and its lateness (a finished resume is
+ * taken to have finished its gather then). Every other run, and a resume with
+ * no `windowEnd` (fail closed: today's rule), keeps its own clock. Pure.
+ */
+export function chartDated(r: ChartRun): ChartRun {
+  if (!chartAnalysisResume(r) || !r.windowEnd || Number.isNaN(msOfInstant(r.windowEnd))) return r
+  return { ...r, startedAt: r.windowEnd, finishedAt: r.finishedAt == null ? null : r.windowEnd }
 }
 
 /** The `errors` list close-run writes is capped (`RUN_ERROR_CAP`,
@@ -479,6 +509,19 @@ export function gatherCompleted(r: ChartRun): boolean {
  * are never recomputed, and an analysis-only run re-reads the shares it
  * measures.
  *
+ * AN ANALYSIS-ONLY RESUME IS DATED BY ITS GATHER (14 Oct, `chartDated`).
+ * Össur's 11 Oct update `41024b9e` opened and gathered on Sunday 11 Oct (869
+ * gate verdicts stamped 04:05 to 04:46 UTC), then was resumed with
+ * `skipGather` and `runId` itself on Monday 12 Oct, which rewrote its
+ * `started_at` (05:37) and `completed_at` (06:23). Dated by those, it read as
+ * an off-day, late run in the week of 12 Oct, and cut the weeks of 28 Sep,
+ * 5 Oct and 12 Oct for good: Össur's chart drew nothing. Such a run is now
+ * placed, checked for its day and for lateness at its `windowEnd`; a
+ * self-resume without `skipGather` gathers again and keeps its own clock, and
+ * a run with no `windowEnd` keeps today's rule. The mapping is the chart's
+ * alone, made here before `weekCadence`, which the same-age line reads
+ * unchanged.
+ *
  * Returns the reason a week breaks, or null. Pure.
  */
 export function chartCadenceBroken(week: string, runs: readonly ChartRun[], now: string): string | null {
@@ -493,6 +536,8 @@ export function chartCadenceBroken(week: string, runs: readonly ChartRun[], now:
   const counted = runs
     // Gathered nothing: no count of the market moved.
     .filter((r) => !chartRunGatheredNothing(r))
+    // An analysis-only resume: dated by its gather, the week it counts in.
+    .map(chartDated)
     // In flight in a week not yet over: not counted until it finishes.
     .filter((r) => !(r.finishedAt == null && r.status === 'running' && nowMs < slotEnd(slotOf(r))))
     .map((r): WeekRun => ({ id: r.id, status: gatherCompleted(r) ? 'completed' : r.status, finishedAt: r.finishedAt, startedAt: r.startedAt }))

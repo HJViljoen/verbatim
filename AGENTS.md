@@ -669,7 +669,16 @@ This version has breaking changes — APIs, conventions, and file structure may 
   and it settles no week either: its finish is not one of the two updates a
   week turns solid by, nor in a hover's "read by N updates"
   (`chartSettlingUpdates`, in `homeWeeks` and `weekVolumesBlock`; a page's
-  latest update and the line's due dates read every finish). **The same-age line
+  latest update and the line's due dates read every finish). **An
+  analysis-only resume is dated by its gather** (14 Oct, `chartDated`): a
+  run with `skipGather` and `runId` naming itself is placed, checked for its
+  day and for lateness at its `windowEnd`, never at the resume's
+  `started_at` / `completed_at`, because Össur's 11 Oct update `41024b9e`
+  gathered on Sunday 11 Oct (gate verdicts 04:05 to 04:46 UTC) and was
+  resumed on Monday 12 Oct, which read as an off-day, late run and cut the
+  weeks of 28 Sep, 5 Oct and 12 Oct, so its chart drew nothing; a
+  self-resume without `skipGather` gathers again and keeps its own clock,
+  and a run with no `windowEnd` keeps the old rule. **The same-age line
   does not follow** (`weekCadence` in `keepWeekPoints` counts every run, so
   `cadenceBroken` on a kept read is unchanged): a kept read is never
   recomputed, so counting a new way would mix two rules under one

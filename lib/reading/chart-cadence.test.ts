@@ -6,7 +6,7 @@ import { changesFromLog, isFailOpenFix, type OurChange } from './comparability'
 import type { ConfigChange } from '../config-log'
 import { gatheredNothing } from '../pipeline/run-bookkeeping'
 import {
-  AFTER_GATHER_STEPS, chartCadenceBroken, chartRunGatheredNothing, chartSettlingUpdates, gatherCompleted, keepWeekPoints, weekPairOf, withChartCadence,
+  AFTER_GATHER_STEPS, chartAnalysisResume, chartCadenceBroken, chartDated, chartRunGatheredNothing, chartSettlingUpdates, gatherCompleted, keepWeekPoints, weekCadence, weekPairOf, withChartCadence,
   WEEK_GATE_SURFACES, WEEK_SEARCH_SURFACES, type ChartRun, type WeekRead,
 } from './week-line'
 import { weekRules, weeksSinceOurChanges, WEEK_CUT_SURFACES, type WeekVolume } from './weeks'
@@ -315,5 +315,76 @@ describe('weekPairOf: the regate does not refuse the 28 Sep → 5 Oct pair', () 
   it('a relevance change that is not one still refuses', () => {
     const { failOpenFix: _f, ...rule } = regate
     expect(weekPairOf(prev, curr, [rule]).reasons.map((r) => r.kind)).toContain('gate')
+  })
+})
+
+// 14 Oct: Össur's chart drew nothing. Its 11 Oct update (`41024b9e`) opened
+// and gathered on Sunday 11 Oct, then was resumed analysis-only (`skipGather`,
+// `runId` itself) on Monday 12 Oct, which rewrote `started_at` and
+// `completed_at`. Dated by those it was an off-day, late run in the week of
+// 12 Oct. The chart dates such a run by its gather, its `windowEnd`
+// (`chartDated`); the same-age line's `weekCadence` is untouched. Runs as the
+// lead read them from production on 14 Oct (ossur-runs-14oct.md).
+describe('an analysis-only resume is dated by its gather on the chart (14 Oct)', () => {
+  const NOW = '2026-10-14T09:00:00Z'
+  const OSSUR_RUNS: ChartRun[] = [
+    {
+      id: '555af400', status: 'partial', startedAt: '2026-10-04T11:45:00Z', finishedAt: '2026-10-04T14:46:00Z',
+      windowStart: '2026-09-13T04:00:00Z', windowEnd: '2026-10-04T11:45:00Z', options: { sendReport: true },
+      errors: [
+        'themes:industry-other: merge failed',
+        'transcribe:youtube: 2 of 43 caption batches run-failed and were recovered id-by-id, under the 25% ratio',
+        'pass-a: 1 video(s) hit the 8000-token output ceiling and were re-asked once on half their comments',
+      ],
+    },
+    {
+      id: '41024b9e', status: 'partial', startedAt: '2026-10-12T05:37:00Z', finishedAt: '2026-10-12T06:23:00Z',
+      windowStart: '2026-10-04T11:45:00Z', windowEnd: '2026-10-11T04:00:00Z', options: { skipGather: true, runId: '41024b9e' },
+      errors: ['ocr: 41 of 300 failed (14%)', 'themes:industry-other: merge failed'],
+    },
+  ]
+
+  it('Össur\'s 4 Oct and 11 Oct updates draw the weeks of 28 Sep and 5 Oct, as of 14 Oct', () => {
+    expect(OSSUR_RUNS.every(gatherCompleted)).toBe(true)
+    expect(chartAnalysisResume(OSSUR_RUNS[1])).toBe(true)
+    expect(chartCadenceBroken('2026-09-28', OSSUR_RUNS, NOW)).toBeNull()
+    expect(chartCadenceBroken('2026-10-05', OSSUR_RUNS, NOW)).toBeNull()
+    // The week still under way reads as having its update to come.
+    expect(chartCadenceBroken('2026-10-12', OSSUR_RUNS, NOW)).toBeNull()
+  })
+
+  it('dated by its own clock (the rule before 14 Oct), the same run cut both weeks', () => {
+    const asBefore = OSSUR_RUNS.map((r) => ({ ...r, windowEnd: null }))
+    expect(chartCadenceBroken('2026-09-28', asBefore, NOW)).not.toBeNull()
+    expect(chartCadenceBroken('2026-10-05', asBefore, NOW)).not.toBeNull()
+  })
+
+  it('a self-resume WITHOUT skipGather gathers again at the resume: on a Monday it still breaks', () => {
+    const regathered = OSSUR_RUNS.map((r) => (r.id === '41024b9e' ? { ...r, options: { runId: '41024b9e' } } : r))
+    expect(chartAnalysisResume(regathered[1])).toBe(false)
+    expect(chartDated(regathered[1])).toBe(regathered[1])
+    expect(chartCadenceBroken('2026-10-05', regathered, NOW)).not.toBeNull()
+  })
+
+  it('a run with no windowEnd keeps today\'s rule; a fresh skipGather run is still not counted', () => {
+    const noWindow = { ...OSSUR_RUNS[1], windowEnd: null }
+    expect(chartDated(noWindow)).toBe(noWindow)
+    const fresh: ChartRun = { ...OSSUR_RUNS[1], id: 'fresh', options: { skipGather: true } }
+    expect(chartAnalysisResume(fresh)).toBe(false)
+    expect(chartRunGatheredNothing(fresh)).toBe(true)
+    // Dated by its gather, an unfinished resume stays unfinished.
+    expect(chartDated({ ...OSSUR_RUNS[1], finishedAt: null, status: 'running' }).finishedAt).toBeNull()
+  })
+
+  it('the same-age line reads every run on its own clock, unchanged', () => {
+    // `weekCadence` places the resume in the week of 12 Oct, off-day and
+    // late, as it always has: its kept reads are never recomputed.
+    const c = weekCadence('2026-10-05', OSSUR_RUNS.map((r) => ({ id: r.id, status: 'completed', finishedAt: r.finishedAt, startedAt: r.startedAt })))
+    expect(c.runsInWeek).toBe(0)
+    expect(c.runsAfter[0]).toBe(1)
+    expect(c.offCadence).toBe(1)
+    const src = readFileSync(new URL('./week-line.ts', import.meta.url), 'utf8')
+    const body = src.slice(src.indexOf('export function weekCadence'), src.indexOf('/** The weeks with their cadence'))
+    expect(body).not.toContain('chartDated')
   })
 })
