@@ -128,7 +128,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
   an idea's sub-questions hold after compose's drops, under which the idea is
   held `thin`. *Model and code:* only question-shaped comments go to the
   model (`isQuestionShaped`). One gpt-5.4 call (`POST_IDEAS_MODEL`; a second
-  only where the answer will not parse) writes each title and cover and
+  attempt where the first gave nothing usable: an answer that will not
+  parse, or a failed call that was not a timeout, such as a 429 or a 5xx; a
+  timeout is thrown for the step to retry, and never a third attempt)
+  writes each title and cover and
   groups the comments, sent by handle, into sub-questions; comment words go
   to a model here as in Pass A, never under `lib/reports/`. Code maps the
   handles back to ids and counts them (`subquestionCounts`), and picks the
@@ -148,13 +151,31 @@ This version has breaking changes — APIs, conventions, and file structure may 
   one) or names no subject (`namesNoSubject`); a label that copies a comment
   drops only its sub-question. The "check with your medical team" line is
   never stored: Content prints it (`MEDICAL_LINE`, `lib/post-ideas/medical.ts`,
-  where `printsMedicalLine`). *When it does nothing:* a TEST run reads and
-  writes nothing. `postIdeasEnabled(clientId)` off (`lib/config.ts`: on by
-  default, `POST_IDEAS=0` off everywhere, `POST_IDEAS_OFF` a list of client
-  ids), no table (`isMissingPostIdeas`), no candidate over the floor, or a run
-  that already has its ideas is a silent no-op that spends nothing; a week
-  whose written ideas are all held `thin` is silent too, and has spent its
-  call. *Failure:* the week read's contract: a transient failure before the
+  where `printsMedicalLine`). *The switch is OPT-IN per tenant* (Phase 4
+  fix round): `POST_IDEAS_ENABLED` (`lib/config.ts`, the
+  `PRODUCT_READINGS_ENABLED` pattern) is off for Sealand and Össur and
+  pinned off by `lib/config.test.ts`, so applying the products migration
+  (which creates `post_ideas`) starts no model spend; turning a tenant on is
+  Heinrich's production step, a diff to the map and its test. Read it
+  through `postIdeasEnabled(clientId)`, never the map. `POST_IDEAS=0` (or
+  `false`) and `POST_IDEAS_OFF` (a list of client ids) stay as emergency
+  OFF-switches only: neither can turn a tenant on. Content and the
+  Dashboard print "not switched on" and no stored idea while it is off.
+  *Money:* a hard cap per run, `POST_IDEAS_BUDGET_USD` ($0.50), and the
+  briefs' headroom rule: after its cheap checks the step reads the run's
+  spend (`runSpendSoFar`) and starts only where `RUN_MODEL_BUDGET_USD`
+  leaves the cap plus `POST_IDEAS_RUN_MARGIN_USD` ($0.50)
+  (`postIdeasHeadroom`); the call is then held to what is left
+  (`postIdeasRoom`, at most the cap), and each attempt is made only where
+  the spend so far plus that attempt's worst case (`postIdeasAttemptMaxUsd`:
+  the prompt counted at two characters a token and the full output
+  ceiling) fits. Either refusal stops fail-soft: no call, no rows, status
+  `over_budget`, one alert. *When it does nothing:* a TEST run reads and
+  writes nothing. The switch off, no table (`isMissingPostIdeas`), no
+  candidate over the floor, or a run that already has its ideas is a silent
+  no-op that spends nothing; a week whose written ideas are all held `thin`
+  is silent too, and has spent its call. *Failure:* the week read's
+  contract: a transient failure before the
   last attempt throws; otherwise the body never throws and alerts the
   operator ONCE inside the step, naming the company and
   `scripts/post-ideas.ts`. Its `.catch` only logs and is never `noteError`'d.
@@ -239,6 +260,17 @@ This version has breaking changes — APIs, conventions, and file structure may 
   commenter can say "growing" and the product has not made a direction claim by
   quoting them. Unmarked markup is NOT exempt from rule (c) — the rule is about
   the whole block.
+  **The client-bundle guard** (`lib/test/client-chains.test.ts`, Phase 4 fix
+  round) walks every `'use client'` file's runtime imports with the
+  project's own TypeScript parser and fails on the first chain to a `node:`
+  builtin, a bare builtin Next does not polyfill for the client
+  (`NEXT_CLIENT_POLYFILLS`), `server-only` or `next/headers`: the Tag
+  control's break (3abd43be), in the test tier rather than minutes into
+  `next build`. Type-only imports are erased and a `'use server'` module is
+  a boundary. Four softer chains to `lib/supabase-admin` and `lib/gather`
+  predate it and are listed in `lib/test/client-chains.ts`, not failed on;
+  a client file's style or constant comes from a client-safe module, never
+  from a page's `parts` that import its loader.
 - **The build runs in CI, and in a worktree it needs a flag.** `npm run build`
   fails inside a git worktree — `node_modules` is a symlink out of the project
   root and Turbopack will not resolve through it. Use `npx next build --webpack`
@@ -771,12 +803,30 @@ This version has breaking changes — APIs, conventions, and file structure may 
   check". The flags (`WeekReadDataV2.unusual`) and the week's conversations
   (`conversations`) are frozen into the read, with no new step id. *Page
   lines* are read when the snapshot is built (`snapshotWeeklyRead` through
-  `loadWeeklyReadLines`, `lib/reports/weekly-read-lines-load.ts`; the pure
-  builder is `weeklyReadLines`, `lib/reports/weekly-read-lines.ts`), because
-  post ideas are written after the read. So a build long after its run (a
-  backfill, a re-claim, Send now on an old run) carries that day's lines. A
-  page with nothing, or with no table yet, has no line, and Voices has none
-  yet (`voices: null`). *Rollback hazard:* code from before this deploy
+  `loadWeeklyReadLines`, `lib/reports/weekly-read-lines-load.ts`), because
+  post ideas are written after the read. EACH LINE IS ITS PAGE'S DASHBOARD
+  TILE (Phase 4 fix round): the build calls the same readers the Dashboard
+  does, `topVoices`, `topProducts`, `topContent` and `topMoves`
+  (`loadLineTops`, on the admin client and a reading handle over it, the
+  export path's shape; no one decides from an email, so `canDecide` is
+  false), and the pure `weeklyReadLines` (`lib/reports/weekly-read-lines.ts`)
+  turns each tile's data into a line: the same item, the tile's own link
+  (its open panel), its figures and its month words. So the email never
+  ranks on another base or folds advice another way: Your products' line is
+  the tile's standout under the tile's label ("Came up for the first time",
+  "Talked about most"), on `marketProductMonth`, and gives no line while
+  `PRODUCT_READINGS_ENABLED` is off; Your moves' line is `waitingAdvice`'s
+  first, folded by its vectors (the page's embedding call, cached per
+  server); Voices' is the group in the most videos. A tile with nothing, a
+  failed read, a table not there yet or a switch off gives no line. The line
+  is stricter than its tile in two ways, and only by leaving itself out: a
+  post idea's title goes through the written read's scrub (`week_read`), and
+  an idea from an older week gives no line. Each line's month is its tile's
+  (the reading month), which can differ from the read's own month for a
+  week that crosses a month (Heinrich's open question on two month rules).
+  `components/pages/v2/home/email-lines.test.tsx` holds each line to its
+  tile's markup. So a build long after its run (a backfill, a re-claim, Send
+  now on an old run) carries that day's lines. *Rollback hazard:* code from before this deploy
   accepts only version 1 and prints a version 2 snapshot as the stale line
   (`staleWeeklyReadSnapshot`). Do not roll back past this deploy without
   first holding v2 sends.
@@ -849,10 +899,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
     review email says the read is on the platform already and Send emails the
     list (`readOnPlatform`); the run that closes a month also writes the
     long-run read, and that run's operator review email carries its title,
-    lead, headlines and sentences under "Already on Your market"
-    (`readyForReview`, `lib/email.ts`). Those words are stale since Design
-    v2: no routed page prints the long-run read. The client's email is
-    unchanged. **"On the platform"
+    lead, headlines and sentences (`readyForReview`, `lib/email.ts`) under
+    "The month's long-run read (written; not shown on a page yet)"
+    (`ALSO_PUBLISHED_HEADING`): no routed page prints the long-run read since
+    Design v2, and where it lives next is Heinrich's call, so the heading
+    names no page (it said "Already on Your market" until the Phase 4 fix
+    round). The client's email is unchanged. **"On the platform"
     is about the ISSUE, not the pages** (the backfill, 1 Oct evening;
     migration `20261106090000_platform_publish.sql`): sent, or put there
     WITHOUT its email (`report_sends.published_at` and `published_by`,
@@ -909,7 +961,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
     line (`TILE_FAILED`) and loses only itself (`settleTile` plus a per-tile
     error boundary, `components/pages/v2/home/tile-boundary.tsx`); the bar's
     own read, the Agent box's questions, the weekly chart and the subjects
-    are soft and draw nothing, the empty frame or no subjects instead. The
+    are soft and draw nothing, the empty frame or no subjects instead. A
+    weekly volume read that THREW is not "Insufficient data" (too few clean
+    weeks, `homeWeeks` null): it carries `WEEKS_FAILED` (`lib/pages/home.ts`,
+    `WeeksRead`), and the week tile prints `TILE_FAILED` in the chart's
+    place while Market's "Videos, week by week" prints `WEEKS_UNREAD` (Phase
+    4 fix round). The
     tiles: Market (`topMarket`); Your market this week (the published read's
     frozen market videos and comments this week beside the month,
     `weekTileOf`; Week by week below them; the biggest ready subject and the
@@ -924,9 +981,13 @@ This version has breaking changes — APIs, conventions, and file structure may 
     Agent box (two questions to try, `agentTries`, from the read's frozen
     `conversations`). Each tile's head link opens its page's panel in place
     where the tile has an item, else the page; the Agent box has none either.
-    There is no Subjects tile and no Competitive tile: "Named most in
-    {Month}" now prints only in the weekly email's Your products line
-    (`lib/reports/weekly-read-lines.ts`). **Week by week** (`homeWeeks`, drawn
+    There is no Subjects tile and no Competitive tile: the Competitive
+    tile's "Named most" brands are the Voices tile's two brands named most
+    unprompted (`NAMED_MOST`). The weekly email prints no "Named most" line
+    of its own: its Your products line is the products tile's standout
+    under the tile's own label ("Came up for the first time" or "Talked
+    about most", `TOP_LABELS`), with its videos of the month's
+    (`lib/reports/weekly-read-lines.ts` `productsLine`). **Week by week** (`homeWeeks`, drawn
     by `HomeWeeksPlot`, `components/pages/v2/home/weeks-plot.tsx`, kept
     exactly from 1 Oct) draws from ONE clean week, the first the DATA shows, never a
     constant (`homeAxis`: the last eight weeks; `weeksSinceOurChanges` cuts at
@@ -959,7 +1020,13 @@ This version has breaking changes — APIs, conventions, and file structure may 
     reading in the month yet). `?conv=` takes a registry id or a slug;
     `?subject=`, `?period=week|month|time`, `?month=` (`YYYY-MM` or a date),
     `?at=` and `?in=` are read too (`marketParams`). It reads no long-run
-    read.
+    read. The lead card labels all three weeks' bars, as the side card and
+    the Dashboard's tile do, and its "What they're doing" never names the
+    conversation's own kind (`leadDoing`: a praise conversation's videos are
+    praise by definition). On a phone the table's month sits under the
+    week's figure in its cell, and its own column shows from 640, so no
+    figure column is cut at 390 (checked on Sealand's dump and the
+    long-label fixture, `marketLongRowsFixture`).
   - **Voices** (T4; `lib/pages/v2/voices.ts`), on the reading month. Groups
     are today's profile with this month's comment-dated videos: a count,
     never a share, never compared (decision 2). Brands: named unprompted is
@@ -985,6 +1052,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
     brand cross is unchanged). Settings › Your products uses the same
     function and the page's own month (`productsMonth`), and its "Tag them"
     link carries the month and `#unclear` (`lib/pages/v2/products-address.ts`).
+    While `PRODUCT_READINGS_ENABLED` is off for the tenant (every tenant
+    today; Heinrich's order is to back-read first), Settings reads no month,
+    prints no count even where a back-read left rows, and says plainly that
+    the Your products page is not switched on yet (`PRODUCTS_PAGE_OFF`); the
+    weekly email's products line is absent, and the page bar names no month
+    over a page that reads none (not applied, not on, no catalogue).
     The quote gate runs with `allowOwn: true` here, because comments under
     the client's posts are part of the basis. Standouts are picked by code
     (`pickStandouts`) and need `STANDOUT_MIN` (3) videos, except the gap
@@ -1001,14 +1074,26 @@ This version has breaking changes — APIs, conventions, and file structure may 
     ideas' run and the published week read's (`anchorOf`), either alone
     where the other is missing. Every week count sits beside its month
     (`readingMonthOf`). Ideas come from `post_ideas`, behind
-    `postIdeasEnabled`: a missing table or the switch off reads "not switched
-    on", no rows "none written", a failed read says so (`unread`). Ideas
+    `postIdeasEnabled` (opt-in, off for every tenant today): a missing table
+    or the switch off reads "not switched on", no rows "none written", a
+    failed read says so (`unread`). Ideas
     print their own week and stop printing once their week ended more than
     `IDEAS_STALE_DAYS` (28) before the page's (`stale`). Who asks is group
     names, never a count. "Your posts" is `ownedPosts`, and "touched on" is
     `questionTouch` over the reading month and the two before. What works is
     `buildPlaybook({ clientSide: 'owned' })`, dated by publish date, with the
-    clock named. The reply list is one click down, never "N waiting". In a
+    clock named. The reply list is one click down, never "N waiting"; its
+    card carries `id="worth-a-reply"` (`REPLIES_ANCHOR`, equal to This
+    week's `WEEK_ANCHORS.reply`), so a stored snapshot's or an email's
+    `/dashboard/content#worth-a-reply` lands on it, and an old link's
+    `?reply=<intent>` opens the list. The list reads its window only
+    (`buildReplies` passes both ends to `loadEngageCandidates`, which then
+    reads each chunk of engage insights' evidence with its comment embedded
+    and bounded, `comments!inner`, one statement per 250 insights, in the
+    unbounded read's order so the ranking's ties hold): Sealand's Content
+    load was 143 statements on 13 Oct, 99 of them this list; offline on a
+    tenant that size the list went from 117 statements to 24 (week) and 26
+    (month), the same rows (`lib/pages/week-replies-cost.test.ts`). In a
     medical market every printed idea carries `MEDICAL_LINE`.
   - **Your moves** (T7; `lib/pages/v2/moves.ts`, `loadMovesPage`).
     `loadMarketSurface` and its blocks stay for stored snapshots, the briefs
@@ -1062,7 +1147,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
     its order and notch per breakpoint. The rules are plain CSS
     (`.panel-slot` / `.panel-notch` in `app/globals.css`) because Tailwind
     sorts `min-[1180px]:` before the named breakpoints. No page does its own
-    order arithmetic, and the panel's content is never drawn twice.
+    order arithmetic (Content's lower row took hand-set `order-*` classes
+    until the Phase 4 fix round; it takes `panelItemOrder` now, its
+    right-hand column's order inert while that column is `display:
+    contents`), and the panel's content is never drawn twice.
     `InPlacePanel` scrolls itself into view when its head is off screen
     (`panelScrollPlan`, reduced motion jumps). From 768 the sidebar takes
     281px, so at 820 a page has 459px and three-column sections start at
