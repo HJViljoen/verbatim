@@ -44,7 +44,8 @@ export interface PairedRow {
   label: string
   /** The model slot that wrote `label`, where one did. */
   slot?: ProseSlot
-  /** One per column, in the columns' order; null is an empty cell. */
+  /** One per column, in the columns' order; null is an empty cell (a dash
+   *  over the bare track). */
   cells: readonly (PairedCell | null)[]
 }
 
@@ -72,6 +73,18 @@ function Cell({ cell, tone }: { cell: PairedCell; tone: PairedColumn['tone'] }) 
   )
 }
 
+/** A cell with nothing to count (a product no video named): a dash over
+ *  the bare track, so the column keeps the table's rhythm without a "0 of 0"
+ *  that would read as a measurement. */
+function EmptyCell() {
+  return (
+    <div className="flex flex-col gap-[5px]">
+      <span className="font-mono text-[12.5px] text-muted-foreground"><span aria-hidden>–</span><span className="sr-only">none</span></span>
+      <div aria-hidden className="h-1.5 max-w-[120px] rounded-full bg-track" />
+    </div>
+  )
+}
+
 export function PairedBars({ rowHeader, columns, rows, label, className }: PairedBarsProps) {
   const th = 'border-b border-border pr-2.5 pb-2.5 text-left align-bottom text-[11.5px] font-semibold tracking-[0.04em] text-muted-foreground'
   return (
@@ -94,7 +107,7 @@ export function PairedBars({ rowHeader, columns, rows, label, className }: Paire
                 const cell = r.cells[i] ?? null
                 return (
                   <td key={c.key} className="py-2.5 pr-2.5 align-middle">
-                    {cell ? <Cell cell={cell} tone={c.tone} /> : null}
+                    {cell ? <Cell cell={cell} tone={c.tone} /> : <EmptyCell />}
                   </td>
                 )
               })}

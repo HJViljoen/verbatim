@@ -66,6 +66,10 @@ export interface CatalogueShelfProps {
   selected?: string | null
   /** The open panel's id, for the selected head's `aria-controls`. */
   panelId?: string
+  /** The whole period is not read (the page's switch is off, or the month
+   *  has no reading yet): each head says "Not read yet" once and the tiles
+   *  print their names alone, rather than "not read yet" on every tile. */
+  unread?: boolean
   className?: string
 }
 
@@ -84,7 +88,7 @@ const TONE: Record<0 | 1 | 2 | 3, string> = {
   3: 'bg-brand text-brand-foreground',
 }
 
-function Tile({ p }: { p: ShelfProduct }) {
+function Tile({ p, unread = false }: { p: ShelfProduct; unread?: boolean }) {
   const tone = shelfTone(p.videos ?? 0)
   return (
     <Link
@@ -100,7 +104,7 @@ function Tile({ p }: { p: ShelfProduct }) {
         <FlagChip verdict={p.flag} size="sm" className="ml-0.5" />
       </span>
       {p.videos == null ? (
-        <span className="shrink-0 text-[11.5px] text-muted-foreground">not read yet</span>
+        unread ? null : <span className="shrink-0 text-[11.5px] text-muted-foreground">not read yet</span>
       ) : tone === 0 ? (
         <span className="shrink-0 font-mono text-[12.5px] text-muted-foreground"><span aria-hidden>–</span><span className="sr-only">no videos</span></span>
       ) : (
@@ -110,7 +114,7 @@ function Tile({ p }: { p: ShelfProduct }) {
   )
 }
 
-export function CatalogueShelf({ columns, selected = null, panelId, className }: CatalogueShelfProps) {
+export function CatalogueShelf({ columns, selected = null, panelId, unread = false, className }: CatalogueShelfProps) {
   return (
     <div className={cn('grid grid-cols-2 gap-3.5 md:grid-cols-3 xl:grid-cols-5', className)}>
       {columns.map((c) => {
@@ -139,7 +143,7 @@ export function CatalogueShelf({ columns, selected = null, panelId, className }:
               {c.line ? <div className="text-[12px] leading-[1.4] text-muted-foreground">{c.line}</div> : null}
               {c.note ? <div className="text-[12.5px] leading-[1.35]">{c.note}</div> : null}
             </Link>
-            {c.products.map((p) => <Tile key={p.id} p={p} />)}
+            {c.products.map((p) => <Tile key={p.id} p={p} unread={unread} />)}
             {c.unclear && c.unclear.count > 0 ? (
               <Link href={c.unclear.href} className="px-0.5 pt-1 text-[12px] text-muted-foreground underline decoration-foreground/25 underline-offset-[3px] hover:text-foreground">
                 Couldn’t tell which · <span data-copy="figure" className="tabular-nums">{fmtInt(c.unclear.count)}</span>

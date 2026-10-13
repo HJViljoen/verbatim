@@ -127,7 +127,7 @@ export function PanelTag({ children }: { children: ReactNode }) {
 }
 
 /** The panel's foot (`.pfoot`): Ask, on the brand yellow. */
-export function AskButton({ href, children }: { href: string; children: ReactNode }) {
+export function AskButton({ href, children, after }: { href: string; children: ReactNode; after?: ReactNode }) {
   return (
     <div className="flex flex-wrap items-center gap-[18px] border-t border-track pt-5">
       <Link
@@ -137,6 +137,9 @@ export function AskButton({ href, children }: { href: string; children: ReactNod
         <Sparkles aria-hidden className="size-3.5" strokeWidth={2} />
         {children}
       </Link>
+      {/* The boards' foot carries a link beside the button (Your products:
+          "See the 52 videos and every comment"). */}
+      {after}
     </div>
   )
 }
