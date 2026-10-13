@@ -29,6 +29,7 @@ import { TILE_FAILED } from './parts'
 import { HomeSkeleton } from './skeleton'
 import { VOICES_BRANDS_FAILED, VOICES_NONE } from './voices-tile'
 import { HomeWeeksPlot } from './weeks-plot'
+import { weekSubjectLabels } from './week-tile'
 
 // The Dashboard's render tier (Design v2, T8): what the page PRINTS, against
 // the boards E1-Dashboard and E1-Dashboard-Phone, decision 1, the copy
@@ -676,6 +677,24 @@ describe('the board\'s shape holds when the data is thin (parity pass)', () => {
     expect(SUBJECT_NOT_MEASURED).toBe('Not measured yet')
     const s = tileText(render(page(sealand)), 'week')
     expect(s).toMatch(/Biggest subject Fit & comfort 34% · 108 of 318 Moved most no comparison with September yet$/)
+  })
+
+  // Ruling U6 (14 Oct): while any subject is not measured yet the rows claim
+  // no rank, as Your products withholds "leads".
+  it('mixed subjects: "Measured subject" and "Moved", never "Biggest subject" or "Moved most"', () => {
+    const full = dashboardFixture()
+    const wk = full.week.state === 'ok' ? full.week.top : null
+    expect(wk?.subjects?.moved).toBeTruthy()
+    const withSubjects = (subjects: NonNullable<typeof wk>['subjects']): DashboardData => ({ ...full, week: { state: 'ok', top: { ...wk!, subjects } } })
+    const mixed = withSubjects({ ...wk!.subjects!, pending: 2 })
+    const t = tileText(render(page(mixed)), 'week')
+    expect(t).toMatch(/Measured subject Fit & comfort 34% · 108 of 318 Moved Cost & access ▲ [\d.]+ pts against September$/)
+    expect(t).not.toMatch(/Biggest|Moved most/)
+    const none = withSubjects({ ...wk!.subjects!, moved: null, noneMoved: true, pending: 2 })
+    expect(tileText(render(page(none)), 'week')).toMatch(/Moved no measured subject beyond its normal swing against September$/)
+    assertCopyContract(page(mixed))
+    expect(weekSubjectLabels({ prevText: 'September' })).toEqual({ biggest: 'Biggest subject', moved: 'Moved most', noneMoved: 'none beyond its normal swing against September' })
+    expect(weekSubjectLabels({ prevText: 'September', pending: 1 }).biggest).toBe('Measured subject')
   })
 
   it('Your products, not switched on: the catalogue as the mini shelf, unshaded, its size, and why in one line', () => {

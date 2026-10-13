@@ -110,12 +110,24 @@ export const SUBJECT_GAP = {
   unread: { biggest: 'not read yet', moved: 'not read yet' },
 } as const
 
+/** The week tile's two row labels, and the words where none moved. "Biggest"
+ *  and "most" rank a subject over every other, so while any subject is not
+ *  measured yet (`pending`) the rows are named neutrally: the subject shown
+ *  is measured, and nothing is said about the ones that are not (ruling U6;
+ *  Your products withholds "leads" the same way). Pure. */
+export function weekSubjectLabels(s: Pick<WeekSubjects, 'pending' | 'prevText'> | null): { biggest: string; moved: string; noneMoved: string } {
+  const prev = s?.prevText ?? 'last month'
+  return (s?.pending ?? 0) > 0
+    ? { biggest: 'Measured subject', moved: 'Moved', noneMoved: `no measured subject beyond its normal swing against ${prev}` }
+    : { biggest: 'Biggest subject', moved: 'Moved most', noneMoved: `none beyond its normal swing against ${prev}` }
+}
+
 /** A ready subject with no level to print. */
 export const SUBJECT_NO_LEVEL = 'no level yet'
 /** Ready subjects, none with a month before to compare (Sealand today). */
 export const subjectNotCompared = (prev: string): string => `no comparison with ${prev} yet`
 /** Compared, and none moved beyond its band. */
-export const subjectNoneMoved = (prev: string): string => `none beyond its normal swing against ${prev}`
+export const subjectNoneMoved = (prev: string): string => weekSubjectLabels({ prevText: prev }).noneMoved
 
 /** One of the board's two rows: its label, and what it holds or why not. */
 function SubjectRow({ label, children, phone = true }: { label: string; children: ReactNode; phone?: boolean }) {
@@ -134,9 +146,11 @@ function Subjects({ s }: { s: WeekSubjects | null }) {
   // The board's two rows in every state (parity pass): a row with no subject
   // says why in its figure's place. The phone board draws "Moved most" alone.
   const gap = s?.gap ? SUBJECT_GAP[s.gap] : !s ? SUBJECT_GAP.unread : null
+  // Ruling U6: no rank claimed while any subject is not measured yet.
+  const labels = weekSubjectLabels(s)
   return (
     <div data-subjects={s?.gap ?? (s ? 'ready' : 'unread')} className="flex flex-col gap-1.5 border-t border-track pt-3 text-[13.5px] leading-[1.4] max-sm:border-t-0 max-sm:pt-0">
-      <SubjectRow label="Biggest subject" phone={false}>
+      <SubjectRow label={labels.biggest} phone={false}>
         {gap ? <Gap>{gap.biggest}</Gap> : s?.biggest ? (
           <Link href={s.biggest.href} className="text-foreground no-underline underline-offset-[3px] hover:underline">
             {s.biggest.name}{' '}
@@ -146,7 +160,7 @@ function Subjects({ s }: { s: WeekSubjects | null }) {
           </Link>
         ) : <Gap>{SUBJECT_NO_LEVEL}</Gap>}
       </SubjectRow>
-      <SubjectRow label="Moved most">
+      <SubjectRow label={labels.moved}>
         {gap ? <Gap>{gap.moved}</Gap> : s?.moved ? (
           <Link href={s.moved.href} className="text-foreground no-underline underline-offset-[3px] hover:underline">
             {s.moved.name}{' '}
@@ -155,7 +169,7 @@ function Subjects({ s }: { s: WeekSubjects | null }) {
               <span className="text-[12.5px] text-muted-foreground"> against {s.prevText}</span>
             </span>
           </Link>
-        ) : s?.noneMoved ? <Gap>{subjectNoneMoved(s.prevText)}</Gap> : <Gap>{subjectNotCompared(s?.prevText ?? 'last month')}</Gap>}
+        ) : s?.noneMoved ? <Gap>{labels.noneMoved}</Gap> : <Gap>{subjectNotCompared(s?.prevText ?? 'last month')}</Gap>}
       </SubjectRow>
     </div>
   )

@@ -1112,7 +1112,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
     `weekTileOf`; Week by week below them; the biggest ready subject and the
     one that moved most against last month through its `Verdict`, or "No
     subject moved beyond its normal swing", `weekSubjectsOf` over Market's
-    own subject facts; no head link); Voices (`topVoices`: the group in the
+    own subject facts; while any subject's check is open the rows claim no
+    rank over it, "Measured subject" and "Moved" for "Biggest subject" and
+    "Moved most", Your products' "leads" rule (`pending`,
+    `weekSubjectLabels`, 14 Oct, ruling U6); no head link); Voices (`topVoices`: the group in the
     most videos, every group's videos as separate bars, the two brands named
     most unprompted, `NAMED_MOST`, with no verdict); Your products
     (`topProducts`); Content (`topContent`, with `MEDICAL_LINE` under the

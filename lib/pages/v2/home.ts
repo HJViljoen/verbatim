@@ -137,6 +137,13 @@ export interface WeekSubjects {
   moved: (WeekSubject & { verdict: Verdict }) | null
   /** No subject moved beyond its band, and at least one was compared. */
   noneMoved: boolean
+  /** OPTIONAL (14 Oct, ruling U6): how many of the client's subjects are not
+   *  measured yet (their check is open). While any is, neither row claims a
+   *  rank over them (Your products' "leads" rule, `topRanked`): the tile says
+   *  "Measured subject" and "Moved", never "Biggest subject" and "Moved
+   *  most" (`weekSubjectLabels`, components/pages/v2/home/week-tile.tsx).
+   *  Absent: none. */
+  pending?: number
   /** OPTIONAL (parity pass, 13 Oct): why the rows hold no subject, so the
    *  block keeps both of the board's rows and says it inside them:
    *  `calibrating`, subjects are named and none is calibrated yet (Össur
@@ -256,9 +263,11 @@ export function weekTileOf(input: {
  * market's videos (ties by name), and the one whose month moved most against
  * last month beyond its band (`verdict.state === 'moved'`, the largest change
  * either way). A subject that is not ready prints neither. Null where neither
- * prints and nothing was compared. Pure.
+ * prints and nothing was compared. `pending` is how many subjects' checks
+ * are open (by default, the provisional facts handed in): while any is, the
+ * tile claims no rank (`weekSubjectLabels`). Pure.
  */
-export function weekSubjectsOf(facts: readonly StandingFact[], month: string, soFar: boolean): WeekSubjects | null {
+export function weekSubjectsOf(facts: readonly StandingFact[], month: string, soFar: boolean, pending: number = facts.filter((f) => f.calibration === 'provisional').length): WeekSubjects | null {
   const m = monthStartOf(month)
   const p = marketParams({})
   const href = (id: string) => subjectHref(p, id)
@@ -277,6 +286,7 @@ export function weekSubjectsOf(facts: readonly StandingFact[], month: string, so
     biggest: biggest ? { id: biggest.subjectId, name: biggest.name, k: biggest.level!.k, n: biggest.level!.n, href: href(biggest.subjectId) } : null,
     moved: moved ? { id: moved.subjectId, name: moved.name, verdict: moved.verdict!, href: href(moved.subjectId) } : null,
     noneMoved: !moved && compared,
+    ...(pending > 0 ? { pending } : {}),
   }
 }
 
@@ -427,7 +437,11 @@ async function loadWeekSubjects(input: {
   )
   // Ready subjects with neither a level nor a month to compare keep the rows,
   // each saying so.
-  return weekSubjectsOf(facts, input.month, input.soFar) ?? weekSubjectsGap(input.month, input.soFar, null)
+  // Ruling U6: the subjects whose check is open are counted, never read, so
+  // the tile claims no rank over them.
+  const pending = all.filter((x) => x.calibration === 'provisional').length
+  const gapped = weekSubjectsGap(input.month, input.soFar, null)
+  return weekSubjectsOf(facts, input.month, input.soFar, pending) ?? (pending > 0 ? { ...gapped, pending } : gapped)
 }
 
 /**

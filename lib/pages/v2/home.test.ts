@@ -114,6 +114,18 @@ describe('the subjects on the week tile, as Market\'s board reads them', () => {
   it('a month already over reads without "so far"', () => {
     expect(weekSubjectsOf(fixtureStanding(), '2026-09-01', false)!.monthText).toBe('September')
   })
+
+  // Ruling U6 (14 Oct): "Biggest" and "most" rank a subject over every
+  // other, so while any subject's check is open the tile claims no rank.
+  it('carries how many subjects are not measured yet: from the facts handed in, or the loader\'s count', () => {
+    const facts = fixtureStanding()
+    const mixed = facts.map((f, i) => (i === 0 ? { ...f, calibration: 'provisional' as const } : f))
+    expect(weekSubjectsOf(facts, '2026-10-01', true)!.pending).toBeUndefined()
+    expect(weekSubjectsOf(mixed, '2026-10-01', true)!.pending).toBe(1)
+    expect(weekSubjectsOf(facts.filter((f) => f.calibration === 'ready'), '2026-10-01', true, 3)!.pending).toBe(3)
+    // The subject shown is still the biggest READY one, with its level.
+    expect(weekSubjectsOf(facts, '2026-10-01', true, 3)!.biggest).toMatchObject({ name: 'Fit & comfort', k: 108, n: 318 })
+  })
 })
 
 describe('the Agent box\'s conversations to try', () => {
