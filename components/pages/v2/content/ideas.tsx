@@ -89,13 +89,15 @@ export function IdeaCardView({ card, state, selected, month, weekWord }: {
       </div>
       {card.format || card.opening ? (
         <div>
-          <p className={cn(LABEL, 'mb-2')}>Suggested format and opening</p>
+          <p className={cn(LABEL, 'mb-2')}>{card.format && card.opening ? 'Suggested format and opening' : card.format ? 'Suggested format' : 'Suggested opening'}</p>
           <div className="flex flex-wrap gap-2">
             {card.format ? <RecipeChip recipe={card.format} /> : null}
             {card.opening ? <RecipeChip recipe={card.opening} /> : null}
           </div>
           {/* The multiples are T13's: on the question, never the whole market. */}
-          <p className="m-0 mt-2 text-[12px] leading-[1.4] text-muted-foreground">1× is a typical market video on this question</p>
+          {card.format?.multiple != null || card.opening?.multiple != null ? (
+            <p className="m-0 mt-2 text-[12px] leading-[1.4] text-muted-foreground">1× is a typical market video on this question</p>
+          ) : null}
         </div>
       ) : null}
       {card.medical ? <p className="m-0 text-[12px] leading-[1.4] text-muted-foreground">{MEDICAL_LINE}</p> : null}
@@ -137,7 +139,7 @@ export function IdeasSection({ block, state, month, weekWord }: {
         <h2 id="ideas-title" className="m-0 text-[19px] leading-[1.3] font-semibold">What to post next</h2>
         {block.cards.length > 0 && block.week ? (
           <span className="text-[13px] leading-[1.4] text-muted-foreground">
-            For {block.week.label}: questions people asked that your posts since {longMonth(since ?? month.month)} have not touched on, biggest first
+            For {block.week.label}: questions people asked that none of your posts since {longMonth(since ?? month.month)} had touched on when they were picked, biggest first
           </span>
         ) : null}
       </div>

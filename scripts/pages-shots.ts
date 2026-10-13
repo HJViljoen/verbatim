@@ -90,7 +90,7 @@ import { yourSubjectsView, type SubjectSettingsRow } from '../lib/settings/your-
 import { VoicesPage } from '../components/pages/v2/voices'
 import { VOICES_FIXTURES } from '../lib/pages/v2/voices-fixture'
 import type { VoicesData } from '../lib/pages/v2/voices'
-import { ContentPage } from '../components/pages/v2/content/page'
+import { ContentPage } from '../components/pages/v2/content'
 import { contentEmptyFixture, contentFixture } from '../lib/pages/v2/content-fixture'
 import type { ContentPageData } from '../lib/pages/v2/content'
 

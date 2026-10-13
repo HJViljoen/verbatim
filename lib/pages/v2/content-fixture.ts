@@ -1,14 +1,14 @@
 import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../../config'
-import type { PostIdeaRow } from '../../post-ideas/types'
+import type { PostIdeaCover, PostIdeaLength, PostIdeaRow } from '../../post-ideas/types'
 import { printsMedicalLine } from '../../post-ideas/medical'
 import { summariseOwnedPosts, type OwnedPosts } from '../../reading/owned'
 import type { Verdict } from '../../reading/verdicts'
 import type { ReplyRow } from '../week'
 import {
-  agentHref, askedBlock, conversationHref, contentWeek, coverAsked, coverLength, daysPhrase, ideaOwnedFrom, ideasWeekOf, weekPhrase, flagVerdict, groupsByConversation, ideaCard, mixSentence,
+  agentHref, askedBlock, conversationHref, contentWeek, daysPhrase, ideaOwnedFrom, ideasWeekOf, weekPhrase, flagVerdict, groupsByConversation, ideaCard, mixSentence,
   newVerdict, postsBlock, repliesView, storedPersonas, subquestionRows, wordsToBorrow, worksBasis,
   type AskedBlock, type ContentMonth, type ContentOpen, type ContentPageData, type ContentPeriod, type IdeaCard,
-  type IdeaAsked, type IdeaLength, type IdeaPanel, type IdeasWeek, type MarketVideoCard, type PanelQuote, type PostsBlock, type WorksBlock, type WorksRow,
+  type IdeaPanel, type IdeasWeek, type MarketVideoCard, type PanelQuote, type PostsBlock, type WorksBlock, type WorksRow,
 } from './content'
 
 // The Content page's fixtures (depth v2, T6): Össur-shaped, drawn from the
@@ -45,10 +45,9 @@ export const REG = {
   clean: 'a1000000-0000-4000-8000-000000000009',
 }
 
-/** A cover as T13 stores it. MERGE: T13's `PostIdeaCover` carries these
- *  fields itself and the cast goes. */
-const cover = (text: string, length: IdeaLength | null, asked: IdeaAsked): PostIdeaRow['cover'] =>
-  ({ text, ...(length ? { length } : {}), asked }) as PostIdeaRow['cover']
+/** A cover as T13 stores it (`PostIdeaCover`). */
+const cover = (text: string, length: PostIdeaLength | null, asked: NonNullable<PostIdeaCover['asked']>): PostIdeaCover =>
+  ({ text, ...(length ? { length } : {}), asked })
 
 const idea = (over: Partial<PostIdeaRow> & Pick<PostIdeaRow, 'rank' | 'registry_id' | 'title'>): PostIdeaRow => ({
   id: `i000000${over.rank}-0000-4000-8000-000000000000`,
@@ -272,7 +271,7 @@ export function askedFixture(period: ContentPeriod = 'week', expanded = false): 
   const block = askedBlock({
     period,
     questions: ASKED_LABELS,
-    counts: period === 'month' ? MONTH_COUNTS : WEEK_COUNTS,
+    counts: { week: WEEK_COUNTS, month: MONTH_COUNTS },
     weeks: [W1, W2, WEEK_COUNTS],
     exclude: new Set([REG.liner, REG.insurance, REG.water]),
     groups: groupsByConversation(OSSUR_PERSONAS),
@@ -348,9 +347,9 @@ export function ideaPanelFixture(rank: 1 | 2 | 3 = 1, clientId = OSSUR_CLIENT_ID
   return {
     card: { ...card, groups: groupsByConversation(OSSUR_PERSONAS).get(row.registry_id) ?? [] },
     cover: row.cover.text,
-    length: coverLength(row.cover),
+    length: row.cover.length ?? null,
     subquestions: subquestionRows(row),
-    asked: coverAsked(row.cover),
+    asked: row.cover.asked ?? null,
     week: ideasWeekFixture(older),
     videos: rank === 1 ? VIDEOS : VIDEOS.slice(1),
     words: wordsToBorrow([

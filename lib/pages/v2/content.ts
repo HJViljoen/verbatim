@@ -4,9 +4,11 @@ import { chunk, UUID_IN_CHUNK } from '../../chunk'
 import { median } from '../../content-tiles'
 import { fmtInt, longMonth, platformLabel, shortDate } from '../../format'
 import { printsMedicalLine } from '../../post-ideas/medical'
+import { postIdeasEnabled } from '../../config'
+import { POST_IDEA_OWNED_MONTHS } from '../../post-ideas/select'
 import {
   isMissingPostIdeas, loadPostIdeas, subquestionCounts, TABLE_POST_IDEAS,
-  type PostIdeaRank, type PostIdeaRow,
+  type PostIdeaCover, type PostIdeaLength, type PostIdeaRank, type PostIdeaRow,
 } from '../../post-ideas/types'
 import { readTranslations, readableQuote } from '../../quotes'
 import { pickEligible } from '../../quote-gate'
@@ -27,7 +29,7 @@ import { coveredDays, readingMonthOf } from '../../written/month'
 import { subjectForTheme } from '../../written/pool'
 import { questionTouch, type QuestionPost } from '../own-post-touch'
 import { buildPlaybook, loadPlaybookVideos, type PlaybookBlock } from '../playbook'
-import { buildReplies, workedLabel, type RepliesBlock, type ReplyRow } from '../week'
+import { buildReplies, loadCheckStrict, loadFlagsStrict, weekFlagRows, workedLabel, type RepliesBlock, type ReplyRow } from '../week'
 
 
 // CONTENT (depth v2, T6; boards E5-Content and E5-Content-Open): what should
@@ -218,12 +220,12 @@ export interface PanelQuote {
 export interface IdeaPanel {
   card: IdeaCard
   cover: string
-  length: IdeaLength | null
+  length: PostIdeaLength | null
   subquestions: IdeaSubquestion[]
   /** The comments the sub-questions were grouped from and their videos
    *  (`cover.asked`): a sub-question's figure is its videos of these. Null on
    *  a row that does not carry them, which then prints no "of". */
-  asked: IdeaAsked | null
+  asked: NonNullable<PostIdeaCover['asked']> | null
   /** The week the idea was written for (its run's window). */
   week: IdeasWeek
   videos: MarketVideoCard[]
@@ -257,19 +259,6 @@ export interface IdeasBlock {
 /** Ideas this many days older than the page's week stop printing. */
 export const IDEAS_STALE_DAYS = 28
 
-/** What T13 stores in `cover` beside the model's text (lib/post-ideas/types.ts
- *  on depth/t13-ideas, `PostIdeaLength` and `cover.asked`). MERGE: these two
- *  shapes become T13's own exports. */
-export interface IdeaLength {
-  fromSeconds: number
-  toSeconds: number
-  videos: number
-  basis: 'format' | 'question'
-}
-export interface IdeaAsked {
-  comments: number
-  videos: number
-}
 
 export interface WorksRow {
   key: string
@@ -345,7 +334,10 @@ export interface AskedRow {
   label: string
   groups: GroupName[]
   subject: string | null
-  videos: number
+  /** Its videos over the page's week, and over its month beside it (decision
+   *  1: a week's figure is never printed alone). Null where not read. */
+  week: number | null
+  month: number | null
   weeks: number[] | null
 }
 
@@ -590,15 +582,15 @@ export function recipe(key: string | null, multiple: number | null, kind: 'forma
 
 /** Whether your posts this month touched on a conversation. */
 /**
- * The months of your own posts the "already touched" test reads: the reading
- * month and the two before it. MERGE: T13's `POST_IDEA_OWNED_MONTHS`
- * (lib/post-ideas/select.ts) and `ownedFrom` (lib/post-ideas/step.ts) are this
- * rule; import them and delete these two.
+ * The first month of your own posts the "already touched" test reads: the
+ * reading month and the two before it (`POST_IDEA_OWNED_MONTHS`). The step's
+ * `ownedFrom` (lib/post-ideas/step.ts) is this rule; it is restated here over
+ * T13's constant rather than imported because step.ts brings the step's
+ * writer, its alert mail and its model client into a page module.
  */
-export const IDEA_OWNED_MONTHS = 3
 export function ideaOwnedFrom(month: string): string {
   let m = monthStartOf(month)
-  for (let i = 1; i < IDEA_OWNED_MONTHS; i++) m = prevMonth(m)
+  for (let i = 1; i < POST_IDEA_OWNED_MONTHS; i++) m = prevMonth(m)
   return m
 }
 
@@ -614,6 +606,15 @@ export function ownTouch(labels: readonly string[], owned: OwnedPosts | null, si
   const posts: QuestionPost[] = owned.posts.map((p) => ({ id: p.id, topics: p.topics, upload_date: p.upload_date, video_url: p.video_url }))
   const t = questionTouch({ labels: labels.map((l) => l.trim()).filter(Boolean), posts })
   return { state: t.state === 'touched' ? 'touched' : 'none', touched: t.matched.length, posts: owned.total, since }
+}
+
+/** Where the one read of your posts ends: the later of the month's end and
+ *  the week's (a week that starts in one month and ends in the next is
+ *  restated against the first, and the touch test reads to the week's end,
+ *  as the step does). */
+export function ownedTo(month: Pick<ContentMonth, 'month'>, week: Pick<ContentWeek, 'to'> | null): string {
+  const end = `${nextMonth(month.month)}T00:00:00.000Z`
+  return week && Date.parse(week.to) > Date.parse(end) ? week.to : end
 }
 
 /** The posts the touch test reads, out of a wider read: from `ideaOwnedFrom`
@@ -632,28 +633,9 @@ export function subquestionRows(idea: Pick<PostIdeaRow, 'subquestions'>): IdeaSu
     .sort((a, b) => b.videos - a.videos || b.comments - a.comments || a.label.localeCompare(b.label))
 }
 
-const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0
-const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
-
-/** The length code stored in `cover`, only where it is the shape T13 writes
- *  (its `coverOf` keeps the same rule; a reader never prints a guessed
- *  figure). */
-export function coverLength(cover: unknown): IdeaLength | null {
-  const len = isObj(cover) ? cover.length : null
-  if (!isObj(len) || !isCount(len.fromSeconds) || !isCount(len.toSeconds) || !isCount(len.videos)) return null
-  if (!(len.fromSeconds > 0 && len.fromSeconds <= len.toSeconds) || (len.basis !== 'format' && len.basis !== 'question')) return null
-  return { fromSeconds: len.fromSeconds, toSeconds: len.toSeconds, videos: len.videos, basis: len.basis }
-}
-
-/** The comments the sub-questions were grouped from, and their videos. */
-export function coverAsked(cover: unknown): IdeaAsked | null {
-  const asked = isObj(cover) ? cover.asked : null
-  return isObj(asked) && isCount(asked.comments) && isCount(asked.videos) ? { comments: asked.comments, videos: asked.videos } : null
-}
-
 /** "30 to 45 seconds", "45 seconds", "1:30 to 2:45 minutes" past ninety
  *  seconds. */
-export function lengthWords(len: Pick<IdeaLength, 'fromSeconds' | 'toSeconds'>): string {
+export function lengthWords(len: Pick<PostIdeaLength, 'fromSeconds' | 'toSeconds'>): string {
   const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
   if (len.toSeconds > 90) {
     return len.fromSeconds === len.toSeconds ? `${mmss(len.toSeconds)} minutes` : `${mmss(len.fromSeconds)} to ${mmss(len.toSeconds)} minutes`
@@ -806,6 +788,8 @@ export function worksRows(playbook: PlaybookBlock, key: 'formats' | 'hooks', lab
 }
 
 const plural = (n: number, one: string, many: string) => (n === 1 ? one : many)
+/** "a" or "an" before a label ("an educational video", "a how-to video"). */
+export const article = (word: string): 'a' | 'an' => (/^[aeiou]/i.test(word) ? 'an' : 'a')
 const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1)
 
 /**
@@ -823,7 +807,8 @@ export function mixSentence(input: { formats: readonly WorksRow[]; openings: rea
   const videos = (label: string) => `${lower(label)} videos`
   const mostMade = [...formats].filter((r) => r.yours > 0).sort((a, b) => b.yours - a.yours || b.multiple - a.multiple)[0]
   if (mostMade) {
-    out.push({ figure: `${fmtInt(mostMade.yours)} of your ${fmtInt(posts)}` }, ` posts ${when} ${plural(mostMade.yours, 'was a', 'were')} ${plural(mostMade.yours, lower(mostMade.label), videos(mostMade.label))}${mostMade.yours === 1 ? ' video' : ''}, which draw `, { figure: fmtMultiple(mostMade.multiple) }, ' a typical video.')
+    const one = `${article(mostMade.label)} ${lower(mostMade.label)} video`
+    out.push({ figure: `${fmtInt(mostMade.yours)} of your ${fmtInt(posts)}` }, ` posts ${when} ${mostMade.yours === 1 ? `was ${one}` : `were ${videos(mostMade.label)}`}, which draw `, { figure: fmtMultiple(mostMade.multiple) }, ' a typical video.')
   }
   const best = formats[0]
   if (best && best.key !== mostMade?.key) {
@@ -917,6 +902,14 @@ export function postsBlock(input: { owned: OwnedPosts | null; typical: number | 
 
 export const REPLIES_NO_WEEK = 'No update has covered a week yet, so there is no reply list.'
 
+/** The days the reply list is picked from: the run's week, or the month it is
+ *  restated against, and never past that month's end (a week that runs into
+ *  the next month lists only the month it names). */
+export function repliesWindowOf(period: ContentPeriod, week: ContentWeek | null, month: ContentMonth): DaysWindow | null {
+  if (period === 'month') return { from: month.from, to: month.to, phrase: monthWords(month) }
+  return week ? { from: week.from, to: week.to, phrase: daysPhrase(week.first, week.last) } : null
+}
+
 export function repliesView(block: RepliesBlock | null, window: DaysWindow | null): RepliesView {
   const empty = { window, rows: [], flagged: [], total: 0, counts: { buying: 0, question: 0, objection: 0, flagged: 0 }, under: { own: 0, about: 0, elsewhere: 0 } }
   if (!block) return { ...empty, unread: 'The comments worth a reply could not be read just now.' }
@@ -948,7 +941,9 @@ export interface QuestionConversation {
 export function askedBlock(input: {
   period: ContentPeriod
   questions: readonly QuestionConversation[] | null
-  counts: Map<string, number> | null
+  /** Each conversation's videos over the week and over the month; the
+   *  period ranks by its own. */
+  counts: { week: Map<string, number> | null; month: Map<string, number> | null }
   weeks: (Map<string, number> | null)[] | null
   exclude: ReadonlySet<string>
   groups: Map<string, GroupName[]>
@@ -959,7 +954,8 @@ export function askedBlock(input: {
   since: string
   expanded: boolean
 }): AskedBlock {
-  const { period, questions, counts } = input
+  const { period, questions } = input
+  const counts = period === 'month' ? input.counts.month : input.counts.week
   const base = { period, rows: [], total: 0, touched: 0, since: input.since, expanded: input.expanded }
   if (!questions || !counts) return { ...base, unread: 'The questions people asked could not be read just now.' }
   const asked = questions
@@ -983,7 +979,8 @@ export function askedBlock(input: {
       label: q.label,
       groups: (input.groups.get(q.registryId) ?? []).slice(0, GROUPS_SHOWN),
       subject: input.subjects.get(q.registryId) ?? null,
-      videos: counts.get(q.registryId) ?? 0,
+      week: input.counts.week ? input.counts.week.get(q.registryId) ?? 0 : null,
+      month: input.counts.month ? input.counts.month.get(q.registryId) ?? 0 : null,
       weeks: weeksOf(q.registryId),
     })),
     total: open.length,
@@ -1089,6 +1086,9 @@ async function soft<T>(what: string, p: PromiseLike<T> | (() => PromiseLike<T>))
 /** The ideas, and whether the table is there at all (`loadPostIdeas` answers
  *  [] for both; one probe tells them apart, only when it does). */
 export async function readIdeas(db: SupabaseClient, clientId: string): Promise<{ state: IdeasState; rows: PostIdeaRow[] }> {
+  // Switched off for this workspace (T13's switch, lib/config.ts): no read at
+  // all, and no stored idea prints, older ones included.
+  if (!postIdeasEnabled(clientId)) return { state: 'not_on', rows: [] }
   const rows = await loadPostIdeas(db, clientId)
   if (rows.length > 0) return { state: 'ready', rows }
   const probe = await db.from(TABLE_POST_IDEAS).select('run_id').eq('client_id', clientId).limit(1)
@@ -1131,14 +1131,12 @@ async function readLabels(db: SupabaseClient, clientId: string, runId: string, i
   return new Map(((res.data ?? []) as { theme_id: string; label: string | null }[]).filter((r) => r.label).map((r) => [String(r.theme_id), String(r.label)]))
 }
 
+/** The run's flagged conversations, by the rule the weekly email freezes
+ *  (`weekFlagRows`, lib/pages/week.ts): none where the check raised nothing,
+ *  and none printed where it says it flagged and the flags cannot be read. */
 async function readFlags(db: SupabaseClient, clientId: string, runId: string): Promise<FlagRowIn[]> {
-  const res = await db.from('anomaly_flags').select('object_kind, object_id, label, denominator, week_k, week_n, baseline_k, baseline_n, change_pts, band_pts')
-    .eq('client_id', clientId).eq('run_id', runId).eq('object_kind', 'theme')
-  if (res.error) {
-    if (/anomaly_flags/.test(res.error.message ?? '') && /schema cache|does not exist/i.test(res.error.message ?? '')) return []
-    throw fail('flags', res.error)
-  }
-  return (res.data ?? []) as FlagRowIn[]
+  const [check, flags] = await Promise.all([loadCheckStrict(db, clientId, runId), loadFlagsStrict(db, clientId, runId)])
+  return (weekFlagRows(check, flags) ?? []).filter((f) => f.object_kind === 'theme')
 }
 
 /** Each shown conversation's subject: the one holding most of its member
@@ -1305,9 +1303,7 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
   const month = contentMonth(week, now)
   const audiences = marketAudiences(marketRivalAudiences(rivals ?? []))
   const groups = groupsByConversation(personas ?? [])
-  const repliesWindow: DaysWindow | null = state.period === 'month'
-    ? { from: month.from, to: week?.to ?? month.to, phrase: monthWords(month) }
-    : week ? { from: week.from, to: week.to, phrase: daysPhrase(week.first, week.last) } : null
+  const repliesWindow = repliesWindowOf(state.period, week, month)
   const since = ideaOwnedFrom(month.month)
 
   // ---- wave 2
@@ -1317,7 +1313,7 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
     week ? soft('flags', readFlags(db, clientId, week.runId)) : Promise.resolve([] as FlagRowIn[]),
     // ONE READ of your posts, from the touch test's first month to the end of
     // the page's month: the touch test's window and the month's are cut from it.
-    soft('owned', ownedPosts({ supabase: db, clientId }, { from: since, to: nextMonth(month.month) })),
+    soft('owned', ownedPosts({ supabase: db, clientId }, { from: since, to: ownedTo(month, week) })),
     soft('playbook', async () => buildPlaybook({ month: month.month, brand: brand ?? 'You', rival: null, videos: await loadPlaybookVideos(db, clientId, month.month), clientSide: 'owned' })),
     repliesWindow
       ? soft('replies', buildReplies({ supabase: db, clientId, runId: week?.runId ?? '', window: { from: repliesWindow.from, to: repliesWindow.to, basis: 'content' }, videos: Promise.resolve([]), gate: true }))
@@ -1338,7 +1334,7 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
   const asked = askedBlock({
     period: state.period,
     questions,
-    counts: state.period === 'month' ? windows?.themes.month ?? null : windows?.themes.week ?? null,
+    counts: { week: windows?.themes.week ?? null, month: windows?.themes.month ?? null },
     weeks: windows?.themes.weeks ?? null,
     exclude: ideaIds,
     groups,
@@ -1400,9 +1396,9 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
     ideaPanel = {
       card: { ...card, groups: groups.get(openIdea.registry_id) ?? [] },
       cover: openIdea.cover.text,
-      length: coverLength(openIdea.cover),
+      length: openIdea.cover.length ?? null,
       subquestions: subquestionRows(openIdea),
-      asked: coverAsked(openIdea.cover),
+      asked: openIdea.cover.asked ?? null,
       week: ideasWeek,
       videos: marketVideoCards(panelVideos ?? [], typical),
       words: wordsToBorrow(panelWords ?? []),
@@ -1464,7 +1460,7 @@ export interface TopContent {
  *  has written nothing for; `stale` ideas more than four weeks older than the
  *  newest week. */
 export const IDEAS_EMPTY: Record<Exclude<IdeasState, 'ready'>, string> = {
-  not_on: 'Post ideas are not switched on for this workspace yet.',
+  not_on: 'Post ideas are not switched on for this workspace.',
   none: 'No post ideas were written for this week.',
   stale: 'No new post ideas in the last four weeks.',
   unread: 'The post ideas could not be read just now.',
@@ -1485,6 +1481,8 @@ export const topContentEmpty = (state: Exclude<IdeasState, 'ready'>): string =>
 export async function topContent(scope: Scope, opts: { now?: Date } = {}): Promise<TopContent> {
   const db = scope.supabase as SupabaseClient
   const { clientId } = scope
+  // Switched off for this workspace: nothing is read and no stored idea shows.
+  if (!postIdeasEnabled(clientId)) return { state: 'not_on', idea: null, href: CONTENT_PATH, line: topContentEmpty('not_on') }
   const [read, published] = await Promise.all([
     soft('top.ideas', readIdeas(db, clientId)),
     soft('top.published', loadPublishedWeekRead(scope.reading.client, clientId)),
@@ -1499,7 +1497,7 @@ export async function topContent(scope: Scope, opts: { now?: Date } = {}): Promi
   const since = ideaOwnedFrom(month.month)
   const [rivals, ownedRead, label] = await Promise.all([
     soft('top.rivals', loadTrackedRivals(db, clientId)),
-    soft('top.owned', ownedPosts({ supabase: db, clientId }, { from: since, to: nextMonth(month.month) })),
+    soft('top.owned', ownedPosts({ supabase: db, clientId }, { from: since, to: ownedTo(month, week) })),
     week ? soft('top.label', readLabels(db, clientId, week.runId, [idea.registry_id])) : Promise.resolve(null),
   ])
   const audiences = marketAudiences(marketRivalAudiences(rivals ?? []))

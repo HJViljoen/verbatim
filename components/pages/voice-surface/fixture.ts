@@ -1763,7 +1763,7 @@ export function refusedVoiceFixture(over: Partial<VoiceSurfaceData> = {}): Voice
       selected: null,
       population: null,
       profileDate: null,
-      empty: 'Reading who is talking is not switched on for this workspace yet.',
+      empty: 'Reading who is talking is not switched on for this workspace.',
     },
     // C5 and C6 not read (no themed update, MF1 not applied).
     words: null,

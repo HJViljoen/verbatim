@@ -29,7 +29,7 @@ export function PostsCard({ block, state, selected, className }: { block: PostsB
         icon={User}
         id="posts-title"
         title={block.complete ? `Your posts in ${longMonth(block.month)}` : 'Your posts this month'}
-        sub={`Your own accounts, ${when.replace(/^in /, '')}`}
+        sub={`Published on your own accounts, ${when.replace(/^in /, '')}`}
       />
       {block.unread ? (
         <p className="m-0 text-[14px] leading-[1.5] text-muted-foreground">{block.unread}</p>

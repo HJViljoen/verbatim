@@ -36,17 +36,17 @@ function Meta({ data }: { data: ContentPageData }) {
     if (data.market.week != null) {
       parts.push(
         <span key="m">
-          <Fig>{fmtInt(data.market.week)}</Fig> videos in your market{data.week.isWeek ? ' this week' : ''}
+          <Fig>{fmtInt(data.market.week)}</Fig> videos in your market with a comment{data.week.isWeek ? ' this week' : ''}
           {data.market.month != null ? <>, <Fig>{fmtInt(data.market.month)}</Fig> {monthWords(data.month)}</> : null}
         </span>,
       )
     }
   } else {
     parts.push(<span key="w">{data.month.complete ? longMonth(data.month.month) : `${longMonth(data.month.month)} so far`}</span>)
-    if (data.market.month != null) parts.push(<span key="m"><Fig>{fmtInt(data.market.month)}</Fig> videos in your market</span>)
+    if (data.market.month != null) parts.push(<span key="m"><Fig>{fmtInt(data.market.month)}</Fig> videos in your market with a comment</span>)
   }
   if (!data.posts.unread) {
-    parts.push(<span key="p"><Fig>{fmtInt(data.posts.total)}</Fig> {data.posts.total === 1 ? 'post' : 'posts'} of your own {monthWords(data.month)}</span>)
+    parts.push(<span key="p"><Fig>{fmtInt(data.posts.total)}</Fig> {data.posts.total === 1 ? 'post' : 'posts'} of your own published {monthWords(data.month)}</span>)
   }
   return <>{parts.map((p, i) => <span key={i}>{i > 0 ? ' · ' : null}{p}</span>)}</>
 }
@@ -80,7 +80,7 @@ export function ContentPage({ data }: { data: ContentPageData }) {
       {data.open?.kind === 'replies' ? <RepliesPanel view={data.replies} state={state} /> : null}
       {data.open?.kind === 'posts' ? <PostsPanel block={data.posts} state={state} /> : null}
 
-      <AskedCard block={data.asked} state={state} month={month} weekWord={weekWord} afterIdeas={data.ideas.cards.length > 0} />
+      <AskedCard block={data.asked} state={state} month={month} weekWord={weekWord} weekHead={data.week && !data.week.isWeek ? data.week.label : 'This week'} afterIdeas={data.ideas.cards.length > 0} />
     </PageFrame>
   )
 }

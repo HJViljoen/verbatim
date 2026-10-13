@@ -9,32 +9,40 @@ import { AskedCard } from './asked'
 const renderText = (node: Parameters<typeof rawText>[0]): string => rawText(node).replace(/\s+([,.])/g, '$1')
 
 const STATE: ContentState = { period: 'week', open: null, asked: false }
+const card = (over: Partial<Parameters<typeof AskedCard>[0]> = {}) => (
+  <AskedCard block={askedFixture()} state={STATE} month={OCT} weekWord="this week" weekHead="This week" {...over} />
+)
 
 describe('Also asked, and not yet in your posts', () => {
-  it('lists the next questions with who asks (no counts), the subject, the videos and three bare weekly counts', () => {
-    const node = <AskedCard block={askedFixture()} state={STATE} month={OCT} weekWord="this week" />
-    const text = renderText(node)
-    expect(text).toContain('Question people asked Who asks Subject Videos this week The last three weeks')
-    expect(text).toContain('How a socket should fit as a child grows Caregivers and family Fit & comfort 12 8 · 9 · 12')
+  it('lists the questions with who asks (no counts), the subject, the week beside its month, and three bare weekly counts', () => {
+    const text = renderText(card())
+    expect(text).toContain('Question people asked Who asks Subject This week October so far The last three weeks')
+    expect(text).toContain('How a socket should fit as a child grows Caregivers and family Fit & comfort 12 17 8 · 9 · 12')
     expect(text).not.toMatch(/Trend|▲|steady/)
     expect(text).toContain('1 more was touched on by your posts and is left out.')
-    expect(render(node)).toContain(`href="/dashboard/market?conv=`)
-    assertCopyContract(node)
+    expect(render(card())).toContain(`href="/dashboard/market?conv=`)
+    assertCopyContract(card())
   })
 
-  it('reads the month instead when the switch says so, and lists them all on request', () => {
-    expect(renderText(<AskedCard block={askedFixture('month')} state={{ ...STATE, period: 'month' }} month={OCT} weekWord="this week" />)).toContain('Videos October so far')
+  it('does not claim to be the step’s ranking: conversations filed as questions, besides the ideas', () => {
+    const text = renderText(card())
+    expect(text).toContain('Conversations filed as questions this week, besides the ideas above, that none of your posts since August touched on, the most videos first')
+    expect(text).not.toMatch(/next questions|in line/)
+    expect(renderText(card({ afterIdeas: false }))).toContain('Conversations filed as questions this week that none of your posts since August touched on, the most videos first')
+  })
+
+  it('names a window that is not a week by its days (decision 1), and ranks the month by the month', () => {
+    const long = renderText(card({ weekWord: 'between 10 Sep and 10 Oct', weekHead: '10 Sep to 10 Oct' }))
+    expect(long).toContain('Question people asked Who asks Subject 10 Sep to 10 Oct October so far')
+    expect(long).not.toContain('This week')
+    const month = renderText(card({ block: askedFixture('month'), state: { ...STATE, period: 'month' } }))
+    expect(month).toContain('Conversations filed as questions in October so far')
+    // Ranked by the month: the knee question (14 in October) before the skin one (13).
+    expect(month.indexOf('Which knee suits')).toBeLessThan(month.indexOf('Looking after the skin'))
+  })
+
+  it('lists them all on request', () => {
     const all = askedFixture('week', true)
     expect(all.rows.length).toBe(all.total)
-  })
-
-  it('is not "the next" questions where no idea stands above it', () => {
-    const text = renderText(<AskedCard block={askedFixture()} state={STATE} month={OCT} weekWord="this week" afterIdeas={false} />)
-    expect(text).toContain('The questions people asked this week that none of your posts since August touched on, the most videos first')
-    expect(text).not.toContain('after the ideas above')
-  })
-
-  it('reads your posts over the post-ideas step’s window', () => {
-    expect(renderText(<AskedCard block={askedFixture()} state={STATE} month={OCT} weekWord="this week" />)).toContain('that none of your posts since August touched on')
   })
 })

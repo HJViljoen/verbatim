@@ -52,6 +52,7 @@ export function IdeaPanelView({ panel, state, count, month, weekWord }: {
   const of = panel.asked?.videos ?? null
   const scale = Math.max(1, of ?? Math.max(0, ...panel.subquestions.map((s) => s.videos)))
   const since = longMonth(card.own.since)
+  const rated = panel.videos.filter((v) => v.multiple != null).length
   return (
     <InPlacePanel
       id={IDEA_PANEL_ID}
@@ -89,13 +90,13 @@ export function IdeaPanelView({ panel, state, count, month, weekWord }: {
           <div>
             <p className={BRIEF_KEY}>Format</p>
             <p className="m-0 text-[15px] leading-[1.45]">
-              {card.format ? <>{card.format.label}{card.format.multiple != null ? <> <Fig className="text-[13px]">· {fmtMultiple(card.format.multiple)}</Fig></> : null}</> : <span className="text-muted-foreground">Too few of the market’s videos on it to choose one</span>}
+              {card.format ? <>{card.format.label}{card.format.multiple != null ? <> <Fig className="text-[13px]">· {fmtMultiple(card.format.multiple)}</Fig></> : null}</> : <span className="text-muted-foreground">No format stands out on this question yet</span>}
             </p>
           </div>
           <div>
             <p className={BRIEF_KEY}>Open with</p>
             <p className="m-0 text-[15px] leading-[1.45]">
-              {card.opening ? <>{card.opening.name}{card.opening.multiple != null ? <> <Fig className="text-[13px]">· {fmtMultiple(card.opening.multiple)}</Fig></> : null}</> : <span className="text-muted-foreground">Too few of the market’s videos on it to choose one</span>}
+              {card.opening ? <>{card.opening.name}{card.opening.multiple != null ? <> <Fig className="text-[13px]">· {fmtMultiple(card.opening.multiple)}</Fig></> : null}</> : <span className="text-muted-foreground">No opening stands out on this question yet</span>}
             </p>
           </div>
           <div>
@@ -112,10 +113,12 @@ export function IdeaPanelView({ panel, state, count, month, weekWord }: {
             </div>
           ) : null}
         </div>
-        <p className="m-0 text-[13px] leading-[1.4] text-muted-foreground">
-          The multiples are the response of the market’s videos on this question made that way, and opening that way, against a typical market video on this question.
-          {card.medical ? <> {MEDICAL_LINE}</> : null}
-        </p>
+        {card.format || card.opening || card.medical ? (
+          <p className="m-0 text-[13px] leading-[1.4] text-muted-foreground">
+            {card.format || card.opening ? <>The {card.format && card.opening ? 'multiples are' : 'multiple is'} the response of the market’s videos on this question {card.format && card.opening ? 'made that way, and opening that way,' : card.format ? 'made that way' : 'opening that way'} against a typical market video on this question.</> : null}
+            {card.medical ? <>{card.format || card.opening ? ' ' : null}{MEDICAL_LINE}</> : null}
+          </p>
+        ) : null}
       </PanelSection>
 
       <div className="grid grid-cols-1 gap-8 xl:grid-cols-3">
@@ -154,9 +157,14 @@ export function IdeaPanelView({ panel, state, count, month, weekWord }: {
         </PanelSection>
       </div>
 
-      <PanelSection label="Market videos where this came up, best response first">
+      <PanelSection label={rated > 0 ? 'Market videos where this came up, best response first' : 'Market videos where this came up, the most viewed first'}>
         {panel.videos.length > 0 ? (
           <div>
+            <p className="m-0 mb-2 text-[12.5px] leading-[1.4] text-muted-foreground">
+              {rated > 0
+                ? `Each video’s response against a typical market video published ${when}${rated < panel.videos.length ? '; a video with no response figure follows, the most viewed first' : ''}.`
+                : 'None of these videos has a response figure, so they are ordered by views.'}
+            </p>
             {panel.videos.map((v) => (
               <div key={v.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border-t border-track py-3 sm:grid-cols-[120px_minmax(0,1fr)_auto]">
                 <div aria-hidden className="hidden h-[68px] w-[120px] items-center justify-center rounded-[8px] bg-track text-muted-foreground sm:flex"><Play className="size-5" /></div>
@@ -172,7 +180,7 @@ export function IdeaPanelView({ panel, state, count, month, weekWord }: {
                   {v.multiple != null ? (
                     <>
                       <Fig className="block text-[18px] font-medium">{fmtMultiple(v.multiple)}</Fig>
-                      <div className="text-[12px] text-muted-foreground">typical response</div>
+                      <div className="text-[12px] text-muted-foreground">a typical video</div>
                     </>
                   ) : <div className="text-[12px] text-muted-foreground">no response figure</div>}
                 </div>

@@ -1226,7 +1226,7 @@ async function buildCast(input: CastInput): Promise<CastBlock> {
     return {
       state: 'not_run', personas: [], selected: null, population: null,
       overlapNote, profileDate: null, stale: false, floorNote,
-      empty: 'Reading who is talking is not switched on for this workspace yet.',
+      empty: 'Reading who is talking is not switched on for this workspace.',
     }
   }
   const personas = (input.profile.personas ?? [])

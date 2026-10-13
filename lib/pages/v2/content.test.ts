@@ -6,8 +6,8 @@ import type { PostIdeaRow } from '../../post-ideas/types'
 import type { OwnedPosts } from '../../reading/owned'
 import { buildPlaybook, type PlaybookVideo } from '../playbook'
 import {
-  anchorOf, askedBlock, contentHref, contentMonth, contentWeek, coverAsked, coverLength, daysLabel, daysPhrase, flagVerdict,
-  ideaOwnedFrom, ideasStale, ideasWeekOf, IDEAS_STALE_DAYS, lengthWords, olderIdeasLine, touchPosts,
+  anchorOf, askedBlock, contentHref, contentMonth, contentWeek, daysLabel, daysPhrase, flagVerdict,
+  article, ideaOwnedFrom, ideasStale, ideasWeekOf, IDEAS_STALE_DAYS, lengthWords, olderIdeasLine, ownedTo, readIdeas, repliesWindowOf, topContent, touchPosts,
   fmtMultiple, groupsByConversation, ideaCard, IDEAS_EMPTY, marketVideoCards, mixSentence, newVerdict, openingChip,
   openingLabel, ownTouch, parseContentParams, pooledThemeVideos, pooledVideos, postsBlock, postTitle, recipe,
   repliesView, storedPersonas, subquestionRows, threeWeeks, topContentEmpty, typicalRate, wordsToBorrow, worksBlock,
@@ -142,18 +142,6 @@ describe('an idea', () => {
       ],
     })
     expect(rows).toEqual([{ label: 'A', videos: 2, comments: 3 }, { label: 'B', videos: 1, comments: 2 }])
-  })
-
-  it('reads code’s length and asked off the cover only where they are T13’s shape', () => {
-    const length = { fromSeconds: 25, toSeconds: 75, videos: 50, basis: 'question' }
-    expect(coverLength({ text: 'x', length })).toEqual(length)
-    expect(coverLength({ text: 'x', length: '30 to 45 seconds' })).toBeNull()
-    expect(coverLength({ text: 'x', length: { ...length, fromSeconds: 80 } })).toBeNull()
-    expect(coverLength({ text: 'x', length: { ...length, basis: 'vibes' } })).toBeNull()
-    expect(coverLength({ text: 'x' })).toBeNull()
-    expect(coverAsked({ text: 'x', asked: { comments: 21, videos: 10 } })).toEqual({ comments: 21, videos: 10 })
-    expect(coverAsked({ text: 'x', asked: { comments: 21 } })).toBeNull()
-    expect(coverAsked(null)).toBeNull()
   })
 
   it('says a length in seconds, and in minutes past ninety', () => {
@@ -361,11 +349,14 @@ describe('also asked', () => {
     { registryId: 'z', label: 'Nobody this week' },
   ]
   const counts = new Map([['idea', 30], ['a', 12], ['b', 9], ['c', 11]])
-  const base = { period: 'week' as const, questions, counts, weeks: [new Map([['a', 1]]), new Map(), counts], exclude: new Set(['idea']), groups: new Map([['a', [{ key: 'g', name: 'G' }]]]), subjects: new Map([['a', 'Fit']]), owned: OSSUR_OWNED, since: '2026-08-01', expanded: false }
+  const monthCounts = new Map([['idea', 40], ['a', 14], ['b', 9], ['c', 30]])
+  const base = { period: 'week' as const, questions, counts: { week: counts, month: monthCounts }, weeks: [new Map([['a', 1]]), new Map(), counts], exclude: new Set(['idea']), groups: new Map([['a', [{ key: 'g', name: 'G' }]]]), subjects: new Map([['a', 'Fit']]), owned: OSSUR_OWNED, since: '2026-08-01', expanded: false }
 
   it('leaves out the ideas, what nobody asked and what your posts touched on, most videos first', () => {
     const block = askedBlock(base)
-    expect(block.rows.map((r) => [r.registryId, r.videos, r.weeks])).toEqual([['a', 12, [1, 0, 12]], ['c', 11, [0, 0, 11]]])
+    expect(block.rows.map((r) => [r.registryId, r.week, r.month, r.weeks])).toEqual([['a', 12, 14, [1, 0, 12]], ['c', 11, 30, [0, 0, 11]]])
+    // The month ranks by the month's own counts.
+    expect(askedBlock({ ...base, period: 'month' }).rows.map((r) => r.registryId)).toEqual(['c', 'a'])
     expect(block.rows[0]).toMatchObject({ groups: [{ key: 'g', name: 'G' }], subject: 'Fit' })
     expect(block).toMatchObject({ total: 2, touched: 1, since: '2026-08-01' })
   })
@@ -373,8 +364,9 @@ describe('also asked', () => {
   it('shows five until asked for all, and drops the weeks where any week is unread', () => {
     const many = Array.from({ length: 8 }, (_, i) => ({ registryId: `q${i}`, label: `Question number ${i}` }))
     const counts8 = new Map(many.map((q, i) => [q.registryId, 10 - i]))
-    expect(askedBlock({ ...base, questions: many, counts: counts8, weeks: null }).rows).toHaveLength(5)
-    expect(askedBlock({ ...base, questions: many, counts: counts8, weeks: null, expanded: true }).rows).toHaveLength(8)
+    expect(askedBlock({ ...base, questions: many, counts: { week: counts8, month: counts8 }, weeks: null }).rows).toHaveLength(5)
+    expect(askedBlock({ ...base, questions: many, counts: { week: counts8, month: counts8 }, weeks: null, expanded: true }).rows).toHaveLength(8)
+    expect(askedBlock({ ...base, counts: { week: null, month: monthCounts } }).unread).toMatch(/could not be read/)
     expect(askedBlock({ ...base, weeks: [null, new Map(), counts] }).rows[0].weeks).toBeNull()
     expect(askedBlock({ ...base, questions: null }).unread).toMatch(/could not be read/)
   })
@@ -382,7 +374,7 @@ describe('also asked', () => {
 
 describe('the empty states', () => {
   it('say why there is no idea, and the Dashboard tile says where the questions are', () => {
-    expect(IDEAS_EMPTY.not_on).toBe('Post ideas are not switched on for this workspace yet.')
+    expect(IDEAS_EMPTY.not_on).toBe('Post ideas are not switched on for this workspace.')
     expect(topContentEmpty('stale')).toBe('No new post ideas in the last four weeks. The questions people asked are on Content.')
     expect(topContentEmpty('none')).toBe('No post ideas were written for this week. The questions people asked are on Content.')
     expect(topContentEmpty('unread')).toBe(IDEAS_EMPTY.unread)
@@ -394,5 +386,50 @@ describe('the fixture', () => {
     const persona = groupsByConversation(OSSUR_PERSONAS)
     expect(persona.get(REG.liner)?.map((g) => g.name)).toEqual(['New amputees, first year', 'Caregivers and family', 'Long-time users upgrading'])
     expect(OSSUR_IDEAS.every((i: PostIdeaRow) => i.client_id === OSSUR_CLIENT_ID)).toBe(true)
+  })
+})
+
+describe('the clocks of the reply list and your posts', () => {
+  const across = contentWeek('r', { from: '2026-09-27T04:03:00.000Z', to: '2026-10-04T04:02:00.000Z' })!
+  const sept = contentMonth(across, new Date('2026-10-05T00:00:00Z'))
+
+  it('lists a month’s replies only from that month, never past its end', () => {
+    expect(repliesWindowOf('month', across, sept)).toEqual({ from: '2026-09-01T00:00:00.000Z', to: '2026-10-01T00:00:00.000Z', phrase: 'in September' })
+    expect(repliesWindowOf('week', across, sept)).toEqual({ from: across.from, to: across.to, phrase: 'between 28 Sep and 4 Oct' })
+    expect(repliesWindowOf('week', null, sept)).toBeNull()
+  })
+
+  it('reads your posts to the later of the month’s end and the week’s, as the step does', () => {
+    expect(ownedTo(sept, across)).toBe(across.to)
+    expect(ownedTo(OCT, contentWeek('r', WINDOW))).toBe('2026-11-01T00:00:00.000Z')
+    expect(ownedTo(OCT, null)).toBe('2026-11-01T00:00:00.000Z')
+  })
+})
+
+describe('post ideas switched off for a workspace', () => {
+  const untouchable = new Proxy({}, { get: () => { throw new Error('read') } }) as never
+  const scope = { supabase: untouchable, clientId: OSSUR_CLIENT_ID, reading: { client: untouchable, clientId: OSSUR_CLIENT_ID }, params: {} }
+
+  it('reads nothing, prints no stored idea and says so, on the page and on the tile', async () => {
+    const before = process.env.POST_IDEAS_OFF
+    process.env.POST_IDEAS_OFF = OSSUR_CLIENT_ID
+    try {
+      expect(await readIdeas(untouchable, OSSUR_CLIENT_ID)).toEqual({ state: 'not_on', rows: [] })
+      expect(await topContent(scope)).toEqual({ state: 'not_on', idea: null, href: '/dashboard/content', line: 'Post ideas are not switched on for this workspace. The questions people asked are on Content.' })
+    } finally {
+      if (before === undefined) delete process.env.POST_IDEAS_OFF
+      else process.env.POST_IDEAS_OFF = before
+    }
+  })
+})
+
+describe('a or an', () => {
+  it('reads "an educational video" and "a how-to video"', () => {
+    expect(article('Educational')).toBe('an')
+    expect(article('entertainment')).toBe('an')
+    expect(article('How-to')).toBe('a')
+    const text = (mixSentence({ formats: [{ key: 'educational', label: 'Educational', share: 9, multiple: 1.6, yours: 1 }], openings: [], posts: 3, unclassified: 0, month: '2026-10-01', complete: false }) ?? [])
+      .map((p) => (typeof p === 'string' ? p : p.figure)).join('')
+    expect(text).toBe('1 of your 3 posts in October so far was an educational video, which draw 1.6× a typical video.')
   })
 })

@@ -20,7 +20,7 @@ export type AcceptPlan =
   | { do: 'mark'; message: string }
 
 export const MOVE_UNRECORDED_MESSAGE =
-  'Marked as Done. Tracking what happens afterwards is not switched on for this workspace yet.'
+  'Marked as Done. Tracking what happens afterwards is not switched on for this workspace.'
 
 export const ACCEPTED_MESSAGE = 'Tracking it from today.'
 

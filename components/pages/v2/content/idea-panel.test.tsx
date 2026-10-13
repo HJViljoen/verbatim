@@ -68,7 +68,10 @@ describe('A post idea, opened in place', () => {
     const text = renderText(panel(1))
     expect(text).toContain('Market videos where this came up, best response first')
     expect(text).not.toMatch(/answered it well/)
-    expect(text).toContain('2.6× typical response')
+    // The videos' multiple is against a typical market video this month, not
+    // the format's (against a typical video on this question).
+    expect(text).toContain('Each video’s response against a typical market video published in October so far.')
+    expect(text).toContain('2.6× a typical video')
   })
 
   it('prints the comments’ words here, one click down, as quote nodes', () => {
@@ -87,5 +90,26 @@ describe('A post idea, opened in place', () => {
     expect(renderText(panel(1))).toMatch(/^Post idea 1 For 5 to 11 Oct Fit & comfort/)
     const older = <IdeaPanelView panel={ideaPanelFixture(1, undefined, true)} state={STATE} count={3} month={OCT} weekWord="this week" />
     expect(renderText(older)).toMatch(/^Post idea 1 For 21 to 27 Sep/)
+  })
+
+  it('words a null format and opening neutrally (T13 also leaves one null when none clears 1.1×)', () => {
+    const base = ideaPanelFixture(1)
+    const node = <IdeaPanelView panel={{ ...base, card: { ...base.card, format: null, opening: null } }} state={STATE} count={3} month={OCT} weekWord="this week" />
+    const text = renderText(node)
+    expect(text).toContain('Format No format stands out on this question yet')
+    expect(text).toContain('Open with No opening stands out on this question yet')
+    expect(text).not.toMatch(/Too few|multiples? (are|is) the response/)
+    expect(text).toContain(MEDICAL_LINE)
+    assertCopyContract(node)
+    const one = renderText(<IdeaPanelView panel={{ ...base, card: { ...base.card, opening: null } }} state={STATE} count={3} month={OCT} weekWord="this week" />)
+    expect(one).toContain('The multiple is the response of the market’s videos on this question made that way against a typical market video on this question.')
+  })
+
+  it('says when the videos are ordered by views, not response', () => {
+    const base = ideaPanelFixture(1)
+    const none = renderText(<IdeaPanelView panel={{ ...base, videos: base.videos.map((v) => ({ ...v, multiple: null })) }} state={STATE} count={3} month={OCT} weekWord="this week" />)
+    expect(none).toContain('Market videos where this came up, the most viewed first None of these videos has a response figure, so they are ordered by views.')
+    const some = renderText(<IdeaPanelView panel={{ ...base, videos: base.videos.map((v, i) => (i === 2 ? { ...v, multiple: null } : v)) }} state={STATE} count={3} month={OCT} weekWord="this week" />)
+    expect(some).toContain('a video with no response figure follows, the most viewed first')
   })
 })

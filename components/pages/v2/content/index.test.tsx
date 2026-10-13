@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { render, renderText as rawText } from '@/lib/test/render'
 import { assertCopyContract, copyNodes } from '@/lib/test/copy-contract'
 import { contentEmptyFixture, contentFixture } from '@/lib/pages/v2/content-fixture'
-import { ContentPage, weekWordOf } from './page'
+import { ContentPage, weekWordOf } from './index'
 
 /** The page's words as read: a tag between a word and its comma is not a space. */
 const renderText = (node: Parameters<typeof rawText>[0]): string => rawText(node).replace(/\s+([,.])/g, '$1')
@@ -20,10 +20,11 @@ describe('Content', () => {
 
   it('states the week beside its month in the bar, and switches the period by link', () => {
     const m = render(<ContentPage data={contentFixture()} />)
-    expect(renderText(<ContentPage data={contentFixture()} />)).toContain('5 to 11 Oct · 241 videos in your market this week, 318 in October so far · 9 posts of your own in October so far')
+    // Each total names its clock: the market's by comment, your posts by publishing.
+    expect(renderText(<ContentPage data={contentFixture()} />)).toContain('5 to 11 Oct · 241 videos in your market with a comment this week, 318 in October so far · 9 posts of your own published in October so far')
     expect(m).toContain('href="/dashboard/content?period=month"')
     expect(m).toMatch(/aria-current="page"[^>]*>This week</)
-    expect(renderText(<ContentPage data={contentFixture({ period: 'month' })} />)).toContain('October so far · 318 videos in your market · 9 posts of your own in October so far')
+    expect(renderText(<ContentPage data={contentFixture({ period: 'month' })} />)).toContain('October so far · 318 videos in your market with a comment · 9 posts of your own published in October so far')
   })
 
   it('keeps the copy contract closed, with each panel open, and empty', () => {
@@ -57,7 +58,7 @@ describe('Content', () => {
 
   it('draws every block’s empty state for a workspace with no update yet', () => {
     const text = renderText(<ContentPage data={contentEmptyFixture()} />)
-    expect(text).toContain('Post ideas are not switched on for this workspace yet.')
+    expect(text).toContain('Post ideas are not switched on for this workspace.')
     expect(text).toContain('No update has covered a week yet, so there is no reply list.')
     expect(text).toContain('You published nothing of your own in October so far.')
   })

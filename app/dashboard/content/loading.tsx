@@ -1,7 +1,7 @@
 import { Bone, BoneLines } from '@/components/shell/skeleton'
 import { surface } from '@/lib/nav'
 
-// Mirrors components/pages/v2/content/page.tsx (boards E5-Content): the title,
+// Mirrors components/pages/v2/content/index.tsx (boards E5-Content): the title,
 // the three post-idea cards, What works beside its two rail cards, then the
 // questions table. The title is the page's own words, so nothing moves when
 // the page lands.

@@ -1,7 +1,7 @@
 import { getSessionContext } from '@/lib/auth'
 import { readingHandle } from '@/lib/reading/read'
 import { loadContentPage } from '@/lib/pages/v2/content'
-import { ContentPage } from '@/components/pages/v2/content/page'
+import { ContentPage } from '@/components/pages/v2/content'
 import type { Metadata } from 'next'
 import { surface } from '@/lib/nav'
 

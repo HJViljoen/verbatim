@@ -19,7 +19,9 @@ const section = (clientId = OSSUR_CLIENT_ID, state = STATE) => {
 describe('What to post next', () => {
   it('draws one card an idea, biggest first, and keeps the copy contract', () => {
     const text = renderText(section())
-    expect(text).toMatch(/^What to post next For 5 to 11 Oct: questions people asked that your posts since August have not touched on, biggest first/)
+    // "when they were picked": a card can say a post has touched on it since,
+    // and the heading must not be contradicted by one.
+    expect(text).toMatch(/^What to post next For 5 to 11 Oct: questions people asked that none of your posts since August had touched on when they were picked, biggest first/)
     expect(text.indexOf('How long does a liner last')).toBeLessThan(text.indexOf('What to do when insurance'))
     expect(text.indexOf('What to do when insurance')).toBeLessThan(text.indexOf('Can you get a prosthetic leg wet?'))
     assertCopyContract(section())
@@ -87,7 +89,7 @@ describe('What to post next', () => {
   it('says honestly why there is no idea, and where the questions are', () => {
     const notOn = contentFixture({ ideas: 'not_on' })
     const text = renderText(<IdeasSection block={notOn.ideas} state={STATE} month={OCT} weekWord="this week" />)
-    expect(text).toContain('Post ideas are not switched on for this workspace yet.')
+    expect(text).toContain('Post ideas are not switched on for this workspace.')
     expect(text).toContain('The questions people asked are listed under Also asked.')
     const none = renderText(<IdeasSection block={{ state: 'none', cards: [], week: null }} state={STATE} month={OCT} weekWord="this week" />)
     expect(none).toContain('No post ideas were written for this week.')
@@ -105,5 +107,18 @@ describe('What to post next', () => {
     expect(renderText(node)).toContain('For 21 to 27 Sep: questions people asked')
     expect(renderText(node)).toContain('No new ideas this week. These are from the week of 21 Sep.')
     assertCopyContract(node)
+  })
+
+  it('suggests what stands out and words a null one neutrally: no label over a chip that is not there', () => {
+    const [card] = ideaCards()
+    const view = (c: typeof card) => renderText(<IdeaCardView card={c} state={STATE} selected={false} month={OCT} weekWord="this week" />)
+    const noOpening = view({ ...card, opening: null })
+    expect(noOpening).toContain('Suggested format Tutorial 2.1× 1× is a typical market video on this question')
+    expect(noOpening).not.toContain('format and opening')
+    expect(view({ ...card, format: null })).toContain('Suggested opening Open with a question 1.8×')
+    const neither = view({ ...card, format: null, opening: null })
+    expect(neither).not.toMatch(/Suggested|1× is a typical/)
+    expect(neither).toContain(MEDICAL_LINE)
+    assertCopyContract(<IdeaCardView card={{ ...card, format: null, opening: null }} state={STATE} selected={false} month={OCT} weekWord="this week" />)
   })
 })
