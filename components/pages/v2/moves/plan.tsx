@@ -4,7 +4,7 @@ import { FileText } from 'lucide-react'
 import { CARD, CardHead } from '@/components/v2'
 import type { PlanCheckCard, PlanClaimRow } from '@/lib/ask/plan-cards'
 import { fmtInt, shortDate } from '@/lib/format'
-import { PLAN_TITLE, leadClaims } from '@/lib/pages/v2/moves'
+import { CHECK_A_PLAN_HREF, NO_PLAN, PLAN_TITLE, leadClaims } from '@/lib/pages/v2/moves'
 import { cn } from '@/lib/utils'
 import { MONO, OLINK } from './parts'
 
@@ -52,7 +52,43 @@ function ClaimRow({ c, first }: { c: PlanClaimRow; first: boolean }) {
   )
 }
 
-export function PlanCard({ plan, className }: { plan: PlanCheckCard; className?: string }) {
+/** The three counts' key, with or without their figures. */
+function Key({ counts }: { counts: PlanCheckCard['summary'] | null }) {
+  return (
+    <div className="flex flex-wrap items-center gap-3.5 text-[12px] text-muted-foreground">
+      {SEG.map((x) => (
+        <span key={x.key} className="inline-flex items-center gap-1.5">
+          <span aria-hidden className={cn('inline-block h-2 w-2.5 rounded-[2px]', x.fill)} />
+          {x.label}{counts ? <> <span data-copy="figure" className={MONO}>{fmtInt(counts[x.key])}</span></> : null}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * THE BOARD'S PLAN CARD WITH NO PLAN CHECKED: its head, its bar as the empty
+ * track it fills from, its key, and the three claim rows' place holding one
+ * calm line; its foot is where a plan is checked. No count is drawn: nothing
+ * was read, which is not zero claims.
+ */
+function NoPlan({ className }: { className?: string }) {
+  return (
+    <section aria-labelledby="plan-title" data-plan-empty="" className={cn(CARD, className)}>
+      <CardHead icon={FileText} id="plan-title" title={PLAN_TITLE} sub={NO_PLAN.sub} />
+      <p className={cn(MONO, 'm-0 text-[12.5px] text-muted-foreground')}>{NO_PLAN.count}</p>
+      <div aria-hidden className="h-3.5 rounded-[5px] bg-track" />
+      <Key counts={null} />
+      <p className="m-0 text-[14px] leading-[1.5] text-secondary-foreground">{NO_PLAN.line}</p>
+      <div className="mt-auto flex items-center justify-between gap-3" data-print-hide>
+        <Link href={CHECK_A_PLAN_HREF} className={OLINK}>Check a plan →</Link>
+      </div>
+    </section>
+  )
+}
+
+export function PlanCard({ plan, className }: { plan: PlanCheckCard | null; className?: string }) {
+  if (!plan) return <NoPlan className={className} />
   const s = plan.summary
   const total = s.supported + s.contradicted + s.untested
   const claims = leadClaims(plan)
@@ -68,16 +104,14 @@ export function PlanCard({ plan, className }: { plan: PlanCheckCard; className?:
           <div role="img" aria-label={`${fmtInt(s.supported)} supported, ${fmtInt(s.contradicted)} contradicted, ${fmtInt(s.untested)} untested`} className="flex h-3.5 gap-0.5 overflow-hidden rounded-[5px]">
             {SEG.map((x) => (s[x.key] > 0 ? <div key={x.key} className={x.fill} style={{ width: `${(100 * s[x.key]) / total}%` }} /> : null))}
           </div>
-          <div className="flex flex-wrap items-center gap-3.5 text-[12px] text-muted-foreground">
-            {SEG.map((x) => (
-              <span key={x.key} className="inline-flex items-center gap-1.5">
-                <span aria-hidden className={cn('inline-block h-2 w-2.5 rounded-[2px]', x.fill)} />
-                {x.label} <span data-copy="figure" className={MONO}>{fmtInt(s[x.key])}</span>
-              </span>
-            ))}
-          </div>
+          <Key counts={s} />
         </>
-      ) : null}
+      ) : (
+        <>
+          <div aria-hidden className="h-3.5 rounded-[5px] bg-track" />
+          <Key counts={null} />
+        </>
+      )}
       {plan.moved.length > 0 ? (
         <div className="flex flex-col gap-1.5 rounded-[10px] bg-inner px-4 py-3.5">
           <p className="m-0 text-[11.5px] font-bold uppercase tracking-[0.06em] text-orange-text">Changed since you uploaded it</p>

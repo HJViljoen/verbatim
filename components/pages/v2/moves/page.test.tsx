@@ -9,9 +9,11 @@ import { bansBroken } from '@/components/pages/moves/fixture'
 const bans = (markup: string) => bansBroken(markup.replace(/<span[^>]*data-notch=""[^>]*><\/span>/g, ''))
 import { MOVES_WRITE_REFUSED } from '@/lib/moves-access'
 import {
-  movesFixture, movesMemberFixture, movesOpenFixture, movesQuietFixture, movesRecordFixture, statementsV2, DESK, MOVE_CARDS, PLAN,
+  movesFixture, movesMemberFixture, movesOpenFixture, movesQuietFixture, movesRecordFixture, movesThinFixture, movesThinOpenFixture, statementsV2, DESK, MOVE_CARDS, PLAN,
 } from '@/lib/pages/v2/moves-fixture'
-import { ADVICE_GONE, ADVICE_NONE, ADVICE_PANEL_ID, RECORD_PANEL_ID, monthLabelOn } from '@/lib/pages/v2/moves'
+import {
+  ADVICE_GONE, ADVICE_NONE, ADVICE_PANEL_ID, ADVICE_REST, NEXT_MOVE, NO_CONCLUSIONS, NO_MOVE_YET, NO_PLAN, NO_QUOTE, RECORD_PANEL_ID, WOULD_MOVE_NOTHING, monthLabelOn,
+} from '@/lib/pages/v2/moves'
 import { readingMonthLabel } from '@/lib/reading/month-label'
 import { MovesV2Page, MOVES_FIRST_RUN } from './index'
 import { panelPlacement } from '@/components/v2'
@@ -42,6 +44,10 @@ describe('every block keeps the copy contract and the bans', () => {
     ['the page, the record open', () => page(movesRecordFixture())],
     ['the page, quiet', () => page(movesQuietFixture(), null as never)],
     ['the page, a member', () => page(movesMemberFixture())],
+    ['the page, thin (a tenant)', () => page(movesThinFixture(), null as never)],
+    ['the page, thin, advice open with no comment', () => page(movesThinOpenFixture(), null as never)],
+    ['the page, thin, a member', () => page({ ...movesThinFixture(), canDecide: false }, null as never)],
+    ['the plan, none checked', () => render(<PlanCard plan={null} />)],
     ['advice', () => render(<AdviceSection data={movesOpenFixture()} />)],
     ['moves', () => render(<MovesSection data={movesFixture()} />)],
     ['what you say', () => render(<WhatYouSay data={statementsV2()} />)],
@@ -74,13 +80,22 @@ describe('the page', () => {
     expect(markupText(render(<MovesV2Page data={null} statements={null} />))).toContain(MOVES_FIRST_RUN)
   })
 
-  it('draws no section with nothing to show, and says so for the advice', () => {
-    const text = markupText(page(movesQuietFixture(), null as never))
-    expect(text).toContain(ADVICE_NONE)
-    expect(text).not.toContain('Your moves, and what happened after')
-    expect(text).not.toContain('Your plan, checked against the market')
-    expect(text).not.toContain('What we concluded')
+  // The parity pass (13 Oct): the board's layout is fixed. With nothing to
+  // show, every section keeps its card and says so inside it.
+  it('keeps every section’s card with nothing to show, each saying so inside it', () => {
+    const markup = page(movesQuietFixture(), null as never)
+    const text = markupText(markup)
+    const order = ['Advice to decide on', ADVICE_NONE, 'Your moves, and what happened after', NO_MOVE_YET.title, 'Your plan, checked against the market', NO_PLAN.sub, 'What we concluded', NO_CONCLUSIONS]
+    let at = -1
+    for (const words of order) {
+      const i = text.indexOf(words, at + 1)
+      expect(i, words).toBeGreaterThan(at)
+      at = i
+    }
     expect(text).toContain('The advice record: all 64 pieces of advice')
+    // The record's card and the move's card take the whole row.
+    expect(markup).toContain('min-[1180px]:col-span-3')
+    expect(markup).toMatch(/data-move-slot=""[^>]*min-\[1180px\]:col-span-2/)
   })
 
   it('draws the add form alone for a reader who may add the first statement', () => {
@@ -367,5 +382,92 @@ describe('what you say, the plan and the conclusions', () => {
     expect(text).toContain('Dismissed since 2 Aug')
     expect(text).toContain('raised by the latest update')
     expect(text).toContain('you have decided on 4 of 23')
+  })
+})
+
+// THE PARITY PASS (13 Oct): the board's shape in the thin real states. Össur
+// and Sealand today: one update has raised each piece, one move dated after
+// the reading month with one month read, no plan checked (Sealand), the
+// statements held from the tenant.
+describe('the board’s shape on thin data', () => {
+  it('the three advice cards each carry "Would move", the month’s level beside its month', () => {
+    const text = markupText(page(movesThinFixture(), null as never))
+    expect(text).toContain('Would move: Cost and affordability frustration · 19 of 521 videos in September, the last full month')
+    expect(text).toContain(`Would move: ${WOULD_MOVE_NOTHING}`)
+  })
+
+  it('a card from a dump before "Would move" draws no line for it', () => {
+    expect(markupText(render(<AdviceSection data={movesFixture()} />))).not.toContain('Would move')
+  })
+
+  it('a move with one month read keeps the board’s chart: its axis, the move, the month it has, and why the rest are empty', () => {
+    const markup = render(<MovesSection data={movesThinFixture()} />)
+    const text = markupText(markup)
+    expect(markup).toContain('your move')
+    expect(text).toMatch(/Aug.*4%.*Sep.*Oct/)
+    expect(text).toContain('August is not read the same way as September; October reads once the month has been read.')
+    expect(text).toContain('Share of market videos: 4% (19 of 521) in September, before the move.')
+  })
+
+  it('a move with no line at all still draws its axis', () => {
+    const socket = MOVE_CARDS.find((c) => c.unread === 'not_ready')!
+    const markup = render(<MovesSection data={movesFixture({ moves: { cards: [socket], recorded: true } })} />)
+    expect(markup).toContain('<svg')
+    expect(markupText(markup)).toMatch(/Jun.*Jul.*Aug.*Sep/)
+  })
+
+  it('one move takes the next move’s card beside it, two across as the board; two moves take none', () => {
+    const one = markupText(render(<MovesSection data={movesThinFixture()} />))
+    expect(one).toContain(NEXT_MOVE.title)
+    expect(one).toContain(NEXT_MOVE.line)
+    expect(one).toContain('Date a move')
+    const two = movesFixture({ moves: { cards: MOVE_CARDS.slice(0, 2), recorded: true } })
+    expect(markupText(render(<MovesSection data={two} />))).not.toContain(NEXT_MOVE.title)
+    // A member is offered no Date a move there either.
+    expect(markupText(render(<MovesSection data={{ ...movesThinFixture(), canDecide: false }} />))).not.toContain('Date a move')
+  })
+
+  it('no plan checked keeps the plan card beside the statements, empty and calm', () => {
+    const markup = page(movesThinFixture(), statementsV2())
+    const text = markupText(markup)
+    expect(text).toContain('What you say, and what comes back')
+    expect(text).toContain('Your plan, checked against the market')
+    expect(text).toContain(NO_PLAN.line)
+    expect(text).toContain('Check a plan →')
+    expect(text).not.toContain('claims supported')
+    // Beside the statements, the plan is half the row; for a tenant (no
+    // statements, AGENTS.md), the whole row.
+    expect(markup).not.toMatch(/data-plan-empty=""[^>]*col-span-2/)
+    expect(page(movesThinFixture(), null as never)).toMatch(/data-plan-empty=""[^>]*col-span-2/)
+  })
+
+  it('fewer than three pieces waiting: the advice record’s card fills the row', () => {
+    const base = movesThinFixture()
+    const data = { ...base, advice: { ...base.advice, cards: base.advice.cards.slice(0, 1), more: 0 } }
+    const markup = render(<AdviceSection data={data} />)
+    const text = markupText(markup)
+    expect(text).toContain(ADVICE_REST.title)
+    expect(text).toContain('65 pieces of advice so far')
+    expect(text).toContain('2 of 65 decided on')
+    expect(markup).toContain('min-[1180px]:col-span-2')
+    assertCopyContract(markup)
+    // The panel opened from the one card sits after the row the record's card
+    // shares with it, its notch at the card.
+    expect(panelPlacement(0, adviceLayout(1))).toMatchObject({ order: { base: 1, w1180: 3 }, notch: { w1180: 0.1667 } })
+  })
+
+  it('the open panel keeps "In their words" with no comment, and the history keeps the board’s nine dots', () => {
+    const markup = page(movesThinOpenFixture(), null as never)
+    const panel = markup.slice(markup.indexOf(`id="${ADVICE_PANEL_ID}"`))
+    expect(markupText(panel)).toContain('In their words')
+    expect(markupText(panel)).toContain(NO_QUOTE)
+    const history = panel.slice(panel.indexOf('aria-label="The updates that raised it"'), panel.indexOf('</ol>'))
+    expect(history.match(/rounded-full/g)).toHaveLength(9)
+    expect(markupText(history).match(/\d+ \w{3}/g)).toEqual(['12 Oct'])
+  })
+
+  it('a conclusion’s advice stays at the row’s end, however many pieces', () => {
+    const markup = render(<ConclusionsSection data={movesThinFixture()} />)
+    expect(markup.match(/sm:grid-cols-\[minmax\(0,1fr\)_auto_minmax\(0,auto\)\]/g)).toHaveLength(4)
   })
 })

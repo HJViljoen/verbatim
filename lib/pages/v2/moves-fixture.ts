@@ -274,6 +274,64 @@ export function movesQuietFixture(): MovesPageData {
   })
 }
 
+// ---- the thin states (the parity pass, 13 Oct) -------------------------------------
+
+const T_COST = 'c1000000-0000-4000-8000-000000000002'
+const L_NAV = 'a1000000-0000-4000-8000-000000000005'
+
+/** Össur's move on 13 October: an advice move dated 5 Oct, so October reads
+ *  only once read; September read, August read but not the same way (a
+ *  change of ours in September), so the line has one month on it. */
+export const THIN_MOVE = moveCards({
+  moves: [
+    { id: 'm-access', kind: 'advice', subject_id: null, registry_ids: null, lineage_id: L_NAV, title: 'Create a guided access path, not a standalone price answer', declared_at: '2026-10-05', dated_on: null, status: 'active', direction: 'up' },
+  ],
+  month: SEPT,
+  now: OCT_13,
+  subjects: new Map(),
+  themes: new Map([[T_COST, 'Cost and affordability frustration']]),
+  adviceTargets: new Map([[L_NAV, T_COST]]),
+  levels: (_kind, _id, month) => ({ '2026-08-01': 23, '2026-09-01': 19 } as Record<string, number>)[month] ?? null,
+  n: (month) => ({ '2026-08-01': 533, '2026-09-01': 521 } as Record<string, number>)[month] ?? null,
+  joined: (prev) => prev !== '2026-08-01',
+})
+
+/** One update has raised each piece so far: a streak of one, one dot. */
+const ONE_UPDATE = { dates: ['2026-10-12'], streak: 1, since: '2026-10-12', recent: [false, false, false, false, false, false, false, false, true] }
+
+/**
+ * THE THIN REAL STATE (Össur and Sealand, 13 Oct): every piece raised by the
+ * one update since the advice was re-keyed, one move dated after the reading
+ * month with one month on its line, no plan checked (Sealand), statements
+ * held from the tenant, conclusions carrying several pieces each.
+ */
+export function movesThinFixture(): MovesPageData {
+  const card = (c: AdviceCard, over: Partial<AdviceCard>): AdviceCard => ({ ...c, history: ONE_UPDATE, firstMade: '2026-10-12', restsOn: c.restsOn.slice(0, 2), ...over })
+  const cards = [
+    card(DESK, { title: 'Create an access navigator for new amputees and caregivers', grounded: { videos: 203, pruned: false }, aim: { label: 'Cost and affordability frustration', month: SEPT, level: { k: 19, n: 521 } } }),
+    card(LINER, { title: 'Translate engineering into everyday outcomes before a rival defines the category', kind: 'competitive_response', grounded: { videos: 141, pruned: false }, aim: { label: 'How the prosthesis works', month: SEPT, level: { k: 37, n: 521 } } }),
+    card(SWEAT, { title: 'A piece of advice with no title', untitled: true, kind: 'customer_experience', grounded: { videos: 146, pruned: false }, aim: null }),
+  ]
+  return movesFixture({
+    counts: { waiting: 4, dated: 1, plans: 0 },
+    advice: { cards, more: 1, open: null, gone: false, total: 65, acted: 2 },
+    moves: { cards: THIN_MOVE, recorded: true },
+    plan: null,
+    conclusions: [
+      { id: 'mi-access', title: 'Access clarity is part of the product experience', videos: 203, advice: [{ lineageId: cards[0].lineageId, title: cards[0].title }] },
+      { id: 'mi-inspire', title: 'Inspiration opens attention, but education earns consideration', videos: 117, advice: [{ lineageId: cards[1].lineageId, title: cards[1].title }, { lineageId: 'a1000000-0000-4000-8000-000000000009', title: 'Replace pure inspiration with guided real-life stories' }] },
+      { id: 'mi-comfort', title: 'Daily wear comfort and fit remain unresolved', videos: 75, advice: [{ lineageId: cards[2].lineageId, title: cards[2].title }] },
+      { id: 'mi-friction', title: 'Hope sits beside friction', videos: 74, advice: [] },
+    ],
+  })
+}
+
+/** The thin state with the first piece open: no comment can be shown. */
+export function movesThinOpenFixture(): MovesPageData {
+  const base = movesThinFixture()
+  return { ...base, advice: { ...base.advice, open: { card: { ...base.advice.cards[0], quote: null }, index: 0, waiting: true } } }
+}
+
 /** A reader who may not decide (a member): no Accept, no Not for us, no Date a
  *  move, no status control. */
 export function movesMemberFixture(): MovesPageData {

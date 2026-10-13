@@ -7,13 +7,14 @@ import {
   type PanelLayout, type PerBreakpoint,
 } from '@/components/v2'
 import { priorityLabel, typeLabel, whyLead } from '@/components/pages/moves/words'
-import { fmtInt, shortDate } from '@/lib/format'
+import { fmtInt, longMonth, shortDate } from '@/lib/format'
 import { MOVES_WRITE_REFUSED } from '@/lib/moves-access'
 import type { MoveDating } from '@/lib/pages/date-move'
+import { inlineMonth } from '@/lib/reading/month-label'
 import {
-  ADVICE_GONE, ADVICE_NONE, ADVICE_PANEL_ID, ADVICE_SUB, ADVICE_TITLE, ASK_ABOUT, GROUNDED_BASIS, MOVES_PATH, RECORD_HREF,
-  adviceHref, askAboutHref, decisionLine, groundedLabel, quoteCiteLine, streakLabel,
-  type AdviceCard, type MovesPageData, type RestsOnRow,
+  ADVICE_GONE, ADVICE_NONE, ADVICE_PANEL_ID, ADVICE_REST, ADVICE_SUB, ADVICE_TITLE, ASK_ABOUT, GROUNDED_BASIS, MOVES_PATH, NO_QUOTE, RECORD_HREF, WOULD_MOVE_NOTHING,
+  adviceHref, askAboutHref, decisionLine, groundedLabel, monthLabelOn, quoteCiteLine, streakLabel,
+  type AdviceAim, type AdviceCard, type MovesPageData, type ReadingLabel, type RestsOnRow,
 } from '@/lib/pages/v2/moves'
 import { cn } from '@/lib/utils'
 import { AcceptDated, AdviceAnswers } from './advice-actions'
@@ -23,8 +24,11 @@ import { BTN, MONO, OLINK, PRIORITY_CHIP, SECTION_SUB, SECTION_TITLE, TAG_CHIP }
 //
 // LEVEL 1 IS THE CARD: the priority, the type, the title, the argument's lead,
 // two counts (the videos it rests on, all time; the updates in a row that
-// raised it, with a dot for each of the latest updates), and the answers. No
-// quote: the one comment the advice carries is in the open panel only.
+// raised it, with a dot for each of the latest updates), what it would move
+// (the conversation its evidence leads with, and its level in the reading
+// month), and the answers. No quote: the one comment the advice carries is in
+// the open panel only. Under three pieces waiting, the advice record's card
+// takes the columns left, so the row keeps the board's three across.
 //
 // LEVEL 2 IS THE PANEL, in place under the row it was opened from, with its
 // notch at the card (`InPlacePanel`, `?advice=<lineage>`): the whole argument,
@@ -39,10 +43,20 @@ import { BTN, MONO, OLINK, PRIORITY_CHIP, SECTION_SUB, SECTION_TITLE, TAG_CHIP }
 // notch out for every width (`panelPlacement`, T9): on one column the notch
 // points at the card's middle.
 
-/** The advice grid's columns: one, then three from the board's 1180. */
+/** The advice grid's columns: one, then three from the board's 1180. Under
+ *  three cards, the record's card fills the row (`AdviceRest`), one column
+ *  on a phone and the columns left from 1180, and the panel's place counts it. */
 export function adviceLayout(count: number): PanelLayout {
-  return { base: equalColumns(1, count), w1180: equalColumns(3, count) }
+  if (count >= ADVICE_ROW) return { base: equalColumns(1, count), w1180: equalColumns(3, count) }
+  return {
+    base: equalColumns(1, count + 1),
+    w1180: { spans: [...Array.from({ length: count }, () => 1), ADVICE_ROW - count], of: ADVICE_ROW },
+  }
 }
+
+/** The board's row of advice: three across. */
+const ADVICE_ROW = 3
+const REST_SPAN: Record<number, string> = { 1: '', 2: 'min-[1180px]:col-span-2', 3: 'min-[1180px]:col-span-3' }
 
 /** The advice's title: the model's stored words, or the page's own where the
  *  stored title is blank. */
@@ -89,7 +103,28 @@ function Evidence({ card }: { card: AdviceCard }) {
   )
 }
 
-function AdviceCardView({ card, open, canDecide }: { card: AdviceCard; open: boolean; canDecide: boolean }) {
+/** "Would move: Cost & access · 19 of 521 videos in September" (the board's
+ *  line, the week's share read as the month's, decision 1): the conversation
+ *  its evidence leads with and its level in the reading month. Nothing where
+ *  the card carries no aim at all (a dump from before it). */
+function WouldMove({ aim, reading }: { aim: AdviceAim | null | undefined; reading: ReadingLabel }) {
+  if (aim === undefined) return null
+  return (
+    <p className="m-0 text-[12.5px] leading-[1.45] text-muted-foreground">
+      Would move:{' '}
+      {aim ? (
+        <span className="text-foreground">
+          <span data-copy="subject" data-slot="pass_b_theme">{aim.label}</span>
+          {aim.level ? (
+            <> · <span data-copy="level">{fmtInt(aim.level.k)} of {fmtInt(aim.level.n)}</span> videos in {inlineMonth(longMonth(aim.month), monthLabelOn(aim.month, reading))}</>
+          ) : null}
+        </span>
+      ) : WOULD_MOVE_NOTHING}
+    </p>
+  )
+}
+
+function AdviceCardView({ card, open, canDecide, reading }: { card: AdviceCard; open: boolean; canDecide: boolean; reading: ReadingLabel }) {
   const lead = whyLead(card.why)
   return (
     <article id={`advice-${card.lineageId}`} className={cn(CARD, 'flex-1 scroll-mt-6', open ? SELECTED_CARD_RING : null)}>
@@ -99,6 +134,7 @@ function AdviceCardView({ card, open, canDecide }: { card: AdviceCard; open: boo
           argument is one click down, in the panel. */}
       {lead ? <p data-copy="stored" data-slot="pass_d_b_recommendation" className="m-0 line-clamp-4 text-[14px] leading-[1.55] text-secondary-foreground">{lead}</p> : null}
       <Evidence card={card} />
+      <WouldMove aim={card.aim} reading={reading} />
       <div className="mt-auto flex flex-wrap items-center gap-2" data-print-hide>
         {canDecide ? <AdviceAnswers lineageId={card.lineageId} recommendationId={card.recommendationId} title={card.title} /> : null}
         {open ? (
@@ -145,24 +181,37 @@ function RestsOn({ rows }: { rows: RestsOnRow[] }) {
 }
 
 /** Every update that raised it, as dots on one line with their dates under
- *  them (the board's row); past twelve the row wraps, twelve to a line. */
-function Timeline({ dates }: { dates: string[] }) {
-  if (dates.length === 0) return null
+ *  them (the board's row); past twelve the row wraps, twelve to a line.
+ *  Raised by fewer updates than the card's dots count, the row is the card's
+ *  own nine latest updates: a dot and its date where one raised it, a pale
+ *  dot where one did not, so a piece raised once keeps the board's row. */
+function Timeline({ history }: { history: AdviceCard['history'] }) {
+  const { dates, recent } = history
+  if (dates.length === 0 && recent.length === 0) return null
+  // The latest updates' slots, each raised one dated in order: the carried
+  // slots are the last of `dates`.
+  const slots: { date: string | null; on: boolean }[] = dates.length >= recent.length
+    ? dates.map((d) => ({ date: d, on: true }))
+    : (() => {
+        const carried = recent.filter(Boolean).length
+        let at = dates.length - carried
+        return recent.map((on) => ({ on, date: on ? dates[at++] ?? null : null }))
+      })()
   // Twelve to a row from 640px, five on a phone (where nine dates would
-  // print over each other).
-  const columns = Math.min(dates.length, 12)
-  const narrow = Math.min(dates.length, 5)
+  // print over each other); a phone's row of nine slots keeps them all.
+  const columns = Math.min(slots.length, 12)
+  const narrow = dates.length >= recent.length ? Math.min(slots.length, 5) : slots.length
   return (
     <ol
       className="relative m-0 grid list-none gap-y-3 p-0 [grid-template-columns:repeat(var(--cn),minmax(0,1fr))] sm:[grid-template-columns:repeat(var(--cw),minmax(0,1fr))]"
       style={{ '--cn': narrow, '--cw': columns } as CSSProperties}
       aria-label="The updates that raised it"
     >
-      {columns > 1 ? <span aria-hidden className="absolute top-[4px] hidden h-px bg-border sm:block" style={{ left: `calc(50% / ${columns})`, right: `calc(50% / ${columns})` }} /> : null}
-      {dates.map((d, i) => (
-        <li key={`${d}-${i}`} className="relative flex min-w-0 flex-col items-center gap-1.5">
-          <span aria-hidden className="size-2.5 rounded-full bg-foreground" />
-          <span className={cn(MONO, 'whitespace-nowrap text-[10px] text-muted-foreground')}>{shortDate(d)}</span>
+      {columns > 1 ? <span aria-hidden className={cn('absolute top-[4px] h-px bg-border', narrow === columns ? null : 'hidden sm:block')} style={{ left: `calc(50% / ${columns})`, right: `calc(50% / ${columns})` }} /> : null}
+      {slots.map((s, i) => (
+        <li key={`${s.date ?? 'none'}-${i}`} className="relative flex min-w-0 flex-col items-center gap-1.5" aria-hidden={s.on ? undefined : true}>
+          <span aria-hidden className={cn('size-2.5 rounded-full', s.on ? 'bg-foreground' : 'bg-track')} />
+          {s.date ? <span className={cn(MONO, 'whitespace-nowrap text-[10px] text-muted-foreground')}>{shortDate(s.date)}</span> : null}
         </li>
       ))}
     </ol>
@@ -225,19 +274,27 @@ function AdvicePanel({ card, notchAt, canDecide, dating, note }: {
             <RestsOn rows={card.restsOn} />
           </PanelSection>
           <PanelSection label={<>How long we have been saying it · <span data-copy="figure">{fmtInt(h.dates.length)}</span> {h.dates.length === 1 ? 'update' : 'updates'}</>}>
-            <Timeline dates={h.dates} />
+            <Timeline history={h} />
             <p className="m-0 text-[13px] leading-[1.4] text-muted-foreground">{decisionLine(card)}</p>
           </PanelSection>
         </div>
       </div>
 
-      {card.quote ? (
-        <PanelSection label="In their words">
-          <div className="max-w-[640px]">
-            <BlockQuote quote={card.quote} ground="inner" cite={quoteCiteLine(card.quoteCite) ?? undefined} />
+      {/* The board's row of three comments; the advice carries one, in the
+          row's first place. Without one the row keeps its place and says so
+          once, quietly. */}
+      <PanelSection label="In their words">
+        {card.quote ? (
+          <div className="grid grid-cols-1 gap-3.5 min-[1180px]:grid-cols-3">
+            {/* The board's `.qpanel`: the comment on the inner ground. */}
+            <div className="min-w-0 rounded-[10px] bg-inner px-[15px] py-[13px]">
+              <BlockQuote quote={card.quote} ground="inner" cite={quoteCiteLine(card.quoteCite) ?? undefined} />
+            </div>
           </div>
-        </PanelSection>
-      ) : null}
+        ) : (
+          <p className="m-0 text-[13.5px] leading-[1.5] text-muted-foreground">{NO_QUOTE}</p>
+        )}
+      </PanelSection>
 
       <div className="flex flex-wrap items-center gap-3 border-t border-track pt-5" data-print-hide>
         {canDecide && card.status === 'new' ? (
@@ -254,10 +311,43 @@ function AdvicePanel({ card, notchAt, canDecide, dating, note }: {
   )
 }
 
+/**
+ * THE BOARD'S ROW WHERE FEWER THAN THREE PIECES WAIT: the advice card's own
+ * frame and parts (its kind line, its title, its lead, its two cells, its
+ * link at the foot), holding the advice record: every piece so far, and how
+ * many you have decided on. It takes the columns the row has left.
+ */
+function AdviceRest({ data, span }: { data: MovesPageData; span: number }) {
+  const { total, acted } = data.advice
+  const none = data.advice.cards.length === 0
+  return (
+    <article data-advice-rest="" className={cn(CARD, 'flex-1')}>
+      <div className="flex min-h-5 flex-wrap items-center gap-2">
+        <span className={cn(MONO, 'text-[12px] text-muted-foreground')}>{ADVICE_REST.kind}</span>
+      </div>
+      <h3 className="m-0 text-[18px] font-semibold leading-[1.35] text-foreground">{none ? ADVICE_NONE : ADVICE_REST.title}</h3>
+      <p className="m-0 text-[14px] leading-[1.55] text-secondary-foreground">{ADVICE_REST.lead}</p>
+      {total > 0 ? (
+        <div className={cn('grid grid-cols-2 gap-2.5', span > 1 ? 'min-[1180px]:max-w-[calc(50%-10px)]' : null)}>
+          <StatCell size="sm" value={total} label={total === 1 ? 'piece of advice so far' : 'pieces of advice so far'} />
+          <StatCell size="sm" value={acted} of={total} label="decided on">
+            <UnitSquares k={Math.round((9 * acted) / total)} n={9} shape="dot" className="mt-2" label={`decided on ${fmtInt(acted)} of ${fmtInt(total)}`} />
+          </StatCell>
+        </div>
+      ) : null}
+      <div className="mt-auto flex flex-wrap items-center gap-2" data-print-hide>
+        <Link href={RECORD_HREF} scroll={false} className={cn(OLINK, 'ml-auto')}>The advice record →</Link>
+      </div>
+    </article>
+  )
+}
+
 export function AdviceSection({ data }: { data: MovesPageData }) {
   const { cards, open, gone } = data.advice
+  const reading: ReadingLabel = { month: data.month, label: data.monthLabel ?? null }
   const index = open?.index ?? null
   const place = index != null ? panelPlacement(index, adviceLayout(cards.length)) : null
+  const rest = Math.max(0, ADVICE_ROW - cards.length)
   return (
     <section aria-labelledby="advice-title" className="flex min-w-0 flex-col gap-4">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-0.5">
@@ -266,27 +356,25 @@ export function AdviceSection({ data }: { data: MovesPageData }) {
       </div>
       {!data.canDecide && cards.length > 0 ? <p className={cn(SECTION_SUB, '-mt-2 px-0.5')}>{MOVES_WRITE_REFUSED}</p> : null}
       {gone ? <p className={cn(SECTION_SUB, 'px-0.5')}>{ADVICE_GONE}</p> : null}
-      {cards.length === 0 ? (
-        <div className={cn(CARD, 'flex-row flex-wrap items-center justify-between gap-3')}>
-          <p className="m-0 text-[14px] leading-[1.5] text-secondary-foreground">{ADVICE_NONE}</p>
-          <Link href={RECORD_HREF} className={OLINK}>The advice record →</Link>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-5 min-[1180px]:grid-cols-3">
-          {cards.map((c, i) => (
-            <Fragment key={c.lineageId}>
-              <div className="flex min-w-0 flex-col" style={panelItemOrder(i)}>
-                <AdviceCardView card={c} open={open?.card.lineageId === c.lineageId} canDecide={data.canDecide} />
-              </div>
-              {open && place && i === index ? (
-                <PanelSlot placement={place}>
-                  <AdvicePanel card={open.card} notchAt={place.notch} canDecide={data.canDecide} dating={data.dating} note={null} />
-                </PanelSlot>
-              ) : null}
-            </Fragment>
-          ))}
-        </div>
-      )}
+      <div className="grid grid-cols-1 gap-5 min-[1180px]:grid-cols-3">
+        {cards.map((c, i) => (
+          <Fragment key={c.lineageId}>
+            <div className="flex min-w-0 flex-col" style={panelItemOrder(i)}>
+              <AdviceCardView card={c} open={open?.card.lineageId === c.lineageId} canDecide={data.canDecide} reading={reading} />
+            </div>
+            {open && place && i === index ? (
+              <PanelSlot placement={place}>
+                <AdvicePanel card={open.card} notchAt={place.notch} canDecide={data.canDecide} dating={data.dating} note={null} />
+              </PanelSlot>
+            ) : null}
+          </Fragment>
+        ))}
+        {rest > 0 ? (
+          <div className={cn('flex min-w-0 flex-col', REST_SPAN[rest])} style={panelItemOrder(cards.length)}>
+            <AdviceRest data={data} span={rest} />
+          </div>
+        ) : null}
+      </div>
       {data.advice.more > 0 ? (
         <p className="m-0 flex justify-end px-0.5">
           <Link href={RECORD_HREF} scroll={false} className={OLINK}>
