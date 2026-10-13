@@ -891,8 +891,9 @@ export async function loadMarketVideos(handle: ReadingHandle, month: string, aud
   }))
 }
 
-/** The month's theme evidence rows over `audiences`. */
-async function loadThemeRefs(handle: ReadingHandle, month: string, audiences: readonly string[]): Promise<ThemeRef[]> {
+/** The month's theme evidence rows over `audiences`. Exported for a page that
+ *  reads the month's market once and crosses it several ways (Voices, T4). */
+export async function loadThemeRefs(handle: ReadingHandle, month: string, audiences: readonly string[]): Promise<ThemeRef[]> {
   const { client, clientId } = handle
   if (audiences.length === 0) return []
   const rows = await selectAll<{ audience: string; object_id: string; video_ids: string[] | null }>(() =>
@@ -978,7 +979,10 @@ async function loadBrandRefs(handle: ReadingHandle): Promise<{ brands: BrandRef[
  * searches found: the reads Competitive's live count makes. Null where the
  * tenant has no brand rules (Össur until T15).
  */
-export async function loadBrandMonthVideos(handle: ReadingHandle, input: { month: string; audiences?: readonly string[] }): Promise<BrandMonthVideos[] | null> {
+export async function loadBrandMonthVideos(
+  handle: ReadingHandle,
+  input: { month: string; audiences?: readonly string[]; market?: readonly MarketVideo[] },
+): Promise<BrandMonthVideos[] | null> {
   const { client, clientId } = handle
   const refs = await loadBrandRefs(handle)
   if (!refs) return null
@@ -988,7 +992,10 @@ export async function loadBrandMonthVideos(handle: ReadingHandle, input: { month
       client.from('brand_mentions').select('video_id, brand_key, source, comment_id, comment_month, method, rule_version')
         .eq('client_id', clientId).order('id'),
     ).catch((e: unknown) => { throw fail('brandMentions', e) }),
-    loadMarketVideos(handle, input.month, audiences),
+    // A page that already read the month's market hands it in (`market`, the
+    // same `loadMarketVideos` rows over the same audiences), so it is not
+    // read twice.
+    input.market ? Promise.resolve([...input.market]) : loadMarketVideos(handle, input.month, audiences),
     selectAll<IdentityRow>(() =>
       client.from('videos').select('id, platform, source, account_name, is_client, is_competitor, competitor_name')
         .eq('client_id', clientId).in('source', ['owned', 'competitor_owned']).order('id'),
@@ -1022,11 +1029,11 @@ export async function loadBrandMonthVideos(handle: ReadingHandle, input: { month
  */
 export async function loadBrandCrosses(
   handle: ReadingHandle,
-  input: { month: string; base?: BrandBase; brandKeys?: readonly string[]; audiences?: readonly string[] },
+  input: { month: string; base?: BrandBase; brandKeys?: readonly string[]; audiences?: readonly string[]; market?: readonly MarketVideo[] },
 ): Promise<{ videos: BrandMonthVideos[]; kinds: BrandCrossRow[]; subjects: BrandCrossRow[] } | null> {
   const base: BrandBase = input.base ?? 'organic'
   const month = monthStartOf(input.month)
-  const all = await loadBrandMonthVideos(handle, { month, audiences: input.audiences })
+  const all = await loadBrandMonthVideos(handle, { month, audiences: input.audiences, market: input.market })
   if (!all) return null
   const wanted = input.brandKeys ? new Set(input.brandKeys) : null
   const videos = all.filter((b) => !wanted || wanted.has(b.brandKey))
@@ -1071,6 +1078,22 @@ export async function loadBrandMonthPairs(
   return brandMonthPair({ month, brands: refs.brands, rows, audiences, pair })
 }
 
+/** The latest `consumer_profiles` row, as the group reads take it. */
+export interface GroupProfileRow {
+  personas: unknown
+  run_id: string | null
+  run_date: string | null
+}
+
+/** The tenant's latest profile (`consumer_profiles`, newest `run_date`), or
+ *  null where Pass E has never written one. */
+export async function loadLatestProfile(handle: ReadingHandle): Promise<GroupProfileRow | null> {
+  const res = await handle.client.from('consumer_profiles').select('personas, run_id, run_date')
+    .eq('client_id', handle.clientId).order('run_date', { ascending: false }).limit(1).maybeSingle()
+  if (res.error) throw fail('profile', res.error)
+  return (res.data as GroupProfileRow | null) ?? null
+}
+
 type EvidenceRow = {
   id: string
   audience_insight_id: string
@@ -1088,14 +1111,20 @@ type EvidenceRow = {
  */
 export async function loadGroupSubjects(
   handle: ReadingHandle,
-  input: { month: string; audiences?: readonly string[] },
+  input: {
+    month: string
+    audiences?: readonly string[]
+    /** The month's market, where the caller has read it (`loadMarketVideos`
+     *  over the same audiences): not read again. */
+    market?: readonly MarketVideo[]
+    /** The latest profile row, where the caller has read it (a page that also
+     *  prints the groups' own fields): not read again. Null is "no profile". */
+    profile?: GroupProfileRow | null
+  },
 ): Promise<{ runId: string | null; runDate: string | null; videos: GroupMonthVideos[]; groups: GroupSubjectRow[] } | null> {
   const { client, clientId } = handle
   const month = monthStartOf(input.month)
-  const profileRes = await client.from('consumer_profiles').select('personas, run_id, run_date')
-    .eq('client_id', clientId).order('run_date', { ascending: false }).limit(1).maybeSingle()
-  if (profileRes.error) throw fail('profile', profileRes.error)
-  const profile = profileRes.data as { personas: unknown; run_id: string | null; run_date: string | null } | null
+  const profile = input.profile !== undefined ? input.profile : await loadLatestProfile(handle)
   if (!profile) return null
   const personas: GroupPersona[] = (Array.isArray(profile.personas) ? profile.personas : [])
     .map((p) => normalisePersona(p as Partial<Persona>))
@@ -1124,7 +1153,7 @@ export async function loadGroupSubjects(
       ),
     ).catch((e: unknown) => { throw fail('groupMemberships', e) }),
     loadSubjectNames(handle),
-    loadMarketVideos(handle, month, audiences),
+    input.market ? Promise.resolve([...input.market]) : loadMarketVideos(handle, month, audiences),
   ])
   const evidence: GroupEvidence[] = evidencePages.flat().flatMap((r) => {
     const c = Array.isArray(r.comments) ? r.comments[0] : r.comments

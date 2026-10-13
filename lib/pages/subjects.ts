@@ -2939,7 +2939,7 @@ export interface VoiceReadOptions {
  * twice; the reads are shared, the pool, the caps, the de-duplication and the
  * round-robin are each drawn inside one subject exactly as they were.
  */
-async function loadVoicesMany(
+export async function loadVoicesMany(
   supabase: SupabaseClient,
   clientId: string,
   groups: readonly { key: string; insightIds: readonly string[] }[],
