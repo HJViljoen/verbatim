@@ -115,6 +115,28 @@ describe('the Your products tab', () => {
     assertCopyContract(markup)
   })
 
+  // Decision 3: the tab reads Your products' month (the reading month). While
+  // that is the current month it says "so far"; once it is a month that has
+  // ended, it names it and says it is the last full month, and the column is
+  // named for it rather than "This month".
+  it('names the month it reads, and labels one that is not the current month', () => {
+    const current = text(productSettingsView(productsFixtureRead(), { selected: null, canEdit: true, now: FIXTURE_NOW.toISOString() }))
+    expect(current).toContain('Liners 8 products · 3 came up in October so far · 11 videos')
+    expect(current).toContain('Product Other names people use This month')
+    expect(current).not.toMatch(/last full month|earlier month/)
+    const v = productSettingsView(productsFixtureRead(), { selected: null, canEdit: true, now: '2026-11-09T09:00:00.000Z' })
+    expect(v.monthLabel).toBe('the last full month')
+    const ended = text(v)
+    expect(ended).toContain('Liners 8 products · 3 came up in October, the last full month · 11 videos')
+    expect(ended).toContain('Product Other names people use October')
+    expect(ended).not.toContain('This month')
+    expect(ended).not.toContain('October so far')
+    assertCopyContract(<ProductsTab view={v} />)
+    // Off, no month at all, label or not.
+    const off = text(productSettingsView(productsFixtureRead({ readingsOn: false }), { selected: null, canEdit: true, now: '2026-11-09T09:00:00.000Z' }))
+    expect(off).not.toMatch(/came up in|last full month|October/)
+  })
+
   it('says an empty list is empty, to an owner and to a member', () => {
     const empty = { groups: [], products: [], aliases: [], readings: [] }
     expect(text(view(true, empty))).toContain('No categories yet. Add a category No products listed yet Add a category, then the products in it')

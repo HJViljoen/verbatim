@@ -4,6 +4,7 @@ import { Box, Info } from 'lucide-react'
 import { IconTile, SELECTED } from '@/components/colour-roles'
 import { Card } from '@/components/pages/studio/ui'
 import { fmtInt } from '@/lib/format'
+import { inlineMonth } from '@/lib/reading/month-label'
 import { PRODUCTS_HELD, PRODUCTS_NOT_APPLIED, PRODUCTS_PAGE_OFF, type AliasChip, type OpenCategory, type ProductLine, type ProductSettingsView } from '@/lib/settings/products'
 import { cn } from '@/lib/utils'
 import { ALIAS_CHIP, CHECKED_TAG } from './chip'
@@ -158,7 +159,9 @@ function ProductRow({ p, open, view }: { p: ProductLine; open: OpenCategory; vie
 
 function OpenCategoryCard({ open, view }: { open: OpenCategory; view: ProductSettingsView }) {
   const parts: ReactNode[] = [<><span data-copy="figure">{fmtInt(open.products)}</span> {open.products === 1 ? 'product' : 'products'}</>]
-  if (open.cameUp != null) parts.push(<><span data-copy="figure">{fmtInt(open.cameUp)}</span> came up in {view.monthName} so far</>)
+  // The month the counts read: "October so far", or the reading month with
+  // its label where it is not the current one (decision 3).
+  if (open.cameUp != null) parts.push(<><span data-copy="figure">{fmtInt(open.cameUp)}</span> came up in {inlineMonth(view.monthWords, view.monthLabel)}</>)
   if (open.unclear) parts.push(<><span data-copy="figure">{fmtInt(open.unclear)}</span> {open.unclear === 1 ? 'video' : 'videos'} we couldn&apos;t place yet</>)
   return (
     <Card className="min-w-0 gap-4 px-[26px] py-6 max-sm:px-5">
@@ -182,7 +185,9 @@ function OpenCategoryCard({ open, view }: { open: OpenCategory; view: ProductSet
           <div role="row" className={`${GRID} hidden border-b border-[#E4E2DC] pb-2 text-[11.5px] font-semibold uppercase tracking-[0.05em] lg:grid ${MUTED}`}>
             <span role="columnheader">Product</span>
             <span role="columnheader">Other names people use</span>
-            <span role="columnheader">{view.readingsOn ? 'This month' : null}</span>
+            {/* "This month" only while it is: a reading month that has ended is
+                named (decision 3). */}
+            <span role="columnheader">{view.readingsOn ? (view.monthLabel ? view.monthName : 'This month') : null}</span>
             <span role="columnheader">{view.canEdit ? <span className="sr-only">Edit</span> : null}</span>
           </div>
           <div role="rowgroup">

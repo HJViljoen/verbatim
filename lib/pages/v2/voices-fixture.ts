@@ -1,4 +1,5 @@
 import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../../config'
+import { readingMonthLabel } from '../../reading/month-label'
 import { brandMonthPair, creatorThemes, type BrandCrossRow, type BrandMonthVideos, type CreatorVideo, type GroupMonthVideos, type GroupSubjectRow, type StoredBrandMonthRow, type ThemeRef } from '../../reading/cross'
 import {
   buildBrandPanel, buildBrands, buildCreatorPanel, buildCreators, buildGroupPanel, buildGroups, creatorVideoIds, monthWordsOf, openOf,
@@ -17,6 +18,9 @@ import {
 
 const SEP = '2026-09-01'
 const AUG = '2026-08-01'
+/** The fixtures' day: 13 October, a day the reading month is still
+ *  September, so the bar carries its label (decision 3). */
+export const VOICES_FIXTURE_NOW = '2026-10-13T08:00:00.000Z'
 
 const ids = (prefix: string, n: number, from = 0): string[] => Array.from({ length: n }, (_, i) => `${prefix}${from + i}`)
 
@@ -186,7 +190,7 @@ export function ossurVoicesFixture(params: VoicesParams = {}): VoicesData {
   const videoIds = creatorVideoIds(creatorVideos.map((v) => ({ id: v.videoId, platform: v.platform, account: v.account })))
   const creators = buildCreators({ month: SEP, read: read2, labels: OSSUR_LABELS, videoIds, brands: [], params })
   const data: VoicesData = {
-    client: 'Össur', month: SEP, soFar: false, monthWords: monthWordsOf(SEP, false), videos: market.length,
+    client: 'Össur', month: SEP, soFar: false, monthWords: monthWordsOf(SEP, false), monthLabel: readingMonthLabel(SEP, VOICES_FIXTURE_NOW), videos: market.length,
     groups, brands, creators, params, open: null, panel: null,
   }
   const open = openOf(data, params, { creators: read2 })
@@ -362,7 +366,7 @@ export function sealandVoicesFixture(params: VoicesParams = {}): VoicesData {
   const brandSets: BrandSet[] = videos.filter((b) => counted.has(b.brandKey)).map((b) => ({ label: b.label, you: b.brandKey === 'client', any: new Set(b.any) }))
   const creators = buildCreators({ month: SEP, read: read2, labels: SEALAND_LABELS, videoIds, brands: brandSets, params })
   const data: VoicesData = {
-    client: 'Sealand', month: SEP, soFar: false, monthWords: monthWordsOf(SEP, false), videos: market.length,
+    client: 'Sealand', month: SEP, soFar: false, monthWords: monthWordsOf(SEP, false), monthLabel: readingMonthLabel(SEP, VOICES_FIXTURE_NOW), videos: market.length,
     groups, brands, creators, params, open: null, panel: null,
   }
   const open = openOf(data, params, { creators: read2 })

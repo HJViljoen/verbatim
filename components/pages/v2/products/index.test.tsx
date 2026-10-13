@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
-import { PRODUCTS_FIXTURES } from '@/lib/pages/v2/products-fixture'
+import { ossurProductsFixture, PRODUCTS_FIXTURES } from '@/lib/pages/v2/products-fixture'
 import { productsBasis, PRODUCTS_NO_CATALOGUE, PRODUCTS_NOT_APPLIED, PRODUCTS_NOT_ON } from '@/lib/pages/v2/products'
 import { ProductsEmpty, ProductsMeta, ProductsPage } from '.'
 
@@ -22,10 +22,24 @@ describe('the Your products page (boards E4-Products and E4-Products-Liners)', (
 
   it('the bar: the month, the products that came up of the catalogue, the videos about them; no period switch', () => {
     const d = PRODUCTS_FIXTURES.ossur()
-    expect(renderText(<ProductsMeta data={d} />)).toBe('September · 15 of your 66 products came up · 412 videos about them or their categories'.replace('66', String(d.catalogue.products)))
+    expect(renderText(<ProductsMeta data={d} />)).toBe('September · the last full month · 15 of your 66 products came up · 412 videos about them or their categories'.replace('66', String(d.catalogue.products)))
     const m = render(<ProductsPage data={d} />)
     expect(m).toContain('>Your products</h1>')
     expect(m).not.toContain('aria-label="Period"')
+  })
+
+  // Decision 3: the month's label on the bar only where the page reads a
+  // month that is not the current calendar month.
+  it('labels the month on the bar only where it is not the current calendar month', () => {
+    expect(renderText(<ProductsMeta data={ossurProductsFixture({}, { now: '2026-10-13T08:00:00.000Z' })} />)).toMatch(/^September · the last full month · 15 of your/)
+    expect(renderText(<ProductsMeta data={ossurProductsFixture({}, { now: '2026-12-02T08:00:00.000Z' })} />)).toMatch(/^September · an earlier month · /)
+    expect(renderText(<ProductsMeta data={ossurProductsFixture({}, { now: '2026-09-20T08:00:00.000Z', soFar: true })} />)).toMatch(/^September so far · 15 of your/)
+    expect(renderText(<ProductsMeta data={ossurProductsFixture({}, { now: undefined })} />)).toMatch(/^September · 15 of your/)
+    // The current month, not read yet: "October so far", no label.
+    expect(renderText(<ProductsMeta data={PRODUCTS_FIXTURES.unread()} />)).toMatch(/^October so far · \d+ products in 6 categories$/)
+    // A state that reads no month names none, label or not.
+    expect(renderText(<ProductsMeta data={PRODUCTS_FIXTURES['not-on']()} />)).not.toMatch(/month/)
+    for (const d of [ossurProductsFixture(), PRODUCTS_FIXTURES['ossur-liners']()]) assertCopyContract(<ProductsPage data={d} />)
   })
 
   it('draws the standouts, then the catalogue, then the open panel under it, then the Settings link', () => {

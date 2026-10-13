@@ -7,7 +7,7 @@ import { tileHref } from '@/lib/pages/home'
 import type { TileRead } from '@/lib/pages/v2/home'
 import type { TopVoices } from '@/lib/pages/v2/voices'
 import { cn } from '@/lib/utils'
-import { MID, MONO_MUTED, TILE, TILE_FAILED, TileHead, TileLine, TT } from './parts'
+import { MID, MONO_MUTED, TILE, TILE_FAILED, TileHead, TileLine, TileMonth, TT } from './parts'
 
 // THE DASHBOARD'S VOICES TILE (Design v2, T8; E1-Dashboard's second row),
 // from `topVoices`: the group of people commenting on the most videos this
@@ -44,6 +44,8 @@ export function VoicesTileView({ read }: { read: TileRead<TopVoices | null> }) {
       {read.state === 'failed' || top?.groupsState === 'unread' ? <TileLine>{TILE_FAILED}</TileLine>
         : !top || !lead ? <TileLine>{top?.groupsEmpty ?? VOICES_NONE}</TileLine> : (
         <>
+          {/* Decision 3: September beside Market's October, labelled. */}
+          <TileMonth words={top.monthWords} label={top.monthLabel} />
           <div className="flex flex-col gap-1.5">
             <p className="m-0 text-[12px] leading-[1.3] font-semibold uppercase tracking-[0.06em] text-orange-text">In the most videos in {top.monthWords}</p>
             <h3 className={TT}><span data-copy="subject" data-slot="pass_e_persona">{lead.name}</span></h3>

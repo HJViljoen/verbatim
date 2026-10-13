@@ -4,10 +4,11 @@ import { CARD } from '@/components/v2'
 import { MovementBadge } from '@/components/delta-badge'
 import { fmtInt, longMonth, shortDate } from '@/lib/format'
 import { monthStartOf } from '@/lib/reading/month-key'
+import { inlineMonth } from '@/lib/reading/month-label'
 import {
   MOVES_SUB, MOVES_TITLE, MOVE_STATUS_LABEL, MOVE_UNREAD,
-  compareMonths, comparePrintable, moveAnchor, pendingLine, pointMonth, sharePct,
-  type MoveCard, type MovePoint, type MovesPageData,
+  compareMonths, comparePrintable, moveAnchor, monthLabelOn, pendingLine, pointMonth, sharePct,
+  type MoveCard, type MovePoint, type MovesPageData, type ReadingLabel,
 } from '@/lib/pages/v2/moves'
 import { cn } from '@/lib/utils'
 import { MoveStatusControl } from './move-status'
@@ -98,8 +99,10 @@ function Level({ p }: { p: MovePoint }) {
   )
 }
 
-/** The one sentence a move earns. */
-function MoveSentence({ card }: { card: MoveCard }) {
+/** The one sentence a move earns. Its latest month carries the reading
+ *  month's label where it is the reading month and not the current one
+ *  ("September, the last full month", decision 3). */
+function MoveSentence({ card, reading }: { card: MoveCard; reading: ReadingLabel | null }) {
   if (card.unread) return <p className="m-0 text-[13.5px] leading-[1.5] text-muted-foreground">{MOVE_UNREAD[card.unread]}</p>
   if (card.pending) {
     // The months before a move dated after the reading month: the latest of
@@ -119,7 +122,7 @@ function MoveSentence({ card }: { card: MoveCard }) {
   const moveMonth = monthStartOf(card.day)
   const c = card.compare
   if (comparePrintable(c)) {
-    const m = compareMonths(c, moveMonth)
+    const m = compareMonths(c, moveMonth, reading)
     return (
       <div className="flex flex-col gap-1.5">
         <p className="m-0 text-[13.5px] leading-[1.5] text-foreground">
@@ -137,7 +140,7 @@ function MoveSentence({ card }: { card: MoveCard }) {
   if (!latest) return null
   return (
     <p className="m-0 text-[13.5px] leading-[1.5] text-foreground">
-      Share of market videos: <Level p={latest} /> in {longMonth(latest.month)}{latest.soFar ? ' so far' : ''}.
+      Share of market videos: <Level p={latest} /> in {inlineMonth(`${longMonth(latest.month)}${latest.soFar ? ' so far' : ''}`, monthLabelOn(latest.month, reading))}.
     </p>
   )
 }
@@ -158,7 +161,7 @@ function OnWhat({ card }: { card: MoveCard }) {
 
 const DOT: Record<MoveCard['status'], string> = { active: 'bg-you', done: 'bg-foreground', dropped: 'bg-comp' }
 
-function MoveCardView({ card, canDecide }: { card: MoveCard; canDecide: boolean }) {
+function MoveCardView({ card, canDecide, reading }: { card: MoveCard; canDecide: boolean; reading: ReadingLabel | null }) {
   return (
     <article id={moveAnchor(card.id)} className={cn(CARD, 'scroll-mt-6')}>
       <div className="flex items-start justify-between gap-3">
@@ -173,13 +176,16 @@ function MoveCardView({ card, canDecide }: { card: MoveCard; canDecide: boolean 
       </div>
       <MoveLine card={card} />
       <div className="mt-auto flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0 flex-1 basis-[260px]"><MoveSentence card={card} /></div>
+        <div className="min-w-0 flex-1 basis-[260px]"><MoveSentence card={card} reading={reading} /></div>
         {card.openHref ? <Link href={card.openHref} className={OLINK}>Open →</Link> : null}
       </div>
       {canDecide ? <div className="border-t border-track pt-3"><MoveStatusControl id={card.id} status={card.status} /></div> : null}
     </article>
   )
 }
+
+/** The page's reading month and its label, as a move's sentence takes it. */
+const readingOf = (data: Pick<MovesPageData, 'month' | 'monthLabel'>): ReadingLabel => ({ month: data.month, label: data.monthLabel ?? null })
 
 export function MovesSection({ data }: { data: MovesPageData }) {
   const cards = data.moves.cards
@@ -191,7 +197,7 @@ export function MovesSection({ data }: { data: MovesPageData }) {
         <p className={SECTION_SUB}>{MOVES_SUB}</p>
       </div>
       <div className="grid grid-cols-1 gap-5 min-[1180px]:grid-cols-2">
-        {cards.map((c) => <MoveCardView key={c.id} card={c} canDecide={data.canDecide} />)}
+        {cards.map((c) => <MoveCardView key={c.id} card={c} canDecide={data.canDecide} reading={readingOf(data)} />)}
       </div>
     </section>
   )

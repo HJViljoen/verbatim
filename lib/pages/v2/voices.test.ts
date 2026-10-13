@@ -337,4 +337,13 @@ describe('the page and the Dashboard tile', () => {
     const o = ossurVoicesFixture()
     expect(topVoicesOf({ month: o.month, soFar: true, videos: o.videos, groups: o.groups, brands: o.brands })).toMatchObject({ monthWords: 'September so far', named: [] })
   })
+
+  // Decision 3: the tile carries the label its loader read at its clock.
+  it('carries the month\'s label to the tile, and none where the loader gave none', () => {
+    const d = sealandVoicesFixture()
+    expect(topVoicesOf({ month: d.month, soFar: false, monthLabel: 'the last full month', videos: d.videos, groups: d.groups, brands: d.brands }).monthLabel).toBe('the last full month')
+    expect(topVoicesOf({ month: d.month, soFar: true, videos: d.videos, groups: d.groups, brands: d.brands }).monthLabel).toBeNull()
+    // The page's data carries it from the fixture's day, 13 October.
+    expect(d.monthLabel).toBe('the last full month')
+  })
 })

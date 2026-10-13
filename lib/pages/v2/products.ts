@@ -28,6 +28,7 @@ import { loadPairOn, type ReadingHandle } from '../../reading/read'
 import { BRANDS_PANEL, type PairOn } from '../../reading/pairs'
 import { monthChange } from '../../reading/bands'
 import { loadReadingMonth } from '../../reading/reading-view'
+import { readingMonthLabel } from '../../reading/month-label'
 import { bandVerdict, type Verdict } from '../../reading/verdicts'
 import { productsTabHref } from '../../settings/products'
 import { selectAll } from '../../supabase-admin'
@@ -334,6 +335,10 @@ export interface ProductsData {
   soFar: boolean
   /** "October so far", "September". */
   monthWords: string
+  /** Decision 3: "the last full month" where `month` is not the current
+   *  calendar month (`readingMonthLabel`, at the load's clock), else null.
+   *  The bar prints it beside `monthWords`. */
+  monthLabel: string | null
   /** "October". */
   monthName: string
   catalogue: { categories: number; products: number }
@@ -990,6 +995,9 @@ export interface ProductsInput {
   /** The reading month, 'YYYY-MM-01', and whether it is still being read. */
   month: string
   soFar: boolean
+  /** The instant the month was read at, for its label (decision 3,
+   *  `readingMonthLabel`). Omitted: no label. */
+  now?: string
   /** The catalogue's read; null where it failed. */
   catalogue: CatalogueRead | null
   /** PRODUCT_READINGS_ENABLED for the tenant. */
@@ -1111,7 +1119,7 @@ export function buildProductsData(input: ProductsInput): ProductsData {
   const month = monthStartOf(input.month)
   const base: ProductsData = {
     state: 'failed', client: input.client || 'You', month, soFar: input.soFar,
-    monthWords: monthWordsOf(month, input.soFar), monthName: longMonth(month),
+    monthWords: monthWordsOf(month, input.soFar), monthLabel: input.now ? readingMonthLabel(month, input.now) : null, monthName: longMonth(month),
     catalogue: EMPTY_HEADER, settingsHref: productsTabHref(), empty: PRODUCTS_FAILED, market: null, header: null,
     standouts: [], shelf: [], canTag: input.canTag, params: input.params, open: null, panel: null,
   }
@@ -1238,6 +1246,10 @@ export interface TopProducts {
   state: 'not_applied' | 'no_catalogue' | 'not_on' | 'quiet' | 'ready'
   /** The month the figures read, "September" (or "October so far"). */
   monthWords: string
+  /** Decision 3: the tile's label where the month is not the current
+   *  calendar month (`readingMonthLabel`), else null. Optional: a dump from
+   *  before it carries none. */
+  monthLabel?: string | null
   standout: {
     /** The kind of standout, words only, no digits. */
     label: string
@@ -1273,9 +1285,11 @@ export const TOP_LABELS: Readonly<Record<'first' | 'most', string>> = {
 /** The tile, from the page's level 1 (no crosses: the tile reads none). The
  *  standout is a product's first month with videos, else the product with
  *  the most videos, else the category with the most. PURE. */
-export function topProductsOf(data: Pick<ProductsData, 'state' | 'monthWords' | 'shelf' | 'header' | 'market' | 'params'>, firsts: readonly FirstStandout[] = []): TopProducts {
+export function topProductsOf(data: Pick<ProductsData, 'state' | 'monthWords' | 'shelf' | 'header' | 'market' | 'params'> & { monthLabel?: string | null }, firsts: readonly FirstStandout[] = []): TopProducts {
   const href = PRODUCTS_HREF
-  const base = { monthWords: data.monthWords, standout: null, href }
+  // A state that reads no month carries no month's label either.
+  const readsMonth = data.state !== 'not_applied' && data.state !== 'no_catalogue' && data.state !== 'not_on'
+  const base = { monthWords: data.monthWords, monthLabel: readsMonth ? data.monthLabel ?? null : null, standout: null, href }
   switch (data.state) {
     case 'not_applied': return { ...base, state: 'not_applied' }
     case 'no_catalogue': return { ...base, state: 'no_catalogue', href: productsTabHref() }
@@ -1466,7 +1480,7 @@ export async function loadProducts(input: ProductsLoadInput): Promise<ProductsDa
   ])
   const enabled = productReadingsEnabled(clientId)
   const shell: ProductsInput = {
-    clientId, client, month, soFar, catalogue, enabled, rows: null, market: null, standing: null,
+    clientId, client, month, soFar, now, catalogue, enabled, rows: null, market: null, standing: null,
     crosses: new Map(), pair: null, params, canTag,
   }
   if (!catalogue || catalogue.state !== 'ready' || !enabled) return buildProductsData(shell)
@@ -1533,7 +1547,7 @@ export async function topProducts(input: { supabase: SupabaseClient; clientId: s
     ])
     const enabled = productReadingsEnabled(clientId)
     const shell: ProductsInput = {
-      clientId, client: '', month, soFar, catalogue, enabled, rows: null, market: null, standing: null,
+      clientId, client: '', month, soFar, now, catalogue, enabled, rows: null, market: null, standing: null,
       crosses: new Map(), pair: null, params: {}, canTag: false,
     }
     let rows: ProductMonthRow[] | null = null

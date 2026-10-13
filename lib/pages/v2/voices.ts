@@ -22,6 +22,7 @@ import {
   type GroupProfileRow, type GroupSubjectRow, type MarketVideo, type ThemeRef,
 } from '../../reading/cross'
 import { monthStartOf, prevMonth } from '../../reading/month-key'
+import { readingMonthLabel } from '../../reading/month-label'
 import { refuseEveryPair } from '../../reading/pairs'
 import { loadPairOn, type ReadingHandle } from '../../reading/read'
 import { marketAudiences } from '../../reading/market'
@@ -419,6 +420,11 @@ export interface VoicesData {
   month: string
   soFar: boolean
   monthWords: string
+  /** Decision 3: "the last full month" where `month` is not the current
+   *  calendar month (`readingMonthLabel`, at the load's own clock), else null.
+   *  The bar prints it beside `monthWords`. Optional: a dump from before it
+   *  carries none. */
+  monthLabel?: string | null
   /** The market's videos this month (`market_month_videos` over the market's
    *  audiences); null where they could not be read. */
   videos: number | null
@@ -939,6 +945,9 @@ export function buildCreatorPanel(input: {
 export interface TopVoices {
   month: string
   monthWords: string
+  /** Decision 3: the tile's label where `month` is not the current calendar
+   *  month (`readingMonthLabel`), else null. Optional, as on `VoicesData`. */
+  monthLabel?: string | null
   /** The market's videos this month. */
   videos: number | null
   /** The group with the most videos this month, and its panel. */
@@ -964,6 +973,8 @@ export const NAMED_MOST = 2
 export function topVoicesOf(input: {
   month: string
   soFar: boolean
+  /** `readingMonthLabel(month, now)`, from the loader's clock. */
+  monthLabel?: string | null
   videos: number | null
   groups: VoicesGroups
   brands: VoicesBrands
@@ -972,6 +983,7 @@ export function topVoicesOf(input: {
   return {
     month: input.month,
     monthWords: monthWordsOf(input.month, input.soFar),
+    monthLabel: input.monthLabel ?? null,
     videos: input.videos,
     group: lead ? { key: lead.key, name: lead.name, oneLiner: lead.oneLiner, videos: lead.videos, href: voicesHref({}, { kind: 'group', key: lead.key }) } : null,
     groups: input.groups.cards.map((c) => ({ key: c.key, name: c.name, videos: c.videos })),
@@ -1192,6 +1204,7 @@ export async function loadVoicesBase(input: VoicesLoadInput): Promise<{ data: Vo
     month,
     soFar,
     monthWords: monthWordsOf(month, soFar),
+    monthLabel: readingMonthLabel(month, now),
     videos: market ? new Set(market.map((v) => v.id)).size : null,
     groups,
     brands,
@@ -1380,7 +1393,7 @@ export async function topVoices(input: { supabase: SupabaseClient; clientId: str
     crosses: null, note: null, params: {}, failed: pairs === undefined,
     clientCounts: clientNameCountsByCount(clientId, month, clientPair?.currAny?.k ?? 0),
   })
-  return topVoicesOf({ month, soFar, videos: groupRead?.marketVideos ?? null, groups, brands })
+  return topVoicesOf({ month, soFar, monthLabel: readingMonthLabel(month, now), videos: groupRead?.marketVideos ?? null, groups, brands })
 }
 
 /** The client's name gate from counts: production checked the name, no read

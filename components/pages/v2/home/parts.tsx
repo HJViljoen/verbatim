@@ -3,6 +3,7 @@ import type { LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { CARD } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
+import { barMonth } from '@/lib/reading/month-label'
 import { cn } from '@/lib/utils'
 
 // The Dashboard's furniture (Design v2, depth plan T8; boards E1-Dashboard and
@@ -78,3 +79,17 @@ export function TileLine({ children, className }: { children: ReactNode; classNa
 
 /** The words a tile prints where its read failed (it loses only itself). */
 export const TILE_FAILED = 'This could not be read just now.'
+
+/**
+ * The month a whole-month tile reads, under its head, where that month is
+ * not the current calendar month: "September · the last full month"
+ * (decision 3; the words are `readingMonthLabel`'s). On days 1 to 15 Market
+ * and the week tile read the week's own month ("in October so far") while
+ * Voices, Your products and Your moves read the month that has just ended;
+ * this line is what makes one Dashboard showing both read as meant. Nothing
+ * where there is no label (the current month), or no month.
+ */
+export function TileMonth({ words, label }: { words: string | null | undefined; label: string | null | undefined }) {
+  if (!label || !words) return null
+  return <p data-tile-month className={cn(MONO_MUTED, 'm-0 -mt-2.5 max-sm:-mt-1.5')}>{barMonth(words, label)}</p>
+}

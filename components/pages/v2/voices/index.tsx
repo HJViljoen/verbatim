@@ -2,6 +2,7 @@ import { PageBar, PageFrame } from '@/components/shell/page-grid'
 import { panelItemOrder, panelPlacement, PanelSlot, type PanelLayout } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
 import { surface } from '@/lib/nav'
+import { barMonth } from '@/lib/reading/month-label'
 import type { VoicesData } from '@/lib/pages/v2/voices'
 import { BrandPanelView, BrandsCard } from './brands'
 import { CreatorPanelView, CreatorsCard } from './creators'
@@ -23,10 +24,12 @@ export { BrandPanelView, BrandsCard } from './brands'
 export { CreatorPanelView, CreatorsCard } from './creators'
 export { GroupCard, GroupGrid, GroupPanelView, WhoCard } from './groups'
 
-/** The bar's meta line: "September · 487 videos · 5 groups · 21 regular
- *  creators · 2 brands". */
+/** The bar's meta line: "September · the last full month · 487 videos · 5
+ *  groups · 21 regular creators · 2 brands"; the month's label only where the
+ *  page reads a month that is not the current one (decision 3,
+ *  `readingMonthLabel`). */
 export function VoicesMeta({ data }: { data: VoicesData }) {
-  const parts: React.ReactNode[] = [<span key="m">{data.monthWords}</span>]
+  const parts: React.ReactNode[] = [<span key="m">{barMonth(data.monthWords, data.monthLabel)}</span>]
   if (data.videos != null) parts.push(<span key="v"><Fig>{fmtInt(data.videos)}</Fig> videos</span>)
   if (data.groups.state === 'ready') parts.push(<span key="g"><Fig>{fmtInt(data.groups.cards.length)}</Fig> {data.groups.cards.length === 1 ? 'group' : 'groups'}</span>)
   if (!data.creators.empty || data.creators.atFloor > 0) parts.push(<span key="c"><Fig>{fmtInt(data.creators.atFloor)}</Fig> regular {data.creators.atFloor === 1 ? 'creator' : 'creators'}</span>)

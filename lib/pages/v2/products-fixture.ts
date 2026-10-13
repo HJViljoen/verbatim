@@ -235,11 +235,16 @@ export function sealInXTexts(): TextRead[] {
   return words.map(([w, d, p], i) => text(`c:x-${i}`, videos[i], `x-${i}`, w, d, p, null))
 }
 
+/** The fixtures' day: 13 October, while the reading month is still
+ *  September, so the bar carries its label (decision 3). */
+export const PRODUCTS_FIXTURE_NOW = '2026-10-13T08:00:00.000Z'
+
 const BASE = (over: Partial<ProductsInput> = {}): ProductsInput => ({
   clientId: OSSUR_CLIENT_ID,
   client: 'Össur',
   month: SEP,
   soFar: false,
+  now: PRODUCTS_FIXTURE_NOW,
   catalogue: { state: 'ready', catalogue: OSSUR_CATALOGUE },
   enabled: true,
   rows: ossurProductRows(),

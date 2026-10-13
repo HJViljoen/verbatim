@@ -44,6 +44,53 @@ const tileMarkup = (markup: string, tile: string): string => {
 }
 const page = (data: DashboardData) => <DashboardPage data={data} />
 
+// Decision 3 (13 Oct): both clocks on one Dashboard. Market and the week
+// tile read the week's own month (October so far); Voices, Your products and
+// Your moves read the reading month, which on 13 October is still September,
+// and each says it is the last full month. Where the whole-month tiles read
+// the current month they print nothing extra.
+describe('the Dashboard\'s two clocks, labelled (decision 3)', () => {
+  const markup = render(page(dashboardFixture({ twoClocks: true })))
+
+  it('Market and the week stay on October so far, with no label', () => {
+    expect(tileText(markup, 'market')).toMatch(/in October so far/)
+    expect(tileText(markup, 'week')).toMatch(/in October so far/)
+    for (const t of ['market', 'week', 'content']) expect(tileText(markup, t), t).not.toMatch(/last full month|earlier month/)
+  })
+
+  it('Voices and Your products say September, the last full month, under their heads', () => {
+    const voices = tileText(markup, 'voices')
+    expect(voices).toMatch(/^Voices Open → September · the last full month In the most videos in September Long-time users upgrading/)
+    const products = tileText(markup, 'products')
+    expect(products).toMatch(/^Your products Open → September · the last full month Named in the most videos Pro-Flex Pivot/)
+    expect(products).toContain('came up in September')
+  })
+
+  it('Your moves says it in the move\'s sentence, where the month is named', () => {
+    expect(tileText(markup, 'moves')).toMatch(/against \d+ of \d+ in September, the last full month/)
+  })
+
+  it('the current month prints no label on any tile', () => {
+    const t = markupText(render(page(dashboardFixture())))
+    expect(t).not.toMatch(/last full month|earlier month/)
+    expect(render(page(dashboardFixture()))).not.toContain('data-tile-month')
+  })
+
+  it('a failed tile or a state that reads no month carries no label', () => {
+    const failed = render(page(dashboardFixture({ twoClocks: true, failed: ['voices', 'products'] })))
+    expect(tileText(failed, 'voices')).not.toMatch(/last full month/)
+    expect(tileText(failed, 'products')).not.toMatch(/last full month/)
+    for (const state of ['not_applied', 'not_on', 'no_catalogue'] as const) {
+      expect(tileText(render(page(dashboardFixture({ twoClocks: true, products: state }))), 'products'), state).not.toMatch(/September|last full month/)
+    }
+    expect(tileText(render(page(dashboardFixture({ twoClocks: true, products: 'quiet' }))), 'products')).toMatch(/September · the last full month .* in September\./)
+  })
+
+  it('keeps the copy contract', () => {
+    assertCopyContract(page(dashboardFixture({ twoClocks: true })))
+  })
+})
+
 describe('the Dashboard, as the board draws it (E1-Dashboard)', () => {
   const data = dashboardFixture()
   const markup = render(page(data))
