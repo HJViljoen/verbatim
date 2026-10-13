@@ -406,7 +406,24 @@ export interface ContentFixtureOptions {
  *  them: the top of the also-asked list, each with the flag an idea on it
  *  would wear. */
 function questionSlots(lead: readonly AskedRow[], flags = true): QuestionSlot[] {
-  return lead.map((r) => ({ ...r, flag: flags && r.registryId === REG.insurance ? INSURANCE_FLAG : null }))
+  return lead.map((r) => ({
+    ...r,
+    flag: flags && r.registryId === REG.insurance ? INSURANCE_FLAG : null,
+    platforms: splitAcross(r.week ?? 0),
+    comments: { week: (r.week ?? 0) * 3 + 2, month: (r.month ?? 0) * 3 + 4 },
+  }))
+}
+
+/** A question's videos this week spread over the platforms, the most first
+ *  (illustrative: TikTok about half, then YouTube, Instagram, Reddit). */
+function splitAcross(videos: number): { platform: string; videos: number }[] {
+  const tiktok = Math.ceil(videos / 2)
+  const youtube = Math.ceil((videos - tiktok) / 2)
+  const instagram = Math.ceil((videos - tiktok - youtube) / 2)
+  const reddit = videos - tiktok - youtube - instagram
+  return [['tiktok', tiktok], ['youtube', youtube], ['instagram', instagram], ['reddit', reddit]]
+    .filter(([, n]) => (n as number) > 0)
+    .map(([platform, n]) => ({ platform: platform as string, videos: n as number }))
 }
 
 /** The page as the board draws it: Össur's week of 4 to 10 October. */

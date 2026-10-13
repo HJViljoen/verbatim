@@ -326,13 +326,27 @@ const marketDump = (): MarketData => JSON.parse(readFileSync(process.env.MARKET_
  *  holds only the table's first five rows, so its table shows what is left of
  *  them (the loader's own goes on to five). */
 const contentDump = (tenant: string): ContentPageData => {
-  const raw = JSON.parse(readFileSync(join(resolve(flag('content-dumps', '.')), tenant, 'content.json'), 'utf8')) as ContentPageData
+  const dir = join(resolve(flag('content-dumps', '.')), tenant)
+  const raw = JSON.parse(readFileSync(join(dir, 'content.json'), 'utf8')) as ContentPageData
   if (Array.isArray(raw.ideas.questions)) return raw
   const n = Math.max(0, IDEA_SLOTS - raw.ideas.cards.length)
   const lead = raw.asked.rows.slice(0, n)
+  // Where it came up: the same tenant's Market dump holds each conversation
+  // in its table with the week's platform mix (production's, the same read);
+  // taken only where it sums to the row's own week figure. A conversation
+  // outside Market's table, and the comments, are not in a dump: the card
+  // then leaves those facts out, as the loader does for a read it lacks.
+  const market = existsSync(join(dir, 'market.json'))
+    ? JSON.parse(readFileSync(join(dir, 'market.json'), 'utf8')) as { table?: { rows?: { conv: { id: string; mix: Record<string, number> | null } }[] } }
+    : null
+  const mixOf = (id: string, week: number | null) => {
+    const mix = market?.table?.rows?.find((r) => r.conv.id === id)?.conv.mix
+    if (!mix || Object.values(mix).reduce((a, b) => a + b, 0) !== week) return null
+    return Object.entries(mix).map(([platform, videos]) => ({ platform, videos })).sort((a, b) => b.videos - a.videos || a.platform.localeCompare(b.platform))
+  }
   return {
     ...raw,
-    ideas: { ...raw.ideas, questions: lead.map((r) => ({ ...r, flag: null })) },
+    ideas: { ...raw.ideas, questions: lead.map((r) => ({ ...r, flag: null, platforms: mixOf(r.registryId, r.week), comments: null })) },
     asked: { ...raw.asked, rows: raw.asked.rows.slice(lead.length), total: Math.max(0, raw.asked.total - lead.length) },
   }
 }

@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react'
 import { User } from 'lucide-react'
 import { CARD, CardHead, InPlacePanel, PanelTitle, SELECTED_CARD_RING, type PerBreakpoint } from '@/components/v2'
 import { fmtInt, longMonth, platformLabel, shortDate } from '@/lib/format'
-import { OWN_RESPONSE_MIN, POSTS_PANEL_ID, contentHref, fmtMultiple, monthWords, type ContentState, type PostsBlock } from '@/lib/pages/v2/content'
+import { POSTS_PANEL_ID, contentHref, fmtMultiple, monthWords, type ContentState, type PostsBlock } from '@/lib/pages/v2/content'
 import { cn } from '@/lib/utils'
 import { Fig, Lvl, OLink, PlatformCounts } from './parts'
 
@@ -70,7 +70,7 @@ export function PostsCard({ block, state, selected, className, style }: { block:
             <div data-copy="level">
               <div className={cn(VALUE, 'whitespace-nowrap')}>{fmtInt(ratedOf(block))} <span className="text-[15px] text-muted-foreground">of {fmtInt(block.total)}</span></div>
               <div className="mt-1.5 text-[12.5px] leading-[1.4] text-muted-foreground">
-                {ratedOf(block) >= OWN_RESPONSE_MIN ? 'with a response figure; the market’s typical video could not be read' : 'with a response figure, too few to state a typical one'}
+                {block.marketTypical === false ? 'with a response figure; the market’s typical video could not be read to compare them' : 'with a response figure, too few to state a typical one'}
               </div>
             </div>
           )}
@@ -86,7 +86,9 @@ export function PostsCard({ block, state, selected, className, style }: { block:
           </>
         ) : (
           <span className="text-muted-foreground">
-            {block.unread ?? (block.total === 0 ? `You published nothing of your own ${when}.` : 'None to name without a response figure.')}
+            {block.unread ?? (block.total === 0
+              ? `You published nothing of your own ${when}.`
+              : block.marketTypical === false ? 'None to name: the market’s typical video could not be read.' : 'None to name without a response figure.')}
           </span>
         )}
       </div>

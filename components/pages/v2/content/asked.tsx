@@ -50,7 +50,7 @@ export function AskedCard({ block, state, month, weekWord, weekHead, afterIdeas 
     : `Conversations filed as questions ${period}${afterIdeas ? ', besides those above' : ''}, the most videos first`
   // An empty table keeps its frame: the headings, and one line in a row.
   const empty = block.unread ?? (block.rows.length === 0
-    ? block.touched > 0 ? 'Every other question people asked was touched on by one of your posts.' : `No ${afterIdeas ? 'other ' : ''}question came up ${period}.`
+    ? block.touched > 0 ? `Every ${afterIdeas ? 'other ' : ''}question people asked was touched on by one of your posts.` : `No ${afterIdeas ? 'other ' : ''}question came up ${period}.`
     : null)
   return (
     <section id={ASKED_ID} aria-labelledby="asked-title" className={cn(CARD, 'scroll-mt-6')}>
@@ -110,7 +110,7 @@ export function AskedCard({ block, state, month, weekWord, weekHead, afterIdeas 
             block.expanded ? (
               <OLink href={contentHref({ ...state, asked: false })} scroll={false}>Show the first {ASKED_SHOWN} ↑</OLink>
             ) : (
-              <OLink href={contentHref({ ...state, asked: true })} scroll={false}>All <Fig>{fmtInt(block.total)}</Fig> questions not yet in your posts →</OLink>
+              <OLink href={contentHref({ ...state, asked: true })} scroll={false}><Fig>{fmtInt(block.total - block.rows.length)}</Fig> more {block.total - block.rows.length === 1 ? 'question' : 'questions'} not yet in your posts →</OLink>
             )
           ) : null}
           {block.touched > 0 ? (

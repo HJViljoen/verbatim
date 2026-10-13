@@ -58,6 +58,15 @@ describe('Also asked, and not yet in your posts', () => {
     expect(text).not.toContain('none of your posts')
   })
 
+  it('names how many more the link shows, not all of them: the cards above hold some', () => {
+    const many = { ...askedFixture(), total: 12 }
+    expect(renderText(card({ block: many }))).toContain('7 more questions not yet in your posts →')
+    expect(renderText(card({ block: many }))).not.toMatch(/All \d+ questions/)
+    // Every question touched on, with nothing above: no "other".
+    const none = { ...askedFixture(), rows: [], total: 0, touched: 3 }
+    expect(renderText(card({ block: none, afterIdeas: false }))).toContain('Every question people asked was touched on by one of your posts.')
+  })
+
   it('lists them all on request', () => {
     const all = askedFixture('week', true)
     expect(all.rows.length).toBe(all.total)

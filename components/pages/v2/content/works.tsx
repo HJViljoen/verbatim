@@ -34,9 +34,15 @@ const belowTypical = (multiple: number): boolean => Math.round(multiple * 10) / 
  *  the column has room and narrower where it has not, so thirteen posts
  *  stay one row (Sealand's wrapped to two at 1440). */
 const MARKS_FIT = 'flex-nowrap gap-[2px] [&>span]:min-w-[3px] [&>span]:max-w-[9px] [&>span]:flex-1'
+/** The most posts the marks draw: one row of 3px marks and 2px gaps in the
+ *  column at its narrowest (about 68px, a 768 window beside the sidebar).
+ *  Above it the column prints "k of n", as it does past `MAX_UNITS`, rather
+ *  than run the row past the card (the fresh check: 28 posts and up did at
+ *  1440). */
+export const MARKS_MAX = 14
 
 function Chart({ title, rows, posts, empty }: { title: string; rows: readonly WorksRow[]; posts: number; empty: string }) {
-  const marks = posts > 0 && posts <= MAX_UNITS
+  const marks = posts > 0 && posts <= Math.min(MARKS_MAX, MAX_UNITS)
   return (
     <div className="flex min-w-0 flex-col gap-2.5">
       <p className="m-0 text-[13px] font-semibold">{title}</p>

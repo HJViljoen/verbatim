@@ -1,9 +1,9 @@
 import { Fragment, type CSSProperties, type ReactNode } from 'react'
 import { CARD, equalColumns, FlagChip, MiniBars, panelItemOrder, panelPlacement, PanelSlot, SELECTED_CARD_RING, type PanelLayout, type PerBreakpoint } from '@/components/v2'
-import { fmtInt, longMonth } from '@/lib/format'
+import { fmtInt, longMonth, platformLabel } from '@/lib/format'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
 import {
-  askedPhrase, conversationHref, IDEA_PANEL_ID, IDEA_SLOTS, IDEAS_EMPTY, contentHref, monthWords, olderIdeasLine, POST_IDEA_SLOT, QUESTION_IDEA_LINE, questionsHeading,
+  askedPhrase, conversationHref, IDEA_PANEL_ID, IDEA_SLOTS, IDEAS_EMPTY, contentHref, monthWords, olderIdeasLine, POST_IDEA_SLOT, QUESTION_IDEA_LINE, questionsAfterIdeas, questionsHeading,
   type ContentState, type IdeaCard, type IdeasBlock, type IdeasState, type OwnTouch, type QuestionSlot, type QuestionSlotsContext,
 } from '@/lib/pages/v2/content'
 import { cn } from '@/lib/utils'
@@ -205,20 +205,29 @@ export function QuestionCardView({ row, rank, state, ctx, style }: {
           </div>
         ) : null}
       </div>
+      {/* The facts the question carries, flowing from the top as an idea's
+          do: who asks, where it came up, its comments, its subject, your
+          posts, and why it holds no idea (where that is not said over the
+          row). A fact the page could not read is left out. */}
       <div className="flex flex-col border-t border-track">
         <Fact name="Who's asking"><WhoAsks groups={row.groups} /></Fact>
+        {row.platforms && row.platforms.length > 0 ? (
+          <Fact name="Came up on">
+            {row.platforms.map((p, i) => <span key={p.platform}>{i > 0 ? ', ' : null}{platformLabel(p.platform)} <Fig>{fmtInt(p.videos)}</Fig></span>)}
+          </Fact>
+        ) : null}
+        {row.comments?.month != null ? (
+          <Fact name="Comments">
+            {ctx.period === 'week' && row.comments.week != null ? <><Fig>{fmtInt(row.comments.week)}</Fig> {ctx.when}, </> : null}
+            <Fig>{fmtInt(row.comments.month)}</Fig> {monthWords(ctx.month)}
+          </Fact>
+        ) : null}
+        <Fact name="Subject">{row.subject ?? <span className="text-muted-foreground">No subject holds it</span>}</Fact>
         <Fact name="Your posts"><QuestionTouchLine ctx={ctx} /></Fact>
+        {QUESTION_IDEA_LINE[state] ? <Fact name="Post idea"><span className="text-muted-foreground">{QUESTION_IDEA_LINE[state]}</span></Fact> : null}
       </div>
-      {/* At the card's foot with its link, so beside an idea's taller card
-          the room falls above it, not under it. */}
-      <div className="mt-auto flex flex-col gap-4">
-        <div>
-          <p className={cn(LABEL, 'mb-1.5')}>Post idea</p>
-          <p className="m-0 text-[13.5px] leading-[1.45] text-muted-foreground">{QUESTION_IDEA_LINE[state]}</p>
-        </div>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <OLink href={conversationHref(row.registryId)}>Open in Market →</OLink>
-        </div>
+      <div className="mt-auto flex flex-wrap items-center justify-between gap-3">
+        <OLink href={conversationHref(row.registryId)}>Open in Market →</OLink>
       </div>
     </article>
   )
@@ -248,9 +257,11 @@ function RowLine({ block, ctx, month }: { block: IdeasBlock; ctx: QuestionSlotsC
   const read = block.week?.read ?? null
   const since = block.cards[0]?.own.since
   if (block.cards.length > 0 && read) {
-    return <>{askedPhrase(read)} that none of your posts since {longMonth(since ?? month.month)} had touched on when they were picked, biggest first</>
+    // A row of fewer ideas says what its other cards are too.
+    const after = block.questions.length > 0 ? questionsAfterIdeas(ctx) : ''
+    return <>{askedPhrase(read)} that none of your posts since {longMonth(since ?? month.month)} had touched on when they were picked, biggest first{after}</>
   }
-  if (block.cards.length === 0 && block.questions.length > 0) return <>{questionsHeading(ctx)}</>
+  if (block.cards.length === 0 && block.questions.length > 0) return <>{questionsHeading(ctx, block.state)}</>
   return null
 }
 

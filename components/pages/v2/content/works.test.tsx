@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { render, renderText as rawText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { worksFixture } from '@/lib/pages/v2/content-fixture'
-import { WorksCard } from './works'
+import { MARKS_MAX, WorksCard } from './works'
 
 /** The page's words as read: a tag between a word and its comma is not a space. */
 const renderText = (node: Parameters<typeof rawText>[0]): string => rawText(node).replace(/\s+([,.])/g, '$1')
@@ -53,9 +53,18 @@ describe('What works in your market’s videos', () => {
     expect(renderText(<WorksCard block={one} />)).toContain('How it opens Kind of video Response · 1× = typical Your 9 posts Too few rated videos of any one opening yet')
   })
 
-  it('fits more posts than the board’s nine in one row of marks, and prints no “0 of 0” where you published nothing', () => {
+  it('fits up to fourteen posts in one row of marks, prints “k of n” above that, and no “0 of 0” where you published nothing', () => {
     const m = render(<WorksCard block={{ ...worksFixture(), posts: 13 }} />)
     expect(m).toMatch(/data-units="6\/13" class="[^"]*flex-nowrap[^"]*\[&amp;&gt;span\]:flex-1/)
+    expect(MARKS_MAX).toBe(14)
+    expect(render(<WorksCard block={{ ...worksFixture(), posts: 14 }} />)).toContain('data-units="6/14"')
+    // The fresh check: 28 posts and up ran the marks past the card at 1440.
+    for (const posts of [15, 28, 35, 60]) {
+      const node = <WorksCard block={{ ...worksFixture(), posts }} />
+      expect(render(node)).not.toContain('data-units=')
+      expect(renderText(node)).toContain(`Story · 22% 3.1× 1 of ${posts}`)
+      assertCopyContract(node)
+    }
     const none = <WorksCard block={{ ...worksFixture(), posts: 0, formats: worksFixture().formats.map((r) => ({ ...r, yours: 0 })) }} />
     expect(renderText(none)).toContain('Response · 1× = typical Your posts')
     expect(renderText(none)).not.toContain('0 of 0')

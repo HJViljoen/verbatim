@@ -125,6 +125,11 @@ describe('What to post next', () => {
     const empty = contentEmptyFixture()
     expect(slots(render(row(empty)))).toEqual(['empty', 'empty', 'empty'])
     expect(renderText(row(empty))).toContain('1 Post ideas are not switched on for this workspace. 2 No update has covered a week yet. 3')
+    // Questions came up but your posts touched on all of them: the empty
+    // card says that, not that none came up (the fresh check).
+    const touched = contentFixture({ ideas: 'fewer' })
+    const allTouched = { ...touched, ideas: { ...touched.ideas, questions: [] }, asked: { ...touched.asked, rows: [], total: 0, touched: 4 } }
+    expect(renderText(row(allTouched))).toContain('2 Every other question people asked was touched on by one of your posts. 3')
     assertCopyContract(row(empty))
   })
 
@@ -133,7 +138,10 @@ describe('What to post next', () => {
     const node = row(data)
     const text = renderText(node)
     // What the cards are, in the board's place over the row.
-    expect(text).toMatch(/^What to post next Questions people asked this week that none of your posts since August touched on, the most videos first/)
+    // What the cards are, and that post ideas are off, said once over the row.
+    expect(text).toMatch(/^What to post next Post ideas are not switched on\. Questions people asked this week that none of your posts since August touched on, the most videos first/)
+    expect(text.split('not switched on')).toHaveLength(2)
+    expect(text).not.toContain('Post idea ')
     // The top of the also-asked list, the most videos first.
     expect(text.indexOf('Liner lifespan and replacement')).toBeLessThan(text.indexOf('Insurance refusals for powered knees'))
     const levels = copyNodes(render(node)).filter((n) => n.kind === 'level').map((n) => n.text)
@@ -141,7 +149,9 @@ describe('What to post next', () => {
     expect(levels.slice(0, 2)).toEqual(['23 of 241 videos this week', '31 of 318 in October so far'])
     expect(text).toContain("Who's asking New amputees, first year, Caregivers and family")
     expect(text).toContain('Your posts None of your 13 posts since August touched on it')
-    expect(text.split('Post idea Not switched on for this workspace')).toHaveLength(4)
+    // The facts the data holds, flowing from the top as an idea card's do.
+    expect(text).toContain("Who's asking New amputees, first year, Caregivers and family Came up on TikTok 12, YouTube 6, Instagram 3, Reddit 2 Comments 71 this week, 97 in October so far Subject No subject holds it Your posts None of your 13 posts since August touched on it Open in Market")
+    expect(text).toContain('Subject Fit & comfort Your posts')
     expect(text).not.toContain('Open the brief')
     expect(render(node)).toContain('href="/dashboard/market?conv=a1000000-0000-4000-8000-000000000001"')
     // The flag an idea on it would wear, only where it was earned.
@@ -164,19 +174,25 @@ describe('What to post next', () => {
     expect(card({ ...ctx, posts: 0 })).toContain('You published nothing of your own since August')
     // A page dumped before the count was carried says it without one.
     expect(card({ ...ctx, posts: undefined })).toContain('None of your posts since August touched on it')
+    // A fact not read is left out, never printed empty; the week's comments
+    // never print without the month's (decision 1).
+    const unreadFacts = renderText(<QuestionCardView row={{ ...q, platforms: null, comments: { week: 40, month: null } }} rank={1} state="not_on" ctx={ctx} />)
+    expect(unreadFacts).not.toMatch(/Came up on|Comments/)
     // The month's figure leads where the page reads the month.
     const month = render(<QuestionCardView row={q} rank={1} state="not_on" ctx={{ ...ctx, period: 'month', when: 'in October so far' }} />)
     expect(copyNodes(month).filter((n) => n.kind === 'level').map((n) => n.text)).toEqual(['31 of 288 videos in October so far'])
     // A set with fewer ideas says it of the question, not of the workspace.
-    expect(renderText(<QuestionCardView row={q} rank={2} state="ready" ctx={ctx} />)).toContain('Post idea None was written for this question')
+    expect(renderText(<QuestionCardView row={q} rank={2} state="ready" ctx={ctx} />)).toContain('Your posts None of your 13 posts since August touched on it Post idea None was written for this question Open in Market')
   })
 
   it('a set of fewer than three ideas keeps its own line over the row, and its cards after it hold questions', () => {
     const data = contentFixture({ ideas: 'fewer' })
     const text = renderText(row(data))
-    expect(text).toMatch(/^What to post next From questions asked 14 Sep to 11 Oct/)
+    // The line over the row names the questions after the idea too.
+    expect(text).toMatch(/^What to post next From questions asked 14 Sep to 11 Oct that none of your posts since August had touched on when they were picked, biggest first, then the next questions asked this week /)
     expect(text).toContain('Open the brief')
     expect(text.split('Post idea None was written for this question')).toHaveLength(3)
+    expect(text).not.toContain('not switched on')
     // The questions in the cards are not the idea's own.
     expect(data.ideas.questions.map((q) => q.registryId)).not.toContain(data.ideas.cards[0].registryId)
     assertCopyContract(row(data))

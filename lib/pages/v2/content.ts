@@ -314,6 +314,13 @@ export interface IdeasBlock {
  *  idea on it would wear (the anomaly check's, or the week read's new). */
 export interface QuestionSlot extends AskedRow {
   flag: Verdict | null
+  /** Where it came up: its videos by platform over the page's period, the
+   *  most first (each video counted on its own platform; they sum to its
+   *  figure). Null where not read. */
+  platforms: { platform: string; videos: number }[] | null
+  /** The comments it holds over the page's week and its month (decision 1:
+   *  the week's never alone). Null where not read. */
+  comments: { week: number | null; month: number | null } | null
 }
 
 /** The cards the ideas row always draws (E5-Content's three). */
@@ -391,6 +398,10 @@ export interface PostsBlock {
    *  typical post's floor read against `OWN_RESPONSE_MIN`. Absent on a page
    *  dumped before the parity pass. */
   rated?: number
+  /** Whether the market's typical video was read: without it no post has a
+   *  multiple, whatever its own figures. Absent on a page dumped before the
+   *  parity pass (read as true). */
+  marketTypical?: boolean
   best: PostRow | null
   rows: PostRow[]
   unread: string | null
@@ -577,6 +588,47 @@ export function pooledVideos(rows: readonly WindowDenominator[] | null, audience
   let n = 0
   for (const r of rows) if (keep.has(r.audience)) n += Number(r.videos) || 0
   return n
+}
+
+/** Each theme's comments pooled over the market's audiences. */
+export function pooledThemeComments(rows: readonly WindowThemeReading[] | null, audiences: readonly string[]): Map<string, number> | null {
+  if (!rows) return null
+  const keep = new Set(audiences)
+  const out = new Map<string, number>()
+  for (const r of rows) {
+    if (!keep.has(r.audience)) continue
+    const n = Number(r.comments)
+    if (!Number.isFinite(n) || n <= 0) continue
+    out.set(String(r.theme_id), (out.get(String(r.theme_id)) ?? 0) + n)
+  }
+  return out
+}
+
+/** Each theme's videos by platform, pooled over the market's audiences (each
+ *  video sits on one platform in one audience, so the mixes add). */
+export function pooledThemeMix(rows: readonly WindowThemeReading[] | null, audiences: readonly string[]): Map<string, Map<string, number>> | null {
+  if (!rows) return null
+  const keep = new Set(audiences)
+  const out = new Map<string, Map<string, number>>()
+  for (const r of rows) {
+    if (!keep.has(r.audience) || !r.platform_mix) continue
+    const mix = out.get(String(r.theme_id)) ?? new Map<string, number>()
+    for (const [platform, v] of Object.entries(r.platform_mix)) {
+      const n = Number(v)
+      if (Number.isFinite(n) && n > 0) mix.set(platform, (mix.get(platform) ?? 0) + n)
+    }
+    out.set(String(r.theme_id), mix)
+  }
+  return out
+}
+
+/** A platform mix as a card's rows, the most videos first. Null where the
+ *  read did not come back; an empty list where it came back with none. */
+export function platformsOf(mixes: Map<string, Map<string, number>> | null | undefined, id: string): { platform: string; videos: number }[] | null {
+  if (!mixes) return null
+  return [...(mixes.get(id) ?? new Map<string, number>()).entries()]
+    .map(([platform, videos]) => ({ platform, videos }))
+    .sort((a, b) => b.videos - a.videos || a.platform.localeCompare(b.platform))
 }
 
 /** A persona as the stored profile holds it, defensively (the row is jsonb a
@@ -984,7 +1036,7 @@ export const OWN_RESPONSE_MIN = 3
 export function postsBlock(input: { owned: OwnedPosts | null; typical: number | null; month: ContentMonth }): PostsBlock {
   const { owned, typical, month } = input
   const base = { month: month.month, complete: month.complete }
-  if (!owned) return { ...base, total: 0, byPlatform: [], response: null, rated: 0, best: null, rows: [], unread: 'Your posts could not be read just now.' }
+  if (!owned) return { ...base, total: 0, byPlatform: [], response: null, rated: 0, marketTypical: typical != null, best: null, rows: [], unread: 'Your posts could not be read just now.' }
   const rates = owned.posts.map(rateOf).filter((r): r is number => r != null)
   const own = median(rates)
   const rows = owned.posts.map((p) => postRow(p, typical))
@@ -995,6 +1047,7 @@ export function postsBlock(input: { owned: OwnedPosts | null; typical: number | 
     byPlatform: owned.byPlatform,
     response: own != null && typical != null && rates.length >= OWN_RESPONSE_MIN ? { multiple: round1(own / typical), rated: rates.length } : null,
     rated: rates.length,
+    marketTypical: typical != null,
     best,
     rows,
     unread: null,
@@ -1360,6 +1413,10 @@ interface WeekReads {
   audiences: string[]
   market: { week: number | null; month: number | null }
   themes: { week: Map<string, number> | null; month: Map<string, number> | null; weeks: (Map<string, number> | null)[] | null }
+  /** Every theme's comments over the week and the month, and its videos by
+   *  platform over each (the ideas row's question cards). */
+  comments: { week: Map<string, number> | null; month: Map<string, number> | null }
+  mixes: { week: Map<string, Map<string, number>> | null; month: Map<string, Map<string, number>> | null }
   weekLabels: string[] | null
   /** Over the days the ideas read (`IdeasRead`): the market's videos, every
    *  theme's, and every theme's in each of its weeks; and over the month
@@ -1410,6 +1467,8 @@ async function readWindows(scope: Scope, week: ContentWeek | null, month: Conten
       month: pooledThemeVideos(m.themes, audiences),
       weeks: weeks ? [...prior.map((p) => pooledThemeVideos(p.themes, audiences)), weekThemes] : null,
     },
+    comments: { week: pooledThemeComments(w?.themes ?? null, audiences), month: pooledThemeComments(m.themes, audiences) },
+    mixes: { week: pooledThemeMix(w?.themes ?? null, audiences), month: pooledThemeMix(m.themes, audiences) },
     weekLabels: weeks ? weeks.map((x) => x.label) : null,
     ideas: i
       ? {
@@ -1561,7 +1620,16 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
     const f = flagOf.get(r.registryId)
     const level = counted(windows?.themes.month, r.registryId, windows?.market.month ?? null)
     const flag = f && week ? flagVerdict(f, week) : newIds.has(r.registryId) && level ? newVerdict(r.registryId, r.label, month, level) : null
-    return { ...r, flag }
+    const weekComments = windows?.comments.week
+    const monthComments = windows?.comments.month
+    return {
+      ...r,
+      flag,
+      platforms: platformsOf(state.period === 'month' ? windows?.mixes.month : windows?.mixes.week, r.registryId),
+      comments: weekComments || monthComments
+        ? { week: weekComments ? weekComments.get(r.registryId) ?? 0 : null, month: monthComments ? monthComments.get(r.registryId) ?? 0 : null }
+        : null,
+    }
   })
 
   const typical = typicalRate(playbook)
@@ -1648,12 +1716,14 @@ export const topContentEmpty = (state: Exclude<IdeasState, 'ready'>): string =>
 
 // ---- the ideas row's other cards (parity pass, 13 Oct) ------------------------------
 
-/** What a question card prints under "Post idea", in the place an idea's
- *  format and opening take: why this card holds a question and not an idea,
- *  in a few calm words. `ready` is a set with fewer than three ideas. */
-export const QUESTION_IDEA_LINE: Record<IdeasState, string> = {
+/** What a question card prints as its "Post idea" fact: why this card holds
+ *  a question and not an idea, in a few calm words. `ready` is a set with
+ *  fewer than three ideas; `not_on` prints no fact, the row's line says it
+ *  once. */
+export const QUESTION_IDEA_LINE: Record<IdeasState, string | null> = {
   ready: 'None was written for this question',
-  not_on: 'Not switched on for this workspace',
+  // Said once, over the row (`questionsHeading`), never on each card.
+  not_on: null,
   none: 'None was written this week',
   stale: 'None written in the last four weeks',
   unread: 'Could not be read just now',
@@ -1679,15 +1749,19 @@ export interface QuestionSlotsContext {
   emptyLine: string
 }
 
-export function questionSlotsContext(data: Pick<ContentPageData, 'period' | 'week' | 'month' | 'market' | 'asked'>): QuestionSlotsContext {
+export function questionSlotsContext(data: Pick<ContentPageData, 'period' | 'week' | 'month' | 'market' | 'asked' | 'ideas'>): QuestionSlotsContext {
   const { week, month, asked } = data
   const weekWords = !week || week.isWeek ? 'this week' : daysPhrase(week.first, week.last)
   const when = data.period === 'month' ? monthWords(month) : weekWords
+  // "other" only where a card before it holds an idea or a question.
+  const other = data.ideas.cards.length + data.ideas.questions.length > 0 ? 'other ' : ''
   const emptyLine = asked.unread
     ? asked.unread
     : !week && data.period === 'week'
-      ? 'No update has covered a week yet.'
-      : `No other question came up ${when}.`
+      ? ASKED_NO_WEEK
+      : asked.touched > 0
+        ? `Every ${other}question people asked was touched on by one of your posts.`
+        : `No ${other}question came up ${when}.`
   return {
     period: data.period,
     when,
@@ -1703,12 +1777,18 @@ export function questionSlotsContext(data: Pick<ContentPageData, 'period' | 'wee
 /** The ideas row's line where every card is a question (no idea printed):
  *  what the cards are, in the board's place for "Questions people keep
  *  asking that your posts don't answer yet, biggest first". */
-export function questionsHeading(ctx: Pick<QuestionSlotsContext, 'when' | 'since' | 'posts'>): string {
+export function questionsHeading(ctx: Pick<QuestionSlotsContext, 'when' | 'since' | 'posts'>, state?: IdeasState): string {
   // Where your posts could not be read, or there were none, nothing was left
   // out as touched, and the line does not say so.
-  if (ctx.posts === null || ctx.posts === 0) return `Questions people asked ${ctx.when}, the most videos first`
-  return `Questions people asked ${ctx.when} that none of your posts since ${longMonth(ctx.since)} touched on, the most videos first`
+  const what = ctx.posts === null || ctx.posts === 0
+    ? `Questions people asked ${ctx.when}, the most videos first`
+    : `Questions people asked ${ctx.when} that none of your posts since ${longMonth(ctx.since)} touched on, the most videos first`
+  // Post ideas not switched on is said here, once, and on no card.
+  return state === 'not_on' ? `Post ideas are not switched on. ${what}` : what
 }
+
+/** The clause a row of fewer ideas adds for the questions after them. */
+export const questionsAfterIdeas = (ctx: Pick<QuestionSlotsContext, 'when'>): string => `, then the next questions asked ${ctx.when}`
 
 /**
  * The Dashboard's Content tile, light: the ideas (two round trips) beside the
