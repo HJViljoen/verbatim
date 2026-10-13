@@ -7,13 +7,11 @@ import { monthStartOf } from '../reading/month-key'
 import { TABLE_THEME_READINGS } from '../reading/types'
 import { CLIENT_AUDIENCE, rivalNameOf } from '../rivals'
 import { selectAll } from '../supabase-admin'
-import { loadActiveSubjects } from '../subjects/membership'
-import { subjectCalibration } from '../subjects/calibration-state'
 import { isMissingSubjects } from '../subjects/types'
 import type { Quote } from '../renderables/types'
 import { WHAT_THEY_SELL } from './market-frame'
 import { makerFraction, segmentOf } from './overview-market'
-import { loadMemberInsightIdsBySubject } from './subjects'
+import { loadSubjectPlacement, placeSubject, type SubjectPlacement } from './subject-place'
 
 // Conversation, as the approved artboard draws it (the pages build, 1 Oct;
 // Page-Conversation.dc.html). What the page adds to the loader's board, pane,
@@ -77,36 +75,9 @@ export function makerPostsSentence(share: number | null | undefined): string | n
   return f ? `${f.charAt(0).toUpperCase()}${f.slice(1)} of its videos are makers’ own posts.` : null
 }
 
-/**
- * The subject a conversation is part of: the one holding the most of its
- * member insights, at least 3 of them and at least 15% (the written read's
- * rule, lib/written/pool.ts `subjectForTheme`, restated here so the page does
- * not import the pipeline's pool; the test pins the two together). A tie goes
- * to the subject earlier in `order`, then by id.
- */
-export function subjectOfTheme(
-  memberIds: readonly string[],
-  subjectsOf: ReadonlyMap<string, readonly string[]>,
-  order: readonly string[] = [],
-): string | null {
-  const members = [...new Set(memberIds)]
-  if (members.length === 0) return null
-  const counts = new Map<string, number>()
-  for (const id of members) for (const s of new Set(subjectsOf.get(id) ?? [])) counts.set(s, (counts.get(s) ?? 0) + 1)
-  const at = (s: string) => {
-    const i = order.indexOf(s)
-    return i < 0 ? Number.MAX_SAFE_INTEGER : i
-  }
-  let best: string | null = null
-  let bestN = 0
-  for (const [s, n] of counts) {
-    if (n > bestN || (n === bestN && best != null && (at(s) - at(best) || s.localeCompare(best)) < 0)) {
-      best = s
-      bestN = n
-    }
-  }
-  return best != null && bestN >= 3 && bestN / members.length >= 0.15 ? best : null
-}
+/** The subject a conversation is part of, among one tier: lib/pages/
+ *  subject-place.ts, the one placement rule (kept importable from here). */
+export { subjectOfTheme } from './subject-place'
 
 /** A category conversation as the kind analysis weighs it. */
 export interface KindTheme {
@@ -291,26 +262,19 @@ export async function loadThemeFacts(
   return out
 }
 
-/** The ready subjects and which of them each insight is a member of. Null
- *  where the subjects are not recorded here.
+/** The subjects a conversation may be placed in, and which of them each
+ *  insight is a member of (`loadSubjectPlacement`, the one placement rule:
+ *  lib/pages/subject-place.ts). Null where the subjects are not recorded
+ *  here, or none may take a conversation.
  *
- *  READY ONLY, here and on every surface but Market: a subject whose
- *  membership is not verified tags nothing. Market alone (the parity pass,
- *  13 Oct; lib/pages/v2/market.ts `placeSubject`) places a conversation in a
- *  subject whose check is still open, and only where no ready subject takes
- *  it, so that subject's row keeps its "Inside it" and the table its Subject
- *  column; a ready subject always wins, a failed one is never used, and the
- *  open one prints no level, line, change or chip count until its check
- *  clears (ruling U6). */
-export async function loadReadySubjects(supabase: SupabaseClient, clientId: string): Promise<{ names: Map<string, string>; order: string[]; subjectsOf: Map<string, string[]> } | null> {
+ *  THE SAME RULE AS MARKET AND CONTENT (14 Oct; until then this surface
+ *  placed in READY subjects only): a ready subject always wins, one whose
+ *  check is open takes a conversation only where no ready subject does, and
+ *  a failed one is never used. Naming the subject is all this surface does
+ *  with it (ruling U6: a name is not a figure). */
+export async function loadPlacedSubjects(supabase: SupabaseClient, clientId: string): Promise<SubjectPlacement | null> {
   try {
-    const subjects = (await loadActiveSubjects(supabase as never, clientId)).filter((s) => subjectCalibration(s) === 'ready')
-    if (subjects.length === 0) return null
-    const bySubject = await loadMemberInsightIdsBySubject(supabase, clientId, subjects.map((s) => s.id))
-    if (!bySubject) return null
-    const subjectsOf = new Map<string, string[]>()
-    for (const [subject, ids] of bySubject) for (const id of ids) subjectsOf.set(id, [...(subjectsOf.get(id) ?? []), subject])
-    return { names: new Map(subjects.map((s) => [s.id, s.name])), order: subjects.map((s) => s.id), subjectsOf }
+    return (await loadSubjectPlacement(supabase, clientId)).placed
   } catch (error) {
     if (!isMissingSubjects(error)) console.error(`[pages] voice.subjects: ${(error as Error)?.message ?? String(error)}; not read`)
     return null
@@ -348,7 +312,7 @@ export function buildConversation(input: {
   attribution: AttributionInputs | null
   /** Member insight ids by conversation (the board's). */
   members: ReadonlyMap<string, readonly string[]>
-  subjects: { names: ReadonlyMap<string, string>; order: readonly string[]; subjectsOf: ReadonlyMap<string, readonly string[]> } | null
+  subjects: SubjectPlacement | null
   /** Makers' share by conversation, where the segments were measured; null
    *  where they were not (nothing is said about makers then). */
   makerShares: ReadonlyMap<string, number | null> | null
@@ -371,7 +335,7 @@ export function buildConversation(input: {
   })
   const rows: Record<string, ConvBoardRow> = {}
   for (const id of new Set(input.boardIds)) {
-    const subjectId = input.subjects ? subjectOfTheme(input.members.get(id) ?? [], input.subjects.subjectsOf, input.subjects.order) : null
+    const subjectId = input.subjects ? placeSubject(input.members.get(id) ?? [], input.subjects) : null
     rows[id] = {
       who: whoOf(input.talk.get(id), input.attribution),
       subject: subjectId ? input.subjects?.names.get(subjectId) ?? null : null,

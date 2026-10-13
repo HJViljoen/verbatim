@@ -1,9 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import type { Period } from '../../../components/v2/period-switch'
-import { loadActiveSubjects } from '../../subjects/membership'
-import { subjectCalibration } from '../../subjects/calibration-state'
-import { isMissingSubjects, type Subject } from '../../subjects/types'
 import { loadObjectReadings, type MarketObjectRef, type ObjectReading } from '../../agent/movement'
 import { brandRulesFor } from '../../brands/aliases'
 import { loadCommentNamings, trackedBrands, whoSplit, type WhoVideo } from '../../brands/attribution'
@@ -44,10 +41,12 @@ import { homeWeeks, homeWeeksFrame, loadWeekRows, WEEKS_FAILED, type WeeksFailed
 import { loadThemeQuotes, loadThemeSegmentRows, makerRuleEnabled, voiceOf, type CiteCandidate } from '../overview'
 import { pickQuotes, POOL_FLOOR } from '../overview-market'
 import { talkKindLabel } from '../overview-market/kinds'
-import { loadMemberInsightIdsBySubject } from '../subjects'
 import { fetchThemedRunId } from '../themed-run'
 import { askAboutTheme, loadLinkedTheme, loadThemeKinds } from '../voice-surface'
-import { subjectOfTheme } from '../voice-conversation'
+import { loadSubjectPlacement, placeSubject, type SubjectPlacement } from '../subject-place'
+import { loadActiveSubjects } from '../../subjects/membership'
+import { subjectCalibration } from '../../subjects/calibration-state'
+import { isMissingSubjects } from '../../subjects/types'
 import { flagFigures, loadCheckStrict, loadFlagsStrict, weekFlagRows, type FlagRow, type UnusualFlag } from '../week'
 import { weekLead } from '../../reading/week-lead'
 import { setApartOf } from '../../written/conversations'
@@ -70,7 +69,7 @@ import { frozenFlag } from '../../written/unusual'
 //   3. THE SUBJECT BOARD: every confirmed subject's month so far against last
 //      month, banded through a `Verdict` (`loadObjectReadings`, the standing
 //      reading, lib/written/standing.ts `factsFromReadings`), its month line,
-//      and the conversations inside it (`subjectOfTheme`) with the period's
+//      and the conversations inside it (`placeSubject`) with the period's
 //      counts.
 //   4. THE RAIL: what people do in the comments (the six kinds, the month so
 //      far against last month), the market's videos week by week (the
@@ -767,16 +766,11 @@ export interface ConvInput {
   themes: ReadonlyMap<string, RunTheme>
   /** registry id → label, for a theme the themed run does not name. */
   registryLabels?: ReadonlyMap<string, string>
-  /** The subjects a conversation is placed in (`placeSubject`): the READY ones
-   *  (`order`, `subjectsOf`), and, on Market only, the ones whose check is
-   *  open (`pending`), used only where no ready subject takes the
-   *  conversation. `names` holds both. */
-  subjects: {
-    names: ReadonlyMap<string, string>
-    order: readonly string[]
-    subjectsOf: ReadonlyMap<string, readonly string[]>
-    pending?: { order: readonly string[]; subjectsOf: ReadonlyMap<string, readonly string[]> } | null
-  } | null
+  /** The subjects a conversation is placed in (`placeSubject`, the one rule,
+   *  lib/pages/subject-place.ts): the READY ones (`order`, `subjectsOf`), and
+   *  the ones whose check is open (`pending`), used only where no ready
+   *  subject takes the conversation. `names` holds both. */
+  subjects: SubjectPlacement | null
   /** The three windows' category counts (oldest first), each a map by theme. */
   weekCounts: (ReadonlyMap<string, { videos: number; mix?: PlatformMix | null }> | null)[]
   /** Which windows our changes cut. */
@@ -1464,69 +1458,10 @@ async function resolveSlug(db: SupabaseClient, clientId: string, slug: string, o
   return ((res.data ?? []) as { id: string }[])[0]?.id ?? null
 }
 
-/**
- * The subjects a conversation may be placed in, in two tiers (the parity
- * pass, 13 Oct; ruling U6): the READY ones, and the ones whose check is still
- * open. A subject being re-described is in neither: its check found it
- * catching comments about other things. Pure.
- */
-export function placementTiers<S extends { id: string }>(all: readonly { subject: S; calibration: string }[]): { ready: S[]; pending: S[] } {
-  return {
-    ready: all.filter((x) => x.calibration === 'ready').map((x) => x.subject),
-    pending: all.filter((x) => x.calibration !== 'ready' && x.calibration !== 'failed').map((x) => x.subject),
-  }
-}
-
-/**
- * THE SUBJECT A CONVERSATION IS PLACED IN, ON MARKET (the parity pass, 13 Oct;
- * ruling U6): a READY subject always wins. `subjectOfTheme` over the ready
- * subjects alone first; only where no ready subject takes the conversation (3
- * of its member insights and 15% of them) is it read against the subjects
- * whose check is open, so a subject whose matching is not verified never
- * takes a conversation from one whose matching is. Membership is written for
- * every active subject whatever its check (the check reads it), and placing a
- * conversation prints only the conversation's own counts: a subject whose
- * check is open keeps its "Inside it" and the table its Subject column, while
- * its own level, line, change and chip count wait for the check. Pure.
- */
-export function placeSubject(memberIds: readonly string[], s: NonNullable<ConvInput['subjects']>): string | null {
-  return subjectOfTheme(memberIds, s.subjectsOf, s.order)
-    ?? (s.pending ? subjectOfTheme(memberIds, s.pending.subjectsOf, s.pending.order) : null)
-}
-
-async function loadSubjects(db: SupabaseClient, clientId: string): Promise<{
-  all: { subject: Subject; calibration: ReturnType<typeof subjectCalibration> }[]
-  placed: ConvInput['subjects']
-}> {
-  let subjects: Subject[]
-  try {
-    subjects = await loadActiveSubjects(db as never, clientId)
-  } catch (error) {
-    if (isMissingSubjects(error)) return { all: [], placed: null }
-    throw error
-  }
-  const all = subjects.map((s) => ({ subject: s, calibration: subjectCalibration(s) }))
-  const tiers = placementTiers(all)
-  const placeable = [...tiers.ready, ...tiers.pending]
-  if (placeable.length === 0) return { all, placed: null }
-  // One membership read for both tiers, split by subject.
-  const bySubject = await loadMemberInsightIdsBySubject(db, clientId, placeable.map((s) => s.id))
-  if (!bySubject) return { all, placed: null }
-  const tierOf = (list: readonly Subject[]) => {
-    const subjectsOf = new Map<string, string[]>()
-    for (const sub of list) for (const id of bySubject.get(sub.id) ?? []) subjectsOf.set(id, [...(subjectsOf.get(id) ?? []), sub.id])
-    return { order: list.map((x) => x.id), subjectsOf }
-  }
-  const ready = tierOf(tiers.ready)
-  return {
-    all,
-    placed: {
-      names: new Map(placeable.map((x) => [x.id, x.name])),
-      order: ready.order,
-      subjectsOf: ready.subjectsOf,
-      pending: tiers.pending.length > 0 ? tierOf(tiers.pending) : null,
-    },
-  }
+/** The subjects and the placement Market reads (`loadSubjectPlacement`,
+ *  lib/pages/subject-place.ts: the one placement rule every surface uses). */
+function loadSubjects(db: SupabaseClient, clientId: string): ReturnType<typeof loadSubjectPlacement> {
+  return loadSubjectPlacement(db, clientId)
 }
 
 /** The evidence refs of these themes for the period: the stored month's

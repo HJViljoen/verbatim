@@ -75,7 +75,7 @@ import { ninetyDays } from './brands'
 import { loadAttribution, marketLabels, trackedBrands } from '../brands/attribution'
 import { clientBrandName } from '../brands/precision'
 import {
-  CONV_KINDS, KIND_ITEM_FLOOR, buildConversation, convKindLabel, kindItems, loadBrandThemeRows, loadReadySubjects,
+  CONV_KINDS, KIND_ITEM_FLOOR, buildConversation, convKindLabel, kindItems, loadBrandThemeRows, loadPlacedSubjects,
   loadThemeFacts, quoteSource,
   type ConversationExtras, type KindTheme, type TalkRef,
 } from './voice-conversation'
@@ -700,7 +700,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   // subjects with their members. Neither waits on anything below.
   const brandThemesAhead = loadBrandThemeRows(db, clientId, month, marketRivals)
   brandThemesAhead.catch(() => {})
-  const subjectsAhead = loadReadySubjects(supabase, clientId)
+  const subjectsAhead = loadPlacedSubjects(supabase, clientId)
   subjectsAhead.catch(() => {})
 
   // ONE BRAND'S VIDEOS (`?brand=`), IN THE BOARD'S PLACE: the ninety days the

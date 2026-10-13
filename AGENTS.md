@@ -1205,13 +1205,25 @@ This version has breaking changes — APIs, conventions, and file structure may 
     the week's next biggest conversation not on the row under "Also talked
     about" (`alsoTalkedOf`). A subject whose check is open keeps its row,
     lists its conversations ("Inside it") and says `SUBJECT_NOT_MEASURED`
-    where its level goes. Market alone places a conversation in a subject
-    whose check is still open, and only where no ready subject takes it
-    (`placeSubject`: a ready subject always wins, a failed one is never
-    used); that subject keeps its row, its "Inside it" and the table's
-    Subject column, but prints no level, line, change or chip count until its
-    check clears (ruling U6). Every other surface places conversations in
-    ready subjects only (`loadReadySubjects`).
+    where its level goes. ONE PLACEMENT RULE, ON EVERY SURFACE THAT NAMES A
+    CONVERSATION'S SUBJECT (14 Oct): `placeSubject` over
+    `loadSubjectPlacement` (`lib/pages/subject-place.ts`), on the
+    conversation's member insights in the run the page reads: a ready
+    subject always wins, one whose check is open takes a conversation only
+    where no ready subject does, and a failed one is never used. Market's
+    rows and table, Content's question cards and Also asked
+    (`readSubjects`, which until 14 Oct had its own one-tier rule over every
+    active subject, failed ones included) and the legacy Voice surface
+    (`loadPlacedSubjects`) all read it, so one conversation names one
+    subject everywhere (`lib/pages/subject-place.test.ts` pins Market's
+    `convOf` against Content's `placeConversations`). A name is not a
+    figure: a subject whose check is open keeps its row, its "Inside it"
+    and the table's Subject column, but prints no level, line, change or
+    chip count until its check clears (ruling U6). The pipeline's written
+    reads (`lib/written/pool.ts` `loadThemeSubjects`, `standing.ts`) still
+    group by the one-tier `subjectForTheme` at write time, frozen into the
+    stored read and replayed as sent; no live page places a conversation
+    from them.
   - **Voices** (T4; `lib/pages/v2/voices.ts`), on the reading month, its
     bar labelled where that is not the current month (decision 3, above).
     Groups are today's profile with this month's comment-dated videos: a

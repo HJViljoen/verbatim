@@ -26,7 +26,7 @@ import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, loadTrackedRivals } from '../../riv
 import { selectAll } from '../../supabase-admin'
 import { loadPublishedWeekRead, type PublishedWeekRead } from '../../written/published'
 import { coveredDays, readingMonthOf } from '../../written/month'
-import { subjectForTheme } from '../../written/pool'
+import { loadSubjectPlacement, placeConversations } from '../subject-place'
 import { questionTouch, type QuestionPost } from '../own-post-touch'
 import { buildPlaybook, loadPlaybookVideos, type PlaybookBlock } from '../playbook'
 import { buildReplies, loadCheckStrict, loadFlagsStrict, weekFlagRows, workedLabel, type RepliesBlock, type ReplyRow } from '../week'
@@ -1325,38 +1325,24 @@ async function readFlags(db: SupabaseClient, clientId: string, runId: string): P
   return (weekFlagRows(check, flags) ?? []).filter((f) => f.object_kind === 'theme')
 }
 
-/** Each shown conversation's subject: the one holding most of its member
- *  insights this run (`subjectForTheme`, the written read's rule). */
+/** Each shown conversation's subject, by Market's rule (`placeSubject` over
+ *  `loadSubjectPlacement`, lib/pages/subject-place.ts: a ready subject wins,
+ *  one whose check is open only where no ready one takes it, a failed one
+ *  never), on the conversation's member insights this run. The one rule
+ *  every surface names a conversation's subject by, so a conversation names
+ *  the same subject here as on Market. A name only: Content prints no
+ *  figure of the subject's own (ruling U6). */
 async function readSubjects(handle: Scope['reading'], runId: string, ids: readonly string[]): Promise<Map<string, { id: string; name: string } | null>> {
-  const out = new Map<string, { id: string; name: string } | null>()
-  if (ids.length === 0) return out
+  if (ids.length === 0) return new Map()
   const { client, clientId } = handle
-  const [obs, subjects] = await Promise.all([
+  const [obs, placement] = await Promise.all([
     selectAll<{ theme_id: string; member_insight_ids: string[] | null }>(() =>
       client.from('theme_observations').select('theme_id, member_insight_ids')
         .eq('client_id', clientId).eq('run_id', runId).in('theme_id', [...ids]).order('theme_id')),
-    selectAll<{ id: string; name: string | null; status: string | null }>(() =>
-      client.from('subjects').select('id, name, status').eq('client_id', clientId).order('id')),
+    loadSubjectPlacement(client, clientId),
   ])
-  const names = new Map(subjects.filter((s) => s.status === 'active' && s.name).map((s) => [String(s.id), String(s.name)]))
   const members = new Map(obs.map((o) => [String(o.theme_id), (o.member_insight_ids ?? []).map(String)]))
-  const insightIds = [...new Set([...members.values()].flat())]
-  const subjectsOf = new Map<string, string[]>()
-  for (const part of chunk(insightIds, UUID_IN_CHUNK)) {
-    const rows = await selectAll<{ subject_id: string; audience_insight_id: string }>(() =>
-      client.from('subject_memberships').select('subject_id, audience_insight_id')
-        .eq('client_id', clientId).eq('member', true).in('audience_insight_id', part).order('subject_id').order('audience_insight_id'))
-    for (const r of rows) {
-      if (!names.has(String(r.subject_id))) continue
-      subjectsOf.set(String(r.audience_insight_id), [...(subjectsOf.get(String(r.audience_insight_id)) ?? []), String(r.subject_id)])
-    }
-  }
-  const order = [...names.keys()]
-  for (const id of ids) {
-    const s = subjectForTheme(members.get(id) ?? [], subjectsOf, order)
-    out.set(id, s ? { id: s, name: names.get(s)! } : null)
-  }
-  return out
+  return placeConversations(new Map(ids.map((id) => [id, members.get(id) ?? []])), placement.placed)
 }
 
 const PANEL_VIDEO_COLUMNS = 'id, video_id, platform, video_url, account_name, caption, hook_text, classified_type, hook_style, engagement_rate, source, is_client, views'

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { placementTiers, placeSubject } from '../subject-place'
 import { WEEKS_FAILED } from '../home'
 import { setApartOf } from '../../written/conversations'
 import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '../../subjects/calibration-state'
@@ -13,7 +14,7 @@ import {
   convOf, cutWindows, doingOf, leadDoing, marketWeeksOf, flagCardOf, flagVerdict, groupsOf, isRegistryId, insideOf, marketHref, marketMonths, marketParams,
   mergeMixes, monthsText, notchOf, ourReadOf, panelStats, periodHref, personasOf, pickHero, pickWeekSides, platformRows, subjectHref,
   flagBaseWords, monthSoFar, tableFilterOf, tableMonths, topSpans, unmeasuredOf, weekWindows, whoOf, windowLabel, withMonthPlatforms, MARKET_TABLE_ROWS,
-  alsoTalkedOf, earlierNewOf, placementTiers, placeSubject, printableFlags, sideIds, subjectAxis,
+  alsoTalkedOf, earlierNewOf, printableFlags, sideIds, subjectAxis,
   type MarketConv,
 } from './market'
 import {
