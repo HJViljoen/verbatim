@@ -72,10 +72,27 @@ export type CatalogueTextKind = keyof typeof CATALOGUE_LIMITS
 
 const WHAT: Record<CatalogueTextKind, string> = { group: 'category', product: 'product', alias: 'name' }
 
+/** The characters the matcher reads in an alias: letters, digits, spaces and
+ *  & . ' + -. T11's `aliasBody` (lib/products/rules.ts) refuses anything else,
+ *  and a name under two letters or digits, so an alias it would refuse never
+ *  reaches the list. The same rule, in one place here, until the merge points
+ *  this at T11's. */
+const ALIAS_CHARS = /^[\p{L}\p{N} &.'+-]+$/u
+
+/** Why the matcher could never read this as a name, or null where it can. PURE. */
+export function aliasTextProblem(text: string): string | null {
+  const t = text.trim()
+  if (!ALIAS_CHARS.test(t)) return "Use letters, numbers, spaces and & . ' + - only, so the name can be found as it is written."
+  if ([...t.replace(/[^\p{L}\p{N}]/gu, '')].length < 2) return 'Give the name at least two letters or numbers.'
+  return null
+}
+
 /**
  * A typed name as the catalogue stores it: spaces collapsed and trimmed, or
  * the sentence that refuses it. The database's CHECK says the same (trimmed,
- * within its length, no control characters); this says it in words first. PURE.
+ * within its length, no control characters); this says it in words first. A
+ * product's name is also one of its names (an alias of kind `name`), so it and
+ * an alias are held to the matcher's rule too (`aliasTextProblem`). PURE.
  */
 export function catalogueText(raw: unknown, kind: CatalogueTextKind): { ok: true; text: string } | { ok: false; message: string } {
   const text = String(raw ?? '').replace(/\s+/g, ' ').trim()
@@ -83,6 +100,10 @@ export function catalogueText(raw: unknown, kind: CatalogueTextKind): { ok: true
   if (/[\u0000-\u001f\u007f]/.test(text)) return { ok: false, message: `Type the ${WHAT[kind]} as plain words.` }
   if (text.length < min) return { ok: false, message: min > 1 ? `Give the ${WHAT[kind]} at least ${min} letters.` : `Type the ${WHAT[kind]} first.` }
   if (text.length > max) return { ok: false, message: `Keep the ${WHAT[kind]} under ${max} characters.` }
+  if (kind !== 'group') {
+    const problem = aliasTextProblem(text)
+    if (problem) return { ok: false, message: problem }
+  }
   return { ok: true, text }
 }
 
@@ -153,7 +174,7 @@ export interface ProductLine {
   name: string
   /** The other names people use, its own name left out. */
   aliases: AliasChip[]
-  /** Its videos this month; null where the month has not been read. */
+  /** Its videos this month; null where the month holds no row for it. */
   videos: number | null
 }
 
@@ -173,7 +194,8 @@ export interface OpenCategory {
   products: number
   /** How many of them came up this month; null where the month is unread. */
   cameUp: number | null
-  /** Videos about one of its products, the rules unable to tell which. */
+  /** Videos about one of its products, the rules unable to tell which; null
+   *  where the month holds no row for the category. */
   unclear: number | null
   /** Where those are tagged. */
   tagHref: string
@@ -200,6 +222,10 @@ export interface ProductSettingsView {
   /** Any common word on the open category, so the key is drawn. */
   anyConfirm: boolean
   canEdit: boolean
+  /** An owner or admin the tenant lock holds (`assertTenantMay`, `tracking`):
+   *  the controls are drawn disabled, under the lock's own line, rather than
+   *  refusing after a submit. Never true for the operator. */
+  locked: boolean
 }
 
 const chip = (a: ProductAliasRow): AliasChip => ({ id: a.id, alias: a.alias, kind: a.kind, needsConfirm: a.needs_confirm })
@@ -220,7 +246,7 @@ const sum = (rows: readonly MonthProductReadingRow[], pick: (r: MonthProductRead
  */
 export function productSettingsView(
   read: Extract<ProductSettingsRead, { state: 'ready' }>,
-  opts: { selected?: string | null; canEdit: boolean },
+  opts: { selected?: string | null; canEdit: boolean; locked?: boolean },
 ): ProductSettingsView {
   const groups = [...read.groups].sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
   const live = new Set(groups.map((g) => g.id))
@@ -238,9 +264,14 @@ export function productSettingsView(
     selected: g.id === open?.id,
   }))
 
+  // A PRODUCT WITH NO ROW HAS NO FIGURE. Its videos are the sum of its own
+  // rows; where the month holds none for it, nothing has read it, and a
+  // missing row is never summed to zero ("quiet" is a claim about the market).
   const isRead = read.readings.length > 0
-  const productVideos = (id: string): number | null =>
-    isRead ? sum(read.readings.filter((r) => r.object_kind === 'product' && r.object_id === id), (r) => r.k_named) : null
+  const productVideos = (id: string): number | null => {
+    const rows = read.readings.filter((r) => r.object_kind === 'product' && r.object_id === id)
+    return rows.length > 0 ? sum(rows, (r) => r.k_named) : null
+  }
 
   // THE SEED LINE names the website and the day the list was filled in, from
   // the rows themselves (`seeded_from`, `created_at`): the earliest seeded
@@ -266,7 +297,7 @@ export function productSettingsView(
       name: open.name,
       products: rows.length,
       cameUp: isRead ? rows.filter((r) => (r.videos ?? 0) > 0).length : null,
-      unclear: isRead ? sum(groupRows, (r) => r.k_unclear) : null,
+      unclear: groupRows.length > 0 ? sum(groupRows, (r) => r.k_unclear) : null,
       tagHref: productsPageHref(open.id),
       words: own.filter((a) => a.kind === 'category_word').map(chip),
       ranges: own.filter((a) => a.kind !== 'category_word').map(chip),
@@ -284,5 +315,6 @@ export function productSettingsView(
     choices: groups.map((g) => ({ id: g.id, name: g.name })),
     anyConfirm: openView != null && [...openView.words, ...openView.ranges, ...openView.rows.flatMap((r) => r.aliases)].some((a) => a.needsConfirm),
     canEdit: opts.canEdit,
+    locked: opts.canEdit && opts.locked === true,
   }
 }

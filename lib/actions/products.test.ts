@@ -175,6 +175,45 @@ describe('products', () => {
     expect(changes()[0]).toMatchObject({ field: 'products', after: expect.objectContaining({ id: out.id, name: 'Iceross Ultra', name_alias: 'written' }) })
   })
 
+  it('refuses a product whose name another product or a category already answers to, before writing anything', async () => {
+    // `sealin` is Seal-In X's other name; `liner` is a word for Liners.
+    for (const name of ['Sealin', 'Liner']) {
+      expect(await addProduct(prev, form({ group_id: FEET, name }))).toEqual({ ok: false, message: `${name} is already a name for something else on your list.` })
+    }
+    expect(await editProduct(prev, form({ id: SYNERGY, name: 'Seal In V', group_id: LINERS }))).toEqual({ ok: false, message: 'Seal In V is already a name for something else on your list.' })
+    expect(catalogueWrites()).toEqual([])
+    expect(changes()).toEqual([])
+  })
+
+  it('renames a product to one of its own other names without writing the word twice', async () => {
+    expect(await editProduct(prev, form({ id: SEAL_IN_X, name: 'Sealin', group_id: LINERS }))).toMatchObject({ ok: true, message: 'Saved.' })
+    const own = tables.product_aliases.filter((a) => a.product_id === SEAL_IN_X)
+    expect(own.filter((a) => a.alias === 'Sealin')).toEqual([])
+    expect(own.find((a) => a.alias === 'sealin')!.retired_at).toBeNull()
+    expect(own.find((a) => a.kind === 'name')!.retired_at).toEqual(expect.any(String))
+    expect(changes()[0]).toMatchObject({ after: expect.objectContaining({ name_alias: 'own' }) })
+  })
+
+  it('never says "Added." or "Saved." over a name that did not land, and keeps the old name on a failed rename', async () => {
+    // The alias insert loses a race (23505) after the product is written.
+    const client = db.client as { from: (t: string) => Record<string, unknown> }
+    const from = client.from
+    client.from = (t: string) => {
+      const b = from(t)
+      if (t === 'product_aliases') b.insert = () => ({ then: (ok: (v: unknown) => unknown) => Promise.resolve({ data: null, error: { code: '23505', message: 'duplicate key' } }).then(ok) })
+      return b
+    }
+    const added = await addProduct(prev, form({ group_id: LINERS, name: 'Iceross Ultra' }))
+    expect(added).toMatchObject({ ok: false, message: expect.stringContaining('Iceross Ultra was added, but its name was not saved as one of its names') })
+    expect(tables.products.find((p) => p.name === 'Iceross Ultra')).toBeTruthy()
+    expect(changes()[0]).toMatchObject({ field: 'products', after: expect.objectContaining({ name_alias: 'taken' }) })
+
+    const renamed = await editProduct(prev, form({ id: SEAL_IN_X, name: 'Iceross Seal-In X5', group_id: LINERS }))
+    expect(renamed).toMatchObject({ ok: false, message: expect.stringContaining('It was renamed Iceross Seal-In X5, but its name was not saved') })
+    // The old name still finds it.
+    expect(tables.product_aliases.find((a) => a.product_id === SEAL_IN_X && a.kind === 'name')!.retired_at).toBeNull()
+  })
+
   it('refuses a product name already on the list in any category', async () => {
     expect(await addProduct(prev, form({ group_id: FEET, name: 'iceross comfort' }))).toEqual({ ok: false, message: 'You already have a product called iceross comfort.' })
     expect(catalogueWrites()).toEqual([])

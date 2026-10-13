@@ -97,11 +97,14 @@ const reading = (
 }
 
 /** October so far: Seal-In X in six videos (one of them Össur's own), Comfort
- *  in three, Synergy in two, and eleven videos about one of the liners the
- *  rules could not tell. */
+ *  in three, Synergy in two, five liners read and named by none (the board's
+ *  "quiet"), and eleven videos about one of the liners the rules could not
+ *  tell. The other categories' products have no row: not read. */
 export function fixtureReadings(): MonthProductReadingRow[] {
   const LINERS = fid(1, 1)
+  const quiet = ['Iceross Seal-In V', 'Iceross Dermo', 'Iceross Sport', 'Iceross Upper-X', 'Iceross Comfort Cushion']
   return [
+    ...quiet.map((name) => reading('product', productId(name), LINERS, 'industry-other', {})),
     reading('product', productId('Iceross Seal-In X'), LINERS, 'industry-other', { named: 5 }),
     reading('product', productId('Iceross Seal-In X'), LINERS, 'client', { named: 1 }),
     reading('product', productId('Iceross Comfort'), LINERS, 'industry-other', { named: 3 }),

@@ -75,6 +75,10 @@ export interface ProductFormState {
 
 const uuid = z.string().uuid()
 const GONE = { group: 'That category is no longer here.', product: 'That product is no longer here.', alias: 'That name is no longer on your list.' } as const
+const TAKEN = (word: string): string => `${word} is already a name for something else on your list.`
+/** The product was written and its name was not saved as one of its names. */
+const NAME_NOT_SAVED = (name: string, done: 'added' | 'renamed'): string =>
+  `${done === 'added' ? `${name} was added` : `It was renamed ${name}`}, but its name was not saved as one of its names, so it cannot be found by it yet. Add ${name} under its other names.`
 
 type Admin = ReturnType<typeof createAdminClient>
 
@@ -275,6 +279,12 @@ export async function addProduct(_prev: ProductFormState, form: FormData): Promi
   if (productsError) return failed('products read', productsError)
   const live = (products ?? []) as ProductRef[]
   if (live.some((p) => sameCatalogueName(p.name, name.text))) return { ok: false, message: `You already have a product called ${name.text}.` }
+  // ITS NAME MUST BE FREE AS A NAME, checked before anything is written: a
+  // word another product or a category already answers to would leave the
+  // new product with no name the matcher reads, while the page said "Added".
+  const aliases = await liveAliases(w)
+  if (!('rows' in aliases)) return aliases
+  if (aliases.rows.some((a) => sameCatalogueName(a.alias, name.text))) return { ok: false, message: TAKEN(name.text) }
 
   const { data: row, error: insertError } = await w.admin.from(TABLE_PRODUCTS)
     .insert({ client_id: w.clientId, group_id: groupId, name: name.text, status: 'active', sort: nextSort(live.filter((p) => p.group_id === groupId)), ...stamp(w.actor) })
@@ -288,6 +298,9 @@ export async function addProduct(_prev: ProductFormState, form: FormData): Promi
   await log(w, 'products', null, { id, group_id: groupId, name: name.text, name_alias: nameAlias, needs_confirm: common },
     `${name.text} was added to ${(group as GroupRef).name}.`)
   revalidateProducts()
+  // Never "Added." over a name that did not land: the product is on the list
+  // and says so, and the sentence says what to do about its name.
+  if (nameAlias !== 'written') return { ok: false, message: NAME_NOT_SAVED(name.text, 'added'), id }
   return { ok: true, message: 'Added.', id }
 }
 
@@ -310,6 +323,16 @@ export async function editProduct(_prev: ProductFormState, form: FormData): Prom
   if (!uuid.safeParse(groupId).success) return { ok: false, message: GONE.group }
   if (before.name === name.text && before.group_id === groupId) return { ok: true, message: 'Nothing to change.', id }
   if (live.some((p) => p.id !== id && sameCatalogueName(p.name, name.text))) return { ok: false, message: `You already have a product called ${name.text}.` }
+  // A NEW NAME MUST BE FREE AS A NAME before the rename is written (addProduct's
+  // rule); one this product already answers to is its own, and stays.
+  const renamed = !sameCatalogueName(before.name, name.text)
+  let aliasRows: AliasRef[] = []
+  if (renamed) {
+    const aliases = await liveAliases(w)
+    if (!('rows' in aliases)) return aliases
+    aliasRows = aliases.rows
+    if (aliasRows.some((a) => a.product_id !== id && sameCatalogueName(a.alias, name.text))) return { ok: false, message: TAKEN(name.text) }
+  }
 
   const moved = groupId !== before.group_id
   let sort = before.sort
@@ -329,22 +352,28 @@ export async function editProduct(_prev: ProductFormState, form: FormData): Prom
   }
   if ((hit ?? []).length === 0) return { ok: false, message: GONE.product }
 
-  // THE OWN-NAME ALIAS FOLLOWS THE NAME: the old one retired, the new one
-  // written, with the old one's common-word flag. A change of case alone is
-  // the same word to the matcher, so it leaves the alias as it is.
-  let nameAlias: 'kept' | 'written' | 'taken' | 'failed' = 'kept'
-  if (!sameCatalogueName(before.name, name.text)) {
-    const aliases = await liveAliases(w)
-    const old = 'rows' in aliases ? aliases.rows.filter((a) => a.product_id === id && a.kind === 'name' && sameCatalogueName(a.alias, before.name)) : []
-    const retireError = await retireAliases(w, old.map((a) => a.id), new Date().toISOString())
-    if (retireError) console.error(`[products] old name alias for ${id}: ${(retireError as { message?: string }).message}`)
-    nameAlias = await writeNameAlias(w, id, name.text, old.some((a) => a.needs_confirm))
+  // THE OWN-NAME ALIAS FOLLOWS THE NAME: the new one written first, with the
+  // old one's common-word flag, and only then the old one retired, so a write
+  // that fails leaves the product its old name to be found by. A change of
+  // case alone is the same word to the matcher and leaves the alias as it is;
+  // a new name it already answers to (one of its other names) needs none.
+  let nameAlias: 'kept' | 'own' | 'written' | 'taken' | 'failed' = 'kept'
+  if (renamed) {
+    const old = aliasRows.filter((a) => a.product_id === id && a.kind === 'name' && sameCatalogueName(a.alias, before.name))
+    nameAlias = aliasRows.some((a) => a.product_id === id && sameCatalogueName(a.alias, name.text))
+      ? 'own'
+      : await writeNameAlias(w, id, name.text, old.some((a) => a.needs_confirm))
+    if (nameAlias === 'written' || nameAlias === 'own') {
+      const retireError = await retireAliases(w, old.map((a) => a.id), new Date().toISOString())
+      if (retireError) console.error(`[products] old name alias for ${id}: ${(retireError as { message?: string }).message}`)
+    }
   }
   const said = moved && before.name !== name.text
     ? `${before.name} was renamed ${name.text} and moved to another category.`
     : moved ? `${name.text} was moved to another category.` : `${before.name} was renamed ${name.text}.`
   await log(w, 'products', { id, name: before.name, group_id: before.group_id }, { id, name: name.text, group_id: groupId, name_alias: nameAlias }, said)
   revalidateProducts()
+  if (nameAlias === 'taken' || nameAlias === 'failed') return { ok: false, message: NAME_NOT_SAVED(name.text, 'renamed'), id }
   return { ok: true, message: 'Saved.', id }
 }
 
@@ -414,14 +443,14 @@ export async function addProductAlias(_prev: ProductFormState, form: FormData): 
   const taken = live.rows.find((a) => sameCatalogueName(a.alias, alias.text))
   if (taken) {
     const same = taken.product_id === productId && taken.group_id === groupId
-    return { ok: false, message: same ? `${alias.text} is already one of its names.` : `${alias.text} is already a name for something else on your list.` }
+    return { ok: false, message: same ? `${alias.text} is already one of its names.` : TAKEN(alias.text) }
   }
 
   const { data: row, error: insertError } = await w.admin.from(TABLE_PRODUCT_ALIASES)
     .insert({ client_id: w.clientId, product_id: productId, group_id: groupId, alias: alias.text, kind, needs_confirm: common, ...stamp(w.actor) })
     .select('id').single()
   if (insertError) {
-    if (isUnique(insertError)) return { ok: false, message: `${alias.text} is already a name for something else on your list.` }
+    if (isUnique(insertError)) return { ok: false, message: TAKEN(alias.text) }
     return failed('name insert', insertError)
   }
   const id = (row as { id: string }).id

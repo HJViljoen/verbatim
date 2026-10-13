@@ -4,7 +4,7 @@ import {
   FIXTURE_CLIENT, FIXTURE_NOW, fid, productsFixtureRead, productsFixtureTables,
 } from '@/components/pages/settings/products/fixture'
 import { fakeDb } from '../test/fake-db'
-import { catalogueText, loadProductSettings, productSettingsView, productsTabHref } from './products'
+import { aliasTextProblem, catalogueText, loadProductSettings, productSettingsView, productsTabHref } from './products'
 
 // Settings › Your products: the read and the view (T10b). Pure, or over the
 // fake database: no network.
@@ -24,6 +24,28 @@ describe('catalogueText', () => {
 
   it('refuses a control character the CHECK would refuse', () => {
     expect(catalogueText('seal\u0007in', 'alias')).toEqual({ ok: false, message: 'Type the name as plain words.' })
+  })
+
+  it('holds a name and a product to what the matcher reads, and a category to the schema alone', () => {
+    const CHARS = "Use letters, numbers, spaces and & . ' + - only, so the name can be found as it is written."
+    for (const bad of ['C-Leg®', 'Pro/Flex', 'feet (prosthetic)']) {
+      expect(catalogueText(bad, 'alias'), bad).toEqual({ ok: false, message: CHARS })
+      expect(catalogueText(bad, 'product'), bad).toEqual({ ok: false, message: CHARS })
+    }
+    expect(catalogueText('--', 'alias')).toEqual({ ok: false, message: 'Give the name at least two letters or numbers.' })
+    expect(catalogueText('X', 'product')).toEqual({ ok: false, message: 'Give the name at least two letters or numbers.' })
+    for (const good of ['Pro-Flex XC', 'Rheo Knee 3', 'Formfit Pro+', 'St. Liner', "Össur's liner", 'Bracing & supports']) {
+      expect(catalogueText(good, 'alias').ok, good).toBe(true)
+    }
+    expect(catalogueText('Feet (prosthetic)', 'group')).toEqual({ ok: true, text: 'Feet (prosthetic)' })
+  })
+})
+
+describe('aliasTextProblem', () => {
+  it('is null for a name the matcher reads, and a sentence for one it cannot', () => {
+    expect(aliasTextProblem('seal-in liner')).toBeNull()
+    expect(aliasTextProblem('a')).toBe('Give the name at least two letters or numbers.')
+    expect(aliasTextProblem('pro/flex')).toMatch(/^Use letters, numbers/)
   })
 })
 
@@ -89,6 +111,23 @@ describe('productSettingsView', () => {
     expect(by['Iceross Seal-In V']).toBe(0)
     expect(open.cameUp).toBe(3)
     expect(open.unclear).toBe(11)
+  })
+
+  it('prints no figure for a product the month holds no row for, even where other rows exist', () => {
+    const readings = productsFixtureRead().readings.filter((r) => r.object_id !== fid(2, 2)) // Seal-In V's zero row
+    const open = view({ readings }).open!
+    expect(open.rows.find((r) => r.name === 'Iceross Seal-In V')!.videos).toBeNull()
+    expect(open.rows.find((r) => r.name === 'Iceross Dermo')!.videos).toBe(0)
+    // A category with no row of its own has no unclear count.
+    expect(view({ readings: readings.filter((r) => r.object_kind === 'product') }).open!.unclear).toBeNull()
+    // Knees' products have no row at all.
+    expect(view({}, fid(1, 3)).open!.rows.every((r) => r.videos === null)).toBe(true)
+  })
+
+  it('draws the controls disabled for an owner or admin the lock holds, never for a member', () => {
+    expect(productSettingsView(productsFixtureRead(), { canEdit: true, locked: true }).locked).toBe(true)
+    expect(productSettingsView(productsFixtureRead(), { canEdit: false, locked: true }).locked).toBe(false)
+    expect(productSettingsView(productsFixtureRead(), { canEdit: true }).locked).toBe(false)
   })
 
   it('says nothing about the month where no product row exists: unread, not quiet', () => {
