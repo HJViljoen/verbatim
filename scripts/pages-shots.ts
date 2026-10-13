@@ -81,6 +81,9 @@ import { SearchTerms } from '../components/pages/settings/search-terms'
 import { YourAccounts } from '../components/pages/settings/your-accounts'
 import { BrandsYouTrack, Communities, NotYourMarket } from '../components/pages/settings/tracked-cards'
 import { whatYouTrack } from '../lib/pages/settings'
+import { MovesV2Page } from '../components/pages/v2/moves'
+import { movesFixture, movesOpenFixture, movesRecordFixture, statementsV2 } from '../lib/pages/v2/moves-fixture'
+import type { MovesPageData } from '../lib/pages/v2/moves'
 
 const args = process.argv.slice(2)
 const flag = (n: string, d: string) => { const i = args.indexOf(`--${n}`); return i >= 0 && args[i + 1] ? args[i + 1] : d }
@@ -317,6 +320,18 @@ const PAGES: Page[] = [
       })
     },
   },
+  // Your moves, Design v2 (depth T7): the fixture beside the depth boards
+  // (`--artboards ~/Documents/Heinrich/Verbatim-Design/depth-2026-10/canvas/project`),
+  // and one real render per tenant from the loader's dumped output
+  // (`--moves-dump <dir>` holding ossur.json and sealand.json, written by
+  // scripts/moves-v2-dump.ts), as a tenant sees it: no statements.
+  { key: 'moves-v2', path: '/dashboard/moves', artboard: 'E6-Moves.dc.html', page: () => h(MovesV2Page, { data: movesFixture(), statements: statementsV2() }) },
+  { key: 'moves-v2-open', path: '/dashboard/moves', artboard: 'E6-Moves-Open.dc.html', page: () => h(MovesV2Page, { data: movesOpenFixture(), statements: statementsV2() }) },
+  { key: 'moves-v2-record', path: '/dashboard/moves', artboard: 'E6-Moves.dc.html', page: () => h(MovesV2Page, { data: movesRecordFixture(), statements: statementsV2() }) },
+  ...(['ossur', 'sealand'] as const).map((tenant): Page => ({
+    key: `moves-v2-${tenant}`, path: '/dashboard/moves', artboard: 'E6-Moves.dc.html',
+    page: () => h(MovesV2Page, { data: JSON.parse(readFileSync(join(resolve(flag('moves-dump', '.')), `${tenant}.json`), 'utf8')).data as MovesPageData, statements: null }),
+  })),
 ]
 
 // ---- the shell -----------------------------------------------------------------

@@ -2599,12 +2599,20 @@ export async function loadSubjects(supabase: SupabaseClient, clientId: string): 
 }
 
 /** Registry labels, for a theme-move's "on what". A registry id is the stable
- *  identity (AGENTS.md); the label is what a reader is shown. */
+ *  identity (AGENTS.md); the label is what a reader is shown.
+ *
+ *  THE COLUMN IS `canonical_label` (depth v2, T7). This read asked for
+ *  `label`, which `theme_registry` has never had, so PostgREST refused it, the
+ *  catch below turned the refusal into an empty map, and every theme move and
+ *  advice move printed no "on what" (Y4's label, the Date-a-move list's) on
+ *  both tenants. Measured 13 Oct: every one of Össur's 1,471 and Sealand's
+ *  3,590 registry rows carries a `canonical_label`. A failed read is still an
+ *  empty map, now logged. */
 export async function loadRegistryLabels(supabase: SupabaseClient, clientId: string): Promise<Map<string, string>> {
-  const rows = await selectAll<{ id: string; label: string | null }>(() =>
-    supabase.from('theme_registry').select('id, label').eq('client_id', clientId).order('id', { ascending: true }),
-  ).catch(() => [] as { id: string; label: string | null }[])
-  return new Map(rows.filter((r) => r.label).map((r) => [r.id, r.label as string]))
+  const rows = await selectAll<{ id: string; canonical_label: string | null }>(() =>
+    supabase.from('theme_registry').select('id, canonical_label').eq('client_id', clientId).order('id', { ascending: true }),
+  ).catch(logAs('registryLabels', [] as { id: string; canonical_label: string | null }[]))
+  return new Map(rows.filter((r) => r.canonical_label?.trim()).map((r) => [r.id, (r.canonical_label as string).trim()]))
 }
 
 /** The ledger's own deep link, so the digest's `?rec=<id>` keeps landing on the

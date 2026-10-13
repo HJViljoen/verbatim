@@ -44,17 +44,13 @@ export function lineGeometry(points: readonly MovePoint[], moveDay: string): {
   const shares = points.map((p) => (p.n > 0 ? p.k / p.n : 0))
   const max = Math.max(...shares, 0.0001) * 1.15
   const ys = shares.map((s) => BASE - (s / max) * (BASE - TOP))
-  // The move's day, inside its month's slot: the slot's middle is mid-month.
+  // THE MOVE'S MONTH, AT ITS FRONT EDGE: the dashed line stands where the
+  // month the move was made in begins on the line (half a slot before its
+  // point), so it reads "from here on" without claiming a day inside a month
+  // the line reads as one point. Its first month, the line's own left edge.
   const moveMonth = monthStartOf(moveDay)
   const at = points.findIndex((p) => p.month === moveMonth)
-  let moveX: number | null = null
-  if (at >= 0) {
-    const day = Number(moveDay.slice(8, 10))
-    const [y, m] = moveMonth.split('-').map(Number)
-    const days = new Date(Date.UTC(y, m, 0)).getUTCDate()
-    const offset = ((day - 0.5) / days - 0.5) * (step || 80)
-    moveX = Math.max(8, Math.min(W - 8, xs[at] + offset))
-  }
+  const moveX = at < 0 ? null : Math.max(8, xs[at] - (n > 1 ? step / 2 : 40))
   return { xs, ys, moveX }
 }
 
@@ -71,7 +67,7 @@ function MoveLine({ card }: { card: MoveCard }) {
       {moveX != null ? (
         <>
           <line x1={moveX} y1={14} x2={moveX} y2={BASE} className="stroke-orange-text" strokeWidth={1.5} strokeDasharray="3 3" />
-          <text x={moveX + 7} y={22} className="fill-orange-text font-sans text-[11px] font-semibold">your move</text>
+          <text x={moveX > W - 80 ? moveX - 7 : moveX + 7} y={22} textAnchor={moveX > W - 80 ? 'end' : 'start'} className="fill-orange-text font-sans text-[11px] font-semibold">your move</text>
         </>
       ) : null}
       {solid.length > 1 ? (

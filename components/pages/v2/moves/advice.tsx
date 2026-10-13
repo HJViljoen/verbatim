@@ -42,6 +42,12 @@ export function panelPlacement(index: number, count: number): { narrow: number; 
   return { narrow: 2 * index + 1, wide: 2 * rowEnd + 1, notchAt: ((index % COLUMNS) + 0.5) / COLUMNS }
 }
 
+/** The advice's title: the model's stored words, or the page's own where the
+ *  stored title is blank. */
+function AdviceTitle({ card }: { card: Pick<AdviceCard, 'title' | 'untitled'> }) {
+  return card.untitled ? <>{card.title}</> : <span data-copy="stored" data-slot="pass_d_b_recommendation">{card.title}</span>
+}
+
 function Chips({ card, open = false }: { card: AdviceCard; open?: boolean }) {
   const chip = priorityLabel(card.priority)
   const type = typeLabel(card.kind)
@@ -84,9 +90,9 @@ function Evidence({ card }: { card: AdviceCard }) {
 function AdviceCardView({ card, open, canDecide }: { card: AdviceCard; open: boolean; canDecide: boolean }) {
   const lead = whyLead(card.why)
   return (
-    <article id={`advice-${card.lineageId}`} className={cn(CARD, 'scroll-mt-6', open ? SELECTED_CARD_RING : null)}>
+    <article id={`advice-${card.lineageId}`} className={cn(CARD, 'flex-1 scroll-mt-6', open ? SELECTED_CARD_RING : null)}>
       <Chips card={card} />
-      <h3 data-copy="stored" data-slot="pass_d_b_recommendation" className="m-0 text-[18px] font-semibold leading-[1.35] text-foreground">{card.title}</h3>
+      <h3 className={cn('m-0 text-[18px] font-semibold leading-[1.35]', card.untitled ? 'text-muted-foreground' : 'text-foreground')}><AdviceTitle card={card} /></h3>
       {lead ? <p data-copy="stored" data-slot="pass_d_b_recommendation" className="m-0 text-[14px] leading-[1.55] text-secondary-foreground">{lead}</p> : null}
       <Evidence card={card} />
       <div className="mt-auto flex flex-wrap items-center gap-2" data-print-hide>
@@ -123,7 +129,7 @@ function RestsOn({ rows }: { rows: RestsOnRow[] }) {
             <RestsOnFigure row={r} />
           </>
         )
-        const cls = cn('grid grid-cols-[minmax(0,1fr)_auto] gap-3.5 py-3 text-[14px] leading-[1.45] text-foreground no-underline', i > 0 ? 'border-t border-track' : null)
+        const cls = cn('grid grid-cols-1 gap-x-3.5 gap-y-0.5 py-3 text-[14px] leading-[1.45] text-foreground no-underline sm:grid-cols-[minmax(0,1fr)_auto]', i > 0 ? 'border-t border-track' : null)
         return r.anchor
           ? <a key={r.id} href={`#${r.anchor}`} className={cn(cls, 'hover:underline underline-offset-2')}>{inner}</a>
           : r.kind === 'rival'
@@ -134,15 +140,25 @@ function RestsOn({ rows }: { rows: RestsOnRow[] }) {
   )
 }
 
-/** Every update that raised it, as dots on a line with their dates. */
+/** Every update that raised it, as dots on one line with their dates under
+ *  them (the board's row); past twelve the row wraps, twelve to a line. */
 function Timeline({ dates }: { dates: string[] }) {
   if (dates.length === 0) return null
+  // Twelve to a row from 640px, five on a phone (where nine dates would
+  // print over each other).
+  const columns = Math.min(dates.length, 12)
+  const narrow = Math.min(dates.length, 5)
   return (
-    <ol className="relative m-0 flex list-none flex-wrap items-start gap-x-3 gap-y-3 p-0" aria-label="The updates that raised it">
+    <ol
+      className="relative m-0 grid list-none gap-y-3 p-0 [grid-template-columns:repeat(var(--cn),minmax(0,1fr))] sm:[grid-template-columns:repeat(var(--cw),minmax(0,1fr))]"
+      style={{ '--cn': narrow, '--cw': columns } as CSSProperties}
+      aria-label="The updates that raised it"
+    >
+      {columns > 1 ? <span aria-hidden className="absolute top-[4px] hidden h-px bg-border sm:block" style={{ left: `calc(50% / ${columns})`, right: `calc(50% / ${columns})` }} /> : null}
       {dates.map((d, i) => (
-        <li key={`${d}-${i}`} className="relative flex min-w-[44px] flex-col items-center gap-1.5">
+        <li key={`${d}-${i}`} className="relative flex min-w-0 flex-col items-center gap-1.5">
           <span aria-hidden className="size-2.5 rounded-full bg-foreground" />
-          <span className={cn(MONO, 'whitespace-nowrap text-[10.5px] text-muted-foreground')}>{shortDate(d)}</span>
+          <span className={cn(MONO, 'whitespace-nowrap text-[10px] text-muted-foreground')}>{shortDate(d)}</span>
         </li>
       ))}
     </ol>
@@ -179,7 +195,7 @@ function AdvicePanel({ card, notchAt, canDecide, dating, fromRecord }: {
         <>
           <Chips card={card} open />
           <PanelTitle id="advice-panel-title" className="text-[24px] leading-[1.25]">
-            <span data-copy="stored" data-slot="pass_d_b_recommendation">{card.title}</span>
+            <AdviceTitle card={card} />
           </PanelTitle>
           {fromRecord ? <p className="m-0 mt-1.5 text-[13px] text-muted-foreground">From the advice record: the latest update did not raise it, or it has been decided.</p> : null}
         </>

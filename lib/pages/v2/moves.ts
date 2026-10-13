@@ -147,8 +147,12 @@ export interface AdviceCard {
   lineageId: string
   /** The newest copy: what a status write names. */
   recommendationId: string
-  /** Stored, `pass_d_b_recommendation`. */
+  /** Stored, `pass_d_b_recommendation`; `UNTITLED_ADVICE` where the stored
+   *  title is blank (`untitled`). */
   title: string
+  /** The stored title was blank (one of Össur's, 12 Oct): the words are the
+   *  page's, not the model's. */
+  untitled?: boolean
   kind: string
   priority: string | null
   /** Pass D-b's whole argument, scrubbed at write time and again at read. */
@@ -322,7 +326,7 @@ export function conclusionViews(
       id: mi.id,
       title: mi.title,
       videos: distinctVideos(mi.evidence?.supporting_theme_ids ?? [], videoByInsight),
-      advice: advice.filter((a) => a.basedOn.includes(mi.id)).map((a) => ({ lineageId: a.lineageId, title: a.title })),
+      advice: advice.filter((a) => a.basedOn.includes(mi.id)).map((a) => ({ lineageId: a.lineageId, title: adviceTitle(a.title) })),
     }))
     .sort((a, b) => (b.advice.length > 0 ? 1 : 0) - (a.advice.length > 0 ? 1 : 0) || b.videos - a.videos || a.id.localeCompare(b.id))
     .slice(0, shown)
@@ -334,7 +338,7 @@ export const CONCLUSIONS_MAX = 8
 export function recordRows(rows: readonly AdviceRow[], cap = LEDGER_ALL_CAP): RecordRow[] {
   return rows.slice(0, cap).map((r) => ({
     lineageId: r.lineageId,
-    title: r.title,
+    title: adviceTitle(r.title),
     kind: r.kind,
     firstMade: r.firstMade,
     updates: r.timesMade,
@@ -489,6 +493,13 @@ export const PLAN_TITLE = 'Your plan, checked against the market'
 export const STATEMENTS_TITLE = 'What you say, and what comes back'
 export const ASK_ABOUT = 'Ask the Agent about this'
 
+/** What a piece of advice whose stored title is blank is called: one of
+ *  Össur's current pieces (written 12 Oct) has an empty title, and a card,
+ *  a tag or a dated move cannot be nameless (a move's title is 1 to 120
+ *  characters). */
+export const UNTITLED_ADVICE = 'A piece of advice with no title'
+export const adviceTitle = (title: string | null | undefined): string => (title ?? '').trim() || UNTITLED_ADVICE
+
 /** "3 pieces of advice waiting · 2 moves dated · 1 plan checked", as parts:
  *  each count is a figure the page marks. */
 export function headerParts(c: MovesPageData['counts']): { n: number; words: string }[] {
@@ -519,13 +530,6 @@ export function decisionLine(card: Pick<AdviceCard, 'firstMade' | 'status' | 'st
  *  direction word (lib/calibration.ts), so the page calls it stopped. */
 export const MOVE_STATUS_LABEL: Record<MoveStatus, string> = { active: 'Active', done: 'Done', dropped: 'Stopped' }
 
-/** What the status control says once a status is set, in the page's words
- *  (lib/subjects/moves.ts `MOVE_STATUS_SAID` says "dropped"). */
-export const MOVE_STATUS_SET: Record<MoveStatus, string> = {
-  active: 'Running again. We report what the conversation does from here.',
-  done: 'Marked done. Its line is kept.',
-  dropped: 'Stopped. Its line is kept.',
-}
 
 /** "Jul", "Oct so far": a line's month under its point. */
 export const pointMonth = (p: Pick<MovePoint, 'month' | 'soFar'>): string => `${longMonth(p.month).slice(0, 3)}${p.soFar ? ' so far' : ''}`
@@ -859,7 +863,8 @@ export async function loadMovesPage(scope: Scope, options: { canDecide: boolean 
     return {
       lineageId: r.lineageId,
       recommendationId: r.recommendationId,
-      title: r.title,
+      title: adviceTitle(r.title),
+      ...(r.title.trim() ? {} : { untitled: true }),
       kind: r.kind,
       priority: r.priority ?? null,
       why: r.why,
@@ -921,7 +926,7 @@ export async function loadMovesPage(scope: Scope, options: { canDecide: boolean 
     month: core.month,
     subjects: askable,
     themes: asked.map((t) => ({ registryId: t.registryId, label: t.label })),
-    advice: topRow ? { lineageId: topRow.lineageId, title: topRow.title } : null,
+    advice: topRow ? { lineageId: topRow.lineageId, title: adviceTitle(topRow.title) } : null,
   }
 
   return {
@@ -1024,7 +1029,7 @@ export async function topMoves(scope: Scope, options: { canDecide: boolean }): P
       ? {
           lineageId: top.lineageId,
           recommendationId: top.recommendationId,
-          title: top.title,
+          title: adviceTitle(top.title),
           kind: top.kind,
           priority: top.priority ?? null,
           grounded: grounded ? { videos: grounded.videos, pruned: grounded.pruned } : null,

@@ -57,3 +57,17 @@ describe('loadRecentOwnPosts reads your own accounts only', () => {
     await expect(marketPosts(db.client as never, CLIENT, '2026-07-01', '2026-10-01')).rejects.toBeTruthy()
   })
 })
+
+describe('loadRegistryLabels reads canonical_label (theme_registry has no `label`)', () => {
+  it('maps each registry id to its label, and a failed read is an empty map', async () => {
+    const { loadRegistryLabels } = await import('./market-surface')
+    const db = fakeDb({ theme_registry: [
+      { id: 'r1', client_id: CLIENT, canonical_label: 'How long a liner lasts' },
+      { id: 'r2', client_id: CLIENT, canonical_label: '  ' },
+      { id: 'r3', client_id: 'other', canonical_label: 'Not ours' },
+    ] })
+    expect([...(await loadRegistryLabels(db.client as never, CLIENT))]).toEqual([['r1', 'How long a liner lasts']])
+    expect(db.calls[0].columns).toBe('id, canonical_label')
+    expect((await loadRegistryLabels(fakeDb({}).client as never, CLIENT)).size).toBe(0)
+  })
+})

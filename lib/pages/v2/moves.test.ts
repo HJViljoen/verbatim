@@ -5,7 +5,7 @@ import type { PairComparability } from '../../reading/comparability'
 import type { RecCopy } from '../market-surface'
 import {
   adviceHistory, conclusionViews, decisionLine, headerParts, largestStance, leadClaims, moveCards, movedMove,
-  recordRows, restsOnRows, streakLabel, adviceHref, MOVES_PATH,
+  recordRows, restsOnRows, streakLabel, adviceHref, adviceTitle, MOVES_PATH, UNTITLED_ADVICE,
 } from './moves'
 import { MOVE_CARDS, PLAN, movesRecordFixture } from './moves-fixture'
 
@@ -183,6 +183,12 @@ describe('the words', () => {
     expect(rows[0].current).toBe(true)
     expect(rows.find((r) => r.status === 'dismissed')?.decidedAt).toBe('2026-08-02T10:00:00.000Z')
     expect(recordRows([], 5)).toEqual([])
+  })
+  it('a blank stored title is named by the page, never left empty', () => {
+    expect(adviceTitle('')).toBe(UNTITLED_ADVICE)
+    expect(adviceTitle('  ')).toBe(UNTITLED_ADVICE)
+    expect(adviceTitle(null)).toBe(UNTITLED_ADVICE)
+    expect(adviceTitle(' Help desk ')).toBe('Help desk')
   })
   it('a piece of advice opens in place on Your moves', () => {
     expect(adviceHref('L1')).toBe(`${MOVES_PATH}?advice=L1#advice-panel`)

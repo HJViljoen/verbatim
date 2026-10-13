@@ -23,7 +23,9 @@ import { MONO } from './parts'
 // THE STATEMENT IS THE CLIENT'S OWN WORDS (`quote`: rule (c) does not police
 // what a person typed). The counts are code's figures.
 
-const COLS = 'grid grid-cols-[minmax(0,1.5fr)_56px_minmax(0,1fr)_minmax(0,1.2fr)] items-center gap-3.5'
+/** Four columns from 640px; below, the statement over its count and bar, and
+ *  how it lands under them. */
+const COLS = 'grid grid-cols-[48px_minmax(0,1fr)] items-center gap-x-3.5 gap-y-2 sm:grid-cols-[minmax(0,1.5fr)_48px_minmax(0,1fr)_minmax(0,1.1fr)]'
 
 const SEG = [
   { key: 'backs', label: 'backs it up', fill: 'bg-you' },
@@ -68,19 +70,19 @@ export function WhatYouSay({ data, className }: { data: StatementsBlockData; cla
         sub={month ? `Your own claims, against what your market says about them in ${month}` : 'Your own claims, against what your market says about them'}
       />
       {data.canEdit ? <AddStatement /> : null}
-      <div className="flex flex-col overflow-x-auto">
-        <div className={cn(COLS, 'min-w-[520px] border-b border-border pb-2 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-muted-foreground')}>
+      <div className="flex flex-col">
+        <div className={cn(COLS, 'hidden border-b border-border pb-2 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-muted-foreground sm:grid')}>
           <span>You say</span><span>Videos</span><span>How it lands</span><span>So far</span>
         </div>
         {data.statements.map((s, i) => (
-          <div key={s.id} className={cn(COLS, 'min-w-[520px] py-3 text-[13.5px]', i > 0 ? 'border-t border-track' : null)}>
-            <span className="flex min-w-0 items-start gap-2">
+          <div key={s.id} className={cn(COLS, 'py-3 text-[13.5px]', i > 0 ? 'border-t border-track' : null)}>
+            <span className="col-span-2 flex min-w-0 items-start gap-2 sm:col-span-1">
               <span data-copy="quote" className="min-w-0 text-foreground">“{s.text}”</span>
               {data.canEdit ? <StatementMenu id={s.id} text={s.text} /> : null}
             </span>
             <span data-copy="figure" className={cn(MONO, 'text-foreground')}>{s.reading ? fmtInt(s.reading.market.videos) : ''}</span>
             {s.reading?.stance ? <Stance s={s.reading.stance} /> : <div className="h-2.5 rounded-[5px] bg-track" aria-hidden />}
-            <SoFar r={s.reading} />
+            <span className="col-span-2 min-w-0 sm:col-span-1"><SoFar r={s.reading} /></span>
           </div>
         ))}
       </div>

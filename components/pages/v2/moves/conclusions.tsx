@@ -80,8 +80,10 @@ export function ConclusionsSection({ data }: { data: MovesPageData }) {
             {conclusions.map((c, i) => (
               <div key={c.id} id={conclusionAnchor(c.id)} className={cn('grid scroll-mt-6 grid-cols-1 items-center gap-x-4 gap-y-1.5 py-[13px] text-[14px] sm:grid-cols-[minmax(0,1fr)_auto_auto]', i > 0 ? 'border-t border-track' : null)}>
                 <span data-copy="stored" data-slot="pass_d_a_insight" className="min-w-0 text-foreground">{c.title}</span>
+                {/* A conclusion resting on rival findings alone resolves to no
+                    video: it prints no count rather than "0 videos". */}
                 <span className={cn(MONO, 'whitespace-nowrap text-[12.5px] text-muted-foreground')}>
-                  <span data-copy="figure">{fmtInt(c.videos)}</span> {c.videos === 1 ? 'video' : 'videos'}, {GROUNDED_BASIS}
+                  {c.videos > 0 ? <><span data-copy="figure">{fmtInt(c.videos)}</span> {c.videos === 1 ? 'video' : 'videos'}, {GROUNDED_BASIS}</> : null}
                 </span>
                 <span className="flex min-w-0 flex-wrap gap-1.5 sm:justify-end">
                   {c.advice.length > 0

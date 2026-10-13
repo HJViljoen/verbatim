@@ -145,6 +145,23 @@ describe('the advice', () => {
   })
 })
 
+describe('real data’s edges', () => {
+  it('advice with a blank stored title is named by the page, in its own words', () => {
+    const base = movesFixture()
+    const card = { ...base.advice.cards[0], title: 'A piece of advice with no title', untitled: true }
+    const markup = render(<AdviceSection data={{ ...base, advice: { ...base.advice, cards: [card] } }} />)
+    expect(markupText(markup)).toContain('A piece of advice with no title')
+    expect(copyNodes(markup).some((n) => n.kind === 'stored' && n.text === 'A piece of advice with no title')).toBe(false)
+    assertCopyContract(markup)
+  })
+
+  it('a conclusion resting on rival findings alone prints no count', () => {
+    const base = movesFixture()
+    const text = markupText(render(<ConclusionsSection data={{ ...base, conclusions: [{ ...base.conclusions[0], videos: 0 }] }} />))
+    expect(text).not.toContain('0 videos')
+  })
+})
+
 describe('the four writes are drawn for an owner or an admin only', () => {
   it('an owner sees Accept, Not for us, Date a move and the status control', () => {
     const text = markupText(page(movesOpenFixture()))

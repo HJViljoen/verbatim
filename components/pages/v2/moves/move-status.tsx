@@ -4,7 +4,16 @@ import { useState, useTransition } from 'react'
 
 import { setMoveStatusAction } from '@/lib/actions/subjects'
 import type { MoveStatus } from '@/lib/subjects/types'
-import { MOVE_STATUS_SET } from '@/lib/pages/v2/moves'
+
+/** What the control says once a status is set, in the page's words
+ *  (lib/subjects/moves.ts `MOVE_STATUS_SAID` says "dropped", a direction
+ *  word). Here, not in lib/pages/v2/moves.ts: a client file importing the
+ *  loader's module would carry its server reads into the browser bundle. */
+export const MOVE_STATUS_SET: Record<MoveStatus, string> = {
+  active: 'Running again. We report what the conversation does from here.',
+  done: 'Marked done. Its line is kept.',
+  dropped: 'Stopped. Its line is kept.',
+}
 
 // A move's status control (depth v2, T7): `setMoveStatusAction`, mounted on
 // Your moves at last (it lived only in the legacy subject block). A running
