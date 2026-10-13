@@ -132,3 +132,55 @@ export async function loadPublishedLongRun(admin: SupabaseClient, clientId: stri
   if (!row || !isLongRunData(row.data)) return null
   return { month: String(row.month).slice(0, 10), data: row.data, created_at: row.created_at }
 }
+
+/** One earlier week's "first heard this week" (`newThisWeek`), as its read
+ *  stored it: the week's frozen window and the conversations' registry ids,
+ *  in the read's order. */
+export interface EarlierNew {
+  window: { from: string; to: string }
+  themeIds: string[]
+}
+
+/**
+ * The conversations first heard in the weeks before one (Market's third card,
+ * the parity pass, 13 Oct: where nothing was first heard this week, the card
+ * names the newest conversation that was). The READY week reads whose window
+ * ended by `before` (the week's own start), newest first, at most `weeks` of
+ * them; only each read's window and `newThisWeek` are read, never its prose.
+ * A read stored before `newThisWeek` existed, or that listed none, is left
+ * out. Empty where the table is not in this database; throws where it cannot
+ * be read.
+ */
+export async function loadEarlierNewThisWeek(
+  admin: SupabaseClient,
+  clientId: string,
+  opts: { before: string; weeks?: number },
+): Promise<EarlierNew[]> {
+  const res = await admin.from(WEEK_READS_TABLE)
+    .select('run_id, status, window_end, window:data->window, fresh:data->newThisWeek')
+    .eq('client_id', clientId).eq('kind', 'week').eq('status', 'ready')
+    .not('data', 'is', null)
+    .lte('window_end', opts.before)
+    .order('window_end', { ascending: false, nullsFirst: false })
+    .limit(opts.weeks ?? 4)
+  if (res.error) {
+    if (isMissingWeekReads(res.error)) return []
+    throw new Error(`week_reads earlier new: ${res.error.message}`)
+  }
+  return earlierNewOfRows((res.data ?? []) as { window: unknown; fresh: unknown }[])
+}
+
+/** Pure: the stored rows as `EarlierNew`, defensively (a row with no window
+ *  or no listed conversation is left out). */
+export function earlierNewOfRows(rows: readonly { window: unknown; fresh: unknown }[]): EarlierNew[] {
+  const out: EarlierNew[] = []
+  for (const r of rows) {
+    const w = (r.window ?? {}) as { from?: unknown; to?: unknown }
+    if (typeof w.from !== 'string' || typeof w.to !== 'string') continue
+    const themeIds = (Array.isArray(r.fresh) ? r.fresh : [])
+      .map((n) => (n as { themeId?: unknown } | null)?.themeId)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0)
+    if (themeIds.length > 0) out.push({ window: { from: w.from, to: w.to }, themeIds })
+  }
+  return out
+}

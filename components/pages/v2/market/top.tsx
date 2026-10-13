@@ -6,9 +6,10 @@ import {
   type MiniBar, type PanelLayout, type PerBreakpoint,
 } from '@/components/v2'
 import { fmtInt, fmtPct, longMonth } from '@/lib/format'
-import { flagBaseWords, topSpans, type Doing, type GroupLink, type HeroCard, type MarketConv, type MarketData, type MonthCount, type SideCard } from '@/lib/pages/v2/market'
+import { talkKindLabel } from '@/lib/pages/overview-market/kinds'
+import { flagBaseWords, sideIds, topSpans, type Doing, type GroupLink, type HeroCard, type MarketConv, type MarketData, type MonthCount, type SideCard } from '@/lib/pages/v2/market'
 import { cn } from '@/lib/utils'
-import { About, BIG, Fig, Label, MID, MONO_MUTED, OLINK, newVerdict } from './parts'
+import { About, ABOUT_NOT_COUNTED, ABOUT_NOT_READ, BIG, Fig, Label, MID, MONO_MUTED, OLINK, newVerdict } from './parts'
 
 // MARKET'S TOP ROW (depth v2, T3; E2-Market's "what moved", re-cut to decision
 // 1). This week: the anomaly check's first flag where it raised one, else the
@@ -63,45 +64,55 @@ function monthBars(months: readonly MonthCount[]): MiniBar[] {
   }))
 }
 
-/** Who's saying it (the groups, by name) and what they're doing (the top
- *  kind, of the month's videos). */
-function Context({ groups, doing, monthText }: { groups: readonly GroupLink[]; doing: Doing | null; monthText: string }) {
-  if (groups.length === 0 && !doing) return null
-  return (
-    <div className={cn('grid grid-cols-1 gap-4 border-t border-track pt-3 text-[13px] leading-[1.5]', groups.length > 0 && doing ? 'sm:grid-cols-2' : null)}>
-      {groups.length > 0 ? (
-        <div>
-          <span className="text-muted-foreground">Who’s saying it</span><br />
-          {groups.slice(0, 2).map((g, i) => (
-            <span key={g.key}>
-              {i > 0 ? ', ' : null}
-              <Link href={g.href} className="text-foreground underline-offset-[3px] hover:underline"><span data-copy="subject" data-slot="pass_e_persona">{g.name}</span></Link>
-            </span>
-          ))}
-        </div>
-      ) : null}
-      {doing ? (
-        <div>
-          <span className="text-muted-foreground">What they’re doing</span><br />
-          {doing.label} <span className={cn(MONO_MUTED, 'whitespace-nowrap')}>· <span data-copy="level">{fmtInt(doing.k)} of {fmtInt(doing.n)}</span> {monthText}</span>
-        </div>
-      ) : null}
-    </div>
-  )
-}
+/** Where no group's conversations include this one (Pass E's `registryIds`):
+ *  the slot keeps its place and says so (the parity pass, 13 Oct). */
+export const NO_GROUP = 'Not linked to a group'
 
-/** Who's saying it, on a card beside the hero: the groups by name. */
-function GroupsLine({ groups, words = 'Who’s asking' }: { groups: readonly GroupLink[]; words?: string }) {
-  if (groups.length === 0) return null
+/** The groups, by name, each opening in Voices; or `NO_GROUP`. */
+function Groups({ groups }: { groups: readonly GroupLink[] }) {
+  if (groups.length === 0) return <span className="text-muted-foreground">{NO_GROUP}</span>
   return (
-    <div className="border-t border-track pt-3 text-[13px] leading-[1.5]">
-      <span className="text-muted-foreground">{words}</span><br />
+    <>
       {groups.slice(0, 2).map((g, i) => (
         <span key={g.key}>
           {i > 0 ? ', ' : null}
           <Link href={g.href} className="text-foreground underline-offset-[3px] hover:underline"><span data-copy="subject" data-slot="pass_e_persona">{g.name}</span></Link>
         </span>
       ))}
+    </>
+  )
+}
+
+/** Who's saying it (the groups, by name) and what they're doing (the top
+ *  kind that is not the conversation's own, of the month's videos). Both
+ *  columns in every state, as the board draws them: with no other kind read,
+ *  the conversation's own kind alone, which is what its videos are by
+ *  definition, so it carries no figure. */
+function Context({ groups, doing, kind, noun, monthText }: { groups: readonly GroupLink[]; doing: Doing | null; kind: string | null; noun: string | null; monthText: string }) {
+  return (
+    <div className="grid grid-cols-2 gap-4 border-t border-track pt-3 text-[13px] leading-[1.5]">
+      <div>
+        <span className="text-muted-foreground">Who’s saying it</span><br />
+        <Groups groups={groups} />
+      </div>
+      <div>
+        <span className="text-muted-foreground">What they’re doing</span><br />
+        {doing
+          // On a phone the two columns stand as the board's do, so the
+          // figure line may wrap inside its own (T9: nothing past the card).
+          ? <>{doing.label} <span className={cn(MONO_MUTED, 'whitespace-nowrap max-sm:whitespace-normal')}>· <span data-copy="level">{fmtInt(doing.k)} of {fmtInt(doing.n)}</span> {monthText}</span></>
+          : kind ? talkKindLabel(kind, noun) : <span className="text-muted-foreground">Not read yet</span>}
+      </div>
+    </div>
+  )
+}
+
+/** Who's saying it, on a card beside the hero: the groups by name. */
+function GroupsLine({ groups, words = 'Who’s asking' }: { groups: readonly GroupLink[]; words?: string }) {
+  return (
+    <div className="border-t border-track pt-3 text-[13px] leading-[1.5]">
+      <span className="text-muted-foreground">{words}</span><br />
+      <Groups groups={groups} />
     </div>
   )
 }
@@ -117,6 +128,8 @@ function Foot({ conv, href, selected, closeHref, data, open = 'Open the conversa
           <span>About</span>
           <About parts={conv.who} brand={data.brand} noun={data.noun} />
         </div>
+      ) : conv && data.brands !== 'counted' ? (
+        <div className="text-[12.5px] text-muted-foreground">About · {data.brands === 'not_counted' ? ABOUT_NOT_COUNTED : ABOUT_NOT_READ}</div>
       ) : <span />}
       {selected && closeHref
         ? <Link href={closeHref} scroll={false} className={OLINK}>Close ↑</Link>
@@ -150,7 +163,9 @@ function FlagHero({ hero, data, selected, span, style }: { hero: Extract<HeroCar
       {/* Drawn for its column: the half-card drawing, and a phone's. */}
       <MiniBars bars={bars} size="lg" className="max-w-[560px] max-sm:hidden" label={`Share of every audience's videos about ${title}, the months before against this week`} />
       <MiniBars bars={bars} size="md" className="sm:hidden" label={`Share of every audience's videos about ${title}, the months before against this week`} />
-      <Context groups={hero.groups} doing={hero.doing} monthText={data.week?.inMonth ?? `in ${data.month.text}`} />
+      {/* Who and what are a conversation's: a flag on a kind or a subject
+          names neither, so its card draws them only for a theme. */}
+      {card.conv ? <Context groups={hero.groups} doing={hero.doing} kind={card.conv.kind} noun={data.noun} monthText={data.week?.inMonth ?? `in ${data.month.text}`} /> : null}
       <Foot conv={card.conv} href={card.href} selected={selected} closeHref={data.panel?.closeHref ?? null} data={data} open={f.objectKind === 'subject' ? 'Open the subject' : 'Open the conversation'} />
     </article>
   )
@@ -178,21 +193,75 @@ function ConvHero({ hero, data, selected, span, style }: { hero: Extract<HeroCar
         ? <>
           {/* Every week's count labelled, as the side card and the
               Dashboard's tile label theirs (Phase 4 fix round). */}
-          <SpikeBars weeks={weekBars(conv, data)} counts="all" className="max-w-[560px] max-sm:hidden" label={`Category videos a week about ${conv.label}`} />
-          <SpikeBars weeks={weekBars(conv, data)} counts="all" size="md" className="sm:hidden" label={`Category videos a week about ${conv.label}`} />
+          <SpikeBars weeks={weekBars(conv, data)} counts="all" ghost className="max-w-[560px] max-sm:hidden" label={`Category videos a week about ${conv.label}`} />
+          <SpikeBars weeks={weekBars(conv, data)} counts="all" size="md" ghost className="sm:hidden" label={`Category videos a week about ${conv.label}`} />
         </>
         : conv.months.length > 1 ? <MiniBars bars={monthBars(conv.months)} size="md" className="max-w-[420px]" label={`Category videos a month about ${conv.label}`} /> : null}
-      <Context groups={hero.groups} doing={hero.doing} monthText={week ? data.week?.inMonth ?? '' : `in ${data.month.text}`} />
+      <Context groups={hero.groups} doing={hero.doing} kind={conv.kind} noun={data.noun} monthText={week ? data.week?.inMonth ?? '' : `in ${data.month.text}`} />
       <Foot conv={conv} href={hero.href} selected={selected} closeHref={data.panel?.closeHref ?? null} data={data} />
     </article>
   )
 }
 
+/** The new card with nothing first heard this week (the parity pass, 13 Oct):
+ *  it keeps its place and says so as its title ("Nothing else new" where a
+ *  conversation off the cards was, so it never contradicts a New chip), then
+ *  keeps the board's weight with one conversation not already on the row:
+ *  the newest an earlier week first heard where nothing at all is new, else
+ *  the week's next biggest (the lead's ruling). With neither, its one line. */
+function NothingNew({ side, data, index, span, selected, style }: { side: SideCard; data: MarketData; index: number; span: string; selected: boolean; style?: CSSProperties }) {
+  const e = side.earlier ?? null
+  const a = e ? null : side.also ?? null
+  const pick = e ?? a
+  return (
+    <article id={`top-${index}`} data-top-card="new-none" style={style} className={cn(CARD, span, 'scroll-mt-6', selected ? SELECTED_CARD_RING : null)}>
+      <CardHead icon={Sparkles} eyebrow={<span data-copy="verdict">New this week</span>} title={<span data-copy="verdict">{side.anyNew ? NOTHING_ELSE_NEW : NOTHING_NEW}</span>} />
+      {pick ? (
+        <>
+          <div className="flex flex-col gap-2.5 border-t border-track pt-3">
+            <Label>{e ? 'Newest' : ALSO_TALKED}</Label>
+            <Link href={pick.href} scroll={false} className="text-[15px] font-semibold leading-[1.35] text-foreground no-underline underline-offset-[3px] hover:underline">
+              <span data-copy="subject" data-slot="pass_b_theme">{pick.conv.label}</span>
+            </Link>
+            <div className="flex flex-wrap items-baseline gap-2"><Fig n={pick.conv.week} className={MID} /><WeekLines conv={pick.conv} data={data} /></div>
+            {e ? <p className="m-0 text-[13px] leading-[1.5] text-muted-foreground">First heard the week of {e.week}</p> : null}
+          </div>
+          {a?.groups ? <GroupsLine groups={a.groups} /> : null}
+          <div className="mt-auto">{selected && data.panel ? <Link href={data.panel.closeHref} scroll={false} className={OLINK}>Close ↑</Link> : <Link href={pick.href} scroll={false} className={OLINK}>Open →</Link>}</div>
+        </>
+      ) : null}
+    </article>
+  )
+}
+
+/** The new card's stand-in's label: the week's next biggest conversation. */
+export const ALSO_TALKED = 'Also talked about'
+
+/** Another card with nothing for it this week: the week's second-biggest,
+ *  where no other conversation reached the floor. */
+function NoOther({ index, span, style }: { index: number; span: string; style?: CSSProperties }) {
+  return (
+    <article id={`top-${index}`} data-top-card="biggest-none" style={style} className={cn(CARD, span, 'scroll-mt-6')}>
+      <CardHead icon={BarChart3} eyebrow="Three weeks" title="No other conversation this week" />
+      <p className="m-0 text-[13.5px] leading-[1.5] text-muted-foreground">Nothing else reached three of the category’s videos.</p>
+    </article>
+  )
+}
+
+/** The new card's title where nothing was first heard this week. */
+export const NOTHING_NEW = 'Nothing new this week'
+export const NOTHING_ELSE_NEW = 'Nothing else new this week'
+
 /** A card beside the hero. */
 function Side({ side, data, index, span, selectedId, style }: { side: SideCard; data: MarketData; index: number; span: string; selectedId: string | null; style?: CSSProperties }) {
   const conv = side.convs[0]
-  const selected = selectedId != null && side.convs.some((c) => c.id === selectedId)
+  const selected = selectedId != null && sideIds(side).includes(selectedId)
   const href = side.hrefs[0]
+  if (!conv) {
+    return side.kind === 'new_list'
+      ? <NothingNew side={side} data={data} index={index} span={span} selected={selected} style={style} />
+      : <NoOther index={index} span={span} style={style} />
+  }
   if (side.kind === 'new_list') {
     const rest = side.convs.slice(1)
     return (
@@ -231,7 +300,7 @@ function Side({ side, data, index, span, selectedId, style }: { side: SideCard; 
           : data.month.category != null ? <span data-copy="level" className={MONO_MUTED}>of {fmtInt(data.month.category)} category videos</span> : null}
       </div>
       {week
-        ? <SpikeBars weeks={weekBars(conv, data)} counts="all" size="md" className="max-w-[300px]" label={`Category videos a week about ${conv.label}`} />
+        ? <SpikeBars weeks={weekBars(conv, data)} counts="all" size="md" ghost className="max-w-[300px]" label={`Category videos a week about ${conv.label}`} />
         : conv.months.length > 1 ? <MiniBars bars={monthBars(conv.months).map(({ sub: _sub, ...b }) => b)} className="max-w-[300px]" label={`Category videos a month about ${conv.label}`} /> : null}
       <GroupsLine groups={side.groups} />
       {conv.who.length > 0 && data.brands === 'counted' ? <div className="flex flex-wrap items-center gap-1.5 text-[12.5px] text-muted-foreground"><span>About</span><About parts={conv.who} brand={data.brand} noun={data.noun} /></div> : null}
@@ -288,7 +357,7 @@ export function TopRowView({ data, panel }: { data: MarketData; panel?: (notchAt
   const sideSpan = SIDE_SPAN[spans[1] ?? 3] ?? 'col-span-12 md:col-span-6 xl:col-span-3'
   // The open card: the hero (0) or a card beside it (1, 2), by the open id.
   const heroOpen = openId != null && openId === heroId
-  const sideOpen = openId == null ? -1 : top.sides.findIndex((s) => s.convs.some((c) => c.id === openId))
+  const sideOpen = openId == null ? -1 : top.sides.findIndex((s) => sideIds(s).includes(openId))
   const at = !top.hero ? -1 : heroOpen ? 0 : sideOpen >= 0 ? sideOpen + 1 : -1
   const place = panel && at >= 0 ? panelPlacement(at, topRowLayout(top.sides.length)) : null
   const slot = (i: number) => (place && panel && i === at ? <PanelSlot placement={place}>{panel(place.notch)}</PanelSlot> : null)

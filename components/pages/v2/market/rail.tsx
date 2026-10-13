@@ -1,11 +1,12 @@
 import type { CSSProperties } from 'react'
 import { BarChart3, ListChecks, Smartphone } from 'lucide-react'
 import { ProportionBar } from '@/components/proportion-bar'
-import { CARD, CardHead, SpikeBars, TickBarRow, TickKey } from '@/components/v2'
+import { CARD, CardHead, SpikeBars, TickBar, TickBarRow, TickKey } from '@/components/v2'
 import { EYEBROW } from '@/components/colour-roles'
 import { fmtInt } from '@/lib/format'
 import { INSUFFICIENT, weeksFailed, type WeeksRead } from '@/lib/pages/home'
-import type { KindsBlock, MarketData, PlatformsBlock, StoredLine } from '@/lib/pages/v2/market'
+import { MARKET_KINDS, type KindsBlock, type MarketData, type PlatformsBlock, type StoredLine } from '@/lib/pages/v2/market'
+import { talkKindLabel } from '@/lib/pages/overview-market/kinds'
 import { cn } from '@/lib/utils'
 import { Stored } from './parts'
 
@@ -47,23 +48,84 @@ export function KindsCard({ block }: { block: KindsBlock }) {
   )
 }
 
+/** What people do in the comments with no kind read for the month: the six
+ *  rows keep their places on empty tracks, and one line says why (the parity
+ *  pass, 13 Oct). */
+export function KindsFrame({ noun, monthText }: { noun: string | null; monthText: string }) {
+  return (
+    <article id="kinds" data-empty="" className={cn(CARD, 'scroll-mt-6')}>
+      <CardHead icon={ListChecks} title="What people do in the comments" sub={<>Share of {monthText}’s videos where at least one comment did it</>} />
+      <div className="flex flex-col gap-[11px]">
+        {MARKET_KINDS.map((k) => (
+          <div key={k} className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_44px] items-center gap-2.5 text-[13.5px] leading-[1.35] text-muted-foreground">
+            <span className="min-w-0">{talkKindLabel(k, noun)}</span>
+            <TickBar pct={0} label={`${talkKindLabel(k, noun)}: not read`} />
+            <span />
+          </div>
+        ))}
+      </div>
+      <p className="m-0 text-[13px] text-muted-foreground">Not read for {monthText} yet.</p>
+    </article>
+  )
+}
+
+/** Where it's said with no video counted by platform: the bar's empty track
+ *  and one line. */
+export function PlatformsFrame({ data }: { data: MarketData }) {
+  return (
+    <article id="where" data-empty="" className={cn(CARD, 'scroll-mt-6')}>
+      <CardHead icon={Smartphone} title="Where it’s said" sub={data.period === 'week' ? 'This week’s videos, by platform' : <>The videos in {data.month.text}, by platform</>} />
+      <div aria-hidden className="h-3 rounded-[6px] bg-track" />
+      <p className="m-0 text-[13px] text-muted-foreground">No video counted by platform yet.</p>
+    </article>
+  )
+}
+
 /** A weekly volume read that failed: never "Insufficient data", which is the
  *  honest word for too few clean weeks (Phase 4 fix round). */
 export const WEEKS_UNREAD = 'The weekly counts could not be read just now.'
 
-export function WeeksCard({ weeks: read }: { weeks: WeeksRead }) {
+/** The chart's rule, said wherever a slot is empty: only weeks read one way
+ *  are drawn (`homeWeeks`). */
+export const WEEKS_RULE = 'Only weeks read the same way are drawn'
+
+/**
+ * THE CHART'S ONE QUIET LINE, one set of words for every state (the parity
+ * pass, 13 Oct): no week to draw is Heinrich's "Insufficient data" with the
+ * rule; slots left empty, the rule; the newest weeks still filling, said once
+ * beside it where it holds. A read that failed says so instead
+ * (`WEEKS_UNREAD`). Null where every slot is drawn and settled.
+ */
+export function weeksLine(columns: readonly { videos: number | null; settled: boolean }[] | null, failed = false): string | null {
+  if (failed) return WEEKS_UNREAD
+  const drawn = columns?.some((c) => c.videos != null) ?? false
+  if (!columns || !drawn) return `${INSUFFICIENT}: ${WEEKS_RULE.charAt(0).toLowerCase()}${WEEKS_RULE.slice(1)}.`
+  const gaps = columns.some((c) => c.videos == null)
+  const filling = columns.some((c) => c.videos != null && !c.settled)
+  if (gaps && filling) return `${WEEKS_RULE}; the newest are still filling.`
+  if (gaps) return `${WEEKS_RULE}.`
+  if (filling) return 'The newest weeks are still filling.'
+  return null
+}
+
+export function WeeksCard({ weeks: read, axis = [] }: { weeks: WeeksRead; axis?: readonly string[] }) {
   const failed = weeksFailed(read)
   const weeks = failed ? null : read
   const drawn = weeks ? weeks.columns.some((c) => c.videos != null) : false
+  // THE BOARD'S CHART IN EVERY STATE (the parity pass, 13 Oct): with no week
+  // to draw (too few clean weeks, or a read that failed) the card still draws
+  // its eight weeks' axis with the slots empty, and one quiet line says why.
+  const line = weeksLine(weeks?.columns ?? null, failed)
+  const columns = weeks && drawn
+    ? weeks.columns.map((c) => ({ label: c.label, count: c.videos }))
+    : (weeks?.columns.map((c) => c.label) ?? axis).map((label) => ({ label, count: null }))
   return (
     <article id="weeks" className={cn(CARD, 'scroll-mt-6')}>
       <CardHead icon={BarChart3} title="Videos, week by week" sub="Your market’s videos, by the week people commented" />
-      {weeks && drawn
-        ? <SpikeBars weeks={weeks.columns.map((c) => ({ label: c.label, count: c.videos }))} variant="ink" counts="all" size="md" label="The market's videos a week" />
-        : <p className="m-0 text-[13.5px] text-muted-foreground">{failed ? WEEKS_UNREAD : INSUFFICIENT}</p>}
-      {weeks && drawn && weeks.columns.some((c) => c.videos != null && !c.settled)
-        ? <p className="m-0 text-[12.5px] text-muted-foreground">The newest weeks are still filling: a week settles two updates after it ends.</p>
+      {columns.length > 0
+        ? <SpikeBars weeks={columns} variant="ink" counts="all" size="md" ghost label="The market's videos a week" />
         : null}
+      {line ? <p className="m-0 text-[13px] text-muted-foreground">{line}</p> : null}
     </article>
   )
 }
@@ -119,20 +181,15 @@ export function WatchCard({ lines }: { lines: readonly StoredLine[] }) {
   )
 }
 
-/** Beside the subject board, the rail is a column; with no board (no subject
- *  named yet, or none measured), its cards share the row. */
-export function railIsWide(data: Pick<MarketData, 'subjects'>): boolean {
-  return !data.subjects || data.subjects.rows.length === 0
-}
-
+/** The rail: a column beside the subject board in every data state (the
+ *  parity pass, 13 Oct: it never breaks out into a row of cards). */
 export function RailView({ data, style }: { data: MarketData; style?: CSSProperties }) {
   const { rail } = data
-  const wide = railIsWide(data)
   return (
-    <div style={style} className={cn('col-span-12 min-w-0 gap-5', wide ? 'grid grid-cols-1 items-start md:grid-cols-2 xl:grid-cols-3' : 'flex flex-col xl:col-span-4')}>
-      {rail.kinds ? <KindsCard block={rail.kinds} /> : null}
-      <WeeksCard weeks={rail.weeks} />
-      {rail.platforms ? <PlatformsCard block={rail.platforms} data={data} /> : null}
+    <div style={style} className="col-span-12 flex min-w-0 flex-col gap-5 xl:col-span-4">
+      {rail.kinds ? <KindsCard block={rail.kinds} /> : <KindsFrame noun={data.noun} monthText={data.month.text} />}
+      <WeeksCard weeks={rail.weeks} axis={rail.weeksAxis} />
+      {rail.platforms ? <PlatformsCard block={rail.platforms} data={data} /> : <PlatformsFrame data={data} />}
       {rail.watch.length > 0 ? <WatchCard lines={rail.watch} /> : null}
     </div>
   )

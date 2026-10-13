@@ -68,6 +68,12 @@ export function About({ parts, brand, noun, className }: { parts: readonly WhoPa
   )
 }
 
+/** Who the videos are about where brands are not counted (or not read): the
+ *  slot keeps its place with the reason in a few words, said once per block
+ *  (the parity pass, 13 Oct; Voices' longer words in a title). */
+export const ABOUT_NOT_COUNTED = 'brands not counted yet'
+export const ABOUT_NOT_READ = 'brands not read yet'
+
 const rank = (p: WhoPart): number => (p.about === 'client' ? 0 : p.about === 'market' ? 2 : 1)
 
 /** A stored sentence (a slot's prose), any `[[key]]` put back as code's

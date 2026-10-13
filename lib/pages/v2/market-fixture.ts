@@ -1,12 +1,12 @@
 import type { ObjectReading } from '../../agent/movement'
 import { bandVerdict, type Verdict } from '../../reading/verdicts'
 import type { MonthSeries } from '../../reading/series'
-import type { HomeWeeks } from '../home'
+import { WEEKS_FAILED, type HomeWeeks } from '../home'
 import type { UnusualFlag } from '../week'
 import {
   buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, convHref, closeHref, flagCardOf, flagVerdict, groupsOf,
   lineBars, marketLongRunFor, marketMonths, marketParams, monthsText, notchOf, ourReadOf, panelStats, pickHero, pickWeekSides, platformRows, subjectHref,
-  tableMonths, convOf, doingOf, leadDoing, withMonthPlatforms,
+  tableMonths, convOf, doingOf, alsoTalkedOf, earlierNewOf, leadDoing, withMonthPlatforms,
   type ConvInput, type ConvPanel, type MarketConv, type MarketData, type MarketMonth, type MarketParams, type MarketWeek, type MonthCount,
   type PanelAt, type SubjectFact, type TopRow,
 } from './market'
@@ -85,6 +85,17 @@ export const FIXTURE_FLAG: Omit<UnusualFlag, 'quotes'> = {
   ],
   explanationModel: 'gpt-5.4',
   rank: 1,
+}
+
+/** A flag on a kind of comment (complaints), not a conversation. */
+export const FIXTURE_KIND_FLAG: Omit<UnusualFlag, 'quotes'> = {
+  ...FIXTURE_FLAG,
+  objectKind: 'kind',
+  objectId: 'pain_point',
+  label: 'pain_point',
+  week: { k: 61, n: 252 },
+  baseline: { k: 286, n: 1906 },
+  sentences: [],
 }
 
 /** The published read's parts the page uses. */
@@ -206,8 +217,23 @@ export function fixtureFacts(): SubjectFact[] {
       { month: OCT, k: now[0], n: now[1] },
     ],
   }))
-  facts.push({ id: subjectId('sport'), name: 'Sport and running', calibration: 'provisional', level: null, verdict: null, trail: [] })
+  // A seventh subject whose check failed: named under the rows, never a row.
+  facts.push({ id: subjectId('sport'), name: 'Sport and running', calibration: 'failed', level: null, verdict: null, trail: [] })
   return facts
+}
+
+/**
+ * The subjects in a thinner state (the parity pass, 13 Oct): `provisional`,
+ * every check still open (Össur today: no level, no line, no change; the
+ * conversations inside each still listed); `one_month`, each read for this
+ * month only (Sealand today: a level, no line to speak of, no change).
+ */
+export function fixtureFactsIn(state: 'provisional' | 'one_month'): SubjectFact[] {
+  return fixtureFacts().map((f) => {
+    if (f.calibration === 'failed') return f
+    if (state === 'provisional') return { ...f, calibration: 'provisional', level: null, verdict: null, trail: [] }
+    return { ...f, verdict: null, trail: f.trail.filter((t) => t.month === OCT) }
+  })
 }
 
 /** The six kinds' readings, October so far against September. */
@@ -257,6 +283,23 @@ export interface FixtureOptions {
   /** The month the view reads has closed (early November, reading October
    *  in full): "October", never "so far". */
   closed?: boolean
+  /** The subjects' state: every check passed (the default), every check
+   *  still open, or read for this month only. */
+  subjects?: 'ready' | 'provisional' | 'one_month'
+  /** The weekly volume: drawn (the default), too few clean weeks, or a read
+   *  that failed. */
+  weeks?: 'drawn' | 'insufficient' | 'failed'
+  /** With nothing first heard this week, an earlier week's read named one
+   *  (the third card names it). */
+  earlierNew?: boolean
+  /** No Voices group lists the lead conversation. */
+  noGroups?: boolean
+  /** The check flagged a kind of comment (complaints), not a conversation:
+   *  the lead card names no group and no "doing". */
+  flagKind?: boolean
+  /** The week's flag is on a conversation first heard this week (Waterproof
+   *  knees), so a New chip sits outside the new card. */
+  flagNew?: boolean
   /** This month's long-run read: `full` (written once the month closed),
    *  `partial` (written before it closed, `partialThrough`), `earlier`
    *  (October still filling with none of its own: September's stands in),
@@ -344,6 +387,9 @@ function octoberLongRun(partialThrough: string | null): LongRunReadData {
   }
 }
 
+/** Two weeks before the fixture's: the earlier read that first heard one. */
+const PREV_WINDOW = { from: '2026-09-21T00:00:00.000Z', to: '2026-09-28T00:00:00.000Z' }
+
 const WEEK: MarketWeek = {
   window: WINDOW,
   dates: '5 to 11 Oct',
@@ -382,11 +428,18 @@ export function marketFixture(opts: FixtureOptions = {}): MarketData {
     raw.at = 'subjects'
   }
   const p: MarketParams = marketParams(raw)
-  const input = { ...fixtureConvInput(period), ...(opts.noNew ? { newIds: new Set<string>() } : {}) }
+  const base = fixtureConvInput(period)
+  // Every check open: the subjects place conversations only as the second
+  // tier (`placeSubject`), as the loader hands them.
+  const pendingTier = opts.subjects === 'provisional' && base.subjects
+    ? { ...base.subjects, order: [] as string[], subjectsOf: new Map<string, string[]>(), pending: { order: base.subjects.order, subjectsOf: base.subjects.subjectsOf } }
+    : base.subjects
+  const input = { ...base, subjects: pendingTier, ...(opts.noNew ? { newIds: new Set<string>(opts.flagNew ? [id(11)] : []) } : {}) }
   const convs = buildConvs(input).map((c) => withWho(c, period))
   const read = fixtureRead()
-  const flag = flagged && period === 'week' ? flagCardOf({ flag: FIXTURE_FLAG, window: WINDOW, convs, convInput: input, monthCategory: MONTH.category, p, noun: null }) : null
-  const groups = (cid: string) => groupsOf(cid, PERSONAS)
+  const theFlag = opts.flagKind ? FIXTURE_KIND_FLAG : opts.flagNew ? { ...FIXTURE_FLAG, objectId: id(11), label: 'Waterproof knees' } : FIXTURE_FLAG
+  const flag = (flagged || opts.flagKind || opts.flagNew) && period === 'week' ? flagCardOf({ flag: theFlag, window: WINDOW, convs, convInput: input, monthCategory: MONTH.category, p, noun: null }) : null
+  const groups = (cid: string) => (opts.noGroups ? [] : groupsOf(cid, PERSONAS))
   const doing = (c: MarketConv | null) => (c ? leadDoing(doingOf(HERO_KINDS, c.month, null), c.kind) : null)
 
   const top: TopRow = { hero: null, sides: [], months: null }
@@ -396,8 +449,22 @@ export function marketFixture(opts: FixtureOptions = {}): MarketData {
     if (flag) top.hero = { kind: 'flag', card: { ...flag, conv: convs.find((c) => c.id === flag.conv?.id) ?? flag.conv }, groups: groups(flag.flag.objectId), doing: doing(flag.conv) }
     else if (pick && pick.kind !== 'flag') top.hero = { kind: pick.kind, conv: pick.conv, href: convHref(p, pick.conv.id, 'top'), groups: groups(pick.conv.id), doing: doing(pick.conv) }
     const sides = pickWeekSides({ convs, heroId, setApart: new Set() })
-    if (sides.biggest) top.sides.push({ kind: 'biggest', convs: [sides.biggest], hrefs: [convHref(p, sides.biggest.id, 'top')], groups: groups(sides.biggest.id) })
-    if (sides.fresh.length > 0) top.sides.push({ kind: 'new_list', convs: sides.fresh, hrefs: sides.fresh.map((c) => convHref(p, c.id, 'top')), groups: groups(sides.fresh[0].id) })
+    // The loader's rule: the board's three cards, always.
+    top.sides.push(sides.biggest
+      ? { kind: 'biggest', convs: [sides.biggest], hrefs: [convHref(p, sides.biggest.id, 'top')], groups: groups(sides.biggest.id) }
+      : { kind: 'biggest', convs: [], hrefs: [], groups: [] })
+    if (sides.fresh.length > 0) {
+      top.sides.push({ kind: 'new_list', convs: sides.fresh, hrefs: sides.fresh.map((c) => convHref(p, c.id, 'top')), groups: groups(sides.fresh[0].id) })
+    } else {
+      const anyNew = convs.some((c) => c.isNew)
+      const onRow = new Set([heroId, sides.biggest?.id].filter((x): x is string => x != null))
+      const earlier = !anyNew && opts.earlierNew ? earlierNewOf([{ window: PREV_WINDOW, themeIds: [id(16)] }], input, (cid) => convHref(p, cid, 'top'), onRow) : null
+      const next = earlier ? null : alsoTalkedOf(convs, onRow, new Set())
+      top.sides.push({
+        kind: 'new_list', convs: [], hrefs: [], groups: [], anyNew, earlier,
+        also: next ? { conv: next, href: convHref(p, next.id, 'top'), groups: groups(next.id) } : null,
+      })
+    }
   } else if (period === 'month') {
     const [first, ...rest] = convs.slice(0, 3)
     top.hero = { kind: 'biggest', conv: first, href: convHref(p, first.id, 'top'), groups: groups(first.id), doing: doing(first) }
@@ -406,7 +473,7 @@ export function marketFixture(opts: FixtureOptions = {}): MarketData {
     top.months = marketMonths(new Map([['2026-05-01', { videos: 262 }], ['2026-06-01', { videos: 331 }], ['2026-07-01', { videos: 455 }], ['2026-08-01', { videos: 612 }], [SEP, { videos: 839 }], [OCT, { videos: 318 }]]), OCT, OCT)
   }
 
-  const facts = fixtureFacts()
+  const facts = !opts.subjects || opts.subjects === 'ready' ? fixtureFacts() : fixtureFactsIn(opts.subjects)
   const subjects = buildSubjectBoard({
     facts, month: OCT, convs, period,
     flag: flag?.conv ? { id: flag.conv.id, verdict: flag.verdict } : null,
@@ -415,6 +482,7 @@ export function marketFixture(opts: FixtureOptions = {}): MarketData {
   const openId = opts.open ? id(opts.open.n) : null
   const table = buildTable({
     convs, params: p, openId: opts.open?.at === 'table' ? openId : null,
+    pending: new Set(input.subjects?.pending?.order ?? []),
     months: period === 'time' ? tableMonths(OCT, new Map([['2026-07-01', 455], ['2026-08-01', 612], [SEP, 780], [OCT, 300]]), OCT) : [],
   })
   const panel = opts.open ? fixturePanel(opts.open.n, opts.open.at, p, period, convs, input, read, flagged) : null
@@ -430,7 +498,8 @@ export function marketFixture(opts: FixtureOptions = {}): MarketData {
     subjects,
     rail: {
       kinds: buildKinds(fixtureKindReadings(), OCT, null, soFar),
-      weeks: FIXTURE_WEEKS,
+      weeks: !opts.weeks || opts.weeks === 'drawn' ? FIXTURE_WEEKS : opts.weeks === 'failed' ? WEEKS_FAILED : null,
+      weeksAxis: FIXTURE_WEEKS.columns.map((c) => c.label),
       platforms: period === 'week'
         ? withMonthPlatforms(platformRows({ tiktok: 128, instagram: 76, youtube: 37 }, 'week'), { tiktok: 170, instagram: 98, youtube: 50 }, 'in October so far')
         : platformRows({ tiktok: 170, instagram: 98, youtube: 50 }, 'month'),
@@ -487,6 +556,19 @@ function fixturePanel(n: number, at: PanelAt, p: MarketParams, period: MarketPar
     askHref: '/dashboard/agent?ask=What%20does%20my%20market%20say%20about%20insurance%20refusals%20for%20powered%20knees%3F',
     closeHref: closeHref(p, at),
   }
+}
+
+/**
+ * MARKET AS ÖSSUR HAS IT TODAY (the parity pass, 13 Oct): no flag, nothing
+ * first heard this week, every subject's check still open, brands not counted
+ * yet, too few clean weeks for the weekly volume, and no Voices group on the
+ * lead. The render tests pin the board's shape in this state: three cards in
+ * the top row, a row per subject with the conversations inside it, the rail
+ * a column beside the board, the weekly chart's frame, and the table's
+ * Subject and About columns.
+ */
+export function marketThinFixture(opts: Pick<FixtureOptions, 'earlierNew' | 'open' | 'subject'> = {}): MarketData {
+  return marketFixture({ flagged: false, noNew: true, subjects: 'provisional', brands: 'not_counted', weeks: 'insufficient', noGroups: true, ...opts })
 }
 
 /** The fixture's ids, for tests. */

@@ -291,9 +291,17 @@ export async function loadThemeFacts(
   return out
 }
 
-/** The ready subjects (a subject whose membership is not verified tags
- *  nothing) and which of them each insight is a member of. Null where the
- *  subjects are not recorded here. */
+/** The ready subjects and which of them each insight is a member of. Null
+ *  where the subjects are not recorded here.
+ *
+ *  READY ONLY, here and on every surface but Market: a subject whose
+ *  membership is not verified tags nothing. Market alone (the parity pass,
+ *  13 Oct; lib/pages/v2/market.ts `placeSubject`) places a conversation in a
+ *  subject whose check is still open, and only where no ready subject takes
+ *  it, so that subject's row keeps its "Inside it" and the table its Subject
+ *  column; a ready subject always wins, a failed one is never used, and the
+ *  open one prints no level, line, change or chip count until its check
+ *  clears (ruling U6). */
 export async function loadReadySubjects(supabase: SupabaseClient, clientId: string): Promise<{ names: Map<string, string>; order: string[]; subjectsOf: Map<string, string[]> } | null> {
   try {
     const subjects = (await loadActiveSubjects(supabase as never, clientId)).filter((s) => subjectCalibration(s) === 'ready')
