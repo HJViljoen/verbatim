@@ -589,8 +589,8 @@ describe('the pipeline carries the month\'s briefs', () => {
     expect(src).toMatch(/runLongRunStep\(admin, \{ clientId, runId, company, lastAttempt: [^}]*, window: closingWindow, testRun \}\)/)
   })
 
-  it('as five additive ids in their own position: after write-longrun-read, immediately before close-run, in this order (71 in all)', () => {
-    expect(ids).toHaveLength(71)
+  it('as five additive ids in their own position: after write-longrun-read, immediately before close-run, in this order (73 in all, the product readings\' two since depth v2 T11)', () => {
+    expect(ids).toHaveLength(73)
     const at = ids.indexOf('plan-briefs')
     expect(ids[at - 1]).toBe('write-longrun-read')
     expect(ids.slice(at, at + 6)).toEqual([

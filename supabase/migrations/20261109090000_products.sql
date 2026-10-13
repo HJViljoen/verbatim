@@ -112,11 +112,15 @@
 -- IDEMPOTENT. `if not exists`, `create or replace`, drop-then-create for the
 -- policies, triggers and the CHECK, grants that end where they began. No
 -- CONCURRENTLY, no BEGIN/COMMIT: the runner wraps the file in one transaction.
--- To prove before production (phase1-staging is paused): apply twice on a
--- throwaway PostgreSQL 17 cluster (scripts/pg-shim/throwaway.sh up, then twice
--- with this file) and run scripts/pg-shim/products-checks.sql
+-- Proven before production (phase1-staging is paused) on a throwaway
+-- PostgreSQL 17 cluster, 13 Oct: scripts/pg-shim/throwaway.sh up --before
+-- 20261109090000, then twice with this file (the catalogue diff after the
+-- second application is empty), then scripts/pg-shim/products-checks.sql
 -- (throwaway.sh check), which exercises the RLS, the append-only grants, the
--- guards' one-shot, the version and a regate round trip.
+-- guards' one-shot, the version and a regate round trip; and the runner's
+-- `products` set through scripts/pg-shim/test-runner.sh <dir> products.
+-- Applied to production by scripts/apply-market-first-migrations.sh --set
+-- products.
 
 -- =============================================================================
 -- 1. The catalogue
@@ -467,7 +471,7 @@ create table if not exists public.product_mentions (
     or (placement = 'none' and product_id is null and group_id is null)),
   -- A model's verdict names the model and its prompt; a rule's or a person's
   -- names neither. A tag row names its tag, and only a tag row does.
-  constraint product_mentions_method_check check (
+  constraint product_mentions_method_shape_check check (
     (method in ('model', 'confirmed') and coalesce(model, '') <> '' and coalesce(prompt_version, '') <> '')
     or (method in ('rule', 'tag') and model is null and prompt_version is null)),
   constraint product_mentions_tag_check check ((method = 'tag') = (tag_id is not null)),
@@ -504,7 +508,14 @@ comment on table public.product_mentions is
 -- category is unbranded, so k_named + k_unclear + k_unbranded = k_any (the
 -- board's "11 name one of your liners · 11 … couldn't tell which · 30 …
 -- in general", of 52). A PRODUCT row is its named videos alone. `comments`:
--- the comments dated in the month placed under it. Written by the run's
+-- the comments dated in the month placed under it. k_organic and n_organic
+-- are k_any and n leaving out every video ANY of our rival searches found,
+-- current and retired: month_brand_readings' one base (MF3; lib/brands/
+-- rival-searches.ts readRivalFound), so a product or a category is never
+-- counted on our own searching for the brands that make them, and a reader
+-- puts the two tables' organic counts side by side over one denominator.
+-- Decided 13 Oct (Heinrich; depth v2 T11 step 0) and added before the first
+-- apply: the one-shot back-read could never gain them later. Written by the run's
 -- product-readings step (before freeze-months, as brand-readings is) and once
 -- by the back-read (T12). The existing three guards attach unchanged.
 create table if not exists public.month_product_readings (
@@ -522,8 +533,12 @@ create table if not exists public.month_product_readings (
   k_unclear         int not null,
   k_unbranded       int not null,
   k_any             int not null,
+  -- k_any and n without any video a rival search of ours found (MF3's
+  -- month_brand_readings base, lib/brands/rival-searches.ts).
+  k_organic         int not null,
   comments          int not null,
   n                 int not null,
+  n_organic         int not null,
   status            text not null check (status in ('filling', 'frozen')),
   origin            text not null check (origin in ('live', 'back_read')),
   read_at           timestamptz not null,
@@ -551,6 +566,10 @@ create table if not exists public.month_product_readings (
     or (object_kind = 'product' and product_id is not null and object_id = product_id)),
   constraint month_product_readings_counts_check check (
     k_named >= 0 and k_unclear >= 0 and k_unbranded >= 0 and k_any >= 0 and comments >= 0 and n >= 0 and k_any <= n),
+  -- The organic base is the same videos less the rival searches' finds: inside
+  -- k_any and n, and its k inside its n.
+  constraint month_product_readings_organic_check check (
+    k_organic >= 0 and n_organic >= 0 and k_organic <= k_any and n_organic <= n and k_organic <= n_organic),
   constraint month_product_readings_split_check check (
     (object_kind = 'product' and k_unclear = 0 and k_unbranded = 0 and k_any = k_named)
     or (object_kind = 'group' and k_named + k_unclear + k_unbranded = k_any)),
@@ -564,7 +583,7 @@ create index if not exists month_product_readings_group_idx
   on public.month_product_readings (client_id, group_id, month);
 
 comment on table public.month_product_readings is
-  'A product''s or a category''s month as talk, per audience: the videos naming it, about one of its products without saying which, about the category in general, and any of them, of the month''s videos, with the catalogue version. A month table: filling until the month freezes, then the record; a closed audience-month takes its product rows once.';
+  'A product''s or a category''s month as talk, per audience: the videos naming it, about one of its products without saying which, about the category in general, and any of them, of the month''s videos, and the same without any video our rival searches found (organic), with the catalogue version. A month table: filling until the month freezes, then the record; a closed audience-month takes its product rows once.';
 
 drop trigger if exists month_product_readings_frozen_guard on public.month_product_readings;
 create trigger month_product_readings_frozen_guard
@@ -700,8 +719,8 @@ grant select (id, client_id, video_id, source, field, comment_id, comment_month,
               method, rule_version, catalogue_version, model, prompt_version, tag_id, found_at)
   on public.product_mentions to authenticated;
 grant select (client_id, month, audience, object_kind, object_id, group_id, product_id, k_named, k_unclear,
-              k_unbranded, k_any, comments, n, status, origin, read_at, run_id, rule_version, catalogue_version,
-              frozen_at)
+              k_unbranded, k_any, k_organic, comments, n, n_organic, status, origin, read_at, run_id, rule_version,
+              catalogue_version, frozen_at)
   on public.month_product_readings to authenticated;
 grant select (id, client_id, run_id, window_start, window_end, rank, registry_id, title, cover, subquestions,
               format, format_multiple, opening, opening_multiple, model, prompt_version, created_at)

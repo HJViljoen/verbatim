@@ -7,6 +7,13 @@ import { describe, expect, it, vi } from 'vitest'
 // to throw if anything ever calls it.
 const h = vi.hoisted(() => ({ parse: vi.fn(async () => { throw new Error('no model call in the freeze proof') }) }))
 vi.mock('../openai', () => ({ openai: { chat: { completions: { parse: h.parse } } } }))
+// The products steps (depth v2 T11) run here as if Sealand had a catalogue and
+// the switch were on: the worst case, every product table written. No model is
+// reached (the parse above throws if one is).
+vi.mock('../config', async (orig) => {
+  const real = await orig<typeof import('../config')>()
+  return { ...real, productReadingsEnabled: () => true }
+})
 
 import { SEALAND_CLIENT_ID } from '../config'
 import { pipelineActor } from '../config-log'
@@ -24,6 +31,9 @@ import { planSegmentVideos, runSegmentBatch } from './segment-videos'
 import { keepWeeksInRun, planComparability, runComparabilityTask } from './comparability-step'
 import { planLensReadings, runLensMonth } from './lens-readings'
 import { planBrandReadings, runBrandMonth } from './brand-readings'
+import { planProductReadings, runProductMonth } from './product-readings'
+import { seedCatalogue } from '../products/seed'
+import { cataloguePattern, compileCatalogue } from '../products/rules'
 import { applyQueuedEdits } from './tracking-queue'
 import { subjectMonthVideos, type SubjectMember } from '../pages/subjects'
 import { TRIM_STAGING } from '../test/trim-staging'
@@ -33,7 +43,8 @@ import { pruneStaleAnalysis, trimFreezeHold, trimStaleMemberships, type TrimSumm
 // THE SUN 4 OCT RUN FREEZES AUGUST FOR GOOD, and deploy 4 puts four run steps
 // (segment-videos, comparability, lens-readings, brand-readings) immediately
 // before freeze-months, plus the queue apply in open-run and the gather's
-// provenance and surfacings. This file is the proof that none of it can change
+// provenance and surfacings; depth v2 (T11) adds a fifth, product-readings,
+// after brand-readings and before freeze-months, proven here the same way. This file is the proof that none of it can change
 // what freeze-months writes for August:
 //
 //  1. The six month-reading functions freeze-months reads (the SQL) read only
@@ -163,6 +174,11 @@ const S = STAGING_FREEZE
 const tenant = <T extends object>(rows: readonly T[]) => rows.map((r) => ({ client_id: SEALAND_CLIENT_ID, ...r }))
 const inWindow = (month: string, p: Record<string, unknown>) => month >= String(p.p_from).slice(0, 10) && month < String(p.p_to).slice(0, 10)
 const rules = brandRulesFor(SEALAND_CLIENT_ID)
+/** A catalogue for Sealand, for the products steps' worst case (it has none in
+ *  production): one category whose words staging's captions hold. */
+const PRODUCTS = seedCatalogue({ seededFrom: 'test', compiledOn: '2026-10-13', groups: [{ name: 'Bags', words: ['bag', 'handbag'], products: [{ name: 'Tote Bag Pro' }] }] })
+const PRODUCT_PATTERN = cataloguePattern(compileCatalogue(PRODUCTS, SEALAND_CLIENT_ID), 'are')
+const PRODUCT_JS = new RegExp(cataloguePattern(compileCatalogue(PRODUCTS, SEALAND_CLIENT_ID), 'js')!, 'isu')
 
 /** Accounts first seen before 1 Jul, so the 4 Oct visit can freeze a first panel
  *  (production's Sealand has 536: attention.ts), and the videos the evidence
@@ -226,6 +242,7 @@ function database(panel: 'none' | 'before-attribution', subjects?: (p: Record<st
       theme_registry: [], subjects: [],
       month_pair_comparability: [], config_change_reach: [], comparability_checks: [],
       month_lens_readings: [], month_brand_readings: [], brand_mentions: [], video_surfacings: [],
+      product_mentions: [], product_tags: [], month_product_readings: [], clients: [{ id: SEALAND_CLIENT_ID, company_name: 'Sealand' }],
       tracking_configs: tenant([{ competitor_names: ['Patagonia', 'The North Face', 'Cotopaxi'], competitor_keywords: [], competitor_handles: {}, own_handles: {}, brand_keywords: ['sealand gear'], watched_brands: [], exclude_terms: [] }]),
       competitors: tenant([{ id: PATAGONIA, name: 'Patagonia', retired_at: null }, { id: NORTH_FACE, name: 'The North Face', retired_at: null }, { id: COTOPAXI, name: 'Cotopaxi', retired_at: null }]),
       week_line_reads: [], week_line_points: [], ai_call_log: [],
@@ -254,7 +271,12 @@ function database(panel: 'none' | 'before-attribution', subjects?: (p: Record<st
         : LABEL_SEGMENTS_STAGING.slice(0, 6).map((v) => ({ video_id: v.id, audience: 'industry-other', platform: v.platform, dated_comments: 12 }))),
       segments_for_videos: (p) => (p.p_video_ids as string[]).map((id, i) => ({ video_id: id, segment: i % 5 === 0 ? 'maker' : 'market' })),
       lens_readings: (p) => [{ audience: 'industry-other', object_kind: 'denominator', object_id: 'videos', k: p.p_video_ids ? (p.p_video_ids as string[]).length : 626, n: 626 }],
+      product_catalogue: () => ({ data: PRODUCTS }),
       brand_mention_candidates: (p) => {
+        if (String(p.p_pattern) === PRODUCT_PATTERN) {
+          return LABEL_SEGMENTS_STAGING.filter((v) => v.caption && PRODUCT_JS.test(v.caption))
+            .map((v) => ({ video_id: v.id, source: 'content', field: 'caption', comment_id: null, comment_month: null, excerpt: v.caption!.slice(0, 160) }))
+        }
         const rule = byPattern.get(String(p.p_pattern))
         const key = rule ? brandKey(rule.brand) : undefined
         return mentions.filter((m) => key && m.row.brand_key === key).map((m) => ({ video_id: m.row.video_id, source: 'content', field: 'caption', comment_id: null, comment_month: null, excerpt: m.excerpt }))
@@ -284,6 +306,9 @@ async function runTheNewSteps(f: FakeAdmin): Promise<Set<string>> {
   for (const month of lens.months) await runLensMonth(admin, { clientId: SEALAND_CLIENT_ID, runId: RUN, now: STEPS_AT, month })
   const brands = await planBrandReadings(admin, SEALAND_CLIENT_ID, STEPS_AT)
   for (const month of brands.months) await runBrandMonth(admin, { clientId: SEALAND_CLIENT_ID, runId: RUN, now: STEPS_AT, month, judge: null })
+  const products = await planProductReadings(admin, SEALAND_CLIENT_ID, STEPS_AT)
+  expect(products.months.length).toBeGreaterThan(0)
+  for (const month of products.months) await runProductMonth(admin, { clientId: SEALAND_CLIENT_ID, runId: RUN, now: STEPS_AT, month, budgetUsd: 0.75, cap: 3000 })
   expect(h.parse).not.toHaveBeenCalled()
   return new Set(f.writes.slice(before).map((w) => w.table))
 }
@@ -318,7 +343,7 @@ describe('2 and 3 · freeze-months on staging\'s August, with and without every 
       const after = await freeze(d4)
 
       // Not vacuous: every step wrote, on a database where all its tables exist.
-      for (const t of ['video_provenance', 'video_surfacings', 'video_segments', 'month_lens_readings', 'month_brand_readings', 'brand_mentions']) {
+      for (const t of ['video_provenance', 'video_surfacings', 'video_segments', 'month_lens_readings', 'month_brand_readings', 'brand_mentions', 'month_product_readings', 'product_mentions']) {
         expect(stepWrites, t).toContain(t)
       }
       // 2. Nothing a step wrote is anything freeze-months read or wrote.
@@ -357,8 +382,8 @@ describe('4 · every new step is non-fatal, so freeze-months always runs after i
   const src = readFileSync(join(ROOT, 'inngest', 'functions', 'pipeline.ts'), 'utf8')
   const freezeAt = src.indexOf(".run('freeze-months'")
 
-  it('each of the eight new ids ends in .catch, and all eight sit before freeze-months', () => {
-    const ids = ["'plan-segment-videos'", '`segment-videos:', "'plan-comparability'", '`comparability:', "'plan-lens-readings'", '`lens-readings:', "'plan-brand-readings'", '`brand-readings:']
+  it('each of the ten new ids ends in .catch, and all ten sit before freeze-months (deploy 4\'s eight, then depth v2\'s two)', () => {
+    const ids = ["'plan-segment-videos'", '`segment-videos:', "'plan-comparability'", '`comparability:', "'plan-lens-readings'", '`lens-readings:', "'plan-brand-readings'", '`brand-readings:', "'plan-product-readings'", '`product-readings:']
     let last = -1
     for (const id of ids) {
       const at = src.indexOf(`.run(${id}`)
@@ -379,11 +404,12 @@ describe('4 · every new step is non-fatal, so freeze-months always runs after i
     expect(block).toContain('const comparabilityTasks = comparabilityPlan?.tasks ?? []')
     expect(block).toContain('const lensMonthsToRead = lensPlan?.months ?? []')
     expect(block).toContain('const brandMonthsToRead = brandPlan?.months ?? []')
+    expect(block).toContain('const productMonthsToRead = productPlan?.months ?? []')
     // Outside a step's own callback, nothing between the first new id and
     // freeze-months awaits anything but a step (a throw out there would be
     // uncaught): cut every `.run(…, async () => { … }).catch(…)` out, then look.
     const outside = block.replace(/\.run\([^\n]*, async \(\) => \{[\s\S]*?\n(\s*)\}\)\n\1\.catch\(\(e\) => \{[\s\S]*?\n\1\}\)/g, '.run(STEP).catch(CAUGHT)')
-    expect(outside.match(/\.run\(STEP\)\.catch\(CAUGHT\)/g)?.length).toBe(8)
+    expect(outside.match(/\.run\(STEP\)\.catch\(CAUGHT\)/g)?.length).toBe(10)
     const awaits = [...outside.matchAll(/await (?!step\b)(\w+)/g)].map((m) => m[1])
     expect(awaits).toEqual([])
   })
@@ -432,13 +458,14 @@ describe('5 · the other freeze-path hunks', () => {
     expect(path.size).toBe(39)
   })
 
-  it('lib/config.ts: the two spend switches are read by nothing on the path, and are off for every tenant', async () => {
-    for (const name of ['SEGMENT_JUDGE_ENABLED', 'BRAND_CONFIRM_ENABLED', 'segmentJudgeEnabled', 'brandConfirmEnabled']) {
+  it('lib/config.ts: the spend switches and the products steps\' switch are read by nothing on the path, and are off for every tenant', async () => {
+    for (const name of ['SEGMENT_JUDGE_ENABLED', 'BRAND_CONFIRM_ENABLED', 'segmentJudgeEnabled', 'brandConfirmEnabled', 'PRODUCT_READINGS_ENABLED', 'productReadingsEnabled']) {
       expect(uses(name), name).toEqual(['lib/config.ts'])
     }
     const config = await vi.importActual<typeof import('../config')>('../config')
     expect(Object.values(config.SEGMENT_JUDGE_ENABLED).every((on) => on === false)).toBe(true)
     expect(Object.values(config.BRAND_CONFIRM_ENABLED).every((on) => on === false)).toBe(true)
+    expect(Object.values(config.PRODUCT_READINGS_ENABLED).every((on) => on === false)).toBe(true)
   })
 
   it('lib/subjects/types.ts: SUBJECTS_MAX (8 to 10) is read by nothing on the path, and by nothing that writes a row without a person or an operator asking', () => {

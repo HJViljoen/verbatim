@@ -376,6 +376,10 @@ export const AFTER_GATHER_STEPS: readonly string[] = [
   'pass-a', 'replan-pass-a', 'replan-pass-a-ocr', 'replan-pass-a-translated',
   'themes', 'persist-themes', 'keyword-attribution',
   'owned-posts', 'owned-comments', 'owned-events',
+  // Your products (depth v2 T11): read what was gathered, write placements
+  // and month rows, and move no week count. Logged-only today (never
+  // noteError'd); listed so a later counted error cannot cut a week.
+  'plan-product-readings', 'product-readings',
 ]
 
 /** A run as the chart's cadence reads it: `errors` is `pipeline_runs.errors`.

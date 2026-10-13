@@ -293,6 +293,8 @@ describe('the products migration: month_product_readings carries the month table
       "check ( (object_kind = 'product' and k_unclear = 0 and k_unbranded = 0 and k_any = k_named) or (object_kind = 'group' and k_named + k_unclear + k_unbranded = k_any))",
     )
     expect(flat).toContain('k_any <= n')
+    // The organic base (month_brand_readings', MF3): inside k_any and n, its k inside its n.
+    expect(flat).toContain('k_organic >= 0 and n_organic >= 0 and k_organic <= k_any and n_organic <= n and k_organic <= n_organic')
     expect(flat).toContain(
       "check ( (object_kind = 'group' and product_id is null and object_id = group_id) or (object_kind = 'product' and product_id is not null and object_id = product_id))",
     )
@@ -334,7 +336,8 @@ describe('the products migration: the pinned shapes', () => {
       'client_id uuid not null → clients on delete cascade', 'month date not null', 'audience text not null',
       'object_kind text not null', 'object_id uuid not null', 'group_id uuid not null', 'product_id uuid',
       'k_named int not null', 'k_unclear int not null', 'k_unbranded int not null', 'k_any int not null',
-      'comments int not null', 'n int not null', 'status text not null', 'origin text not null',
+      'k_organic int not null', 'comments int not null', 'n int not null', 'n_organic int not null',
+      'status text not null', 'origin text not null',
       'read_at timestamptz not null', 'run_id uuid → pipeline_runs on delete set null', 'rule_version text not null',
       'catalogue_version text not null', 'frozen_at timestamptz',
       'pk (client_id, month, audience, object_kind, object_id)',

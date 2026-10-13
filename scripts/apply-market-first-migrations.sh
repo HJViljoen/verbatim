@@ -71,6 +71,19 @@
 #         the member's INSERT on it; no other grant, policy or trigger changes
 #         (the runner reads the member's grants on moves after it). Your moves
 #         dates a move today until it is applied, and reads the day once it is.
+#   products = 20261109090000_products.sql (depth v2 T10 + T11 step 0: Your
+#         products and the weekly post ideas), after costs (20261108090000,
+#         the newest production held on 13 Oct). Additive: seven tables
+#         (product_groups, products, product_aliases, product_tags,
+#         product_mentions, month_product_readings with the month tables'
+#         three guards, post_ideas), product_catalogue() and one alias guard,
+#         regate_videos / regate_restore replaced with two more tables, and
+#         config_changes' surface CHECK widened by 'products'. It changes no
+#         existing grant, month table or guard (the runner reads the existing
+#         guards before and after, as for mf3). Nothing deployed before depth
+#         v2 reads it; depth v2's steps, pages and Settings each say "not
+#         there" and write nothing until it is in. Apply it BEFORE deploying
+#         depth v2's Settings (T10b), and before scripts/products.ts --apply.
 #
 # TESTED on a throwaway PG 17 cluster (scripts/pg-shim/throwaway.sh) through
 # --test-target, which takes MF_TEST_DB_URL, accepts ONLY a 127.0.0.1 or
@@ -136,8 +149,13 @@ case "$SET" in
     LABELS=(MF5)
     PREREQ_VERSION="20261103090000"; PREREQ_NAME="MF3"
     ;;
-  "") echo "ABORT: --set is required (mf1 | r12 | mf2 | mf4 | mf3 | mf5)."; exit 2 ;;
-  *) echo "ABORT: unknown set '$SET' (mf1 | r12 | mf2 | mf4 | mf3 | mf5)."; exit 2 ;;
+  products)
+    EXPECTED_FILES=(20261109090000_products.sql)
+    LABELS=(PRODUCTS)
+    PREREQ_VERSION="20261108090000"; PREREQ_NAME="costs"
+    ;;
+  "") echo "ABORT: --set is required (mf1 | r12 | mf2 | mf4 | mf3 | mf5 | products)."; exit 2 ;;
+  *) echo "ABORT: unknown set '$SET' (mf1 | r12 | mf2 | mf4 | mf3 | mf5 | products)."; exit 2 ;;
 esac
 N=${#EXPECTED_FILES[@]}
 for f in "${EXPECTED_FILES[@]}"; do
@@ -683,6 +701,93 @@ SQL
   echo "  expect: dated_on 0 on every tenant (only Your moves' Date a move writes it, once this is in)"
 }
 
+# PRODUCTS (depth v2 T10): seven tables under three grant rules (the
+# catalogue edits by column, the placements and tags append-only, the month
+# table and the ideas upserted), the guards on the month table and the alias,
+# one read function the service role alone calls, the regate covering the two
+# video- and comment-keyed tables, and the change log's new surface. The
+# existing guards are read before the apply (pre-check 4) and again after it.
+PRODUCTS_TABLES="'product_groups','products','product_aliases','product_tags','product_mentions','month_product_readings','post_ideas'"
+PRODUCTS_TRIGGERS="month_product_readings_delete_guard:month_reading_delete_guard,month_product_readings_frozen_guard:month_reading_frozen_guard,month_product_readings_frozen_insert_guard:month_reading_frozen_insert_guard,product_aliases_retire_once:product_aliases_retire_once"
+
+verify_PRODUCTS() {
+  local sql
+  read -r -d '' sql <<SQL
+select
+  (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relname in ($PRODUCTS_TABLES) and c.relrowsecurity)                as tables_rls,
+  (select count(*) from pg_policies where schemaname = 'public' and tablename in ($PRODUCTS_TABLES)
+      and cmd = 'SELECT' and roles = '{authenticated}' and qual = '(client_id = get_my_client_id())')    as select_policies,
+  (select count(*) from information_schema.role_table_grants where table_schema = 'public'
+    and table_name in ($PRODUCTS_TABLES) and grantee in ('anon','authenticated'))                        as tenant_table_grants,
+  (select count(*) from information_schema.columns c where c.table_schema = 'public' and c.table_name in ($PRODUCTS_TABLES)
+    and not has_column_privilege('authenticated', format('public.%I', c.table_name), c.column_name, 'SELECT')) as hidden_columns,
+  (select count(*) from information_schema.role_table_grants where table_schema = 'public'
+    and table_name in ($PRODUCTS_TABLES) and grantee = 'service_role'
+    and privilege_type in ('SELECT','INSERT'))                                                           as service_select_insert,
+  (select coalesce(string_agg(table_name || '.' || privilege_type, ',' order by table_name, privilege_type), '-')
+     from information_schema.role_table_grants where table_schema = 'public'
+    and table_name in ($PRODUCTS_TABLES) and grantee = 'service_role'
+    and privilege_type in ('UPDATE','DELETE','TRUNCATE'))                                                as service_rewrites,
+  (select coalesce(string_agg(column_name, ',' order by column_name), '-') from information_schema.column_privileges
+    where table_schema = 'public' and table_name = 'product_aliases' and grantee = 'service_role'
+      and privilege_type = 'UPDATE')                                                                     as alias_update_columns;
+SQL
+  show "$sql"
+  echo "  expect: tables|pol|tenant|hidden|sel+ins = 7|7|0|0|14; table-level rewrites: the month table's UPDATE and DELETE"
+  echo "          and post_ideas' UPDATE only (the catalogue edits by column); an alias takes its retirement stamp alone"
+  check "tables|pol|tenant|hid|sel+ins" "$(sed "s/$FS/|/g" <<<"$OUT" | cut -d'|' -f1-5)" "7|7|0|0|14"
+  check "service table rewrites" "$(field 6 "$OUT")" "month_product_readings.DELETE,month_product_readings.UPDATE,post_ideas.UPDATE"
+  check "alias UPDATE columns" "$(field 7 "$OUT")" "retired_at,retired_by,retired_label"
+
+  read -r -d '' sql <<SQL
+select
+  (select string_agg(t.tgname || ':' || p.proname, ',' order by t.tgname)
+     from pg_trigger t join pg_class c on c.oid = t.tgrelid join pg_proc p on p.oid = t.tgfoid
+    where not t.tgisinternal and c.relnamespace = 'public'::regnamespace and c.relname in ($PRODUCTS_TABLES)) as triggers,
+  (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'product_catalogue' and p.prosecdef
+      and p.proconfig = '{"search_path=public, pg_temp"}'
+      and not has_function_privilege('anon', p.oid, 'EXECUTE')
+      and not has_function_privilege('authenticated', p.oid, 'EXECUTE')
+      and has_function_privilege('service_role', p.oid, 'EXECUTE'))                                      as catalogue_fn,
+  (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname in ('regate_videos', 'regate_restore')
+      and pg_get_functiondef(p.oid) like '%product_mentions%' and pg_get_functiondef(p.oid) like '%product_tags%'
+      and not has_function_privilege('authenticated', p.oid, 'EXECUTE'))                                 as regate_fns,
+  (select count(*) from pg_constraint where conname = 'config_changes_surface_check'
+      and pg_get_constraintdef(oid) like '%''products''%')                                               as products_surface;
+SQL
+  show "$sql"
+  echo "  expect: the four guards on their tables; product_catalogue a pinned definer the service role alone calls;"
+  echo "          both regate functions covering placements and tags; the change log takes 'products'"
+  check "guards on the new tables" "$(field 1 "$OUT")" "$PRODUCTS_TRIGGERS"
+  check "catalogue|regate|surface" "$(sed "s/$FS/|/g" <<<"$OUT" | cut -d'|' -f2-4)" "1|2|1"
+
+  show "$TENANT_UPDATE_SQL"
+  echo "  expect: PRODUCTS changes no grant on tracking_configs, so the list read before it"
+  check "tenant UPDATE columns kept" "$OUT" "$PRE_TENANT_UPDATE"
+
+  show "$GUARDS_SQL"
+  echo "  expect: the existing guards as read before the apply (pre-check 4)"
+  check "existing guards unchanged" "$(sed "s/$FS/|/g" <<<"$OUT")" "$PRE_GUARDS"
+  finish_verify "$CURRENT"
+
+  echo
+  echo "  == PRODUCTS READING (human read): the new tables are empty =="
+  read -r -d '' sql <<SQL
+select 'product_groups' as t, count(*) from public.product_groups
+union all select 'products', count(*) from public.products
+union all select 'product_aliases', count(*) from public.product_aliases
+union all select 'product_mentions', count(*) from public.product_mentions
+union all select 'product_tags', count(*) from public.product_tags
+union all select 'month_product_readings', count(*) from public.month_product_readings
+union all select 'post_ideas', count(*) from public.post_ideas;
+SQL
+  show "$sql"
+  echo "  expect: 0 rows in each (scripts/products.ts --apply seeds the catalogue; the back-read and the steps write the rest)"
+}
+
 # ------------------------------------------------------------ pre-checks ----
 echo "== plan: $N file(s), filename order, one psql + one transaction each =="
 for i in "${!EXPECTED_FILES[@]}"; do printf '  %-5s %s\n' "${LABELS[$i]}" "${EXPECTED_FILES[$i]}"; done
@@ -717,12 +822,12 @@ else
   echo "  NOTE: differs from staging. ${LABELS[0]} changes no grant, so this does not stop ${LABELS[0]}; show Claude the list before the r12 set."
 fi
 
-if [[ "$SET" == "mf3" ]]; then
-  echo "== pre-check 4: the existing guards and the audit trigger, before MF3 =="
+if [[ "$SET" == "mf3" || "$SET" == "products" ]]; then
+  echo "== pre-check 4: the existing guards and the audit trigger, before ${LABELS[0]} =="
   if ! PRE_GUARDS="$(q "$GUARDS_SQL")"; then echo "ABORT: guard query failed. Nothing applied."; exit 1; fi
   PRE_GUARDS="$(sed "s/$FS/|/g" <<<"$PRE_GUARDS")"
   echo "  functions and triggers | md5 = $PRE_GUARDS"
-  echo "  (MF3 must leave this line as it is: verify_MF3 reads it again after the apply)"
+  echo "  (${LABELS[0]} must leave this line as it is: verify_${LABELS[0]} reads it again after the apply)"
 fi
 
 HCOLS=""
@@ -834,6 +939,10 @@ case "$SET" in
   ;;
   mf5)
   echo "DONE: $SET applied, verified and recorded. MF5 is in: Your moves' Date a move now takes the day the change was made."
+  ;;
+  products)
+  echo "DONE: $SET applied, verified and recorded. The products tables are in and empty."
+  echo "  Next: scripts/products.ts --seed (dry), then --apply, once the catalogue seed is reviewed; the back-read after."
   ;;
 esac
 echo "Log: $LOG"

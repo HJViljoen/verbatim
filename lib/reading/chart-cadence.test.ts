@@ -53,6 +53,10 @@ describe('gatherCompleted: a partial run counts as a completed gather only on it
     expect(gatherCompleted(sunday('2026-10-04'))).toBe(true)
   })
 
+  it('a run partial only for the product steps (depth v2 T11) still completed its gather', () => {
+    expect(gatherCompleted({ ...SEALAND_RUNS[4], errors: ['product-readings: 2026-10 out of retries', 'plan-product-readings: catalogue read failed'] })).toBe(true)
+  })
+
   it('names no gather step as after the gather', () => {
     for (const gather of ['comments', 'platform', 'gate', 'discover-subreddits', 'classify-meta', 'plan-classify']) {
       expect(AFTER_GATHER_STEPS).not.toContain(gather)
