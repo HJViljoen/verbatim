@@ -32,7 +32,7 @@ import { HomeWeeksPlot } from './weeks-plot'
 // THE BOARD'S SHAPE IN EVERY STATE (parity pass, 13 Oct): a week with nothing
 // drawn keeps its slot as a faint well, and the chart's key gives its place to
 // the one quiet line saying why; both subject rows stay, a row with no
-// subject saying why in its figure's place ("level after calibration", "no
+// subject saying why in its figure's place ("Not measured yet", "no
 // comparison with September yet").
 
 function Numbers({ tile }: { tile: WeekTile }) {
@@ -99,7 +99,8 @@ function Weeks({ tile }: { tile: WeekTile }) {
 /** The words a subjects row prints where it holds no subject (parity pass,
  *  13 Oct): the row keeps its place, and says why in the figure's. */
 export const SUBJECT_GAP = {
-  calibrating: { biggest: 'level after calibration', moved: 'after calibration' },
+  // Ruling U6: no "calibration" on a client surface; Market's own words.
+  calibrating: { biggest: 'Not measured yet', moved: 'Not measured yet' }, // = SUBJECT_PENDING (parity/market), unify at merge
   none_named: { biggest: 'none named yet', moved: 'none named yet' },
   failed: { biggest: 'could not be read just now', moved: 'could not be read just now' },
   /** No published week yet: nothing to read the subjects against. */

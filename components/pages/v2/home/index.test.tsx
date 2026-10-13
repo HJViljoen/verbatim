@@ -661,7 +661,7 @@ describe('the board\'s shape holds when the data is thin (parity pass)', () => {
     const w = tileMarkup(markup, 'week')
     expect(w.match(/data-week-state="empty"/g)).toHaveLength(8)
     expect(markupText(w.slice(w.indexOf('data-weeks=""'))).match(/Insufficient data/g)).toHaveLength(1)
-    expect(markupText(w)).toMatch(/Biggest subject level after calibration Moved most after calibration$/)
+    expect(markupText(w)).toMatch(/Biggest subject Not measured yet Moved most Not measured yet$/)
     const s = tileText(render(page(sealand)), 'week')
     expect(s).toMatch(/Biggest subject Fit & comfort 34% · 108 of 318 Moved most no comparison with September yet$/)
   })
@@ -705,5 +705,22 @@ describe('the board\'s shape holds when the data is thin (parity pass)', () => {
     expect(tileMarkup(m, 'products')).toContain('data-shelf="ghost"')
     expect(tileText(m, 'content')).toContain(IDEAS_EMPTY.not_on)
     expect(tileText(m, 'moves')).toContain(`After your move ${MOVES_NO_MOVE}`)
+  })
+})
+
+// Ruling U6: "calibration" is the operator's word, never a client's. No tile
+// prints it, in any state (Market's thin subjects say "Not measured yet").
+describe('no tile says "calibration" (ruling U6)', () => {
+  it.each([
+    ['the full fixture', dashboardFixture()],
+    ['Össur today', dashboardThinFixture()],
+    ['Sealand today', dashboardThinFixture({ tenant: 'sealand' })],
+    ['before the first update', dashboardEmptyFixture()],
+    ['every tile failed', dashboardFixture({ failed: ['market', 'week', 'voices', 'products', 'content', 'moves'] })],
+    ['two clocks', dashboardFixture({ twoClocks: true })],
+  ] as const)('%s', (_name, data) => {
+    const markup = render(page(data))
+    for (const t of ['market', 'week', 'voices', 'products', 'content', 'moves', 'agent']) expect(tileText(markup, t), t).not.toMatch(/calibrat/i)
+    expect(markupText(markup)).not.toMatch(/calibrat/i)
   })
 })
