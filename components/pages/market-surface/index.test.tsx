@@ -714,7 +714,8 @@ describe('MK2 · the ledger', () => {
     // WP3.6 (25 Sep rulings): the footer holds a link alone, the preview's
     // "Show all 64 →", naming the whole ledger, never the cap.
     expect(text).toContain(`Show all ${data.advice.total} →`)
-    expect(render(marketAdvice.render(data, 'app', ctx))).toContain('ledger=all')
+    // Written as `?advice=all`, the one selection the v2 page reads (T7).
+    expect(render(marketAdvice.render(data, 'app', ctx))).toContain('/dashboard/moves?advice=all')
     expect(text).not.toContain('shown')
     expect(text).not.toContain('behind them')
     expect(text).not.toMatch(/quarter/i)
@@ -1240,7 +1241,7 @@ describe('MK2 · the short list in the app', () => {
     expect(text).not.toContain(third.title)
     expect(text).toContain(EARLIER_ADVICE)
     expect(text).not.toMatch(/Show all \d/)
-    expect(render(marketAdvice.render(d, 'app', ctx))).toContain('ledger=all')
+    expect(render(marketAdvice.render(d, 'app', ctx))).toContain('/dashboard/moves?advice=all')
   })
 
   it('says when an idea came back in other words', () => {

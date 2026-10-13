@@ -117,6 +117,7 @@ export const SWEAT: AdviceCard = {
 export const DESK_OPEN: AdviceCard = {
   ...DESK,
   quote: { ref: 'e:5d3b4c1e-2f60-4a8b-9c7d-0e1f2a3b4c5d', text: 'Whoever helps me get this approved gets my business. That’s it.', lang: 'en', english: null },
+  quoteCite: { platform: 'youtube', date: '2026-10-05' },
 }
 
 // ---- the moves ----------------------------------------------------------------------
@@ -218,7 +219,7 @@ export function movesFixture(over: Partial<MovesPageData> = {}): MovesPageData {
     readingAt: OCT_13,
     canDecide: true,
     counts: { waiting: 3, dated: 3, plans: 1 },
-    advice: { cards: [DESK, LINER, SWEAT], open: null, gone: false, total: 23, acted: 4 },
+    advice: { cards: [DESK, LINER, SWEAT], more: 0, open: null, gone: false, total: 23, acted: 4 },
     moves: { cards: MOVE_CARDS, recorded: true },
     plan: PLAN,
     conclusions: [
@@ -244,7 +245,7 @@ export function movesFixture(over: Partial<MovesPageData> = {}): MovesPageData {
 /** The board E6-Moves-Open: the first piece opened in place. */
 export function movesOpenFixture(): MovesPageData {
   const base = movesFixture()
-  return { ...base, advice: { ...base.advice, open: { card: DESK_OPEN, index: 0 } } }
+  return { ...base, advice: { ...base.advice, open: { card: DESK_OPEN, index: 0, waiting: true } } }
 }
 
 /** The advice record opened (`?advice=all`): every piece, in the ledger's
@@ -262,7 +263,7 @@ export function movesRecordFixture(): MovesPageData {
 export function movesQuietFixture(): MovesPageData {
   return movesFixture({
     counts: { waiting: 0, dated: 0, plans: 0 },
-    advice: { cards: [], open: null, gone: false, total: 64, acted: 64 },
+    advice: { cards: [], more: 0, open: null, gone: false, total: 64, acted: 64 },
     moves: { cards: [], recorded: true },
     plan: null,
     conclusions: [],

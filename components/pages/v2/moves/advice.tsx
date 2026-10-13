@@ -9,7 +9,7 @@ import { MOVES_WRITE_REFUSED } from '@/lib/moves-access'
 import type { MoveDating } from '@/lib/pages/date-move'
 import {
   ADVICE_GONE, ADVICE_NONE, ADVICE_PANEL_ID, ADVICE_SUB, ADVICE_TITLE, ASK_ABOUT, GROUNDED_BASIS, MOVES_PATH, RECORD_HREF,
-  adviceHref, askAboutHref, decisionLine, groundedLabel, streakLabel,
+  adviceHref, askAboutHref, decisionLine, groundedLabel, quoteCiteLine, streakLabel,
   type AdviceCard, type MovesPageData, type RestsOnRow,
 } from '@/lib/pages/v2/moves'
 import { cn } from '@/lib/utils'
@@ -177,12 +177,18 @@ export function whyParagraphs(why: string | null): string[] {
   return out
 }
 
-function AdvicePanel({ card, notchAt, canDecide, dating, fromRecord }: {
+/** Why an opened piece is not under a card: one of the more waiting, or from
+ *  the advice record (decided, or not raised by the latest update). */
+export const OPEN_MORE_WAITING = 'One of the pieces of advice waiting past the three above.'
+export const OPEN_FROM_RECORD = 'From the advice record: the latest update did not raise it, or it has been decided.'
+
+function AdvicePanel({ card, notchAt, canDecide, dating, note }: {
   card: AdviceCard
   notchAt: number
   canDecide: boolean
   dating: MoveDating | null
-  fromRecord: boolean
+  /** Said under the title where the piece has no card above. */
+  note: string | null
 }) {
   const paragraphs = whyParagraphs(card.why)
   const h = card.history
@@ -199,7 +205,7 @@ function AdvicePanel({ card, notchAt, canDecide, dating, fromRecord }: {
           <PanelTitle id="advice-panel-title" className="text-[24px] leading-[1.25]">
             <AdviceTitle card={card} />
           </PanelTitle>
-          {fromRecord ? <p className="m-0 mt-1.5 text-[13px] text-muted-foreground">From the advice record: the latest update did not raise it, or it has been decided.</p> : null}
+          {note ? <p className="m-0 mt-1.5 text-[13px] text-muted-foreground">{note}</p> : null}
         </>
       )}
     >
@@ -225,7 +231,7 @@ function AdvicePanel({ card, notchAt, canDecide, dating, fromRecord }: {
       {card.quote ? (
         <PanelSection label="In their words">
           <div className="max-w-[640px]">
-            <BlockQuote quote={card.quote} ground="inner" />
+            <BlockQuote quote={card.quote} ground="inner" cite={quoteCiteLine(card.quoteCite) ?? undefined} />
           </div>
         </PanelSection>
       ) : null}
@@ -274,13 +280,20 @@ export function AdviceSection({ data }: { data: MovesPageData }) {
               className="min-w-0 [order:var(--o)] min-[1180px]:col-span-3 min-[1180px]:[order:var(--ow)]"
               style={{ '--o': place.narrow, '--ow': place.wide } as CSSProperties}
             >
-              <AdvicePanel card={open.card} notchAt={place.notchAt} canDecide={data.canDecide} dating={data.dating} fromRecord={false} />
+              <AdvicePanel card={open.card} notchAt={place.notchAt} canDecide={data.canDecide} dating={data.dating} note={null} />
             </div>
           ) : null}
         </div>
       )}
+      {data.advice.more > 0 ? (
+        <p className="m-0 flex justify-end px-0.5">
+          <Link href={RECORD_HREF} scroll={false} className={OLINK}>
+            <span data-copy="figure">{fmtInt(data.advice.more)}</span> more waiting →
+          </Link>
+        </p>
+      ) : null}
       {open && index == null ? (
-        <AdvicePanel card={open.card} notchAt={0.08} canDecide={data.canDecide} dating={data.dating} fromRecord />
+        <AdvicePanel card={open.card} notchAt={0.08} canDecide={data.canDecide} dating={data.dating} note={open.waiting ? OPEN_MORE_WAITING : OPEN_FROM_RECORD} />
       ) : null}
     </section>
   )

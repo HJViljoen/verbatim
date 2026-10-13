@@ -1374,7 +1374,7 @@ export async function loadMarketSurface(
   const datableAhead = loadMoveDatable(supabase, clientId)
   for (const p of [questionThemesAhead, postsAhead, filingsAhead, claimsAhead, marketVideosAhead, datableAhead]) p.catch(() => {})
 
-  const [insightRes, recRows, decisions, summaryRes, bucketRows, moves, subjects, themeLabels, corpusVideos] = await Promise.all([
+  const [insightRes, recRows, decisions, summaryRes, bucketRows, moves, subjects, corpusVideos] = await Promise.all([
     supabase.from('market_insights')
       .select('id, insight_type, title, description, evidence, confidence_score, opportunity_score')
       .eq('client_id', clientId).eq('run_id', runId)
@@ -1414,9 +1414,14 @@ export async function loadMarketSurface(
     ),
     loadMoves(supabase, clientId),
     loadSubjects(supabase, clientId),
-    loadRegistryLabels(supabase, clientId),
     countAnalysedVideos(supabase, clientId),
   ])
+  // THE LABELS OF THE THEMES THIS PAGE NAMES, NOT THE REGISTRY (depth v2, T7):
+  // the moves' themes now, the advice's leading themes once the ledger rows
+  // are grounded (`targetLabelsAhead`). A whole-registry read is 3,590 rows on
+  // Sealand, on every load.
+  const moveLabelsAhead = loadRegistryLabels(supabase, clientId, (moves ?? []).flatMap((m) => m.registry_ids ?? []))
+  moveLabelsAhead.catch(() => {})
 
   const insights = (insightRes.data ?? []) as InsightRow[]
   const summary = row<{ say_vs_hear: SayVsHearEntry[] | null }>(summaryRes, 'market-surface.runSummary')
@@ -1441,7 +1446,7 @@ export async function loadMarketSurface(
   // lands before the await from being an unhandled rejection; the await
   // still rejects with it.
   const subjectsActive = (subjects ?? []).filter((x) => x.status === 'active')
-  const extrasAhead = judgeAhead.then((pair) => loadMovesExtras({
+  const extrasAhead = Promise.all([judgeAhead, moveLabelsAhead]).then(([pair, themeLabels]) => loadMovesExtras({
     supabase,
     reading,
     clientId,
@@ -1593,10 +1598,14 @@ export async function loadMarketSurface(
   // only for rows that have been decided on and name something (an undecided
   // row's answer is a sentence); the conclusions ask for the leading theme of
   // every row they draw. One query, two blocks — see `loadTargetPoints`.
+  // The ledger rows' leading themes, labelled beside the month read.
+  const targetLabelsAhead = loadRegistryLabels(supabase, clientId, groundedRows.flatMap((r) => r.targetIds.slice(0, 1)))
+  targetLabelsAhead.catch(() => {})
   const monthPoints = await loadTargetPoints(reading, clientId, month, [
     ...groundedRows.filter((r) => r.decidedAt && r.targetIds.length > 0).map((r) => r.targetIds[0]),
     ...shownConclusions.map((c) => conclusionTarget.get(c.id)).filter((t): t is string => Boolean(t)),
   ])
+  const themeLabels = new Map([...(await moveLabelsAhead), ...(await targetLabelsAhead)])
   const pair = await judgeAhead
   const withAfterwards = readAfterwards(groundedRows, monthPoints, themeLabels, pair)
 
@@ -2394,6 +2403,10 @@ export async function attachQuotes(
   evidenceByInsight: Map<string, string[]>,
   themeSlugById: Map<string, string>,
   clientId: string,
+  /** Filled, where given, with each kept quote's platform and comment day,
+   *  by lineage (depth v2, T7: the open panel's cite). Off the gate's own
+   *  context read: no read of its own. */
+  cites?: Map<string, { platform: string | null; date: string | null }>,
 ): Promise<AdviceRow[]> {
   const audienceIdsFor = (r: AdviceRow) => [...new Set(r.basedOn.flatMap((id) => evidenceByInsight.get(id) ?? []))]
   const heroOf = (r: AdviceRow) => (heroByLineage.get(r.lineageId) ?? '').trim()
@@ -2443,6 +2456,7 @@ export async function attachQuotes(
       : null
     if (!verdict?.ok || (verdict.thread && threads.has(verdict.thread))) return { ...r, quote: null }
     if (verdict.thread) threads.add(verdict.thread)
+    if (cites && ctx) cites.set(r.lineageId, { platform: ctx.forEvidence(id)?.platform ?? null, date: ctx.dateOfEvidence(id) })
     return r
   })
 }
@@ -2608,22 +2622,40 @@ export async function loadSubjects(supabase: SupabaseClient, clientId: string): 
  *  both tenants. Measured 13 Oct: every one of Össur's 1,471 and Sealand's
  *  3,590 registry rows carries a `canonical_label`. A failed read is still an
  *  empty map, now logged. */
-export async function loadRegistryLabels(supabase: SupabaseClient, clientId: string): Promise<Map<string, string>> {
-  const rows = await selectAll<{ id: string; canonical_label: string | null }>(() =>
-    supabase.from('theme_registry').select('id, canonical_label').eq('client_id', clientId).order('id', { ascending: true }),
-  ).catch(logAs('registryLabels', [] as { id: string; canonical_label: string | null }[]))
-  return new Map(rows.filter((r) => r.canonical_label?.trim()).map((r) => [r.id, (r.canonical_label as string).trim()]))
+export async function loadRegistryLabels(supabase: SupabaseClient, clientId: string, ids: readonly string[]): Promise<Map<string, string>> {
+  // ONLY THE IDS A PAGE NAMES (depth v2, T7): a move's themes, an advice's
+  // leading theme. Chunked like every `.in()` here (lib/chunk.ts); none named,
+  // no read.
+  const unique = [...new Set(ids.filter(Boolean))]
+  if (unique.length === 0) return new Map()
+  const parts = await mapWithLimit(chunk(unique, UUID_IN_CHUNK), READ_CONCURRENCY, (part) =>
+    selectAll<{ id: string; canonical_label: string | null }>(() =>
+      supabase.from('theme_registry').select('id, canonical_label').eq('client_id', clientId).in('id', part).order('id', { ascending: true }),
+    ).catch(logAs('registryLabels', [] as { id: string; canonical_label: string | null }[])),
+  )
+  return new Map(parts.flat().filter((r) => r.canonical_label?.trim()).map((r) => [r.id, (r.canonical_label as string).trim()]))
 }
 
 /** The ledger's own deep link, so the digest's `?rec=<id>` keeps landing on the
  *  row it names once that link points here. Your moves is at /dashboard/moves
- *  since Design v2 and names a row with `?advice=` (its route hands that to
- *  this loader as `?item=`); an old `?item=` or `?rec=` link to
- *  /dashboard/market lands there too (lib/nav.ts `redirectFor`). */
+ *  since Design v2 and names a row with `?advice=`; an old `?item=` or `?rec=`
+ *  link to /dashboard/market lands there too (lib/nav.ts `redirectFor`).
+ *
+ *  `?advice=` IS THE ONE SELECTION THE v2 PAGE READS (depth v2, T7), so the
+ *  old three are written as it, as `redirectFor` maps them, where no lineage
+ *  is named: the legacy block's "Show all" passed `{ ledger: 'all' }` and
+ *  wrote `?ledger=all`, which the v2 page did not read. `ledger` leads here
+ *  (`redirectFor` reads `item` first): the one caller that sets it means the
+ *  record, whatever row the page it was drawn on had open. (The v2 loader
+ *  also reads the old three, for HTML already stored.) */
+const OLD_SELECTION = ['ledger', 'item', 'rec'] as const
+
 export function marketSurfaceHref(lineageId?: string | null, params: Record<string, string | undefined> = {}): string {
   const q = new URLSearchParams()
-  for (const [k, v] of Object.entries(params)) if (typeof v === 'string' && v !== '' && k !== 'item' && k !== 'rec' && k !== 'advice') q.set(k, v)
-  if (lineageId) q.set('advice', lineageId)
+  const dropped = new Set<string>([...OLD_SELECTION, 'advice'])
+  for (const [k, v] of Object.entries(params)) if (typeof v === 'string' && v !== '' && !dropped.has(k)) q.set(k, v)
+  const named = lineageId || OLD_SELECTION.map((k) => params[k]).find((v) => typeof v === 'string' && v !== '')
+  if (named) q.set('advice', named)
   const s = q.toString()
   return s ? `/dashboard/moves?${s}` : '/dashboard/moves'
 }

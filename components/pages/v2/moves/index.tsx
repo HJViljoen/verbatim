@@ -60,7 +60,9 @@ export function MovesV2Page({ data, statements }: { data: MovesPageData | null; 
       </div>
     )
   }
-  const say = statements && statements.statements.length > 0 ? statements : null
+  // Drawn where there are statements, or where the reader may add the first
+  // (the operator: the route reads none for a tenant, `maySeeStatements`).
+  const say = statements && (statements.statements.length > 0 || statements.canEdit) ? statements : null
   return (
     <div className="flex min-w-0 flex-col gap-5 leading-[normal]">
       <Header data={data} />

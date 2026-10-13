@@ -3152,18 +3152,24 @@ async function buildForYouAndPublished(input: {
  *
  * Six columns, never `*`: `videos` carries transcripts and OCR text.
  */
-async function loadOwnPosts(supabase: SupabaseClient, clientId: string, month: string): Promise<ClientPost[] | null> {
+export async function loadOwnPosts(supabase: SupabaseClient, clientId: string, month: string): Promise<ClientPost[] | null> {
+  // OFF YOUR OWN ACCOUNTS (depth v2, T7 for T14): `ownedPosts`, the read
+  // `loadRecentOwnPosts` above makes too, so one Your market load counts "your
+  // posts" one way. It read `is_client`, which every creator's video naming
+  // the brand carries: Össur's September card counted 161 "posts you
+  // published" where 25 were Össur's own. In id order, as before.
   try {
-    return await selectAll<ClientPost>(() =>
-      supabase
-        .from('videos')
-        .select('id, upload_date, comments_count, hook_style, classified_type, analyzed_run_id')
-        .eq('client_id', clientId)
-        .eq('is_client', true)
-        .gte('upload_date', monthStartOf(month))
-        .lt('upload_date', nextMonth(month))
-        .order('id', { ascending: true }),
-    )
+    const owned = await ownedPosts({ supabase, clientId }, { from: monthStartOf(month), to: nextMonth(month) })
+    return owned.posts
+      .map((p) => ({
+        id: p.id,
+        upload_date: p.upload_date,
+        comments_count: p.comments_count,
+        hook_style: p.hook_style,
+        classified_type: p.classified_type,
+        analyzed_run_id: p.analyzed_run_id ?? null,
+      }))
+      .sort((a, b) => a.id.localeCompare(b.id))
   } catch (error) {
     console.error(`[pages] overview.ownPosts: ${(error as { message?: string })?.message ?? String(error)}`)
     return null

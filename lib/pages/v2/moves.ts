@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import type { RecStatus } from '../../calibration'
 import { currentTopLineage, recUpdateOf, recUpdateTimes } from '../../dashboard-tiles'
-import { longMonth, shortDate } from '../../format'
+import { longMonth, platformLabel, shortDate } from '../../format'
 import { distinctVideos } from '../../market-tiles'
 import { PLAN_VERDICT_LABEL, loadPlanChecks, type PlanCheckCard, type PlanClaimRow } from '../../ask/plan-cards'
 import { fetchInsightsByIds } from '../../quotes'
@@ -25,7 +25,7 @@ import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../../chun
 import { subjectCalibration } from '../../subjects/calibration-state'
 import { earliestMoveDay } from '../../subjects/move-day'
 import type { MoveStatus } from '../../subjects/types'
-import { adviceShortlist, adviceVectors, ADVICE_SHORTLIST, currentAdvice } from '../advice-shortlist'
+import { adviceShortlist, adviceVectors, currentAdvice } from '../advice-shortlist'
 import type { MoveDating } from '../date-move'
 import { fetchRunningRunIds } from '../latest-video-run'
 import {
@@ -102,6 +102,21 @@ export const ADVICE_PANEL_ID = 'advice-panel'
 export const RECORD_PANEL_ID = 'advice-record'
 export const MOVES_PATH = '/dashboard/moves'
 
+/**
+ * The page's one selection, from the URL. `?advice=` first; then the three
+ * Your moves answered to before Design v2 (`item`, `rec`, `ledger`), in
+ * `redirectFor`'s order, because a stored export, an email or a share link
+ * written before T7 can carry `/dashboard/moves?ledger=all` (the legacy
+ * block's "Show all") and stored HTML cannot be re-written. Pure.
+ */
+export function adviceParam(params: Record<string, string | undefined>): string {
+  for (const k of [ADVICE_PARAM, 'item', 'rec', 'ledger']) {
+    const v = (params[k] ?? '').trim()
+    if (v) return v
+  }
+  return ''
+}
+
 /** A piece of advice opened in place. */
 export const adviceHref = (lineageId: string): string => `${MOVES_PATH}?${ADVICE_PARAM}=${encodeURIComponent(lineageId)}#${ADVICE_PANEL_ID}`
 /** The advice record, opened in place. */
@@ -110,6 +125,22 @@ export const RECORD_HREF = `${MOVES_PATH}?${ADVICE_PARAM}=${ADVICE_RECORD}#${REC
 export const conclusionAnchor = (id: string): string => `conclusion-${id}`
 
 // ---- the shapes ---------------------------------------------------------------------
+
+/** The board's three advice cards. */
+export const ADVICE_CARDS_SHOWN = 3
+
+/**
+ * The advice waiting for a decision: every idea the latest update raised that
+ * nobody has decided on, one row per idea (`adviceShortlist`, folded by the
+ * vectors where there are any), uncapped, in the ledger's order. Pure; the one
+ * list the page's "N pieces of advice waiting" and the Dashboard tile both
+ * count.
+ */
+export function waitingAdvice<R extends AdviceRow>(rows: readonly R[], vectors: ReadonlyMap<string, number[]> | null): R[] {
+  const list = adviceShortlist(rows, vectors ? (id) => vectors.get(id) : null, { shown: Number.MAX_SAFE_INTEGER })
+  const byLineage = new Map(rows.map((r) => [r.lineageId, r]))
+  return list.lineages.map((id) => byLineage.get(id)).filter((r): r is R => r != null && r.status === 'new')
+}
 
 /** How long the product has been raising one piece of advice, in updates. */
 export interface AdviceHistory {
@@ -170,6 +201,9 @@ export interface AdviceCard {
   /** Its one comment, vouched and through the quote gate: the open panel's
    *  only, so null on every card that is not open. */
   quote: Quote | null
+  /** Where and when that comment was written ("Instagram · 8 Oct"): the
+   *  comment's video's platform and its day. Absent with no quote. */
+  quoteCite?: { platform: string | null; date: string | null } | null
 }
 
 /** A month on a move's line. */
@@ -246,10 +280,14 @@ export interface MovesPageData {
   canDecide: boolean
   counts: { waiting: number; dated: number; plans: number }
   advice: {
+    /** The first `ADVICE_CARDS_SHOWN` pieces waiting (the board's three). */
     cards: AdviceCard[]
-    /** The opened piece: its card's place among `cards`, or null when it was
-     *  opened from the record or a link and is not waiting. */
-    open: { card: AdviceCard; index: number | null } | null
+    /** Pieces waiting past the cards: "N more waiting", into the record. */
+    more: number
+    /** The opened piece: its card's place among `cards`, or null when it is
+     *  not one of them; `waiting` where it is waiting all the same (one of the
+     *  `more`). */
+    open: { card: AdviceCard; index: number | null; waiting: boolean } | null
     /** A link named advice this page does not hold. */
     gone: boolean
     /** Every piece of advice, and how many have been decided. */
@@ -554,6 +592,13 @@ export function compareMonths(c: NonNullable<MoveCard['compare']>, moveMonth: st
 /** What a move dated after the reading month says under its line. */
 export const pendingLine = (month: string): string => `${longMonth(month)} reads once the month has been read.`
 
+/** A quote's cite, "Instagram · 8 Oct", or null with nothing to say. */
+export function quoteCiteLine(cite: AdviceCard['quoteCite']): string | null {
+  if (!cite) return null
+  const parts = [cite.platform ? platformLabel(cite.platform) : null, cite.date ? shortDate(cite.date) : null].filter(Boolean)
+  return parts.length > 0 ? parts.join(' · ') : null
+}
+
 /** Whether the earlier month may print beside the later (the one condition). */
 export const comparePrintable = (c: MoveCard['compare']): c is NonNullable<MoveCard['compare']> => c != null && priorPrintable(c.verdict)
 
@@ -601,7 +646,6 @@ interface Core {
   adviceRows: AdviceRow[]
   moves: DatedMove[] | null
   subjects: SubjectName[] | null
-  themeLabels: Map<string, string>
   rivals: string[]
   marketN: (month: string) => number | null
   pair: PairOn
@@ -614,7 +658,7 @@ async function readCore(scope: Scope): Promise<Core | null> {
   const { clientId } = scope
   const reading = scope.reading
   const readingAt = new Date().toISOString()
-  const [clientRes, latestRes, runs, schedule, history, rivalAudiences, copies, decisions, moves, subjects, themeLabels, pair] = await Promise.all([
+  const [clientRes, latestRes, runs, schedule, history, rivalAudiences, copies, decisions, moves, subjects, pair] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     supabase.from('pipeline_runs').select('id, started_at')
       .eq('client_id', clientId).in('status', ['completed', 'partial'])
@@ -630,7 +674,6 @@ async function readCore(scope: Scope): Promise<Core | null> {
     loadDecisions(supabase, clientId),
     loadMoves(supabase, clientId),
     loadSubjects(supabase, clientId),
-    loadRegistryLabels(supabase, clientId),
     loadAppPairOn(reading, readingAt),
   ])
   const latest = row<{ id: string; started_at: string }>(latestRes, 'moves-v2.latestRun')
@@ -660,7 +703,6 @@ async function readCore(scope: Scope): Promise<Core | null> {
     adviceRows: buildAdviceRows(copies, decisions),
     moves,
     subjects,
-    themeLabels,
     rivals,
     marketN: (m) => counts.get(monthStartOf(m))?.videos ?? null,
     pair,
@@ -762,6 +804,33 @@ async function readAdviceTargets(core: Core, moves: readonly DatedMove[], cited:
   return out
 }
 
+/**
+ * The moves' cards: each advice move's leading theme, then the labels of the
+ * themes the moves name (only those: `loadRegistryLabels` by id) beside each
+ * object's months in the market.
+ */
+async function readMoveCards(core: Core, moves: readonly DatedMove[], cited: Map<string, { evidence: string[] }>): Promise<MoveCard[]> {
+  if (moves.length === 0) return []
+  const targets = await readAdviceTargets(core, moves, cited)
+  const themeIds = [...moves.flatMap((m) => (m.kind === 'theme' ? m.registry_ids ?? [] : [])), ...targets.values()]
+  const [themes, levels] = await Promise.all([
+    loadRegistryLabels(core.supabase, core.clientId, themeIds),
+    readMoveLevels(core, moves, targets),
+  ])
+  return moveCards({
+    moves,
+    month: core.month,
+    now: core.readingAt,
+    subjects: subjectsOf(core),
+    themes,
+    adviceTargets: targets,
+    levels,
+    n: core.marketN,
+    joined: (prev, m) => joins(core.pair(prev, m, 'market')),
+    pair: core.pair,
+  })
+}
+
 function subjectsOf(core: Core): Map<string, { name: string; calibration: SubjectCalibrationWord }> {
   return new Map((core.subjects ?? []).filter((x) => x.status === 'active').map((x) => [x.id, { name: x.name, calibration: marketCalibration(subjectCalibration(x)) }]))
 }
@@ -786,7 +855,7 @@ export async function loadMovesPage(scope: Scope, options: { canDecide: boolean 
   const core = await readCore(scope)
   if (!core) return null
   const { supabase, clientId } = core
-  const param = (scope.params[ADVICE_PARAM] ?? '').trim()
+  const param = adviceParam(scope.params)
   const recordOpen = param === ADVICE_RECORD
 
   // ── the second wave: everything that waits only on the first ───────────
@@ -808,9 +877,12 @@ export async function loadMovesPage(scope: Scope, options: { canDecide: boolean 
   for (const p of [plansAhead, plansCountAhead, insightsAhead, questionsAhead, datableAhead, vectorsAhead]) p.catch(() => {})
 
   const vectors = await vectorsAhead
-  const list = adviceShortlist(core.adviceRows, vectors ? (id) => vectors.get(id) : null, { shown: ADVICE_SHORTLIST })
   const byLineage = new Map(core.adviceRows.map((r) => [r.lineageId, r]))
-  const waiting = list.lineages.map((id) => byLineage.get(id)).filter((r): r is AdviceRow => r != null && r.status === 'new')
+  // THE ONE "WAITING" COUNT (the bar's, and the Dashboard tile's through
+  // `topMoves`): every idea the latest update raised that nobody has decided
+  // on, folded, uncapped. The board's three cards are its first three.
+  const waitingAll = waitingAdvice(core.adviceRows, vectors)
+  const waiting = waitingAll.slice(0, ADVICE_CARDS_SHOWN)
   const named = param && !recordOpen
     ? core.adviceRows.find((r) => r.lineageId === param || r.recommendationId === param)
       ?? core.copies.map((c) => (c.id === param ? byLineage.get(lineageKey(c)) : undefined)).find(Boolean)
@@ -818,7 +890,9 @@ export async function loadMovesPage(scope: Scope, options: { canDecide: boolean 
     : null
   const current = currentAdvice(core.adviceRows).filter((r) => r.inLatest === true)
   const moveLineages = (core.moves ?? []).filter((m) => m.kind === 'advice' && m.lineage_id).map((m) => m.lineage_id as string)
-  const evidenceRows = [...new Map([...waiting, ...(named ? [named] : []), ...current, ...moveLineages.map((id) => byLineage.get(id)).filter((r): r is AdviceRow => r != null)].map((r) => [r.lineageId, r])).values()]
+  // What the drawn cards, the opened piece and the advice moves cite; the
+  // conclusions' tags read `based_on` alone and cite nothing here.
+  const evidenceRows = [...new Map([...waiting, ...(named ? [named] : []), ...moveLineages.map((id) => byLineage.get(id)).filter((r): r is AdviceRow => r != null)].map((r) => [r.lineageId, r])).values()]
 
   // ── the third wave: what the drawn advice cites, and the conclusions ───
   const [cited, insights] = await Promise.all([
@@ -829,28 +903,11 @@ export async function loadMovesPage(scope: Scope, options: { canDecide: boolean 
     ...evidenceRows.flatMap((r) => r.basedOn.flatMap((id) => cited.market.get(id)?.evidence ?? [])),
     ...insights.flatMap((mi) => mi.evidence?.supporting_theme_ids ?? []),
   ]
-  const movesAhead = (async () => {
-    const moves = core.moves ?? []
-    if (moves.length === 0) return [] as MoveCard[]
-    const targets = await readAdviceTargets(core, moves, cited.market)
-    const levels = await readMoveLevels(core, moves, targets)
-    return moveCards({
-      moves,
-      month: core.month,
-      now: core.readingAt,
-      subjects: subjectsOf(core),
-      themes: core.themeLabels,
-      adviceTargets: targets,
-      levels,
-      n: core.marketN,
-      joined: (prev, m) => joins(core.pair(prev, m, 'market')),
-      pair: core.pair,
-    })
-  })().catch(logAs('moves', [] as MoveCard[]))
+  const movesAhead = readMoveCards(core, core.moves ?? [], cited.market).catch(logAs('moves', [] as MoveCard[]))
   const { videoByInsight, slugById } = await readAudience(supabase, audienceIds)
 
   const onPage = new Set(insights.map((i) => i.id))
-  const cardOf = (r: AdviceRow, quote: Quote | null = null): AdviceCard => {
+  const cardOf = (r: AdviceRow, quote: Quote | null = null, quoteCite: AdviceCard['quoteCite'] = null): AdviceCard => {
     const evidence = [...new Set(r.basedOn.flatMap((id) => cited.market.get(id)?.evidence ?? []))]
     const grounded = groundingFor({
       basedOn: evidence,
@@ -876,6 +933,7 @@ export async function loadMovesPage(scope: Scope, options: { canDecide: boolean 
       history: adviceHistory(r.lineageId, core.copies),
       restsOn: restsOnRows({ basedOn: r.basedOn, market: cited.market, rival: cited.rival, videoByInsight, onPage }),
       quote,
+      ...(quote ? { quoteCite } : {}),
     }
   }
 
@@ -883,20 +941,25 @@ export async function loadMovesPage(scope: Scope, options: { canDecide: boolean 
   // Pass D-b chose, printed only where the evidence vouches for it and the
   // quote gate passes it (`attachQuotes`).
   let openQuote: Quote | null = null
+  let openCite: AdviceCard['quoteCite'] = null
   if (named) {
     const hero = new Map<string, string>()
     for (const c of [...core.copies].sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? '') || a.id.localeCompare(b.id))) {
       if (lineageKey(c) === named.lineageId) hero.set(named.lineageId, c.hero_quote ?? '')
     }
     const evidenceByInsight = new Map([...cited.market].map(([id, m]) => [id, m.evidence]))
-    openQuote = await attachQuotes(supabase, [named], hero, evidenceByInsight, slugById, clientId)
+    const cites = new Map<string, { platform: string | null; date: string | null }>()
+    openQuote = await attachQuotes(supabase, [named], hero, evidenceByInsight, slugById, clientId, cites)
       .then((rows) => rows[0]?.quote ?? null)
       .catch(logAs('quote', null))
+    openCite = openQuote ? cites.get(named.lineageId) ?? null : null
   }
 
   const cards = waiting.map((r) => cardOf(r))
   const openIndex = named ? cards.findIndex((c) => c.lineageId === named.lineageId) : -1
-  const open = named ? { card: cardOf(named, openQuote), index: openIndex >= 0 ? openIndex : null } : null
+  const open = named
+    ? { card: cardOf(named, openQuote, openCite), index: openIndex >= 0 ? openIndex : null, waiting: waitingAll.some((r) => r.lineageId === named.lineageId) }
+    : null
 
   const [moveCardsRead, plans, plansCount, questions, datable] = await Promise.all([movesAhead, plansAhead, plansCountAhead, questionsAhead, datableAhead])
 
@@ -935,9 +998,10 @@ export async function loadMovesPage(scope: Scope, options: { canDecide: boolean 
     monthStatus: core.monthStatus,
     readingAt: core.readingAt,
     canDecide: options.canDecide,
-    counts: { waiting: cards.length, dated: (core.moves ?? []).length, plans: plansCount ?? plans.length },
+    counts: { waiting: waitingAll.length, dated: (core.moves ?? []).length, plans: plansCount ?? plans.length },
     advice: {
       cards,
+      more: waitingAll.length - cards.length,
       open,
       gone: Boolean(param) && !recordOpen && named == null,
       total: core.adviceRows.length,
@@ -956,8 +1020,8 @@ export async function loadMovesPage(scope: Scope, options: { canDecide: boolean 
 /** What the Dashboard's Your moves tile draws (board E1): the advice to decide
  *  on first, and the move whose market moved, each linking to its place here. */
 export interface TopMoves {
-  /** The current recommendation, where nobody has decided on it; else the
-   *  first undecided piece the latest update raised. Null: nothing waiting. */
+  /** The first piece waiting for a decision: Your moves' first card. Null:
+   *  nothing waiting. */
   advice: {
     lineageId: string
     recommendationId: string
@@ -969,8 +1033,8 @@ export interface TopMoves {
     /** Opens it in place on Your moves. */
     href: string
   } | null
-  /** Undecided pieces the latest update raised (not folded: no embedding call
-   *  on the Dashboard). */
+  /** The advice waiting for a decision, folded and uncapped: the number Your
+   *  moves' bar prints (`waitingAdvice`). */
   waiting: number
   /** The move whose comparison cleared its band (the largest change), else the
    *  newest move with a comparison that may print. Null: none. */
@@ -995,30 +1059,26 @@ export function movedMove(cards: readonly MoveCard[]): MoveCard | null {
 
 /**
  * The Dashboard's Your moves tile (T8, wave 2b), light: the first wave this
- * page reads (no embedding call, no quote, no plan, no conclusions), then the
- * top advice's evidence and the moves' months beside each other, then its
- * videos. Null where the tenant has no delivered update.
+ * page reads and the short list's embedding call (cached per server; no
+ * quote, no plan, no conclusions), then the top advice's evidence and the
+ * moves' months beside each other, then its videos. Null where the tenant has
+ * no delivered update.
  */
 export async function topMoves(scope: Scope, options: { canDecide: boolean }): Promise<TopMoves | null> {
   const core = await readCore(scope)
   if (!core) return null
-  const latest = core.adviceRows.filter((r) => r.inLatest === true && r.status === 'new')
-  const topId = currentTopLineage(core.copies)
-  const top = latest.find((r) => r.lineageId === topId) ?? latest[0] ?? null
+  // THE PAGE'S LIST AND COUNT (`waitingAdvice`): the same embedding call,
+  // cached per server (lib/pages/advice-shortlist.ts), and the page's first
+  // card is the tile's advice.
+  const latest = waitingAdvice(core.adviceRows, await adviceVectors(core.adviceRows))
+  const top = latest[0] ?? null
   const moves = core.moves ?? []
   const lineages = [...new Set([...(top ? [top.lineageId] : []), ...moves.filter((m) => m.kind === 'advice' && m.lineage_id).map((m) => m.lineage_id as string)])]
   const cited = await readCited(core.supabase, core.clientId, lineages.flatMap((id) => core.adviceRows.find((r) => r.lineageId === id)?.basedOn ?? []))
   const evidence = top ? [...new Set(top.basedOn.flatMap((id) => cited.market.get(id)?.evidence ?? []))] : []
   const [audience, cards] = await Promise.all([
     readAudience(core.supabase, evidence),
-    moves.length === 0 ? Promise.resolve([] as MoveCard[]) : (async () => {
-      const targets = await readAdviceTargets(core, moves, cited.market)
-      const levels = await readMoveLevels(core, moves, targets)
-      return moveCards({
-        moves, month: core.month, now: core.readingAt, subjects: subjectsOf(core), themes: core.themeLabels,
-        adviceTargets: targets, levels, n: core.marketN, joined: (prev, m) => joins(core.pair(prev, m, 'market')), pair: core.pair,
-      })
-    })().catch(logAs('top.moves', [] as MoveCard[])),
+    readMoveCards(core, moves, cited.market).catch(logAs('top.moves', [] as MoveCard[])),
   ])
   const grounded = top
     ? groundingFor({ basedOn: evidence, videoByInsight: audience.videoByInsight, themeIds: [], audience: 'client', month: core.month, cited: top.basedOn.length })

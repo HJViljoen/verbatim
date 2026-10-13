@@ -5,8 +5,9 @@ import type { PairComparability } from '../../reading/comparability'
 import type { RecCopy } from '../market-surface'
 import {
   adviceHistory, conclusionViews, decisionLine, headerParts, largestStance, leadClaims, moveCards, movedMove,
-  recordRows, restsOnRows, streakLabel, adviceHref, adviceTitle, MOVES_PATH, UNTITLED_ADVICE,
+  recordRows, restsOnRows, streakLabel, adviceHref, adviceParam, adviceTitle, waitingAdvice, MOVES_PATH, UNTITLED_ADVICE,
 } from './moves'
+import { buildAdviceRows } from '../market-surface'
 import { MOVE_CARDS, PLAN, movesRecordFixture } from './moves-fixture'
 
 // Your moves, Design v2 (T7): the page's pure half. The loader's reads feed
@@ -43,6 +44,30 @@ describe('adviceHistory', () => {
   it('keeps at most nine dots, the latest', () => {
     const many = Array.from({ length: 12 }, (_, i) => copy('A', `r${i}`, `2026-0${i < 9 ? 1 : 2}-${String(10 + i).padStart(2, '0')}T06:00:00Z`))
     expect(adviceHistory('A', many).recent).toHaveLength(9)
+  })
+})
+
+describe('waitingAdvice: the one count the page and the tile print', () => {
+  // Six pieces the latest update raised, two saying the same thing, one
+  // decided; and one an earlier update raised.
+  const copies = [
+    ...['A', 'B', 'C', 'D', 'E', 'F'].map((l, i) => copy(l, 'r2', '2026-08-08T06:00:00Z', { id: `${l}-2`, priority: i === 0 ? 'high' : 'medium' })),
+    copy('OLD', 'r1', '2026-08-01T06:00:00Z'),
+  ]
+  const rows = buildAdviceRows(copies, [{ id: 'd', lineage_id: 'F', status: 'acted_on', decided_at: '2026-08-09T00:00:00Z' }])
+  const v = (x: number) => [x, Math.sqrt(1 - x * x)]
+  const vectors = new Map([['A', v(1)], ['B', v(0.999)], ['C', v(0)], ['D', [0.6, -0.8]], ['E', [-1, 0]], ['F', v(1)], ['OLD', [0, -1]]])
+
+  it('folds what says the same thing, leaves out the decided and the earlier, and is not capped', () => {
+    const waiting = waitingAdvice(rows, vectors).map((r) => r.lineageId)
+    expect(waiting).not.toContain('F')
+    expect(waiting).not.toContain('OLD')
+    expect(waiting.filter((l) => l === 'A' || l === 'B')).toHaveLength(1)
+    expect(waiting).toHaveLength(4)
+  })
+
+  it('without vectors nothing is folded', () => {
+    expect(waitingAdvice(rows, null)).toHaveLength(5)
   })
 })
 
@@ -190,6 +215,14 @@ describe('the words', () => {
     expect(adviceTitle('  ')).toBe(UNTITLED_ADVICE)
     expect(adviceTitle(null)).toBe(UNTITLED_ADVICE)
     expect(adviceTitle(' Help desk ')).toBe('Help desk')
+  })
+  it('reads `?advice=`, and the old item, rec and ledger that stored links carry', () => {
+    expect(adviceParam({ advice: 'L1', ledger: 'all' })).toBe('L1')
+    expect(adviceParam({ ledger: 'all' })).toBe('all')
+    expect(adviceParam({ item: 'L2' })).toBe('L2')
+    expect(adviceParam({ rec: 'r3' })).toBe('r3')
+    expect(adviceParam({ item: 'L2', rec: 'r3', ledger: 'all' })).toBe('L2')
+    expect(adviceParam({ advice: ' ', horizon: 'last_3' })).toBe('')
   })
   it('a piece of advice opens in place on Your moves', () => {
     expect(adviceHref('L1')).toBe(`${MOVES_PATH}?advice=L1#advice-panel`)

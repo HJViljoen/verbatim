@@ -58,8 +58,13 @@ function SoFar({ r }: { r: StatementReading | null }) {
   )
 }
 
+/** What the card says where the operator has added no statement yet. */
+export const SAY_FIRST = 'Add something you say about yourself, and each update reads how your market treats it.'
+
 export function WhatYouSay({ data, className }: { data: StatementsBlockData; className?: string }) {
-  if (data.statements.length === 0) return null
+  // NO ROWS: the add form alone, for a reader who may add one (the operator,
+  // while statements are held from tenants); nothing for anyone else.
+  if (data.statements.length === 0 && !data.canEdit) return null
   const month = data.month ? `${longMonth(data.month)}${data.complete ? '' : ' so far'}` : null
   return (
     <section aria-labelledby="say-title" className={cn(CARD, className)}>
@@ -70,6 +75,8 @@ export function WhatYouSay({ data, className }: { data: StatementsBlockData; cla
         sub={month ? `Your own claims, against what your market says about them in ${month}` : 'Your own claims, against what your market says about them'}
       />
       {data.canEdit ? <AddStatement /> : null}
+      {data.statements.length === 0 ? <p className="m-0 text-[13.5px] leading-[1.5] text-muted-foreground">{SAY_FIRST}</p> : null}
+      {data.statements.length > 0 ? (<>
       <div className="flex flex-col">
         <div className={cn(COLS, 'hidden border-b border-border pb-2 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-muted-foreground sm:grid')}>
           <span>You say</span><span>Videos</span><span>How it lands</span><span>So far</span>
@@ -91,6 +98,7 @@ export function WhatYouSay({ data, className }: { data: StatementsBlockData; cla
           <span key={x.key} className="inline-flex items-center gap-1.5"><span aria-hidden className={cn('inline-block h-2 w-2.5 rounded-[2px]', x.fill)} />{x.label}</span>
         ))}
       </div>
+      </>) : null}
     </section>
   )
 }

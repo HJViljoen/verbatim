@@ -58,16 +58,41 @@ describe('loadRecentOwnPosts reads your own accounts only', () => {
   })
 })
 
-describe('loadRegistryLabels reads canonical_label (theme_registry has no `label`)', () => {
-  it('maps each registry id to its label, and a failed read is an empty map', async () => {
+describe('loadRegistryLabels reads canonical_label (theme_registry has no `label`), for the ids named', () => {
+  it('maps each named registry id to its label, and a failed read is an empty map', async () => {
     const { loadRegistryLabels } = await import('./market-surface')
     const db = fakeDb({ theme_registry: [
       { id: 'r1', client_id: CLIENT, canonical_label: 'How long a liner lasts' },
       { id: 'r2', client_id: CLIENT, canonical_label: '  ' },
       { id: 'r3', client_id: 'other', canonical_label: 'Not ours' },
     ] })
-    expect([...(await loadRegistryLabels(db.client as never, CLIENT))]).toEqual([['r1', 'How long a liner lasts']])
+    expect([...(await loadRegistryLabels(db.client as never, CLIENT, ['r1', 'r2', 'r3', 'r1']))]).toEqual([['r1', 'How long a liner lasts']])
     expect(db.calls[0].columns).toBe('id, canonical_label')
-    expect((await loadRegistryLabels(fakeDb({}).client as never, CLIENT)).size).toBe(0)
+    expect(db.calls[0].filters).toContain('id in 3')
+    expect((await loadRegistryLabels(fakeDb({}).client as never, CLIENT, ['r1'])).size).toBe(0)
+  })
+
+  it('reads nothing where no theme is named', async () => {
+    const { loadRegistryLabels } = await import('./market-surface')
+    const db = fakeDb({ theme_registry: [] })
+    expect((await loadRegistryLabels(db.client as never, CLIENT, [])).size).toBe(0)
+    expect(db.calls).toEqual([])
+  })
+})
+
+describe('Your market’s card counts your own posts the same way (loadOwnPosts)', () => {
+  it('a month of posts off your own accounts, with what was read, in id order', async () => {
+    const { loadOwnPosts } = await import('./overview')
+    const db = fakeDb({ videos: [
+      video('b-own', { analyzed_run_id: 'run-9', hook_style: 'question', classified_type: 'tutorial' }),
+      video('a-own', { upload_date: '2026-09-01', analyzed_run_id: null }),
+      video('c-creator', { source: 'discovered' }),
+      video('d-other-month', { upload_date: '2026-08-31' }),
+    ] })
+    expect(await loadOwnPosts(db.client as never, CLIENT, '2026-09-01')).toEqual([
+      { id: 'a-own', upload_date: '2026-09-01', comments_count: 3, hook_style: null, classified_type: null, analyzed_run_id: null },
+      { id: 'b-own', upload_date: '2026-09-10', comments_count: 3, hook_style: 'question', classified_type: 'tutorial', analyzed_run_id: 'run-9' },
+    ])
+    expect(db.calls[0].filters).toContain('source=owned')
   })
 })

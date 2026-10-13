@@ -61,7 +61,7 @@ interface Cache {
   comment: Map<string, string | null>
   /** insight_evidence.id → the comment it quotes, or the video it quotes
    *  (`source_video_id`, a `videos.id`: a post's own words, a transcript). */
-  evidence: Map<string, { commentId: string | null; videoId: string | null }>
+  evidence: Map<string, { commentId: string | null; videoId: string | null; commentDate?: string | null }>
   /** video key → the video; also the bare video id → the first found. */
   video: Map<string, QuoteVideo>
   bare: Map<string, QuoteVideo>
@@ -104,6 +104,11 @@ export interface QuoteContext {
   forVideoUuid(uuid: string | null | undefined): QuoteVideo | null
   /** The comment an evidence row quotes, where it quotes one. */
   commentOfEvidence(evidenceId: string | null | undefined): string | null
+  /** The day that comment was written (`comments.comment_date`, `YYYY-MM-DD`),
+   *  read in the same embed as its video (depth v2, T7: a quote's cite). Null
+   *  where the row quotes no comment, the comment has no date, or the row was
+   *  read by an earlier caller before this field existed. */
+  dateOfEvidence(evidenceId: string | null | undefined): string | null
 }
 
 /**
@@ -137,12 +142,16 @@ export async function readQuoteContext(
   //    not two) and its own video.
   const evidenceIds = clean(want.evidenceIds).filter((id) => !cache.evidence.has(id))
   if (evidenceIds.length > 0) {
-    type EvidenceRow = { id: string; comment_id: string | null; source_video_id: string | null; comments?: { platform: string | null; video_id: string | null } | null }
+    type EvidenceRow = { id: string; comment_id: string | null; source_video_id: string | null; comments?: { platform: string | null; video_id: string | null; comment_date?: string | null } | null }
     const rows = await readChunks<EvidenceRow>(evidenceIds, UUID_IN_CHUNK,
-      (part) => db.from('insight_evidence').select('id, comment_id, source_video_id, comments(platform, video_id)').in('id', part), 'quote-context evidence')
+      (part) => db.from('insight_evidence').select('id, comment_id, source_video_id, comments(platform, video_id, comment_date)').in('id', part), 'quote-context evidence')
     for (const r of rows) {
-      cache.evidence.set(String(r.id), { commentId: r.comment_id ? String(r.comment_id) : null, videoId: r.source_video_id ? String(r.source_video_id) : null })
       const c = Array.isArray(r.comments) ? r.comments[0] : r.comments
+      cache.evidence.set(String(r.id), {
+        commentId: r.comment_id ? String(r.comment_id) : null,
+        videoId: r.source_video_id ? String(r.source_video_id) : null,
+        commentDate: c?.comment_date ? String(c.comment_date).slice(0, 10) : null,
+      })
       if (r.comment_id && c && !cache.comment.has(String(r.comment_id))) cache.comment.set(String(r.comment_id), c.video_id ? videoKey(c.platform, String(c.video_id)) : null)
     }
     for (const id of evidenceIds) if (!cache.evidence.has(id)) cache.evidence.set(id, { commentId: null, videoId: null })
@@ -236,6 +245,7 @@ export async function readQuoteContext(
       return (e.commentId ? forComment(e.commentId) : null) ?? (e.videoId ? cache.uuid.get(e.videoId) ?? null : null)
     },
     commentOfEvidence: (evidenceId) => (evidenceId ? cache.evidence.get(evidenceId)?.commentId ?? null : null),
+    dateOfEvidence: (evidenceId) => (evidenceId ? cache.evidence.get(evidenceId)?.commentDate ?? null : null),
   }
 }
 

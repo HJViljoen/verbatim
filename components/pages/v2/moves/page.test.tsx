@@ -13,7 +13,9 @@ import {
 } from '@/lib/pages/v2/moves-fixture'
 import { ADVICE_GONE, ADVICE_NONE, ADVICE_PANEL_ID, RECORD_PANEL_ID } from '@/lib/pages/v2/moves'
 import { MovesV2Page, MOVES_FIRST_RUN } from './index'
-import { AdviceSection, panelPlacement, whyParagraphs } from './advice'
+import { AdviceSection, OPEN_MORE_WAITING, panelPlacement, whyParagraphs } from './advice'
+import { SAY_FIRST } from './say'
+import { TrackThisSubject } from '@/components/subjects/track-this'
 import { MovesSection, lineGeometry } from './moves'
 import { WhatYouSay } from './say'
 import { PlanCard } from './plan'
@@ -77,6 +79,13 @@ describe('the page', () => {
     expect(text).not.toContain('Your plan, checked against the market')
     expect(text).not.toContain('What we concluded')
     expect(text).toContain('The advice record: all 64 pieces of advice')
+  })
+
+  it('draws the add form alone for a reader who may add the first statement', () => {
+    const text = markupText(page(movesFixture(), statementsV2({ statements: [], canEdit: true })))
+    expect(text).toContain('What you say, and what comes back')
+    expect(text).toContain(SAY_FIRST)
+    expect(text).not.toContain('How it lands')
   })
 
   it('draws no statements card without rows, and the plan takes the row', () => {
@@ -159,6 +168,44 @@ describe('real data’s edges', () => {
     const base = movesFixture()
     const text = markupText(render(<ConclusionsSection data={{ ...base, conclusions: [{ ...base.conclusions[0], videos: 0 }] }} />))
     expect(text).not.toContain('0 videos')
+  })
+})
+
+describe('the board’s three cards, and the rest waiting', () => {
+  it('a count past the three cards is a link into the record', () => {
+    const base = movesFixture()
+    const markup = page({ ...base, counts: { ...base.counts, waiting: 5 }, advice: { ...base.advice, more: 2 } })
+    const text = markupText(markup)
+    expect(text).toContain('5 pieces of advice waiting')
+    expect(text).toContain('2 more waiting →')
+    expect(markup).toContain('href="/dashboard/moves?advice=all#advice-record"')
+    expect(page()).not.toContain('more waiting')
+  })
+
+  it('a piece waiting past the three opens under the grid and says so', () => {
+    const base = movesOpenFixture()
+    const text = markupText(page({ ...base, advice: { ...base.advice, more: 1, open: { ...base.advice.open!, index: null, waiting: true } } }))
+    expect(text).toContain(OPEN_MORE_WAITING)
+  })
+
+  it('the open quote carries where and when it was written', () => {
+    expect(markupText(page(movesOpenFixture()))).toContain('YouTube · 5 Oct')
+  })
+})
+
+describe('Track this on the legacy subject pane: the status is an owner’s or an admin’s', () => {
+  const move = { id: 'm-1', title: 'Price page', declaredAt: '2026-09-02', status: 'active' as const }
+  it('an owner or an admin sees Mark done and Drop it', () => {
+    const text = markupText(render(<TrackThisSubject subjectId="s-1" subjectName="Cost" move={move} canChangeStatus />))
+    expect(text).toContain('Mark done')
+    expect(text).toContain('Drop it')
+  })
+  it('a member sees the move and no control', () => {
+    const text = markupText(render(<TrackThisSubject subjectId="s-1" subjectName="Cost" move={move} canChangeStatus={false} />))
+    expect(text).toContain('Price page')
+    expect(text).not.toContain('Mark done')
+    expect(text).not.toContain('Drop it')
+    expect(markupText(render(<TrackThisSubject subjectId="s-1" subjectName="Cost" move={{ ...move, status: 'dropped' }} canChangeStatus={false} />))).not.toContain('Track it again')
   })
 })
 
