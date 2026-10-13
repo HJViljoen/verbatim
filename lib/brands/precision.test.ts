@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { SEALAND_CLIENT_ID } from '../config'
+import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../config'
 import { BRAND_PRECISION_FLOOR, BRAND_RULE_VERSION } from './aliases'
 import { BRAND_HAND_CHECKS, NAME_READS, NONE_FOUND, brandCountState, clientBrandName, nameChecked, nameNoMatch, noiseWords, type BrandHandCheck, type HandCheckPart } from './precision'
 
@@ -54,6 +54,33 @@ describe('production’s hand check of 27 Sep (data/hand-check-brands-prod-20260
     expect(BRAND_RULE_VERSION).toBe('brands_v1')
     const next = { [SEALAND_CLIENT_ID]: Object.fromEntries(Object.entries(BRAND_HAND_CHECKS[SEALAND_CLIENT_ID]).map(([b, c]) => [b, { ...c, ruleVersion: 'brands_v2' }])) }
     for (const brand of EIGHT) expect(brandCountState(SEALAND_CLIENT_ID, brand, next), brand).toBe('not_yet')
+  })
+})
+
+describe('production’s hand check of 13 Oct, Össur (~/.claude/plans/verbatim-depth-v2/t15-handcheck.md)', () => {
+  const read = {
+    on: '2026-10-13', where: 'production', ruleVersion: 'brands_v1', source: '~/.claude/plans/verbatim-depth-v2/t15-handcheck.md',
+    of: 'brands_v1 matches (Össur rules of 13 Oct), window 2026-06-01 to 2026-11-01, every Össur match, every Ottobock headline match and 30 of its other 147',
+  }
+
+  it('holds one entry per brand Össur tracks, its name and Ottobock, as the sheet records them', () => {
+    expect(BRAND_HAND_CHECKS[OSSUR_CLIENT_ID]).toEqual({
+      'Össur': { headline: { read: 56, brand: 56 }, rest: { read: 9, brand: 9 }, ...read },
+      Ottobock: { headline: { read: 21, brand: 21 }, rest: { read: 30, brand: 30 }, ...read },
+    })
+    // The entry is keyed as the pages ask: the client's rule names it as
+    // clients.company_name does on production ("Össur").
+    expect(clientBrandName(OSSUR_CLIENT_ID)).toBe('Össur')
+  })
+
+  it('counts both, every part at 1.00; the name is checked, and its line still waits for every match of a month to be read', () => {
+    expect(brandCountState(OSSUR_CLIENT_ID, 'Össur')).toBe('counted')
+    expect(brandCountState(OSSUR_CLIENT_ID, 'Ottobock')).toBe('counted')
+    expect(nameChecked(OSSUR_CLIENT_ID)).toBe(true)
+    expect(nameNoMatch(OSSUR_CLIENT_ID)).toBe(false)
+    expect(NAME_READS[OSSUR_CLIENT_ID]).toBeUndefined()
+    // Sealand's entries are untouched by Össur's.
+    expect(brandCountState(SEALAND_CLIENT_ID, 'Patagonia')).toBe('counted')
   })
 })
 

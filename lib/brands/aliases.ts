@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 
-import { SEALAND_CLIENT_ID } from '../config'
+import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../config'
 
 // Brand topics v1 (market-first decision E, WP2.6): the per-brand names and the
 // guards against their other meanings, in ONE place. A brand "comes up" in a
@@ -40,6 +40,11 @@ import { SEALAND_CLIENT_ID } from '../config'
 // VERSIONED. The rows the script writes carry BRAND_RULE_VERSION; a change to
 // any list is a new version (the test pins the lists' fingerprint), and rows
 // of the old version stay (brand_mentions is append-only, plan §4.0 rule 4).
+// The test pins each tenant's lists apart, because every row is a tenant's:
+// a tenant's FIRST rules change no other tenant's rows, so Össur's came in
+// under brands_v1 (13 Oct) beside Sealand's, whose own fingerprint is the one
+// it has carried since deploy 3. A change to a tenant's lists after its rows
+// exist is still a new version, for every tenant.
 
 export const BRAND_RULE_VERSION = 'brands_v1'
 
@@ -184,9 +189,45 @@ const SEALAND_RULES: readonly BrandRule[] = [
   },
 ]
 
-/** The rules per tenant. A tenant with none (Össur, paused) gets no rows. */
+// ÖSSUR (depth v2 T15, 13 Oct): the client and the one rival it tracks.
+// Production's tracking_configs on 13 Oct: brand_keywords ['ossur'],
+// competitor_names ['Ottobock'] (competitors 5ecfa431, live), own handles
+// ossur (Instagram) and ossur_corp (TikTok), Ottobock's ottobock; no watched
+// brands. Every form below is one production holds (window June to October:
+// 1,450 readable videos, 53,214 comments).
+//
+// A PRODUCT LINE COUNTS ONLY BESIDE THE NAME, as Sealand's rivals' do
+// ("Cotopaxi Allpa", "Patagonia Black Hole"): "Pro-Flex", "Iceross", "Power
+// Knee", "C-Leg" or "Genium" alone names a product, not the company, and
+// placing talk under a product is the products step's job (depth v2 T11).
+// Production holds few such: 10 Össur-product-only texts and 41 Ottobock ones
+// over the window, against 87 and 171 rows these rules give.
+const OSSUR_RULES: readonly BrandRule[] = [
+  {
+    brand: 'Össur',
+    key: { kind: 'client' },
+    strong: [
+      '@[oöÖ]ssur[a-z0-9_]*', '[oöÖ]ssur\\.com',
+      '[oöÖ]ssur(?:_?corp|za|southafrica|latam|family|korea|india|brasil|turkiye|mx|navii[a-z]*)',
+    ],
+    weak: ['[oöÖ]ssurs?'],
+    notFollowed: ['diler[a-zçğıöşü]*', 'dilemek'],
+    notWith: ['osur(?:uk|ur|an|m|d)[a-zçğıöşü]*', 'ossur(?:a|ada|asa|du|dum|uk)'],
+    why: 'the name with two s\'s, whole word (single-s "osur" is Turkish for fart: osuruk, osurdu, osurmak, all on production); any @ossur handle, ossur.com and the regional names production holds (#ÖssurZA, @ossurlatam, @ossurbrasil, #OssurNaviiKnee); never "ossur dilerim" (Turkish "I\'m sorry", spelt by ear; production 13 Oct, a YouTube caption) or beside the Turkish fart words',
+  },
+  {
+    brand: 'Ottobock',
+    key: { kind: 'rival', name: 'Ottobock' },
+    strong: ['otto\\s*bock[a-z0-9_]*', 'ottobo(?:k|ch|c)'],
+    weak: [],
+    why: 'no other meaning on production (13 Oct: every match read by hand is the company, 51 of its 171 rows and 27 transcript and on-screen matches), so every form counts anywhere: "Otto Bock", any ottobock handle or hashtag (@ottobockcare_northamerica, #ottobocklatam) and the misspellings production holds (ottobok, ottoboch, #ottoboc); OtterBox and "otto" alone do not match',
+  },
+]
+
+/** The rules per tenant. A tenant with none gets no rows. */
 export const BRAND_RULES: Readonly<Record<string, readonly BrandRule[]>> = {
   [SEALAND_CLIENT_ID]: SEALAND_RULES,
+  [OSSUR_CLIENT_ID]: OSSUR_RULES,
 }
 
 export function brandRulesFor(clientId: string): readonly BrandRule[] {
