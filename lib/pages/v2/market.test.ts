@@ -3,12 +3,11 @@ import { flagWordOf } from '@/components/v2/flag-chip'
 import type { OurChange } from '../../reading/comparability'
 import type { WindowReading } from '../../reading/read'
 import type { WeekReadData } from '../../written/types'
-import { raisedFlags, type CheckRow, type FlagRow } from '../week'
 import {
   buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, categoryThemeVideos, categoryVideos, closeHref, convHref,
   convOf, cutWindows, doingOf, flagCardOf, flagVerdict, groupsOf, isRegistryId, insideOf, marketHref, marketMonths, marketParams,
   mergeMixes, monthsText, notchOf, ourReadOf, panelStats, periodHref, personasOf, pickHero, pickWeekSides, platformRows, subjectHref,
-  setApartOf, tableMonths, weekWindows, whoOf, windowLabel, MARKET_TABLE_ROWS,
+  setApartOf, tableMonths, weekFlagRows, weekLead, weekWindows, whoOf, windowLabel, MARKET_TABLE_ROWS, type FlagRowIn,
   type MarketConv,
 } from './market'
 import {
@@ -185,15 +184,22 @@ describe('the top row', () => {
   })
 })
 
-describe('raisedFlags (This week\'s rule for which flag is the week\'s)', () => {
-  const row = (rank: number): FlagRow => ({ run_id: 'r', object_kind: 'theme', object_id: `t${rank}`, label: '', denominator: '', week_k: 1, week_n: 2, baseline_k: 1, baseline_n: 2, baseline_months: [], baseline_filling_months: [], baseline_regime: null, change_pts: 1, band_pts: 1, rank, flagged_count: 2, explanation: null, explanation_model: null, quote_refs: [] })
-  const check = (outcome: string): CheckRow => ({ run_id: 'r', week_start: null, week_end: null, outcome, reason: null, note: '', set_size: 30, tested: 20, flagged_count: 2, update_videos: null, median_videos: null })
+describe('the week\'s lead (mirrors of T11b\'s weekFlagRows and weekLead)', () => {
+  const row = (rank: number): FlagRowIn => ({ object_kind: 'theme', object_id: `t${rank}`, label: '', denominator: '', week_k: 1, week_n: 2, baseline_k: 1, baseline_n: 2, baseline_months: [], baseline_filling_months: [], baseline_regime: null, change_pts: 1, band_pts: 1, rank, explanation: null, explanation_model: null })
   it('puts rank 1 first, and raises nothing where the check did not fire or the flags were not read', () => {
-    expect(raisedFlags(check('flagged'), [row(2), row(1)]).map((f) => f.rank)).toEqual([1, 2])
-    expect(raisedFlags(check('nothing_unusual'), [row(1)])).toEqual([])
-    expect(raisedFlags(check('suppressed'), [row(1)])).toEqual([])
-    expect(raisedFlags(null, [row(1)])).toEqual([])
-    expect(raisedFlags(check('flagged'), null)).toEqual([])
+    expect(weekFlagRows({ outcome: 'flagged' }, [row(2), row(1)]).map((f) => f.rank)).toEqual([1, 2])
+    expect(weekFlagRows({ outcome: 'nothing_unusual' }, [row(1)])).toEqual([])
+    expect(weekFlagRows({ outcome: 'suppressed' }, [row(1)])).toEqual([])
+    expect(weekFlagRows(null, [row(1)])).toEqual([])
+    expect(weekFlagRows({ outcome: 'flagged' }, null)).toEqual([])
+  })
+
+  it('leads with the first flag, else the biggest new conversation, else the biggest', () => {
+    const conversations = [{ themeId: 'a', videos: 9 }, { themeId: 'b', videos: 23 }, { themeId: 'c', videos: 8 }]
+    expect(weekLead({ flags: ['f1', 'f2'], newThisWeek: [{ themeId: 'c' }], conversations })).toEqual({ kind: 'flag', flag: 'f1' })
+    expect(weekLead({ flags: [], newThisWeek: [{ themeId: 'c' }, { themeId: 'a' }], conversations })).toEqual({ kind: 'new', conversation: { themeId: 'a', videos: 9 } })
+    expect(weekLead({ flags: [], newThisWeek: [{ themeId: 'gone' }], conversations })).toEqual({ kind: 'biggest', conversation: { themeId: 'b', videos: 23 } })
+    expect(weekLead({ flags: [], newThisWeek: [], conversations: [] })).toBeNull()
   })
 })
 

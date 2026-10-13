@@ -102,9 +102,16 @@ describe('TopRowView', () => {
     expect(renderText(<TopRowView data={OPEN} />)).toContain('Close ↑')
   })
 
+  it('with nothing flagged and nothing new, the week\'s most talked about leads, headed plainly', () => {
+    const plain = marketFixture({ flagged: false, noNew: true })
+    const text = renderText(<TopRowView data={plain} />)
+    expect(text).toMatch(/^Most talked about this week How long a liner lasts 23 of 226 category videos this week 35 in October so far/)
+    assertCopyContract(<TopRowView data={plain} />)
+  })
+
   it('the month leads with its three biggest and their month bars, each "k of n"', () => {
     const text = renderText(<TopRowView data={MONTH} />)
-    expect(text).toMatch(/^Biggest in October so far How long a liner lasts 35 of 300 category videos in October so far/)
+    expect(text).toMatch(/^Most talked about in October so far How long a liner lasts 35 of 300 category videos in October so far/)
     expect(text).toContain('Month by month Insurance refusals for powered knees 31 of 300 category videos')
     expect(text).toContain('Jul 16 of 455')
     assertCopyContract(<TopRowView data={MONTH} />)

@@ -146,8 +146,8 @@ function ConvHero({ hero, data, selected, span }: { hero: Extract<HeroCard, { ki
   const { conv } = hero
   const week = data.period === 'week'
   const eyebrow = week
-    ? hero.kind === 'new' ? <span data-copy="verdict">New this week</span> : 'Biggest this week'
-    : `Biggest in ${data.month.text}`
+    ? hero.kind === 'new' ? <span data-copy="verdict">New this week</span> : 'Most talked about this week'
+    : `Most talked about in ${data.month.text}`
   const figure = week ? conv.week : conv.month
   return (
     <article id="top-0" className={cn(CARD, span, 'scroll-mt-6', selected ? SELECTED_CARD_RING : null)}>

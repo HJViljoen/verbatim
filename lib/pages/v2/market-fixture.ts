@@ -250,6 +250,8 @@ export interface FixtureOptions {
   open?: { n: number; at: PanelAt } | null
   /** Open a subject (its key). */
   subject?: string | null
+  /** Nothing was first heard this week. */
+  noNew?: boolean
 }
 
 const MONTH: MarketMonth = {
@@ -297,7 +299,7 @@ export function marketFixture(opts: FixtureOptions = {}): MarketData {
     raw.at = 'subjects'
   }
   const p: MarketParams = marketParams(raw)
-  const input = fixtureConvInput(period)
+  const input = { ...fixtureConvInput(period), ...(opts.noNew ? { newIds: new Set<string>() } : {}) }
   const convs = buildConvs(input).map((c) => withWho(c, period))
   const read = fixtureRead()
   const flag = flagged && period === 'week' ? flagCardOf({ flag: FIXTURE_FLAG, window: WINDOW, convs, convInput: input, monthCategory: MONTH.category, p, noun: null }) : null

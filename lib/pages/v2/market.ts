@@ -43,7 +43,7 @@ import { loadMemberInsightIdsBySubject } from '../subjects'
 import { fetchThemedRunId } from '../themed-run'
 import { askAboutTheme, loadLinkedTheme, loadThemeKinds } from '../voice-surface'
 import { subjectOfTheme } from '../voice-conversation'
-import { loadCheck, loadFlags, raisedFlags, unusualFlagOf, flagFigures, type UnusualFlag } from '../week'
+import { flagFigures, isMissingAnomalyRecord, type UnusualFlag } from '../week'
 
 // MARKET (Design v2, depth plan T3; boards E2-Market and E2-Market-Open):
 // what the market is talking about, at `/dashboard/market`.
@@ -699,21 +699,26 @@ export const periodCount = (c: Pick<MarketConv, 'week' | 'month'>, period: Perio
   (period === 'week' ? c.week : c.month) ?? 0
 
 /**
- * The top row's hero, this week: the check's first flag where it flagged
- * something; else the biggest conversation first heard this week; else the
- * week's biggest. A theme set apart (maker-led, off-topic) never leads. Pure.
+ * The top row's hero, this week, by the week's ONE lead rule (`weekLead`, the
+ * weekly email's too): the check's first flag where it flagged something;
+ * else the new conversation with the most videos this week; else the
+ * conversation with the most videos this week. A theme set apart (maker-led,
+ * off-topic) never leads, so it is not handed to the rule. Pure.
  */
 export function pickHero(input: {
   convs: readonly MarketConv[]
   flag: FlagCard | null
   setApart: { has(id: string): boolean }
 }): { kind: 'flag' } | { kind: 'new' | 'biggest'; conv: MarketConv } | null {
-  if (input.flag) return { kind: 'flag' }
   const eligible = input.convs.filter((c) => !input.setApart.has(c.id))
-  const fresh = eligible.filter((c) => c.isNew)
-  if (fresh[0]) return { kind: 'new', conv: fresh[0] }
-  if (eligible[0]) return { kind: 'biggest', conv: eligible[0] }
-  return null
+  const lead = weekLead({
+    flags: input.flag ? [input.flag] : [],
+    newThisWeek: eligible.filter((c) => c.isNew).map((c) => ({ themeId: c.id })),
+    conversations: eligible.map((c) => ({ themeId: c.id, videos: c.week ?? 0, conv: c })),
+  })
+  if (!lead) return null
+  if (lead.kind === 'flag') return { kind: 'flag' }
+  return { kind: lead.kind, conv: lead.conversation.conv }
 }
 
 /**
@@ -726,6 +731,94 @@ export function pickWeekSides(input: { convs: readonly MarketConv[]; heroId: str
   const biggest = eligible[0] ?? null
   const fresh = eligible.filter((c) => c.isNew && c.id !== biggest?.id).slice(0, 3)
   return { biggest, fresh }
+}
+
+// ---- Mirrors of the weekly email's shared rules (T11b), until the merge ---------------------
+//
+// T11b owns the week's lead rule (`lib/reading/week-lead.ts` `weekLead`) and
+// exports This week's anomaly reader from lib/pages/week.ts (`loadCheck`,
+// `loadFlags`, `weekFlagRows`). Neither is on this branch, so the four below
+// mirror them, with the same order and the same reads, and are replaced by
+// imports at the merge (the lead's note, 13 Oct): Market's top slot and the
+// weekly email must lead with the same thing.
+
+/** An `anomaly_checks` row, as This week's §1 reads it. */
+export interface CheckRowIn {
+  outcome: string
+  flagged_count?: number | null
+}
+
+/** An `anomaly_flags` row, as This week's §1 reads it. */
+export interface FlagRowIn {
+  object_kind: string
+  object_id: string
+  label: string
+  denominator: string
+  week_k: number
+  week_n: number
+  baseline_k: number
+  baseline_n: number
+  baseline_months: string[] | null
+  baseline_filling_months: string[] | null
+  baseline_regime?: string | null
+  change_pts: number
+  band_pts: number
+  rank: number
+  explanation: { sentences?: string[] } | null
+  explanation_model: string | null
+}
+
+/**
+ * MIRROR of `weekFlagRows` (lib/pages/week.ts, T11b): the flags an update
+ * raised, rank 1 first; none where the check did not fire, refused, or its
+ * flags could not be read (This week's §1 rule: `buildUnusual`). Pure.
+ */
+export function weekFlagRows<R extends { rank: number }>(check: CheckRowIn | null | undefined, flags: readonly R[] | null): R[] {
+  if (!check || flags == null || flags.length === 0) return []
+  if (['suppressed', 'no_window', 'missing_migration', 'nothing_unusual'].includes(check.outcome)) return []
+  return [...flags].sort((a, b) => a.rank - b.rank)
+}
+
+/**
+ * MIRROR of `weekLead` (lib/reading/week-lead.ts, T11b): what leads the week.
+ *   1. the first flag (already in `weekFlagRows`' order);
+ *   2. else the new conversation with the most videos this week;
+ *   3. else the conversation with the most videos this week ("Most talked
+ *      about this week", a count beside its month, no direction word).
+ * Ties go to the theme id. Null where there is nothing. Pure.
+ */
+export function weekLead<F, C extends { themeId: string; videos: number }>(input: {
+  flags: readonly F[]
+  newThisWeek: readonly { themeId: string }[]
+  conversations: readonly C[]
+}): { kind: 'flag'; flag: F } | { kind: 'new' | 'biggest'; conversation: C } | null {
+  if (input.flags[0] !== undefined) return { kind: 'flag', flag: input.flags[0] }
+  const byVideos = [...input.conversations].sort((a, b) => b.videos - a.videos || a.themeId.localeCompare(b.themeId))
+  const fresh = new Set(input.newThisWeek.map((n) => n.themeId))
+  const firstNew = byVideos.find((c) => fresh.has(c.themeId))
+  if (firstNew) return { kind: 'new', conversation: firstNew }
+  return byVideos[0] ? { kind: 'biggest', conversation: byVideos[0] } : null
+}
+
+/** One flag row in This week's shape, without its quotes (§1's `buildFlag`
+ *  minus the quote read). Pure. */
+export function flagOfRow(f: FlagRowIn): Omit<UnusualFlag, 'quotes'> {
+  return {
+    objectKind: f.object_kind,
+    objectId: f.object_id,
+    label: f.label,
+    denominator: f.denominator,
+    week: { k: f.week_k, n: f.week_n },
+    baseline: { k: f.baseline_k, n: f.baseline_n },
+    baselineMonths: f.baseline_months ?? [],
+    baselineFilling: f.baseline_filling_months ?? [],
+    baselineRegime: f.baseline_regime ?? null,
+    changePts: Number(f.change_pts),
+    bandPts: Number(f.band_pts),
+    sentences: f.explanation?.sentences ?? [],
+    explanationModel: f.explanation_model,
+    rank: f.rank,
+  }
 }
 
 // ---- The subject board (pure) ----------------------------------------------------------
@@ -1295,9 +1388,32 @@ async function loadThemeSeries(db: SupabaseClient, clientId: string, ids: readon
 
 /** The anomaly check's first flag for the read's run, or null. */
 async function loadWeekFlag(db: SupabaseClient, clientId: string, runId: string): Promise<Omit<UnusualFlag, 'quotes'> | null> {
-  const [check, flags] = await Promise.all([loadCheck(db, clientId, runId), loadFlags(db, clientId, runId)])
-  const first = raisedFlags(check, flags)[0]
-  return first ? unusualFlagOf(first) : null
+  const [check, flags] = await Promise.all([loadCheckIn(db, clientId, runId), loadFlagsIn(db, clientId, runId)])
+  const first = weekFlagRows(check, flags)[0]
+  return first ? flagOfRow(first) : null
+}
+
+/** MIRROR of This week's `loadCheck` (lib/pages/week.ts; T11b exports it):
+ *  the check's row for this update, undefined where the table is not here. */
+async function loadCheckIn(db: SupabaseClient, clientId: string, runId: string): Promise<CheckRowIn | null | undefined> {
+  const res = await db.from('anomaly_checks').select('*').eq('client_id', clientId).eq('run_id', runId).maybeSingle()
+  if (res.error) {
+    if (!isMissingAnomalyRecord(res.error)) console.error(`[pages] market.check: ${res.error.message}`)
+    return undefined
+  }
+  return (res.data as CheckRowIn | null) ?? null
+}
+
+/** MIRROR of This week's `loadFlags`: null where the read failed, never
+ *  "there were none". */
+async function loadFlagsIn(db: SupabaseClient, clientId: string, runId: string): Promise<FlagRowIn[] | null> {
+  try {
+    return await selectAll<FlagRowIn>(() =>
+      db.from('anomaly_flags').select('*').eq('client_id', clientId).eq('run_id', runId).order('rank', { ascending: true }))
+  } catch (error) {
+    if (!isMissingAnomalyRecord(error)) console.error(`[pages] market.flags: ${(error as { message?: string })?.message ?? String(error)}`)
+    return null
+  }
 }
 
 // ---- The loader ---------------------------------------------------------------------------
