@@ -318,9 +318,13 @@ export function brandKinds(month: string, lens: readonly BrandLens[]): BrandCros
 
 /**
  * Brand × subject: of the brand's n videos this month, how many carry each
- * active subject (the subject month rule, through `lens_readings`). Subjects
- * not in `subjects` (retired, or not named) are left out; largest first, the
- * page takes the top. No verdict, for the reason `brandKinds` gives. Pure.
+ * active subject (the subject month rule, through `lens_readings`). That rule
+ * reads members over the BASE insights table, as `month_subject_readings`
+ * does, so a member a newer update superseded and the prune has not yet taken
+ * still counts (Sealand, Patagonia, September: 3 of 8 subjects one video
+ * higher than over `audience_insights_current`). Subjects not in `subjects`
+ * (retired, or not named) are left out; largest first, the page takes the
+ * top. No verdict, for the reason `brandKinds` gives. Pure.
  */
 export function brandSubjects(month: string, lens: readonly BrandLens[], subjects: ReadonlyMap<string, string>): BrandCrossRow[] {
   return brandCross(month, lens, 'subject', (id) => subjects.get(id) ?? null)
@@ -468,10 +472,13 @@ export interface CreatorThemes {
 const creatorKey = (platform: string, account: string): string => `${platform}|${account}`
 
 /**
- * Each creator's followers: the count on the most recently gathered of their
- * videos that carries one above zero (0 is the column's default, "not read"),
- * the larger on a tie. Reddit is left out whatever it holds: there the field
- * is the subreddit's subscribers, not a person's following. Pure.
+ * Each creator's followers: the count on the most recently gathered of THE
+ * VIDEOS GIVEN (the month's, in `creatorThemes`) that carries one above zero
+ * (0 is the column's default, "not read"), the larger on a tie. A snapshot on
+ * one of the creator's videos outside the month is not read, so the figure is
+ * as of the month's videos, not the account's latest. Reddit is left out
+ * whatever it holds: there the field is the subreddit's subscribers (r/onebag
+ * stores about 951,600), not a person's following. Pure.
  */
 export function creatorFollowers(videos: readonly CreatorVideo[]): Map<string, number | null> {
   const best = new Map<string, { at: string; n: number } | null>()
