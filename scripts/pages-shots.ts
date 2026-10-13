@@ -61,6 +61,7 @@ import { designFixture } from '../components/pages/competitive-surface/page/fixt
 import { SubjectsPage } from '../components/pages/subjects/page'
 import { marketSubjectsFixture, waterproofingFixture } from '../components/pages/subjects/fixture'
 import { subjectsView, type SubjectReadLine } from '../lib/pages/subjects-view'
+import { SUBJECT_NOT_MEASURED } from '../lib/subjects/calibration-state'
 import { MovesPage } from '../components/pages/moves'
 import { consideringFixture, statementsFixture } from '../components/pages/moves/fixture'
 import { sealandMovesFixture } from '../components/pages/market-surface/fixture'
@@ -97,7 +98,7 @@ import { movesFailedFixture, movesFixture, movesHistoryFixture, movesOpenFixture
 import type { MovesPageData } from '../lib/pages/v2/moves'
 import { MarketPage } from '../components/pages/v2/market'
 import { marketFixture, marketLongRowsFixture, marketThinFixture } from '../lib/pages/v2/market-fixture'
-import { alsoTalkedOf, convHref, subjectAxis, SUBJECT_PENDING, type MarketData, type SubjectRow } from '../lib/pages/v2/market'
+import { alsoTalkedOf, convHref, subjectAxis, type MarketData, type SubjectRow } from '../lib/pages/v2/market'
 import { homeWeeksFrame } from '../lib/pages/home'
 import { ContentPage } from '../components/pages/v2/content'
 import { contentEmptyFixture, contentFixture, contentThinFixture } from '../lib/pages/v2/content-fixture'
@@ -338,7 +339,7 @@ function marketDumpNow(raw: MarketData, readAt: string): MarketData {
     const axis = subjectAxis(d.month.month)
     const padded = (r: SubjectRow): SubjectRow => ({ ...r, pending: r.pending ?? null, trail: r.trail.length === 0 ? [] : axis.map((month) => ({ month, pct: r.trail.find((t) => t.month === month)?.pct ?? null })) })
     const pending: SubjectRow[] = d.subjects.unmeasured.filter((u) => u.state !== 'failed').map((u) => ({
-      id: u.id, name: u.name, level: null, pending: { state: u.state as 'provisional' | 'unread', note: u.state === 'provisional' ? SUBJECT_PENDING : u.note },
+      id: u.id, name: u.name, level: null, pending: { state: u.state as 'provisional' | 'unread', note: u.state === 'provisional' ? SUBJECT_NOT_MEASURED : u.note },
       prevPct: null, verdict: null, trail: [], inside: [], href: u.href,
     }))
     d.subjects = { ...d.subjects, rows: [...d.subjects.rows.map(padded), ...pending], unmeasured: d.subjects.unmeasured.filter((u) => u.state === 'failed') }

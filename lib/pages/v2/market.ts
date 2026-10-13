@@ -31,7 +31,7 @@ import { INDUSTRY_AUDIENCE, loadCompetitors, loadTrackedRivals } from '../../riv
 import { selectAll } from '../../supabase-admin'
 import { coveredDays, inMonth, monthsPhrase, readingMonthOf } from '../../written/month'
 import { SLICE } from '../../reading/coverage'
-import { FAILED_EXPLAINED } from '../../subjects/calibration-state'
+import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '../../subjects/calibration-state'
 import { loadEarlierNewThisWeek, loadPublishedLongRun, loadPublishedWeekRead, type EarlierNew, type PublishedWeekRead } from '../../written/published'
 import type { StoredLongRun } from '../../written/store'
 import type { WeekReadData, WhoAbout, WhoPart } from '../../written/types'
@@ -347,7 +347,7 @@ export interface UnmeasuredSubject {
   /** `provisional` (its check is open), `failed` (being re-described) or
    *  `unread` (nothing read for it in the month). */
   state: 'provisional' | 'failed' | 'unread'
-  /** Why (`SUBJECT_PENDING`, `FAILED_EXPLAINED`, or no reading this month). */
+  /** Why (`SUBJECT_NOT_MEASURED`, `FAILED_EXPLAINED`, or no reading this month). */
   note: string
   href: string
 }
@@ -957,12 +957,6 @@ export interface SubjectFact {
   trail: { month: string; k: number | null; n: number | null }[]
 }
 
-/** What a subject's row says in its level's place while its precision check
- *  is open (the parity pass, 13 Oct). The row keeps its name, its bar's track
- *  and the conversations inside it. No calibration word: ruling U6 keeps
- *  "calibration" and "provisional" off client surfaces (`calibrationWord`). */
-export const SUBJECT_PENDING = 'Not measured yet'
-
 /** The months a subject's line spans, oldest first, ending at `month`. */
 export function subjectAxis(month: string, count = MARKET_SUBJECT_MONTHS): string[] {
   const out: string[] = []
@@ -1053,14 +1047,15 @@ export function buildSubjectBoard(input: {
 
 /**
  * Why a subject prints no level: not measured yet while its check is open
- * (`SUBJECT_PENDING`; the row carries no calibration or "provisional" word,
+ * (`SUBJECT_NOT_MEASURED`, lib/subjects/calibration-state.ts, the one
+ * constant every surface prints; the row carries no calibration or "provisional" word,
  * as no client surface does, ruling U6, `calibrationWord`); being re-described
  * where the check failed (the calibration's own words, `FAILED_EXPLAINED`);
  * no reading yet where the month was not read for it. Pure.
  */
 export function unmeasuredOf(f: Pick<SubjectFact, 'id' | 'name' | 'calibration'>, monthText: string, href: string): UnmeasuredSubject {
   const state = f.calibration === 'failed' ? 'failed' : f.calibration === 'unread' ? 'unread' : 'provisional'
-  const note = state === 'failed' ? FAILED_EXPLAINED : state === 'unread' ? `No reading in ${monthText} yet` : SUBJECT_PENDING
+  const note = state === 'failed' ? FAILED_EXPLAINED : state === 'unread' ? `No reading in ${monthText} yet` : SUBJECT_NOT_MEASURED
   return { id: f.id, name: f.name, state, note, href }
 }
 

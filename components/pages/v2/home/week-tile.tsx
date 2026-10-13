@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { MovementBadge } from '@/components/delta-badge'
 import { fmtInt } from '@/lib/format'
 import { homeWeekDetail, INSUFFICIENT, weeksDrawable } from '@/lib/pages/home'
+import { SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import type { TileRead, WeekSubjects, WeekTile } from '@/lib/pages/v2/home'
 import { cn } from '@/lib/utils'
 import { MONO_MUTED, TILE, TILE_FAILED, TileHead, TileLine } from './parts'
@@ -32,7 +33,7 @@ import { HomeWeeksPlot } from './weeks-plot'
 // THE BOARD'S SHAPE IN EVERY STATE (parity pass, 13 Oct): a week with nothing
 // drawn keeps its slot as a faint well, and the chart's key gives its place to
 // the one quiet line saying why; both subject rows stay, a row with no
-// subject saying why in its figure's place ("not measured yet", "no
+// subject saying why in its figure's place (`SUBJECT_NOT_MEASURED`, "no
 // comparison with September yet").
 
 function Numbers({ tile }: { tile: WeekTile }) {
@@ -100,7 +101,9 @@ function Weeks({ tile }: { tile: WeekTile }) {
  *  13 Oct): the row keeps its place, and says why in the figure's. */
 export const SUBJECT_GAP = {
   // Ruling U6: no "calibration" on a client surface; Market's own words.
-  calibrating: { biggest: 'not measured yet', moved: 'not measured yet' }, // = SUBJECT_PENDING (parity/market, lower-cased in a row), unify at merge
+  // Market's and Your products' words for a subject whose check is open, the
+  // one constant (`SUBJECT_NOT_MEASURED`).
+  calibrating: { biggest: SUBJECT_NOT_MEASURED, moved: SUBJECT_NOT_MEASURED },
   none_named: { biggest: 'none named yet', moved: 'none named yet' },
   failed: { biggest: 'could not be read just now', moved: 'could not be read just now' },
   /** No published week yet: nothing to read the subjects against. */

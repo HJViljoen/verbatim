@@ -13,6 +13,7 @@ import { decodeEntities, markupText, render, renderText } from '@/lib/test/rende
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { GROUPS_NOT_RUN } from '@/lib/pages/v2/voices'
+import { SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { DashboardPage, DashboardStream, FAILED_TILE } from '.'
 import { TileBoundary } from './tile-boundary'
 import { AGENT_LINE } from './agent-box'
@@ -665,7 +666,8 @@ describe('the board\'s shape holds when the data is thin (parity pass)', () => {
     const w = tileMarkup(markup, 'week')
     expect(w.match(/data-week-state="empty"/g)).toHaveLength(8)
     expect(markupText(w.slice(w.indexOf('data-weeks=""'))).match(/Insufficient data/g)).toHaveLength(1)
-    expect(markupText(w)).toMatch(/Biggest subject not measured yet Moved most not measured yet$/)
+    expect(markupText(w)).toMatch(new RegExp(`Biggest subject ${SUBJECT_NOT_MEASURED} Moved most ${SUBJECT_NOT_MEASURED}$`))
+    expect(SUBJECT_NOT_MEASURED).toBe('Not measured yet')
     const s = tileText(render(page(sealand)), 'week')
     expect(s).toMatch(/Biggest subject Fit & comfort 34% · 108 of 318 Moved most no comparison with September yet$/)
   })

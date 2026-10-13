@@ -116,12 +116,6 @@ export const PRODUCTS_FAILED = 'Your products could not be read just now. Refres
 /** The words for a product with no video this month. */
 export const QUIET = 'Quiet'
 
-/** A subject whose check has not passed (ruling U6, `printsMarket`): its name
- *  where the layout needs one, these words where its figure would be.
- *  = SUBJECT_PENDING (lib/pages/v2/market.ts on parity/market), unify at
- *  merge. */
-export const SUBJECT_NOT_MEASURED = 'Not measured yet'
-
 // ---- the shapes --------------------------------------------------------------------
 
 export type ProductsState = 'not_applied' | 'no_catalogue' | 'not_on' | 'unread' | 'failed' | 'ready'
@@ -149,7 +143,7 @@ export interface Crosses {
   kinds: CrossCell[]
   /** The client's subjects whose check has not passed (provisional), by name
    *  in their own order, with no count: the page prints the name and
-   *  SUBJECT_NOT_MEASURED. A failed one is left out (no name, no figure).
+   *  SUBJECT_NOT_MEASURED (lib/subjects/calibration-state.ts). A failed one is left out (no name, no figure).
    *  Absent: every subject read is ready. */
   pending?: { id: string; label: string }[]
 }

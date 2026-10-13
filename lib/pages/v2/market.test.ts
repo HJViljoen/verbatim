@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { WEEKS_FAILED } from '../home'
 import { setApartOf } from '../../written/conversations'
-import { FAILED_EXPLAINED } from '../../subjects/calibration-state'
+import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '../../subjects/calibration-state'
 import { earlierNewOfRows } from '../../written/published'
 import { flagWordOf } from '@/components/v2/flag-chip'
 import type { OurChange } from '../../reading/comparability'
@@ -13,7 +13,7 @@ import {
   convOf, cutWindows, doingOf, leadDoing, marketWeeksOf, flagCardOf, flagVerdict, groupsOf, isRegistryId, insideOf, marketHref, marketMonths, marketParams,
   mergeMixes, monthsText, notchOf, ourReadOf, panelStats, periodHref, personasOf, pickHero, pickWeekSides, platformRows, subjectHref,
   flagBaseWords, monthSoFar, tableFilterOf, tableMonths, topSpans, unmeasuredOf, weekWindows, whoOf, windowLabel, withMonthPlatforms, MARKET_TABLE_ROWS,
-  alsoTalkedOf, earlierNewOf, placementTiers, placeSubject, sideIds, subjectAxis, SUBJECT_PENDING,
+  alsoTalkedOf, earlierNewOf, placementTiers, placeSubject, sideIds, subjectAxis,
   type MarketConv,
 } from './market'
 import {
@@ -226,10 +226,10 @@ describe('the subject board', () => {
   it('says why a subject prints no level: its check open, being re-described, or not read this month', () => {
     expect(unmeasuredOf({ id: 's', name: 'S', calibration: 'failed' }, 'October so far', '#').note).toBe(FAILED_EXPLAINED)
     expect(unmeasuredOf({ id: 's', name: 'S', calibration: 'unread' }, 'October so far', '#').note).toBe('No reading in October so far yet')
-    expect(unmeasuredOf({ id: 's', name: 'S', calibration: 'provisional' }, 'October so far', '#')).toMatchObject({ state: 'provisional', note: SUBJECT_PENDING })
+    expect(unmeasuredOf({ id: 's', name: 'S', calibration: 'provisional' }, 'October so far', '#')).toMatchObject({ state: 'provisional', note: SUBJECT_NOT_MEASURED })
     // No calibration or "provisional" word on a client surface (ruling U6).
-    expect(SUBJECT_PENDING).toBe('Not measured yet')
-    expect(SUBJECT_PENDING).not.toMatch(/provisional|calibrat/i)
+    expect(SUBJECT_NOT_MEASURED).toBe('Not measured yet')
+    expect(SUBJECT_NOT_MEASURED).not.toMatch(/provisional|calibrat/i)
   })
 
   // The parity pass (13 Oct): a subject with no level keeps the board's row.
@@ -240,7 +240,7 @@ describe('the subject board', () => {
     })!
     expect(thin.rows.map((r) => r.name)).toEqual(['Choosing the right device', 'Community & encouragement', 'Cost & access', 'Fit & comfort', 'Function & movement', 'Look & style'])
     const fit = thin.rows.find((r) => r.name === 'Fit & comfort')!
-    expect(fit).toMatchObject({ level: null, pending: { state: 'provisional', note: SUBJECT_PENDING }, verdict: null, prevPct: null, trail: [] })
+    expect(fit).toMatchObject({ level: null, pending: { state: 'provisional', note: SUBJECT_NOT_MEASURED }, verdict: null, prevPct: null, trail: [] })
     expect(fit.inside.map((c) => [c.label, c.count, c.month])).toEqual([
       ['How long a liner lasts', 23, 35], ['Sweat under the liner', 21, 30], ['Socket fit changing over time', 14, 20],
     ])
@@ -489,7 +489,7 @@ describe('the open panel', () => {
 
   it('a subject whose check is open opens with why and the conversations inside it', () => {
     const data = marketThinFixture({ subject: 'cost' })
-    expect(data.subjectPanel).toMatchObject({ state: 'provisional', note: SUBJECT_PENDING, bars: [], level: null, verdict: null })
+    expect(data.subjectPanel).toMatchObject({ state: 'provisional', note: SUBJECT_NOT_MEASURED, bars: [], level: null, verdict: null })
     expect(data.subjectPanel!.inside.map((c) => c.label)).toEqual(['Insurance refusals for powered knees', 'Paying out of pocket', 'Medical aid and liners'])
   })
 

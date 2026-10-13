@@ -3,9 +3,9 @@ import { EYEBROW } from '@/components/colour-roles'
 import { CARD, FlagChip, UnitSquares } from '@/components/v2'
 import { fmtInt, longMonth } from '@/lib/format'
 import {
-  SUBJECT_NOT_MEASURED,
   type FirstStandout, type FocusStandout, type GapStandout, type GeneralStandout, type PraisedStandout, type SlotKey, type SlotTier, type Standout, type StandoutSlot,
 } from '@/lib/pages/v2/products'
+import { SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { cn } from '@/lib/utils'
 import { MidFigure, OfIts, OLINK, ShareRow, VerdictBadge } from './parts'
 

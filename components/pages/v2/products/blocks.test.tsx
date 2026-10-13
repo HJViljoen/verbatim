@@ -339,7 +339,7 @@ describe('ruling U6, as drawn: a provisional subject prints its name and "Not me
     const node = <CategoryPanelView panel={panel} monthName="September" canTag />
     const text = renderText(node)
     expect(text).toContain('What it’s about · of 23 Choosing the right device Not measured yet Community & encouragement Not measured yet Cost & access Not measured yet Fit & comfort Not measured yet')
-    expect(text).toContain('Your products against liners in general What it’s about All liners Iceross Seal-In X Iceross Dermo Iceross Seal-In V Choosing the right device · not measured yet · not measured yet')
+    expect(text).toContain('Your products against liners in general What it’s about All liners Iceross Seal-In X Iceross Dermo Iceross Seal-In V Choosing the right device · Not measured yet · Not measured yet')
     expect(text).not.toContain('– none')
     expect(text).toContain('What these videos are about: Not measured yet. A subject is counted here once its check has passed.')
     expect(text).not.toContain('Each count is videos')

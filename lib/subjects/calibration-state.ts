@@ -155,6 +155,16 @@ export function calibrationWord(v: string | null | undefined): string | null {
 }
 
 /**
+ * What a client surface prints in a subject's figure's place while its check
+ * has not passed (ruling U6; the parity pass, 13 Oct). ONE constant for every
+ * surface: Market's subject rows and panel, Your products' cards, shelf and
+ * panel, and the Dashboard's subjects rows all say these words, so a subject
+ * reads the same wherever it is drawn. No calibration or "provisional" word
+ * (`calibrationWord`): those are the operator's.
+ */
+export const SUBJECT_NOT_MEASURED = 'Not measured yet'
+
+/**
  * Does the subject's MARKET level print, and every count that rests on its
  * membership (its share, rank, trail, kinds, question counts, maker split,
  * month cards and chart)?

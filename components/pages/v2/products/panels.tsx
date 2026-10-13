@@ -3,10 +3,11 @@ import { FlagChip, InPlacePanel, MiniBars, PairedBars, PanelSection, PanelTitle,
 import { fmtInt, fmtPct, longMonth } from '@/lib/format'
 import { PRODUCT_TAG_COPY } from '@/lib/products/tags'
 import {
-  catalogueBreak, PANEL_ID, sharePct, SUBJECT_NOT_MEASURED, UNCLEAR_ID,
+  catalogueBreak, PANEL_ID, sharePct, UNCLEAR_ID,
   type CategoryPanel, type Compare, type Crosses, type LineBar, type ProductPanel, type ProductsQuote, type UnclearLine,
 } from '@/lib/pages/v2/products'
 import { quoteWords } from '@/lib/pages/brands'
+import { SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { cn } from '@/lib/utils'
 import { AskButton, BTN, CAPS, EmptyLine, Fig, MiniRow, OLINK, PanelTag, VerdictBadge } from './parts'
 import { TagControl } from './tag-control'
@@ -119,7 +120,7 @@ function CompareSection({ compare, title, products, monthName }: { compare: Comp
         columns={compare.columns}
         rows={compare.rows.map((r) => ({ key: r.key, label: r.label, cells: r.cells }))}
         label={title}
-        emptyLabel={compare.empty === 'pending' ? 'not measured yet' : compare.empty === 'not_read' ? 'not read' : 'none'}
+        emptyLabel={compare.empty === 'pending' ? SUBJECT_NOT_MEASURED : compare.empty === 'not_read' ? 'not read' : 'none'}
       />
       <p className="m-0 text-[12.5px] leading-[1.5] text-muted-foreground">
         {compare.empty === 'pending' ? null : <>Each count is videos, out of that column’s total.{' '}</>}

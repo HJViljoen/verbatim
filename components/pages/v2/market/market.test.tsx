@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract, copyNodes, copyViolations } from '@/lib/test/copy-contract'
 import { fixtureId, marketFixture, marketLongRowsFixture, marketThinFixture, FIXTURE_WEEKS } from '@/lib/pages/v2/market-fixture'
-import { SUBJECT_PENDING } from '@/lib/pages/v2/market'
+import { SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import type { MarketData } from '@/lib/pages/v2/market'
 import { MarketPage, MARKET_FIRST_RUN } from './index'
 import { ConversationPanel, SubjectPanelView } from './panel'
@@ -401,7 +401,7 @@ describe('SubjectPanelView', () => {
   it('a subject whose check is open says why and lists the conversations inside it', () => {
     const data = marketThinFixture({ subject: 'cost' })
     const text = renderText(<SubjectPanelView panel={data.subjectPanel!} data={data} />)
-    expect(text).toContain(`Cost & access Close ${SUBJECT_PENDING}.`)
+    expect(text).toContain(`Cost & access Close ${SUBJECT_NOT_MEASURED}.`)
     expect(text).toContain('Conversations inside it · this week, and October so far Insurance refusals for powered knees 19 31 Paying out of pocket 15 22 Medical aid and liners 9 12')
     assertCopyContract(<SubjectPanelView panel={data.subjectPanel!} data={data} />)
   })
@@ -480,8 +480,8 @@ describe('the board\'s shape in the thin state (Össur today)', () => {
 
   it('keeps a row per subject: its name, why in the level\'s place over the bar\'s track, and the conversations inside it', () => {
     expect(html.match(/data-subject-row="provisional"/g)).toHaveLength(6)
-    expect(text).toContain(`Fit & comfort ${SUBJECT_PENDING} Inside it Week Oct How long a liner lasts 23 35 Sweat under the liner 21 30 Socket fit changing over time 14 20`)
-    expect(text).toContain(`Look & style ${SUBJECT_PENDING} Inside it Week Oct Covers and finishes 7 10 Showing it or hiding it 6 9`)
+    expect(text).toContain(`Fit & comfort ${SUBJECT_NOT_MEASURED} Inside it Week Oct How long a liner lasts 23 35 Sweat under the liner 21 30 Socket fit changing over time 14 20`)
+    expect(text).toContain(`Look & style ${SUBJECT_NOT_MEASURED} Inside it Week Oct Covers and finishes 7 10 Showing it or hiding it 6 9`)
     expect(html).toMatch(/<article id="subjects"[^>]*class="[^"]*col-span-12 xl:col-span-8/)
   })
 
