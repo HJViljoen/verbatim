@@ -4,7 +4,6 @@ import type { Candidate } from '../brands/mentions'
 import { readRivalFound } from '../brands/rival-searches'
 import { PRODUCT_CLASSIFY_BUDGET_USD, PRODUCT_CLASSIFY_CAP, PRODUCT_CLASSIFY_PARALLEL, PRODUCT_STEP_MODEL_MS, productReadingsEnabled } from '../config'
 import { chunk } from '../chunk'
-import { readMonthVideos } from '../provenance/load'
 import { denominatorKey, fillingMonths, isMissingMonthlyReading, monthsToRefresh, monthStartOf, nextMonth } from '../reading/monthly'
 import { selectAll } from '../supabase-admin'
 import { PRODUCT_CLASSIFY_PASS, runClassifier, type Classifier } from '../products/classify'
@@ -12,7 +11,7 @@ import { readSearchFound, readSearchTerms } from '../products/organic'
 import type { MentionInsert } from '../products/match'
 import {
   guardFreeze, HELD_COLUMNS, itemsLeft, mergeProductRows, placeProducts, pooledProductMonth, PRODUCT_COMMENT_COLUMNS, PRODUCT_READINGS_TABLE, PRODUCT_VIDEO_COLUMNS,
-  storedProductRows, writeProductRows, type HeldRow, type ProductCommentRow, type ProductReadIO, type ProductVideoRow,
+  readProductMonthVideos, storedProductRows, writeProductRows, type HeldRow, type ProductCommentRow, type ProductReadIO, type ProductVideoRow,
 } from '../products/readings'
 import {
   isMissingProductsSchema, loadProductCatalogue, PRODUCT_TAG_COLUMNS, TABLE_PRODUCT_MENTIONS, TABLE_PRODUCT_TAGS,
@@ -96,7 +95,7 @@ export function stepProductIO(admin: SupabaseClient, clientId: string, window: {
         .order('video_id').order('source').order('field').order('comment_id'))
       return rows.map((r) => ({ ...r, comment_month: r.comment_month ? String(r.comment_month).slice(0, 10) : null }))
     },
-    monthVideos: (m) => readMonthVideos(admin, clientId, m, { n: 0 }),
+    monthVideos: (m) => readProductMonthVideos(admin, clientId, m),
     videos: async (ids) => {
       const out: ProductVideoRow[] = []
       for (const part of chunk(ids, 100)) {

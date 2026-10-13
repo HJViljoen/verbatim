@@ -2,8 +2,8 @@
 -- weekly post ideas (T13). NOT APPLIED ANYWHERE YET: written 13 Oct on
 -- depth/t10-schema; applying it is Heinrich's step.
 --
--- WHAT IT ADDS. Seven new tables, one new trigger function (a guard) and one
--- read function; two existing functions replaced with their bodies plus two
+-- WHAT IT ADDS. Seven new tables, one new trigger function (a guard) and two
+-- read functions; two existing functions replaced with their bodies plus two
 -- tables; one widened CHECK.
 --   product_groups          a client's product categories ("Liners", "Feet").
 --                           The page says "categories"; the table never does,
@@ -24,6 +24,9 @@
 --   post_ideas              the run's three post ideas (T13)
 --   product_catalogue()     the active catalogue and its data-derived version,
 --                           read in one snapshot
+--   product_month_videos()  the month's videos a product reading counts: every
+--                           audience, the client's included, each marked owned
+--                           or not (T5: the market's words, never the brand's)
 --   regate_videos / regate_restore   + product_mentions and product_tags
 --   config_changes_surface_check     + 'products'
 --
@@ -346,6 +349,49 @@ as $$
                                           order by lower(a.alias), a.id), '[]'::jsonb) from a))
   end
   from canon c
+$$;
+
+-- The month's videos a product reading counts (depth v2 T5; the lead's ruling
+-- of 13 Oct): market_month_videos' rule (full-lane videos, the comments Pass A
+-- read, with a comment dated in the month, UTC) over EVERY audience, the
+-- client's included. A creator's video that names the client is where talk
+-- about its products lives, and the comments under the client's own posts are
+-- the market speaking on the brand's post: both count. What the client's own
+-- posts SAY never places anything (lib/products/readings.ts contentFields
+-- leaves an owned video's words out), which is why `owned` comes back:
+-- videos.source = 'owned' (lib/reading/owned.ts OWNED_SOURCE). The audience
+-- strings are monthly_denominators' own, the client first (lib/rivals.ts
+-- audienceOf), so a month's audiences add up to distinct videos.
+create or replace function public.product_month_videos(p_client uuid, p_month date)
+returns table (video_id uuid, audience text, platform text, dated_comments int, owned boolean)
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  with bounds as (
+    select (date_trunc('month', p_month)::date)::timestamp at time zone 'UTC' as t0,
+           ((date_trunc('month', p_month) + interval '1 month')::date)::timestamp at time zone 'UTC' as t1
+  ),
+  vid as (
+    select v.id, v.platform, v.video_id,
+           case when v.is_client     then 'client'
+                when v.is_competitor then 'competitor:' || coalesce(v.competitor_name, 'unknown')
+                else 'industry-other'
+           end as audience,
+           coalesce(v.source = 'owned', false) as owned
+    from public.videos v
+    where v.client_id = p_client
+      and v.analyzed_lane = 'full'
+  )
+  select v.id, v.audience, v.platform, count(distinct c.id)::int, v.owned
+  from public.comments c
+  join vid v on v.platform = c.platform and v.video_id = c.video_id
+  cross join bounds b
+  where c.client_id = p_client
+    and c.comment_date >= b.t0
+    and c.comment_date <  b.t1
+  group by v.id, v.audience, v.platform, v.owned
 $$;
 
 comment on function public.product_catalogue(uuid) is
@@ -756,6 +802,8 @@ revoke delete, truncate on public.post_ideas from service_role;
 -- function a tenant could call is one a tenant could call with another id).
 revoke all on function public.product_catalogue(uuid) from public, anon, authenticated;
 grant execute on function public.product_catalogue(uuid) to service_role;
+revoke all on function public.product_month_videos(uuid, date) from public, anon, authenticated;
+grant execute on function public.product_month_videos(uuid, date) to service_role;
 
 -- The trigger function fires whatever the writer's role; nobody calls it.
 revoke all on function public.product_aliases_retire_once() from public, anon, authenticated;

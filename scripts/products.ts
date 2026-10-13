@@ -9,7 +9,6 @@ import { readRivalFound } from '../lib/brands/rival-searches'
 import { readSearchFound, readSearchTerms } from '../lib/products/organic'
 import { recordConfigChange, scriptActor } from '../lib/config-log'
 import { assertProject, MARKET_FIRST_PROJECTS } from '../lib/ops/market-first-args'
-import { readMonthVideos } from '../lib/provenance/load'
 import { denominatorKey, monthStartOf } from '../lib/reading/monthly'
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
 import { clientNameOf } from '../lib/pipeline/product-readings'
@@ -17,7 +16,7 @@ import { runClassifier, type ClassifyItem, type RunClassifyResult } from '../lib
 import { excerptAround, keyOfRow, standingPlacements, type MentionInsert } from '../lib/products/match'
 import {
   CATEGORY_WORDS_ONLY_UNDER_RELEVANT, guardFreeze, HELD_COLUMNS, itemsLeft, mergeProductRows, placeProducts, pooledProductMonth, priceItems, PRODUCT_COMMENT_COLUMNS, PRODUCT_VIDEO_COLUMNS, productReadingRows,
-  storedProductRows, writeProductRows, type Ask, type HeldRow, type PlaceResult, type ProductCommentRow, type ProductReadIO, type ProductVideoRow,
+  readProductMonthVideos, storedProductRows, writeProductRows, type Ask, type HeldRow, type PlaceResult, type ProductCommentRow, type ProductReadIO, type ProductVideoRow,
 } from '../lib/products/readings'
 import { matchAliases } from '../lib/products/rules'
 import { hashSample, KIND_WORD, parseProductsArgs, planSeedLoad, PRODUCTS_SCRIPT, type HeldCatalogue, type ProductsArgs, type SampleRow } from '../lib/products/script'
@@ -283,7 +282,7 @@ function scriptIO(admin: SupabaseClient, args: ProductsArgs, ration: Ration, fro
     monthVideos: async (m) => {
       const pages = { n: 0 }
       ration.spend(1, `the market of ${m.slice(0, 7)}`)
-      const out = await readMonthVideos(admin, args.clientId, m, pages)
+      const out = await readProductMonthVideos(admin, args.clientId, m, pages)
       if (pages.n > 1) ration.spend(pages.n - 1, `the market of ${m.slice(0, 7)}`)
       return out
     },

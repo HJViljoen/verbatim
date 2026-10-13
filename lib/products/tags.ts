@@ -2,7 +2,6 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { readRivalFound } from '../brands/rival-searches'
 import { recordConfigChange, type ConfigActor } from '../config-log'
-import { readMonthVideos } from '../provenance/load'
 import { denominatorKey, freezeStateFor, monthsToRefresh, monthStartOf } from '../reading/monthly'
 import { selectAll } from '../supabase-admin'
 import { compileCatalogue, PRODUCT_RULE_VERSION } from './rules'
@@ -10,7 +9,7 @@ import { standingPlacements, type MentionInsert } from './match'
 import { PRODUCT_MODEL_RULE_VERSION } from './classify'
 import { readSearchFound, readSearchTerms } from './organic'
 import {
-  categorySearchFinds, categorySearchTerms, HELD_COLUMNS, mergeProductRows, PRODUCT_READINGS_TABLE, productReadingRows, storedProductRows, writeProductRows,
+  categorySearchFinds, categorySearchTerms, HELD_COLUMNS, mergeProductRows, PRODUCT_READINGS_TABLE, productReadingRows, readProductMonthVideos, storedProductRows, writeProductRows,
   type HeldRow,
 } from './readings'
 import {
@@ -93,7 +92,9 @@ export function tagOptions(catalogue: Pick<ProductCatalogue, 'groups' | 'product
     }
     const unclear: TagChoice = { placement: 'unclear', groupId: g.id }
     const unbranded: TagChoice = { placement: 'unbranded', groupId: g.id }
-    out.push({ value: tagValue(unclear), label: `One of your ${g.name.toLowerCase()}, not sure which`, choice: unclear })
+    // "One of your products in Feet", never "one of your feet": a category's
+    // own noun reads as a body part (Feet, Knees, Hands).
+    out.push({ value: tagValue(unclear), label: `One of your products in ${g.name}, not sure which`, choice: unclear })
     out.push({ value: tagValue(unbranded), label: `${g.name} in general`, choice: unbranded })
   }
   const none: TagChoice = { placement: 'none' }
@@ -285,7 +286,7 @@ export async function rereadOpenMonths(admin: SupabaseClient, clientId: string, 
   const searchFinds = categorySearchFinds(termsByGroup, allTerms.length ? await readSearchFound(admin, clientId, allTerms) : new Map())
   const written: string[] = []
   for (const m of open) {
-    const market = await readMonthVideos(admin, clientId, m, { n: 0 })
+    const market = await readProductMonthVideos(admin, clientId, m)
     if (!market) continue
     const rows = productReadingRows({ clientId, compiled, markets: new Map([[m, market]]), rivalFound, searchFinds, standing })
     const stored = await storedProductRows(admin, clientId, [m], isMissingProductsSchema)
