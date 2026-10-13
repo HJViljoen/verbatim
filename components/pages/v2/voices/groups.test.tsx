@@ -22,7 +22,7 @@ describe('Who is in your market and the group cards (decision 2)', () => {
   })
 
   it('says why no group shows', () => {
-    const node = <WhoCard groups={{ state: 'not_run', profileDate: null, cards: [], empty: 'Reading who is talking is not switched on for this workspace.' }} videos={487} monthWords="September" />
+    const node = <WhoCard groups={{ state: 'not_run', profileDate: null, cards: [], empty: 'Reading who is talking is not switched on for this workspace yet.' }} videos={487} monthWords="September" />
     expect(renderText(node)).toContain('not switched on')
     assertCopyContract(node)
   })

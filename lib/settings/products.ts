@@ -50,7 +50,7 @@ import { settingsSubPage } from './rail'
 // market and an unread month is ours.
 
 /** What a person is told when the products migration is not applied here. */
-export const PRODUCTS_NOT_APPLIED = 'Your products are not switched on for this workspace.'
+export const PRODUCTS_NOT_APPLIED = 'Your products are not switched on for this workspace yet.'
 
 /** A member's refusal: changing the catalogue changes what is counted. */
 export const PRODUCTS_REFUSED = 'Only owners and admins can change your product list.'

@@ -52,7 +52,7 @@ describe('voiceCast (C4)', () => {
   })
 
   it('tells "not switched on" apart, in words', () => {
-    expect(renderText(voiceCast.render(refusedVoiceFixture(), 'app', ctx))).toContain('Reading who is talking is not switched on for this workspace.')
+    expect(renderText(voiceCast.render(refusedVoiceFixture(), 'app', ctx))).toContain('Reading who is talking is not switched on for this workspace yet.')
   })
 
   it('renders in all three modes and keeps the copy contract', () => {

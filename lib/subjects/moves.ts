@@ -106,7 +106,7 @@ export interface WriteResult<T> {
 
 /** What a caller is told when M4 is not applied here. One string, so a reader
  *  and the three sites that return it cannot drift. */
-export const SUBJECTS_NOT_APPLIED = 'Subjects are not switched on for this workspace.'
+export const SUBJECTS_NOT_APPLIED = 'Subjects are not switched on for this workspace yet.'
 
 /** What a caller is told when a move is given a day before MF5 is applied
  *  here (the form offers no day then, so this is a stale form or a crafted
@@ -509,7 +509,7 @@ export async function setMoveStatus(
   const { data: before, error: readError } = await ctx.supabase
     .from(TABLE_MOVES).select('id, title, status').eq('client_id', ctx.clientId).eq('id', input.id).maybeSingle()
   if (readError) {
-    return { ok: false, message: isMissingSubjects(readError) ? 'Tracking is not switched on for this workspace.' : couldNotSave('setMoveStatus read', readError) }
+    return { ok: false, message: isMissingSubjects(readError) ? 'Tracking is not switched on for this workspace yet.' : couldNotSave('setMoveStatus read', readError) }
   }
   const held = before as { title: string; status: MoveStatus } | null
   if (!held) return { ok: false, message: 'That move is no longer here.' }

@@ -449,7 +449,7 @@ export function personasOf(profile: GroupProfileRow | null): VoicesPersona[] {
   })
 }
 
-export const GROUPS_NOT_RUN = 'Reading who is talking is not switched on for this workspace.'
+export const GROUPS_NOT_RUN = 'Reading who is talking is not switched on for this workspace yet.'
 export const GROUPS_NONE = 'Too little conversation in the latest update to describe who is talking.'
 export const GROUPS_UNREAD = 'Who is talking could not be read just now.'
 
