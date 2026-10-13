@@ -13,7 +13,6 @@ import { gateFor } from '../../quote-context'
 import { substituteFigures } from '../../reports/cover'
 import type { FigureTable as PrintedFigures } from '../../reports/types'
 import { proseFigures } from '../../prose/figures'
-import { anomalyVerdict, type AnomalyRow } from '../../reading/anomaly'
 import { themeMonthLine, type ThemeMonthLine } from '../../reading/cross'
 import { loadAppPairOn, ourChangesWithoutGatherFlags } from '../../reading/gather-flags'
 import { isFailOpenFix, type OurChange } from '../../reading/comparability'
@@ -43,7 +42,10 @@ import { loadMemberInsightIdsBySubject } from '../subjects'
 import { fetchThemedRunId } from '../themed-run'
 import { askAboutTheme, loadLinkedTheme, loadThemeKinds } from '../voice-surface'
 import { subjectOfTheme } from '../voice-conversation'
-import { flagFigures, isMissingAnomalyRecord, type UnusualFlag } from '../week'
+import { flagFigures, loadCheckStrict, loadFlagsStrict, weekFlagRows, type FlagRow, type UnusualFlag } from '../week'
+import { weekLead } from '../../reading/week-lead'
+import { setApartOf } from '../../written/conversations'
+import { frozenFlag } from '../../written/unusual'
 
 // MARKET (Design v2, depth plan T3; boards E2-Market and E2-Market-Open):
 // what the market is talking about, at `/dashboard/market`.
@@ -220,7 +222,10 @@ export interface MarketMonth {
   prev: { month: string; text: string; category: number | null }
 }
 
-/** The anomaly check's first flag, as the top card prints it. */
+/** The anomaly check's first flag, as the top card prints it. Its k of n is
+ *  over the check's own denominator (`flag.denominator`, every audience
+ *  together, your own posts included), which the card names; its month is the
+ *  category's, named as such. */
 export interface FlagCard {
   verdict: Verdict
   flag: Omit<UnusualFlag, 'quotes'>
@@ -534,7 +539,12 @@ export function weekWindows(window: { from: string; to: string }, count = MARKET
  * on `WEEK_CUT_SURFACES` took effect was not read the way the newest one was,
  * so its count is not drawn (null). A fix of failed judgements cuts nothing
  * (`failOpenFix`), and a change the pipeline made inside a run before its
- * gather takes effect at that run (`preGatherCutBefore`). Pure.
+ * gather takes effect at that run (`preGatherCutBefore`).
+ *
+ * THE NEWEST WINDOW IS NEVER CUT. It is the reference the others are read
+ * against, and the run that read it gathered after any change made inside it
+ * (a person's change on 8 Oct inside a 5 to 12 Oct window cut all three and
+ * emptied the page). Pure.
  */
 export function cutWindows<T extends { from: string }>(
   windows: readonly T[],
@@ -548,7 +558,7 @@ export function cutWindows<T extends { from: string }>(
     const at = Date.parse(preGatherCutBefore(c, runs) ?? c.changedAt)
     if (Number.isFinite(at) && at > cut) cut = at
   }
-  return windows.map((w) => Date.parse(w.from) < cut)
+  return windows.map((w, i) => i < windows.length - 1 && Date.parse(w.from) < cut)
 }
 
 /** A window's label: the first day it covers, as the read's own dates count
@@ -699,22 +709,23 @@ export const periodCount = (c: Pick<MarketConv, 'week' | 'month'>, period: Perio
   (period === 'week' ? c.week : c.month) ?? 0
 
 /**
- * The top row's hero, this week, by the week's ONE lead rule (`weekLead`, the
- * weekly email's too): the check's first flag where it flagged something;
- * else the new conversation with the most videos this week; else the
- * conversation with the most videos this week. A theme set apart (maker-led,
- * off-topic) never leads, so it is not handed to the rule. Pure.
+ * The top row's hero, this week, by the week's ONE lead rule (`weekLead`,
+ * lib/reading/week-lead.ts, the weekly email's too): the check's first flag
+ * where it flagged something; else the new conversation with the most videos
+ * this week; else the conversation with the most videos this week. A theme
+ * set apart (maker-led, off-topic) never leads. Pure.
  */
 export function pickHero(input: {
   convs: readonly MarketConv[]
   flag: FlagCard | null
   setApart: { has(id: string): boolean }
 }): { kind: 'flag' } | { kind: 'new' | 'biggest'; conv: MarketConv } | null {
-  const eligible = input.convs.filter((c) => !input.setApart.has(c.id))
   const lead = weekLead({
     flags: input.flag ? [input.flag] : [],
-    newThisWeek: eligible.filter((c) => c.isNew).map((c) => ({ themeId: c.id })),
-    conversations: eligible.map((c) => ({ themeId: c.id, videos: c.week ?? 0, conv: c })),
+    newThisWeek: input.convs.filter((c) => c.isNew).map((c) => ({ registryId: c.id })),
+    conversations: input.convs.map((c) => ({
+      registryId: c.id, label: c.label, week: c.week ?? 0, setApart: c.setApart != null || input.setApart.has(c.id), conv: c,
+    })),
   })
   if (!lead) return null
   if (lead.kind === 'flag') return { kind: 'flag' }
@@ -733,76 +744,10 @@ export function pickWeekSides(input: { convs: readonly MarketConv[]; heroId: str
   return { biggest, fresh }
 }
 
-// ---- Mirrors of the weekly email's shared rules (T11b), until the merge ---------------------
-//
-// T11b owns the week's lead rule (`lib/reading/week-lead.ts` `weekLead`) and
-// exports This week's anomaly reader from lib/pages/week.ts (`loadCheck`,
-// `loadFlags`, `weekFlagRows`). Neither is on this branch, so the four below
-// mirror them, with the same order and the same reads, and are replaced by
-// imports at the merge (the lead's note, 13 Oct): Market's top slot and the
-// weekly email must lead with the same thing.
-
-/** An `anomaly_checks` row, as This week's §1 reads it. */
-export interface CheckRowIn {
-  outcome: string
-  flagged_count?: number | null
-}
-
-/** An `anomaly_flags` row, as This week's §1 reads it. */
-export interface FlagRowIn {
-  object_kind: string
-  object_id: string
-  label: string
-  denominator: string
-  week_k: number
-  week_n: number
-  baseline_k: number
-  baseline_n: number
-  baseline_months: string[] | null
-  baseline_filling_months: string[] | null
-  baseline_regime?: string | null
-  change_pts: number
-  band_pts: number
-  rank: number
-  explanation: { sentences?: string[] } | null
-  explanation_model: string | null
-}
-
-/**
- * MIRROR of `weekFlagRows` (lib/pages/week.ts, T11b): the flags an update
- * raised, rank 1 first; none where the check did not fire, refused, or its
- * flags could not be read (This week's §1 rule: `buildUnusual`). Pure.
- */
-export function weekFlagRows<R extends { rank: number }>(check: CheckRowIn | null | undefined, flags: readonly R[] | null): R[] {
-  if (!check || flags == null || flags.length === 0) return []
-  if (['suppressed', 'no_window', 'missing_migration', 'nothing_unusual'].includes(check.outcome)) return []
-  return [...flags].sort((a, b) => a.rank - b.rank)
-}
-
-/**
- * MIRROR of `weekLead` (lib/reading/week-lead.ts, T11b): what leads the week.
- *   1. the first flag (already in `weekFlagRows`' order);
- *   2. else the new conversation with the most videos this week;
- *   3. else the conversation with the most videos this week ("Most talked
- *      about this week", a count beside its month, no direction word).
- * Ties go to the theme id. Null where there is nothing. Pure.
- */
-export function weekLead<F, C extends { themeId: string; videos: number }>(input: {
-  flags: readonly F[]
-  newThisWeek: readonly { themeId: string }[]
-  conversations: readonly C[]
-}): { kind: 'flag'; flag: F } | { kind: 'new' | 'biggest'; conversation: C } | null {
-  if (input.flags[0] !== undefined) return { kind: 'flag', flag: input.flags[0] }
-  const byVideos = [...input.conversations].sort((a, b) => b.videos - a.videos || a.themeId.localeCompare(b.themeId))
-  const fresh = new Set(input.newThisWeek.map((n) => n.themeId))
-  const firstNew = byVideos.find((c) => fresh.has(c.themeId))
-  if (firstNew) return { kind: 'new', conversation: firstNew }
-  return byVideos[0] ? { kind: 'biggest', conversation: byVideos[0] } : null
-}
-
 /** One flag row in This week's shape, without its quotes (§1's `buildFlag`
- *  minus the quote read). Pure. */
-export function flagOfRow(f: FlagRowIn): Omit<UnusualFlag, 'quotes'> {
+ *  minus the quote read): the explanation and the baseline's caveats come
+ *  with it, for "our read" at level 2. Pure. */
+export function flagOfRow(f: FlagRow): Omit<UnusualFlag, 'quotes'> {
   return {
     objectKind: f.object_kind,
     objectId: f.object_id,
@@ -1111,34 +1056,19 @@ export function monthsText(months: readonly string[]): string {
   return `${longMonth(sorted[0])} to ${longMonth(sorted[sorted.length - 1])}`
 }
 
-/** The anomaly check's verdict for one flag, through the check's own
- *  `anomalyVerdict` (the regime and filling caveats ride on it). */
-export function flagVerdict(flag: Omit<UnusualFlag, 'quotes'>, window: { from: string; to: string }): Verdict {
-  const row: AnomalyRow = {
-    kind: flag.objectKind as AnomalyRow['kind'],
-    id: flag.objectId,
-    label: flag.label,
-    denominator: flag.denominator,
-    weekVideos: flag.week.k,
-    weekTotal: flag.week.n,
-    weekPct: share(flag.week.k, flag.week.n),
-    baselineVideos: flag.baseline.k,
-    baselineTotal: flag.baseline.n,
-    baselinePct: share(flag.baseline.k, flag.baseline.n),
-    baselineMonthsClearing: flag.baselineMonths.length,
-    verdict: { state: 'moved', change: flag.changePts, band: flag.bandPts } as AnomalyRow['verdict'],
-    p: null,
-    holmThreshold: null,
-    state: 'flagged',
+/** The anomaly check's verdict for one flag: the weekly read's own adapter
+ *  (`frozenFlag`, lib/written/unusual.ts, over the check's `anomalyVerdict`),
+ *  so the page's chip and the email's are read off one Verdict. Null for an
+ *  object kind the check does not know. Pure. */
+export function flagVerdict(flag: Omit<UnusualFlag, 'quotes'>, window: { from: string; to: string }): Verdict | null {
+  const row: FlagRow = {
+    run_id: '', object_kind: flag.objectKind, object_id: flag.objectId, label: flag.label, denominator: flag.denominator,
+    week_k: flag.week.k, week_n: flag.week.n, baseline_k: flag.baseline.k, baseline_n: flag.baseline.n,
+    baseline_months: flag.baselineMonths, baseline_filling_months: flag.baselineFilling, baseline_regime: flag.baselineRegime,
+    change_pts: flag.changePts, band_pts: flag.bandPts, rank: flag.rank, flagged_count: 0,
+    explanation: null, explanation_model: null, quote_refs: [],
   }
-  const months = [...flag.baselineMonths].map(monthStartOf).sort()
-  const regime = flag.baselineRegime === 'one' || flag.baselineRegime === 'mixed' || flag.baselineRegime === 'unknown' || flag.baselineRegime === 'not_grouped'
-    ? flag.baselineRegime
-    : undefined
-  return anomalyVerdict(row, window, months[0] ? { from: months[0], to: window.from } : undefined, {
-    regime,
-    baselineFillingMonths: flag.baselineFilling.length,
-  })
+  return frozenFlag(row, window)?.verdict ?? null
 }
 
 /** The stats row of an open conversation (each a level where it has an n). */
@@ -1210,20 +1140,6 @@ export function whoOf(
     videosOf.set(r.theme_id, [...(videosOf.get(r.theme_id) ?? []), ...videos])
   }
   return new Map([...videosOf.entries()].map(([id, videos]) => [id, whoSplit(videos, company)]))
-}
-
-/** The themes set apart (decision F): half or more of their videos makers'
- *  own, or off-topic (`segmentOf`, the board's rule), from the month's
- *  `theme_maker_shares` rows. Empty where they were not measured. Pure. */
-export function setApartOf(rows: Parameters<typeof themeSegmentsOf>[0] | null): Map<string, 'makers' | 'noise'> {
-  const out = new Map<string, 'makers' | 'noise'>()
-  if (!rows) return out
-  const shares = themeSegmentsOf(rows)
-  for (const id of new Set([...shares.maker.keys(), ...shares.noise.keys()])) {
-    const seg = segmentOf({ makerShare: shares.maker.get(id) ?? null, noiseShare: shares.noise.get(id) ?? null })
-    if (seg) out.set(id, seg)
-  }
-  return out
 }
 
 // ---- The reads ----------------------------------------------------------------------------
@@ -1388,32 +1304,13 @@ async function loadThemeSeries(db: SupabaseClient, clientId: string, ids: readon
 
 /** The anomaly check's first flag for the read's run, or null. */
 async function loadWeekFlag(db: SupabaseClient, clientId: string, runId: string): Promise<Omit<UnusualFlag, 'quotes'> | null> {
-  const [check, flags] = await Promise.all([loadCheckIn(db, clientId, runId), loadFlagsIn(db, clientId, runId)])
-  const first = weekFlagRows(check, flags)[0]
+  // This week's readers and rule (lib/pages/week.ts): a missing table is no
+  // check; a failed read throws and `soft` drops the card. `weekFlagRows`
+  // answers null for a check that flagged and whose flags could not be read:
+  // no flag card then, and the slot leads with the next rule's answer.
+  const [check, flags] = await Promise.all([loadCheckStrict(db, clientId, runId), loadFlagsStrict(db, clientId, runId)])
+  const first = weekFlagRows(check, flags)?.[0]
   return first ? flagOfRow(first) : null
-}
-
-/** MIRROR of This week's `loadCheck` (lib/pages/week.ts; T11b exports it):
- *  the check's row for this update, undefined where the table is not here. */
-async function loadCheckIn(db: SupabaseClient, clientId: string, runId: string): Promise<CheckRowIn | null | undefined> {
-  const res = await db.from('anomaly_checks').select('*').eq('client_id', clientId).eq('run_id', runId).maybeSingle()
-  if (res.error) {
-    if (!isMissingAnomalyRecord(res.error)) console.error(`[pages] market.check: ${res.error.message}`)
-    return undefined
-  }
-  return (res.data as CheckRowIn | null) ?? null
-}
-
-/** MIRROR of This week's `loadFlags`: null where the read failed, never
- *  "there were none". */
-async function loadFlagsIn(db: SupabaseClient, clientId: string, runId: string): Promise<FlagRowIn[] | null> {
-  try {
-    return await selectAll<FlagRowIn>(() =>
-      db.from('anomaly_flags').select('*').eq('client_id', clientId).eq('run_id', runId).order('rank', { ascending: true }))
-  } catch (error) {
-    if (!isMissingAnomalyRecord(error)) console.error(`[pages] market.flags: ${(error as { message?: string })?.message ?? String(error)}`)
-    return null
-  }
 }
 
 // ---- The loader ---------------------------------------------------------------------------
@@ -1728,12 +1625,14 @@ export function flagCardOf(a: {
   monthCategory: number | null
   p: MarketParams
   noun: string | null
-}): FlagCard {
+}): FlagCard | null {
   const { flag } = a
   const conv = flag.objectKind === 'theme' ? a.convs.find((c) => c.id === flag.objectId) ?? convOf(flag.objectId, a.convInput) : null
   const label = conv?.label ?? (flag.objectKind === 'kind' ? talkKindLabel(flag.objectId, a.noun) : flag.label)
+  const verdict = flagVerdict({ ...flag, label }, a.window)
+  if (!verdict) return null
   return {
-    verdict: flagVerdict({ ...flag, label }, a.window),
+    verdict,
     flag: { ...flag, label },
     baselineText: monthsText(flag.baselineMonths),
     conv,

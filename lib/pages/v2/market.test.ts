@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { setApartOf } from '../../written/conversations'
 import { flagWordOf } from '@/components/v2/flag-chip'
 import type { OurChange } from '../../reading/comparability'
 import type { WindowReading } from '../../reading/read'
@@ -7,7 +8,7 @@ import {
   buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, categoryThemeVideos, categoryVideos, closeHref, convHref,
   convOf, cutWindows, doingOf, flagCardOf, flagVerdict, groupsOf, isRegistryId, insideOf, marketHref, marketMonths, marketParams,
   mergeMixes, monthsText, notchOf, ourReadOf, panelStats, periodHref, personasOf, pickHero, pickWeekSides, platformRows, subjectHref,
-  setApartOf, tableMonths, weekFlagRows, weekLead, weekWindows, whoOf, windowLabel, MARKET_TABLE_ROWS, type FlagRowIn,
+  tableMonths, weekWindows, whoOf, windowLabel, MARKET_TABLE_ROWS,
   type MarketConv,
 } from './market'
 import {
@@ -63,6 +64,16 @@ describe('the weeks', () => {
     // A surface the week chart does not cut on (`products`) cuts nothing.
     expect(cutWindows(w, [change('products' as never, '2026-10-06T10:00:00.000Z')])).toEqual([false, false, false])
     expect(cutWindows(w, [])).toEqual([false, false, false])
+  })
+
+  it('never cuts the newest window: a person\'s change on 8 Oct inside the 5 to 12 Oct window cuts the two before', () => {
+    const w = weekWindows({ from: '2026-10-05T00:00:00.000Z', to: '2026-10-12T00:00:00.000Z' })!
+    const change: OurChange = { id: 'c', surface: 'terms', changedAt: '2026-10-08T10:00:00.000Z', note: null, affects: [] }
+    const cut = cutWindows(w, [change])
+    expect(cut).toEqual([true, true, false])
+    const convs = buildConvs({ ...fixtureConvInput('week'), weekCut: cut })
+    expect(convs).toHaveLength(buildConvs(fixtureConvInput('week')).length)
+    expect(convs.every((c) => c.week != null && c.weeks[0] === null && c.weeks[1] === null)).toBe(true)
   })
 
   it('reads the category out of a window read, and nothing for a missing one', () => {
@@ -135,7 +146,7 @@ describe('the conversations', () => {
 
 describe('the top row', () => {
   const convs = buildConvs(fixtureConvInput('week'))
-  const flag = flagCardOf({ flag: FIXTURE_FLAG, window: fixtureRead().window, convs, convInput: fixtureConvInput('week'), monthCategory: 300, p: marketParams({}), noun: null })
+  const flag = flagCardOf({ flag: FIXTURE_FLAG, window: fixtureRead().window, convs, convInput: fixtureConvInput('week'), monthCategory: 300, p: marketParams({}), noun: null })!
 
   it('leads with the check\'s flag, else what was first heard this week, else the biggest', () => {
     expect(pickHero({ convs, flag, setApart: new Set() })).toEqual({ kind: 'flag' })
@@ -165,41 +176,23 @@ describe('the top row', () => {
 
   it('names a kind flag in the rail\'s words, and opens a subject flag\'s subject', () => {
     const input = fixtureConvInput('week')
-    const kind = flagCardOf({ flag: { ...FIXTURE_FLAG, objectKind: 'kind', objectId: 'pain_point', label: 'pain_point' }, window: fixtureRead().window, convs, convInput: input, monthCategory: 300, p: marketParams({}), noun: null })
+    const kind = flagCardOf({ flag: { ...FIXTURE_FLAG, objectKind: 'kind', objectId: 'pain_point', label: 'pain_point' }, window: fixtureRead().window, convs, convInput: input, monthCategory: 300, p: marketParams({}), noun: null })!
     expect(kind.flag.label).toBe('Complained about something')
     expect(kind.href).toBeNull()
-    const subject = flagCardOf({ flag: { ...FIXTURE_FLAG, objectKind: 'subject', objectId: 's1', label: 'Cost & access' }, window: fixtureRead().window, convs, convInput: input, monthCategory: 300, p: marketParams({}), noun: null })
+    const subject = flagCardOf({ flag: { ...FIXTURE_FLAG, objectKind: 'subject', objectId: 's1', label: 'Cost & access' }, window: fixtureRead().window, convs, convInput: input, monthCategory: 300, p: marketParams({}), noun: null })!
     expect(subject.href).toContain('subject=s1')
   })
 
   it('carries the baseline\'s caveats onto the verdict', () => {
     const v = flagVerdict({ ...FIXTURE_FLAG, baselineRegime: 'mixed', baselineFilling: ['2026-09-01'] }, fixtureRead().window)
-    expect(v.flags).toEqual(['clustering_changed', 'thin'])
+    expect(v?.flags).toEqual(['clustering_changed', 'thin'])
+    expect(flagVerdict({ ...FIXTURE_FLAG, objectKind: 'mood' }, fixtureRead().window)).toBeNull()
   })
 
   it('draws the market\'s months, oldest first, the newest still filling', () => {
     const m = marketMonths(new Map([['2026-09-01', { videos: 839 }], ['2026-10-01', { videos: 318 }]]), OCT, OCT)
     expect(m?.map((x) => [x.label, x.k, x.filling])).toEqual([['September', 839, false], ['October', 318, true]])
     expect(marketMonths(new Map(), OCT, OCT)).toBeNull()
-  })
-})
-
-describe('the week\'s lead (mirrors of T11b\'s weekFlagRows and weekLead)', () => {
-  const row = (rank: number): FlagRowIn => ({ object_kind: 'theme', object_id: `t${rank}`, label: '', denominator: '', week_k: 1, week_n: 2, baseline_k: 1, baseline_n: 2, baseline_months: [], baseline_filling_months: [], baseline_regime: null, change_pts: 1, band_pts: 1, rank, explanation: null, explanation_model: null })
-  it('puts rank 1 first, and raises nothing where the check did not fire or the flags were not read', () => {
-    expect(weekFlagRows({ outcome: 'flagged' }, [row(2), row(1)]).map((f) => f.rank)).toEqual([1, 2])
-    expect(weekFlagRows({ outcome: 'nothing_unusual' }, [row(1)])).toEqual([])
-    expect(weekFlagRows({ outcome: 'suppressed' }, [row(1)])).toEqual([])
-    expect(weekFlagRows(null, [row(1)])).toEqual([])
-    expect(weekFlagRows({ outcome: 'flagged' }, null)).toEqual([])
-  })
-
-  it('leads with the first flag, else the biggest new conversation, else the biggest', () => {
-    const conversations = [{ themeId: 'a', videos: 9 }, { themeId: 'b', videos: 23 }, { themeId: 'c', videos: 8 }]
-    expect(weekLead({ flags: ['f1', 'f2'], newThisWeek: [{ themeId: 'c' }], conversations })).toEqual({ kind: 'flag', flag: 'f1' })
-    expect(weekLead({ flags: [], newThisWeek: [{ themeId: 'c' }, { themeId: 'a' }], conversations })).toEqual({ kind: 'new', conversation: { themeId: 'a', videos: 9 } })
-    expect(weekLead({ flags: [], newThisWeek: [{ themeId: 'gone' }], conversations })).toEqual({ kind: 'biggest', conversation: { themeId: 'b', videos: 23 } })
-    expect(weekLead({ flags: [], newThisWeek: [], conversations: [] })).toBeNull()
   })
 })
 
