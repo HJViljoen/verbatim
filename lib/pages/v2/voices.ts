@@ -1,11 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { nameChecked, NAME_READS, noiseWords, NOT_COUNTED_YET } from '../../brands/precision'
+import { nameChecked, NAME_READS, NONE_FOUND, noiseWords, NOT_COUNTED_YET } from '../../brands/precision'
 import { fmtInt, longMonth, platformLabel, shortDate } from '../../format'
 import { gateFor } from '../../quote-context'
 import { readingOf, readTranslations } from '../../quotes'
 import { ASKED_SHOWN, FINDING_KINDS_HELD, findingKindWords, ninetyDays, quoteWords } from '../brands'
-import { readFindings, readQuestions, readSaidAbout, type FindingRead } from '../brands-load'
+import { readQuestions, readSaidAbout } from '../brands-load'
 import { fetchRunningRunIds } from '../latest-video-run'
 import { loadVoicesMany } from '../subjects'
 import { ACCOUNT_FLOOR } from '../voice-surface-where'
@@ -16,15 +16,16 @@ import { normalisePersona, type Persona } from '../../profile-tiles'
 import { CLIENT_AUDIENCE, rivalKey } from '../../rivals'
 import { FLAGGED_KIND, KIND_ORDER } from '../../reading/kinds'
 import {
-  creatorThemes, loadBrandCrosses, loadBrandMonthPairs, loadGroupSubjects, loadLatestProfile, loadMarketAudiences,
-  loadMarketVideos, loadThemeRefs,
+  creatorThemes, loadBrandCrosses, loadBrandMonthPairs, loadBrandRefs, loadCompanyName, loadGroupSubjects, loadLatestProfile,
+  loadMarketAudiences, loadMarketVideos, loadThemeRefs,
   type BrandCrossRow, type BrandMonthVideos, type BrandPair, type CreatorThemes, type GroupMonthVideos,
   type GroupProfileRow, type GroupSubjectRow, type MarketVideo, type ThemeRef,
 } from '../../reading/cross'
 import { monthStartOf, prevMonth } from '../../reading/month-key'
 import { refuseEveryPair } from '../../reading/pairs'
 import { loadPairOn, type ReadingHandle } from '../../reading/read'
-import { loadReadingMonth } from '../../reading/reading-view'
+import { marketAudiences } from '../../reading/market'
+import { loadMarketRivalAudiences, loadReadingMonth } from '../../reading/reading-view'
 import { windowEnd, type ReadingMonth } from '../../reading/reading-month'
 import type { Verdict } from '../../reading/verdicts'
 
@@ -236,6 +237,11 @@ export interface VoicesBrandRow {
   label: string
   you: boolean
   state: BrandRowState
+  /** Where it is not counted, the words it prints ("not counted yet", "no
+   *  video names it", "mostly the German word for Friday · not counted"). */
+  stateWords: string | null
+  /** A watched brand (no rival audience, no Competitive pane). */
+  watched: boolean
   /** Named unprompted this month: `k_organic` of `n_organic`. */
   named: Level | null
   /** Last month's, where the verdict lets it print. */
@@ -264,15 +270,20 @@ export interface VoicesBrands {
   prevMonth: string
   /** Brands named unprompted this month, you first, then most named. */
   rows: VoicesBrandRow[]
+  /** Every brand the page tracks (you included), each with its state: any one
+   *  of them opens its panel (`?brand=`), printed as a row or not. */
+  all: VoicesBrandRow[]
   /** Counted, and not named unprompted this month. */
-  notNamed: string[]
+  notNamed: { label: string; href: string }[]
   /** Tracked and not counted: their words ("not counted yet", "mostly the
    *  German word for Friday"). */
-  notCounted: { label: string; words: string }[]
+  notCounted: { label: string; words: string; href: string }[]
   /** Every brand the page tracks (you included), for the empty state and the
    *  bar's count. */
-  tracked: string[]
-  /** Pass C's weightiest finding of the latest update, the card's note. */
+  tracked: { label: string; href: string }[]
+  /** Pass C's weightiest finding of the latest update, the card's note. Not
+   *  given under a `?month=` the reader chose: a finding is the latest
+   *  update's, and carries no month of its own. */
   note: { rival: string; title: string; href: string } | null
   empty: string | null
 }
@@ -309,6 +320,9 @@ export interface VoicesCreators {
   /** At the floor and not listed. */
   more: number
   toggleHref: string
+  /** The month had Reddit videos, whose account is a community (a
+   *  subreddit), not a person: left out of the list, and the card says so. */
+  communitiesLeftOut: boolean
   empty: string | null
 }
 
@@ -355,6 +369,11 @@ export interface BrandPanel {
   label: string
   you: boolean
   state: BrandRowState
+  /** Where it is not counted, why (the row's words). */
+  stateWords: string | null
+  /** Its videos this month are too few to say how people treat it: counted,
+   *  and named without being asked in none of them. */
+  tooFew: boolean
   named: Level | null
   prevNamed: (Level & { month: string }) | null
   verdict: Verdict | null
@@ -368,6 +387,7 @@ export interface BrandPanel {
   /** The question conversations under its own content, by videos. */
   asked: { themes: { registryId: string; label: string; videos: number; href: string }[] } | null
   said: VoicesQuote[]
+  /** Pass C's findings of the latest update for this rival (undated). */
   findings: { id: string; kindWords: string; title: string; body: string | null }[]
   askHref: string
   closeHref: string
@@ -600,31 +620,35 @@ export function buildBrands(input: {
   month: string
   /** Null: the tenant has no brand rules. */
   pairs: BrandPair[] | null
+  /** The month sets and crosses of the brands that may print (a brand never
+   *  printed is not crossed); null where none was read. */
   crosses: { videos: BrandMonthVideos[]; kinds: BrandCrossRow[]; subjects: BrandCrossRow[] } | null
   note: { rival: string; title: string } | null
   params: VoicesParams
   failed?: boolean
   nameReads?: typeof NAME_READS
+  /** Whether your own row may print, where the caller has judged it
+   *  (`clientNameCounts` on the set, or `clientNameCountsByCount`). Absent,
+   *  it is judged on the client's month set in `crosses`, and FAILS CLOSED
+   *  where there is none: no set read is no match read. */
+  clientCounts?: boolean
 }): VoicesBrands {
   const month = monthStartOf(input.month)
   const before = prevMonth(month)
-  const base = { month, prevMonth: before, rows: [], notNamed: [], notCounted: [], tracked: [], note: null } as Omit<VoicesBrands, 'state' | 'empty'>
+  const base = { month, prevMonth: before, rows: [], all: [], notNamed: [], notCounted: [], tracked: [], note: null } as Omit<VoicesBrands, 'state' | 'empty'>
   if (input.failed) return { ...base, state: 'unread', empty: BRANDS_UNREAD }
   if (!input.pairs) return { ...base, state: 'not_read', empty: BRANDS_NOT_READ }
-  const tracked = input.pairs.map((p) => p.label)
   const videosOf = new Map((input.crosses?.videos ?? []).map((b) => [b.brandKey, b]))
   const kindsOf = new Map((input.crosses?.kinds ?? []).map((b) => [b.brandKey, b]))
   const subjectsOf = new Map((input.crosses?.subjects ?? []).map((b) => [b.brandKey, b]))
-  if (!input.pairs.some((p) => p.curr != null)) {
-    return { ...base, tracked, state: 'not_counted', empty: BRANDS_NOT_COUNTED }
-  }
+  const counting = input.pairs.some((p) => p.curr != null)
+  const clientSet = videosOf.get('client')
+  const clientOk = input.clientCounts ?? (clientSet ? clientNameCounts(input.clientId, month, clientSet.any, input.nameReads) : false)
   const all: VoicesBrandRow[] = input.pairs.map((p) => {
     const you = p.brandKey === 'client'
-    const sets = videosOf.get(p.brandKey)
-    const gate = !you || clientNameCounts(input.clientId, month, sets?.any ?? [], input.nameReads)
     const measured = p.countState ?? 'not_yet'
     const state: BrandRowState =
-      measured === 'counted' && p.curr != null && gate ? 'counted'
+      measured === 'counted' && p.curr != null && (!you || clientOk) ? 'counted'
         : measured === 'noise' ? 'noise'
           : measured === 'none' && (p.curr == null || p.curr.k === 0) ? 'none'
             : 'not_yet'
@@ -637,6 +661,8 @@ export function buildBrands(input: {
       label: p.label,
       you,
       state,
+      stateWords: state === 'noise' ? noiseWords(p.label) : state === 'none' ? NONE_FOUND : state === 'not_yet' ? NOT_COUNTED_YET : null,
+      watched: p.brandKey.startsWith('watched:'),
       named: counted ? p.curr : null,
       prevNamed: counted && p.prev ? { ...p.prev, month: before } : null,
       verdict: counted ? p.verdict : null,
@@ -648,24 +674,37 @@ export function buildBrands(input: {
       selected,
     }
   })
-  const rows = all
-    .filter((r) => r.state === 'counted' && (r.named?.k ?? 0) > 0)
-    .sort((a, b) => Number(b.you) - Number(a.you) || (b.named?.k ?? 0) - (a.named?.k ?? 0) || (b.any?.k ?? 0) - (a.any?.k ?? 0) || a.label.localeCompare(b.label))
-  const notNamed = all.filter((r) => (r.state === 'counted' && (r.named?.k ?? 0) === 0) || r.state === 'none').map((r) => r.label)
-  const notCounted = all
-    .filter((r) => r.state === 'not_yet' || r.state === 'noise')
-    .map((r) => ({ label: r.label, words: r.state === 'noise' ? noiseWords(r.label) : NOT_COUNTED_YET }))
+  const link = (r: VoicesBrandRow) => ({ label: r.label, href: r.href })
   const noteRow = input.note ? all.find((r) => r.label.trim().toLowerCase() === input.note!.rival.trim().toLowerCase()) : undefined
+  const note = input.note && noteRow ? { rival: noteRow.label, title: input.note.title, href: voicesHref(input.params, { kind: 'brand', key: noteRow.param }) } : null
+  if (!counting) {
+    return { ...base, all, tracked: all.map(link), note, state: 'not_counted', empty: BRANDS_NOT_COUNTED }
+  }
+  const rows = all
+    .filter(printable)
+    .sort((a, b) => Number(b.you) - Number(a.you) || (b.named?.k ?? 0) - (a.named?.k ?? 0) || (b.any?.k ?? 0) - (a.any?.k ?? 0) || a.label.localeCompare(b.label))
   return {
     ...base,
-    tracked,
+    all,
+    tracked: all.map(link),
     state: 'ready',
     rows,
-    notNamed,
-    notCounted,
-    note: input.note && noteRow ? { rival: noteRow.label, title: input.note.title, href: voicesHref(input.params, { kind: 'brand', key: noteRow.param }) } : null,
+    notNamed: all.filter((r) => (r.state === 'counted' && (r.named?.k ?? 0) === 0) || r.state === 'none').map(link),
+    notCounted: all.filter((r) => r.state === 'not_yet' || r.state === 'noise').map((r) => ({ ...link(r), words: r.stateWords ?? NOT_COUNTED_YET })),
+    note,
     empty: null,
   }
+}
+
+/** A row the table prints: counted, and named without being asked in at
+ *  least one video. */
+const printable = (r: VoicesBrandRow): boolean => r.state === 'counted' && (r.named?.k ?? 0) > 0
+
+/** The brands worth crossing (their kinds and subjects, one lens call each):
+ *  those whose month row may print, before your own name's gate. A brand that
+ *  never prints is never crossed. */
+export function crossKeys(pairs: readonly BrandPair[]): string[] {
+  return pairs.filter((p) => p.countState === 'counted' && (p.curr?.k ?? 0) > 0).map((p) => p.brandKey)
 }
 
 /** Does a `?brand=` value name this brand? Its name, its key, its audience,
@@ -704,11 +743,13 @@ export function buildBrandPanel(input: {
   window: { from: string; to: string } | null
   asked: { themes: { registryId: string; label: string; videos: number }[] } | null
   said: VoicesQuote[]
-  findings: readonly Pick<FindingRead, 'id' | 'category' | 'title' | 'body'>[]
+  findings: readonly { id: string; category: string; title: string; body: string | null }[]
   params: VoicesParams
 }): BrandPanel {
   const r = input.row
   const counted = r.state === 'counted'
+  // A brand opened from the note, an old link or the lines under the table
+  // need not be one the table prints: its count half then says why.
   const kinds = counted && input.kinds && input.kinds.n > 0
     ? input.kinds.cells
       .filter((c) => c.id !== FLAGGED_KIND && c.k > 0)
@@ -722,6 +763,8 @@ export function buildBrandPanel(input: {
     label: r.label,
     you: r.you,
     state: r.state,
+    stateWords: r.stateWords,
+    tooFew: counted && (r.named?.k ?? 0) === 0,
     named: r.named,
     prevNamed: r.prevNamed,
     verdict: r.verdict,
@@ -744,6 +787,13 @@ export function buildBrandPanel(input: {
 }
 
 // ---- 3. the creators -----------------------------------------------------------------
+
+/** The platforms whose account is a community, not a creator. */
+export const COMMUNITY_PLATFORMS: ReadonlySet<string> = new Set(['reddit'])
+
+/** The month's creators, communities left out. */
+export const creatorsOf = (read: Pick<CreatorThemes, 'creators'>): CreatorThemes['creators'] =>
+  read.creators.filter((c) => !COMMUNITY_PLATFORMS.has(c.platform))
 
 /** Rows the creators card lists before "All N accounts". */
 export const CREATOR_ROWS = 5
@@ -807,9 +857,13 @@ export function buildCreators(input: {
   const expanded = input.params.creators === 'all'
   const toggleHref = voicesHref(input.params, null, { creators: expanded ? null : 'all' })
   if (!input.read) {
-    return { month, accounts: 0, atFloor: 0, floor: ACCOUNT_FLOOR, rows: [], expanded, more: 0, toggleHref, empty: 'Creators could not be read just now.' }
+    return { month, accounts: 0, atFloor: 0, floor: ACCOUNT_FLOOR, rows: [], expanded, more: 0, toggleHref, communitiesLeftOut: false, empty: 'Creators could not be read just now.' }
   }
-  const atFloor = input.read.creators.filter((c) => c.videos >= ACCOUNT_FLOOR)
+  // A CREATOR IS A PERSON OR A BRAND POSTING, NEVER A COMMUNITY. On Reddit a
+  // post's `account_name` is its subreddit (r/onebag), which is where the
+  // talk happens and not who made it; the groups' platforms carry it.
+  const people = creatorsOf(input.read)
+  const atFloor = people.filter((c) => c.videos >= ACCOUNT_FLOOR)
   const shown = atFloor.slice(0, expanded ? CREATOR_ROWS_MAX : CREATOR_ROWS)
   const unique = (account: string): boolean => atFloor.filter((c) => c.account.toLowerCase() === account.toLowerCase()).length === 1
   const picked = resolveCreator(atFloor, input.params.creator)?.key ?? null
@@ -835,13 +889,14 @@ export function buildCreators(input: {
   })
   return {
     month,
-    accounts: input.read.creators.length,
+    accounts: people.length,
     atFloor: atFloor.length,
     floor: ACCOUNT_FLOOR,
     rows,
     expanded,
     more: Math.max(0, atFloor.length - rows.length),
     toggleHref,
+    communitiesLeftOut: people.length < input.read.creators.length,
     empty: atFloor.length === 0
       ? `No account made ${fmtInt(ACCOUNT_FLOOR)} or more of the market’s videos in ${longMonth(month)}.`
       : null,
@@ -955,6 +1010,11 @@ export interface VoicesContext {
   labels: Map<string, string>
   brandSets: BrandSet[]
   client: string
+  /** The latest update's Pass C findings (`competitive_insights`), read once
+   *  for the note and kept for a rival's panel; and the runs still running,
+   *  which neither may read. */
+  findings: FindingRow[]
+  running: string[]
 }
 
 /** Theme labels (`theme_registry.canonical_label`) by registry id. */
@@ -972,63 +1032,116 @@ async function readLabels(handle: ReadingHandle, ids: readonly string[]): Promis
   return out
 }
 
-/** The latest update's Pass C findings, light: the rows the note needs. */
-async function readNote(supabase: SupabaseClient, handle: ReadingHandle, tracked: readonly string[]): Promise<{ rival: string; title: string } | null> {
-  if (tracked.length === 0) return null
-  const [running, res] = await Promise.all([
-    fetchRunningRunIds(supabase, handle.clientId, 'voices'),
-    handle.client.from('competitive_insights').select('run_id, category, competitor_name, title, impact_level, created_at')
+/** A Pass C finding, as the note and a rival's panel read it. */
+export interface FindingRow {
+  id: string
+  run_id: string | null
+  category: string
+  competitor_name: string | null
+  title: string
+  finding: string | null
+  impact_level: string | null
+}
+
+/** The latest finished update's Pass C findings: one read, kept whole (sixty
+ *  rows at most) so the note and a rival's panel both take theirs from it. */
+async function readLatestFindings(handle: ReadingHandle, running: Promise<string[]>): Promise<FindingRow[]> {
+  const [live, res] = await Promise.all([
+    running,
+    handle.client.from('competitive_insights').select('id, run_id, category, competitor_name, title, finding, impact_level, created_at')
       .eq('client_id', handle.clientId).order('created_at', { ascending: false }).limit(60),
   ])
   if (res.error) throw new Error(`competitive_insights: ${res.error.message}`)
-  const rows = ((res.data ?? []) as { run_id: string | null; category: string; competitor_name: string | null; title: string; impact_level: string | null }[])
-    .filter((r) => r.run_id && !running.includes(r.run_id))
+  const rows = ((res.data ?? []) as FindingRow[]).filter((r) => r.run_id && !live.includes(r.run_id))
   const runId = rows[0]?.run_id
-  return runId ? topFinding(rows.filter((r) => r.run_id === runId), tracked) : null
+  return runId ? rows.filter((r) => r.run_id === runId).map((r) => ({ ...r, id: String(r.id) })) : []
 }
 
 /**
- * Level 1: every read the page makes before a panel, in two waves (the month
- * and the market's audiences, then everything the month's market feeds), each
- * section failing alone.
+ * The brands card's note: Pass C's weightiest finding of the latest update.
+ * A FINDING IS THE LATEST UPDATE'S AND CARRIES NO MONTH, so under a month the
+ * reader chose (`?month=`, the reading month's reason `explicit`) it is not
+ * printed rather than set beside a month it may not be about. Pure.
+ */
+export function noteOf(reason: ReadingMonth['reason'] | null, findings: readonly FindingRow[], tracked: readonly string[]): { rival: string; title: string } | null {
+  return reason === 'explicit' ? null : topFinding(findings, tracked)
+}
+
+/** One rival's findings of the latest update, the held kinds left out. */
+export function findingsFor(rows: readonly FindingRow[], rival: string): { id: string; category: string; title: string; body: string | null }[] {
+  const name = rival.trim().toLowerCase()
+  return rows
+    .filter((r) => (r.competitor_name ?? '').trim().toLowerCase() === name && !FINDING_KINDS_HELD.has(r.category) && r.title?.trim())
+    .map((r) => ({ id: r.id, category: r.category, title: r.title.trim(), body: r.finding?.trim() || null }))
+}
+
+/** The market's audiences: the category and the live tracked rivals, off the
+ *  rivals read the reading month makes on the same client (memoised per
+ *  request), and the identity register's own read only where that failed. */
+async function audiencesOf(supabase: SupabaseClient, handle: ReadingHandle): Promise<string[]> {
+  const rivals = await loadMarketRivalAudiences(supabase, handle.clientId)
+  return rivals ? marketAudiences(rivals) : loadMarketAudiences(handle)
+}
+
+/**
+ * Level 1: every read the page makes before a panel, in three waves, each
+ * section failing alone:
+ *   1. the month (runs, schedule, the stored denominators, the rivals), the
+ *      latest profile, the workspace's name, the brands' identity (tracking,
+ *      competitors), the month-pair judge, and the latest Pass C findings;
+ *   2. what the month decides: the month's market, its theme evidence, and the
+ *      brands' month rows (the pairs);
+ *   3. what the market and the pairs feed: the groups' evidence and subjects,
+ *      the crosses of the brands that may print (none where no brand has a
+ *      month row: Össur today), and the creators' conversation labels.
  */
 export async function loadVoicesBase(input: VoicesLoadInput): Promise<{ data: VoicesData; ctx: VoicesContext }> {
   const { supabase, clientId, reading: handle, params } = input
   const now = input.now ?? new Date().toISOString()
 
+  // ---- wave 1
+  const running = fetchRunningRunIds(supabase, clientId, 'voices').catch((e: unknown) => { say('running', e); return [] as string[] })
+  const findingsAhead = readLatestFindings(handle, running).catch((e: unknown) => { say('findings', e); return [] as FindingRow[] })
+  // The brands' identity starts now and is memoised, so the pairs and the
+  // month sets below take it without a second read.
+  const refsAhead = loadBrandRefs(handle).catch((e: unknown) => { say('brandRefs', e); return undefined })
   const [rm, audiences, profile, company, pair] = await Promise.all([
     loadReadingMonth(supabase, handle, now, { explicit: params.month ?? null }).catch((e: unknown) => { say('month', e); return null }),
-    loadMarketAudiences(handle).catch((e: unknown) => { say('audiences', e); return null }),
+    audiencesOf(supabase, handle).catch((e: unknown) => { say('audiences', e); return null }),
     loadLatestProfile(handle).catch((e: unknown) => { say('profile', e); return undefined }),
-    supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
+    loadCompanyName(handle).catch((e: unknown) => { say('company', e); return '' }),
     loadPairOn(handle, now),
   ])
   const month = monthStartOf(rm?.month ?? now)
   const soFar = rm ? rm.state === 'so_far' : true
-  const client = ((company.data as { company_name?: string | null } | null)?.company_name ?? '').trim() || 'You'
+  const client = company || 'You'
   const aud = audiences ?? []
 
-  const [market, refs] = await Promise.all([
+  // ---- wave 2
+  const [market, refs, pairs] = await Promise.all([
     audiences ? loadMarketVideos(handle, month, aud).catch((e: unknown) => { say('market', e); return null }) : Promise.resolve(null),
     audiences ? loadThemeRefs(handle, month, aud).catch((e: unknown) => { say('refs', e); return [] as ThemeRef[] }) : Promise.resolve([] as ThemeRef[]),
+    audiences
+      ? refsAhead.then((r) => (r === undefined ? undefined : loadBrandMonthPairs(handle, { month, now, pair, audiences: aud })))
+        .catch((e: unknown) => { say('pairs', e); return undefined })
+      : Promise.resolve(undefined),
   ])
 
+  // ---- wave 3
   // undefined: not read (or failed); the profile's own absence is `profile === null`.
   const groupAhead = market && profile
     ? loadGroupSubjects(handle, { month, audiences: aud, market, profile }).catch((e: unknown) => { say('groups', e); return undefined })
     : Promise.resolve(undefined)
-  const crossesAhead = market
-    ? loadBrandCrosses(handle, { month, base: 'any', audiences: aud, market }).catch((e: unknown) => { say('crosses', e); return undefined })
-    : Promise.resolve(undefined)
-  const pairsAhead = audiences
-    ? loadBrandMonthPairs(handle, { month, now, pair, audiences: aud }).catch((e: unknown) => { say('pairs', e); return undefined })
+  // CROSS ONLY WHAT MAY PRINT: no lens call for a brand whose month row
+  // cannot print, and none at all where no brand has a month row.
+  const keys = pairs ? crossKeys(pairs) : []
+  const crossesAhead = market && keys.length > 0
+    ? loadBrandCrosses(handle, { month, base: 'any', audiences: aud, market, brandKeys: keys }).catch((e: unknown) => { say('crosses', e); return undefined })
     : Promise.resolve(undefined)
   const creatorsRead = market ? creatorThemes({ month, videos: market, refs, audiences: aud }) : null
-  const topThemes = (creatorsRead?.creators ?? []).filter((c) => c.videos >= ACCOUNT_FLOOR).slice(0, CREATOR_ROWS_MAX).flatMap((c) => c.themes.slice(0, 3).map((t) => t.themeId))
+  const topThemes = (creatorsRead ? creatorsOf(creatorsRead) : []).filter((c) => c.videos >= ACCOUNT_FLOOR).slice(0, CREATOR_ROWS_MAX).flatMap((c) => c.themes.slice(0, 3).map((t) => t.themeId))
   const labelsAhead = readLabels(handle, topThemes).catch((e: unknown) => { say('labels', e); return new Map<string, string>() })
-
-  const [groupRead, crosses, pairs, labels] = await Promise.all([groupAhead, crossesAhead, pairsAhead, labelsAhead])
-  const note = pairs ? await readNote(supabase, handle, pairs.filter((p) => p.brandKey !== 'client').map((p) => p.label)).catch((e: unknown) => { say('note', e); return null }) : null
+  const [groupRead, crosses, labels, findings, live] = await Promise.all([groupAhead, crossesAhead, labelsAhead, findingsAhead, running])
 
   const platformOf = new Map((market ?? []).map((v) => [v.id, v.platform]))
   const groups = buildGroups({
@@ -1038,6 +1151,14 @@ export async function loadVoicesBase(input: VoicesLoadInput): Promise<{ data: Vo
     params,
     failed: profile === undefined || (profile != null && (market == null || groupRead == null)),
   })
+  // YOUR OWN ROW: judged on your month set where it was crossed, else on the
+  // counts (the set was not read because the row could not print).
+  const clientPair = pairs?.find((p) => p.brandKey === 'client')
+  const clientSet = crosses?.videos.find((b) => b.brandKey === 'client')
+  const clientCounts = clientSet
+    ? clientNameCounts(clientId, month, clientSet.any)
+    : clientNameCountsByCount(clientId, month, clientPair?.currAny?.k ?? 0)
+  const note = noteOf(rm?.reason ?? null, findings, (pairs ?? []).filter((p) => p.brandKey !== 'client').map((p) => p.label))
   const brands = buildBrands({
     clientId,
     month,
@@ -1046,6 +1167,7 @@ export async function loadVoicesBase(input: VoicesLoadInput): Promise<{ data: Vo
     note,
     params,
     failed: pairs === undefined,
+    clientCounts,
   })
   const counted = new Set(brands.rows.map((r) => r.brandKey))
   const brandSets: BrandSet[] = brands.state === 'ready'
@@ -1084,24 +1206,28 @@ export async function loadVoicesBase(input: VoicesLoadInput): Promise<{ data: Vo
     labels,
     brandSets,
     client,
+    findings,
+    running: live,
   }
   return { data, ctx }
 }
 
 /** Which item `params` opens, in the page's order: a group, a brand, a
- *  creator. One at a time; an item that is not on the page opens nothing. */
+ *  creator. One at a time; an item that is not on the page opens nothing.
+ *  ANY tracked brand opens (`brands.all`), printed as a row or not: the
+ *  note, an old Competitive `?vs=` link and the lines under the table open
+ *  brands the table does not print. */
 export function openOf(data: Pick<VoicesData, 'groups' | 'brands' | 'creators'>, params: VoicesParams, ctx?: Pick<VoicesContext, 'creators'>): { kind: OpenKind; key: string } | null {
   if (params.group) {
     const card = data.groups.cards.find((c) => c.key === params.group)
     if (card) return { kind: 'group', key: card.key }
   }
-  if (params.brand && data.brands.state === 'ready') {
-    const all = [...data.brands.rows]
-    const row = all.find((r) => matchesBrand(r, params.brand))
+  if (params.brand) {
+    const row = data.brands.all.find((r) => matchesBrand(r, params.brand))
     if (row) return { kind: 'brand', key: row.brandKey }
   }
   if (params.creator) {
-    const pool: readonly { key: string; account: string }[] = ctx?.creators?.creators.filter((c) => c.videos >= ACCOUNT_FLOOR) ?? data.creators.rows
+    const pool: readonly { key: string; account: string }[] = ctx?.creators ? creatorsOf(ctx.creators).filter((c) => c.videos >= ACCOUNT_FLOOR) : data.creators.rows
     const hit = resolveCreator(pool, params.creator)
     if (hit) return { kind: 'creator', key: hit.key }
   }
@@ -1124,7 +1250,7 @@ function groupQuote(v: { quote: { ref: string; text: string; lang?: string | nul
 export async function openPanel(ctx: VoicesContext, data: VoicesData, params: VoicesParams): Promise<VoicesData> {
   const open = openOf(data, params, ctx)
   if (!open) return { ...data, params, open: null, panel: null }
-  const { supabase, clientId, reading: handle } = ctx.input
+  const { clientId, reading: handle } = ctx.input
   try {
     if (open.kind === 'group') {
       const index = data.groups.cards.findIndex((c) => c.key === open.key)
@@ -1150,15 +1276,16 @@ export async function openPanel(ctx: VoicesContext, data: VoicesData, params: Vo
       return { ...data, open, panel }
     }
     if (open.kind === 'brand') {
-      const row = data.brands.rows.find((r) => r.brandKey === open.key)
+      const row = data.brands.all.find((r) => r.brandKey === open.key)
       if (!row) return { ...data, open: null, panel: null }
-      const rival = !row.you && !row.brandKey.startsWith('watched:') ? { name: row.label, audience: rivalKey(row.label) } : null
+      // THE RIVAL HALF DOES NOT DEPEND ON COUNTS: a tracked rival's filed
+      // videos over the ninety days (what is asked under its content, what is
+      // said about it) and its findings, counted or not.
+      const rival = !row.you && !row.watched ? { name: row.label, audience: rivalKey(row.label) } : null
       const window = rival && ctx.reading ? ninetyDays(windowEnd(ctx.reading)) : null
-      const running = rival ? await fetchRunningRunIds(supabase, clientId, 'voices').catch(() => [] as string[]) : []
-      const [said, questions, findings] = await Promise.all([
+      const [said, questions] = await Promise.all([
         rival && window ? readSaidAbout(handle.client, clientId, rival, window).catch((e: unknown) => { say('brand.said', e); return null }) : Promise.resolve(null),
-        rival && window ? readQuestions(handle.client, clientId, ctx.month, window, [rival], running).catch((e: unknown) => { say('brand.asked', e); return null }) : Promise.resolve(null),
-        rival ? readFindings(handle.client, clientId, ctx.month, [rival], running).catch((e: unknown) => { say('brand.findings', e); return [] as FindingRead[] }) : Promise.resolve([] as FindingRead[]),
+        rival && window ? readQuestions(handle.client, clientId, ctx.month, window, [rival], ctx.running).catch((e: unknown) => { say('brand.asked', e); return null }) : Promise.resolve(null),
       ])
       const themes = questions?.themes.get(rival?.audience ?? '') ?? []
       const panel = buildBrandPanel({
@@ -1174,12 +1301,12 @@ export async function openPanel(ctx: VoicesContext, data: VoicesData, params: Vo
           ref: q.ref, text: quoteWords(q), english: q.english, lang: q.lang, platform: q.platform,
           cite: [q.platform ? platformLabel(q.platform) : null, q.date ? shortDate(q.date) : null].filter(Boolean).join(' · '),
         })),
-        findings,
+        findings: rival ? findingsFor(ctx.findings, rival.name) : [],
         params,
       })
       return { ...data, open, panel }
     }
-    const creator = ctx.creators?.creators.find((c) => c.key === open.key)
+    const creator = ctx.creators ? creatorsOf(ctx.creators).find((c) => c.key === open.key) : undefined
     if (!creator) return { ...data, open: null, panel: null }
     const labels = await readLabels(handle, creator.themes.slice(0, PANEL_CONVERSATIONS + 6).map((t) => t.themeId)).catch((e: unknown) => { say('creator.labels', e); return new Map<string, string>() })
     const panel = buildCreatorPanel({
@@ -1200,53 +1327,57 @@ export async function loadVoices(input: VoicesLoadInput): Promise<VoicesData> {
 
 /**
  * The Dashboard's Voices tile (T8): the group with the most videos this month
- * and its panel, every group's videos, and the two brands named most. One wave
- * after the month: the profile, the month's market, the groups' evidence and
- * the brands' month rows. No verdict is printed on the tile, so no month-pair
- * judge is read (every pair refused: the levels stand alone).
+ * and its panel, every group's videos, and the two brands named most. Two
+ * waves, the fewest reads that give the tile its data:
+ *   1. the month (runs, schedule, the stored denominators, the rivals), the
+ *      latest profile, and the brands' identity (tracking, competitors, the
+ *      workspace's name), memoised for the pairs;
+ *   2. the groups' videos alone (their comment evidence beside the month's
+ *      market; no subject membership and no subject names), and the brands'
+ *      month rows.
+ * No verdict prints on the tile, so no month-pair judge is read (every pair
+ * refused: the levels stand alone), no lens call is made, and no mention row
+ * is read: your own row is judged on the counts (`clientNameCountsByCount`).
  */
 export async function topVoices(input: { supabase: SupabaseClient; clientId: string; reading: ReadingHandle; now?: string }): Promise<TopVoices | null> {
   const { supabase, clientId, reading: handle } = input
   const now = input.now ?? new Date().toISOString()
+  // ---- wave 1
+  const refsAhead = loadBrandRefs(handle).catch((e: unknown) => { say('top.brandRefs', e); return undefined })
   const [rm, audiences, profile] = await Promise.all([
     loadReadingMonth(supabase, handle, now).catch((e: unknown) => { say('top.month', e); return null }),
-    loadMarketAudiences(handle).catch((e: unknown) => { say('top.audiences', e); return null }),
+    audiencesOf(supabase, handle).catch((e: unknown) => { say('top.audiences', e); return null }),
     loadLatestProfile(handle).catch((e: unknown) => { say('top.profile', e); return undefined }),
   ])
   if (!audiences) return null
   const month = monthStartOf(rm?.month ?? now)
   const soFar = rm ? rm.state === 'so_far' : true
-  const market = await loadMarketVideos(handle, month, audiences).catch((e: unknown) => { say('top.market', e); return null })
+  // ---- wave 2
   const [groupRead, pairs] = await Promise.all([
-    market && profile ? loadGroupSubjects(handle, { month, audiences, market, profile }).catch((e: unknown) => { say('top.groups', e); return undefined }) : Promise.resolve(undefined),
-    loadBrandMonthPairs(handle, { month, now, pair: refuseEveryPair, audiences }).catch((e: unknown) => { say('top.pairs', e); return undefined }),
+    profile ? loadGroupSubjects(handle, { month, audiences, profile, videosOnly: true }).catch((e: unknown) => { say('top.groups', e); return undefined }) : Promise.resolve(undefined),
+    refsAhead.then((r) => (r === undefined ? undefined : loadBrandMonthPairs(handle, { month, now, pair: refuseEveryPair, audiences })))
+      .catch((e: unknown) => { say('top.pairs', e); return undefined }),
   ])
   const groups = buildGroups({
     profile: profile ?? null,
     read: groupRead ?? null,
-    platformOf: new Map((market ?? []).map((v) => [v.id, v.platform])),
+    platformOf: new Map(),
     params: {},
-    failed: profile === undefined || (profile != null && (market == null || groupRead == null)),
+    failed: profile === undefined || (profile != null && groupRead == null),
   })
-  // THE CLIENT'S NAME GATE ON THE TILE IS READ OFF THE COUNTS, not the video
-  // set (which would cost the mention layer's read): your row stands where
-  // every name read of the month is a yes and they cover the month's videos
-  // naming you (`clientNameCountsByCount`). Where the read set and the month's
-  // set are the same videos, which is the only way they are written, this is
-  // the page's rule.
-  const gated = pairs?.map((p) => (p.brandKey === 'client' && !clientNameCountsByCount(clientId, month, p.currAny?.k ?? 0) ? { ...p, countState: 'not_yet' as const } : p))
+  const clientPair = pairs?.find((p) => p.brandKey === 'client')
   const brands = buildBrands({
-    clientId, month, pairs: gated === undefined ? [] : gated,
-    crosses: null, note: null, params: {}, failed: gated === undefined,
-    // The gate is applied above; the builder's own set-based gate passes an
-    // empty set.
+    clientId, month, pairs: pairs === undefined ? [] : pairs,
+    crosses: null, note: null, params: {}, failed: pairs === undefined,
+    clientCounts: clientNameCountsByCount(clientId, month, clientPair?.currAny?.k ?? 0),
   })
-  return topVoicesOf({ month, soFar, videos: market ? new Set(market.map((v) => v.id)).size : null, groups, brands })
+  return topVoicesOf({ month, soFar, videos: groupRead?.marketVideos ?? null, groups, brands })
 }
 
 /** The client's name gate from counts: production checked the name, no read
  *  of the month found another word, and the month's reads cover `kAny`
- *  videos. */
+ *  videos. Where the read set and the month's set are the same videos, which
+ *  is the only way they are written, this is `clientNameCounts`. */
 export function clientNameCountsByCount(clientId: string, month: string, kAny: number, reads: typeof NAME_READS = NAME_READS): boolean {
   if (!nameChecked(clientId)) return false
   const m = monthStartOf(month)

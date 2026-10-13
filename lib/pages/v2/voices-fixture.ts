@@ -174,7 +174,9 @@ export function ossurVoicesFixture(params: VoicesParams = {}): VoicesData {
   const groups = buildGroups({ profile, read, platformOf, params })
   const tracked = [{ brandKey: 'client', label: 'Össur', countState: 'counted' as const }, { brandKey: '5ecfa431', label: 'Ottobock', countState: 'counted' as const }]
   const pairs = brandMonthPair({ month: SEP, brands: tracked, rows: [], audiences: ['industry-other'], pair: null })
-  const brands = buildBrands({ clientId: OSSUR_CLIENT_ID, month: SEP, pairs, crosses: null, note: null, params })
+  // No month row yet (the back-read has not run): every brand "not counted
+  // yet", and the latest update's finding about Ottobock still the note.
+  const brands = buildBrands({ clientId: OSSUR_CLIENT_ID, month: SEP, pairs, crosses: null, note: { rival: 'Ottobock', title: 'Ottobock’s talk turns on getting a knee paid for' }, params })
   const refs = refsOver(market, {
     'reg-phantom': [[0, 10]], 'reg-first-socket': [[10, 30]], 'reg-skin': [[30, 45]], 'reg-insurance': [[60, 90], [150, 158]],
     'reg-knee-choice': [[110, 125], [190, 200]], 'reg-running': [[100, 124]], 'reg-growing': [[150, 162]], 'reg-kids-wear': [[170, 177]],
@@ -204,6 +206,20 @@ export function ossurVoicesFixture(params: VoicesParams = {}): VoicesData {
   if (open?.kind === 'creator') {
     const c = read2.creators.find((x) => x.key === open.key)!
     return { ...data, open, panel: buildCreatorPanel({ creator: c, n: market.length, labels: OSSUR_LABELS, videoIds: videoIds.get(c.key) ?? [], brands: [], params }) }
+  }
+  if (open?.kind === 'brand') {
+    // A rival not counted yet: its count half says so, its Competitive half
+    // (filed videos over ninety days, findings) stands.
+    const row = brands.all.find((r) => r.brandKey === open.key)!
+    return {
+      ...data, open, panel: buildBrandPanel({
+        row, kinds: undefined, subjects: undefined, noun: null, window: { from: '2026-07-03', to: '2026-10-01' },
+        asked: { themes: [{ registryId: 'reg-insurance', label: 'Insurance refusals for powered knees', videos: 7 }] },
+        said: [{ ref: 'c:o1', text: 'The Genium changed my life but the fight with insurance took a year.', english: null, lang: null, platform: 'youtube', cite: 'YouTube · 18 Sep' }],
+        findings: [{ id: 'of1', category: 'topic_ownership', title: 'Ottobock’s talk turns on getting a knee paid for', body: 'Where the rest of the market talks about fit and daily life, talk about Ottobock gathers around appeals and coverage.' }],
+        params,
+      }),
+    }
   }
   return data
 }
@@ -384,5 +400,6 @@ export const VOICES_FIXTURES = {
   'ossur-creator': () => ossurVoicesFixture({ creator: 'A L I S' }),
   sealand: () => sealandVoicesFixture(),
   'sealand-brand': () => sealandVoicesFixture({ brand: 'Patagonia' }),
-  'sealand-creator': () => sealandVoicesFixture({ creator: 'r/onebag' }),
+  'sealand-creator': () => sealandVoicesFixture({ creator: 'Pack Hacker' }),
+  'ossur-brand': () => ossurVoicesFixture({ brand: 'Ottobock' }),
 } as const

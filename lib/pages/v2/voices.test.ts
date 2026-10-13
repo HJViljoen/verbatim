@@ -3,9 +3,9 @@ import { SEALAND_CLIENT_ID, OSSUR_CLIENT_ID } from '../../config'
 import { brandMonthPair, type BrandCrossRow, type BrandMonthVideos, type CreatorThemes } from '../../reading/cross'
 import {
   buildBrandPanel, buildBrands, buildCreatorPanel, buildCreators, buildGroupPanel, buildGroups, clientNameCounts, clientNameCountsByCount,
-  creatorVideoIds, firstSentence, groupRows, initialsOf, matchesBrand, openOf, parseVoicesParams, personasOf, phrasesOf, PHRASE_MAX_WORDS,
-  resolveCreator, themeVideoSets, topFinding, topVoicesOf, voicesHref, whoLabel,
-  BRANDS_NOT_COUNTED, BRANDS_NOT_READ, GROUPS_NOT_RUN, GROUPS_NONE, GROUPS_UNREAD,
+  creatorVideoIds, crossKeys, findingsFor, firstSentence, groupRows, initialsOf, matchesBrand, noteOf, openOf, parseVoicesParams, personasOf,
+  phrasesOf, PHRASE_MAX_WORDS, resolveCreator, themeVideoSets, topFinding, topVoicesOf, voicesHref, whoLabel,
+  BRANDS_NOT_COUNTED, BRANDS_NOT_READ, GROUPS_NOT_RUN, GROUPS_NONE, GROUPS_UNREAD, type FindingRow,
 } from './voices'
 import { ossurVoicesFixture, sealandVoicesFixture } from './voices-fixture'
 
@@ -143,8 +143,16 @@ describe('the brands', () => {
   it('is not read for a tenant with no brand rules, and not counted where no month row exists (Össur today)', () => {
     expect(buildBrands({ clientId: OSSUR_CLIENT_ID, month: SEP, pairs: null, crosses: null, note: null, params: {} })).toMatchObject({ state: 'not_read', empty: BRANDS_NOT_READ })
     const none = brandMonthPair({ month: SEP, brands: brands.slice(0, 2), rows: [], audiences: ['industry-other'], pair: null })
-    expect(buildBrands({ clientId: OSSUR_CLIENT_ID, month: SEP, pairs: none, crosses: null, note: null, params: {} }))
-      .toMatchObject({ state: 'not_counted', empty: BRANDS_NOT_COUNTED, tracked: ['Sealand', 'Patagonia'], rows: [] })
+    const b = buildBrands({ clientId: OSSUR_CLIENT_ID, month: SEP, pairs: none, crosses: null, note: { rival: 'Patagonia', title: 'A finding' }, params: { brand: 'patagonia' } })
+    expect(b).toMatchObject({ state: 'not_counted', empty: BRANDS_NOT_COUNTED, rows: [] })
+    expect(b.tracked).toEqual([
+      { label: 'Sealand', href: '/dashboard/voices?brand=Sealand#brand-panel' },
+      { label: 'Patagonia', href: '/dashboard/voices' },
+    ])
+    // Every tracked brand is still there to open, each saying it is not counted;
+    // the latest update's finding is still the note, and its link opens.
+    expect(b.all.map((r) => [r.label, r.state, r.stateWords])).toEqual([['Sealand', 'not_yet', 'not counted yet'], ['Patagonia', 'not_yet', 'not counted yet']])
+    expect(b.note).toEqual({ rival: 'Patagonia', title: 'A finding', href: '/dashboard/voices?brand=Patagonia#brand-panel' })
   })
 
   it('counts unprompted on one base, you first, and the crosses over every video naming it', () => {
@@ -159,8 +167,10 @@ describe('the brands', () => {
     expect(p.verdict?.state).toBe('too_little_data')
     expect(p.prevNamed).toEqual({ k: 4, n: 250, month: '2026-08-01' })
     expect(p.selected).toBe(true)
-    expect(b.notNamed).toEqual(['Old School', 'Rareform'])
-    expect(b.notCounted).toEqual([{ label: 'Freitag', words: 'mostly the German word for Friday · not counted' }, { label: 'Newcomer', words: 'not counted yet' }])
+    expect(b.notNamed.map((x) => x.label)).toEqual(['Old School', 'Rareform'])
+    expect(b.notNamed[0].href).toBe('/dashboard/voices?brand=Old+School#brand-panel')
+    expect(b.notCounted.map((x) => [x.label, x.words])).toEqual([['Freitag', 'mostly the German word for Friday · not counted'], ['Newcomer', 'not counted yet']])
+    expect(b.all).toHaveLength(6)
     expect(b.note).toEqual({ rival: 'Patagonia', title: 'Lasts for years', href: '/dashboard/voices?brand=Patagonia#brand-panel' })
   })
 
@@ -169,6 +179,13 @@ describe('the brands', () => {
     const b = buildBrands({ clientId: SEALAND_CLIENT_ID, month: SEP, pairs, crosses: { videos: unread, kinds, subjects }, note: null, params: {} })
     expect(b.rows.map((r) => r.label)).toEqual(['Patagonia'])
     expect(b.notCounted.map((r) => r.label)).toContain('Sealand')
+    // NO SET READ IS NO MATCH READ: with no crosses and no judgement handed
+    // in, your row fails closed (it used to pass on an empty set).
+    const blind = buildBrands({ clientId: SEALAND_CLIENT_ID, month: SEP, pairs, crosses: null, note: null, params: {} })
+    expect(blind.rows.map((r) => r.label)).toEqual(['Patagonia'])
+    expect(blind.all.find((r) => r.you)?.state).toBe('not_yet')
+    // The caller's judgement, where it has one, stands.
+    expect(buildBrands({ clientId: SEALAND_CLIENT_ID, month: SEP, pairs, crosses: null, note: null, params: {}, clientCounts: true }).rows[0].label).toBe('Sealand')
     expect(clientNameCounts(SEALAND_CLIENT_ID, SEP, [])).toBe(true)
     expect(clientNameCounts(SEALAND_CLIENT_ID, '2026-10-01', ['x'])).toBe(false)
     // Össur's name is checked (T15) and no match of it outside its posts is read yet.
@@ -183,6 +200,22 @@ describe('the brands', () => {
     expect(matchesBrand(b, 'Patagonia')).toBe(false)
     expect(matchesBrand({ brandKey: 'client', label: 'Össur' }, 'you')).toBe(true)
     expect(matchesBrand(b, '')).toBe(false)
+  })
+
+  it('crosses only the brands whose month row may print', () => {
+    expect(crossKeys(pairs)).toEqual(['client', 'p'])
+    expect(crossKeys(brandMonthPair({ month: SEP, brands, rows: [], audiences: ['industry-other'], pair: null }))).toEqual([])
+  })
+
+  it('reads one rival\'s findings off the latest update, and no note under a month the reader chose', () => {
+    const rows: FindingRow[] = [
+      { id: '1', run_id: 'r', category: 'content_gap', competitor_name: 'Ottobock', title: ' Gap ', finding: 'Body', impact_level: 'high' },
+      { id: '2', run_id: 'r', category: 'notable_account', competitor_name: 'Ottobock', title: 'Held', finding: null, impact_level: 'high' },
+      { id: '3', run_id: 'r', category: 'content_gap', competitor_name: 'Other', title: 'Not this rival', finding: null, impact_level: 'low' },
+    ]
+    expect(findingsFor(rows, 'ottobock')).toEqual([{ id: '1', category: 'content_gap', title: 'Gap', body: 'Body' }])
+    expect(noteOf('current_early', rows, ['Ottobock'])).toEqual({ rival: 'Ottobock', title: 'Gap' })
+    expect(noteOf('explicit', rows, ['Ottobock'])).toBeNull()
   })
 
   it('takes Pass C\'s weightiest finding of a tracked brand as the note, the held kinds left out', () => {
@@ -208,6 +241,16 @@ describe('the brands', () => {
     expect(panel.asked?.themes[0].href).toBe('/dashboard/market?conv=t9#conversation-panel')
     expect(panel.findings).toEqual([{ id: 'f2', kindWords: 'where the content differs', title: 'kept', body: 'b' }])
     expect(panel.closeHref).toBe('/dashboard/voices')
+    expect(panel).toMatchObject({ stateWords: null, tooFew: false })
+  })
+
+  it('opens a brand the table does not print: its count half says why, its rival half stands', () => {
+    const b = buildBrands({ clientId: SEALAND_CLIENT_ID, month: SEP, pairs, crosses: { videos: sets, kinds, subjects }, note: null, params: {} })
+    const noise = buildBrandPanel({ row: b.all.find((r) => r.label === 'Freitag')!, kinds: undefined, subjects: undefined, noun: null, window: null, asked: null, said: [], findings: [{ id: 'f', category: 'content_gap', title: 't', body: null }], params: {} })
+    expect(noise).toMatchObject({ state: 'noise', stateWords: 'mostly the German word for Friday · not counted', tooFew: false, kinds: [], named: null })
+    expect(noise.findings).toHaveLength(1)
+    const zero = buildBrandPanel({ row: b.all.find((r) => r.label === 'Rareform')!, kinds: undefined, subjects: undefined, noun: null, window: null, asked: null, said: [], findings: [], params: {} })
+    expect(zero).toMatchObject({ state: 'counted', tooFew: true, named: { k: 0, n: 743 } })
   })
 })
 
@@ -227,16 +270,26 @@ describe('the creators', () => {
   ]
   const brands = [{ label: 'Patagonia', you: false, any: new Set(['a', 'b']) }, { label: 'Sealand', you: true, any: new Set(['c']) }]
 
-  it('lists the accounts at the floor, names their conversation where it has a label, and the brand named most', () => {
-    const c = buildCreators({ month: SEP, read, labels: new Map([['t1', 'Laundry']]), videoIds: creatorVideoIds(market), brands, params: { creator: 'r/onebag' } })
-    expect(c.accounts).toBe(4)
-    expect(c.atFloor).toBe(3)
-    expect(c.rows.map((r) => [r.key, r.param])).toEqual([['reddit|r/onebag', 'r/onebag'], ['tiktok|kate', 'tiktok|kate'], ['youtube|kate', 'youtube|kate']])
-    expect(c.rows[0]).toMatchObject({ top: { registryId: 't1', label: 'Laundry', k: 2, ofTheme: 8 }, brand: { label: 'Patagonia', k: 2, you: false }, selected: true, followerWord: 'followers' })
-    expect(c.rows[2].followerWord).toBe('subscribers')
+  it('lists the people and brands at the floor, never a Reddit community, with their conversation and the brand named most', () => {
+    const c = buildCreators({ month: SEP, read, labels: new Map([['t1', 'Laundry']]), videoIds: creatorVideoIds(market), brands, params: { creator: 'tiktok|kate' } })
+    expect(c.accounts).toBe(3)
+    expect(c.atFloor).toBe(2)
+    expect(c.communitiesLeftOut).toBe(true)
+    expect(c.rows.map((r) => [r.key, r.param])).toEqual([['tiktok|kate', 'tiktok|kate'], ['youtube|kate', 'youtube|kate']])
+    expect(c.rows[0]).toMatchObject({ top: null, brand: null, selected: true, followerWord: 'followers', followers: 88400 })
+    expect(c.rows[1].followerWord).toBe('subscribers')
     expect(c.more).toBe(0)
     expect(c.toggleHref).toBe('/dashboard/voices?creators=all')
     expect(c.empty).toBeNull()
+    const noReddit = buildCreators({ month: SEP, read: { ...read, creators: read.creators.slice(1) }, labels: new Map(), videoIds: new Map(), brands: [], params: {} })
+    expect(noReddit.communitiesLeftOut).toBe(false)
+  })
+
+  it('names a creator\'s conversation where it has a label, and the brand named in most of its videos', () => {
+    const tiktok = { ...read.creators[0], key: 'tiktok|onebag', account: 'onebag', platform: 'tiktok' }
+    const vids = creatorVideoIds(market.map((m) => (m.account === 'r/onebag' ? { ...m, platform: 'tiktok', account: 'onebag' } : m)))
+    const c = buildCreators({ month: SEP, read: { ...read, creators: [tiktok] }, labels: new Map([['t1', 'Laundry']]), videoIds: vids, brands, params: {} })
+    expect(c.rows[0]).toMatchObject({ top: { registryId: 't1', label: 'Laundry', k: 2, ofTheme: 8 }, brand: { label: 'Patagonia', k: 2, you: false } })
   })
 
   it('says so when no account reaches the floor, and when the creators were not read', () => {
@@ -267,8 +320,12 @@ describe('the page and the Dashboard tile', () => {
     expect(openOf(d, { group: 'gone', brand: 'patagonia' })?.kind).toBe('brand')
     expect(openOf(d, { creator: 'Pack Hacker' })).toEqual({ kind: 'creator', key: 'youtube|Pack Hacker' })
     expect(openOf(d, { brand: 'Nobody' })).toBeNull()
-    // Össur's brands are not counted, so no brand opens.
-    expect(openOf(ossurVoicesFixture(), { brand: 'Ottobock' })).toBeNull()
+    // ANY tracked brand opens: one the table does not print (Freedom of Movement, named
+    // in no video), and Össur's rival, counted or not.
+    expect(openOf(d, { brand: 'Freedom of Movement' })).toEqual({ kind: 'brand', key: 'c-fom' })
+    expect(openOf(ossurVoicesFixture(), { brand: 'competitor:Ottobock' })).toEqual({ kind: 'brand', key: '5ecfa431' })
+    // A subreddit is no creator.
+    expect(openOf(d, { creator: 'r/onebag' })).toBeNull()
   })
 
   it('tops the tile with the group of the most videos, and the two brands named most', () => {
