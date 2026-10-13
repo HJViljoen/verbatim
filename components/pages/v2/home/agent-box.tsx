@@ -1,26 +1,30 @@
 import Link from 'next/link'
+import type { ReactNode } from 'react'
 import { NAV_ICON } from '@/components/nav-icons'
-import type { AgentBox } from '@/lib/pages/v2/home'
+import type { AgentBox, AgentTry } from '@/lib/pages/v2/home'
 import { cn } from '@/lib/utils'
 import { TILE, TileHead } from './parts'
 
 // THE AGENT BOX (Design v2, T8; E1-Dashboard's last card): a question and Ask,
 // which opens the Agent with the question in its box (`/dashboard/agent?ask=`).
-// A plain GET form, so it works before any script has loaded. Under it, two
-// questions to try, the Agent's own question about each of the week's two
-// biggest conversations (`agentTries`), each a link that opens the Agent with
-// it asked; none where the read froze no conversations.
+// A plain GET form, so it works before any script has loaded, drawn at once.
+// Under it, the week's two biggest conversations to ask about (`agentTries`:
+// the read's, else the ones the Market tile leads with), each a link that
+// opens the Agent asking what the market says about it; none where neither
+// holds a conversation.
 
 /** The box's line (the board's; "rival", the board's word for a competitor). */
 export const AGENT_LINE = 'Ask what your market thinks about anything: a product, a price, a claim, a rival.'
 /** The phone board's shorter line. */
 export const AGENT_LINE_PHONE = 'Ask the Agent about anything in your market'
 
-export function AgentBoxView({ box }: { box: AgentBox }) {
+/** The box: its head, the line and the question box, and `children` (the
+ *  questions to try) under it. */
+export function AgentBoxShell({ action, children }: { action: string; children?: ReactNode }) {
   return (
     <article aria-labelledby="home-agent" data-tile="agent" className={cn(TILE, 'col-span-12 min-[1180px]:col-span-4')}>
       <div className="max-sm:hidden"><TileHead icon={NAV_ICON.ask} name="Agent" id="home-agent" href={null} /></div>
-      <form action={box.action} method="get" className="flex flex-col gap-3">
+      <form action={action} method="get" className="flex flex-col gap-3">
         <label htmlFor="home-ask" className="text-[13px] leading-[1.45] text-muted-foreground max-sm:font-medium max-sm:text-foreground">
           <span className="max-sm:hidden">{AGENT_LINE}</span>
           <span className="sm:hidden">{AGENT_LINE_PHONE}</span>
@@ -41,17 +45,27 @@ export function AgentBoxView({ box }: { box: AgentBox }) {
           </button>
         </div>
       </form>
-      {box.tries.length > 0 ? (
-        <div className="flex flex-col gap-1 text-[13px] leading-[1.45] max-sm:hidden">
-          <span className="text-muted-foreground">Try</span>
-          {box.tries.map((t) => (
-            <Link key={t.href} href={t.href} className="text-foreground no-underline underline-offset-[3px] hover:underline">
-              {/* The Agent's question, about a conversation by its label. */}
-              <span data-copy="subject" data-slot="pass_b_theme">{t.question}</span>
-            </Link>
-          ))}
-        </div>
-      ) : null}
+      {children}
     </article>
   )
+}
+
+/** The conversations to ask about, each a link that opens the Agent with its
+ *  question asked. */
+export function AgentTries({ tries }: { tries: readonly AgentTry[] }) {
+  if (tries.length === 0) return null
+  return (
+    <div className="flex flex-col gap-1 text-[13px] leading-[1.45] max-sm:hidden">
+      <span className="text-muted-foreground">Try asking about</span>
+      {tries.map((t) => (
+        <Link key={t.href} href={t.href} aria-label={t.question} className="text-foreground no-underline underline-offset-[3px] hover:underline">
+          <span data-copy="subject" data-slot="pass_b_theme">{t.label}</span> →
+        </Link>
+      ))}
+    </div>
+  )
+}
+
+export function AgentBoxView({ box }: { box: AgentBox }) {
+  return <AgentBoxShell action={box.action}><AgentTries tries={box.tries} /></AgentBoxShell>
 }

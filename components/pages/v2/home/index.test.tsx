@@ -128,7 +128,8 @@ describe('the Dashboard, as the board draws it (E1-Dashboard)', () => {
     expect(t).toContain(AGENT_LINE)
     expect(markup).toMatch(/<form[^>]*action="\/dashboard\/agent" method="get"/)
     expect(markup).toContain('name="ask"')
-    expect(t).toMatch(/Try What does my market say about how long a liner lasts\? Who is talking about insurance refusals for powered knees\?/)
+    expect(t).toMatch(/Try asking about How long a liner lasts → Insurance refusals for powered knees →/)
+    expect(markup).toContain(`href="/dashboard/agent?ask=${encodeURIComponent('What does my market say about "How long a liner lasts"?')}"`)
   })
 
   it('every tile links into its page\'s panel', () => {
@@ -258,7 +259,7 @@ describe('the phone board (E1-Dashboard-Phone)', () => {
     expect(tileMarkup(markup, 'voices')).toMatch(/role="list"[^>]*class="[^"]*max-sm:hidden/)
     expect(tileMarkup(markup, 'content')).toMatch(/class="flex flex-wrap gap-2 max-sm:hidden"/)
     expect(tileMarkup(markup, 'moves')).toMatch(/bg-inner[^"]*max-sm:hidden/)
-    expect(tileMarkup(markup, 'agent')).toMatch(/max-sm:hidden"><span class="text-muted-foreground">Try/)
+    expect(tileMarkup(markup, 'agent')).toMatch(/max-sm:hidden"><span class="text-muted-foreground">Try asking about/)
   })
   it('keeps the week beside its month, and the medical team line, on a phone too', () => {
     expect(tileMarkup(markup, 'market')).not.toMatch(/data-copy="level"[^>]*max-sm:hidden/)
@@ -291,13 +292,16 @@ describe('the route streams each tile on its own', () => {
     const stream = await renderToReadableStream(<DashboardStream reads={{ ...reads, moves: slow }} />)
     const reader = stream.getReader()
     let first = ''
-    // Read what is ready before the slow tile settles.
-    for (let i = 0; i < 20 && !first.includes('data-tile="agent"'); i++) {
+    // Read what is ready before the slow tile settles: the shell with every
+    // tile's bones (the Agent's question box drawn at once), then each tile
+    // whose read has settled.
+    for (let i = 0; i < 20 && !first.includes('data-tile="content"'); i++) {
       const { value, done } = await reader.read()
       if (done) break
       first += new TextDecoder().decode(value)
     }
     expect(first).toContain('aria-label="Loading Your moves"')
+    expect(first).toContain('data-tile="agent"')
     expect(first).toContain('data-tile="market"')
     expect(first).not.toContain('data-tile="moves"')
     release!()

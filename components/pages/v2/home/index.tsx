@@ -4,7 +4,7 @@ import { Bone } from '@/components/shell/skeleton'
 import { weekdayDate } from '@/lib/format'
 import { surface } from '@/lib/nav'
 import type { DashboardBar, DashboardData, DashboardReads } from '@/lib/pages/v2/home'
-import { AgentBoxView } from './agent-box'
+import { AgentBoxShell, AgentBoxView, AgentTries } from './agent-box'
 import { ContentTileView } from './content-tile'
 import { MarketTileView } from './market-tile'
 import { MovesTileView } from './moves-tile'
@@ -84,7 +84,12 @@ export function DashboardStream({ reads }: { reads: DashboardReads }) {
       products={<Suspense fallback={<TileBones span="narrow" label="Loading Your products" />}><Settled read={reads.products}>{(r) => <ProductsTileView read={r} />}</Settled></Suspense>}
       content={<Suspense fallback={<TileBones span="narrow" label="Loading Content" />}><Settled read={reads.content}>{(r) => <ContentTileView read={r} />}</Settled></Suspense>}
       moves={<Suspense fallback={<TileBones span="wide" label="Loading Your moves" />}><Settled read={reads.moves}>{(r) => <MovesTileView read={r} />}</Settled></Suspense>}
-      agent={<Suspense fallback={<TileBones span="narrow" label="Loading the Agent" />}><Settled read={reads.agent}>{(box) => <AgentBoxView box={box} />}</Settled></Suspense>}
+      agent={(
+        // The question box draws at once; only its questions to try wait.
+        <AgentBoxShell action={surface('ask').href}>
+          <Suspense fallback={null}><Settled read={reads.agent}>{(box) => <AgentTries tries={box.tries} />}</Settled></Suspense>
+        </AgentBoxShell>
+      )}
     />
   )
 }

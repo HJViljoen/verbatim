@@ -1,7 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { loadObjectReadings, type MarketObjectRef } from '../../agent/movement'
-import { themeQuestion, topicOf } from '../../agent/starters'
 import { surface } from '../../nav'
 import { loadAppPairOn } from '../../reading/gather-flags'
 import { monthStartOf, prevMonth } from '../../reading/month-key'
@@ -152,8 +151,10 @@ export interface WeekTile {
   href: string
 }
 
-/** A question to try in the Agent box. */
+/** A conversation to ask the Agent about from the box: its label (the link's
+ *  words) and the question the link asks. */
 export interface AgentTry {
+  label: string
   question: string
   href: string
 }
@@ -248,19 +249,30 @@ export function weekSubjectsOf(facts: readonly StandingFact[], month: string, so
 }
 
 /**
- * The questions to try (the board's "Try"): the Agent's own question about
- * each of the week's two biggest conversations, as the read froze them
- * (`conversations`, ranked as the week's lead ranks them; a set-apart one
- * leads nothing, decision F). The first asks what the market says; the
- * second, who is talking. None where the read froze no conversations. Pure.
+ * What to try asking (the board's "Try"): the week's two biggest
+ * conversations, by their labels. The read's frozen `conversations` where it
+ * holds them (ranked as the week's lead ranks them, T11b), else the ones the
+ * Market tile leads with (its lead and its rows: a read stored before T11b
+ * holds none); a set-apart one leads nothing (decision F). Each link asks the
+ * Agent what the market says about that conversation, its label quoted
+ * whole: a label is a model's free text ("Will it fit airline rules"), and no
+ * one sentence frame reads right around every one, so the box prints the
+ * label and the question carries it. None where neither holds one. Pure.
  */
-export function agentTries(read: PublishedWeekRead | null): AgentTry[] {
+export function agentTries(read: PublishedWeekRead | null, market: MarketTop | null = null): AgentTry[] {
   const data = read?.data
-  const convs = data && data.version === 2 ? (data.conversations ?? []) : []
-  const picked = convs.filter((c) => !c.setApart && c.label.trim()).slice(0, AGENT_TRIES)
-  return picked.map((c, i) => {
-    const question = i === 0 ? themeQuestion({ label: c.label, kind: null }) : `Who is talking about ${topicOf(c.label)}?`
-    return { question, href: `${surface('ask').href}?ask=${encodeURIComponent(question.slice(0, 300))}` }
+  const frozen = data && data.version === 2 ? (data.conversations ?? []) : []
+  const labels: string[] = frozen.filter((c) => !c.setApart && c.label.trim()).map((c) => c.label.trim())
+  if (labels.length < AGENT_TRIES && market) {
+    const hero = market.hero
+    const lead = hero ? (hero.kind === 'flag' ? hero.card.conv : hero.conv) : null
+    for (const c of [lead, ...market.rows.map((r) => r.conv)]) {
+      if (c && !c.setApart && c.label.trim() && !labels.includes(c.label.trim())) labels.push(c.label.trim())
+    }
+  }
+  return labels.slice(0, AGENT_TRIES).map((label) => {
+    const question = `What does my market say about "${label}"?`
+    return { label, question, href: `${surface('ask').href}?ask=${encodeURIComponent(question.slice(0, 300))}` }
   })
 }
 
@@ -404,7 +416,9 @@ export function startDashboard(session: DashboardSession): DashboardReads {
     products,
     content,
     moves,
-    agent: publishedSoft.then((read) => ({ action: surface('ask').href, tries: agentTries(read) })),
+    // The box draws at once; its questions to try wait for the read and the
+    // Market tile they are about.
+    agent: Promise.all([publishedSoft, market]).then(([read, m]) => ({ action: surface('ask').href, tries: agentTries(read, m.state === 'ok' ? m.top.top : null) })),
   }
 }
 

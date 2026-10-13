@@ -94,19 +94,27 @@ describe('the subjects on the week tile, as Market\'s board reads them', () => {
   })
 })
 
-describe('the Agent box\'s questions to try', () => {
-  it('asks about the week\'s two biggest conversations the read froze, never one set apart', () => {
+describe('the Agent box\'s conversations to try', () => {
+  it('names the week\'s two biggest conversations the read froze, never one set apart, each asking the Agent about it', () => {
     const tries = agentTries(fixturePublished())
     expect(tries).toHaveLength(AGENT_TRIES)
-    expect(tries[0].question).toBe('What does my market say about how long a liner lasts?')
-    expect(tries[1].question).toBe('Who is talking about insurance refusals for powered knees?')
+    expect(tries.map((t) => t.label)).toEqual(['How long a liner lasts', 'Insurance refusals for powered knees'])
+    expect(tries[0].question).toBe('What does my market say about "How long a liner lasts"?')
     expect(tries[0].href).toBe(`/dashboard/agent?ask=${encodeURIComponent(tries[0].question)}`)
     const base = fixturePublished()
     const apart = { ...base, data: { ...base.data, conversations: base.data.version === 2 ? base.data.conversations!.map((c, i) => ({ ...c, setApart: i === 0 })) : [] } }
-    expect(agentTries(apart)[0].question).toBe('What does my market say about insurance refusals for powered knees?')
+    expect(agentTries(apart)[0].label).toBe('Insurance refusals for powered knees')
   })
 
-  it('offers none without a read, or a read that froze no conversations', () => {
+  it('takes the conversations the Market tile leads with where the read froze none (a read stored before T11b)', () => {
+    const base = fixturePublished()
+    const older = { ...base, data: { ...(base.data as WeekReadDataV2), conversations: undefined } }
+    expect(agentTries(older, fixtureMarketTop({ flagged: false })).map((t) => t.label)).toEqual(['Waterproof knees', 'How long a liner lasts'])
+    // The flag's conversation leads where the check raised one.
+    expect(agentTries(null, fixtureMarketTop())[0].label).toBe('Insurance refusals for powered knees')
+  })
+
+  it('offers none without a read or a Market tile, or a read that froze no conversations', () => {
     expect(agentTries(null)).toEqual([])
     const base = fixturePublished()
     expect(agentTries({ ...base, data: { ...(base.data as WeekReadDataV2), conversations: undefined } })).toEqual([])
