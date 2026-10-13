@@ -1197,7 +1197,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
     ideas' run and the published week read's (`anchorOf`), either alone
     where the other is missing. Every week count sits beside its month
     (`readingMonthOf`). Ideas come from `post_ideas`, behind
-    `postIdeasEnabled` (opt-in, off for every tenant today): a missing table
+    `postIdeasEnabled` (opt-in; on for Sealand and Össur since 13 Oct): a missing table
     or the switch off reads "not switched on", no rows "none written", a
     failed read says so (`unread`). THE IDEAS PRINT THE DAYS THEY READ
     (Heinrich, 13 Oct): "From questions asked 14 Sep to 11 Oct"

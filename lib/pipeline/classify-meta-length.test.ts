@@ -22,7 +22,7 @@ vi.mock('../supabase-admin', async (orig) => {
 })
 
 import { fakeDb, type FakeDb } from '../test/fake-db'
-import { CLASSIFY_META_BATCH, CLASSIFY_META_MAX_OUTPUT_TOKENS, runClassifyMetaBatch } from './classify-meta'
+import { CLASSIFY_META_BATCH, CLASSIFY_META_CHARS_PER_TOKEN, CLASSIFY_META_MAX_OUTPUT_TOKENS, runClassifyMetaBatch } from './classify-meta'
 
 const CLIENT = '00000000-0000-4000-8000-0000000000aa'
 const RUN = '78a6eb3c-0000-4000-8000-000000000001'
@@ -88,6 +88,10 @@ describe('runClassifyMetaBatch: a batch whose answer runs into the output ceilin
     const logged = db.calls.filter((c) => c.table === 'ai_call_log' && c.op === 'insert').map((c) => (c.values as Record<string, unknown>[])[0])
     expect(logged).toHaveLength(3)
     expect(logged[0]).toMatchObject({ pass: 'classify_meta', call_index: 3, completion_tokens: CLASSIFY_META_MAX_OUTPUT_TOKENS, validation_status: 'parse_error' })
+    // The SDK reports no usage on a length stop: the prompt is estimated from its length.
+    const request = logged[0].request as { system: string; user: string }
+    expect(logged[0].prompt_tokens).toBe(Math.ceil((request.system.length + request.user.length) / CLASSIFY_META_CHARS_PER_TOKEN))
+    expect(Number(logged[0].prompt_tokens)).toBeGreaterThan(0)
     expect(String(logged[0].error_message)).toMatch(/length limit was reached \(25 videos, 8000-token ceiling\)/)
     expect(r.costUsd).toBeGreaterThan(Number(logged[0].cost_usd))
   })

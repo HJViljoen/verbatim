@@ -87,6 +87,11 @@ export const CLASSIFY_META_MAX_OUTPUT_TOKENS = 8000
  *  line of about forty words. A test measures such an entry against it. */
 export const CLASSIFY_META_ITEM_MAX_TOKENS = 300
 
+/** The characters a prompt token is counted at where the SDK reports no
+ *  usage (a call that ran into the ceiling): the usual rate for English,
+ *  an estimate in the ledger, never a measure. */
+export const CLASSIFY_META_CHARS_PER_TOKEN = 4
+
 /** The `videos.source` values the plan takes: the gathered corpus and the
  *  client's own posts. Never 'competitor_owned'. */
 export const CLASSIFY_META_SOURCES = ['discovered', OWNED_SOURCE] as const
@@ -406,8 +411,11 @@ export async function runClassifyMetaBatch(
       if (isLengthLimitError(e)) {
         // Billed to the ceiling: a length stop is exactly that many output
         // tokens. The SDK throws before it hands over the usage, so the
-        // prompt's tokens are not known and are not counted.
-        const usage = { prompt_tokens: 0, completion_tokens: CLASSIFY_META_MAX_OUTPUT_TOKENS }
+        // prompt's tokens are an ESTIMATE, at four characters a token.
+        const usage = {
+          prompt_tokens: Math.ceil((systemPrompt.length + userPrompt.length) / CLASSIFY_META_CHARS_PER_TOKEN),
+          completion_tokens: CLASSIFY_META_MAX_OUTPUT_TOKENS,
+        }
         overrunUsd += estimateCost(ANALYSIS_MODEL, usage.prompt_tokens, usage.completion_tokens)
         const message = e instanceof Error ? e.message : String(e)
         await logAiCall(admin, {
