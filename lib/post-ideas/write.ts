@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { zodResponseFormat } from 'openai/helpers/zod'
 import { z } from 'zod'
 
-import { SYNTHESIS_MODEL, SYNTHESIS_REASONING_EFFORT, estimateCost } from '../config'
+import { POST_IDEAS_BUDGET_USD, SYNTHESIS_MODEL, SYNTHESIS_REASONING_EFFORT, estimateCost } from '../config'
 import { openai } from '../openai'
 import { logAiCall } from '../pipeline/ai-log'
 import { asTimeout, isTimeout, UNTIMED_STEP, type CallBudget } from '../written/deadline'
@@ -11,9 +11,19 @@ import type { IdeaCandidate } from './select'
 
 // The post ideas' one model call (depth v2, T13). The week read's precedent
 // (lib/written/write-model.ts): the synthesis model at the synthesis effort,
-// one strict structured call, one more attempt on an answer that would not
-// parse, every attempt logged to `ai_call_log` as pass `post_ideas`, each held
-// to the step's clock (lib/written/deadline.ts) with no SDK retry.
+// one strict structured call, and ONE more attempt where the first gave
+// nothing usable: an answer that would not parse, or a failed call that was
+// not a timeout (a 429, a 5xx, a dropped connection). A timeout is not
+// retried here: it is thrown, for the step (and Inngest) to decide. Every
+// attempt is logged to `ai_call_log` as pass `post_ideas`, each held to the
+// step's clock (lib/written/deadline.ts) with no SDK retry.
+//
+// A HARD DOLLAR CAP (Phase 4 fix round). Before each attempt, what the call
+// has spent plus that attempt's worst case (`postIdeasAttemptMaxUsd`: the
+// prompt and the full output ceiling) must fit `maxUsd` (the step hands in
+// what the run can afford, at most `POST_IDEAS_BUDGET_USD`), or the attempt is
+// not made and `PostIdeasBudgetError` is thrown: never a call the cap cannot
+// cover.
 //
 // WHAT GOES TO THE MODEL. The company's name; for each conversation, its
 // label and description (Pass B's, the analyst's words) and its question
@@ -59,6 +69,28 @@ export function postIdeasSchema() {
 }
 
 export class PostIdeasWriteError extends Error {}
+
+/** The call was not made: its worst case would not fit what was left of the
+ *  cap. Never transient (a retry would meet the same cap). */
+export class PostIdeasBudgetError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'PostIdeasBudgetError'
+  }
+}
+
+/** Characters a prompt token is counted at for the worst case: two, well
+ *  under English's four, because 41% of stored quotes are not ASCII and
+ *  tokenise denser. An over-count only makes the cap stricter. */
+const CHARS_PER_TOKEN_WORST = 2
+
+/** One attempt's worst case in dollars: the whole prompt, counted densely, and
+ *  the full output ceiling (`POST_IDEAS_MAX_OUTPUT_TOKENS`, reasoning
+ *  included). Pure. */
+export function postIdeasAttemptMaxUsd(prompts: { system: string; user: string }): number {
+  const promptTokens = Math.ceil((prompts.system.length + prompts.user.length) / CHARS_PER_TOKEN_WORST)
+  return estimateCost(POST_IDEAS_MODEL, promptTokens, POST_IDEAS_MAX_OUTPUT_TOKENS)
+}
 
 /** The writer's two messages. Pure. */
 export function buildPostIdeaPrompts(a: { company: string; sells?: string | null; candidates: readonly IdeaCandidate[] }): { system: string; user: string } {
@@ -112,8 +144,9 @@ export interface PostIdeasCall {
 /**
  * The call. Throws `PostIdeasWriteError` where two attempts gave nothing that
  * parses (the error behind it kept as `cause`, so the step can tell a dropped
- * call from a bad answer), and a timeout (`isTransient`) where the step's
- * clock runs out.
+ * call from a bad answer), a timeout (`isTransient`) where the step's clock
+ * runs out, and `PostIdeasBudgetError`, before an attempt, where its worst
+ * case would not fit `maxUsd`.
  */
 export async function generatePostIdeas(
   admin: SupabaseClient | null,
@@ -125,6 +158,9 @@ export async function generatePostIdeas(
     log?: boolean
     client?: ParseClient
     budget?: CallBudget
+    /** The most the call may spend, retries in: what the run can afford,
+     *  at most (and by default) `POST_IDEAS_BUDGET_USD`. */
+    maxUsd?: number
   },
 ): Promise<PostIdeasCall> {
   const client = args.client ?? openai
@@ -135,7 +171,15 @@ export async function generatePostIdeas(
   let lastError = ''
   let lastCause: unknown
   let costUsd = 0
+  const maxUsd = Math.min(args.maxUsd ?? POST_IDEAS_BUDGET_USD, POST_IDEAS_BUDGET_USD)
+  const worst = postIdeasAttemptMaxUsd(args.prompts)
   for (let attempt = 1; attempt <= 2; attempt++) {
+    if (costUsd + worst > maxUsd) {
+      throw new PostIdeasBudgetError(
+        `the post ideas' call was not made: attempt ${attempt} may cost up to $${worst.toFixed(2)}, and $${Math.max(0, maxUsd - costUsd).toFixed(2)} is left of the $${maxUsd.toFixed(2)} it may spend (it has spent $${costUsd.toFixed(2)})`
+        + (lastError ? `; the attempt before it failed: ${lastError}` : ''),
+      )
+    }
     const options = budget.optionsFor('writer')
     const startedAt = Date.now()
     try {
