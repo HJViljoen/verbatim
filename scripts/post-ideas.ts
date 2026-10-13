@@ -112,7 +112,7 @@ function render(built: BuiltPostIdeas, mode: string): string {
     out.push(`- What they want to know (of ${idea.cover.asked?.videos ?? '?'} videos, ${idea.cover.asked?.comments ?? '?'} comments read):`)
     for (const s of idea.subquestions) {
       const n = subquestionCounts(s)
-      out.push(`  - ${s.label}: ${n.videos} videos, ${n.comments} comments`)
+      out.push(`  - ${s.label}: ${n.videos} ${n.videos === 1 ? 'video' : 'videos'}, ${n.comments} ${n.comments === 1 ? 'comment' : 'comments'}`)
       for (const id of s.commentIds.slice(0, 2)) out.push(`    - e.g. "${textOf.get(id) ?? '?'}"`)
     }
   }
@@ -124,7 +124,7 @@ function render(built: BuiltPostIdeas, mode: string): string {
     const handle = inputs.candidates.find((k) => k.themeId === x.themeId)?.handle
     const covered = inputs.covered.find((k) => k.themeId === x.themeId)
     const fate = handle ? `sent as ${handle}` : covered ? `left out: own posts touched it (${covered.posts.length})` : x.eligible ? 'not sent (past the cap)' : 'not eligible (the week pool\'s gate)'
-    out.push(`- "${x.label}": week ${x.weekVideos}, counted ${x.lenientVideos}; ${fate}`)
+    out.push(`- "${x.label}" (filed as ${x.kind ?? '?'}, mostly ${x.dominantKind ?? '?'} this week): week ${x.weekVideos}, counted ${x.lenientVideos}; ${fate}`)
   }
   out.push(`Own posts read for the touch test: ${inputs.ownPosts ?? 'unread'}.`)
   for (const h of built.held) out.push(`Held: ${h.question} "${h.label}": ${h.reason}`)

@@ -19,7 +19,7 @@ import type { ParseClient } from '../written/write-model'
 import { composePostIdeas, postIdeaRows, type HeldIdea, type PostIdeaDraft, type PostIdeaInsert } from './compose'
 import type { IdeaScrubCounts } from './scrub'
 import {
-  choosePlay, POST_IDEA_OWNED_MONTHS, QUESTION_KIND, questionComments, rankQuestions, untouchedQuestions, withHandles,
+  choosePlay, isQuestionConversation, POST_IDEA_OWNED_MONTHS, questionComments, rankQuestions, untouchedQuestions, withHandles,
   type CoveredQuestion, type IdeaCandidate, type PlayVideo,
 } from './select'
 import { isMissingPostIdeas, POST_IDEAS_ON_CONFLICT, TABLE_POST_IDEAS } from './types'
@@ -83,8 +83,8 @@ export interface PostIdeaInputs {
   month: string
   candidates: IdeaCandidate[]
   /** The workings: every question conversation on three or more category
-   *  videos in the window, and what became of it. */
-  considered: { themeId: string; label: string; weekVideos: number; lenientVideos: number; eligible: boolean }[]
+   *  videos in the window (`isQuestionConversation`), and what became of it. */
+  considered: { themeId: string; label: string; kind: string | null; dominantKind: string | null; weekVideos: number; lenientVideos: number; eligible: boolean }[]
   /** Conversations left out because the client's own posts touched them. */
   covered: CoveredQuestion[]
   /** The client's own posts the touch test read, or null where unread. */
@@ -167,13 +167,17 @@ export async function loadPostIdeaInputs(admin: SupabaseClient, opts: { clientId
   // only one on three category videos can reach three gated ones.
   const week = await loadWindowReading(admin, clientId, { from: window.from, to: window.to, runId, audiences: [INDUSTRY_AUDIENCE] })
   if (!week.themes) throw new Error('post ideas: the window reads are not applied here')
+  // Every conversation, not only those filed as questions: one filed under a
+  // topic is a question conversation where its comments this week mostly ask
+  // (`isQuestionConversation`), which only its evidence can say. The week
+  // pool reads the same.
   const raw = week.themes.filter((t) => t.audience === INDUSTRY_AUDIENCE && t.videos >= POOL_MIN_VIDEOS)
-  const themes = (await loadPoolThemes(admin, clientId, runId, raw)).filter((t) => t.kind === QUESTION_KIND)
+  const themes = await loadPoolThemes(admin, clientId, runId, raw)
   if (themes.length === 0) return empty
 
   const brands = await loadTrackedBrands(admin, clientId)
   const evidence = await loadDatedEvidence(admin, clientId, themes.flatMap((t) => t.memberIds), window, { brands })
-  const judged = themes.map((t) => judgeTheme(clientId, t, evidence))
+  const judged = themes.map((t) => judgeTheme(clientId, t, evidence)).filter(isQuestionConversation)
   const ranked = rankQuestions(judged)
   const eligible = new Set(ranked.map((j) => j.theme.themeId))
 
@@ -202,7 +206,7 @@ export async function loadPostIdeaInputs(admin: SupabaseClient, opts: { clientId
   return {
     ...empty,
     candidates,
-    considered: judged.map((j) => ({ themeId: j.theme.themeId, label: j.theme.label, weekVideos: j.theme.weekVideos, lenientVideos: j.lenientVideos, eligible: eligible.has(j.theme.themeId) }))
+    considered: judged.map((j) => ({ themeId: j.theme.themeId, label: j.theme.label, kind: j.theme.kind, dominantKind: j.dominantKind, weekVideos: j.theme.weekVideos, lenientVideos: j.lenientVideos, eligible: eligible.has(j.theme.themeId) }))
       .sort((a, b) => b.lenientVideos - a.lenientVideos || b.weekVideos - a.weekVideos || a.themeId.localeCompare(b.themeId)),
     covered,
     ownPosts: posts?.length ?? null,

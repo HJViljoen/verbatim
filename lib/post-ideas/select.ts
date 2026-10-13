@@ -2,7 +2,7 @@ import { questionTouch, type QuestionPost, type QuestionTouch } from '../pages/o
 import { ENGAGEMENT_EXCLUDED, formatReading, type FormatReading, type FormatRow, type FormatVideo } from '../reading/formats'
 import { INDUSTRY_AUDIENCE } from '../rivals'
 import { judge, type DatedEvidence } from '../written/evidence'
-import { countsForTheWeek, lenientGateFor, rankEligible, type PoolTheme, type ThemeJudgement } from '../written/pool'
+import { countsForTheWeek, lenientGateFor, POOL_MIN_VIDEOS, rankEligible, type PoolTheme, type ThemeJudgement } from '../written/pool'
 import { POST_IDEA_RANKS, type PostIdeaLength } from './types'
 
 // Which question conversations become post ideas, and what code decides about
@@ -11,7 +11,8 @@ import { POST_IDEA_RANKS, type PostIdeaLength } from './types'
 //
 // THE CANDIDATES. The run's question conversations of its own window: themes
 // of the run's clustering whose kind is `question` (`theme_observations.category`)
-// and that the week pool would take (`rankEligible`, lib/written/pool.ts: at
+// or whose counted comments in the window are mostly questions
+// (`isQuestionConversation`), and that the week pool would take (`rankEligible`, lib/written/pool.ts: at
 // least three category videos on the read lane with a citation the lenient
 // gate passes, one with a quote the strict gate passes, not maker-led), in the
 // week pool's order, biggest first. A conversation the client's own posts
@@ -55,8 +56,14 @@ export const POST_IDEA_COMMENT_CHARS = 280
 export const POST_IDEA_SUBQUESTIONS_MAX = 5
 /** A format or opening is suggested only at this multiple or above. */
 export const POST_IDEA_MIN_MULTIPLE = 1.1
-/** Durations a length is read off, at least. */
-export const LENGTH_MIN_VIDEOS = 3
+/** Durations a length is read off, at least: under five, the middle half is
+ *  the whole range (three testimonials ran 30 s and 3:15 on Össur's week). */
+export const LENGTH_MIN_VIDEOS = 5
+/** The longest video a length is read off: the short form the board's length
+ *  is ("30 to 45 seconds"), up to YouTube's Shorts ceiling. A long-form video
+ *  on the same question is another post (Sealand's airline question mixed
+ *  thirty-second reels with seventeen-minute reviews: a range of nothing). */
+export const LENGTH_MAX_SECONDS = 180
 /** Months of the client's own posts the "already touched" test reads: the
  *  reading month and the two before it. */
 export const POST_IDEA_OWNED_MONTHS = 3
@@ -110,9 +117,21 @@ export interface IdeaCandidate {
 
 // ---- The conversations --------------------------------------------------------------
 
+/**
+ * Is this a question conversation? Its kind is `question` (Pass B's category),
+ * or most of its counted citations in the window are questions (the week
+ * pool's `dominantKind`, in videos): a conversation filed under fit or price
+ * whose comments this week mostly ASK is as much a question as one filed
+ * under questions, and on Össur's corpus most questions are filed under a
+ * topic (the 4 to 11 Oct window held two of the first kind and more of the
+ * second).
+ */
+export const isQuestionConversation = (j: Pick<ThemeJudgement, 'theme' | 'dominantKind'>): boolean =>
+  j.theme.kind === QUESTION_KIND || j.dominantKind === QUESTION_KIND
+
 /** The question conversations the week pool would take, biggest first. */
 export function rankQuestions(judged: readonly ThemeJudgement[]): ThemeJudgement[] {
-  return rankEligible(judged.filter((j) => j.theme.kind === QUESTION_KIND))
+  return rankEligible(judged.filter(isQuestionConversation))
 }
 
 /** One conversation the client's posts already touch, and the posts. */
@@ -170,8 +189,11 @@ export function questionComments(
   const members = new Set(theme.memberIds)
   const gate = lenientGateFor(clientId, theme.label)
   const counted = evidence.filter((e) => members.has(e.insightId) && countsForTheWeek(e) && judge(e, gate).ok && (e.english ?? e.text).trim() !== '')
+  // The questions where they reach as many videos as a conversation needs;
+  // otherwise every counted comment (a price conversation's "how much?" is
+  // often filed as buying intent), and the writer leaves out what asks nothing.
   const asking = counted.filter((e) => e.kind === QUESTION_KIND)
-  const pool = asking.length > 0 ? asking : counted
+  const pool = new Set(asking.map((e) => e.video.uuid)).size >= POOL_MIN_VIDEOS ? asking : counted
   // One row per comment: its best-ranked citation.
   const byComment = new Map<string, DatedEvidence>()
   for (const e of [...pool].sort((a, b) => a.rank - b.rank || a.evidenceId.localeCompare(b.evidenceId))) {
@@ -225,9 +247,10 @@ export function roundSeconds(s: number): number {
 
 /**
  * How long the post should run: the middle half (nearest-rank quartiles) of
- * the durations of the videos on the question that drew at least the typical
- * response on it (`typical`, the question's median), in `format` where at
- * least `LENGTH_MIN_VIDEOS` of them carry a duration, else in any format.
+ * the durations of the short-form videos (`LENGTH_MAX_SECONDS`) on the
+ * question that drew at least the typical response on it (`typical`, the
+ * question's median), in `format` where at least `LENGTH_MIN_VIDEOS` of them
+ * carry a duration, else in any format.
  * Null where too few carry one, or there is no typical response to read
  * against. Pure.
  */
@@ -236,7 +259,7 @@ export function ideaLength(videos: readonly PlayVideo[], format: string | null, 
   const strong = videos.filter((v) => {
     const rate = rateOf(v)
     const d = Number(v.duration_seconds)
-    return rate !== null && rate >= typical && Number.isFinite(d) && d > 0
+    return rate !== null && rate >= typical && Number.isFinite(d) && d > 0 && d <= LENGTH_MAX_SECONDS
   })
   const inFormat = format ? strong.filter((v) => v.classified_type === format) : []
   const [set, basis]: [readonly PlayVideo[], PostIdeaLength['basis']] | [null, null] =

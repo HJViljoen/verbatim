@@ -6,7 +6,7 @@ import { INDUSTRY_AUDIENCE } from '../rivals'
 import type { DatedEvidence } from '../written/evidence'
 import type { PoolTheme, ThemeJudgement } from '../written/pool'
 import {
-  bestRow, choosePlay, ideaLength, LENGTH_MIN_VIDEOS, POST_IDEA_CANDIDATES, POST_IDEA_MIN_MULTIPLE, POST_IDEAS_MAX,
+  bestRow, choosePlay, ideaLength, isQuestionConversation, LENGTH_MAX_SECONDS, LENGTH_MIN_VIDEOS, POST_IDEA_CANDIDATES, POST_IDEA_MIN_MULTIPLE, POST_IDEAS_MAX,
   questionComments, rankQuestions, roundSeconds, untouchedQuestions, withHandles, type PlayVideo,
 } from './select'
 
@@ -87,14 +87,12 @@ describe('questionComments: the conversation\'s question comments, as the writer
     expect(out.map((c) => c.videoId).sort()).toEqual(['v-1', 'v-2'])
   })
 
-  it('prefers question-kind citations where the conversation has any, and takes the others only where it has none', () => {
-    const mixed = [
-      ev({ insight: 'q1', video: 1, text: ASKS[0] }),
-      ev({ insight: 'q2', video: 2, text: 'This backpack kept my laptop dry through a storm in Lisbon last week.', kind: 'praise' }),
-    ]
-    expect(questionComments(SEALAND, WATERPROOF, mixed).map((c) => c.videoId)).toEqual(['v-1'])
-    const none = [ev({ insight: 'q2', video: 2, text: 'This backpack kept my laptop dry through a storm in Lisbon last week.', kind: 'praise' })]
-    expect(questionComments(SEALAND, WATERPROOF, none).map((c) => c.videoId)).toEqual(['v-2'])
+  it('takes the question-kind citations where they reach three videos, and every counted one where they do not', () => {
+    const praise = ev({ insight: 'q4', video: 9, text: 'This backpack kept my laptop dry through a storm in Lisbon last week.', kind: 'praise' })
+    const asking = [ev({ insight: 'q1', video: 1, text: ASKS[0] }), ev({ insight: 'q2', video: 2, text: ASKS[1] }), ev({ insight: 'q3', video: 3, text: ASKS[2] })]
+    expect(questionComments(SEALAND, WATERPROOF, [...asking, praise]).map((c) => c.videoId).sort()).toEqual(['v-1', 'v-2', 'v-3'])
+    // Two videos of questions: a price conversation's "how much?" is often filed as buying intent.
+    expect(questionComments(SEALAND, WATERPROOF, [...asking.slice(0, 2), praise]).map((c) => c.videoId).sort()).toEqual(['v-1', 'v-2', 'v-9'])
   })
 
   it('takes one row per comment, reads the English where there is one, and draws round the videos under a cap', () => {
@@ -118,7 +116,7 @@ describe('questionComments: the conversation\'s question comments, as the writer
 
 // ---- The conversations ----------------------------------------------------------------
 
-const judgement = (o: { id: string; label: string; kind?: string; lenient: number; gated?: number; week?: number; makers?: number }): ThemeJudgement => ({
+const judgement = (o: { id: string; label: string; kind?: string; dominant?: string; lenient: number; gated?: number; week?: number; makers?: number }): ThemeJudgement => ({
   theme: { themeId: o.id, label: o.label, description: null, kind: o.kind ?? 'question', matchKind: 'strong', memberIds: [], weekVideos: o.week ?? o.lenient },
   lenientVideos: o.lenient,
   lenientVideoIds: [],
@@ -126,8 +124,8 @@ const judgement = (o: { id: string; label: string; kind?: string; lenient: numbe
   gatedVideoIds: [],
   quoteRefs: [],
   quoteOptions: [],
-  kinds: ['question'],
-  dominantKind: 'question',
+  kinds: [o.dominant ?? o.kind ?? 'question'],
+  dominantKind: o.dominant ?? o.kind ?? 'question',
   notes: [],
   seenVideos: o.lenient,
   makerVideos: o.makers ?? 0,
@@ -138,26 +136,29 @@ describe('rankQuestions and untouchedQuestions: the conversations handed to the 
     judgement({ id: 'th-small', label: 'Questions about strap length', lenient: 3 }),
     judgement({ id: 'th-rain', label: 'Questions about waterproof backpack coating', lenient: 9 }),
     judgement({ id: 'th-praise', label: 'Praise for the roll top', kind: 'praise', lenient: 20 }),
+    judgement({ id: 'th-fit', label: 'Hip belt fit', kind: 'pain_point', dominant: 'question', lenient: 5 }),
     judgement({ id: 'th-thin', label: 'Questions about colours', lenient: 2 }),
     judgement({ id: 'th-maker', label: 'Questions about sewing patterns', lenient: 8, makers: 6 }),
     judgement({ id: 'th-laptop', label: 'Questions about laptop sleeve size', lenient: 6 }),
   ]
 
-  it('takes question conversations the week pool would take, biggest first', () => {
-    expect(rankQuestions(judged).map((j) => j.theme.themeId)).toEqual(['th-rain', 'th-laptop', 'th-small'])
+  it('takes question conversations the week pool would take, biggest first: filed as questions, or mostly asking this week', () => {
+    expect(rankQuestions(judged).map((j) => j.theme.themeId)).toEqual(['th-rain', 'th-laptop', 'th-fit', 'th-small'])
+    expect(isQuestionConversation(judgement({ id: 'x', label: 'x', kind: 'question', dominant: 'purchase_intent', lenient: 3 }))).toBe(true)
+    expect(isQuestionConversation(judgement({ id: 'x', label: 'x', kind: 'praise', lenient: 3 }))).toBe(false)
   })
 
   it('leaves out a conversation the client\'s own posts touched, by the one rule every page uses', () => {
     const posts = [{ id: 'own-1', topics: ['waterproof coating test', 'backpack in rain'], upload_date: '2026-10-02', video_url: null }]
     const { kept, covered } = untouchedQuestions(rankQuestions(judged), posts)
-    expect(kept.map((k) => k.judgement.theme.themeId)).toEqual(['th-laptop', 'th-small'])
+    expect(kept.map((k) => k.judgement.theme.themeId)).toEqual(['th-laptop', 'th-fit', 'th-small'])
     expect(kept.every((k) => k.touch === 'none')).toBe(true)
     expect(covered).toEqual([{ themeId: 'th-rain', label: 'Questions about waterproof backpack coating', posts: ['own-1'] }])
   })
 
   it('leaves nothing out on a guess where the client\'s posts could not be read', () => {
     const { kept, covered } = untouchedQuestions(rankQuestions(judged), null)
-    expect(kept.map((k) => k.touch)).toEqual(['unread', 'unread', 'unread'])
+    expect(kept.map((k) => k.touch)).toEqual(['unread', 'unread', 'unread', 'unread'])
     expect(covered).toEqual([])
   })
 
@@ -226,18 +227,27 @@ describe('choosePlay: the playbook\'s own reading over the market\'s videos on t
 })
 
 describe('ideaLength: how long the post should run, from code', () => {
-  it('reads the middle half of the chosen format\'s durations among the videos at or above the typical response', () => {
-    // Tutorials at or above 6.5: t2 (35 s) and t3 (52 s): two, under the
-    // floor, so the length reads every format at or above it: 35, 52, 20, 25.
-    expect(LENGTH_MIN_VIDEOS).toBe(3)
-    expect(ideaLength(ON_QUESTION, 'tutorial', 6.5)).toEqual({ fromSeconds: 20, toSeconds: 35, videos: 4, basis: 'question' })
-    // With the typical response lower, all three tutorials count.
-    expect(ideaLength(ON_QUESTION, 'tutorial', 5)).toEqual({ fromSeconds: 35, toSeconds: 50, videos: 3, basis: 'format' })
+  const MORE: PlayVideo[] = [
+    ...ON_QUESTION,
+    play('t4', { classified_type: 'tutorial', engagement_rate: 9, duration_seconds: 44 }),
+    play('t5', { classified_type: 'tutorial', engagement_rate: 10, duration_seconds: 31 }),
+    play('t6', { classified_type: 'tutorial', engagement_rate: 6.6, duration_seconds: 600 }),
+  ]
+
+  it('reads the middle half of the chosen format\'s short-form durations among the videos at or above the typical response', () => {
+    expect([LENGTH_MIN_VIDEOS, LENGTH_MAX_SECONDS]).toEqual([5, 180])
+    // Tutorials at or above 6.5 and short: t2 35, t3 52, t4 44, t5 31; four,
+    // under the floor (t6 runs ten minutes and is another post). So any
+    // format: 20, 25, 31, 35, 44, 52; quartiles at ranks 2 and 5.
+    expect(ideaLength(MORE, 'tutorial', 6.5)).toEqual({ fromSeconds: 25, toSeconds: 45, videos: 6, basis: 'question' })
+    // With the typical response lower, five tutorials count: 31 35 40 44 52.
+    expect(ideaLength(MORE, 'tutorial', 5)).toEqual({ fromSeconds: 35, toSeconds: 45, videos: 5, basis: 'format' })
   })
 
   it('is null where too few videos carry a duration, or there is no typical response', () => {
-    expect(ideaLength(ON_QUESTION.map((v) => ({ ...v, duration_seconds: 0 })), 'tutorial', 5)).toBeNull()
-    expect(ideaLength(ON_QUESTION, 'tutorial', null)).toBeNull()
+    expect(ideaLength(MORE.map((v) => ({ ...v, duration_seconds: 0 })), 'tutorial', 5)).toBeNull()
+    expect(ideaLength(ON_QUESTION, 'tutorial', 6.5)).toBeNull()
+    expect(ideaLength(MORE, 'tutorial', null)).toBeNull()
   })
 
   it('rounds to five seconds under a minute and fifteen above', () => {
