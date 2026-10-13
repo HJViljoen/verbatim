@@ -83,12 +83,17 @@ const reading = (
   const k_named = k.named ?? 0
   const k_unclear = k.unclear ?? 0
   const k_unbranded = k.unbranded ?? 0
-  return {
+  const k_any = k_named + k_unclear + k_unbranded
+  // T11 adds the organic base (k_organic, n_organic) to the row before the
+  // migration is applied; built as a value rather than returned as a literal so
+  // this fixture types with and without those two columns.
+  const row = {
     client_id: FIXTURE_CLIENT, month: FIXTURE_MONTH, audience, object_kind, object_id, group_id,
     product_id: object_kind === 'product' ? object_id : null, k_named, k_unclear, k_unbranded,
-    k_any: k_named + k_unclear + k_unbranded, comments: (k_named + k_unclear + k_unbranded) * 3, n: 318, status: 'filling',
-    origin: 'live', read_at: '2026-10-12T04:00:00.000Z', run_id: null, rule_version: 'pr1', catalogue_version: 'pc1_0123456789abcdef', frozen_at: null,
+    k_any, k_organic: k_any, comments: k_any * 3, n: 318, n_organic: 300, status: 'filling' as const,
+    origin: 'live' as const, read_at: '2026-10-12T04:00:00.000Z', run_id: null, rule_version: 'pr1', catalogue_version: 'pc1_0123456789abcdef', frozen_at: null,
   }
+  return row
 }
 
 /** October so far: Seal-In X in six videos (one of them Össur's own), Comfort

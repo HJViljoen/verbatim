@@ -80,7 +80,6 @@ const WHAT: Record<CatalogueTextKind, string> = { group: 'category', product: 'p
 export function catalogueText(raw: unknown, kind: CatalogueTextKind): { ok: true; text: string } | { ok: false; message: string } {
   const text = String(raw ?? '').replace(/\s+/g, ' ').trim()
   const { min, max } = CATALOGUE_LIMITS[kind]
-  // eslint-disable-next-line no-control-regex
   if (/[\u0000-\u001f\u007f]/.test(text)) return { ok: false, message: `Type the ${WHAT[kind]} as plain words.` }
   if (text.length < min) return { ok: false, message: min > 1 ? `Give the ${WHAT[kind]} at least ${min} letters.` : `Type the ${WHAT[kind]} first.` }
   if (text.length > max) return { ok: false, message: `Keep the ${WHAT[kind]} under ${max} characters.` }
