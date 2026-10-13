@@ -216,7 +216,10 @@ describe('the quarterly card’s absence', () => {
     assertCopyContract(<QuarterlyAbsentTile />)
     const text = renderText(<QuarterlyAbsentTile />)
     expect(text).toContain('none is confirmed for this workspace yet')
-    expect(text).toContain('Name a subject on Subjects')
+    expect(text).toContain('Name a subject in Settings')
+    // The editor's address since Design v2 (T10c), not the Subjects page,
+    // which only redirects to Market.
+    expect(render(<QuarterlyAbsentTile />)).toContain('href="/dashboard/settings/subjects"')
   })
 
   // No date, no count, and nothing about a quarter nobody has read — the same

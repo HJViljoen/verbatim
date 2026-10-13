@@ -16,8 +16,12 @@ import { EMPTY_STATE } from '@/lib/subjects/form-state'
 import { SUBJECTS_MAX } from '@/lib/subjects/types'
 
 // The subjects editor, moved in from Settings (pages rebuild, 1 Oct;
-// Page-Subjects.dc.html): add, rename and stop live on the Subjects page, on
-// the list they change. Three controls, as the design draws them:
+// Page-Subjects.dc.html): add, rename and stop lived on the Subjects page, on
+// the list they change. Design v2 folded that page into Market, and the
+// editor went back to Settings › Your subjects (T10c,
+// components/pages/settings/subjects), unchanged; the Subjects page module
+// stays registered for stored snapshots. Three controls, as the design draws
+// them:
 //  · the "..." on every row (Rename, Stop; Confirm on a subject that was named
 //    and not confirmed yet);
 //  · "Add a subject" under the list;

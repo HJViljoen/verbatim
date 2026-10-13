@@ -1676,7 +1676,10 @@ interface RunRow {
   window_basis?: string | null
 }
 
-interface CheckRow {
+/** One update's `anomaly_checks` row. Exported for the weekly email, which
+ *  freezes the same flags this page prints (lib/written/unusual.ts), through
+ *  the strict readers below. */
+export interface CheckRow {
   run_id: string
   week_start: string | null
   week_end: string | null
@@ -1690,7 +1693,8 @@ interface CheckRow {
   median_videos: number | null
 }
 
-interface FlagRow {
+/** One `anomaly_flags` row, as `loadFlags` and `loadFlagsStrict` read it. */
+export interface FlagRow {
   run_id: string
   object_kind: string
   object_id: string
@@ -2366,11 +2370,11 @@ async function buildUnusual(input: {
   // client their week was quiet on the strength of a failed read. That is the
   // exact conflation `anomaly_checks` exists to prevent, and one ternary is all
   // it takes to reintroduce it.
-  if (flags == null || flags.length === 0) {
+  const rowsIn = weekFlagRows(check, flags)
+  if (rowsIn == null || rowsIn.length === 0) {
     return { ...common, state: 'unreadable', flaggedCount: check.flagged_count ?? 0 }
   }
 
-  const rowsIn = [...flags].sort((a, b) => a.rank - b.rank)
   const built = await Promise.all(rowsIn.map((f) => buildFlag(input.supabase, input.clientId, f)))
   return {
     ...common,
@@ -2378,6 +2382,24 @@ async function buildUnusual(input: {
     flags: built,
     flaggedCount: rowsIn[0]?.flagged_count ?? built.length,
   }
+}
+
+/** The check's outcomes under which it raised nothing for the update. */
+const UNFLAGGED_OUTCOMES: ReadonlySet<string> = new Set(['suppressed', 'no_window', 'missing_migration', 'nothing_unusual'])
+
+/**
+ * WHICH FLAGS ARE THE UPDATE'S, the rule in one place: §1 prints these, and
+ * the weekly email freezes the same ones into the week's read
+ * (lib/written/unusual.ts), the first of them its lead. None where the check
+ * has no row or its row raised nothing; the check's own rows in its rank
+ * order where it flagged; and null where its row says it flagged and the
+ * flags could not be read, which is "we could not look", never "nothing was
+ * unusual". Pure.
+ */
+export function weekFlagRows(check: CheckRow | null | undefined, flags: FlagRow[] | null): FlagRow[] | null {
+  if (!check || UNFLAGGED_OUTCOMES.has(check.outcome)) return []
+  if (flags == null || flags.length === 0) return null
+  return [...flags].sort((a, b) => a.rank - b.rank)
 }
 
 async function buildFlag(supabase: SupabaseClient, clientId: string, f: FlagRow): Promise<UnusualFlag> {
@@ -3435,6 +3457,43 @@ async function loadFlags(supabase: SupabaseClient, clientId: string, runId: stri
       console.error(`[pages] week.flags: ${(error as { message?: string })?.message ?? String(error)}`)
     }
     return null
+  }
+}
+
+/**
+ * THE STRICT READERS, for a writer that FREEZES what it reads (the week's read
+ * keeps the update's flags for the level-1 email; lib/written/unusual.ts). A
+ * missing table answers as the lenient readers above do (`undefined`, `null`):
+ * the expected state before M7, and nothing to retry. Any other failure THROWS,
+ * because a frozen "no check" would outlive the blip that caused it. This
+ * page's own readers stay lenient: a page that loses its §1 to a blip prints
+ * "could not look" and reads again on the next load.
+ */
+export async function loadCheckStrict(supabase: SupabaseClient, clientId: string, runId: string): Promise<CheckRow | null | undefined> {
+  const res = await supabase
+    .from('anomaly_checks')
+    .select('*')
+    .eq('client_id', clientId)
+    .eq('run_id', runId)
+    .maybeSingle()
+  if (res.error) {
+    if (isMissingAnomalyRecord(res.error)) return undefined
+    throw new Error(`anomaly_checks: ${res.error.message}`, { cause: res.error })
+  }
+  return (res.data as CheckRow | null) ?? null
+}
+
+/** The flags, strictly: `null` only where the table is not installed. */
+export async function loadFlagsStrict(supabase: SupabaseClient, clientId: string, runId: string): Promise<FlagRow[] | null> {
+  try {
+    return await selectAll<FlagRow>(() =>
+      supabase.from('anomaly_flags').select('*')
+        .eq('client_id', clientId).eq('run_id', runId)
+        .order('rank', { ascending: true }),
+    )
+  } catch (error) {
+    if (isMissingAnomalyRecord(error)) return null
+    throw error
   }
 }
 

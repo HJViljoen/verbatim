@@ -8,6 +8,7 @@ import type { QuarterlyCard } from '@/lib/pages/reports-card'
 import { quarterUnlocked } from '@/lib/reports/quarterly'
 import { priorPrintable } from '@/lib/reading/verdicts'
 import { printsMarket } from '@/lib/subjects/calibration-state'
+import { settingsSubPage } from '@/lib/settings/rail'
 
 /**
  * The quarterly card on /dashboard/reports (Block D wave 2, package E-reports;
@@ -310,6 +311,10 @@ export function pillWord(readings: number, drawn: boolean): string | null {
   return quarterUnlocked(readings) ? `${readingWord(readings)} stand behind it` : null
 }
 
+/** Where a subject is named: Settings › Your subjects (depth v2, T10c). The
+ *  Subjects page that held the editor until Design v2 only redirects to
+ *  Market, which reads subjects and names none. */
+const SUBJECTS_EDITOR_HREF = settingsSubPage('subjects').href
 
 /**
  * What stands where the card cannot be built at all (Block D wave 2, package
@@ -336,7 +341,7 @@ export function QuarterlyAbsentTile({ col = 7, row = 2 }: { col?: number; row?: 
       meta="not yet"
       distribute="between"
       className="xl:min-h-[248px]"
-      footer={<Link href="/dashboard/subjects" className="inline-flex h-8 -my-1 items-center underline underline-offset-2">Name a subject on Subjects</Link>}
+      footer={<Link href={SUBJECTS_EDITOR_HREF} className="inline-flex h-8 -my-1 items-center underline underline-offset-2">Name a subject in Settings</Link>}
     >
       <p className="m-0 text-[12.5px] leading-[1.45] text-foreground">
         The quarterly review reads the subjects you track, and none is confirmed for this workspace yet, so there is no

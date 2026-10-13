@@ -12,6 +12,7 @@ import { scrubWeekRead, weekAllowTokens, type WeekScrubCounts } from './scrub'
 import { loadStanding } from './standing'
 import { loadPreviousHeadlines, saveWeekRead, weekReadsApplied, type WeekReadRow, type WeekReadStatus } from './store'
 import type { StandingFact, WeekPool, WeekReadDataV2 } from './types'
+import { AnomalyReadError, readAnomalyRecord, unusualFrom, type AnomalyRecord } from './unusual'
 import { writerFigures, writerSubjects, type WeekReadOutput } from './write'
 import { generateWeekRead, WEEK_READ_MODEL, type ParseClient } from './write-model'
 
@@ -32,7 +33,10 @@ import { generateWeekRead, WEEK_READ_MODEL, type ParseClient } from './write-mod
 //    429 or 5xx, a dropped connection) on any attempt but the step's last is
 //    THROWN, so Inngest retries the step: nothing stored, nothing sent. On
 //    the last attempt, and on any other failure at once, it never throws: it
-//    stores a `failed` row where it can and alerts the operator.
+//    stores a `failed` row where it can and alerts the operator. Before it
+//    builds anything it reads the update's anomaly check, strictly, and
+//    freezes it into the read it stores (`withUnusual`, lib/written/unusual.ts;
+//    depth v2, T11b): the level-1 email's lead, read here and in no new step.
 //
 // WHY THE ALERT IS SENT IN HERE AND NOT IN THE STEP'S `.catch`. A step that
 // runs out of retries is memoised as failed, and every later step replays the
@@ -208,6 +212,18 @@ export function rowOf(clientId: string, runId: string, built: Pick<BuiltWeekRead
   }
 }
 
+/**
+ * The update's anomaly check, frozen into the read before it is stored
+ * (depth v2, T11b): the level-1 email's lead. `anomaly-check` runs before this
+ * step, so its rows for the run are on disk. The step reads them (strictly,
+ * before the build) and hands the record here; `null` is a check that could
+ * not be read on the step's last attempt, kept as `unread`, never as "no
+ * check". Pure.
+ */
+export function withUnusual<B extends Pick<BuiltWeekRead, 'data'>>(built: B, record: AnomalyRecord | null): B {
+  return { ...built, data: { ...built.data, unusual: unusualFrom(record, built.data.window) } }
+}
+
 export interface WeekReadStepResult {
   status: WeekReadStatus | 'missing_migration'
   findings: number
@@ -222,13 +238,16 @@ export interface WeekReadStepDeps {
   build: typeof buildWeekRead
   save: (admin: SupabaseClient, row: WeekReadRow) => Promise<void>
   alert: (subject: string, text: string) => Promise<{ sent: boolean }>
+  /** The update's anomaly check (T11b), read strictly: a missing table is an
+   *  answer, any other failure throws. */
+  anomaly: (admin: SupabaseClient, a: { clientId: string; runId: string }) => Promise<AnomalyRecord>
 }
 
 // The month's long-run read is NOT written here: it has its own step,
 // `write-longrun-read`, after this one (lib/written/longrun.ts
 // `runLongRunStep`; the integration of 1 Oct moved it out, because the two
 // reads together overran one step's 250 s).
-const DEFAULT_DEPS: WeekReadStepDeps = { applied: weekReadsApplied, build: buildWeekRead, save: saveWeekRead, alert: sendAlertEmail }
+const DEFAULT_DEPS: WeekReadStepDeps = { applied: weekReadsApplied, build: buildWeekRead, save: saveWeekRead, alert: sendAlertEmail, anomaly: readAnomalyRecord }
 
 const FALLBACK = (clientId: string, runId: string) =>
   `Fallback, once the cause is fixed: node --env-file=.env.local --import tsx scripts/week-read.ts --client ${clientId} --run ${runId} (dry), then again with --write.`
@@ -272,7 +291,23 @@ export async function runWeekReadStep(
     // (250 s), well inside the route's 300 s; one that runs out is thrown as a
     // timeout, retried as a step below, and on the last attempt stored as a
     // failed read, with the alert naming it.
-    const built = await d.build(admin, { clientId: opts.clientId, runId: opts.runId, log: true, budget: callBudget({ startedAt }) })
+    // THE UPDATE'S ANOMALY CHECK, READ BEFORE ANYTHING IS SPENT (T11b). A
+    // missing table is no check. A failure before the last attempt is thrown
+    // as transient, so Inngest retries the step with nothing built; on the
+    // last attempt the read goes ahead with the check frozen `unread`.
+    let anomaly: AnomalyRecord | null
+    try {
+      anomaly = await d.anomaly(admin, { clientId: opts.clientId, runId: opts.runId })
+    } catch (e) {
+      const failure = e instanceof AnomalyReadError ? e : new AnomalyReadError(`the update's anomaly check could not be read: ${e instanceof Error ? e.message : String(e)}`, { cause: e })
+      if (!lastAttempt) throw failure
+      console.warn(`[write-week-read] ${failure.message}; frozen as unread`)
+      anomaly = null
+    }
+    const built = withUnusual(
+      await d.build(admin, { clientId: opts.clientId, runId: opts.runId, log: true, budget: callBudget({ startedAt }) }),
+      anomaly,
+    )
     await d.save(admin, rowOf(opts.clientId, opts.runId, built))
     const result: WeekReadStepResult = { status: built.status, findings: built.data.findings.length, held: built.data.held.length, costUsd: built.data.costUsd }
     console.log(`[write-week-read] ${built.status}: ${result.findings} finding(s), ${result.held} held, $${result.costUsd}`)

@@ -81,6 +81,15 @@ import { SearchTerms } from '../components/pages/settings/search-terms'
 import { YourAccounts } from '../components/pages/settings/your-accounts'
 import { BrandsYouTrack, Communities, NotYourMarket } from '../components/pages/settings/tracked-cards'
 import { whatYouTrack } from '../lib/pages/settings'
+import { ProductsTab } from '../components/pages/settings/products'
+import { productsFixtureRead } from '../components/pages/settings/products/fixture'
+import { productSettingsView, type ProductSettingsRead } from '../lib/settings/products'
+import { YourSubjectsTab } from '../components/pages/settings/subjects'
+import { subjectsFixtureRows } from '../components/pages/settings/subjects/fixture'
+import { yourSubjectsView, type SubjectSettingsRow } from '../lib/settings/your-subjects'
+import { VoicesPage } from '../components/pages/v2/voices'
+import { VOICES_FIXTURES } from '../lib/pages/v2/voices-fixture'
+import type { VoicesData } from '../lib/pages/v2/voices'
 import { ContentPage } from '../components/pages/v2/content/page'
 import { contentEmptyFixture, contentFixture } from '../lib/pages/v2/content-fixture'
 import type { ContentPageData } from '../lib/pages/v2/content'
@@ -216,6 +225,28 @@ function settingsModel() {
 
 const noop = async <T,>(prev: T): Promise<T> => prev
 
+/** Settings › Your products and Your subjects (depth v2, T10b/T10c): the
+ *  fixtures, or a loader's production output dumped to JSON (`--settings-dump
+ *  <file>`: `{ products, subjects }`, as scripts the package ran wrote them). */
+const settingsDump = (() => {
+  const file = flag('settings-dump', '')
+  return file ? JSON.parse(readFileSync(resolve(file), 'utf8')) as { products: ProductSettingsRead; subjects: { state: 'missing' } | { state: 'ready'; rows: SubjectSettingsRow[] } } : null
+})()
+const settingsProductsPage = () => {
+  const read = settingsDump ? settingsDump.products : productsFixtureRead()
+  return h(SettingsFrame, {
+    active: 'products', title: 'Settings', operator: false,
+    children: h(ProductsTab, { view: read.state === 'missing' ? null : productSettingsView(read, { selected: null, canEdit: true }) }),
+  })
+}
+const settingsSubjectsPage = () => {
+  const read = settingsDump ? settingsDump.subjects : { state: 'ready' as const, rows: subjectsFixtureRows() }
+  return h(SettingsFrame, {
+    active: 'subjects', title: 'Settings', operator: false,
+    children: h(YourSubjectsTab, { view: read.state === 'missing' ? null : yourSubjectsView(read.rows, true) }),
+  })
+}
+
 /** The Agent's earlier questions: the fixture's threads and two more, newest
  *  first, as `loadAskHistory` hands the page twenty. */
 const AGENT_HISTORY = askHistory([
@@ -320,9 +351,25 @@ const PAGES: Page[] = [
       })
     },
   },
+  { key: 'settings-products', path: '/dashboard/settings/products', artboard: 'E8-Settings-Products.dc.html', page: settingsProductsPage },
+  { key: 'settings-subjects', path: '/dashboard/settings/subjects', artboard: 'no-board-settings-subjects.dc.html', page: settingsSubjectsPage },
+  // Voices (depth v2, T4), beside the boards E3-Voices and E3-Voices-Open.
+  // `voices-real` draws a dump of the loader's production output
+  // (`VOICES_JSON=<file>`, one per tenant, read once under the lock).
+  { key: 'voices-ossur', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES.ossur() }) },
+  { key: 'voices-ossur-group', path: '/dashboard/voices', artboard: 'E3-Voices-Open.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['ossur-group']() }) },
+  { key: 'voices-ossur-creator', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['ossur-creator']() }) },
+  { key: 'voices-sealand', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES.sealand() }) },
+  { key: 'voices-sealand-brand', path: '/dashboard/voices', artboard: 'E3-Voices-Open.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['sealand-brand']() }) },
+  { key: 'voices-sealand-creator', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['sealand-creator']() }) },
+  // Only where a dump is named: unset, the entry is not listed, so a run of
+  // every page never stops on a missing file.
+  ...(process.env.VOICES_JSON
+    ? [{ key: 'voices-real', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: JSON.parse(readFileSync(process.env.VOICES_JSON as string, 'utf8')) as VoicesData }) }]
+    : []),
   // Depth v2, T6 (Content; boards E5-Content and E5-Content-Open, shot with
   // `--artboards ~/Documents/Heinrich/Verbatim-Design/depth-2026-10/canvas/project`).
-  // `content-dump` draws a loader's dumped output: CONTENT_DUMP=<file.json>.
+  // `content-dump` draws a loader's dumped output.
   { key: 'content-v2', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentFixture() }) },
   { key: 'content-v2-open', path: '/dashboard/content', artboard: 'E5-Content-Open.dc.html', page: () => h(ContentPage, { data: contentFixture({ open: { kind: 'idea', rank: 1 } }) }) },
   { key: 'content-v2-replies', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentFixture({ open: { kind: 'replies' } }) }) },
@@ -330,7 +377,10 @@ const PAGES: Page[] = [
   { key: 'content-v2-not-on', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentFixture({ ideas: 'not_on' }) }) },
   { key: 'content-v2-empty', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentEmptyFixture() }) },
   { key: 'content-v2-older', path: '/dashboard/content', artboard: 'E5-Content-Open.dc.html', page: () => h(ContentPage, { data: contentFixture({ olderIdeas: true, open: { kind: 'idea', rank: 2 } }) }) },
-  { key: 'content-dump', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: JSON.parse(readFileSync(process.env.CONTENT_DUMP ?? '', 'utf8')) as ContentPageData }) },
+  // Only where a dump is named (`CONTENT_DUMP=<file>`), as `voices-real`.
+  ...(process.env.CONTENT_DUMP
+    ? [{ key: 'content-dump', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: JSON.parse(readFileSync(process.env.CONTENT_DUMP as string, 'utf8')) as ContentPageData }) }]
+    : []),
 ]
 
 // ---- the shell -----------------------------------------------------------------
