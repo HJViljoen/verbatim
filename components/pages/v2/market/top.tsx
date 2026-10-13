@@ -98,7 +98,9 @@ function Context({ groups, doing, kind, noun, monthText }: { groups: readonly Gr
       <div>
         <span className="text-muted-foreground">What they’re doing</span><br />
         {doing
-          ? <>{doing.label} <span className={cn(MONO_MUTED, 'whitespace-nowrap')}>· <span data-copy="level">{fmtInt(doing.k)} of {fmtInt(doing.n)}</span> {monthText}</span></>
+          // On a phone the two columns stand as the board's do, so the
+          // figure line may wrap inside its own (T9: nothing past the card).
+          ? <>{doing.label} <span className={cn(MONO_MUTED, 'whitespace-nowrap max-sm:whitespace-normal')}>· <span data-copy="level">{fmtInt(doing.k)} of {fmtInt(doing.n)}</span> {monthText}</span></>
           : kind ? talkKindLabel(kind, noun) : <span className="text-muted-foreground">Not read yet</span>}
       </div>
     </div>
