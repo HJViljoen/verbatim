@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
-import { TickBar, TickBarRow, TickKey } from './tick-bar'
+import { figureClearPct, TickBar, TickBarRow, TickKey } from './tick-bar'
 import { MOVED, NO_CLEAR, REFUSED } from './fixture'
 
 describe('TickBar', () => {
@@ -29,6 +29,12 @@ describe('TickBar', () => {
     assertCopyContract(node)
     // A tick just past the fill: the figure starts past the tick.
     expect(render(<TickBar pct={22} tick={25} size="xl" figure="0.9×" label="x" />)).toContain('left:calc(25% + 6px)')
+    // Content's 0.5× on the 1× marker (Phase 4 fix round): 12.5 points short
+    // of the tick is too close for the figure on a phone's bar.
+    expect(render(<TickBar pct={12.5} tick={25} size="xl" figure="0.5×" label="x" />)).toContain('left:calc(25% + 6px)')
+    // Far enough short of it, the figure stays at the fill.
+    expect(render(<TickBar pct={0} tick={30} size="xl" figure="0.0×" label="x" />)).toContain('left:calc(0% + 6px)')
+    expect(figureClearPct('0.5×')).toBe(25)
   })
 })
 
