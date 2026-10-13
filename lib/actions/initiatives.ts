@@ -65,11 +65,14 @@ const firstIssue = (e: z.ZodError) => {
 function revalidateInitiatives() {
   // The parked settings page is where an initiative is renamed, finished and
   // stopped until WP14's moves panel; it has to see its own write.
+  // Your moves, the Dashboard, Market (Your market's address, Design v2) and
+  // Voices (Conversation's "Track this", which Voices draws until its own page
+  // lands).
   revalidatePath('/dashboard/settings/initiatives')
-  revalidatePath('/dashboard/market')
+  revalidatePath('/dashboard/moves')
   revalidatePath('/dashboard')
-  revalidatePath('/dashboard/overview')
-  revalidatePath('/dashboard/voice')
+  revalidatePath('/dashboard/market')
+  revalidatePath('/dashboard/voices')
 }
 
 export async function createInitiative(

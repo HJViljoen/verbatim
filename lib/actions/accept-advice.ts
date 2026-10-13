@@ -83,9 +83,11 @@ export async function acceptAdvice(lineageId: string, title: string): Promise<Ac
   if (plan.do === 'refuse') return { ok: false, message: plan.message }
 
   const status = await setRecommendationStatus(rec.id as string, 'acted_on')
-  revalidatePath('/dashboard/market')
+  // Your moves (/dashboard/moves since Design v2), the Dashboard, and Market,
+  // which took Your market's moves line with its address.
+  revalidatePath('/dashboard/moves')
   revalidatePath('/dashboard')
-  revalidatePath('/dashboard/overview')
+  revalidatePath('/dashboard/market')
   if (!status.ok) return { ok: false, message: `${plan.message} ${status.message}`.trim() }
   return { ok: true, message: plan.message }
 }

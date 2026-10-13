@@ -91,18 +91,19 @@ const firstIssue = (e: z.ZodError): string => {
 /**
  * Everywhere a subject or a move is read.
  *
- * Four addresses and each of them is real: the page that declared it, the
- * Overview hero and the OV5 moves list, Settings › Subjects (WP16), and Market,
- * which is where a move is scored (WP14). A router cache of 60 seconds
- * (next.config.ts staleTimes.dynamic) is long enough for a client to name a
- * subject and then not see it on the next page they open.
+ * Four addresses and each of them is real: Market, which holds the subject
+ * board and Your market's subjects since Design v2 (the Subjects page and
+ * /dashboard/overview redirect there), the Dashboard, Settings, and Your
+ * moves, which is where a move is scored (WP14; /dashboard/moves since Design
+ * v2). A router cache of 60 seconds (next.config.ts staleTimes.dynamic) is
+ * long enough for a client to name a subject and then not see it on the next
+ * page they open.
  */
 function revalidateSubjects(): void {
-  revalidatePath('/dashboard/subjects')
-  revalidatePath('/dashboard')
-  revalidatePath('/dashboard/overview')
-  revalidatePath('/dashboard/settings')
   revalidatePath('/dashboard/market')
+  revalidatePath('/dashboard')
+  revalidatePath('/dashboard/settings')
+  revalidatePath('/dashboard/moves')
 }
 
 async function context(): Promise<WriteContext> {

@@ -106,7 +106,7 @@ export async function addStatement(_prev: StatementActionState, form: FormData):
   const added = await insertStatement(ctx, text)
   if (!('id' in added)) return added
   measureLater(ctx.clientId, added.id)
-  revalidatePath('/dashboard/market')
+  revalidatePath('/dashboard/moves')
   return { ok: true, message: '' }
 }
 
@@ -130,7 +130,7 @@ export async function removeStatement(id: string): Promise<StatementActionState>
   if (!ctx.allowed) return { ok: false, message: 'Only owners and admins can change statements.' }
   const failed = await retire(ctx, id)
   if (failed) return failed
-  revalidatePath('/dashboard/market')
+  revalidatePath('/dashboard/moves')
   return { ok: true, message: '' }
 }
 
@@ -158,10 +158,10 @@ export async function editStatement(id: string, raw: string): Promise<StatementA
     // restored one is measured again.)
     const restored = await insertStatement(ctx, (current as { text: string }).text)
     if ('id' in restored) measureLater(ctx.clientId, restored.id)
-    revalidatePath('/dashboard/market')
+    revalidatePath('/dashboard/moves')
     return added
   }
   measureLater(ctx.clientId, added.id)
-  revalidatePath('/dashboard/market')
+  revalidatePath('/dashboard/moves')
   return { ok: true, message: '' }
 }
