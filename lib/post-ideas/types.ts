@@ -1,11 +1,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 // The run's post ideas (depth redesign v2, T13; plan decision 5): up to three
-// question conversations of the week that the client's own posts do not
-// answer, biggest first, each with what a post on it should cover and the
-// sub-questions people ask inside it. The table is `post_ideas`
-// (supabase/migrations/20261109090000_products.sql); lib/products-migration.test.ts
-// holds the columns here equal to it.
+// question conversations of the four weeks to the run's window end that the
+// client's own posts do not answer, biggest first, each with what a post on it
+// should cover and the sub-questions people ask inside it. Written every week,
+// on every run; the days they read are stored on each row (`read_start` /
+// `read_end`, lib/post-ideas/select.ts `ideasReadWindow`; Heinrich, 13 Oct).
+// The table is `post_ideas` (supabase/migrations/20261109090000_products.sql);
+// lib/products-migration.test.ts holds the columns here equal to it.
 //
 // WHO WRITES WHAT. The model writes the title and the cover, and sorts the
 // conversation's question comments into sub-questions BY COMMENT ID. Code
@@ -36,11 +38,11 @@ export interface PostIdeaCover {
    *  lib/post-ideas/select.ts `ideaLength`). */
   length?: PostIdeaLength
   /** The comments the sub-questions were grouped from: exactly the
-   *  conversation's question comments of the run's window that were SENT to
-   *  the model (a capped, video-spread sample), and the number of DISTINCT
-   *  videos those comments sit under. A sub-question can only be found among
-   *  them, so its figure prints as its videos "of `asked.videos`", never of
-   *  the conversation's week. */
+   *  conversation's question comments of the ideas' window (`read_start` to
+   *  `read_end`) that were SENT to the model (a capped, video-spread sample),
+   *  and the number of DISTINCT videos those comments sit under. A
+   *  sub-question can only be found among them, so its figure prints as its
+   *  videos "of `asked.videos`", never of the conversation's window. */
   asked?: { comments: number; videos: number }
 }
 
@@ -65,9 +67,15 @@ export interface PostIdeaRow {
   id: string
   client_id: string
   run_id: string
-  /** The run's frozen window, half-open [window_start, window_end). */
+  /** The run's frozen window, half-open [window_start, window_end): the week
+   *  the ideas were written for. */
   window_start: string
   window_end: string
+  /** The window the ideas READ their question comments from, half-open
+   *  [read_start, read_end): the four weeks ending at `window_end`
+   *  (`ideasReadWindow`). Every count the step decided on is over it. */
+  read_start: string
+  read_end: string
   rank: PostIdeaRank
   /** The question conversation (theme_registry.id). */
   registry_id: string
@@ -92,7 +100,7 @@ export interface PostIdeaRow {
 }
 
 export const POST_IDEA_COLUMNS =
-  'id, client_id, run_id, window_start, window_end, rank, registry_id, title, cover, subquestions, format, format_multiple, opening, opening_multiple, model, prompt_version, created_at'
+  'id, client_id, run_id, window_start, window_end, read_start, read_end, rank, registry_id, title, cover, subquestions, format, format_multiple, opening, opening_multiple, model, prompt_version, created_at'
 
 // ---- Reading ----------------------------------------------------------------------
 
@@ -121,7 +129,7 @@ export function parsePostIdeaRow(raw: unknown): PostIdeaRow | null {
     if (!isObj(s) || typeof s.label !== 'string' || !isStrList(s.commentIds) || !isStrList(s.videoIds)) return null
     subquestions.push({ label: s.label, commentIds: s.commentIds, videoIds: s.videoIds })
   }
-  for (const key of ['id', 'client_id', 'run_id', 'window_start', 'window_end', 'registry_id', 'title', 'model', 'prompt_version', 'created_at']) {
+  for (const key of ['id', 'client_id', 'run_id', 'window_start', 'window_end', 'read_start', 'read_end', 'registry_id', 'title', 'model', 'prompt_version', 'created_at']) {
     if (typeof raw[key] !== 'string') return null
   }
   const format = typeof raw.format === 'string' ? raw.format : null
@@ -132,6 +140,8 @@ export function parsePostIdeaRow(raw: unknown): PostIdeaRow | null {
     run_id: raw.run_id as string,
     window_start: raw.window_start as string,
     window_end: raw.window_end as string,
+    read_start: raw.read_start as string,
+    read_end: raw.read_end as string,
     rank: rank as PostIdeaRank,
     registry_id: raw.registry_id as string,
     title: raw.title as string,

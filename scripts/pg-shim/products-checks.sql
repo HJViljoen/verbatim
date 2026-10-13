@@ -327,27 +327,49 @@ do $$ begin
 end $$;
 
 -- post_ideas: one set per run, ranks 1 to 3, read by its tenant.
-insert into public.post_ideas (client_id, run_id, window_start, window_end, rank, registry_id, title, cover, subquestions, format, format_multiple, opening, opening_multiple, model, prompt_version)
-values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '00000000-0000-4000-8000-0000000000a1', '2026-10-05', '2026-10-12', 1,
+insert into public.post_ideas (client_id, run_id, window_start, window_end, read_start, read_end, rank, registry_id, title, cover, subquestions, format, format_multiple, opening, opening_multiple, model, prompt_version)
+values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '00000000-0000-4000-8000-0000000000a1', '2026-10-05', '2026-10-12', '2026-09-14', '2026-10-12', 1,
         '0f000000-0000-4000-8000-000000000001', 'How long does a liner last?', '{"text": "How long liners last"}',
         '[{"label": "How long it should last", "commentIds": ["0d000000-0000-4000-8000-000000000001"], "videoIds": ["0c000000-0000-4000-8000-000000000001"]}]',
         'tutorial', 2.1, 'question', 1.8, 'gpt-4.1-mini', 'post_ideas_v1');
 do $$ begin
-  begin insert into public.post_ideas (client_id, run_id, window_start, window_end, rank, registry_id, title, cover, subquestions, model, prompt_version)
-    values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '00000000-0000-4000-8000-0000000000a1', '2026-10-05', '2026-10-12', 4,
+  begin insert into public.post_ideas (client_id, run_id, window_start, window_end, read_start, read_end, rank, registry_id, title, cover, subquestions, model, prompt_version)
+    values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '00000000-0000-4000-8000-0000000000a1', '2026-10-05', '2026-10-12', '2026-09-14', '2026-10-12', 4,
             '0f000000-0000-4000-8000-000000000001', 'x', '{"text": "x"}', '[]', 'm', 'p');
     raise exception 'CHECK FAILED: a fourth idea';
   exception when check_violation then null; end;
-  begin insert into public.post_ideas (client_id, run_id, window_start, window_end, rank, registry_id, title, cover, subquestions, model, prompt_version)
-    values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '00000000-0000-4000-8000-0000000000a1', '2026-10-05', '2026-10-12', 2,
+  begin insert into public.post_ideas (client_id, run_id, window_start, window_end, read_start, read_end, rank, registry_id, title, cover, subquestions, model, prompt_version)
+    values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '00000000-0000-4000-8000-0000000000a1', '2026-10-05', '2026-10-12', '2026-09-14', '2026-10-12', 2,
             '0f000000-0000-4000-8000-000000000001', 'x', '{"text": "x"}', '[]', 'm', 'p');
     raise exception 'CHECK FAILED: one conversation twice in one run';
   exception when unique_violation then null; end;
+  -- The ideas' window never runs past the run's own end, and is a window.
+  begin insert into public.post_ideas (client_id, run_id, window_start, window_end, read_start, read_end, rank, registry_id, title, cover, subquestions, model, prompt_version)
+    values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '00000000-0000-4000-8000-0000000000a1', '2026-10-05', '2026-10-12', '2026-09-14', '2026-10-13', 3,
+            '0f000000-0000-4000-8000-000000000001', 'x', '{"text": "x"}', '[]', 'm', 'p');
+    raise exception 'CHECK FAILED: ideas read past the run''s end';
+  exception when check_violation then null; end;
+  begin insert into public.post_ideas (client_id, run_id, window_start, window_end, read_start, read_end, rank, registry_id, title, cover, subquestions, model, prompt_version)
+    values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '00000000-0000-4000-8000-0000000000a1', '2026-10-05', '2026-10-12', '2026-10-12', '2026-10-12', 3,
+            '0f000000-0000-4000-8000-000000000001', 'x', '{"text": "x"}', '[]', 'm', 'p');
+    raise exception 'CHECK FAILED: an empty read window';
+  exception when check_violation then null; end;
 end $$;
 set local role authenticated;
 set local request.jwt.claims = '{"sub": "b0000000-0000-0000-0000-00000000000b", "role": "authenticated"}';
 do $$ declare n int; begin
   select count(id) into n from public.post_ideas; if n <> 0 then raise exception 'CHECK FAILED: B reads A''s post ideas'; end if;
+end $$;
+reset role;
+-- A's member reads its own ideas, the days they read included (the page
+-- prints them).
+set local role authenticated;
+set local request.jwt.claims = '{"sub": "a0000000-0000-0000-0000-00000000000a", "role": "authenticated"}';
+do $$ declare r record; begin
+  select read_start, read_end, window_end into strict r from public.post_ideas;
+  if r.read_start <> '2026-09-14'::timestamptz or r.read_end <> r.window_end then
+    raise exception 'CHECK FAILED: A cannot read the days its ideas read';
+  end if;
 end $$;
 reset role;
 

@@ -1,6 +1,7 @@
 import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../../config'
 import type { PostIdeaCover, PostIdeaLength, PostIdeaRow } from '../../post-ideas/types'
 import { printsMedicalLine } from '../../post-ideas/medical'
+import { ideasReadWindow } from '../../post-ideas/select'
 import { summariseOwnedPosts, type OwnedPosts } from '../../reading/owned'
 import type { Verdict } from '../../reading/verdicts'
 import type { ReplyRow } from '../week'
@@ -29,6 +30,8 @@ import {
 
 const RUN = 'r0000000-0000-4000-8000-000000000001'
 const WINDOW = { from: '2026-10-04T04:03:00.000Z', to: '2026-10-11T04:02:00.000Z' }
+/** The four weeks the ideas read, ending where the run's window ends. */
+const READ = ideasReadWindow(WINDOW)
 const ID = (n: number) => `c${String(n).padStart(7, '0')}-0000-4000-8000-000000000000`
 const VID = (n: number) => `v${String(n).padStart(7, '0')}-0000-4000-8000-000000000000`
 const ids = (from: number, n: number, f = ID) => Array.from({ length: n }, (_, i) => f(from + i))
@@ -55,6 +58,9 @@ const idea = (over: Partial<PostIdeaRow> & Pick<PostIdeaRow, 'rank' | 'registry_
   run_id: RUN,
   window_start: WINDOW.from,
   window_end: WINDOW.to,
+  // The four weeks the ideas read (`ideasReadWindow`): 14 Sep to 11 Oct.
+  read_start: READ.from,
+  read_end: READ.to,
   cover: { text: '' },
   subquestions: [],
   format: null,

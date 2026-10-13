@@ -8,6 +8,8 @@ const row = {
   run_id: '00000000-0000-4000-8000-0000000000a1',
   window_start: '2026-10-05T00:00:00+00:00',
   window_end: '2026-10-12T00:00:00+00:00',
+  read_start: '2026-09-14T00:00:00+00:00',
+  read_end: '2026-10-12T00:00:00+00:00',
   rank: 1,
   registry_id: '00000000-0000-4000-8000-0000000000f1',
   title: 'How long does a liner last, and how do you know it is time to replace it?',
@@ -33,6 +35,14 @@ describe('parsePostIdeaRow', () => {
     expect(parsed?.opening_multiple).toBe(1.8)
     expect(parsed?.subquestions[0]).toEqual(row.subquestions[0])
     expect(parsed?.cover.text).toBe(row.cover.text)
+    // The run's week, and the four weeks the ideas read.
+    expect([parsed?.window_start, parsed?.window_end, parsed?.read_start, parsed?.read_end]).toEqual([row.window_start, row.window_end, row.read_start, row.read_end])
+  })
+
+  it('reads no row that does not say which days its ideas read', () => {
+    expect(parsePostIdeaRow({ ...row, read_start: null })).toBeNull()
+    const { read_end: _, ...noEnd } = row
+    expect(parsePostIdeaRow(noEnd)).toBeNull()
   })
 
   it('reads a row with no format or opening chosen', () => {

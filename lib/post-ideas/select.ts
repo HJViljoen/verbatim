@@ -10,8 +10,18 @@ import { POST_IDEA_RANKS, type PostIdeaLength } from './types'
 // each before the writer sees it (depth v2, T13; plan decision 5). PURE: the
 // reads are lib/post-ideas/step.ts's.
 //
-// THE CANDIDATES. The run's question conversations of its own window: themes
-// of the run's clustering whose kind is `question` (`theme_observations.category`)
+// THE WINDOW THE IDEAS READ (Heinrich, 13 Oct evening: the lead's
+// recommendation). The ideas still refresh every week, on every run, but they
+// read the question comments of the FOUR WEEKS ending at the run's window end
+// (`ideasReadWindow`: `POST_IDEAS_READ_DAYS`, 28 days), dated by the comment.
+// One week gave one idea a tenant under the evidence floor. The window is
+// stored on every row (`post_ideas.read_start` / `read_end`), so the page
+// prints the days the ideas read ("From questions asked 14 Sep to 11 Oct").
+// Everything below that says "the window" means this one; the client's own
+// posts keep their three months (`POST_IDEA_OWNED_MONTHS`).
+//
+// THE CANDIDATES. The question conversations of the ideas' window, under the
+// run's clustering: themes of the run whose kind is `question` (`theme_observations.category`)
 // or whose counted comments in the window are mostly questions
 // (`isQuestionConversation`), and that the week pool would take (`rankEligible`, lib/written/pool.ts: at
 // least three category videos on the read lane with a citation the lenient
@@ -25,7 +35,7 @@ import { POST_IDEA_RANKS, type PostIdeaLength } from './types'
 // stored, so a conversation whose idea the scrub empties still leaves three.
 //
 // THE COMMENTS THE WRITER GROUPS. The conversation's citations in the window
-// that count for the week (`countsForTheWeek`: category, read lane, no maker's
+// that count for a period (`countsForTheWeek`: category, read lane, no maker's
 // video), pass the lenient gate (no brand insider) and ASK (`isQuestionShaped`:
 // a question mark of any script anywhere, or an English question opener; an
 // answer or a piece of advice is never a sub-question), of question-kind
@@ -49,6 +59,25 @@ import { POST_IDEA_RANKS, type PostIdeaLength } from './types'
 // `POST_IDEA_MIN_MULTIPLE` above it, on at least `POST_IDEA_MIN_RATED` rated
 // videos (the floor every surface rests a format's lead on), is chosen; none,
 // and the slot is null rather than a pick off a handful of videos.
+
+/** The days of question comments the ideas read, ending at the run's window
+ *  end: four weeks (Heinrich, 13 Oct). */
+export const POST_IDEAS_READ_DAYS = 28
+
+const DAY_MS = 86_400_000
+
+/**
+ * The window the ideas read: the `POST_IDEAS_READ_DAYS` ending at the run's
+ * frozen window end, half-open `[end - 28 days, end)`, dated by the comment.
+ * Never past the run's own end (a comment after the run opened was not
+ * gathered), and never the clock. Throws on a window end that is not a date.
+ * Pure.
+ */
+export function ideasReadWindow(window: { from: string; to: string }): { from: string; to: string } {
+  const end = Date.parse(window.to)
+  if (!Number.isFinite(end)) throw new Error(`post ideas: the run's window end is not a date (${window.to})`)
+  return { from: new Date(end - POST_IDEAS_READ_DAYS * DAY_MS).toISOString(), to: window.to }
+}
 
 /** At most three ideas a run (the table's ranks). */
 export const POST_IDEAS_MAX = POST_IDEA_RANKS.length
@@ -149,7 +178,9 @@ export interface IdeaCandidate {
   themeId: string
   label: string
   description: string | null
-  /** The category's videos on it in the window (`window_theme_readings`). */
+  /** The category's videos on it in the ideas' window (`window_theme_readings`
+   *  over `ideasReadWindow`; the name is the week pool's, kept for saved
+   *  inputs). */
   weekVideos: number
   /** …with a citation the lenient gate passes: the rank key. */
   lenientVideos: number
@@ -170,7 +201,7 @@ export interface IdeaCandidate {
  * Is this a question conversation? Its kind is `question` (Pass B's category),
  * or most of its counted citations in the window are questions (the week
  * pool's `dominantKind`, in videos): a conversation filed under fit or price
- * whose comments this week mostly ASK is as much a question as one filed
+ * whose comments in the window mostly ASK is as much a question as one filed
  * under questions, and on Össur's corpus most questions are filed under a
  * topic (the 4 to 11 Oct window held two of the first kind and more of the
  * second).

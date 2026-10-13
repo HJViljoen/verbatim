@@ -1,14 +1,19 @@
-// The week's post ideas for one run (depth v2, T13): the run's question
-// conversations its client's own posts have not touched, the writer's one
-// call, the scrub and compose, printed as a readable rendering (the ideas top
-// to bottom, then the workings) plus the stored rows as JSON.
+// The week's post ideas for one run (depth v2, T13): the question
+// conversations of the four weeks ending at the run's window end (the step's
+// own window, `ideasReadWindow`, lib/post-ideas/select.ts; Heinrich, 13 Oct)
+// that its client's own posts have not touched, the writer's one call, the
+// scrub and compose, printed as a readable rendering (the ideas top to bottom,
+// then the workings) plus the stored rows as JSON. It reads the inputs through
+// the step's own `loadPostIdeaInputs`, so it cannot read another window.
 //
 //   node --env-file=.env.local --import tsx scripts/post-ideas.ts \
 //     --client <uuid> [--run <uuid>] [--dry-run] [--out <file.md>]
 //
 // DRY BY DEFAULT (`--dry-run` says so out loud). Nothing is written to any
 // database: no `post_ideas` row and no `ai_call_log` row. The call is still
-// paid for (gpt-5.4 at medium effort, typically $0.05 to $0.15 a run), and
+// paid for (gpt-5.4 at medium effort: $0.01 to $0.02 a tenant on one week's
+// questions, 13 Oct; four weeks hand the writer more conversations and more
+// comments, so expect about $0.05 to $0.15), and
 // held to `POST_IDEAS_BUDGET_USD` ($0.50) across its attempts, each made only
 // where its worst case still fits. Without --run it reads the client's newest
 // finished run with a window.
@@ -27,7 +32,9 @@
 // sub-question so a reader can judge the grouping: a stranger's words, for the
 // operator's own machine only, never the repository or the vault.
 //
-// READING A PROMPT BEFORE PAYING FOR IT, without reading production twice:
+// READING A PROMPT BEFORE PAYING FOR IT, without reading production twice
+// (a file saved before the four-week window carries no `read`: it read the
+// run's own window, and is shown as having read that):
 //   --prompt-only [--save-inputs <file.json>]   reads the inputs, prints the
 //       writer's two messages, saves what it read, and stops: no model call;
 //   --inputs <file.json>   builds from saved inputs instead of reading them:
@@ -93,6 +100,15 @@ async function newestRun(db: SupabaseClient, clientId: string): Promise<string> 
   return row.id
 }
 
+/** Inputs as a file may hold them: one saved before the four-week window
+ *  (13 Oct) carries no `read`. */
+type SavedInputs = Omit<PostIdeaInputs, 'read'> & { read?: PostIdeaInputs['read'] }
+
+/** A saved file's inputs with the window they were read over: a file saved
+ *  before the four-week window read the run's own window, so that is what it
+ *  says it read, never four weeks it did not. */
+const withRead = (saved: SavedInputs): PostIdeaInputs => ({ ...saved, read: saved.read ?? saved.window })
+
 const seconds = (s: number): string => (s < 60 ? `${s} s` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} min`)
 
 function render(built: BuiltPostIdeas, mode: string): string {
@@ -100,14 +116,14 @@ function render(built: BuiltPostIdeas, mode: string): string {
   const out: string[] = []
   out.push(`# Post ideas: ${inputs.company}, run ${inputs.runId}`)
   out.push('')
-  out.push(`${mode}. Window ${inputs.window.from} to ${inputs.window.to} (reading month ${inputs.month.slice(0, 7)}). Status: ${built.status}. ${built.ideas.length} idea(s), ${built.held.length} held. Model ${built.called ? POST_IDEAS_MODEL : 'not called'}, $${built.costUsd.toFixed(4)}.`)
+  out.push(`${mode}. Run window ${inputs.window.from} to ${inputs.window.to} (reading month ${inputs.month.slice(0, 7)}); questions read from ${inputs.read.from} to ${inputs.read.to}. Status: ${built.status}. ${built.ideas.length} idea(s), ${built.held.length} held. Model ${built.called ? POST_IDEAS_MODEL : 'not called'}, $${built.costUsd.toFixed(4)}.`)
   for (const idea of built.ideas) {
     const cand = inputs.candidates.find((x) => x.themeId === idea.registryId)
     const textOf = new Map((cand?.comments ?? []).map((x) => [x.commentId, x.text]))
     out.push('')
     out.push(`## ${idea.rank}. ${idea.title}`)
     out.push('')
-    out.push(`- Conversation: "${cand?.label ?? idea.registryId}" (registry ${idea.registryId}); ${cand?.weekVideos ?? '?'} category videos in the window, ${cand?.lenientVideos ?? '?'} with a counted citation.`)
+    out.push(`- Conversation: "${cand?.label ?? idea.registryId}" (registry ${idea.registryId}); ${cand?.weekVideos ?? '?'} category videos in the window read, ${cand?.lenientVideos ?? '?'} with a counted citation.`)
     out.push(`- Your posts: ${cand?.touch === 'unread' ? 'could not be read' : `none of the client's ${inputs.ownPosts ?? '?'} own posts published since ${ownedFrom(inputs.month).slice(0, 7)} touched it`}.`)
     out.push(`- Format: ${idea.format ? `${workedLabel(idea.format)} · ${idea.formatMultiple}×` : 'none chosen'}. Open with: ${idea.opening ? `${workedLabel(idea.opening)} · ${idea.openingMultiple}×` : 'none chosen'}. (1× = a typical market video on this question; read over ${cand?.play.videos ?? '?'} videos, ${cand?.play.rated ?? '?'} rated.)`)
     const len = idea.cover.length
@@ -123,14 +139,14 @@ function render(built: BuiltPostIdeas, mode: string): string {
   out.push('')
   out.push('## Workings')
   out.push('')
-  out.push(`Question conversations on three or more category videos in the window (${inputs.considered.length}):`)
+  out.push(`Question conversations on three or more category videos in the window read (${inputs.considered.length}):`)
   for (const x of inputs.considered) {
     const handle = inputs.candidates.find((k) => k.themeId === x.themeId)?.handle
     const covered = inputs.covered.find((k) => k.themeId === x.themeId)
     const fate = handle ? `sent as ${handle} (${x.asks ?? '?'} comments that ask)` : covered ? `left out: own posts touched it (${covered.posts.length})` : !x.eligible ? 'not eligible (the week pool\'s gate)'
       : x.asks != null && x.asks < POST_IDEA_MIN_COMMENTS ? `not sent: under the evidence floor (${x.asks} ${x.asks === 1 ? 'comment asks' : 'comments ask'}; ${POST_IDEA_MIN_COMMENTS} across ${POST_IDEA_MIN_VIDEOS} videos needed)`
       : 'not sent (under the floor on videos, or past the cap)'
-    out.push(`- "${x.label}" (filed as ${x.kind ?? '?'}, mostly ${x.dominantKind ?? '?'} this week): week ${x.weekVideos}, counted ${x.lenientVideos}; ${fate}`)
+    out.push(`- "${x.label}" (filed as ${x.kind ?? '?'}, mostly ${x.dominantKind ?? '?'} in it): videos ${x.weekVideos}, counted ${x.lenientVideos}; ${fate}`)
   }
   out.push(`Own posts read for the touch test: ${inputs.ownPosts ?? 'unread'}.`)
   for (const h of built.held) out.push(`Held: ${h.question} "${h.label}": ${h.reason}`)
@@ -166,12 +182,12 @@ async function main() {
   let inputs: PostIdeaInputs
   let prior: { raw: PostIdeasOutput; costUsd: number } | null = null
   if (recomposeFrom) {
-    const saved = JSON.parse(readFileSync(resolve(process.cwd(), recomposeFrom), 'utf8')) as { inputs: PostIdeaInputs; raw: PostIdeasOutput | null; costUsd: number }
+    const saved = JSON.parse(readFileSync(resolve(process.cwd(), recomposeFrom), 'utf8')) as { inputs: SavedInputs; raw: PostIdeasOutput | null; costUsd: number }
     if (!saved.raw) throw new Error(`${recomposeFrom} holds no writer output to compose again (a thin week makes none)`)
-    inputs = saved.inputs
+    inputs = withRead(saved.inputs)
     prior = { raw: saved.raw, costUsd: saved.costUsd }
   } else if (inputsFrom) {
-    inputs = JSON.parse(readFileSync(resolve(process.cwd(), inputsFrom), 'utf8')) as PostIdeaInputs
+    inputs = withRead(JSON.parse(readFileSync(resolve(process.cwd(), inputsFrom), 'utf8')) as SavedInputs)
   } else {
     inputs = await loadPostIdeaInputs(db!, { clientId, runId })
   }
