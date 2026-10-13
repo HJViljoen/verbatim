@@ -7,6 +7,7 @@ import { weekTileOf, type DashboardData, type DashboardReads } from '@/lib/pages
 import { DASHBOARD_NOW, dashboardEmptyFixture, dashboardFixture, dashboardThinFixture, fixtureMovesTop, fixturePublished } from '@/lib/pages/v2/home-fixture'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
 import { CONTENT_PATH, IDEAS_EMPTY, topAskedOf } from '@/lib/pages/v2/content'
+import { NEXT_MOVE, NO_MOVE_YET } from '@/lib/pages/v2/moves'
 import { contentThinFixture } from '@/lib/pages/v2/content-fixture'
 import { ContentPage } from '@/components/pages/v2/content'
 import type { MarketWeekRowRaw } from '@/lib/reading/weeks'
@@ -798,7 +799,19 @@ describe('the thin states, after the fresh check', () => {
     expect(tileText(render(page(dashboardThinFixture({ moves: 'no_move' }))), 'moves')).toContain(MOVES_NO_MOVE)
     const member = tileText(render(page(dashboardThinFixture({ moves: 'no_move_member' }))), 'moves')
     expect(member).toContain(MOVES_NO_MOVE_MEMBER)
-    expect(member).not.toMatch(/Accept/)
+    expect(member).not.toMatch(/accept|date a change/i)
+  })
+
+  it('Your moves, no move: the tile says what Your moves says (the merge, 13 Oct)', () => {
+    // The page's card title, and its invitation only where the page gives it.
+    expect(MOVES_NO_MOVE).toBe(`${NO_MOVE_YET.title}. ${NEXT_MOVE.line}`)
+    expect(MOVES_NO_MOVE_MEMBER).toBe(`${NO_MOVE_YET.title}.`)
+    for (const w of [MOVES_NO_MOVE, MOVES_NO_MOVE_MEMBER]) expect(w).not.toMatch(/accept/i)
+    // A dump from before `invite`: no invitation, whoever reads it.
+    const old = dashboardThinFixture({ moves: 'no_move' })
+    const top = old.moves.state === 'ok' ? old.moves.top! : null
+    const stripped = { ...old, moves: { state: 'ok' as const, top: { ...top!, invite: undefined } } }
+    expect(tileText(render(page(stripped)), 'moves')).toContain(MOVES_NO_MOVE_MEMBER)
   })
 
   it('Content: where your posts could not be read, a neutral title (nothing was left out), the week named by Content\'s rule', () => {

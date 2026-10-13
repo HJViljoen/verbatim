@@ -261,6 +261,8 @@ export function fixtureMovesTop(state: MovesFixtureState = 'full', opts: { septe
       compare: move.compare, moved: move.compare.verdict.state === 'moved', href: `${MOVES_PATH}#move-${move.id}`,
     },
     canDecide: state !== 'member' && state !== 'no_move_member',
+    // Moves are recorded in the fixture: the reader who may decide may date.
+    invite: state !== 'member' && state !== 'no_move_member',
     ...(opts.september ? { reading: { month: SEP, label: SEP_LABEL } } : {}),
     ...(moveless ? { newest } : {}),
   }

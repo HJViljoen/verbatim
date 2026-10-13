@@ -788,6 +788,17 @@ export const NO_MOVE_YET = {
   sub: 'Your first move',
 }
 
+/**
+ * Where there is no move, in Your moves' own words, for the Dashboard's
+ * "After your move" panel (the merge, 13 Oct): the card's title, and its
+ * invitation only where the reader may date a move (an owner or an admin,
+ * where moves are recorded: `TopMoves.invite`). A member is told no move is
+ * dated, never to accept or date anything. Pure.
+ */
+export function noMoveWords(invite: boolean): string {
+  return invite ? `${NO_MOVE_YET.title}. ${NEXT_MOVE.line}` : `${NO_MOVE_YET.title}.`
+}
+
 /** What a move dated after the reading month says under its line. */
 export const pendingLine = (month: string): string => `${longMonth(month)} reads once the month has been read.`
 
@@ -1279,6 +1290,10 @@ export interface TopMoves {
   }) | null
   /** Whether the reader may Accept / Not for us on the tile. */
   canDecide: boolean
+  /** OPTIONAL. Whether the panel invites dating a move where there is none:
+   *  the reader may decide and moves are recorded, as Your moves invites it
+   *  (`noMoveWords`). A dump from before it carries none: no invitation. */
+  invite?: boolean
   /** The reading month and its label (decision 3): the move's later month
    *  prints it where it is the reading month. Optional: a dump from before it
    *  carries none. */
@@ -1367,6 +1382,7 @@ export async function topMoves(scope: Scope, options: { canDecide: boolean }): P
         }
       : null,
     canDecide: options.canDecide,
+    invite: options.canDecide && core.moves != null,
     reading: { month: core.month, label: readingMonthLabel(core.month, core.readingAt) },
     newest: move && move.compare ? null : newestMove(cards),
   }

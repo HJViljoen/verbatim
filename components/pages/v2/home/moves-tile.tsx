@@ -8,7 +8,7 @@ import { PRIORITY_CHIP } from '@/components/pages/v2/moves/parts'
 import { fmtInt, longMonth } from '@/lib/format'
 import type { TileRead } from '@/lib/pages/v2/home'
 import { tileHref } from '@/lib/pages/home'
-import { compareMonths, groundedLabel, monthLabelOn, MOVE_UNREAD, pendingLine, RECORD_HREF, sharePct, streakLabel, UNTITLED_ADVICE, type TopMoves } from '@/lib/pages/v2/moves'
+import { compareMonths, groundedLabel, monthLabelOn, MOVE_UNREAD, noMoveWords, pendingLine, RECORD_HREF, sharePct, streakLabel, UNTITLED_ADVICE, type TopMoves } from '@/lib/pages/v2/moves'
 import { inlineMonth } from '@/lib/reading/month-label'
 import { monthStartOf } from '@/lib/reading/month-key'
 import { cn } from '@/lib/utils'
@@ -93,10 +93,11 @@ function Move({ move, reading }: { move: NonNullable<TopMoves['move']>; reading:
 }
 
 /** The panel's words where there is no move yet (parity pass, 13 Oct: the
- *  board's "After your move" panel stays). An owner or an admin is told what
- *  makes one; a member, who cannot, is told what will show. */
-export const MOVES_NO_MOVE = 'No move yet. Accept a piece of advice to follow its market before and after.'
-export const MOVES_NO_MOVE_MEMBER = 'No move yet. When your team makes one, its market before and after shows here.'
+ *  board's "After your move" panel stays), in Your moves' own words
+ *  (`noMoveWords`): the reader who may date one is invited to, as the page
+ *  invites them; a member is told only that none is dated. */
+export const MOVES_NO_MOVE = noMoveWords(true)
+export const MOVES_NO_MOVE_MEMBER = noMoveWords(false)
 
 const PANEL = 'flex min-w-0 flex-col gap-2 rounded-[10px] bg-inner px-4 py-3.5 text-foreground no-underline max-sm:hidden'
 const EYEBROW_MOVE = 'm-0 text-[11.5px] leading-[1.3] font-semibold uppercase tracking-[0.06em] text-orange-text'
@@ -170,7 +171,7 @@ export function MovesTileView({ read }: { read: TileRead<TopMoves | null> }) {
               : (
                 <div data-move="none" className={PANEL}>
                   <p className={EYEBROW_MOVE}>After your move</p>
-                  <p className={CSUB}>{top?.canDecide ? MOVES_NO_MOVE : MOVES_NO_MOVE_MEMBER}</p>
+                  <p className={CSUB}>{noMoveWords(top?.invite === true)}</p>
                 </div>
               )}
         </div>
