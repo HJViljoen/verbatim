@@ -148,7 +148,7 @@ export const PRODUCTS_BASIS = 'Counted over your market: rivals’ posts and eve
 /** The not-applied state (production today): the tables are not there. */
 export const PRODUCTS_NOT_APPLIED = 'Your products are not switched on for this workspace yet.'
 /** No catalogue (Sealand today). */
-export const PRODUCTS_NO_CATALOGUE = 'Add the products you sell, and the names people use for them, and this page will show what your market says about each one.'
+export const PRODUCTS_NO_CATALOGUE = 'Add the products you sell, and the names people use for them, and this page can show what your market says about each one.'
 /** The switch is off for the tenant. */
 export const PRODUCTS_NOT_ON = 'We have your product list. Reading what your market says about it is not switched on for this workspace yet.'
 /** The month holds no product row. */
