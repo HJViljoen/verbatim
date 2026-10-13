@@ -179,6 +179,13 @@ describe('loadPublishedLongRun: the month\'s long-run read (Market › This mont
     expect(await loadPublishedLongRun(db.client as SupabaseClient, CLIENT, { month: '2026-10-01' })).toBeNull()
   })
 
+  it('`before` narrows it to the months before one: the most recent closed month\'s read, never the month itself', async () => {
+    const db = fakeDb({ week_reads: [...READS, ...LONG].map((r) => ({ ...r })) })
+    expect(inShort(await loadPublishedLongRun(db.client as SupabaseClient, CLIENT, { before: '2026-10-01' }))).toBe('What holds to 2026-09-01.')
+    expect(inShort(await loadPublishedLongRun(db.client as SupabaseClient, CLIENT, { before: '2026-09-01' }))).toBe('What holds to 2026-08-01.')
+    expect(await loadPublishedLongRun(db.client as SupabaseClient, CLIENT, { before: '2026-08-01' })).toBeNull()
+  })
+
   it('a month read only before it closed (partialThrough) prints that read; once the month-closing run writes the full one, the full one', async () => {
     const partial = longRun('rb', '2026-09-01', { window_end: '2026-09-27T04:00:00Z', created_at: '2026-10-01T18:00:00Z' })
     partial.data = { ...partial.data, inShort: 'Partial.', partialThrough: '2026-09-26' } as typeof partial.data
@@ -222,10 +229,11 @@ describe('every page that prints a stored read asks the selector, and the select
     expect(text).not.toMatch(/loadLatestLongRun/)
   })
 
-  it('Market › This month reads the month\'s long-run read through the selector, for the month the view reads (Heinrich, 13 Oct)', () => {
+  it('Market › This month reads the month\'s long-run read through the selector: the month the view reads, else, on a filling month, the closed months before it (Heinrich, 13 Oct)', () => {
     const text = src('lib/pages/v2/market.ts')
     expect(text).toMatch(/loadPublishedLongRun\(db, clientId, \{ month \}\)/)
-    expect(text).toMatch(/period === 'month'\s*\?\s*soft\('longRun', loadPublishedLongRun\(/)
+    expect(text).toMatch(/loadPublishedLongRun\(db, clientId, \{ before: month \}\)/)
+    expect(text).toMatch(/period === 'month'\s*\?\s*soft\('longRun'/)
     expect(text).not.toMatch(/from\(WEEK_READS_TABLE\)|from\('week_reads'\)/)
   })
 

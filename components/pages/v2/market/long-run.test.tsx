@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract, copyNodes, copyViolations } from '@/lib/test/copy-contract'
 import { fixtureLongRun, marketFixture } from '@/lib/pages/v2/market-fixture'
-import { marketLongRunOf } from '@/lib/pages/v2/market'
+import { marketLongRunFor, marketLongRunOf } from '@/lib/pages/v2/market'
 import { MarketPage } from './index'
 import { LONG_RUN_ID, LongRunSection, longRunSub } from './long-run'
 
@@ -14,6 +14,8 @@ import { LONG_RUN_ID, LongRunSection, longRunSub } from './long-run'
 const FULL = marketFixture({ period: 'month', closed: true, longRun: 'full' })
 const PARTIAL = marketFixture({ period: 'month', longRun: 'partial' })
 const NONE = marketFixture({ period: 'month', closed: true })
+/** October still filling, none of its own yet: September's stands in. */
+const EARLIER = marketFixture({ period: 'month', longRun: 'earlier' })
 
 const section = (data = FULL) => <LongRunSection read={data.longRun!} data={data} />
 
@@ -61,7 +63,8 @@ describe('the month\'s long-run read, as a section', () => {
     expect(text).toContain('Our read of what has held across these months, written before October closed, on the comments to 11 Oct.')
     expect(render(section(PARTIAL))).toContain('data-long-run="partial"')
     assertCopyContract(section(PARTIAL))
-    expect(longRunSub({ month: '2026-09-01', partialThrough: null })).toBe('Our read of what has held across these months, written once September had closed.')
+    expect(longRunSub({ month: '2026-09-01', viewMonth: '2026-09-01', earlier: false, across: 'What holds across August and September', partialThrough: null }))
+      .toBe('Our read of what has held across these months, written once September had closed.')
   })
 })
 
@@ -122,5 +125,42 @@ describe('marketLongRunOf: the read for exactly the month the view reads', () =>
     expect(read.ideas).toHaveLength(1)
     expect(read.ideas[0]).toMatchObject({ body: ['A sentence.'], heard: ['2026-10-01'] })
     expect(read.partialThrough).toBeNull()
+  })
+})
+
+describe('a month still filling has no read of its own: the most recent closed month\'s stands in, headed with its month', () => {
+  it('prints September\'s read under October so far, below the data, named as September\'s, never as this month\'s', () => {
+    expect(EARLIER.month).toMatchObject({ month: '2026-10-01', soFar: true })
+    expect(EARLIER.longRun).toMatchObject({ month: '2026-09-01', viewMonth: '2026-10-01', earlier: true, title: 'September’s long-run read' })
+    const text = renderText(section(EARLIER))
+    expect(text).toMatch(/^September’s long-run read What holds across August and September: our read, written once September had closed\. October has no read of its own yet\./)
+    expect(text).not.toMatch(/What holds across September and October|October’s long-run read/)
+    // Its ideas name its own months.
+    expect(text).toContain('Heard in August and September · 64 videos')
+    const html = render(<MarketPage data={EARLIER} />)
+    expect(html).toContain('data-long-run-month="2026-09"')
+    const at = html.indexOf(`id="${LONG_RUN_ID}"`)
+    expect(at).toBeGreaterThan(html.indexOf('id="conversations"'))
+    // One read only: no stack of past months.
+    expect((html.match(new RegExp(`id="${LONG_RUN_ID}"`, 'g')) ?? []).length).toBe(1)
+    expect(copyViolations(<MarketPage data={EARLIER} />)).toEqual([])
+  })
+
+  it('marketLongRunFor: the view\'s own read first; the last closed month\'s only on a filling month; none on a closed month without its own', () => {
+    const oct = { month: '2026-10-01', data: fixtureLongRun(), created_at: '2026-11-01T05:00:00.000Z' }
+    const octPartial = { month: '2026-10-01', data: fixtureLongRun('2026-10-11'), created_at: '2026-10-11T18:00:00.000Z' }
+    const sep = { month: '2026-09-01', data: fixtureLongRun(null, 'sep'), created_at: '2026-10-04T05:00:00.000Z' }
+    // Filling, none of its own: September's, headed with its month.
+    expect(marketLongRunFor({ own: null, closed: sep, month: '2026-10-01', filling: true })).toMatchObject({ month: '2026-09-01', earlier: true, title: 'September’s long-run read' })
+    // Filling with a read of its own (one written before it closed): its own.
+    expect(marketLongRunFor({ own: octPartial, closed: sep, month: '2026-10-01', filling: true })).toMatchObject({ month: '2026-10-01', earlier: false, title: 'What holds across September and October' })
+    // A read of its own with nothing to print, on a filling month: the closed month's.
+    expect(marketLongRunFor({ own: { ...oct, data: { ...oct.data, ideas: [] } }, closed: sep, month: '2026-10-01', filling: true })?.month).toBe('2026-09-01')
+    // `?month=` of a closed month: only that month's, never an earlier one.
+    expect(marketLongRunFor({ own: null, closed: sep, month: '2026-10-01', filling: false })).toBeNull()
+    expect(marketLongRunFor({ own: oct, closed: null, month: '2026-10-01', filling: false })?.earlier).toBe(false)
+    // Never a read of the month itself or after it as "earlier".
+    expect(marketLongRunFor({ own: null, closed: oct, month: '2026-10-01', filling: true })).toBeNull()
+    expect(marketLongRunFor({ own: null, closed: null, month: '2026-10-01', filling: true })).toBeNull()
   })
 })

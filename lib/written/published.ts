@@ -108,10 +108,12 @@ export async function loadPublishedWeekRead(
  * full one the month-closing run writes; `standsAsMonthRead`,
  * lib/written/store.ts); a row that is not a long-run read is passed over.
  * `month` (`YYYY-MM-01`) narrows it to that month's read, which is how Market
- * › This month asks for the month it shows. Throws where `week_reads` cannot
- * be read.
+ * › This month asks for the month it shows; `before` to the months before
+ * one, which is how it asks for the most recent closed month's read where the
+ * month it shows is still filling and has none. Throws where `week_reads`
+ * cannot be read.
  */
-export async function loadPublishedLongRun(admin: SupabaseClient, clientId: string, opts: { month?: string } = {}): Promise<StoredLongRun | null> {
+export async function loadPublishedLongRun(admin: SupabaseClient, clientId: string, opts: { month?: string; before?: string } = {}): Promise<StoredLongRun | null> {
   // One row a month: a chunk is every month there is, so a row that is not a
   // long-run read is passed over for the one before it.
   let q = admin.from(WEEK_READS_TABLE)
@@ -119,6 +121,7 @@ export async function loadPublishedLongRun(admin: SupabaseClient, clientId: stri
     .eq('client_id', clientId).eq('kind', 'month').eq('status', 'ready')
     .not('data', 'is', null)
   if (opts.month) q = q.eq('month', opts.month)
+  if (opts.before) q = q.lt('month', opts.before)
   const res = await q.order('month', { ascending: false }).order('created_at', { ascending: false }).limit(UUID_IN_CHUNK)
   if (res.error) {
     if (isMissingWeekReads(res.error)) return null

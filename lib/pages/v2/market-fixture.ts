@@ -5,7 +5,7 @@ import type { HomeWeeks } from '../home'
 import type { UnusualFlag } from '../week'
 import {
   buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, convHref, closeHref, flagCardOf, flagVerdict, groupsOf,
-  lineBars, marketLongRunOf, marketMonths, marketParams, monthsText, notchOf, ourReadOf, panelStats, pickHero, pickWeekSides, platformRows, subjectHref,
+  lineBars, marketLongRunFor, marketMonths, marketParams, monthsText, notchOf, ourReadOf, panelStats, pickHero, pickWeekSides, platformRows, subjectHref,
   tableMonths, convOf, doingOf, leadDoing, withMonthPlatforms,
   type ConvInput, type ConvPanel, type MarketConv, type MarketData, type MarketMonth, type MarketParams, type MarketWeek, type MonthCount,
   type PanelAt, type SubjectFact, type TopRow,
@@ -258,9 +258,10 @@ export interface FixtureOptions {
    *  in full): "October", never "so far". */
   closed?: boolean
   /** This month's long-run read: `full` (written once the month closed),
-   *  `partial` (written before it closed, `partialThrough`), or none. Only
-   *  the month period prints it. */
-  longRun?: 'full' | 'partial' | null
+   *  `partial` (written before it closed, `partialThrough`), `earlier`
+   *  (October still filling with none of its own: September's stands in), or
+   *  none. Only the month period prints it. */
+  longRun?: 'full' | 'partial' | 'earlier' | null
 }
 
 const MONTH: MarketMonth = {
@@ -276,12 +277,26 @@ const MONTH: MarketMonth = {
 const MONTH_CLOSED: MarketMonth = { ...MONTH, soFar: false, text: 'October', market: { videos: 912, comments: 16_204 }, category: 861 }
 
 /**
- * October's long-run read (`week_reads` kind 'month'), Össur-shaped and
+ * October’s long-run read (`week_reads` kind 'month'; with `sep`, September’s), Össur-shaped and
  * illustrative: what has held across September and October, in the writer's
  * words as the scrub left them (no figure, no direction word), with code's
  * counts. `partialThrough` where it was written before October closed.
  */
-export function fixtureLongRun(partialThrough: string | null = null): LongRunReadData {
+export function fixtureLongRun(partialThrough: string | null = null, month: 'oct' | 'sep' = 'oct'): LongRunReadData {
+  const read = octoberLongRun(partialThrough)
+  if (month === 'oct') return read
+  // September's read: its window is August and September.
+  const shift = (m: string) => (m === OCT ? SEP : '2026-08-01')
+  return {
+    ...read,
+    month: SEP,
+    months: ['2026-08-01', SEP],
+    window: { from: '2026-08-01T00:00:00.000Z', to: `${OCT}T00:00:00.000Z` },
+    ideas: read.ideas.map((idea) => ({ ...idea, months: idea.months.map((m) => ({ ...m, month: shift(m.month) })) })),
+  }
+}
+
+function octoberLongRun(partialThrough: string | null): LongRunReadData {
   return {
     version: 1,
     kind: 'longrun',
@@ -425,9 +440,12 @@ export function marketFixture(opts: FixtureOptions = {}): MarketData {
     panel,
     brands: opts.brands ?? 'counted',
     subjectPanel: opts.subject ? buildSubjectPanel({ id: subjectId(opts.subject), facts, convs, period, p, read, month, flag: flag?.conv ? { id: flag.conv.id, verdict: flag.verdict } : null }) : null,
-    // The loader's own rule: the month period only, the view's month only.
+    // The loader's own rule (`marketLongRunFor`): the month period only, the
+    // view's month's read, or on a filling month the last closed month's.
     longRun: period === 'month' && opts.longRun
-      ? marketLongRunOf({ month: OCT, data: fixtureLongRun(opts.longRun === 'partial' ? '2026-10-11' : null), created_at: '2026-11-01T05:00:00.000Z' }, month.month)
+      ? marketLongRunFor(opts.longRun === 'earlier'
+        ? { own: null, closed: { month: SEP, data: fixtureLongRun(null, 'sep'), created_at: '2026-10-04T05:00:00.000Z' }, month: month.month, filling: month.soFar }
+        : { own: { month: OCT, data: fixtureLongRun(opts.longRun === 'partial' ? '2026-10-11' : null), created_at: '2026-11-01T05:00:00.000Z' }, closed: null, month: month.month, filling: month.soFar })
       : null,
   }
 }

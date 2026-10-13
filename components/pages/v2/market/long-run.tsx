@@ -9,8 +9,11 @@ import { About } from './parts'
 
 // THE MONTH'S LONG-RUN READ, ON MARKET › THIS MONTH (Heinrich, 13 Oct: below
 // the month's data, never at the top, never on This week or Over time). The
-// published `week_reads` row of kind 'month' for the month the view reads
-// (`marketLongRunOf`); no read for that month, no section, and no placeholder.
+// published `week_reads` row of kind 'month' for the month the view reads;
+// where that month is still filling and has none of its own, the most recent
+// closed month's, headed with its month ("September’s long-run read") so it
+// never reads as this month's (`marketLongRunFor`). One read only; no read to
+// show, no section, and no placeholder.
 //
 // No board draws it, so it is drawn in the page's idiom: the kit's card and
 // head, the lead, then each idea as a row: its headline and sentences on the
@@ -30,12 +33,17 @@ const SLOT = 'week_read'
 
 /** The line under the title: what the section is, and when it was written.
  *  A read written before its month closed (`partialThrough`) says the day it
- *  reads to. */
-export function longRunSub(read: Pick<MarketLongRun, 'month' | 'partialThrough'>): string {
+ *  reads to; an earlier month's read standing in on a filling month
+ *  (`earlier`) names what it holds across and says the month in view has no
+ *  read of its own yet. */
+export function longRunSub(read: Pick<MarketLongRun, 'month' | 'partialThrough' | 'earlier' | 'viewMonth' | 'across'>): string {
   const month = longMonth(read.month)
-  return read.partialThrough
-    ? `Our read of what has held across these months, written before ${month} closed, on the comments to ${shortDate(`${read.partialThrough.slice(0, 10)}T00:00:00.000Z`)}.`
-    : `Our read of what has held across these months, written once ${month} had closed.`
+  const when = read.partialThrough
+    ? `written before ${month} closed, on the comments to ${shortDate(`${read.partialThrough.slice(0, 10)}T00:00:00.000Z`)}`
+    : `written once ${month} had closed`
+  return read.earlier
+    ? `${read.across}: our read, ${when}. ${longMonth(read.viewMonth)} has no read of its own yet.`
+    : `Our read of what has held across these months, ${when}.`
 }
 
 export function LongRunSection({ read, data }: { read: MarketLongRun; data: Pick<MarketData, 'brand' | 'noun' | 'brands'> }) {
@@ -44,6 +52,7 @@ export function LongRunSection({ read, data }: { read: MarketLongRun; data: Pick
       id={LONG_RUN_ID}
       aria-labelledby="long-run-title"
       data-long-run={read.partialThrough ? 'partial' : 'full'}
+      data-long-run-month={read.month.slice(0, 7)}
       className={cn(CARD, 'scroll-mt-6')}
     >
       <CardHead icon={Layers} id="long-run-title" title={read.title} sub={longRunSub(read)} />

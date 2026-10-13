@@ -920,12 +920,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
     `topMarket`) and Content (`loadContentPage`, `topContent`). The month's
     long-run read (`week_reads` kind 'month', `loadPublishedLongRun`) has
     ONE routed reader since 13 Oct (Heinrich): Market › This month
-    (`loadMarket`, `period === 'month'` only), which asks for exactly the
-    month the view reads (`loadPublishedLongRun(db, clientId, { month })`;
-    `marketLongRunOf` holds it there) and draws it last on the page, below
-    the conversation table (`components/pages/v2/market/long-run.tsx`,
-    `#long-run`). Never on This week or Over time; no read for that month,
-    no section and no placeholder. This week
+    (`loadMarket`, `period === 'month'` only), which asks for the month the
+    view reads (`loadPublishedLongRun(db, clientId, { month })`) and, only
+    where that month is still filling and has none, for the most recent
+    closed month's (`{ before: month }`, headed with that month;
+    `marketLongRunFor`), and draws the one read last on the page, below the
+    conversation table (`components/pages/v2/market/long-run.tsx`,
+    `#long-run`). Never on This week or Over time; no read to show, no
+    section and no placeholder. This week
     (`loadWeekReadPage`), the Subjects pane (`loadSubjectReadLine`) and Your
     market (`loadMarketPicture`, the newest long-run read of any month, for
     stored snapshots) still read through it and are on no route.
@@ -1066,10 +1068,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
     table, the last thing on the page, never at the top and never on This
     week or Over time (`MarketData.longRun`, `marketLongRunOf`,
     `LongRunSection`). It is the published read for the month the view
-    reads, and a month's read is written when it closes: so the default This
-    month shows it while the reading month is still the month just closed
-    (`readingMonthFor`, decision A), none once the reading month is the
-    month still filling, and `?month=` of a closed month shows that month's. Its title ("What holds across September and
+    reads; a month's read is written when it closes, so where the view reads
+    a month still FILLING (`soFar`: from about the 16th, `readingMonthFor`,
+    decision A) with no read of its own, the most recent CLOSED month's read
+    stands in, in the same place, headed with its own month ("September’s
+    long-run read", and "October has no read of its own yet"), one read and
+    never a stack (`marketLongRunFor`, `loadPublishedLongRun` with
+    `before`). A month with its own read shows its own, and `?month=` of a
+    closed month shows only that month's (none where it has none). Its title ("What holds across September and
     October"), lead, headlines and sentences are stored `week_read` prose;
     each idea's months and videos are code's figures, and who they are
     about prints only where the brands are `counted`. No board draws it:
