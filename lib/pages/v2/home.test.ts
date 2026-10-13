@@ -7,7 +7,7 @@ import type { StandingFact, WeekReadDataV2 } from '../../written/types'
 import { homeWeeksFrame } from '../home'
 import { parseContentParams } from './content'
 import {
-  agentTries, dashboardBar, settleTile, topProductsStub, weekSubjectsOf, weekTileOf, AGENT_TRIES,
+  agentTries, dashboardBar, marketWeekOf, settleTile, shortDates, topProductsStub, weekSubjectsOf, weekTileOf, AGENT_TRIES,
 } from './home'
 import {
   dashboardFixture, fixtureContentTop, fixtureMarketTop, fixtureMovesTop, fixturePublished, fixtureStanding, fixtureVoicesTop, DASHBOARD_NOW,
@@ -124,8 +124,14 @@ describe('the Agent box\'s conversations to try', () => {
 describe('the bar', () => {
   it('dates the week by the read and the updates by the clock', () => {
     expect(dashboardBar({ read: fixturePublished(), clock: { asAt: '2026-10-11T07:30:00Z', nextUpdate: '2026-10-18T06:00:00Z', paused: false } }))
-      .toEqual({ dates: '5 to 11 October', asAt: '2026-10-11T07:30:00Z', nextUpdate: '2026-10-18T06:00:00Z', paused: false })
-    expect(dashboardBar({ read: null, clock: null })).toEqual({ dates: null, asAt: null, nextUpdate: null, paused: false })
+      .toEqual({ dates: '5 to 11 October', short: '5 to 11 Oct', asAt: '2026-10-11T07:30:00Z', nextUpdate: '2026-10-18T06:00:00Z', paused: false })
+    expect(dashboardBar({ read: null, clock: null })).toEqual({ dates: null, short: null, asAt: null, nextUpdate: null, paused: false })
+    expect(shortDates('28 September to 4 October')).toBe('28 Sep to 4 Oct')
+  })
+
+  it('hands the Market tile the read\'s market this week, so its category count can say where it sits', () => {
+    expect(marketWeekOf(fixturePublished())).toBe(241)
+    expect(marketWeekOf(null)).toBeNull()
   })
 })
 
@@ -201,10 +207,10 @@ describe('every tile\'s link opens its page\'s panel (each parsed by that page\'
 describe('one wave (the loader\'s shape, pinned by its source)', () => {
   const src = readFileSync(resolve(__dirname, 'home.ts'), 'utf8')
 
-  it('reads the published week once and hands it to Market and Content', () => {
+  it('reads the published week once and hands it to Market and Content (Content on the soft read: a failed week read costs it its anchor, not the tile)', () => {
     expect(src.match(/loadPublishedWeekRead\(/g)).toHaveLength(1)
     expect(src).toMatch(/topMarket\(\{ supabase, clientId, reading, read, now \}\)/)
-    expect(src).toMatch(/topContent\(scope, \{ now, published: read \}\)/)
+    expect(src).toMatch(/publishedSoft\.then\(\(read\) => topContent\(scope, \{ now, published: read \}\)\)/)
   })
 
   it('starts every tile before awaiting any, on one session client and one reading handle', () => {
@@ -216,5 +222,28 @@ describe('one wave (the loader\'s shape, pinned by its source)', () => {
 
   it('wraps each tile so a failed read loses only that tile', () => {
     for (const t of ['market', 'voices', 'products', 'content', 'moves', 'week']) expect(src).toContain(`settleTile('${t}',`)
+  })
+})
+
+describe('a failed read reaches its tile as a failure, never as "nothing yet"', () => {
+  it('Market\'s top read throws where the themed run, the newest week or its labels could not be read', () => {
+    const src = readFileSync(resolve(__dirname, 'market.ts'), 'utf8')
+    const top = src.slice(src.indexOf('export async function topMarket'), src.indexOf('async function loadThemeLabels'))
+    expect(top).not.toMatch(/fetchThemedRunId\([^)]*\)\)\.catch\(\(\) => null\)/)
+    expect(top).toMatch(/throw new Error\('market\.top: the newest week could not be read'\)/)
+    expect(top).toMatch(/const runThemes = await loadThemeLabels\(/)
+  })
+
+  it('Voices\' top read carries its groups\' and brands\' states', () => {
+    const top = fixtureVoicesTop()
+    expect(top).toMatchObject({ groupsState: 'ready', groupsEmpty: null, brandsState: 'ready' })
+  })
+})
+
+describe('the rivals are read once a request', () => {
+  it('loadTrackedRivals memoises on the client and hands each caller its own copy', () => {
+    const src = readFileSync(resolve(__dirname, '../../rivals.ts'), 'utf8')
+    expect(src).toMatch(/memoRead\(client, `rivals:tracked:\$\{clientId\}`/)
+    expect(src).toMatch(/return rows\.map\(\(r\) => \(\{ \.\.\.r \}\)\)/)
   })
 })

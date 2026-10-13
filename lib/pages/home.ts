@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { STILL_FILLING, weekDetailLabel, type WeekDetail } from '../charts/week-bars'
 import { fmtInt, shortDate } from '../format'
-import type { NavKey } from '../nav'
+import { surface, type NavKey } from '../nav'
 import { loadTrackedRivals, type TrackedRival } from '../rivals'
 import { loadChanges } from '../reading/read'
 import { loadCadenceRuns, loadDeliveredRuns, marketRivalAudiences, updateInstant } from '../reading/reading-view'
@@ -80,6 +80,9 @@ export const TILE_NAV: Readonly<Record<HomeTileKey, NavKey>> = {
   content: 'content',
   moves: 'moves',
 }
+
+/** The page under a tile, where it has no panel to open. */
+export const tileHref = (key: HomeTileKey): string => surface(TILE_NAV[key]).href
 
 /** Columns "Week by week" frames (the artboard: eight weeks). */
 export const WEEK_COLUMNS = 8

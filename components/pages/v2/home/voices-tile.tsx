@@ -3,6 +3,7 @@ import { BrandChip } from '@/components/colour-roles'
 import { NAV_ICON } from '@/components/nav-icons'
 import { TickBar } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
+import { tileHref } from '@/lib/pages/home'
 import type { TileRead } from '@/lib/pages/v2/home'
 import type { TopVoices } from '@/lib/pages/v2/voices'
 import { cn } from '@/lib/utils'
@@ -23,8 +24,10 @@ import { MID, MONO_MUTED, TILE, TILE_FAILED, TileHead, TileLine, TT } from './pa
 /** Groups the tile draws bars for (the lead and three more). */
 export const VOICES_GROUP_BARS = 4
 
-/** Voices' own words for a month with no group read. */
+/** Where no group prints and Voices has no words of its own for why. */
 export const VOICES_NONE = 'No group of people commenting has been read yet.'
+/** Where the brands' reads failed: the row says so instead of vanishing. */
+export const VOICES_BRANDS_FAILED = 'could not be read just now'
 
 export function VoicesTileView({ read }: { read: TileRead<TopVoices | null> }) {
   const top = read.state === 'ok' ? read.top : null
@@ -34,8 +37,12 @@ export function VoicesTileView({ read }: { read: TileRead<TopVoices | null> }) {
   const named = top?.named ?? []
   return (
     <article aria-labelledby="home-voices" data-tile="voices" className={cn(TILE, 'col-span-12 min-[1180px]:col-span-4')}>
-      <TileHead icon={NAV_ICON.voices} name="Voices" id="home-voices" href={lead?.href ?? top?.href ?? '/dashboard/voices'} />
-      {read.state === 'failed' ? <TileLine>{TILE_FAILED}</TileLine> : !top || !lead ? <TileLine>{VOICES_NONE}</TileLine> : (
+      <TileHead icon={NAV_ICON.voices} name="Voices" id="home-voices" href={lead?.href ?? top?.href ?? tileHref('voices')} />
+      {/* A failed read of the groups is a failure, never "nothing yet"; a
+          workspace whose groups are not switched on, or too thin to describe,
+          gets Voices' own words for it. */}
+      {read.state === 'failed' || top?.groupsState === 'unread' ? <TileLine>{TILE_FAILED}</TileLine>
+        : !top || !lead ? <TileLine>{top?.groupsEmpty ?? VOICES_NONE}</TileLine> : (
         <>
           <div className="flex flex-col gap-1.5">
             <p className="m-0 text-[12px] leading-[1.3] font-semibold uppercase tracking-[0.06em] text-orange-text">In the most videos in {top.monthWords}</p>
@@ -59,12 +66,17 @@ export function VoicesTileView({ read }: { read: TileRead<TopVoices | null> }) {
               ))}
             </div>
           ) : null}
-          {named.length > 0 ? (
+          {top.brandsState === 'unread' ? (
+            <div className="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-track pt-2.5 text-[13.5px] max-sm:hidden">
+              <span className="text-muted-foreground">Named most</span>
+              <span className="text-muted-foreground">{VOICES_BRANDS_FAILED}</span>
+            </div>
+          ) : named.length > 0 ? (
             <div className="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-track pt-2.5 text-[13.5px] max-sm:hidden">
               <span className="text-muted-foreground">Named most</span>
               <span className="flex flex-wrap items-center gap-1.5">
                 {named.map((b) => (
-                  <Link key={b.label} href={b.href} scroll={false} className="no-underline" aria-label={`${b.label}: named in ${fmtInt(b.k)} of ${fmtInt(b.n)} videos`}>
+                  <Link key={b.label} href={b.href} className="no-underline" aria-label={`${b.label}: named in ${fmtInt(b.k)} of ${fmtInt(b.n)} videos`}>
                     <BrandChip who={b.you ? 'you' : 'rival'}>{b.label} <span data-copy="figure" className="font-mono font-normal">{fmtInt(b.k)}</span></BrandChip>
                   </Link>
                 ))}

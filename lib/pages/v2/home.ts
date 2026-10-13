@@ -74,12 +74,24 @@ import { topVoices, type TopVoices } from './voices'
 // ---- Your products (T5's tile, stubbed) ----------------------------------------------
 
 // switch to import from lib/pages/v2/products at merge
-/** What the Dashboard's Your products tile prints (pinned for T5 and T8). */
+/** What the Dashboard's Your products tile prints (pinned for T5 and T8; T5's
+ *  `topProducts({supabase, clientId, reading, now})` returns it, with the
+ *  optional fields where it has them). */
 export interface TopProducts {
   state: 'not_applied' | 'no_catalogue' | 'not_on' | 'quiet' | 'ready'
   monthWords: string
   standout: { label: string; name: string; k: number; n: number | null; href: string } | null
   href: string
+  /** Why a `quiet` tile has nothing: its month was not read yet, or its read
+   *  failed. Absent: read, and nothing of yours was named. */
+  note?: 'unread' | 'failed'
+  /** Products of yours named this month, and how many you list (the board's
+   *  "9 of your 38"). */
+  cameUp?: number
+  products?: number
+  /** The catalogue by category, each product's videos this month (the board's
+   *  mini shelf). */
+  columns?: { id: string; name: string; products: { id: string; videos: number }[] }[]
 }
 
 /**
@@ -99,6 +111,8 @@ export type TileRead<T> = { state: 'ok'; top: T } | { state: 'failed' }
 export interface DashboardBar {
   /** The published week's days, "5 to 11 October"; null with no read. */
   dates: string | null
+  /** The same, short, for the phone's bar ("5 to 11 Oct"). */
+  short: string | null
   /** The last update the page reads, and the next one the schedule promises. */
   asAt: string | null
   nextUpdate: string | null
@@ -107,6 +121,10 @@ export interface DashboardBar {
 
 export interface MarketTile {
   top: MarketTop | null
+  /** The market's videos this week, as the week's tile prints them (the
+   *  read's frozen figure), so the tile can say how its category's count sits
+   *  inside it; null with no read. */
+  marketWeek: number | null
   /** The month the week is restated against, `YYYY-MM-01` (a "New" chip's
    *  month); null with no read. */
   month: string | null
@@ -276,18 +294,31 @@ export function agentTries(read: PublishedWeekRead | null, market: MarketTop | n
   })
 }
 
+/** "5 to 11 October" as the phone's bar prints it: "5 to 11 Oct". */
+export const shortDates = (dates: string): string =>
+  dates.replace(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\b/g, (m) => m.slice(0, 3))
+
 /** The bar, from the read and the update clock. Pure. */
 export function dashboardBar(input: {
   read: PublishedWeekRead | null
   clock: { asAt: string | null; nextUpdate: string | null; paused: boolean } | null
 }): DashboardBar {
   const data = input.read?.data ?? null
+  const dates = data ? weekReadDates(data.window) || null : null
   return {
-    dates: data ? weekReadDates(data.window) || null : null,
+    dates,
+    short: dates ? shortDates(dates) : null,
     asAt: input.clock?.asAt ?? null,
     nextUpdate: input.clock?.nextUpdate ?? null,
     paused: input.clock?.paused ?? false,
   }
+}
+
+/** The read's frozen market videos this week, or null. */
+export function marketWeekOf(read: PublishedWeekRead | null): number | null {
+  const data = read?.data
+  const v = data && data.version === 2 ? data.market?.week.videos : null
+  return isCount(v) ? v : null
 }
 
 // ---- The reads ----------------------------------------------------------------------------
@@ -389,10 +420,12 @@ export function startDashboard(session: DashboardSession): DashboardReads {
     .then(([runs, schedule]) => updateClock({ now: nowIso, runs, schedule })))
 
   const market = settleTile('market', published.then((read) => topMarket({ supabase, clientId, reading, read, now })
-    .then((top): MarketTile => ({ top, month: read ? weekReadMonth(read.data) : null }))))
+    .then((top): MarketTile => ({ top, month: read ? weekReadMonth(read.data) : null, marketWeek: marketWeekOf(read) }))))
   const voices = settleTile('voices', topVoices({ supabase, clientId, reading, now: nowIso }))
   const products = settleTile('products', topProductsStub(scope))
-  const content = settleTile('content', published.then((read) => topContent(scope, { now, published: read })))
+  // A failed week read costs Content its anchor week, not the tile: Content
+  // anchors on the ideas' own run where the read is missing.
+  const content = settleTile('content', publishedSoft.then((read) => topContent(scope, { now, published: read })))
   const moves = settleTile('moves', topMoves(scope, { canDecide }))
 
   const weeks = soft('weeks', loadHomeWeeks({ supabase, clientId, reading: db, rivals }, nowIso))

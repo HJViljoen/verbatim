@@ -4,6 +4,7 @@ import { NAV_ICON } from '@/components/nav-icons'
 import { newVerdict } from '@/components/pages/v2/market/parts'
 import { MARKET_FIRST_RUN } from '@/components/pages/v2/market'
 import { fmtInt, fmtPct } from '@/lib/format'
+import { tileHref } from '@/lib/pages/home'
 import { flagBaseWords, type MarketConv, type MarketTop } from '@/lib/pages/v2/market'
 import type { MarketTile, TileRead } from '@/lib/pages/v2/home'
 import { cn } from '@/lib/utils'
@@ -25,13 +26,23 @@ import { BIG, Fig, MONO_MUTED, MROW, TILE, TILE_FAILED, TileHead, TileLine, TT }
 /** Market's own words for "no conversation leads". */
 export const MARKET_NONE = 'No conversation leads this week yet.'
 
-/** "of 226 category videos this week" and "31 of 300 in October so far". */
-function WeekLines({ conv, top }: { conv: MarketConv; top: MarketTop }) {
+/** "of 151 category videos this week (153 in your market)" and "35 of
+ *  279 in October so far". The category's count sits inside the market's
+ *  (the week tile's figure), and both are named, so the two totals on the
+ *  page read as one inside the other. On a phone the two run as one line, as
+ *  the phone board draws it. */
+function WeekLines({ conv, top, marketWeek }: { conv: MarketConv; top: MarketTop; marketWeek: number | null }) {
+  const inside = marketWeek != null && top.category.week != null && marketWeek !== top.category.week
   return (
     <div className={cn(MONO_MUTED, 'mt-2')}>
-      {top.category.week != null ? <span data-copy="level" className="block">of {fmtInt(top.category.week)} category videos this week</span> : null}
+      {top.category.week != null ? (
+        <span className="sm:block">
+          <span data-copy="level">of {fmtInt(top.category.week)} category videos this week</span>
+          {inside ? <> (<span data-copy="figure">{fmtInt(marketWeek!)}</span> in your market)</> : null}
+        </span>
+      ) : null}
       {conv.month != null && top.category.month != null
-        ? <span data-copy="level" className="block">{fmtInt(conv.month)} of {fmtInt(top.category.month)} {top.week.inMonth}</span>
+        ? <span className="sm:block"><span className="sm:hidden"> · </span><span data-copy="level">{fmtInt(conv.month)} of {fmtInt(top.category.month)}</span> {top.week.inMonth}</span>
         : null}
     </div>
   )
@@ -40,7 +51,7 @@ function WeekLines({ conv, top }: { conv: MarketConv; top: MarketTop }) {
 /** The three weekly windows as bars, oldest first: counts only. */
 const weekBars = (conv: MarketConv, top: MarketTop) => conv.weeks.map((count, i) => ({ label: top.week.labels[i] ?? '', count }))
 
-function Hero({ top }: { top: MarketTop }) {
+function Hero({ top, marketWeek }: { top: MarketTop; marketWeek: number | null }) {
   const hero = top.hero
   if (!hero) return null
   if (hero.kind === 'flag') {
@@ -85,7 +96,7 @@ function Hero({ top }: { top: MarketTop }) {
       <div className="grid grid-cols-[minmax(0,5fr)_minmax(0,6fr)] items-end gap-7 max-sm:grid-cols-1 max-sm:gap-3">
         <div>
           <Fig n={conv.week} className={cn(BIG, 'block')} />
-          <WeekLines conv={conv} top={top} />
+          <WeekLines conv={conv} top={top} marketWeek={marketWeek} />
         </div>
         <SpikeBars weeks={weekBars(conv, top)} counts="all" size="md" className="w-full max-w-[400px] justify-self-end max-sm:justify-self-start" label={`Category videos a week about ${conv.label}`} />
       </div>
@@ -97,7 +108,7 @@ function Hero({ top }: { top: MarketTop }) {
 function Row({ row, top, month }: { row: MarketTop['rows'][number]; top: MarketTop; month: string | null }) {
   const c = row.conv
   return (
-    <Link href={row.href} scroll={false} className={cn(MROW, '-mx-2 rounded-md px-2 text-foreground no-underline hover:bg-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring')}>
+    <Link href={row.href} className={cn(MROW, '-mx-2 rounded-md px-2 text-foreground no-underline hover:bg-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring')}>
       <span className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
         <span data-copy="subject" data-slot="pass_b_theme" className="min-w-0">{c.label}</span>
         {row.kind === 'new' && month && c.isNew
@@ -131,7 +142,7 @@ function Row({ row, top, month }: { row: MarketTop['rows'][number]; top: MarketT
 /** Where the tile's link goes: the lead's panel, else Market. */
 export function marketTileHref(top: MarketTop | null): string {
   const hero = top?.hero
-  if (!hero) return top?.href ?? '/dashboard/market'
+  if (!hero) return top?.href ?? tileHref('market')
   return hero.kind === 'flag' ? hero.card.href ?? top!.href : hero.href
 }
 
@@ -140,13 +151,13 @@ export function MarketTileView({ read }: { read: TileRead<MarketTile> }) {
   const month = read.state === 'ok' ? read.top.month : null
   return (
     <article aria-labelledby="home-market" data-tile="market" className={cn(TILE, 'col-span-12 min-[1180px]:col-span-8')}>
-      <TileHead icon={NAV_ICON.market} name="Market" id="home-market" href={read.state === 'ok' ? marketTileHref(top) : '/dashboard/market'} open="Open Market" />
+      <TileHead icon={NAV_ICON.market} name="Market" id="home-market" href={read.state === 'ok' ? marketTileHref(top) : tileHref('market')} open="Open Market" />
       {read.state === 'failed' ? <TileLine>{TILE_FAILED}</TileLine>
         : !top ? <TileLine>{MARKET_FIRST_RUN}</TileLine>
           : !top.hero && top.rows.length === 0 ? <TileLine>{MARKET_NONE}</TileLine>
             : (
               <>
-                <Hero top={top} />
+                <Hero top={top} marketWeek={read.state === 'ok' ? read.top.marketWeek : null} />
                 {top.rows.length > 0 ? <div className="flex flex-col">{top.rows.map((r) => <Row key={r.conv.id} row={r} top={top} month={month} />)}</div> : null}
               </>
             )}

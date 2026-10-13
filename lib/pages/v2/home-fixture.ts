@@ -91,18 +91,37 @@ export function fixtureVoicesTop(opts: { named?: boolean } = {}): TopVoices {
       { label: 'Össur', k: 41, n: 318, you: true, href: voicesHref({}, { kind: 'brand', key: 'client' }) },
       { label: 'Ottobock', k: 37, n: 318, you: false, href: voicesHref({}, { kind: 'brand', key: 'Ottobock' }) },
     ],
+    groupsState: 'ready',
+    groupsEmpty: null,
+    brandsState: opts.named === false ? 'not_counted' : 'ready',
     href: VOICES_HREF,
   }
 }
 
-export function fixtureProductsTop(state: TopProducts['state'] = 'ready'): TopProducts {
+/** The catalogue as the board's mini shelf draws it: liners 3 of 8 named,
+ *  feet 2 of 9, knees 3 of 6, bracing 1 of 9, sockets none of 6. */
+const SHELF: { id: string; name: string; videos: number[] }[] = [
+  { id: 'g-liners', name: 'Liners', videos: [9, 4, 1, 0, 0, 0, 0, 0] },
+  { id: 'g-feet', name: 'Feet', videos: [7, 3, 0, 0, 0, 0, 0, 0, 0] },
+  { id: 'g-knees', name: 'Knees', videos: [6, 4, 3, 0, 0, 0] },
+  { id: 'g-bracing', name: 'Bracing', videos: [1, 0, 0, 0, 0, 0, 0, 0, 0] },
+  { id: 'g-sockets', name: 'Sockets', videos: [0, 0, 0, 0, 0, 0] },
+]
+
+export function fixtureProductsTop(state: TopProducts['state'] = 'ready', opts: { note?: TopProducts['note']; shelf?: boolean } = {}): TopProducts {
   const href = '/dashboard/products'
-  if (state !== 'ready') return { state, monthWords: state === 'quiet' ? 'October so far' : '', standout: null, href }
+  const shelf = opts.shelf === false ? {} : {
+    cameUp: SHELF.reduce((n, c) => n + c.videos.filter((v) => v > 0).length, 0),
+    products: SHELF.reduce((n, c) => n + c.videos.length, 0),
+    columns: SHELF.map((c) => ({ id: c.id, name: c.name, products: c.videos.map((videos, i) => ({ id: `${c.id}-${i}`, videos })) })),
+  }
+  if (state !== 'ready') return { state, monthWords: state === 'quiet' ? 'October so far' : '', standout: null, href, ...(opts.note ? { note: opts.note } : {}) }
   return {
     state,
     monthWords: 'October so far',
     standout: { label: 'Named in the most videos', name: 'Pro-Flex Pivot', k: 9, n: 318, href: `${href}?product=p-pivot#product-panel` },
     href,
+    ...shelf,
   }
 }
 
@@ -144,7 +163,7 @@ export function fixtureMovesTop(state: 'full' | 'member' | 'no_advice' | 'no_mov
     },
     waiting: state === 'no_advice' ? 0 : 3,
     move: state === 'no_move' || !move?.compare ? null : {
-      id: move.id, title: move.title, label: move.label, day: move.day, direction: move.direction,
+      id: move.id, title: move.title, kind: move.kind, label: move.label, day: move.day, direction: move.direction,
       compare: move.compare, moved: move.compare.verdict.state === 'moved', href: `${MOVES_PATH}#move-${move.id}`,
     },
     canDecide: state !== 'member',
@@ -158,6 +177,8 @@ export interface DashboardFixtureOptions {
   /** The anomaly check flagged insurance refusals (default true). */
   flagged?: boolean
   products?: TopProducts['state']
+  /** Why a quiet products tile has nothing (`note`). */
+  productsNote?: TopProducts['note']
   content?: IdeasState | 'older'
   moves?: 'full' | 'member' | 'no_advice' | 'no_move' | 'none'
   /** Brands named this month (Össur before its back-read has none). */
@@ -170,14 +191,14 @@ export interface DashboardFixtureOptions {
 export function dashboardFixture(o: DashboardFixtureOptions = {}): DashboardData {
   const read = fixturePublished()
   const failed = new Set(o.failed ?? [])
-  const market: TileRead<MarketTile> = ok({ top: fixtureMarketTop({ flagged: o.flagged }), month: OCT })
+  const market: TileRead<MarketTile> = ok({ top: fixtureMarketTop({ flagged: o.flagged }), month: OCT, marketWeek: 241 })
   const week = ok(weekTileOf({ read, weeks: FIXTURE_WEEKS, subjects: weekSubjectsOf(fixtureStanding(), OCT, true), now: NOW }))
   return {
-    bar: { dates: '5 to 11 October', asAt: '2026-10-11T07:30:00.000Z', nextUpdate: '2026-10-18T06:00:00.000Z', paused: false },
+    bar: { dates: '5 to 11 October', short: '5 to 11 Oct', asAt: '2026-10-11T07:30:00.000Z', nextUpdate: '2026-10-18T06:00:00.000Z', paused: false },
     market: failed.has('market') ? FAILED : market,
     week: failed.has('week') ? FAILED : week,
     voices: failed.has('voices') ? FAILED : ok(fixtureVoicesTop({ named: o.named })),
-    products: failed.has('products') ? FAILED : ok(fixtureProductsTop(o.products)),
+    products: failed.has('products') ? FAILED : ok(fixtureProductsTop(o.products, { note: o.productsNote })),
     content: failed.has('content') ? FAILED : ok(fixtureContentTop(o.content, { medical: true })),
     moves: failed.has('moves') ? FAILED : ok(o.moves === 'none' ? null : fixtureMovesTop(o.moves ?? 'full')),
     agent: { action: '/dashboard/agent', tries: agentTries(read) },
@@ -188,8 +209,8 @@ export function dashboardFixture(o: DashboardFixtureOptions = {}): DashboardData
  *  with; no catalogue and post ideas not switched on. */
 export function dashboardEmptyFixture(): DashboardData {
   return {
-    bar: { dates: null, asAt: null, nextUpdate: '2026-10-18T06:00:00.000Z', paused: false },
-    market: ok({ top: null, month: null }),
+    bar: { dates: null, short: null, asAt: null, nextUpdate: '2026-10-18T06:00:00.000Z', paused: false },
+    market: ok({ top: null, month: null, marketWeek: null }),
     week: ok(weekTileOf({ read: null, weeks: homeWeeksFrame(NOW), subjects: null, now: NOW })),
     voices: ok(null),
     products: ok(fixtureProductsTop('no_catalogue')),

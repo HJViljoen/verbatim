@@ -9,15 +9,19 @@ import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
 import { IDEAS_EMPTY } from '@/lib/pages/v2/content'
 import type { MarketWeekRowRaw } from '@/lib/reading/weeks'
 import { assertCopyContract } from '@/lib/test/copy-contract'
-import { markupText, render, renderText } from '@/lib/test/render'
-import { DashboardPage, DashboardStream } from '.'
+import { decodeEntities, markupText, render, renderText } from '@/lib/test/render'
+import { readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
+import { GROUPS_NOT_RUN } from '@/lib/pages/v2/voices'
+import { DashboardPage, DashboardStream, FAILED_TILE } from '.'
+import { TileBoundary } from './tile-boundary'
 import { AGENT_LINE } from './agent-box'
 import { MARKET_NONE } from './market-tile'
 import { MOVES_FIRST_RUN, MOVES_NONE_WAITING } from './moves-tile'
-import { PRODUCTS_LINES, PRODUCTS_SETTINGS } from './products-tile'
+import { PRODUCTS_LINES, PRODUCTS_SETTINGS, PRODUCTS_UNREAD } from './products-tile'
 import { TILE_FAILED } from './parts'
 import { HomeSkeleton } from './skeleton'
-import { VOICES_NONE } from './voices-tile'
+import { VOICES_BRANDS_FAILED, VOICES_NONE } from './voices-tile'
 import { HomeWeeksPlot } from './weeks-plot'
 
 // The Dashboard's render tier (Design v2, T8): what the page PRINTS, against
@@ -80,14 +84,16 @@ describe('the Dashboard, as the board draws it (E1-Dashboard)', () => {
 
   it('Your market this week: the week\'s videos and comments, the month beside them, the weekly volume, the subjects against last month', () => {
     const t = tileText(markup, 'week')
-    expect(t).toMatch(/241 videos this week · 3,912 comments/)
+    expect(t).toMatch(/241 videos in your market this week · 3,912 comments/)
     expect(t).toMatch(/318 videos and 5,840 comments in October so far/)
     expect(t).toContain('Week by week')
     expect(t).toMatch(/Biggest subject Fit & comfort 34% · 108 of 318/)
-    expect(t).toMatch(/Moved most Cost & access .* on September/)
+    expect(t).toMatch(/Moved most Cost & access ▲ [\d.]+ pts against September/)
+    // A subject moving is neither good nor bad news: the badge is neutral, as Market draws it.
+    expect(tileMarkup(markup, 'week')).not.toMatch(/data-copy="verdict"><span[^>]*class="[^"]*text-(?:positive|negative|you|good|bad)/)
     expect(t).not.toMatch(/a usual week/)
     // The change is the badge's, in a verdict node.
-    expect(tileMarkup(markup, 'week')).toMatch(/<span data-copy="verdict" class="whitespace-nowrap">/)
+    expect(tileMarkup(markup, 'week')).toMatch(/<span data-copy="verdict"><span title="moved beyond[^"]*" class="text-xs font-semibold text-muted-foreground">/)
   })
 
   it('Voices: the group in the most videos as a count of the month\'s, every group a bar of its own, the two brands named most', () => {
@@ -99,8 +105,13 @@ describe('the Dashboard, as the board draws it (E1-Dashboard)', () => {
     expect(tileMarkup(markup, 'voices').match(/role="img"/g)).toHaveLength(4)
   })
 
-  it('Your products: the standout, a count of the month\'s videos', () => {
-    expect(tileText(markup, 'products')).toMatch(/Named in the most videos Pro-Flex Pivot 9 of 318 videos in October so far/)
+  it('Your products: the standout, how many of yours came up, the mini shelf, and the standout\'s count of the month\'s videos', () => {
+    const t = tileText(markup, 'products')
+    expect(t).toMatch(/Named in the most videos Pro-Flex Pivot 9 of your 38 products came up in October so far .*Pro-Flex Pivot: 9 of 318 videos in October so far\./)
+    const shelf = tileMarkup(markup, 'products')
+    expect(shelf).toContain('aria-label="Your catalogue: Liners 3 of 8 named, Feet 2 of 9 named, Knees 3 of 6 named, Bracing 1 of 9 named, Sockets 0 of 6 named"')
+    expect(shelf.match(/data-tone="/g)).toHaveLength(38)
+    expect(shelf).toMatch(/role="img"[^>]*class="grid gap-1\.5 max-sm:hidden"/)
   })
 
   it('Content: the first idea, its week beside its month, its format and opening, your posts, and the medical team line', () => {
@@ -143,8 +154,12 @@ describe('the Dashboard, as the board draws it (E1-Dashboard)', () => {
   it('prints no comment\'s words, no em dash, no left stripe and no highlight', () => {
     // The one quote node is the move's title: the client's own words, as Your
     // moves marks them. No commenter is quoted at level 1.
-    const quotes = [...markup.matchAll(/data-copy="quote"[^>]*>([^<]*)</g)].map((m) => m[1])
-    expect(quotes).toEqual([fixtureMovesTop().move!.title])
+    // The quote nodes are the client's own words, as Your moves marks them:
+    // the move's title and the subject it is on. No commenter is quoted.
+    const quotes = [...markup.matchAll(/data-copy="quote"[^>]*>([^<]*)</g)].map((m) => decodeEntities(m[1]))
+    const move = fixtureMovesTop().move!
+    expect(quotes).toEqual([move.title, move.label])
+    expect(move.kind).toBe('subject')
     expect(text).not.toMatch(/[“”]/)
     expect(text).not.toContain('—')
     expect(markup).not.toMatch(STRIPE)
@@ -199,13 +214,14 @@ describe('every tile\'s honest state when its page has nothing', () => {
     const data = dashboardFixture({ flagged: false })
     assertCopyContract(page(data))
     const t = tileText(render(page(data)), 'market')
-    expect(t).toMatch(/^Market Open Market → New this week Waterproof knees 8 of 226 category videos this week 8 of 300 in October so far/)
+    // The category's count is named inside the market's (the week tile's 241).
+    expect(t).toMatch(/^Market Open Market → New this week Waterproof knees 8 of 226 category videos this week \( ?241 in your market\) · 8 of 300 in October so far/)
     expect(t).not.toContain('Unusual this week')
   })
 
   it('Market, nothing to lead with', () => {
     const data = dashboardFixture()
-    const empty: DashboardData = { ...data, market: { state: 'ok', top: { top: { ...(data.market.state === 'ok' ? data.market.top.top! : null!), hero: null, rows: [] }, month: '2026-10-01' } } }
+    const empty: DashboardData = { ...data, market: { state: 'ok', top: { top: { ...(data.market.state === 'ok' ? data.market.top.top! : null!), hero: null, rows: [] }, month: '2026-10-01', marketWeek: 241 } } }
     expect(tileText(render(page(empty)), 'market')).toContain(MARKET_NONE)
     assertCopyContract(page(empty))
   })
@@ -389,5 +405,117 @@ describe('Week by week shows a week\'s numbers on hover, focus or a tap (Heinric
       expect(figuresOf(tip)).toEqual([c.videos.toLocaleString('en-US'), c.comments.toLocaleString('en-US')])
       expect(buttonsOf(markup).find(([w]) => w === c.week)![1]).toBe(`Week of ${c.label}, ${c.videos.toLocaleString('en-US')} videos, ${c.comments.toLocaleString('en-US')} comments, still filling`)
     }
+  })
+})
+
+// ---- The fresh check's fixes (T8) --------------------------------------------------------
+
+describe('a tile that throws while it draws loses only itself', () => {
+  it('the boundary draws the tile\'s own failed state in its place, and nothing else of its own', () => {
+    expect(TileBoundary.getDerivedStateFromError()).toEqual({ failed: true })
+    const b = new TileBoundary({ name: 'market', fallback: FAILED_TILE.market, children: <p>the tile</p> })
+    expect(render(<>{b.render()}</>)).toBe('<p>the tile</p>')
+    b.state = { failed: true }
+    const failed = render(<>{b.render()}</>)
+    expect(markupText(failed)).toContain(TILE_FAILED)
+    expect(failed).toContain('data-tile="market"')
+    // Every tile on the page sits inside its boundary (a static render draws the children).
+    expect(render(page(dashboardFixture())).match(/data-tile="/g)).toHaveLength(7)
+  })
+
+  it('in the stream, a tile view that throws leaves every other tile and the Agent standing', async () => {
+    const d = dashboardFixture()
+    // A shape the Market view does not expect: a flag with no card.
+    const broken = { state: 'ok', top: { top: { hero: { kind: 'flag' }, rows: [], category: { week: 1, month: 1 }, week: { dates: '', inMonth: '', labels: [] }, href: '/dashboard/market' }, month: null, marketWeek: null } } as unknown as DashboardData['market']
+    const errors: unknown[] = []
+    const stream = await renderToReadableStream(<DashboardStream reads={{
+      bar: Promise.resolve(d.bar), market: Promise.resolve(broken), week: Promise.resolve(d.week), voices: Promise.resolve(d.voices),
+      products: Promise.resolve(d.products), content: Promise.resolve(d.content), moves: Promise.resolve(d.moves), agent: Promise.resolve(d.agent),
+    }} />, { onError: (e) => { errors.push(e) } })
+    await stream.allReady
+    const out = await new Response(stream).text()
+    expect(errors).toHaveLength(1)
+    for (const t of ['week', 'voices', 'products', 'content', 'moves', 'agent']) expect(out).toContain(`data-tile="${t}"`)
+  })
+})
+
+describe('a failed read says so, never "nothing yet"', () => {
+  it('Voices: a failed groups read is the failure line; groups not switched on are Voices\' own words; failed brands say so in their row', () => {
+    const d = dashboardFixture()
+    const voices = d.voices.state === 'ok' ? d.voices.top! : null!
+    const failed = { ...d, voices: { state: 'ok' as const, top: { ...voices, group: null, groups: [], groupsState: 'unread' as const, groupsEmpty: 'Who is talking could not be read just now.' } } }
+    expect(tileText(render(page(failed)), 'voices')).toContain(TILE_FAILED)
+    const off = { ...d, voices: { state: 'ok' as const, top: { ...voices, group: null, groups: [], groupsState: 'not_run' as const, groupsEmpty: GROUPS_NOT_RUN } } }
+    expect(tileText(render(page(off)), 'voices')).toContain(GROUPS_NOT_RUN)
+    const brands = { ...d, voices: { state: 'ok' as const, top: { ...voices, named: [], brandsState: 'unread' as const } } }
+    expect(tileText(render(page(brands)), 'voices')).toContain(`Named most ${VOICES_BRANDS_FAILED}`)
+    for (const x of [failed, off, brands]) assertCopyContract(page(x))
+  })
+
+  it('Your products: a month not read yet, or a failed read, is not "none named"', () => {
+    const unread = dashboardFixture({ products: 'quiet', productsNote: 'unread' })
+    expect(tileText(render(page(unread)), 'products')).toContain(PRODUCTS_UNREAD)
+    expect(tileText(render(page(unread)), 'products')).not.toContain(PRODUCTS_LINES.quiet)
+    const failed = dashboardFixture({ products: 'quiet', productsNote: 'failed' })
+    expect(tileText(render(page(failed)), 'products')).toContain(TILE_FAILED)
+    for (const x of [unread, failed]) assertCopyContract(page(x))
+  })
+})
+
+describe('the board\'s details (the fresh check)', () => {
+  const markup = render(page(dashboardFixture()))
+
+  it('Content\'s own-posts line is grey: the tile\'s only orange words are its link', () => {
+    const c = tileMarkup(markup, 'content')
+    expect(c).toMatch(/<p class="m-0 text-\[13px\] leading-\[1\.4\] text-muted-foreground">None of your/)
+    // Past the head (its glyph and its link), no orange words.
+    const body = c.slice(c.indexOf('</h2>'))
+    expect(body.slice(body.indexOf('</a>'))).not.toContain('text-orange-text')
+  })
+
+  it('a link to another page lets the browser land on its panel: no tile link holds the scroll', () => {
+    const dir = join(__dirname)
+    for (const f of readdirSync(dir).filter((x) => x.endsWith('.tsx') && !x.endsWith('.test.tsx'))) {
+      expect(readFileSync(join(dir, f), 'utf8'), f).not.toMatch(/scroll=\{false\}/)
+    }
+  })
+
+  it('a tile with nothing to open links to its page, by `TILE_NAV`', () => {
+    const failed = render(page(dashboardFixture({ failed: ['market', 'voices', 'products', 'content', 'moves'] })))
+    expect(tileMarkup(failed, 'market')).toContain('href="/dashboard/market"')
+    expect(tileMarkup(failed, 'voices')).toContain('href="/dashboard/voices"')
+    expect(tileMarkup(failed, 'products')).toContain('href="/dashboard/products"')
+    expect(tileMarkup(failed, 'content')).toContain('href="/dashboard/content"')
+    expect(tileMarkup(failed, 'moves')).toContain('href="/dashboard/moves"')
+  })
+
+  it('the empty week tile says "Insufficient data" once at each width', () => {
+    const w = tileMarkup(render(page(dashboardEmptyFixture())), 'week')
+    expect(w.match(/Insufficient data/g)).toHaveLength(2)
+    expect(w).toMatch(/<p class="m-0 text-\[14px\] leading-\[1\.5\] text-muted-foreground sm:hidden">Insufficient data/)
+    expect(w).toMatch(/data-weeks=""[\s\S]*Insufficient data/)
+  })
+})
+
+describe('the phone board (E1-Dashboard-Phone), after the check', () => {
+  const markup = render(page(dashboardFixture()))
+
+  it('the bar is the short line', () => {
+    expect(markup).toContain('<span class="sm:hidden">5 to 11 Oct · next update Sun 18 Oct</span>')
+    expect(markup).toContain('<span class="max-sm:hidden">Week of 5 to 11 October · updated Sun 11 Oct · next update Sun 18 Oct</span>')
+  })
+
+  it('Your market this week is one line of figures, the month still beside the week, and no chart', () => {
+    const w = tileMarkup(markup, 'week')
+    expect(markupText(w.match(/<span class="[^"]* sm:hidden">videos ·[\s\S]*?in October so far<\/span>/)![0])).toBe('videos · 3,912 comments this week · 318 in October so far')
+    expect(w).toMatch(/data-weeks=""/)
+  })
+
+  it('no empty hairline on a phone where the subjects have only their biggest (which the phone does not draw)', () => {
+    const d = dashboardFixture()
+    const week = d.week.state === 'ok' ? d.week.top : null!
+    const only = { ...d, week: { state: 'ok' as const, top: { ...week, subjects: { ...week.subjects!, moved: null, noneMoved: false } } } }
+    expect(tileMarkup(render(page(only)), 'week')).toMatch(/<div class="flex flex-col gap-1\.5 border-t border-track pt-3 text-\[13\.5px\] leading-\[1\.4\] max-sm:hidden">/)
+    expect(tileMarkup(markup, 'week')).toMatch(/<div class="flex flex-col gap-1\.5 border-t border-track pt-3 text-\[13\.5px\] leading-\[1\.4\]">/)
   })
 })

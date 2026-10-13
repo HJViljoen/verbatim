@@ -6,7 +6,8 @@ import { AdviceAnswers } from '@/components/pages/v2/moves/advice-actions'
 import { PRIORITY_CHIP } from '@/components/pages/v2/moves/parts'
 import { fmtInt } from '@/lib/format'
 import type { TileRead } from '@/lib/pages/v2/home'
-import { compareMonths, groundedLabel, MOVES_PATH, RECORD_HREF, sharePct, streakLabel, UNTITLED_ADVICE, type TopMoves } from '@/lib/pages/v2/moves'
+import { tileHref } from '@/lib/pages/home'
+import { compareMonths, groundedLabel, RECORD_HREF, sharePct, streakLabel, UNTITLED_ADVICE, type TopMoves } from '@/lib/pages/v2/moves'
 import { monthStartOf } from '@/lib/reading/month-key'
 import { cn } from '@/lib/utils'
 import { CSUB, OLINK, TILE, TILE_FAILED, TileHead, TileLine, TT } from './parts'
@@ -79,9 +80,9 @@ function Move({ move }: { move: NonNullable<TopMoves['move']> }) {
         <span data-copy="verdict" className="text-[12.5px]"><MovementBadge verdict={c.verdict} unit="pts" good={move.direction === 'down' ? 'down' : 'up'} bandTip /></span>
       </div>
       <p className={CSUB}>
-        {/* What it is on: a subject's name or a conversation's label (the tile's
-            type does not say which), plain as Market prints a subject. */}
-        Share of market videos{move.label ? <> on {move.label}</> : null}: <span data-copy="level">{fmtInt(c.before.k)} of {fmtInt(c.before.n)}</span> in {m.before}, against <span data-copy="level">{fmtInt(c.after.k)} of {fmtInt(c.after.n)}</span> in {m.after}
+        {/* What it is on, marked as Your moves marks it: a subject is the
+            client's own name for it, a theme the model's label. */}
+        Share of market videos{move.label ? <> on {move.kind === 'subject' ? <span data-copy="quote">{move.label}</span> : <span data-copy="subject" data-slot="pass_b_theme">{move.label}</span>}</> : null}: <span data-copy="level">{fmtInt(c.before.k)} of {fmtInt(c.before.n)}</span> in {m.before}, against <span data-copy="level">{fmtInt(c.after.k)} of {fmtInt(c.after.n)}</span> in {m.after}
       </p>
     </Link>
   )
@@ -89,7 +90,7 @@ function Move({ move }: { move: NonNullable<TopMoves['move']> }) {
 
 /** Where the tile's link goes: the advice's panel, else the move, else the page. */
 export function movesTileHref(top: TopMoves | null): string {
-  return top?.advice?.href ?? top?.move?.href ?? MOVES_PATH
+  return top?.advice?.href ?? top?.move?.href ?? tileHref('moves')
 }
 
 export function MovesTileView({ read }: { read: TileRead<TopMoves | null> }) {

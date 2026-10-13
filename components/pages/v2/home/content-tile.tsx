@@ -1,9 +1,9 @@
 import { NAV_ICON } from '@/components/nav-icons'
-import { OwnTouchLine } from '@/components/pages/v2/content/ideas'
 import { RecipeChip } from '@/components/pages/v2/content/parts'
-import { fmtInt } from '@/lib/format'
+import { fmtInt, longMonth } from '@/lib/format'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
-import { IDEAS_EMPTY, POST_IDEA_SLOT, type TopContent } from '@/lib/pages/v2/content'
+import { IDEAS_EMPTY, POST_IDEA_SLOT, type OwnTouch, type TopContent } from '@/lib/pages/v2/content'
+import { tileHref } from '@/lib/pages/home'
 import type { TileRead } from '@/lib/pages/v2/home'
 import { cn } from '@/lib/utils'
 import { MID, MONO_MUTED, TILE, TILE_FAILED, TileHead, TileLine, TT } from './parts'
@@ -20,12 +20,22 @@ import { MID, MONO_MUTED, TILE, TILE_FAILED, TileHead, TileLine, TT } from './pa
 // can see whether you replied (decision 5), so Content lists the comments
 // worth an answer instead, one click down.
 
+/** Whether your posts touched on it, in Content's words (`OwnTouchLine`), in
+ *  the board's grey: the kit draws no orange words. */
+export function OwnLine({ own }: { own: OwnTouch }) {
+  const when = `since ${longMonth(own.since)}`
+  if (own.state === 'unread') return <>Your posts could not be read just now</>
+  if (own.state === 'no_posts') return <>You published nothing of your own {when}</>
+  if (own.state === 'none') return <>None of your <span data-copy="figure">{fmtInt(own.posts)}</span> posts {when} touched on it</>
+  return <><span data-copy="figure">{fmtInt(own.touched)}</span> of your <span data-copy="figure">{fmtInt(own.posts)}</span> posts {when} touched on it</>
+}
+
 export function ContentTileView({ read }: { read: TileRead<TopContent> }) {
   const top = read.state === 'ok' ? read.top : null
   const idea = top?.state === 'ready' ? top.idea : null
   return (
     <article aria-labelledby="home-content" data-tile="content" data-state={top?.state ?? 'failed'} className={cn(TILE, 'col-span-12 min-[1180px]:col-span-4')}>
-      <TileHead icon={NAV_ICON.content} name="Content" id="home-content" href={top?.href ?? '/dashboard/content'} />
+      <TileHead icon={NAV_ICON.content} name="Content" id="home-content" href={top?.href ?? tileHref('content')} />
       {!top ? <TileLine>{TILE_FAILED}</TileLine> : !idea ? <TileLine>{top.line ?? IDEAS_EMPTY.none}</TileLine> : (
         <>
           {top.line ? <TileLine className="text-[13px]">{top.line}</TileLine> : null}
@@ -51,7 +61,7 @@ export function ContentTileView({ read }: { read: TileRead<TopContent> }) {
               {idea.opening ? <RecipeChip recipe={idea.opening} /> : null}
             </div>
           ) : null}
-          <p className="m-0 text-[13px] leading-[1.4]"><OwnTouchLine own={idea.own} /></p>
+          <p className="m-0 text-[13px] leading-[1.4] text-muted-foreground"><OwnLine own={idea.own} /></p>
           {idea.medical ? <p className="m-0 text-[12px] leading-[1.4] text-muted-foreground">{MEDICAL_LINE}</p> : null}
         </>
       )}
