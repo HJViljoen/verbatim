@@ -48,6 +48,7 @@ function deps(over: Partial<WeekReadStepDeps> = {}) {
     build: async () => built(2),
     save: async (_a, row) => { saved.push(row) },
     alert: async (subject, text) => { alerts.push({ subject, text }); return { sent: true } },
+    unusual: async () => null,
     ...over,
   }
   return { d, saved, alerts }
@@ -61,6 +62,25 @@ describe('runWeekReadStep', () => {
     expect(saved).toHaveLength(1)
     expect(saved[0]).toMatchObject({ client_id: 'client-1', run_id: 'run-27', kind: 'week', month: '2026-09-01', status: 'ready', cost_usd: 0.21 })
     expect(saved[0].window_start).toBe('2026-09-20T04:18:00+00:00')
+    expect(alerts).toEqual([])
+  })
+
+  // Depth v2, T11b: the update's anomaly check is frozen into the read, inside
+  // this step, so the level-1 email leads with the flag the run raised.
+  it('freezes the update\'s anomaly check into the read it stores, read over the read\'s own window', async () => {
+    const unusual = { outcome: 'flagged', flags: [], flaggedCount: 1, unread: true }
+    const asked: { clientId: string; runId: string; window: { from: string; to: string } }[] = []
+    const { d, saved } = deps({ unusual: async (_a, a) => { asked.push(a); return unusual } })
+    expect((await runWeekReadStep(admin, OPTS, d)).status).toBe('ready')
+    expect(asked).toEqual([{ clientId: 'client-1', runId: 'run-27', window: { from: '2026-09-20T04:18:00+00:00', to: expect.any(String) } }])
+    expect(saved[0].data && 'unusual' in saved[0].data ? saved[0].data.unusual : null).toEqual(unusual)
+  })
+
+  it('a check that cannot be read leaves the read as it was: stored, no alert, no flag', async () => {
+    const { d, saved, alerts } = deps({ unusual: async () => { throw new Error('anomaly_flags: boom') } })
+    expect((await runWeekReadStep(admin, OPTS, d)).status).toBe('ready')
+    expect(saved[0].status).toBe('ready')
+    expect(saved[0].data && 'unusual' in saved[0].data).toBe(false)
     expect(alerts).toEqual([])
   })
 

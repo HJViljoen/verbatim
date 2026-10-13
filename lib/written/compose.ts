@@ -336,7 +336,7 @@ export function composeWeekRead(a: ComposeWeekArgs): WeekReadDataV2 {
     const evidence = evidenceLine(`n${newThisWeek.length + 1}`, videos, `the conversation "${c.label}"`, month, complete)
     Object.assign(figures, evidence.figures)
     backing.add(c.id.toUpperCase())
-    newThisWeek.push({ themeId: c.themeId, body: text, videos, evidence: evidence.body })
+    newThisWeek.push({ themeId: c.themeId, label: c.label.trim(), body: text, videos, evidence: evidence.body })
   }
 
   const restsOnEvidence = (cited: readonly PoolCandidate[]): boolean => cited.some((c) => backing.has(c.id.toUpperCase()))

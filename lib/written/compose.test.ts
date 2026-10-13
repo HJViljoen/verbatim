@@ -549,6 +549,8 @@ describe('composeWeekRead: new this week is code\'s to decide (v3)', () => {
     ])
     expect(read.newThisWeek).toEqual([{
       themeId: 'th-c2',
+      // The conversation's own label, frozen for the level-1 email (T11b).
+      label: 'Asks for the bag in red',
       body: 'People ask whether the bag comes in red.',
       videos: { week: 5, month: 5 },
       evidence: '[[n1_week]] videos this week · [[n1_month]] in September so far',

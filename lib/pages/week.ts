@@ -1671,7 +1671,9 @@ interface RunRow {
   window_basis?: string | null
 }
 
-interface CheckRow {
+/** One update's `anomaly_checks` row. Exported for the weekly email, which
+ *  freezes the same flags this page prints (lib/written/unusual.ts). */
+export interface CheckRow {
   run_id: string
   week_start: string | null
   week_end: string | null
@@ -1685,7 +1687,8 @@ interface CheckRow {
   median_videos: number | null
 }
 
-interface FlagRow {
+/** One `anomaly_flags` row, as `loadFlags` reads it. */
+export interface FlagRow {
   run_id: string
   object_kind: string
   object_id: string
@@ -2356,11 +2359,11 @@ async function buildUnusual(input: {
   // client their week was quiet on the strength of a failed read. That is the
   // exact conflation `anomaly_checks` exists to prevent, and one ternary is all
   // it takes to reintroduce it.
-  if (flags == null || flags.length === 0) {
+  const rowsIn = weekFlagRows(check, flags)
+  if (rowsIn == null || rowsIn.length === 0) {
     return { ...common, state: 'unreadable', flaggedCount: check.flagged_count ?? 0 }
   }
 
-  const rowsIn = [...flags].sort((a, b) => a.rank - b.rank)
   const built = await Promise.all(rowsIn.map((f) => buildFlag(input.supabase, input.clientId, f)))
   return {
     ...common,
@@ -2368,6 +2371,24 @@ async function buildUnusual(input: {
     flags: built,
     flaggedCount: rowsIn[0]?.flagged_count ?? built.length,
   }
+}
+
+/** The check's outcomes under which it raised nothing for the update. */
+const UNFLAGGED_OUTCOMES: ReadonlySet<string> = new Set(['suppressed', 'no_window', 'missing_migration', 'nothing_unusual'])
+
+/**
+ * WHICH FLAGS ARE THE UPDATE'S, the rule in one place: §1 prints these, and
+ * the weekly email freezes the same ones into the week's read
+ * (lib/written/unusual.ts), the first of them its lead. None where the check
+ * has no row or its row raised nothing; the check's own rows in its rank
+ * order where it flagged; and null where its row says it flagged and the
+ * flags could not be read, which is "we could not look", never "nothing was
+ * unusual". Pure.
+ */
+export function weekFlagRows(check: CheckRow | null | undefined, flags: FlagRow[] | null): FlagRow[] | null {
+  if (!check || UNFLAGGED_OUTCOMES.has(check.outcome)) return []
+  if (flags == null || flags.length === 0) return null
+  return [...flags].sort((a, b) => a.rank - b.rank)
 }
 
 async function buildFlag(supabase: SupabaseClient, clientId: string, f: FlagRow): Promise<UnusualFlag> {
@@ -3392,7 +3413,7 @@ async function loadOwnedRivalAudiences(supabase: SupabaseClient, clientId: strin
  *  installed here; `null` means it is and this update has no row — two
  *  different silences, and §1 prints them the same way only because both mean
  *  "nobody has looked at this update yet". */
-async function loadCheck(supabase: SupabaseClient, clientId: string, runId: string): Promise<CheckRow | null | undefined> {
+export async function loadCheck(supabase: SupabaseClient, clientId: string, runId: string): Promise<CheckRow | null | undefined> {
   try {
     const res = await supabase
       .from('anomaly_checks')
@@ -3413,7 +3434,7 @@ async function loadCheck(supabase: SupabaseClient, clientId: string, runId: stri
  *  not installed, or the read was refused — and never "there were none": a
  *  check row that says `flagged` beside an empty list is a record disagreeing
  *  with itself, and §1 says so rather than reading it as silence. */
-async function loadFlags(supabase: SupabaseClient, clientId: string, runId: string): Promise<FlagRow[] | null> {
+export async function loadFlags(supabase: SupabaseClient, clientId: string, runId: string): Promise<FlagRow[] | null> {
   try {
     return await selectAll<FlagRow>(() =>
       supabase.from('anomaly_flags').select('*')
