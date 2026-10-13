@@ -5,12 +5,12 @@ import { SettingsFrame, SettingsTable, SettingsRow, SettingsCard, FactRow } from
 import { ReadinessTable } from '@/components/ops/readiness-table'
 import type { ReadinessRow } from '@/lib/readiness/types'
 
-describe('the settings tabs (the Page-Settings artboard, pages build 1 Oct)', () => {
-  it('draws the client\'s three tabs as pills, in the artboard\'s order, and no operator tab', () => {
+describe('the settings tabs (the Page-Settings artboard, pages build 1 Oct; E8 in Design v2)', () => {
+  it('draws the client\'s five tabs as pills, in the board\'s order, and no operator tab', () => {
     const markup = render(<SettingsFrame active="tracking" title="Settings">x</SettingsFrame>)
     const text = renderText(<SettingsFrame active="tracking" title="Settings">x</SettingsFrame>)
-    expect(text).toMatch(/What you track Team Billing/)
-    for (const hidden of ['Readiness', 'The record', 'How to read', 'Subjects', 'Reports and recipients']) expect(text).not.toContain(hidden)
+    expect(text).toMatch(/What you track Your products Your subjects Team Billing/)
+    for (const hidden of ['Readiness', 'The record', 'How to read', 'Reports and recipients']) expect(text).not.toContain(hidden)
     expect(markup).toMatch(/<nav aria-label="Settings" class="flex gap-1 overflow-x-auto">/)
     // No hairline under the row and no green rule: the lit tab is a pill.
     expect(markup).not.toContain('border-b border-border')
@@ -19,7 +19,7 @@ describe('the settings tabs (the Page-Settings artboard, pages build 1 Oct)', ()
 
   it('gives the operator Readiness, The record and How to read after them', () => {
     const text = renderText(<SettingsFrame active="record" operator title="Settings">x</SettingsFrame>)
-    expect(text).toMatch(/What you track Team Billing Readiness The record How to read/)
+    expect(text).toMatch(/What you track Your products Your subjects Team Billing Readiness The record How to read/)
   })
 
   it('lights exactly one tab, as a pale-yellow pill (a selected state) in weight 600, and none when the page is parked', () => {
@@ -35,7 +35,7 @@ describe('the settings tabs (the Page-Settings artboard, pages build 1 Oct)', ()
   it('gives every tab a focus ring and the artboard\'s 38px height', () => {
     const markup = render(<SettingsFrame active="tracking" title="Settings">x</SettingsFrame>)
     expect(markup.match(/focus-visible:ring-2/g)?.length).toBeGreaterThanOrEqual(3)
-    expect(markup.match(/inline-flex h-\[38px\]/g)).toHaveLength(3)
+    expect(markup.match(/inline-flex h-\[38px\]/g)).toHaveLength(5)
   })
 
   it('puts Log out in the page\'s own bar, as a form', () => {
