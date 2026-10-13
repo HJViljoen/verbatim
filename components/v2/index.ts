@@ -4,7 +4,9 @@
 // shared `PageBar` (components/shell/page-grid.tsx, its `meta` line); the
 // colour roles are components/colour-roles.tsx; the movement badge is
 // `MovementBadge`. `scripts/render-kit.tsx` draws every piece on one page.
-export { InPlacePanel, PanelSection, PanelTitle, SELECTED_CARD_RING, type InPlacePanelProps } from './panel'
+export { InPlacePanel, PanelSection, PanelSlot, PanelTitle, SELECTED_CARD_RING, type InPlacePanelProps } from './panel'
+export { equalColumns, panelItemOrder, panelPlacement, PANEL_BREAKPOINTS, type PanelBreakpoint, type PanelLayout, type PanelPlacement, type PanelRow, type PerBreakpoint } from './panel-place'
+export { panelScrollPlan, PANEL_HEAD_PX } from './panel-scroll'
 export { PeriodSwitch, PERIODS, parsePeriod, type Period, type PeriodOption, type PeriodSwitchProps } from './period-switch'
 export { FlagChip, FLAG_WORDS, flagWordOf, type FlagChipProps, type FlagWord } from './flag-chip'
 export { CARD, CardHead, type CardHeadProps } from './card-head'

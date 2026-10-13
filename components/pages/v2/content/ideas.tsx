@@ -116,7 +116,7 @@ export function IdeaCardView({ card, state, selected, month, weekWord }: {
 function IdeasEmpty({ block }: { block: IdeasBlock }) {
   const line = block.state === 'ready' ? IDEAS_EMPTY.none : IDEAS_EMPTY[block.state]
   return (
-    <div className={cn(CARD, 'gap-2')} data-ideas-empty={block.state}>
+    <div className={cn(CARD, 'gap-2 max-sm:gap-2')} data-ideas-empty={block.state}>
       <p className="m-0 text-[15px] leading-[1.5]">{line}</p>
       <p className="m-0 text-[13.5px] text-muted-foreground">
         The questions people asked are listed under <a href={`#${ASKED_ID}`} className="font-semibold text-orange-text no-underline hover:underline">Also asked</a>.

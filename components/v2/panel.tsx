@@ -1,7 +1,9 @@
 import Link from 'next/link'
 import { X } from 'lucide-react'
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { cn } from '@/lib/utils'
+import { NOTCH_VAR_CLASS, notchPct, notchStyle, PANEL_SLOT_CLASS, panelSlotStyle, sameEverywhere, type PanelPlacement, type PerBreakpoint } from './panel-place'
+import { PanelScrollIn } from './panel-scroll-in'
 
 /**
  * THE IN-PLACE PANEL (depth v2, T2; the boards' `.panel`).
@@ -24,6 +26,15 @@ import { cn } from '@/lib/utils'
  * kept clear of the panel's rounded corners.
  *
  * The clicked item wears `SELECTED_CARD_RING` while its panel is open.
+ *
+ * AT EVERY WIDTH (T9, the phone pass). Where the item is a card in a grid
+ * whose columns change with the width, the panel goes in a `PanelSlot` among
+ * the cards, placed after the clicked card's row at each breakpoint
+ * (`panelPlacement`, components/v2/panel-place.ts), and `notchAt` takes the
+ * placement's per-breakpoint notch, so on a phone it sits under the card and
+ * points at it. Opened through a `scroll={false}` link it may start below the
+ * fold, so it brings itself into view once drawn where its head is out of
+ * sight (`PanelScrollIn`); a panel already on screen never moves the page.
  */
 
 /** The selected source card's ring: 2px of ink outside the card, alongside its
@@ -35,8 +46,9 @@ export interface InPlacePanelProps {
   /** The panel's id: the `#hash` the item links to, and its anchor. */
   id: string
   /** Where the notch points, 0 to 1 of the panel's width: the centre of the
-   *  clicked item. Clamped clear of the corners. */
-  notchAt: number
+   *  clicked item. Clamped clear of the corners. Per breakpoint where the
+   *  item's grid changes its columns (`panelPlacement(...).notch`). */
+  notchAt: number | PerBreakpoint
   /** The page without the selection. */
   closeHref: string
   children: ReactNode
@@ -46,12 +58,22 @@ export interface InPlacePanelProps {
   head?: ReactNode
   /** Close's accessible name ("Close this conversation"). */
   closeLabel?: string
+  /** What is open (the item's key), so a panel that stays in place while it
+   *  switches from one item to the next checks its view again. */
+  openKey?: string
   className?: string
 }
 
-export function InPlacePanel({ id, notchAt, closeHref, children, labelledBy, head, closeLabel, className }: InPlacePanelProps) {
-  const at = Math.min(1, Math.max(0, Number.isFinite(notchAt) ? notchAt : 0.5))
-  const pct = `${Math.round(at * 10000) / 100}%`
+/** The notch's left edge: centred on its place, kept clear of the corners. */
+const notchLeft = (at: string) => `clamp(20px, calc(${at} - 9px), calc(100% - 38px))`
+
+export function InPlacePanel({ id, notchAt, closeHref, children, labelledBy, head, closeLabel, openKey, className }: InPlacePanelProps) {
+  // One place at every width draws as it always has; places that differ by
+  // breakpoint draw through the notch's custom properties.
+  const single = typeof notchAt === 'number' ? notchAt : sameEverywhere(notchAt) ? notchAt.base : null
+  const notch: CSSProperties = single != null
+    ? { left: notchLeft(notchPct(single)) }
+    : { ...notchStyle(notchAt as PerBreakpoint), left: notchLeft('var(--notch)') }
   return (
     <section
       id={id}
@@ -65,9 +87,10 @@ export function InPlacePanel({ id, notchAt, closeHref, children, labelledBy, hea
       <span
         aria-hidden
         data-notch=""
-        className="absolute -top-[9px] size-[18px] rotate-45 rounded-tl-[3px] border-t border-l border-foreground/5 bg-card"
-        style={{ left: `clamp(20px, calc(${pct} - 9px), calc(100% - 38px))` }}
+        className={cn('absolute -top-[9px] size-[18px] rotate-45 rounded-tl-[3px] border-t border-l border-foreground/5 bg-card', single != null ? null : NOTCH_VAR_CLASS)}
+        style={notch}
       />
+      <PanelScrollIn key={openKey ?? id} target={id} />
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">{head}</div>
         <Link
@@ -82,6 +105,19 @@ export function InPlacePanel({ id, notchAt, closeHref, children, labelledBy, hea
       </div>
       {children}
     </section>
+  )
+}
+
+/**
+ * THE PANEL'S PLACE IN A GRID OF CARDS (T9): one more child of the cards'
+ * grid, spanning its every column, ordered after the clicked card's row at
+ * each breakpoint (`panelPlacement`). The cards take `panelItemOrder(i)`.
+ */
+export function PanelSlot({ placement, children, className }: { placement: PanelPlacement; children: ReactNode; className?: string }) {
+  return (
+    <div data-panel-slot="" className={cn(PANEL_SLOT_CLASS, className)} style={panelSlotStyle(placement.order)}>
+      {children}
+    </div>
   )
 }
 

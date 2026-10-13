@@ -1,8 +1,12 @@
 import Link from 'next/link'
+import { Fragment, type CSSProperties } from 'react'
 import { Users } from 'lucide-react'
-import { CARD, CardHead, InPlacePanel, PanelSection, PanelTitle, SELECTED_CARD_RING, StatCell, StatRow, TickBar } from '@/components/v2'
+import {
+  CARD, CardHead, equalColumns, InPlacePanel, panelItemOrder, panelPlacement, PanelSection, PanelSlot, PanelTitle, SELECTED_CARD_RING, StatCell, StatRow, TickBar,
+  type PanelLayout, type PerBreakpoint,
+} from '@/components/v2'
 import { fmtInt } from '@/lib/format'
-import { groupRows, PANEL_ID, type GroupPanel, type VoicesData, type VoicesGroupCard, type VoicesGroups } from '@/lib/pages/v2/voices'
+import { PANEL_ID, type GroupPanel, type VoicesData, type VoicesGroupCard, type VoicesGroups } from '@/lib/pages/v2/voices'
 import { cn } from '@/lib/utils'
 import { AskButton, CAPS, EmptyLine, Fig, LevelText, MiniRow, OLINK, PanelTag, Phrase, PlatformStrip, QuoteCard } from './parts'
 
@@ -50,10 +54,11 @@ export function WhoCard({ groups, videos, monthWords }: { groups: VoicesGroups; 
 }
 
 /** One group (the board's `.pcard`). */
-export function GroupCard({ card, n, monthWords }: { card: VoicesGroupCard; n: number | null; monthWords: string }) {
+export function GroupCard({ card, n, monthWords, style }: { card: VoicesGroupCard; n: number | null; monthWords: string; style?: CSSProperties }) {
   return (
     <article
       data-group={card.key}
+      style={style}
       className={cn(CARD, 'gap-3.5 rounded-[14px] px-[22px] py-5', card.selected ? SELECTED_CARD_RING : null)}
     >
       <div>
@@ -101,14 +106,17 @@ export function GroupCard({ card, n, monthWords }: { card: VoicesGroupCard; n: n
   )
 }
 
-/** The group's panel, in place under its row (E3-Voices-Open). */
-export function GroupPanelView({ panel, monthWords }: { panel: GroupPanel; monthWords: string }) {
+/** The group's panel, in place under its row (E3-Voices-Open). `notchAt`
+ *  is the grid's placement, per breakpoint (`GroupGrid`); alone, the
+ *  loader's three-across notch. */
+export function GroupPanelView({ panel, monthWords, notchAt }: { panel: GroupPanel; monthWords: string; notchAt?: number | PerBreakpoint }) {
   const [first, second] = panel.subjects
   const where = panel.platforms[0]
   return (
     <InPlacePanel
       id={PANEL_ID.group}
-      notchAt={panel.notchAt}
+      notchAt={notchAt ?? panel.notchAt}
+      openKey={panel.key}
       closeHref={panel.closeHref}
       labelledBy="group-title"
       closeLabel="Close this group"
@@ -185,21 +193,34 @@ export function GroupPanelView({ panel, monthWords }: { panel: GroupPanel; month
   )
 }
 
-/** The cards three to a row, and the open group's panel under the row its
- *  card is in. */
+/** The group grid's columns: one on a phone, two from 768, three from 1280. */
+export function groupLayout(count: number): PanelLayout {
+  return { base: equalColumns(1, count), md: equalColumns(2, count), xl: equalColumns(3, count) }
+}
+
+/** The cards three to a row (two from 768, one on a phone), and the open
+ *  group's panel under the row its card is in at every width: one grid, the
+ *  panel a child of it placed after the card's row (`panelPlacement`), and in
+ *  the markup right after the card that opened it. */
 export function GroupGrid({ data }: { data: Pick<VoicesData, 'groups' | 'videos' | 'panel' | 'monthWords'> }) {
-  const rows = groupRows(data.groups.cards, 3)
+  const cards = data.groups.cards
   const panel = data.panel?.kind === 'group' ? data.panel : null
+  const at = panel ? cards.findIndex((c) => c.key === panel.key) : -1
+  const place = at >= 0 ? panelPlacement(at, groupLayout(cards.length)) : null
   return (
     <>
-      {rows.map((row, i) => (
-        <div key={i} className="contents">
-          <section aria-label={i === 0 ? 'The groups' : 'The groups, continued'} className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {row.map((c) => <GroupCard key={c.key} card={c} n={data.videos} monthWords={data.monthWords} />)}
-          </section>
-          {panel && row.some((c) => c.key === panel.key) ? <GroupPanelView panel={panel} monthWords={data.monthWords} /> : null}
-        </div>
-      ))}
+      <section aria-label="The groups" className="grid grid-cols-1 gap-x-4 gap-y-5 md:grid-cols-2 xl:grid-cols-3">
+        {cards.map((c, i) => (
+          <Fragment key={c.key}>
+            <GroupCard card={c} n={data.videos} monthWords={data.monthWords} style={panelItemOrder(i)} />
+            {panel && place && i === at ? (
+              <PanelSlot placement={place}><GroupPanelView panel={panel} monthWords={data.monthWords} notchAt={place.notch} /></PanelSlot>
+            ) : null}
+          </Fragment>
+        ))}
+      </section>
+      {/* A group no card names (an old link) still opens, under the grid. */}
+      {panel && at < 0 ? <GroupPanelView panel={panel} monthWords={data.monthWords} /> : null}
     </>
   )
 }
