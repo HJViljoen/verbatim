@@ -13,10 +13,9 @@ import { buildReplies } from './week'
 // insights, the videos, the translations and one segments call: no comment is
 // read by id, and the segments read reuses what the candidates carry.
 //
-// Offline, on a tenant sized like Sealand's dump (2,750 current engage
-// insights, 6,875 cited comments; the harness is in the fix round's report):
-// 117 statements before, 24 after for the week, 26 for the month, with the
-// same twelve rows and three flagged.
+// On a tenant sized like Sealand's dump the list's statements are pinned
+// below (24 for the week, 26 for the month); the 117 before the fix round
+// was measured offline once, on the same tenant with the old code.
 
 const CLIENT = SEALAND_CLIENT_ID
 const WINDOW = { from: '2026-10-04T04:03:00.000Z', to: '2026-10-11T04:02:00.000Z', basis: 'content' as const }
@@ -60,5 +59,66 @@ describe('the reply list\'s reads', () => {
     expect(db.calls.length).toBeLessThanOrEqual(12)
     // Every row is a comment written inside the window.
     for (const r of block.rows) expect(r.date! >= WINDOW.from && r.date! < WINDOW.to).toBe(true)
+  })
+})
+
+// THE FIGURE AGENTS.md QUOTES, PINNED (Phase 4 fix check): on a tenant sized
+// like Sealand's 13 Oct dump (2,750 current engage insights, 6,875 cited
+// comments, about 6% of them in the week; the dump had 3 pages of insights,
+// 28 evidence and 71 comment statements), the list makes 24 statements for
+// the week and 26 for the month. The 117 it made before the fix round was
+// measured once, offline, on this same tenant with the code at 3abd43be; it
+// cannot be re-run here, because that code is gone.
+describe('the reply list\'s statements on a Sealand-sized tenant', () => {
+  const CATS = ['purchase_intent', 'question', 'objection', 'switching_signal', 'buying_trigger', 'misinformation']
+  const TEXTS = [
+    'Where can I buy this backpack in the grey colour please?',
+    'Does this bag fit under an airline seat as a personal item?',
+    'How much is the shipping to Germany for the duffel bag?',
+    'Is the zipper waterproof or will my laptop get wet in rain?',
+    'I would buy it if it came in a bigger size for a laptop.',
+  ]
+  function sealandSized() {
+    const videos = Array.from({ length: 1500 }, (_, i) => ({
+      id: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`, client_id: CLIENT, video_id: `nv${i}`, platform: ['tiktok', 'instagram', 'youtube'][i % 3],
+      video_url: `https://example.com/v/${i}`, account_name: `creator${i % 400}`, topics: ['travel backpack'], source: 'discovered', is_client: false,
+      is_competitor: false, competitor_name: null,
+    }))
+    const insights: Record<string, unknown>[] = []
+    const evidence: Record<string, unknown>[] = []
+    const comments: Record<string, unknown>[] = []
+    const DAY = 86_400_000
+    const t0 = Date.parse('2026-06-01T00:00:00Z')
+    let j = 0
+    for (let i = 0; i < 2750; i++) {
+      insights.push({ id: `i${i}`, client_id: CLIENT, category: CATS[i % CATS.length], theme: 'backpack_buying_questions', description: 'Where to buy', strength_score: (i % 9) + 1 })
+      for (let k = 0; k < (i % 2 ? 3 : 2); k++, j++) {
+        const v = videos[j % videos.length]
+        const r = (j * 7919) % 1000
+        const date = r < 60 ? new Date(Date.parse('2026-10-04T06:00:00Z') + (r % 6) * DAY).toISOString()
+          : r < 70 ? '2026-10-11T09:00:00.000Z'
+          : new Date(t0 + (r % 120) * DAY).toISOString()
+        comments.push({ id: `c${j}`, client_id: CLIENT, author: `@asker${j}`, text: `${TEXTS[j % TEXTS.length]} (${j})`, likes: j % 17, comment_date: date, platform: v.platform, video_id: v.video_id, comment_id: `native${j}` })
+        evidence.push({ id: `e${j}`, client_id: CLIENT, audience_insight_id: `i${i}`, comment_id: `c${j}`, source: 'comment', source_video_id: v.id })
+      }
+    }
+    return {
+      audience_insights_current: insights, insight_evidence: evidence, comments, videos,
+      tracking_configs: [{ client_id: CLIENT, own_handles: {}, brand_keywords: ['sealand'], competitor_keywords: [], industry_keywords: ['backpack'] }],
+      comment_translations: comments.map((c) => ({ comment_id: c.id, text_hash: quoteTextHash(cleanQuote(String(c.text))), language: 'en', english: String(c.text) })),
+    }
+  }
+
+  it.each([
+    ['the week', WINDOW, 24],
+    ['the month', { from: '2026-10-01T00:00:00.000Z', to: '2026-11-01T00:00:00.000Z', basis: 'content' as const }, 26],
+  ])('%s: %s statements, and no comment read by id', async (_label, window, statements) => {
+    const db = fakeDb(sealandSized(), { segments_for_videos: () => [] })
+    const block = await buildReplies({ supabase: db.client as never, clientId: CLIENT, runId: 'run-1', window, videos: Promise.resolve([]), gate: true })
+    expect(block.total).toBe(12)
+    expect(block.flagged).toHaveLength(3)
+    expect(db.calls).toHaveLength(statements)
+    expect(db.calls.filter((c) => c.table === 'insight_evidence')).toHaveLength(11)
+    expect(db.calls.filter((c) => c.table === 'comments')).toEqual([])
   })
 })

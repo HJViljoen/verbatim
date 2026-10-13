@@ -161,16 +161,21 @@ This version has breaking changes — APIs, conventions, and file structure may 
   `false`) and `POST_IDEAS_OFF` (a list of client ids) stay as emergency
   OFF-switches only: neither can turn a tenant on. Content and the
   Dashboard print "not switched on" and no stored idea while it is off.
-  *Money:* a hard cap per run, `POST_IDEAS_BUDGET_USD` ($0.50), and the
-  briefs' headroom rule: after its cheap checks the step reads the run's
-  spend (`runSpendSoFar`) and starts only where `RUN_MODEL_BUDGET_USD`
-  leaves the cap plus `POST_IDEAS_RUN_MARGIN_USD` ($0.50)
-  (`postIdeasHeadroom`); the call is then held to what is left
-  (`postIdeasRoom`, at most the cap), and each attempt is made only where
-  the spend so far plus that attempt's worst case (`postIdeasAttemptMaxUsd`:
-  the prompt counted at two characters a token and the full output
-  ceiling) fits. Either refusal stops fail-soft: no call, no rows, status
-  `over_budget`, one alert. *When it does nothing:* a TEST run reads and
+  *Money:* a hard cap PER RUN, `POST_IDEAS_BUDGET_USD` ($0.50), across
+  every retry of the step: after its cheap checks the step reads the run's
+  spend (`runSpendSoFar`) and this run's post-ideas spend so far
+  (`postIdeasSpendSoFar`: `ai_call_log`, pass `post_ideas`), and starts only
+  where something is left of the cap (`postIdeasCapLeft`) and
+  `RUN_MODEL_BUDGET_USD` leaves that plus `POST_IDEAS_RUN_MARGIN_USD` ($0.50)
+  (`postIdeasHeadroom`, the briefs' rule); the call is then held to what is
+  left (`postIdeasRoom`), and each attempt is made only where the spend so
+  far plus that attempt's worst case (`postIdeasAttemptMaxUsd`: the prompt
+  counted at two characters a token and the full output ceiling) fits.
+  Either refusal stops fail-soft: no call, no rows, status `over_budget`,
+  one alert, and the result reports what the attempt really spent (an
+  unparsed answer is paid for; so does `failed`). `scripts/post-ideas.ts
+  --write` does not check the switch: it writes, and the pages hide what it
+  wrote while the switch is off. *When it does nothing:* a TEST run reads and
   writes nothing. The switch off, no table (`isMissingPostIdeas`), no
   candidate over the floor, or a run that already has its ideas is a silent
   no-op that spends nothing; a week whose written ideas are all held `thin`
@@ -821,9 +826,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
   failed read, a table not there yet or a switch off gives no line. The line
   is stricter than its tile in two ways, and only by leaving itself out: a
   post idea's title goes through the written read's scrub (`week_read`), and
-  an idea from an older week gives no line. Each line's month is its tile's
-  (the reading month), which can differ from the read's own month for a
-  week that crosses a month (Heinrich's open question on two month rules).
+  an idea from an older week gives no line. Each line's month is its tile's:
+  the reading month for Voices and Your products (`loadReadingMonth`), and
+  for Content the month its idea week is restated against (`contentMonth`,
+  the `readingMonthOf` rule over the anchor week). Those can differ from each
+  other, and from the read's own month, for a week that crosses a month
+  (Heinrich's open question on two month rules).
   `components/pages/v2/home/email-lines.test.tsx` holds each line to its
   tile's markup. So a build long after its run (a backfill, a re-claim, Send
   now on an old run) carries that day's lines. *Rollback hazard:* code from before this deploy
@@ -1053,7 +1061,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
     function and the page's own month (`productsMonth`), and its "Tag them"
     link carries the month and `#unclear` (`lib/pages/v2/products-address.ts`).
     While `PRODUCT_READINGS_ENABLED` is off for the tenant (every tenant
-    today; Heinrich's order is to back-read first), Settings reads no month,
+    today; Heinrich's order is to back-read first), Settings reads no month
+    (the route asks for the page's month only while it is on,
+    `loadProductSettingsForPage`),
     prints no count even where a back-read left rows, and says plainly that
     the Your products page is not switched on yet (`PRODUCTS_PAGE_OFF`); the
     weekly email's products line is absent, and the page bar names no month
@@ -1091,9 +1101,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
     reads each chunk of engage insights' evidence with its comment embedded
     and bounded, `comments!inner`, one statement per 250 insights, in the
     unbounded read's order so the ranking's ties hold): Sealand's Content
-    load was 143 statements on 13 Oct, 99 of them this list; offline on a
-    tenant that size the list went from 117 statements to 24 (week) and 26
-    (month), the same rows (`lib/pages/week-replies-cost.test.ts`). In a
+    load was 143 statements on 13 Oct, 99 of them this list. On a tenant
+    that size the list now makes 24 statements for the week and 26 for the
+    month, pinned by `lib/pages/week-replies-cost.test.ts`; the 117 it made
+    before was measured once, offline, on the same tenant with the old code,
+    with the same rows. In a
     medical market every printed idea carries `MEDICAL_LINE`.
   - **Your moves** (T7; `lib/pages/v2/moves.ts`, `loadMovesPage`).
     `loadMarketSurface` and its blocks stay for stored snapshots, the briefs

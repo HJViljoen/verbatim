@@ -290,9 +290,10 @@ export async function loadEngageCandidates(
      * lib/reading/cross.ts), so no comment outside the window is fetched by
      * id. Measured offline on a tenant sized like Sealand's 13 Oct dump
      * (2,750 current engage insights, 6,875 cited comments; Content was 143
-     * statements there): the reply list went from 117 statements to 24 for a
-     * week and 26 for a month, with the same rows
-     * (lib/pages/week-replies-cost.test.ts).
+     * statements there): the reply list makes 24 statements for a week and
+     * 26 for a month, pinned by lib/pages/week-replies-cost.test.ts; the 117
+     * it made before was measured once, offline, with the old code, and gave
+     * the same rows.
      */
     commentsSince?: string
     /**
