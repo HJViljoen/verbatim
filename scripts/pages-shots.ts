@@ -81,6 +81,9 @@ import { SearchTerms } from '../components/pages/settings/search-terms'
 import { YourAccounts } from '../components/pages/settings/your-accounts'
 import { BrandsYouTrack, Communities, NotYourMarket } from '../components/pages/settings/tracked-cards'
 import { whatYouTrack } from '../lib/pages/settings'
+import { MarketPage } from '../components/pages/v2/market'
+import { marketFixture } from '../lib/pages/v2/market-fixture'
+import type { MarketData } from '../lib/pages/v2/market'
 
 const args = process.argv.slice(2)
 const flag = (n: string, d: string) => { const i = args.indexOf(`--${n}`); return i >= 0 && args[i + 1] ? args[i + 1] : d }
@@ -267,6 +270,13 @@ const agentThread = (raw = agentFixture()) => {
   })
 }
 
+/** Market (depth v2, T3) from a loader dump: `MARKET_V2_JSON=<file>` names
+ *  the JSON `scripts/market-v2-dump.ts` wrote (production, read once under
+ *  the lock); without it, the fixture. */
+const marketDump = (): MarketData => (process.env.MARKET_V2_JSON
+  ? JSON.parse(readFileSync(process.env.MARKET_V2_JSON, 'utf8')) as MarketData
+  : marketFixture())
+
 // ---- the pages, as their routes compose them -------------------------------------
 
 interface Page {
@@ -317,6 +327,18 @@ const PAGES: Page[] = [
       })
     },
   },
+  // Market (depth v2, T3), to the E2 boards: the week with the check's flag,
+  // the week with none (the biggest new conversation leads), a conversation
+  // open under the top row, under the table, a subject open, the month and
+  // over time; and a loader dump (`MARKET_V2_JSON`).
+  { key: 'market-v2', path: '/dashboard/market', artboard: 'E2-Market.dc.html', page: () => h(MarketPage, { data: marketFixture() }) },
+  { key: 'market-v2-quiet', path: '/dashboard/market', artboard: 'E2-Market.dc.html', page: () => h(MarketPage, { data: marketFixture({ flagged: false }) }) },
+  { key: 'market-v2-open', path: '/dashboard/market', artboard: 'E2-Market-Open.dc.html', page: () => h(MarketPage, { data: marketFixture({ open: { n: 3, at: 'top' } }) }) },
+  { key: 'market-v2-table-open', path: '/dashboard/market', artboard: 'E2-Market-Open.dc.html', page: () => h(MarketPage, { data: marketFixture({ open: { n: 5, at: 'table' } }) }) },
+  { key: 'market-v2-subject', path: '/dashboard/market', artboard: 'E2-Market-Open.dc.html', page: () => h(MarketPage, { data: marketFixture({ subject: 'cost' }) }) },
+  { key: 'market-v2-month', path: '/dashboard/market', artboard: 'E2-Market.dc.html', page: () => h(MarketPage, { data: marketFixture({ period: 'month' }) }) },
+  { key: 'market-v2-time', path: '/dashboard/market', artboard: 'E2-Market.dc.html', page: () => h(MarketPage, { data: marketFixture({ period: 'time' }) }) },
+  { key: 'market-v2-real', path: '/dashboard/market', artboard: 'E2-Market.dc.html', page: () => h(MarketPage, { data: marketDump() }) },
 ]
 
 // ---- the shell -----------------------------------------------------------------
