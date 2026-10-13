@@ -230,10 +230,10 @@ insert into public.month_denominators (client_id, month, audience, videos, comme
 do $$ declare v0 text; begin
   select v.v0 into v0 from v;
   -- The first back-read of a month that closed before the table had rows: let in, every row.
-  insert into public.month_product_readings (client_id, month, audience, object_kind, object_id, group_id, product_id, k_named, k_unclear, k_unbranded, k_any, comments, n, status, origin, read_at, run_id, rule_version, catalogue_version, frozen_at) values
-    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2026-08-01', 'industry-other', 'group', '0a000000-0000-4000-8000-000000000001', '0a000000-0000-4000-8000-000000000001', null, 6, 5, 10, 21, 30, 40, 'frozen', 'back_read', now(), null, 'products_v1', v0, now()),
-    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2026-08-01', 'industry-other', 'product', '0b000000-0000-4000-8000-000000000001', '0a000000-0000-4000-8000-000000000001', '0b000000-0000-4000-8000-000000000001', 6, 0, 0, 6, 8, 40, 'frozen', 'back_read', now(), null, 'products_v1', v0, now()),
-    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2026-09-01', 'industry-other', 'group', '0a000000-0000-4000-8000-000000000001', '0a000000-0000-4000-8000-000000000001', null, 11, 11, 30, 52, 70, 52, 'filling', 'live', now(), '00000000-0000-4000-8000-0000000000a1', 'products_v1', v0, null);
+  insert into public.month_product_readings (client_id, month, audience, object_kind, object_id, group_id, product_id, k_named, k_unclear, k_unbranded, k_any, k_organic, comments, n, n_organic, status, origin, read_at, run_id, rule_version, catalogue_version, frozen_at) values
+    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2026-08-01', 'industry-other', 'group', '0a000000-0000-4000-8000-000000000001', '0a000000-0000-4000-8000-000000000001', null, 6, 5, 10, 21, 18, 30, 40, 35, 'frozen', 'back_read', now(), null, 'products_v1', v0, now()),
+    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2026-08-01', 'industry-other', 'product', '0b000000-0000-4000-8000-000000000001', '0a000000-0000-4000-8000-000000000001', '0b000000-0000-4000-8000-000000000001', 6, 0, 0, 6, 5, 8, 40, 35, 'frozen', 'back_read', now(), null, 'products_v1', v0, now()),
+    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2026-09-01', 'industry-other', 'group', '0a000000-0000-4000-8000-000000000001', '0a000000-0000-4000-8000-000000000001', null, 11, 11, 30, 52, 45, 70, 52, 46, 'filling', 'live', now(), '00000000-0000-4000-8000-0000000000a1', 'products_v1', v0, null);
   -- A frozen row is never rewritten, nor deleted.
   begin update public.month_product_readings set k_named = 7, k_any = 22 where month = '2026-08-01' and object_kind = 'group';
     raise exception 'CHECK FAILED: a frozen product month was rewritten';
@@ -244,21 +244,31 @@ do $$ declare v0 text; begin
   -- A filling one is refreshed and swept.
   update public.month_product_readings set k_unbranded = 31, k_any = 53, n = 53 where month = '2026-09-01' and object_kind = 'group';
   -- The split adds up; a product row is its named videos; the object is the row's.
-  begin insert into public.month_product_readings (client_id, month, audience, object_kind, object_id, group_id, product_id, k_named, k_unclear, k_unbranded, k_any, comments, n, status, origin, read_at, rule_version, catalogue_version) values
-    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2026-09-01', 'industry-other', 'group', '0a000000-0000-4000-8000-000000000002', '0a000000-0000-4000-8000-000000000002', null, 1, 1, 1, 2, 3, 52, 'filling', 'live', now(), 'products_v1', v0);
+  begin insert into public.month_product_readings (client_id, month, audience, object_kind, object_id, group_id, product_id, k_named, k_unclear, k_unbranded, k_any, k_organic, comments, n, n_organic, status, origin, read_at, rule_version, catalogue_version) values
+    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2026-09-01', 'industry-other', 'group', '0a000000-0000-4000-8000-000000000002', '0a000000-0000-4000-8000-000000000002', null, 1, 1, 1, 2, 0, 3, 52, 52, 'filling', 'live', now(), 'products_v1', v0);
     raise exception 'CHECK FAILED: a category split that does not add up';
   exception when check_violation then null; end;
-  begin insert into public.month_product_readings (client_id, month, audience, object_kind, object_id, group_id, product_id, k_named, k_unclear, k_unbranded, k_any, comments, n, status, origin, read_at, rule_version, catalogue_version) values
-    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2026-09-01', 'industry-other', 'product', '0b000000-0000-4000-8000-000000000002', '0a000000-0000-4000-8000-000000000002', '0b000000-0000-4000-8000-000000000002', 1, 1, 0, 2, 3, 52, 'filling', 'live', now(), 'products_v1', v0);
+  begin insert into public.month_product_readings (client_id, month, audience, object_kind, object_id, group_id, product_id, k_named, k_unclear, k_unbranded, k_any, k_organic, comments, n, n_organic, status, origin, read_at, rule_version, catalogue_version) values
+    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2026-09-01', 'industry-other', 'product', '0b000000-0000-4000-8000-000000000002', '0a000000-0000-4000-8000-000000000002', '0b000000-0000-4000-8000-000000000002', 1, 1, 0, 2, 0, 3, 52, 52, 'filling', 'live', now(), 'products_v1', v0);
     raise exception 'CHECK FAILED: a product row with videos it does not name';
   exception when check_violation then null; end;
-  begin insert into public.month_product_readings (client_id, month, audience, object_kind, object_id, group_id, product_id, k_named, k_unclear, k_unbranded, k_any, comments, n, status, origin, read_at, rule_version, catalogue_version) values
-    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2026-09-01', 'industry-other', 'group', '0a000000-0000-4000-8000-000000000001', '0a000000-0000-4000-8000-000000000002', null, 0, 0, 0, 0, 0, 52, 'filling', 'live', now(), 'products_v1', v0);
+  begin insert into public.month_product_readings (client_id, month, audience, object_kind, object_id, group_id, product_id, k_named, k_unclear, k_unbranded, k_any, k_organic, comments, n, n_organic, status, origin, read_at, rule_version, catalogue_version) values
+    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2026-09-01', 'industry-other', 'group', '0a000000-0000-4000-8000-000000000001', '0a000000-0000-4000-8000-000000000002', null, 0, 0, 0, 0, 0, 0, 52, 52, 'filling', 'live', now(), 'products_v1', v0);
     raise exception 'CHECK FAILED: a category row naming another category';
   exception when check_violation then null; end;
-  begin insert into public.month_product_readings (client_id, month, audience, object_kind, object_id, group_id, product_id, k_named, k_unclear, k_unbranded, k_any, comments, n, status, origin, read_at, rule_version, catalogue_version) values
-    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2026-09-01', 'industry-other', 'group', '0a000000-0000-4000-8000-000000000002', '0a000000-0000-4000-8000-000000000002', null, 0, 0, 60, 60, 0, 52, 'filling', 'live', now(), 'products_v1', v0);
+  begin insert into public.month_product_readings (client_id, month, audience, object_kind, object_id, group_id, product_id, k_named, k_unclear, k_unbranded, k_any, k_organic, comments, n, n_organic, status, origin, read_at, rule_version, catalogue_version) values
+    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2026-09-01', 'industry-other', 'group', '0a000000-0000-4000-8000-000000000002', '0a000000-0000-4000-8000-000000000002', null, 0, 0, 60, 60, 0, 0, 52, 52, 'filling', 'live', now(), 'products_v1', v0);
     raise exception 'CHECK FAILED: more videos than the month has';
+  exception when check_violation then null; end;
+  -- The organic base is inside the base: no more organic videos than videos,
+  -- nor than the organic month has.
+  begin insert into public.month_product_readings (client_id, month, audience, object_kind, object_id, group_id, product_id, k_named, k_unclear, k_unbranded, k_any, k_organic, comments, n, n_organic, status, origin, read_at, rule_version, catalogue_version) values
+    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2026-09-01', 'industry-other', 'group', '0a000000-0000-4000-8000-000000000002', '0a000000-0000-4000-8000-000000000002', null, 0, 0, 4, 4, 5, 0, 52, 52, 'filling', 'live', now(), 'products_v1', v0);
+    raise exception 'CHECK FAILED: more organic videos than videos';
+  exception when check_violation then null; end;
+  begin insert into public.month_product_readings (client_id, month, audience, object_kind, object_id, group_id, product_id, k_named, k_unclear, k_unbranded, k_any, k_organic, comments, n, n_organic, status, origin, read_at, rule_version, catalogue_version) values
+    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2026-09-01', 'industry-other', 'group', '0a000000-0000-4000-8000-000000000002', '0a000000-0000-4000-8000-000000000002', null, 0, 0, 4, 4, 4, 0, 52, 3, 'filling', 'live', now(), 'products_v1', v0);
+    raise exception 'CHECK FAILED: more organic videos than the organic month has';
   exception when check_violation then null; end;
   -- The catalogue a frozen month names cannot be taken away under it.
   begin delete from public.products where id = '0b000000-0000-4000-8000-000000000001';
