@@ -3,7 +3,7 @@ import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { ossurVoicesFixture } from '@/lib/pages/v2/voices-fixture'
 import { mergeWho, type GroupPanel } from '@/lib/pages/v2/voices'
-import { GroupCard, GroupGrid, GroupPanelView, WhoCard } from './groups'
+import { GroupCard, GroupGrid, GroupPanelView, MixCard, WhoCard } from './groups'
 
 describe('Who is in your market and the group cards (decision 2)', () => {
   const d = ossurVoicesFixture()
@@ -35,15 +35,35 @@ describe('Who is in your market and the group cards (decision 2)', () => {
     expect(text).toContain('What they talk about · of their 45 Fit & comfort 17 Cost & access 14')
     expect(text).toContain('Wants: Clear answers they can act on for someone else: what to buy, what’s covered, what recovery looks like.')
     expect(text).toContain('Open →')
+    // Wants and stops hold three lines each on the card; the panel has them whole.
+    expect(render(node).match(/class="line-clamp-3"/g)).toHaveLength(2)
     expect(text).not.toMatch(/%|no clear change|since September/)
     expect(render(node)).not.toContain('data-copy="quote"')
     assertCopyContract(node)
   })
 
-  it('a card with no video this month says so and prints no level', () => {
+  // The parity pass (13 Oct): a thin card keeps the board's card. Its level
+  // row, its "What they talk about" box and its "Where" strip stay, each
+  // carrying the gap in its own frame.
+  it('a card with no video this month keeps the board\'s card: the level at 0, the box and the strip', () => {
     const node = <GroupCard card={{ ...d.groups.cards[0], videos: 0, subjects: [], platforms: [] }} n={487} monthWords="September" />
-    expect(renderText(node)).toContain('No video of the market’s in September carries their comments.')
+    const text = renderText(node)
+    expect(text).toContain('0 of 487 videos not compared yet')
+    expect(text).toContain('What they talk about None of their comments in September.')
+    expect(text).toContain('Where')
+    expect(text).not.toContain('of their 0')
     assertCopyContract(node)
+  })
+
+  it('a card whose videos carry no subject keeps its box and says so in it', () => {
+    const node = <GroupCard card={{ ...d.groups.cards[0], subjects: [] }} n={487} monthWords="September" />
+    expect(renderText(node)).toContain('What they talk about · of their 96 No subject read in their videos yet.')
+    assertCopyContract(node)
+  })
+
+  it('a card\'s verdict slot says the change is not compared (decision 2), never a direction', () => {
+    const text = renderText(<GroupCard card={d.groups.cards[0]} n={d.videos} monthWords={d.monthWords} />)
+    expect(text).toContain('96 of 487 videos not compared yet')
   })
 
   it('the grid opens a group\'s panel in place, under its card at every width (T9)', () => {
@@ -59,15 +79,50 @@ describe('Who is in your market and the group cards (decision 2)', () => {
     expect(m.match(/aria-label="The groups"/g)).toHaveLength(1)
     expect(m).not.toContain('The groups, continued')
     expect(m.match(/id="group-panel"/g)).toHaveLength(1)
-    // The fourth of five: after itself on a phone (order 7), after the
-    // second row of two from 768 (cards 3 and 4: order 7), after the second
-    // row of three from 1280 (cards 4 and 5: order 9); its notch at its
-    // column: the middle, the right of two, the left of three.
-    expect(m).toContain('--panel-o-base:7;--panel-o-sm:7;--panel-o-md:7;--panel-o-lg:7;--panel-o-w1180:7;--panel-o-xl:9')
+    // The fourth of five, the mix card the grid's sixth: after itself on a
+    // phone (order 7), after the second row of two from 768 (cards 3 and 4:
+    // order 7), after the second row of three from 1280 (cards 4 and 5 and
+    // the mix card: order 11); its notch at its column: the middle, the right
+    // of two, the left of three.
+    expect(m).toContain('--panel-o-base:7;--panel-o-sm:7;--panel-o-md:7;--panel-o-lg:7;--panel-o-w1180:7;--panel-o-xl:11')
+    // The panel lands before the mix card on a phone and after its row from 1280.
+    expect(m.indexOf('data-mix=""')).toBeGreaterThan(panel)
+    expect(m).toContain('data-mix="" aria-labelledby="voices-mix" style="order:10"')
     expect(m).toContain('--notch-base:50%;--notch-sm:50%;--notch-md:75%;--notch-lg:75%;--notch-w1180:75%;--notch-xl:16.67%')
     expect(m).toContain('ring-2 ring-foreground')
     expect(m).toContain('Close ↑')
     assertCopyContract(<GroupGrid data={open} />)
+  })
+})
+
+describe('the mix card (the board\'s sixth; decision 2)', () => {
+  const d = ossurVoicesFixture()
+
+  it('keeps its place, named for what it shows: this month\'s column drawn, last month\'s axis empty and dashed', () => {
+    const node = <MixCard cards={d.groups.cards} n={d.videos} month={d.month} monthWords={d.monthWords} />
+    const text = renderText(node)
+    expect(text).toContain('The mix in September August isn’t read for these groups')
+    expect(text).toContain('Each update describes the groups afresh, so these groups have no earlier month to set this one beside.')
+    // No word that claims a comparison (the fresh check, 13 Oct).
+    expect(text).not.toMatch(/How the mix changed|against|changed|%|no clear change|moved/)
+    const m = render(node)
+    // Both columns are named; only September's carries points, and no line
+    // joins the two (a line needs both ends). Last month's axis is dashed.
+    expect(m).toContain('>Aug</text>')
+    expect(m).toContain('>Sep</text>')
+    expect(m.match(/<circle /g)).toHaveLength(d.groups.cards.length)
+    expect(m).not.toMatch(/<line [^>]*stroke-cat/)
+    expect(m).toContain('[&amp;&gt;line:first-of-type]:[stroke-dasharray:3_4]')
+    // Long names are shortened on the chart, whole for a screen reader.
+    expect(m).toContain('New amputees…')
+    expect(m).toMatch(/aria-label="[^"]*New amputees, first year none to 96/)
+    assertCopyContract(node)
+  })
+
+  it('sits in the grid after the group cards', () => {
+    const m = render(<GroupGrid data={d} />)
+    expect(m.indexOf('data-mix=""')).toBeGreaterThan(m.lastIndexOf('data-group='))
+    expect(m.match(/data-mix=""/g)).toHaveLength(1)
   })
 })
 
@@ -110,10 +165,45 @@ describe('a group\'s panel (E3-Voices-Open)', () => {
     assertCopyContract(node)
   })
 
-  it('leaves out what a group does not have', () => {
+  // The parity pass (13 Oct): the board's third column, "Products they
+  // mention", is drawn as what the count is: your products named in the
+  // group's videos, each opening in Your products.
+  it('lists your products in their videos, and the talk about one of yours it could not place', () => {
+    const node = <GroupPanelView panel={panel} monthWords="September" />
+    const text = renderText(node)
+    expect(text).toContain('Products in their videos · of their 45 Iceross Comfort 2 of 45 Iceross Seal-In 1 of 45 Couldn’t tell which product 7 of 45 Each opens in Your products')
+    expect(text).not.toContain('Rheo Knee')
+    expect(text).not.toContain('Where they comment')
+    expect(render(node)).toContain('href="/dashboard/products?product=p-comfort#product-panel"')
+    assertCopyContract(node)
+  })
+
+  it('keeps the products column where none is read, saying so in one line', () => {
+    const off = { ...panel, products: { state: 'off' as const, rows: [], unclear: 0, line: 'Your products are not read for this workspace yet.' } }
+    const text = renderText(<GroupPanelView panel={off} monthWords="September" />)
+    expect(text).toContain('Products in their videos Your products are not read for this workspace yet.')
+    assertCopyContract(<GroupPanelView panel={off} monthWords="September" />)
+    // A panel stored before the column (a dump) draws where they comment.
+    const { products: _drop, ...old } = panel
+    void _drop
+    expect(renderText(<GroupPanelView panel={old} monthWords="September" />)).toContain('Where they comment · of 45')
+  })
+
+  // The fresh check (13 Oct): a column with nothing to list keeps its place
+  // and says so, so the panel's grids never reflow; the full-width rows (how
+  // they talk, their words) are left out.
+  it('keeps every column where a group has nothing to list, and leaves out the full-width rows', () => {
     const bare: GroupPanel = { ...panel, who: [], conversations: [], phrases: [], quotes: [], triggers: '' }
-    const text = renderText(<GroupPanelView panel={bare} monthWords="September" />)
-    expect(text).not.toMatch(/Who they say|conversations they|How they talk|In their words|tips them/)
-    assertCopyContract(<GroupPanelView panel={bare} monthWords="September" />)
+    const node = <GroupPanelView panel={bare} monthWords="September" />
+    const text = renderText(node)
+    expect(text).toContain('What tips them into acting Not described in the latest update.')
+    expect(text).toContain('Who they say they are Nothing they said told us who they are.')
+    expect(text).toContain('The conversations they’re in None of their videos in September is in a named conversation.')
+    expect(text).toContain('Products in their videos')
+    expect(text).not.toMatch(/How they talk|In their words/)
+    // Six column heads in the two grids, as with everything filled.
+    const heads = (m: string) => m.match(/<p class="m-0 text-\[11\.5px\] font-semibold uppercase/g)?.length ?? 0
+    expect(heads(render(node))).toBe(heads(render(<GroupPanelView panel={panel} monthWords="September" />)) - 2)
+    assertCopyContract(node)
   })
 })

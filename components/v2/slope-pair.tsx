@@ -11,8 +11,9 @@ import { cn } from '@/lib/utils'
  * category grey. The slope is a picture of two levels and says nothing more:
  * no arrow, no word. Whether the two months may be compared at all is the
  * caller's `Verdict`, printed beside the chart, and a page with a refused pair
- * does not draw one (plan decision 2 holds this chart back from Voices until
- * the monthly group reading exists).
+ * does not draw one. Voices (plan decision 2) draws its later column alone,
+ * every `from` null, until the monthly group reading exists: the earlier
+ * axis stands empty and the card says why.
  *
  * Labels that would collide are nudged apart, never dropped. Every value is
  * a figure; a row's name that a model wrote names its slot (`slot`), so the
@@ -23,6 +24,9 @@ export interface SlopeRow {
   /** Stable key (a group's key, a brand's). */
   key: string
   label: string
+  /** The whole name, where `label` is shortened for the chart: what a screen
+   *  reader hears. */
+  fullLabel?: string
   /** The model slot that wrote `label`, where one did (`pass_e_persona`). */
   slot?: ProseSlot
   /** The two readings, in one unit. A null end is not drawn. */
@@ -79,7 +83,7 @@ export function SlopePair({ fromLabel, toLabel, rows, highlight = null, format =
   const rights = spread(rows.map((r) => (r.to == null ? -1 : y(r.to) + 4)), GAP).map(r1)
   // The picked row draws last, on top of the grey ones.
   const order = rows.map((r, i) => i).sort((a, b) => Number(rows[a].key === highlight) - Number(rows[b].key === highlight))
-  const aria = `${label}, ${fromLabel} to ${toLabel}: ${rows.map((r) => `${r.label} ${r.from == null ? 'none' : format(r.from)} to ${r.to == null ? 'none' : format(r.to)}`).join(', ')}.`
+  const aria = `${label}, ${fromLabel} to ${toLabel}: ${rows.map((r) => `${r.fullLabel ?? r.label} ${r.from == null ? 'none' : format(r.from)} to ${r.to == null ? 'none' : format(r.to)}`).join(', ')}.`
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={aria} className={cn('block h-auto w-full overflow-visible', className)}>

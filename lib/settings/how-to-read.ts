@@ -141,6 +141,8 @@ export const READING_CARDS: readonly ReadingCard[] = [
       'A rival’s panel reads the ninety days ending at the last update of the month the page reads.',
       NINETY_DAY_NOTE,
       'Creators are the accounts that made 3 or more of the market’s videos in the month, with their followers as of those videos. Reddit is left out: a Reddit post’s account is its community, not a person.',
+      // The parity pass (13 Oct): the group panel's products column.
+      'A group’s products are the products of yours named in the videos the group comments on that month, by the rule Your products places them with: in the video itself or a comment on it, not necessarily one of the group’s own.',
     ],
   },
   {

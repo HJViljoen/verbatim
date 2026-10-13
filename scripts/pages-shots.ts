@@ -537,6 +537,11 @@ const PAGES: Page[] = [
     key: `market-v2-${tenant}`, path: '/dashboard/market', artboard: 'E2-Market.dc.html',
     page: () => h(MarketPage, { data: marketDumpOf(flag('market-dump', '.'), tenant) }),
   })) : []),
+  // The parity pass (13 Oct): Voices in Össur's thin states, beside E3-Voices
+  // (brands not counted, a group with no video, one with no subject, two
+  // creators), and the day after its brand back-read (its own row not yet).
+  { key: 'voices-ossur-thin', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['ossur-thin']() }) },
+  { key: 'voices-ossur-counted', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['ossur-counted']() }) },
 ]
 
 // ---- the shell -----------------------------------------------------------------

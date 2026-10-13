@@ -5,9 +5,10 @@ import {
   buildBrandPanel, buildBrands, buildCreatorPanel, buildCreators, buildGroupPanel, buildGroups, clientNameCounts, clientNameCountsByCount,
   creatorVideoIds, crossKeys, findingsFor, firstSentence, groupRows, initialsOf, matchesBrand, noteOf, openOf, parseVoicesParams, personasOf,
   phrasesOf, PHRASE_MAX_WORDS, resolveCreator, themeVideoSets, topFinding, topVoicesOf, voicesHref, whoLabel, mergeWho, whoKey, WHO_FILLER_WORDS, WHO_SHOWN,
-  BRANDS_NOT_COUNTED, BRANDS_NOT_READ, GROUPS_NOT_RUN, GROUPS_NONE, GROUPS_UNREAD, type FindingRow,
+  BRANDS_NOT_COUNTED, BRANDS_NOT_READ, BRANDS_UNREAD, GROUPS_NOT_RUN, GROUPS_NONE, GROUPS_UNREAD, type FindingRow,
+  brandTable, MIX_WHY, mixNotRead, mixTitle, slopeLabel, SLOPE_LABEL_MAX, groupProducts, GROUP_PRODUCTS_OFF, GROUP_PRODUCTS_SHOWN, GROUP_PRODUCTS_UNREAD,
 } from './voices'
-import { ossurVoicesFixture, sealandVoicesFixture } from './voices-fixture'
+import { ossurCountedVoicesFixture, ossurThinVoicesFixture, ossurVoicesFixture, sealandVoicesFixture, VOICES_FIXTURES } from './voices-fixture'
 
 const SEP = '2026-09-01'
 
@@ -258,8 +259,14 @@ describe('the brands', () => {
     expect(matchesBrand(b, '')).toBe(false)
   })
 
-  it('crosses only the brands whose month row may print', () => {
+  it('crosses only the brands whose month row may print, and your own row wherever any video names it', () => {
     expect(crossKeys(pairs)).toEqual(['client', 'p'])
+    // Your row always prints (brandTable), so it is crossed at k_organic 0
+    // too, where a video names it at all; a rival at 0 is not.
+    const quiet = brandMonthPair({ month: SEP, brands, rows: [row('client', SEP, 3, 0), row('p', SEP, 5, 0), row('r', SEP, 2, 1)], audiences: ['industry-other'], pair: null })
+    expect(crossKeys(quiet)).toEqual(['client', 'r'])
+    const none = brandMonthPair({ month: SEP, brands, rows: [row('client', SEP, 0, 0)], audiences: ['industry-other'], pair: null })
+    expect(crossKeys(none)).toEqual([])
     expect(crossKeys(brandMonthPair({ month: SEP, brands, rows: [], audiences: ['industry-other'], pair: null }))).toEqual([])
   })
 
@@ -401,5 +408,115 @@ describe('the page and the Dashboard tile', () => {
     expect(topVoicesOf({ month: d.month, soFar: true, videos: d.videos, groups: d.groups, brands: d.brands }).monthLabel).toBeNull()
     // The page's data carries it from the fixture's day, 13 October.
     expect(d.monthLabel).toBe('the last full month')
+  })
+})
+
+// The parity pass (13 Oct; Heinrich: "the page shouldn't look too different if
+// everything isn't as populated as the design"): the board's brands table, its
+// mix card and its card slots, in every data state.
+describe('the board\'s shape in a thin month', () => {
+  it('draws the brands table you first in every state, and never names your row twice', () => {
+    // Össur today: rules, no month row. Every tracked brand is a row, nothing
+    // counted, and the line under the heads is the card's own.
+    const today = brandTable(ossurVoicesFixture().brands)
+    expect(today.rows.map((r) => [r.label, r.state])).toEqual([['Össur', 'not_yet'], ['Ottobock', 'not_yet']])
+    expect(today).toMatchObject({ pending: true, line: BRANDS_NOT_COUNTED, notNamed: [], notCounted: [] })
+    // After the back-read: your row first and not counted yet (no match of
+    // your name outside your posts read by hand), the rival counted, and
+    // the lines under the table without you.
+    const after = ossurCountedVoicesFixture()
+    const t = brandTable(after.brands)
+    expect(t.rows.map((r) => [r.label, r.state, r.stateWords])).toEqual([['Össur', 'not_yet', 'not counted yet'], ['Ottobock', 'counted', null]])
+    expect(t).toMatchObject({ pending: false, line: null })
+    expect(after.brands.notCounted.map((r) => r.label)).toEqual(['Össur'])
+    expect(t.notCounted).toEqual([])
+    // Your row is not a counted row elsewhere: the Dashboard's "Named most"
+    // and the creators' chips read `rows`, which it never joins uncounted.
+    expect(after.brands.rows.map((r) => r.label)).toEqual(['Ottobock'])
+    expect(after.creators.rows.every((r) => r.brand == null || r.brand.label === 'Ottobock')).toBe(true)
+    // Sealand: your row is counted and printed first, as it was.
+    const s = brandTable(sealandVoicesFixture().brands)
+    expect(s.rows[0]).toMatchObject({ label: 'Sealand', you: true, state: 'counted' })
+    expect(s.rows.filter((r) => r.you)).toHaveLength(1)
+    // Counted and named by nobody unprompted: your row prints its 0, and the
+    // "not named" line under the table leaves you out.
+    const b = sealandVoicesFixture().brands
+    const quietYou = b.all.map((r) => (r.you ? { ...r, named: { k: 0, n: 743 } } : r))
+    const q = brandTable({ ...b, all: quietYou, rows: b.rows.filter((r) => !r.you), notNamed: [{ label: 'Sealand', href: '#' }, ...b.notNamed] })
+    expect(q.rows[0]).toMatchObject({ label: 'Sealand', named: { k: 0, n: 743 } })
+    expect(q.notNamed.map((x) => x.label)).not.toContain('Sealand')
+    // No rules, or a failed read: the heads and the one line.
+    for (const [state, line] of [['not_read', BRANDS_NOT_READ], ['unread', BRANDS_UNREAD]] as const) {
+      expect(brandTable({ ...b, state, empty: line })).toMatchObject({ rows: [], pending: true, line })
+    }
+  })
+
+  it('names a group on the mix chart whole where it fits, else cut at a word with an ellipsis', () => {
+    expect(slopeLabel('Caretaker')).toBe('Caretaker')
+    expect(slopeLabel('One-bag travellers')).toBe('One-bag travellers')
+    expect(slopeLabel('New amputees, first year')).toBe('New amputees…')
+    expect(slopeLabel('Long-time users upgrading')).toBe('Long-time users…')
+    // Never ending on a word that leaves the name hanging.
+    expect(slopeLabel('Clinicians and prosthetists')).toBe('Clinicians…')
+    expect(slopeLabel('Supercalifragilisticexpialidocious')).toBe('Supercalifragilis…')
+    for (const n of ['Sustainability-minded buyers', 'Parents of children growing out of sockets']) expect(slopeLabel(n).length).toBeLessThanOrEqual(SLOPE_LABEL_MAX)
+  })
+
+  // The fresh check (13 Oct): the board's "How the mix changed" and "August
+  // against September" claimed a comparison decision 2 rules out. The card
+  // is named for what it shows (the lead's wording).
+  it('names the mix card for what it shows, and says last month is not read for these groups', () => {
+    expect(mixTitle('September')).toBe('The mix in September')
+    expect(mixNotRead('August')).toBe('August isn’t read for these groups')
+    expect(MIX_WHY).not.toMatch(/changed|against|compared/)
+  })
+
+  it('a thin Össur still has every group, one at no video and one with no subject', () => {
+    const d = ossurThinVoicesFixture()
+    expect(d.groups.cards).toHaveLength(5)
+    expect(d.groups.cards.find((c) => c.key === 'clinicians')).toMatchObject({ videos: 0, subjects: [], platforms: [] })
+    expect(d.groups.cards.find((c) => c.key === 'athlete')).toMatchObject({ videos: 12, subjects: [] })
+    expect(d.brands).toMatchObject({ state: 'not_counted', note: null })
+    expect(d.creators.atFloor).toBe(2)
+  })
+
+  it('reads a group\'s products off its own video sets: named most first, the unplaced talk apart', () => {
+    const v = (n: number) => Array.from({ length: n }, (_, i) => `v${i}`)
+    const sets = {
+      groups: new Map([['g', { any: new Set(v(12)), named: new Set(v(6)), unclear: new Set(['v6', 'v7', 'v8']), unbranded: new Set(['v9']) }], ['h', { any: new Set(['v8', 'v10']), named: new Set<string>(), unclear: new Set(['v8', 'v10']), unbranded: new Set<string>() }]]),
+      products: new Map([['a', new Set(['v0'])], ['b', new Set(['v1', 'v2', 'v3'])], ['c', new Set<string>()], ['d', new Set(['v4'])], ['e', new Set(['v5'])], ['f', new Set(['v5'])]]),
+      all: new Set(v(12)),
+    }
+    const products = ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => ({ id, name: `Product ${id.toUpperCase()}` }))
+    const g = groupProducts({ state: 'ready', sets, products, month: SEP, monthWords: 'September', params: { month: '2026-09' } })
+    expect(g.rows.map((r) => [r.name, r.k])).toEqual([['Product B', 3], ['Product A', 1], ['Product D', 1], ['Product E', 1]])
+    expect(g.rows).toHaveLength(GROUP_PRODUCTS_SHOWN)
+    expect(g.rows[0].href).toBe('/dashboard/products?month=2026-09&product=b#product-panel')
+    // Unplaced talk counts a video once across categories.
+    expect(g.unclear).toBe(4)
+    expect(g.line).toBeNull()
+    const none = groupProducts({ state: 'ready', sets: { groups: new Map(), products: new Map(), all: new Set() }, products, month: SEP, monthWords: 'September', params: {} })
+    expect(none).toMatchObject({ rows: [], unclear: 0, line: 'None of your products came up in their videos in September.' })
+    expect(groupProducts({ state: 'off', month: SEP, monthWords: 'September', params: {} })).toMatchObject({ state: 'off', line: GROUP_PRODUCTS_OFF })
+    expect(groupProducts({ state: 'unread', month: SEP, monthWords: 'September', params: {} })).toMatchObject({ state: 'unread', line: GROUP_PRODUCTS_UNREAD })
+    expect(groupProducts({ state: 'ready', sets: null, month: SEP, monthWords: 'September', params: {} }).state).toBe('unread')
+    // A month Your products holds no reading of says so: never "none came up"
+    // (a false absence), as Your products' own page says it.
+    expect(groupProducts({ state: 'not_read', month: '2026-10-01', monthWords: 'October so far', params: {} })).toMatchObject({ state: 'not_read', rows: [], line: 'Not read for October.' })
+  })
+
+  // The fresh check (13 Oct): your row printed "not read" in Praised ·
+  // complained when it was counted and nobody named it unprompted, because
+  // the loader never asked for its cross. The fixture's crosses come through
+  // `crossKeys`, as the loader's do.
+  it('your row named only when asked still reads how people treat it', () => {
+    const d = VOICES_FIXTURES['sealand-you-quiet']()
+    const you = brandTable(d.brands).rows[0]
+    expect(you).toMatchObject({ label: 'Sealand', you: true, state: 'counted', named: { k: 0, n: 743 } })
+    expect(you.praised).toEqual({ k: 0, n: 1 })
+    expect(you.complained).toEqual({ k: 0, n: 1 })
+    expect(you.topSubject).toMatchObject({ label: 'Durability', k: 1, n: 1 })
+    // Not listed again under the table.
+    expect(brandTable(d.brands).notNamed.map((x) => x.label)).not.toContain('Sealand')
   })
 })

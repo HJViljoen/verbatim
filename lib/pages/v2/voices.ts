@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { nameChecked, NAME_READS, NONE_FOUND, noiseWords, NOT_COUNTED_YET } from '../../brands/precision'
+import { productReadingsEnabled } from '../../config'
 import { fmtInt, longMonth, platformLabel, shortDate } from '../../format'
 import { gateFor } from '../../quote-context'
 import { readingOf, readTranslations } from '../../quotes'
@@ -12,7 +13,16 @@ import { ACCOUNT_FLOOR } from '../voice-surface-where'
 import { talkKindLabel } from '../overview-market/kinds'
 import { WHAT_THEY_SELL } from '../market-frame'
 import { surface } from '../../nav'
+import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../../chunk'
+import { standingPlacements, type StandingText, type TextKey } from '../../products/match'
+import {
+  isMissingProductsSchema, loadProductCatalogue, PRODUCT_TAG_COLUMNS, standingTags, TABLE_MONTH_PRODUCT_READINGS, TABLE_PRODUCT_MENTIONS, TABLE_PRODUCT_TAGS,
+  type CatalogueProduct, type ProductCatalogue, type ProductTagRow,
+} from '../../products/types'
+import { selectAll } from '../../supabase-admin'
 import { normalisePersona, type Persona } from '../../profile-tiles'
+import { placementsInPlay, productMonthSets, type MentionRead, type ProductMonthSets } from './products'
+import { productsHref } from './products-address'
 import { CLIENT_AUDIENCE, rivalKey } from '../../rivals'
 import { FLAGGED_KIND, KIND_ORDER } from '../../reading/kinds'
 import {
@@ -37,11 +47,14 @@ import type { Verdict } from '../../reading/verdicts'
 //   1. THE GROUPS. Today's groups (the latest `consumer_profiles` row) with
 //      THIS MONTH'S videos (`loadGroupSubjects`, comment-dated evidence on
 //      the month's market videos). DECISION 2: a count of videos and no share
-//      of the market, no month-on-month change and no mix-change card. A
-//      profile is rebuilt every update over all-time insights, so a group's
-//      count here is "this month's videos for today's groups", never a point
-//      on a series. The groups overlap (a video can hold several), so no
-//      remainder ("Other") is taken from them either.
+//      of the market, and no month-on-month change. A profile is rebuilt
+//      every update over all-time insights, so a group's count here is "this
+//      month's videos for today's groups", never a point on a series. The
+//      groups overlap (a video can hold several), so no remainder ("Other")
+//      is taken from them either. THE PARITY PASS (13 Oct) keeps the board's
+//      shape around that: each card's verdict slot says the change is not
+//      compared yet, and the board's mix card keeps its place ("The mix in
+//      September") with this month's column drawn and last month's empty.
 //   2. THE BRANDS. Named unprompted (`k_organic` of `n_organic`, this month
 //      and last, judged as a `Verdict` by the month-pair rule:
 //      `loadBrandMonthPairs`), and, over every video naming the brand (base
@@ -66,8 +79,9 @@ import type { Verdict } from '../../reading/verdicts'
 //
 // BRANDS STAY HONEST FOR A TENANT WITH NO ROWS. Össur has brand rules since
 // T15 but no `brand_mentions` and no `month_brand_readings` until its
-// back-read: the brands card then says the brands are not counted yet, and
-// fills on its own once the month rows exist.
+// back-read: the brands card then draws its table with every tracked brand's
+// row and empty cells, says once that the brands are not counted yet, and
+// fills on its own once the month rows exist (`brandTable`).
 //
 // PURE HALF FIRST (every builder is tested over fixtures), THEN THE READS.
 
@@ -345,6 +359,10 @@ export interface GroupPanel {
   who: { label: string; count: number }[]
   /** The conversations the group is in: its videos this month in each. */
   conversations: { registryId: string; label: string; k: number; href: string }[]
+  /** Your products named in the group's videos this month (E3-Voices-Open's
+   *  "Products they mention"). Optional: a dump from before it carries none,
+   *  and its panel draws where the group comments instead. */
+  products?: GroupProducts
   /** Real phrases (Pass A checked each against a comment), short ones
    *  only, with their English where the comment was not. */
   phrases: { text: string; english: string | null }[]
@@ -455,6 +473,60 @@ export function personasOf(profile: GroupProfileRow | null): VoicesPersona[] {
   })
 }
 
+/** THE PERIOD SWITCH'S TWO OTHER VIEWS (the parity pass, 13 Oct). The board
+ *  draws "This week · This month · Over time"; Voices reads one month, since a
+ *  group has no week reading and no month-by-month one (decision 2), so the
+ *  switch is drawn with the month on and the other two shown, not offered. */
+export const VOICES_ONE_MONTH = 'Voices reads one month at a time: groups have no weekly or month-by-month reading yet.'
+
+/** THE BOARD'S SIXTH CARD until a group has a month-by-month reading
+ *  (decision 2). E3-Voices calls it "How the mix changed", which claims a
+ *  comparison nothing makes: it is named for what it shows (the fresh check,
+ *  13 Oct: the lead's wording), keeps its place and its chart, this month's
+ *  column drawn and last month's empty, and says why. */
+export const mixTitle = (monthWords: string): string => `The mix in ${monthWords}`
+export const mixNotRead = (prevMonthName: string): string => `${prevMonthName} isn’t read for these groups`
+export const MIX_WHY = 'Each update describes the groups afresh, so these groups have no earlier month to set this one beside.'
+
+/** Where a group card's verdict would stand ("no clear change" on the
+ *  board): the same quiet slot, saying the change is not read. */
+export const GROUP_NOT_COMPARED = 'not compared yet'
+
+/** The longest group name the mix chart sets beside its figure: the chart's
+ *  label column holds about this many characters at the board's 11px mono. */
+export const SLOPE_LABEL_MAX = 18
+
+/** WORDS THAT DO NOT END A SHORTENED NAME: "Clinicians and" reads as cut
+ *  mid-thought, "Clinicians" does not. */
+const DANGLING = new Set(['and', 'or', 'of', 'the', 'a', 'an', 'in', 'on', 'for', 'with', 'to', '&'])
+
+/**
+ * A group's name as the mix chart labels it: whole where it fits, else cut at
+ * a word and marked with an ellipsis, so a long name never runs past the
+ * card (the board's own chart shortens its names by hand: "Clinicians",
+ * "Active"). The card above it carries the whole name, and the chart's
+ * screen-reader words do too. PURE.
+ */
+export function slopeLabel(name: string, max = SLOPE_LABEL_MAX): string {
+  const t = name.replace(/\s+/g, ' ').trim()
+  if (t.length <= max) return t
+  const words = t.split(' ')
+  const kept: string[] = []
+  for (const w of words) {
+    if ([...kept, w].join(' ').length > max - 1) break
+    kept.push(w)
+  }
+  while (kept.length > 1 && DANGLING.has(kept[kept.length - 1].toLowerCase().replace(/[^\p{L}&]/gu, ''))) kept.pop()
+  const cut = (kept.length > 0 ? kept.join(' ') : t.slice(0, max - 1)).replace(/[\s,;:.·-]+$/u, '')
+  return `${cut}…`
+}
+
+/** A group panel's columns where they have nothing to list: each keeps its
+ *  place and says so (the fresh check, 13 Oct), so the grid never reflows. */
+export const GROUP_NOT_DESCRIBED = 'Not described in the latest update.'
+export const GROUP_NO_WHO = 'Nothing they said told us who they are.'
+export const groupNoConversations = (monthWords: string): string => `None of their videos in ${monthWords} is in a named conversation.`
+
 export const GROUPS_NOT_RUN = 'Reading who is talking is not switched on for this workspace yet.'
 export const GROUPS_NONE = 'Too little conversation in the latest update to describe who is talking.'
 export const GROUPS_UNREAD = 'Who is talking could not be read just now.'
@@ -555,6 +627,8 @@ export function buildGroupPanel(input: {
   params: VoicesParams
   /** A phrase's English, where the comment it came from was not. */
   englishOf?: (text: string) => string | null
+  /** The group's products (`readGroupProducts`), where read. */
+  products?: GroupProducts
 }): GroupPanel {
   const mine = new Set(input.videoIds)
   const conversations = [...new Set(input.persona.registryIds)]
@@ -583,11 +657,142 @@ export function buildGroupPanel(input: {
     // self-description, counted once with their counts added.
     who: mergeWho(input.persona.who.map((w) => ({ label: whoLabel(w.signal), count: w.count })).filter((w) => w.label)),
     conversations,
+    ...(input.products ? { products: input.products } : {}),
     phrases: phrasesOf(input.persona.howTheyTalk, input.englishOf),
     quotes: input.quotes.slice(0, GROUP_QUOTES),
     askHref: askHref(`What does the group "${input.persona.name}" in my market want, and what stops them?`),
     closeHref: voicesHref(input.params),
     notchAt: (col + 0.5) / input.perRow,
+  }
+}
+
+// ---- the group's products (E3-Voices-Open, "Products they mention") -----------------
+//
+// THE PARITY PASS (13 Oct): the board's panel names the products a group's
+// talk is about, and Your products now reads Össur's catalogue. A product
+// stands on one of the group's videos by Your products' own rule
+// (`productMonthSets`: its content names it, or a comment on it in the month
+// does), so the column is "Products in their videos", which is what the
+// count is, and not "they mention", which would claim the group's own
+// comments named it. Where no catalogue is read (Sealand, or Your products
+// switched off) the column keeps its place and says so in one line. A month
+// Your products has not read (no stored row for it, Your products' own rule)
+// says "not read", never "none came up": that would be a false absence.
+
+/** How many products the column lists. */
+export const GROUP_PRODUCTS_SHOWN = 4
+export const GROUP_PRODUCTS_OFF = 'Your products are not read for this workspace yet.'
+export const GROUP_PRODUCTS_UNREAD = 'Your products could not be read just now.'
+export const groupProductsNotRead = (monthName: string): string => `Not read for ${monthName}.`
+export const groupProductsNone = (monthWords: string): string => `None of your products came up in their videos in ${monthWords}.`
+
+export interface GroupProducts {
+  /** `not_read`: Your products holds no reading of the month yet. */
+  state: 'ready' | 'off' | 'not_read' | 'unread'
+  /** Each product named in the group's videos, most first: k of their videos. */
+  rows: { id: string; name: string; k: number; href: string }[]
+  /** Their videos about one of your products where we could not tell which. */
+  unclear: number
+  /** The column's one line where it lists nothing, else null. */
+  line: string | null
+}
+
+/** The column from the group's own product sets (`productMonthSets` over the
+ *  group's videos alone). PURE. */
+export function groupProducts(input: {
+  state: GroupProducts['state']
+  sets?: ProductMonthSets | null
+  products?: readonly Pick<CatalogueProduct, 'id' | 'name'>[]
+  /** The month read, `YYYY-MM-01`. */
+  month: string
+  monthWords: string
+  params: VoicesParams
+}): GroupProducts {
+  const empty = { rows: [], unclear: 0 }
+  if (input.state === 'off') return { state: 'off', ...empty, line: GROUP_PRODUCTS_OFF }
+  if (input.state === 'not_read') return { state: 'not_read', ...empty, line: groupProductsNotRead(longMonth(input.month)) }
+  if (input.state === 'unread' || !input.sets) return { state: 'unread', ...empty, line: GROUP_PRODUCTS_UNREAD }
+  const sets = input.sets
+  const rows = (input.products ?? [])
+    .map((p) => ({ id: p.id, name: p.name, k: sets.products.get(p.id)?.size ?? 0, href: productsHref({ month: input.params.month }, { kind: 'product', id: p.id }) }))
+    .filter((r) => r.k > 0)
+    .sort((a, b) => b.k - a.k || a.name.localeCompare(b.name))
+    .slice(0, GROUP_PRODUCTS_SHOWN)
+  const unclear = new Set([...sets.groups.values()].flatMap((g) => [...g.unclear])).size
+  return { state: 'ready', rows, unclear, line: rows.length === 0 && unclear === 0 ? groupProductsNone(input.monthWords) : null }
+}
+
+/** The product_mentions columns the placements are read with (Your
+ *  products' `MENTION_COLUMNS`). */
+const GROUP_MENTION_COLUMNS = 'id, video_id, source, comment_id, comment_month, placement, product_id, group_id, method, rule_version, catalogue_version, tag_id'
+
+/**
+ * The month's placements on the group's videos alone: Your products'
+ * `loadMonthPlacements`, each of its four reads bounded by the videos (in
+ * chunks), so a panel never pages the whole catalogue's history. The same
+ * rows on those videos, so the same answer on them (`standingPlacements`).
+ */
+async function loadGroupPlacements(db: SupabaseClient, clientId: string, input: { month: string; version: string; catalogue: ProductCatalogue; videoIds: readonly string[] }): Promise<Map<TextKey, StandingText>> {
+  const parts = chunk([...new Set(input.videoIds)], UUID_IN_CHUNK)
+  const read = <T>(q: (ids: string[]) => Parameters<typeof selectAll<T>>[0]) =>
+    mapWithLimit(parts, READ_CONCURRENCY, (ids) => selectAll<T>(q(ids))).then((pages) => pages.flat())
+  const [content, comments, tagRows, tags] = await Promise.all([
+    read<MentionRead>((ids) => () => db.from(TABLE_PRODUCT_MENTIONS).select(GROUP_MENTION_COLUMNS)
+      .eq('client_id', clientId).eq('catalogue_version', input.version).eq('source', 'content').in('video_id', ids).order('id')),
+    read<MentionRead>((ids) => () => db.from(TABLE_PRODUCT_MENTIONS).select(GROUP_MENTION_COLUMNS)
+      .eq('client_id', clientId).eq('catalogue_version', input.version).eq('source', 'comment').eq('comment_month', input.month).in('video_id', ids).order('id')),
+    read<MentionRead>((ids) => () => db.from(TABLE_PRODUCT_MENTIONS).select(GROUP_MENTION_COLUMNS)
+      .eq('client_id', clientId).eq('method', 'tag').in('video_id', ids).order('id')),
+    read<ProductTagRow>((ids) => () => db.from(TABLE_PRODUCT_TAGS).select(PRODUCT_TAG_COLUMNS).eq('client_id', clientId).in('video_id', ids).order('id')),
+  ])
+  const tagMonths = new Map(tagRows.filter((r) => r.tag_id && r.comment_month).map((r) => [r.tag_id!, monthStartOf(String(r.comment_month))]))
+  return standingPlacements({
+    rows: placementsInPlay([...content, ...comments].map((r) => ({ ...r, comment_month: r.comment_month ? monthStartOf(String(r.comment_month)) : null })), input.version),
+    tags: standingTags(tags),
+    tagMonths,
+    active: { groups: new Set(input.catalogue.groups.map((g) => g.id)), products: new Set(input.catalogue.products.map((p) => p.id)) },
+  })
+}
+
+/** The month's catalogue version from ONE stored row, in Your products'
+ *  order (`versionOf` over `loadMonthProductReadings`), or null where the
+ *  month holds no row: Your products has not read it. */
+async function readMonthVersion(db: SupabaseClient, clientId: string, month: string): Promise<string | null> {
+  const res = await db.from(TABLE_MONTH_PRODUCT_READINGS).select('catalogue_version')
+    .eq('client_id', clientId).eq('month', month)
+    .order('audience').order('object_kind').order('object_id').limit(1)
+  if (res.error) throw new Error(`${TABLE_MONTH_PRODUCT_READINGS}: ${(res.error as { message?: string }).message ?? String(res.error)}`)
+  const row = ((res.data ?? []) as { catalogue_version: string | null }[])[0]
+  return row ? (row.catalogue_version ?? '') : null
+}
+
+/** The group's products, read for its panel: the catalogue, the month's
+ *  catalogue version (one row; none is "not read"), and the placements on
+ *  the group's videos, then the sets over them. Off where Your products is
+ *  not switched on, no catalogue is read or the migration is not applied;
+ *  never throws. */
+async function readGroupProducts(handle: ReadingHandle, clientId: string, month: string, monthWords: string, videoIds: readonly string[], params: VoicesParams): Promise<GroupProducts> {
+  const m = monthStartOf(month)
+  const as = (state: GroupProducts['state']) => groupProducts({ state, month: m, monthWords, params })
+  if (!productReadingsEnabled(clientId)) return as('off')
+  try {
+    const cat = await loadProductCatalogue(handle.client, clientId)
+    if (cat.state !== 'ready') return as('off')
+    const stored = await readMonthVersion(handle.client, clientId, m)
+    if (stored === null) return as('not_read')
+    const version = stored || cat.catalogue.version
+    const standing = videoIds.length > 0
+      ? await loadGroupPlacements(handle.client, clientId, { month: m, version, catalogue: cat.catalogue, videoIds })
+      : new Map<TextKey, StandingText>()
+    const sets = productMonthSets({
+      month: m, market: videoIds.map((id) => ({ id })), standing,
+      groups: cat.catalogue.groups.map((g) => g.id), products: cat.catalogue.products.map((p) => p.id),
+    })
+    return groupProducts({ state: 'ready', sets, products: cat.catalogue.products, month: m, monthWords, params })
+  } catch (e) {
+    if (isMissingProductsSchema(e)) return as('off')
+    say('group.products', e)
+    return as('unread')
   }
 }
 
@@ -773,11 +978,65 @@ export function buildBrands(input: {
  *  least one video. */
 const printable = (r: VoicesBrandRow): boolean => r.state === 'counted' && (r.named?.k ?? 0) > 0
 
+/** What the brands table draws, in every state. */
+export interface BrandTable {
+  /** The rows, in the board's order: you first. */
+  rows: VoicesBrandRow[]
+  /** No row in the table is counted: each draws its cells empty, and the
+   *  line under the header says why, once. */
+  pending: boolean
+  /** That line (the card's `empty`), or null where the table holds counts. */
+  line: string | null
+  /** The lines under the table, never naming a brand its rows already draw. */
+  notNamed: VoicesBrands['notNamed']
+  notCounted: VoicesBrands['notCounted']
+}
+
+/**
+ * THE BRANDS TABLE IN THE BOARD'S SHAPE, IN EVERY STATE (the parity pass,
+ * 13 Oct; Heinrich: "the page shouldn't look too different if everything
+ * isn't as populated as the design"). E3-Voices draws a table: the four
+ * column heads, then a row per brand with your own first, then the key. A
+ * thin month keeps that table and lets its cells carry the gap:
+ *   - `ready`: your row first WHATEVER its state (the board always draws it:
+ *     "not counted yet" where your name's matches are not all read, "0 of
+ *     743" where it was counted and nobody named it unprompted), then the
+ *     rivals named without being asked, most first; the lines under the table
+ *     name the rest and never your row twice;
+ *   - `not_counted` (brand rules, no month row yet: Össur before its
+ *     back-read): every tracked brand is a row, you first, its cells drawn
+ *     empty, and the table says once, under its head, that brands are not
+ *     counted yet;
+ *   - `not_read` / `unread`: the head and that one line.
+ * PURE.
+ */
+export function brandTable(b: VoicesBrands): BrandTable {
+  if (b.state === 'ready') {
+    const you = b.all.find((r) => r.you) ?? null
+    const isYou = (x: { label: string }): boolean => you != null && x.label === you.label
+    return {
+      rows: you ? [you, ...b.rows.filter((r) => !r.you)] : b.rows,
+      pending: false,
+      line: null,
+      notNamed: b.notNamed.filter((x) => !isYou(x)),
+      notCounted: b.notCounted.filter((x) => !isYou(x)),
+    }
+  }
+  // A stable sort: you first, then the tracked order.
+  const rows = b.state === 'not_counted' ? [...b.all].sort((x, y) => Number(y.you) - Number(x.you)) : []
+  return { rows, pending: true, line: b.empty, notNamed: [], notCounted: [] }
+}
+
 /** The brands worth crossing (their kinds and subjects, one lens call each):
  *  those whose month row may print, before your own name's gate. A brand that
- *  never prints is never crossed. */
+ *  never prints is never crossed. YOUR ROW ALWAYS PRINTS (`brandTable`), so
+ *  it is crossed wherever it is counted and some video names it at all, even
+ *  where none named it unprompted: its praised and complained cells read
+ *  every video naming it, and a cell nobody asked for would say "not read". */
 export function crossKeys(pairs: readonly BrandPair[]): string[] {
-  return pairs.filter((p) => p.countState === 'counted' && (p.curr?.k ?? 0) > 0).map((p) => p.brandKey)
+  return pairs
+    .filter((p) => p.countState === 'counted' && ((p.curr?.k ?? 0) > 0 || (p.brandKey === 'client' && (p.currAny?.k ?? 0) > 0)))
+    .map((p) => p.brandKey)
 }
 
 /** Does a `?brand=` value name this brand? Its name, its key, its audience,
@@ -1239,13 +1498,7 @@ export async function loadVoicesBase(input: VoicesLoadInput): Promise<{ data: Vo
     params,
     failed: profile === undefined || (profile != null && (market == null || groupRead == null)),
   })
-  // YOUR OWN ROW: judged on your month set where it was crossed, else on the
-  // counts (the set was not read because the row could not print).
-  const clientPair = pairs?.find((p) => p.brandKey === 'client')
-  const clientSet = crosses?.videos.find((b) => b.brandKey === 'client')
-  const clientCounts = clientSet
-    ? clientNameCounts(clientId, month, clientSet.any)
-    : clientNameCountsByCount(clientId, month, clientPair?.currAny?.k ?? 0)
+  const clientCounts = clientCountsOf(clientId, month, pairs ?? null, crosses ?? null)
   const note = noteOf(rm?.reason ?? null, findings, (pairs ?? []).filter((p) => p.brandKey !== 'client').map((p) => p.label))
   const brands = buildBrands({
     clientId,
@@ -1349,18 +1602,20 @@ export async function openPanel(ctx: VoicesContext, data: VoicesData, params: Vo
       const videoIds = ctx.groupRead?.videos.find((g) => g.key === open.key)?.videoIds ?? []
       const subjects = (ctx.groupRead?.groups.find((g) => g.key === open.key)?.subjects ?? []).map((s) => ({ id: s.subjectId, label: s.label, k: s.k }))
       const phrases = phrasesOf(persona.howTheyTalk).map((p) => p.text)
-      const [labels, readings, voices] = await Promise.all([
+      const [labels, readings, voices, products] = await Promise.all([
         readLabels(handle, persona.registryIds).catch((e: unknown) => { say('group.labels', e); return new Map<string, string>() }),
         phrases.length > 0 ? readTranslations(handle.client, phrases) : Promise.resolve(new Map<string, { lang: string; english: string | null }>()),
         loadVoicesMany(handle.client, clientId, [{ key: persona.key, insightIds: persona.insightIds }], {
           month: ctx.month.slice(0, 7), marketFirst: true, gate: gateFor(clientId, {}),
         }).catch((e: unknown) => { say('group.voices', e); return null }),
+        readGroupProducts(handle, clientId, ctx.month, data.monthWords, videoIds, params),
       ])
       const quotes = (voices?.get(persona.key)?.voices ?? []).map(groupQuote)
       const panel = buildGroupPanel({
         persona, card, index, perRow: 3, n: data.videos, subjects, videoIds,
         themeSets: themeVideoSets(ctx.refs), labels, quotes, params,
         englishOf: (text) => readingOf(readings, text).english ?? null,
+        products,
       })
       return { ...data, open, panel }
     }
@@ -1461,6 +1716,16 @@ export async function topVoices(input: { supabase: SupabaseClient; clientId: str
     clientCounts: clientNameCountsByCount(clientId, month, clientPair?.currAny?.k ?? 0),
   })
   return topVoicesOf({ month, soFar, monthLabel: readingMonthLabel(month, now), videos: groupRead?.marketVideos ?? null, groups, brands })
+}
+
+/** YOUR OWN ROW'S GATE, as the page's loader judges it: on your month set
+ *  where it was crossed (`clientNameCounts`), else on the counts
+ *  (`clientNameCountsByCount`: the set was not read because the row could not
+ *  print). PURE: the fixtures judge it the same way. */
+export function clientCountsOf(clientId: string, month: string, pairs: readonly BrandPair[] | null, crosses: { videos: readonly BrandMonthVideos[] } | null, reads: typeof NAME_READS = NAME_READS): boolean {
+  const clientSet = crosses?.videos.find((b) => b.brandKey === 'client')
+  if (clientSet) return clientNameCounts(clientId, month, clientSet.any, reads)
+  return clientNameCountsByCount(clientId, month, pairs?.find((p) => p.brandKey === 'client')?.currAny?.k ?? 0, reads)
 }
 
 /** The client's name gate from counts: production checked the name, no read

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
-import { ossurVoicesFixture, sealandVoicesFixture } from '@/lib/pages/v2/voices-fixture'
+import { ossurVoicesFixture, sealandVoicesFixture, VOICES_FIXTURES } from '@/lib/pages/v2/voices-fixture'
 import type { BrandPanel } from '@/lib/pages/v2/voices'
 import { BrandPanelView, BrandsCard, VerdictNote } from './brands'
 
@@ -33,16 +33,57 @@ describe('Brands in your market', () => {
     assertCopyContract(node)
   })
 
-  it('Össur: rules and no month row yet, so the card says the brands are not counted and names them', () => {
+  // The parity pass (13 Oct): the board's table in every state. Össur today
+  // has rules and no month row: the table keeps its heads, draws every
+  // tracked brand as a row (you first) with its cells empty, and says once,
+  // under the heads, that brands are not counted yet.
+  it('Össur: rules and no month row yet, so the table keeps its rows and says once that nothing is counted', () => {
     const d = ossurVoicesFixture()
     const node = <BrandsCard brands={d.brands} monthWords={d.monthWords} />
-    expect(renderText(node)).toContain('Brands are not counted for this workspace yet. The brands this workspace tracks: Össur , Ottobock .')
-    expect(renderText(node)).not.toMatch(/\d+ of \d+/)
-    // Each tracked brand still opens, and the latest finding is the note.
+    const text = renderText(node)
+    expect(text).toContain('Brand Named in Praised · complained Talked about for Brands are not counted for this workspace yet. Össur You Ottobock')
+    expect(text.match(/not counted/g)).toHaveLength(1)
+    expect(text).not.toMatch(/\d+ of \d+/)
     const m = render(node)
+    expect(m.match(/data-brand="/g)).toHaveLength(2)
+    expect(m.match(/data-empty-track=""/g)).toHaveLength(2 * 3)
+    // The key names the bars' colours: no bar, no key.
+    expect(text).not.toContain('videos where people praised')
+    // Each tracked brand still opens, and the latest finding is the note.
     expect(m).toContain('href="/dashboard/voices?brand=Ottobock#brand-panel"')
-    expect(renderText(node)).toContain('Ottobock: Ottobock’s talk turns on getting a knee paid for Open Ottobock →')
+    expect(text).toContain('Ottobock: Ottobock’s talk turns on getting a knee paid for Open Ottobock →')
     assertCopyContract(node)
+  })
+
+  it('Össur after its back-read: your row first, not counted yet, and the rivals counted', () => {
+    const d = VOICES_FIXTURES['ossur-counted']()
+    const node = <BrandsCard brands={d.brands} monthWords={d.monthWords} />
+    const text = renderText(node)
+    expect(text).toContain('Össur You not counted yet Ottobock 12 of 402 videos')
+    expect(text).toContain('12 · 18 of 37 Cost & access · 21 of 37')
+    // Your row is drawn, so the lines under the table do not name it again.
+    expect(text.match(/Össur/g)).toHaveLength(1)
+    const m = render(node)
+    expect(m.indexOf('data-brand="client"')).toBeLessThan(m.indexOf('data-brand="5ecfa431"'))
+    assertCopyContract(node)
+  })
+
+  it('your row named only when asked prints its 0 and how people treat it, never "not read"', () => {
+    const d = VOICES_FIXTURES['sealand-you-quiet']()
+    const node = <BrandsCard brands={d.brands} monthWords={d.monthWords} />
+    const text = renderText(node)
+    expect(text).toContain('Sealand You 0 of 743 videos')
+    expect(text).toContain('0 · 0 of 1 Durability · 1 of 1')
+    expect(text).not.toContain('not read')
+    assertCopyContract(node)
+  })
+
+  it('a table with nothing named unprompted keeps its heads and says so inside it', () => {
+    const d = sealandVoicesFixture()
+    const quiet = { ...d.brands, rows: [], all: d.brands.all.filter((r) => !r.you), notNamed: [] }
+    const text = renderText(<BrandsCard brands={quiet} monthWords={d.monthWords} />)
+    expect(text).toContain('Brand Named in Praised · complained Talked about for No brand you track was named without being asked in September.')
+    assertCopyContract(<BrandsCard brands={quiet} monthWords={d.monthWords} />)
   })
 
   it('a refused comparison prints nothing beside the level', () => {

@@ -21,6 +21,10 @@ export type Period = 'week' | 'month' | 'time'
 export interface PeriodOption<V extends string = Period> {
   value: V
   label: string
+  /** Shown and not offered: why, for its tooltip and a screen reader. A
+   *  disabled option is no link, so nothing promises a view that is not
+   *  there (Voices' week and over time, the parity pass, 13 Oct). */
+  disabled?: string
 }
 
 /** The boards' three, in their order. */
@@ -55,6 +59,18 @@ export function PeriodSwitch<V extends string = Period>({ value, options, hrefFo
     >
       {options.map((o) => {
         const on = o.value === value
+        if (o.disabled && !on) {
+          return (
+            <span
+              key={o.value}
+              aria-disabled="true"
+              title={o.disabled}
+              className="cursor-default whitespace-nowrap rounded-[7px] px-[13px] py-[7px] text-[13.5px] leading-[1.2] text-muted-foreground/70"
+            >
+              {o.label}<span className="sr-only"> ({o.disabled})</span>
+            </span>
+          )
+        }
         return (
           <Link
             key={o.value}
