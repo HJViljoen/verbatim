@@ -30,7 +30,9 @@ export function shelfColumn(c: ShelfCategoryView, monthName: string): ShelfColum
       : c.videos === 0
       ? <>Quiet in {monthName}</>
       : c.share
-        ? <><span data-copy="figure">{sharePct(c.share.k, c.share.n)}</span> of the market <VerdictBadge verdict={c.verdict} answersOnly /></>
+        // The verdict on its own line under the share, as the board draws
+        // "▲ from 14%" (the lead, 14 Oct: on one line it ran on as one phrase).
+        ? <><span data-copy="figure">{sharePct(c.share.k, c.share.n)}</span> of the market<VerdictBadge verdict={c.verdict} answersOnly className="mt-0.5 block" /></>
         : null,
     // RULING U6: only a ready subject is counted. Where some are not measured
     // yet, none is said to lead over them; where none is ready, the head says

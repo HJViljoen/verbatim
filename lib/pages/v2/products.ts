@@ -1217,11 +1217,14 @@ export const PRODUCT_QUOTES = 3
  *  most-videos first, so a product with talk is shown before a quiet one. */
 export const SHELF_TILES = 8
 
-/** A shelf column as the page draws it: its first `SHELF_TILES` tiles, and
- *  how many more ("+N more"). The page's shelf and the Dashboard's mini shelf
+/** A shelf column as the page draws it: every tile where the column holds
+ *  at most `SHELF_TILES + 1`, else its first `SHELF_TILES` and how many more
+ *  ("+N more", N at least 2). NEVER "+1 MORE" (the lead's ruling, 14 Oct): a
+ *  line that stands for one tile takes the tile's own place, so a column of
+ *  exactly 9 draws all 9. The page's shelf and the Dashboard's mini shelf
  *  both cut by this, so the two draw the same tiles. PURE. */
 export function shelfCut<T>(products: readonly T[]): { shown: T[]; more: number } {
-  return products.length > SHELF_TILES
+  return products.length > SHELF_TILES + 1
     ? { shown: products.slice(0, SHELF_TILES), more: products.length - SHELF_TILES }
     : { shown: [...products], more: 0 }
 }

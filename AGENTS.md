@@ -1138,7 +1138,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
     `TopProducts.columns` (the page's own shelf, `miniShelfOf` over
     `data.shelf`, in every state with a catalogue but a failed read:
     unshaded where the month was not read, cut as the page cuts it,
-    `shelfCut`: `SHELF_TILES` bars a column, then "+N more", its words
+    `shelfCut`: all of a column of `SHELF_TILES + 1` or fewer, else
+    `SHELF_TILES` bars and "+N more", never "+1 more", its words
     counting the whole column, `named`); `ContentTile.asked` via
     `topAsked`, read only where no idea prints (the page's split with no
     idea on the row, `askedWithLead` with `lead: IDEA_SLOTS`: the tile's
@@ -1304,9 +1305,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
     it is named, with `SUBJECT_NOT_MEASURED` where its count would be. A
     state with no reading still draws the frame, and every state with a
     catalogue draws the shelf (`buildProductsData` fills `shelf` with no
-    count where the month was not read). A shelf column shows `SHELF_TILES`
-    (8) tiles, most videos first, then "+N more" into the category's panel
-    (`shelfCut`, which the Dashboard's mini shelf cuts by too).
+    count where the month was not read). A shelf column shows every tile
+    where it holds nine or fewer, else `SHELF_TILES` (8), most videos first,
+    then "+N more" into the category's panel; never "+1 more", a line in a
+    tile's place (the lead, 14 Oct; `shelfCut`, which the Dashboard's mini
+    shelf cuts by too). A column's head puts its verdict on its own line
+    under "N% of the market", as the board's "▲ from 14%".
   - **Content** (T6; `lib/pages/v2/content.ts`: `loadContentPage`,
     `topContent`). The week is a run's frozen window: the newer of the post
     ideas' run and the published week read's (`anchorOf`), either alone

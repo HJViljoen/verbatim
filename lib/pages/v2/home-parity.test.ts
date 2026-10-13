@@ -24,8 +24,9 @@ describe('Your products: the tile draws the page\'s own shelf, cut as the page c
     expect(cols.map((c) => c.id)).toEqual(d.shelf.map((c) => c.id))
     for (const [i, c] of cols.entries()) {
       const page = d.shelf[i]
-      expect(c.products.map((p) => p.id)).toEqual(page.products.slice(0, SHELF_TILES).map((p) => p.id))
-      expect(c.more).toBe(Math.max(0, page.products.length - SHELF_TILES))
+      const cut = page.products.length > SHELF_TILES + 1 ? SHELF_TILES : page.products.length
+      expect(c.products.map((p) => p.id)).toEqual(page.products.slice(0, cut).map((p) => p.id))
+      expect(c.more).toBe(page.products.length - cut)
       expect(c.products.length + (c.more ?? 0)).toBe(page.products.length)
     }
   }
@@ -35,7 +36,9 @@ describe('Your products: the tile draws the page\'s own shelf, cut as the page c
     const top = topProductsOf(d)
     same(d, top.columns!)
     expect(top.columns!.some((c) => (c.more ?? 0) > 0)).toBe(true)
-    expect(Math.max(...top.columns!.map((c) => c.products.length))).toBeLessThanOrEqual(SHELF_TILES)
+    expect(Math.max(...top.columns!.map((c) => c.products.length))).toBeLessThanOrEqual(SHELF_TILES + 1)
+    // Never "+1 more": a column of nine draws nine.
+    for (const c of top.columns!) expect(c.more ?? 0).not.toBe(1)
     // Its words count past the cut: every product that came up, of the whole column.
     for (const [i, c] of top.columns!.entries()) expect(c.named).toBe(d.shelf[i].products.filter((p) => (p.videos ?? 0) > 0).length)
   })
@@ -66,6 +69,11 @@ describe('Your products: the tile draws the page\'s own shelf, cut as the page c
     const twenty = Array.from({ length: 20 }, (_, i) => i)
     expect(shelfCut(twenty)).toEqual({ shown: twenty.slice(0, SHELF_TILES), more: 20 - SHELF_TILES })
     expect(shelfCut(twenty.slice(0, SHELF_TILES))).toEqual({ shown: twenty.slice(0, SHELF_TILES), more: 0 })
+    // The lead's ruling, 14 Oct: never "+1 more". Nine draw all nine; ten
+    // draw eight and "+2 more".
+    expect(shelfCut(twenty.slice(0, 9))).toEqual({ shown: twenty.slice(0, 9), more: 0 })
+    expect(shelfCut(twenty.slice(0, 10))).toEqual({ shown: twenty.slice(0, SHELF_TILES), more: 2 })
+    for (let n = 0; n <= 20; n++) expect(shelfCut(twenty.slice(0, n)).more).not.toBe(1)
   })
 })
 

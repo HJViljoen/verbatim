@@ -81,6 +81,9 @@ describe('the catalogue (E4-Products, "Your catalogue")', () => {
   it('a column\'s head prints its verdict only where it is an answer, and a quiet column says so', () => {
     const hands = shelfColumn(d.shelf.find((c) => c.name === 'Hands')!, 'September')
     expect(renderText(<>{hands.line}</>)).toMatch(/^13% of the market ▲ 4\.3 pts/)
+    // The verdict on its own line under the share (the board's "▲ from 14%"),
+    // never run on after "of the market" as one phrase.
+    expect(render(<>{hands.line}</>)).toMatch(/of the market<span data-copy="verdict" class="[^"]*\bblock\b/)
     const sockets = shelfColumn(d.shelf.find((c) => c.name === 'Sockets & Locks')!, 'September')
     expect(renderText(<>{sockets.line}</>)).toBe('1% of the market')
     const quiet = shelfColumn({ ...d.shelf[0], videos: 0, lead: null }, 'September')
