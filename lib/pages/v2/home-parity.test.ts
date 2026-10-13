@@ -148,3 +148,15 @@ describe('Your market this week: the subject rows say why they hold no subject',
     expect(src).toMatch(/\.catch\(\(error: unknown\) => \{ say\('subjects', error\); return weekSubjectsGap\(month, soFar, 'failed'\) \}\)/)
   })
 })
+
+describe('Market: the tile\'s "also" is Market\'s own third-card rule', () => {
+  it('topMarket names its stand-in by `alsoTalkedOf`, as Market\'s third card does, and only where nothing more is new', () => {
+    const src = readFileSync(resolve(__dirname, 'market.ts'), 'utf8')
+    const top = src.slice(src.indexOf('export async function topMarket'))
+    const page = src.slice(0, src.indexOf('export async function topMarket'))
+    expect(top).toMatch(/const next = sides\.fresh\[0\] \? null : alsoTalkedOf\(convs, onRow, setApart\)/)
+    expect(page).toMatch(/const next = earlier \? null : alsoTalkedOf\(convs, onRow, setApart\)/)
+    // No second copy of the rule.
+    expect(src.match(/c\.setApart == null && !setApart\.has\(c\.id\)/g)).toHaveLength(1)
+  })
+})

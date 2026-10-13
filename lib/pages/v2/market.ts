@@ -2237,8 +2237,8 @@ export interface MarketTop {
   /** OPTIONAL (parity pass, 13 Oct): where nothing more was first heard this
    *  week, the week's next biggest conversation not already on the tile and
    *  not set apart, so the tile keeps the board's two rows (Market's third
-   *  card's "Also talked about", `alsoTalkedOf` on parity/market; unify at
-   *  merge). Null where there is none. */
+   *  card's "Also talked about": the same function, `alsoTalkedOf`). Null
+   *  where there is none. */
   also?: { conv: MarketConv; href: string } | null
   /** The category's videos this week and in the month: every conversation
    *  count's n. */
@@ -2345,9 +2345,10 @@ export async function topMarket(input: {
   const rows: MarketTop['rows'] = []
   if (sides.biggest) rows.push({ kind: 'biggest', conv: sides.biggest, href: convHref(params, sides.biggest.id, 'top') })
   if (sides.fresh[0]) rows.push({ kind: 'new', conv: sides.fresh[0], href: convHref(params, sides.fresh[0].id, 'top') })
-  // = alsoTalkedOf (parity/market), unify at merge.
+  // Market's own rule for its third card's "Also talked about" (one function,
+  // so the tile and the page name the same conversation).
   const onRow = new Set([heroId, ...rows.map((r) => r.conv.id)].filter((x): x is string => x != null))
-  const next = sides.fresh[0] ? null : convs.find((c) => !onRow.has(c.id) && c.setApart == null && !setApart.has(c.id)) ?? null
+  const next = sides.fresh[0] ? null : alsoTalkedOf(convs, onRow, setApart)
   return {
     hero,
     rows,
