@@ -7,6 +7,7 @@ import { fmtInt, fmtPct } from '@/lib/format'
 import { tileHref } from '@/lib/pages/home'
 import { flagBaseWords, type MarketConv, type MarketTop } from '@/lib/pages/v2/market'
 import type { MarketTile, TileRead } from '@/lib/pages/v2/home'
+import { TAG } from '@/components/colour-roles'
 import { cn } from '@/lib/utils'
 import { BIG, Fig, MONO_MUTED, MROW, TILE, TILE_FAILED, TileHead, TileLine, TT } from './parts'
 
@@ -51,7 +52,27 @@ function WeekLines({ conv, top, marketWeek }: { conv: MarketConv; top: MarketTop
 /** The three weekly windows as bars, oldest first: counts only. */
 const weekBars = (conv: MarketConv, top: MarketTop) => conv.weeks.map((count, i) => ({ label: top.week.labels[i] ?? '', count }))
 
-function Hero({ top, marketWeek }: { top: MarketTop; marketWeek: number | null }) {
+/** The chip beside a lead conversation's name, where the board draws its flag
+ *  chip (parity pass, 13 Oct: chip and title on one line in every state): the
+ *  reader flag "New" where it was first heard this week, else the pale tag
+ *  saying why it leads, which is a rank and no claim of movement. */
+export const MARKET_LEADS = 'Most talked about this week'
+
+/** The row the board keeps for what was first heard this week, where nothing
+ *  was (the brief's own words for Market's third card). */
+export const MARKET_NOTHING_NEW = 'Nothing new this week'
+/** The same, where the lead itself is the week's one new conversation. */
+export const MARKET_NOTHING_ELSE_NEW = 'Nothing else new this week'
+
+function LeadChip({ hero, top, month }: { hero: { kind: 'new' | 'biggest'; conv: MarketConv }; top: MarketTop; month: string | null }) {
+  const c = hero.conv
+  if (hero.kind === 'new' && month) {
+    return <FlagChip verdict={newVerdict(c.id, c.label, c.month ?? c.week ?? 0, top.category.month ?? 0, month)} />
+  }
+  return <span data-chip="leads" className={cn(TAG, 'whitespace-nowrap rounded-full px-2 py-[5px] text-[12px] leading-none font-semibold')}>{MARKET_LEADS}</span>
+}
+
+function Hero({ top, marketWeek, month }: { top: MarketTop; marketWeek: number | null; month: string | null }) {
   const hero = top.hero
   if (!hero) return null
   if (hero.kind === 'flag') {
@@ -87,10 +108,8 @@ function Hero({ top, marketWeek }: { top: MarketTop; marketWeek: number | null }
   const { conv } = hero
   return (
     <>
-      <div className="flex flex-col gap-1.5">
-        <p className="m-0 text-[12px] leading-[1.3] font-semibold uppercase tracking-[0.06em] text-orange-text">
-          {hero.kind === 'new' ? <span data-copy="verdict">New this week</span> : 'Most talked about this week'}
-        </p>
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
+        <LeadChip hero={hero} top={top} month={month} />
         <h3 className={TT}><span data-copy="subject" data-slot="pass_b_theme">{conv.label}</span></h3>
       </div>
       <div className="grid grid-cols-[minmax(0,5fr)_minmax(0,6fr)] items-end gap-7 max-sm:grid-cols-1 max-sm:gap-3">
@@ -157,8 +176,18 @@ export function MarketTileView({ read }: { read: TileRead<MarketTile> }) {
           : !top.hero && top.rows.length === 0 ? <TileLine>{MARKET_NONE}</TileLine>
             : (
               <>
-                <Hero top={top} marketWeek={read.state === 'ok' ? read.top.marketWeek : null} />
-                {top.rows.length > 0 ? <div className="flex flex-col">{top.rows.map((r) => <Row key={r.conv.id} row={r} top={top} month={month} />)}</div> : null}
+                <Hero top={top} marketWeek={read.state === 'ok' ? read.top.marketWeek : null} month={month} />
+                <div className="flex flex-col">
+                  {top.rows.map((r) => <Row key={r.conv.id} row={r} top={top} month={month} />)}
+                  {/* The board's second row is what was first heard this week:
+                      where nothing was (or it leads the tile), the row stays
+                      and says so (parity pass). */}
+                  {top.rows.some((r) => r.kind === 'new') ? null : (
+                    <div data-row="nothing-new" className={cn(MROW, 'text-muted-foreground')}>
+                      <span>{top.hero?.kind === 'new' ? MARKET_NOTHING_ELSE_NEW : MARKET_NOTHING_NEW}</span>
+                    </div>
+                  )}
+                </div>
               </>
             )}
     </article>

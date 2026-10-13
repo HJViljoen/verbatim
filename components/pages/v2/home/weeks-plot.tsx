@@ -34,9 +34,11 @@ const PLOT_TOP = 0.88
  *  normal leading, 1.3 of the type), its 8px gap and the 1px baseline. */
 const SIZES = {
   lg: { box: 'h-[190px]', label: 'text-[12px] max-sm:text-[10px]', under: 'bottom-[24.6px]' },
-  sm: { box: 'h-[128px]', label: 'text-[10.5px]', under: 'bottom-[22.65px]' },
+  sm: { box: 'h-[112px]', label: 'text-[10.5px]', under: 'bottom-[22.65px]' },
 } as const
 const HAIR = 'border-[#E4E2DC]'
+/** An empty week's well: as tall as the tallest bar may stand (`PLOT_TOP`). */
+const WELL = 'h-[88%]'
 const MUTED = 'text-[#5F656B]'
 
 export function HomeWeeksPlot({ weeks, details, label, open = null, size = 'lg' }: {
@@ -90,7 +92,13 @@ export function HomeWeeksPlot({ weeks, details, label, open = null, size = 'lg' 
                 // A week still filling: the same yellow, faint, with no words
                 // (Heinrich, 1 Oct); solid once it has settled.
                 <div className={`relative w-[44%] max-w-8 rounded-t-[3px] bg-brand ${c.settled ? '' : 'opacity-45'}`} data-week-state={c.settled ? 'settled' : 'filling'} data-week={c.week} style={{ height: `${at(c.videos, weeks.maxVideos)}%` }} />
-              ) : null}
+              ) : (
+                // A week with nothing drawn keeps its slot: a faint well where
+                // its bar would stand, no height of its own, so the frame
+                // carries the gap (parity pass, 13 Oct: "the week tile's
+                // chart frame with faint slots").
+                <div aria-hidden className={`relative w-[44%] max-w-8 rounded-t-[3px] bg-track/70 ${WELL}`} data-week-state="empty" />
+              )}
             </div>
             <div className={cn('whitespace-nowrap', sz.label, MUTED)}>{c.label}</div>
             {d ? (

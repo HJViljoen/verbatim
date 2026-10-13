@@ -46,7 +46,7 @@ import { SEALAND_CLIENT_ID } from '../lib/config'
 import { surface } from '../lib/nav'
 
 import { DashboardPage } from '../components/pages/v2/home'
-import { dashboardEmptyFixture, dashboardFixture } from '../lib/pages/v2/home-fixture'
+import { dashboardEmptyFixture, dashboardFixture, dashboardThinFixture } from '../lib/pages/v2/home-fixture'
 import type { DashboardData } from '../lib/pages/v2/home'
 import { MarketPicturePage } from '../components/pages/overview/picture'
 import { PICTURE_FIXTURE } from '../components/pages/overview/picture/fixture'
@@ -476,6 +476,12 @@ const PAGES: Page[] = [
   // subjects as a locked tenant's owner sees it.
   { key: 'dashboard-two-clocks', path: '/dashboard', artboard: 'E1-Dashboard.dc.html', page: () => h(DashboardPage, { data: dashboardFixture({ twoClocks: true }) }) },
   { key: 'settings-subjects-locked', path: '/dashboard/settings/subjects', artboard: 'no-board-settings-subjects.dc.html', page: () => settingsSubjectsPage(true) },
+  // The parity pass (13 Oct): the Dashboard's thin states, beside E1-Dashboard,
+  // as Össur and Sealand read today (no flag, nothing new, too few clean
+  // weeks, subjects not calibrated or not compared, brands not counted, no
+  // readings of products, no post ideas, a move waiting for its month).
+  { key: 'dashboard-thin', path: '/dashboard', artboard: 'E1-Dashboard.dc.html', page: () => h(DashboardPage, { data: dashboardThinFixture() }) },
+  { key: 'dashboard-thin-sealand', path: '/dashboard', artboard: 'E1-Dashboard.dc.html', page: () => h(DashboardPage, { data: dashboardThinFixture({ tenant: 'sealand' }) }) },
 ]
 
 // ---- the shell -----------------------------------------------------------------

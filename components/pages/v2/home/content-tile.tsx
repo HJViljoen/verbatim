@@ -2,9 +2,9 @@ import { NAV_ICON } from '@/components/nav-icons'
 import { RecipeChip } from '@/components/pages/v2/content/parts'
 import { fmtInt, longMonth } from '@/lib/format'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
-import { IDEAS_EMPTY, POST_IDEA_SLOT, type OwnTouch, type TopContent } from '@/lib/pages/v2/content'
+import { IDEAS_EMPTY, POST_IDEA_SLOT, type OwnTouch, type TopAsked } from '@/lib/pages/v2/content'
 import { tileHref } from '@/lib/pages/home'
-import type { TileRead } from '@/lib/pages/v2/home'
+import type { ContentTile, TileRead } from '@/lib/pages/v2/home'
 import { cn } from '@/lib/utils'
 import { MID, MONO_MUTED, TILE, TILE_FAILED, TileHead, TileLine, TT } from './parts'
 
@@ -32,13 +32,54 @@ export function OwnLine({ own }: { own: OwnTouch }) {
   return <><span data-copy="figure">{fmtInt(own.touched)}</span> of your <span data-copy="figure">{fmtInt(own.posts)}</span> posts {when} touched on it</>
 }
 
-export function ContentTileView({ read }: { read: TileRead<TopContent> }) {
+/** The title where there is no idea: the question in the most of the week's
+ *  videos that your posts have not touched (Content's "Also asked", its first
+ *  row; a question your posts touched is left out, so the title says so
+ *  rather than "asked most"). */
+export const ASKED_TITLE = 'Not in your posts yet'
+
+/** The tile with no post idea (parity pass, 13 Oct): the board's "Post next"
+ *  card, title, count of the week's videos beside its month, and your posts,
+ *  on the question the week asked most; why there is no idea, in one quiet
+ *  line under it. */
+function Asked({ asked, line }: { asked: TopAsked; line: string | null }) {
+  return (
+    <>
+      <h3 className={TT}>
+        {ASKED_TITLE}: <span data-copy="subject" data-slot="pass_b_theme">{asked.label}</span>
+      </h3>
+      {/* The week's figure only beside its month (decision 1). */}
+      {asked.week && asked.month ? (
+        <>
+          <div data-copy="level" className="flex flex-wrap items-baseline gap-x-2.5">
+            <span className={MID}>{fmtInt(asked.week.k)}</span>
+            <span className={MONO_MUTED}>of {fmtInt(asked.week.n)} videos this week</span>
+          </div>
+          <p data-copy="level" className={cn(MONO_MUTED, 'm-0 -mt-2 max-sm:-mt-1')}>
+            {fmtInt(asked.month.k)} of {fmtInt(asked.month.n)} {asked.monthWords}
+          </p>
+        </>
+      ) : asked.month ? (
+        <p data-copy="level" className={cn(MONO_MUTED, 'm-0 text-[14px] text-foreground')}>{fmtInt(asked.month.k)} of {fmtInt(asked.month.n)} {asked.monthWords}</p>
+      ) : null}
+      {asked.own ? <p className="m-0 text-[13px] leading-[1.4] text-muted-foreground"><OwnLine own={asked.own} /></p> : null}
+      {line ? <p data-content-why="" className="m-0 mt-auto text-[12px] leading-[1.4] text-muted-foreground">{line}</p> : null}
+    </>
+  )
+}
+
+export function ContentTileView({ read }: { read: TileRead<ContentTile> }) {
   const top = read.state === 'ok' ? read.top : null
   const idea = top?.state === 'ready' ? top.idea : null
+  const asked = !idea ? top?.asked ?? null : null
+  // Where no idea prints, the tile opens Content's "Also asked" on its question.
+  const href = asked ? asked.href : top?.href ?? tileHref('content')
   return (
     <article aria-labelledby="home-content" data-tile="content" data-state={top?.state ?? 'failed'} className={cn(TILE, 'col-span-12 min-[1180px]:col-span-4')}>
-      <TileHead icon={NAV_ICON.content} name="Content" id="home-content" href={top?.href ?? tileHref('content')} />
-      {!top ? <TileLine>{TILE_FAILED}</TileLine> : !idea ? <TileLine>{top.line ?? IDEAS_EMPTY.none}</TileLine> : (
+      <TileHead icon={NAV_ICON.content} name="Content" id="home-content" href={href} />
+      {!top ? <TileLine>{TILE_FAILED}</TileLine>
+        : asked ? <Asked asked={asked} line={top.state === 'ready' ? null : IDEAS_EMPTY[top.state]} />
+          : !idea ? <TileLine>{top.line ?? IDEAS_EMPTY.none}</TileLine> : (
         <>
           {top.line ? <TileLine className="text-[13px]">{top.line}</TileLine> : null}
           <h3 className={TT}>

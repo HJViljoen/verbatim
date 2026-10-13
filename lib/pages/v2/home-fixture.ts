@@ -3,9 +3,9 @@ import { readingMonthLabel } from '../../reading/month-label'
 import type { PublishedWeekRead } from '../../written/published'
 import type { StandingFact, WeekReadDataV2 } from '../../written/types'
 import { homeWeeksFrame } from '../home'
-import { contentHref, IDEAS_EMPTY, ideasReadOf, recipe, topContentEmpty, type IdeasState, type TopContent } from './content'
+import { ASKED_ID, CONTENT_PATH, contentHref, IDEAS_EMPTY, ideasReadOf, recipe, topContentEmpty, type IdeasState, type TopAsked } from './content'
 import {
-  agentTries, weekSubjectsOf, weekTileOf, type DashboardData, type MarketTile, type TileRead, type TopProducts,
+  agentTries, weekSubjectsGap, weekSubjectsOf, weekTileOf, type ContentTile, type DashboardData, type MarketTile, type TileRead, type TopProducts, type WeekSubjects,
 } from './home'
 import { buildConvs, convHref, flagCardOf, marketParams, pickHero, pickWeekSides, type MarketTop } from './market'
 import { FIXTURE_FLAG, FIXTURE_WEEKS, fixtureConvInput, fixtureFacts, fixtureId, fixtureRead } from './market-fixture'
@@ -47,10 +47,11 @@ export function fixturePublished(): PublishedWeekRead {
   }
 }
 
-/** Market's tile, as `topMarket` builds it from the week. */
-export function fixtureMarketTop(opts: { flagged?: boolean } = {}): MarketTop {
+/** Market's tile, as `topMarket` builds it from the week. `nothingNew`: no
+ *  conversation was first heard this week (Össur, 5 Oct). */
+export function fixtureMarketTop(opts: { flagged?: boolean; nothingNew?: boolean } = {}): MarketTop {
   const p = marketParams({})
-  const input = fixtureConvInput('week')
+  const input = { ...fixtureConvInput('week'), ...(opts.nothingNew ? { newIds: new Set<string>() } : {}) }
   const convs = buildConvs(input)
   const card = opts.flagged === false ? null : flagCardOf({ flag: FIXTURE_FLAG, window: fixtureRead().window, convs, convInput: input, monthCategory: 300, p, noun: null })
   const pick = pickHero({ convs, flag: card, setApart: new Set() })
@@ -80,6 +81,10 @@ export function fixtureStanding(): StandingFact[] {
 }
 
 export function fixtureVoicesTop(opts: { named?: boolean; september?: boolean } = {}): TopVoices {
+  const tracked = [
+    { label: 'Össur', you: true, href: voicesHref({}, { kind: 'brand', key: 'Össur' }) },
+    { label: 'Ottobock', you: false, href: voicesHref({}, { kind: 'brand', key: 'Ottobock' }) },
+  ]
   const groups = [
     { key: 'long-time-users', name: 'Long-time users upgrading', videos: 86 },
     { key: 'new-amputees', name: 'New amputees in their first year', videos: 74 },
@@ -101,6 +106,7 @@ export function fixtureVoicesTop(opts: { named?: boolean; september?: boolean } 
     groupsState: 'ready',
     groupsEmpty: null,
     brandsState: opts.named === false ? 'not_counted' : 'ready',
+    tracked,
     href: VOICES_HREF,
   }
 }
@@ -124,7 +130,14 @@ export function fixtureProductsTop(state: TopProducts['state'] = 'ready', opts: 
   }
   const words = opts.september ? 'September' : 'October so far'
   const label = opts.september ? { monthLabel: SEP_LABEL } : {}
-  if (state !== 'ready') return { state, monthWords: state === 'quiet' ? words : '', ...(state === 'quiet' ? label : {}), standout: null, href, ...(opts.note ? { note: opts.note } : {}) }
+  // Not switched on, or the month not read: the catalogue unshaded
+  // (`withCatalogueShelf`); read and quiet: the shelf, every product none.
+  const unshaded = state === 'not_on' || (state === 'quiet' && opts.note === 'unread')
+  const catalogue = unshaded && opts.shelf !== false ? { catalogue: SHELF.map((c) => ({ id: c.id, name: c.name, products: c.videos.length })) } : {}
+  const quiet = state === 'quiet' && !opts.note && opts.shelf !== false
+    ? { cameUp: 0, products: SHELF.reduce((n, c) => n + c.videos.length, 0), columns: SHELF.map((c) => ({ id: c.id, name: c.name, products: c.videos.map((_, i) => ({ id: `${c.id}-${i}`, videos: 0 })) })) }
+    : {}
+  if (state !== 'ready') return { state, monthWords: state === 'quiet' ? words : '', ...(state === 'quiet' ? label : {}), standout: null, href, ...(opts.note ? { note: opts.note } : {}), ...catalogue, ...quiet }
   return {
     state,
     monthWords: words,
@@ -135,8 +148,22 @@ export function fixtureProductsTop(state: TopProducts['state'] = 'ready', opts: 
   }
 }
 
-export function fixtureContentTop(state: IdeasState | 'older' = 'ready', opts: { medical?: boolean } = {}): TopContent {
-  if (state !== 'ready' && state !== 'older') return { state, idea: null, href: '/dashboard/content', line: state === 'unread' ? IDEAS_EMPTY.unread : topContentEmpty(state) }
+/** The week's most-asked question your posts have not touched (Content's
+ *  "Also asked", first row), as `topAsked` reads it. */
+export function fixtureAsked(): TopAsked {
+  return {
+    registryId: fixtureId(1),
+    label: 'How long a liner lasts',
+    week: { k: 23, n: 226 },
+    month: { k: 35, n: 300 },
+    monthWords: 'in October so far',
+    own: { state: 'none', touched: 0, posts: 25, since: '2026-08-01' },
+    href: `${CONTENT_PATH}#${ASKED_ID}`,
+  }
+}
+
+export function fixtureContentTop(state: IdeasState | 'older' = 'ready', opts: { medical?: boolean; asked?: boolean } = {}): ContentTile {
+  if (state !== 'ready' && state !== 'older') return { state, idea: null, href: '/dashboard/content', line: state === 'unread' ? IDEAS_EMPTY.unread : topContentEmpty(state), ...(opts.asked ? { asked: fixtureAsked() } : {}) }
   const older = state === 'older'
   return {
     state: 'ready',
@@ -168,8 +195,17 @@ export function fixtureContentTop(state: IdeasState | 'older' = 'ready', opts: {
   }
 }
 
-export function fixtureMovesTop(state: 'full' | 'member' | 'no_advice' | 'no_move' = 'full', opts: { september?: boolean } = {}): TopMoves {
+export function fixtureMovesTop(state: 'full' | 'member' | 'no_advice' | 'no_move' | 'pending' = 'full', opts: { september?: boolean } = {}): TopMoves {
   const move = movedMove(MOVE_CARDS)
+  // Accepted on 5 October, so its own month reads once October has been read
+  // (Össur's and Sealand's only moves, 13 Oct).
+  const newest: TopMoves['newest'] = state === 'pending'
+    ? {
+        id: 'm-access', title: 'Create a guided access path, not a standalone price answer', kind: 'advice', label: 'Cost and affordability frustration',
+        day: '2026-10-05', direction: 'up', pending: OCT, unread: null,
+        before: { month: SEP, role: 'before', k: 19, n: 521, soFar: false }, href: `${MOVES_PATH}#move-m-access`,
+      }
+    : null
   return {
     advice: state === 'no_advice' ? null : {
       lineageId: DESK.lineageId,
@@ -182,12 +218,13 @@ export function fixtureMovesTop(state: 'full' | 'member' | 'no_advice' | 'no_mov
       href: adviceHref(DESK.lineageId),
     },
     waiting: state === 'no_advice' ? 0 : 3,
-    move: state === 'no_move' || !move?.compare ? null : {
+    move: state === 'no_move' || state === 'pending' || !move?.compare ? null : {
       id: move.id, title: move.title, kind: move.kind, label: move.label, day: move.day, direction: move.direction,
       compare: move.compare, moved: move.compare.verdict.state === 'moved', href: `${MOVES_PATH}#move-${move.id}`,
     },
     canDecide: state !== 'member',
     ...(opts.september ? { reading: { month: SEP, label: SEP_LABEL } } : {}),
+    ...(state === 'pending' || state === 'no_move' ? { newest } : {}),
   }
 }
 
@@ -227,6 +264,34 @@ export function dashboardFixture(o: DashboardFixtureOptions = {}): DashboardData
     content: failed.has('content') ? FAILED : ok(fixtureContentTop(o.content, { medical: true })),
     moves: failed.has('moves') ? FAILED : ok(o.moves === 'none' ? null : fixtureMovesTop(o.moves ?? 'full', { september: o.twoClocks })),
     agent: { action: '/dashboard/agent', tries: agentTries(read) },
+  }
+}
+
+/**
+ * THE THIN STATE, AS ÖSSUR READS TODAY (parity pass, 13 Oct): no flag and
+ * nothing first heard this week; too few clean weeks for the weekly volume;
+ * subjects named and none calibrated; brands not counted yet; product
+ * readings not switched on (the catalogue unshaded); post ideas not switched
+ * on (the week's most-asked question in their place); and one move, accepted
+ * this month, its after side waiting for October. `sealand` is Sealand's
+ * today: brands counted, subjects calibrated with no September to compare,
+ * no catalogue. The board's shape must hold in both.
+ */
+export function dashboardThinFixture(opts: { tenant?: 'ossur' | 'sealand' } = {}): DashboardData {
+  const read = fixturePublished()
+  const sealand = opts.tenant === 'sealand'
+  const top = fixtureMarketTop({ flagged: false, nothingNew: true })
+  const ready = weekSubjectsOf(fixtureStanding(), OCT, true)
+  const subjects: WeekSubjects = sealand && ready ? { ...ready, moved: null, noneMoved: false } : weekSubjectsGap(OCT, true, 'calibrating')
+  return {
+    bar: { dates: '5 to 11 October', short: '5 to 11 Oct', asAt: '2026-10-12T06:23:00.000Z', nextUpdate: '2026-10-18T04:00:00.000Z', paused: false },
+    market: ok({ top, month: OCT, marketWeek: 241 }),
+    week: ok(weekTileOf({ read, weeks: null, subjects, now: NOW })),
+    voices: ok(fixtureVoicesTop({ named: sealand, september: true })),
+    products: ok(fixtureProductsTop(sealand ? 'no_catalogue' : 'not_on', { september: true })),
+    content: ok(fixtureContentTop('not_on', { asked: true })),
+    moves: ok(fixtureMovesTop('pending', { september: true })),
+    agent: { action: '/dashboard/agent', tries: agentTries(read, top) },
   }
 }
 

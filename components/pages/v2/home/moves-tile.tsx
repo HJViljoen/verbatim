@@ -4,10 +4,10 @@ import { NAV_ICON } from '@/components/nav-icons'
 import { priorityLabel } from '@/components/pages/moves/words'
 import { AdviceAnswers } from '@/components/pages/v2/moves/advice-actions'
 import { PRIORITY_CHIP } from '@/components/pages/v2/moves/parts'
-import { fmtInt } from '@/lib/format'
+import { fmtInt, longMonth } from '@/lib/format'
 import type { TileRead } from '@/lib/pages/v2/home'
 import { tileHref } from '@/lib/pages/home'
-import { compareMonths, groundedLabel, RECORD_HREF, sharePct, streakLabel, UNTITLED_ADVICE, type TopMoves } from '@/lib/pages/v2/moves'
+import { compareMonths, groundedLabel, MOVE_UNREAD, pendingLine, RECORD_HREF, sharePct, streakLabel, UNTITLED_ADVICE, type TopMoves } from '@/lib/pages/v2/moves'
 import { monthStartOf } from '@/lib/reading/month-key'
 import { cn } from '@/lib/utils'
 import { CSUB, OLINK, TILE, TILE_FAILED, TileHead, TileLine, TT } from './parts'
@@ -90,6 +90,42 @@ function Move({ move, reading }: { move: NonNullable<TopMoves['move']>; reading:
   )
 }
 
+/** The panel's words where no move has a comparison to print yet (parity
+ *  pass, 13 Oct: the board's "After your move" panel stays, on the newest
+ *  move, or saying there is none). */
+export const MOVES_NO_MOVE = 'No move yet. Accept a piece of advice to follow its market before and after.'
+
+const PANEL = 'flex min-w-0 flex-col gap-2 rounded-[10px] bg-inner px-4 py-3.5 text-foreground no-underline max-sm:hidden'
+const EYEBROW_MOVE = 'm-0 text-[11.5px] leading-[1.3] font-semibold uppercase tracking-[0.06em] text-orange-text'
+
+/** The newest move, its month before where that was read, and why its own
+ *  side does not print yet: the board's panel, the after side left open. */
+function Newest({ move }: { move: NonNullable<TopMoves['newest']> }) {
+  const b = move.before
+  return (
+    <Link href={move.href} data-move="pending" className={cn(PANEL, 'transition-colors hover:bg-track focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring')}>
+      <p className={EYEBROW_MOVE}>After your move</p>
+      <div className="text-[14px] font-semibold leading-[1.35]"><span data-copy="quote">{move.title}</span></div>
+      {b ? (
+        <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+          <span data-copy="figure" className="font-mono text-[24px] leading-none font-medium tracking-[-0.02em] tabular-nums text-muted-foreground">{sharePct(b.k, b.n)}</span>
+          <span aria-hidden className="font-mono text-muted-foreground">→</span>
+          {/* The after side's place, empty until its month is read. */}
+          <span aria-hidden className="inline-block h-[18px] w-12 self-center rounded-[3px] border border-dashed border-foreground/20" />
+        </div>
+      ) : null}
+      <p className={CSUB}>
+        {b ? (
+          <>
+            Share of market videos{move.label ? <> on {move.kind === 'subject' ? <span data-copy="quote">{move.label}</span> : <span data-copy="subject" data-slot="pass_b_theme">{move.label}</span>}</> : null}: <span data-copy="level">{fmtInt(b.k)} of {fmtInt(b.n)}</span> in {longMonth(b.month)}, the month before.{' '}
+          </>
+        ) : null}
+        {move.pending ? pendingLine(move.pending) : move.unread ? MOVE_UNREAD[move.unread] : null}
+      </p>
+    </Link>
+  )
+}
+
 /** Where the tile's link goes: the advice's panel, else the move, else the page. */
 export function movesTileHref(top: TopMoves | null): string {
   return top?.advice?.href ?? top?.move?.href ?? tileHref('moves')
@@ -100,10 +136,20 @@ export function MovesTileView({ read }: { read: TileRead<TopMoves | null> }) {
   return (
     <article aria-labelledby="home-moves" data-tile="moves" className={cn(TILE, 'col-span-12 min-[1180px]:col-span-8')}>
       <TileHead icon={NAV_ICON.moves} name="Your moves" id="home-moves" href={movesTileHref(top)} />
-      {read.state === 'failed' ? <TileLine>{TILE_FAILED}</TileLine> : !top ? <TileLine>{MOVES_FIRST_RUN}</TileLine> : (
-        <div className={cn('grid grid-cols-1 gap-7', top.move ? 'md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]' : null)}>
-          <Advice top={top} />
-          {top.move ? <Move move={top.move} reading={top.reading} /> : null}
+      {read.state === 'failed' ? <TileLine>{TILE_FAILED}</TileLine> : (
+        // The board's two columns in every state (parity pass): the advice,
+        // and "After your move" beside it, on the move whose market moved, else
+        // the newest move with its after side still open, else none yet.
+        <div className="grid grid-cols-1 gap-7 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+          {top ? <Advice top={top} /> : <TileLine>{MOVES_FIRST_RUN}</TileLine>}
+          {top?.move ? <Move move={top.move} reading={top.reading} />
+            : top?.newest ? <Newest move={top.newest} />
+              : (
+                <div data-move="none" className={PANEL}>
+                  <p className={EYEBROW_MOVE}>After your move</p>
+                  <p className={CSUB}>{MOVES_NO_MOVE}</p>
+                </div>
+              )}
         </div>
       )}
     </article>
