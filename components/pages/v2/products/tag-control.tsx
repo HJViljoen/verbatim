@@ -3,7 +3,7 @@
 import { useActionState, useId, useState } from 'react'
 import { tagProduct, type ProductTagState } from '@/lib/actions/product-tags'
 import { cn } from '@/lib/utils'
-import { BTN, BTN_INK } from './parts'
+import { BTN, BTN_INK } from './buttons'
 
 // "Tag the product" (board E4-Products-Liners, the couldn't-tell-which list):
 // a person says which of the client's products a comment (or a video as a

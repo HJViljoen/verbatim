@@ -16,13 +16,9 @@ import { cn } from '@/lib/utils'
 
 export { AskButton, CAPS, EmptyLine, Fig, LevelText, MiniRow, OLINK, PanelTag } from '@/components/pages/v2/voices/parts'
 
-/** The board's `.btn`: 38px, the inner ground, ink words. */
-export const BTN =
-  'inline-flex min-h-[38px] cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-inner px-3.5 text-[13.5px] font-semibold text-foreground no-underline transition-colors hover:bg-track focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-60'
-
-/** The board's `.btn.ink`: ink with white words. */
-export const BTN_INK =
-  'inline-flex min-h-[38px] cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-primary px-3.5 text-[13.5px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-60'
+// The buttons live in ./buttons so the client Tag control can import them
+// without pulling the page's loader (and its server imports) into the browser.
+export { BTN, BTN_INK } from './buttons'
 
 /** The board's `.mid`: a card's 30px figure, its words beside it in mono. */
 export function MidFigure({ value, children }: { value: number; children?: ReactNode }) {
