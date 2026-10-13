@@ -16,6 +16,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { chunk } from './chunk'
 import { selectAll } from './supabase-admin'
 import { cleanQuote, readableQuote } from './quotes'
+import { isOwnedPost } from './reading/owned'
 
 export const ENGAGE_CATEGORIES = [
   'purchase_intent',
@@ -50,6 +51,32 @@ export interface EngageComment {
   /** The platform's id of the video it sits under (`comments.video_id`), where
    *  the read had it: the quote gate's context read starts at the videos. */
   videoId?: string | null
+  /** Whose video it sits under (`engageUnder`). Null where the video row was
+   *  not read; absent on rows built before depth v2 (T14). */
+  under?: EngageUnder | null
+}
+
+/**
+ * Whose video a reply candidate sits under.
+ *
+ *   own_post   a post off the client's own account (`source = 'owned'`): a
+ *              reply lands under your own post.
+ *   names_you  a creator's video tagged to the client by a brand keyword
+ *              (`is_client`, gathered): about you, on someone else's account.
+ *   elsewhere  the category's or a rival's video.
+ *
+ * THE SPLIT `is_client` ALONE CANNOT MAKE. `contextLine`
+ * (lib/content-tiles.ts) said "under your post" for any account that posted an
+ * `is_client` video, so a creator's review of the brand read as the brand's
+ * own post. The source is the only column that knows whose account it is
+ * (lib/reading/owned.ts).
+ */
+export type EngageUnder = 'own_post' | 'names_you' | 'elsewhere'
+
+export function engageUnder(v: { source?: string | null; is_client?: boolean | null }): EngageUnder {
+  if (isOwnedPost(v)) return 'own_post'
+  if (v.is_client) return 'names_you'
+  return 'elsewhere'
 }
 
 export interface EngageCandidate {
@@ -289,10 +316,11 @@ export async function loadEngageCandidates(
 
   const videos = await chunkedIn<{
     video_id: string; platform: string; video_url: string; account_name: string; topics: string[] | null
+    source: string | null; is_client: boolean | null
   }>(
     (ids) => () =>
       db.from('videos')
-        .select('video_id, platform, video_url, account_name, topics')
+        .select('video_id, platform, video_url, account_name, topics, source, is_client')
         .eq('client_id', clientId)
         .in('video_id', ids)
         .order('id'),
@@ -327,6 +355,7 @@ export async function loadEngageCandidates(
         account: video?.account_name ?? null,
         platformCommentId: comment.comment_id,
         videoId: comment.video_id ?? null,
+        under: video ? engageUnder(video) : null,
       },
     })
   }
