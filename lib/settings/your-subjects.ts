@@ -71,14 +71,21 @@ export interface YourSubjectsView {
   activeCount: number
   max: number
   canEdit: boolean
+  /** An owner or admin the tenant lock holds (`assertTenantMay`, `tracking`;
+   *  decision 7): the controls are drawn disabled, under the lock's own line
+   *  (`SUBJECTS_HELD`), rather than refusing after a submit, as Settings ›
+   *  Your products does. Never true for the operator, or for a reader who
+   *  cannot edit anyway. */
+  locked: boolean
 }
 
 /** Where a followed subject is read: Market, with it open. */
 export const marketSubjectHref = (id: string): string => `/dashboard/market?subject=${encodeURIComponent(id)}`
 
-/** The tab, from the read. PURE. */
-export function yourSubjectsView(rows: readonly SubjectSettingsRow[], canEdit: boolean): YourSubjectsView {
+/** The tab, from the read. `locked` is the tenant lock's answer for this
+ *  session (the route asks `assertTenantMay`, the call the actions make). PURE. */
+export function yourSubjectsView(rows: readonly SubjectSettingsRow[], canEdit: boolean, locked = false): YourSubjectsView {
   const following = rows.filter((r) => r.status === 'active').map((r) => ({ ...r, href: marketSubjectHref(r.id) }))
   const waiting = rows.filter((r) => r.status === 'proposed').map((r) => ({ ...r, because: originLine(r.origin) }))
-  return { following, waiting, activeCount: following.length, max: SUBJECTS_MAX, canEdit }
+  return { following, waiting, activeCount: following.length, max: SUBJECTS_MAX, canEdit, locked: canEdit && locked }
 }

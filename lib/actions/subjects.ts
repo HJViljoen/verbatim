@@ -13,8 +13,9 @@ import {
   setMoveStatus,
   type WriteContext,
 } from '@/lib/subjects/moves'
-import { MOVE_STATUSES, SUBJECT_ORIGINS, SUBJECT_WRITE_REFUSED } from '@/lib/subjects/types'
+import { MOVE_STATUSES, SUBJECT_ORIGINS, SUBJECT_WRITE_REFUSED, SUBJECTS_HELD } from '@/lib/subjects/types'
 import { MOVES_WRITE_REFUSED, mayDecideMoves } from '@/lib/moves-access'
+import { assertTenantMay } from '@/lib/tenant-locks'
 
 // The subject and move write path (Phase 1 WP12, design §3 SU1 and SU2).
 //
@@ -51,6 +52,15 @@ import { MOVES_WRITE_REFUSED, mayDecideMoves } from '@/lib/moves-access'
 // by side and one page cannot answer two readers two ways; and "Track this"
 // joined them on 13 Oct (decision 6b), because it declares a move exactly as
 // "Date a move" does. Both refuse before anything is read.
+//
+// AND THE SUBJECT WRITES TAKE THE TENANT LOCK (decision 7, 13 Oct). Naming,
+// confirming and stopping a subject change what is measured, so a locked
+// tenant's own owner or admin (Sealand during its trial) is refused with
+// `SUBJECTS_HELD`, after the role check and before any write, exactly as the
+// catalogue's writes are (lib/actions/products.ts); the platform operator is
+// let through to make the change on the tenant's behalf (`assertTenantMay`,
+// lib/tenant-locks.ts). The lock queues nothing here: the queue holds
+// tracking columns only.
 //
 // Every one of these writes carries an actor into `config_changes`
 // (lib/subjects/moves.ts), written with the service-role client because a log a
@@ -119,10 +129,19 @@ function revalidateSubjects(): void {
  *  editor prints where its controls would have been. */
 const REFUSED: SubjectFormState = { ok: false, message: SUBJECT_WRITE_REFUSED }
 
-/** The session, plus whether this reader may change the measurement. */
-async function manageContext(): Promise<{ ctx: WriteContext; allowed: boolean }> {
-  const { supabase, clientId, userId, email, operator, role } = await getSessionContext()
-  return { ctx: { supabase, clientId, userId, email, operator }, allowed: canManageTenant(role) }
+/** The refusal a locked tenant's owner or admin gets (decision 7). */
+const HELD: SubjectFormState = { ok: false, message: SUBJECTS_HELD }
+
+/** The session, plus whether this reader may change the measurement: the
+ *  role first, then the tenant lock (`assertTenantMay`, `tracking`). The
+ *  refusal is the sentence for whichever said no. */
+async function manageContext(): Promise<{ ctx: WriteContext; refusal: SubjectFormState | null }> {
+  const session = await getSessionContext()
+  const { supabase, clientId, userId, email, operator, role } = session
+  const ctx = { supabase, clientId, userId, email, operator }
+  if (!canManageTenant(role)) return { ctx, refusal: REFUSED }
+  if (!assertTenantMay(session, clientId, 'tracking').ok) return { ctx, refusal: HELD }
+  return { ctx, refusal: null }
 }
 
 /** Name a subject — or rename one, which is an insert and a retirement, never
@@ -139,8 +158,8 @@ export async function nameSubjectAction(
   })
   if (!parsed.success) return { ok: false, message: firstIssue(parsed.error) }
 
-  const { ctx, allowed } = await manageContext()
-  if (!allowed) return REFUSED
+  const { ctx, refusal } = await manageContext()
+  if (refusal) return refusal
   const result = await nameSubject(ctx, createAdminClient(), {
     name: parsed.data.name,
     description: parsed.data.description ?? null,
@@ -154,8 +173,8 @@ export async function nameSubjectAction(
 /** Confirm a subject: the write that starts the counting (decision E). */
 export async function confirmSubjectAction(id: string): Promise<SubjectFormState> {
   if (!uuid.safeParse(id).success) return { ok: false, message: 'Unknown subject.' }
-  const { ctx, allowed } = await manageContext()
-  if (!allowed) return REFUSED
+  const { ctx, refusal } = await manageContext()
+  if (refusal) return refusal
   const result = await activateSubject(ctx, createAdminClient(), { id })
   if (result.ok) revalidateSubjects()
   return { ok: result.ok, message: result.message }
@@ -165,8 +184,8 @@ export async function confirmSubjectAction(id: string): Promise<SubjectFormState
  *  the database freezes them at retirement rather than letting them decay. */
 export async function retireSubjectAction(id: string): Promise<SubjectFormState> {
   if (!uuid.safeParse(id).success) return { ok: false, message: 'Unknown subject.' }
-  const { ctx, allowed } = await manageContext()
-  if (!allowed) return REFUSED
+  const { ctx, refusal } = await manageContext()
+  if (refusal) return refusal
   const result = await retireSubject(ctx, createAdminClient(), { id })
   if (result.ok) revalidateSubjects()
   return { ok: result.ok, message: result.message }

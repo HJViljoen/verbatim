@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { SUBJECTS_NOT_APPLIED } from '@/lib/subjects/moves'
-import { SUBJECT_WRITE_REFUSED } from '@/lib/subjects/types'
+import { SUBJECT_WRITE_REFUSED, SUBJECTS_HELD } from '@/lib/subjects/types'
 import { yourSubjectsView, type YourSubjectsView } from '@/lib/settings/your-subjects'
 import { fixtureSubjectId, subjectsFixtureRows } from './fixture'
 import { YourSubjectsTab } from './index'
@@ -57,6 +57,44 @@ describe('the Your subjects tab', () => {
     expect(t).toContain('Durability')
   })
 
+  // Decision 7 (13 Oct): Sealand's lock holds its subjects as it holds its
+  // searches and its product list. The tab says so before anything is
+  // submitted, and every control is drawn disabled.
+  it('shows a locked tenant\'s owner the lock\'s line and every control disabled, before anything is submitted', () => {
+    const v = yourSubjectsView(subjectsFixtureRows(), true, true)
+    expect(v.locked).toBe(true)
+    const markup = render(<YourSubjectsTab view={v} />)
+    const t = text(v)
+    expect(t).toContain(`A subject is something your market talks about that you chose to follow. ${SUBJECTS_HELD}`)
+    expect(t).not.toContain('Renaming one starts a fresh subject')
+    const buttons = markup.match(/<button[^>]*>/g) ?? []
+    // Add a subject, eight row menus and two Confirms.
+    expect(buttons.length).toBe(11)
+    for (const b of buttons) expect(b, b).toContain('disabled=""')
+    assertCopyContract(markup)
+    expect(markup).not.toContain('—')
+  })
+
+  it('an unlocked owner, and the operator (never locked), get the controls as before', () => {
+    const v = yourSubjectsView(subjectsFixtureRows(), true, false)
+    expect(v.locked).toBe(false)
+    const markup = render(<YourSubjectsTab view={v} />)
+    expect(text(v)).not.toContain(SUBJECTS_HELD)
+    expect((markup.match(/<button[^>]*>/g) ?? []).filter((b) => b.includes('disabled=""'))).toEqual([])
+  })
+
+  it('a member is never "locked": they read the lists and the role\'s sentence, not the lock\'s', () => {
+    const v = yourSubjectsView(subjectsFixtureRows(), false, true)
+    expect(v.locked).toBe(false)
+    expect(text(v)).toContain(SUBJECT_WRITE_REFUSED)
+    expect(text(v)).not.toContain(SUBJECTS_HELD)
+  })
+
+  it('the lock\'s line is calibrated copy: no em dash, no digit', () => {
+    expect(SUBJECTS_HELD).not.toContain('—')
+    expect(SUBJECTS_HELD).not.toMatch(/\d/)
+  })
+
   it('stops offering a new subject at the ceiling', () => {
     const ten = Array.from({ length: 10 }, (_, i) => ({ ...subjectsFixtureRows()[0], id: fixtureSubjectId(i + 1), name: `Subject ${i + 1}` }))
     expect(render(<YourSubjectsTab view={view(true, ten)} />)).toMatch(/<button[^>]*disabled=""[^>]*title="You follow 10 subjects\. Stop one before you add another\."/)
@@ -76,5 +114,7 @@ describe('the Your subjects tab', () => {
     expect(src).not.toContain('redirect(')
     expect(src).toContain('<SettingsFrame active="subjects"')
     expect(src).toContain('YourSubjectsTab')
+    // The route asks the lock the way the actions do (decision 7).
+    expect(src).toContain("assertTenantMay(session, clientId, 'tracking')")
   })
 })

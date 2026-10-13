@@ -1,4 +1,5 @@
 import { ANALYSIS_MODEL } from '../config'
+import { CONTACT_EMAIL } from '../legal'
 
 // Subjects — the shapes, the thresholds, and the one string that decides
 // whether two of a subject's months may be compared (Phase 1 WP4, design items
@@ -543,3 +544,14 @@ export function isMissingSubjects(error: unknown): boolean {
  */
 export const SUBJECT_WRITE_REFUSED =
   'Only an owner or an admin can change what we read your market against.'
+
+/**
+ * What a locked tenant's owner or admin is told (decision 7, 13 Oct): the
+ * tenant lock (lib/tenant-locks.ts, `tracking`; Sealand during its trial)
+ * holds the subjects still, as it holds the searches and the product list.
+ * Printed by Settings › Your subjects in place of the controls' use, before
+ * anything is submitted, and returned by the three subject writes when one is
+ * called anyway. The platform operator is let through and makes the change on
+ * the tenant's behalf. Products' sentence, `PRODUCTS_HELD`, is the model.
+ */
+export const SUBJECTS_HELD = `Your subjects are held still during your trial. Write to ${CONTACT_EMAIL} and we will make the change for you.`
