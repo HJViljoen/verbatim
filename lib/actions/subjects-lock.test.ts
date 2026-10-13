@@ -78,6 +78,10 @@ describe('a locked tenant\'s owner or admin is refused, before anything is read 
         expect(db.calls).toEqual([])
         expect(admin.calls).toEqual([])
       })
+      it('add one with a form that would not parse: the lock\'s sentence, never a form error', async () => {
+        expect(await nameSubjectAction({ ok: false, message: '' }, new FormData())).toEqual({ ok: false, message: SUBJECTS_HELD })
+        expect(db.calls).toEqual([])
+      })
       it('rename one', async () => {
         expect(await nameSubjectAction({ ok: false, message: '' }, nameForm(ACTIVE))).toEqual({ ok: false, message: SUBJECTS_HELD })
         expect(db.calls).toEqual([])
@@ -142,7 +146,10 @@ describe('the write path, read as text', () => {
   const src = readFileSync(join(__dirname, 'subjects.ts'), 'utf8')
   const body = (name: string) => src.slice(src.indexOf(`export async function ${name}(`), src.indexOf('\n}\n', src.indexOf(`export async function ${name}(`)))
 
-  it('every subject write goes through the one gate, and the gate asks the role, then the lock', () => {
+  it('every subject write goes through the one gate, before the form is parsed, and the gate asks the role, then the lock', () => {
+    const name = body('nameSubjectAction')
+    expect(name.indexOf('await manageContext()')).toBeGreaterThan(-1)
+    expect(name.indexOf('await manageContext()')).toBeLessThan(name.indexOf('nameSchema.safeParse('))
     for (const fn of ['nameSubjectAction', 'confirmSubjectAction', 'retireSubjectAction']) {
       expect(body(fn), fn).toMatch(/const \{ ctx, refusal \} = await manageContext\(\)\n\s+if \(refusal\) return refusal/)
     }

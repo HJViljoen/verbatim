@@ -72,6 +72,8 @@ describe('the Your subjects tab', () => {
     // Add a subject, eight row menus and two Confirms.
     expect(buttons.length).toBe(11)
     for (const b of buttons) expect(b, b).toContain('disabled=""')
+    // Add a subject says why it is off.
+    expect(markup).toContain(`title="${SUBJECTS_HELD}"`)
     assertCopyContract(markup)
     expect(markup).not.toContain('—')
   })

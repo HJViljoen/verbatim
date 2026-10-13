@@ -67,6 +67,11 @@ describe('small words', () => {
       expect(whoKey('Child amputee')).not.toBe(whoKey('Amputee child'))
       expect(whoKey('Bilateral amputee')).not.toBe(whoKey('Amputee'))
       expect(whoKey('Amputee interest')).not.toBe(whoKey('Amputee'))
+      // A support group is not support, and news is not new (the fresh check).
+      expect(whoKey('Support group')).not.toBe(whoKey('Support'))
+      expect(whoKey('News')).not.toBe(whoKey('New'))
+      expect(mergeWho([{ label: 'Support group', count: 4 }, { label: 'Support', count: 3 }, { label: 'News', count: 2 }, { label: 'New', count: 1 }])).toHaveLength(4)
+      expect(WHO_FILLER_WORDS.has('group')).toBe(false)
       // Filler alone keeps its words: two different ones stay two.
       expect(mergeWho([{ label: 'Community', count: 3 }, { label: 'Users', count: 2 }])).toHaveLength(2)
       // Singular is simple, and the same on both sides of a comparison:
@@ -93,7 +98,7 @@ describe('small words', () => {
         { label: 'Bilateral amputee', count: 7 },
       ])
       expect(mergeWho(ossur).find((w) => w.label.startsWith('Recent'))).toEqual({ label: 'Recent amputee', count: 4 })
-      expect([...WHO_FILLER_WORDS]).toEqual(expect.arrayContaining(['community', 'user', 'type', 'people', 'person', 'group', 'folk']))
+      expect([...WHO_FILLER_WORDS]).toEqual(expect.arrayContaining(['community', 'user', 'type', 'people', 'person', 'folk']))
     })
   })
 

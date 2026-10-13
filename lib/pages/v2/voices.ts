@@ -615,18 +615,20 @@ export function whoLabel(signal: string): string {
  *  "Amputee users" are both "amputee". Singular forms: a word is singularised
  *  before it is looked up. */
 export const WHO_FILLER_WORDS: ReadonlySet<string> = new Set([
-  'community', 'user', 'type', 'people', 'person', 'group', 'folk',
+  'community', 'user', 'type', 'people', 'person', 'folk',
   'audience', 'member', 'individual', 'identity',
 ])
+// NOT 'group': "Support group" is not "Support" (the fresh check, 13 Oct).
 
 /** How many self-descriptions a group's panel lists (the top three distinct). */
 export const WHO_SHOWN = 3
 
 /** One word, singular, simply: "users" → "user", "families" → "family";
- *  "ss", "us" and "is" endings and short words are left alone. */
+ *  "ss", "us", "is" and "ws" endings and short words are left alone, so
+ *  "news" is never "new". */
 function singular(word: string): string {
   if (word.length > 4 && word.endsWith('ies')) return `${word.slice(0, -3)}y`
-  if (word.length > 3 && word.endsWith('s') && !/(ss|us|is)$/.test(word)) return word.slice(0, -1)
+  if (word.length > 3 && word.endsWith('s') && !/(ss|us|is|ws)$/.test(word)) return word.slice(0, -1)
   return word
 }
 

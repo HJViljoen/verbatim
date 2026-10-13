@@ -85,7 +85,7 @@ export const READING_CARDS: readonly ReadingCard[] = [
       'A tile that cannot be read says so on its own; the rest of the page still draws.',
       // DECISION 3 (13 Oct): both clocks kept, the whole-month tiles labelled
       // (`readingMonthLabel`, lib/reading/month-label.ts).
-      'A week’s figures sit beside the month so far, while who is talking, your products and your moves read a whole month: early in a month that is still the last full month, and those tiles say so.',
+      'A week’s figures sit beside the month so far, while who is talking, your products and your moves read a whole month: early in a month they still read the last full month, and those tiles say so.',
     ],
   },
   {

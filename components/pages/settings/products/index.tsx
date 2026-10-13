@@ -4,7 +4,7 @@ import { Box, Info } from 'lucide-react'
 import { IconTile, SELECTED } from '@/components/colour-roles'
 import { Card } from '@/components/pages/studio/ui'
 import { fmtInt } from '@/lib/format'
-import { inlineMonth } from '@/lib/reading/month-label'
+import { inlineMonth, monthHeading } from '@/lib/reading/month-label'
 import { PRODUCTS_HELD, PRODUCTS_NOT_APPLIED, PRODUCTS_PAGE_OFF, type AliasChip, type OpenCategory, type ProductLine, type ProductSettingsView } from '@/lib/settings/products'
 import { cn } from '@/lib/utils'
 import { ALIAS_CHIP, CHECKED_TAG } from './chip'
@@ -187,7 +187,7 @@ function OpenCategoryCard({ open, view }: { open: OpenCategory; view: ProductSet
             <span role="columnheader">Other names people use</span>
             {/* "This month" only while it is: a reading month that has ended is
                 named (decision 3). */}
-            <span role="columnheader">{view.readingsOn ? (view.monthLabel ? view.monthName : 'This month') : null}</span>
+            <span role="columnheader">{view.readingsOn ? monthHeading(view.monthName, view.monthLabel) : null}</span>
             <span role="columnheader">{view.canEdit ? <span className="sr-only">Edit</span> : null}</span>
           </div>
           <div role="rowgroup">

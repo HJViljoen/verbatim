@@ -852,7 +852,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
   ("48 of 640 videos, 14 Sep to 11 Oct · 35 of 318 in October so far";
   `contentLine`), never "this week". Those months can differ from each
   other, and from the read's own month, for a week that crosses a month or
-  on days 1 to 15 (decision 3, "Two clocks" below: both are kept). Voices'
+  early in a month, before the reading month switches (decision 3, "Two
+  clocks" below: both are kept). Voices'
   and Your products' lines are whole-month readings, so where the tile's
   month is not the current one they carry its label as the tile does ("In
   the most videos in September, the last full month:", `inlineMonth` over
@@ -1008,8 +1009,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
     week lines) sit beside the week's own month ("31 of 318 in October so far"). A
     WHOLE-MONTH reading (Voices, Your products, Your moves' month lines and
     their comparison, Settings › Your products) reads the reading month
-    (`readingMonthFor`; `loadReadingMonth`), which on days 1 to 15 is the
-    month that has just ended. Both are kept. Wherever a whole-month reading
+    (`readingMonthFor`; `loadReadingMonth`), which stays the month that has
+    just ended until the new month is half over, has had two updates and is
+    not thin (a paused workspace keeps the latest month it has rows for).
+    Both are kept. Wherever a whole-month reading
     names a month that is not the current calendar month it says so in ONE
     helper's words, `readingMonthLabel(month, now)` (`lib/reading/month-label.ts`:
     "the last full month", "an earlier month" for an older one, null for the
@@ -1237,7 +1240,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
     `recommendations` UPDATE) with ones that keep the tenant and actor pins
     and add `get_my_role()` owner or admin, or `is_superadmin()`; no grant
     or read changes, the service role untouched
-    (`scripts/pg-shim/moves-role-gate-checks.sql`). Until then a member's
+    (`scripts/pg-shim/moves-role-gate-checks.sql`; the undo, proved to give
+    back the catalogue line for line, is `moves-role-gate-undo.sql` beside
+    it). The rows are written on the session client, so for a tenant's own
+    session the policy is the boundary; an operator viewing a tenant writes
+    with the service role, where `mayDecideMoves` is the only gate. Until then a member's
     own JWT can still write those four through PostgREST. A move reads the
     market from `MOVE_MONTHS_BEFORE` (2) months before it to the reading
     month, and its one comparison goes through `pairedVerdict` under the

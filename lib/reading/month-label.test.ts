@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { DIRECTION_WORDS } from '../calibration'
-import { barMonth, EARLIER_MONTH, inlineMonth, LAST_FULL_MONTH, readingMonthLabel } from './month-label'
+import { barMonth, EARLIER_MONTH, inlineMonth, LAST_FULL_MONTH, monthHeading, readingMonthLabel, THIS_MONTH } from './month-label'
 import { readingMonthFor } from './reading-month'
 
 // Decision 3 (13 Oct): keep both clocks, and label a whole-month reading that
@@ -35,7 +35,7 @@ describe('readingMonthLabel', () => {
     expect(readingMonthLabel('2026-10-01', '2026-11-01T00:30:00.000Z')).toBe(LAST_FULL_MONTH)
   })
 
-  it('agrees with the reading month: on days 1 to 15 it labels, from the switch on it does not', () => {
+  it('agrees with the reading month: before the switch it labels, from the switch on it does not', () => {
     // Sealand's calendar (Sunday updates): September leads to 15 Oct, October
     // so far from 16 Oct (lib/reading/reading-month.ts).
     const updates = ['2026-09-27T07:00:00.000Z', '2026-10-04T07:00:00.000Z', '2026-10-11T07:00:00.000Z']
@@ -55,6 +55,11 @@ describe('the two places a label is written', () => {
     expect(barMonth('September', LAST_FULL_MONTH)).toBe('September · the last full month')
     expect(barMonth('October so far', null)).toBe('October so far')
     expect(barMonth('October so far', undefined)).toBe('October so far')
+  })
+
+  it('a column of the month\'s counts: "This month" while it is, the month\'s name once it is not', () => {
+    expect(monthHeading('October', null)).toBe(THIS_MONTH)
+    expect(monthHeading('September', LAST_FULL_MONTH)).toBe('September')
   })
 
   it('a sentence: "September, the last full month"', () => {

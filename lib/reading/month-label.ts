@@ -7,8 +7,9 @@ import { monthStartOf, prevMonth } from './month-key'
 //     beside the week's own month: "31 of 318 in October so far";
 //   · a WHOLE-MONTH reading (Voices, Your products, Your moves' months and
 //     their comparison, Settings › Your products) reads the reading month
-//     (`readingMonthFor`, lib/reading/reading-month.ts), which on days 1 to
-//     15 is still the month that has just ended.
+//     (`readingMonthFor`, lib/reading/reading-month.ts), which stays the
+//     month that has just ended until the new month is half over, has had
+//     two updates and is not thin.
 // So on 13 October one Dashboard shows October beside September. Both are
 // right; unlabelled, the pair reads as a mistake. Wherever a whole-month
 // reading names a month that is not the current calendar month, it says so
@@ -49,3 +50,9 @@ export const barMonth = (words: string, label: string | null | undefined): strin
  *  alone where there is no label. */
 export const inlineMonth = (words: string, label: string | null | undefined): string =>
   label ? `${words}, ${label}` : words
+
+/** What a column of the month's counts is headed: "This month" only while
+ *  it is (no label); the month's name once it is not ("September"). */
+export const THIS_MONTH = 'This month'
+export const monthHeading = (name: string, label: string | null | undefined): string =>
+  label ? name : THIS_MONTH

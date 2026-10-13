@@ -14,6 +14,7 @@ import {
 } from '@/lib/actions/subjects'
 import { EMPTY_STATE } from '@/lib/subjects/form-state'
 import { SUBJECTS_MAX } from '@/lib/subjects/types'
+import { SUBJECTS_HELD } from '@/lib/tenant-locks'
 
 // The subjects editor, moved in from Settings (pages rebuild, 1 Oct;
 // Page-Subjects.dc.html): add, rename and stop lived on the Subjects page, on
@@ -100,7 +101,7 @@ export function AddSubjectButton({ activeCount, locked = false }: { activeCount:
         type="button"
         onClick={() => setOpen(true)}
         disabled={atCeiling || locked}
-        title={atCeiling ? `You follow ${SUBJECTS_MAX} subjects. Stop one before you add another.` : undefined}
+        title={locked ? SUBJECTS_HELD : atCeiling ? `You follow ${SUBJECTS_MAX} subjects. Stop one before you add another.` : undefined}
         className={`${OUTLINE_BUTTON} h-10 px-4 text-[14px]`}
       >
         <Plus className="size-4" aria-hidden />

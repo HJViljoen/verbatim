@@ -34,10 +34,18 @@
 -- so the pipeline, the operator and the scripts write as before.
 --
 -- WHY THE APP KEEPS WORKING. Every app write to these tables is made after
--- `mayDecideMoves` on the session client (lib/actions/accept-advice.ts,
--- rec-status.ts, date-move.ts, and setMoveStatusAction / trackSubjectAction in
--- lib/actions/subjects.ts), so an owner's or an admin's write passes the new
--- policy, and a member's is refused by the app before it reaches here. An
+-- `mayDecideMoves` (lib/actions/accept-advice.ts, rec-status.ts, date-move.ts,
+-- and setMoveStatusAction / trackSubjectAction in lib/actions/subjects.ts),
+-- so a member's is refused by the app before it reaches here, and an owner's
+-- or an admin's passes the new policy. WHICH CLIENT WRITES THE ROW (checked
+-- against the code, 13 Oct): the moves, decision and recommendation rows go
+-- out on the SESSION client (`ctx.supabase` in lib/subjects/moves.ts
+-- declareMove and setMoveStatus, `supabase` in rec-status.ts), so for a
+-- tenant's own session this policy is the boundary under `mayDecideMoves`;
+-- the `createAdminClient()` those two actions pass writes only the
+-- `config_changes` log row. An operator viewing another tenant arrives with
+-- the service role as the session client (lib/auth.ts applyOperatorView), so
+-- there `mayDecideMoves` is the only gate, as it was before this file. An
 -- UPDATE the policy filters out comes back as zero rows (setMoveStatus reads
 -- `select('id')` and says so), an INSERT it refuses as 42501.
 --
@@ -52,9 +60,14 @@
 -- through, and every read unchanged). No BEGIN/COMMIT, no CONCURRENTLY: the
 -- runner wraps the file in one transaction.
 --
--- UNDO (only if a write a member must make turns up): re-create the four old
--- policies from the files named above, by their old names, and drop the four
--- below.
+-- UNDO (only if a write a member must make turns up):
+-- scripts/pg-shim/moves-role-gate-undo.sql drops the four policies below and
+-- re-creates the four old ones by their old names, exactly as the catalogue
+-- held them; applied after this file on a throwaway cluster it gives back the
+-- catalogue as it was before, line for line. Run it through the same runner
+-- path (a psql on the session pooler, one transaction) and record nothing in
+-- the history: the version stays applied in name only until this file runs
+-- again.
 
 -- moves: declaring a move ("Date a move", "Track this", Accept) ---------------
 drop policy if exists "Members declare their own moves" on public.moves;

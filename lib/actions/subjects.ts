@@ -150,6 +150,10 @@ export async function nameSubjectAction(
   _prev: SubjectFormState,
   form: FormData,
 ): Promise<SubjectFormState> {
+  // The role and the lock first (decision 7): a locked owner is told the
+  // subjects are held, never a form error.
+  const { ctx, refusal } = await manageContext()
+  if (refusal) return refusal
   const parsed = nameSchema.safeParse({
     name: String(form.get('name') ?? ''),
     description: blankToUndefined(form.get('description')),
@@ -157,9 +161,6 @@ export async function nameSubjectAction(
     supersedes: blankToUndefined(form.get('supersedes')),
   })
   if (!parsed.success) return { ok: false, message: firstIssue(parsed.error) }
-
-  const { ctx, refusal } = await manageContext()
-  if (refusal) return refusal
   const result = await nameSubject(ctx, createAdminClient(), {
     name: parsed.data.name,
     description: parsed.data.description ?? null,

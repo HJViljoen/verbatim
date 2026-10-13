@@ -83,7 +83,8 @@ export const TILE_FAILED = 'This could not be read just now.'
 /**
  * The month a whole-month tile reads, under its head, where that month is
  * not the current calendar month: "September · the last full month"
- * (decision 3; the words are `readingMonthLabel`'s). On days 1 to 15 Market
+ * (decision 3; the words are `readingMonthLabel`'s). Until the new month is
+ * half over, has had two updates and is not thin (`readingMonthFor`), Market
  * and the week tile read the week's own month ("in October so far") while
  * Voices, Your products and Your moves read the month that has just ended;
  * this line is what makes one Dashboard showing both read as meant. Nothing
