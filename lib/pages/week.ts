@@ -1671,7 +1671,9 @@ interface RunRow {
   window_basis?: string | null
 }
 
-interface CheckRow {
+/** An `anomaly_checks` row as §1 reads it (exported for Market's flag card,
+ *  depth v2 T3, which reads the same record through `loadCheck`). */
+export interface CheckRow {
   run_id: string
   week_start: string | null
   week_end: string | null
@@ -1685,7 +1687,8 @@ interface CheckRow {
   median_videos: number | null
 }
 
-interface FlagRow {
+/** An `anomaly_flags` row as §1 reads it. */
+export interface FlagRow {
   run_id: string
   object_kind: string
   object_id: string
@@ -2360,7 +2363,7 @@ async function buildUnusual(input: {
     return { ...common, state: 'unreadable', flaggedCount: check.flagged_count ?? 0 }
   }
 
-  const rowsIn = [...flags].sort((a, b) => a.rank - b.rank)
+  const rowsIn = raisedFlags(check, flags)
   const built = await Promise.all(rowsIn.map((f) => buildFlag(input.supabase, input.clientId, f)))
   return {
     ...common,
@@ -2370,9 +2373,22 @@ async function buildUnusual(input: {
   }
 }
 
-async function buildFlag(supabase: SupabaseClient, clientId: string, f: FlagRow): Promise<UnusualFlag> {
-  const refs = refsOf(f.quote_refs)
-  const quotes = await resolveRefs(supabase, clientId, refs.slice(0, 2))
+/**
+ * THE FLAGS AN UPDATE RAISED, the week's first: the rows of a check that
+ * fired, in rank order (rank 1 is the flag the check put first), or none where
+ * the check did not fire, said nothing, or its flags could not be read. The
+ * ONE rule for which flag is the week's: §1 prints these, and Market's flag
+ * card (depth v2, T3, lib/pages/v2/market.ts) leads with the first. Pure.
+ */
+export function raisedFlags(check: CheckRow | null | undefined, flags: readonly FlagRow[] | null): FlagRow[] {
+  if (!check || flags == null || flags.length === 0) return []
+  if (['suppressed', 'no_window', 'missing_migration', 'nothing_unusual'].includes(check.outcome)) return []
+  return [...flags].sort((a, b) => a.rank - b.rank)
+}
+
+/** One flag row in §1's shape, without its quotes (`buildFlag` resolves
+ *  those). Pure. */
+export function unusualFlagOf(f: FlagRow): Omit<UnusualFlag, 'quotes'> {
   return {
     objectKind: f.object_kind,
     objectId: f.object_id,
@@ -2387,9 +2403,14 @@ async function buildFlag(supabase: SupabaseClient, clientId: string, f: FlagRow)
     bandPts: Number(f.band_pts),
     sentences: f.explanation?.sentences ?? [],
     explanationModel: f.explanation_model,
-    quotes,
     rank: f.rank,
   }
+}
+
+async function buildFlag(supabase: SupabaseClient, clientId: string, f: FlagRow): Promise<UnusualFlag> {
+  const refs = refsOf(f.quote_refs)
+  const quotes = await resolveRefs(supabase, clientId, refs.slice(0, 2))
+  return { ...unusualFlagOf(f), quotes }
 }
 
 /**
@@ -3392,7 +3413,7 @@ async function loadOwnedRivalAudiences(supabase: SupabaseClient, clientId: strin
  *  installed here; `null` means it is and this update has no row — two
  *  different silences, and §1 prints them the same way only because both mean
  *  "nobody has looked at this update yet". */
-async function loadCheck(supabase: SupabaseClient, clientId: string, runId: string): Promise<CheckRow | null | undefined> {
+export async function loadCheck(supabase: SupabaseClient, clientId: string, runId: string): Promise<CheckRow | null | undefined> {
   try {
     const res = await supabase
       .from('anomaly_checks')
@@ -3413,7 +3434,7 @@ async function loadCheck(supabase: SupabaseClient, clientId: string, runId: stri
  *  not installed, or the read was refused — and never "there were none": a
  *  check row that says `flagged` beside an empty list is a record disagreeing
  *  with itself, and §1 says so rather than reading it as silence. */
-async function loadFlags(supabase: SupabaseClient, clientId: string, runId: string): Promise<FlagRow[] | null> {
+export async function loadFlags(supabase: SupabaseClient, clientId: string, runId: string): Promise<FlagRow[] | null> {
   try {
     return await selectAll<FlagRow>(() =>
       supabase.from('anomaly_flags').select('*')
