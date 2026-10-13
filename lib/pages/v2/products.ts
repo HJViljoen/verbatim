@@ -588,8 +588,10 @@ export function categoryShareVerdict(input: {
   const verdict = monthChange({
     object: { kind: 'product', id: input.group.id, label: input.group.name },
     audience: 'market',
-    curr: { month: m, videos: curr.n, k: curr.k_any, audience: 'market' },
-    prev: { month: before, videos: prev?.n ?? null, k: prev?.k_any ?? null, audience: 'market' },
+    // No clustering: a placement is the catalogue's, never a theme's (the
+    // catalogue's own version is checked below).
+    curr: { month: m, videos: curr.n, k: curr.k_any, audience: 'market', regime: 'n/a' },
+    prev: { month: before, videos: prev?.n ?? null, k: prev?.k_any ?? null, audience: 'market', regime: 'n/a' },
     // The market view: a category's share of the market moves with what we
     // search and read, as the market's own month does.
     comparability: input.pair ? input.pair(before, m, 'market') : null,
@@ -885,13 +887,18 @@ export const UNCLEAR_ALL = 30
 /** Quotes in a product's panel. */
 export const PRODUCT_QUOTES = 3
 
-/** The shelf's columns at its widest (`CatalogueShelf`, xl: five). */
-const SHELF_COLUMNS = 5
+/** The shelf's columns at its widest: the kit's five (the board's five
+ *  categories), six where the catalogue has six (Össur's: Hands joined), so
+ *  no category wraps alone onto a second row. More than six wrap. */
+export function shelfColumns(categories: number): 5 | 6 {
+  return categories >= 6 ? 6 : 5
+}
 
 /** The notch's place under a category's column at the shelf's widest. */
 export function notchFor(groups: readonly { id: string }[], groupId: string): number {
+  const cols = shelfColumns(groups.length)
   const i = Math.max(0, groups.findIndex((g) => g.id === groupId))
-  return (((i % SHELF_COLUMNS) + 0.5) / SHELF_COLUMNS)
+  return (((i % cols) + 0.5) / cols)
 }
 
 /** A month line: up to LINE_MONTHS months that hold a row for the object,
@@ -1040,7 +1047,7 @@ export function unclearLines(texts: readonly TextRead[], clientId: string, limit
       continue
     }
     if (!quoteGate(gateInputOf(t), gate).ok) { withheld++; continue }
-    lines.push({ key: t.key, videoId: t.videoId, commentId: t.commentId, quote: { text: t.text, english: t.english, lang: t.lang }, cite: citeOf({ ...t, account: null }), watchHref: link.href })
+    lines.push({ key: t.key, videoId: t.videoId, commentId: t.commentId, quote: { text: t.text, english: t.english, lang: t.lang }, cite: citeOf(t), watchHref: link.href })
   }
   return { lines: lines.slice(0, limit), more: Math.max(0, lines.length - limit), withheld }
 }

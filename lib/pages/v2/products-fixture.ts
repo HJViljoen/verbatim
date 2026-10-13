@@ -87,7 +87,7 @@ const SPECS: Record<(typeof MONTHS)[number], MonthSpec> = {
     market: 612, rival: 52,
     groups: {
       Liners: { named: { 'Iceross Seal-In X': 6, 'Iceross Comfort': 4, 'Iceross Synergy': 2 }, unclear: 12, unbranded: 49 },
-      Feet: { named: { 'Flex-Foot Cheetah': 8, 'Pro-Flex XC': 5, 'Pro-Flex Terra': 2 }, unclear: 8, unbranded: 37 },
+      Feet: { named: { 'Flex-Foot Cheetah': 8, 'Pro-Flex XC': 5, 'Pro-Flex Terra': 2, 'Proprio Foot': 1 }, unclear: 8, unbranded: 36 },
       Knees: { named: { 'Rheo Knee': 6, 'Power Knee': 3 }, unclear: 5, unbranded: 27 },
       'Sockets & Locks': { named: { 'Connect TF': 1 }, unclear: 1, unbranded: 6 },
       Hands: { named: { 'i-Limb Quantum': 3, 'i-Limb Ultra': 1 }, unclear: 4, unbranded: 46 },
@@ -245,7 +245,6 @@ const BASE = (over: Partial<ProductsInput> = {}): ProductsInput => ({
   pair: ACCEPT_PAIRS,
   params: {},
   canTag: true,
-  filling: (m) => m === SEP,
   ...over,
 })
 
