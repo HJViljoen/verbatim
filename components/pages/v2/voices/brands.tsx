@@ -237,6 +237,7 @@ export function BrandPanelView({ panel, monthWords }: { panel: BrandPanel; month
       {panel.tooFew ? (
         <p className="m-0 text-[14px] leading-[1.5] text-muted-foreground">No video named {panel.label} without being asked in {monthWords}: too few to say how people treat it.</p>
       ) : null}
+      {(panel.named && !panel.tooFew) || panel.kinds.length > 0 ? (
       <StatRow>
         {panel.named && !panel.tooFew ? (
           <StatCell value={panel.named.k} of={panel.named.n} label="videos named it without being asked">
@@ -250,6 +251,7 @@ export function BrandPanelView({ panel, monthWords }: { panel: BrandPanel; month
         {praised ? <StatCell value={praised.k} of={praised.n} label="videos naming it, where people praised something" /> : null}
         {complained ? <StatCell value={complained.k} of={complained.n} label="videos naming it, where people complained about something" /> : null}
       </StatRow>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-7 md:grid-cols-3">
         {panel.kinds.length > 0 ? (

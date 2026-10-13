@@ -63,6 +63,8 @@ describe('a brand\'s panel', () => {
     expect(text).toContain('Asked under its content, 3 Jul to 30 Sep Insurance refusals for powered knees 7 videos')
     expect(text).toContain('Said about Ottobock, 3 Jul to 30 Sep')
     expect(text).not.toMatch(/named it without being asked|named it at all/)
+    // No empty stats row where nothing is counted.
+    expect(render(node)).not.toContain('xl:grid-cols-4')
     assertCopyContract(node)
   })
 
