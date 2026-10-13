@@ -1,11 +1,12 @@
 import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../../config'
 import type { PostIdeaCover, PostIdeaLength, PostIdeaRow } from '../../post-ideas/types'
 import { printsMedicalLine } from '../../post-ideas/medical'
+import { ideasReadWindow } from '../../post-ideas/select'
 import { summariseOwnedPosts, type OwnedPosts } from '../../reading/owned'
 import type { Verdict } from '../../reading/verdicts'
 import type { ReplyRow } from '../week'
 import {
-  agentHref, askedBlock, conversationHref, contentWeek, daysPhrase, ideaOwnedFrom, ideasWeekOf, weekPhrase, flagVerdict, groupsByConversation, ideaCard, mixSentence,
+  agentHref, askedBlock, conversationHref, contentWeek, daysPhrase, ideaOwnedFrom, ideasReadOf, ideasWeekOf, flagVerdict, groupsByConversation, ideaCard, mixSentence,
   newVerdict, postsBlock, repliesView, storedPersonas, subquestionRows, wordsToBorrow, worksBasis,
   type AskedBlock, type ContentMonth, type ContentOpen, type ContentPageData, type ContentPeriod, type IdeaCard,
   type IdeaPanel, type IdeasWeek, type MarketVideoCard, type PanelQuote, type PostsBlock, type WorksBlock, type WorksRow,
@@ -29,6 +30,8 @@ import {
 
 const RUN = 'r0000000-0000-4000-8000-000000000001'
 const WINDOW = { from: '2026-10-04T04:03:00.000Z', to: '2026-10-11T04:02:00.000Z' }
+/** The four weeks the ideas read, ending where the run's window ends. */
+const READ = ideasReadWindow(WINDOW)
 const ID = (n: number) => `c${String(n).padStart(7, '0')}-0000-4000-8000-000000000000`
 const VID = (n: number) => `v${String(n).padStart(7, '0')}-0000-4000-8000-000000000000`
 const ids = (from: number, n: number, f = ID) => Array.from({ length: n }, (_, i) => f(from + i))
@@ -55,6 +58,9 @@ const idea = (over: Partial<PostIdeaRow> & Pick<PostIdeaRow, 'rank' | 'registry_
   run_id: RUN,
   window_start: WINDOW.from,
   window_end: WINDOW.to,
+  // The four weeks the ideas read (`ideasReadWindow`): 14 Sep to 11 Oct.
+  read_start: READ.from,
+  read_end: READ.to,
   cover: { text: '' },
   subquestions: [],
   format: null,
@@ -289,15 +295,20 @@ const INSURANCE_FLAG: Verdict = flagVerdict({
   week_k: 19, week_n: 241, baseline_k: 39, baseline_n: 1906, change_pts: 5.8, band_pts: 3.6,
 }, WINDOW)
 
+/** The ideas' four weeks (14 Sep to 11 Oct): each idea's videos over all of
+ *  them (distinct videos, so fewer than the weeks' sum), and the market's. */
+const READ_COUNTS = new Map([[REG.liner, 48], [REG.insurance, 33], [REG.water, 8]])
+const READ_MARKET = 640
+/** The first of the four weeks (14 Sep); the other three are W1, W2 and the
+ *  page's week. */
+const W0 = new Map([[REG.liner, 6], [REG.insurance, 4], [REG.water, 0]])
+
 export function ideaCards(clientId = OSSUR_CLIENT_ID): IdeaCard[] {
   const groups = groupsByConversation(OSSUR_PERSONAS)
-  const week = (id: string) => ({ k: WEEK_COUNTS.get(id) ?? 0, n: 241 })
+  const read = (id: string) => ({ k: READ_COUNTS.get(id) ?? 0, n: READ_MARKET })
   const month = (id: string) => ({ k: MONTH_COUNTS.get(id) ?? 0, n: 318 })
-  const weeks = (id: string) => [
-    { label: '21 Sep', count: W1.get(id) ?? 0 },
-    { label: '28 Sep', count: W2.get(id) ?? 0 },
-    { label: '5 Oct', count: WEEK_COUNTS.get(id) ?? 0 },
-  ]
+  const labels = ideasReadOf(OSSUR_IDEAS[0])!.weeks!.map((w) => w.label)
+  const weeks = (id: string) => [W0, W1, W2, WEEK_COUNTS].map((m, i) => ({ label: labels[i], count: m.get(id) ?? 0 }))
   const subjects: Record<string, { id: string; name: string }> = {
     [REG.liner]: { id: 's-fit', name: 'Fit & comfort' },
     [REG.insurance]: { id: 's-cost', name: 'Cost & access' },
@@ -306,7 +317,7 @@ export function ideaCards(clientId = OSSUR_CLIENT_ID): IdeaCard[] {
   return OSSUR_IDEAS.map((i) => ideaCard({
     idea: i,
     label: ASKED_LABELS.find((l) => l.registryId === i.registry_id)?.label ?? null,
-    week: week(i.registry_id),
+    read: read(i.registry_id),
     month: month(i.registry_id),
     weeks: weeks(i.registry_id),
     flag: i.registry_id === REG.insurance ? INSURANCE_FLAG : i.registry_id === REG.water ? newVerdict(REG.water, 'Getting a prosthetic leg wet', OCT, month(REG.water)) : null,
@@ -334,11 +345,15 @@ const QUOTES: PanelQuote[] = [
 const OLDER_RUN = 'r0000000-0000-4000-8000-000000000000'
 const OLDER_WINDOW = { from: '2026-09-20T04:03:00.000Z', to: '2026-09-27T04:02:00.000Z' }
 
-/** The ideas' own week: this page's (`current`), or two weeks before. */
+/** The ideas' own week: this page's (`current`), or two weeks before; and
+ *  the four weeks each read. */
 export function ideasWeekFixture(older = false): IdeasWeek {
   if (!older) return ideasWeekOf(OSSUR_IDEAS, contentWeek(RUN, WINDOW))!
-  const w = contentWeek(OLDER_RUN, OLDER_WINDOW)!
-  return { runId: OLDER_RUN, label: w.label, phrase: weekPhrase(w), current: false }
+  // The same ideas, written two weeks before: their own week and four weeks,
+  // and so their own month (August in full: their four weeks began in it).
+  const read = ideasReadWindow(OLDER_WINDOW)
+  const rows = OSSUR_IDEAS.map((i) => ({ ...i, run_id: OLDER_RUN, window_start: OLDER_WINDOW.from, window_end: OLDER_WINDOW.to, read_start: read.from, read_end: read.to }))
+  return ideasWeekOf(rows, contentWeek(RUN, WINDOW))!
 }
 
 export function ideaPanelFixture(rank: 1 | 2 | 3 = 1, clientId = OSSUR_CLIENT_ID, older = false): IdeaPanel {

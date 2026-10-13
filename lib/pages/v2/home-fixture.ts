@@ -3,7 +3,7 @@ import { readingMonthLabel } from '../../reading/month-label'
 import type { PublishedWeekRead } from '../../written/published'
 import type { StandingFact, WeekReadDataV2 } from '../../written/types'
 import { homeWeeksFrame } from '../home'
-import { contentHref, IDEAS_EMPTY, recipe, topContentEmpty, type IdeasState, type TopContent } from './content'
+import { contentHref, IDEAS_EMPTY, ideasReadOf, recipe, topContentEmpty, type IdeasState, type TopContent } from './content'
 import {
   agentTries, weekSubjectsOf, weekTileOf, type DashboardData, type MarketTile, type TileRead, type TopProducts,
 } from './home'
@@ -143,15 +143,25 @@ export function fixtureContentTop(state: IdeasState | 'older' = 'ready', opts: {
     idea: {
       rank: 1,
       title: 'How long a liner lasts, and when it is time to replace one',
-      week: { k: 23, n: 241 },
-      month: { k: 35, n: 318 },
-      weekLabel: '5 to 11 Oct',
-      monthWords: 'in October so far',
+      read: { k: 48, n: 640 },
+      month: older ? { k: 64, n: 839 } : { k: 35, n: 318 },
+      monthWords: older ? 'in September' : 'in October so far',
       format: recipe('tutorial', 2.1, 'format'),
       opening: recipe('question', 1.8, 'opening'),
       own: { state: 'none', touched: 0, posts: 25, since: '2026-08-01' },
       medical: opts.medical ?? true,
-      ideasWeek: { runId: older ? 'run-2026-10-04' : 'run-2026-10-11', label: older ? '28 Sep to 4 Oct' : '5 to 11 Oct', phrase: 'the week of 28 Sep', current: !older },
+      ideasWeek: {
+        runId: older ? 'run-2026-10-04' : 'run-2026-10-11', label: older ? '28 Sep to 4 Oct' : '5 to 11 Oct', phrase: 'the week of 28 Sep', current: !older,
+        // The four weeks the ideas read (`ideasReadWindow`).
+        read: ideasReadOf(older
+          ? { read_start: '2026-09-06T04:02:00.000Z', read_end: '2026-10-04T04:02:00.000Z' }
+          : { read_start: '2026-09-13T04:02:00.000Z', read_end: '2026-10-11T04:02:00.000Z' })!,
+        // The month the figure sits beside: the page's for this week's ideas,
+        // an older set's own read window's (September in full).
+        month: older
+          ? { month: '2026-09-01', complete: true, from: '2026-09-01T00:00:00.000Z', to: '2026-10-01T00:00:00.000Z' }
+          : { month: '2026-10-01', complete: false, from: '2026-10-01T00:00:00.000Z', to: '2026-10-11T04:02:00.000Z' },
+      },
     },
     href: contentHref({ period: 'week', open: { kind: 'idea', rank: 1 }, asked: false }),
     line: older ? 'No new ideas this week. These are from the week of 28 Sep.' : null,

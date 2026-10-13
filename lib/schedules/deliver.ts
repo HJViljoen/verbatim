@@ -25,6 +25,7 @@ import { renderQuarterlyEmail } from '../email/quarterly'
 import { isWeeklyReadData } from '../reports/weekly-read-build'
 import { monthsPhrase } from '../written/month'
 import { isLongRunData, loadWeekRead } from '../written/store'
+import { MARKET_LONG_RUN_ANCHOR, marketMonthHref } from '../nav'
 import type { LongRunReadData } from '../written/types'
 import { renderWeeklyReadEmail } from '../email/weekly-read'
 import type { ReportSnapshotData } from '../reports/types'
@@ -71,30 +72,39 @@ const EMAIL_FAILED = 'email not sent, provider not configured or the send failed
 
 /** The month's long-run read as the operator's review email shows it (fresh
  *  review B1): its title, lead and every idea's headline and sentences, as
- *  stored. Null where it holds nothing to print. Pure. */
-export function alsoPublishedOf(read: LongRunReadData): AlsoPublished | null {
+ *  stored, and the address of Market › This month for its month, where the
+ *  client sees it below the month's data (Heinrich, 13 Oct; `baseUrl` the
+ *  app's). Null where it holds nothing to print, which is also where This
+ *  month draws no section (`marketLongRunOf`). Pure. */
+export function alsoPublishedOf(read: LongRunReadData, baseUrl: string): AlsoPublished | null {
   const ideas = read.ideas
     .filter((idea) => (idea.headline ?? '').trim())
     .map((idea) => ({ headline: idea.headline.trim(), body: (idea.body ?? []).map((p) => p.trim()).filter(Boolean) }))
   if (ideas.length === 0) return null
-  return { title: `What holds across ${monthsPhrase(read.months)}`, inShort: (read.inShort ?? '').trim(), ideas }
+  return {
+    title: `What holds across ${monthsPhrase(read.months)}`,
+    inShort: (read.inShort ?? '').trim(),
+    ideas,
+    href: `${baseUrl}${marketMonthHref(read.month, MARKET_LONG_RUN_ANCHOR)}`,
+  }
 }
 
 /**
  * WHAT THE RUN ALSO WROTE (fresh review B1, 1 Oct evening; 5 Oct). The run
  * that closes a month writes the month's long-run read beside its week read.
- * Your market printed it until Design v2 retired that page; no routed page
- * reads it now (where it lives next is Heinrich's call), and the Studio does
- * not show it, so the operator's review email for that run carries it, for
- * Heinrich to read, under a heading that names no page. Null where the run
- * wrote none that prints (every other week); `unread` where it could not be
- * read, so the email says so rather than leave it out.
+ * The client reads it on Market › This month, for its month, below the
+ * month's data, as soon as it is written (Heinrich, 13 Oct; the published
+ * read, lib/written/published.ts). The Studio does not show it, so the
+ * operator's review email for that run carries it, for Heinrich to read, and
+ * links to it there. Null where the run wrote none that prints (every other
+ * week); `unread` where it could not be read, so the email says so rather
+ * than leave it out.
  */
-async function loadAlsoPublished(admin: SupabaseClient, clientId: string, runId: string): Promise<AlsoPublished | null> {
+async function loadAlsoPublished(admin: SupabaseClient, clientId: string, runId: string, baseUrl: string): Promise<AlsoPublished | null> {
   try {
     const row = await loadWeekRead(admin, { clientId, runId, kind: 'month' })
     if (!row || row.status !== 'ready' || !isLongRunData(row.data)) return null
-    return alsoPublishedOf(row.data)
+    return alsoPublishedOf(row.data, baseUrl)
   } catch (e) {
     console.error(`[deliver] the long-run read of run ${runId} could not be read into the review email: ${e instanceof Error ? e.message : String(e)}`)
     return { unread: true }
@@ -160,10 +170,10 @@ export async function readyForReview(
   // `reports` row) under `schedule:<id>`, which is where its Send button is.
   const item = reportId ?? (schedule && sendsArtefact(schedule) ? `schedule:${schedule.id}` : null)
   // The OPERATOR's email for a weekly read: the long-run read this run also
-  // wrote, on Your market already, where it wrote one. The client's email is
-  // unchanged.
+  // wrote, on Market › This month already, where it wrote one. The client's
+  // email is unchanged.
   const alsoPublished = reviewers.audience === 'operator' && isWeeklyReadData(data)
-    ? await loadAlsoPublished(admin, row.client_id, data.runId)
+    ? await loadAlsoPublished(admin, row.client_id, data.runId, a.baseUrl)
     : null
   const { sent } = await sendReviewEmail({
     to: reviewers.to,

@@ -345,7 +345,8 @@ describe('the products migration: the pinned shapes', () => {
     post_ideas: [
       'id uuid not null', 'client_id uuid not null → clients on delete cascade',
       'run_id uuid not null → pipeline_runs on delete cascade', 'window_start timestamptz not null',
-      'window_end timestamptz not null', 'rank smallint not null', 'registry_id uuid not null → theme_registry on delete cascade',
+      'window_end timestamptz not null', 'read_start timestamptz not null', 'read_end timestamptz not null',
+      'rank smallint not null', 'registry_id uuid not null → theme_registry on delete cascade',
       'title text not null', 'cover jsonb not null', 'subquestions jsonb not null', 'format text', 'format_multiple numeric',
       'opening text', 'opening_multiple numeric', 'model text not null', 'prompt_version text not null',
       'created_at timestamptz not null',

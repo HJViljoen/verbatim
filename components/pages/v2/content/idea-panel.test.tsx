@@ -12,7 +12,7 @@ const renderText = (node: Parameters<typeof rawText>[0]): string => rawText(node
 
 const STATE: ContentState = { period: 'week', open: { kind: 'idea', rank: 1 }, asked: false }
 const panel = (rank: 1 | 2 | 3 = 1, clientId?: string) => (
-  <IdeaPanelView panel={ideaPanelFixture(rank, clientId)} state={{ ...STATE, open: { kind: 'idea', rank } }} count={3} month={OCT} weekWord="this week" />
+  <IdeaPanelView panel={ideaPanelFixture(rank, clientId)} state={{ ...STATE, open: { kind: 'idea', rank } }} count={3} month={OCT} />
 )
 
 describe('A post idea, opened in place', () => {
@@ -26,15 +26,17 @@ describe('A post idea, opened in place', () => {
     assertCopyContract(panel(2))
   })
 
-  it('states the week, the month beside it, the three weeks as counts and your posts, as levels where they are levels', () => {
+  it('states the four weeks the ideas read, the month beside them, each week as a count and your posts, as levels where they are levels', () => {
     const levels = copyNodes(render(panel(1))).filter((n) => n.kind === 'level').map((n) => n.text)
     expect(levels).toEqual([
-      '23 of 241 videos in your market this week where it came up',
+      '48 of 640 videos in your market where it came up, 14 Sep to 11 Oct',
       '31 of 318 videos in October so far',
       '0 of 13 posts of yours since August touched on it',
     ])
     const text = renderText(panel(1))
-    expect(text).toContain('9 · 14 · 23 videos a week, the weeks of 21 Sep, 28 Sep, 5 Oct')
+    // Four bare counts, one a week the ideas read, with no word (decision 1).
+    expect(text).toContain('6 · 9 · 14 · 23 videos a week, the weeks of 14 Sep, 21 Sep, 28 Sep, 5 Oct')
+    expect(text).not.toMatch(/this week where it came up|Rising|trend/i)
     expect(text).not.toMatch(/new amputees in their first year/)
   })
 
@@ -86,30 +88,31 @@ describe('A post idea, opened in place', () => {
     expect(m).toContain(`href="/dashboard/market?conv=`)
   })
 
-  it('names the week the idea was written for', () => {
-    expect(renderText(panel(1))).toMatch(/^Post idea 1 For 5 to 11 Oct Fit & comfort/)
-    const older = <IdeaPanelView panel={ideaPanelFixture(1, undefined, true)} state={STATE} count={3} month={OCT} weekWord="this week" />
-    expect(renderText(older)).toMatch(/^Post idea 1 For 21 to 27 Sep/)
+  it('names the days the idea read its questions from (Heinrich, 13 Oct: four weeks to its update)', () => {
+    expect(renderText(panel(1))).toMatch(/^Post idea 1 From questions asked 14 Sep to 11 Oct Fit & comfort/)
+    const older = <IdeaPanelView panel={ideaPanelFixture(1, undefined, true)} state={STATE} count={3} month={OCT} />
+    expect(renderText(older)).toMatch(/^Post idea 1 From questions asked 31 Aug to 27 Sep/)
+    assertCopyContract(older)
   })
 
   it('words a null format and opening neutrally (T13 also leaves one null when none clears 1.1×)', () => {
     const base = ideaPanelFixture(1)
-    const node = <IdeaPanelView panel={{ ...base, card: { ...base.card, format: null, opening: null } }} state={STATE} count={3} month={OCT} weekWord="this week" />
+    const node = <IdeaPanelView panel={{ ...base, card: { ...base.card, format: null, opening: null } }} state={STATE} count={3} month={OCT} />
     const text = renderText(node)
     expect(text).toContain('Format No format stands out on this question yet')
     expect(text).toContain('Open with No opening stands out on this question yet')
     expect(text).not.toMatch(/Too few|multiples? (are|is) the response/)
     expect(text).toContain(MEDICAL_LINE)
     assertCopyContract(node)
-    const one = renderText(<IdeaPanelView panel={{ ...base, card: { ...base.card, opening: null } }} state={STATE} count={3} month={OCT} weekWord="this week" />)
+    const one = renderText(<IdeaPanelView panel={{ ...base, card: { ...base.card, opening: null } }} state={STATE} count={3} month={OCT} />)
     expect(one).toContain('The multiple is the response of the market’s videos on this question made that way against a typical market video on this question.')
   })
 
   it('says when the videos are ordered by views, not response', () => {
     const base = ideaPanelFixture(1)
-    const none = renderText(<IdeaPanelView panel={{ ...base, videos: base.videos.map((v) => ({ ...v, multiple: null })) }} state={STATE} count={3} month={OCT} weekWord="this week" />)
+    const none = renderText(<IdeaPanelView panel={{ ...base, videos: base.videos.map((v) => ({ ...v, multiple: null })) }} state={STATE} count={3} month={OCT} />)
     expect(none).toContain('Market videos where this came up, the most viewed first None of these videos has a response figure, so they are ordered by views.')
-    const some = renderText(<IdeaPanelView panel={{ ...base, videos: base.videos.map((v, i) => (i === 2 ? { ...v, multiple: null } : v)) }} state={STATE} count={3} month={OCT} weekWord="this week" />)
+    const some = renderText(<IdeaPanelView panel={{ ...base, videos: base.videos.map((v, i) => (i === 2 ? { ...v, multiple: null } : v)) }} state={STATE} count={3} month={OCT} />)
     expect(some).toContain('a video with no response figure follows, the most viewed first')
   })
 })

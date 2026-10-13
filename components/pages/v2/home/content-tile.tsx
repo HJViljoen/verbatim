@@ -10,11 +10,13 @@ import { MID, MONO_MUTED, TILE, TILE_FAILED, TileHead, TileLine, TT } from './pa
 
 // THE DASHBOARD'S CONTENT TILE (Design v2, T8; E1-Dashboard's second row),
 // from `topContent`: the week's first post idea, which opens its brief in
-// place on Content (`?idea=<rank>`), with how many of the week's market videos
-// it came up in and the month beside it (decision 1), the format and opening
-// code chose, and whether your posts touched on it; or why there is no idea
-// (not switched on, none written, too old). In a medical market the medical
-// team line prints under the idea, always (T13's done-when).
+// place on Content (`?idea=<rank>`), with how many of the market's videos it
+// came up in over the days the ideas read ("of 640 videos, 14 Sep to 11
+// Oct": four weeks of questions, Heinrich, 13 Oct) and the month beside it
+// (decision 1), the format and opening code chose, and whether your posts
+// touched on it; or why there is no idea (not switched on, none written, too
+// old). In a medical market the medical team line prints under the idea,
+// always (T13's done-when).
 //
 // The board's "12 comments are waiting for a reply" is not printed: nothing
 // can see whether you replied (decision 5), so Content lists the comments
@@ -42,16 +44,18 @@ export function ContentTileView({ read }: { read: TileRead<TopContent> }) {
           <h3 className={TT}>
             Post next: <span data-copy="stored" data-slot={POST_IDEA_SLOT}>{idea.title}</span>
           </h3>
-          {idea.week ? (
+          {/* The four weeks only beside their month (decision 1), as on
+              Content and in the email. */}
+          {idea.read && idea.month ? (
             <div data-copy="level" className="flex flex-wrap items-baseline gap-x-2.5">
-              <span className={MID}>{fmtInt(idea.week.k)}</span>
-              <span className={MONO_MUTED}>of {fmtInt(idea.week.n)} videos this week</span>
+              <span className={MID}>{fmtInt(idea.read.k)}</span>
+              <span className={MONO_MUTED}>of {fmtInt(idea.read.n)} videos, <span className="whitespace-nowrap">{idea.ideasWeek.read.label}</span></span>
             </div>
           ) : null}
-          {/* The week beside its month (decision 1); the month alone where the
-              week was not read. */}
+          {/* The ideas' days beside the month (decision 1); the month alone
+              where those days were not read. */}
           {idea.month ? (
-            <p data-copy="level" className={cn(MONO_MUTED, 'm-0', idea.week ? '-mt-2 max-sm:-mt-1' : 'text-[14px] text-foreground')}>
+            <p data-copy="level" className={cn(MONO_MUTED, 'm-0', idea.read ? '-mt-2 max-sm:-mt-1' : 'text-[14px] text-foreground')}>
               {fmtInt(idea.month.k)} of {fmtInt(idea.month.n)} {idea.monthWords}
             </p>
           ) : null}

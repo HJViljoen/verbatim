@@ -3,7 +3,7 @@ import { CARD, equalColumns, FlagChip, MiniBars, panelItemOrder, panelPlacement,
 import { fmtInt, longMonth } from '@/lib/format'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
 import {
-  ASKED_ID, IDEA_PANEL_ID, IDEAS_EMPTY, contentHref, monthWords, olderIdeasLine, POST_IDEA_SLOT,
+  ASKED_ID, askedPhrase, IDEA_PANEL_ID, IDEAS_EMPTY, contentHref, monthWords, olderIdeasLine, POST_IDEA_SLOT,
   type ContentState, type IdeaCard, type IdeasBlock, type OwnTouch,
 } from '@/lib/pages/v2/content'
 import { cn } from '@/lib/utils'
@@ -11,14 +11,16 @@ import { Fact, GroupNames, LABEL, Fig, OLink, RecipeChip } from './parts'
 
 /**
  * WHAT TO POST NEXT (E5-Content, the first row): the week's post ideas, one
- * card each, biggest first.
+ * card each, biggest first. They refresh every week and read the questions
+ * of the four weeks to their update (Heinrich, 13 Oct), and the section says
+ * which days: "From questions asked 14 Sep to 11 Oct".
  *
  * A card is level 1, so it prints no comment's words: the idea's title (the
- * model's, `stored` under `post_idea`), how many of the week's market videos
- * it came up in with the month beside it (decision 1), the last three weeks
- * as three bare counts, the flag only where the anomaly check or the week
- * read earned one, who asks by group name alone (decision 5), whether your
- * posts this month touched on it, and the format and opening code chose with
+ * model's, `stored` under `post_idea`), how many of the market's videos over
+ * those days it came up in with the month beside it (decision 1), each of
+ * those weeks as a bare count, the flag only where the anomaly check or the
+ * week read earned one, who asks by group name alone (decision 5), whether
+ * your posts touched on it, and the format and opening code chose with
  * their multiples. In a medical market every card carries the medical team
  * line. "Open the brief" opens the idea in place (`?idea=<rank>`).
  */
@@ -35,18 +37,23 @@ export function OwnTouchLine({ own }: { own: OwnTouch }) {
   return <span><Fig>{fmtInt(own.touched)}</Fig> of your <Fig>{fmtInt(own.posts)}</Fig> posts {when} touched on it</span>
 }
 
-/** The week's figure with its month under it, or the month's alone. */
-function Demand({ card, monthLabel, weekWord }: { card: IdeaCard; monthLabel: string; weekWord: string }) {
+/** The figure over the days the ideas read, with its month under it, or the
+ *  month's alone. The four weeks never print without their month (decision
+ *  1): no month, no four-week figure. */
+function Demand({ card, monthLabel, readLabel }: { card: IdeaCard; monthLabel: string; readLabel: string | null }) {
+  const four = card.read && readLabel && card.month ? card.read : null
   return (
     <div className="min-w-0">
-      {card.week ? (
+      {four ? (
         <div data-copy="level">
-          <div className="font-mono text-[30px] leading-none font-medium tracking-[-0.02em] tabular-nums">{fmtInt(card.week.k)}</div>
-          <div className="mt-1.5 font-mono text-[12.5px] leading-[1.45] text-muted-foreground">of {fmtInt(card.week.n)} videos {weekWord}</div>
+          <div className="font-mono text-[30px] leading-none font-medium tracking-[-0.02em] tabular-nums">{fmtInt(four.k)}</div>
+          {/* The days on a line of their own where the card is narrow: the
+              dates never break inside. */}
+          <div className="mt-1.5 font-mono text-[12.5px] leading-[1.45] text-muted-foreground">of {fmtInt(four.n)} videos, <span className="whitespace-nowrap">{readLabel}</span></div>
         </div>
       ) : null}
       {card.month ? (
-        <p data-copy="level" className={cn('m-0 font-mono text-[12.5px] leading-[1.45] text-muted-foreground', card.week ? null : 'text-[14px] text-foreground')}>
+        <p data-copy="level" className={cn('m-0 font-mono text-[12.5px] leading-[1.45] text-muted-foreground', four ? null : 'text-[14px] text-foreground')}>
           {fmtInt(card.month.k)} of {fmtInt(card.month.n)} {monthLabel}
         </p>
       ) : null}
@@ -55,12 +62,13 @@ function Demand({ card, monthLabel, weekWord }: { card: IdeaCard; monthLabel: st
   )
 }
 
-export function IdeaCardView({ card, state, selected, month, weekWord, style }: {
+export function IdeaCardView({ card, state, selected, month, readLabel, style }: {
   card: IdeaCard
   state: ContentState
   selected: boolean
   month: { month: string; complete: boolean }
-  weekWord: string
+  /** The days the ideas read, "14 Sep to 11 Oct" (`IdeasRead.label`). */
+  readLabel: string | null
   style?: CSSProperties
 }) {
   const open = contentHref({ ...state, open: { kind: 'idea', rank: card.rank } })
@@ -75,12 +83,12 @@ export function IdeaCardView({ card, state, selected, month, weekWord, style }: 
         </h3>
       </div>
       <div className="flex items-end justify-between gap-3">
-        <Demand card={card} monthLabel={monthWords(month)} weekWord={weekWord} />
+        <Demand card={card} monthLabel={monthWords(month)} readLabel={readLabel} />
         {card.weeks ? (
-          <div className="w-[118px] shrink-0">
+          <div className={cn('shrink-0', card.weeks.length > 3 ? 'w-[150px]' : 'w-[118px]')}>
             <MiniBars
               bars={card.weeks.map((w) => ({ label: w.label, value: w.count }))}
-              label="Market videos a week where it came up, the last three weeks"
+              label={`Market videos a week where it came up, the weeks of ${card.weeks.map((w) => w.label).join(', ')}`}
             />
           </div>
         ) : null}
@@ -136,24 +144,27 @@ export function ideasLayout(count: number): PanelLayout {
  *  every width: one grid, the brief a child of it placed after the card's row
  *  (`panelPlacement`) and in the markup right after the card. A brief whose
  *  card is not drawn opens under the row. */
-export function IdeasSection({ block, state, month, weekWord, panel }: {
+export function IdeasSection({ block, state, month, panel }: {
   block: IdeasBlock
   state: ContentState
   month: { month: string; complete: boolean }
-  weekWord: string
   panel?: (notchAt?: number | PerBreakpoint) => ReactNode
 }) {
   const openRank = state.open?.kind === 'idea' ? state.open.rank : null
   const since = block.cards[0]?.own.since
+  const read = block.week?.read ?? null
+  // The month each card's figure sits beside: the ideas' own (the page's for
+  // this week's ideas; an older set's read window's).
+  const ideasMonth = block.week?.month ?? month
   const at = panel && openRank != null ? block.cards.findIndex((c) => c.rank === openRank) : -1
   const place = panel && at >= 0 ? panelPlacement(at, ideasLayout(block.cards.length)) : null
   return (
     <section aria-labelledby="ideas-title" className="flex flex-col gap-3.5">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-0.5">
         <h2 id="ideas-title" className="m-0 text-[19px] leading-[1.3] font-semibold">What to post next</h2>
-        {block.cards.length > 0 && block.week ? (
+        {block.cards.length > 0 && read ? (
           <span className="text-[13px] leading-[1.4] text-muted-foreground">
-            For {block.week.label}: questions people asked that none of your posts since {longMonth(since ?? month.month)} had touched on when they were picked, biggest first
+            {askedPhrase(read)} that none of your posts since {longMonth(since ?? month.month)} had touched on when they were picked, biggest first
           </span>
         ) : null}
       </div>
@@ -164,7 +175,7 @@ export function IdeasSection({ block, state, month, weekWord, panel }: {
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
           {block.cards.map((c, i) => (
             <Fragment key={c.rank}>
-              <IdeaCardView card={c} state={state} selected={openRank === c.rank} month={month} weekWord={weekWord} style={panelItemOrder(i)} />
+              <IdeaCardView card={c} state={state} selected={openRank === c.rank} month={ideasMonth} readLabel={read?.label ?? null} style={panelItemOrder(i)} />
               {place && panel && i === at ? <PanelSlot placement={place}>{panel(place.notch)}</PanelSlot> : null}
             </Fragment>
           ))}

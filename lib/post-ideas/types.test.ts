@@ -1,6 +1,15 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { describe, it, expect } from 'vitest'
 
-import { isMissingPostIdeas, parsePostIdeaRow, subquestionCounts } from './types'
+import { isMissingPostIdeas, loadPostIdeas, parsePostIdeaRow, subquestionCounts } from './types'
+
+/** A query that answers every chain with this error. */
+function fail(error: { code: string; message: string }) {
+  const q: Record<string, unknown> = {}
+  for (const m of ['select', 'eq', 'order', 'limit']) q[m] = () => q
+  q.then = (ok: (v: unknown) => unknown) => Promise.resolve({ data: null, error }).then(ok)
+  return q
+}
 
 const row = {
   id: '00000000-0000-4000-8000-0000000000e1',
@@ -8,6 +17,8 @@ const row = {
   run_id: '00000000-0000-4000-8000-0000000000a1',
   window_start: '2026-10-05T00:00:00+00:00',
   window_end: '2026-10-12T00:00:00+00:00',
+  read_start: '2026-09-14T00:00:00+00:00',
+  read_end: '2026-10-12T00:00:00+00:00',
   rank: 1,
   registry_id: '00000000-0000-4000-8000-0000000000f1',
   title: 'How long does a liner last, and how do you know it is time to replace it?',
@@ -33,6 +44,14 @@ describe('parsePostIdeaRow', () => {
     expect(parsed?.opening_multiple).toBe(1.8)
     expect(parsed?.subquestions[0]).toEqual(row.subquestions[0])
     expect(parsed?.cover.text).toBe(row.cover.text)
+    // The run's week, and the four weeks the ideas read.
+    expect([parsed?.window_start, parsed?.window_end, parsed?.read_start, parsed?.read_end]).toEqual([row.window_start, row.window_end, row.read_start, row.read_end])
+  })
+
+  it('reads no row that does not say which days its ideas read', () => {
+    expect(parsePostIdeaRow({ ...row, read_start: null })).toBeNull()
+    const { read_end: _, ...noEnd } = row
+    expect(parsePostIdeaRow(noEnd)).toBeNull()
   })
 
   it('reads a row with no format or opening chosen', () => {
@@ -65,6 +84,23 @@ describe('isMissingPostIdeas', () => {
     expect(isMissingPostIdeas({ code: '42P01', message: 'relation "public.post_ideas" does not exist' })).toBe(true)
     expect(isMissingPostIdeas({ code: '42501', message: 'permission denied for table post_ideas' })).toBe(false)
     expect(isMissingPostIdeas({ code: 'PGRST205', message: 'Could not find the table \'public.week_reads\' in the schema cache' })).toBe(false)
+    // Without a code, only the two phrasings of a missing table.
+    expect(isMissingPostIdeas(new Error('Could not find the table \'public.post_ideas\' in the schema cache'))).toBe(true)
+    expect(isMissingPostIdeas(new Error('relation "public.post_ideas" does not exist'))).toBe(true)
+  })
+
+  it('a missing COLUMN is not a missing table: it surfaces as an error, never hides the ideas', () => {
+    expect(isMissingPostIdeas({ code: '42703', message: 'column post_ideas.read_start does not exist' })).toBe(false)
+    expect(isMissingPostIdeas({ code: 'PGRST204', message: 'Could not find the \'read_start\' column of \'post_ideas\' in the schema cache' })).toBe(false)
+    expect(isMissingPostIdeas(new Error('column post_ideas.read_start does not exist'))).toBe(false)
+    expect(isMissingPostIdeas(new Error('Could not find the \'read_end\' column of \'post_ideas\' in the schema cache'))).toBe(false)
+  })
+
+  it('loadPostIdeas: no table reads as none; a missing column throws', async () => {
+    const tableGone = { from: () => fail({ code: '42P01', message: 'relation "public.post_ideas" does not exist' }) } as unknown as SupabaseClient
+    expect(await loadPostIdeas(tableGone, 'client')).toEqual([])
+    const columnGone = { from: () => fail({ code: '42703', message: 'column post_ideas.read_start does not exist' }) } as unknown as SupabaseClient
+    await expect(loadPostIdeas(columnGone, 'client')).rejects.toThrow(/post_ideas: column post_ideas\.read_start does not exist/)
   })
 })
 

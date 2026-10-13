@@ -29,10 +29,11 @@ import type { ChartRun } from '../../reading/week-line'
 import type { Verdict } from '../../reading/verdicts'
 import { INDUSTRY_AUDIENCE, loadCompetitors, loadTrackedRivals } from '../../rivals'
 import { selectAll } from '../../supabase-admin'
-import { coveredDays, inMonth, readingMonthOf } from '../../written/month'
+import { coveredDays, inMonth, monthsPhrase, readingMonthOf } from '../../written/month'
 import { SLICE } from '../../reading/coverage'
 import { countedNote, FAILED_EXPLAINED } from '../../subjects/calibration-state'
-import { loadPublishedWeekRead, type PublishedWeekRead } from '../../written/published'
+import { loadPublishedLongRun, loadPublishedWeekRead, type PublishedWeekRead } from '../../written/published'
+import type { StoredLongRun } from '../../written/store'
 import type { WeekReadData, WhoAbout, WhoPart } from '../../written/types'
 import { weekReadDates } from '../../reports/weekly-read'
 import { factsFromReadings, marketComparable } from '../../written/standing'
@@ -81,6 +82,17 @@ import { frozenFlag } from '../../written/unusual'
 //   6. THE OPEN PANEL (`?conv=<registry id or slug>`, `?subject=<id>`): the
 //      conversation in full, in place, under the row it was opened from
 //      (`?at=top|subjects|table`).
+//   7. THIS MONTH ONLY, AT THE BOTTOM: the month's long-run read ("What holds
+//      across August and September"), the published `week_reads` row of kind
+//      'month' for the month the view reads (`loadPublishedLongRun` with
+//      `month`; Heinrich, 13 Oct: below the month's data, never at the top,
+//      never on This week or Over time). A month still filling has none of
+//      its own until it closes, so there the newest ready read of any
+//      EARLIER month (usually last month's; `before: month`) stands in,
+//      headed with its own month ("September’s long-run read"),
+//      one read only (`marketLongRunFor`). A closed month with no read, no
+//      section. Stored `week_read` prose, read after the figures, so level 2
+//      by position.
 //
 // DECISION 1 (13 Oct): no weekly direction words and no week figure on its
 // own. A week count is printed beside its month ("19 this week · 31 in
@@ -472,10 +484,56 @@ export interface MarketData {
    *  `not_counted` (rules, no rows written yet: Össur before its back-read) or
    *  `not_read` (no brand rules). Only `counted` prints a split. */
   brands: BrandsState
+  /** This month only: the month's long-run read, printed below the month's
+   *  data; null on the week and over time, and where none is published for
+   *  the month the view reads. */
+  longRun: MarketLongRun | null
+  /** This month only: the long-run read could not be read (a failed
+   *  `week_reads` read), so the page says so in one calm line rather than
+   *  look like a month with no read. */
+  longRunUnread: boolean
 }
 
 /** Whether the "about" split may print. */
 export type BrandsState = 'counted' | 'not_counted' | 'not_read'
+
+/** The month's long-run read as This month prints it, below the month's data
+ *  (Heinrich, 13 Oct). The writer's words as stored (`week_read` prose,
+ *  scrubbed when written); the counts are code's. Never a change: nothing in
+ *  it compares one month with another. */
+export interface MarketLongRun {
+  /** The read's month, `YYYY-MM-01`: the month the view reads, or, where the
+   *  view reads a month still filling that has none of its own (`earlier`),
+   *  the newest earlier month with a ready read. */
+  month: string
+  /** The month the view reads, `YYYY-MM-01`. */
+  viewMonth: string
+  /** The newest earlier month's read, standing in on a filling month
+   *  with no read of its own: the heading then names its month. */
+  earlier: boolean
+  /** The heading: "What holds across August and September" for the view's
+   *  own read; "September’s long-run read" for an earlier one, so it never
+   *  reads as this month's. */
+  title: string
+  /** "What holds across August and September" (the read's window months). */
+  across: string
+  /** The lead, where one survived the scrub. */
+  inShort: string | null
+  ideas: {
+    headline: string
+    body: string[]
+    /** Distinct videos behind it over the read's window. */
+    videos: number
+    /** The months it was heard in, oldest first. */
+    heard: string[]
+    /** Who those videos are about (one brand per video), as stored. */
+    who: WhoPart[]
+  }[]
+  /** Written before its month closed, on the comments to this day
+   *  (`partialThrough`, the backfill): it does not stand as the month's read
+   *  (`standsAsMonthRead`), and the page says which day it reads to. */
+  partialThrough: string | null
+}
 
 // ---- Params and addresses (pure) --------------------------------------------------------
 
@@ -1518,6 +1576,19 @@ export async function loadMarket(input: {
     .filter((d) => monthStartOf(d.month) === month && market.includes(d.audience))
     .map((d) => (d as { platform_mix?: PlatformMix | null }).platform_mix ?? null))
 
+  // THIS MONTH's long-run read, for the month the view reads, read beside
+  // everything else and printed below it (Heinrich, 13 Oct); where that month
+  // is still filling and has none of its own, the newest earlier month's
+  // (`marketLongRunFor`). A read that fails costs that section only.
+  const noLongRun = { own: null, closed: null } as { own: StoredLongRun | null; closed: StoredLongRun | null }
+  const longRunAhead: Promise<typeof noLongRun | 'failed'> = period === 'month'
+    ? soft<typeof noLongRun | 'failed'>('longRun', (async () => {
+        const own = await loadPublishedLongRun(db, clientId, { month })
+        if (!soFar || marketLongRunOf(own, month)) return { own, closed: null }
+        return { own, closed: await loadPublishedLongRun(db, clientId, { before: month }) }
+      })(), 'failed')
+    : Promise.resolve(noLongRun)
+
   // ── wave 2: the period's readings ──
   const [themedRunId, changes, cadence] = await Promise.all([themedRunAhead.catch(() => null), changesAhead, cadenceAhead])
   const ourChanges = ourChangesWithoutGatherFlags((changes ?? []).filter((r) => !isFailOpenFix(r)))
@@ -1705,6 +1776,8 @@ export async function loadMarket(input: {
   const subjectPanel = !openId && p.subject
     ? buildSubjectPanel({ id: p.subject, facts: subjectFacts, convs, period, p, read, month: monthBlock, flag: flagCard?.conv ? { id: flagCard.conv.id, verdict: flagCard.verdict } : null })
     : null
+  const longRunRead = await longRunAhead
+  const longRun = longRunRead === 'failed' ? null : marketLongRunFor({ ...longRunRead, month, filling: soFar })
 
   return {
     brand,
@@ -1721,7 +1794,58 @@ export async function loadMarket(input: {
     panel,
     subjectPanel,
     brands,
+    longRun,
+    longRunUnread: longRunRead === 'failed',
   }
+}
+
+/**
+ * The month's long-run read as This month prints it, or null: no read, a read
+ * of another month than the one the view reads (the selector is asked for the
+ * view's month; this holds it there), or a read with no idea to print. Ideas
+ * with no headline are left out. Pure.
+ */
+export function marketLongRunOf(read: StoredLongRun | null | undefined, month: string): MarketLongRun | null {
+  if (!read || monthStartOf(read.month) !== monthStartOf(month)) return null
+  const ideas = read.data.ideas
+    .filter((idea) => (idea.headline ?? '').trim())
+    .map((idea) => ({
+      headline: idea.headline.trim(),
+      body: (idea.body ?? []).map((p) => p.trim()).filter(Boolean),
+      videos: idea.videos,
+      heard: (idea.months ?? []).filter((m) => m.videos > 0).map((m) => monthStartOf(m.month)),
+      who: idea.who ?? [],
+    }))
+  if (ideas.length === 0) return null
+  const across = `What holds across ${monthsPhrase(read.data.months)}`
+  return {
+    month: monthStartOf(read.month),
+    viewMonth: monthStartOf(month),
+    earlier: false,
+    title: across,
+    across,
+    inShort: (read.data.inShort ?? '').trim() || null,
+    ideas,
+    partialThrough: read.data.partialThrough ?? null,
+  }
+}
+
+/**
+ * The ONE long-run read This month prints (Heinrich, 13 Oct): the view's own
+ * month's where it has one that prints; else, only where the view reads a
+ * month still FILLING (`filling`, the month under way: its read is written
+ * when it closes), the newest ready read of any earlier month (`closed`:
+ * `loadPublishedLongRun` with `before`, usually last month's, an older one
+ * where last month has none), headed with its own month so it never reads as
+ * this month's; else none. A closed month with no read of its own shows
+ * none: `?month=` of a closed month only ever shows that month's. Pure.
+ */
+export function marketLongRunFor(a: { own: StoredLongRun | null; closed: StoredLongRun | null; month: string; filling: boolean }): MarketLongRun | null {
+  const own = marketLongRunOf(a.own, a.month)
+  if (own || !a.filling || !a.closed || monthStartOf(a.closed.month) >= monthStartOf(a.month)) return own
+  const earlier = marketLongRunOf(a.closed, a.closed.month)
+  if (!earlier) return null
+  return { ...earlier, viewMonth: monthStartOf(a.month), earlier: true, title: `${longMonth(earlier.month)}’s long-run read` }
 }
 
 /** This week's platforms with each one's month beside it (decision 1). Pure. */
