@@ -1,10 +1,13 @@
 -- Checks for 20261109090000_products.sql, run on a throwaway cluster after the
--- migration (scripts/pg-shim/throwaway.sh up <dir>, which applies every
--- migration; then throwaway.sh twice <dir> supabase/migrations/20261109090000_products.sql
+-- migration (scripts/pg-shim/throwaway.sh up <dir> --before 20261109090000;
+-- then throwaway.sh twice <dir> supabase/migrations/20261109090000_products.sql
 -- for the empty catalogue diff; then throwaway.sh check <dir> this-file).
 -- Every check raises on a wrong answer, so the run stops at the first one; the
--- whole file is one transaction and rolls back. WRITTEN 13 OCT, NOT YET RUN:
--- the first run is part of proving the migration (T10's done-when).
+-- whole file is one transaction and rolls back. FIRST RUN 13 Oct (depth v2
+-- T11 step 1) on a throwaway PG 17 cluster brought up `--before
+-- 20261109090000`: the migration applied twice with an empty catalogue diff
+-- (after one fix: a named constraint took the auto-name of an inline CHECK),
+-- and every check here passed.
 --
 -- The world: tenant A with two categories (Liners, Feet), a product in each,
 -- aliases, a video with a comment, placements and a tag chain, a closed month

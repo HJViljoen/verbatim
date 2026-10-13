@@ -112,11 +112,15 @@
 -- IDEMPOTENT. `if not exists`, `create or replace`, drop-then-create for the
 -- policies, triggers and the CHECK, grants that end where they began. No
 -- CONCURRENTLY, no BEGIN/COMMIT: the runner wraps the file in one transaction.
--- To prove before production (phase1-staging is paused): apply twice on a
--- throwaway PostgreSQL 17 cluster (scripts/pg-shim/throwaway.sh up, then twice
--- with this file) and run scripts/pg-shim/products-checks.sql
+-- Proven before production (phase1-staging is paused) on a throwaway
+-- PostgreSQL 17 cluster, 13 Oct: scripts/pg-shim/throwaway.sh up --before
+-- 20261109090000, then twice with this file (the catalogue diff after the
+-- second application is empty), then scripts/pg-shim/products-checks.sql
 -- (throwaway.sh check), which exercises the RLS, the append-only grants, the
--- guards' one-shot, the version and a regate round trip.
+-- guards' one-shot, the version and a regate round trip; and the runner's
+-- `products` set through scripts/pg-shim/test-runner.sh <dir> products.
+-- Applied to production by scripts/apply-market-first-migrations.sh --set
+-- products.
 
 -- =============================================================================
 -- 1. The catalogue
@@ -467,7 +471,7 @@ create table if not exists public.product_mentions (
     or (placement = 'none' and product_id is null and group_id is null)),
   -- A model's verdict names the model and its prompt; a rule's or a person's
   -- names neither. A tag row names its tag, and only a tag row does.
-  constraint product_mentions_method_check check (
+  constraint product_mentions_method_shape_check check (
     (method in ('model', 'confirmed') and coalesce(model, '') <> '' and coalesce(prompt_version, '') <> '')
     or (method in ('rule', 'tag') and model is null and prompt_version is null)),
   constraint product_mentions_tag_check check ((method = 'tag') = (tag_id is not null)),

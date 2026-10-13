@@ -580,6 +580,31 @@ describe('the runner\'s mf3 set', () => {
       .sort()
     expect(runner.match(/MF3_TRIGGERS="([^"]+)"/)?.[1]).toBe(inFile.join(','))
     expect(runner).toMatch(/verify_MF3\(\) \{[\s\S]*?check "existing guards unchanged" .* "\$PRE_GUARDS"\n/)
-    expect(runner).toMatch(/if \[\[ "\$SET" == "mf3" \]\]; then\n {2}echo "== pre-check 4: the existing guards/)
+    // The products set reads the same guards the same way (depth v2 T10).
+    expect(runner).toMatch(/if \[\[ "\$SET" == "mf3"(?: \|\| "\$SET" == "products")? \]\]; then\n {2}echo "== pre-check 4: the existing guards/)
+  })
+})
+
+describe('the runner\'s products set (depth v2 T10, applied after costs)', () => {
+  const runner = readFileSync(new URL('../scripts/apply-market-first-migrations.sh', import.meta.url), 'utf8')
+  const testRunner = readFileSync(new URL('../scripts/pg-shim/test-runner.sh', import.meta.url), 'utf8')
+  const PRODUCTS = '20261109090000_products.sql'
+  const products = squash(code(PRODUCTS))
+
+  it('applies the products migration alone, after costs (the newest production held on 13 Oct)', () => {
+    const block = runner.match(/\n {2}products\)\n([\s\S]*?)\n {4};;/)?.[1] ?? ''
+    expect(block.match(/EXPECTED_FILES=\(([^)]*)\)/)?.[1]?.trim()).toBe(PRODUCTS)
+    expect(block.match(/LABELS=\(([^)]*)\)/)?.[1]?.trim()).toBe('PRODUCTS')
+    expect(block.match(/PREREQ_VERSION="(\d+)"/)?.[1]).toBe('20261108090000')
+    expect(testRunner).toMatch(/products\) FIRST=20261109090000; HISTORY="[^"]*\('20261108090000', 'costs'\)"; YES='y\\n'; PREREQ=20261108090000 ;;/)
+  })
+
+  it('verifies the seven tables, the guards the file attaches, and reads the existing guards before and after', () => {
+    const listed = [...(runner.match(/PRODUCTS_TABLES="([^"]+)"/)?.[1] ?? '').matchAll(/'(\w+)'/g)].map((m) => m[1])
+    expect(listed.sort()).toEqual([...products.matchAll(/create table if not exists public\.(\w+)/g)].map((m) => m[1]).sort())
+    const inFile = [...products.matchAll(/create trigger (\w+) [^;]*?execute function public\.(\w+)\(\);/g)].map((m) => `${m[1]}:${m[2]}`).sort()
+    expect(runner.match(/PRODUCTS_TRIGGERS="([^"]+)"/)?.[1]).toBe(inFile.join(','))
+    expect(runner).toMatch(/verify_PRODUCTS\(\) \{[\s\S]*?check "existing guards unchanged" .* "\$PRE_GUARDS"\n/)
+    expect(runner).toMatch(/if \[\[ "\$SET" == "mf3" \|\| "\$SET" == "products" \]\]; then\n {2}echo "== pre-check 4: the existing guards/)
   })
 })
