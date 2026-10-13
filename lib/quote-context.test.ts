@@ -57,5 +57,16 @@ describe('readQuoteContext', () => {
     const ctx = await readQuoteContext(db, 'A', { evidenceIds: ['ev-post'] })
     expect(ctx.forEvidence('ev-post')?.videoId).toBe('1wabc')
     expect(ctx.commentOfEvidence('ev-post')).toBeNull()
+    expect(ctx.dateOfEvidence('ev-post')).toBeNull()
+  })
+
+  it('carries the quoted comment’s day from the same embed (a quote’s cite, depth v2 T7)', async () => {
+    const db = fakeDb({
+      insight_evidence: [{ id: 'ev-c', comment_id: 'c-1', source_video_id: null, comments: { platform: 'instagram', video_id: 'ig-9', comment_date: '2026-10-08T14:02:00+00:00' } }],
+      videos: [video({ id: 'row-9', client_id: 'A', platform: 'instagram', video_id: 'ig-9' })],
+    })
+    const ctx = await readQuoteContext(db, 'A', { evidenceIds: ['ev-c'] })
+    expect(ctx.dateOfEvidence('ev-c')).toBe('2026-10-08')
+    expect(ctx.forEvidence('ev-c')?.platform).toBe('instagram')
   })
 })

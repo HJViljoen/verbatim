@@ -90,6 +90,9 @@ import { yourSubjectsView, type SubjectSettingsRow } from '../lib/settings/your-
 import { VoicesPage } from '../components/pages/v2/voices'
 import { VOICES_FIXTURES } from '../lib/pages/v2/voices-fixture'
 import type { VoicesData } from '../lib/pages/v2/voices'
+import { MovesV2Page } from '../components/pages/v2/moves'
+import { movesFixture, movesOpenFixture, movesRecordFixture, statementsV2 } from '../lib/pages/v2/moves-fixture'
+import type { MovesPageData } from '../lib/pages/v2/moves'
 
 const args = process.argv.slice(2)
 const flag = (n: string, d: string) => { const i = args.indexOf(`--${n}`); return i >= 0 && args[i + 1] ? args[i + 1] : d }
@@ -364,6 +367,19 @@ const PAGES: Page[] = [
   ...(process.env.VOICES_JSON
     ? [{ key: 'voices-real', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: JSON.parse(readFileSync(process.env.VOICES_JSON as string, 'utf8')) as VoicesData }) }]
     : []),
+  // Your moves, Design v2 (depth T7): the fixture beside the depth boards
+  // (`--artboards ~/Documents/Heinrich/Verbatim-Design/depth-2026-10/canvas/project`),
+  // and one real render per tenant from the loader's dumped output
+  // (`--moves-dump <dir>` holding ossur.json and sealand.json, written by
+  // scripts/moves-v2-dump.ts), as a tenant sees it: no statements.
+  { key: 'moves-v2', path: '/dashboard/moves', artboard: 'E6-Moves.dc.html', page: () => h(MovesV2Page, { data: movesFixture(), statements: statementsV2() }) },
+  { key: 'moves-v2-open', path: '/dashboard/moves', artboard: 'E6-Moves-Open.dc.html', page: () => h(MovesV2Page, { data: movesOpenFixture(), statements: statementsV2() }) },
+  { key: 'moves-v2-record', path: '/dashboard/moves', artboard: 'E6-Moves.dc.html', page: () => h(MovesV2Page, { data: movesRecordFixture(), statements: statementsV2() }) },
+  // Only where a dump folder is named, so a run of every page never stops on a missing file.
+  ...(flag('moves-dump', '') ? (['ossur', 'sealand'] as const).map((tenant): Page => ({
+    key: `moves-v2-${tenant}`, path: '/dashboard/moves', artboard: 'E6-Moves.dc.html',
+    page: () => h(MovesV2Page, { data: JSON.parse(readFileSync(join(resolve(flag('moves-dump', '.')), `${tenant}.json`), 'utf8')).data as MovesPageData, statements: null }),
+  })) : []),
 ]
 
 // ---- the shell -----------------------------------------------------------------

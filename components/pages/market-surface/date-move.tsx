@@ -35,7 +35,10 @@ const GREEN = 'cursor-pointer items-center justify-center gap-2 whitespace-nowra
  *  white with a hairline, the calendar-plus icon. */
 const SECONDARY = 'inline-flex h-10 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-[10px] border border-[#E4E2DC] bg-white px-4 text-[14px] font-semibold text-[#26292C] transition-colors hover:bg-[#F7F6F2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#26292C]/30'
 
-export function DateMove({ dating, place = 'block' }: { dating: MoveDating; place?: 'block' | 'bar' | 'head' }) {
+/** Your moves' v2 head (depth v2, board E6-Moves): the board's ink button. */
+const INK = 'inline-flex min-h-[38px] cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-primary px-3.5 text-[13.5px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+
+export function DateMove({ dating, place = 'block' }: { dating: MoveDating; place?: 'block' | 'bar' | 'head' | 'ink' }) {
   const [open, setOpen] = useState(false)
   const [state, action, pending] = useActionState(dateMoveAction, EMPTY_STATE)
   const [lastDated, setLastDated] = useState<string | undefined>(undefined)
@@ -54,9 +57,9 @@ export function DateMove({ dating, place = 'block' }: { dating: MoveDating; plac
         onClick={() => setOpen(true)}
         // ONE DISPLAY CLASS PER WIDTH: the bar's button is `hidden` below sm
         // (the block's own is there), and never `inline-flex` beside it.
-        className={place === 'head' ? SECONDARY : `${GREEN} ${place === 'bar' ? 'hidden h-10 sm:inline-flex' : 'inline-flex h-11 w-fit px-[18px]'}`}
+        className={place === 'ink' ? INK : place === 'head' ? SECONDARY : `${GREEN} ${place === 'bar' ? 'hidden h-10 sm:inline-flex' : 'inline-flex h-11 w-fit px-[18px]'}`}
       >
-        {place === 'head' ? <CalendarPlus className="size-4" aria-hidden /> : <Plus className="size-4" aria-hidden />}
+        {place === 'ink' ? null : place === 'head' ? <CalendarPlus className="size-4" aria-hidden /> : <Plus className="size-4" aria-hidden />}
         {DATE_MOVE}
       </button>
       <Sheet open={open} onOpenChange={setOpen}>

@@ -90,6 +90,11 @@ export interface OwnedPost {
   sentiment: string | null
   sentiment_source: string | null
   analyzed_lane: string | null
+  /** The run whose analysis is the post's current one (`videos.analyzed_run_id`);
+   *  null where nothing has analysed it. Optional so a row built before it
+   *  (a fixture, a playbook video) still fits. Your market's card counts the
+   *  posts "with a reading" off it (depth v2, T7). */
+  analyzed_run_id?: string | null
 }
 
 /** The client's own posts over a window. */
@@ -109,7 +114,7 @@ export interface OwnedPosts {
 /** The columns `OwnedPost` carries, and no more. One literal, not a
  *  concatenation: the client's select parser types a literal and gives up on a
  *  `string`. */
-export const OWNED_POST_COLUMNS = 'id, video_id, platform, video_url, account_name, upload_date, caption, classified_type, hook_style, hook_text, engagement_rate, views, likes, comments_count, topics, is_client, is_competitor, competitor_name, source, sentiment, sentiment_source, analyzed_lane'
+export const OWNED_POST_COLUMNS = 'id, video_id, platform, video_url, account_name, upload_date, caption, classified_type, hook_style, hook_text, engagement_rate, views, likes, comments_count, topics, is_client, is_competitor, competitor_name, source, sentiment, sentiment_source, analyzed_lane, analyzed_run_id'
 
 /** A window bound as a day: an instant (`2026-10-01T00:00:00Z`) or a day. */
 const day = (x: string): string => x.slice(0, 10)
