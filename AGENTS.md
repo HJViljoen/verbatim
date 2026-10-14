@@ -447,6 +447,46 @@ This version has breaking changes — APIs, conventions, and file structure may 
   which keeps the shot. `--force-subjects` overrides it, for an operator who
   means it. A subject named after the seed has no history and cannot be given
   one.
+- **A subject's words and its judge belong to its line; changing either
+  starts a new reading (14 Oct, Össur).** *Re-describing is a supersede*,
+  never an edit: `scripts/subject-redescribe.ts` (seeds
+  `scripts/seeds/ossur-subjects*.ts`, `lib/subjects/redescribe.ts`) retires the
+  subject and inserts a successor with the same name and the new words, born
+  active, `superseded_by` set, embedded, one `config_changes` row by
+  `scriptActor`. A `from` guard refuses words that moved, `--allow-moves` is
+  needed over moves on the old id, and a resumed run finishes only a retirement
+  the record shows it made. An edit in place would be silent: `JUDGE_VERSION`
+  folds in no subject's words, so a re-run re-judges nothing and a ready check
+  stays ready. Closed months stay with the retired line; the successor counts
+  from its insert (`subjectCountedFrom`) by the read-in rule (`subjectReadIn`,
+  `lib/subjects/read-in.ts`), and the anomaly check tests a subject only
+  against baseline months it was read in (`subjectUnreadMonths`, held at
+  `baseline_forming`), which also covers a subject named after its tenant's
+  back-read. *The judge is per tenant*: `judgeFor(clientId)` /
+  `judgeVersionFor(clientId)` (`lib/subjects/types.ts`,
+  `SUBJECT_JUDGE_BY_CLIENT`; read only through the functions). The default is
+  `subject_judge_v1·gpt-4.1-mini·0.6/0.4·subject_embed_v2`, Sealand's, pinned
+  byte for byte. Össur's is `subject_judge_strict_v1·gpt-5.4:low·none/0.4·
+  subject_embed_v2`: gpt-5.4 at low effort, the strict prompt (the
+  description split at "excluding" into what belongs and a hard never-belongs
+  list; unsure is no) and every pair at 0.40 or more judged, no unjudged auto
+  tier, because the mini judge read "excluding" as prose and decided by its
+  batch neighbours (offline replay, 14 Oct: Function and Look 48% under it,
+  94% and 81 to 93% under the strict one). About $1 an Össur update, under the
+  $3 pass ceiling. The calibration gate reads `judgeVersionFor(client_id)`, so
+  a subject read without its client fails closed to "Not measured yet". The
+  batch size (`SUBJECT_JUDGE_BATCH`) and the user-prompt format are not in the
+  key and do change judgements: changing either bumps the prompt version. A
+  subject month stamped by a judge other than the tenant's own today is no
+  reading (`otherJudgeMonths`: `loadMonthSeries`, the legacy Overview, the
+  anomaly baseline), so no comparison or trail crosses a judge change; not cut
+  are `scripts/coverage-report.ts` and the unrouted This week block. Every
+  pipeline membership step runs on a clock (`SUBJECT_STEP_BUDGET_MS`, 150 s;
+  45 s a call, one SDK retry): one that runs out stops early
+  (`clockStopped`), `subjectFreezeHold` holds the subject months, and the next
+  run carries on. Never deploy a judge change while that tenant's run is in
+  flight: a memoised membership step replays the old judge's rows while
+  `freeze-months` stamps the new key.
 - **`competitors` is rival identity; a rename is ONE logged operation.**
   `tracking_configs.competitor_names` is the tracked LIST; `competitors`
   (M1) is the identity, with `first_seen_at`, `retired_at` and `superseded_by`.
