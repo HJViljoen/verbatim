@@ -356,7 +356,7 @@ describe('groupMonthVideos and groupSubjects', () => {
 
 describe('measuredSubjects (ruling U6)', () => {
   const row = (id: string, name: string, check: 'ready' | 'provisional' | 'failed' | 'unchecked', status = 'active'): SubjectStateRow => ({
-    id, name, status,
+    id, client_id: 'client-1', name, status,
     calibrated_at: check === 'unchecked' ? null : '2026-10-13T00:00:00Z',
     calibration_judge_version: check === 'unchecked' ? null : JUDGE_VERSION,
     // 0.80 on 25 still reaches the floor (provisional); 0.09 on 33 never does (failed).

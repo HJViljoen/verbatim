@@ -13,6 +13,7 @@ import {
   subjectCalibration,
   withheldLabel,
 } from './calibration-state'
+import { SEALAND_CLIENT_ID } from '../config'
 import { JUDGE_VERSION } from './types'
 
 // The three states (market-first decision C, WP1.1), pinned on real
@@ -29,6 +30,7 @@ import { JUDGE_VERSION } from './types'
 
 const at = '2026-09-24T11:53:16.678Z'
 const row = (precision: number | string | null, n: number | string | null, judge: string | null = JUDGE_VERSION) => ({
+  client_id: SEALAND_CLIENT_ID,
   calibrated_at: precision == null ? null : at,
   calibration_precision: precision,
   calibration_n: n,

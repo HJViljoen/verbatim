@@ -9,7 +9,7 @@ import {
 } from '../reading/types'
 import type { SubjectMembershipResult } from './membership'
 import {
-  JUDGE_VERSION,
+  judgeVersionFor,
   type SubjectReading,
   type SubjectStatus,
   type SubjectWindowReading,
@@ -116,12 +116,14 @@ export async function readSubjectWindow(
  * `clustering` is false: a subject's membership is not a clustering artefact,
  * so its rows carry no clustering fingerprint and are comparable across a
  * boundary a theme's are not. `judge_version` is stamped instead, and it is the
- * column a cross-month comparison has to match on.
+ * column a cross-month comparison has to match on. It is the TENANT'S judge
+ * (`judgeVersionFor`, 14 Oct): the one its membership pass wrote the rows the
+ * reading counts under.
  */
 export function subjectMonthSide(
   admin: SupabaseClient,
   clientId: string,
-  judgeVersion: string = JUDGE_VERSION,
+  judgeVersion: string = judgeVersionFor(clientId),
 ): NumeratorSide {
   return {
     table: MONTH_SUBJECT_TABLE,
@@ -203,7 +205,7 @@ export function backReadBlockers(subjects: readonly SubjectBackReadState[]): str
 /** What `subjectFreezeHold` needs of a membership pass — the shape of a step's
  *  result, or `null` for a step that ran out of retries. */
 export type MembershipOutcome =
-  | Pick<SubjectMembershipResult, 'subjectName' | 'skipped' | 'budgetStopped' | 'unanswered'>
+  | Pick<SubjectMembershipResult, 'subjectName' | 'skipped' | 'budgetStopped' | 'unanswered' | 'clockStopped'>
   | null
 
 /**
@@ -234,6 +236,7 @@ export function subjectFreezeHold(results: readonly MembershipOutcome[]): string
   say(named.filter((r) => r.skipped === 'coverage_short'), 'refused because the corpus is not embedded enough')
   say(named.filter((r) => r.skipped === 'no_vector'), 'has no phrase vector')
   say(named.filter((r) => r.budgetStopped), 'stopped at the pass ceiling with pairs still undecided')
+  say(named.filter((r) => r.clockStopped), "stopped at the step's clock with pairs still undecided")
   const unanswered = named.filter((r) => r.unanswered > 0)
   if (unanswered.length > 0) {
     reasons.push(

@@ -75,9 +75,9 @@ import type { SubjectCalibrationWord } from './overview-market/subjects'
 import { loadMarketMakers, loadQuestionsBySubject, makerKOf, nameQuestions, postsSharing, UNANSWERED_SHOWN, type MarketMakers } from './subjects'
 import { loadOwnPostSubjects, questionTouch } from './own-post-touch'
 import { ownPostFilings } from '../reading/own-posts'
-import { isMissingSubjects, MOVE_PROMISE, RPC_WINDOW_SUBJECT_READINGS, TABLE_MOVES, TABLE_SUBJECT_MEMBERSHIPS, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
+import { isMissingSubjects, judgeVersionFor, MOVE_PROMISE, RPC_WINDOW_SUBJECT_READINGS, TABLE_MOVES, TABLE_SUBJECT_MEMBERSHIPS, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
 import { earnsVerdict, printsClient, subjectCalibration, type SubjectCalibration } from '../subjects/calibration-state'
-import { monthsWrittenAt, subjectBackRead, subjectCountedFrom, subjectReadIn, unreadWords, type CountedSubject } from '../subjects/read-in'
+import { monthsWrittenAt, otherJudgeMonths, subjectBackRead, subjectCountedFrom, subjectReadIn, unreadWords, type CountedSubject } from '../subjects/read-in'
 import { chunk, mapWithLimit, MULTI_ROW_IN_CHUNK, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import type { KeywordRow } from '../provenance/searches'
 import { selectAll } from '../supabase-admin'
@@ -2027,6 +2027,9 @@ export type StoredSubjectRow = {
   subject_id: string
   videos: number
   comments: number
+  /** The judge that read the month (`select('*')` carries it). Optional: a
+   *  fixture or a stored row from before may not. */
+  judge_version?: string | null
 }
 
 /**
@@ -2525,6 +2528,7 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
   // The rows and their market sides (WP1.6) read the same answer.
   const subjectsRead = {
     writtenAt: monthsWrittenAt(history.denominators, new Set(marketAudiences(marketRivals))),
+    judgeVersion: judgeVersionFor(clientId),
     countedFrom: new Map((subjectRows ?? []).map((x) => [x.id, subjectCountedFrom(x as CountedSubject, subjectChanges)])),
     unreadWords: unreadWords({ month, filling: monthStatus === 'filling', nextUpdate: rm.nextUpdate }),
   }
@@ -5372,6 +5376,10 @@ interface SubjectsInput {
     writtenAt: ReadonlyMap<string, number>
     countedFrom: ReadonlyMap<string, number | null>
     unreadWords: string
+    /** The tenant's judge today (`judgeVersionFor`): a month whose rows were
+     *  read under another is not read for the subject (`otherJudgeMonths`,
+     *  lib/subjects/read-in.ts). Absent: no judge cut, as before. */
+    judgeVersion?: string
   }
 }
 
@@ -5383,7 +5391,8 @@ type SubjectsReadIn = NonNullable<SubjectsInput['read']>
  * (`withMarketSides`): a month written before the subject was counted, with
  * no row for it and no back-read, is 'unread', and its 0 is no reading.
  * Without `read`, every month reads as read, as before. `month` is a month
- * start.
+ * start. A month read under a judge other than `read.judgeVersion` is
+ * 'unread' too (14 Oct): no row, verdict or word crosses a judge change.
  */
 export function subjectReadInOf(
   read: SubjectsReadIn | undefined,
@@ -5391,6 +5400,7 @@ export function subjectReadInOf(
 ): (subjectId: string, month: string) => 'read' | 'unread' | 'no_month' {
   if (!read) return () => 'read'
   const all = months ?? []
+  const otherJudge = read.judgeVersion ? otherJudgeMonths(all, read.judgeVersion) : null
   const citedIn = new Set(all.map((r) => `${monthStartOf(r.month)}|${r.subject_id}`))
   const backRead = new Map<string, boolean>()
   const backReadOf = (subjectId: string): boolean => {
@@ -5400,13 +5410,15 @@ export function subjectReadInOf(
     }
     return backRead.get(subjectId)!
   }
-  return (subjectId, month) =>
-    subjectReadIn({
+  return (subjectId, month) => {
+    if (otherJudge && read.writtenAt.get(month) != null && otherJudge(subjectId).has(month)) return 'unread'
+    return subjectReadIn({
       countedFrom: read.countedFrom.get(subjectId) ?? null,
       writtenAt: read.writtenAt.get(month),
       cited: citedIn.has(`${month}|${subjectId}`),
       backRead: backReadOf(subjectId),
     })
+  }
 }
 
 /** The category side of one subject at the same point last month, or null. */

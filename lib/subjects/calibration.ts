@@ -1,6 +1,6 @@
 import { createHash } from 'crypto'
 
-import { SUBJECT_CALIBRATION_SAMPLE, SUBJECT_MATCH_HIGH, SUBJECT_MATCH_LOW, SUBJECT_PRECISION_FLOOR } from './types'
+import { SUBJECT_CALIBRATION_SAMPLE, SUBJECT_MATCH_HIGH, SUBJECT_MATCH_LOW, SUBJECT_PRECISION_FLOOR, type SubjectJudge } from './types'
 
 // The precision gate (design :891): a subject's share is not shown to a client
 // until precision has been measured, by hand, at or above 85%.
@@ -18,6 +18,15 @@ import { SUBJECT_CALIBRATION_SAMPLE, SUBJECT_MATCH_HIGH, SUBJECT_MATCH_LOW, SUBJ
 // (lib/pipeline/rec-lineage.ts), which were picked against a labelled pair set
 // rather than guessed. SUBJECT_MATCH_HIGH and SUBJECT_MATCH_LOW are guessed
 // today, and this is how they stop being.
+
+/**
+ * The threshold pair a judge ships at, as the precision arithmetic takes it.
+ * A judge with no auto tier (`high: null`, Össur's since 14 Oct) asks the
+ * model about every pair in the band, which is a `high` nothing reaches. Pure.
+ */
+export function judgeThresholds(judge: Pick<SubjectJudge, 'high' | 'low'>): { high: number; low: number } {
+  return { high: judge.high ?? Number.POSITIVE_INFINITY, low: judge.low }
+}
 
 /**
  * A deterministic sample of keys.
@@ -196,6 +205,7 @@ export function precisionAt(
 export function candidateThresholds(
   highs: readonly number[] = [0.55, 0.6, 0.65, 0.7],
   lows: readonly number[] = [0.35, 0.4, 0.45, 0.5, 0.55],
+  shipped: { high: number; low: number } = { high: SUBJECT_MATCH_HIGH, low: SUBJECT_MATCH_LOW },
 ): { high: number; low: number }[] {
   const out: { high: number; low: number }[] = []
   for (const high of highs) {
@@ -204,10 +214,11 @@ export function candidateThresholds(
       out.push({ high, low })
     }
   }
-  if (!out.some((p) => p.high === SUBJECT_MATCH_HIGH && p.low === SUBJECT_MATCH_LOW)) {
-    out.push({ high: SUBJECT_MATCH_HIGH, low: SUBJECT_MATCH_LOW })
+  if (!out.some((p) => p.high === shipped.high && p.low === shipped.low)) {
+    out.push({ high: shipped.high, low: shipped.low })
   }
-  return out.sort((a, b) => a.high - b.high || a.low - b.low)
+  // A shipped pair with no auto tier (`high` Infinity) sorts last.
+  return out.sort((a, b) => (a.high === b.high ? 0 : a.high - b.high) || a.low - b.low)
 }
 
 export function precisionTable(
@@ -224,14 +235,17 @@ export function clearsPrecisionGate(row: PrecisionRow, floor = SUBJECT_PRECISION
 
 /** One printed table. Monospace, because an operator reads it in a terminal and
  *  the whole point is comparing a column. */
-export function formatPrecisionTable(rows: readonly PrecisionRow[]): string {
+export function formatPrecisionTable(
+  rows: readonly PrecisionRow[],
+  shippedAt: { high: number; low: number } = { high: SUBJECT_MATCH_HIGH, low: SUBJECT_MATCH_LOW },
+): string {
   const head = ' high    low  predicted  correct  precision  missed  unknown'
   const body = rows.map((r) => {
-    const shipped = r.high === SUBJECT_MATCH_HIGH && r.low === SUBJECT_MATCH_LOW ? '  <- shipped' : ''
+    const shipped = r.high === shippedAt.high && r.low === shippedAt.low ? '  <- shipped' : ''
     // em-dash-ok: operator console table, the empty-cell mark
     const pct = r.precision === null ? '     —' : `${(100 * r.precision).toFixed(1)}%`.padStart(6)
     return (
-      `${r.high.toFixed(2).padStart(5)}  ${r.low.toFixed(2).padStart(5)}  ` +
+      `${(Number.isFinite(r.high) ? r.high.toFixed(2) : 'none').padStart(5)}  ${r.low.toFixed(2).padStart(5)}  ` +
       `${String(r.predicted).padStart(9)}  ${String(r.correct).padStart(7)}  ${pct}  ` +
       `${String(r.missed).padStart(6)}  ${String(r.unknown).padStart(7)}${shipped}`
     )

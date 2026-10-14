@@ -28,7 +28,8 @@ import {
   type Audience,
   type PlatformMix,
 } from './types'
-import { isMissingSubjects, TABLE_SUBJECTS } from '../subjects/types'
+import { isMissingSubjects, judgeVersionFor, TABLE_SUBJECTS } from '../subjects/types'
+import { otherJudgeMonths, withoutUnreadMonths, type JudgedMonthRow } from '../subjects/read-in'
 import {
   changesFromLog,
   OUR_CHANGE_SURFACES,
@@ -446,6 +447,17 @@ export async function loadMonthSeries(
 
   const axis = monthAxis(from, to)
   const series: MonthSeries[] = []
+  // A SUBJECT'S MONTH READ UNDER ANOTHER JUDGE IS NO READING OF IT (14 Oct).
+  // The rows carry the judge that decided the membership they count
+  // (`judge_version`); a month stamped by a judge other than the tenant's own
+  // today (`judgeVersionFor`) loses its k here, as a month the subject was not
+  // read in does (`withoutUnreadMonths`), so no comparison, trail or direction
+  // word built on this series crosses a judge change (`otherJudgeMonths`,
+  // lib/subjects/read-in.ts). A tenant whose rows all carry its own judge
+  // reads exactly as before.
+  const judgeCut = objectKind === 'subject'
+    ? otherJudgeMonths(numerators as unknown as JudgedMonthRow[], judgeVersionFor(clientId))
+    : null
   for (const audience of keys.length > 0 ? keys : ['']) {
     if (!objectIds || objectIds.length === 0) {
       series.push(
@@ -464,27 +476,27 @@ export async function loadMonthSeries(
       continue
     }
     for (const objectId of objectIds) {
-      series.push(
-        buildSeries({
-          axis,
-          audience,
-          denominators,
-          readings: numeratorById.get(objectId) ?? [],
-          changes: seriesChanges,
-          renames,
-          // The OBJECT's substrate, not the denominator's: a series whose
-          // numerator table is absent says "not recorded", never "nothing was
-          // said" (lib/reading/series.ts MonthState).
-          substrate: numeratorSubstrate,
-          changeLogFrom,
-          updatesByMonth: updates.byMonth,
-          firstRunMonth: updates.firstRunMonth,
-          // No clustering, no boundaries — never "we did not record it".
-          ...(objectKind && NUMERATOR_HAS_CLUSTERING[objectKind] === false ? { regimes: [] } : {}),
-          objectId,
-          objectLabel: labels.get(objectId) ?? null,
-        }),
-      )
+      const built = buildSeries({
+        axis,
+        audience,
+        denominators,
+        readings: numeratorById.get(objectId) ?? [],
+        changes: seriesChanges,
+        renames,
+        // The OBJECT's substrate, not the denominator's: a series whose
+        // numerator table is absent says "not recorded", never "nothing was
+        // said" (lib/reading/series.ts MonthState).
+        substrate: numeratorSubstrate,
+        changeLogFrom,
+        updatesByMonth: updates.byMonth,
+        firstRunMonth: updates.firstRunMonth,
+        // No clustering, no boundaries — never "we did not record it".
+        ...(objectKind && NUMERATOR_HAS_CLUSTERING[objectKind] === false ? { regimes: [] } : {}),
+        objectId,
+        objectLabel: labels.get(objectId) ?? null,
+      })
+      const cut = judgeCut ? judgeCut(objectId) : null
+      series.push(cut && cut.size > 0 ? withoutUnreadMonths(built, (m) => cut.has(m)) : built)
     }
   }
 

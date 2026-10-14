@@ -197,7 +197,7 @@ export async function loadKeptWeekLine(client: SupabaseClient, input: {
   let objects = input.objects ? [...input.objects] : undefined
   if (!objects && points.some((p) => p.objectKind === 'subject')) {
     const { data, error } = await client.from('subjects')
-      .select('id, name, status, calibrated_at, calibration_precision, calibration_n, calibration_judge_version')
+      .select('id, client_id, name, status, calibrated_at, calibration_precision, calibration_n, calibration_judge_version')
       .eq('client_id', clientId)
     if (error) console.error(`[pages] subjects: ${error.message}; the week line draws its kinds alone`)
     type SubjectRow = Parameters<typeof subjectCalibration>[0] & { id: string; name: string; status: string }

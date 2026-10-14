@@ -44,8 +44,8 @@ import {
   trailingCompleteMonths,
 } from '../reading/monthly'
 import { readSubjectWindow } from '../subjects/read'
-import { monthsWrittenAt, subjectBackRead, subjectCountedFrom, subjectReadIn } from '../subjects/read-in'
-import { isMissingSubjects } from '../subjects/types'
+import { monthsWrittenAt, otherJudgeMonths, subjectBackRead, subjectCountedFrom, subjectReadIn, type JudgedMonthRow } from '../subjects/read-in'
+import { isMissingSubjects, judgeVersionFor } from '../subjects/types'
 import {
   TABLE_DENOMINATORS,
   TABLE_KIND_READINGS,
@@ -278,7 +278,17 @@ export function pooledByObject(
  * no row in any of them, counted after they were written, reads as forming
  * even where a back-read reached it in some older month: the side that flags
  * nothing. A month with no denominator row is `no_month` and is not listed;
- * the denominator's own zero already says it. Pure.
+ * the denominator's own zero already says it.
+ *
+ * AND A MONTH READ UNDER ANOTHER JUDGE (14 Oct; `otherJudgeMonths`,
+ * lib/subjects/read-in.ts). The week is counted off today's memberships, so
+ * under the tenant's judge today; a baseline month frozen under the judge
+ * before it counted another membership. The baseline's `regime` only ever
+ * folded the BASELINE months' keys, so a baseline wholly under the old judge
+ * read `one` and a new judge's week was tested against it: a stricter judge
+ * reads as a fall, a looser one as a surge. Such a month is held the same way
+ * (`otherJudge`), so the subject sits at `baseline_forming` until every kept
+ * month was read by the judge its week is. Pure.
  */
 export function subjectUnreadMonths(input: {
   months: readonly string[]
@@ -288,11 +298,14 @@ export function subjectUnreadMonths(input: {
   subjectMonths: readonly DenominatorMonth[]
   /** `subjectCountedFrom`, in ms. */
   countedFrom: number | null
+  /** The months the subject was read under a judge other than the tenant's
+   *  own today, as month starts (`otherJudgeMonths`). */
+  otherJudge?: ReadonlySet<string>
 }): string[] {
   const writtenAt = monthsWrittenAt(input.denominators)
   const cited = new Set(input.subjectMonths.filter((m) => m.videos > 0).map((m) => monthStartOf(m.month)))
   const backRead = subjectBackRead(input.countedFrom, cited, writtenAt)
-  return input.months.filter((m) => subjectReadIn({
+  return input.months.filter((m) => input.otherJudge?.has(monthStartOf(m)) || subjectReadIn({
     countedFrom: input.countedFrom,
     writtenAt: writtenAt.get(monthStartOf(m)),
     cited: cited.has(monthStartOf(m)),
@@ -1445,6 +1458,9 @@ export async function buildReading(
   // has no row in the months written before it was counted, and those are no
   // reading, not zeros. Read once, and only when there are subjects.
   const changeLog = subjects.length > 0 ? (changes ?? (await loadChanges(admin, clientId))) : []
+  // The baseline months each subject was read under another judge than the
+  // tenant's own today (`subjectUnreadMonths`' `otherJudge`).
+  const otherJudge = otherJudgeMonths(subjectMonths as unknown as JudgedMonthRow[], judgeVersionFor(clientId))
   for (const subject of subjects) {
     const subjectBaseline = baselineSubjects.get(subject.id) ?? []
     const unreadMonths = subjectUnreadMonths({
@@ -1452,6 +1468,7 @@ export async function buildReading(
       denominators: denominatorMonths,
       subjectMonths: subjectBaseline,
       countedFrom: subjectCountedFrom(subject, changeLog),
+      otherJudge: otherJudge(subject.id),
     })
     candidates.push({
       kind: 'subject',

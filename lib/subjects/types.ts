@@ -1,4 +1,4 @@
-import { ANALYSIS_MODEL } from '../config'
+import { ANALYSIS_MODEL, OSSUR_CLIENT_ID } from '../config'
 
 // Subjects — the shapes, the thresholds, and the one string that decides
 // whether two of a subject's months may be compared (Phase 1 WP4, design items
@@ -212,6 +212,146 @@ export const SUBJECT_EMBED_INPUT_VERSION = 'subject_embed_v2'
 export const JUDGE_VERSION =
   `${SUBJECT_JUDGE_PROMPT_VERSION}·${SUBJECT_JUDGE_MODEL}·${SUBJECT_MATCH_HIGH}/${SUBJECT_MATCH_LOW}·${SUBJECT_EMBED_INPUT_VERSION}`
 
+// ---- The judge, per tenant (14 Oct) -------------------------------------------
+//
+// ONE JUDGE PER TENANT, DEFAULTING TO THE ONE ABOVE. Össur's subjects read
+// 15 to 61% precision under gpt-4.1-mini on a sheet Heinrich labelled
+// (plans/verbatim-depth-v2/judge-report.md): the mini judges a block by
+// contrast with its neighbours, reads "excluding …" as prose rather than a
+// rule, and never sees the pairs at 0.60 or more. An offline replay of the
+// same 198 pairs put gpt-5.4 at low effort, with the description split into
+// what belongs and a hard list of what never does, and every pair in the band
+// judged, at 89 to 100% on the five re-worded subjects (Look & style 81% with
+// production-like neighbours in each call; the fresh sheet decides). Moving the global
+// judge would re-judge Sealand and reset every one of its checks for a fault
+// measured on Össur, so the judge is chosen per tenant instead, the
+// `postIdeasEnabled` pattern (lib/config.ts): a map keyed by client id, read
+// only through `judgeFor` / `judgeVersionFor`.
+//
+// THE VERSION STRING NAMES ALL OF IT (`judgeVersionOf`): the prompt, the model
+// and its reasoning effort, the auto tier ("none" where every pair is judged),
+// the floor and the phrase formula. The default's is `JUDGE_VERSION` byte for
+// byte, so a tenant on the default re-judges nothing and keeps its checks, and
+// a test pins Sealand's string.
+//
+// FAIL CLOSED. A subject read without its client compares its calibration
+// against the default judge (`judgeVersionFor(undefined)`): a subject checked
+// under a tenant's own judge then reads provisional ("Not measured yet"),
+// never a wrong ready.
+
+/** Which prompt a judge asks: `v1` is `buildJudgeSystemPrompt`, `strict` is
+ *  `buildStrictJudgeSystemPrompt` (lib/subjects/membership.ts). */
+export type SubjectJudgePrompt = 'v1' | 'strict'
+
+/** Everything that decides who belongs, as one value. */
+export interface SubjectJudge {
+  /** The prompt's identity. Bump it with any change to what the judge is asked. */
+  promptVersion: string
+  prompt: SubjectJudgePrompt
+  model: string
+  /** A reasoning model's effort (it takes no temperature); null for a 4.x
+   *  model, which is asked at `ANALYSIS_TEMPERATURE`. */
+  reasoningEffort: 'low' | 'medium' | null
+  /** The auto tier: at or above it the vector alone makes a member and no
+   *  model is asked. Null: there is none, and every pair in the band is
+   *  judged. */
+  high: number | null
+  /** The floor: below it the vector alone says no. */
+  low: number
+  embedVersion: string
+  /** Calls in flight at once inside one subject's pass. NOT part of the key
+   *  (`judgeVersionOf`): it changes when an answer arrives, never what it is.
+   *  One is today's judge, one call after another. */
+  concurrency: number
+}
+
+/** Today's judge, and every tenant's unless the map below names another. */
+export const DEFAULT_SUBJECT_JUDGE: SubjectJudge = {
+  promptVersion: SUBJECT_JUDGE_PROMPT_VERSION,
+  prompt: 'v1',
+  model: SUBJECT_JUDGE_MODEL,
+  reasoningEffort: null,
+  high: SUBJECT_MATCH_HIGH,
+  low: SUBJECT_MATCH_LOW,
+  embedVersion: SUBJECT_EMBED_INPUT_VERSION,
+  concurrency: 1,
+}
+
+/** The strict prompt's identity (`buildStrictJudgeSystemPrompt`). */
+export const STRICT_JUDGE_PROMPT_VERSION = 'subject_judge_strict_v1'
+
+/**
+ * The judge the 14 Oct replay measured: gpt-5.4 at low effort, the strict
+ * prompt, and no auto tier (7 of the sheet's 24 pairs at 0.60 or more were
+ * wrong, and the auto tier never asks). The model is a literal, not
+ * `SYNTHESIS_MODEL`: a change there must not re-judge a tenant unseen.
+ *
+ * FOUR CALLS AT ONCE, the replay's own pace: one call of twenty pairs took
+ * 12 s offline on 14 Oct (about $0.013), so one after another a pipeline step
+ * would judge about a dozen batches before its clock stops it
+ * (`SUBJECT_STEP_BUDGET_MS`, lib/subjects/membership.ts).
+ */
+export const STRICT_SUBJECT_JUDGE: SubjectJudge = {
+  promptVersion: STRICT_JUDGE_PROMPT_VERSION,
+  prompt: 'strict',
+  model: 'gpt-5.4',
+  reasoningEffort: 'low',
+  high: null,
+  low: SUBJECT_MATCH_LOW,
+  embedVersion: SUBJECT_EMBED_INPUT_VERSION,
+  concurrency: 4,
+}
+
+/** A judge's comparability key. The default's is `JUDGE_VERSION` exactly. */
+export function judgeVersionOf(j: SubjectJudge): string {
+  const model = j.reasoningEffort ? `${j.model}:${j.reasoningEffort}` : j.model
+  return `${j.promptVersion}·${model}·${j.high ?? 'none'}/${j.low}·${j.embedVersion}`
+}
+
+/**
+ * The tenants with a judge of their own. Read it through `judgeFor` /
+ * `judgeVersionFor`; never the map (`map` on those is for a test).
+ *
+ * Össur since 14 Oct (Heinrich's approval of the judge report). Adding a
+ * tenant here re-judges its whole corpus on its next membership pass (every
+ * pair is undecided at a new key) and turns every one of its checks back to
+ * "Not measured yet" until a fresh sheet is labelled: budget both.
+ */
+export const SUBJECT_JUDGE_BY_CLIENT: Readonly<Record<string, SubjectJudge>> = {
+  [OSSUR_CLIENT_ID]: STRICT_SUBJECT_JUDGE,
+}
+
+/** The judge a tenant's subjects are read with. No client: the default. */
+export function judgeFor(
+  clientId: string | null | undefined,
+  map: Readonly<Record<string, SubjectJudge>> = SUBJECT_JUDGE_BY_CLIENT,
+): SubjectJudge {
+  if (!clientId) return DEFAULT_SUBJECT_JUDGE
+  return Object.prototype.hasOwnProperty.call(map, clientId) ? map[clientId] : DEFAULT_SUBJECT_JUDGE
+}
+
+/** The key a tenant's memberships, months and checks are stamped and read
+ *  with. No client: the default's, which is what makes a read that lost its
+ *  client fail closed. */
+export function judgeVersionFor(
+  clientId: string | null | undefined,
+  map: Readonly<Record<string, SubjectJudge>> = SUBJECT_JUDGE_BY_CLIENT,
+): string {
+  return judgeVersionOf(judgeFor(clientId, map))
+}
+
+/** What `subject_band()` is handed as `p_high` for a judge with no auto tier:
+ *  above any cosine similarity, so the function bands every pair `judge`.
+ *  `splitBand` (lib/subjects/membership.ts) does not trust the label anyway. */
+export const NO_AUTO_TIER_HIGH = 2
+
+/** What `subject_band()` is asked under a judge: its floor, its auto tier
+ *  (`NO_AUTO_TIER_HIGH` where it has none, so every pair bands `judge`) and
+ *  its key. Pure. */
+export function bandArgs(judge: SubjectJudge): { p_low: number; p_high: number; p_judge: string } {
+  return { p_low: judge.low, p_high: judge.high ?? NO_AUTO_TIER_HIGH, p_judge: judgeVersionOf(judge) }
+}
+
 // ---- The phrase vector ------------------------------------------------------
 
 /**
@@ -297,6 +437,29 @@ export function subjectPositiveGloss(description?: string | null): string {
   const cut = EXCLUSION_CLAUSE.exec(text)
   const positive = cut ? text.slice(0, cut.index) : text
   return asSentence(positive.replace(META_FRAME, ''))
+}
+
+/**
+ * A description split for the strict judge (`buildStrictJudgeSystemPrompt`):
+ * what belongs, and what never does, cut at the same exclusion marker the
+ * phrase vector cuts at.
+ *
+ * BYTE FOR BYTE THE 14 OCT REPLAY'S SPLIT, so the precision it measured holds:
+ * what belongs keeps its "Comments about" frame, loses the punctuation before
+ * the marker and ends on a full stop; what never belongs is everything after
+ * the marker, trimmed. A description with no marker is what belongs, as
+ * written, and nothing never does. Null where nothing belongs (an empty
+ * description, or one that is only an exclusion): the prompt then judges on
+ * the name. Pure.
+ */
+export function subjectExclusionSplit(description?: string | null): { belongs: string | null; never: string | null } {
+  const d = description ?? ''
+  if (!d.trim()) return { belongs: null, never: null }
+  const cut = EXCLUSION_CLAUSE.exec(d)
+  if (!cut) return { belongs: d.trim(), never: null }
+  const before = d.slice(0, cut.index).trim().replace(/[\s,;:]+$/, '')
+  const never = d.slice(cut.index + cut[0].length).trim()
+  return { belongs: before ? `${before}.` : null, never: never || null }
 }
 
 /** The text a subject is embedded from. The same shape as `embedInput`
@@ -445,8 +608,13 @@ export type SubjectCalibration = 'calibrating' | 'ready'
  * gate quietly doing nothing. Null is `calibrating`.
  */
 export function subjectCalibration(
-  s: Pick<Subject, 'calibrated_at' | 'calibration_precision' | 'calibration_judge_version'>,
-  judgeVersion: string = JUDGE_VERSION,
+  s: Pick<Subject, 'calibrated_at' | 'calibration_precision' | 'calibration_judge_version'> & {
+    /** The tenant, whose judge the check is held against (`judgeVersionFor`).
+     *  Required as a key so a read that does not select it fails to compile;
+     *  null or absent compares against the default judge, which fails closed. */
+    client_id: string | null | undefined
+  },
+  judgeVersion: string = judgeVersionFor(s.client_id),
 ): SubjectCalibration {
   if (!s.calibrated_at) return 'calibrating'
   if ((s.calibration_precision ?? 0) < SUBJECT_PRECISION_FLOOR) return 'calibrating'

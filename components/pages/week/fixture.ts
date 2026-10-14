@@ -887,13 +887,13 @@ export const SEALAND_RIVAL_AUDIENCES = [
 
 const JUDGE = 'subject_judge_v1·gpt-4.1-mini·0.6/0.4·subject_embed_v2'
 const SEALAND_SUBJECTS = [
-  { id: '723d1389-4eb0-47f1-b6e1-f368d990fb2a', name: 'Looks & style', status: 'active', named_at: '2026-09-23', calibrated_at: '2026-09-24T11:53:17.071Z', calibration_precision: 0.8571428571428571, calibration_n: 33, calibration_judge_version: JUDGE },
-  { id: '98349b72-6783-424d-8397-8b43bf06741b', name: 'Durability', status: 'active', named_at: '2026-09-23', calibrated_at: '2026-09-24T11:53:17.462Z', calibration_precision: 1, calibration_n: 33, calibration_judge_version: JUDGE },
-  { id: 'cf7bd22c-9a38-47c6-80dd-e8d3c5b3852d', name: 'Price', status: 'active', named_at: '2026-09-23', calibrated_at: '2026-09-24T11:53:17.858Z', calibration_precision: 1, calibration_n: 33, calibration_judge_version: JUDGE },
-  { id: 'fba00f77-4720-4f8e-b48f-3d4c53222e9f', name: 'Comfort', status: 'active', named_at: '2026-09-23', calibrated_at: '2026-09-24T11:53:18.256Z', calibration_precision: 0.9166666666666666, calibration_n: 33, calibration_judge_version: JUDGE },
-  { id: '27ac98cd-57e5-4322-922d-df90fa0ab859', name: 'Waterproofing', status: 'active', named_at: '2026-09-23', calibrated_at: '2026-09-24T11:53:16.277Z', calibration_precision: 1, calibration_n: 33, calibration_judge_version: JUDGE },
-  { id: '3f6d49f4-cedd-492d-a957-1c840c1258a1', name: 'Repair & warranty', status: 'active', named_at: '2026-09-23', calibrated_at: '2026-09-24T11:53:16.678Z', calibration_precision: 0.3333333333333333, calibration_n: 33, calibration_judge_version: JUDGE },
-  { id: '1db58231-9327-4815-9898-ed3008bb353c', name: 'Community & purpose', status: 'active', named_at: '2026-09-24', calibrated_at: null, calibration_precision: null, calibration_n: null, calibration_judge_version: null },
+  { id: '723d1389-4eb0-47f1-b6e1-f368d990fb2a', client_id: SEALAND_CLIENT_ID, name: 'Looks & style', status: 'active', named_at: '2026-09-23', calibrated_at: '2026-09-24T11:53:17.071Z', calibration_precision: 0.8571428571428571, calibration_n: 33, calibration_judge_version: JUDGE },
+  { id: '98349b72-6783-424d-8397-8b43bf06741b', client_id: SEALAND_CLIENT_ID, name: 'Durability', status: 'active', named_at: '2026-09-23', calibrated_at: '2026-09-24T11:53:17.462Z', calibration_precision: 1, calibration_n: 33, calibration_judge_version: JUDGE },
+  { id: 'cf7bd22c-9a38-47c6-80dd-e8d3c5b3852d', client_id: SEALAND_CLIENT_ID, name: 'Price', status: 'active', named_at: '2026-09-23', calibrated_at: '2026-09-24T11:53:17.858Z', calibration_precision: 1, calibration_n: 33, calibration_judge_version: JUDGE },
+  { id: 'fba00f77-4720-4f8e-b48f-3d4c53222e9f', client_id: SEALAND_CLIENT_ID, name: 'Comfort', status: 'active', named_at: '2026-09-23', calibrated_at: '2026-09-24T11:53:18.256Z', calibration_precision: 0.9166666666666666, calibration_n: 33, calibration_judge_version: JUDGE },
+  { id: '27ac98cd-57e5-4322-922d-df90fa0ab859', client_id: SEALAND_CLIENT_ID, name: 'Waterproofing', status: 'active', named_at: '2026-09-23', calibrated_at: '2026-09-24T11:53:16.277Z', calibration_precision: 1, calibration_n: 33, calibration_judge_version: JUDGE },
+  { id: '3f6d49f4-cedd-492d-a957-1c840c1258a1', client_id: SEALAND_CLIENT_ID, name: 'Repair & warranty', status: 'active', named_at: '2026-09-23', calibrated_at: '2026-09-24T11:53:16.678Z', calibration_precision: 0.3333333333333333, calibration_n: 33, calibration_judge_version: JUDGE },
+  { id: '1db58231-9327-4815-9898-ed3008bb353c', client_id: SEALAND_CLIENT_ID, name: 'Community & purpose', status: 'active', named_at: '2026-09-24', calibrated_at: null, calibration_precision: null, calibration_n: null, calibration_judge_version: null },
 ]
 const S = Object.fromEntries(SEALAND_SUBJECTS.map((x) => [x.name, x.id]))
 

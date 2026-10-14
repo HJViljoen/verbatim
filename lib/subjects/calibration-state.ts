@@ -1,4 +1,4 @@
-import { JUDGE_VERSION, SUBJECT_PRECISION_FLOOR, wilsonUpper, type Subject } from './types'
+import { judgeVersionFor, SUBJECT_PRECISION_FLOOR, wilsonUpper, type Subject } from './types'
 
 // A subject's calibration, in three states (market-first decision C, WP1.1).
 //
@@ -113,6 +113,11 @@ function asNumber(v: number | string | null | undefined): number | null {
 /**
  * Which of the three states a subject's stored calibration earns.
  *
+ * THE JUDGE IS THE TENANT'S (14 Oct): `judgeVersionFor(s.client_id)`, the
+ * default judge for every tenant but one with its own. A subject read without
+ * its client is held against the default, so one checked under its tenant's
+ * own judge reads provisional there.
+ *
  * THE JUDGE VERSION IS REQUIRED for both ready and failed. A precision
  * measured under another judge (a moved threshold, a changed prompt) is not
  * evidence about the numbers the subject carries now, either way: it cannot
@@ -128,8 +133,14 @@ export function subjectCalibration(
   s: Pick<Subject, 'calibrated_at' | 'calibration_judge_version'> & {
     calibration_precision: number | string | null
     calibration_n?: number | string | null
+    /** The tenant, whose judge the check is held against (`judgeVersionFor`,
+     *  lib/subjects/types.ts; Össur has its own since 14 Oct). Required as a
+     *  key, so a subject read that does not select it does not compile. Null
+     *  or absent compares against the DEFAULT judge: a subject checked under
+     *  a tenant's own judge then reads provisional, never a wrong ready. */
+    client_id: string | null | undefined
   },
-  judgeVersion: string = JUDGE_VERSION,
+  judgeVersion: string = judgeVersionFor(s.client_id),
 ): SubjectCalibration {
   if (!s.calibrated_at) return 'provisional'
   if (s.calibration_judge_version !== judgeVersion) return 'provisional'

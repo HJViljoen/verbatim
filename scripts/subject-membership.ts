@@ -11,7 +11,7 @@ import {
   type SubjectMembershipOptions,
   type SubjectMembershipResult,
 } from '../lib/subjects/membership'
-import { JUDGE_VERSION, SUBJECT_MIN_COVERAGE, type Subject } from '../lib/subjects/types'
+import { judgeVersionFor, SUBJECT_MIN_COVERAGE, type Subject } from '../lib/subjects/types'
 
 // Decide subject membership across a tenant's whole live insight population.
 // DRY BY DEFAULT — pass --apply to spend and write.
@@ -142,7 +142,7 @@ async function main() {
       `(~$${estimated.reduce((n, r) => n + (r.estimated?.costUsd.low ?? 0), 0).toFixed(4)}-` +
       `$${estimated.reduce((n, r) => n + (r.estimated?.costUsd.high ?? 0), 0).toFixed(4)} across them)`
   console.log(
-    `[subject-membership] judge ${JUDGE_VERSION} · ${calls} call(s) · ~$${priced.toFixed(4)} ` +
+    `[subject-membership] judge ${judgeVersionFor(clientId)} · ${calls} call(s) · ~$${priced.toFixed(4)} ` +
     `· pass ceiling $${(budget || subjectBudgetUsd()).toFixed(2)}${estimatedNote}`,
   )
 

@@ -1,6 +1,6 @@
 import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../../config'
 import { readingMonthLabel } from '../../reading/month-label'
-import { JUDGE_VERSION } from '../../subjects/types'
+import { judgeVersionFor } from '../../subjects/types'
 import { brandMonthPair, creatorThemes, measuredSubjects, type BrandCrossRow, type BrandMonthVideos, type CreatorVideo, type GroupMonthVideos, type GroupSubjectRow, type StoredBrandMonthRow, type ThemeRef } from '../../reading/cross'
 import {
   buildBrandPanel, buildBrands, buildCreatorPanel, buildCreators, buildGroupPanel, buildGroups, clientCountsOf, creatorVideoIds, crossKeys, groupProducts, monthWordsOf, openOf,
@@ -135,7 +135,8 @@ const MIXED_READY = new Set(['s-cost', 's-function'])
 function ossurMeasured(checks: OssurSubjectChecks) {
   const passed = (id: string) => checks === 'ready' || (checks === 'mixed' && MIXED_READY.has(id))
   return measuredSubjects(OSSUR_SUBJECTS.map(([id, name]) => ({
-    id, name, status: 'active', calibration_judge_version: passed(id) ? JUDGE_VERSION : null,
+    // Össur's checks are held against its own judge since 14 Oct.
+    id, client_id: OSSUR_CLIENT_ID, name, status: 'active', calibration_judge_version: passed(id) ? judgeVersionFor(OSSUR_CLIENT_ID) : null,
     calibrated_at: passed(id) ? '2026-10-13T00:00:00.000Z' : null, calibration_precision: passed(id) ? 0.92 : null, calibration_n: passed(id) ? 40 : null,
   })))
 }

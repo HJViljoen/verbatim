@@ -422,7 +422,7 @@ export interface ChecksIO {
   segments(ids: readonly string[]): Promise<Map<string, PopulationVideo['segment']>>
   /** lens_readings over one population-month, or null when MF2 is not there. */
   lens(population: StepPopulation | 'all', month: string, ids: readonly string[], minDated: number, capturedBefore: string | null, themeRun: string | null): Promise<LensRow[] | null>
-  subjects(): Promise<{ id: string; name: string; status: string; calibrated_at: string | null; calibration_precision: number | string | null; calibration_n: number | string | null; calibration_judge_version: string | null }[]>
+  subjects(): Promise<{ id: string; client_id: string | null; name: string; status: string; calibrated_at: string | null; calibration_precision: number | string | null; calibration_n: number | string | null; calibration_judge_version: string | null }[]>
   themeRun(): Promise<string | null>
   labels(ids: readonly string[]): Promise<Map<string, string>>
 }

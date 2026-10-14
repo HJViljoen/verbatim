@@ -9,21 +9,23 @@ import { logAiCall } from '../pipeline/ai-log'
 import { embedTexts } from '../pipeline/cluster'
 import { createAdminClient, selectAll } from '../supabase-admin'
 import {
-  JUDGE_VERSION,
+  DEFAULT_SUBJECT_JUDGE,
   RPC_SUBJECT_BAND,
+  bandArgs,
   SUBJECT_EMBED_INPUT_VERSION,
   SUBJECT_JUDGE_BATCH,
   SUBJECT_JUDGE_MODEL,
-  SUBJECT_JUDGE_PROMPT_VERSION,
-  SUBJECT_MATCH_HIGH,
-  SUBJECT_MATCH_LOW,
   SUBJECT_MIN_COVERAGE,
   TABLE_SUBJECTS,
   TABLE_SUBJECT_MEMBERSHIPS,
   isMissingSubjects,
+  judgeFor,
+  judgeVersionOf,
   subjectEmbedInput,
+  subjectExclusionSplit,
   type BandedPair,
   type Subject,
+  type SubjectJudge,
   type SubjectMembershipRow,
 } from './types'
 
@@ -100,6 +102,27 @@ export const subjectBudgetUsd = (runBudget = RUN_MODEL_BUDGET_USD): number => ru
 
 export const SUBJECT_JUDGE_PASS = 'subject_judge'
 
+/**
+ * A `subject-membership:N-of-M` step's clock (14 Oct). The step runs inside the
+ * Inngest route, whose `maxDuration` is 300 s, and writes its rows once, at
+ * the end: a step killed at 300 s writes nothing, and Inngest's retry judges
+ * the whole band again and pays for it again, with nothing in the pass
+ * ceiling to stop it (the ceiling counts only the steps that returned).
+ * gpt-4.1-mini answers a batch in a second or two; gpt-5.4 at low effort,
+ * Össur's judge since 14 Oct, in 5 to 12 s (the replay's timed calls, and the
+ * 14 Oct smoke call), four at a time (`SubjectJudge.concurrency`). A week's
+ * new pairs fit (about twenty batches for the biggest subject, five waves); a
+ * full re-judge of it (about 95) does not, and is the script's job
+ * (scripts/subject-membership.ts --apply). So no wave starts after this many
+ * ms from the step's start, each call is capped at `SUBJECT_CALL_CAP_MS` with
+ * one SDK retry, and the step returns what it decided. The rest stays
+ * undecided, the freeze holds the subject months (`subjectFreezeHold`), and
+ * the next run carries on. Worst case: 150 s, plus one wave at twice 45 s,
+ * plus the write, inside 300 s.
+ */
+export const SUBJECT_STEP_BUDGET_MS = 150_000
+export const SUBJECT_CALL_CAP_MS = 45_000
+
 // ---- Pure -------------------------------------------------------------------
 
 /** The judge's answer shape. One decision per insight ref — the batch is one
@@ -161,6 +184,72 @@ export function buildJudgeSystemPrompt(subject: { name: string; description: str
   ].join('\n')
 }
 
+/**
+ * The strict prompt (`subject_judge_strict_v1`, 14 Oct), for a tenant whose
+ * judge asks it (`judgeFor`, lib/subjects/types.ts).
+ *
+ * WHAT IT CHANGES, AND WHY (plans/verbatim-depth-v2/judge-report.md). The
+ * description is split at its exclusion marker (`subjectExclusionSplit`) into
+ * WHAT BELONGS and a hard WHAT NEVER BELONGS list, because "excluding …" read
+ * as prose was a hint the judge weighed, not a rule; the subject has to be the
+ * CENTRAL point of a block, never one item in a list or a side effect; and
+ * unsure means no.
+ *
+ * WORD FOR WORD THE PROMPT THE REPLAY MEASURED (its `strictSystem`, no worked
+ * examples, no main-point field): gpt-5.4 at low effort read 89 to 100% on the
+ * five re-worded subjects (Look & style 81% with production-like neighbours)
+ * and 96% on Cost & access with it. A change to any
+ * line is a new prompt, and `STRICT_JUDGE_PROMPT_VERSION` moves with it.
+ */
+export function buildStrictJudgeSystemPrompt(subject: { name: string; description: string | null }): string {
+  const { belongs, never } = subjectExclusionSplit(subject.description)
+  const lines = [
+    'You decide whether a single piece of customer feedback belongs to one named SUBJECT that a brand is tracking.',
+    '',
+    `THE SUBJECT: "${subject.name}"`,
+    belongs ? `WHAT BELONGS: ${belongs}` : 'WHAT BELONGS: (no description was given; judge on the name alone, and be strict.)',
+    ...(never ? [`WHAT NEVER BELONGS: ${never}`] : []),
+    '',
+    'Each numbered block is one thing the brand’s audience said, as the product recorded it: a short slug and a sentence describing what people said. For each block, decide whether this subject is the CENTRAL point of what was said.',
+    '',
+    'Say yes only when what the block is mainly about is described under WHAT BELONGS. A subject that comes up in passing, as one item in a list, as a side effect, or as the reason for something else does not make the block a member.',
+    '',
+    ...(never ? ['WHAT NEVER BELONGS is a hard rule, not a hint. When a block is mainly about anything listed there, say no, even when it also touches this subject.', ''] : []),
+    'Judge the subject matter, not the mood. "This is far too expensive" and "great value for what it is" are both about price. A complaint and a compliment about the same thing are both members.',
+    '',
+    'Sharing a word with the subject is not belonging to it. Feedback about something adjacent, broader or merely related is a no. A subject that swallows everything measures nothing.',
+    '',
+    'When you are unsure, say no.',
+    '',
+    'Return exactly one decision per block, using the block’s own ref. Never invent a ref and never skip one.',
+  ]
+  return lines.join('\n')
+}
+
+/** The system prompt a judge asks with. */
+export function judgeSystemPrompt(subject: { name: string; description: string | null }, judge: SubjectJudge = DEFAULT_SUBJECT_JUDGE): string {
+  return judge.prompt === 'strict' ? buildStrictJudgeSystemPrompt(subject) : buildJudgeSystemPrompt(subject)
+}
+
+/** The sampling a judge is asked at: a reasoning model's effort (it takes no
+ *  temperature), else `ANALYSIS_TEMPERATURE`, which is what the default judge
+ *  has always been asked at. */
+export function judgeSampling(judge: SubjectJudge): { temperature: number } | { reasoning_effort: 'low' | 'medium' } {
+  return judge.reasoningEffort ? { reasoning_effort: judge.reasoningEffort } : { temperature: ANALYSIS_TEMPERATURE }
+}
+
+/**
+ * One subject's band, split into what the vector settles and what the model
+ * is asked, under a judge. A judge with an auto tier (`high`) keeps
+ * `subject_band()`'s own label; a judge with none (`high: null`) sends EVERY
+ * pair to the model, whatever label the function gave it, so the rule does not
+ * rest on the `p_high` it was handed. Pure.
+ */
+export function splitBand(band: readonly BandedPair[], judge: SubjectJudge = DEFAULT_SUBJECT_JUDGE): { vector: BandedPair[]; judge: BandedPair[] } {
+  if (judge.high == null) return { vector: [], judge: [...band] }
+  return { vector: band.filter((p) => p.band === 'member'), judge: band.filter((p) => p.band === 'judge') }
+}
+
 export function buildJudgeUserPrompt(batch: readonly JudgeCandidate[]): string {
   return batch
     .map((c, i) => `[i${i + 1}] ${c.theme.replace(/_/g, ' ')}: ${c.description.trim()}`)
@@ -203,6 +292,8 @@ export function membershipRows(args: {
   decisions: ReadonlyMap<string, boolean>
   scores: ReadonlyMap<string, number>
   method: SubjectMembershipRow['method']
+  /** The key the rows are stamped with: the tenant's (`judgeVersionFor`).
+   *  Absent: the default judge's, which is `JUDGE_VERSION`. */
   judgeVersion?: string
 }): SubjectMembershipRow[] {
   const rows: SubjectMembershipRow[] = []
@@ -214,7 +305,7 @@ export function membershipRows(args: {
       member,
       method: args.method,
       score: args.scores.get(audience_insight_id) ?? null,
-      judge_version: args.judgeVersion ?? JUDGE_VERSION,
+      judge_version: args.judgeVersion ?? judgeVersionOf(DEFAULT_SUBJECT_JUDGE),
       run_id: args.runId,
     })
   }
@@ -284,8 +375,8 @@ export const SUBJECT_BAND_SHARE = { low: 0.0118, mid: 0.0582, high: 0.1267 } as 
  *  arithmetic on a different count, and not two numbers to reconcile. */
 export const JUDGE_CALL_TOKENS = { input: 1900, output: 500 } as const
 
-export const judgeCallCost = (calls: number): number =>
-  estimateCost(SUBJECT_JUDGE_MODEL, calls * JUDGE_CALL_TOKENS.input, calls * JUDGE_CALL_TOKENS.output)
+export const judgeCallCost = (calls: number, model: string = SUBJECT_JUDGE_MODEL): number =>
+  estimateCost(model, calls * JUDGE_CALL_TOKENS.input, calls * JUDGE_CALL_TOKENS.output)
 
 export interface FirstPassEstimate {
   /** The population it was scaled from. */
@@ -298,7 +389,7 @@ export interface FirstPassEstimate {
 /** The band, the calls and the cost a first pass over `embedded` insights would
  *  come to for one subject. Pure — every number in it is arithmetic on the
  *  measured shares above. */
-export function estimateFirstPass(embedded: number): FirstPassEstimate {
+export function estimateFirstPass(embedded: number, model: string = SUBJECT_JUDGE_MODEL): FirstPassEstimate {
   const pairs = {
     low: Math.round(embedded * SUBJECT_BAND_SHARE.low),
     mid: Math.round(embedded * SUBJECT_BAND_SHARE.mid),
@@ -313,7 +404,7 @@ export function estimateFirstPass(embedded: number): FirstPassEstimate {
     embedded,
     pairs,
     calls,
-    costUsd: { low: judgeCallCost(calls.low), mid: judgeCallCost(calls.mid), high: judgeCallCost(calls.high) },
+    costUsd: { low: judgeCallCost(calls.low, model), mid: judgeCallCost(calls.mid, model), high: judgeCallCost(calls.high, model) },
   }
 }
 
@@ -338,6 +429,10 @@ export interface SubjectMembershipResult {
   /** The pass hit its own ceiling and stopped early; what is left is undecided
    *  next run. */
   budgetStopped: boolean
+  /** The step's clock ran out (`deadlineAt`) and it stopped early; what is
+   *  left is undecided next run. Optional so a step result stored before it
+   *  existed still reads. */
+  clockStopped?: boolean
   /** Set on a DRY RUN ONLY, and only for a subject whose phrase has to be
    *  embedded before anything can be banded. There is no band to plan from, so
    *  `calls` and `costUsd` above are this estimate's MIDPOINT rather than a
@@ -352,7 +447,7 @@ export function emptyMembershipResult(subjectId = '', subjectName = ''): Subject
   return {
     subjectId, subjectName,
     vectorMembers: 0, judged: 0, judgedMembers: 0, unanswered: 0,
-    calls: 0, costUsd: 0, written: 0, skipped: null, budgetStopped: false,
+    calls: 0, costUsd: 0, written: 0, skipped: null, budgetStopped: false, clockStopped: false,
   }
 }
 
@@ -378,7 +473,9 @@ export function membershipSummary(r: SubjectMembershipResult): string {
       `The real pass embeds the phrase first (~$0.0000005 for the set) and then plans off the band it actually gets.`
     )
   }
-  const stopped = r.budgetStopped ? ` · STOPPED at the pass ceiling ($${subjectBudgetUsd().toFixed(2)})` : ''
+  const stopped = r.budgetStopped
+    ? ` · STOPPED at the pass ceiling ($${subjectBudgetUsd().toFixed(2)})`
+    : r.clockStopped ? ` · STOPPED at the step's clock (${SUBJECT_STEP_BUDGET_MS / 1000} s); the rest is undecided until the next run` : ''
   const unanswered = r.unanswered > 0 ? ` · ${r.unanswered} unanswered, still undecided` : ''
   return (
     `${r.subjectName}: ${r.vectorMembers} by vector · ${r.judgedMembers}/${r.judged} by judge in ${r.calls} call(s) ` +
@@ -445,24 +542,19 @@ export async function embedSubjects(admin: Admin, subjects: readonly Subject[]):
   return written
 }
 
-/** One subject's band: every live insight at or above the low threshold with no
- *  decision at this judge version. `selectAll` because Össur's band is past
- *  PostgREST's 1000-row cap, on an RPC exactly as on a select. */
+/** One subject's band: every live insight at or above the judge's floor with
+ *  no decision at its key. The judge is the tenant's (`judgeFor`) unless one
+ *  is handed in. `selectAll` because Össur's band is past PostgREST's 1000-row
+ *  cap, on an RPC exactly as on a select. */
 export async function readBand(
   admin: Admin,
   clientId: string,
   subjectId: string,
-  judgeVersion = JUDGE_VERSION,
+  judge: SubjectJudge = judgeFor(clientId),
 ): Promise<BandedPair[]> {
   return selectAll<BandedPair>(() =>
     admin
-      .rpc(RPC_SUBJECT_BAND, {
-        p_client: clientId,
-        p_subject: subjectId,
-        p_low: SUBJECT_MATCH_LOW,
-        p_high: SUBJECT_MATCH_HIGH,
-        p_judge: judgeVersion,
-      })
+      .rpc(RPC_SUBJECT_BAND, { p_client: clientId, p_subject: subjectId, ...bandArgs(judge) })
       .order('audience_insight_id', { ascending: true }),
   )
 }
@@ -517,6 +609,15 @@ export interface SubjectMembershipOptions {
   /** Skip the coverage refusal. For the calibration harness alone, which is
    *  measuring precision on a sample and is not writing a number anyone reads. */
   ignoreCoverage?: boolean
+  /** The judge, where a caller means another than the tenant's own
+   *  (`judgeFor(clientId)`): a test, or a replay. The pipeline and the scripts
+   *  leave it out. */
+  judge?: SubjectJudge
+  /** The step's clock (the pipeline only): no wave of calls starts after this instant
+   *  (epoch ms), and each call is capped at `SUBJECT_CALL_CAP_MS` with one SDK
+   *  retry. What is left stays undecided and comes back next run, and
+   *  `clockStopped` holds the freeze. Absent: no clock (the scripts). */
+  deadlineAt?: number
   /** The tenant's embedding coverage, when the caller has already counted it.
    *  It is a property of the PASS, not of a subject — two `count=exact` queries
    *  over the whole insight population — and asking it once per subject is five
@@ -544,6 +645,10 @@ export async function judgeSubject(
 ): Promise<SubjectMembershipResult> {
   const out = emptyMembershipResult(subject.id, subject.name)
   const budget = opts.budgetUsd ?? subjectBudgetUsd()
+  // The tenant's judge (lib/subjects/types.ts `judgeFor`): its model, prompt,
+  // sampling, band and the key every row it writes is stamped with.
+  const judge = opts.judge ?? judgeFor(opts.clientId)
+  const judgeVersion = judgeVersionOf(judge)
 
   let coverage = opts.coverage ?? null
   if (!opts.ignoreCoverage) {
@@ -565,7 +670,7 @@ export async function judgeSubject(
   // and reads the band it actually gets.
   if (opts.dryRun && subjectsNeedingVectors([subject]).length === 1) {
     const embedded = (coverage ?? (await embeddingCoverage(admin, opts.clientId))).embedded
-    out.estimated = estimateFirstPass(embedded)
+    out.estimated = estimateFirstPass(embedded, judge.model)
     out.calls = out.estimated.calls.mid
     out.costUsd = out.estimated.costUsd.mid
     return out
@@ -573,7 +678,7 @@ export async function judgeSubject(
 
   let band: BandedPair[]
   try {
-    band = await readBand(admin, opts.clientId, subject.id)
+    band = await readBand(admin, opts.clientId, subject.id, judge)
   } catch (e) {
     if (!isMissingSubjects(e)) throw e
     out.skipped = 'migration'
@@ -587,10 +692,11 @@ export async function judgeSubject(
   }
 
   const scores = new Map(band.map((p) => [p.audience_insight_id, p.score]))
-  const vectorMembers = band.filter((p) => p.band === 'member')
+  const split = splitBand(band, judge)
+  const vectorMembers = split.vector
   out.vectorMembers = vectorMembers.length
 
-  const toJudge = band.filter((p) => p.band === 'judge')
+  const toJudge = split.judge
   const candidates = await loadJudgeCandidates(admin, opts.clientId, toJudge)
   const batches = planJudgeBatches(candidates)
   out.judged = candidates.length
@@ -601,7 +707,7 @@ export async function judgeSubject(
     // information: ~1,900 input and ~500 output tokens a call. This arm has a
     // real band behind it, so it is a plan and not an estimate — the estimate
     // arm is above, for the subject whose vector does not exist yet.
-    out.costUsd = judgeCallCost(batches.length)
+    out.costUsd = judgeCallCost(batches.length, judge.model)
     return out
   }
 
@@ -612,31 +718,34 @@ export async function judgeSubject(
     decisions: new Map(vectorMembers.map((p) => [p.audience_insight_id, true])),
     scores,
     method: 'embedding_high',
+    judgeVersion,
   })
 
-  let calls = 0
-  for (const batch of batches) {
-    if (out.costUsd >= budget) {
-      out.budgetStopped = true
-      break
-    }
-    calls++
-    const systemPrompt = buildJudgeSystemPrompt(subject)
+  // One batch: the call, its ledger row, and what it decided. Never throws: a
+  // failed call leaves its pairs undecided for the next run.
+  const judgeBatch = async (batch: JudgeCandidate[], callIndex: number) => {
+    const systemPrompt = judgeSystemPrompt(subject, judge)
     const userPrompt = buildJudgeUserPrompt(batch)
     const startedAt = Date.now()
     let parsed: SubjectJudgeOutput | null = null
     let refusal: string | null = null
     let usage = { prompt_tokens: 0, completion_tokens: 0 }
     try {
-      const completion = await openai.chat.completions.parse({
-        model: SUBJECT_JUDGE_MODEL,
-        temperature: ANALYSIS_TEMPERATURE,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-        response_format: zodResponseFormat(SubjectJudgeSchema, 'subject_membership'),
-      })
+      const completion = await openai.chat.completions.parse(
+        {
+          model: judge.model,
+          ...judgeSampling(judge),
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          response_format: zodResponseFormat(SubjectJudgeSchema, 'subject_membership'),
+        },
+        // Inside a step only: a hard cap and one SDK retry, so one slow answer
+        // cannot run the step past the route's 300 s (lib/written/deadline.ts
+        // says why that costs a whole retry of the step).
+        opts.deadlineAt != null ? { timeout: SUBJECT_CALL_CAP_MS, maxRetries: 1 } : undefined,
+      )
       const msg = completion.choices[0]?.message
       parsed = (msg?.parsed ?? null) as SubjectJudgeOutput | null
       refusal = msg?.refusal ?? (parsed ? null : 'no parsed output')
@@ -644,16 +753,15 @@ export async function judgeSubject(
     } catch (e) {
       refusal = e instanceof Error ? e.message : String(e)
     }
-    const costUsd = estimateCost(SUBJECT_JUDGE_MODEL, usage.prompt_tokens, usage.completion_tokens)
-    out.costUsd += costUsd
+    const costUsd = estimateCost(judge.model, usage.prompt_tokens, usage.completion_tokens)
 
     await logAiCall(admin, {
       clientId: opts.clientId,
       runId: opts.runId,
       pass: SUBJECT_JUDGE_PASS,
-      callIndex: calls,
-      model: SUBJECT_JUDGE_MODEL,
-      promptVersion: `${SUBJECT_JUDGE_PROMPT_VERSION}:${subject.name}`,
+      callIndex,
+      model: judge.model,
+      promptVersion: `${judge.promptVersion}:${subject.name}`,
       systemPrompt,
       userPrompt,
       response: parsed,
@@ -662,25 +770,48 @@ export async function judgeSubject(
       durationMs: Date.now() - startedAt,
       validationStatus: parsed ? 'valid' : 'parse_error',
     })
+    return { batch, parsed, refusal, costUsd }
+  }
 
-    if (!parsed) {
-      // The pairs of this batch stay undecided and come back next run. Said
-      // once per pass rather than once per batch.
-      out.unanswered += batch.length
-      out.error = out.error ?? (refusal ?? 'no parsed output')
-      continue
+  // In waves of the judge's `concurrency` (one, today's judge: one call after
+  // another, exactly as before), with the ceiling and the clock asked before
+  // each wave, so a wave of four can pass the ceiling by up to three calls
+  // (about $0.04 on gpt-5.4). Each wave's answers are taken in batch order.
+  let calls = 0
+  const wave = Math.max(1, judge.concurrency)
+  for (let w = 0; w < batches.length; w += wave) {
+    if (out.costUsd >= budget) {
+      out.budgetStopped = true
+      break
     }
-    const decisions = validateJudgeResponse(parsed, batch)
-    out.unanswered += batch.length - decisions.size
-    for (const belongs of decisions.values()) if (belongs) out.judgedMembers++
-    rows.push(...membershipRows({
-      clientId: opts.clientId,
-      subjectId: subject.id,
-      runId: opts.runId,
-      decisions,
-      scores,
-      method: 'judge',
-    }))
+    if (opts.deadlineAt != null && Date.now() >= opts.deadlineAt) {
+      out.clockStopped = true
+      break
+    }
+    const answers = await Promise.all(batches.slice(w, w + wave).map((batch, j) => judgeBatch(batch, calls + j + 1)))
+    calls += answers.length
+    for (const { batch, parsed, refusal, costUsd } of answers) {
+      out.costUsd += costUsd
+      if (!parsed) {
+        // The pairs of this batch stay undecided and come back next run. Said
+        // once per pass rather than once per batch.
+        out.unanswered += batch.length
+        out.error = out.error ?? (refusal ?? 'no parsed output')
+        continue
+      }
+      const decisions = validateJudgeResponse(parsed, batch)
+      out.unanswered += batch.length - decisions.size
+      for (const belongs of decisions.values()) if (belongs) out.judgedMembers++
+      rows.push(...membershipRows({
+        clientId: opts.clientId,
+        subjectId: subject.id,
+        runId: opts.runId,
+        decisions,
+        scores,
+        method: 'judge',
+        judgeVersion,
+      }))
+    }
   }
   out.calls = calls
 

@@ -2598,13 +2598,13 @@ export async function loadMoveDatable(supabase: SupabaseClient, clientId: string
  *  counts a subject's match on your own posts, and a move on a subject is
  *  read, only when the subject is ready, so the loader needs its state. Still
  *  no `select('*')`: nothing else on the row is printed here. */
-export type SubjectName = Pick<Subject, 'id' | 'name' | 'status' | 'calibrated_at' | 'calibration_precision' | 'calibration_n' | 'calibration_judge_version'>
+export type SubjectName = Pick<Subject, 'id' | 'client_id' | 'name' | 'status' | 'calibrated_at' | 'calibration_precision' | 'calibration_n' | 'calibration_judge_version'>
 
 export async function loadSubjects(supabase: SupabaseClient, clientId: string): Promise<SubjectName[] | null> {
   try {
     return await selectAll<SubjectName>(() =>
       supabase.from(TABLE_SUBJECTS)
-        .select('id, name, status, calibrated_at, calibration_precision, calibration_n, calibration_judge_version')
+        .select('id, client_id, name, status, calibrated_at, calibration_precision, calibration_n, calibration_judge_version')
         .eq('client_id', clientId).order('id', { ascending: true }),
     )
   } catch (error) {

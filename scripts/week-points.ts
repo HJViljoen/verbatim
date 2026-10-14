@@ -192,7 +192,7 @@ async function check(admin: SupabaseClient, args: ScriptArgs, now: string, first
 
   readsUsed++
   const { data: subjects, error: subjectsError } = await admin.from('subjects')
-    .select('id, name, status, calibrated_at, calibration_precision, calibration_n, calibration_judge_version')
+    .select('id, client_id, name, status, calibrated_at, calibration_precision, calibration_n, calibration_judge_version')
     .eq('client_id', args.clientId)
   if (subjectsError) throw new Error(`${NAME}: subjects: ${subjectsError.message}`)
   const objects: WeekLineObject[] = [

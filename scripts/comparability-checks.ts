@@ -218,7 +218,7 @@ async function main() {
     subjects: async () => {
       ration.spend(1, 'subjects')
       const { data, error } = await admin.from('subjects')
-        .select('id, name, status, calibrated_at, calibration_precision, calibration_n, calibration_judge_version').eq('client_id', args.clientId)
+        .select('id, client_id, name, status, calibrated_at, calibration_precision, calibration_n, calibration_judge_version').eq('client_id', args.clientId)
       if (error) throw new Error(`${NAME}: subjects: ${error.message}`)
       return data ?? []
     },

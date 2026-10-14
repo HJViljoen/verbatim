@@ -221,7 +221,7 @@ export function stepChecksIO(admin: SupabaseClient, clientId: string): ChecksIO 
     },
     subjects: async () => {
       const { data, error } = await admin.from('subjects')
-        .select('id, name, status, calibrated_at, calibration_precision, calibration_n, calibration_judge_version').eq('client_id', clientId)
+        .select('id, client_id, name, status, calibrated_at, calibration_precision, calibration_n, calibration_judge_version').eq('client_id', clientId)
       if (error) {
         if (isMissingObject(error, 'subjects')) return []
         throw new Error(`subjects: ${error.message}`)

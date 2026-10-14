@@ -12,10 +12,10 @@ import {
 } from '../lib/reading/monthly'
 import { backReadBlockers, subjectMonthSide, type SubjectBackReadState } from '../lib/subjects/read'
 import {
-  JUDGE_VERSION,
+  bandArgs,
+  judgeFor,
+  judgeVersionFor,
   RPC_SUBJECT_BAND,
-  SUBJECT_MATCH_HIGH,
-  SUBJECT_MATCH_LOW,
   TABLE_SUBJECTS,
   TABLE_SUBJECT_MEMBERSHIPS,
   isMissingSubjects,
@@ -192,7 +192,7 @@ async function subjectBlockers(
       .select('subject_id', { count: 'exact', head: true })
       .eq('client_id', clientId)
       .eq('subject_id', r.id)
-      .eq('judge_version', JUDGE_VERSION)
+      .eq('judge_version', judgeVersionFor(clientId))
     if (error) throw new Error(`${TABLE_SUBJECT_MEMBERSHIPS} count: ${error.message}`)
     // What the judge has NOT decided yet, asked of the same function the
     // membership pass reads — a pass that stopped at its ceiling leaves rows
@@ -203,9 +203,7 @@ async function subjectBlockers(
       {
         p_client: clientId,
         p_subject: r.id,
-        p_low: SUBJECT_MATCH_LOW,
-        p_high: SUBJECT_MATCH_HIGH,
-        p_judge: JUDGE_VERSION,
+        ...bandArgs(judgeFor(clientId)),
       },
       { count: 'exact', head: true },
     )

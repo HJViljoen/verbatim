@@ -55,7 +55,7 @@ import { SLICE } from '@/lib/reading/coverage'
 import { subjectFreezeHold, subjectMonthSide, type MembershipOutcome } from '@/lib/subjects/read'
 import { embedNullInsights, embedSummary } from '@/lib/pipeline/embed-insights'
 import { embeddingCoverage } from '@/lib/agent/retrieve'
-import { embedSubjects, judgeSubject, loadActiveSubjects, membershipSummary, subjectBudgetUsd } from '@/lib/subjects/membership'
+import { embedSubjects, judgeSubject, loadActiveSubjects, membershipSummary, subjectBudgetUsd, SUBJECT_STEP_BUDGET_MS } from '@/lib/subjects/membership'
 import { isMissingSubjects } from '@/lib/subjects/types'
 import { resolveRunWindow, isStalled, type RunWindow } from '@/lib/pipeline/window'
 import { clusteringKey as clusteringKeyOf, currentClusteringRegime } from '@/lib/pipeline/clustering'
@@ -1525,7 +1525,11 @@ export const runPipeline = inngest.createFunction(
       const r = await step
         .run(`subject-membership:${i + 1}-of-${subjects.length}`, async () => {
           const admin = createAdminClient()
-          const r = await judgeSubject(admin, subject, { clientId, runId, budgetUsd, coverage: subjectCoverage })
+          // The step's clock (SUBJECT_STEP_BUDGET_MS): a band too big for one
+          // step is judged in part, the rest next run, rather than killed at
+          // the route's 300 s and judged, and paid for, again on retry.
+          const deadlineAt = Date.now() + SUBJECT_STEP_BUDGET_MS
+          const r = await judgeSubject(admin, subject, { clientId, runId, budgetUsd, coverage: subjectCoverage, deadlineAt })
           console.log(`[subject-membership] ${membershipSummary(r)}`)
           return r
         })

@@ -217,6 +217,7 @@ describe('subjectEmbedInput', () => {
 
 describe('subjectCalibration', () => {
   const ready = {
+    client_id: null,
     calibrated_at: '2026-09-20T00:00:00.000Z',
     calibration_precision: 0.9,
     calibration_judge_version: JUDGE_VERSION,
@@ -227,7 +228,7 @@ describe('subjectCalibration', () => {
   })
 
   it('is calibrating when nothing has been measured', () => {
-    expect(subjectCalibration({ calibrated_at: null, calibration_precision: null, calibration_judge_version: null }))
+    expect(subjectCalibration({ client_id: null, calibrated_at: null, calibration_precision: null, calibration_judge_version: null }))
       .toBe('calibrating')
   })
 

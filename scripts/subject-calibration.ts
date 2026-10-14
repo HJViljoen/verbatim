@@ -8,7 +8,9 @@ import {
   calibrationNote,
   calibrationRecorded,
   clearsPrecisionGate,
+  candidateThresholds,
   formatPrecisionTable,
+  judgeThresholds,
   lastCalibrationLogged,
   pickCalibrationPairs,
   precisionAt,
@@ -21,11 +23,10 @@ import {
 import { loadActiveSubjects } from '../lib/subjects/membership'
 import { pickSubjects, subjectNames } from './subject-membership'
 import {
-  JUDGE_VERSION,
+  judgeFor,
+  judgeVersionOf,
   RPC_SUBJECT_BAND,
   SUBJECT_CALIBRATION_SAMPLE,
-  SUBJECT_MATCH_HIGH,
-  SUBJECT_MATCH_LOW,
   SUBJECT_PRECISION_FLOOR,
   TABLE_SUBJECTS,
   TABLE_SUBJECT_MEMBERSHIPS,
@@ -47,8 +48,8 @@ import {
 //
 //      DRAWN FROM EACH SUBJECT'S PREDICTED MEMBERS (2026-09-24), not from its
 //      score range: the pairs the shipped pair calls members — at or above
-//      SUBJECT_MATCH_HIGH, or in the band with the judge's yes on file under
-//      the live JUDGE_VERSION. So run scripts/subject-membership.ts --apply
+//      the judge's auto tier, or in the band with the judge's yes on file
+//      under the tenant's judge version (`judgeVersionFor`). So run scripts/subject-membership.ts --apply
 //      first; an undecided band pair is not a member and is not drawn. A
 //      subject with fewer predicted members than its quota gets all of them.
 //      Precision at the shipped pair is then correct / sampled, which is what
@@ -100,6 +101,11 @@ import {
 // SPENDS NOTHING. It reads vectors that already exist and judge decisions that
 // have already been paid for. A pair inside the band with no decision on file
 // is counted as `unknown` and printed, never scored as a miss.
+//
+// THE TENANT'S JUDGE (14 Oct): `judgeFor(--client)`. Its key is the one the
+// decisions are read at and the one --apply stamps the figure with, and its
+// thresholds are the shipped pair. Össur's judge has no auto tier, so every
+// predicted member there is a judged yes, and its shipped row prints "none".
 
 interface Args { clientId: string; emit: string | null; score: string | null; apply: boolean; sample: number; project: string | null; subjects: string[] | null }
 
@@ -129,10 +135,10 @@ function parseArgs(argv: string[]): Args {
 
 type Admin = ReturnType<typeof createAdminClient>
 
-/** The judge decisions on file under the live key, keyed `subject|insight`.
+/** The judge decisions on file under the tenant's key, keyed `subject|insight`.
  *  Both halves read them: --emit to know which band pairs are members, and
  *  --score to predict each labelled pair the way the shipped procedure would. */
-async function loadDecisions(admin: Admin, clientId: string, subjectIds: readonly string[]) {
+async function loadDecisions(admin: Admin, clientId: string, subjectIds: readonly string[], judgeVersion: string) {
   const decisions = new Map<string, boolean>()
   for (const subjectId of subjectIds) {
     const mem = await selectAll<{ audience_insight_id: string; member: boolean }>(() =>
@@ -141,7 +147,7 @@ async function loadDecisions(admin: Admin, clientId: string, subjectIds: readonl
         .select('audience_insight_id, member')
         .eq('client_id', clientId)
         .eq('subject_id', subjectId)
-        .eq('judge_version', JUDGE_VERSION)
+        .eq('judge_version', judgeVersion)
         .eq('method', 'judge')
         .order('audience_insight_id', { ascending: true }),
     )
@@ -183,6 +189,9 @@ async function main() {
   // destroy the labels (and the .emitted copy is the pristine one).
   if (emit && existsSync(emit)) throw new Error(`${emit} exists; --emit never overwrites a sheet — name a new file`)
   const admin = createAdminClient()
+  const judge = judgeFor(clientId)
+  const judgeVersion = judgeVersionOf(judge)
+  const shipped = judgeThresholds(judge)
   const active = await loadActiveSubjects(admin, clientId)
   if (active.length === 0) throw new Error('no active subjects for this tenant — confirm a set on the Subjects page first')
   const subjects = only ? pickSubjects(active, only) : active
@@ -200,7 +209,7 @@ async function main() {
     const text = new Map(ids.map((r) => [r.id, r]))
     // The whole set's split, filtered or not: see --subjects above.
     const quota = calibrationQuota(active.length, sample)
-    const decisions = await loadDecisions(admin, clientId, subjects.map((s) => s.id))
+    const decisions = await loadDecisions(admin, clientId, subjects.map((s) => s.id), judgeVersion)
     const lines: string[] = []
     const insights = new Set<string>()
     for (const s of subjects) {
@@ -211,9 +220,9 @@ async function main() {
           score: row.score,
           judged: decisions.get(`${s.id}|${row.audience_insight_id}`) ?? null,
         }))
-      const predicted = scored.filter((r) => predictAt(r, SUBJECT_MATCH_HIGH, SUBJECT_MATCH_LOW) === true).length
-      const undecided = scored.filter((r) => predictAt(r, SUBJECT_MATCH_HIGH, SUBJECT_MATCH_LOW) === null).length
-      const picked = pickCalibrationPairs(s.id, scored, quota)
+      const predicted = scored.filter((r) => predictAt(r, shipped.high, shipped.low) === true).length
+      const undecided = scored.filter((r) => predictAt(r, shipped.high, shipped.low) === null).length
+      const picked = pickCalibrationPairs(s.id, scored, quota, shipped.high, shipped.low)
       console.log(
         `[subject-calibration] ${s.name}: ${picked.length} of ${predicted} predicted members` +
         (picked.length < quota ? ' (all of them — fewer than the quota)' : '') +
@@ -235,7 +244,7 @@ async function main() {
     writeFileSync(emit, lines.join('\n') + '\n', { flag: 'wx' })
     console.log(
       `[subject-calibration] ${lines.length} pairs to label — up to ${quota} for each of ${subjects.length} subjects, ` +
-      `over ${insights.size} distinct insights, every one a predicted member at ${SUBJECT_MATCH_HIGH}/${SUBJECT_MATCH_LOW} → ${emit}`,
+      `over ${insights.size} distinct insights, every one a predicted member under ${judgeVersion} → ${emit}`,
     )
     console.log('[subject-calibration] replace every "label": null with true or false, then re-run with --score.')
     console.log('[subject-calibration] only predicted members are asked about, so precision is measured and recall is not.')
@@ -260,7 +269,7 @@ async function main() {
 
   // The judge decisions already on file, so a band pair is scored by what the
   // shipped procedure would actually say rather than by the vector alone.
-  const decisions = await loadDecisions(admin, clientId, subjects.map((s) => s.id))
+  const decisions = await loadDecisions(admin, clientId, subjects.map((s) => s.id), judgeVersion)
 
   const bySubject = new Map<string, LabelledPair[]>()
   for (const r of rows) {
@@ -293,24 +302,24 @@ async function main() {
     lastLogged = lastCalibrationLogged((data ?? []) as { after: unknown }[])
   }
 
-  console.log(`[subject-calibration] judge ${JUDGE_VERSION} · floor ${Math.round(SUBJECT_PRECISION_FLOOR * 100)}%\n`)
+  console.log(`[subject-calibration] judge ${judgeVersion} · floor ${Math.round(SUBJECT_PRECISION_FLOOR * 100)}%\n`)
   for (const s of subjects) {
     const pairs = bySubject.get(s.id) ?? []
     console.log(`${s.name} — ${pairs.length} labelled pairs`)
     if (pairs.length === 0) { console.log('  (nothing labelled)\n'); continue }
-    console.log(formatPrecisionTable(precisionTable(pairs)))
-    const shipped = precisionAt(pairs, SUBJECT_MATCH_HIGH, SUBJECT_MATCH_LOW)
-    const clears = clearsPrecisionGate(shipped)
-    console.log(`  → ${clears ? 'READY' : 'CALIBRATING'} at the shipped pair` + (shipped.unknown > 0 ? ` (${shipped.unknown} band pairs have no judge decision on file; run scripts/subject-membership.ts --apply first for a complete figure)` : ''))
+    console.log(formatPrecisionTable(precisionTable(pairs, candidateThresholds(undefined, undefined, shipped)), shipped))
+    const atShipped = precisionAt(pairs, shipped.high, shipped.low)
+    const clears = clearsPrecisionGate(atShipped)
+    console.log(`  → ${clears ? 'READY' : 'CALIBRATING'} at the shipped pair` + (atShipped.unknown > 0 ? ` (${atShipped.unknown} band pairs have no judge decision on file; run scripts/subject-membership.ts --apply first for a complete figure)` : ''))
     if (apply) {
       const after = {
         calibrated_at: new Date().toISOString(),
-        calibration_precision: shipped.precision,
+        calibration_precision: atShipped.precision,
         calibration_n: pairs.length,
-        calibration_judge_version: JUDGE_VERSION,
+        calibration_judge_version: judgeVersion,
       }
       if (calibrationRecorded(s, lastLogged.get(s.id), after)) {
-        console.log(`  already recorded: ${shipped.precision === null ? 'no precision' : `${(100 * shipped.precision).toFixed(1)}%`} over ${pairs.length} pairs, on the subject and the change log — skipped\n`)
+        console.log(`  already recorded: ${atShipped.precision === null ? 'no precision' : `${(100 * atShipped.precision).toFixed(1)}%`} over ${pairs.length} pairs, on the subject and the change log — skipped\n`)
         continue
       }
       const { error } = await admin
@@ -352,7 +361,7 @@ async function main() {
           'so only this subject and the ones after it are written and logged.',
         )
       }
-      console.log(`  recorded: ${shipped.precision === null ? 'no precision' : `${(100 * shipped.precision).toFixed(1)}%`} over ${pairs.length} pairs`)
+      console.log(`  recorded: ${atShipped.precision === null ? 'no precision' : `${(100 * atShipped.precision).toFixed(1)}%`} over ${pairs.length} pairs`)
     }
     console.log('')
   }

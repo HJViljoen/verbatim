@@ -9,7 +9,7 @@ import { createAdminClient, selectAll } from '../lib/supabase-admin'
 import { subjectCalibration } from '../lib/subjects/calibration-state'
 import { coverageClears, readBand } from '../lib/subjects/membership'
 import {
-  JUDGE_VERSION,
+  judgeVersionFor,
   SUBJECT_MIN_COVERAGE,
   TABLE_MONTH_SUBJECT_READINGS,
   TABLE_SUBJECT_MEMBERSHIPS,
@@ -163,11 +163,11 @@ async function main() {
   const monthRows = ids.length === 0 ? [] : await paged<{ subject_id: string; month: string }>(() => admin.from(TABLE_MONTH_SUBJECT_READINGS)
     .select('subject_id, month').eq('client_id', args.clientId).in('subject_id', ids).in('month', [...MONTHS])
     .order('subject_id').order('month').order('audience'))
-  console.log(`\njudge ${JUDGE_VERSION}`)
+  console.log(`\njudge ${judgeVersionFor(args.clientId)}`)
   for (const s of subjects) {
     const isNew = named.has(s.name.trim().toLowerCase())
     const members = await admin.from(TABLE_SUBJECT_MEMBERSHIPS).select('audience_insight_id', { count: 'exact', head: true })
-      .eq('client_id', args.clientId).eq('subject_id', s.id).eq('member', true).eq('judge_version', JUDGE_VERSION)
+      .eq('client_id', args.clientId).eq('subject_id', s.id).eq('member', true).eq('judge_version', judgeVersionFor(args.clientId))
     pages++
     if (members.error) throw new Error(`${NAME}: ${TABLE_SUBJECT_MEMBERSHIPS}: ${members.error.message}`)
     let undecided = ''

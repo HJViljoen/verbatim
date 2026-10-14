@@ -915,6 +915,8 @@ export async function loadThemeRefs(handle: ReadingHandle, month: string, audien
  *  check (`subjectCalibration`'s columns). */
 export interface SubjectStateRow {
   id: string
+  /** The tenant: its judge is what the check is held against (`judgeVersionFor`). */
+  client_id: string | null
   name: string | null
   status: string | null
   calibrated_at: string | null
@@ -966,7 +968,7 @@ export function measuredSubjects(rows: readonly SubjectStateRow[]): MeasuredSubj
 async function loadMeasuredSubjects(handle: ReadingHandle): Promise<MeasuredSubjects> {
   const rows = await selectAll<SubjectStateRow>(() =>
     handle.client.from('subjects')
-      .select('id, name, status, calibrated_at, calibration_precision, calibration_n, calibration_judge_version')
+      .select('id, client_id, name, status, calibrated_at, calibration_precision, calibration_n, calibration_judge_version')
       .eq('client_id', handle.clientId).order('named_at').order('id'),
   ).catch((e: unknown) => { throw fail('subjects', e) })
   return measuredSubjects(rows)

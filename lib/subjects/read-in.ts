@@ -205,3 +205,71 @@ export function withoutUnreadMonths(series: MonthSeries, unread: (month: string)
     ),
   }
 }
+
+// ---- A month read under another judge (14 Oct) -----------------------------------
+//
+// WHY. A subject's month is stamped with the judge that decided its membership
+// (`month_subject_readings.judge_version`), and a frozen month keeps it for
+// ever. When a tenant's judge changes (Össur's, 14 Oct: lib/subjects/types.ts
+// `judgeFor`), its months still filling are re-read under the new judge at the
+// next update, and every month already frozen stays under the old one. Nothing
+// compared a subject's months on that column: Market's pair is judged on the
+// market view (`regime: 'n/a'`), so a September read by the new judge would
+// have been compared with, and drawn on one line with, an August read by the
+// old, with no mark. That is a claim about our judge dressed as a claim about
+// the conversation.
+//
+// THE RULE: a month read under a judge other than the tenant's own today is no
+// reading of the subject, the treatment a month written before the subject was
+// counted already gets (`subjectReadIn`'s 'unread', `withoutUnreadMonths`). So
+// no comparison, trail or direction word crosses a judge change, on any reader
+// that takes its months through `loadMonthSeries` or the anomaly baseline,
+// and the old months stay in the database as they were.
+//
+// WHICH MONTHS. The subject's own rows name its month's judge. A month where it
+// has no row (a 0 the series fills in) takes the judge any other subject's row
+// in that month names: one visit writes every subject of an audience-month
+// under one key. A month nothing names a judge for is left as it is, so a
+// tenant whose rows all carry its own judge (Sealand) reads exactly as before.
+
+/** A stored subject month row, as the cut reads it. */
+export interface JudgedMonthRow {
+  month: string
+  subject_id?: string | null
+  judge_version?: string | null
+}
+
+/**
+ * The months each subject was read under a judge other than `current`: its own
+ * rows there carry another key, or it has no row there and another subject's
+ * row does. Returns a lookup by subject id. Pure.
+ */
+export function otherJudgeMonths(
+  rows: readonly JudgedMonthRow[],
+  current: string,
+): (subjectId: string) => ReadonlySet<string> {
+  const own = new Map<string, Map<string, boolean>>()
+  const monthOther = new Map<string, boolean>()
+  for (const r of rows) {
+    if (!r.subject_id || r.judge_version == null) continue
+    const m = monthStartOf(r.month)
+    const other = r.judge_version !== current
+    const mine = own.get(r.subject_id) ?? new Map<string, boolean>()
+    mine.set(m, (mine.get(m) ?? false) || other)
+    own.set(r.subject_id, mine)
+    monthOther.set(m, (monthOther.get(m) ?? false) || other)
+  }
+  const memo = new Map<string, Set<string>>()
+  return (subjectId) => {
+    const held = memo.get(subjectId)
+    if (held) return held
+    const mine = own.get(subjectId)
+    const out = new Set<string>()
+    for (const [m, anyOther] of monthOther) {
+      const ownMonth = mine?.get(m)
+      if (ownMonth ?? anyOther) out.add(m)
+    }
+    memo.set(subjectId, out)
+    return out
+  }
+}
