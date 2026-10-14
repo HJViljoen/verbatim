@@ -79,7 +79,8 @@ import { priorPrintable, type Verdict } from './verdicts'
 //   loadBrandMonthVideos(handle, input: { month: string; audiences?: readonly string[] }): Promise<BrandMonthVideos[] | null>
 //   loadBrandCrosses(handle, input: { month: string; base?: BrandBase; brandKeys?: readonly string[]; audiences?: readonly string[] }):
 //       Promise<{ videos: BrandMonthVideos[]; kinds: BrandCrossRow[]; subjects: BrandCrossRow[]; pendingSubjects } | null>
-//       (subjects: READY ones only, ruling U6, `measuredSubjects`; pendingSubjects: the provisional ones, by name)
+//       (subjects: READY ones only, ruling U6, `measuredSubjects`, a ready one on none of its videos at 0;
+//        pendingSubjects: every other active subject, provisional or failed, by name with its state)
 //   loadBrandMonthPairs(handle, input: { month: string; now: string; pair?: PairOn; audiences?: readonly string[] }): Promise<BrandPair[] | null>
 //
 // Creators
@@ -94,8 +95,8 @@ import { priorPrintable, type Verdict } from './verdicts'
 //     memberships: readonly GroupMembership[]; subjects: ReadonlyMap<string, string>; market: ReadonlyMap<string, string> }): GroupSubjectRow[]
 //   loadGroupSubjects(handle, input: { month: string; audiences?: readonly string[] }):
 //       Promise<{ runId: string | null; runDate: string | null; videos: GroupMonthVideos[]; groups: GroupSubjectRow[]; pendingSubjects } | null>
-//       (groups' subjects: READY ones only, ruling U6, `measuredSubjects`)
-//   measuredSubjects(rows: readonly SubjectStateRow[]): { names: Map<string, string>; pending: { id; label }[] }
+//       (groups' subjects: READY ones only, ruling U6, `measuredSubjects`, a ready one on none of its videos at 0)
+//   measuredSubjects(rows: readonly SubjectStateRow[]): { names: Map<string, string>; pending: { id; label; state }[] }
 //
 // Conversations (a theme registry id)
 //   themePlatforms(input: { themeId: string; month: string; rows: readonly ThemePlatformRow[]; audiences?: readonly string[] }): ThemePlatforms | null
@@ -270,7 +271,10 @@ export interface BrandCrossRow {
    *  denominator, pooled over the market's audiences. Equals the length of the
    *  base set (every video in it is a full-lane market video of the month). */
   n: number
-  /** Largest first; only objects on at least one video. */
+  /** Largest first. A kind: only those on at least one video. A subject:
+   *  every one the loader names, a subject on none of the brand's videos at
+   *  k 0 after the rest, in the subjects' own order (14 Oct: a tracked subject
+   *  is never hidden for being thin); none where n is 0. */
   cells: BrandCrossCell[]
 }
 
@@ -292,7 +296,15 @@ function pooledLens(rows: readonly LensRowIn[], objectKind: string): { n: number
   return { n, k }
 }
 
-function brandCross(month: string, lens: readonly BrandLens[], objectKind: 'kind' | 'subject', labelOf: (id: string) => string | null): BrandCrossRow[] {
+function brandCross(
+  month: string,
+  lens: readonly BrandLens[],
+  objectKind: 'kind' | 'subject',
+  labelOf: (id: string) => string | null,
+  /** Objects that keep a cell at k 0 where the brand has videos, in this
+   *  order after the counted ones (a subject: every one the loader names). */
+  always: readonly string[] = [],
+): BrandCrossRow[] {
   const m = monthStartOf(month)
   return lens.map((b) => {
     const { n, k } = pooledLens(b.rows, objectKind)
@@ -303,7 +315,13 @@ function brandCross(month: string, lens: readonly BrandLens[], objectKind: 'kind
         return label == null ? [] : [{ id, label, k: count, n }]
       })
       .sort(byCount)
-    return { brandKey: b.brandKey, label: b.label, month: m, base: b.base, n, cells }
+    const zeros = n > 0
+      ? always.filter((id) => !cells.some((c) => c.id === id)).flatMap((id) => {
+          const label = labelOf(id)
+          return label == null ? [] : [{ id, label, k: 0, n }]
+        })
+      : []
+    return { brandKey: b.brandKey, label: b.label, month: m, base: b.base, n, cells: [...cells, ...zeros] }
   })
 }
 
@@ -331,10 +349,13 @@ export function brandKinds(month: string, lens: readonly BrandLens[]): BrandCros
  * higher than over `audience_insights_current`). Subjects not in `subjects`
  * (retired, not named, or not ready: the loader passes the READY ones alone,
  * `measuredSubjects`, ruling U6) are left out; largest first, the page takes the
- * top. No verdict, for the reason `brandKinds` gives. Pure.
+ * top. EVERY SUBJECT IN `subjects` KEEPS ITS CELL where the brand has videos
+ * (14 Oct, "tracked no matter what"): one on none of them reads 0 of n, after
+ * the rest, in the subjects' own order, never left out for being thin. No
+ * verdict, for the reason `brandKinds` gives. Pure.
  */
 export function brandSubjects(month: string, lens: readonly BrandLens[], subjects: ReadonlyMap<string, string>): BrandCrossRow[] {
-  return brandCross(month, lens, 'subject', (id) => subjects.get(id) ?? null)
+  return brandCross(month, lens, 'subject', (id) => subjects.get(id) ?? null, [...subjects.keys()])
 }
 
 /** A `month_brand_readings` row as read. */
@@ -656,8 +677,11 @@ export function groupMonthVideos(input: {
  * group's own talk about each subject (its insights that are members of the
  * subject, cited on a comment dated in the month). A subject is counted only
  * where `subjects` names it (the loader passes the READY ones alone,
- * `measuredSubjects`, ruling U6). No share of the month and no
- * comparison with last month (decision 2). Pure.
+ * `measuredSubjects`, ruling U6), and EVERY ONE IT NAMES KEEPS ITS ROW where
+ * the group has videos (14 Oct: a tracked subject is never hidden for being
+ * thin): one the group's talk never touches reads 0 of n, after the rest, in
+ * the subjects' own order. No share of the month and no comparison with last
+ * month (decision 2). Pure.
  */
 export function groupSubjects(input: {
   month: string
@@ -676,17 +700,21 @@ export function groupSubjects(input: {
     membersOf.set(m.subjectId, set)
   }
   const groups = groupMonthVideos({ month, personas: input.personas, evidence: input.evidence, market: input.market })
+  const order = [...input.subjects.keys()]
   return input.personas.map((p, i) => {
     const mine = new Set(p.insightIds)
     const n = groups[i].n
-    const subjects = [...membersOf.entries()]
-      .map(([subjectId, members]) => {
-        const insights = new Set([...members].filter((id) => mine.has(id)))
-        const k = insights.size === 0 ? 0 : videosOf(insights, input.evidence, month, input.market).size
-        return { subjectId, label: input.subjects.get(subjectId) as string, k, n }
-      })
-      .filter((s) => s.k > 0)
-      .sort((a, b) => b.k - a.k || a.subjectId.localeCompare(b.subjectId))
+    if (n === 0) return { key: p.key, name: p.name, month, n, subjects: [] }
+    const counted = order.map((subjectId) => {
+      const members = membersOf.get(subjectId) ?? new Set<string>()
+      const insights = new Set([...members].filter((id) => mine.has(id)))
+      const k = insights.size === 0 ? 0 : videosOf(insights, input.evidence, month, input.market).size
+      return { subjectId, label: input.subjects.get(subjectId) as string, k, n }
+    })
+    const subjects = [
+      ...counted.filter((s) => s.k > 0).sort((a, b) => b.k - a.k || a.subjectId.localeCompare(b.subjectId)),
+      ...counted.filter((s) => s.k === 0),
+    ]
     return { key: p.key, name: p.name, month, n, subjects }
   })
 }
@@ -925,17 +953,26 @@ export interface SubjectStateRow {
   calibration_judge_version: string | null
 }
 
+/** A subject a cross may only say is there: its name and why it is not
+ *  counted (its check is open, or failed: being re-described). */
+export interface PendingSubject {
+  id: string
+  label: string
+  state: 'provisional' | 'failed'
+}
+
 /** The subjects a cross may count, and the ones it may only say are there. */
 export interface MeasuredSubjects {
   /** Active, named and READY: id → name. The only subjects any cross here
    *  counts, ranks or picks as a top. */
   names: Map<string, string>
-  /** Active and named, their check not passed (provisional), in the
-   *  subjects' own order: no count, no rank and no share. A page says
-   *  SUBJECT_NOT_MEASURED (lib/subjects/calibration-state.ts) for them. A
-   *  failed subject is in neither: it is hidden everywhere while it is
-   *  re-described (Your products' `crossesOf`, the same rule). */
-  pending: { id: string; label: string }[]
+  /** Active and named, their check not passed, in the subjects' own order:
+   *  no count, no rank and no share. A page says SUBJECT_NOT_MEASURED
+   *  (lib/subjects/calibration-state.ts) for a provisional one, and
+   *  FAILED_EXPLAINED for a failed one (14 Oct: a tracked subject is never
+   *  hidden; until then a failed one was in neither list, Your products'
+   *  `crossesOf` the same). */
+  pending: PendingSubject[]
 }
 
 /**
@@ -945,20 +982,25 @@ export interface MeasuredSubjects {
  * brand's "top subject". Membership is exactly what the check has not
  * verified (one of Össur's subjects measured 9% precision on 13 Oct), so a
  * count on it is not an unlabelled figure but a wrong one. Group × subject
- * and brand × subject are both counted over `names` alone, and the pages say
- * how many more are `pending`. Which subjects are pending is the tenant's
+ * and brand × subject are both counted over `names` alone, and the pages name
+ * the `pending` ones (14 Oct, never folded into a count). Which subjects are pending is the tenant's
  * list, never "the ones this group's videos hold": whether a set holds one
- * at all rests on the same unverified membership. PURE.
+ * at all rests on the same unverified membership.
+ *
+ * A TRACKED SUBJECT IS NEVER HIDDEN (Heinrich, 14 Oct). Every active, named
+ * subject is in one list or the other: a failed one (being re-described) is
+ * pending exactly as a provisional one is, with its own state so a page can
+ * say why (FAILED_EXPLAINED where SUBJECT_NOT_MEASURED would go). PURE.
  */
 export function measuredSubjects(rows: readonly SubjectStateRow[]): MeasuredSubjects {
   const names = new Map<string, string>()
-  const pending: { id: string; label: string }[] = []
+  const pending: PendingSubject[] = []
   for (const r of rows) {
     const name = (r.name ?? '').trim()
     if (r.status !== 'active' || !name) continue
     const state = subjectCalibration(r)
     if (state === 'ready') names.set(String(r.id), name)
-    else if (state === 'provisional') pending.push({ id: String(r.id), label: name })
+    else pending.push({ id: String(r.id), label: name, state })
   }
   return { names, pending }
 }

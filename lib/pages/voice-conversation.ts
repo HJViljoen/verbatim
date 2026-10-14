@@ -268,9 +268,10 @@ export async function loadThemeFacts(
  *  here, or none may take a conversation.
  *
  *  THE SAME RULE AS MARKET AND CONTENT (14 Oct; until then this surface
- *  placed in READY subjects only): a ready subject always wins, one whose
- *  check is open takes a conversation only where no ready subject does, and
- *  a failed one is never used. Naming the subject is all this surface does
+ *  placed in READY subjects only): a ready subject always wins, and one
+ *  whose check has not passed, open or failed (14 Oct: a tracked subject is
+ *  never hidden), takes a conversation only where no ready subject does.
+ *  Naming the subject is all this surface does
  *  with it (ruling U6: a name is not a figure). */
 export async function loadPlacedSubjects(supabase: SupabaseClient, clientId: string): Promise<SubjectPlacement | null> {
   try {

@@ -3,8 +3,9 @@ import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { bandVerdict } from '@/lib/reading/verdicts'
 import { ossurLinersFixture, ossurNaviiFixture, ossurProductsFixture, ossurSealInXFixture, ossurTodayFixture, PRODUCT_IDS, PRODUCTS_FIXTURES } from '@/lib/pages/v2/products-fixture'
-import { SHELF_TILES, type CategoryPanel, type FocusStandout, type GapStandout, type ProductPanel } from '@/lib/pages/v2/products'
+import { buildCompare, crossesOf, setKey, SHELF_TILES, type CategoryPanel, type FocusStandout, type GapStandout, type ProductPanel } from '@/lib/pages/v2/products'
 import { PRODUCT_TAG_COPY } from '@/lib/products/tags'
+import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { CatalogueCard, CatalogueFrame, shelfColumn } from './shelf'
 import { emptyTitle, shareWords, StandoutCard, StandoutFrames, Standouts, SQUARES_MAX } from './standouts'
 import { CategoryPanelView, ProductPanelView } from './panels'
@@ -388,5 +389,81 @@ describe('the fresh check\'s fixes on the parity pass, as drawn', () => {
     // A column at the cap or under it has no "more".
     expect(shelfColumn(d.shelf.find((c) => c.name === 'Hands')!, 'September').more).toBeNull()
     assertCopyContract(<CatalogueCard data={d} />)
+  })
+})
+
+// A TRACKED SUBJECT IS NEVER HIDDEN (Heinrich, 14 Oct): a category's panel
+// lists every active subject, the ready ones counted (a thin one's small
+// count, one on none of its videos at 0), then those whose check has not
+// passed by name, a failed one with its own reason and no figure.
+describe('Your products: a tracked subject is never hidden (14 Oct)', () => {
+  const base = PRODUCTS_FIXTURES['ossur-liners']().panel as CategoryPanel
+  const crosses = {
+    ...base.crosses!,
+    subjects: [{ id: 's-fit', label: 'Fit & comfort', k: 12 }, { id: 's-look', label: 'Look & style', k: 1 }],
+    quiet: [{ id: 's-function', label: 'Function & movement' }],
+    pending: [{ id: 's-cost', label: 'Cost & access', state: 'provisional' as const }, { id: 's-community', label: 'Community & encouragement', state: 'failed' as const }],
+  }
+  const panel: CategoryPanel = { ...base, crosses }
+
+  it('lists every subject: counted, thin, at 0, not measured yet, and being re-described with its reason', () => {
+    const node = <CategoryPanelView panel={panel} monthName="September" canTag={false} />
+    const text = renderText(node)
+    expect(text).toContain(`What it’s about · of ${crosses.n} Fit & comfort 12 Look & style 1 Function & movement 0 Cost & access ${SUBJECT_NOT_MEASURED} Community & encouragement ${FAILED_EXPLAINED}`)
+    const html = render(node)
+    const at = html.indexOf('data-subject-failed')
+    const row = html.slice(at, html.indexOf('</div>', at))
+    expect(row).toContain('Community &amp; encouragement')
+    expect(row).not.toMatch(/data-copy=/)
+    assertCopyContract(node)
+  })
+
+  it('more than six subjects: every one is listed, none cut for being small', () => {
+    const many = { ...crosses, subjects: Array.from({ length: 8 }, (_, i) => ({ id: `s-${i}`, label: `Subject ${i + 1}`, k: 9 - i })), quiet: undefined, pending: undefined }
+    const text = renderText(<CategoryPanelView panel={{ ...base, crosses: many }} monthName="September" canTag={false} />)
+    for (let i = 1; i <= 8; i++) expect(text).toContain(`Subject ${i} `)
+  })
+
+  it('the comparison, every ready subject at 0 and others pending: it names the pending subjects as before, never a table of zeros (the lead\'s ruling, 14 Oct)', () => {
+    const subjects = new Map([
+      ['s-fit', { name: 'Fit & comfort', state: 'ready' as const }],
+      ['s-cost', { name: 'Cost & access', state: 'provisional' as const }],
+      ['s-community', { name: 'Community & encouragement', state: 'failed' as const }],
+    ])
+    const den = (k: number) => ({ audience: 'industry-other', object_kind: 'denominator', object_id: 'videos', k, n: k })
+    const crossesIn = new Map([[setKey('group', 'g'), crossesOf([den(10)], subjects)], [setKey('product', 'p'), crossesOf([den(3)], subjects)]])
+    const compare = buildCompare({ month: '2026-09-01', group: { id: 'g', name: 'Liners' }, products: [{ id: 'p', name: 'Iceross Comfort', videos: 3 }], crosses: crossesIn })!
+    expect(compare.empty).toBe('pending')
+    expect(compare.rows.map((r) => r.label)).toEqual(['Cost & access', 'Community & encouragement'])
+    const node = <CategoryPanelView panel={{ ...panel, compare }} monthName="September" canTag={false} />
+    const text = renderText(node)
+    expect(text).toContain(`What it’s about All liners Iceross Comfort Cost & access · ${SUBJECT_NOT_MEASURED} · ${SUBJECT_NOT_MEASURED} Community & encouragement`)
+    expect(text).toContain('What these videos are about: Not measured yet. A subject is counted here once its check has passed.')
+    expect(text).not.toContain('Fit & comfort 0 of 10')
+    assertCopyContract(node)
+    // With nothing pending, the ready subject at 0 is drawn as a 0, never hidden.
+    const ready = new Map([['s-fit', { name: 'Fit & comfort', state: 'ready' as const }]])
+    const zeros = buildCompare({ month: '2026-09-01', group: { id: 'g', name: 'Liners' }, products: [{ id: 'p', name: 'Iceross Comfort', videos: 3 }], crosses: new Map([[setKey('group', 'g'), crossesOf([den(10)], ready)], [setKey('product', 'p'), crossesOf([den(3)], ready)]]) })!
+    expect(zeros.rows.map((r) => [r.label, r.cells[0]])).toEqual([['Fit & comfort', { k: 0, n: 10 }]])
+    expect(zeros.verdicts).toEqual([])
+  })
+
+  it('the comparison, with no ready subject: a row being re-described is named like an open one, its reason never repeated (once a page, 14 Oct)', () => {
+    const compare = {
+      columns: [{ key: 'g', label: 'All liners', tone: 'market' as const }, { key: 'p', label: 'Iceross Comfort', tone: 'you' as const }],
+      rows: [
+        { key: 's-cost', label: 'Cost & access', cells: [null, null] },
+        { key: 's-community', label: 'Community & encouragement', cells: [null, null] },
+      ],
+      verdicts: [],
+      empty: 'pending' as const,
+    }
+    // The open panel names the failed subject in "What it's about" with its
+    // reason (once), and the table below lists it with no figure.
+    const node = <CategoryPanelView panel={{ ...panel, compare }} monthName="September" canTag={false} />
+    const html = render(node)
+    expect(html.split(FAILED_EXPLAINED).length - 1).toBe(1)
+    expect(renderText(node)).toContain(`What it’s about All liners Iceross Comfort Cost & access · ${SUBJECT_NOT_MEASURED} · ${SUBJECT_NOT_MEASURED} Community & encouragement · ${SUBJECT_NOT_MEASURED} · ${SUBJECT_NOT_MEASURED}`)
+    assertCopyContract(node)
   })
 })

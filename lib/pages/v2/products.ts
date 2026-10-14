@@ -137,15 +137,23 @@ export interface CrossCell {
  *  `null` where the cross was not read (a failed read, a shot from a dump). */
 export interface Crosses {
   n: number
-  /** The READY subjects only (ruling U6, `printsMarket`): a subject whose
-   *  check has not passed has no count here, no rank and no share. */
+  /** The READY subjects on at least one of the set's videos (ruling U6,
+   *  `printsMarket`), largest first: what a pick, a lead or a rank reads. A
+   *  subject whose check has not passed has no count here, no rank and no
+   *  share. */
   subjects: CrossCell[]
+  /** The READY subjects on none of the set's videos, in their own order
+   *  (14 Oct: a tracked subject is never hidden for being thin): a list
+   *  prints each at 0, after the counted ones; no pick reads them. Absent
+   *  where there is none, or the set has no video. */
+  quiet?: { id: string; label: string }[]
   kinds: CrossCell[]
-  /** The client's subjects whose check has not passed (provisional), by name
-   *  in their own order, with no count: the page prints the name and
-   *  SUBJECT_NOT_MEASURED (lib/subjects/calibration-state.ts). A failed one is left out (no name, no figure).
-   *  Absent: every subject read is ready. */
-  pending?: { id: string; label: string }[]
+  /** The client's subjects whose check has not passed, by name in their own
+   *  order, with no count: the page prints the name and SUBJECT_NOT_MEASURED
+   *  (lib/subjects/calibration-state.ts), or FAILED_EXPLAINED for one being
+   *  re-described (`state: 'failed'`; 14 Oct, displayed as a pending one is,
+   *  where until then it was left out). Absent: every subject read is ready. */
+  pending?: { id: string; label: string; state?: 'provisional' | 'failed' }[]
 }
 
 /** A subject as the crosses read it: its name and its check's state. */
@@ -689,16 +697,22 @@ export function topRanked(c: Pick<Crosses, 'subjects' | 'pending'> | null | unde
  *  RULING U6 (`printsMarket`, lib/subjects/calibration-state.ts): only a
  *  READY subject is counted; one whose check has not passed is `pending`, by
  *  name and in the subjects' own order, whatever its count (its count, and
- *  even whether this set has any, rests on its membership); a failed one is
- *  left out. PURE. */
+ *  even whether this set has any, rests on its membership).
+ *
+ *  A TRACKED SUBJECT IS NEVER HIDDEN (14 Oct): a failed one is pending with
+ *  its state, as a provisional one is, and a ready one on none of the set's
+ *  videos is `quiet`, printed at 0. PURE. */
 export function crossesOf(rows: readonly LensRowIn[], subjects: ReadonlyMap<string, SubjectRead>): Crosses {
   const pooled = poolLens(rows)
   const ready = (id: string) => subjects.get(id)?.state === 'ready'
-  const pending = [...subjects].filter(([, s]) => s.state === 'provisional').map(([id, s]) => ({ id, label: s.name }))
+  const pending = [...subjects].filter(([, s]) => s.state !== 'ready').map(([id, s]) => ({ id, label: s.name, state: s.state === 'failed' ? 'failed' as const : 'provisional' as const }))
+  const counted = [...pooled.subjects].filter(([id, k]) => k > 0 && ready(id))
+    .map(([id, k]) => ({ id, label: subjects.get(id)!.name, k })).sort(byNumberThenName)
+  const quiet = pooled.n > 0 ? [...subjects].filter(([id, s]) => s.state === 'ready' && !counted.some((c) => c.id === id)).map(([id, s]) => ({ id, label: s.name })) : []
   return {
     n: pooled.n,
-    subjects: [...pooled.subjects].filter(([id, k]) => k > 0 && ready(id))
-      .map(([id, k]) => ({ id, label: subjects.get(id)!.name, k })).sort(byNumberThenName),
+    subjects: counted,
+    ...(quiet.length > 0 ? { quiet } : {}),
     kinds: [...pooled.kinds].filter(([id, k]) => k > 0 && id !== 'misinformation' && KIND_LABELS[id])
       .map(([id, k]) => ({ id, label: productKindLabel(id), k })).sort(byNumberThenName),
     ...(pending.length > 0 ? { pending } : {}),
@@ -1201,8 +1215,9 @@ export function buildShelf(input: {
 export const LINE_MONTHS = 6
 /** How many months back the page reads, for a product's first month. */
 export const HISTORY_MONTHS = 12
-/** Subjects a panel lists. */
-export const PANEL_SUBJECTS = 6
+/** Kinds a panel lists. Its subjects are every one (14 Oct: a tracked subject
+ *  is never hidden; six until then). */
+export const PANEL_KINDS = 6
 /** Rows and product columns in "your products against the category". */
 export const COMPARE_ROWS = 5
 export const COMPARE_PRODUCTS = 3
@@ -1276,11 +1291,19 @@ export function buildCompare(input: {
 }): Compare | null {
   const gc = input.crosses.get(setKey('group', input.group.id))
   if (!gc || gc.n === 0) return null
-  if (gc.subjects.length === 0) {
-    // NOT MEASURED YET (ruling U6): the table keeps its shape, each row a
-    // subject's name and every cell empty, the category's included.
-    const pending = (gc.pending ?? []).slice(0, COMPARE_ROWS)
-    if (pending.length === 0) return null
+  // The rows: the ready subjects the category's videos carry, largest first,
+  // then any ready one on none of them at 0 (14 Oct: a tracked subject is
+  // never hidden for being thin), to the table's COMPARE_ROWS.
+  const subjectRows: CrossCell[] = [...gc.subjects, ...(gc.quiet ?? []).map((q) => ({ ...q, k: 0 }))]
+  const pending = (gc.pending ?? []).slice(0, COMPARE_ROWS)
+  // NOT MEASURED YET (ruling U6): no ready subject on any of the category's
+  // videos, and some not measured: the table keeps its shape, each row the
+  // name of a subject not measured yet and every cell empty, the category's
+  // included, one being re-described among them (14 Oct; why is said once,
+  // in the panel's "What it's about"). A table of ready subjects all at 0
+  // would say less than their names do (the lead's ruling, 14 Oct), so it
+  // is drawn only where no subject is pending.
+  if (gc.subjects.length === 0 && pending.length > 0) {
     const named = [...input.products].filter((p) => (p.videos ?? 0) > 0)
       .sort((a, b) => (a.id === input.focus ? -1 : b.id === input.focus ? 1 : 0) || (b.videos ?? 0) - (a.videos ?? 0))
     const shown = (named.length > 0 ? named : [...input.products].sort((a, b) => (a.id === input.focus ? -1 : b.id === input.focus ? 1 : 0)))
@@ -1292,6 +1315,7 @@ export function buildCompare(input: {
       empty: 'pending',
     }
   }
+  if (subjectRows.length === 0) return null
   const ranked = [...input.products].filter((p) => (p.videos ?? 0) > 0 && (input.crosses.get(setKey('product', p.id))?.n ?? 0) > 0)
     .sort((a, b) => (a.id === input.focus ? -1 : b.id === input.focus ? 1 : 0) || (b.videos ?? 0) - (a.videos ?? 0))
     .slice(0, COMPARE_PRODUCTS)
@@ -1304,7 +1328,7 @@ export function buildCompare(input: {
     const empty = [...input.products].sort((a, b) => (a.id === input.focus ? -1 : b.id === input.focus ? 1 : 0)).slice(0, input.focus ? 1 : COMPARE_PRODUCTS)
     return {
       columns: [categoryColumn, ...empty.map((p) => ({ key: p.id, label: p.name, tone: 'you' as const }))],
-      rows: gc.subjects.slice(0, COMPARE_ROWS).map((s) => ({ key: s.id, label: s.label, cells: [{ k: s.k, n: gc.n }, ...empty.map(() => null)] })),
+      rows: subjectRows.slice(0, COMPARE_ROWS).map((s) => ({ key: s.id, label: s.label, cells: [{ k: s.k, n: gc.n }, ...empty.map(() => null)] })),
       verdicts: [],
       empty: empty.some((p) => (p.videos ?? 0) > 0) ? 'not_read' : 'none_named',
     }
@@ -1318,13 +1342,15 @@ export function buildCompare(input: {
   // cell to read first in its column. A weight, never a comparison claim:
   // the pairs are banded below and worded only where one clears.
   const topOf = new Map(ranked.map((p) => [p.id, input.crosses.get(setKey('product', p.id))!.subjects[0]?.id ?? null]))
-  const rows: CompareRow[] = gc.subjects.slice(0, COMPARE_ROWS).map((s) => {
+  const rows: CompareRow[] = subjectRows.slice(0, COMPARE_ROWS).map((s) => {
     const cells: (CompareCell | null)[] = [{ k: s.k, n: gc.n }]
     for (const p of ranked) {
       const pc = input.crosses.get(setKey('product', p.id))!
       const k = pc.subjects.find((x) => x.id === s.id)?.k ?? 0
       cells.push({ k, n: pc.n, ...(k > 0 && topOf.get(p.id) === s.id ? { highlight: true } : {}) })
-      verdicts.push(productAgainstCategory({ product: p, subject: s, month: input.month, product_: { k, n: pc.n }, category: { k: s.k, n: gc.n } }))
+      // A row the category carries on none of its videos is printed, never
+      // banded: there is no pair to judge.
+      if (s.k > 0) verdicts.push(productAgainstCategory({ product: p, subject: s, month: input.month, product_: { k, n: pc.n }, category: { k: s.k, n: gc.n } }))
     }
     return { key: s.id, label: s.label, cells }
   })

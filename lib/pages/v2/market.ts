@@ -43,7 +43,7 @@ import { pickQuotes, POOL_FLOOR } from '../overview-market'
 import { talkKindLabel } from '../overview-market/kinds'
 import { fetchThemedRunId } from '../themed-run'
 import { askAboutTheme, loadLinkedTheme, loadThemeKinds } from '../voice-surface'
-import { loadReadySubjectIds, loadSubjectPlacement, placeSubject, type SubjectPlacement } from '../subject-place'
+import { loadReadySubjectIds, loadSubjectPlacement, notReadyIds, placeSubject, type SubjectPlacement } from '../subject-place'
 import { flagFigures, loadCheckStrict, loadFlagsStrict, weekFlagRows, type FlagRow, type UnusualFlag } from '../week'
 import { flagPrints, weekLead } from '../../reading/week-lead'
 import { setApartOf } from '../../written/conversations'
@@ -310,9 +310,11 @@ export interface SubjectRow {
   level: (Level & { pct: number }) | null
   /** A subject that keeps its row without a level (the parity pass, 13 Oct:
    *  its name, its bar's track and the conversations inside it, the level's
-   *  place saying why): its check is open (`provisional`), or the month was
-   *  not read for it (`unread`). Null where the level prints. */
-  pending: { state: 'provisional' | 'unread'; note: string } | null
+   *  place saying why): its check is open (`provisional`), its check failed
+   *  (`failed`, being re-described: since 14 Oct a row like an open one, a
+   *  tracked subject is never hidden), or the month was not read for it
+   *  (`unread`). Null where the level prints. */
+  pending: { state: 'provisional' | 'failed' | 'unread'; note: string } | null
   /** Last month's share for the tick, where the pair answered. */
   prevPct: number | null
   verdict: Verdict | null
@@ -353,11 +355,13 @@ export interface SubjectBoard {
   prevText: string
   /** The market's videos in the month: every level's n. */
   n: number | null
-  /** Every subject that keeps its row: the measured ones largest first, then
-   *  the ones with no level yet (`pending`), by state and name. */
+  /** Every active subject, each in its own row: the measured ones largest
+   *  first, then the ones with no level (`pending`), their check open or
+   *  failed by name, then the ones not read this month. */
   rows: SubjectRow[]
-  /** Subjects hidden as being re-described (a failed check), with why: named
-   *  in one line under the rows, never a row (decision C). */
+  /** Subjects named in one line under the rows rather than a row. Empty since
+   *  14 Oct (a failed subject has its own row, as an open one does); kept so
+   *  a stored dump from before it still draws its line. */
   unmeasured: UnmeasuredSubject[]
   /** Whether any row draws last month's tick (the legend is printed only then). */
   ticks: boolean
@@ -481,7 +485,8 @@ export interface ConvPanel {
 export interface SubjectPanel {
   id: string
   name: string
-  /** Not `ready`: no level, no conversations; `note` says why. */
+  /** Not `ready`: no level, no line; `note` says why. The conversations
+   *  inside it are listed in every state (a failed one's too, since 14 Oct). */
   state: 'ready' | 'provisional' | 'failed' | 'unread'
   note: string | null
   at: PanelAt
@@ -970,9 +975,14 @@ export function subjectAxis(month: string, count = MARKET_SUBJECT_MONTHS): strin
  * month's share only where the pair may be printed), its month line on the
  * board's axis and the period's conversations inside it; then every subject
  * with no level yet in the same row, its name, the conversations inside it and
- * why in the level's place (`pending`). A subject being re-described (a failed
- * check) is named in one quiet line under the rows: decision C hides it
- * everywhere, and the conversations its members point at are not its. Pure.
+ * why in the level's place (`pending`).
+ *
+ * A TRACKED SUBJECT IS NEVER HIDDEN (Heinrich, 14 Oct). A subject being
+ * re-described (a failed check) keeps its row exactly as one whose check is
+ * open: its name, its bar's empty track, the conversations placed in it
+ * (`placeSubject`, the second tier) and FAILED_EXPLAINED where the level
+ * goes. Until 14 Oct it was named in one line under the rows, with nothing
+ * inside it. A small level prints as a small level ("4 of 318"). Pure.
  */
 export function buildSubjectBoard(input: {
   facts: readonly SubjectFact[]
@@ -988,7 +998,6 @@ export function buildSubjectBoard(input: {
   const m = monthStartOf(input.month)
   const before = prevMonth(m)
   const rows: SubjectRow[] = []
-  const unmeasured: UnmeasuredSubject[] = []
   const pending: SubjectRow[] = []
   const monthText = input.soFar ? `${longMonth(m)} so far` : longMonth(m)
   const axis = subjectAxis(m)
@@ -1001,13 +1010,9 @@ export function buildSubjectBoard(input: {
   for (const f of input.facts) {
     if (!f.level || f.level.n <= 0) {
       const u = unmeasuredOf(f, monthText, input.subjectHref(f.id))
-      if (u.state === 'failed') {
-        unmeasured.push(u)
-        continue
-      }
-      // Its check open: no figure resting on its membership prints (ruling
-      // U6, `printsMarket`), so no line either. Not read this month: its
-      // earlier months are a ready subject's and keep their line.
+      // Its check open or failed: no figure resting on its membership prints
+      // (ruling U6, `printsMarket`), so no line either. Not read this month:
+      // its earlier months are a ready subject's and keep their line.
       pending.push({
         id: f.id, name: f.name, level: null, pending: { state: u.state, note: u.note }, prevPct: null, verdict: null,
         trail: u.state === 'unread' ? trailOf(f) : [], inside: inside(f.id), href: u.href,
@@ -1033,9 +1038,10 @@ export function buildSubjectBoard(input: {
     prevText: longMonth(before),
     n: rows[0]?.level?.n ?? null,
     // No rank rests on a membership that is not checked (ruling U6): the rows
-    // with no level stand by name, their check open first.
-    rows: [...rows, ...pending.sort((a, b) => (a.pending?.state === b.pending?.state ? 0 : a.pending?.state === 'provisional' ? -1 : 1) || a.name.localeCompare(b.name))],
-    unmeasured: unmeasured.sort((a, b) => a.name.localeCompare(b.name)),
+    // with no level stand by name, those whose check has not passed (open or
+    // failed, one tier) first, then those not read this month.
+    rows: [...rows, ...pending.sort((a, b) => (a.pending?.state === 'unread' ? 1 : 0) - (b.pending?.state === 'unread' ? 1 : 0) || a.name.localeCompare(b.name))],
+    unmeasured: [],
     ticks: rows.some((r) => r.prevPct != null),
   }
 }
@@ -1744,6 +1750,8 @@ export async function loadMarket(input: {
   const sides = period === 'week' && heroPick ? pickWeekSides({ convs, heroId, setApart }) : null
 
   // ── wave 3: subjects' and kinds' readings, who, the hero's kinds ──
+  // A failed subject prints no figure, so it is not read; it keeps its row
+  // all the same (`factsFromReadings` files it as failed, `buildSubjectBoard`).
   const subjectObjects: MarketObjectRef[] = subjects.all
     .filter((x) => x.calibration !== 'failed')
     .map(({ subject, calibration }) => ({ kind: 'subject' as const, id: subject.id, label: subject.name, calibration }))
@@ -1873,7 +1881,8 @@ export async function loadMarket(input: {
     params: p,
     openId: openId && at === 'table' ? openId : null,
     months: period === 'time' ? tableMonths(month, categoryOf, nowMonth) : [],
-    pending: new Set(subjects.placed?.pending?.order ?? []),
+    // Open and failed alike: their chips print no count (ruling U6).
+    pending: notReadyIds(subjects.placed),
   })
 
   // ── the open panels ──
@@ -2121,10 +2130,10 @@ async function loadConvPanel(a: {
 
 /** The open subject: its month line, every conversation inside it (a
  *  set-apart one tagged), and the week read's sentence on it where the read is
- *  of this month. A subject that prints no level says why; one whose check is
- *  open, or that was not read this month, still lists the conversations inside
- *  it (the parity pass, 13 Oct: those are the conversations' own counts, and
- *  exist without calibration); one being re-described lists nothing. Pure. */
+ *  of this month. A subject that prints no level says why, and still lists
+ *  the conversations inside it (the parity pass, 13 Oct: those are the
+ *  conversations' own counts, and exist without calibration), one being
+ *  re-described included (14 Oct: a tracked subject is never hidden). Pure. */
 export function buildSubjectPanel(a: {
   id: string
   facts: readonly SubjectFact[]
@@ -2150,14 +2159,17 @@ export function buildSubjectPanel(a: {
     id: f.id,
     name: f.name,
     state: unmeasured ? unmeasured.state : 'ready',
-    note: unmeasured ? unmeasured.note : null,
+    // Why a failed subject shows no figure is said once a page (14 Oct, the
+    // lead's ruling): in its own row on the board, just above this panel, so
+    // the panel says only that it is not measured yet.
+    note: unmeasured ? (unmeasured.state === 'failed' ? SUBJECT_NOT_MEASURED : unmeasured.note) : null,
     at: 'subjects',
     notchAt: notchOf('subjects'),
     level: measured && f.level ? { ...f.level, pct: share(f.level.k, f.level.n) } : null,
     verdict: measured ? f.verdict : null,
     monthText: a.month.text,
     bars: measured ? bars : [],
-    inside: unmeasured?.state !== 'failed' ? insideOf(f.id, a.convs, a.period, { limit: 50, href: (id) => convHref(a.p, id, 'subjects'), flagId: a.flag?.id ?? null, flag: a.flag?.verdict ?? null }) : [],
+    inside: insideOf(f.id, a.convs, a.period, { limit: 50, href: (id) => convHref(a.p, id, 'subjects'), flagId: a.flag?.id ?? null, flag: a.flag?.verdict ?? null }),
     sentence: standing?.sentence?.trim() ? { body: standing.sentence.trim(), figures: (a.read?.figures ?? {}) as unknown as PrintedFigures } : null,
     askHref: `/dashboard/agent?ask=${encodeURIComponent(`What does my market say about ${f.name}?`)}`,
     closeHref: closeHref(a.p, 'subjects'),

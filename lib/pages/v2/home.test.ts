@@ -126,6 +126,16 @@ describe('the subjects on the week tile, as Market\'s board reads them', () => {
     // The subject shown is still the biggest READY one, with its level.
     expect(weekSubjectsOf(facts, '2026-10-01', true, 3)!.biggest).toMatchObject({ name: 'Fit & comfort', k: 108, n: 318 })
   })
+
+  // 14 Oct: a tracked subject is never hidden, and a failed one is never left
+  // out of what the tile withholds its rank over.
+  it('counts a subject being re-described among those not measured yet, so no rank is claimed over it', () => {
+    const facts = fixtureStanding()
+    expect(weekSubjectsOf(facts, '2026-10-01', true)!.pending).toBeUndefined()
+    const failed = facts.map((f, i) => (i === facts.length - 1 ? { ...f, calibration: 'failed' as const, level: null, verdict: null } : f))
+    expect(weekSubjectsOf(failed, '2026-10-01', true)!.pending).toBe(1)
+    expect(weekSubjectsOf(failed, '2026-10-01', true)!.biggest).toMatchObject({ name: 'Fit & comfort' })
+  })
 })
 
 describe('the Agent box\'s conversations to try', () => {

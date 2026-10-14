@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { SEALAND_CLIENT_ID, OSSUR_CLIENT_ID } from '../../config'
+import { SUBJECT_NOT_MEASURED } from '../../subjects/calibration-state'
 import { brandMonthPair, type BrandCrossRow, type BrandMonthVideos, type CreatorThemes } from '../../reading/cross'
 import {
+  failedSubjectsOf, notCountedOf, notMeasuredLine, NOT_MEASURED_LEAD,
   buildBrandPanel, buildBrands, buildCreatorPanel, buildCreators, buildGroupPanel, buildGroups, clientNameCounts, clientNameCountsByCount,
   creatorVideoIds, crossKeys, findingsFor, firstSentence, groupRows, initialsOf, matchesBrand, noteOf, openOf, parseVoicesParams, personasOf,
   phrasesOf, PHRASE_MAX_WORDS, resolveCreator, themeVideoSets, topFinding, topVoicesOf, voicesHref, whoLabel, mergeWho, whoKey, WHO_FILLER_WORDS, WHO_SHOWN,
@@ -489,8 +491,10 @@ describe('the board\'s shape in a thin month', () => {
       expect(c.subjectsPending).toBe(4)
       for (const x of c.subjects) expect(ready.has(x.label)).toBe(true)
     }
-    // Caregivers talk about Fit & comfort most (17), but Fit & comfort is not checked.
-    expect(d.groups.cards.find((c) => c.key === 'caregivers')!.subjects.map((x) => [x.label, x.k])).toEqual([['Cost & access', 14]])
+    // Caregivers talk about Fit & comfort most (17), but Fit & comfort is not
+    // checked. Function & movement is ready and on none of their videos: its
+    // row stays, at 0 (14 Oct: a tracked subject is never hidden for being thin).
+    expect(d.groups.cards.find((c) => c.key === 'caregivers')!.subjects.map((x) => [x.label, x.k])).toEqual([['Cost & access', 14], ['Function & movement', 0]])
     const counted = VOICES_FIXTURES['ossur-counted-brand']()
     const otto = counted.brands.all.find((r) => r.label === 'Ottobock')!
     // The lens gave Fit & comfort 25 of Ottobock's videos: never its top.
@@ -547,5 +551,42 @@ describe('the board\'s shape in a thin month', () => {
     expect(you.topSubject).toMatchObject({ label: 'Durability', k: 1, n: 1 })
     // Not listed again under the table.
     expect(brandTable(d.brands).notNamed.map((x) => x.label)).not.toContain('Sealand')
+  })
+})
+
+// A TRACKED SUBJECT IS NEVER HIDDEN (Heinrich, 14 Oct).
+describe('a tracked subject is never hidden (14 Oct)', () => {
+  it('names every subject not counted, open and failed alike, in order; the failed ones alone for the page\'s one line', () => {
+    const list = [{ id: 'a', label: 'A', state: 'provisional' as const }, { id: 'b', label: 'B' }, { id: 'c', label: 'C', state: 'failed' as const }]
+    expect(notCountedOf(undefined)).toEqual({})
+    expect(notCountedOf(list)).toEqual({ subjectsPending: 3, subjectsNotMeasured: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }, { id: 'c', label: 'C' }] })
+    expect(failedSubjectsOf(list)).toEqual([{ id: 'c', label: 'C' }])
+    expect(failedSubjectsOf(undefined)).toEqual([])
+  })
+
+  it('the one short line: "Not measured yet: …", every name once, in the order given', () => {
+    expect(notMeasuredLine([{ label: 'Cost & access' }, { label: 'Fit & comfort' }])).toBe('Not measured yet: Cost & access, Fit & comfort')
+    expect(NOT_MEASURED_LEAD).toBe(SUBJECT_NOT_MEASURED)
+    expect(notMeasuredLine([])).toBeNull()
+    expect(notMeasuredLine(undefined)).toBeNull()
+  })
+
+  it('every group card and a counted brand row name the open and the failed subject; the page says the failed one\'s reason once; a ready one on none of a group\'s videos stays, at 0', () => {
+    const d = VOICES_FIXTURES['ossur-tracked']()
+    expect(d.subjectsFailed).toEqual([{ id: 's-fit', label: 'Fit & comfort' }])
+    for (const c of d.groups.cards) {
+      expect(c.subjectsPending).toBe(2)
+      expect(c.subjectsNotMeasured).toEqual([{ id: 's-cost', label: 'Cost & access' }, { id: 's-fit', label: 'Fit & comfort' }])
+      // Both ready subjects, on every group with videos, the thin one included.
+      expect(c.subjects.map((s) => s.label).sort()).toEqual(['Function & movement', 'Look & style'])
+      expect(c.subjects.some((s) => s.label === 'Fit & comfort' || s.label === 'Cost & access')).toBe(false)
+    }
+    expect(d.groups.cards.find((c) => c.key === 'caregivers')!.subjects).toEqual([
+      { id: 's-look', label: 'Look & style', k: 2 }, { id: 's-function', label: 'Function & movement', k: 0 },
+    ])
+    const otto = d.brands.all.find((r) => r.label === 'Ottobock')!
+    expect(otto).toMatchObject({ subjectsPending: 2, subjectsNotMeasured: [{ id: 's-cost', label: 'Cost & access' }, { id: 's-fit', label: 'Fit & comfort' }] })
+    const panel = VOICES_FIXTURES['ossur-tracked-brand']().panel as { subjects: { label: string; k: number }[] }
+    expect(panel.subjects.map((s) => [s.label, s.k])).toEqual([['Function & movement', 9], ['Look & style', 1]])
   })
 })

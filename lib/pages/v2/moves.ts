@@ -24,7 +24,7 @@ import { REFUSAL_WHY } from '../../reading/record'
 import type { Quote, Scope } from '../../renderables/types'
 import { selectAll } from '../../supabase-admin'
 import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../../chunk'
-import { subjectCalibration } from '../../subjects/calibration-state'
+import { FAILED_EXPLAINED, subjectCalibration } from '../../subjects/calibration-state'
 import { earliestMoveDay } from '../../subjects/move-day'
 import type { MoveStatus } from '../../subjects/types'
 import { adviceShortlist, adviceVectors, currentAdvice } from '../advice-shortlist'
@@ -467,6 +467,10 @@ export function moveCards(input: {
   const reading = monthStartOf(input.month)
   const joined = input.joined ?? (() => true)
   const order: Record<string, number> = { active: 0, done: 1, dropped: 2 }
+  // Why a failed subject shows no figure is said once a page (14 Oct, the
+  // lead's ruling): its first card here says FAILED_EXPLAINED, any later one
+  // on the same subject only that it is not measured yet.
+  const explained = new Set<string>()
   return [...input.moves]
     .sort((a, b) => (order[a.status] ?? 3) - (order[b.status] ?? 3) || moveDay(b).localeCompare(moveDay(a)) || a.id.localeCompare(b.id))
     .map((m): MoveCard => {
@@ -496,7 +500,9 @@ export function moveCards(input: {
       if (!object || notReady) {
         // Ruling U6: a subject whose check is open is "not measured yet"; only
         // a failed one is being re-described.
-        const unread: MoveCard['unread'] = notReady ? (subject?.calibration === 'failed' ? 'not_ready' : 'not_measured')
+        const failedFirst = notReady && subject?.calibration === 'failed' && m.subject_id != null && !explained.has(m.subject_id)
+        if (failedFirst) explained.add(m.subject_id!)
+        const unread: MoveCard['unread'] = notReady ? (failedFirst ? 'not_ready' : 'not_measured')
           : m.kind === 'theme' && themeIds.length > 1 ? 'several' : 'nothing'
         return { ...base, points: [], compare: null, unread, pending: null }
       }
@@ -743,7 +749,10 @@ export const sharePct = (k: number, n: number): string => (n > 0 ? `${Math.round
 export const MOVE_UNREAD: Record<NonNullable<MoveCard['unread']>, string> = {
   // SUBJECT_NOT_MEASURED's words (ruling U6), in a sentence.
   not_measured: 'This subject is not measured yet: its line is drawn once its check has passed.',
-  not_ready: 'This subject is being re-described, so its months are not read yet.',
+  // A failed subject's one reason, the words every surface prints for it (14
+  // Oct: displayed as a pending one is, FAILED_EXPLAINED where
+  // SUBJECT_NOT_MEASURED would go).
+  not_ready: FAILED_EXPLAINED,
   several: 'This move is on several themes, so no one line can be drawn for it.',
   nothing: 'This move names nothing the market is read on month by month.',
   no_reading: 'Your market has no reading of this yet.',
@@ -1213,7 +1222,9 @@ export async function loadMovesPage(scope: Scope, options: { canDecide: boolean 
   // "Date a move": the subjects, the month's most-asked questions and the
   // current recommendation, as Your moves has offered them since WP3.6.
   const subjects = subjectsOf(core)
-  const askable = [...subjects.entries()].filter(([, s]) => s.calibration !== 'failed').map(([id, s]) => ({ id, name: s.name }))
+  // Every active subject may be dated (14 Oct: a tracked subject is never
+  // hidden); one whose check has not passed draws its line once it does.
+  const askable = [...subjects.entries()].map(([id, s]) => ({ id, name: s.name }))
   const asked = questions
     ? buildQuestions({
         month: core.month,

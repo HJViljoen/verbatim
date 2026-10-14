@@ -161,6 +161,21 @@ describe('brandKinds and brandSubjects', () => {
     ])
   })
 
+  it('keeps every subject it is given (14 Oct): one on none of the brand\'s videos reads 0, after the rest, in the subjects\' order', () => {
+    const [row] = brandSubjects(SEP, [lens], new Map([['s-look', 'Look'], ['s-price', 'Price'], ['s-fit', 'Fit'], ['s-durable', 'Durability']]))
+    expect(row.cells).toEqual([
+      { id: 's-price', label: 'Price', k: 5, n: 14 },
+      { id: 's-durable', label: 'Durability', k: 1, n: 14 },
+      { id: 's-look', label: 'Look', k: 0, n: 14 },
+      { id: 's-fit', label: 'Fit', k: 0, n: 14 },
+    ])
+    // No video, nothing to count over: no cell, never "0 of 0".
+    const empty: BrandLens = { brandKey: 'client', label: 'Sealand', base: 'organic', rows: [] }
+    expect(brandSubjects(SEP, [empty], new Map([['s-fit', 'Fit']]))[0].cells).toEqual([])
+    // A kind stays as it was: only those on a video.
+    expect(brandKinds(SEP, [lens])[0].cells.every((c) => c.k > 0)).toBe(true)
+  })
+
   it('reads a brand with no video this month as n 0 and no cells', () => {
     const empty: BrandLens = { brandKey: 'client', label: 'Sealand', base: 'organic', rows: [] }
     expect(brandKinds(SEP, [empty])).toEqual([{ brandKey: 'client', label: 'Sealand', month: SEP, base: 'organic', n: 0, cells: [] }])
@@ -341,7 +356,10 @@ describe('groupMonthVideos and groupSubjects', () => {
       key: 'caretaker', name: 'Caretakers', month: SEP, n: 2,
       subjects: [{ subjectId: 's-fit', label: 'Fit', k: 2, n: 2 }, { subjectId: 's-cost', label: 'Cost', k: 1, n: 2 }],
     })
-    expect(ath.subjects).toEqual([{ subjectId: 's-cost', label: 'Cost', k: 1, n: 1 }])
+    // 14 Oct: a subject the group's talk never touches keeps its row at 0
+    // (a tracked subject is never hidden for being thin), after the rest.
+    expect(ath.subjects).toEqual([{ subjectId: 's-cost', label: 'Cost', k: 1, n: 1 }, { subjectId: 's-fit', label: 'Fit', k: 0, n: 1 }])
+    // A group with no video this month has nothing to count over: no row.
     expect(quiet).toEqual({ key: 'quiet', name: 'Quiet', month: SEP, n: 0, subjects: [] })
   })
 
@@ -364,7 +382,7 @@ describe('measuredSubjects (ruling U6)', () => {
     calibration_n: check === 'unchecked' ? null : check === 'failed' ? 33 : 25,
   })
 
-  it('counts the ready subjects alone; the open ones are pending by name, in their order; a failed one is neither', () => {
+  it('counts the ready subjects alone; every other is pending by name with its state, in their order, a failed one included (14 Oct)', () => {
     const m = measuredSubjects([
       row('s-fit', 'Fit', 'ready'),
       row('s-cost', 'Cost', 'provisional'),
@@ -374,7 +392,11 @@ describe('measuredSubjects (ruling U6)', () => {
       row('s-blank', '  ', 'ready'),
     ])
     expect([...m.names]).toEqual([['s-fit', 'Fit']])
-    expect(m.pending).toEqual([{ id: 's-cost', label: 'Cost' }, { id: 's-look', label: 'Look' }])
+    expect(m.pending).toEqual([
+      { id: 's-cost', label: 'Cost', state: 'provisional' },
+      { id: 's-look', label: 'Look', state: 'provisional' },
+      { id: 's-repair', label: 'Repair', state: 'failed' },
+    ])
   })
 
   it('all six open (Össur, 13 Oct): nothing is counted', () => {

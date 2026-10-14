@@ -593,6 +593,14 @@ const PAGES: Page[] = [
   // creators), and the day after its brand back-read (its own row not yet).
   { key: 'voices-ossur-thin', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['ossur-thin']() }) },
   { key: 'voices-ossur-counted', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['ossur-counted']() }) },
+  // A tracked subject is never hidden (14 Oct): one ready, one ready and thin,
+  // one whose check is open, one being re-described, on Market (its board, and
+  // the failed one's panel) and Voices (the page, a group's and a rival's panel).
+  { key: 'market-v2-tracked', path: '/dashboard/market', artboard: 'E2-Market.dc.html', page: () => h(MarketPage, { data: marketFixture({ subjects: 'tracked' }) }) },
+  { key: 'market-v2-tracked-failed', path: '/dashboard/market', artboard: 'E2-Market-Open.dc.html', page: () => h(MarketPage, { data: marketFixture({ subjects: 'tracked', subject: 'community' }) }) },
+  { key: 'voices-tracked', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['ossur-tracked']() }) },
+  { key: 'voices-tracked-group', path: '/dashboard/voices', artboard: 'E3-Voices-Open.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['ossur-tracked-group']() }) },
+  { key: 'voices-tracked-brand', path: '/dashboard/voices', artboard: 'E3-Voices-Open.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['ossur-tracked-brand']() }) },
   // Content's parity pass (13 Oct): the board's shape in the thin states.
   // The thin real state (both tenants' rows on 13 Oct, as a fixture), a set
   // of one idea, a week with none written, and, with `--content-dumps <dir>`,

@@ -1327,8 +1327,8 @@ async function readFlags(db: SupabaseClient, clientId: string, runId: string): P
 
 /** Each shown conversation's subject, by Market's rule (`placeSubject` over
  *  `loadSubjectPlacement`, lib/pages/subject-place.ts: a ready subject wins,
- *  one whose check is open only where no ready one takes it, a failed one
- *  never), on the conversation's member insights this run. The one rule
+ *  one whose check has not passed, open or failed, only where no ready one
+ *  takes it), on the conversation's member insights this run. The one rule
  *  every surface names a conversation's subject by, so a conversation names
  *  the same subject here as on Market. A name only: Content prints no
  *  figure of the subject's own (ruling U6). */

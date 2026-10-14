@@ -9,6 +9,7 @@ import { fmtInt, longMonth } from '@/lib/format'
 import type { TileRead } from '@/lib/pages/v2/home'
 import { tileHref } from '@/lib/pages/home'
 import { compareMonths, groundedLabel, monthLabelOn, MOVE_UNREAD, noMoveWords, pendingLine, RECORD_HREF, sharePct, streakLabel, UNTITLED_ADVICE, type TopMoves } from '@/lib/pages/v2/moves'
+import { notMeasuredLine } from '@/lib/pages/not-measured'
 import { inlineMonth } from '@/lib/reading/month-label'
 import { monthStartOf } from '@/lib/reading/month-key'
 import { cn } from '@/lib/utils'
@@ -118,7 +119,14 @@ function Newest({ move, reading }: { move: NonNullable<TopMoves['newest']>; read
   let figures: ReactNode = null
   let sentence: ReactNode = null
   if (move.unread) {
-    sentence = MOVE_UNREAD[move.unread]
+    // A subject whose check has not passed (open or failed): the tile's title
+    // does not name it, so the one short line does ("Not measured yet: Fit &
+    // comfort"); why a failed one shows no figure is Your moves' to say, once
+    // (the fresh check, 14 Oct). Any other reason keeps Your moves' words.
+    const named = move.kind === 'subject' && (move.unread === 'not_ready' || move.unread === 'not_measured') && move.label
+      ? notMeasuredLine([{ label: move.label }])
+      : null
+    sentence = named ?? MOVE_UNREAD[move.unread]
   } else if (move.pending) {
     if (p) {
       figures = (

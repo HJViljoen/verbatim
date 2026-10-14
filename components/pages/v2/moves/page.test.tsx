@@ -9,6 +9,7 @@ import { bansBroken } from '@/components/pages/moves/fixture'
 const bans = (markup: string) => bansBroken(markup.replace(/<span[^>]*data-notch=""[^>]*><\/span>/g, ''))
 import { MOVES_WRITE_REFUSED } from '@/lib/moves-access'
 import { PLAN_EMPTY } from '@/lib/ask/plan-cards'
+import { FAILED_EXPLAINED } from '@/lib/subjects/calibration-state'
 import {
   movesFixture, movesMemberFixture, movesOpenFixture, movesQuietFixture, movesRecordFixture, movesThinFixture, movesThinOpenFixture, statementsV2, DESK, MOVE_CARDS, PLAN,
 } from '@/lib/pages/v2/moves-fixture'
@@ -286,6 +287,22 @@ describe('the moves', () => {
     const text = markupText(render(<MovesSection data={movesFixture()} />))
     expect(text).toContain('This subject is not measured yet: its line is drawn once its check has passed.')
     expect(text).not.toContain('being re-described')
+  })
+
+  // 14 Oct: a tracked subject is never hidden. A move on a subject being
+  // re-described keeps its card and says the one reason every surface
+  // prints for it, with no line and no figure.
+  it('a subject being re-described keeps its move card, with FAILED_EXPLAINED and no line', () => {
+    const base = movesFixture()
+    const card = { ...base.moves.cards[0], points: [], compare: null, unread: 'not_ready' as const, pending: null }
+    const data = { ...base, moves: { ...base.moves, cards: [card] } }
+    const markup = render(<MovesSection data={data} />)
+    expect(markupText(markup)).toContain(FAILED_EXPLAINED)
+    // The chart keeps its axis (the parity pass) with no month drawn on it.
+    const drawn = markup.slice(markup.indexOf('<article id="move-'), markup.indexOf('</article>'))
+    expect(drawn).toContain('no month drawn yet')
+    expect(drawn).not.toMatch(/<circle|data-copy="(figure|level|verdict)"/)
+    assertCopyContract(<MovesSection data={data} />)
   })
 
   it('draws the move’s day inside its month', () => {

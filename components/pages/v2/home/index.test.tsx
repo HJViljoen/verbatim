@@ -7,7 +7,7 @@ import { weekTileOf, type DashboardData, type DashboardReads } from '@/lib/pages
 import { DASHBOARD_NOW, dashboardEmptyFixture, dashboardFixture, dashboardThinFixture, fixtureMovesTop, fixturePublished } from '@/lib/pages/v2/home-fixture'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
 import { CONTENT_PATH, IDEAS_EMPTY, topAskedOf } from '@/lib/pages/v2/content'
-import { NEXT_MOVE, NO_MOVE_YET } from '@/lib/pages/v2/moves'
+import { NEXT_MOVE, NO_MOVE_YET, type TopMoves } from '@/lib/pages/v2/moves'
 import { contentThinFixture } from '@/lib/pages/v2/content-fixture'
 import { ContentPage } from '@/components/pages/v2/content'
 import type { MarketWeekRowRaw } from '@/lib/reading/weeks'
@@ -16,7 +16,7 @@ import { decodeEntities, markupText, render, renderText } from '@/lib/test/rende
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { GROUPS_NOT_RUN } from '@/lib/pages/v2/voices'
-import { SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
+import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { DashboardPage, DashboardStream, FAILED_TILE } from '.'
 import { TileBoundary } from './tile-boundary'
 import { AGENT_LINE } from './agent-box'
@@ -806,6 +806,23 @@ describe('the thin states, after the fresh check', () => {
     expect(markupText(panel)).toMatch(/4% Share of market videos on Cost and affordability frustration ?: 23 of 521 in September, the last full month\.$/)
     expect(panel).not.toContain('→')
     expect(panel).not.toContain('border-dashed')
+  })
+
+  // The fresh check (14 Oct): the tile's title does not name the subject, so
+  // a move on one whose check has not passed (failed or open) names it in the
+  // one short line; FAILED_EXPLAINED ("the subject") is Your moves' to say.
+  it('Your moves: a move on a subject being re-described names it, "Not measured yet: Fit & comfort", never FAILED_EXPLAINED', () => {
+    const base = dashboardThinFixture({ moves: 'unread_move' })
+    const read = base.moves as { state: 'ok'; top: TopMoves }
+    for (const unread of ['not_ready', 'not_measured'] as const) {
+      const top: TopMoves = { ...read.top, newest: { ...read.top.newest!, kind: 'subject' as const, label: 'Fit & comfort', unread } }
+      const data: DashboardData = { ...base, moves: { state: 'ok', top } }
+      const t = tileText(render(page(data)), 'moves')
+      expect(t).toMatch(/After your move Create a guided access path, not a standalone price answer Not measured yet: Fit & comfort$/)
+      expect(t).not.toContain(FAILED_EXPLAINED)
+      expect(t).not.toMatch(/\d+%/)
+    }
+    assertCopyContract(page(base))
   })
 
   it('Your moves: a move no line can be drawn for says why, and prints no level', () => {

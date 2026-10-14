@@ -3,11 +3,11 @@ import { FlagChip, InPlacePanel, MiniBars, PairedBars, PanelSection, PanelTitle,
 import { fmtInt, fmtPct, longMonth } from '@/lib/format'
 import { PRODUCT_TAG_COPY } from '@/lib/products/tags'
 import {
-  catalogueBreak, PANEL_ID, sharePct, UNCLEAR_ID,
+  catalogueBreak, PANEL_ID, PANEL_KINDS, sharePct, UNCLEAR_ID,
   type CategoryPanel, type Compare, type Crosses, type LineBar, type ProductPanel, type ProductsQuote, type UnclearLine,
 } from '@/lib/pages/v2/products'
 import { quoteWords } from '@/lib/pages/brands'
-import { SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
+import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { cn } from '@/lib/utils'
 import { AskButton, BTN, CAPS, EmptyLine, Fig, MiniRow, OLINK, PanelTag, VerdictBadge } from './parts'
 import { TagControl } from './tag-control'
@@ -31,8 +31,18 @@ import { TagControl } from './tag-control'
 //                   Quotes print here and nowhere above (Heinrich's v2 rule).
 
 /** A subject not measured yet (ruling U6): its name where the row's name
- *  goes, SUBJECT_NOT_MEASURED where its bar and count would be. */
-function PendingRow({ label }: { label: string }) {
+ *  goes, SUBJECT_NOT_MEASURED where its bar and count would be. One being
+ *  re-described (14 Oct: displayed as a pending one is) says why under its
+ *  name, FAILED_EXPLAINED, too long for the bar's column. */
+function PendingRow({ label, failed = false }: { label: string; failed?: boolean }) {
+  if (failed) {
+    return (
+      <div data-subject-failed="" className="flex flex-col gap-0.5 text-[13.5px]">
+        <span className="min-w-0 leading-[1.3] text-foreground">{label}</span>
+        <span className="text-[12.5px] leading-[1.4] text-muted-foreground">{FAILED_EXPLAINED}</span>
+      </div>
+    )
+  }
   return (
     <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] items-center gap-2 text-[13.5px]">
       <span className="min-w-0 leading-[1.3] text-foreground">{label}</span>
@@ -41,18 +51,22 @@ function PendingRow({ label }: { label: string }) {
   )
 }
 
-/** A section of subjects or kinds, k of the set's n. The subjects: the
- *  ready ones counted, then those not measured yet by name (ruling U6). */
+/** A section of subjects or kinds, k of the set's n. The subjects: EVERY
+ *  active one (14 Oct: a tracked subject is never hidden; six until then):
+ *  the ready ones counted, largest first, a ready one on none of the set's
+ *  videos at 0, then those whose check has not passed by name (ruling U6),
+ *  one being re-described with its reason. The kinds: the six largest. */
 function CrossSection({ label, crosses, pick, empty }: { label: string; crosses: Crosses | null; pick: 'subjects' | 'kinds'; empty: string }) {
-  const rows = crosses ? crosses[pick].slice(0, 6) : []
-  const pending = crosses && pick === 'subjects' ? (crosses.pending ?? []).slice(0, Math.max(0, 6 - rows.length)) : []
+  const subjects = pick === 'subjects'
+  const rows = crosses ? (subjects ? [...crosses.subjects, ...(crosses.quiet ?? []).map((q) => ({ ...q, k: 0 }))] : crosses.kinds.slice(0, PANEL_KINDS)) : []
+  const pending = crosses && subjects ? crosses.pending ?? [] : []
   return (
     <PanelSection label={crosses && crosses.n > 0 ? <>{label} · of <Fig>{fmtInt(crosses.n)}</Fig></> : label}>
       {(rows.length > 0 || pending.length > 0) && crosses
         ? (
           <>
-            {rows.map((r) => <MiniRow key={r.id} size="md" label={r.label} k={r.k} of={crosses.n} tone={pick === 'subjects' ? 'market' : 'ink'} />)}
-            {pending.map((r) => <PendingRow key={r.id} label={r.label} />)}
+            {rows.map((r) => <MiniRow key={r.id} size="md" label={r.label} k={r.k} of={crosses.n} tone={subjects ? 'market' : 'ink'} />)}
+            {pending.map((r) => <PendingRow key={r.id} label={r.label} failed={r.state === 'failed'} />)}
           </>
         )
         : <EmptyLine>{empty}</EmptyLine>}
@@ -125,6 +139,8 @@ function CompareSection({ compare, title, products, monthName }: { compare: Comp
       <p className="m-0 text-[12.5px] leading-[1.5] text-muted-foreground">
         {compare.empty === 'pending' ? null : <>Each count is videos, out of that column’s total.{' '}</>}
         {compare.empty === 'pending'
+          // A row being re-described is not measured either; why is said
+          // once on the page, in its row under "What it’s about" (14 Oct).
           ? <>What these videos are about: {SUBJECT_NOT_MEASURED}. A subject is counted here once its check has passed.</>
           : compare.empty === 'none_named'
           ? <>No video named {products} in {monthName}, so there is nothing yet to set against the category.</>

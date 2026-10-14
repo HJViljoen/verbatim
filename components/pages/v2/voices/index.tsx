@@ -74,7 +74,7 @@ export function VoicesPage({ data }: { data: VoicesData }) {
       <PageBar title={surface('voices').label} meta={<VoicesMeta data={data} />} phoneControls="below">
         <MonthSwitch data={data} />
       </PageBar>
-      <WhoCard groups={data.groups} videos={data.videos} monthWords={data.monthWords} />
+      <WhoCard groups={data.groups} videos={data.videos} monthWords={data.monthWords} failed={data.subjectsFailed} />
       {data.groups.state === 'ready' ? <GroupGrid data={data} /> : null}
       <section aria-label="Brands and creators" className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
         <BrandsCard brands={data.brands} monthWords={data.monthWords} style={panelItemOrder(0)} />

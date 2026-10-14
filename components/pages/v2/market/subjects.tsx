@@ -6,6 +6,7 @@ import { Sparkline } from '@/components/charts/sparkline'
 import { CARD, CardHead, TickBar } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
 import type { MarketData, SubjectBoard, SubjectRow } from '@/lib/pages/v2/market'
+import { SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { cn } from '@/lib/utils'
 import { ConvChip, ConvRow, Label, MONO_MUTED, SetApartTag } from './parts'
 
@@ -20,7 +21,9 @@ import { ConvChip, ConvRow, Label, MONO_MUTED, SetApartTag } from './parts'
 // THE BOARD'S FORM IN EVERY STATE (the parity pass, 13 Oct): a subject with no
 // level yet keeps its row (its name, its bar's empty track, the conversations
 // inside it) with why in the level's place; the card keeps its column beside
-// the rail even with no subject named.
+// the rail even with no subject named. A TRACKED SUBJECT IS NEVER HIDDEN (14
+// Oct): one being re-described has its row exactly as one whose check is
+// open, FAILED_EXPLAINED in the level's place.
 
 /** "14 to 22%": the month line's range, in whole percent. Null for one
  *  point: its range would repeat the level printed above it. */
@@ -96,10 +99,15 @@ function Row({ row, data, selected }: { row: SubjectRow; data: MarketData; selec
           </>
         ) : (
           // NO LEVEL YET, THE ROW KEPT (the parity pass, 13 Oct): the level's
-          // place says why, in one quiet line, over the bar's empty track.
+          // place says why, in one quiet line, over the bar's empty track. A
+          // longer reason (being re-described) wraps on its own leading and
+          // keeps the figure's height as its least.
           <>
-            <p data-subject-pending="" className="m-0 mt-2 text-[13px] leading-[34px] text-muted-foreground">{row.pending?.note}</p>
-            <TickBar pct={0} size="lg" className="mt-2.5" label={row.pending?.note ?? row.name} />
+            <p data-subject-pending="" className="m-0 mt-2 flex min-h-[34px] items-center text-[13px] leading-[1.45] text-muted-foreground">{row.pending?.note}</p>
+            {/* The empty track's label is the short line: a failed row's
+                reason is in the line above, so a screen reader hears it
+                once, not twice (once a page, 14 Oct). */}
+            <TickBar pct={0} size="lg" className="mt-2.5" label={row.pending?.state === 'failed' ? SUBJECT_NOT_MEASURED : row.pending?.note ?? row.name} />
           </>
         )}
         <MonthLine row={row} />
@@ -131,9 +139,9 @@ function Row({ row, data, selected }: { row: SubjectRow; data: MarketData; selec
   )
 }
 
-/** The subjects that print no level, grouped by why (the calibration's own
- *  words): counted in your market and marked provisional; being re-described;
- *  not read this month. Each opens its panel, which says the same. */
+/** The subjects named in one line under the rows, grouped by why: a stored
+ *  dump from before 14 Oct (a failed subject has its own row since). Each
+ *  opens its panel, which says the same. */
 function Unmeasured({ board, selected }: { board: SubjectBoard; selected: string | null }) {
   const groups = (['provisional', 'failed', 'unread'] as const)
     .map((state) => ({ state, rows: board.unmeasured.filter((u) => u.state === state) }))

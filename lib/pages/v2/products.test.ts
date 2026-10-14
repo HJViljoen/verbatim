@@ -619,7 +619,7 @@ describe('the parity pass: the board\'s shape in the real, thin state', () => {
 // on this page as on Market: no count, no share, no "leads", no "mostly
 // about". Its name stands where the layout needs one.
 describe('ruling U6: Össur\'s provisional subjects print no figure', () => {
-  it('the crosses count only a ready subject; a provisional one is pending by name, whatever its count; a failed one is left out', () => {
+  it('the crosses count only a ready subject; the rest are pending by name with their state, whatever their count, a failed one too (14 Oct)', () => {
     const rows = [
       { audience: 'industry-other', object_kind: 'denominator', object_id: 'videos', k: 10, n: 10 },
       { audience: 'industry-other', object_kind: 'subject', object_id: 'ready', k: 4, n: 10 },
@@ -634,8 +634,38 @@ describe('ruling U6: Össur\'s provisional subjects print no figure', () => {
     ])
     const c = crossesOf(rows, subjects)
     expect(c.subjects).toEqual([{ id: 'ready', label: 'Ready one', k: 4 }])
-    // In the subjects' own order, a provisional one with no video here too.
-    expect(c.pending).toEqual([{ id: 'quiet', label: 'Quiet one' }, { id: 'prov', label: 'Provisional one' }])
+    // In the subjects' own order, a provisional one with no video here too,
+    // and a failed one named with its state (a tracked subject is never hidden).
+    expect(c.pending).toEqual([
+      { id: 'quiet', label: 'Quiet one', state: 'provisional' },
+      { id: 'prov', label: 'Provisional one', state: 'provisional' },
+      { id: 'bad', label: 'Failed one', state: 'failed' },
+    ])
+    expect(c.quiet).toBeUndefined()
+  })
+
+  it('a ready subject on none of the set\'s videos is quiet: printed at 0, never a pick (14 Oct)', () => {
+    const rows = [
+      { audience: 'industry-other', object_kind: 'denominator', object_id: 'videos', k: 10, n: 10 },
+      { audience: 'industry-other', object_kind: 'subject', object_id: 'big', k: 6, n: 10 },
+    ]
+    const subjects = new Map([
+      ['thin', { name: 'Thin one', state: 'ready' as const }],
+      ['big', { name: 'Big one', state: 'ready' as const }],
+    ])
+    const c = crossesOf(rows, subjects)
+    expect(c.subjects).toEqual([{ id: 'big', label: 'Big one', k: 6 }])
+    expect(c.quiet).toEqual([{ id: 'thin', label: 'Thin one' }])
+    expect(topRanked(c)).toBe(true)
+    // No video in the set: nothing to count over, so nothing is quiet either.
+    expect(crossesOf([], subjects).quiet).toBeUndefined()
+    // The comparison lists it at 0 after the rest, and bands no pair on it.
+    const cmp = buildCompare({
+      month: '2026-09-01', group: { id: 'g', name: 'Liners' }, products: [{ id: 'p', name: 'P', videos: 3 }],
+      crosses: new Map([[setKey('group', 'g'), c], [setKey('product', 'p'), crossesOf([{ audience: 'industry-other', object_kind: 'denominator', object_id: 'videos', k: 3, n: 3 }, { audience: 'industry-other', object_kind: 'subject', object_id: 'big', k: 2, n: 3 }], subjects)]]),
+    })!
+    expect(cmp.rows.map((r) => [r.label, r.cells[0]])).toEqual([['Big one', { k: 6, n: 10 }], ['Thin one', { k: 0, n: 10 }]])
+    expect(cmp.verdicts).toHaveLength(1)
   })
 
   it('Össur today: no shelf head names a subject as leading, and none prints a subject\'s count', () => {

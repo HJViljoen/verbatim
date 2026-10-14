@@ -217,10 +217,13 @@ describe('the subject board', () => {
     convHref: (id) => `#c-${id}`, subjectHref: (id) => `#s-${id}`, soFar: true,
   })!
 
-  it('lists the subjects with a level, largest first, and names a subject being re-described under them', () => {
-    expect(board.rows.map((r) => r.name)).toEqual(['Fit & comfort', 'Function & movement', 'Cost & access', 'Community & encouragement', 'Choosing the right device', 'Look & style'])
-    expect(board.rows.every((r) => r.pending === null)).toBe(true)
-    expect(board.unmeasured).toEqual([{ id: fixtureSubjectId('sport'), name: 'Sport and running', state: 'failed', note: FAILED_EXPLAINED, href: `#s-${fixtureSubjectId('sport')}` }])
+  it('lists the subjects with a level, largest first, then a subject being re-described in its own row (14 Oct)', () => {
+    expect(board.rows.map((r) => r.name)).toEqual(['Fit & comfort', 'Function & movement', 'Cost & access', 'Community & encouragement', 'Choosing the right device', 'Look & style', 'Sport and running'])
+    expect(board.rows.slice(0, 6).every((r) => r.pending === null)).toBe(true)
+    // A tracked subject is never hidden: the failed one keeps a row, no
+    // figure, FAILED_EXPLAINED where its level goes.
+    expect(board.rows[6]).toMatchObject({ id: fixtureSubjectId('sport'), level: null, verdict: null, prevPct: null, trail: [], pending: { state: 'failed', note: FAILED_EXPLAINED }, href: `#s-${fixtureSubjectId('sport')}` })
+    expect(board.unmeasured).toEqual([])
     expect(board).toMatchObject({ monthText: 'October so far', prevText: 'September', n: 318, ticks: true })
   })
 
@@ -239,13 +242,14 @@ describe('the subject board', () => {
       facts: fixtureFactsIn('provisional'), month: OCT, convs, period: 'week', flag: null,
       convHref: (id) => `#c-${id}`, subjectHref: (id) => `#s-${id}`, soFar: true,
     })!
-    expect(thin.rows.map((r) => r.name)).toEqual(['Choosing the right device', 'Community & encouragement', 'Cost & access', 'Fit & comfort', 'Function & movement', 'Look & style'])
+    expect(thin.rows.map((r) => r.name)).toEqual(['Choosing the right device', 'Community & encouragement', 'Cost & access', 'Fit & comfort', 'Function & movement', 'Look & style', 'Sport and running'])
     const fit = thin.rows.find((r) => r.name === 'Fit & comfort')!
     expect(fit).toMatchObject({ level: null, pending: { state: 'provisional', note: SUBJECT_NOT_MEASURED }, verdict: null, prevPct: null, trail: [] })
     expect(fit.inside.map((c) => [c.label, c.count, c.month])).toEqual([
       ['How long a liner lasts', 23, 35], ['Sweat under the liner', 21, 30], ['Socket fit changing over time', 14, 20],
     ])
-    expect(thin.unmeasured.map((u) => u.state)).toEqual(['failed'])
+    expect(thin.rows.map((r) => r.pending?.state)).toEqual(['provisional', 'provisional', 'provisional', 'provisional', 'provisional', 'provisional', 'failed'])
+    expect(thin.unmeasured).toEqual([])
     expect(thin).toMatchObject({ n: null, ticks: false })
   })
 
@@ -259,12 +263,12 @@ describe('the subject board', () => {
     expect(fit.verdict).toBeNull()
   })
 
-  it('splits the subjects into the ready and the ones whose check is open; a failed one is neither', () => {
+  it('splits the subjects into three tiers: ready, open, failed (14 Oct)', () => {
     const all = [
       { subject: { id: 'p' }, calibration: 'provisional' }, { subject: { id: 'f' }, calibration: 'failed' }, { subject: { id: 'r' }, calibration: 'ready' },
     ]
     const t = placementTiers(all)
-    expect([t.ready.map((x) => x.id), t.pending.map((x) => x.id)]).toEqual([['r'], ['p']])
+    expect([t.ready.map((x) => x.id), t.pending.map((x) => x.id), t.failed.map((x) => x.id)]).toEqual([['r'], ['p'], ['f']])
   })
 
   // Ruling U6 on a mixed tenant: a ready subject always wins placement, even
@@ -507,9 +511,11 @@ describe('the open panel', () => {
     expect(who.get('t1')).toEqual([{ about: 'client', videos: 1 }, { about: 'market', videos: 2 }])
   })
 
-  it('a subject being re-described opens with why and lists nothing', () => {
+  it('a subject being re-described opens as an open one does: not measured yet, the conversations inside it (here none), no figure', () => {
     const data = marketFixture({ subject: 'sport' })
-    expect(data.subjectPanel).toMatchObject({ state: 'failed', note: FAILED_EXPLAINED, inside: [], bars: [], level: null })
+    // Its reason, FAILED_EXPLAINED, is said once a page: in its row (14 Oct).
+    expect(data.subjectPanel).toMatchObject({ state: 'failed', note: SUBJECT_NOT_MEASURED, inside: [], bars: [], level: null })
+    expect(data.subjects!.rows.find((r) => r.id === data.subjectPanel!.id)!.pending).toEqual({ state: 'failed', note: FAILED_EXPLAINED })
   })
 
   it('a subject whose check is open opens with why and the conversations inside it', () => {

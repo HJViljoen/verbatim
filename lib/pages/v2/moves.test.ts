@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { FAILED_EXPLAINED } from '../../subjects/calibration-state'
 
 import { priorPrintable } from '../../reading/verdicts'
 import type { PairComparability } from '../../reading/comparability'
@@ -161,6 +162,14 @@ describe('moveCards', () => {
     expect(by.get('a')?.unread).toBe('not_measured')
     expect(MOVE_UNREAD.not_measured).not.toMatch(/re-described/)
     expect(by.get('d')?.unread).toBe('not_ready')
+    // A failed subject's move keeps its card and says the one reason every
+    // surface prints for it (14 Oct), with no line.
+    expect(MOVE_UNREAD.not_ready).toBe(FAILED_EXPLAINED)
+    expect(by.get('d')?.points).toEqual([])
+    // Said once a page: a second move on the same failed subject says only
+    // that it is not measured yet.
+    const twice = moveCards({ ...base, moves: [move({ id: 'd', subject_id: 's3' }), move({ id: 'e', subject_id: 's3', declared_at: '2026-08-02' })] })
+    expect(twice.map((c) => c.unread)).toEqual(['not_ready', 'not_measured'])
     expect(by.get('b')?.unread).toBe('several')
     expect(by.get('c')?.label).toBe('Liner life')
     expect(by.get('c')?.openHref).toBe(adviceHref('L1'))
