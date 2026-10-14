@@ -98,7 +98,7 @@ async function main() {
   const subjectsRes = await admin.from(TABLE_SUBJECTS).select(SUBJECT_COLUMNS).eq('client_id', args.clientId)
   if (subjectsRes.error) throw new Error(`${NAME}: subjects: ${subjectsRes.error.message}. Nothing written.`)
   const subjects = (subjectsRes.data ?? []) as Subject[]
-  const changesRes = await admin.from(CONFIG_CHANGES_TABLE).select('after')
+  const changesRes = await admin.from(CONFIG_CHANGES_TABLE).select('after, actor_kind, changed_at')
     .eq('client_id', args.clientId).eq('surface', 'subjects').eq('field', 'subjects')
   if (changesRes.error) throw new Error(`${NAME}: config_changes: ${changesRes.error.message}. Nothing written.`)
   const runningRes = await admin.from('pipeline_runs').select('id').eq('client_id', args.clientId).eq('status', 'running')

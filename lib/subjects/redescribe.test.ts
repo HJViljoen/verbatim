@@ -9,6 +9,7 @@ import {
   redescribeChange,
   redescribeLogged,
   redescribeNote,
+  retiredBy,
   strandedMoves,
   successorRow,
   type RedescribeSubject,
@@ -28,6 +29,9 @@ const entry = (over: Partial<Redescription> = {}): Redescription => ({
 })
 const successor = (over: Partial<RedescribeSubject> = {}) => subject({ id: 'new', description: NEW_WORDS, ...over })
 const logRow = { after: { id: 'new', supersedes: 'old' } }
+// What `subjects_status_audit` writes when the service role (this script)
+// retires the old subject.
+const stoppedByScript = { after: { id: 'old', name: 'Look & style', status: 'retired', superseded_by: null }, actor_kind: 'script', changed_at: '2026-10-14T10:00:00Z' }
 
 describe('planRedescribe', () => {
   it('re-describes an active subject the seed was written against: retire, insert, point, log', () => {
@@ -60,8 +64,19 @@ describe('planRedescribe', () => {
   })
 
   it('finishes a run that stopped after the retirement: insert, point, log', () => {
-    expect(planRedescribe([subject({ status: 'retired' })], [], [entry()])[0])
+    expect(planRedescribe([subject({ status: 'retired' })], [stoppedByScript], [entry()])[0])
       .toMatchObject({ writes: ['insert', 'point', 'log'], successorId: null })
+  })
+
+  it('never brings back a subject a member stopped, or one the record cannot say who stopped', () => {
+    const byUser = { ...stoppedByScript, actor_kind: 'user', changed_at: '2026-10-15T09:00:00Z' }
+    expect(planRedescribe([subject({ status: 'retired' })], [byUser], [entry()])[0])
+      .toMatchObject({ refused: expect.stringMatching(/logged as "user", not by this script/) })
+    expect(planRedescribe([subject({ status: 'retired' })], [], [entry()])[0])
+      .toMatchObject({ refused: expect.stringMatching(/does not show who stopped it/) })
+    // The newest retirement row decides.
+    expect(retiredBy([byUser, stoppedByScript], 'old')).toBe('user')
+    expect(retiredBy([stoppedByScript, logRow, { after: { id: 'old', status: 'active' }, actor_kind: 'user' }], 'old')).toBe('script')
   })
 
   it('finishes a run that stopped after the insert: point, and the log only if it is missing', () => {
@@ -96,7 +111,8 @@ describe('strandedMoves', () => {
   })
 
   it('never blocks finishing a subject an earlier run already stopped, nor a refused one', () => {
-    const stopped = planRedescribe([subject({ status: 'retired' })], [], [entry()])
+    const stopped = planRedescribe([subject({ status: 'retired' })], [stoppedByScript], [entry()])
+    expect(stopped[0]).toMatchObject({ writes: ['insert', 'point', 'log'] })
     expect(strandedMoves(stopped, [move('old')])).toEqual([])
     const refused = planRedescribe([subject({ description: 'Something else.' })], [], [entry()])
     expect(strandedMoves(refused, [move('old')])).toEqual([])

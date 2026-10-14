@@ -122,11 +122,39 @@ export function redescribeLogged(changes: readonly { after: unknown }[], success
   })
 }
 
+/** One `subjects` change-log row as the plan reads it: `after`, and for the
+ *  status trigger's rows who made the change and when. */
+export interface SubjectLogRow {
+  after: unknown
+  actor_kind?: string | null
+  changed_at?: string | null
+}
+
+/**
+ * Who stopped this subject, by the record: the `actor_kind` of the newest
+ * change-log row whose `after` names it `retired` (`subjects_status_audit`
+ * writes one for every retirement, taking the actor from identity). The
+ * service role, which is this script, logs as 'script'; a member stopping it
+ * in Settings logs as 'user'. Null where no such row is held. Pure.
+ */
+export function retiredBy(changes: readonly SubjectLogRow[], id: string): string | null {
+  let newest: SubjectLogRow | null = null
+  for (const c of changes) {
+    const a = c.after as { id?: unknown; status?: unknown } | null
+    if (a == null || typeof a !== 'object' || a.id !== id || a.status !== 'retired') continue
+    if (!newest || (c.changed_at ?? '') >= (newest.changed_at ?? '')) newest = c
+  }
+  return newest ? newest.actor_kind ?? null : null
+}
+
 /**
  * What each subject of the seed needs, from what the database holds.
  *
  *   active, its name and words as the seed says → retire, insert, point, log
  *   retired by an earlier run, no successor yet   → insert, point, log
+ *     (only where the record shows the service role stopped it: a subject
+ *     a member stopped in Settings is never brought back, born counted,
+ *     under new words)
  *   retired, its successor there, not pointed     → point (and log if missing)
  *   retired and pointed at its successor          → log if missing, else nothing
  *
@@ -135,7 +163,7 @@ export function redescribeLogged(changes: readonly { after: unknown }[], success
  */
 export function planRedescribe(
   subjects: readonly RedescribeSubject[],
-  changes: readonly { after: unknown }[],
+  changes: readonly SubjectLogRow[],
   seed: readonly Redescription[],
 ): RedescribePlan[] {
   const seen = new Set<string>()
@@ -173,6 +201,12 @@ export function planRedescribe(
       return { id: e.id, name: e.name, writes: ['point', ...logWrite(successor.id)], successorId: successor.id }
     }
     if (words(old.description) !== words(e.from)) return refuse('it is stopped, and its description is not the one the seed was written against')
+    const by = retiredBy(changes, old.id)
+    if (by !== 'script') {
+      return refuse(by == null
+        ? 'it is stopped, and the record does not show who stopped it'
+        : `its stop is logged as "${by}", not by this script: a re-description never brings back a subject somebody stopped`)
+    }
     return { id: e.id, name: e.name, writes: ['insert', 'point', 'log'], successorId: null }
   })
 }
