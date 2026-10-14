@@ -5,7 +5,7 @@ import { fixtureId, marketFixture, marketLongRowsFixture, marketThinFixture, FIX
 import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import type { MarketData } from '@/lib/pages/v2/market'
 import { MarketPage, MARKET_FIRST_RUN } from './index'
-import { ConversationPanel, SubjectPanelView } from './panel'
+import { ConversationPanel, SubjectPanelView, SUBJECT_NONE_THIS_WEEK } from './panel'
 import { KindsCard, KindsFrame, PlatformsCard, PlatformsFrame, RailView, WatchCard, WeeksCard, weeksLine, WEEKS_UNREAD } from './rail'
 import { WEEKS_FAILED } from '@/lib/pages/home'
 import { SubjectBoardView } from './subjects'
@@ -591,10 +591,10 @@ describe('SubjectPanelView: a ready subject in full (14 Oct)', () => {
   it('this week: the week beside the month, its own read, the four blocks, three quotes, then the conversations inside it', () => {
     const text = renderText(panelOf(RICH))
     // The week's videos stand beside the month's level (decision 1).
-    expect(text).toMatch(/^Subject Cost & access Close 40 of 241 videos in your market this week 70 of 318 videos in your market, October so far 22% of the market’s videos ▲ 7 pts Our read People describe insurance refusals/)
+    expect(text).toMatch(/^Subject Cost & access Close 40 of 241 videos in your market this week 70 of 318 videos in your market, October so far 22% of the market’s videos ▲ 7 pts The parts below read the videos where a comment was about it: 40 this week, and 64 of these 70 in October so far\. Our read People describe insurance refusals/)
     // Our read: what people said, then what it means for the company.
     expect(text).toContain('Paying out of pocket runs through all of it.')
-    expect(text).toContain('fundraisers when the funding does not come. What it means for Össur Össur\'s knees and feet reach people through insurers and medical aid')
+    expect(text).toContain('fundraisers when the funding does not come. What it means for Össur The refusals people describe are for powered knees, the kind of knee Össur sells.')
     expect(text).toContain('Who it’s about · this week Össur 6 · Ottobock 3 · others 31 October so far Össur 7 · Ottobock 6 · others 51')
     expect(text).toContain('What people did · of 64 in October so far Complained about something 44 Asked a question 20')
     expect(text).toContain('Who’s saying it Long-time users upgrading Caregivers and family Each opens in Voices')
@@ -609,9 +609,11 @@ describe('SubjectPanelView: a ready subject in full (14 Oct)', () => {
     assertCopyContract(panelOf(RICH))
   })
 
-  it('this month: the month alone, where by platform as bars', () => {
+  it('this month: the month alone, its one base named under the stats, where by platform as bars', () => {
     const text = renderText(panelOf(RICH_MONTH))
-    expect(text).toMatch(/^Subject Cost & access Close 70 of 318 videos in your market, October so far 22% of the market’s videos/)
+    expect(text).toMatch(/^Subject Cost & access Close 70 of 318 videos in your market, October so far 22% of the market’s videos ▲ 7 pts The parts below read the 64 of these 70 videos where a comment was about it\. Our read/)
+    // Every block reads that one base: none of them counts over the level's 70.
+    expect(text).toContain('What people did · of 64 in October so far')
     expect(text).not.toContain('this week')
     expect(text).toContain('Who it’s about Össur 7 · Ottobock 6 · others 51 What people did · of 64 in October so far')
     expect(text).toContain('Where TikTok 32 Instagram 16 YouTube 16')
@@ -620,13 +622,41 @@ describe('SubjectPanelView: a ready subject in full (14 Oct)', () => {
 
   it('ready and thin (one video): a small count as a small count, and code\'s one line as its read', () => {
     const text = renderText(panelOf(THIN))
-    expect(text).toMatch(/^Subject Look & style Close 1 of 241 videos in your market this week 4 of 318 videos in your market, October so far 1% of the market’s videos too few to compare Our read In October so far, talk about Look & style sat in “Covers and finishes” and “Showing it or hiding it”\./)
+    expect(text).toMatch(/^Subject Look & style Close 1 of 241 videos in your market this week 4 of 318 videos in your market, October so far 1% of the market’s videos too few to compare The parts below read the videos where a comment was about it: 1 this week, and 1 of these 4 in October so far\. Our read In October so far, talk about Look & style sat in “Covers and finishes” and “Showing it or hiding it”\./)
     expect(text).toContain('What people did · of 1 in October so far Praised it 1')
     expect(text).toContain('Where This week October so far Instagram 1 1 of 1')
     expect(text).toContain('In their words · 1 of the comments')
     // No group's talk is in it: the block is left out, as the conversation panel's is.
     expect(text).not.toContain('Who’s saying it')
     assertCopyContract(panelOf(THIN))
+  })
+
+  it('a tenant whose subject reads are switched off: the week read\'s sentence alone under Our read, the blocks as they are', () => {
+    const d = marketFixture({ subject: 'cost', subjectDetail: 'rich', subjectReadsOff: true })
+    const text = renderText(panelOf(d))
+    expect(text).toContain('Our read People ask how to get a knee paid for, and what to do when a claim is refused. Month by month')
+    expect(text).not.toMatch(/People describe insurance refusals|What it means for/)
+    expect(text).toContain('What people did · of 64 in October so far')
+    assertCopyContract(panelOf(d))
+  })
+
+  it('no base line where the blocks read every video the level counts', () => {
+    const d = marketFixture({ subject: 'cost', subjectDetail: 'rich', period: 'month' })
+    const panel = { ...d.subjectPanel!, level: { ...d.subjectPanel!.level!, k: 64 } }
+    expect(render(<SubjectPanelView panel={panel} data={d} />)).not.toContain('data-subject-base')
+  })
+
+  it('this week with none of its videos: who it is about and where keep their frame, say so in one line, and give the month', () => {
+    const d = marketFixture({ subject: 'cost', subjectDetail: 'rich' })
+    const detail = d.subjectPanel!.detail!
+    const quiet = {
+      ...d.subjectPanel!,
+      detail: { ...detail, week: { k: 0, n: 241 }, cited: { month: 64, week: 0 }, who: { parts: [], n: 0, month: detail.who!.month }, platforms: { rows: [], n: 0, month: detail.platforms!.month } },
+    }
+    const text = renderText(<SubjectPanelView panel={quiet} data={d} />)
+    expect(text).toContain(`Who it’s about · this week ${SUBJECT_NONE_THIS_WEEK} October so far Össur 7 · Ottobock 6 · others 51`)
+    expect(text).toContain(`Where This week October so far TikTok 0 32 of 64 Instagram 0 16 of 64 YouTube 0 16 of 64 ${SUBJECT_NONE_THIS_WEEK}`)
+    assertCopyContract(<SubjectPanelView panel={quiet} data={d} />)
   })
 
   it('brands not counted yet: who it is about says so, and nothing else changes', () => {

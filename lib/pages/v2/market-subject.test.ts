@@ -122,6 +122,14 @@ describe('subjectDetailOf: the subject\'s videos, by the conversation panel\'s r
     expect(subjectQuoteOf(ev({ i: 9, day: 9, platform: 'youtube' }))).toMatchObject({ source: 'YouTube · 9 Oct', about: null })
   })
 
+  it('this week with none of its videos and some in the month: who and where keep their frame, the month beside; one base named', () => {
+    const d = subjectDetailOf({ ...base, evidence: [ev({ i: 1, day: 2, platform: 'instagram' }), ev({ i: 2, day: 3 })] })
+    expect(d.cited).toEqual({ month: 2, week: 0 })
+    expect(d.who).toMatchObject({ parts: [], n: 0, month: { n: 2 } })
+    expect(d.platforms).toMatchObject({ rows: [], n: 0, month: { counts: { instagram: 1, tiktok: 1 }, n: 2 } })
+    expect(d.week).toEqual({ k: 0, n: 241 })
+  })
+
   it('a subject with nothing in the period has no block to print', () => {
     const d = subjectDetailOf({ ...base, evidence: [] })
     expect(d).toMatchObject({ who: null, doing: null, groups: [], platforms: null, quotes: [], week: { k: 0, n: 241 } })
@@ -134,11 +142,11 @@ describe('buildSubjectPanel: the read and the blocks, for a READY subject alone 
   const detail = { basis: 'month', week: null, who: null, brands: 'counted', doing: null, groups: [], platforms: null, quotes: [] } as SubjectDetail
 
   it('a ready subject: its own read where the published read holds one of this month, and its blocks', () => {
-    const panel = buildSubjectPanel({ id: fixtureSubjectId('cost'), facts: fixtureFacts(), convs: [], period: 'month', p, read: withSubjectReads(fixtureRead()), month, detail })
+    const panel = buildSubjectPanel({ id: fixtureSubjectId('cost'), facts: fixtureFacts(), convs: [], period: 'month', p, read: withSubjectReads(fixtureRead()), month, detail, readsOn: true })
     expect(panel?.state).toBe('ready')
     expect(panel?.read?.thin).toBe(false)
     expect(panel?.read?.lines.map((l) => l.body)).toHaveLength(2)
-    expect(panel?.read?.means?.body).toContain('Össur\'s knees and feet')
+    expect(panel?.read?.means?.body).toContain('the kind of knee Össur sells')
     expect(panel?.detail).toBe(detail)
     // The week read's sentence is kept: it stands in where there is no read.
     expect(panel?.sentence?.body).toContain('paid for')
@@ -148,12 +156,20 @@ describe('buildSubjectPanel: the read and the blocks, for a READY subject alone 
     expect(buildSubjectPanel({ id: fixtureSubjectId('cost'), facts: fixtureFacts(), convs: [], period: 'month', p, read: fixtureRead(), month })?.read).toBeNull()
     const sep = { ...withSubjectReads(fixtureRead()) } as WeekReadData & { subjectReads: { month: string } }
     sep.subjectReads = { ...sep.subjectReads, month: '2026-09-01' }
-    expect(buildSubjectPanel({ id: fixtureSubjectId('cost'), facts: fixtureFacts(), convs: [], period: 'month', p, read: sep, month })?.read).toBeNull()
+    expect(buildSubjectPanel({ id: fixtureSubjectId('cost'), facts: fixtureFacts(), convs: [], period: 'month', p, read: sep, month, readsOn: true })?.read).toBeNull()
+  })
+
+  it('a tenant whose subject reads are switched off prints no stored read: the sentence alone (the post ideas\' rule)', () => {
+    for (const readsOn of [false, undefined]) {
+      const panel = buildSubjectPanel({ id: fixtureSubjectId('cost'), facts: fixtureFacts(), convs: [], period: 'month', p, read: withSubjectReads(fixtureRead()), month, detail, readsOn })
+      expect(panel).toMatchObject({ state: 'ready', read: null, detail })
+      expect(panel?.sentence?.body).toContain('paid for')
+    }
   })
 
   it('open or failed: neither the read nor the blocks, whatever was read', () => {
     for (const [facts, id] of [[fixtureFactsIn('provisional'), 'cost'], [fixtureFactsIn('tracked'), 'community'], [fixtureFacts(), 'sport']] as const) {
-      const panel = buildSubjectPanel({ id: fixtureSubjectId(id), facts, convs: [], period: 'month', p, read: withSubjectReads(fixtureRead()), month, detail })
+      const panel = buildSubjectPanel({ id: fixtureSubjectId(id), facts, convs: [], period: 'month', p, read: withSubjectReads(fixtureRead()), month, detail, readsOn: true })
       expect(panel?.state).not.toBe('ready')
       expect(panel).toMatchObject({ read: null, detail: null })
     }
@@ -163,7 +179,7 @@ describe('buildSubjectPanel: the read and the blocks, for a READY subject alone 
     const read = withSubjectReads(fixtureRead())
     const cost = subjectReadLines(subjectReadOf(read, fixtureSubjectId('cost'), OCT))
     expect(cost?.lines.map((l) => l.body.slice(0, 20))).toEqual(['People describe insu', 'Paying out of pocket'])
-    expect(cost?.means?.body.slice(0, 20)).toBe('Össur\'s knees and fe')
+    expect(cost?.means?.body.slice(0, 20)).toBe('The refusals people ')
     expect(subjectReadLines(subjectReadOf(read, fixtureSubjectId('look'), OCT))).toMatchObject({ thin: true, means: null, lines: [{ body: expect.stringContaining('sat in') }] })
     expect(subjectReadLines(null)).toBeNull()
   })

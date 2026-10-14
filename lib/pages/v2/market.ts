@@ -8,6 +8,7 @@ import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../../chun
 import { fmtInt, longMonth, platformLabel, shortDate } from '../../format'
 import { gateFor } from '../../quote-context'
 import type { GateOptions } from '../../quote-gate'
+import { subjectReadsEnabled } from '../../config'
 import { substituteFigures } from '../../reports/cover'
 import type { FigureTable as PrintedFigures } from '../../reports/types'
 import { proseFigures } from '../../prose/figures'
@@ -534,11 +535,18 @@ export interface SubjectPanel {
 export interface SubjectDetail {
   /** What the week blocks count: this week's videos, or the month's. */
   basis: 'week' | 'month'
+  /** The videos the blocks read: the month's, and this week's on the week.
+   *  Where the month's fall short of the level's k (members spoken only on
+   *  camera, which no comment dates), the panel says so once, under the
+   *  stats (the lead's ruling, 14 Oct): one base, named. Absent on a dump
+   *  from before it. */
+  cited?: { month: number; week: number | null }
   /** This week only: the subject's videos this week, of the market's. */
   week: Level | null
   /** Who the videos are about (one brand per video, the item's own counted
-   *  comments, `whoSplit`); this week, with the month's beside it. Null where
-   *  it has no video in the period. */
+   *  comments, `whoSplit`); this week, with the month's beside it (`parts`
+   *  empty where the week has none and the month some: the block keeps its
+   *  frame and says so). Null where it has no video in the period. */
   who: { parts: WhoPart[]; n: number; month: { parts: WhoPart[]; n: number } | null } | null
   /** Whether "who" may print (`loadWho`'s rule, for these comments). */
   brands: BrandsState
@@ -547,7 +555,8 @@ export interface SubjectDetail {
   /** Groups whose own insights are in its month's talk, the most videos
    *  first: names only, each opening in Voices (decision 2). */
   groups: GroupLink[]
-  /** Its videos by platform; this week, with the month's beside them. */
+  /** Its videos by platform; this week, with the month's beside them (`rows`
+   *  empty where the week has none and the month some). */
   platforms: { rows: PlatformRow[]; n: number; month: { counts: Record<string, number>; n: number; text: string } | null } | null
   /** Three gated quotes (`subjectQuotes`, the strict subject gate). */
   quotes: PanelQuote[]
@@ -1989,7 +1998,7 @@ export async function loadMarket(input: {
       }), null)
     : null
   const subjectPanel = !openId && p.subject
-    ? buildSubjectPanel({ id: p.subject, facts: subjectFacts, convs, period, p, read, month: monthBlock, flag: flagCard?.conv ? { id: flagCard.conv.id, verdict: flagCard.verdict } : null, detail: await detailAhead })
+    ? buildSubjectPanel({ id: p.subject, facts: subjectFacts, convs, period, p, read, month: monthBlock, flag: flagCard?.conv ? { id: flagCard.conv.id, verdict: flagCard.verdict } : null, detail: await detailAhead, readsOn: subjectReadsEnabled(clientId) })
     : null
   const longRunRead = await longRunAhead
   const longRun = longRunRead === 'failed' ? null : marketLongRunFor({ ...longRunRead, month, filling: soFar })
@@ -2246,6 +2255,11 @@ export function buildSubjectPanel(a: {
   flag?: { id: string; verdict: Verdict } | null
   /** The blocks over its videos (`subjectDetailOf`), where they were read. */
   detail?: SubjectDetail | null
+  /** The tenant's subject reads are switched on (`subjectReadsEnabled`,
+   *  lib/config.ts): off (and absent), no stored read prints and the week
+   *  read's sentence stands in, as Content prints no stored idea while post
+   *  ideas are off. */
+  readsOn?: boolean
 }): SubjectPanel | null {
   const f = a.facts.find((x) => x.id === a.id)
   if (!f) return null
@@ -2273,7 +2287,7 @@ export function buildSubjectPanel(a: {
     bars: measured ? bars : [],
     inside: insideOf(f.id, a.convs, a.period, { limit: 50, href: (id) => convHref(a.p, id, 'subjects'), flagId: a.flag?.id ?? null, flag: a.flag?.verdict ?? null }),
     sentence: standing?.sentence?.trim() ? { body: standing.sentence.trim(), figures: (a.read?.figures ?? {}) as unknown as PrintedFigures } : null,
-    read: measured ? subjectReadLines(subjectReadOf(a.read, f.id, m)) : null,
+    read: measured && a.readsOn ? subjectReadLines(subjectReadOf(a.read, f.id, m)) : null,
     detail: measured ? a.detail ?? null : null,
     askHref: `/dashboard/agent?ask=${encodeURIComponent(`What does my market say about ${f.name}?`)}`,
     closeHref: closeHref(a.p, 'subjects'),
@@ -2397,15 +2411,21 @@ export function subjectDetailOf(input: {
   const where = platformRows(platformMixOf(basis), weekRows ? 'week' : 'month')
   const span = [...new Set([...monthRows, ...(weekRows ?? [])])]
   const quotes = subjectQuotes({ gate: input.gate, memberIds: input.members, evidence: span, market: input.market, prefer: weekRows ? input.week : null, count: MARKET_QUOTES })
+  // This week with no video of its own and some in the month: who and where
+  // keep their frame (the parity rule) with the week empty beside the month.
+  const quietWeek = weekRows != null && basisVideos.size === 0 && monthVideos.size > 0
+  const monthWho = weekRows ? whoFor(monthRows) : null
+  const monthWhere = weekRows ? { counts: platformMixOf(monthRows), n: monthVideos.size, text: input.month.text } : null
 
   return {
     basis: weekRows ? 'week' : 'month',
+    cited: { month: monthVideos.size, week: weekRows ? basisVideos.size : null },
     week: weekRows && input.marketWeek != null ? { k: basisVideos.size, n: input.marketWeek } : null,
-    who: whoBasis ? { ...whoBasis, month: weekRows ? whoFor(monthRows) : null } : null,
+    who: whoBasis ? { ...whoBasis, month: monthWho } : quietWeek ? { parts: [], n: 0, month: monthWho } : null,
     brands: input.brands,
     doing: doing.length > 0 ? { rows: doing, n: monthVideos.size, text: `in ${input.month.text}` } : null,
     groups,
-    platforms: where ? { rows: where.rows, n: where.n, month: weekRows ? { counts: platformMixOf(monthRows), n: monthVideos.size, text: input.month.text } : null } : null,
+    platforms: where ? { rows: where.rows, n: where.n, month: monthWhere } : quietWeek ? { rows: [], n: 0, month: monthWhere } : null,
     quotes: quotes.map(subjectQuoteOf),
   }
 }

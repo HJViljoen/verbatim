@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach } from 'vitest'
-import { passAMinComments, PASS_A_MIN_COMMENTS_DEFAULT, captureRunFlags, transcriptsEnabled, translationEnabled, ocrEnabled, effectivePeriod, periodWindowDays, periodSince, PERSONA_MAX, PERSONA_MIN_INSIGHTS, PERSONA_MIN_VIDEOS, PERSONA_DIGEST_THEMES, EVIDENCE_FLOOR, directionWordsFor, DIRECTION_READERS, DIRECTION_WORDS_BY_READER, OLD_PAGES_RETIRE_ON, SEGMENT_JUDGE_ENABLED, BRAND_CONFIRM_ENABLED, segmentJudgeEnabled, brandConfirmEnabled, PRODUCT_READINGS_ENABLED, productReadingsEnabled, PRODUCT_CLASSIFY_BUDGET_USD, POST_IDEAS_ENABLED, postIdeasEnabled, POST_IDEAS_BUDGET_USD, POST_IDEAS_RUN_MARGIN_USD, PRODUCT_CLASSIFY_CAP, SEALAND_CLIENT_ID, OSSUR_CLIENT_ID, DEMO_CLIENT_ID } from './config'
+import { passAMinComments, PASS_A_MIN_COMMENTS_DEFAULT, captureRunFlags, transcriptsEnabled, translationEnabled, ocrEnabled, effectivePeriod, periodWindowDays, periodSince, PERSONA_MAX, PERSONA_MIN_INSIGHTS, PERSONA_MIN_VIDEOS, PERSONA_DIGEST_THEMES, EVIDENCE_FLOOR, directionWordsFor, DIRECTION_READERS, DIRECTION_WORDS_BY_READER, OLD_PAGES_RETIRE_ON, SEGMENT_JUDGE_ENABLED, BRAND_CONFIRM_ENABLED, segmentJudgeEnabled, brandConfirmEnabled, PRODUCT_READINGS_ENABLED, productReadingsEnabled, PRODUCT_CLASSIFY_BUDGET_USD, POST_IDEAS_ENABLED, postIdeasEnabled, POST_IDEAS_BUDGET_USD, POST_IDEAS_RUN_MARGIN_USD, SUBJECT_READS_ENABLED, subjectReadsEnabled, SUBJECT_READS_BUDGET_USD, SUBJECT_READS_RUN_MARGIN_USD, PRODUCT_CLASSIFY_CAP, SEALAND_CLIENT_ID, OSSUR_CLIENT_ID, DEMO_CLIENT_ID } from './config'
 
 // Pass A's comment floor is per-platform (Wave 3). One global 5 was tuned for
 // TikTok/Instagram; Reddit threads run 3-8 comments but are far denser per
@@ -252,3 +252,51 @@ describe('POST_IDEAS_ENABLED', () => {
   })
 })
 
+
+// The subjects' own reads (14 Oct): OPT-IN, the post ideas' pattern. A yes is
+// a diff to this test: on for Össur (the lead's ruling, 14 Oct), off for
+// Sealand until Heinrich has read Össur's. The env switches only turn off.
+describe('SUBJECT_READS_ENABLED', () => {
+  const saved = { on: process.env.SUBJECT_READS, off: process.env.SUBJECT_READS_OFF }
+  const restore = () => {
+    if (saved.on === undefined) delete process.env.SUBJECT_READS
+    else process.env.SUBJECT_READS = saved.on
+    if (saved.off === undefined) delete process.env.SUBJECT_READS_OFF
+    else process.env.SUBJECT_READS_OFF = saved.off
+  }
+
+  it('is on for Össur alone: off for Sealand, any other tenant and an unknown one', () => {
+    delete process.env.SUBJECT_READS
+    delete process.env.SUBJECT_READS_OFF
+    try {
+      expect(SUBJECT_READS_ENABLED).toEqual({ [OSSUR_CLIENT_ID]: true })
+      expect(subjectReadsEnabled(OSSUR_CLIENT_ID)).toBe(true)
+      for (const id of [SEALAND_CLIENT_ID, DEMO_CLIENT_ID, 'not-a-tenant']) expect(subjectReadsEnabled(id)).toBe(false)
+    } finally {
+      restore()
+    }
+  })
+
+  it('SUBJECT_READS=0 or false turns it off everywhere, SUBJECT_READS_OFF one tenant; neither turns one on', () => {
+    try {
+      for (const v of ['0', 'false']) {
+        process.env.SUBJECT_READS = v
+        expect(subjectReadsEnabled(OSSUR_CLIENT_ID)).toBe(false)
+      }
+      delete process.env.SUBJECT_READS
+      process.env.SUBJECT_READS_OFF = ` ${OSSUR_CLIENT_ID.toUpperCase()} , someone-else`
+      expect(subjectReadsEnabled(OSSUR_CLIENT_ID)).toBe(false)
+      delete process.env.SUBJECT_READS_OFF
+      process.env.SUBJECT_READS = '1'
+      expect(subjectReadsEnabled(SEALAND_CLIENT_ID)).toBe(false)
+      expect(subjectReadsEnabled(SEALAND_CLIENT_ID, { [SEALAND_CLIENT_ID]: true })).toBe(true)
+    } finally {
+      restore()
+    }
+  })
+
+  it('caps the step at $1 a run, and starts it only with $0.50 more left under the run\'s budget', () => {
+    expect(SUBJECT_READS_BUDGET_USD).toBe(1)
+    expect(SUBJECT_READS_RUN_MARGIN_USD).toBe(0.5)
+  })
+})

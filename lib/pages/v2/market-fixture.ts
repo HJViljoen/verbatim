@@ -339,6 +339,9 @@ export interface FixtureOptions {
    *  (Look & style under `subjects: 'tracked'`, ready on one video, code's
    *  one line). Absent: the panel as it was before them. */
   subjectDetail?: 'rich' | 'thin' | null
+  /** The tenant's subject reads are switched off (`subjectReadsEnabled`): the
+   *  panel prints no stored read, the sentence stands in. */
+  subjectReadsOff?: boolean
 }
 
 const MONTH: MarketMonth = {
@@ -566,6 +569,7 @@ export function marketFixture(opts: FixtureOptions = {}): MarketData {
           id: subjectId(opts.subject), facts, convs, period, p, read: opts.subjectDetail ? withSubjectReads(read) : read, month,
           flag: flag?.conv ? { id: flag.conv.id, verdict: flag.verdict } : null,
           detail: opts.subjectDetail ? fixtureSubjectDetail(opts.subjectDetail, period, month) : null,
+          readsOn: Boolean(opts.subjectDetail) && !opts.subjectReadsOff,
         })
       : null,
     // The loader's own rule (`marketLongRunFor`): the month period only, the
@@ -732,7 +736,7 @@ export function withSubjectReads(read: WeekReadData): WeekReadData {
             'People describe insurance refusals for powered knees as a long fight: appeals, letters from a prosthetist, and a mechanical knee offered in its place. Parents and partners describe the same paperwork from the other side, as the person who files it.',
             'Paying out of pocket runs through all of it. Liners, sockets and running blades are named as costs that medical aid leaves to the family, and some set up fundraisers when the funding does not come.',
           ],
-          means: 'Össur\'s knees and feet reach people through insurers and medical aid as much as through clinics. Where cover is refused, the paperwork decides whether a device is fitted at all.',
+          means: 'The refusals people describe are for powered knees, the kind of knee Össur sells. Where cover is refused, the appeal and its paperwork stand between a buyer and the knee.',
           basedOn: [id(3), id(6), id(13)],
         },
         {

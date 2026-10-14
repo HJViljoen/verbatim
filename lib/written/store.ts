@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import type { LongRunReadData, WeekReadData } from './types'
+import type { LongRunReadData, SubjectReadsData, WeekReadData } from './types'
 
 // The stored read (plan T4): one `week_reads` row per run and kind
 // (supabase/migrations/20261104090000_week_reads.sql). The service role
@@ -45,10 +45,44 @@ export async function weekReadsApplied(admin: SupabaseClient): Promise<boolean> 
 }
 
 /** Write one run's read, replacing the run's earlier row of the same kind
- *  (a retried step, or the Monday fallback over a failed Sunday). */
+ *  (a retried step, or the Monday fallback over a failed Sunday).
+ *
+ *  THE SUBJECTS' READS ARE KEPT (14 Oct, the lead's ruling): they live on the
+ *  run's week row (`data.subjectReads`, `write-subject-reads`), so a fallback
+ *  that writes the week read again (scripts/week-read.ts, backfill-platform)
+ *  would drop them. A new week read of the same month carries the replaced
+ *  row's reads over (`withKeptSubjectReads`); one read first, only for a
+ *  week read that has none of its own. */
 export async function saveWeekRead(admin: SupabaseClient, row: WeekReadRow): Promise<void> {
-  const res = await admin.from(WEEK_READS_TABLE).upsert(row, { onConflict: 'run_id,kind' })
+  const data = row.data as WeekReadData | LongRunReadData | null
+  const wants = row.kind === 'week' && data != null && (data as { version?: unknown }).version === 2 && !(data as { subjectReads?: unknown }).subjectReads
+  const out = wants ? withKeptSubjectReads(row, await replacedWeekData(admin, row)) : row
+  const res = await admin.from(WEEK_READS_TABLE).upsert(out, { onConflict: 'run_id,kind' })
   if (res.error) throw new Error(`week_reads write: ${res.error.message}`)
+}
+
+/** The data of the week row a write is about to replace, or null (none, or
+ *  the table not there). Throws where it cannot be read. */
+async function replacedWeekData(admin: SupabaseClient, row: Pick<WeekReadRow, 'client_id' | 'run_id'>): Promise<WeekReadData | null> {
+  const res = await admin.from(WEEK_READS_TABLE).select('data')
+    .eq('client_id', row.client_id).eq('run_id', row.run_id).eq('kind', 'week').maybeSingle()
+  if (res.error) {
+    if (isMissingWeekReads(res.error)) return null
+    throw new Error(`week_reads (kept subject reads) read: ${res.error.message}`)
+  }
+  return ((res.data as { data: WeekReadData | null } | null)?.data) ?? null
+}
+
+/** The row with the replaced row's subject reads carried over, where the new
+ *  row is a version-2 week read with none of its own and the reads are of
+ *  its month (a read of another month would print against the wrong level).
+ *  Pure. */
+export function withKeptSubjectReads(row: WeekReadRow, replaced: WeekReadData | null | undefined): WeekReadRow {
+  const data = row.data as (WeekReadData & { subjectReads?: SubjectReadsData }) | null
+  const kept = replaced && replaced.version === 2 ? replaced.subjectReads : undefined
+  if (!kept || row.kind !== 'week' || !data || data.version !== 2 || data.subjectReads) return row
+  if (!row.month || kept.month.slice(0, 7) !== row.month.slice(0, 7)) return row
+  return { ...row, data: { ...data, subjectReads: kept } }
 }
 
 /** The run's stored read of a kind, or null. */

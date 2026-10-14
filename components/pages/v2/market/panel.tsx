@@ -6,7 +6,7 @@ import { ProportionBar } from '@/components/proportion-bar'
 import { FlagChip, InPlacePanel, MiniBars, PanelSection, PanelTitle, StatCell, StatRow, TickBarRow, type PerBreakpoint } from '@/components/v2'
 import { fmtInt, fmtPct } from '@/lib/format'
 import { marketLabelsOf } from '@/lib/brands/labels'
-import { MARKET_PANEL_MONTHS, type ConvPanel, type MarketData, type MonthCount, type PanelQuote, type StoredLine, type SubjectDetail, type SubjectPanel } from '@/lib/pages/v2/market'
+import { MARKET_PANEL_MONTHS, platformRows, type ConvPanel, type MarketData, type MonthCount, type PanelQuote, type StoredLine, type SubjectDetail, type SubjectPanel } from '@/lib/pages/v2/market'
 import type { WhoPart } from '@/lib/written/types'
 import { translationLabel, translationNote } from '@/components/quote-block'
 import { cn } from '@/lib/utils'
@@ -182,6 +182,31 @@ function WhoLine({ parts, data }: { parts: readonly WhoPart[]; data: MarketData 
   )
 }
 
+/** The words a subject's week block says where the week holds none of its
+ *  videos and the month some (the parity rule: the block keeps its frame). */
+export const SUBJECT_NONE_THIS_WEEK = 'No video this week.'
+
+/**
+ * ONE BASE, NAMED (the lead's ruling, 14 Oct). The level counts the videos
+ * its members are cited on and those where a member is only spoken on
+ * camera; the blocks below read only the videos a comment dates. Where the
+ * month's blocks read fewer videos than the level counts, one calm line under
+ * the stats says which, the week beside the month on the week. Nothing where
+ * the two agree.
+ */
+function SubjectBase({ level, detail, monthText }: { level: { k: number }; detail: SubjectDetail; monthText: string }) {
+  const cited = detail.cited
+  if (!cited || cited.month >= level.k) return null
+  const fig = (n: number) => <span data-copy="figure">{fmtInt(n)}</span>
+  return (
+    <p data-subject-base="" className="m-0 text-[13px] leading-[1.5] text-muted-foreground">
+      {cited.week != null
+        ? <>The parts below read the videos where a comment was about it: {fig(cited.week)} this week, and {fig(cited.month)} of these {fig(level.k)} in {monthText}.</>
+        : <>The parts below read the {fig(cited.month)} of these {fig(level.k)} videos where a comment was about it.</>}
+    </p>
+  )
+}
+
 /**
  * A READY subject's blocks (14 Oct): the conversation panel's right-hand
  * column over the subject's videos. This week, who it is about and where
@@ -197,7 +222,7 @@ function SubjectBlocks({ detail, data }: { detail: SubjectDetail; data: MarketDa
         </PanelSection>
       ) : detail.who ? (
         <PanelSection label={<>Who it’s about{week ? <span className="normal-case tracking-normal"> · this week</span> : null}</>}>
-          <WhoLine parts={detail.who.parts} data={data} />
+          {detail.who.parts.length > 0 ? <WhoLine parts={detail.who.parts} data={data} /> : <p className="m-0 text-[13.5px] text-muted-foreground">{SUBJECT_NONE_THIS_WEEK}</p>}
           {week && detail.who.month ? (
             <div className="flex flex-col gap-1">
               <Label className="normal-case tracking-normal">{data.month.text}</Label>
@@ -231,9 +256,10 @@ function SubjectBlocks({ detail, data }: { detail: SubjectDetail; data: MarketDa
               <span />
               <span className="text-right text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">This week</span>
               <span className="text-right text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{detail.platforms.month.text}</span>
-              {detail.platforms.rows.map((r) => (
-                <PlatformMonthRow key={r.platform} label={r.label} week={r.videos} month={detail.platforms!.month!.counts[r.platform] ?? 0} n={detail.platforms!.month!.n} />
+              {(detail.platforms.rows.length > 0 ? detail.platforms.rows : platformRows(detail.platforms.month.counts, 'month')?.rows ?? []).map((r) => (
+                <PlatformMonthRow key={r.platform} label={r.label} week={detail.platforms!.rows.find((x) => x.platform === r.platform)?.videos ?? 0} month={detail.platforms!.month!.counts[r.platform] ?? 0} n={detail.platforms!.month!.n} />
               ))}
+              {detail.platforms.rows.length === 0 ? <p className="col-span-3 m-0 text-[13px] text-muted-foreground">{SUBJECT_NONE_THIS_WEEK}</p> : null}
             </div>
           ) : detail.platforms.rows.map((r, i) => (
             <TickBarRow key={r.platform} name={r.label} value={fmtInt(r.videos)} pct={r.pct} tone="ink" valueWidth="narrow" label={`${fmtInt(r.videos)} of ${fmtInt(detail.platforms!.n)}`} className={i > 2 ? 'opacity-80' : undefined} />
@@ -317,6 +343,7 @@ export function SubjectPanelView({ panel, data, notchAt }: { panel: SubjectPanel
           <StatCell value={`${Math.round(panel.level.pct)}%`} label={<>of the market’s videos <span data-copy="verdict"><MovementBadge verdict={panel.verdict} unit="pts" good="neutral" bandTip /></span></>} />
         </StatRow>
       ) : null}
+      {panel.level && detail ? <SubjectBase level={panel.level} detail={detail} monthText={panel.monthText} /> : null}
       {detail ? (
         // THE CONVERSATION PANEL'S ANATOMY (14 Oct): our read and the month
         // line, the four blocks beside them, the quotes, then the

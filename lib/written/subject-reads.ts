@@ -11,6 +11,8 @@ import { companyLines, type CompanyContext } from './company'
 import { judge, type DatedEvidence } from './evidence'
 import { notesOf, POOL_MIN_VIDEOS } from './pool'
 import { ADVICE, FORECAST, scrubWeekText, toldWhatToDo, WHOLE_SLACK } from './scrub'
+import { MEDICAL_CLAIMS } from '../post-ideas/scrub'
+import { inMonth } from './month'
 import { speaksForTheMarket, subjectLenientGate } from './standing'
 import type { SubjectRead, SubjectReadsData } from './types'
 import { DELETED_WORDS } from './write'
@@ -253,6 +255,9 @@ export function buildSubjectReadPrompts(a: SubjectReadPromptArgs): { system: str
     `2. means: what it means for ${co}, one short paragraph of at most ${SUBJECT_READ_MAX.meansSentences} sentences, about ${co} in particular, never about the category in general. Connect what people said to what ${co} sells and to what it says about itself (under About ${co}): where the talk bears on one of ${co}'s claims or products, name it and say what the talk means for it, in the market's terms. Where it bears on none, say what it means for a company that sells ${what}. A line that would be as true of any rival is not about ${co}: make it specific.`,
     `  - Intelligence, not instructions: say what is true about the business, never what ${co} should do. Never "should", "could", "needs to", "must", "consider", "make sure", "an opportunity", and never an imperative. Never a forecast ("will", "likely", "set to").`,
     `  - ${co}'s claims are its own words, not evidence about the market. Never say how a claim was received or whether buyers believe it unless a note says so, and never say the market ignores, overlooks or does not mention something: the notes are not everything people said.`,
+    `  - Every claim about ${co} rests on a note given or on what is written under About ${co}, and on nothing else: never say how ${co}'s products reach people, who buys them, where, or through whom, unless a note says so.`,
+    '  - No comparison of one channel, product, group or brand with another: never "as much as", "more than", "less than", "rather than" or any "than". A sentence with one is deleted.',
+    '  - When unsure whether a claim rests on what is given, leave it out. One true sentence is better than three.',
     '',
     'House style:',
     `- Plain language, for a busy person at ${co} reading on a phone. Short sentences. Concrete nouns: the thing people name, in the market's own words. No consultant abstractions: never "a fit problem", "legible", "positioning", "lens", "value proposition", "use case", "resonates", "narrative", "friction", "ecosystem", "landscape", "journey". Name the thing instead.`,
@@ -300,6 +305,15 @@ export const shownConversations = (m: SubjectReadMaterial): string[] =>
 
 // ---- Scrub and compose ----------------------------------------------------------------
 
+/** A comparison, which "what it means" never makes (the lead's ruling, 14
+ *  Oct: "Össur's knees reach people through insurers as much as through
+ *  clinics" compared two channels no note compared). Applied to the meaning
+ *  paragraph only, on the sentence-drop rule: what people said may compare
+ *  in their own terms. */
+export const COMPARISON: readonly { name: string; re: RegExp }[] = [
+  { name: 'comparison', re: /\bas\s+much\s+as\b|\bthan\b/i },
+]
+
 export interface SubjectReadScrub {
   /** Sentences dropped, whatever the reason. */
   dropped: number
@@ -311,10 +325,13 @@ export interface SubjectReadScrub {
  * digit, no direction word, no sentence about how it was made, no first
  * person, ids stripped, dashes made commas, British spelling), with the week
  * read's implication rules on `means` (`ADVICE`, `FORECAST`, the company told
- * what to do). `ready` where anything of what was said survives; `held`
+ * what to do), and on `means` alone a comparison (`COMPARISON`) and, in a
+ * medical market (`medical`: `printsMedicalLine`, lib/post-ideas/medical.ts),
+ * a medical claim (`MEDICAL_CLAIMS`, the post ideas' rules), each dropping
+ * its sentence. `ready` where anything of what was said survives; `held`
  * otherwise. Pure.
  */
-export function finishSubjectRead(m: SubjectReadMaterial, raw: SubjectReadOutput, o: { company: string; allow: readonly string[] }): { read: SubjectRead; scrub: SubjectReadScrub } {
+export function finishSubjectRead(m: SubjectReadMaterial, raw: SubjectReadOutput, o: { company: string; allow: readonly string[]; medical?: boolean }): { read: SubjectRead; scrub: SubjectReadScrub } {
   let dropped = 0
   let leaked = false
   const told = toldWhatToDo(o.company)
@@ -326,7 +343,11 @@ export function finishSubjectRead(m: SubjectReadMaterial, raw: SubjectReadOutput
     leaked ||= r.counts.leaked
     return r.text ? [r.text] : []
   }).slice(0, SUBJECT_READ_MAX.sayingParagraphs)
-  const meansR = scrubWeekText(raw.means ?? '', Math.round(SUBJECT_READ_MAX.means * WHOLE_SLACK), { allow: o.allow, maxSentences: SUBJECT_READ_MAX.meansSentences, extra: [...ADVICE, ...FORECAST, ...(told ? [told] : [])] })
+  const meansR = scrubWeekText(raw.means ?? '', Math.round(SUBJECT_READ_MAX.means * WHOLE_SLACK), {
+    allow: o.allow,
+    maxSentences: SUBJECT_READ_MAX.meansSentences,
+    extra: [...ADVICE, ...FORECAST, ...(told ? [told] : []), ...COMPARISON, ...(o.medical ? MEDICAL_CLAIMS.map((r) => ({ name: r.name, re: r.re })) : [])],
+  })
   dropped += meansR.counts.dropped
   leaked ||= meansR.counts.leaked
   const means = meansR.text
@@ -349,8 +370,12 @@ const andList = (xs: readonly string[]): string =>
 /**
  * A THIN subject's read, written by code (no call): where its talk sat this
  * month, by the pages' placement, or that it sat inside other conversations,
- * or that the comments said nothing of it. Never a count, never a size word:
- * the panel prints the level above it. Through the same scrub. Pure.
+ * or, where none of its gated talk is left to name, that too little was said
+ * to write a read. NEVER A CLAIM OF SILENCE (the lead's ruling, 14 Oct): the
+ * level counts comments this line cannot see (demographic citations, makers'
+ * and off-lane videos), so "said nothing" could sit under a level above 0.
+ * Never a count, never a size word: the panel prints the level above it.
+ * Through the same scrub. Pure.
  */
 export function thinSubjectRead(m: SubjectReadMaterial, o: { month: string; complete: boolean; allow: readonly string[] }): SubjectRead {
   const when = o.complete ? `In ${longMonth(o.month)}` : `In ${longMonth(o.month)} so far`
@@ -359,7 +384,7 @@ export function thinSubjectRead(m: SubjectReadMaterial, o: { month: string; comp
     ? `${when}, talk about ${m.name} sat in ${andList(names)}.`
     : m.heard
       ? `${when}, talk about ${m.name} sat inside other conversations, with none of its own.`
-      : `${when}, the comments said nothing about ${m.name}.`
+      : `Too little was said about ${m.name} ${inMonth(o.month, o.complete)} to write a read.`
   const text = scrubWeekText(line, SUBJECT_READ_MAX.paragraph, { allow: o.allow }).text
   return {
     subjectId: m.subjectId,

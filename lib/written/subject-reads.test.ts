@@ -113,6 +113,11 @@ describe('the writer\'s prompt', () => {
     expect(system).toMatch(/You have NO numbers/)
     expect(system).toMatch(/Never a medical or clinical claim/)
     expect(system).toMatch(/Never mention how anything was found/)
+    // The meaning rests on what it was given, compares nothing and leaves out what it is unsure of.
+    expect(system).toMatch(/Every claim about Össur rests on a note given or on what is written under About Össur/)
+    expect(system).toMatch(/never say how Össur's products reach people/)
+    expect(system).toMatch(/No comparison of one channel, product, group or brand with another/)
+    expect(system).toMatch(/When unsure .* leave it out/)
     expect(system).not.toMatch(/—/)
   })
 
@@ -157,9 +162,9 @@ describe('finishSubjectRead and the thin line', () => {
     expect(finishSubjectRead(m, { saying: ['P.'], means: 'Cover decides the fitting. Össur could show the paperwork.' }, { company: 'Össur', allow: [] }).read.means).toBe('Cover decides the fitting.')
   })
 
-  it('caps at a sentence\'s end with the week read\'s slack: the offline test\'s second, more specific sentence is kept', () => {
-    // gpt-5.4's answer on the Össur-shaped fixture, 14 Oct: about 470 characters, the writer told 420.
-    const means = 'For Össur, this talk sits beside its prosthetic legs and running blades, because people use peer examples to picture life with a first prosthesis and the kind of person they can become with it. The race posts and running club stories bear on Össur\'s claim that its running blades are made for amputee athletes of every level, while the questions around a first socket show that the market meets prosthetic products through other amputees as much as through product claims.'
+  it('caps at a sentence\'s end with the week read\'s slack: a meaning a little over the writer\'s cap is kept whole', () => {
+    // About 470 characters, the writer told 420 (the offline test's length, 14 Oct).
+    const means = 'For Össur, this talk sits beside its prosthetic legs and running blades, because people use peer examples to picture life with a first prosthesis and the kind of person they can become with it. The race posts and running club stories bear on Össur\'s claim that its running blades are made for amputee athletes of every level, and the questions around a first socket are asked of other amputees who wear one already.'
     const { read } = finishSubjectRead(m, { saying: ['P.'], means }, { company: 'Össur', allow: [] })
     expect(read.means).toBe(means)
     // Over the slack, whole sentences only: never one half said.
@@ -167,6 +172,27 @@ describe('finishSubjectRead and the thin line', () => {
     const capped = finishSubjectRead(m, { saying: ['P.'], means: long }, { company: 'Össur', allow: [] }).read.means
     expect(capped.endsWith('.')).toBe(true)
     expect(capped.length).toBeLessThanOrEqual(Math.round(420 * 1.25))
+  })
+
+  it('the meaning makes no comparison: a sentence with one drops, on the sentence rule; what people said may compare', () => {
+    // The offline test's second sentence, and the fresh check's example.
+    const means = [
+      'Össur\'s claim about its running blades bears on the race stories.',
+      'The market meets prosthetic products through other amputees as much as through product claims.',
+      'Össur\'s knees reach people through insurers more than through clinics.',
+      'Buyers ask the appeal rather than the clinic.',
+    ].join(' ')
+    const { read, scrub } = finishSubjectRead(m, { saying: ['People name the race stories.'], means }, { company: 'Össur', allow: [] })
+    expect(read.means).toBe('Össur\'s claim about its running blades bears on the race stories.')
+    expect(scrub.dropped).toBe(3)
+    // A comparison in what people said stays: it is theirs to make.
+    expect(finishSubjectRead(m, { saying: ['People say a liner lasts longer than a sock.'], means: 'M.' }, { company: 'Össur', allow: [] }).read.saying).toEqual(['People say a liner lasts longer than a sock.'])
+  })
+
+  it('in a medical market the meaning drops a medical claim (the post ideas\' MEDICAL_CLAIMS); elsewhere it does not run', () => {
+    const means = 'Össur says its liners keep the limb drier. A drier liner prevents sores on the residual limb.'
+    expect(finishSubjectRead(m, { saying: ['P.'], means }, { company: 'Össur', allow: [], medical: true }).read.means).toBe('Össur says its liners keep the limb drier.')
+    expect(finishSubjectRead(m, { saying: ['P.'], means }, { company: 'Össur', allow: [] }).read.means).toBe(means)
   })
 
   it('held where nothing of what was said survives', () => {
@@ -182,7 +208,10 @@ describe('finishSubjectRead and the thin line', () => {
     })
     const loose = material([RICH_EVIDENCE[4]])
     expect(thinSubjectRead(loose, { month: '2026-09-01', complete: true, allow: [] }).saying).toEqual(['In September, talk about Cost & access sat inside other conversations, with none of its own.'])
-    expect(thinSubjectRead(material([]), { month: OCT, complete: false, allow: [] }).saying).toEqual(['In October so far, the comments said nothing about Cost & access.'])
+    // Never a claim of silence: the level counts comments this line cannot see.
+    expect(thinSubjectRead(material([]), { month: OCT, complete: false, allow: [] }).saying).toEqual(['Too little was said about Cost & access in October so far to write a read.'])
+    expect(thinSubjectRead(material([]), { month: '2026-09-01', complete: true, allow: [] }).saying).toEqual(['Too little was said about Cost & access in September to write a read.'])
+    for (const m2 of [material([]), material(RICH_EVIDENCE.slice(5))]) expect(thinSubjectRead(m2, { month: OCT, complete: false, allow: [] }).saying.join(' ')).not.toMatch(/nothing|nobody|no one|never/i)
   })
 })
 
@@ -341,6 +370,7 @@ function deps(over: Partial<SubjectReadsStepDeps> = {}) {
   const saved: SubjectReadsData[] = []
   const alerts: string[] = []
   const d: SubjectReadsStepDeps = {
+    enabled: vi.fn(() => true),
     company: vi.fn(async () => 'Össur'),
     row: vi.fn(async () => readyRow()) as unknown as SubjectReadsStepDeps['row'],
     build: vi.fn(async () => builtOf([READY])) as unknown as SubjectReadsStepDeps['build'],
@@ -357,6 +387,14 @@ describe('runSubjectReadsStep: silent where it should be', () => {
   it('a TEST run reads nothing, writes nothing and tells nobody', async () => {
     const { d, saved, alerts } = deps()
     expect(await runSubjectReadsStep(admin, { clientId: CLIENT, runId: RUN, testRun: true }, d)).toMatchObject({ status: 'test_run', costUsd: 0 })
+    expect(d.row).not.toHaveBeenCalled()
+    expect([saved, alerts]).toEqual([[], []])
+  })
+
+  it('a tenant switched off reads nothing, writes nothing and tells nobody', async () => {
+    const { d, saved, alerts } = deps({ enabled: vi.fn(() => false) })
+    expect(await runSubjectReadsStep(admin, { clientId: CLIENT, runId: RUN, testRun: false }, d)).toMatchObject({ status: 'disabled', costUsd: 0 })
+    expect(d.enabled).toHaveBeenCalledWith(CLIENT)
     expect(d.row).not.toHaveBeenCalled()
     expect([saved, alerts]).toEqual([[], []])
   })

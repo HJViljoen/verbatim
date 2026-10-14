@@ -2,10 +2,11 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { zodResponseFormat } from 'openai/helpers/zod'
 
 import { mapWithLimit } from '../chunk'
-import { estimateCost, RUN_MODEL_BUDGET_USD, SUBJECT_READS_BUDGET_USD, SUBJECT_READS_RUN_MARGIN_USD } from '../config'
+import { estimateCost, RUN_MODEL_BUDGET_USD, SUBJECT_READS_BUDGET_USD, SUBJECT_READS_RUN_MARGIN_USD, subjectReadsEnabled } from '../config'
 import { sendAlertEmail } from '../email'
 import { openai } from '../openai'
 import { loadSubjectPlacement, placementMembers } from '../pages/subject-place'
+import { printsMedicalLine } from '../post-ideas/medical'
 import { pickThemedRunId, type ThemedRunRow } from '../pages/themed-run'
 import { logAiCall } from '../pipeline/ai-log'
 import { runSpendSoFar } from '../pipeline/run-costs'
@@ -42,7 +43,9 @@ import type { ParseClient } from './write-model'
 //    lib/written/published.ts), exactly when the week read itself prints.
 //
 // SILENT WHERE IT SHOULD BE. A TEST run (`isTestRun`) reads and writes
-// nothing. No `week_reads` table, no READY week read for the run (thin,
+// nothing. A tenant switched off (`subjectReadsEnabled`, lib/config.ts: OPT-IN,
+// on for Össur alone since 14 Oct; `SUBJECT_READS=0` and `SUBJECT_READS_OFF`
+// are emergency off-switches) is the same. No `week_reads` table, no READY week read for the run (thin,
 // failed or missing: the week read's own step told the operator, and a page
 // prints no read that is not ready), or no ready subject is a no-op that
 // spends nothing, logged and never alerted. A run whose reads are all
@@ -345,7 +348,7 @@ export async function buildSubjectReads(
       const call = await generateSubjectRead(admin, { clientId: opts.clientId, runId: opts.runId, prompts, log: opts.log, client: opts.client, budget: opts.budget, spend })
       paid += call.costUsd
       raw[m.subjectId] = call.output
-      const done = finishSubjectRead(m, call.output, { company: inputs.company, allow: inputs.allow })
+      const done = finishSubjectRead(m, call.output, { company: inputs.company, allow: inputs.allow, medical: printsMedicalLine(inputs.clientId) })
       scrub[m.subjectId] = done.scrub
       return done.read
     } catch (e) {
@@ -418,7 +421,7 @@ export async function subjectReadsSpendSoFar(admin: SupabaseClient, clientId: st
 // ---- The step --------------------------------------------------------------------------
 
 export interface SubjectReadsStepResult {
-  status: 'ready' | 'failed' | 'test_run' | 'missing_migration' | 'no_week_read' | 'no_subjects' | 'exists' | 'over_budget'
+  status: 'ready' | 'failed' | 'test_run' | 'disabled' | 'missing_migration' | 'no_week_read' | 'no_subjects' | 'exists' | 'over_budget'
   /** Subjects with a written read, a thin one, and a failed or held one. */
   written: number
   thin: number
@@ -429,6 +432,8 @@ export interface SubjectReadsStepResult {
 
 /** What the step needs from the world, so a test can stand them in. */
 export interface SubjectReadsStepDeps {
+  /** The per-tenant switch (`subjectReadsEnabled`, lib/config.ts). */
+  enabled: (clientId: string) => boolean
   company: (admin: SupabaseClient, clientId: string) => Promise<string>
   row: typeof loadWeekRowForReads
   build: typeof buildSubjectReads
@@ -439,7 +444,7 @@ export interface SubjectReadsStepDeps {
 }
 
 const DEFAULT_DEPS: SubjectReadsStepDeps = {
-  company: companyOf, row: loadWeekRowForReads, build: buildSubjectReads, spent: runSpendSoFar, readsSpent: subjectReadsSpendSoFar, save: saveSubjectReads, alert: sendAlertEmail,
+  enabled: (clientId) => subjectReadsEnabled(clientId), company: companyOf, row: loadWeekRowForReads, build: buildSubjectReads, spent: runSpendSoFar, readsSpent: subjectReadsSpendSoFar, save: saveSubjectReads, alert: sendAlertEmail,
 }
 
 const FALLBACK = (clientId: string, runId: string) =>
@@ -472,6 +477,12 @@ export async function runSubjectReadsStep(
   if (opts.testRun) {
     console.log('[write-subject-reads] a test run: no subject read is written')
     return { status: 'test_run', ...zero }
+  }
+  // The per-tenant switch: off, nothing is read, spent or written, and nobody
+  // is told, as for a test run.
+  if (!d.enabled(opts.clientId)) {
+    console.log('[write-subject-reads] subject reads are switched off for this tenant (SUBJECT_READS_ENABLED, or SUBJECT_READS / SUBJECT_READS_OFF)')
+    return { status: 'disabled', ...zero }
   }
   // THE STEP'S CLOCK STARTS HERE: every call is capped and done by 250 s.
   const startedAt = Date.now()

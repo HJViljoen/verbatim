@@ -7,7 +7,13 @@
 // reads exactly what the step reads.
 //
 //   node --env-file=.env.local --import tsx scripts/subject-reads.ts \
-//     --client <uuid> --run <uuid> [--write] [--out <file.md>]
+//     --client <uuid> --run <uuid> [--write] [--out <file.md>] [--force]
+//
+// THE SWITCH (`subjectReadsEnabled`, lib/config.ts: OPT-IN, on for Össur
+// alone since 14 Oct). For a tenant switched off it refuses; `--force` lets a
+// DRY run go ahead (to read a tenant's reads before it is turned on), and is
+// refused beside `--write`: a stored read of a tenant switched off prints
+// nowhere, and the switch is the one place a tenant is turned on.
 //
 // DRY BY DEFAULT. Nothing is written to any database: no `week_reads` change
 // and no `ai_call_log` row. The calls ARE paid for (gpt-5.4 at medium effort,
@@ -42,7 +48,7 @@ import { resolve } from 'node:path'
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
-import { SUBJECT_READS_BUDGET_USD } from '../lib/config'
+import { SUBJECT_READS_BUDGET_USD, subjectReadsEnabled } from '../lib/config'
 import {
   buildSubjectReads, loadSubjectReadInputs, loadWeekRowForReads, saveSubjectReads,
   type BuiltSubjectReads, type SubjectReadInputs,
@@ -103,12 +109,23 @@ function render(built: BuiltSubjectReads, mode: string): string {
   return out.join('\n')
 }
 
+/** The per-tenant switch, asked before anything is read: off, refused, but
+ *  for a dry run under --force. */
+function switchGate(id: string, write: boolean): void {
+  if (subjectReadsEnabled(id)) return
+  if (!has('force') || write) {
+    console.error(`Subject reads are switched off for ${id} (SUBJECT_READS_ENABLED, or SUBJECT_READS / SUBJECT_READS_OFF). A dry run may pass --force; --write never does.`)
+    process.exit(2)
+  }
+  console.log('Switched off for this tenant: a dry run under --force, nothing is stored.')
+}
+
 async function main() {
   const clientId = flag('client')
   const runId = flag('run')
   const inputsFrom = flag('inputs')
   if (!inputsFrom && (!clientId || !runId)) {
-    console.error('Usage: scripts/subject-reads.ts --client <uuid> --run <uuid> [--write] [--prompt-only] [--save-inputs <file>] [--inputs <file>] [--out <file.md>]')
+    console.error('Usage: scripts/subject-reads.ts --client <uuid> --run <uuid> [--write] [--prompt-only] [--save-inputs <file>] [--inputs <file>] [--out <file.md>] [--force]')
     process.exit(2)
   }
   const write = has('write')
@@ -116,13 +133,19 @@ async function main() {
     console.error('--write reads the run itself: it never stores reads built from a saved file.')
     process.exit(2)
   }
+  if (write && has('force')) {
+    console.error('--force is for a dry run only: a tenant is turned on in SUBJECT_READS_ENABLED (lib/config.ts), never by --write.')
+    process.exit(2)
+  }
 
   let inputs: SubjectReadInputs
   let db: SupabaseClient | null = null
   if (inputsFrom) {
     inputs = JSON.parse(readFileSync(resolve(process.cwd(), inputsFrom), 'utf8')) as SubjectReadInputs
+    switchGate(inputs.clientId, write)
     console.log(`Inputs from ${inputsFrom}: ${inputs.company}, ${inputs.subjects.length} ready subject(s); no database is read.`)
   } else {
+    switchGate(clientId, write)
     db = admin()
     await probe(db, clientId)
     const row = await loadWeekRowForReads(db, clientId, runId)
