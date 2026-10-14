@@ -1130,6 +1130,27 @@ This version has breaking changes — APIs, conventions, and file structure may 
     (`miniShelfOf`, `shelfCut`); the moves tile's no-move words are Your
     moves' (`noMoveWords`); the Voices tile's tracked brands are
     `brandTable`'s rows.
+  - **A tracked subject is never hidden** (Heinrich, 14 Oct: "If someone
+    wants us to track certain subjects for them, they want it tracked no
+    matter what, even if there isn't that much to be said"). Every active
+    subject keeps its place on Market, Voices, Your products, the
+    Dashboard's week tile and Your moves, in every state: ready, thin,
+    empty, open or failed. A failed subject is shown exactly as an open one
+    is, named where an open one is named, its reason (`FAILED_EXPLAINED`)
+    said ONCE a page: in Market's row for it, in the foot of Voices' "Who's
+    in your market", in Your products' open panel, on Your moves' first card
+    for it; elsewhere the short named line ("Not measured yet: Fit &
+    comfort"). Ruling U6 is unchanged: neither prints a figure resting on
+    its membership, and neither leads, ranks or "leads" anything. A ready
+    subject on none of a set's videos is listed at 0 (`groupSubjects`,
+    `brandSubjects`, `Crosses.quiet`), never as a top, a lead or a headline
+    cell. The operator's side of the rule: a failed subject is ours to fix
+    (re-describe it or change the tenant's judge, the bullet "A subject's
+    words and its judge belong to its line"), never to leave failed. Still
+    pipeline follow-ups: the written read (`written/pool.ts`
+    `SUBJECT_MIN_MEMBERS`, one tier; `standing.ts`; `write.ts`;
+    `compose.ts`) and the briefs (`reports/briefs/compose.ts`) treat failed
+    and thin subjects their own way.
   - **Dashboard** (Design v2, T8; boards E1-Dashboard and -Phone;
     `lib/pages/v2/home.ts`, route `app/dashboard/(home)/page.tsx`).
     `startDashboard` starts every tile's reads in one wave on one session
@@ -1152,7 +1173,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
     `weekTileOf`; Week by week below them; the biggest ready subject and the
     one that moved most against last month through its `Verdict`, or "No
     subject moved beyond its normal swing", `weekSubjectsOf` over Market's
-    own subject facts; while any subject's check is open the rows claim no
+    own subject facts; while any subject's check is open or failed the rows claim no
     rank over it, "Measured subject" and "Moved" for "Biggest subject" and
     "Moved most", Your products' "leads" rule (`pending`,
     `weekSubjectLabels`, 14 Oct, ruling U6); no head link); Voices (`topVoices`: the group in the
@@ -1268,9 +1289,13 @@ This version has breaking changes — APIs, conventions, and file structure may 
     where its level goes. ONE PLACEMENT RULE, ON EVERY SURFACE THAT NAMES A
     CONVERSATION'S SUBJECT (14 Oct): `placeSubject` over
     `loadSubjectPlacement` (`lib/pages/subject-place.ts`), on the
-    conversation's member insights in the run the page reads: a ready
-    subject always wins, one whose check is open takes a conversation only
-    where no ready subject does, and a failed one is never used. Market's
+    conversation's member insights in the run the page reads, in three
+    tiers, each in the subjects' order: a ready subject always wins; one
+    whose check is open takes a conversation only where no ready subject
+    does; one being re-described (failed) only where neither does, since it
+    catches comments about other things and must never outbid an open one
+    (`placementTiers`, `placeSubject`; until 14 Oct a failed one was never
+    used). Market's
     rows and table, Content's question cards and Also asked
     (`readSubjects`, which until 14 Oct had its own one-tier rule over every
     active subject, failed ones included) and the legacy Voice surface
@@ -1279,7 +1304,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
     `convOf` against Content's `placeConversations`). A name is not a
     figure: a subject whose check is open keeps its row, its "Inside it"
     and the table's Subject column, but prints no level, line, change or
-    chip count until its check clears (ruling U6). The pipeline's written
+    chip count until its check clears (ruling U6); a failed subject keeps
+    its row, its panel and "Inside it" too, as an open one does, with
+    `FAILED_EXPLAINED` once, in its row (its panel then says "Not measured
+    yet."). The pipeline's written
     reads (`lib/written/pool.ts` `loadThemeSubjects`, `standing.ts`) still
     group by the one-tier `subjectForTheme` at write time, frozen into the
     stored read and replayed as sent; no live page places a conversation
@@ -1303,8 +1331,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
     every group card and panel). The rest are the tenant's, never "the ones
     this set holds": a box with no ready subject keeps its frame, says
     `SUBJECT_NOT_MEASURED` and draws its rows' empty tracks
-    (`NotMeasuredRows`); a mixed one lists the ready rows, then how many more
-    are not measured yet (`PendingSubjectsLine`). The client's own row needs its name checked
+    (`NotMeasuredRows`); a mixed one lists the ready rows (a ready one on
+    none of the set's videos at 0, after the others, never a top), then ONE
+    short line naming every subject not ready, open or failed, in the
+    subjects' order ("Not measured yet: …", `notMeasuredLine`; never a
+    count). Why a failed one shows no figure is said once on the page, in
+    the foot of "Who's in your market" (`VoicesData.subjectsFailed`); a
+    group panel's headline cells take ready subjects above 0 only; a brand's
+    panel lists every ready subject. The client's own row needs its name checked
     (`nameChecked`) and every month match read in `NAME_READS`
     (`clientNameCounts`; the Dashboard's tile uses
     `clientNameCountsByCount`). A tenant with rules and no rows says the
