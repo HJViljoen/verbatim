@@ -209,8 +209,8 @@ describe('finishSubjectRead and the thin line', () => {
     const loose = material([RICH_EVIDENCE[4]])
     expect(thinSubjectRead(loose, { month: '2026-09-01', complete: true, allow: [] }).saying).toEqual(['In September, talk about Cost & access sat inside other conversations, with none of its own.'])
     // Never a claim of silence: the level counts comments this line cannot see.
-    expect(thinSubjectRead(material([]), { month: OCT, complete: false, allow: [] }).saying).toEqual(['Too little was said about Cost & access in October so far to write a read.'])
-    expect(thinSubjectRead(material([]), { month: '2026-09-01', complete: true, allow: [] }).saying).toEqual(['Too little was said about Cost & access in September to write a read.'])
+    expect(thinSubjectRead(material([]), { month: OCT, complete: false, allow: [] }).saying).toEqual(['No read of Cost & access in October so far yet.'])
+    expect(thinSubjectRead(material([]), { month: '2026-09-01', complete: true, allow: [] }).saying).toEqual(['No read of Cost & access in September yet.'])
     for (const m2 of [material([]), material(RICH_EVIDENCE.slice(5))]) expect(thinSubjectRead(m2, { month: OCT, complete: false, allow: [] }).saying.join(' ')).not.toMatch(/nothing|nobody|no one|never/i)
   })
 })

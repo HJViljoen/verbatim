@@ -370,8 +370,9 @@ const andList = (xs: readonly string[]): string =>
 /**
  * A THIN subject's read, written by code (no call): where its talk sat this
  * month, by the pages' placement, or that it sat inside other conversations,
- * or, where none of its gated talk is left to name, that too little was said
- * to write a read. NEVER A CLAIM OF SILENCE (the lead's ruling, 14 Oct): the
+ * or, where none of its gated talk is left to name, that there is no read of
+ * it yet, giving no reason (§0a: prose never says why it cannot say something;
+ * the fresh check, 14 Oct). NEVER A CLAIM OF SILENCE (the lead's ruling, 14 Oct): the
  * level counts comments this line cannot see (demographic citations, makers'
  * and off-lane videos), so "said nothing" could sit under a level above 0.
  * Never a count, never a size word: the panel prints the level above it.
@@ -384,7 +385,7 @@ export function thinSubjectRead(m: SubjectReadMaterial, o: { month: string; comp
     ? `${when}, talk about ${m.name} sat in ${andList(names)}.`
     : m.heard
       ? `${when}, talk about ${m.name} sat inside other conversations, with none of its own.`
-      : `Too little was said about ${m.name} ${inMonth(o.month, o.complete)} to write a read.`
+      : `No read of ${m.name} ${inMonth(o.month, o.complete)} yet.`
   const text = scrubWeekText(line, SUBJECT_READ_MAX.paragraph, { allow: o.allow }).text
   return {
     subjectId: m.subjectId,

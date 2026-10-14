@@ -205,6 +205,29 @@ This version has breaking changes — APIs, conventions, and file structure may 
   operator ONCE inside the step, naming the company and
   `scripts/post-ideas.ts`. Its `.catch` only logs and is never `noteError`'d.
   It is in `AFTER_GATHER_STEPS`.
+  **The subjects' own reads (14 Oct) add one, immediately after
+  `write-week-read` and before `write-post-ideas`:** `write-subject-reads`
+  (74 ids before, 75 after; `scripts/pipeline-step-ids.sh d9ca1c30
+  --expect-before write-post-ideas write-subject-reads` is the check,
+  `lib/written/subject-reads.test.ts` pins it). For each READY subject it
+  writes what people said across the conversations `placeSubject` puts
+  inside it, then what it means for the company: one gpt-5.4 call where its
+  month holds gated citations on 3 videos and 2 notes, code's one line
+  otherwise (never a claim of silence and never a reason). Scrubbed with
+  `week_read`, plus `ADVICE` / `FORECAST` / `toldWhatToDo`, a comparison
+  (`COMPARISON`) and, in a medical market, `MEDICAL_CLAIMS` on the meaning.
+  Stored on the run's `week_reads` row (`data.subjectReads`, no migration;
+  `saveWeekRead` keeps them when a week read is written again; the weekly
+  snapshot strips them) and read only through `subjectReadOf`. OPT-IN per
+  tenant: `subjectReadsEnabled` (`SUBJECT_READS_ENABLED`, on for Össur alone
+  since 14 Oct; `SUBJECT_READS=0` and `SUBJECT_READS_OFF` are emergency
+  off-switches), and a page prints no stored read for a tenant switched off.
+  `SUBJECT_READS_BUDGET_USD` ($1) per run with `RUN_MODEL_BUDGET_USD`
+  headroom. A TEST run, a tenant switched off, no table, no ready week read
+  or no ready subject is a silent no-op. The week read's fail-soft contract
+  applies; what was written is saved before a transient retry. In
+  `AFTER_GATHER_STEPS`. By hand: `scripts/subject-reads.ts --client <uuid>
+  --run <uuid>` (dry; `--write` stores; `--force` for a dry run only).
   **Your products (T11) adds two, after the `brand-readings:*` steps and
   immediately before `freeze-months`:** `plan-product-readings` and
   `product-readings:${i}-of-${n}`, one month a step
@@ -530,6 +553,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
   rule holds in the report's implications and watch lines only: advice and
   forecasts drop their sentence (`ADVICE`, `FORECAST`, `toldWhatToDo`), which
   are NOT safe on market prose and are not reused by the guard.
+  `splitSentences` starts a sentence at any script's capital (14 Oct: "…
+  insurers. Össur's …" was one sentence, so a dropped sentence took its
+  neighbour; an abbreviation still holds), and `toldWhatToDo` matches a
+  company name opening on any capital. Both reach every slot that uses
+  them: the week read, the long-run read, the briefs (their interpret fields
+  too), post ideas, the anomaly explanation and the subject reads.
 - **A block renders three modes.** `render(data, mode, ctx)` for
   `app | print | email`, plus `figures()` / `verdicts()` / `quotes()` /
   `emptyState()` (`lib/blocks/types.ts`). There is exactly ONE `RenderMode` in
@@ -1310,8 +1339,16 @@ This version has breaking changes — APIs, conventions, and file structure may 
     yet."). The pipeline's written
     reads (`lib/written/pool.ts` `loadThemeSubjects`, `standing.ts`) still
     group by the one-tier `subjectForTheme` at write time, frozen into the
-    stored read and replayed as sent; no live page places a conversation
-    from them.
+    stored read and replayed as sent, except the subjects' own reads, which
+    use `placeSubject`; no live page places a conversation from them. A
+    READY subject's panel has the conversation panel's blocks over its own
+    videos (members' comment citations dated in the period, on the market's
+    videos; `subjectDetailOf`, `loadSubjectDetail`, read only on
+    `?subject=`); where those are fewer than the level counts, one line
+    under the stats names the base. Its own read sits under Our read where
+    the tenant is switched on (else the week read's `panel.sentence`). The
+    week sits beside the month. An open or failed subject keeps the old
+    panel.
   - **Voices** (T4; `lib/pages/v2/voices.ts`), on the reading month, its
     bar labelled where that is not the current month (decision 3, above).
     Groups are today's profile with this month's comment-dated videos: a
