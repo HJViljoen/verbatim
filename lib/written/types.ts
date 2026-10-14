@@ -401,7 +401,65 @@ export interface WeekReadDataV2 extends WeekReadCommon {
    *  level-1 email leads with the flag the run raised and never re-reads it.
    *  Absent on a read stored before it, and where the read failed. */
   unusual?: WeekReadUnusual
+  /** ADDITIVE (14 Oct): each ready subject's own written read, added to the
+   *  run's row by the step after this read's (`write-subject-reads`,
+   *  lib/written/subject-reads-step.ts), and printed under "Our read" in
+   *  Market's subject panel (`subjectReadOf`, lib/written/published.ts).
+   *  Absent on a read stored before it, and until that step has run. The
+   *  weekly issue never carries it (`weeklyReadSnapshotData`). */
+  subjectReads?: SubjectReadsData
   promptVersion: 'week_read_v3'
+}
+
+/**
+ * The subjects' own reads (Heinrich, 14 Oct: "What's the point of tracking a
+ * subject if we just have nothing there"): for each READY subject (ruling U6:
+ * every read rests on its membership), what people said across the
+ * conversations inside it, then what it means for the company. Stored on the
+ * run's `week_reads` row of kind 'week' (`data.subjectReads`, no migration),
+ * so a page reaches it only through the published read. Written words after
+ * the `week_read` scrub; no figure and no comment's words.
+ */
+export interface SubjectReadsData {
+  version: 1
+  promptVersion: 'subject_read_v1'
+  /** The month read, `YYYY-MM-01`: the week read's own month, which is the
+   *  month Market's subject panel prints its level for. */
+  month: string
+  /** The days read: `[month start, the run's window end)`, or the month in
+   *  full where the week carried past its end (`readingMonthOf`). */
+  read: { from: string; to: string }
+  /** `ready` where any subject has a read; `failed` where the step could not
+   *  write any (the operator was told). */
+  status: 'ready' | 'failed'
+  model: string
+  costUsd: number
+  subjects: SubjectRead[]
+  /** Why a failed step failed, for the operator. */
+  error?: string
+}
+
+/** One subject's read. */
+export interface SubjectRead {
+  subjectId: string
+  name: string
+  /** `ready`: written. `thin`: too little was said for a writer, so code
+   *  wrote one short line on where its talk sat (no call). `held`: the scrub
+   *  left nothing of what was said. `failed`: the call failed (the operator
+   *  was told). A page prints `ready` and `thin` only. */
+  status: 'ready' | 'thin' | 'held' | 'failed'
+  /** What people said across the conversations inside it: one or two short
+   *  paragraphs. */
+  saying: string[]
+  /** What it means for the company: one short paragraph, '' where the scrub
+   *  left none (and on a thin read). */
+  means: string
+  /** The conversations (`theme_registry.id`) the read was handed, placed in
+   *  the subject by the pages' rule (`placeSubject`), so the read and the
+   *  panel's "Inside it" name the same ones. */
+  basedOn: string[]
+  /** Held or failed: why, for the operator. */
+  reason?: string
 }
 
 /**

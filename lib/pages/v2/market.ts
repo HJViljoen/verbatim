@@ -7,10 +7,11 @@ import { loadCommentNamings, trackedBrands, whoSplit, type WhoVideo } from '../.
 import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../../chunk'
 import { fmtInt, longMonth, platformLabel, shortDate } from '../../format'
 import { gateFor } from '../../quote-context'
+import type { GateOptions } from '../../quote-gate'
 import { substituteFigures } from '../../reports/cover'
 import type { FigureTable as PrintedFigures } from '../../reports/types'
 import { proseFigures } from '../../prose/figures'
-import { themeMonthLine, type ThemeMonthLine } from '../../reading/cross'
+import { commentVideoKey, groupSubjects, themeMonthLine, type ThemeMonthLine } from '../../reading/cross'
 import { loadAppPairOn, ourChangesWithoutGatherFlags } from '../../reading/gather-flags'
 import { isFailOpenFix, type OurChange } from '../../reading/comparability'
 import { marketAudiences, pooledDenominators } from '../../reading/market'
@@ -24,16 +25,18 @@ import { readEvidenceRefs } from '../../reading/evidence-refs'
 import { WEEK_CUT_SURFACES, preGatherCutBefore, type MarketWeekRowRaw } from '../../reading/weeks'
 import type { ChartRun } from '../../reading/week-line'
 import type { Verdict } from '../../reading/verdicts'
-import { INDUSTRY_AUDIENCE, loadCompetitors, loadTrackedRivals } from '../../rivals'
+import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, loadCompetitors, loadTrackedRivals, rivalNameOf } from '../../rivals'
 import { selectAll } from '../../supabase-admin'
 import { coveredDays, inMonth, monthsPhrase, readingMonthOf } from '../../written/month'
 import { SLICE } from '../../reading/coverage'
 import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '../../subjects/calibration-state'
-import { loadEarlierNewThisWeek, loadPublishedLongRun, loadPublishedWeekRead, type EarlierNew, type PublishedWeekRead } from '../../written/published'
+import type { Subject } from '../../subjects/types'
+import { loadDatedEvidence, type DatedEvidence } from '../../written/evidence'
+import { loadEarlierNewThisWeek, loadPublishedLongRun, loadPublishedWeekRead, subjectReadOf, type EarlierNew, type PublishedWeekRead } from '../../written/published'
 import type { StoredLongRun } from '../../written/store'
 import type { WeekReadData, WhoAbout, WhoPart } from '../../written/types'
 import { weekReadDates } from '../../reports/weekly-read'
-import { factsFromReadings, marketComparable } from '../../written/standing'
+import { factsFromReadings, marketComparable, subjectGate, subjectQuotes } from '../../written/standing'
 import { fetchRunningRunIds } from '../latest-video-run'
 import { loadRegistryLabels } from '../registry-labels'
 import { WHAT_THEY_SELL } from '../market-frame'
@@ -42,8 +45,8 @@ import { loadThemeQuotes, loadThemeSegmentRows, makerRuleEnabled, voiceOf, type 
 import { pickQuotes, POOL_FLOOR } from '../overview-market'
 import { talkKindLabel } from '../overview-market/kinds'
 import { fetchThemedRunId } from '../themed-run'
-import { askAboutTheme, loadLinkedTheme, loadThemeKinds } from '../voice-surface'
-import { loadReadySubjectIds, loadSubjectPlacement, notReadyIds, placeSubject, type SubjectPlacement } from '../subject-place'
+import { askAboutTheme, loadLinkedTheme, loadThemeKinds, themeKindCounts } from '../voice-surface'
+import { loadReadySubjectIds, loadSubjectPlacement, notReadyIds, placeSubject, placementMembers, type SubjectPlacement } from '../subject-place'
 import { flagFigures, loadCheckStrict, loadFlagsStrict, weekFlagRows, type FlagRow, type UnusualFlag } from '../week'
 import { flagPrints, weekLead } from '../../reading/week-lead'
 import { setApartOf } from '../../written/conversations'
@@ -496,10 +499,58 @@ export interface SubjectPanel {
   monthText: string
   bars: MonthCount[]
   inside: InsideRow[]
-  /** The week read's stored sentence on it, where the read is of this month. */
+  /** The week read's stored sentence on it, where the read is of this month:
+   *  "Our read" where the subject has no read of its own (`read`). */
   sentence: StoredLine | null
+  /** "Our read" (14 Oct): the subject's own written read, what people said
+   *  across the conversations inside it and then what it means for the
+   *  company (`subjectReads` on the published week read, `subjectReadOf`),
+   *  where it is of this month; `thin` where code wrote its one line. Stored
+   *  `week_read` prose. Ready only; absent on a dump from before it. */
+  read?: { lines: StoredLine[]; means: StoredLine | null; thin: boolean } | null
+  /** The conversation panel's anatomy, over the subject's own videos (14 Oct).
+   *  READY ONLY (ruling U6: every block rests on its membership); absent or
+   *  null in every other state, and on a dump from before it. */
+  detail?: SubjectDetail | null
   askHref: string
   closeHref: string
+}
+
+/**
+ * A READY subject's panel blocks (Heinrich, 14 Oct: "What's the point of
+ * tracking a subject if we just have nothing there"), by the conversation
+ * panel's own rules, over THE SUBJECT'S VIDEOS: the market's videos (the
+ * category and the tracked brands, never the client's own posts) where a
+ * comment citing one of its member insights is dated in the period (the
+ * group × subject cross's rule, lib/reading/cross.ts; the month reading's
+ * cited arm, demographic citations included). A member spoken only on camera
+ * is in the level and in no block: it has no comment to date it.
+ *
+ * This week every week figure stands beside its month (decision 1): the week
+ * stat beside the level, who it is about and where beside the month's. What
+ * people did and who is saying it are the month's on every period, as the
+ * conversation panel's are (groups are a month's videos, decision 2).
+ */
+export interface SubjectDetail {
+  /** What the week blocks count: this week's videos, or the month's. */
+  basis: 'week' | 'month'
+  /** This week only: the subject's videos this week, of the market's. */
+  week: Level | null
+  /** Who the videos are about (one brand per video, the item's own counted
+   *  comments, `whoSplit`); this week, with the month's beside it. Null where
+   *  it has no video in the period. */
+  who: { parts: WhoPart[]; n: number; month: { parts: WhoPart[]; n: number } | null } | null
+  /** Whether "who" may print (`loadWho`'s rule, for these comments). */
+  brands: BrandsState
+  /** The kinds of its own insights on its month's videos (`themeKindCounts`). */
+  doing: { rows: Doing[]; n: number; text: string } | null
+  /** Groups whose own insights are in its month's talk, the most videos
+   *  first: names only, each opening in Voices (decision 2). */
+  groups: GroupLink[]
+  /** Its videos by platform; this week, with the month's beside them. */
+  platforms: { rows: PlatformRow[]; n: number; month: { counts: Record<string, number>; n: number; text: string } | null } | null
+  /** Three gated quotes (`subjectQuotes`, the strict subject gate). */
+  quotes: PanelQuote[]
 }
 
 export interface MarketData {
@@ -1271,20 +1322,35 @@ export function panelQuoteOf(c: CiteCandidate): PanelQuote {
 export function groupsOf(id: string, personas: readonly { key: string; name: string; registryIds: readonly string[] }[]): GroupLink[] {
   return personas
     .filter((p) => p.registryIds.includes(id))
-    .map((p) => ({ key: p.key, name: p.name, href: `/dashboard/voices?group=${encodeURIComponent(p.key)}#group-panel` }))
+    .map((p) => groupLink(p.key, p.name))
 }
 
-/** The personas of a stored profile, defensively: key, name and the theme
- *  registry ids. */
-export function personasOf(raw: unknown): { key: string; name: string; registryIds: string[] }[] {
+/** A group, opening in Voices. */
+export const groupLink = (key: string, name: string): GroupLink =>
+  ({ key, name, href: `/dashboard/voices?group=${encodeURIComponent(key)}#group-panel` })
+
+/** A stored profile's persona as Market reads it. */
+export interface PersonaLink {
+  key: string
+  name: string
+  registryIds: string[]
+  /** Its insights (Pass E's `insightIds`), where the profile holds them: what
+   *  a subject's groups are read from (14 Oct). */
+  insightIds?: string[]
+}
+
+/** The personas of a stored profile, defensively: key, name, the theme
+ *  registry ids and, where held, the insight ids. */
+export function personasOf(raw: unknown): PersonaLink[] {
   if (!Array.isArray(raw)) return []
   return raw.flatMap((p) => {
-    const o = (p ?? {}) as { key?: unknown; name?: unknown; registryIds?: unknown }
+    const o = (p ?? {}) as { key?: unknown; name?: unknown; registryIds?: unknown; insightIds?: unknown }
     const name = typeof o.name === 'string' ? o.name.trim() : ''
     if (!name) return []
     const key = typeof o.key === 'string' && o.key ? o.key : name
     const registryIds = Array.isArray(o.registryIds) ? o.registryIds.filter((x): x is string => typeof x === 'string') : []
-    return [{ key, name, registryIds }]
+    const insightIds = Array.isArray(o.insightIds) ? [...new Set(o.insightIds.filter((x): x is string => typeof x === 'string'))] : null
+    return [{ key, name, registryIds, ...(insightIds ? { insightIds } : {}) }]
   })
 }
 
@@ -1396,11 +1462,15 @@ export function tableMonths(month: string, category: ReadonlyMap<string, number>
 }
 
 /** Who a conversation's videos are about, from its evidence refs and the
- *  brands their comments name (`themeWho`'s rule, Your market's). Pure. */
+ *  brands their comments name (`themeWho`'s rule, Your market's). A
+ *  conversation's refs are the category's, so a video is the category's
+ *  unless `audienceOf` files it (a subject's videos span the tracked brands'
+ *  audiences too, 14 Oct). Pure. */
 export function whoOf(
   refs: readonly { theme_id: string; video_ids: readonly string[]; comment_ids: readonly string[] }[],
   mentions: readonly { comment_id: string; video_id: string; name: string }[],
   company: string,
+  audienceOf: (videoId: string) => string = () => INDUSTRY_AUDIENCE,
 ): Map<string, WhoPart[]> {
   const videosOf = new Map<string, WhoVideo[]>()
   const byVideo = new Map<string, { comment_id: string; name: string }[]>()
@@ -1409,7 +1479,7 @@ export function whoOf(
     const comments = new Set(r.comment_ids)
     const videos: WhoVideo[] = r.video_ids.map((id) => ({
       id,
-      audience: INDUSTRY_AUDIENCE,
+      audience: audienceOf(id),
       named: (byVideo.get(id) ?? []).filter((m) => comments.has(m.comment_id)).map((m) => m.name),
     }))
     videosOf.set(r.theme_id, [...(videosOf.get(r.theme_id) ?? []), ...videos])
@@ -1516,23 +1586,35 @@ async function loadWho(
   clientId: string,
   a: { refs: readonly { theme_id: string; video_ids: string[]; comment_ids: string[] }[]; company: string; rivals: readonly { id: string; name: string }[] },
 ): Promise<{ who: Map<string, WhoPart[]>; brands: BrandsState }> {
-  if (brandRulesFor(clientId).length === 0) return { who: new Map(), brands: 'not_read' }
+  const { mentions, brands } = await loadNamings(db, clientId, { commentIds: a.refs.flatMap((r) => r.comment_ids), company: a.company, rivals: a.rivals })
+  return { who: brands === 'counted' ? whoOf(a.refs, mentions, a.company) : new Map(), brands }
+}
+
+/** The tracked brands these comments name (`loadCommentNamings`, the hand
+ *  check's gate), and whether a split may print at all (`loadWho`'s rule:
+ *  no brand rules is `not_read`, rules and no row yet `not_counted`). */
+async function loadNamings(
+  db: SupabaseClient,
+  clientId: string,
+  a: { commentIds: readonly string[]; company: string; rivals: readonly { id: string; name: string }[] },
+): Promise<{ mentions: { comment_id: string; video_id: string; name: string }[]; brands: BrandsState }> {
+  if (brandRulesFor(clientId).length === 0) return { mentions: [], brands: 'not_read' }
   const tracked = trackedBrands(clientId, a.company, a.rivals)
-  const namings = a.refs.length > 0
-    ? await loadCommentNamings(db, { clientId, commentIds: a.refs.flatMap((r) => r.comment_ids), brands: tracked })
+  const namings = a.commentIds.length > 0
+    ? await loadCommentNamings(db, { clientId, commentIds: a.commentIds, brands: tracked })
     : []
   if (namings.length === 0) {
     // One row is enough to tell "nobody named one" from "nothing counted yet".
     const probe = await db.from('brand_mentions').select('id').eq('client_id', clientId).limit(1)
     if (probe.error) throw new Error(`brand_mentions probe: ${probe.error.message}`)
-    if ((probe.data ?? []).length === 0) return { who: new Map(), brands: 'not_counted' }
+    if ((probe.data ?? []).length === 0) return { mentions: [], brands: 'not_counted' }
   }
-  const mentions = namings.map((n) => ({ comment_id: n.commentId, video_id: n.videoId, name: n.name }))
-  return { who: whoOf(a.refs, mentions, a.company), brands: 'counted' }
+  return { mentions: namings.map((n) => ({ comment_id: n.commentId, video_id: n.videoId, name: n.name })), brands: 'counted' }
 }
 
-/** The latest consumer profile's personas (key, name, registry ids). */
-async function loadPersonas(db: SupabaseClient, clientId: string): Promise<{ key: string; name: string; registryIds: string[] }[]> {
+/** The latest consumer profile's personas (key, name, registry ids, insight
+ *  ids). */
+async function loadPersonas(db: SupabaseClient, clientId: string): Promise<PersonaLink[]> {
   const res = await db.from('consumer_profiles').select('personas').eq('client_id', clientId)
     .order('run_date', { ascending: false }).limit(1).maybeSingle()
   if (res.error) throw new Error(`consumer_profiles: ${res.error.message}`)
@@ -1789,6 +1871,19 @@ export async function loadMarket(input: {
   const earlierNewAhead = nothingNew && read
     ? soft('earlierNew', loadEarlierNewThisWeek(db, clientId, { before: read.window.from }), [] as EarlierNew[])
     : Promise.resolve([] as EarlierNew[])
+  // THE OPEN SUBJECT'S BLOCKS (14 Oct): read only when a subject's panel is
+  // open, and only for a subject whose check passed (ruling U6), beside the
+  // month's readings; the panel takes them where its level prints. Its
+  // members come off the placement the page holds (no membership read).
+  const openSubject = !openId && p.subject ? subjects.all.find((x) => x.subject.id === p.subject && x.calibration === 'ready')?.subject ?? null : null
+  const detailAhead: Promise<SubjectDetail | null> = openSubject && subjects.placed
+    ? soft('subjectDetail', personasAhead.then((personas) => loadSubjectDetail({
+        db, clientId, subject: openSubject, members: placementMembers(subjects.placed).get(openSubject.id) ?? new Set<string>(),
+        period, week: weekBlock, month: monthBlock, market, personas, company: brand,
+        rivals: competitors.map((c) => ({ id: c.id, name: c.name })), noun,
+      })), null)
+    : Promise.resolve(null)
+  detailAhead.catch(() => {})
   const [readings, whoRead, personas, heroKinds, weekRowsRaw, earlierNew] = await Promise.all([
     readingsAhead, whoAhead, personasAhead, heroId ? kindsFor(heroId) : Promise.resolve(null), weekRowsAhead, earlierNewAhead,
   ])
@@ -1894,7 +1989,7 @@ export async function loadMarket(input: {
       }), null)
     : null
   const subjectPanel = !openId && p.subject
-    ? buildSubjectPanel({ id: p.subject, facts: subjectFacts, convs, period, p, read, month: monthBlock, flag: flagCard?.conv ? { id: flagCard.conv.id, verdict: flagCard.verdict } : null })
+    ? buildSubjectPanel({ id: p.subject, facts: subjectFacts, convs, period, p, read, month: monthBlock, flag: flagCard?.conv ? { id: flagCard.conv.id, verdict: flagCard.verdict } : null, detail: await detailAhead })
     : null
   const longRunRead = await longRunAhead
   const longRun = longRunRead === 'failed' ? null : marketLongRunFor({ ...longRunRead, month, filling: soFar })
@@ -2133,7 +2228,12 @@ async function loadConvPanel(a: {
  *  of this month. A subject that prints no level says why, and still lists
  *  the conversations inside it (the parity pass, 13 Oct: those are the
  *  conversations' own counts, and exist without calibration), one being
- *  re-described included (14 Oct: a tracked subject is never hidden). Pure. */
+ *  re-described included (14 Oct: a tracked subject is never hidden).
+ *
+ *  A READY subject (14 Oct) also has its own read where the published read
+ *  holds one of this month (`subjectReadOf`; the sentence stands in where it
+ *  does not) and the conversation panel's blocks over its videos (`detail`,
+ *  `subjectDetailOf`); every other state has neither (ruling U6). Pure. */
 export function buildSubjectPanel(a: {
   id: string
   facts: readonly SubjectFact[]
@@ -2144,6 +2244,8 @@ export function buildSubjectPanel(a: {
   month: MarketMonth
   /** The week's flag, where it names a conversation inside the subject. */
   flag?: { id: string; verdict: Verdict } | null
+  /** The blocks over its videos (`subjectDetailOf`), where they were read. */
+  detail?: SubjectDetail | null
 }): SubjectPanel | null {
   const f = a.facts.find((x) => x.id === a.id)
   if (!f) return null
@@ -2171,9 +2273,183 @@ export function buildSubjectPanel(a: {
     bars: measured ? bars : [],
     inside: insideOf(f.id, a.convs, a.period, { limit: 50, href: (id) => convHref(a.p, id, 'subjects'), flagId: a.flag?.id ?? null, flag: a.flag?.verdict ?? null }),
     sentence: standing?.sentence?.trim() ? { body: standing.sentence.trim(), figures: (a.read?.figures ?? {}) as unknown as PrintedFigures } : null,
+    read: measured ? subjectReadLines(subjectReadOf(a.read, f.id, m)) : null,
+    detail: measured ? a.detail ?? null : null,
     askHref: `/dashboard/agent?ask=${encodeURIComponent(`What does my market say about ${f.name}?`)}`,
     closeHref: closeHref(a.p, 'subjects'),
   }
+}
+
+/** A subject's own read as "Our read" prints it: what people said, each
+ *  paragraph a stored line with no figure, then what it means for the
+ *  company, its own line. Pure. */
+export function subjectReadLines(r: ReturnType<typeof subjectReadOf>): SubjectPanel['read'] {
+  if (!r) return null
+  const line = (body: string) => ({ body: body.trim(), figures: {} as PrintedFigures })
+  const lines = r.saying.filter((p) => p.trim()).map(line)
+  if (lines.length === 0) return null
+  return { lines, means: r.means.trim() ? line(r.means) : null, thin: r.status === 'thin' }
+}
+
+/** "TikTok · 7 Oct" and who the video is filed under: a subject's quote as
+ *  the panel prints it (`panelQuoteOf`'s shape). Pure. */
+export function subjectQuoteOf(e: DatedEvidence): PanelQuote {
+  const rival = rivalNameOf(e.video.audience)
+  return {
+    text: e.text,
+    lang: e.lang ?? null,
+    english: e.english ?? null,
+    source: [platformLabel(e.video.platform), e.commentDate ? shortDate(e.commentDate) : null].filter(Boolean).join(' · '),
+    about: e.video.audience === CLIENT_AUDIENCE ? 'client' : rival ? `rival:${rival}` : null,
+  }
+}
+
+/** Each platform's distinct videos among these citations. Pure. */
+function platformMixOf(rows: readonly DatedEvidence[]): Record<string, number> {
+  const per = new Map<string, Set<string>>()
+  for (const e of rows) {
+    const p = (e.video.platform ?? '').toLowerCase()
+    if (!p) continue
+    const held = per.get(p) ?? new Set<string>()
+    held.add(e.video.uuid)
+    per.set(p, held)
+  }
+  return Object.fromEntries([...per.entries()].map(([p, s]) => [p, s.size]))
+}
+
+/**
+ * A READY subject's panel blocks (`SubjectDetail`, whose doc says what each
+ * counts), by the conversation panel's rules over THE SUBJECT'S VIDEOS: its
+ * member insights' comment citations dated in the period (`evidence`, read
+ * over the month and, this week, the week's window too), on the market's
+ * videos (`market`: the category and the tracked brands' audiences).
+ *  · who it is about: `whoOf` over the videos and the subject's own counted
+ *    comments, each video filed by its audience unless a tracked brand is
+ *    named in them (`whoSplit`'s rule);
+ *  · what people did: `themeKindCounts` over its own insights on its month's
+ *    videos (`doingOf`), the conversation panel's month;
+ *  · who's saying it: the group × subject cross (`groupSubjects`) over its
+ *    month's talk, the groups with any of it, the most videos first;
+ *  · where: its videos by platform (`platformRows`);
+ *  · in their words: `subjectQuotes`, the strict subject gate, this week's
+ *    first where the period is the week.
+ * Pure.
+ */
+export function subjectDetailOf(input: {
+  subjectId: string
+  name: string
+  evidence: readonly DatedEvidence[]
+  members: ReadonlySet<string>
+  market: ReadonlySet<string>
+  period: Period
+  /** The week's window: the week period only. */
+  week: { from: string; to: string } | null
+  month: Pick<MarketMonth, 'month' | 'text'>
+  /** The market's videos this week (the week stat's n). */
+  marketWeek: number | null
+  personas: readonly Pick<PersonaLink, 'key' | 'name' | 'insightIds'>[]
+  namings: readonly { comment_id: string; video_id: string; name: string }[]
+  brands: BrandsState
+  company: string
+  noun: string | null
+  gate: GateOptions
+}): SubjectDetail {
+  const m = monthStartOf(input.month.month)
+  const within = (e: DatedEvidence, from: string, to: string) => {
+    const t = Date.parse(e.commentDate)
+    return Number.isFinite(t) && t >= Date.parse(from) && t < Date.parse(to)
+  }
+  const counted = input.evidence.filter((e) => input.members.has(e.insightId) && input.market.has(e.video.audience))
+  const monthRows = counted.filter((e) => within(e, `${m}T00:00:00.000Z`, `${nextMonth(m)}T00:00:00.000Z`))
+  const weekRows = input.period === 'week' && input.week ? counted.filter((e) => within(e, input.week!.from, input.week!.to)) : null
+  const basis = weekRows ?? monthRows
+  const videos = (rows: readonly DatedEvidence[]) => new Set(rows.map((e) => e.video.uuid))
+  const monthVideos = videos(monthRows)
+  const basisVideos = videos(basis)
+  const audienceOf = new Map(counted.map((e) => [e.video.uuid, e.video.audience]))
+
+  const whoFor = (rows: readonly DatedEvidence[]): { parts: WhoPart[]; n: number } | null => {
+    const ref = { theme_id: input.subjectId, video_ids: [...videos(rows)], comment_ids: [...new Set(rows.map((e) => e.commentId))] }
+    const parts = whoOf([ref], input.namings, input.company, (v) => audienceOf.get(v) ?? INDUSTRY_AUDIENCE).get(input.subjectId) ?? []
+    return parts.length > 0 ? { parts, n: parts.reduce((s, x) => s + x.videos, 0) } : null
+  }
+  const whoBasis = whoFor(basis)
+
+  const kinds = themeKindCounts(monthRows.map((e) => ({ category: e.kind, source_video_id: e.video.uuid })), monthVideos)
+  const doing = doingOf(kinds, monthVideos.size, input.noun)
+
+  // Who's saying it: the group × subject cross, read from the subject's side
+  // over its month's talk (every row handed in is one of its members').
+  const groupRows = groupSubjects({
+    month: m,
+    personas: input.personas.filter((p) => (p.insightIds ?? []).length > 0).map((p) => ({ key: p.key, name: p.name, insightIds: p.insightIds ?? [] })),
+    evidence: monthRows.map((e) => ({ insightId: e.insightId, commentId: e.commentId, platform: e.video.platform, platformVideoId: e.video.videoId, commentDate: e.commentDate })),
+    memberships: [...input.members].map((insightId) => ({ subjectId: input.subjectId, insightId })),
+    subjects: new Map([[input.subjectId, input.name]]),
+    market: new Map(monthRows.map((e) => [commentVideoKey(e.video.platform, e.video.videoId), e.video.uuid])),
+  })
+  const groups = groupRows
+    .map((g) => ({ g, k: g.subjects[0]?.k ?? 0 }))
+    .filter((x) => x.k > 0)
+    .sort((a, b) => b.k - a.k || a.g.name.localeCompare(b.g.name))
+    .map((x) => groupLink(x.g.key, x.g.name))
+
+  const where = platformRows(platformMixOf(basis), weekRows ? 'week' : 'month')
+  const span = [...new Set([...monthRows, ...(weekRows ?? [])])]
+  const quotes = subjectQuotes({ gate: input.gate, memberIds: input.members, evidence: span, market: input.market, prefer: weekRows ? input.week : null, count: MARKET_QUOTES })
+
+  return {
+    basis: weekRows ? 'week' : 'month',
+    week: weekRows && input.marketWeek != null ? { k: basisVideos.size, n: input.marketWeek } : null,
+    who: whoBasis ? { ...whoBasis, month: weekRows ? whoFor(monthRows) : null } : null,
+    brands: input.brands,
+    doing: doing.length > 0 ? { rows: doing, n: monthVideos.size, text: `in ${input.month.text}` } : null,
+    groups,
+    platforms: where ? { rows: where.rows, n: where.n, month: weekRows ? { counts: platformMixOf(monthRows), n: monthVideos.size, text: input.month.text } : null } : null,
+    quotes: quotes.map(subjectQuoteOf),
+  }
+}
+
+/**
+ * A ready subject's blocks, read only when its panel is open (`?subject=`):
+ * its members' comment citations over the month and, this week, the week's
+ * window too (`loadDatedEvidence`, demographic citations included, the
+ * translations and the quote gate's video context with it), then the
+ * tracked brands those comments name (`loadNamings`). The membership, the
+ * profile and the published read are the page's own, read already.
+ */
+export async function loadSubjectDetail(a: {
+  db: SupabaseClient
+  clientId: string
+  subject: Pick<Subject, 'id' | 'name' | 'description'>
+  members: ReadonlySet<string>
+  period: Period
+  week: MarketWeek | null
+  month: MarketMonth
+  market: readonly string[]
+  personas: readonly PersonaLink[]
+  company: string
+  rivals: readonly { id: string; name: string }[]
+  noun: string | null
+}): Promise<SubjectDetail> {
+  const m = monthStartOf(a.month.month)
+  const monthFrom = `${m}T00:00:00.000Z`
+  const monthTo = `${nextMonth(m)}T00:00:00.000Z`
+  const week = a.period === 'week' && a.week ? a.week.window : null
+  const from = week && Date.parse(week.from) < Date.parse(monthFrom) ? week.from : monthFrom
+  const to = week && Date.parse(week.to) > Date.parse(monthTo) ? week.to : monthTo
+  // A brand's own people are not the market (lib/written/evidence.ts): the
+  // client and every rival it has tracked, by name.
+  const brandNames = [...new Set([a.company, ...a.rivals.map((r) => r.name)].map((x) => x.trim()).filter(Boolean))]
+  const evidence = await loadDatedEvidence(a.db, a.clientId, [...a.members], { from, to }, { brands: brandNames, includeRedacted: true })
+  const market = new Set(a.market)
+  const counted = evidence.filter((e) => a.members.has(e.insightId) && market.has(e.video.audience))
+  const { mentions, brands } = await loadNamings(a.db, a.clientId, { commentIds: [...new Set(counted.map((e) => e.commentId))], company: a.company, rivals: a.rivals })
+  return subjectDetailOf({
+    subjectId: a.subject.id, name: a.subject.name, evidence, members: a.members, market, period: a.period, week,
+    month: a.month, marketWeek: a.week?.market.videos ?? null, personas: a.personas, namings: mentions, brands,
+    company: a.company, noun: a.noun, gate: subjectGate(a.clientId, a.subject),
+  })
 }
 
 // ---- The Dashboard's Market tile (T8) -----------------------------------------------------

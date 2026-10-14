@@ -329,17 +329,52 @@ export function subjectMaterial<T extends MaterialTheme = MaterialTheme>(input: 
     if (v.ok) passed.push({ e, score: v.score })
   }
   const notes = notesOf(passed)
-  const from = Date.parse(input.window.from)
-  const to = Date.parse(input.window.to)
-  const quotable = own.filter((e) => !isOwnAccount(e) && !e.insider)
-  const thisWeek = quotable.filter((e) => Date.parse(e.commentDate) >= from && Date.parse(e.commentDate) < to)
-  const pick = (pool: readonly DatedEvidence[]): DatedEvidence | null => {
-    const category = pool.filter((e) => e.video.audience === INDUSTRY_AUDIENCE)
-    const brands = pool.filter((e) => e.video.audience !== INDUSTRY_AUDIENCE)
-    return pickEligible(category, gateInputOf, 1, input.gate)[0] ?? pickEligible(brands, gateInputOf, 1, input.gate)[0] ?? null
-  }
-  const chosen = pick(thisWeek) ?? pick(quotable)
+  const chosen = subjectQuotes({ gate: input.gate, memberIds: input.memberIds, evidence: input.evidence, market: input.market, prefer: input.window, count: 1 })[0] ?? null
   return { notes, quoteRef: chosen ? refOf(chosen) : null, insights: new Set(own.map((e) => e.insightId)), material }
+}
+
+/**
+ * A subject's quotes, the strict gate's way (`subjectMaterial`'s one quote,
+ * and Market's subject panel's three, 14 Oct): its members' citations that
+ * speak for the market (`speaksForTheMarket`: the category or a tracked
+ * brand, the read lane, no maker's video), never the video's own account, a
+ * brand insider or a demographic citation; from `prefer` (the week) first
+ * where it holds any, then from the rest; within each, the category's before
+ * a brand's; one a video, and no wording twice (`pickEligible`). Fewer come
+ * back where fewer pass. `evidence` may hold other subjects' rows. Pure.
+ */
+export function subjectQuotes(input: {
+  gate: GateOptions
+  memberIds: ReadonlySet<string>
+  evidence: readonly DatedEvidence[]
+  market: ReadonlySet<string>
+  /** The days to quote from first (the week); null quotes the whole span. */
+  prefer?: { from: string; to: string } | null
+  count: number
+}): DatedEvidence[] {
+  const quotable = input.evidence
+    .filter((e) => input.memberIds.has(e.insightId) && !e.redacted && speaksForTheMarket(e, input.market) && !isOwnAccount(e) && !e.insider)
+    .sort((a, b) => a.rank - b.rank || a.evidenceId.localeCompare(b.evidenceId))
+  const from = input.prefer ? Date.parse(input.prefer.from) : NaN
+  const to = input.prefer ? Date.parse(input.prefer.to) : NaN
+  const preferred = input.prefer ? quotable.filter((e) => Date.parse(e.commentDate) >= from && Date.parse(e.commentDate) < to) : []
+  const out: DatedEvidence[] = []
+  const videos = new Set<string>()
+  const used = new Set<string>()
+  const take = (pool: readonly DatedEvidence[]) => {
+    const left = input.count - out.length
+    if (left <= 0) return
+    const open = pool.filter((e) => !videos.has(e.video.uuid))
+    for (const e of pickEligible(open, gateInputOf, left, { ...input.gate, used })) {
+      out.push(e)
+      videos.add(e.video.uuid)
+    }
+  }
+  for (const pool of [preferred, quotable]) {
+    take(pool.filter((e) => e.video.audience === INDUSTRY_AUDIENCE))
+    take(pool.filter((e) => e.video.audience !== INDUSTRY_AUDIENCE))
+  }
+  return out
 }
 
 /**

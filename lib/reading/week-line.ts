@@ -398,6 +398,9 @@ export const AFTER_GATHER_STEPS: readonly string[] = [
   // The week's post ideas (depth v2, T13): read off what was gathered, logged
   // and never noteError'd; listed so a future counted error cannot cut a week.
   'write-post-ideas',
+  // The subjects' own reads (14 Oct): the same, for each ready subject's read
+  // on the run's week read row.
+  'write-subject-reads',
   // Your products (depth v2 T11): read what was gathered, write placements
   // and month rows, and move no week count. Logged-only today (never
   // noteError'd); listed so a later counted error cannot cut a week.

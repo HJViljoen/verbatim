@@ -38,19 +38,23 @@
 
 export const WEEK_READ_STEP_BUDGET_MS = 250_000
 
-export type WeekReadCall = 'writer' | 'check' | 'embed'
+export type WeekReadCall = 'writer' | 'check' | 'embed' | 'subject'
 
-/** Each call's hard cap, and the least time worth starting it with. */
+/** Each call's hard cap, and the least time worth starting it with. `subject`
+ *  is one subject's read in `write-subject-reads` (14 Oct): a short
+ *  structured write, a few in flight at once on that step's own clock, with
+ *  no call after them to keep time for. */
 export const WEEK_READ_CALLS: Record<WeekReadCall, { capMs: number; floorMs: number }> = {
   writer: { capMs: 150_000, floorMs: 60_000 },
   check: { capMs: 120_000, floorMs: 10_000 },
   embed: { capMs: 20_000, floorMs: 5_000 },
+  subject: { capMs: 100_000, floorMs: 30_000 },
 }
 
 /** The time a call before each of these must leave it: the check's 45 s, its
  *  old cap (p90 29 s), and the fit's whole cap. The check runs past its
  *  reserve only on time the writer did not use. */
-export const WEEK_READ_RESERVE: Record<Exclude<WeekReadCall, 'writer'>, number> = {
+export const WEEK_READ_RESERVE: Record<Exclude<WeekReadCall, 'writer' | 'subject'>, number> = {
   check: 45_000,
   embed: WEEK_READ_CALLS.embed.capMs,
 }
@@ -61,6 +65,7 @@ const AFTER: Record<WeekReadCall, number> = {
   writer: WEEK_READ_RESERVE.check + WEEK_READ_RESERVE.embed,
   check: WEEK_READ_RESERVE.embed,
   embed: 0,
+  subject: 0,
 }
 
 /** A model call in the step ran out of time, or had none left to start. */

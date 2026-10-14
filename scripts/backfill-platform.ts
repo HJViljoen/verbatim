@@ -142,7 +142,7 @@ function sast(now = new Date()): { weekday: string; hm: number; label: string } 
  *  Vercel's 300 s and a slow afternoon on the writer (one call over the step's
  *  150 s on 1 Oct) must not cost a whole dry run. Still a hard cap per call,
  *  and still no silent retry. */
-const SCRIPT_CAPS: Record<WeekReadCall, number> = { writer: 300_000, check: 90_000, embed: 40_000 }
+const SCRIPT_CAPS: Record<WeekReadCall, number> = { writer: 300_000, check: 90_000, embed: 40_000, subject: 200_000 }
 const SCRIPT_BUDGET: CallBudget = { optionsFor: (call) => ({ timeout: SCRIPT_CAPS[call], maxRetries: 0 }) }
 
 /** Monday (UTC) of the ISO week holding this instant, `YYYY-MM-DD`. Pure. */

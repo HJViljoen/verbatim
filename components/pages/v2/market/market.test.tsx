@@ -574,3 +574,92 @@ describe('a tracked subject is never hidden (14 Oct)', () => {
     assertCopyContract(node)
   })
 })
+
+// A TRACKED SUBJECT'S PANEL SAYS SOMETHING (Heinrich, 14 Oct: "What's the
+// point of tracking a subject if we just have nothing there"). A READY
+// subject's panel has the conversation panel's anatomy over its own videos:
+// our read (its own written read), month by month, who it is about, what
+// people did, who is saying it, where, three quotes, Ask the Agent and the
+// conversations inside it. A subject whose check is open or failed keeps the
+// panel it had: no block rests on its membership (ruling U6).
+describe('SubjectPanelView: a ready subject in full (14 Oct)', () => {
+  const RICH = marketFixture({ subject: 'cost', subjectDetail: 'rich' })
+  const RICH_MONTH = marketFixture({ subject: 'cost', subjectDetail: 'rich', period: 'month' })
+  const THIN = marketFixture({ subjects: 'tracked', subject: 'look', subjectDetail: 'thin' })
+  const panelOf = (d: MarketData) => <SubjectPanelView panel={d.subjectPanel!} data={d} />
+
+  it('this week: the week beside the month, its own read, the four blocks, three quotes, then the conversations inside it', () => {
+    const text = renderText(panelOf(RICH))
+    // The week's videos stand beside the month's level (decision 1).
+    expect(text).toMatch(/^Subject Cost & access Close 40 of 241 videos in your market this week 70 of 318 videos in your market, October so far 22% of the market’s videos ▲ 7 pts Our read People describe insurance refusals/)
+    // Our read: what people said, then what it means for the company.
+    expect(text).toContain('Paying out of pocket runs through all of it.')
+    expect(text).toContain('fundraisers when the funding does not come. What it means for Össur Össur\'s knees and feet reach people through insurers and medical aid')
+    expect(text).toContain('Who it’s about · this week Össur 6 · Ottobock 3 · others 31 October so far Össur 7 · Ottobock 6 · others 51')
+    expect(text).toContain('What people did · of 64 in October so far Complained about something 44 Asked a question 20')
+    expect(text).toContain('Who’s saying it Long-time users upgrading Caregivers and family Each opens in Voices')
+    expect(text).toContain('Where This week October so far TikTok 20 32 of 64 Instagram 10 16 of 64 YouTube 10 16 of 64')
+    expect(text).toMatch(/In their words · 3 of the comments “The cost of a running blade/)
+    expect(text).toMatch(/Conversations inside it · this week, and October so far Insurance refusals for powered knees Unusual this week 19 31 .*Ask the Agent about this/)
+    const html = render(panelOf(RICH))
+    expect(html.match(/data-copy="quote"/g)).toHaveLength(3)
+    expect(html).toContain('href="/dashboard/voices?group=long-time-users#group-panel"')
+    // The quotes and the blocks come before the conversations inside it.
+    expect(html.indexOf('In their words')).toBeLessThan(html.indexOf('Conversations inside it'))
+    assertCopyContract(panelOf(RICH))
+  })
+
+  it('this month: the month alone, where by platform as bars', () => {
+    const text = renderText(panelOf(RICH_MONTH))
+    expect(text).toMatch(/^Subject Cost & access Close 70 of 318 videos in your market, October so far 22% of the market’s videos/)
+    expect(text).not.toContain('this week')
+    expect(text).toContain('Who it’s about Össur 7 · Ottobock 6 · others 51 What people did · of 64 in October so far')
+    expect(text).toContain('Where TikTok 32 Instagram 16 YouTube 16')
+    assertCopyContract(panelOf(RICH_MONTH))
+  })
+
+  it('ready and thin (one video): a small count as a small count, and code\'s one line as its read', () => {
+    const text = renderText(panelOf(THIN))
+    expect(text).toMatch(/^Subject Look & style Close 1 of 241 videos in your market this week 4 of 318 videos in your market, October so far 1% of the market’s videos too few to compare Our read In October so far, talk about Look & style sat in “Covers and finishes” and “Showing it or hiding it”\./)
+    expect(text).toContain('What people did · of 1 in October so far Praised it 1')
+    expect(text).toContain('Where This week October so far Instagram 1 1 of 1')
+    expect(text).toContain('In their words · 1 of the comments')
+    // No group's talk is in it: the block is left out, as the conversation panel's is.
+    expect(text).not.toContain('Who’s saying it')
+    assertCopyContract(panelOf(THIN))
+  })
+
+  it('brands not counted yet: who it is about says so, and nothing else changes', () => {
+    const d = marketFixture({ subject: 'cost', subjectDetail: 'rich', period: 'month' })
+    const panel = { ...d.subjectPanel!, detail: { ...d.subjectPanel!.detail!, brands: 'not_counted' as const } }
+    const text = renderText(<SubjectPanelView panel={panel} data={d} />)
+    expect(text).toContain('Who it’s about Brands are not counted for this workspace yet.')
+    expect(text).not.toContain('Össur 7')
+    assertCopyContract(<SubjectPanelView panel={panel} data={d} />)
+  })
+
+  it('a subject whose check is open keeps its panel: no read of its own, no block, no quote (U6)', () => {
+    const d = marketFixture({ flagged: false, noNew: true, subjects: 'provisional', brands: 'not_counted', weeks: 'insufficient', noGroups: true, subject: 'cost', subjectDetail: 'rich' })
+    expect(d.subjectPanel).toMatchObject({ state: 'provisional', detail: null, read: null })
+    const text = renderText(panelOf(d))
+    expect(text).toContain(`Cost & access Close ${SUBJECT_NOT_MEASURED}.`)
+    expect(text).not.toMatch(/Who it’s about|What people did|Who’s saying it|Where|In their words|People describe insurance refusals|videos in your market/)
+    expect(text).toContain('Conversations inside it · this week, and October so far Insurance refusals for powered knees 19 31')
+    expect(render(panelOf(d))).not.toContain('data-copy="quote"')
+    assertCopyContract(panelOf(d))
+  })
+
+  it('a subject being re-described keeps its panel: no read of its own, no block, no quote (U6)', () => {
+    const d = marketFixture({ subjects: 'tracked', subject: 'community', subjectDetail: 'rich' })
+    expect(d.subjectPanel).toMatchObject({ state: 'failed', detail: null, read: null })
+    const text = renderText(panelOf(d))
+    expect(text).toContain(`Community & encouragement Close ${SUBJECT_NOT_MEASURED}. Conversations inside it`)
+    expect(text).not.toMatch(/Who it’s about|What people did|Who’s saying it|In their words|Our read|videos in your market/)
+    assertCopyContract(panelOf(d))
+  })
+
+  it('the page with the rich panel open keeps the copy contract and prints its quotes inside the panel only', () => {
+    assertCopyContract(<MarketPage data={RICH} />)
+    expect(quotesOutsidePanel(RICH)).toBe(0)
+  })
+})

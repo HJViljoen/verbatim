@@ -1905,6 +1905,21 @@ export const POST_IDEAS_BUDGET_USD = 0.5
  *  budget stop. */
 export const POST_IDEAS_RUN_MARGIN_USD = 0.5
 
+/** The subject reads' HARD dollar cap per run (the `write-subject-reads`
+ *  step, lib/written/subject-reads-step.ts; 14 Oct): one gpt-5.4 call per
+ *  ready subject with enough to say, each attempt started only where the
+ *  step's spend so far (this run's earlier attempts included: `ai_call_log`,
+ *  pass `subject_read`) plus what every call in flight may still cost plus
+ *  that attempt's worst case (its prompt and `SUBJECT_READ_MAX_OUTPUT_TOKENS`
+ *  of output, lib/written/subject-reads.ts) fits. */
+export const SUBJECT_READS_BUDGET_USD = 1
+
+/** What must stay unspent under `RUN_MODEL_BUDGET_USD` after the subject
+ *  reads (the post ideas' and the briefs' margin): the step starts only where
+ *  the run has `SUBJECT_READS_BUDGET_USD` plus this left, so it can never trip
+ *  the run's own budget stop. */
+export const SUBJECT_READS_RUN_MARGIN_USD = 0.5
+
 /** The product classifier's per-run cap, in ITEMS (confirm checks and
  *  comments): a runaway backstop, translate-quotes' shape. At about $0.0001 a
  *  comment (gpt-4.1-mini, 25 a call; the few confirm checks on gpt-4.1 cost

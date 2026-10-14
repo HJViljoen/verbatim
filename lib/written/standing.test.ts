@@ -13,7 +13,7 @@ import type { DatedEvidence } from './evidence'
 import { invertMembers } from './pool'
 import {
   contentsOf, factsFromReadings, marketComparable, materialThemes, rungOf, standingKey, standingLine, subjectGate, subjectLenientGate,
-  subjectMaterial, type SubjectReading,
+  subjectMaterial, subjectQuotes, type SubjectReading,
 } from './standing'
 import type { StandingFact } from './types'
 
@@ -395,5 +395,26 @@ describe('contentsOf', () => {
     const themes = Array.from({ length: 8 }, (_, i) => ({ label: `T${i}`, memberIds: [`a${i}`, `b${i}`, `c${i}`] }))
     const members = invertMembers(new Map([['s', themes.flatMap((t) => t.memberIds)]]))
     expect(contentsOf('s', new Set(themes.map((t) => t.memberIds[0])), themes, members, ['s'])).toHaveLength(5)
+  })
+})
+
+describe('subjectQuotes: a subject\'s quotes, the strict gate\'s way (Market\'s subject panel, 14 Oct)', () => {
+  const gate = subjectGate(SEALAND_CLIENT_ID, COMFORT)
+
+  it('three: the preferred days first, the category before a brand within each, one a video, never a demographic citation', () => {
+    const evidence = [
+      ev({ insight: 'i1', video: 1, text: LINES[0], date: '2026-09-03T00:00:00+00:00' }),
+      ev({ insight: 'i2', video: 2, text: LINES[1], date: '2026-09-24T00:00:00+00:00', audience: 'competitor:Cotopaxi' }),
+      ev({ insight: 'i3', video: 3, text: LINES[2], date: '2026-09-25T00:00:00+00:00' }),
+      // A second line on video 3 is never a second quote from it.
+      ev({ insight: 'i1', video: 3, text: LINES[3], date: '2026-09-25T00:00:00+00:00' }),
+      { ...ev({ insight: 'i3', video: 4, text: LINES[3], date: '2026-09-25T00:00:00+00:00' }), redacted: true },
+    ]
+    const picked = subjectQuotes({ gate, memberIds: new Set(['i1', 'i2', 'i3']), evidence, market: MARKET, prefer: WEEK, count: 3 })
+    expect(picked.map((e) => e.video.uuid)).toEqual(['v3', 'v2', 'v1'])
+    // No preferred days: the category's first.
+    const month = subjectQuotes({ gate, memberIds: new Set(['i1', 'i2', 'i3']), evidence, market: MARKET, prefer: null, count: 3 })
+    expect(month.map((e) => e.video.uuid)).toEqual(['v1', 'v3', 'v2'])
+    expect(subjectQuotes({ gate, memberIds: new Set(['i1']), evidence, market: MARKET, count: 1 })).toHaveLength(1)
   })
 })

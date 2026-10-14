@@ -601,6 +601,16 @@ const PAGES: Page[] = [
   { key: 'voices-tracked', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['ossur-tracked']() }) },
   { key: 'voices-tracked-group', path: '/dashboard/voices', artboard: 'E3-Voices-Open.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['ossur-tracked-group']() }) },
   { key: 'voices-tracked-brand', path: '/dashboard/voices', artboard: 'E3-Voices-Open.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['ossur-tracked-brand']() }) },
+  // A tracked subject's panel says something (14 Oct): a ready subject in
+  // full this week and this month, a ready one on a single video, and one
+  // whose check is open and one being re-described, which keep the panel
+  // they had. No board draws a subject's panel: shot beside E2-Market-Open,
+  // the conversation's, whose anatomy it takes.
+  { key: 'market-v2-subject-rich', path: '/dashboard/market', artboard: 'E2-Market-Open.dc.html', page: () => h(MarketPage, { data: marketFixture({ subject: 'cost', subjectDetail: 'rich' }) }) },
+  { key: 'market-v2-subject-rich-month', path: '/dashboard/market', artboard: 'E2-Market-Open.dc.html', page: () => h(MarketPage, { data: marketFixture({ subject: 'cost', subjectDetail: 'rich', period: 'month' }) }) },
+  { key: 'market-v2-subject-thin', path: '/dashboard/market', artboard: 'E2-Market-Open.dc.html', page: () => h(MarketPage, { data: marketFixture({ subjects: 'tracked', subject: 'look', subjectDetail: 'thin' }) }) },
+  { key: 'market-v2-subject-open', path: '/dashboard/market', artboard: 'E2-Market-Open.dc.html', page: () => h(MarketPage, { data: marketFixture({ flagged: false, noNew: true, subjects: 'provisional', brands: 'not_counted', weeks: 'insufficient', noGroups: true, subject: 'cost', subjectDetail: 'rich' }) }) },
+  { key: 'market-v2-subject-failed', path: '/dashboard/market', artboard: 'E2-Market-Open.dc.html', page: () => h(MarketPage, { data: marketFixture({ subjects: 'tracked', subject: 'community', subjectDetail: 'rich' }) }) },
   // Content's parity pass (13 Oct): the board's shape in the thin states.
   // The thin real state (both tenants' rows on 13 Oct, as a fixture), a set
   // of one idea, a week with none written, and, with `--content-dumps <dir>`,

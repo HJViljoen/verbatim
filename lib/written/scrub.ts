@@ -106,12 +106,14 @@ export const FORECAST: readonly { name: string; re: RegExp }[] = [
 
 /** The company told what it could or should do ("Sealand could show…").
  *  "Sealand can be compared…" is a reading, not advice, so a modal before
- *  "be" passes, but for "should" and "must". */
+ *  "be" passes, but for "should" and "must". The name's start is a letter
+ *  boundary of any script (14 Oct): `\b` is ASCII's, so "Össur could…",
+ *  whose first letter is no ASCII word character, never matched. */
 export function toldWhatToDo(company: string): { name: string; re: RegExp } | null {
   const name = company.trim()
   if (name.length < 2) return null
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+')
-  return { name: 'told what to do', re: new RegExp(`\\b${escaped}(?:'s)?\\s+(?:(?:could|can|might|may)(?!\\s+be\\b)|should|must|needs?\\s+to|has\\s+to|would\\s+do\\s+well)\\b`, 'i') }
+  return { name: 'told what to do', re: new RegExp(`(?<![\\p{L}\\p{N}_])${escaped}(?:'s)?\\s+(?:(?:could|can|might|may)(?!\\s+be\\b)|should|must|needs?\\s+to|has\\s+to|would\\s+do\\s+well)\\b`, 'iu') }
 }
 
 /** The banned phrases a text names, by name, in the order listed. Exported

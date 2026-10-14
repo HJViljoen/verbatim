@@ -79,6 +79,11 @@ export interface DatedEvidence {
   /** The commenter says they work for a tracked brand (`saysTheyWorkFor`):
    *  not a consumer's voice. Absent is false. */
   insider?: boolean
+  /** A demographic citation (`insight_evidence.redacted`): it COUNTS (the
+   *  month rule reads every comment citation) and never quotes, so its
+   *  `text` is ''. Only a read asked `includeRedacted` returns one; absent is
+   *  false. */
+  redacted?: boolean
 }
 
 type EmbeddedVideo = {
@@ -103,6 +108,7 @@ type EmbeddedInsight = {
     quote: string | null
     relevance_rank: number | null
     comment_id: string | null
+    redacted?: boolean | null
     comments: {
       id: string
       comment_date: string | null
@@ -116,7 +122,7 @@ type EmbeddedInsight = {
 const EVIDENCE_SELECT = [
   'id, category, description, theme,',
   'videos(id, platform, video_id, analyzed_lane, is_client, is_competitor, competitor_name, account_name),',
-  'insight_evidence!inner(id, quote, relevance_rank, comment_id,',
+  'insight_evidence!inner(id, quote, relevance_rank, comment_id, redacted,',
   'comments!inner(id, comment_date, platform, video_id, author))',
 ].join(' ')
 
@@ -132,15 +138,18 @@ export function audienceOfVideo(v: { is_client: boolean | null; is_competitor: b
 }
 
 /** The rows the embedded read returned, flattened to one row per citation.
- *  Pure, and exported for its test. */
-export function flattenEvidence(rows: readonly EmbeddedInsight[]): Omit<DatedEvidence, 'context' | 'lang' | 'english'>[] {
+ *  A redacted (demographic) citation is kept only with `keepRedacted`, its
+ *  words never: `text` ''. Pure, and exported for its test. */
+export function flattenEvidence(rows: readonly EmbeddedInsight[], opts: { keepRedacted?: boolean } = {}): Omit<DatedEvidence, 'context' | 'lang' | 'english'>[] {
   const out: Omit<DatedEvidence, 'context' | 'lang' | 'english'>[] = []
   for (const insight of rows) {
     const v = one(insight.videos)
     if (!v?.id || !v.video_id || !v.platform) continue
     for (const e of insight.insight_evidence ?? []) {
       const c = one(e.comments)
-      if (!e.quote || !e.comment_id || !c?.comment_date) continue
+      const redacted = e.redacted === true
+      if (redacted && !opts.keepRedacted) continue
+      if ((!e.quote && !redacted) || !e.comment_id || !c?.comment_date) continue
       // The comment must sit under the insight's own video.
       if (c.video_id !== v.video_id || (c.platform ?? '').toLowerCase() !== v.platform.toLowerCase()) continue
       out.push({
@@ -153,7 +162,8 @@ export function flattenEvidence(rows: readonly EmbeddedInsight[]): Omit<DatedEvi
         commentId: String(e.comment_id),
         commentDate: c.comment_date,
         author: c.author ?? null,
-        text: e.quote,
+        text: redacted ? '' : e.quote ?? '',
+        ...(redacted ? { redacted: true } : {}),
         video: {
           uuid: String(v.id),
           platform: v.platform,
@@ -172,24 +182,28 @@ export function flattenEvidence(rows: readonly EmbeddedInsight[]): Omit<DatedEvi
  * The comment evidence of these insights dated in `[from, to)`, with each
  * quote's English (the translation cache), its video's gate context, and
  * whether its commenter says they work for one of `brands` (`insider`).
- * Throws on a read error: both callers are fail-soft one level up.
+ * `includeRedacted` keeps the demographic citations too, marked `redacted`
+ * with no words: a caller that COUNTS a subject's videos by the month rule
+ * (which reads every comment citation) asks for them; one that only quotes
+ * does not. Throws on a read error: every caller is fail-soft one level up.
  */
 export async function loadDatedEvidence(
   admin: SupabaseClient,
   clientId: string,
   insightIds: readonly string[],
   period: { from: string; to: string },
-  opts: { brands?: readonly string[] } = {},
+  opts: { brands?: readonly string[]; includeRedacted?: boolean } = {},
 ): Promise<DatedEvidence[]> {
   const ids = [...new Set(insightIds.filter(Boolean))]
   if (ids.length === 0) return []
   const pages = await mapWithLimit(chunk(ids, UUID_IN_CHUNK), READ_CONCURRENCY, async (part) => {
-    const res = await admin
+    let q = admin
       .from('audience_insights')
       .select(EVIDENCE_SELECT)
       .eq('client_id', clientId)
       .in('id', part)
-      .eq('insight_evidence.redacted', false)
+    if (!opts.includeRedacted) q = q.eq('insight_evidence.redacted', false)
+    const res = await q
       .eq('insight_evidence.source', 'comment')
       .gte('insight_evidence.comments.comment_date', period.from)
       .lt('insight_evidence.comments.comment_date', period.to)
@@ -197,10 +211,10 @@ export async function loadDatedEvidence(
     if (res.error) throw new Error(`written evidence: ${res.error.message}`)
     return (res.data ?? []) as unknown as EmbeddedInsight[]
   })
-  const flat = flattenEvidence(pages.flat())
+  const flat = flattenEvidence(pages.flat(), { keepRedacted: opts.includeRedacted })
   if (flat.length === 0) return []
   const [translations, ctx] = await Promise.all([
-    readTranslations(admin, flat.map((e) => e.text)),
+    readTranslations(admin, flat.filter((e) => !e.redacted).map((e) => e.text)),
     readQuoteContext(admin, clientId, { videoUuids: [...new Set(flat.map((e) => e.video.uuid))] }, admin),
   ])
   const brands = opts.brands ?? []
@@ -246,12 +260,15 @@ export async function loadTrackedBrands(admin: SupabaseClient, clientId: string)
   return [...new Set([company, ...rivals.map((r) => r.name.trim())].filter(Boolean))]
 }
 
-/** The gate's verdict, or the written read's own refusal of a brand insider. */
-export type WrittenVerdict = GateVerdict | { ok: false; reason: 'insider' }
+/** The gate's verdict, or the written read's own refusal of a brand insider
+ *  or a demographic citation (which counts and never quotes). */
+export type WrittenVerdict = GateVerdict | { ok: false; reason: 'insider' | 'redacted' }
 
 /** The gate's verdict on one citation, where a brand's own person never
- *  passes. Every gate in the written read goes through here. */
+ *  passes, nor a redacted one. Every gate in the written read goes through
+ *  here. */
 export function judge(e: DatedEvidence, gate: GateOptions): WrittenVerdict {
+  if (e.redacted) return { ok: false, reason: 'redacted' }
   if (e.insider) return { ok: false, reason: 'insider' }
   return quoteGate(gateInputOf(e), gate)
 }

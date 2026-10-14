@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { SEALAND_CLIENT_ID } from '../config'
 import { gateFor } from '../quote-context'
 import { INDUSTRY_AUDIENCE } from '../rivals'
-import { judge, passes, saysTheyWorkFor, type DatedEvidence } from './evidence'
+import { flattenEvidence, judge, passes, saysTheyWorkFor, type DatedEvidence } from './evidence'
 
 // A brand's own people are not the market (T3b, 30 Sep): the narrow text rule
 // that marks them, and the gate wrapper every written-read gate goes through.
@@ -66,5 +66,28 @@ describe('judge and passes', () => {
     expect(judge(row(false), gate)).toMatchObject({ ok: true })
     expect(judge(row(true), gate)).toEqual({ ok: false, reason: 'insider' })
     expect(passes(row(true), gate)).toBe(false)
+  })
+})
+
+describe('a demographic (redacted) citation: it counts, and never quotes (14 Oct)', () => {
+  const insight = (redacted: boolean, quote: string | null) => ({
+    id: 'i1', category: 'demographic_signal', description: 'Says who they are.', theme: 't',
+    videos: { id: 'v1', platform: 'tiktok', video_id: 'n1', analyzed_lane: 'full', is_client: false, is_competitor: false, competitor_name: null, account_name: 'acct' },
+    insight_evidence: [{ id: 'e1', quote, relevance_rank: 1, comment_id: 'c1', redacted, comments: { id: 'c1', comment_date: '2026-10-02T00:00:00Z', platform: 'tiktok', video_id: 'n1', author: 'a' } }],
+  })
+
+  it('flattenEvidence keeps one only where asked, with no words', () => {
+    expect(flattenEvidence([insight(true, 'I am a below knee amputee')])).toEqual([])
+    expect(flattenEvidence([insight(true, 'I am a below knee amputee')], { keepRedacted: true })).toEqual([
+      expect.objectContaining({ evidenceId: 'e1', text: '', redacted: true, video: expect.objectContaining({ uuid: 'v1' }) }),
+    ])
+    expect(flattenEvidence([insight(true, null)], { keepRedacted: true })).toHaveLength(1)
+    // An ordinary row with no quote is still no row.
+    expect(flattenEvidence([insight(false, null)], { keepRedacted: true })).toEqual([])
+  })
+
+  it('judge refuses it, whatever the gate', () => {
+    const [row] = flattenEvidence([insight(true, 'x')], { keepRedacted: true })
+    expect(judge({ ...row, context: null }, {})).toEqual({ ok: false, reason: 'redacted' })
   })
 })

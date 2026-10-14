@@ -7,10 +7,11 @@ import type { UnusualFlag } from '../week'
 import {
   buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, convHref, closeHref, flagCardOf, flagVerdict, groupsOf,
   lineBars, marketLongRunFor, marketMonths, marketParams, monthsText, notchOf, ourReadOf, panelStats, pickHero, pickWeekSides, platformRows, subjectHref,
-  tableMonths, convOf, doingOf, alsoTalkedOf, earlierNewOf, leadDoing, withMonthPlatforms,
+  subjectDetailOf, tableMonths, convOf, doingOf, alsoTalkedOf, earlierNewOf, leadDoing, withMonthPlatforms,
   type ConvInput, type ConvPanel, type MarketConv, type MarketData, type MarketMonth, type MarketParams, type MarketWeek, type MonthCount,
-  type PanelAt, type SubjectFact, type TopRow,
+  type PanelAt, type SubjectDetail, type SubjectFact, type TopRow,
 } from './market'
+import type { DatedEvidence } from '../../written/evidence'
 import type { LongRunReadData, WeekReadData } from '../../written/types'
 import type { ThemeMonthLine } from '../../reading/cross'
 
@@ -333,6 +334,11 @@ export interface FixtureOptions {
    *  (October still filling with none of its own: September's stands in),
    *  `unread` (the read failed), or none. Only the month period prints it. */
   longRun?: 'full' | 'partial' | 'earlier' | 'unread' | null
+  /** The open subject's blocks and its own read (14 Oct): `rich` (Cost &
+   *  access, a ready subject on many videos, its written read) or `thin`
+   *  (Look & style under `subjects: 'tracked'`, ready on one video, code's
+   *  one line). Absent: the panel as it was before them. */
+  subjectDetail?: 'rich' | 'thin' | null
 }
 
 const MONTH: MarketMonth = {
@@ -555,7 +561,13 @@ export function marketFixture(opts: FixtureOptions = {}): MarketData {
     table,
     panel,
     brands: opts.brands ?? 'counted',
-    subjectPanel: opts.subject ? buildSubjectPanel({ id: subjectId(opts.subject), facts, convs, period, p, read, month, flag: flag?.conv ? { id: flag.conv.id, verdict: flag.verdict } : null }) : null,
+    subjectPanel: opts.subject
+      ? buildSubjectPanel({
+          id: subjectId(opts.subject), facts, convs, period, p, read: opts.subjectDetail ? withSubjectReads(read) : read, month,
+          flag: flag?.conv ? { id: flag.conv.id, verdict: flag.verdict } : null,
+          detail: opts.subjectDetail ? fixtureSubjectDetail(opts.subjectDetail, period, month) : null,
+        })
+      : null,
     // The loader's own rule (`marketLongRunFor`): the month period only, the
     // view's month's read, or on a filling month the newest earlier month's.
     longRun: period === 'month' && opts.longRun && opts.longRun !== 'unread'
@@ -602,6 +614,135 @@ function fixturePanel(n: number, at: PanelAt, p: MarketParams, period: MarketPar
     ],
     askHref: '/dashboard/agent?ask=What%20does%20my%20market%20say%20about%20insurance%20refusals%20for%20powered%20knees%3F',
     closeHref: closeHref(p, at),
+  }
+}
+
+// ---- A ready subject's panel (14 Oct) --------------------------------------------------
+//
+// Cost & access as a ready subject on many videos (`rich`), and Look & style
+// as one ready on a single video (`thin`): the members' comment citations in
+// October, as `loadDatedEvidence` returns them (one demographic citation
+// among them, which counts and never quotes), assembled by the page's own
+// builder (`subjectDetailOf`). Illustrative words, no tenant row read.
+
+const COST_MEMBERS = [3, 6, 13].flatMap((n) => [1, 2, 3, 4].map((i) => `ins-${n}-${i}`))
+const KIND_OF: Record<number, string> = { 3: 'pain_point', 6: 'pain_point', 13: 'question', 15: 'praise', 16: 'question' }
+
+/** Comments that say something about cost and access, for the quotes. The
+ *  rest of the rich fixture's comments are too short to quote. */
+const COST_WORDS = [
+  'Third appeal for my powered knee was refused. Insurance says a mechanical knee is enough for me.',
+  'My insurance covered the socket but not the knee, so the rest of the cost is on us now.',
+  'How do you get medical aid to pay for a microprocessor knee? The paperwork never ends.',
+  'Got my knee approved by insurance after a year of appeals and letters from my prosthetist.',
+  'Paying out of pocket for a liner every few months adds up, and nobody covers it.',
+  'The cost of a running blade is more than my car and insurance will not touch it.',
+]
+
+const SUBJECT_PERSONAS = [
+  { ...PERSONAS[0], insightIds: ['ins-3-1', 'ins-3-2', 'ins-6-1'] },
+  { ...PERSONAS[1], insightIds: ['ins-13-1', 'ins-6-2', 'ins-16-1'] },
+  { ...PERSONAS[2], insightIds: ['ins-1-1'] },
+  { ...PERSONAS[3], insightIds: [] },
+]
+
+/** One citation, shaped as the evidence read returns it. */
+function citation(o: { i: number; key: string; insight: string; platform: string; audience: string; day: number; text: string; redacted?: boolean }): DatedEvidence {
+  const n = Number(o.insight.split('-')[1])
+  const videoId = `${o.key}-${o.i}`
+  return {
+    insightId: o.insight,
+    kind: KIND_OF[n] ?? null,
+    description: `What people said in ${o.insight}.`,
+    evidenceId: `ev-${o.key}-${o.i}`,
+    rank: 1,
+    commentId: `cm-${o.key}-${o.i}`,
+    commentDate: `2026-10-${String(o.day).padStart(2, '0')}T12:00:00.000Z`,
+    author: `viewer${o.i}`,
+    text: o.redacted ? '' : o.text,
+    ...(o.redacted ? { redacted: true } : {}),
+    video: { uuid: `vid-${videoId}`, platform: o.platform, videoId, audience: o.audience, lane: 'full', accountName: `creator${o.i}` },
+    context: {
+      platform: o.platform, videoId, caption: 'Living with a prosthetic leg', hashtags: ['amputee'], topics: ['prosthetics'], accountName: `creator${o.i}`,
+      isClient: false, isCompetitor: o.audience !== 'industry-other', competitorName: o.audience.startsWith('competitor:') ? o.audience.slice('competitor:'.length) : null,
+      source: 'discovered', segment: 'market',
+    },
+  }
+}
+
+/** Cost & access's October: 64 videos (the level's 70 less those only spoken
+ *  on camera), 40 of them in the week of 5 Oct, three filed under Ottobock;
+ *  or Look & style's one video. */
+export function fixtureSubjectEvidence(kind: 'rich' | 'thin'): { evidence: DatedEvidence[]; members: Set<string>; namings: { comment_id: string; video_id: string; name: string }[] } {
+  if (kind === 'thin') {
+    const evidence = [citation({ i: 1, key: 'look', insight: 'ins-15-1', platform: 'instagram', audience: 'industry-other', day: 6, text: 'I love the carbon cover on my leg, people ask about the design and the finish all the time.' })]
+    return { evidence, members: new Set([15, 16].flatMap((n) => [1, 2, 3, 4].map((i) => `ins-${n}-${i}`))), namings: [] }
+  }
+  const platforms = ['tiktok', 'tiktok', 'instagram', 'youtube']
+  const evidence = Array.from({ length: 64 }, (_, i) => citation({
+    i,
+    key: 'cost',
+    insight: COST_MEMBERS[i % COST_MEMBERS.length],
+    platform: platforms[i % platforms.length],
+    audience: i % 21 === 4 ? 'competitor:Ottobock' : 'industry-other',
+    day: 1 + (i % 11),
+    text: COST_WORDS[i] ?? 'Same here.',
+    redacted: i === 11,
+  }))
+  const namings = [
+    ...evidence.filter((_, i) => i % 10 === 0).map((e) => ({ comment_id: e.commentId, video_id: e.video.uuid, name: 'Össur' })),
+    ...evidence.filter((_, i) => i % 13 === 7).map((e) => ({ comment_id: e.commentId, video_id: e.video.uuid, name: 'Ottobock' })),
+  ]
+  return { evidence, members: new Set(COST_MEMBERS), namings }
+}
+
+/** The open subject's blocks, by the page's own builder. */
+export function fixtureSubjectDetail(kind: 'rich' | 'thin', period: MarketParams['period'], month: MarketMonth): SubjectDetail {
+  const { evidence, members, namings } = fixtureSubjectEvidence(kind)
+  const subject = kind === 'rich'
+    ? { id: subjectId('cost'), name: 'Cost & access', claim: 'Cost & access. Comments about what prosthetic devices cost, insurance, medical aid and funding, and cost or paperwork standing between people and the device they need.' }
+    : { id: subjectId('look'), name: 'Look & style', claim: 'Look & style. Comments about how prosthetics look: design, covers and finishes, showing or hiding the device.' }
+  return subjectDetailOf({
+    subjectId: subject.id, name: subject.name, evidence, members, market: new Set(['industry-other', 'competitor:Ottobock']),
+    period, week: period === 'week' ? WINDOW : null, month, marketWeek: period === 'week' ? WEEK.market.videos : null,
+    personas: SUBJECT_PERSONAS, namings, brands: 'counted', company: 'Össur', noun: null,
+    gate: { claim: subject.claim, requireRelevance: true },
+  })
+}
+
+/** The published read with the subjects' own reads on it, as
+ *  `write-subject-reads` adds them: Cost & access written, Look & style thin
+ *  (code's line). */
+export function withSubjectReads(read: WeekReadData): WeekReadData {
+  if (read.version !== 2) return read
+  return {
+    ...read,
+    subjectReads: {
+      version: 1,
+      promptVersion: 'subject_read_v1',
+      month: OCT,
+      read: { from: `${OCT}T00:00:00.000Z`, to: WINDOW.to },
+      status: 'ready',
+      model: 'gpt-5.4',
+      costUsd: 0.09,
+      subjects: [
+        {
+          subjectId: subjectId('cost'), name: 'Cost & access', status: 'ready',
+          saying: [
+            'People describe insurance refusals for powered knees as a long fight: appeals, letters from a prosthetist, and a mechanical knee offered in its place. Parents and partners describe the same paperwork from the other side, as the person who files it.',
+            'Paying out of pocket runs through all of it. Liners, sockets and running blades are named as costs that medical aid leaves to the family, and some set up fundraisers when the funding does not come.',
+          ],
+          means: 'Össur\'s knees and feet reach people through insurers and medical aid as much as through clinics. Where cover is refused, the paperwork decides whether a device is fitted at all.',
+          basedOn: [id(3), id(6), id(13)],
+        },
+        {
+          subjectId: subjectId('look'), name: 'Look & style', status: 'thin',
+          saying: ['In October so far, talk about Look & style sat in “Covers and finishes” and “Showing it or hiding it”.'],
+          means: '',
+          basedOn: [id(15), id(16)],
+        },
+      ],
+    },
   }
 }
 

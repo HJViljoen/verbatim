@@ -397,11 +397,13 @@ describe('the pipeline carries write-post-ideas', () => {
   const src = readFileSync(new URL('../../inngest/functions/pipeline.ts', import.meta.url), 'utf8')
   const ids = stepIds(src)
 
-  it('as one additive id in its own position: after write-week-read, immediately before write-longrun-read (74 in all, with the product readings\' two)', () => {
-    expect(ids).toHaveLength(74)
+  it('as one additive id in its own position: after write-week-read and the subjects\' reads, immediately before write-longrun-read (75 in all, with the product readings\' two and write-subject-reads)', () => {
+    expect(ids).toHaveLength(75)
     expect(ids.filter((id) => id === 'write-post-ideas')).toHaveLength(1)
     const at = ids.indexOf('write-post-ideas')
-    expect(ids[at - 1]).toBe('write-week-read')
+    // lib/written/subject-reads.test.ts pins write-subject-reads (14 Oct).
+    expect(ids[at - 1]).toBe('write-subject-reads')
+    expect(ids[at - 2]).toBe('write-week-read')
     expect(ids[at + 1]).toBe('write-longrun-read')
   })
 

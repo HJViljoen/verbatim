@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { UUID_IN_CHUNK } from '../chunk'
 import { isLongRunData, isMissingWeekReads, WEEK_READS_TABLE, type StoredLongRun } from './store'
-import type { WeekReadData } from './types'
+import type { SubjectRead, WeekReadData } from './types'
 
 /**
  * THE PUBLISHED READ: the ONLY way a page reads `week_reads`.
@@ -98,6 +98,23 @@ export async function loadPublishedWeekRead(
     windowEnd: row.window_end,
     data: row.data as WeekReadData,
   }
+}
+
+/**
+ * A subject's own read on the published week read (14 Oct, `subjectReads`,
+ * added to the run's row by `write-subject-reads`): its entry where the reads
+ * are of `month` (the month the subject panel prints its level for) and it
+ * has words to print, a written read or a thin one; else null, and the panel
+ * says the week read's sentence instead. It takes the read the page already
+ * holds (`loadPublishedWeekRead`): no read of its own. Pure.
+ */
+export function subjectReadOf(read: WeekReadData | null | undefined, subjectId: string, month: string): SubjectRead | null {
+  if (!read || read.version !== 2) return null
+  const reads = read.subjectReads
+  if (!reads || reads.month.slice(0, 7) !== month.slice(0, 7)) return null
+  const r = reads.subjects.find((s) => s.subjectId === subjectId)
+  if (!r || (r.status !== 'ready' && r.status !== 'thin')) return null
+  return r.saying.some((p) => p.trim()) ? r : null
 }
 
 /**

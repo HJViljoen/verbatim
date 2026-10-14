@@ -37,6 +37,7 @@ import { runPassE } from '@/lib/pipeline/pass-e'
 import { reevaluatePlanChecks } from '@/lib/ask/reevaluate'
 import { measureStatements, measureSummary, statementMonth, statementsBudget } from '@/lib/statements/measure'
 import { runWeekReadStep } from '@/lib/written/step'
+import { runSubjectReadsStep } from '@/lib/written/subject-reads-step'
 import { runLongRunStep } from '@/lib/written/longrun'
 import { runPostIdeasStep } from '@/lib/post-ideas/step'
 import { isTestRun } from '@/lib/schedules/due'
@@ -2232,6 +2233,31 @@ export const runPipeline = inngest.createFunction(
       })
       .catch((e) => {
         console.error(`[write-week-read] out of retries: ${e instanceof Error ? e.message : String(e)}`)
+        return null
+      })
+
+    // Each ready subject's own read (14 Oct; lib/written/subject-reads-step.ts):
+    // what people said across the conversations the pages place inside it,
+    // then what it means for the company, one call per subject with enough to
+    // say (a thin subject gets code's one line), scrubbed as the week read is,
+    // and added to this run's week read row (`data.subjectReads`) for Market's
+    // subject panel. An ADDITIVE id in its own position, immediately after
+    // write-week-read and before write-post-ideas: 74 ids before it, 75 with
+    // it.
+    //
+    // NON-FATAL in the week read's way: what was written is saved first; a
+    // transient failure before the last attempt then throws, so Inngest
+    // retries the step and writes only what is missing; on the last attempt,
+    // and on any other failure at once, the body never throws and alerts the
+    // operator ONCE, inside the step. A TEST run writes nothing; no table, no
+    // ready week read or no ready subject is a no-op that spends nothing.
+    // Logged here, never noteError'd: a clean run must not read 'partial'
+    // over a subject's read.
+    await step
+      .run('write-subject-reads', () =>
+        runSubjectReadsStep(createAdminClient(), { clientId, runId, testRun: isTestRun({ id: runId, options }), lastAttempt: attempt >= (maxAttempts ?? 3) - 1 }))
+      .catch((e) => {
+        console.error(`[write-subject-reads] out of retries: ${e instanceof Error ? e.message : String(e)}`)
         return null
       })
 

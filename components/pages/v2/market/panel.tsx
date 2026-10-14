@@ -6,10 +6,12 @@ import { ProportionBar } from '@/components/proportion-bar'
 import { FlagChip, InPlacePanel, MiniBars, PanelSection, PanelTitle, StatCell, StatRow, TickBarRow, type PerBreakpoint } from '@/components/v2'
 import { fmtInt, fmtPct } from '@/lib/format'
 import { marketLabelsOf } from '@/lib/brands/labels'
-import { MARKET_PANEL_MONTHS, type ConvPanel, type MarketData, type MonthCount, type SubjectPanel } from '@/lib/pages/v2/market'
+import { MARKET_PANEL_MONTHS, type ConvPanel, type MarketData, type MonthCount, type PanelQuote, type StoredLine, type SubjectDetail, type SubjectPanel } from '@/lib/pages/v2/market'
+import type { WhoPart } from '@/lib/written/types'
 import { translationLabel, translationNote } from '@/components/quote-block'
 import { cn } from '@/lib/utils'
 import { About, ConvChip, ConvRow, Label, OLINK, SetApartTag, Stored, newVerdict } from './parts'
+import { PlatformMonthRow } from './rail'
 import { BRANDS_NOT_COUNTED, BRANDS_NOT_READ } from '@/lib/pages/v2/voices'
 
 // THE OPEN PANELS (depth v2, T3; E2-Market-Open): a conversation in full, or a
@@ -40,14 +42,6 @@ function shareBars(bars: readonly MonthCount[]) {
 /** `notchAt`: the placement's notch where the page placed the panel among
  *  its cards (T9); alone, the loader's. */
 export function ConversationPanel({ panel, data, notchAt }: { panel: ConvPanel; data: MarketData; notchAt?: number | PerBreakpoint }) {
-  const whoTotal = panel.who?.n ?? 0
-  const words = marketLabelsOf(data.noun)
-  const whoSegments = (panel.who?.parts ?? []).map((p) => ({
-    label: p.about === 'client' ? data.brand : p.about === 'market' ? words.short : p.about.slice('rival:'.length),
-    count: p.videos,
-    pct: whoTotal > 0 ? Math.round((100 * p.videos) / whoTotal) : 0,
-    color: p.about === 'client' ? 'bg-you' : p.about === 'market' ? 'bg-track' : 'bg-comp',
-  }))
   const chip = panel.flag
     ? <FlagChip verdict={panel.flag} />
     : panel.isNew && data.month.category != null
@@ -99,8 +93,7 @@ export function ConversationPanel({ panel, data, notchAt }: { panel: ConvPanel; 
             </PanelSection>
           ) : panel.who ? (
             <PanelSection label="Who it’s about">
-              {panel.who.parts.some((p) => p.about !== 'market') ? <ProportionBar of="videos" segments={whoSegments} /> : null}
-              <About parts={panel.who.parts} brand={data.brand} noun={data.noun} />
+              <WhoLine parts={panel.who.parts} data={data} />
             </PanelSection>
           ) : null}
           {panel.doing ? (
@@ -129,27 +122,7 @@ export function ConversationPanel({ panel, data, notchAt }: { panel: ConvPanel; 
           ) : null}
         </div>
       </div>
-      {panel.quotes.length > 0 ? (
-        <PanelSection label={<>In their words · <span data-copy="figure">{panel.quotes.length}</span> of the comments</>}>
-          <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-3">
-            {panel.quotes.map((q, i) => {
-              const note = translationNote({ lang: q.lang, english: q.english })
-              const label = translationLabel(note)
-              return (
-                <figure key={i} className="m-0 flex flex-col gap-1.5 rounded-[10px] bg-inner px-[15px] py-[13px]">
-                  <blockquote data-copy="quote" className="m-0 font-serif text-[15.5px] italic leading-[1.5] text-foreground">“{q.text}”</blockquote>
-                  {label ? <span className="text-[12px] text-muted-foreground">{label}</span> : null}
-                  {note.english ? <p data-copy="quote" className="m-0 font-serif text-[14px] leading-[1.5] text-muted-foreground">{note.english}</p> : null}
-                  <figcaption className="flex flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
-                    <span>{q.source}</span>
-                    {q.about === 'client' ? <BrandChip who="you">{data.brand}</BrandChip> : q.about && q.about !== 'market' ? <BrandChip who="rival">{q.about.slice('rival:'.length)}</BrandChip> : null}
-                  </figcaption>
-                </figure>
-              )
-            })}
-          </div>
-        </PanelSection>
-      ) : null}
+      {panel.quotes.length > 0 ? <QuotesSection quotes={panel.quotes} data={data} /> : null}
       <div className="flex flex-wrap items-center gap-[18px] border-t border-track pt-5">
         <Link href={panel.askHref} className={ASK}><Sparkles className="size-3.5" aria-hidden />Ask the Agent about this</Link>
       </div>
@@ -157,8 +130,162 @@ export function ConversationPanel({ panel, data, notchAt }: { panel: ConvPanel; 
   )
 }
 
+/** "Our read" on a subject: its own read where the published read holds one
+ *  (14 Oct), what people said and then what it means for the company; else
+ *  the week read's sentence on it. */
+function subjectOurRead(panel: SubjectPanel): { lines: StoredLine[]; means: StoredLine | null } {
+  if (panel.state === 'ready' && panel.read && panel.read.lines.length > 0) return { lines: panel.read.lines, means: panel.read.means ?? null }
+  return { lines: panel.sentence ? [panel.sentence] : [], means: null }
+}
+
+/** The quotes a panel prints: the conversation panel's markup, one card each. */
+function QuotesSection({ quotes, data }: { quotes: readonly PanelQuote[]; data: MarketData }) {
+  return (
+    <PanelSection label={<>In their words · <span data-copy="figure">{quotes.length}</span> of the comments</>}>
+      <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-3">
+        {quotes.map((q, i) => {
+          const note = translationNote({ lang: q.lang, english: q.english })
+          const label = translationLabel(note)
+          return (
+            <figure key={i} className="m-0 flex flex-col gap-1.5 rounded-[10px] bg-inner px-[15px] py-[13px]">
+              <blockquote data-copy="quote" className="m-0 font-serif text-[15.5px] italic leading-[1.5] text-foreground">“{q.text}”</blockquote>
+              {label ? <span className="text-[12px] text-muted-foreground">{label}</span> : null}
+              {note.english ? <p data-copy="quote" className="m-0 font-serif text-[14px] leading-[1.5] text-muted-foreground">{note.english}</p> : null}
+              <figcaption className="flex flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
+                <span>{q.source}</span>
+                {q.about === 'client' ? <BrandChip who="you">{data.brand}</BrandChip> : q.about && q.about !== 'market' ? <BrandChip who="rival">{q.about.slice('rival:'.length)}</BrandChip> : null}
+              </figcaption>
+            </figure>
+          )
+        })}
+      </div>
+    </PanelSection>
+  )
+}
+
+/** Who a set of videos is about, as the conversation panel draws it: the bar
+ *  where a brand is in it, then the running line. */
+function WhoLine({ parts, data }: { parts: readonly WhoPart[]; data: MarketData }) {
+  const total = parts.reduce((s, p) => s + p.videos, 0)
+  const words = marketLabelsOf(data.noun)
+  const segments = parts.map((p) => ({
+    label: p.about === 'client' ? data.brand : p.about === 'market' ? words.short : p.about.slice('rival:'.length),
+    count: p.videos,
+    pct: total > 0 ? Math.round((100 * p.videos) / total) : 0,
+    color: p.about === 'client' ? 'bg-you' : p.about === 'market' ? 'bg-track' : 'bg-comp',
+  }))
+  return (
+    <>
+      {parts.some((p) => p.about !== 'market') ? <ProportionBar of="videos" segments={segments} /> : null}
+      <About parts={parts} brand={data.brand} noun={data.noun} />
+    </>
+  )
+}
+
+/**
+ * A READY subject's blocks (14 Oct): the conversation panel's right-hand
+ * column over the subject's videos. This week, who it is about and where
+ * each print the week with the month beside it (decision 1).
+ */
+function SubjectBlocks({ detail, data }: { detail: SubjectDetail; data: MarketData }) {
+  const week = detail.basis === 'week'
+  return (
+    <div className="grid min-w-0 grid-cols-1 gap-x-7 gap-y-[26px] sm:grid-cols-2">
+      {detail.brands !== 'counted' ? (
+        <PanelSection label="Who it’s about">
+          <p className="m-0 text-[13.5px] text-muted-foreground">{detail.brands === 'not_counted' ? BRANDS_NOT_COUNTED : BRANDS_NOT_READ}</p>
+        </PanelSection>
+      ) : detail.who ? (
+        <PanelSection label={<>Who it’s about{week ? <span className="normal-case tracking-normal"> · this week</span> : null}</>}>
+          <WhoLine parts={detail.who.parts} data={data} />
+          {week && detail.who.month ? (
+            <div className="flex flex-col gap-1">
+              <Label className="normal-case tracking-normal">{data.month.text}</Label>
+              <About parts={detail.who.month.parts} brand={data.brand} noun={data.noun} />
+            </div>
+          ) : null}
+        </PanelSection>
+      ) : null}
+      {detail.doing ? (
+        <PanelSection label={<>What people did · <span data-copy="level">of {fmtInt(detail.doing.n)}</span> {detail.doing.text}</>}>
+          {detail.doing.rows.map((r) => (
+            <TickBarRow key={r.kind} name={r.label} value={fmtInt(r.k)} pct={r.n > 0 ? (100 * r.k) / r.n : 0} valueWidth="narrow" label={`${fmtInt(r.k)} of ${fmtInt(r.n)}`} />
+          ))}
+        </PanelSection>
+      ) : null}
+      {detail.groups.length > 0 ? (
+        <PanelSection label="Who’s saying it">
+          {detail.groups.map((g) => (
+            <Link key={g.key} href={g.href} className="-mx-2 rounded-md px-2 py-1 text-[14.5px] text-foreground no-underline hover:bg-inner">
+              <span data-copy="subject" data-slot="pass_e_persona">{g.name}</span>
+            </Link>
+          ))}
+          <p className="m-0 text-[12px] text-muted-foreground">Each opens in Voices</p>
+        </PanelSection>
+      ) : null}
+      {detail.platforms ? (
+        <PanelSection label="Where">
+          {week && detail.platforms.month ? (
+            // This week: each platform's week beside its month (decision 1).
+            <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-baseline gap-x-4 gap-y-1.5 text-[13px]">
+              <span />
+              <span className="text-right text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">This week</span>
+              <span className="text-right text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{detail.platforms.month.text}</span>
+              {detail.platforms.rows.map((r) => (
+                <PlatformMonthRow key={r.platform} label={r.label} week={r.videos} month={detail.platforms!.month!.counts[r.platform] ?? 0} n={detail.platforms!.month!.n} />
+              ))}
+            </div>
+          ) : detail.platforms.rows.map((r, i) => (
+            <TickBarRow key={r.platform} name={r.label} value={fmtInt(r.videos)} pct={r.pct} tone="ink" valueWidth="narrow" label={`${fmtInt(r.videos)} of ${fmtInt(detail.platforms!.n)}`} className={i > 2 ? 'opacity-80' : undefined} />
+          ))}
+        </PanelSection>
+      ) : null}
+    </div>
+  )
+}
+
 export function SubjectPanelView({ panel, data, notchAt }: { panel: SubjectPanel; data: MarketData; notchAt?: number | PerBreakpoint }) {
   const week = data.period === 'week'
+  // Ruling U6: the blocks rest on the subject's membership, so a READY
+  // subject alone has them; every other state keeps the panel as it was.
+  const detail = panel.state === 'ready' ? panel.detail ?? null : null
+  const ourRead = subjectOurRead(panel)
+  const left = (
+    <div className="flex min-w-0 flex-col gap-[26px]">
+      {ourRead.lines.length > 0 ? (
+        <PanelSection label="Our read">
+          {ourRead.lines.map((l, i) => <Stored key={i} line={l} slot="week_read" className="m-0 text-[15.5px] leading-[1.62] text-foreground" />)}
+          {ourRead.means ? (
+            <>
+              <Label className="mt-1 normal-case tracking-normal">What it means for {data.brand}</Label>
+              <Stored line={ourRead.means} slot="week_read" className="m-0 text-[15.5px] leading-[1.62] text-foreground" />
+            </>
+          ) : null}
+        </PanelSection>
+      ) : null}
+      {panel.bars.length > 0 ? (
+        <PanelSection label="Month by month · share of your market’s videos">
+          <MiniBars bars={shareBars(panel.bars)} size="lg" className="max-sm:hidden" label={`Share of the market's videos about ${panel.name}, month by month`} />
+          <MiniBars bars={shareBars(panel.bars).slice(-3)} size="md" className="sm:hidden" label={`Share of the market's videos about ${panel.name}, month by month`} />
+        </PanelSection>
+      ) : null}
+    </div>
+  )
+  const inside = (
+    <PanelSection label={<>Conversations inside it {week ? <span className="normal-case tracking-normal">· this week, and {data.month.text}</span> : null}</>}>
+      {panel.inside.length > 0
+        ? panel.inside.map((c) => (
+          <ConvRow
+            key={c.id}
+            href={c.href}
+            label={c.label}
+            chip={<><ConvChip flag={c.flag} isNew={c.isNew} id={c.id} label={c.label} k={c.month ?? c.count ?? 0} n={data.month.category ?? 0} month={data.month.month} /><SetApartTag setApart={c.setApart} /></>}
+            counts={week ? [c.count, c.month] : [c.count]}
+          />
+        ))
+        : <p className="m-0 text-[13.5px] text-muted-foreground">No conversation in it reached three videos.</p>}
+    </PanelSection>
+  )
   return (
     <InPlacePanel
       id="subject-panel"
@@ -184,38 +311,30 @@ export function SubjectPanelView({ panel, data, notchAt }: { panel: SubjectPanel
       ) : null}
       {panel.level ? (
         <StatRow>
+          {/* This week: the week's videos beside the month's level (decision 1). */}
+          {detail?.week ? <StatCell value={detail.week.k} of={detail.week.n} label="videos in your market this week" /> : null}
           <StatCell value={panel.level.k} of={panel.level.n} label={`videos in your market, ${panel.monthText}`} />
           <StatCell value={`${Math.round(panel.level.pct)}%`} label={<>of the market’s videos <span data-copy="verdict"><MovementBadge verdict={panel.verdict} unit="pts" good="neutral" bandTip /></span></>} />
         </StatRow>
       ) : null}
-      <div className="grid grid-cols-1 gap-10 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
-        <div className="flex min-w-0 flex-col gap-[26px]">
-          {panel.sentence ? (
-            <PanelSection label="Our read">
-              <Stored line={panel.sentence} slot="week_read" className="m-0 text-[15.5px] leading-[1.62] text-foreground" />
-            </PanelSection>
-          ) : null}
-          {panel.bars.length > 0 ? (
-            <PanelSection label="Month by month · share of your market’s videos">
-              <MiniBars bars={shareBars(panel.bars)} size="lg" className="max-sm:hidden" label={`Share of the market's videos about ${panel.name}, month by month`} />
-              <MiniBars bars={shareBars(panel.bars).slice(-3)} size="md" className="sm:hidden" label={`Share of the market's videos about ${panel.name}, month by month`} />
-            </PanelSection>
-          ) : null}
+      {detail ? (
+        // THE CONVERSATION PANEL'S ANATOMY (14 Oct): our read and the month
+        // line, the four blocks beside them, the quotes, then the
+        // conversations inside it.
+        <>
+          <div className="grid grid-cols-1 gap-10 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+            {left}
+            <SubjectBlocks detail={detail} data={data} />
+          </div>
+          {detail.quotes.length > 0 ? <QuotesSection quotes={detail.quotes} data={data} /> : null}
+          {inside}
+        </>
+      ) : (
+        <div className="grid grid-cols-1 gap-10 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+          {left}
+          {inside}
         </div>
-        <PanelSection label={<>Conversations inside it {week ? <span className="normal-case tracking-normal">· this week, and {data.month.text}</span> : null}</>}>
-          {panel.inside.length > 0
-            ? panel.inside.map((c) => (
-              <ConvRow
-                key={c.id}
-                href={c.href}
-                label={c.label}
-                chip={<><ConvChip flag={c.flag} isNew={c.isNew} id={c.id} label={c.label} k={c.month ?? c.count ?? 0} n={data.month.category ?? 0} month={data.month.month} /><SetApartTag setApart={c.setApart} /></>}
-                counts={week ? [c.count, c.month] : [c.count]}
-              />
-            ))
-            : <p className="m-0 text-[13.5px] text-muted-foreground">No conversation in it reached three videos.</p>}
-        </PanelSection>
-      </div>
+      )}
       <div className="flex flex-wrap items-center gap-[18px] border-t border-track pt-5">
         <Link href={panel.askHref} className={ASK}><Sparkles className="size-3.5" aria-hidden />Ask the Agent about this</Link>
         <Label className="normal-case tracking-normal">Subjects are named in Settings</Label>

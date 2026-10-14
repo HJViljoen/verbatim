@@ -60,6 +60,27 @@ export function notReadyIds(s: SubjectPlacement | null | undefined): Set<string>
   return new Set([...(s?.pending?.order ?? []), ...(s?.failed?.order ?? [])])
 }
 
+/** Each subject's member insights, off the placement's one membership read
+ *  (every tier), so a reader that already holds the placement reads no
+ *  membership again (Market's subject panel, the subjects' reads; 14 Oct).
+ *  Every subject the placement orders has an entry, empty where it holds no
+ *  member. Pure. */
+export function placementMembers(s: SubjectPlacement | null | undefined): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>()
+  for (const tier of [s, s?.pending, s?.failed]) {
+    if (!tier) continue
+    for (const id of tier.order) if (!out.has(id)) out.set(id, new Set())
+    for (const [insight, subjects] of tier.subjectsOf) {
+      for (const id of subjects) {
+        const held = out.get(id) ?? new Set<string>()
+        held.add(insight)
+        out.set(id, held)
+      }
+    }
+  }
+  return out
+}
+
 /** The fewest of a conversation's member insights a subject must hold, and
  *  the share of them (the written read's rule, lib/written/pool.ts
  *  `subjectForTheme`; the test pins the two together). */

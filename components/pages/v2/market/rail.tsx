@@ -161,11 +161,12 @@ export function PlatformsCard({ block, data }: { block: PlatformsBlock; data: Ma
   )
 }
 
-/** One platform's week, then its month with the month's n. */
-function PlatformMonthRow({ label, color, week, month, n }: { label: string; color: string; week: number; month: number; n: number }) {
+/** One platform's week, then its month with the month's n (the rail's, and a
+ *  subject panel's "Where" this week, with no swatch). */
+export function PlatformMonthRow({ label, color, week, month, n }: { label: string; color?: string; week: number; month: number; n: number }) {
   return (
     <>
-      <span className="inline-flex items-center gap-1.5"><i aria-hidden className={cn('inline-block size-2 rounded-[2px]', color)} />{label}</span>
+      <span className="inline-flex items-center gap-1.5">{color ? <i aria-hidden className={cn('inline-block size-2 rounded-[2px]', color)} /> : null}{label}</span>
       <span data-copy="figure" className="text-right font-mono tabular-nums">{fmtInt(week)}</span>
       <span data-copy="level" className="text-right font-mono tabular-nums text-muted-foreground">{fmtInt(month)} of {fmtInt(n)}</span>
     </>

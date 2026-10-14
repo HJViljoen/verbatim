@@ -94,10 +94,16 @@ export class WeeklyReadNotReadyError extends Error {
 }
 
 /** The snapshot's data for a stored read. Pure: the builder below and the
- *  preview script both go through it. */
+ *  preview script both go through it. The subjects' own reads
+ *  (`subjectReads`, written onto the run's row for Market's subject panel, 14
+ *  Oct) are no part of the issue: nothing in it prints them, so the snapshot
+ *  does not carry them. */
 export function weeklyReadSnapshotData(a: { company: string; runId: string; read: WeekReadData; writtenAt: string; lines?: readonly WeeklyReadLine[] }): WeeklyReadSnapshotData {
   const company = a.company.trim()
   const period = weekReadDates(a.read.window)
+  const read: WeekReadData = a.read.version === 2 && a.read.subjectReads
+    ? (({ subjectReads: _left, ...rest }) => rest)(a.read)
+    : a.read
   return {
     version: WEEKLY_READ_SNAPSHOT_VERSION,
     kind: 'weekly_read',
@@ -108,7 +114,7 @@ export function weeklyReadSnapshotData(a: { company: string; runId: string; read
     month: a.read.month,
     runId: a.runId,
     subject: weeklyReadSubject(company, a.read, period),
-    read: a.read,
+    read,
     lines: [...(a.lines ?? [])],
   }
 }
