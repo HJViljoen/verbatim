@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { OSSUR_SUBJECTS } from '../../scripts/seeds/ossur-subjects'
 import { OSSUR_SUBJECTS_2 } from '../../scripts/seeds/ossur-subjects-2'
+import { OSSUR_SUBJECTS_3 } from '../../scripts/seeds/ossur-subjects-3'
 import { scriptActor } from '../config-log'
 import {
   DESCRIPTION_MAX,
@@ -268,6 +269,34 @@ describe('the second Össur seed (limb)', () => {
       const at = s.description.indexOf(add)
       expect(at, s.name).toBeGreaterThan(0)
       expect(s.description.slice(0, at) + s.description.slice(at + add.length), s.name).toBe(s.from)
+    }
+  })
+})
+
+describe('the third Össur seed (exclusions from the 14 Oct sheet)', () => {
+  const seed = OSSUR_SUBJECTS_3
+  const secondWords = new Map(OSSUR_SUBJECTS_2.subjects.map((s) => [s.name, s.description]))
+  const before = (d: string) => d.split(' excluding ')[0]
+  const excluded = (d: string) => d.split(' excluding ')[1].replace(/\.$/, '').split(/, (?:and )?/).map((x) => x.trim())
+
+  it('re-words the three that missed the floor, from the words the second seed gave them', () => {
+    expect(seed.clientId).toBe(OSSUR_SUBJECTS_2.clientId)
+    expect(seed.subjects.map((s) => s.name)).toEqual(['Choosing the right device', 'Function & movement', 'Look & style'])
+    for (const s of seed.subjects) expect(s.from, s.name).toBe(secondWords.get(s.name))
+    for (const s of seed.subjects) expect(OSSUR_SUBJECTS_2.subjects.map((x) => x.id)).not.toContain(s.id)
+  })
+
+  it('moves only the exclusions: what belongs is unchanged and every earlier exclusion stays', () => {
+    for (const s of seed.subjects) {
+      const from = s.from ?? ''
+      expect(from, s.name).not.toBe('')
+      expect(descriptionProblem(s.description, s.from), s.name).toBeNull()
+      expect(s.description, s.name).not.toMatch(/[—–]/)
+      // The phrase vector reads only what belongs, so the judge's candidates do not move.
+      expect(before(s.description), s.name).toBe(before(from))
+      const now = excluded(s.description)
+      for (const term of excluded(from)) expect(now, `${s.name}: ${term}`).toContain(term)
+      expect(now.length, s.name).toBeGreaterThan(excluded(from).length)
     }
   })
 })
