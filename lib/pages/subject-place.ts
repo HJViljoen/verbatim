@@ -21,10 +21,13 @@ import { loadMemberInsightIdsBySubject } from './subjects'
 //
 // A TRACKED SUBJECT IS NEVER HIDDEN (Heinrich, 14 Oct: "they want it tracked
 // no matter what"). A failed subject (its check clearly under the floor,
-// being re-described) is placed exactly as a provisional one is: in the
-// second tier, taking a conversation only where no ready subject does. Until
-// 14 Oct it was in no tier, so the conversations it holds named no subject
-// anywhere and the subject's own row on Market listed nothing inside it.
+// being re-described) is placed too, in a THIRD tier (the lead's ruling, 14
+// Oct): it takes a conversation only where neither a ready nor an open
+// subject does. A failed subject is over-broad by definition (its check
+// found it catching comments about other things), so in one tier with the
+// open ones it held the most members and outbid them. Until 14 Oct it was in
+// no tier, so the conversations it holds named no subject anywhere and the
+// subject's own row on Market listed nothing inside it.
 //
 // The rule's member ids are the conversation's own (`theme_observations.
 // member_insight_ids`) under the run the page reads its conversations from:
@@ -32,15 +35,29 @@ import { loadMemberInsightIdsBySubject } from './subjects'
 // the published week read is the latest themed one, which is how a run
 // publishes; a page reading another run reads that run's clustering.
 
-/** The subjects a conversation may be placed in, as `placeSubject` takes
- *  them: the READY ones (`order`, `subjectsOf`), and the ones whose check has
- *  not passed, provisional or failed (`pending`), used only where no ready
- *  subject takes the conversation. `names` holds both. */
-export interface SubjectPlacement {
-  names: ReadonlyMap<string, string>
+/** One tier of `SubjectPlacement`: its subjects in their own order, and
+ *  which of them each insight is a member of. */
+export interface PlacementTier {
   order: readonly string[]
   subjectsOf: ReadonlyMap<string, readonly string[]>
-  pending?: { order: readonly string[]; subjectsOf: ReadonlyMap<string, readonly string[]> } | null
+}
+
+/** The subjects a conversation may be placed in, as `placeSubject` takes
+ *  them, in three tiers: the READY ones (`order`, `subjectsOf`); the ones
+ *  whose check is open (`pending`), used only where no ready subject takes
+ *  the conversation; and the ones being re-described (`failed`), used only
+ *  where neither does. `names` holds all three. */
+export interface SubjectPlacement extends PlacementTier {
+  names: ReadonlyMap<string, string>
+  pending?: PlacementTier | null
+  failed?: PlacementTier | null
+}
+
+/** Every subject id a placement names below the ready tier (open, then
+ *  failed): the subjects whose check has not passed, whose chips print no
+ *  count (ruling U6). Pure. */
+export function notReadyIds(s: SubjectPlacement | null | undefined): Set<string> {
+  return new Set([...(s?.pending?.order ?? []), ...(s?.failed?.order ?? [])])
 }
 
 /** The fewest of a conversation's member insights a subject must hold, and
@@ -81,16 +98,19 @@ export function subjectOfTheme(
 }
 
 /**
- * The subjects a conversation may be placed in, in two tiers (the parity
- * pass, 13 Oct; ruling U6): the READY ones, and every other active subject,
- * its check open (provisional) or failed (being re-described), in one tier
- * and in the subjects' own order (14 Oct: a tracked subject is never hidden;
- * a failed one behaves exactly as a provisional one). Pure.
+ * The subjects a conversation may be placed in, in three tiers, each in the
+ * subjects' own order (the parity pass, 13 Oct; ruling U6; the lead's ruling,
+ * 14 Oct): the READY ones; the ones whose check is open (`pending`: not
+ * checked, or under the floor without being clearly under); and the ones
+ * being re-described (`failed`), last, because a failed subject catches
+ * comments about other things and would outbid an open one. A tracked
+ * subject is in one of the three, never in none. Pure.
  */
-export function placementTiers<S extends { id: string }>(all: readonly { subject: S; calibration: string }[]): { ready: S[]; pending: S[] } {
+export function placementTiers<S extends { id: string }>(all: readonly { subject: S; calibration: string }[]): { ready: S[]; pending: S[]; failed: S[] } {
   return {
     ready: all.filter((x) => x.calibration === 'ready').map((x) => x.subject),
-    pending: all.filter((x) => x.calibration !== 'ready').map((x) => x.subject),
+    pending: all.filter((x) => x.calibration !== 'ready' && x.calibration !== 'failed').map((x) => x.subject),
+    failed: all.filter((x) => x.calibration === 'failed').map((x) => x.subject),
   }
 }
 
@@ -99,13 +119,16 @@ export function placementTiers<S extends { id: string }>(all: readonly { subject
  * 13 Oct, on Market; every surface since 14 Oct; ruling U6): a READY subject
  * always wins. `subjectOfTheme` over the ready subjects alone first; only
  * where no ready subject takes the conversation (3 of its member insights
- * and 15% of them) is it read against the subjects whose check has not
- * passed (provisional and failed, one tier), so a subject whose matching is
- * not verified never takes a conversation from one whose matching is. Pure.
+ * and 15% of them) is it read against the subjects whose check is open; and
+ * only where none of those takes it, against the subjects being re-described
+ * (the lead's ruling, 14 Oct). So a subject whose matching is not verified
+ * never takes a conversation from one whose matching is, and one whose
+ * matching was found wrong never takes one from one not yet checked. Pure.
  */
 export function placeSubject(memberIds: readonly string[], s: SubjectPlacement): string | null {
   return subjectOfTheme(memberIds, s.subjectsOf, s.order)
     ?? (s.pending ? subjectOfTheme(memberIds, s.pending.subjectsOf, s.pending.order) : null)
+    ?? (s.failed ? subjectOfTheme(memberIds, s.failed.subjectsOf, s.failed.order) : null)
 }
 
 /** Each conversation's subject (`placeSubject`), named, by registry id: null
@@ -131,8 +154,8 @@ export interface PlacedSubjectRow {
 
 /**
  * The tenant's active subjects with their check's state (`all`, named first),
- * and the placement both tiers read (`placed`): one membership read for the
- * two tiers, split by subject. `placed` is null where no subject may take a
+ * and the placement the three tiers read (`placed`): one membership read for
+ * the three, split by subject. `placed` is null where no subject may take a
  * conversation, or the subjects are not recorded here (a missing table is no
  * subjects, never an error).
  */
@@ -146,7 +169,7 @@ export async function loadSubjectPlacement(db: SupabaseClient, clientId: string)
   }
   const all = subjects.map((s) => ({ subject: s, calibration: subjectCalibration(s) }))
   const tiers = placementTiers(all)
-  const placeable = [...tiers.ready, ...tiers.pending]
+  const placeable = [...tiers.ready, ...tiers.pending, ...tiers.failed]
   if (placeable.length === 0) return { all, placed: null }
   const bySubject = await loadMemberInsightIdsBySubject(db, clientId, placeable.map((s) => s.id))
   if (!bySubject) return { all, placed: null }
@@ -163,6 +186,7 @@ export async function loadSubjectPlacement(db: SupabaseClient, clientId: string)
       order: ready.order,
       subjectsOf: ready.subjectsOf,
       pending: tiers.pending.length > 0 ? tierOf(tiers.pending) : null,
+      failed: tiers.failed.length > 0 ? tierOf(tiers.failed) : null,
     },
   }
 }

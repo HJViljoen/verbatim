@@ -3,7 +3,7 @@ import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { ossurVoicesFixture, VOICES_FIXTURES } from '@/lib/pages/v2/voices-fixture'
 import { mergeWho, type GroupPanel } from '@/lib/pages/v2/voices'
-import { FAILED_EXPLAINED } from '@/lib/subjects/calibration-state'
+import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { GroupCard, GroupGrid, GroupPanelView, MixCard, WhoCard } from './groups'
 import { VoicesPage } from './index'
 
@@ -279,10 +279,30 @@ describe('a tracked subject is never hidden (14 Oct)', () => {
     assertCopyContract(node)
   })
 
+  it('the group panel\'s headline cells name only a ready subject on at least one video: a 0 stays on the card, never in a cell (the lead\'s ruling, 14 Oct)', () => {
+    const open = VOICES_FIXTURES['ossur-tracked-group']()
+    const panel = open.panel as GroupPanel
+    expect(panel.subjects.map((x) => [x.label, x.k])).toEqual([['Look & style', 2], ['Function & movement', 0]])
+    const node = <GroupPanelView panel={panel} monthWords={open.monthWords} />
+    const text = renderText(node)
+    expect(text).toContain('45 of 487 videos they comment on 2 of 45 are about Look & style 12 of 45 are on YouTube')
+    expect(text).not.toMatch(/0 of 45 are about/)
+    assertCopyContract(node)
+    // Every ready subject at 0, some not measured: the cells fall back as
+    // before, "Not measured yet" in the two subject cells' place, four cells.
+    const zeros: GroupPanel = { ...panel, subjects: [{ id: 's-function', label: 'Function & movement', k: 0 }, { id: 's-look', label: 'Look & style', k: 0 }] }
+    const t = renderText(<GroupPanelView panel={zeros} monthWords={open.monthWords} />)
+    expect(t).toContain(`45 of 487 videos they comment on ${SUBJECT_NOT_MEASURED} what their videos are about 12 of 45 are on YouTube`)
+    expect(t).not.toMatch(/are about (Function|Look)/)
+    assertCopyContract(<GroupPanelView panel={zeros} monthWords={open.monthWords} />)
+  })
+
   it('the page says why a failed subject shows no figure ONCE, in the foot of "Who\'s in your market", one line a subject', () => {
     const node = <WhoCard groups={d.groups} videos={d.videos} monthWords={d.monthWords} failed={d.subjectsFailed} />
     const text = renderText(node)
-    expect(text).toMatch(new RegExp(`Clinicians and prosthetists 29 of 487 videos Fit & comfort: ${FAILED_EXPLAINED.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`))
+    expect(text.endsWith(`Clinicians and prosthetists 29 of 487 videos Fit & comfort. ${FAILED_EXPLAINED}`)).toBe(true)
+    // One colon, the sentence's own: never "Fit & comfort: Being re-described:".
+    expect(text).not.toContain('Fit & comfort: Being')
     expect(render(node).match(/data-subject-failed/g)).toHaveLength(1)
     assertCopyContract(node)
     // None where no subject failed.

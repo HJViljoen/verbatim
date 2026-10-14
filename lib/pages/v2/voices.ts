@@ -33,7 +33,6 @@ import {
 } from '../../reading/cross'
 import { monthStartOf, prevMonth } from '../../reading/month-key'
 import { readingMonthLabel } from '../../reading/month-label'
-import { SUBJECT_NOT_MEASURED } from '../../subjects/calibration-state'
 import { refuseEveryPair } from '../../reading/pairs'
 import { loadPairOn, type ReadingHandle } from '../../reading/read'
 import { marketAudiences } from '../../reading/market'
@@ -594,17 +593,9 @@ export function failedSubjectsOf(list: readonly PendingIn[] | undefined): { id: 
   return (list ?? []).filter((x) => x.state === 'failed').map((x) => ({ id: x.id, label: x.label }))
 }
 
-/** What starts the one short line that names the subjects not measured yet
- *  (14 Oct): the one constant every surface prints, SUBJECT_NOT_MEASURED. */
-export const NOT_MEASURED_LEAD = SUBJECT_NOT_MEASURED
-
-/** "Not measured yet: Cost & access, Fit & comfort": every subject whose
- *  check has not passed, open or failed, named once, in the order given.
- *  Null where there is none. Pure. */
-export function notMeasuredLine(subjects: readonly { label: string }[] | undefined): string | null {
-  const names = (subjects ?? []).map((s) => s.label.trim()).filter(Boolean)
-  return names.length > 0 ? `${NOT_MEASURED_LEAD}: ${names.join(', ')}` : null
-}
+/** The one short line that names the subjects not measured yet (14 Oct),
+ *  `lib/pages/not-measured.ts`, shared with the Dashboard's moves tile. */
+export { NOT_MEASURED_LEAD, notMeasuredLine } from '../not-measured'
 
 export function buildGroups(input: {
   profile: GroupProfileRow | null

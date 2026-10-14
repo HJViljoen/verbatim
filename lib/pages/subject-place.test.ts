@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { subjectForTheme } from '../written/pool'
-import { placeConversations, placeSubject, placementTiers, subjectOfTheme, type SubjectPlacement } from './subject-place'
+import { notReadyIds, placeConversations, placeSubject, placementTiers, subjectOfTheme, type SubjectPlacement } from './subject-place'
 import { convOf, type ConvInput } from './v2/market'
 
 // ONE PLACEMENT RULE (14 Oct): every surface that names a conversation's
@@ -16,8 +16,8 @@ const invert = (pairs: [string, string[]][]) => {
 }
 
 /** Three conversations and a mixed tenant: Fit ready, Cost open, Repair
- *  failed (14 Oct: in the second tier with Cost, a tracked subject is never
- *  hidden). */
+ *  failed (14 Oct: in the third tier, after Cost; a tracked subject is never
+ *  hidden, and a failed one never outbids an open one). */
 const A = members('a', 10)
 const B = members('b', 10)
 const C = members('c', 10)
@@ -30,16 +30,21 @@ const tiers = placementTiers(all)
 const membership: [string, string[]][] = [
   // A: Fit holds 3, Cost 8. A ready subject that qualifies always wins.
   ['fit', A.slice(0, 3)], ['cost', A.slice(0, 8)],
-  // B: Repair (failed) holds 9, Cost (open) 4: one tier, the most wins.
+  // B: Repair (failed) holds 9, Cost (open) 4: Cost qualifies, so Cost keeps
+  // it (a failed subject catches more than it should, and never outbids).
   ['repair', B.slice(0, 9)], ['cost', [...B.slice(0, 2), ...B.slice(8, 10)]],
-  // C: Repair alone: Repair, as an open subject would.
+  // C: Repair alone: no ready or open subject takes it, so Repair does.
   ['repair', C.slice(0, 7)],
 ]
+const tierOf = (list: readonly { id: string }[]) => ({
+  order: list.map((s) => s.id),
+  subjectsOf: invert(membership.filter(([s]) => list.some((x) => x.id === s))),
+})
 const placement: SubjectPlacement = {
-  names: new Map([...tiers.ready, ...tiers.pending].map((s) => [s.id, s.name])),
-  order: tiers.ready.map((s) => s.id),
-  subjectsOf: invert(membership.filter(([s]) => tiers.ready.some((x) => x.id === s))),
-  pending: { order: tiers.pending.map((s) => s.id), subjectsOf: invert(membership.filter(([s]) => tiers.pending.some((x) => x.id === s))) },
+  names: new Map([...tiers.ready, ...tiers.pending, ...tiers.failed].map((s) => [s.id, s.name])),
+  ...tierOf(tiers.ready),
+  pending: tierOf(tiers.pending),
+  failed: tierOf(tiers.failed),
 }
 
 function marketInput(): ConvInput {
@@ -67,7 +72,7 @@ describe('one placement rule for a conversation\'s subject', () => {
       expect(content.get(id)?.name ?? null).toBe(market.subjectName)
       expect(content.get(id)?.id ?? null).toBe(market.subjectId)
     }
-    expect([...content].map(([id, s]) => [id, s?.name ?? null])).toEqual([['A', 'Fit'], ['B', 'Repair'], ['C', 'Repair']])
+    expect([...content].map(([id, s]) => [id, s?.name ?? null])).toEqual([['A', 'Fit'], ['B', 'Cost'], ['C', 'Repair']])
   })
 
   it('Content\'s old rule (every active subject, one tier) named a provisional one over a ready one; the two tiers never do', () => {
@@ -76,20 +81,26 @@ describe('one placement rule for a conversation\'s subject', () => {
     expect(placeSubject(A, placement)).toBe('fit')
   })
 
-  it('a failed subject is placed exactly as a provisional one (14 Oct): in the second tier, never over a ready one', () => {
+  it('three tiers (the lead\'s ruling, 14 Oct): ready, then open, then failed; a failed subject is placed, never hidden, never over an open or a ready one', () => {
     expect(tiers.ready.map((s) => s.id)).toEqual(['fit'])
-    expect(tiers.pending.map((s) => s.id)).toEqual(['cost', 'repair'])
-    // B: no ready subject takes it; Repair holds the most of the second tier.
-    expect(placeSubject(B, placement)).toBe('repair')
+    expect(tiers.pending.map((s) => s.id)).toEqual(['cost'])
+    expect(tiers.failed.map((s) => s.id)).toEqual(['repair'])
+    // B: Repair (failed) holds 9 of 10, Cost (open) 4: the open one keeps it.
+    expect(placeSubject(B, placement)).toBe('cost')
+    // C: only the failed one qualifies: it takes the conversation.
+    expect(placeSubject(C, placement)).toBe('repair')
     // A: Repair holding every member insight still loses to a ready Fit.
-    const repairAll: SubjectPlacement = {
-      ...placement,
-      pending: { order: ['cost', 'repair'], subjectsOf: invert([['repair', A], ['cost', A.slice(0, 8)]]) },
-    }
+    const repairAll: SubjectPlacement = { ...placement, failed: { order: ['repair'], subjectsOf: invert([['repair', A]]) } }
     expect(placeSubject(A, repairAll)).toBe('fit')
-    // A tie in the second tier goes to the subjects' own order, whatever the state.
-    const tie: SubjectPlacement = { names: placement.names, order: [], subjectsOf: new Map(), pending: { order: ['cost', 'repair'], subjectsOf: invert([['repair', A.slice(0, 5)], ['cost', A.slice(5, 10)]]) } }
-    expect(placeSubject(A, tie)).toBe('cost')
+    // With no open subject that qualifies, the failed one is read: Cost at 2
+    // of 10 does not qualify on B, so Repair takes it.
+    const costThin: SubjectPlacement = { ...placement, pending: { order: ['cost'], subjectsOf: invert([['cost', B.slice(0, 2)]]) } }
+    expect(placeSubject(B, costThin)).toBe('repair')
+    // A tier with nothing read is no tier.
+    expect(placeSubject(C, { ...placement, failed: null })).toBeNull()
+    // The chips' not-ready set: open and failed alike.
+    expect([...notReadyIds(placement)]).toEqual(['cost', 'repair'])
+    expect(notReadyIds(null).size).toBe(0)
   })
 
   it('a tenant whose subjects are all open (Össur, 13 Oct) names the open subject, and no subject read names nothing', () => {

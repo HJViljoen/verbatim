@@ -2,6 +2,7 @@ import type { ObjectReading } from '../../agent/movement'
 import { bandVerdict, type Verdict } from '../../reading/verdicts'
 import type { MonthSeries } from '../../reading/series'
 import { WEEKS_FAILED, type HomeWeeks } from '../home'
+import { notReadyIds } from '../subject-place'
 import type { UnusualFlag } from '../week'
 import {
   buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, convHref, closeHref, flagCardOf, flagVerdict, groupsOf,
@@ -439,7 +440,7 @@ const PERSONAS = [
 const HERO_KINDS = [{ kind: 'pain_point', videos: 14 }, { kind: 'question', videos: 9 }, { kind: 'objection', videos: 4 }]
 
 /** The tracked-always four as the loader places them (`placementTiers`):
- *  the ready ones first, the open and the failed one in the second tier. */
+ *  the ready ones first, then the open one, then the failed one. */
 function trackedPlacement(all: NonNullable<ConvInput['subjects']>): NonNullable<ConvInput['subjects']> {
   const tier = (keep: (check: string) => boolean) => {
     const order = all.order.filter((sid) => keep(TRACKED[sid.slice('subj-'.length)] ?? ''))
@@ -451,10 +452,9 @@ function trackedPlacement(all: NonNullable<ConvInput['subjects']>): NonNullable<
     return { order, subjectsOf }
   }
   const ready = tier((c) => c === 'ready')
-  const pending = tier((c) => c === 'provisional' || c === 'failed')
   return {
     names: new Map([...all.names].filter(([sid]) => TRACKED[sid.slice('subj-'.length)] != null)),
-    order: ready.order, subjectsOf: ready.subjectsOf, pending,
+    order: ready.order, subjectsOf: ready.subjectsOf, pending: tier((c) => c === 'provisional'), failed: tier((c) => c === 'failed'),
   }
 }
 
@@ -529,7 +529,7 @@ export function marketFixture(opts: FixtureOptions = {}): MarketData {
   const openId = opts.open ? id(opts.open.n) : null
   const table = buildTable({
     convs, params: p, openId: opts.open?.at === 'table' ? openId : null,
-    pending: new Set(input.subjects?.pending?.order ?? []),
+    pending: notReadyIds(input.subjects),
     months: period === 'time' ? tableMonths(OCT, new Map([['2026-07-01', 455], ['2026-08-01', 612], [SEP, 780], [OCT, 300]]), OCT) : [],
   })
   const panel = opts.open ? fixturePanel(opts.open.n, opts.open.at, p, period, convs, input, read, flagged) : null

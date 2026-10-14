@@ -220,7 +220,11 @@ export function ProductsColumn({ products, videos }: { products: GroupProducts; 
  *  is the grid's placement, per breakpoint (`GroupGrid`); alone, the
  *  loader's three-across notch. */
 export function GroupPanelView({ panel, monthWords, notchAt }: { panel: GroupPanel; monthWords: string; notchAt?: number | PerBreakpoint }) {
-  const [first, second] = panel.subjects
+  // The headline cells name what their videos ARE about: ready subjects on
+  // at least one of them (the lead's ruling, 14 Oct). A ready one at 0 stays
+  // on the card's list, never in a headline cell; with none above 0, the
+  // cells fall back as before ("Not measured yet" where some are not).
+  const [first, second] = panel.subjects.filter((s) => s.k > 0)
   const where = panel.platforms[0]
   return (
     <InPlacePanel

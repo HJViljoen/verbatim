@@ -5,7 +5,8 @@ import { TickBar } from '@/components/v2'
 import { TAG } from '@/components/colour-roles'
 import { fmtCompact, fmtInt } from '@/lib/format'
 import { quoteWords } from '@/lib/pages/brands'
-import { notMeasuredLine, type VoicesPlatform, type VoicesQuote } from '@/lib/pages/v2/voices'
+import { notMeasuredLine } from '@/lib/pages/not-measured'
+import type { VoicesPlatform, VoicesQuote } from '@/lib/pages/v2/voices'
 import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { cn } from '@/lib/utils'
 
@@ -65,7 +66,10 @@ export function MiniRow({ label, k, of, tone = 'market', size = 'sm', className 
 export function FailedSubjectLine({ label, className }: { label: string; className?: string }) {
   return (
     <p data-subject-failed="" className={cn('m-0 text-[12.5px] leading-[1.45] text-muted-foreground', className)}>
-      <span className="font-medium text-foreground">{label}:</span> {FAILED_EXPLAINED}
+      {/* The name, then the sentence: FAILED_EXPLAINED opens with its own
+          colon ("Being re-described: …"), so the name takes a full stop,
+          never a second colon (the fresh check, 14 Oct). */}
+      <span className="font-medium text-foreground">{label}.</span> {FAILED_EXPLAINED}
     </p>
   )
 }

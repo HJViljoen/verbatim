@@ -43,7 +43,7 @@ import { pickQuotes, POOL_FLOOR } from '../overview-market'
 import { talkKindLabel } from '../overview-market/kinds'
 import { fetchThemedRunId } from '../themed-run'
 import { askAboutTheme, loadLinkedTheme, loadThemeKinds } from '../voice-surface'
-import { loadReadySubjectIds, loadSubjectPlacement, placeSubject, type SubjectPlacement } from '../subject-place'
+import { loadReadySubjectIds, loadSubjectPlacement, notReadyIds, placeSubject, type SubjectPlacement } from '../subject-place'
 import { flagFigures, loadCheckStrict, loadFlagsStrict, weekFlagRows, type FlagRow, type UnusualFlag } from '../week'
 import { flagPrints, weekLead } from '../../reading/week-lead'
 import { setApartOf } from '../../written/conversations'
@@ -1881,7 +1881,8 @@ export async function loadMarket(input: {
     params: p,
     openId: openId && at === 'table' ? openId : null,
     months: period === 'time' ? tableMonths(month, categoryOf, nowMonth) : [],
-    pending: new Set(subjects.placed?.pending?.order ?? []),
+    // Open and failed alike: their chips print no count (ruling U6).
+    pending: notReadyIds(subjects.placed),
   })
 
   // ── the open panels ──

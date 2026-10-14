@@ -263,12 +263,12 @@ describe('the subject board', () => {
     expect(fit.verdict).toBeNull()
   })
 
-  it('splits the subjects into the ready and the rest; a failed one is with the open ones (14 Oct)', () => {
+  it('splits the subjects into three tiers: ready, open, failed (14 Oct)', () => {
     const all = [
       { subject: { id: 'p' }, calibration: 'provisional' }, { subject: { id: 'f' }, calibration: 'failed' }, { subject: { id: 'r' }, calibration: 'ready' },
     ]
     const t = placementTiers(all)
-    expect([t.ready.map((x) => x.id), t.pending.map((x) => x.id)]).toEqual([['r'], ['p', 'f']])
+    expect([t.ready.map((x) => x.id), t.pending.map((x) => x.id), t.failed.map((x) => x.id)]).toEqual([['r'], ['p'], ['f']])
   })
 
   // Ruling U6 on a mixed tenant: a ready subject always wins placement, even

@@ -1295,13 +1295,15 @@ export function buildCompare(input: {
   // then any ready one on none of them at 0 (14 Oct: a tracked subject is
   // never hidden for being thin), to the table's COMPARE_ROWS.
   const subjectRows: CrossCell[] = [...gc.subjects, ...(gc.quiet ?? []).map((q) => ({ ...q, k: 0 }))]
-  if (subjectRows.length === 0) {
-    // NOT MEASURED YET (ruling U6): the table keeps its shape, each row a
-    // subject's name and every cell empty, the category's included, one
-    // being re-described among them (14 Oct; why is said once, in the
-    // panel's "What it's about").
-    const pending = (gc.pending ?? []).slice(0, COMPARE_ROWS)
-    if (pending.length === 0) return null
+  const pending = (gc.pending ?? []).slice(0, COMPARE_ROWS)
+  // NOT MEASURED YET (ruling U6): no ready subject on any of the category's
+  // videos, and some not measured: the table keeps its shape, each row the
+  // name of a subject not measured yet and every cell empty, the category's
+  // included, one being re-described among them (14 Oct; why is said once,
+  // in the panel's "What it's about"). A table of ready subjects all at 0
+  // would say less than their names do (the lead's ruling, 14 Oct), so it
+  // is drawn only where no subject is pending.
+  if (gc.subjects.length === 0 && pending.length > 0) {
     const named = [...input.products].filter((p) => (p.videos ?? 0) > 0)
       .sort((a, b) => (a.id === input.focus ? -1 : b.id === input.focus ? 1 : 0) || (b.videos ?? 0) - (a.videos ?? 0))
     const shown = (named.length > 0 ? named : [...input.products].sort((a, b) => (a.id === input.focus ? -1 : b.id === input.focus ? 1 : 0)))
@@ -1313,6 +1315,7 @@ export function buildCompare(input: {
       empty: 'pending',
     }
   }
+  if (subjectRows.length === 0) return null
   const ranked = [...input.products].filter((p) => (p.videos ?? 0) > 0 && (input.crosses.get(setKey('product', p.id))?.n ?? 0) > 0)
     .sort((a, b) => (a.id === input.focus ? -1 : b.id === input.focus ? 1 : 0) || (b.videos ?? 0) - (a.videos ?? 0))
     .slice(0, COMPARE_PRODUCTS)
