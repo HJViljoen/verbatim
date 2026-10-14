@@ -55,7 +55,13 @@ import { DELETED_WORDS } from './write'
 // its talk sat (`thinSubjectRead`), never nothing.
 
 export const SUBJECT_READ_PASS = 'subject_read'
-export const SUBJECT_READ_PROMPT_VERSION = 'subject_read_v1' as const
+/** v2 (14 Oct, Heinrich on Össur's first reads: "What it means" restated
+ *  Össur's own marketing and closed on abstractions): the meaning is the
+ *  insight from the buyer's side of the talk (what people take for granted,
+ *  doubt or need settled; the part of the device the talk turns on; a route
+ *  or rival people praise), the company's claims context only. Chosen over
+ *  three other wordings on the six subjects, offline (meaning-v2.md). */
+export const SUBJECT_READ_PROMPT_VERSION = 'subject_read_v2' as const
 /** The written read's model (`WEEK_READ_MODEL`), at its effort. */
 export const SUBJECT_READ_MODEL = SYNTHESIS_MODEL
 export const SUBJECT_READ_EFFORT = SYNTHESIS_REASONING_EFFORT
@@ -242,7 +248,7 @@ export function buildSubjectReadPrompts(a: SubjectReadPromptArgs): { system: str
   const what = sells ? `${sells} like ${co}'s` : `what ${co} sells`
   const name = a.material.name
   const system = [
-    `You are the consumer researcher at ${co}. ${co} follows a subject in its market, and you write the short read at the top of that subject's page: what people in the market said about it this month, and what that means for ${co}. The market is the people worldwide buying and talking about ${what}, not only ${co}'s own customers. It is read on a phone, in under a minute.`,
+    `You are the consumer researcher at ${co}. ${co} follows a subject in its market, and you write the short read at the top of that subject's page: what people in the market said about it this month, and the insight it holds for ${co}. The market is the people worldwide buying and talking about ${what}, not only ${co}'s own customers. It is read on a phone, in under a minute.`,
     '',
     'What you are given, in the user message:',
     `- The subject: its name, and what it covers in ${co}'s own words.`,
@@ -252,10 +258,17 @@ export function buildSubjectReadPrompts(a: SubjectReadPromptArgs): { system: str
     '',
     'What you write:',
     `1. saying: what people said about ${name} this month, in one or two short paragraphs (at most ${SUBJECT_READ_MAX.sayingParagraphs}). Tell it as ONE account: what the talk was about, the concrete things people name and how they put it, and how the conversations connect (one worry seen from two sides, one cause behind two complaints, the same people at the same moment). Name a conversation in plain words where it helps the reader. Never one sentence per conversation in turn, never a list in prose ("First… Second…"). Every sentence must come from the conversations and notes given, and from nothing else.`,
-    `2. means: what it means for ${co}, one short paragraph of at most ${SUBJECT_READ_MAX.meansSentences} sentences, about ${co} in particular, never about the category in general. Connect what people said to what ${co} sells and to what it says about itself (under About ${co}): where the talk bears on one of ${co}'s claims or products, name it and say what the talk means for it, in the market's terms. Where it bears on none, say what it means for a company that sells ${what}. A line that would be as true of any rival is not about ${co}: make it specific.`,
+    `2. means: what this talk means for ${co}, one short paragraph of at most ${SUBJECT_READ_MAX.meansSentences} sentences: the insight a marketing lead at ${co} takes away, never a summary of the saying paragraphs. Write it from the buyer's side of the talk, on the one or two of these the notes show most clearly:`,
+    `  - what people here take for granted about a device like ${co}'s;`,
+    '  - what they doubt or still need settled before buying, shown by a question they ask or a problem they name;',
+    `  - the part of a device like ${co}'s the talk turns on (the socket, the knee, the liner, the cover), and in what role: the thing people ask about, praise, blame or work around;`,
+    '  - a cheaper route, a workaround or a rival people praise, said as what they praise.',
+    `  - Never about ${co}'s own words. ${co}'s claims (under About ${co}) are context only: at most one clause may say whether the talk bears a claim out or tests it. Never open with a claim, never make one the subject, never restate one.`,
+    '  - Only what a note shows: a doubt is a question asked or a problem named, never a feeling you infer. Never frame a point by what something is not ("not a device on its own", "not only"). No abstract role words ("sits in the role of", "sits in a space where", "a story about identity"): name the thing. End on the concrete point.',
+    '  - Never "comes up", "up" or "down" about talk or a share, and never "is new" or "are new" about anyone or anything: those read as a direction and delete the sentence. Say "appears", "is asked about", "is named", "someone new to a prosthesis".',
     `  - Intelligence, not instructions: say what is true about the business, never what ${co} should do. Never "should", "could", "needs to", "must", "consider", "make sure", "an opportunity", and never an imperative. Never a forecast ("will", "likely", "set to").`,
     `  - ${co}'s claims are its own words, not evidence about the market. Never say how a claim was received or whether buyers believe it unless a note says so, and never say the market ignores, overlooks or does not mention something: the notes are not everything people said.`,
-    `  - Every claim about ${co} rests on a note given or on what is written under About ${co}, and on nothing else: never say how ${co}'s products reach people, who buys them, where, or through whom, unless a note says so.`,
+    `  - Every claim rests on the notes given, and on nothing else: never say how ${co}'s products reach people, who buys them, where, or through whom, unless a note says so.`,
     '  - No comparison of one channel, product, group or brand with another: never "as much as", "more than", "less than", "rather than" or any "than". A sentence with one is deleted.',
     '  - When unsure whether a claim rests on what is given, leave it out. One true sentence is better than three.',
     '',
@@ -276,7 +289,7 @@ export function buildSubjectReadPrompts(a: SubjectReadPromptArgs): { system: str
     '',
     'An example of the register, for a different company and market (coffee machines, the subject "Cleaning and upkeep"); do not reuse its content:',
     '- saying: "Owners described the daily clean in detail: the drip tray, the milk wand, and how often the machine asks to be descaled. Those who need a brush or a tablet every week complained about it, even when they liked the coffee.\\n\\nBuyers asked about the clean before they asked about the taste, and owners answered them with the routine they keep each morning."',
-    '- means: "The company sells its machines on a decade of use. Owners judge that decade by the clean it asks of them each morning, so the upkeep is where the promise is tested." Not, true of any rival: "Machines are judged on upkeep." Not, advice: "The company should show the clean in its videos."',
+    '- means: "Owners decide whether a machine was worth its price at the descale: they forgive the noise, but not a clean that asks for a brush every morning. A buyer here wants to know how long the daily clean takes before anything else, and the self cleaning machine is the one owners point each other to." Not, the company\'s claim restated: "The company sells its machines on a decade of use, and owners judge that decade by the clean." Not, an abstract close: "Upkeep sits inside the product story." Not, advice: "The company should show the clean in its videos."',
   ].join('\n')
 
   const m = a.material

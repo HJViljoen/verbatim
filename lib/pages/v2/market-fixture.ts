@@ -723,7 +723,7 @@ export function withSubjectReads(read: WeekReadData): WeekReadData {
     ...read,
     subjectReads: {
       version: 1,
-      promptVersion: 'subject_read_v1',
+      promptVersion: 'subject_read_v2',
       month: OCT,
       read: { from: `${OCT}T00:00:00.000Z`, to: WINDOW.to },
       status: 'ready',

@@ -12,9 +12,10 @@ import { sealandRead } from '../test/weekly-read-fixture'
 import { WeekReadTimeoutError } from './deadline'
 import type { DatedEvidence } from './evidence'
 import { subjectReadOf } from './published'
+import { scrubWeekText } from './scrub'
 import {
   buildSubjectReadPrompts, finishSubjectRead, SpendGate, subjectReadAttemptMaxUsd, subjectReadMaterial, subjectReadsCapLeft, subjectReadsData,
-  subjectReadsHeadroom, subjectReadsRoom, thinSubjectRead, SUBJECT_READ_MAX_OUTPUT_TOKENS, type SubjectReadMaterial, type SubjectReadTheme,
+  subjectReadsHeadroom, subjectReadsRoom, thinSubjectRead, SUBJECT_READ_MAX_OUTPUT_TOKENS, SUBJECT_READ_PROMPT_VERSION, type SubjectReadMaterial, type SubjectReadTheme,
 } from './subject-reads'
 import {
   buildSubjectReads, generateSubjectRead, keepsRead, readDaysOf, runSubjectReadsStep, saveSubjectReads, SubjectReadBudgetError, SubjectReadWriteError,
@@ -108,17 +109,44 @@ describe('the writer\'s prompt', () => {
 
   it('asks for what people said, then what it means, with the week read\'s rules', () => {
     expect(system).toContain('1. saying: what people said about Cost & access this month')
-    expect(system).toContain('2. means: what it means for Össur')
+    expect(system).toContain('2. means: what this talk means for Össur')
     expect(system).toMatch(/Intelligence, not instructions/)
     expect(system).toMatch(/You have NO numbers/)
     expect(system).toMatch(/Never a medical or clinical claim/)
     expect(system).toMatch(/Never mention how anything was found/)
     // The meaning rests on what it was given, compares nothing and leaves out what it is unsure of.
-    expect(system).toMatch(/Every claim about Össur rests on a note given or on what is written under About Össur/)
+    expect(system).toMatch(/Every claim rests on the notes given, and on nothing else/)
     expect(system).toMatch(/never say how Össur's products reach people/)
     expect(system).toMatch(/No comparison of one channel, product, group or brand with another/)
     expect(system).toMatch(/When unsure .* leave it out/)
     expect(system).not.toMatch(/—/)
+  })
+
+  it('v2: the meaning is the insight from the buyer\'s side, the company\'s claims context only (Heinrich, 14 Oct)', () => {
+    expect(SUBJECT_READ_PROMPT_VERSION).toBe('subject_read_v2')
+    expect(system).toContain('the insight a marketing lead at Össur takes away, never a summary of the saying paragraphs')
+    expect(system).toContain('Write it from the buyer\'s side of the talk')
+    for (const angle of [
+      'what people here take for granted about a device like Össur\'s',
+      'what they doubt or still need settled before buying, shown by a question they ask or a problem they name',
+      'the part of a device like Össur\'s the talk turns on',
+      'a cheaper route, a workaround or a rival people praise, said as what they praise',
+    ]) expect(system).toContain(angle)
+    // Its own claims are context, never the subject: the v1 reads opened on them.
+    expect(system).toContain('Never open with a claim, never make one the subject, never restate one.')
+    expect(system).not.toMatch(/Connect what people said to what Össur sells and to what it says about itself/)
+    // No inferred feeling, no "not X" framing, no abstract close.
+    expect(system).toMatch(/a doubt is a question asked or a problem named, never a feeling you infer/)
+    expect(system).toMatch(/Never frame a point by what something is not/)
+    expect(system).toMatch(/No abstract role words .*End on the concrete point/)
+    // "comes up" and "is new" read as a direction and delete their sentence:
+    // the trial wordings lost one to "comes up" and one to "is new".
+    expect(system).toMatch(/Never "comes up", "up" or "down"/)
+    expect(system).toMatch(/never "is new" or "are new"/)
+    expect(scrubWeekText('When someone is new to a prosthesis, peers answer.', 700, { allow: [] }).counts.droppedDirection).toBe(1)
+    // The example models the insight, and names what not to write.
+    expect(system).toMatch(/Not, the company's claim restated: /)
+    expect(system).toMatch(/Not, an abstract close: /)
   })
 
   it('hands it the conversations inside the subject and the notes, never a comment or a figure', () => {
@@ -292,7 +320,7 @@ describe('buildSubjectReads', () => {
     })
     expect(parse).toHaveBeenCalledTimes(1)
     expect(built.data.subjects.map((s) => [s.subjectId, s.status])).toEqual([['cost', 'ready'], ['look', 'thin'], ['kept', 'ready']])
-    expect(built.data).toMatchObject({ status: 'ready', month: OCT, promptVersion: 'subject_read_v1' })
+    expect(built.data).toMatchObject({ status: 'ready', month: OCT, promptVersion: 'subject_read_v2' })
     expect(built.data.costUsd).toBeGreaterThan(0.05)
   })
 

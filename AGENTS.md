@@ -211,7 +211,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
   --expect-before write-post-ideas write-subject-reads` is the check,
   `lib/written/subject-reads.test.ts` pins it). For each READY subject it
   writes what people said across the conversations `placeSubject` puts
-  inside it, then what it means for the company: one gpt-5.4 call where its
+  inside it, then what it means for the company: since `subject_read_v2`
+  (14 Oct, Heinrich: v1's meaning restated the company's own claims and
+  closed on abstractions) the insight from the buyer's side of the talk
+  (what people take for granted, doubt or need settled, the part of the
+  device the talk turns on, a route or rival people praise), the company's
+  claims context only and never its subject. One gpt-5.4 call where its
   month holds gated citations on 3 videos and 2 notes, code's one line
   otherwise (never a claim of silence and never a reason). Scrubbed with
   `week_read`, plus `ADVICE` / `FORECAST` / `toldWhatToDo`, a comparison

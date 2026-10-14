@@ -422,7 +422,9 @@ export interface WeekReadDataV2 extends WeekReadCommon {
  */
 export interface SubjectReadsData {
   version: 1
-  promptVersion: 'subject_read_v1'
+  /** v1: the first reads (14 Oct). v2: "what it means" is the insight from
+   *  the buyer's side, never the company's own claims (the same day). */
+  promptVersion: 'subject_read_v1' | 'subject_read_v2'
   /** The month read, `YYYY-MM-01`: the week read's own month, which is the
    *  month Market's subject panel prints its level for. */
   month: string
