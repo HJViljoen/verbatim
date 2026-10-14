@@ -175,8 +175,9 @@ export function SubjectPanelView({ panel, data, notchAt }: { panel: SubjectPanel
       }
     >
       {panel.state !== 'ready' && panel.note ? (
-        // No level: why, in one line. Being re-described, nothing listed;
-        // otherwise the conversations inside it, as the board lists them.
+        // No level: why, in one line, and the conversations inside it, as the
+        // board lists them, in every state (14 Oct: one being re-described
+        // too; a tracked subject is never hidden).
         <p data-subject-state={panel.state} className="m-0 text-[15px] leading-[1.6] text-foreground">
           {panel.state === 'failed' ? panel.note : `${panel.note}.`}
         </p>
@@ -201,7 +202,6 @@ export function SubjectPanelView({ panel, data, notchAt }: { panel: SubjectPanel
             </PanelSection>
           ) : null}
         </div>
-        {panel.state !== 'failed' ? (
         <PanelSection label={<>Conversations inside it {week ? <span className="normal-case tracking-normal">· this week, and {data.month.text}</span> : null}</>}>
           {panel.inside.length > 0
             ? panel.inside.map((c) => (
@@ -215,7 +215,6 @@ export function SubjectPanelView({ panel, data, notchAt }: { panel: SubjectPanel
             ))
             : <p className="m-0 text-[13.5px] text-muted-foreground">No conversation in it reached three videos.</p>}
         </PanelSection>
-        ) : null}
       </div>
       <div className="flex flex-wrap items-center gap-[18px] border-t border-track pt-5">
         <Link href={panel.askHref} className={ASK}><Sparkles className="size-3.5" aria-hidden />Ask the Agent about this</Link>

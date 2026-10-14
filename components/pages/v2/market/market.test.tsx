@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract, copyNodes, copyViolations } from '@/lib/test/copy-contract'
 import { fixtureId, marketFixture, marketLongRowsFixture, marketThinFixture, FIXTURE_WEEKS } from '@/lib/pages/v2/market-fixture'
-import { SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
+import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import type { MarketData } from '@/lib/pages/v2/market'
 import { MarketPage, MARKET_FIRST_RUN } from './index'
 import { ConversationPanel, SubjectPanelView } from './panel'
@@ -171,7 +171,9 @@ describe('SubjectBoardView', () => {
     expect(text).toMatch(/^What the market is talking about Your subjects, as a share of October so far’s 318 videos\. The black tick is September\./)
     expect(text).toContain('Cost & access 22% 70 of 318 ▲ 7 pts')
     expect(text).toContain('Fit & comfort 34% 108 of 318 no clear change')
-    expect(text).toContain('Sport and running : Being re-described')
+    // A tracked subject is never hidden (14 Oct): the failed one has its own
+    // row, its reason where the level goes, and what is inside it.
+    expect(text).toContain('Sport and running Being re-described: a check found the subject catching comments about other things, so it shows no figure while we reword it. Inside it No conversation in it reached three videos this week.')
     assertCopyContract(<SubjectBoardView board={board} data={WEEK} />)
   })
 
@@ -398,11 +400,12 @@ describe('brands not counted yet (Össur before its back-read)', () => {
 })
 
 describe('SubjectPanelView', () => {
-  it('a subject being re-described says why and lists nothing', () => {
+  it('a subject being re-described says why and lists the conversations inside it, as an open one does (14 Oct)', () => {
     const data = marketFixture({ subject: 'sport' })
     const text = renderText(<SubjectPanelView panel={data.subjectPanel!} data={data} />)
     expect(text).toContain('Sport and running Close Being re-described: a check found the subject catching comments')
-    expect(text).not.toContain('Conversations inside it')
+    expect(text).toContain('Conversations inside it · this week, and October so far No conversation in it reached three videos.')
+    expect(text).not.toMatch(/\d+ of \d+ videos in your market/)
     assertCopyContract(<SubjectPanelView panel={data.subjectPanel!} data={data} />)
   })
 
@@ -505,5 +508,60 @@ describe('the board\'s shape in the thin state (Össur today)', () => {
     // With no conversation in a subject, the Subject header says so too.
     const none = { ...THIN, table: { ...THIN.table!, subjects: false, filters: [], rows: THIN.table!.rows.map((r) => ({ ...r, conv: { ...r.conv, subjectId: null, subjectName: null } })) } }
     expect(renderText(<ConversationTable table={none.table} data={none} />)).toContain('Conversation Subject · none yet About · brands not counted yet This week')
+  })
+})
+
+// A TRACKED SUBJECT IS NEVER HIDDEN (Heinrich, 14 Oct): one ready, one ready
+// and thin, one whose check is open, one being re-described. Every one keeps
+// its row; the failed one says why where its level goes and prints no figure
+// (ruling U6), exactly as the open one does; the thin one prints its small
+// count.
+describe('a tracked subject is never hidden (14 Oct)', () => {
+  const TRACKED = marketFixture({ subjects: 'tracked' })
+  const board = TRACKED.subjects!
+  const rowOf = (html: string, state: string): string => {
+    const at = html.indexOf(`data-subject-row="${state}"`)
+    const next = html.indexOf('data-subject-row="', at + 1)
+    return html.slice(at, next < 0 ? undefined : next)
+  }
+
+  it('draws a row for every subject, the failed one with FAILED_EXPLAINED, the conversations inside it and no figure', () => {
+    const text = renderText(<SubjectBoardView board={board} data={TRACKED} />)
+    expect(board.rows.map((r) => [r.name, r.pending?.state ?? 'ready'])).toEqual([
+      ['Fit & comfort', 'ready'], ['Look & style', 'ready'], ['Community & encouragement', 'failed'], ['Cost & access', 'provisional'],
+    ])
+    expect(text).toContain(`Community & encouragement ${FAILED_EXPLAINED} Inside it Week Oct Running-blade stories 17 26 First steps after amputation 13 19 Support from other amputees 9 13`)
+    expect(text).toContain(`Cost & access ${SUBJECT_NOT_MEASURED} Inside it`)
+    // No figure rests on the failed subject's membership: no level, no line,
+    // no change. Its conversations' own counts are theirs.
+    const failed = rowOf(render(<SubjectBoardView board={board} data={TRACKED} />), 'failed')
+    expect(failed).toContain('Being re-described: a check found')
+    expect(failed).toContain('Running-blade stories')
+    expect(failed).not.toMatch(/data-copy="level"|data-copy="verdict"|months<\/span>|%<\/span>/)
+    assertCopyContract(<SubjectBoardView board={board} data={TRACKED} />)
+  })
+
+  it('prints a thin ready subject\'s small count as a small count', () => {
+    const text = renderText(<SubjectBoardView board={board} data={TRACKED} />)
+    expect(text).toContain('Look & style 1% 4 of 318 too few to compare')
+  })
+
+  it('the failed subject\'s panel says why and lists the conversations inside it, with no figure of its own', () => {
+    const data = marketFixture({ subjects: 'tracked', subject: 'community' })
+    const node = <SubjectPanelView panel={data.subjectPanel!} data={data} />
+    const text = renderText(node)
+    expect(text).toContain(`Community & encouragement Close ${FAILED_EXPLAINED} Conversations inside it · this week, and October so far Running-blade stories 17 26`)
+    expect(text).not.toMatch(/videos in your market|of the market’s videos/)
+    assertCopyContract(node)
+  })
+
+  it('the table names the failed subject on its conversations and gives its chip no count, as an open one\'s', () => {
+    const node = <ConversationTable table={TRACKED.table!} data={TRACKED} />
+    const text = renderText(node)
+    expect(TRACKED.table!.filters.map((f) => [f.name, f.count])).toEqual([
+      ['All', 17], ['Fit & comfort', 4], ['Look & style', 2], ['Community & encouragement', null], ['Cost & access', null],
+    ])
+    expect(text).toContain('Running-blade stories Community & encouragement')
+    assertCopyContract(node)
   })
 })

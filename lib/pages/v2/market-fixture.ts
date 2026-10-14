@@ -222,13 +222,39 @@ export function fixtureFacts(): SubjectFact[] {
   return facts
 }
 
+/** The four subjects a tracked-always tenant follows (14 Oct): one ready,
+ *  one ready and thin, one whose check is open, one whose check failed. The
+ *  other two of the six are not followed, so their conversations name no
+ *  subject. */
+const TRACKED: Record<string, 'ready' | 'provisional' | 'failed'> = { fit: 'ready', look: 'ready', cost: 'provisional', community: 'failed' }
+
 /**
  * The subjects in a thinner state (the parity pass, 13 Oct): `provisional`,
  * every check still open (Össur today: no level, no line, no change; the
  * conversations inside each still listed); `one_month`, each read for this
- * month only (Sealand today: a level, no line to speak of, no change).
+ * month only (Sealand today: a level, no line to speak of, no change);
+ * `tracked` (14 Oct, a tracked subject is never hidden): Fit & comfort ready,
+ * Look & style ready and thin (4 of 318), Cost & access's check open,
+ * Community & encouragement's check failed.
  */
-export function fixtureFactsIn(state: 'provisional' | 'one_month'): SubjectFact[] {
+export function fixtureFactsIn(state: 'provisional' | 'one_month' | 'tracked'): SubjectFact[] {
+  if (state === 'tracked') {
+    return fixtureFacts().flatMap((f): SubjectFact[] => {
+      const key = f.id.slice('subj-'.length)
+      const check = TRACKED[key]
+      if (!check) return []
+      if (check === 'failed') return [{ ...f, calibration: 'failed', level: null, verdict: null, trail: [] }]
+      if (check === 'provisional') return [{ ...f, calibration: 'provisional', level: null, verdict: null, trail: [] }]
+      if (key !== 'look') return [f]
+      // Thin: a small level prints as a small level, never hidden.
+      return [{
+        ...f,
+        level: { k: 4, n: 318 },
+        verdict: monthVerdict('subject', f.id, f.name, [4, 318], [7, 839]),
+        trail: [{ month: '2026-08-01', k: 5, n: 612 }, { month: SEP, k: 7, n: 839 }, { month: OCT, k: 4, n: 318 }],
+      }]
+    })
+  }
   return fixtureFacts().map((f) => {
     if (f.calibration === 'failed') return f
     if (state === 'provisional') return { ...f, calibration: 'provisional', level: null, verdict: null, trail: [] }
@@ -284,8 +310,9 @@ export interface FixtureOptions {
    *  in full): "October", never "so far". */
   closed?: boolean
   /** The subjects' state: every check passed (the default), every check
-   *  still open, or read for this month only. */
-  subjects?: 'ready' | 'provisional' | 'one_month'
+   *  still open, read for this month only, or the tracked-always four (one
+   *  ready, one thin, one open, one failed: `fixtureFactsIn('tracked')`). */
+  subjects?: 'ready' | 'provisional' | 'one_month' | 'tracked'
   /** The weekly volume: drawn (the default), too few clean weeks, or a read
    *  that failed. */
   weeks?: 'drawn' | 'insufficient' | 'failed'
@@ -411,6 +438,26 @@ const PERSONAS = [
 
 const HERO_KINDS = [{ kind: 'pain_point', videos: 14 }, { kind: 'question', videos: 9 }, { kind: 'objection', videos: 4 }]
 
+/** The tracked-always four as the loader places them (`placementTiers`):
+ *  the ready ones first, the open and the failed one in the second tier. */
+function trackedPlacement(all: NonNullable<ConvInput['subjects']>): NonNullable<ConvInput['subjects']> {
+  const tier = (keep: (check: string) => boolean) => {
+    const order = all.order.filter((sid) => keep(TRACKED[sid.slice('subj-'.length)] ?? ''))
+    const subjectsOf = new Map<string, string[]>()
+    for (const [ins, list] of all.subjectsOf) {
+      const kept = list.filter((sid) => order.includes(sid))
+      if (kept.length > 0) subjectsOf.set(ins, kept)
+    }
+    return { order, subjectsOf }
+  }
+  const ready = tier((c) => c === 'ready')
+  const pending = tier((c) => c === 'provisional' || c === 'failed')
+  return {
+    names: new Map([...all.names].filter(([sid]) => TRACKED[sid.slice('subj-'.length)] != null)),
+    order: ready.order, subjectsOf: ready.subjectsOf, pending,
+  }
+}
+
 /** Market as the route would hand it to the page. */
 export function marketFixture(opts: FixtureOptions = {}): MarketData {
   const period = opts.period ?? 'week'
@@ -433,7 +480,7 @@ export function marketFixture(opts: FixtureOptions = {}): MarketData {
   // tier (`placeSubject`), as the loader hands them.
   const pendingTier = opts.subjects === 'provisional' && base.subjects
     ? { ...base.subjects, order: [] as string[], subjectsOf: new Map<string, string[]>(), pending: { order: base.subjects.order, subjectsOf: base.subjects.subjectsOf } }
-    : base.subjects
+    : opts.subjects === 'tracked' && base.subjects ? trackedPlacement(base.subjects) : base.subjects
   const input = { ...base, subjects: pendingTier, ...(opts.noNew ? { newIds: new Set<string>(opts.flagNew ? [id(11)] : []) } : {}) }
   const convs = buildConvs(input).map((c) => withWho(c, period))
   const read = fixtureRead()

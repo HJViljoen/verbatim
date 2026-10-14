@@ -14,10 +14,17 @@ import { loadMemberInsightIdsBySubject } from './subjects'
 // Voice surface another (ready subjects only), so a conversation could name
 // one subject on Market and another, or none, on Content.
 //
-// A NAME IS NOT A FIGURE. Placing a conversation in a subject whose check is
-// still open is allowed (ruling U6 is about figures resting on membership):
+// A NAME IS NOT A FIGURE. Placing a conversation in a subject whose check has
+// not passed is allowed (ruling U6 is about figures resting on membership):
 // the surface may name the subject and print the conversation's own counts,
 // never a level, line, change or count of the subject's own.
+//
+// A TRACKED SUBJECT IS NEVER HIDDEN (Heinrich, 14 Oct: "they want it tracked
+// no matter what"). A failed subject (its check clearly under the floor,
+// being re-described) is placed exactly as a provisional one is: in the
+// second tier, taking a conversation only where no ready subject does. Until
+// 14 Oct it was in no tier, so the conversations it holds named no subject
+// anywhere and the subject's own row on Market listed nothing inside it.
 //
 // The rule's member ids are the conversation's own (`theme_observations.
 // member_insight_ids`) under the run the page reads its conversations from:
@@ -26,9 +33,9 @@ import { loadMemberInsightIdsBySubject } from './subjects'
 // publishes; a page reading another run reads that run's clustering.
 
 /** The subjects a conversation may be placed in, as `placeSubject` takes
- *  them: the READY ones (`order`, `subjectsOf`), and the ones whose check is
- *  open (`pending`), used only where no ready subject takes the conversation.
- *  `names` holds both. */
+ *  them: the READY ones (`order`, `subjectsOf`), and the ones whose check has
+ *  not passed, provisional or failed (`pending`), used only where no ready
+ *  subject takes the conversation. `names` holds both. */
 export interface SubjectPlacement {
   names: ReadonlyMap<string, string>
   order: readonly string[]
@@ -75,14 +82,15 @@ export function subjectOfTheme(
 
 /**
  * The subjects a conversation may be placed in, in two tiers (the parity
- * pass, 13 Oct; ruling U6): the READY ones, and the ones whose check is still
- * open. A subject being re-described is in neither: its check found it
- * catching comments about other things. Pure.
+ * pass, 13 Oct; ruling U6): the READY ones, and every other active subject,
+ * its check open (provisional) or failed (being re-described), in one tier
+ * and in the subjects' own order (14 Oct: a tracked subject is never hidden;
+ * a failed one behaves exactly as a provisional one). Pure.
  */
 export function placementTiers<S extends { id: string }>(all: readonly { subject: S; calibration: string }[]): { ready: S[]; pending: S[] } {
   return {
     ready: all.filter((x) => x.calibration === 'ready').map((x) => x.subject),
-    pending: all.filter((x) => x.calibration !== 'ready' && x.calibration !== 'failed').map((x) => x.subject),
+    pending: all.filter((x) => x.calibration !== 'ready').map((x) => x.subject),
   }
 }
 
@@ -91,9 +99,9 @@ export function placementTiers<S extends { id: string }>(all: readonly { subject
  * 13 Oct, on Market; every surface since 14 Oct; ruling U6): a READY subject
  * always wins. `subjectOfTheme` over the ready subjects alone first; only
  * where no ready subject takes the conversation (3 of its member insights
- * and 15% of them) is it read against the subjects whose check is open, so a
- * subject whose matching is not verified never takes a conversation from one
- * whose matching is. A failed subject is never used. Pure.
+ * and 15% of them) is it read against the subjects whose check has not
+ * passed (provisional and failed, one tier), so a subject whose matching is
+ * not verified never takes a conversation from one whose matching is. Pure.
  */
 export function placeSubject(memberIds: readonly string[], s: SubjectPlacement): string | null {
   return subjectOfTheme(memberIds, s.subjectsOf, s.order)

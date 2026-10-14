@@ -87,9 +87,13 @@ export function fixtureMarketTop(opts: { flagged?: boolean; nothingNew?: boolean
   }
 }
 
-/** Market's subject facts, as the standing reader hands them. */
+/** Market's subject facts, as the standing reader hands them: the board's
+ *  month, every subject ready. Market's seventh subject, being re-described,
+ *  is Market's own case: since 14 Oct a failed subject withholds the tile's
+ *  rank as an open one does (`weekSubjectsOf`, pinned in home.test.ts), and
+ *  the board draws "Biggest subject". */
 export function fixtureStanding(): StandingFact[] {
-  return fixtureFacts().map((f, i): StandingFact => ({
+  return fixtureFacts().filter((f) => f.calibration !== 'failed').map((f, i): StandingFact => ({
     subjectId: f.id, name: f.name, calibration: f.calibration as StandingFact['calibration'], level: f.level, rank: f.level ? i + 1 : 0,
     trail: f.trail, verdict: f.verdict, direction: null, rung: f.level ? 'changed' : 'none', contents: [], notes: [], quoteRef: null,
   }))

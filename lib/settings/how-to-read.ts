@@ -110,7 +110,8 @@ export const READING_CARDS: readonly ReadingCard[] = [
       'A conversation is listed once 3 of the period’s videos in the category carry it.',
       'A subject is counted by the same rule a theme is, which means it counts what people SAID, not what they bought.',
       'A subject’s month so far is called a change against last month only where it clears the band, and reads “no clear change” where it does not; two months not read the same way are not compared.',
-      'A subject still being checked keeps its row and the conversations inside it, but prints no figure: its level comes after the check. One whose check clearly failed prints no figure and no conversations while it is re-described.',
+      // 14 Oct: a tracked subject is never hidden (`buildSubjectBoard`).
+      'Every subject you follow keeps its row, however little is said about it. One still being checked keeps its row and the conversations inside it, but prints no figure: its level comes after the check. One whose check clearly failed keeps its row and the conversations inside it too, prints no figure, and says it is being re-described.',
       'The kinds of thing people did in the comments overlap: one video can carry several, so together they are more than its whole.',
       'It cannot tell you why anything moved. A number and a reason are different claims, and only one of them is counted.',
       'Our read of what has held across the months sits below a month’s figures. It is written when the month closes, says so where it was written earlier, and compares no month with another. While a month is still under way and has no read of its own, the newest read of any month before it stands there, named as that month’s.',
@@ -138,7 +139,7 @@ export const READING_CARDS: readonly ReadingCard[] = [
       `The count, “${BRANDS_HEAD_ORGANIC}”, leaves out every video our own brand searches found, so our searching for a brand does not add to its count. It is set against last month only where both months were read the same way.`,
       'What people did in the videos naming a brand, and what those videos are about, is a level with no change: a brand’s month holds too few videos to band.',
       // Ruling U6 (14 Oct): `measuredSubjects`, lib/reading/cross.ts.
-      'What a group or a brand talks about counts only the subjects whose check has passed. A subject still being checked prints no figure here: the page says how many are not measured yet, and “Not measured yet” where none is.',
+      'What a group or a brand talks about counts only the subjects whose check has passed: a group’s card shows its three largest, and a brand’s panel lists each of them, at 0 where none of its videos carry it. A subject still being checked prints no figure here: the page says how many are not measured yet, and “Not measured yet” where none is. A subject being re-described is named, with why it shows no figure.',
       'A brand’s figures are counts of the videos our searches found, never market share.',
       'A rival’s panel reads the ninety days ending at the last update of the month the page reads.',
       NINETY_DAY_NOTE,
@@ -165,7 +166,7 @@ export const READING_CARDS: readonly ReadingCard[] = [
       'A standout needs 3 or more videos. A product is set against its category only where the difference clears the band, and with a product’s tens of videos it rarely does. A category’s share is set against last month the same way, and two months read on different product lists are not compared.',
       // The four places (the parity pass, 13 Oct night: `standoutSlots`).
       // Ruling U6 (`printsMarket`): the crosses count ready subjects only.
-      'A subject still being checked prints no figure here either: it is named, and reads “Not measured yet” where its count would be, and no card or column says what the talk is mostly about until its check has passed.',
+      'Every subject you follow is listed in a category’s or a product’s panel, at 0 where none of its videos carry it. A subject still being checked prints no figure here either: it is named, and reads “Not measured yet” where its count would be, or why it is being re-described, and no card or column says what the talk is mostly about while any subject’s check has not passed.',
       'The four cards at the top are always there. Where nothing reaches a standout, a card shows the nearest the month has and says what it is: a product named for the first time in one or two videos; the category with the largest share of talk that names none of your products; the product, else the category, with 3 or more videos and the largest share with praise in their comments; and the product, else the category, with 3 or more videos and the largest share about one subject. Each is one not already shown in another card, where there is one. A subject is said to lead only where it leads every other outright. Where the month has nothing for a card, it says so.',
       'A product with no reading in a month reads “not read yet”, never quiet.',
       'Until your catalogue is loaded and its reading is switched on, the page says which is missing rather than printing a count.',

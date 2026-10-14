@@ -4,6 +4,7 @@ import { assertCopyContract } from '@/lib/test/copy-contract'
 import { ossurVoicesFixture, sealandVoicesFixture, VOICES_FIXTURES } from '@/lib/pages/v2/voices-fixture'
 import type { BrandPanel } from '@/lib/pages/v2/voices'
 import { BrandPanelView, BrandsCard, VerdictNote } from './brands'
+import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 
 describe('Brands in your market: ruling U6', () => {
   it('a counted brand\'s top subject and panel count the ready subjects alone, and say how many more are not measured', () => {
@@ -164,6 +165,36 @@ describe('a brand\'s panel', () => {
     expect(text).toContain('Brand You Sealand')
     expect(text).not.toMatch(/Asked under|Said about|differs/)
     expect(text).toContain('Ask the Agent about your brand')
+    assertCopyContract(node)
+  })
+})
+
+// A TRACKED SUBJECT IS NEVER HIDDEN (Heinrich, 14 Oct).
+describe('Brands in your market: a tracked subject is never hidden (14 Oct)', () => {
+  it('a counted rival\'s panel lists every ready subject, the thin one\'s small count, then the open ones counted and the failed one named with its reason', () => {
+    const d = VOICES_FIXTURES['ossur-tracked-brand']()
+    const node = <BrandPanelView panel={d.panel as BrandPanel} monthWords={d.monthWords} />
+    const text = renderText(node)
+    expect(text).toContain(`What they talk about · of its 37 Function & movement 9 Look & style 1 1 more subject not measured yet Fit & comfort: ${FAILED_EXPLAINED}`)
+    assertCopyContract(node)
+  })
+
+  it('a ready subject on none of a brand\'s videos is listed at 0 and is never its top subject', () => {
+    const d = VOICES_FIXTURES['ossur-tracked']()
+    const client = d.brands.all.find((r) => r.you)!
+    // Össur's own row is not counted yet; Ottobock's top is a subject on its videos.
+    expect(client.topSubject).toBeNull()
+    const otto = d.brands.all.find((r) => r.label === 'Ottobock')!
+    expect(otto.topSubject).toMatchObject({ label: 'Function & movement', k: 9 })
+  })
+
+  it('with only a subject being re-described and none ready on its videos, the column says "Not measured yet", never "no subject"', () => {
+    const d = VOICES_FIXTURES['ossur-tracked']()
+    const brands = { ...d.brands, rows: d.brands.rows.map((r) => ({ ...r, topSubject: null, subjectsPending: undefined, subjectsFailed: [{ id: 's-fit', label: 'Fit & comfort' }] })) }
+    const node = <BrandsCard brands={brands} monthWords={d.monthWords} />
+    const text = renderText(node)
+    expect(text).toContain(SUBJECT_NOT_MEASURED)
+    expect(text).not.toContain('no subject yet')
     assertCopyContract(node)
   })
 })

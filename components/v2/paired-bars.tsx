@@ -47,6 +47,9 @@ export interface PairedRow {
   /** One per column, in the columns' order; null is an empty cell (its mark
    *  and words from `emptyLabel`). */
   cells: readonly (PairedCell | null)[]
+  /** This row's own reason for an empty cell, where it differs from the
+   *  table's (a subject being re-described among ones not measured yet). */
+  emptyLabel?: string
 }
 
 export interface PairedBarsProps {
@@ -113,7 +116,7 @@ export function PairedBars({ rowHeader, columns, rows, label, emptyLabel = 'none
                 const cell = r.cells[i] ?? null
                 return (
                   <td key={c.key} className="py-2.5 pr-2.5 align-middle">
-                    {cell ? <Cell cell={cell} tone={c.tone} /> : <EmptyCell label={emptyLabel} />}
+                    {cell ? <Cell cell={cell} tone={c.tone} /> : <EmptyCell label={r.emptyLabel ?? emptyLabel} />}
                   </td>
                 )
               })}

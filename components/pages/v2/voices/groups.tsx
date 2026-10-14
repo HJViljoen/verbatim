@@ -67,9 +67,11 @@ export function WhoCard({ groups, videos, monthWords }: { groups: VoicesGroups; 
 
 /** One group (the board's `.pcard`). */
 export function GroupCard({ card, n, monthWords, style }: { card: VoicesGroupCard; n: number | null; monthWords: string; style?: CSSProperties }) {
-  // No ready subject on their videos, and some not measured yet: the box
-  // cannot say "no subject", only that it is not measured (ruling U6).
-  const notMeasured = card.videos > 0 && card.subjects.length === 0 && (card.subjectsPending ?? 0) > 0
+  // No ready subject on their videos, and some not measured yet or being
+  // re-described: the box cannot say "no subject", only that it is not
+  // measured, or why (ruling U6; a failed one named since 14 Oct).
+  const failed = card.subjectsFailed ?? []
+  const notMeasured = card.videos > 0 && card.subjects.length === 0 && ((card.subjectsPending ?? 0) > 0 || failed.length > 0)
   return (
     <article
       data-group={card.key}
@@ -102,10 +104,10 @@ export function GroupCard({ card, n, monthWords, style }: { card: VoicesGroupCar
         {card.subjects.length > 0 ? (
           <>
             {card.subjects.map((s) => <MiniRow key={s.id} label={s.label} k={s.k} of={card.videos} />)}
-            <PendingSubjectsLine count={card.subjectsPending ?? 0} />
+            <PendingSubjectsLine count={card.subjectsPending ?? 0} failed={failed} />
           </>
         ) : notMeasured ? (
-          <NotMeasuredRows />
+          <NotMeasuredRows open={(card.subjectsPending ?? 0) > 0} failed={failed} />
         ) : <p className="m-0 text-[12.5px] leading-[1.4] text-muted-foreground">{card.videos > 0 ? 'No subject read in their videos yet.' : `None of their comments in ${monthWords}.`}</p>}
       </div>
       {card.wants || card.stops ? (
@@ -239,7 +241,7 @@ export function GroupPanelView({ panel, monthWords, notchAt }: { panel: GroupPan
         {second && panel.videos > 0 ? <StatCell value={second.k} of={panel.videos} label={<>are about {second.label}</>} /> : null}
         {/* Ruling U6: no ready subject, no "are about" figure; the two
             cells' place says why, once, so the row keeps its four. */}
-        {!first && panel.videos > 0 && (panel.subjectsPending ?? 0) > 0 ? (
+        {!first && panel.videos > 0 && ((panel.subjectsPending ?? 0) > 0 || (panel.subjectsFailed?.length ?? 0) > 0) ? (
           <div className="min-w-0 rounded-[10px] bg-inner px-4 pt-4 pb-3.5 xl:col-span-2">
             <div className="text-[15px] font-medium leading-[30px] text-muted-foreground">{SUBJECT_NOT_MEASURED}</div>
             <div className="mt-2 text-[12.5px] leading-[1.4] text-muted-foreground">what their videos are about</div>

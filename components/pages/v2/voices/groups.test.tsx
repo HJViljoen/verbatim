@@ -3,6 +3,7 @@ import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { ossurVoicesFixture, VOICES_FIXTURES } from '@/lib/pages/v2/voices-fixture'
 import { mergeWho, type GroupPanel } from '@/lib/pages/v2/voices'
+import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { GroupCard, GroupGrid, GroupPanelView, MixCard, WhoCard } from './groups'
 
 describe('Who is in your market and the group cards (decision 2)', () => {
@@ -80,7 +81,8 @@ describe('Who is in your market and the group cards (decision 2)', () => {
     const p = ossurVoicesFixture({}, 'mixed')
     const node = <GroupCard card={p.groups.cards.find((c) => c.key === 'caregivers')!} n={p.videos} monthWords={p.monthWords} />
     const text = renderText(node)
-    expect(text).toContain('What they talk about · of their 45 Cost & access 14 4 more subjects not measured yet')
+    // A ready subject on none of their videos keeps its row at 0 (14 Oct).
+    expect(text).toContain('What they talk about · of their 45 Cost & access 14 Function & movement 0 4 more subjects not measured yet')
     expect(text).not.toContain('Fit & comfort')
     assertCopyContract(node)
   })
@@ -242,6 +244,43 @@ describe('a group\'s panel (E3-Voices-Open)', () => {
     // Six column heads in the two grids, as with everything filled.
     const heads = (m: string) => m.match(/<p class="m-0 text-\[11\.5px\] font-semibold uppercase/g)?.length ?? 0
     expect(heads(render(node))).toBe(heads(render(<GroupPanelView panel={panel} monthWords="September" />)) - 2)
+    assertCopyContract(node)
+  })
+})
+
+// A TRACKED SUBJECT IS NEVER HIDDEN (Heinrich, 14 Oct): Function & movement
+// ready, Look & style ready and thin, Cost & access's check open, Fit &
+// comfort being re-described.
+describe('a tracked subject is never hidden (14 Oct)', () => {
+  const d = VOICES_FIXTURES['ossur-tracked']()
+  const card = (key: string) => d.groups.cards.find((c) => c.key === key)!
+
+  it('a group\'s box: the ready rows, a thin one\'s small count and a 0, how many are not measured, and the failed one named with its reason', () => {
+    const node = <GroupCard card={card('caregivers')} n={d.videos} monthWords={d.monthWords} />
+    const text = renderText(node)
+    expect(text).toContain(`What they talk about · of their 45 Look & style 2 Function & movement 0 1 more subject not measured yet Fit & comfort: ${FAILED_EXPLAINED}`)
+    // The failed one carries no figure: its line is its name and its reason.
+    const html = render(node)
+    const line = html.slice(html.indexOf('data-subject-failed'), html.indexOf('</p>', html.indexOf('data-subject-failed')))
+    expect(line).not.toMatch(/data-copy=/)
+    assertCopyContract(node)
+  })
+
+  it('a box with no ready subject and only one being re-described says its reason where "Not measured yet" would go', () => {
+    const only = { ...card('caregivers'), subjects: [], subjectsPending: undefined, subjectsFailed: [{ id: 's-fit', label: 'Fit & comfort' }] }
+    const node = <GroupCard card={only} n={d.videos} monthWords={d.monthWords} />
+    const text = renderText(node)
+    expect(text).toContain(`What they talk about Fit & comfort: ${FAILED_EXPLAINED}`)
+    expect(text).not.toContain(SUBJECT_NOT_MEASURED)
+    assertCopyContract(node)
+  })
+
+  it('the group\'s panel counts the ready subjects alone, the thin one included', () => {
+    const open = VOICES_FIXTURES['ossur-tracked-group']()
+    const node = <GroupPanelView panel={open.panel as GroupPanel} monthWords={open.monthWords} />
+    const text = renderText(node)
+    expect(text).toContain('2 of 45 are about Look & style')
+    expect(text).not.toMatch(/are about Fit & comfort|are about Cost & access/)
     assertCopyContract(node)
   })
 })

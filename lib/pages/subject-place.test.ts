@@ -16,7 +16,8 @@ const invert = (pairs: [string, string[]][]) => {
 }
 
 /** Three conversations and a mixed tenant: Fit ready, Cost open, Repair
- *  failed (so in no tier at all). */
+ *  failed (14 Oct: in the second tier with Cost, a tracked subject is never
+ *  hidden). */
 const A = members('a', 10)
 const B = members('b', 10)
 const C = members('c', 10)
@@ -29,9 +30,9 @@ const tiers = placementTiers(all)
 const membership: [string, string[]][] = [
   // A: Fit holds 3, Cost 8. A ready subject that qualifies always wins.
   ['fit', A.slice(0, 3)], ['cost', A.slice(0, 8)],
-  // B: Repair (failed) holds 9, Cost 4: never the failed one.
+  // B: Repair (failed) holds 9, Cost (open) 4: one tier, the most wins.
   ['repair', B.slice(0, 9)], ['cost', [...B.slice(0, 2), ...B.slice(8, 10)]],
-  // C: Repair alone: nothing.
+  // C: Repair alone: Repair, as an open subject would.
   ['repair', C.slice(0, 7)],
 ]
 const placement: SubjectPlacement = {
@@ -66,15 +67,29 @@ describe('one placement rule for a conversation\'s subject', () => {
       expect(content.get(id)?.name ?? null).toBe(market.subjectName)
       expect(content.get(id)?.id ?? null).toBe(market.subjectId)
     }
-    expect([...content].map(([id, s]) => [id, s?.name ?? null])).toEqual([['A', 'Fit'], ['B', 'Cost'], ['C', null]])
+    expect([...content].map(([id, s]) => [id, s?.name ?? null])).toEqual([['A', 'Fit'], ['B', 'Repair'], ['C', 'Repair']])
   })
 
-  it('Content\'s old rule (every active subject, one tier) named the failed subject, and a provisional one over a ready one', () => {
+  it('Content\'s old rule (every active subject, one tier) named a provisional one over a ready one; the two tiers never do', () => {
     const everyActive = invert(membership)
-    expect(subjectForTheme(B, everyActive, ['cost', 'fit', 'repair'])).toBe('repair')
     expect(subjectForTheme(A, everyActive, ['cost', 'fit', 'repair'])).toBe('cost')
-    expect(placeSubject(B, placement)).toBe('cost')
     expect(placeSubject(A, placement)).toBe('fit')
+  })
+
+  it('a failed subject is placed exactly as a provisional one (14 Oct): in the second tier, never over a ready one', () => {
+    expect(tiers.ready.map((s) => s.id)).toEqual(['fit'])
+    expect(tiers.pending.map((s) => s.id)).toEqual(['cost', 'repair'])
+    // B: no ready subject takes it; Repair holds the most of the second tier.
+    expect(placeSubject(B, placement)).toBe('repair')
+    // A: Repair holding every member insight still loses to a ready Fit.
+    const repairAll: SubjectPlacement = {
+      ...placement,
+      pending: { order: ['cost', 'repair'], subjectsOf: invert([['repair', A], ['cost', A.slice(0, 8)]]) },
+    }
+    expect(placeSubject(A, repairAll)).toBe('fit')
+    // A tie in the second tier goes to the subjects' own order, whatever the state.
+    const tie: SubjectPlacement = { names: placement.names, order: [], subjectsOf: new Map(), pending: { order: ['cost', 'repair'], subjectsOf: invert([['repair', A.slice(0, 5)], ['cost', A.slice(5, 10)]]) } }
+    expect(placeSubject(A, tie)).toBe('cost')
   })
 
   it('a tenant whose subjects are all open (Össur, 13 Oct) names the open subject, and no subject read names nothing', () => {
