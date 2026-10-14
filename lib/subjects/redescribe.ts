@@ -32,8 +32,9 @@ import type { Subject } from './types'
 // WHAT IT KEEPS: the name, the origin and the source (the provenance of a name
 // the client confirmed). WHAT IT DOES NOT: the old id's memberships, its
 // calibration and its months, which is the point. Moves declared on the old id
-// stay on it (a move's target carries no UPDATE grant), so an operator checks
-// for them first.
+// stay on it (a move's target carries no UPDATE grant), so the script reads
+// them and refuses to stop a subject that has one (`strandedMoves`) unless the
+// operator says so.
 //
 // RESUMABLE, because the order is retire, insert, point, log, and the unique
 // live name means the insert can only follow the retirement: a run that stops
@@ -75,6 +76,27 @@ export type RedescribeWrite = (typeof REDESCRIBE_WRITES)[number]
 export type RedescribePlan =
   | { id: string; name: string; writes: RedescribeWrite[]; successorId: string | null }
   | { id: string; name: string; refused: string }
+
+/** A declared move, as the plan reads it. */
+export interface MoveOnSubject {
+  id: string
+  subject_id: string | null
+  status: string
+}
+
+/**
+ * The moves a re-description would strand. A move's target carries no UPDATE
+ * grant (it is what every point already reported means), so a move on the old
+ * id stays on the stopped subject, and Your moves then draws it with no
+ * subject and no reading (`subjectsOf` keeps active subjects only). Only a
+ * subject this run still RETIRES counts: one already stopped by an earlier run
+ * has stranded its moves already, and refusing to finish it would leave the
+ * old line closed with no successor. Pure.
+ */
+export function strandedMoves(plans: readonly RedescribePlan[], moves: readonly MoveOnSubject[]): MoveOnSubject[] {
+  const retiring = new Set(plans.flatMap((p) => ('refused' in p || !p.writes.includes('retire') ? [] : [p.id])))
+  return moves.filter((m) => m.subject_id != null && retiring.has(m.subject_id))
+}
 
 /** The subjects table's own limit (`description` CHECK, and `nameSubject`). */
 export const DESCRIPTION_MAX = 400

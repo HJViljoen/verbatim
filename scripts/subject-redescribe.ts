@@ -7,12 +7,14 @@ import { embedSubjects } from '../lib/subjects/membership'
 import {
   planRedescribe,
   redescribeChange,
+  strandedMoves,
   successorRow,
+  type MoveOnSubject,
   type RedescribePlan,
   type RedescribeSeed,
   type RedescribeSubject,
 } from '../lib/subjects/redescribe'
-import { TABLE_SUBJECTS, type Subject } from '../lib/subjects/types'
+import { TABLE_MOVES, TABLE_SUBJECTS, type Subject } from '../lib/subjects/types'
 import { createAdminClient } from '../lib/supabase-admin'
 
 // Re-describe a tenant's subjects from a seed (14 Oct). What a re-description
@@ -24,8 +26,9 @@ import { createAdminClient } from '../lib/supabase-admin'
 //     --client <uuid> --project <ref> --seed scripts/seeds/<tenant>-subjects.ts [--apply]
 //
 // READ-ONLY BY DEFAULT (lib/ops/market-first-args.ts): it reads the tenant's
-// subjects, its `subjects` change-log rows and its running updates, three
-// small reads after a timed probe, and prints what each subject needs. A
+// subjects, its `subjects` change-log rows, its running updates and the moves
+// declared on the seed's subjects, four small reads after a timed probe, and
+// prints what each subject needs. A
 // subject the seed was not written against (a moved name or description) is
 // refused, and then nothing is written for any of them.
 //
@@ -34,9 +37,10 @@ import { createAdminClient } from '../lib/supabase-admin'
 //      retirement trigger closes the months it still had open);
 //   2. insert the successor, active, with the old name, origin and source and
 //      the new words (`subjects_insert_audit` logs it);
-//   3. point the old subject at it (`superseded_by`);
-//   4. embed the successor's phrase (one embeddings call for the set, about a
-//      millionth of a dollar), so the membership dry run plans off a real band;
+//   3. embed the successor's phrase (one embeddings call per successor, about
+//      a millionth of a dollar), so the membership dry run plans off a real
+//      band; a failure here only warns, and the membership pass embeds it;
+//   4. point the old subject at it (`superseded_by`);
 //   5. one `config_changes` row with the command as its actor and both
 //      descriptions (`redescribeChange`).
 // A stop part-way is finished by running the same command again.
@@ -47,6 +51,11 @@ import { createAdminClient } from '../lib/supabase-admin'
 // NOT WHILE AN UPDATE RUNS. A run that planned its subjects before the write
 // would judge and freeze the old ones; the script refuses with --apply while
 // the tenant has a running update, unless --allow-running.
+//
+// NOT OVER A DECLARED MOVE. A move on the old id stays on it (no UPDATE grant
+// on its target) and Your moves draws it with no subject and no reading, so
+// --apply refuses while a subject it would stop carries one, unless
+// --allow-moves (`strandedMoves`).
 
 const NAME = 'subject-redescribe'
 const PROBE_MAX_MS = 3000
@@ -68,7 +77,7 @@ function planLine(p: RedescribePlan): string {
 
 async function main() {
   const args = parseScriptArgs(process.argv.slice(2), {
-    name: NAME, values: ['seed'], flags: ['allow-running'], defaultClient: '',
+    name: NAME, values: ['seed'], flags: ['allow-running', 'allow-moves'], defaultClient: '',
   })
   assertProject(args, process.env.NEXT_PUBLIC_SUPABASE_URL, NAME)
   console.log(modeLine(args, NAME))
@@ -95,11 +104,18 @@ async function main() {
   const runningRes = await admin.from('pipeline_runs').select('id').eq('client_id', args.clientId).eq('status', 'running')
   if (runningRes.error) throw new Error(`${NAME}: pipeline_runs: ${runningRes.error.message}. Nothing written.`)
   const running = (runningRes.data ?? []).map((r) => (r as { id: string }).id)
+  const movesRes = await admin.from(TABLE_MOVES).select('id, subject_id, status')
+    .eq('client_id', args.clientId).in('subject_id', seed.subjects.map((e) => e.id))
+  if (movesRes.error) throw new Error(`${NAME}: moves: ${movesRes.error.message}. Nothing written.`)
 
   const plans = planRedescribe(subjects, changesRes.data ?? [], seed.subjects)
   console.log(`  seed ${seedPath}, written ${seed.writtenOn}: ${seed.subjects.length} subject(s)`)
   for (const p of plans) console.log(planLine(p))
   if (running.length > 0) console.log(`  running update(s): ${running.join(', ')}`)
+  const stranded = strandedMoves(plans, (movesRes.data ?? []) as MoveOnSubject[])
+  if (stranded.length > 0) {
+    console.log(`  moves on a subject this stops (they stay on it; Your moves draws them with no reading): ${stranded.map((m) => `${m.id} (${m.status})`).join(', ')}`)
+  }
 
   const refused = plans.filter((p) => 'refused' in p)
   if (refused.length > 0) throw new Error(`${NAME}: REFUSED: ${refused.length} subject(s) cannot be re-described as the seed says. Nothing written.`)
@@ -109,6 +125,9 @@ async function main() {
   }
   if (running.length > 0 && !args.flags.has('allow-running')) {
     throw new Error(`${NAME}: REFUSED: an update is running for this client (${running.join(', ')}). Run again when it has finished, or pass --allow-running. Nothing written.`)
+  }
+  if (stranded.length > 0 && !args.flags.has('allow-moves')) {
+    throw new Error(`${NAME}: REFUSED: ${stranded.length} declared move(s) are on a subject this would stop. Decide what becomes of them, then pass --allow-moves. Nothing written.`)
   }
 
   const actor = scriptActor(`scripts/${NAME}.ts --client ${args.clientId} --seed <file> --apply`)

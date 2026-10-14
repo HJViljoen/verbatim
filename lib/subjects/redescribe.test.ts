@@ -9,6 +9,7 @@ import {
   redescribeChange,
   redescribeLogged,
   redescribeNote,
+  strandedMoves,
   successorRow,
   type RedescribeSubject,
   type Redescription,
@@ -82,6 +83,23 @@ describe('planRedescribe', () => {
       .toMatchObject({ refused: expect.stringMatching(/stopped too/) })
     expect(planRedescribe([subject({ status: 'retired' }), successor({ description: 'Other.' })], [], [entry()])[0])
       .toMatchObject({ refused: expect.stringMatching(/other words/) })
+  })
+})
+
+describe('strandedMoves', () => {
+  const move = (subject_id: string | null, id = 'm1', status = 'active') => ({ id, subject_id, status })
+
+  it('names every move, of any status, on a subject this run would stop', () => {
+    const plans = planRedescribe([subject()], [], [entry()])
+    expect(strandedMoves(plans, [move('old'), move('old', 'm2', 'done'), move('other', 'm3'), move(null, 'm4')]).map((m) => m.id))
+      .toEqual(['m1', 'm2'])
+  })
+
+  it('never blocks finishing a subject an earlier run already stopped, nor a refused one', () => {
+    const stopped = planRedescribe([subject({ status: 'retired' })], [], [entry()])
+    expect(strandedMoves(stopped, [move('old')])).toEqual([])
+    const refused = planRedescribe([subject({ description: 'Something else.' })], [], [entry()])
+    expect(strandedMoves(refused, [move('old')])).toEqual([])
   })
 })
 
