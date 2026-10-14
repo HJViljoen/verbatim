@@ -540,6 +540,10 @@ describe('a tracked subject is never hidden (14 Oct)', () => {
     expect(failed).toContain('Being re-described: a check found')
     expect(failed).toContain('Running-blade stories')
     expect(failed).not.toMatch(/data-copy="level"|data-copy="verdict"|months<\/span>|%<\/span>/)
+    // Once a page, for a screen reader too: the empty track under the reason
+    // carries the short line, never the reason again.
+    expect(failed.split('Being re-described').length - 1).toBe(1)
+    expect(failed).toContain(`role="img" aria-label="${SUBJECT_NOT_MEASURED}"`)
     assertCopyContract(<SubjectBoardView board={board} data={TRACKED} />)
   })
 

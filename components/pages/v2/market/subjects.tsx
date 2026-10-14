@@ -6,6 +6,7 @@ import { Sparkline } from '@/components/charts/sparkline'
 import { CARD, CardHead, TickBar } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
 import type { MarketData, SubjectBoard, SubjectRow } from '@/lib/pages/v2/market'
+import { SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { cn } from '@/lib/utils'
 import { ConvChip, ConvRow, Label, MONO_MUTED, SetApartTag } from './parts'
 
@@ -103,7 +104,10 @@ function Row({ row, data, selected }: { row: SubjectRow; data: MarketData; selec
           // keeps the figure's height as its least.
           <>
             <p data-subject-pending="" className="m-0 mt-2 flex min-h-[34px] items-center text-[13px] leading-[1.45] text-muted-foreground">{row.pending?.note}</p>
-            <TickBar pct={0} size="lg" className="mt-2.5" label={row.pending?.note ?? row.name} />
+            {/* The empty track's label is the short line: a failed row's
+                reason is in the line above, so a screen reader hears it
+                once, not twice (once a page, 14 Oct). */}
+            <TickBar pct={0} size="lg" className="mt-2.5" label={row.pending?.state === 'failed' ? SUBJECT_NOT_MEASURED : row.pending?.note ?? row.name} />
           </>
         )}
         <MonthLine row={row} />
