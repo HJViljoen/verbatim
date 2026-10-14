@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { OSSUR_SUBJECTS } from '../../scripts/seeds/ossur-subjects'
+import { OSSUR_SUBJECTS_2 } from '../../scripts/seeds/ossur-subjects-2'
 import { scriptActor } from '../config-log'
 import {
   DESCRIPTION_MAX,
@@ -182,5 +183,90 @@ describe('the Össur seed', () => {
       'Look & style. How a prosthetic is decorated and shown: colours, covers, paint and finishes, patterns, tattoos, realistic skin tones, and showing it off or hiding it.',
     ])
     for (const s of seed.subjects) expect(subjectPositiveGloss(s.description), s.name).not.toMatch(/excluding|amputee|limb loss|wanting/i)
+  })
+})
+
+// A SUCCESSOR OF A SUCCESSOR (14 Oct, the second Össur seed). The first seed
+// retired `old` and made `new`; the second re-describes `new`. The plan reads
+// only what the database holds, so the chain needs no special case: `old` is
+// retired, so it is neither "another live subject of its name" nor touched,
+// and each guard (the words, the moves, who stopped it) is asked of `new`.
+describe('a successor re-described again', () => {
+  const LIMB_WORDS = 'Comments about how a prosthetic limb is decorated and shown: colours and covers, excluding how it works.'
+  const first = subject({ status: 'retired', superseded_by: 'new' })
+  const second = (over: Partial<RedescribeSubject> = {}) => successor(over)
+  const third = (over: Partial<RedescribeSubject> = {}) => subject({ id: 'newer', description: LIMB_WORDS, ...over })
+  const again = (over: Partial<Redescription> = {}): Redescription => ({ id: 'new', name: 'Look & style', from: NEW_WORDS, description: LIMB_WORDS, ...over })
+  const stoppedNew = { after: { id: 'new', name: 'Look & style', status: 'retired', superseded_by: null }, actor_kind: 'script', changed_at: '2026-10-14T16:00:00Z' }
+  const firstLog = { after: { id: 'new', supersedes: 'old' } }
+  const secondLog = { after: { id: 'newer', supersedes: 'new' } }
+
+  it('plans the full step on the successor, with the first one stopped and pointed', () => {
+    expect(planRedescribe([first, second()], [stoppedByScript, firstLog], [again()]))
+      .toEqual([{ id: 'new', name: 'Look & style', writes: ['retire', 'insert', 'point', 'log'], successorId: null }])
+  })
+
+  it('holds the from guard against the successor\'s words, not the first subject\'s', () => {
+    expect(planRedescribe([first, second()], [], [again({ from: OLD_WORDS })])[0])
+      .toMatchObject({ refused: 'its description today is not the one the seed was written against' })
+  })
+
+  it('finishes a stopped run at each step, and never reads the first line\'s rows as its own', () => {
+    // Stopped after the retirement: the first seed's log row and the old
+    // subject's own retirement do not count as this one's.
+    expect(planRedescribe([first, second({ status: 'retired' })], [stoppedByScript, firstLog, stoppedNew], [again()])[0])
+      .toMatchObject({ writes: ['insert', 'point', 'log'], successorId: null })
+    // Stopped after the insert.
+    expect(planRedescribe([first, second({ status: 'retired' }), third()], [firstLog], [again()])[0])
+      .toMatchObject({ writes: ['point', 'log'], successorId: 'newer' })
+    // Pointed: only the missing log, then nothing.
+    const done = [first, second({ status: 'retired', superseded_by: 'newer' }), third()]
+    expect(planRedescribe(done, [firstLog], [again()])[0]).toMatchObject({ writes: ['log'], successorId: 'newer' })
+    expect(planRedescribe(done, [firstLog, secondLog], [again()])[0]).toMatchObject({ writes: [], successorId: 'newer' })
+    expect(redescribeLogged([firstLog], 'newer', 'new')).toBe(false)
+  })
+
+  it('needs the record to show this script stopped the successor, not the first subject', () => {
+    expect(planRedescribe([first, second({ status: 'retired' })], [stoppedByScript, firstLog], [again()])[0])
+      .toMatchObject({ refused: expect.stringMatching(/does not show who stopped it/) })
+  })
+
+  it('names the moves on the successor it would stop, not the first subject\'s', () => {
+    const plans = planRedescribe([first, second()], [], [again()])
+    const moves = [{ id: 'm-old', subject_id: 'old', status: 'active' }, { id: 'm-new', subject_id: 'new', status: 'active' }]
+    expect(strandedMoves(plans, moves).map((m) => m.id)).toEqual(['m-new'])
+  })
+})
+
+describe('the second Össur seed (limb)', () => {
+  const seed = OSSUR_SUBJECTS_2
+  const firstWords = new Map(OSSUR_SUBJECTS.subjects.map((s) => [s.name, s.description]))
+
+  it('re-words the five successors from the words the first seed gave them, and leaves Cost & access alone', () => {
+    expect(seed.clientId).toBe(OSSUR_SUBJECTS.clientId)
+    expect(seed.subjects.map((s) => s.name)).toEqual(OSSUR_SUBJECTS.subjects.map((s) => s.name))
+    expect(new Set(seed.subjects.map((s) => s.id)).size).toBe(5)
+    for (const s of seed.subjects) expect(s.from, s.name).toBe(firstWords.get(s.name))
+    // None of the first seed's ids: those subjects are retired.
+    for (const s of seed.subjects) expect(OSSUR_SUBJECTS.subjects.map((x) => x.id)).not.toContain(s.id)
+  })
+
+  it('adds "limb" and changes nothing else', () => {
+    // What each one inserts: taking it out gives the first seed's words back.
+    const inserted: Record<string, string> = {
+      'Choosing the right device': ' limb',
+      'Community & encouragement': ' with limb loss',
+      'Fit & comfort': ' limb',
+      'Function & movement': ' limb',
+      'Look & style': ' limb',
+    }
+    for (const s of seed.subjects) {
+      expect(descriptionProblem(s.description, s.from), s.name).toBeNull()
+      expect(s.description, s.name).not.toMatch(/[—–]/)
+      const add = inserted[s.name]
+      const at = s.description.indexOf(add)
+      expect(at, s.name).toBeGreaterThan(0)
+      expect(s.description.slice(0, at) + s.description.slice(at + add.length), s.name).toBe(s.from)
+    }
   })
 })
