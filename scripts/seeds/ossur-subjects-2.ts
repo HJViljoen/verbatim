@@ -1,17 +1,18 @@
 import type { RedescribeSeed } from '../../lib/subjects/redescribe'
 
-// Össur's subjects, re-worded a second time (14 Oct): the five successors of
-// scripts/seeds/ossur-subjects.ts say "limb". The lead's call, under
+// Össur's subjects, re-worded a second time (14 Oct): four of the five
+// successors of scripts/seeds/ossur-subjects.ts say "limb". The lead's call, under
 // Heinrich's approval of 14 Oct: the judge replay
 // (plans/verbatim-depth-v2/judge-report.md) found prosthetic EYES filed under
 // them (both of Fit & comfort's false keeps, one of Look & style's), because
 // the words said "a prosthetic" and the sheet's labels meant a limb.
 //
 // NOTHING ELSE MOVES. Each description is the first seed's, with "limb" added
-// where it names the prosthetic; Community & encouragement names none, so the
-// person encouraged is "someone with limb loss", which is the community its
-// June words were about. Cost & access is left as it is (its words are
-// unchanged since June).
+// where it names the prosthetic. Community & encouragement is NOT here (the
+// lead's ruling, 14 Oct): it passed at 97% on its current words and names no
+// prosthetic, and "with limb loss" would pull its phrase vector toward people
+// saying they have limb loss, which its words exclude. Cost & access is left
+// as it is too (its words are unchanged since June).
 //
 // HOW IT IS LOADED: as the first seed was (scripts/subject-redescribe.ts
 // --client <uuid> --project <ref> --seed scripts/seeds/ossur-subjects-2.ts,
@@ -31,12 +32,6 @@ export const OSSUR_SUBJECTS_2: RedescribeSeed = {
       name: 'Choosing the right device',
       from: 'Comments about weighing one prosthetic against another before choosing: one knee, foot or hand against another, microprocessor against mechanical, a blade against an everyday foot, and picking or changing prosthetist or clinic, excluding wanting a device, asking what one can do, how it fits, and price.',
       description: 'Comments about weighing one prosthetic limb against another before choosing: one knee, foot or hand against another, microprocessor against mechanical, a blade against an everyday foot, and picking or changing prosthetist or clinic, excluding wanting a device, asking what one can do, how it fits, and price.',
-    },
-    {
-      id: 'da5bd724-d336-4756-8d1a-0ad648766b2e',
-      name: 'Community & encouragement',
-      from: 'Comments about people encouraging and supporting someone: praise for their courage, strength or positive attitude, messages of support and blessings, and people sharing their own story to lift others, excluding people only saying they are amputees or have limb loss, wanting a device, and questions about rehab or devices.',
-      description: 'Comments about people encouraging and supporting someone with limb loss: praise for their courage, strength or positive attitude, messages of support and blessings, and people sharing their own story to lift others, excluding people only saying they are amputees or have limb loss, wanting a device, and questions about rehab or devices.',
     },
     {
       id: 'ae634614-4e04-433d-a2d6-63c013416a7c',

@@ -242,10 +242,12 @@ describe('the second Össur seed (limb)', () => {
   const seed = OSSUR_SUBJECTS_2
   const firstWords = new Map(OSSUR_SUBJECTS.subjects.map((s) => [s.name, s.description]))
 
-  it('re-words the five successors from the words the first seed gave them, and leaves Cost & access alone', () => {
+  it('re-words four successors from the words the first seed gave them, and leaves Community and Cost & access alone', () => {
     expect(seed.clientId).toBe(OSSUR_SUBJECTS.clientId)
-    expect(seed.subjects.map((s) => s.name)).toEqual(OSSUR_SUBJECTS.subjects.map((s) => s.name))
-    expect(new Set(seed.subjects.map((s) => s.id)).size).toBe(5)
+    // Community & encouragement passed at 97% on its current words (the
+    // lead's ruling, 14 Oct): it is not re-worded.
+    expect(seed.subjects.map((s) => s.name)).toEqual(['Choosing the right device', 'Fit & comfort', 'Function & movement', 'Look & style'])
+    expect(new Set(seed.subjects.map((s) => s.id)).size).toBe(4)
     for (const s of seed.subjects) expect(s.from, s.name).toBe(firstWords.get(s.name))
     // None of the first seed's ids: those subjects are retired.
     for (const s of seed.subjects) expect(OSSUR_SUBJECTS.subjects.map((x) => x.id)).not.toContain(s.id)
@@ -255,7 +257,6 @@ describe('the second Össur seed (limb)', () => {
     // What each one inserts: taking it out gives the first seed's words back.
     const inserted: Record<string, string> = {
       'Choosing the right device': ' limb',
-      'Community & encouragement': ' with limb loss',
       'Fit & comfort': ' limb',
       'Function & movement': ' limb',
       'Look & style': ' limb',
