@@ -403,7 +403,9 @@ describe('SubjectPanelView', () => {
   it('a subject being re-described says why and lists the conversations inside it, as an open one does (14 Oct)', () => {
     const data = marketFixture({ subject: 'sport' })
     const text = renderText(<SubjectPanelView panel={data.subjectPanel!} data={data} />)
-    expect(text).toContain('Sport and running Close Being re-described: a check found the subject catching comments')
+    // Its reason is said once a page, in its row on the board above (14 Oct).
+    expect(text).toContain(`Sport and running Close ${SUBJECT_NOT_MEASURED}.`)
+    expect(text).not.toContain(FAILED_EXPLAINED)
     expect(text).toContain('Conversations inside it · this week, and October so far No conversation in it reached three videos.')
     expect(text).not.toMatch(/\d+ of \d+ videos in your market/)
     assertCopyContract(<SubjectPanelView panel={data.subjectPanel!} data={data} />)
@@ -546,13 +548,16 @@ describe('a tracked subject is never hidden (14 Oct)', () => {
     expect(text).toContain('Look & style 1% 4 of 318 too few to compare')
   })
 
-  it('the failed subject\'s panel says why and lists the conversations inside it, with no figure of its own', () => {
+  it('the failed subject\'s panel lists the conversations inside it, with no figure of its own; the page says why once, in its row', () => {
     const data = marketFixture({ subjects: 'tracked', subject: 'community' })
     const node = <SubjectPanelView panel={data.subjectPanel!} data={data} />
     const text = renderText(node)
-    expect(text).toContain(`Community & encouragement Close ${FAILED_EXPLAINED} Conversations inside it · this week, and October so far Running-blade stories 17 26`)
+    expect(text).toContain(`Community & encouragement Close ${SUBJECT_NOT_MEASURED}. Conversations inside it · this week, and October so far Running-blade stories 17 26`)
     expect(text).not.toMatch(/videos in your market|of the market’s videos/)
     assertCopyContract(node)
+    // Once a page: the board's row says it, the open panel does not repeat it.
+    const page = renderText(<MarketPage data={data} />)
+    expect(page.split(FAILED_EXPLAINED).length - 1).toBe(1)
   })
 
   it('the table names the failed subject on its conversations and gives its chip no count, as an open one\'s', () => {

@@ -3,7 +3,7 @@ import { readingMonthLabel } from '../../reading/month-label'
 import { JUDGE_VERSION } from '../../subjects/types'
 import { brandMonthPair, creatorThemes, measuredSubjects, type PendingSubject, type BrandCrossRow, type BrandMonthVideos, type CreatorVideo, type GroupMonthVideos, type GroupSubjectRow, type StoredBrandMonthRow, type ThemeRef } from '../../reading/cross'
 import {
-  buildBrandPanel, buildBrands, buildCreatorPanel, buildCreators, buildGroupPanel, buildGroups, clientCountsOf, creatorVideoIds, crossKeys, groupProducts, monthWordsOf, openOf,
+  buildBrandPanel, buildBrands, failedSubjectsOf, buildCreatorPanel, buildCreators, buildGroupPanel, buildGroups, clientCountsOf, creatorVideoIds, crossKeys, groupProducts, monthWordsOf, openOf,
   personasOf, themeVideoSets,
   type BrandSet, type VoicesData, type VoicesParams, type VoicesQuote,
 } from './voices'
@@ -263,9 +263,12 @@ export function ossurVoicesFixture(params: VoicesParams = {}, checks: OssurSubje
   const read2 = creatorThemes({ month: SEP, videos: creatorVideos, refs })
   const videoIds = creatorVideoIds(creatorVideos.map((v) => ({ id: v.videoId, platform: v.platform, account: v.account })))
   const creators = buildCreators({ month: SEP, read: read2, labels: OSSUR_LABELS, videoIds, brands: [], params })
+  // Why a failed subject shows no figure, once on the page (the loader's rule).
+  const failed = failedSubjectsOf(read.pendingSubjects)
   const data: VoicesData = {
     client: 'Össur', month: SEP, soFar: false, monthWords: monthWordsOf(SEP, false), monthLabel: readingMonthLabel(SEP, VOICES_FIXTURE_NOW), videos: market.length,
     groups, brands, creators, params, open: null, panel: null,
+    ...(failed.length > 0 ? { subjectsFailed: failed } : {}),
   }
   const open = openOf(data, params, { creators: read2 })
   if (open?.kind === 'group') {

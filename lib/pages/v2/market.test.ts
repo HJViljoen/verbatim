@@ -511,9 +511,11 @@ describe('the open panel', () => {
     expect(who.get('t1')).toEqual([{ about: 'client', videos: 1 }, { about: 'market', videos: 2 }])
   })
 
-  it('a subject being re-described opens with why and lists nothing', () => {
+  it('a subject being re-described opens as an open one does: not measured yet, the conversations inside it (here none), no figure', () => {
     const data = marketFixture({ subject: 'sport' })
-    expect(data.subjectPanel).toMatchObject({ state: 'failed', note: FAILED_EXPLAINED, inside: [], bars: [], level: null })
+    // Its reason, FAILED_EXPLAINED, is said once a page: in its row (14 Oct).
+    expect(data.subjectPanel).toMatchObject({ state: 'failed', note: SUBJECT_NOT_MEASURED, inside: [], bars: [], level: null })
+    expect(data.subjects!.rows.find((r) => r.id === data.subjectPanel!.id)!.pending).toEqual({ state: 'failed', note: FAILED_EXPLAINED })
   })
 
   it('a subject whose check is open opens with why and the conversations inside it', () => {

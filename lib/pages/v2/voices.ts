@@ -33,6 +33,7 @@ import {
 } from '../../reading/cross'
 import { monthStartOf, prevMonth } from '../../reading/month-key'
 import { readingMonthLabel } from '../../reading/month-label'
+import { SUBJECT_NOT_MEASURED } from '../../subjects/calibration-state'
 import { refuseEveryPair } from '../../reading/pairs'
 import { loadPairOn, type ReadingHandle } from '../../reading/read'
 import { marketAudiences } from '../../reading/market'
@@ -225,17 +226,18 @@ export interface VoicesGroupCard {
    *  being thin), so the box holds its three rows where three are ready. */
   subjects: { id: string; label: string; k: number }[]
   /** How many of the client's subjects are not measured yet (their check is
-   *  open): no count for them, and the card says how many more there are,
-   *  or SUBJECT_NOT_MEASURED where none is ready. The tenant's number, the
-   *  same on every card: which of them a group's videos hold rests on the
-   *  membership the check has not verified. Absent (a dump from before it):
-   *  none. */
+   *  open, or failed: being re-described). No count for them. The tenant's
+   *  number, the same on every card: which of them a group's videos hold
+   *  rests on the membership the check has not verified. A dump from before
+   *  `subjectsNotMeasured` prints it as "N more subjects not measured yet".
+   *  Absent: none. */
   subjectsPending?: number
-  /** The client's subjects being re-described (their check failed), by name
-   *  (14 Oct: displayed as a pending one is, its reason FAILED_EXPLAINED
-   *  where SUBJECT_NOT_MEASURED would go). The tenant's list, the same on
-   *  every card. Absent: none. */
-  subjectsFailed?: { id: string; label: string }[]
+  /** The same subjects BY NAME, open and failed alike, in the subjects' own
+   *  order (14 Oct: a tracked subject is named, never folded into a count):
+   *  the card's one short line, "Not measured yet: Cost & access, Fit &
+   *  comfort" (`notMeasuredLine`). Why a failed one shows no figure is said
+   *  once on the page (`VoicesData.subjectsFailed`), never on each card. */
+  subjectsNotMeasured?: { id: string; label: string }[]
   /** The platforms of those videos (this month's, never the profile's
    *  all-time mix). */
   platforms: VoicesPlatform[]
@@ -290,13 +292,12 @@ export interface VoicesBrandRow {
    *  one of them. */
   topSubject: { id: string; label: string; k: number; n: number } | null
   /** Counted, and how many of the client's subjects are not measured yet
-   *  (`measuredSubjects`): where no ready subject is on its videos, the
-   *  column says SUBJECT_NOT_MEASURED, never "no subject". Absent: none. */
+   *  (`measuredSubjects`: open or failed): where no ready subject is on its
+   *  videos, the column says SUBJECT_NOT_MEASURED, never "no subject".
+   *  Absent: none. */
   subjectsPending?: number
-  /** Counted, and the client's subjects being re-described (14 Oct), by
-   *  name: the column says SUBJECT_NOT_MEASURED for them as for a pending
-   *  one, never "no subject". Absent: none. */
-  subjectsFailed?: { id: string; label: string }[]
+  /** Counted, and those subjects by name, as on a group card. */
+  subjectsNotMeasured?: { id: string; label: string }[]
   href: string
   selected: boolean
 }
@@ -379,8 +380,8 @@ export interface GroupPanel {
   subjects: { id: string; label: string; k: number }[]
   /** The card's `subjectsPending`. */
   subjectsPending?: number
-  /** The card's `subjectsFailed`. */
-  subjectsFailed?: { id: string; label: string }[]
+  /** The card's `subjectsNotMeasured`. */
+  subjectsNotMeasured?: { id: string; label: string }[]
   platforms: VoicesPlatform[]
   wants: string
   stops: string
@@ -435,8 +436,8 @@ export interface BrandPanel {
   subjects: { id: string; label: string; k: number; n: number }[]
   /** The row's `subjectsPending`, where it is counted. */
   subjectsPending?: number
-  /** The row's `subjectsFailed`, where it is counted. */
-  subjectsFailed?: { id: string; label: string }[]
+  /** The row's `subjectsNotMeasured`, where it is counted. */
+  subjectsNotMeasured?: { id: string; label: string }[]
   /** The Competitive pane, a rival's alone: over the ninety days ending at
    *  the reading month's last update. */
   window: { from: string; to: string } | null
@@ -489,6 +490,11 @@ export interface VoicesData {
   params: VoicesParams
   open: { kind: OpenKind; key: string } | null
   panel: VoicesPanel | null
+  /** The client's subjects being re-described (their check failed), by name
+   *  (14 Oct): each says why it shows no figure ONCE on the page, in the foot
+   *  of "Who's in your market" (FAILED_EXPLAINED), never on each card, where
+   *  it is only named among those not measured yet. Absent: none. */
+  subjectsFailed?: { id: string; label: string }[]
 }
 
 // ---- 1. the groups -------------------------------------------------------------------
@@ -573,14 +579,31 @@ export const GROUPS_UNREAD = 'Who is talking could not be read just now.'
 type PendingIn = { id: string; label: string; state?: 'provisional' | 'failed' }
 
 /** The client's subjects that are not counted, as a card, row or panel
- *  carries them: how many have their check open (`subjectsPending`), and
- *  which are being re-described (`subjectsFailed`, by name: 14 Oct, a
- *  tracked subject is never hidden). Each absent where there is none. Pure. */
-export function notCountedOf(list: readonly PendingIn[] | undefined): { subjectsPending?: number; subjectsFailed?: { id: string; label: string }[] } {
-  const all = list ?? []
-  const open = all.filter((x) => x.state !== 'failed').length
-  const failed = all.filter((x) => x.state === 'failed').map((x) => ({ id: x.id, label: x.label }))
-  return { ...(open > 0 ? { subjectsPending: open } : {}), ...(failed.length > 0 ? { subjectsFailed: failed } : {}) }
+ *  carries them: how many (`subjectsPending`) and which, by name in the
+ *  subjects' own order (`subjectsNotMeasured`), open and failed alike (14
+ *  Oct: a tracked subject is named, never folded into a count). Both absent
+ *  where there is none. Pure. */
+export function notCountedOf(list: readonly PendingIn[] | undefined): { subjectsPending?: number; subjectsNotMeasured?: { id: string; label: string }[] } {
+  const all = (list ?? []).map((x) => ({ id: x.id, label: x.label }))
+  return all.length > 0 ? { subjectsPending: all.length, subjectsNotMeasured: all } : {}
+}
+
+/** The client's subjects being re-described, by name, for the page's one
+ *  line each (`VoicesData.subjectsFailed`). Pure. */
+export function failedSubjectsOf(list: readonly PendingIn[] | undefined): { id: string; label: string }[] {
+  return (list ?? []).filter((x) => x.state === 'failed').map((x) => ({ id: x.id, label: x.label }))
+}
+
+/** What starts the one short line that names the subjects not measured yet
+ *  (14 Oct): the one constant every surface prints, SUBJECT_NOT_MEASURED. */
+export const NOT_MEASURED_LEAD = SUBJECT_NOT_MEASURED
+
+/** "Not measured yet: Cost & access, Fit & comfort": every subject whose
+ *  check has not passed, open or failed, named once, in the order given.
+ *  Null where there is none. Pure. */
+export function notMeasuredLine(subjects: readonly { label: string }[] | undefined): string | null {
+  const names = (subjects ?? []).map((s) => s.label.trim()).filter(Boolean)
+  return names.length > 0 ? `${NOT_MEASURED_LEAD}: ${names.join(', ')}` : null
 }
 
 export function buildGroups(input: {
@@ -706,7 +729,7 @@ export function buildGroupPanel(input: {
     n: input.n,
     subjects: input.subjects,
     ...(input.card.subjectsPending ? { subjectsPending: input.card.subjectsPending } : {}),
-    ...(input.card.subjectsFailed?.length ? { subjectsFailed: input.card.subjectsFailed } : {}),
+    ...(input.card.subjectsNotMeasured?.length ? { subjectsNotMeasured: input.card.subjectsNotMeasured } : {}),
     platforms: input.card.platforms,
     wants: input.persona.wants,
     stops: input.persona.blockers,
@@ -1169,7 +1192,7 @@ export function buildBrandPanel(input: {
     kinds,
     subjects,
     ...(counted && r.subjectsPending ? { subjectsPending: r.subjectsPending } : {}),
-    ...(counted && r.subjectsFailed?.length ? { subjectsFailed: r.subjectsFailed } : {}),
+    ...(counted && r.subjectsNotMeasured?.length ? { subjectsNotMeasured: r.subjectsNotMeasured } : {}),
     window: input.window,
     asked: input.asked && input.asked.themes.length > 0
       ? { themes: input.asked.themes.map((t) => ({ ...t, href: conversationHref(t.registryId) })) }
@@ -1610,6 +1633,9 @@ export async function loadVoicesBase(input: VoicesLoadInput): Promise<{ data: Vo
     open: null,
     panel: null,
   }
+  // Why a failed subject shows no figure, once on the page (14 Oct).
+  const failedSubjects = failedSubjectsOf(groupRead?.pendingSubjects ?? crosses?.pendingSubjects)
+  if (failedSubjects.length > 0) data.subjectsFailed = failedSubjects
   const ctx: VoicesContext = {
     input: { ...input, now },
     month,

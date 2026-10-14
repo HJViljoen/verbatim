@@ -980,8 +980,8 @@ export interface MeasuredSubjects {
  * brand's "top subject". Membership is exactly what the check has not
  * verified (one of Össur's subjects measured 9% precision on 13 Oct), so a
  * count on it is not an unlabelled figure but a wrong one. Group × subject
- * and brand × subject are both counted over `names` alone, and the pages say
- * how many more are `pending`. Which subjects are pending is the tenant's
+ * and brand × subject are both counted over `names` alone, and the pages name
+ * the `pending` ones (14 Oct, never folded into a count). Which subjects are pending is the tenant's
  * list, never "the ones this group's videos hold": whether a set holds one
  * at all rests on the same unverified membership.
  *

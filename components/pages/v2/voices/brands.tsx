@@ -126,7 +126,7 @@ function BrandRow({ row, max, pending }: { row: VoicesBrandRow; max: number; pen
           // a claim about a membership nobody has checked.
           // A subject being re-described is not measured either (14 Oct): the
           // cell names no subject, so it says the one constant for both.
-          ? <span className="text-muted-foreground">{(row.subjectsPending ?? 0) > 0 || (row.subjectsFailed?.length ?? 0) > 0 ? SUBJECT_NOT_MEASURED : 'no subject yet'}</span>
+          ? <span className="text-muted-foreground">{(row.subjectsPending ?? 0) > 0 || (row.subjectsNotMeasured?.length ?? 0) > 0 ? SUBJECT_NOT_MEASURED : 'no subject yet'}</span>
           : <EmptyTrack className="w-3/5" />}
       </div>
     </div>
@@ -293,11 +293,11 @@ export function BrandPanelView({ panel, monthWords, notchAt }: { panel: BrandPan
         {panel.subjects.length > 0 ? (
           <PanelSection label={<>What they talk about · of its <Fig>{fmtInt(crossN)}</Fig></>}>
             {panel.subjects.map((s) => <MiniRow key={s.id} size="md" label={s.label} k={s.k} of={s.n} />)}
-            <PendingSubjectsLine count={panel.subjectsPending ?? 0} failed={panel.subjectsFailed} className="text-[12.5px]" />
+            <PendingSubjectsLine subjects={panel.subjectsNotMeasured} count={panel.subjectsPending ?? 0} className="text-[12.5px]" />
           </PanelSection>
-        ) : (panel.subjectsPending ?? 0) > 0 || (panel.subjectsFailed?.length ?? 0) > 0 ? (
+        ) : (panel.subjectsPending ?? 0) > 0 || (panel.subjectsNotMeasured?.length ?? 0) > 0 ? (
           <PanelSection label="What they talk about">
-            <NotMeasuredRows size="md" rows={3} open={(panel.subjectsPending ?? 0) > 0} failed={panel.subjectsFailed} />
+            <NotMeasuredRows size="md" rows={3} subjects={panel.subjectsNotMeasured} />
           </PanelSection>
         ) : null}
         {panel.asked ? (

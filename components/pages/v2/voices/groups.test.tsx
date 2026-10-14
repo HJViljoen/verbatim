@@ -3,8 +3,9 @@ import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { ossurVoicesFixture, VOICES_FIXTURES } from '@/lib/pages/v2/voices-fixture'
 import { mergeWho, type GroupPanel } from '@/lib/pages/v2/voices'
-import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
+import { FAILED_EXPLAINED } from '@/lib/subjects/calibration-state'
 import { GroupCard, GroupGrid, GroupPanelView, MixCard, WhoCard } from './groups'
+import { VoicesPage } from './index'
 
 describe('Who is in your market and the group cards (decision 2)', () => {
   const d = ossurVoicesFixture()
@@ -65,25 +66,27 @@ describe('Who is in your market and the group cards (decision 2)', () => {
   // Ruling U6 (13 Oct): Össur's six subjects are all provisional, and one of
   // them measured 9% precision, so a count on any of them is wrong, not just
   // unlabelled. The box keeps its frame and its height and says so once.
-  it('U6, all provisional: the box keeps its frame, says "Not measured yet" once and prints no subject count', () => {
+  it('U6, all provisional: the box keeps its frame, names every subject not measured yet in one line and prints no subject count', () => {
     const p = ossurVoicesFixture({}, 'provisional')
     const node = <GroupCard card={p.groups.cards.find((c) => c.key === 'caregivers')!} n={p.videos} monthWords={p.monthWords} />
     const text = renderText(node)
-    expect(text).toContain('What they talk about Not measured yet')
+    // 14 Oct: a tracked subject is named, never folded into a count.
+    expect(text).toContain('What they talk about Not measured yet: Choosing the right device, Community & encouragement, Cost & access, Fit & comfort, Function & movement, Look & style')
     expect(text).not.toContain('of their 45')
-    expect(text).not.toMatch(/Fit & comfort|Cost & access|Community/)
+    expect(render(node)).not.toMatch(/<span data-copy="figure"[^>]*>\d+<\/span> more/)
     // Its rows' empty tracks hold the box's height.
     expect(render(node).match(/border-dashed/g)?.length).toBeGreaterThanOrEqual(4)
     assertCopyContract(node)
   })
 
-  it('U6, mixed: the ready rows with their counts first, then how many more are not measured yet', () => {
+  it('U6, mixed: the ready rows with their counts first, then the subjects not measured yet, named', () => {
     const p = ossurVoicesFixture({}, 'mixed')
     const node = <GroupCard card={p.groups.cards.find((c) => c.key === 'caregivers')!} n={p.videos} monthWords={p.monthWords} />
     const text = renderText(node)
     // A ready subject on none of their videos keeps its row at 0 (14 Oct).
-    expect(text).toContain('What they talk about · of their 45 Cost & access 14 Function & movement 0 4 more subjects not measured yet')
-    expect(text).not.toContain('Fit & comfort')
+    expect(text).toContain('What they talk about · of their 45 Cost & access 14 Function & movement 0 Not measured yet: Choosing the right device, Community & encouragement, Fit & comfort, Look & style')
+    // Named, never counted: Fit & comfort (17 of their videos) prints no figure.
+    expect(text).not.toMatch(/Fit & comfort \d/)
     assertCopyContract(node)
   })
 
@@ -255,24 +258,42 @@ describe('a tracked subject is never hidden (14 Oct)', () => {
   const d = VOICES_FIXTURES['ossur-tracked']()
   const card = (key: string) => d.groups.cards.find((c) => c.key === key)!
 
-  it('a group\'s box: the ready rows, a thin one\'s small count and a 0, how many are not measured, and the failed one named with its reason', () => {
+  it('a group\'s box: the ready rows, a thin one\'s small count and a 0, then ONE short line naming the open and the failed subject (the lead\'s ruling, 14 Oct)', () => {
     const node = <GroupCard card={card('caregivers')} n={d.videos} monthWords={d.monthWords} />
     const text = renderText(node)
-    expect(text).toContain(`What they talk about · of their 45 Look & style 2 Function & movement 0 1 more subject not measured yet Fit & comfort: ${FAILED_EXPLAINED}`)
-    // The failed one carries no figure: its line is its name and its reason.
+    expect(text).toContain('What they talk about · of their 45 Look & style 2 Function & movement 0 Not measured yet: Cost & access, Fit & comfort Wants:')
+    // The reason is said once on the page, never on a card.
+    expect(text).not.toContain(FAILED_EXPLAINED)
     const html = render(node)
-    const line = html.slice(html.indexOf('data-subject-failed'), html.indexOf('</p>', html.indexOf('data-subject-failed')))
+    const line = html.slice(html.indexOf('data-subjects-not-measured'), html.indexOf('</p>', html.indexOf('data-subjects-not-measured')))
     expect(line).not.toMatch(/data-copy=/)
     assertCopyContract(node)
   })
 
-  it('a box with no ready subject and only one being re-described says its reason where "Not measured yet" would go', () => {
-    const only = { ...card('caregivers'), subjects: [], subjectsPending: undefined, subjectsFailed: [{ id: 's-fit', label: 'Fit & comfort' }] }
+  it('a box with no ready subject names those not measured yet, the failed one among them, where "Not measured yet" stood alone', () => {
+    const only = { ...card('caregivers'), subjects: [], subjectsPending: 1, subjectsNotMeasured: [{ id: 's-fit', label: 'Fit & comfort' }] }
     const node = <GroupCard card={only} n={d.videos} monthWords={d.monthWords} />
     const text = renderText(node)
-    expect(text).toContain(`What they talk about Fit & comfort: ${FAILED_EXPLAINED}`)
-    expect(text).not.toContain(SUBJECT_NOT_MEASURED)
+    expect(text).toContain('What they talk about Not measured yet: Fit & comfort')
+    expect(text).not.toContain(FAILED_EXPLAINED)
     assertCopyContract(node)
+  })
+
+  it('the page says why a failed subject shows no figure ONCE, in the foot of "Who\'s in your market", one line a subject', () => {
+    const node = <WhoCard groups={d.groups} videos={d.videos} monthWords={d.monthWords} failed={d.subjectsFailed} />
+    const text = renderText(node)
+    expect(text).toMatch(new RegExp(`Clinicians and prosthetists 29 of 487 videos Fit & comfort: ${FAILED_EXPLAINED.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`))
+    expect(render(node).match(/data-subject-failed/g)).toHaveLength(1)
+    assertCopyContract(node)
+    // None where no subject failed.
+    expect(render(<WhoCard groups={d.groups} videos={d.videos} monthWords={d.monthWords} />)).not.toContain('data-subjects-failed')
+  })
+
+  it('the whole page prints FAILED_EXPLAINED once, however many cards name the subject', () => {
+    const html = render(<VoicesPage data={d} />)
+    expect(html.split(FAILED_EXPLAINED).length - 1).toBe(1)
+    const counts = d.groups.cards.map((c) => c.subjectsNotMeasured?.length ?? 0)
+    expect(counts.every((n) => n === 2)).toBe(true)
   })
 
   it('the group\'s panel counts the ready subjects alone, the thin one included', () => {

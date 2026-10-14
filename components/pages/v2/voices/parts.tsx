@@ -5,7 +5,7 @@ import { TickBar } from '@/components/v2'
 import { TAG } from '@/components/colour-roles'
 import { fmtCompact, fmtInt } from '@/lib/format'
 import { quoteWords } from '@/lib/pages/brands'
-import type { VoicesPlatform, VoicesQuote } from '@/lib/pages/v2/voices'
+import { notMeasuredLine, type VoicesPlatform, type VoicesQuote } from '@/lib/pages/v2/voices'
 import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { cn } from '@/lib/utils'
 
@@ -57,47 +57,55 @@ export function MiniRow({ label, k, of, tone = 'market', size = 'sm', className 
   )
 }
 
-/** A subject being re-described, named, with its reason (FAILED_EXPLAINED)
- *  where a pending one's SUBJECT_NOT_MEASURED would go (14 Oct: a tracked
- *  subject is never hidden). The tenant's subject, never a claim that this
- *  set holds it: the sentence says it shows no figure. */
+/** A subject being re-described, named, with its reason (FAILED_EXPLAINED):
+ *  said ONCE on the page (14 Oct, the lead's ruling), in the foot of "Who's
+ *  in your market" (`FailedSubjectsFoot`), never on each card. The tenant's
+ *  subject, never a claim that a set holds it: the sentence says it shows no
+ *  figure. */
 export function FailedSubjectLine({ label, className }: { label: string; className?: string }) {
   return (
-    <p data-subject-failed="" className={cn('m-0 text-[12px] leading-[1.4] text-muted-foreground', className)}>
+    <p data-subject-failed="" className={cn('m-0 text-[12.5px] leading-[1.45] text-muted-foreground', className)}>
       <span className="font-medium text-foreground">{label}:</span> {FAILED_EXPLAINED}
     </p>
   )
 }
 
-/** RULING U6, a box's quiet lines under its ready rows: how many more of
- *  the client's subjects are not measured yet (their check is open), never
- *  which of them this set holds, which rests on their membership; then each
- *  one being re-described, named with its reason (14 Oct, `FailedSubjectLine`).
- *  Nothing where none is pending. */
-export function PendingSubjectsLine({ count, failed = [], className }: { count: number; failed?: readonly { id: string; label: string }[]; className?: string }) {
-  if (count <= 0 && failed.length === 0) return null
+/** The page's one place for why each subject being re-described shows no
+ *  figure: one calm line a subject, under a hairline. Nothing where none is. */
+export function FailedSubjectsFoot({ failed }: { failed?: readonly { id: string; label: string }[] }) {
+  if (!failed || failed.length === 0) return null
   return (
-    <>
-      {count > 0 ? (
-        <p className={cn('m-0 text-[12px] leading-[1.4] text-muted-foreground', className)}>
-          <Fig>{fmtInt(count)}</Fig> more {count === 1 ? 'subject' : 'subjects'} not measured yet
-        </p>
-      ) : null}
-      {failed.map((f) => <FailedSubjectLine key={f.id} label={f.label} className={className} />)}
-    </>
+    <div data-subjects-failed="" className="flex flex-col gap-1 border-t border-track pt-3">
+      {failed.map((f) => <FailedSubjectLine key={f.id} label={f.label} />)}
+    </div>
   )
 }
 
-/** RULING U6, a box with no ready subject: SUBJECT_NOT_MEASURED in one quiet
- *  line (where any subject's check is open), each subject being re-described
- *  with its reason (14 Oct), and the rows' empty tracks under them, so the box
- *  keeps its frame and roughly its height (the parity pass: the component
- *  carries the gap). */
-export function NotMeasuredRows({ rows = 2, size = 'sm', open = true, failed = [] }: { rows?: number; size?: 'sm' | 'md'; open?: boolean; failed?: readonly { id: string; label: string }[] }) {
+/** RULING U6, a box's one short line under its ready rows: every subject of
+ *  the client's whose check has not passed, open or failed, NAMED in the
+ *  subjects' order (14 Oct: a tracked subject is named, never folded into a
+ *  count): "Not measured yet: Cost & access, Fit & comfort"
+ *  (`notMeasuredLine`). The tenant's list, never which of them this set
+ *  holds, which rests on their membership. A dump from before the names
+ *  carries a count alone and prints it as it did. Nothing where none is. */
+export function PendingSubjectsLine({ subjects, count = 0, className }: { subjects?: readonly { id: string; label: string }[]; count?: number; className?: string }) {
+  const line = notMeasuredLine(subjects)
+  if (!line && count <= 0) return null
+  return (
+    <p data-subjects-not-measured="" className={cn('m-0 text-[12px] leading-[1.4] text-muted-foreground', className)}>
+      {line ?? <><Fig>{fmtInt(count)}</Fig> more {count === 1 ? 'subject' : 'subjects'} not measured yet</>}
+    </p>
+  )
+}
+
+/** RULING U6, a box with no ready subject: the one short line naming the
+ *  subjects not measured yet (SUBJECT_NOT_MEASURED alone where a dump names
+ *  none), and the rows' empty tracks under it, so the box keeps its frame and
+ *  roughly its height (the parity pass: the component carries the gap). */
+export function NotMeasuredRows({ rows = 2, size = 'sm', subjects }: { rows?: number; size?: 'sm' | 'md'; subjects?: readonly { id: string; label: string }[] }) {
   return (
     <>
-      {open || failed.length === 0 ? <p className={cn('m-0 leading-[1.4] text-muted-foreground', size === 'md' ? 'text-[13.5px]' : 'text-[12.5px]')}>{SUBJECT_NOT_MEASURED}</p> : null}
-      {failed.map((f) => <FailedSubjectLine key={f.id} label={f.label} className={size === 'md' ? 'text-[13px]' : undefined} />)}
+      <p data-subjects-not-measured="" className={cn('m-0 leading-[1.4] text-muted-foreground', size === 'md' ? 'text-[13.5px]' : 'text-[12.5px]')}>{notMeasuredLine(subjects) ?? SUBJECT_NOT_MEASURED}</p>
       {Array.from({ length: rows }, (_, i) => (
         <div key={i} aria-hidden className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_34px] items-center gap-2">
           <span className="block h-2.5 w-3/5 rounded-full border border-dashed border-foreground/15" />

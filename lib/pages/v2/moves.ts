@@ -467,6 +467,10 @@ export function moveCards(input: {
   const reading = monthStartOf(input.month)
   const joined = input.joined ?? (() => true)
   const order: Record<string, number> = { active: 0, done: 1, dropped: 2 }
+  // Why a failed subject shows no figure is said once a page (14 Oct, the
+  // lead's ruling): its first card here says FAILED_EXPLAINED, any later one
+  // on the same subject only that it is not measured yet.
+  const explained = new Set<string>()
   return [...input.moves]
     .sort((a, b) => (order[a.status] ?? 3) - (order[b.status] ?? 3) || moveDay(b).localeCompare(moveDay(a)) || a.id.localeCompare(b.id))
     .map((m): MoveCard => {
@@ -496,7 +500,9 @@ export function moveCards(input: {
       if (!object || notReady) {
         // Ruling U6: a subject whose check is open is "not measured yet"; only
         // a failed one is being re-described.
-        const unread: MoveCard['unread'] = notReady ? (subject?.calibration === 'failed' ? 'not_ready' : 'not_measured')
+        const failedFirst = notReady && subject?.calibration === 'failed' && m.subject_id != null && !explained.has(m.subject_id)
+        if (failedFirst) explained.add(m.subject_id!)
+        const unread: MoveCard['unread'] = notReady ? (failedFirst ? 'not_ready' : 'not_measured')
           : m.kind === 'theme' && themeIds.length > 1 ? 'several' : 'nothing'
         return { ...base, points: [], compare: null, unread, pending: null }
       }

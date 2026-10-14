@@ -424,22 +424,22 @@ describe('Your products: a tracked subject is never hidden (14 Oct)', () => {
     for (let i = 1; i <= 8; i++) expect(text).toContain(`Subject ${i} `)
   })
 
-  it('the comparison, with no ready subject: a row being re-described says so in its cells and once under the table', () => {
+  it('the comparison, with no ready subject: a row being re-described is named like an open one, its reason never repeated (once a page, 14 Oct)', () => {
     const compare = {
       columns: [{ key: 'g', label: 'All liners', tone: 'market' as const }, { key: 'p', label: 'Iceross Comfort', tone: 'you' as const }],
       rows: [
         { key: 's-cost', label: 'Cost & access', cells: [null, null] },
-        { key: 's-community', label: 'Community & encouragement', cells: [null, null], failed: true },
+        { key: 's-community', label: 'Community & encouragement', cells: [null, null] },
       ],
       verdicts: [],
       empty: 'pending' as const,
     }
-    const node = <CategoryPanelView panel={{ ...base, compare }} monthName="September" canTag={false} />
-    const text = renderText(node)
-    expect(text).toContain(`A subject is counted here once its check has passed. Community & encouragement: ${FAILED_EXPLAINED}`)
+    // The open panel names the failed subject in "What it's about" with its
+    // reason (once), and the table below lists it with no figure.
+    const node = <CategoryPanelView panel={{ ...panel, compare }} monthName="September" canTag={false} />
     const html = render(node)
-    expect(html).toContain(`<span class="sr-only">${FAILED_EXPLAINED}</span>`)
-    expect(html).toContain(`<span class="sr-only">${SUBJECT_NOT_MEASURED}</span>`)
+    expect(html.split(FAILED_EXPLAINED).length - 1).toBe(1)
+    expect(renderText(node)).toContain(`What it’s about All liners Iceross Comfort Cost & access · ${SUBJECT_NOT_MEASURED} · ${SUBJECT_NOT_MEASURED} Community & encouragement · ${SUBJECT_NOT_MEASURED} · ${SUBJECT_NOT_MEASURED}`)
     assertCopyContract(node)
   })
 })

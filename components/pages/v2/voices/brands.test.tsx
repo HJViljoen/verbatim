@@ -14,8 +14,9 @@ describe('Brands in your market: ruling U6', () => {
     expect(card).not.toContain('Fit & comfort')
     const node = <BrandPanelView panel={d.panel as BrandPanel} monthWords={d.monthWords} />
     const text = renderText(node)
-    expect(text).toContain('What they talk about · of its 37 Cost & access 21 Function & movement 9 4 more subjects not measured yet')
-    expect(text).not.toContain('Fit & comfort')
+    expect(text).toContain('What they talk about · of its 37 Cost & access 21 Function & movement 9 Not measured yet: Choosing the right device, Community & encouragement, Fit & comfort, Look & style')
+    // Named, never counted (the lens gave Fit & comfort 25 of its videos).
+    expect(text).not.toMatch(/Fit & comfort \d/)
     assertCopyContract(node)
   })
 
@@ -171,11 +172,13 @@ describe('a brand\'s panel', () => {
 
 // A TRACKED SUBJECT IS NEVER HIDDEN (Heinrich, 14 Oct).
 describe('Brands in your market: a tracked subject is never hidden (14 Oct)', () => {
-  it('a counted rival\'s panel lists every ready subject, the thin one\'s small count, then the open ones counted and the failed one named with its reason', () => {
+  it('a counted rival\'s panel lists every ready subject, the thin one\'s small count, then ONE short line naming the open and the failed subject', () => {
     const d = VOICES_FIXTURES['ossur-tracked-brand']()
     const node = <BrandPanelView panel={d.panel as BrandPanel} monthWords={d.monthWords} />
     const text = renderText(node)
-    expect(text).toContain(`What they talk about · of its 37 Function & movement 9 Look & style 1 1 more subject not measured yet Fit & comfort: ${FAILED_EXPLAINED}`)
+    expect(text).toContain('What they talk about · of its 37 Function & movement 9 Look & style 1 Not measured yet: Cost & access, Fit & comfort')
+    // Its reason is the page's, once, in the foot of "Who's in your market".
+    expect(text).not.toContain(FAILED_EXPLAINED)
     assertCopyContract(node)
   })
 
@@ -190,7 +193,7 @@ describe('Brands in your market: a tracked subject is never hidden (14 Oct)', ()
 
   it('with only a subject being re-described and none ready on its videos, the column says "Not measured yet", never "no subject"', () => {
     const d = VOICES_FIXTURES['ossur-tracked']()
-    const brands = { ...d.brands, rows: d.brands.rows.map((r) => ({ ...r, topSubject: null, subjectsPending: undefined, subjectsFailed: [{ id: 's-fit', label: 'Fit & comfort' }] })) }
+    const brands = { ...d.brands, rows: d.brands.rows.map((r) => ({ ...r, topSubject: null, subjectsPending: 1, subjectsNotMeasured: [{ id: 's-fit', label: 'Fit & comfort' }] })) }
     const node = <BrandsCard brands={brands} monthWords={d.monthWords} />
     const text = renderText(node)
     expect(text).toContain(SUBJECT_NOT_MEASURED)

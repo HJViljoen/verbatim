@@ -2158,7 +2158,10 @@ export function buildSubjectPanel(a: {
     id: f.id,
     name: f.name,
     state: unmeasured ? unmeasured.state : 'ready',
-    note: unmeasured ? unmeasured.note : null,
+    // Why a failed subject shows no figure is said once a page (14 Oct, the
+    // lead's ruling): in its own row on the board, just above this panel, so
+    // the panel says only that it is not measured yet.
+    note: unmeasured ? (unmeasured.state === 'failed' ? SUBJECT_NOT_MEASURED : unmeasured.note) : null,
     at: 'subjects',
     notchAt: notchOf('subjects'),
     level: measured && f.level ? { ...f.level, pct: share(f.level.k, f.level.n) } : null,

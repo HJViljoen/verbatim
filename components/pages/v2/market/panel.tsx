@@ -179,7 +179,7 @@ export function SubjectPanelView({ panel, data, notchAt }: { panel: SubjectPanel
         // board lists them, in every state (14 Oct: one being re-described
         // too; a tracked subject is never hidden).
         <p data-subject-state={panel.state} className="m-0 text-[15px] leading-[1.6] text-foreground">
-          {panel.state === 'failed' ? panel.note : `${panel.note}.`}
+          {panel.note.endsWith('.') ? panel.note : `${panel.note}.`}
         </p>
       ) : null}
       {panel.level ? (

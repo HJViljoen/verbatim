@@ -139,7 +139,7 @@ export const READING_CARDS: readonly ReadingCard[] = [
       `The count, “${BRANDS_HEAD_ORGANIC}”, leaves out every video our own brand searches found, so our searching for a brand does not add to its count. It is set against last month only where both months were read the same way.`,
       'What people did in the videos naming a brand, and what those videos are about, is a level with no change: a brand’s month holds too few videos to band.',
       // Ruling U6 (14 Oct): `measuredSubjects`, lib/reading/cross.ts.
-      'What a group or a brand talks about counts only the subjects whose check has passed: a group’s card shows its three largest, and a brand’s panel lists each of them, at 0 where none of its videos carry it. A subject still being checked prints no figure here: the page says how many are not measured yet, and “Not measured yet” where none is. A subject being re-described is named, with why it shows no figure.',
+      'What a group or a brand talks about counts only the subjects whose check has passed: a group’s card shows its three largest, and a brand’s panel lists each of them, at 0 where none of its videos carry it. A subject still being checked, or being re-described, prints no figure here: each box names them in one line, “Not measured yet: …”, and why one being re-described shows no figure is said once, under Who’s in your market.',
       'A brand’s figures are counts of the videos our searches found, never market share.',
       'A rival’s panel reads the ninety days ending at the last update of the month the page reads.',
       NINETY_DAY_NOTE,

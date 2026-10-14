@@ -305,13 +305,7 @@ export interface ProductsQuote {
 
 export interface CompareColumn { key: string; label: string; tone: 'market' | 'you' }
 export interface CompareCell extends Level { highlight?: boolean }
-export interface CompareRow {
-  key: string
-  label: string
-  cells: (CompareCell | null)[]
-  /** A subject being re-described (14 Oct): its empty cells say so. */
-  failed?: boolean
-}
+export interface CompareRow { key: string; label: string; cells: (CompareCell | null)[] }
 
 /** Rows of things people talk about, each counted in the category and in each
  *  of the client's products there (`PairedBars`). */
@@ -1303,8 +1297,9 @@ export function buildCompare(input: {
   const subjectRows: CrossCell[] = [...gc.subjects, ...(gc.quiet ?? []).map((q) => ({ ...q, k: 0 }))]
   if (subjectRows.length === 0) {
     // NOT MEASURED YET (ruling U6): the table keeps its shape, each row a
-    // subject's name and every cell empty, the category's included; a row
-    // being re-described says so in its cells (14 Oct).
+    // subject's name and every cell empty, the category's included, one
+    // being re-described among them (14 Oct; why is said once, in the
+    // panel's "What it's about").
     const pending = (gc.pending ?? []).slice(0, COMPARE_ROWS)
     if (pending.length === 0) return null
     const named = [...input.products].filter((p) => (p.videos ?? 0) > 0)
@@ -1313,7 +1308,7 @@ export function buildCompare(input: {
       .slice(0, input.focus ? 1 : COMPARE_PRODUCTS)
     return {
       columns: [{ key: input.group.id, label: `All ${input.group.name.toLowerCase()}`, tone: 'market' }, ...shown.map((p) => ({ key: p.id, label: p.name, tone: 'you' as const }))],
-      rows: pending.map((x) => ({ key: x.id, label: x.label, cells: [null, ...shown.map(() => null)], ...(x.state === 'failed' ? { failed: true } : {}) })),
+      rows: pending.map((x) => ({ key: x.id, label: x.label, cells: [null, ...shown.map(() => null)] })),
       verdicts: [],
       empty: 'pending',
     }

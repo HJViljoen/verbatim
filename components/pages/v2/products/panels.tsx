@@ -132,18 +132,16 @@ function CompareSection({ compare, title, products, monthName }: { compare: Comp
       <PairedBars
         rowHeader="What it’s about"
         columns={compare.columns}
-        rows={compare.rows.map((r) => ({ key: r.key, label: r.label, cells: r.cells, ...(r.failed ? { emptyLabel: FAILED_EXPLAINED } : {}) }))}
+        rows={compare.rows.map((r) => ({ key: r.key, label: r.label, cells: r.cells }))}
         label={title}
         emptyLabel={compare.empty === 'pending' ? SUBJECT_NOT_MEASURED : compare.empty === 'not_read' ? 'not read' : 'none'}
       />
       <p className="m-0 text-[12.5px] leading-[1.5] text-muted-foreground">
         {compare.empty === 'pending' ? null : <>Each count is videos, out of that column’s total.{' '}</>}
         {compare.empty === 'pending'
-          ? <>
-            What these videos are about: {SUBJECT_NOT_MEASURED}. A subject is counted here once its check has passed.
-            {/* A row being re-described says why once, by name (14 Oct). */}
-            {compare.rows.filter((r) => r.failed).map((r) => <span key={r.key} className="mt-1 block">{r.label}: {FAILED_EXPLAINED}</span>)}
-          </>
+          // A row being re-described is not measured either; why is said
+          // once on the page, in its row under "What it’s about" (14 Oct).
+          ? <>What these videos are about: {SUBJECT_NOT_MEASURED}. A subject is counted here once its check has passed.</>
           : compare.empty === 'none_named'
           ? <>No video named {products} in {monthName}, so there is nothing yet to set against the category.</>
           : compare.empty === 'not_read'
