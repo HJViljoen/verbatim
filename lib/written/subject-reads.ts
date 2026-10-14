@@ -63,10 +63,10 @@ export const SUBJECT_READ_EFFORT = SYNTHESIS_REASONING_EFFORT
 export const SUBJECT_READ_MAX_OUTPUT_TOKENS = 6_000
 
 /** Field caps, in characters, and the counts. The writer is told each; scrub
- *  holds it to each with the week read's slack (`WHOLE_SLACK`), by whole
- *  sentences, so a sentence a little over is kept and none prints half said
- *  (the offline test of 14 Oct lost the second, more specific sentence of a
- *  "what it means" at the bare cap). */
+ *  holds it to each with the week read's slack (`WHOLE_SLACK`), cut at a
+ *  sentence's end (`scrubWeekText`), so a sentence a little over is kept (the
+ *  offline test of 14 Oct lost the second, more specific sentence of a "what
+ *  it means" at the bare cap). */
 export const SUBJECT_READ_MAX = {
   paragraph: 560,
   sayingParagraphs: 2,
@@ -306,29 +306,6 @@ export interface SubjectReadScrub {
   leaked: boolean
 }
 
-/** A sentence's end before any capital, "Össur" included: the shared
- *  splitter (`splitSentences`, lib/prose/scrub.ts) starts a sentence only at an
- *  ASCII capital, so to it "… insurers. Össur's knees …" is ONE sentence, and
- *  a rule that drops one drops both. */
-const SENTENCE_END = /(?<=[.!?])\s+(?=[\p{Lu}\[“"])/u
-
-/** One paragraph through `scrubWeekText`, a sentence at a time (each handed
- *  over as its own paragraph, so no sentence takes its neighbour with it),
- *  then put back together, capped at `max` by WHOLE sentences: a claim never
- *  prints half said (the first is kept whatever its length). Pure. */
-function scrubBySentence(raw: string, max: number, o: Parameters<typeof scrubWeekText>[2]): ReturnType<typeof scrubWeekText> {
-  const sentences = (raw ?? '').replace(/\s+/g, ' ').trim().split(SENTENCE_END).filter(Boolean)
-  const r = scrubWeekText(sentences.join('\n\n'), Number.MAX_SAFE_INTEGER, o)
-  const kept: string[] = []
-  let used = 0
-  for (const s of r.text.split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean)) {
-    if (kept.length > 0 && used + 1 + s.length > max) break
-    kept.push(s)
-    used += (kept.length > 1 ? 1 : 0) + s.length
-  }
-  return { ...r, text: kept.join(' ') }
-}
-
 /**
  * The writer's answer through the `week_read` policy (`scrubWeekText`: no
  * digit, no direction word, no sentence about how it was made, no first
@@ -344,12 +321,12 @@ export function finishSubjectRead(m: SubjectReadMaterial, raw: SubjectReadOutput
   // A paragraph the writer broke with a blank line is two paragraphs.
   const paragraphs = (raw.saying ?? []).flatMap((p) => (p ?? '').split(/\n\s*\n/)).map((p) => p.trim()).filter(Boolean)
   const saying = paragraphs.flatMap((p) => {
-    const r = scrubBySentence(p, Math.round(SUBJECT_READ_MAX.paragraph * WHOLE_SLACK), { allow: o.allow })
+    const r = scrubWeekText(p, Math.round(SUBJECT_READ_MAX.paragraph * WHOLE_SLACK), { allow: o.allow })
     dropped += r.counts.dropped
     leaked ||= r.counts.leaked
     return r.text ? [r.text] : []
   }).slice(0, SUBJECT_READ_MAX.sayingParagraphs)
-  const meansR = scrubBySentence(raw.means ?? '', Math.round(SUBJECT_READ_MAX.means * WHOLE_SLACK), { allow: o.allow, maxSentences: SUBJECT_READ_MAX.meansSentences, extra: [...ADVICE, ...FORECAST, ...(told ? [told] : [])] })
+  const meansR = scrubWeekText(raw.means ?? '', Math.round(SUBJECT_READ_MAX.means * WHOLE_SLACK), { allow: o.allow, maxSentences: SUBJECT_READ_MAX.meansSentences, extra: [...ADVICE, ...FORECAST, ...(told ? [told] : [])] })
   dropped += meansR.counts.dropped
   leaked ||= meansR.counts.leaked
   const means = meansR.text
@@ -383,7 +360,7 @@ export function thinSubjectRead(m: SubjectReadMaterial, o: { month: string; comp
     : m.heard
       ? `${when}, talk about ${m.name} sat inside other conversations, with none of its own.`
       : `${when}, the comments said nothing about ${m.name}.`
-  const text = scrubBySentence(line, SUBJECT_READ_MAX.paragraph, { allow: o.allow }).text
+  const text = scrubWeekText(line, SUBJECT_READ_MAX.paragraph, { allow: o.allow }).text
   return {
     subjectId: m.subjectId,
     name: m.name,

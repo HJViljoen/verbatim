@@ -149,7 +149,7 @@ describe('finishSubjectRead and the thin line', () => {
     expect(scrub.dropped).toBeGreaterThanOrEqual(4)
   })
 
-  it('a sentence opening on a capital the shared splitter does not read (Össur) is scrubbed on its own, never with its neighbour', () => {
+  it('a sentence opening on a capital outside A to Z (Össur) is scrubbed on its own, never with its neighbour (the shared splitter, 14 Oct)', () => {
     const { read } = finishSubjectRead(m, { saying: ['People name the paperwork. Össur\'s knees are named too.'], means: 'Cover decides the fitting. Össur should show it.' }, { company: 'Össur', allow: [] })
     expect(read.saying).toEqual(['People name the paperwork. Össur\'s knees are named too.'])
     expect(read.means).toBe('Cover decides the fitting.')
@@ -157,7 +157,7 @@ describe('finishSubjectRead and the thin line', () => {
     expect(finishSubjectRead(m, { saying: ['P.'], means: 'Cover decides the fitting. Össur could show the paperwork.' }, { company: 'Össur', allow: [] }).read.means).toBe('Cover decides the fitting.')
   })
 
-  it('caps by whole sentences with the week read\'s slack: the offline test\'s second, more specific sentence is kept', () => {
+  it('caps at a sentence\'s end with the week read\'s slack: the offline test\'s second, more specific sentence is kept', () => {
     // gpt-5.4's answer on the Össur-shaped fixture, 14 Oct: about 470 characters, the writer told 420.
     const means = 'For Össur, this talk sits beside its prosthetic legs and running blades, because people use peer examples to picture life with a first prosthesis and the kind of person they can become with it. The race posts and running club stories bear on Össur\'s claim that its running blades are made for amputee athletes of every level, while the questions around a first socket show that the market meets prosthetic products through other amputees as much as through product claims.'
     const { read } = finishSubjectRead(m, { saying: ['P.'], means }, { company: 'Össur', allow: [] })

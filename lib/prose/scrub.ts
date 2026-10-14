@@ -114,13 +114,30 @@ export function tidy(text: string): string {
     .trim()
 }
 
+/** Abbreviations a sentence does not end at, read only before a capital
+ *  outside A to Z ("e.g. Össur", "Dr. Örn"): such a capital never started a
+ *  sentence before 14 Oct, so it does not start one after an abbreviation now. */
+const ABBREVIATION_BEFORE = String.raw`(?<!(?:^|[\s(])(?:e\.g|i\.e|cf|etc|vs|approx|Dr|Mr|Mrs|Ms|Mx|St|Prof)\.)`
+
+/** Where one sentence ends and the next begins: after `.`, `!` or `?` and
+ *  space, before a capital, a `[[key]]` or an opening quotation mark. ANY
+ *  script's capital (14 Oct): until then only A to Z started a sentence, so
+ *  "… insurers. Össur's knees …" was ONE sentence, and a rule that dropped
+ *  either dropped both (Össur's reads, its briefs, its post ideas). A capital
+ *  outside A to Z is held to the abbreviations above as well; before A to Z,
+ *  a quotation mark or a key, the split is exactly as it was. */
+const SENTENCE_BREAK = new RegExp(
+  String.raw`(?<=[.!?])\s+(?=[A-Z\[“"])|(?<=[.!?])${ABBREVIATION_BEFORE}\s+(?=[^\P{Lu}A-Z])`,
+  'u',
+)
+
 /** Sentences, for a body that may carry `[[keys]]` and opening quotation
  *  marks. A sentence is the unit both rules drop, so this is the unit of
  *  damage: it is deliberately conservative about splitting. */
 export function splitSentences(body: string): string[] {
   return body
     .replace(/\s+/g, ' ')
-    .split(/(?<=[.!?])\s+(?=[A-Z\[“"])/)
+    .split(SENTENCE_BREAK)
     .map((s) => s.trim())
     .filter(Boolean)
 }

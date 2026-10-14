@@ -13,6 +13,7 @@ import {
   isInterpretation,
   replaceOutsideQuotes,
   scrubProse,
+  splitSentences,
 } from './scrub'
 
 const figures: FigureTable = {
@@ -301,5 +302,40 @@ describe('scrubProse', () => {
 
   it('counts nothing on a slot whose words are the model\u2019s by right', () => {
     expect(scrubProse('pass_b_theme', 'Practical skills like growing food come up.').flaggedDirection).toBe(0)
+  })
+})
+
+// A SENTENCE STARTS AT ANY SCRIPT'S CAPITAL (14 Oct). Until then only A to Z
+// started one, so "… insurers. Össur's knees …" was one sentence to every
+// slot's scrub, and a rule that dropped either half dropped both: Össur's
+// written reads, its briefs and its post ideas. Before A to Z, a quotation
+// mark or a key the split is unchanged, and an abbreviation still holds a
+// capital outside A to Z to its sentence, as it always did.
+describe('splitSentences: a sentence starts at any capital', () => {
+  it('splits before Ö, É and Å as before A to Z', () => {
+    expect(splitSentences('People name the liner. Össur\'s knees come up too.')).toEqual(['People name the liner.', 'Össur\'s knees come up too.'])
+    expect(splitSentences('The fit is the worry. Évora clinics are named. Åsa answers them!')).toEqual(['The fit is the worry.', 'Évora clinics are named.', 'Åsa answers them!'])
+    expect(splitSentences('Is it covered? Össur says so.')).toEqual(['Is it covered?', 'Össur says so.'])
+  })
+
+  it('splits exactly as before at A to Z, a quotation mark and a key', () => {
+    expect(splitSentences('One. Two. “Three,” they say. [[videos]] videos.')).toEqual(['One.', 'Two.', '“Three,” they say.', '[[videos]] videos.'])
+    expect(splitSentences('It costs a lot. and more.')).toEqual(['It costs a lot. and more.'])
+    expect(splitSentences('Version 3.5 is out. 4 more follow.')).toEqual(['Version 3.5 is out. 4 more follow.'])
+  })
+
+  it('an abbreviation does not end a sentence where it did not before', () => {
+    expect(splitSentences('Covers, e.g. carbon or skins, are praised.')).toEqual(['Covers, e.g. carbon or skins, are praised.'])
+    expect(splitSentences('Brands, e.g. Össur and Ottobock, are named.')).toEqual(['Brands, e.g. Össur and Ottobock, are named.'])
+    expect(splitSentences('People thank Dr. Örn for the fitting.')).toEqual(['People thank Dr. Örn for the fitting.'])
+    expect(splitSentences('Clinics, i.e. Åsa\'s, are named. Össur is too.')).toEqual(['Clinics, i.e. Åsa\'s, are named.', 'Össur is too.'])
+  })
+
+  it('a dropped sentence no longer takes its neighbour with it', () => {
+    const r = dropDigitSentences('People name the paperwork. Össur sells 3 knees.', {})
+    expect(r.text).toBe('People name the paperwork.')
+    expect(r.dropped).toBe(1)
+    const d = scrubProse('week_read', 'Össur\'s liners are named. Cover is growing.', { verdicts: [] })
+    expect(d.text).toBe('Össur\'s liners are named.')
   })
 })
