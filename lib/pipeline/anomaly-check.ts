@@ -32,6 +32,7 @@ import {
 import { SLICE } from '../reading/coverage'
 import { ourChangesWithoutGatherFlags } from '../reading/gather-flags'
 import { loadChanges, loadPairRows } from '../reading/read'
+import type { ConfigChange } from '../config-log'
 import { preRegisteredKind } from '../reading/kinds'
 import { quoteRef } from '../renderables/quotes-freeze'
 import {
@@ -43,6 +44,7 @@ import {
   trailingCompleteMonths,
 } from '../reading/monthly'
 import { readSubjectWindow } from '../subjects/read'
+import { monthsWrittenAt, subjectBackRead, subjectCountedFrom, subjectReadIn } from '../subjects/read-in'
 import { isMissingSubjects } from '../subjects/types'
 import {
   TABLE_DENOMINATORS,
@@ -205,6 +207,8 @@ interface StoredMonthRow {
   run_id?: string | null
   clustering_key?: string | null
   judge_version?: string | null
+  /** When an update last wrote the row (`month_denominators.read_at`). */
+  read_at?: string | null
 }
 
 /**
@@ -248,6 +252,52 @@ export function pooledByObject(
     out.set(id, months.filter((m) => per.has(m)).map((month) => ({ month, videos: per.get(month) ?? 0 })))
   }
   return out
+}
+
+/**
+ * The baseline months a subject was NOT READ in, by the read-in rule Market's
+ * board, Ask and Your moves already apply (`subjectReadIn`,
+ * lib/subjects/read-in.ts), never a second one: a month is read when the
+ * subject has a row in it, when the one-shot back-read included the subject,
+ * or when it was counted (`subjectCountedFrom`) before the month's
+ * denominator rows were last written (`monthsWrittenAt`). In any other month
+ * its missing row is no reading, and `weekVsBaseline` holds it at
+ * `baseline_forming` (`unreadMonths`): still in the set, never tested.
+ *
+ * WHY (the re-describe check, 14 Oct). A re-described subject is a successor
+ * with a new id (scripts/subject-redescribe.ts), and it has no row in a closed
+ * month: the insert guard refuses one and the back-read is spent. It gets the
+ * months still filling at the next update's freeze-months, which runs before
+ * this check, so its pooled baseline was about a third of its level and its
+ * week read as a surge. That flag took one of the three places while the
+ * subject was provisional, and would lead Market, the Dashboard and the weekly
+ * email the day its check cleared. The same was already true of any subject
+ * named after its tenant's back-read, which this fixes too.
+ *
+ * `cited` is read over the baseline months this check reads, so a subject with
+ * no row in any of them, counted after they were written, reads as forming
+ * even where a back-read reached it in some older month: the side that flags
+ * nothing. A month with no denominator row is `no_month` and is not listed;
+ * the denominator's own zero already says it. Pure.
+ */
+export function subjectUnreadMonths(input: {
+  months: readonly string[]
+  /** The stored denominator rows the baseline pools, with `read_at`. */
+  denominators: readonly { month: string; audience: string; read_at?: string | null }[]
+  /** The subject's pooled baseline months (`pooledByObject`). */
+  subjectMonths: readonly DenominatorMonth[]
+  /** `subjectCountedFrom`, in ms. */
+  countedFrom: number | null
+}): string[] {
+  const writtenAt = monthsWrittenAt(input.denominators)
+  const cited = new Set(input.subjectMonths.filter((m) => m.videos > 0).map((m) => monthStartOf(m.month)))
+  const backRead = subjectBackRead(input.countedFrom, cited, writtenAt)
+  return input.months.filter((m) => subjectReadIn({
+    countedFrom: input.countedFrom,
+    writtenAt: writtenAt.get(monthStartOf(m)),
+    cited: cited.has(monthStartOf(m)),
+    backRead,
+  }) === 'unread')
 }
 
 /**
@@ -1090,7 +1140,7 @@ export async function runAnomalyCheck(args: RunAnomalyCheckArgs): Promise<Anomal
   let regimes: Map<string, BaselineRegime>
   let filling: string[]
   try {
-    const built = await buildReading(admin, args.clientId, args.runId, window, months)
+    const built = await buildReading(admin, args.clientId, args.runId, window, months, changeLog)
     reading = built.reading
     registration = built.registration
     regimes = built.regimes
@@ -1287,6 +1337,10 @@ export async function buildReading(
   runId: string,
   window: AnomalyWindow,
   months: readonly string[],
+  /** The tenant's change log, when the caller has already read it (the step
+   *  has, for the comparable baseline); absent, it is read here. Each
+   *  subject's confirmation in it is when it started being counted. */
+  changes?: readonly ConfigChange[],
 ): Promise<{
   reading: AnomalyReading
   registration: PreRegistration
@@ -1344,10 +1398,10 @@ export async function buildReading(
     // shrinks and the Holm threshold LOOSENS, so a transient database error
     // could let a flag fire that would not otherwise have fired. A silent
     // change to the measurement is the one thing this file cannot afford.
-    selectAll<{ id: string; name: string }>(() =>
-      admin.from('subjects').select('id, name').eq('client_id', clientId).eq('status', 'active').order('id', { ascending: true }),
+    selectAll<{ id: string; name: string; named_at: string; created_at: string | null }>(() =>
+      admin.from('subjects').select('id, name, named_at, created_at').eq('client_id', clientId).eq('status', 'active').order('id', { ascending: true }),
     ).catch((e) => {
-      if (isMissingSubjects(e)) return [] as { id: string; name: string }[]
+      if (isMissingSubjects(e)) return [] as { id: string; name: string; named_at: string; created_at: string | null }[]
       throw e
     }),
     selectAll<{ id: string; canonical_label: string | null }>(() =>
@@ -1386,14 +1440,27 @@ export async function buildReading(
       months: baselineRivals.get(audience) ?? [],
     })
   }
+  // A SUBJECT IS TESTED ONLY AGAINST MONTHS IT WAS READ IN (`subjectUnreadMonths`):
+  // a successor of a re-description, or any subject named after the back-read,
+  // has no row in the months written before it was counted, and those are no
+  // reading, not zeros. Read once, and only when there are subjects.
+  const changeLog = subjects.length > 0 ? (changes ?? (await loadChanges(admin, clientId))) : []
   for (const subject of subjects) {
+    const subjectBaseline = baselineSubjects.get(subject.id) ?? []
+    const unreadMonths = subjectUnreadMonths({
+      months,
+      denominators: denominatorMonths,
+      subjectMonths: subjectBaseline,
+      countedFrom: subjectCountedFrom(subject, changeLog),
+    })
     candidates.push({
       kind: 'subject',
       id: subject.id,
       label: subject.name,
       denominator: SLICE,
       weekVideos: weekSubjectVideos.get(subject.id) ?? 0,
-      months: baselineSubjects.get(subject.id) ?? [],
+      months: subjectBaseline,
+      ...(unreadMonths.length > 0 ? { unreadMonths } : {}),
     })
   }
   // PLAIN WORDS, NEVER AN ID. This label is written to anomaly_flags.label,

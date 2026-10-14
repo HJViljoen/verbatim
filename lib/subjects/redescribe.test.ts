@@ -144,6 +144,10 @@ describe('the successor and its record', () => {
   it('says it in the record with no figure, no dash and no "comments"', () => {
     const note = redescribeNote('Look & style')
     expect(note).not.toMatch(/\d|—|–|comments/i)
+    // The step itself closes the old line's open months: never "months
+    // already closed stay with the old ones".
+    expect(note).not.toMatch(/already closed|months/i)
+    expect(note).toBe('Reworded "Look & style" to say more exactly what belongs in it, and started a new count under the new words. What it counted under the old words, up to today, is kept unchanged and is no longer shown.')
   })
 })
 

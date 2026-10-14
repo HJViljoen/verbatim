@@ -17,6 +17,7 @@ import {
   pooledByObject,
   pooledMonths,
   regimesByObject,
+  subjectUnreadMonths,
   type BaselineRegime,
 } from './anomaly-check'
 import { thinUpdate, weekVsBaseline, type AnomalyReading, type DenominatorSeries, type PreRegisteredObject } from '../reading/anomaly'
@@ -88,6 +89,68 @@ describe('pooling a baseline out of stored month rows', () => {
     expect(pooledByObject(rows, (r) => (r as { kind?: string }).kind ?? null, MONTHS).get('praise')).toEqual([
       { month: '2026-07-01', videos: 5 },
     ])
+  })
+})
+
+// THE RE-DESCRIBE CHECK (14 Oct). A successor (scripts/subject-redescribe.ts)
+// has no July or August row and gets September at the 18 Oct update, before
+// this check runs: read as zeros, its baseline is a third of its level.
+describe('a subject is tested only against months it was read in', () => {
+  const BASE = ['2026-07-01', '2026-08-01', '2026-09-01']
+  const WRITTEN: Record<string, string> = {
+    '2026-07-01': '2026-09-10T04:00:00.000Z',
+    '2026-08-01': '2026-09-27T04:00:00.000Z',
+    '2026-09-01': '2026-10-18T04:30:00.000Z',
+  }
+  const denominators = BASE.flatMap((month) => [
+    { month, audience: 'client', videos: 63, read_at: WRITTEN[month] },
+    { month, audience: 'industry-other', videos: 300, read_at: WRITTEN[month] },
+  ])
+  const at = (iso: string) => Date.parse(iso)
+  const baseSeries: DenominatorSeries = { name: 'every audience together', weekVideos: 205, months: BASE.map((month) => ({ month, videos: 363 })) }
+  const subject = (id: string, months: { month: string; videos: number }[], extra: Partial<PreRegisteredObject> = {}): PreRegisteredObject => ({
+    kind: 'subject', id, label: id, denominator: baseSeries.name, weekVideos: 30, months, ...extra,
+  })
+
+  it('names the months written before a successor was counted, where it has no row', () => {
+    expect(subjectUnreadMonths({
+      months: BASE, denominators, subjectMonths: [{ month: '2026-09-01', videos: 40 }], countedFrom: at('2026-10-15T09:00:00.000Z'),
+    })).toEqual(['2026-07-01', '2026-08-01'])
+  })
+
+  it('names nothing for a subject counted before the baseline, or one the back-read reached', () => {
+    const full = BASE.map((month) => ({ month, videos: 40 }))
+    expect(subjectUnreadMonths({ months: BASE, denominators, subjectMonths: full, countedFrom: at('2026-06-01T00:00:00.000Z') })).toEqual([])
+    // Össur's six today: named 4 Oct, back-read into the closed months, cited in
+    // August only; July's missing row is a real zero (subjectBackRead).
+    expect(subjectUnreadMonths({
+      months: BASE, denominators,
+      subjectMonths: [{ month: '2026-08-01', videos: 12 }, { month: '2026-09-01', videos: 40 }],
+      countedFrom: at('2026-10-04T10:00:00.000Z'),
+    })).toEqual([])
+  })
+
+  it('a successor with no July or August row is never flagged as a surge', () => {
+    const months = [{ month: '2026-09-01', videos: 40 }]
+    const unreadMonths = subjectUnreadMonths({ months: BASE, denominators, subjectMonths: months, countedFrom: at('2026-10-15T09:00:00.000Z') })
+    // Before the fix: 30 of 205 against 40 of 1,089, a surge, flagged.
+    const before = weekVsBaseline({ week: '2026-10-11', denominators: [baseSeries], set: [subject('successor', months)] })
+    expect(before.flags.map((f) => f.id)).toEqual(['successor'])
+    const after = weekVsBaseline({ week: '2026-10-11', denominators: [baseSeries], set: [subject('successor', months, { unreadMonths })] })
+    expect(after.flags).toEqual([])
+    expect(after.rows[0]).toMatchObject({ state: 'baseline_forming', p: null, verdict: null, baselineMonthsClearing: 1 })
+    // Still pre-registered: it costs the family its look (the Holm denominator).
+    expect(after.setSize).toBe(1)
+    expect(after.tested).toBe(0)
+  })
+
+  it('a subject counted from before the baseline is tested exactly as today', () => {
+    const full = BASE.map((month) => ({ month, videos: 40 }))
+    const unreadMonths = subjectUnreadMonths({ months: BASE, denominators, subjectMonths: full, countedFrom: at('2026-06-01T00:00:00.000Z') })
+    const today = weekVsBaseline({ week: '2026-10-11', denominators: [baseSeries], set: [subject('fit', full)] })
+    const now = weekVsBaseline({ week: '2026-10-11', denominators: [baseSeries], set: [subject('fit', full, { unreadMonths })] })
+    expect(now).toEqual(today)
+    expect(now.tested).toBe(1)
   })
 })
 

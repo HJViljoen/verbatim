@@ -103,6 +103,12 @@ export interface PreRegisteredObject {
   /** The object's videos per baseline month, keyed the same way as the
    *  denominator's months. A month the object is absent from may be omitted. */
   months: readonly DenominatorMonth[]
+  /** Baseline months the object was NOT READ in: a subject counted only after
+   *  the month's rows were written (`subjectReadIn`, lib/subjects/read-in.ts).
+   *  Its missing row there is no reading, never the zero an omitted month
+   *  otherwise is, so an object with any of them is `baseline_forming`: still
+   *  in the set, never tested. Absent means read in every month, as before. */
+  unreadMonths?: readonly string[]
 }
 
 export type AnomalyState = 'flagged' | 'no_clear_change' | 'too_little_data' | 'baseline_forming'
@@ -606,6 +612,12 @@ export function weekVsBaseline(input: {
     // Only the denominator's own months count: an object row for a month the
     // baseline does not cover is not part of this comparison.
     const baselineVideos = sumMonths(obj.months, monthKeys)
+    // A month the object was not read in is no month of ITS baseline
+    // (`unreadMonths`); with none, this is the denominator's own count.
+    const unread = new Set((obj.unreadMonths ?? []).filter((m) => monthKeys.has(m)))
+    const ownClearing = unread.size === 0
+      ? state.monthsClearing
+      : den.months.filter((m) => m.videos >= floor.minN && !unread.has(m.month)).length
     const base: Omit<AnomalyRow, 'verdict' | 'p' | 'holmThreshold' | 'state'> = {
       kind: obj.kind,
       id: obj.id,
@@ -617,12 +629,13 @@ export function weekVsBaseline(input: {
       baselineVideos,
       baselineTotal,
       baselinePct: pct(baselineVideos, baselineTotal),
-      baselineMonthsClearing: state.monthsClearing,
+      baselineMonthsClearing: ownClearing,
     }
     // A baseline under three months is not a thin comparison — it is no
     // comparison, and the check says so rather than drawing a band nobody
-    // should read.
-    if (state.monthsClearing < requireMonths) {
+    // should read. So is an object missing months of its own: its absent rows
+    // there would read as zeros, and its week as a surge.
+    if (state.monthsClearing < requireMonths || unread.size > 0) {
       return { ...base, verdict: null, p: null, holmThreshold: null, state: 'baseline_forming' }
     }
 

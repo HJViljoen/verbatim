@@ -235,9 +235,12 @@ export function successorRow(old: RedescribeSubject, e: Pick<Redescription, 'des
 }
 
 /** The line Settings › The record prints (tenant-readable, verbatim). No
- *  figure and no threshold; "comments" has a fixed meaning there. */
+ *  figure, no threshold, no dash; "comments" has a fixed meaning there. It
+ *  claims only what the step does: the old line stops (and the retirement
+ *  closes its open months too, so "the months already closed" would undersell
+ *  it), its counts are kept as they were, and no page draws a stopped subject. */
 export function redescribeNote(name: string): string {
-  return `Reworded "${name}" to say more exactly what belongs in it. It is counted afresh under the new words; months already closed stay with the old ones.`
+  return `Reworded "${name}" to say more exactly what belongs in it, and started a new count under the new words. What it counted under the old words, up to today, is kept unchanged and is no longer shown.`
 }
 
 /** The change-log line: `nameSubject`'s shape for a rename ("after" names the
