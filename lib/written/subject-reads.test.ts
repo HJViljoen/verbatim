@@ -14,7 +14,7 @@ import type { DatedEvidence } from './evidence'
 import { subjectReadOf } from './published'
 import { scrubWeekText } from './scrub'
 import {
-  buildSubjectReadPrompts, finishSubjectRead, SpendGate, subjectReadAttemptMaxUsd, subjectReadMaterial, subjectReadsCapLeft, subjectReadsData,
+  buildSubjectReadPrompts, finishSubjectRead, headlineRefused, SpendGate, subjectReadAttemptMaxUsd, subjectReadSchema, subjectReadMaterial, subjectReadsCapLeft, subjectReadsData,
   subjectReadsHeadroom, subjectReadsRoom, thinSubjectRead, SUBJECT_READ_MAX_OUTPUT_TOKENS, SUBJECT_READ_PROMPT_VERSION, type SubjectReadMaterial, type SubjectReadTheme,
 } from './subject-reads'
 import {
@@ -106,6 +106,12 @@ describe('subjectReadMaterial: the pages\' grouping, the market\'s gated talk', 
 describe('the writer\'s prompt', () => {
   const m = material(RICH_EVIDENCE)
   const { system, user } = buildSubjectReadPrompts({ company: 'Össur', clientId: CLIENT, month: OCT, complete: false, material: m, context: null })
+  /** The coffee example's positive text for one field. */
+  const example = (field: string): string => {
+    const line = system.split('\n').find((l) => l.startsWith(`- ${field}: "`)) ?? ''
+    const start = `- ${field}: "`.length
+    return line.slice(start, line.indexOf('"', start))
+  }
 
   it('asks for what people said, then what it means, with the week read\'s rules', () => {
     expect(system).toContain('1. saying: what people said about Cost & access this month')
@@ -124,14 +130,13 @@ describe('the writer\'s prompt', () => {
   })
 
   it('v2: the meaning is the insight from the buyer\'s side, the company\'s claims context only (Heinrich, 14 Oct)', () => {
-    expect(SUBJECT_READ_PROMPT_VERSION).toBe('subject_read_v2')
     expect(system).toContain('the insight a marketing lead at Össur takes away, never a summary of the saying paragraphs')
     expect(system).toContain('Write it from the buyer\'s side of the talk')
     for (const angle of [
-      'what people here take for granted about a device like Össur\'s',
+      'what people here take for granted about what Össur sells',
       'what they doubt or still need settled before buying, shown by a question they ask or a problem they name',
-      'the part of a device like Össur\'s the talk turns on',
-      'a cheaper route, a workaround or a rival people praise, said as what they praise',
+      'the part of the product the talk turns on (a named part, a material, a size or a finish, in the words people in this market use)',
+      'a workaround or alternative people praise, said as what they praise',
     ]) expect(system).toContain(angle)
     // Its own claims are context, never the subject: the v1 reads opened on them.
     expect(system).toContain('Never open with a claim, never make one the subject, never restate one.')
@@ -148,6 +153,54 @@ describe('the writer\'s prompt', () => {
     // The example models the insight, and names what not to write.
     expect(system).toMatch(/Not, the company's claim restated: /)
     expect(system).toMatch(/Not, an abstract close: /)
+  })
+
+  it('v3: tenant-neutral, for bags as for prostheses (the fresh check\'s three should-fixes, 16 Oct)', () => {
+    expect(SUBJECT_READ_PROMPT_VERSION).toBe('subject_read_v3')
+    const sealand = buildSubjectReadPrompts({ company: 'Sealand', clientId: 'ac16988e-c4f3-4baf-b388-73895852a554', month: OCT, complete: false, material: m, context: null }).system
+    // The tenant's own category words where the product has them (WHAT_THEY_SELL), its name otherwise.
+    expect(sealand).toContain('what people here take for granted about bags like Sealand\'s')
+    expect(system).toContain('what people here take for granted about what Össur sells')
+    for (const p of [system, sealand]) {
+      // (1) No prosthetic part list, no prosthesis wording, for any tenant.
+      expect(p).not.toMatch(/socket|the knee|liner|prosthe|a device like/i)
+      expect(p).toContain('"someone buying for the first time"')
+      // (3) No comparative invitation the comparison scrub would miss.
+      expect(p).not.toMatch(/cheaper|cheapest/)
+      // The word list's alternatives survive the scrub it describes ("going up stairs" did not: "going up" is a movement frame).
+      expect(p).toContain('"taking the stairs"')
+      expect(p).not.toContain('going up stairs')
+    }
+    expect(scrubWeekText('People talk about taking the stairs.', 700, { allow: [] }).text).toBe('People talk about taking the stairs.')
+    expect(scrubWeekText('People talk about going up stairs.', 700, { allow: [] }).text).toBe('')
+    // (2) The coffee example keeps the rules it states: no inferred feeling, no "not X" frame, no rank.
+    const means = example('means')
+    expect(means).toBe('Owners describe the clean each morning in detail: the drip tray, the milk wand and the descale. A buyer here asks how long that clean takes, and the self cleaning machine is the one owners point each other to.')
+    for (const field of ['saying', 'means', 'headline']) {
+      const text = example(field)
+      expect(text.length).toBeGreaterThan(20)
+      expect(text).not.toMatch(/forgive|\bbut not\b|\bnot\s+(?:a|an|the|only|one)\b|before anything else|\bthan\b|before they asked/i)
+      // The example passes the scrub its own rules stand for.
+      expect(scrubWeekText(text.replace(/\\n/g, ' '), 2_000, { allow: [] }).counts.dropped).toBe(0)
+    }
+    // The inferred feeling is now a counter-example, named as one.
+    expect(system).toContain('Not, a feeling inferred and a "not X" frame: "Owners forgive the noise, but not a brush every morning."')
+  })
+
+  it('v3: asks for a headline, the subject\'s main point in one line from the buyer\'s side, under the meaning\'s rules', () => {
+    expect(system).toContain('3. headline: the subject\'s main point in one line, written last: the point of "means" in fewer words, never a summary of "saying".')
+    expect(system).toContain('At most 14 words and under 90 characters. A plain statement in sentence case (a capital on the first word and on names only), with no full stop at the end.')
+    expect(system).toContain('From the buyer\'s side: what people take for granted, what they still need settled, the part the talk turns on, or what they praise.')
+    // The first v3 dry run (16 Oct) wrote three of five headlines as "Buyers judge … by …", the example's own frame.
+    expect(system).toContain('the subjects\' headlines are read side by side, so never a stock frame ("Buyers judge … by …", "… is judged by …")')
+    expect(example('headline')).not.toMatch(/\bjudge/i)
+    expect(system).toContain('Never a question, never a label or a topic ("Cost & access", "Questions about Cost & access"), never the subject\'s name restated as a claim ("Cost & access matters to buyers"), and never Össur\'s own claim or a line about Össur\'s words.')
+    expect(system).toMatch(/Every rule for "means" and every house rule below holds here too: only what a note shows, no inferred feeling, no "not X" frame, no advice and no forecast, no comparison and no "than", no size or rank, no digit and no amount in words, no direction word, no medical claim, no first person\./)
+    expect(system).toContain('- headline: "Buyers want to know how long the daily clean takes".')
+    expect(system).toMatch(/Not, a question: .*Not, the subject's name restated: .*Not, the company's claim: /)
+    // The schema asks for it, in thinking order: what was said, what it means, then the line.
+    expect(Object.keys(subjectReadSchema().shape)).toEqual(['saying', 'means', 'headline'])
+    expect(subjectReadSchema().shape.headline.description).toMatch(/at most 14 words and under 90 characters, no full stop at the end\. Never a question, never the subject's name restated, never the company's own claim\./)
   })
 
   it('hands it the conversations inside the subject and the notes, never a comment or a figure', () => {
@@ -232,6 +285,61 @@ describe('finishSubjectRead and the thin line', () => {
     const means = 'Össur says its liners keep the limb drier. A drier liner prevents sores on the residual limb.'
     expect(finishSubjectRead(m, { saying: ['P.'], means }, { company: 'Össur', allow: [], medical: true }).read.means).toBe('Össur says its liners keep the limb drier.')
     expect(finishSubjectRead(m, { saying: ['P.'], means }, { company: 'Össur', allow: [] }).read.means).toBe(means)
+  })
+
+  it('v3: the headline is kept as one line, its full stop gone; an answer with none stores none', () => {
+    const { read, scrub } = finishSubjectRead(m, { saying: ['People name the appeal.'], means: 'Cover decides the fitting.', headline: '  The appeal decides when a knee is fitted.  ' }, { company: 'Össur', allow: [] })
+    expect(read).toEqual({
+      subjectId: 'cost', name: 'Cost & access', status: 'ready',
+      saying: ['People name the appeal.'], means: 'Cover decides the fitting.', headline: 'The appeal decides when a knee is fitted',
+      basedOn: ['t-ins'],
+    })
+    expect(scrub).toEqual({ dropped: 0, leaked: false, headline: 'kept' })
+    // A v2 answer (no headline): the read and its scrub are exactly v2's.
+    const v2 = finishSubjectRead(m, { saying: ['People name the appeal.'], means: 'Cover decides the fitting.' }, { company: 'Össur', allow: [] })
+    expect('headline' in v2.read).toBe(false)
+    expect(v2.scrub).toEqual({ dropped: 0, leaked: false })
+    // Only its first sentence is a headline: a second never stands in for a first the scrub dropped.
+    expect(finishSubjectRead(m, { saying: ['P.'], means: 'M.', headline: 'The appeal decides the fitting. Buyers ask twice.' }, { company: 'Össur', allow: [] }).read.headline).toBe('The appeal decides the fitting')
+    expect('headline' in finishSubjectRead(m, { saying: ['P.'], means: 'M.', headline: 'It grew by ten. The appeal decides the fitting.' }, { company: 'Össur', allow: [] }).read).toBe(false)
+  })
+
+  it('v3: the headline takes the meaning\'s finish whole; whatever drops it, the read stores none', () => {
+    const headlineOf = (headline: string, o: { medical?: boolean } = {}) =>
+      finishSubjectRead(m, { saying: ['People name the appeal.'], means: 'Cover decides the fitting.', headline }, { company: 'Össur', allow: [], ...o })
+    for (const [why, h] of [
+      ['a digit', 'Buyers wait six weeks for 2 appeals'],
+      ['an amount in words', 'A socket at fifteen thousand dollars decides the fitting'],
+      ['a direction word', 'Talk about refused cover is growing'],
+      ['advice', 'Össur should show the appeal'],
+      ['the company told what it could do', 'Össur could show the appeal'],
+      ['a forecast', 'Appeals are likely to decide the fitting'],
+      ['a comparison', 'The appeal matters more than the knee'],
+      ['the first person', 'Our buyers wait for the appeal'],
+      ['how it was made', 'This report finds the appeal decides the fitting'],
+      ['a question', 'Who pays for the knee?'],
+      ['the subject\'s name alone', 'Cost & access.'],
+      ['over its cap with the slack', 'Buyers describe the appeal, the letters from a prosthetist, the waiting, the paperwork, the second refusal and the fundraiser'],
+      ['over its word cap with the slack', 'Buyers ask who pays and who signs and who files and who waits and who calls and who writes it all'],
+    ] as const) {
+      const { read, scrub } = headlineOf(h)
+      expect('headline' in read, why).toBe(false)
+      expect(scrub.headline, why).toBe('dropped')
+      expect(read.means, why).toBe('Cover decides the fitting.')
+    }
+    // A medical claim drops it in a medical market, as it drops a sentence of the meaning.
+    expect('headline' in headlineOf('A drier liner prevents sores', { medical: true }).read).toBe(false)
+    expect(headlineOf('A drier liner prevents sores').read.headline).toBe('A drier liner prevents sores')
+    expect(headlineRefused('Cost and access', 'Cost & access')).toBeNull()
+    expect(headlineRefused('cost & ACCESS!', 'Cost & access')).toBe('name')
+    expect(headlineRefused('Is cover the point?', 'Cost & access')).toBe('question')
+  })
+
+  it('v3: a held read has no headline, and code\'s thin line never has one', () => {
+    const held = finishSubjectRead(m, { saying: ['It grew by ten.'], means: 'Össur sells knees.', headline: 'The appeal decides the fitting' }, { company: 'Össur', allow: [] }).read
+    expect(held).toMatchObject({ status: 'held', saying: [] })
+    expect('headline' in held).toBe(false)
+    expect('headline' in thinSubjectRead(material(RICH_EVIDENCE.slice(0, 1)), { month: OCT, complete: false, allow: [] })).toBe(false)
   })
 
   it('held where nothing of what was said survives', () => {
@@ -331,7 +439,7 @@ describe('buildSubjectReads', () => {
     })
     expect(parse).toHaveBeenCalledTimes(1)
     expect(built.data.subjects.map((s) => [s.subjectId, s.status])).toEqual([['cost', 'ready'], ['look', 'thin'], ['kept', 'ready']])
-    expect(built.data).toMatchObject({ status: 'ready', month: OCT, promptVersion: 'subject_read_v2' })
+    expect(built.data).toMatchObject({ status: 'ready', month: OCT, promptVersion: 'subject_read_v3' })
     expect(built.data.costUsd).toBeGreaterThan(0.05)
   })
 
@@ -376,6 +484,18 @@ describe('the store and the published read', () => {
     expect(subjectReadOf(read, 'a', '2026-09-01')).toBeNull()
     expect(subjectReadOf(base, 'a', OCT)).toBeNull()
     expect(subjectReadOf(null, 'a', OCT)).toBeNull()
+  })
+
+  it('subjectReadOf carries a v3 read\'s headline; a v1 or v2 read, stored with none, reads exactly as it was stored', () => {
+    const base = sealandRead({ headline: 'H' }) as WeekReadData
+    const v3 = { ...base, subjectReads: subjectReadsData({ month: OCT, read: { from: OCT, to: WINDOW.to }, costUsd: 0, subjects: [{ subjectId: 'a', name: 'A', status: 'ready', saying: ['P.'], means: 'M.', headline: 'The appeal decides the fitting', basedOn: [] }] }) } as WeekReadData
+    expect(subjectReadOf(v3, 'a', OCT)).toMatchObject({ headline: 'The appeal decides the fitting', saying: ['P.'], means: 'M.' })
+    for (const promptVersion of ['subject_read_v1', 'subject_read_v2'] as const) {
+      const stored: SubjectReadsData = { version: 1, promptVersion, month: OCT, read: { from: OCT, to: WINDOW.to }, status: 'ready', model: 'gpt-5.4', costUsd: 0.1, subjects: [{ subjectId: 'a', name: 'A', status: 'ready', saying: ['P.'], means: 'M.', basedOn: [] }] }
+      const r = subjectReadOf({ ...base, subjectReads: stored } as WeekReadData, 'a', OCT)
+      expect(r).toEqual(stored.subjects[0])
+      expect('headline' in (r as SubjectRead)).toBe(false)
+    }
   })
 
   it('the weekly issue never carries them', () => {

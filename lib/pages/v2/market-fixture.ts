@@ -342,6 +342,8 @@ export interface FixtureOptions {
   /** The tenant's subject reads are switched off (`subjectReadsEnabled`): the
    *  panel prints no stored read, the sentence stands in. */
   subjectReadsOff?: boolean
+  /** The open subject's written read carries a v3 headline (16 Oct). */
+  subjectHeadline?: string
 }
 
 const MONTH: MarketMonth = {
@@ -566,7 +568,8 @@ export function marketFixture(opts: FixtureOptions = {}): MarketData {
     brands: opts.brands ?? 'counted',
     subjectPanel: opts.subject
       ? buildSubjectPanel({
-          id: subjectId(opts.subject), facts, convs, period, p, read: opts.subjectDetail ? withSubjectReads(read) : read, month,
+          id: subjectId(opts.subject), facts, convs, period, p,
+          read: opts.subjectDetail ? (opts.subjectHeadline ? withSubjectHeadline(withSubjectReads(read), opts.subjectHeadline) : withSubjectReads(read)) : read, month,
           flag: flag?.conv ? { id: flag.conv.id, verdict: flag.verdict } : null,
           detail: opts.subjectDetail ? fixtureSubjectDetail(opts.subjectDetail, period, month) : null,
           readsOn: Boolean(opts.subjectDetail) && !opts.subjectReadsOff,
@@ -746,6 +749,20 @@ export function withSubjectReads(read: WeekReadData): WeekReadData {
           basedOn: [id(15), id(16)],
         },
       ],
+    },
+  }
+}
+
+/** The same reads written by `subject_read_v3`: Cost & access's written read
+ *  carries a headline (16 Oct); the thin one never has one. */
+export function withSubjectHeadline(read: WeekReadData, headline: string): WeekReadData {
+  if (read.version !== 2 || !read.subjectReads) return read
+  return {
+    ...read,
+    subjectReads: {
+      ...read.subjectReads,
+      promptVersion: 'subject_read_v3',
+      subjects: read.subjectReads.subjects.map((s) => (s.status === 'ready' ? { ...s, headline } : s)),
     },
   }
 }

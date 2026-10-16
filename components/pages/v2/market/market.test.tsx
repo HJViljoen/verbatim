@@ -631,6 +631,16 @@ describe('SubjectPanelView: a ready subject in full (14 Oct)', () => {
     assertCopyContract(panelOf(THIN))
   })
 
+  it('a v3 read\'s headline (16 Oct) is carried for the subject card and the panel prints exactly what it printed before', () => {
+    for (const period of ['week', 'month'] as const) {
+      const before = marketFixture({ subject: 'cost', subjectDetail: 'rich', period })
+      const after = marketFixture({ subject: 'cost', subjectDetail: 'rich', period, subjectHeadline: 'The appeal decides when a knee is fitted' })
+      expect(after.subjectPanel?.read?.headline?.body).toBe('The appeal decides when a knee is fitted')
+      expect(render(panelOf(after))).toBe(render(panelOf(before)))
+      expect(renderText(panelOf(after))).not.toContain('The appeal decides when a knee is fitted')
+    }
+  })
+
   it('a tenant whose subject reads are switched off: the week read\'s sentence alone under Our read, the blocks as they are', () => {
     const d = marketFixture({ subject: 'cost', subjectDetail: 'rich', subjectReadsOff: true })
     const text = renderText(panelOf(d))

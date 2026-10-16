@@ -423,8 +423,11 @@ export interface WeekReadDataV2 extends WeekReadCommon {
 export interface SubjectReadsData {
   version: 1
   /** v1: the first reads (14 Oct). v2: "what it means" is the insight from
-   *  the buyer's side, never the company's own claims (the same day). */
-  promptVersion: 'subject_read_v1' | 'subject_read_v2'
+   *  the buyer's side, never the company's own claims (the same day). v3 (16
+   *  Oct): a one-line `headline` per written read, for Market's subject card,
+   *  and the prompt worded for any tenant. Nothing reads this field to decide
+   *  how a read prints: a v1 or v2 read prints as it always has. */
+  promptVersion: 'subject_read_v1' | 'subject_read_v2' | 'subject_read_v3'
   /** The month read, `YYYY-MM-01`: the week read's own month, which is the
    *  month Market's subject panel prints its level for. */
   month: string
@@ -456,6 +459,12 @@ export interface SubjectRead {
   /** What it means for the company: one short paragraph, '' where the scrub
    *  left none (and on a thin read). */
   means: string
+  /** ADDITIVE (v3, 16 Oct): the subject's main point in one line, from the
+   *  buyer's side (Market's subject card prints it above "What it means"):
+   *  sentence case, no full stop, no figure. Scrubbed as `means` is; absent
+   *  where the scrub left none, on a thin, held or failed read, and on every
+   *  read stored before v3. */
+  headline?: string
   /** The conversations (`theme_registry.id`) the read was handed, placed in
    *  the subject by the pages' rule (`placeSubject`), so the read and the
    *  panel's "Inside it" name the same ones. */

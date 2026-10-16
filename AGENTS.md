@@ -215,8 +215,21 @@ This version has breaking changes — APIs, conventions, and file structure may 
   (14 Oct, Heinrich: v1's meaning restated the company's own claims and
   closed on abstractions) the insight from the buyer's side of the talk
   (what people take for granted, doubt or need settled, the part of the
-  device the talk turns on, a route or rival people praise), the company's
-  claims context only and never its subject. One gpt-5.4 call where its
+  product the talk turns on, a workaround or alternative people praise), the
+  company's claims context only and never its subject. Since
+  `subject_read_v3` (16 Oct, Heinrich: Market's top layer is analysis, each
+  subject a card of a headline and "What it means", the numbers one click
+  down) each written read also carries `headline`: the subject's main point
+  in one line from the buyer's side, at most about 90 characters and 14
+  words, sentence case, no full stop, scrubbed with the meaning's finish and
+  dropped whole past either cap, as a question or as the subject's name alone
+  (`headlineRefused`). ADDITIVE: `SubjectRead.headline?`, absent where the
+  scrub left none, on a thin, held or failed read and on every read stored
+  before v3, which print exactly as before; `subjectReadOf` and
+  `subjectReadLines` carry it and the panel does not print it. v3's prompt is
+  tenant-neutral (the category words come from `WHAT_THEY_SELL`, else "what
+  {company} sells"; no prosthetic part list; the coffee example keeps its own
+  rules). One gpt-5.4 call where its
   month holds gated citations on 3 videos and 2 notes, code's one line
   otherwise (never a claim of silence and never a reason). Scrubbed with
   `week_read`, plus `ADVICE` / `FORECAST` / `toldWhatToDo`, a comparison

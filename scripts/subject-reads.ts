@@ -1,7 +1,8 @@
 // The subjects' own reads for one run (14 Oct; the `write-subject-reads`
 // step's code, lib/written/subject-reads-step.ts): for each READY subject,
 // what people said across the conversations the pages place inside it, then
-// what it means for the company; one call per subject with enough to say,
+// what it means for the company, and (since v3) its one-line headline; one
+// call per subject with enough to say,
 // code's one line for a thin one. It reads the inputs through the step's own
 // `loadSubjectReadInputs` and builds through its own `buildSubjectReads`, so it
 // reads exactly what the step reads.
@@ -93,6 +94,7 @@ function render(built: BuiltSubjectReads, mode: string): string {
     out.push('')
     out.push(`## ${s.name} (${s.status})`)
     out.push('')
+    if (s.headline) out.push(`Headline: ${s.headline}`, '')
     for (const p of s.saying) out.push(p, '')
     if (s.means) out.push(`What it means: ${s.means}`, '')
     if (s.reason) out.push(`Why: ${s.reason}`, '')
@@ -102,7 +104,7 @@ function render(built: BuiltSubjectReads, mode: string): string {
       for (const c of m.conversations) out.push(`  - "${c.label}" (${c.kind ?? '?'}): ${c.videos} gated video(s), ${c.notes.length} note(s)`)
     }
     const scrub = built.scrub[s.subjectId]
-    if (scrub) out.push(`- Scrub: ${scrub.dropped} sentence(s) dropped.`)
+    if (scrub) out.push(`- Scrub: ${scrub.dropped} sentence(s) dropped${scrub.headline ? `; the headline ${scrub.headline}` : ''}.`)
     const raw = built.raw[s.subjectId]
     if (raw) out.push(`- The writer's answer before the scrub: ${JSON.stringify(raw)}`)
   }

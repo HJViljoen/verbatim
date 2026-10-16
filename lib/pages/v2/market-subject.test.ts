@@ -10,7 +10,7 @@ import {
   buildSubjectPanel, loadSubjectDetail, marketParams, personasOf, subjectDetailOf, subjectQuoteOf, subjectReadLines,
   type MarketMonth, type SubjectDetail,
 } from './market'
-import { fixtureFacts, fixtureFactsIn, fixtureRead, fixtureSubjectEvidence, fixtureSubjectId, marketFixture, withSubjectReads } from './market-fixture'
+import { fixtureFacts, fixtureFactsIn, fixtureRead, fixtureSubjectEvidence, fixtureSubjectId, marketFixture, withSubjectHeadline, withSubjectReads } from './market-fixture'
 
 // A READY SUBJECT'S PANEL (Heinrich, 14 Oct): the conversation panel's blocks
 // over the subject's own videos, by the conversation panel's rules, read only
@@ -182,6 +182,18 @@ describe('buildSubjectPanel: the read and the blocks, for a READY subject alone 
     expect(cost?.means?.body.slice(0, 20)).toBe('The refusals people ')
     expect(subjectReadLines(subjectReadOf(read, fixtureSubjectId('look'), OCT))).toMatchObject({ thin: true, means: null, lines: [{ body: expect.stringContaining('sat in') }] })
     expect(subjectReadLines(null)).toBeNull()
+    // A read stored before v3 has no headline, and its lines carry none.
+    expect(cost && 'headline' in cost).toBe(false)
+  })
+
+  it('subjectReadLines carries a v3 read\'s headline for the subject card, and leaves the rest as it was', () => {
+    const read = withSubjectReads(fixtureRead())
+    const before = subjectReadLines(subjectReadOf(read, fixtureSubjectId('cost'), OCT))
+    const v3 = withSubjectHeadline(read, 'The appeal decides when a knee is fitted')
+    const after = subjectReadLines(subjectReadOf(v3, fixtureSubjectId('cost'), OCT))
+    expect(after).toEqual({ ...before, headline: { body: 'The appeal decides when a knee is fitted', figures: {} } })
+    // A blank headline is none.
+    expect(subjectReadLines(subjectReadOf(withSubjectHeadline(read, '  '), fixtureSubjectId('cost'), OCT))).toEqual(before)
   })
 })
 

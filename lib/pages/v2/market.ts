@@ -507,8 +507,11 @@ export interface SubjectPanel {
    *  across the conversations inside it and then what it means for the
    *  company (`subjectReads` on the published week read, `subjectReadOf`),
    *  where it is of this month; `thin` where code wrote its one line. Stored
-   *  `week_read` prose. Ready only; absent on a dump from before it. */
-  read?: { lines: StoredLine[]; means: StoredLine | null; thin: boolean } | null
+   *  `week_read` prose. Ready only; absent on a dump from before it.
+   *  `headline` (v3, 16 Oct): the read's one line, carried for Market's
+   *  subject card and not printed by the panel; absent where the read has
+   *  none (every read stored before v3, and a thin one). */
+  read?: { lines: StoredLine[]; means: StoredLine | null; thin: boolean; headline?: StoredLine } | null
   /** The conversation panel's anatomy, over the subject's own videos (14 Oct).
    *  READY ONLY (ruling U6: every block rests on its membership); absent or
    *  null in every other state, and on a dump from before it. */
@@ -2296,13 +2299,15 @@ export function buildSubjectPanel(a: {
 
 /** A subject's own read as "Our read" prints it: what people said, each
  *  paragraph a stored line with no figure, then what it means for the
- *  company, its own line. Pure. */
+ *  company, its own line; and its headline (v3), carried and not printed
+ *  here, only where a written read has one. Pure. */
 export function subjectReadLines(r: ReturnType<typeof subjectReadOf>): SubjectPanel['read'] {
   if (!r) return null
   const line = (body: string) => ({ body: body.trim(), figures: {} as PrintedFigures })
   const lines = r.saying.filter((p) => p.trim()).map(line)
   if (lines.length === 0) return null
-  return { lines, means: r.means.trim() ? line(r.means) : null, thin: r.status === 'thin' }
+  const headline = r.status === 'ready' && r.headline?.trim() ? { headline: line(r.headline) } : {}
+  return { lines, means: r.means.trim() ? line(r.means) : null, thin: r.status === 'thin', ...headline }
 }
 
 /** "TikTok · 7 Oct" and who the video is filed under: a subject's quote as
