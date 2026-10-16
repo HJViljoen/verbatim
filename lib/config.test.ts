@@ -254,8 +254,9 @@ describe('POST_IDEAS_ENABLED', () => {
 
 
 // The subjects' own reads (14 Oct): OPT-IN, the post ideas' pattern. A yes is
-// a diff to this test: on for Össur (the lead's ruling, 14 Oct), off for
-// Sealand until Heinrich has read Össur's. The env switches only turn off.
+// a diff to this test: on for Össur (the lead's ruling, 14 Oct) and for
+// Sealand (Heinrich's approval, 16 Oct, once the prompt was made
+// tenant-neutral in subject_read_v3). The env switches only turn off.
 describe('SUBJECT_READS_ENABLED', () => {
   const saved = { on: process.env.SUBJECT_READS, off: process.env.SUBJECT_READS_OFF }
   const restore = () => {
@@ -265,13 +266,14 @@ describe('SUBJECT_READS_ENABLED', () => {
     else process.env.SUBJECT_READS_OFF = saved.off
   }
 
-  it('is on for Össur alone: off for Sealand, any other tenant and an unknown one', () => {
+  it('is on for Össur and Sealand: off for any other tenant and an unknown one', () => {
     delete process.env.SUBJECT_READS
     delete process.env.SUBJECT_READS_OFF
     try {
-      expect(SUBJECT_READS_ENABLED).toEqual({ [OSSUR_CLIENT_ID]: true })
+      expect(SUBJECT_READS_ENABLED).toEqual({ [OSSUR_CLIENT_ID]: true, [SEALAND_CLIENT_ID]: true })
       expect(subjectReadsEnabled(OSSUR_CLIENT_ID)).toBe(true)
-      for (const id of [SEALAND_CLIENT_ID, DEMO_CLIENT_ID, 'not-a-tenant']) expect(subjectReadsEnabled(id)).toBe(false)
+      expect(subjectReadsEnabled(SEALAND_CLIENT_ID)).toBe(true)
+      for (const id of [DEMO_CLIENT_ID, 'not-a-tenant']) expect(subjectReadsEnabled(id)).toBe(false)
     } finally {
       restore()
     }
@@ -288,8 +290,12 @@ describe('SUBJECT_READS_ENABLED', () => {
       expect(subjectReadsEnabled(OSSUR_CLIENT_ID)).toBe(false)
       delete process.env.SUBJECT_READS_OFF
       process.env.SUBJECT_READS = '1'
+      expect(subjectReadsEnabled(DEMO_CLIENT_ID)).toBe(false)
+      expect(subjectReadsEnabled(DEMO_CLIENT_ID, { [DEMO_CLIENT_ID]: true })).toBe(true)
+      // Sealand's own off-switch, now that it is on.
+      process.env.SUBJECT_READS_OFF = SEALAND_CLIENT_ID
       expect(subjectReadsEnabled(SEALAND_CLIENT_ID)).toBe(false)
-      expect(subjectReadsEnabled(SEALAND_CLIENT_ID, { [SEALAND_CLIENT_ID]: true })).toBe(true)
+      expect(subjectReadsEnabled(OSSUR_CLIENT_ID)).toBe(true)
     } finally {
       restore()
     }

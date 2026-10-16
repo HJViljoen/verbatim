@@ -237,9 +237,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
   Stored on the run's `week_reads` row (`data.subjectReads`, no migration;
   `saveWeekRead` keeps them when a week read is written again; the weekly
   snapshot strips them) and read only through `subjectReadOf`. OPT-IN per
-  tenant: `subjectReadsEnabled` (`SUBJECT_READS_ENABLED`, on for Össur alone
-  since 14 Oct; `SUBJECT_READS=0` and `SUBJECT_READS_OFF` are emergency
-  off-switches), and a page prints no stored read for a tenant switched off.
+  tenant: `subjectReadsEnabled` (`SUBJECT_READS_ENABLED`, on for Össur since
+  14 Oct and for Sealand since 16 Oct, Heinrich's approval on the condition
+  of v3's tenant-neutral prompt, the lead's real-data dry run shown to him
+  before Sunday 18 Oct's run; `SUBJECT_READS=0` and `SUBJECT_READS_OFF` are
+  emergency off-switches), and a page prints no stored read for a tenant
+  switched off.
   `SUBJECT_READS_BUDGET_USD` ($1) per run with `RUN_MODEL_BUDGET_USD`
   headroom. A TEST run, a tenant switched off, no table, no ready week read
   or no ready subject is a silent no-op. The week read's fail-soft contract

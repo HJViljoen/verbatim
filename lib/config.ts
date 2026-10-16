@@ -1924,14 +1924,19 @@ export const SUBJECT_READS_RUN_MARGIN_USD = 0.5
  * The subjects' own reads (the `write-subject-reads` step, Market's subject
  * panel; 14 Oct), per tenant: OPT-IN, the `POST_IDEAS_ENABLED` pattern (the
  * lead's ruling on the fresh check: nobody reads a read before it prints, so a
- * tenant is turned on only once Heinrich has read one). Off, the step reads,
+ * tenant is turned on only with Heinrich's yes: a read he has read, or his
+ * approval on a stated condition, with the lead's dry run on real data shown
+ * to him before the first scheduled run writes one). Off, the step reads,
  * spends and writes nothing, the script writes nothing, and the panel prints
  * no stored subject read (the week read's sentence on it stands in), as
  * Content prints no stored idea while post ideas are off. A tenant is turned
  * on with a diff to this map and to lib/config.test.ts, which pins it.
  *
- * ON FOR ÖSSUR (14 Oct, the lead's ruling); OFF FOR SEALAND until Heinrich has
- * read Össur's.
+ * ON FOR ÖSSUR (14 Oct, the lead's ruling). ON FOR SEALAND (16 Oct,
+ * Heinrich's approval, on the condition that the prompt make sense for any
+ * tenant: `subject_read_v3`, lib/written/subject-reads.ts, which also adds
+ * each read's headline; the lead dry-runs Sealand on real data and shows him
+ * before Sunday 18 Oct's run). Off for every other tenant.
  *
  * `SUBJECT_READS=0` (or `false`) and `SUBJECT_READS_OFF` (a comma-separated
  * client-id list) are EMERGENCY OFF-SWITCHES only: neither can turn a tenant
@@ -1939,6 +1944,7 @@ export const SUBJECT_READS_RUN_MARGIN_USD = 0.5
  */
 export const SUBJECT_READS_ENABLED: Readonly<Record<string, boolean>> = {
   [OSSUR_CLIENT_ID]: true,
+  [SEALAND_CLIENT_ID]: true,
 }
 /** May this tenant's run write its subjects' reads, and Market print them?
  *  Read it; never read the map. `map` is for a test. */

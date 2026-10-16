@@ -44,7 +44,7 @@ import type { ParseClient } from './write-model'
 //
 // SILENT WHERE IT SHOULD BE. A TEST run (`isTestRun`) reads and writes
 // nothing. A tenant switched off (`subjectReadsEnabled`, lib/config.ts: OPT-IN,
-// on for Össur alone since 14 Oct; `SUBJECT_READS=0` and `SUBJECT_READS_OFF`
+// on for Össur since 14 Oct and Sealand since 16 Oct; `SUBJECT_READS=0` and `SUBJECT_READS_OFF`
 // are emergency off-switches) is the same. No `week_reads` table, no READY week read for the run (thin,
 // failed or missing: the week read's own step told the operator, and a page
 // prints no read that is not ready), or no ready subject is a no-op that

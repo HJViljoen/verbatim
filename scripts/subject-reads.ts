@@ -11,7 +11,7 @@
 //     --client <uuid> --run <uuid> [--write] [--out <file.md>] [--force]
 //
 // THE SWITCH (`subjectReadsEnabled`, lib/config.ts: OPT-IN, on for Össur
-// alone since 14 Oct). For a tenant switched off it refuses; `--force` lets a
+// since 14 Oct and for Sealand since 16 Oct). For a tenant switched off it refuses; `--force` lets a
 // DRY run go ahead (to read a tenant's reads before it is turned on), and is
 // refused beside `--write`: a stored read of a tenant switched off prints
 // nowhere, and the switch is the one place a tenant is turned on.
