@@ -591,7 +591,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
   `week_read_v4` (16 Oct) the implications are written from the buyer's side
   of the week's talk, the subject reads' v2 rule: the company's claims are
   context only, at most one clause, never a line's opening or subject (Össur's
-  11 Oct read opened all three lines on its own marketing). The shape, the
+  11 Oct read opened all three lines on its own marketing). The lead's 30 Sep
+  ruling holds in buyer-side words: each line is particular to the company's
+  market and buyers (its products, the parts of them people name, its own
+  customers' talk), and a line as true of any rival is not an implication. The shape, the
   caps and the scrubs are v3's; the bump only records which instruction
   wrote the words, and nothing reads `promptVersion` to decide how a read
   prints, so a v3 read, its snapshots and the version-1 email goldens print
