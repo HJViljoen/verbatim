@@ -595,9 +595,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
   of the week's talk, the subject reads' v2 rule: the company's claims are
   context only, at most one clause, never a line's opening or subject (Össur's
   11 Oct read opened all three lines on its own marketing). The lead's 30 Sep
-  ruling holds in buyer-side words: each line is particular to the company's
-  market and buyers (its products, the parts of them people name, its own
-  customers' talk), and a line as true of any rival is not an implication. The shape, the
+  ruling holds in buyer-side words, under the product's attribution rule
+  (the final round, 16 Oct: Sealand's offline run gave "A Sealand backpack
+  buyer…" to talk no candidate gave Sealand): each line is particular to
+  what the company SELLS (its category, the parts and products of that
+  kind, their buyers), it names the company's own products, customers or
+  posts only where a candidate names the company or its product, and where
+  none does it says what the finding means for a company that sells that
+  (v3's fallback). A line as true of any category is not an implication. The shape, the
   caps and the scrubs are v3's; the bump only records which instruction
   wrote the words, and nothing reads `promptVersion` to decide how a read
   prints, so a v3 read, its snapshots and the version-1 email goldens print

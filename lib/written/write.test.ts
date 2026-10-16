@@ -6,7 +6,7 @@ import { SEALAND_CLIENT_ID } from '../config'
 import type { CompanyContext } from './company'
 import { candidate, fact, pool, ref, WINDOW } from './test-fixtures'
 import {
-  buildWeekReadPrompts, DELETED_WORDS, weekReadSchema, WEEK_READ_PROMPT_VERSION, writerFigures, type WeekWriterArgs,
+  buildWeekReadPrompts, DELETED_WORDS, INTENSITY_RULE, weekReadSchema, WEEK_READ_PROMPT_VERSION, writerFigures, type WeekWriterArgs,
 } from './write'
 
 // The writer's prompt and schema (plan T3), on fixtures.
@@ -185,14 +185,15 @@ describe('the prompt', () => {
   it('writes its own example in the house style: no digit, no deleted word, no magnitude word, no advice', () => {
     const example = system.slice(system.indexOf('An example of the register'))
     expect(example).toContain('A story paragraph:')
-    expect(example).toContain('An implication, from the buyer\'s side and particular to the company, never the story again: "Owners of the company\'s own machines name its milk wand as the part of the morning clean they would change. A buyer looking at its range asks the time that clean takes, and the wand that rinses itself is the feature its owners recommend."')
-    // The claim-first line is the counter-example now (v4), named as one; so are the story told again and a line true of any rival.
+    // The final round (16 Oct, M1): the implication is about what the company SELLS, and gives it no talk no candidate gives it.
+    expect(example).toContain('An implication, from the buyer\'s side and particular to what the company sells, never the story again, where no candidate names the company: "On a machine with a milk wand, the wand is the part of the morning clean owners would change. A buyer of such a machine asks the time that clean takes, and a wand that rinses itself is the feature owners recommend." Where a candidate names the company or its machines, a line may name them; here none does.')
+    expect(example).toContain('Not, talk given to the company that no candidate gives it: "Owners of the company\'s own machines name its milk wand."')
+    // The claim-first line, the story told again and a line true of any category are counter-examples, named as such.
     expect(example).toContain('Not, the company\'s claim first, where it says its machines last a decade: "The company sells its machines on a decade of use.')
     expect(example).toContain('Not, the story told again: "Owners described the drip tray, the milk wand and the descale, and judged the machine by the routine."')
-    expect(example).toContain('Not, true of any rival: "Machines are judged on upkeep."')
-    // The fix round (16 Oct): the implication does not retell the finding or the story it sits beside.
-    const implication = example.slice(example.indexOf('An implication'), example.indexOf('Not, the story told again'))
-    expect(implication).not.toMatch(/drip tray|descale|routine/)
+    expect(example).toContain('Not, true of any category: "Products are judged on upkeep."')
+    const implication = example.slice(example.indexOf('An implication'), example.indexOf('Not, talk given'))
+    expect(implication).not.toMatch(/drip tray|descale|routine|company's own|its owners|its range/)
     expect(example).toContain('A watch line:')
     expect(example).toContain('A week line:')
     expect(example).not.toMatch(/\d/)
@@ -270,7 +271,7 @@ describe('the prompt', () => {
   })
 })
 
-describe('what it means for the company: about Sealand in particular, never the category (the lead, 30 Sep), from the buyer\'s side (v4, 16 Oct)', () => {
+describe('what it means for the company: particular to what Sealand sells, never true of any category, its own talk only where a candidate names it (M1, 16 Oct), from the buyer\'s side (v4)', () => {
   const context: CompanyContext = {
     sells: { noun: 'bags', description: null, keywords: ['backpack', 'travel bag'] },
     claims: ['Bags are made from upcycled materials.'],
@@ -303,9 +304,17 @@ describe('what it means for the company: about Sealand in particular, never the 
     expect(system).toContain('Never frame a point by what something is not ("not only", "rather than the look")')
     expect(system).toContain('No abstract closing line ("sits inside the product story", "a story about identity"): name the thing, and end on the concrete point.')
     // The fix round's real dry run (16 Oct) still opened a line by listing the story's questions again.
-    expect(system).toContain("Each line adds what the story does not say: never list again the things people asked about or named in the story or the findings. Name the one thing the point turns on, and say what it means for Sealand's buyers.")
+    expect(system).toContain("Each line adds what the story does not say: never list again the things people asked about or named in the story or the findings. Name the one thing the point turns on, and say what it means for buyers of what Sealand sells.")
     // The lead's 30 Sep ruling, kept in buyer-side words (the fix round, 16 Oct).
-    expect(system).toContain("About Sealand in particular, never about the category in general: each line says something particular to Sealand's market and buyers, such as the products Sealand sells (by name where the candidates name them), the parts of them people name, or what Sealand's own customers say. A line that would be as true of any rival is not an implication for Sealand: make it particular or leave it out. The claims stay context only, at most one clause.")
+    // M1 (the final round): particular to what Sealand SELLS; its own products, customers or posts only where a candidate names it;
+    // v3's honest fallback back. Sealand's offline run gave "A Sealand backpack buyer…" to talk no candidate gave Sealand.
+    expect(system).toContain("Particular to what Sealand sells, never true of any category: each line is about what Sealand sells, the parts and products of that kind people name, and the buyers of that kind of product. Name Sealand's own products, customers or posts ONLY where a candidate's label, description or notes name Sealand or one of its products: talk is never Sealand's because it is about the kind of thing Sealand sells. Where no candidate names Sealand, say what the finding means for a company that sells what Sealand sells. A line that would be as true of any category is not an implication: make it particular or leave it out. The claims stay context only, at most one clause.")
+    expect(buildWeekReadPrompts(args({ clientId: SEALAND_CLIENT_ID })).system).toContain("say what the finding means for a company that sells bags like Sealand's")
+    expect(system).not.toMatch(/what Sealand's own customers say|Sealand's market and buyers|as true of any rival/)
+    // The intensity rule without its "comparisons allowed" sentence, which clashed with "never set against something else".
+    expect(system).toContain(INTENSITY_RULE)
+    expect(system).not.toMatch(/allowed only where the input data directly shows them/)
+    expect(system).toContain('- For insurance, write "insurance cover" or "insurance", never "coverage" on its own: a sentence with a bare "coverage" is deleted.')
     // v3's instruction to name the claim and say what the week means for it is gone.
     expect(system).not.toContain("Connect the week's findings to what Sealand sells and to what it says about itself")
     expect(system).not.toContain('name the claim or the product and say what the finding means for it')
