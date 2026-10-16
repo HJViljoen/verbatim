@@ -28,6 +28,9 @@ describe('britishSpelling', () => {
     expect(britishSpelling('A labeled fiber, customized jewelry, a personalized catalog.')).toBe('A labelled fibre, customised jewellery, a personalised catalogue.')
     expect(britishSpelling('Owners realize, recognize, prioritize and analyze it.')).toBe('Owners realise, recognise, prioritise and analyse it.')
     expect(britishSpelling('Neighbors honor the warranty.')).toBe('Neighbours honour the warranty.')
+    // Össur's stored watch line of 11 Oct printed "centering" (16 Oct).
+    expect(britishSpelling('Whether questions about how a prosthesis works keep centering on attachment, shoes and pain after long walks')).toBe('Whether questions about how a prosthesis works keep centring on attachment, shoes and pain after long walks')
+    expect(britishSpelling('Talk centered on the zips, centers on the straps.')).toBe('Talk centred on the zips, centres on the straps.')
   })
 
   it('whole words only', () => {

@@ -69,6 +69,7 @@ export const BRITISH_SPELLINGS: Readonly<Record<string, string>> = {
   center: 'centre',
   centers: 'centres',
   centered: 'centred',
+  centering: 'centring',
   // travel
   traveled: 'travelled',
   traveling: 'travelling',
