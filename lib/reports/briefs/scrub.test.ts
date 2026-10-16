@@ -114,6 +114,15 @@ describe('the §0a backstop', () => {
     expect(clean('Interest in colour is growing.')).toBe('')
   })
 
+  it('drops an amount stated in words, as the written reads do, and counts it apart from digits', () => {
+    const r = scrubBriefText('Buyers price a socket near fifteen thousand dollars. They ask who fits it.', 200, { company: 'Acme', field: 'market' })
+    expect(r.text).toBe('They ask who fits it.')
+    expect(r.dropped).toEqual([{ sentence: 'Buyers price a socket near fifteen thousand dollars.', rule: 'an amount in words' }])
+    expect(r.counts.droppedAmountWords).toBe(1)
+    expect(r.counts.droppedDigits).toBe(0)
+    expect(clean('Buyers name one clear reason and the first socket.')).toBe('Buyers name one clear reason and the first socket.')
+  })
+
   it('drops advice only where the writer interprets, never in what people said', () => {
     const said = 'Buyers say a bag should last for years.'
     expect(clean(said, 'market')).toBe(said)

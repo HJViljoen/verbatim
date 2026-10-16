@@ -563,8 +563,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
   (16 Oct: `statesAmountInWords`, its units in `AMOUNT_UNITS`, counted as
   `droppedAmountWords`), outside quotation marks only and in every caller of
   `scrubWeekText` (the week read, the long-run read, the subject reads, Your
-  statements), while a bare small count ("one", "two prostheses", "the
-  first") stays and the briefs, which call `scrubProse` directly, do not get it.
+  statements) and in the monthly briefs' `scrubBriefText` (rule "an amount
+  in words"), while a bare small count ("one", "two prostheses", "the
+  first") stays.
   `splitSentences` starts a sentence at any script's capital (14 Oct: "…
   insurers. Össur's …" was one sentence, so a dropped sentence took its
   neighbour; an abbreviation still holds), and `toldWhatToDo` matches a

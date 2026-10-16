@@ -1,6 +1,6 @@
 import { scrubProse, splitSentences, stripThemeRefs } from '../../prose/scrub'
 import { capText, noDashes } from '../documents/scrub'
-import { ADVICE, BANNED_PHRASES, toldWhatToDo, type WeekScrubCounts } from '../../written/scrub'
+import { ADVICE, BANNED_PHRASES, statesAmountInWords, toldWhatToDo, type WeekScrubCounts } from '../../written/scrub'
 import { britishSpelling } from '../../written/spelling'
 
 // What the brief writer's words go through (pure). Sentence by sentence, the
@@ -155,13 +155,14 @@ export function scrubBriefText(raw: string, max: number, o: BriefScrubOptions): 
   ]
   const counts: WeekScrubCounts = { dropped: 0, droppedDigits: 0, droppedAmountWords: 0, droppedDirection: 0, droppedBanned: 0, droppedAdvice: 0, droppedLong: 0, leaked: false }
   const dropped: BriefScrub['dropped'] = []
-  const drop = (sentence: string, rule: string, kind: 'banned' | 'advice' | 'digits' | 'direction') => {
+  const drop = (sentence: string, rule: string, kind: 'banned' | 'advice' | 'digits' | 'amount' | 'direction') => {
     dropped.push({ sentence, rule })
     counts.dropped += 1
     counts.leaked = true
     if (kind === 'banned') counts.droppedBanned += 1
     if (kind === 'advice') counts.droppedAdvice += 1
     if (kind === 'digits') counts.droppedDigits += 1
+    if (kind === 'amount') counts.droppedAmountWords += 1
     if (kind === 'direction') counts.droppedDirection += 1
   }
   const paragraphs = (raw ?? '').split(/\n\s*\n/).map((p) => p.replace(/\s*\n\s*/g, ' ').trim()).filter(Boolean)
@@ -172,6 +173,8 @@ export function scrubBriefText(raw: string, max: number, o: BriefScrubOptions): 
     for (const sentence of splitSentences(noDashes(stripIds(stripThemeRefs(para))))) {
       const rule = firstBreak(sentence, rules)
       if (rule) { drop(sentence, rule, ADVICE.some((a) => a.name === rule) || rule === 'told what to do' ? 'advice' : 'banned'); continue }
+      // The written reads' backstop beside the digit rule: a figure typed in words.
+      if (statesAmountInWords(sentence)) { drop(sentence, 'an amount in words', 'amount'); continue }
       const r = scrubProse('week_read', sentence, { figures: {}, allow: [], verdicts: [] })
       if (!r.text.trim()) { drop(sentence, r.droppedDigits > 0 ? 'a digit' : r.droppedDirection > 0 ? 'a direction word' : 'the prose policy', r.droppedDigits > 0 ? 'digits' : 'direction'); continue }
       kept.push(capitalised(r.text.trim()))
