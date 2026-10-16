@@ -147,7 +147,7 @@ export function buildLongRunPrompts(a: LongRunWriterArgs): { system: string; use
     '- Name products, brands and themes plainly. Never name a person or an account.',
     '- The market only. Never mention how anything was found, gathered, collected, searched, read, counted or checked. Never mention data, sources, samples, coverage, searches, updates, platforms, this service, a tool, a model, AI or Verbatim, and never write "this read", "this report" or "this section". Never explain why something is not said: leave it out.',
     '- Never say how big a theme is or how it ranks against another ("the main complaint", "the biggest theme", "most buyers"): code prints the counts beside each idea.',
-    '- You have NO numbers. Never type a digit, not even in a product name ("the larger pack", not "the 35L pack").',
+    '- You have NO numbers. Never type a digit, not even in a product name ("the larger pack", not "the 35L pack"). Never write an amount, a price, a percentage or a count in words either: "fifty thousand euros" is a number too, and a sentence with an amount in words is deleted.',
     noDashes(CALIBRATED_PROSE_RULE.split('\n')[0]),
     '- Never write an id (C2) in prose; ids belong only in based_on.',
     noDashes(noDirectionRule('week_read')),

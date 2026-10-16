@@ -146,7 +146,7 @@ export function renderWeekRead(company: string, runId: string, built: BuiltWeekR
   for (const h of d.held) out.push(`- ${h.section ? `[${h.section}] ` : ''}${h.headline || '_(no text)_'}: ${h.reason}`)
   if (d.held.length === 0) out.push('- none')
   out.push('')
-  if (built.scrub) out.push(`### Scrub`, '', `- sentences dropped: ${built.scrub.dropped} (digits ${built.scrub.droppedDigits}, direction ${built.scrub.droppedDirection}, how-it-was-made ${built.scrub.droppedBanned}, advice or forecast ${built.scrub.droppedAdvice ?? 0}); one-line fields dropped for length: ${built.scrub.droppedLong ?? 0}`, '')
+  if (built.scrub) out.push(`### Scrub`, '', `- sentences dropped: ${built.scrub.dropped} (digits ${built.scrub.droppedDigits}, amounts in words ${built.scrub.droppedAmountWords ?? 0}, direction ${built.scrub.droppedDirection}, how-it-was-made ${built.scrub.droppedBanned}, advice or forecast ${built.scrub.droppedAdvice ?? 0}); one-line fields dropped for length: ${built.scrub.droppedLong ?? 0}`, '')
   if (built.check) {
     out.push(`### Self-check${built.check.ran ? '' : ' (DID NOT RUN: findings kept unchecked)'}`, '')
     for (const v of built.check.verdicts) out.push(`- ${v.verdict}: ${v.headline}${built.check.contradicted.get(v.headline) ? ` (they say: ${built.check.contradicted.get(v.headline)})` : ''}`)
@@ -235,7 +235,7 @@ export function renderLongRun(company: string, clientId: string, built: BuiltLon
     for (const h of d.held) out.push(`- **${h.headline}**: ${h.reason}`)
     out.push('')
   }
-  if (built.scrub) out.push(`Scrub: ${built.scrub.dropped} sentence(s) dropped (digits ${built.scrub.droppedDigits}, direction ${built.scrub.droppedDirection}, process ${built.scrub.droppedBanned}, change or advice ${built.scrub.droppedAdvice}).`, '')
+  if (built.scrub) out.push(`Scrub: ${built.scrub.dropped} sentence(s) dropped (digits ${built.scrub.droppedDigits}, amounts in words ${built.scrub.droppedAmountWords ?? 0}, direction ${built.scrub.droppedDirection}, process ${built.scrub.droppedBanned}, change or advice ${built.scrub.droppedAdvice}).`, '')
   if (built.check) {
     out.push('### Self-check', '')
     for (const v of built.check.verdicts) out.push(`- ${v.verdict}: ${v.headline}`)

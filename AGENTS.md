@@ -558,6 +558,13 @@ This version has breaking changes — APIs, conventions, and file structure may 
   rule holds in the report's implications and watch lines only: advice and
   forecasts drop their sentence (`ADVICE`, `FORECAST`, `toldWhatToDo`), which
   are NOT safe on market prose and are not reused by the guard.
+  A written-read sentence that states an amount in words ("fifty thousand
+  euros", "twenty-five percent", "hundreds of") drops whole like a digit one
+  (16 Oct: `statesAmountInWords`, its units in `AMOUNT_UNITS`, counted as
+  `droppedAmountWords`), outside quotation marks only and in every caller of
+  `scrubWeekText` (the week read, the long-run read, the subject reads, Your
+  statements), while a bare small count ("one", "two prostheses", "the
+  first") stays and the briefs, which call `scrubProse` directly, do not get it.
   `splitSentences` starts a sentence at any script's capital (14 Oct: "…
   insurers. Össur's …" was one sentence, so a dropped sentence took its
   neighbour; an abbreviation still holds), and `toldWhatToDo` matches a

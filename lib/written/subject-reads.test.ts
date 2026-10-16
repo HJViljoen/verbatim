@@ -112,6 +112,7 @@ describe('the writer\'s prompt', () => {
     expect(system).toContain('2. means: what this talk means for Össur')
     expect(system).toMatch(/Intelligence, not instructions/)
     expect(system).toMatch(/You have NO numbers/)
+    expect(system).toContain('Never write an amount, a price, a percentage or a count in words either: "fifty thousand euros" is a number too.')
     expect(system).toMatch(/Never a medical or clinical claim/)
     expect(system).toMatch(/Never mention how anything was found/)
     // The meaning rests on what it was given, compares nothing and leaves out what it is unsure of.
@@ -180,6 +181,16 @@ describe('finishSubjectRead and the thin line', () => {
       basedOn: ['t-ins'],
     })
     expect(scrub.dropped).toBeGreaterThanOrEqual(4)
+  })
+
+  it('drops a price written out in words like a digit (Össur\'s Cost & access read, 16 Oct), and keeps a bare count', () => {
+    const { read, scrub } = finishSubjectRead(m, {
+      saying: ['People describe prosthetic prices as out of reach, from bionic hands priced around fifty thousand euros to sockets priced near fifteen thousand dollars before insurance. They name one insurer and two appeals.'],
+      means: 'Cover decides the fitting. A socket costs a few hundred dollars.',
+    }, { company: 'Össur', allow: [] })
+    expect(read.saying).toEqual(['They name one insurer and two appeals.'])
+    expect(read.means).toBe('Cover decides the fitting.')
+    expect(scrub).toEqual({ dropped: 2, leaked: true })
   })
 
   it('a sentence opening on a capital outside A to Z (Össur) is scrubbed on its own, never with its neighbour (the shared splitter, 14 Oct)', () => {

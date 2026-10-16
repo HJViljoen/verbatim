@@ -153,7 +153,7 @@ export function scrubBriefText(raw: string, max: number, o: BriefScrubOptions): 
     ...BRIEF_BANNED, ...TIME_COMPARISON, ...BRIEF_PROCESS, ...UNMEASURED,
     ...(o.field === 'interpret' ? [...ADVICE, ...(told ? [told] : [])] : []),
   ]
-  const counts: WeekScrubCounts = { dropped: 0, droppedDigits: 0, droppedDirection: 0, droppedBanned: 0, droppedAdvice: 0, droppedLong: 0, leaked: false }
+  const counts: WeekScrubCounts = { dropped: 0, droppedDigits: 0, droppedAmountWords: 0, droppedDirection: 0, droppedBanned: 0, droppedAdvice: 0, droppedLong: 0, leaked: false }
   const dropped: BriefScrub['dropped'] = []
   const drop = (sentence: string, rule: string, kind: 'banned' | 'advice' | 'digits' | 'direction') => {
     dropped.push({ sentence, rule })
@@ -279,11 +279,12 @@ export function sharedSubject(prev: string, cur: string): string | null {
   return null
 }
 
-export const ZERO_COUNTS: WeekScrubCounts = { dropped: 0, droppedDigits: 0, droppedDirection: 0, droppedBanned: 0, droppedAdvice: 0, droppedLong: 0, leaked: false }
+export const ZERO_COUNTS: WeekScrubCounts = { dropped: 0, droppedDigits: 0, droppedAmountWords: 0, droppedDirection: 0, droppedBanned: 0, droppedAdvice: 0, droppedLong: 0, leaked: false }
 
 export const addCounts = (a: WeekScrubCounts, b: WeekScrubCounts): WeekScrubCounts => ({
   dropped: a.dropped + b.dropped,
   droppedDigits: a.droppedDigits + b.droppedDigits,
+  droppedAmountWords: a.droppedAmountWords + b.droppedAmountWords,
   droppedDirection: a.droppedDirection + b.droppedDirection,
   droppedBanned: a.droppedBanned + b.droppedBanned,
   droppedAdvice: a.droppedAdvice + b.droppedAdvice,

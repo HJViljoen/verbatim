@@ -1,4 +1,4 @@
-import { allowTokens, scrubProse, splitSentences, stripThemeRefs } from '../prose/scrub'
+import { allowTokens, replaceOutsideQuotes, scrubProse, splitSentences, stripThemeRefs } from '../prose/scrub'
 import { capText, noDashes } from '../reports/documents/scrub'
 import type { FigureTable } from '../reports/types'
 import { britishSpelling } from './spelling'
@@ -14,10 +14,14 @@ import { WEEK_READ_MAX, type WeekReadOutput } from './write'
 //     data, coverage, sources, updates, the tool, Verbatim, "this report",
 //     why something cannot be said) or in the first person is dropped whole.
 //     The prompt forbids all of it; this is what holds when a prompt does not;
-//  4. the `week_read` policy (lib/prose/scrub.ts, `both`), with NO verdicts:
-//     a sentence with a digit the model typed, or a `[[key]]` the table does
-//     not hold, drops; so does any sentence naming a direction, because
-//     nothing licensed one; magnitude words are stripped as words;
+//  4. an amount in words (`statesAmountInWords`, `AMOUNT_UNITS`): "fifty
+//     thousand euros", "twenty-five percent", "hundreds of" drop their
+//     sentence like a digit, outside quotation marks only. A bare small count
+//     ("one", "two prostheses", "the first", "half", "both") stays;
+//     then the `week_read` policy (lib/prose/scrub.ts, `both`), with NO
+//     verdicts: a sentence with a digit the model typed, or a `[[key]]` the
+//     table does not hold, drops; so does any sentence naming a direction,
+//     because nothing licensed one; magnitude words are stripped as words;
 //  5. in the report's implications and watch lines only (v3), advice and
 //     forecasts drop their sentence too (`ADVICE`, `FORECAST`, and the
 //     company told what it could or should do): the report is intelligence,
@@ -122,12 +126,68 @@ export function bannedHits(text: string, list: readonly { name: string; re: RegE
   return list.filter(({ re }) => re.test(text ?? '')).map(({ name }) => name)
 }
 
+// ---- An amount in words ------------------------------------------------------------------------
+
+/**
+ * The currency words and units an amount is stated in: ONE list, EXPORTED. A
+ * number word, a magnitude or "a few" before any of these is a figure the
+ * model typed in words, and a figure is code's (16 Oct: Össur's Cost & access
+ * read priced bionic hands "around fifty thousand euros" with no digit, and
+ * the digit rule let it through). "pounds" is money and weight alike.
+ */
+export const AMOUNT_UNITS: readonly string[] = [
+  'euro', 'euros', 'dollar', 'dollars', 'pound', 'pounds', 'pence', 'cent', 'cents',
+  'rand', 'rands', 'franc', 'francs', 'krona', 'kronor', 'krone', 'kroner', 'króna', 'krónur', 'yen',
+  'percent', 'per cent', 'percentage point', 'percentage points',
+  'kilo', 'kilos', 'kilogram', 'kilograms', 'mile', 'miles', 'kilometre', 'kilometres', 'kilometer', 'kilometers',
+]
+
+/** Two to ninety-nine in words, the teens and the hyphenated tens included,
+ *  and "dozen". Never "one", "first", "second", "half" or "both": a bare small
+ *  count is English, not a figure. */
+const NUMBER_WORD = String.raw`(?:(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:[-\s](?:one|two|three|four|five|six|seven|eight|nine))?|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|two|three|four|five|six|seven|eight|nine|dozen)`
+const MAGNITUDE = 'hundred|thousand|million|billion'
+const UNIT = AMOUNT_UNITS.map((u) => u.replace(/\s+/g, String.raw`\s+`)).join('|')
+
+/**
+ * An amount stated in words, three ways, each a figure on any reading:
+ *  · a number word, "a", "one", "a few" or "several" before a magnitude
+ *    ("fifty thousand", "a few hundred", "one million");
+ *  · a magnitude in the plural, which is always a count ("hundreds of",
+ *    "thousands of", "dozens of");
+ *  · a number word, "zero", "one", a magnitude, "a few" or "several" before a
+ *    unit in `AMOUNT_UNITS` ("fifteen euros", "twenty-five percent", "one per
+ *    cent", "a few dollars", "a thousand-euro socket").
+ */
+const AMOUNT_IN_WORDS = new RegExp(
+  String.raw`\b(?:${NUMBER_WORD}|a|one|a\s+few|several)[-\s]+(?:${MAGNITUDE})s?\b` +
+  String.raw`|\b(?:hundreds|thousands|millions|billions|dozens)\b` +
+  String.raw`|\b(?:${NUMBER_WORD}|zero|one|${MAGNITUDE}|a\s+few|several)[-\s]+(?:${UNIT})\b`,
+  'gi',
+)
+
+/**
+ * Does this sentence state an amount in words, outside quotation marks? The
+ * written reads' backstop beside the digit rule: such a sentence drops whole,
+ * like a digit's. Words inside quotation marks are the speaker's, so the test
+ * runs through `replaceOutsideQuotes`, the one mechanic that keeps a word rule
+ * off them. Pure.
+ */
+export function statesAmountInWords(sentence: string): boolean {
+  const text = sentence ?? ''
+  return replaceOutsideQuotes(text, AMOUNT_IN_WORDS, '\u0000') !== text
+}
+
 // ---- One field ---------------------------------------------------------------------------------
 
 export interface WeekScrubCounts {
   /** Sentences dropped, whatever the reason. */
   dropped: number
   droppedDigits: number
+  /** …because they stated an amount in words (`statesAmountInWords`): a
+   *  figure typed with no digit, counted apart from `droppedDigits` so the
+   *  prompt's line against it can be judged on numbers. */
+  droppedAmountWords: number
   droppedDirection: number
   /** …because they talked about how the read was made (§0a). */
   droppedBanned: number
@@ -140,11 +200,12 @@ export interface WeekScrubCounts {
   leaked: boolean
 }
 
-const ZERO: WeekScrubCounts = { dropped: 0, droppedDigits: 0, droppedDirection: 0, droppedBanned: 0, droppedAdvice: 0, droppedLong: 0, leaked: false }
+const ZERO: WeekScrubCounts = { dropped: 0, droppedDigits: 0, droppedAmountWords: 0, droppedDirection: 0, droppedBanned: 0, droppedAdvice: 0, droppedLong: 0, leaked: false }
 
 const add = (a: WeekScrubCounts, b: WeekScrubCounts): WeekScrubCounts => ({
   dropped: a.dropped + b.dropped,
   droppedDigits: a.droppedDigits + b.droppedDigits,
+  droppedAmountWords: a.droppedAmountWords + b.droppedAmountWords,
   droppedDirection: a.droppedDirection + b.droppedDirection,
   droppedBanned: a.droppedBanned + b.droppedBanned,
   droppedAdvice: a.droppedAdvice + b.droppedAdvice,
@@ -186,6 +247,10 @@ function scrubParagraph(raw: string, o: WeekScrubOptions): { text: string; count
     }
     if (o.extra && bannedHits(sentence, o.extra).length > 0) {
       counts = add(counts, { ...ZERO, dropped: 1, droppedAdvice: 1, leaked: true })
+      continue
+    }
+    if (statesAmountInWords(sentence)) {
+      counts = add(counts, { ...ZERO, dropped: 1, droppedAmountWords: 1, leaked: true })
       continue
     }
     kept.push(sentence)

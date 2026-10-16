@@ -425,12 +425,13 @@ export interface ScrubbedLongRun {
 export function scrubLongRun(w: LongRunOutput, opts: { company?: string } = {}): ScrubbedLongRun {
   const told = opts.company ? toldWhatToDo(opts.company) : null
   const extra = [...CHANGE, ...ADVICE, ...(told ? [told] : [])]
-  let counts: WeekScrubCounts = { dropped: 0, droppedDigits: 0, droppedDirection: 0, droppedBanned: 0, droppedAdvice: 0, droppedLong: 0, leaked: false }
+  let counts: WeekScrubCounts = { dropped: 0, droppedDigits: 0, droppedAmountWords: 0, droppedDirection: 0, droppedBanned: 0, droppedAdvice: 0, droppedLong: 0, leaked: false }
   const run = (raw: string, max: number, o: Parameters<typeof scrubWeekText>[2] = {}) => {
     const r = scrubWeekText(raw ?? '', max, { extra, ...o })
     counts = {
       dropped: counts.dropped + r.counts.dropped,
       droppedDigits: counts.droppedDigits + r.counts.droppedDigits,
+      droppedAmountWords: counts.droppedAmountWords + r.counts.droppedAmountWords,
       droppedDirection: counts.droppedDirection + r.counts.droppedDirection,
       droppedBanned: counts.droppedBanned + r.counts.droppedBanned,
       droppedAdvice: counts.droppedAdvice + r.counts.droppedAdvice,

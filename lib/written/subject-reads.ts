@@ -279,7 +279,7 @@ export function buildSubjectReadPrompts(a: SubjectReadPromptArgs): { system: str
     '- Name products, brands and conversations plainly. Never name a person or an account.',
     '- The market only. Never mention how anything was found, gathered, collected, searched, read, counted or checked. Never mention data, sources, samples, coverage, searches, updates, platforms, this service, a tool, a model, AI or Verbatim, and never write "this read", "this report" or "this page". Never explain why something is not said or cannot be compared: if something cannot be said, leave it out. A sentence that does any of this is deleted before anyone reads it.',
     '- Never say how big the subject or a conversation is, or how it ranks ("the main worry", "the biggest", "most people", "more than"): code prints the counts beside your words.',
-    '- You have NO numbers. Never type a digit: not in a date, a size, an age or a product name. A sentence with a digit is deleted.',
+    '- You have NO numbers. Never type a digit: not in a date, a size, an age or a product name. Never write an amount, a price, a percentage or a count in words either: "fifty thousand euros" is a number too. A sentence with a digit or an amount in words is deleted.',
     noDashes(CALIBRATED_PROSE_RULE.split('\n')[0]),
     '- Never write an id (C2) in prose.',
     noDashes(noDirectionRule('week_read')),

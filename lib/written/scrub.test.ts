@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { FigureTable } from '../reports/types'
-import { ADVICE, BANNED_PHRASES, bannedHits, FORECAST, scrubWeekRead, scrubWeekText, toldWhatToDo, weekAllowTokens, WHOLE_SLACK } from './scrub'
+import { ADVICE, AMOUNT_UNITS, BANNED_PHRASES, bannedHits, FORECAST, scrubWeekRead, scrubWeekText, statesAmountInWords, toldWhatToDo, weekAllowTokens, WHOLE_SLACK } from './scrub'
 import { candidate, written } from './test-fixtures'
 import { WEEK_READ_MAX } from './write'
 
@@ -43,6 +43,72 @@ describe('the product rules, policy both, no verdicts', () => {
 
   it('strips the ids a model types', () => {
     expect(scrub('Buyers describe the zip [C2]. Owners report the seam (C1, C3).').text).toBe('Buyers describe the zip. Owners report the seam.')
+  })
+})
+
+describe('an amount in words drops its sentence like a digit', () => {
+  // Össur's Cost & access read, 16 Oct: the prices written out, no digit.
+  const OSSUR = 'People describe prosthetic prices as out of reach, from bionic hands priced around fifty thousand euros to sockets priced near fifteen thousand dollars before insurance.'
+
+  it('drops the Össur sentence, keeps its neighbour, and counts it apart from the digits', () => {
+    const r = scrub(`Buyers ask what insurance pays for. ${OSSUR}`)
+    expect(r.text).toBe('Buyers ask what insurance pays for.')
+    expect(r.counts).toMatchObject({ dropped: 1, droppedAmountWords: 1, droppedDigits: 0, leaked: true })
+  })
+
+  it('drops a magnitude, a price, a percentage and a plural count', () => {
+    for (const s of [
+      'Owners say the liner cost a few hundred dollars.',
+      'Buyers say twenty-five percent of the price goes on the socket.',
+      'The fit draws thousands of comments.',
+      'A spare cover costs fifteen euros.',
+      'Buyers say a fifty-euro strap breaks first.',
+      'Owners mention one per cent of the price.',
+    ]) {
+      const r = scrub(`Buyers describe the socket. ${s}`)
+      expect(r.text, s).toBe('Buyers describe the socket.')
+      expect(r.counts.droppedAmountWords, s).toBe(1)
+    }
+  })
+
+  it('keeps a bare small count, an ordinal, half and both', () => {
+    for (const s of [
+      'Owners name one clear reason for the switch.',
+      'Buyers describe the first socket as the hardest.',
+      'Owners compare two prostheses side by side.',
+      'Price takes half the talk.',
+      'Runners describe both legs after a long day.',
+      'Owners describe a second socket within the year.',
+      'No one asks about the colour.',
+    ]) {
+      expect(statesAmountInWords(s), s).toBe(false)
+      const r = scrub(s)
+      expect(r.text, s).toBe(s)
+      expect(r.counts.droppedAmountWords, s).toBe(0)
+    }
+  })
+
+  it('never reaches inside a quotation', () => {
+    const s = 'One owner called the hand “a fifty thousand euro arm”.'
+    expect(statesAmountInWords(s)).toBe(false)
+    expect(scrub(s).text).toBe(s)
+    expect(scrub('Owners repeat "fifty thousand" when they talk about the price.').text).toBe('Owners repeat "fifty thousand" when they talk about the price.')
+    // The words around a quotation are still the writer's.
+    expect(statesAmountInWords('Owners called it “the arm” and paid fifty thousand euros.')).toBe(true)
+  })
+
+  it('keeps its units in one list', () => {
+    expect(AMOUNT_UNITS).toEqual(expect.arrayContaining(['euros', 'dollars', 'pounds', 'rand', 'francs', 'krona', 'kronor', 'yen', 'percent', 'per cent', 'kilos', 'kilograms', 'miles', 'kilometres']))
+  })
+
+  it('reaches every field of the week read and adds up across them', () => {
+    const { output, counts } = scrubWeekRead(written({
+      findings: [{ headline: 'Price decides the sale', saw: 'Buyers ask about cost. Sockets run to thousands of dollars.', means: 'Price is judged against lifespan.', based_on: ['C1'], quote_from: null }],
+      story: [{ paragraph: 'The week turned on price. A liner costs about forty euros.', based_on: ['C1'], quote_from: null }],
+    }), {})
+    expect(output.findings[0].saw).toBe('Buyers ask about cost.')
+    expect(output.story[0].paragraph).toBe('The week turned on price.')
+    expect(counts.droppedAmountWords).toBe(2)
   })
 })
 
