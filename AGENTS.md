@@ -228,17 +228,29 @@ This version has breaking changes — APIs, conventions, and file structure may 
   stop or trailing mark. The writer is asked for at most about 80 characters
   and 12 words; the scrub holds it at 90 and 14 with NO slack
   (`SUBJECT_READ_MAX`) and drops it whole past either. It takes the meaning's
-  finish, and its own refusals (`headlineRefused`, read on the writer's words
-  before the scrub) drop it as a question (with or without "?"), the
-  subject's name alone ("and" for "&", any order), an opening that reports
-  people asking or talking ("Buyers ask", "People talk"), the first or second
-  person, an instruction, a forecast ("will", "set to"), a comparison ("the
-  best", "the most", one thing chosen "over" another, "prefer X to Y", "ahead
-  of" as a rank) or "increasingly"; each rule is narrow and tested both ways,
-  and every headline of the 16 Oct real dry runs passes them. The subject
-  prompt forbids every comparison, so it carries the shared intensity rule
-  without its "comparisons allowed where the data shows them" sentence
-  (`INTENSITY_RULE`), and it promises deletion only for what code deletes.
+  finish (less the advice list's broad opening imperative), and its own
+  refusals (`headlineRefused`, read on the writer's words before the scrub)
+  are built for PRECISION, because a wrong drop leaves the card with no
+  headline: a question only on a "?" or an auxiliary then a subject first
+  ("Does the zip last"; no wh-word rule); the subject's name alone, "&" read
+  as "and", in any order, or only framed as a topic or "matters to buyers";
+  an opening "Buyers|People|Customers|Viewers|Users|Owners|Shoppers
+  ask|talk|discuss|wonder"; I, me, my, you, your; a fixed list of verbs at
+  the very start before "the", "a", "your" or "more"; "will" as a verb,
+  "won't", "set to" before a verb; "the best/most/least/worst", one thing
+  chosen or preferred "over" another, "prefer X to Y" (never an infinitive
+  "to"), "ahead of" a rival (never of buying, the order, the purchase, a
+  flight); "increasingly". A headline the shared strip would change ("Most
+  of the talk…" to "Of the talk…") drops rather than print changed.
+  `lib/written/subject-reads.test.ts` holds the table: the re-check's
+  probes must drop, its near misses must stand whole, and every headline of
+  the 16 Oct real dry runs stands but the five that opened "Buyers ask",
+  which drop by design. Holes are accepted where closing them would drop
+  good lines ("Owners praise rolltops over zipped bags", "The main worry
+  is…"). Both prompts carry the shared intensity rule without its
+  "comparisons allowed where the data shows them" sentence (`INTENSITY_RULE`,
+  lib/written/write.ts), and the headline rule lists as deleted only what
+  this code deletes.
   ADDITIVE: `SubjectRead.headline?`, absent where the
   scrub left none, on a thin, held or failed read and on every read stored
   before v3, which print exactly as before; `subjectReadOf` and

@@ -14,7 +14,7 @@ import type { DatedEvidence } from './evidence'
 import { subjectReadOf } from './published'
 import { scrubWeekText } from './scrub'
 import {
-  buildSubjectReadPrompts, finishSubjectRead, headlineRefused, INTENSITY_RULE, SpendGate, type HeadlineRefusal, subjectReadAttemptMaxUsd, subjectReadSchema, subjectReadMaterial, subjectReadsCapLeft, subjectReadsData,
+  buildSubjectReadPrompts, finishSubjectRead, headlineRefused, SpendGate, type HeadlineRefusal, subjectReadAttemptMaxUsd, subjectReadSchema, subjectReadMaterial, subjectReadsCapLeft, subjectReadsData,
   subjectReadsHeadroom, subjectReadsRoom, thinSubjectRead, SUBJECT_READ_MAX_OUTPUT_TOKENS, SUBJECT_READ_PROMPT_VERSION, type SubjectReadMaterial, type SubjectReadTheme,
 } from './subject-reads'
 import {
@@ -23,6 +23,7 @@ import {
 } from './subject-reads-step'
 import type { SubjectRead, SubjectReadsData, WeekReadData } from './types'
 import type { ParseClient } from './write-model'
+import { INTENSITY_RULE } from './write'
 
 // A TRACKED SUBJECT'S OWN READ (14 Oct): grouped by the pages' placement, from
 // the market's gated talk, written by one call per ready subject with enough
@@ -106,12 +107,19 @@ describe('subjectReadMaterial: the pages\' grouping, the market\'s gated talk', 
 describe('the writer\'s prompt', () => {
   const m = material(RICH_EVIDENCE)
   const { system, user } = buildSubjectReadPrompts({ company: 'Össur', clientId: CLIENT, month: OCT, complete: false, material: m, context: null })
-  /** The coffee example's positive text for one field. */
+  /** The coffee example's positive text for one field: saying and means are
+   *  one quotation each; the headlines are the three good ones, before the
+   *  first counter-example. */
   const example = (field: string): string => {
+    if (field === 'headline') {
+      const line = system.split('\n').find((l) => l.startsWith('- headline, three good ones')) ?? ''
+      return [...line.slice(0, line.indexOf('Not,')).matchAll(/"([^"]+)"/g)].map((x) => x[1]).join(' | ')
+    }
     const line = system.split('\n').find((l) => l.startsWith(`- ${field}: "`)) ?? ''
     const start = `- ${field}: "`.length
     return line.slice(start, line.indexOf('"', start))
   }
+  const GOOD_HEADLINES = ['Owners take good coffee for granted and count the cleaning time', 'The milk wand is the part owners blame for a slow clean', 'Owners praise a wand that rinses itself for the minutes it saves']
 
   it('asks for what people said, then what it means, with the week read\'s rules', () => {
     expect(system).toContain('1. saying: what people said about Cost & access this month')
@@ -177,14 +185,18 @@ describe('the writer\'s prompt', () => {
     expect(scrubWeekText('People talk about going up stairs.', 700, { allow: [] }).text).toBe('')
     // (2) The coffee example keeps the rules it states: no inferred feeling, no "not X" frame, no rank.
     const means = example('means')
-    expect(means).toBe('Good coffee is taken for granted here. What a buyer still needs settled before buying is the time the clean takes each morning, and the milk wand is the part that decides it: a wand that rinses itself is the feature owners name to each other.')
+    expect(means).toBe('The milk wand carries the judgement on the morning clean. How long cleaning takes is settled before buying, even by owners who like the coffee, and a wand that rinses itself is the feature owners name to each other.')
+    // The final round (16 Oct): seven of nine real meanings copied "… is taken for granted here. What still needs settling…".
+    expect(means).not.toMatch(/taken for granted here|still needs settl/)
+    expect(system).toContain('Take these in any order and in your own words: open on whichever point the notes make clearest, never on a set formula ("… is taken for granted here. What still needs settling…").')
     // The fix round (16 Oct): the meaning is not the saying again, and the headline summarises neither.
     expect(means).not.toMatch(/drip tray/)
-    expect(example('headline')).not.toMatch(/drip tray|milk wand|descale/)
+    // Each good headline names at most the one part its point turns on, never the saying's list.
+    for (const h of example('headline').split(' | ')) expect(h.match(/drip tray|milk wand|descale/g)?.length ?? 0, h).toBeLessThanOrEqual(1)
     expect(system).toContain('Not, the saying told again: "Owners describe the drip tray, the milk wand and the descale, and buyers ask how long the clean takes."')
     expect(system).toContain('Each part does its own job: saying tells what was said; means says what it adds up to for the business, without telling it again; headline is the one point.')
     for (const field of ['saying', 'means', 'headline']) {
-      const text = example(field)
+      const text = example(field).replace(/ \| /g, '. ')
       expect(text.length).toBeGreaterThan(20)
       expect(text).not.toMatch(/forgive|\bbut not\b|\bnot\s+(?:a|an|the|only|one)\b|before anything else|\bthan\b|before they asked/i)
       // The example passes the scrub its own rules stand for.
@@ -200,14 +212,21 @@ describe('the writer\'s prompt', () => {
     expect(system).toContain('At most about 12 words and 80 characters; a line over 14 words or 90 characters is deleted. A plain statement in sentence case (a capital on the first word and on names only), with no full stop or other mark at the end.')
     // The headline round (16 Oct): five of nine real headlines opened "Buyers ask", a report that questions exist.
     expect(system).toContain('The insight: what the talk SHOWS from the buyer\'s side, that is what decides it for buyers, what they take for granted, or which part carries their judgement. Name the thing they name.')
-    expect(system).toContain('Never a report that people ask, talk or discuss: never open on "Buyers ask", "People ask", "People talk", "Buyers want … explained" or any other report of asking or talking. Say what the asking shows. For coffee machines, "Owners take good coffee for granted and count the cleaning time", not "Buyers ask how long the daily clean takes".')
+    expect(system).toContain('Never a report that people ask, talk or discuss: never open on "Buyers ask", "People ask", "People talk", "Buyers want … explained" or any other report of asking or talking. Say what the asking shows.')
     expect(system).not.toMatch(/a claim about what buyers do, ask or decide/)
     // The first v3 dry run (16 Oct) wrote three of five headlines as "Buyers judge … by …", the example's own frame.
-    expect(system).toContain('the subjects\' headlines are read side by side, so never a stock frame ("Buyers judge … by …", "… is judged by …")')
+    // The headline round's example "…decides the purchase once…" became the frame six of nine copied (the final round).
+    expect(system).toContain('the subjects\' headlines are read side by side, so never a stock frame ("Buyers judge … by …", "… is judged by …", "… decides … once …"), and never the example\'s shape.')
     expect(example('headline')).not.toMatch(/\bjudge/i)
     // The second v3 dry run wrote Fit & comfort's as "Socket length, pressure and heat need settling" (16 Oct).
-    expect(system).toContain('ONE point about the subject, never a list of three nouns. For coffee machines, "The milk wand is the part owners blame for a slow clean", not "Milk wand, descale and drip tray need settling".')
-    for (const good of ['The milk wand is the part owners blame for a slow clean', 'Owners take good coffee for granted and count the cleaning time', 'The morning clean decides the purchase once the coffee is good']) {
+    expect(system).toContain('ONE point about the subject, never a list of three nouns ("Milk wand, descale and drip tray need settling").')
+    // Three good headlines of three different shapes, never one to copy.
+    expect(example('headline')).toBe(GOOD_HEADLINES.join(' | '))
+    expect(system).toContain('(what is taken for granted)')
+    expect(system).toContain('(the part that carries the judgement)')
+    expect(system).toContain('(what people praise, and why)')
+    expect(system).toContain('Not, a stock frame: "The morning clean decides the purchase once the coffee is good".')
+    for (const good of GOOD_HEADLINES) {
       expect(scrubWeekText(good, 90, { allow: [], headline: true }).text).toBe(good)
       expect(headlineRefused(good, 'Cleaning and upkeep')).toBeNull()
       expect(good).not.toMatch(/^(?:Buyers|People|Owners) (?:ask|want|talk)/)
@@ -216,10 +235,13 @@ describe('the writer\'s prompt', () => {
     }
     expect(system).toContain('Never a label or a topic ("Cost & access", "Questions about Cost & access"), never the subject\'s name restated as a claim ("Cost & access matters to buyers"), and never Össur\'s own claim or a line about Össur\'s words.')
     // It promises deletion only for what code deletes (the fix round): an inferred feeling, a "not X" frame and a rank are "never".
-    expect(system).toContain('Every rule for "means" and every house rule below holds here too. Never an inferred feeling, a "not X" frame, a size or a rank. A headline is deleted, and the subject prints without one, where it is a question (with or without its question mark), the subject\'s name alone, a line that opens on people asking, talking, discussing or wondering ("Buyers ask", "People talk"), an instruction, a forecast ("will", "set to"), a comparison ("than", "the best", "the most", one thing "over" another), in the first or second person ("I", "we", "you"), or where it holds a digit, an amount in words, a direction word or, in a medical market, a medical claim.')
+    expect(system).toContain('Every rule for "means" and every house rule below holds here too. Never an inferred feeling, a "not X" frame, a size or a rank. A headline is deleted, and the subject prints without one, where it ends on a question mark or opens on "Does", "Is" or another such verb before its subject; is the subject\'s name alone; opens on people asking, talking, discussing or wondering ("Buyers ask", "People talk"); opens on an instruction ("Make the", "Show the"); holds a forecast ("will", "set to" before a verb), a comparison ("than", "as much as", "the best", "the most", one thing chosen or preferred "over" another, "prefer" one thing "to" another, "ahead of" a rival), the first or second person ("I", "we", "you"), a word the house style removes ("many", "most"), a digit, an amount in words, a direction word or, in a medical market, a medical claim.')
     expect(system).not.toContain('A headline that breaks one is deleted')
-    expect(system).toContain('- headline: "The morning clean decides the purchase once the coffee is good".')
-    expect(system).toMatch(/Not, a report of asking: "Buyers ask how long the clean takes before they buy"\. Not, a summary and a list: .*Not, a question: .*Not, the subject's name restated: .*Not, the company's claim: /)
+    expect(system).toMatch(/Not, a report of asking: "Buyers ask how long the clean takes before they buy"\. Not, a stock frame: .*Not, a summary and a list: .*Not, a question: .*Not, the subject's name restated: .*Not, the company's claim: /)
+    // "coverage" alone is the method ban's word: Össur's Cost read lost a sentence to it.
+    expect(system).toContain('- For insurance, write "insurance cover" or "insurance", never "coverage" on its own: a sentence with a bare "coverage" is deleted.')
+    expect(scrubWeekText('Buyers ask about price, coverage and where to buy.', 500, { allow: [] }).text).toBe('')
+    expect(scrubWeekText('Buyers ask about price, insurance cover and where to buy.', 500, { allow: [] }).text).toBe('Buyers ask about price, insurance cover and where to buy.')
     // The schema asks for it, in thinking order: what was said, what it means, then the line.
     expect(Object.keys(subjectReadSchema().shape)).toEqual(['saying', 'means', 'headline'])
     expect(subjectReadSchema().shape.headline.description).toMatch(/ONE claim about what the talk shows \(what decides it for buyers, what they take for granted, or which part carries their judgement\), never a report that people ask or talk, a plain statement in sentence case, at most about 12 words and 80 characters, no full stop at the end\. Never a question, never a list, never the subject's name restated, never the company's own claim\./)
@@ -379,40 +401,85 @@ describe('finishSubjectRead and the thin line', () => {
     expect('headline' in finishSubjectRead(m, { saying: ['P.'], means: 'M.', headline: `${ninety}y` }, { company: 'Össur', allow: [] }).read).toBe(false)
   })
 
-  it('the fix round\'s refusals, tested both ways: each probe drops, each near miss stands', () => {
+  it('the headline drops, high precision (the final round): the re-check\'s probes drop, its near misses stand', () => {
     const NAME = 'Durability & repair'
-    const drops: [HeadlineRefusal, string][] = [
-      ['question', 'Does the zip last'], ['question', 'Is the socket worth the wait'], ['question', 'Which bag fits under the seat'],
-      ['question', 'Why straps dig in on long days'], ['question', 'How long does the clean take'], ['question', 'What size is right for carry on'],
-      ['question', 'Can a liner be washed at home?'],
-      ['name', 'Durability and repair'], ['name', 'Repair and durability'], ['name', 'durability & REPAIR.'],
-      ['person', 'I want a bag that lasts for years'], ['person', 'You need a socket that fits'], ['person', 'Your straps decide comfort'],
-      ['imperative', 'Make the repair service easy to find'], ['imperative', 'Show the stitching up close'], ['imperative', 'Consider the hip belt'],
-      ['imperative', 'Try the bag packed before buying'], ['imperative', 'Focus on the socket'], ['imperative', 'Use the hip belt on long days'],
-      ['imperative', 'Keep the zip clean'], ['imperative', 'Answer the fit question first'],
-      ['forecast', 'Buyers will ask about repair next season'], ['forecast', 'Repair is set to decide the order'], ['forecast', 'Buyers won\'t wait for a restock'],
-      ['comparison', 'Buyers choose the duffle over the tote'], ['comparison', 'Buyers prefer the leather strap to the webbing'], ['comparison', 'Comfort comes ahead of looks'],
-      ['comparison', 'The best bags keep the laptop sleeve padded'], ['comparison', 'The most praised part is the zip'],
-      ['direction', 'Buyers are increasingly asking about repair'],
-      // The headline round's backstop: a report that people ask or talk, at the opening.
-      ['report', 'Buyers ask about zippers and suede before they buy'], ['report', 'People talk about the socket on long walks'],
-      ['report', 'Customers discuss the price of the duffle'], ['report', 'Viewers wonder whether the clip is real'], ['report', 'Users asked about the battery'],
-      ['report', 'Buyers ask how the socket is refined when sore spots appear'],
+    const keep = (h: string, medical = false, name = NAME) =>
+      finishSubjectRead({ ...m, name }, { saying: ['People say the zip broke.'], means: 'M.', headline: h }, { company: medical ? 'Össur' : 'Sealand', allow: [], medical }).read.headline
+    // MUST DROP: [why, line]; 'scrub' where the shared finish drops it (a digit, an amount, a direction word, advice, the method ban, a magnitude word).
+    const DROPS: [HeadlineRefusal | 'scrub', string][] = [
+      ['report', 'Owners ask whether the zip can be repaired at home'], ['report', 'Buyers ask whether the 35L bag fits under a seat'],
+      ['scrub', 'Owners name 3 zips that fail'], ['scrub', 'Buyers weigh fifty euros against a bag that lasts'], ['scrub', 'Thousands of owners ask about the zip'],
+      ['scrub', 'A few hundred owners ask about the zip'],
+      ['scrub', 'Talk about the zip is growing among owners'], ['scrub', 'Questions about repair keep rising'], ['direction', 'Buyers are increasingly asking about repair'],
+      ['scrub', 'Interest in repair picked up among owners'],
+      ['scrub', 'Sealand should show the zip in its videos'], ['scrub', 'An opportunity to show the repair service'], ['scrub', 'Sealand could lead with the repair service'],
+      ['imperative', 'Lead with the repair service'], ['imperative', 'Highlight the repair service for buyers'], ['imperative', 'Make the repair service easy to find'],
+      ['imperative', 'Show the stitching up close'], ['imperative', 'Consider the hip belt'], ['imperative', 'Try the bag packed before buying'],
+      ['imperative', 'Use the hip belt on long days'], ['imperative', 'Keep the zip clean'], ['imperative', 'Answer the fit question first'], ['imperative', 'Give your straps a rest'],
+      ['forecast', 'Buyers will likely ask about repair'], ['forecast', 'Buyers will ask about repair next season'], ['forecast', 'Repair is set to decide the next purchase'],
+      ['forecast', 'Buyers won\'t wait for a restock'], ['scrub', 'Questions are going to centre on fit'],
+      ['scrub', 'Buyers trust the zip more than the strap'], ['comparison', 'Buyers prefer rolltops to zipped bags'], ['scrub', 'The zip matters as much as the strap'],
+      ['comparison', 'Buyers choose Fjallraven ahead of Sealand'], ['comparison', 'The best zip decides the purchase'], ['comparison', 'Buyers choose the duffle over the tote'],
+      ['comparison', 'Buyers prefer the leather strap to the webbing'], ['comparison', 'Comfort comes ahead of looks'], ['comparison', 'The most praised part is the zip'],
+      ['comparison', 'The best fit comes from repeat adjustments'], ['comparison', 'Sizes run ahead of colour in the questions'],
+      ['scrub', 'We see buyers ask about the zip'], ['scrub', 'Our buyers ask about the zip'], ['person', 'You can see buyers ask about the zip'], ['person', 'I think buyers ask about the zip'],
+      ['person', 'Your own body shape decides strap comfort'], ['person', 'My first leg stories carry the encouragement'], ['person', 'Did you know stories carry the encouragement'],
+      ['question', 'Is the zip worth it?'], ['question', 'Does the zip last'], ['question', 'Will the zip last'], ['question', 'Buyers ask: "does the zip last?"'],
+      ['question', 'Do buyers trust the zip'], ['question', 'Can a liner be washed at home?'],
+      ['name', 'Durability & repair'], ['name', 'Durability and repair'], ['name', 'Repair and durability'], ['name', 'durability & REPAIR.'],
+      ['name', 'Durability & repair matters to buyers'], ['name', 'Questions about durability & repair'],
+      ['scrub', 'The data shows owners ask about repair'], ['scrub', 'Across platforms owners ask about repair'], ['scrub', 'This report finds owners ask about repair'],
+      ['scrub', 'Fifty thousand euros. Buyers ask about the price'], ['report', 'Owners ask about the zip. Sealand should show it'],
+      ['scrub', 'Owners who carry their laptop every day ask whether the padded sleeve and the hip belt and the zip hold up through a full year of commuting in the rain'],
+      ['report', 'Owners ask about the zip…'], ['report', 'Owners ask about the zip — and the strap'],
+      ['report', 'Buyers ask about zippers and suede before they buy'], ['report', 'People talk about the socket on long walks'], ['report', 'Customers discuss the price of the duffle'],
+      ['report', 'Viewers wonder whether the clip is real'], ['report', 'Users asked about the battery'], ['report', 'Shoppers ask where the bag is sold'],
+      ['report', 'People wonder less about price than fit'], ['report', 'Buyers ask nothing until the colour is right'],
+      // GARBLED: the shared strip would change a word, so the headline drops rather than print changed.
+      ['scrub', 'Many owners ask about the zip'], ['scrub', 'Most buyers ask about the zip'], ['scrub', 'A huge number of owners ask about the zip'],
+      ['scrub', 'Most of the talk turns on the socket'], ['scrub', 'The socket matters most once the leg is fitted'], ['scrub', 'Owners value straps that hold over many trips'],
     ]
-    for (const [why, h] of drops) expect(headlineRefused(h, NAME), h).toBe(why)
-    const stands = [
-      'How a bag carries decides comfort', 'When the leg is fitted, the socket decides comfort', 'Where it is sold decides the order',
-      'What buyers want settled is the fit', 'Durability and repair decide the order', 'IT workers carry laptops in the sleeve', 'Myoelectric hands are asked about by grip',
-      'Build quality decides the price', 'Use in the rain is where the zip is tested', 'Focus falls on the socket', 'Makeshift legs are praised for weight',
-      'The will to walk again draws praise', 'Comfort over a long travel day rests on the straps', 'Buyers check carry on size ahead of a flight',
-      'Buyers prefer to see the bag worn', 'Suede wear over time worries buyers', 'Owners value the zip over a long trip',
-      'Buyers take the socket\'s fit for granted', 'People who ask about the socket want a fitting first', 'Buyers\' questions turn on the zip', 'Talk turns on the socket',
+    for (const [why, h] of DROPS) {
+      expect(keep(h), h).toBeUndefined()
+      if (why !== 'scrub') expect(headlineRefused(h, NAME), h).toBe(why)
+    }
+    // A medical claim drops in a medical market only (Össur's flag).
+    for (const h of ['The liner prevents sores on long walks', 'The socket relieves pain for new amputees', 'Doctors recommend the knee for active users', 'The foot is safe on ice']) {
+      expect(keep(h, true), h).toBeUndefined()
+      expect(keep(h, false), h).toBe(h)
+    }
+    // MUST STAND, whole and unchanged: the re-check's near misses (27 of them dropped before this round).
+    const STANDS = [
+      'People who ask about the socket want a fitting first', 'Comfort over a long day decides the strap', 'The bag has to fit under the seat ahead of a flight',
+      'Fit is checked ahead of a flight', 'Fit is settled ahead of buying', 'Size is settled ahead of the order', 'Stock is checked ahead of purchase',
+      'Buyers are won over by the lifelike finish', 'Owners value comfort over long trips', 'Owners rate the strap over a full day of travel',
+      'People asking about the socket want a fitting first', 'Users talking about grip name the hand first', 'What is settled first is the fit',
+      'What is taken for granted is good coffee', 'Where stock is short, buyers wait for a restock', 'When colour is wrong, the bag goes back',
+      'How comfort is judged depends on body shape', 'How the socket is cast decides comfort', 'How a bag carries when packed decides the purchase',
+      'Where it is sold decides the purchase', 'What decides the purchase is the zip', 'May travel puts carry on size first', 'Use during long trips tests the straps',
+      'Use in the rain tests the zips', 'Build quality carries the price', 'Show pieces set the look buyers want', 'Keep cards, phone and keys within reach is the ask',
+      'Start up cost decides access to a leg', 'Offer price sets the bar for a sale', 'Buyers take the socket fit for granted', 'Buyers\' questions turn on the zip',
+      'Talk turns on the socket', 'People prefer sockets that adjust to the body', 'Buyers prefer a liner fitted to the residual limb', 'Buyers prefer to see the bag worn',
+      'The will to walk again carries the stories', 'Free will shapes how people style a cover', 'The strap is set to the right length before a trip',
+      'A strap set to length decides comfort', 'At least one spare liner is part of the routine', 'Owners trust a zip they can repair themselves',
+      'A rival\'s zip is the part owners name', 'Weight over the hips decides comfort', 'Load over the shoulders decides comfort', 'Comfort over hours of wear decides the socket',
+      'Comfort holds over the whole day only with a padded strap', 'Buyers choose a colour over the phone with the shop', 'Durability is judged over years of use',
+      'Will power carries the rehab stories', 'Has-been bags still sell on colour', 'Can sizes decide what fits under the seat',
+      'Which bag fits under the seat is settled by airline rules', 'Who pays for the socket decides access to a leg', 'Why a socket hurts is traced to sweat and heat',
+      'Whose design it is matters less once the fit is right', 'IT workers carry laptops in the sleeve', 'Myoelectric hands are named for grip',
+      'Makeshift legs are praised for weight', 'Durability and repair decide the order', 'Buyers want to know how long the daily clean takes',
+      'Two zips and one strap decide whether owners keep the bag',
     ]
-    for (const h of stands) expect(headlineRefused(h, NAME), h).toBeNull()
-    // Read on the writer's own words: the magnitude strip would take "most" out of "the most".
-    const { read, scrub } = finishSubjectRead(m, { saying: ['P.'], means: 'M.', headline: 'The most praised part is the zip' }, { company: 'Össur', allow: [] })
-    expect('headline' in read).toBe(false)
-    expect(scrub.headline).toBe('dropped')
+    for (const h of STANDS) {
+      expect(headlineRefused(h, NAME), h).toBeNull()
+      expect(keep(h), h).toBe(h)
+    }
+    // Two near misses pass these refusals but drop on an older shared rule, named here so the table claims no more than the path does:
+    // "falls" is on the direction word list, and "the search" is the method ban's word.
+    for (const h of ['Focus falls on the socket once the leg is fitted', 'Make and model decide the search']) {
+      expect(headlineRefused(h, NAME), h).toBeNull()
+      expect(keep(h), h).toBeUndefined()
+    }
   })
 
   it('every headline the real dry runs wrote (16 Oct) still stands, Össur\'s under its medical rules, but for the "Buyers ask" reports the headline round drops', () => {
@@ -434,6 +501,16 @@ describe('finishSubjectRead and the thin line', () => {
       ['Buying & delivery', 'Stock status and colour decide whether interest becomes an order', false],
       ['Looks & style', 'Buyers want reused materials to look beautiful and well made', false],
       ['Durability', 'Buyers settle toughness at the zip, stitching and suede', false],
+      // The headline round's nine (v3c, 16 Oct night), every one kept.
+      ['Cost & access', 'The socket bill and insurance approval decide access to a leg', true],
+      ['Function & movement', 'Smooth movement convinces when balance, hips and grip make sense', true],
+      ['Look & style', 'The look is settled between lifelike skin and visible design', true],
+      ['Fit & comfort', 'The socket decides comfort once length and alignment feel right', true],
+      ['Community & encouragement', 'Prosthetic stories turn on confidence, honesty and visible support', true],
+      ['Comfort', 'Shoulder straps decide comfort once a bag is fully packed', false],
+      ['Buying & delivery', 'Availability decides the purchase once the bag itself is wanted', false],
+      ['Looks & style', 'Colour and finish decide whether reused bags look worth owning', false],
+      ['Durability', 'Zips and suede carry trust once the bag looks built to last', false],
     ]
     for (const [name, h, medical] of REAL) {
       expect(headlineRefused(h, name), h).toBeNull()
