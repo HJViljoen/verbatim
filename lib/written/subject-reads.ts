@@ -237,7 +237,7 @@ export function subjectReadSchema() {
   return z.object({
     saying: z.array(z.string()).describe(`What people said about the subject this month, as one account in one or two short paragraphs (at most ${SUBJECT_READ_MAX.sayingParagraphs}), each under ${SUBJECT_READ_MAX.paragraph} characters, in plain words and the analytical third person. No placeholder, no quotation marks.`),
     means: z.string().describe(`What it means for the company: one short paragraph of at most ${SUBJECT_READ_MAX.meansSentences} sentences, under ${SUBJECT_READ_MAX.means} characters. Intelligence, never an instruction or a forecast.`),
-    headline: z.string().describe(`The subject's main point in one line, from the buyer's side: ONE claim about what buyers do, ask or decide, a plain statement in sentence case, at most about ${SUBJECT_READ_MAX.headlineWordsAsk} words and ${SUBJECT_READ_MAX.headlineAsk} characters, no full stop at the end. Never a question, never a list, never the subject's name restated, never the company's own claim.`),
+    headline: z.string().describe(`The subject's main point in one line, from the buyer's side: ONE claim about what the talk shows (what decides it for buyers, what they take for granted, or which part carries their judgement), never a report that people ask or talk, a plain statement in sentence case, at most about ${SUBJECT_READ_MAX.headlineWordsAsk} words and ${SUBJECT_READ_MAX.headlineAsk} characters, no full stop at the end. Never a question, never a list, never the subject's name restated, never the company's own claim.`),
   })
 }
 
@@ -300,11 +300,12 @@ export function buildSubjectReadPrompts(a: SubjectReadPromptArgs): { system: str
     '  - When unsure whether a claim rests on what is given, leave it out. One true sentence is better than three.',
     `3. headline: the subject's main point in one line, written last. It is printed on its own above "means", with no figure beside it: the one point a reader takes away, never a summary of "saying" or of "means".`,
     `  - At most about ${SUBJECT_READ_MAX.headlineWordsAsk} words and ${SUBJECT_READ_MAX.headlineAsk} characters; a line over ${SUBJECT_READ_MAX.headlineWords} words or ${SUBJECT_READ_MAX.headline} characters is deleted. A plain statement in sentence case (a capital on the first word and on names only), with no full stop or other mark at the end.`,
-    '  - ONE point about the subject: a claim about what buyers do, ask or decide, never a list of three nouns. For coffee machines, "Owners want the milk wand clean without taking the machine apart", not "Milk wand, descale and drip tray need settling".',
-    '  - From the buyer\'s side: what people take for granted, what they still need settled, the part the talk turns on, or what they praise. Name the thing they name.',
+    '  - ONE point about the subject, never a list of three nouns. For coffee machines, "The milk wand is the part owners blame for a slow clean", not "Milk wand, descale and drip tray need settling".',
+    '  - The insight: what the talk SHOWS from the buyer\'s side, that is what decides it for buyers, what they take for granted, or which part carries their judgement. Name the thing they name.',
+    '  - Never a report that people ask, talk or discuss: never open on "Buyers ask", "People ask", "People talk", "Buyers want … explained" or any other report of asking or talking. Say what the asking shows. For coffee machines, "Owners take good coffee for granted and count the cleaning time", not "Buyers ask how long the daily clean takes".',
     '  - This subject\'s own point in its own words: the subjects\' headlines are read side by side, so never a stock frame ("Buyers judge … by …", "… is judged by …").',
     `  - Never a label or a topic ("${name}", "Questions about ${name}"), never the subject's name restated as a claim ("${name} matters to buyers"), and never ${co}'s own claim or a line about ${co}'s words.`,
-    '  - Every rule for "means" and every house rule below holds here too. Never an inferred feeling, a "not X" frame, a size or a rank. A headline is deleted, and the subject prints without one, where it is a question (with or without its question mark), the subject\'s name alone, an instruction, a forecast ("will", "set to"), a comparison ("than", "the best", "the most", one thing "over" another), in the first or second person ("I", "we", "you"), or where it holds a digit, an amount in words, a direction word or, in a medical market, a medical claim.',
+    '  - Every rule for "means" and every house rule below holds here too. Never an inferred feeling, a "not X" frame, a size or a rank. A headline is deleted, and the subject prints without one, where it is a question (with or without its question mark), the subject\'s name alone, a line that opens on people asking, talking, discussing or wondering ("Buyers ask", "People talk"), an instruction, a forecast ("will", "set to"), a comparison ("than", "the best", "the most", one thing "over" another), in the first or second person ("I", "we", "you"), or where it holds a digit, an amount in words, a direction word or, in a medical market, a medical claim.',
     '',
     'House style:',
     `- Plain language, for a busy person at ${co} reading on a phone. Short sentences. Concrete nouns: the thing people name, in the market's own words. No consultant abstractions: never "a fit problem", "legible", "positioning", "lens", "value proposition", "use case", "resonates", "narrative", "friction", "ecosystem", "landscape", "journey". Name the thing instead.`,
@@ -324,7 +325,7 @@ export function buildSubjectReadPrompts(a: SubjectReadPromptArgs): { system: str
     'An example of the register, for a different company and market (coffee machines, the subject "Cleaning and upkeep"); do not reuse its content. Each part does its own job: saying tells what was said; means says what it adds up to for the business, without telling it again; headline is the one point.',
     '- saying: "Owners described the daily clean in detail: the drip tray, the milk wand, and how often the machine asks to be descaled. Those who need a brush or a tablet every week complained about it, even when they liked the coffee.\\n\\nBuyers asked how long the clean takes before they bought, and owners answered with the routine they keep each morning and the machines whose milk wand rinses itself."',
     '- means: "Good coffee is taken for granted here. What a buyer still needs settled before buying is the time the clean takes each morning, and the milk wand is the part that decides it: a wand that rinses itself is the feature owners name to each other." Not, the saying told again: "Owners describe the drip tray, the milk wand and the descale, and buyers ask how long the clean takes." Not, the company\'s claim restated: "The company sells its machines on a decade of use, and owners judge that decade by the clean." Not, a feeling inferred and a "not X" frame: "Owners forgive the noise, but not a brush every morning." Not, an abstract close: "Upkeep sits inside the product story." Not, advice: "The company should show the clean in its videos."',
-    '- headline: "Buyers want the morning clean settled before they buy a machine". Not, a summary and a list: "Owners describe the drip tray, milk wand and descale". Not, a question: "Is the daily clean worth it". Not, the subject\'s name restated: "Cleaning and upkeep matter to owners". Not, the company\'s claim: "A decade of use, judged at the descale".',
+    '- headline: "The morning clean decides the purchase once the coffee is good". Not, a report of asking: "Buyers ask how long the clean takes before they buy". Not, a summary and a list: "Owners describe the drip tray, milk wand and descale". Not, a question: "Is the daily clean worth it". Not, the subject\'s name restated: "Cleaning and upkeep matter to owners". Not, the company\'s claim: "A decade of use, judged at the descale".',
   ].join('\n')
 
   const m = a.material
@@ -379,7 +380,7 @@ export interface SubjectReadScrub {
 // probes). Each is narrow on purpose and tested both ways: every headline the
 // real dry runs wrote (Össur and Sealand, 16 Oct) passes them all.
 
-export type HeadlineRefusal = 'question' | 'name' | 'person' | 'imperative' | 'forecast' | 'comparison' | 'direction'
+export type HeadlineRefusal = 'question' | 'name' | 'report' | 'person' | 'imperative' | 'forecast' | 'comparison' | 'direction'
 
 /** Auxiliaries and modals: a headline that opens on one is a question. */
 const QUESTION_AUX = new Set(['am', 'is', 'are', 'was', 'were', 'do', 'does', 'did', 'can', 'could', 'will', 'would', 'should', 'shall', 'has', 'have', 'had', 'may', 'might', 'must'])
@@ -400,6 +401,10 @@ const OBJECT_IMPERATIVE = new Set(['answer', 'build', 'focus', 'highlight', 'kee
 const IMPERATIVE_NEXT = /^(?:the|a|an|it|them|this|that|these|those|every|each|your|their|its|more|less|sure|buyers|people|owners|users|customers|on|with|up|out|how|what|why|where|when|which|\p{L}+ing)$/u
 
 const HEADLINE_RULES: readonly { name: HeadlineRefusal; re: RegExp }[] = [
+  // A report that people ask or talk, at the opening only (the headline round,
+  // 16 Oct: five of nine opened "Buyers ask"). A backstop: the prompt asks for
+  // what the talk shows. "Buyers take the socket's fit for granted" stands.
+  { name: 'report', re: /^(?:buyers|people|customers|viewers|users)\s+(?:ask|asks|asked|asking|talk|talks|talked|talking|discuss|discusses|discussed|wonder|wonders|wondered)\b/iu },
   // "I", "me", "my", "you", "your"; "we", "our", "us" already drop (LOCAL_BANNED).
   { name: 'person', re: /(?<![\p{L}\p{N}])(?:I|[Mm]e|[Mm]y|[Mm]ine|[Yy]ou|[Yy]our|[Yy]ours|[Yy]ourself)(?![\p{L}\p{N}])/u },
   // "will" as a verb (never "the will to walk"), "won't", "set to" a change.
@@ -422,7 +427,8 @@ const headlineWords = (s: string): string[] =>
 /** The headline's own refusals beyond the meaning's rules (v3, the fix round):
  *  a question (its question mark, an auxiliary first, or a wh-word that opens
  *  only a question), the subject's name alone ("&" read as "and", its words
- *  in any order), the first or second person, an instruction (a bare verb
+ *  in any order), a report that people ask or talk ("Buyers ask…", the
+ *  headline round), the first or second person, an instruction (a bare verb
  *  first), a forecast, a comparison or a direction word the list misses.
  *  Each leaves the read without a headline. Pure. */
 export function headlineRefused(headline: string, subjectName: string): HeadlineRefusal | null {

@@ -14,7 +14,7 @@ import type { DatedEvidence } from './evidence'
 import { subjectReadOf } from './published'
 import { scrubWeekText } from './scrub'
 import {
-  buildSubjectReadPrompts, finishSubjectRead, headlineRefused, INTENSITY_RULE, SpendGate, subjectReadAttemptMaxUsd, subjectReadSchema, subjectReadMaterial, subjectReadsCapLeft, subjectReadsData,
+  buildSubjectReadPrompts, finishSubjectRead, headlineRefused, INTENSITY_RULE, SpendGate, type HeadlineRefusal, subjectReadAttemptMaxUsd, subjectReadSchema, subjectReadMaterial, subjectReadsCapLeft, subjectReadsData,
   subjectReadsHeadroom, subjectReadsRoom, thinSubjectRead, SUBJECT_READ_MAX_OUTPUT_TOKENS, SUBJECT_READ_PROMPT_VERSION, type SubjectReadMaterial, type SubjectReadTheme,
 } from './subject-reads'
 import {
@@ -198,27 +198,31 @@ describe('the writer\'s prompt', () => {
     expect(system).toContain('3. headline: the subject\'s main point in one line, written last. It is printed on its own above "means", with no figure beside it: the one point a reader takes away, never a summary of "saying" or of "means".')
     // The caps: asked for 80 and 12, held at 90 and 14 with no slack (the fix round).
     expect(system).toContain('At most about 12 words and 80 characters; a line over 14 words or 90 characters is deleted. A plain statement in sentence case (a capital on the first word and on names only), with no full stop or other mark at the end.')
-    expect(system).toContain('From the buyer\'s side: what people take for granted, what they still need settled, the part the talk turns on, or what they praise.')
+    // The headline round (16 Oct): five of nine real headlines opened "Buyers ask", a report that questions exist.
+    expect(system).toContain('The insight: what the talk SHOWS from the buyer\'s side, that is what decides it for buyers, what they take for granted, or which part carries their judgement. Name the thing they name.')
+    expect(system).toContain('Never a report that people ask, talk or discuss: never open on "Buyers ask", "People ask", "People talk", "Buyers want … explained" or any other report of asking or talking. Say what the asking shows. For coffee machines, "Owners take good coffee for granted and count the cleaning time", not "Buyers ask how long the daily clean takes".')
+    expect(system).not.toMatch(/a claim about what buyers do, ask or decide/)
     // The first v3 dry run (16 Oct) wrote three of five headlines as "Buyers judge … by …", the example's own frame.
     expect(system).toContain('the subjects\' headlines are read side by side, so never a stock frame ("Buyers judge … by …", "… is judged by …")')
     expect(example('headline')).not.toMatch(/\bjudge/i)
     // The second v3 dry run wrote Fit & comfort's as "Socket length, pressure and heat need settling" (16 Oct).
-    expect(system).toContain('ONE point about the subject: a claim about what buyers do, ask or decide, never a list of three nouns. For coffee machines, "Owners want the milk wand clean without taking the machine apart", not "Milk wand, descale and drip tray need settling".')
-    for (const good of ['Owners want the milk wand clean without taking the machine apart', 'Buyers want the morning clean settled before they buy a machine']) {
+    expect(system).toContain('ONE point about the subject, never a list of three nouns. For coffee machines, "The milk wand is the part owners blame for a slow clean", not "Milk wand, descale and drip tray need settling".')
+    for (const good of ['The milk wand is the part owners blame for a slow clean', 'Owners take good coffee for granted and count the cleaning time', 'The morning clean decides the purchase once the coffee is good']) {
       expect(scrubWeekText(good, 90, { allow: [], headline: true }).text).toBe(good)
       expect(headlineRefused(good, 'Cleaning and upkeep')).toBeNull()
+      expect(good).not.toMatch(/^(?:Buyers|People|Owners) (?:ask|want|talk)/)
       expect(good.split(' ').length).toBeLessThanOrEqual(12)
       expect(good.length).toBeLessThanOrEqual(80)
     }
     expect(system).toContain('Never a label or a topic ("Cost & access", "Questions about Cost & access"), never the subject\'s name restated as a claim ("Cost & access matters to buyers"), and never Össur\'s own claim or a line about Össur\'s words.')
     // It promises deletion only for what code deletes (the fix round): an inferred feeling, a "not X" frame and a rank are "never".
-    expect(system).toContain('Every rule for "means" and every house rule below holds here too. Never an inferred feeling, a "not X" frame, a size or a rank. A headline is deleted, and the subject prints without one, where it is a question (with or without its question mark), the subject\'s name alone, an instruction, a forecast ("will", "set to"), a comparison ("than", "the best", "the most", one thing "over" another), in the first or second person ("I", "we", "you"), or where it holds a digit, an amount in words, a direction word or, in a medical market, a medical claim.')
+    expect(system).toContain('Every rule for "means" and every house rule below holds here too. Never an inferred feeling, a "not X" frame, a size or a rank. A headline is deleted, and the subject prints without one, where it is a question (with or without its question mark), the subject\'s name alone, a line that opens on people asking, talking, discussing or wondering ("Buyers ask", "People talk"), an instruction, a forecast ("will", "set to"), a comparison ("than", "the best", "the most", one thing "over" another), in the first or second person ("I", "we", "you"), or where it holds a digit, an amount in words, a direction word or, in a medical market, a medical claim.')
     expect(system).not.toContain('A headline that breaks one is deleted')
-    expect(system).toContain('- headline: "Buyers want the morning clean settled before they buy a machine".')
-    expect(system).toMatch(/Not, a summary and a list: .*Not, a question: .*Not, the subject's name restated: .*Not, the company's claim: /)
+    expect(system).toContain('- headline: "The morning clean decides the purchase once the coffee is good".')
+    expect(system).toMatch(/Not, a report of asking: "Buyers ask how long the clean takes before they buy"\. Not, a summary and a list: .*Not, a question: .*Not, the subject's name restated: .*Not, the company's claim: /)
     // The schema asks for it, in thinking order: what was said, what it means, then the line.
     expect(Object.keys(subjectReadSchema().shape)).toEqual(['saying', 'means', 'headline'])
-    expect(subjectReadSchema().shape.headline.description).toMatch(/ONE claim about what buyers do, ask or decide, a plain statement in sentence case, at most about 12 words and 80 characters, no full stop at the end\. Never a question, never a list, never the subject's name restated, never the company's own claim\./)
+    expect(subjectReadSchema().shape.headline.description).toMatch(/ONE claim about what the talk shows \(what decides it for buyers, what they take for granted, or which part carries their judgement\), never a report that people ask or talk, a plain statement in sentence case, at most about 12 words and 80 characters, no full stop at the end\. Never a question, never a list, never the subject's name restated, never the company's own claim\./)
   })
 
   it('the fix round: no comparison is allowed anywhere in it, and only what code deletes is promised as deleted', () => {
@@ -350,7 +354,7 @@ describe('finishSubjectRead and the thin line', () => {
       ['a question', 'Who pays for the knee?'],
       ['the subject\'s name alone', 'Cost & access.'],
       ['over its cap (no slack)', 'Buyers describe the appeal letters from the prosthetist and the paperwork for the second refusal'],
-      ['over its word cap (no slack)', 'Buyers ask who pays and who signs and who files and who waits for it'],
+      ['over its word cap (no slack)', 'Owners name who pays and who signs and who files and who waits for it'],
     ] as const) {
       const { read, scrub } = headlineOf(h)
       expect('headline' in read, why).toBe(false)
@@ -365,11 +369,11 @@ describe('finishSubjectRead and the thin line', () => {
   })
 
   it('the caps hold with no slack: 90 characters and 14 words pass, one more of either drops', () => {
-    const fits = 'Buyers ask who pays for the socket and who files the paperwork for it'
+    const fits = 'Owners name who pays for the socket and who files the paperwork for it'
     expect(fits.split(' ')).toHaveLength(14)
     expect(finishSubjectRead(m, { saying: ['P.'], means: 'M.', headline: fits }, { company: 'Össur', allow: [] }).read.headline).toBe(fits)
     expect('headline' in finishSubjectRead(m, { saying: ['P.'], means: 'M.', headline: `${fits} today` }, { company: 'Össur', allow: [] }).read).toBe(false)
-    const ninety = `Buyers ask about the socket ${'x'.repeat(90 - 'Buyers ask about the socket '.length)}`
+    const ninety = `Cover decides the socket ${'x'.repeat(90 - 'Cover decides the socket '.length)}`
     expect(ninety).toHaveLength(90)
     expect(finishSubjectRead(m, { saying: ['P.'], means: 'M.', headline: ninety }, { company: 'Össur', allow: [] }).read.headline).toBe(ninety)
     expect('headline' in finishSubjectRead(m, { saying: ['P.'], means: 'M.', headline: `${ninety}y` }, { company: 'Össur', allow: [] }).read).toBe(false)
@@ -377,7 +381,7 @@ describe('finishSubjectRead and the thin line', () => {
 
   it('the fix round\'s refusals, tested both ways: each probe drops, each near miss stands', () => {
     const NAME = 'Durability & repair'
-    const drops: [string, string][] = [
+    const drops: [HeadlineRefusal, string][] = [
       ['question', 'Does the zip last'], ['question', 'Is the socket worth the wait'], ['question', 'Which bag fits under the seat'],
       ['question', 'Why straps dig in on long days'], ['question', 'How long does the clean take'], ['question', 'What size is right for carry on'],
       ['question', 'Can a liner be washed at home?'],
@@ -390,6 +394,10 @@ describe('finishSubjectRead and the thin line', () => {
       ['comparison', 'Buyers choose the duffle over the tote'], ['comparison', 'Buyers prefer the leather strap to the webbing'], ['comparison', 'Comfort comes ahead of looks'],
       ['comparison', 'The best bags keep the laptop sleeve padded'], ['comparison', 'The most praised part is the zip'],
       ['direction', 'Buyers are increasingly asking about repair'],
+      // The headline round's backstop: a report that people ask or talk, at the opening.
+      ['report', 'Buyers ask about zippers and suede before they buy'], ['report', 'People talk about the socket on long walks'],
+      ['report', 'Customers discuss the price of the duffle'], ['report', 'Viewers wonder whether the clip is real'], ['report', 'Users asked about the battery'],
+      ['report', 'Buyers ask how the socket is refined when sore spots appear'],
     ]
     for (const [why, h] of drops) expect(headlineRefused(h, NAME), h).toBe(why)
     const stands = [
@@ -398,6 +406,7 @@ describe('finishSubjectRead and the thin line', () => {
       'Build quality decides the price', 'Use in the rain is where the zip is tested', 'Focus falls on the socket', 'Makeshift legs are praised for weight',
       'The will to walk again draws praise', 'Comfort over a long travel day rests on the straps', 'Buyers check carry on size ahead of a flight',
       'Buyers prefer to see the bag worn', 'Suede wear over time worries buyers', 'Owners value the zip over a long trip',
+      'Buyers take the socket\'s fit for granted', 'People who ask about the socket want a fitting first', 'Buyers\' questions turn on the zip', 'Talk turns on the socket',
     ]
     for (const h of stands) expect(headlineRefused(h, NAME), h).toBeNull()
     // Read on the writer's own words: the magnitude strip would take "most" out of "the most".
@@ -406,7 +415,7 @@ describe('finishSubjectRead and the thin line', () => {
     expect(scrub.headline).toBe('dropped')
   })
 
-  it('every headline the real dry runs wrote (16 Oct) still stands, Össur\'s under its medical rules', () => {
+  it('every headline the real dry runs wrote (16 Oct) still stands, Össur\'s under its medical rules, but for the "Buyers ask" reports the headline round drops', () => {
     const REAL: [string, string, boolean][] = [
       ['Cost & access', 'The socket, liner and insurance approval shape whether the leg is reachable', true],
       ['Cost & access', 'Socket cost and insurance approval stand between buyers and the prosthetic', true],
@@ -414,7 +423,10 @@ describe('finishSubjectRead and the thin line', () => {
       ['Function & movement', 'Buyers judge a prosthesis by balance, grip and long walks', true],
       ['Look & style', 'Leg covers and finishes settle what people notice first', true],
       ['Look & style', 'A leg cover is judged by realism, style and whether it draws notice', true],
-      ['Fit & comfort', 'Buyers ask how the socket is refined when sore spots appear', true],
+      ['Fit & comfort', 'Buyers want socket and leg length adjustments explained', true],
+      ['Community & encouragement', 'People value honest prosthetic stories with humour and support', true],
+      ['Buying & delivery', 'People buy once stock, colour and size are settled', false],
+      ['Looks & style', 'Upcycled bags still have to look good to be wanted', false],
       ['Fit & comfort', 'Socket length, pressure and heat need settling', true],
       ['Fit & comfort', 'Buyers judge the socket by pressure, sweat and leg length', true],
       ['Community & encouragement', 'New amputees look to other users for reassurance while learning to walk', true],

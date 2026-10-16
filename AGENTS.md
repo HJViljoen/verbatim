@@ -221,14 +221,17 @@ This version has breaking changes — APIs, conventions, and file structure may 
   `subject_read_v3` (16 Oct, Heinrich: Market's top layer is analysis, each
   subject a card of a headline and "What it means", the numbers one click
   down) each written read also carries `headline`: the subject's main point
-  in one line from the buyer's side, one claim about what buyers do, ask or
-  decide (never a list of nouns, never a stock frame), sentence case, no full
+  in one line from the buyer's side, the insight: what the talk shows (what
+  decides it for buyers, what they take for granted, which part carries their
+  judgement), never a report that people ask or talk, never a list of nouns,
+  never a stock frame; sentence case, no full
   stop or trailing mark. The writer is asked for at most about 80 characters
   and 12 words; the scrub holds it at 90 and 14 with NO slack
   (`SUBJECT_READ_MAX`) and drops it whole past either. It takes the meaning's
   finish, and its own refusals (`headlineRefused`, read on the writer's words
   before the scrub) drop it as a question (with or without "?"), the
-  subject's name alone ("and" for "&", any order), the first or second
+  subject's name alone ("and" for "&", any order), an opening that reports
+  people asking or talking ("Buyers ask", "People talk"), the first or second
   person, an instruction, a forecast ("will", "set to"), a comparison ("the
   best", "the most", one thing chosen "over" another, "prefer X to Y", "ahead
   of" as a rank) or "increasingly"; each rule is narrow and tested both ways,

@@ -31,6 +31,9 @@ describe('britishSpelling', () => {
     // Össur's stored watch line of 11 Oct printed "centering" (16 Oct).
     expect(britishSpelling('Whether questions about how a prosthesis works keep centering on attachment, shoes and pain after long walks')).toBe('Whether questions about how a prosthesis works keep centring on attachment, shoes and pain after long walks')
     expect(britishSpelling('Talk centered on the zips, centers on the straps.')).toBe('Talk centred on the zips, centres on the straps.')
+    // Sealand's 16 Oct dry run wrote "zippers" in a headline (the headline round).
+    expect(britishSpelling('Buyers ask about zippers and suede, and the zipper pull.')).toBe('Buyers ask about zips and suede, and the zip pull.')
+    expect(britishSpelling('One owner wrote "the zipper broke" and other zippers held.')).toBe('One owner wrote "the zipper broke" and other zips held.')
   })
 
   it('whole words only', () => {
