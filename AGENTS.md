@@ -220,7 +220,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
   `subject_read_v3` (16 Oct, Heinrich: Market's top layer is analysis, each
   subject a card of a headline and "What it means", the numbers one click
   down) each written read also carries `headline`: the subject's main point
-  in one line from the buyer's side, at most about 90 characters and 14
+  in one line from the buyer's side, one claim about what buyers do, ask or
+  decide (never a list of nouns, never a stock frame), at most about 90 characters and 14
   words, sentence case, no full stop, scrubbed with the meaning's finish and
   dropped whole past either cap, as a question or as the subject's name alone
   (`headlineRefused`). ADDITIVE: `SubjectRead.headline?`, absent where the

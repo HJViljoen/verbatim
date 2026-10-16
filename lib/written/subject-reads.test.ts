@@ -194,6 +194,12 @@ describe('the writer\'s prompt', () => {
     // The first v3 dry run (16 Oct) wrote three of five headlines as "Buyers judge … by …", the example's own frame.
     expect(system).toContain('the subjects\' headlines are read side by side, so never a stock frame ("Buyers judge … by …", "… is judged by …")')
     expect(example('headline')).not.toMatch(/\bjudge/i)
+    // The second v3 dry run wrote Fit & comfort's as "Socket length, pressure and heat need settling" (16 Oct).
+    expect(system).toContain('ONE point about the subject: a claim about what buyers do, ask or decide, never a list of three nouns. For coffee machines, "Owners want the milk wand clean without taking the machine apart", not "Milk wand, descale and drip tray need settling".')
+    for (const good of ['Owners want the milk wand clean without taking the machine apart', 'Buyers want to know how long the daily clean takes']) {
+      expect(scrubWeekText(good, 112, { allow: [], headline: true }).text).toBe(good)
+      expect(good.split(' ').length).toBeLessThanOrEqual(14)
+    }
     expect(system).toContain('Never a question, never a label or a topic ("Cost & access", "Questions about Cost & access"), never the subject\'s name restated as a claim ("Cost & access matters to buyers"), and never Össur\'s own claim or a line about Össur\'s words.')
     expect(system).toMatch(/Every rule for "means" and every house rule below holds here too: only what a note shows, no inferred feeling, no "not X" frame, no advice and no forecast, no comparison and no "than", no size or rank, no digit and no amount in words, no direction word, no medical claim, no first person\./)
     expect(system).toContain('- headline: "Buyers want to know how long the daily clean takes".')

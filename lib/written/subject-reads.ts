@@ -293,6 +293,7 @@ export function buildSubjectReadPrompts(a: SubjectReadPromptArgs): { system: str
     `  - At most ${SUBJECT_READ_MAX.headlineWords} words and under ${SUBJECT_READ_MAX.headline} characters. A plain statement in sentence case (a capital on the first word and on names only), with no full stop at the end.`,
     '  - From the buyer\'s side: what people take for granted, what they still need settled, the part the talk turns on, or what they praise. Name the thing they name.',
     '  - This subject\'s own point in its own words: the subjects\' headlines are read side by side, so never a stock frame ("Buyers judge … by …", "… is judged by …").',
+    '  - ONE point about the subject: a claim about what buyers do, ask or decide, never a list of three nouns. For coffee machines, "Owners want the milk wand clean without taking the machine apart", not "Milk wand, descale and drip tray need settling".',
     `  - Never a question, never a label or a topic ("${name}", "Questions about ${name}"), never the subject's name restated as a claim ("${name} matters to buyers"), and never ${co}'s own claim or a line about ${co}'s words.`,
     '  - Every rule for "means" and every house rule below holds here too: only what a note shows, no inferred feeling, no "not X" frame, no advice and no forecast, no comparison and no "than", no size or rank, no digit and no amount in words, no direction word, no medical claim, no first person. A headline that breaks one is deleted, and the subject prints without one.',
     '',
