@@ -218,7 +218,7 @@ describe('runWeekReadStep', () => {
 
   it('rowOf keeps quotes as refs, the story\'s too, and stores the v3 shape', () => {
     const row = rowOf('client-1', 'run-27', built(2))
-    expect(row.data).toMatchObject({ version: 2, promptVersion: 'week_read_v3', headline: 'The week.' })
+    expect(row.data).toMatchObject({ version: 2, promptVersion: 'week_read_v4', headline: 'The week.' })
     expect(row.data?.version === 2 && row.data.story[0].quote?.ref).toMatch(/^e:/)
     expect(JSON.stringify(row.data)).not.toMatch(/"text":"[^"]/)
   })

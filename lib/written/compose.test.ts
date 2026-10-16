@@ -121,7 +121,7 @@ describe('composeWeekRead: a thin week', () => {
     const standing = [fact({ subjectId: 's1', name: 'Comfort', rank: 1 }), fact({ subjectId: 's2', name: 'Repair', calibration: 'failed' })]
     const p = pool([candidate({ id: 'C1' })])
     const read = composeWeekRead({ pool: p, standing, written: null, subjects: [], writerFigures: writerFigures(p), model: '', costUsd: 0 })
-    expect(read).toMatchObject({ version: 2, headline: '', story: [], implications: [], newThisWeek: [], watch: [], findings: [], held: [], month: SEP, promptVersion: 'week_read_v3', costUsd: 0 })
+    expect(read).toMatchObject({ version: 2, headline: '', story: [], implications: [], newThisWeek: [], watch: [], findings: [], held: [], month: SEP, promptVersion: 'week_read_v4', costUsd: 0 })
     expect(read.standing.map((s) => [s.name, s.line !== '', s.sentence])).toEqual([['Comfort', true, ''], ['Repair', false, '']])
   })
 })

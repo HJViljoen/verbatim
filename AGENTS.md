@@ -573,7 +573,15 @@ This version has breaking changes — APIs, conventions, and file structure may 
   what it means, new this week, worth watching, then the findings) a fourth
   rule holds in the report's implications and watch lines only: advice and
   forecasts drop their sentence (`ADVICE`, `FORECAST`, `toldWhatToDo`), which
-  are NOT safe on market prose and are not reused by the guard.
+  are NOT safe on market prose and are not reused by the guard. Since
+  `week_read_v4` (16 Oct) the implications are written from the buyer's side
+  of the week's talk, the subject reads' v2 rule: the company's claims are
+  context only, at most one clause, never a line's opening or subject (Össur's
+  11 Oct read opened all three lines on its own marketing). The shape, the
+  caps and the scrubs are v3's; the bump only records which instruction
+  wrote the words, and nothing reads `promptVersion` to decide how a read
+  prints, so a v3 read, its snapshots and the version-1 email goldens print
+  as before.
   A written-read sentence that states an amount in words ("fifty thousand
   euros", "twenty-five percent", "hundreds of") drops whole like a digit one
   (16 Oct: `statesAmountInWords`, its units in `AMOUNT_UNITS`, counted as

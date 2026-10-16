@@ -408,7 +408,11 @@ export interface WeekReadDataV2 extends WeekReadCommon {
    *  Absent on a read stored before it, and until that step has run. The
    *  weekly issue never carries it (`weeklyReadSnapshotData`). */
   subjectReads?: SubjectReadsData
-  promptVersion: 'week_read_v3'
+  /** v3: the report (30 Sep). v4 (16 Oct): the same report and shape, its
+   *  implications written from the buyer's side, the company's claims context
+   *  only (the subject reads' v2 rule). Nothing reads it to decide how a read
+   *  prints. */
+  promptVersion: 'week_read_v3' | 'week_read_v4'
 }
 
 /**

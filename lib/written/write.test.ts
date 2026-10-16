@@ -75,8 +75,8 @@ describe('the schema', () => {
     expect(weekReadSchema().safeParse({ ...ok, implications: [{ implication: 'i' }] }).success).toBe(false)
   })
 
-  it('records its version', () => {
-    expect(WEEK_READ_PROMPT_VERSION).toBe('week_read_v3')
+  it('records its version: v4, the implications from the buyer\'s side (16 Oct)', () => {
+    expect(WEEK_READ_PROMPT_VERSION).toBe('week_read_v4')
   })
 
   it('describes each report section as the owner approved it (30 Sep)', () => {
@@ -84,6 +84,7 @@ describe('the schema', () => {
     expect(schema.properties.story.description).toContain('never a list')
     expect(schema.properties.story.items!.properties.quote_from.description).toContain('At most two paragraphs point to one')
     expect(schema.properties.implications.items!.properties.implication.description).toContain('Intelligence, never an instruction')
+    expect(schema.properties.implications.items!.properties.implication.description).toContain("What the week's talk means for the company, from the buyer's side (what people take for granted, still need settled, the part the talk turns on, or a workaround they praise), the company's claims context only and never a line's opening")
     expect(schema.properties.new_this_week.description).toContain('only candidates marked "First heard this week: yes". Empty when none is marked so.')
     expect(schema.properties.watch.items!.properties.question.description).toContain('starting with "Whether"')
     expect(schema.properties.watch.items!.properties.question.description).toContain('Never a forecast, a direction or advice')
@@ -184,7 +185,9 @@ describe('the prompt', () => {
   it('writes its own example in the house style: no digit, no deleted word, no magnitude word, no advice', () => {
     const example = system.slice(system.indexOf('An example of the register'))
     expect(example).toContain('A story paragraph:')
-    expect(example).toContain('An implication, where the company says its machines last a decade:')
+    expect(example).toContain('An implication, from the buyer\'s side: "Owners describe the clean each morning in detail, the drip tray, the milk wand and the descale. A buyer asks how long that clean takes, and owners point each other to the self cleaning machine."')
+    // The claim-first line is the counter-example now (v4), named as one.
+    expect(example).toContain('Not, the company\'s claim first, where it says its machines last a decade: "The company sells its machines on a decade of use.')
     expect(example).toContain('A watch line:')
     expect(example).toContain('A week line:')
     expect(example).not.toMatch(/\d/)
@@ -279,15 +282,32 @@ describe('what it means for the company (the lead, 30 Sep: about Sealand, not th
     expect(buildWeekReadPrompts(args()).user).toContain('About Sealand: nothing recorded beyond its name.')
   })
 
-  it('asks for implications about the company, connected to what it sells and claims, else to a company that sells what it sells', () => {
-    expect(system).toContain('about Sealand in particular, never about the category in general')
-    expect(system).toContain("Connect the week's findings to what Sealand sells and to what it says about itself")
-    expect(system).toContain('Where the week bears on none of Sealand\'s claims, say what the finding means for a company that sells what Sealand sells.')
-    expect(system).toContain('A line that would be as true of any rival is not an implication for Sealand')
+  it('v4: each implication is the insight from the buyer\'s side; the company\'s claims are context only, never a line\'s opening (16 Oct)', () => {
+    expect(system).toContain('"What it means for Sealand", two or three lines (at most 3), each at most two short sentences: the insight a marketing lead at Sealand takes away from the week, never a recap of the story.')
+    expect(system).toContain("Write each line from the buyer's side of the week's talk, on the one of these its candidates show most clearly:")
+    for (const angle of [
+      'what people in this market take for granted about what Sealand sells;',
+      'what they doubt or still need settled before buying, shown by a question they ask or a problem they name;',
+      'the part of the product the talk turns on (a named part, a material, a size or a finish, in the words people in this market use), and in what role: the thing people ask about, praise, blame or work around;',
+      'a workaround or alternative people praise, said as what they praise.',
+    ]) expect(system).toContain(angle)
+    expect(buildWeekReadPrompts(args({ clientId: SEALAND_CLIENT_ID })).system).toContain("what people in this market take for granted about bags like Sealand's;")
+    // Össur's 11 Oct read opened all three lines on its own marketing ("Össur says its bionic devices mimic natural movement…").
+    expect(system).toContain("Never about Sealand's own words. Sealand's claims (under About Sealand) are context only: at most one clause of a line may say whether the week's talk bears a claim out or tests it. Never open a line with a claim, with what Sealand says or with what it sells; never make a claim the subject of a line; never restate one.")
+    expect(system).toContain('a doubt is a question asked or a problem named, never a feeling you infer')
+    expect(system).toContain('Never frame a point by what something is not ("not only", "rather than the look")')
+    expect(system).toContain('No abstract closing line ("sits inside the product story", "a story about identity"): name the thing, and end on the concrete point.')
+    expect(system).toContain('A line that would be as true of any week, or of any product in any market, is not an implication')
+    // v3's instruction to name the claim and say what the week means for it is gone.
+    expect(system).not.toContain("Connect the week's findings to what Sealand sells and to what it says about itself")
+    expect(system).not.toContain('name the claim or the product and say what the finding means for it')
+    expect(system).not.toContain('about Sealand in particular, never about the category in general')
+    // Unchanged: claims are not evidence, and nothing said is everything said.
     expect(system).toContain('Never say how a claim was received or whether buyers believe it unless a candidate says so')
     expect(system).toContain('never say the market ignores, overlooks or does not mention something')
-    // With the product's noun, the fallback names what it sells.
-    expect(buildWeekReadPrompts(args({ clientId: SEALAND_CLIENT_ID })).system).toContain("a company that sells bags like Sealand's")
+    // The rest of the report keeps its v3 instructions.
+    expect(system).toContain('2. story: "What happened", the week told as ONE story in two or three paragraphs (at most 3).')
+    expect(system).toContain('6. week_in_one_line: the week\'s headline claim in one sentence of plain words, under 160 characters')
   })
 
   it('asks for literal words, naming the idioms the first dry v3 read used', () => {

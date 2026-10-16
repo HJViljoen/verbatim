@@ -48,7 +48,15 @@ import { firstHeardThisWeek, type PoolCandidate, type StandingFact, type WeekPoo
 // nothing about how anything was found, and never why something is not said.
 
 export const WEEK_READ_PASS = 'week_read'
-export const WEEK_READ_PROMPT_VERSION = 'week_read_v3' as const
+/** v4 (16 Oct; Heinrich's Market top layer prints the week's headline and
+ *  "What it means" on a card): the same report, shape, caps and scrubs as v3,
+ *  its implications written from the buyer's side of the week's talk, the
+ *  company's claims context only, at most one clause and never a line's
+ *  opening or subject (the subject reads' v2 rule; Össur's 11 Oct read opened
+ *  all three lines on its own marketing). Bumped so `ai_call_log` and the
+ *  stored read say which instruction wrote the words; nothing reads it to
+ *  decide how a read prints, so a v3 read prints as it always has. */
+export const WEEK_READ_PROMPT_VERSION = 'week_read_v4' as const
 
 /** Field caps, in characters, and the report's counts. Compose and scrub hold
  *  the writer to every one. */
@@ -116,7 +124,7 @@ export function weekReadSchema() {
       quote_from: z.string().nullable().describe('A candidate this paragraph cites whose people say its point most directly, where a real voice would help the reader; code prints one of their quotes after the paragraph. At most two paragraphs point to one; null otherwise.'),
     })).describe(`What happened: the week told as ONE story in two or three paragraphs, weaving the findings together (how they connect, what they add up to). Never one paragraph per finding in turn, never a list.`),
     implications: z.array(z.object({
-      implication: z.string().describe(`What the week as a whole says about the company's business, at most ${WEEK_READ_MAX.implicationSentences} short sentences, under ${WEEK_READ_MAX.implication} characters. Intelligence, never an instruction: never "should", "could", "needs to", "consider" or "an opportunity".`),
+      implication: z.string().describe(`What the week's talk means for the company, from the buyer's side (what people take for granted, still need settled, the part the talk turns on, or a workaround they praise), the company's claims context only and never a line's opening: at most ${WEEK_READ_MAX.implicationSentences} short sentences, under ${WEEK_READ_MAX.implication} characters. Intelligence, never an instruction: never "should", "could", "needs to", "consider" or "an opportunity".`),
       based_on: basedOn('this implication'),
     })).describe(`What it means for the company: two or three implications, each following from the week's evidence, at most ${WEEK_READ_MAX.implications}.`),
     new_this_week: z.array(z.object({
@@ -270,7 +278,14 @@ export function buildWeekReadPrompts(a: WeekWriterArgs): { system: string; user:
     '  - The same rule as the headlines: no contrast the candidates do not show ("selection, not brand attachment").',
     `  - quote_from: at most ${WEEK_READ_MAX.storyQuotes} paragraphs point to a voice, where hearing one would help the reader: the id of a candidate that paragraph cites whose people say its point most directly. Code prints a real quote from that candidate after the paragraph. Otherwise null. Never write a quotation yourself.`,
     '',
-    `3. implications: "What it means for ${co}", two or three lines (at most ${WEEK_READ_MAX.implications}), each at most two short sentences, about ${co} in particular, never about the category in general. Connect the week's findings to what ${co} sells and to what it says about itself (under About ${co}): where a finding bears on one of ${co}'s own claims or on what it sells, name the claim or the product and say what the finding means for it, in the market's terms. Where the week bears on none of ${co}'s claims, say what the finding means for a company that sells ${what}. A line that would be as true of any rival is not an implication for ${co}: make it specific or leave it out.`,
+    `3. implications: "What it means for ${co}", two or three lines (at most ${WEEK_READ_MAX.implications}), each at most two short sentences: the insight a marketing lead at ${co} takes away from the week, never a recap of the story. Write each line from the buyer's side of the week's talk, on the one of these its candidates show most clearly:`,
+    `  - what people in this market take for granted about ${what};`,
+    '  - what they doubt or still need settled before buying, shown by a question they ask or a problem they name;',
+    '  - the part of the product the talk turns on (a named part, a material, a size or a finish, in the words people in this market use), and in what role: the thing people ask about, praise, blame or work around;',
+    '  - a workaround or alternative people praise, said as what they praise.',
+    `  - Never about ${co}'s own words. ${co}'s claims (under About ${co}) are context only: at most one clause of a line may say whether the week's talk bears a claim out or tests it. Never open a line with a claim, with what ${co} says or with what it sells; never make a claim the subject of a line; never restate one.`,
+    '  - Only what a candidate shows: a doubt is a question asked or a problem named, never a feeling you infer. Never frame a point by what something is not ("not only", "rather than the look"). No abstract closing line ("sits inside the product story", "a story about identity"): name the thing, and end on the concrete point.',
+    `  - Concrete to this week's talk: the thing people named, in their words. A line that would be as true of any week, or of any product in any market, is not an implication: make it concrete or leave it out.`,
     `  - ${co}'s claims are its own words, not evidence about the market. Never say how a claim was received or whether buyers believe it unless a candidate says so, and never say the market ignores, overlooks or does not mention something: the candidates are not everything people said.`,
     `  - Intelligence, not instructions: say what is true about the business, never what ${co} should do. Never "should", "could", "needs to", "must", "consider", "make sure", "an opportunity", and never an imperative. Each rests on the week's candidates (based_on) and follows from them, not from general knowledge about the category. Each is checked against the conversation on its own, like a headline.`,
     '',
@@ -304,7 +319,7 @@ export function buildWeekReadPrompts(a: WeekWriterArgs): { system: string; user:
     'An example of the register, for a different company and market (coffee machines); do not reuse its content:',
     '- A finding. Too broad, two ideas joined: "Machines earn their price when they are easy to live with". One idea, written right: headline "Owners judge a machine by how long the daily clean takes"; saw "Owners describe the clean in detail: the drip tray, the milk wand, and how often the machine asks to be descaled. Those who need a brush or a tablet every week complain about it, even when they like the coffee.\\n\\nBuyers ask about the clean before they ask about the taste."; means "The clean is the cost owners feel every day. It decides whether they still praise the machine a year after buying it.". The price doubt would be a second finding of its own, if its candidates carry it.',
     '- A story paragraph: "The week\'s talk was about living with a machine. Owners described the daily clean in detail, the drip tray, the milk wand and the descale, and they judged the price in the same terms: by how long a machine keeps working and what it asks of them each morning. For these owners the machine is the routine around the cup."',
-    '- An implication, where the company says its machines last a decade: "The company sells its machines on a decade of use. Owners this week judged a machine by the clean it asks for each morning, so the decade is judged on the daily upkeep." Not, true of any rival: "Machines are judged on upkeep." Not, advice: "The company should show the clean in its videos."',
+    '- An implication, from the buyer\'s side: "Owners describe the clean each morning in detail, the drip tray, the milk wand and the descale. A buyer asks how long that clean takes, and owners point each other to the self cleaning machine." Not, the company\'s claim first, where it says its machines last a decade: "The company sells its machines on a decade of use. Owners this week judged that decade by the clean." Not, true of any product: "Machines are judged on upkeep." Not, advice: "The company should show the clean in its videos."',
     '- A watch line: "Whether owners who complain about descaling name the tablets or the time it takes."',
     '- A week line: "Owners judged their machines this week by the daily upkeep they live with."',
   ].filter((l) => l !== null).join('\n').replace(/\n{3,}/g, '\n\n')
