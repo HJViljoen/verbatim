@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import { readingHandle } from '../../reading/read'
 import { FOREIGN_CLIENT, productsDb, productsTables, PRODUCTS_DB_CLIENT } from './products-db-fixture'
+import { OSSUR_CATALOGUE } from './products-fixture'
+import { PRODUCT_RULE_VERSION } from '../../products/rules'
 import { PRODUCT_IDS } from './products-fixture'
 import { loadProducts, parseProductsParams } from './products'
 import { loadProductsLevel, type LevelAsk, type ProductsLevelData } from './products-levels'
@@ -128,5 +130,30 @@ describe('Your products\' pages read the tenant\'s own rows only', () => {
     expect(data.missing).toBe(true)
     expect(data.category).toBeNull()
     expect(db.calls.some((c) => c.table === 'month_product_readings')).toBe(false)
+  })
+})
+
+// ONE BUSY VIDEO NEVER CROWDS ANOTHER OUT (the fresh check, 17 Oct). The
+// comments naming the product on the videos a page lists were one text read
+// cut at one cap, newest first: a video with more newer comments than the cap
+// took every place, the others printed "None of the comments naming it can
+// be quoted here." for comments that could, and the busy one's "Show all"
+// named the cap instead of its own count. Each video is its own list now.
+describe('Your products\' evidence counts every video\'s comments', () => {
+  it('a video with hundreds of newer comments naming it leaves another\'s comment on its card, and counts all of its own', async () => {
+    const tables = productsTables()
+    const BUSY = 'v-2026-09-0'
+    for (let i = 0; i < 250; i++) {
+      const id = `c-busy-${String(i).padStart(3, '0')}`
+      tables.comments.push({ id, client_id: PRODUCTS_DB_CLIENT, text: 'The Seal-In X finally stopped slipping on my long walks to work.', comment_date: '2026-09-27T10:00:00.000Z', platform: 'tiktok', video_id: `p-${BUSY}`, comment_id: `pc-${id}`, author: 'viewer' })
+      tables.product_mentions.push({ id: `m-busy-${i}`, client_id: PRODUCTS_DB_CLIENT, video_id: BUSY, source: 'comment', comment_id: id, comment_month: '2026-09-01', placement: 'named', product_id: PRODUCT_IDS.sealInX(), group_id: PRODUCT_IDS.liners(), method: 'rule', rule_version: PRODUCT_RULE_VERSION, catalogue_version: OSSUR_CATALOGUE.version, tag_id: null })
+    }
+    const r = await run({ month: '2026-09' }, SEAL, tables)
+    const videos = (r.data as ProductsLevelData).product!.evidence.videos
+    const busy = videos.find((v) => v.id === BUSY)!
+    const other = videos.find((v) => v.id === 'v-2026-09-1')!
+    expect(busy).toMatchObject({ named: 252, quotable: 252 })
+    expect(other.named).toBe(1)
+    expect(other.quotes).toHaveLength(1)
   })
 })

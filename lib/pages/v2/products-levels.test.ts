@@ -6,7 +6,7 @@ import type { Crosses, TextRead } from './products'
 import { PRODUCT_IDS, linersUnclearTexts } from './products-fixture'
 import { categoryFixture, PRODUCTS_LEVEL_FIXTURES, productFixture, quietProductFixture, sealVideos, todayCategoryFixture } from './products-level-fixture'
 import {
-  aboutLine, categoryHeadline, categoryMenu, groupsOf, HUB_CARDS, hubQuotes, keptMonth, namedVideoOrder, platformsOf, productEvidence, productGroupOf, productLead,
+  aboutLine, categoryHeadline, categoryMenu, groupsOf, HUB_CARDS, hubQuotes, keptMonth, namedByVideo, namedVideoOrder, platformsOf, productEvidence, productGroupOf, productLead,
   productMenu, PRODUCT_VIDEO_QUOTES, PRODUCT_VIDEOS_MAX, PRODUCT_VIDEOS_SHOWN, quietWordsOf, shareWord, shownVideos, subjectRowsOf, type ProductCard,
 } from './products-levels'
 import { OSSUR_CATALOGUE } from './products-fixture'
@@ -212,6 +212,19 @@ describe('the product\'s page, the evidence', () => {
     const ev = productEvidence({ order, shown: { ids: ['v'], open: null, all: false }, videos: new Map([['v', { id: 'v', platform: 'tiktok', video_id: 'p', video_url: null, account_name: 'a', comments_count: 1 }]]), texts: [t('1', 'liner?'), t('2', 'This liner finally stopped slipping on my long walks to work.')], owned: new Set(), clientId: OSSUR_CLIENT_ID, groupId: 'g', productId: 'p', params: {} })
     expect(ev.videos[0]).toMatchObject({ named: 2, quotable: 1, total: null })
     expect(productEvidence({ order, shown: { ids: ['v'], open: null, all: false }, videos: null, texts: [], owned: new Set(), clientId: OSSUR_CLIENT_ID, groupId: 'g', productId: 'p', params: {} }).state).toBe('unread')
+  })
+
+  it('a busy video never crowds another out: each video\'s comments are one list, read whole, and every printable one is counted', () => {
+    const st = (videoId: string, commentId: string): StandingText => ({ videoId, commentId, month: '2026-09-01', placements: [{ placement: 'named', groupId: 'g', productId: 'p', method: 'rule' }] })
+    const busy = Array.from({ length: 300 }, (_, i) => st('busy', `b${i}`))
+    const lists = namedByVideo([...busy, st('quiet', 'q1'), st('busy', 'b300')])
+    expect(lists.map((l) => [l.texts[0].videoId, l.texts.length, l.cap])).toEqual([['busy', 301, 301], ['quiet', 1, 1]])
+    expect(namedByVideo([])).toEqual([])
+    // Past the opened list's cap, the card still counts every printable one.
+    const t = (id: string): TextRead => ({ key: `c:${id}`, videoId: 'busy', commentId: id, text: 'This liner finally stopped slipping on my long walks to work.', lang: 'en', english: null, date: '2026-09-02', platform: 'tiktok', account: null, videoUrl: null, platformCommentId: null })
+    const ev = productEvidence({ order: [{ id: 'busy', named: 130, inVideo: false }], shown: { ids: ['busy'], open: 'busy', all: false }, videos: new Map([['busy', { id: 'busy', platform: 'tiktok', video_id: 'p', video_url: null, account_name: 'a', comments_count: 400 }]]), texts: Array.from({ length: 120 }, (_, i) => t(`b${i}`)), owned: new Set(), clientId: OSSUR_CLIENT_ID, groupId: 'g', productId: 'p', params: {} })
+    expect(ev.videos[0]).toMatchObject({ named: 130, quotable: 120, open: true })
+    expect(ev.videos[0].quotes).toHaveLength(50)
   })
 
   it('a quiet month: named in no video, one last month, the way to it', () => {

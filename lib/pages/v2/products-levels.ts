@@ -286,7 +286,9 @@ export interface NamedVideo {
   /** The comments shown: three (two on a phone), or every printable one
    *  where opened (at most PRODUCT_VIDEO_COMMENTS_MAX). */
   quotes: NamedComment[]
-  /** How many of its naming comments may print. */
+  /** How many of its naming comments may print: every one, uncapped (the
+   *  card's "Show all" and the opened note count them, `showNamedOf`,
+   *  `openedNamedNote`). */
   quotable: number
   open: boolean
   /** Opens it (closed), or closes it (open). */
@@ -605,6 +607,23 @@ export function shownVideos(order: readonly { id: string }[], params: Pick<Produ
   return { ids, open, all }
 }
 
+/** The comments naming it on the shown videos as one text list A VIDEO, each
+ *  read whole (`readTextLists` cuts each list at its own cap): one cap over
+ *  them all, newest first, let one busy video crowd every other's comments
+ *  out of the read, and cut the card's count of the ones that may print, so
+ *  "Show all" could name fewer than the card's own count. The comments
+ *  themselves are read whole either way (the text read takes every id); only
+ *  the translations and the gate's context follow the cap. PURE. */
+export function namedByVideo(texts: readonly StandingText[]): { texts: StandingText[]; cap: number }[] {
+  const by = new Map<string, StandingText[]>()
+  for (const t of texts) {
+    const list = by.get(t.videoId)
+    if (list) list.push(t)
+    else by.set(t.videoId, [t])
+  }
+  return [...by.values()].map((list) => ({ texts: list, cap: list.length }))
+}
+
 /** The evidence, from the order, the videos read and the comments naming it
  *  on the shown videos (newest first). A comment prints where the root's
  *  gate passes it; the rest are counted. PURE. */
@@ -865,7 +884,7 @@ export async function loadProductsLevel(input: ProductsLoadInput & { ask: LevelA
   const shownSet = new Set(shown.ids)
   const [named, groups] = await Promise.all([
     standing && shownSet.size > 0
-      ? readTextLists(handle, [{ texts: namedComments(standing, m, pid, shownSet), cap: shownSet.size * (PRODUCT_VIDEO_COMMENTS_MAX + 10) }], videos ?? new Map()).then((r) => r[0]).catch((e: unknown) => { say('level texts', e); return null })
+      ? readTextLists(handle, namedByVideo(namedComments(standing, m, pid, shownSet)), videos ?? new Map()).then((r) => r.flat()).catch((e: unknown) => { say('level texts', e); return null })
       : Promise.resolve([] as TextRead[]),
     videos && ids.length > 0 ? readGroups(handle, m, ids, videos).catch((e: unknown) => { say('level groups', e); return undefined }) : Promise.resolve(videos ? null : undefined),
   ])

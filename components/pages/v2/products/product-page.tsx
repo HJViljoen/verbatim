@@ -6,7 +6,7 @@ import { CARD, FlagChip } from '@/components/v2'
 import { fmtInt, longMonth } from '@/lib/format'
 import { WHERE_NAMED_ID } from '@/lib/pages/v2/products-address'
 import {
-  PRODUCT_VIDEO_QUOTES, PRODUCT_VIDEO_QUOTES_PHONE, PRODUCT_VIDEOS_SHOWN_PHONE,
+  PRODUCT_VIDEO_COMMENTS_MAX, PRODUCT_VIDEO_QUOTES, PRODUCT_VIDEO_QUOTES_PHONE, PRODUCT_VIDEOS_SHOWN_PHONE,
   type NamedComment, type NamedVideo, type ProductPage, type ProductsLevelData,
 } from '@/lib/pages/v2/products-levels'
 import { prevMonth } from '@/lib/reading/month-key'
@@ -36,6 +36,35 @@ export const NAMED_IN_VIDEO_ONLY = 'Named in the video itself, with no comment n
 export const OWN_POST_NOTE = 'The comments on your posts count here. What the post itself says never does.'
 /** A quiet month's facts. */
 export const QUIET_FACT = 'Nothing to read in a quiet month.'
+/** Opened: the comments naming it that are counted and not printed, said
+ *  once under the list (the root's words for the gate: "quoted here"). */
+export const namedNotQuoted = (n: number): string => `The other ${n === 1 ? 'one is' : `${fmtInt(n)} are`} counted, not quoted here.`
+
+/**
+ * "Show all 14 comments" where every comment naming it may print; else "Show
+ * 9 of 14 comments", what the list it opens draws of the count the card
+ * states, the first `PRODUCT_VIDEO_COMMENTS_MAX` where more may print. Never
+ * "all" of a number smaller than the card's own (Market's `showCommentsOf`).
+ * Pure.
+ */
+export function showNamedOf(v: Pick<NamedVideo, 'quotable' | 'named'>): { shown: number; of: number | null } {
+  const shown = Math.min(v.quotable, PRODUCT_VIDEO_COMMENTS_MAX)
+  return { shown, of: shown < v.named ? v.named : null }
+}
+
+/**
+ * Under an opened list, once: where the cap cut it, how many of the ones that
+ * may print it draws ("The first 50 of the 120 that can be quoted are shown;
+ * 8 more are counted, not quoted here."); else the counted ones it does not
+ * print (`namedNotQuoted`); null where it draws every comment counted. Pure.
+ */
+export function openedNamedNote(v: Pick<NamedVideo, 'quotable' | 'named'>): string | null {
+  const unquoted = Math.max(0, v.named - v.quotable)
+  if (v.quotable > PRODUCT_VIDEO_COMMENTS_MAX) {
+    return `The first ${fmtInt(PRODUCT_VIDEO_COMMENTS_MAX)} of the ${fmtInt(v.quotable)} that can be quoted are shown${unquoted > 0 ? `; ${fmtInt(unquoted)} more ${unquoted === 1 ? 'is' : 'are'} counted, not quoted here` : ''}.`
+  }
+  return unquoted > 0 ? namedNotQuoted(unquoted) : null
+}
 
 function Lead({ page }: { page: ProductPage }) {
   return (
@@ -70,6 +99,8 @@ const LINKISH = 'text-[13.5px] font-semibold text-foreground no-underline underl
 function VideoCard({ v, index, all, brand }: { v: NamedVideo; index: number; all: boolean; brand: string }) {
   const deskMore = !v.open && v.quotable > PRODUCT_VIDEO_QUOTES
   const phoneMore = !v.open && v.quotable > PRODUCT_VIDEO_QUOTES_PHONE
+  const show = showNamedOf(v)
+  const note = v.open ? openedNamedNote(v) : null
   const where = v.owned ? 'post' : 'video'
   return (
     <article id={`video-${v.id}`} data-video-card="" className={cn(CARD, 'scroll-mt-6 gap-3 px-[22px] pt-5 pb-[18px] max-sm:gap-2.5 max-sm:px-4 max-sm:pt-4 max-sm:pb-3.5', !all && !v.open && index >= PRODUCT_VIDEOS_SHOWN_PHONE ? 'max-sm:hidden' : null)}>
@@ -97,12 +128,16 @@ function VideoCard({ v, index, all, brand }: { v: NamedVideo; index: number; all
           {v.quotes.map((c, i) => <Comment key={c.key} c={c} hideOnPhone={!v.open && i >= PRODUCT_VIDEO_QUOTES_PHONE} />)}
         </div>
       ) : v.named > 0 ? <p className="m-0 rounded-[10px] bg-inner px-4 py-3 text-[13.5px] text-muted-foreground">{NONE_QUOTABLE}</p> : null}
-      {v.open && v.quotable > v.quotes.length ? <p className="m-0 text-[12.5px] text-muted-foreground">The first <span data-copy="figure">{fmtInt(v.quotes.length)}</span> of the <span data-copy="figure">{fmtInt(v.quotable)}</span> that can be quoted are shown.</p> : null}
+      {note ? <p className="m-0 text-[12.5px] text-muted-foreground">{note}</p> : null}
       {v.open ? (
         <div><Link href={v.href} scroll={false} className={LINKISH}>Show fewer comments</Link></div>
       ) : deskMore || phoneMore ? (
         <div className={cn(!deskMore ? 'sm:hidden' : null, !phoneMore ? 'max-sm:hidden' : null)}>
-          <Link href={v.href} scroll={false} className={LINKISH}>Show all <span data-copy="figure">{fmtInt(v.quotable)}</span> comments</Link>
+          <Link href={v.href} scroll={false} className={LINKISH}>
+            {show.of == null
+              ? <>Show all <span data-copy="figure">{fmtInt(show.shown)}</span> comments</>
+              : <>Show <span data-copy="figure">{fmtInt(show.shown)}</span> of <span data-copy="figure">{fmtInt(show.of)}</span> comments</>}
+          </Link>
         </div>
       ) : null}
     </article>

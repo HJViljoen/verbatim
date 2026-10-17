@@ -8,7 +8,7 @@ import { CATEGORY_MISSING, PRODUCT_MISSING, type ProductsLevelData } from '@/lib
 import { PRODUCT_TAG_COPY } from '@/lib/products/tags'
 import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { ProductsCategoryPage, ProductsProductPage } from './levels'
-import { NAMED_IN_VIDEO_ONLY, OWN_POST_NOTE, QUIET_FACT } from './product-page'
+import { NAMED_IN_VIDEO_ONLY, openedNamedNote, OWN_POST_NOTE, QUIET_FACT, showNamedOf } from './product-page'
 import { tagSub } from './unclear'
 
 // YOUR PRODUCTS' LEVEL PAGES, AS DRAWN (17 Oct; the G4 boards): every state a
@@ -188,6 +188,28 @@ describe('a product\'s page, the evidence (G4-Products-Product)', () => {
     const all = renderText(page(PRODUCTS_LEVEL_FIXTURES['sealinx-all']()))
     expect(all).not.toContain('Show the other')
     expect(all).toContain('Show fewer videos')
+  })
+
+  it('"Show all" never names fewer than the card\'s own count, and the opened list says what it leaves out (Market\'s rule)', () => {
+    expect(showNamedOf({ quotable: 14, named: 14 })).toEqual({ shown: 14, of: null })
+    expect(showNamedOf({ quotable: 9, named: 14 })).toEqual({ shown: 9, of: 14 })
+    expect(showNamedOf({ quotable: 120, named: 120 })).toEqual({ shown: 50, of: 120 })
+    expect(openedNamedNote({ quotable: 14, named: 14 })).toBeNull()
+    expect(openedNamedNote({ quotable: 9, named: 14 })).toBe('The other 5 are counted, not quoted here.')
+    expect(openedNamedNote({ quotable: 13, named: 14 })).toBe('The other one is counted, not quoted here.')
+    expect(openedNamedNote({ quotable: 120, named: 128 })).toBe('The first 50 of the 120 that can be quoted are shown; 8 more are counted, not quoted here.')
+    expect(openedNamedNote({ quotable: 120, named: 120 })).toBe('The first 50 of the 120 that can be quoted are shown.')
+    // As drawn: a card whose printable comments are fewer than its count.
+    const d = PRODUCTS_LEVEL_FIXTURES.sealinx()
+    const v = d.product!.evidence.videos[0]
+    const fewer = { ...d, product: { ...d.product!, evidence: { ...d.product!.evidence, videos: [{ ...v, named: 14, quotable: 9, quotes: v.quotes.slice(0, 3) }] } } }
+    const t = renderText(page(fewer))
+    expect(t).toContain('14 comments name it, of 148 on the video')
+    expect(t).toContain('Show 9 of 14 comments')
+    expect(t).not.toMatch(/Show all 9/)
+    assertCopyContract(page(fewer))
+    const opened = { ...fewer, product: { ...fewer.product, evidence: { ...fewer.product.evidence, videos: [{ ...fewer.product.evidence.videos[0], open: true }] } } }
+    expect(renderText(page(opened))).toContain('The other 5 are counted, not quoted here. Show fewer comments')
   })
 
   it('a video named only in its own words says so', () => {

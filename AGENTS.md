@@ -1781,7 +1781,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
     "Where it was named": every video naming it this month, the most
     comments naming it first (`namedVideoOrder`), four then "Show the other
     N videos" (three on a phone), each with up to three comments naming it
-    (two on a phone; the gate, `allowOwn`; translations as every quote's),
+    (two on a phone; the gate, `allowOwn`; translations as every quote's;
+    each video's comments are their own list, read whole, `namedByVideo`,
+    so one busy video never crowds another's out and "Show all N" counts
+    every printable one: never "all" of fewer than the card's count, else
+    "Show 9 of 14 comments", and the opened list says what it leaves out,
+    `showNamedOf` / `openedNamedNote`, Market's rule),
     "Named in the video" where its own words name it, an own post "Your
     post" with `OWN_POST_NOTE` (its comments count, its words never do);
     the facts (its place in its category: this product, your other
