@@ -7,7 +7,7 @@ import type { UnusualFlag } from '../week'
 import {
   buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, convHref, conversationCrumbs, flagCardOf, flagVerdict, groupsOf, insideOf,
   lineBars, marketLongRunFor, marketMonths, marketParams, monthsText, ourReadOf, panelStats, pickHero, pickWeekSides, platformRows, subjectCardsOf, subjectCrumbs, subjectHref,
-  subjectDetailOf, subjectNavOf, subjectTableHref, tableMonths, convOf, doingOf, alsoTalkedOf, earlierNewOf, leadDoing, weekCardOf, weekCrumbs, weekPageOf, withMonthPlatforms,
+  subjectDetailOf, subjectNavOf, subjectTableHref, tableMonths, weekWindows, convOf, doingOf, alsoTalkedOf, earlierNewOf, leadDoing, weekCardOf, weekCrumbs, weekPageOf, withMonthPlatforms,
   type ConvInput, type ConvPanel, type MarketConv, type MarketData, type MarketMonth, type MarketParams, type MarketWeek, type MonthCount,
   type SubjectDetail, type SubjectFact, type TopRow,
 } from './market'
@@ -689,10 +689,12 @@ export function marketSubjectFixture(key: string, opts: FixtureOptions & { detai
   const { period, p, convs, read, flagOn, facts, board, subjectNav, month } = core
   const sid = subjectId(key)
   const fact = facts.find((f) => f.id === sid)
-  const detailKind = opts.detail === undefined ? (fact?.calibration === 'ready' ? 'rich' : null) : opts.detail
+  // Fit & comfort and Cost & access on many videos; any other ready subject
+  // on one (the fixture's evidence is written for those two).
+  const detailKind = opts.detail === undefined ? (fact?.calibration === 'ready' ? (key === 'fit' || key === 'cost' ? 'rich' : 'thin') : null) : opts.detail
   const panel = buildSubjectPanel({
     id: sid, facts, convs, period, p, read, month, flag: flagOn,
-    detail: detailKind ? fixtureSubjectDetail(detailKind, period, month) : null,
+    detail: detailKind ? fixtureSubjectDetail(detailKind, period, month, key === 'fit' ? 'fit' : 'cost') : null,
     readsOn: core.readsOn,
   })
   if (!panel) return { ...core.base, view: 'subject', missing: true, subjectNav, crumbs: subjectCrumbs(p, subjectNav, { id: sid, name: key }).slice(0, 1) }
@@ -800,7 +802,7 @@ function fixturePanel(n: number, period: MarketParams['period'], convs: readonly
 // builder (`subjectDetailOf`). Illustrative words, no tenant row read.
 
 const COST_MEMBERS = [3, 6, 13].flatMap((n) => [1, 2, 3, 4].map((i) => `ins-${n}-${i}`))
-const KIND_OF: Record<number, string> = { 3: 'pain_point', 6: 'pain_point', 13: 'question', 15: 'praise', 16: 'question' }
+const KIND_OF: Record<number, string> = { 1: 'question', 2: 'pain_point', 3: 'pain_point', 6: 'pain_point', 7: 'pain_point', 13: 'question', 15: 'praise', 16: 'question', 17: 'pain_point' }
 
 /** Comments that say something about cost and access, for the quotes. The
  *  rest of the rich fixture's comments are too short to quote. */
@@ -815,9 +817,9 @@ const COST_WORDS = [
 
 const SUBJECT_PERSONAS = [
   { ...PERSONAS[0], insightIds: ['ins-3-1', 'ins-3-2', 'ins-6-1'] },
-  { ...PERSONAS[1], insightIds: ['ins-13-1', 'ins-6-2', 'ins-16-1'] },
-  { ...PERSONAS[2], insightIds: ['ins-1-1'] },
-  { ...PERSONAS[3], insightIds: [] },
+  { ...PERSONAS[1], insightIds: ['ins-13-1', 'ins-6-2', 'ins-16-1', 'ins-2-1', 'ins-2-2'] },
+  { ...PERSONAS[2], insightIds: ['ins-1-1', 'ins-1-2', 'ins-7-1', 'ins-7-3'] },
+  { ...PERSONAS[3], insightIds: ['ins-17-1'] },
 ]
 
 /** One citation, shaped as the evidence read returns it. */
@@ -847,40 +849,64 @@ function citation(o: { i: number; key: string; insight: string; platform: string
 /** Cost & access's October: 64 videos (the level's 70 less those only spoken
  *  on camera), 40 of them in the week of 5 Oct, three filed under Ottobock;
  *  or Look & style's one video. */
-export function fixtureSubjectEvidence(kind: 'rich' | 'thin'): { evidence: DatedEvidence[]; members: Set<string>; namings: { comment_id: string; video_id: string; name: string }[] } {
+export function fixtureSubjectEvidence(kind: 'rich' | 'thin', key: 'cost' | 'fit' = 'cost'): { evidence: DatedEvidence[]; members: Set<string>; namings: { comment_id: string; video_id: string; name: string }[] } {
   if (kind === 'thin') {
     const evidence = [citation({ i: 1, key: 'look', insight: 'ins-15-1', platform: 'instagram', audience: 'industry-other', day: 6, text: 'I love the carbon cover on my leg, people ask about the design and the finish all the time.' })]
     return { evidence, members: new Set([15, 16].flatMap((n) => [1, 2, 3, 4].map((i) => `ins-${n}-${i}`))), namings: [] }
   }
+  const memberIds = key === 'fit' ? FIT_MEMBERS : COST_MEMBERS
+  const words = key === 'fit' ? FIT_WORDS : COST_WORDS
   const platforms = ['tiktok', 'tiktok', 'instagram', 'youtube']
   const evidence = Array.from({ length: 64 }, (_, i) => citation({
     i,
-    key: 'cost',
-    insight: COST_MEMBERS[i % COST_MEMBERS.length],
+    key,
+    insight: memberIds[i % memberIds.length],
     platform: platforms[i % platforms.length],
     audience: i % 21 === 4 ? 'competitor:Ottobock' : 'industry-other',
     day: 1 + (i % 11),
-    text: COST_WORDS[i] ?? 'Same here.',
+    text: words[i] ?? 'Same here.',
     redacted: i === 11,
+  }))
+  // The weeks before October's (the subject's week by week): comments dated
+  // in the two weekly windows that open in September, outside the month.
+  const before = Array.from({ length: 30 }, (_, i) => ({
+    ...citation({ i: 100 + i, key, insight: memberIds[i % memberIds.length], platform: platforms[i % platforms.length], audience: 'industry-other', day: 1, text: 'Same here.' }),
+    commentDate: `2026-09-${String(22 + (i % 9)).padStart(2, '0')}T12:00:00.000Z`,
   }))
   const namings = [
     ...evidence.filter((_, i) => i % 10 === 0).map((e) => ({ comment_id: e.commentId, video_id: e.video.uuid, name: 'Össur' })),
     ...evidence.filter((_, i) => i % 13 === 7).map((e) => ({ comment_id: e.commentId, video_id: e.video.uuid, name: 'Ottobock' })),
   ]
-  return { evidence, members: new Set(COST_MEMBERS), namings }
+  return { evidence: [...evidence, ...before], members: new Set(memberIds), namings }
 }
 
-/** The open subject's blocks, by the page's own builder. */
-export function fixtureSubjectDetail(kind: 'rich' | 'thin', period: MarketParams['period'], month: MarketMonth): SubjectDetail {
-  const { evidence, members, namings } = fixtureSubjectEvidence(kind)
-  const subject = kind === 'rich'
-    ? { id: subjectId('cost'), name: 'Cost & access', claim: 'Cost & access. Comments about what prosthetic devices cost, insurance, medical aid and funding, and cost or paperwork standing between people and the device they need.' }
-    : { id: subjectId('look'), name: 'Look & style', claim: 'Look & style. Comments about how prosthetics look: design, covers and finishes, showing or hiding the device.' }
+/** Fit & comfort's members and the comments that say something about fit. */
+const FIT_MEMBERS = [1, 2, 7, 17].flatMap((n) => [1, 2, 3, 4].map((i) => `ins-${n}-${i}`))
+const FIT_WORDS = [
+  'Is it normal that my liner feels loose after six months? Nobody told me they wear out.',
+  'Summer plus liner equals swamp. What do you all use for the sweat under the socket?',
+  'My daughter outgrew her socket in four months. Is that normal for a growing kid?',
+  'The new socket finally fits without pressure sores after three castings with my prosthetist.',
+  'My liner rolls down at the knee by the afternoon, does anyone have a fix for that?',
+  'Long walks are fine now that the socket was adjusted, the sore spot on my shin is gone.',
+]
+
+/** The open subject's blocks, by the page's own builder: Cost & access or
+ *  Fit & comfort on many videos (`rich`), Look & style on one (`thin`). This
+ *  week they read the three weekly windows too. */
+export function fixtureSubjectDetail(kind: 'rich' | 'thin', period: MarketParams['period'], month: MarketMonth, key: 'cost' | 'fit' = 'cost'): SubjectDetail {
+  const { evidence, members, namings } = fixtureSubjectEvidence(kind, key)
+  const subject = kind === 'thin'
+    ? { id: subjectId('look'), name: 'Look & style', claim: 'Look & style. Comments about how prosthetics look: design, covers and finishes, showing or hiding the device.' }
+    : key === 'fit'
+      ? { id: subjectId('fit'), name: 'Fit & comfort', claim: 'Fit & comfort. Comments about how a prosthesis fits and feels: the socket, the liner, pressure, sweat and skin, length and alignment.' }
+      : { id: subjectId('cost'), name: 'Cost & access', claim: 'Cost & access. Comments about what prosthetic devices cost, insurance, medical aid and funding, and cost or paperwork standing between people and the device they need.' }
+  const windows = period === 'week' ? (weekWindows(WINDOW) ?? []).map((w) => ({ ...w, cut: false })) : null
   return subjectDetailOf({
     subjectId: subject.id, name: subject.name, evidence, members, market: new Set(['industry-other', 'competitor:Ottobock']),
     period, week: period === 'week' ? WINDOW : null, month, marketWeek: period === 'week' ? WEEK.market.videos : null,
     personas: SUBJECT_PERSONAS, namings, brands: 'counted', company: 'Össur', noun: null,
-    gate: { claim: subject.claim, requireRelevance: true },
+    gate: { claim: subject.claim, requireRelevance: true }, windows,
   })
 }
 

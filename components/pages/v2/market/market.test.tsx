@@ -4,7 +4,6 @@ import { assertCopyContract, copyNodes, copyViolations } from '@/lib/test/copy-c
 import { fixtureSubjectId, marketFixture, marketLongRowsFixture, marketThinFixture, FIXTURE_WEEKS, OSSUR_WEEK } from '@/lib/pages/v2/market-fixture'
 import { OSSUR_SUBJECT_READS } from '@/lib/pages/v2/market-reads-fixture'
 import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
-import type { MarketData } from '@/lib/pages/v2/market'
 import { MarketPage, MARKET_FIRST_RUN } from './index'
 import { AlsoThisWeek, ALSO_TALKED, MOST_TALKED, NOTHING_ELSE_NEW, NOTHING_NEW, SubjectCardsView, WeekCardView, WEEK_THIN, WEEK_UNREAD } from './analysis'
 import { KindsCard, KindsFrame, NumbersRow, PlatformsCard, PlatformsFrame, WeeksCard, weeksLine, WEEKS_UNREAD } from './rail'

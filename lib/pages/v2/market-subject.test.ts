@@ -300,9 +300,11 @@ describe('loadSubjectDetail: what an open subject panel reads', () => {
 })
 
 describe('the fixture\'s subject evidence', () => {
-  it('rich: 64 videos in October, 40 in the week, one demographic citation', () => {
+  it('rich: 64 videos in October, 40 in the week, one demographic citation, and the weeks before October\'s', () => {
     const { evidence } = fixtureSubjectEvidence('rich')
-    expect(new Set(evidence.map((e) => e.video.uuid)).size).toBe(64)
+    const october = evidence.filter((e) => e.commentDate.startsWith('2026-10'))
+    expect(new Set(october.map((e) => e.video.uuid)).size).toBe(64)
+    expect(evidence.filter((e) => e.commentDate.startsWith('2026-09')).length).toBeGreaterThan(0)
     expect(evidence.filter((e) => e.redacted)).toHaveLength(1)
     expect(fixtureSubjectEvidence('thin').evidence).toHaveLength(1)
   })

@@ -5,7 +5,9 @@ import { PERIODS, PeriodSwitch } from '@/components/v2'
 import { periodHref, type MarketData } from '@/lib/pages/v2/market'
 import { marketConversationPath, marketSubjectPath, surface } from '@/lib/nav'
 import { MARKET_FIRST_RUN, MARKET_TITLE } from './index'
-import { ConversationPanel, SubjectPanelView } from './panel'
+import { ConversationPanel } from './panel'
+import { SubjectPageBody } from './subject-page'
+import { fmtInt } from '@/lib/format'
 import { OLINK, Stored } from './parts'
 
 // MARKET'S LEVEL PAGES (depth as pages, 17 Oct): a tracked subject, a
@@ -57,13 +59,33 @@ export function MarketSubjectPage({ data, switcherOpen = false }: { data: Market
   const path = marketSubjectPath(page.panel.id)
   return (
     <PageFrame className="text-foreground">
-      <PageBar title={page.panel.name} crumbs={data.crumbs ? <Crumbs crumbs={data.crumbs} open={switcherOpen ? 'current' : undefined} /> : null}>
+      <PageBar title={page.panel.name} crumbs={data.crumbs ? <Crumbs crumbs={data.crumbs} open={switcherOpen ? 'current' : undefined} /> : null} meta={<SubjectMeta page={page} data={data} />}>
         <div className="max-lg:hidden"><Switch data={data} path={path} /></div>
       </PageBar>
       <div className="-mt-2 lg:hidden"><Switch data={data} path={path} /></div>
-      <SubjectPanelView panel={page.panel} data={data} />
+      <SubjectPageBody page={page} data={data} />
     </PageFrame>
   )
+}
+
+/** A subject's meta line: the period's dates, and where its check passed,
+ *  its videos this week beside its month's (decision 1). No figure for one
+ *  whose check has not (U6). */
+function SubjectMeta({ page, data }: { page: NonNullable<MarketData['subjectPage']>; data: MarketData }) {
+  const level = page.panel.level
+  const week = data.period === 'week' && data.week ? data.week : null
+  const stat = page.panel.detail?.week ?? null
+  const lv = (k: number, n: number) => <span data-copy="level">{fmtInt(k)} of {fmtInt(n)}</span>
+  if (week) {
+    return (
+      <>
+        {week.dates}
+        {level && stat ? <> · in {lv(stat.k, stat.n)} videos this week</> : null}
+        {level ? <> · {lv(level.k, level.n)} {week.inMonth}</> : null}
+      </>
+    )
+  }
+  return <>{data.period === 'time' ? `Month by month, to ${data.month.text}` : data.month.text}{level ? <> · in {lv(level.k, level.n)} videos</> : null}</>
 }
 
 /** A conversation's page (`/dashboard/market/conversations/[conv]`). */
