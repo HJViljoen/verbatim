@@ -5,10 +5,10 @@ import type { QuoteVideo } from '../../quote-gate'
 import { gateFor } from '../../quote-context'
 import { summariseOwnedPosts, type OwnedPost } from '../../reading/owned'
 import {
-  agentHref, conversationHref, contentWeek, groupsByConversation, ideaOwnedFrom, ideasWeekOf, mixSentence, monthWords, olderIdeasLine, ownTouch,
+  agentHref, conversationHref, contentWeek, groupsByConversation, ideaOwnedFrom, ideasWeekOf, mixSentence, monthWords, ownTouch,
   postsBlock, recipe, repliesView, wordsToBorrow, type ContentPeriod, type MarketVideoCard,
 } from './content'
-import { ideaCrumbs, subquestionCards, type ContentIdeaData, type IdeaPage, type IdeaPageState, type SubCommentRow } from './content-idea'
+import { earlierIdeaLine, ideaCrumbs, subquestionCards, type ContentIdeaData, type IdeaPage, type IdeaPageState, type SubCommentRow } from './content-idea'
 import { contentCrumb, elsewhereIdeas, POSTS_PAGE, postsLine, REPLIES_PAGE, repliesLine, type Elsewhere } from './content-levels'
 import { contentPostsHref, type ReplySection } from './content-address'
 import { kindCounts, postCards, shownPosts, type PostCommentRow, type PostsPageData } from './content-posts'
@@ -197,7 +197,9 @@ export function contentIdeaFixture(opts: IdeaFixtureOptions = {}): ContentIdeaDa
     typicalWords: monthWords(ideasWeek.month),
     askHref: agentHref(`Draft an outline for a post that answers this question from my market: ${row.title}`),
     conversationHref: conversationHref(id),
-    older: ideasWeek.current ? null : olderIdeasLine(ideasWeek),
+    // An earlier set than the anchor run's (a newer set exists): the loader's
+    // `earlierIdeaLine`, never the root's "No new ideas this week".
+    older: ideasWeek.current ? null : earlierIdeaLine(ideasWeek, true),
   }
   const siblings = set.map((r) => ({ id: r.id, title: r.title, rank: r.rank, flag: r.registry_id === REG.insurance ? INSURANCE_FLAG : null }))
   return { state: 'ready', page, crumbs: ideaCrumbs(page, siblings, ideasWeek) }

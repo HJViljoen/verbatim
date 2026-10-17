@@ -107,7 +107,9 @@ describe('a post idea\'s page', () => {
 
   it('an older idea still opens, and says which week it was written for', () => {
     const text = renderText(page({ older: true }))
-    expect(text).toContain('No new ideas this week. These are from the week of 21 Sep.')
+    // From an earlier set while a newer one exists: never "No new ideas this week".
+    expect(text).toContain('This idea was written for the week of 21 Sep, before the ideas Content shows now.')
+    expect(text).not.toContain('No new ideas this week')
     // Beside its own read window's month, in full.
     expect(text).toMatch(/of \d+ in (August|September)/)
   })
