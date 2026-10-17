@@ -4,11 +4,12 @@ import { Crumbs } from '@/components/shell/crumbs'
 import { PERIODS, PeriodSwitch } from '@/components/v2'
 import { periodHref, type MarketData } from '@/lib/pages/v2/market'
 import { marketConversationPath, marketSubjectPath, surface } from '@/lib/nav'
-import { MARKET_FIRST_RUN, MARKET_TITLE } from './index'
+import { MARKET_FIRST_RUN, MARKET_TITLE, Meta } from './index'
+import { WeekPageBody } from './week-page'
 import { ConversationPageBody } from './conversation-page'
 import { SubjectPageBody } from './subject-page'
 import { fmtInt } from '@/lib/format'
-import { OLINK, Stored } from './parts'
+import { OLINK } from './parts'
 
 // MARKET'S LEVEL PAGES (depth as pages, 17 Oct): a tracked subject, a
 // conversation and the week's read, each its own address under Market
@@ -116,14 +117,14 @@ export function MarketConversationPage({ data }: { data: MarketData | null }) {
   )
 }
 
-/** The week's page (`/dashboard/market/week`): the published read in full. */
+/** The week's page (`/dashboard/market/week`, F2-Market-Week): the published
+ *  read in full. No period switch and no chevron: a read is one week's. */
 export function MarketWeekPage({ data }: { data: MarketData | null }) {
   if (!data) return <FirstRun />
-  const page = data.weekPage
   return (
     <PageFrame className="text-foreground">
-      <PageBar title="This week’s read" crumbs={data.crumbs ? <Crumbs crumbs={data.crumbs} /> : null} />
-      {page && page.state === 'ready' && page.line ? <Stored line={page.line} slot="week_read" className="m-0 text-[15px]" /> : <p className="m-0 text-[15px] text-muted-foreground">This week’s read is not ready yet.</p>}
+      <PageBar title="This week’s read" crumbs={data.crumbs ? <Crumbs crumbs={data.crumbs} /> : null} meta={data.week ? <Meta data={data} /> : null} />
+      {data.weekPage ? <WeekPageBody page={data.weekPage} data={data} /> : null}
     </PageFrame>
   )
 }

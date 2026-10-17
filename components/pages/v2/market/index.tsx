@@ -30,8 +30,9 @@ export const MARKET_FIRST_RUN = 'Your market’s first week will appear here aft
 
 const fig = (n: number | null | undefined) => (n == null ? null : <span data-copy="figure">{fmtInt(n)}</span>)
 
-/** The bar's quiet line: the period's dates and the market's size. */
-function Meta({ data }: { data: MarketData }) {
+/** The bar's quiet line: the period's dates and the market's size (the
+ *  week's page's too). */
+export function Meta({ data }: { data: MarketData }) {
   if (data.period === 'week' && data.week) {
     const { market } = data.week
     return (

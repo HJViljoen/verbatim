@@ -680,7 +680,8 @@ export interface ConvPage {
 /** The week's page (`/dashboard/market/week`, F2-Market-Week): the published
  *  read in full. Stored `week_read` prose; the quotes resolve at render. */
 export interface WeekPage {
-  state: 'ready' | 'thin' | 'failed'
+  /** `none`: no read published yet; `failed`: it could not be read. */
+  state: 'ready' | 'thin' | 'failed' | 'none'
   dates: string | null
   line: StoredLine | null
   /** What happened, a paragraph each, each followed by the quote its ref
@@ -1833,7 +1834,10 @@ export function weekCardOf(published: PublishedWeekRead | 'failed' | null): Week
     ? (read.implications ?? []).map((x) => (x.body ?? '').trim()).filter(Boolean).slice(0, MARKET_WEEK_MEANS).map((body) => ({ body, figures }))
     : []
   const dates = weekReadDates(read.window) || null
-  if (!lead && means.length === 0) return { state: 'thin', dates, line: null, means: [], href: null }
+  // Thin where the read has nothing to print, here or on its page: no line,
+  // no implication and no story (the week's page's own rule, `weekPageOf`).
+  const story = read.version === 2 && (read.story ?? []).some((p) => (p.body ?? '').trim())
+  if (!lead && means.length === 0 && !story) return { state: 'thin', dates, line: null, means: [], href: null }
   return { state: 'ready', dates, line: lead ? { body: lead, figures } : null, means, href: MARKET_WEEK_PATH }
 }
 
@@ -1966,7 +1970,8 @@ export function weekPageOf(a: { published: PublishedWeekRead | 'failed' | null; 
     askHref: `/dashboard/agent?ask=${encodeURIComponent(WEEK_ASK)}`,
     tableHref: marketHref({ period: 'week' }, MARKET_TABLE_ANCHOR),
   }
-  if (a.published === 'failed' || !a.published || !a.read) return { ...base, state: 'failed' }
+  if (a.published === 'failed') return { ...base, state: 'failed' }
+  if (!a.published || !a.read) return { ...base, state: 'none' }
   const read = a.read
   const figures = (read.figures ?? {}) as unknown as PrintedFigures
   const line = (body: string): StoredLine => ({ body: body.trim(), figures })

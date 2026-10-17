@@ -549,7 +549,7 @@ function readsFor(opts: FixtureOptions, read: WeekReadData): WeekReadData {
 function weekReadFor(opts: FixtureOptions): WeekReadData {
   const read = fixtureRead()
   if (opts.v1Read) return { ...read, version: 1, inShort: 'Insurance refusals were the talk of the week, and liners came up all week.', promptVersion: 'week_read_v2' } as unknown as WeekReadData
-  if (opts.week === 'thin' && read.version === 2) return { ...read, headline: '', implications: [] }
+  if (opts.week === 'thin' && read.version === 2) return { ...read, headline: '', implications: [], story: [] }
   return read
 }
 
