@@ -7,7 +7,8 @@
  * not.is.null), `gte`, `lte`,
  * `lt`, `order`, `limit`, `range`,
  * `maybeSingle` and `single`, over rows handed in per table; and `rpc(fn,
- * args)` through a function handed in per name. A table the test did not name
+ * args)` through a function handed in per name, awaited or chained with
+ * `order`, `range`, `limit`, `single` and `maybeSingle`. A table the test did not name
  * answers with a PostgREST-shaped "does not exist" error, so a reader's
  * missing-table guard is exercised by leaving the table out. Every call is
  * recorded, so a test can assert what was (and was not) read.
@@ -225,12 +226,43 @@ export function fakeDb(
 
   const client = {
     from: (table: string) => query(table),
-    rpc: async (fn: string, args: Record<string, unknown>) => {
+    // An rpc answers as PostgREST's does, awaited or chained: `.order()`,
+    // `.range()` and `.limit()` page its rows (a reader pages a set-returning
+    // function past the 1,000-row cap exactly as it pages a table), and
+    // `.single()` / `.maybeSingle()` take its first row.
+    rpc: (fn: string, args: Record<string, unknown>) => {
       calls.push({ table: fn, op: 'rpc', filters: Object.keys(args ?? {}) })
       const f = rpcs[fn]
-      if (!f) return { data: null, error: { code: 'PGRST202', message: `Could not find the function public.${fn} in the schema cache` } }
-      const out = f(args ?? {})
-      return Array.isArray(out) ? { data: out, error: null } : { data: null, error: out.error }
+      let orderCol: string | null = null
+      let asc = true
+      let from = 0
+      let to = Number.POSITIVE_INFINITY
+      let one = false
+      const run = () => {
+        if (!f) return { data: null, error: { code: 'PGRST202', message: `Could not find the function public.${fn} in the schema cache` } }
+        const out = f(args ?? {})
+        if (!Array.isArray(out)) return { data: null, error: out.error }
+        let rows = out
+        if (orderCol) {
+          const col = orderCol
+          rows = [...rows].sort((a, b) => {
+            const x = a[col] as string | number
+            const y = b[col] as string | number
+            return (x < y ? -1 : x > y ? 1 : 0) * (asc ? 1 : -1)
+          })
+        }
+        const page = rows.slice(from, Number.isFinite(to) ? to + 1 : undefined)
+        return one ? { data: page[0] ?? null, error: null } : { data: page, error: null }
+      }
+      const b = {
+        order: (col: string, opts?: { ascending?: boolean }) => { orderCol = col; asc = opts?.ascending !== false; return b },
+        range: (a: number, z: number) => { from = a; to = z; return b },
+        limit: (n: number) => { to = from + n - 1; return b },
+        single: () => { one = true; return b },
+        maybeSingle: () => { one = true; return b },
+        then: (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) => Promise.resolve(run()).then(resolve, reject),
+      }
+      return b
     },
   }
   return { client, calls }
