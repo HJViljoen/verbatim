@@ -2150,7 +2150,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
     `/dashboard/moves/advice/<lineage>` (a recommendation id, an old
     `?rec=`, resolves to its lineage, `adviceNamed`), a dated move the
     EVIDENCE at `/dashboard/moves/<id>`, and the advice record the INDEX at
-    `/dashboard/moves/advice` (`?all=1` lists every piece no longer raised);
+    `/dashboard/moves/advice` (`?all=1` lists every piece no longer raised;
+    its "Waiting for a decision" counts the rows it lists, the advice
+    waiting alone, as the meta's "N waiting" and the root do, and names any
+    piece the short list folded into one of them under the rows, counted in
+    neither, `recordGroupsOf`'s `also`);
     the addresses are written once in `lib/pages/v2/moves-address.ts`, and
     every old `?advice=<lineage|id>`, `?advice=all` and `?item=` / `?rec=` /
     `?ledger=` (on this address and Market's) lands on its page for good in

@@ -475,6 +475,12 @@ export interface RecordGroup {
   rows: (RecordRow & { note?: string | null })[]
   /** Rows past `RECORD_GONE_SHOWN` not drawn ("Show the other N"). */
   hidden: number
+  /** Waiting only: the pieces the latest update also raised that the short
+   *  list folded into one above (the same idea in other words). Named under
+   *  the rows, never a row of their own and never in the group's count, as
+   *  `waitingAdvice` (the meta's "N waiting", the root's bar, the
+   *  Dashboard) does not count them. */
+  also?: (RecordRow & { note: string })[]
 }
 
 export const RECORD_GROUP_TITLE: Record<RecordGroupKey, string> = {
@@ -490,8 +496,10 @@ export const SAME_IDEA_NOTE = 'the same idea as one above'
  * THE ADVICE RECORD, GROUPED BY WHAT WAS DECIDED (board report, decision 1):
  * every piece of advice once, in three groups. WAITING is the advice waiting
  * (`waitingAdvice`, the one count the root's bar and the Dashboard print),
- * strongest first, then any piece the latest update raised that the short
- * list folded into one of them, marked as the same idea; DECIDED is every
+ * strongest first; any piece the latest update raised that the short list
+ * folded into one of them is named under them as the same idea (`also`),
+ * counted the same way in the heading and the list: not at all, so the
+ * group's count is its rows and equals the meta's "N waiting"; DECIDED is every
  * piece decided on, the newest decision first; NO LONGER RAISED is the rest,
  * in the ledger's order (newest raised first), `RECORD_GONE_SHOWN` of them
  * unless `all`. Pure.
@@ -506,7 +514,7 @@ export function recordGroupsOf(rows: readonly RecordRow[], waiting: readonly str
   const gone = rows.filter((r) => r.status === 'new' && !r.current && !waitingSet.has(r.lineageId))
   const shown = all ? gone : gone.slice(0, RECORD_GONE_SHOWN)
   return [
-    { key: 'waiting', title: RECORD_GROUP_TITLE.waiting, rows: [...first, ...folded], hidden: 0 },
+    { key: 'waiting', title: RECORD_GROUP_TITLE.waiting, rows: first, hidden: 0, also: folded },
     { key: 'decided', title: RECORD_GROUP_TITLE.decided, rows: decided, hidden: 0 },
     { key: 'gone', title: RECORD_GROUP_TITLE.gone, rows: shown, hidden: gone.length - shown.length },
   ]

@@ -6,7 +6,8 @@ import { bansBroken } from '@/components/pages/moves/fixture'
 import {
   adviceFailedFixture, adviceFixture, adviceThinFixture, adviceWithMoveFixture, moveFixture, moveHeldFixture, moveThinFixture, recordFixture, recordQuietFixture,
 } from '@/lib/pages/v2/moves-levels-fixture'
-import { ADVICE_MISSING, BACK_TO_MOVES, NO_THIRD_CONVERSATION, NO_OTHER_COMMENT, SAID_HELD } from '@/lib/pages/v2/moves-levels'
+import { ADVICE_MISSING, BACK_TO_MOVES, NO_THIRD_CONVERSATION, NO_OTHER_COMMENT, SAID_HELD, SAME_IDEA_NOTE } from '@/lib/pages/v2/moves-levels'
+import { RECORD_SAME_IDEA_HEAD } from './record-page'
 import { MovesAdvicePage, MovesMissing, MovesMovePage, MovesRecordPage } from './levels'
 
 // YOUR MOVES' LEVEL PAGES, AS THEY PRINT (levels as pages, 17 Oct; the G6
@@ -240,6 +241,24 @@ describe('the advice record, an index (G6-Moves-Record)', () => {
     const all = recordPage(recordFixture(true))
     expect(all.match(/data-record-row=""/g)).toHaveLength(23)
     expect(markupText(all)).not.toContain('Show the other')
+  })
+
+  // The fresh check: a piece the short list folded used to be a row under
+  // "Waiting for a decision" and in its count, which read 4 over "3 waiting
+  // for a decision". It is named under the rows now, counted in neither.
+  it('the waiting heading counts its rows, the meta\'s count; a folded piece is named under them, not counted', () => {
+    const base = recordFixture()
+    const folded = { ...base.groups[0].rows[1], lineageId: 'f-folded', title: 'Say how long a liner lasts in every liner post', note: SAME_IDEA_NOTE }
+    const page = { ...base, groups: [{ ...base.groups[0], also: [folded] }, ...base.groups.slice(1)] }
+    const m = recordPage(page)
+    const at = (k: string) => m.lastIndexOf('<section', m.indexOf(`data-record-group="${k}"`))
+    const waiting = m.slice(at('waiting'), at('decided'))
+    expect(waiting.match(/data-record-row=""/g)).toHaveLength(3)
+    expect(markupText(waiting)).toMatch(/^Waiting for a decision 3 /)
+    expect(markupText(m)).toContain('3 waiting for a decision')
+    expect(markupText(waiting)).toContain(`${RECORD_SAME_IDEA_HEAD} Say how long a liner lasts in every liner post`)
+    expect(waiting).toContain('href="/dashboard/moves/advice/f-folded"')
+    assertCopyContract(<MovesRecordPage page={page} />)
   })
 
   it('a group with no row keeps its card and says so', () => {

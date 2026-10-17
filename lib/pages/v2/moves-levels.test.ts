@@ -212,13 +212,17 @@ describe('the advice record, grouped by what was decided (decision 1)', () => {
   it('every piece once: the advice waiting (the one count), the same idea folded under it, decided newest first, the rest', () => {
     const g = recordGroupsOf(rows, ['L2', 'L1'])
     expect(g.map((x) => x.key)).toEqual(['waiting', 'decided', 'gone'])
-    expect(g[0].rows.map((r) => [r.lineageId, r.note ?? null])).toEqual([['L2', null], ['L1', null], ['L3', SAME_IDEA_NOTE]])
+    // The waiting group's count is its rows, the advice waiting alone (the
+    // meta's "N waiting"): the piece folded into one of them is named under
+    // them, counted the same way in the heading and the list, not at all.
+    expect(g[0].rows.map((r) => [r.lineageId, r.note ?? null])).toEqual([['L2', null], ['L1', null]])
+    expect(g[0].also?.map((r) => [r.lineageId, r.note])).toEqual([['L3', SAME_IDEA_NOTE]])
     expect(g[1].rows.map((r) => r.lineageId)).toEqual(['L5', 'L4'])
     expect(g[2].rows).toHaveLength(RECORD_GONE_SHOWN)
     expect(g[2].hidden).toBe(9 - RECORD_GONE_SHOWN)
     const all = recordGroupsOf(rows, ['L2', 'L1'], true)
     expect(all[2]).toMatchObject({ hidden: 0 })
-    expect(all.reduce((s, x) => s + x.rows.length, 0)).toBe(rows.length)
+    expect(all.reduce((s, x) => s + x.rows.length + (x.also?.length ?? 0), 0)).toBe(rows.length)
   })
 
   it('names a decision by the control that made it', () => {

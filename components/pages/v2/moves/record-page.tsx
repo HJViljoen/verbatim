@@ -25,6 +25,10 @@ export const RECORD_GROUP_EMPTY: Record<RecordGroup['key'], string> = {
   gone: 'Every piece of advice so far is still being raised.',
 }
 
+/** Over the pieces folded into the advice waiting: named, never counted as
+ *  waiting on their own (`RecordGroup.also`). */
+export const RECORD_SAME_IDEA_HEAD = 'Also raised by the latest update, the same idea as one above in other words:'
+
 const MORE = 'inline-flex min-h-[38px] cursor-pointer items-center justify-center self-start rounded-lg bg-card px-3.5 text-[13.5px] font-semibold text-foreground no-underline ring-1 ring-border hover:bg-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
 function RecordRowView({ r, first }: { r: RecordGroup['rows'][number]; first: boolean }) {
@@ -60,6 +64,16 @@ function GroupCard({ g }: { g: RecordGroup }) {
           {g.rows.map((r, i) => <RecordRowView key={r.lineageId} r={r} first={i === 0} />)}
         </ol>
       )}
+      {g.also && g.also.length > 0 ? (
+        <div data-record-same="" className="flex flex-col gap-1 border-t border-track pt-2.5 pb-2.5">
+          <p className="m-0 text-[12.5px] text-muted-foreground">{RECORD_SAME_IDEA_HEAD}</p>
+          {g.also.map((r) => (
+            <Link key={r.lineageId} href={adviceHref(r.lineageId)} className="text-[13px] leading-[1.45] text-secondary-foreground no-underline underline-offset-[3px] hover:underline">
+              {r.title === UNTITLED_ADVICE ? r.title : <span data-copy="stored" data-slot="pass_d_b_recommendation">{r.title}</span>}
+            </Link>
+          ))}
+        </div>
+      ) : null}
       {g.hidden > 0 ? (
         <Link href={recordAllHref()} className={cn(MORE, 'mt-1.5 mb-2')}>Show the other <span data-copy="figure" className="ml-1">{fmtInt(g.hidden)}</span></Link>
       ) : null}
