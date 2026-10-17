@@ -1,10 +1,11 @@
 import Link from 'next/link'
+import type { ReactNode } from 'react'
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
-import { Crumbs } from '@/components/shell/crumbs'
+import { ConversationLabel, LevelBar } from '@/components/shell/level-bar'
 import { PERIODS, PeriodSwitch } from '@/components/v2'
-import { periodHref, type MarketData } from '@/lib/pages/v2/market'
+import { periodHref, WEEK_PAGE_TITLE, type MarketData } from '@/lib/pages/v2/market'
 import { marketConversationPath, marketSubjectPath, surface } from '@/lib/nav'
-import { MARKET_FIRST_RUN, MARKET_TITLE, Meta } from './index'
+import { MARKET_FIRST_RUN, MARKET_TITLE } from './index'
 import { WeekPageBody } from './week-page'
 import { ConversationPageBody } from './conversation-page'
 import { SubjectPageBody, weekLevelOf } from './subject-page'
@@ -14,6 +15,10 @@ import { OLINK } from './parts'
 // MARKET'S LEVEL PAGES (depth as pages, 17 Oct): a tracked subject, a
 // conversation and the week's read, each its own address under Market
 // (lib/nav.ts). Market stays the sidebar's active surface on every one.
+//
+// EACH OPENS WITH THE PATH, THEN THE PAGE NAMING ITS LEVEL (F3-Market-Nav):
+// the slim crumb row and the title block (`LevelBar`), the period switch at
+// the block's right-hand end; the week's read has no switch.
 
 /** A level page whose id names nothing Market follows (an unknown or a
  *  retired one): one calm line inside the page, and the way back. */
@@ -60,34 +65,33 @@ export function MarketSubjectPage({ data, switcherOpen = false }: { data: Market
   const path = marketSubjectPath(page.panel.id)
   return (
     <PageFrame className="text-foreground">
-      <PageBar title={page.panel.name} crumbs={data.crumbs ? <Crumbs crumbs={data.crumbs} open={switcherOpen ? 'current' : undefined} /> : null} meta={<SubjectMeta page={page} data={data} />}>
-        <div className="max-lg:hidden"><Switch data={data} path={path} /></div>
-      </PageBar>
-      <div className="-mt-2 lg:hidden"><Switch data={data} path={path} /></div>
+      {data.crumbs ? (
+        <LevelBar crumbs={data.crumbs} level="subject" label="Subject" title={page.panel.name} meta={subjectMeta(page, data)} controls={<Switch data={data} path={path} />} open={switcherOpen ? 'current' : undefined} />
+      ) : <PageBar title={page.panel.name} />}
       <SubjectPageBody page={page} data={data} />
     </PageFrame>
   )
 }
 
-/** A subject's meta line: the period's dates, and where its check passed,
- *  its videos this week beside its month's (decision 1). No figure for one
- *  whose check has not (U6). */
-function SubjectMeta({ page, data }: { page: NonNullable<MarketData['subjectPage']>; data: MarketData }) {
+const lv = (k: number, n: number) => <span data-copy="level">{fmtInt(k)} of {fmtInt(n)}</span>
+
+/** A subject's meta line, as its phone lines: the period's dates, and where
+ *  its check passed its videos this week beside its month's (decision 1),
+ *  "82 of 241 videos this week · 108 of 318 in October so far". No figure for
+ *  one whose check has not (U6). */
+export function subjectMeta(page: NonNullable<MarketData['subjectPage']>, data: MarketData): ReactNode[][] {
   const level = page.panel.level
   const week = data.period === 'week' && data.week ? data.week : null
-  // This week's share on the level's base (17 Oct); none where unread.
+  // This week's count on the level's base (17 Oct); none where unread.
   const stat = weekLevelOf(page)
-  const lv = (k: number, n: number) => <span data-copy="level">{fmtInt(k)} of {fmtInt(n)}</span>
   if (week) {
-    return (
-      <>
-        {week.dates}
-        {level && stat ? <> · in {lv(stat.k, stat.n)} videos this week</> : null}
-        {level ? <> · {lv(level.k, level.n)} {week.inMonth}</> : null}
-      </>
-    )
+    return [
+      [week.dates, ...(level && stat ? [<>{lv(stat.k, stat.n)} videos this week</>] : [])],
+      level ? [<>{lv(level.k, level.n)} {week.inMonth}</>] : [],
+    ]
   }
-  return <>{data.period === 'time' ? `Month by month, to ${data.month.text}` : data.month.text}{level ? <> · in {lv(level.k, level.n)} videos</> : null}</>
+  const when = data.period === 'time' ? `Month by month, to ${data.month.text}` : data.month.text
+  return [[when], level ? [<>{lv(level.k, level.n)} videos{data.period === 'time' ? ` in ${data.month.text}` : null}</>] : []]
 }
 
 /** A conversation's page (`/dashboard/market/conversations/[conv]`). */
@@ -103,29 +107,56 @@ export function MarketConversationPage({ data }: { data: MarketData | null }) {
     )
   }
   const path = marketConversationPath(page.panel.id)
-  const lv = (l: { k: number; n: number }) => <span data-copy="level">{fmtInt(l.k)} of {fmtInt(l.n)}</span>
-  const meta = data.period === 'week' && data.week
-    ? <>{data.week.dates}{page.week ? <> · in {lv(page.week)} category videos this week</> : null}{page.month ? <> · {lv(page.month)} {data.week.inMonth}</> : null}</>
-    : <>{data.period === 'time' ? `Month by month, to ${data.month.text}` : data.month.text}{page.month ? <> · in {lv(page.month)} category videos</> : null}</>
+  const crumbs = data.crumbs ?? []
+  const parent = crumbs.length > 2 ? crumbs[crumbs.length - 2] : null
   return (
     <PageFrame className="text-foreground">
-      <PageBar title={page.panel.label} crumbs={data.crumbs ? <Crumbs crumbs={data.crumbs} /> : null} meta={meta}>
-        <div className="max-lg:hidden"><Switch data={data} path={path} /></div>
-      </PageBar>
-      <div className="-mt-2 lg:hidden"><Switch data={data} path={path} /></div>
+      {crumbs.length > 0 ? (
+        <LevelBar crumbs={crumbs} level="conversation" label={<ConversationLabel parent={parent} />} meta={conversationMeta(page, data)} controls={<Switch data={data} path={path} />} />
+      ) : <PageBar title={page.panel.label} />}
       <ConversationPageBody page={page} data={data} />
     </PageFrame>
   )
 }
 
+/** A conversation's meta line, as its phone lines: the dates, its category
+ *  videos this week, its month (decision 1: the week beside its month). */
+export function conversationMeta(page: NonNullable<MarketData['convPage']>, data: MarketData): ReactNode[][] {
+  if (data.period === 'week' && data.week) {
+    return [
+      [data.week.dates],
+      page.week ? [<>{lv(page.week.k, page.week.n)} category videos this week</>] : [],
+      page.month ? [<>{lv(page.month.k, page.month.n)} {data.week.inMonth}</>] : [],
+    ]
+  }
+  return [[data.period === 'time' ? `Month by month, to ${data.month.text}` : data.month.text], page.month ? [<>{lv(page.month.k, page.month.n)} category videos{data.period === 'time' ? ` in ${data.month.text}` : null}</>] : []]
+}
+
 /** The week's page (`/dashboard/market/week`, F2-Market-Week): the published
- *  read in full. No period switch and no chevron: a read is one week's. */
+ *  read in full, titled by its dates ("5 to 11 October", F3-Market-Nav 7). No
+ *  period switch and no chevron: a read is one week's. */
 export function MarketWeekPage({ data }: { data: MarketData | null }) {
   if (!data) return <FirstRun />
   return (
     <PageFrame className="text-foreground">
-      <PageBar title="This week’s read" crumbs={data.crumbs ? <Crumbs crumbs={data.crumbs} /> : null} meta={data.week ? <Meta data={data} /> : null} />
+      {data.crumbs ? (
+        <LevelBar crumbs={data.crumbs} level="week" label="The week’s read" title={data.week?.dates || WEEK_PAGE_TITLE} meta={weekMeta(data)} />
+      ) : <PageBar title={WEEK_PAGE_TITLE} />}
       {data.weekPage ? <WeekPageBody page={data.weekPage} data={data} /> : null}
     </PageFrame>
   )
+}
+
+const fig = (n: number | null | undefined) => (n == null ? null : <span data-copy="figure">{fmtInt(n)}</span>)
+
+/** The week's meta: the market's videos and comments this week, then its
+ *  month (decision 1); the dates are the title. */
+export function weekMeta(data: MarketData): ReactNode[][] | null {
+  const week = data.week
+  if (!week) return null
+  const { videos, comments } = week.market
+  const first = videos != null && comments != null
+    ? <>{fig(videos)} videos and {fig(comments)} comments this week</>
+    : videos != null ? <>{fig(videos)} videos this week</> : null
+  return [first ? [first] : [], data.month.market.videos != null ? [<>{fig(data.month.market.videos)} videos {week.inMonth}</>] : []]
 }

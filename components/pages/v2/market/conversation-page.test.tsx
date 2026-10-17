@@ -22,7 +22,7 @@ describe('a conversation under its ready subject, this week', () => {
   const html = render(page(LINER))
 
   it('its bar: "Market / Fit & comfort / How long a liner lasts", the week beside its month', () => {
-    expect(text).toMatch(/^Fit & comfort Market \/ Fit & comfort \/ How long a liner lasts This week This month Over time 5 to 11 October · in 23 of 226 category videos this week · 35 of 300 in October so far/)
+    expect(text).toMatch(/^Market \/ Fit & comfort \/ How long a liner lasts Fit & comfort Conversation in Fit & comfort How long a liner lasts 5 to 11 October · 23 of 226 category videos this week · 35 of 300 in October so far This week This month Over time/)
     expect(html).toContain(`href="/dashboard/market/subjects/${fixtureSubjectId('fit')}"`)
     expect(html).toContain(`href="/dashboard/market/conversations/${fixtureId(1)}?period=month"`)
   })
@@ -80,7 +80,7 @@ describe('every state keeps its frame', () => {
   it('this month: no week stat and no week by week; its month', () => {
     const d = marketConversationFixture(1, { period: 'month' })
     const text = renderText(page(d))
-    expect(text).toMatch(/^Fit & comfort Market \/ Fit & comfort \/ How long a liner lasts This week This month Over time October so far · in 35 of 300 category videos/)
+    expect(text).toMatch(/^Market \/ Fit & comfort \/ How long a liner lasts Fit & comfort Conversation in Fit & comfort How long a liner lasts October so far · 35 of 300 category videos This week/)
     // The groups count over the month's 35, as the stats do.
     expect(text).toContain('Who’s saying it · of 35 in October so far New amputees in their first year 23 of 35 Long-time users upgrading 7 of 35 Each opens in Voices')
     expect(text).not.toContain('Week by week')
@@ -91,7 +91,7 @@ describe('every state keeps its frame', () => {
   it('with no ready subject: "Market / {conversation}"; brands not counted says so in its place', () => {
     const d = marketConversationFixture(1, { flagged: false, noNew: true, subjects: 'provisional', brands: 'not_counted', weeks: 'insufficient', noGroups: true })
     const text = renderText(page(d))
-    expect(text).toMatch(/^Market Market \/ How long a liner lasts /)
+    expect(text).toMatch(/^Market \/ How long a liner lasts Market Conversation How long a liner lasts /)
     expect(text).toContain('Who it’s about Brands are not counted for this workspace yet.')
     assertCopyContract(page(d))
   })

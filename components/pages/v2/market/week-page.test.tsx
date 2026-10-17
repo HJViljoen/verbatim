@@ -18,7 +18,7 @@ describe('the week\'s page', () => {
   const html = render(<MarketWeekPage data={READ} />)
 
   it('its bar: "Market / This week\'s read", no switch, no chevron; the week beside its month', () => {
-    expect(text).toMatch(/^Market Market \/ This week’s read 5 to 11 October · 241 videos · 3,912 comments · 318 videos in October so far This week · 5 to 11 October/)
+    expect(text).toMatch(/^Market \/ This week’s read Market The week’s read 5 to 11 October 241 videos and 3,912 comments this week · 318 videos in October so far This week · 5 to 11 October/)
     expect(html).not.toContain('aria-haspopup')
     expect(html).not.toContain('aria-label="Period"')
   })

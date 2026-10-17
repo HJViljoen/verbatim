@@ -42,13 +42,19 @@ export function MarketSkeleton() {
   )
 }
 
-/** The bar of a level page: the breadcrumb's place and the meta line. */
+/** The bar of a level page (F3-Market-Nav): the crumb row with its
+ *  hairline, then the title block's tile, label, title and meta. */
 function LevelBar({ label }: { label: string }) {
   return (
-    <div role="presentation" className="flex flex-col gap-2">
+    <div role="presentation" className="flex flex-col">
       <span className="sr-only">{label}</span>
-      <Bone className="h-[30px] w-80 max-w-full" />
-      <Bone className="h-3 w-64 max-w-full" />
+      <div className="border-b border-border pt-3 pb-[11px] max-sm:hidden sm:-mx-4 sm:-mt-[18px] sm:px-4 md:-mx-10 md:-mt-7 md:px-10"><Bone className="h-[22px] w-64 max-w-full" /></div>
+      <Bone className="h-6 w-24 sm:hidden" />
+      <div className="mt-2.5 flex items-center gap-3.5">
+        <Bone className="size-[46px] shrink-0 rounded-[11px] max-sm:size-[38px]" />
+        <div className="flex min-w-0 flex-col gap-1.5"><Bone className="h-3 w-24" /><Bone className="h-7 w-72 max-w-full" /></div>
+      </div>
+      <Bone className="mt-3 h-3 w-80 max-w-full" />
     </div>
   )
 }

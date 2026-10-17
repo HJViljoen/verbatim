@@ -2004,6 +2004,10 @@ export function subjectMenu(nav: readonly SubjectNavItem[], currentId: string): 
   return hasSiblings(menu) && nav.length > 1 ? menu : null
 }
 
+/** The period in a switcher's words: "this week", "this month", "over
+ *  time". */
+const periodWords = (period: Period): string => (period === 'week' ? 'this week' : period === 'month' ? 'this month' : 'over time')
+
 /** "Market": the breadcrumb's root, the period kept. */
 const marketCrumb = (p: MarketParams): Crumb => ({ label: 'Market', href: periodHref(p, p.period) })
 
@@ -2029,7 +2033,11 @@ export function conversationCrumbs(a: {
 }): Crumb[] {
   const items: CrumbItem[] = a.siblings.map((c) => ({ key: c.id, label: c.label, href: c.href, current: c.id === a.conv.id, slot: 'pass_b_theme' }))
   const menu: CrumbMenu | null = items.length > 1 || (items.length === 1 && !items[0].current)
-    ? { label: a.parent ? `Inside ${a.parent.name}` : 'This period’s conversations', switchLabel: a.parent ? `Switch to another conversation in ${a.parent.name}` : 'Switch to another conversation', items }
+    ? {
+        label: a.parent ? `Conversations in ${a.parent.name}` : `Conversations ${periodWords(a.p.period)}`,
+        switchLabel: a.parent ? `Switch to another conversation in ${a.parent.name}` : `Switch to another conversation ${periodWords(a.p.period)}`,
+        items,
+      }
     : null
   const self: Crumb = { label: a.conv.label, href: null, slot: 'pass_b_theme', menu }
   if (!a.parent) return [marketCrumb(a.p), self]

@@ -25,7 +25,7 @@ describe('a ready subject, this week', () => {
   const html = render(page(FIT))
 
   it('its bar: "Market / Fit & comfort", the week beside its month, the period switch', () => {
-    expect(text).toMatch(/^Market Market \/ Fit & comfort This week This month Over time 5 to 11 October · in 82 of 241 videos this week · 108 of 318 in October so far/)
+    expect(text).toMatch(/^Market \/ Fit & comfort Market Subject Fit & comfort 5 to 11 October · 82 of 241 videos this week · 108 of 318 in October so far This week This month Over time/)
     expect(html).toMatch(/<a (?=[^>]*aria-current="page")(?=[^>]*href="\/dashboard\/market\/subjects\/subj-fit")[^>]*>This week</)
     expect(html).toContain('href="/dashboard/market/subjects/subj-fit?period=month"')
   })
@@ -89,7 +89,7 @@ describe('a ready subject whose week could not be read on the level\'s base', ()
     expect(html).toContain('data-tile-gap=""')
     expect(text).not.toMatch(/of 241 videos this week/)
     // The bar keeps the week's dates and the month's level, and no week figure.
-    expect(text).toMatch(/^Market Market \/ Fit & comfort This week This month Over time 5 to 11 October · 108 of 318 in October so far This week/)
+    expect(text).toMatch(/^Market \/ Fit & comfort Market Subject Fit & comfort 5 to 11 October · 108 of 318 in October so far This week/)
     // The one-base line names the blocks' week without a tile to set it against.
     expect(text).toContain('The parts below read the videos where a comment was about it: 40 this week, and 64 of these 108 in October so far.')
     assertCopyContract(page(d))
@@ -143,7 +143,7 @@ describe('a ready subject, this month', () => {
   const text = renderText(page(d))
 
   it('three tiles, no week figure and no week by week; its month line; a read stored before headlines', () => {
-    expect(text).toMatch(/^Market Market \/ Cost & access This week This month Over time October so far · in 70 of 318 videos/)
+    expect(text).toMatch(/^Market \/ Cost & access Market Subject Cost & access October so far · 70 of 318 videos This week This month Over time/)
     expect(text).toContain('Our read · October so far What people are saying People describe insurance refusals')
     expect(render(page(d))).not.toContain('id="subject-head"')
     expect(text).toContain('The numbers October so far ▲ 7 pts October so far against September, 15% 22% 70 of 318 videos in October so far 3 conversations inside it in October so far')
@@ -170,7 +170,7 @@ describe('every state keeps its frame', () => {
   it('not measured yet (U6): its name, why, and the conversations inside it by name; no figure, line or chip count', () => {
     const d = marketSubjectFixture('cost', { flagged: false, noNew: true, subjects: 'provisional', brands: 'not_counted', weeks: 'insufficient', noGroups: true })
     const text = renderText(page(d))
-    expect(text).toBe(`Market Market / Cost & access This week This month Over time 5 to 11 October This week This month Over time Our read · October so far ${SUBJECT_NOT_MEASURED} The numbers ${SUBJECT_NUMBERS_HELD} Inside it Each opens as its own page. Insurance refusals for powered knees Paying out of pocket Medical aid and liners Ask the Agent about Cost & access`)
+    expect(text).toBe(`Market / Cost & access Market Subject Cost & access 5 to 11 October This week This month Over time Our read · October so far ${SUBJECT_NOT_MEASURED} The numbers ${SUBJECT_NUMBERS_HELD} Inside it Each opens as its own page. Insurance refusals for powered knees Paying out of pocket Medical aid and liners Ask the Agent about Cost & access`)
     expect(copyNodes(render(page(d))).filter((n) => n.kind === 'figure' || n.kind === 'level' || n.kind === 'verdict' || n.kind === 'quote')).toEqual([])
     assertCopyContract(page(d))
   })

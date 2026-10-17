@@ -1,6 +1,6 @@
 // THE SWITCHER BY KEYBOARD, IN A REAL BROWSER (depth as pages, 17 Oct). The
 // render tier checks what the breadcrumb PRINTS and cannot press a key (no
-// jsdom, lib/test/render.ts); this bundles the shipped `Crumbs`
+// jsdom, lib/test/render.ts); this bundles the shipped `CrumbRow`
 // (components/shell/crumbs.tsx) with esbuild, mounts it in headless Chrome
 // over the subject page's fixture, and drives it: Enter and Space open it on
 // the current entry, the arrows, Home and End move, Escape closes and hands
@@ -23,9 +23,9 @@ async function bundle(): Promise<string> {
       contents: `
         import { createElement as h } from 'react'
         import { createRoot } from 'react-dom/client'
-        import { Crumbs } from './components/shell/crumbs'
+        import { CrumbRow } from './components/shell/crumbs'
         const crumbs = JSON.parse(document.getElementById('crumbs').textContent)
-        createRoot(document.getElementById('root')).render(h('div', { style: { padding: '40px' } }, h(Crumbs, { crumbs }), h('p', { id: 'away' }, 'Outside')))
+        createRoot(document.getElementById('root')).render(h('div', { style: { padding: '40px' } }, h(CrumbRow, { crumbs }), h('p', { id: 'away' }, 'Outside')))
       `,
       resolveDir: ROOT,
       loader: 'tsx',
