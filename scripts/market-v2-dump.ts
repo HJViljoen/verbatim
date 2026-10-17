@@ -11,6 +11,16 @@
 //     scripts/market-v2-dump.ts --confirm --client <uuid> --out <file.json> \
 //     [--view top|week|subject:<id>|conversation:<id>|conversation:lead] [--params 'period=month']
 //
+// THE LEVEL PAGES' READS (F3, 17 Oct) come with their views: a subject's page
+// dumps the hub (every conversation inside it with its description, its three
+// weeks on the level's base, its comments each labelled with a conversation);
+// a conversation's page dumps its evidence (its videos and the comments about
+// it under each). `--params 'video=<videos.id>'` opens one video's comments
+// and `--params 'videos=all'` lists every video, as the page's own params do;
+// neither reads more. `--view subject:first` takes the top page's first
+// subject card (one `loadMarket` of the top page first, as `conversation:lead`
+// does with `topMarket`).
+//
 // THIS IS A PRODUCTION READ. One page load, about forty statements. It will not
 // start without `--confirm`, and it probes first: the smallest PostgREST read
 // there is, timed, and it refuses to go on past 3 s or on an error (AGENTS.md:
@@ -68,7 +78,15 @@ async function main() {
   const asked = flag('view') ?? 'top'
   let view: MarketView = { kind: 'top' }
   if (asked === 'week') view = { kind: 'week' }
-  else if (asked.startsWith('subject:')) view = { kind: 'subject', id: asked.slice('subject:'.length) }
+  else if (asked === 'subject:first') {
+    const tdb = counted()
+    const top = await loadMarket({ supabase: tdb, clientId, reading: readingHandle(clientId, tdb), params: marketParams({}) })
+    const first = top?.subjectCards?.[0]?.id ?? null
+    console.log(`top page: ${Date.now() - t0} ms; first subject ${first ?? 'none'}`)
+    report('top page')
+    if (!first) throw new Error('No subject on the top page: name one with --view subject:<id>.')
+    view = { kind: 'subject', id: first }
+  } else if (asked.startsWith('subject:')) view = { kind: 'subject', id: asked.slice('subject:'.length) }
   else if (asked.startsWith('conversation:')) {
     let id = asked.slice('conversation:'.length)
     if (id === 'lead') {

@@ -1077,8 +1077,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
     in full), `/dashboard/market/subjects/<id>` (a tracked subject) and
     `/dashboard/market/conversations/<conv>` (a registry id, or an old
     link's slug, as `?conv=` took them). Each level page reads `?period=`
-    and `?month=`; the table's `?in=` and `?all=1` stay on the top page;
-    `?at=` is retired. Market stays the sidebar's active surface on every
+    and `?month=`; a conversation's page also reads `?video=<videos.id>`
+    (one video's comments about it in full, at most
+    `MARKET_VIDEO_COMMENTS_MAX`, 50) and `?videos=all` (every video, at most
+    `MARKET_CONV_VIDEOS_MAX`, 60), both honoured only for the conversation's
+    own videos in the period (`shownConvVideos`; a foreign or non-member id
+    names nothing, pinned in `lib/pages/v2/market-statements.test.ts`) and
+    built by `convPageHref`, the period kept; the table's `?in=` and
+    `?all=1` stay on the top page; `?at=` is retired. Market stays the sidebar's active surface on every
     one (`surfaceForPath`). Each has its own `loading.tsx`, keeps the shell
     on a throw (`app/dashboard/error.tsx`) and prints one calm line with the
     way back for an id Market does not follow, never a 404. Every stored
@@ -1089,35 +1095,46 @@ This version has breaking changes — APIs, conventions, and file structure may 
     page: Market's `convHref` / `subjectHref` and its table, the flag card,
     the Dashboard's Market and week tiles, the weekly email's lead
     (`objectHref`), Voices, Content, Your moves, Settings › Your subjects and
-    the Agent. **THE BREADCRUMB AND ITS SWITCHERS.** On a level page the path
-    replaces the title in `PageBar` (its `crumbs`, `components/shell/crumbs.tsx`,
-    a client component fed plain data from `lib/pages/crumbs.ts`, so the
-    client-bundle guard holds): ancestors muted links at 500, a light slash
-    (palette A's muted at 45%: the board's warm `#B9B6AE` is a neutral the
-    drift guard refuses), the page itself the one ink h1 at 700, 26px on the
-    bar's 40px line; on a phone "‹ {parent}" at 14px/600 above a 24px title.
-    WHERE THE PATH WRAPS (17 Oct, drawn on production's names): each slash
-    rides at the head of the crumb after it, in one item, so a line never
-    ends on a slash; an ancestor stops at `ANCESTOR_MAX` (11rem, 20rem from
-    1680) in an ellipsis, its whole name still its text and its `title`, so a
-    real path holds one line at 1440 beside the period switch (Össur's
-    "Market / Community & … / Praise for resilience and courage"); the page's
-    own name is never cut, and where it cannot fit (1024, a long label) it
-    takes the next line with its slash and wraps inside itself, its chevron
-    on its first line. Every segment with siblings carries a 28px chevron (`aria-haspopup=
-    "menu"`), ancestors included; one with none is plain text, never a
-    disabled button. A subject's siblings are the tracked subjects in the top
-    page's order (`subjectNavOf`, `subjectMenu`: the ready ranked, the
-    unready below a hairline, unranked, U6; "Little talk so far" or
-    `SUBJECT_NOT_MEASURED` in words, never a figure); a conversation under a
-    READY subject (`placeSubject`) reads "Market / {subject} / {conversation}"
-    and lists that subject's Inside it, one with none "Market /
-    {conversation}" and the period's conversations in the table's order
-    (`conversationCrumbs`); the week's read has no chevron (`weekCrumbs`).
-    Every entry keeps the period. Keyboard: Enter or Space opens on the
-    current entry, the arrows, Home and End move, Escape closes and returns
-    focus, Tab or a click outside closes (`scripts/crumbs-keys.ts` drives it
-    in headless Chrome; the render tier presses no key).
+    the Agent. **THE PATH, THEN THE PAGE NAMING ITS LEVEL (F3-Market-Nav,
+    17 Oct; Heinrich: the subject's page and the conversation's "look the
+    same and say the same", so the hierarchy was lost).** A level page opens
+    with `LevelBar` (`components/shell/level-bar.tsx`): a slim crumb row
+    (`CrumbRow`, `components/shell/crumbs.tsx`, a client component fed plain
+    data from `lib/pages/crumbs.ts`, so the client-bundle guard holds) at the
+    top of the content column, 14px, ancestors muted links at 500, the page
+    itself ink at 600, a light slash (palette A's muted at 45%: the board's
+    warm `#B9B6AE` is a neutral the drift guard refuses), a hairline under it
+    edge to edge of the column; then the TITLE BLOCK that names the level:
+    an icon tile (`LevelTile`, the boards' glyphs in
+    `components/shell/level-glyphs.tsx`), a small level label, the 28px title
+    as the page's one h1, the mono meta line, and the period switch at the
+    block's right-hand end. A subject: stacked layers on the kit's yellow,
+    "Subject". A conversation: a speech bubble on the neutral, "Conversation
+    in {subject}" with the subject a link up (`ConversationLabel`), or
+    "Conversation" where no ready subject holds it. The week's read: a
+    calendar on the yellow, "The week's read", titled by its dates ("5 to 11
+    October"), no chevron and no period switch. Market's top page keeps its
+    own bar and has no crumb row. On a phone the row becomes the way back
+    (`BackLink`, "‹ Market", "‹ Fit & comfort") above the level label and
+    the title, the page's own chevron rides after the title, the meta breaks
+    into its lines (each week figure on its month's line). WHERE THE PATH
+    WRAPS: each slash rides at the head of the crumb after it, so a line
+    never ends on a slash; an ancestor stops at `ANCESTOR_MAX` in an
+    ellipsis, its whole name its text and its `title`; the page's own
+    segment is never cut. Every segment with siblings carries a 22px
+    up-down button (`aria-haspopup="menu"`), ancestors included; one with
+    none is plain text, never a disabled button. A subject's siblings are
+    the tracked subjects in the top page's order (`subjectNavOf`,
+    `subjectMenu`: the ready ranked, the unready below a hairline, unranked,
+    U6; "Little talk so far" or `SUBJECT_NOT_MEASURED` in words, never a
+    figure); a conversation under a READY subject (`placeSubject`) reads
+    "Market / {subject} / {conversation}" and lists "Conversations in
+    {subject}", one with none "Market / {conversation}" and the period's
+    conversations in the table's order (`conversationCrumbs`). Every entry
+    keeps the period. Keyboard: Enter or Space opens on the current entry,
+    the arrows, Home and End move, Escape closes and returns focus, Tab or a
+    click outside closes (`scripts/crumbs-keys.ts` drives `CrumbRow` in
+    headless Chrome; the render tier presses no key).
     Parked pages leave clients through `TENANT_RETIRED` / `tenantAway` (the
     operator keeps them); Reports redirects into the Studio with its query
     (`?group=sent&item=`, `?view=`). Studio names a page key by
@@ -1393,8 +1410,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
     this.
   - **Market** (T3; analysis first, as pages, 17 Oct; `lib/pages/v2/market.ts`,
     `app/dashboard/market/**`, `components/pages/v2/market/*`; boards
-    F2-Market, -Phone, -States, -Week, -Subject, -Subject-Switcher,
-    -Subject-Phone and -Conversation). Nav key `market`, page key
+    F2-Market, -Phone, -States and -Week for the top page and the week's
+    read, and since 17 Oct F3-Market-Nav, F3-Market-Subject (not -Subject-B),
+    F3-Market-Conversation and their two phone boards for the level pages). Nav key `market`, page key
     `overview`, unchanged: the `overview` module (`overviewPage`) stays
     registered for stored snapshots, exports and the monthly, on no route.
     `loadMarket` takes a `view` (`top`, `week`, `subject`, `conversation`;
@@ -1402,11 +1420,15 @@ This version has breaking changes — APIs, conventions, and file structure may 
     prints, through the same builders, so a page and the top layer never
     disagree (`lib/pages/v2/market-statements.test.ts` pins each load's
     statements offline: the top page's week 36, the month 28, a
-    conversation's page 41 (40 until its groups were counted, one
-    `insight_evidence` read a 250 counted comments), a subject's 35 (34
-    until its week's share moved to the level's base, one
-    `window_subject_readings` call), the week's read 15; today's panels in
-    place were 45 and 40). **TWO RULES ARE REVERSED (Heinrich, 16
+    conversation's page 40, a subject's 39, the week's read 15; today's
+    panels in place were 45 and 40. A conversation's page was 41 at
+    13773763: since F3 it reads no quotes of its own, no month line and no
+    month refs for what people did, and reads its counted comments'
+    citations once (shared with its groups), its videos and the English of
+    the comments its shown videos print; the same 40 with a video opened or
+    every video listed. A subject's page was 35 (36 with conversations
+    inside it): since F3 it reads its two earlier weeks on the level's base
+    and its conversations' descriptions). **TWO RULES ARE REVERSED (Heinrich, 16
     Oct).** Design v2's "no model prose at the top of Market" is gone: the
     week's read and each subject's read LEAD the top layer as stored
     `week_read` prose, about 600 words above the first number (ruling 3),
@@ -1453,58 +1475,108 @@ This version has breaking changes — APIs, conventions, and file structure may 
     (the month's three biggest, or the market's months; the side cards; the
     table), and This month still ends with its long-run read. Where the
     week was asked for and its read could not be read, the failed week card
-    stands above the month. *A subject's page* (`buildSubjectPanel`,
-    `subjectDetailOf`, `loadSubjectDetail`, the 14 Oct panel's data and
-    builders moved into a page): Our read (the headline, what people are
-    saying beside what it means; else the state's line, the week read's
-    sentence under it where the tenant's reads are off), printed EXACTLY
-    where its card prints it, by one rule (`subjectOwnRead`: every subject
-    whose check passed, a level this month or not; a read is words, and U6
-    holds back figures, never a ready subject's words; until 17 Oct the page
-    printed it only with a level, so Össur's six, read in no October month
-    yet, had a read on each card and none on its page); the numbers (this
-    week's share as k of n ON THE MONTH TILE'S BASE (17 Oct, the board's "34%
-    · 82 of 241 videos this week" beside "31% · 99 of 318"):
-    `window_subject_readings` over the week's window, pooled over the
-    market's audiences as the level is, of the market's videos in the window
-    (`subjectWeekLevel`, one read, on a ready subject's page this week
-    alone), and where that read fails or answers no row, `SUBJECT_WEEK_UNREAD`
-    in the tile's frame, never a figure from another base (until then it
-    counted only the videos a comment dates, and 17% stood beside a month of
-    34%); the month's change from its `Verdict` alone (with no change to
-    draw, no verdict or a refused one, the tile keeps its frame and says the
-    Dashboard week tile's words, "No comparison with September yet.",
-    `subjectNotCompared`, and no reason: the one condition, plan §0a; Sealand's
-    October, whose pair with September is refused), the month's share,
-    the conversations inside it; the one-base line (the parts below read the
-    videos a comment dates, the week's and the month's, each "of these" the
-    tile's); week by week, the subject's videos a comment dates in the three
-    weekly windows, three bare counts; month by month, three months at every
-    width as the board draws them (`MARKET_SUBJECT_PAGE_MONTHS`; a
-    conversation's page keeps `MARKET_PANEL_MONTHS`' four); who is saying it,
-    each group "k of n"; what people did; where, the week beside the month;
-    three comments through the strict subject gate; the Agent); then the
-    biggest three conversations inside it as pages and "All N conversations
-    in {subject}" to the table filtered to it. A subject whose check has not
-    passed carries its name, why and its conversations by name, and NO
-    figure, line or chip count (U6). Where a page prints no figure, its
-    numbers card says the state's own reason in one line
-    (`subjectNumbersLine`): a ready subject the month has no reading for yet,
-    the month's line ("No reading in October so far yet.", `noReadingYet`);
-    its check open or failed, that no figure prints until its check passes
-    (Our read above already says "Not measured yet" or the failed line, so
-    it is not said twice). *A conversation's page* is E2's panel
-    whole (`loadConvPanel`, `convPageOf`), "Month by month" where the data
-    has months; its "Who's saying it" counts each group's videos of the
-    conversation's in the period, "15 of 23", the base in the label ("of 23
-    this week", the stats' own figure), by the subject page's reader
-    (`groupCountsOf` over the group × subject cross, which takes a week's
-    window, `convGroupsOf`) over the member citations on its counted
-    comments (its refs), and prints Pass E's names alone where those could
-    not be read or counted; where every group counts none, it says what the
-    count measures (`noGroupSaying`, the subject page's line too: "This
-    week, no video in it has a comment from one of the groups in Voices.").
-    A count, never a share, never compared (decision 2). *The week's page* is the published read in full
+    stands above the month. THE THREE LEVELS EACH HAVE THEIR OWN JOB AND
+    THEIR OWN LOOK (F3, 17 Oct): Market is the week's analysis; a subject is
+    the HUB, the richest page, its read, its numbers and its parts; a
+    conversation is the EVIDENCE, lighter and led by what people said. *A
+    subject's page* (F3-Market-Subject, the board Heinrich chose: "our read
+    first, … and then inside fit and comfort and the rest";
+    `buildSubjectPanel`, `subjectDetailOf`, `loadSubjectDetail`,
+    `insideConvsOf`), in the board's order: (1) THE HEADER CARD: "Our read
+    · {month}", the stored v3 headline as its lead (none where the read has
+    none: a pre-v3, thin or switched-off read never gets an invented one),
+    and the figure strip inside the card: the level ("34%", its bar, "of
+    your market's videos", "108 of 318 in October so far"), the change
+    against last month from its `Verdict` alone (the badge's word and
+    change, "against September, 33%", the baseline's k of n; with no change
+    to draw, no verdict or a refused one, the Dashboard week tile's words,
+    "No comparison with September yet.", `subjectChangeGap`, and no reason:
+    the one condition, plan §0a), THIS WEEK AS A COUNT ON THE LEVEL'S BASE
+    ("82 of 241 videos this week", never a percent beside the month's: the
+    board report's decision 4; `window_subject_readings` over the week's
+    window pooled over the market's audiences as the level is,
+    `subjectWeekLevel`; `SUBJECT_WEEK_UNREAD` in its frame where that read
+    fails), and the conversations inside it this week ("See them below ↓");
+    off the week, three figures. (2) OUR READ: what people are saying beside
+    what it means (stored `week_read` prose), printed EXACTLY where its card
+    prints a read, by one rule (`subjectOwnRead`: every subject whose check
+    passed, a level this month or not; a read is words, and U6 holds back
+    figures, never a ready subject's words); else the state's own line.
+    (3) INSIDE {SUBJECT}: every conversation placed in it this period
+    (`insideConvsOf`), the three biggest as cards (its own one-line
+    description, Pass B's, one `themes` read; "23 this week" over "35 in
+    October so far"; its three weeks as tiny bare bars; who it is about;
+    "Unusual this week" ONLY where the check flagged it, and then its newest
+    bar in the accent, the boards' only orange; Open), then "All N
+    conversations", the three included (name, description, About, "9 · 14 ·
+    23", this week, the month; a two-line list on a phone), and the footnote
+    "A video can sit in more than one conversation", its "so these add up
+    to more than the N videos" half only where they do; a ready subject with
+    none this period keeps the section's frame and says so in one line
+    (`insideNone`). (4) THE NUMBERS: week by week ON THE LEVEL'S BASE (the
+    three windows each read as this week is, `SubjectPage.weeks`, three bare
+    counts in the market's yellow, "82 this week · 108 in October so far"),
+    month by month, three months at every width
+    (`MARKET_SUBJECT_PAGE_MONTHS`, a month filling outlined); the one-base
+    line; who is saying it, what people did and where on their own honest
+    base, the videos where a comment was about it, named in the labels ("of
+    64 in October so far"; the board's "of 108" is illustrative). (5) IN
+    THEIR WORDS: three comments, each from a different conversation where
+    three exist (`quotesAcrossConversations` over `insightThemes`), each
+    labelled with its conversation above the quote and opening its page.
+    (6) THE AGENT. U6: a subject whose check has not passed says its state's
+    line ONCE, in the header card's strip (`SUBJECT_NOT_MEASURED` or
+    `FAILED_EXPLAINED`), our read says no read prints until its check passes
+    (`SUBJECT_READ_HELD`), its conversations are named with their
+    descriptions and NO figure, line or chip count, and its numbers card says
+    no figure prints until its check passes (`subjectNumbersLine`). A ready
+    subject the month has no reading for yet (`unread`) prints its read and
+    its conversations' own counts (the category's, not the subject's), and
+    the strip and the numbers say the month's line ("No reading in October so
+    far yet.", `noReadingYet`). *A conversation's page* (F3-Market-
+    Conversation; `loadConvPanel`, `convPageOf`, `convEvidenceOf`,
+    `convSiblingsOf`): the HEADER ON THE PAGE, no card and no tile row: the
+    title block, its own one-line description as a 21px lead (Pass B's, the
+    line its subject's page lists it with), the "Unusual this week" chip only
+    where flagged (no "New": the week's one chip is the check's), a hairline
+    under. Then WHAT PEOPLE SAID, about two thirds: one card per video in it
+    this period (its refs, the category's), most of its counted comments
+    first, ties by its own `comments_count` (`convVideoOrder`); each with
+    its creator (`account_name`), "{Platform} · posted {upload_date}", a
+    brand chip only where who it is about is counted (`aboutNamed` over the
+    tracked brands its counted comments name), its caption on one line, "14
+    comments about this, of 212 on the video", "Watch the video ↗"
+    (`video_url`, a new tab, `rel="noopener noreferrer"`), up to three of its
+    comments about the conversation (two on a phone) in quote style with
+    their date only and their English as every quote's, and "Show all {N}
+    comments", N the ones that may print; five videos, three on a phone, then
+    "Show more videos · {N} more". THE COMMENTS ARE THE CONVERSATION'S
+    COUNTED COMMENTS (its refs' `comment_ids`) dated in the period's window,
+    their citations by its member insights, through the rules Market's
+    quotes pass and the quote gate with its claim and relevance required
+    (`videoQuotes`; `allowOwn` off; a demographic citation counts and never
+    quotes), the words the citation's own excerpt, resolved at render, never
+    stored. Opened, a video says the rest are counted, not quoted (`notQuoted`)
+    where fewer print; a video counted for what is said on camera says so
+    (`CONV_SAID_IN_VIDEO`); a failed read is `CONV_EVIDENCE_UNREAD`, its frame
+    and one line. ONE READ, TWO USES: the counted comments' citations
+    (`loadConvCommentEvidence`, `insight_evidence` with the comment embedded,
+    `comments!inner`, the session's client's alone, one read a 250 comments)
+    count its groups and fill its videos; its videos are one read a 250
+    (`loadConvVideos`); the English is read only for the shown videos'
+    comments. Beside it THE FACTS, small, on the page (a card on a phone):
+    week by week (three bare counts; the newest in the accent only where
+    flagged), who it's about, what people did, who's saying it ("15 of 23",
+    a count, never a share, never compared, decision 2; `groupCountsOf` over
+    its citations, `convGroupsOf`; Pass E's names alone
+    where they could not be counted; `noGroupSaying` where none counts) and
+    where, each "of" the period's videos (what people did reads this week's
+    videos since F3). No month chart. Then OTHER CONVERSATIONS IN {SUBJECT},
+    its subject's in the subject's order with their week beside their month,
+    and "{subject}, the whole subject →" (under no ready subject, the
+    period's biggest `MARKET_SIBLINGS`, 8); then the Agent, "about these
+    videos and what people said under them".
+    *The week's page* is the published read in full
     (`weekPageOf` over `weeklyReadView` after `hydrateData`): what
     happened, each quote after the paragraph whose ref it carries, what it
     means, new this week, worth watching, "Every conversation this week (N)"
