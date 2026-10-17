@@ -323,7 +323,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
   does nothing:* both are in `AFTER_GATHER_STEPS`, and each is a no-op that
   reads and spends nothing until `20261109090000_products.sql` is applied,
   for a tenant with no catalogue, and while `PRODUCT_READINGS_ENABLED` is
-  off, which it is for every tenant: turn one on only after its seed is
+  off for the tenant. It is ON for Össur since 13 Oct (its catalogue loaded
+  and its back-read written: June to August frozen, September and October
+  open) and off for Sealand, which has no catalogue (`lib/config.ts`,
+  pinned in `lib/config.test.ts`): turn a tenant on only after its seed is
   loaded and its back-read written. *Caps:* `PRODUCT_CLASSIFY_CAP` (3,000
   items a run), `PRODUCT_CLASSIFY_BUDGET_USD` ($0.75, read from
   `ai_call_log`), and each call capped at the lesser of `CALL_CAP_MS` (60 s)
