@@ -1759,8 +1759,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
     prose `pass_a_brand_claim`, never a quote, two, `topClaims`) and three
     comments said about it, each labelled with its conversation off the
     themed run's members. A brand not counted, or that no video names,
-    keeps every frame and says why ONCE, in its header (the row's
-    `stateWords`); each frame below says only what it holds
+    keeps every frame IN ITS SHAPE (the strip's four places and the numbers
+    card's five, each with its rows' empty tracks, the months on their axis
+    with no bar; never one line in a card's place) and says why ONCE, in the
+    strip's first place (the row's `stateWords`); each frame says only what
+    it holds
     (`brandFrameNone`), never "not counted yet" of a brand that is counted
     or never will be; its ninety days stand. *A creator's page* (G3-Voices-Creator,
     -Phone; `buildCreatorPage`): a flat header, one line code builds ("Their

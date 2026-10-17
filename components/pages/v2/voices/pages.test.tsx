@@ -246,6 +246,17 @@ describe('a brand\'s page (G3-Voices-Brand)', () => {
     expect(t).toContain('No figure prints for Ottobock this month.')
     // The why is said once, in the header.
     expect(t.split('not counted yet').length - 1).toBe(1)
+    // THE PARITY RULE: the strip keeps its four places and the numbers card
+    // its five, each with empty tracks, the months on their axis with no bar;
+    // never one line in the card's place.
+    const h = render(brand(brandFixture({ counted: false })))
+    expect(h.match(/data-fig=""/g)).toHaveLength(4)
+    expect(t).toContain('videos named it without being asked Ottobock in October so far: not counted yet. No comparison against September videos named it at all praised · complained')
+    expect(t).toContain('Named without being asked · month by month')
+    expect(t).toContain('What people did in the comments')
+    expect(t).toContain('What its talk sits in Where it was named Where')
+    expect(h.match(/data-empty-row=""/g)).toHaveLength(12)
+    expect(h).not.toContain('data-filling=""')
     expect(t).toContain('Under its own content')
     expect(t).not.toMatch(/\d+ of 290/)
   })

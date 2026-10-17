@@ -5,6 +5,7 @@ import { BubbleGlyph, LayersGlyph } from '@/components/shell/level-glyphs'
 import { CARD, CardHead, MiniBars, TickBar, TickBarRow } from '@/components/v2'
 import { fmtCompact, fmtInt, longMonth, shortDate } from '@/lib/format'
 import { inlineMonth } from '@/lib/reading/month-label'
+import { prevMonth } from '@/lib/reading/month-key'
 import { notMeasuredLine } from '@/lib/pages/not-measured'
 import {
   BRAND_FINDINGS_NOTE, BRAND_NO_FINDING, BRAND_YOU_NO_FINDING, brandCreatorsNone, brandCreatorsSub, brandFrameNone, brandGroupsNone,
@@ -13,7 +14,7 @@ import {
 import { cn } from '@/lib/utils'
 import { FailedSubjectLine, Fig, LevelText, RowChevron } from './parts'
 import { VerdictNote } from './brands'
-import { AskBox, Caps, FL, FS, FV, FW, GAPLINE, HUB_LEAD, HubBar, HubCard, HubFig, LevelQuoteCard, LevelSection, MiniTile, PAGE_CARD, READ } from './levels'
+import { AskBox, Caps, EmptyBar, FL, FS, FV, FW, GAPLINE, HUB_LEAD, HubBar, HubCard, HubFig, LevelQuoteCard, LevelSection, MiniTile, PAGE_CARD, READ } from './levels'
 
 // A BRAND'S PAGE, A HUB (G3-Voices-Brand, its phone and its switcher boards).
 // In the board's order:
@@ -53,6 +54,26 @@ function monthBars(bars: readonly BrandMonthBar[]) {
   })
 }
 
+/** A figure's place with no figure (the parity rule): a dashed track at the
+ *  figure's height, decoration only; the words beside it say why. */
+function EmptyFigure() {
+  return <div aria-hidden className="flex h-[34px] items-center max-sm:h-[26px]"><EmptyBar className="w-24" /></div>
+}
+
+/** A column's rows with nothing in them yet: each row's name and its track,
+ *  empty (G3-Voices-Group-Thin's "Who they say they are"). */
+function EmptyRows({ n }: { n: number }) {
+  return (
+    <>
+      {Array.from({ length: n }, (_, i) => (
+        <div key={i} aria-hidden data-empty-row="" className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_34px] items-center gap-2.5 py-1">
+          <EmptyBar className="w-3/5" /><EmptyBar /><span />
+        </div>
+      ))}
+    </>
+  )
+}
+
 function Header({ page }: { page: BrandPage }) {
   const counted = page.state === 'counted'
   const tone = page.you ? 'you' : 'rival'
@@ -70,9 +91,28 @@ function Header({ page }: { page: BrandPage }) {
       lead={page.lead ? <h2 className={HUB_LEAD}><span data-copy="stored" data-slot="pass_c_finding">{page.lead.title}</span></h2> : null}
     >
       {!counted ? (
-        <div data-fig="" className="col-span-full flex flex-col gap-1.5 px-[34px] pt-5 pb-[22px] max-sm:px-[18px] max-sm:pt-[15px] max-sm:pb-4">
-          <p data-brand-state={page.state} className={cn(GAPLINE, 'max-sm:text-[14.5px]')}>{page.label} in {page.month.monthWords}: {page.stateWords ?? 'not counted yet'}.</p>
-        </div>
+        // THE PARITY RULE: the strip keeps its four places, each with an
+        // empty track where its figure goes and its own label; why it holds
+        // no figure is said once, in the first.
+        <>
+          <HubFig>
+            <EmptyFigure />
+            <div className={cn(FL, 'text-muted-foreground')}>videos named it without being asked</div>
+            <p data-brand-state={page.state} className={cn(FS, 'm-0')}>{page.label} in {page.month.monthWords}: {page.stateWords ?? 'not counted yet'}.</p>
+          </HubFig>
+          <HubFig>
+            <div className={cn(FW, 'text-muted-foreground')}>No comparison</div>
+            <div className={cn(FL, 'text-muted-foreground')}>against {longMonth(prevMonth(page.month.month))}</div>
+          </HubFig>
+          <HubFig>
+            <EmptyFigure />
+            <div className={cn(FL, 'text-muted-foreground')}>videos named it at all</div>
+          </HubFig>
+          <HubFig>
+            <EmptyFigure />
+            <div className={cn(FL, 'text-muted-foreground')}>praised · complained</div>
+          </HubFig>
+        </>
       ) : (
         <>
           <HubFig>
@@ -231,16 +271,37 @@ function VerdictLine({ page }: { page: BrandPage }) {
 function Numbers({ page }: { page: BrandPage }) {
   const counted = page.state === 'counted'
   const n = page.any?.k ?? 0
+  const tone = page.you ? 'you' : 'rival'
   if (!counted) {
+    // THE PARITY RULE: the card keeps its two rows and five places, the
+    // months on their axis with no bar, every column under its head with its
+    // rows' empty tracks, and says its gap once.
+    const empty = monthBars(page.months.map((m) => ({ ...m, k: null, n: null })))
+    const label = `${page.label}, named without being asked, month by month`
     return (
       <section aria-label={`${page.label} in numbers`} data-numbers-gap={page.state} className={PAGE_CARD}>
-        <p className={GAPLINE}>{brandFrameNone('figure', page.label, page.month)}</p>
+        <div className="grid grid-cols-1 gap-11 max-sm:gap-0 min-[1180px]:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+          <div className="flex min-w-0 flex-col gap-3">
+            <Caps>Named without being asked · month by month</Caps>
+            <MiniBars bars={empty} size="lg" highlight={null} tone={tone} className="max-w-[520px] max-sm:hidden" label={label} />
+            <MiniBars bars={empty} size="md" highlight={null} tone={tone} className="sm:hidden" label={label} />
+            <p className={GAPLINE}>{brandFrameNone('figure', page.label, page.month)}</p>
+          </div>
+          <div className="flex min-w-0 flex-col gap-2 max-[1179px]:mt-6 max-sm:mt-[18px] max-sm:border-t max-sm:border-track max-sm:pt-[18px]">
+            <Caps>What people did in the comments</Caps>
+            <EmptyRows n={4} />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 gap-x-10 gap-y-[26px] border-t border-track pt-6 max-sm:gap-y-0 max-sm:pt-[18px] min-[1180px]:grid-cols-3">
+          <div className="flex min-w-0 flex-col gap-2"><Caps>What its talk sits in</Caps><EmptyRows n={3} /></div>
+          <div className="flex min-w-0 flex-col gap-2 max-sm:mt-[18px] max-sm:border-t max-sm:border-track max-sm:pt-[18px]"><Caps>Where it was named</Caps><EmptyRows n={2} /></div>
+          <div className="flex min-w-0 flex-col gap-2 max-sm:mt-[18px] max-sm:border-t max-sm:border-track max-sm:pt-[18px]"><Caps>Where</Caps><EmptyRows n={3} /></div>
+        </div>
       </section>
     )
   }
   const bars = monthBars(page.months)
   const prev = longMonth(page.prevNamed?.month ?? page.month.month)
-  const tone = page.you ? 'you' : 'rival'
   return (
     <section aria-label={`${page.label} in numbers`} className={PAGE_CARD}>
       <div className="grid grid-cols-1 gap-11 max-sm:gap-0 min-[1180px]:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
