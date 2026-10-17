@@ -7,7 +7,7 @@ import type { DatedEvidence } from '../../written/evidence'
 import { subjectReadOf } from '../../written/published'
 import type { WeekReadData } from '../../written/types'
 import {
-  buildSubjectPanel, loadSubjectDetail, marketParams, personasOf, subjectDetailOf, subjectQuoteOf, subjectReadLines, subjectWeekLevel,
+  buildSubjectPanel, loadSubjectDetail, marketParams, personasOf, subjectDetailOf, subjectOwnRead, subjectQuoteOf, subjectReadLines, subjectWeekLevel,
   type MarketMonth, type SubjectDetail,
 } from './market'
 import { fixtureFacts, fixtureFactsIn, fixtureRead, fixtureSubjectEvidence, fixtureSubjectId, marketFixture, withSubjectHeadline, withSubjectReads } from './market-fixture'
@@ -195,6 +195,23 @@ describe('buildSubjectPanel: the read and the blocks, for a READY subject alone 
       expect(panel).toMatchObject({ state: 'ready', read: null, detail })
       expect(panel?.sentence?.body).toContain('paid for')
     }
+  })
+
+  it('a ready subject the month has no reading for yet: its read, by its card\'s rule, and no figure and no blocks (17 Oct)', () => {
+    const panel = buildSubjectPanel({ id: fixtureSubjectId('cost'), facts: fixtureFactsIn('unread'), convs: [], period: 'month', p, read: withSubjectReads(fixtureRead()), month, detail, readsOn: true })
+    expect(panel).toMatchObject({ state: 'unread', level: null, verdict: null, bars: [], detail: null })
+    expect(panel?.read).toEqual(subjectReadLines(subjectOwnRead({ id: fixtureSubjectId('cost'), state: 'unread', read: withSubjectReads(fixtureRead()), month: OCT, readsOn: true })))
+    expect(panel?.read?.means?.body).toContain('the kind of knee Össur sells')
+    // Off for the tenant, none, as for a subject with a level.
+    expect(buildSubjectPanel({ id: fixtureSubjectId('cost'), facts: fixtureFactsIn('unread'), convs: [], period: 'month', p, read: withSubjectReads(fixtureRead()), month, readsOn: false })?.read).toBeNull()
+  })
+
+  it('subjectOwnRead: every subject whose check passed, a level or not; never one open or failed, never with the reads off', () => {
+    const read = withSubjectReads(fixtureRead())
+    const own = (state: 'ready' | 'unread' | 'provisional' | 'failed', readsOn = true) => subjectOwnRead({ id: fixtureSubjectId('cost'), state, read, month: OCT, readsOn })
+    expect(own('ready')).toBe(subjectReadOf(read, fixtureSubjectId('cost'), OCT))
+    expect(own('unread')).toBe(subjectReadOf(read, fixtureSubjectId('cost'), OCT))
+    expect([own('provisional'), own('failed'), own('ready', false), own('unread', false)]).toEqual([null, null, null, null])
   })
 
   it('open or failed: neither the read nor the blocks, whatever was read', () => {

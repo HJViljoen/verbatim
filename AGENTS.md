@@ -1449,7 +1449,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
     `subjectDetailOf`, `loadSubjectDetail`, the 14 Oct panel's data and
     builders moved into a page): Our read (the headline, what people are
     saying beside what it means; else the state's line, the week read's
-    sentence under it where the tenant's reads are off); the numbers (this
+    sentence under it where the tenant's reads are off), printed EXACTLY
+    where its card prints it, by one rule (`subjectOwnRead`: every subject
+    whose check passed, a level this month or not; a read is words, and U6
+    holds back figures, never a ready subject's words; until 17 Oct the page
+    printed it only with a level, so Össur's six, read in no October month
+    yet, had a read on each card and none on its page); the numbers (this
     week's share as k of n ON THE MONTH TILE'S BASE (17 Oct, the board's "34%
     · 82 of 241 videos this week" beside "31% · 99 of 318"):
     `window_subject_readings` over the week's window, pooled over the

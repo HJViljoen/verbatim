@@ -4,8 +4,8 @@ import { List, Sparkles } from 'lucide-react'
 import { MovementBadge } from '@/components/delta-badge'
 import { EYEBROW, IconTile } from '@/components/colour-roles'
 import { CARD, MiniBars, PanelSection, SpikeBars, TickBarRow } from '@/components/v2'
-import { fmtInt, longMonth } from '@/lib/format'
-import { platformRows, type MarketData, type SubjectPage, type SubjectPanel } from '@/lib/pages/v2/market'
+import { fmtInt } from '@/lib/format'
+import { platformRows, subjectNoRead, type MarketData, type SubjectPage, type SubjectPanel } from '@/lib/pages/v2/market'
 import { SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { cn } from '@/lib/utils'
 import { SectionHead } from './analysis'
@@ -38,8 +38,8 @@ export const READ = 'm-0 text-[15.5px] leading-[1.62] text-foreground max-sm:tex
 /** A state said in one line inside its card. */
 const GAPLINE = 'm-0 text-[15px] leading-[1.55] text-muted-foreground'
 
-/** A ready subject with no read for the month. */
-export const SUBJECT_NO_READ = (name: string, month: string) => `No read of ${name} in ${longMonth(month)} yet.`
+/** A ready subject with no read for the month: its card's line. */
+export const SUBJECT_NO_READ = subjectNoRead
 
 /** Where the week holds none of the subject's videos and the month some:
  *  the block keeps its frame and says so (the parity rule, 14 Oct). */
@@ -78,9 +78,14 @@ export const weekLevelOf = (page: Pick<SubjectPage, 'week'>): { k: number; n: nu
   page.week && page.week !== 'unread' ? page.week : null
 
 /** "Our read · October so far": the headline, then what people are saying
- *  beside what it means; or the state's own line. */
+ *  beside what it means; or the state's own line. The read prints exactly
+ *  where its card on the top page prints it (`subjectOwnRead`, 17 Oct): a
+ *  subject whose check passed, a level this month or not (`unread`), so the
+ *  card and its page never disagree. */
 function ReadCard({ panel, data }: { panel: SubjectPanel; data: MarketData }) {
-  const read = panel.state === 'ready' ? panel.read ?? null : null
+  // Its check passed: its words print, its figures only with a level.
+  const passed = panel.state === 'ready' || panel.state === 'unread'
+  const read = passed ? panel.read ?? null : null
   const written = read && !read.thin && read.lines.length > 0 ? read : null
   const eyebrow = <p className={cn('m-0', EYEBROW)}>Our read · {panel.monthText}</p>
   if (written) {
@@ -106,18 +111,19 @@ function ReadCard({ panel, data }: { panel: SubjectPanel; data: MarketData }) {
     )
   }
   // Thin (code's one line), not measured, failed, or no read this month: the
-  // card's own state line, in its frame.
+  // card's own state line, in its frame (a ready subject's card's words, with
+  // or without a level: why it prints no figure is the numbers' to say).
   const line = read?.thin ? <Stored line={read.lines[0]} slot="week_read" className={GAPLINE} />
-    : panel.state === 'ready' ? <p className={GAPLINE}>{SUBJECT_NO_READ(panel.name, data.month.month)}</p>
+    : passed ? <p className={GAPLINE}>{SUBJECT_NO_READ(panel.name, data.month.month)}</p>
       : <p data-subject-state={panel.state} className={GAPLINE}>{panel.note ?? SUBJECT_NOT_MEASURED}</p>
   return (
-    <article id="subject-read" data-subject-read={read?.thin ? 'thin' : panel.state === 'ready' ? 'no_read' : panel.state} className={PAGE_CARD}>
+    <article id="subject-read" data-subject-read={read?.thin ? 'thin' : passed ? 'no_read' : panel.state} className={PAGE_CARD}>
       <div className="flex flex-col gap-3">
         {eyebrow}
         {line}
         {/* A tenant whose reads are switched off: the week read's sentence on
             it stands in, as the 14 Oct panel's did. */}
-        {panel.state === 'ready' && !read && panel.sentence ? <Stored line={panel.sentence} slot="week_read" className={READ} /> : null}
+        {passed && !read && panel.sentence ? <Stored line={panel.sentence} slot="week_read" className={READ} /> : null}
       </div>
     </article>
   )

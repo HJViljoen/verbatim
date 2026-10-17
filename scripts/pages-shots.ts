@@ -560,6 +560,8 @@ const PAGES: Page[] = [
   { key: 'market-pages-subject-no-read', path: '/dashboard/market/subjects/subj-look', artboard: 'F2-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('look', { subjects: 'states' }) }) },
   { key: 'market-pages-subject-week-unread', path: '/dashboard/market/subjects/subj-fit', artboard: 'F2-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('fit', { subjectWeek: 'unread' }) }) },
   { key: 'market-pages-subject-missing', path: '/dashboard/market/subjects/nope', artboard: 'F2-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('nope') }) },
+  // A ready subject read in no month yet (Össur, 17 Oct): its read, no figure.
+  { key: 'market-pages-subject-unread', path: '/dashboard/market/subjects/subj-fit', artboard: 'F2-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('fit', { subjects: 'unread' }) }) },
   // A conversation's page: under its ready subject, the flagged one, the
   // month, one with no ready subject, and an id Market cannot name.
   { key: 'market-pages-conversation', path: '/dashboard/market/conversations/c1', artboard: 'F2-Market-Conversation.dc.html', page: () => h(MarketConversationPage, { data: marketConversationFixture(1) }) },

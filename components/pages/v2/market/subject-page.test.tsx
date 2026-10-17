@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { render, renderText } from '@/lib/test/render'
+import { markupText, render, renderText } from '@/lib/test/render'
 import { assertCopyContract, copyNodes } from '@/lib/test/copy-contract'
-import { fixtureSubjectId, marketSubjectFixture } from '@/lib/pages/v2/market-fixture'
+import { fixtureSubjectId, marketFixture, marketSubjectFixture, type FixtureOptions } from '@/lib/pages/v2/market-fixture'
 import { OSSUR_SUBJECT_READS } from '@/lib/pages/v2/market-reads-fixture'
 import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import type { MarketData } from '@/lib/pages/v2/market'
+import { SubjectCardsView } from './analysis'
 import { BACK_TO_MARKET, MarketSubjectPage, SUBJECT_MISSING } from './pages'
 import { SubjectPageBody, SUBJECT_NUMBERS_HELD, SUBJECT_WEEK_UNREAD } from './subject-page'
 
@@ -148,6 +149,55 @@ describe('every state keeps its frame', () => {
 
   it('before the first update: the top page\'s own line', () => {
     expect(renderText(page(null as never))).toBe('Market Your market’s first week will appear here after the first update.')
+  })
+})
+
+describe('a subject\'s read prints on its page exactly where its card prints it (17 Oct)', () => {
+  // ONE RULE (`subjectOwnRead`): the card on the top page prints a read if and
+  // only if its page prints the same read, in every state. Until 17 Oct the
+  // page printed a read only where the subject had a level, so Össur's six
+  // (every check passed, none read in October yet) each had a read on its
+  // card and "No reading in October so far yet" under its page's Our read.
+  const CASES: [string, string, FixtureOptions][] = [
+    ['ready, with a level', 'fit', {}],
+    ['ready, no level this month', 'fit', { subjects: 'unread' }],
+    ['thin', 'choosing', {}],
+    ['thin, no level this month', 'choosing', { subjects: 'unread' }],
+    ['a read stored before headlines', 'cost', { subjects: 'states' }],
+    ['no read this month', 'look', { subjects: 'states' }],
+    ['no read, no level this month', 'fit', { subjects: 'unread', subjectReads: 'none' }],
+    ['not measured yet', 'function', { subjects: 'states' }],
+    ['failed', 'community', { subjects: 'states' }],
+    ['the tenant\'s reads switched off', 'fit', { subjectReadsOff: true }],
+    ['reads off, no level this month', 'fit', { subjects: 'unread', subjectReadsOff: true }],
+  ]
+  const stored = (html: string) => copyNodes(html).filter((n) => n.kind === 'stored').map((n) => n.text)
+  for (const [name, key, opts] of CASES) {
+    it(name, () => {
+      const card = marketFixture(opts).subjectCards!.find((c) => c.id === fixtureSubjectId(key))!
+      const read = render(body(marketSubjectFixture(key, opts))).match(/<article id="subject-read"[\s\S]*?<\/article>/)![0]
+      // The page's read card is in the card's state: written, thin, no read,
+      // not measured or failed.
+      expect(read.match(/data-subject-read="([a-z_]+)"/)?.[1] ?? 'read').toBe(card.state)
+      const words = stored(render(<SubjectCardsView cards={[card]} />))
+      if (card.state === 'read' || card.state === 'thin') {
+        // The same read: every line the card prints, its page prints.
+        expect(words.length).toBeGreaterThan(0)
+        for (const w of words) expect(stored(read)).toContain(w)
+      } else {
+        // No read on either: the card's own line stands in its page's place.
+        expect(words).toEqual([])
+        expect(markupText(read)).toContain(card.note!)
+      }
+    })
+  }
+
+  it('Össur on 17 Oct: a ready subject read in no month yet prints its whole read, and no figure', () => {
+    const d = marketSubjectFixture('fit', { subjects: 'unread' })
+    const text = renderText(body(d))
+    expect(text).toContain(`Our read · October so far ${fit.headline} What people are saying ${fit.saying.join(' ')} What it means ${fit.means} The numbers`)
+    expect(copyNodes(render(page(d))).filter((n) => n.kind === 'figure' || n.kind === 'level' || n.kind === 'verdict')).toEqual([])
+    assertCopyContract(page(d))
   })
 })
 

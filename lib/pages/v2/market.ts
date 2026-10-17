@@ -534,7 +534,9 @@ export interface SubjectPanel {
    *  across the conversations inside it and then what it means for the
    *  company (`subjectReads` on the published week read, `subjectReadOf`),
    *  where it is of this month; `thin` where code wrote its one line. Stored
-   *  `week_read` prose. Ready only; absent on a dump from before it.
+   *  `week_read` prose. Wherever its check passed, a level this month or not
+   *  (`subjectOwnRead`, its card's rule, 17 Oct); absent on a dump from
+   *  before it.
    *  `headline` (v3, 16 Oct): the read's one line, carried for Market's
    *  subject card and not printed by the panel; absent where the read has
    *  none (every read stored before v3, and a thin one). */
@@ -1893,10 +1895,37 @@ export function weekCardOf(published: PublishedWeekRead | 'failed' | null): Week
 }
 
 /**
+ * A SUBJECT'S OWN READ, ONE RULE for its card on the top page, its page and
+ * the switcher's "Little talk so far" (17 Oct): the published read's own for
+ * the month (`subjectReadOf`), where the tenant's reads are switched on, for
+ * every subject whose check passed, a level this month or not. A read is
+ * words, not a figure: ruling U6 holds a figure back, never a ready
+ * subject's words, so a ready subject the month has no reading for yet
+ * (Össur's six, mid-October: `unread`) prints its read on its card and on
+ * its page alike, and its page still prints no figure. A subject whose check
+ * is open or failed has none. Pure.
+ */
+export function subjectOwnRead(a: {
+  id: string
+  /** Its board row's `pending.state`, or `ready` where it has a level. */
+  state: SubjectPanel['state']
+  read: WeekReadData | null
+  month: string
+  readsOn: boolean | undefined
+}): ReturnType<typeof subjectReadOf> {
+  if (a.state === 'provisional' || a.state === 'failed' || !a.readsOn) return null
+  return subjectReadOf(a.read, a.id, a.month)
+}
+
+/** A ready subject with no read of its own for the month: its card's line
+ *  and its page's, one source. */
+export const subjectNoRead = (name: string, month: string): string => `No read of ${name} in ${longMonth(month)} yet.`
+
+/**
  * One card per tracked subject (F2-Market-States' six states), in the top
  * page's order (`subjectOrder`). The words are the published read's own
- * (`subjectReadOf`, where the tenant's reads are switched on); no card prints
- * a figure in any state. Pure.
+ * (`subjectOwnRead`, the rule its page shares); no card prints a figure in
+ * any state. Pure.
  */
 export function subjectCardsOf(a: {
   rows: readonly SubjectRow[]
@@ -1912,7 +1941,7 @@ export function subjectCardsOf(a: {
     const named = row.inside.slice(0, MARKET_INSIDE).map((c) => ({ id: c.id, label: c.label, href: c.href }))
     if (row.pending?.state === 'provisional') return { ...base, state: 'provisional', note: SUBJECT_NOT_MEASURED, inside: named }
     if (row.pending?.state === 'failed') return { ...base, state: 'failed', note: FAILED_EXPLAINED, inside: named }
-    const r = a.readsOn ? subjectReadOf(a.read, row.id, a.month) : null
+    const r = subjectOwnRead({ id: row.id, state: row.pending?.state ?? 'ready', read: a.read, month: a.month, readsOn: a.readsOn })
     if (r?.status === 'thin') return { ...base, state: 'thin', body: line(r.saying.find((p) => p.trim()) ?? '') }
     if (r) {
       const means = r.means.trim()
@@ -1923,7 +1952,7 @@ export function subjectCardsOf(a: {
         body: line(means || (r.saying.find((p) => p.trim()) ?? '')),
       }
     }
-    return { ...base, state: 'no_read', note: `No read of ${row.name} in ${longMonth(a.month)} yet.` }
+    return { ...base, state: 'no_read', note: subjectNoRead(row.name, a.month) }
   })
 }
 
@@ -1938,7 +1967,7 @@ export function subjectNavOf(a: {
 }): SubjectNavItem[] {
   return subjectOrder(a.rows).map((row) => {
     const ready = row.pending?.state !== 'provisional' && row.pending?.state !== 'failed'
-    const thin = ready && a.readsOn && subjectReadOf(a.read, row.id, a.month)?.status === 'thin'
+    const thin = subjectOwnRead({ id: row.id, state: row.pending?.state ?? 'ready', read: a.read, month: a.month, readsOn: a.readsOn })?.status === 'thin'
     return { id: row.id, name: row.name, href: a.href(row.id), ready, note: !ready ? SUBJECT_NOT_MEASURED : thin ? LITTLE_TALK : null }
   })
 }
@@ -2729,10 +2758,12 @@ async function loadConvPanel(a: {
  *  conversations' own counts, and exist without calibration), one being
  *  re-described included (14 Oct: a tracked subject is never hidden).
  *
- *  A READY subject (14 Oct) also has its own read where the published read
- *  holds one of this month (`subjectReadOf`; the sentence stands in where it
- *  does not) and the conversation panel's blocks over its videos (`detail`,
- *  `subjectDetailOf`); every other state has neither (ruling U6). Pure. */
+ *  A subject whose check passed has its own read where the published read
+ *  holds one of this month, a level this month or not (`subjectOwnRead`, its
+ *  card's rule, 17 Oct; the sentence stands in where it does not). A READY
+ *  subject with a level (14 Oct) also has the conversation panel's blocks
+ *  over its videos (`detail`, `subjectDetailOf`); every other state has none
+ *  (ruling U6). Pure. */
 export function buildSubjectPanel(a: {
   id: string
   facts: readonly SubjectFact[]
@@ -2776,7 +2807,9 @@ export function buildSubjectPanel(a: {
     bars: measured ? bars : [],
     inside: insideOf(f.id, a.convs, a.period, { limit: 50, href: (id) => convHref(a.p, id), flagId: a.flag?.id ?? null, flag: a.flag?.verdict ?? null }),
     sentence: standing?.sentence?.trim() ? { body: standing.sentence.trim(), figures: (a.read?.figures ?? {}) as unknown as PrintedFigures } : null,
-    read: measured && a.readsOn ? subjectReadLines(subjectReadOf(a.read, f.id, m)) : null,
+    // Its card's rule (`subjectOwnRead`): a ready subject's words print with
+    // or without a level this month; a figure prints only with one.
+    read: subjectReadLines(subjectOwnRead({ id: f.id, state: unmeasured ? unmeasured.state : 'ready', read: a.read, month: m, readsOn: a.readsOn })),
     detail: measured ? a.detail ?? null : null,
     askHref: `/dashboard/agent?ask=${encodeURIComponent(`What does my market say about ${f.name}?`)}`,
   }
