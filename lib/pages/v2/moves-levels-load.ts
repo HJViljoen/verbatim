@@ -249,13 +249,20 @@ export async function loadAdvicePage(scope: Scope, id: string, options: { canDec
   const rivalsAhead = soft('advice.rivals', loadCompetitors(db, clientId), [] as { id: string; name: string }[])
   for (const p of [vectorsAhead, runAhead, personasAhead, datableAhead, rivalsAhead]) p.catch(() => {})
 
-  const cited = await readCited(core.supabase, clientId, r.basedOn)
+  // WHAT IT RESTS ON AND THE VIDEOS BEHIND IT ARE THE PAGE. Read as none, a
+  // failed read would print "since replaced", "no evidence" and "no
+  // conversation" for advice that has them, so it throws instead and the
+  // page keeps the shell (app/dashboard/error.tsx).
+  let evidenceFailed = false
+  const evidenceUnread = () => { evidenceFailed = true }
+  const cited = await readCited(core.supabase, clientId, r.basedOn, evidenceUnread)
   const evidence = [...new Set(r.basedOn.flatMap((b) => cited.market.get(b)?.evidence ?? []))]
   const [audience, citationsRead, runId] = await Promise.all([
-    readAudience(core.supabase, clientId, evidence, { kinds: true }),
+    readAudience(core.supabase, clientId, evidence, { kinds: true, onError: evidenceUnread }),
     soft<ConvEvidenceRow[] | null>('advice.citations', loadInsightCitations(db, clientId, evidence), null),
     runAhead.catch(() => core.latestRunId),
   ])
+  if (evidenceFailed) throw new Error('moves-v2.advice: what it rests on could not be read')
   // THE CONVERSATIONS ITS VIDEOS SIT IN: the themed update's themes, by the
   // registry bridge (never a label), with Pass B's descriptions.
   type ThemeRow = { supporting_insight_ids: string[] | null; registry_id: string | null; description: string | null }
@@ -276,8 +283,10 @@ export async function loadAdvicePage(scope: Scope, id: string, options: { canDec
   let from = monthStartOf(core.month)
   for (let i = 1; i < LINE_MONTHS; i++) from = prevMonth(from)
   const videoIds = [...new Set(evidence.map((i) => audience.videoByInsight.get(i)).filter((v): v is string => Boolean(v)))]
+  // A label read that failed is said as one, never as "no conversation".
+  let labelsFailed = false
   const [labels, levels, videosRead, rivals] = await Promise.all([
-    soft('advice.labels', loadRegistryLabels(core.supabase, clientId, convIds), new Map<string, string>()),
+    soft('advice.labels', loadRegistryLabels(core.supabase, clientId, convIds, () => { labelsFailed = true }), new Map<string, string>()),
     readMoveLevels(core, onIt, targets, convIds, () => { levelsFailed = true }, from),
     soft<ConvVideoRow[] | null>('advice.videos', loadVideosById(db, clientId, videoIds), null),
     rivalsAhead,
@@ -293,12 +302,15 @@ export async function loadAdvicePage(scope: Scope, id: string, options: { canDec
     const n = core.marketN(reading)
     return k != null && n != null && n > 0 ? { k, n } : null
   }
-  const conversations = themesRead == null ? 'unread' as const : adviceConversationsOf({
+  // The themes or their labels unread: the conversations, and the line their
+  // target is read on, say so (never "no conversation read month by month").
+  const groupingUnread = themesRead == null || labelsFailed
+  const conversations = groupingUnread ? 'unread' as const : adviceConversationsOf({
     evidence, registryByInsight, videoByInsight: audience.videoByInsight, labels, descriptions, level: levelOf, target, month: core.month,
   })
   const monthLabel = readingMonthLabel(core.month, core.readingAt)
   const targetLabel = target ? labels.get(target)?.trim() ?? null : null
-  const line = levelsFailed ? 'unread' as const
+  const line = levelsFailed || groupingUnread ? 'unread' as const
     : target && targetLabel
       ? wouldMoveLineOf({
           themeId: target, label: targetLabel, month: core.month, monthLabel, now: core.readingAt,
@@ -394,15 +406,24 @@ export async function loadMovePage(scope: Scope, id: string, options: { canDecid
 
   // Its line, beside every other move's (the switcher and "Your other moves"
   // are their cards): the root's own reads.
+  let citedFailed = false
   const lineages = dated.filter((x) => x.kind === 'advice' && x.lineage_id).map((x) => x.lineage_id as string)
-  const cited = await readCited(core.supabase, clientId, lineages.flatMap((l) => core.adviceRows.find((r) => r.lineageId === l)?.basedOn ?? []))
+  const cited = await readCited(core.supabase, clientId, lineages.flatMap((l) => core.adviceRows.find((r) => r.lineageId === l)?.basedOn ?? []), () => { citedFailed = true })
   const [movesRead, personas, rivals, runId] = await Promise.all([
     readMoveCards(core, dated, cited.market).catch(logAs('move.cards', null as Awaited<ReturnType<typeof readMoveCards>> | null)),
     soft('move.personas', loadPersonas(db, clientId), [] as PersonaLink[]),
     soft('move.rivals', loadCompetitors(db, clientId), [] as { id: string; name: string }[]),
     themedRun(core).catch(() => core.latestRunId),
   ])
-  const cards = movesRead?.cards ?? []
+  // ITS LINE IS THE PAGE. A failed read under the moves' lines (what an advice
+  // move is on, the labels, the months) would print "names nothing the market
+  // is read on" or "no reading of this yet", and a failed read of them all
+  // "no dated move at this address", for a move that has them: the page
+  // throws instead and keeps the shell (app/dashboard/error.tsx). The move is
+  // this tenant's (found among `core.moves` above), so this is never the
+  // calm missing line.
+  if (!movesRead || movesRead.aimsFailed || citedFailed) throw new Error('moves-v2.move: its line could not be read')
+  const cards = movesRead.cards
   const card = cards.find((c) => c.id === m.id)
   if (!card) return 'missing'
   const reading = monthStartOf(core.month)

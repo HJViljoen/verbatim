@@ -925,8 +925,10 @@ export async function readCore(scope: Scope): Promise<Core | null> {
   }
 }
 
-/** The market insights and rival findings a set of advice cites, by id. */
-export async function readCited(supabase: SupabaseClient, clientId: string, ids: readonly string[]): Promise<{
+/** The market insights and rival findings a set of advice cites, by id. A
+ *  failed read is logged and read as none; `onError` lets a page that rests
+ *  on it (a piece of advice's, a move's) say so instead. */
+export async function readCited(supabase: SupabaseClient, clientId: string, ids: readonly string[], onError?: () => void): Promise<{
   market: Map<string, { title: string; evidence: string[] }>
   rival: Map<string, { title: string }>
 }> {
@@ -938,10 +940,16 @@ export async function readCited(supabase: SupabaseClient, clientId: string, ids:
     const [m, c] = await Promise.all([
       selectAll<{ id: string; title: string; evidence: InsightRow['evidence'] }>(() =>
         supabase.from('market_insights').select('id, title, evidence').eq('client_id', clientId).in('id', part).order('id', { ascending: true }),
-      ).catch(logAs('cited.market', [] as { id: string; title: string; evidence: InsightRow['evidence'] }[])),
+      ).catch((error: unknown) => {
+        onError?.()
+        return logAs('cited.market', [] as { id: string; title: string; evidence: InsightRow['evidence'] }[])(error)
+      }),
       selectAll<{ id: string; title: string }>(() =>
         supabase.from('competitive_insights').select('id, title').eq('client_id', clientId).in('id', part).order('id', { ascending: true }),
-      ).catch(logAs('cited.rival', [] as { id: string; title: string }[])),
+      ).catch((error: unknown) => {
+        onError?.()
+        return logAs('cited.rival', [] as { id: string; title: string }[])(error)
+      }),
     ])
     return { m, c }
   })
@@ -952,12 +960,17 @@ export async function readCited(supabase: SupabaseClient, clientId: string, ids:
   return { market, rival }
 }
 
-/** Each audience insight's video and theme slug, for the ids given. */
-export async function readAudience(supabase: SupabaseClient, clientId: string, ids: readonly string[], opts: { kinds?: boolean } = {}): Promise<{ videoByInsight: Map<string, string | null>; slugById: Map<string, string>; kindById: Map<string, string | null> }> {
+/** Each audience insight's video and theme slug, for the ids given. A failed
+ *  read is logged and read as none; `onError` lets a page that rests on it
+ *  say so instead. */
+export async function readAudience(supabase: SupabaseClient, clientId: string, ids: readonly string[], opts: { kinds?: boolean; onError?: () => void } = {}): Promise<{ videoByInsight: Map<string, string | null>; slugById: Map<string, string>; kindById: Map<string, string | null> }> {
   type Row = { id: string; theme: string; source_video_id: string | null; category?: string | null }
   const rows = ids.length > 0
     ? await fetchInsightsByIds<Row>(supabase, [...new Set(ids)], opts.kinds ? 'id, theme, source_video_id, category' : 'id, theme, source_video_id', clientId)
-      .catch(logAs('audience', [] as Row[]))
+      .catch((error: unknown) => {
+        opts.onError?.()
+        return logAs('audience', [] as Row[])(error)
+      })
     : []
   return {
     videoByInsight: new Map(rows.map((r) => [r.id, r.source_video_id])),

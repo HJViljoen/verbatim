@@ -211,6 +211,23 @@ describe('a piece of advice\'s page reads its own rows only', () => {
     expect(page.conversations).not.toBe('unread')
   })
 
+  it('a failed read under its conversations says so, never "no conversation"; a failed read of what it rests on throws, so the shell says it', async () => {
+    vi.setSystemTime(NOW)
+    type Page = Exclude<Awaited<ReturnType<typeof loadAdvicePage>>, 'missing' | null>
+    for (const drop of ['themes', 'theme_registry']) {
+      const { [drop]: _gone, ...rest } = tables() as Record<string, unknown>
+      const page = await loadAdvicePage(scopeOf(fakeDb(rest as never)), L1, { canDecide: true }) as Page
+      expect(page.conversations, drop).toBe('unread')
+      expect(page.line, drop).toBe('unread')
+      expect(page.card.aim, drop).toBeNull()
+    }
+    // Read as none, these would print "since replaced" and "no evidence".
+    for (const drop of ['market_insights', 'audience_insights']) {
+      const { [drop]: _gone, ...rest } = tables() as Record<string, unknown>
+      await expect(loadAdvicePage(scopeOf(fakeDb(rest as never)), L1, { canDecide: true }), drop).rejects.toThrow(/could not be read/)
+    }
+  })
+
   it('a member gets no decision and no day to date it; a decided piece offers none either', async () => {
     const db = fakeDb(tables() as never)
     const member = await loadAdvicePage(scopeOf(db), L1, { canDecide: false }) as Exclude<Awaited<ReturnType<typeof loadAdvicePage>>, 'missing' | null>
@@ -273,6 +290,15 @@ describe('a dated move\'s page reads its own rows only', () => {
     for (const leak of [/before the move/, /Other workspace/, /client own post/, /Our own clinic post/]) expect(json).not.toMatch(leak)
     for (const c of calls.filter((x) => x.table === 'videos' || x.table === 'subject_memberships')) expect(c.filters, c.table).toContain(`client_id=${CLIENT}`)
     for (const c of calls.filter((x) => x.table === 'insight_evidence')) expect(c.filters).toContain(`comments.client_id=${CLIENT}`)
+  })
+
+  it('a failed read under the moves\' lines throws, so the shell says it: never the missing line, "names nothing" or "no reading"', async () => {
+    vi.setSystemTime(NOW)
+    // The themes an advice move is read on, and what the advice rests on.
+    for (const drop of ['themes', 'market_insights']) {
+      const { [drop]: _gone, ...rest } = tables() as Record<string, unknown>
+      await expect(loadMovePage(scopeOf(fakeDb(rest as never)), M_ADVICE, { canDecide: true }), drop).rejects.toThrow(/could not be read/)
+    }
   })
 
   it('U6: a move on a subject whose check is open lists nothing it said and reads no member; a failed read is unread', async () => {
