@@ -1523,7 +1523,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
     64 in October so far"; the board's "of 108" is illustrative). (5) IN
     THEIR WORDS: three comments, each from a different conversation where
     three exist (`quotesAcrossConversations` over `insightThemes`), each
-    labelled with its conversation above the quote and opening its page.
+    labelled with its conversation above the quote and opening its page;
+    only a conversation the page lists names a comment (`themesInside`), so
+    a member's comment in a conversation placed under another subject
+    prints unlabelled and the head drops "each from its conversation".
     (6) THE AGENT. U6: a subject whose check has not passed says its state's
     line ONCE, in the header card's strip (`SUBJECT_NOT_MEASURED` or
     `FAILED_EXPLAINED`), our read says no read prints until its check passes

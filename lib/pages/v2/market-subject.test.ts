@@ -7,7 +7,7 @@ import type { DatedEvidence } from '../../written/evidence'
 import { subjectReadOf } from '../../written/published'
 import type { WeekReadData } from '../../written/types'
 import {
-  buildSubjectPanel, insideConvsOf, insightThemes, loadSubjectDetail, marketParams, personasOf, quotesAcrossConversations, subjectDetailOf, subjectOwnRead, subjectQuoteOf, subjectReadLines, subjectWeekLevel,
+  buildSubjectPanel, insideConvsOf, insightThemes, themesInside, loadSubjectDetail, marketParams, personasOf, quotesAcrossConversations, subjectDetailOf, subjectOwnRead, subjectQuoteOf, subjectReadLines, subjectWeekLevel,
   type MarketConv, type MarketMonth, type SubjectDetail,
 } from './market'
 import { fixtureFacts, fixtureFactsIn, fixtureRead, fixtureSubjectEvidence, fixtureSubjectId, marketFixture, withSubjectHeadline, withSubjectReads } from './market-fixture'
@@ -381,6 +381,18 @@ describe('the hub\'s parts', () => {
     ])
     const of = insightThemes(themes)
     expect([...of.entries()]).toEqual([['i1', { id: 't1', label: 'Liners' }], ['i2', { id: 't1', label: 'Liners' }], ['i3', { id: 't2', label: 'Sweat' }]])
+  })
+
+  it('themesInside: a quote is labelled only with a conversation the subject page lists', () => {
+    const themes = new Map([
+      ['t1', { label: 'Ready to buy handmade bags', kind: null, memberIds: ['i1'] }],
+      ['t9', { label: 'Trolley bags within budget', kind: null, memberIds: ['i9'] }],
+    ])
+    // t9 is placed under another subject: its member's comment prints, unlabelled.
+    const of = insightThemes(themesInside(themes, ['t1']))
+    expect([...of.keys()]).toEqual(['i1'])
+    const q = (insightId: string, n: number) => ({ insightId, n })
+    expect(quotesAcrossConversations([q('i9', 9), q('i1', 1)], of, 2).map((x) => x.n)).toEqual([1, 9])
   })
 
   it('quotesAcrossConversations: the first of each conversation first, then the rest in the gate\'s order', () => {

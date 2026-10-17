@@ -2847,8 +2847,10 @@ export async function loadMarket(input: {
         period, week: weekBlock, month: monthBlock, market, personas, company: brand,
         rivals: competitors.map((c) => ({ id: c.id, name: c.name })), noun,
         windows: period === 'week' && windows ? windows.map((w, i) => ({ ...w, cut: cut[i] ?? false })) : null,
-        // Each of its three comments from a different conversation (F3).
-        conversations: { themeOf: insightThemes(runThemes), href: (id) => convHref(p, id) },
+        // Each of its three comments from a different conversation (F3), and
+        // only one of ITS conversations names a comment: a member's comment
+        // in a conversation placed under another subject prints unlabelled.
+        conversations: { themeOf: insightThemes(themesInside(runThemes, insideIds)), href: (id) => convHref(p, id) },
       })), null)
     : Promise.resolve(null)
   detailAhead.catch(() => {})
@@ -3375,6 +3377,16 @@ export function insideConvsOf(a: {
       description: a.descriptions.get(c.id)?.trim() || null,
       flag: a.flag?.id === c.id ? a.flag.verdict : null,
     }))
+}
+
+/** The run's themes narrowed to the conversations placed inside one subject
+ *  (its page's "Inside {subject}"), so a quote's label never names a
+ *  conversation the page does not list (17 Oct: Sealand's Buying & delivery
+ *  labelled all three of its comments with other subjects' conversations).
+ *  Pure. */
+export function themesInside(themes: ReadonlyMap<string, RunTheme>, inside: readonly string[]): Map<string, RunTheme> {
+  const keep = new Set(inside)
+  return new Map([...themes].filter(([id]) => keep.has(id)))
 }
 
 /** Which conversation each insight is in on the themed run (its members),
