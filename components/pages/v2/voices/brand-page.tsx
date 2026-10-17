@@ -11,7 +11,7 @@ import {
   type BrandMonthBar, type BrandPage,
 } from '@/lib/pages/v2/voices-levels'
 import { cn } from '@/lib/utils'
-import { Fig, LevelText, RowChevron } from './parts'
+import { FailedSubjectLine, Fig, LevelText, RowChevron } from './parts'
 import { VerdictNote } from './brands'
 import { AskBox, Caps, FL, FS, FV, FW, GAPLINE, HUB_LEAD, HubBar, HubCard, HubFig, LevelQuoteCard, LevelSection, MiniTile, PAGE_CARD, READ } from './levels'
 
@@ -277,6 +277,9 @@ function Numbers({ page }: { page: BrandPage }) {
           <p className="m-0 text-[12px] leading-[1.45] text-muted-foreground">
             {notMeasuredLine(page.notMeasured)}{page.notMeasured.length > 0 && page.subjects.length > 0 ? ' · ' : null}{page.subjects.length > 0 ? 'each opens in Market' : null}
           </p>
+          {/* Why one being re-described shows no figure, said once on the
+              page (14 Oct), as the root's foot and a group's page say it. */}
+          {page.notMeasured.filter((s) => s.failed).map((s) => <FailedSubjectLine key={s.id} label={s.label} className="text-[12px]" />)}
         </div>
         <div className="flex min-w-0 flex-col gap-2 max-sm:mt-[18px] max-sm:border-t max-sm:border-track max-sm:pt-[18px]">
           <Caps>Where it was named{page.where ? <> · of its <Fig>{fmtInt(page.where.n)}</Fig></> : null}</Caps>

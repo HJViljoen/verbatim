@@ -243,6 +243,11 @@ describe('the level pages\' reads', () => {
     expect(data.window).toMatchObject({ from: '2026-06-30', to: '2026-09-28' })
     // Any name an old link carries finds the same brand.
     for (const key of ['Ottobock', 'competitor:Ottobock', 'ottobock']) expect(((await brandLoad(key)).data as { brandKey?: string }).brandKey, key).toBe(OTTO)
+    // A subject being re-described is named with a flag the page says why by.
+    const t = tables()
+    const failedSubject = { ...t.subjects[0], id: '00000000-0000-4000-8000-000000000052', name: 'Function & movement', calibration_precision: 0.09 }
+    const withFailed = (await brandLoad(OTTO, {}, { subjects: [...t.subjects, failedSubject] })).data
+    expect(withFailed.kind === 'brand' && withFailed.notMeasured).toEqual([{ id: failedSubject.id, label: 'Function & movement', failed: true }])
     // Your own brand: no ninety days, no finding.
     const you = (await brandLoad('client')).data
     expect(you).toMatchObject({ kind: 'brand', you: true, window: null, lead: null, claims: [], said: [] })

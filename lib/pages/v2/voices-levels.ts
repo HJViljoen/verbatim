@@ -511,7 +511,9 @@ export interface BrandPage {
   months: BrandMonthBar[]
   kinds: { kind: string; label: string; k: number; n: number }[]
   subjects: { id: string; label: string; k: number; n: number; href: string }[]
-  notMeasured: { id: string; label: string }[]
+  /** Every subject not ready, named; `failed` for one being re-described,
+   *  whose reason the page says once (FAILED_EXPLAINED). */
+  notMeasured: { id: string; label: string; failed?: boolean }[]
   /** Where it was named, of its `any`: in a comment dated this month, in the
    *  video's own words (caption, speech, on screen). */
   where: { comment: number; content: number; n: number } | null
@@ -580,7 +582,7 @@ export interface BrandInput {
   audiences: readonly string[]
   kinds: BrandCrossRow | null
   subjects: BrandCrossRow | null
-  pending: readonly { id: string; label: string }[]
+  pending: readonly { id: string; label: string; failed?: boolean }[]
   noun: string | null
   personas: readonly VoicesPersona[]
   groupSets: ReadonlyMap<string, readonly string[]> | null
@@ -696,7 +698,7 @@ export function buildBrandPage(input: BrandInput): BrandPage {
     months: brandMonthBars(input.rows, r.brandKey, month.month, input.audiences, input.nowMonth),
     kinds,
     subjects,
-    notMeasured: counted ? input.pending.map((s) => ({ id: s.id, label: s.label })) : [],
+    notMeasured: counted ? input.pending.map((s) => ({ id: s.id, label: s.label, ...(s.failed ? { failed: true } : {}) })) : [],
     where: counted ? brandWhere(input.rows, r.brandKey, month.month, input.audiences) : null,
     platforms: counted ? platformsOfSet(any, input.platformOf) : [],
     window,
@@ -1384,7 +1386,7 @@ export async function loadVoicesBrand(input: LevelLoadInput & { key: string }): 
   ])
   const said = rival && window ? await soft('said', readSaidAboutLabelled(handle.client, clientId, { name: row.label, window, themes, month: m }), []) : []
   const readyNames = new Map(subjectsAll.filter((s) => s.calibration === 'ready').map((s) => [s.subject.id, s.subject.name]))
-  const pending = subjectsAll.filter((s) => s.calibration !== 'ready').map((s) => ({ id: s.subject.id, label: s.subject.name }))
+  const pending = subjectsAll.filter((s) => s.calibration !== 'ready').map((s) => ({ id: s.subject.id, label: s.subject.name, ...(s.calibration === 'failed' ? { failed: true } : {}) }))
   const lensRows: BrandLens[] = lens ? [{ brandKey: row.brandKey, label: row.label, base: 'any', rows: lens }] : []
   const creators = market ? creatorThemes({ month: m, videos: market, refs: [], audiences }) : null
   const creatorIds = new Map<string, string[]>()

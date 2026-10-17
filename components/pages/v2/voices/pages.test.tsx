@@ -180,6 +180,18 @@ describe('a brand\'s page (G3-Voices-Brand)', () => {
     expect(t).toContain('What its talk sits in · of its 45 Cost & access 26 of 45')
   })
 
+  // A subject being re-described is named with the open ones, and why it
+  // shows no figure is said once on the page (14 Oct), as on the root and a
+  // group's page; the brand's page said it nowhere.
+  it('a subject being re-described: named with the rest, and its reason once on the page', () => {
+    const b = brandFixture()
+    const failed = { ...b, notMeasured: [{ id: 's-function', label: 'Function & movement' }, { id: 's-fit', label: 'Fit & comfort', failed: true }] }
+    const h = render(brand(failed))
+    expect(renderText(brand(failed))).toContain('Not measured yet: Function & movement, Fit & comfort · each opens in Market Fit & comfort. Being re-described:')
+    expect(h.split(FAILED_EXPLAINED).length - 1).toBe(1)
+    expect(render(brand(b))).not.toContain(FAILED_EXPLAINED)
+  })
+
   it('who talks about it: the groups and the creators, each row opening its page and ending in the chevron', () => {
     expect(text).toContain('The groups commenting on its videos A video can hold more than one group, so the counts overlap Long-time users upgrading Know what they want; fighting to get it paid for. 21 of 49')
     expect(text).toContain('Creators it comes up with Accounts with 3 or more of your market’s videos this month whose videos name it TA The Amputee Diaries YouTube · 96K subscribers 3 of its 49')
