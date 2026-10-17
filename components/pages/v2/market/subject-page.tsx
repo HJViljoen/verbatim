@@ -340,13 +340,21 @@ function ConvCard({ item, data, counts }: { item: InsideConv; data: MarketData; 
 const TH = 'whitespace-nowrap border-b border-border pb-2.5 pr-3 text-left text-[11.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground'
 const TD = 'border-b border-track py-[11px] pr-3 align-middle'
 
-/** "9 · 14 · 23": the three weeks as bare counts, oldest first; a week our
- *  own change cut is left out (never 0). */
-function ThreeWeeks({ weeks }: { weeks: readonly (number | null)[] }) {
-  const read = weeks.filter((w): w is number => w != null)
+/** "9 · 14 · 23": the three weeks as bare counts, oldest first. A week our
+ *  own change cut keeps its slot as a blank (never 0, and never dropped, or
+ *  "9 · 23" reads as two weeks in a row); a reader hears "not drawn", the
+ *  week chart's words for the same week. */
+export function ThreeWeeks({ weeks }: { weeks: readonly (number | null)[] }) {
   return (
     <span className="whitespace-nowrap font-mono text-[12.5px] tabular-nums text-muted-foreground">
-      {read.map((w, i) => <Fragment key={i}>{i > 0 ? ' · ' : null}<span data-copy="figure">{fmtInt(w)}</span></Fragment>)}
+      {weeks.map((w, i) => (
+        <Fragment key={i}>
+          {i > 0 ? ' · ' : null}
+          {w != null
+            ? <span data-copy="figure">{fmtInt(w)}</span>
+            : <span data-week-cut=""><span aria-hidden className="inline-block w-[1.5ch] border-b border-muted-foreground/40 align-middle" /><span className="sr-only">not drawn</span></span>}
+        </Fragment>
+      ))}
     </span>
   )
 }

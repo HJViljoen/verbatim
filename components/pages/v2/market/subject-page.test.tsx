@@ -7,7 +7,7 @@ import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibrati
 import type { MarketData } from '@/lib/pages/v2/market'
 import { SubjectCardsView } from './analysis'
 import { BACK_TO_MARKET, MarketSubjectPage, SUBJECT_MISSING } from './pages'
-import { insideNone, SubjectPageBody, subjectChangeGap, subjectNumbersLine, SUBJECT_NUMBERS_HELD, SUBJECT_READ_HELD, SUBJECT_WEEK_UNREAD } from './subject-page'
+import { insideNone, SubjectPageBody, subjectChangeGap, subjectNumbersLine, SUBJECT_NUMBERS_HELD, SUBJECT_READ_HELD, SUBJECT_WEEK_UNREAD, ThreeWeeks } from './subject-page'
 
 // A TRACKED SUBJECT'S PAGE, THE HUB (F3-Market-Subject, 17 Oct; the board
 // with the read first): from the page fixture through the page's own
@@ -342,5 +342,15 @@ describe('the switcher in its row', () => {
     const text = renderText(<MarketSubjectPage data={d} switcherOpen />)
     expect(text).toContain(`Your subjects Fit & comfort Cost & access Choosing the right device Little talk so far Look & style Community & encouragement ${SUBJECT_NOT_MEASURED} Function & movement ${SUBJECT_NOT_MEASURED}`)
     expect(render(<MarketSubjectPage data={d} switcherOpen />)).toContain(`href="/dashboard/market/subjects/${fixtureSubjectId('cost')}"`)
+  })
+})
+
+describe('the list\'s three weeks', () => {
+  it('keeps a cut week\'s slot as a blank, never dropped and never 0', () => {
+    expect(renderText(<ThreeWeeks weeks={[9, 14, 23]} />)).toBe('9 · 14 · 23')
+    // "9 · 23" would read as two weeks in a row.
+    expect(renderText(<ThreeWeeks weeks={[9, null, 23]} />)).toBe('9 · not drawn · 23')
+    expect(render(<ThreeWeeks weeks={[9, null, 23]} />)).toContain('data-week-cut')
+    expect(copyNodes(render(<ThreeWeeks weeks={[9, null, 23]} />)).filter((n) => n.kind === 'figure')).toHaveLength(2)
   })
 })
