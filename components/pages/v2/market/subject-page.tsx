@@ -5,7 +5,7 @@ import { MovementBadge } from '@/components/delta-badge'
 import { EYEBROW, IconTile } from '@/components/colour-roles'
 import { CARD, MiniBars, PanelSection, SpikeBars, TickBarRow } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
-import { noReadingYet, platformRows, subjectNoRead, subjectNotCompared, type MarketData, type SubjectPage, type SubjectPanel } from '@/lib/pages/v2/market'
+import { noGroupSaying, noReadingYet, platformRows, subjectNoRead, subjectNotCompared, type MarketData, type SubjectPage, type SubjectPanel } from '@/lib/pages/v2/market'
 import { SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { cn } from '@/lib/utils'
 import { SectionHead } from './analysis'
@@ -222,7 +222,7 @@ function NumbersCard({ page, data }: { page: SubjectPage; data: MarketData }) {
           <PanelSection label={<>Who’s saying it · <span data-copy="level">of {fmtInt(detail.cited?.month ?? detail.doing?.n ?? 0)}</span> {`in ${panel.monthText}`}</>} className="max-sm:border-t max-sm:border-track max-sm:pt-[18px]">
             {detail.groups.length > 0
               ? <GroupRows groups={detail.groups.slice(0, 4)} n={detail.cited?.month ?? 0} />
-              : <p className="m-0 text-[13.5px] text-muted-foreground">No group’s own talk is in it yet.</p>}
+              : <p className="m-0 text-[13.5px] text-muted-foreground">{noGroupSaying(`in ${panel.monthText}`)}</p>}
           </PanelSection>
           <PanelSection label={detail.doing ? <>What people did · <span data-copy="level">of {fmtInt(detail.doing.n)}</span> {detail.doing.text}</> : 'What people did'} className="max-sm:mt-[18px] max-sm:border-t max-sm:border-track max-sm:pt-[18px]">
             {detail.doing

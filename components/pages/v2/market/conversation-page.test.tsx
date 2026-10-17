@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
 import { fixtureId, fixtureSubjectId, marketConversationFixture } from '@/lib/pages/v2/market-fixture'
-import type { MarketData } from '@/lib/pages/v2/market'
+import { noGroupSaying, type MarketData } from '@/lib/pages/v2/market'
 import { BACK_TO_MARKET, CONVERSATION_MISSING, MarketConversationPage } from './pages'
 import { ConversationPageBody } from './conversation-page'
 
@@ -101,7 +101,7 @@ describe('every state keeps its frame', () => {
     const t = renderText(<ConversationPageBody page={names} data={LINER} />)
     expect(t).toContain('Who’s saying it New amputees in their first year Long-time users upgrading Each opens in Voices Where')
     const none = { ...LINER.convPage!, panel: { ...LINER.convPage!.panel, groups: [] } }
-    expect(renderText(<ConversationPageBody page={none} data={LINER} />)).toContain('Who’s saying it · of 23 this week No group’s own talk is in it this week. Where')
+    expect(renderText(<ConversationPageBody page={none} data={LINER} />)).toContain('Who’s saying it · of 23 this week This week, no video in it has a comment from one of the groups in Voices. Where')
     assertCopyContract(<ConversationPageBody page={names} data={LINER} />)
   })
 
@@ -117,6 +117,19 @@ describe('every state keeps its frame', () => {
     expect(cells).toHaveLength(2)
     for (const c of cells) expect(c).toMatch(/>\d[\d,]*<\/div>$/)
     expect(html).not.toContain('data-tile-gap')
+  })
+
+  it('no group counted: plain words for what the count measures, in the period\'s own words (17 Oct)', () => {
+    // A group counts a video where one of its insights cites a comment in
+    // the conversation in the period (`groupCountsOf`): none, no such video.
+    expect(noGroupSaying('this week')).toBe('This week, no video in it has a comment from one of the groups in Voices.')
+    expect(noGroupSaying('in October so far')).toBe('In October so far, no video in it has a comment from one of the groups in Voices.')
+    const month = marketConversationFixture(1, { period: 'month' })
+    const none = { ...month.convPage!, panel: { ...month.convPage!.panel, groups: [] } }
+    const text = renderText(<ConversationPageBody page={none} data={month} />)
+    expect(text).toContain('Who’s saying it · of 35 in October so far In October so far, no video in it has a comment from one of the groups in Voices. Where')
+    expect(text).not.toContain('own talk')
+    assertCopyContract(<ConversationPageBody page={none} data={month} />)
   })
 
   it('a conversation first heard this week carries "New", the reader flag in a verdict node', () => {

@@ -3014,6 +3014,19 @@ export function groupCountsOf(a: {
 }
 
 /**
+ * WHO'S SAYING IT, WHERE NO GROUP COUNTS: a group counts a video where a
+ * comment in the set, dated in the period, is cited by one of the insights
+ * Pass E files under it (`groupCountsOf`), so no group means no video in it
+ * had a comment from one of Voices' groups. The words say exactly that (17
+ * Oct; it read "No group's own talk is in it this week."), one line for a
+ * subject's page and a conversation's, `when` the base's own words ("this
+ * week", "in October so far"). Pure.
+ */
+export function noGroupSaying(when: string): string {
+  return `${when.charAt(0).toUpperCase()}${when.slice(1)}, no video in it has a comment from one of the groups in Voices.`
+}
+
+/**
  * A CONVERSATION'S "WHO'S SAYING IT", COUNTED (17 Oct, F2-Market-
  * Conversation: "New amputees, first year · 15 of 23"): the subject page's
  * reader (`groupCountsOf`) over the conversation's own talk in the period:

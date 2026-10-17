@@ -130,6 +130,14 @@ describe('a ready subject with no change to print against last month (17 Oct)', 
   })
 })
 
+describe('a ready subject whose groups hold none of its talk', () => {
+  it('says so in the conversation page\'s words, over the month its groups read (17 Oct)', () => {
+    const d = marketSubjectFixture('fit')
+    const none: MarketData = { ...d, subjectPage: { ...d.subjectPage!, panel: { ...d.subjectPage!.panel, detail: { ...d.subjectPage!.panel.detail!, groups: [] } } } }
+    expect(renderText(body(none))).toContain('Who’s saying it · of 64 in October so far In October so far, no video in it has a comment from one of the groups in Voices. What people did')
+  })
+})
+
 describe('a ready subject, this month', () => {
   const d = marketSubjectFixture('cost', { period: 'month', subjectReads: 'v2' })
   const text = renderText(page(d))

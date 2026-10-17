@@ -1500,8 +1500,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
     (`groupCountsOf` over the group × subject cross, which takes a week's
     window, `convGroupsOf`) over the member citations on its counted
     comments (its refs), and prints Pass E's names alone where those could
-    not be read or counted. A count, never a share, never compared (decision
-    2). *The week's page* is the published read in full
+    not be read or counted; where every group counts none, it says what the
+    count measures (`noGroupSaying`, the subject page's line too: "This
+    week, no video in it has a comment from one of the groups in Voices.").
+    A count, never a share, never compared (decision 2). *The week's page* is the published read in full
     (`weekPageOf` over `weeklyReadView` after `hydrateData`): what
     happened, each quote after the paragraph whose ref it carries, what it
     means, new this week, worth watching, "Every conversation this week (N)"

@@ -4,7 +4,7 @@ import { TAG } from '@/components/colour-roles'
 import { MovementBadge } from '@/components/delta-badge'
 import { FlagChip, MiniBars, PanelSection, SpikeBars, StatCell, StatRow, TickBarRow } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
-import type { ConvPage, MarketData } from '@/lib/pages/v2/market'
+import { noGroupSaying, type ConvPage, type MarketData } from '@/lib/pages/v2/market'
 import { cn } from '@/lib/utils'
 import { BRANDS_NOT_COUNTED, BRANDS_NOT_READ } from '@/lib/pages/v2/voices'
 import { ASK, GroupRows, QuotesSection, shareBars, WhoLine } from './panel'
@@ -99,7 +99,7 @@ export function ConversationPageBody({ page, data }: { page: ConvPage; data: Mar
           <PanelSection label={base ? <>Who’s saying it · <span data-copy="level">of {fmtInt(base.n)}</span> {base.text}</> : 'Who’s saying it'}>
             {panel.groups.length > 0
               ? <GroupRows groups={panel.groups} n={base?.n ?? null} />
-              : <p className="m-0 text-[13.5px] text-muted-foreground">{base ? `No group’s own talk is in it ${base.text}.` : 'Not linked to a group.'}</p>}
+              : <p className="m-0 text-[13.5px] text-muted-foreground">{base ? noGroupSaying(base.text) : 'Not linked to a group.'}</p>}
           </PanelSection>
           <PanelSection label={panel.platforms ? <>Where · <span data-copy="level">of {fmtInt(panel.platforms.n)}</span> {data.period === 'week' ? 'this week' : `in ${data.month.text}`}</> : 'Where'}>
             {panel.platforms
