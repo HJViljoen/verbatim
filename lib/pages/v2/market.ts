@@ -671,6 +671,10 @@ export interface ConvPage {
   /** This week: its three weekly counts, oldest first (null where cut), with
    *  the windows' labels; empty off the week. */
   weeks: { label: string; count: number | null }[]
+  /** The bar's levels: its category videos this week (the week only) and in
+   *  the month the page states it against. */
+  week: Level | null
+  month: Level | null
 }
 
 /** The week's page (`/dashboard/market/week`, F2-Market-Week): the published
@@ -1929,6 +1933,19 @@ export function conversationCrumbs(a: {
   return [marketCrumb(a.p), { label: a.parent.name, href: subjectHref(a.p, a.parent.id), menu: subjectMenu(a.nav, a.parent.id) }, self]
 }
 
+/** A conversation's page from its panel and its counts: the three weekly
+ *  windows (this week), and the bar's two levels, the week beside its month
+ *  (decision 1). Pure. */
+export function convPageOf(panel: ConvPanel, conv: MarketConv | null, week: MarketWeek | null, month: MarketMonth, period: Period): ConvPage {
+  const labels = week?.weekLabels ?? []
+  return {
+    panel,
+    weeks: period === 'week' && conv ? conv.weeks.map((count, i) => ({ label: labels[i] ?? '', count })) : [],
+    week: period === 'week' && conv?.week != null && week?.category != null ? { k: conv.week, n: week.category } : null,
+    month: (conv?.month ?? null) != null && month.category != null ? { k: conv!.month!, n: month.category } : null,
+  }
+}
+
 /** The week's page: "Market / This week's read", no chevron (a read is one
  *  week's). */
 export const WEEK_PAGE_TITLE = 'This week’s read'
@@ -2341,16 +2358,12 @@ export async function loadMarket(input: {
     const siblings = parent
       ? insideOf(parent.id, convs, period, { limit: 50, href: (id) => convHref(p, id) })
       : convs.map((c) => ({ id: c.id, label: c.label, href: convHref(p, c.id) }))
-    const labels = weekBlock?.weekLabels ?? []
     return {
       ...common,
       view: 'conversation',
       subjectNav,
       crumbs: conversationCrumbs({ p, nav: subjectNav, conv: { id: convId, label: panel.label }, parent, siblings }),
-      convPage: {
-        panel,
-        weeks: period === 'week' && conv ? conv.weeks.map((count, i) => ({ label: labels[i] ?? '', count })) : [],
-      },
+      convPage: convPageOf(panel, conv, weekBlock, monthBlock, period),
     }
   }
 

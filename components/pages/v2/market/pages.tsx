@@ -5,7 +5,7 @@ import { PERIODS, PeriodSwitch } from '@/components/v2'
 import { periodHref, type MarketData } from '@/lib/pages/v2/market'
 import { marketConversationPath, marketSubjectPath, surface } from '@/lib/nav'
 import { MARKET_FIRST_RUN, MARKET_TITLE } from './index'
-import { ConversationPanel } from './panel'
+import { ConversationPageBody } from './conversation-page'
 import { SubjectPageBody } from './subject-page'
 import { fmtInt } from '@/lib/format'
 import { OLINK, Stored } from './parts'
@@ -101,13 +101,17 @@ export function MarketConversationPage({ data }: { data: MarketData | null }) {
     )
   }
   const path = marketConversationPath(page.panel.id)
+  const lv = (l: { k: number; n: number }) => <span data-copy="level">{fmtInt(l.k)} of {fmtInt(l.n)}</span>
+  const meta = data.period === 'week' && data.week
+    ? <>{data.week.dates}{page.week ? <> · in {lv(page.week)} category videos this week</> : null}{page.month ? <> · {lv(page.month)} {data.week.inMonth}</> : null}</>
+    : <>{data.period === 'time' ? `Month by month, to ${data.month.text}` : data.month.text}{page.month ? <> · in {lv(page.month)} category videos</> : null}</>
   return (
     <PageFrame className="text-foreground">
-      <PageBar title={page.panel.label} crumbs={data.crumbs ? <Crumbs crumbs={data.crumbs} /> : null}>
+      <PageBar title={page.panel.label} crumbs={data.crumbs ? <Crumbs crumbs={data.crumbs} /> : null} meta={meta}>
         <div className="max-lg:hidden"><Switch data={data} path={path} /></div>
       </PageBar>
       <div className="-mt-2 lg:hidden"><Switch data={data} path={path} /></div>
-      <ConversationPanel panel={page.panel} data={data} />
+      <ConversationPageBody page={page} data={data} />
     </PageFrame>
   )
 }

@@ -1,23 +1,18 @@
-import Link from 'next/link'
-import { Sparkles } from 'lucide-react'
-import { BrandChip, TAG } from '@/components/colour-roles'
-import { MovementBadge } from '@/components/delta-badge'
+import { BrandChip } from '@/components/colour-roles'
 import { ProportionBar } from '@/components/proportion-bar'
-import { CARD, FlagChip, MiniBars, PanelSection, PanelTitle, StatCell, StatRow, TickBarRow } from '@/components/v2'
+import { PanelSection } from '@/components/v2'
 import { fmtInt, fmtPct } from '@/lib/format'
 import { marketLabelsOf } from '@/lib/brands/labels'
-import { MARKET_PANEL_MONTHS, type ConvPanel, type MarketData, type MonthCount, type PanelQuote, type SubjectDetail } from '@/lib/pages/v2/market'
+import { MARKET_PANEL_MONTHS, type MarketData, type MonthCount, type PanelQuote, type SubjectDetail } from '@/lib/pages/v2/market'
 import type { WhoPart } from '@/lib/written/types'
 import { translationLabel, translationNote } from '@/components/quote-block'
-import { cn } from '@/lib/utils'
-import { About, OLINK, Stored, newVerdict } from './parts'
-import { BRANDS_NOT_COUNTED, BRANDS_NOT_READ } from '@/lib/pages/v2/voices'
+import { About, OLINK } from './parts'
 
-// THE OPEN PANELS (depth v2, T3; E2-Market-Open): a conversation in full, or a
-// subject in full, in place under the row it was opened from, with a notch
-// pointing at it (`InPlacePanel`, driven by `?conv=` / `?subject=`). Level 2:
-// the quotes (three, through the quote gate) and our read live here, never on
-// the page above.
+// THE PARTS MARKET'S PAGES SHARE (17 Oct; until then the open panels', E2-
+// Market-Open): the Agent's button, a share line's month bars, the three
+// comments (level 2: quotes live on a page, never on the top layer), who a
+// set of videos is about, and the subject's one base, named. The pages
+// themselves are ./subject-page.tsx and ./conversation-page.tsx.
 
 export const ASK = 'inline-flex min-h-[38px] cursor-pointer items-center gap-2 rounded-lg bg-brand px-3.5 text-[13.5px] font-semibold text-brand-foreground no-underline transition-colors hover:bg-brand/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
@@ -36,87 +31,6 @@ export function shareBars(bars: readonly MonthCount[]) {
       filling: soFar,
     }
   })
-}
-
-/** A conversation in full: its page's body (17 Oct). */
-export function ConversationPanel({ panel, data }: { panel: ConvPanel; data: MarketData }) {
-  const chip = panel.flag
-    ? <FlagChip verdict={panel.flag} />
-    : panel.isNew && data.month.category != null
-      ? <FlagChip verdict={newVerdict(panel.id, panel.label, panel.stats[0]?.value ?? 0, data.month.category, data.month.month)} />
-      : null
-  return (
-    <article id="conversation" aria-labelledby="conv-head" className={cn(CARD, 'gap-7 sm:px-[34px] sm:pt-[30px] sm:pb-8')}>
-      <div>
-        {panel.subjectName || chip ? (
-          <div className="flex flex-wrap items-center gap-2">
-            {panel.subjectName ? <span className={cn(TAG, 'rounded-md px-2 py-[3px] text-[12px]')}>{panel.subjectName}</span> : null}
-            {chip}
-          </div>
-        ) : null}
-        <PanelTitle id="conv-head"><span data-copy="subject" data-slot="pass_b_theme">{panel.label}</span></PanelTitle>
-      </div>
-      {panel.stats.length > 0 ? (
-        <StatRow>
-          {panel.stats.map((s, i) => <StatCell key={i} value={s.value} of={s.of} label={s.label} />)}
-        </StatRow>
-      ) : null}
-      <div className="grid grid-cols-1 gap-10 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
-        <div className="flex min-w-0 flex-col gap-[26px]">
-          {panel.ourRead ? (
-            <PanelSection label="Our read">
-              {panel.ourRead.lines.map((l, i) => <Stored key={i} line={l} slot={panel.ourRead!.slot} className="m-0 text-[15.5px] leading-[1.62] text-foreground" />)}
-            </PanelSection>
-          ) : null}
-          {panel.line && panel.line.bars.length > 0 ? (
-            <PanelSection label={<>Month by month · share of {panel.line.basis} {panel.line.verdict ? <span data-copy="verdict" className="ml-1 normal-case tracking-normal"><MovementBadge verdict={panel.line.verdict} unit="pts" good="neutral" bandTip /></span> : null}</>}>
-              <MiniBars bars={shareBars(panel.line.bars)} size="lg" className="max-sm:hidden" label={`Share of the category's videos about ${panel.label}, month by month`} />
-              <MiniBars bars={shareBars(panel.line.bars).slice(-3)} size="md" className="sm:hidden" label={`Share of the category's videos about ${panel.label}, month by month`} />
-            </PanelSection>
-          ) : null}
-        </div>
-        <div className="grid min-w-0 grid-cols-1 gap-x-7 gap-y-[26px] sm:grid-cols-2">
-          {data.brands !== 'counted' ? (
-            <PanelSection label="Who it’s about">
-              <p className="m-0 text-[13.5px] text-muted-foreground">{data.brands === 'not_counted' ? BRANDS_NOT_COUNTED : BRANDS_NOT_READ}</p>
-            </PanelSection>
-          ) : panel.who ? (
-            <PanelSection label="Who it’s about">
-              <WhoLine parts={panel.who.parts} data={data} />
-            </PanelSection>
-          ) : null}
-          {panel.doing ? (
-            <PanelSection label={<>What people did · <span data-copy="level">of {fmtInt(panel.doing.n)}</span> {panel.doing.text}</>}>
-              {panel.doing.rows.map((r) => (
-                <TickBarRow key={r.kind} name={r.label} value={fmtInt(r.k)} pct={r.n > 0 ? (100 * r.k) / r.n : 0} valueWidth="narrow" label={`${fmtInt(r.k)} of ${fmtInt(r.n)}`} />
-              ))}
-            </PanelSection>
-          ) : null}
-          {panel.groups.length > 0 ? (
-            <PanelSection label="Who’s saying it">
-              {panel.groups.map((g) => (
-                <Link key={g.key} href={g.href} className="-mx-2 rounded-md px-2 py-1 text-[14.5px] text-foreground no-underline hover:bg-inner">
-                  <span data-copy="subject" data-slot="pass_e_persona">{g.name}</span>
-                </Link>
-              ))}
-              <p className="m-0 text-[12px] text-muted-foreground">Each opens in Voices</p>
-            </PanelSection>
-          ) : null}
-          {panel.platforms ? (
-            <PanelSection label="Where">
-              {panel.platforms.rows.map((r, i) => (
-                <TickBarRow key={r.platform} name={r.label} value={fmtInt(r.videos)} pct={r.pct} tone="ink" valueWidth="narrow" label={`${fmtInt(r.videos)} of ${fmtInt(panel.platforms!.n)}`} className={i > 2 ? 'opacity-80' : undefined} />
-              ))}
-            </PanelSection>
-          ) : null}
-        </div>
-      </div>
-      {panel.quotes.length > 0 ? <QuotesSection quotes={panel.quotes} data={data} /> : null}
-      <div className="flex flex-wrap items-center gap-[18px] border-t border-track pt-5">
-        <Link href={panel.askHref} className={ASK}><Sparkles className="size-3.5" aria-hidden />Ask the Agent about this</Link>
-      </div>
-    </article>
-  )
 }
 
 /** The quotes a panel prints: the conversation panel's markup, one card each. */

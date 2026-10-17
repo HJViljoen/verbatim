@@ -5,7 +5,7 @@ import { WEEKS_FAILED, type HomeWeeks } from '../home'
 import { notReadyIds } from '../subject-place'
 import type { UnusualFlag } from '../week'
 import {
-  buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, convHref, conversationCrumbs, flagCardOf, flagVerdict, groupsOf, insideOf,
+  buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, convHref, convPageOf, conversationCrumbs, flagCardOf, flagVerdict, groupsOf, insideOf,
   lineBars, marketLongRunFor, marketMonths, marketParams, monthsText, ourReadOf, panelStats, pickHero, pickWeekSides, platformRows, subjectCardsOf, subjectCrumbs, subjectHref,
   subjectDetailOf, subjectNavOf, subjectTableHref, tableMonths, weekWindows, convOf, doingOf, alsoTalkedOf, earlierNewOf, leadDoing, weekCardOf, weekCrumbs, weekPageOf, withMonthPlatforms,
   type ConvInput, type ConvPanel, type MarketConv, type MarketData, type MarketMonth, type MarketParams, type MarketWeek, type MonthCount,
@@ -733,10 +733,7 @@ export function marketConversationFixture(n: number, opts: FixtureOptions = {}):
     view: 'conversation',
     subjectNav,
     crumbs: conversationCrumbs({ p, nav: subjectNav, conv: { id: cid, label: panel.label }, parent, siblings }),
-    convPage: {
-      panel,
-      weeks: period === 'week' && conv ? conv.weeks.map((count, i) => ({ label: WEEK.weekLabels[i] ?? '', count })) : [],
-    },
+    convPage: convPageOf(panel, conv, period === 'week' ? WEEK : null, core.month, period),
   }
 }
 
@@ -784,7 +781,11 @@ function fixturePanel(n: number, period: MarketParams['period'], convs: readonly
     doing: { rows: doingOf(HERO_KINDS, conv.month, null), n: conv.month ?? 0, text: 'in October so far' },
     groups: groupsOf(cid, PERSONAS),
     platforms: where ? { rows: where.rows, n: where.n } : null,
-    quotes: [
+    quotes: n === 1 ? [
+      { text: 'Is it normal that my liner feels loose after six months? Nobody told me they wear out.', lang: null, english: null, source: 'Instagram · 6 Oct', about: null },
+      { text: 'Does anyone’s liner roll down at the knee by the afternoon?', lang: null, english: null, source: 'YouTube · 9 Oct', about: null },
+      { text: 'This liner gave me a rash after a week.', lang: null, english: null, source: 'TikTok · 6 Oct', about: 'client' },
+    ] : [
       { text: 'Third appeal denied. They say a mechanical knee is adequate. Adequate for sitting, maybe.', lang: null, english: null, source: 'TikTok · 7 Oct', about: null },
       { text: 'My prosthetist wrote three letters. Still no.', lang: null, english: null, source: 'Instagram · 8 Oct', about: null },
       { text: 'Got the C-Leg approved after a year of fighting. Worth it, but the fight nearly broke me.', lang: null, english: null, source: 'YouTube · 3 Oct', about: 'rival:Ottobock' },
