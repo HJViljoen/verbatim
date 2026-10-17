@@ -424,11 +424,17 @@ export async function loadMovePage(scope: Scope, id: string, options: { canDecid
   // calm missing line.
   if (!movesRead || movesRead.aimsFailed || citedFailed) throw new Error('moves-v2.move: its line could not be read')
   const cards = movesRead.cards
-  const card = cards.find((c) => c.id === m.id)
-  if (!card) return 'missing'
+  const found = cards.find((c) => c.id === m.id)
+  if (!found) return 'missing'
+  const subjects = subjectsOf(core)
+  // WHY A FAILED SUBJECT SHOWS NO FIGURE IS SAID ONCE A PAGE (14 Oct, the
+  // lead's ruling): `moveCards` says it on the first card of the subject's and
+  // "not measured yet" on any later one. On a move's page its own card is the
+  // only one that prints why, so it says it, whichever card it was.
+  const failedSubject = found.object?.kind === 'subject' && subjects.get(found.object.id)?.calibration === 'failed'
+  const card: MoveCard = found.unread === 'not_measured' && failedSubject ? { ...found, unread: 'not_ready' } : found
   const reading = monthStartOf(core.month)
   const object = card.object ?? null
-  const subjects = subjectsOf(core)
   const ready = object?.kind === 'subject' ? subjects.get(object.id)?.calibration === 'ready' : object != null
   const readingPoint = card.points.find((pt) => pt.month === reading) ?? null
   const now = core.readingAt

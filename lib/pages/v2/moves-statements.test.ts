@@ -301,6 +301,21 @@ describe('a dated move\'s page reads its own rows only', () => {
     }
   })
 
+  it('U6: a failed subject\'s reason is said on its move\'s own page, even when another move on it is listed first', async () => {
+    vi.setSystemTime(NOW)
+    const t = tables()
+    const M_LATER = '00000000-0000-4000-8000-0000000000b3'
+    const failed = {
+      subjects: [{ ...t.subjects[0], calibration_precision: 0.2, calibration_n: 400 }],
+      moves: [...t.moves, { ...t.moves[0], id: M_LATER, title: 'Later clinic push', declared_at: '2026-10-01T00:00:00.000Z', dated_on: '2026-10-01' }],
+    }
+    const { data } = await statements(move(M_SUBJECT), failed as never)
+    const page = data as Exclude<Awaited<ReturnType<typeof loadMovePage>>, 'missing' | null>
+    expect(page.others.map((c) => c.id)).toContain(M_LATER)
+    expect(page.card.unread).toBe('not_ready')
+    expect(page.evidence.state).toBe('held')
+  })
+
   it('U6: a move on a subject whose check is open lists nothing it said and reads no member; a failed read is unread', async () => {
     const t = tables()
     const open = { subjects: [{ ...t.subjects[0], calibration_precision: 0.4 }] }
