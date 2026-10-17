@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
+import { Crumbs } from '@/components/shell/crumbs'
 import { PERIODS, PeriodSwitch } from '@/components/v2'
 import { periodHref, type MarketData } from '@/lib/pages/v2/market'
 import { marketConversationPath, marketSubjectPath, surface } from '@/lib/nav'
@@ -56,7 +57,7 @@ export function MarketSubjectPage({ data }: { data: MarketData | null }) {
   const path = marketSubjectPath(page.panel.id)
   return (
     <PageFrame className="text-foreground">
-      <PageBar title={page.panel.name}>
+      <PageBar title={page.panel.name} crumbs={data.crumbs ? <Crumbs crumbs={data.crumbs} /> : null}>
         <div className="max-lg:hidden"><Switch data={data} path={path} /></div>
       </PageBar>
       <div className="-mt-2 lg:hidden"><Switch data={data} path={path} /></div>
@@ -80,7 +81,7 @@ export function MarketConversationPage({ data }: { data: MarketData | null }) {
   const path = marketConversationPath(page.panel.id)
   return (
     <PageFrame className="text-foreground">
-      <PageBar title={<span data-copy="subject" data-slot="pass_b_theme">{page.panel.label}</span>}>
+      <PageBar title={page.panel.label} crumbs={data.crumbs ? <Crumbs crumbs={data.crumbs} /> : null}>
         <div className="max-lg:hidden"><Switch data={data} path={path} /></div>
       </PageBar>
       <div className="-mt-2 lg:hidden"><Switch data={data} path={path} /></div>
@@ -95,7 +96,7 @@ export function MarketWeekPage({ data }: { data: MarketData | null }) {
   const page = data.weekPage
   return (
     <PageFrame className="text-foreground">
-      <PageBar title="This week’s read" />
+      <PageBar title="This week’s read" crumbs={data.crumbs ? <Crumbs crumbs={data.crumbs} /> : null} />
       {page && page.state === 'ready' && page.line ? <Stored line={page.line} slot="week_read" className="m-0 text-[15px]" /> : <p className="m-0 text-[15px] text-muted-foreground">This week’s read is not ready yet.</p>}
     </PageFrame>
   )

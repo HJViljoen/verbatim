@@ -189,9 +189,16 @@ export function TileColumns({ of, rule = true, rail, children, className }: {
 /** Page title, and under it the bar's ONE context line where the page has
  *  one; the right-hand controls sit at the end of the pair. */
 export function PageBar({
-  title, line, meta, children, phoneControls = 'beside',
+  title, crumbs, line, meta, children, phoneControls = 'beside',
 }: {
   title: ReactNode
+  /**
+   * DEPTH AS PAGES (17 Oct; the F2 boards): on a level page the breadcrumb
+   * replaces the title (`Crumbs`, components/shell/crumbs.tsx, which holds
+   * the page's one h1). The meta line then sits 2px under the path's 40px
+   * line, as the boards draw it.
+   */
+  crumbs?: ReactNode
   /**
    * THE CONTEXT LINE, PRINTED AGAIN (25 Sep rulings, market-first WP1.2): the
    * brand, the month selector and "as at the {update} update · next update
@@ -239,11 +246,13 @@ export function PageBar({
   // title's lines.
   const below = Boolean(children) && phoneControls === 'below'
   return (
-    <div className={cn('grid shrink-0 items-center gap-y-2', children ? 'grid-cols-[minmax(0,1fr)_auto] gap-x-6' : 'grid-cols-1', children && under ? 'sm:items-end' : null)}>
+    <div className={cn('grid shrink-0 items-center', crumbs ? 'gap-y-0.5' : 'gap-y-2', children ? 'grid-cols-[minmax(0,1fr)_auto] gap-x-6' : 'grid-cols-1', children && under ? 'sm:items-end' : null)}>
       {/* 26px bold on a 40px line (the navigation of 1 Oct: every
           `Page-*.dc.html` artboard's title, `font-size: 26px; font-weight: 700`
           in a 40px-high bar). It was MASTER's `text-2xl`. */}
-      <h1 className={cn('col-start-1 row-start-1 m-0 text-[26px] leading-10 font-bold', below ? 'max-sm:col-span-2' : null)}>{title}</h1>
+      {crumbs
+        ? <div className={cn('col-start-1 row-start-1 min-w-0', below ? 'max-sm:col-span-2' : null)}>{crumbs}</div>
+        : <h1 className={cn('col-start-1 row-start-1 m-0 text-[26px] leading-10 font-bold', below ? 'max-sm:col-span-2' : null)}>{title}</h1>}
       {children ? (
         // 10px between the controls: the artboards' own gap (Your moves,
         // Settings), since the bar became every page's title (integration).
