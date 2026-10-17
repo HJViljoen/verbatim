@@ -8,6 +8,7 @@ import { CATEGORY_MISSING, PRODUCT_MISSING, type ProductsLevelData } from '@/lib
 import { PRODUCT_TAG_COPY } from '@/lib/products/tags'
 import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { ProductsCategoryPage, ProductsProductPage } from './levels'
+import { categoryChangeGap } from './category-page'
 import { NAMED_IN_VIDEO_ONLY, openedNamedNote, OWN_POST_NOTE, QUIET_FACT, showNamedOf } from './product-page'
 import { tagSub } from './unclear'
 
@@ -66,6 +67,27 @@ describe('a category\'s page, the hub (G4-Products-Category)', () => {
     expect(text).toContain('Liners · September Liners talk is mostly about liners in general 14% of your market’s videos 118 of 839 in September No clear change +2.1 pts against August, 12% 73 of 612 in August 19 of the 118 name one of your liners 78 are about liners in general, none of yours named 21 are about one of yours, but we couldn’t tell which Tag them below ↓')
     // No read card: the board's "Our read" is not written (decision 1).
     expect(text).not.toMatch(/Our read|What people are saying|What it means/)
+  })
+
+  // A month pair refused (a catalogue change between the months) never
+  // compares, so its line carries no "yet"; one with last month unread keeps
+  // Market's words. No reason either way (plan §0a).
+  it('says no "yet" where the month pair is refused, and gives no reason', () => {
+    expect(categoryChangeGap('August', true)).toBe('No comparison with August.')
+    expect(categoryChangeGap('August', false)).toBe('No comparison with August yet.')
+    const refused = PRODUCTS_LEVEL_FIXTURES.liners()
+    const cat = refused.category!
+    const verdict = cat.detail.verdict!
+    const { baseline: _b, ...level } = verdict
+    void _b
+    refused.category = { ...cat, detail: { ...cat.detail, verdict: { ...level, changePts: null, bandPts: null, state: 'refused', refusedReason: 'tracking_change' } } }
+    const t = renderText(page(refused))
+    expect(t).toContain('No comparison with August.')
+    expect(t).not.toMatch(/No comparison with August yet|catalogue|tracking/)
+    assertCopyContract(page(refused))
+    const unread = PRODUCTS_LEVEL_FIXTURES.liners()
+    unread.category = { ...cat, detail: { ...cat.detail, verdict: null } }
+    expect(renderText(page(unread))).toContain('No comparison with August yet.')
   })
 
   it('then the products: three cards, all of them as a list in the shelf\'s order, each opening its page', () => {

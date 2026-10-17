@@ -51,6 +51,14 @@ function Fig({ children }: { children: ReactNode }) {
   )
 }
 
+/** The change where none prints, with no reason (plan §0a). Where the month
+ *  pair is REFUSED (a catalogue change between the two months, or a change
+ *  in how they were read), the comparison never comes, so it says no "yet";
+ *  where last month is simply not read, it is Market's words
+ *  (`subjectChangeGap`, "No comparison with August yet."). */
+export const categoryChangeGap = (prev: string, refused: boolean): string =>
+  (refused ? `No comparison with ${prev}.` : subjectChangeGap(prev))
+
 function HubCard({ page, d }: { page: CategoryPage; d: ProductsLevelData }) {
   const { detail } = page
   const base = d.base
@@ -98,7 +106,7 @@ function HubCard({ page, d }: { page: CategoryPage; d: ProductsLevelData }) {
               </div>
               {prev && prev.n > 0 ? <div className={FS}><span data-copy="level">{fmtInt(prev.k)} of {fmtInt(prev.n)}</span> in {prevName}</div> : null}
             </>
-          ) : <p data-fig-gap="" className={cn(FL, 'm-0 text-muted-foreground')}>{subjectChangeGap(prevName)}</p>}
+          ) : <p data-fig-gap="" className={cn(FL, 'm-0 text-muted-foreground')}>{categoryChangeGap(prevName, verdict?.state === 'refused')}</p>}
         </Fig>
         <Fig>
           <div data-copy="figure" className={FV}>{fmtInt(split.named)}</div>
