@@ -137,8 +137,12 @@ export const MARKET_WEEKS = 3
 export const MARKET_QUOTES = 3
 /** Months a card's bars and the over-time table read, the month included. */
 export const MARKET_CARD_MONTHS = 4
-/** Months the open panel's line draws at most (the board's four). */
+/** Months a conversation's page draws its line over at most (E2's open
+ *  panel's four; F2-Market-Conversation draws no month chart). */
 export const MARKET_PANEL_MONTHS = 4
+/** Months a subject's page draws "Month by month" over (F2-Market-Subject:
+ *  August, September, October so far), at every width. */
+export const MARKET_SUBJECT_PAGE_MONTHS = 3
 /** Months Over time's market card draws at most. */
 export const MARKET_TIME_MONTHS = 6
 /** Months the subject board's small line reads. */
@@ -2748,7 +2752,7 @@ export function buildSubjectPanel(a: {
   const standing = a.read && monthStartOf(a.read.month) === m ? a.read.standing.find((s) => s.subjectId === a.id) : null
   const bars: MonthCount[] = f.trail
     .filter((pt) => monthStartOf(pt.month) <= m && pt.n != null)
-    .slice(-MARKET_PANEL_MONTHS)
+    .slice(-MARKET_SUBJECT_PAGE_MONTHS)
     .map((pt) => ({ month: monthStartOf(pt.month), label: longMonth(pt.month), k: pt.k ?? 0, n: pt.n, filling: monthStartOf(pt.month) === m && a.month.soFar }))
   return {
     id: f.id,

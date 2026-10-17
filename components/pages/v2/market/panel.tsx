@@ -24,7 +24,7 @@ export const ASK = 'inline-flex min-h-[38px] cursor-pointer items-center gap-2 r
  *  the boards print whole percents here, as the tiles and the kinds card
  *  do, and the "k of n" under each bar keeps it checkable. */
 export function shareBars(bars: readonly MonthCount[]) {
-  // The board's four months; only the newest can be "so far".
+  // At most a conversation's four months (a subject's page hands in three); only the newest can be "so far".
   const shown = bars.slice(-MARKET_PANEL_MONTHS)
   return shown.map((b, i) => {
     const pct = b.n ? (100 * (b.k ?? 0)) / b.n : 0

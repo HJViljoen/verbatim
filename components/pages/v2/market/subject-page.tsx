@@ -172,8 +172,10 @@ function NumbersCard({ page, data }: { page: SubjectPage; data: MarketData }) {
         ) : null}
         {panel.bars.length > 0 ? (
           <PanelSection label="Month by month · share of your market’s videos" className={week && weeks ? 'max-[1179px]:mt-6 max-sm:mt-0 max-sm:border-t max-sm:border-track max-sm:pt-[18px]' : undefined}>
+            {/* Three months at every width (`MARKET_SUBJECT_PAGE_MONTHS`), the
+                phone's at its smaller size. */}
             <MiniBars bars={shareBars(panel.bars)} size="lg" className="max-sm:hidden" label={`Share of the market's videos about ${panel.name}, month by month`} />
-            <MiniBars bars={shareBars(panel.bars).slice(-3)} size="md" className="sm:hidden" label={`Share of the market's videos about ${panel.name}, month by month`} />
+            <MiniBars bars={shareBars(panel.bars)} size="md" className="sm:hidden" label={`Share of the market's videos about ${panel.name}, month by month`} />
           </PanelSection>
         ) : null}
       </div>

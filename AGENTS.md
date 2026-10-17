@@ -1458,7 +1458,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
     the conversations inside it; the one-base line (the parts below read the
     videos a comment dates, the week's and the month's, each "of these" the
     tile's); week by week, the subject's videos a comment dates in the three
-    weekly windows, three bare counts; month by month; who is saying it,
+    weekly windows, three bare counts; month by month, three months at every
+    width as the board draws them (`MARKET_SUBJECT_PAGE_MONTHS`; a
+    conversation's page keeps `MARKET_PANEL_MONTHS`' four); who is saying it,
     each group "k of n"; what people did; where, the week beside the month;
     three comments through the strict subject gate; the Agent); then the
     biggest three conversations inside it as pages and "All N conversations

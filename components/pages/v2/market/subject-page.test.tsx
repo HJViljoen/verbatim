@@ -44,8 +44,11 @@ describe('a ready subject, this week', () => {
     expect(html).toMatch(/data-copy="verdict"[^>]*><span class="text-xs font-medium text-muted-foreground"[^>]*>no clear change/)
   })
 
-  it('week by week (three bare counts) and month by month', () => {
-    expect(text).toContain('Week by week · videos 21 33 40 21 Sep 28 Sep 5 Oct Month by month · share of your market’s videos 32% July 144 of 455')
+  it('week by week (three bare counts) and month by month: three months at every width, as the board draws them', () => {
+    expect(text).toContain('Week by week · videos 21 33 40 21 Sep 28 Sep 5 Oct Month by month · share of your market’s videos 32% August 194 of 612 33% September 277 of 839 34% October so far · 108 of 318 32% August')
+    expect(text).not.toContain('July')
+    // The conversation's page keeps its four (`MARKET_PANEL_MONTHS`); a subject's three.
+    expect(FIT.subjectPage!.panel.bars.map((b) => b.label)).toEqual(['August', 'September', 'October'])
   })
 
   it('prints the month\'s share one way: the tile\'s whole percent is the bar\'s (the fresh check, 17 Oct)', () => {
