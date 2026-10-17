@@ -69,7 +69,7 @@ function LeadSentence({ card, reading }: { card: MoveCard; reading: ReadingLabel
   if (card.pending) {
     const last = card.points[card.points.length - 1]
     return last
-      ? <p className={LEAD}>Share of market videos{on}: {pct(last)} in {longMonth(last.month)}, before the move. {longMonth(card.pending)} reads once the month has been read.</p>
+      ? <p className={LEAD}>Share of market videos{on}: {pct(last)} in {longMonth(last.month)}, before the move.</p>
       : <p className={cn(LEAD, 'text-muted-foreground')}>{longMonth(card.pending)} reads once the month has been read.</p>
   }
   const c = card.compare
@@ -258,12 +258,15 @@ function Facts({ page }: { page: MovePageData }) {
               : <p className="m-0 text-[13px] text-muted-foreground">No video counted by platform yet.</p>}
           </div>
         </>
-      ) : (
+      ) : page.evidence.state === 'ready' || page.evidence.state === 'unread' ? (
+        // Its videos not read, or none yet: said once here beside the list's
+        // own line. A subject whose check is open, or a move on nothing read
+        // month by month, already says why above and in "What it is on".
         <div className={FACT}>
           <Label>Since {since}</Label>
-          <p className="m-0 text-[13px] text-muted-foreground">{saidGap(page.evidence, page.card.day)}</p>
+          <p className="m-0 text-[13px] text-muted-foreground">{page.evidence.state === 'unread' ? 'Not read just now.' : 'No video yet.'}</p>
         </div>
-      )}
+      ) : null}
     </aside>
   )
 }
@@ -290,7 +293,11 @@ function OtherMoves({ page }: { page: MovePageData }) {
           </div>
         ) : null}
         {page.others.length === 0 && !page.invite ? (
-          <p className="m-0 text-[14px] text-muted-foreground">No other move is dated yet.</p>
+          // The row keeps a card's frame where there is nothing else to show.
+          <div data-no-other-move="" className="flex min-w-0 flex-col gap-1.5 rounded-[12px] px-4 pt-3.5 pb-[13px] ring-1 ring-border">
+            <span className="text-[14px] leading-[1.35] font-semibold text-foreground">No other move yet</span>
+            <span className="text-[12.5px] text-muted-foreground">This is the only move dated so far.</span>
+          </div>
         ) : null}
       </nav>
     </>
@@ -323,6 +330,6 @@ export function moveMeta(page: MovePageData, read: string | null): ReactNode[][]
   return [
     [`Dated ${shortDate(page.card.day)}`],
     read ? [read] : [],
-    ev.state === 'ready' && page.card.label ? [<><span data-copy="figure">{fmtInt(ev.total)}</span> {ev.total === 1 ? 'video' : 'videos'} on <OnLabel card={page.card} /> since {shortDate(page.card.day)}</>] : [],
+    ev.state === 'ready' && ev.total > 0 && page.card.label ? [<><span data-copy="figure">{fmtInt(ev.total)}</span> {ev.total === 1 ? 'video' : 'videos'} on <OnLabel card={page.card} /> since {shortDate(page.card.day)}</>] : [],
   ]
 }

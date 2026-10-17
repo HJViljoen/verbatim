@@ -197,10 +197,20 @@ describe('a dated move, the evidence (G6-Moves-Move)', () => {
     expect(member).not.toContain('Your next move')
   })
 
+  it('the thin real move (a member): its month before it alone, said once; no count of nothing; the siblings keep a frame', () => {
+    const html = movePage(moveThinFixture())
+    const t = markupText(html)
+    expect(t).toMatch(/Share of market videos on Cost and affordability frustration ?: 4% in September, before the move\./)
+    expect(t.match(/October reads once the month has been read/g)).toHaveLength(1)
+    expect(t).not.toMatch(/\b0 videos\b/)
+    expect(html).toContain('data-no-other-move=""')
+    expect(t).not.toContain('Mark done')
+  })
+
   it('U6: a move on a subject whose check is open prints no line, no figure and nothing it said, and says why once', () => {
     const t = markupText(movePage(moveHeldFixture()))
     expect(t).toContain('This subject is not measured yet: its line is drawn once its check has passed.')
-    expect(t).toContain(SAID_HELD)
+    expect(t.split(SAID_HELD)).toHaveLength(2)
     expect(t).toContain('A subject you track · not measured yet')
     expect(movePage(moveHeldFixture())).not.toContain('data-video-card')
   })
