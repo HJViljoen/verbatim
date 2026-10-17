@@ -100,6 +100,12 @@ describe('the reply list\'s page', () => {
     expect(empty).toContain('Ready to buy They say they want one')
     expect(empty).toContain('None this week.')
     expect(empty).toContain('What to post next Post ideas are not switched on for this workspace.')
+    // The month is named, never "this month" for one that has ended.
+    expect(renderText(page({ state: 'empty', period: 'month' }))).toContain('None in October so far.')
+    const september = contentRepliesFixture({ state: 'empty', period: 'month' })
+    const ended = renderText(<ContentRepliesPage data={{ ...september, view: { ...september.view, window: { ...september.view.window!, phrase: 'in September' } } }} />)
+    expect(ended).toContain('None in September.')
+    expect(ended).not.toContain('this month')
     expect(renderText(page({ state: 'unread' }))).toContain('The comments worth a reply could not be read just now.')
     const noWeek = renderText(page({ state: 'no_week' }))
     expect(noWeek).toContain('No update has covered a week yet, so there is no reply list.')

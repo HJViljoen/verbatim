@@ -96,7 +96,9 @@ function VideoCard({ v, brand, hideOnPhone, wrong }: { v: ReplyVideoView; brand:
 /** One kind: its title and counts, what it holds, its videos (two on a phone,
  *  then "Show all … in {kind}"). Its frame and one line where it holds none. */
 function KindSection({ k, data }: { k: ReplyKindView; data: RepliesPageData }) {
-  const when = data.period === 'month' ? 'this month' : data.isWeek ? 'this week' : 'in these days'
+  // The month in its own words ("in October so far", "in September"): a
+  // month that has ended is never "this month".
+  const when = data.period === 'month' ? data.view.window?.phrase ?? 'this month' : data.isWeek ? 'this week' : 'in these days'
   return (
     <section id={k.key} aria-labelledby={`h-${k.key}`} data-reply-kind={k.key} className="flex scroll-mt-6 flex-col gap-3 [&+&]:mt-[18px] max-sm:[&+&]:mt-2.5">
       <div className="flex items-baseline justify-between gap-3 px-0.5 max-sm:flex-col max-sm:items-start max-sm:gap-0.5">
