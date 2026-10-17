@@ -237,7 +237,7 @@ function ossurGroupProducts(videoIds: readonly string[], params: VoicesParams) {
     products: new Map([['p-comfort', new Set(ids.slice(0, 2))], ['p-seal', new Set(ids.slice(2, 3))], ['p-rheo', new Set<string>()]]),
     all: new Set(ids.slice(0, 11)),
   }
-  const products = [{ id: 'p-comfort', name: 'Iceross Comfort' }, { id: 'p-seal', name: 'Iceross Seal-In' }, { id: 'p-rheo', name: 'Rheo Knee' }]
+  const products = [{ id: 'p-comfort', name: 'Iceross Comfort', group_id: 'g-liners' }, { id: 'p-seal', name: 'Iceross Seal-In', group_id: 'g-liners' }, { id: 'p-rheo', name: 'Rheo Knee', group_id: 'g-knees' }]
   return groupProducts({ state: 'ready', sets, products, month: SEP, monthWords: monthWordsOf(SEP, false), params })
 }
 

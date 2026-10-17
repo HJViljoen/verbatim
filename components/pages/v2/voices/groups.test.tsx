@@ -217,7 +217,8 @@ describe('a group\'s panel (E3-Voices-Open)', () => {
     expect(text).toContain('Products in their videos · of their 45 Iceross Comfort 2 of 45 Iceross Seal-In 1 of 45 Couldn’t tell which product 7 of 45 Each opens in Your products')
     expect(text).not.toContain('Rheo Knee')
     expect(text).not.toContain('Where they comment')
-    expect(render(node)).toContain('href="/dashboard/products?product=p-comfort#product-panel"')
+    // Each opens the product's own page (Your products as pages, 17 Oct).
+    expect(render(node)).toContain('href="/dashboard/products/g-liners/p-comfort"')
     assertCopyContract(node)
   })
 

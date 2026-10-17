@@ -115,7 +115,8 @@ const isUnique = (error: unknown): boolean => (error as { code?: string } | null
 /** Every page that reads the catalogue. */
 function revalidateProducts(): void {
   revalidatePath('/dashboard/settings/products')
-  revalidatePath('/dashboard/products')
+  // The root and every category's and product's page under it (17 Oct).
+  revalidatePath('/dashboard/products', 'layout')
   revalidatePath('/dashboard')
 }
 

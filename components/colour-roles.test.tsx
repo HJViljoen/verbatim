@@ -8,8 +8,9 @@ import { MarketPage } from './pages/v2/market'
 import { marketFixture } from '@/lib/pages/v2/market-fixture'
 import { VoicesPage } from './pages/v2/voices'
 import { VOICES_FIXTURES } from '@/lib/pages/v2/voices-fixture'
-import { ProductsPage } from './pages/v2/products'
+import { ProductsCategoryPage, ProductsPage, ProductsProductPage } from './pages/v2/products'
 import { PRODUCTS_FIXTURES } from '@/lib/pages/v2/products-fixture'
+import { PRODUCTS_LEVEL_FIXTURES } from '@/lib/pages/v2/products-level-fixture'
 import { ContentPage } from './pages/v2/content'
 import { contentFixture } from '@/lib/pages/v2/content-fixture'
 import { MovesV2Page } from './pages/v2/moves'
@@ -107,8 +108,9 @@ describe('the bans that hold with more colour, on the pages', () => {
     ['voices, a group open', render(<VoicesPage data={VOICES_FIXTURES['ossur-group']()} />), false],
     // Your products names the client's own products, never a brand by chip.
     ['your products', render(<ProductsPage data={PRODUCTS_FIXTURES.ossur()} />), false],
-    ['your products, a category open', render(<ProductsPage data={PRODUCTS_FIXTURES['ossur-liners']()} />), false],
-    ['your products, a product open', render(<ProductsPage data={PRODUCTS_FIXTURES['ossur-product']()} />), false],
+    // A category's and a product's own pages (17 Oct, the G4 boards).
+    ['your products, a category', render(<ProductsCategoryPage data={PRODUCTS_LEVEL_FIXTURES.liners()} />), false],
+    ['your products, a product', render(<ProductsProductPage data={PRODUCTS_LEVEL_FIXTURES.sealinx()} />), false],
     ['content', render(<ContentPage data={contentFixture()} />), false],
     ['content, an idea open', render(<ContentPage data={contentFixture({ open: { kind: 'idea', rank: 1 } })} />), false],
     ['your moves', render(<MovesV2Page data={movesFixture()} statements={statementsV2()} />), false],

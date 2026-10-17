@@ -1,12 +1,11 @@
 import Link from 'next/link'
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
-import { equalColumns, panelPlacement, PeriodSwitch, type PanelLayout, type PerBreakpoint } from '@/components/v2'
+import { PeriodSwitch } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
 import { surface } from '@/lib/nav'
 import { barMonth } from '@/lib/reading/month-label'
-import { shelfColumns, type ProductsData } from '@/lib/pages/v2/products'
+import type { ProductsData } from '@/lib/pages/v2/products'
 import { Fig, OLINK } from './parts'
-import { CategoryPanelView, ProductPanelView } from './panels'
 import { CatalogueCard, CatalogueFrame } from './shelf'
 import { StandoutFrames, Standouts } from './standouts'
 
@@ -16,8 +15,10 @@ import { StandoutFrames, Standouts } from './standouts'
 //     products came up, the videos about them or their categories);
 //   what stands out: up to four cards, picked by code;
 //   your catalogue: every category a column, every product a tile shaded by
-//     its videos;
-//   the open category or product, in place under the catalogue.
+//     its videos.
+// Every card, head and tile opens a PAGE (17 Oct, the G4 boards): a
+// category's (the hub) or a product's (the evidence), ./levels.tsx. Nothing
+// opens in place on this page any more.
 // Before any count, the page's honest states: not switched on (the
 // migration, or the tenant's switch), no catalogue (a link to Settings), not
 // read for the month, or not read just now.
@@ -26,7 +27,7 @@ import { StandoutFrames, Standouts } from './standouts'
 // (`month_product_readings`), so "This week" and "Over time" would offer views
 // with nothing behind them. The switch in the board's place offers the latest
 // months read (`monthOptions`), each an address (`?month=`); the month line
-// in each panel is the over-time view.
+// on each level page is the over-time view.
 //
 // EVERY STATE KEEPS THE BOARD'S FRAME (the parity pass, 13 Oct night): the
 // four standout places, the catalogue card and the links under it. A state
@@ -36,7 +37,7 @@ import { StandoutFrames, Standouts } from './standouts'
 
 export { CatalogueCard, CatalogueFrame, shelfColumn } from './shelf'
 export { StandoutCard, StandoutFrames, Standouts, shareWords } from './standouts'
-export { CategoryPanelView, ProductPanelView } from './panels'
+export { ProductsCategoryPage, ProductsLevelMissing, ProductsProductPage } from './levels'
 export { TagControl, TagControlView, tagSaid } from './tag-control'
 
 /** The states that read no month: the page not switched on, its tables not
@@ -95,28 +96,7 @@ function MonthSwitch({ data }: { data: ProductsData }) {
   )
 }
 
-/** The shelf's columns at each width (the kit's `CatalogueShelf`: two on a
- *  phone, three from 768, five or six from 1280). */
-export function shelfLayout(count: number): PanelLayout {
-  return { base: equalColumns(2, count), md: equalColumns(3, count), xl: equalColumns(shelfColumns(count), count) }
-}
-
-/**
- * Where the open panel's notch points, at each width: the open category's
- * column (a product's own category), wherever the shelf wraps it (T9). The
- * panel itself stays under the catalogue card at every width, as the board
- * draws it: the columns are inside the card, and a panel between two of its
- * rows would be a card inside a card.
- */
-export function shelfNotch(data: Pick<ProductsData, 'shelf' | 'panel'>): PerBreakpoint | undefined {
-  const id = data.panel?.kind === 'product' ? data.panel.groupId : data.panel?.kind === 'group' ? data.panel.id : null
-  const at = id ? data.shelf.findIndex((c) => c.id === id) : -1
-  return at >= 0 ? panelPlacement(at, shelfLayout(data.shelf.length)).notch : undefined
-}
-
 export function ProductsPage({ data }: { data: ProductsData }) {
-  const panel = data.panel
-  const notch = shelfNotch(data)
   // The switch, wherever there is a month to switch to (a month not read
   // yet included: the way back to one that is).
   const showSwitch = data.months.length >= 2 && data.months.some((m) => m.current)
@@ -130,8 +110,6 @@ export function ProductsPage({ data }: { data: ProductsData }) {
         <>
           <Standouts slots={data.slots} monthName={data.monthName} />
           <CatalogueCard data={data} />
-          {panel?.kind === 'group' ? <CategoryPanelView panel={panel} monthName={data.monthName} canTag={data.canTag} notchAt={notch} /> : null}
-          {panel?.kind === 'product' ? <ProductPanelView panel={panel} monthName={data.monthName} notchAt={notch} /> : null}
         </>
       )}
       {data.state !== 'ready' ? null : (

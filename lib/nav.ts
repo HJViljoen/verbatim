@@ -2,6 +2,7 @@ import { OLD_PAGES_RETIRE_ON } from './config'
 import { fullDate } from './format'
 import type { PageKey } from './renderables/types'
 import type { SessionContext } from './auth'
+import { productsCategoryPath, productsProductPath } from './pages/v2/products-address'
 
 /**
  * The shell's one table (Phase 1 WP9, items 42 and 38a, decision C).
@@ -467,6 +468,13 @@ export const RETIRED_ADDRESSES: Readonly<Record<string, string>> = {
   '/dashboard/reports': '/dashboard/studio',
 }
 
+/** What a redirect may need that its address does not carry, read by the
+ *  page that asks (Your products: a product's category, from the catalogue). */
+export interface RedirectKnown {
+  /** The category a product sits in; null for one the catalogue does not hold. */
+  productGroup?: (productId: string) => string | null
+}
+
 /** Your moves' legacy deep links on `/dashboard/market`, in the order one wins
  *  over another: `?item=<lineage>` (the ledger's row), `?rec=<id>` (the
  *  digest's, four sent emails), `?ledger=all` (Show all). */
@@ -513,6 +521,8 @@ function marketMonth(params: SearchParams): Record<string, string | undefined> {
  *   /dashboard/voice            → /dashboard/voices           (the cast, a brand's videos)
  *   /dashboard/competitive?vs=B → /dashboard/voices?brand=B
  *   /dashboard/subjects?item=S  → /dashboard/market/subjects/S
+ *   /dashboard/products?group=G → /dashboard/products/G           (17 Oct; ?unclear=all kept)
+ *   /dashboard/products?product=P → /dashboard/products/<its category>/P
  *   the other RETIRED_ADDRESSES → their target, query kept
  *
  * Every param the mapping does not name travels as it came (a repeated key
@@ -529,7 +539,7 @@ function marketMonth(params: SearchParams): Record<string, string | undefined> {
  * §10.2.2): `/dashboard/voice#cast` lands on `/dashboard/voices#cast`, and a
  * fragment the new page has no id for scrolls nowhere.
  */
-export function redirectFor(path: string, params: SearchParams = {}): string | null {
+export function redirectFor(path: string, params: SearchParams = {}, known: RedirectKnown = {}): string | null {
   switch (path) {
     case '/dashboard':
       return value(params.month) === undefined ? null : redirectFor('/dashboard/overview', params)
@@ -566,6 +576,24 @@ export function redirectFor(path: string, params: SearchParams = {}): string | n
     }
     case '/dashboard/competitive':
       return withQuery(RETIRED_ADDRESSES[path], remap(params, ['vs'], { brand: value(params.vs) }))
+    // ---- YOUR PRODUCTS' PANELS ARE PAGES (17 Oct; the G4 boards) ----------
+    // `?group=` opened a category's panel in place, `?product=` a product's,
+    // and `?unclear=all` the category's whole couldn't-tell-which list.
+    // Settings' "Tag them", the Dashboard's tile, Voices and sent weekly
+    // emails carry them, so they redirect for good, `?month=` and every other
+    // param kept. A product's page nests under its category, which the
+    // address does not name: the root page reads its catalogue and passes
+    // `known.productGroup`. A product wins where a link carried both, as the
+    // panel did; one the catalogue does not hold falls back to the category,
+    // else stays on the root (which reads neither param now).
+    case '/dashboard/products': {
+      const product = value(params.product)
+      const group = value(params.group)
+      const home = product !== undefined ? known.productGroup?.(product) ?? null : null
+      if (product !== undefined && home) return withQuery(productsProductPath(home, product), remap(params, ['group', 'product', 'unclear']))
+      if (group !== undefined) return withQuery(productsCategoryPath(group), remap(params, ['group', 'product']))
+      return null
+    }
     default: {
       const to = RETIRED_ADDRESSES[path]
       return to === undefined ? null : withQuery(to, params)

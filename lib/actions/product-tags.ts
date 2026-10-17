@@ -56,7 +56,9 @@ export async function tagProduct(_prev: ProductTagState, formData: FormData): Pr
   })
   switch (r.outcome) {
     case 'written':
-      revalidatePath('/dashboard/products')
+      // The tag is drawn on a category's page (17 Oct): every Your products
+      // page under the root refreshes.
+      revalidatePath('/dashboard/products', 'layout')
       return { ok: true, outcome: r.outcome, message: PRODUCT_TAG_COPY.done }
     case 'written_closed':
       return { ok: true, outcome: r.outcome, message: PRODUCT_TAG_COPY.closedMonth }

@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { Box } from 'lucide-react'
 import { CARD, CardHead, CatalogueShelf, ShelfLegend, type ShelfColumn } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
-import { PANEL_ID, productsBasis, sharePct, shelfColumns, shelfCut, type ProductsData, type ShelfCategoryView } from '@/lib/pages/v2/products'
+import { productsBasis, sharePct, shelfColumns, shelfCut, type ProductsData, type ShelfCategoryView } from '@/lib/pages/v2/products'
 import { SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { cn } from '@/lib/utils'
 import { OLINK, VerdictBadge } from './parts'
@@ -12,8 +12,11 @@ import { OLINK, VerdictBadge } from './parts'
 // month (`CatalogueShelf`, the kit's), the products with videos first. A
 // column's head is its videos, its share of the market with this month
 // against last (a verdict, printed only where it is an answer: moved, or no
-// clear change), and what most of its videos are about. Under the tiles,
-// "Couldn't tell which · N" opens that list in the category's panel.
+// clear change), and what most of its videos are about. Every head, tile and
+// link opens a PAGE (17 Oct, the G4 boards; each head carries a small arrow
+// to say so): a head and "+N more" the category's page (the hub lists every
+// product), a tile the product's page, "Couldn't tell which · N" the
+// category's page at its list (`#unclear`).
 
 /** One column, as the kit draws it. */
 export function shelfColumn(c: ShelfCategoryView, monthName: string): ShelfColumn {
@@ -45,16 +48,16 @@ export function shelfColumn(c: ShelfCategoryView, monthName: string): ShelfColum
           ? <span className="text-muted-foreground">What it’s about · {SUBJECT_NOT_MEASURED}</span>
           : null,
     // The board's height: the first SHELF_TILES tiles (the most videos
-    // first, `buildShelf`), then "+N more" into the category's panel
-    // (`shelfCut`, which the Dashboard's mini shelf cuts by too).
+    // first, `buildShelf`), then "+N more" into the category's page, which
+    // lists every product (`shelfCut`, which the Dashboard's mini shelf cuts
+    // by too).
     products: shown.map((p) => ({ id: p.id, name: p.name, videos: p.videos, href: p.href, flag: p.flag })),
     more: more > 0 ? { count: more, href: c.href } : null,
     unclear: c.unclear > 0 ? { count: c.unclear, href: c.unclearHref } : null,
   }
 }
 
-export function CatalogueCard({ data }: { data: Pick<ProductsData, 'shelf' | 'monthName' | 'open' | 'client'> }) {
-  const selected = data.shelf.find((c) => c.selected)?.id ?? null
+export function CatalogueCard({ data }: { data: Pick<ProductsData, 'shelf' | 'monthName' | 'client'> }) {
   return (
     <section aria-labelledby="catalogue-title" className={CARD}>
       {/* The key sits at the head's right on a wide screen and wraps under it
@@ -72,8 +75,7 @@ export function CatalogueCard({ data }: { data: Pick<ProductsData, 'shelf' | 'mo
       </div>
       <CatalogueShelf
         columns={data.shelf.map((c) => shelfColumn(c, data.monthName))}
-        selected={selected}
-        panelId={data.open ? PANEL_ID[data.open.kind] : undefined}
+        opens
         className={shelfColumns(data.shelf.length) === 6 ? 'xl:grid-cols-6' : undefined}
       />
     </section>
@@ -117,7 +119,7 @@ export function CatalogueFrame({ data, link }: { data: Pick<ProductsData, 'shelf
         <div className="pt-1"><ShelfLegend /></div>
       </div>
       {data.shelf.length > 0
-        ? <CatalogueShelf columns={data.shelf.map((c) => shelfColumn(c, data.monthName))} unread className={shelfColumns(data.shelf.length) === 6 ? 'xl:grid-cols-6' : undefined} />
+        ? <CatalogueShelf columns={data.shelf.map((c) => shelfColumn(c, data.monthName))} unread opens className={shelfColumns(data.shelf.length) === 6 ? 'xl:grid-cols-6' : undefined} />
         : <EmptyShelf />}
     </section>
   )

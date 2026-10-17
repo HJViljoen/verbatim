@@ -773,7 +773,7 @@ export interface GroupProducts {
 export function groupProducts(input: {
   state: GroupProducts['state']
   sets?: ProductMonthSets | null
-  products?: readonly Pick<CatalogueProduct, 'id' | 'name'>[]
+  products?: readonly (Pick<CatalogueProduct, 'id' | 'name'> & { group_id?: string })[]
   /** The month read, `YYYY-MM-01`. */
   month: string
   monthWords: string
@@ -785,7 +785,7 @@ export function groupProducts(input: {
   if (input.state === 'unread' || !input.sets) return { state: 'unread', ...empty, line: GROUP_PRODUCTS_UNREAD }
   const sets = input.sets
   const rows = (input.products ?? [])
-    .map((p) => ({ id: p.id, name: p.name, k: sets.products.get(p.id)?.size ?? 0, href: productsHref({ month: input.params.month }, { kind: 'product', id: p.id }) }))
+    .map((p) => ({ id: p.id, name: p.name, k: sets.products.get(p.id)?.size ?? 0, href: productsHref({ month: input.params.month }, { kind: 'product', id: p.id, group: p.group_id }) }))
     .filter((r) => r.k > 0)
     .sort((a, b) => b.k - a.k || a.name.localeCompare(b.name))
     .slice(0, GROUP_PRODUCTS_SHOWN)

@@ -2,16 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { bandVerdict } from '@/lib/reading/verdicts'
-import { ossurLinersFixture, ossurNaviiFixture, ossurProductsFixture, ossurSealInXFixture, ossurTodayFixture, PRODUCT_IDS, PRODUCTS_FIXTURES } from '@/lib/pages/v2/products-fixture'
-import { buildCompare, crossesOf, setKey, SHELF_TILES, type CategoryPanel, type FocusStandout, type GapStandout, type ProductPanel } from '@/lib/pages/v2/products'
-import { PRODUCT_TAG_COPY } from '@/lib/products/tags'
-import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
+import { ossurProductsFixture, ossurTodayFixture, PRODUCT_IDS, PRODUCTS_FIXTURES } from '@/lib/pages/v2/products-fixture'
+import { SHELF_TILES, type FocusStandout, type GapStandout } from '@/lib/pages/v2/products'
 import { CatalogueCard, CatalogueFrame, shelfColumn } from './shelf'
 import { emptyTitle, shareWords, StandoutCard, StandoutFrames, Standouts, SQUARES_MAX } from './standouts'
-import { CategoryPanelView, ProductPanelView } from './panels'
 
-// Every block of Your products, rendered statically against the copy
-// contract and the board's words (depth v2, T5).
+// Every block of Your products' root, rendered statically against the copy
+// contract and the board's words (depth v2, T5). The level pages' blocks
+// (17 Oct, the G4 boards) are ./levels.test.tsx's.
 
 const d = ossurProductsFixture()
 
@@ -44,7 +42,7 @@ describe('the standouts (E4-Products, the four cards)', () => {
       window: { kind: 'month', from: '2026-09-01', to: '2026-10-01' }, value: { k: 12, n: 120 }, baseline: { k: 150, n: 400 },
     })
     const s: GapStandout = {
-      kind: 'gap', open: { kind: 'group', id: PRODUCT_IDS.liners() }, href: '/dashboard/products?group=x#category-panel', name: 'Liners', where: 'Liners',
+      kind: 'gap', open: { kind: 'group', id: PRODUCT_IDS.liners() }, href: '/dashboard/products/x', name: 'Liners', where: 'Liners',
       subject: 'Sweat and heat', category: { k: 150, n: 400 }, product: { name: 'Iceross Seal-In X', k: 12, n: 120 }, verdict,
     }
     expect(verdict.state).toBe('moved')
@@ -72,7 +70,7 @@ describe('the catalogue (E4-Products, "Your catalogue")', () => {
     expect(m).toContain('data-tone="0"')
     expect(m).toContain('xl:grid-cols-6')
     const text = renderText(node)
-    expect(text).toContain('Liners 117 videos 14% of the market no clear change')
+    expect(text).toContain('Liners → 117 videos 14% of the market no clear change')
     expect(text).toContain('Fit & comfort leads, 70 of 117')
     expect(text).toContain('Couldn’t tell which · 21')
     expect(text).toContain('Counted on every video in your market, including creators’ videos about Össur')
@@ -92,99 +90,6 @@ describe('the catalogue (E4-Products, "Your catalogue")', () => {
     expect(quiet.note).toBeNull()
   })
 
-  it('wears the ring on the open category\'s head, the product\'s category where a product is open', () => {
-    expect(render(<CatalogueCard data={ossurLinersFixture()} />)).toMatch(/aria-current="true"[^>]*ring-2 ring-foreground/)
-    const product = ossurSealInXFixture()
-    expect(product.shelf.find((c) => c.selected)?.name).toBe('Liners')
-  })
-})
-
-describe('a category\'s panel (E4-Products-Liners)', () => {
-  const open = ossurLinersFixture()
-  const panel = open.panel as CategoryPanel
-
-  it('the split, what it is about, what people did, the month line, the comparison, the list, Ask and Settings', () => {
-    const node = <CategoryPanelView panel={panel} monthName="September" canTag />
-    const text = renderText(node)
-    expect(text).toContain('Category 14% of the market no clear change')
-    expect(text).toContain('10 of your products · 4 came up in September')
-    expect(text).toContain('117 of 839 videos talk about liners 18 name one of your products 21 are about one of yours, but we couldn’t tell which 78 are about liners in general, none of yours named')
-    expect(text).toContain('What it’s about · of 117 Fit & comfort')
-    expect(text).toContain('What people did · of 117 Complaints in the comments')
-    expect(text).toContain('Share of the market, month by month')
-    expect(text).toContain('Your products against liners in general')
-    expect(text).toContain('Too few videos on any one product to call a difference from the category yet.')
-    expect(text).toContain('About one of your products, but we couldn’t tell which · 21 videos')
-    expect(text).toContain('“This liner gave me a rash after a week, back to my old one now.” TikTok · 29 Sep · video by @stepbystep.amp Watch the video Tag the product')
-    expect(text).toContain('1 more comment we do not quote here.')
-    expect(text).toContain('See all 6 →')
-    expect(text).toContain('Ask the Agent about liners')
-    expect(text).toContain('Edit Liners in Settings →')
-    expect(render(node)).toContain('data-tag-control="closed"')
-    assertCopyContract(node)
-  })
-
-  it('draws no Tag control for a reader who may not tag, and says who can', () => {
-    const member = PRODUCTS_FIXTURES['ossur-liners-member']().panel as CategoryPanel
-    const node = <CategoryPanelView panel={member} monthName="September" canTag={false} />
-    expect(render(node)).not.toContain('data-tag-control')
-    expect(renderText(node)).not.toContain('Tag the product')
-    expect(renderText(node)).toContain(PRODUCT_TAG_COPY.role)
-    assertCopyContract(node)
-  })
-
-  it('a video\'s own words are a line too, with no quote', () => {
-    const all = PRODUCTS_FIXTURES['ossur-liners-all']().panel as CategoryPanel
-    const text = renderText(<CategoryPanelView panel={all} monthName="September" canTag />)
-    expect(text).toContain('The video itself names one of your products here. YouTube · 15 Sep · video by @amputee.life')
-    expect(text).not.toContain('See all')
-  })
-
-  it('keeps the list\'s place where no video is about one of yours without saying which, and says so once (the parity pass)', () => {
-    const node = <CategoryPanelView panel={{ ...panel, unclear: { ...panel.unclear, videos: 0, lines: [] } }} monthName="September" canTag />
-    expect(render(node)).toContain('id="unclear"')
-    expect(renderText(node)).toContain('About one of your products, but we couldn’t tell which · 0 videos No video about liners in September was about one of yours without saying which.')
-    expect(renderText(node)).not.toContain('Tag the product')
-    assertCopyContract(node)
-  })
-})
-
-describe('a product\'s panel', () => {
-  it('its videos against the market and its category, what it is about, its month by month, its comments', () => {
-    const panel = ossurSealInXFixture().panel as ProductPanel
-    const node = <ProductPanelView panel={panel} monthName="September" />
-    const text = renderText(node)
-    expect(text).toContain('Product Liners Iceross Seal-In X 9 videos in September')
-    expect(text).toContain('9 of 839 videos in your market name it 9 of 117 videos about liners name it 6 of 9 are about Fit & comfort')
-    expect(text).toContain('Share of the market naming it, month by month 1.0% Jun 4 of 410 1.0% Jul 5 of 520 1.0% Aug 6 of 612 1.1% Sep 9 of 839')
-    expect(text).toContain('Iceross Seal-In X against liners in general')
-    expect(text).toContain('In their words · 3 comments naming it in September')
-    expect(render(node).match(/data-copy="quote"/g)).toHaveLength(3)
-    assertCopyContract(node)
-  })
-
-  it('says where a kind was found, never that people did it to the product ("Praised it" overclaims)', () => {
-    // A kind's count is the product's videos with that kind anywhere in their
-    // comments, about it or about anything else in the video.
-    const panel = ossurSealInXFixture().panel as ProductPanel
-    const text = renderText(<ProductPanelView panel={panel} monthName="September" />)
-    expect(text).toMatch(/What people did · of 9 (Praise|Questions|Complaints|Talk of buying|Pushback) in the comments/)
-    for (const shared of ['Praised it', 'Praised a', 'Asked a question', 'Complained about something', 'Said they want to buy', 'Pushed back']) {
-      expect(text).not.toContain(shared)
-    }
-  })
-
-  it('a first month wears its flag; a quiet product says so, its stats are read zeros (the parity pass)', () => {
-    const navii = ossurNaviiFixture().panel as ProductPanel
-    expect(render(<ProductPanelView panel={navii} monthName="September" />)).toContain('data-flag="new"')
-    const quiet = { ...navii, videos: 0, comments: 0, flag: null, crosses: null, quotes: [] }
-    const node = <ProductPanelView panel={quiet} monthName="September" />
-    const text = renderText(node)
-    expect(text).toContain('Nobody in your market named it in September.')
-    expect(text).toContain('0 of 839 videos in your market name it 0 of 76 videos about knees name it 0 comments name it 52 of 76 are about knees in general, none of yours named')
-    expect(text).toContain('In their words No comment named it in September.')
-    assertCopyContract(node)
-  })
 })
 
 describe('the fresh check\'s fixes, as drawn', () => {
@@ -194,7 +99,7 @@ describe('the fresh check\'s fixes, as drawn', () => {
       window: { kind: 'month', from: '2026-09-01', to: '2026-10-01' }, value: { k: 80, n: 120 }, baseline: { k: 150, n: 400 },
     })
     const s: GapStandout = {
-      kind: 'gap', open: { kind: 'group', id: PRODUCT_IDS.liners() }, href: '/dashboard/products?group=x#category-panel', name: 'Liners', where: 'Liners',
+      kind: 'gap', open: { kind: 'group', id: PRODUCT_IDS.liners() }, href: '/dashboard/products/x', name: 'Liners', where: 'Liners',
       subject: 'Grip', category: { k: 150, n: 400 }, product: { name: 'Iceross Seal-In X', k: 80, n: 120 }, verdict: v,
     }
     const text = renderText(<StandoutCard s={s} monthName="September" />)
@@ -204,29 +109,6 @@ describe('the fresh check\'s fixes, as drawn', () => {
     assertCopyContract(<StandoutCard s={s} monthName="September" />)
   })
 
-  it('a product not read yet says so, never that nobody named it', () => {
-    const panel = { ...(ossurNaviiFixture().panel as ProductPanel), videos: null, flag: null, crosses: null, quotes: [] }
-    const node = <ProductPanelView panel={panel} monthName="September" />
-    const text = renderText(node)
-    expect(text).toContain('Not read yet for September: it was not in your list when September was last read.')
-    expect(text).not.toContain('Nobody in your market named it')
-    expect(render(node)).not.toContain('videos in your market name it')
-    assertCopyContract(node)
-  })
-
-  it('the month line outlines the reading month (the board\'s "so far" bar), never the orange; a catalogue change is footnoted', () => {
-    const panel = ossurLinersFixture().panel as CategoryPanel
-    const m = render(<CategoryPanelView panel={panel} monthName="September" canTag />)
-    expect(m).not.toContain('data-bar="picked"')
-    expect(m.match(/data-filling=""/g)).toHaveLength(1)
-    const changed = { ...panel, line: panel.line.map((b, i) => ({ ...b, version: i < 2 ? 'pc1_a' : 'pc1_b' })) }
-    expect(renderText(<CategoryPanelView panel={changed} monthName="September" canTag />)).toContain('Your product list changed before August: the months before it were read on the earlier list.')
-  })
-
-  it('the comparison sets each product\'s own largest subject in weight (the board\'s bold cells)', () => {
-    const m = render(<CategoryPanelView panel={ossurLinersFixture().panel as CategoryPanel} monthName="September" canTag />)
-    expect(m.match(/font-semibold">\d+ of \d+</g)?.length).toBeGreaterThanOrEqual(3)
-  })
 })
 
 // THE PARITY PASS (13 Oct night): every state keeps the board's shape. The
@@ -338,24 +220,11 @@ describe('ruling U6, as drawn: a provisional subject prints its name and "Not me
     expect(renderText(<>{shelfColumn({ ...partial, subjectsPending: false, leads: true }, 'September').note}</>)).toBe('Fit & comfort leads, 12 of 23')
   })
 
-  it('the panel: each subject by name with "Not measured yet" where its bar and count would be; the comparison keeps its rows, every cell empty', () => {
-    const panel = PRODUCTS_FIXTURES['ossur-today-liners']().panel as CategoryPanel
-    const node = <CategoryPanelView panel={panel} monthName="September" canTag />
-    const text = renderText(node)
-    expect(text).toContain('What it’s about · of 23 Choosing the right device Not measured yet Community & encouragement Not measured yet Cost & access Not measured yet Fit & comfort Not measured yet')
-    expect(text).toContain('Your products against liners in general What it’s about All liners Iceross Seal-In X Iceross Dermo Iceross Seal-In V Choosing the right device · Not measured yet · Not measured yet')
-    expect(text).not.toContain('– none')
-    expect(text).toContain('What these videos are about: Not measured yet. A subject is counted here once its check has passed.')
-    expect(text).not.toContain('Each count is videos')
-    // Kinds are not subjects: still counted.
-    expect(text).toContain('What people did · of 23 Complaints in the comments 11')
-    assertCopyContract(node)
-  })
 })
 
 describe('the fresh check\'s fixes on the parity pass, as drawn', () => {
   const focus = (over: Partial<FocusStandout>): FocusStandout => ({
-    kind: 'focus', open: { kind: 'group', id: 'g' }, href: '/dashboard/products?group=g#category-panel', name: 'Bracing & Supports', where: 'Bracing & Supports',
+    kind: 'focus', open: { kind: 'group', id: 'g' }, href: '/dashboard/products/g', name: 'Bracing & Supports', where: 'Bracing & Supports',
     subject: 'Fit & comfort', level: { k: 5, n: 12 }, ranked: true, ...over,
   })
 
@@ -374,7 +243,7 @@ describe('the fresh check\'s fixes on the parity pass, as drawn', () => {
     assertCopyContract(<StandoutCard s={focus({ ranked: false })} monthName="September" tier="next" />)
   })
 
-  it('the shelf keeps the board\'s height: eight tiles, the most videos first, then "+N more" into the category\'s panel', () => {
+  it('the shelf keeps the board\'s height: eight tiles, the most videos first, then "+N more" into the category\'s page, which lists every product', () => {
     const d = PRODUCTS_FIXTURES['ossur-today']()
     const feet = d.shelf.find((c) => c.name === 'Feet')!
     expect(feet.products).toHaveLength(20)
@@ -385,85 +254,9 @@ describe('the fresh check\'s fixes on the parity pass, as drawn', () => {
     const m = render(<CatalogueCard data={d} />)
     // Liners (10), Feet (20), Knees (10) and Bracing & Supports (15).
     expect(m.match(/data-more=""/g)).toHaveLength(4)
-    expect(renderText(<CatalogueCard data={d} />)).toContain('Pro-Flex LP Align – no videos + 12 more →')
+    expect(renderText(<CatalogueCard data={d} />)).toContain('Pro-Flex LP Align no videos + 12 more →')
     // A column at the cap or under it has no "more".
     expect(shelfColumn(d.shelf.find((c) => c.name === 'Hands')!, 'September').more).toBeNull()
     assertCopyContract(<CatalogueCard data={d} />)
-  })
-})
-
-// A TRACKED SUBJECT IS NEVER HIDDEN (Heinrich, 14 Oct): a category's panel
-// lists every active subject, the ready ones counted (a thin one's small
-// count, one on none of its videos at 0), then those whose check has not
-// passed by name, a failed one with its own reason and no figure.
-describe('Your products: a tracked subject is never hidden (14 Oct)', () => {
-  const base = PRODUCTS_FIXTURES['ossur-liners']().panel as CategoryPanel
-  const crosses = {
-    ...base.crosses!,
-    subjects: [{ id: 's-fit', label: 'Fit & comfort', k: 12 }, { id: 's-look', label: 'Look & style', k: 1 }],
-    quiet: [{ id: 's-function', label: 'Function & movement' }],
-    pending: [{ id: 's-cost', label: 'Cost & access', state: 'provisional' as const }, { id: 's-community', label: 'Community & encouragement', state: 'failed' as const }],
-  }
-  const panel: CategoryPanel = { ...base, crosses }
-
-  it('lists every subject: counted, thin, at 0, not measured yet, and being re-described with its reason', () => {
-    const node = <CategoryPanelView panel={panel} monthName="September" canTag={false} />
-    const text = renderText(node)
-    expect(text).toContain(`What it’s about · of ${crosses.n} Fit & comfort 12 Look & style 1 Function & movement 0 Cost & access ${SUBJECT_NOT_MEASURED} Community & encouragement ${FAILED_EXPLAINED}`)
-    const html = render(node)
-    const at = html.indexOf('data-subject-failed')
-    const row = html.slice(at, html.indexOf('</div>', at))
-    expect(row).toContain('Community &amp; encouragement')
-    expect(row).not.toMatch(/data-copy=/)
-    assertCopyContract(node)
-  })
-
-  it('more than six subjects: every one is listed, none cut for being small', () => {
-    const many = { ...crosses, subjects: Array.from({ length: 8 }, (_, i) => ({ id: `s-${i}`, label: `Subject ${i + 1}`, k: 9 - i })), quiet: undefined, pending: undefined }
-    const text = renderText(<CategoryPanelView panel={{ ...base, crosses: many }} monthName="September" canTag={false} />)
-    for (let i = 1; i <= 8; i++) expect(text).toContain(`Subject ${i} `)
-  })
-
-  it('the comparison, every ready subject at 0 and others pending: it names the pending subjects as before, never a table of zeros (the lead\'s ruling, 14 Oct)', () => {
-    const subjects = new Map([
-      ['s-fit', { name: 'Fit & comfort', state: 'ready' as const }],
-      ['s-cost', { name: 'Cost & access', state: 'provisional' as const }],
-      ['s-community', { name: 'Community & encouragement', state: 'failed' as const }],
-    ])
-    const den = (k: number) => ({ audience: 'industry-other', object_kind: 'denominator', object_id: 'videos', k, n: k })
-    const crossesIn = new Map([[setKey('group', 'g'), crossesOf([den(10)], subjects)], [setKey('product', 'p'), crossesOf([den(3)], subjects)]])
-    const compare = buildCompare({ month: '2026-09-01', group: { id: 'g', name: 'Liners' }, products: [{ id: 'p', name: 'Iceross Comfort', videos: 3 }], crosses: crossesIn })!
-    expect(compare.empty).toBe('pending')
-    expect(compare.rows.map((r) => r.label)).toEqual(['Cost & access', 'Community & encouragement'])
-    const node = <CategoryPanelView panel={{ ...panel, compare }} monthName="September" canTag={false} />
-    const text = renderText(node)
-    expect(text).toContain(`What it’s about All liners Iceross Comfort Cost & access · ${SUBJECT_NOT_MEASURED} · ${SUBJECT_NOT_MEASURED} Community & encouragement`)
-    expect(text).toContain('What these videos are about: Not measured yet. A subject is counted here once its check has passed.')
-    expect(text).not.toContain('Fit & comfort 0 of 10')
-    assertCopyContract(node)
-    // With nothing pending, the ready subject at 0 is drawn as a 0, never hidden.
-    const ready = new Map([['s-fit', { name: 'Fit & comfort', state: 'ready' as const }]])
-    const zeros = buildCompare({ month: '2026-09-01', group: { id: 'g', name: 'Liners' }, products: [{ id: 'p', name: 'Iceross Comfort', videos: 3 }], crosses: new Map([[setKey('group', 'g'), crossesOf([den(10)], ready)], [setKey('product', 'p'), crossesOf([den(3)], ready)]]) })!
-    expect(zeros.rows.map((r) => [r.label, r.cells[0]])).toEqual([['Fit & comfort', { k: 0, n: 10 }]])
-    expect(zeros.verdicts).toEqual([])
-  })
-
-  it('the comparison, with no ready subject: a row being re-described is named like an open one, its reason never repeated (once a page, 14 Oct)', () => {
-    const compare = {
-      columns: [{ key: 'g', label: 'All liners', tone: 'market' as const }, { key: 'p', label: 'Iceross Comfort', tone: 'you' as const }],
-      rows: [
-        { key: 's-cost', label: 'Cost & access', cells: [null, null] },
-        { key: 's-community', label: 'Community & encouragement', cells: [null, null] },
-      ],
-      verdicts: [],
-      empty: 'pending' as const,
-    }
-    // The open panel names the failed subject in "What it's about" with its
-    // reason (once), and the table below lists it with no figure.
-    const node = <CategoryPanelView panel={{ ...panel, compare }} monthName="September" canTag={false} />
-    const html = render(node)
-    expect(html.split(FAILED_EXPLAINED).length - 1).toBe(1)
-    expect(renderText(node)).toContain(`What it’s about All liners Iceross Comfort Cost & access · ${SUBJECT_NOT_MEASURED} · ${SUBJECT_NOT_MEASURED} Community & encouragement · ${SUBJECT_NOT_MEASURED} · ${SUBJECT_NOT_MEASURED}`)
-    assertCopyContract(node)
   })
 })

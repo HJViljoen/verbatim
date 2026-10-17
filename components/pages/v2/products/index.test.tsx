@@ -5,8 +5,8 @@ import { ossurProductsFixture, PRODUCTS_FIXTURES } from '@/lib/pages/v2/products
 import { productsBasis, PRODUCTS_NO_CATALOGUE, PRODUCTS_NOT_APPLIED, PRODUCTS_NOT_ON } from '@/lib/pages/v2/products'
 import { ProductsEmpty, ProductsMeta, ProductsPage } from '.'
 
-describe('the Your products page (boards E4-Products and E4-Products-Liners)', () => {
-  it('keeps the copy contract on every fixture, open or not, every state', () => {
+describe('the Your products page (boards E4-Products and G4-Products)', () => {
+  it('keeps the copy contract on every fixture, every state', () => {
     for (const f of Object.values(PRODUCTS_FIXTURES)) assertCopyContract(<ProductsPage data={f()} />)
   })
 
@@ -14,10 +14,23 @@ describe('the Your products page (boards E4-Products and E4-Products-Liners)', (
     for (const f of Object.values(PRODUCTS_FIXTURES)) expect(renderText(<ProductsPage data={f()} />)).not.toMatch(/this month/i)
   })
 
-  it('prints no quote at level 1 (quotes are the panels\'), and no quote in a panel above its own section', () => {
-    expect(render(<ProductsPage data={PRODUCTS_FIXTURES.ossur()} />)).not.toContain('data-copy="quote"')
-    const open = render(<ProductsPage data={PRODUCTS_FIXTURES['ossur-liners']()} />)
-    expect(open.indexOf('data-copy="quote"')).toBeGreaterThan(open.indexOf('id="category-panel"'))
+  it('prints no quote at level 1 (quotes are the level pages\'), and opens no panel: every head, tile and card is a page', () => {
+    for (const f of Object.values(PRODUCTS_FIXTURES)) {
+      const m = render(<ProductsPage data={f()} />)
+      expect(m).not.toContain('data-copy="quote"')
+      expect(m).not.toContain('data-panel')
+      expect(m).not.toMatch(/href="\/dashboard\/products\?(?:[^"]*&amp;)?(?:group|product)=/)
+    }
+  })
+
+  it('says each column head opens a page, with the board\'s small arrow (G4-Products)', () => {
+    const m = render(<ProductsPage data={PRODUCTS_FIXTURES.ossur()} />)
+    expect(m.match(/data-head-opens=""/g)).toHaveLength(6)
+  })
+
+  it('prints no en or em dash: the legend reads "1 to 2" and "3 to 5", a quiet tile a drawn rule', () => {
+    for (const f of Object.values(PRODUCTS_FIXTURES)) expect(render(<ProductsPage data={f()} />)).not.toMatch(/[\u2013\u2014]/)
+    expect(renderText(<ProductsPage data={PRODUCTS_FIXTURES.ossur()} />)).toContain('1 to 2 3 to 5 6+ quiet')
   })
 
   it('the bar: the month, the products that came up of the catalogue, the videos about them; the board\'s switch in months', () => {
@@ -51,24 +64,17 @@ describe('the Your products page (boards E4-Products and E4-Products-Liners)', (
     expect(renderText(<ProductsMeta data={PRODUCTS_FIXTURES.unread()} />)).toMatch(/^October so far · \d+ products in 6 categories$/)
     // A state that reads no month names none, label or not.
     expect(renderText(<ProductsMeta data={PRODUCTS_FIXTURES['not-on']()} />)).not.toMatch(/month/)
-    for (const d of [ossurProductsFixture(), PRODUCTS_FIXTURES['ossur-liners']()]) assertCopyContract(<ProductsPage data={d} />)
+    for (const d of [ossurProductsFixture(), PRODUCTS_FIXTURES['ossur-today']()]) assertCopyContract(<ProductsPage data={d} />)
   })
 
-  it('draws the standouts, then the catalogue, then the open panel under it, then the Settings link', () => {
-    const text = renderText(<ProductsPage data={PRODUCTS_FIXTURES['ossur-liners']()} />)
+  it('draws the standouts, then the catalogue, then the Settings link', () => {
+    const text = renderText(<ProductsPage data={PRODUCTS_FIXTURES.ossur()} />)
     const at = (s: string) => text.indexOf(s)
     expect(at('Navii came up for the first time')).toBeGreaterThan(-1)
     expect(at('Navii came up for the first time')).toBeLessThan(at('Your catalogue'))
-    expect(at('Your catalogue')).toBeLessThan(at('About one of your products, but we couldn’t tell which'))
-    expect(at('About one of your products')).toBeLessThan(at('Edit your products in Settings'))
+    expect(at('Your catalogue')).toBeLessThan(at('Edit your products in Settings'))
     expect(text).toContain(productsBasis('Össur'))
     expect(text).toContain('Counted on every video in your market, including creators’ videos about Össur and the comments on your own posts. What your own posts say (captions, hashtags, voice-over, on-screen text) is never counted.')
-  })
-
-  it('one panel at a time: a product\'s panel and no category\'s', () => {
-    const m = render(<ProductsPage data={PRODUCTS_FIXTURES['ossur-product']()} />)
-    expect(m).toContain('id="product-panel"')
-    expect(m).not.toContain('id="category-panel"')
   })
 
   it('the honest states keep the board\'s frame: the four places, the catalogue card with its line, the catalogue where there is one (the parity pass)', () => {
@@ -87,7 +93,7 @@ describe('the Your products page (boards E4-Products and E4-Products-Liners)', (
     expect(render(<ProductsPage data={PRODUCTS_FIXTURES.sealand()} />)).toContain('data-empty-shelf=""')
     const notOn = render(<ProductsPage data={PRODUCTS_FIXTURES['not-on']()} />)
     expect(notOn.match(/data-column=/g)).toHaveLength(6)
-    expect(renderText(<ProductsPage data={PRODUCTS_FIXTURES['not-on']()} />)).toContain('Liners Not read yet Iceross Seal-In X')
+    expect(renderText(<ProductsPage data={PRODUCTS_FIXTURES['not-on']()} />)).toContain('Liners → Not read yet Iceross Seal-In X')
     expect(renderText(<ProductsPage data={PRODUCTS_FIXTURES['not-on']()} />)).not.toContain('not read yet')
     expect(renderText(<ProductsMeta data={PRODUCTS_FIXTURES.sealand()} />)).toBe('No products added yet')
   })

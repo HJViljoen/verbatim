@@ -45,7 +45,7 @@ describe('tagProduct', () => {
       clientId: 'e52cac94-30e1-426a-9a36-31b11e0b30b6', videoId: V, commentId: C, choice: { placement: 'unclear', groupId: G },
       actor: expect.objectContaining({ kind: 'user', user_id: 'u-1', label: 'owner@ossur.test · tagged a product' }),
     }))
-    expect(h.revalidate).toHaveBeenCalledWith('/dashboard/products')
+    expect(h.revalidate).toHaveBeenCalledWith('/dashboard/products', 'layout')
   })
 
   it('a video as a whole posts no comment', async () => {
