@@ -642,6 +642,9 @@ export function buildBrandPage(input: BrandInput): BrandPage {
     : []
   const subjects = counted && input.subjects ? input.subjects.cells.map((c) => ({ id: c.id, label: c.label, k: c.k, n: c.n, href: marketSubjHref(c.id, month.month) })) : []
   const window = rival && input.window ? { ...input.window, words: windowWords(input.window) } : null
+  // Praised and complained over every video naming it: the root's row where
+  // its crosses were read, else this page's own kinds cross (the same lens).
+  const kindCell = (id: string): Level | null => (input.kinds && input.kinds.n > 0 ? { k: input.kinds.cells.find((c) => c.id === id)?.k ?? 0, n: input.kinds.n } : null)
   return {
     kind: 'brand',
     month,
@@ -655,8 +658,8 @@ export function buildBrandPage(input: BrandInput): BrandPage {
     prevNamed: r.prevNamed,
     verdict: r.verdict,
     any: r.any,
-    praised: r.praised,
-    complained: r.complained,
+    praised: counted ? r.praised ?? kindCell('praise') : null,
+    complained: counted ? r.complained ?? kindCell('pain_point') : null,
     lead: first ? { title: first.title.trim(), body: first.finding?.trim() || null, kindWords: findingKindWords(first.category) } : null,
     findingsDate: first ? input.findingsDate : null,
     findings: rest.slice(0, 2).map((f) => ({ id: f.id, kindWords: findingKindWords(f.category), title: f.title.trim(), body: f.finding?.trim() || null })),
@@ -1098,11 +1101,12 @@ async function readDescriptions(handle: ReadingHandle, runId: string | null, ids
   return out
 }
 
-/** The themed run (the run Market reads its conversations under), never one
- *  still running. */
-async function themedRun(input: LevelLoadInput): Promise<string | null> {
-  const running = await fetchRunningRunIds(input.supabase, input.clientId, 'voices').catch(() => [] as string[])
-  return fetchThemedRunId(input.supabase, input.clientId, running, 'voices')
+/** The runs still running (one read a load, shared by every reader that
+ *  must not read one), and the themed run (the run Market reads its
+ *  conversations under), never one still running. */
+const runningOf = (input: LevelLoadInput): Promise<string[]> => fetchRunningRunIds(input.supabase, input.clientId, 'voices').catch(() => [] as string[])
+async function themedRun(input: LevelLoadInput, running: Promise<string[]>): Promise<string | null> {
+  return fetchThemedRunId(input.supabase, input.clientId, await running, 'voices')
 }
 
 /** The brands' month rows (the pairs), the counted brands' sets and the
@@ -1204,7 +1208,7 @@ export async function loadVoicesGroup(input: LevelLoadInput & { key: string }): 
   if (!profile || !persona) return { kind: 'missing', level: 'group', line: GROUP_MISSING }
   const m = month.month
 
-  const runAhead = soft('themedRun', themedRun(input), null)
+  const runAhead = soft('themedRun', themedRun(input, runningOf(input)), null)
   const [groupRead, placement, refs, labels, runId] = await Promise.all([
     market ? soft('groups', loadGroupSubjects(handle, { month: m, audiences, market, profile }), null) : Promise.resolve(null),
     soft('placement', loadSubjectPlacement(handle.client, clientId), { all: [], placed: null }),
@@ -1327,7 +1331,8 @@ export async function loadVoicesBrand(input: LevelLoadInput & { key: string }): 
   const { month, audiences, market, profile, now, reading } = base
   const m = month.month
   const pairAhead = loadPairOn(handle, now)
-  const findingsAhead = soft('findings', readLatestFindings(handle, fetchRunningRunIds(input.supabase, clientId, 'voices').catch(() => [] as string[])), [] as FindingRow[])
+  const running = runningOf(input)
+  const findingsAhead = soft('findings', readLatestFindings(handle, running), [] as FindingRow[])
   const brandRead = await loadBrandsFor(handle, clientId, { month: m, now, audiences, market, pair: await pairAhead, months: BRAND_MONTHS })
   const row = brandRead.brands.all.find((r) => matchesBrand(r, input.key))
   if (!row) return { kind: 'missing', level: 'brand', line: BRAND_MISSING }
@@ -1337,7 +1342,7 @@ export async function loadVoicesBrand(input: LevelLoadInput & { key: string }): 
   const window = rival && reading ? ninetyDays(windowEnd(reading)) : null
   const personas = personasOf(profile ?? null)
   const anyIds = counted ? set?.any ?? [] : []
-  const runAhead = rival ? soft('themedRun', themedRun(input), null) : Promise.resolve(null)
+  const runAhead = rival ? soft('themedRun', themedRun(input, running), null) : Promise.resolve(null)
   const [groupRead, lens, subjectsAll, findings, runId] = await Promise.all([
     counted && market && profile ? soft('groups', loadGroupSubjects(handle, { month: m, audiences, market, profile, videosOnly: true }), null) : Promise.resolve(null),
     counted ? soft('lens', readLens(handle, m, anyIds), null) : Promise.resolve(null),
@@ -1345,7 +1350,7 @@ export async function loadVoicesBrand(input: LevelLoadInput & { key: string }): 
     findingsAhead,
     runAhead,
   ])
-  const live = rival ? await fetchRunningRunIds(input.supabase, clientId, 'voices').catch(() => [] as string[]) : []
+  const live = rival ? await running : []
   const [asked, claims, themes] = await Promise.all([
     rival && window ? soft('asked', readQuestions(handle.client, clientId, m, window, [{ name: row.label, audience: rivalKey(row.label) }], live), null) : Promise.resolve(null),
     rival && window ? soft('claims', readOwnClaims(handle.client, clientId, { name: row.label, window }), []) : Promise.resolve([]),
