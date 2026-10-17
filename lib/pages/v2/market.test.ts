@@ -241,7 +241,7 @@ describe('the subject board', () => {
 
   it('says why a subject prints no level: its check open, being re-described, or not read this month', () => {
     expect(unmeasuredOf({ id: 's', name: 'S', calibration: 'failed' }, 'October so far', '#').note).toBe(FAILED_EXPLAINED)
-    expect(unmeasuredOf({ id: 's', name: 'S', calibration: 'unread' }, 'October so far', '#').note).toBe('No reading in October so far yet')
+    expect(unmeasuredOf({ id: 's', name: 'S', calibration: 'unread' }, 'October so far', '#').note).toBe('No reading in October so far yet.')
     expect(unmeasuredOf({ id: 's', name: 'S', calibration: 'provisional' }, 'October so far', '#')).toMatchObject({ state: 'provisional', note: SUBJECT_NOT_MEASURED })
     // No calibration or "provisional" word on a client surface (ruling U6).
     expect(SUBJECT_NOT_MEASURED).toBe('Not measured yet')

@@ -5,7 +5,7 @@ import { MovementBadge } from '@/components/delta-badge'
 import { EYEBROW, IconTile } from '@/components/colour-roles'
 import { CARD, MiniBars, PanelSection, SpikeBars, TickBarRow } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
-import { platformRows, subjectNoRead, type MarketData, type SubjectPage, type SubjectPanel } from '@/lib/pages/v2/market'
+import { noReadingYet, platformRows, subjectNoRead, type MarketData, type SubjectPage, type SubjectPanel } from '@/lib/pages/v2/market'
 import { SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { cn } from '@/lib/utils'
 import { SectionHead } from './analysis'
@@ -45,8 +45,22 @@ export const SUBJECT_NO_READ = subjectNoRead
  *  the block keeps its frame and says so (the parity rule, 14 Oct). */
 export const SUBJECT_NONE_THIS_WEEK = 'No video this week.'
 
-/** The unready page's numbers card, in one line (U6). */
+/** A failed subject's numbers card, in one line (U6). */
 export const SUBJECT_NUMBERS_HELD = 'No figure prints for this subject until its check passes.'
+
+/**
+ * THE NUMBERS CARD OF A SUBJECT THAT PRINTS NO FIGURE, in one line: the
+ * state's own reason (17 Oct). Not read in the month yet, the month's own
+ * line (`noReadingYet`): its check passed, so "until its check passes" was
+ * false there (Össur's six, mid-October). Its check open, the not-measured
+ * line every surface prints where a figure would be. Failed, why no figure
+ * prints until the check passes again. Pure.
+ */
+export function subjectNumbersLine(panel: Pick<SubjectPanel, 'state' | 'monthText'>): string {
+  if (panel.state === 'unread') return noReadingYet(panel.monthText)
+  if (panel.state === 'provisional') return SUBJECT_NOT_MEASURED
+  return SUBJECT_NUMBERS_HELD
+}
 
 /** The week tile where its share on the level's base could not be read
  *  (`SubjectPage.week` is `'unread'`): said in its frame, never a figure from
@@ -146,8 +160,8 @@ function NumbersCard({ page, data }: { page: SubjectPage; data: MarketData }) {
   const weeks = detail?.weeks ?? null
   if (!level) {
     return (
-      <section aria-label={`${panel.name} in numbers`} className={PAGE_CARD}>
-        <p className={GAPLINE}>{SUBJECT_NUMBERS_HELD}</p>
+      <section aria-label={`${panel.name} in numbers`} data-numbers-gap={panel.state} className={PAGE_CARD}>
+        <p className={GAPLINE}>{subjectNumbersLine(panel)}</p>
       </section>
     )
   }

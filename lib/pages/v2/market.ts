@@ -1277,6 +1277,11 @@ export function buildSubjectBoard(input: {
   }
 }
 
+/** A subject whose check passed and the month has no reading for yet: the
+ *  month's own line ("No reading in October so far yet."), its row's note
+ *  and its page's numbers alike. */
+export const noReadingYet = (monthText: string): string => `No reading in ${monthText} yet.`
+
 /**
  * Why a subject prints no level: not measured yet while its check is open
  * (`SUBJECT_NOT_MEASURED`, lib/subjects/calibration-state.ts, the one
@@ -1287,7 +1292,7 @@ export function buildSubjectBoard(input: {
  */
 export function unmeasuredOf(f: Pick<SubjectFact, 'id' | 'name' | 'calibration'>, monthText: string, href: string): UnmeasuredSubject {
   const state = f.calibration === 'failed' ? 'failed' : f.calibration === 'unread' ? 'unread' : 'provisional'
-  const note = state === 'failed' ? FAILED_EXPLAINED : state === 'unread' ? `No reading in ${monthText} yet` : SUBJECT_NOT_MEASURED
+  const note = state === 'failed' ? FAILED_EXPLAINED : state === 'unread' ? noReadingYet(monthText) : SUBJECT_NOT_MEASURED
   return { id: f.id, name: f.name, state, note, href }
 }
 

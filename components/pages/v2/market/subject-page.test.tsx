@@ -7,7 +7,7 @@ import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibrati
 import type { MarketData } from '@/lib/pages/v2/market'
 import { SubjectCardsView } from './analysis'
 import { BACK_TO_MARKET, MarketSubjectPage, SUBJECT_MISSING } from './pages'
-import { SubjectPageBody, SUBJECT_NUMBERS_HELD, SUBJECT_WEEK_UNREAD } from './subject-page'
+import { SubjectPageBody, subjectNumbersLine, SUBJECT_NUMBERS_HELD, SUBJECT_WEEK_UNREAD } from './subject-page'
 
 // A TRACKED SUBJECT'S PAGE (depth as pages, 17 Oct; F2-Market-Subject, its
 // switcher and its phone board): from the page fixture through the page's own
@@ -128,7 +128,7 @@ describe('every state keeps its frame', () => {
   it('not measured yet (U6): its name, why, and the conversations inside it by name; no figure, line or chip count', () => {
     const d = marketSubjectFixture('cost', { flagged: false, noNew: true, subjects: 'provisional', brands: 'not_counted', weeks: 'insufficient', noGroups: true })
     const text = renderText(page(d))
-    expect(text).toBe(`Market Market / Cost & access This week This month Over time 5 to 11 October This week This month Over time Our read · October so far ${SUBJECT_NOT_MEASURED} The numbers ${SUBJECT_NUMBERS_HELD} Inside it Each opens as its own page. Insurance refusals for powered knees Paying out of pocket Medical aid and liners Ask the Agent about Cost & access`)
+    expect(text).toBe(`Market Market / Cost & access This week This month Over time 5 to 11 October This week This month Over time Our read · October so far ${SUBJECT_NOT_MEASURED} The numbers ${SUBJECT_NOT_MEASURED} Inside it Each opens as its own page. Insurance refusals for powered knees Paying out of pocket Medical aid and liners Ask the Agent about Cost & access`)
     expect(copyNodes(render(page(d))).filter((n) => n.kind === 'figure' || n.kind === 'level' || n.kind === 'verdict' || n.kind === 'quote')).toEqual([])
     assertCopyContract(page(d))
   })
@@ -139,6 +139,24 @@ describe('every state keeps its frame', () => {
     expect(text).toContain(`Our read · October so far ${FAILED_EXPLAINED} The numbers ${SUBJECT_NUMBERS_HELD} Inside it Each opens as its own page. Running-blade stories First steps after amputation Support from other amputees`)
     expect(text.split(FAILED_EXPLAINED).length - 1).toBe(1)
     expect(copyNodes(render(page(d))).filter((n) => n.kind === 'figure' || n.kind === 'level')).toEqual([])
+  })
+
+  it('a ready subject the month has no reading for yet: the numbers say so, never "until its check passes" (17 Oct)', () => {
+    const d = marketSubjectFixture('fit', { subjects: 'unread' })
+    expect(renderText(body(d))).toContain('What it means')
+    expect(renderText(body(d))).toMatch(/ The numbers No reading in October so far yet\. Inside it /)
+    expect(render(body(d))).toContain('data-numbers-gap="unread"')
+    expect(renderText(body(d))).not.toContain(SUBJECT_NUMBERS_HELD)
+  })
+
+  it('the numbers\' line names each state\'s own reason: unread, not measured, failed', () => {
+    expect(subjectNumbersLine({ state: 'unread', monthText: 'October so far' })).toBe('No reading in October so far yet.')
+    expect(subjectNumbersLine({ state: 'unread', monthText: 'October' })).toBe('No reading in October yet.')
+    expect(subjectNumbersLine({ state: 'provisional', monthText: 'October so far' })).toBe(SUBJECT_NOT_MEASURED)
+    expect(subjectNumbersLine({ state: 'failed', monthText: 'October so far' })).toBe(SUBJECT_NUMBERS_HELD)
+    // Each on its page, in the numbers card's frame.
+    expect(render(body(marketSubjectFixture('function', { subjects: 'states' })))).toMatch(/data-numbers-gap="provisional"[^>]*><p[^>]*>Not measured yet<\/p>/)
+    expect(render(body(marketSubjectFixture('community', { subjects: 'states' })))).toMatch(new RegExp(`data-numbers-gap="failed"[^>]*><p[^>]*>${SUBJECT_NUMBERS_HELD}</p>`))
   })
 
   it('an id Market does not follow: one calm line, and the way back', () => {

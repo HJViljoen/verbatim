@@ -1475,7 +1475,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
     biggest three conversations inside it as pages and "All N conversations
     in {subject}" to the table filtered to it. A subject whose check has not
     passed carries its name, why and its conversations by name, and NO
-    figure, line or chip count (U6). *A conversation's page* is E2's panel
+    figure, line or chip count (U6). Where a page prints no figure, its
+    numbers card says the state's own reason in one line
+    (`subjectNumbersLine`): a ready subject the month has no reading for yet,
+    the month's line ("No reading in October so far yet.", `noReadingYet`);
+    its check open, `SUBJECT_NOT_MEASURED`; failed, that no figure prints
+    until its check passes. *A conversation's page* is E2's panel
     whole (`loadConvPanel`, `convPageOf`), "Month by month" where the data
     has months; its "Who's saying it" counts each group's videos of the
     conversation's in the period, "15 of 23", the base in the label ("of 23
