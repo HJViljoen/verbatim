@@ -96,6 +96,9 @@ describe('the week card', () => {
     expect(html).toContain('href="/dashboard/market/week"')
     // Three across from 1180, stacked under it, a hairline between on a phone.
     expect(html).toMatch(/data-week-means="" class="[^"]*min-\[1180px\]:grid-cols-3/)
+    // "Read the whole week" stands alone at the foot's left (F2-Market's lone
+    // `.cardfoot` child), where a subject card's Open sits at the right.
+    expect(html).toMatch(/<div data-card-foot="" class="[^"]*"><a [^>]*href="\/dashboard\/market\/week"/)
     assertCopyContract(node)
   })
 

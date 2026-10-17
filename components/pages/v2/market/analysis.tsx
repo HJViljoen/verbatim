@@ -30,11 +30,13 @@ export function SectionHead({ id, title, note }: { id?: string; title: string; n
 /** The quiet line a card says its gap in (the boards' `.gapline`). */
 const GAPLINE = 'm-0 text-[15px] leading-[1.55] text-muted-foreground max-sm:text-[14.5px]'
 
-/** A card's foot: the month words at the left, its link at the right. */
-function Foot({ left, href, label = 'Open' }: { left?: ReactNode; href: string | null; label?: string }) {
+/** A card's foot: the month words at the left, its link at the right; or,
+ *  with `lead` (the week card's "Read the whole week", F2-Market's lone
+ *  `.cardfoot` child), the link alone at the left. */
+function Foot({ left, href, label = 'Open', lead = false }: { left?: ReactNode; href: string | null; label?: string; lead?: boolean }) {
   return (
-    <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-1.5">
-      {left ? <span className="text-[12.5px] text-muted-foreground">{left}</span> : <span />}
+    <div data-card-foot="" className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-1.5">
+      {left ? <span className="text-[12.5px] text-muted-foreground">{left}</span> : lead ? null : <span />}
       {href ? <Link href={href} className={OLINK}>{label} →</Link> : null}
     </div>
   )
@@ -79,7 +81,7 @@ export function WeekCardView({ card }: { card: WeekCard }) {
               ))}
             </div>
           ) : null}
-          <Foot href={card.href} label="Read the whole week" />
+          <Foot href={card.href} label="Read the whole week" lead />
         </>
       ) : (
         <p className={GAPLINE}>{card.state === 'thin' ? WEEK_THIN : WEEK_UNREAD}</p>
