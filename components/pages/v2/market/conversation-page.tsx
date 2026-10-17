@@ -125,7 +125,7 @@ function Said({ ev, data }: { ev: ConvEvidence; data: MarketData }) {
       <div className="flex items-baseline justify-between gap-3 px-0.5 max-sm:flex-col max-sm:items-start max-sm:gap-0.5">
         <h2 id="said-title" className="m-0 text-[19px] leading-[1.3] font-semibold tracking-[-0.005em] text-foreground max-sm:text-[18px]">What people said</h2>
         {ev.state === 'ready' && ev.total > 0 ? (
-          <span className="text-[13px] leading-[1.4] text-muted-foreground"><span data-copy="figure">{fmtInt(ev.total)}</span> {ev.total === 1 ? 'video' : 'videos'} {when}, most comments about it first</span>
+          <span className="text-[13px] leading-[1.4] text-muted-foreground"><span data-copy="figure">{fmtInt(ev.total)}</span> category {ev.total === 1 ? 'video' : 'videos'} {when}, most comments about it first</span>
         ) : null}
       </div>
       {ev.state === 'unread' || ev.total === 0 ? (

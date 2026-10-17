@@ -37,7 +37,7 @@ describe('a conversation under its ready subject, this week', () => {
   })
 
   it('what people said: five videos, most comments about it first, each with three of its comments, "Show all", the link out', () => {
-    expect(text).toContain('What people said 23 videos this week, most comments about it first @stepbystep.amp TikTok · posted 3 Oct Össur Three signs your liner is done')
+    expect(text).toContain('What people said 23 category videos this week, most comments about it first @stepbystep.amp TikTok · posted 3 Oct Össur Three signs your liner is done')
     const all = cards(html)
     expect(all).toHaveLength(5)
     expect(markupText(all[0])).toBe('@stepbystep.amp TikTok · posted 3 Oct Össur Three signs your liner is done, and what my clinic never told me about replacing it 14 comments about this, of 212 on the video Watch the video ↗ “This liner gave me a rash after a week and I had to go back to my old one.” 5 Oct “Mine lasted eight months before it started slipping. Is that normal?” 6 Oct “Nobody at my fitting said anything about replacing the liner.” 7 Oct Show all 14 comments')
@@ -152,7 +152,7 @@ describe('every state keeps its frame', () => {
     const d = marketConversationFixture(1, { period: 'month' })
     const text = renderText(page(d))
     expect(text).toMatch(/^Market \/ Fit & comfort \/ How long a liner lasts Fit & comfort Conversation in Fit & comfort How long a liner lasts October so far · 35 of 300 category videos This week/)
-    expect(text).toContain('What people said 35 videos in October so far, most comments about it first')
+    expect(text).toContain('What people said 35 category videos in October so far, most comments about it first')
     expect(text).toContain('Who’s saying it · of 35 New amputees in their first year 23 of 35 Long-time users upgrading 7 of 35 Each opens in Voices')
     expect(text).toContain('Other conversations in Fit & comfort Fit & comfort, the whole subject → Sweat under the liner 30 in October so far')
     expect(text).not.toContain('Week by week')
