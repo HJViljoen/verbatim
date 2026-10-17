@@ -237,6 +237,9 @@ describe('the crumbs and the switchers', () => {
     expect(m.items.map((i) => [i.current, i.note, i.slot])).toEqual(MOVE_CARDS.map((c, i) => [i === 0, c.status === 'active' ? 'Active' : c.status === 'done' ? 'Done' : 'Stopped', 'quote']))
     expect(moveCrumbs(MOVE_CARDS[0], m)[1]).toMatchObject({ label: MOVE_CARDS[0].title, slot: 'quote' })
     expect(moveMenu([], 'x')).toBeNull()
+    // The only dated move has no sibling: no chevron that opens on itself.
+    expect(moveMenu([MOVE_CARDS[0]], MOVE_CARDS[0].id)).toBeNull()
+    expect(moveMenu(MOVE_CARDS.slice(0, 2), MOVE_CARDS[0].id)?.items).toHaveLength(2)
     expect(recordCrumbs()).toEqual([{ label: 'Your moves', href: '/dashboard/moves' }, { label: 'The advice record', href: null }])
   })
 })

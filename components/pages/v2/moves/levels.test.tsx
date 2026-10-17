@@ -204,6 +204,8 @@ describe('a dated move, the evidence (G6-Moves-Move)', () => {
     expect(t.match(/October reads once the month has been read/g)).toHaveLength(1)
     expect(t).not.toMatch(/\b0 videos\b/)
     expect(html).toContain('data-no-other-move=""')
+    // Its only dated move: the crumb is plain text, no chevron opening on itself.
+    expect(html).not.toContain('data-crumb-chevron')
     expect(t).not.toContain('Mark done')
   })
 

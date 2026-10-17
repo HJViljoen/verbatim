@@ -580,9 +580,12 @@ export function adviceCrumbs(card: Pick<AdviceCard, 'title' | 'untitled'>, menu:
   return [MOVES_ROOT, { label: card.title, href: null, slot: card.untitled ? null : 'pass_d_b_recommendation', menu }]
 }
 
-/** The move switcher: the dated moves, each with its status in words. Pure. */
+/** The move switcher: the dated moves, each with its status in words; none
+ *  where this move is the only one, because a segment with no sibling is
+ *  plain text, never a chevron that opens on itself (the crumbs' rule,
+ *  components/shell/crumbs.tsx). Pure. */
 export function moveMenu(cards: readonly Pick<MoveCard, 'id' | 'title' | 'status'>[], currentId: string): CrumbMenu | null {
-  if (cards.length === 0) return null
+  if (!cards.some((c) => c.id !== currentId)) return null
   return {
     label: MOVE_SWITCH.label,
     switchLabel: MOVE_SWITCH.switchLabel,
