@@ -53,6 +53,8 @@ describe('a post idea\'s page', () => {
     expect(text).toContain('None of your 13 posts since August touched on it')
     expect(text).toContain('Read over your posts published since 1 August, the touch test the idea was picked by.')
     expect(text).toContain('New amputees, first year → Caregivers and family → Long-time users upgrading → Each opens in Voices')
+    // Each opens its group's page in Voices (Voices' levels are pages, 17 Oct).
+    expect(render(page())).toContain('href="/dashboard/voices/groups/new-amputees"')
     expect(text).toContain('“Your liner has an expiry date. Here is how to read it.” The Amputee Diaries · YouTube · tutorial · opens with a question 2.6× a typical video')
   })
 

@@ -408,9 +408,9 @@ describe('the level-1 email: the board, top to bottom', () => {
     expect(render(<WeeklyReadReport data={levelOne()} appUrl={APP} />)).toContain('padding:26px 30px 6px')
   })
 
-  it('a rival flag opens its brand panel in Voices', () => {
+  it('a rival flag opens its brand page in Voices', () => {
     const rival = sealandFlag({ objectKind: 'rival', objectId: 'competitor:Osprey', label: 'Osprey' })
-    expect(l1Email(levelOne(levelOneRead({ unusual: sealandUnusual([rival]) })))).toContain(`href="${APP}/dashboard/voices?brand=Osprey"`)
+    expect(l1Email(levelOne(levelOneRead({ unusual: sealandUnusual([rival]) })))).toContain(`href="${APP}/dashboard/voices/brands/Osprey"`)
   })
 
   it('goes out under the same frozen subject, with a plain-text mirror', () => {

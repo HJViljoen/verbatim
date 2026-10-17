@@ -1063,7 +1063,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
     the live Content page, which replaced This week's read there. ONE pure
     function maps every old address with its params, `redirectFor`
     (`voice?theme=` → `market/conversations/<theme>`,
-    `competitive?vs=` → `voices?brand=`, `subjects?item=` →
+    `competitive?vs=` → `voices/brands/<vs>` (Voices' pages, its bullet), `subjects?item=` →
     `market/subjects/<item>`, a month → `market?period=month&month=`, Your
     moves' `market?rec|item|ledger` → `moves/advice/<id>` (or the record), `/dashboard?month=`
     too, and Market's own `?conv=` / `?subject=`, below), pinned by
@@ -1663,14 +1663,144 @@ This version has breaking changes — APIs, conventions, and file structure may 
     group by the one-tier `subjectForTheme` at write time, frozen into the
     stored read and replayed as sent, except the subjects' own reads, which
     use `placeSubject`; no live page places a conversation from them.
-  - **Voices** (T4; `lib/pages/v2/voices.ts`), on the reading month, its
-    bar labelled where that is not the current month (decision 3, above).
+  - **Voices** (T4; as pages since 17 Oct, the G3 boards; `lib/pages/v2/voices.ts`
+    for the root, `lib/pages/v2/voices-levels.ts` for its level pages,
+    `components/pages/v2/voices/*`), on the reading month, its bar labelled
+    where that is not the current month (decision 3, above).
+    **ITS LEVELS ARE PAGES (Heinrich approved G3 with every recommendation).**
+    A root and three kinds of page, each its own address, written once in
+    `lib/pages/v2/voices-address.ts`: `/dashboard/voices` (the root),
+    `/dashboard/voices/groups/<persona key>` (a GROUP, a hub),
+    `/dashboard/voices/brands/<brand key>` (a BRAND, a hub: 'client', a
+    `competitors.id`, 'watched:<slug>'; the page also takes a name,
+    `competitor:<name>` or 'you', `matchesBrand`) and
+    `/dashboard/voices/creators/<platform>/<account>` (a CREATOR, the
+    evidence; two segments, board decision 1, since a pipe reads %7C in a
+    shared link; an old link's account alone lands on one segment, resolved
+    as the panel did). Each reads `?month=`; a creator's also `?video=` (a
+    UUID: one of its own videos' counted comments in full, at most 50) and
+    `?videos=all` (every video, at most 60), honoured only for the creator's
+    own videos in the month. Voices stays the sidebar's active surface on
+    each (`surfaceForPath`). Each has its own `loading.tsx`, keeps the shell
+    on a throw and prints one calm line with "Back to Voices" for an address
+    it does not follow (a key today's profile does not hold, an untracked
+    brand, a creator under `ACCOUNT_FLOOR` this month, and Reddit, whose
+    account is a community: `CREATOR_REDDIT`), never a 404. Old links
+    redirect FOR GOOD in one hop, other params kept (`voicesLevelRedirect`,
+    Voices' block at the top of `redirectFor`; pinned in
+    `lib/nav-redirects.test.ts`, Voices' table): `voices?group=` /
+    `?persona=`, `?brand=`, `?creator=` (`platform|account` or the account),
+    the old Conversation page's `voice?persona=` / `?brand=` (a `?theme=`
+    still wins, Market's conversation) and Competitive's `?vs=`; the Voices
+    route asks before it reads anything. Panels left the page: no
+    `InPlacePanel`, no `PanelSlot`, no "Close". Each opens with Market's
+    `LevelBar` (an additive `tile` prop draws Voices' tiles: a group's
+    people on the hub yellow, a brand's tag in its colour role, the rival
+    grey or your gold, labelled "Rival brand" / "Your brand" / "Brand you
+    watch", a creator's camera on the neutral, "Creator on {platform}"), its
+    crumb "Voices / {name} ⌃⌄" and a switcher: the month's groups in the
+    root's order; "Brands you track" (you first with the note "You", then by
+    how often each was named without being asked, then the not named and not
+    counted below the hairline, in words, never a figure); creators at the
+    floor, most videos first, never Reddit. The month switch is the root's
+    (the week and over time drawn, not offered), and a level page's own
+    frames say "this month" only while the month read is under way, its name
+    otherwise (`inMonthWords`, decision 3). Every link a level page
+    makes into Market opens This month for the month Voices reads
+    (`marketConvHref`, `marketSubjHref`), so the counts agree. Every builder
+    that opened a Voices panel opens a page: the root's rows and cards,
+    `topVoicesOf` (the Dashboard's tile and the weekly email's Voices line),
+    Market's `groupLink`, Content's `groupHref` and the email's rival line
+    (`objectHref`). *The root* is the same shape with decision 2's counts:
+    its Who rows, brand rows and creator rows end in the leave-the-page
+    chevron (`RowChevron`, board decision 8; out of the tab order, the name
+    is the link). *A group's page* (G3-Voices-Group, -Phone, -Thin;
+    `buildGroupPage`): the header card (the stored one-liner as its lead,
+    "Who they are · described at the {date} update"; their videos of the
+    market's, "Not compared yet" against last month, the READY subject they
+    talk about most, the conversations they are in); the read card (wants,
+    stops, tips; who they say they are, merged by decision 8; how they
+    talk); WHAT THEY TALK ABOUT, its parts Market's levels (board D3): at
+    most three subject cards (the ready subjects on their videos, most
+    first, each "17 of their 45 videos", the conversations inside it for
+    them by `placeSubject` and its level on the market off
+    `loadObjectReadings`; where fewer than three are ready, the subjects
+    whose check has not passed that hold their conversations, named with no
+    figure, a conversation's own count beside it, "Its check is still
+    open"), then one line naming every subject not measured yet (with
+    `FAILED_EXPLAINED` once a page for a failed one), the subjects not carded
+    that hold their conversations, and the ready ones not carded ("Also in
+    their videos", counts; "In none of their videos", names); every
+    conversation they are in (its description, its subject, theirs of
+    their videos, all its videos; the footnote's second half only where the
+    counts add up past their videos); the numbers (the brands in their
+    videos, you first, `groupBrandRows`; your products, `readGroupProducts`;
+    where they comment); three comments, each from one of their own
+    conversations (`loadVoicesMany`'s gate, then one bounded read of the
+    picks' evidence ids for their insights, `quotesAcrossConversations`);
+    with none to print the card keeps its frame and says why in one line,
+    and a failed read says so (`quotesUnread`), never the look of none.
+    *A brand's page* (G3-Voices-Brand, -Phone, -Switcher;
+    `buildBrandPage`): the header card (Pass C's weightiest finding about a
+    rival as its lead, "Where its talk differs · the {date} update"; named
+    without being asked with its `Verdict` and its change; named at all,
+    the row's `k_any` of its own `n`, what the figures below are of;
+    praised · complained of its `any`, the month's alone; each cross's head
+    names the lens's base its rows are of); how the talk differs (the finding's account and the
+    other findings; your own brand says it has none, `BRAND_YOU_NO_FINDING`);
+    who talks about it, its parts Voices' levels (D3): the groups commenting
+    on its videos and the creators at the floor it comes up with, each row
+    opening its page (D2: a hub draws no videos); the numbers (named without
+    being asked, month by month, three bars in its colour role, MiniBars'
+    additive `tone`, with the verdict line; the kinds; what its talk sits
+    in, READY subjects, those not measured named, why a failed one shows no
+    figure said once (FAILED_EXPLAINED); where it was named,
+    `k_comment` / `k_content` of `k_any`; where); UNDER ITS OWN CONTENT, a
+    rival's alone, under its own heading and window chip (D4: the ninety
+    days to the reading month's last update): what is asked under its posts,
+    what it says in its own videos (`video_claims`, `entity = 'competitor'`,
+    on its `competitor_owned` posts in the window, the paraphrase as stored
+    prose `pass_a_brand_claim`, never a quote, two, `topClaims`) and three
+    comments said about it, each labelled with its conversation off the
+    themed run's members. A brand not counted, or that no video names,
+    keeps every frame IN ITS SHAPE (the strip's four places and the numbers
+    card's five, each with its rows' empty tracks, the months on their axis
+    with no bar; never one line in a card's place) and says why ONCE, in the
+    strip's first place (the row's `stateWords`); each frame says only what
+    it holds
+    (`brandFrameNone`), never "not counted yet" of a brand that is counted
+    or never will be; its ninety days stand. *A creator's page* (G3-Voices-Creator,
+    -Phone; `buildCreatorPage`): a flat header, one line code builds ("Their
+    biggest conversation is X: 6 of their 14 videos, of the 24 in it this
+    month") and the brands named in their videos; their videos, the most
+    comments counted first (`convVideoOrder`, `shownConvVideos`), each led by
+    its caption, its day and the conversation it is in, "22 comments
+    counted, of 340 on the video" (board decision 5), and the counted
+    comments that may print (`creatorVideoQuotes`: Market's rules for a
+    video's comments, each naming the conversation whose refs hold it, every
+    conversation of theirs labelled; gated with no claim, so no relevance
+    test, and its reason says so, `LEVEL_QUOTE_RULE`, never Market's "speaks
+    to this");
+    the facts (followers as of the month's videos, their conversations
+    theirs of all its videos, who comments, what people did off one lens
+    call); the other creators; the Agent. READS: each page reads only what it
+    prints (`lib/pages/v2/voices-statements.test.ts`, offline: the root 27,
+    a group's page 40, a brand's 39, a creator's 24; before, at fff60bbb, the
+    root 27 and its panels 35, 39 and 28; a video opened or every video
+    listed reads nothing more); new reads are chunked at 250 and filtered by
+    the session's client (a creator's counted comments through
+    `comments!inner` on its own platform and video ids), and a foreign or
+    non-member id names nothing (pinned, and the test fails with the
+    filters removed). `scripts/voices-v2-dump.ts --view
+    root|group:<key>|brand:<key>|creator:<platform>/<account>|<level>:first`
+    dumps one page for production renders; `scripts/shots/voices-levels.ts`
+    draws every state beside its board.
     Groups are today's profile with this month's comment-dated videos: a
     count, never a share, never compared (decision 2). A group's "Who they
     say they are" merges near-repeats (decision 8, `mergeWho`): each label
     lowercased, each word singular, the filler words in `WHO_FILLER_WORDS`
     dropped; labels whose normal forms are EQUAL are one row, counts added,
-    under the wording that came up most, and the panel lists `WHO_SHOWN` (3).
+    under the wording that came up most, and the group's page lists `WHO_SHOWN` (3).
     Nothing looser than equality ("Caretaker" and "Care worker" stay apart). Brands: named unprompted is
     `k_organic` of `n_organic` with its `Verdict` (`brandMonthPair`, on
     `BRANDS_PANEL`); praised, complained and the subject read base `any` and
@@ -1687,20 +1817,18 @@ This version has breaking changes — APIs, conventions, and file structure may 
     short line naming every subject not ready, open or failed, in the
     subjects' order ("Not measured yet: …", `notMeasuredLine`; never a
     count). Why a failed one shows no figure is said once on the page, in
-    the foot of "Who's in your market" (`VoicesData.subjectsFailed`); a
-    group panel's headline cells take ready subjects above 0 only; a brand's
-    panel lists every ready subject. The client's own row needs its name checked
+    the foot of "Who's in your market" (`VoicesData.subjectsFailed`) on the
+    root, and in the line under the subject cards on a group's page; a
+    group's top subject is a ready one above 0 only; a brand's page lists
+    every ready subject. The client's own row needs its name checked
     (`nameChecked`) and every month match read in `NAME_READS`
     (`clientNameCounts`; the Dashboard's tile uses
     `clientNameCountsByCount`). A tenant with rules and no rows says the
     brands are not counted yet (`BRANDS_NOT_COUNTED`). Creators are listed at
     `ACCOUNT_FLOOR` (3) market videos; Reddit is left out
     (`COMMUNITY_PLATFORMS`: its account is the community) and never shows
-    followers. A rival's panel carries Competitive's pane over the ninety
-    days ending at the reading month's last update. One panel opens at a
-    time: `?group=` / `?persona=`, `?brand=` (a name, a key or
-    `competitor:<name>`, for ANY tracked brand), `?creator=` (an account or
-    `platform|account`). THIN MONTHS KEEP E3-VOICES' SHAPE (parity pass):
+    followers. THIN MONTHS KEEP E3-VOICES' SHAPE (parity pass), and the thin
+    group keeps G3-Voices-Group-Thin's:
     the month switch shows the month, and This week and Over time are drawn
     but not offered (the kit's `disabled`). Each group card's verdict slot
     reads `GROUP_NOT_COMPARED` ("not compared yet"). "The mix in {month}"
@@ -1708,9 +1836,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
     (decision 2). The brands table always draws its column heads with your
     row first; before any month row exists, every tracked brand is a row
     with empty cells and one "not counted yet" line (`brandTable`). A
-    group's panel lists "Products in their videos" by Your products' rule
+    group's page lists "Products in their videos" by Your products' rule
     (`productMonthSets` over the group's videos: named in the video or a
-    comment on it), never as the group's own words.
+    comment on it), never as the group's own words; its "Who they say they
+    are" with nothing keeps its empty tracks and one line.
   - **Your products** (T5; `lib/pages/v2/products.ts`; AS PAGES, 17 Oct,
     the G4 boards, every recommendation of their report approved:
     `lib/pages/v2/products-levels.ts`, `components/pages/v2/products/`).
@@ -2137,21 +2266,25 @@ This version has breaking changes — APIs, conventions, and file structure may 
     the subjects module's census (`lib/pages/subjects.ts` `loadOwnPosts`)
     still reads `is_client` or `source='owned'`, and `buildPlaybook` defaults
     to `clientSide: 'about'` everywhere but Content.
-  - **Panels at every width (T9).** Voices only: since 17 Oct Market, Your
-    products, Content and Your moves open pages, never a panel (their
-    bullets above), and the machinery stays for Voices until it moves
-    over. A v2 panel opened from a card in a grid
-    is ONE child of that grid: cards take `panelItemOrder(i)`, the panel
-    goes in a `PanelSlot` right after the clicked card, and
-    `panelPlacement(index, layout)` (`components/v2/panel-place.ts`) gives
-    its order and notch per breakpoint. The rules are plain CSS
-    (`.panel-slot` / `.panel-notch` in `app/globals.css`) because Tailwind
-    sorts `min-[1180px]:` before the named breakpoints. No page does its own
-    order arithmetic, and the panel's content is never drawn twice.
-    `InPlacePanel` scrolls itself into view when its head is off screen
-    (`panelScrollPlan`, reduced motion jumps). From 768 the sidebar takes
-    281px, so at 820 a page has 459px and three-column sections start at
-    `lg`.
+  - **Panels at every width (T9): legacy, used by no page.** Since 17 Oct
+    every v2 page opens its depth as pages, never a panel: Market, Voices,
+    Your products, Content and Your moves (their bullets above). No client
+    page and nothing that renders a stored snapshot imports `InPlacePanel`,
+    `PanelSlot`, `panelPlacement` or `panelItemOrder` any more; the
+    machinery stays in the kit (`components/v2/panel.tsx`,
+    `panel-place.ts`, `panel-scroll.ts`, the `.panel-slot` / `.panel-notch`
+    rules in `app/globals.css`), unused, drawn only by its own tests and the
+    kit gallery (`scripts/render-kit.tsx`), and no new page is built on it
+    (the kit's `SELECTED_CARD_RING` is a style constant the shelf still
+    takes). How it worked, for whoever retires it: a panel opened from a
+    card in a grid was ONE child of that grid: cards took
+    `panelItemOrder(i)`, the panel went in a `PanelSlot` right after the
+    clicked card, and `panelPlacement(index, layout)` gave its order and
+    notch per breakpoint, in plain CSS because Tailwind sorts
+    `min-[1180px]:` before the named breakpoints; `InPlacePanel` scrolled
+    itself into view when its head was off screen (`panelScrollPlan`,
+    reduced motion jumps). From 768 the sidebar takes 281px, so at 820 a
+    page has 459px and three-column sections start at `lg`.
   - **The phone shell (T9).** Below 768 `PhoneTopBar`
     (`components/shell/phone-bar.tsx`) stands in for the sidebar and opens
     the same drawer, so its rows still come from `lib/nav.ts`; the

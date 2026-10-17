@@ -14,7 +14,8 @@ import { adviceHref, movedMove, type TopMoves } from './moves'
 import { movePath } from './moves-address'
 import { DESK, MOVE_CARDS } from './moves-fixture'
 import { shelfCut } from './products'
-import { VOICES_HREF, voicesHref, type TopVoices } from './voices'
+import { VOICES_HREF, type TopVoices } from './voices'
+import { voicesBrandHref, voicesGroupHref } from './voices-address'
 
 // THE DASHBOARD'S RENDER FIXTURES (Design v2, T8): Össur-shaped, from the
 // other pages' own fixtures (Market's week, Your moves' help desk and its
@@ -101,10 +102,13 @@ export function fixtureStanding(): StandingFact[] {
   }))
 }
 
+/** Ottobock's brand key in the fixtures (a `competitors.id` in production). */
+const OTTOBOCK_KEY = '5ecfa431'
+
 export function fixtureVoicesTop(opts: { named?: boolean; september?: boolean } = {}): TopVoices {
   const tracked = [
-    { label: 'Össur', you: true, href: voicesHref({}, { kind: 'brand', key: 'Össur' }) },
-    { label: 'Ottobock', you: false, href: voicesHref({}, { kind: 'brand', key: 'Ottobock' }) },
+    { label: 'Össur', you: true, href: voicesBrandHref('client') },
+    { label: 'Ottobock', you: false, href: voicesBrandHref(OTTOBOCK_KEY) },
   ]
   const groups = [
     { key: 'long-time-users', name: 'Long-time users upgrading', videos: 86 },
@@ -118,11 +122,11 @@ export function fixtureVoicesTop(opts: { named?: boolean; september?: boolean } 
     monthWords: opts.september ? 'September' : 'October so far',
     ...(opts.september ? { monthLabel: SEP_LABEL } : {}),
     videos: 318,
-    group: { ...groups[0], oneLiner: 'People who have worn a prosthesis for years and want the next one.', href: voicesHref({}, { kind: 'group', key: groups[0].key }) },
+    group: { ...groups[0], oneLiner: 'People who have worn a prosthesis for years and want the next one.', href: voicesGroupHref(groups[0].key) },
     groups,
     named: opts.named === false ? [] : [
-      { label: 'Össur', k: 41, n: 318, you: true, href: voicesHref({}, { kind: 'brand', key: 'client' }) },
-      { label: 'Ottobock', k: 37, n: 318, you: false, href: voicesHref({}, { kind: 'brand', key: 'Ottobock' }) },
+      { label: 'Össur', k: 41, n: 318, you: true, href: voicesBrandHref('client') },
+      { label: 'Ottobock', k: 37, n: 318, you: false, href: voicesBrandHref(OTTOBOCK_KEY) },
     ],
     groupsState: 'ready',
     groupsEmpty: null,

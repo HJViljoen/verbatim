@@ -2,8 +2,8 @@ import { redirect } from 'next/navigation'
 import { retiredTo, type SearchProps } from '@/lib/nav'
 
 // COMPETITIVE FOLDED INTO VOICES (Design v2, decision 6 of the depth plan):
-// the brands are Voices'. `?vs=` (the brand read in full) lands as
-// `?brand=`.
+// the brands are Voices'. `?vs=` (the brand read in full) lands on that
+// brand’s page under `/dashboard/voices/brands/` (17 Oct).
 //
 // Its page keys, modules and block keys stay registered, so a stored report
 // or share link renders as it did; only the address moved. A thin page.tsx

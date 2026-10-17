@@ -32,11 +32,13 @@ export type LevelKind = 'subject' | 'conversation' | 'week' | 'category' | 'prod
 
 /** A level another page names and draws its own tile for (depth as pages,
  *  17 Oct): Content's post idea, reply list and your posts; Your moves'
- *  piece of advice, dated move and advice record. Closed, so a typo is a
- *  compile error: a page that moves over adds its own. */
+ *  piece of advice, dated move and advice record; Voices' group, brand and
+ *  creator. Closed, so a typo is a compile error: a page that moves over
+ *  adds its own. */
 export type PageLevelKind =
   | 'idea' | 'replies' | 'posts'
   | 'advice' | 'move' | 'record'
+  | 'group' | 'brand' | 'creator'
 
 /** `LevelTile`'s levels (Market's three, Your products' two) take no tile;
  *  another page's level must bring its own, so a level `LevelTile` cannot
@@ -87,6 +89,9 @@ export function LevelBar({ crumbs, level, tile, label, title, meta, controls, op
   /** Draw the page's own switcher open (the board's open state, for the
    *  render tier and the shots). */
   open?: 'current'
+  /** The level's tile, where the page is not one of Market's (whose tiles
+   *  `LevelTile` draws): additive, so Market's bar is unchanged. */
+  tile?: ReactNode
 }) {
   const current = crumbs[crumbs.length - 1]
   const menu = current?.menu

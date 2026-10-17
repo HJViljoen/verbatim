@@ -1,4 +1,5 @@
 import { marketConversationPath, marketSubjectPath } from '../nav'
+import { voicesBrandPath } from '../pages/v2/voices-address'
 import { fmtInt, longMonth } from '../format'
 import type { Verdict } from '../reading/verdicts'
 import { coveredDays, inMonth, monthHeading, monthsPhrase } from '../written/month'
@@ -214,13 +215,14 @@ export const ALSO_ROWS = 3
 
 /** Where an object opens: a conversation's or a subject's page on Market
  *  (17 Oct; a snapshot built before then carries the old `?conv=` /
- *  `?subject=`, which redirect there), a rival in Voices' brand panel (it
- *  takes the name), anything else Market itself. An app path. */
+ *  `?subject=`, which redirect there), a rival its brand page on Voices (17
+ *  Oct, by name, which the page resolves; an older `?brand=` redirects
+ *  there), anything else Market itself. An app path. */
 export function objectHref(kind: string, id: string): string {
   const market = '/dashboard/market'
   if (kind === 'theme' && id) return marketConversationPath(id)
   if (kind === 'subject' && id) return marketSubjectPath(id)
-  if (kind === 'rival' && id) return `/dashboard/voices?brand=${encodeURIComponent(rivalNameOf(id) ?? id)}`
+  if (kind === 'rival' && id) return voicesBrandPath(rivalNameOf(id) ?? id)
   return market
 }
 

@@ -2,30 +2,18 @@ import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { ossurVoicesFixture, sealandVoicesFixture, VOICES_FIXTURES } from '@/lib/pages/v2/voices-fixture'
-import type { BrandPanel } from '@/lib/pages/v2/voices'
-import { BrandPanelView, BrandsCard, VerdictNote } from './brands'
-import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
+import { BrandsCard, VerdictNote } from './brands'
 
 describe('Brands in your market: ruling U6', () => {
-  it('a counted brand\'s top subject and panel count the ready subjects alone, and say how many more are not measured', () => {
-    const d = VOICES_FIXTURES['ossur-counted-brand']()
+  it('a counted brand\'s top subject counts the ready subjects alone', () => {
+    const d = VOICES_FIXTURES['ossur-counted']()
     const card = renderText(<BrandsCard brands={d.brands} monthWords={d.monthWords} />)
     expect(card).toContain('Cost & access · 21 of 37')
     expect(card).not.toContain('Fit & comfort')
-    const node = <BrandPanelView panel={d.panel as BrandPanel} monthWords={d.monthWords} />
-    const text = renderText(node)
-    expect(text).toContain('What they talk about · of its 37 Cost & access 21 Function & movement 9 Not measured yet: Choosing the right device, Community & encouragement, Fit & comfort, Look & style')
-    // Named, never counted (the lens gave Fit & comfort 25 of its videos).
-    expect(text).not.toMatch(/Fit & comfort \d/)
-    assertCopyContract(node)
   })
 
-  it('with no subject ready, the column keeps its place and says "Not measured yet"; the table never says "no subject"', () => {
-    const d = VOICES_FIXTURES['ossur-counted-brand']()
-    const panel = { ...(d.panel as BrandPanel), subjects: [], subjectsPending: 6 }
-    const node = <BrandPanelView panel={panel} monthWords={d.monthWords} />
-    expect(renderText(node)).toContain('What they talk about Not measured yet')
-    assertCopyContract(node)
+  it('with no subject ready, the table never says "no subject"', () => {
+    const d = VOICES_FIXTURES['ossur-counted']()
     const brands = { ...d.brands, rows: d.brands.rows.map((r) => ({ ...r, topSubject: null, subjectsPending: 6 })) }
     const t = renderText(<BrandsCard brands={brands} monthWords={d.monthWords} />)
     expect(t).not.toContain('no subject yet')
@@ -49,7 +37,10 @@ describe('Brands in your market', () => {
     const m0 = render(node)
     // The board's header is drawn at every width (two rows of two below lg).
     expect(m0).not.toContain('max-lg:hidden')
-    expect(m0).toContain('href="/dashboard/voices?brand=Freedom+of+Movement#brand-panel"')
+    expect(m0).toContain('href="/dashboard/voices/brands/c-fom"')
+    // Each row opens the brand's page and ends in the chevron (17 Oct).
+    expect(m0).toContain('href="/dashboard/voices/brands/c0000000-0000-0000-0000-000000000003"')
+    expect(m0.match(/data-row-chevron=""/g)?.length).toBe(d.brands.rows.length)
     expect(text).toContain('Patagonia: Patagonia is praised for lasting for years')
     const m = render(node)
     expect(m).toMatch(/data-copy="verdict"[^>]*><span class="text-xs font-medium text-muted-foreground"[^>]*>too few to compare/)
@@ -78,7 +69,7 @@ describe('Brands in your market', () => {
     // The key names the bars' colours: no bar, no key.
     expect(text).not.toContain('videos where people praised')
     // Each tracked brand still opens, and the latest finding is the note.
-    expect(m).toContain('href="/dashboard/voices?brand=Ottobock#brand-panel"')
+    expect(m).toContain('href="/dashboard/voices/brands/5ecfa431"')
     expect(text).toContain('Ottobock: Ottobock’s talk turns on getting a knee paid for Open Ottobock →')
     assertCopyContract(node)
   })
@@ -119,85 +110,5 @@ describe('Brands in your market', () => {
     const v = d.brands.rows[1].verdict!
     expect(render(<VerdictNote verdict={{ ...v, state: 'refused', refusedReason: 'tracking_change' }} you={false} />)).toBe('')
     expect(render(<VerdictNote verdict={null} you={false} />)).toBe('')
-  })
-})
-
-describe('a brand\'s panel', () => {
-  it('a rival not counted yet (Össur today): the count half says so, the Competitive half stands', () => {
-    const d = ossurVoicesFixture({ brand: 'Ottobock' })
-    const p = d.panel as BrandPanel
-    const node = <BrandPanelView panel={p} monthWords={d.monthWords} />
-    const text = renderText(node)
-    expect(text).toContain('Ottobock in September: not counted yet.')
-    expect(text).toContain('Asked under its content, 3 Jul to 30 Sep Insurance refusals for powered knees 7 videos')
-    expect(text).toContain('Said about Ottobock, 3 Jul to 30 Sep')
-    expect(text).not.toMatch(/named it without being asked|named it at all/)
-    // No empty stats row where nothing is counted.
-    expect(render(node)).not.toContain('xl:grid-cols-4')
-    assertCopyContract(node)
-  })
-
-  const d = sealandVoicesFixture({ brand: 'Patagonia' })
-  const panel = d.panel as BrandPanel
-
-  it('the brand\'s month in full, and the Competitive pane re-laid: asked, where its talk differs, said about it', () => {
-    const node = <BrandPanelView panel={panel} monthWords={d.monthWords} />
-    const text = renderText(node)
-    expect(text).toContain('13 of 743 videos named it without being asked too few to compare August: 4 of 250')
-    expect(text).toContain('65 of 940 videos named it at all')
-    expect(text).toContain('50 of 65 videos naming it, where people praised something')
-    expect(text).toContain('What people did in the comments · of its 65 Praised a bag 50 Asked a question 45')
-    expect(text).toContain('What they talk about · of its 65 Durability 19')
-    expect(text).toContain('Asked under its content, 30 Jun to 27 Sep Is the Black Hole worth it 9 videos')
-    expect(text).toContain('Where its talk differs from the rest of the market · the latest update how the talk differs')
-    expect(text).toContain('Said about Patagonia, 30 Jun to 27 Sep')
-    expect(text).toContain('Ask the Agent about Patagonia')
-    const m = render(node)
-    expect(m.match(/data-copy="quote"/g)?.length).toBe(2)
-    assertCopyContract(node)
-  })
-
-  it('your own brand has no rival pane: its month alone', () => {
-    const you = sealandVoicesFixture({ brand: 'you' })
-    const p = you.panel as BrandPanel
-    expect(p.you).toBe(true)
-    const node = <BrandPanelView panel={p} monthWords={you.monthWords} />
-    const text = renderText(node)
-    expect(text).toContain('Brand You Sealand')
-    expect(text).not.toMatch(/Asked under|Said about|differs/)
-    expect(text).toContain('Ask the Agent about your brand')
-    assertCopyContract(node)
-  })
-})
-
-// A TRACKED SUBJECT IS NEVER HIDDEN (Heinrich, 14 Oct).
-describe('Brands in your market: a tracked subject is never hidden (14 Oct)', () => {
-  it('a counted rival\'s panel lists every ready subject, the thin one\'s small count, then ONE short line naming the open and the failed subject', () => {
-    const d = VOICES_FIXTURES['ossur-tracked-brand']()
-    const node = <BrandPanelView panel={d.panel as BrandPanel} monthWords={d.monthWords} />
-    const text = renderText(node)
-    expect(text).toContain('What they talk about · of its 37 Function & movement 9 Look & style 1 Not measured yet: Cost & access, Fit & comfort')
-    // Its reason is the page's, once, in the foot of "Who's in your market".
-    expect(text).not.toContain(FAILED_EXPLAINED)
-    assertCopyContract(node)
-  })
-
-  it('a ready subject on none of a brand\'s videos is listed at 0 and is never its top subject', () => {
-    const d = VOICES_FIXTURES['ossur-tracked']()
-    const client = d.brands.all.find((r) => r.you)!
-    // Össur's own row is not counted yet; Ottobock's top is a subject on its videos.
-    expect(client.topSubject).toBeNull()
-    const otto = d.brands.all.find((r) => r.label === 'Ottobock')!
-    expect(otto.topSubject).toMatchObject({ label: 'Function & movement', k: 9 })
-  })
-
-  it('with only a subject being re-described and none ready on its videos, the column says "Not measured yet", never "no subject"', () => {
-    const d = VOICES_FIXTURES['ossur-tracked']()
-    const brands = { ...d.brands, rows: d.brands.rows.map((r) => ({ ...r, topSubject: null, subjectsPending: 1, subjectsNotMeasured: [{ id: 's-fit', label: 'Fit & comfort' }] })) }
-    const node = <BrandsCard brands={brands} monthWords={d.monthWords} />
-    const text = renderText(node)
-    expect(text).toContain(SUBJECT_NOT_MEASURED)
-    expect(text).not.toContain('no subject yet')
-    assertCopyContract(node)
   })
 })

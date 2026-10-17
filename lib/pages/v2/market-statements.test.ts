@@ -229,7 +229,7 @@ describe('a conversation\'s "who\'s saying it" counts each group over its own vi
     const page = (await load())!.convPage!
     expect(page.week).toMatchObject({ k: 7 })
     expect(page.panel.groupBase).toEqual({ n: 7, text: 'this week' })
-    expect(page.panel.groups).toEqual([{ key: 'carers', name: 'Caregivers and family', href: '/dashboard/voices?group=carers#group-panel', videos: 1 }])
+    expect(page.panel.groups).toEqual([{ key: 'carers', name: 'Caregivers and family', href: '/dashboard/voices/groups/carers', videos: 1 }])
   })
 
   it('a citations read that fails keeps Pass E\'s names, with no count and no base', async () => {
@@ -237,7 +237,7 @@ describe('a conversation\'s "who\'s saying it" counts each group over its own vi
     const db = fakeDb(rest as never, rpcs() as never)
     const page = (await loadMarket({ supabase: db.client as never, clientId: CLIENT, reading: readingHandle(CLIENT, db.client as never), params: marketParams({}), view: { kind: 'conversation', id: fixtureId(3) }, now: new Date('2026-10-14T09:00:00.000Z') }))!.convPage!
     expect(page.panel.groupBase).toBeNull()
-    expect(page.panel.groups).toEqual([{ key: 'carers', name: 'Caregivers and family', href: '/dashboard/voices?group=carers#group-panel' }])
+    expect(page.panel.groups).toEqual([{ key: 'carers', name: 'Caregivers and family', href: '/dashboard/voices/groups/carers' }])
   })
 })
 

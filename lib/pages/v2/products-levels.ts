@@ -12,7 +12,7 @@ import type { Verdict } from '../../reading/verdicts'
 import { marketSubjectHref, surface } from '../../nav'
 import { productsTabHref } from '../../settings/products'
 import type { Crumb, CrumbItem, CrumbMenu } from '../crumbs'
-import { voicesHref } from './voices'
+import { voicesGroupHref } from './voices-address'
 import {
   askHref, buildCompare, buildProductsData, marketProductMonth, namedComments, PRODUCT_KIND_LABELS, productQuotes, readCrosses,
   readProductsMonth, readProductsShell, readTextLists, readVideoRows, say, setKey, setsOf, shellReads, UNCLEAR_ALL, UNCLEAR_SHOWN, unclearLines, unclearTexts,
@@ -406,7 +406,7 @@ export function groupsOf(ids: ReadonlySet<string>, groups: readonly { key: strin
   if (groups === undefined) return { state: 'unread' }
   if (groups === null || groups.length === 0) return { state: 'none' }
   const rows = groups
-    .map((g, i) => ({ key: g.key, name: g.name, k: g.videoIds.filter((v) => ids.has(v)).length, href: voicesHref(keptMonth(params), { kind: 'group', key: g.key }), i }))
+    .map((g, i) => ({ key: g.key, name: g.name, k: g.videoIds.filter((v) => ids.has(v)).length, href: voicesGroupHref(g.key, keptMonth(params)), i }))
     .filter((g) => g.k > 0)
     .sort((a, b) => b.k - a.k || a.i - b.i)
     .map(({ i: _i, ...g }) => g)

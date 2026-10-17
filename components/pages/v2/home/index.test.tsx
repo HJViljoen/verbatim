@@ -201,12 +201,12 @@ describe('the Dashboard, as the board draws it (E1-Dashboard)', () => {
     expect(markup).toContain(`href="/dashboard/agent?ask=${encodeURIComponent('What does my market say about "How long a liner lasts"?')}"`)
   })
 
-  it('every tile links into its page\'s panel', () => {
+  it('every tile links to its item\'s own page', () => {
     expect(markup).toMatch(/href="\/dashboard\/market\/conversations\/[^"?#]+"[^>]*>Open Market →/)
-    expect(markup).toContain('href="/dashboard/voices?group=long-time-users#group-panel"')
-    // The product's own page (Your products as pages, 17 Oct).
+    // Each tile opens its item's own page (depth as pages, 17 Oct): a
+    // Voices group's, the product's, the post idea's by its row, the advice's.
+    expect(markup).toContain('href="/dashboard/voices/groups/long-time-users"')
     expect(markup).toContain('href="/dashboard/products/g-feet/p-pivot"')
-    // Content's idea is a page of its own, by its row (depth as pages, 17 Oct).
     expect(markup).toContain('href="/dashboard/content/ideas/i0000001-0000-4000-8000-000000000000"')
     expect(markup).toMatch(/href="\/dashboard\/moves\/advice\/[^"?#]+"/)
   })

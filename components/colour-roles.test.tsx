@@ -8,6 +8,8 @@ import { MarketPage } from './pages/v2/market'
 import { marketFixture } from '@/lib/pages/v2/market-fixture'
 import { VoicesPage } from './pages/v2/voices'
 import { VOICES_FIXTURES } from '@/lib/pages/v2/voices-fixture'
+import { VOICES_LEVEL_FIXTURES } from '@/lib/pages/v2/voices-levels-fixture'
+import { VoicesBrandPage, VoicesCreatorPage, VoicesGroupPage } from './pages/v2/voices/pages'
 import { ProductsCategoryPage, ProductsPage, ProductsProductPage } from './pages/v2/products'
 import { PRODUCTS_FIXTURES } from '@/lib/pages/v2/products-fixture'
 import { PRODUCTS_LEVEL_FIXTURES } from '@/lib/pages/v2/products-level-fixture'
@@ -110,8 +112,10 @@ describe('the bans that hold with more colour, on the pages', () => {
     // This month closes with the month's long-run read (Heinrich, 13 Oct).
     ['market, this month with its long-run read', render(<MarketPage data={marketFixture({ period: 'month', closed: true, longRun: 'full' })} />), true],
     ['voices', render(<VoicesPage data={VOICES_FIXTURES.sealand()} />), true],
-    ['voices, a brand open', render(<VoicesPage data={VOICES_FIXTURES['sealand-brand']()} />), true],
-    ['voices, a group open', render(<VoicesPage data={VOICES_FIXTURES['ossur-group']()} />), false],
+    // Voices' level pages (17 Oct): a brand's, a group's and a creator's.
+    ['voices, a brand\'s page', render(<VoicesBrandPage data={VOICES_LEVEL_FIXTURES.brand()} />), false],
+    ['voices, a group\'s page', render(<VoicesGroupPage data={VOICES_LEVEL_FIXTURES.group()} />), true],
+    ['voices, a creator\'s page', render(<VoicesCreatorPage data={VOICES_LEVEL_FIXTURES.creator()} />), true],
     // Your products names the client's own products, never a brand by chip.
     ['your products', render(<ProductsPage data={PRODUCTS_FIXTURES.ossur()} />), false],
     // A category's and a product's own pages (17 Oct, the G4 boards).

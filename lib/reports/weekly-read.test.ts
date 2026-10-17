@@ -135,8 +135,8 @@ describe('level 1 (depth v2, T11b): the email a new snapshot sends', () => {
   it('opens each object where it lives: a conversation and a subject in Market, a rival in its Voices brand panel', () => {
     expect(objectHref('theme', 'reg 1')).toBe('/dashboard/market/conversations/reg%201')
     expect(objectHref('subject', 's9')).toBe('/dashboard/market/subjects/s9')
-    expect(objectHref('rival', 'competitor:Ottobock')).toBe('/dashboard/voices?brand=Ottobock')
-    expect(objectHref('rival', 'Osprey Packs')).toBe('/dashboard/voices?brand=Osprey%20Packs')
+    expect(objectHref('rival', 'competitor:Ottobock')).toBe('/dashboard/voices/brands/Ottobock')
+    expect(objectHref('rival', 'Osprey Packs')).toBe('/dashboard/voices/brands/Osprey%20Packs')
     expect(objectHref('kind', 'question')).toBe('/dashboard/market')
   })
   it('the other flags come first among the rows, then the biggest conversations on the lead\'s counts; never one set apart; each once', () => {

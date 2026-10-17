@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Sparkles } from 'lucide-react'
+import { ChevronRight, Sparkles } from 'lucide-react'
 import { Fragment, type ReactNode } from 'react'
 import { TickBar } from '@/components/v2'
 import { TAG } from '@/components/colour-roles'
@@ -206,6 +206,18 @@ export function AskButton({ href, children, after }: { href: string; children: R
           "See the 52 videos and every comment"). */}
       {after}
     </div>
+  )
+}
+
+/** THE LEAVE-THE-PAGE CHEVRON (G3-Voices, board decision 8): a root row's
+ *  last column, saying the row opens a page of its own. The row's name is its
+ *  link for a keyboard and a screen reader; the chevron is the same address
+ *  for a pointer, out of the tab order. */
+export function RowChevron({ href, className }: { href: string; className?: string }) {
+  return (
+    <Link href={href} tabIndex={-1} aria-hidden data-row-chevron="" className={cn('flex size-4 shrink-0 items-center justify-center text-muted-foreground/70 no-underline transition-colors hover:text-foreground', className)}>
+      <ChevronRight className="size-4" strokeWidth={2} />
+    </Link>
   )
 }
 

@@ -1226,7 +1226,7 @@ export function ideaCard(input: {
 export const agentHref = (text: string): string => `/dashboard/agent?ask=${encodeURIComponent(text)}`
 /** A conversation's page on Market (17 Oct: a page, never a panel). */
 export const conversationHref = (registryId: string): string => marketConversationPath(registryId)
-export const groupHref = (key: string): string => `/dashboard/voices?group=${encodeURIComponent(key)}`
+export { voicesGroupPath as groupHref } from './voices-address'
 
 // ---- the reads ----------------------------------------------------------------------
 

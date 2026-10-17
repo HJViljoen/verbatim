@@ -129,7 +129,7 @@ describe('a category\'s page, the hub (G4-Products-Category)', () => {
     expect(text).toContain('Each opens in Voices')
     const m = render(page(d))
     expect(m).toContain('href="/dashboard/market/subjects/s-fit-comfort?period=month&amp;month=2026-09"')
-    expect(m).toContain('href="/dashboard/voices?group=new#group-panel"')
+    expect(m).toContain('href="/dashboard/voices/groups/new"')
     // Group names are Pass E's, replayed with their slot.
     expect(m).toContain('data-slot="pass_e_persona">New amputees, first year')
   })

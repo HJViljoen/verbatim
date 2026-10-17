@@ -4,6 +4,7 @@ import type { PageKey } from './renderables/types'
 import type { SessionContext } from './auth'
 import { productsCategoryPath, productsProductPath } from './pages/v2/products-address'
 import { adviceLanding } from './pages/v2/moves-address'
+import { voicesLevelRedirect } from './pages/v2/voices-address'
 
 /**
  * The shell's one table (Phase 1 WP9, items 42 and 38a, decision C).
@@ -581,11 +582,14 @@ export function contentRedirect(params: SearchParams = {}): string | null {
  *   /dashboard/overview?month=M → /dashboard/market?period=month&month=M
  *   /dashboard/week             → /dashboard/market
  *   /dashboard/voice?theme=T    → /dashboard/market/conversations/T   (or ?themes=T,…: the first)
- *   /dashboard/voice            → /dashboard/voices           (the cast, a brand's videos)
- *   /dashboard/competitive?vs=B → /dashboard/voices?brand=B
+ *   /dashboard/voice            → /dashboard/voices           (the cast; ?persona=, ?brand=: Voices' pages)
+ *   /dashboard/competitive?vs=B → /dashboard/voices/brands/B   (Voices' block, below)
  *   /dashboard/subjects?item=S  → /dashboard/market/subjects/S
  *   /dashboard/products?group=G → /dashboard/products/G           (17 Oct; ?unclear=all kept)
  *   /dashboard/products?product=P → /dashboard/products/<its category>/P
+ *   /dashboard/voices?group=G   → /dashboard/voices/groups/G   (17 Oct; ?persona=, ?brand=, ?creator=: Voices' block)
+ *   /dashboard/content?replies=1 → /dashboard/content/replies  (17 Oct; ?reply=I its section, ?posts=1 → /dashboard/content/posts)
+ *   /dashboard/content?idea=N   → the idea's page, resolved by the page (`ideaLanding`)
  *   the other RETIRED_ADDRESSES → their target, query kept
  *
  * Every param the mapping does not name travels as it came (a repeated key
@@ -604,6 +608,15 @@ export function contentRedirect(params: SearchParams = {}): string | null {
  * fragment the new page has no id for scrolls nowhere.
  */
 export function redirectFor(path: string, params: SearchParams = {}, known: RedirectKnown = {}): string | null {
+  // ---- VOICES' LEVELS ARE PAGES (17 Oct, the G3 boards) ----------------------
+  // `?group=` / `?persona=`, `?brand=` and `?creator=` opened a panel in place
+  // on Voices (and on the old Conversation page, `/dashboard/voice`), and
+  // Competitive's `?vs=` named a brand: each lands on its level page in one
+  // hop, every other param kept (lib/pages/v2/voices-address.ts, where the
+  // addresses are written once). `undefined` is "not Voices' to answer".
+  const voices = voicesLevelRedirect(path, params)
+  if (voices !== undefined) return voices
+  // ---- end of Voices' block ----------------------------------------------------
   switch (path) {
     case '/dashboard':
       return value(params.month) === undefined ? null : redirectFor('/dashboard/overview', params)

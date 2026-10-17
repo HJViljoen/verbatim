@@ -2,17 +2,12 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { nameChecked, NAME_READS, NONE_FOUND, noiseWords, NOT_COUNTED_YET } from '../../brands/precision'
 import { productReadingsEnabled } from '../../config'
-import { fmtInt, longMonth, platformLabel, shortDate } from '../../format'
-import { gateFor } from '../../quote-context'
-import { readingOf, readTranslations } from '../../quotes'
-import { ASKED_SHOWN, FINDING_KINDS_HELD, findingKindWords, ninetyDays, quoteWords } from '../brands'
-import { readQuestions, readSaidAbout } from '../brands-load'
+import { fmtInt, longMonth, platformLabel } from '../../format'
+import { FINDING_KINDS_HELD } from '../brands'
 import { fetchRunningRunIds } from '../latest-video-run'
-import { loadVoicesMany } from '../subjects'
 import { ACCOUNT_FLOOR } from '../voice-surface-where'
-import { talkKindLabel } from '../overview-market/kinds'
-import { WHAT_THEY_SELL } from '../market-frame'
 import { marketConversationPath, surface } from '../../nav'
+import { VOICES_PATH, voicesBrandHref, voicesCreatorHref, voicesGroupHref } from './voices-address'
 import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../../chunk'
 import { standingPlacements, type StandingText, type TextKey } from '../../products/match'
 import {
@@ -24,7 +19,6 @@ import { normalisePersona, type Persona } from '../../profile-tiles'
 import { placementsInPlay, productMonthSets, type MentionRead, type ProductMonthSets } from './products'
 import { productsHref } from './products-address'
 import { CLIENT_AUDIENCE, rivalKey } from '../../rivals'
-import { FLAGGED_KIND, KIND_ORDER } from '../../reading/kinds'
 import {
   creatorThemes, loadBrandCrosses, loadBrandMonthPairs, loadBrandRefs, loadCompanyName, loadGroupSubjects, loadLatestProfile,
   loadMarketAudiences, loadMarketVideos, loadThemeRefs,
@@ -37,7 +31,7 @@ import { refuseEveryPair } from '../../reading/pairs'
 import { loadPairOn, type ReadingHandle } from '../../reading/read'
 import { marketAudiences } from '../../reading/market'
 import { loadMarketRivalAudiences, loadReadingMonth } from '../../reading/reading-view'
-import { windowEnd, type ReadingMonth } from '../../reading/reading-month'
+import type { ReadingMonth } from '../../reading/reading-month'
 import type { Verdict } from '../../reading/verdicts'
 
 // VOICES (depth v2, T4; boards E3-Voices and E3-Voices-Open): who is saying
@@ -70,12 +64,12 @@ import type { Verdict } from '../../reading/verdicts'
 //      never a following) and the conversation each one made most of
 //      (`month_evidence_refs` theme rows).
 //
-// A click opens one panel in place, under the item (`?group=`, `?brand=`,
-// `?creator=`): the group's triggers, how they talk, who they say they are,
-// the conversations they are in and three of their comments; the brand's
-// comments in full and the Competitive pane's own content; the creator's
-// conversations and the brands named in their videos. No quote is printed at
-// level 1 (Heinrich's v2 rule); quotes are the panels'.
+// EVERY ROW OPENS A PAGE (depth as pages, 17 Oct; the G3 boards): a group, a
+// brand or a creator, each its own address (lib/pages/v2/voices-address.ts,
+// built in lib/pages/v2/voices-levels.ts). Nothing opens in place, and an old
+// `?group=`, `?brand=` or `?creator=` redirects to its page before anything
+// is read (lib/nav.ts `redirectFor`). No quote is printed on the root
+// (Heinrich's v2 rule); quotes are the level pages'.
 //
 // BRANDS STAY HONEST FOR A TENANT WITH NO ROWS. Össur has brand rules since
 // T15 but no `brand_mentions` and no `month_brand_readings` until its
@@ -91,16 +85,6 @@ import type { Verdict } from '../../reading/verdicts'
 export const VOICES_HREF = surface('voices').href
 
 export interface VoicesParams {
-  /** A group's key (`consumer_profiles.personas[].key`). `persona` is the old
-   *  Conversation link's name for it. */
-  group?: string
-  persona?: string
-  /** A brand: its name, its key ('client', a `competitors.id`,
-   *  'watched:<slug>') or its audience (`competitor:<name>`), as an old
-   *  Competitive `?vs=` link carried it (lib/nav.ts `redirectFor`). */
-  brand?: string
-  /** A creator: the account's name, or `platform|account`. */
-  creator?: string
   /** `all` lists every account at the floor. */
   creators?: string
   /** `?month=YYYY-MM`, as every reading page takes it. */
@@ -117,43 +101,32 @@ export function paramValue(raw: string | string[] | undefined | null): string | 
   return t === '' ? undefined : t
 }
 
-/** The page's params from a request's search params. */
+/** The root's params from a request's search params. An old `?group=`,
+ *  `?brand=` or `?creator=` never reaches here: the route redirects it to
+ *  its page first. */
 export function parseVoicesParams(raw: Record<string, string | string[] | undefined> | null | undefined): VoicesParams {
   const sp = raw ?? {}
   const out: VoicesParams = {}
-  const group = paramValue(sp.group) ?? paramValue(sp.persona)
-  if (group) out.group = group
-  for (const k of ['brand', 'creator', 'creators', 'month'] as const) {
+  for (const k of ['creators', 'month'] as const) {
     const v = paramValue(sp[k])
     if (v) out[k] = v
   }
   return out
 }
 
-/**
- * The page's address with the month and the creators' expansion kept, and at
- * most one item open: `open` names it, and null opens nothing. The hash is the
- * open panel's anchor, so the browser lands on it.
- */
-export function voicesHref(params: VoicesParams, open: { kind: OpenKind; key: string } | null = null, over: Partial<Record<Param, string | null>> = {}): string {
+/** The root's address with the month and the creators' expansion kept. */
+export function voicesHref(params: VoicesParams, over: Partial<Record<Param, string | null>> = {}): string {
   const q = new URLSearchParams()
   for (const k of KEPT) {
     const v = k in over ? over[k] : params[k]
     if (v) q.set(k, v)
   }
-  if (open) q.set(open.kind, open.key)
   const s = q.toString()
-  return `${VOICES_HREF}${s ? `?${s}` : ''}${open ? `#${PANEL_ID[open.kind]}` : ''}`
+  return `${VOICES_PATH}${s ? `?${s}` : ''}`
 }
 
-export type OpenKind = 'group' | 'brand' | 'creator'
-
-/** Each panel's anchor id. */
-export const PANEL_ID: Readonly<Record<OpenKind, string>> = {
-  group: 'group-panel',
-  brand: 'brand-panel',
-  creator: 'creator-panel',
-}
+/** The month a level page's link keeps: the reader's `?month=` alone. */
+const kept = (params: VoicesParams): { month?: string } => (params.month ? { month: params.month } : {})
 
 /** Where a question to the Agent goes, prefilled. */
 export function askHref(question: string): string {
@@ -186,8 +159,6 @@ export function initialsOf(account: string): string {
 
 /** A platform's own word for a following. */
 export const followerWord = (platform: string): string => (platform === 'youtube' ? 'subscribers' : 'followers')
-
-const byNumberThenLabel = <T extends { k: number; label: string }>(a: T, b: T): number => b.k - a.k || a.label.localeCompare(b.label)
 
 /** Count of each platform among a set of videos. */
 function platformsOf(ids: readonly string[], platformOf: ReadonlyMap<string, string>): VoicesPlatform[] {
@@ -242,8 +213,8 @@ export interface VoicesGroupCard {
   /** The first sentence of each, stored Pass E prose. */
   wants: string
   stops: string
+  /** Its page (`/dashboard/voices/groups/<key>`), the month kept. */
   href: string
-  selected: boolean
 }
 
 export interface VoicesGroups {
@@ -263,8 +234,6 @@ export interface Level {
 
 export interface VoicesBrandRow {
   brandKey: string
-  /** What `?brand=` carries for it: its name. */
-  param: string
   label: string
   you: boolean
   state: BrandRowState
@@ -296,8 +265,8 @@ export interface VoicesBrandRow {
   subjectsPending?: number
   /** Counted, and those subjects by name, as on a group card. */
   subjectsNotMeasured?: { id: string; label: string }[]
+  /** Its page (`/dashboard/voices/brands/<brand key>`), the month kept. */
   href: string
-  selected: boolean
 }
 
 export interface VoicesBrands {
@@ -310,7 +279,7 @@ export interface VoicesBrands {
   /** Brands named unprompted this month, you first, then most named. */
   rows: VoicesBrandRow[]
   /** Every brand the page tracks (you included), each with its state: any one
-   *  of them opens its panel (`?brand=`), printed as a row or not. */
+   *  of them opens its page, printed as a row or not. */
   all: VoicesBrandRow[]
   /** Counted, and not named unprompted this month. */
   notNamed: { label: string; href: string }[]
@@ -330,7 +299,6 @@ export interface VoicesBrands {
 export interface VoicesCreatorRow {
   /** `platform|account`. */
   key: string
-  param: string
   account: string
   platform: string
   platformLabel: string
@@ -343,8 +311,8 @@ export interface VoicesCreatorRow {
   top: { registryId: string; label: string; k: number; ofTheme: number } | null
   /** The brand named in most of the creator's videos this month. */
   brand: { label: string; k: number; you: boolean } | null
+  /** Its page (`/dashboard/voices/creators/<platform>/<account>`). */
   href: string
-  selected: boolean
 }
 
 export interface VoicesCreators {
@@ -365,44 +333,7 @@ export interface VoicesCreators {
   empty: string | null
 }
 
-export interface GroupPanel {
-  kind: 'group'
-  key: string
-  name: string
-  oneLiner: string
-  videos: number
-  /** The market's videos this month. */
-  n: number | null
-  /** READY subjects only (ruling U6), as on the card, every one of them
-   *  (a ready one the group never touches at 0). */
-  subjects: { id: string; label: string; k: number }[]
-  /** The card's `subjectsPending`. */
-  subjectsPending?: number
-  /** The card's `subjectsNotMeasured`. */
-  subjectsNotMeasured?: { id: string; label: string }[]
-  platforms: VoicesPlatform[]
-  wants: string
-  stops: string
-  triggers: string
-  /** Who they say they are: each signal and how often it came up in what the
-   *  group said (Pass E's count of its demographic points, not videos). */
-  who: { label: string; count: number }[]
-  /** The conversations the group is in: its videos this month in each. */
-  conversations: { registryId: string; label: string; k: number; href: string }[]
-  /** Your products named in the group's videos this month (E3-Voices-Open's
-   *  "Products they mention"). Optional: a dump from before it carries none,
-   *  and its panel draws where the group comments instead. */
-  products?: GroupProducts
-  /** Real phrases (Pass A checked each against a comment), short ones
-   *  only, with their English where the comment was not. */
-  phrases: { text: string; english: string | null }[]
-  /** Three of the group's comments this month, through the quote gate. */
-  quotes: VoicesQuote[]
-  askHref: string
-  closeHref: string
-  notchAt: number
-}
-
+/** A quote as a level page's builders take one in (the fixtures' shape). */
 export interface VoicesQuote {
   ref: string
   text: string
@@ -411,62 +342,6 @@ export interface VoicesQuote {
   platform: string | null
   cite: string
 }
-
-export interface BrandPanel {
-  kind: 'brand'
-  brandKey: string
-  label: string
-  you: boolean
-  state: BrandRowState
-  /** Where it is not counted, why (the row's words). */
-  stateWords: string | null
-  /** Its videos this month are too few to say how people treat it: counted,
-   *  and named without being asked in none of them. */
-  tooFew: boolean
-  named: Level | null
-  prevNamed: (Level & { month: string }) | null
-  verdict: Verdict | null
-  any: Level | null
-  /** What people did in the comments of the videos naming it (base `any`). */
-  kinds: { kind: string; label: string; k: number; n: number }[]
-  /** READY subjects only (ruling U6), every one of them where the brand has
-   *  videos: one on none of them at 0, after the rest (14 Oct). */
-  subjects: { id: string; label: string; k: number; n: number }[]
-  /** The row's `subjectsPending`, where it is counted. */
-  subjectsPending?: number
-  /** The row's `subjectsNotMeasured`, where it is counted. */
-  subjectsNotMeasured?: { id: string; label: string }[]
-  /** The Competitive pane, a rival's alone: over the ninety days ending at
-   *  the reading month's last update. */
-  window: { from: string; to: string } | null
-  /** The question conversations under its own content, by videos. */
-  asked: { themes: { registryId: string; label: string; videos: number; href: string }[] } | null
-  said: VoicesQuote[]
-  /** Pass C's findings of the latest update for this rival (undated). */
-  findings: { id: string; kindWords: string; title: string; body: string | null }[]
-  askHref: string
-  closeHref: string
-  notchAt: number
-}
-
-export interface CreatorPanel {
-  kind: 'creator'
-  key: string
-  account: string
-  platform: string
-  platformLabel: string
-  followers: number | null
-  followerWord: string
-  videos: number
-  n: number | null
-  conversations: { registryId: string; label: string; k: number; ofTheme: number; href: string }[]
-  brands: { label: string; k: number; you: boolean }[]
-  askHref: string
-  closeHref: string
-  notchAt: number
-}
-
-export type VoicesPanel = GroupPanel | BrandPanel | CreatorPanel
 
 export interface VoicesData {
   /** The workspace's name ("Össur"). */
@@ -486,8 +361,6 @@ export interface VoicesData {
   brands: VoicesBrands
   creators: VoicesCreators
   params: VoicesParams
-  open: { kind: OpenKind; key: string } | null
-  panel: VoicesPanel | null
   /** The client's subjects being re-described (their check failed), by name
    *  (14 Oct): each says why it shows no figure ONCE on the page, in the foot
    *  of "Who's in your market" (FAILED_EXPLAINED), never on each card, where
@@ -615,7 +488,6 @@ export function buildGroups(input: {
   const notCounted = notCountedOf(input.read?.pendingSubjects)
   const cards: VoicesGroupCard[] = personas.map((p) => {
     const ids = videosOf.get(p.key) ?? []
-    const selected = p.key === input.params.group
     return {
       key: p.key,
       name: p.name,
@@ -626,22 +498,13 @@ export function buildGroups(input: {
       platforms: platformsOf(ids, input.platformOf),
       wants: firstSentence(p.wants),
       stops: firstSentence(p.blockers),
-      href: selected ? voicesHref(input.params) : voicesHref(input.params, { kind: 'group', key: p.key }),
-      selected,
+      href: voicesGroupHref(p.key, kept(input.params)),
     }
   })
   // Most videos first; equals keep the profile's own order (a stable sort).
   const order = new Map(personas.map((p, i) => [p.key, i]))
   cards.sort((a, b) => b.videos - a.videos || (order.get(a.key) ?? 0) - (order.get(b.key) ?? 0))
   return { state: 'ready', profileDate: input.profile.run_date, cards, empty: null }
-}
-
-/** The cards the grid lays out three to a row (the board's), in rows, so a
- *  group's panel can open directly under the row its card is in. */
-export function groupRows<T>(cards: readonly T[], perRow = 3): T[][] {
-  const out: T[][] = []
-  for (let i = 0; i < cards.length; i += perRow) out.push(cards.slice(i, i + perRow))
-  return out
 }
 
 /** The registry ids each conversation's month videos sit under, pooled over
@@ -656,8 +519,6 @@ export function themeVideoSets(refs: readonly ThemeRef[]): Map<string, Set<strin
   return out
 }
 
-/** How many conversations a panel lists. */
-export const PANEL_CONVERSATIONS = 6
 /** How many of a group's phrases its panel prints, and the longest phrase
  *  in words: a longer one is a whole comment, which is a quote's job. */
 export const PANEL_PHRASES = 8
@@ -679,64 +540,6 @@ export function phrasesOf(raw: readonly string[], englishOf: (text: string) => s
   }
   return out
 }
-/** How many of a group's comments its panel prints. */
-export const GROUP_QUOTES = 3
-
-export function buildGroupPanel(input: {
-  persona: VoicesPersona
-  card: VoicesGroupCard
-  index: number
-  perRow: number
-  n: number | null
-  subjects: { id: string; label: string; k: number }[]
-  videoIds: readonly string[]
-  themeSets: ReadonlyMap<string, ReadonlySet<string>>
-  labels: ReadonlyMap<string, string>
-  quotes: VoicesQuote[]
-  params: VoicesParams
-  /** A phrase's English, where the comment it came from was not. */
-  englishOf?: (text: string) => string | null
-  /** The group's products (`readGroupProducts`), where read. */
-  products?: GroupProducts
-}): GroupPanel {
-  const mine = new Set(input.videoIds)
-  const conversations = [...new Set(input.persona.registryIds)]
-    .map((id) => {
-      const set = input.themeSets.get(id)
-      const k = set ? [...set].filter((v) => mine.has(v)).length : 0
-      return { registryId: id, label: input.labels.get(id) ?? '', k, href: conversationHref(id) }
-    })
-    .filter((c) => c.k > 0 && c.label)
-    .sort(byNumberThenLabel)
-    .slice(0, PANEL_CONVERSATIONS)
-  const col = input.index % input.perRow
-  return {
-    kind: 'group',
-    key: input.persona.key,
-    name: input.persona.name,
-    oneLiner: input.persona.oneLiner,
-    videos: input.card.videos,
-    n: input.n,
-    subjects: input.subjects,
-    ...(input.card.subjectsPending ? { subjectsPending: input.card.subjectsPending } : {}),
-    ...(input.card.subjectsNotMeasured?.length ? { subjectsNotMeasured: input.card.subjectsNotMeasured } : {}),
-    platforms: input.card.platforms,
-    wants: input.persona.wants,
-    stops: input.persona.blockers,
-    triggers: input.persona.triggers,
-    // Decision 8: near-repeats ("Amputee community", "Amputee users") are one
-    // self-description, counted once with their counts added.
-    who: mergeWho(input.persona.who.map((w) => ({ label: whoLabel(w.signal), count: w.count })).filter((w) => w.label)),
-    conversations,
-    ...(input.products ? { products: input.products } : {}),
-    phrases: phrasesOf(input.persona.howTheyTalk, input.englishOf),
-    quotes: input.quotes.slice(0, GROUP_QUOTES),
-    askHref: askHref(`What does the group "${input.persona.name}" in my market want, and what stops them?`),
-    closeHref: voicesHref(input.params),
-    notchAt: (col + 0.5) / input.perRow,
-  }
-}
-
 // ---- the group's products (E3-Voices-Open, "Products they mention") -----------------
 //
 // THE PARITY PASS (13 Oct): the board's panel names the products a group's
@@ -842,7 +645,7 @@ async function readMonthVersion(db: SupabaseClient, clientId: string, month: str
  *  the group's videos, then the sets over them. Off where Your products is
  *  not switched on, no catalogue is read or the migration is not applied;
  *  never throws. */
-async function readGroupProducts(handle: ReadingHandle, clientId: string, month: string, monthWords: string, videoIds: readonly string[], params: VoicesParams): Promise<GroupProducts> {
+export async function readGroupProducts(handle: ReadingHandle, clientId: string, month: string, monthWords: string, videoIds: readonly string[], params: VoicesParams): Promise<GroupProducts> {
   const m = monthStartOf(month)
   const as = (state: GroupProducts['state']) => groupProducts({ state, month: m, monthWords, params })
   if (!productReadingsEnabled(clientId)) return as('off')
@@ -1008,10 +811,8 @@ export function buildBrands(input: {
     // The top is a subject on at least one of its videos: a ready one at 0
     // keeps its cell in the panel (14 Oct), never the column's "top".
     const top = subjectsOf.get(p.brandKey)?.cells.find((c) => c.k > 0)
-    const selected = matchesBrand(p, input.params.brand)
     return {
       brandKey: p.brandKey,
-      param: p.label,
       label: p.label,
       you,
       state,
@@ -1025,13 +826,12 @@ export function buildBrands(input: {
       complained: counted ? cellOf(kindsOf.get(p.brandKey), 'pain_point') : null,
       topSubject: counted && top ? { id: top.id, label: top.label, k: top.k, n: top.n } : null,
       ...(counted ? notCounted : {}),
-      href: selected ? voicesHref(input.params) : voicesHref(input.params, { kind: 'brand', key: p.label }),
-      selected,
+      href: voicesBrandHref(p.brandKey, kept(input.params)),
     }
   })
   const link = (r: VoicesBrandRow) => ({ label: r.label, href: r.href })
   const noteRow = input.note ? all.find((r) => r.label.trim().toLowerCase() === input.note!.rival.trim().toLowerCase()) : undefined
-  const note = input.note && noteRow ? { rival: noteRow.label, title: input.note.title, href: voicesHref(input.params, { kind: 'brand', key: noteRow.param }) } : null
+  const note = input.note && noteRow ? { rival: noteRow.label, title: input.note.title, href: noteRow.href } : null
   if (!counting) {
     return { ...base, all, tracked: all.map(link), note, state: 'not_counted', empty: BRANDS_NOT_COUNTED }
   }
@@ -1139,65 +939,6 @@ export function topFinding(rows: readonly { competitor_name: string | null; cate
   return top ? { rival: String(top.r.competitor_name), title: top.r.title.trim() } : null
 }
 
-/** How many of what is said about a rival its panel prints. */
-export const BRAND_QUOTES = 2
-
-export function buildBrandPanel(input: {
-  row: VoicesBrandRow
-  kinds: BrandCrossRow | undefined
-  subjects: BrandCrossRow | undefined
-  noun: string | null
-  window: { from: string; to: string } | null
-  asked: { themes: { registryId: string; label: string; videos: number }[] } | null
-  said: VoicesQuote[]
-  findings: readonly { id: string; category: string; title: string; body: string | null }[]
-  params: VoicesParams
-}): BrandPanel {
-  const r = input.row
-  const counted = r.state === 'counted'
-  // A brand opened from the note, an old link or the lines under the table
-  // need not be one the table prints: its count half then says why.
-  const kinds = counted && input.kinds && input.kinds.n > 0
-    ? input.kinds.cells
-      .filter((c) => c.id !== FLAGGED_KIND && c.k > 0)
-      .map((c) => ({ kind: c.id, label: talkKindLabel(c.id, input.noun), k: c.k, n: c.n }))
-      .sort((a, b) => b.k - a.k || KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind))
-    : []
-  // Every ready subject (14 Oct: a tracked subject is never hidden for being
-  // thin; the panel listed six until then, which cut Sealand's smallest two
-  // of eight), a subject on none of its videos at 0.
-  const subjects = counted && input.subjects ? input.subjects.cells.map((c) => ({ id: c.id, label: c.label, k: c.k, n: c.n })) : []
-  return {
-    kind: 'brand',
-    brandKey: r.brandKey,
-    label: r.label,
-    you: r.you,
-    state: r.state,
-    stateWords: r.stateWords,
-    tooFew: counted && (r.named?.k ?? 0) === 0,
-    named: r.named,
-    prevNamed: r.prevNamed,
-    verdict: r.verdict,
-    any: r.any,
-    kinds,
-    subjects,
-    ...(counted && r.subjectsPending ? { subjectsPending: r.subjectsPending } : {}),
-    ...(counted && r.subjectsNotMeasured?.length ? { subjectsNotMeasured: r.subjectsNotMeasured } : {}),
-    window: input.window,
-    asked: input.asked && input.asked.themes.length > 0
-      ? { themes: input.asked.themes.map((t) => ({ ...t, href: conversationHref(t.registryId) })) }
-      : null,
-    said: input.said.slice(0, BRAND_QUOTES),
-    findings: input.findings
-      .filter((f) => !FINDING_KINDS_HELD.has(f.category))
-      .map((f) => ({ id: f.id, kindWords: findingKindWords(f.category), title: f.title, body: f.body ?? null })),
-    askHref: askHref(r.you ? 'What does my market say about us?' : `What does my market say about ${r.label}?`),
-    closeHref: voicesHref(input.params),
-    // The brands card is the first of the two columns (7 of 12).
-    notchAt: 0.29,
-  }
-}
-
 // ---- 3. the creators -----------------------------------------------------------------
 
 /** The platforms whose account is a community, not a creator. */
@@ -1238,14 +979,6 @@ function topBrandIn(ids: readonly string[], brands: readonly BrandSet[]): { labe
   return hits[0] ?? null
 }
 
-/** Every brand named in a set of videos, most first. */
-function brandsIn(ids: readonly string[], brands: readonly BrandSet[]): { label: string; k: number; you: boolean }[] {
-  return brands
-    .map((b) => ({ label: b.label, you: b.you, k: ids.filter((id) => b.any.has(id)).length }))
-    .filter((b) => b.k > 0)
-    .sort((a, b) => b.k - a.k || Number(b.you) - Number(a.you) || a.label.localeCompare(b.label))
-}
-
 /** A creator's market videos this month, by its key. */
 export function creatorVideoIds(market: readonly Pick<MarketVideo, 'id' | 'platform' | 'account'>[]): Map<string, string[]> {
   const out = new Map<string, string[]>()
@@ -1267,7 +1000,7 @@ export function buildCreators(input: {
 }): VoicesCreators {
   const month = monthStartOf(input.month)
   const expanded = input.params.creators === 'all'
-  const toggleHref = voicesHref(input.params, null, { creators: expanded ? null : 'all' })
+  const toggleHref = voicesHref(input.params, { creators: expanded ? null : 'all' })
   if (!input.read) {
     return { month, accounts: 0, atFloor: 0, floor: ACCOUNT_FLOOR, rows: [], expanded, more: 0, toggleHref, communitiesLeftOut: false, empty: 'Creators could not be read just now.' }
   }
@@ -1277,15 +1010,10 @@ export function buildCreators(input: {
   const people = creatorsOf(input.read)
   const atFloor = people.filter((c) => c.videos >= ACCOUNT_FLOOR)
   const shown = atFloor.slice(0, expanded ? CREATOR_ROWS_MAX : CREATOR_ROWS)
-  const unique = (account: string): boolean => atFloor.filter((c) => c.account.toLowerCase() === account.toLowerCase()).length === 1
-  const picked = resolveCreator(atFloor, input.params.creator)?.key ?? null
   const rows: VoicesCreatorRow[] = shown.map((c) => {
     const top = c.themes.find((t) => input.labels.has(t.themeId))
-    const param = unique(c.account) ? c.account : c.key
-    const selected = c.key === picked
     return {
       key: c.key,
-      param,
       account: c.account,
       platform: c.platform,
       platformLabel: platformLabel(c.platform),
@@ -1295,8 +1023,7 @@ export function buildCreators(input: {
       followerWord: followerWord(c.platform),
       top: top ? { registryId: top.themeId, label: input.labels.get(top.themeId) as string, k: top.k, ofTheme: top.ofTheme } : null,
       brand: topBrandIn(input.videoIds.get(c.key) ?? [], input.brands),
-      href: selected ? voicesHref(input.params) : voicesHref(input.params, { kind: 'creator', key: param }),
-      selected,
+      href: voicesCreatorHref(c.platform, c.account, kept(input.params)),
     }
   })
   return {
@@ -1315,37 +1042,6 @@ export function buildCreators(input: {
   }
 }
 
-export function buildCreatorPanel(input: {
-  creator: CreatorThemes['creators'][number]
-  n: number | null
-  labels: ReadonlyMap<string, string>
-  videoIds: readonly string[]
-  brands: readonly BrandSet[]
-  params: VoicesParams
-}): CreatorPanel {
-  const c = input.creator
-  return {
-    kind: 'creator',
-    key: c.key,
-    account: c.account,
-    platform: c.platform,
-    platformLabel: platformLabel(c.platform),
-    followers: c.followers,
-    followerWord: followerWord(c.platform),
-    videos: c.videos,
-    n: input.n,
-    conversations: c.themes
-      .filter((t) => input.labels.has(t.themeId))
-      .slice(0, PANEL_CONVERSATIONS + 2)
-      .map((t) => ({ registryId: t.themeId, label: input.labels.get(t.themeId) as string, k: t.k, ofTheme: t.ofTheme, href: conversationHref(t.themeId) })),
-    brands: brandsIn(input.videoIds, input.brands),
-    askHref: askHref(`What do people say under ${c.account}'s videos?`),
-    closeHref: voicesHref(input.params),
-    // The creators card is the second of the two columns (5 of 12).
-    notchAt: 0.79,
-  }
-}
-
 // ---- the Dashboard's tile (T8) ---------------------------------------------------------
 
 export interface TopVoices {
@@ -1356,13 +1052,13 @@ export interface TopVoices {
   monthLabel?: string | null
   /** The market's videos this month. */
   videos: number | null
-  /** The group with the most videos this month, and its panel. */
+  /** The group with the most videos this month, and its page. */
   group: { key: string; name: string; oneLiner: string; videos: number; href: string } | null
   /** Every group's videos this month, most first (they overlap: never a
    *  share, never stacked). */
   groups: { key: string; name: string; videos: number }[]
   /** Named most this month, unprompted: the two brands named in most videos
-   *  (you only where your name is counted), each with its panel. */
+   *  (you only where your name is counted), each with its page. */
   named: { label: string; k: number; n: number; you: boolean; href: string }[]
   /** The groups' state, and Voices' own words where none prints
    *  (`unread`: the read failed, which the tile says as a failure). */
@@ -1372,7 +1068,7 @@ export interface TopVoices {
   brandsState: VoicesBrands['state']
   /** OPTIONAL (parity pass, 13 Oct): the brands table's first rows, in its
    *  order (`brandTable`: you first; not counted yet, every tracked brand in
-   *  the tracked order), at most `NAMED_MOST`, each with its panel, so a
+   *  the tracked order), at most `NAMED_MOST`, each with its page, so a
    *  "Named most" row whose brands are not counted yet keeps its chips (names,
    *  no counts) and names them as the page's table does. A dump from before
    *  it carries none. */
@@ -1398,19 +1094,19 @@ export function topVoicesOf(input: {
     monthWords: monthWordsOf(input.month, input.soFar),
     monthLabel: input.monthLabel ?? null,
     videos: input.videos,
-    group: lead ? { key: lead.key, name: lead.name, oneLiner: lead.oneLiner, videos: lead.videos, href: voicesHref({}, { kind: 'group', key: lead.key }) } : null,
+    group: lead ? { key: lead.key, name: lead.name, oneLiner: lead.oneLiner, videos: lead.videos, href: voicesGroupHref(lead.key) } : null,
     groups: input.groups.cards.map((c) => ({ key: c.key, name: c.name, videos: c.videos })),
     named: input.brands.rows
       .filter((r) => r.named && r.named.k > 0)
       .sort((a, b) => (b.named?.k ?? 0) - (a.named?.k ?? 0) || Number(b.you) - Number(a.you) || a.label.localeCompare(b.label))
       .slice(0, NAMED_MOST)
-      .map((r) => ({ label: r.label, k: r.named!.k, n: r.named!.n, you: r.you, href: voicesHref({}, { kind: 'brand', key: r.param }) })),
+      .map((r) => ({ label: r.label, k: r.named!.k, n: r.named!.n, you: r.you, href: voicesBrandHref(r.brandKey) })),
     groupsState: input.groups.state,
     groupsEmpty: input.groups.empty,
     brandsState: input.brands.state,
     tracked: brandTable(input.brands).rows
       .slice(0, NAMED_MOST)
-      .map((r) => ({ label: r.label, you: r.you, href: voicesHref({}, { kind: 'brand', key: r.param }) })),
+      .map((r) => ({ label: r.label, you: r.you, href: voicesBrandHref(r.brandKey) })),
     href: VOICES_HREF,
   }
 }
@@ -1431,31 +1127,8 @@ const say = (what: string, error: unknown): void => {
   console.error(`[pages] voices.${what}: ${(error as { message?: string } | null)?.message ?? String(error)}`)
 }
 
-/** What the panels need of the level-1 reads. */
-export interface VoicesContext {
-  input: VoicesLoadInput
-  month: string
-  reading: ReadingMonth | null
-  audiences: string[]
-  profile: GroupProfileRow | null
-  personas: VoicesPersona[]
-  market: MarketVideo[]
-  refs: ThemeRef[]
-  groupRead: { videos: GroupMonthVideos[]; groups: GroupSubjectRow[]; pendingSubjects?: readonly PendingIn[] } | null
-  crosses: { videos: BrandMonthVideos[]; kinds: BrandCrossRow[]; subjects: BrandCrossRow[]; pendingSubjects?: readonly PendingIn[] } | null
-  creators: CreatorThemes | null
-  labels: Map<string, string>
-  brandSets: BrandSet[]
-  client: string
-  /** The latest update's Pass C findings (`competitive_insights`), read once
-   *  for the note and kept for a rival's panel; and the runs still running,
-   *  which neither may read. */
-  findings: FindingRow[]
-  running: string[]
-}
-
 /** Theme labels (`theme_registry.canonical_label`) by registry id. */
-async function readLabels(handle: ReadingHandle, ids: readonly string[]): Promise<Map<string, string>> {
+export async function readLabels(handle: ReadingHandle, ids: readonly string[]): Promise<Map<string, string>> {
   const out = new Map<string, string>()
   const want = [...new Set(ids)].filter(Boolean)
   for (let i = 0; i < want.length; i += 200) {
@@ -1478,11 +1151,13 @@ export interface FindingRow {
   title: string
   finding: string | null
   impact_level: string | null
+  /** When the update wrote it (the brand page's "the 11 Oct update"). */
+  created_at?: string | null
 }
 
 /** The latest finished update's Pass C findings: one read, kept whole (sixty
  *  rows at most) so the note and a rival's panel both take theirs from it. */
-async function readLatestFindings(handle: ReadingHandle, running: Promise<string[]>): Promise<FindingRow[]> {
+export async function readLatestFindings(handle: ReadingHandle, running: Promise<string[]>): Promise<FindingRow[]> {
   const [live, res] = await Promise.all([
     running,
     handle.client.from('competitive_insights').select('id, run_id, category, competitor_name, title, finding, impact_level, created_at')
@@ -1521,8 +1196,8 @@ async function audiencesOf(supabase: SupabaseClient, handle: ReadingHandle): Pro
 }
 
 /**
- * Level 1: every read the page makes before a panel, in three waves, each
- * section failing alone:
+ * The root: every read it makes, in three waves, each section failing alone
+ * (it opens nothing in place since 17 Oct; each row is a page):
  *   1. the month (runs, schedule, the stored denominators, the rivals), the
  *      latest profile, the workspace's name, the brands' identity (tracking,
  *      competitors), the month-pair judge, and the latest Pass C findings;
@@ -1532,7 +1207,7 @@ async function audiencesOf(supabase: SupabaseClient, handle: ReadingHandle): Pro
  *      the crosses of the brands that may print (none where no brand has a
  *      month row: Össur today), and the creators' conversation labels.
  */
-export async function loadVoicesBase(input: VoicesLoadInput): Promise<{ data: VoicesData; ctx: VoicesContext }> {
+export async function loadVoices(input: VoicesLoadInput): Promise<VoicesData> {
   const { supabase, clientId, reading: handle, params } = input
   const now = input.now ?? new Date().toISOString()
 
@@ -1578,7 +1253,7 @@ export async function loadVoicesBase(input: VoicesLoadInput): Promise<{ data: Vo
   const creatorsRead = market ? creatorThemes({ month, videos: market, refs, audiences: aud }) : null
   const topThemes = (creatorsRead ? creatorsOf(creatorsRead) : []).filter((c) => c.videos >= ACCOUNT_FLOOR).slice(0, CREATOR_ROWS_MAX).flatMap((c) => c.themes.slice(0, 3).map((t) => t.themeId))
   const labelsAhead = readLabels(handle, topThemes).catch((e: unknown) => { say('labels', e); return new Map<string, string>() })
-  const [groupRead, crosses, labels, findings, live] = await Promise.all([groupAhead, crossesAhead, labelsAhead, findingsAhead, running])
+  const [groupRead, crosses, labels, findings] = await Promise.all([groupAhead, crossesAhead, labelsAhead, findingsAhead])
 
   const platformOf = new Map((market ?? []).map((v) => [v.id, v.platform]))
   const groups = buildGroups({
@@ -1620,146 +1295,11 @@ export async function loadVoicesBase(input: VoicesLoadInput): Promise<{ data: Vo
     brands,
     creators,
     params,
-    open: null,
-    panel: null,
   }
   // Why a failed subject shows no figure, once on the page (14 Oct).
   const failedSubjects = failedSubjectsOf(groupRead?.pendingSubjects ?? crosses?.pendingSubjects)
   if (failedSubjects.length > 0) data.subjectsFailed = failedSubjects
-  const ctx: VoicesContext = {
-    input: { ...input, now },
-    month,
-    reading: rm,
-    audiences: aud,
-    profile: profile ?? null,
-    personas: personasOf(profile ?? null),
-    market: market ?? [],
-    refs,
-    groupRead: groupRead ?? null,
-    crosses: crosses ?? null,
-    creators: creatorsRead,
-    labels,
-    brandSets,
-    client,
-    findings,
-    running: live,
-  }
-  return { data, ctx }
-}
-
-/** Which item `params` opens, in the page's order: a group, a brand, a
- *  creator. One at a time; an item that is not on the page opens nothing.
- *  ANY tracked brand opens (`brands.all`), printed as a row or not: the
- *  note, an old Competitive `?vs=` link and the lines under the table open
- *  brands the table does not print. */
-export function openOf(data: Pick<VoicesData, 'groups' | 'brands' | 'creators'>, params: VoicesParams, ctx?: Pick<VoicesContext, 'creators'>): { kind: OpenKind; key: string } | null {
-  if (params.group) {
-    const card = data.groups.cards.find((c) => c.key === params.group)
-    if (card) return { kind: 'group', key: card.key }
-  }
-  if (params.brand) {
-    const row = data.brands.all.find((r) => matchesBrand(r, params.brand))
-    if (row) return { kind: 'brand', key: row.brandKey }
-  }
-  if (params.creator) {
-    const pool: readonly { key: string; account: string }[] = ctx?.creators ? creatorsOf(ctx.creators).filter((c) => c.videos >= ACCOUNT_FLOOR) : data.creators.rows
-    const hit = resolveCreator(pool, params.creator)
-    if (hit) return { kind: 'creator', key: hit.key }
-  }
-  return null
-}
-
-/** A quote of a group's, as the panel prints it. */
-function groupQuote(v: { quote: { ref: string; text: string; lang?: string | null; english?: string | null }; cite: string; platform: string | null }): VoicesQuote {
-  return {
-    ref: v.quote.ref,
-    text: v.quote.text,
-    english: v.quote.english ?? null,
-    lang: v.quote.lang ?? null,
-    platform: v.platform,
-    cite: [v.platform ? platformLabel(v.platform) : null, v.cite].filter(Boolean).join(' · '),
-  }
-}
-
-/** The open panel's own reads, and the panel. */
-export async function openPanel(ctx: VoicesContext, data: VoicesData, params: VoicesParams): Promise<VoicesData> {
-  const open = openOf(data, params, ctx)
-  if (!open) return { ...data, params, open: null, panel: null }
-  const { clientId, reading: handle } = ctx.input
-  try {
-    if (open.kind === 'group') {
-      const index = data.groups.cards.findIndex((c) => c.key === open.key)
-      const card = data.groups.cards[index]
-      const persona = ctx.personas.find((p) => p.key === open.key)
-      if (!card || !persona) return { ...data, open: null, panel: null }
-      const videoIds = ctx.groupRead?.videos.find((g) => g.key === open.key)?.videoIds ?? []
-      const subjects = (ctx.groupRead?.groups.find((g) => g.key === open.key)?.subjects ?? []).map((s) => ({ id: s.subjectId, label: s.label, k: s.k }))
-      const phrases = phrasesOf(persona.howTheyTalk).map((p) => p.text)
-      const [labels, readings, voices, products] = await Promise.all([
-        readLabels(handle, persona.registryIds).catch((e: unknown) => { say('group.labels', e); return new Map<string, string>() }),
-        phrases.length > 0 ? readTranslations(handle.client, phrases) : Promise.resolve(new Map<string, { lang: string; english: string | null }>()),
-        loadVoicesMany(handle.client, clientId, [{ key: persona.key, insightIds: persona.insightIds }], {
-          month: ctx.month.slice(0, 7), marketFirst: true, gate: gateFor(clientId, {}),
-        }).catch((e: unknown) => { say('group.voices', e); return null }),
-        readGroupProducts(handle, clientId, ctx.month, data.monthWords, videoIds, params),
-      ])
-      const quotes = (voices?.get(persona.key)?.voices ?? []).map(groupQuote)
-      const panel = buildGroupPanel({
-        persona, card, index, perRow: 3, n: data.videos, subjects, videoIds,
-        themeSets: themeVideoSets(ctx.refs), labels, quotes, params,
-        englishOf: (text) => readingOf(readings, text).english ?? null,
-        products,
-      })
-      return { ...data, open, panel }
-    }
-    if (open.kind === 'brand') {
-      const row = data.brands.all.find((r) => r.brandKey === open.key)
-      if (!row) return { ...data, open: null, panel: null }
-      // THE RIVAL HALF DOES NOT DEPEND ON COUNTS: a tracked rival's filed
-      // videos over the ninety days (what is asked under its content, what is
-      // said about it) and its findings, counted or not.
-      const rival = !row.you && !row.watched ? { name: row.label, audience: rivalKey(row.label) } : null
-      const window = rival && ctx.reading ? ninetyDays(windowEnd(ctx.reading)) : null
-      const [said, questions] = await Promise.all([
-        rival && window ? readSaidAbout(handle.client, clientId, rival, window).catch((e: unknown) => { say('brand.said', e); return null }) : Promise.resolve(null),
-        rival && window ? readQuestions(handle.client, clientId, ctx.month, window, [rival], ctx.running).catch((e: unknown) => { say('brand.asked', e); return null }) : Promise.resolve(null),
-      ])
-      const themes = questions?.themes.get(rival?.audience ?? '') ?? []
-      const panel = buildBrandPanel({
-        row,
-        kinds: ctx.crosses?.kinds.find((k) => k.brandKey === row.brandKey),
-        subjects: ctx.crosses?.subjects.find((k) => k.brandKey === row.brandKey),
-        noun: WHAT_THEY_SELL[clientId] ?? null,
-        window,
-        asked: themes.length > 0
-          ? { themes: [...themes].sort((a, b) => b.videos - a.videos || a.label.localeCompare(b.label)).slice(0, ASKED_SHOWN) }
-          : null,
-        said: (said?.quotes ?? []).map((q) => ({
-          ref: q.ref, text: quoteWords(q), english: q.english, lang: q.lang, platform: q.platform,
-          cite: [q.platform ? platformLabel(q.platform) : null, q.date ? shortDate(q.date) : null].filter(Boolean).join(' · '),
-        })),
-        findings: rival ? findingsFor(ctx.findings, rival.name) : [],
-        params,
-      })
-      return { ...data, open, panel }
-    }
-    const creator = ctx.creators ? creatorsOf(ctx.creators).find((c) => c.key === open.key) : undefined
-    if (!creator) return { ...data, open: null, panel: null }
-    const labels = await readLabels(handle, creator.themes.slice(0, PANEL_CONVERSATIONS + 6).map((t) => t.themeId)).catch((e: unknown) => { say('creator.labels', e); return new Map<string, string>() })
-    const panel = buildCreatorPanel({
-      creator, n: data.videos, labels, videoIds: creatorVideoIds(ctx.market).get(creator.key) ?? [], brands: ctx.brandSets, params,
-    })
-    return { ...data, open, panel }
-  } catch (e) {
-    say('panel', e)
-    return { ...data, open: null, panel: null }
-  }
-}
-
-/** The page: level 1, then the panel `params` opens. */
-export async function loadVoices(input: VoicesLoadInput): Promise<VoicesData> {
-  const { data, ctx } = await loadVoicesBase(input)
-  return openPanel(ctx, data, input.params)
+  return data
 }
 
 /**

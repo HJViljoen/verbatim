@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { ossurVoicesFixture, sealandVoicesFixture } from '@/lib/pages/v2/voices-fixture'
-import type { CreatorPanel } from '@/lib/pages/v2/voices'
-import { CreatorPanelView, CreatorsCard } from './creators'
+import { CreatorsCard } from './creators'
 
 describe('Creators who drive the talk', () => {
   it('the accounts at the floor: platform, followers (never Reddit\'s), the conversation they made most of, their videos', () => {
@@ -17,6 +16,9 @@ describe('Creators who drive the talk', () => {
     expect(text).toContain('The Amputee Diaries YouTube · 96K subscribers')
     expect(text).toContain('All 6 accounts with 3 or more videos →')
     expect(render(node)).not.toContain('data-copy="quote"')
+    // Each row opens the creator's page, two segments, and ends in the chevron.
+    expect(render(node)).toContain('href="/dashboard/voices/creators/tiktok/A%20L%20I%20S"')
+    expect(render(node).match(/data-row-chevron=""/g)?.length).toBe(d.creators.rows.length)
     assertCopyContract(node)
   })
 
@@ -38,21 +40,6 @@ describe('Creators who drive the talk', () => {
     const d = ossurVoicesFixture()
     const node = <CreatorsCard creators={{ ...d.creators, rows: [], atFloor: 0, empty: 'No account made 3 or more of the market’s videos in September.' }} monthWords={d.monthWords} />
     expect(renderText(node)).toContain('No account made 3 or more')
-    assertCopyContract(node)
-  })
-})
-
-describe('a creator\'s panel', () => {
-  it('its videos of the market, the conversations they are in, the brands they name', () => {
-    const d = sealandVoicesFixture({ creator: 'Pack Hacker' })
-    const panel = d.panel as CreatorPanel
-    const node = <CreatorPanelView panel={panel} monthWords={d.monthWords} />
-    const text = renderText(node)
-    expect(text).toContain('Creator Pack Hacker YouTube · 512K subscribers as of their videos in September')
-    expect(text).toContain('12 of 940 market videos in September')
-    expect(text).toContain('Brands named in their videos')
-    expect(text).toContain('Ask the Agent about this creator')
-    expect(text).not.toContain('this month')
     assertCopyContract(node)
   })
 })

@@ -136,7 +136,7 @@ describe('the category\'s page, the hub', () => {
 
   it('the numbers: subjects open Market\'s pages at the month, groups open Voices, platforms from the month\'s market', () => {
     expect(page.subjects[0]).toMatchObject({ label: 'Fit & comfort', k: 70, href: '/dashboard/market/subjects/s-fit-comfort?period=month&month=2026-09' })
-    expect(page.groups.state === 'ready' && page.groups.rows.map((g) => [g.name, g.k, g.href])[0]).toEqual(['New amputees, first year', 47, '/dashboard/voices?group=new#group-panel'])
+    expect(page.groups.state === 'ready' && page.groups.rows.map((g) => [g.name, g.k, g.href])[0]).toEqual(['New amputees, first year', 47, '/dashboard/voices/groups/new'])
     expect(page.platforms?.n).toBe(118)
     expect(page.platforms!.rows.reduce((s, r) => s + r.k, 0)).toBe(118)
   })
@@ -292,7 +292,7 @@ describe('the small builders', () => {
       .toEqual({ n: 2, rows: [{ platform: 'tiktok', label: 'TikTok', k: 1 }, { platform: 'youtube', label: 'YouTube', k: 1 }] })
     expect(platformsOf(new Set(), [])).toBeNull()
     const g = groupsOf(new Set(['a', 'b']), [{ key: 'x', name: 'X', videoIds: ['a'] }, { key: 'y', name: 'Y', videoIds: ['z'] }], {})
-    expect(g).toEqual({ state: 'ready', n: 2, rows: [{ key: 'x', name: 'X', k: 1, href: '/dashboard/voices?group=x#group-panel' }] })
+    expect(g).toEqual({ state: 'ready', n: 2, rows: [{ key: 'x', name: 'X', k: 1, href: '/dashboard/voices/groups/x' }] })
     expect(groupsOf(new Set(['a']), null, {})).toEqual({ state: 'none' })
     expect(groupsOf(new Set(['a']), undefined, {})).toEqual({ state: 'unread' })
   })

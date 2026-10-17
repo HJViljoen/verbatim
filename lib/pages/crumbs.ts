@@ -11,10 +11,11 @@
 /** The prose slot a label is replayed from, where it is model prose written
  *  elsewhere (a conversation's label is Pass B's; a post idea's title is the
  *  post-ideas writer's; a piece of advice's title, Pass D-b's, drawn as a
- *  stored node). `quote` marks a person's own words that are not a name we
- *  gave (a dated move's title, the client's). Null for a name a person gave
- *  (a subject's) or a page's own words. */
-export type CrumbSlot = 'pass_b_theme' | 'post_idea' | 'pass_d_b_recommendation' | 'quote' | null
+ *  stored node; a Voices group's name is Pass E's). `quote` marks a person's
+ *  own words that are not a name we gave (a dated move's title, the
+ *  client's). Null for a name a person gave (a subject's) or a page's own
+ *  words. */
+export type CrumbSlot = 'pass_b_theme' | 'post_idea' | 'pass_d_b_recommendation' | 'pass_e_persona' | 'quote' | null
 
 /** One entry in a switcher: a sibling page, the period kept in its address. */
 export interface CrumbItem {
