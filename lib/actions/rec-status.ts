@@ -142,7 +142,8 @@ export async function setRecommendationStatus(id: string, status: string): Promi
   // staleTimes.dynamic = 60). The parked path drops out with the parked page.
   // Market took Your market's address and its moves line with it.
   revalidatePath('/dashboard/market-intel')
-  revalidatePath('/dashboard/moves')
+  // Every page under Your moves (its levels are pages since 17 Oct).
+  revalidatePath('/dashboard/moves', 'layout')
   revalidatePath('/dashboard')
   revalidatePath('/dashboard/market')
   return { ok: true, message: '' }

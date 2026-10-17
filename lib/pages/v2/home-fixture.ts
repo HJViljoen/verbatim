@@ -9,7 +9,8 @@ import {
 } from './home'
 import { buildConvs, convHref, flagCardOf, marketParams, pickHero, pickWeekSides, type MarketTop } from './market'
 import { FIXTURE_FLAG, FIXTURE_WEEKS, fixtureConvInput, fixtureFacts, fixtureId, fixtureRead } from './market-fixture'
-import { adviceHref, movedMove, MOVES_PATH, type TopMoves } from './moves'
+import { adviceHref, movedMove, type TopMoves } from './moves'
+import { movePath } from './moves-address'
 import { DESK, MOVE_CARDS } from './moves-fixture'
 import { shelfCut } from './products'
 import { VOICES_HREF, voicesHref, type TopVoices } from './voices'
@@ -238,7 +239,7 @@ export function fixtureMovesTop(state: MovesFixtureState = 'full', opts: { septe
   const move = movedMove(MOVE_CARDS)
   const access = {
     id: 'm-access', title: 'Create a guided access path, not a standalone price answer', kind: 'advice' as const, label: 'Cost and affordability frustration',
-    day: '2026-10-05', direction: 'up' as const, href: `${MOVES_PATH}#move-m-access`,
+    day: '2026-10-05', direction: 'up' as const, href: movePath('m-access'),
   }
   const newest: TopMoves['newest'] = state === 'pending'
     ? { ...access, pending: OCT, unread: null, point: { month: SEP, role: 'before', k: 19, n: 521, soFar: false } }
@@ -262,7 +263,7 @@ export function fixtureMovesTop(state: MovesFixtureState = 'full', opts: { septe
     waiting: state === 'no_advice' ? 0 : 3,
     move: moveless || !move?.compare ? null : {
       id: move.id, title: move.title, kind: move.kind, label: move.label, day: move.day, direction: move.direction,
-      compare: move.compare, moved: move.compare.verdict.state === 'moved', href: `${MOVES_PATH}#move-${move.id}`,
+      compare: move.compare, moved: move.compare.verdict.state === 'moved', href: move.href,
     },
     canDecide: state !== 'member' && state !== 'no_move_member',
     // Moves are recorded in the fixture: the reader who may decide may date.

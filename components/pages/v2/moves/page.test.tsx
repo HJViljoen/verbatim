@@ -11,26 +11,27 @@ import { MOVES_WRITE_REFUSED } from '@/lib/moves-access'
 import { PLAN_EMPTY } from '@/lib/ask/plan-cards'
 import { FAILED_EXPLAINED } from '@/lib/subjects/calibration-state'
 import {
-  movesFixture, movesMemberFixture, movesOpenFixture, movesQuietFixture, movesRecordFixture, movesThinFixture, movesThinOpenFixture, statementsV2, DESK, MOVE_CARDS, PLAN,
+  movesFixture, movesMemberFixture, movesQuietFixture, movesThinFixture, statementsV2, DESK, MOVE_CARDS, PLAN,
 } from '@/lib/pages/v2/moves-fixture'
 import {
-  ADVICE_GONE, ADVICE_NONE, ADVICE_PANEL_ID, ADVICE_REST, MOVES_UNREAD_TITLE, NEXT_MOVE, NO_CONCLUSIONS, NO_MOVE_YET, NO_QUOTE, RECORD_PANEL_ID, WOULD_MOVE_NOTHING, monthLabelOn,
+  ADVICE_NONE, ADVICE_REST, MOVES_UNREAD_TITLE, NEXT_MOVE, NO_CONCLUSIONS, NO_MOVE_YET, WOULD_MOVE_NOTHING, monthLabelOn,
 } from '@/lib/pages/v2/moves'
 import { readingMonthLabel } from '@/lib/reading/month-label'
 import { MovesV2Page, MOVES_FIRST_RUN } from './index'
-import { panelPlacement } from '@/components/v2'
-import { AdviceSection, adviceLayout, OPEN_MORE_WAITING, whyParagraphs } from './advice'
+import { AdviceSection } from './advice'
 import { SAY_FIRST } from './say'
 import { TrackThisSubject } from '@/components/subjects/track-this'
 import { MovesSection, lineGeometry } from './moves'
 import { WhatYouSay } from './say'
 import { PlanCard } from './plan'
 import { ConclusionsSection } from './conclusions'
+import { Timeline } from './history-row'
 
 // Your moves, Design v2 (T7): every block over its fixture, against the copy
 // contract (lib/test/copy-contract.ts) and the design bans, and the rules the
-// v2 page adds: no quote at level 1, the panel in place under its card, and
-// the four writes drawn only for a reader who may make them.
+// v2 page adds: no quote at level 1, every card opening its own page (17 Oct,
+// G6: nothing opens in place), and the four writes drawn only for a reader
+// who may make them.
 
 const page = (data = movesFixture(), statements = statementsV2()) => render(<MovesV2Page data={data} statements={statements} />)
 
@@ -42,19 +43,16 @@ const commentQuotes = (markup: string) => (markup.match(/font-serif[^"]*italic|i
 describe('every block keeps the copy contract and the bans', () => {
   const cases: [string, () => string][] = [
     ['the page', () => page()],
-    ['the page, advice open', () => page(movesOpenFixture())],
-    ['the page, the record open', () => page(movesRecordFixture())],
     ['the page, quiet', () => page(movesQuietFixture(), null as never)],
     ['the page, a member', () => page(movesMemberFixture())],
     ['the page, thin (a tenant)', () => page(movesThinFixture(), null as never)],
-    ['the page, thin, advice open with no comment', () => page(movesThinOpenFixture(), null as never)],
     ['the page, thin, a member', () => page({ ...movesThinFixture(), canDecide: false }, null as never)],
     ['the plan, none checked', () => render(<PlanCard plan={null} />)],
-    ['advice', () => render(<AdviceSection data={movesOpenFixture()} />)],
+    ['advice', () => render(<AdviceSection data={movesFixture()} />)],
     ['moves', () => render(<MovesSection data={movesFixture()} />)],
     ['what you say', () => render(<WhatYouSay data={statementsV2()} />)],
     ['the plan', () => render(<PlanCard plan={PLAN} />)],
-    ['conclusions and the record', () => render(<ConclusionsSection data={movesRecordFixture()} />)],
+    ['conclusions and the record', () => render(<ConclusionsSection data={movesFixture()} />)],
   ]
   it.each(cases)('%s', (_name, draw) => {
     const markup = draw()
@@ -113,9 +111,11 @@ describe('the page', () => {
     expect(markup).toContain('min-[1180px]:col-span-2')
   })
 
-  it('says when a link named advice the page does not hold', () => {
-    const base = movesFixture()
-    expect(markupText(page({ ...base, advice: { ...base.advice, gone: true } }))).toContain(ADVICE_GONE)
+  it('opens nothing in place: no panel, no notch, no close link (levels as pages, 17 Oct)', () => {
+    const markup = page()
+    expect(markup).not.toContain('data-notch')
+    expect(markup).not.toContain('Close ↑')
+    expect(markup).not.toContain('?advice=')
   })
 })
 
@@ -125,12 +125,6 @@ describe('no quote at level 1', () => {
     expect(copyNodes(render(<AdviceSection data={movesFixture()} />)).filter((n) => n.kind === 'quote')).toEqual([])
   })
 
-  it('the open panel prints the advice’s one comment, inside the panel', () => {
-    const markup = page(movesOpenFixture())
-    expect(commentQuotes(markup)).toBe(1)
-    const panel = markup.slice(markup.indexOf(`id="${ADVICE_PANEL_ID}"`))
-    expect(panel).toContain('Whoever helps me get this approved gets my business.')
-  })
 })
 
 describe('the advice', () => {
@@ -142,36 +136,15 @@ describe('the advice', () => {
     expect(text).toContain('63 videos it rests on, all time')
     expect(text).toContain('9 updates in a row, since 27 Jul')
     expect(text).toContain('4 updates in a row, since 14 Sep')
-    expect(text).toContain('Why →')
+    expect(text).toContain('Open →')
+    expect(text).toContain('Strongest first. Each opens as its own page.')
   })
 
-  it('the open panel sits under its card, notched at it, with the card ringed', () => {
-    const markup = render(<AdviceSection data={movesOpenFixture()} />)
-    expect(markup).toContain(`id="${ADVICE_PANEL_ID}"`)
-    expect(markup).toContain('data-notch')
-    expect(markup).toContain('ring-2 ring-foreground')
-    expect(markup).toContain('Close ↑')
-    const text = markupText(markup)
-    for (const words of ['Why', 'What it rests on', 'How long we have been saying it · 9 updates', 'First suggested 27 Jul. Nobody has decided on it yet.', 'Accept and date it as a move', 'Ask the Agent about this']) {
-      expect(text, words).toContain(words)
-    }
-    expect(text).toContain('286 videos, all time')
-    expect(text).toContain('about a rival · Voices')
-    expect(text).not.toContain('See the')
-  })
-
-  it('places the panel after its card’s row wide, and after its card narrow, its notch at the card', () => {
-    const at = (i: number, n: number) => panelPlacement(i, adviceLayout(n))
-    expect(at(0, 3).order).toMatchObject({ base: 1, md: 1, w1180: 5, xl: 5 })
-    expect(at(0, 3).notch).toMatchObject({ base: 0.5, w1180: 0.1667 })
-    expect(at(1, 3)).toMatchObject({ order: { base: 3, w1180: 5 }, notch: { base: 0.5, w1180: 0.5 } })
-    expect(at(3, 5)).toMatchObject({ order: { base: 7, w1180: 9 }, notch: { w1180: 0.1667 } })
-    expect(at(4, 5).order).toMatchObject({ base: 9, w1180: 9 })
-  })
-
-  it('sets the argument two sentences to a paragraph', () => {
-    expect(whyParagraphs('One. Two. Three.')).toEqual(['One. Two.', 'Three.'])
-    expect(whyParagraphs(null)).toEqual([])
+  it('each card names its level (the signpost), and its title and Open go to its page (G6-Moves)', () => {
+    const markup = render(<AdviceSection data={movesFixture()} />)
+    expect(markup.match(/data-kind-tile="advice"/g)).toHaveLength(3)
+    expect(markup.match(new RegExp(`href="/dashboard/moves/advice/${DESK.lineageId}"`, 'g'))).toHaveLength(2)
+    expect(markup).not.toContain('Why →')
   })
 })
 
@@ -199,18 +172,8 @@ describe('the board’s three cards, and the rest waiting', () => {
     const text = markupText(markup)
     expect(text).toContain('5 pieces of advice waiting')
     expect(text).toContain('2 more waiting →')
-    expect(markup).toContain('href="/dashboard/moves?advice=all#advice-record"')
+    expect(markup).toContain('href="/dashboard/moves/advice"')
     expect(page()).not.toContain('more waiting')
-  })
-
-  it('a piece waiting past the three opens under the grid and says so', () => {
-    const base = movesOpenFixture()
-    const text = markupText(page({ ...base, advice: { ...base.advice, more: 1, open: { ...base.advice.open!, index: null, waiting: true } } }))
-    expect(text).toContain(OPEN_MORE_WAITING)
-  })
-
-  it('the open quote carries where and when it was written', () => {
-    expect(markupText(page(movesOpenFixture()))).toContain('YouTube · 5 Oct')
   })
 })
 
@@ -243,17 +206,15 @@ describe('Track this on the legacy subject pane: tracking and the status are an 
 
 describe('the four writes are drawn for an owner or an admin only', () => {
   it('an owner sees Accept, Not for us, Date a move and the status control', () => {
-    const text = markupText(page(movesOpenFixture()))
+    const text = markupText(page(movesFixture()))
     expect(text).toContain('Accept')
     expect(text).toContain('Not for us')
     expect(text).toContain('Date a move')
     expect(text).toContain('Mark done')
-    expect(text).toContain('Made on')
   })
 
   it('a member sees none of them, and the one sentence why', () => {
-    const base = movesMemberFixture()
-    const text = markupText(page({ ...base, advice: { ...base.advice, open: movesOpenFixture().advice.open } }))
+    const text = markupText(page(movesMemberFixture()))
     expect(text).not.toMatch(/\bAccept\b/)
     expect(text).not.toContain('Not for us')
     expect(text).not.toContain('Date a move')
@@ -396,14 +357,11 @@ describe('what you say, the plan and the conclusions', () => {
     expect(text).toContain('The advice record: all 23 pieces of advice and what you decided →')
   })
 
-  it('the advice record opens in place as a list of every piece and what was decided', () => {
-    const markup = render(<ConclusionsSection data={movesRecordFixture()} />)
-    expect(markup).toContain(`id="${RECORD_PANEL_ID}"`)
-    const text = markupText(markup)
-    expect(text).toContain('Run a summer athlete campaign around the Paralympics')
-    expect(text).toContain('Dismissed since 2 Aug')
-    expect(text).toContain('raised by the latest update')
-    expect(text).toContain('you have decided on 4 of 23')
+  it('the advice record is its own page: the link goes there, and each tag opens its piece\'s page', () => {
+    const markup = render(<ConclusionsSection data={movesFixture()} />)
+    expect(markup).toContain('href="/dashboard/moves/advice"')
+    expect(markup).toContain(`href="/dashboard/moves/advice/${DESK.lineageId}"`)
+    expect(markup).not.toContain('data-notch')
   })
 })
 
@@ -477,19 +435,7 @@ describe('the board’s shape on thin data', () => {
     expect(text).toContain('2 of 65 decided on')
     expect(markup).toContain('min-[1180px]:col-span-2')
     assertCopyContract(markup)
-    // The panel opened from the one card sits after the row the record's card
-    // shares with it, its notch at the card.
-    expect(panelPlacement(0, adviceLayout(1))).toMatchObject({ order: { base: 1, w1180: 3 }, notch: { w1180: 0.1667 } })
-  })
-
-  it('the open panel keeps "In their words" with no comment, and the history keeps the board’s nine dots', () => {
-    const markup = page(movesThinOpenFixture(), null as never)
-    const panel = markup.slice(markup.indexOf(`id="${ADVICE_PANEL_ID}"`))
-    expect(markupText(panel)).toContain('In their words')
-    expect(markupText(panel)).toContain(NO_QUOTE)
-    const history = panel.slice(panel.indexOf('aria-label="The updates that raised it"'), panel.indexOf('</ol>'))
-    expect(history.match(/rounded-full/g)).toHaveLength(9)
-    expect(markupText(history).match(/\d+ \w{3}/g)).toEqual(['12 Oct'])
+    expect(markup).toContain('href="/dashboard/moves/advice"')
   })
 
   it('a conclusion’s advice stays at the row’s end, however many pieces', () => {
@@ -547,17 +493,14 @@ describe('a failed read says so, once, in its own place', () => {
   })
 })
 
-describe('the history row on a phone and in the narrow column', () => {
-  /** The open panel's history over `n` updates in a row, of the latest nine. */
+describe('the history row (the advice page\'s), on a phone and in the narrow column', () => {
+  /** The history over `n` updates in a row, of the latest nine. */
   const history = (n: number) => {
     const days = ['2026-08-10', '2026-08-17', '2026-08-24', '2026-08-31', '2026-09-07', '2026-09-14', '2026-09-21', '2026-09-28', '2026-10-05', '2026-10-12']
     const dates = days.slice(-n)
     const recent = Array.from({ length: 9 }, (_, i) => i >= 9 - n)
-    const base = movesThinOpenFixture()
-    const card = { ...base.advice.open!.card, history: { dates, streak: n, since: dates[0], recent } }
-    const markup = page({ ...base, advice: { ...base.advice, open: { ...base.advice.open!, card } } }, null as never)
-    const panel = markup.slice(markup.indexOf(`id="${ADVICE_PANEL_ID}"`))
-    return panel.slice(panel.indexOf('aria-label="The updates that raised it"'), panel.indexOf('</ol>'))
+    const markup = render(<Timeline history={{ dates, streak: n, since: dates[0], recent }} />)
+    return markup.slice(markup.indexOf('aria-label="The updates that raised it"'), markup.indexOf('</ol>'))
   }
   const labels = (row: string) => [...row.matchAll(/<span class="([^"]*)">(\d+ \w{3})<\/span>/g)].map((m) => ({ date: m[2], spaced: m[1].includes('max-sm:hidden min-[1180px]:max-[1319.98px]:hidden') }))
 
@@ -575,14 +518,11 @@ describe('the history row on a phone and in the narrow column', () => {
   })
 
   it('a date older than the latest nine updates draws every date as a list, five to a phone’s row', () => {
-    const base = movesThinOpenFixture()
     const dates = ['2026-06-01', '2026-10-05', '2026-10-12']
-    const card = { ...base.advice.open!.card, history: { dates, streak: 2, since: '2026-10-05', recent: [false, false, false, false, false, false, false, true, true] } }
-    const markup = page({ ...base, advice: { ...base.advice, open: { ...base.advice.open!, card } } }, null as never)
-    const panel = markup.slice(markup.indexOf(`id="${ADVICE_PANEL_ID}"`))
-    const row = panel.slice(panel.indexOf('aria-label="The updates that raised it"'), panel.indexOf('</ol>'))
+    const markup = render(<Timeline history={{ dates, streak: 2, since: '2026-10-05', recent: [false, false, false, false, false, false, false, true, true] }} />)
+    const row = markup.slice(markup.indexOf('aria-label="The updates that raised it"'), markup.indexOf('</ol>'))
     expect(markupText(row).match(/\d+ \w{3}/g)).toEqual(['1 Jun', '5 Oct', '12 Oct'])
-    expect(panel).toContain('--cn:3')
+    expect(markup).toContain('--cn:3')
   })
 })
 

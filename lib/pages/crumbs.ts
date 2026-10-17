@@ -9,9 +9,11 @@
 // walks the switcher's imports.
 
 /** The prose slot a label is replayed from, where it is model prose written
- *  elsewhere (a conversation's label is Pass B's). Null for a name a person
- *  gave (a subject's) or a page's own words. */
-export type CrumbSlot = 'pass_b_theme' | null
+ *  elsewhere (a conversation's label is Pass B's; a piece of advice's title,
+ *  Pass D-b's, drawn as a stored node). `quote` marks a person's own words
+ *  that are not a name we gave (a dated move's title, the client's). Null for
+ *  a name a person gave (a subject's) or a page's own words. */
+export type CrumbSlot = 'pass_b_theme' | 'pass_d_b_recommendation' | 'quote' | null
 
 /** One entry in a switcher: a sibling page, the period kept in its address. */
 export interface CrumbItem {
@@ -36,6 +38,13 @@ export interface CrumbMenu {
   /** Below a hairline, unranked: the subjects whose check has not passed
    *  (ruling U6). */
   below?: CrumbItem[]
+  /** Above a hairline, before `items`: the page itself where the set does not
+   *  hold it (Your moves: a piece of advice opened from the record, ticked
+   *  above the advice waiting). */
+  above?: CrumbItem[]
+  /** The wider menu (400px), for long entries with a note (Your moves'
+   *  advice and its priority). */
+  wide?: boolean
 }
 
 /** One segment of the path. The last is the page itself (no `href`). */
@@ -50,4 +59,4 @@ export interface Crumb {
 
 /** Whether a menu holds anything to switch to. */
 export const hasSiblings = (m: CrumbMenu | null | undefined): m is CrumbMenu =>
-  m != null && m.items.length + (m.below?.length ?? 0) > 0
+  m != null && m.items.length + (m.below?.length ?? 0) + (m.above?.length ?? 0) > 0

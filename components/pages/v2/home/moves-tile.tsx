@@ -17,13 +17,13 @@ import { CSUB, OLINK, TILE, TILE_FAILED, TileHead, TileLine, TT } from './parts'
 
 // THE DASHBOARD'S YOUR MOVES TILE (Design v2, T8; E1-Dashboard's third row),
 // from `topMoves`: the first piece of advice waiting for a decision, which
-// opens in place on Your moves (`?advice=<lineage>`), with Accept and Not for
+// opens its own page on Your moves (`/dashboard/moves/advice/<lineage>`), with Accept and Not for
 // us for an owner or an admin (`mayDecideMoves`; the actions refuse anyone
 // else anyway); and beside it the move whose market moved most since it was
 // dated, its month before against the latest month read since, banded
 // through its `Verdict`.
 //
-// No quote here: the advice's one comment is in its panel. The move's title
+// No quote here: the advice's comments are on its own page. The move's title
 // is the client's own words, marked as Your moves marks them.
 
 /** Your moves' words where nothing has been delivered yet. */

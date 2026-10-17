@@ -57,7 +57,8 @@ export async function dateMoveAction(_prev: SubjectFormState, form: FormData): P
   // Where the move is read: Your moves (Y4 and the hero; /dashboard/moves
   // since Design v2), the Dashboard, and Market, which took Your market's
   // moves line with its address.
-  revalidatePath('/dashboard/moves')
+  // Every page under Your moves (its levels are pages since 17 Oct).
+  revalidatePath('/dashboard/moves', 'layout')
   revalidatePath('/dashboard')
   revalidatePath('/dashboard/market')
   const day = moveDay(datedOn, databaseToday())

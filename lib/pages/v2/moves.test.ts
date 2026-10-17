@@ -6,10 +6,10 @@ import type { PairComparability } from '../../reading/comparability'
 import type { RecCopy } from '../market-surface'
 import {
   adviceAims, adviceHistory, axisLine, compareMonths, conclusionViews, decisionLine, headerParts, largestStance, leadClaims, moveAxis, moveCards, movedMove,
-  recordRows, restsOnRows, streakLabel, adviceHref, adviceParam, adviceTitle, waitingAdvice, MOVES_PATH, MOVE_UNREAD, UNTITLED_ADVICE,
+  recordRows, restsOnRows, streakLabel, adviceHref, adviceTitle, waitingAdvice, MOVES_PATH, MOVE_UNREAD, RECORD_HREF, UNTITLED_ADVICE,
 } from './moves'
 import { buildAdviceRows } from '../market-surface'
-import { MOVE_CARDS, PLAN, THIN_MOVE, movesRecordFixture } from './moves-fixture'
+import { MOVE_CARDS, PLAN, THIN_MOVE } from './moves-fixture'
 
 // Your moves, Design v2 (T7): the page's pure half. The loader's reads feed
 // these, and the render tests draw what they return.
@@ -119,7 +119,11 @@ describe('moveCards', () => {
     expect(c.compare?.verdict.state).toBe('moved')
     expect(c.compare?.verdict.value).toEqual({ k: 120, n: 600 })
     expect(c.compare?.verdict.baseline).toEqual({ k: 60, n: 600 })
-    expect(c.openHref).toBe('/dashboard/market/subjects/s1')
+    // Its own page, and what it is on in Market, on the reading month (G6,
+    // decision 4).
+    expect(c.href).toBe('/dashboard/moves/m')
+    expect(c.onHref).toBe('/dashboard/market/subjects/s1?period=month&month=2026-09')
+    expect(c.object).toEqual({ kind: 'subject', id: 's1' })
   })
 
   it('draws no month across a refused step, and a refused pair prints no earlier month', () => {
@@ -172,7 +176,10 @@ describe('moveCards', () => {
     expect(twice.map((c) => c.unread)).toEqual(['not_ready', 'not_measured'])
     expect(by.get('b')?.unread).toBe('several')
     expect(by.get('c')?.label).toBe('Liner life')
-    expect(by.get('c')?.openHref).toBe(adviceHref('L1'))
+    // An advice move is on the theme its evidence leads with: that opens in Market.
+    expect(by.get('c')?.onHref).toBe('/dashboard/market/conversations/t1?period=month&month=2026-09')
+    expect(by.get('c')?.href).toBe('/dashboard/moves/c')
+    expect(by.get('b')?.onHref).toBeNull()
   })
 
   it('a month still under way is "so far"', () => {
@@ -217,8 +224,10 @@ describe('the words', () => {
     expect(leadClaims(PLAN).map((c) => c.verdict)).toEqual(['contradicts', 'contradicts', 'echoes'])
   })
   it('the advice record is every piece, in the ledger’s order', () => {
-    const rows = movesRecordFixture().record.rows
-    expect(rows).toHaveLength(4)
+    const rows = recordRows(buildAdviceRows([
+      copy('A', 'r1', '2026-08-01T06:00:00Z'), copy('B', 'r1', '2026-08-01T06:00:00Z'), copy('A', 'r2', '2026-08-08T06:00:00Z'),
+    ], [{ id: 'd-1', lineage_id: 'B', status: 'dismissed', decided_at: '2026-08-02T10:00:00.000Z' }]))
+    expect(rows).toHaveLength(2)
     expect(rows[0].current).toBe(true)
     expect(rows.find((r) => r.status === 'dismissed')?.decidedAt).toBe('2026-08-02T10:00:00.000Z')
     expect(recordRows([], 5)).toEqual([])
@@ -234,7 +243,7 @@ describe('the words', () => {
   })
 
   it('names a blank-titled piece of advice by its body in the record and the conclusions\' chips', () => {
-    const rows = movesRecordFixture().record.rows
+    const rows = recordRows(buildAdviceRows([copy('A', 'r1', '2026-08-01T06:00:00Z', { title: '', reasoning: 'Put a help desk on every reel. Buyers ask there.' })], null))
     expect(rows.every((r) => r.title !== UNTITLED_ADVICE)).toBe(true)
     const views = conclusionViews(
       [{ id: 'm1', title: 'Access decides', evidence: { supporting_theme_ids: [] } }],
@@ -243,16 +252,9 @@ describe('the words', () => {
     )
     expect(views[0].advice[0].title).toBe('Create a guided access path, not a standalone price answer')
   })
-  it('reads `?advice=`, and the old item, rec and ledger that stored links carry', () => {
-    expect(adviceParam({ advice: 'L1', ledger: 'all' })).toBe('L1')
-    expect(adviceParam({ ledger: 'all' })).toBe('all')
-    expect(adviceParam({ item: 'L2' })).toBe('L2')
-    expect(adviceParam({ rec: 'r3' })).toBe('r3')
-    expect(adviceParam({ item: 'L2', rec: 'r3', ledger: 'all' })).toBe('L2')
-    expect(adviceParam({ advice: ' ', horizon: 'last_3' })).toBe('')
-  })
-  it('a piece of advice opens in place on Your moves', () => {
-    expect(adviceHref('L1')).toBe(`${MOVES_PATH}?advice=L1#advice-panel`)
+  it('a piece of advice and the advice record open their own pages (17 Oct; the old `?advice=` redirects, lib/nav-redirects.test.ts)', () => {
+    expect(adviceHref('L1')).toBe(`${MOVES_PATH}/advice/L1`)
+    expect(RECORD_HREF).toBe(`${MOVES_PATH}/advice`)
   })
 })
 
