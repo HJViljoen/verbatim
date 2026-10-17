@@ -65,6 +65,13 @@ import { contentCrumb } from './content-levels'
 // (the typical video their response is read against).
 
 export const IDEA_MISSING = 'Content has no post idea at this address.'
+
+/** An idea from an earlier set than the newest (an emailed link, a week or
+ *  more on): the week it was written for. Never the root's "No new ideas
+ *  this week", which is untrue where a newer set exists; "before the ideas
+ *  Content shows now" only where the newest set was read. Pure. */
+export const earlierIdeaLine = (week: Pick<IdeasWeek, 'phrase'>, newestKnown: boolean): string =>
+  `This idea was written for ${week.phrase}${newestKnown ? ', before the ideas Content shows now' : ''}.`
 export const IDEA_NOT_ON = 'Post ideas are not switched on for this workspace.'
 export const IDEA_UNREAD = 'This post idea could not be read just now.'
 
@@ -143,8 +150,9 @@ export interface IdeaPage {
   typicalWords: string
   askHref: string
   conversationHref: string
-  /** "No new ideas this week. These are from the week of 28 Sep." where the
-   *  idea is not the root's week's. */
+  /** Where the idea is not the root's week's: the root's own line ("No new
+   *  ideas this week. These are from the week of 28 Sep.") where its set is
+   *  the newest; else which week it was written for (`earlierIdeaLine`). */
   older: string | null
 }
 
@@ -458,7 +466,7 @@ export async function loadContentIdea(scope: Scope, id: string, opts: { now?: Da
     typicalWords: monthWords(ideasWeek.month),
     askHref: agentHref(`Draft an outline for a post that answers this question from my market: ${idea.title}`),
     conversationHref: conversationHref(id0),
-    older: ideasWeek.current ? null : olderIdeasLine(ideasWeek),
+    older: ideasWeek.current ? null : newest?.run_id === idea.run_id ? olderIdeasLine(ideasWeek) : earlierIdeaLine(ideasWeek, newest != null),
   }
   return { state: 'ready', page, crumbs: ideaCrumbs(page, siblings, ideasWeek) }
 }

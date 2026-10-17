@@ -138,7 +138,7 @@ async function measure<T>(load: (scope: Parameters<typeof loadContentPage>[0]) =
 }
 
 const root: Load = (scope) => loadContentPage(scope, { now: NOW })
-const root_ = (scope: Parameters<typeof loadContentPage>[0]) => loadContentPage(scope, { now: NOW })
+const rootPage = (scope: Parameters<typeof loadContentPage>[0]) => loadContentPage(scope, { now: NOW })
 const ideaPage = (id: string) => (scope: Parameters<typeof loadContentPage>[0]) => loadContentIdea(scope, id, { now: NOW })
 const replies = (scope: Parameters<typeof loadContentPage>[0]) => loadContentReplies(scope, { now: NOW })
 const posts = (scope: Parameters<typeof loadContentPage>[0]) => loadContentPosts(scope, { now: NOW })
@@ -350,7 +350,23 @@ describe('a post idea\'s page beside the root\'s card', () => {
     expect(page.flag?.flags).toContain('new')
     expect(page.flag?.window).toMatchObject({ kind: 'month', from: '2026-10-01' })
     // The card on the root says the same.
-    const root = await measure(root_, {}, olderSet() as ReturnType<typeof contentTables>)
+    const root = await measure(rootPage, {}, olderSet() as ReturnType<typeof contentTables>)
     expect(root.data.ideas.cards[0].flag?.window).toEqual(page.flag?.window)
+  })
+
+  it('an idea from the newest set, older than the published read, says the root\'s own line', async () => {
+    const r = await measure(ideaPage(IDEA(1)), {}, olderSet() as ReturnType<typeof contentTables>)
+    expect(r.data.page!.older).toBe('No new ideas this week. These are from the week of 28 Sep.')
+  })
+
+  it('an idea from an earlier set than the newest never says "No new ideas this week": it names its week', async () => {
+    const t = contentTables()
+    const earlier = { ...t.post_ideas[0], id: IDEA(9), run_id: OLD_RUN, window_start: OLD_WINDOW.from, window_end: OLD_WINDOW.to, read_start: OLD_READ.from, read_end: OLD_READ.to, created_at: '2026-10-04T05:10:00.000Z' }
+    const r = await measure(ideaPage(IDEA(9)), {}, { ...t, post_ideas: [...t.post_ideas, earlier] })
+    const page = r.data.page!
+    expect(page.week.current).toBe(false)
+    expect(page.older).toBe('This idea was written for the week of 28 Sep, before the ideas Content shows now.')
+    // Its switcher is its own set's (one idea), never this week's.
+    expect(r.data.crumbs[1].menu).toBeNull()
   })
 })

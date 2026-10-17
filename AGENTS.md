@@ -1777,7 +1777,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
     where the other is missing; ideas whose week ended more than
     `IDEAS_STALE_DAYS` (28) before it stop printing on the root (`stale`) and
     still resolve on their own page, saying the week they were written for
-    (`olderIdeasLine`). Every week count sits beside its month
+    (`olderIdeasLine` where their set is the newest; `earlierIdeaLine` for
+    an earlier set, which never says "No new ideas this week" while a newer
+    set exists). Every week count sits beside its month
     (`readingMonthOf`). Ideas come from `post_ideas`, behind
     `postIdeasEnabled` (opt-in; on for Sealand and Össur since 13 Oct): a
     missing table or the switch off reads "not switched on", no rows "none
