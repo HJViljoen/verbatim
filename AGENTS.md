@@ -1069,6 +1069,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
     too, and Market's own `?conv=` / `?subject=`, below), pinned by
     `lib/nav-redirects.test.ts`. A bare `/dashboard/market` is Market now, so
     a link meaning Your moves must say `/dashboard/moves`.
+    **YOUR PRODUCTS' DEPTH IS PAGES TOO (17 Oct, the G4 boards):** `/dashboard/products/<category id>` (the hub) and `/dashboard/products/<category id>/<product id>` (the evidence), on `LevelBar` with the level tiles `category` and `product`; the root's `?group=` / `?product=` / `?unclear=all` redirect for good (`redirectFor`'s Your products block, the catalogue passed as `known.productGroup`), and every builder that opened a panel now opens a page (the Your products bullet below).
     **MARKET'S DEPTH IS PAGES (Heinrich, 16 and 17 Oct; the F2 boards).**
     Market is a top layer and three kinds of page under it, each its own
     address, written once in `lib/nav.ts` (`MARKET_WEEK_PATH`,
@@ -1707,50 +1708,138 @@ This version has breaking changes — APIs, conventions, and file structure may 
     group's panel lists "Products in their videos" by Your products' rule
     (`productMonthSets` over the group's videos: named in the video or a
     comment on it), never as the group's own words.
-  - **Your products** (T5; `lib/pages/v2/products.ts`). `?group=` /
-    `?product=` open in place; `?unclear=all` shows an open category's full
-    couldn't-tell list. Counts pool `month_product_readings` over every
+  - **Your products** (T5; `lib/pages/v2/products.ts`; AS PAGES, 17 Oct,
+    the G4 boards, every recommendation of their report approved:
+    `lib/pages/v2/products-levels.ts`, `components/pages/v2/products/`).
+    THREE ADDRESSES, written once in `lib/pages/v2/products-address.ts`
+    (a leaf: `lib/nav.ts` imports it, never the reverse; `PRODUCTS_HREF`
+    pinned equal to the sidebar's): the root `/dashboard/products` (the four
+    standouts and the shelf), a category's page
+    `/dashboard/products/<category id>` (the HUB) and a product's
+    `/dashboard/products/<category id>/<product id>` (the EVIDENCE). Every
+    level reads `?month=`; a category's page `?unclear=all` (its whole
+    couldn't-tell-which list on the same page, `#unclear`, never a panel);
+    a product's `?video=<videos.id>` (one video's comments naming it, at
+    most `PRODUCT_VIDEO_COMMENTS_MAX`, 50) and `?videos=all` (at most
+    `PRODUCT_VIDEOS_MAX`, 60), both honoured only for the product's own
+    videos this month (`shownVideos`) and never sent to a query. Each route
+    has its own `loading.tsx`; an id the catalogue does not hold prints one
+    calm line and "Back to Your products" (no catalogue: the Settings way
+    on); a product asked under another category redirects to its own
+    (`ProductsLevelData.redirect`, one hop, read before wave 2). The root's
+    old `?group=`, `?product=` and `?unclear=all` redirect FOR GOOD through
+    `redirectFor`'s Your products block (the root reads its catalogue first,
+    one call, only where `?product=` is asked, and passes
+    `known.productGroup`; a product wins over a category, an unknown one
+    falls back to the category named, else stays). Every builder that
+    opened a panel opens a page: the shelf's heads, tiles, "+N more" and
+    "Couldn't tell which · N" (`buildShelf`), the standouts (`objectHref`),
+    so the Dashboard's tile and the weekly email's line; Settings' "Tag
+    them" (`productsHref` with a category: its page, `#unclear`); Voices'
+    "Products in their videos" (`groupProducts` passes `group_id`). A
+    product named WITHOUT its category is the old address, which still
+    redirects. Tags and catalogue edits revalidate
+    `('/dashboard/products', 'layout')`, every page under the root. THE
+    ROOT reads what it read (33 statements in Össur's fixture database,
+    `products-statements.test.ts`) and no text: its quotes are the level
+    pages'. Each column head carries the board's small arrow
+    (`CatalogueShelf`'s `opens`); the shelf's key reads "1 to 2" and "3 to
+    5" and a quiet tile's mark is a drawn rule, never an en dash.
+    THE HUB (`buildCategoryPage`, 30 statements): the path "Your products /
+    {category}" and its switcher (the categories in the shelf's order, a
+    quiet one "Quiet so far" or "Quiet in {month}", never a figure); the
+    title block (three boxes on the kit's yellow, "Category"); the header
+    card, "{Category} · {month}" and a headline IN CODE'S WORDS
+    (`categoryHeadline`, the root's "Category, not you" rule; decision 1:
+    no category read is written, so the board's read card is not drawn),
+    its four figures (the share, the month's `Verdict` against last month,
+    named, couldn't tell which); "Your {category}": the products that came
+    up as cards (at most `HUB_CARDS`, 3: the commonest kind of comment, the
+    month beside last, what its videos are about, `aboutLine`), then EVERY
+    product as a list in the shelf's order (the root's `shelfCut` stays on
+    the root), its column "about most" only where no subject is pending;
+    the couldn't-tell-which card with Tag for owners and admins (a member:
+    the words, Watch the video, `PRODUCT_TAG_COPY.role`), its line true to
+    what a tag does (an open month counts it; a closed one keeps it and
+    moves nothing, `tagSub`); the numbers: three months, what it's about
+    (READY subjects, each opening its page on Market at the month; those on
+    none of its videos named on one line; U6's rows by name), what people
+    did, who's talking (Voices' groups crossed with the set, each opening
+    in Voices, `groupsOf` over `loadGroupSubjects` `videosOnly`), where
+    (the month's market, no read); the products against the category
+    (`buildCompare`, pending subjects as rows with no figure); a comment
+    naming each card's product (the root's gate, `allowOwn`), labelled with
+    it; the Agent and Settings.
+    THE EVIDENCE (`buildProductPage`, 24 statements: no month-pair judge,
+    it prints no verdict): the path with both switchers (the category's
+    products in the shelf's order, the quiet ones under a hairline in
+    words), the title block (a SINGLE box on the neutral, the sidebar's own
+    Box, never Voices' brand tag; "Product in {category}", the category a
+    link up); one line IN CODE'S WORDS (`productLead`: "Most", "Almost
+    every", "Every" are the level's own words past half, never a rank, so a
+    subject not measured yet is never named and takes nothing from them);
+    "Where it was named": every video naming it this month, the most
+    comments naming it first (`namedVideoOrder`), four then "Show the other
+    N videos" (three on a phone), each with up to three comments naming it
+    (two on a phone; the gate, `allowOwn`; translations as every quote's),
+    "Named in the video" where its own words name it, an own post "Your
+    post" with `OWN_POST_NOTE` (its comments count, its words never do);
+    the facts (its place in its category: this product, your other
+    products there, one of yours but not which, the category in general,
+    adding up to the category's videos; month by month; what people did;
+    what it's about; who's talking; where); its siblings; the Agent.
+    THE OFF STATES KEEP THE FRAME (decision 5): switched off, unread and
+    failed draw the path, the title block, the state's line with its way
+    on and the list (or the siblings) with no count; no month switch where
+    no month is read. A quiet product says nobody named it, how many did
+    last month and the way there; its facts say "Nothing to read in a quiet
+    month". `PRODUCT_READINGS_ENABLED` is ON FOR ÖSSUR since 13 Oct (its
+    catalogue loaded and back-read written) and off for Sealand, which has
+    no catalogue: Sealand's level pages print the no-catalogue line.
+    ISOLATION: every level read filters on the session's client and reads
+    only the page's own set (`products-statements.test.ts` pins it with
+    another workspace's rows in every table, and fails with a filter
+    removed). Dump: `scripts/products-v2-dump.ts --confirm --view
+    root|category:<id|first>|product:<group>/<id>|first`; shots:
+    `scripts/shots/products-levels.ts`.
+    What stays from T5: counts pool `month_product_readings` over every
     audience through `marketProductMonth` (`lib/products/market-month.ts`),
     and the crosses pool every audience too (a local `poolLens`; Voices'
     brand cross is unchanged). Settings › Your products uses the same
     function and the page's own month (`productsMonth`), names it "{Month}
     so far" only while it is the current month and with its label otherwise
-    (`productSettingsView`'s `now`, decision 3), and its "Tag them"
-    link carries the month and `#unclear` (`lib/pages/v2/products-address.ts`).
-    While `PRODUCT_READINGS_ENABLED` is off for the tenant (every tenant
-    today; Heinrich's order is to back-read first), Settings reads no month
-    (the route asks for the page's month only while it is on,
-    `loadProductSettingsForPage`),
-    prints no count even where a back-read left rows, and says plainly that
-    the Your products page is not switched on yet (`PRODUCTS_PAGE_OFF`); the
-    weekly email's products line is absent, and the page bar names no month
-    over a page that reads none (not applied, not on, no catalogue).
-    The quote gate runs with `allowOwn: true` here, because comments under
-    the client's posts are part of the basis. Standouts are picked by code
-    (`pickStandouts`) and need `STANDOUT_MIN` (3) videos, except the gap
-    card, which needs its band to clear. Every comparison is a `Verdict`
-    (`ObjectKind` `'product'`); the category share verdict is judged on the
-    brands view (`BRANDS_PANEL`), which handles changes cut, and is refused
-    across a catalogue change. A product with no row in a read month reads
-    "not read yet", never quiet. The panels' kinds are `productKindLabel`'s
-    (above, "Who talk is about"). The Tag control is for owners and admins
-    only. Honest states: not applied, no catalogue, not switched on, unread,
-    failed (`ProductsState`). THE BOARD'S SHAPE IN EVERY STATE (parity pass,
-    13 Oct night): the page always draws the board's four standout places
-    (`standoutSlots`): the code's pick, else the month's nearest honest card
-    worded for what it is, else the place's empty frame. Those stand-ins
-    never reach the Dashboard tile or the email, which read `standouts`
-    (the strict picks) and the shelf. The month switch reads `?month=`. A
-    subject that has not passed its check prints no figure on the page (U6):
-    it is named, with `SUBJECT_NOT_MEASURED` where its count would be. A
-    state with no reading still draws the frame, and every state with a
-    catalogue draws the shelf (`buildProductsData` fills `shelf` with no
-    count where the month was not read). A shelf column shows every tile
-    where it holds nine or fewer, else `SHELF_TILES` (8), most videos first,
-    then "+N more" into the category's panel; never "+1 more", a line in a
-    tile's place (the lead, 14 Oct; `shelfCut`, which the Dashboard's mini
-    shelf cuts by too). A column's head puts its verdict on its own line
-    under "N% of the market", as the board's "▲ from 14%".
+    (`productSettingsView`'s `now`, decision 3). While
+    `PRODUCT_READINGS_ENABLED` is off for a tenant, Settings reads no month
+    (`loadProductSettingsForPage`), prints no count even where a back-read
+    left rows, and says plainly that the Your products page is not switched
+    on yet (`PRODUCTS_PAGE_OFF`); the weekly email's products line is
+    absent, and the page bar names no month over a page that reads none
+    (not applied, not on, no catalogue). The quote gate runs with
+    `allowOwn: true` here, because comments under the client's posts are
+    part of the basis. Standouts are picked by code (`pickStandouts`) and
+    need `STANDOUT_MIN` (3) videos, except the gap card, which needs its
+    band to clear. Every comparison is a `Verdict` (`ObjectKind`
+    `'product'`); the category share verdict is judged on the brands view
+    (`BRANDS_PANEL`), which handles changes cut, and is refused across a
+    catalogue change. A product with no row in a read month reads "not read
+    yet", never quiet. The kinds are `productKindLabel`'s (above, "Who talk
+    is about"). Honest states: not applied, no catalogue, not switched on,
+    unread, failed (`ProductsState`). THE BOARD'S SHAPE IN EVERY STATE
+    (parity pass, 13 Oct night): the root always draws the board's four
+    standout places (`standoutSlots`): the code's pick, else the month's
+    nearest honest card worded for what it is, else the place's empty
+    frame. Those stand-ins never reach the Dashboard tile or the email,
+    which read `standouts` (the strict picks) and the shelf. The month
+    switch reads `?month=`. A subject that has not passed its check prints
+    no figure (U6): it is named, with `SUBJECT_NOT_MEASURED` where its count
+    would be. Every state with a catalogue draws the shelf
+    (`buildProductsData` fills `shelf` with no count where the month was
+    not read). A shelf column shows every tile where it holds nine or
+    fewer, else `SHELF_TILES` (8), most videos first, then "+N more" into
+    the category's page; never "+1 more" (the lead, 14 Oct; `shelfCut`,
+    which the Dashboard's mini shelf cuts by too). A column's head puts its
+    verdict on its own line under "N% of the market", as the board's "▲
+    from 14%".
   - **Content** (T6; `lib/pages/v2/content.ts`: `loadContentPage`,
     `topContent`). The week is a run's frozen window: the newer of the post
     ideas' run and the published week read's (`anchorOf`), either alone
@@ -1895,10 +1984,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
     the subjects module's census (`lib/pages/subjects.ts` `loadOwnPosts`)
     still reads `is_client` or `source='owned'`, and `buildPlaybook` defaults
     to `clientSide: 'about'` everywhere but Content.
-  - **Panels at every width (T9).** Voices, Your products, Content and Your
-    moves only: since 17 Oct Market opens pages, never a panel (the Market
-    bullet above), and the machinery stays for the four until they move
-    over. A v2 panel opened from a card in a grid
+  - **Panels at every width (T9).** Voices, Content and Your moves only: since 17 Oct Market and Your products open pages, never a panel (their bullets above), and the machinery stays for the three until they move over. A v2 panel opened from a card in a grid
     is ONE child of that grid: cards take `panelItemOrder(i)`, the panel
     goes in a `PanelSlot` right after the clicked card, and
     `panelPlacement(index, layout)` (`components/v2/panel-place.ts`) gives
