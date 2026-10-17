@@ -5,10 +5,10 @@ import { WEEKS_FAILED, type HomeWeeks } from '../home'
 import { notReadyIds } from '../subject-place'
 import type { UnusualFlag } from '../week'
 import {
-  buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, convGroupsOf, convHref, convPageOf, conversationCrumbs, flagCardOf, flagVerdict, groupsOf, insideConvsOf, insideOf, insightThemes,
+  buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, convEvidenceOf, convGroupsOf, convHref, convPageOf, convSiblingsOf, conversationCrumbs, flagCardOf, flagVerdict, groupsOf, insideConvsOf, insideOf, insightThemes, CONV_EVIDENCE_UNREAD,
   lineBars, marketLongRunFor, marketMonths, marketParams, monthsText, ourReadOf, panelStats, pickHero, pickWeekSides, platformRows, subjectCardsOf, subjectCrumbs, subjectHref,
   subjectDetailOf, subjectNavOf, subjectTableHref, subjectWeekLevel, tableMonths, weekWindows, convOf, doingOf, alsoTalkedOf, earlierNewOf, leadDoing, weekCardOf, weekCrumbs, weekPageOf, withMonthPlatforms,
-  type ConvInput, type ConvPanel, type MarketConv, type MarketData, type MarketMonth, type MarketParams, type MarketWeek, type MonthCount,
+  type ConvEvidence, type ConvEvidenceRow, type ConvInput, type ConvPanel, type ConvVideoRow, type MarketConv, type MarketData, type MarketMonth, type MarketParams, type MarketWeek, type MonthCount,
   type SubjectDetail, type SubjectFact, type TopRow,
 } from './market'
 import { OSSUR_SUBJECT_READS, SEALAND_SUBJECT_READS } from './market-reads-fixture'
@@ -17,6 +17,8 @@ import type { LongRunReadData, WeekReadData } from '../../written/types'
 import type { PublishedWeekRead } from '../../written/published'
 import { weekReadDates } from '../../reports/weekly-read'
 import type { GroupEvidence, ThemeMonthLine } from '../../reading/cross'
+import { cleanQuote } from '../../quotes'
+import { quoteTextHash } from '../../quote-text'
 
 // MARKET'S RENDER FIXTURE (depth v2, T3): an Össur-shaped week, drawn from the
 // E2 boards' own numbers and re-cut to decision 1 (no weekly direction words,
@@ -433,6 +435,13 @@ export interface FixtureOptions {
   /** A subject's page: its week on the level's base could not be read (the
    *  window read failed, or answered no row). */
   subjectWeek?: 'unread'
+  /** A conversation's page: its videos could not be read (`unread`), or it
+   *  has none in the period (`none`). */
+  convEvidence?: 'unread' | 'none'
+  /** A conversation's page: `?video=` (a fixture video's number, 1 to 23)
+   *  and `?videos=all`. */
+  convVideo?: number
+  convVideos?: 'all'
 }
 
 const MONTH: MarketMonth = {
@@ -742,8 +751,65 @@ export function marketSubjectFixture(key: string, opts: FixtureOptions & { detai
   }
 }
 
-/** A conversation's page (its fixture number): its panel, its three weekly
- *  counts, and the breadcrumb under its ready subject (or Market alone). */
+/**
+ * WHAT PEOPLE SAID ON A CONVERSATION'S PAGE (F3-Market-Conversation): its
+ * videos in the period (its week's 23, or its month's 35, for How long a
+ * liner lasts) as the evidence read returns them, by the page's own builder
+ * (`convEvidenceOf`). The first five are the board's creators, captions and
+ * comments (one in Spanish with its English); the rest carry a line or two
+ * each. Illustrative words, no tenant row read.
+ */
+const CONV_VIDEOS: [string, string, string, number, string, string[]][] = [
+  // account, platform, caption, comments on the video, posted, comments about this
+  ['@stepbystep.amp', 'tiktok', 'Three signs your liner is done, and what my clinic never told me about replacing it', 212, '2026-10-03', [
+    'This liner gave me a rash after a week and I had to go back to my old one.', 'Mine lasted eight months before it started slipping. Is that normal?', 'Nobody at my fitting said anything about replacing the liner.']],
+  ['The Amputee Diaries', 'youtube', 'Your liner has an expiry date. Here’s how to read it.', 96, '2026-09-28', [
+    'Does anyone’s liner roll down at the knee by the afternoon?', 'Six months in and the inside of my liner is already thin at the back.', 'My prosthetist said a year. My liner never makes it past seven months.']],
+  ['@limbcare.clinic', 'instagram', 'We get this question every week: how long should a liner really last?', 41, '2026-10-05', [
+    'Is it normal that my liner feels loose after six months? Nobody told me they wear out.', '¿Cada cuánto hay que cambiar el liner? A mí nadie me lo explicó en la clínica.']],
+  ['@runningon.carbon', 'instagram', 'Long run on a hot day, and the liner check after mile ten', 58, '2026-10-02', [
+    'My liner stops holding by lunchtime in summer when I run.', 'How long does your liner last if you run every day?']],
+  ['@firstyear.leg', 'tiktok', 'Month four with my first leg: what changed, and what nobody warned me about', 37, '2026-10-06', [
+    'Did your clinic tell you when to get a new liner? Mine didn’t.', 'My liner feels loose by the evening now. My skin can tell.']],
+]
+const CONV_COUNTS = [14, 11, 9, 6, 5]
+export const CONV_SPANISH = { text: CONV_VIDEOS[2][5][1], english: 'How often do you have to change the liner? Nobody explained it to me at the clinic.' }
+
+export function fixtureConvEvidence(n: number, conv: MarketConv | null, period: MarketParams['period'], p: MarketParams, opts: FixtureOptions = {}): ConvEvidence {
+  if (opts.convEvidence === 'unread') return CONV_EVIDENCE_UNREAD
+  const total = opts.convEvidence === 'none' ? 0 : (period === 'week' ? conv?.week : conv?.month) ?? 0
+  const videos: ConvVideoRow[] = []
+  const evidence: ConvEvidenceRow[] = []
+  const vid = (i: number) => `00000000-0000-4000-8000-${String(5000 + n * 100 + i).padStart(12, '0')}`
+  for (let i = 0; i < total; i++) {
+    const board = n === 1 ? CONV_VIDEOS[i] : undefined
+    const count = n === 1 && i < CONV_COUNTS.length ? CONV_COUNTS[i] : Math.max(1, 5 - Math.floor(i / 3))
+    videos.push({
+      id: vid(i + 1), platform: board?.[1] ?? ['tiktok', 'instagram', 'youtube'][i % 3], video_id: `cv${n}-${i + 1}`,
+      video_url: `https://example.com/v/${n}-${i + 1}`, account_name: board?.[0] ?? `@creator${i + 1}`, caption: board?.[2] ?? `Video ${i + 1} about ${conv?.label ?? 'it'}`,
+      comments_count: board?.[3] ?? 30 - i, upload_date: board?.[4] ?? `2026-10-0${1 + (i % 6)}`,
+      is_client: false, is_competitor: false, competitor_name: null, hashtags: ['amputee'], topics: ['prosthetics'], source: 'discovered',
+    })
+    for (let j = 0; j < count; j++) {
+      const words = board?.[5][j] ?? (j === 0 && n !== 1 ? `People ask about ${(conv?.label ?? 'this').toLowerCase()} under video ${i + 1}, and what helps.` : 'Same here.')
+      evidence.push({
+        evidenceId: `cev-${n}-${i}-${j}`, insightId: `ins-${n}-${1 + (j % 4)}`, commentId: `ccm-${n}-${i}-${j}`, quote: words, rank: j + 1, redacted: false,
+        comment: { date: `2026-10-${String(5 + ((i + j) % 6)).padStart(2, '0')}T10:00:00.000Z`, platform: videos[i].platform, videoId: videos[i].video_id, author: `viewer${i}-${j}` },
+      })
+    }
+  }
+  const pp: MarketParams = { ...p, video: opts.convVideo ? vid(opts.convVideo) : null, videos: opts.convVideos === 'all' }
+  return convEvidenceOf({
+    convId: id(n), kind: conv?.kind ?? null, videoIds: videos.map((v) => v.id), commentIds: new Set(evidence.map((e) => e.commentId)),
+    members: new Set([1, 2, 3, 4].map((k) => `ins-${n}-${k}`)), videos, evidence,
+    translations: new Map([[quoteTextHash(cleanQuote(CONV_SPANISH.text)), { lang: 'es', english: CONV_SPANISH.english }]]),
+    named: new Map([[vid(1), ['Össur']], [vid(4), ['Össur']]]), brand: 'Össur', brands: opts.brands ?? 'counted', gate: {}, p: pp,
+  })
+}
+
+/** A conversation's page (its fixture number): its facts, its three weekly
+ *  counts, its videos and what people said, its siblings, and the breadcrumb
+ *  under its ready subject (or Market alone). */
 export function marketConversationFixture(n: number, opts: FixtureOptions = {}): MarketData {
   const core = fixtureCore(opts)
   const { period, p, convs, input, read, flagged, subjectNav } = core
@@ -760,7 +826,12 @@ export function marketConversationFixture(n: number, opts: FixtureOptions = {}):
     view: 'conversation',
     subjectNav,
     crumbs: conversationCrumbs({ p, nav: subjectNav, conv: { id: cid, label: panel.label }, parent, siblings }),
-    convPage: convPageOf(panel, conv, period === 'week' ? WEEK : null, core.month, period),
+    convPage: {
+      ...convPageOf(panel, conv, period === 'week' ? WEEK : null, core.month, period),
+      lead: panel.description ? { body: panel.description, figures: {} } : null,
+      evidence: fixtureConvEvidence(n, conv, period, p, opts),
+      siblings: convSiblingsOf({ convId: cid, convs, parent, period, p }),
+    },
   }
 }
 
@@ -833,7 +904,8 @@ function fixturePanel(n: number, period: MarketParams['period'], convs: readonly
     ourRead: ourReadOf({ id: cid, read, flag: flagHere, description: 'People share how long their liners last before they lose grip, and when to replace one.' }),
     line: { bars, verdict: null, basis: 'the category’s videos' },
     who: conv.who.length > 0 ? { parts: conv.who, n: conv.who.reduce((s, x) => s + x.videos, 0) } : null,
-    doing: { rows: doingOf(HERO_KINDS, conv.month, null), n: conv.month ?? 0, text: 'in October so far' },
+    // What people did, of the period's videos (F3: the rail's "of 23").
+    doing: { rows: doingOf(HERO_KINDS, period === 'week' ? conv.week : conv.month, null), n: (period === 'week' ? conv.week : conv.month) ?? 0, text: period === 'week' ? 'this week' : 'in October so far' },
     groups: counted ? counted.groups : groupsOf(cid, PERSONAS),
     groupBase: counted?.base ?? null,
     platforms: where ? { rows: where.rows, n: where.n } : null,
@@ -847,6 +919,7 @@ function fixturePanel(n: number, period: MarketParams['period'], convs: readonly
       { text: 'Got the C-Leg approved after a year of fighting. Worth it, but the fight nearly broke me.', lang: null, english: null, source: 'YouTube · 3 Oct', about: 'rival:Ottobock' },
     ],
     askHref: '/dashboard/agent?ask=What%20does%20my%20market%20say%20about%20insurance%20refusals%20for%20powered%20knees%3F',
+    description: FIXTURE_DESCRIPTIONS[n] ?? null,
   }
 }
 

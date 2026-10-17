@@ -3,11 +3,14 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Period } from '../../../components/v2/period-switch'
 import { loadObjectReadings, type MarketObjectRef, type ObjectReading } from '../../agent/movement'
 import { brandRulesFor } from '../../brands/aliases'
-import { loadCommentNamings, trackedBrands, whoSplit, type WhoVideo } from '../../brands/attribution'
+import { aboutNamed, loadCommentNamings, trackedBrands, whoSplit, type WhoVideo } from '../../brands/attribution'
 import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../../chunk'
 import { fmtInt, longMonth, platformLabel, shortDate } from '../../format'
 import { gateFor } from '../../quote-context'
-import type { GateOptions } from '../../quote-gate'
+import { pickEligible, type GateOptions, type QuoteVideo } from '../../quote-gate'
+import { cleanQuote, readingOf, readsAsHeroQuote, readTranslations } from '../../quotes'
+import { accountKey } from '../overview-market/voices'
+import { readsAsOffer } from '../overview-market/offers'
 import { subjectReadsEnabled } from '../../config'
 import { substituteFigures } from '../../reports/cover'
 import type { FigureTable as PrintedFigures } from '../../reports/types'
@@ -46,10 +49,10 @@ import { hasSiblings, type Crumb, type CrumbItem, type CrumbMenu } from '../crum
 import { readLead } from '../week-read'
 import { weeklyReadView, type ResolvedQuote } from '../../reports/weekly-read'
 import { hydrateData } from '../../snapshots'
-import { MARKET_TABLE_ANCHOR, MARKET_WEEK_PATH, marketConversationHref, marketPeriodQuery, marketSubjectHref } from '../../nav'
+import { MARKET_TABLE_ANCHOR, MARKET_WEEK_PATH, marketConversationHref, marketConversationPath, marketPeriodQuery, marketSubjectHref } from '../../nav'
 import { homeWeeks, homeWeeksFrame, loadWeekRows, WEEKS_FAILED, type WeeksFailed, type WeeksRead } from '../home'
-import { loadThemeQuotes, loadThemeSegmentRows, makerRuleEnabled, voiceOf, type CiteCandidate } from '../overview'
-import { pickQuotes, POOL_FLOOR } from '../overview-market'
+import { loadThemeSegmentRows, makerRuleEnabled, voiceOf, type CiteCandidate } from '../overview'
+import { POOL_FLOOR } from '../overview-market'
 import { talkKindLabel } from '../overview-market/kinds'
 import { fetchThemedRunId } from '../themed-run'
 import { askAboutTheme, loadLinkedTheme, loadThemeKinds, themeKindCounts } from '../voice-surface'
@@ -151,6 +154,19 @@ export const MARKET_SUBJECT_MONTHS = 6
 export const MARKET_KINDS = ['question', 'praise', 'pain_point', 'feature_request', 'purchase_intent', 'objection'] as const
 /** "What it means" lines the week card prints, at most (F2-Market). */
 export const MARKET_WEEK_MEANS = 3
+/** A conversation's page (F3-Market-Conversation): the videos shown before
+ *  "Show more videos" (three on a phone), the comments each shows before
+ *  "Show all" (two on a phone), and the most an opened list or "every video"
+ *  draws, so no address can make the page unbounded. */
+export const MARKET_CONV_VIDEOS = 5
+export const MARKET_CONV_VIDEOS_PHONE = 3
+export const MARKET_VIDEO_QUOTES = 3
+export const MARKET_VIDEO_QUOTES_PHONE = 2
+export const MARKET_VIDEO_COMMENTS_MAX = 50
+export const MARKET_CONV_VIDEOS_MAX = 60
+/** The other conversations a conversation's page lists where no ready
+ *  subject holds it (the period's biggest); under a subject, all of its. */
+export const MARKET_SIBLINGS = 8
 
 // ---- The shapes --------------------------------------------------------------------------
 
@@ -174,6 +190,12 @@ export interface MarketParams {
   in: string | null
   /** `?all=1`: the table shows every row (the top page only). */
   all: boolean
+  /** `?video=<id>`: a conversation's page opens one video's comments about
+   *  it in full (bounded). Honoured only where the id is one of the
+   *  conversation's own videos in the period; anything else is ignored. */
+  video?: string | null
+  /** `?videos=all`: a conversation's page lists every video (bounded). */
+  videos?: boolean
 }
 
 /** A count with what it is out of. */
@@ -515,6 +537,9 @@ export interface ConvPanel {
   platforms: { rows: PlatformRow[]; n: number } | null
   quotes: PanelQuote[]
   askHref: string
+  /** Its own one-line description (Pass B's): its page's lead (F3). Absent
+   *  on a dump from before it. */
+  description?: string | null
 }
 
 /** A tracked subject in full: its page's body (17 Oct; until then the panel
@@ -733,6 +758,98 @@ export interface ConvPage {
    *  the month the page states it against. */
   week: Level | null
   month: Level | null
+  /** F3-Market-Conversation's one-line read under the title, the 21px lead:
+   *  the conversation's own description (Pass B's), the line its subject's
+   *  page lists it with. Null where none is stored; absent on a dump from
+   *  before it. */
+  lead?: StoredLine | null
+  /** "What people said": its videos in the period and the comments about it
+   *  under each (`convEvidenceOf`). Absent on a dump from before it. */
+  evidence?: ConvEvidence | null
+  /** "Other conversations in {subject}": its siblings with their counts, in
+   *  the subject's order; under no ready subject, the period's biggest
+   *  (`MARKET_SIBLINGS`). Absent on a dump from before it. */
+  siblings?: ConvSiblings | null
+}
+
+/**
+ * A CONVERSATION'S EVIDENCE (F3-Market-Conversation, 17 Oct: the page absorbs
+ * F2's "See the N videos and every comment", which no page served). Every
+ * video in the conversation in the period (its refs, the category's), most
+ * comments about it first, ties by the video's own comment total; under each,
+ * the comments about the conversation dated in the period's window that pass
+ * the quote gate Market's quotes pass, their words resolved at render. A
+ * count is every counted comment on the video; the quotes are the ones the
+ * gate lets print.
+ */
+export interface ConvEvidence {
+  /** `unread`: the conversation's videos could not be read just now. */
+  state: 'ready' | 'unread'
+  /** Every video in it in the period. */
+  total: number
+  /** The videos shown, in order: the first `MARKET_CONV_VIDEOS`, every one
+   *  with `?videos=all` (at most `MARKET_CONV_VIDEOS_MAX`), and the opened
+   *  one wherever it falls. */
+  videos: ConvVideo[]
+  /** `?videos=all` is honoured. */
+  all: boolean
+  /** "Show more videos · {N} more", from 640 and on a phone (three shown
+   *  there); null where none remain. */
+  more: { href: string; desktop: number; phone: number } | null
+  /** Every video is listed, but more than the cap exist: the page says how
+   *  many it lists. Null where it lists them all. */
+  capped: number | null
+}
+
+/** One video in a conversation, as its card prints it. */
+export interface ConvVideo {
+  /** `videos.id`: the video's row, and its card's anchor. */
+  id: string
+  /** The creator (`account_name`). */
+  account: string
+  /** "TikTok". */
+  platform: string
+  /** "3 Oct" (`upload_date`), where stored. */
+  posted: string | null
+  /** Who it is about where the tenant's brands are counted and a tracked
+   *  brand is named in its comments about the conversation (`aboutNamed`);
+   *  null for the market or where brands are not counted (no chip). */
+  about: WhoAbout | null
+  caption: string | null
+  /** The video on its platform, a new tab. */
+  url: string | null
+  /** Its comments about the conversation in the period (counted). */
+  aboutCount: number
+  /** Its comments in all (`comments_count`), where stored. */
+  total: number | null
+  /** The comments it shows: three (two on a phone), or, opened, every one
+   *  the gate lets print (at most `MARKET_VIDEO_COMMENTS_MAX`). */
+  quotes: ConvComment[]
+  /** How many of its comments about the conversation the gate lets print:
+   *  "Show all {N} comments". */
+  quotable: number
+  /** `?video=` names it: every printable comment shows. */
+  open: boolean
+  /** Its own list opened (or, open, closed again), the period kept. */
+  href: string
+}
+
+/** A comment under a video: the commenter's words, resolved at render, and
+ *  its date (the platform is said once, on the video). */
+export interface ConvComment {
+  text: string
+  lang: string | null
+  english: string | null
+  /** "6 Oct". */
+  date: string
+}
+
+/** A conversation's siblings, as its page lists them. */
+export interface ConvSiblings {
+  /** The ready subject it sits in, where one holds it: the section's name
+   *  and "{subject}, the whole subject →". */
+  parent: { id: string; name: string; href: string } | null
+  items: { id: string; label: string; href: string; count: number | null; month: number | null }[]
 }
 
 /** The week's page (`/dashboard/market/week`, F2-Market-Week): the published
@@ -863,13 +980,35 @@ export function marketParams(sp: Readonly<Record<string, string | string[] | und
   const monthRaw = one(sp.month)
   const month = monthRaw && /^\d{4}-\d{2}/.test(monthRaw) ? `${monthRaw.slice(0, 7)}-01` : null
   const period: Period = p === 'week' || p === 'month' || p === 'time' ? p : month ? 'month' : 'week'
+  const video = one(sp.video)
   return {
     period,
     month,
     in: one(sp.in),
     all: one(sp.all) === '1',
+    // A video is named by its row id; anything else names nothing.
+    video: video && UUID_RE.test(video) ? video.toLowerCase() : null,
+    videos: one(sp.videos) === 'all',
   }
 }
+
+/**
+ * A conversation's page with one video's comments open (`?video=`) or every
+ * video listed (`?videos=all`), the period and month kept, the browser taken
+ * to the card (F3-Market-Conversation's "Show all {N} comments" and "Show more
+ * videos"). Pure.
+ */
+export function convPageHref(p: Pick<MarketParams, 'period' | 'month'>, id: string, open: { video?: string | null; videos?: boolean } = {}): string {
+  const q = new URLSearchParams(marketPeriodQuery(p).replace(/^\?/, ''))
+  if (open.videos) q.set('videos', 'all')
+  if (open.video) q.set('video', open.video)
+  const qs = q.toString()
+  const hash = open.video ? `#video-${open.video}` : open.videos ? `#${CONV_SAID_ANCHOR}` : ''
+  return `${marketConversationPath(id)}${qs ? `?${qs}` : ''}${hash}`
+}
+
+/** "What people said": where "Show more videos" lands. */
+export const CONV_SAID_ANCHOR = 'what-people-said'
 
 /**
  * The top page's address with these params. The period is left out on the
@@ -1782,28 +1921,56 @@ async function loadRefs(
 }
 
 /**
- * The citations behind these comments (a conversation's counted comments in
- * the period, its refs): each comment's citing insights, with the comment's
- * date and its video, as the group cross reads them (`GroupEvidence`). The
- * caller keeps its own member insights' (`convGroupsOf`). One read a 250
- * comments, paged past the 1,000-row cap on a unique order.
+ * EVERY CITATION OF A CONVERSATION'S COUNTED COMMENTS IN THE PERIOD (its
+ * refs' `comment_ids`), with the excerpt each quotes and the comment it is on
+ * (its date, platform, video and author): one read a 250 comments, each
+ * chunk's citations with their comment embedded (`comments!inner`, the
+ * session's client's alone), paged past the 1,000-row cap on a unique order.
+ * ONE READ, TWO USES on a conversation's page (F3, 17 Oct): who is saying it
+ * (`convGroupsOf`, its member insights' citations as the group cross reads
+ * them) and what people said under each video (`convEvidenceOf`). Never a
+ * comment's text: the excerpt is the citation's own, resolved at render.
  */
-async function loadCommentCitations(db: SupabaseClient, commentIds: readonly string[]): Promise<GroupEvidence[]> {
+async function loadConvCommentEvidence(db: SupabaseClient, clientId: string, commentIds: readonly string[]): Promise<ConvEvidenceRow[]> {
   const ids = [...new Set(commentIds)]
   if (ids.length === 0) return []
-  type Row = { id: string; audience_insight_id: string; comment_id: string | null; comments: { comment_date: string | null; platform: string; video_id: string } | { comment_date: string | null; platform: string; video_id: string }[] | null }
+  type Comment = { comment_date: string | null; platform: string; video_id: string; author: string | null }
+  type Row = { id: string; audience_insight_id: string; comment_id: string | null; quote: string | null; relevance_rank: number | null; redacted: boolean | null; comments: Comment | Comment[] | null }
   const pages = await mapWithLimit(chunk(ids, UUID_IN_CHUNK), READ_CONCURRENCY, (part) =>
     selectAll<Row>(() =>
       db.from('insight_evidence')
-        .select('id, audience_insight_id, comment_id, comments!inner(comment_date, platform, video_id)')
-        .in('comment_id', part).eq('source', 'comment')
+        .select('id, audience_insight_id, comment_id, quote, relevance_rank, redacted, comments!inner(client_id, comment_date, platform, video_id, author)')
+        .in('comment_id', part).eq('source', 'comment').eq('comments.client_id', clientId)
         .order('id'),
     ))
   return pages.flat().flatMap((r) => {
     const c = Array.isArray(r.comments) ? r.comments[0] : r.comments
     if (!c || !r.comment_id) return []
-    return [{ insightId: String(r.audience_insight_id), commentId: String(r.comment_id), platform: c.platform, platformVideoId: String(c.video_id), commentDate: c.comment_date }]
+    return [{
+      evidenceId: String(r.id), insightId: String(r.audience_insight_id), commentId: String(r.comment_id), quote: r.quote ?? null,
+      rank: r.relevance_rank ?? 99, redacted: r.redacted === true,
+      comment: { date: c.comment_date, platform: c.platform, videoId: String(c.video_id), author: c.author ?? null },
+    }]
   })
+}
+
+/** The rows as the group cross reads them (`GroupEvidence`). */
+const groupEvidenceOf = (rows: readonly ConvEvidenceRow[]): GroupEvidence[] =>
+  rows.map((r) => ({ insightId: r.insightId, commentId: r.commentId, platform: r.comment.platform, platformVideoId: r.comment.videoId, commentDate: r.comment.date }))
+
+/** A conversation's videos in the period, by their row ids (its refs), the
+ *  session's client's alone: one read a 250. */
+async function loadConvVideos(db: SupabaseClient, clientId: string, ids: readonly string[]): Promise<ConvVideoRow[]> {
+  const unique = [...new Set(ids)]
+  if (unique.length === 0) return []
+  const parts = await mapWithLimit(chunk(unique, UUID_IN_CHUNK), READ_CONCURRENCY, (part) =>
+    selectAll<ConvVideoRow>(() =>
+      db.from('videos')
+        .select('id, platform, video_id, video_url, account_name, caption, comments_count, upload_date, is_client, is_competitor, competitor_name, hashtags, topics, source')
+        .eq('client_id', clientId).in('id', part)
+        .order('id'),
+    ))
+  return parts.flat()
 }
 
 /**
@@ -1819,9 +1986,9 @@ async function loadWho(
   db: SupabaseClient,
   clientId: string,
   a: { refs: readonly { theme_id: string; video_ids: string[]; comment_ids: string[] }[]; company: string; rivals: readonly { id: string; name: string }[] },
-): Promise<{ who: Map<string, WhoPart[]>; brands: BrandsState }> {
+): Promise<{ who: Map<string, WhoPart[]>; brands: BrandsState; mentions: { comment_id: string; video_id: string; name: string }[] }> {
   const { mentions, brands } = await loadNamings(db, clientId, { commentIds: a.refs.flatMap((r) => r.comment_ids), company: a.company, rivals: a.rivals })
-  return { who: brands === 'counted' ? whoOf(a.refs, mentions, a.company) : new Map(), brands }
+  return { who: brands === 'counted' ? whoOf(a.refs, mentions, a.company) : new Map(), brands, mentions }
 }
 
 /** The tracked brands these comments name (`loadCommentNamings`, the hand
@@ -2102,6 +2269,218 @@ export function convPageOf(panel: ConvPanel, conv: MarketConv | null, week: Mark
     weeks: period === 'week' && conv ? conv.weeks.map((count, i) => ({ label: labels[i] ?? '', count })) : [],
     week: period === 'week' && conv?.week != null && week?.category != null ? { k: conv.week, n: week.category } : null,
     month: (conv?.month ?? null) != null && month.category != null ? { k: conv!.month!, n: month.category } : null,
+  }
+}
+
+/** One citation of a counted comment as a conversation's page reads it
+ *  (`loadConvCommentEvidence`): the citing insight, the excerpt it quotes, and
+ *  the comment it is on. */
+export interface ConvEvidenceRow {
+  evidenceId: string
+  insightId: string
+  commentId: string
+  /** The excerpt the citation quotes; empty on a demographic citation. */
+  quote: string | null
+  rank: number
+  /** A demographic citation: it counts and never quotes. */
+  redacted: boolean
+  comment: { date: string | null; platform: string; videoId: string; author: string | null }
+}
+
+/** A conversation's video as its card reads it (the `videos` row). */
+export interface ConvVideoRow {
+  id: string
+  platform: string
+  video_id: string
+  video_url: string | null
+  account_name: string | null
+  caption: string | null
+  comments_count: number | null
+  upload_date: string | null
+  is_client: boolean | null
+  is_competitor: boolean | null
+  competitor_name: string | null
+  hashtags: string[] | null
+  topics: string[] | null
+  source: string | null
+}
+
+const videoKey = (platform: string, videoId: string): string => `${platform}::${videoId}`
+
+/** A conversation's videos could not be read just now: "What people said"
+ *  keeps its frame and says so in one line. */
+export const CONV_EVIDENCE_UNREAD: ConvEvidence = { state: 'unread', total: 0, videos: [], all: false, more: null, capped: null }
+
+/**
+ * THE ORDER OF A CONVERSATION'S VIDEOS (F3-Market-Conversation: "most comments
+ * about it first"): every video of its refs in the period, by how many of its
+ * counted comments (the refs' `comment_ids`) are on it, ties by the video's
+ * own comment total, then its id. A video counted for what is said in it and
+ * with no comment about it (the reading's on-camera arm) stands last, at 0.
+ * A video or comment outside the refs is never counted. Pure.
+ */
+export function convVideoOrder(a: {
+  videoIds: readonly string[]
+  commentIds: ReadonlySet<string>
+  videos: readonly ConvVideoRow[]
+  evidence: readonly ConvEvidenceRow[]
+}): { video: ConvVideoRow; comments: Set<string> }[] {
+  const wanted = new Set(a.videoIds)
+  const byKey = new Map(a.videos.filter((v) => wanted.has(v.id)).map((v) => [videoKey(v.platform, v.video_id), v]))
+  const comments = new Map<string, Set<string>>()
+  for (const e of a.evidence) {
+    if (!a.commentIds.has(e.commentId)) continue
+    const v = byKey.get(videoKey(e.comment.platform, e.comment.videoId))
+    if (!v) continue
+    const held = comments.get(v.id) ?? new Set<string>()
+    held.add(e.commentId)
+    comments.set(v.id, held)
+  }
+  return [...byKey.values()]
+    .map((video) => ({ video, comments: comments.get(video.id) ?? new Set<string>() }))
+    .sort((x, y) => y.comments.size - x.comments.size || (y.video.comments_count ?? 0) - (x.video.comments_count ?? 0) || x.video.id.localeCompare(y.video.id))
+}
+
+/**
+ * Which videos a conversation's page shows: the first `MARKET_CONV_VIDEOS`,
+ * every one with `?videos=all` (at most `MARKET_CONV_VIDEOS_MAX`), and the
+ * one `?video=` opens wherever it falls, only where it is one of the
+ * conversation's own (a foreign or non-member id names nothing). Pure.
+ */
+export function shownConvVideos(order: readonly { video: { id: string } }[], p: Pick<MarketParams, 'video' | 'videos'>): { ids: string[]; open: string | null } {
+  const open = p.video && order.some((o) => o.video.id === p.video) ? p.video : null
+  const base = order.slice(0, p.videos ? MARKET_CONV_VIDEOS_MAX : MARKET_CONV_VIDEOS).map((o) => o.video.id)
+  const ids = open && !base.includes(open) ? order.map((o) => o.video.id).filter((id) => base.includes(id) || id === open) : base
+  return { ids, open }
+}
+
+/** The video a comment sits under, as the quote gate reads it. */
+const gateVideoOfRow = (v: ConvVideoRow): QuoteVideo => ({
+  platform: v.platform, videoId: v.video_id, caption: v.caption, hashtags: v.hashtags, topics: v.topics,
+  accountName: v.account_name, isClient: v.is_client, isCompetitor: v.is_competitor, competitorName: v.competitor_name,
+  source: v.source, segment: null,
+})
+
+/**
+ * A VIDEO'S COMMENTS ABOUT THE CONVERSATION THAT MAY PRINT, best first: its
+ * counted comments' citations by the conversation's member insights, one a
+ * comment (its best-ranked excerpt), never a demographic one; each through
+ * the rules Market's quotes pass (`pickQuotes`, lib/pages/overview-market/
+ * voices.ts): not the video's own account, readable as a voice, no sale offer,
+ * then the quote gate itself with the conversation's claim and its relevance
+ * required (`gateFor`, as its page's quotes asked), every passing one kept
+ * (a video is one thread, and here every comment is its own). The window has
+ * dated them already, so the month rule is the window's. Pure.
+ */
+export function videoQuotes(a: {
+  video: ConvVideoRow
+  evidence: readonly ConvEvidenceRow[]
+  commentIds: ReadonlySet<string>
+  members: ReadonlySet<string>
+  translations: Map<string, { lang: string; english: string | null }>
+  gate: GateOptions
+  kind: string | null
+}): ConvComment[] {
+  const best = new Map<string, ConvEvidenceRow>()
+  for (const e of a.evidence) {
+    if (e.redacted || !e.quote?.trim() || !a.commentIds.has(e.commentId) || !a.members.has(e.insightId)) continue
+    if (e.comment.platform !== a.video.platform || e.comment.videoId !== a.video.video_id) continue
+    const held = best.get(e.commentId)
+    if (!held || e.rank < held.rank || (e.rank === held.rank && e.evidenceId < held.evidenceId)) best.set(e.commentId, e)
+  }
+  const own = accountKey(a.video.account_name)
+  const candidates = [...best.values()]
+    .sort((x, y) => x.rank - y.rank || x.evidenceId.localeCompare(y.evidenceId))
+    .map((e) => ({ e, text: cleanQuote(e.quote ?? ''), reading: readingOf(a.translations, e.quote) }))
+    .filter((c) => {
+      const author = accountKey(c.e.comment.author)
+      if (author && author === own) return false
+      if (readsAsOffer(c.text) || readsAsOffer(c.reading.english)) return false
+      return readsAsHeroQuote(c.text, { lang: c.reading.lang ?? null, english: c.reading.english ?? null })
+    })
+  const video = gateVideoOfRow(a.video)
+  const picked = pickEligible(candidates, (c) => ({ text: c.text, lang: c.reading.lang ?? null, english: c.reading.english ?? null, video }), MARKET_VIDEO_COMMENTS_MAX, { ...a.gate, kind: a.gate.kind ?? a.kind, perThread: MARKET_VIDEO_COMMENTS_MAX })
+  return picked.map((c) => ({ text: c.text, lang: c.reading.lang ?? null, english: c.reading.english ?? null, date: c.e.comment.date ? shortDate(c.e.comment.date) : '' }))
+}
+
+/**
+ * "WHAT PEOPLE SAID" (F3-Market-Conversation), from what the page read: the
+ * conversation's videos in order (`convVideoOrder`), the shown ones
+ * (`shownConvVideos`), each with its counted comments about it, its own
+ * total, who it is about where brands are counted (`aboutNamed` over the
+ * tracked brands its counted comments name), and its printable comments
+ * (`videoQuotes`): three, or every one where it is open. Pure.
+ */
+export function convEvidenceOf(a: {
+  convId: string
+  kind: string | null
+  videoIds: readonly string[]
+  commentIds: ReadonlySet<string>
+  members: ReadonlySet<string>
+  videos: readonly ConvVideoRow[]
+  evidence: readonly ConvEvidenceRow[]
+  translations: Map<string, { lang: string; english: string | null }>
+  /** The tracked brands each video's counted comments name, by `videos.id`. */
+  named: ReadonlyMap<string, readonly string[]>
+  brand: string
+  brands: BrandsState
+  gate: GateOptions
+  p: MarketParams
+}): ConvEvidence {
+  const order = convVideoOrder(a)
+  const { ids, open } = shownConvVideos(order, a.p)
+  const all = Boolean(a.p.videos)
+  const shown = order.filter((o) => ids.includes(o.video.id))
+  const videos: ConvVideo[] = shown.map(({ video, comments }) => {
+    const quotes = videoQuotes({ video, evidence: a.evidence, commentIds: a.commentIds, members: a.members, translations: a.translations, gate: a.gate, kind: a.kind })
+    const isOpen = video.id === open
+    const about = a.brands === 'counted' ? aboutNamed({ audience: INDUSTRY_AUDIENCE, named: a.named.get(video.id) ?? [] }, a.brand) : 'market'
+    return {
+      id: video.id,
+      account: (video.account_name ?? '').trim(),
+      platform: platformLabel(video.platform),
+      posted: video.upload_date ? shortDate(`${video.upload_date.slice(0, 10)}T12:00:00.000Z`) : null,
+      about: about === 'market' ? null : about,
+      caption: video.caption?.replace(/\s+/g, ' ').trim() || null,
+      url: video.video_url?.trim() || null,
+      aboutCount: comments.size,
+      total: video.comments_count ?? null,
+      quotes: isOpen ? quotes : quotes.slice(0, MARKET_VIDEO_QUOTES),
+      quotable: quotes.length,
+      open: isOpen,
+      href: convPageHref(a.p, a.convId, isOpen ? { videos: all } : { video: video.id, videos: all }),
+    }
+  })
+  const total = order.length
+  const desktop = total - shown.length
+  const phoneShown = all ? shown.length : shown.filter((o, i) => i < MARKET_CONV_VIDEOS_PHONE || o.video.id === open).length
+  const phone = total - phoneShown
+  return {
+    state: 'ready',
+    total,
+    videos,
+    all,
+    more: !all && (desktop > 0 || phone > 0) ? { href: convPageHref(a.p, a.convId, { videos: true }), desktop, phone } : null,
+    capped: all && total > MARKET_CONV_VIDEOS_MAX ? MARKET_CONV_VIDEOS_MAX : null,
+  }
+}
+
+/** A conversation's siblings (F3-Market-Conversation): under its ready
+ *  subject, the subject's other conversations in the subject's order; under
+ *  none, the period's biggest others (`MARKET_SIBLINGS`). Each with the
+ *  period's count and the month it is stated against. Pure. */
+export function convSiblingsOf(a: {
+  convId: string
+  convs: readonly MarketConv[]
+  parent: { id: string; name: string } | null
+  period: Period
+  p: MarketParams
+}): ConvSiblings {
+  const others = a.convs.filter((c) => c.id !== a.convId && (a.parent ? c.subjectId === a.parent.id : true))
+  const listed = a.parent ? others : others.slice(0, MARKET_SIBLINGS)
+  return {
+    parent: a.parent ? { ...a.parent, href: subjectHref(a.p, a.parent.id) } : null,
+    items: listed.map((c) => ({ id: c.id, label: c.label, href: convHref(a.p, c.id), count: periodCount(c, a.period), month: a.period === 'week' ? c.month : null })),
   }
 }
 
@@ -2404,18 +2783,26 @@ export async function loadMarket(input: {
     ...insideIds,
     ...(convId ? [convId] : []),
   ])]
-  const refsAhead = soft('refs', loadRefs(db, clientId, { period, month, window: read?.window ?? null, runId: themedRunId, ids: whoIds }), [])
+  // A failed refs read is null, so a conversation's page can tell "its videos
+  // could not be read" from "it has none".
+  const refsRead = soft<Awaited<ReturnType<typeof loadRefs>> | null>('refs', loadRefs(db, clientId, { period, month, window: read?.window ?? null, runId: themedRunId, ids: whoIds }), null)
+  const refsAhead = refsRead.then((refs) => refs ?? [])
   const whoAhead = refsAhead
-    .then((refs) => soft('who', loadWho(db, clientId, { refs, company: brand, rivals: competitors.map((c) => ({ id: c.id, name: c.name })) }), { who: new Map<string, WhoPart[]>(), brands: 'not_counted' as BrandsState }))
-  // A CONVERSATION'S GROUPS, COUNTED (17 Oct): the member citations on its
-  // counted comments in the period (its refs), read on its page only and only
-  // where some group holds insights to count. Null (names only) where not.
+    .then((refs) => soft('who', loadWho(db, clientId, { refs, company: brand, rivals: competitors.map((c) => ({ id: c.id, name: c.name })) }), { who: new Map<string, WhoPart[]>(), brands: 'not_counted' as BrandsState, mentions: [] }))
+  // A CONVERSATION'S COUNTED COMMENTS, READ ONCE (17 Oct; F3): every citation
+  // of its counted comments in the period (its refs), with the excerpt each
+  // quotes and the comment's video, on its page only. Its groups are counted
+  // from them (where some group holds insights to count) and its videos'
+  // comments are drawn from them. Null where the read failed.
+  const convRefsAhead = convId ? refsRead.then((refs) => (refs ? refs.find((r) => r.theme_id === convId) ?? { theme_id: convId, video_ids: [], comment_ids: [] } : null)) : Promise.resolve(null)
+  const convEvidenceAhead: Promise<ConvEvidenceRow[] | null> = convId
+    ? convRefsAhead.then((refs) => (refs ? soft('convEvidence', loadConvCommentEvidence(db, clientId, refs.comment_ids), null) : null))
+    : Promise.resolve(null)
+  const convVideosAhead: Promise<ConvVideoRow[] | null> = convId
+    ? convRefsAhead.then((refs) => (refs ? soft('convVideos', loadConvVideos(db, clientId, refs.video_ids), null) : null))
+    : Promise.resolve(null)
   const citationsAhead: Promise<GroupEvidence[] | null> = convId
-    ? Promise.all([refsAhead, personasAhead]).then(([refs, personas]) => {
-        const comments = refs.find((r) => r.theme_id === convId)?.comment_ids ?? null
-        if (!comments || !personas.some((x) => (x.insightIds ?? []).length > 0)) return null
-        return soft('citations', loadCommentCitations(db, comments), null)
-      })
+    ? Promise.all([convEvidenceAhead, personasAhead]).then(([rows, personas]) => (rows && personas.some((x) => (x.insightIds ?? []).length > 0) ? groupEvidenceOf(rows) : null))
     : Promise.resolve(null)
   // What people did in a conversation: its month's videos (the stored refs).
   // Read once per conversation: the month's lead and a conversation's page.
@@ -2541,7 +2928,8 @@ export async function loadMarket(input: {
     const panel = convId
       ? await soft('panel', loadConvPanel({
           db, clientId, id: convId, period, month: monthBlock, week: weekBlock,
-          conv, read, flag, themedRunId, nowMonth, pair: pair as PairOn, personas, noun, kindsFor, runThemes,
+          conv, read, flag, themedRunId, personas, noun, kindsFor, runThemes,
+          weekVideos: period === 'week' ? convRefsAhead.then((r) => r?.video_ids ?? null) : undefined,
           citations: citationsAhead,
         }), null)
       : null
@@ -2552,12 +2940,36 @@ export async function loadMarket(input: {
     const siblings = parent
       ? insideOf(parent.id, convs, period, { limit: 50, href: (id) => convHref(p, id) })
       : convs.map((c) => ({ id: c.id, label: c.label, href: convHref(p, c.id) }))
+    // WHAT PEOPLE SAID (F3): its videos and the comments about it under each,
+    // the English read only for the comments of the videos shown.
+    const [refs, rows, videoRows] = await Promise.all([convRefsAhead, convEvidenceAhead, convVideosAhead])
+    const evidence = refs && rows && videoRows
+      ? await soft('evidence', (async (): Promise<ConvEvidence> => {
+          const members = new Set(runThemes.get(convId)?.memberIds ?? [])
+          const commentIds = new Set(refs.comment_ids)
+          const shown = new Set(shownConvVideos(convVideoOrder({ videoIds: refs.video_ids, commentIds, videos: videoRows, evidence: rows }), p).ids)
+          const keys = new Set(videoRows.filter((v) => shown.has(v.id)).map((v) => videoKey(v.platform, v.video_id)))
+          const texts = rows.filter((r) => !r.redacted && r.quote && members.has(r.insightId) && commentIds.has(r.commentId) && keys.has(videoKey(r.comment.platform, r.comment.videoId))).map((r) => r.quote as string)
+          const translations = await readTranslations(db, texts)
+          const named = new Map<string, string[]>()
+          for (const m of whoRead.mentions) if (commentIds.has(m.comment_id)) named.set(m.video_id, [...(named.get(m.video_id) ?? []), m.name])
+          return convEvidenceOf({
+            convId, kind: panel.kind, videoIds: refs.video_ids, commentIds, members, videos: videoRows, evidence: rows, translations, named,
+            brand, brands, gate: gateFor(clientId, { claim: panel.label, requireRelevance: true }), p,
+          })
+        })(), CONV_EVIDENCE_UNREAD)
+      : CONV_EVIDENCE_UNREAD
     return {
       ...common,
       view: 'conversation',
       subjectNav,
       crumbs: conversationCrumbs({ p, nav: subjectNav, conv: { id: convId, label: panel.label }, parent, siblings }),
-      convPage: convPageOf(panel, conv, weekBlock, monthBlock, period),
+      convPage: {
+        ...convPageOf(panel, conv, weekBlock, monthBlock, period),
+        lead: panel.description ? { body: panel.description, figures: {} } : null,
+        evidence,
+        siblings: convSiblingsOf({ convId, convs, parent, period, p }),
+      },
     }
   }
 
@@ -2760,8 +3172,14 @@ export function flagCardOf(a: {
   }
 }
 
-/** The open conversation in full: its month line, who and where, what people
- *  did, the groups it is in, three gated quotes and our read (level 2). */
+/**
+ * A conversation's page's facts (F3-Market-Conversation, 17 Oct): who it is
+ * about, what people did, who is saying it and where, each OF THE PERIOD'S
+ * VIDEOS (this week's "of 23", or the month's), its flag, its description
+ * (the page's lead) and our read. Its comments are its evidence's
+ * (`convEvidenceOf`), so it reads no quotes of its own here; and no month
+ * line, which the board draws no chart for.
+ */
 async function loadConvPanel(a: {
   db: SupabaseClient
   clientId: string
@@ -2773,14 +3191,15 @@ async function loadConvPanel(a: {
   read: WeekReadData | null
   flag: Omit<UnusualFlag, 'quotes'> | null
   themedRunId: string | null
-  nowMonth: string
-  pair: PairOn
   personas: readonly PersonaLink[]
   noun: string | null
   kindsFor: (id: string) => Promise<{ kind: string; label: string; videos: number }[] | null>
   runThemes: ReadonlyMap<string, RunTheme>
+  /** This week: its videos in the week's window (its refs), what people did
+   *  is read over (the month's are `kindsFor`'s). */
+  weekVideos?: Promise<readonly string[] | null>
   /** Its member citations on its counted comments in the period, where read
-   *  (`loadCommentCitations`), read beside the rest: its groups' counts. */
+   *  (`loadConvCommentEvidence`), read beside the rest: its groups' counts. */
   citations?: Promise<GroupEvidence[] | null>
 }): Promise<ConvPanel | null> {
   const { db, clientId, id } = a
@@ -2788,33 +3207,30 @@ async function loadConvPanel(a: {
   const label = a.conv?.label ?? registryLabels.get(id) ?? null
   if (!label) return null
   const kind = a.conv?.kind ?? a.runThemes.get(id)?.kind ?? null
-  const [line, monthRow, kinds, quotes, description, citations] = await Promise.all([
-    soft('line', loadThemeSeries(db, clientId, [id], a.month.month, 12).then((set) => {
-      const s = set.get(id)
-      return s ? themeMonthLine(s, a.month.month, a.pair) : null
-    }), null as ThemeMonthLine | null),
+  const week = a.period === 'week'
+  const kindsAhead = week && a.weekVideos
+    ? a.weekVideos.then((videos) => (videos && videos.length > 0 ? soft('themeKinds', loadThemeKinds(db, clientId, a.themedRunId, id, [...videos]), null) : null))
+    : a.kindsFor(id)
+  const [monthRow, kinds, description, citations] = await Promise.all([
     a.conv ? Promise.resolve(null) : soft('monthRow', loadMonthThemeRows(db, clientId, a.month.month).then((m) => m.get(id) ?? null), null),
-    a.kindsFor(id),
-    soft('quotes', loadThemeQuotes(db, clientId, a.themedRunId, new Map([[id, kind]]), a.month.month), new Map<string, { candidates: CiteCandidate[]; texts: string[] }>()),
+    kindsAhead,
     soft('description', loadDescription(db, clientId, a.themedRunId, id), null),
     a.citations ?? Promise.resolve(null),
   ])
-  const picked = pickQuotes(quotes.get(id)?.candidates ?? [], {
-    month: a.month.month, kind, count: MARKET_QUOTES, skipOffers: true,
-    gate: gateFor(clientId, { claim: label, requireRelevance: true }),
-  }) as CiteCandidate[]
   const flagHere = a.flag && a.flag.objectKind === 'theme' && a.flag.objectId === id ? a.flag : null
-  const prevPoint = line?.points.find((pt) => pt.month === prevMonth(a.month.month)) ?? null
   // A conversation the period does not list (an old link): its month only.
   const conv: MarketConv = a.conv ?? {
     id, label, kind, subjectId: null, subjectName: null, week: null, weeks: [],
-    month: monthRow?.videos ?? null, months: [], who: [], mix: monthRow?.mix ?? null, isNew: false, monthVerdict: line?.verdict ?? null, setApart: null,
+    month: monthRow?.videos ?? null, months: [], who: [], mix: monthRow?.mix ?? null, isNew: false, monthVerdict: null, setApart: null,
   }
-  const doing = doingOf(kinds, conv.month, a.noun)
-  const platforms = platformRows(conv.mix, a.period === 'week' ? 'week' : 'month')
+  // What people did, of the period's videos: this week's "of 23", or the
+  // month's (F3: every fact in the rail is of the period's videos).
+  const n = week ? conv.week : conv.month
+  const doing = doingOf(kinds, n, a.noun)
+  const platforms = platformRows(conv.mix, week ? 'week' : 'month')
   const counted = convGroupsOf({
     id, label, period: a.period, month: a.month, window: a.week?.window ?? null, personas: a.personas,
-    citations, members: a.runThemes.get(id)?.memberIds ?? [], n: a.period === 'week' ? conv.week : conv.month,
+    citations, members: a.runThemes.get(id)?.memberIds ?? [], n,
   })
   return {
     id,
@@ -2823,16 +3239,17 @@ async function loadConvPanel(a: {
     subjectName: conv.subjectName,
     flag: flagHere && a.week ? flagVerdict(flagHere, a.week.window) : null,
     isNew: conv.isNew,
-    stats: panelStats({ conv, period: a.period, week: a.week, month: a.month, prevK: prevPoint?.k ?? null, flag: flagHere, baselineText: flagHere ? monthsText(flagHere.baselineMonths) : null }),
+    stats: panelStats({ conv, period: a.period, week: a.week, month: a.month, prevK: null, flag: flagHere, baselineText: flagHere ? monthsText(flagHere.baselineMonths) : null }),
     ourRead: ourReadOf({ id, read: a.read, flag: flagHere, description }),
-    line: line ? { bars: lineBars(line, a.nowMonth), verdict: line.verdict, basis: 'the category’s videos' } : null,
-    who: conv.who.length > 0 ? { parts: conv.who, n: conv.who.reduce((s, x) => s + x.videos, 0) } : null,
-    doing: doing.length > 0 && conv.month ? { rows: doing, n: conv.month, text: a.month.soFar ? `in ${longMonth(a.month.month)} so far` : `in ${longMonth(a.month.month)}` } : null,
+    line: null,
+    who: conv.who.length > 0 ? { parts: conv.who, n: conv.who.reduce((sum, x) => sum + x.videos, 0) } : null,
+    doing: doing.length > 0 && n ? { rows: doing, n, text: week ? 'this week' : a.month.soFar ? `in ${longMonth(a.month.month)} so far` : `in ${longMonth(a.month.month)}` } : null,
     groups: counted ? counted.groups : groupsOf(id, a.personas),
     groupBase: counted?.base ?? null,
     platforms: platforms ? { rows: platforms.rows, n: platforms.n } : null,
-    quotes: picked.map(panelQuoteOf),
+    quotes: [],
     askHref: askAboutTheme({ label, kind }),
+    description: description?.trim() || null,
   }
 }
 

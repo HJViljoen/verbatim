@@ -17,6 +17,8 @@ import { loadMarket, marketParams, type MarketView } from './market'
 // same tables.
 
 const CLIENT = '00000000-0000-4000-8000-0000000000aa'
+const FOREIGN_VIDEO = '00000000-0000-4000-8000-0000000000f9'
+const V1 = '00000000-0000-4000-8000-0000000000d1'
 const RUN = '00000000-0000-4000-8000-0000000000bb'
 
 function tables() {
@@ -46,15 +48,22 @@ function tables() {
     // The category's, and the client's own posts, which the market leaves out.
     month_subject_readings: ['2026-09-01', '2026-10-01'].flatMap((month) => ['industry-other', 'client'].map((audience) => ({ client_id: CLIENT, month, audience, subject_id: subject, videos: audience === 'client' ? 9 : 70, comments: 400, status: 'filling', run_id: RUN, judge_version: judgeVersionFor(CLIENT) }))),
     month_kind_readings: ['2026-09-01', '2026-10-01'].flatMap((month) => ['question', 'praise'].map((kind) => ({ client_id: CLIENT, month, audience: 'industry-other', kind, videos: 120, comments: 400, status: 'filling', run_id: RUN }))),
-    month_evidence_refs: themes.map((n) => ({ client_id: CLIENT, month: '2026-10-01', object_kind: 'theme', audience: 'industry-other', object_id: fixtureId(n), video_ids: ['v1'], comment_ids: ['c1'] })),
+    month_evidence_refs: themes.map((n) => ({ client_id: CLIENT, month: '2026-10-01', object_kind: 'theme', audience: 'industry-other', object_id: fixtureId(n), video_ids: [V1], comment_ids: ['c1'] })),
     audience_insights: [],
     // Conversation 3's counted comment this week, cited by its member insight
     // (one of the carers' own) and by another conversation's.
     insight_evidence: [
-      { id: 'e1', audience_insight_id: 'ins-3', comment_id: 'c1', source: 'comment' },
-      { id: 'e2', audience_insight_id: 'ins-1', comment_id: 'c1', source: 'comment' },
+      { id: 'e1', audience_insight_id: 'ins-3', comment_id: 'c1', source: 'comment', quote: 'Third appeal for my powered knee was refused, the insurance says a mechanical knee is enough.', relevance_rank: 1, redacted: false },
+      { id: 'e2', audience_insight_id: 'ins-1', comment_id: 'c1', source: 'comment', quote: 'Same here.', relevance_rank: 2, redacted: false },
     ],
-    comments: [{ id: 'c1', client_id: CLIENT, comment_date: '2026-10-07T10:00:00.000Z', platform: 'tiktok', video_id: 'n1' }],
+    comments: [{ id: 'c1', client_id: CLIENT, comment_date: '2026-10-07T10:00:00.000Z', platform: 'tiktok', video_id: 'n1', author: 'viewer1' }],
+    // The conversation's video, and another workspace's, which no page of
+    // this tenant's may name.
+    videos: [
+      { id: V1, client_id: CLIENT, platform: 'tiktok', video_id: 'n1', video_url: 'https://www.tiktok.com/@a/video/n1', account_name: '@stepbystep.amp', caption: 'Insurance said no to my knee', comments_count: 212, upload_date: '2026-10-03', is_client: false, is_competitor: false, competitor_name: null, hashtags: [], topics: [], source: 'discovered' },
+      { id: FOREIGN_VIDEO, client_id: '00000000-0000-4000-8000-0000000000cc', platform: 'tiktok', video_id: 'n9', video_url: 'https://x', account_name: 'Other workspace creator', caption: 'Other workspace video', comments_count: 5, upload_date: '2026-10-03', is_client: false, is_competitor: false, competitor_name: null, hashtags: [], topics: [], source: 'discovered' },
+    ],
+    comment_translations: [],
     consumer_profiles: [{ client_id: CLIENT, run_date: '2026-10-12', personas: [{ key: 'carers', name: 'Caregivers and family', registryIds: [fixtureId(3)], insightIds: ['ins-3'] }] }],
     competitors: [],
     tracking_configs: [{ client_id: CLIENT, competitor_names: [], own_handles: {} }],
@@ -66,7 +75,7 @@ function rpcs() {
   return {
     window_denominators: () => [{ audience: 'industry-other', videos: 226, comments: 3000, platform_mix: { tiktok: 150, instagram: 76 } }],
     window_theme_readings: () => themes.map((n) => ({ audience: 'industry-other', theme_id: fixtureId(n), videos: 4 + n, comments: 20, platform_mix: { tiktok: 3, instagram: 1 + n } })),
-    monthly_evidence_refs: () => themes.map((n) => ({ audience: 'industry-other', theme_id: fixtureId(n), video_ids: ['v1'], comment_ids: ['c1'] })),
+    monthly_evidence_refs: () => themes.map((n) => ({ audience: 'industry-other', theme_id: fixtureId(n), video_ids: [V1], comment_ids: ['c1'] })),
     market_week_volumes: () => [],
     // The subject over the week's window, as the month's rows read it: the
     // category's 60 and the client's own 9, which the market leaves out.
@@ -100,6 +109,16 @@ async function statements(raw: Record<string, string>, view?: MarketView): Promi
 // three: its two earlier weeks on the level's base (`window_subject_readings`
 // for each; their markets are the window reads', memoised) and every
 // conversation's own description (`themes`, one read a 250). 39.
+//
+// THE CONVERSATION AS THE EVIDENCE (F3-Market-Conversation, 17 Oct). Its page
+// no longer reads quotes of its own (the gate's five reads), its month line
+// (no chart) or its month's refs for what people did (this week's videos are
+// its week refs, read already): 41 less those. It reads its counted comments'
+// citations once (`insight_evidence` with each comment embedded, one read a
+// 250 comments, which its groups shared already), its videos (`videos`, one
+// read a 250) and the English of the comments the shown videos print
+// (`comment_translations`, its probe and one read a chunk). 40, and the same
+// 40 with a video opened or every video listed.
 describe('Market\'s statements, page by page', () => {
   it('counts each load', async () => {
     const week = await statements({})
@@ -108,10 +127,17 @@ describe('Market\'s statements, page by page', () => {
     const subject = await statements({}, { kind: 'subject', id: fixtureSubjectId('cost') })
     const subjectMonth = await statements({ period: 'month' }, { kind: 'subject', id: fixtureSubjectId('cost') })
     const read = await statements({}, { kind: 'week' })
-    expect({ week: week.total, month: month.total, conv: conv.total, subject: subject.total, read: read.total }).toEqual({ week: 36, month: 28, conv: 41, subject: 39, read: 15 })
-    // A conversation's groups are counted on its page alone (the week's
-    // read resolves its quotes' evidence refs there, as it always has).
+    expect({ week: week.total, month: month.total, conv: conv.total, subject: subject.total, read: read.total }).toEqual({ week: 36, month: 28, conv: 40, subject: 39, read: 15 })
+    // A conversation's counted comments are read once, on its page alone,
+    // for its groups and its videos' comments together; its videos once.
     expect(conv.by['from:insight_evidence']).toBe(1)
+    expect(conv.by['from:videos']).toBe(1)
+    expect(conv.by['from:comment_translations']).toBe(2)
+    for (const page of [week, month, subject]) expect(page.by['from:videos']).toBeUndefined()
+    // Opening a video, or listing every one, reads nothing more.
+    const opened = await statements({ video: V1 }, { kind: 'conversation', id: fixtureId(3) })
+    const every = await statements({ videos: 'all' }, { kind: 'conversation', id: fixtureId(3) })
+    expect([opened.total, every.total]).toEqual([40, 40])
     for (const page of [week, month, subject]) expect(page.by['from:insight_evidence']).toBeUndefined()
     // The subject's three weeks on the level's base are read once each, on a
     // subject's page this week alone.
@@ -270,5 +296,68 @@ describe('a foreign id names nothing', () => {
     expect(subject?.subjectPage?.panel.name).toBe('Cost & access')
     // The switcher lists the session's subjects alone.
     expect(JSON.stringify(subject?.crumbs ?? [])).not.toMatch(SECRET)
+  })
+})
+
+// WHAT PEOPLE SAID, READ (F3-Market-Conversation, 17 Oct): the conversation's
+// videos in the period (its refs), each with its counted comments about it,
+// its own total and the comments the quote gate lets print, words resolved
+// from the citation's own excerpt; and the params that open a video's list
+// or every video, which name only the conversation's own videos.
+describe('a conversation\'s videos and what people said under them', () => {
+  async function load(raw: Record<string, string> = {}, over: Record<string, unknown> = {}) {
+    const db = fakeDb({ ...tables(), ...over } as never, rpcs() as never)
+    return loadMarket({ supabase: db.client as never, clientId: CLIENT, reading: readingHandle(CLIENT, db.client as never), params: marketParams(raw), view: { kind: 'conversation', id: fixtureId(3) }, now: new Date('2026-10-14T09:00:00.000Z') })
+  }
+
+  it('one card a video: its creator, platform and day, caption, link, its comments about it of its total, and the comment that may print', async () => {
+    const ev = (await load())!.convPage!.evidence!
+    expect(ev.state).toBe('ready')
+    expect(ev.total).toBe(1)
+    expect(ev.videos).toHaveLength(1)
+    expect(ev.videos[0]).toMatchObject({
+      id: V1, account: '@stepbystep.amp', platform: 'TikTok', posted: '3 Oct', caption: 'Insurance said no to my knee', url: 'https://www.tiktok.com/@a/video/n1',
+      aboutCount: 1, total: 212, quotable: 1, open: false, about: null,
+    })
+    // The member's excerpt prints; another conversation's citation of the
+    // same comment ("Same here.", conversation 1's) never does.
+    expect(ev.videos[0].quotes).toEqual([{ text: 'Third appeal for my powered knee was refused, the insurance says a mechanical knee is enough.', lang: null, english: null, date: '7 Oct' }])
+    expect(ev.videos[0].href).toBe(`/dashboard/market/conversations/${fixtureId(3)}?video=${V1}#video-${V1}`)
+    expect(ev.more).toBeNull()
+  })
+
+  it('its lead is its own description; its siblings are its subject\'s other conversations with their counts', async () => {
+    const page = (await load())!.convPage!
+    expect(page.lead).toEqual({ body: 'People describe insurance refusals.', figures: {} })
+    expect(page.siblings).toMatchObject({ parent: { name: 'Cost & access' }, items: [{ label: 'Conversation 5', count: 9 }, { label: 'Conversation 1', count: 5 }] })
+  })
+
+  it('?video= opens that video\'s list, the period kept; its own link closes it', async () => {
+    const ev = (await load({ video: V1, period: 'week' }))!.convPage!.evidence!
+    expect(ev.videos[0].open).toBe(true)
+    expect(ev.videos[0].href).toBe(`/dashboard/market/conversations/${fixtureId(3)}`)
+  })
+
+  it('a foreign or non-member video id names nothing: no card opens and no other workspace\'s words reach the page', async () => {
+    for (const id of [FOREIGN_VIDEO, '00000000-0000-4000-8000-0000000000e1', 'not-an-id']) {
+      const data = await load({ video: id })
+      expect(data!.convPage!.evidence!.videos.map((v) => [v.id, v.open])).toEqual([[V1, false]])
+      expect(JSON.stringify(data)).not.toMatch(/Other workspace/)
+    }
+  })
+
+  it('a video the refs do not name is never read into the list, even the tenant\'s own', async () => {
+    const t = tables()
+    const extra = { ...t.videos[0], id: '00000000-0000-4000-8000-0000000000d2', video_id: 'n2', account_name: 'Not in this conversation' }
+    const data = await load({}, { videos: [...t.videos, extra] })
+    expect(data!.convPage!.evidence!.videos.map((v) => v.id)).toEqual([V1])
+    expect(JSON.stringify(data)).not.toMatch(/Not in this conversation/)
+  })
+
+  it('its videos\' read failing: the evidence is unread, never an empty list', async () => {
+    const { videos: _gone, ...rest } = tables()
+    const db = fakeDb(rest as never, rpcs() as never)
+    const data = await loadMarket({ supabase: db.client as never, clientId: CLIENT, reading: readingHandle(CLIENT, db.client as never), params: marketParams({}), view: { kind: 'conversation', id: fixtureId(3) }, now: new Date('2026-10-14T09:00:00.000Z') })
+    expect(data!.convPage!.evidence).toMatchObject({ state: 'unread', videos: [] })
   })
 })

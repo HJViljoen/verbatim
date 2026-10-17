@@ -32,7 +32,7 @@ describe('marketParams and the addresses', () => {
     expect(marketParams({ month: 'soon' }).month).toBeNull()
     // `?at=` (where a panel opened in place) and `?conv=` / `?subject=` are
     // read no more: the panels are pages, and the route redirects them.
-    expect(marketParams({ at: 'side', conv: 'abc', subject: 'x' })).toEqual({ period: 'week', month: null, in: null, all: false })
+    expect(marketParams({ at: 'side', conv: 'abc', subject: 'x' })).toEqual({ period: 'week', month: null, in: null, all: false, video: null, videos: false })
     expect(marketParams({ all: '1', in: 's1' })).toMatchObject({ all: true, in: 's1' })
   })
 

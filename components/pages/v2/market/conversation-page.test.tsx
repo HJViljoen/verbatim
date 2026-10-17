@@ -43,7 +43,7 @@ describe('a conversation under its ready subject, this week', () => {
   it('who it is about, what people did, who is saying it, where, each "of N"', () => {
     // Who's saying it counts each group's videos of the conversation's 23 this
     // week, the base in its label (F2-Market-Conversation, 17 Oct), the most first.
-    expect(text).toContain('Who it’s about Össur 4 · others 19 What people did · of 35 in October so far Complained about something 14 Asked a question 9 Pushed back 4 Who’s saying it · of 23 this week New amputees in their first year 15 of 23 Long-time users upgrading 5 of 23 Each opens in Voices Where · of 23 this week TikTok 14 Instagram 5 YouTube 4')
+    expect(text).toContain('Who it’s about Össur 4 · others 19 What people did · of 23 this week Complained about something 14 Asked a question 9 Pushed back 4 Who’s saying it · of 23 this week New amputees in their first year 15 of 23 Long-time users upgrading 5 of 23 Each opens in Voices Where · of 23 this week TikTok 14 Instagram 5 YouTube 4')
     expect(html).toContain('href="/dashboard/voices?group=new-amputees#group-panel"')
   })
 
