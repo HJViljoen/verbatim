@@ -94,14 +94,24 @@ export function productsTables() {
     month_denominators: ['2026-08-01', '2026-09-01', '2026-10-01'].map((month) => ({ client_id: PRODUCTS_DB_CLIENT, month, audience: 'industry-other', videos: 300, comments: 4000, platform_mix: { tiktok: 200, instagram: 100 }, status: 'filling', run_id: RUN, read_at: `${month.slice(0, 7)}-28T00:00:00.000Z` })),
     month_product_readings: [
       ...ossurProductRows().map((r) => ({ ...r, client_id: PRODUCTS_DB_CLIENT })),
-      // Another workspace's month row, under one of Össur's own category ids.
-      { client_id: FOREIGN_CLIENT, month: '2026-09-01', audience: 'industry-other', object_kind: 'group', object_id: PRODUCT_IDS.liners(), group_id: PRODUCT_IDS.liners(), product_id: null, k_named: 99, k_unclear: 99, k_unbranded: 99, k_any: 297, comments: 999, n: 999, catalogue_version: OSSUR_CATALOGUE.version, status: 'filling' },
+      // Another workspace's month row, under one of Össur's own category ids,
+      // in an audience Össur's rows do not hold: read without the client
+      // filter, it would pool into the split (`marketProductMonth` keeps one
+      // row an audience, so a shared audience would hide it).
+      { client_id: FOREIGN_CLIENT, month: '2026-09-01', audience: 'competitor:Other workspace', object_kind: 'group', object_id: PRODUCT_IDS.liners(), group_id: PRODUCT_IDS.liners(), product_id: null, k_named: 99, k_unclear: 99, k_unbranded: 99, k_any: 297, comments: 999, n: 999, catalogue_version: OSSUR_CATALOGUE.version, status: 'filling' },
     ],
     product_mentions: [
       ...mentionRows(),
       { id: 'm-foreign-1', client_id: FOREIGN_CLIENT, video_id: 'v-foreign-1', source: 'comment', comment_id: 'c-foreign-1', comment_month: '2026-09-01', placement: 'named', product_id: PRODUCT_IDS.sealInX(), group_id: PRODUCT_IDS.liners(), method: 'rule', rule_version: PRODUCT_RULE_VERSION, catalogue_version: OSSUR_CATALOGUE.version, tag_id: null },
+      // Another workspace's mention naming the Seal-In X on one of Össur's
+      // own September videos, by its own comment: read without the client
+      // filter, it would add a comment naming it to that video's count.
+      { id: 'm-foreign-2', client_id: FOREIGN_CLIENT, video_id: 'v-2026-09-0', source: 'comment', comment_id: 'c-foreign-2', comment_month: '2026-09-01', placement: 'named', product_id: PRODUCT_IDS.sealInX(), group_id: PRODUCT_IDS.liners(), method: 'rule', rule_version: PRODUCT_RULE_VERSION, catalogue_version: OSSUR_CATALOGUE.version, tag_id: null },
     ],
-    product_tags: [],
+    // Another workspace's tag, moving one of Össur's own comments naming the
+    // Seal-In X to the category in general: read without the client filter,
+    // it would take that comment off the video's count.
+    product_tags: [{ id: 't-foreign-1', client_id: FOREIGN_CLIENT, video_id: 'v-2026-09-0', comment_id: 'c-sealinx-0', placement: 'unbranded', product_id: null, group_id: PRODUCT_IDS.liners(), supersedes: null, actor_kind: 'user', actor_user_id: null, actor_label: 'other workspace', created_at: '2026-10-01T00:00:00.000Z' }],
     subjects: [{
       id: 's-fit-comfort', client_id: PRODUCTS_DB_CLIENT, name: 'Fit & comfort', description: 'Fit.', origin: 'named', source_ref: null, named_at: '2026-09-01T00:00:00.000Z', status: 'active',
       superseded_by: null, embedded_at: null, embed_input_version: null, calibrated_at: '2026-10-01T00:00:00.000Z', calibration_precision: 0.9, calibration_n: 40, calibration_judge_version: judgeVersionFor(PRODUCTS_DB_CLIENT),

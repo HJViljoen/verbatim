@@ -92,9 +92,13 @@ describe('Your products\' pages read the tenant\'s own rows only', () => {
     const page = await run({ month: '2026-09' }, SEAL)
     const h = hub.data as ProductsLevelData
     const p = page.data as ProductsLevelData
-    // The foreign month row's 297 videos never reach the split.
-    expect(h.category?.detail.split?.any).not.toBe(297)
-    expect(h.category?.detail.split?.any).toBeLessThan(200)
+    // The foreign month row's 297 videos never reach the split (it sits in
+    // an audience of its own, so an unfiltered read would pool it).
+    expect(h.category?.detail.split?.any).toBe(117)
+    expect(h.base.market).toBe(839)
+    // Its mention and its tag never move a count: the Seal-In X's busiest
+    // video keeps exactly Össur's two comments naming it.
+    expect(p.product?.evidence.videos.find((v) => v.id === 'v-2026-09-0')?.named).toBe(2)
     // Its video and comment never reach the evidence or the list.
     expect(p.product?.evidence.videos.map((v) => v.id)).not.toContain('v-foreign-1')
     expect(JSON.stringify(h)).not.toContain('Other workspace')
