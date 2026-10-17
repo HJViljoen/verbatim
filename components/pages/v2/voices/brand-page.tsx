@@ -176,7 +176,7 @@ function WhoTalks({ page }: { page: BrandPage }) {
                 <MiniTile kind="group" size="sm" />
                 <div className="min-w-0">
                   <Link href={g.href} className="block text-[14.5px] leading-[1.3] font-semibold text-foreground no-underline hover:underline hover:underline-offset-[3px]"><span data-copy="subject" data-slot="pass_e_persona">{g.name}</span></Link>
-                  {g.oneLiner ? <span className="mt-0.5 block text-[12.5px] leading-[1.4] text-muted-foreground"><span data-copy="subject" data-slot="pass_e_persona">{g.oneLiner}</span></span> : null}
+                  {g.oneLiner ? <span className="mt-0.5 block text-[12.5px] leading-[1.4] text-muted-foreground max-sm:hidden"><span data-copy="subject" data-slot="pass_e_persona">{g.oneLiner}</span></span> : null}
                 </div>
                 <TickBar pct={n > 0 ? (100 * g.k) / n : 0} size="md" tone="market" label={`${g.name}: ${fmtInt(g.k)} of ${fmtInt(n)}`} className="max-lg:order-last max-lg:col-span-2 max-lg:col-start-2" />
                 <LevelText k={g.k} n={n} className="text-right text-[12.5px] whitespace-nowrap" />
@@ -304,7 +304,7 @@ function OwnContent({ page }: { page: BrandPage }) {
     <>
       <LevelSection
         title="Under its own content"
-        note={<span data-window-chip="" className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-track px-[9px] py-[5px] text-[12px] leading-none font-semibold text-foreground">{w.words} · the ninety days to the month’s last update</span>}
+        note={<span data-window-chip="" className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-track px-[9px] py-[5px] text-[12px] leading-none font-semibold text-foreground">{w.words} · <span className="max-sm:hidden">the ninety days to the month’s last update</span><span className="sm:hidden">ninety days</span></span>}
       />
       <section aria-label={`Under ${page.label}'s own content`} className={PAGE_CARD}>
         <div className="grid grid-cols-1 gap-11 max-sm:gap-0 min-[1180px]:grid-cols-2">

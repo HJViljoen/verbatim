@@ -54,7 +54,7 @@ function Header({ page }: { page: GroupPage }) {
     <HubCard
       id="group-hub"
       label={page.name}
-      eyebrow={<>Who they are{described ? <> · {described}</> : null}</>}
+      eyebrow={<>Who they are{described ? <> · <span className="max-sm:hidden">{described}</span><span className="sm:hidden">{described.replace('described at ', '')}</span></> : null}</>}
       lead={page.oneLiner ? <h2 className={HUB_LEAD}><span data-copy="subject" data-slot="pass_e_persona">{page.oneLiner}</span></h2> : null}
     >
       <HubFig>
@@ -305,7 +305,7 @@ function Conversations({ page }: { page: GroupPage }) {
                 <LevelText k={c.k} n={page.videos} className="text-right text-[13px]" />
                 <span className="col-span-2 text-[12.5px] text-muted-foreground">
                   {c.subject ? <>{c.subject.name}{c.all != null ? ' · ' : null}</> : null}
-                  {c.all != null ? <><Fig>{fmtInt(c.all)}</Fig> {when}</> : null}
+                  {c.all != null ? <><Fig>{fmtInt(c.all)}</Fig> in {when}</> : null}
                 </span>
               </div>
             ))}
@@ -409,7 +409,7 @@ export function GroupPageBody({ page }: { page: GroupPage }) {
         title="What they talk about"
         note={thin
           ? <>No subject has passed its check yet, so none is counted for them · each opens in Market</>
-          : <>Their <Fig>{fmtInt(page.videos)}</Fig> videos in your subjects, then every conversation they’re in · each opens in Market</>}
+          : <>Their <Fig>{fmtInt(page.videos)}</Fig> videos in your subjects<span className="max-sm:hidden">, then every conversation they’re in</span> · each opens in Market</>}
       />
       {page.cards.length > 0 ? (
         <section aria-label="The subjects their videos sit in" className="grid grid-cols-1 gap-5 max-sm:gap-3 min-[1180px]:grid-cols-3">

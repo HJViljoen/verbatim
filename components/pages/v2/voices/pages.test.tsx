@@ -160,7 +160,7 @@ describe('a brand\'s page (G3-Voices-Brand)', () => {
   })
 
   it('under its own content (D4): its own heading and window chip, what is asked, what it says (stored, never a quote), three comments each from its conversation', () => {
-    expect(html).toMatch(/data-window-chip=""[^>]*>14 Jul to 11 Oct · the ninety days to the month’s last update</)
+    expect(html).toMatch(/data-window-chip=""[^>]*>14 Jul to 11 Oct · <span class="max-sm:hidden">the ninety days to the month’s last update<\/span><span class="sm:hidden">ninety days<\/span>/)
     expect(text).toContain('Asked under its content Insurance refusals for powered knees 14 videos')
     expect(html).toContain('data-copy="stored" data-slot="pass_a_brand_claim"')
     expect(text).toContain('Said about Ottobock · 3 comments, each from its conversation Insurance refusals for powered knees “Got the C-Leg approved after a year of fighting. Worth it, but the fight nearly broke me.” YouTube · 3 Oct')
@@ -201,7 +201,9 @@ describe('a creator\'s page (G3-Voices-Creator)', () => {
   })
 
   it('their videos, caption first: the day and the conversation, the brand, comments counted of all on it, each comment naming its conversation', () => {
-    expect(text).toContain('Their videos 14 videos in October so far, the most comments counted first First 5k on the Cheetah, and what nobody tells you about the socket Posted 8 Oct · in Running on a blade Össur 22 comments counted, of 340 on the video Watch the video ↗ “Mile 3 on the new foot and I forgot I was wearing it.”')
+    // From 640 the brand's chip sits at the card's right; on a phone it rides
+    // after the day and the conversation takes its own line.
+    expect(text).toContain('Their videos 14 videos in October so far, the most comments counted first First 5k on the Cheetah, and what nobody tells you about the socket Posted 8 Oct · Össur · in Running on a blade Össur 22 comments counted, of 340 on the video Watch the video ↗ “Mile 3 on the new foot and I forgot I was wearing it.”')
     expect(text).toContain('“How long before you could run without the socket rubbing?” 2 Oct · in Socket fit causes pain')
     expect(text).toContain('Spanish · machine translation Which foot do you run with in the mountains? I can’t find one that holds up.')
     expect(html.match(/data-video-card=""/g)).toHaveLength(5)

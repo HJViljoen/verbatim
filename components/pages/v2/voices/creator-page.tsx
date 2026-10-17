@@ -100,10 +100,13 @@ function VideoCard({ v, index, all }: { v: CreatorVideoCard; index: number; all:
           <p className="m-0 line-clamp-2 text-[15.5px] leading-[1.4] font-semibold text-foreground max-sm:text-[15px]">{v.caption ?? 'A video with no caption'}</p>
           <span className="mt-0.5 block text-[12.5px] leading-[1.45] text-muted-foreground">
             {v.posted ? <>Posted {v.posted}</> : null}
-            {v.conv ? <>{v.posted ? ' · ' : null}in <Link href={v.conv.href} className="inline-flex items-center gap-[5px] font-medium text-secondary-foreground no-underline hover:text-foreground hover:underline hover:underline-offset-[3px]"><BubbleGlyph className="size-3 text-muted-foreground" /><span data-copy="subject" data-slot="pass_b_theme">{v.conv.label}</span></Link></> : null}
+            {/* On a phone the brand rides after the day, and the conversation
+                takes its own line (G3-Voices-Creator-Phone). */}
+            {v.brand ? <span className="sm:hidden"> · <BrandChip who={v.brand.you ? 'you' : 'rival'} className="text-[12px]">{v.brand.label}</BrandChip></span> : null}
+            {v.conv ? <><span className="max-sm:hidden">{v.posted ? ' · ' : null}</span><span className="max-sm:mt-1 max-sm:block">in <Link href={v.conv.href} className="inline-flex items-center gap-[5px] font-medium text-secondary-foreground no-underline hover:text-foreground hover:underline hover:underline-offset-[3px]"><BubbleGlyph className="size-3 text-muted-foreground" /><span data-copy="subject" data-slot="pass_b_theme">{v.conv.label}</span></Link></span></> : null}
           </span>
         </div>
-        {v.brand ? <BrandChip who={v.brand.you ? 'you' : 'rival'} className="shrink-0 self-start text-[12px]">{v.brand.label}</BrandChip> : null}
+        {v.brand ? <BrandChip who={v.brand.you ? 'you' : 'rival'} className="shrink-0 self-start text-[12px] max-sm:hidden">{v.brand.label}</BrandChip> : null}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[13px] text-muted-foreground">
         {v.total != null && v.total >= v.counted
