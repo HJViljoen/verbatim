@@ -296,7 +296,10 @@ describe('a creator\'s page (G3-Voices-Creator)', () => {
 
   it('a video opened says what it does not print and closes; every video listed has no "Show more"', () => {
     const t = renderText(creator(creatorFixture({ video: 2 })))
-    expect(t).toContain('The other 9 are counted, not quoted: a comment prints only where it reads clearly and speaks to this. Show fewer comments')
+    // The gate here asks no relevance to a claim, so the reason claims none
+    // (Market's "and speaks to this" is its conversation page's own rule).
+    expect(t).toContain('The other 9 are counted, not quoted: a comment prints only where it reads clearly in the commenter’s own words. Show fewer comments')
+    expect(t).not.toContain('speaks to this')
     const all = renderText(creator(creatorFixture({ all: true })))
     expect(all).not.toContain('Show more videos')
     expect(render(creator(creatorFixture({ all: true }))).match(/data-video-card=""/g)).toHaveLength(14)

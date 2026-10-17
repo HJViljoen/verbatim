@@ -5,7 +5,7 @@ import { BubbleGlyph, PlayGlyph } from '@/components/shell/level-glyphs'
 import { CARD, TickBarRow } from '@/components/v2'
 import { fmtCompact, fmtInt, longMonth } from '@/lib/format'
 import { MARKET_VIDEO_COMMENTS_MAX, MARKET_VIDEO_QUOTES, MARKET_VIDEO_QUOTES_PHONE } from '@/lib/pages/v2/market'
-import { inMonthWords, type CreatorComment, type CreatorPage, type CreatorVideoCard } from '@/lib/pages/v2/voices-levels'
+import { inMonthWords, LEVEL_QUOTE_RULE, type CreatorComment, type CreatorPage, type CreatorVideoCard } from '@/lib/pages/v2/voices-levels'
 import { cn } from '@/lib/utils'
 import { Fig, OLINK } from './parts'
 import { AskBox, Caps, GAPLINE, LevelSection } from './levels'
@@ -22,8 +22,13 @@ import { AskBox, Caps, GAPLINE, LevelSection } from './levels'
 // "Show all" and "Show more" are addresses (`?video=`, `?videos=all`, the
 // creator's own videos alone), so they work without client code. Never Reddit.
 
-/** Why a counted comment may not print: the gate's two tests, in words. */
-const QUOTE_RULE = 'a comment prints only where it reads clearly and speaks to this'
+/** Why a counted comment may not print, in the words of what this page's
+ *  gate tests (`LEVEL_QUOTE_RULE`). Market's conversation page says "and
+ *  speaks to this" because it requires each comment to speak to the
+ *  conversation (`requireRelevance` on its label); a creator's comments sit
+ *  in many conversations and are gated with no claim, so this page claims no
+ *  relevance test it does not run. */
+const QUOTE_RULE = LEVEL_QUOTE_RULE
 export const CREATOR_NONE_QUOTABLE = `None of its counted comments can be quoted: ${QUOTE_RULE}.`
 export const CREATOR_VIDEOS_UNREAD = 'Their videos could not be read just now.'
 
