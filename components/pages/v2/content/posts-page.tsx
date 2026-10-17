@@ -10,7 +10,7 @@ import { postAnchor, WORKS_ANCHOR } from '@/lib/pages/v2/content-address'
 import { monthText, POST_COMMENTS_MAX, POSTS_SHOWN_PHONE, type KindCount, type PostCard, type PostComment, type PostsPageData } from '@/lib/pages/v2/content-posts'
 import { cn } from '@/lib/utils'
 import { AskCard, ContentLevelTile, ElsewhereSection, FACT, FactLabel, MORE, RAIL, RAIL_ROW, VideoTile } from './level'
-import { OLINK, Sentence } from './parts'
+import { OLINK } from './parts'
 
 // YOUR POSTS, THE EVIDENCE (depth as pages, 17 Oct; boards G5-Content-Posts
 // and -Posts-Phone): the flat header (a person on the neutral, "Your own
@@ -185,7 +185,10 @@ export function PostsPageBody({ data }: { data: PostsPageData }) {
     <>
       {data.lead ? (
         <div data-posts-lead="" className="-mt-0.5 border-b border-border pb-[22px] max-sm:pb-4">
-          <p className="m-0 max-w-[820px] text-[21px] leading-[1.45] font-normal tracking-[-0.005em] text-foreground max-sm:text-[18px] [&_[data-copy=figure]]:font-sans [&_[data-copy=figure]]:tabular-nums"><Sentence parts={data.lead} /></p>
+          {/* The lead's figures in the lead's own face (the board's `.lead .mono`). */}
+          <p className="m-0 max-w-[820px] text-[21px] leading-[1.45] font-normal tracking-[-0.005em] text-foreground max-sm:text-[18px]">
+            {data.lead.map((p, i) => (typeof p === 'string' ? <span key={i}>{p}</span> : <span key={i} data-copy="figure" className="tabular-nums">{p.figure}</span>))}
+          </p>
         </div>
       ) : <div className="-mt-0.5 border-b border-border" />}
       <div className="grid grid-cols-1 items-start gap-11 max-sm:gap-[22px] min-[1180px]:grid-cols-[minmax(0,1fr)_300px]">

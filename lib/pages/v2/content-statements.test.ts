@@ -194,3 +194,118 @@ describe('Content\'s statements, page by page', () => {
     expect(own.by['from:comments']).toBe(1)
   })
 })
+
+// ---- isolation: every new param names only the tenant's own rows ------------------
+//
+// The idea's id, its `?sub=`, your posts' `?post=` and the reply list's
+// videos are honoured only for the session's tenant and the page's own set;
+// every new read names the session's client, so a test fails where a read's
+// client filter is removed (the filters are asserted, not only the outcome).
+
+const FOREIGN_IDEA = '00000000-0000-4000-8000-0000000001ff'
+const FOREIGN_COMMENT = '00000000-0000-4000-8000-0000000004ff'
+const FOREIGN_POST = '00000000-0000-4000-8000-0000000003ff'
+
+function withForeign() {
+  const t = contentTables()
+  const [first, ...rest] = t.post_ideas
+  return {
+    ...t,
+    // Another workspace's idea, and a comment of theirs named by our idea's
+    // first sub-question (a stored id that resolves to their row).
+    post_ideas: [
+      { ...first, subquestions: [{ ...first.subquestions[0], commentIds: [...first.subquestions[0].commentIds, FOREIGN_COMMENT] }, ...first.subquestions.slice(1)] },
+      ...rest,
+      { ...first, id: FOREIGN_IDEA, client_id: OTHER, run_id: '00000000-0000-4000-8000-0000000000dd', title: 'Other workspace idea' },
+    ],
+    comments: [
+      ...t.comments,
+      { id: FOREIGN_COMMENT, client_id: OTHER, author: 'foreign', text: 'Other workspace comment asking how long it lasts?', likes: 0, comment_date: '2026-10-07T10:00:00.000Z', platform: 'tiktok', video_id: 'mv1', comment_id: 'nf' },
+      // Another workspace's comment under a video with our own post's id.
+      { id: '00000000-0000-4000-8000-0000000004fe', client_id: OTHER, author: 'foreign', text: 'Other workspace comment under the same video id?', likes: 0, comment_date: '2026-10-09T10:00:00.000Z', platform: 'instagram', video_id: 'own1', comment_id: 'nf2' },
+    ],
+    videos: [...t.videos, { ...t.videos[0], id: FOREIGN_POST, client_id: OTHER, source: 'owned', account_name: 'Other workspace account', caption: 'Other workspace post', upload_date: '2026-10-08' }],
+  }
+}
+
+const filtersOf = (calls: { table: string; filters: string[] }[], table: string) => calls.filter((c) => c.table === table).map((c) => c.filters)
+
+describe('a post idea\'s page reads only the tenant\'s own idea', () => {
+  it('another workspace\'s idea names nothing: the calm line, and nothing read past the first wave', async () => {
+    const r = await measure(ideaPage(FOREIGN_IDEA), {}, withForeign())
+    expect(r.data).toMatchObject({ state: 'missing', page: null })
+    expect(r.total).toBe(3)
+    expect(JSON.stringify(r.data)).not.toContain('Other workspace')
+  })
+
+  it('a malformed id reads nothing at all', async () => {
+    for (const id of ['nope', `${IDEA(1)}x`, "1' or 1=1", '']) {
+      const r = await measure(ideaPage(id), {}, withForeign())
+      expect(r.data, id).toMatchObject({ state: 'missing' })
+      expect(r.total, id).toBe(0)
+    }
+  })
+
+  it('a workspace with post ideas switched off reads nothing and prints no stored idea', async () => {
+    const db = fakeDb(withForeign() as never, contentRpcs() as never)
+    const off = '00000000-0000-4000-8000-0000000000ee'
+    const data = await loadContentIdea({ supabase: db.client as never, clientId: off, reading: readingHandle(off, db.client as never), params: {} }, IDEA(1), { now: NOW })
+    expect(data.state).toBe('not_on')
+    expect(db.calls).toHaveLength(0)
+  })
+
+  it('every read it makes names the session\'s client, and another workspace\'s comment never reaches a card', async () => {
+    const r = await measure(ideaPage(IDEA(1)), { sub: '1' }, withForeign())
+    expect(r.data.state).toBe('ready')
+    for (const f of filtersOf(r.calls, 'post_ideas')) expect(f).toContain(`client_id=${CLIENT}`)
+    for (const table of ['comments', 'videos', 'language_samples_current', 'theme_observations', 'consumer_profiles']) {
+      for (const f of filtersOf(r.calls, table)) expect(f, table).toContain(`client_id=${CLIENT}`)
+    }
+    expect(JSON.stringify(r.data)).not.toContain('Other workspace')
+    // The opened sub-question lists only the tenant's comments.
+    const first = r.data.page!.subquestions[0]
+    expect(first.open).toBe(true)
+    expect(first.quotes.every((q) => !q.text.includes('Other workspace'))).toBe(true)
+  })
+
+  it('opens only a sub-question the idea has', async () => {
+    for (const sub of ['9', 'x', '0']) {
+      const r = await measure(ideaPage(IDEA(1)), { sub })
+      expect(r.data.page!.subquestions.some((s) => s.open), sub).toBe(false)
+    }
+  })
+
+  it('the session\'s own idea opens (the control)', async () => {
+    const r = await measure(ideaPage(IDEA(2)), {}, withForeign())
+    expect(r.data).toMatchObject({ state: 'ready', page: { id: IDEA(2), rank: 2 } })
+    // The switcher lists the set's two ideas, the other workspace's not.
+    expect(r.data.crumbs[1].menu!.items.map((i) => i.key)).toEqual([IDEA(1), IDEA(2)])
+  })
+})
+
+describe('your posts\' page reads only the tenant\'s own posts and their comments', () => {
+  it('another workspace\'s post id opens nothing, and no other workspace\'s post or comment reaches a card', async () => {
+    const r = await measure(posts, { post: FOREIGN_POST }, withForeign())
+    expect(r.data.cards.some((c) => c.open)).toBe(false)
+    expect(r.data.cards.map((c) => c.id)).not.toContain(FOREIGN_POST)
+    expect(JSON.stringify(r.data)).not.toContain('Other workspace')
+    for (const table of ['videos', 'comments']) {
+      for (const f of filtersOf(r.calls, table)) expect(f, table).toContain(`client_id=${CLIENT}`)
+    }
+  })
+
+  it('the session\'s own post opens (the control)', async () => {
+    const r = await measure(posts, { post: OWN(2) }, withForeign())
+    expect(r.data.cards.find((c) => c.id === OWN(2))?.open).toBe(true)
+  })
+})
+
+describe('the reply list\'s page reads only the tenant\'s own videos', () => {
+  it('names the session\'s client on every read of videos and comments', async () => {
+    const r = await measure(replies, {}, withForeign())
+    for (const f of filtersOf(r.calls, 'videos')) expect(f).toContain(`client_id=${CLIENT}`)
+    expect(JSON.stringify(r.data)).not.toContain('Other workspace')
+    // Its comments are under the videos the queue read: each named by its row.
+    expect(r.data.kinds.flatMap((k) => k.videos).every((v) => v.id === null || [OWN(1), OWN(2), OWN(3), ...[1, 2, 3, 4, 5, 6].map(VID)].includes(v.id))).toBe(true)
+  })
+})

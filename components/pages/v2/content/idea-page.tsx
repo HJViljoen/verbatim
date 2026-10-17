@@ -28,7 +28,9 @@ import { OLINK } from './parts'
 // where it came up; the conversation in Market; the Agent.
 //
 // THE COMMENTS ARE THE SUB-QUESTIONS' OWN (the stored ids), through the quote
-// gate the root's panel ran, their words resolved at render, never stored.
+// gate the root's idea panel ran until 17 Oct (`gateFor` with the idea's
+// title as the claim, comments under your own posts allowed), their words
+// resolved at render, never stored.
 // "Show all" is an address (`?sub=<n>`), so it works without client code.
 
 const EYEBROW = 'm-0 text-[12px] font-semibold uppercase tracking-[0.06em] text-orange-text'

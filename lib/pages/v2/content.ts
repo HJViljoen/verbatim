@@ -10,11 +10,9 @@ import { postIdeasEnabled } from '../../config'
 import { POST_IDEA_OWNED_MONTHS } from '../../post-ideas/select'
 import {
   isMissingPostIdeas, loadPostIdeas, subquestionCounts, TABLE_POST_IDEAS,
-  type PostIdeaCover, type PostIdeaLength, type PostIdeaRank, type PostIdeaRow,
+  type PostIdeaLength, type PostIdeaRank, type PostIdeaRow,
 } from '../../post-ideas/types'
-import { readTranslations, readableQuote } from '../../quotes'
-import { pickEligible } from '../../quote-gate'
-import { gateFor, readQuoteContext } from '../../quote-context'
+import { readableQuote } from '../../quotes'
 import { ENGAGEMENT_EXCLUDED } from '../../reading/formats'
 import { marketAudiences } from '../../reading/market'
 import { monthStartOf, nextMonth, prevMonth } from '../../reading/month-key'
@@ -233,15 +231,6 @@ export interface MarketVideoCard {
    *  Reddit, and where either rate is missing. */
   multiple: number | null
   url: string | null
-}
-
-export interface PanelQuote {
-  ref: string
-  text: string
-  lang?: string | null
-  english?: string | null
-  platform: string | null
-  date: string | null
 }
 
 export type IdeasState = 'ready' | 'not_on' | 'none' | 'stale' | 'unread'
@@ -742,7 +731,7 @@ export function touchPosts(owned: OwnedPosts | null, month: string, to: string):
   return owned ? summariseOwnedPosts(owned.posts, { from: ideaOwnedFrom(month), to }) : null
 }
 
-/** The sub-questions as the panel draws them: counted off their ids, the most
+/** The sub-questions counted off their ids, the most
  *  asked first. */
 export function subquestionRows(idea: Pick<PostIdeaRow, 'subquestions'>): IdeaSubquestion[] {
   return idea.subquestions
@@ -788,7 +777,7 @@ export function ideasReadOf(idea: Pick<PostIdeaRow, 'read_start' | 'read_end'>):
 }
 
 /** "From questions asked 14 Sep to 11 Oct": the days the ideas read, as the
- *  page, the tile and the panel print them. */
+ *  page, the tile and the idea's page print them. */
 export const askedPhrase = (read: Pick<IdeasRead, 'label'>): string => `From questions asked ${read.label}`
 
 /** The ideas' own week, against the page's, the days they read, and the
@@ -1728,7 +1717,7 @@ export const questionsAfterIdeas = (ctx: Pick<QuestionSlotsContext, 'when'>): st
  * The Dashboard's Content tile, light: the ideas (two round trips) beside the
  * published week read (one), then, for the first idea only, the market and
  * conversation counts over the days the ideas read and over the month, your
- * posts and the rivals, in parallel. No reply queue (it is four reads deep), no panel. The same rules
+ * posts and the rivals, in parallel. No reply queue (it is four reads deep), no idea's page. The same rules
  * as the page: the newest week anchors, ideas more than four weeks older are
  * not shown, older ones say so.
  */

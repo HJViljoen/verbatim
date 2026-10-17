@@ -70,6 +70,19 @@ const FILLERS = [
   'Should the clinic replace it for free if it tears within months?',
   'Is it normal to need a new liner when your weight changes a little?',
   'How long did your very first liner last compared with now?',
+  'Does the cold make a liner crack sooner in winter months?',
+  'How many hours a day do you wear yours before it gets loose?',
+  'Is a cheaper liner worth it if you have to replace it twice as often?',
+  'Can you repair a small tear or does it have to go straight away?',
+  'Why does mine roll down at the top after a few weeks of wear?',
+  'Does lotion on the skin wear the inside of the liner faster?',
+  'How do you store a spare so it does not lose its shape?',
+  'Is it the liner or the socket when you start to get blisters?',
+  'Does running every day shorten the life of a liner a lot?',
+  'Will my insurer pay for two liners a year or only one?',
+  'Is the silicone one better than gel for people who sweat a lot?',
+  'How do you know a new liner is the right size before you buy it?',
+  'Does a liner last longer if you rotate between two of them?',
 ]
 
 /** Idea 1's sub-question comments: a row per stored id, the board's words
@@ -80,7 +93,7 @@ function subRows(row: PostIdeaRow, texts: Record<number, { text: string; platfor
     const t = texts[si]?.[ci]
     return {
       id,
-      text: t?.text ?? FILLERS[f++ % FILLERS.length].replace(/\?$/, ci % 2 ? ' for you?' : '?'),
+      text: t?.text ?? FILLERS[f++ % FILLERS.length],
       platform: t?.platform ?? 'tiktok',
       comment_date: t?.date ?? '2026-10-01T10:00:00.000Z',
       video_id: 'mv1',
