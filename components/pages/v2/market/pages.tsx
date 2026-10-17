@@ -7,7 +7,7 @@ import { marketConversationPath, marketSubjectPath, surface } from '@/lib/nav'
 import { MARKET_FIRST_RUN, MARKET_TITLE, Meta } from './index'
 import { WeekPageBody } from './week-page'
 import { ConversationPageBody } from './conversation-page'
-import { SubjectPageBody } from './subject-page'
+import { SubjectPageBody, weekLevelOf } from './subject-page'
 import { fmtInt } from '@/lib/format'
 import { OLINK } from './parts'
 
@@ -75,7 +75,8 @@ export function MarketSubjectPage({ data, switcherOpen = false }: { data: Market
 function SubjectMeta({ page, data }: { page: NonNullable<MarketData['subjectPage']>; data: MarketData }) {
   const level = page.panel.level
   const week = data.period === 'week' && data.week ? data.week : null
-  const stat = page.panel.detail?.week ?? null
+  // This week's share on the level's base (17 Oct); none where unread.
+  const stat = weekLevelOf(page)
   const lv = (k: number, n: number) => <span data-copy="level">{fmtInt(k)} of {fmtInt(n)}</span>
   if (week) {
     return (

@@ -31,6 +31,7 @@ import { selectAll } from '../../supabase-admin'
 import { coveredDays, inMonth, monthsPhrase, readingMonthOf } from '../../written/month'
 import { SLICE } from '../../reading/coverage'
 import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '../../subjects/calibration-state'
+import { readSubjectWindow } from '../../subjects/read'
 import type { Subject } from '../../subjects/types'
 import { loadDatedEvidence, type DatedEvidence } from '../../written/evidence'
 import { loadEarlierNewThisWeek, loadPublishedLongRun, loadPublishedWeekRead, subjectReadOf, type EarlierNew, type PublishedWeekRead } from '../../written/published'
@@ -53,7 +54,7 @@ import { talkKindLabel } from '../overview-market/kinds'
 import { fetchThemedRunId } from '../themed-run'
 import { askAboutTheme, loadLinkedTheme, loadThemeKinds, themeKindCounts } from '../voice-surface'
 import { loadReadySubjectIds, loadSubjectPlacement, notReadyIds, placeSubject, placementMembers, type SubjectPlacement } from '../subject-place'
-import { flagFigures, loadCheckStrict, loadFlagsStrict, weekFlagRows, type FlagRow, type UnusualFlag } from '../week'
+import { flagFigures, loadCheckStrict, loadFlagsStrict, pooledSubjectCounts, weekFlagRows, type FlagRow, type UnusualFlag } from '../week'
 import { flagPrints, weekLead } from '../../reading/week-lead'
 import { setApartOf } from '../../written/conversations'
 import { frozenFlag } from '../../written/unusual'
@@ -544,22 +545,21 @@ export interface SubjectPanel {
  * cited arm, demographic citations included). A member spoken only on camera
  * is in the level and in no block: it has no comment to date it.
  *
- * This week every week figure stands beside its month (decision 1): the week
- * stat beside the level, who it is about and where beside the month's. What
- * people did and who is saying it are the month's on every period, as the
- * conversation panel's are (groups are a month's videos, decision 2).
+ * This week every week figure stands beside its month (decision 1): who it is
+ * about and where beside the month's. What people did and who is saying it
+ * are the month's on every period, as the conversation panel's are (groups
+ * are a month's videos, decision 2). The week's share is not one of these:
+ * it is read on the level's base (`SubjectPage.week`, `subjectWeekLevel`).
  */
 export interface SubjectDetail {
   /** What the week blocks count: this week's videos, or the month's. */
   basis: 'week' | 'month'
   /** The videos the blocks read: the month's, and this week's on the week.
-   *  Where the month's fall short of the level's k (members spoken only on
-   *  camera, which no comment dates), the panel says so once, under the
-   *  stats (the lead's ruling, 14 Oct): one base, named. Absent on a dump
-   *  from before it. */
+   *  Where they fall short of the level's k, the month's or the week's
+   *  (members spoken only on camera, which no comment dates), the page says
+   *  so once, under the stats (the lead's ruling, 14 Oct): one base, named.
+   *  Absent on a dump from before it. */
   cited?: { month: number; week: number | null }
-  /** This week only: the subject's videos this week, of the market's. */
-  week: Level | null
   /** Who the videos are about (one brand per video, the item's own counted
    *  comments, `whoSplit`); this week, with the month's beside it (`parts`
    *  empty where the week has none and the month some: the block keeps its
@@ -579,10 +579,10 @@ export interface SubjectDetail {
   quotes: PanelQuote[]
   /** This week only (the subject's page, 17 Oct): its videos in each of the
    *  three weekly windows the conversations count (`weekWindows`), oldest
-   *  first, by the same rule as `week` (a comment citing one of its members
-   *  dated in the window, on the market's videos); null where our own change
-   *  cut the window (never 0). Three bare counts with no word (decision 1).
-   *  Absent off the week, and on a dump from before it. */
+   *  first, by the blocks' rule (a comment citing one of its members dated in
+   *  the window, on the market's videos: `cited.week` for the newest); null
+   *  where our own change cut the window (never 0). Three bare counts with no
+   *  word (decision 1). Absent off the week, and on a dump from before it. */
   weeks?: (number | null)[]
 }
 
@@ -651,6 +651,14 @@ export interface SubjectNavItem {
 /** A tracked subject's page (`/dashboard/market/subjects/[id]`, 17 Oct). */
 export interface SubjectPage {
   panel: SubjectPanel
+  /** This week, a READY subject's share ON ITS LEVEL'S BASE (17 Oct):
+   *  `window_subject_readings` over the page's week window, pooled over the
+   *  market's audiences as the month tile's level is, of the market's videos
+   *  in the window (`subjectWeekLevel`). `'unread'` where that read failed or
+   *  answered no row: the tile says so in its frame, never a figure from
+   *  another base. Null off the week, and wherever the level prints none
+   *  (U6). Absent on a dump from before it. */
+  week?: Level | 'unread' | null
   /** This week: the three windows' labels, oldest first (the subject's own
    *  counts are `panel.detail.weeks`). */
   weekLabels: string[]
@@ -2283,6 +2291,16 @@ export async function loadMarket(input: {
       })), null)
     : Promise.resolve(null)
   detailAhead.catch(() => {})
+  // ITS WEEK ON ITS LEVEL'S BASE (17 Oct): one more read, on a ready
+  // subject's page, this week only. The market's videos in the window are the
+  // window read's own (memoised: the newest window is read above already).
+  const newest = windows && windows.length > 0 ? windows[windows.length - 1] : null
+  const weekLevelAhead: Promise<Level | 'unread' | null> = openSubject && period === 'week' && newest
+    ? Promise.all([
+        soft('subjectWeek', readSubjectWindow(db, clientId, newest), null),
+        soft('subjectWeekBase', loadWindowReading(db, clientId, { from: newest.from, to: newest.to, audiences: market }), null),
+      ]).then(([rows, base]) => subjectWeekLevel({ subjectId: openSubject.id, rows, denominators: base?.denominators ?? null, rivalAudiences }))
+    : Promise.resolve(null)
   const [readings, whoRead, personas, heroKinds, weekRowsRaw, earlierNew] = await Promise.all([
     readingsAhead, whoAhead, personasAhead, isTop && period === 'month' && heroId ? kindsFor(heroId) : Promise.resolve(null), weekRowsAhead, earlierNewAhead,
   ])
@@ -2338,6 +2356,8 @@ export async function loadMarket(input: {
       crumbs: subjectCrumbs(p, subjectNav, { id: panel.id, name: panel.name }),
       subjectPage: {
         panel,
+        // A figure only where the level prints one (U6).
+        week: panel.level ? await weekLevelAhead : null,
         weekLabels: weekBlock?.weekLabels ?? [],
         prevPct: subjectBoard?.rows.find((r) => r.id === panel.id)?.prevPct ?? null,
         inside: inside.slice(0, MARKET_INSIDE).map((c) => ({ conv: c, href: convHref(p, c.id) })),
@@ -2765,8 +2785,6 @@ export function subjectDetailOf(input: {
   /** The week's window: the week period only. */
   week: { from: string; to: string } | null
   month: Pick<MarketMonth, 'month' | 'text'>
-  /** The market's videos this week (the week stat's n). */
-  marketWeek: number | null
   personas: readonly Pick<PersonaLink, 'key' | 'name' | 'insightIds'>[]
   namings: readonly { comment_id: string; video_id: string; name: string }[]
   brands: BrandsState
@@ -2828,7 +2846,7 @@ export function subjectDetailOf(input: {
   const monthWhere = weekRows ? { counts: platformMixOf(monthRows), n: monthVideos.size, text: input.month.text } : null
 
   // This week, the subject's videos in each of the three windows, by the
-  // week stat's own rule; a window our change cut is null, never 0.
+  // blocks' own rule; a window our change cut is null, never 0.
   const weeks = weekRows && input.windows && input.windows.length > 0
     ? input.windows.map((w) => (w.cut ? null : videos(counted.filter((e) => within(e, w.from, w.to))).size))
     : null
@@ -2836,7 +2854,6 @@ export function subjectDetailOf(input: {
     ...(weeks ? { weeks } : {}),
     basis: weekRows ? 'week' : 'month',
     cited: { month: monthVideos.size, week: weekRows ? basisVideos.size : null },
-    week: weekRows && input.marketWeek != null ? { k: basisVideos.size, n: input.marketWeek } : null,
     who: whoBasis ? { ...whoBasis, month: monthWho } : quietWeek ? { parts: [], n: 0, month: monthWho } : null,
     brands: input.brands,
     doing: doing.length > 0 ? { rows: doing, n: monthVideos.size, text: `in ${input.month.text}` } : null,
@@ -2844,6 +2861,39 @@ export function subjectDetailOf(input: {
     platforms: where ? { rows: where.rows, n: where.n, month: monthWhere } : quietWeek ? { rows: [], n: 0, month: monthWhere } : null,
     quotes: quotes.map(subjectQuoteOf),
   }
+}
+
+/**
+ * A READY SUBJECT'S WEEK, ON ITS LEVEL'S BASE (17 Oct, F2-Market-Subject:
+ * "34% · 82 of 241 videos this week" beside "31% · 99 of 318 videos in
+ * October so far"). The month tile's level is the subject's month reading
+ * (the videos its members are cited on, and those where a member is only
+ * spoken on camera), pooled over the market's audiences, of the market's
+ * videos that month. The week is read the same way: `window_subject_readings`
+ * over the page's week window (`rows`, every audience), pooled over the same
+ * audiences (`pooledSubjectCounts`), of the market's videos in the window
+ * (`denominators`, pooled as the written read pools its market week). Until
+ * then the tile counted only the videos a member's comment dates in the week,
+ * so "17%" stood beside a month of "34%" and read as a halving that was not
+ * there; the blocks below still read that comment base, and say so.
+ *
+ * `'unread'`, never a figure from another base, where the read failed (null),
+ * answered no row at all, or the window's market was not read. A subject with
+ * no row among the others' had no video in the week: 0 of n. Pure.
+ */
+export function subjectWeekLevel(a: {
+  subjectId: string
+  rows: readonly { audience: string; subject_id: string; videos: number }[] | null
+  denominators: readonly { audience: string; videos: number; comments: number }[] | null
+  rivalAudiences: readonly string[]
+}): Level | 'unread' {
+  if (!a.rows || a.rows.length === 0 || !a.denominators) return 'unread'
+  // One period: every row under one key, so the pooling is across audiences
+  // only (`marketFiguresOf`, lib/written/pool.ts).
+  const key = '2000-01-01'
+  const n = pooledDenominators(a.denominators.map((d) => ({ month: key, audience: d.audience, videos: Number(d.videos), comments: Number(d.comments) || 0 })), a.rivalAudiences).get(key)?.videos
+  if (n == null || n <= 0) return 'unread'
+  return { k: pooledSubjectCounts(a.rows, a.rivalAudiences).get(a.subjectId) ?? 0, n }
 }
 
 /**
@@ -2889,7 +2939,7 @@ export async function loadSubjectDetail(a: {
   const { mentions, brands } = await loadNamings(a.db, a.clientId, { commentIds: [...new Set(counted.map((e) => e.commentId))], company: a.company, rivals: a.rivals })
   return subjectDetailOf({
     subjectId: a.subject.id, name: a.subject.name, evidence, members: a.members, market, period: a.period, week,
-    month: a.month, marketWeek: a.week?.market.videos ?? null, personas: a.personas, namings: mentions, brands,
+    month: a.month, personas: a.personas, namings: mentions, brands,
     company: a.company, noun: a.noun, gate: subjectGate(a.clientId, a.subject), windows: week ? a.windows ?? null : null,
   })
 }

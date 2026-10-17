@@ -558,6 +558,7 @@ const PAGES: Page[] = [
   { key: 'market-pages-subject-open', path: '/dashboard/market/subjects/subj-cost', artboard: 'F2-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('cost', { flagged: false, noNew: true, subjects: 'provisional', brands: 'not_counted', weeks: 'insufficient', noGroups: true }) }) },
   { key: 'market-pages-subject-failed', path: '/dashboard/market/subjects/subj-community', artboard: 'F2-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('community', { subjects: 'tracked' }) }) },
   { key: 'market-pages-subject-no-read', path: '/dashboard/market/subjects/subj-look', artboard: 'F2-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('look', { subjects: 'states' }) }) },
+  { key: 'market-pages-subject-week-unread', path: '/dashboard/market/subjects/subj-fit', artboard: 'F2-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('fit', { subjectWeek: 'unread' }) }) },
   { key: 'market-pages-subject-missing', path: '/dashboard/market/subjects/nope', artboard: 'F2-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('nope') }) },
   // A conversation's page: under its ready subject, the flagged one, the
   // month, one with no ready subject, and an id Market cannot name.

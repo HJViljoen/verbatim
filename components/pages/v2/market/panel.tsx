@@ -84,19 +84,23 @@ export function WhoLine({ parts, data }: { parts: readonly WhoPart[]; data: Mark
 /**
  * ONE BASE, NAMED (the lead's ruling, 14 Oct). The level counts the videos
  * its members are cited on and those where a member is only spoken on
- * camera; the blocks below read only the videos a comment dates. Where the
- * month's blocks read fewer videos than the level counts, one calm line under
- * the stats says which, the week beside the month on the week. Nothing where
- * the two agree.
+ * camera, and since 17 Oct so does the week's share (`week`, the same reading
+ * over the week's window); the blocks below read only the videos a comment
+ * dates. Where they read fewer videos than the tiles count, the month's or
+ * the week's, one calm line under the stats says which, the week beside the
+ * month on the week. Nothing where they agree.
  */
-export function SubjectBase({ level, detail, monthText }: { level: { k: number }; detail: SubjectDetail; monthText: string }) {
+export function SubjectBase({ level, week = null, detail, monthText }: { level: { k: number }; week?: { k: number } | null; detail: SubjectDetail; monthText: string }) {
   const cited = detail.cited
-  if (!cited || cited.month >= level.k) return null
+  if (!cited) return null
+  // The week's tile, where it was read and holds every video the blocks read.
+  const weekOf = cited.week != null && week && cited.week <= week.k ? week : null
+  if (cited.month >= level.k && !(weekOf && cited.week! < weekOf.k)) return null
   const fig = (n: number) => <span data-copy="figure">{fmtInt(n)}</span>
   return (
     <p data-subject-base="" className="m-0 text-[13px] leading-[1.5] text-muted-foreground">
       {cited.week != null
-        ? <>The parts below read the videos where a comment was about it: {fig(cited.week)} this week, and {fig(cited.month)} of these {fig(level.k)} in {monthText}.</>
+        ? <>The parts below read the videos where a comment was about it: {fig(cited.week)} {weekOf ? <>of these {fig(weekOf.k)} </> : null}this week, and {fig(cited.month)} of these {fig(level.k)} in {monthText}.</>
         : <>The parts below read the {fig(cited.month)} of these {fig(level.k)} videos where a comment was about it.</>}
     </p>
   )

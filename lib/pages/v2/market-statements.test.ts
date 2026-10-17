@@ -40,7 +40,8 @@ function tables() {
     subject_memberships: themes.map((n) => ({ client_id: CLIENT, subject_id: subject, audience_insight_id: `ins-${n}`, member: true })),
     month_denominators: ['2026-09-01', '2026-10-01'].map((month) => ({ client_id: CLIENT, month, audience: 'industry-other', videos: 300, comments: 4000, platform_mix: { tiktok: 200, instagram: 100 }, status: 'filling', run_id: RUN, read_at: `${month.slice(0, 7)}-28T00:00:00.000Z` })),
     month_theme_readings: themes.map((n) => ({ client_id: CLIENT, month: '2026-10-01', audience: 'industry-other', theme_id: fixtureId(n), videos: 10 + n, platform_mix: { tiktok: 5, instagram: 5 + n }, status: 'filling', run_id: RUN })),
-    month_subject_readings: ['2026-09-01', '2026-10-01'].map((month) => ({ client_id: CLIENT, month, audience: 'industry-other', subject_id: subject, videos: 70, comments: 400, status: 'filling', run_id: RUN, judge_version: judgeVersionFor(CLIENT) })),
+    // The category's, and the client's own posts, which the market leaves out.
+    month_subject_readings: ['2026-09-01', '2026-10-01'].flatMap((month) => ['industry-other', 'client'].map((audience) => ({ client_id: CLIENT, month, audience, subject_id: subject, videos: audience === 'client' ? 9 : 70, comments: 400, status: 'filling', run_id: RUN, judge_version: judgeVersionFor(CLIENT) }))),
     month_kind_readings: ['2026-09-01', '2026-10-01'].flatMap((month) => ['question', 'praise'].map((kind) => ({ client_id: CLIENT, month, audience: 'industry-other', kind, videos: 120, comments: 400, status: 'filling', run_id: RUN }))),
     month_evidence_refs: themes.map((n) => ({ client_id: CLIENT, month: '2026-10-01', object_kind: 'theme', audience: 'industry-other', object_id: fixtureId(n), video_ids: ['v1'], comment_ids: ['c1'] })),
     audience_insights: [],
@@ -57,7 +58,9 @@ function rpcs() {
     window_theme_readings: () => themes.map((n) => ({ audience: 'industry-other', theme_id: fixtureId(n), videos: 4 + n, comments: 20, platform_mix: { tiktok: 3, instagram: 1 + n } })),
     monthly_evidence_refs: () => themes.map((n) => ({ audience: 'industry-other', theme_id: fixtureId(n), video_ids: ['v1'], comment_ids: ['c1'] })),
     market_week_volumes: () => [],
-    window_subject_readings: () => [],
+    // The subject over the week's window, as the month's rows read it: the
+    // category's 60 and the client's own 9, which the market leaves out.
+    window_subject_readings: () => ['industry-other', 'client'].map((audience) => ({ audience, subject_id: fixtureSubjectId('cost'), videos: audience === 'client' ? 9 : 60, comments: 300, platform_mix: { tiktok: 40 }, excluded_on_camera: 0, excluded_undated: 0 })),
   }
 }
 
@@ -73,15 +76,24 @@ async function statements(raw: Record<string, string>, view?: MarketView): Promi
 // TODAY'S MARKET before the pages (17 Oct, measured by this harness at
 // 8be41baa): the week 39, the week with the lead conversation open in place
 // 45, the week with a subject open in place 40, the month 28. Each page now
-// reads only what it prints.
+// reads only what it prints. A subject's page was 34 at 2fc55c9b and reads
+// one more since its week's share moved to the level's base (17 Oct): the
+// `window_subject_readings` call (the window's market is the window read's,
+// memoised).
 describe('Market\'s statements, page by page', () => {
   it('counts each load', async () => {
     const week = await statements({})
     const month = await statements({ period: 'month' })
     const conv = await statements({}, { kind: 'conversation', id: fixtureId(3) })
     const subject = await statements({}, { kind: 'subject', id: fixtureSubjectId('cost') })
+    const subjectMonth = await statements({ period: 'month' }, { kind: 'subject', id: fixtureSubjectId('cost') })
     const read = await statements({}, { kind: 'week' })
-    expect({ week: week.total, month: month.total, conv: conv.total, subject: subject.total, read: read.total }).toEqual({ week: 36, month: 28, conv: 40, subject: 34, read: 15 })
+    expect({ week: week.total, month: month.total, conv: conv.total, subject: subject.total, read: read.total }).toEqual({ week: 36, month: 28, conv: 40, subject: 35, read: 15 })
+    // The week's share is read once, on a subject's page this week alone.
+    expect(subject.by['rpc:window_subject_readings']).toBe(1)
+    // Its n is the newest window read's own market: three windows, no fourth.
+    expect(subject.by['rpc:window_denominators']).toBe(3)
+    for (const page of [week, month, conv, read, subjectMonth]) expect(page.by['rpc:window_subject_readings']).toBeUndefined()
     // The top page's week names no group and no "doing" on its small cards:
     // no profile read and no lead's kinds.
     expect(week.by['from:consumer_profiles']).toBeUndefined()
@@ -95,6 +107,40 @@ describe('Market\'s statements, page by page', () => {
       expect(page.by['rpc:market_week_volumes']).toBeUndefined()
       expect(page.by['from:month_kind_readings']).toBeUndefined()
     }
+  })
+})
+
+// ONE BASE FOR A SUBJECT'S TWO SHARES (17 Oct, F2-Market-Subject: "34% · 82
+// of 241 videos this week" beside "31% · 99 of 318 videos in October so
+// far"). The month tile's level is the subject's month reading pooled over
+// the market's audiences, of the market's videos; the week tile is the same
+// reading over the week's window, pooled over the same audiences, of the
+// market's videos in the window. Until then the week counted only the videos
+// a member's comment dates, which here is none (the stand-in holds no
+// evidence): the tile printed 0% beside a month of 23%.
+describe('a subject\'s week tile and month tile read one base', () => {
+  async function load(rpcOver: Record<string, unknown> = {}) {
+    const db = fakeDb(tables() as never, { ...rpcs(), ...rpcOver } as never)
+    return loadMarket({ supabase: db.client as never, clientId: CLIENT, reading: readingHandle(CLIENT, db.client as never), params: marketParams({}), view: { kind: 'subject', id: fixtureSubjectId('cost') }, now: new Date('2026-10-14T09:00:00.000Z') })
+  }
+
+  it('the week is the subject reading over the window, pooled as the month is: the client\'s own posts left out of both', async () => {
+    const page = (await load())!.subjectPage!
+    expect(page.panel.level).toMatchObject({ k: 70, n: 300 })
+    expect(page.week).toEqual({ k: 60, n: 226 })
+    // Not the blocks' base: no comment dates a member in the stand-in.
+    expect(page.panel.detail?.cited).toEqual({ month: 0, week: 0 })
+  })
+
+  it('a read that fails, or answers no row, is unread: never a figure from another base', async () => {
+    expect((await load({ window_subject_readings: () => ({ error: { code: 'XX000', message: 'boom' } }) }))!.subjectPage!.week).toBe('unread')
+    expect((await load({ window_subject_readings: () => [] }))!.subjectPage!.week).toBe('unread')
+  })
+
+  it('this month there is no week tile', async () => {
+    const db = fakeDb(tables() as never, rpcs() as never)
+    const data = await loadMarket({ supabase: db.client as never, clientId: CLIENT, reading: readingHandle(CLIENT, db.client as never), params: marketParams({ period: 'month' }), view: { kind: 'subject', id: fixtureSubjectId('cost') }, now: new Date('2026-10-14T09:00:00.000Z') })
+    expect(data!.subjectPage!.week).toBeNull()
   })
 })
 

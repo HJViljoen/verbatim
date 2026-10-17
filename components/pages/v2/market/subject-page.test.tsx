@@ -6,7 +6,7 @@ import { OSSUR_SUBJECT_READS } from '@/lib/pages/v2/market-reads-fixture'
 import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import type { MarketData } from '@/lib/pages/v2/market'
 import { BACK_TO_MARKET, MarketSubjectPage, SUBJECT_MISSING } from './pages'
-import { SubjectPageBody, SUBJECT_NUMBERS_HELD } from './subject-page'
+import { SubjectPageBody, SUBJECT_NUMBERS_HELD, SUBJECT_WEEK_UNREAD } from './subject-page'
 
 // A TRACKED SUBJECT'S PAGE (depth as pages, 17 Oct; F2-Market-Subject, its
 // switcher and its phone board): from the page fixture through the page's own
@@ -24,7 +24,7 @@ describe('a ready subject, this week', () => {
   const html = render(page(FIT))
 
   it('its bar: "Market / Fit & comfort", the week beside its month, the period switch', () => {
-    expect(text).toMatch(/^Market Market \/ Fit & comfort This week This month Over time 5 to 11 October · in 40 of 241 videos this week · 108 of 318 in October so far/)
+    expect(text).toMatch(/^Market Market \/ Fit & comfort This week This month Over time 5 to 11 October · in 82 of 241 videos this week · 108 of 318 in October so far/)
     expect(html).toMatch(/<a (?=[^>]*aria-current="page")(?=[^>]*href="\/dashboard\/market\/subjects\/subj-fit")[^>]*>This week</)
     expect(html).toContain('href="/dashboard/market/subjects/subj-fit?period=month"')
   })
@@ -34,9 +34,12 @@ describe('a ready subject, this week', () => {
     expect(html).toMatch(/<h2 id="subject-head" data-copy="stored" data-slot="week_read" class="[^"]*text-\[28px\]/)
   })
 
-  it('the numbers: the four tiles, the week beside the month, the change from its Verdict alone', () => {
-    expect(text).toContain('The numbers This week’s 40 videos, beside October so far 17% 40 of 241 videos this week no clear change · +0.9 pts October so far against September, 33% 34% 108 of 318 videos in October so far 4 conversations inside it this week')
-    expect(text).toContain('The parts below read the videos where a comment was about it: 40 this week, and 64 of these 108 in October so far.')
+  it('the numbers: the four tiles, the week beside the month on one base, the change from its Verdict alone', () => {
+    // The board's two shares, one base (17 Oct): 82 of 241 this week beside
+    // 108 of 318 in the month, never the week's comment base (40) beside the
+    // month's level.
+    expect(text).toContain('The numbers This week’s 82 videos, beside October so far 34% 82 of 241 videos this week no clear change · +0.9 pts October so far against September, 33% 34% 108 of 318 videos in October so far 4 conversations inside it this week')
+    expect(text).toContain('The parts below read the videos where a comment was about it: 40 of these 82 this week, and 64 of these 108 in October so far.')
     // The change is the one badge's, inside a verdict node.
     expect(html).toMatch(/data-copy="verdict"[^>]*><span class="text-xs font-medium text-muted-foreground"[^>]*>no clear change/)
   })
@@ -69,6 +72,23 @@ describe('a ready subject, this week', () => {
 
   it('keeps the copy contract', () => {
     assertCopyContract(page(FIT))
+  })
+})
+
+describe('a ready subject whose week could not be read on the level\'s base', () => {
+  const d = marketSubjectFixture('fit', { subjectWeek: 'unread' })
+  const text = renderText(page(d))
+  const html = render(page(d))
+
+  it('the week tile keeps its frame and says so in one line; no figure from another base anywhere', () => {
+    expect(text).toContain(`The numbers October so far ${SUBJECT_WEEK_UNREAD} no clear change · +0.9 pts`)
+    expect(html).toContain('data-tile-gap=""')
+    expect(text).not.toMatch(/of 241 videos this week/)
+    // The bar keeps the week's dates and the month's level, and no week figure.
+    expect(text).toMatch(/^Market Market \/ Fit & comfort This week This month Over time 5 to 11 October · 108 of 318 in October so far This week/)
+    // The one-base line names the blocks' week without a tile to set it against.
+    expect(text).toContain('The parts below read the videos where a comment was about it: 40 this week, and 64 of these 108 in October so far.')
+    assertCopyContract(page(d))
   })
 })
 

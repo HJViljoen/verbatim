@@ -7,7 +7,7 @@ import type { UnusualFlag } from '../week'
 import {
   buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, convHref, convPageOf, conversationCrumbs, flagCardOf, flagVerdict, groupsOf, insideOf,
   lineBars, marketLongRunFor, marketMonths, marketParams, monthsText, ourReadOf, panelStats, pickHero, pickWeekSides, platformRows, subjectCardsOf, subjectCrumbs, subjectHref,
-  subjectDetailOf, subjectNavOf, subjectTableHref, tableMonths, weekWindows, convOf, doingOf, alsoTalkedOf, earlierNewOf, leadDoing, weekCardOf, weekCrumbs, weekPageOf, withMonthPlatforms,
+  subjectDetailOf, subjectNavOf, subjectTableHref, subjectWeekLevel, tableMonths, weekWindows, convOf, doingOf, alsoTalkedOf, earlierNewOf, leadDoing, weekCardOf, weekCrumbs, weekPageOf, withMonthPlatforms,
   type ConvInput, type ConvPanel, type MarketConv, type MarketData, type MarketMonth, type MarketParams, type MarketWeek, type MonthCount,
   type SubjectDetail, type SubjectFact, type TopRow,
 } from './market'
@@ -410,6 +410,9 @@ export interface FixtureOptions {
   /** The week read stored before `week_read_v3`: an In short, no
    *  implications. */
   v1Read?: boolean
+  /** A subject's page: its week on the level's base could not be read (the
+   *  window read failed, or answered no row). */
+  subjectWeek?: 'unread'
 }
 
 const MONTH: MarketMonth = {
@@ -706,6 +709,7 @@ export function marketSubjectFixture(key: string, opts: FixtureOptions & { detai
     crumbs: subjectCrumbs(p, subjectNav, { id: panel.id, name: panel.name }),
     subjectPage: {
       panel,
+      week: period === 'week' && panel.level ? fixtureSubjectWeek(sid, panel.level, opts.subjectWeek === 'unread') : null,
       weekLabels: WEEK.weekLabels,
       prevPct: board?.rows.find((r) => r.id === sid)?.prevPct ?? null,
       inside: inside.slice(0, 3).map((c) => ({ conv: c, href: convHref(p, c.id) })),
@@ -892,6 +896,31 @@ const FIT_WORDS = [
   'Long walks are fine now that the socket was adjusted, the sore spot on my shin is gone.',
 ]
 
+/** The market's videos in the fixture's week, by audience, as
+ *  `window_denominators` answers: the category and Ottobock make the 241,
+ *  and the client's own posts are not the market. */
+const WEEK_DENOMINATORS = [
+  { audience: 'industry-other', videos: 226, comments: 3700 },
+  { audience: 'competitor:Ottobock', videos: 15, comments: 212 },
+  { audience: 'client', videos: 9, comments: 64 },
+]
+
+/** A ready subject's week on its level's base, by the page's own builder
+ *  (`subjectWeekLevel`) over `window_subject_readings`-shaped rows: its month
+ *  share carried to the week's 241 (Fit & comfort's 108 of 318 is the
+ *  board's 82 of 241), a few of them Ottobock's, and three of the client's
+ *  own posts the pooling leaves out. `unread`: the read answered no row. */
+export function fixtureSubjectWeek(sid: string, level: { k: number; n: number }, unread = false) {
+  const k = Math.round((level.k / Math.max(1, level.n)) * 241)
+  const rival = Math.round(k * 0.07)
+  const rows = unread ? [] : [
+    { audience: 'industry-other', subject_id: sid, videos: k - rival },
+    ...(rival > 0 ? [{ audience: 'competitor:Ottobock', subject_id: sid, videos: rival }] : []),
+    { audience: 'client', subject_id: sid, videos: 3 },
+  ]
+  return subjectWeekLevel({ subjectId: sid, rows, denominators: WEEK_DENOMINATORS, rivalAudiences: ['competitor:Ottobock'] })
+}
+
 /** The open subject's blocks, by the page's own builder: Cost & access or
  *  Fit & comfort on many videos (`rich`), Look & style on one (`thin`). This
  *  week they read the three weekly windows too. */
@@ -905,7 +934,7 @@ export function fixtureSubjectDetail(kind: 'rich' | 'thin', period: MarketParams
   const windows = period === 'week' ? (weekWindows(WINDOW) ?? []).map((w) => ({ ...w, cut: false })) : null
   return subjectDetailOf({
     subjectId: subject.id, name: subject.name, evidence, members, market: new Set(['industry-other', 'competitor:Ottobock']),
-    period, week: period === 'week' ? WINDOW : null, month, marketWeek: period === 'week' ? WEEK.market.videos : null,
+    period, week: period === 'week' ? WINDOW : null, month,
     personas: SUBJECT_PERSONAS, namings, brands: 'counted', company: 'Össur', noun: null,
     gate: { claim: subject.claim, requireRelevance: true }, windows,
   })

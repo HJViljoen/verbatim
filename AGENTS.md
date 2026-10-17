@@ -1394,8 +1394,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
     prints, through the same builders, so a page and the top layer never
     disagree (`lib/pages/v2/market-statements.test.ts` pins each load's
     statements offline: the top page's week 36, the month 28, a
-    conversation's page 40, a subject's 34, the week's read 15; today's
-    panels in place were 45 and 40). **TWO RULES ARE REVERSED (Heinrich, 16
+    conversation's page 40, a subject's 35 (34 until its week's share moved
+    to the level's base, one `window_subject_readings` call), the week's
+    read 15; today's panels in place were 45 and 40). **TWO RULES ARE REVERSED (Heinrich, 16
     Oct).** Design v2's "no model prose at the top of Market" is gone: the
     week's read and each subject's read LEAD the top layer as stored
     `week_read` prose, about 600 words above the first number (ruling 3),
@@ -1443,10 +1444,19 @@ This version has breaking changes — APIs, conventions, and file structure may 
     builders moved into a page): Our read (the headline, what people are
     saying beside what it means; else the state's line, the week read's
     sentence under it where the tenant's reads are off); the numbers (this
-    week's share as k of n, the month's change from its `Verdict` alone, the
-    month's share, the conversations inside it; the one-base line; week by
-    week, the subject's videos in the three weekly windows by the week
-    tile's own rule, three bare counts; month by month; who is saying it,
+    week's share as k of n ON THE MONTH TILE'S BASE (17 Oct, the board's "34%
+    · 82 of 241 videos this week" beside "31% · 99 of 318"):
+    `window_subject_readings` over the week's window, pooled over the
+    market's audiences as the level is, of the market's videos in the window
+    (`subjectWeekLevel`, one read, on a ready subject's page this week
+    alone), and where that read fails or answers no row, `SUBJECT_WEEK_UNREAD`
+    in the tile's frame, never a figure from another base (until then it
+    counted only the videos a comment dates, and 17% stood beside a month of
+    34%); the month's change from its `Verdict` alone, the month's share,
+    the conversations inside it; the one-base line (the parts below read the
+    videos a comment dates, the week's and the month's, each "of these" the
+    tile's); week by week, the subject's videos a comment dates in the three
+    weekly windows, three bare counts; month by month; who is saying it,
     each group "k of n"; what people did; where, the week beside the month;
     three comments through the strict subject gate; the Agent); then the
     biggest three conversations inside it as pages and "All N conversations

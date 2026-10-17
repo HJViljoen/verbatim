@@ -48,6 +48,11 @@ export const SUBJECT_NONE_THIS_WEEK = 'No video this week.'
 /** The unready page's numbers card, in one line (U6). */
 export const SUBJECT_NUMBERS_HELD = 'No figure prints for this subject until its check passes.'
 
+/** The week tile where its share on the level's base could not be read
+ *  (`SubjectPage.week` is `'unread'`): said in its frame, never a figure from
+ *  another base. */
+export const SUBJECT_WEEK_UNREAD = 'This week’s share could not be read just now.'
+
 /** One tile of the four (the boards' `.stat`): a big value over its label. */
 function Tile({ value, children, figure = true }: { value: ReactNode; children: ReactNode; figure?: boolean }) {
   return (
@@ -57,6 +62,20 @@ function Tile({ value, children, figure = true }: { value: ReactNode; children: 
     </div>
   )
 }
+
+/** A tile whose figure could not be read: its frame, and one calm line. */
+function GapTile({ children }: { children: ReactNode }) {
+  return (
+    <div data-tile-gap="" className="min-w-0 rounded-[10px] bg-inner px-4 pt-4 pb-3.5 max-sm:p-[13px] max-sm:pb-3">
+      <p className="m-0 text-[13px] leading-[1.45] text-muted-foreground">{children}</p>
+    </div>
+  )
+}
+
+/** This week's share on the level's base, where it was read (a dump from
+ *  before it has none). */
+export const weekLevelOf = (page: Pick<SubjectPage, 'week'>): { k: number; n: number } | null =>
+  page.week && page.week !== 'unread' ? page.week : null
 
 /** "Our read · October so far": the headline, then what people are saying
  *  beside what it means; or the state's own line. */
@@ -112,7 +131,9 @@ function NumbersCard({ page, data }: { page: SubjectPage; data: MarketData }) {
   const level = panel.level
   const detail = panel.detail ?? null
   const week = data.period === 'week'
-  const weekStat = detail?.week ?? null
+  // This week's share, on the month tile's own base (17 Oct): its figure, or
+  // the line saying it could not be read.
+  const weekStat = week ? page.week ?? null : null
   const inMonth = data.week?.inMonth ?? `in ${panel.monthText}`
   const insideWords = week ? 'this week' : `in ${panel.monthText}`
   const pct = (k: number, n: number) => `${Math.round((100 * k) / Math.max(1, n))}%`
@@ -126,8 +147,10 @@ function NumbersCard({ page, data }: { page: SubjectPage; data: MarketData }) {
   }
   return (
     <section id="subject-numbers" aria-label={`${panel.name} in numbers`} className={PAGE_CARD}>
-      <div className={cn('grid grid-cols-2 gap-3 max-sm:gap-2.5', week && weekStat ? 'min-[1180px]:grid-cols-4' : 'min-[1180px]:grid-cols-3')}>
-        {week && weekStat ? <Tile value={pct(weekStat.k, weekStat.n)}><span data-copy="level">{fmtInt(weekStat.k)} of {fmtInt(weekStat.n)}</span> videos this week</Tile> : null}
+      <div className={cn('grid grid-cols-2 gap-3 max-sm:gap-2.5', weekStat ? 'min-[1180px]:grid-cols-4' : 'min-[1180px]:grid-cols-3')}>
+        {weekStat === 'unread'
+          ? <GapTile>{SUBJECT_WEEK_UNREAD}</GapTile>
+          : weekStat ? <Tile value={pct(weekStat.k, weekStat.n)}><span data-copy="level">{fmtInt(weekStat.k)} of {fmtInt(weekStat.n)}</span> videos this week</Tile> : null}
         <Tile value={(
           // The board's 26px change, drawn by the one badge; a non-answer
           // ("no clear change") at the tile's quieter size.
@@ -140,7 +163,7 @@ function NumbersCard({ page, data }: { page: SubjectPage; data: MarketData }) {
         <Tile value={pct(level.k, level.n)}><span data-copy="level">{fmtInt(level.k)} of {fmtInt(level.n)}</span> videos {inMonth}</Tile>
         <Tile value={fmtInt(page.insideTotal)}>conversations inside it {insideWords}</Tile>
       </div>
-      {detail ? <SubjectBase level={level} detail={detail} monthText={panel.monthText} /> : null}
+      {detail ? <SubjectBase level={level} week={weekLevelOf(page)} detail={detail} monthText={panel.monthText} /> : null}
       <div className={cn('grid grid-cols-1 gap-11 max-sm:gap-0', week && weeks ? 'min-[1180px]:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]' : null)}>
         {week && weeks ? (
           <PanelSection label="Week by week · videos">
@@ -242,9 +265,10 @@ function InsideCard({ page, data }: { page: SubjectPage; data: MarketData }) {
 /** The page's body under its bar. */
 export function SubjectPageBody({ page, data }: { page: SubjectPage; data: MarketData }) {
   const ready = page.panel.level != null
+  const weekLevel = data.period === 'week' ? weekLevelOf(page) : null
   const note = ready
-    ? data.period === 'week' && page.panel.detail?.week
-      ? <>This week’s <span data-copy="figure">{fmtInt(page.panel.detail.week.k)}</span> {page.panel.detail.week.k === 1 ? 'video' : 'videos'}, beside {page.panel.monthText}</>
+    ? weekLevel
+      ? <>This week’s <span data-copy="figure">{fmtInt(weekLevel.k)}</span> {weekLevel.k === 1 ? 'video' : 'videos'}, beside {page.panel.monthText}</>
       : <>{page.panel.monthText}</>
     : null
   return (

@@ -7,7 +7,7 @@ import type { DatedEvidence } from '../../written/evidence'
 import { subjectReadOf } from '../../written/published'
 import type { WeekReadData } from '../../written/types'
 import {
-  buildSubjectPanel, loadSubjectDetail, marketParams, personasOf, subjectDetailOf, subjectQuoteOf, subjectReadLines,
+  buildSubjectPanel, loadSubjectDetail, marketParams, personasOf, subjectDetailOf, subjectQuoteOf, subjectReadLines, subjectWeekLevel,
   type MarketMonth, type SubjectDetail,
 } from './market'
 import { fixtureFacts, fixtureFactsIn, fixtureRead, fixtureSubjectEvidence, fixtureSubjectId, marketFixture, withSubjectHeadline, withSubjectReads } from './market-fixture'
@@ -37,7 +37,7 @@ const ev = (o: { i: number; insight?: string; day: number; platform?: string; au
 
 const base = {
   subjectId: 's1', name: 'Cost & access', members: new Set(['m1', 'm2', 'm3']), market: new Set(['industry-other', 'competitor:Ottobock']),
-  period: 'week' as const, week: WEEK, month: MONTH, marketWeek: 241, personas: [], namings: [], brands: 'counted' as const,
+  period: 'week' as const, week: WEEK, month: MONTH, personas: [], namings: [], brands: 'counted' as const,
   company: 'Össur', noun: null, gate: { claim: 'Cost & access. insurance, medical aid, funding, paperwork', requireRelevance: true },
 }
 
@@ -48,7 +48,7 @@ describe('subjectDetailOf: the subject\'s videos, by the conversation panel\'s r
       evidence: [ev({ i: 1, day: 2 }), ev({ i: 2, day: 3, audience: 'client' }), ev({ i: 3, day: 4, insight: 'other' }), ev({ i: 4, day: 6, audience: 'competitor:Ottobock' })],
     })
     expect(d.basis).toBe('month')
-    expect(d.week).toBeNull()
+    expect(d.cited).toEqual({ month: 2, week: null })
     expect(d.platforms).toMatchObject({ n: 2, month: null })
     expect(d.doing).toMatchObject({ n: 2, text: 'in October so far' })
   })
@@ -63,7 +63,10 @@ describe('subjectDetailOf: the subject\'s videos, by the conversation panel\'s r
       ],
     })
     expect(d.basis).toBe('week')
-    expect(d.week).toEqual({ k: 2, n: 241 })
+    // The week's videos a comment dates: the blocks' base, never the tile's
+    // (the week's share reads the level's base, `subjectWeekLevel`).
+    expect(d.cited).toEqual({ month: 3, week: 2 })
+    expect(d).not.toHaveProperty('week')
     expect(d.platforms).toMatchObject({ n: 2, rows: [{ platform: 'tiktok', videos: 2 }], month: { counts: { tiktok: 2, instagram: 1 }, n: 3, text: 'October so far' } })
     expect(d.who).toMatchObject({ n: 2, month: { n: 3 } })
     expect(d.doing).toEqual({ rows: [{ kind: 'pain_point', label: 'Complained about something', k: 2, n: 3 }, { kind: 'question', label: 'Asked a question', k: 1, n: 3 }], n: 3, text: 'in October so far' })
@@ -127,19 +130,46 @@ describe('subjectDetailOf: the subject\'s videos, by the conversation panel\'s r
     expect(d.cited).toEqual({ month: 2, week: 0 })
     expect(d.who).toMatchObject({ parts: [], n: 0, month: { n: 2 } })
     expect(d.platforms).toMatchObject({ rows: [], n: 0, month: { counts: { instagram: 1, tiktok: 1 }, n: 2 } })
-    expect(d.week).toEqual({ k: 0, n: 241 })
   })
 
   it('a subject with nothing in the period has no block to print', () => {
     const d = subjectDetailOf({ ...base, evidence: [] })
-    expect(d).toMatchObject({ who: null, doing: null, groups: [], platforms: null, quotes: [], week: { k: 0, n: 241 } })
+    expect(d).toMatchObject({ who: null, doing: null, groups: [], platforms: null, quotes: [], cited: { month: 0, week: 0 } })
+  })
+})
+
+describe('subjectWeekLevel: the week\'s share on the level\'s base (17 Oct)', () => {
+  const rivals = ['competitor:Ottobock']
+  const denominators = [
+    { audience: 'industry-other', videos: 226, comments: 3700 },
+    { audience: 'competitor:Ottobock', videos: 15, comments: 212 },
+    { audience: 'client', videos: 9, comments: 64 },
+    // A rival no longer tracked is not the market.
+    { audience: 'competitor:Gone', videos: 30, comments: 90 },
+  ]
+  const row = (audience: string, subject_id: string, videos: number) => ({ audience, subject_id, videos })
+
+  it('pools the subject\'s window rows and the window\'s market over the market\'s audiences, as the month\'s level pools', () => {
+    const rows = [row('industry-other', 's1', 76), row('competitor:Ottobock', 's1', 6), row('client', 's1', 3), row('competitor:Gone', 's1', 5), row('industry-other', 's2', 40)]
+    expect(subjectWeekLevel({ subjectId: 's1', rows, denominators, rivalAudiences: rivals })).toEqual({ k: 82, n: 241 })
+  })
+
+  it('a subject with no row among the others\' had no video in the week', () => {
+    expect(subjectWeekLevel({ subjectId: 's3', rows: [row('industry-other', 's1', 76)], denominators, rivalAudiences: rivals })).toEqual({ k: 0, n: 241 })
+  })
+
+  it('unread where the read failed, answered no row, or the window\'s market is not there', () => {
+    expect(subjectWeekLevel({ subjectId: 's1', rows: null, denominators, rivalAudiences: rivals })).toBe('unread')
+    expect(subjectWeekLevel({ subjectId: 's1', rows: [], denominators, rivalAudiences: rivals })).toBe('unread')
+    expect(subjectWeekLevel({ subjectId: 's1', rows: [row('industry-other', 's1', 4)], denominators: null, rivalAudiences: rivals })).toBe('unread')
+    expect(subjectWeekLevel({ subjectId: 's1', rows: [row('industry-other', 's1', 4)], denominators: [], rivalAudiences: rivals })).toBe('unread')
   })
 })
 
 describe('buildSubjectPanel: the read and the blocks, for a READY subject alone (U6)', () => {
   const p = marketParams({ subject: fixtureSubjectId('cost') })
   const month = marketFixture().month
-  const detail = { basis: 'month', week: null, who: null, brands: 'counted', doing: null, groups: [], platforms: null, quotes: [] } as SubjectDetail
+  const detail = { basis: 'month', who: null, brands: 'counted', doing: null, groups: [], platforms: null, quotes: [] } as SubjectDetail
 
   it('a ready subject: its own read where the published read holds one of this month, and its blocks', () => {
     const panel = buildSubjectPanel({ id: fixtureSubjectId('cost'), facts: fixtureFacts(), convs: [], period: 'month', p, read: withSubjectReads(fixtureRead()), month, detail, readsOn: true })
