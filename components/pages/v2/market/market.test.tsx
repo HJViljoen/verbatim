@@ -359,6 +359,16 @@ describe('ConversationTable', () => {
     assertCopyContract(<ConversationTable table={WEEK.table!} data={WEEK} />)
   })
 
+  // The fresh check (17 Oct): "Össur 4others 19" on every About cell. A flex
+  // row drops the spaces between its items, so the row carries the boards'
+  // 6px itself, on the table, a subject's page and a conversation's alike.
+  it('About keeps the boards\' gap between its chips and before "others"', () => {
+    const html = render(<ConversationTable table={WEEK.table!} data={WEEK} />)
+    const abouts = html.match(/<span data-about="" class="[^"]*"/g) ?? []
+    expect(abouts.length).toBeGreaterThan(0)
+    for (const a of abouts) expect(a).toMatch(/\binline-flex\b[^"]*\bgap-x-1\.5\b/)
+  })
+
   it('U6: filtered to a subject whose check is open, the table prints no total and Show all no number', () => {
     const held = { ...WEEK.table!, totalHeld: true }
     const text = renderText(<ConversationTable table={held} data={WEEK} />)

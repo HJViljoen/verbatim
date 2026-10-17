@@ -47,13 +47,19 @@ export function newVerdict(id: string, label: string, k: number, n: number, mont
 
 /** Who the videos are about, in one running line: the client's chip, the
  *  rivals' chips, the rest of the market in quiet words, each with its count
- *  ("Ottobock 5 · Össur 3 · others 11"). */
+ *  ("Ottobock 5 · Össur 3 · others 11").
+ *
+ *  THE GAP IS THE ROW'S OWN (`ABOUT_GAP`, the boards' 6px between chips and
+ *  before "others"): a flex row drops the spaces `ChipSep` writes, so without
+ *  it the chips touched ("Össur 4others 19"; the fresh check, 17 Oct). */
+export const ABOUT_GAP = 'gap-x-1.5'
+
 export function About({ parts, brand, noun, className }: { parts: readonly WhoPart[]; brand: string; noun: string | null; className?: string }) {
   if (parts.length === 0) return null
   const words = marketLabelsOf(noun)
   const ordered = [...parts].sort((a, b) => rank(a) - rank(b) || b.videos - a.videos)
   return (
-    <span className={cn('inline-flex flex-wrap items-center gap-y-1 text-[12.5px] leading-[1.5]', className)}>
+    <span data-about="" className={cn('inline-flex flex-wrap items-center gap-y-1 text-[12.5px] leading-[1.5]', ABOUT_GAP, className)}>
       {ordered.map((p, i) => (
         <Fragment key={p.about}>
           {i > 0 ? <ChipSep /> : null}
