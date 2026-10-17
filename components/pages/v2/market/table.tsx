@@ -92,11 +92,14 @@ function PhoneRow({ conv, href, data, subjects }: { conv: MarketConv; href: stri
     <div data-phone-row="" className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-[3px] border-t border-track py-[11px] first:border-t-0 first:pt-0">
       <span className="min-w-0 text-[14px]"><Name conv={conv} href={href} data={data} /></span>
       <span className="text-right font-mono text-[13.5px] tabular-nums">{count != null ? <span data-copy="figure">{fmtInt(count)}</span> : ''}</span>
-      <span className="min-w-0 text-[12.5px] text-muted-foreground">{subjects ? conv.subjectName ?? '' : ''}</span>
-      <span className="justify-self-end whitespace-nowrap text-[12.5px] text-muted-foreground">
-        {data.period === 'week'
-          ? conv.month != null ? <><span data-copy="figure" className="font-mono">{fmtInt(conv.month)}</span> {data.week?.inMonth ?? `in ${data.month.text}`}</> : null
-          : data.period === 'month' ? <span data-copy="verdict"><MovementBadge verdict={conv.monthVerdict} unit="pts" good="neutral" bandTip /></span> : null}
+      {/* The second line spans the row, so the month never narrows the name. */}
+      <span className="col-span-2 flex min-w-0 items-baseline justify-between gap-3 text-[12.5px] text-muted-foreground">
+        <span className="min-w-0">{subjects ? conv.subjectName ?? '' : ''}</span>
+        <span className="shrink-0 whitespace-nowrap">
+          {data.period === 'week'
+            ? conv.month != null ? <><span data-copy="figure" className="font-mono">{fmtInt(conv.month)}</span> {data.week?.inMonth ?? `in ${data.month.text}`}</> : null
+            : data.period === 'month' ? <span data-copy="verdict"><MovementBadge verdict={conv.monthVerdict} unit="pts" good="neutral" bandTip /></span> : null}
+        </span>
       </span>
     </div>
   )

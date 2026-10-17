@@ -43,7 +43,7 @@ function Switch({ data, path }: { data: MarketData; path: string }) {
 }
 
 /** A tracked subject's page (`/dashboard/market/subjects/[id]`). */
-export function MarketSubjectPage({ data }: { data: MarketData | null }) {
+export function MarketSubjectPage({ data, switcherOpen = false }: { data: MarketData | null; switcherOpen?: boolean }) {
   if (!data) return <FirstRun />
   const page = data.subjectPage
   if (!page || data.missing) {
@@ -57,7 +57,7 @@ export function MarketSubjectPage({ data }: { data: MarketData | null }) {
   const path = marketSubjectPath(page.panel.id)
   return (
     <PageFrame className="text-foreground">
-      <PageBar title={page.panel.name} crumbs={data.crumbs ? <Crumbs crumbs={data.crumbs} /> : null}>
+      <PageBar title={page.panel.name} crumbs={data.crumbs ? <Crumbs crumbs={data.crumbs} open={switcherOpen ? 'current' : undefined} /> : null}>
         <div className="max-lg:hidden"><Switch data={data} path={path} /></div>
       </PageBar>
       <div className="-mt-2 lg:hidden"><Switch data={data} path={path} /></div>

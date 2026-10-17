@@ -78,12 +78,12 @@ const rank = (p: WhoPart): number => (p.about === 'client' ? 0 : p.about === 'ma
 
 /** A stored sentence (a slot's prose), any `[[key]]` put back as code's
  *  figure; a sentence naming a key the table lacks is left out. */
-export function Stored({ line, slot, className, as: Tag = 'p' }: { line: StoredLine; slot: string; className?: string; as?: 'p' | 'span' | 'div' }) {
-  if (!line.body.includes('[[')) return <Tag data-copy="stored" data-slot={slot} className={className}>{line.body}</Tag>
+export function Stored({ line, slot, className, as: Tag = 'p', id }: { line: StoredLine; slot: string; className?: string; as?: 'p' | 'span' | 'div' | 'h2' | 'h3'; id?: string }) {
+  if (!line.body.includes('[[')) return <Tag id={id} data-copy="stored" data-slot={slot} className={className}>{line.body}</Tag>
   const parts = substituteFigures(line.body, line.figures)
   if (parts.length === 0) return null
   return (
-    <Tag data-copy="stored" data-slot={slot} className={className}>
+    <Tag id={id} data-copy="stored" data-slot={slot} className={className}>
       {parts.map((part, i) => ('text' in part ? <Fragment key={i}>{part.text}</Fragment> : <span key={i} data-copy="figure">{part.figure}</span>))}
     </Tag>
   )

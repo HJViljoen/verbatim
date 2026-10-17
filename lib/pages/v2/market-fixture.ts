@@ -15,6 +15,7 @@ import { OSSUR_SUBJECT_READS, SEALAND_SUBJECT_READS } from './market-reads-fixtu
 import type { DatedEvidence } from '../../written/evidence'
 import type { LongRunReadData, WeekReadData } from '../../written/types'
 import type { PublishedWeekRead } from '../../written/published'
+import { weekReadDates } from '../../reports/weekly-read'
 import type { ThemeMonthLine } from '../../reading/cross'
 
 // MARKET'S RENDER FIXTURE (depth v2, T3): an Össur-shaped week, drawn from the
@@ -496,7 +497,8 @@ const PREV_WINDOW = { from: '2026-09-21T00:00:00.000Z', to: '2026-09-28T00:00:00
 
 const WEEK: MarketWeek = {
   window: WINDOW,
-  dates: '5 to 11 Oct',
+  // The read's own words for its window, as the loader writes them.
+  dates: weekReadDates(WINDOW),
   month: OCT,
   monthComplete: false,
   inMonth: 'in October so far',

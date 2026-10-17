@@ -1,20 +1,18 @@
-import type { CSSProperties } from 'react'
 import { BarChart3, ListChecks, Smartphone } from 'lucide-react'
 import { ProportionBar } from '@/components/proportion-bar'
 import { CARD, CardHead, SpikeBars, TickBar, TickBarRow, TickKey } from '@/components/v2'
-import { EYEBROW } from '@/components/colour-roles'
 import { fmtInt } from '@/lib/format'
 import { INSUFFICIENT, weeksFailed, type WeeksRead } from '@/lib/pages/home'
-import { MARKET_KINDS, type KindsBlock, type MarketData, type PlatformsBlock, type StoredLine } from '@/lib/pages/v2/market'
+import { MARKET_KINDS, type KindsBlock, type MarketData, type PlatformsBlock } from '@/lib/pages/v2/market'
 import { talkKindLabel } from '@/lib/pages/overview-market/kinds'
 import { cn } from '@/lib/utils'
-import { Stored } from './parts'
 
-// MARKET'S RAIL (depth v2, T3; E2-Market's right-hand column): what people do
-// in the comments (the month so far against last month, the tick at last
-// month), the market's videos week by week (the Dashboard's own chart and
-// rules), where it is said (the period's videos by platform) and, this week,
-// what is worth watching (the published read's stored lines). The boards'
+// THE NUMBERS' SIDE CARDS (depth v2, T3; E2-Market's right-hand column, a row
+// of three since F2-Market, 17 Oct): what people do in the comments (the month
+// so far against last month, the tick at last month), the market's videos
+// week by week (the Dashboard's own chart and rules), where it is said (the
+// period's videos by platform). What is worth watching moved to the week's
+// page with the rest of the read. The boards'
 // "a usual week" tick and "a busy week, but within the normal range" are not
 // drawn: no rule bands a week against a usual one (decision 1).
 
@@ -173,24 +171,17 @@ export function PlatformMonthRow({ label, color, week, month, n }: { label: stri
   )
 }
 
-export function WatchCard({ lines }: { lines: readonly StoredLine[] }) {
-  return (
-    <article id="watch" className={cn(CARD, 'scroll-mt-6')}>
-      <p className={cn('m-0', EYEBROW)}>Worth watching next week</p>
-      {lines.map((l, i) => <Stored key={i} line={l} slot="week_read" className="m-0 text-[14.5px] leading-[1.55] text-foreground" />)}
-    </article>
-  )
-}
-
-/** The rail: a column beside the subject board in every data state (the
- *  parity pass, 13 Oct: it never breaks out into a row of cards). */
-export function RailView({ data, style }: { data: MarketData; style?: CSSProperties }) {
+/** THE NUMBERS' SIDE CARDS (F2-Market, ruling 2): a row of three above the
+ *  full-width table, never a rail beside it, sharing a height, one to a row
+ *  under 1180 and on a phone. In every data state each keeps its card. */
+export function NumbersRow({ data }: { data: MarketData }) {
   const { rail } = data
+  const cell = 'col-span-12 flex min-w-0 min-[1180px]:col-span-4 [&>article]:flex-1'
   return (
-    <div style={style} className="col-span-12 flex min-w-0 flex-col gap-5 xl:col-span-4">
-      {rail.kinds ? <KindsCard block={rail.kinds} /> : <KindsFrame noun={data.noun} monthText={data.month.text} />}
-      <WeeksCard weeks={rail.weeks} axis={rail.weeksAxis} />
-      {rail.platforms ? <PlatformsCard block={rail.platforms} data={data} /> : <PlatformsFrame data={data} />}
-    </div>
+    <section id="numbers" aria-label="The numbers" className="grid grid-cols-12 gap-5 max-sm:gap-3.5">
+      <div className={cell}>{rail.kinds ? <KindsCard block={rail.kinds} /> : <KindsFrame noun={data.noun} monthText={data.month.text} />}</div>
+      <div className={cell}><WeeksCard weeks={rail.weeks} axis={rail.weeksAxis} /></div>
+      <div className={cell}>{rail.platforms ? <PlatformsCard block={rail.platforms} data={data} /> : <PlatformsFrame data={data} />}</div>
+    </section>
   )
 }
