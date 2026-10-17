@@ -105,6 +105,20 @@ describe('every state keeps its frame', () => {
     assertCopyContract(<ConversationPageBody page={names} data={LINER} />)
   })
 
+  it('a month with no figure is no tile, never an empty one: the stats that print each carry their figure (17 Oct)', () => {
+    // The subject page's empty change tile, checked here: a conversation's
+    // stats are only the figures it has (`panelStats`), so a month before
+    // with none drops its tile and the row closes up (an odd last one takes
+    // the row), and the month line's verdict sits in its label or not at all.
+    const conv = LINER.convPage!
+    const noPrev = { ...conv, panel: { ...conv.panel, stats: conv.panel.stats.filter((x) => !x.label.endsWith('in September')) } }
+    const html = render(<ConversationPageBody page={noPrev} data={LINER} />)
+    const cells = html.match(/<div data-copy="level" class="min-w-0 rounded-\[10px\] bg-inner[^"]*"><div[^>]*>[^<]*<\/div>/g) ?? []
+    expect(cells).toHaveLength(2)
+    for (const c of cells) expect(c).toMatch(/>\d[\d,]*<\/div>$/)
+    expect(html).not.toContain('data-tile-gap')
+  })
+
   it('a conversation first heard this week carries "New", the reader flag in a verdict node', () => {
     const d = marketConversationFixture(11)
     expect(render(body(d))).toContain('data-flag="new"')

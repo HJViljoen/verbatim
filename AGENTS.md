@@ -1463,7 +1463,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
     alone), and where that read fails or answers no row, `SUBJECT_WEEK_UNREAD`
     in the tile's frame, never a figure from another base (until then it
     counted only the videos a comment dates, and 17% stood beside a month of
-    34%); the month's change from its `Verdict` alone, the month's share,
+    34%); the month's change from its `Verdict` alone (with no change to
+    draw, no verdict or a refused one, the tile keeps its frame and says the
+    Dashboard week tile's words, "No comparison with September yet.",
+    `subjectNotCompared`, and no reason: the one condition, plan §0a; Sealand's
+    October, whose pair with September is refused), the month's share,
     the conversations inside it; the one-base line (the parts below read the
     videos a comment dates, the week's and the month's, each "of these" the
     tile's); week by week, the subject's videos a comment dates in the three

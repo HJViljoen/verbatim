@@ -5,6 +5,7 @@ import { fmtInt } from '@/lib/format'
 import { homeWeekDetail, INSUFFICIENT, weeksDrawable } from '@/lib/pages/home'
 import { SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import type { TileRead, WeekSubjects, WeekTile } from '@/lib/pages/v2/home'
+import { subjectNotCompared } from '@/lib/pages/v2/market'
 import { cn } from '@/lib/utils'
 import { MONO_MUTED, TILE, TILE_FAILED, TileHead, TileLine } from './parts'
 import { HomeWeeksPlot } from './weeks-plot'
@@ -124,8 +125,9 @@ export function weekSubjectLabels(s: Pick<WeekSubjects, 'pending' | 'prevText'> 
 
 /** A ready subject with no level to print. */
 export const SUBJECT_NO_LEVEL = 'no level yet'
-/** Ready subjects, none with a month before to compare (Sealand today). */
-export const subjectNotCompared = (prev: string): string => `no comparison with ${prev} yet`
+/** Ready subjects, none with a month before to compare (Sealand today):
+ *  Market's words, which a subject's page prints in its change tile. */
+export { subjectNotCompared }
 /** Compared, and none moved beyond its band. */
 export const subjectNoneMoved = (prev: string): string => weekSubjectLabels({ prevText: prev }).noneMoved
 

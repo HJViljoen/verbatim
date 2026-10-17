@@ -7,7 +7,7 @@ import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibrati
 import type { MarketData } from '@/lib/pages/v2/market'
 import { SubjectCardsView } from './analysis'
 import { BACK_TO_MARKET, MarketSubjectPage, SUBJECT_MISSING } from './pages'
-import { SubjectPageBody, subjectNumbersLine, SUBJECT_NUMBERS_HELD, SUBJECT_WEEK_UNREAD } from './subject-page'
+import { SubjectPageBody, subjectChangeGap, subjectNumbersLine, SUBJECT_NUMBERS_HELD, SUBJECT_WEEK_UNREAD } from './subject-page'
 
 // A TRACKED SUBJECT'S PAGE (depth as pages, 17 Oct; F2-Market-Subject, its
 // switcher and its phone board): from the page fixture through the page's own
@@ -93,6 +93,40 @@ describe('a ready subject whose week could not be read on the level\'s base', ()
     // The one-base line names the blocks' week without a tile to set it against.
     expect(text).toContain('The parts below read the videos where a comment was about it: 40 this week, and 64 of these 108 in October so far.')
     assertCopyContract(page(d))
+  })
+})
+
+describe('a ready subject with no change to print against last month (17 Oct)', () => {
+  // Sealand's October: its pair with September is refused (our September
+  // search change), so the standing facts carry no verdict and the badge drew
+  // nothing; the tile printed its label over an empty slot. It now says so in
+  // its frame, in the Dashboard week tile's words, and names no reason (the
+  // one condition, plan §0a).
+  const d = marketSubjectFixture('fit', { subjects: 'one_month' })
+  const text = renderText(page(d))
+  const html = render(page(d))
+
+  it('the change tile keeps its frame and says so in one line; the other tiles as they were', () => {
+    expect(d.subjectPage!.panel.verdict).toBeNull()
+    expect(subjectChangeGap('September')).toBe('No comparison with September yet.')
+    expect(text).toContain('The numbers This week’s 82 videos, beside October so far 34% 82 of 241 videos this week No comparison with September yet. 34% 108 of 318 videos in October so far')
+    expect(html.match(/data-tile-gap=""/g)).toHaveLength(1)
+    expect(text).not.toContain('October so far against September')
+    assertCopyContract(page(d))
+  })
+
+  it('a refused verdict: the same line, no reason and no earlier figure; never "not read as a change"', () => {
+    const fit = marketSubjectFixture('fit')
+    const v = fit.subjectPage!.panel.verdict!
+    const refused: MarketData = { ...fit, subjectPage: { ...fit.subjectPage!, prevPct: null, panel: { ...fit.subjectPage!.panel, verdict: { ...v, changePts: null, bandPts: null, state: 'refused', refusedReason: 'tracking_change', pair: { mode: 'refuse', cause: 'searches', changeMonth: '2026-09-01', checkWith: null } } } } }
+    const t = renderText(page(refused))
+    expect(t).toContain('82 of 241 videos this week No comparison with September yet. 34% 108 of 318')
+    expect(t).not.toMatch(/not read as a change|refused|not compared|against September, 33%/)
+  })
+
+  it('a change that prints keeps its badge over its label', () => {
+    expect(renderText(page(FIT))).toContain('no clear change · +0.9 pts October so far against September, 33%')
+    expect(render(page(FIT))).not.toContain('data-tile-gap')
   })
 })
 

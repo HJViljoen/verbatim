@@ -1277,6 +1277,20 @@ export function buildSubjectBoard(input: {
   }
 }
 
+/**
+ * A READY SUBJECT'S MONTH WITH NO CHANGE TO PRINT against the month before:
+ * no verdict (the month pair is not comparable, `marketComparable`, so the
+ * standing facts carry none: Sealand's October, whose pair with September
+ * our September search change refuses), or one refused. ONE SOURCE for the
+ * Dashboard's week tile (a row's gap, lower case) and the subject page's
+ * change tile (a sentence in its frame, 17 Oct). It names no reason, and
+ * that is the rule, not a gap: a comparison the product will not stand
+ * behind is not shown and not explained (the one condition, plan §0a;
+ * `MovementBadge` draws nothing for it, and "not read as a change" is never
+ * client copy).
+ */
+export const subjectNotCompared = (prev: string): string => `no comparison with ${prev} yet`
+
 /** A subject whose check passed and the month has no reading for yet: the
  *  month's own line ("No reading in October so far yet."), its row's note
  *  and its page's numbers alike. */

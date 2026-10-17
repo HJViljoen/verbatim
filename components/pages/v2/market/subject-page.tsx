@@ -5,7 +5,7 @@ import { MovementBadge } from '@/components/delta-badge'
 import { EYEBROW, IconTile } from '@/components/colour-roles'
 import { CARD, MiniBars, PanelSection, SpikeBars, TickBarRow } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
-import { noReadingYet, platformRows, subjectNoRead, type MarketData, type SubjectPage, type SubjectPanel } from '@/lib/pages/v2/market'
+import { noReadingYet, platformRows, subjectNoRead, subjectNotCompared, type MarketData, type SubjectPage, type SubjectPanel } from '@/lib/pages/v2/market'
 import { SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { cn } from '@/lib/utils'
 import { SectionHead } from './analysis'
@@ -66,6 +66,18 @@ export function subjectNumbersLine(panel: Pick<SubjectPanel, 'state' | 'monthTex
  *  (`SubjectPage.week` is `'unread'`): said in its frame, never a figure from
  *  another base. */
 export const SUBJECT_WEEK_UNREAD = 'This week’s share could not be read just now.'
+
+/** The change tile where no change prints: the Dashboard week tile's words
+ *  for the same state (`subjectNotCompared`), as a sentence in the tile's
+ *  frame. No reason, by the one condition (plan §0a). */
+export const subjectChangeGap = (prev: string): string => {
+  const words = subjectNotCompared(prev)
+  return `${words.charAt(0).toUpperCase()}${words.slice(1)}.`
+}
+
+/** Whether the change tile has a change to draw: `MovementBadge` draws
+ *  nothing for no verdict or a refused one, and the tile then says so. */
+const changeDrawn = (verdict: SubjectPanel['verdict']): boolean => verdict != null && verdict.state !== 'refused'
 
 /** One tile of the four (the boards' `.stat`): a big value over its label. */
 function Tile({ value, children, figure = true }: { value: ReactNode; children: ReactNode; figure?: boolean }) {
@@ -171,15 +183,21 @@ function NumbersCard({ page, data }: { page: SubjectPage; data: MarketData }) {
         {weekStat === 'unread'
           ? <GapTile>{SUBJECT_WEEK_UNREAD}</GapTile>
           : weekStat ? <Tile value={pct(weekStat.k, weekStat.n)}><span data-copy="level">{fmtInt(weekStat.k)} of {fmtInt(weekStat.n)}</span> videos this week</Tile> : null}
-        <Tile value={(
-          // The board's 26px change, drawn by the one badge; a non-answer
-          // ("no clear change") at the tile's quieter size.
-          <span data-copy="verdict" className={cn('block font-sans tracking-[-0.01em] [&>span]:leading-[1.15]', panel.verdict?.state === 'moved' ? '[&>span]:text-[26px] max-sm:[&>span]:text-[22px]' : '[&>span]:text-[17px] max-sm:[&>span]:text-[15px]')}>
-            <MovementBadge verdict={panel.verdict} unit="pts" good="neutral" bandTip />
-          </span>
-        )} figure={false}>
-          {panel.monthText} against {data.month.prev.text}{page.prevPct != null ? <>, <span data-copy="figure">{Math.round(page.prevPct)}%</span></> : null}
-        </Tile>
+        {changeDrawn(panel.verdict) ? (
+          <Tile value={(
+            // The board's 26px change, drawn by the one badge; a non-answer
+            // ("no clear change") at the tile's quieter size.
+            <span data-copy="verdict" className={cn('block font-sans tracking-[-0.01em] [&>span]:leading-[1.15]', panel.verdict?.state === 'moved' ? '[&>span]:text-[26px] max-sm:[&>span]:text-[22px]' : '[&>span]:text-[17px] max-sm:[&>span]:text-[15px]')}>
+              <MovementBadge verdict={panel.verdict} unit="pts" good="neutral" bandTip />
+            </span>
+          )} figure={false}>
+            {panel.monthText} against {data.month.prev.text}{page.prevPct != null ? <>, <span data-copy="figure">{Math.round(page.prevPct)}%</span></> : null}
+          </Tile>
+        ) : (
+          // No change to draw (the parity rule): the tile keeps its frame and
+          // says so in one line, never an empty slot over its label.
+          <GapTile>{subjectChangeGap(data.month.prev.text)}</GapTile>
+        )}
         <Tile value={pct(level.k, level.n)}><span data-copy="level">{fmtInt(level.k)} of {fmtInt(level.n)}</span> videos {inMonth}</Tile>
         <Tile value={fmtInt(page.insideTotal)}>conversations inside it {insideWords}</Tile>
       </div>
