@@ -76,7 +76,8 @@ describe('loadProductSettings', () => {
 
   it('links "Tag them" to the category\'s list on Your products, in the same month', () => {
     const v = productSettingsView(productsFixtureRead(), { canEdit: true })
-    expect(v.open!.tagHref).toBe(`/dashboard/products?month=2026-10&group=${fid(1, 1)}#unclear`)
+    // The category's page, at its couldn't-tell-which list (17 Oct).
+    expect(v.open!.tagHref).toBe(`/dashboard/products/${fid(1, 1)}?month=2026-10#unclear`)
   })
 
   it('answers missing, never throws, where the migration is not applied', async () => {

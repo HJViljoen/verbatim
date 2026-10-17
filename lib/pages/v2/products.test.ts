@@ -8,14 +8,17 @@ import { KIND_LABELS } from '../../reading/kinds'
 import { fakeDb } from '../../test/fake-db'
 import { talkKindLabel } from '../overview-market/kinds'
 import {
-  ACCEPT_PAIRS, linersUnclearTexts, OSSUR_CATALOGUE, OSSUR_STANDING, ossurCrosses, ossurLinersFixture, ossurProductRows, ossurProductsFixture,
-  ossurSealInXFixture, ossurTodayFixture, ossurTodayLinersFixture, ossurTodayCrosses, ossurTodayQuietFixture, ossurTodayRows, PRODUCT_IDS, PRODUCTS_FIXTURES, SEP_MARKET, sealInXTexts,
+  ACCEPT_PAIRS, linersUnclearTexts, OSSUR_CATALOGUE, OSSUR_STANDING, ossurCrosses, ossurProductRows, ossurProductsFixture,
+  ossurTodayFixture, ossurTodayCrosses, ossurTodayInput, ossurTodayRows, PRODUCT_IDS, PRODUCTS_FIXTURES, SEP_MARKET, sealInXTexts,
 } from './products-fixture'
+import { categoryFixture, todayCategoryFixture } from './products-level-fixture'
+import { buildLevelData } from './products-levels'
+import { surface } from '../../nav'
 import {
-  buildCompare, buildProductsData, catalogueBreak, categoryShareVerdict, crossesOf, firstMonthOf, monthLine, monthOptions, monthsToRead, poolLens, loadMonthPlacements, marketProductMonth, marketVideosOf, monthsBack, notchFor,
-  openOf, parseProductsParams, pickStandouts, placementsInPlay, productKindLabel, productMonthSets, productQuotes, productsHref, PRODUCT_KIND_LABELS, setKey, sharePct, shelfColumns,
+  buildCompare, buildProductsData, catalogueBreak, categoryShareVerdict, crossesOf, firstMonthOf, monthLine, monthOptions, monthsToRead, poolLens, loadMonthPlacements, marketProductMonth, marketVideosOf, monthsBack,
+  objectHref, parseProductsParams, pickStandouts, placementsInPlay, productKindLabel, productMonthSets, productQuotes, productsHref, PRODUCT_KIND_LABELS, setKey, sharePct, shelfColumns,
   SLOT_ORDER, STANDOUT_MIN, standoutSlots, topProducts, topRanked, topProductsOf, unclearLines, PRODUCTS_HREF, TOP_LABELS,
-  type CategoryPanel, type ProductMonthRow, type ProductPanel, type ProductsInput, type TextRead,
+  type ProductMonthRow, type ProductsInput, type TextRead,
 } from './products'
 
 // Your products (depth v2, T5): the page's pure half over Össur's real
@@ -25,23 +28,31 @@ import {
 const SEP = '2026-09-01'
 const AUD = ['competitor:Ottobock', 'industry-other']
 
-describe('the address', () => {
-  it('reads a category, a product, the full list and the month, first of a repeated key, empty as absent', () => {
-    expect(parseProductsParams({ group: ['g1', 'g2'], product: ' ', unclear: 'all', month: '2026-09', other: 'x' })).toEqual({ group: 'g1', unclear: 'all', month: '2026-09' })
+describe('the address (as pages, 17 Oct)', () => {
+  it('reads a category, a product, the full list, the month and a product page\'s video params, first of a repeated key, empty as absent', () => {
+    expect(parseProductsParams({ group: ['g1', 'g2'], product: ' ', unclear: 'all', month: '2026-09', video: 'v1', videos: 'all', other: 'x' })).toEqual({ group: 'g1', unclear: 'all', month: '2026-09', video: 'v1', videos: 'all' })
   })
 
-  it('keeps the month, opens one item with its anchor, and keeps "all" only on a category', () => {
+  it('writes the root\'s address once, as the sidebar does', () => {
+    expect(PRODUCTS_HREF).toBe(surface('products').href)
+  })
+
+  it('a category is its page, a product its page under its category, the month kept; "all" only on a category', () => {
     expect(productsHref({ month: '2026-09' })).toBe(`${PRODUCTS_HREF}?month=2026-09`)
-    expect(productsHref({}, { kind: 'group', id: 'g' })).toBe('/dashboard/products?group=g#category-panel')
-    expect(productsHref({}, { kind: 'group', id: 'g' }, { all: true, at: 'unclear' })).toBe('/dashboard/products?group=g&unclear=all#unclear')
-    expect(productsHref({}, { kind: 'product', id: 'p' }, { all: true })).toBe('/dashboard/products?product=p#product-panel')
+    expect(productsHref({}, { kind: 'group', id: 'g' })).toBe('/dashboard/products/g')
+    expect(productsHref({ month: '2026-09' }, { kind: 'group', id: 'g' }, { all: true, at: 'unclear' })).toBe('/dashboard/products/g?month=2026-09&unclear=all#unclear')
+    expect(productsHref({ month: '2026-09' }, { kind: 'group', id: 'g' }, { at: 'unclear' })).toBe('/dashboard/products/g?month=2026-09#unclear')
+    expect(productsHref({}, { kind: 'product', id: 'p', group: 'g' }, { all: true })).toBe('/dashboard/products/g/p')
+    // An id that needs escaping is escaped once.
+    expect(productsHref({}, { kind: 'group', id: 'a b/c' })).toBe('/dashboard/products/a%20b%2Fc')
+    // A product without its category is the old panel address, which
+    // redirects to its page in one hop (`redirectFor`).
+    expect(productsHref({}, { kind: 'product', id: 'p' })).toBe('/dashboard/products?product=p')
   })
 
-  it('opens a product before a category, and nothing the catalogue does not hold (Settings\' "Tag them" link opens its category)', () => {
-    expect(openOf(OSSUR_CATALOGUE, { group: PRODUCT_IDS.liners(), product: PRODUCT_IDS.navii() })).toEqual({ kind: 'product', id: PRODUCT_IDS.navii() })
-    expect(openOf(OSSUR_CATALOGUE, { group: PRODUCT_IDS.liners() })).toEqual({ kind: 'group', id: PRODUCT_IDS.liners() })
-    expect(openOf(OSSUR_CATALOGUE, { group: 'not-a-category', product: 'nor-a-product' })).toBeNull()
-    expect(openOf(null, { group: PRODUCT_IDS.liners() })).toBeNull()
+  it('an object opens its page, a product under its own category from the catalogue', () => {
+    expect(objectHref({ month: '2026-09' }, OSSUR_CATALOGUE, 'product', PRODUCT_IDS.navii())).toBe(`/dashboard/products/${PRODUCT_IDS.knees()}/${PRODUCT_IDS.navii()}?month=2026-09`)
+    expect(objectHref({}, OSSUR_CATALOGUE, 'group', PRODUCT_IDS.liners())).toBe(`/dashboard/products/${PRODUCT_IDS.liners()}`)
   })
 })
 
@@ -178,7 +189,7 @@ describe('the standouts, picked by code', () => {
       ['first', 'Navii'], ['general', 'Hands'], ['praised', 'Flex-Foot Cheetah'], ['focus', 'Rheo Knee'],
     ])
     const [first, general, praised, focus] = d.standouts
-    expect(first).toMatchObject({ videos: 3, where: 'Knees', lead: { label: 'Function & movement', k: 2, n: 3 }, href: `/dashboard/products?product=${PRODUCT_IDS.navii()}#product-panel` })
+    expect(first).toMatchObject({ videos: 3, where: 'Knees', lead: { label: 'Function & movement', k: 2, n: 3 }, href: `/dashboard/products/${PRODUCT_IDS.knees()}/${PRODUCT_IDS.navii()}` })
     expect(general).toMatchObject({ inGeneral: { k: 98, n: 110 }, yours: { k: 12, n: 110 } })
     expect(praised).toMatchObject({ praised: { k: 7, n: 9 }, where: 'Feet' })
     expect(focus).toMatchObject({ subject: 'Cost & access', level: { k: 5, n: 7 } })
@@ -218,40 +229,13 @@ describe('the page, from its reads', () => {
     expect(d.market).toBe(839)
   })
 
-  it('opens a category with its split (exclusive, so it adds up), month line, comparison and couldn\'t-tell-which list', () => {
-    const d = ossurLinersFixture()
-    expect(d.shelf[0].selected).toBe(true)
-    const p = d.panel!
-    expect(p.kind).toBe('group')
-    if (p.kind !== 'group') return
-    expect(p.split).toEqual({ any: 117, named: 18, unclear: 21, unbranded: 78 })
-    expect(p.split!.named + p.split!.unclear + p.split!.unbranded).toBe(p.split!.any)
-    expect(p.line.map((b) => [b.label, b.k, b.n])).toEqual([['Jun', 40, 410], ['Jul', 55, 520], ['Aug', 73, 612], ['Sep', 117, 839]])
-    expect(p.compare!.columns.map((c) => c.label)).toEqual(['All liners', 'Iceross Seal-In X', 'Iceross Comfort', 'Iceross Synergy'])
-    expect(p.compare!.verdicts.every((v) => v.state === 'too_little_data')).toBe(true)
-    expect(p.unclear).toMatchObject({ videos: 21, more: 3, withheld: 1 })
-    expect(p.unclear.lines).toHaveLength(3)
-    expect(p.unclear.allHref).toBe(`/dashboard/products?group=${PRODUCT_IDS.liners()}&unclear=all#unclear`)
-    expect(p.unclear.options.map((o) => o.label).slice(-3)).toEqual(['One of your products in Liners, not sure which', 'Liners in general', 'Not about your products'])
-    expect(p.notchAt).toBeCloseTo(notchFor(OSSUR_CATALOGUE.groups, PRODUCT_IDS.liners()))
-  })
-
-  it('lists every line with "all", and offers no Tag choice to a reader who may not tag', () => {
-    const all = PRODUCTS_FIXTURES['ossur-liners-all']().panel
-    expect(all?.kind === 'group' && [all.unclear.lines.length, all.unclear.more, all.unclear.allHref]).toEqual([6, 0, null])
-    const member = PRODUCTS_FIXTURES['ossur-liners-member']()
-    expect(member.canTag).toBe(false)
-    expect(member.panel?.kind === 'group' && member.panel.unclear.options).toEqual([])
-  })
-
-  it('opens a product with its videos against the market and its category, and three of its comments, one a video', () => {
-    const p = ossurSealInXFixture().panel!
-    expect(p.kind).toBe('product')
-    if (p.kind !== 'product') return
-    expect(p).toMatchObject({ videos: 9, market: 839, categoryVideos: 117, groupName: 'Liners' })
-    expect(p.quotes).toHaveLength(3)
-    expect(p.quotes.map((q) => q.cite)).toEqual(['YouTube · 28 Sep', 'TikTok · 22 Sep', 'Instagram · 12 Sep'])
-    expect(p.compare!.columns.map((c) => c.label)).toEqual(['All liners', 'Iceross Seal-In X'])
+  it('every head, tile and card opens a page: a category\'s, or a product\'s under its category', () => {
+    const d = ossurProductsFixture()
+    const liners = d.shelf[0]
+    expect(liners.href).toBe(`/dashboard/products/${PRODUCT_IDS.liners()}`)
+    expect(liners.unclearHref).toBe(`/dashboard/products/${PRODUCT_IDS.liners()}#unclear`)
+    expect(liners.products[0].href).toBe(`/dashboard/products/${PRODUCT_IDS.liners()}/${PRODUCT_IDS.sealInX()}`)
+    for (const s of d.slots) if (s.card) expect(s.card.href, s.slot).toMatch(/^\/dashboard\/products\/[^?#]+/)
   })
 
   it('says why it prints no count: no migration, no catalogue, not switched on, a month not read, a failed read', () => {
@@ -303,11 +287,11 @@ describe('the panel\'s words', () => {
 })
 
 describe('the Dashboard\'s tile (T8)', () => {
-  it('names the first-month product, into its open panel', () => {
+  it('names the first-month product, into its page', () => {
     const d = ossurProductsFixture()
     const top = topProductsOf(d, d.standouts.filter((s) => s.kind === 'first') as never)
     expect(top).toMatchObject({ state: 'ready', monthWords: 'September', standout: { label: TOP_LABELS.first, name: 'Navii', k: 3, n: null }, href: PRODUCTS_HREF, cameUp: 15 })
-    expect(top.standout!.href).toContain(`product=${PRODUCT_IDS.navii()}`)
+    expect(top.standout!.href).toBe(`/dashboard/products/${PRODUCT_IDS.knees()}/${PRODUCT_IDS.navii()}`)
     expect(top.standout!.label).not.toMatch(/\d/)
     expect(top.columns).toHaveLength(6)
   })
@@ -438,11 +422,14 @@ describe('the fresh check\'s fixes (13 Oct)', () => {
   it('5. a product with no row in a read month is not read yet (null), never quiet; its tile and the Dashboard\'s small shelf say so', () => {
     const navii = PRODUCT_IDS.navii()
     const rows = ossurProductRows().filter((r) => !(r.object_id === navii && r.month === SEP))
-    const d = buildProductsData({ ...baseInput(), rows, params: { product: navii } })
+    const d = buildProductsData({ ...baseInput(), rows })
     const tile = d.shelf.find((c) => c.name === 'Knees')!.products.find((p) => p.id === navii)!
     expect(tile.videos).toBeNull()
     expect(d.shelf.find((c) => c.name === 'Knees')!.products.at(-1)!.id).toBe(navii)
-    expect(d.panel?.kind === 'product' && d.panel.videos).toBeNull()
+    // Its page says it was not read, never that it was quiet.
+    const page = buildLevelData({ in: { ...baseInput(), rows }, ask: { kind: 'product', group: PRODUCT_IDS.knees(), id: navii }, product: { videos: new Map(), named: [], groups: null } })
+    expect(page.product?.videos).toBeNull()
+    expect(page.product?.lead).toMatch(/^Not read yet for September/)
     expect(topProductsOf(d).columns!.flatMap((c) => c.products).some((p) => p.id === navii)).toBe(false)
     // A category with no row this month is not read either.
     const knees = PRODUCT_IDS.knees()
@@ -477,11 +464,11 @@ describe('the fresh check\'s fixes (13 Oct)', () => {
   })
 
   it('11. the comparison sets each product\'s own largest subject in weight', () => {
-    const p = ossurLinersFixture().panel
-    if (p?.kind !== 'group' || !p.compare) throw new Error('expected a comparison')
-    const fit = p.compare.rows.find((r) => r.label === 'Fit & comfort')!
+    const compare = categoryFixture({ over: { crosses: ossurCrosses() } }).category?.detail.compare
+    if (!compare) throw new Error('expected a comparison')
+    const fit = compare.rows.find((r) => r.label === 'Fit & comfort')!
     expect(fit.cells.map((c) => c?.highlight ?? false)).toEqual([false, true, true, true])
-    expect(p.compare.rows.find((r) => r.label === 'Cost & access')!.cells.some((c) => c?.highlight)).toBe(false)
+    expect(compare.rows.find((r) => r.label === 'Cost & access')!.cells.some((c) => c?.highlight)).toBe(false)
   })
 })
 
@@ -569,32 +556,30 @@ describe('the parity pass: the board\'s shape in the real, thin state', () => {
     expect(upTo.standouts).toEqual(all.standouts)
     expect(upTo.slots).toEqual(all.slots)
     expect(upTo.months.map((m) => m.label)).toEqual(['July', 'August', 'September'])
-    // An open panel too: its split, crosses, line and comparison.
-    const open = { params: { group: PRODUCT_IDS.liners() } }
-    const panelAll = ossurTodayFixture({ ...open, calibrated: true }).panel
-    const panelUpTo = ossurTodayFixture({ ...open, calibrated: true, over: { rows: ossurTodayRows().filter((r) => r.month <= SEP) } }).panel
-    expect(panelAll).not.toBeNull()
-    expect(panelUpTo).toEqual(panelAll)
-    const product = { params: { product: PRODUCT_IDS.sealInX() } }
-    expect(ossurTodayFixture({ ...product, over: { rows: ossurTodayRows().filter((r) => r.month <= SEP) } }).panel).toEqual(ossurTodayFixture(product).panel)
+    // A category's page and a product's too: their split, crosses, lines,
+    // comparison and place (the switch's months aside).
+    const upToRows = ossurTodayRows().filter((r) => r.month <= SEP)
+    const category = (rows?: ProductMonthRow[]) => buildLevelData({ in: ossurTodayInput(false, rows ? { rows } : {}, true), ask: { kind: 'category', id: PRODUCT_IDS.liners() }, category: { unclear: [], named: new Map(), groups: null } }).category
+    expect(category()).not.toBeNull()
+    expect(category(upToRows)).toEqual(category())
+    const product = (rows?: ProductMonthRow[]) => buildLevelData({ in: ossurTodayInput(false, rows ? { rows } : {}), ask: { kind: 'product', group: PRODUCT_IDS.liners(), id: PRODUCT_IDS.sealInX() }, product: { videos: new Map(), named: [], groups: null } }).product
+    expect(product(upToRows)).toEqual(product())
   })
 
   it('a category with no product named keeps its comparison: the category\'s column counted, the products\' empty', () => {
-    const liners = ossurTodayLinersFixture(false, true).panel as CategoryPanel
+    const liners = todayCategoryFixture({ calibrated: true }).category!.detail
     expect(liners.compare).toMatchObject({ empty: 'none_named', verdicts: [] })
     expect(liners.compare!.columns.map((c) => c.label)).toEqual(['All liners', 'Iceross Seal-In X', 'Iceross Dermo', 'Iceross Seal-In V'])
     expect(liners.compare!.rows[0].cells).toEqual([{ k: 12, n: 23 }, null, null, null])
     // Subjects not measured yet (today): the same table, each row a subject's
     // name, every cell empty, the category's included.
-    const today = ossurTodayLinersFixture().panel as CategoryPanel
+    const today = todayCategoryFixture().category!.detail
     expect(today.compare).toMatchObject({ empty: 'pending', verdicts: [] })
     expect(today.compare!.rows.map((r) => r.label)).toEqual(['Choosing the right device', 'Community & encouragement', 'Cost & access', 'Fit & comfort', 'Function & movement'])
     expect(today.compare!.rows.every((r) => r.cells.every((c) => c === null))).toBe(true)
-    // A quiet product's own panel: its one column, empty.
-    const quiet = ossurTodayQuietFixture().panel as ProductPanel
-    expect(quiet.compare).toMatchObject({ empty: 'pending' })
-    expect(quiet.compare!.columns.map((c) => c.label)).toEqual(['All liners', 'Iceross Seal-In X'])
-    expect(quiet).toMatchObject({ videos: 0, market: 539, categoryVideos: 23, categoryUnbranded: 20 })
+    // A quiet product's own page: a read zero, its category's figures beside it.
+    const quiet = buildLevelData({ in: ossurTodayInput(false), ask: { kind: 'product', group: PRODUCT_IDS.liners(), id: PRODUCT_IDS.sealInX() }, product: { videos: new Map(), named: [], groups: null } }).product!
+    expect(quiet).toMatchObject({ videos: 0, market: 539, categoryVideos: 23, place: { product: 0, others: 0, unclear: 3, general: 20, n: 23 } })
     // Named, but what their videos are about not read: said as such.
     const g = { id: 'g', name: 'Feet' }
     const crosses = new Map([[setKey('group', 'g'), { n: 5, subjects: [{ id: 's', label: 'Fit', k: 2 }], kinds: [] }]])
@@ -676,14 +661,18 @@ describe('ruling U6: Össur\'s provisional subjects print no figure', () => {
   })
 
   it('no card, panel or comparison draws a provisional subject\'s figure', () => {
-    const d = ossurTodayLinersFixture()
+    const level = todayCategoryFixture()
+    const d = level.base
     expect(d.slots.some((s) => s.card?.kind === 'focus' || s.card?.kind === 'gap')).toBe(false)
     expect(d.slots.find((s) => s.slot === 'first')!.card).toMatchObject({ lead: null })
-    const panel = d.panel as CategoryPanel
-    expect(panel.crosses!.subjects).toEqual([])
-    expect(panel.crosses!.pending!.map((x) => x.label)).toEqual(['Choosing the right device', 'Community & encouragement', 'Cost & access', 'Fit & comfort', 'Function & movement', 'Look & style'])
-    const product = PRODUCTS_FIXTURES['ossur-today-product']().panel as ProductPanel
-    expect(product.crosses!.subjects).toEqual([])
+    const detail = level.category!.detail
+    expect(detail.crosses!.subjects).toEqual([])
+    expect(detail.crosses!.pending!.map((x) => x.label)).toEqual(['Choosing the right device', 'Community & encouragement', 'Cost & access', 'Fit & comfort', 'Function & movement', 'Look & style'])
+    // The hub's list says no subject leads and prints none's figure.
+    expect(level.category!.subjectsPending).toBe(true)
+    expect(level.category!.subjects).toEqual([])
+    const feet = todayCategoryFixture({ group: PRODUCT_IDS.feet() })
+    expect(feet.category!.cards.every((c) => c.about.kind === 'pending')).toBe(true)
   })
 })
 

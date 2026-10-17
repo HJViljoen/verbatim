@@ -520,11 +520,12 @@ describe('the board\'s shape in a thin month', () => {
       products: new Map([['a', new Set(['v0'])], ['b', new Set(['v1', 'v2', 'v3'])], ['c', new Set<string>()], ['d', new Set(['v4'])], ['e', new Set(['v5'])], ['f', new Set(['v5'])]]),
       all: new Set(v(12)),
     }
-    const products = ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => ({ id, name: `Product ${id.toUpperCase()}` }))
+    const products = ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => ({ id, name: `Product ${id.toUpperCase()}`, group_id: 'g' }))
     const g = groupProducts({ state: 'ready', sets, products, month: SEP, monthWords: 'September', params: { month: '2026-09' } })
     expect(g.rows.map((r) => [r.name, r.k])).toEqual([['Product B', 3], ['Product A', 1], ['Product D', 1], ['Product E', 1]])
     expect(g.rows).toHaveLength(GROUP_PRODUCTS_SHOWN)
-    expect(g.rows[0].href).toBe('/dashboard/products?month=2026-09&product=b#product-panel')
+    // A product's page, nested under its category (Your products as pages, 17 Oct).
+    expect(g.rows[0].href).toBe('/dashboard/products/g/b?month=2026-09')
     // Unplaced talk counts a video once across categories.
     expect(g.unclear).toBe(4)
     expect(g.line).toBeNull()

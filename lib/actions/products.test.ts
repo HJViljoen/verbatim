@@ -21,7 +21,7 @@ vi.mock('@/lib/supabase-admin', async (orig) => ({
   ...(await orig<typeof import('@/lib/supabase-admin')>()),
   createAdminClient: () => h.db,
 }))
-vi.mock('next/cache', () => ({ revalidatePath: (p: string) => { h.revalidated.push(p) } }))
+vi.mock('next/cache', () => ({ revalidatePath: (p: string, type?: string) => { h.revalidated.push(type ? `${p} (${type})` : p) } }))
 
 const {
   addProduct, addProductAlias, addProductGroup, editProduct, renameProductGroup,
@@ -124,7 +124,7 @@ describe('categories', () => {
       after: { id: out.id, name: 'Covers' }, actor_kind: 'user', actor_user_id: owner.userId,
     })])
     expect(String(changes()[0].actor_label)).toBe('owner@ossur.example · products: add a category')
-    expect(h.revalidated).toEqual(['/dashboard/settings/products', '/dashboard/products', '/dashboard'])
+    expect(h.revalidated).toEqual(['/dashboard/settings/products', '/dashboard/products (layout)', '/dashboard'])
   })
 
   it('refuses a name it already has, whatever the case', async () => {

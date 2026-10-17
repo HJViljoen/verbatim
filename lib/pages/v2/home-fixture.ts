@@ -172,7 +172,7 @@ export function fixtureProductsTop(state: TopProducts['state'] = 'ready', opts: 
     state,
     monthWords: words,
     ...label,
-    standout: { label: 'Named in the most videos', name: 'Pro-Flex Pivot', k: 9, n: 318, href: `${href}?product=p-pivot#product-panel` },
+    standout: { label: 'Named in the most videos', name: 'Pro-Flex Pivot', k: 9, n: 318, href: `${href}/g-feet/p-pivot` },
     href,
     ...shelf,
   }

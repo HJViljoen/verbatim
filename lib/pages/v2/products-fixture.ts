@@ -151,11 +151,13 @@ const built = MONTHS.map((m) => ({ month: m, ...monthOf(m, SPECS[m]) }))
 /** Every placement the fixture makes, every month. */
 export const OSSUR_STANDING: ReadonlyMap<TextKey, StandingText> = new Map(built.flatMap((b) => b.standing))
 
-/** The four months' rows, as the products step writes them. */
-export function ossurProductRows(): ProductMonthRow[] {
+/** The four months' rows, as the products step writes them; with `standing`
+ *  where a fixture adds placements (a level page's comments naming a
+ *  product), so the rows count what the page lists. */
+export function ossurProductRows(standing: ReadonlyMap<TextKey, StandingText> = OSSUR_STANDING): ProductMonthRow[] {
   const compiled = compileCatalogue(OSSUR_CATALOGUE, OSSUR_CLIENT_ID)
   const markets = new Map(built.map((b) => [b.month, b.market]))
-  return productReadingRows({ clientId: OSSUR_CLIENT_ID, compiled, markets, rivalFound: new Set(), standing: OSSUR_STANDING })
+  return productReadingRows({ clientId: OSSUR_CLIENT_ID, compiled, markets, rivalFound: new Set(), standing })
     .map((r) => ({ ...r, status: r.month === SEP ? 'filling' as const : 'frozen' as const }))
 }
 
@@ -240,6 +242,9 @@ export function sealInXTexts(): TextRead[] {
  *  September, so the bar carries its label (decision 3). */
 export const PRODUCTS_FIXTURE_NOW = '2026-10-13T08:00:00.000Z'
 
+/** Össur's September as the page's input (a level fixture builds on it). */
+export const ossurInput = (over: Partial<ProductsInput> = {}): ProductsInput => BASE(over)
+
 const BASE = (over: Partial<ProductsInput> = {}): ProductsInput => ({
   clientId: OSSUR_CLIENT_ID,
   client: 'Össur',
@@ -261,21 +266,6 @@ const BASE = (over: Partial<ProductsInput> = {}): ProductsInput => ({
 /** Össur's September, nothing open. */
 export function ossurProductsFixture(params: ProductsParams = {}, over: Partial<ProductsInput> = {}): ProductsData {
   return buildProductsData(BASE({ params, ...over }))
-}
-
-/** The Liners open, the reader an owner (the Tag controls drawn). */
-export function ossurLinersFixture(params: ProductsParams = {}, over: Partial<ProductsInput> = {}): ProductsData {
-  return buildProductsData(BASE({ params: { group: groupId('Liners'), ...params }, panelReads: { unclear: linersUnclearTexts() }, ...over }))
-}
-
-/** The Iceross Seal-In X open. */
-export function ossurSealInXFixture(): ProductsData {
-  return buildProductsData(BASE({ params: { product: productId('Iceross Seal-In X') }, panelReads: { named: sealInXTexts() } }))
-}
-
-/** The Navii open: its first month. */
-export function ossurNaviiFixture(): ProductsData {
-  return buildProductsData(BASE({ params: { product: productId('Navii') }, panelReads: { named: [] } }))
 }
 
 // ---- Össur today (the parity pass, 13 Oct night) ----------------------------------
@@ -423,7 +413,7 @@ const pendingCross = (c: Crosses): Crosses => ({ ...c, subjects: [], pending: OS
  *  from three videos, which none has), in Össur's own subjects. `calibrated`
  *  reads them as if every subject's check had passed (the page after
  *  calibration); otherwise they are provisional, as today. */
-function todayCrosses(thin: boolean, products: readonly string[] = [], calibrated = false): Map<string, Crosses> {
+export function todayCrosses(thin: boolean, products: readonly string[] = [], calibrated = false): Map<string, Crosses> {
   const all = todayCrossesCounted(thin, products)
   return calibrated ? all : new Map([...all].map(([k, c]) => [k, pendingCross(c)]))
 }
@@ -464,7 +454,7 @@ function todayCrossesCounted(thin: boolean, products: readonly string[] = []): M
 /** A category's couldn't-tell-which texts in September, newest first: the
  *  Liners' two comments, then the videos whose own words name one of Össur's
  *  products there (the loader lists those too). */
-function todayUnclearTexts(thin: boolean, group = 'Liners'): TextRead[] {
+export function todayUnclearTexts(thin: boolean, group = 'Liners'): TextRead[] {
   const sep = todayBuilt(thin).months.find((b) => b.month === SEP)!.standing
   const liners = sep.filter(([, t]) => t.placements.some((x) => x.placement === 'unclear' && x.groupId === groupId(group)))
   const comments = liners.filter(([k]) => k.startsWith('c:')).map(([, t]) => t)
@@ -480,7 +470,7 @@ function todayUnclearTexts(thin: boolean, group = 'Liners'): TextRead[] {
 }
 
 /** The comments naming the Pro-Flex XC in September. */
-function proFlexXcTexts(): TextRead[] {
+export function proFlexXcTexts(): TextRead[] {
   const sep = todayBuilt(false).months.find((b) => b.month === SEP)!.standing
   const videos = sep.filter(([, t]) => t.placements.some((x) => x.productId === productId('Pro-Flex XC'))).map(([, t]) => t.videoId)
   return [
@@ -492,6 +482,9 @@ function proFlexXcTexts(): TextRead[] {
 /** A month pair the thin state refuses (a change of ours between August and
  *  September: Össur's 15 September handles change, on the brands view). */
 const REFUSE_PAIRS: PairOn = (prevMonth, month): PairComparability => ({ prevMonth, month, mode: 'refuse', reasons: [{ kind: 'searches', changeId: null, share: null }], row: null, checkWith: null })
+
+/** Össur today as the page's input (a level fixture builds on it). */
+export const ossurTodayInput = (thin: boolean, over: Partial<ProductsInput> = {}, calibrated = false): ProductsInput => TODAY(thin, over, calibrated)
 
 const TODAY = (thin: boolean, over: Partial<ProductsInput> = {}, calibrated = false): ProductsInput => {
   const b = todayBuilt(thin)
@@ -514,37 +507,20 @@ export function ossurTodayFixture(opts: { thin?: boolean; calibrated?: boolean; 
   return buildProductsData(TODAY(opts.thin ?? false, { params: opts.params ?? {}, ...opts.over }, opts.calibrated ?? false))
 }
 
-/** Össur today with the Liners open: no liner named, three couldn't tell
- *  which (two comments and a video). */
-export function ossurTodayLinersFixture(thin = false, calibrated = false): ProductsData {
-  return buildProductsData(TODAY(thin, { params: { group: groupId('Liners') }, panelReads: { unclear: todayUnclearTexts(thin) } }, calibrated))
+export const PRODUCT_IDS = {
+  liners: () => groupId('Liners'), knees: () => groupId('Knees'), feet: () => groupId('Feet'),
+  sealInX: () => productId('Iceross Seal-In X'), comfort: () => productId('Iceross Comfort'), navii: () => productId('Navii'), rheo: () => productId('Rheo Knee'),
+  proFlexXc: () => productId('Pro-Flex XC'), proprio: () => productId('Proprio Foot'),
 }
-
-/** Össur today with the Feet open: three of its products named, one or two
- *  videos each. */
-export function ossurTodayFeetFixture(calibrated = false): ProductsData {
-  return buildProductsData(TODAY(false, { params: { group: groupId('Feet') }, crosses: todayCrosses(false, ['Pro-Flex XC', 'Proprio Foot', 'Pro-Flex Terra'], calibrated), panelReads: { unclear: todayUnclearTexts(false, 'Feet') } }, calibrated))
-}
-
-/** Össur today with the Pro-Flex XC open (two videos). */
-export function ossurTodayProductFixture(calibrated = false): ProductsData {
-  return buildProductsData(TODAY(false, { params: { product: productId('Pro-Flex XC') }, crosses: todayCrosses(false, ['Pro-Flex XC'], calibrated), panelReads: { named: proFlexXcTexts() } }, calibrated))
-}
-
-/** Össur today with the Iceross Seal-In X open: nobody named it in September. */
-export function ossurTodayQuietFixture(): ProductsData {
-  return buildProductsData(TODAY(false, { params: { product: productId('Iceross Seal-In X') }, panelReads: { named: [] } }))
-}
-
-export const PRODUCT_IDS = { liners: () => groupId('Liners'), knees: () => groupId('Knees'), sealInX: () => productId('Iceross Seal-In X'), navii: () => productId('Navii'), rheo: () => productId('Rheo Knee') }
+/** A category's or a product's id by its name in the seed. */
+export const fixtureGroupId = groupId
+export const fixtureProductId = productId
+/** The fixture's months built, for a level fixture's placements. */
+export const ossurTodayStanding = (thin = false): Map<TextKey, StandingText> => todayBuilt(thin).standing
+export const ossurTodayMarket = (thin = false, month = SEP) => todayBuilt(thin).months.find((m) => m.month === month)!.market.map((v) => ({ id: v.id, audience: v.audience, platform: v.platform, owned: v.owned === true }))
 
 export const PRODUCTS_FIXTURES = {
   ossur: () => ossurProductsFixture(),
-  'ossur-liners': () => ossurLinersFixture(),
-  'ossur-liners-all': () => ossurLinersFixture({ unclear: 'all' }),
-  'ossur-liners-member': () => ossurLinersFixture({}, { canTag: false }),
-  'ossur-product': () => ossurSealInXFixture(),
-  'ossur-navii': () => ossurNaviiFixture(),
   /** Sealand: no catalogue. */
   sealand: () => buildProductsData({ ...BASE(), clientId: SEALAND_CLIENT_ID, client: 'Sealand', catalogue: { state: 'empty' } }),
   /** Production today: the migration is not applied. */
@@ -555,13 +531,7 @@ export const PRODUCTS_FIXTURES = {
   unread: () => buildProductsData({ ...BASE(), month: '2026-10-01', soFar: true, rows: ossurProductRows() }),
   // The parity pass (13 Oct night): production's real state, and a thinner one.
   'ossur-today': () => ossurTodayFixture(),
-  'ossur-today-liners': () => ossurTodayLinersFixture(),
-  'ossur-today-feet': () => ossurTodayFeetFixture(),
-  'ossur-today-product': () => ossurTodayProductFixture(),
-  'ossur-today-quiet': () => ossurTodayQuietFixture(),
   'ossur-thin': () => ossurTodayFixture({ thin: true }),
-  'ossur-thin-liners': () => ossurTodayLinersFixture(true),
   // After the subjects' checks pass (the lead's calibration step).
   'ossur-today-calibrated': () => ossurTodayFixture({ calibrated: true }),
-  'ossur-today-calibrated-feet': () => ossurTodayFeetFixture(true),
 } as const

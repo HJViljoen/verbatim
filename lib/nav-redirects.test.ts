@@ -212,3 +212,74 @@ describe('the five old reading pages are redirect stubs that ask the mapping', (
     expect(v2.ADVICE_RECORD).toBe(LEDGER_ALL_VALUE)
   })
 })
+
+// ---- YOUR PRODUCTS' PANELS ARE PAGES (17 Oct; the G4 boards) -----------------
+//
+// The root's `?group=`, `?product=` and `?unclear=all` opened a panel in place:
+// Settings' "Tag them", the Dashboard's tile, Voices and sent weekly emails
+// carry them, so each lands on its page for good, one hop, the month and every
+// other param kept. A product's page nests under its category, which the root
+// page reads from the catalogue (`known.productGroup`).
+describe('Your products: every old panel link lands on its page', () => {
+  const categoryOf = (id: string): string | null => ({ p1: 'g1', 'p 2': 'g/2' } as Record<string, string>)[id] ?? null
+  const known = { productGroup: categoryOf }
+  const PRODUCTS_TABLE: readonly [string, string][] = [
+    ['/dashboard/products?group=g1', '/dashboard/products/g1'],
+    ['/dashboard/products?group=g1&month=2026-09', '/dashboard/products/g1?month=2026-09'],
+    // Settings' "Tag them": the month, the whole list, the list's own anchor.
+    ['/dashboard/products?month=2026-10&group=g1#unclear', '/dashboard/products/g1?month=2026-10#unclear'],
+    ['/dashboard/products?group=g1&unclear=all#unclear', '/dashboard/products/g1?unclear=all#unclear'],
+    // The Dashboard's tile and the weekly email's line, a panel anchor that
+    // the page has no id for (it scrolls nowhere, harmlessly).
+    ['/dashboard/products?product=p1#product-panel', '/dashboard/products/g1/p1#product-panel'],
+    ['/dashboard/products?month=2026-09&product=p1', '/dashboard/products/g1/p1?month=2026-09'],
+    // A product wins where a link carried both, as the panel did; its
+    // category's whole list does not travel to the product.
+    ['/dashboard/products?group=g9&product=p1&unclear=all', '/dashboard/products/g1/p1'],
+    // An id that needs escaping is escaped once.
+    ['/dashboard/products?product=p%202', '/dashboard/products/g%2F2/p%202'],
+    // A product the catalogue does not hold: its category where the link
+    // named one, else the root, which reads neither param now.
+    ['/dashboard/products?group=g1&product=gone', '/dashboard/products/g1'],
+    ['/dashboard/products?product=gone', '/dashboard/products?product=gone'],
+    // Other params ride along; the bare root stays.
+    ['/dashboard/products?group=g1&utm=email', '/dashboard/products/g1?utm=email'],
+    ['/dashboard/products', '/dashboard/products'],
+    ['/dashboard/products?month=2026-09', '/dashboard/products?month=2026-09'],
+  ]
+
+  const landWith = (url: string): string => {
+    const { path, params, hash } = request(url)
+    const to = redirectFor(path, params, known)
+    if (to === null) return url
+    return to.includes('#') ? to : `${to}${hash}`
+  }
+
+  it.each(PRODUCTS_TABLE)('%s → %s', (from, to) => {
+    expect(landWith(from)).toBe(to)
+  })
+
+  it('one hop: a landing is a page the redirect never sends on', () => {
+    for (const [from] of PRODUCTS_TABLE) {
+      const { path, params } = request(from)
+      const to = redirectFor(path, params, known)
+      if (to === null) continue
+      const next = request(to)
+      expect(redirectFor(next.path, next.params, known), `${from} → ${to}`).toBeNull()
+      expect(next.path, from).toMatch(/^\/dashboard\/products\/[^/]+(\/[^/]+)?$/)
+    }
+  })
+
+  it('a page that does not know the catalogue sends a category on and leaves a product where it is', () => {
+    expect(redirectFor('/dashboard/products', { group: 'g1' })).toBe('/dashboard/products/g1')
+    expect(redirectFor('/dashboard/products', { product: 'p1' })).toBeNull()
+  })
+
+  it('the root asks the mapping before it reads the page, with the catalogue only for a product', () => {
+    const src = read('app/dashboard/products/page.tsx')
+    expect(src).toMatch(/redirectFor\('\/dashboard\/products', sp, known\)[\s\S]*loadProducts\(/)
+    expect(src).toMatch(/sp\.product\s*\?/)
+    // The product's page sends a product asked under another category on.
+    expect(read('app/dashboard/products/[group]/[product]/page.tsx')).toMatch(/if \(data\.redirect\) redirect\(data\.redirect\)/)
+  })
+})

@@ -27,7 +27,7 @@ describe('the lines, from the pages\' tops', () => {
     expect(lines.map((l) => l.page)).toEqual([...LINE_PAGES])
     expect(lines.map((l) => [l.label, `${l.lead} ${l.name}`, l.figure, l.href])).toEqual([
       ['Voices', 'In the most videos in October so far: Long-time users upgrading', '86 of 318 videos', '/dashboard/voices?group=long-time-users#group-panel'],
-      ['Your products', 'Named in the most videos: Pro-Flex Pivot', '9 of 318 videos in October so far', '/dashboard/products?product=p-pivot#product-panel'],
+      ['Your products', 'Named in the most videos: Pro-Flex Pivot', '9 of 318 videos in October so far', '/dashboard/products/g-feet/p-pivot'],
       ['Content', 'Post next: How long a liner lasts, and when it is time to replace one', '48 of 640 videos, 14 Sep to 11 Oct · 35 of 318 in October so far', '/dashboard/content?idea=1#idea-panel'],
       ['Your moves', `Advice waiting: ${fixtureMovesTop().advice!.title}`, lines[3].figure, fixtureMovesTop().advice!.href],
     ])

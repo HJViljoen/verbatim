@@ -2,7 +2,8 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import type { Candidate } from '../lib/brands/mentions'
-import { buildProductsData, setKey, type ProductMonthRow, type ProductsParams, type TextRead } from '../lib/pages/v2/products'
+import { buildProductsData, setKey, type ProductMonthRow, type ProductsInput, type ProductsParams, type TextRead } from '../lib/pages/v2/products'
+import { buildLevelData, type LevelAsk } from '../lib/pages/v2/products-levels'
 import type { StandingText } from '../lib/products/match'
 import { placeProducts, type ProductCommentRow, type ProductReadIO, type ProductVideoRow } from '../lib/products/readings'
 import type { ProductCatalogue } from '../lib/products/types'
@@ -16,6 +17,10 @@ import { refuseEveryPair } from '../lib/reading/pairs'
 //   OPENAI_API_KEY=x node --import tsx scripts/products-page-replay.ts \
 //     --dump <a dump scripts/products.ts --back-read --dry-run --dump wrote> \
 //     --month 2026-09 --out <new file> [--open group:<name>|product:<name>] [--now <iso>]
+//
+// With `--open` it writes that level page's data (a category's or a
+// product's, `buildLevelData`), which scripts/pages-shots.ts draws by its
+// `level` (`PRODUCTS_JSON=<file>`).
 //
 // The dump holds every read the products dry run made over its window (the
 // catalogue scan, the videos and comments read in full, each month's market,
@@ -82,13 +87,18 @@ async function main(): Promise<void> {
     .map((r) => ({ ...r, status: freezeStateFor(r.month, now) }))
   const market = (dump.monthVideos[month] ?? []).map((v) => ({ id: v.id, audience: v.audience, platform: v.platform }))
 
-  // The open item, by name.
-  const params: ProductsParams = {}
+  // The level page asked for, by name (17 Oct: a category's or a product's
+  // page, never a panel).
+  const params: ProductsParams = { month: month.slice(0, 7) }
   const open = arg('open', '')
+  let ask: LevelAsk | null = null
   if (open) {
     const [kind, name] = [open.slice(0, open.indexOf(':')), open.slice(open.indexOf(':') + 1)]
-    if (kind === 'group') params.group = dump.catalogue.groups.find((g) => g.name === name)?.id
-    if (kind === 'product') params.product = dump.catalogue.products.find((p) => p.name === name)?.id
+    const g = kind === 'group' ? dump.catalogue.groups.find((x) => x.name === name) : null
+    const p = kind === 'product' ? dump.catalogue.products.find((x) => x.name === name) : null
+    if (g) ask = { kind: 'category', id: g.id }
+    if (p) ask = { kind: 'product', group: p.group_id, id: p.id }
+    if (!ask) throw new Error(`products-page-replay: --open ${open} names nothing in the catalogue`)
   }
 
   // The panel's texts, from the dump's own rows.
@@ -106,17 +116,30 @@ async function main(): Promise<void> {
   const newest = (a: TextRead, b: TextRead) => (b.date ?? '').localeCompare(a.date ?? '')
   const { productMonthSets, unclearTexts, namedComments } = await import('../lib/pages/v2/products')
   const sets = productMonthSets({ month, market, standing: pass.standing, groups: dump.catalogue.groups.map((g) => g.id), products: dump.catalogue.products.map((p) => p.id) })
-  const panelReads = params.group
-    ? { unclear: unclearTexts(pass.standing, month, params.group, sets.groups.get(params.group)?.unclear ?? new Set()).map(textOf).sort(newest) }
-    : params.product
-      ? { named: namedComments(pass.standing, month, params.product, sets.products.get(params.product) ?? new Set()).map(textOf).sort(newest) }
-      : null
-
-  const data = buildProductsData({
-    clientId: dump.clientId, client: dump.clientName, month, soFar: freezeStateFor(month, now) === 'filling' && now < `${month.slice(0, 7)}-31`,
+  const input: ProductsInput = {
+    clientId: dump.clientId, client: dump.clientName, month, soFar: freezeStateFor(month, now) === 'filling' && now < `${month.slice(0, 7)}-31`, now,
     catalogue: { state: 'ready', catalogue: dump.catalogue }, enabled: true, rows, market, standing: pass.standing,
-    crosses: new Map(), pair: refuseEveryPair, params, canTag: true, panelReads,
-  })
+    crosses: new Map(), pair: refuseEveryPair, params, canTag: true,
+  }
+  const data = buildProductsData(input)
+  if (ask) {
+    // The level page's texts, from the dump's own rows. No groups: the dump
+    // holds no profile (who's talking reads "not switched on").
+    const level = ask.kind === 'category'
+      ? buildLevelData({ in: input, ask, category: {
+        unclear: unclearTexts(pass.standing, month, ask.id, sets.groups.get(ask.id)?.unclear ?? new Set()).map(textOf).sort(newest),
+        named: new Map(dump.catalogue.products.filter((p) => p.group_id === (ask as { id: string }).id).map((p) => [p.id, namedComments(pass.standing, month, p.id, sets.products.get(p.id) ?? new Set()).map(textOf).sort(newest)])),
+        groups: null,
+      } })
+      : buildLevelData({ in: input, ask, product: {
+        videos: new Map([...(sets.products.get(ask.id) ?? [])].flatMap((id) => { const v = videos.get(id); return v ? [[id, { id, platform: v.platform, video_id: v.video_id, video_url: null, account_name: v.account_name, caption: v.caption }] as const] : [] })),
+        named: namedComments(pass.standing, month, ask.id, sets.products.get(ask.id) ?? new Set()).map(textOf).sort(newest),
+        groups: null,
+      } })
+    writeFileSync(out, JSON.stringify(level))
+    console.log(`products-page-replay: ${level.level} page · ${level.base.state} · ${level.group?.name ?? '?'}${level.item ? ` / ${level.item.name}` : ''}; wrote ${out} (local only: it holds commenters' words)`)
+    return
+  }
   writeFileSync(out, JSON.stringify(data))
   const header = data.header
   console.log(`products-page-replay: ${data.state} · ${data.monthWords} · ${header?.cameUp ?? 0} of ${header?.products ?? 0} products came up · ${header?.videos ?? '?'} videos · market ${data.market ?? '?'}`)
