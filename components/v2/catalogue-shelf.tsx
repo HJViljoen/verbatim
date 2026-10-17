@@ -73,6 +73,9 @@ export interface CatalogueShelfProps {
    *  has no reading yet): each head says "Not read yet" once and the tiles
    *  print their names alone, rather than "not read yet" on every tile. */
   unread?: boolean
+  /** Each head opens a page (Your products, 17 Oct, G4-Products): a small
+   *  arrow at the head's right says so. Off by default. */
+  opens?: boolean
   className?: string
 }
 
@@ -109,7 +112,8 @@ function Tile({ p, unread = false }: { p: ShelfProduct; unread?: boolean }) {
       {p.videos == null ? (
         unread ? null : <span className="shrink-0 text-[11.5px] text-muted-foreground">not read yet</span>
       ) : tone === 0 ? (
-        <span className="shrink-0 font-mono text-[12.5px] text-muted-foreground"><span aria-hidden>–</span><span className="sr-only">no videos</span></span>
+        // A read zero: a short rule, never a dash character (G4's `.qd`).
+        <span data-quiet-mark="" className="shrink-0"><span aria-hidden className="inline-block h-[1.5px] w-[9px] rounded-[1px] bg-muted-foreground/60 align-middle" /><span className="sr-only">no videos</span></span>
       ) : (
         <span data-copy="figure" className="shrink-0 font-mono text-[12.5px] font-semibold tabular-nums">{fmtInt(p.videos)}</span>
       )}
@@ -117,7 +121,7 @@ function Tile({ p, unread = false }: { p: ShelfProduct; unread?: boolean }) {
   )
 }
 
-export function CatalogueShelf({ columns, selected = null, panelId, unread = false, className }: CatalogueShelfProps) {
+export function CatalogueShelf({ columns, selected = null, panelId, unread = false, opens = false, className }: CatalogueShelfProps) {
   return (
     <div className={cn('grid grid-cols-2 gap-3.5 md:grid-cols-3 xl:grid-cols-5', className)}>
       {columns.map((c) => {
@@ -134,7 +138,12 @@ export function CatalogueShelf({ columns, selected = null, panelId, unread = fal
                 on ? SELECTED_CARD_RING : null,
               )}
             >
-              <h3 className="m-0 text-[15px] leading-[1.25] font-semibold">{c.name}</h3>
+              {opens ? (
+                <h3 className="m-0 flex items-baseline justify-between gap-2 text-[15px] leading-[1.25] font-semibold">
+                  <span className="min-w-0">{c.name}</span>
+                  <span aria-hidden data-head-opens="" className="shrink-0 text-[14px] text-orange-text">→</span>
+                </h3>
+              ) : <h3 className="m-0 text-[15px] leading-[1.25] font-semibold">{c.name}</h3>}
               {c.videos == null ? (
                 <div className="text-[12.5px] text-muted-foreground">Not read yet</div>
               ) : (
@@ -170,13 +179,14 @@ export function CatalogueShelf({ columns, selected = null, panelId, unread = fal
 }
 
 /** The shelf's key: the three shades and the quiet outline, at the right of
- *  the catalogue card's head. */
+ *  the catalogue card's head. NO DASH (17 Oct, the lead's ruling on the G4
+ *  report): the ranges read "1 to 2" and "3 to 5", never an en dash. */
 export function ShelfLegend() {
   const swatch = 'inline-block h-2.5 w-3.5 rounded-[3px]'
   return (
     <div className="flex flex-wrap items-center gap-4 text-[12px] text-muted-foreground">
-      <span className="inline-flex items-center gap-1.5"><i aria-hidden className={cn(swatch, 'bg-accent')} /><span data-copy="figure">1–2</span></span>
-      <span className="inline-flex items-center gap-1.5"><i aria-hidden className={cn(swatch, 'bg-brand/65')} /><span data-copy="figure">3–5</span></span>
+      <span className="inline-flex items-center gap-1.5"><i aria-hidden className={cn(swatch, 'bg-accent')} /><span data-copy="figure">1 to 2</span></span>
+      <span className="inline-flex items-center gap-1.5"><i aria-hidden className={cn(swatch, 'bg-brand/65')} /><span data-copy="figure">3 to 5</span></span>
       <span className="inline-flex items-center gap-1.5"><i aria-hidden className={cn(swatch, 'bg-brand')} /><span data-copy="figure">6+</span></span>
       <span className="inline-flex items-center gap-1.5"><i aria-hidden className={cn(swatch, 'border border-dashed border-foreground/30')} />quiet</span>
     </div>

@@ -17,13 +17,21 @@ describe('CatalogueShelf', () => {
     expect(m).toMatch(/<a data-tone="0" class="[^"]*border-dashed[^"]*" href="\?product=dermo"/)
   })
 
-  it('prints every count, a quiet product a dash a screen reader hears as none', () => {
+  it('prints every count, a quiet product a short rule (never a dash) a screen reader hears as none', () => {
     const text = renderText(shelf())
-    expect(text).toContain('Liners 52 videos Iceross Seal-In X 6 Iceross Comfort 3 Iceross Synergy 2 Iceross Seal-In V – no videos')
+    expect(text).toContain('Liners 52 videos Iceross Seal-In X 6 Iceross Comfort 3 Iceross Synergy 2 Iceross Seal-In V no videos')
     expect(text).toContain('Couldn’t tell which · 11')
     // The quiet category prints its zero and no "couldn't tell" link.
-    expect(text).toContain('Sockets & suspension 0 videos Direct Socket – no videos Icelock 200 – no videos')
+    expect(text).toContain('Sockets & suspension 0 videos Direct Socket no videos Icelock 200 no videos')
+    // The quiet mark is drawn, not typed: no en or em dash on the shelf.
+    expect(render(shelf())).toContain('data-quiet-mark=""')
+    expect(render(shelf())).not.toMatch(/[\u2013\u2014]/)
     assertCopyContract(shelf())
+  })
+
+  it('says each head opens a page with a small arrow, only where asked (Your products, 17 Oct)', () => {
+    expect(render(<CatalogueShelf columns={SHELF} opens />).match(/data-head-opens=""/g)).toHaveLength(SHELF.length)
+    expect(render(shelf())).not.toContain('data-head-opens')
   })
 
   it('says "not read yet" for a product or a category the period holds no reading for, never a quiet zero', () => {
@@ -68,7 +76,9 @@ describe('CatalogueShelf', () => {
   })
 
   it('keys the shades in its legend', () => {
-    expect(renderText(<ShelfLegend />)).toBe('1–2 3–5 6+ quiet')
+    expect(renderText(<ShelfLegend />)).toBe('1 to 2 3 to 5 6+ quiet')
+    // No en or em dash anywhere in the key (the lead's ruling, 17 Oct).
+    expect(render(<ShelfLegend />)).not.toMatch(/[\u2013\u2014]/)
     assertCopyContract(<ShelfLegend />)
   })
 })

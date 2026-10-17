@@ -3,7 +3,7 @@ import { Fragment, type ReactNode } from 'react'
 import { hasSiblings, type Crumb } from '@/lib/pages/crumbs'
 import { cn } from '@/lib/utils'
 import { BackLink, CrumbRow, Switcher } from './crumbs'
-import { BubbleGlyph, CalendarGlyph, LayersGlyph } from './level-glyphs'
+import { BoxesGlyph, BoxGlyph, BubbleGlyph, CalendarGlyph, LayersGlyph } from './level-glyphs'
 
 // THE PATH, THEN THE PAGE NAMING ITS LEVEL (F3-Market-Nav, 17 Oct). A level
 // page under Market opens with the slim crumb row (`CrumbRow`, the path and
@@ -24,17 +24,30 @@ import { BubbleGlyph, CalendarGlyph, LayersGlyph } from './level-glyphs'
 // the title; the meta breaks into its lines (a week figure stays beside its
 // month on its line); the control goes under the block.
 
-export type LevelKind = 'subject' | 'conversation' | 'week'
+export type LevelKind = 'subject' | 'conversation' | 'week' | 'category' | 'product'
 
+// Your products' two levels (G4, 17 Oct): a category is three boxes on the
+// kit's yellow (a hub, as a subject is), a product a single box on the
+// neutral (evidence, as a conversation is).
 const TILE: Record<LevelKind, string> = {
   subject: 'bg-accent text-orange-text',
   conversation: 'bg-track text-secondary-foreground',
   week: 'bg-accent text-orange-text',
+  category: 'bg-accent text-orange-text',
+  product: 'bg-track text-secondary-foreground',
+}
+
+const GLYPH: Record<LevelKind, typeof LayersGlyph> = {
+  subject: LayersGlyph,
+  conversation: BubbleGlyph,
+  week: CalendarGlyph,
+  category: BoxesGlyph,
+  product: BoxGlyph,
 }
 
 /** The level's tile: 46px, its glyph 22px (38px and 19px on a phone). */
 export function LevelTile({ level }: { level: LevelKind }) {
-  const Glyph = level === 'subject' ? LayersGlyph : level === 'conversation' ? BubbleGlyph : CalendarGlyph
+  const Glyph = GLYPH[level]
   return (
     <span aria-hidden data-level-tile={level} className={cn('flex size-[46px] shrink-0 items-center justify-center rounded-[11px] max-sm:size-[38px] max-sm:rounded-[10px]', TILE[level])}>
       <Glyph className="size-[22px] max-sm:size-[19px]" />
