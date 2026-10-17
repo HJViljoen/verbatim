@@ -1054,8 +1054,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
     `dashboard` names the legacy module that stored snapshots and Össur's
     digest still render). Market is `/dashboard/market` (page key
     `overview`), Voices `/dashboard/voices` (`voice`), Content
-    `/dashboard/content` (`content`), Your moves `/dashboard/moves` (`market`,
-    deep link `?advice=`); Your products (`/dashboard/products`) is new and
+    `/dashboard/content` (`content`), Your moves `/dashboard/moves` (`market`;
+    its levels are pages, below); Your products (`/dashboard/products`) is new and
     has no page key, so nothing stores under it. PAGE KEYS DID NOT MOVE, only
     addresses. The 1 Oct reading addresses (`/dashboard/overview`, `/week`
     and `/subjects` land on Market, `/voice` and `/competitive` on Voices)
@@ -1065,7 +1065,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
     (`voice?theme=` → `market/conversations/<theme>`,
     `competitive?vs=` → `voices?brand=`, `subjects?item=` →
     `market/subjects/<item>`, a month → `market?period=month&month=`, Your
-    moves' `market?rec|item|ledger` → `moves?advice=`, `/dashboard?month=`
+    moves' `market?rec|item|ledger` → `moves/advice/<id>` (or the record), `/dashboard?month=`
     too, and Market's own `?conv=` / `?subject=`, below), pinned by
     `lib/nav-redirects.test.ts`. A bare `/dashboard/market` is Market now, so
     a link meaning Your moves must say `/dashboard/moves`.
@@ -1135,6 +1135,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
     the arrows, Home and End move, Escape closes and returns focus, Tab or a
     click outside closes (`scripts/crumbs-keys.ts` drives `CrumbRow` in
     headless Chrome; the render tier presses no key).
+    **YOUR MOVES' DEPTH IS PAGES TOO (17 Oct; G6):** a piece of advice, a dated move and the advice record at `/dashboard/moves/advice/<id>`, `/dashboard/moves/<id>` and `/dashboard/moves/advice` (`lib/pages/v2/moves-address.ts`), every old `?advice=` / `?item=` / `?rec=` / `?ledger=` there for good in one hop, under `LevelBar` with Your moves' own tiles (the bullet "Your moves").
     Parked pages leave clients through `TENANT_RETIRED` / `tenantAway` (the
     operator keeps them); Reports redirects into the Studio with its query
     (`?group=sent&item=`, `?view=`). Studio names a page key by
@@ -1806,24 +1807,86 @@ This version has breaking changes — APIs, conventions, and file structure may 
     says the gap in one line. Question cards carry no medical line, because
     they propose no post. A window is called "this week" only where it is
     seven days (`weekWordsOf`, for the page and the Dashboard's tile).
-  - **Your moves** (T7; `lib/pages/v2/moves.ts`, `loadMovesPage`).
+  - **Your moves** (T7; `lib/pages/v2/moves.ts`, `loadMovesPage`; levels as
+    pages since 17 Oct, the G6 boards: `lib/pages/v2/moves-levels.ts` pure,
+    `moves-levels-load.ts` reads, `components/pages/v2/moves/levels.tsx`).
     `loadMarketSurface` and its blocks stay for stored snapshots, the briefs
-    and the quarterly. `?advice=` takes a lineage, a recommendation id or
-    `all`; the old `item` / `rec` / `ledger` are read too (`adviceParam`).
+    and the quarterly. **NOTHING OPENS IN PLACE** (Heinrich approved G6 with
+    every recommendation, 17 Oct): a piece of advice is the HUB at
+    `/dashboard/moves/advice/<lineage>` (a recommendation id, an old
+    `?rec=`, resolves to its lineage, `adviceNamed`), a dated move the
+    EVIDENCE at `/dashboard/moves/<id>`, and the advice record the INDEX at
+    `/dashboard/moves/advice` (`?all=1` lists every piece no longer raised);
+    the addresses are written once in `lib/pages/v2/moves-address.ts`, and
+    every old `?advice=<lineage|id>`, `?advice=all` and `?item=` / `?rec=` /
+    `?ledger=` (on this address and Market's) lands on its page for good in
+    one hop (`redirectFor`, its "Your moves" block; the root redirects before
+    it reads anything). Each opens with Market's `LevelBar` ("Your moves /
+    {page}"), its tile Your moves' own (`level-tiles.tsx`: a signpost on the
+    yellow for advice, a flag and a check-list on the neutral). *The root*
+    (G6-Moves): the advice cards and the move cards carry their level's tile,
+    their titles and Open go to the pages, and a move's "on {label}" opens
+    what it is on in Market on the reading month (`MoveCard.onHref`; its own
+    page is `href`, and `object` names what its line reads); the record and
+    "N more waiting" open the record's page. *The hub* (G6-Moves-Advice,
+    -Switcher, -Thin, -Phone; `loadAdvicePage`): a header card led by the
+    argument's FIRST SENTENCE at 32px (`argumentParts`; "Why" holds the
+    rest) with four figures inside it (its videos all time and the
+    conversations they sit in, the updates in a row with the nine dots, what
+    it would move with its level in the reading month, the decision in the
+    controls' words, `decisionWord`: Accepted, Not for us); the argument
+    beside what it rests on; THE CONVERSATIONS BEHIND IT (its evidence
+    insights grouped by the themed update's themes through
+    `registryIdsByInsight`, each counted in the advice's own videos, the
+    target first on a tie, `adviceConversationsOf`; three cards, then the
+    rest as a list, each opening on Market's month view; Pass B's
+    descriptions); THE NUMBERS over its videos ALL TIME (decision 5,
+    `adviceNumbersOf`: who raises it by the group cross, who it is about,
+    what people did by its insights' kinds, where), and the one monthly
+    figure, the line a move on it is read on (`wouldMoveLineOf`: the reading
+    month and the two before, `joinedRun` with the record's reason for a
+    month left off, a month with no reading an empty slot); IN THEIR WORDS,
+    one comment from each conversation, biggest first, through Market's
+    evidence rules and the quote gate with the conversation's claim and its
+    relevance (`adviceQuotesOf` over `videoQuotes`), never one voice twice;
+    ITS HISTORY (the nine-dot row, `history-row.tsx`) and the moves made on
+    it (`moves.lineage_id`); the Agent. Its switcher holds the advice
+    waiting, strongest first, each priority in words, then the record under
+    a hairline; a piece opened from the record shows above a hairline,
+    ticked (`adviceMenu`, `CrumbMenu.above` and `.wide`). *A move*
+    (G6-Moves-Move, -Phone; `loadMovePage`): a flat header (the one
+    comparison as the lead, its verdict, its line with the move marked, the
+    no-cause line), the level label "Move on {it}" linking to Market
+    (decision 4), its status and Mark done / Stop it at the block's right;
+    WHAT PEOPLE SAID AFTER IT, from its day to the latest update, dated by
+    the comment (decision 6): its subject's members (a READY subject only:
+    U6, `SAID_HELD` otherwise) or its conversation's in the themed update,
+    their citations dated in the window (`loadInsightCitations`, the
+    comment embedded and the client's alone, one read a 250), on the
+    market's videos (never the client's own posts), Market's video cards
+    over that window and set (`moveEvidenceOf`; `?video=` and `?videos=all`
+    honoured only for its own videos); the facts beside them, each of those
+    videos (`moveFactsOf`); its other moves and, for an owner, "Your next
+    move". No week chip anywhere (decision 7). Statements
+    (`lib/pages/v2/moves-statements.test.ts`, offline): the root 37 before
+    and after; a piece of advice opened in place was 43, its page is 33;
+    the record rode on every root read (37) and is 3 now; a move's page 37.
     A piece of advice is named by `adviceTitle(title, body)` everywhere
-    (cards, the conclusions' chips, the record, the Dashboard's tile, the
-    weekly email's line, a dated move's default title): its stored title,
-    else its body's first clause cut on a word boundary at about 70
-    characters (`titleFromBody`, `lib/prose/advice-title.ts`; one of
-    Össur's, 12 Oct, was stored blank because the slot's scrub dropped it
-    whole), and `UNTITLED_ADVICE` only where both are blank. Pass D-b now
-    stores by the same rule (`titleOrBody` in `lib/pipeline/pass-d.ts`, no
-    step id changed).
+    (cards, the conclusions' chips, the record, the crumbs and switcher, the
+    Dashboard's tile, the weekly email's line, a dated move's default title):
+    its stored title, else its body's first clause cut on a word boundary at
+    about 70 characters (`titleFromBody`, `lib/prose/advice-title.ts`), and
+    `UNTITLED_ADVICE` only where both are blank. Pass D-b stores by the same
+    rule (`titleOrBody` in `lib/pipeline/pass-d.ts`, no step id changed).
     Accept, Not for us, Date a move, "Track this" (`trackSubjectAction`,
     since decision 6b) and a move's status are an owner's or admin's
     (`mayDecideMoves`, `MOVES_WRITE_REFUSED`), each refused before anything
-    is read. `TrackThisSubject` requires `canDecide` (no default): a member
-    is offered no Track this and sees a declared move without controls. The
+    is read; on the hub the two decisions sit at the right of the title block
+    for an owner or an admin only, and accepting asks the day the change was
+    made where MF5 is applied (`AdviceDecision`); a member sees neither and
+    no invitation. Every decision revalidates every page under Your moves
+    (`revalidatePath('/dashboard/moves', 'layout')`). `TrackThisSubject`
+    requires `canDecide` (no default). The
     database enforces it only once Heinrich applies
     `20261110090000_moves_role_gate.sql` (decision 6a; the runner's
     `moves-role` set, after `products`): it replaces the four member write
@@ -1831,26 +1894,19 @@ This version has breaking changes — APIs, conventions, and file structure may 
     `recommendations` UPDATE) with ones that keep the tenant and actor pins
     and add `get_my_role()` owner or admin, or `is_superadmin()`; no grant
     or read changes, the service role untouched
-    (`scripts/pg-shim/moves-role-gate-checks.sql`; the undo, proved to give
-    back the catalogue line for line, is `moves-role-gate-undo.sql` beside
-    it). The rows are written on the session client, so for a tenant's own
-    session the policy is the boundary; an operator viewing a tenant writes
-    with the service role, where `mayDecideMoves` is the only gate. Until then a member's
-    own JWT can still write those four through PostgREST. A move reads the
-    market from `MOVE_MONTHS_BEFORE` (2) months before it to the reading
-    month, and its one comparison goes through `pairedVerdict` under the
-    month-pair judge. THE BOARD'S LAYOUT IN EVERY DATA STATE (parity pass):
-    every section keeps its card. A move's chart is drawn on its axis
-    (`moveAxis`) whatever was read, with empty slots and one line. An odd
-    last move takes the next move's card (`NEXT_MOVE`) on its neighbour's
-    axis; no move at all is that card across the row (`NO_MOVE_YET`), which
-    invites a dated move only where the reader may date one (an owner or
-    admin, moves recorded, something to date it on: `canDate`). With fewer
-    than three pieces of advice waiting, the advice record's card fills the
-    row (`AdviceRest`). The plan card draws even with no plan
-    (`PLAN_EMPTY`). A card's "Would move" is the theme its evidence leads
-    with (`adviceTargets`), with its level in the reading month
-    (`adviceAims`), never a week.
+    (`scripts/pg-shim/moves-role-gate-checks.sql`; the undo is
+    `moves-role-gate-undo.sql` beside it). Until then a member's own JWT can
+    still write those four through PostgREST. A move reads the market from
+    `MOVE_MONTHS_BEFORE` (2) months before it to the reading month, and its
+    one comparison goes through `pairedVerdict` under the month-pair judge.
+    THE BOARDS' LAYOUT IN EVERY DATA STATE (parity pass): every section keeps
+    its card (the root's next move's card, `NEXT_MOVE`, `NO_MOVE_YET`,
+    `AdviceRest`, `PLAN_EMPTY`; the hub's third conversation place says why
+    it is empty, "In their words" says how many more could not be shown, a
+    failed read says so in its section; the record's empty group keeps its
+    card). A card's "Would move" is the theme its evidence leads with
+    (`adviceTargets`), with its level in the reading month (`adviceAims`),
+    never a week.
     `theme_registry`'s label column is `canonical_label`. Your statements
     (`client_statements` / `client_statement_readings`, migration
     `20261105090000`; gloss, band at the subjects' 0.40/0.60, judge, stance),
@@ -1895,9 +1951,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
     the subjects module's census (`lib/pages/subjects.ts` `loadOwnPosts`)
     still reads `is_client` or `source='owned'`, and `buildPlaybook` defaults
     to `clientSide: 'about'` everywhere but Content.
-  - **Panels at every width (T9).** Voices, Your products, Content and Your
-    moves only: since 17 Oct Market opens pages, never a panel (the Market
-    bullet above), and the machinery stays for the four until they move
+  - **Panels at every width (T9).** Voices, Your products and Content only:
+    since 17 Oct Market and Your moves open pages, never a panel (their
+    bullets above), and the machinery stays for the three until they move
     over. A v2 panel opened from a card in a grid
     is ONE child of that grid: cards take `panelItemOrder(i)`, the panel
     goes in a `PanelSlot` right after the clicked card, and
