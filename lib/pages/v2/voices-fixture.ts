@@ -3,8 +3,8 @@ import { readingMonthLabel } from '../../reading/month-label'
 import { judgeVersionFor } from '../../subjects/types'
 import { brandMonthPair, creatorThemes, measuredSubjects, type PendingSubject, type BrandCrossRow, type BrandMonthVideos, type CreatorVideo, type GroupMonthVideos, type GroupSubjectRow, type StoredBrandMonthRow, type ThemeRef } from '../../reading/cross'
 import {
-  buildBrands, failedSubjectsOf, buildCreators, buildGroups, clientCountsOf, creatorVideoIds, crossKeys, groupProducts, monthWordsOf,
-  type BrandSet, type VoicesData, type VoicesParams, type VoicesQuote,
+  buildBrands, failedSubjectsOf, buildCreators, buildGroups, clientCountsOf, creatorVideoIds, crossKeys, monthWordsOf,
+  type BrandSet, type VoicesData, type VoicesParams,
 } from './voices'
 
 // The Voices page's render fixtures (depth v2, T4): an Össur-shaped month
@@ -191,12 +191,6 @@ function refsOver(market: { id: string }[], spans: Record<string, [number, numbe
   }))
 }
 
-const OSSUR_QUOTES: VoicesQuote[] = [
-  { ref: 'e:q1', text: 'My daughter outgrew her socket in four months. Is that normal?', english: null, lang: null, platform: 'instagram', cite: 'Instagram · 14 Sep · under a category video' },
-  { ref: 'e:q2', text: 'He refuses to wear it to school. Any tips from other parents?', english: null, lang: null, platform: 'tiktok', cite: 'TikTok · 16 Sep · under a category video' },
-  { ref: 'e:q3', text: 'Insurance covered the leg but not the liners. Nobody warned us.', english: null, lang: null, platform: 'instagram', cite: 'Instagram · 19 Sep · under a category video' },
-]
-
 interface CreatorIn {
   platform: string
   account: string
@@ -225,20 +219,6 @@ const OSSUR_CREATORS: CreatorIn[] = [
   { platform: 'tiktok', account: 'newleg.newlife', videos: [200, 204], followers: 58000 },
   { platform: 'youtube', account: 'Stepping Forward', videos: [210, 213], followers: 3100 },
 ]
-
-/** A group's products, as the board's panel draws them ("Iceross Comfort 2
- *  of 45 · Couldn't tell which product 7 of 45"): two named products and the
- *  talk about a liner that could not tell which, over the group's videos. */
-function ossurGroupProducts(videoIds: readonly string[], params: VoicesParams) {
-  const ids = [...videoIds]
-  const sets = {
-    groups: new Map([['g-liners', { any: new Set(ids.slice(0, 11)), named: new Set(ids.slice(0, 3)), unclear: new Set(ids.slice(3, 10)), unbranded: new Set(ids.slice(10, 11)) }]]),
-    products: new Map([['p-comfort', new Set(ids.slice(0, 2))], ['p-seal', new Set(ids.slice(2, 3))], ['p-rheo', new Set<string>()]]),
-    all: new Set(ids.slice(0, 11)),
-  }
-  const products = [{ id: 'p-comfort', name: 'Iceross Comfort' }, { id: 'p-seal', name: 'Iceross Seal-In' }, { id: 'p-rheo', name: 'Rheo Knee' }]
-  return groupProducts({ state: 'ready', sets, products, month: SEP, monthWords: monthWordsOf(SEP, false), params })
-}
 
 /** Össur's September: groups and creators read; brand rules, no brand row.
  *  `checks`: which of its subjects have passed their check (every one, the

@@ -2,18 +2,12 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { nameChecked, NAME_READS, NONE_FOUND, noiseWords, NOT_COUNTED_YET } from '../../brands/precision'
 import { productReadingsEnabled } from '../../config'
-import { fmtInt, longMonth, platformLabel, shortDate } from '../../format'
-import { gateFor } from '../../quote-context'
-import { readingOf, readTranslations } from '../../quotes'
-import { ASKED_SHOWN, FINDING_KINDS_HELD, findingKindWords, ninetyDays, quoteWords } from '../brands'
-import { readQuestions, readSaidAbout } from '../brands-load'
+import { fmtInt, longMonth, platformLabel } from '../../format'
+import { FINDING_KINDS_HELD } from '../brands'
 import { fetchRunningRunIds } from '../latest-video-run'
-import { loadVoicesMany } from '../subjects'
 import { ACCOUNT_FLOOR } from '../voice-surface-where'
-import { talkKindLabel } from '../overview-market/kinds'
-import { WHAT_THEY_SELL } from '../market-frame'
 import { marketConversationPath, surface } from '../../nav'
-import { VOICES_PATH, voicesBrandHref, voicesCreatorHref, voicesGroupHref, voicesMonthQuery } from './voices-address'
+import { VOICES_PATH, voicesBrandHref, voicesCreatorHref, voicesGroupHref } from './voices-address'
 import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../../chunk'
 import { standingPlacements, type StandingText, type TextKey } from '../../products/match'
 import {
@@ -25,7 +19,6 @@ import { normalisePersona, type Persona } from '../../profile-tiles'
 import { placementsInPlay, productMonthSets, type MentionRead, type ProductMonthSets } from './products'
 import { productsHref } from './products-address'
 import { CLIENT_AUDIENCE, rivalKey } from '../../rivals'
-import { FLAGGED_KIND, KIND_ORDER } from '../../reading/kinds'
 import {
   creatorThemes, loadBrandCrosses, loadBrandMonthPairs, loadBrandRefs, loadCompanyName, loadGroupSubjects, loadLatestProfile,
   loadMarketAudiences, loadMarketVideos, loadThemeRefs,
@@ -38,7 +31,7 @@ import { refuseEveryPair } from '../../reading/pairs'
 import { loadPairOn, type ReadingHandle } from '../../reading/read'
 import { marketAudiences } from '../../reading/market'
 import { loadMarketRivalAudiences, loadReadingMonth } from '../../reading/reading-view'
-import { windowEnd, type ReadingMonth } from '../../reading/reading-month'
+import type { ReadingMonth } from '../../reading/reading-month'
 import type { Verdict } from '../../reading/verdicts'
 
 // VOICES (depth v2, T4; boards E3-Voices and E3-Voices-Open): who is saying
@@ -166,8 +159,6 @@ export function initialsOf(account: string): string {
 
 /** A platform's own word for a following. */
 export const followerWord = (platform: string): string => (platform === 'youtube' ? 'subscribers' : 'followers')
-
-const byNumberThenLabel = <T extends { k: number; label: string }>(a: T, b: T): number => b.k - a.k || a.label.localeCompare(b.label)
 
 /** Count of each platform among a set of videos. */
 function platformsOf(ids: readonly string[], platformOf: ReadonlyMap<string, string>): VoicesPlatform[] {

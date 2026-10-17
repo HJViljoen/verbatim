@@ -9,7 +9,7 @@ import { pickEligible, type GateOptions, type QuoteVideo } from '../../quote-gat
 import { cleanQuote, fetchQuoteCitationsByAudience, readingOf, readsAsHeroQuote, readTranslations } from '../../quotes'
 import { quoteRef } from '../../renderables/quotes-freeze'
 import {
-  brandKinds, brandMonthPair, brandSubjects, creatorThemes, loadBrandMonthVideos, loadBrandRefs, loadCompanyName, loadGroupSubjects, loadLatestProfile, loadMarketAudiences,
+  brandKinds, brandMonthPair, brandSubjects, creatorThemes, loadBrandMonthVideos, loadBrandRefs, loadGroupSubjects, loadLatestProfile, loadMarketAudiences,
   loadMarketVideos,
   type BrandCrossRow, type BrandLens, type BrandMonthVideos, type BrandPair, type CreatorRow, type CreatorThemes, type GroupMonthVideos, type GroupProfileRow,
   type GroupSubjectRow, type LensRowIn, type MarketVideo, type StoredBrandMonthRow,
