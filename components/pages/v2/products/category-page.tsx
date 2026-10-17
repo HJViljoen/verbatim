@@ -161,7 +161,7 @@ function Card({ card, d, prevName }: { card: ProductCard; d: ProductsLevelData; 
       <h3 className="m-0 text-[17px] leading-[1.3] font-semibold tracking-[-0.005em]"><Link href={card.href} className="text-foreground no-underline underline-offset-[3px] hover:underline">{card.name}</Link></h3>
       <p className="m-0 text-[14px] leading-[1.5] text-secondary-foreground">
         {card.kind
-          ? <>{card.kind.label} under <span data-copy="figure">{fmtInt(card.kind.k)}</span> of its <span data-copy="figure">{fmtInt(card.kind.n)}</span> videos.</>
+          ? <>{card.kind.label} under <span data-copy="figure">{fmtInt(card.kind.k)}</span> of its <span data-copy="figure">{fmtInt(card.kind.n)}</span> {card.kind.n === 1 ? 'video' : 'videos'}.</>
           : 'What people did in its comments has not been read yet.'}
       </p>
       <div className="mt-auto flex items-end justify-between gap-3 border-t border-track pt-3">
@@ -169,7 +169,7 @@ function Card({ card, d, prevName }: { card: ProductCard; d: ProductsLevelData; 
           <b data-copy="figure" className="font-mono text-[15px] font-semibold tabular-nums text-foreground">{fmtInt(card.videos)}</b> {card.videos === 1 ? 'video' : 'videos'} in {d.base.monthWords}
           {card.prev != null ? <><br /><span data-copy="figure" className="font-mono text-foreground">{fmtInt(card.prev)}</span> in {prevName}</> : null}
         </p>
-        {card.kind ? <Units k={card.kind.k} n={card.kind.n} label={`${fmtInt(card.kind.k)} of the ${fmtInt(card.kind.n)} videos naming ${card.name} have ${card.kind.label.toLowerCase()}`} /> : null}
+        {card.kind ? <Units k={card.kind.k} n={card.kind.n} label={card.kind.n === 1 ? `The one video naming ${card.name} has ${card.kind.label.toLowerCase()}` : `${fmtInt(card.kind.k)} of the ${fmtInt(card.kind.n)} videos naming ${card.name} have ${card.kind.label.toLowerCase()}`} /> : null}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 text-[12.5px]">
         <AboutText about={card.about} monthWords={d.base.monthWords} muted />

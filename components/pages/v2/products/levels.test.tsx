@@ -109,6 +109,12 @@ describe('a category\'s page, the hub (G4-Products-Category)', () => {
     expect(renderText(page(PRODUCTS_LEVEL_FIXTURES['liners-all']()))).not.toContain('are listed here')
   })
 
+  it('a card over one video says "its 1 video", never "its 1 videos"', () => {
+    const t = renderText(page(PRODUCTS_LEVEL_FIXTURES['today-feet']()))
+    expect(t).toContain('Praise in the comments under 1 of its 1 video.')
+    expect(t).not.toMatch(/of its 1 videos/)
+  })
+
   it('"See all" makes the list longer on the same page, and the way back', () => {
     const all = renderText(page(PRODUCTS_LEVEL_FIXTURES['liners-all']()))
     expect(all).toContain('The video itself names one of your products here. YouTube · 15 Sep · video by @amputee.life')
