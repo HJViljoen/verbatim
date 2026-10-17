@@ -1847,8 +1847,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
     month and the two before, `joinedRun` with the record's reason for a
     month left off, a month with no reading an empty slot); IN THEIR WORDS,
     one comment from each conversation, biggest first, through Market's
-    evidence rules and the quote gate with the conversation's claim and its
-    relevance (`adviceQuotesOf` over `videoQuotes`), never one voice twice;
+    evidence rules and the quote gate with the conversation's claim, its
+    relevance and its kind (`adviceQuotesOf` over `videoQuotes`), never one
+    voice twice;
     ITS HISTORY (the nine-dot row, `history-row.tsx`) and the moves made on
     it (`moves.lineage_id`); the Agent. Its switcher holds the advice
     waiting, strongest first, each priority in words, then the record under

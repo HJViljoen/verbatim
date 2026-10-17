@@ -41,7 +41,13 @@ describe('the conversations behind a piece of advice (data 1)', () => {
     const c = build()
     expect(c.videos).toBe(4)
     expect(c.rows.map((r) => [r.id, r.videos, r.target])).toEqual([['t2', 1, true], ['t1', 2, false]].sort((a, b) => (b[1] as number) - (a[1] as number)))
-    expect(c.rows[0]).toMatchObject({ id: 't1', description: 'Where to get one.', level: { k: 11, n: 521 }, href: '/dashboard/market/conversations/t1?period=month&month=2026-09' })
+    expect(c.rows[0]).toMatchObject({ id: 't1', description: 'Where to get one.', kind: null, level: { k: 11, n: 521 }, href: '/dashboard/market/conversations/t1?period=month&month=2026-09' })
+    // Its kind in the themed update rides with it, for the quote gate.
+    const kinded = adviceConversationsOf({
+      evidence: ['i1'], registryByInsight: registry, videoByInsight: videos, labels: new Map([['t1', 'Price and location']]),
+      descriptions: new Map(), kinds: new Map([['t1', 'question']]), level: () => null, target: null, month: SEPT,
+    })
+    expect(kinded.rows[0].kind).toBe('question')
   })
 
   it('leaves out a conversation Market could not name (no label), and a video in no conversation counts in the base alone', () => {
@@ -157,6 +163,16 @@ describe('in their words: three comments, each from its conversation (data 2)', 
       citations: [{ ...citations[0], comment: { ...citations[0].comment, author: '@n1' } }], videos, translations: new Map(), gate, named: new Map(), brand: 'Össur', brands: 'not_read',
     })
     expect(own).toEqual([])
+  })
+
+  it('the gate holds a comment to its conversation\'s kind, as Market\'s page does: a praising line never stands for complaints', () => {
+    const praise: LevelCitation[] = [{ ...cite('e9', 'i9', 'c9', 'n1', 'The fitting clinic was amazing, the best day this year.'), video: 'V1' }]
+    const draw = (kind: string | null) => adviceQuotesOf({
+      conversations: [{ ...conv('t9', 'Insurance refusals'), kind }], membersOf: new Map([['t9', new Set(['i9'])]]),
+      citations: praise, videos, translations: new Map(), gate, named: new Map(), brand: 'Össur', brands: 'not_read',
+    })
+    expect(draw('pain_point')).toEqual([])
+    expect(draw('praise').map((q) => q.text)).toEqual(['The fitting clinic was amazing, the best day this year.'])
   })
 
   it('who a comment\'s video is about: a brand its comments name, else its audience, so a rival\'s own post is the rival\'s', () => {

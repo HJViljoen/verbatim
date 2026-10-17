@@ -129,6 +129,10 @@ export interface AdviceConversation {
   label: string
   /** Pass B's one line, as Market lists it; null where none. */
   description: string | null
+  /** Its kind (the themed update's `category`), which the quote gate holds a
+   *  comment from it to, as Market's conversation page does; absent in a
+   *  dump from before it. */
+  kind?: string | null
   /** Of the advice's videos (all time), how many sit in it. */
   videos: number
   /** Its videos out of the market's in the reading month; null where not read. */
@@ -163,6 +167,8 @@ export function adviceConversationsOf(a: {
   videoByInsight: ReadonlyMap<string, string | null>
   labels: ReadonlyMap<string, string>
   descriptions: ReadonlyMap<string, string>
+  /** Each conversation's kind in the themed update, where read. */
+  kinds?: ReadonlyMap<string, string | null>
   level: (themeId: string) => { k: number; n: number } | null
   target: string | null
   month: string
@@ -185,7 +191,7 @@ export function adviceConversationsOf(a: {
       const label = a.labels.get(id)?.trim()
       if (!label) return []
       return [{
-        id, label, description: a.descriptions.get(id)?.trim() || null, videos: videos.size,
+        id, label, description: a.descriptions.get(id)?.trim() || null, kind: a.kinds?.get(id) ?? null, videos: videos.size,
         level: a.level(id), target: id === a.target,
         href: marketConversationHref(id, { period: 'month', month }),
       }]
@@ -422,7 +428,9 @@ export function adviceQuotesOf(a: {
     for (const id of order) {
       const video = a.videos.get(id)
       if (!video) continue
-      const quotes = videoQuotes({ video, evidence: cites, commentIds, members, translations: a.translations, gate: a.gate(conv.label), kind: null })
+      // The gate holds it to its conversation's kind, as Market's page does
+      // for the same comment (a praising line never illustrates complaints).
+      const quotes = videoQuotes({ video, evidence: cites, commentIds, members, translations: a.translations, gate: a.gate(conv.label), kind: conv.kind ?? null })
       const q = quotes.find((x) => !used.has(fold(x.text)))
       if (!q) continue
       used.add(fold(q.text))

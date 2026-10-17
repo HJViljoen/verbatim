@@ -265,16 +265,18 @@ export async function loadAdvicePage(scope: Scope, id: string, options: { canDec
   if (evidenceFailed) throw new Error('moves-v2.advice: what it rests on could not be read')
   // THE CONVERSATIONS ITS VIDEOS SIT IN: the themed update's themes, by the
   // registry bridge (never a label), with Pass B's descriptions.
-  type ThemeRow = { supporting_insight_ids: string[] | null; registry_id: string | null; description: string | null }
+  type ThemeRow = { supporting_insight_ids: string[] | null; registry_id: string | null; description: string | null; category: string | null }
   const themesRead = await soft<ThemeRow[] | null>('advice.themes', selectAll<ThemeRow>(() =>
-    db.from('themes').select('supporting_insight_ids, registry_id, description').eq('client_id', clientId).eq('run_id', runId).order('id')), null)
+    db.from('themes').select('supporting_insight_ids, registry_id, description, category').eq('client_id', clientId).eq('run_id', runId).order('id')), null)
   const registryByInsight = registryIdsByInsight(themesRead ?? [])
   const target = orderedTargets(evidence, registryByInsight)[0] ?? null
   const convIds = [...new Set(evidence.flatMap((i) => registryByInsight.get(i) ?? []))]
   const descriptions = new Map<string, string>()
+  const kinds = new Map<string, string | null>()
   for (const t of themesRead ?? []) {
     const d = (t.description ?? '').trim()
     if (t.registry_id && d && !descriptions.has(t.registry_id)) descriptions.set(t.registry_id, d)
+    if (t.registry_id && t.category && !kinds.get(t.registry_id)) kinds.set(t.registry_id, t.category)
   }
   // The moves made on it, read on its target as the root reads them.
   const onIt = (core.moves ?? []).filter((m) => m.kind === 'advice' && m.lineage_id === r.lineageId)
@@ -306,7 +308,7 @@ export async function loadAdvicePage(scope: Scope, id: string, options: { canDec
   // target is read on, say so (never "no conversation read month by month").
   const groupingUnread = themesRead == null || labelsFailed
   const conversations = groupingUnread ? 'unread' as const : adviceConversationsOf({
-    evidence, registryByInsight, videoByInsight: audience.videoByInsight, labels, descriptions, level: levelOf, target, month: core.month,
+    evidence, registryByInsight, videoByInsight: audience.videoByInsight, labels, descriptions, kinds, level: levelOf, target, month: core.month,
   })
   const monthLabel = readingMonthLabel(core.month, core.readingAt)
   const targetLabel = target ? labels.get(target)?.trim() ?? null : null
