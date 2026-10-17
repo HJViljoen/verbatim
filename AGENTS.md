@@ -1870,7 +1870,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
     move". No week chip anywhere (decision 7). Statements
     (`lib/pages/v2/moves-statements.test.ts`, offline): the root 37 before
     and after; a piece of advice opened in place was 43, its page is 33;
-    the record rode on every root read (37) and is 3 now; a move's page 37.
+    the record rode on every root read (37) and is 3 now; a move's page 35
+    on a subject (no themed update: its members are memberships).
     A piece of advice is named by `adviceTitle(title, body)` everywhere
     (cards, the conclusions' chips, the record, the crumbs and switcher, the
     Dashboard's tile, the weekly email's line, a dated move's default title):

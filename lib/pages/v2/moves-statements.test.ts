@@ -128,8 +128,10 @@ const record = (params: Record<string, string> = {}) => (db: ReturnType<typeof f
 // reads for its cards and moves); a piece of advice's page 33 (the root's
 // core, no plan and no conclusions, plus its conversations, its cited
 // comments once for its numbers and its quotes, its videos, the English of
-// its candidates); a dated move's page 37 (the core, every move's line for
-// the switcher, then its comments since its day, their videos and kinds);
+// its candidates); a dated move's page 35 on a subject (the core, every
+// move's line for the switcher, then its comments since its day, their
+// videos and kinds; the themed update only for a move on a theme or on
+// advice, whose members it names: 37 until the fresh check);
 // the record 3 (the latest update, the advice and its decisions).
 describe('Your moves\' statements, page by page', () => {
   it('counts each load', async () => {
@@ -142,9 +144,17 @@ describe('Your moves\' statements, page by page', () => {
     const every = await statements(move(M_SUBJECT, { videos: 'all' }))
     const all = await statements(record({ all: '1' }))
     vi.useRealTimers()
-    expect({ root: r.total, advice: a.total, move: m.total, record: rc.total }).toEqual({ root: 37, advice: 33, move: 37, record: 3 })
+    expect({ root: r.total, advice: a.total, move: m.total, record: rc.total }).toEqual({ root: 37, advice: 33, move: 35, record: 3 })
     // Opening a video, listing every one, or every piece of the record reads nothing more.
-    expect([opened.total, every.total, all.total]).toEqual([37, 37, 3])
+    expect([opened.total, every.total, all.total]).toEqual([35, 35, 3])
+    // A subject's move reads no themed update (its members are memberships);
+    // a move on advice reads its leading conversation's members there.
+    expect(m.by['from:theme_observations']).toBeUndefined()
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const onAdvice = await statements(move(M_ADVICE))
+    vi.useRealTimers()
+    expect(onAdvice.by['from:theme_observations']).toBe(1)
+    expect(onAdvice.calls.find((c) => c.table === 'theme_observations')?.filters).toContain(`run_id=${RUN}`)
     // The advice's cited comments are read once, for its numbers and its
     // quotes together; its videos once; no plan and no conclusions.
     expect(a.by['from:insight_evidence']).toBe(1)

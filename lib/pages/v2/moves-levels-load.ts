@@ -413,7 +413,10 @@ export async function loadMovePage(scope: Scope, id: string, options: { canDecid
     readMoveCards(core, dated, cited.market).catch(logAs('move.cards', null as Awaited<ReturnType<typeof readMoveCards>> | null)),
     soft('move.personas', loadPersonas(db, clientId), [] as PersonaLink[]),
     soft('move.rivals', loadCompetitors(db, clientId), [] as { id: string; name: string }[]),
-    themedRun(core).catch(() => core.latestRunId),
+    // The themed update names a conversation's members, for a move on a
+    // theme or on advice; a subject's members are its memberships, so a
+    // subject's move reads no run for it.
+    m.kind === 'subject' ? Promise.resolve(core.latestRunId) : themedRun(core).catch(() => core.latestRunId),
   ])
   // ITS LINE IS THE PAGE. A failed read under the moves' lines (what an advice
   // move is on, the labels, the months) would print "names nothing the market
