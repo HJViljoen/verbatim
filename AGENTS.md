@@ -1699,7 +1699,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
     how often each was named without being asked, then the not named and not
     counted below the hairline, in words, never a figure); creators at the
     floor, most videos first, never Reddit. The month switch is the root's
-    (the week and over time drawn, not offered). Every link a level page
+    (the week and over time drawn, not offered), and a level page's own
+    frames say "this month" only while the month read is under way, its name
+    otherwise (`inMonthWords`, decision 3). Every link a level page
     makes into Market opens This month for the month Voices reads
     (`marketConvHref`, `marketSubjHref`), so the counts agree. Every builder
     that opened a Voices panel opens a page: the root's rows and cards,
@@ -1731,20 +1733,24 @@ This version has breaking changes — APIs, conventions, and file structure may 
     videos, you first, `groupBrandRows`; your products, `readGroupProducts`;
     where they comment); three comments, each from one of their own
     conversations (`loadVoicesMany`'s gate, then one bounded read of the
-    picks' evidence ids for their insights, `quotesAcrossConversations`).
+    picks' evidence ids for their insights, `quotesAcrossConversations`);
+    with none to print the card keeps its frame and says why in one line,
+    and a failed read says so (`quotesUnread`), never the look of none.
     *A brand's page* (G3-Voices-Brand, -Phone, -Switcher;
     `buildBrandPage`): the header card (Pass C's weightiest finding about a
     rival as its lead, "Where its talk differs · the {date} update"; named
     without being asked with its `Verdict` and its change; named at all,
-    what the figures below are of; praised · complained of its `any`, the
-    month's alone); how the talk differs (the finding's account and the
+    the row's `k_any` of its own `n`, what the figures below are of;
+    praised · complained of its `any`, the month's alone; each cross's head
+    names the lens's base its rows are of); how the talk differs (the finding's account and the
     other findings; your own brand says it has none, `BRAND_YOU_NO_FINDING`);
     who talks about it, its parts Voices' levels (D3): the groups commenting
     on its videos and the creators at the floor it comes up with, each row
     opening its page (D2: a hub draws no videos); the numbers (named without
     being asked, month by month, three bars in its colour role, MiniBars'
     additive `tone`, with the verdict line; the kinds; what its talk sits
-    in, READY subjects, those not measured named; where it was named,
+    in, READY subjects, those not measured named, why a failed one shows no
+    figure said once (FAILED_EXPLAINED); where it was named,
     `k_comment` / `k_content` of `k_any`; where); UNDER ITS OWN CONTENT, a
     rival's alone, under its own heading and window chip (D4: the ninety
     days to the reading month's last update): what is asked under its posts,
@@ -1752,8 +1758,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
     on its `competitor_owned` posts in the window, the paraphrase as stored
     prose `pass_a_brand_claim`, never a quote, two, `topClaims`) and three
     comments said about it, each labelled with its conversation off the
-    themed run's members. A brand not counted keeps every frame and says why
-    once; its ninety days stand. *A creator's page* (G3-Voices-Creator,
+    themed run's members. A brand not counted, or that no video names,
+    keeps every frame and says why ONCE, in its header (the row's
+    `stateWords`); each frame below says only what it holds
+    (`brandFrameNone`), never "not counted yet" of a brand that is counted
+    or never will be; its ninety days stand. *A creator's page* (G3-Voices-Creator,
     -Phone; `buildCreatorPage`): a flat header, one line code builds ("Their
     biggest conversation is X: 6 of their 14 videos, of the 24 in it this
     month") and the brands named in their videos; their videos, the most
@@ -1761,7 +1770,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
     its caption, its day and the conversation it is in, "22 comments
     counted, of 340 on the video" (board decision 5), and the counted
     comments that may print (`creatorVideoQuotes`: Market's rules for a
-    video's comments, each naming the conversation whose refs hold it);
+    video's comments, each naming the conversation whose refs hold it, every
+    conversation of theirs labelled; gated with no claim, so no relevance
+    test, and its reason says so, `LEVEL_QUOTE_RULE`, never Market's "speaks
+    to this");
     the facts (followers as of the month's videos, their conversations
     theirs of all its videos, who comments, what people did off one lens
     call); the other creators; the Agent. READS: each page reads only what it
