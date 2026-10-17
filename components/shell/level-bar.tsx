@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Fragment, type ReactNode } from 'react'
+import { Fragment, type ReactElement, type ReactNode } from 'react'
 import { hasSiblings, type Crumb } from '@/lib/pages/crumbs'
 import { cn } from '@/lib/utils'
 import { BackLink, CrumbRow, Switcher } from './crumbs'
@@ -26,6 +26,17 @@ import { BubbleGlyph, CalendarGlyph, LayersGlyph } from './level-glyphs'
 
 export type LevelKind = 'subject' | 'conversation' | 'week'
 
+/** A level another page names and draws its own tile for (Content's: a post
+ *  idea, the reply list, your posts; depth as pages, 17 Oct). Closed, so a
+ *  typo is a compile error: a page that moves over adds its own. */
+export type PageLevelKind = 'idea' | 'replies' | 'posts'
+
+/** Market's levels draw `LevelTile` and take no tile; another page's level
+ *  must bring its own, so a level `LevelTile` cannot draw never reaches it. */
+type LevelAndTile =
+  | { level: LevelKind; tile?: undefined }
+  | { level: PageLevelKind; tile: ReactElement }
+
 const TILE: Record<LevelKind, string> = {
   subject: 'bg-accent text-orange-text',
   conversation: 'bg-track text-secondary-foreground',
@@ -42,16 +53,13 @@ export function LevelTile({ level }: { level: LevelKind }) {
   )
 }
 
-export function LevelBar({ crumbs, level, tile, label, title, meta, controls, open }: {
+export function LevelBar({ crumbs, level, tile, label, title, meta, controls, open }: LevelAndTile & {
   /** The path; its last segment is the page (its menu rides after the title
    *  on a phone). */
   crumbs: readonly Crumb[]
-  /** Market's three levels; another page names its own (`data-level-bar`)
-   *  and draws its own tile. */
-  level: LevelKind | (string & {})
-  /** Another page's level tile, in `LevelTile`'s place (Content's lightbulb,
-   *  reply arrow and person, depth as pages, 17 Oct). */
-  tile?: ReactNode
+  /** `level`: Market's three levels, or another page's own
+   *  (`data-level-bar`), which brings its `tile` in `LevelTile`'s place
+   *  (Content's lightbulb, reply arrow and person, depth as pages, 17 Oct). */
   /** "Subject", "Conversation in {subject}", "The week's read". */
   label: ReactNode
   /** The page's h1: the path's last segment by default. */
