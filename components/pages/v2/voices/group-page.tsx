@@ -8,7 +8,7 @@ import { prevMonth } from '@/lib/reading/month-key'
 import { inlineMonth } from '@/lib/reading/month-label'
 import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import {
-  conversationsOverlap, countWords, GROUP_AFRESH, GROUP_NO_SUBJECTS, GROUP_NOT_COMPARED_TITLE, GROUP_QUOTES_UNREAD, groupNoConversationsIn, groupQuotesNone, HOW_THEY_TALK_NONE,
+  conversationsOverlap, countWords, GROUP_AFRESH, GROUP_NO_SUBJECTS, GROUP_NO_SUBJECTS_SHORT, GROUP_NOT_COMPARED_TITLE, GROUP_QUOTES_UNREAD, groupNoConversationsIn, groupQuotesNone, HOW_THEY_TALK_NONE,
   type GroupPage, type GroupSubjectCard,
 } from '@/lib/pages/v2/voices-levels'
 import { GROUP_NO_WHO, GROUP_NOT_DESCRIBED, type GroupProducts } from '@/lib/pages/v2/voices'
@@ -412,7 +412,6 @@ function Quotes({ page }: { page: GroupPage }) {
 
 /** The page's body under its title block, in the board's order. */
 export function GroupPageBody({ page }: { page: GroupPage }) {
-  const thin = page.subjectsState !== 'ready'
   return (
     <>
       <Header page={page} />
@@ -420,9 +419,12 @@ export function GroupPageBody({ page }: { page: GroupPage }) {
       <LevelSection
         id="talk"
         title="What they talk about"
-        note={thin
+        note={page.subjectsState === 'none_ready'
           ? <>No subject has passed its check yet, so none is counted for them · each opens in Market</>
-          : <>Their <Fig>{fmtInt(page.videos)}</Fig> videos in your subjects<span className="max-sm:hidden">, then every conversation they’re in</span> · each opens in Market</>}
+          : page.subjectsState === 'none'
+            // No subject is tracked at all: none has a check to pass.
+            ? <>{GROUP_NO_SUBJECTS_SHORT} · every conversation they’re in opens in Market</>
+            : <>Their <Fig>{fmtInt(page.videos)}</Fig> videos in your subjects<span className="max-sm:hidden">, then every conversation they’re in</span> · each opens in Market</>}
       />
       {page.cards.length > 0 ? (
         <section aria-label="The subjects their videos sit in" className="grid grid-cols-1 gap-5 max-sm:gap-3 min-[1180px]:grid-cols-3">

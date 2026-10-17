@@ -286,6 +286,7 @@ export const GROUP_NOT_COMPARED_TITLE = 'Not compared yet'
 export const GROUP_AFRESH = 'Each update describes the groups afresh'
 export const HOW_THEY_TALK_NONE = 'No phrasing of theirs could be checked against a comment yet.'
 export const GROUP_NO_SUBJECTS = 'No subject is tracked for this workspace yet.'
+export const GROUP_NO_SUBJECTS_SHORT = 'No subject is tracked yet'
 export const groupNoConversationsIn = (monthWords: string): string => `None of their videos in ${monthWords} is in a named conversation.`
 /** Why a counted comment may not print on a level page: what the quote gate
  *  tests there (readable, a person's own words, not the account's own reply,

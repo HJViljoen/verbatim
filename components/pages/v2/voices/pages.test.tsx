@@ -137,6 +137,16 @@ describe('a group\'s page (G3-Voices-Group)', () => {
     assertCopyContract(group(none))
   })
 
+  // A workspace that names no subject has none whose check could be open: the
+  // section's note says none is tracked, never "No subject has passed its check".
+  it('no subject tracked at all: the section says so, and claims no check', () => {
+    const g = { ...groupFixture(), subjectsState: 'none' as const, cards: [], notMeasured: [], alsoIn: [], inNone: [], holdsMore: [], topSubject: null }
+    const t = renderText(group(g))
+    expect(t).toContain('What they talk about No subject is tracked yet · every conversation they’re in opens in Market')
+    expect(t).not.toContain('passed its check')
+    expect(render(group(g))).toContain('data-group-subjects-none=""')
+  })
+
   it('a tracked subject is never hidden: the failed one\'s reason once on the page', () => {
     const h = render(group(groupFixture({ checks: 'tracked' })))
     expect(h.split(FAILED_EXPLAINED).length - 1).toBe(1)
