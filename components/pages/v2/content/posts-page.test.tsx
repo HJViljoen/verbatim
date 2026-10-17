@@ -40,6 +40,24 @@ describe('your posts\' page', () => {
     expect(m).toMatch(/href="https:\/\/example\.com\/own\/1" target="_blank" rel="noopener noreferrer"/)
   })
 
+  // Where the platform counts more comments than we hold, the line names the
+  // gap the rule makes: the account's own replies are left out (the fresh
+  // check: "6 of the 9 comments on it are here" read as if the rest were
+  // never gathered).
+  it('names your own replies where the platform counts more than it holds', () => {
+    const d = contentPostsFixture()
+    const replied = { ...d, cards: [{ ...d.cards[0], held: 6, onPlatform: 9, ownLeftOut: true }, ...d.cards.slice(1)] }
+    const text = renderText(<ContentPostsPage data={replied} />)
+    // The tail follows the level's node with no space, as a browser reads it.
+    expect(render(<ContentPostsPage data={replied} />)).toMatch(/>6<\/b> of 9 comments<\/span> on it; your own replies are left out</)
+    expect(text).toContain('6 of 9 comments on it; your own replies are left out')
+    expect(text).not.toContain('comments on it are here')
+    assertCopyContract(<ContentPostsPage data={replied} />)
+    const unreplied = { ...d, cards: [{ ...d.cards[0], held: 6, onPlatform: 9, ownLeftOut: false }, ...d.cards.slice(1)] }
+    expect(renderText(<ContentPostsPage data={unreplied} />)).toContain('6 of 9 comments on it are here')
+    assertCopyContract(<ContentPostsPage data={unreplied} />)
+  })
+
   it('offers the rest by an address: four more from 640, six on a phone where three show', () => {
     const m = render(page())
     expect(renderText(page())).toContain('Show 4 more posts')

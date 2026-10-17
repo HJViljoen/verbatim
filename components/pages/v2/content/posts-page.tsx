@@ -76,6 +76,13 @@ function Recipe({ card }: { card: PostCard }) {
   return <span>{parts.map((p, i) => <span key={i}>{i > 0 ? ' · ' : null}{p}</span>)}</span>
 }
 
+/** After "6 of 9 comments on it", where the platform counts more than we
+ *  hold: the account's own replies are left out by rule, so the line names
+ *  them where it replied ("; your own replies are left out"), and otherwise
+ *  says what the six are (" are here"). Pure. */
+export const onPlatformTail = (card: Pick<PostCard, 'ownLeftOut'>): string =>
+  (card.ownLeftOut ? '; your own replies are left out' : ' are here')
+
 /** One post (F3's `.vcard`): the account, platform and day, the best
  *  month's chip, its caption, its recipe and the link out, its comments. */
 function PostCardView({ card, index, all }: { card: PostCard; index: number; all: boolean }) {
@@ -99,7 +106,7 @@ function PostCardView({ card, index, all }: { card: PostCard; index: number; all
       {card.held != null ? (
         <p className="m-0 text-[13px] text-muted-foreground">
           {card.onPlatform != null
-            ? <span data-copy="level"><b className="font-mono font-semibold tabular-nums text-foreground">{fmtInt(card.held)}</b> of the {fmtInt(card.onPlatform)} comments on it are here</span>
+            ? <><span data-copy="level"><b className="font-mono font-semibold tabular-nums text-foreground">{fmtInt(card.held)}</b> of {fmtInt(card.onPlatform)} comments</span> on it{onPlatformTail(card)}</>
             : <><b data-copy="figure" className="font-mono font-semibold tabular-nums text-foreground">{fmtInt(card.held)}</b> {card.held === 1 ? 'comment' : 'comments'} on it</>}
         </p>
       ) : null}

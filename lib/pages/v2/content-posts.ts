@@ -82,6 +82,10 @@ export interface PostCard {
    *  comments could not be read. */
   held: number | null
   onPlatform: number | null
+  /** Whether the post's own account replied under it: those replies are
+   *  left out by rule, so the card names them beside the platform's count
+   *  (they are part of the gap, never a comment we failed to gather). */
+  ownLeftOut: boolean
   /** Two of them, or, opened, every one that may print (at most
    *  `POST_COMMENTS_MAX`). */
   quotes: PostComment[]
@@ -191,8 +195,9 @@ export function postCards(a: {
   return a.posts.map((p) => {
     const row = postRow(p, a.typical)
     const own = accountKey(p.account_name)
-    const under = (a.comments ?? [])
+    const onPost = (a.comments ?? [])
       .filter((c) => c.platform === p.platform && c.video_id === p.video_id && (c.text ?? '').trim())
+    const under = onPost
       .filter((c) => !own || accountKey(c.author) !== own)
       .sort((x, y) => (y.comment_date ?? '').localeCompare(x.comment_date ?? '') || x.id.localeCompare(y.id))
     const video = gateVideoOf(p)
@@ -219,6 +224,7 @@ export function postCards(a: {
       best: a.best === p.id,
       held,
       onPlatform: held != null && platformCount != null && platformCount > held ? platformCount : null,
+      ownLeftOut: held != null && under.length < onPost.length,
       quotes: shown.map((c) => {
         const tr = reading(c.text ?? '')
         return { ref: quoteRef.message(c.id), text: (c.text ?? '').trim(), lang: tr?.lang ?? null, english: tr?.english ?? null, date: c.comment_date ? shortDate(c.comment_date) : null }

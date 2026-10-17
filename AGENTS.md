@@ -2095,7 +2095,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
     your posts newest first (five, three on a phone, then "Show N more posts",
     `?all=1` at most `POSTS_MAX`, 60), each with its format, opening and
     response (`postRow`), "Best this month", and the comments under it (its
-    own account's replies left out, the gate with your own posts allowed,
+    own account's replies left out, and where the platform counts more the
+    line says so, "6 of 9 comments on it; your own replies are left out"
+    where the account replied, `ownLeftOut`, else "… are here"; the gate
+    with your own posts allowed,
     one chunked read for the posts shown; `?post=<id>` opens one in full,
     honoured only for the month's own posts); the facts (how they were made,
     how they open, where, the response, "What works in your market's

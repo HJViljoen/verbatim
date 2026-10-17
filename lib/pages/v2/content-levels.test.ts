@@ -212,7 +212,11 @@ describe('your posts, and the comments under them', () => {
     expect(first.held).toBe(6)
     expect(first.quotes.map((q) => q.text)).not.toContain('Thanks for asking, DM us and we will help you find a clinic.')
     const fewer = comments.filter((c) => c.video_id !== posts[0].video_id || c.text?.startsWith('Can'))
-    expect(cards({ comments: fewer })[0]).toMatchObject({ held: 1, onPlatform: 6 })
+    expect(cards({ comments: fewer })[0]).toMatchObject({ held: 1, onPlatform: 6, ownLeftOut: false })
+    // The account replied: its reply is left out, and the card says so.
+    expect(cards({ comments: own })[0]).toMatchObject({ held: 6, ownLeftOut: true })
+    expect(cards({ comments: [...fewer, own[own.length - 1]] })[0]).toMatchObject({ held: 1, onPlatform: 6, ownLeftOut: true })
+    expect(cards({ comments: null })[0].ownLeftOut).toBe(false)
   })
 
   it('opened, every comment that may print; unread, none', () => {
