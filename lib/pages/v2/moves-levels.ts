@@ -258,7 +258,9 @@ export function wouldMoveLineOf(a: {
   const parts = [
     axisLine(slots),
     a.monthLabel ? `${longMonth(reading)} is ${a.monthLabel}.` : null,
-    'A move dated on this advice is read on this line, from two months before it.',
+    // "from two months before it" only where a month before the reading
+    // month is drawn (G6-Moves-Advice-Thin leaves it out).
+    `A move dated on this advice is read on this line${slots.slice(0, -1).some((s) => s.point) ? ', from two months before it' : ''}.`,
   ].filter(Boolean)
   return { themeId: a.themeId, label: a.label, href: marketConversationHref(a.themeId, { period: 'month', month: reading }), slots, note: parts.join(' ') }
 }

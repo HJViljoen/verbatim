@@ -79,7 +79,7 @@ export const DESK: AdviceCard = {
   history: HISTORY(L_DESK),
   restsOn: [
     { id: 'mi-access', kind: 'market', title: 'Access, not the device, decides who gets fitted', videos: 286, anchor: 'conclusion-mi-access' },
-    { id: 'mi-families', kind: 'market', title: 'Families are a growing part of the buying decision', videos: 45, anchor: 'conclusion-mi-families' },
+    { id: 'mi-families', kind: 'market', title: 'Families are part of the buying decision', videos: 45, anchor: 'conclusion-mi-families' },
     { id: 'ci-ottobock', kind: 'rival', title: 'Most of Ottobock’s talk is about getting a knee paid for', videos: null, anchor: null },
   ],
   quote: null,
@@ -228,7 +228,7 @@ export function movesFixture(over: Partial<MovesPageData> = {}): MovesPageData {
     conclusions: [
       { id: 'mi-access', title: 'Access, not the device, decides who gets fitted', videos: 286, advice: [{ lineageId: L_DESK, title: DESK.title }] },
       { id: 'mi-liners', title: 'Liners are treated as consumables that nobody explains', videos: 117, advice: [{ lineageId: L_LINER, title: LINER.title }, { lineageId: L_SWEAT, title: SWEAT.title }] },
-      { id: 'mi-families', title: 'Families are a growing part of the buying decision', videos: 45, advice: [{ lineageId: L_DESK, title: DESK.title }] },
+      { id: 'mi-families', title: 'Families are part of the buying decision', videos: 45, advice: [{ lineageId: L_DESK, title: DESK.title }] },
       { id: 'mi-athletes', title: 'Athletes carry the most shared stories in the market', videos: 235, advice: [] },
     ],
     dating: {

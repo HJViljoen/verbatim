@@ -275,7 +275,7 @@ function OtherMoves({ page }: { page: MovePageData }) {
   return (
     <>
       <SectionHead title={OTHER_MOVES_TITLE} note={all} />
-      <nav aria-label={OTHER_MOVES_TITLE} className="grid grid-cols-1 gap-3 sm:grid-cols-2 min-[1180px]:grid-cols-4">
+      <nav aria-label={OTHER_MOVES_TITLE} className="grid grid-cols-2 gap-3 max-sm:grid-cols-1 min-[1180px]:grid-cols-4">
         {page.others.map((m) => (
           <Link key={m.id} href={m.href} data-sibling="" className="flex min-w-0 flex-col gap-1.5 rounded-[12px] bg-card px-4 pt-3.5 pb-[13px] no-underline shadow-card transition-shadow hover:shadow-panel">
             <span className="text-[14px] leading-[1.35] font-semibold text-foreground"><span data-copy="quote">{m.title}</span></span>

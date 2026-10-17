@@ -126,13 +126,15 @@ export function MoveChart({ card, readingMonth, detail = false }: {
               {s.point && y != null ? (
                 <>
                   <circle cx={xs[i]} cy={y} r={4} className={cn('stroke-foreground', s.point.soFar ? 'fill-card' : 'fill-foreground')} strokeWidth={2} />
-                  <text data-copy="figure" x={xs[i]} y={y - 10} textAnchor="middle" className={cn('fill-foreground font-mono text-[11.5px]', i === lastDrawn?.i ? 'font-semibold' : null)}>{sharePct(s.point.k, s.point.n)}</text>
+                  <text data-copy="figure" x={xs[i]} y={y - 10} textAnchor="middle" className={cn('fill-foreground font-mono text-[11.5px]', detail ? 'max-sm:text-[14px]' : null, i === lastDrawn?.i ? 'font-semibold' : null)}>{sharePct(s.point.k, s.point.n)}</text>
                 </>
               ) : null}
               {detail ? (
                 <>
-                  <text x={xs[i]} y={127} textAnchor="middle" className="fill-muted-foreground font-mono text-[10.5px]">{longMonth(s.month)}{s.point?.soFar ? ' so far' : ''}</text>
-                  {s.point ? <text data-copy="level" x={xs[i]} y={141} textAnchor="middle" className="fill-muted-foreground font-mono text-[10.5px]">{fmtInt(s.point.k)} of {fmtInt(s.point.n)}</text> : null}
+                  {/* On a phone the chart scales to the column, so its words
+                      take a larger size in the chart's own units (G6-Moves-Move-Phone). */}
+                  <text x={xs[i]} y={127} textAnchor="middle" className="fill-muted-foreground font-mono text-[10.5px] max-sm:text-[13px]">{longMonth(s.month)}{s.point?.soFar ? ' so far' : ''}</text>
+                  {s.point ? <text data-copy="level" x={xs[i]} y={142} textAnchor="middle" className="fill-muted-foreground font-mono text-[10.5px] max-sm:text-[13px]">{fmtInt(s.point.k)} of {fmtInt(s.point.n)}</text> : null}
                 </>
               ) : (
                 <text x={xs[i]} y={128} textAnchor="middle" className="fill-muted-foreground font-mono text-[10.5px]">{s.point ? pointMonth(s.point) : pointMonth({ month: s.month, soFar: false })}</text>

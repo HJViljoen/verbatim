@@ -118,6 +118,19 @@ const advice = (id: string, params: Record<string, string> = {}) => (db: ReturnT
 const move = (id: string, params: Record<string, string> = {}) => (db: ReturnType<typeof fakeDb>) => loadMovePage(scopeOf(db, params), id, { canDecide: true })
 const record = (params: Record<string, string> = {}) => (db: ReturnType<typeof fakeDb>) => loadRecordPage(scopeOf(db, params))
 
+// BEFORE (d4e1480b, measured by this harness on a scratch copy of the base):
+// the root 37; the root with a piece of advice open in place (`?advice=`,
+// its hero quote read through the gate) 43; the root with the record open in
+// place (`?advice=all`) 37: the record rode on every root read. A move's Open
+// went to Market, so a move had no load of its own.
+//
+// NOW: the root 37 (it reads no quote and no record any more, and the same
+// reads for its cards and moves); a piece of advice's page 33 (the root's
+// core, no plan and no conclusions, plus its conversations, its cited
+// comments once for its numbers and its quotes, its videos, the English of
+// its candidates); a dated move's page 37 (the core, every move's line for
+// the switcher, then its comments since its day, their videos and kinds);
+// the record 3 (the latest update, the advice and its decisions).
 describe('Your moves\' statements, page by page', () => {
   it('counts each load', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
@@ -125,8 +138,171 @@ describe('Your moves\' statements, page by page', () => {
     const a = await statements(advice(L1))
     const m = await statements(move(M_SUBJECT))
     const rc = await statements(record())
+    const opened = await statements(move(M_SUBJECT, { video: V1 }))
+    const every = await statements(move(M_SUBJECT, { videos: 'all' }))
+    const all = await statements(record({ all: '1' }))
     vi.useRealTimers()
-    console.log(JSON.stringify({ root: r.total, advice: a.total, move: m.total, record: rc.total, rootBy: r.by, adviceBy: a.by, moveBy: m.by, recordBy: rc.by }, null, 1))
-    expect(r.total).toBeGreaterThan(0)
+    expect({ root: r.total, advice: a.total, move: m.total, record: rc.total }).toEqual({ root: 37, advice: 33, move: 37, record: 3 })
+    // Opening a video, listing every one, or every piece of the record reads nothing more.
+    expect([opened.total, every.total, all.total]).toEqual([37, 37, 3])
+    // The advice's cited comments are read once, for its numbers and its
+    // quotes together; its videos once; no plan and no conclusions.
+    expect(a.by['from:insight_evidence']).toBe(1)
+    expect(a.by['from:videos']).toBe(1)
+    expect(a.by['from:plan_checks']).toBeUndefined()
+    // The root reads no comment at all (no quote at level 1) and no record.
+    expect(r.by['from:insight_evidence']).toBeUndefined()
+    expect(r.by['from:comment_translations']).toBeUndefined()
+    // A move's comments since its day once, its videos once; no plan.
+    expect(m.by['from:insight_evidence']).toBe(1)
+    expect(m.by['from:videos']).toBe(1)
+    expect(m.by['from:plan_checks']).toBeUndefined()
+    // The record reads three tables and no month at all.
+    expect(Object.keys(rc.by).sort()).toEqual(['from:pipeline_runs', 'from:rec_decisions', 'from:recommendations'])
+  })
+})
+
+describe('a piece of advice\'s page reads its own rows only', () => {
+  it('its conversations, its numbers and one comment from its conversation, from the tenant\'s rows', async () => {
+    const { data } = await statements(advice(L1))
+    const page = data as Exclude<Awaited<ReturnType<typeof loadAdvicePage>>, 'missing' | null>
+    expect(page.conversations).toMatchObject({ videos: 2, rows: [{ id: T1, label: 'Price and location questions', videos: 2, target: true, description: 'Where to get a device.' }, { id: T2, videos: 1 }] })
+    expect(page.numbers).toMatchObject({ n: 2, where: { n: 2 } })
+    expect(page.quotes !== 'unread' && page.quotes.map((q) => q.conv?.label)).toEqual(['Price and location questions', 'Cost frustration'])
+    // The move dated on it, and its switcher's advice waiting (the third is decided).
+    expect(page.moves !== 'unread' && page.moves.cards.map((c) => c.id)).toEqual([M_ADVICE])
+    expect(page.crumbs[1].menu?.items.map((i) => i.key)).toEqual([L1, L2])
+  })
+
+  it('a recommendation id (an old `?rec=`) names its lineage; another workspace\'s or an unknown id is the calm missing state', async () => {
+    const { data: byRec } = await statements(advice(rec(L1, 1).id))
+    expect(byRec !== 'missing' && byRec !== null && (byRec as { card: { lineageId: string } }).card.lineageId).toBe(L1)
+    const foreign = { recommendations: [...tables().recommendations, { ...rec('00000000-0000-4000-8000-0000000000a9', 9), client_id: OTHER, title: 'Other workspace advice' }] }
+    for (const id of ['00000000-0000-4000-8000-0000000000a9', 'not-an-id', '']) {
+      const { data } = await statements(advice(id), foreign)
+      expect(data).toBe('missing')
+      expect(JSON.stringify(data)).not.toMatch(/Other workspace/)
+    }
+  })
+
+  it('another workspace\'s insight, comment and video named in its evidence reach no figure and no word; every read names the client', async () => {
+    const t = tables()
+    const over = {
+      market_insights: [{ ...t.market_insights[0], evidence: { supporting_theme_ids: ['ins-1', 'ins-2', 'ins-3', 'ins-x'] } }],
+      audience_insights: [...t.audience_insights, { id: 'ins-x', client_id: OTHER, theme: 'x', source_video_id: FOREIGN_VIDEO, category: 'praise' }],
+      comments: [...t.comments, { id: 'cf', client_id: OTHER, comment_date: '2026-10-02T10:00:00.000Z', platform: 'tiktok', video_id: 'n1', author: 'foreign' }],
+      insight_evidence: [...t.insight_evidence, { id: 'ef', audience_insight_id: 'ins-1', comment_id: 'cf', source: 'comment', quote: 'Other workspace words about a powered knee fitting near Leeds.', relevance_rank: 0, redacted: false }],
+    }
+    const { data, calls } = await statements(advice(L1), over)
+    const page = data as Exclude<Awaited<ReturnType<typeof loadAdvicePage>>, 'missing' | null>
+    expect(page.numbers).toMatchObject({ n: 2 })
+    expect(JSON.stringify(data)).not.toMatch(/Other workspace/)
+    for (const c of calls.filter((x) => x.table === 'videos' || x.table === 'audience_insights' || x.table === 'themes')) expect(c.filters, c.table).toContain(`client_id=${CLIENT}`)
+    for (const c of calls.filter((x) => x.table === 'insight_evidence')) expect(c.filters).toContain(`comments.client_id=${CLIENT}`)
+  })
+
+  it('a read that fails says so in its section, never as an empty one', async () => {
+    const { insight_evidence: _e, ...noEvidence } = tables()
+    const db = fakeDb(noEvidence as never)
+    vi.setSystemTime(NOW)
+    const page = await loadAdvicePage(scopeOf(db), L1, { canDecide: true }) as Exclude<Awaited<ReturnType<typeof loadAdvicePage>>, 'missing' | null>
+    expect(page.numbers).toBe('unread')
+    expect(page.quotes).toBe('unread')
+    expect(page.conversations).not.toBe('unread')
+  })
+
+  it('a member gets no decision and no day to date it; a decided piece offers none either', async () => {
+    const db = fakeDb(tables() as never)
+    const member = await loadAdvicePage(scopeOf(db), L1, { canDecide: false }) as Exclude<Awaited<ReturnType<typeof loadAdvicePage>>, 'missing' | null>
+    expect(member.canDecide).toBe(false)
+    expect(member.dating).toBeNull()
+    const decided = await loadAdvicePage(scopeOf(fakeDb(tables() as never)), L3, { canDecide: true }) as Exclude<Awaited<ReturnType<typeof loadAdvicePage>>, 'missing' | null>
+    expect(decided.card.status).toBe('dismissed')
+    expect(decided.dating).toBeNull()
+  })
+})
+
+describe('a dated move\'s page reads its own rows only', () => {
+  it('its comments since its day, by its subject\'s members, on the market\'s videos', async () => {
+    const { data } = await statements(move(M_SUBJECT))
+    const page = data as Exclude<Awaited<ReturnType<typeof loadMovePage>>, 'missing' | null>
+    expect(page.card.id).toBe(M_SUBJECT)
+    expect(page.window.from).toBe('2026-09-14T00:00:00.000Z')
+    expect(page.evidence).toMatchObject({ state: 'ready', total: 2 })
+    expect(page.evidence.videos.map((v) => v.aboutCount)).toEqual([1, 1])
+    expect(page.facts).toMatchObject({ n: 2 })
+    expect(page.others.map((c) => c.id)).toEqual([M_ADVICE])
+    // The switcher: every dated move, the newest first, this one ticked.
+    expect(page.crumbs[1].menu?.items.map((i) => [i.key, i.current])).toEqual([[M_ADVICE, false], [M_SUBJECT, true]])
+  })
+
+  it('another workspace\'s move id is missing; a foreign or non-member video id opens nothing', async () => {
+    for (const id of ['00000000-0000-4000-8000-0000000000b9', 'nope']) expect((await statements(move(id))).data).toBe('missing')
+    for (const video of [FOREIGN_VIDEO, '00000000-0000-4000-8000-0000000000e9', 'not-an-id']) {
+      const { data } = await statements(move(M_SUBJECT, { video }))
+      const page = data as Exclude<Awaited<ReturnType<typeof loadMovePage>>, 'missing' | null>
+      expect(page.evidence.videos.every((v) => !v.open)).toBe(true)
+      expect(JSON.stringify(data)).not.toMatch(/Other workspace/)
+    }
+    const { data } = await statements(move(M_SUBJECT, { video: V1 }))
+    expect((data as Exclude<Awaited<ReturnType<typeof loadMovePage>>, 'missing' | null>).evidence.videos.find((v) => v.id === V1)?.open).toBe(true)
+  })
+
+  it('a comment before its day, another workspace\'s comment and the client\'s own posts reach nothing; every read names the client', async () => {
+    const t = tables()
+    const OWN = '00000000-0000-4000-8000-0000000000d3'
+    const over = {
+      comments: [
+        ...t.comments,
+        { id: 'c-old', client_id: CLIENT, comment_date: '2026-09-01T10:00:00.000Z', platform: 'tiktok', video_id: 'n1', author: 'early' },
+        { id: 'c-for', client_id: OTHER, comment_date: '2026-10-02T10:00:00.000Z', platform: 'tiktok', video_id: 'n9', author: 'foreign' },
+        { id: 'c-own', client_id: CLIENT, comment_date: '2026-10-02T10:00:00.000Z', platform: 'tiktok', video_id: 'n3', author: 'fan' },
+      ],
+      insight_evidence: [
+        ...t.insight_evidence,
+        { id: 'e-old', audience_insight_id: 'ins-1', comment_id: 'c-old', source: 'comment', quote: 'Words from before the move about a running clinic.', relevance_rank: 1, redacted: false },
+        { id: 'e-for', audience_insight_id: 'ins-1', comment_id: 'c-for', source: 'comment', quote: 'Other workspace words about a running clinic.', relevance_rank: 1, redacted: false },
+        { id: 'e-own', audience_insight_id: 'ins-2', comment_id: 'c-own', source: 'comment', quote: 'Words under the client own post about the clinic.', relevance_rank: 1, redacted: false },
+      ],
+      videos: [...t.videos, { ...t.videos[0], id: OWN, video_id: 'n3', is_client: true, account_name: 'Össur', caption: 'Our own clinic post' }],
+    }
+    const { data, calls } = await statements(move(M_SUBJECT, { videos: 'all' }), over)
+    const page = data as Exclude<Awaited<ReturnType<typeof loadMovePage>>, 'missing' | null>
+    expect(page.evidence.total).toBe(2)
+    const json = JSON.stringify(data)
+    for (const leak of [/before the move/, /Other workspace/, /client own post/, /Our own clinic post/]) expect(json).not.toMatch(leak)
+    for (const c of calls.filter((x) => x.table === 'videos' || x.table === 'subject_memberships')) expect(c.filters, c.table).toContain(`client_id=${CLIENT}`)
+    for (const c of calls.filter((x) => x.table === 'insight_evidence')) expect(c.filters).toContain(`comments.client_id=${CLIENT}`)
+  })
+
+  it('U6: a move on a subject whose check is open lists nothing it said and reads no member; a failed read is unread', async () => {
+    const t = tables()
+    const open = { subjects: [{ ...t.subjects[0], calibration_precision: 0.4 }] }
+    const { data, by } = await statements(move(M_SUBJECT), open)
+    const page = data as Exclude<Awaited<ReturnType<typeof loadMovePage>>, 'missing' | null>
+    expect(page.evidence.state).toBe('held')
+    expect(page.facts).toBeNull()
+    expect(by['from:subject_memberships']).toBeUndefined()
+    expect(by['from:insight_evidence']).toBeUndefined()
+    const { insight_evidence: _e, ...noEvidence } = t
+    const db = fakeDb(noEvidence as never)
+    const failed = await loadMovePage(scopeOf(db), M_SUBJECT, { canDecide: true }) as Exclude<Awaited<ReturnType<typeof loadMovePage>>, 'missing' | null>
+    expect(failed.evidence.state).toBe('unread')
+  })
+})
+
+describe('the advice record', () => {
+  it('every piece once, grouped by what was decided; six no longer raised unless `?all=1`', async () => {
+    const { data } = await statements(record())
+    const page = data as NonNullable<Awaited<ReturnType<typeof loadRecordPage>>>
+    expect(page).toMatchObject({ total: 3, decided: 1, waiting: 2, since: '2026-10-12' })
+    expect(page.groups.map((g) => [g.key, g.rows.length])).toEqual([['waiting', 2], ['decided', 1], ['gone', 0]])
+  })
+
+  it('reads another workspace\'s advice never, and before the first update it is the first-run line', async () => {
+    const t = tables()
+    const { data } = await statements(record(), { recommendations: [...t.recommendations, { ...rec('00000000-0000-4000-8000-0000000000a9', 9), client_id: OTHER, title: 'Other workspace advice' }] })
+    expect(JSON.stringify(data)).not.toMatch(/Other workspace/)
+    expect((await statements(record(), { pipeline_runs: [] })).data).toBeNull()
   })
 })
