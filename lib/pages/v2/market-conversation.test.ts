@@ -4,7 +4,7 @@ import { cleanQuote } from '../../quotes'
 import { quoteTextHash } from '../../quote-text'
 
 import {
-  convEvidenceOf, convPageHref, convSiblingsOf, convVideoOrder, marketParams, MARKET_CONV_VIDEOS, MARKET_CONV_VIDEOS_MAX, shownConvVideos, videoQuotes,
+  convEvidenceOf, convPageHref, convSiblingsOf, convVideoOrder, marketParams, MARKET_CONV_VIDEOS, MARKET_CONV_VIDEOS_MAX, MARKET_VIDEO_COMMENTS_MAX, shownConvVideos, videoQuotes,
   type ConvEvidenceRow, type ConvVideoRow, type MarketConv,
 } from './market'
 
@@ -126,6 +126,16 @@ describe('what people said', () => {
     expect(ev.videos.find((v) => v.id === id(1))!.href).toBe(`/dashboard/market/conversations/${CONV}?period=month&video=${id(1)}#video-${id(1)}`)
     // The opened sixth is drawn on a phone too: four of eight there.
     expect(ev.more).toMatchObject({ desktop: 2, phone: 4 })
+  })
+
+  it('a video with more printable comments than an opened list draws: every one counted, the first fifty shown (the fresh check, 17 Oct)', () => {
+    const one = [video(1)]
+    const many = Array.from({ length: 60 }, (_, j) => row({ e: `m${String(j).padStart(2, '0')}`, c: `mc${j}`, v: 1, quote: `Comment number ${j + 1} about how long a liner lasts before it slips.` }))
+    const over = { ...args(), videoIds: [id(1)], videos: one, evidence: many, commentIds: new Set(many.map((e) => e.commentId)) }
+    const closed = convEvidenceOf(over).videos[0]
+    expect([closed.aboutCount, closed.quotable, closed.quotes.length]).toEqual([60, 60, 3])
+    const opened = convEvidenceOf({ ...over, p: marketParams({ video: id(1) }) }).videos[0]
+    expect([opened.open, opened.quotable, opened.quotes.length]).toEqual([true, 60, MARKET_VIDEO_COMMENTS_MAX])
   })
 
   it('every video with ?videos=all: none remain, and each video\'s own link keeps the list open', () => {

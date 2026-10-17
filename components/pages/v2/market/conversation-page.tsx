@@ -5,7 +5,7 @@ import { translationLabel, translationNote } from '@/components/quote-block'
 import { PlayGlyph } from '@/components/shell/level-glyphs'
 import { CARD, FlagChip, SpikeBars, TickBarRow } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
-import { CONV_SAID_ANCHOR, MARKET_VIDEO_QUOTES, MARKET_VIDEO_QUOTES_PHONE, noGroupSaying, type ConvComment, type ConvEvidence, type ConvPage, type ConvSiblings, type ConvVideo, type MarketData } from '@/lib/pages/v2/market'
+import { CONV_SAID_ANCHOR, MARKET_VIDEO_COMMENTS_MAX, MARKET_VIDEO_QUOTES, MARKET_VIDEO_QUOTES_PHONE, noGroupSaying, type ConvComment, type ConvEvidence, type ConvPage, type ConvSiblings, type ConvVideo, type MarketData } from '@/lib/pages/v2/market'
 import { cn } from '@/lib/utils'
 import { BRANDS_NOT_COUNTED, BRANDS_NOT_READ } from '@/lib/pages/v2/voices'
 import { SectionHead } from './analysis'
@@ -34,11 +34,38 @@ const FACT = 'flex min-w-0 flex-col gap-[9px] border-t border-border py-4 first-
 export const CONV_VIDEOS_UNREAD = 'Its videos could not be read just now.'
 /** A video counted for what is said in it, with no comment about it. */
 export const CONV_SAID_IN_VIDEO = 'Said in the video itself, with no comment about it.'
-/** A video whose comments about it are counted and none reads clearly enough
- *  to print. */
-export const CONV_NONE_QUOTABLE = 'None of its comments about this reads clearly enough to quote.'
+/** Why a counted comment may not print: the gate's two tests, in words. */
+const QUOTE_RULE = 'a comment prints only where it reads clearly and speaks to this'
+/** A video whose comments about it are counted and none may print: the
+ *  gate's reason, whole (it can be either test that failed). */
+export const CONV_NONE_QUOTABLE = `None of its comments about this can be quoted: ${QUOTE_RULE}.`
 /** Opened: the comments counted and not printed, said once under the list. */
-export const notQuoted = (n: number): string => `The other ${n === 1 ? 'one is' : `${n} are`} counted, not quoted: a comment prints only where it reads clearly and speaks to this.`
+export const notQuoted = (n: number): string => `The other ${n === 1 ? 'one is' : `${n} are`} counted, not quoted: ${QUOTE_RULE}.`
+
+/**
+ * "Show all 14 comments" where every comment about it may print; else "Show 9
+ * of 14 comments", what the list it opens draws of the count the card states,
+ * the first `MARKET_VIDEO_COMMENTS_MAX` where more may print. Never "all" of a
+ * number smaller than the card's own. Pure.
+ */
+export function showCommentsOf(v: Pick<ConvVideo, 'quotable' | 'aboutCount'>): { shown: number; of: number | null } {
+  const shown = Math.min(v.quotable, MARKET_VIDEO_COMMENTS_MAX)
+  return { shown, of: shown < v.aboutCount ? v.aboutCount : null }
+}
+
+/**
+ * Under an opened list, once: where the cap cut it, how many of the ones that
+ * may print it draws ("The first 50 of the 120 that can be quoted are shown;
+ * 80 more are counted, not quoted."); else the counted ones it does not print
+ * and why (`notQuoted`); null where it draws every comment counted. Pure.
+ */
+export function openedNote(v: Pick<ConvVideo, 'quotable' | 'aboutCount'>): string | null {
+  const unquoted = Math.max(0, v.aboutCount - v.quotable)
+  if (v.quotable > MARKET_VIDEO_COMMENTS_MAX) {
+    return `The first ${fmtInt(MARKET_VIDEO_COMMENTS_MAX)} of the ${fmtInt(v.quotable)} that can be quoted are shown${unquoted > 0 ? `; ${fmtInt(unquoted)} more ${unquoted === 1 ? 'is' : 'are'} counted, not quoted` : ''}.`
+  }
+  return unquoted > 0 ? notQuoted(unquoted) : null
+}
 
 /** The period in the page's words. */
 const whenOf = (data: MarketData): string => (data.period === 'week' ? 'this week' : `in ${data.month.text}`)
@@ -77,6 +104,8 @@ function VideoCard({ v, data, index, all }: { v: ConvVideo; data: MarketData; in
   const shown = v.quotes
   const phoneMore = !v.open && v.quotable > MARKET_VIDEO_QUOTES_PHONE
   const deskMore = !v.open && v.quotable > MARKET_VIDEO_QUOTES
+  const show = showCommentsOf(v)
+  const note = v.open ? openedNote(v) : null
   return (
     <article id={`video-${v.id}`} data-video-card="" className={cn(CARD, 'scroll-mt-6 gap-3 px-[22px] pt-5 pb-[18px] max-sm:gap-2.5 max-sm:px-4 max-sm:pt-4 max-sm:pb-3.5', !all && !v.open && index >= 3 ? 'max-sm:hidden' : null)}>
       <div className="flex min-w-0 items-center gap-3">
@@ -101,12 +130,16 @@ function VideoCard({ v, data, index, all }: { v: ConvVideo; data: MarketData; in
           {shown.map((c, i) => <Comment key={i} c={c} hideOnPhone={!v.open && i >= MARKET_VIDEO_QUOTES_PHONE} />)}
         </div>
       ) : v.aboutCount > 0 ? <p className="m-0 rounded-[10px] bg-inner px-4 py-3 text-[13.5px] text-muted-foreground">{CONV_NONE_QUOTABLE}</p> : null}
-      {v.open && v.quotable < v.aboutCount ? <p className="m-0 text-[12.5px] text-muted-foreground">{notQuoted(v.aboutCount - v.quotable)}</p> : null}
+      {note ? <p className="m-0 text-[12.5px] text-muted-foreground">{note}</p> : null}
       {v.open ? (
         <div><Link href={v.href} scroll={false} className="text-[13.5px] font-semibold text-foreground no-underline underline-offset-[3px] hover:underline">Show fewer comments</Link></div>
       ) : phoneMore || deskMore ? (
         <div className={cn(!deskMore ? 'sm:hidden' : null, !phoneMore ? 'max-sm:hidden' : null)}>
-          <Link href={v.href} scroll={false} className="text-[13.5px] font-semibold text-foreground no-underline underline-offset-[3px] hover:underline">Show all <span data-copy="figure">{fmtInt(v.quotable)}</span> comments</Link>
+          <Link href={v.href} scroll={false} className="text-[13.5px] font-semibold text-foreground no-underline underline-offset-[3px] hover:underline">
+            {show.of == null
+              ? <>Show all <span data-copy="figure">{fmtInt(show.shown)}</span> comments</>
+              : <>Show <span data-copy="figure">{fmtInt(show.shown)}</span> of <span data-copy="figure">{fmtInt(show.of)}</span> comments</>}
+          </Link>
         </div>
       ) : null}
     </article>

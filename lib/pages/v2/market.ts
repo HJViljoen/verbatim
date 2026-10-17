@@ -823,10 +823,10 @@ export interface ConvVideo {
   /** Its comments in all (`comments_count`), where stored. */
   total: number | null
   /** The comments it shows: three (two on a phone), or, opened, every one
-   *  the gate lets print (at most `MARKET_VIDEO_COMMENTS_MAX`). */
+   *  the gate lets print, the first `MARKET_VIDEO_COMMENTS_MAX` of them. */
   quotes: ConvComment[]
-  /** How many of its comments about the conversation the gate lets print:
-   *  "Show all {N} comments". */
+  /** How many of its comments about the conversation the gate lets print,
+   *  every one, uncapped (`showCommentsLabel`, `openedNote`). */
   quotable: number
   /** `?video=` names it: every printable comment shows. */
   open: boolean
@@ -2370,7 +2370,13 @@ const gateVideoOfRow = (v: ConvVideoRow): QuoteVideo => ({
  * then the quote gate itself with the conversation's claim and its relevance
  * required (`gateFor`, as its page's quotes asked), every passing one kept
  * (a video is one thread, and here every comment is its own). The window has
- * dated them already, so the month rule is the window's. Pure.
+ * dated them already, so the month rule is the window's. ONE RULE OF
+ * `pickQuotes` IS NOT KEPT, on purpose: the insight's own kind need not be the
+ * conversation's, because this is every comment about it (the board's mix of
+ * questions and complaints under one video), not three that illustrate its
+ * kind; the kind still rides into the gate, so a problem's comments never
+ * print praise alone (`contradictsKind`). Every passing comment, uncapped.
+ * Pure.
  */
 export function videoQuotes(a: {
   video: ConvVideoRow
@@ -2399,7 +2405,11 @@ export function videoQuotes(a: {
       return readsAsHeroQuote(c.text, { lang: c.reading.lang ?? null, english: c.reading.english ?? null })
     })
   const video = gateVideoOfRow(a.video)
-  const picked = pickEligible(candidates, (c) => ({ text: c.text, lang: c.reading.lang ?? null, english: c.reading.english ?? null, video }), MARKET_VIDEO_COMMENTS_MAX, { ...a.gate, kind: a.gate.kind ?? a.kind, perThread: MARKET_VIDEO_COMMENTS_MAX })
+  // Every one that passes, uncapped: the card's "Show all" counts them, and
+  // the list it opens draws the first `MARKET_VIDEO_COMMENTS_MAX`, so a cap
+  // is never passed off as the gate's verdict.
+  const every = candidates.length
+  const picked = pickEligible(candidates, (c) => ({ text: c.text, lang: c.reading.lang ?? null, english: c.reading.english ?? null, video }), every, { ...a.gate, kind: a.gate.kind ?? a.kind, perThread: every })
   return picked.map((c) => ({ text: c.text, lang: c.reading.lang ?? null, english: c.reading.english ?? null, date: c.e.comment.date ? shortDate(c.e.comment.date) : '' }))
 }
 
@@ -2445,7 +2455,7 @@ export function convEvidenceOf(a: {
       url: video.video_url?.trim() || null,
       aboutCount: comments.size,
       total: video.comments_count ?? null,
-      quotes: isOpen ? quotes : quotes.slice(0, MARKET_VIDEO_QUOTES),
+      quotes: quotes.slice(0, isOpen ? MARKET_VIDEO_COMMENTS_MAX : MARKET_VIDEO_QUOTES),
       quotable: quotes.length,
       open: isOpen,
       href: convPageHref(a.p, a.convId, isOpen ? { videos: all } : { video: video.id, videos: all }),

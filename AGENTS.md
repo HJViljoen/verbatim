@@ -1549,15 +1549,21 @@ This version has breaking changes — APIs, conventions, and file structure may 
     (`video_url`, a new tab, `rel="noopener noreferrer"`), up to three of its
     comments about the conversation (two on a phone) in quote style with
     their date only and their English as every quote's, and "Show all {N}
-    comments", N the ones that may print; five videos, three on a phone, then
+    comments" where every comment counted may print, else "Show {k} of {N}
+    comments" (`showCommentsOf`: k the ones that may print, never "all" of a
+    number under the card's own, and at most the opened list's 50); five
+    videos, three on a phone, then
     "Show more videos · {N} more". THE COMMENTS ARE THE CONVERSATION'S
     COUNTED COMMENTS (its refs' `comment_ids`) dated in the period's window,
     their citations by its member insights, through the rules Market's
     quotes pass and the quote gate with its claim and relevance required
     (`videoQuotes`; `allowOwn` off; a demographic citation counts and never
     quotes), the words the citation's own excerpt, resolved at render, never
-    stored. Opened, a video says the rest are counted, not quoted (`notQuoted`)
-    where fewer print; a video counted for what is said on camera says so
+    stored. The pickQuotes rule it does NOT keep is the insight's kind: this
+    is every comment about it, so the kind only rides into the gate
+    (`contradictsKind`). Opened, a video says the rest are counted, not
+    quoted (`notQuoted`) where fewer print, and where more may print than
+    the list's 50 it says the cap is the reason (`openedNote`); a video counted for what is said on camera says so
     (`CONV_SAID_IN_VIDEO`); a failed read is `CONV_EVIDENCE_UNREAD`, its frame
     and one line. ONE READ, TWO USES: the counted comments' citations
     (`loadConvCommentEvidence`, `insight_evidence` with the comment embedded,

@@ -4,7 +4,7 @@ import { assertCopyContract, copyNodes, copyViolations } from '@/lib/test/copy-c
 import { CONV_SPANISH, fixtureId, fixtureSubjectId, marketConversationFixture } from '@/lib/pages/v2/market-fixture'
 import { noGroupSaying, type MarketData } from '@/lib/pages/v2/market'
 import { BACK_TO_MARKET, CONVERSATION_MISSING, MarketConversationPage } from './pages'
-import { ConversationPageBody, CONV_NONE_QUOTABLE, CONV_SAID_IN_VIDEO, CONV_VIDEOS_UNREAD, notQuoted } from './conversation-page'
+import { ConversationPageBody, CONV_NONE_QUOTABLE, CONV_SAID_IN_VIDEO, CONV_VIDEOS_UNREAD, notQuoted, openedNote, showCommentsOf } from './conversation-page'
 
 // A CONVERSATION'S PAGE, THE EVIDENCE (F3-Market-Conversation, 17 Oct): the
 // header on the page (the title block, the one-line read, the week's chip
@@ -136,6 +136,25 @@ describe('the params: a video\'s list opened, every video listed', () => {
     const v = d.convPage!.evidence!.videos.find((x) => x.open)!
     expect(v.aboutCount).toBeGreaterThan(v.quotable)
     expect(renderText(body(d))).toContain(notQuoted(v.aboutCount - v.quotable))
+  })
+
+  it('"Show all N" only where every comment about it may print; else what the list draws of the card\'s count, and why (the fresh check, 17 Oct)', () => {
+    expect(showCommentsOf({ quotable: 14, aboutCount: 14 })).toEqual({ shown: 14, of: null })
+    expect(showCommentsOf({ quotable: 9, aboutCount: 14 })).toEqual({ shown: 9, of: 14 })
+    // Past the opened list's cap: never "all", and the cap is never passed
+    // off as the gate's verdict.
+    expect(showCommentsOf({ quotable: 120, aboutCount: 200 })).toEqual({ shown: 50, of: 200 })
+    expect(showCommentsOf({ quotable: 60, aboutCount: 60 })).toEqual({ shown: 50, of: 60 })
+    expect(openedNote({ quotable: 14, aboutCount: 14 })).toBeNull()
+    expect(openedNote({ quotable: 9, aboutCount: 14 })).toBe(notQuoted(5))
+    expect(openedNote({ quotable: 120, aboutCount: 200 })).toBe('The first 50 of the 120 that can be quoted are shown; 80 more are counted, not quoted.')
+    expect(openedNote({ quotable: 60, aboutCount: 60 })).toBe('The first 50 of the 60 that can be quoted are shown.')
+    const ev = LINER.convPage!.evidence!
+    const fewer = { ...LINER.convPage!, evidence: { ...ev, videos: [{ ...ev.videos[0], quotable: 9 }] } }
+    const text = renderText(<ConversationPageBody page={fewer} data={LINER} />)
+    expect(text).toContain('14 comments about this, of 212 on the video')
+    expect(text).toContain('Show 9 of 14 comments')
+    expect(text).not.toMatch(/Show all 9/)
   })
 
   it('?videos=all lists every one (and none is hidden on a phone); no "Show more"', () => {
