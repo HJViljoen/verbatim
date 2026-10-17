@@ -5,7 +5,7 @@ import { postIdeasEnabled } from '../../config'
 import { shortDate } from '../../format'
 import { printsMedicalLine } from '../../post-ideas/medical'
 import {
-  loadPostIdeas, parsePostIdeaRow, POST_IDEA_COLUMNS, subquestionCounts, TABLE_POST_IDEAS,
+  isMissingPostIdeas, loadPostIdeas, parsePostIdeaRow, POST_IDEA_COLUMNS, subquestionCounts, TABLE_POST_IDEAS,
   type PostIdeaCover, type PostIdeaLength, type PostIdeaRank, type PostIdeaRow,
 } from '../../post-ideas/types'
 import { pickEligible, type GateOptions } from '../../quote-gate'
@@ -285,11 +285,16 @@ export const SUB_UNREAD = 'Its comments could not be read just now.'
 // ---- the reads ---------------------------------------------------------------------
 
 /** The row by its id, for this tenant alone; null for none (a foreign, a
- *  retired or a malformed id reads nothing). */
-export async function readIdeaRow(db: SupabaseClient, clientId: string, id: string): Promise<PostIdeaRow | null> {
+ *  retired or a malformed id reads nothing). `'not_on'` where the table is
+ *  not there: the root reads that as "not switched on" (`readIdeas`), never
+ *  as a read that failed (AGENTS.md, Content). */
+export async function readIdeaRow(db: SupabaseClient, clientId: string, id: string): Promise<PostIdeaRow | null | 'not_on'> {
   if (!UUID_RE.test(id)) return null
   const res = await db.from(TABLE_POST_IDEAS).select(POST_IDEA_COLUMNS).eq('client_id', clientId).eq('id', id.toLowerCase()).maybeSingle()
-  if (res.error) throw new Error(`content.idea: ${res.error.message}`)
+  if (res.error) {
+    if (isMissingPostIdeas(res.error)) return 'not_on'
+    throw new Error(`content.idea: ${res.error.message}`)
+  }
   return res.data ? parsePostIdeaRow(res.data) : null
 }
 
@@ -340,7 +345,7 @@ export async function loadContentIdea(scope: Scope, id: string, opts: { now?: Da
   // ---- wave 1: the row (for this tenant alone), the newest set's run, the
   // published read. A malformed id reads nothing at all.
   if (!UUID_RE.test(id)) return missing('missing')
-  let row: PostIdeaRow | null
+  let row: PostIdeaRow | null | 'not_on'
   let published: PublishedWeekRead | null
   let newest: Pick<PostIdeaRow, 'run_id' | 'window_start' | 'window_end'> | null
   try {
@@ -353,6 +358,7 @@ export async function loadContentIdea(scope: Scope, id: string, opts: { now?: Da
     console.error(`[pages] content.idea: ${(e as { message?: string })?.message ?? String(e)}`)
     return missing('unread')
   }
+  if (row === 'not_on') return missing('not_on')
   if (!row) return missing('missing')
   const idea = row
 

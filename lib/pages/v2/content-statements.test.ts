@@ -254,6 +254,12 @@ describe('a post idea\'s page reads only the tenant\'s own idea', () => {
     expect(db.calls).toHaveLength(0)
   })
 
+  it('a workspace whose post ideas table is not there yet reads as not switched on, as the root does, never as a failed read', async () => {
+    const { post_ideas: _gone, ...tables } = contentTables()
+    const r = await measure(ideaPage(IDEA(1)), {}, tables as ReturnType<typeof contentTables>)
+    expect(r.data).toMatchObject({ state: 'not_on', page: null })
+  })
+
   it('every read it makes names the session\'s client, and another workspace\'s comment never reaches a card', async () => {
     const r = await measure(ideaPage(IDEA(1)), { sub: '1' }, withForeign())
     expect(r.data.state).toBe('ready')
