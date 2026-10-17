@@ -3,7 +3,8 @@ import { retiredTo, type SearchProps } from '@/lib/nav'
 
 // CONVERSATION SPLIT (Design v2, decision 6 of the depth plan). A link that
 // opened a theme (`?theme=`, or a stored link's `?themes=`, the first of
-// them) opens it on Market (`?conv=`); the rest of the page, the cast
+// them) opens its page on Market (under `/dashboard/market/conversations/`,
+// 17 Oct); the rest of the page, the cast
 // (`#cast`) and a brand's videos (`?brand=`), is Voices', and lands there
 // with its params.
 //

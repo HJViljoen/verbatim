@@ -16,7 +16,7 @@ import { BIG, Fig, MONO_MUTED, MROW, TILE, TILE_FAILED, TileHead, TileLine, TT }
 // disagree. The anomaly check's flag where it raised one, else the week's
 // biggest conversation first heard this week, else its biggest; then the
 // week's biggest with its three weekly counts and one more first heard this
-// week. Each opens its panel on Market (`?conv=`).
+// week. Each opens its conversation's page on Market (17 Oct).
 //
 // DECISION 1: the board's "3× its usual level", "Rising 3 weeks" and
 // "usually about 6" go. The flag prints the check's own chip ("Unusual this

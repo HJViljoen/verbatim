@@ -35,8 +35,8 @@ import { topVoices, type TopVoices } from './voices'
 //   2. MARKET (`topMarket`, lib/pages/v2/market.ts): the anomaly check's flag
 //      where it raised one, else the week's biggest new conversation, else its
 //      biggest; then the week's biggest with its three bare weekly counts and
-//      one more first heard this week. Each opens its panel on Market
-//      (`?conv=`).
+//      one more first heard this week. Each opens its conversation's page on
+//      Market (17 Oct).
 //   3. YOUR MARKET THIS WEEK: the market's videos and comments this week, the
 //      month beside them (the published read's frozen figures), the weekly
 //      volume (lib/pages/home.ts `homeWeeks`, kept exactly), and the subjects

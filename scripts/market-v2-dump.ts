@@ -1,13 +1,15 @@
-// Market's loader output for ONE tenant, dumped to JSON (depth v2, T3), so the
-// page can be drawn from real data offline (`MARKET_V2_JSON=<file>
-// scripts/pages-shots.ts --only market-v2-real`) and its figures checked
-// against the database. READ-ONLY: it calls `topMarket` (to learn the week's
-// lead) and then `loadMarket` once, with that lead's panel open; it writes
-// nothing to the database and spends no model or Apify money.
+// Market's loader output for ONE tenant and ONE page, dumped to JSON (depth
+// v2, T3; Market's pages, 17 Oct), so the page can be drawn from real data
+// offline (`MARKET_V2_JSON=<file> scripts/pages-shots.ts --only
+// market-pages-real` for the top page) and its figures checked against the
+// database. READ-ONLY: `loadMarket` once for the page named (`--view`: `top`,
+// the default; `week`; `subject:<id>`; `conversation:<id>`, or
+// `conversation:lead`, which first calls `topMarket` to learn the week's
+// lead); it writes nothing to the database and spends no model or Apify money.
 //
 //   OPENAI_API_KEY=dummy node --env-file=<.env.local> --import tsx \
 //     scripts/market-v2-dump.ts --confirm --client <uuid> --out <file.json> \
-//     [--params 'period=month&conv=<id>&at=top'] [--no-open]
+//     [--view top|week|subject:<id>|conversation:<id>|conversation:lead] [--params 'period=month']
 //
 // THIS IS A PRODUCTION READ. One page load, about forty statements. It will not
 // start without `--confirm`, and it probes first: the smallest PostgREST read
@@ -19,7 +21,7 @@ import { writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createClient } from '@supabase/supabase-js'
 import { readingHandle } from '../lib/reading/read'
-import { loadMarket, marketParams, topMarket } from '../lib/pages/v2/market'
+import { loadMarket, marketParams, topMarket, type MarketView } from '../lib/pages/v2/market'
 
 const args = process.argv.slice(2)
 const flag = (n: string): string | null => { const i = args.indexOf(`--${n}`); return i >= 0 && args[i + 1] ? args[i + 1] : null }
@@ -63,20 +65,28 @@ async function main() {
 
   const raw = Object.fromEntries(new URLSearchParams(flag('params') ?? ''))
   const t0 = Date.now()
-  let conv: string | undefined = raw.conv
-  if (!conv && !args.includes('--no-open') && (raw.period ?? 'week') === 'week') {
-    const tdb = counted()
-    const top = await topMarket({ supabase: tdb, clientId, reading: readingHandle(clientId, tdb) })
-    const lead = top?.hero ? (top.hero.kind === 'flag' ? top.hero.card.conv?.id : top.hero.conv.id) : null
-    console.log(`topMarket: ${Date.now() - t0} ms; lead ${lead ?? 'none'}`)
-    report('topMarket')
-    writeFileSync(resolve(out.replace(/\.json$/, '.top.json')), JSON.stringify(top, null, 2))
-    conv = lead ?? undefined
-  }
-  const params = marketParams({ ...raw, ...(conv ? { conv, at: raw.at ?? 'top' } : {}) })
+  const asked = flag('view') ?? 'top'
+  let view: MarketView = { kind: 'top' }
+  if (asked === 'week') view = { kind: 'week' }
+  else if (asked.startsWith('subject:')) view = { kind: 'subject', id: asked.slice('subject:'.length) }
+  else if (asked.startsWith('conversation:')) {
+    let id = asked.slice('conversation:'.length)
+    if (id === 'lead') {
+      const tdb = counted()
+      const top = await topMarket({ supabase: tdb, clientId, reading: readingHandle(clientId, tdb) })
+      const lead = top?.hero ? (top.hero.kind === 'flag' ? top.hero.card.conv?.id : top.hero.conv.id) : null
+      console.log(`topMarket: ${Date.now() - t0} ms; lead ${lead ?? 'none'}`)
+      report('topMarket')
+      writeFileSync(resolve(out.replace(/\.json$/, '.top.json')), JSON.stringify(top, null, 2))
+      if (!lead) throw new Error('No lead conversation this week: name one with --view conversation:<id>.')
+      id = lead
+    }
+    view = { kind: 'conversation', id }
+  } else if (asked !== 'top') throw new Error(`--view ${asked}: top, week, subject:<id> or conversation:<id|lead>`)
+  const params = marketParams(raw)
   const t1 = Date.now()
   const db = counted()
-  const data = await loadMarket({ supabase: db, clientId, reading: readingHandle(clientId, db), params })
+  const data = await loadMarket({ supabase: db, clientId, reading: readingHandle(clientId, db), params, view })
   console.log(`loadMarket: ${Date.now() - t1} ms`)
   report('loadMarket')
   writeFileSync(resolve(out), JSON.stringify(data, null, 2))

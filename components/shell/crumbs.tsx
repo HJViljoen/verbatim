@@ -193,7 +193,7 @@ export function Crumbs({ crumbs, open }: { crumbs: readonly Crumb[]; open?: 'cur
         </Link>
       ) : null}
       <nav aria-label="Breadcrumb">
-        <ol className="m-0 flex min-h-10 list-none flex-wrap items-center gap-x-2.5 p-0">
+        <ol className="m-0 flex min-h-10 list-none flex-wrap items-center gap-x-2.5 p-0 max-sm:min-h-0">
           {crumbs.slice(0, -1).map((c, i) => (
             <Fragment key={i}>
               <li className="relative flex items-center gap-0.5 max-sm:hidden">

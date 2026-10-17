@@ -67,10 +67,11 @@ export interface HomeWeeks {
 export type HomeTileKey = 'market' | 'week' | 'voices' | 'products' | 'content' | 'moves'
 
 /** The page each tile opens: its address in lib/nav.ts, so a route that moves
- *  moves the link with it. Each tile's own link opens that page's panel in
- *  place (Market `?conv=`, Voices `?group=`, Your products `?product=` or
- *  `?group=`, Content `?idea=`, Your moves `?advice=`); this is the page under
- *  it, where the tile has nothing to open. "Your market this week" is the
+ *  moves the link with it. Each tile's own link opens what it names: a page
+ *  on Market (a conversation's or a subject's, 17 Oct), or that page's panel
+ *  in place (Voices `?group=`, Your products `?product=` or `?group=`,
+ *  Content `?idea=`, Your moves `?advice=`); this is the page under it, where
+ *  the tile has nothing to open. "Your market this week" is the
  *  market's own size, so Market. */
 export const TILE_NAV: Readonly<Record<HomeTileKey, NavKey>> = {
   market: 'market',

@@ -28,7 +28,7 @@ import { HomeWeeksPlot } from './weeks-plot'
 // level of the market's videos, and the one whose month moved most against
 // last month, its change banded through its `Verdict` (`MovementBadge`, in a
 // verdict node, neutral as Market draws a subject's change: a subject moving
-// is neither good nor bad news). Each opens its panel on Market (`?subject=`).
+// is neither good nor bad news). Each opens its subject's page on Market.
 //
 // THE BOARD'S SHAPE IN EVERY STATE (parity pass, 13 Oct): a week with nothing
 // drawn keeps its slot as a faint well, and the chart's key gives its place to

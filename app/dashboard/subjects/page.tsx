@@ -2,8 +2,9 @@ import { redirect } from 'next/navigation'
 import { retiredTo, type SearchProps } from '@/lib/nav'
 
 // SUBJECTS FOLDED INTO MARKET (Design v2, decision 6 of the depth plan): the
-// subject board is Market's. `?item=` (the open subject) lands as
-// `?subject=`, and `?month=` on Market's month view.
+// subject board is Market's. `?item=` (the open subject) lands on its page
+// (under `/dashboard/market/subjects/`, 17 Oct), and `?month=` on Market's
+// month view.
 //
 // Its page keys, modules and block keys stay registered, so a stored report
 // or share link renders as it did; only the address moved. A thin page.tsx

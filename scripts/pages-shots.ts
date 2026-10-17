@@ -321,6 +321,14 @@ const agentThread = (raw = agentFixture()) => {
  *  the lock). */
 const marketDump = (): MarketData => JSON.parse(readFileSync(process.env.MARKET_V2_JSON as string, 'utf8')) as MarketData
 
+/** A dump drawn by the page it was read for (17 Oct: Market's pages). */
+function marketDumpPage(d: MarketData): ReactNode {
+  if (d.view === 'subject') return h(MarketSubjectPage, { data: d })
+  if (d.view === 'conversation') return h(MarketConversationPage, { data: d })
+  if (d.view === 'week') return h(MarketWeekPage, { data: d })
+  return h(MarketPage, { data: d })
+}
+
 /**
  * A Market dump written before the parity pass (13 Oct), in today's shape:
  * HARNESS ONLY, so a pre-change production dump draws as the page would draw
@@ -566,8 +574,10 @@ const PAGES: Page[] = [
     key: `market-pages-${tenant}-dump`, path: '/dashboard/market', artboard: 'F2-Market.dc.html',
     page: () => h(MarketPage, { data: marketDumpOf(flag('market-dump', '.'), tenant) }),
   })) : []),
+  // A loader dump of any of Market's pages (`scripts/market-v2-dump.ts
+  // --view …`), drawn by its own page (`data.view`).
   ...(process.env.MARKET_V2_JSON
-    ? [{ key: 'market-pages-real', path: '/dashboard/market', artboard: 'F2-Market.dc.html', page: () => h(MarketPage, { data: marketDump() }) }]
+    ? [{ key: 'market-pages-real', path: '/dashboard/market', artboard: 'F2-Market.dc.html', page: () => marketDumpPage(marketDump()) }]
     : []),
   // Depth v2, T6 (Content; boards E5-Content and E5-Content-Open, shot with
   // `--artboards ~/Documents/Heinrich/Verbatim-Design/depth-2026-10/canvas/project`).

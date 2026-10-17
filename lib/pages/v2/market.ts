@@ -2847,7 +2847,7 @@ export function subjectDetailOf(input: {
 }
 
 /**
- * A ready subject's blocks, read only when its panel is open (`?subject=`):
+ * A ready subject's blocks, read only on its page (`/dashboard/market/subjects/<id>`):
  * its members' comment citations over the month and, this week, the week's
  * window too (`loadDatedEvidence`, demographic citations included, the
  * translations and the quote gate's video context with it), then the
@@ -2901,8 +2901,8 @@ export async function loadSubjectDetail(a: {
  * week's flag where the anomaly check raised one, else the week's biggest
  * conversation first heard this week, else its biggest; with its three weekly
  * counts and its month; then the week's biggest conversation's three counts
- * (unless it leads) and one more first heard this week. Each links to its open
- * panel on Market. Null where no week has been read.
+ * (unless it leads) and one more first heard this week. Each links to its
+ * conversation's page on Market. Null where no week has been read.
  *
  * The same builders as the page (`buildConvs`, `pickHero`, `pickWeekSides`,
  * `flagCardOf`, `setApartOf`), so the tile and Market's top row never

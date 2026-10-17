@@ -94,7 +94,10 @@ function PhoneRow({ conv, href, data, subjects }: { conv: MarketConv; href: stri
       <span className="text-right font-mono text-[13.5px] tabular-nums">{count != null ? <span data-copy="figure">{fmtInt(count)}</span> : ''}</span>
       {/* The second line spans the row, so the month never narrows the name. */}
       <span className="col-span-2 flex min-w-0 items-baseline justify-between gap-3 text-[12.5px] text-muted-foreground">
-        <span className="min-w-0">{subjects ? conv.subjectName ?? '' : ''}</span>
+        {/* A subject's page lists its own conversations: there the left of
+            the second line says who each is about (F2-Market-Subject-Phone);
+            the top page's list carries no About chips (ruling 4). */}
+        <span className="min-w-0">{subjects ? conv.subjectName ?? '' : conv.who.length > 0 && data.brands === 'counted' ? <About parts={conv.who} brand={data.brand} noun={data.noun} /> : ''}</span>
         <span className="shrink-0 whitespace-nowrap">
           {data.period === 'week'
             ? conv.month != null ? <><span data-copy="figure" className="font-mono">{fmtInt(conv.month)}</span> {data.week?.inMonth ?? `in ${data.month.text}`}</> : null
