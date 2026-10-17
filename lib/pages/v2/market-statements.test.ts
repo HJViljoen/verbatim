@@ -354,6 +354,50 @@ describe('a conversation\'s videos and what people said under them', () => {
     expect(JSON.stringify(data)).not.toMatch(/Not in this conversation/)
   })
 
+  // THE READS THEMSELVES FILTER, NOT ONLY THE PARAMS (the fresh check, 17
+  // Oct). Refs that named another workspace's video and comment (a stale or
+  // corrupt id), a counted comment under a video outside the conversation,
+  // and a member's citation of a comment outside the window: each is cited by
+  // the conversation's own member insight, and none may reach the page, as a
+  // card, a count or a word.
+  it('another workspace\'s video and comment, a video outside its refs, a comment outside the window: none is read into a card, a count or a word', async () => {
+    const t = tables()
+    const OTHER = '00000000-0000-4000-8000-0000000000cc'
+    const V2 = '00000000-0000-4000-8000-0000000000d2'
+    const over = {
+      videos: [...t.videos, { ...t.videos[0], id: V2, video_id: 'n2', account_name: 'Not in this conversation', caption: 'Not in this conversation either' }],
+      comments: [
+        ...t.comments,
+        { id: 'cf', client_id: OTHER, comment_date: '2026-10-07T10:00:00.000Z', platform: 'tiktok', video_id: 'n9', author: 'foreign1' },
+        { id: 'c3', client_id: CLIENT, comment_date: '2026-10-07T11:00:00.000Z', platform: 'tiktok', video_id: 'n2', author: 'viewer3' },
+        { id: 'c4', client_id: CLIENT, comment_date: '2026-09-01T10:00:00.000Z', platform: 'tiktok', video_id: 'n1', author: 'viewer4' },
+      ],
+      insight_evidence: [
+        ...t.insight_evidence,
+        { id: 'e3', audience_insight_id: 'ins-3', comment_id: 'cf', source: 'comment', quote: 'Foreign workspace words: my insurance refused the powered knee appeal twice.', relevance_rank: 1, redacted: false },
+        { id: 'e4', audience_insight_id: 'ins-3', comment_id: 'c3', source: 'comment', quote: 'Words under a video outside this conversation: insurance refused my knee.', relevance_rank: 1, redacted: false },
+        { id: 'e5', audience_insight_id: 'ins-3', comment_id: 'c4', source: 'comment', quote: 'Words from outside the window: the insurance refused my knee in August.', relevance_rank: 1, redacted: false },
+      ],
+    }
+    const r = rpcs()
+    const db = fakeDb({ ...t, ...over } as never, {
+      ...r,
+      // The conversation's refs name the foreign video and its comment, and
+      // the tenant's comment under a video the refs do not name (V2); c4 is
+      // never in them (dated outside the window).
+      monthly_evidence_refs: () => [1, 3, 5].map((n) => ({ audience: 'industry-other', theme_id: fixtureId(n), video_ids: n === 3 ? [V1, FOREIGN_VIDEO] : [V1], comment_ids: n === 3 ? ['c1', 'cf', 'c3'] : ['c1'] })),
+    } as never)
+    const data = await loadMarket({ supabase: db.client as never, clientId: CLIENT, reading: readingHandle(CLIENT, db.client as never), params: marketParams({ videos: 'all' }), view: { kind: 'conversation', id: fixtureId(3) }, now: new Date('2026-10-14T09:00:00.000Z') })
+    const ev = data!.convPage!.evidence!
+    expect(ev.videos.map((v) => [v.id, v.aboutCount, v.quotable])).toEqual([[V1, 1, 1]])
+    expect(ev.total).toBe(1)
+    const json = JSON.stringify(data)
+    for (const leak of [/Other workspace/, /Foreign workspace words/, /outside this conversation/, /Not in this conversation/, /outside the window/]) expect(json).not.toMatch(leak)
+    // Every videos and citations read named the session's client.
+    for (const c of db.calls.filter((x) => x.table === 'videos')) expect(c.filters).toContain(`client_id=${CLIENT}`)
+    for (const c of db.calls.filter((x) => x.table === 'insight_evidence')) expect(c.filters).toContain(`comments.client_id=${CLIENT}`)
+  })
+
   it('its videos\' read failing: the evidence is unread, never an empty list', async () => {
     const { videos: _gone, ...rest } = tables()
     const db = fakeDb(rest as never, rpcs() as never)
