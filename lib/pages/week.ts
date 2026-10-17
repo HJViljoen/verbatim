@@ -893,6 +893,14 @@ export interface ReplyRow {
    *  Content page splits its reply list by it. Optional: a stored copy, and a
    *  row whose video was not read, carry none. */
   under?: EngageUnder
+  /** The video's row (`videos.id`) the comment sits under, where its row was
+   *  read: Content's reply list prints each comment under its video (depth
+   *  as pages, 17 Oct). An id, never words. Optional: a stored copy carries
+   *  none. */
+  videoRowId?: string
+  /** The comment's likes, where the platform gave any (the reply list's
+   *  "12 likes"). Optional: a stored copy carries none. */
+  likes?: number
 }
 
 /** §2 and §8: the work queue, and the claims that are not one. */
@@ -2305,6 +2313,8 @@ function toReplyRow(
     insightId: c.insightId,
     ...(makers.has(c.comment.id) ? { maker: true } : {}),
     ...(c.comment.under ? { under: c.comment.under } : {}),
+    ...(c.comment.videoRowId ? { videoRowId: c.comment.videoRowId } : {}),
+    ...(c.comment.likes > 0 ? { likes: c.comment.likes } : {}),
   }
 }
 

@@ -12,30 +12,34 @@ import {
   fmtMultiple, groupsByConversation, ideaCard, IDEAS_EMPTY, marketVideoCards, mixSentence, newVerdict, openingChip,
   openingLabel, ownTouch, parseContentParams, pooledThemeVideos, pooledVideos, postsBlock, postTitle, recipe,
   repliesView, storedPersonas, subquestionRows, threeWeeks, topContentEmpty, typicalRate, wordsToBorrow, worksBlock,
-  worksRows, type PanelVideoRow, type WorksRow,
+  worksRows, ideaHref, repliesHref, postsHref, type PanelVideoRow, type WorksRow,
 } from './content'
 import { contentFixture, OCT, OSSUR_IDEAS, OSSUR_OWNED, OSSUR_OWNED_SINCE, OSSUR_PERSONAS, OSSUR_REPLIES, REG } from './content-fixture'
 
 const WINDOW = { from: '2026-10-04T04:03:00.000Z', to: '2026-10-11T04:02:00.000Z' }
 
 describe('the URL', () => {
-  it('reads the period, one panel and the expanded table; anything else is the default', () => {
-    expect(parseContentParams({})).toEqual({ period: 'week', open: null, asked: false })
-    expect(parseContentParams({ period: 'month', idea: '2' })).toEqual({ period: 'month', open: { kind: 'idea', rank: 2 }, asked: false })
-    expect(parseContentParams({ idea: '7' }).open).toBeNull()
-    expect(parseContentParams({ replies: '1' }).open).toEqual({ kind: 'replies' })
-    // An old reply link's tab (`?reply=question#worth-a-reply`) opens the list.
-    expect(parseContentParams({ reply: 'question' }).open).toEqual({ kind: 'replies' })
-    expect(parseContentParams({ posts: '1', asked: 'all' })).toEqual({ period: 'week', open: { kind: 'posts' }, asked: true })
+  it('reads the period and the expanded table; anything else is the default (the old panels redirect first)', () => {
+    expect(parseContentParams({})).toEqual({ period: 'week', asked: false })
+    expect(parseContentParams({ period: 'month', idea: '2' })).toEqual({ period: 'month', asked: false })
+    expect(parseContentParams({ replies: '1', asked: 'all' })).toEqual({ period: 'week', asked: true })
     expect(parseContentParams({ period: 'year' }).period).toBe('week')
   })
 
-  it('writes the page back with the period kept and the panel anchored', () => {
-    expect(contentHref({ period: 'week', open: null, asked: false })).toBe('/dashboard/content')
-    expect(contentHref({ period: 'week', open: { kind: 'idea', rank: 1 }, asked: false })).toBe('/dashboard/content?idea=1#idea-panel')
-    expect(contentHref({ period: 'month', open: { kind: 'replies' }, asked: false })).toBe('/dashboard/content?period=month&replies=1#replies-panel')
-    expect(contentHref({ period: 'week', open: null, asked: true })).toBe('/dashboard/content?asked=all#also-asked')
-    expect(contentHref({ period: 'week', open: { kind: 'posts' }, asked: true })).toBe('/dashboard/content?posts=1&asked=all#posts-panel')
+  it('writes the root back with the period kept and the table anchored', () => {
+    expect(contentHref({ period: 'week', asked: false })).toBe('/dashboard/content')
+    expect(contentHref({ period: 'month', asked: false })).toBe('/dashboard/content?period=month')
+    expect(contentHref({ period: 'week', asked: true })).toBe('/dashboard/content?asked=all#also-asked')
+    expect(contentHref({ period: 'month', asked: true })).toBe('/dashboard/content?period=month&asked=all#also-asked')
+  })
+
+  it('opens every card on a page of its own: an idea by its row, the reply list with the period, your posts', () => {
+    expect(ideaHref({ id: 'i0000001-0000-4000-8000-000000000000' })).toBe('/dashboard/content/ideas/i0000001-0000-4000-8000-000000000000')
+    // A card dumped before it carried its row opens the root.
+    expect(ideaHref({})).toBe('/dashboard/content')
+    expect(repliesHref('week')).toBe('/dashboard/content/replies')
+    expect(repliesHref('month')).toBe('/dashboard/content/replies?period=month')
+    expect(postsHref()).toBe('/dashboard/content/posts')
   })
 })
 
@@ -375,7 +379,7 @@ describe('worth a reply', () => {
   it('counts the comments it picked by what they ask and whose post they sit under', () => {
     const view = repliesView(OSSUR_REPLIES, window)
     expect(view.total).toBe(12)
-    expect(view.counts).toEqual({ buying: 4, question: 5, objection: 2, flagged: 1 })
+    expect(view.counts).toEqual({ buying: 5, question: 3, objection: 3, flagged: 1 })
     expect(view.under).toEqual({ own: 6, about: 3, elsewhere: 3 })
     expect(repliesView(null, window).unread).toMatch(/could not be read/)
     expect(repliesView({ ...OSSUR_REPLIES, rows: [], flagged: [], unread: 'This update covered no window.' }, window).unread).toBe('This update covered no window.')

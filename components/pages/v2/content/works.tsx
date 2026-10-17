@@ -3,6 +3,7 @@ import { ChartLine } from 'lucide-react'
 import { CARD, CardHead, TickBar, UnitSquares, MAX_UNITS } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
 import { fmtMultiple, monthWords, WORKS_SCALE_MAX, type WorksBlock, type WorksRow } from '@/lib/pages/v2/content'
+import { WORKS_ANCHOR } from '@/lib/pages/v2/content-address'
 import { cn } from '@/lib/utils'
 import { Fig, Lvl, Sentence } from './parts'
 
@@ -101,7 +102,9 @@ export function WorksCard({ block, className, style }: { block: WorksBlock; clas
   const when = monthWords(block)
   const neither = block.formats.length === 0 && block.openings.length === 0
   return (
-    <article aria-labelledby="works-title" style={style} className={cn(CARD, className)}>
+    // `what-works`: where your posts' page sends a reader for the market's
+    // formats (WORKS_ANCHOR).
+    <article id={WORKS_ANCHOR} aria-labelledby="works-title" style={style} className={cn(CARD, 'scroll-mt-6', className)}>
       <CardHead
         icon={ChartLine}
         id="works-title"

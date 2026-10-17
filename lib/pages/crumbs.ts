@@ -9,9 +9,10 @@
 // walks the switcher's imports.
 
 /** The prose slot a label is replayed from, where it is model prose written
- *  elsewhere (a conversation's label is Pass B's). Null for a name a person
- *  gave (a subject's) or a page's own words. */
-export type CrumbSlot = 'pass_b_theme' | null
+ *  elsewhere (a conversation's label is Pass B's; a post idea's title is the
+ *  post-ideas writer's). Null for a name a person gave (a subject's) or a
+ *  page's own words. */
+export type CrumbSlot = 'pass_b_theme' | 'post_idea' | null
 
 /** One entry in a switcher: a sibling page, the period kept in its address. */
 export interface CrumbItem {
@@ -36,6 +37,9 @@ export interface CrumbMenu {
   /** Below a hairline, unranked: the subjects whose check has not passed
    *  (ruling U6). */
   below?: CrumbItem[]
+  /** The board's wide menu (460px), for long entries such as a post idea's
+   *  title (G5-Content-Idea-Switcher). */
+  wide?: boolean
 }
 
 /** One segment of the path. The last is the page itself (no `href`). */

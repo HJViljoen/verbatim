@@ -3,7 +3,8 @@ import { readingMonthLabel } from '../../reading/month-label'
 import type { PublishedWeekRead } from '../../written/published'
 import type { StandingFact, WeekReadDataV2 } from '../../written/types'
 import { homeWeeksFrame, type HomeWeeks } from '../home'
-import { CONTENT_PATH, contentHref, IDEAS_EMPTY, ideasReadOf, questionSlotId, recipe, topContentEmpty, type IdeasState, type TopAsked } from './content'
+import { contentIdeaPath } from './content-address'
+import { CONTENT_PATH, IDEAS_EMPTY, ideasReadOf, questionSlotId, recipe, topContentEmpty, type IdeasState, type TopAsked } from './content'
 import {
   agentTries, weekSubjectsGap, weekSubjectsOf, weekTileOf, type ContentTile, type DashboardData, type MarketTile, type TileRead, type TopProducts, type WeekSubjects,
 } from './home'
@@ -195,12 +196,16 @@ export function fixtureAsked(): TopAsked {
   }
 }
 
+/** The first post idea's row (`post_ideas.id`): the tile opens its page. */
+export const FIXTURE_IDEA_ID = 'i0000001-0000-4000-8000-000000000000'
+
 export function fixtureContentTop(state: IdeasState | 'older' = 'ready', opts: { medical?: boolean; asked?: boolean } = {}): ContentTile {
   if (state !== 'ready' && state !== 'older') return { state, idea: null, href: '/dashboard/content', line: state === 'unread' ? IDEAS_EMPTY.unread : topContentEmpty(state), ...(opts.asked ? { asked: fixtureAsked() } : {}) }
   const older = state === 'older'
   return {
     state: 'ready',
     idea: {
+      id: FIXTURE_IDEA_ID,
       rank: 1,
       title: 'How long a liner lasts, and when it is time to replace one',
       read: { k: 48, n: 640 },
@@ -223,7 +228,7 @@ export function fixtureContentTop(state: IdeasState | 'older' = 'ready', opts: {
           : { month: '2026-10-01', complete: false, from: '2026-10-01T00:00:00.000Z', to: '2026-10-11T04:02:00.000Z' },
       },
     },
-    href: contentHref({ period: 'week', open: { kind: 'idea', rank: 1 }, asked: false }),
+    href: contentIdeaPath(FIXTURE_IDEA_ID),
     line: older ? 'No new ideas this week. These are from the week of 28 Sep.' : null,
   }
 }

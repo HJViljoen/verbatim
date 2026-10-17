@@ -27,49 +27,40 @@ describe('Content', () => {
     expect(renderText(<ContentPage data={contentFixture({ period: 'month' })} />)).toContain('October so far · 318 videos in your market with a comment · 9 posts of your own published in October so far')
   })
 
-  it('keeps the copy contract closed, with each panel open, and empty', () => {
+  it('keeps the copy contract, in every period and state', () => {
     assertCopyContract(<ContentPage data={contentFixture()} />)
-    assertCopyContract(<ContentPage data={contentFixture({ open: { kind: 'idea', rank: 1 } })} />)
-    assertCopyContract(<ContentPage data={contentFixture({ open: { kind: 'replies' } })} />)
-    assertCopyContract(<ContentPage data={contentFixture({ open: { kind: 'posts' }, period: 'month', asked: true })} />)
+    assertCopyContract(<ContentPage data={contentFixture({ period: 'month', asked: true })} />)
     assertCopyContract(<ContentPage data={contentFixture({ ideas: 'not_on' })} />)
     assertCopyContract(<ContentPage data={contentEmptyFixture()} />)
-    assertCopyContract(<ContentPage data={contentFixture({ olderIdeas: true, open: { kind: 'idea', rank: 2 } })} />)
+    assertCopyContract(<ContentPage data={contentFixture({ olderIdeas: true })} />)
     assertCopyContract(<ContentPage data={contentFixture({ ideas: 'stale' })} />)
   })
 
-  it('prints no quote at level 1: every comment’s words are one click down', () => {
+  it('prints no quote at level 1: every comment’s words are a page down', () => {
     const closed = copyNodes(render(<ContentPage data={contentFixture()} />)).filter((n) => n.kind === 'quote')
     // The one quote node at level 1 is your own best post's title: your words,
     // not a commenter's.
     expect(closed.map((n) => n.text)).toEqual(['“Meet the Navii.”'])
-    expect(copyNodes(render(<ContentPage data={contentFixture({ open: { kind: 'idea', rank: 1 } })} />)).filter((n) => n.kind === 'quote').length).toBeGreaterThan(3)
   })
 
-  it('opens one panel, in place, under its own card at every width (T9)', () => {
-    const idea = render(<ContentPage data={contentFixture({ open: { kind: 'idea', rank: 1 } })} />)
-    // In the markup right after the first idea, before the second; ordered
-    // after the card on a phone and after the row of three from 1280.
-    expect(idea.indexOf('id="idea-panel"')).toBeGreaterThan(idea.indexOf('id="idea-1"'))
-    expect(idea.indexOf('id="idea-panel"')).toBeLessThan(idea.indexOf('id="idea-2"'))
-    expect(idea).toContain('--panel-o-base:1;--panel-o-sm:1;--panel-o-md:1;--panel-o-lg:1;--panel-o-w1180:1;--panel-o-xl:5')
-    expect(idea).toContain('--notch-base:50%;--notch-sm:50%;--notch-md:50%;--notch-lg:50%;--notch-w1180:50%;--notch-xl:16.67%')
-    const replies = render(<ContentPage data={contentFixture({ open: { kind: 'replies' } })} />)
-    // Between Worth a reply and Your posts on a phone; under the pair, at the
-    // right-hand column, from 1280.
-    expect(replies.indexOf('id="replies-panel"')).toBeGreaterThan(replies.indexOf('id="posts-title"'))
-    expect(replies.indexOf('id="replies-panel"')).toBeLessThan(replies.indexOf('id="also-asked"'))
-    expect(replies).toContain('--panel-o-base:3;--panel-o-sm:3;--panel-o-md:3;--panel-o-lg:3;--panel-o-w1180:3;--panel-o-xl:5')
-    expect(replies).toContain('--notch-xl:83.33%')
-    // The cards' orders are the kit's (`panelItemOrder`), never hand-set
-    // classes (Phase 4 fix round): Worth a reply is the second card.
-    expect(replies).toMatch(/aria-labelledby="replies-title" style="order:2"/)
-    expect(replies).toMatch(/aria-labelledby="works-title" style="order:0"/)
-    expect(replies).toMatch(/aria-labelledby="posts-title" style="order:4"/)
-    expect(replies).not.toMatch(/class="[^"]*\border-\d/)
-    expect(replies).not.toContain('id="idea-panel"')
-    const posts = render(<ContentPage data={contentFixture({ open: { kind: 'posts' }, period: 'month' })} />)
-    expect(posts).toContain('--panel-o-base:5;--panel-o-sm:5;--panel-o-md:5;--panel-o-lg:5;--panel-o-w1180:5;--panel-o-xl:5')
+  it('opens every card on a page of its own, and nothing in place (depth as pages, 17 Oct)', () => {
+    const m = render(<ContentPage data={contentFixture()} />)
+    // Each idea by its row; the reply list and your posts at their pages.
+    expect(m).toContain('href="/dashboard/content/ideas/i0000001-0000-4000-8000-000000000000"')
+    expect(m).toContain('href="/dashboard/content/ideas/i0000002-0000-4000-8000-000000000000"')
+    expect(m).toContain('href="/dashboard/content/replies"')
+    expect(m).toContain('href="/dashboard/content/posts"')
+    // The reply list keeps the month.
+    expect(render(<ContentPage data={contentFixture({ period: 'month' })} />)).toContain('href="/dashboard/content/replies?period=month"')
+    // A question card and an Also asked row open the conversation in Market.
+    const fewer = render(<ContentPage data={contentFixture({ ideas: 'fewer' })} />)
+    expect(fewer).toMatch(/data-idea-slot="question"[\s\S]*href="\/dashboard\/market\/conversations\//)
+    // No panel, no old panel param, no close link; the stored anchor stays on its card.
+    for (const page of [m, fewer]) {
+      expect(page).not.toMatch(/data-panel=""|\?idea=|replies=1|posts=1|Close ↑/)
+      expect(page).toContain('id="worth-a-reply"')
+      expect(page).toContain('id="what-works"')
+    }
   })
 
   it('draws every block’s empty state for a workspace with no update yet', () => {
@@ -89,7 +80,7 @@ describe('Content', () => {
     const text = renderText(node)
     expect(text).toContain('How the video is made')
     expect(text).toContain('How it opens')
-    expect(text).toContain('9 comments · all elsewhere in your market 4 ready to buy 5 questions 0 objections 0 wrong information Open the replies')
+    expect(text).toContain('9 comments · all elsewhere in your market 5 ready to buy 3 questions 1 objection 0 wrong information Open the replies')
     // No post has a response figure: the cell states how many have one, of all, and the best post's place says why it names none.
     expect(text).toContain('13 posts · Instagram 13 0 of 13 with a response figure, too few to state a typical one Best this month None to name without a response figure. All your posts')
     expect(text).toContain('Question people asked Who asks Subject This week October so far The last three weeks')

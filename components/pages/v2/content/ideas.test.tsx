@@ -4,19 +4,18 @@ import { assertCopyContract, copyNodes } from '@/lib/test/copy-contract'
 import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '@/lib/config'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
 import { contentEmptyFixture, contentFixture, contentThinFixture, ideaCards, OCT } from '@/lib/pages/v2/content-fixture'
-import { IDEA_SLOTS, questionSlotsContext, type ContentPageData, type ContentState } from '@/lib/pages/v2/content'
+import { IDEA_SLOTS, questionSlotsContext, type ContentPageData } from '@/lib/pages/v2/content'
 import { IdeaCardView, IdeasSection, OwnTouchLine, QuestionCardView } from './ideas'
 
 /** The page's words as read: a tag between a word and its comma is not a space. */
 const renderText = (node: Parameters<typeof rawText>[0]): string => rawText(node).replace(/\s+([,.])/g, '$1')
 
-const STATE: ContentState = { period: 'week', open: null, asked: false }
-const section = (clientId = OSSUR_CLIENT_ID, state = STATE) => {
+const section = (clientId = OSSUR_CLIENT_ID) => {
   const data = contentFixture({ clientId })
-  return <IdeasSection block={data.ideas} state={state} month={OCT} ctx={questionSlotsContext(data)} />
+  return <IdeasSection block={data.ideas} month={OCT} ctx={questionSlotsContext(data)} />
 }
 /** The row as the page draws it for these data. */
-const row = (data: ContentPageData, state = STATE) => <IdeasSection block={data.ideas} state={state} month={OCT} ctx={questionSlotsContext(data)} />
+const row = (data: ContentPageData) => <IdeasSection block={data.ideas} month={OCT} ctx={questionSlotsContext(data)} />
 /** Each card's kind, in order (`idea`, `question` or `empty`). */
 const slots = (m: string): string[] => [...m.matchAll(/<article id="idea-\d"|data-idea-slot="(question|empty)"/g)].map((x) => x[1] ?? 'idea')
 
@@ -38,7 +37,7 @@ describe('What to post next', () => {
 
   it('states the four weeks the ideas read beside the month, and each of those weeks as a bare count with no word', () => {
     const [card] = ideaCards()
-    const m = render(<IdeaCardView card={card} state={STATE} selected={false} month={OCT} readLabel="14 Sep to 11 Oct" />)
+    const m = render(<IdeaCardView card={card} month={OCT} readLabel="14 Sep to 11 Oct" />)
     const levels = copyNodes(m).filter((n) => n.kind === 'level').map((n) => n.text)
     expect(levels).toEqual(['48 of 640 videos, 14 Sep to 11 Oct', '31 of 318 in October so far'])
     // The four weekly counts are the bars' own figures: 6, 9, 14 and 23,
@@ -46,16 +45,16 @@ describe('What to post next', () => {
     expect(copyNodes(m).filter((n) => n.kind === 'figure').map((n) => n.text)).toEqual(expect.arrayContaining(['6', '9', '14', '23']))
     expect(m).toContain('the weeks of 14 Sep, 21 Sep, 28 Sep, 5 Oct')
     expect(m).not.toMatch(/videos this week/)
-    expect(renderText(<IdeaCardView card={card} state={STATE} selected={false} month={OCT} readLabel="14 Sep to 11 Oct" />)).not.toMatch(/Rising|usual level|trend/i)
+    expect(renderText(<IdeaCardView card={card} month={OCT} readLabel="14 Sep to 11 Oct" />)).not.toMatch(/Rising|usual level|trend/i)
   })
 
   it('prints the four weeks only beside their month: no month, the four-week figure goes too (decision 1)', () => {
     const [card] = ideaCards()
-    const noMonth = render(<IdeaCardView card={{ ...card, month: null }} state={STATE} selected={false} month={OCT} readLabel="14 Sep to 11 Oct" />)
+    const noMonth = render(<IdeaCardView card={{ ...card, month: null }} month={OCT} readLabel="14 Sep to 11 Oct" />)
     expect(copyNodes(noMonth).filter((n) => n.kind === 'level')).toEqual([])
     expect(noMonth).not.toContain('of 640 videos')
     // The month alone where the four weeks were not read.
-    const noRead = render(<IdeaCardView card={{ ...card, read: null }} state={STATE} selected={false} month={OCT} readLabel="14 Sep to 11 Oct" />)
+    const noRead = render(<IdeaCardView card={{ ...card, read: null }} month={OCT} readLabel="14 Sep to 11 Oct" />)
     expect(copyNodes(noRead).filter((n) => n.kind === 'level').map((n) => n.text)).toEqual(['31 of 318 in October so far'])
   })
 
@@ -70,7 +69,7 @@ describe('What to post next', () => {
 
   it('prints a flag only where one was earned: the anomaly check’s, or the week read’s new', () => {
     const cards = ideaCards()
-    const flag = (i: number) => copyNodes(render(<IdeaCardView card={cards[i]} state={STATE} selected={false} month={OCT} readLabel="14 Sep to 11 Oct" />)).filter((n) => n.kind === 'verdict').map((n) => n.text)
+    const flag = (i: number) => copyNodes(render(<IdeaCardView card={cards[i]} month={OCT} readLabel="14 Sep to 11 Oct" />)).filter((n) => n.kind === 'verdict').map((n) => n.text)
     expect(flag(0)).toEqual([])
     expect(flag(1)).toEqual(['Unusual this week'])
     expect(flag(2)).toEqual(['New'])
@@ -78,18 +77,18 @@ describe('What to post next', () => {
 
   it('names who asks without a count (decision 5), and whether your posts touched on it', () => {
     const cards = ideaCards()
-    const one = renderText(<IdeaCardView card={cards[0]} state={STATE} selected={false} month={OCT} readLabel="14 Sep to 11 Oct" />)
+    const one = renderText(<IdeaCardView card={cards[0]} month={OCT} readLabel="14 Sep to 11 Oct" />)
     expect(one).toContain("Who's asking New amputees, first year, Caregivers and family")
     expect(one).not.toMatch(/\d+ of \d+ new amputees/i)
     // The post-ideas step's own test and window: the reading month and the
     // two before (since August), to the week's end.
     expect(one).toContain('Your posts None of your 13 posts since August touched on it')
-    expect(renderText(<IdeaCardView card={cards[2]} state={STATE} selected={false} month={OCT} readLabel="14 Sep to 11 Oct" />)).toContain('1 of your 13 posts since August touched on it')
+    expect(renderText(<IdeaCardView card={cards[2]} month={OCT} readLabel="14 Sep to 11 Oct" />)).toContain('1 of your 13 posts since August touched on it')
     expect(renderText(<OwnTouchLine own={{ state: 'no_posts', touched: 0, posts: 0, since: '2026-08-01' }} />)).toBe('You published nothing of your own since August')
   })
 
   it('suggests the format and the opening with their multiples', () => {
-    const text = renderText(<IdeaCardView card={ideaCards()[0]} state={STATE} selected={false} month={OCT} readLabel="14 Sep to 11 Oct" />)
+    const text = renderText(<IdeaCardView card={ideaCards()[0]} month={OCT} readLabel="14 Sep to 11 Oct" />)
     // T13's multiples are on the question: 1× is a typical market video on it.
     expect(text).toContain('Suggested format and opening Tutorial 2.1× Open with a question 1.8× 1× is a typical market video on this question')
   })
@@ -100,12 +99,11 @@ describe('What to post next', () => {
     expect(renderText(section(SEALAND_CLIENT_ID))).not.toContain(MEDICAL_LINE)
   })
 
-  it('opens the idea in place, and the open card wears the ring and closes', () => {
-    expect(render(section())).toContain('href="/dashboard/content?idea=1#idea-panel"')
-    const open = render(section(OSSUR_CLIENT_ID, { ...STATE, open: { kind: 'idea', rank: 2 } }))
-    expect(open).toMatch(/<article id="idea-2"[^>]*class="[^"]*ring-2 ring-foreground/)
-    expect(open).toContain('Close ↑')
-    expect(open).toMatch(/aria-expanded="true" aria-controls="idea-panel"/)
+  it('opens each idea on its own page, by its row, and nothing in place (depth as pages, 17 Oct)', () => {
+    const m = render(section())
+    expect(m).toContain('href="/dashboard/content/ideas/i0000001-0000-4000-8000-000000000000"')
+    expect(m).toContain('href="/dashboard/content/ideas/i0000003-0000-4000-8000-000000000000"')
+    expect(m).not.toMatch(/Close ↑|aria-expanded|\?idea=/)
   })
 
   it('marks the model’s title as stored under the post_idea slot', () => {
@@ -213,7 +211,7 @@ describe('What to post next', () => {
 
   it('suggests what stands out and words a null one neutrally: no label over a chip that is not there', () => {
     const [card] = ideaCards()
-    const view = (c: typeof card) => renderText(<IdeaCardView card={c} state={STATE} selected={false} month={OCT} readLabel="14 Sep to 11 Oct" />)
+    const view = (c: typeof card) => renderText(<IdeaCardView card={c} month={OCT} readLabel="14 Sep to 11 Oct" />)
     const noOpening = view({ ...card, opening: null })
     expect(noOpening).toContain('Suggested format Tutorial 2.1× 1× is a typical market video on this question')
     expect(noOpening).not.toContain('format and opening')
@@ -221,6 +219,6 @@ describe('What to post next', () => {
     const neither = view({ ...card, format: null, opening: null })
     expect(neither).not.toMatch(/Suggested|1× is a typical/)
     expect(neither).toContain(MEDICAL_LINE)
-    assertCopyContract(<IdeaCardView card={{ ...card, format: null, opening: null }} state={STATE} selected={false} month={OCT} readLabel="14 Sep to 11 Oct" />)
+    assertCopyContract(<IdeaCardView card={{ ...card, format: null, opening: null }} month={OCT} readLabel="14 Sep to 11 Oct" />)
   })
 })

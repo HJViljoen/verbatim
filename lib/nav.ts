@@ -497,6 +497,46 @@ function marketMonth(params: SearchParams): Record<string, string | undefined> {
   return month !== undefined && params.period === undefined ? { period: 'month', month } : {}
 }
 
+// ---- Content's pages (depth as pages, 17 Oct; the G5 boards) ---------------
+//
+// Content is a root page and three kinds of page under it, each its own
+// address; nothing opens in place:
+//
+//   /dashboard/content                  the root
+//   /dashboard/content/ideas/<id>       a post idea, by `post_ideas.id`
+//   /dashboard/content/replies          the comments worth a reply
+//   /dashboard/content/posts            your own posts this month
+//
+// The pages' own builders are lib/pages/v2/content-address.ts; the two paths
+// below are here because `redirectFor` sends the root's old panel params to
+// them. An old `?idea=<rank>` names a place in a week's set, not an idea, so
+// only the page, which reads the set, can resolve it: `contentRedirect`
+// leaves it to the page (`ideaLanding`, content-address.ts).
+
+/** The reply list's page. */
+export const CONTENT_REPLIES_PATH = '/dashboard/content/replies'
+/** Your posts' page. */
+export const CONTENT_POSTS_PATH = '/dashboard/content/posts'
+/** The reply list's sections, by the old list's tab (`?reply=<intent>`). */
+export const REPLY_SECTION_ANCHORS: Readonly<Record<string, string>> = { buying: 'buy', question: 'questions', objection: 'objections', misinformation: 'wrong' }
+/** The root's own params, which no level page reads. */
+export const CONTENT_ROOT_PARAMS = ['idea', 'replies', 'reply', 'posts', 'asked'] as const
+
+/** Where an old Content link lands: `?replies=1` and `?reply=<intent>` on the
+ *  reply list's page (the intent its section's anchor, the period kept),
+ *  `?posts=1` on your posts' page. Null for the root itself and for a rank
+ *  (`?idea=1` to `3`), which the page resolves. Pure. */
+export function contentRedirect(params: SearchParams = {}): string | null {
+  const rank = value(params.idea)
+  if (rank === '1' || rank === '2' || rank === '3') return null
+  if (params.replies !== undefined || params.reply !== undefined) {
+    const anchor = REPLY_SECTION_ANCHORS[value(params.reply) ?? '']
+    return withQuery(`${CONTENT_REPLIES_PATH}${anchor ? `#${anchor}` : ''}`, remap(params, CONTENT_ROOT_PARAMS))
+  }
+  if (params.posts !== undefined) return withQuery(CONTENT_POSTS_PATH, remap(params, [...CONTENT_ROOT_PARAMS, 'period']))
+  return null
+}
+
 /**
  * WHERE AN OLD ADDRESS LANDS NOW, its params mapped (Design v2, decision 6).
  * The ONE place the mapping is written: every redirect stub, the Dashboard's
@@ -566,6 +606,9 @@ export function redirectFor(path: string, params: SearchParams = {}): string | n
     }
     case '/dashboard/competitive':
       return withQuery(RETIRED_ADDRESSES[path], remap(params, ['vs'], { brand: value(params.vs) }))
+    // Content's open panels are pages (17 Oct): `contentRedirect` above.
+    case '/dashboard/content':
+      return contentRedirect(params)
     default: {
       const to = RETIRED_ADDRESSES[path]
       return to === undefined ? null : withQuery(to, params)

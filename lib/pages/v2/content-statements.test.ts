@@ -6,6 +6,9 @@ import { cleanQuote } from '../../quotes'
 import { readingHandle } from '../../reading/read'
 import { fakeDb } from '../../test/fake-db'
 import { loadContentPage } from './content'
+import { loadContentIdea } from './content-idea'
+import { loadContentPosts } from './content-posts'
+import { loadContentReplies } from './content-replies'
 
 // CONTENT'S STATEMENTS, COUNTED OFFLINE (depth as pages, 17 Oct; the Market
 // harness's pattern, lib/pages/v2/market-statements.test.ts). Every
@@ -125,24 +128,69 @@ export function countCalls(calls: readonly { op: string; table: string }[]): { t
 
 const NOW = new Date('2026-10-13T08:00:00.000Z')
 
-async function rootStatements(params: Record<string, string>): Promise<{ total: number; by: Record<string, number> }> {
-  const db = fakeDb(contentTables() as never, contentRpcs() as never)
-  await loadContentPage({ supabase: db.client as never, clientId: CLIENT, reading: readingHandle(CLIENT, db.client as never), params }, { now: NOW })
-  return countCalls(db.calls)
+type Load = (scope: Parameters<typeof loadContentPage>[0]) => Promise<unknown>
+
+/** One load's statements against a fresh stand-in, and what it returned. */
+async function measure<T>(load: (scope: Parameters<typeof loadContentPage>[0]) => Promise<T>, params: Record<string, string> = {}, tables = contentTables()): Promise<{ total: number; by: Record<string, number>; data: T; calls: { op: string; table: string; filters: string[] }[] }> {
+  const db = fakeDb(tables as never, contentRpcs() as never)
+  const data = await load({ supabase: db.client as never, clientId: CLIENT, reading: readingHandle(CLIENT, db.client as never), params })
+  return { ...countCalls(db.calls), data, calls: db.calls }
 }
+
+const root: Load = (scope) => loadContentPage(scope, { now: NOW })
+const ideaPage = (id: string) => (scope: Parameters<typeof loadContentPage>[0]) => loadContentIdea(scope, id, { now: NOW })
+const replies = (scope: Parameters<typeof loadContentPage>[0]) => loadContentReplies(scope, { now: NOW })
+const posts = (scope: Parameters<typeof loadContentPage>[0]) => loadContentPosts(scope, { now: NOW })
 
 // TODAY'S CONTENT, before its depth became pages (17 Oct, measured by this
 // harness on d4e1480b): the root this week 40, this month 40; a post idea
 // opened in place (`?idea=1`) 46 (its videos, comments, their English, its
 // words and the gate's context); the reply list (`?replies=1`) and your posts
 // (`?posts=1`) opened in place 40, since the root reads both lists already.
-describe('Content\'s statements', () => {
+//
+// AS PAGES (17 Oct): the root reads what it always read for its cards, 40 in
+// either period (an old panel param never reaches it: the route redirects
+// first). An idea's page reads 32: the row by id, the newest set's run and
+// the published read (the root's anchor), its set (the switcher), its label,
+// the flags, the groups, the rivals, the window readings over the days it
+// read (its four weeks, and the month), your posts (the touch test), its
+// sub-questions' comments, their English and the gate's context, the words to
+// borrow, the market videos and the month's playbook (the typical video);
+// opening a sub-question reads nothing more. The reply list's page reads 19:
+// the root's anchor, the brand, the queue the root card counts, the videos
+// its comments sit under, your posts this month and the ideas' figures for
+// the foot; the month and a kind in full the same. Your posts' page reads 15:
+// the anchor, your posts this month, the playbook, the comments under the
+// posts shown and their English, and the foot's ideas; every post listed, or
+// one post opened, the same.
+describe('Content\'s statements, page by page', () => {
   it('counts each load', async () => {
-    const week = await rootStatements({})
-    const month = await rootStatements({ period: 'month' })
-    const idea = await rootStatements({ idea: '1' })
-    const replies = await rootStatements({ replies: '1' })
-    const posts = await rootStatements({ posts: '1' })
-    expect({ week: week.total, month: month.total, idea: idea.total, replies: replies.total, posts: posts.total }).toEqual({ week: 40, month: 40, idea: 46, replies: 40, posts: 40 })
+    const week = await measure(root)
+    const month = await measure(root, { period: 'month' })
+    const idea = await measure(ideaPage(IDEA(1)))
+    const ideaOpen = await measure(ideaPage(IDEA(1)), { sub: '1' })
+    const list = await measure(replies)
+    const listMonth = await measure(replies, { period: 'month' })
+    const listKind = await measure(replies, { kind: 'buy' })
+    const own = await measure(posts)
+    const ownAll = await measure(posts, { all: '1' })
+    const ownOpen = await measure(posts, { post: OWN(1) })
+    expect({
+      week: week.total, month: month.total, idea: idea.total, ideaOpen: ideaOpen.total,
+      replies: list.total, repliesMonth: listMonth.total, repliesKind: listKind.total,
+      posts: own.total, postsAll: ownAll.total, postsOpen: ownOpen.total,
+    }).toEqual({
+      week: 40, month: 40, idea: 32, ideaOpen: 32,
+      replies: 19, repliesMonth: 19, repliesKind: 19,
+      posts: 15, postsAll: 15, postsOpen: 15,
+    })
+    // The idea's row is read once, by id, and its set once, by its run.
+    expect(idea.by['from:post_ideas']).toBe(3)
+    // The level pages read no reply queue but the reply list's own, and the
+    // root's cards read no idea row by id.
+    for (const page of [idea, own]) expect(page.by['from:audience_insights_current']).toBeUndefined()
+    expect(list.by['from:audience_insights_current']).toBe(1)
+    // Your posts' page reads the comments under the posts it shows, once.
+    expect(own.by['from:comments']).toBe(1)
   })
 })

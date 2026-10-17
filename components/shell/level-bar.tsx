@@ -42,11 +42,16 @@ export function LevelTile({ level }: { level: LevelKind }) {
   )
 }
 
-export function LevelBar({ crumbs, level, label, title, meta, controls, open }: {
+export function LevelBar({ crumbs, level, tile, label, title, meta, controls, open }: {
   /** The path; its last segment is the page (its menu rides after the title
    *  on a phone). */
   crumbs: readonly Crumb[]
-  level: LevelKind
+  /** Market's three levels; another page names its own (`data-level-bar`)
+   *  and draws its own tile. */
+  level: LevelKind | (string & {})
+  /** Another page's level tile, in `LevelTile`'s place (Content's lightbulb,
+   *  reply arrow and person, depth as pages, 17 Oct). */
+  tile?: ReactNode
   /** "Subject", "Conversation in {subject}", "The week's read". */
   label: ReactNode
   /** The page's h1: the path's last segment by default. */
@@ -71,7 +76,7 @@ export function LevelBar({ crumbs, level, label, title, meta, controls, open }: 
       <div className="mt-2.5 flex flex-wrap items-end justify-between gap-x-5 gap-y-3.5 max-sm:mt-1 max-sm:block">
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-3.5 max-sm:gap-3">
-            <LevelTile level={level} />
+            {tile ?? <LevelTile level={level as LevelKind} />}
             <div className="min-w-0">
               <p data-level-label="" className="m-0 text-[13px] leading-[18px] font-semibold text-muted-foreground">{label}</p>
               <div className="flex min-w-0 items-center gap-1">

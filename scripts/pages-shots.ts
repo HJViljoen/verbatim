@@ -102,6 +102,7 @@ import { MarketConversationPage, MarketSubjectPage, MarketWeekPage } from '../co
 import { alsoTalkedOf, convHref, subjectAxis, subjectCardsOf, subjectHref, type MarketData, type SubjectRow } from '../lib/pages/v2/market'
 import { homeWeeksFrame } from '../lib/pages/home'
 import { ContentPage } from '../components/pages/v2/content'
+import { contentLevelPages } from './shots/content-levels'
 import { contentEmptyFixture, contentFixture, contentThinFixture } from '../lib/pages/v2/content-fixture'
 import { IDEA_SLOTS, type ContentPageData } from '../lib/pages/v2/content'
 import { ProductsPage } from '../components/pages/v2/products'
@@ -606,12 +607,11 @@ const PAGES: Page[] = [
   // `--artboards ~/Documents/Heinrich/Verbatim-Design/depth-2026-10/canvas/project`).
   // `content-dump` draws a loader's dumped output.
   { key: 'content-v2', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentFixture() }) },
-  { key: 'content-v2-open', path: '/dashboard/content', artboard: 'E5-Content-Open.dc.html', page: () => h(ContentPage, { data: contentFixture({ open: { kind: 'idea', rank: 1 } }) }) },
-  { key: 'content-v2-replies', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentFixture({ open: { kind: 'replies' } }) }) },
-  { key: 'content-v2-posts', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentFixture({ open: { kind: 'posts' }, period: 'month' }) }) },
   { key: 'content-v2-not-on', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentFixture({ ideas: 'not_on' }) }) },
   { key: 'content-v2-empty', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentEmptyFixture() }) },
-  { key: 'content-v2-older', path: '/dashboard/content', artboard: 'E5-Content-Open.dc.html', page: () => h(ContentPage, { data: contentFixture({ olderIdeas: true, open: { kind: 'idea', rank: 2 } }) }) },
+  { key: 'content-v2-older', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: contentFixture({ olderIdeas: true }) }) },
+  // Content's depth as pages (17 Oct; the G5 boards): scripts/shots/content-levels.ts.
+  ...contentLevelPages(),
   // Only where a dump is named (`CONTENT_DUMP=<file>`), as `voices-real`.
   ...(process.env.CONTENT_DUMP
     ? [{ key: 'content-dump', path: '/dashboard/content', artboard: 'E5-Content.dc.html', page: () => h(ContentPage, { data: JSON.parse(readFileSync(process.env.CONTENT_DUMP as string, 'utf8')) as ContentPageData }) }]
