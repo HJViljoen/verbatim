@@ -32,6 +32,14 @@ describe('a conversation under its ready subject, this week', () => {
     expect(text).toContain('Week by week · videos 9 14 23 21 Sep 28 Sep 5 Oct Month by month · share of the category’s videos 2% July 9 of 455')
   })
 
+  it('three stats leave no hole: two to a row under 1280, the third the row\'s width (the fresh check, 17 Oct)', () => {
+    const row = (d: MarketData) => render(body(d)).match(/<div class="grid grid-cols-2 gap-3 [^"]*">/)?.[0] ?? ''
+    expect(row(LINER)).toContain('xl:grid-cols-3')
+    expect(row(LINER)).toContain('max-xl:[&amp;&gt;*:last-child]:col-span-2')
+    // Four (a flag's baseline among them) fill two rows of two.
+    expect(row(FLAG)).not.toContain('col-span-2')
+  })
+
   it('who it is about, what people did, who is saying it, where, each "of N"', () => {
     expect(text).toContain('Who it’s about Össur 4 · others 19 What people did · of 35 in October so far Complained about something 14 Asked a question 9 Pushed back 4 Who’s saying it Long-time users upgrading New amputees in their first year Each opens in Voices Where · of 23 this week TikTok 14 Instagram 5 YouTube 4')
   })

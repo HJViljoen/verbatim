@@ -44,8 +44,10 @@ export function ConversationPageBody({ page, data }: { page: ConvPage; data: Mar
       </div>
       {panel.stats.length > 0 ? (
         // The stats share the row: four, or three where no flag adds its
-        // baseline (the board draws four; the row never leaves a hole).
-        <StatRow className={cn('max-sm:gap-2.5', panel.stats.length === 3 ? 'xl:grid-cols-3' : panel.stats.length === 2 ? 'xl:grid-cols-2' : null)}>
+        // baseline (the board draws four; the row never leaves a hole). Two
+        // to a row under 1280, so an odd last one takes the row's width
+        // there (the fresh check, 17 Oct: at 390 the third sat beside a gap).
+        <StatRow className={cn('max-sm:gap-2.5', panel.stats.length === 3 ? 'xl:grid-cols-3' : panel.stats.length === 2 ? 'xl:grid-cols-2' : null, panel.stats.length % 2 === 1 ? 'max-xl:[&>*:last-child]:col-span-2' : null)}>
           {panel.stats.map((s, i) => <StatCell key={i} value={s.value} of={s.of} label={s.label} />)}
         </StatRow>
       ) : null}
