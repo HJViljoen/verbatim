@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { RETIRED_ADDRESSES, SURFACES, isMarketPage, redirectFor, type SearchParams } from './nav'
 import { SETTINGS_ADDRESSES } from './settings/rail'
+import { isVoicesPage } from './pages/v2/voices-address'
 
 // EVERY OLD LINK LANDS (Design v2, decision 6 of the depth plan).
 //
@@ -69,14 +70,9 @@ const TABLE: readonly [string, string][] = [
   ['/dashboard/voice?theme=reg-1&themes=slug-2', '/dashboard/market/conversations/reg-1'],
   ['/dashboard/voice', '/dashboard/voices'],
   ['/dashboard/voice#cast', '/dashboard/voices#cast'],
-  ['/dashboard/voice?persona=p1#cast', '/dashboard/voices?persona=p1#cast'],
-  ['/dashboard/voice?brand=Ottobock#board', '/dashboard/voices?brand=Ottobock#board'],
-  ['/dashboard/voice?month=2026-09&brand=Ottobock&board=all', '/dashboard/voices?month=2026-09&brand=Ottobock&board=all'],
   ['/dashboard/voice?theme=&themes=', '/dashboard/voices'],
-  // Competitive (/dashboard/competitive) → Voices; the brand read in full is `?brand=`.
+  // Competitive (/dashboard/competitive) → Voices; a named brand is its page (Voices' table, below).
   ['/dashboard/competitive', '/dashboard/voices'],
-  ['/dashboard/competitive?vs=Ottobock', '/dashboard/voices?brand=Ottobock'],
-  ['/dashboard/competitive?vs=The%20North%20Face&month=2026-09', '/dashboard/voices?brand=The+North+Face&month=2026-09'],
   ['/dashboard/competitive?horizon=last_3', '/dashboard/voices?horizon=last_3'],
   // Subjects (/dashboard/subjects) → Market; the open subject is its page (17 Oct).
   ['/dashboard/subjects', '/dashboard/market'],
@@ -116,7 +112,6 @@ const TABLE: readonly [string, string][] = [
   ['/dashboard/reports?view=x', '/dashboard/studio?view=x'],
   // An address that is no old page is not touched.
   ['/dashboard/moves?advice=lin-7', '/dashboard/moves?advice=lin-7'],
-  ['/dashboard/voices?brand=Ottobock', '/dashboard/voices?brand=Ottobock'],
 ]
 
 describe('every old link lands (the table)', () => {
@@ -210,5 +205,76 @@ describe('the five old reading pages are redirect stubs that ask the mapping', (
     const { LEDGER_ALL_VALUE } = await import('./pages/market-surface')
     expect(v2.ADVICE_PARAM).toBe('advice')
     expect(v2.ADVICE_RECORD).toBe(LEDGER_ALL_VALUE)
+  })
+})
+
+// ---- Voices: its levels are pages (17 Oct, the G3 boards) ----------------------
+//
+// `?group=` / `?persona=`, `?brand=` and `?creator=` opened a panel in place on
+// Voices, and the old Conversation and Competitive pages carried `?persona=`,
+// `?brand=` and `?vs=`. Each lands on its level page in ONE hop, the level's
+// param dropped and every other kept (lib/pages/v2/voices-address.ts).
+describe('Voices: every old link to a group, a brand or a creator lands on its page', () => {
+  const VOICES_TABLE: readonly [string, string][] = [
+    // Voices' own panels.
+    ['/dashboard/voices?group=carers', '/dashboard/voices/groups/carers'],
+    ['/dashboard/voices?group=carers#group-panel', '/dashboard/voices/groups/carers#group-panel'],
+    ['/dashboard/voices?persona=carers&month=2026-09', '/dashboard/voices/groups/carers?month=2026-09'],
+    ['/dashboard/voices?brand=Ottobock', '/dashboard/voices/brands/Ottobock'],
+    ['/dashboard/voices?brand=competitor:Ottobock&month=2026-09', '/dashboard/voices/brands/competitor:Ottobock?month=2026-09'],
+    ['/dashboard/voices?brand=The%20North%20Face', '/dashboard/voices/brands/The%20North%20Face'],
+    ['/dashboard/voices?creator=tiktok|@stepbystep.amp', '/dashboard/voices/creators/tiktok/@stepbystep.amp'],
+    ['/dashboard/voices?creator=The%20Amputee%20Diaries&creators=all', '/dashboard/voices/creators/The%20Amputee%20Diaries?creators=all'],
+    // A link that named two levels opens the first, in the root's old order.
+    ['/dashboard/voices?brand=Ottobock&group=carers', '/dashboard/voices/groups/carers'],
+    // The root's own links stay on the root.
+    ['/dashboard/voices', '/dashboard/voices'],
+    ['/dashboard/voices?month=2026-09&creators=all', '/dashboard/voices?month=2026-09&creators=all'],
+    ['/dashboard/voices/groups/carers?month=2026-09', '/dashboard/voices/groups/carers?month=2026-09'],
+    ['/dashboard/voices/brands/client', '/dashboard/voices/brands/client'],
+    ['/dashboard/voices/creators/tiktok/@stepbystep.amp', '/dashboard/voices/creators/tiktok/@stepbystep.amp'],
+    // Conversation (/dashboard/voice): its cast's persona, a brand's videos.
+    ['/dashboard/voice?persona=p1#cast', '/dashboard/voices/groups/p1#cast'],
+    ['/dashboard/voice?brand=Ottobock#board', '/dashboard/voices/brands/Ottobock#board'],
+    ['/dashboard/voice?month=2026-09&brand=Ottobock&board=all', '/dashboard/voices/brands/Ottobock?month=2026-09&board=all'],
+    // A theme still wins: it is Market's conversation (the table above).
+    ['/dashboard/voice?theme=reg-123&persona=p1', '/dashboard/market/conversations/reg-123?persona=p1'],
+    // Competitive's brand read in full.
+    ['/dashboard/competitive?vs=Ottobock', '/dashboard/voices/brands/Ottobock'],
+    ['/dashboard/competitive?vs=The%20North%20Face&month=2026-09', '/dashboard/voices/brands/The%20North%20Face?month=2026-09'],
+  ]
+
+  it('holds each old link once', () => {
+    expect(new Set(VOICES_TABLE.map(([from]) => from)).size).toBe(VOICES_TABLE.length)
+  })
+
+  it.each(VOICES_TABLE)('%s → %s', (from, to) => {
+    expect(decodeURIComponent(land(from))).toBe(decodeURIComponent(to))
+  })
+
+  it('lands every redirect on an address something serves, in one hop', () => {
+    const served = [...SURFACES.map((s) => s.href), ...SETTINGS_ADDRESSES]
+    for (const [from] of VOICES_TABLE) {
+      const { path, params } = request(from)
+      const to = redirectFor(path, params)
+      if (to === null) continue
+      const landing = new URL(to, ORIGIN).pathname
+      if (!isMarketPage(landing) && !isVoicesPage(landing)) expect(served, from).toContain(landing)
+      const next = request(to)
+      expect(redirectFor(next.path, next.params), `${from} → ${to}`).toBeNull()
+    }
+  })
+
+  it('the stubs send their old params on through the same mapping', async () => {
+    for (const name of ['voice', 'competitive'] as const) {
+      const page = (await import(join(ROOT, 'app', 'dashboard', name, 'page.tsx'))) as { default: Parameters<typeof redirectOf>[0] }
+      for (const [from, to] of VOICES_TABLE.filter(([f]) => request(f).path === `/dashboard/${name}`)) {
+        expect(decodeURIComponent(await redirectOf(page.default, request(from).params)), from).toBe(decodeURIComponent(to.split('#')[0]))
+      }
+    }
+  })
+
+  it('Voices sends an old panel param on before it reads anything', () => {
+    expect(read('app/dashboard/voices/page.tsx')).toMatch(/redirectFor\('\/dashboard\/voices', sp\)[\s\S]*getSessionContext\(/)
   })
 })

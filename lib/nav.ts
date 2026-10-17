@@ -2,6 +2,7 @@ import { OLD_PAGES_RETIRE_ON } from './config'
 import { fullDate } from './format'
 import type { PageKey } from './renderables/types'
 import type { SessionContext } from './auth'
+import { voicesLevelRedirect } from './pages/v2/voices-address'
 
 /**
  * The shell's one table (Phase 1 WP9, items 42 and 38a, decision C).
@@ -510,8 +511,8 @@ function marketMonth(params: SearchParams): Record<string, string | undefined> {
  *   /dashboard/overview?month=M → /dashboard/market?period=month&month=M
  *   /dashboard/week             → /dashboard/market
  *   /dashboard/voice?theme=T    → /dashboard/market/conversations/T   (or ?themes=T,…: the first)
- *   /dashboard/voice            → /dashboard/voices           (the cast, a brand's videos)
- *   /dashboard/competitive?vs=B → /dashboard/voices?brand=B
+ *   /dashboard/voice            → /dashboard/voices           (the cast; ?persona=, ?brand=: Voices' pages)
+ *   /dashboard/competitive?vs=B → /dashboard/voices/brands/B   (Voices' block, below)
  *   /dashboard/subjects?item=S  → /dashboard/market/subjects/S
  *   the other RETIRED_ADDRESSES → their target, query kept
  *
@@ -530,6 +531,15 @@ function marketMonth(params: SearchParams): Record<string, string | undefined> {
  * fragment the new page has no id for scrolls nowhere.
  */
 export function redirectFor(path: string, params: SearchParams = {}): string | null {
+  // ---- VOICES' LEVELS ARE PAGES (17 Oct, the G3 boards) ----------------------
+  // `?group=` / `?persona=`, `?brand=` and `?creator=` opened a panel in place
+  // on Voices (and on the old Conversation page, `/dashboard/voice`), and
+  // Competitive's `?vs=` named a brand: each lands on its level page in one
+  // hop, every other param kept (lib/pages/v2/voices-address.ts, where the
+  // addresses are written once). `undefined` is "not Voices' to answer".
+  const voices = voicesLevelRedirect(path, params)
+  if (voices !== undefined) return voices
+  // ---- end of Voices' block ----------------------------------------------------
   switch (path) {
     case '/dashboard':
       return value(params.month) === undefined ? null : redirectFor('/dashboard/overview', params)
