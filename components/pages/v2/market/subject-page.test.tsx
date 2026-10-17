@@ -97,7 +97,7 @@ describe('a ready subject, this week, in the board\'s order', () => {
     expect(text).toContain('Who’s saying it · of 64 in October so far New amputees in their first year 16 of 64 Caregivers and family 8 of 64 Active and athletic users 4 of 64 Each opens in Voices')
     expect(text).toContain('What people did · of 64 in October so far Complained about something 48 Asked a question 16')
     expect(text).toContain('Where · of 64 in October so far This week October so far TikTok 20 32 of 64 Instagram 10 16 of 64 YouTube 10 16 of 64')
-    expect(html).toContain('href="/dashboard/voices?group=new-amputees#group-panel"')
+    expect(html).toContain('href="/dashboard/voices/groups/new-amputees"')
     expect(text).not.toMatch(/\d\.\d%/)
   })
 

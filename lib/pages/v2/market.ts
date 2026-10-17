@@ -50,6 +50,7 @@ import { readLead } from '../week-read'
 import { weeklyReadView, type ResolvedQuote } from '../../reports/weekly-read'
 import { hydrateData } from '../../snapshots'
 import { MARKET_TABLE_ANCHOR, MARKET_WEEK_PATH, marketConversationHref, marketConversationPath, marketPeriodQuery, marketSubjectHref } from '../../nav'
+import { voicesGroupPath } from './voices-address'
 import { homeWeeks, homeWeeksFrame, loadWeekRows, WEEKS_FAILED, type WeeksFailed, type WeeksRead } from '../home'
 import { loadThemeSegmentRows, makerRuleEnabled, voiceOf, type CiteCandidate } from '../overview'
 import { POOL_FLOOR } from '../overview-market'
@@ -1673,9 +1674,9 @@ export function groupsOf(id: string, personas: readonly { key: string; name: str
     .map((p) => groupLink(p.key, p.name))
 }
 
-/** A group, opening in Voices. */
+/** A group, opening its page in Voices (17 Oct: a page, never a panel). */
 export const groupLink = (key: string, name: string): GroupLink =>
-  ({ key, name, href: `/dashboard/voices?group=${encodeURIComponent(key)}#group-panel` })
+  ({ key, name, href: voicesGroupPath(key) })
 
 /** A stored profile's persona as Market reads it. */
 export interface PersonaLink {

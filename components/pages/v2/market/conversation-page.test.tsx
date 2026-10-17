@@ -68,7 +68,7 @@ describe('a conversation under its ready subject, this week', () => {
 
   it('the facts, small, on the page: week by week, who it\'s about, what people did, who\'s saying it and where, each of the week\'s 23', () => {
     expect(text).toContain('The facts Week by week · videos 9 14 23 21 Sep 28 Sep 5 Oct 23 this week · 35 in October so far Who it’s about Össur 4 · others 19 What people did · of 23 Complained about something 14 Asked a question 9 Pushed back 4 Who’s saying it · of 23 New amputees in their first year 15 of 23 Long-time users upgrading 5 of 23 Each opens in Voices Where · of 23 TikTok 14 Instagram 5 YouTube 4')
-    expect(html).toContain('href="/dashboard/voices?group=new-amputees#group-panel"')
+    expect(html).toContain('href="/dashboard/voices/groups/new-amputees"')
     // No month chart and no tile row.
     expect(text).not.toContain('Month by month')
   })

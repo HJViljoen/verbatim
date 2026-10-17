@@ -103,8 +103,8 @@ describe('subjectDetailOf: the subject\'s videos, by the conversation panel\'s r
       ],
     })
     expect(d.groups).toEqual([
-      { key: 'b', name: 'Beta', href: '/dashboard/voices?group=b#group-panel', videos: 2 },
-      { key: 'a', name: 'Alpha', href: '/dashboard/voices?group=a#group-panel', videos: 1 },
+      { key: 'b', name: 'Beta', href: '/dashboard/voices/groups/b', videos: 2 },
+      { key: 'a', name: 'Alpha', href: '/dashboard/voices/groups/a', videos: 1 },
     ])
   })
 

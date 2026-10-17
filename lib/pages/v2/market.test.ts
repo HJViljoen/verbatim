@@ -480,7 +480,7 @@ describe('a conversation\'s and a subject\'s page', () => {
   it('names the groups a conversation is in, defensively', () => {
     const personas = personasOf([{ key: 'k', name: 'Caregivers', registryIds: ['t1'] }, { name: ' ' }, null, { name: 'No key', registryIds: 'x' }])
     expect(personas).toEqual([{ key: 'k', name: 'Caregivers', registryIds: ['t1'] }, { key: 'No key', name: 'No key', registryIds: [] }])
-    expect(groupsOf('t1', personas)).toEqual([{ key: 'k', name: 'Caregivers', href: '/dashboard/voices?group=k#group-panel' }])
+    expect(groupsOf('t1', personas)).toEqual([{ key: 'k', name: 'Caregivers', href: '/dashboard/voices/groups/k' }])
     expect(personasOf(null)).toEqual([])
   })
 
@@ -507,8 +507,8 @@ describe('a conversation\'s and a subject\'s page', () => {
     it('each group\'s videos of the conversation\'s, in the week\'s window, the most first; a group with none left out', () => {
       expect(convGroupsOf({ ...base, period: 'week', n: 23 })).toEqual({
         groups: [
-          { key: 'new', name: 'New amputees', href: '/dashboard/voices?group=new#group-panel', videos: 2 },
-          { key: 'care', name: 'Caregivers', href: '/dashboard/voices?group=care#group-panel', videos: 1 },
+          { key: 'new', name: 'New amputees', href: '/dashboard/voices/groups/new', videos: 2 },
+          { key: 'care', name: 'Caregivers', href: '/dashboard/voices/groups/care', videos: 1 },
         ],
         base: { n: 23, text: 'this week' },
       })

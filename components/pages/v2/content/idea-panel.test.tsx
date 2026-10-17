@@ -63,7 +63,7 @@ describe('A post idea, opened in place', () => {
     expect(text).toContain('What they want to know · of 23 videos How long it should last 11 The signs it is worn out 8 Whether liners differ 5 Whether medical aid pays 4')
     expect(render(panel(1))).toContain('aria-label="11 of 23 videos"')
     expect(text).toContain("Who's asking New amputees, first year → Caregivers and family → Long-time users upgrading → Each opens in Voices")
-    expect(render(panel(1))).toContain('href="/dashboard/voices?group=new-amputees"')
+    expect(render(panel(1))).toContain('href="/dashboard/voices/groups/new-amputees"')
   })
 
   it('relabels the market videos honestly (decision 5): where it came up, best response first', () => {
