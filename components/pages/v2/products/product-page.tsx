@@ -191,7 +191,7 @@ function Facts({ page, d }: { page: ProductPage; d: ProductsLevelData }) {
       </div>
       <div className={FACT}>
         <Label>Month by month · share naming it</Label>
-        <MonthBars line={page.line} name={page.name} mode="product" size="md" />
+        <div className="max-w-[260px]"><MonthBars line={page.line} name={page.name} mode="product" size="sm" /></div>
       </div>
       <div className={FACT}>
         <Label>What people did{!quiet && c ? <> · {of(n)}</> : null}</Label>

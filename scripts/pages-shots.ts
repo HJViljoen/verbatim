@@ -107,6 +107,7 @@ import { IDEA_SLOTS, type ContentPageData } from '../lib/pages/v2/content'
 import { ProductsPage } from '../components/pages/v2/products'
 import { PRODUCTS_FIXTURES } from '../lib/pages/v2/products-fixture'
 import type { ProductsData } from '../lib/pages/v2/products'
+import { PRODUCTS_LEVEL_SHOTS } from './shots/products-levels'
 
 const args = process.argv.slice(2)
 const flag = (n: string, d: string) => { const i = args.indexOf(`--${n}`); return i >= 0 && args[i + 1] ? args[i + 1] : d }
@@ -630,6 +631,7 @@ const PAGES: Page[] = [
   ...(process.env.PRODUCTS_JSON
     ? [{ key: 'products-real', path: '/dashboard/products', artboard: 'E4-Products.dc.html', page: () => h(ProductsPage, { data: JSON.parse(readFileSync(process.env.PRODUCTS_JSON as string, 'utf8')) as ProductsData }) }]
     : []),
+  ...PRODUCTS_LEVEL_SHOTS,
   // The Dashboard's other states (Design v2, T8): every tile's empty, failed
   // and member states on one page each, and one real render per tenant from
   // the loader's dump (`--home-dump <dir>` holding ossur.json and
