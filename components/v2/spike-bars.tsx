@@ -39,10 +39,13 @@ export interface SpikeBarsProps {
   counts?: 'last' | 'all'
   /** `market` (yellow bars, the hero) or `ink` (the rail's weekly volume). */
   variant?: 'market' | 'ink'
-  /** The board's two drawings: `lg` 480 by 132 for a half-width card (the
-   *  hero), `md` 300 by 112 for a rail card. Each keeps its type readable at
-   *  the width it is drawn for. Default `lg`. */
-  size?: 'lg' | 'md'
+  /** The boards' drawings: `lg` 480 by 132 for a half-width card (the
+   *  hero), `md` 300 by 112 for a rail card; and F3's three (17 Oct): `wide`
+   *  520 by 150 (a subject's week by week), `rail` 300 by 86 (a
+   *  conversation's facts) and `xs` 136 by 58 (a conversation's card inside
+   *  a subject). Each keeps its type readable at the width it is drawn for.
+   *  Default `lg`. */
+  size?: 'lg' | 'md' | 'wide' | 'rail' | 'xs'
   /** What the chart is, for a screen reader. The readings are appended. */
   label: string
   /** A week with no reading draws a faint empty slot, the plot's height, so
@@ -55,15 +58,19 @@ export interface SpikeBarsProps {
 /** One decimal of a user unit is finer than a pixel at any width drawn. */
 const r1 = (v: number): number => Math.round(v * 10) / 10
 
-const GEOMETRY = {
+const GEOMETRY: Record<NonNullable<SpikeBarsProps['size']>, { W: number; H: number; BASE: number; TOP: number; small: number; big: number; axis?: number }> = {
   lg: { W: 480, H: 132, BASE: 110, TOP: 14, small: 10.5, big: 12 },
   md: { W: 300, H: 112, BASE: 92, TOP: 16, small: 9.5, big: 9.5 },
-} as const
+  // F3: counts over every bar, the axis a size under them, as drawn.
+  wide: { W: 520, H: 150, BASE: 134, TOP: 14, small: 12.5, big: 12.5, axis: 11.5 },
+  rail: { W: 300, H: 86, BASE: 70, TOP: 14, small: 11, big: 11, axis: 10 },
+  xs: { W: 136, H: 58, BASE: 42, TOP: 14, small: 11, big: 11, axis: 10 },
+}
 
 export function SpikeBars({ weeks, compare = null, highlightLast, counts = 'last', variant = 'market', size = 'lg', label, ghost = false, className }: SpikeBarsProps) {
   const n = weeks.length
   if (n === 0) return null
-  const { W, H, BASE, TOP, small, big } = GEOMETRY[size]
+  const { W, H, BASE, TOP, small, big, axis = small } = GEOMETRY[size]
   const pick = highlightLast ?? variant === 'market'
   const max = Math.max(1, ...weeks.map((w) => w.count ?? 0), compare?.value ?? 0)
   const slot = W / n
@@ -122,7 +129,7 @@ export function SpikeBars({ weeks, compare = null, highlightLast, counts = 'last
           x={r1(i * slot + slot / 2)}
           y={H - 5}
           textAnchor="middle"
-          fontSize={small}
+          fontSize={axis}
           fontWeight={i === n - 1 ? 600 : 400}
           className={cn('font-mono', i === n - 1 ? 'fill-foreground' : 'fill-muted-foreground')}
         >

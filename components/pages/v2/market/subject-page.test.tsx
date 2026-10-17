@@ -1,152 +1,178 @@
 import { describe, expect, it } from 'vitest'
 import { markupText, render, renderText } from '@/lib/test/render'
 import { assertCopyContract, copyNodes } from '@/lib/test/copy-contract'
-import { fixtureSubjectId, marketFixture, marketSubjectFixture, type FixtureOptions } from '@/lib/pages/v2/market-fixture'
+import { fixtureId, fixtureSubjectId, marketFixture, marketSubjectFixture, type FixtureOptions } from '@/lib/pages/v2/market-fixture'
 import { OSSUR_SUBJECT_READS } from '@/lib/pages/v2/market-reads-fixture'
 import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import type { MarketData } from '@/lib/pages/v2/market'
 import { SubjectCardsView } from './analysis'
 import { BACK_TO_MARKET, MarketSubjectPage, SUBJECT_MISSING } from './pages'
-import { SubjectPageBody, subjectChangeGap, subjectNumbersLine, SUBJECT_NUMBERS_HELD, SUBJECT_WEEK_UNREAD } from './subject-page'
+import { insideNone, SubjectPageBody, subjectChangeGap, subjectNumbersLine, SUBJECT_NUMBERS_HELD, SUBJECT_READ_HELD, SUBJECT_WEEK_UNREAD } from './subject-page'
 
-// A TRACKED SUBJECT'S PAGE (depth as pages, 17 Oct; F2-Market-Subject, its
-// switcher and its phone board): from the page fixture through the page's own
-// builders (`buildSubjectPanel`, `subjectDetailOf`), against the copy
-// contract, decision 1 (a week figure beside its month) and ruling U6 (no
-// figure, line or chip count on a subject whose check has not passed).
+// A TRACKED SUBJECT'S PAGE, THE HUB (F3-Market-Subject, 17 Oct; the board
+// with the read first): from the page fixture through the page's own
+// builders (`buildSubjectPanel`, `subjectDetailOf`, `insideConvsOf`), in the
+// board's order, against the copy contract, decision 1 (a week figure beside
+// its month, three weeks three bare counts, the week a count and never a
+// percent) and ruling U6 (no figure on a subject whose check has not passed).
 
 const FIT = marketSubjectFixture('fit')
 const fit = OSSUR_SUBJECT_READS.find((r) => r.name === 'Fit & comfort')!
 const page = (d: MarketData) => <MarketSubjectPage data={d} />
 const body = (d: MarketData) => <SubjectPageBody page={d.subjectPage!} data={d} />
+const hubOf = (html: string) => html.match(/<article id="subject-hub"[\s\S]*?<\/article>/)![0]
+const readOf = (html: string) => html.match(/<article id="subject-read"[\s\S]*?<\/article>/)![0]
 
-describe('a ready subject, this week', () => {
+describe('a ready subject, this week, in the board\'s order', () => {
   const text = renderText(page(FIT))
   const html = render(page(FIT))
 
-  it('its bar: "Market / Fit & comfort", the week beside its month, the period switch', () => {
-    expect(text).toMatch(/^Market \/ Fit & comfort Market Subject Fit & comfort 5 to 11 October · 82 of 241 videos this week · 108 of 318 in October so far This week This month Over time/)
+  it('the path, then the title block: "Subject", its name, the week beside its month as counts, the period switch', () => {
+    expect(text).toMatch(/^Market \/ Fit & comfort Market Subject Fit & comfort 5 to 11 October · 82 of 241 videos this week · 108 of 318 in October so far This week This month Over time Our read/)
     expect(html).toMatch(/<a (?=[^>]*aria-current="page")(?=[^>]*href="\/dashboard\/market\/subjects\/subj-fit")[^>]*>This week</)
     expect(html).toContain('href="/dashboard/market/subjects/subj-fit?period=month"')
   })
 
-  it('its read first: the headline, what people are saying beside what it means, stored prose', () => {
-    expect(text).toContain(`Our read · October so far ${fit.headline} What people are saying ${fit.saying.join(' ')} What it means ${fit.means} The numbers`)
-    expect(html).toMatch(/<h2 id="subject-head" data-copy="stored" data-slot="week_read" class="[^"]*text-\[28px\]/)
+  it('the order: the header card, our read, inside it, the numbers, in their words, the Agent', () => {
+    const at = (s: string) => text.indexOf(s)
+    const order = ['Our read · October so far', 'What people are saying', 'Inside Fit & comfort', 'All 4 conversations', 'The numbers', 'Week by week', 'In their words', 'Ask what people say about Fit & comfort']
+    for (let i = 1; i < order.length; i++) expect(at(order[i])).toBeGreaterThan(at(order[i - 1]))
   })
 
-  it('the numbers: the four tiles, the week beside the month on one base, the change from its Verdict alone', () => {
-    // The board's two shares, one base (17 Oct): 82 of 241 this week beside
-    // 108 of 318 in the month, never the week's comment base (40) beside the
-    // month's level.
-    expect(text).toContain('The numbers This week’s 82 videos, beside October so far 34% 82 of 241 videos this week no clear change · +0.9 pts October so far against September, 33% 34% 108 of 318 videos in October so far 4 conversations inside it this week')
+  it('the header card: the eyebrow, the stored headline as its lead, and the four figures inside the card', () => {
+    const hub = hubOf(html)
+    expect(markupText(hub)).toBe(`Our read · October so far ${fit.headline} 34% of your market’s videos 108 of 318 in October so far no clear change · +0.9 pts against September, 33% 277 of 839 in September 82 of 241 videos this week 5 to 11 October 4 conversations inside it this week See them below ↓`)
+    expect(hub).toMatch(/<h2 id="subject-head" data-copy="stored" data-slot="week_read" class="[^"]*text-\[32px\]/)
+    // The level's bar, the change from its Verdict alone, and the week a
+    // COUNT on the level's base: never "34%" beside the month's "34%".
+    expect(hub).toMatch(/style="width:34%"/)
+    expect(hub).toMatch(/data-copy="verdict"[^>]*><span[^>]*>no clear change/)
+    expect(hub).toMatch(/<div data-copy="level" class="flex flex-col gap-1.5"><div class="[^"]*">82<\/div><div class="[^"]*">of 241 videos this week<\/div><\/div>/)
+    expect(markupText(hub).match(/\d+%/g)).toEqual(['34%', '33%'])
+    expect(hub).toContain('href="#inside"')
+    expect(hub.match(/data-fig=""/g)).toHaveLength(4)
+  })
+
+  it('our read: what people are saying beside what it means, stored prose, with no headline of its own', () => {
+    const read = readOf(html)
+    expect(markupText(read)).toBe(`What people are saying ${fit.saying.join(' ')} What it means ${fit.means}`)
+    expect(read).not.toContain('<h2')
+  })
+
+  it('inside it: "4 conversations this week", the three biggest as cards (description, the week beside its month, three bare bars, who, Open)', () => {
+    expect(text).toContain('Inside Fit & comfort 4 conversations this week · the three biggest, then all four')
+    const cards = html.match(/<article data-inside-card=""[\s\S]*?<\/article>/g)!
+    expect(cards).toHaveLength(3)
+    expect(markupText(cards[0])).toBe('How long a liner lasts People share how long their liners last before they lose grip, and when to replace one. 23 this week 35 in October so far 9 14 23 21 Sep 28 Sep 5 Oct Össur 4 · others 19 Open →')
+    expect(cards[0]).toContain(`href="/dashboard/market/conversations/${fixtureId(1)}"`)
+    // The description is Pass B's, in its slot; the bars draw three bare
+    // counts with the newest in the accent.
+    expect(cards[0]).toMatch(/<span data-copy="subject" data-slot="pass_b_theme" class="[^"]*">People share how long/)
+    expect(cards[0]).toMatch(/data-week="newest"/)
+    expect(cards[0]).toContain('fill-orange')
+    // No flag this week inside Fit & comfort: no chip on any card.
+    for (const c of cards) expect(c).not.toContain('data-flag=')
+  })
+
+  it('then all four as a list, the three included: name and description, who, three weeks, this week, the month; the footnote', () => {
+    const table = html.match(/<table[\s\S]*?<\/table>/)![0]
+    expect(markupText(table)).toContain('Conversation About Three weeks to 5 Oct This week October so far How long a liner lasts People share how long their liners last before they lose grip, and when to replace one. Össur 4 · others 19 9 · 14 · 23 23 35 Sweat under the liner')
+    expect(table.match(/<tr /g)).toHaveLength(4)
+    expect(text).toContain('All 4 conversations Biggest this week first. Each opens as its own page.')
+    // The conversations' week counts (63) do not add up past the subject's 82:
+    // the footnote says only what is so.
+    expect(text).toContain('A video can sit in more than one conversation')
+    expect(text).not.toContain('add up to more than')
+  })
+
+  it('the numbers: week by week on the level\'s base (three bare counts, the week beside its month), month by month, then the parts on their own base', () => {
+    expect(text).toContain('The numbers Fit & comfort’s videos, this week beside October so far Week by week · videos 74 70 82 21 Sep 28 Sep 5 Oct 82 this week · 108 in October so far Month by month · share of your market’s videos 32% August 194 of 612 33% September 277 of 839 34% October so far · 108 of 318')
     expect(text).toContain('The parts below read the videos where a comment was about it: 40 of these 82 this week, and 64 of these 108 in October so far.')
-    // The change is the one badge's, inside a verdict node.
-    expect(html).toMatch(/data-copy="verdict"[^>]*><span class="text-xs font-medium text-muted-foreground"[^>]*>no clear change/)
-  })
-
-  it('week by week (three bare counts) and month by month: three months at every width, as the board draws them', () => {
-    expect(text).toContain('Week by week · videos 21 33 40 21 Sep 28 Sep 5 Oct Month by month · share of your market’s videos 32% August 194 of 612 33% September 277 of 839 34% October so far · 108 of 318 32% August')
-    expect(text).not.toContain('July')
-    // The conversation's page keeps its four (`MARKET_PANEL_MONTHS`); a subject's three.
-    expect(FIT.subjectPage!.panel.bars.map((b) => b.label)).toEqual(['August', 'September', 'October'])
-  })
-
-  it('prints the month\'s share one way: the tile\'s whole percent is the bar\'s (the fresh check, 17 Oct)', () => {
-    expect(text).toContain('34% 108 of 318 videos in October so far')
-    expect(text).toMatch(/34% October so far · 108 of 318/)
-    expect(text).not.toMatch(/\d\.\d%/)
-  })
-
-  it('who is saying it, what people did and where, each "of N"; three comments; the Agent', () => {
     expect(text).toContain('Who’s saying it · of 64 in October so far New amputees in their first year 16 of 64 Caregivers and family 8 of 64 Active and athletic users 4 of 64 Each opens in Voices')
     expect(text).toContain('What people did · of 64 in October so far Complained about something 48 Asked a question 16')
     expect(text).toContain('Where · of 64 in October so far This week October so far TikTok 20 32 of 64 Instagram 10 16 of 64 YouTube 10 16 of 64')
-    expect(html.match(/data-copy="quote"/g)).toHaveLength(3)
-    expect(text).toContain('Ask the Agent about Fit & comfort')
     expect(html).toContain('href="/dashboard/voices?group=new-amputees#group-panel"')
+    expect(text).not.toMatch(/\d\.\d%/)
   })
 
-  it('the conversations inside it: the biggest three as pages, then all of them on the table', () => {
-    expect(text).toContain('Conversations inside it The biggest this week. Each opens as its own page. Conversation About This week October so far How long a liner lasts → Össur 4 · others 19 23 35 Sweat under the liner →')
-    expect(html).toContain('href="/dashboard/market?in=subj-fit#conversations"')
-    expect(text).toContain('All 4 conversations in Fit & comfort →')
-    expect(html.match(/<tbody>[\s\S]*?<\/tbody>/)![0].match(/<tr /g)).toHaveLength(3)
+  it('in their words: three comments, each labelled with its conversation, opening its page', () => {
+    expect(html.match(/data-copy="quote"/g)).toHaveLength(3)
+    expect(text).toContain('In their words · 3 comments, each from its conversation Sweat under the liner “Long walks are fine')
+    expect(html.match(/data-quote-from=""/g)).toHaveLength(3)
+    expect(html).toMatch(new RegExp(`<a data-quote-from="" class="[^"]*" href="/dashboard/market/conversations/${fixtureId(2)}"><svg`))
   })
 
-  it('keeps the copy contract', () => {
+  it('the Agent: the board\'s card from 640, a full-width button on a phone', () => {
+    expect(html).toMatch(/<section aria-label="Ask the Agent" class="[^"]*max-sm:hidden"><p[^>]*>Ask what people say about Fit &amp; comfort, in your own words\.<\/p><a class="[^"]*" href="\/dashboard\/agent\?ask=/)
+    expect(html).toMatch(/justify-center sm:hidden" href="\/dashboard\/agent\?ask=[^"]*"><svg[^>]*>[\s\S]*?<\/svg>Ask the Agent about Fit &amp; comfort<\/a>/)
+  })
+
+  it('keeps the copy contract, and prints no dash', () => {
     assertCopyContract(page(FIT))
+    expect(text).not.toMatch(/[–—]/)
   })
 })
 
 describe('a ready subject whose week could not be read on the level\'s base', () => {
   const d = marketSubjectFixture('fit', { subjectWeek: 'unread' })
   const text = renderText(page(d))
-  const html = render(page(d))
 
-  it('the week tile keeps its frame and says so in one line; no figure from another base anywhere', () => {
-    expect(text).toContain(`The numbers October so far ${SUBJECT_WEEK_UNREAD} no clear change · +0.9 pts`)
-    expect(html).toContain('data-tile-gap=""')
+  it('the week\'s figure keeps its frame and says so in one line; no figure from another base anywhere', () => {
+    expect(markupText(hubOf(render(page(d))))).toContain(`277 of 839 in September ${SUBJECT_WEEK_UNREAD} 4 conversations inside it this week`)
     expect(text).not.toMatch(/of 241 videos this week/)
-    // The bar keeps the week's dates and the month's level, and no week figure.
     expect(text).toMatch(/^Market \/ Fit & comfort Market Subject Fit & comfort 5 to 11 October · 108 of 318 in October so far This week/)
-    // The one-base line names the blocks' week without a tile to set it against.
+    // Week by week keeps the two weeks read and the newest's empty slot.
+    expect(text).toContain('Week by week · videos 74 70 21 Sep 28 Sep 5 Oct 108 in October so far')
     expect(text).toContain('The parts below read the videos where a comment was about it: 40 this week, and 64 of these 108 in October so far.')
     assertCopyContract(page(d))
   })
 })
 
 describe('a ready subject with no change to print against last month (17 Oct)', () => {
-  // Sealand's October: its pair with September is refused (our September
-  // search change), so the standing facts carry no verdict and the badge drew
-  // nothing; the tile printed its label over an empty slot. It now says so in
-  // its frame, in the Dashboard week tile's words, and names no reason (the
-  // one condition, plan §0a).
-  const d = marketSubjectFixture('fit', { subjects: 'one_month' })
-  const text = renderText(page(d))
-  const html = render(page(d))
-
-  it('the change tile keeps its frame and says so in one line; the other tiles as they were', () => {
+  it('the change keeps its frame and says so in one line; the other figures as they were', () => {
+    const d = marketSubjectFixture('fit', { subjects: 'one_month' })
     expect(d.subjectPage!.panel.verdict).toBeNull()
     expect(subjectChangeGap('September')).toBe('No comparison with September yet.')
-    expect(text).toContain('The numbers This week’s 82 videos, beside October so far 34% 82 of 241 videos this week No comparison with September yet. 34% 108 of 318 videos in October so far')
-    expect(html.match(/data-tile-gap=""/g)).toHaveLength(1)
-    expect(text).not.toContain('October so far against September')
+    expect(markupText(hubOf(render(page(d))))).toContain('108 of 318 in October so far No comparison with September yet. 82 of 241 videos this week')
+    expect(render(page(d)).match(/data-fig-gap=""/g)).toHaveLength(1)
     assertCopyContract(page(d))
   })
 
   it('a refused verdict: the same line, no reason and no earlier figure; never "not read as a change"', () => {
-    const fit = marketSubjectFixture('fit')
-    const v = fit.subjectPage!.panel.verdict!
-    const refused: MarketData = { ...fit, subjectPage: { ...fit.subjectPage!, prevPct: null, panel: { ...fit.subjectPage!.panel, verdict: { ...v, changePts: null, bandPts: null, state: 'refused', refusedReason: 'tracking_change', pair: { mode: 'refuse', cause: 'searches', changeMonth: '2026-09-01', checkWith: null } } } } }
-    const t = renderText(page(refused))
-    expect(t).toContain('82 of 241 videos this week No comparison with September yet. 34% 108 of 318')
-    expect(t).not.toMatch(/not read as a change|refused|not compared|against September, 33%/)
-  })
-
-  it('a change that prints keeps its badge over its label', () => {
-    expect(renderText(page(FIT))).toContain('no clear change · +0.9 pts October so far against September, 33%')
-    expect(render(page(FIT))).not.toContain('data-tile-gap')
+    const v = FIT.subjectPage!.panel.verdict!
+    const refused: MarketData = { ...FIT, subjectPage: { ...FIT.subjectPage!, prevPct: null, panel: { ...FIT.subjectPage!.panel, verdict: { ...v, changePts: null, bandPts: null, state: 'refused', refusedReason: 'tracking_change', pair: { mode: 'refuse', cause: 'searches', changeMonth: '2026-09-01', checkWith: null } } } } }
+    const t = markupText(hubOf(render(page(refused))))
+    expect(t).toContain('108 of 318 in October so far No comparison with September yet. 82 of 241')
+    expect(t).not.toMatch(/not read as a change|refused|not compared|against September|277 of 839/)
   })
 })
 
-describe('a ready subject whose groups hold none of its talk', () => {
-  it('says so in the conversation page\'s words, over the month its groups read (17 Oct)', () => {
-    const d = marketSubjectFixture('fit')
-    const none: MarketData = { ...d, subjectPage: { ...d.subjectPage!, panel: { ...d.subjectPage!.panel, detail: { ...d.subjectPage!.panel.detail!, groups: [] } } } }
-    expect(renderText(body(none))).toContain('Who’s saying it · of 64 in October so far In October so far, no video in it has a comment from one of the groups in Voices. What people did')
+describe('the week\'s flag on a conversation inside it', () => {
+  const d = marketSubjectFixture('cost')
+  const html = render(page(d))
+
+  it('"Unusual this week" on its card and its row only, the conversation the check flagged', () => {
+    const cards = html.match(/<article data-inside-card=""[\s\S]*?<\/article>/g)!
+    expect(cards[0]).toMatch(/data-flag="unusual"[^>]*>Unusual this week</)
+    expect(cards[0]).toContain('Insurance refusals for powered knees')
+    expect(cards.slice(1).some((c) => c.includes('data-flag='))).toBe(false)
+    const table = html.match(/<table[\s\S]*?<\/table>/)![0]
+    expect(table.match(/data-flag="unusual"/g)).toHaveLength(1)
+    assertCopyContract(page(d))
   })
 })
 
 describe('a ready subject, this month', () => {
   const d = marketSubjectFixture('cost', { period: 'month', subjectReads: 'v2' })
   const text = renderText(page(d))
+  const html = render(page(d))
 
-  it('three tiles, no week figure and no week by week; its month line; a read stored before headlines', () => {
+  it('three figures, no week figure and no week by week; the list\'s month alone; a read stored before headlines leads with no sentence', () => {
     expect(text).toMatch(/^Market \/ Cost & access Market Subject Cost & access October so far · 70 of 318 videos This week This month Over time/)
-    expect(text).toContain('Our read · October so far What people are saying People describe insurance refusals')
-    expect(render(page(d))).not.toContain('id="subject-head"')
-    expect(text).toContain('The numbers October so far ▲ 7 pts October so far against September, 15% 22% 70 of 318 videos in October so far 3 conversations inside it in October so far')
+    expect(markupText(hubOf(html))).toBe('Our read · October so far 22% of your market’s videos 70 of 318 in October so far ▲ 7 pts against September, 15% 126 of 839 in September 3 conversations inside it in October so far See them below ↓')
+    expect(hubOf(html)).not.toContain('id="subject-head"')
+    expect(hubOf(html).match(/data-fig=""/g)).toHaveLength(3)
+    expect(markupText(html.match(/<table[\s\S]*?<\/table>/)![0])).toMatch(/^Conversation About October so far Insurance refusals/)
     expect(text).not.toContain('Week by week')
     expect(text).not.toContain('this week')
     assertCopyContract(page(d))
@@ -154,41 +180,60 @@ describe('a ready subject, this month', () => {
 })
 
 describe('every state keeps its frame', () => {
-  it('thin: code\'s one line in the read\'s card, the numbers as they are', () => {
+  it('thin: code\'s one line in the read\'s card', () => {
     const d = marketSubjectFixture('choosing')
     const thin = OSSUR_SUBJECT_READS.find((r) => r.status === 'thin')!
-    expect(renderText(body(d))).toMatch(new RegExp(`^Our read · October so far ${thin.saying[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} The numbers`))
+    expect(markupText(readOf(render(body(d))))).toBe(`What people are saying ${thin.saying[0]}`)
     expect(render(body(d))).toContain('data-subject-read="thin"')
+    // A thin read has no headline: the header card leads with none.
+    expect(hubOf(render(body(d)))).not.toContain('<h2')
     assertCopyContract(page(d))
   })
 
   it('no read this month: its line; with the tenant\'s reads switched off, the week read\'s sentence under it', () => {
-    expect(renderText(body(marketSubjectFixture('look', { subjects: 'states' })))).toMatch(/^Our read · October so far No read of Look & style in October yet\. The numbers/)
-    expect(renderText(body(marketSubjectFixture('cost', { subjectReadsOff: true })))).toMatch(/^Our read · October so far No read of Cost & access in October yet\. People ask how to get a knee paid for, and what to do when a claim is refused\. The numbers/)
+    expect(markupText(readOf(render(body(marketSubjectFixture('look', { subjects: 'states' })))))).toBe('What people are saying No read of Look & style in October yet.')
+    expect(markupText(readOf(render(body(marketSubjectFixture('cost', { subjectReadsOff: true })))))).toBe('What people are saying No read of Cost & access in October yet. People ask how to get a knee paid for, and what to do when a claim is refused.')
   })
 
-  it('not measured yet (U6): its name, why, and the conversations inside it by name; no figure, line or chip count', () => {
+  it('not measured yet (U6): its state\'s line once in the header card, its conversations by name, no figure, line, chip or quote', () => {
     const d = marketSubjectFixture('cost', { flagged: false, noNew: true, subjects: 'provisional', brands: 'not_counted', weeks: 'insufficient', noGroups: true })
     const text = renderText(page(d))
-    expect(text).toBe(`Market / Cost & access Market Subject Cost & access 5 to 11 October This week This month Over time Our read · October so far ${SUBJECT_NOT_MEASURED} The numbers ${SUBJECT_NUMBERS_HELD} Inside it Each opens as its own page. Insurance refusals for powered knees Paying out of pocket Medical aid and liners Ask the Agent about Cost & access`)
+    expect(text).toBe(`Market / Cost & access Market Subject Cost & access 5 to 11 October This week This month Over time Our read · October so far ${SUBJECT_NOT_MEASURED} What people are saying ${SUBJECT_READ_HELD} Inside Cost & access Insurance refusals for powered knees Appeals, letters from a prosthetist and the knee insurers will not pay for. Open → Paying out of pocket Open → Medical aid and liners Open → Every conversation inside it Each opens as its own page. Each opens as its own page. Conversation Insurance refusals for powered knees Appeals, letters from a prosthetist and the knee insurers will not pay for. Paying out of pocket Medical aid and liners Insurance refusals for powered knees Paying out of pocket Medical aid and liners The numbers ${SUBJECT_NUMBERS_HELD} Ask what people say about Cost & access, in your own words. Ask the Agent about Cost & access Ask the Agent about Cost & access`)
+    expect(text.split(SUBJECT_NOT_MEASURED).length - 1).toBe(1)
     expect(copyNodes(render(page(d))).filter((n) => n.kind === 'figure' || n.kind === 'level' || n.kind === 'verdict' || n.kind === 'quote')).toEqual([])
     assertCopyContract(page(d))
   })
 
-  it('failed: why, said once on its page, then Inside it as an open one; no figure', () => {
+  it('failed: why, said once on its page, then its conversations as an open one\'s; no figure', () => {
     const d = marketSubjectFixture('community', { subjects: 'tracked' })
     const text = renderText(page(d))
-    expect(text).toContain(`Our read · October so far ${FAILED_EXPLAINED} The numbers ${SUBJECT_NUMBERS_HELD} Inside it Each opens as its own page. Running-blade stories First steps after amputation Support from other amputees`)
+    expect(text).toContain(`Our read · October so far ${FAILED_EXPLAINED} What people are saying ${SUBJECT_READ_HELD} Inside Community & encouragement Running-blade stories Open →`)
     expect(text.split(FAILED_EXPLAINED).length - 1).toBe(1)
     expect(copyNodes(render(page(d))).filter((n) => n.kind === 'figure' || n.kind === 'level')).toEqual([])
   })
 
-  it('a ready subject the month has no reading for yet: the numbers say so, never "until its check passes" (17 Oct)', () => {
+  it('a ready subject with no conversation this week keeps the section\'s frame and says so in one line', () => {
+    const none: MarketData = { ...FIT, subjectPage: { ...FIT.subjectPage!, inside: [], insideTotal: 0 } }
+    const text = renderText(body(none))
+    expect(text).toContain(`Inside Fit & comfort ${insideNone('this week')} The numbers`)
+    expect(insideNone('this week')).toBe('No conversation in it reached three videos this week.')
+    expect(render(body(none))).toContain('data-inside-none=""')
+    // The header card's count says none, and offers no link down.
+    expect(markupText(hubOf(render(body(none))))).toMatch(/0 conversations inside it this week$/)
+  })
+
+  it('a ready subject the month has no reading for yet: no figure of its own, the month\'s line; its conversations\' own counts', () => {
     const d = marketSubjectFixture('fit', { subjects: 'unread' })
-    expect(renderText(body(d))).toContain('What it means')
-    expect(renderText(body(d))).toMatch(/ The numbers No reading in October so far yet\. Inside it /)
-    expect(render(body(d))).toContain('data-numbers-gap="unread"')
+    const html = render(body(d))
+    expect(markupText(hubOf(html))).toBe(`Our read · October so far ${fit.headline} No reading in October so far yet.`)
+    expect(copyNodes(hubOf(html)).filter((n) => n.kind === 'figure' || n.kind === 'level' || n.kind === 'verdict')).toEqual([])
+    expect(renderText(body(d))).toMatch(/ The numbers No reading in October so far yet\. Ask what people say/)
+    expect(html).toContain('data-numbers-gap="unread"')
     expect(renderText(body(d))).not.toContain(SUBJECT_NUMBERS_HELD)
+    // Its check passed (U6 holds nothing back): each conversation's own
+    // counts, the category's videos, print inside it.
+    expect(renderText(body(d))).toContain('Inside Fit & comfort 4 conversations this week · the three biggest, then all four')
+    assertCopyContract(page(d))
   })
 
   it('the numbers\' line names each state\'s own reason: unread, not measured, failed', () => {
@@ -196,7 +241,6 @@ describe('every state keeps its frame', () => {
     expect(subjectNumbersLine({ state: 'unread', monthText: 'October' })).toBe('No reading in October yet.')
     expect(subjectNumbersLine({ state: 'provisional', monthText: 'October so far' })).toBe(SUBJECT_NUMBERS_HELD)
     expect(subjectNumbersLine({ state: 'failed', monthText: 'October so far' })).toBe(SUBJECT_NUMBERS_HELD)
-    // Each on its page, in the numbers card's frame.
     expect(render(body(marketSubjectFixture('function', { subjects: 'states' })))).toMatch(new RegExp(`data-numbers-gap="provisional"[^>]*><p[^>]*>${SUBJECT_NUMBERS_HELD}</p>`))
     expect(render(body(marketSubjectFixture('community', { subjects: 'states' })))).toMatch(new RegExp(`data-numbers-gap="failed"[^>]*><p[^>]*>${SUBJECT_NUMBERS_HELD}</p>`))
   })
@@ -212,12 +256,24 @@ describe('every state keeps its frame', () => {
   })
 })
 
+describe('on a phone (F3-Market-Subject-Phone)', () => {
+  const html = render(page(FIT))
+
+  it('the list is two lines a row: the name and this week, then its month and its three weeks', () => {
+    const rows = html.match(/<div data-phone-row=""[\s\S]*?<\/span><\/span><\/div>/g)!
+    expect(rows).toHaveLength(4)
+    expect(markupText(rows[0])).toBe('How long a liner lasts 23 35 in October so far 9 · 14 · 23')
+    expect(html).toContain('This week, then October so far. The three weeks to 5 Oct, oldest first.')
+  })
+
+  it('the strip is two to a row, and the header card\'s gutters are the phone\'s', () => {
+    expect(hubOf(html)).toMatch(/class="-mx-\[34px\] mt-1.5 grid grid-cols-2 [^"]*max-sm:-mx-\[18px\]/)
+  })
+})
+
 describe('a subject\'s read prints on its page exactly where its card prints it (17 Oct)', () => {
   // ONE RULE (`subjectOwnRead`): the card on the top page prints a read if and
-  // only if its page prints the same read, in every state. Until 17 Oct the
-  // page printed a read only where the subject had a level, so Össur's six
-  // (every check passed, none read in October yet) each had a read on its
-  // card and "No reading in October so far yet" under its page's Our read.
+  // only if its page prints the same read, in every state.
   const CASES: [string, string, FixtureOptions][] = [
     ['ready, with a level', 'fit', {}],
     ['ready, no level this month', 'fit', { subjects: 'unread' }],
@@ -235,33 +291,25 @@ describe('a subject\'s read prints on its page exactly where its card prints it 
   for (const [name, key, opts] of CASES) {
     it(name, () => {
       const card = marketFixture(opts).subjectCards!.find((c) => c.id === fixtureSubjectId(key))!
-      const read = render(body(marketSubjectFixture(key, opts))).match(/<article id="subject-read"[\s\S]*?<\/article>/)![0]
-      // The page's read card is in the card's state: written, thin, no read,
-      // not measured or failed.
-      expect(read.match(/data-subject-read="([a-z_]+)"/)?.[1] ?? 'read').toBe(card.state)
+      const html = render(body(marketSubjectFixture(key, opts)))
+      const read = readOf(html)
       const words = stored(render(<SubjectCardsView cards={[card]} />))
       if (card.state === 'read' || card.state === 'thin') {
-        // The same read: every line the card prints, its page prints.
+        // The same read: every line the card prints, its page prints (the
+        // headline in the header card, the rest in our read).
+        expect(read.match(/data-subject-read="([a-z_]+)"/)?.[1] ?? 'read').toBe(card.state)
         expect(words.length).toBeGreaterThan(0)
-        for (const w of words) expect(stored(read)).toContain(w)
+        for (const w of words) expect([...stored(hubOf(html)), ...stored(read)]).toContain(w)
       } else {
-        // No read on either: the card's own line stands in its page's place.
+        // No read on either: the card's own line stands on its page, once.
         expect(words).toEqual([])
-        expect(markupText(read)).toContain(card.note!)
+        expect(markupText(hubOf(html) + read)).toContain(card.note!)
       }
     })
   }
-
-  it('Össur on 17 Oct: a ready subject read in no month yet prints its whole read, and no figure', () => {
-    const d = marketSubjectFixture('fit', { subjects: 'unread' })
-    const text = renderText(body(d))
-    expect(text).toContain(`Our read · October so far ${fit.headline} What people are saying ${fit.saying.join(' ')} What it means ${fit.means} The numbers`)
-    expect(copyNodes(render(page(d))).filter((n) => n.kind === 'figure' || n.kind === 'level' || n.kind === 'verdict')).toEqual([])
-    assertCopyContract(page(d))
-  })
 })
 
-describe('the switcher in its bar', () => {
+describe('the switcher in its row', () => {
   it('opens on the subject ticked, the ready ranked, the unready below a hairline in words', () => {
     const d = marketSubjectFixture('fit', { subjects: 'states' })
     const text = renderText(<MarketSubjectPage data={d} switcherOpen />)

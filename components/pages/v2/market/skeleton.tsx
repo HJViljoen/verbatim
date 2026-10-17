@@ -59,27 +59,33 @@ function LevelBar({ label }: { label: string }) {
   )
 }
 
-/** A tracked subject's page loading (F2-Market-Subject): the bar, the read,
- *  the numbers, the conversations inside it. */
+/** A tracked subject's page loading (F3-Market-Subject): the path and the
+ *  title block, the header card and its strip, our read, the three cards and
+ *  the list inside it, the numbers. */
 export function MarketSubjectSkeleton() {
   return (
     <PageFrame>
       <div role="status" aria-busy="true" aria-label="Loading the subject" className="flex flex-col gap-[22px]">
         <LevelBar label="Market" />
-        <div className={cn(CARD, 'gap-6')}>
+        <div className={cn(CARD, 'gap-5 overflow-hidden sm:px-[34px] sm:pt-[30px] sm:pb-0 max-sm:pb-0')}>
           <Bone className="h-4 w-40" />
-          <Bone className="h-8 w-3/4" />
-          <div className="grid grid-cols-1 gap-10 border-t border-track pt-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+          <Bone className="h-9 w-3/4" />
+          <div className="-mx-[34px] grid grid-cols-2 gap-px border-t border-track bg-inner max-sm:-mx-[18px] min-[1180px]:grid-cols-4">{[0, 1, 2, 3].map((i) => <div key={i} className="flex flex-col gap-2 px-[22px] pt-5 pb-[22px]"><Bone className="h-8 w-16" /><Bone className="h-3 w-32" /></div>)}</div>
+        </div>
+        <div className={cn(CARD, 'gap-6')}>
+          <div className="grid grid-cols-1 gap-10 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
             <BoneLines lines={7} />
             <BoneLines lines={5} />
           </div>
         </div>
+        <Bone className="h-5 w-56" />
+        <div className="grid grid-cols-1 gap-5 min-[1180px]:grid-cols-3">{[0, 1, 2].map((i) => <div key={i} className={cn(CARD, 'gap-3')}><Bone className="h-5 w-3/4" /><BoneLines lines={2} /><Bone className="h-[58px] w-full" /></div>)}</div>
+        <div className={CARD}><Bone className="h-5 w-48" /><BoneLines lines={6} /></div>
+        <Bone className="h-5 w-40" />
         <div className={cn(CARD, 'gap-6')}>
-          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">{[0, 1, 2, 3].map((i) => <Bone key={i} className="h-[86px] w-full" />)}</div>
           <div className="grid grid-cols-1 gap-10 xl:grid-cols-2"><Bone className="h-[150px] w-full" /><Bone className="h-[150px] w-full" /></div>
           <div className="grid grid-cols-1 gap-8 xl:grid-cols-3">{[0, 1, 2].map((i) => <BoneLines key={i} lines={4} />)}</div>
         </div>
-        <div className={CARD}><Bone className="h-5 w-56" /><BoneLines lines={4} /></div>
       </div>
     </PageFrame>
   )
