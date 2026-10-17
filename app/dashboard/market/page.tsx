@@ -9,8 +9,9 @@
 // is retired: nothing opens in place.
 //
 // OLD LINKS STILL LAND, BEFORE ANYTHING IS READ (`redirectFor`): Your moves'
-// `?rec=`, `?item=` and `?ledger=all` go to `/dashboard/moves?advice=`, and an
-// open panel's `?conv=` and `?subject=` to that conversation's or subject's
+// `?rec=` and `?item=` go straight to that piece of advice's page
+// (`/dashboard/moves/advice/<id>`) and `?ledger=all` to the advice record
+// (`/dashboard/moves/advice`), in one hop; an open panel's `?conv=` and `?subject=` to that conversation's or subject's
 // page (17 Oct), every other param kept. Stored snapshots, sent emails and
 // share pages carry them, so these redirects are permanent.
 //

@@ -6,7 +6,7 @@ import { adviceNamed } from './moves-levels-load'
 import {
   ADVICE_QUOTES, NO_OTHER_COMMENT, RECORD_GONE_SHOWN, SAME_IDEA_NOTE,
   adviceConversationsOf, adviceCrumbs, adviceMenu, adviceNumbersOf, adviceQuotesOf, argumentParts, decisionWord, hubDecisionLine,
-  moveCrumbs, moveEvidenceOf, moveFactsOf, moveMenu, moveReadWords, movesDatedLine, movesOnAdvice, noMoveOnItInvite, recordCrumbs,
+  moveCrumbs, moveEvidenceOf, moveFactsOf, moveMenu, moveReadWords, movesDatedLine, noMoveOnItInvite, recordCrumbs,
   recordGroupsOf, recordState, restsOnNote, streakWords, whyParagraphs, wouldMoveLineOf, type AdviceConversation, type LevelCitation,
 } from './moves-levels'
 import type { ConvEvidenceRow, ConvVideoRow } from './market'
@@ -187,10 +187,7 @@ describe('in their words: three comments, each from its conversation (data 2)', 
 })
 
 describe('the moves made on a piece of advice (data 5)', () => {
-  it('by `moves.lineage_id`, advice moves only', () => {
-    const cards = MOVE_CARDS
-    const on = movesOnAdvice(cards, [{ id: cards[0].id, lineage_id: 'L1', kind: 'advice' }, { id: cards[1].id, lineage_id: 'L1', kind: 'subject' }], 'L1')
-    expect(on.map((c) => c.id)).toEqual([cards[0].id])
+  it('the decision figure\'s foot and the invitation', () => {
     expect(movesDatedLine(0)).toBe('no move dated on it')
     expect(movesDatedLine(1)).toBe('1 move dated on it')
     expect(noMoveOnItInvite('Insurance refusals')).toBe('Accept it and date the change you make, and the move gets its own page, read month by month on Insurance refusals.')

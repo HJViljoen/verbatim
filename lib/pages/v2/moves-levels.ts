@@ -455,13 +455,6 @@ const fold = (text: string): string => text.replace(/\s+/g, ' ').trim().toLowerC
 
 // ---- the moves made on a piece of advice --------------------------------------------
 
-/** The moves dated on one piece of advice (`moves.lineage_id`, board report
- *  data 5), as the root draws them. Pure. */
-export function movesOnAdvice(cards: readonly MoveCard[], dated: readonly { id: string; lineage_id: string | null; kind: string }[], lineageId: string): MoveCard[] {
-  const on = new Set(dated.filter((m) => m.kind === 'advice' && m.lineage_id === lineageId).map((m) => m.id))
-  return cards.filter((c) => on.has(c.id))
-}
-
 /** The decision figure's foot: "no move dated on it", "1 move dated on it". */
 export const movesDatedLine = (n: number): string => (n === 0 ? 'no move dated on it' : `${fmtInt(n)} ${n === 1 ? 'move' : 'moves'} dated on it`)
 

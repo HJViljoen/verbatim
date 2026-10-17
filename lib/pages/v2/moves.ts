@@ -716,16 +716,6 @@ export function headerParts(c: MovesPageData['counts']): { n: number; words: str
 }
 
 
-/** The decision line under the history: "First suggested 20 Jul. Never
- *  accepted or declined." */
-export function decisionLine(card: Pick<AdviceCard, 'firstMade' | 'status' | 'statusLabel' | 'decidedAt'>): string {
-  const first = card.firstMade ? `First suggested ${shortDate(card.firstMade)}.` : ''
-  const decided = card.status === 'new'
-    ? 'Nobody has decided on it yet.'
-    : `${card.statusLabel}${card.decidedAt ? ` since ${shortDate(card.decidedAt)}` : ''}.`
-  return [first, decided].filter(Boolean).join(' ')
-}
-
 /** What the card's status chip says. `dropped` is the stored value and a
  *  direction word (lib/calibration.ts), so the page calls it stopped. */
 export const MOVE_STATUS_LABEL: Record<MoveStatus, string> = { active: 'Active', done: 'Done', dropped: 'Stopped' }

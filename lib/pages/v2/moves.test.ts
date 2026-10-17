@@ -5,7 +5,7 @@ import { priorPrintable } from '../../reading/verdicts'
 import type { PairComparability } from '../../reading/comparability'
 import type { RecCopy } from '../market-surface'
 import {
-  adviceAims, adviceHistory, axisLine, compareMonths, conclusionViews, decisionLine, headerParts, largestStance, leadClaims, moveAxis, moveCards, movedMove,
+  adviceAims, adviceHistory, axisLine, compareMonths, conclusionViews, headerParts, largestStance, leadClaims, moveAxis, moveCards, movedMove,
   recordRows, restsOnRows, streakLabel, adviceHref, adviceTitle, waitingAdvice, MOVES_PATH, MOVE_UNREAD, RECORD_HREF, UNTITLED_ADVICE,
 } from './moves'
 import { buildAdviceRows } from '../market-surface'
@@ -208,12 +208,10 @@ describe('the words', () => {
   it('the bar’s counts', () => {
     expect(headerParts({ waiting: 1, dated: 2, plans: 0 }).map((p) => `${p.n} ${p.words}`)).toEqual(['1 piece of advice waiting', '2 moves dated', '0 plans checked'])
   })
-  it('the streak and the decision', () => {
+  it('the streak', () => {
     expect(streakLabel({ dates: ['2026-08-01', '2026-08-08'], streak: 2, since: '2026-08-01', recent: [] })).toBe('updates in a row, since 1 Aug')
     expect(streakLabel({ dates: ['2026-08-01'], streak: 0, since: null, recent: [] })).toBe('update raised it')
     expect(streakLabel({ dates: ['2026-10-12'], streak: 1, since: '2026-10-12', recent: [] })).toBe('update, first raised 12 Oct')
-    expect(decisionLine({ firstMade: '2026-07-20', status: 'new', statusLabel: 'New', decidedAt: null })).toBe('First suggested 20 Jul. Nobody has decided on it yet.')
-    expect(decisionLine({ firstMade: '2026-07-20', status: 'dismissed', statusLabel: 'Dismissed', decidedAt: '2026-08-02T10:00:00Z' })).toBe('First suggested 20 Jul. Dismissed since 2 Aug.')
   })
   it('the largest stance, as a level', () => {
     expect(largestStance({ base: 20, backs: 11, doubts: 4, asks: 5 })).toEqual({ k: 11, n: 20, words: 'back it up' })
