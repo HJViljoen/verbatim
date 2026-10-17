@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { RETIRED_ADDRESSES, SURFACES, isMarketPage, redirectFor, type SearchParams } from './nav'
 import { SETTINGS_ADDRESSES } from './settings/rail'
+import { ideaLanding, ideaRankParam, isContentPage } from './pages/v2/content-address'
 
 // EVERY OLD LINK LANDS (Design v2, decision 6 of the depth plan).
 //
@@ -281,5 +282,101 @@ describe('Your products: every old panel link lands on its page', () => {
     expect(src).toMatch(/sp\.product\s*\?/)
     // The product's page sends a product asked under another category on.
     expect(read('app/dashboard/products/[group]/[product]/page.tsx')).toMatch(/if \(data\.redirect\) redirect\(data\.redirect\)/)
+  })
+})
+
+// ---- Content (depth as pages, 17 Oct; the G5 boards) ---------------------------
+//
+// Content's panels in place became pages: the reply list and your posts are
+// their own addresses, and a post idea is a page by its row id. Stored
+// snapshots, sent emails and bookmarks carry `?replies=1`, `?reply=<intent>`
+// (This week's old tab, `#worth-a-reply` with it), `?posts=1` and `?idea=1`.
+// The first three are pure (`contentRedirect`, lib/nav.ts); a rank is a
+// week's, so only the page, which reads the set, can name its idea
+// (`ideaLanding`, lib/pages/v2/content-address.ts).
+describe('Content', () => {
+  const CONTENT_TABLE: readonly [string, string][] = [
+    ['/dashboard/content?replies=1', '/dashboard/content/replies'],
+    ['/dashboard/content?replies=1#replies-panel', '/dashboard/content/replies#replies-panel'],
+    ['/dashboard/content?period=month&replies=1', '/dashboard/content/replies?period=month'],
+    ['/dashboard/content?replies=1&asked=all', '/dashboard/content/replies'],
+    ['/dashboard/content?replies=', '/dashboard/content/replies'],
+    ['/dashboard/content?reply=buying', '/dashboard/content/replies#buy'],
+    ['/dashboard/content?reply=question#worth-a-reply', '/dashboard/content/replies#questions'],
+    ['/dashboard/content?reply=objection', '/dashboard/content/replies#objections'],
+    ['/dashboard/content?reply=misinformation', '/dashboard/content/replies#wrong'],
+    ['/dashboard/content?reply=all', '/dashboard/content/replies'],
+    ['/dashboard/content?period=month&reply=question', '/dashboard/content/replies?period=month#questions'],
+    ['/dashboard/content?posts=1', '/dashboard/content/posts'],
+    ['/dashboard/content?posts=1#posts-panel', '/dashboard/content/posts#posts-panel'],
+    ['/dashboard/content?period=month&posts=1&asked=all', '/dashboard/content/posts'],
+    ['/dashboard/content?posts=1&utm_source=email', '/dashboard/content/posts?utm_source=email'],
+    // The reply list wins over your posts, as the panels did.
+    ['/dashboard/content?replies=1&posts=1', '/dashboard/content/replies'],
+    // The root's own links stay; a stored `#worth-a-reply` lands on its card.
+    ['/dashboard/content', '/dashboard/content'],
+    ['/dashboard/content#worth-a-reply', '/dashboard/content#worth-a-reply'],
+    ['/dashboard/content?period=month&asked=all#also-asked', '/dashboard/content?period=month&asked=all#also-asked'],
+    // A rank is left to the page; a rank that is no rank is the root's.
+    ['/dashboard/content?idea=1', '/dashboard/content?idea=1'],
+    ['/dashboard/content?idea=7&replies=1', '/dashboard/content/replies'],
+    // The level pages themselves are not touched.
+    ['/dashboard/content/replies?period=month', '/dashboard/content/replies?period=month'],
+    ['/dashboard/content/ideas/abc', '/dashboard/content/ideas/abc'],
+  ]
+
+  it.each(CONTENT_TABLE)('%s → %s', (from, to) => {
+    expect(decodeURIComponent(land(from))).toBe(decodeURIComponent(to))
+  })
+
+  it('lands on a Content page, in one hop', () => {
+    for (const [from] of CONTENT_TABLE) {
+      const { path, params } = request(from)
+      const to = redirectFor(path, params)
+      if (to === null) continue
+      expect(isContentPage(new URL(to, ORIGIN).pathname), from).toBe(true)
+      const next = request(to)
+      expect(redirectFor(next.path, next.params), `${from} → ${to}`).toBeNull()
+    }
+  })
+
+  // `?idea=<rank>`: that rank in the set the root shows now, by its row id.
+  const SET = [{ rank: 1, id: 'idea-row-1' }, { rank: 2, id: 'idea-row-2' }]
+  const IDEA_TABLE: readonly [string, readonly { rank: number; id: string }[] | null, string][] = [
+    ['/dashboard/content?idea=1', SET, '/dashboard/content/ideas/idea-row-1'],
+    ['/dashboard/content?idea=2#idea-panel', SET, '/dashboard/content/ideas/idea-row-2#idea-panel'],
+    ['/dashboard/content?period=month&idea=1&asked=all', SET, '/dashboard/content/ideas/idea-row-1'],
+    ['/dashboard/content?idea=1&replies=1', SET, '/dashboard/content/ideas/idea-row-1'],
+    ['/dashboard/content?idea=1&utm_source=email', SET, '/dashboard/content/ideas/idea-row-1?utm_source=email'],
+    // No idea at that rank: the root, the rank dropped, its own params kept.
+    ['/dashboard/content?idea=3', SET, '/dashboard/content'],
+    ['/dashboard/content?period=month&idea=3&asked=all', SET, '/dashboard/content?period=month&asked=all'],
+    ['/dashboard/content?idea=1', null, '/dashboard/content'],
+    ['/dashboard/content?idea=1', [], '/dashboard/content'],
+    // ... or where the rest of the link points, in the same hop.
+    ['/dashboard/content?idea=3&replies=1', SET, '/dashboard/content/replies'],
+    ['/dashboard/content?idea=2&posts=1', [], '/dashboard/content/posts'],
+  ]
+
+  it.each(IDEA_TABLE)('%s (set %j) → %s', (from, set, to) => {
+    const { params, hash } = request(from)
+    const landing = ideaLanding(params, set)
+    const at = landing.includes('#') ? landing : `${landing}${hash}`
+    expect(decodeURIComponent(at)).toBe(decodeURIComponent(to))
+    const next = request(landing)
+    expect(isContentPage(next.path), from).toBe(true)
+    expect(redirectFor(next.path, next.params), from).toBeNull()
+    expect(ideaRankParam(next.params), from).toBeNull()
+  })
+
+  it('reads a rank only from 1 to 3', () => {
+    expect(['1', '2', '3', ' 2 ', '0', '4', 'x', ''].map((v) => ideaRankParam({ idea: v }))).toEqual([1, 2, 3, 2, null, null, null, null])
+    expect(ideaRankParam({ idea: ['2', '1'] })).toBe(2)
+  })
+
+  it('the root sends the old panels on before it reads anything, and resolves a rank before it reads the page', () => {
+    const src = read('app/dashboard/content/page.tsx')
+    expect(src).toMatch(/redirectFor\(CONTENT_ROOT, sp\)[\s\S]*getSessionContext\(/)
+    expect(src).toMatch(/ideaRankParam\(sp\)[\s\S]*ideaLanding\([\s\S]*loadContentPage\(/)
   })
 })

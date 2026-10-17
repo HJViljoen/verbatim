@@ -206,7 +206,8 @@ describe('the Dashboard, as the board draws it (E1-Dashboard)', () => {
     expect(markup).toContain('href="/dashboard/voices?group=long-time-users#group-panel"')
     // The product's own page (Your products as pages, 17 Oct).
     expect(markup).toContain('href="/dashboard/products/g-feet/p-pivot"')
-    expect(markup).toContain('href="/dashboard/content?idea=1#idea-panel"')
+    // Content's idea is a page of its own, by its row (depth as pages, 17 Oct).
+    expect(markup).toContain('href="/dashboard/content/ideas/i0000001-0000-4000-8000-000000000000"')
     expect(markup).toMatch(/href="\/dashboard\/moves\?advice=[^"]+#advice-panel"/)
   })
 

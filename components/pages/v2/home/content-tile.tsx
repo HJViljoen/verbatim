@@ -10,8 +10,8 @@ import { cn } from '@/lib/utils'
 import { MID, MONO_MUTED, TILE, TILE_FAILED, TileHead, TileLine, TT } from './parts'
 
 // THE DASHBOARD'S CONTENT TILE (Design v2, T8; E1-Dashboard's second row),
-// from `topContent`: the week's first post idea, which opens its brief in
-// place on Content (`?idea=<rank>`), with how many of the market's videos it
+// from `topContent`: the week's first post idea, which opens its own page
+// (`/dashboard/content/ideas/<id>`, depth as pages, 17 Oct), with how many of the market's videos it
 // came up in over the days the ideas read ("of 640 videos, 14 Sep to 11
 // Oct": four weeks of questions, Heinrich, 13 Oct) and the month beside it
 // (decision 1), the format and opening code chose, and whether your posts

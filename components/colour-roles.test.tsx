@@ -12,6 +12,10 @@ import { ProductsCategoryPage, ProductsPage, ProductsProductPage } from './pages
 import { PRODUCTS_FIXTURES } from '@/lib/pages/v2/products-fixture'
 import { PRODUCTS_LEVEL_FIXTURES } from '@/lib/pages/v2/products-level-fixture'
 import { ContentPage } from './pages/v2/content'
+import { ContentIdeaPage } from '@/components/pages/v2/content/idea-page'
+import { ContentRepliesPage } from '@/components/pages/v2/content/replies-page'
+import { ContentPostsPage } from '@/components/pages/v2/content/posts-page'
+import { contentIdeaFixture, contentPostsFixture, contentRepliesFixture } from '@/lib/pages/v2/content-levels-fixture'
 import { contentFixture } from '@/lib/pages/v2/content-fixture'
 import { MovesV2Page } from './pages/v2/moves'
 import { movesFixture, movesOpenFixture, statementsV2 } from '@/lib/pages/v2/moves-fixture'
@@ -112,7 +116,11 @@ describe('the bans that hold with more colour, on the pages', () => {
     ['your products, a category', render(<ProductsCategoryPage data={PRODUCTS_LEVEL_FIXTURES.liners()} />), false],
     ['your products, a product', render(<ProductsProductPage data={PRODUCTS_LEVEL_FIXTURES.sealinx()} />), false],
     ['content', render(<ContentPage data={contentFixture()} />), false],
-    ['content, an idea open', render(<ContentPage data={contentFixture({ open: { kind: 'idea', rank: 1 } })} />), false],
+    // Content's depth is pages (17 Oct): an idea's, the reply list's (a post
+    // about you carries your brand's chip) and your posts'.
+    ['content, a post idea', render(<ContentIdeaPage data={contentIdeaFixture()} />), false],
+    ['content, worth a reply', render(<ContentRepliesPage data={contentRepliesFixture()} />), true],
+    ['content, your posts', render(<ContentPostsPage data={contentPostsFixture()} />), false],
     ['your moves', render(<MovesV2Page data={movesFixture()} statements={statementsV2()} />), false],
     ['your moves, advice open', render(<MovesV2Page data={movesOpenFixture()} statements={statementsV2()} />), false],
     ['settings, your products', render(<ProductsTab view={productSettingsView(productsFixtureRead({}), { selected: null, canEdit: true })} />), false],

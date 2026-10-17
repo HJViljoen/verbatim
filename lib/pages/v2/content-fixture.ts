@@ -6,11 +6,11 @@ import { summariseOwnedPosts, type OwnedPosts } from '../../reading/owned'
 import type { Verdict } from '../../reading/verdicts'
 import type { ReplyRow } from '../week'
 import {
-  agentHref, askedWithLead, conversationHref, contentWeek, daysPhrase, ideaOwnedFrom, ideasReadOf, ideasWeekOf, flagVerdict, groupsByConversation, ideaCard, mixSentence,
-  newVerdict, postsBlock, repliesView, storedPersonas, subquestionRows, wordsToBorrow, worksBasis,
+  askedWithLead, contentWeek, daysPhrase, ideaOwnedFrom, ideasReadOf, ideasWeekOf, flagVerdict, groupsByConversation, ideaCard, mixSentence,
+  newVerdict, postsBlock, repliesView, storedPersonas, worksBasis,
   ASKED_NO_WEEK, IDEA_SLOTS,
-  type AskedBlock, type ContentMonth, type ContentOpen, type ContentPageData, type ContentPeriod, type IdeaCard,
-  type IdeaPanel, type IdeasState, type IdeasWeek, type MarketVideoCard, type PanelQuote, type PostsBlock, type QuestionSlot, type WorksBlock, type WorksRow, type AskedRow,
+  type AskedBlock, type ContentMonth, type ContentPageData, type ContentPeriod, type IdeaCard,
+  type IdeasState, type IdeasWeek, type MarketVideoCard, type PostsBlock, type QuestionSlot, type WorksBlock, type WorksRow, type AskedRow,
 } from './content'
 
 // The Content page's fixtures (depth v2, T6): Össur-shaped, drawn from the
@@ -29,12 +29,12 @@ import {
 // `videos.id`, and the multiples are on the question (1× = a typical market
 // video on it).
 
-const RUN = 'r0000000-0000-4000-8000-000000000001'
-const WINDOW = { from: '2026-10-04T04:03:00.000Z', to: '2026-10-11T04:02:00.000Z' }
+export const RUN = 'r0000000-0000-4000-8000-000000000001'
+export const WINDOW = { from: '2026-10-04T04:03:00.000Z', to: '2026-10-11T04:02:00.000Z' }
 /** The four weeks the ideas read, ending where the run's window ends. */
 const READ = ideasReadWindow(WINDOW)
-const ID = (n: number) => `c${String(n).padStart(7, '0')}-0000-4000-8000-000000000000`
-const VID = (n: number) => `v${String(n).padStart(7, '0')}-0000-4000-8000-000000000000`
+export const ID = (n: number) => `c${String(n).padStart(7, '0')}-0000-4000-8000-000000000000`
+export const VID = (n: number) => `v${String(n).padStart(7, '0')}-0000-4000-8000-000000000000`
 const ids = (from: number, n: number, f = ID) => Array.from({ length: n }, (_, i) => f(from + i))
 
 export const REG = {
@@ -53,7 +53,7 @@ export const REG = {
 const cover = (text: string, length: PostIdeaLength | null, asked: NonNullable<PostIdeaCover['asked']>): PostIdeaCover =>
   ({ text, ...(length ? { length } : {}), asked })
 
-const idea = (over: Partial<PostIdeaRow> & Pick<PostIdeaRow, 'rank' | 'registry_id' | 'title'>): PostIdeaRow => ({
+export const idea = (over: Partial<PostIdeaRow> & Pick<PostIdeaRow, 'rank' | 'registry_id' | 'title'>): PostIdeaRow => ({
   id: `i000000${over.rank}-0000-4000-8000-000000000000`,
   client_id: OSSUR_CLIENT_ID,
   run_id: RUN,
@@ -123,7 +123,7 @@ export const OSSUR_PERSONAS = storedPersonas([
 
 export const OCT: ContentMonth = { month: '2026-10-01', complete: false, from: '2026-10-01T00:00:00.000Z', to: WINDOW.to }
 
-const post = (n: number, platform: string, upload: string, classified: string | null, hook: string | null, rate: number | null, caption: string, topics: string[]) => ({
+export const post = (n: number, platform: string, upload: string, classified: string | null, hook: string | null, rate: number | null, caption: string, topics: string[]) => ({
   id: `p${String(n).padStart(7, '0')}-0000-4000-8000-000000000000`,
   video_id: `own${n}`,
   platform,
@@ -217,36 +217,58 @@ export function postsFixture(month: ContentMonth = OCT): PostsBlock {
   return postsBlock({ owned: OSSUR_OWNED, typical: OSSUR_TYPICAL, month })
 }
 
-const reply = (n: number, intent: ReplyRow['intent'], under: ReplyRow['under'], text: string, platform: string, date: string, context: string, reason: string): ReplyRow => ({
+/** The videos the reply list's comments sit under (the G5 board's: your own
+ *  posts, creators' posts about you, and others'). */
+export const REPLY_VIDEOS = {
+  rheo: { id: 'p0000005-0000-4000-8000-000000000000', platform: 'instagram', video_url: 'https://example.com/own/5', account_name: '@ossur', caption: 'Rheo Knee. Designed around you.', upload_date: '2026-10-07' },
+  proflex: { id: 'p0000002-0000-4000-8000-000000000000', platform: 'tiktok', video_url: 'https://example.com/own/2', account_name: '@ossur', caption: 'Our new Pro-Flex range is here.', upload_date: '2026-10-09' },
+  running: { id: 'p0000004-0000-4000-8000-000000000000', platform: 'youtube', video_url: 'https://example.com/own/4', account_name: '@ossur', caption: 'Running again after a year: one athlete’s story.', upload_date: '2026-10-08' },
+  diariesFoot: { id: 'm0000001-0000-4000-8000-000000000000', platform: 'youtube', video_url: 'https://example.com/m/1', account_name: 'The Amputee Diaries', caption: 'Trying the Pro-Flex foot for a month', upload_date: '2026-10-04' },
+  navii: { id: 'p0000001-0000-4000-8000-000000000000', platform: 'instagram', video_url: 'https://example.com/own/1', account_name: '@ossur', caption: 'Meet the Navii. Built for wet days and long walks.', upload_date: '2026-10-10' },
+  diariesLiner: { id: 'm0000002-0000-4000-8000-000000000000', platform: 'youtube', video_url: 'https://example.com/m/2', account_name: 'The Amputee Diaries', caption: 'Your liner has an expiry date. Here’s how to read it.', upload_date: '2026-09-28' },
+  clinicians: { id: 'p0000006-0000-4000-8000-000000000000', platform: 'tiktok', video_url: 'https://example.com/own/6', account_name: '@ossur', caption: 'Five reasons clinicians choose Össur.', upload_date: '2026-10-06' },
+  blades: { id: 'm0000003-0000-4000-8000-000000000000', platform: 'youtube', video_url: 'https://example.com/m/3', account_name: 'Running On Blades', caption: 'Six months with my Rheo: the honest review', upload_date: '2026-10-01' },
+  amplife: { id: 'm0000004-0000-4000-8000-000000000000', platform: 'instagram', video_url: 'https://example.com/m/4', account_name: '@amp.life', caption: 'What my first year of prosthetics cost', upload_date: '2026-10-05' },
+  trail: { id: 'm0000005-0000-4000-8000-000000000000', platform: 'tiktok', video_url: 'https://example.com/m/5', account_name: '@trail.legs', caption: 'First hike on the new knee, 12 km of rocks', upload_date: '2026-10-04' },
+  beach: { id: 'm0000006-0000-4000-8000-000000000000', platform: 'tiktok', video_url: 'https://example.com/m/6', account_name: '@beach.amputee', caption: 'Beach day, leg off or leg on?', upload_date: '2026-10-04' },
+} as const
+
+type ReplyVideo = (typeof REPLY_VIDEOS)[keyof typeof REPLY_VIDEOS]
+
+const reply = (n: number, intent: ReplyRow['intent'], under: ReplyRow['under'], text: string, video: ReplyVideo, date: string, reason: string, likes = 0): ReplyRow => ({
   id: ID(500 + n),
   intent,
   date,
-  context,
+  context: under === 'own_post' ? 'under your post' : `under ${video.account_name}’s post`,
   reason,
-  platform,
+  platform: video.platform,
   quote: { ref: `m:${ID(500 + n)}`, text },
-  href: intent === 'misinformation' ? null : `https://example.com/v/${n}`,
+  href: intent === 'misinformation' ? null : video.platform === 'youtube' ? `${video.video_url}?lc=native${n}` : video.video_url,
   insightId: `ins${n}`,
   ...(under ? { under } : {}),
+  videoRowId: video.id,
+  ...(likes > 0 ? { likes } : {}),
 })
 
-/** The reply queue: twelve comments, seven under Össur's own posts. */
+/** The reply queue as the G5 board draws it: twelve comments, five ready to
+ *  buy, three questions, three objections and one wrong, six under Össur's
+ *  own posts, three under posts about it, three elsewhere. */
 export const OSSUR_REPLIES = {
   rows: [
-    reply(1, 'buying', 'own_post', 'Where can I try the Navii in Cape Town? My clinic only has older knees.', 'instagram', '2026-10-09T10:00:00.000Z', 'under your post · 12 likes', 'Looking for a fitting'),
-    reply(2, 'buying', 'own_post', 'Is the Pro-Flex covered by medical aid here or do I pay myself?', 'tiktok', '2026-10-09T08:00:00.000Z', 'under your post', 'Cost questions before buying'),
-    reply(3, 'buying', 'names_you', 'Booking a fitting for this foot next month, any tips before I go?', 'youtube', '2026-10-08T15:00:00.000Z', 'under @stepbystep.amp’s post', 'Ready to be fitted'),
-    reply(4, 'buying', 'own_post', 'How do I get a quote for the Rheo through my prosthetist?', 'instagram', '2026-10-07T12:00:00.000Z', 'under your post · 3 likes', 'Asking how to buy'),
-    reply(5, 'question', 'own_post', 'Can the Navii go in the sea or only the shower?', 'instagram', '2026-10-10T09:00:00.000Z', 'under your post · 8 likes', 'Water and the knee'),
-    reply(6, 'question', 'names_you', 'How long did your liner last before it started slipping?', 'youtube', '2026-10-09T19:00:00.000Z', 'under @theamputeediaries’s post', 'How long liners last'),
-    reply(7, 'question', 'own_post', 'Does the sleeve come in a child size?', 'instagram', '2026-10-06T11:00:00.000Z', 'under your post', 'Sizes for children'),
-    reply(8, 'question', 'elsewhere', 'Which knee would you pick for hiking on rough ground?', 'tiktok', '2026-10-06T07:00:00.000Z', 'under @limbcare.clinic’s post', 'Choosing a knee'),
-    reply(9, 'question', 'own_post', 'Is there a waiting list for the Pro-Flex in the UK?', 'tiktok', '2026-10-05T16:00:00.000Z', 'under your post', 'Getting hold of it'),
-    reply(10, 'objection', 'names_you', 'Mine squeaks after six months and the clinic says that is normal.', 'youtube', '2026-10-08T21:00:00.000Z', 'under @runningonblades’s post', 'Noise and wear'),
-    reply(11, 'objection', 'elsewhere', 'Too expensive for most of us without insurance help.', 'instagram', '2026-10-07T09:00:00.000Z', 'under @amp.life’s post', 'Price'),
+    reply(1, 'buying', 'own_post', 'Where can I try the Navii in Cape Town? My clinic only has older knees.', REPLY_VIDEOS.rheo, '2026-10-09T10:00:00.000Z', 'Looking for a fitting', 12),
+    reply(2, 'buying', 'own_post', 'How do I get a quote for the Rheo through my prosthetist?', REPLY_VIDEOS.rheo, '2026-10-07T12:00:00.000Z', 'Asking how to buy', 3),
+    reply(3, 'buying', 'own_post', 'Is the Pro-Flex covered by medical aid here or do I pay myself?', REPLY_VIDEOS.proflex, '2026-10-09T08:00:00.000Z', 'Cost before buying'),
+    reply(4, 'buying', 'own_post', 'Can I switch from my old foot to the Pro-Flex without a new socket?', REPLY_VIDEOS.running, '2026-10-09T15:00:00.000Z', 'Changing from another foot', 2),
+    reply(5, 'buying', 'names_you', 'Booking a fitting for this foot next month, any tips before I go?', REPLY_VIDEOS.diariesFoot, '2026-10-08T15:00:00.000Z', 'Ready to be fitted'),
+    reply(6, 'question', 'own_post', 'Can the Navii go in the sea or only the shower?', REPLY_VIDEOS.navii, '2026-10-10T09:00:00.000Z', 'Water and the knee', 8),
+    reply(7, 'question', 'names_you', 'How long did your liner last before it started slipping?', REPLY_VIDEOS.diariesLiner, '2026-10-09T19:00:00.000Z', 'How long liners last'),
+    reply(8, 'question', 'own_post', 'Is there a waiting list for the Pro-Flex in the UK?', REPLY_VIDEOS.clinicians, '2026-10-07T16:00:00.000Z', 'Getting hold of it'),
+    reply(9, 'objection', 'names_you', 'Mine squeaks after six months and the clinic says that is normal.', REPLY_VIDEOS.blades, '2026-10-08T21:00:00.000Z', 'Noise and wear', 5),
+    reply(10, 'objection', 'elsewhere', 'Too expensive for most of us without insurance help.', REPLY_VIDEOS.amplife, '2026-10-07T09:00:00.000Z', 'Price'),
+    reply(11, 'objection', 'elsewhere', 'The waiting time at my clinic for this knee is eight months.', REPLY_VIDEOS.trail, '2026-10-06T09:00:00.000Z', 'Waiting times'),
   ] as ReplyRow[],
   flagged: [
-    reply(12, 'misinformation', 'elsewhere', 'You can’t swim with any prosthetic leg, the water ruins them all.', 'tiktok', '2026-10-06T13:00:00.000Z', 'awareness only, never a reply prompt', 'Water and prostheses'),
+    reply(12, 'misinformation', 'elsewhere', 'You can’t swim with any prosthetic leg, the water ruins them all.', REPLY_VIDEOS.beach, '2026-10-06T13:00:00.000Z', 'Water and prostheses'),
   ] as ReplyRow[],
   counts: [],
   total: 11,
@@ -255,7 +277,7 @@ export const OSSUR_REPLIES = {
 }
 
 /** Who asks, the subjects, and the week's counts of the conversations. */
-const ASKED_LABELS = [
+export const ASKED_LABELS = [
   { registryId: REG.liner, label: 'Liner lifespan and replacement' },
   { registryId: REG.insurance, label: 'Insurance refusals for powered knees' },
   { registryId: REG.water, label: 'Getting a prosthetic leg wet' },
@@ -266,10 +288,10 @@ const ASKED_LABELS = [
   { registryId: REG.blade, label: 'Running on a blade for the first time' },
   { registryId: REG.clean, label: 'Cleaning a liner at home' },
 ]
-const WEEK_COUNTS = new Map([[REG.liner, 23], [REG.insurance, 19], [REG.water, 8], [REG.socket, 12], [REG.knee, 10], [REG.skin, 9], [REG.school, 7], [REG.blade, 6], [REG.clean, 5]])
-const MONTH_COUNTS = new Map([[REG.liner, 31], [REG.insurance, 31], [REG.water, 8], [REG.socket, 17], [REG.knee, 14], [REG.skin, 13], [REG.school, 9], [REG.blade, 10], [REG.clean, 9]])
-const W1 = new Map([[REG.liner, 9], [REG.insurance, 6], [REG.water, 0], [REG.socket, 8], [REG.knee, 11], [REG.skin, 9], [REG.school, 3], [REG.blade, 7], [REG.clean, 4]])
-const W2 = new Map([[REG.liner, 14], [REG.insurance, 7], [REG.water, 0], [REG.socket, 9], [REG.knee, 10], [REG.skin, 8], [REG.school, 5], [REG.blade, 6], [REG.clean, 2]])
+export const WEEK_COUNTS = new Map([[REG.liner, 23], [REG.insurance, 19], [REG.water, 8], [REG.socket, 12], [REG.knee, 10], [REG.skin, 9], [REG.school, 7], [REG.blade, 6], [REG.clean, 5]])
+export const MONTH_COUNTS = new Map([[REG.liner, 31], [REG.insurance, 31], [REG.water, 8], [REG.socket, 17], [REG.knee, 14], [REG.skin, 13], [REG.school, 9], [REG.blade, 10], [REG.clean, 9]])
+export const W1 = new Map([[REG.liner, 9], [REG.insurance, 6], [REG.water, 0], [REG.socket, 8], [REG.knee, 11], [REG.skin, 9], [REG.school, 3], [REG.blade, 7], [REG.clean, 4]])
+export const W2 = new Map([[REG.liner, 14], [REG.insurance, 7], [REG.water, 0], [REG.socket, 9], [REG.knee, 10], [REG.skin, 8], [REG.school, 5], [REG.blade, 6], [REG.clean, 2]])
 const SUBJECTS = new Map<string, string | null>([
   [REG.socket, 'Fit & comfort'], [REG.knee, 'Choosing'], [REG.skin, 'Fit & comfort'], [REG.school, 'Community'], [REG.blade, 'Function & movement'], [REG.clean, 'Fit & comfort'],
 ])
@@ -302,18 +324,18 @@ const THIN_GROUPS = groupsByConversation(storedPersonas([{ key: 'first-time', na
 const THIN_SUBJECTS = new Map<string, string | null>([[REG.liner, 'Fit & comfort'], [REG.insurance, 'Cost & access'], [REG.knee, 'Choosing']])
 
 /** The anomaly check's flag on insurance refusals this week. */
-const INSURANCE_FLAG: Verdict = flagVerdict({
+export const INSURANCE_FLAG: Verdict = flagVerdict({
   object_kind: 'theme', object_id: REG.insurance, label: 'Insurance refusals for powered knees', denominator: 'market',
   week_k: 19, week_n: 241, baseline_k: 39, baseline_n: 1906, change_pts: 5.8, band_pts: 3.6,
 }, WINDOW)
 
 /** The ideas' four weeks (14 Sep to 11 Oct): each idea's videos over all of
  *  them (distinct videos, so fewer than the weeks' sum), and the market's. */
-const READ_COUNTS = new Map([[REG.liner, 48], [REG.insurance, 33], [REG.water, 8]])
-const READ_MARKET = 640
+export const READ_COUNTS = new Map([[REG.liner, 48], [REG.insurance, 33], [REG.water, 8]])
+export const READ_MARKET = 640
 /** The first of the four weeks (14 Sep); the other three are W1, W2 and the
  *  page's week. */
-const W0 = new Map([[REG.liner, 6], [REG.insurance, 4], [REG.water, 0]])
+export const W0 = new Map([[REG.liner, 6], [REG.insurance, 4], [REG.water, 0]])
 
 export function ideaCards(clientId = OSSUR_CLIENT_ID): IdeaCard[] {
   const groups = groupsByConversation(OSSUR_PERSONAS)
@@ -341,16 +363,11 @@ export function ideaCards(clientId = OSSUR_CLIENT_ID): IdeaCard[] {
   }))
 }
 
-const VIDEOS: MarketVideoCard[] = [
-  { id: VID(1), title: 'Your liner has an expiry date. Here is how to read it.', account: 'theamputeediaries', platform: 'youtube', format: 'Tutorial', opening: 'A question', multiple: 2.6, url: 'https://example.com/v1' },
-  { id: VID(2), title: 'Three signs your liner is done.', account: 'stepbystep.amp', platform: 'tiktok', format: 'Tutorial', opening: 'A bold claim', multiple: 2.2, url: 'https://example.com/v2' },
-  { id: VID(3), title: 'We get this question every week.', account: 'limbcare.clinic', platform: 'instagram', format: 'Educational', opening: 'A question', multiple: 1.7, url: 'https://example.com/v3' },
-]
-
-const QUOTES: PanelQuote[] = [
-  { ref: `m:${ID(1)}`, text: 'Is it normal that my liner feels loose after six months? Nobody told me they wear out.', platform: 'instagram', date: '2026-10-06T10:00:00.000Z' },
-  { ref: `m:${ID(2)}`, text: 'Mine stops holding by lunchtime now. New liner or new socket?', platform: 'tiktok', date: '2026-10-08T10:00:00.000Z' },
-  { ref: `m:${ID(3)}`, text: 'How do you all know when to replace it? My clinic never said.', platform: 'youtube', date: '2026-10-09T10:00:00.000Z' },
+/** The market videos where idea 1 came up, as the G5 board names them. */
+export const IDEA_VIDEOS: MarketVideoCard[] = [
+  { id: VID(1), title: 'Your liner has an expiry date. Here is how to read it.', account: 'The Amputee Diaries', platform: 'youtube', format: 'Tutorial', opening: 'A question', multiple: 2.6, url: 'https://example.com/v1' },
+  { id: VID(2), title: 'Three signs your liner is done.', account: '@stepbystep.amp', platform: 'tiktok', format: 'Tutorial', opening: 'A bold claim', multiple: 2.2, url: 'https://example.com/v2' },
+  { id: VID(3), title: 'We get this question every week.', account: '@limbcare.clinic', platform: 'instagram', format: 'Educational', opening: 'A question', multiple: 1.7, url: 'https://example.com/v3' },
 ]
 
 /** The run two weeks before: the week an older set of ideas was written for. */
@@ -368,36 +385,13 @@ export function ideasWeekFixture(older = false): IdeasWeek {
   return ideasWeekOf(rows, contentWeek(RUN, WINDOW))!
 }
 
-export function ideaPanelFixture(rank: 1 | 2 | 3 = 1, clientId = OSSUR_CLIENT_ID, older = false): IdeaPanel {
-  const row = OSSUR_IDEAS.find((i) => i.rank === rank)!
-  const card = ideaCards(clientId).find((c) => c.rank === rank)!
-  return {
-    card: { ...card, groups: groupsByConversation(OSSUR_PERSONAS).get(row.registry_id) ?? [] },
-    cover: row.cover.text,
-    length: row.cover.length ?? null,
-    subquestions: subquestionRows(row),
-    asked: row.cover.asked ?? null,
-    week: ideasWeekFixture(older),
-    videos: rank === 1 ? VIDEOS : VIDEOS.slice(1),
-    words: wordsToBorrow([
-      { id: 'w1', phrase: 'feels loose' },
-      { id: 'w2', phrase: 'nobody told me they wear out' },
-      { id: 'w3', phrase: 'stops holding by lunchtime' },
-      { id: 'w4', phrase: 'my skin can tell' },
-    ]),
-    quotes: rank === 1 ? QUOTES : QUOTES.slice(0, 1),
-    askHref: agentHref(`Draft an outline for a post that answers this question from my market: ${row.title}`),
-    conversationHref: conversationHref(row.registry_id),
-  }
-}
-
 export interface ContentFixtureOptions {
   clientId?: string
   period?: ContentPeriod
-  open?: ContentOpen
   asked?: boolean
-  /** `fewer`: a set of one idea (the step's floor held the rest back). */
-  ideas?: IdeasState | 'fewer'
+  /** `fewer`: a set of one idea (the step's floor held the rest back);
+   *  `two`: a set of two, as G5-Content draws it. */
+  ideas?: IdeasState | 'fewer' | 'two'
   /** The ideas were written for an earlier week (the step stored none since). */
   olderIdeas?: boolean
 }
@@ -430,10 +424,9 @@ function splitAcross(videos: number): { platform: string; videos: number }[] {
 export function contentFixture(opts: ContentFixtureOptions = {}): ContentPageData {
   const clientId = opts.clientId ?? OSSUR_CLIENT_ID
   const period = opts.period ?? 'week'
-  const open = opts.open ?? null
-  const ideasState: IdeasState = opts.ideas === 'fewer' ? 'ready' : opts.ideas ?? 'ready'
+  const ideasState: IdeasState = opts.ideas === 'fewer' || opts.ideas === 'two' ? 'ready' : opts.ideas ?? 'ready'
   const week = contentWeek(RUN, WINDOW)!
-  const cards = ideasState === 'ready' ? ideaCards(clientId).slice(0, opts.ideas === 'fewer' ? 1 : 3) : []
+  const cards = ideasState === 'ready' ? ideaCards(clientId).slice(0, opts.ideas === 'fewer' ? 1 : opts.ideas === 'two' ? 2 : 3) : []
   const { asked, lead } = askedSplit(period, opts.asked ?? false, cards.length)
   const repliesWindow = period === 'month' ? { from: OCT.from, to: WINDOW.to, phrase: 'in October so far' } : { from: week.from, to: week.to, phrase: daysPhrase(week.first, week.last) }
   return {
@@ -447,8 +440,6 @@ export function contentFixture(opts: ContentFixtureOptions = {}): ContentPageDat
     replies: repliesView(OSSUR_REPLIES, repliesWindow),
     posts: postsFixture(),
     asked,
-    open: open?.kind === 'idea' && !cards.some((c) => c.rank === open.rank) ? null : open,
-    ideaPanel: open?.kind === 'idea' && cards.some((c) => c.rank === open.rank) ? ideaPanelFixture(open.rank, clientId, opts.olderIdeas) : null,
   }
 }
 
@@ -502,7 +493,5 @@ export function contentEmptyFixture(): ContentPageData {
     replies: { ...repliesView(null, null), unread: 'No update has covered a week yet, so there is no reply list.' },
     posts: { month: month.month, complete: false, total: 0, byPlatform: [], response: null, best: null, rows: [], unread: null },
     asked: { period: 'week', rows: [], total: 0, touched: 0, since: ideaOwnedFrom(month.month), posts: 0, expanded: false, unread: ASKED_NO_WEEK },
-    open: null,
-    ideaPanel: null,
   }
 }

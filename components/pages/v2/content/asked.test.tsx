@@ -8,7 +8,7 @@ import { AskedCard } from './asked'
 /** The page's words as read: a tag between a word and its comma is not a space. */
 const renderText = (node: Parameters<typeof rawText>[0]): string => rawText(node).replace(/\s+([,.])/g, '$1')
 
-const STATE: ContentState = { period: 'week', open: null, asked: false }
+const STATE: ContentState = { period: 'week', asked: false }
 const card = (over: Partial<Parameters<typeof AskedCard>[0]> = {}) => (
   <AskedCard block={askedFixture()} state={STATE} month={OCT} weekWord="this week" weekHead="This week" {...over} />
 )

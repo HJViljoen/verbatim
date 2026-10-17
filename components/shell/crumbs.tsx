@@ -192,7 +192,7 @@ export function Switcher({ menu, defaultOpen = false, className }: {
           id={id}
           role="menu"
           aria-label={menu.label}
-          className="absolute left-[-4px] top-[30px] z-20 flex max-h-[min(480px,70vh)] w-[320px] max-w-[calc(100vw-32px)] flex-col gap-px overflow-y-auto rounded-[12px] bg-card p-1.5 shadow-panel ring-1 ring-foreground/6"
+          className={cn('absolute left-[-4px] top-[30px] z-20 flex max-h-[min(480px,70vh)]', menu.wide ? 'w-[460px]' : 'w-[320px]', 'max-w-[calc(100vw-32px)] flex-col gap-px overflow-y-auto rounded-[12px] bg-card p-1.5 shadow-panel ring-1 ring-foreground/6')}
         >
           {/* The board's small-caps label, for the eye: a menu may own only
               its items and separators (ARIA), and its name is already

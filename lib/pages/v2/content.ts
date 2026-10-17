@@ -1,4 +1,5 @@
 import { marketConversationPath } from '../../nav'
+import { contentIdeaPath, CONTENT_POSTS_PATH, contentRepliesHref } from './content-address'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { chunk, UUID_IN_CHUNK } from '../../chunk'
@@ -9,11 +10,9 @@ import { postIdeasEnabled } from '../../config'
 import { POST_IDEA_OWNED_MONTHS } from '../../post-ideas/select'
 import {
   isMissingPostIdeas, loadPostIdeas, subquestionCounts, TABLE_POST_IDEAS,
-  type PostIdeaCover, type PostIdeaLength, type PostIdeaRank, type PostIdeaRow,
+  type PostIdeaLength, type PostIdeaRank, type PostIdeaRow,
 } from '../../post-ideas/types'
-import { readTranslations, readableQuote } from '../../quotes'
-import { pickEligible } from '../../quote-gate'
-import { gateFor, readQuoteContext } from '../../quote-context'
+import { readableQuote } from '../../quotes'
 import { ENGAGEMENT_EXCLUDED } from '../../reading/formats'
 import { marketAudiences } from '../../reading/market'
 import { monthStartOf, nextMonth, prevMonth } from '../../reading/month-key'
@@ -47,8 +46,9 @@ import { buildReplies, loadCheckStrict, loadFlagsStrict, weekFlagRows, workedLab
 //                       (decision 1), the four weeks as four bare counts,
 //                       who asks (group names, no counts: decision 5),
 //                       whether your posts touched on it, and the format and
-//                       opening code chose with their multiples. Opens in
-//                       place with `?idea=<rank>`.
+//                       opening code chose with their multiples. Each opens
+//                       its own page (`/dashboard/content/ideas/<id>`,
+//                       lib/pages/v2/content-idea.ts).
 //   What works          the month's market videos by format and by opening
 //                       (`buildPlaybook`, published clock), with your own
 //                       posts beside each row (`clientSide: 'owned'`) and a
@@ -56,10 +56,12 @@ import { buildReplies, loadCheckStrict, loadFlagsStrict, weekFlagRows, workedLab
 //   Worth a reply       the comments worth answering (This week's queue,
 //                       `buildReplies`), split by whose post they sit under.
 //                       A list, never "N waiting": nothing here can see
-//                       whether you replied (decision 5).
+//                       whether you replied (decision 5). Its page is
+//                       `/dashboard/content/replies` (content-pages.ts).
 //   Your posts          your own accounts' posts this month (`ownedPosts`):
 //                       how many, where, their typical response against the
-//                       market's, the best one.
+//                       market's, the best one. Its page is
+//                       `/dashboard/content/posts` (content-pages.ts).
 //   Also asked          the week's (or month's) other question
 //                       conversations your posts have not touched on.
 //
@@ -71,13 +73,14 @@ import { buildReplies, loadCheckStrict, loadFlagsStrict, weekFlagRows, workedLab
 // comment, under the page's run's clustering, each beside the page's month.
 //
 // NO QUOTE AT LEVEL 1. The comments' words, the words to borrow and the reply
-// list's comments are all one click down, in a panel.
+// list's comments are all one click down, on a page of their own (depth as
+// pages, 17 Oct; the G5 boards): nothing on Content opens in place.
 //
 // THE READS, in three waves: (1) the ideas, the published read, the brand, the
 // groups, the rivals; (2) everything the week and the month decide: the
 // window readings, the run's question conversations, the anomaly flags, your
 // posts, the month's videos, the reply queue; (3) the subjects of the
-// conversations shown and, where a panel is open, what it shows.
+// conversations shown.
 
 // ---- the shapes --------------------------------------------------------------------
 
@@ -92,10 +95,7 @@ export const CONTENT_PERIODS: readonly { value: ContentPeriod; label: string }[]
 /** The page's address. */
 export const CONTENT_PATH = '/dashboard/content'
 
-/** The panels' anchors. */
-export const IDEA_PANEL_ID = 'idea-panel'
-export const REPLIES_PANEL_ID = 'replies-panel'
-export const POSTS_PANEL_ID = 'posts-panel'
+/** The also-asked table's anchor. */
 export const ASKED_ID = 'also-asked'
 /** A card on the ideas row that holds a question (`QuestionCardView`), by its
  *  place on the row: the ideas' cards come first, then the questions in line
@@ -105,18 +105,17 @@ export const questionSlotId = (rank: number): string => `idea-slot-${rank}`
  *  link replies to (`WEEK_ANCHORS.reply`, `/dashboard/content#worth-a-reply`,
  *  written before Design v2 and never re-written), so an old link lands on
  *  the card. A hash never reaches the server, so the anchor alone cannot open
- *  the list: it scrolls to the card, whose "Open the replies" is one click. */
+ *  the list: it scrolls to the card, whose "Open the replies" is one click.
+ *  An old link's `?reply=<intent>` lands on the list's page, at its section
+ *  (lib/nav.ts `contentRedirect`). */
 export const REPLIES_ANCHOR = 'worth-a-reply'
-/** The old reply list's tab (`?reply=<intent>`, components/pages/week/reply.tsx
- *  REPLY_PARAM): an old link that carries it opens the list in place. */
-const LEGACY_REPLY_PARAM = 'reply'
 
 /** The also-asked table's rows before "all" is asked for. */
 export const ASKED_SHOWN = 5
 
-/** The panel's market videos and quotes. */
+/** A post idea's market videos (its page's "Market videos where this came
+ *  up"). */
 export const PANEL_VIDEOS = 3
-export const PANEL_QUOTES = 3
 /** Words to borrow: at most this many, each short enough to be a phrase. */
 export const WORDS_SHOWN = 4
 export const WORD_MAX_CHARS = 60
@@ -185,6 +184,9 @@ export interface GroupName {
 }
 
 export interface IdeaCard {
+  /** `post_ideas.id`: its page's address. Absent on a page dumped before the
+   *  idea pages (17 Oct), which then opens the root. */
+  id?: string
   rank: PostIdeaRank
   registryId: string
   /** The model's title (`stored`, slot `post_idea`). */
@@ -229,33 +231,6 @@ export interface MarketVideoCard {
    *  Reddit, and where either rate is missing. */
   multiple: number | null
   url: string | null
-}
-
-export interface PanelQuote {
-  ref: string
-  text: string
-  lang?: string | null
-  english?: string | null
-  platform: string | null
-  date: string | null
-}
-
-export interface IdeaPanel {
-  card: IdeaCard
-  cover: string
-  length: PostIdeaLength | null
-  subquestions: IdeaSubquestion[]
-  /** The comments the sub-questions were grouped from and their videos
-   *  (`cover.asked`): a sub-question's figure is its videos of these. Null on
-   *  a row that does not carry them, which then prints no "of". */
-  asked: NonNullable<PostIdeaCover['asked']> | null
-  /** The week the idea was written for (its run's window). */
-  week: IdeasWeek
-  videos: MarketVideoCard[]
-  words: { ref: string; text: string }[]
-  quotes: PanelQuote[]
-  askHref: string
-  conversationHref: string
 }
 
 export type IdeasState = 'ready' | 'not_on' | 'none' | 'stale' | 'unread'
@@ -442,8 +417,6 @@ export interface AskedBlock {
   unread: string | null
 }
 
-export type ContentOpen = { kind: 'idea'; rank: PostIdeaRank } | { kind: 'replies' } | { kind: 'posts' } | null
-
 export interface ContentPageData {
   brand: string
   period: ContentPeriod
@@ -456,43 +429,40 @@ export interface ContentPageData {
   replies: RepliesView
   posts: PostsBlock
   asked: AskedBlock
-  open: ContentOpen
-  ideaPanel: IdeaPanel | null
 }
 
 // ---- the URL -----------------------------------------------------------------------
 
 export interface ContentState {
   period: ContentPeriod
-  open: ContentOpen
   asked: boolean
 }
 
-/** The page's params, read once. Anything else is the default. */
+/** The root's params, read once: the period and the expanded table. Anything
+ *  else is the default (the old panels' params never reach the page: the
+ *  route sends them to their pages first, lib/nav.ts `contentRedirect`). */
 export function parseContentParams(params: Record<string, string | undefined>): ContentState {
   const period: ContentPeriod = params.period === 'month' ? 'month' : 'week'
-  const rank = Number(params.idea)
-  const open: ContentOpen = rank === 1 || rank === 2 || rank === 3
-    ? { kind: 'idea', rank }
-    : params.replies != null || params[LEGACY_REPLY_PARAM] != null ? { kind: 'replies' }
-      : params.posts != null ? { kind: 'posts' }
-        : null
-  return { period, open, asked: params.asked === 'all' }
+  return { period, asked: params.asked === 'all' }
 }
 
-/** The page's address with this state: the period kept unless it is the
- *  default, one panel at most, its anchor last. */
+/** The root's address with this state: the period kept unless it is the
+ *  default, the table's anchor where it is expanded. */
 export function contentHref(state: ContentState): string {
   const q = new URLSearchParams()
   if (state.period !== 'week') q.set('period', state.period)
-  let hash = ''
-  if (state.open?.kind === 'idea') { q.set('idea', String(state.open.rank)); hash = `#${IDEA_PANEL_ID}` }
-  if (state.open?.kind === 'replies') { q.set('replies', '1'); hash = `#${REPLIES_PANEL_ID}` }
-  if (state.open?.kind === 'posts') { q.set('posts', '1'); hash = `#${POSTS_PANEL_ID}` }
-  if (state.asked) { q.set('asked', 'all'); if (!hash) hash = `#${ASKED_ID}` }
+  if (state.asked) q.set('asked', 'all')
   const qs = q.toString()
-  return `${CONTENT_PATH}${qs ? `?${qs}` : ''}${hash}`
+  return `${CONTENT_PATH}${qs ? `?${qs}` : ''}${state.asked ? `#${ASKED_ID}` : ''}`
 }
+
+/** Where an idea card opens: its page, by its row id; the root for a card
+ *  dumped before it carried one. */
+export const ideaHref = (card: Pick<IdeaCard, 'id'>): string => (card.id ? contentIdeaPath(card.id) : CONTENT_PATH)
+/** Where Worth a reply opens: its page, the period kept. */
+export const repliesHref = (period: ContentPeriod): string => contentRepliesHref({ period })
+/** Where Your posts opens: its page. */
+export const postsHref = (): string => CONTENT_POSTS_PATH
 
 // ---- the clocks --------------------------------------------------------------------
 
@@ -761,7 +731,7 @@ export function touchPosts(owned: OwnedPosts | null, month: string, to: string):
   return owned ? summariseOwnedPosts(owned.posts, { from: ideaOwnedFrom(month), to }) : null
 }
 
-/** The sub-questions as the panel draws them: counted off their ids, the most
+/** The sub-questions counted off their ids, the most
  *  asked first. */
 export function subquestionRows(idea: Pick<PostIdeaRow, 'subquestions'>): IdeaSubquestion[] {
   return idea.subquestions
@@ -807,7 +777,7 @@ export function ideasReadOf(idea: Pick<PostIdeaRow, 'read_start' | 'read_end'>):
 }
 
 /** "From questions asked 14 Sep to 11 Oct": the days the ideas read, as the
- *  page, the tile and the panel print them. */
+ *  page, the tile and the idea's page print them. */
 export const askedPhrase = (read: Pick<IdeasRead, 'label'>): string => `From questions asked ${read.label}`
 
 /** The ideas' own week, against the page's, the days they read, and the
@@ -1235,6 +1205,7 @@ export function ideaCard(input: {
 }): IdeaCard {
   const { idea } = input
   return {
+    id: idea.id,
     rank: idea.rank,
     registryId: idea.registry_id,
     title: idea.title,
@@ -1262,7 +1233,7 @@ export const groupHref = (key: string): string => `/dashboard/voices?group=${enc
 const fail = (what: string, e: unknown): Error => new Error(`content.${what}: ${(e as { message?: string })?.message ?? String(e)}`)
 
 /** Log and answer null: one block's read failing costs that block only. */
-async function soft<T>(what: string, p: PromiseLike<T> | (() => PromiseLike<T>)): Promise<T | null> {
+export async function soft<T>(what: string, p: PromiseLike<T> | (() => PromiseLike<T>)): Promise<T | null> {
   try {
     return await (typeof p === 'function' ? p() : p)
   } catch (e) {
@@ -1287,14 +1258,14 @@ export async function readIdeas(db: SupabaseClient, clientId: string): Promise<{
   return { state: 'none', rows: [] }
 }
 
-async function readPersonas(db: SupabaseClient, clientId: string): Promise<StoredPersona[]> {
+export async function readPersonas(db: SupabaseClient, clientId: string): Promise<StoredPersona[]> {
   const res = await db.from('consumer_profiles').select('personas, run_date')
     .eq('client_id', clientId).order('run_date', { ascending: false }).limit(1).maybeSingle()
   if (res.error) throw fail('personas', res.error)
   return storedPersonas((res.data as { personas?: unknown } | null)?.personas)
 }
 
-async function readBrand(db: SupabaseClient, clientId: string): Promise<string> {
+export async function readBrand(db: SupabaseClient, clientId: string): Promise<string> {
   const res = await db.from('clients').select('company_name').eq('id', clientId).maybeSingle()
   if (res.error) throw fail('brand', res.error)
   return ((res.data as { company_name?: string | null } | null)?.company_name ?? '').trim() || 'You'
@@ -1302,7 +1273,7 @@ async function readBrand(db: SupabaseClient, clientId: string): Promise<string> 
 
 /** The run's question conversations: the run's observations (the run's own
  *  clustering), category `question`. */
-async function readQuestions(db: SupabaseClient, clientId: string, runId: string): Promise<QuestionConversation[]> {
+export async function readQuestions(db: SupabaseClient, clientId: string, runId: string): Promise<QuestionConversation[]> {
   const rows = await selectAll<{ theme_id: string; label: string | null }>(() =>
     db.from('theme_observations').select('theme_id, label')
       .eq('client_id', clientId).eq('run_id', runId).eq('category', 'question').order('theme_id'))
@@ -1311,7 +1282,7 @@ async function readQuestions(db: SupabaseClient, clientId: string, runId: string
 
 /** Labels for conversations the question read did not name (an idea whose
  *  conversation the run filed under another kind). */
-async function readLabels(db: SupabaseClient, clientId: string, runId: string, ids: readonly string[]): Promise<Map<string, string>> {
+export async function readLabels(db: SupabaseClient, clientId: string, runId: string, ids: readonly string[]): Promise<Map<string, string>> {
   if (ids.length === 0) return new Map()
   const res = await db.from('theme_observations').select('theme_id, label')
     .eq('client_id', clientId).eq('run_id', runId).in('theme_id', [...ids])
@@ -1322,7 +1293,7 @@ async function readLabels(db: SupabaseClient, clientId: string, runId: string, i
 /** The run's flagged conversations, by the rule the weekly email freezes
  *  (`weekFlagRows`, lib/pages/week.ts): none where the check raised nothing,
  *  and none printed where it says it flagged and the flags cannot be read. */
-async function readFlags(db: SupabaseClient, clientId: string, runId: string): Promise<FlagRowIn[]> {
+export async function readFlags(db: SupabaseClient, clientId: string, runId: string): Promise<FlagRowIn[]> {
   const [check, flags] = await Promise.all([loadCheckStrict(db, clientId, runId), loadFlagsStrict(db, clientId, runId)])
   return (weekFlagRows(check, flags) ?? []).filter((f) => f.object_kind === 'theme')
 }
@@ -1334,7 +1305,7 @@ async function readFlags(db: SupabaseClient, clientId: string, runId: string): P
  *  every surface names a conversation's subject by, so a conversation names
  *  the same subject here as on Market. A name only: Content prints no
  *  figure of the subject's own (ruling U6). */
-async function readSubjects(handle: Scope['reading'], runId: string, ids: readonly string[]): Promise<Map<string, { id: string; name: string } | null>> {
+export async function readSubjects(handle: Scope['reading'], runId: string, ids: readonly string[]): Promise<Map<string, { id: string; name: string } | null>> {
   if (ids.length === 0) return new Map()
   const { client, clientId } = handle
   const [obs, placement] = await Promise.all([
@@ -1347,45 +1318,18 @@ async function readSubjects(handle: Scope['reading'], runId: string, ids: readon
   return placeConversations(new Map(ids.map((id) => [id, members.get(id) ?? []])), placement.placed)
 }
 
-const PANEL_VIDEO_COLUMNS = 'id, video_id, platform, video_url, account_name, caption, hook_text, classified_type, hook_style, engagement_rate, source, is_client, views'
+export const PANEL_VIDEO_COLUMNS = 'id, video_id, platform, video_url, account_name, caption, hook_text, classified_type, hook_style, engagement_rate, source, is_client, views'
 
 /** The idea's videos. A sub-question's `videoIds` are `videos.id` (T13's
  *  `IdeaComment.videoId`, lib/post-ideas/select.ts), its `commentIds`
  *  `comments.id`. */
-async function readPanelVideos(db: SupabaseClient, clientId: string, ids: readonly string[]): Promise<PanelVideoRow[]> {
+export async function readPanelVideos(db: SupabaseClient, clientId: string, ids: readonly string[]): Promise<PanelVideoRow[]> {
   const parts = await Promise.all(chunk([...ids], UUID_IN_CHUNK).map((part) =>
     selectAll<PanelVideoRow>(() => db.from('videos').select(PANEL_VIDEO_COLUMNS).eq('client_id', clientId).in('id', part).order('id'))))
   return parts.flat()
 }
 
-/** Three of the idea's comments, through the quote gate (the market's words,
- *  readable, one per thread). */
-async function readPanelQuotes(db: SupabaseClient, admin: SupabaseClient | null, clientId: string, commentIds: readonly string[], claim: string): Promise<PanelQuote[]> {
-  if (commentIds.length === 0) return []
-  const rows = (await Promise.all(chunk([...commentIds], UUID_IN_CHUNK).map(async (part) => {
-    const res = await db.from('comments').select('id, text, platform, comment_date, video_id').eq('client_id', clientId).in('id', part)
-    if (res.error) throw fail('quotes', res.error)
-    return (res.data ?? []) as { id: string; text: string | null; platform: string | null; comment_date: string | null; video_id: string | null }[]
-  }))).flat().filter((r) => (r.text ?? '').trim())
-  if (rows.length === 0) return []
-  const order = new Map(commentIds.map((id, i) => [id, i]))
-  rows.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
-  const [translations, ctx] = await Promise.all([
-    readTranslations(db, rows.map((r) => r.text ?? '')),
-    readQuoteContext(db, clientId, { commentVideos: rows.map((r) => ({ commentId: r.id, platform: r.platform, videoId: r.video_id })), commentIds: rows.map((r) => r.id) }, admin),
-  ])
-  const reading = (t: string) => translations.get(t) ?? null
-  const picked = pickEligible(rows, (r) => {
-    const tr = reading(r.text ?? '')
-    return { text: r.text ?? '', lang: tr?.lang ?? null, english: tr?.english ?? null, video: ctx.forComment(r.id) }
-  }, PANEL_QUOTES, gateFor(clientId, { allowOwn: true, claim }))
-  return picked.map((r) => {
-    const tr = reading(r.text ?? '')
-    return { ref: quoteRef.message(r.id), text: (r.text ?? '').trim(), lang: tr?.lang ?? null, english: tr?.english ?? null, platform: r.platform, date: r.comment_date }
-  })
-}
-
-async function readWords(db: SupabaseClient, clientId: string, commentIds: readonly string[]): Promise<{ id: string; phrase: string | null }[]> {
+export async function readWords(db: SupabaseClient, clientId: string, commentIds: readonly string[]): Promise<{ id: string; phrase: string | null }[]> {
   if (commentIds.length === 0) return []
   const parts = await Promise.all(chunk([...commentIds], UUID_IN_CHUNK).map(async (part) => {
     const res = await db.from('language_samples_current').select('id, phrase, comment_id').eq('client_id', clientId).in('comment_id', part)
@@ -1409,7 +1353,7 @@ export function anchorOf(ideas: readonly PostIdeaRow[], published: PublishedWeek
   return Date.parse(fromIdea.to) > Date.parse(fromRead.to) ? fromIdea : fromRead
 }
 
-interface WeekReads {
+export interface WeekReads {
   audiences: string[]
   market: { week: number | null; month: number | null }
   themes: { week: Map<string, number> | null; month: Map<string, number> | null; weeks: (Map<string, number> | null)[] | null }
@@ -1427,6 +1371,9 @@ interface WeekReads {
     themes: Map<string, number> | null
     weeks: (Map<string, number> | null)[] | null
     month: { market: number | null; themes: Map<string, number> | null }
+    /** Every theme's videos by platform over the days the ideas read (an
+     *  idea's page: "Where it came up"), from the same read. */
+    mix: Map<string, Map<string, number>> | null
   } | null
 }
 
@@ -1437,7 +1384,7 @@ interface WeekReads {
  *  clustering, each an arbitrary window read (never a sum of weeks).
  *  `week: false` leaves the page's week unread (the Dashboard's tile prints
  *  none). */
-async function readWindows(scope: Scope, week: ContentWeek | null, month: ContentMonth, audiences: string[], opts: { trend?: boolean; week?: boolean; ideas?: Pick<IdeasWeek, 'read' | 'month'> | null } = {}): Promise<WeekReads> {
+export async function readWindows(scope: Scope, week: ContentWeek | null, month: ContentMonth, audiences: string[], opts: { trend?: boolean; week?: boolean; ideas?: Pick<IdeasWeek, 'read' | 'month'> | null } = {}): Promise<WeekReads> {
   const { client, clientId } = scope.reading
   const read = (from: string, to: string, runId: string | null) => loadWindowReading(client, clientId, { from, to, audiences, runId })
   const runId = week?.runId ?? null
@@ -1476,6 +1423,7 @@ async function readWindows(scope: Scope, week: ContentWeek | null, month: Conten
           themes: pooledThemeVideos(i.themes, audiences),
           weeks: ideaSlices ? ideaSlices.map((p) => pooledThemeVideos(p.themes, audiences)) : null,
           month: { market: pooledVideos((im ?? m).denominators, audiences), themes: pooledThemeVideos((im ?? m).themes, audiences) },
+          mix: pooledThemeMix(i.themes, audiences),
         }
       : null,
   }
@@ -1570,17 +1518,9 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
   // not a read that failed.
   const asked: AskedBlock = week ? askedRead : { ...askedRead, unread: ASKED_NO_WEEK }
 
-  // ---- wave 3: the subjects of what is shown, and the open panel's reads
+  // ---- wave 3: the subjects of what is shown
   const shownIds = [...ideaIds, ...lead.map((r) => r.registryId), ...asked.rows.map((r) => r.registryId)]
-  const openIdea = state.open?.kind === 'idea' ? ideas.find((i) => i.rank === (state.open as { rank: number }).rank) ?? null : null
-  const commentIds = openIdea ? [...new Set(openIdea.subquestions.flatMap((s) => s.commentIds))] : []
-  const videoIds = openIdea ? [...new Set(openIdea.subquestions.flatMap((s) => s.videoIds))] : []
-  const [subjects, panelVideos, panelQuotes, panelWords] = await Promise.all([
-    week ? soft('subjects', readSubjects(scope.reading, week.runId, shownIds)) : Promise.resolve(null),
-    openIdea ? soft('panelVideos', readPanelVideos(db, clientId, videoIds)) : Promise.resolve(null),
-    openIdea ? soft('panelQuotes', readPanelQuotes(db, admin, clientId, commentIds, openIdea.title)) : Promise.resolve(null),
-    openIdea ? soft('panelWords', readWords(db, clientId, commentIds)) : Promise.resolve(null),
-  ])
+  const subjects = week ? await soft('subjects', readSubjects(scope.reading, week.runId, shownIds)) : null
   for (const r of [...lead, ...asked.rows]) r.subject = subjects?.get(r.registryId)?.name ?? null
 
   const flagOf = new Map((flags ?? []).map((f) => [String(f.object_id), f]))
@@ -1633,24 +1573,6 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
   })
 
   const typical = typicalRate(playbook)
-  let ideaPanel: IdeaPanel | null = null
-  if (openIdea && ideasWeek) {
-    const card = cards.find((c) => c.rank === openIdea.rank)!
-    ideaPanel = {
-      card: { ...card, groups: groups.get(openIdea.registry_id) ?? [] },
-      cover: openIdea.cover.text,
-      length: openIdea.cover.length ?? null,
-      subquestions: subquestionRows(openIdea),
-      asked: openIdea.cover.asked ?? null,
-      week: ideasWeek,
-      videos: marketVideoCards(panelVideos ?? [], typical),
-      words: wordsToBorrow(panelWords ?? []),
-      quotes: panelQuotes ?? [],
-      askHref: agentHref(`Draft an outline for a post that answers this question from my market: ${openIdea.title}`),
-      conversationHref: conversationHref(openIdea.registry_id),
-    }
-  }
-
   const ideasState: IdeasState = !ideasRead ? 'unread' : stale ? 'stale' : ideasRead.state === 'ready' && cards.length === 0 ? 'none' : ideasRead.state
   return {
     brand: brand ?? 'You',
@@ -1663,8 +1585,6 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
     replies: repliesWindow ? repliesView(replies, repliesWindow) : { ...repliesView(null, null), unread: REPLIES_NO_WEEK },
     posts: postsBlock({ owned, typical, month }),
     asked,
-    open: state.open?.kind === 'idea' && !ideaPanel ? null : state.open,
-    ideaPanel,
   }
 }
 
@@ -1677,6 +1597,8 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
 export interface TopContent {
   state: IdeasState
   idea: {
+    /** `post_ideas.id`: the idea's page. */
+    id: string
     rank: PostIdeaRank
     title: string
     /** Over the days the ideas read (`ideasWeek.read`) and the month beside
@@ -1692,7 +1614,8 @@ export interface TopContent {
      *  ideas were stored (the tile then prints `olderIdeasLine`). */
     ideasWeek: IdeasWeek
   } | null
-  /** The idea's open panel, or the page where there is no idea. */
+  /** The idea's page (`/dashboard/content/ideas/<id>`, depth as pages, 17
+   *  Oct), or Content where there is no idea. */
   href: string
   /** The empty state's line where there is no idea; where the idea is from an
    *  older week, the line saying so. */
@@ -1794,7 +1717,7 @@ export const questionsAfterIdeas = (ctx: Pick<QuestionSlotsContext, 'when'>): st
  * The Dashboard's Content tile, light: the ideas (two round trips) beside the
  * published week read (one), then, for the first idea only, the market and
  * conversation counts over the days the ideas read and over the month, your
- * posts and the rivals, in parallel. No reply queue (it is four reads deep), no panel. The same rules
+ * posts and the rivals, in parallel. No reply queue (it is four reads deep), no idea's page. The same rules
  * as the page: the newest week anchors, ideas more than four weeks older are
  * not shown, older ones say so.
  */
@@ -1831,6 +1754,7 @@ export async function topContent(scope: Scope, opts: {
   return {
     state: 'ready',
     idea: {
+      id: idea.id,
       rank: idea.rank,
       title: idea.title,
       read: counted(windows?.ideas?.themes, id, windows?.ideas?.market ?? null),
@@ -1842,7 +1766,7 @@ export async function topContent(scope: Scope, opts: {
       medical: printsMedicalLine(clientId),
       ideasWeek,
     },
-    href: contentHref({ period: 'week', open: { kind: 'idea', rank: idea.rank }, asked: false }),
+    href: contentIdeaPath(idea.id),
     line: ideasWeek.current ? null : olderIdeasLine(ideasWeek),
   }
 }

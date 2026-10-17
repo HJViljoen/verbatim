@@ -1136,6 +1136,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
     the arrows, Home and End move, Escape closes and returns focus, Tab or a
     click outside closes (`scripts/crumbs-keys.ts` drives `CrumbRow` in
     headless Chrome; the render tier presses no key).
+    **CONTENT'S DEPTH IS PAGES TOO (17 Oct; the G5 boards):** `/dashboard/content/ideas/<post_ideas.id>`, `/dashboard/content/replies` and `/dashboard/content/posts` (`lib/pages/v2/content-address.ts`), old `?idea=`, `?replies=1`, `?reply=` and `?posts=1` redirecting to them (the Content bullet below).
     Parked pages leave clients through `TENANT_RETIRED` / `tenantAway` (the
     operator keeps them); Reports redirects into the Studio with its query
     (`?group=sent&item=`, `?view=`). Studio names a page key by
@@ -1360,8 +1361,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
     Accept and Not for us for owners and admins, `mayDecideMoves`); and the
     Agent box (two questions to try, `agentTries`, from the read's frozen
     `conversations`). Each tile's head link opens what its item is, else the
-    page: on Market a conversation's or a subject's page (17 Oct), on the
-    other pages their panel in place; the Agent box has none either.
+    page: on Market a conversation's or a subject's page, on Content the
+    idea's page (17 Oct), on the other pages their panel in place; the
+    Agent box has none either.
     There is no Subjects tile and no Competitive tile: the Competitive
     tile's "Named most" brands are the Voices tile's two brands named most
     unprompted (`NAMED_MOST`). The weekly email prints no "Named most" line
@@ -1436,8 +1438,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
     and the numbers sit one layer down. The depth brief's "level 2 opens IN
     PLACE, never a new page" is gone for Market: every Open is a page, and
     Market no longer uses the T9 panel machinery (`InPlacePanel`,
-    `PanelSlot`, `panelPlacement`), which Voices, Your products, Content and
-    Your moves still use until they move over. Still true: no quote on the
+    `PanelSlot`, `panelPlacement`), which Voices, Your products and Your
+    moves still use until they move over (Content moved over on 17 Oct). Still true: no quote on the
     top layer (quotes live on a page), decision 1, U6, the copy contract.
     *The top page, This week*, top to bottom: the WEEK CARD (`weekCardOf`:
     the published read's week in one line and its implications, up to
@@ -1848,61 +1850,129 @@ This version has breaking changes — APIs, conventions, and file structure may 
     which the Dashboard's mini shelf cuts by too). A column's head puts its
     verdict on its own line under "N% of the market", as the board's "▲
     from 14%".
-  - **Content** (T6; `lib/pages/v2/content.ts`: `loadContentPage`,
-    `topContent`). The week is a run's frozen window: the newer of the post
-    ideas' run and the published week read's (`anchorOf`), either alone
-    where the other is missing. Every week count sits beside its month
+  - **Content** (T6; depth as pages, 17 Oct; `lib/pages/v2/content.ts`
+    `loadContentPage`, `topContent`; the level pages' loaders
+    `content-idea.ts`, `content-replies.ts`, `content-posts.ts` beside
+    `content-levels.ts`, the addresses `content-address.ts`; boards
+    E5-Content, and since 17 Oct G5-Content, -Idea, -Idea-Switcher,
+    -Idea-Thin, -Replies, -Posts and their phone boards). CONTENT'S DEPTH IS
+    PAGES (Heinrich approved the G boards, 17 Oct): the root keeps its own
+    title and no crumb row, and every Open on it is a page, never a panel:
+    an idea's card opens `/dashboard/content/ideas/<post_ideas.id>` (by its
+    row, never its rank: rank 1 is a new idea every week and an emailed link
+    must keep resolving), a question card and an Also asked row open the
+    conversation's page in Market, Worth a reply opens
+    `/dashboard/content/replies` (the period kept), Your posts
+    `/dashboard/content/posts`; What works stays on the root (`#what-works`,
+    nothing in it opens), and `?asked=all` stays a list on the root. Each
+    level page has its own `loading.tsx`, keeps the shell on a throw, opens
+    with `LevelBar` (Market's, with Content's tile) and prints one calm line
+    with "Back to Content" where its address names nothing (a foreign, a
+    retired or a malformed idea id, or post ideas switched off), never a 404.
+    THE ROOT'S ANCHOR IS EVERY PAGE'S (`readAnchor` / `anchorFrom`,
+    `content-levels.ts`): the week is a run's frozen window, the newer of the
+    post ideas' run and the published week read's (`anchorOf`), either alone
+    where the other is missing; ideas whose week ended more than
+    `IDEAS_STALE_DAYS` (28) before it stop printing on the root (`stale`) and
+    still resolve on their own page, saying the week they were written for
+    (`olderIdeasLine` where their set is the newest; `earlierIdeaLine` for
+    an earlier set, which never says "No new ideas this week" while a newer
+    set exists). Every week count sits beside its month
     (`readingMonthOf`). Ideas come from `post_ideas`, behind
-    `postIdeasEnabled` (opt-in; on for Sealand and Össur since 13 Oct): a missing table
-    or the switch off reads "not switched on", no rows "none written", a
-    failed read says so (`unread`). THE IDEAS PRINT THE DAYS THEY READ
-    (Heinrich, 13 Oct): "From questions asked 14 Sep to 11 Oct"
+    `postIdeasEnabled` (opt-in; on for Sealand and Össur since 13 Oct): a
+    missing table or the switch off reads "not switched on", no rows "none
+    written", a failed read says so (`unread`). THE IDEAS PRINT THE DAYS THEY
+    READ (Heinrich, 13 Oct): "From questions asked 14 Sep to 11 Oct"
     (`askedPhrase` over `ideasReadOf`, the row's `read_start` / `read_end`),
-    above the cards, on the open panel's head chip and on the Dashboard's
-    tile ("of 640 videos, 14 Sep to 11 Oct"). Each idea's figure is its
-    market videos over those days of the market's then (`IdeaCard.read`,
-    `TopContent.idea.read`: one window read, never a sum of weeks), and it
-    prints ONLY beside its month (no month, no four-week figure: page, panel,
-    tile and email alike). The month is `IdeasWeek.month`: the page's for a
-    set written for the page's week; for an OLDER set (`!current`, the
-    lead's ruling of 13 Oct), the month of its own read window,
-    `readingMonthOf` over `read_start` / `read_end` (14 Sep to 11 Oct reads
-    beside "September", in full), so the four weeks and the month always
-    share days. Its bars are those four weeks as four bare counts
-    (`IdeasRead.weeks`, `ideaWeeks`; no weekly counts where the stored window
-    is not whole weeks), all under the page's run's clustering
-    (`readWindows` with `ideas`, reading an older set's month beside the
-    page's; the tile reads the four weeks and the month only). The week
-    read's "New" stays on the page's month: it is the page's week's flag. Ideas still say the week they were written for when it is not the
-    page's (`olderIdeasLine`) and stop printing once that week ended more than
-    `IDEAS_STALE_DAYS` (28) before the page's (`stale`). Also asked keeps the
-    page's week and its three weeks. Who asks is group
+    above the cards, in the idea page's meta and on the Dashboard's tile.
+    Each idea's figure is its market videos over those days of the market's
+    then (one window read, never a sum of weeks), and it prints ONLY beside
+    its month (no month, no four-week figure: root, idea page, foot, tile and
+    email alike); the month is `IdeasWeek.month` (the page's for a current
+    set, an OLDER set's own read window's, the lead's ruling of 13 Oct), its
+    bars those four weeks as bare counts, all under the anchor run's
+    clustering. *A post idea's page, the HUB* (`loadContentIdea`): the path
+    "Content / {idea}", its switcher the set's ideas in rank order with a flag
+    as its state word ("Unusual this week", "New"; never a figure), the
+    board's wide menu, no chevron with one idea (`ideaCrumbs`); a lightbulb
+    on the yellow, "Post idea 1, from {conversation}" (a link to Market), the
+    days it read beside its month; no period switch. Then the header card
+    (what the post should cover, stored `post_idea` prose, the medical line
+    in a medical market, and four figures: came up in, make it as, open
+    with, length, each keeping its frame with a quiet line where it has
+    nothing), what they want to know (a card a sub-question: its videos "of"
+    the videos asked, `cover.asked`, its comments off its ids, two of them
+    one a video, and "Show all N" or "Show k of N" where the gate lets fewer
+    print; `?sub=<n>` lists one in full, at most `SUB_COMMENTS_MAX`, 50,
+    honoured only for the idea's own sub-questions), the numbers (its four
+    weeks, who's asking by group name opening Voices, where it came up over
+    the four weeks, `pooledThemeMix` of the same read, your posts by the
+    step's touch test, words to borrow), market videos where it came up,
+    the conversation in Market, the Agent. Its comments pass the gate the
+    root's panel ran (`gateFor` with the idea's title as the claim, comments
+    under your own posts allowed), their words resolved at render, never
+    stored. *The reply list, EVIDENCE* (`loadContentReplies`): TODAY'S LIST
+    (`buildReplies`, the root card's own digest: three of a kind, twelve in
+    all, two from one video), so the card and the page count one list; the
+    count is a cap, never a level, so no "of N" and no month beside it. Flat
+    header (a reply arrow on the neutral, "Comments", "Worth a reply", the
+    days and the split in mono, This week | This month), a one-line read and
+    chips to its four sections (`#buy`, `#questions`, `#objections`,
+    `#wrong`); each comment under the video it was written on (its poster,
+    day, "Your post" or the brand's chip for a post about you, its caption,
+    the reply link; none on wrong information; `ReplyRow.videoRowId` and
+    `likes`, additive, carry what the cards need and the page reads the
+    videos once), two videos a section on a phone and "Show all … in {kind}"
+    (`?kind=`), the facts and how the list is picked. Nothing here can see
+    whether you replied: never "N waiting". *Your posts, EVIDENCE*
+    (`loadContentPosts`): the month the root's card reads, no switch; code's
+    sentence about your mix (`mixSentence`, its formats half) as the lead;
+    your posts newest first (five, three on a phone, then "Show N more posts",
+    `?all=1` at most `POSTS_MAX`, 60), each with its format, opening and
+    response (`postRow`), "Best this month", and the comments under it (its
+    own account's replies left out, the gate with your own posts allowed,
+    one chunked read for the posts shown; `?post=<id>` opens one in full,
+    honoured only for the month's own posts); the facts (how they were made,
+    how they open, where, the response, "What works in your market's
+    videos" back to the root). Both evidence pages end with "Elsewhere on
+    Content" (the root's first two ideas with their four weeks beside their
+    month and, in a medical market, `MEDICAL_LINE` under each, as under every
+    printed idea; and the other evidence page: your posts' count, or the reply
+    list's days with no count, since the foot does not read the list) and
+    the Agent. OLD LINKS LAND (`redirectFor` in the root page, before
+    anything is read; `contentRedirect`, `lib/nav.ts`): `?replies=1` and
+    `?reply=<intent>` on the reply list (the intent its section's anchor,
+    the period kept), `?posts=1` on your posts, every other param kept;
+    `?idea=<rank>` names a week's place, so the route reads the root's set
+    and sends it to that rank's idea, or to the root where the set has none
+    (`ideaLanding`); a stored `/dashboard/content#worth-a-reply` lands on the
+    root card, which keeps the id (`REPLIES_ANCHOR`, equal to This week's
+    `WEEK_ANCHORS.reply`). The Dashboard's tile and the weekly email's
+    Content line open the idea's page (`TopContent.href`). STATEMENTS
+    (`lib/pages/v2/content-statements.test.ts`, offline): the root 40 this
+    week and this month, as before; today's panels were 46 with an idea open
+    and 40 with the reply list or your posts; an idea's page 32, the reply
+    list 19, your posts 15, the same with a sub-question, a kind or a post
+    opened; each pinned with its foreign and malformed ids naming nothing
+    and every read's client filter asserted. The reply list reads its window
+    only (`buildReplies` passes both ends to `loadEngageCandidates`, one
+    statement per 250 insights): on a Sealand-sized tenant 24 statements for
+    the week and 26 for the month (`lib/pages/week-replies-cost.test.ts`).
+    Also asked keeps the root's week and its three weeks. Who asks is group
     names, never a count. "Your posts" is `ownedPosts`, and "touched on" is
     `questionTouch` over the reading month and the two before. What works is
     `buildPlaybook({ clientSide: 'owned' })`, dated by publish date, with the
-    clock named. The reply list is one click down, never "N waiting"; its
-    card carries `id="worth-a-reply"` (`REPLIES_ANCHOR`, equal to This
-    week's `WEEK_ANCHORS.reply`), so a stored snapshot's or an email's
-    `/dashboard/content#worth-a-reply` lands on it, and an old link's
-    `?reply=<intent>` opens the list. The list reads its window only
-    (`buildReplies` passes both ends to `loadEngageCandidates`, which then
-    reads each chunk of engage insights' evidence with its comment embedded
-    and bounded, `comments!inner`, one statement per 250 insights, in the
-    unbounded read's order so the ranking's ties hold): Sealand's Content
-    load was 143 statements on 13 Oct, 99 of them this list. On a tenant
-    that size the list now makes 24 statements for the week and 26 for the
-    month, pinned by `lib/pages/week-replies-cost.test.ts`; the 117 it made
-    before was measured once, offline, on the same tenant with the old code,
-    with the same rows. In a
-    medical market every printed idea carries `MEDICAL_LINE`. THE IDEAS ROW
-    ALWAYS DRAWS THREE CARDS (`IDEA_SLOTS`; parity pass): the places the
-    ideas leave hold the next questions in line (`IdeasBlock.questions`, the
-    top of `askedWithLead`, each card's anchor `questionSlotId(rank)`), and
-    Also asked goes on after them, so no question prints twice; a slot with
-    neither is an empty card that says why. A thin card keeps its frame and
-    says the gap in one line. Question cards carry no medical line, because
-    they propose no post. A window is called "this week" only where it is
-    seven days (`weekWordsOf`, for the page and the Dashboard's tile).
+    clock named. In a medical market every printed idea carries
+    `MEDICAL_LINE`. THE IDEAS ROW ALWAYS DRAWS THREE CARDS (`IDEA_SLOTS`;
+    parity pass): the places the ideas leave hold the next questions in line
+    (`IdeasBlock.questions`, the top of `askedWithLead`, each card's anchor
+    `questionSlotId(rank)`), and Also asked goes on after them, so no
+    question prints twice; a slot with neither is an empty card that says
+    why. Question cards carry no medical line, because they propose no post.
+    A window is called "this week" only where it is seven days
+    (`weekWordsOf`). The level pages keep the boards' shape in every state:
+    a sub-question, a section or a post whose comments could not be read
+    keeps its card and says so; an empty section says "None this week.".
   - **Your moves** (T7; `lib/pages/v2/moves.ts`, `loadMovesPage`).
     `loadMarketSurface` and its blocks stay for stored snapshots, the briefs
     and the quarterly. `?advice=` takes a lineage, a recommendation id or
@@ -1992,17 +2062,17 @@ This version has breaking changes — APIs, conventions, and file structure may 
     the subjects module's census (`lib/pages/subjects.ts` `loadOwnPosts`)
     still reads `is_client` or `source='owned'`, and `buildPlaybook` defaults
     to `clientSide: 'about'` everywhere but Content.
-  - **Panels at every width (T9).** Voices, Content and Your moves only: since 17 Oct Market and Your products open pages, never a panel (their bullets above), and the machinery stays for the three until they move over. A v2 panel opened from a card in a grid
+  - **Panels at every width (T9).** Voices and Your moves only: since 17 Oct
+    Market, Your products and Content open pages, never a panel (their
+    bullets above), and the machinery stays for the two until they move
+    over. A v2 panel opened from a card in a grid
     is ONE child of that grid: cards take `panelItemOrder(i)`, the panel
     goes in a `PanelSlot` right after the clicked card, and
     `panelPlacement(index, layout)` (`components/v2/panel-place.ts`) gives
     its order and notch per breakpoint. The rules are plain CSS
     (`.panel-slot` / `.panel-notch` in `app/globals.css`) because Tailwind
     sorts `min-[1180px]:` before the named breakpoints. No page does its own
-    order arithmetic (Content's lower row took hand-set `order-*` classes
-    until the Phase 4 fix round; it takes `panelItemOrder` now, its
-    right-hand column's order inert while that column is `display:
-    contents`), and the panel's content is never drawn twice.
+    order arithmetic, and the panel's content is never drawn twice.
     `InPlacePanel` scrolls itself into view when its head is off screen
     (`panelScrollPlan`, reduced motion jumps). From 768 the sidebar takes
     281px, so at 820 a page has 459px and three-column sections start at

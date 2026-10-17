@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest'
 import { bandVerdict } from '../../reading/verdicts'
 import type { StandingFact, WeekReadDataV2 } from '../../written/types'
 import { homeWeeksFrame, WEEKS_FAILED } from '../home'
-import { parseContentParams } from './content'
 import { topProducts } from './products'
 import {
   agentTries, dashboardBar, marketWeekOf, settleTile, shortDates, weekSubjectsOf, weekTileOf, AGENT_TRIES,
@@ -227,11 +226,9 @@ describe('every tile\'s link opens its page\'s panel (each parsed by that page\'
     expect(top.named.map((b) => parseVoicesParams(query(b.href)).brand)).toEqual(['client', 'Ottobock'])
   })
 
-  it('Content: `?idea=1`, the brief in place', () => {
+  it('Content: the idea\'s own page, by its row (depth as pages, 17 Oct)', () => {
     const top = fixtureContentTop()
-    expect(path(top.href)).toBe('/dashboard/content')
-    expect(parseContentParams(query(top.href)).open).toEqual({ kind: 'idea', rank: 1 })
-    expect(top.href).toMatch(/#idea-panel$/)
+    expect(top.href).toBe(`/dashboard/content/ideas/${top.idea!.id}`)
   })
 
   it('Your moves: `?advice=<lineage>`, the advice in place', () => {

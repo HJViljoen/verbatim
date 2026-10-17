@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Fragment, type ReactNode } from 'react'
+import { Fragment, type ReactElement, type ReactNode } from 'react'
 import { hasSiblings, type Crumb } from '@/lib/pages/crumbs'
 import { cn } from '@/lib/utils'
 import { BackLink, CrumbRow, Switcher } from './crumbs'
@@ -28,7 +28,20 @@ export type LevelKind = 'subject' | 'conversation' | 'week' | 'category' | 'prod
 
 // Your products' two levels (G4, 17 Oct): a category is three boxes on the
 // kit's yellow (a hub, as a subject is), a product a single box on the
-// neutral (evidence, as a conversation is).
+// neutral (evidence, as a conversation is). `LevelTile` draws all five.
+
+/** A level another page names and draws its own tile for (depth as pages,
+ *  17 Oct): Content's post idea, reply list and your posts. Closed, so a
+ *  typo is a compile error: a page that moves over adds its own. */
+export type PageLevelKind = 'idea' | 'replies' | 'posts'
+
+/** `LevelTile`'s levels (Market's three, Your products' two) take no tile;
+ *  another page's level must bring its own, so a level `LevelTile` cannot
+ *  draw never reaches it. `level` is also the bar's `data-level-bar`. */
+type LevelAndTile =
+  | { level: LevelKind; tile?: undefined }
+  | { level: PageLevelKind; tile: ReactElement }
+
 const TILE: Record<LevelKind, string> = {
   subject: 'bg-accent text-orange-text',
   conversation: 'bg-track text-secondary-foreground',
@@ -55,11 +68,10 @@ export function LevelTile({ level }: { level: LevelKind }) {
   )
 }
 
-export function LevelBar({ crumbs, level, label, title, meta, controls, open }: {
+export function LevelBar({ crumbs, level, tile, label, title, meta, controls, open }: LevelAndTile & {
   /** The path; its last segment is the page (its menu rides after the title
    *  on a phone). */
   crumbs: readonly Crumb[]
-  level: LevelKind
   /** "Subject", "Conversation in {subject}", "The week's read". */
   label: ReactNode
   /** The page's h1: the path's last segment by default. */
@@ -84,7 +96,7 @@ export function LevelBar({ crumbs, level, label, title, meta, controls, open }: 
       <div className="mt-2.5 flex flex-wrap items-end justify-between gap-x-5 gap-y-3.5 max-sm:mt-1 max-sm:block">
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-3.5 max-sm:gap-3">
-            <LevelTile level={level} />
+            {tile ?? <LevelTile level={level as LevelKind} />}
             <div className="min-w-0">
               <p data-level-label="" className="m-0 text-[13px] leading-[18px] font-semibold text-muted-foreground">{label}</p>
               <div className="flex min-w-0 items-center gap-1">

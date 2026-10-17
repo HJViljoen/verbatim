@@ -113,6 +113,18 @@ describe('the title block', () => {
     expect(renderText(<ConversationLabel parent={null} />)).toBe('Conversation')
     assertCopyContract(node)
   })
+
+  it('takes a closed set of levels: Market\'s draw their own tile, another page\'s must bring one (checked by tsc)', () => {
+    const crumbs = conv.crumbs!
+    const tile = <span data-level-tile="idea" />
+    // @ts-expect-error a level no page names is a compile error
+    void (<LevelBar crumbs={crumbs} level="subjct" label="Subject" />)
+    // @ts-expect-error another page's level brings its own tile
+    void (<LevelBar crumbs={crumbs} level="idea" label="Post idea 1" />)
+    // @ts-expect-error Market's levels draw LevelTile and take no tile
+    void (<LevelBar crumbs={crumbs} level="subject" tile={tile} label="Subject" />)
+    expect(render(<LevelBar crumbs={crumbs} level="idea" tile={tile} label="Post idea 1" />)).toContain('data-level-bar="idea"')
+  })
 })
 
 describe('the switcher', () => {

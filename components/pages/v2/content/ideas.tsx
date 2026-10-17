@@ -1,10 +1,10 @@
-import { Fragment, type CSSProperties, type ReactNode } from 'react'
-import { CARD, equalColumns, FlagChip, MiniBars, panelItemOrder, panelPlacement, PanelSlot, SELECTED_CARD_RING, type PanelLayout, type PerBreakpoint } from '@/components/v2'
+import type { CSSProperties } from 'react'
+import { CARD, FlagChip, MiniBars } from '@/components/v2'
 import { fmtInt, longMonth, platformLabel } from '@/lib/format'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
 import {
-  askedPhrase, conversationHref, IDEA_PANEL_ID, IDEA_SLOTS, IDEAS_EMPTY, contentHref, monthWords, olderIdeasLine, POST_IDEA_SLOT, QUESTION_IDEA_LINE, questionsAfterIdeas, questionsHeading, questionSlotId,
-  type ContentState, type IdeaCard, type IdeasBlock, type IdeasState, type OwnTouch, type QuestionSlot, type QuestionSlotsContext,
+  askedPhrase, conversationHref, IDEA_SLOTS, IDEAS_EMPTY, ideaHref, monthWords, olderIdeasLine, POST_IDEA_SLOT, QUESTION_IDEA_LINE, questionsAfterIdeas, questionsHeading, questionSlotId,
+  type IdeaCard, type IdeasBlock, type IdeasState, type OwnTouch, type QuestionSlot, type QuestionSlotsContext,
 } from '@/lib/pages/v2/content'
 import { cn } from '@/lib/utils'
 import { Fact, GroupNames, LABEL, Fig, OLink, RecipeChip } from './parts'
@@ -22,7 +22,8 @@ import { Fact, GroupNames, LABEL, Fig, OLink, RecipeChip } from './parts'
  * week read earned one, who asks by group name alone (decision 5), whether
  * your posts touched on it, and the format and opening code chose with
  * their multiples. In a medical market every card carries the medical team
- * line. "Open the brief" opens the idea in place (`?idea=<rank>`).
+ * line. "Open the brief" opens the idea's own page (`/dashboard/content/ideas/
+ * <id>`, depth as pages, 17 Oct).
  */
 
 /** "None of your 61 posts since August touched on it": the post-ideas step's
@@ -62,19 +63,15 @@ function Demand({ card, monthLabel, readLabel }: { card: IdeaCard; monthLabel: s
   )
 }
 
-export function IdeaCardView({ card, state, selected, month, readLabel, style }: {
+export function IdeaCardView({ card, month, readLabel, style }: {
   card: IdeaCard
-  state: ContentState
-  selected: boolean
   month: { month: string; complete: boolean }
   /** The days the ideas read, "14 Sep to 11 Oct" (`IdeasRead.label`). */
   readLabel: string | null
   style?: CSSProperties
 }) {
-  const open = contentHref({ ...state, open: { kind: 'idea', rank: card.rank } })
-  const close = contentHref({ ...state, open: null })
   return (
-    <article id={`idea-${card.rank}`} aria-labelledby={`idea-${card.rank}-title`} style={style} className={cn(CARD, 'scroll-mt-6', selected ? SELECTED_CARD_RING : null)}>
+    <article id={`idea-${card.rank}`} aria-labelledby={`idea-${card.rank}-title`} style={style} className={cn(CARD, 'scroll-mt-6')}>
       <div className="flex items-start gap-3">
         <span aria-hidden className="flex size-[26px] shrink-0 items-center justify-center rounded-full bg-orange-text text-[13px] font-bold text-white">{card.rank}</span>
         <h3 id={`idea-${card.rank}-title`} className="m-0 text-[18px] leading-[1.35] font-semibold tracking-[-0.005em]">
@@ -112,11 +109,7 @@ export function IdeaCardView({ card, state, selected, month, readLabel, style }:
       ) : null}
       {card.medical ? <p className="m-0 text-[12px] leading-[1.4] text-muted-foreground">{MEDICAL_LINE}</p> : null}
       <div className="mt-auto flex flex-wrap items-center justify-between gap-3">
-        {selected ? (
-          <OLink href={close} scroll={false} aria-expanded aria-controls={IDEA_PANEL_ID}>Close ↑</OLink>
-        ) : (
-          <OLink href={open} aria-expanded={false} aria-controls={IDEA_PANEL_ID}>Open the brief →</OLink>
-        )}
+        <OLink href={ideaHref(card)}>Open the brief →</OLink>
       </div>
     </article>
   )
@@ -246,11 +239,6 @@ function EmptySlotCard({ rank, line, style }: { rank: number; line: string | nul
   )
 }
 
-/** The ideas' columns: one on a phone and up to 1280, three from there. */
-export function ideasLayout(count: number): PanelLayout {
-  return { base: equalColumns(1, count), xl: equalColumns(3, count) }
-}
-
 /** The line over the row, in the board's place: the days the ideas read, or,
  *  where every card is a question, what the questions are. */
 function RowLine({ block, ctx, month }: { block: IdeasBlock; ctx: QuestionSlotsContext; month: { month: string } }) {
@@ -266,24 +254,19 @@ function RowLine({ block, ctx, month }: { block: IdeasBlock; ctx: QuestionSlotsC
 }
 
 /**
- * The week's ideas, and the open one's brief (`panel`) under its card at
- * every width: one grid, the brief a child of it placed after the card's row
- * (`panelPlacement`) and in the markup right after the card. A brief whose
- * card is not drawn opens under the row.
+ * The week's ideas, one card each in a grid of three from 1280 (one a row
+ * under it). Each opens its own page; nothing opens in place.
  *
  * ALWAYS THREE CARDS (the board's row, in every state): the ideas, then a
  * question card for each place they leave (`IdeasBlock.questions`), then an
  * empty card for any place no question is left for.
  */
-export function IdeasSection({ block, state, month, ctx, panel }: {
+export function IdeasSection({ block, month, ctx }: {
   block: IdeasBlock
-  state: ContentState
   month: { month: string; complete: boolean }
   /** What the question cards print beside their figures. */
   ctx: QuestionSlotsContext
-  panel?: (notchAt?: number | PerBreakpoint) => ReactNode
 }) {
-  const openRank = state.open?.kind === 'idea' ? state.open.rank : null
   const read = block.week?.read ?? null
   // The month each card's figure sits beside: the ideas' own (the page's for
   // this week's ideas; an older set's read window's).
@@ -298,8 +281,6 @@ export function IdeasSection({ block, state, month, ctx, panel }: {
     ...(cards.length === 0 && questions.length === 0 && block.state !== 'ready' ? [IDEAS_EMPTY[block.state]] : []),
     ctx.emptyLine,
   ]
-  const at = panel && openRank != null ? cards.findIndex((c) => c.rank === openRank) : -1
-  const place = panel && at >= 0 ? panelPlacement(at, ideasLayout(IDEA_SLOTS)) : null
   const line = RowLine({ block, ctx, month })
   return (
     <section aria-labelledby="ideas-title" className="flex flex-col gap-3.5">
@@ -311,21 +292,15 @@ export function IdeasSection({ block, state, month, ctx, panel }: {
         <p data-ideas-older="" className="m-0 px-0.5 text-[14px] leading-[1.5]">{olderIdeasLine(block.week)}</p>
       ) : null}
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-3" data-ideas-state={block.state}>
-        {cards.map((c, i) => (
-          <Fragment key={c.rank}>
-            <IdeaCardView card={c} state={state} selected={openRank === c.rank} month={ideasMonth} readLabel={read?.label ?? null} style={panelItemOrder(i)} />
-            {place && panel && i === at ? <PanelSlot placement={place}>{panel(place.notch)}</PanelSlot> : null}
-          </Fragment>
-        ))}
+        {cards.map((c) => <IdeaCardView key={c.rank} card={c} month={ideasMonth} readLabel={read?.label ?? null} />)}
         {questions.map((q, i) => (
-          <QuestionCardView key={q.registryId} row={q} rank={cards.length + i + 1} state={block.state} ctx={ctx} style={panelItemOrder(cards.length + i)} />
+          <QuestionCardView key={q.registryId} row={q} rank={cards.length + i + 1} state={block.state} ctx={ctx} />
         ))}
         {Array.from({ length: empty }, (_, i) => {
           const rank = cards.length + questions.length + i + 1
-          return <EmptySlotCard key={`empty-${rank}`} rank={rank} line={emptyLines[i] ?? null} style={panelItemOrder(rank - 1)} />
+          return <EmptySlotCard key={`empty-${rank}`} rank={rank} line={emptyLines[i] ?? null} />
         })}
       </div>
-      {panel && !place ? panel() : null}
     </section>
   )
 }
