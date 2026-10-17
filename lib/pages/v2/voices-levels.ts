@@ -531,8 +531,12 @@ export interface BrandPage {
 export const BRAND_SAID_SHOWN = 3
 export const BRAND_CLAIMS_SHOWN = 2
 export const BRAND_MONTHS = 3
-export const BRAND_GROUPS_NONE = 'None of the groups comments on its videos this month.'
-export const BRAND_CREATORS_NONE = 'No creator with three or more videos this month made one that names it.'
+/** "this month" only while the month read is under way, else its name
+ *  (decision 3, "Two clocks": a page reading September in October never
+ *  says "this month" of it). */
+export const brandGroupsNone = (m: Pick<LevelMonth, 'month' | 'soFar'>): string => `None of the groups comments on its videos ${inMonthWords(m)}.`
+export const brandCreatorsNone = (m: Pick<LevelMonth, 'month' | 'soFar'>): string => `No creator with ${countWords(ACCOUNT_FLOOR)} or more videos ${inMonthWords(m)} made one that names it.`
+export const brandCreatorsSub = (m: Pick<LevelMonth, 'month' | 'soFar'>): string => `Accounts with ${fmtInt(ACCOUNT_FLOOR)} or more of your market’s videos ${inMonthWords(m)} whose videos name it`
 export const BRAND_FINDINGS_NOTE = 'Findings are the latest update’s, so they carry no month of their own.'
 export const BRAND_YOU_NO_FINDING = 'Findings compare a rival’s talk with the rest of the market, so your own brand has none.'
 export const BRAND_NO_FINDING = 'The latest update wrote no finding about this brand.'
@@ -540,7 +544,7 @@ export const BRAND_NO_FINDING = 'The latest update wrote no finding about this b
 /** The brands switcher (G3-Voices-Brand-Switcher): "Brands you track", you
  *  first, then by how often each was named without being asked, then those
  *  not named or not counted below a hairline, in words and no figure. */
-export function brandMenu(brands: VoicesBrands, currentKey: string, p: Pick<LevelParams, 'month'>): CrumbMenu | null {
+export function brandMenu(brands: VoicesBrands, currentKey: string, p: Pick<LevelParams, 'month'>, when = 'this month'): CrumbMenu | null {
   const item = (r: VoicesBrandRow, note: string | null): CrumbItem => ({ key: r.brandKey, label: r.label, href: voicesBrandHref(r.brandKey, p), current: r.brandKey === currentKey, note })
   const named = (r: VoicesBrandRow) => r.state === 'counted' && (r.named?.k ?? 0) > 0
   const you = brands.all.find((r) => r.you) ?? null
@@ -550,7 +554,7 @@ export function brandMenu(brands: VoicesBrands, currentKey: string, p: Pick<Leve
   ]
   const below = brands.all
     .filter((r) => !r.you && !named(r))
-    .map((r) => item(r, r.state === 'counted' || r.state === 'none' ? 'Not named this month' : r.state === 'noise' ? 'Not counted' : sentence(NOT_COUNTED_YET)))
+    .map((r) => item(r, r.state === 'counted' || r.state === 'none' ? `Not named ${when}` : r.state === 'noise' ? 'Not counted' : sentence(NOT_COUNTED_YET)))
   const menu: CrumbMenu = { label: 'Brands you track', switchLabel: 'Switch to another brand', items: top, below }
   return top.length + below.length > 1 ? menu : null
 }
@@ -693,7 +697,7 @@ export function buildBrandPage(input: BrandInput): BrandPage {
     claims: window ? input.claims.slice(0, BRAND_CLAIMS_SHOWN).map((c) => ({ id: c.id, claim: c.claim })) : [],
     said: window ? input.said.slice(0, BRAND_SAID_SHOWN) : [],
     askHref: askHref(r.you ? 'What does my market say about us?' : `What does my market say about ${r.label}?`),
-    crumbs: [voicesCrumb(params), { label: r.label, href: null, menu: brandMenu(input.brands, r.brandKey, params) }],
+    crumbs: [voicesCrumb(params), { label: r.label, href: null, menu: brandMenu(input.brands, r.brandKey, params, inMonthWords(month)) }],
   }
 }
 

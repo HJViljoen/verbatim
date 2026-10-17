@@ -226,6 +226,11 @@ describe('a brand\'s page (G3-Voices-Brand)', () => {
     ])).toEqual([{ id: 'b', claim: 'Approval stories.' }, { id: 'a', claim: 'Clinic visits.' }])
   })
 
+  it('the switcher\'s notes name the month read where it is not under way (decision 3)', () => {
+    expect(brandFixture({ month: { month: SEP, soFar: false, monthWords: 'September', monthLabel: 'the last full month', n: 318 } }).crumbs[1].menu?.below?.map((i) => i.note)).toEqual(['Not named in September'])
+    expect(brandFixture().crumbs[1].menu?.below?.map((i) => i.note)).toEqual(['Not named this month'])
+  })
+
   it('brandMenu holds no switcher for a workspace that tracks one brand', () => {
     const one = buildBrands({ clientId: OSSUR_CLIENT_ID, month: OCT, pairs: brandMonthPair({ month: OCT, brands: [{ brandKey: 'client', label: 'Össur', countState: 'counted' }], rows: [], audiences: ['industry-other'], pair: null }), crosses: null, note: null, params: {} })
     expect(brandMenu(one, 'client', {})).toBeNull()

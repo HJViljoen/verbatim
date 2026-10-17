@@ -278,7 +278,7 @@ const FINDINGS: FindingRow[] = [
 
 /** A brand's page, the board's Ottobock unless `key` names another. `counted`
  *  false: Össur before its back-read (no month row), the rival half standing. */
-export function brandFixture(opts: { key?: string; counted?: boolean; params?: LevelParams } = {}): BrandPage {
+export function brandFixture(opts: { key?: string; counted?: boolean; params?: LevelParams; month?: LevelMonth } = {}): BrandPage {
   const key = opts.key ?? OTTO
   const counted = opts.counted ?? true
   const rows = counted ? brandRows() : []
@@ -317,7 +317,7 @@ export function brandFixture(opts: { key?: string; counted?: boolean; params?: L
   const platformOf = new Map(market.map((id, i) => [id, i % 49 < 21 ? 'tiktok' : i % 49 < 37 ? 'youtube' : 'instagram']))
   otto.forEach((id, i) => platformOf.set(id, i < 21 ? 'tiktok' : i < 37 ? 'youtube' : 'instagram'))
   return buildBrandPage({
-    month: OCT_MONTH,
+    month: opts.month ?? OCT_MONTH,
     row,
     brands,
     set: sets.find((s) => s.brandKey === key) ?? null,
@@ -371,7 +371,7 @@ const V = (n: number): string => `00000000-0000-4000-8000-0000000c${String(n).pa
 /** @stepbystep.amp on TikTok, October so far (the board's): 14 videos, 182k
  *  followers, six in Running on a blade of the 24 in it. `video` opens one
  *  video's comments; `all` lists every video. */
-export function creatorFixture(opts: { video?: number; all?: boolean } = {}): CreatorPage {
+export function creatorFixture(opts: { video?: number; all?: boolean; month?: LevelMonth } = {}): CreatorPage {
   const n = 318
   const account = '@stepbystep.amp'
   const mine = Array.from({ length: 14 }, (_, i) => V(i + 1))
@@ -439,7 +439,7 @@ export function creatorFixture(opts: { video?: number; all?: boolean } = {}): Cr
   ]
   const personas = personasOf({ run_id: 'r', run_date: '2026-10-11', personas: GROUPS.map((g) => ({ key: g.key, name: g.name, oneLiner: g.oneLiner, insightIds: [] })) })
   return buildCreatorPage({
-    month: { ...OCT_MONTH, n },
+    month: opts.month ?? { ...OCT_MONTH, n },
     creator,
     people,
     labels: new Map(CREATOR_CONVS.map((c) => [c.id, c.label])),
@@ -456,6 +456,10 @@ export function creatorFixture(opts: { video?: number; all?: boolean } = {}): Cr
     params: { ...(opts.video != null ? { video: mine[opts.video] } : {}), ...(opts.all ? { videos: true } : {}) },
   })
 }
+
+/** September read in October, the last full month (decision 3): no line on a
+ *  level page may call it "this month". */
+export const SEP_CLOSED_MONTH: LevelMonth = { month: SEP, soFar: false, monthWords: monthWordsOf(SEP, false), monthLabel: readingMonthLabel(SEP, LEVELS_FIXTURE_NOW), n: 318 }
 
 /** Every level page the render tests and the shots draw. */
 export const VOICES_LEVEL_FIXTURES = {

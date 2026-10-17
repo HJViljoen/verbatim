@@ -4,7 +4,7 @@ import { assertCopyContract } from '@/lib/test/copy-contract'
 import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { VOICES_ONE_MONTH } from '@/lib/pages/v2/voices'
 import { BACK_TO_VOICES, BRAND_MISSING, CREATOR_REDDIT, GROUP_MISSING, GROUP_QUOTES_UNREAD, groupQuotesNone, VOICES_ONE_MONTH_SHORT, type BrandPage, type CreatorPage, type GroupPage, type LevelMissing } from '@/lib/pages/v2/voices-levels'
-import { brandFixture, creatorFixture, groupFixture, groupThinFixture, VOICES_LEVEL_FIXTURES } from '@/lib/pages/v2/voices-levels-fixture'
+import { brandFixture, creatorFixture, groupFixture, groupThinFixture, SEP_CLOSED_MONTH, VOICES_LEVEL_FIXTURES } from '@/lib/pages/v2/voices-levels-fixture'
 import { VoicesBrandPage, VoicesCreatorPage, VoicesGroupPage } from './pages'
 
 // VOICES' LEVEL PAGES, AS THEY PRINT (17 Oct; the G3 boards): each from its
@@ -209,6 +209,34 @@ describe('a brand\'s page (G3-Voices-Brand)', () => {
     expect(t).toContain('No figure prints for Ottobock until it is counted.')
     expect(t).toContain('Under its own content')
     expect(t).not.toMatch(/\d+ of 290/)
+  })
+})
+
+// DECISION 3, "TWO CLOCKS": a level page reading September in October (the
+// reading month stays the month just ended until the new one is half over)
+// names September and never calls it "this month", in every frame the page
+// writes itself: the empty groups and creators, the creators' head, the
+// switcher's notes, a creator's empty "who comments".
+describe('a level page reading a closed month never calls it "this month"', () => {
+  it('a brand\'s and a creator\'s own words name the month', () => {
+    const b = { ...brandFixture({ month: SEP_CLOSED_MONTH }), groups: [], creators: [] }
+    const bt = renderText(brand(b, true))
+    expect(bt).toContain('None of the groups comments on its videos in September.')
+    expect(bt).toContain('Creators it comes up with Accounts with 3 or more of your market’s videos in September whose videos name it No creator with three or more videos in September made one that names it.')
+    expect(bt).toContain('Proteor Not named in September')
+    expect(bt).not.toMatch(/this month/i)
+    const c = { ...creatorFixture({ month: SEP_CLOSED_MONTH }), groups: [] }
+    const ct = renderText(creator(c))
+    expect(ct).toContain('Who comments · of 14 No group comments on their videos in September.')
+    expect(ct).toContain('of the 24 in it in September.')
+    expect(ct).not.toMatch(/this month/i)
+    expect(renderText(group(groupThinFixture()))).not.toMatch(/this month/i)
+  })
+
+  it('while the month is under way the boards\' "this month" stands', () => {
+    const b = { ...brandFixture(), groups: [], creators: [] }
+    expect(renderText(brand(b))).toContain('None of the groups comments on its videos this month.')
+    expect(renderText(creator({ ...creatorFixture(), groups: [] }))).toContain('No group comments on their videos this month.')
   })
 })
 

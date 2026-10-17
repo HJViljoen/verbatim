@@ -207,7 +207,7 @@ function Facts({ page }: { page: CreatorPage }) {
             ))}
             <p className="m-0 text-[12px] text-muted-foreground">Each opens its page in Voices</p>
           </>
-        ) : <p className="m-0 text-[13px] text-muted-foreground">{page.groupsLine ?? 'No group comments on their videos this month.'}</p>}
+        ) : <p className="m-0 text-[13px] text-muted-foreground">{page.groupsLine ?? `No group comments on their videos ${inMonthWords(page.month)}.`}</p>}
       </div>
       <div className={FACT}>
         <Caps>What people did{page.kinds ? <> · <span data-copy="level">of {fmtInt(page.kinds[0]?.n ?? page.videos)}</span></> : null}</Caps>

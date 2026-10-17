@@ -7,7 +7,7 @@ import { fmtCompact, fmtInt, longMonth, shortDate } from '@/lib/format'
 import { inlineMonth } from '@/lib/reading/month-label'
 import { notMeasuredLine } from '@/lib/pages/not-measured'
 import {
-  BRAND_CREATORS_NONE, BRAND_FINDINGS_NOTE, BRAND_GROUPS_NONE, BRAND_NO_FINDING, BRAND_YOU_NO_FINDING,
+  BRAND_FINDINGS_NOTE, BRAND_NO_FINDING, BRAND_YOU_NO_FINDING, brandCreatorsNone, brandCreatorsSub, brandGroupsNone,
   type BrandMonthBar, type BrandPage,
 } from '@/lib/pages/v2/voices-levels'
 import { cn } from '@/lib/utils'
@@ -169,7 +169,7 @@ function WhoTalks({ page }: { page: BrandPage }) {
     <section aria-label={`Who talks about ${page.label}`} className="grid grid-cols-1 items-start gap-5 max-sm:gap-3.5 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
       <article aria-labelledby="brand-groups" className={CARD}>
         <CardHead icon={Users} id="brand-groups" title="The groups commenting on its videos" sub="A video can hold more than one group, so the counts overlap" />
-        {!counted ? notCounted : page.groups.length === 0 ? <p className={GAPLINE}>{page.groupsLine ?? BRAND_GROUPS_NONE}</p> : (
+        {!counted ? notCounted : page.groups.length === 0 ? <p className={GAPLINE}>{page.groupsLine ?? brandGroupsNone(page.month)}</p> : (
           <div role="list">
             {page.groups.map((g) => (
               <div key={g.key} role="listitem" className="grid grid-cols-[22px_minmax(0,1fr)_64px_16px] items-center gap-x-3 gap-y-1.5 border-t border-track py-3 first:border-t-0 first:pt-0.5 lg:grid-cols-[22px_minmax(0,1.25fr)_minmax(0,1fr)_64px_16px]">
@@ -187,8 +187,8 @@ function WhoTalks({ page }: { page: BrandPage }) {
         )}
       </article>
       <article aria-labelledby="brand-creators" className={CARD}>
-        <CardHead icon={SquarePlay} id="brand-creators" title="Creators it comes up with" sub="Accounts with 3 or more of your market’s videos this month whose videos name it" />
-        {!counted ? notCounted : page.creators.length === 0 ? <p className={GAPLINE}>{BRAND_CREATORS_NONE}</p> : (
+        <CardHead icon={SquarePlay} id="brand-creators" title="Creators it comes up with" sub={brandCreatorsSub(page.month)} />
+        {!counted ? notCounted : page.creators.length === 0 ? <p className={GAPLINE}>{brandCreatorsNone(page.month)}</p> : (
           <div role="list">
             {page.creators.map((c) => (
               <div key={c.key} role="listitem" className="grid grid-cols-[36px_minmax(0,1fr)_auto_16px] items-center gap-3 border-t border-track py-3 first:border-t-0 first:pt-0.5">
