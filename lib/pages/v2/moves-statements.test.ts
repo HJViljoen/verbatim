@@ -178,7 +178,8 @@ describe('a piece of advice\'s page reads its own rows only', () => {
     const { data: byRec } = await statements(advice(rec(L1, 1).id))
     expect(byRec !== 'missing' && byRec !== null && (byRec as { card: { lineageId: string } }).card.lineageId).toBe(L1)
     const foreign = { recommendations: [...tables().recommendations, { ...rec('00000000-0000-4000-8000-0000000000a9', 9), client_id: OTHER, title: 'Other workspace advice' }] }
-    for (const id of ['00000000-0000-4000-8000-0000000000a9', 'not-an-id', '']) {
+    // Its lineage, and its own recommendation id (an old `?rec=` of theirs).
+    for (const id of ['00000000-0000-4000-8000-0000000000a9', rec('00000000-0000-4000-8000-0000000000a9', 9).id, 'not-an-id', '']) {
       const { data } = await statements(advice(id), foreign)
       expect(data).toBe('missing')
       expect(JSON.stringify(data)).not.toMatch(/Other workspace/)
