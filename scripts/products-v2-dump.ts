@@ -12,7 +12,7 @@
 //
 //   OPENAI_API_KEY=dummy node --env-file=<.env.local> --import tsx \
 //     scripts/products-v2-dump.ts --confirm --client <uuid> --out <file.json> \
-//     [--view root|category:<id>|category:first|product:<id>|product:first] [--params 'month=2026-09']
+//     [--view root|category:<id>|category:first|product:<category id>/<product id>|product:first] [--params 'month=2026-09']
 //
 // `category:first` is the root's first column with a video this month (the
 // shelf's order); `product:first` the product with the most videos on the
