@@ -148,6 +148,10 @@ describe('the writer\'s prompt', () => {
     ]) expect(system).toContain(angle)
     // Its own claims are context, never the subject: the v1 reads opened on them.
     expect(system).toContain('Never open with a claim, never make one the subject, never restate one.')
+    // Heinrich, 17 Oct: v2's one clause on a claim became a closing formula
+    // (five of nine dry meanings ended "That tests {co}'s claim…"), so none.
+    expect(system).toContain('never a sentence or a clause about a claim, never that the talk bears one out, tests it or supports it, and never a close on one ("That tests Össur\'s claim…")')
+    expect(system).not.toMatch(/at most one clause/)
     expect(system).not.toMatch(/Connect what people said to what Össur sells and to what it says about itself/)
     // No inferred feeling, no "not X" framing, no abstract close.
     expect(system).toMatch(/a doubt is a question asked or a problem named, never a feeling you infer/)

@@ -72,7 +72,9 @@ export const SUBJECT_READ_PASS = 'subject_read'
  *  should-fixes: the prosthetic parts and "someone new to a prosthesis" went
  *  to every tenant, the coffee example broke the prompt's own rules, and "a
  *  cheaper route" invited a comparative `COMPARISON` does not catch). The
- *  meaning's rules are v2's. */
+ *  meaning's rules are v2's, less the one clause v2 allowed on a claim
+ *  (Heinrich, 17 Oct: five of nine dry meanings closed on "That tests
+ *  {co}'s claim…", used as a formula), which no sentence may now carry. */
 export const SUBJECT_READ_PROMPT_VERSION = 'subject_read_v3' as const
 /** The written read's model (`WEEK_READ_MODEL`), at its effort. */
 export const SUBJECT_READ_MODEL = SYNTHESIS_MODEL
@@ -287,7 +289,7 @@ export function buildSubjectReadPrompts(a: SubjectReadPromptArgs): { system: str
     '  - the part of the product the talk turns on (a named part, a material, a size or a finish, in the words people in this market use), and in what role: the thing people ask about, praise, blame or work around;',
     '  - a fix, a part or a product people praise, named for what it is and for what they praise in it, never set against something else ("cheaper", "an alternative", "instead of").',
     '  - Take these in any order and in your own words: open on whichever point the notes make clearest, never on a set formula ("… is taken for granted here. What still needs settling…").',
-    `  - Never about ${co}'s own words. ${co}'s claims (under About ${co}) are context only: at most one clause may say whether the talk bears a claim out or tests it. Never open with a claim, never make one the subject, never restate one.`,
+    `  - Never about ${co}'s own words. ${co}'s claims (under About ${co}) are context only, to tell you what ${co} offers: never a sentence or a clause about a claim, never that the talk bears one out, tests it or supports it, and never a close on one ("That tests ${co}'s claim…"). Never open with a claim, never make one the subject, never restate one.`,
     '  - Only what a note shows: a doubt is a question asked or a problem named, never a feeling you infer. Never frame a point by what something is not ("not one purchase", "not only"). No abstract role words ("sits in the role of", "sits in a space where", "sits inside stories about", "a story about identity"): name the thing. End on the concrete point.',
     '  - Never "comes up", "up" or "down" about talk or a share, and never "is new" or "are new" about anyone or anything: those read as a direction and delete the sentence. Say "appears", "is asked about", "is named", "someone buying for the first time".',
     `  - Intelligence, not instructions: say what is true about the business, never what ${co} should do. Never "should", "could", "needs to", "must", "consider", "make sure", "an opportunity", and never an imperative. Never a forecast ("will", "likely", "set to").`,

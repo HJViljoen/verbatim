@@ -84,7 +84,7 @@ describe('the schema', () => {
     expect(schema.properties.story.description).toContain('never a list')
     expect(schema.properties.story.items!.properties.quote_from.description).toContain('At most two paragraphs point to one')
     expect(schema.properties.implications.items!.properties.implication.description).toContain('Intelligence, never an instruction')
-    expect(schema.properties.implications.items!.properties.implication.description).toContain("What the week's talk means for the company, from the buyer's side (what people take for granted, still need settled, the part the talk turns on, or a workaround they praise), the company's claims context only and never a line's opening")
+    expect(schema.properties.implications.items!.properties.implication.description).toContain("What the week's talk means for the company, from the buyer's side (what people take for granted, still need settled, the part the talk turns on, or a workaround they praise), the company's claims context only, never a sentence or clause about one and never a line's opening")
     expect(schema.properties.new_this_week.description).toContain('only candidates marked "First heard this week: yes". Empty when none is marked so.')
     expect(schema.properties.watch.items!.properties.question.description).toContain('starting with "Whether"')
     expect(schema.properties.watch.items!.properties.question.description).toContain('Never a forecast, a direction or advice')
@@ -299,7 +299,9 @@ describe('what it means for the company: particular to what Sealand sells, never
     ]) expect(system).toContain(angle)
     expect(buildWeekReadPrompts(args({ clientId: SEALAND_CLIENT_ID })).system).toContain("what people in this market take for granted about bags like Sealand's;")
     // Össur's 11 Oct read opened all three lines on its own marketing ("Össur says its bionic devices mimic natural movement…").
-    expect(system).toContain("Never about Sealand's own words. Sealand's claims (under About Sealand) are context only: at most one clause of a line may say whether the week's talk bears a claim out or tests it. Never open a line with a claim, with what Sealand says or with what it sells; never make a claim the subject of a line; never restate one.")
+    expect(system).toContain("Never about Sealand's own words. Sealand's claims (under About Sealand) are context only, to tell you what Sealand offers: never a sentence or a clause of a line about a claim, never that the week's talk bears one out, tests it or supports it, and never a close on one (\"That tests Sealand's claim…\"). Never open a line with a claim, with what Sealand says or with what it sells; never make a claim the subject of a line; never restate one.")
+    // Heinrich, 17 Oct: the one clause v4 first allowed on a claim became a closing formula.
+    expect(system).not.toMatch(/at most one clause/)
     expect(system).toContain('a doubt is a question asked or a problem named, never a feeling you infer')
     expect(system).toContain('Never frame a point by what something is not ("not only", "rather than the look")')
     expect(system).toContain('No abstract closing line ("sits inside the product story", "a story about identity"): name the thing, and end on the concrete point.')
@@ -308,7 +310,7 @@ describe('what it means for the company: particular to what Sealand sells, never
     // The lead's 30 Sep ruling, kept in buyer-side words (the fix round, 16 Oct).
     // M1 (the final round): particular to what Sealand SELLS; its own products, customers or posts only where a candidate names it;
     // v3's honest fallback back. Sealand's offline run gave "A Sealand backpack buyer…" to talk no candidate gave Sealand.
-    expect(system).toContain("Particular to what Sealand sells, never true of any category: each line is about what Sealand sells, the parts and products of that kind people name, and the buyers of that kind of product. Name Sealand's own products, customers or posts ONLY where a candidate's label, description or notes name Sealand or one of its products: talk is never Sealand's because it is about the kind of thing Sealand sells. Where no candidate names Sealand, say what the finding means for a company that sells what Sealand sells. A line that would be as true of any category is not an implication: make it particular or leave it out. The claims stay context only, at most one clause.")
+    expect(system).toContain("Particular to what Sealand sells, never true of any category: each line is about what Sealand sells, the parts and products of that kind people name, and the buyers of that kind of product. Name Sealand's own products, customers or posts ONLY where a candidate's label, description or notes name Sealand or one of its products: talk is never Sealand's because it is about the kind of thing Sealand sells. Where no candidate names Sealand, say what the finding means for a company that sells what Sealand sells. A line that would be as true of any category is not an implication: make it particular or leave it out. The claims stay context only, never a clause.")
     expect(buildWeekReadPrompts(args({ clientId: SEALAND_CLIENT_ID })).system).toContain("say what the finding means for a company that sells bags like Sealand's")
     expect(system).not.toMatch(/what Sealand's own customers say|Sealand's market and buyers|as true of any rival/)
     // The intensity rule without its "comparisons allowed" sentence, which clashed with "never set against something else".

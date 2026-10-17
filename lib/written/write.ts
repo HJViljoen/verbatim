@@ -51,9 +51,10 @@ export const WEEK_READ_PASS = 'week_read'
 /** v4 (16 Oct; Heinrich's Market top layer prints the week's headline and
  *  "What it means" on a card): the same report, shape, caps and scrubs as v3,
  *  its implications written from the buyer's side of the week's talk, the
- *  company's claims context only, at most one clause and never a line's
- *  opening or subject (the subject reads' v2 rule; Össur's 11 Oct read opened
- *  all three lines on its own marketing). Bumped so `ai_call_log` and the
+ *  company's claims context only, never a line's opening or subject (the
+ *  subject reads' v2 rule; Össur's 11 Oct read opened all three lines on its
+ *  own marketing), and since 17 Oct never a sentence or clause of a line at
+ *  all (Heinrich: the one clause first allowed became a closing formula). Bumped so `ai_call_log` and the
  *  stored read say which instruction wrote the words; nothing reads it to
  *  decide how a read prints, so a v3 read prints as it always has. */
 export const WEEK_READ_PROMPT_VERSION = 'week_read_v4' as const
@@ -124,7 +125,7 @@ export function weekReadSchema() {
       quote_from: z.string().nullable().describe('A candidate this paragraph cites whose people say its point most directly, where a real voice would help the reader; code prints one of their quotes after the paragraph. At most two paragraphs point to one; null otherwise.'),
     })).describe(`What happened: the week told as ONE story in two or three paragraphs, weaving the findings together (how they connect, what they add up to). Never one paragraph per finding in turn, never a list.`),
     implications: z.array(z.object({
-      implication: z.string().describe(`What the week's talk means for the company, from the buyer's side (what people take for granted, still need settled, the part the talk turns on, or a workaround they praise), the company's claims context only and never a line's opening: at most ${WEEK_READ_MAX.implicationSentences} short sentences, under ${WEEK_READ_MAX.implication} characters. Intelligence, never an instruction: never "should", "could", "needs to", "consider" or "an opportunity".`),
+      implication: z.string().describe(`What the week's talk means for the company, from the buyer's side (what people take for granted, still need settled, the part the talk turns on, or a workaround they praise), the company's claims context only, never a sentence or clause about one and never a line's opening: at most ${WEEK_READ_MAX.implicationSentences} short sentences, under ${WEEK_READ_MAX.implication} characters. Intelligence, never an instruction: never "should", "could", "needs to", "consider" or "an opportunity".`),
       based_on: basedOn('this implication'),
     })).describe(`What it means for the company: two or three implications, each following from the week's evidence, at most ${WEEK_READ_MAX.implications}.`),
     new_this_week: z.array(z.object({
@@ -291,9 +292,9 @@ export function buildWeekReadPrompts(a: WeekWriterArgs): { system: string; user:
     '  - the part of the product the talk turns on (a named part, a material, a size or a finish, in the words people in this market use), and in what role: the thing people ask about, praise, blame or work around;',
     '  - a fix, a part or a product people praise, named for what it is and for what they praise in it, never set against something else ("cheaper", "an alternative", "instead of").',
     `  - Each line adds what the story does not say: never list again the things people asked about or named in the story or the findings. Name the one thing the point turns on, and say what it means for buyers of ${what}.`,
-    `  - Never about ${co}'s own words. ${co}'s claims (under About ${co}) are context only: at most one clause of a line may say whether the week's talk bears a claim out or tests it. Never open a line with a claim, with what ${co} says or with what it sells; never make a claim the subject of a line; never restate one.`,
+    `  - Never about ${co}'s own words. ${co}'s claims (under About ${co}) are context only, to tell you what ${co} offers: never a sentence or a clause of a line about a claim, never that the week's talk bears one out, tests it or supports it, and never a close on one ("That tests ${co}'s claim…"). Never open a line with a claim, with what ${co} says or with what it sells; never make a claim the subject of a line; never restate one.`,
     '  - Only what a candidate shows: a doubt is a question asked or a problem named, never a feeling you infer. Never frame a point by what something is not ("not only", "rather than the look"). No abstract closing line ("sits inside the product story", "a story about identity"): name the thing, and end on the concrete point.',
-    `  - Particular to what ${co} sells, never true of any category: each line is about ${what}, the parts and products of that kind people name, and the buyers of that kind of product. Name ${co}'s own products, customers or posts ONLY where a candidate's label, description or notes name ${co} or one of its products: talk is never ${co}'s because it is about the kind of thing ${co} sells. Where no candidate names ${co}, say what the finding means for a company that sells ${what}. A line that would be as true of any category is not an implication: make it particular or leave it out. The claims stay context only, at most one clause.`,
+    `  - Particular to what ${co} sells, never true of any category: each line is about ${what}, the parts and products of that kind people name, and the buyers of that kind of product. Name ${co}'s own products, customers or posts ONLY where a candidate's label, description or notes name ${co} or one of its products: talk is never ${co}'s because it is about the kind of thing ${co} sells. Where no candidate names ${co}, say what the finding means for a company that sells ${what}. A line that would be as true of any category is not an implication: make it particular or leave it out. The claims stay context only, never a clause.`,
     `  - ${co}'s claims are its own words, not evidence about the market. Never say how a claim was received or whether buyers believe it unless a candidate says so, and never say the market ignores, overlooks or does not mention something: the candidates are not everything people said.`,
     `  - Intelligence, not instructions: say what is true about the business, never what ${co} should do. Never "should", "could", "needs to", "must", "consider", "make sure", "an opportunity", and never an imperative. Each rests on the week's candidates (based_on) and follows from them, not from general knowledge about the category. Each is checked against the conversation on its own, like a headline.`,
     '',

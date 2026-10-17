@@ -217,7 +217,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
   (what people take for granted, doubt or need settled, the part of the
   product the talk turns on, a fix, part or product people praise named for
   what it is and never set against something else), the company's claims
-  context only and never its subject. Since
+  context only and never its subject (since 17 Oct never a sentence or
+  clause at all: the one clause v2 allowed became a closing formula). Since
   `subject_read_v3` (16 Oct, Heinrich: Market's top layer is analysis, each
   subject a card of a headline and "What it means", the numbers one click
   down) each written read also carries `headline`: the subject's main point
@@ -605,7 +606,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
   are NOT safe on market prose and are not reused by the guard. Since
   `week_read_v4` (16 Oct) the implications are written from the buyer's side
   of the week's talk, the subject reads' v2 rule: the company's claims are
-  context only, at most one clause, never a line's opening or subject (Össur's
+  context only, never a sentence or clause of a line (since 17 Oct, Heinrich:
+  the one clause first allowed became a closing formula), never a line's
+  opening or subject (Össur's
   11 Oct read opened all three lines on its own marketing). The lead's 30 Sep
   ruling holds in buyer-side words, under the product's attribution rule
   (the final round, 16 Oct: Sealand's offline run gave "A Sealand backpack
