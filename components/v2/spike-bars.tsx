@@ -42,10 +42,11 @@ export interface SpikeBarsProps {
   /** The boards' drawings: `lg` 480 by 132 for a half-width card (the
    *  hero), `md` 300 by 112 for a rail card; and F3's three (17 Oct): `wide`
    *  520 by 150 (a subject's week by week), `rail` 300 by 86 (a
-   *  conversation's facts) and `xs` 136 by 58 (a conversation's card inside
-   *  a subject). Each keeps its type readable at the width it is drawn for.
-   *  Default `lg`. */
-  size?: 'lg' | 'md' | 'wide' | 'rail' | 'xs'
+   *  conversation's facts), `xs` 136 by 58 (a conversation's card inside a
+   *  subject) and `phone` 300 by 150 (the subject's week by week at 390).
+   *  Each keeps its type readable at the width it is drawn for. Default
+   *  `lg`. */
+  size?: 'lg' | 'md' | 'wide' | 'rail' | 'xs' | 'phone'
   /** What the chart is, for a screen reader. The readings are appended. */
   label: string
   /** A week with no reading draws a faint empty slot, the plot's height, so
@@ -65,6 +66,7 @@ const GEOMETRY: Record<NonNullable<SpikeBarsProps['size']>, { W: number; H: numb
   wide: { W: 520, H: 150, BASE: 134, TOP: 14, small: 12.5, big: 12.5, axis: 11.5 },
   rail: { W: 300, H: 86, BASE: 70, TOP: 14, small: 11, big: 11, axis: 10 },
   xs: { W: 136, H: 58, BASE: 42, TOP: 14, small: 11, big: 11, axis: 10 },
+  phone: { W: 300, H: 150, BASE: 134, TOP: 14, small: 12.5, big: 12.5, axis: 11.5 },
 }
 
 export function SpikeBars({ weeks, compare = null, highlightLast, counts = 'last', variant = 'market', size = 'lg', label, ghost = false, className }: SpikeBarsProps) {

@@ -62,8 +62,8 @@ describe('a conversation under its ready subject, this week', () => {
   })
 
   it('"Show more videos · 18 more" from 640, "· 20 more" on a phone (three there), both an address', () => {
-    expect(html).toMatch(new RegExp(`<a class="[^"]*self-start max-sm:hidden" href="/dashboard/market/conversations/${fixtureId(1)}\\?videos=all#what-people-said">Show more videos · <span data-copy="figure">18</span>\u00a0more</a>`))
-    expect(html).toMatch(/self-stretch sm:hidden" href="[^"]*">Show more videos · <span data-copy="figure">20<\/span>\u00a0more<\/a>/)
+    expect(html).toMatch(new RegExp(`<a class="[^"]*self-start max-sm:hidden" href="/dashboard/market/conversations/${fixtureId(1)}\\?videos=all#what-people-said"><span>Show more videos · <span data-copy="figure">18</span>\u00a0more</span></a>`))
+    expect(html).toMatch(/self-stretch sm:hidden" href="[^"]*"><span>Show more videos · <span data-copy="figure">20<\/span>\u00a0more<\/span><\/a>/)
   })
 
   it('the facts, small, on the page: week by week, who it\'s about, what people did, who\'s saying it and where, each of the week\'s 23', () => {
@@ -111,6 +111,9 @@ describe('the flagged conversation', () => {
     const html = render(body(FLAG))
     expect(html.match(/data-flag="unusual"/g)).toHaveLength(1)
     expect(html).toMatch(/<div data-conv-lead=""[\s\S]*?data-flag="unusual"/)
+    // Its newest week in the accent in the facts; an unflagged one's yellow.
+    expect(html.match(/<aside aria-labelledby="facts-title"[\s\S]*?<\/aside>/)![0]).toContain('fill-orange')
+    expect(render(body(LINER)).match(/<aside aria-labelledby="facts-title"[\s\S]*?<\/aside>/)![0]).not.toContain('fill-orange')
     assertCopyContract(page(FLAG))
   })
 

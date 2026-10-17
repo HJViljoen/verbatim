@@ -66,10 +66,11 @@ describe('a ready subject, this week, in the board\'s order', () => {
     expect(markupText(cards[0])).toBe('How long a liner lasts People share how long their liners last before they lose grip, and when to replace one. 23 this week 35 in October so far 9 14 23 21 Sep 28 Sep 5 Oct Össur 4 · others 19 Open →')
     expect(cards[0]).toContain(`href="/dashboard/market/conversations/${fixtureId(1)}"`)
     // The description is Pass B's, in its slot; the bars draw three bare
-    // counts with the newest in the accent.
+    // counts in the market's yellow (the accent is the flag's, below).
     expect(cards[0]).toMatch(/<span data-copy="subject" data-slot="pass_b_theme" class="[^"]*">People share how long/)
-    expect(cards[0]).toMatch(/data-week="newest"/)
-    expect(cards[0]).toContain('fill-orange')
+    expect(cards[0]).not.toContain('fill-orange')
+    // Week by week on the subject's own base: yellow, all three.
+    expect(html.match(/<section id="subject-numbers"[\s\S]*?<\/section>/)![0]).not.toContain('fill-orange')
     // No flag this week inside Fit & comfort: no chip on any card.
     for (const c of cards) expect(c).not.toContain('data-flag=')
   })
@@ -86,7 +87,7 @@ describe('a ready subject, this week, in the board\'s order', () => {
   })
 
   it('the numbers: week by week on the level\'s base (three bare counts, the week beside its month), month by month, then the parts on their own base', () => {
-    expect(text).toContain('The numbers Fit & comfort’s videos, this week beside October so far Week by week · videos 74 70 82 21 Sep 28 Sep 5 Oct 82 this week · 108 in October so far Month by month · share of your market’s videos 32% August 194 of 612 33% September 277 of 839 34% October so far · 108 of 318')
+    expect(text).toContain('The numbers Fit & comfort’s videos, this week beside October so far Week by week · videos 74 70 82 21 Sep 28 Sep 5 Oct 74 70 82 21 Sep 28 Sep 5 Oct 82 this week · 108 in October so far Month by month · share of your market’s videos 32% August 194 of 612 33% September 277 of 839 34% October so far · 108 of 318')
     expect(text).toContain('The parts below read the videos where a comment was about it: 40 of these 82 this week, and 64 of these 108 in October so far.')
     expect(text).toContain('Who’s saying it · of 64 in October so far New amputees in their first year 16 of 64 Caregivers and family 8 of 64 Active and athletic users 4 of 64 Each opens in Voices')
     expect(text).toContain('What people did · of 64 in October so far Complained about something 48 Asked a question 16')
@@ -121,8 +122,9 @@ describe('a ready subject whose week could not be read on the level\'s base', ()
     expect(markupText(hubOf(render(page(d))))).toContain(`277 of 839 in September ${SUBJECT_WEEK_UNREAD} 4 conversations inside it this week`)
     expect(text).not.toMatch(/of 241 videos this week/)
     expect(text).toMatch(/^Market \/ Fit & comfort Market Subject Fit & comfort 5 to 11 October · 108 of 318 in October so far This week/)
-    // Week by week keeps the two weeks read and the newest's empty slot.
-    expect(text).toContain('Week by week · videos 74 70 21 Sep 28 Sep 5 Oct 108 in October so far')
+    // Week by week keeps the two weeks read and the newest's empty slot (the
+    // chart drawn twice: from 640, and at the phone's size).
+    expect(text).toContain('Week by week · videos 74 70 21 Sep 28 Sep 5 Oct 74 70 21 Sep 28 Sep 5 Oct 108 in October so far')
     expect(text).toContain('The parts below read the videos where a comment was about it: 40 this week, and 64 of these 108 in October so far.')
     assertCopyContract(page(d))
   })
@@ -155,6 +157,9 @@ describe('the week\'s flag on a conversation inside it', () => {
     const cards = html.match(/<article data-inside-card=""[\s\S]*?<\/article>/g)!
     expect(cards[0]).toMatch(/data-flag="unusual"[^>]*>Unusual this week</)
     expect(cards[0]).toContain('Insurance refusals for powered knees')
+    // Its newest week in the accent, as the board draws the flagged card's.
+    expect(cards[0]).toMatch(/fill-orange[^"]*" data-week="newest"/)
+    expect(cards.slice(1).some((c) => c.includes('fill-orange'))).toBe(false)
     expect(cards.slice(1).some((c) => c.includes('data-flag='))).toBe(false)
     const table = html.match(/<table[\s\S]*?<\/table>/)![0]
     expect(table.match(/data-flag="unusual"/g)).toHaveLength(1)

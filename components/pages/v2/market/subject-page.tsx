@@ -177,7 +177,7 @@ function Strip({ page, data }: { page: SubjectPage; data: MarketData }) {
           <>
             {/* The board's change, drawn by the one badge at the figure's
                 size: the word and the change beside it, checkable. */}
-            <div data-copy="verdict" className={cn(FW, '[&>span]:text-[length:inherit] [&>span]:leading-[inherit] [&>span]:font-[inherit] [&>span]:text-foreground')}>
+            <div data-copy="verdict" className={cn(FW, '[&>span]:text-[length:inherit] [&>span]:leading-[inherit] [&>span]:font-[inherit] [&>span]:text-foreground [&>span>span]:text-[15px] [&>span>span]:text-muted-foreground max-sm:[&>span>span]:text-[13px]')}>
               <MovementBadge verdict={verdict} unit="pts" good="neutral" bandTip />
             </div>
             <div className={FL}>against {data.month.prev.text}{page.prevPct != null ? <>, <span data-copy="figure">{Math.round(page.prevPct)}%</span></> : null}</div>
@@ -311,7 +311,9 @@ function ConvCard({ item, data, counts }: { item: InsideConv; data: MarketData; 
             {conv.month != null ? <><span data-copy="figure" className="font-mono tabular-nums text-foreground">{fmtInt(conv.month)}</span> {data.week && week ? data.week.inMonth : `in ${data.month.text}`}</> : null}
           </p>
           {week && conv.weeks.length > 0 ? (
-            <SpikeBars weeks={conv.weeks.map((count, i) => ({ label: labels[i] ?? '', count }))} counts="all" size="xs" ghost className="w-[136px] shrink-0" label={`${conv.label}, videos a week`} />
+            // The newest week in the accent only where the check flagged it
+            // (the boards: orange is the week's one chip's colour).
+            <SpikeBars weeks={conv.weeks.map((count, i) => ({ label: labels[i] ?? '', count }))} counts="all" size="xs" ghost highlightLast={Boolean(item.flag)} className="w-[136px] shrink-0" label={`${conv.label}, videos a week`} />
           ) : null}
         </div>
       ) : null}
@@ -474,9 +476,11 @@ function NumbersCard({ page, data }: { page: SubjectPage; data: MarketData }) {
       <div className={cn('grid grid-cols-1 gap-11 max-sm:gap-0', weeks ? 'min-[1180px]:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]' : null)}>
         {weeks ? (
           <PanelSection label="Week by week · videos">
-            {/* Three bare counts on the level's base, the newest in the
-                accent; a week our own change cut keeps its slot. */}
-            <SpikeBars weeks={weeks.map((count, i) => ({ label: page.weekLabels[i] ?? '', count }))} counts="all" size="wide" ghost className="max-w-[520px]" label={`${panel.name}, videos a week`} />
+            {/* Three bare counts on the level's base, all in the market's
+                yellow as the board draws them (a subject earns no week chip);
+                a week our own change cut keeps its slot. */}
+            <SpikeBars weeks={weeks.map((count, i) => ({ label: page.weekLabels[i] ?? '', count }))} counts="all" size="wide" ghost highlightLast={false} className="max-w-[520px] max-sm:hidden" label={`${panel.name}, videos a week`} />
+            <SpikeBars weeks={weeks.map((count, i) => ({ label: page.weekLabels[i] ?? '', count }))} counts="all" size="phone" ghost highlightLast={false} className="sm:hidden" label={`${panel.name}, videos a week`} />
             <p className="m-0 text-[12.5px] text-muted-foreground">
               {weekLevel ? <><span data-copy="figure">{fmtInt(weekLevel.k)}</span> this week · </> : null}<span data-copy="figure">{fmtInt(level.k)}</span> {inMonth}
             </p>
@@ -485,9 +489,10 @@ function NumbersCard({ page, data }: { page: SubjectPage; data: MarketData }) {
         {panel.bars.length > 0 ? (
           <PanelSection label="Month by month · share of your market’s videos" className={weeks ? 'max-[1179px]:mt-6 max-sm:mt-0 max-sm:border-t max-sm:border-track max-sm:pt-[18px]' : undefined}>
             {/* Three months at every width (`MARKET_SUBJECT_PAGE_MONTHS`), the
-                phone's at its smaller size. */}
-            <MiniBars bars={shareBars(panel.bars)} size="lg" className="max-sm:hidden" label={`Share of the market's videos about ${panel.name}, month by month`} />
-            <MiniBars bars={shareBars(panel.bars)} size="md" className="sm:hidden" label={`Share of the market's videos about ${panel.name}, month by month`} />
+                phone's at its smaller size; in the market's yellow as the board
+                draws them, a month still filling outlined (MASTER). */}
+            <MiniBars bars={shareBars(panel.bars)} size="lg" highlight={null} className="max-sm:hidden" label={`Share of the market's videos about ${panel.name}, month by month`} />
+            <MiniBars bars={shareBars(panel.bars)} size="md" highlight={null} className="sm:hidden" label={`Share of the market's videos about ${panel.name}, month by month`} />
           </PanelSection>
         ) : null}
       </div>

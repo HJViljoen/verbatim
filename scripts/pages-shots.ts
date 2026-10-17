@@ -321,6 +321,13 @@ const agentThread = (raw = agentFixture()) => {
  *  the lock). */
 const marketDump = (): MarketData => JSON.parse(readFileSync(process.env.MARKET_V2_JSON as string, 'utf8')) as MarketData
 
+/** The board a dump's page is drawn beside: a level page's F3 board, the
+ *  top page's F2-Market. */
+function marketDumpArtboard(): string {
+  const view = marketDump().view
+  return view === 'subject' ? 'F3-Market-Subject.dc.html' : view === 'conversation' ? 'F3-Market-Conversation.dc.html' : view === 'week' ? 'F3-Market-Nav.dc.html' : 'F2-Market.dc.html'
+}
+
 /** A dump drawn by the page it was read for (17 Oct: Market's pages). */
 function marketDumpPage(d: MarketData): ReactNode {
   if (d.view === 'subject') return h(MarketSubjectPage, { data: d })
@@ -547,35 +554,45 @@ const PAGES: Page[] = [
   { key: 'market-pages-month-longrun-earlier', path: '/dashboard/market', artboard: 'F2-Market.dc.html', page: () => h(MarketPage, { data: marketFixture({ period: 'month', longRun: 'earlier' }) }) },
   { key: 'market-pages-time', path: '/dashboard/market', artboard: 'F2-Market.dc.html', page: () => h(MarketPage, { data: marketFixture({ period: 'time' }) }) },
   { key: 'market-pages-long-month', path: '/dashboard/market', artboard: 'F2-Market.dc.html', page: () => h(MarketPage, { data: marketLongRowsFixture('month') }) },
-  // A subject's page: ready with its blocks, its switcher open, the month, a
-  // ready one on one video, one whose check is open, one failed, one with no
-  // read this month, and an id Market does not follow.
-  { key: 'market-pages-subject', path: '/dashboard/market/subjects/subj-fit', artboard: 'F2-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('fit') }) },
-  { key: 'market-pages-subject-switcher', path: '/dashboard/market/subjects/subj-fit', artboard: 'F2-Market-Subject-Switcher.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('fit', { subjects: 'states' }), switcherOpen: true }) },
-  { key: 'market-pages-subject-month', path: '/dashboard/market/subjects/subj-fit', artboard: 'F2-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('fit', { period: 'month' }) }) },
-  { key: 'market-pages-subject-thin', path: '/dashboard/market/subjects/subj-look', artboard: 'F2-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('look', { subjects: 'tracked', detail: 'thin' }) }) },
-  { key: 'market-pages-subject-choosing', path: '/dashboard/market/subjects/subj-choosing', artboard: 'F2-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('choosing', { detail: 'thin' }) }) },
-  { key: 'market-pages-subject-open', path: '/dashboard/market/subjects/subj-cost', artboard: 'F2-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('cost', { flagged: false, noNew: true, subjects: 'provisional', brands: 'not_counted', weeks: 'insufficient', noGroups: true }) }) },
-  { key: 'market-pages-subject-failed', path: '/dashboard/market/subjects/subj-community', artboard: 'F2-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('community', { subjects: 'tracked' }) }) },
-  { key: 'market-pages-subject-no-read', path: '/dashboard/market/subjects/subj-look', artboard: 'F2-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('look', { subjects: 'states' }) }) },
-  { key: 'market-pages-subject-week-unread', path: '/dashboard/market/subjects/subj-fit', artboard: 'F2-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('fit', { subjectWeek: 'unread' }) }) },
-  { key: 'market-pages-subject-missing', path: '/dashboard/market/subjects/nope', artboard: 'F2-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('nope') }) },
-  // A ready subject read in no month yet (Össur, 17 Oct): its read, no figure.
-  { key: 'market-pages-subject-unread', path: '/dashboard/market/subjects/subj-fit', artboard: 'F2-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('fit', { subjects: 'unread' }) }) },
-  // No change to print against last month (Sealand, 17 Oct): the tile says so.
-  { key: 'market-pages-subject-not-compared', path: '/dashboard/market/subjects/subj-fit', artboard: 'F2-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('fit', { subjects: 'one_month' }) }) },
+  // MARKET'S LEVEL PAGES, F3 (17 Oct; `--artboards ~/Documents/Heinrich/
+  // Verbatim-Design/depth-2026-10/canvas/project`): the path and the title
+  // block (F3-Market-Nav), the subject as the hub (F3-Market-Subject, the read
+  // first) and the conversation as the evidence (F3-Market-Conversation); at
+  // 390 beside F3-Market-Subject-Phone and F3-Market-Conversation-Phone.
+  // A subject's page: ready, its switcher open, the month, a ready one on one
+  // video, a thin read, its check open, failed, no read this month, its week
+  // unread, read in no month yet, no change to print, the flagged
+  // conversation inside it, and an id Market does not follow.
+  { key: 'market-levels-subject', path: '/dashboard/market/subjects/subj-fit', artboard: 'F3-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('fit') }) },
+  { key: 'market-levels-subject-switcher', path: '/dashboard/market/subjects/subj-fit', artboard: 'F3-Market-Nav.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('fit', { subjects: 'states' }), switcherOpen: true }) },
+  { key: 'market-levels-subject-month', path: '/dashboard/market/subjects/subj-fit', artboard: 'F3-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('fit', { period: 'month' }) }) },
+  { key: 'market-levels-subject-flag', path: '/dashboard/market/subjects/subj-cost', artboard: 'F3-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('cost') }) },
+  { key: 'market-levels-subject-thin', path: '/dashboard/market/subjects/subj-look', artboard: 'F3-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('look', { subjects: 'tracked', detail: 'thin' }) }) },
+  { key: 'market-levels-subject-choosing', path: '/dashboard/market/subjects/subj-choosing', artboard: 'F3-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('choosing', { detail: 'thin' }) }) },
+  { key: 'market-levels-subject-open', path: '/dashboard/market/subjects/subj-cost', artboard: 'F3-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('cost', { flagged: false, noNew: true, subjects: 'provisional', brands: 'not_counted', weeks: 'insufficient', noGroups: true }) }) },
+  { key: 'market-levels-subject-failed', path: '/dashboard/market/subjects/subj-community', artboard: 'F3-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('community', { subjects: 'tracked' }) }) },
+  { key: 'market-levels-subject-no-read', path: '/dashboard/market/subjects/subj-look', artboard: 'F3-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('look', { subjects: 'states' }) }) },
+  { key: 'market-levels-subject-week-unread', path: '/dashboard/market/subjects/subj-fit', artboard: 'F3-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('fit', { subjectWeek: 'unread' }) }) },
+  { key: 'market-levels-subject-unread', path: '/dashboard/market/subjects/subj-fit', artboard: 'F3-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('fit', { subjects: 'unread' }) }) },
+  { key: 'market-levels-subject-not-compared', path: '/dashboard/market/subjects/subj-fit', artboard: 'F3-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('fit', { subjects: 'one_month' }) }) },
+  { key: 'market-levels-subject-missing', path: '/dashboard/market/subjects/nope', artboard: 'F3-Market-Subject.dc.html', page: () => h(MarketSubjectPage, { data: marketSubjectFixture('nope') }) },
   // A conversation's page: under its ready subject, the flagged one, the
-  // month, one with no ready subject, and an id Market cannot name.
-  { key: 'market-pages-conversation', path: '/dashboard/market/conversations/c1', artboard: 'F2-Market-Conversation.dc.html', page: () => h(MarketConversationPage, { data: marketConversationFixture(1) }) },
-  { key: 'market-pages-conversation-flag', path: '/dashboard/market/conversations/c3', artboard: 'F2-Market-Conversation.dc.html', page: () => h(MarketConversationPage, { data: marketConversationFixture(3) }) },
-  { key: 'market-pages-conversation-month', path: '/dashboard/market/conversations/c1', artboard: 'F2-Market-Conversation.dc.html', page: () => h(MarketConversationPage, { data: marketConversationFixture(1, { period: 'month' }) }) },
-  { key: 'market-pages-conversation-no-subject', path: '/dashboard/market/conversations/c1', artboard: 'F2-Market-Conversation.dc.html', page: () => h(MarketConversationPage, { data: marketConversationFixture(1, { flagged: false, noNew: true, subjects: 'provisional', brands: 'not_counted', weeks: 'insufficient', noGroups: true }) }) },
-  { key: 'market-pages-conversation-missing', path: '/dashboard/market/conversations/nope', artboard: 'F2-Market-Conversation.dc.html', page: () => h(MarketConversationPage, { data: { ...marketConversationFixture(1), convPage: null, missing: true } }) },
-  { key: 'market-pages-conversation-long', path: '/dashboard/market/conversations/c1', artboard: 'F2-Market-Conversation.dc.html', page: () => h(MarketConversationPage, { data: marketLongCrumbsFixture() }) },
-  // The week's read: written, thin, and one that could not be read.
-  { key: 'market-pages-week', path: '/dashboard/market/week', artboard: 'F2-Market-Week.dc.html', page: () => h(MarketWeekPage, { data: marketWeekFixture() }) },
-  { key: 'market-pages-week-read-thin', path: '/dashboard/market/week', artboard: 'F2-Market-Week.dc.html', page: () => h(MarketWeekPage, { data: marketWeekFixture({ week: 'thin' }) }) },
-  { key: 'market-pages-week-read-failed', path: '/dashboard/market/week', artboard: 'F2-Market-Week.dc.html', page: () => h(MarketWeekPage, { data: marketWeekFixture({ week: 'failed' }) }) },
+  // month, one with no ready subject, a video's comments opened, every video
+  // listed, its videos unread, a long path, and an id Market cannot name.
+  { key: 'market-levels-conversation', path: '/dashboard/market/conversations/c1', artboard: 'F3-Market-Conversation.dc.html', page: () => h(MarketConversationPage, { data: marketConversationFixture(1) }) },
+  { key: 'market-levels-conversation-flag', path: '/dashboard/market/conversations/c3', artboard: 'F3-Market-Conversation.dc.html', page: () => h(MarketConversationPage, { data: marketConversationFixture(3) }) },
+  { key: 'market-levels-conversation-month', path: '/dashboard/market/conversations/c1', artboard: 'F3-Market-Conversation.dc.html', page: () => h(MarketConversationPage, { data: marketConversationFixture(1, { period: 'month' }) }) },
+  { key: 'market-levels-conversation-no-subject', path: '/dashboard/market/conversations/c1', artboard: 'F3-Market-Nav.dc.html', page: () => h(MarketConversationPage, { data: marketConversationFixture(1, { flagged: false, noNew: true, subjects: 'provisional', brands: 'not_counted', weeks: 'insufficient', noGroups: true }) }) },
+  { key: 'market-levels-conversation-open', path: '/dashboard/market/conversations/c1', artboard: 'F3-Market-Conversation.dc.html', page: () => h(MarketConversationPage, { data: marketConversationFixture(1, { convVideo: 3 }) }) },
+  { key: 'market-levels-conversation-all', path: '/dashboard/market/conversations/c1', artboard: 'F3-Market-Conversation.dc.html', page: () => h(MarketConversationPage, { data: marketConversationFixture(1, { convVideos: 'all' }) }) },
+  { key: 'market-levels-conversation-unread', path: '/dashboard/market/conversations/c1', artboard: 'F3-Market-Conversation.dc.html', page: () => h(MarketConversationPage, { data: marketConversationFixture(1, { convEvidence: 'unread' }) }) },
+  { key: 'market-levels-conversation-long', path: '/dashboard/market/conversations/c1', artboard: 'F3-Market-Nav.dc.html', page: () => h(MarketConversationPage, { data: marketLongCrumbsFixture() }) },
+  { key: 'market-levels-conversation-missing', path: '/dashboard/market/conversations/nope', artboard: 'F3-Market-Conversation.dc.html', page: () => h(MarketConversationPage, { data: { ...marketConversationFixture(1), convPage: null, missing: true } }) },
+  // The week's read under its title block (F3-Market-Nav 7): written, thin,
+  // and one that could not be read.
+  { key: 'market-levels-week', path: '/dashboard/market/week', artboard: 'F3-Market-Nav.dc.html', page: () => h(MarketWeekPage, { data: marketWeekFixture() }) },
+  { key: 'market-levels-week-thin', path: '/dashboard/market/week', artboard: 'F3-Market-Nav.dc.html', page: () => h(MarketWeekPage, { data: marketWeekFixture({ week: 'thin' }) }) },
+  { key: 'market-levels-week-failed', path: '/dashboard/market/week', artboard: 'F3-Market-Nav.dc.html', page: () => h(MarketWeekPage, { data: marketWeekFixture({ week: 'failed' }) }) },
   ...(flag('market-dump', '') ? (['ossur', 'sealand'] as const).map((tenant): Page => ({
     key: `market-pages-${tenant}-dump`, path: '/dashboard/market', artboard: 'F2-Market.dc.html',
     page: () => h(MarketPage, { data: marketDumpOf(flag('market-dump', '.'), tenant) }),
@@ -583,7 +600,7 @@ const PAGES: Page[] = [
   // A loader dump of any of Market's pages (`scripts/market-v2-dump.ts
   // --view …`), drawn by its own page (`data.view`).
   ...(process.env.MARKET_V2_JSON
-    ? [{ key: 'market-pages-real', path: '/dashboard/market', artboard: 'F2-Market.dc.html', page: () => marketDumpPage(marketDump()) }]
+    ? [{ key: 'market-pages-real', path: '/dashboard/market', artboard: marketDumpArtboard(), page: () => marketDumpPage(marketDump()) }]
     : []),
   // Depth v2, T6 (Content; boards E5-Content and E5-Content-Open, shot with
   // `--artboards ~/Documents/Heinrich/Verbatim-Design/depth-2026-10/canvas/project`).

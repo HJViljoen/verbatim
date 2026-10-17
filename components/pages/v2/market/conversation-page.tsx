@@ -136,8 +136,8 @@ function Said({ ev, data }: { ev: ConvEvidence; data: MarketData }) {
         <>
           {ev.videos.map((v, i) => <VideoCard key={v.id} v={v} data={data} index={i} all={ev.all} />)}
           {ev.capped != null ? <p className="m-0 text-[12.5px] text-muted-foreground">The first <span data-copy="figure">{fmtInt(ev.capped)}</span> of <span data-copy="figure">{fmtInt(ev.total)}</span> are listed.</p> : null}
-          {ev.more && ev.more.desktop > 0 ? <Link href={ev.more.href} className={cn(MORE, 'self-start max-sm:hidden')}>Show more videos · <span data-copy="figure">{fmtInt(ev.more.desktop)}</span>&nbsp;more</Link> : null}
-          {ev.more && ev.more.phone > 0 ? <Link href={ev.more.href} className={cn(MORE, 'self-stretch sm:hidden')}>Show more videos · <span data-copy="figure">{fmtInt(ev.more.phone)}</span>&nbsp;more</Link> : null}
+          {ev.more && ev.more.desktop > 0 ? <Link href={ev.more.href} className={cn(MORE, 'self-start max-sm:hidden')}><span>Show more videos · <span data-copy="figure">{fmtInt(ev.more.desktop)}</span>&nbsp;more</span></Link> : null}
+          {ev.more && ev.more.phone > 0 ? <Link href={ev.more.href} className={cn(MORE, 'self-stretch sm:hidden')}><span>Show more videos · <span data-copy="figure">{fmtInt(ev.more.phone)}</span>&nbsp;more</span></Link> : null}
         </>
       )}
     </section>
@@ -152,12 +152,16 @@ function Facts({ page, data }: { page: ConvPage; data: MarketData }) {
   const weeks = page.weeks.length > 0 ? page.weeks : null
   const of = (x: number | null | undefined) => (x != null ? <> · <span data-copy="level">of {fmtInt(x)}</span></> : null)
   return (
-    <aside aria-labelledby="facts-title" className="flex min-w-0 flex-col max-sm:rounded-[14px] max-sm:bg-card max-sm:px-[18px] max-sm:pt-4 max-sm:pb-1.5 max-sm:shadow-card">
+    // From 640 the rail's box reaches 8px past its column each side, so a
+    // group row's hover ground (the boards' `.conv`, 8px outside its text)
+    // stays inside it; the text keeps the column's edge.
+    <aside aria-labelledby="facts-title" className="flex min-w-0 flex-col sm:-mx-2 sm:px-2 max-sm:rounded-[14px] max-sm:bg-card max-sm:px-[18px] max-sm:pt-4 max-sm:pb-1.5 max-sm:shadow-card">
       <h2 id="facts-title" className="m-0 mb-1 text-[15px] font-semibold text-foreground">The facts</h2>
       {weeks ? (
         <div className={FACT}>
           <Label>Week by week · videos</Label>
-          <SpikeBars weeks={weeks} counts="all" size="rail" ghost className="max-w-[300px]" label={`${panel.label}, category videos a week`} />
+          {/* The newest week in the accent only where the check flagged it. */}
+          <SpikeBars weeks={weeks} counts="all" size="rail" ghost highlightLast={Boolean(panel.flag)} className="max-w-[300px]" label={`${panel.label}, category videos a week`} />
           <p className="m-0 text-[12.5px] text-muted-foreground">
             {page.week ? <><span data-copy="figure">{fmtInt(page.week.k)}</span> this week</> : null}
             {page.week && page.month ? ' · ' : null}
