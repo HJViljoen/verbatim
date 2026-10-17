@@ -42,7 +42,13 @@ describe('a ready subject, this week', () => {
   })
 
   it('week by week (three bare counts) and month by month', () => {
-    expect(text).toContain('Week by week · videos 21 33 40 21 Sep 28 Sep 5 Oct Month by month · share of your market’s videos 31.6% July 144 of 455')
+    expect(text).toContain('Week by week · videos 21 33 40 21 Sep 28 Sep 5 Oct Month by month · share of your market’s videos 32% July 144 of 455')
+  })
+
+  it('prints the month\'s share one way: the tile\'s whole percent is the bar\'s (the fresh check, 17 Oct)', () => {
+    expect(text).toContain('34% 108 of 318 videos in October so far')
+    expect(text).toMatch(/34% October so far · 108 of 318/)
+    expect(text).not.toMatch(/\d\.\d%/)
   })
 
   it('who is saying it, what people did and where, each "of N"; three comments; the Agent', () => {

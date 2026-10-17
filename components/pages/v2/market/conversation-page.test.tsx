@@ -29,7 +29,7 @@ describe('a conversation under its ready subject, this week', () => {
 
   it('E2\'s anatomy: its subject, its name, the stats with their n, our read, week by week and month by month', () => {
     expect(renderText(body(LINER))).toMatch(/^Fit & comfort How long a liner lasts 23 of 226 category videos this week 35 of 300 category videos in October so far 19 of 780 category videos in September Our read People share how long their liners last/)
-    expect(text).toContain('Week by week · videos 9 14 23 21 Sep 28 Sep 5 Oct Month by month · share of the category’s videos 2.0% July 9 of 455')
+    expect(text).toContain('Week by week · videos 9 14 23 21 Sep 28 Sep 5 Oct Month by month · share of the category’s videos 2% July 9 of 455')
   })
 
   it('who it is about, what people did, who is saying it, where, each "of N"', () => {

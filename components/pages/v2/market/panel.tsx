@@ -16,7 +16,11 @@ import { About, OLINK } from './parts'
 
 export const ASK = 'inline-flex min-h-[38px] cursor-pointer items-center gap-2 rounded-lg bg-brand px-3.5 text-[13.5px] font-semibold text-brand-foreground no-underline transition-colors hover:bg-brand/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
-/** The month bars of a share line: the share over each bar, "k of n" under. */
+/** The month bars of a share line: the share over each bar, "k of n" under.
+ *  WHOLE PERCENTS (the fresh check, 17 Oct): the subject's page printed
+ *  "34%" on its tile and "34.0%" on the bar below it, one figure two ways;
+ *  the boards print whole percents here, as the tiles and the kinds card
+ *  do, and the "k of n" under each bar keeps it checkable. */
 export function shareBars(bars: readonly MonthCount[]) {
   // The board's four months; only the newest can be "so far".
   const shown = bars.slice(-MARKET_PANEL_MONTHS)
@@ -26,7 +30,7 @@ export function shareBars(bars: readonly MonthCount[]) {
     return {
       label: b.label,
       value: pct,
-      display: fmtPct(pct),
+      display: fmtPct(pct, 0),
       sub: b.n != null ? `${soFar ? 'so far · ' : ''}${fmtInt(b.k ?? 0)} of ${fmtInt(b.n)}` : undefined,
       filling: soFar,
     }
