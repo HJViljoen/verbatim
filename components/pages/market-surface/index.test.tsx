@@ -688,7 +688,7 @@ describe('MK2 · the ledger', () => {
     const data = deepLinkFixture()
     const markup = render(marketAdvice.render(data, 'app', ctx))
     expect(markup).toContain(`id="advice-${data.advice.highlight}"`)
-    expect(markup).toContain(`/dashboard/moves?advice=${data.advice.highlight}`)
+    expect(markup).toContain(`/dashboard/moves/advice/${data.advice.highlight}`)
     expect(renderText(marketAdvice.render(data, 'app', ctx))).toContain('This is the piece of advice your link named.')
   })
 
@@ -714,8 +714,8 @@ describe('MK2 · the ledger', () => {
     // WP3.6 (25 Sep rulings): the footer holds a link alone, the preview's
     // "Show all 64 →", naming the whole ledger, never the cap.
     expect(text).toContain(`Show all ${data.advice.total} →`)
-    // Written as `?advice=all`, the one selection the v2 page reads (T7).
-    expect(render(marketAdvice.render(data, 'app', ctx))).toContain('/dashboard/moves?advice=all')
+    // The advice record's own page since 17 Oct.
+    expect(render(marketAdvice.render(data, 'app', ctx))).toContain('/dashboard/moves/advice"')
     expect(text).not.toContain('shown')
     expect(text).not.toContain('behind them')
     expect(text).not.toMatch(/quarter/i)
@@ -1241,7 +1241,7 @@ describe('MK2 · the short list in the app', () => {
     expect(text).not.toContain(third.title)
     expect(text).toContain(EARLIER_ADVICE)
     expect(text).not.toMatch(/Show all \d/)
-    expect(render(marketAdvice.render(d, 'app', ctx))).toContain('/dashboard/moves?advice=all')
+    expect(render(marketAdvice.render(d, 'app', ctx))).toContain('/dashboard/moves/advice"')
   })
 
   it('says when an idea came back in other words', () => {
