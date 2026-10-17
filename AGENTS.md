@@ -1360,8 +1360,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
     Accept and Not for us for owners and admins, `mayDecideMoves`); and the
     Agent box (two questions to try, `agentTries`, from the read's frozen
     `conversations`). Each tile's head link opens what its item is, else the
-    page: on Market a conversation's or a subject's page (17 Oct), on the
-    other pages their panel in place; the Agent box has none either.
+    page: on Market a conversation's or a subject's page, on Content the
+    idea's page (17 Oct), on the other pages their panel in place; the
+    Agent box has none either.
     There is no Subjects tile and no Competitive tile: the Competitive
     tile's "Named most" brands are the Voices tile's two brands named most
     unprompted (`NAMED_MOST`). The weekly email prints no "Named most" line
@@ -1436,8 +1437,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
     and the numbers sit one layer down. The depth brief's "level 2 opens IN
     PLACE, never a new page" is gone for Market: every Open is a page, and
     Market no longer uses the T9 panel machinery (`InPlacePanel`,
-    `PanelSlot`, `panelPlacement`), which Voices, Your products, Content and
-    Your moves still use until they move over. Still true: no quote on the
+    `PanelSlot`, `panelPlacement`), which Voices, Your products and Your
+    moves still use until they move over (Content moved over on 17 Oct). Still true: no quote on the
     top layer (quotes live on a page), decision 1, U6, the copy contract.
     *The top page, This week*, top to bottom: the WEEK CARD (`weekCardOf`:
     the published read's week in one line and its implications, up to
@@ -1966,7 +1967,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
     to `clientSide: 'about'` everywhere but Content.
   - **Panels at every width (T9).** Voices, Your products and Your
     moves only: since 17 Oct Market and Content open pages, never a panel (the Market
-    bullet above), and the machinery stays for the four until they move
+    bullet above), and the machinery stays for the three until they move
     over. A v2 panel opened from a card in a grid
     is ONE child of that grid: cards take `panelItemOrder(i)`, the panel
     goes in a `PanelSlot` right after the clicked card, and
@@ -1974,10 +1975,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
     its order and notch per breakpoint. The rules are plain CSS
     (`.panel-slot` / `.panel-notch` in `app/globals.css`) because Tailwind
     sorts `min-[1180px]:` before the named breakpoints. No page does its own
-    order arithmetic (Content's lower row took hand-set `order-*` classes
-    until the Phase 4 fix round; it takes `panelItemOrder` now, its
-    right-hand column's order inert while that column is `display:
-    contents`), and the panel's content is never drawn twice.
+    order arithmetic, and the panel's content is never drawn twice.
     `InPlacePanel` scrolls itself into view when its head is off screen
     (`panelScrollPlan`, reduced motion jumps). From 768 the sidebar takes
     281px, so at 820 a page has 459px and three-column sections start at
