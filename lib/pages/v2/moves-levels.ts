@@ -8,6 +8,7 @@ import { inlineMonth } from '../../reading/month-label'
 import { pairOnVerdict } from '../../reading/comparability'
 import type { PairOn } from '../../reading/pairs'
 import type { RefusedReason } from '../../reading/verdicts'
+import { audienceOfVideo } from '../../written/evidence'
 import type { WhoAbout, WhoPart } from '../../written/types'
 import type { Crumb, CrumbItem, CrumbMenu } from '../crumbs'
 import { marketConversationHref } from '../../nav'
@@ -425,7 +426,10 @@ export function adviceQuotesOf(a: {
       const q = quotes.find((x) => !used.has(fold(x.text)))
       if (!q) continue
       used.add(fold(q.text))
-      const about = a.brands === 'counted' ? aboutNamed({ audience: 'industry-other', named: [...(a.named.get(id) ?? [])] }, a.brand) : 'market'
+      // "Who talk is about": a tracked brand its counted comments name, else
+      // its audience (a rival's own post is the rival's), the rule the
+      // numbers' "Who it's about" counts by.
+      const about = a.brands === 'counted' ? aboutNamed({ audience: audienceOfVideo(video), named: [...(a.named.get(id) ?? [])] }, a.brand) : 'market'
       out.push({
         conv: { id: conv.id, label: conv.label, href: conv.href },
         text: q.text, lang: q.lang, english: q.english,
@@ -641,7 +645,11 @@ export function moveEvidenceOf(a: {
   const videos: ConvVideo[] = shown.map(({ video, comments }) => {
     const quotes = videoQuotes({ video, evidence: a.evidence, commentIds: a.commentIds, members: a.members, translations: a.translations, gate: a.gate, kind: null })
     const isOpen = video.id === open
-    const about = a.brands === 'counted' ? aboutNamed({ audience: 'industry-other', named: [...(a.named.get(video.id) ?? [])] } as Pick<WhoVideo, 'audience' | 'named'>, a.brand) : 'market'
+    // A tracked brand its counted comments name, else its audience: these
+    // are the market's videos, the tracked rivals' own posts among them, so
+    // a rival's post is the rival's, as the facts' "Who it's about" counts it
+    // (Market's conversation cards are the category's alone).
+    const about = a.brands === 'counted' ? aboutNamed({ audience: audienceOfVideo(video), named: [...(a.named.get(video.id) ?? [])] } as Pick<WhoVideo, 'audience' | 'named'>, a.brand) : 'market'
     return {
       id: video.id,
       account: (video.account_name ?? '').trim(),

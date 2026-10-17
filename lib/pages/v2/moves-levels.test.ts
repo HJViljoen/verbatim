@@ -158,6 +158,16 @@ describe('in their words: three comments, each from its conversation (data 2)', 
     })
     expect(own).toEqual([])
   })
+
+  it('who a comment\'s video is about: a brand its comments name, else its audience, so a rival\'s own post is the rival\'s', () => {
+    const rivals = new Map([['V1', video('V1', 'tiktok', 'n1', { is_competitor: true, competitor_name: 'Ottobock' })], ['V2', video('V2', 'tiktok', 'n2')]])
+    const quotes = adviceQuotesOf({
+      conversations: [conv('t1', 'Insurance refusals'), conv('t2', 'Price and location')],
+      membersOf: new Map([['t1', new Set(['i1'])], ['t2', new Set(['i2'])]]),
+      citations, videos: rivals, translations: new Map(), gate, named: new Map(), brand: 'Össur', brands: 'counted',
+    })
+    expect(quotes.map((q) => q.about)).toEqual(['rival:Ottobock', null])
+  })
 })
 
 describe('the moves made on a piece of advice (data 5)', () => {
@@ -252,6 +262,17 @@ describe('a move\'s evidence: what people said after it (data 6, decision 6)', (
     expect(v1.href).toBe('/dashboard/moves/M1?video=V1#video-V1')
     expect(JSON.stringify(e)).not.toContain('outside the set')
     expect(e.more).toBeNull()
+  })
+
+  it('who each video is about: a brand its counted comments name, else its audience, as the facts count it (a rival\'s own post is the rival\'s)', () => {
+    const e = moveEvidenceOf({
+      moveId: 'M1', claim: 'Community', videoIds: ['V1', 'V2'], commentIds: new Set(['c1', 'c2', 'c3']), members: new Set(['m1']),
+      videos: [video('V1', 'tiktok', 'n1', { is_competitor: true, competitor_name: 'Ottobock' }), vids[1]], evidence: ev,
+      translations: new Map(), named: new Map([['V2', ['Össur']]]), brand: 'Össur', brands: 'counted', gate: {}, p: {},
+    })
+    expect(Object.fromEntries(e.videos.map((v) => [v.id, v.about]))).toEqual({ V1: 'rival:Ottobock', V2: 'client' })
+    // Brands not counted: no video says who it is about.
+    expect(build().videos.every((v) => v.about === null)).toBe(true)
   })
 
   it('`?video=` opens only its own video; a foreign or unknown id names nothing', () => {
