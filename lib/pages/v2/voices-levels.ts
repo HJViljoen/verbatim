@@ -1483,10 +1483,14 @@ export async function loadVoicesCreator(input: LevelLoadInput & { segments: read
   }
   const mineIds = market.filter((v) => v.platform === creator.platform && v.account === creator.account).map((v) => v.id)
   const platformVideoIds = market.filter((v) => mineIds.includes(v.id)).map((v) => v.platformVideoId)
-  const themeIds = creator.themes.slice(0, CREATOR_CONVERSATIONS + 6).map((t) => t.themeId)
+  // EVERY conversation of theirs is labelled, not the facts' first few: each
+  // video and each counted comment names the conversation it is in (the
+  // board), and a comment counted only in a smaller one would print with no
+  // name. One read a 250 ids, so the count of statements is the same.
+  const themeIds = creator.themes.map((t) => t.themeId)
   const [labels, refs, videos, groupRead, lens, brandRead] = await Promise.all([
     soft('labels', readLabels(handle, themeIds), new Map<string, string>()),
-    soft('creatorRefs', readThemeRefs(handle, m, audiences, creator.themes.map((t) => t.themeId)), []),
+    soft('creatorRefs', readThemeRefs(handle, m, audiences, themeIds), []),
     soft<ConvVideoRow[] | null>('videos', readCreatorVideos(handle, mineIds), null),
     profile ? soft('groups', loadGroupSubjects(handle, { month: m, audiences, market, profile, videosOnly: true }), null) : Promise.resolve(null),
     soft('lens', readLens(handle, m, mineIds), null),

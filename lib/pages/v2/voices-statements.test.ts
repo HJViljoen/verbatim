@@ -248,6 +248,28 @@ describe('the level pages\' reads', () => {
     expect(you).toMatchObject({ kind: 'brand', you: true, window: null, lead: null, claims: [], said: [] })
   })
 
+  // Every comment names its conversation (the board), however many the
+  // creator is in: a comment counted only in their thirteenth conversation
+  // still prints its name, and labelling them all reads no more.
+  it('a creator in more conversations than the facts list: every counted comment still names its own', async () => {
+    const t = tables()
+    const many = Array.from({ length: 12 }, (_, i) => REG(100 + i))
+    const over = {
+      month_evidence_refs: [
+        ...many.map((id) => ({ client_id: CLIENT, month: SEP, object_kind: 'theme', audience: 'industry-other', object_id: id, video_ids: [V(1), V(2), V(3)], comment_ids: [] })),
+        { client_id: CLIENT, month: SEP, object_kind: 'theme', audience: 'industry-other', object_id: REG(200), video_ids: [V(1)], comment_ids: ['c1'] },
+      ],
+      theme_registry: [...t.theme_registry, ...many.map((id, i) => ({ id, client_id: CLIENT, canonical_label: `Conversation ${i + 1}`, member_slugs: [] })), { id: REG(200), client_id: CLIENT, canonical_label: 'The thirteenth conversation', member_slugs: [] }],
+    }
+    const { data, n } = await creatorLoad(['tiktok', '@stepbystep.amp'], {}, over)
+    if (data.kind !== 'creator') throw new Error('missing')
+    const card = data.evidence.cards.find((v) => v.id === V(1))
+    expect(card?.quotes.map((q) => q.conv?.label)).toEqual(['The thirteenth conversation'])
+    expect(card?.conv?.label).toBe('Conversation 1')
+    expect(data.conversations).toHaveLength(6)
+    expect(n.by['from:theme_registry']).toBe(1)
+  })
+
   it('a creator: its biggest conversation, its videos most counted first, every printable comment naming its conversation', async () => {
     const { data } = await creatorLoad(['tiktok', '@stepbystep.amp'])
     if (data.kind !== 'creator') throw new Error('missing')
