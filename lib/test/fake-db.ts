@@ -3,6 +3,7 @@
  * that exercise a reader's I/O glue (market-first WP3.9 and WP3.11).
  *
  * WHAT IT ANSWERS. `from(table)` with `select`, `eq`, `neq`, `in`, `is`,
+ * `contains` (an array column holding every value given),
  * `not` (`is`, `in`, `eq`; any other operator throws), `or` (eq / is.null /
  * not.is.null), `gte`, `lte`,
  * `lt`, `order`, `limit`, `range`,
@@ -160,6 +161,11 @@ export function fakeDb(
       neq(col: string, v: unknown) { call.filters.push(`${col}!=${String(v)}`); preds.push((r) => val(r, col) !== v); return builder },
       in(col: string, vs: readonly unknown[]) { call.filters.push(`${col} in ${vs.length}`); const set = new Set(vs); preds.push((r) => set.has(val(r, col))); return builder },
       is(col: string, v: unknown) { call.filters.push(`${col} is ${String(v)}`); preds.push((r) => (val(r, col) ?? null) === v); return builder },
+      contains(col: string, vs: readonly unknown[]) {
+        call.filters.push(`${col} contains ${vs.length}`)
+        preds.push((r) => { const have = val(r, col); return Array.isArray(have) && vs.every((v) => have.includes(v)) })
+        return builder
+      },
       // `not` for the shapes the readers use: `is` (null or a value), `in`
       // over PostgREST's `(a,b,"c")` list and `eq`. Any other operator
       // THROWS rather than filter nothing, so a test cannot pass by a filter

@@ -97,3 +97,61 @@ describe('Market\'s statements, page by page', () => {
     }
   })
 })
+
+// A FOREIGN ID NAMES NOTHING (the fresh check, 17 Oct). The level pages take
+// an id or a slug from the URL and read on the service role, so every read
+// that could name a subject or a conversation is filtered by the session's
+// client: a subject (`loadActiveSubjects`), a registry label
+// (`loadRegistryLabels`), a slug (`loadLinkedTheme`, `resolveSlug`), a theme's
+// description, its months and its evidence. Another workspace's id or slug,
+// handed to either page, lands on the calm "not followed" state, and none of
+// that workspace's words reaches the page's data, breadcrumb or switcher.
+describe('a foreign id names nothing', () => {
+  const OTHER = '00000000-0000-4000-8000-0000000000cc'
+  const FOREIGN_THEME = fixtureId(9)
+  const FOREIGN_SUBJECT = '00000000-0000-4000-8000-0000000000f1'
+  const SECRET = /Other workspace/
+
+  function withForeign() {
+    const t = tables()
+    return {
+      ...t,
+      theme_registry: [
+        ...t.theme_registry.map((r) => (r.id === fixtureId(3) ? { ...r, member_slugs: ['own-slug'] } : r)),
+        { id: FOREIGN_THEME, client_id: OTHER, canonical_label: 'Other workspace conversation', member_slugs: ['foreign-slug'] },
+      ],
+      themes: [...t.themes, { client_id: OTHER, run_id: RUN, created_at: '2026-10-12T05:00:00.000Z', registry_id: FOREIGN_THEME, description: 'Other workspace description.' }],
+      theme_observations: [...t.theme_observations, { client_id: OTHER, run_id: RUN, theme_id: FOREIGN_THEME, label: 'Other workspace conversation', category: 'question', member_insight_ids: ['ins-x'] }],
+      month_theme_readings: [...t.month_theme_readings, { client_id: OTHER, month: '2026-10-01', audience: 'industry-other', theme_id: FOREIGN_THEME, videos: 40, platform_mix: { tiktok: 40 }, status: 'filling', run_id: RUN }],
+      subjects: [...t.subjects, { ...t.subjects[0], id: FOREIGN_SUBJECT, client_id: OTHER, name: 'Other workspace subject' }],
+    }
+  }
+
+  async function load(view: MarketView) {
+    const db = fakeDb(withForeign() as never, rpcs() as never)
+    return loadMarket({ supabase: db.client as never, clientId: CLIENT, reading: readingHandle(CLIENT, db.client as never), params: marketParams({}), view, now: new Date('2026-10-14T09:00:00.000Z') })
+  }
+
+  it.each([
+    ['a conversation by another workspace\'s registry id', { kind: 'conversation', id: FOREIGN_THEME }],
+    ['a conversation by another workspace\'s slug', { kind: 'conversation', id: 'foreign-slug' }],
+    ['a subject by another workspace\'s id', { kind: 'subject', id: FOREIGN_SUBJECT }],
+  ] as [string, MarketView][])('%s: the calm missing state, and none of its words', async (_label, view) => {
+    const data = await load(view)
+    expect(data?.missing).toBe(true)
+    expect(data?.convPage).toBeUndefined()
+    expect(data?.subjectPage).toBeUndefined()
+    expect(JSON.stringify(data)).not.toMatch(SECRET)
+  })
+
+  it('the session\'s own slug and subject still open their pages (the control)', async () => {
+    const conv = await load({ kind: 'conversation', id: 'own-slug' })
+    expect(conv?.missing).toBeFalsy()
+    expect(conv?.convPage?.panel.label).toBe('Conversation 3')
+    const subject = await load({ kind: 'subject', id: fixtureSubjectId('cost') })
+    expect(subject?.missing).toBeFalsy()
+    expect(subject?.subjectPage?.panel.name).toBe('Cost & access')
+    // The switcher lists the session's subjects alone.
+    expect(JSON.stringify(subject?.crumbs ?? [])).not.toMatch(SECRET)
+  })
+})
