@@ -107,10 +107,16 @@ function NonAnswer({ word, title, change, bandPts, unit, bandTip = false }: { wo
         // The change is one unit on a line, as `Moved`'s arrow and change are:
         // in a narrow head ("no clear change · +0.3 pts" under a shelf
         // column's share) it wraps before the "·", never inside "+0.3 pts".
-        <span className="font-normal"> <span className="whitespace-nowrap">· {change > 0 ? '+' : change < 0 ? '−' : '±'}{Math.abs(change).toLocaleString('en-US')}{unit ? ` ${unit}` : ''}</span>{bandTip ? '' : ` · ${band(bandPts, unit)}`}</span>
+        <span className="font-normal"> <span className="whitespace-nowrap">· {signedChange(change, unit)}</span>{bandTip ? '' : ` · ${band(bandPts, unit)}`}</span>
       ) : null}
     </span>
   )
+}
+
+/** A non-answer's change as the badge prints it beside its word: "+0.9 pts",
+ *  "−0.4 pts", "±0 pts" (a sign on every change, the unit after it). */
+export function signedChange(change: number, unit?: string): string {
+  return `${change > 0 ? '+' : change < 0 ? '−' : '±'}${Math.abs(change).toLocaleString('en-US')}${unit ? ` ${unit}` : ''}`
 }
 
 /** An arrowed movement, coloured on the caller's favourability axis.
@@ -186,6 +192,25 @@ export function MovementBadge({ verdict, unit, good = 'up', bandTip = false, sha
     const moved = bandPts != null ? `moved beyond the ${bandPts} pt margin of this measurement` : 'moved'
     return <Moved change={change} unit={unit} band={bandPts} good={good} bandTip={bandTip} title={moved} />
   }
+  const parts = nonAnswerParts(verdict, unit)
+  if (!parts) return null
+  return <NonAnswer word={parts.word} title={parts.title} change={parts.change} bandPts={parts.bandPts} unit={unit} bandTip={bandTip} />
+}
+
+/**
+ * A verdict's non-answer in its parts: the word, the change it refused and its
+ * band (both null where it withholds them), and the title that explains it.
+ * The badge draws them as one line; a surface that lays a figure out itself
+ * takes them here, so the word and the numbers stay the badge's (F3-Market-
+ * Subject's change figure: the word its title, the change on the line under
+ * it, never a line that opens on the badge's "·"). Null where the badge draws
+ * a movement or nothing: no verdict, a refused one, a movement with a change.
+ */
+export function nonAnswerParts(verdict: Verdict | DeltaVerdict | null | undefined, unit?: string): { word: string; title: string; change: number | null; bandPts: number | null } | null {
+  if (!verdict || verdict.state === 'refused') return null
+  const change = 'changePts' in verdict ? verdict.changePts : verdict.change
+  const bandPts = 'bandPts' in verdict ? verdict.bandPts : verdict.band
+  if (verdict.state === 'moved' && change != null) return null
   const inside = change != null && bandPts != null
     ? `moved ${change > 0 ? '+' : ''}${change}${unit ? ` ${unit}` : ''}, inside the ${bandPts} pt margin of this measurement`
     : 'not enough on both sides to compare yet'
@@ -217,7 +242,7 @@ export function MovementBadge({ verdict, unit, good = 'up', bandTip = false, sha
   // The numbers stay in `title` for both, where they are an explanation and not
   // a claim.
   const withholds = verdict.state === 'too_little_data'
-  return <NonAnswer word={word} title={inside} change={withholds ? null : change} bandPts={withholds ? null : bandPts} unit={unit} bandTip={bandTip} />
+  return { word, title: inside, change: withholds || bandPts == null ? null : change, bandPts: withholds || change == null ? null : bandPts }
 }
 
 /**

@@ -41,12 +41,17 @@ describe('a ready subject, this week, in the board\'s order', () => {
 
   it('the header card: the eyebrow, the stored headline as its lead, and the four figures inside the card', () => {
     const hub = hubOf(html)
-    expect(markupText(hub)).toBe(`Our read · October so far ${fit.headline} 34% of your market’s videos 108 of 318 in October so far no clear change · +0.9 pts against September, 33% 277 of 839 in September 82 of 241 videos this week 5 to 11 October 4 conversations inside it this week See them below ↓`)
+    expect(markupText(hub)).toBe(`Our read · October so far ${fit.headline} 34% of your market’s videos 108 of 318 in October so far No clear change +0.9 pts against September, 33% 277 of 839 in September 82 of 241 videos this week 5 to 11 October 4 conversations inside it this week See them below ↓`)
     expect(hub).toMatch(/<h2 id="subject-head" data-copy="stored" data-slot="week_read" class="[^"]*text-\[32px\]/)
     // The level's bar, the change from its Verdict alone, and the week a
     // COUNT on the level's base: never "34%" beside the month's "34%".
     expect(hub).toMatch(/style="width:34%"/)
-    expect(hub).toMatch(/data-copy="verdict"[^>]*><span[^>]*>no clear change/)
+    // The badge's word is the figure's title, as the board draws it, and
+    // the change it refused opens the line under it: no line opens on a "·"
+    // (the lead's check, 17 Oct).
+    expect(hub).toMatch(/<div data-copy="verdict" title="moved \+0\.9 pts, inside the [\d.]+ pt margin of this measurement" class="[^"]*text-\[22px\][^"]*">No clear change<\/div>/)
+    expect(hub).toMatch(/<div class="[^"]*"><span data-copy="verdict" class="whitespace-nowrap">\+0\.9 pts<\/span> against September, <span data-copy="figure">33%<\/span><\/div>/)
+    expect(markupText(hub)).not.toMatch(/·\s*\+0\.9/)
     expect(hub).toMatch(/<div data-copy="level" class="flex flex-col gap-1.5"><div class="[^"]*">82<\/div><div class="[^"]*">of 241 videos this week<\/div><\/div>/)
     expect(markupText(hub).match(/\d+%/g)).toEqual(['34%', '33%'])
     expect(hub).toContain('href="#inside"')
@@ -146,6 +151,23 @@ describe('a ready subject with no change to print against last month (17 Oct)', 
     const t = markupText(hubOf(render(page(refused))))
     expect(t).toContain('108 of 318 in October so far No comparison with September yet. 82 of 241')
     expect(t).not.toMatch(/not read as a change|refused|not compared|against September|277 of 839/)
+  })
+})
+
+describe('the change figure in its other states (the lead\'s check, 17 Oct)', () => {
+  const v = FIT.subjectPage!.panel.verdict!
+  const withVerdict = (verdict: typeof v): MarketData => ({ ...FIT, subjectPage: { ...FIT.subjectPage!, panel: { ...FIT.subjectPage!.panel, verdict } } })
+
+  it('a movement: its arrow and change are the title, one unit, then the comparison', () => {
+    const t = markupText(hubOf(render(page(withVerdict({ ...v, state: 'moved', changePts: 4.2, bandPts: 2.1 })))))
+    expect(t).toContain('108 of 318 in October so far ▲ 4.2 pts against September, 33% 277 of 839 in September')
+    assertCopyContract(page(withVerdict({ ...v, state: 'moved', changePts: 4.2, bandPts: 2.1 })))
+  })
+
+  it('too few to compare: the word alone as the title, no change under it', () => {
+    const t = markupText(hubOf(render(page(withVerdict({ ...v, state: 'too_little_data', changePts: -4.6, bandPts: 2 })))))
+    expect(t).toContain('108 of 318 in October so far Too few to compare against September, 33%')
+    expect(t).not.toContain('4.6')
   })
 })
 

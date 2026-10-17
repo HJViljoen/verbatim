@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { Fragment, type ReactNode } from 'react'
 import { Sparkles } from 'lucide-react'
-import { MovementBadge } from '@/components/delta-badge'
+import { MovementBadge, nonAnswerParts, signedChange } from '@/components/delta-badge'
 import { BrandChip } from '@/components/colour-roles'
 import { translationLabel, translationNote } from '@/components/quote-block'
 import { BubbleGlyph } from '@/components/shell/level-glyphs'
@@ -85,13 +85,13 @@ export function subjectNumbersLine(panel: Pick<SubjectPanel, 'state' | 'monthTex
  *  another base. */
 export const SUBJECT_WEEK_UNREAD = 'This week’s videos could not be read just now.'
 
+/** Words as a sentence opens them: "no clear change" as "No clear change". */
+const sentenceCase = (words: string): string => `${words.charAt(0).toUpperCase()}${words.slice(1)}`
+
 /** The change where none prints: the Dashboard week tile's words for the
  *  same state (`subjectNotCompared`), as a sentence in its frame. No reason,
  *  by the one condition (plan §0a). */
-export const subjectChangeGap = (prev: string): string => {
-  const words = subjectNotCompared(prev)
-  return `${words.charAt(0).toUpperCase()}${words.slice(1)}.`
-}
+export const subjectChangeGap = (prev: string): string => `${sentenceCase(subjectNotCompared(prev))}.`
 
 /** A ready subject with no conversation this period: the Inside section's
  *  frame, and one line. */
@@ -160,6 +160,7 @@ function Strip({ page, data }: { page: SubjectPage; data: MarketData }) {
   }
   const pct = (k: number, n: number) => Math.round((100 * k) / Math.max(1, n))
   const verdict = panel.verdict
+  const nonAnswer = nonAnswerParts(verdict, 'pts')
   const prev = verdict?.baseline ?? null
   const inMonth = data.week?.inMonth ?? `in ${panel.monthText}`
   return (
@@ -175,12 +176,23 @@ function Strip({ page, data }: { page: SubjectPage; data: MarketData }) {
       <Fig>
         {changeDrawn(verdict) ? (
           <>
-            {/* The board's change, drawn by the one badge at the figure's
-                size: the word and the change beside it, checkable. */}
-            <div data-copy="verdict" className={cn(FW, '[&>span]:text-[length:inherit] [&>span]:leading-[inherit] [&>span]:font-[inherit] [&>span]:text-foreground [&>span>span]:text-[15px] [&>span>span]:text-muted-foreground max-sm:[&>span>span]:text-[13px]')}>
-              <MovementBadge verdict={verdict} unit="pts" good="neutral" bandTip />
+            {nonAnswer ? (
+              // A non-answer: the badge's word is the figure's title, as the
+              // board draws "No clear change", and the change it refused opens
+              // the line under it ("+0.9 pts against September, 33%"), so the
+              // claim stays checkable and no line opens on a separator.
+              <div data-copy="verdict" title={nonAnswer.title} className={FW}>{sentenceCase(nonAnswer.word)}</div>
+            ) : (
+              // A movement: the one badge at the figure's size, its arrow and
+              // change one unit on one line.
+              <div data-copy="verdict" className={cn(FW, '[&>span]:text-[length:inherit] [&>span]:leading-[inherit] [&>span]:font-[inherit] [&>span]:text-foreground')}>
+                <MovementBadge verdict={verdict} unit="pts" good="neutral" bandTip />
+              </div>
+            )}
+            <div className={FL}>
+              {nonAnswer?.change != null ? <><span data-copy="verdict" className="whitespace-nowrap">{signedChange(nonAnswer.change, 'pts')}</span> </> : null}
+              against {data.month.prev.text}{page.prevPct != null ? <>, <span data-copy="figure">{Math.round(page.prevPct)}%</span></> : null}
             </div>
-            <div className={FL}>against {data.month.prev.text}{page.prevPct != null ? <>, <span data-copy="figure">{Math.round(page.prevPct)}%</span></> : null}</div>
             {prev && page.prevPct != null ? <div className={FS}><span data-copy="level">{fmtInt(prev.k)} of {fmtInt(prev.n)}</span> in {data.month.prev.text}</div> : null}
           </>
         ) : (
