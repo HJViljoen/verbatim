@@ -1394,9 +1394,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
     prints, through the same builders, so a page and the top layer never
     disagree (`lib/pages/v2/market-statements.test.ts` pins each load's
     statements offline: the top page's week 36, the month 28, a
-    conversation's page 40, a subject's 35 (34 until its week's share moved
-    to the level's base, one `window_subject_readings` call), the week's
-    read 15; today's panels in place were 45 and 40). **TWO RULES ARE REVERSED (Heinrich, 16
+    conversation's page 41 (40 until its groups were counted, one
+    `insight_evidence` read a 250 counted comments), a subject's 35 (34
+    until its week's share moved to the level's base, one
+    `window_subject_readings` call), the week's read 15; today's panels in
+    place were 45 and 40). **TWO RULES ARE REVERSED (Heinrich, 16
     Oct).** Design v2's "no model prose at the top of Market" is gone: the
     week's read and each subject's read LEAD the top layer as stored
     `week_read` prose, about 600 words above the first number (ruling 3),
@@ -1464,7 +1466,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
     passed carries its name, why and its conversations by name, and NO
     figure, line or chip count (U6). *A conversation's page* is E2's panel
     whole (`loadConvPanel`, `convPageOf`), "Month by month" where the data
-    has months. *The week's page* is the published read in full
+    has months; its "Who's saying it" counts each group's videos of the
+    conversation's in the period, "15 of 23", the base in the label ("of 23
+    this week", the stats' own figure), by the subject page's reader
+    (`groupCountsOf` over the group × subject cross, which takes a week's
+    window, `convGroupsOf`) over the member citations on its counted
+    comments (its refs), and prints Pass E's names alone where those could
+    not be read or counted. A count, never a share, never compared (decision
+    2). *The week's page* is the published read in full
     (`weekPageOf` over `weeklyReadView` after `hydrateData`): what
     happened, each quote after the paragraph whose ref it carries, what it
     means, new this week, worth watching, "Every conversation this week (N)"

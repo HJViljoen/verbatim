@@ -12,7 +12,7 @@ import { subjectReadsEnabled } from '../../config'
 import { substituteFigures } from '../../reports/cover'
 import type { FigureTable as PrintedFigures } from '../../reports/types'
 import { proseFigures } from '../../prose/figures'
-import { commentVideoKey, groupSubjects, themeMonthLine, type ThemeMonthLine } from '../../reading/cross'
+import { commentVideoKey, groupSubjects, themeMonthLine, type GroupEvidence, type ThemeMonthLine } from '../../reading/cross'
 import { loadAppPairOn, ourChangesWithoutGatherFlags } from '../../reading/gather-flags'
 import { isFailOpenFix, type OurChange } from '../../reading/comparability'
 import { marketAudiences, pooledDenominators } from '../../reading/market'
@@ -285,10 +285,10 @@ export interface GroupLink {
   key: string
   name: string
   href: string
-  /** A subject's groups only (17 Oct): the subject's videos in the month
-   *  with the group's own insights in their talk (the group × subject cross,
-   *  `groupSubjects`), printed "k of n". Absent on a conversation's groups,
-   *  which Pass E names without a count. */
+  /** The set's videos with the group's own insights in their talk (17 Oct;
+   *  `groupCountsOf`, the group × subject cross), printed "k of n": a
+   *  subject's in the month, a conversation's in the period. Absent where the
+   *  groups are named without a count (Pass E's link, `groupsOf`). */
   videos?: number
 }
 
@@ -496,7 +496,14 @@ export interface ConvPanel {
   line: { bars: MonthCount[]; verdict: Verdict | null; basis: string } | null
   who: { parts: WhoPart[]; n: number } | null
   doing: { rows: Doing[]; n: number; text: string } | null
+  /** Who's saying it: the groups whose own insights are in its talk this
+   *  period, each with its videos (`convGroupsOf`, 17 Oct); or, where those
+   *  could not be counted, the groups Pass E links it to, by name. */
   groups: GroupLink[]
+  /** What the groups' counts are of: its videos in the period, with the
+   *  period's words ("this week", "in October so far"). Null where the groups
+   *  are names only; absent on a dump from before it. */
+  groupBase?: { n: number; text: string } | null
   platforms: { rows: PlatformRow[]; n: number } | null
   quotes: PanelQuote[]
   askHref: string
@@ -1713,6 +1720,31 @@ async function loadRefs(
 }
 
 /**
+ * The citations behind these comments (a conversation's counted comments in
+ * the period, its refs): each comment's citing insights, with the comment's
+ * date and its video, as the group cross reads them (`GroupEvidence`). The
+ * caller keeps its own member insights' (`convGroupsOf`). One read a 250
+ * comments, paged past the 1,000-row cap on a unique order.
+ */
+async function loadCommentCitations(db: SupabaseClient, commentIds: readonly string[]): Promise<GroupEvidence[]> {
+  const ids = [...new Set(commentIds)]
+  if (ids.length === 0) return []
+  type Row = { id: string; audience_insight_id: string; comment_id: string | null; comments: { comment_date: string | null; platform: string; video_id: string } | { comment_date: string | null; platform: string; video_id: string }[] | null }
+  const pages = await mapWithLimit(chunk(ids, UUID_IN_CHUNK), READ_CONCURRENCY, (part) =>
+    selectAll<Row>(() =>
+      db.from('insight_evidence')
+        .select('id, audience_insight_id, comment_id, comments!inner(comment_date, platform, video_id)')
+        .in('comment_id', part).eq('source', 'comment')
+        .order('id'),
+    ))
+  return pages.flat().flatMap((r) => {
+    const c = Array.isArray(r.comments) ? r.comments[0] : r.comments
+    if (!c || !r.comment_id) return []
+    return [{ insightId: String(r.audience_insight_id), commentId: String(r.comment_id), platform: c.platform, platformVideoId: String(c.video_id), commentDate: c.comment_date }]
+  })
+}
+
+/**
  * Who these themes' videos are about, and whether that may print at all.
  *
  * A TENANT WITH NO BRAND RULES has nothing read (`not_read`); one with rules
@@ -2253,8 +2285,19 @@ export async function loadMarket(input: {
     ...insideIds,
     ...(convId ? [convId] : []),
   ])]
-  const whoAhead = soft('refs', loadRefs(db, clientId, { period, month, window: read?.window ?? null, runId: themedRunId, ids: whoIds }), [])
+  const refsAhead = soft('refs', loadRefs(db, clientId, { period, month, window: read?.window ?? null, runId: themedRunId, ids: whoIds }), [])
+  const whoAhead = refsAhead
     .then((refs) => soft('who', loadWho(db, clientId, { refs, company: brand, rivals: competitors.map((c) => ({ id: c.id, name: c.name })) }), { who: new Map<string, WhoPart[]>(), brands: 'not_counted' as BrandsState }))
+  // A CONVERSATION'S GROUPS, COUNTED (17 Oct): the member citations on its
+  // counted comments in the period (its refs), read on its page only and only
+  // where some group holds insights to count. Null (names only) where not.
+  const citationsAhead: Promise<GroupEvidence[] | null> = convId
+    ? Promise.all([refsAhead, personasAhead]).then(([refs, personas]) => {
+        const comments = refs.find((r) => r.theme_id === convId)?.comment_ids ?? null
+        if (!comments || !personas.some((x) => (x.insightIds ?? []).length > 0)) return null
+        return soft('citations', loadCommentCitations(db, comments), null)
+      })
+    : Promise.resolve(null)
   // What people did in a conversation: its month's videos (the stored refs).
   // Read once per conversation: the month's lead and a conversation's page.
   const kindsRead = new Map<string, Promise<{ kind: string; label: string; videos: number }[] | null>>()
@@ -2374,6 +2417,7 @@ export async function loadMarket(input: {
       ? await soft('panel', loadConvPanel({
           db, clientId, id: convId, period, month: monthBlock, week: weekBlock,
           conv, read, flag, themedRunId, nowMonth, pair: pair as PairOn, personas, noun, kindsFor, runThemes,
+          citations: citationsAhead,
         }), null)
       : null
     if (!panel || !convId) return { ...common, view: 'conversation', missing: true, subjectNav, crumbs: [marketCrumb(p)] }
@@ -2606,17 +2650,20 @@ async function loadConvPanel(a: {
   themedRunId: string | null
   nowMonth: string
   pair: PairOn
-  personas: readonly { key: string; name: string; registryIds: readonly string[] }[]
+  personas: readonly PersonaLink[]
   noun: string | null
   kindsFor: (id: string) => Promise<{ kind: string; label: string; videos: number }[] | null>
   runThemes: ReadonlyMap<string, RunTheme>
+  /** Its member citations on its counted comments in the period, where read
+   *  (`loadCommentCitations`), read beside the rest: its groups' counts. */
+  citations?: Promise<GroupEvidence[] | null>
 }): Promise<ConvPanel | null> {
   const { db, clientId, id } = a
   const registryLabels = a.conv ? new Map<string, string>() : await soft('registry', loadRegistryLabels(db, clientId, [id]), new Map<string, string>())
   const label = a.conv?.label ?? registryLabels.get(id) ?? null
   if (!label) return null
   const kind = a.conv?.kind ?? a.runThemes.get(id)?.kind ?? null
-  const [line, monthRow, kinds, quotes, description] = await Promise.all([
+  const [line, monthRow, kinds, quotes, description, citations] = await Promise.all([
     soft('line', loadThemeSeries(db, clientId, [id], a.month.month, 12).then((set) => {
       const s = set.get(id)
       return s ? themeMonthLine(s, a.month.month, a.pair) : null
@@ -2625,6 +2672,7 @@ async function loadConvPanel(a: {
     a.kindsFor(id),
     soft('quotes', loadThemeQuotes(db, clientId, a.themedRunId, new Map([[id, kind]]), a.month.month), new Map<string, { candidates: CiteCandidate[]; texts: string[] }>()),
     soft('description', loadDescription(db, clientId, a.themedRunId, id), null),
+    a.citations ?? Promise.resolve(null),
   ])
   const picked = pickQuotes(quotes.get(id)?.candidates ?? [], {
     month: a.month.month, kind, count: MARKET_QUOTES, skipOffers: true,
@@ -2639,6 +2687,10 @@ async function loadConvPanel(a: {
   }
   const doing = doingOf(kinds, conv.month, a.noun)
   const platforms = platformRows(conv.mix, a.period === 'week' ? 'week' : 'month')
+  const counted = convGroupsOf({
+    id, label, period: a.period, month: a.month, window: a.week?.window ?? null, personas: a.personas,
+    citations, members: a.runThemes.get(id)?.memberIds ?? [], n: a.period === 'week' ? conv.week : conv.month,
+  })
   return {
     id,
     label,
@@ -2651,7 +2703,8 @@ async function loadConvPanel(a: {
     line: line ? { bars: lineBars(line, a.nowMonth), verdict: line.verdict, basis: 'the category’s videos' } : null,
     who: conv.who.length > 0 ? { parts: conv.who, n: conv.who.reduce((s, x) => s + x.videos, 0) } : null,
     doing: doing.length > 0 && conv.month ? { rows: doing, n: conv.month, text: a.month.soFar ? `in ${longMonth(a.month.month)} so far` : `in ${longMonth(a.month.month)}` } : null,
-    groups: groupsOf(id, a.personas),
+    groups: counted ? counted.groups : groupsOf(id, a.personas),
+    groupBase: counted?.base ?? null,
     platforms: platforms ? { rows: platforms.rows, n: platforms.n } : null,
     quotes: picked.map(panelQuoteOf),
     askHref: askAboutTheme({ label, kind }),
@@ -2822,19 +2875,15 @@ export function subjectDetailOf(input: {
 
   // Who's saying it: the group × subject cross, read from the subject's side
   // over its month's talk (every row handed in is one of its members').
-  const groupRows = groupSubjects({
+  const groups = groupCountsOf({
+    id: input.subjectId,
+    name: input.name,
     month: m,
-    personas: input.personas.filter((p) => (p.insightIds ?? []).length > 0).map((p) => ({ key: p.key, name: p.name, insightIds: p.insightIds ?? [] })),
+    personas: input.personas,
     evidence: monthRows.map((e) => ({ insightId: e.insightId, commentId: e.commentId, platform: e.video.platform, platformVideoId: e.video.videoId, commentDate: e.commentDate })),
-    memberships: [...input.members].map((insightId) => ({ subjectId: input.subjectId, insightId })),
-    subjects: new Map([[input.subjectId, input.name]]),
+    members: input.members,
     market: new Map(monthRows.map((e) => [commentVideoKey(e.video.platform, e.video.videoId), e.video.uuid])),
   })
-  const groups = groupRows
-    .map((g) => ({ g, k: g.subjects[0]?.k ?? 0 }))
-    .filter((x) => x.k > 0)
-    .sort((a, b) => b.k - a.k || a.g.name.localeCompare(b.g.name))
-    .map((x) => ({ ...groupLink(x.g.key, x.g.name), videos: x.k }))
 
   const where = platformRows(platformMixOf(basis), weekRows ? 'week' : 'month')
   const span = [...new Set([...monthRows, ...(weekRows ?? [])])]
@@ -2861,6 +2910,82 @@ export function subjectDetailOf(input: {
     platforms: where ? { rows: where.rows, n: where.n, month: monthWhere } : quietWeek ? { rows: [], n: 0, month: monthWhere } : null,
     quotes: quotes.map(subjectQuoteOf),
   }
+}
+
+/**
+ * WHO'S SAYING IT, COUNTED: the groups whose own insights are in a set's
+ * talk, each with its videos, the most first; groups with none of it are
+ * left out. ONE READER for a subject's page and a conversation's (17 Oct):
+ * the group × subject cross (`groupSubjects`, lib/reading/cross.ts) read
+ * from the set's side, the set's member insights standing as its one
+ * "subject" over the evidence handed in (its comment citations, dated in the
+ * month, or inside `window` where one is given), on the videos `market`
+ * names. A group is a count, never a share and never compared (decision 2).
+ * Pure.
+ */
+export function groupCountsOf(a: {
+  /** The set: a subject's id and name, or a conversation's. */
+  id: string
+  name: string
+  month: string
+  window?: { from: string; to: string } | null
+  personas: readonly Pick<PersonaLink, 'key' | 'name' | 'insightIds'>[]
+  evidence: readonly GroupEvidence[]
+  members: Iterable<string>
+  market: ReadonlyMap<string, string>
+}): GroupLink[] {
+  const rows = groupSubjects({
+    month: a.month,
+    window: a.window ?? null,
+    personas: a.personas.filter((p) => (p.insightIds ?? []).length > 0).map((p) => ({ key: p.key, name: p.name, insightIds: p.insightIds ?? [] })),
+    evidence: a.evidence,
+    memberships: [...a.members].map((insightId) => ({ subjectId: a.id, insightId })),
+    subjects: new Map([[a.id, a.name]]),
+    market: a.market,
+  })
+  return rows
+    .map((g) => ({ g, k: g.subjects[0]?.k ?? 0 }))
+    .filter((x) => x.k > 0)
+    .sort((x, y) => y.k - x.k || x.g.name.localeCompare(y.g.name))
+    .map((x) => ({ ...groupLink(x.g.key, x.g.name), videos: x.k }))
+}
+
+/**
+ * A CONVERSATION'S "WHO'S SAYING IT", COUNTED (17 Oct, F2-Market-
+ * Conversation: "New amputees, first year · 15 of 23"): the subject page's
+ * reader (`groupCountsOf`) over the conversation's own talk in the period:
+ * the citations on its counted comments (`citations`, the period's refs)
+ * by its member insights in the themed run (`members`), dated in the period
+ * (the week's window, or the month). Each count is of the conversation's
+ * videos in the period (`n`, the figure its stats print: "23 of 241 videos
+ * this week"), and a group's videos are among them. Null, so the page keeps
+ * the groups Pass E links it to by name, where no count can stand: the
+ * citations were not read, it has no member or no n, no group holds
+ * insights, or a count would pass n. Pure.
+ */
+export function convGroupsOf(a: {
+  id: string
+  label: string
+  period: Period
+  month: Pick<MarketMonth, 'month' | 'text'>
+  window: { from: string; to: string } | null
+  personas: readonly Pick<PersonaLink, 'key' | 'name' | 'insightIds'>[]
+  citations: readonly GroupEvidence[] | null
+  members: readonly string[]
+  n: number | null
+}): { groups: GroupLink[]; base: { n: number; text: string } } | null {
+  if (!a.citations || a.members.length === 0 || a.n == null || a.n <= 0) return null
+  if (!a.personas.some((p) => (p.insightIds ?? []).length > 0)) return null
+  const week = a.period === 'week' && a.window
+  // Every citation handed in is on one of the conversation's counted videos,
+  // so the videos are the comments' own.
+  const market = new Map(a.citations.map((e) => [commentVideoKey(e.platform, e.platformVideoId), commentVideoKey(e.platform, e.platformVideoId)]))
+  const groups = groupCountsOf({
+    id: a.id, name: a.label, month: monthStartOf(a.month.month), window: week ? a.window : null,
+    personas: a.personas, evidence: a.citations, members: a.members, market,
+  })
+  if (groups.some((g) => (g.videos ?? 0) > a.n!)) return null
+  return { groups, base: { n: a.n, text: week ? 'this week' : `in ${a.month.text}` } }
 }
 
 /**

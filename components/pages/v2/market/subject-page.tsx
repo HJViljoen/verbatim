@@ -9,7 +9,7 @@ import { platformRows, type MarketData, type SubjectPage, type SubjectPanel } fr
 import { SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { cn } from '@/lib/utils'
 import { SectionHead } from './analysis'
-import { ASK, QuotesSection, shareBars, SubjectBase } from './panel'
+import { ASK, GroupRows, QuotesSection, shareBars, SubjectBase } from './panel'
 import { Label, OLINK, Stored } from './parts'
 import { PlatformMonthRow } from './rail'
 import { ConversationRows } from './table'
@@ -181,17 +181,7 @@ function NumbersCard({ page, data }: { page: SubjectPage; data: MarketData }) {
         <div className="grid grid-cols-1 gap-x-10 gap-y-[26px] border-t border-track pt-6 max-sm:gap-y-0 max-sm:border-t-0 max-sm:pt-0 min-[1180px]:grid-cols-3">
           <PanelSection label={<>Who’s saying it · <span data-copy="level">of {fmtInt(detail.cited?.month ?? detail.doing?.n ?? 0)}</span> {`in ${panel.monthText}`}</>} className="max-sm:border-t max-sm:border-track max-sm:pt-[18px]">
             {detail.groups.length > 0
-              ? (
-                <>
-                  {detail.groups.slice(0, 4).map((g) => (
-                    <Link key={g.key} href={g.href} className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-[14px] text-foreground no-underline hover:bg-inner">
-                      <span data-copy="subject" data-slot="pass_e_persona">{g.name}</span>
-                      {g.videos != null ? <span data-copy="level" className="whitespace-nowrap font-mono text-[13px] tabular-nums text-secondary-foreground">{fmtInt(g.videos)} of {fmtInt(detail.cited?.month ?? 0)}</span> : null}
-                    </Link>
-                  ))}
-                  <p className="m-0 text-[12px] text-muted-foreground">Each opens in Voices</p>
-                </>
-              )
+              ? <GroupRows groups={detail.groups.slice(0, 4)} n={detail.cited?.month ?? 0} />
               : <p className="m-0 text-[13.5px] text-muted-foreground">No group’s own talk is in it yet.</p>}
           </PanelSection>
           <PanelSection label={detail.doing ? <>What people did · <span data-copy="level">of {fmtInt(detail.doing.n)}</span> {detail.doing.text}</> : 'What people did'} className="max-sm:mt-[18px] max-sm:border-t max-sm:border-track max-sm:pt-[18px]">

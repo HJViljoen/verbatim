@@ -5,7 +5,7 @@ import { WEEKS_FAILED, type HomeWeeks } from '../home'
 import { notReadyIds } from '../subject-place'
 import type { UnusualFlag } from '../week'
 import {
-  buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, convHref, convPageOf, conversationCrumbs, flagCardOf, flagVerdict, groupsOf, insideOf,
+  buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, convGroupsOf, convHref, convPageOf, conversationCrumbs, flagCardOf, flagVerdict, groupsOf, insideOf,
   lineBars, marketLongRunFor, marketMonths, marketParams, monthsText, ourReadOf, panelStats, pickHero, pickWeekSides, platformRows, subjectCardsOf, subjectCrumbs, subjectHref,
   subjectDetailOf, subjectNavOf, subjectTableHref, subjectWeekLevel, tableMonths, weekWindows, convOf, doingOf, alsoTalkedOf, earlierNewOf, leadDoing, weekCardOf, weekCrumbs, weekPageOf, withMonthPlatforms,
   type ConvInput, type ConvPanel, type MarketConv, type MarketData, type MarketMonth, type MarketParams, type MarketWeek, type MonthCount,
@@ -16,7 +16,7 @@ import type { DatedEvidence } from '../../written/evidence'
 import type { LongRunReadData, WeekReadData } from '../../written/types'
 import type { PublishedWeekRead } from '../../written/published'
 import { weekReadDates } from '../../reports/weekly-read'
-import type { ThemeMonthLine } from '../../reading/cross'
+import type { GroupEvidence, ThemeMonthLine } from '../../reading/cross'
 
 // MARKET'S RENDER FIXTURE (depth v2, T3): an Össur-shaped week, drawn from the
 // E2 boards' own numbers and re-cut to decision 1 (no weekly direction words,
@@ -758,6 +758,33 @@ export function marketWeekFixture(opts: FixtureOptions = {}): MarketData {
   }
 }
 
+/** Each group's part of a conversation's talk in the fixture, by its videos
+ *  in the period: New amputees on most of "How long a liner lasts" (the
+ *  board's 15 of 23), the other groups Pass E links to a conversation on
+ *  fewer. */
+const GROUP_SHARE: Record<string, number> = { 'new-amputees': 0.65, caregivers: 0.22, 'long-time-users': 0.2, active: 0.3 }
+
+/** A conversation's groups, counted by the page's own builder
+ *  (`convGroupsOf`) over citations shaped as the evidence read returns them:
+ *  each group Pass E links it to cites some of its videos in the period, and
+ *  once on 30 Sep, outside the week and the month, which never counts. */
+export function fixtureConvGroups(cid: string, conv: MarketConv, period: MarketParams['period']) {
+  const linked = PERSONAS.filter((p) => p.registryIds.includes(cid))
+  const n = period === 'week' ? conv.week : conv.month
+  const citations: GroupEvidence[] = linked.flatMap((p) => [
+    ...Array.from({ length: Math.round((GROUP_SHARE[p.key] ?? 0.1) * (n ?? 0)) }, (_, i) => ({
+      insightId: `${p.key}-${cid}`, commentId: `${p.key}-${cid}-c${i}`, platform: 'tiktok', platformVideoId: `${cid}-v${i}`,
+      commentDate: `2026-10-${String(5 + (i % 7)).padStart(2, '0')}T10:00:00.000Z`,
+    })),
+    { insightId: `${p.key}-${cid}`, commentId: `${p.key}-${cid}-early`, platform: 'tiktok', platformVideoId: `${cid}-early`, commentDate: '2026-09-30T10:00:00.000Z' },
+  ])
+  return convGroupsOf({
+    id: cid, label: conv.label, period, month: MONTH, window: WINDOW, citations, n,
+    personas: linked.map((p) => ({ ...p, insightIds: [`${p.key}-${cid}`, `${p.key}-elsewhere`] })),
+    members: linked.map((p) => `${p.key}-${cid}`),
+  })
+}
+
 /** The open conversation in full. */
 function fixturePanel(n: number, period: MarketParams['period'], convs: readonly MarketConv[], input: ConvInput, read: WeekReadData, flagged: boolean): ConvPanel {
   const cid = id(n)
@@ -771,6 +798,7 @@ function fixturePanel(n: number, period: MarketParams['period'], convs: readonly
   }
   const bars: MonthCount[] = lineBars(line, OCT)
   const where = platformRows(conv.mix, period === 'week' ? 'week' : 'month')
+  const counted = fixtureConvGroups(cid, conv, period)
   return {
     id: cid,
     label: conv.label,
@@ -783,7 +811,8 @@ function fixturePanel(n: number, period: MarketParams['period'], convs: readonly
     line: { bars, verdict: null, basis: 'the category’s videos' },
     who: conv.who.length > 0 ? { parts: conv.who, n: conv.who.reduce((s, x) => s + x.videos, 0) } : null,
     doing: { rows: doingOf(HERO_KINDS, conv.month, null), n: conv.month ?? 0, text: 'in October so far' },
-    groups: groupsOf(cid, PERSONAS),
+    groups: counted ? counted.groups : groupsOf(cid, PERSONAS),
+    groupBase: counted?.base ?? null,
     platforms: where ? { rows: where.rows, n: where.n } : null,
     quotes: n === 1 ? [
       { text: 'Is it normal that my liner feels loose after six months? Nobody told me they wear out.', lang: null, english: null, source: 'Instagram · 6 Oct', about: null },

@@ -45,6 +45,13 @@ function tables() {
     month_kind_readings: ['2026-09-01', '2026-10-01'].flatMap((month) => ['question', 'praise'].map((kind) => ({ client_id: CLIENT, month, audience: 'industry-other', kind, videos: 120, comments: 400, status: 'filling', run_id: RUN }))),
     month_evidence_refs: themes.map((n) => ({ client_id: CLIENT, month: '2026-10-01', object_kind: 'theme', audience: 'industry-other', object_id: fixtureId(n), video_ids: ['v1'], comment_ids: ['c1'] })),
     audience_insights: [],
+    // Conversation 3's counted comment this week, cited by its member insight
+    // (one of the carers' own) and by another conversation's.
+    insight_evidence: [
+      { id: 'e1', audience_insight_id: 'ins-3', comment_id: 'c1', source: 'comment' },
+      { id: 'e2', audience_insight_id: 'ins-1', comment_id: 'c1', source: 'comment' },
+    ],
+    comments: [{ id: 'c1', client_id: CLIENT, comment_date: '2026-10-07T10:00:00.000Z', platform: 'tiktok', video_id: 'n1' }],
     consumer_profiles: [{ client_id: CLIENT, run_date: '2026-10-12', personas: [{ key: 'carers', name: 'Caregivers and family', registryIds: [fixtureId(3)], insightIds: ['ins-3'] }] }],
     competitors: [],
     tracking_configs: [{ client_id: CLIENT, competitor_names: [], own_handles: {} }],
@@ -76,9 +83,11 @@ async function statements(raw: Record<string, string>, view?: MarketView): Promi
 // TODAY'S MARKET before the pages (17 Oct, measured by this harness at
 // 8be41baa): the week 39, the week with the lead conversation open in place
 // 45, the week with a subject open in place 40, the month 28. Each page now
-// reads only what it prints. A subject's page was 34 at 2fc55c9b and reads
-// one more since its week's share moved to the level's base (17 Oct): the
-// `window_subject_readings` call (the window's market is the window read's,
+// reads only what it prints. At 2fc55c9b a conversation's page was 40 and a
+// subject's 34; each reads one more since 17 Oct: a conversation's counts its
+// groups (`insight_evidence` on its counted comments, one read a 250), and a
+// subject's reads its week's share on the level's base
+// (`window_subject_readings`; the window's market is the window read's,
 // memoised).
 describe('Market\'s statements, page by page', () => {
   it('counts each load', async () => {
@@ -88,7 +97,11 @@ describe('Market\'s statements, page by page', () => {
     const subject = await statements({}, { kind: 'subject', id: fixtureSubjectId('cost') })
     const subjectMonth = await statements({ period: 'month' }, { kind: 'subject', id: fixtureSubjectId('cost') })
     const read = await statements({}, { kind: 'week' })
-    expect({ week: week.total, month: month.total, conv: conv.total, subject: subject.total, read: read.total }).toEqual({ week: 36, month: 28, conv: 40, subject: 35, read: 15 })
+    expect({ week: week.total, month: month.total, conv: conv.total, subject: subject.total, read: read.total }).toEqual({ week: 36, month: 28, conv: 41, subject: 35, read: 15 })
+    // A conversation's groups are counted on its page alone (the week's
+    // read resolves its quotes' evidence refs there, as it always has).
+    expect(conv.by['from:insight_evidence']).toBe(1)
+    for (const page of [week, month, subject]) expect(page.by['from:insight_evidence']).toBeUndefined()
     // The week's share is read once, on a subject's page this week alone.
     expect(subject.by['rpc:window_subject_readings']).toBe(1)
     // Its n is the newest window read's own market: three windows, no fourth.
@@ -141,6 +154,32 @@ describe('a subject\'s week tile and month tile read one base', () => {
     const db = fakeDb(tables() as never, rpcs() as never)
     const data = await loadMarket({ supabase: db.client as never, clientId: CLIENT, reading: readingHandle(CLIENT, db.client as never), params: marketParams({ period: 'month' }), view: { kind: 'subject', id: fixtureSubjectId('cost') }, now: new Date('2026-10-14T09:00:00.000Z') })
     expect(data!.subjectPage!.week).toBeNull()
+  })
+})
+
+// A CONVERSATION'S GROUPS, COUNTED (17 Oct, F2-Market-Conversation: "New
+// amputees, first year · 15 of 23"): the citations on its counted comments
+// this week, its own member insights' alone, each group's videos of the
+// conversation's videos this week (its stats' figure).
+describe('a conversation\'s "who\'s saying it" counts each group over its own videos', () => {
+  async function load(over: Record<string, unknown> = {}) {
+    const db = fakeDb({ ...tables(), ...over } as never, rpcs() as never)
+    return loadMarket({ supabase: db.client as never, clientId: CLIENT, reading: readingHandle(CLIENT, db.client as never), params: marketParams({}), view: { kind: 'conversation', id: fixtureId(3) }, now: new Date('2026-10-14T09:00:00.000Z') })
+  }
+
+  it('Caregivers and family: 1 of the conversation\'s 7 videos this week', async () => {
+    const page = (await load())!.convPage!
+    expect(page.week).toMatchObject({ k: 7 })
+    expect(page.panel.groupBase).toEqual({ n: 7, text: 'this week' })
+    expect(page.panel.groups).toEqual([{ key: 'carers', name: 'Caregivers and family', href: '/dashboard/voices?group=carers#group-panel', videos: 1 }])
+  })
+
+  it('a citations read that fails keeps Pass E\'s names, with no count and no base', async () => {
+    const { insight_evidence: _gone, ...rest } = tables()
+    const db = fakeDb(rest as never, rpcs() as never)
+    const page = (await loadMarket({ supabase: db.client as never, clientId: CLIENT, reading: readingHandle(CLIENT, db.client as never), params: marketParams({}), view: { kind: 'conversation', id: fixtureId(3) }, now: new Date('2026-10-14T09:00:00.000Z') }))!.convPage!
+    expect(page.panel.groupBase).toBeNull()
+    expect(page.panel.groups).toEqual([{ key: 'carers', name: 'Caregivers and family', href: '/dashboard/voices?group=carers#group-panel' }])
   })
 })
 

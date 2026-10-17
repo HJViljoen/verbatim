@@ -11,7 +11,7 @@ import type { WeekReadData } from '../../written/types'
 import { MARKET_LONG_RUN_ANCHOR, marketMonthHref } from '../../nav'
 import {
   buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, categoryThemeVideos, categoryVideos, convHref,
-  convOf, cutWindows, doingOf, leadDoing, marketWeeksOf, flagCardOf, flagVerdict, groupsOf, isRegistryId, insideOf, marketHref, marketMonths, marketParams,
+  convGroupsOf, convOf, cutWindows, doingOf, leadDoing, marketWeeksOf, flagCardOf, flagVerdict, groupCountsOf, groupsOf, isRegistryId, insideOf, marketHref, marketMonths, marketParams,
   mergeMixes, monthsText, ourReadOf, panelStats, periodHref, personasOf, pickHero, pickWeekSides, platformRows, subjectHref, subjectTableHref,
   flagBaseWords, monthSoFar, tableFilterOf, tableMonths, topSpans, unmeasuredOf, weekWindows, whoOf, windowLabel, withMonthPlatforms, MARKET_TABLE_ROWS,
   alsoTalkedOf, earlierNewOf, printableFlags, sideIds, subjectAxis,
@@ -482,6 +482,51 @@ describe('a conversation\'s and a subject\'s page', () => {
     expect(personas).toEqual([{ key: 'k', name: 'Caregivers', registryIds: ['t1'] }, { key: 'No key', name: 'No key', registryIds: [] }])
     expect(groupsOf('t1', personas)).toEqual([{ key: 'k', name: 'Caregivers', href: '/dashboard/voices?group=k#group-panel' }])
     expect(personasOf(null)).toEqual([])
+  })
+
+  describe('who is saying it, counted (17 Oct): the subject page\'s reader over a conversation\'s own talk', () => {
+    const WEEK = { from: '2026-10-05T00:00:00.000Z', to: '2026-10-12T00:00:00.000Z' }
+    const month = { month: '2026-10-01', text: 'October so far' }
+    const personas = [
+      { key: 'new', name: 'New amputees', registryIds: [], insightIds: ['a1', 'a2', 'x9'] },
+      { key: 'care', name: 'Caregivers', registryIds: [], insightIds: ['c1'] },
+      { key: 'quiet', name: 'Quiet', registryIds: [], insightIds: ['q1'] },
+      { key: 'old', name: 'An old profile', registryIds: [] },
+    ]
+    const cite = (insightId: string, video: string, day: string) => ({ insightId, commentId: `${insightId}-${video}-${day}`, platform: 'tiktok', platformVideoId: video, commentDate: `${day}T10:00:00.000Z` })
+    const citations = [
+      cite('a1', 'v1', '2026-10-06'), cite('a2', 'v1', '2026-10-07'), cite('a2', 'v2', '2026-10-08'),
+      // Before the week, in the month: the month counts it, the week does not.
+      cite('a1', 'v3', '2026-10-02'),
+      // Another theme's insight on the same comment's video: not the conversation's talk.
+      cite('x9', 'v4', '2026-10-09'),
+      cite('c1', 'v2', '2026-10-10'),
+    ]
+    const base = { id: 'conv', label: 'How long a liner lasts', month, window: WEEK, personas, citations, members: ['a1', 'a2', 'c1', 'q1'] }
+
+    it('each group\'s videos of the conversation\'s, in the week\'s window, the most first; a group with none left out', () => {
+      expect(convGroupsOf({ ...base, period: 'week', n: 23 })).toEqual({
+        groups: [
+          { key: 'new', name: 'New amputees', href: '/dashboard/voices?group=new#group-panel', videos: 2 },
+          { key: 'care', name: 'Caregivers', href: '/dashboard/voices?group=care#group-panel', videos: 1 },
+        ],
+        base: { n: 23, text: 'this week' },
+      })
+      expect(convGroupsOf({ ...base, period: 'month', n: 35 })).toMatchObject({ groups: [{ key: 'new', videos: 3 }, { key: 'care', videos: 1 }], base: { n: 35, text: 'in October so far' } })
+    })
+
+    it('one reader: the subject page\'s, over the same rows, gives the same groups', () => {
+      const market = new Map(citations.map((e) => [`${e.platform}|${e.platformVideoId}`, `${e.platform}|${e.platformVideoId}`]))
+      expect(convGroupsOf({ ...base, period: 'week', n: 23 })?.groups).toEqual(groupCountsOf({ id: 'conv', name: 'How long a liner lasts', month: month.month, window: WEEK, personas, evidence: citations, members: base.members, market }))
+    })
+
+    it('null, so Pass E\'s names stand, where no count can: nothing read, no member, no n, no group holding insights, a count past n', () => {
+      expect(convGroupsOf({ ...base, period: 'week', n: 23, citations: null })).toBeNull()
+      expect(convGroupsOf({ ...base, period: 'week', n: 23, members: [] })).toBeNull()
+      expect(convGroupsOf({ ...base, period: 'week', n: null })).toBeNull()
+      expect(convGroupsOf({ ...base, period: 'week', n: 23, personas: [personas[3]] })).toBeNull()
+      expect(convGroupsOf({ ...base, period: 'week', n: 1 })).toBeNull()
+    })
   })
 
   it('states the week, the month, last month and the flag\'s baseline, each with its n', () => {

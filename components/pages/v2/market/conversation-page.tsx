@@ -7,7 +7,7 @@ import { fmtInt } from '@/lib/format'
 import type { ConvPage, MarketData } from '@/lib/pages/v2/market'
 import { cn } from '@/lib/utils'
 import { BRANDS_NOT_COUNTED, BRANDS_NOT_READ } from '@/lib/pages/v2/voices'
-import { ASK, QuotesSection, shareBars, WhoLine } from './panel'
+import { ASK, GroupRows, QuotesSection, shareBars, WhoLine } from './panel'
 import { newVerdict, Stored } from './parts'
 import { PAGE_CARD, READ } from './subject-page'
 
@@ -15,7 +15,8 @@ import { PAGE_CARD, READ } from './subject-page'
 // E2's conversation panel, its anatomy whole, as a page. Its subject and its
 // chip, its name, the stats (each "of N"), our read, week by week (three bare
 // counts) and month by month where the data has
-// months, who it is about, what people did, who is saying it and where, three
+// months, who it is about, what people did, who is saying it (each group's
+// videos "k of n"), and where, three
 // comments through the quote gate, the Agent. The data is `loadConvPanel`'s,
 // as the panel had it.
 
@@ -29,6 +30,7 @@ export function ConversationPageBody({ page, data }: { page: ConvPage; data: Mar
       : null
   const weeks = page.weeks.length > 0 ? page.weeks : null
   const months = panel.line && panel.line.bars.length > 0 ? panel.line : null
+  const base = panel.groupBase ?? null
   return (
     <article id="conversation" aria-labelledby="conv-head" className={PAGE_CARD}>
       <div className="flex flex-col gap-2.5">
@@ -91,19 +93,13 @@ export function ConversationPageBody({ page, data }: { page: ConvPage; data: Mar
               ? panel.doing.rows.map((r) => <TickBarRow key={r.kind} name={r.label} value={fmtInt(r.k)} pct={r.n > 0 ? (100 * r.k) / r.n : 0} valueWidth="narrow" label={`${fmtInt(r.k)} of ${fmtInt(r.n)}`} />)
               : <p className="m-0 text-[13.5px] text-muted-foreground">Not read yet.</p>}
           </PanelSection>
-          <PanelSection label="Who’s saying it">
+          {/* Each group's videos of the conversation's in the period, the
+              base named in the label as the subject's page names its own
+              (17 Oct); Pass E's names alone where they were not counted. */}
+          <PanelSection label={base ? <>Who’s saying it · <span data-copy="level">of {fmtInt(base.n)}</span> {base.text}</> : 'Who’s saying it'}>
             {panel.groups.length > 0
-              ? (
-                <>
-                  {panel.groups.map((g) => (
-                    <Link key={g.key} href={g.href} className="-mx-2 rounded-md px-2 py-1 text-[14px] text-foreground no-underline hover:bg-inner">
-                      <span data-copy="subject" data-slot="pass_e_persona">{g.name}</span>
-                    </Link>
-                  ))}
-                  <p className="m-0 text-[12px] text-muted-foreground">Each opens in Voices</p>
-                </>
-              )
-              : <p className="m-0 text-[13.5px] text-muted-foreground">Not linked to a group.</p>}
+              ? <GroupRows groups={panel.groups} n={base?.n ?? null} />
+              : <p className="m-0 text-[13.5px] text-muted-foreground">{base ? `No group’s own talk is in it ${base.text}.` : 'Not linked to a group.'}</p>}
           </PanelSection>
           <PanelSection label={panel.platforms ? <>Where · <span data-copy="level">of {fmtInt(panel.platforms.n)}</span> {data.period === 'week' ? 'this week' : `in ${data.month.text}`}</> : 'Where'}>
             {panel.platforms

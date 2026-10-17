@@ -9,7 +9,7 @@ import { ConversationPageBody } from './conversation-page'
 // A CONVERSATION'S PAGE (depth as pages, 17 Oct; F2-Market-Conversation): E2's
 // conversation panel, whole, as a page, from the page fixture through the
 // panel's own builders (`loadConvPanel`'s shape: `panelStats`, `ourReadOf`,
-// `lineBars`, `doingOf`, `groupsOf`, `platformRows`, the quote gate), under
+// `lineBars`, `doingOf`, `convGroupsOf`, `platformRows`, the quote gate), under
 // its breadcrumb. Quotes live here (level 2), never on the top layer.
 
 const LINER = marketConversationFixture(1)
@@ -41,7 +41,10 @@ describe('a conversation under its ready subject, this week', () => {
   })
 
   it('who it is about, what people did, who is saying it, where, each "of N"', () => {
-    expect(text).toContain('Who it’s about Össur 4 · others 19 What people did · of 35 in October so far Complained about something 14 Asked a question 9 Pushed back 4 Who’s saying it Long-time users upgrading New amputees in their first year Each opens in Voices Where · of 23 this week TikTok 14 Instagram 5 YouTube 4')
+    // Who's saying it counts each group's videos of the conversation's 23 this
+    // week, the base in its label (F2-Market-Conversation, 17 Oct), the most first.
+    expect(text).toContain('Who it’s about Össur 4 · others 19 What people did · of 35 in October so far Complained about something 14 Asked a question 9 Pushed back 4 Who’s saying it · of 23 this week New amputees in their first year 15 of 23 Long-time users upgrading 5 of 23 Each opens in Voices Where · of 23 this week TikTok 14 Instagram 5 YouTube 4')
+    expect(html).toContain('href="/dashboard/voices?group=new-amputees#group-panel"')
   })
 
   it('three comments at level 2, as quote nodes, with who the video is filed under; the Agent', () => {
@@ -78,6 +81,8 @@ describe('every state keeps its frame', () => {
     const d = marketConversationFixture(1, { period: 'month' })
     const text = renderText(page(d))
     expect(text).toMatch(/^Fit & comfort Market \/ Fit & comfort \/ How long a liner lasts This week This month Over time October so far · in 35 of 300 category videos/)
+    // The groups count over the month's 35, as the stats do.
+    expect(text).toContain('Who’s saying it · of 35 in October so far New amputees in their first year 23 of 35 Long-time users upgrading 7 of 35 Each opens in Voices')
     expect(text).not.toContain('Week by week')
     expect(text).not.toContain('this week')
     assertCopyContract(page(d))
@@ -89,6 +94,15 @@ describe('every state keeps its frame', () => {
     expect(text).toMatch(/^Market Market \/ How long a liner lasts /)
     expect(text).toContain('Who it’s about Brands are not counted for this workspace yet.')
     assertCopyContract(page(d))
+  })
+
+  it('groups that could not be counted: Pass E\'s names, no count and no base; none counted says so in the period\'s words', () => {
+    const names = { ...LINER.convPage!, panel: { ...LINER.convPage!.panel, groupBase: null, groups: LINER.convPage!.panel.groups.map(({ videos: _v, ...g }) => g) } }
+    const t = renderText(<ConversationPageBody page={names} data={LINER} />)
+    expect(t).toContain('Who’s saying it New amputees in their first year Long-time users upgrading Each opens in Voices Where')
+    const none = { ...LINER.convPage!, panel: { ...LINER.convPage!.panel, groups: [] } }
+    expect(renderText(<ConversationPageBody page={none} data={LINER} />)).toContain('Who’s saying it · of 23 this week No group’s own talk is in it this week. Where')
+    assertCopyContract(<ConversationPageBody page={names} data={LINER} />)
   })
 
   it('a conversation first heard this week carries "New", the reader flag in a verdict node', () => {

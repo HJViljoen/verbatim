@@ -90,9 +90,10 @@ import { priorPrintable, type Verdict } from './verdicts'
 //
 // Groups (personas: today's groups, this month's videos; never a series)
 //   commentVideoKey(platform: string, platformVideoId: string): string   the `market` map's key
-//   groupMonthVideos(input: { month: string; personas: readonly GroupPersona[]; evidence: readonly GroupEvidence[]; market: ReadonlyMap<string, string> }): GroupMonthVideos[]
-//   groupSubjects(input: { month: string; personas: readonly GroupPersona[]; evidence: readonly GroupEvidence[];
+//   groupMonthVideos(input: { month: string; window?: GroupWindow | null; personas: readonly GroupPersona[]; evidence: readonly GroupEvidence[]; market: ReadonlyMap<string, string> }): GroupMonthVideos[]
+//   groupSubjects(input: { month: string; window?: GroupWindow | null; personas: readonly GroupPersona[]; evidence: readonly GroupEvidence[];
 //     memberships: readonly GroupMembership[]; subjects: ReadonlyMap<string, string>; market: ReadonlyMap<string, string> }): GroupSubjectRow[]
+//       (`window`: a period that is not the month, such as a run's week, which may cross two months)
 //   loadGroupSubjects(handle, input: { month: string; audiences?: readonly string[] }):
 //       Promise<{ runId: string | null; runDate: string | null; videos: GroupMonthVideos[]; groups: GroupSubjectRow[]; pendingSubjects } | null>
 //       (groups' subjects: READY ones only, ruling U6, `measuredSubjects`, a ready one on none of its videos at 0)
@@ -638,14 +639,25 @@ export interface GroupSubjectRow {
 /** `platform|platformVideoId`: how a comment names its video. */
 export const commentVideoKey = (platform: string, platformVideoId: string): string => `${platform}|${platformVideoId}`
 
-/** The videos one set of insights' evidence lands on this month, in the
- *  market. */
-function videosOf(insights: ReadonlySet<string>, evidence: readonly GroupEvidence[], month: string, market: ReadonlyMap<string, string>): Set<string> {
+/** A period the cross reads in place of the month (half-open): a run's week,
+ *  which can start in one month and end in the next (Market's conversation
+ *  page, 17 Oct). `month` still names the rows. */
+export interface GroupWindow {
+  from: string
+  to: string
+}
+
+/** The videos one set of insights' evidence lands on this month (or inside
+ *  the window, where one is given), in the market. */
+function videosOf(insights: ReadonlySet<string>, evidence: readonly GroupEvidence[], month: string, market: ReadonlyMap<string, string>, window: GroupWindow | null = null): Set<string> {
   const out = new Set<string>()
+  const from = window ? Date.parse(window.from) : null
+  const to = window ? Date.parse(window.to) : null
   for (const e of evidence) {
     if (!insights.has(e.insightId) || !e.commentDate) continue
     const d = Date.parse(e.commentDate)
-    if (!Number.isFinite(d) || monthStartOf(e.commentDate) !== month) continue
+    if (!Number.isFinite(d)) continue
+    if (from != null && to != null ? d < from || d >= to : monthStartOf(e.commentDate) !== month) continue
     const video = market.get(commentVideoKey(e.platform, e.platformVideoId))
     if (video) out.add(video)
   }
@@ -661,13 +673,15 @@ function videosOf(insights: ReadonlySet<string>, evidence: readonly GroupEvidenc
  */
 export function groupMonthVideos(input: {
   month: string
+  /** Read the comments dated inside this window instead of the month. */
+  window?: GroupWindow | null
   personas: readonly GroupPersona[]
   evidence: readonly GroupEvidence[]
   market: ReadonlyMap<string, string>
 }): GroupMonthVideos[] {
   const month = monthStartOf(input.month)
   return input.personas.map((p) => {
-    const videoIds = [...videosOf(new Set(p.insightIds), input.evidence, month, input.market)].sort()
+    const videoIds = [...videosOf(new Set(p.insightIds), input.evidence, month, input.market, input.window ?? null)].sort()
     return { key: p.key, name: p.name, month, videoIds, n: videoIds.length }
   })
 }
@@ -685,6 +699,8 @@ export function groupMonthVideos(input: {
  */
 export function groupSubjects(input: {
   month: string
+  /** Read the comments dated inside this window instead of the month. */
+  window?: GroupWindow | null
   personas: readonly GroupPersona[]
   evidence: readonly GroupEvidence[]
   memberships: readonly GroupMembership[]
@@ -699,7 +715,8 @@ export function groupSubjects(input: {
     set.add(m.insightId)
     membersOf.set(m.subjectId, set)
   }
-  const groups = groupMonthVideos({ month, personas: input.personas, evidence: input.evidence, market: input.market })
+  const window = input.window ?? null
+  const groups = groupMonthVideos({ month, window, personas: input.personas, evidence: input.evidence, market: input.market })
   const order = [...input.subjects.keys()]
   return input.personas.map((p, i) => {
     const mine = new Set(p.insightIds)
@@ -708,7 +725,7 @@ export function groupSubjects(input: {
     const counted = order.map((subjectId) => {
       const members = membersOf.get(subjectId) ?? new Set<string>()
       const insights = new Set([...members].filter((id) => mine.has(id)))
-      const k = insights.size === 0 ? 0 : videosOf(insights, input.evidence, month, input.market).size
+      const k = insights.size === 0 ? 0 : videosOf(insights, input.evidence, month, input.market, window).size
       return { subjectId, label: input.subjects.get(subjectId) as string, k, n }
     })
     const subjects = [

@@ -1,9 +1,10 @@
+import Link from 'next/link'
 import { BrandChip } from '@/components/colour-roles'
 import { ProportionBar } from '@/components/proportion-bar'
 import { PanelSection } from '@/components/v2'
 import { fmtInt, fmtPct } from '@/lib/format'
 import { marketLabelsOf } from '@/lib/brands/labels'
-import { MARKET_PANEL_MONTHS, type MarketData, type MonthCount, type PanelQuote, type SubjectDetail } from '@/lib/pages/v2/market'
+import { MARKET_PANEL_MONTHS, type GroupLink, type MarketData, type MonthCount, type PanelQuote, type SubjectDetail } from '@/lib/pages/v2/market'
 import type { WhoPart } from '@/lib/written/types'
 import { translationLabel, translationNote } from '@/components/quote-block'
 import { About, OLINK } from './parts'
@@ -11,7 +12,8 @@ import { About, OLINK } from './parts'
 // THE PARTS MARKET'S PAGES SHARE (17 Oct; until then the open panels', E2-
 // Market-Open): the Agent's button, a share line's month bars, the three
 // comments (level 2: quotes live on a page, never on the top layer), who a
-// set of videos is about, and the subject's one base, named. The pages
+// set of videos is about, who is saying it, and the subject's one base,
+// named. The pages
 // themselves are ./subject-page.tsx and ./conversation-page.tsx.
 
 export const ASK = 'inline-flex min-h-[38px] cursor-pointer items-center gap-2 rounded-lg bg-brand px-3.5 text-[13.5px] font-semibold text-brand-foreground no-underline transition-colors hover:bg-brand/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
@@ -77,6 +79,26 @@ export function WhoLine({ parts, data }: { parts: readonly WhoPart[]; data: Mark
     <>
       {parts.some((p) => p.about !== 'market') ? <ProportionBar of="videos" segments={segments} /> : null}
       <About parts={parts} brand={data.brand} noun={data.noun} />
+    </>
+  )
+}
+
+/**
+ * WHO'S SAYING IT, one list for a subject's page and a conversation's (17
+ * Oct): each group by name, opening in Voices, with its videos "k of n" where
+ * they were counted (`GroupLink.videos`, `groupCountsOf`) over `n`, the base
+ * the section's label names. A count, never a share (decision 2).
+ */
+export function GroupRows({ groups, n }: { groups: readonly GroupLink[]; n: number | null }) {
+  return (
+    <>
+      {groups.map((g) => (
+        <Link key={g.key} href={g.href} className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-[14px] text-foreground no-underline hover:bg-inner">
+          <span data-copy="subject" data-slot="pass_e_persona">{g.name}</span>
+          {g.videos != null && n != null ? <span data-copy="level" className="whitespace-nowrap font-mono text-[13px] tabular-nums text-secondary-foreground">{fmtInt(g.videos)} of {fmtInt(n)}</span> : null}
+        </Link>
+      ))}
+      <p className="m-0 text-[12px] text-muted-foreground">Each opens in Voices</p>
     </>
   )
 }

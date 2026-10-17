@@ -363,6 +363,17 @@ describe('groupMonthVideos and groupSubjects', () => {
     expect(quiet).toEqual({ key: 'quiet', name: 'Quiet', month: SEP, n: 0, subjects: [] })
   })
 
+  it('a window in place of the month (17 Oct): the comments dated inside it, across the month\'s edge, half-open', () => {
+    const window = { from: '2026-09-30T00:00:00Z', to: '2026-10-01T00:00:01Z' }
+    // c4 (30 Sep) and c6 (1 Oct, 00:00:00) are inside; everything else is not.
+    expect(groupMonthVideos({ month: SEP, window, personas, evidence, market }).map((g) => [g.key, g.videoIds])).toEqual([
+      ['caretaker', ['v1', 'v2']], ['athlete', []], ['quiet', []],
+    ])
+    const [care] = groupSubjects({ month: SEP, window, personas, evidence, memberships: [{ subjectId: 'conv', insightId: 'i2' }], subjects: new Map([['conv', 'A conversation']]), market })
+    expect(care).toMatchObject({ n: 2, subjects: [{ subjectId: 'conv', k: 1, n: 2 }] })
+    expect(groupMonthVideos({ month: SEP, window: { from: '2026-09-02T10:00:00Z', to: '2026-09-03T10:00:00Z' }, personas, evidence, market })[0].videoIds).toEqual(['v1'])
+  })
+
   it('reads empty inputs as empty', () => {
     expect(groupMonthVideos({ month: SEP, personas: [], evidence: [], market: new Map() })).toEqual([])
     expect(groupSubjects({ month: SEP, personas, evidence: [], memberships: [], subjects: new Map(), market })
