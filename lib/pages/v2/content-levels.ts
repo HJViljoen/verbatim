@@ -81,6 +81,11 @@ export interface ElsewhereIdea {
 export interface Elsewhere {
   /** The root's first two ideas. */
   ideas: ElsewhereIdea[]
+  /** Print the medical team line under each idea (a medical market,
+   *  `printsMedicalLine`): every printed idea carries it, as the root's cards
+   *  and the Dashboard's tile do (AGENTS.md's Content bullet). Absent on a
+   *  page dumped before it. */
+  medical?: boolean
   /** Where there is no idea to name: why, in the root row's words. */
   ideasLine: string | null
   /** The other evidence page: its name, its address and one line. */

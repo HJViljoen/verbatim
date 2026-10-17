@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { render, renderText as rawText } from '@/lib/test/render'
 import { assertCopyContract, copyNodes } from '@/lib/test/copy-contract'
 import { contentRepliesFixture } from '@/lib/pages/v2/content-levels-fixture'
+import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
 import { ContentRepliesPage, repliesMeta } from './replies-page'
 
 // THE COMMENTS WORTH A REPLY, THE EVIDENCE (G5-Content-Replies and
@@ -93,6 +94,16 @@ describe('the reply list\'s page', () => {
     const m = render(page())
     expect(m).toContain('href="/dashboard/content/ideas/i0000001-0000-4000-8000-000000000000"')
     expect(m).toContain('href="/dashboard/content/posts"')
+  })
+
+  it('prints the medical team line under each idea in the foot, in a medical market, as under every printed idea', () => {
+    const m = render(page())
+    // Two ideas, each in the wide row and in the phone's list.
+    expect(m.split(MEDICAL_LINE).length - 1).toBe(4)
+    const plain = contentRepliesFixture()
+    expect(render(<ContentRepliesPage data={{ ...plain, elsewhere: { ...plain.elsewhere, medical: false } }} />)).not.toContain(MEDICAL_LINE)
+    // No idea, no line.
+    expect(render(page({ noIdeas: true }))).not.toContain(MEDICAL_LINE)
   })
 
   it('keeps its frame where the list is empty, could not be read, or no update has covered a week', () => {

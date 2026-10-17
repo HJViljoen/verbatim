@@ -5,6 +5,7 @@ import type { EngageUnder } from '../../engage'
 import { longMonth, platformLabel, shortDate } from '../../format'
 import { nextMonth } from '../../reading/month-key'
 import { ownedPosts } from '../../reading/owned'
+import { printsMedicalLine } from '../../post-ideas/medical'
 import type { Scope } from '../../renderables/types'
 import { weekReadDates } from '../../reports/weekly-read'
 import type { Crumb } from '../crumbs'
@@ -262,6 +263,7 @@ export async function loadContentReplies(scope: Scope, opts: { now?: Date } = {}
     crumbs: [contentCrumb(), { label: 'Worth a reply', href: null }],
     elsewhere: {
       ideas: elsewhereIdeas(anchor, figures ?? null),
+      medical: printsMedicalLine(clientId),
       ideasLine: elsewhereIdeasLine(anchor.ideasState),
       page: { ...POSTS_PAGE, line: postsLine(owned ? owned.total : null, month) },
     },

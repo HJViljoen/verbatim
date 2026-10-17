@@ -8,6 +8,7 @@ import { readTranslations } from '../../quotes'
 import { nextMonth } from '../../reading/month-key'
 import { ownedPosts, type OwnedPost, type OwnedPosts } from '../../reading/owned'
 import { quoteRef } from '../../renderables/quotes-freeze'
+import { printsMedicalLine } from '../../post-ideas/medical'
 import type { Scope } from '../../renderables/types'
 import { selectAll } from '../../supabase-admin'
 import type { Crumb } from '../crumbs'
@@ -292,6 +293,7 @@ export async function loadContentPosts(scope: Scope, opts: { now?: Date } = {}):
     crumbs: [contentCrumb(), { label: 'Your posts', href: null }],
     elsewhere: {
       ideas: elsewhereIdeas(anchor, figures ?? null),
+      medical: printsMedicalLine(clientId),
       ideasLine: elsewhereIdeasLine(anchor.ideasState),
       page: { ...REPLIES_PAGE, line: repliesLine(anchor.week, month) },
     },

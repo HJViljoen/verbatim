@@ -1838,7 +1838,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
     how they open, where, the response, "What works in your market's
     videos" back to the root). Both evidence pages end with "Elsewhere on
     Content" (the root's first two ideas with their four weeks beside their
-    month, and the other evidence page: your posts' count, or the reply
+    month and, in a medical market, `MEDICAL_LINE` under each, as under every
+    printed idea; and the other evidence page: your posts' count, or the reply
     list's days with no count, since the foot does not read the list) and
     the Agent. OLD LINKS LAND (`redirectFor` in the root page, before
     anything is read; `contentRedirect`, `lib/nav.ts`): `?replies=1` and

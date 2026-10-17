@@ -220,6 +220,7 @@ function elsewhere(page: 'posts' | 'replies', opts: { noIdeas?: boolean } = {}):
   const anchor = { ideas: opts.noIdeas ? [] : OSSUR_IDEAS, ideasWeek: ideasWeekOf(OSSUR_IDEAS, WEEK) }
   return {
     ideas: elsewhereIdeas(anchor, ELSEWHERE_READ),
+    medical: printsMedicalLine(OSSUR_CLIENT_ID),
     ideasLine: opts.noIdeas ? 'Post ideas are not switched on for this workspace.' : null,
     page: page === 'posts' ? { ...POSTS_PAGE, line: postsLine(9, OCT) } : { ...REPLIES_PAGE, line: repliesLine(WEEK, OCT) },
   }

@@ -193,6 +193,9 @@ describe('Content\'s statements, page by page', () => {
     expect(list.by['from:audience_insights_current']).toBe(1)
     // Your posts' page reads the comments under the posts it shows, once.
     expect(own.by['from:comments']).toBe(1)
+    // Össur is a medical market: the foot's ideas carry the medical line.
+    expect(list.data.elsewhere.medical).toBe(true)
+    expect(own.data.elsewhere.medical).toBe(true)
   })
 })
 

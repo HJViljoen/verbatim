@@ -3,6 +3,7 @@ import { Sparkles } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { CARD } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
+import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
 import type { Elsewhere } from '@/lib/pages/v2/content-levels'
 import { CONTENT_ROOT } from '@/lib/pages/v2/content-address'
 import { cn } from '@/lib/utils'
@@ -103,8 +104,9 @@ export function AskCard({ line, label, href }: { line: string; label: string; hr
 const SIB = 'flex min-w-0 flex-col gap-1.5 rounded-[12px] bg-card px-4 pt-3.5 pb-[13px] no-underline shadow-card transition-shadow hover:shadow-panel'
 
 /** One idea in the foot: its title (`stored`), "Post idea 1 · 48 of 640
- *  videos, 14 Sep to 11 Oct · 31 in October so far". */
-function IdeaSibling({ idea }: { idea: Elsewhere['ideas'][number] }) {
+ *  videos, 14 Sep to 11 Oct · 31 in October so far", and in a medical market
+ *  the medical team line, as under every printed idea. */
+function IdeaSibling({ idea, medical }: { idea: Elsewhere['ideas'][number]; medical: boolean }) {
   return (
     <>
       <span data-copy="stored" data-slot="post_idea" className="text-[14px] leading-[1.35] font-semibold text-foreground">{idea.title}</span>
@@ -114,6 +116,7 @@ function IdeaSibling({ idea }: { idea: Elsewhere['ideas'][number] }) {
           <> · <span data-copy="level"><span className="font-mono text-foreground">{fmtInt(idea.read.k)}</span> of {fmtInt(idea.read.n)} videos</span>, {idea.readLabel} · <span data-copy="figure" className="font-mono text-foreground">{fmtInt(idea.month)}</span> {idea.monthWords}</>
         ) : null}
       </span>
+      {medical ? <span data-medical-line="" className="text-[12px] leading-[1.4] text-muted-foreground">{MEDICAL_LINE}</span> : null}
     </>
   )
 }
@@ -132,7 +135,7 @@ export function ElsewhereSection({ data }: { data: Elsewhere }) {
     <>
       <div className="max-sm:hidden"><ContentSectionHead title="Elsewhere on Content" action={root} /></div>
       <nav aria-label="Elsewhere on Content" data-elsewhere="" className="grid grid-cols-1 gap-3 max-sm:hidden lg:grid-cols-3">
-        {data.ideas.map((i) => <Link key={i.id} href={i.href} className={SIB}><IdeaSibling idea={i} /></Link>)}
+        {data.ideas.map((i) => <Link key={i.id} href={i.href} className={SIB}><IdeaSibling idea={i} medical={data.medical ?? false} /></Link>)}
         {data.ideas.length === 0 ? (
           <Link href={CONTENT_ROOT} className={SIB}>
             <span className="text-[14px] leading-[1.35] font-semibold text-foreground">What to post next</span>
@@ -144,7 +147,7 @@ export function ElsewhereSection({ data }: { data: Elsewhere }) {
       <section aria-label="Elsewhere on Content" className={cn(CARD, 'gap-3 sm:hidden')}>
         <h2 className="m-0 text-[17px] leading-[1.3] font-semibold text-foreground">Elsewhere on Content</h2>
         <div className="flex flex-col">
-          {data.ideas.map((i) => <Link key={i.id} href={i.href} className="flex min-w-0 flex-col gap-1 border-t border-track py-[11px] no-underline first:border-t-0 first:pt-0"><IdeaSibling idea={i} /></Link>)}
+          {data.ideas.map((i) => <Link key={i.id} href={i.href} className="flex min-w-0 flex-col gap-1 border-t border-track py-[11px] no-underline first:border-t-0 first:pt-0"><IdeaSibling idea={i} medical={data.medical ?? false} /></Link>)}
           {data.ideas.length === 0 ? (
             <Link href={CONTENT_ROOT} className="flex min-w-0 flex-col gap-1 border-t border-track py-[11px] no-underline first:border-t-0 first:pt-0">
               <span className="text-[14px] font-semibold text-foreground">What to post next</span>
