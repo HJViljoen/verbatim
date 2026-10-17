@@ -4,6 +4,8 @@ import { assertCopyContract, copyNodes } from '@/lib/test/copy-contract'
 import { contentRepliesFixture } from '@/lib/pages/v2/content-levels-fixture'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
 import { ContentRepliesPage, repliesMeta } from './replies-page'
+import { ENGAGE_PER_VIDEO, ENGAGE_TOTAL } from '@/lib/engage'
+import { FLAGGED_SHOWN } from '@/lib/pages/week'
 
 // THE COMMENTS WORTH A REPLY, THE EVIDENCE (G5-Content-Replies and
 // -Replies-Phone): what it prints, in the board's order, in every state.
@@ -61,7 +63,14 @@ describe('the reply list\'s page', () => {
   it('sets the facts beside it: what they are, whose post, where, and how the list is picked (today\'s limits)', () => {
     const text = renderText(page())
     expect(text).toContain('The facts What they are Ready to buy 5 Questions 3 Objections 3 Wrong information 1 Whose post they sit under Your posts 6 Posts about you 3 Elsewhere in your market 3 Where Instagram 4 TikTok 4 YouTube 4')
-    expect(text).toContain('Picked from the comments written between 5 and 11 Oct: at most three of a kind, twelve in all and two from one video. We cannot see whether you have replied, so a comment stays on the list.')
+    expect(text).toContain('Picked from the comments written between 5 and 11 Oct: up to twelve, no more than two from one video; wrong information is listed apart, up to three. We cannot see whether you have replied, so a comment stays on the list.')
+    // The words say what the code does: the digest's total and per-video caps
+    // (`rankEngageCandidates`) and the flagged list's own (`FLAGGED_SHOWN`).
+    // "Three of a kind" was untrue beside the page's sections: Ready to buy
+    // holds three of the reading's categories (5 here), and the flagged
+    // comments sit outside the twelve.
+    expect([ENGAGE_TOTAL, ENGAGE_PER_VIDEO, FLAGGED_SHOWN]).toEqual([12, 2, 3])
+    expect(text).not.toMatch(/three of a kind|twelve in all/)
     const facts = renderText(page()).slice(renderText(page()).indexOf('The facts'))
     expect(facts.slice(0, facts.indexOf('Elsewhere on Content'))).not.toMatch(/waiting|oldest/i)
   })

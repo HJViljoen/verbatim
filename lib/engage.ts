@@ -138,6 +138,14 @@ const priority = (category: string) => {
   return i === -1 ? ENGAGE_CATEGORIES.length : i
 }
 
+/** The digest's caps, `rankEngageCandidates`' defaults: at most three of an
+ *  insight category, twelve in all, two from one video. Content's reply list
+ *  states the total and the per-video cap in its facts, and its test holds
+ *  the words to these. */
+export const ENGAGE_PER_CATEGORY = 3
+export const ENGAGE_TOTAL = 12
+export const ENGAGE_PER_VIDEO = 2
+
 export function rankEngageCandidates(
   candidates: EngageCandidate[],
   opts: {
@@ -164,8 +172,8 @@ export function rankEngageCandidates(
     vocab?: Set<string>
   },
 ): EngageCandidate[] {
-  const perCategoryCap = opts.perCategoryCap ?? 3
-  const totalCap = opts.totalCap ?? 12
+  const perCategoryCap = opts.perCategoryCap ?? ENGAGE_PER_CATEGORY
+  const totalCap = opts.totalCap ?? ENGAGE_TOTAL
   const windowStart = Date.parse(opts.windowStart)
   const windowEnd = opts.windowEnd != null ? Date.parse(opts.windowEnd) : null
 
@@ -206,7 +214,7 @@ export function rankEngageCandidates(
     if (seenComments.has(c.comment.id)) continue
     if ((perCategory.get(c.category) ?? 0) >= perCategoryCap) continue
     const videoKey = c.comment.videoUrl
-    if (videoKey && (perVideo.get(videoKey) ?? 0) >= 2) continue
+    if (videoKey && (perVideo.get(videoKey) ?? 0) >= ENGAGE_PER_VIDEO) continue
     picked.push(c)
     seenComments.add(c.comment.id)
     perCategory.set(c.category, (perCategory.get(c.category) ?? 0) + 1)

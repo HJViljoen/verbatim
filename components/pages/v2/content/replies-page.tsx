@@ -150,7 +150,7 @@ function Facts({ data }: { data: RepliesPageData }) {
       <div className={FACT}>
         <FactLabel>How the list is picked</FactLabel>
         <p className="m-0 text-[12.5px] leading-[1.5] text-secondary-foreground">
-          Picked from the comments written {view.window?.phrase ?? 'this week'}: at most three of a kind, twelve in all and two from one video. We cannot see whether you have replied, so a comment stays on the list.
+          Picked from the comments written {view.window?.phrase ?? 'this week'}: up to twelve, no more than two from one video; wrong information is listed apart, up to three. We cannot see whether you have replied, so a comment stays on the list.
         </p>
       </div>
     </aside>

@@ -2073,8 +2073,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
     root's panel ran (`gateFor` with the idea's title as the claim, comments
     under your own posts allowed), their words resolved at render, never
     stored. *The reply list, EVIDENCE* (`loadContentReplies`): TODAY'S LIST
-    (`buildReplies`, the root card's own digest: three of a kind, twelve in
-    all, two from one video), so the card and the page count one list; the
+    (`buildReplies`, the root card's own digest: three of an insight
+    category, twelve in all, two from one video, `ENGAGE_*` in
+    `lib/engage.ts`; wrong information ranked apart, at most `FLAGGED_SHOWN`,
+    3), so the card and the page count one list, and the facts say only the
+    caps the code applies (up to twelve, two from one video, wrong
+    information apart, up to three); the
     count is a cap, never a level, so no "of N" and no month beside it. Flat
     header (a reply arrow on the neutral, "Comments", "Worth a reply", the
     days and the split in mono, This week | This month), a one-line read and
