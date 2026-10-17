@@ -26,7 +26,7 @@ import {
   agentHref, anchorOf, contentMonth, conversationHref, flagVerdict, groupsByConversation, ideaOwnedFrom, ideasWeekOf, ideaWeeks, marketVideoCards,
   monthWords, newVerdict, olderIdeasLine, ownedTo, ownTouch, platformsOf, readFlags, readLabels, readPanelVideos, readPersonas, readWindows, readWords,
   recipe, soft, touchPosts, typicalRate, wordsToBorrow,
-  type FlagRowIn, type GroupName, type IdeasWeek, type MarketVideoCard, type OwnTouch, type Recipe,
+  type ContentMonth, type FlagRowIn, type GroupName, type IdeasWeek, type MarketVideoCard, type OwnTouch, type Recipe,
 } from './content'
 import { contentIdeaHref, contentIdeaPath, subAnchor } from './content-address'
 import { contentCrumb } from './content-levels'
@@ -319,12 +319,14 @@ async function readSubComments(db: SupabaseClient, clientId: string, ids: readon
   return parts.flat()
 }
 
-/** A flag's verdict for a conversation: the anomaly check's on the anchor
- *  run, else the week read's "new" over the idea's month. */
-function flagFor(registryId: string, label: string, flags: ReadonlyMap<string, FlagRowIn>, newIds: ReadonlySet<string>, week: { from: string; to: string } | null, monthLevel: Counted | null, ideasWeek: IdeasWeek): Verdict | null {
+/** A flag's verdict for a conversation, the root card's rule: the anomaly
+ *  check's on the anchor run, else the week read's "new" over the PAGE's month
+ *  (the root's `month`, never an older set's own: "new" is the page's week's
+ *  flag, AGENTS.md's Content bullet). */
+function flagFor(registryId: string, label: string, flags: ReadonlyMap<string, FlagRowIn>, newIds: ReadonlySet<string>, week: { from: string; to: string } | null, pageMonthLevel: Counted | null, pageMonth: ContentMonth): Verdict | null {
   const f = flags.get(registryId)
   if (f && week) return flagVerdict(f, week)
-  return newIds.has(registryId) && monthLevel ? newVerdict(registryId, label, ideasWeek.month, monthLevel) : null
+  return newIds.has(registryId) && pageMonthLevel ? newVerdict(registryId, label, pageMonth, pageMonthLevel) : null
 }
 
 const missing = (state: IdeaPageState): ContentIdeaData => ({ state, page: null, crumbs: [contentCrumb()] })
@@ -408,14 +410,19 @@ export async function loadContentIdea(scope: Scope, id: string, opts: { now?: Da
     const n = windows?.ideas?.month.market ?? null
     return windows?.ideas?.month.themes && n != null && n > 0 ? { k: windows.ideas.month.themes.get(registryId) ?? 0, n } : null
   }
+  // The page's own month (the root's), which "new" is judged over.
+  const pageMonth = (registryId: string): Counted | null => {
+    const n = windows?.market.month ?? null
+    return windows?.themes.month && n != null && n > 0 ? { k: windows.themes.month.get(registryId) ?? 0, n } : null
+  }
   const id0 = idea.registry_id
   const readN = windows?.ideas?.market ?? null
-  const flag = flagFor(id0, label ?? idea.title, flagOf, newIds, week, ideaMonth(id0), ideasWeek)
+  const flag = flagFor(id0, label ?? idea.title, flagOf, newIds, week, pageMonth(id0), month)
   const sub = subParam(scope.params.sub, idea.subquestions.length)
 
   const siblings = (set && set.length > 0 ? set : [idea]).map((r) => ({
     id: r.id, title: r.title, rank: r.rank,
-    flag: r.id === idea.id ? flag : flagFor(r.registry_id, r.title, flagOf, newIds, week, ideaMonth(r.registry_id), ideasWeek),
+    flag: r.id === idea.id ? flag : flagFor(r.registry_id, r.title, flagOf, newIds, week, pageMonth(r.registry_id), month),
   }))
 
   const page: IdeaPage = {

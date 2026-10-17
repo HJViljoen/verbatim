@@ -138,6 +138,7 @@ async function measure<T>(load: (scope: Parameters<typeof loadContentPage>[0]) =
 }
 
 const root: Load = (scope) => loadContentPage(scope, { now: NOW })
+const root_ = (scope: Parameters<typeof loadContentPage>[0]) => loadContentPage(scope, { now: NOW })
 const ideaPage = (id: string) => (scope: Parameters<typeof loadContentPage>[0]) => loadContentIdea(scope, id, { now: NOW })
 const replies = (scope: Parameters<typeof loadContentPage>[0]) => loadContentReplies(scope, { now: NOW })
 const posts = (scope: Parameters<typeof loadContentPage>[0]) => loadContentPosts(scope, { now: NOW })
@@ -313,5 +314,43 @@ describe('the reply list\'s page reads only the tenant\'s own videos', () => {
     expect(JSON.stringify(r.data)).not.toContain('Other workspace')
     // Its comments are under the videos the queue read: each named by its row.
     expect(r.data.kinds.flatMap((k) => k.videos).every((v) => v.id === null || [OWN(1), OWN(2), OWN(3), ...[1, 2, 3, 4, 5, 6].map(VID)].includes(v.id))).toBe(true)
+  })
+})
+
+// ---- an idea's page beside the root's card ------------------------------------------
+//
+// The page and the card that opened it read the same rules (the root's anchor,
+// lib/pages/v2/content.ts `loadContentPage`), so they never disagree about a
+// week, a month or a flag.
+
+const OLD_RUN = '00000000-0000-4000-8000-0000000000b0'
+const OLD_WINDOW = { from: '2026-09-27T04:03:00.000Z', to: '2026-10-04T04:02:00.000Z' }
+const OLD_READ = { from: '2026-09-06T04:02:00.000Z', to: '2026-10-04T04:02:00.000Z' }
+
+/** Idea 1 from a set a week older than the published read, the read naming
+ *  its conversation new this week. */
+function olderSet() {
+  const t = contentTables()
+  const [first] = t.post_ideas
+  return {
+    ...t,
+    post_ideas: [{ ...first, run_id: OLD_RUN, window_start: OLD_WINDOW.from, window_end: OLD_WINDOW.to, read_start: OLD_READ.from, read_end: OLD_READ.to }],
+    week_reads: [{ ...t.week_reads[0], data: { version: 2, window: WINDOW, newThisWeek: [{ themeId: LINER, label: 'Liner lifespan and replacement' }] } }],
+  }
+}
+
+describe('a post idea\'s page beside the root\'s card', () => {
+  it('judges the week read\'s "new" over the page\'s month, as the card does, never an older set\'s own month', async () => {
+    const r = await measure(ideaPage(IDEA(1)), {}, olderSet() as ReturnType<typeof contentTables>)
+    const page = r.data.page!
+    // The idea's figures sit beside ITS month (an older set's read window's).
+    expect(page.week.current).toBe(false)
+    expect(page.week.month.month).toBe('2026-09-01')
+    // Its "new" is the page's week's flag, on the page's month.
+    expect(page.flag?.flags).toContain('new')
+    expect(page.flag?.window).toMatchObject({ kind: 'month', from: '2026-10-01' })
+    // The card on the root says the same.
+    const root = await measure(root_, {}, olderSet() as ReturnType<typeof contentTables>)
+    expect(root.data.ideas.cards[0].flag?.window).toEqual(page.flag?.window)
   })
 })
