@@ -82,6 +82,16 @@ describe('the switcher', () => {
     assertCopyContract(<Switcher menu={menu} defaultOpen />)
   })
 
+  it('owns only its items and its hairline: the small-caps label is for the eye (the fresh check, 17 Oct)', () => {
+    const html = render(<Switcher menu={subjectMenu(nav, fixtureSubjectId('fit'))!} defaultOpen />)
+    const inside = html.slice(html.indexOf('role="menu"'))
+    expect(inside).toMatch(/^role="menu" aria-label="Your subjects"[^>]*><p aria-hidden="true"[^>]*>Your subjects<\/p>/)
+    // Every other child is an entry or the separator.
+    const children = inside.replace(/^[^>]*>/, '').replace(/<p aria-hidden="true"[^>]*>[^<]*<\/p>/, '').match(/<(a|div) [^>]*>/g) ?? []
+    expect(children.length).toBeGreaterThan(0)
+    for (const c of children) expect(c).toMatch(/role="(menuitemradio|separator)"/)
+  })
+
   it('opens from a 28px button, and is closed until asked', () => {
     const menu = subjectMenu(nav, fixtureSubjectId('fit'))!
     const closed = render(<Switcher menu={menu} />)

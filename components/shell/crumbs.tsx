@@ -164,7 +164,10 @@ export function Switcher({ menu, defaultOpen = false }: { menu: CrumbMenu; defau
           aria-label={menu.label}
           className="absolute left-[-10px] top-[44px] z-20 flex max-h-[min(480px,70vh)] w-[340px] max-w-[calc(100vw-32px)] flex-col gap-px overflow-y-auto rounded-[12px] bg-card p-1.5 shadow-panel ring-1 ring-foreground/6"
         >
-          <p className="m-0 mx-2.5 mb-1.5 mt-2 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{menu.label}</p>
+          {/* The board's small-caps label, for the eye: a menu may own only
+              its items and separators (ARIA), and its name is already
+              `aria-label`, so a screen reader is not told it twice. */}
+          <p aria-hidden className="m-0 mx-2.5 mb-1.5 mt-2 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{menu.label}</p>
           {menu.items.map((item) => <Entry key={item.key} item={item} onKeyDown={onItemKey} />)}
           {menu.below && menu.below.length > 0 ? (
             <>
