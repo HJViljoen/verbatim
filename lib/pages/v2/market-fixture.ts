@@ -1096,11 +1096,14 @@ export function marketThinFixture(opts: Pick<FixtureOptions, 'earlierNew'> = {})
 export const fixtureId = id
 export const fixtureSubjectId = subjectId
 
+/** The longest conversation label the fixtures draw (the table's and the
+ *  breadcrumb's width checks). */
+const LONG = 'Whether the forty litre travel backpack really fits under the seat on budget airlines across Europe'
+
 /** The table at its widest (Phase 4 fix round, the 390 check): long labels
  *  and three-digit figures, the week's and the month's, on the first rows. */
 export function marketLongRowsFixture(period: 'week' | 'month' = 'week'): MarketData {
   const d = marketFixture({ period })
-  const LONG = 'Whether the forty litre travel backpack really fits under the seat on budget airlines across Europe'
   const table = d.table!
   return {
     ...d,
@@ -1108,5 +1111,18 @@ export function marketLongRowsFixture(period: 'week' | 'month' = 'week'): Market
       ...table,
       rows: table.rows.map((r, i) => (i < 3 ? { ...r, conv: { ...r.conv, label: i === 0 ? LONG : `${LONG} (${i})`, week: 123 + i, month: 456 + i } } : r)),
     },
+  }
+}
+
+/** A conversation's page under the longest names Market draws (the
+ *  breadcrumb's wrap check, 17 Oct): Össur's longest subject, "Community &
+ *  encouragement", over the table check's long label. */
+export function marketLongCrumbsFixture(): MarketData {
+  const d = marketConversationFixture(1)
+  const [market, subject, conv] = d.crumbs!
+  return {
+    ...d,
+    crumbs: [market, { ...subject, label: 'Community & encouragement' }, { ...conv, label: LONG }],
+    convPage: { ...d.convPage!, panel: { ...d.convPage!.panel, label: LONG, subjectName: 'Community & encouragement' } },
   }
 }

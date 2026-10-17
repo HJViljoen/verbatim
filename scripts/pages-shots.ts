@@ -97,7 +97,7 @@ import { MovesV2Page } from '../components/pages/v2/moves'
 import { movesFailedFixture, movesFixture, movesHistoryFixture, movesOpenFixture, movesQuietFixture, movesRecordFixture, movesThinFixture, movesThinOpenFixture, statementsV2 } from '../lib/pages/v2/moves-fixture'
 import type { MovesPageData } from '../lib/pages/v2/moves'
 import { MarketPage } from '../components/pages/v2/market'
-import { marketConversationFixture, marketFixture, marketLongRowsFixture, marketSubjectFixture, marketThinFixture, marketWeekFixture } from '../lib/pages/v2/market-fixture'
+import { marketConversationFixture, marketFixture, marketLongCrumbsFixture, marketLongRowsFixture, marketSubjectFixture, marketThinFixture, marketWeekFixture } from '../lib/pages/v2/market-fixture'
 import { MarketConversationPage, MarketSubjectPage, MarketWeekPage } from '../components/pages/v2/market/pages'
 import { alsoTalkedOf, convHref, subjectAxis, subjectCardsOf, subjectHref, type MarketData, type SubjectRow } from '../lib/pages/v2/market'
 import { homeWeeksFrame } from '../lib/pages/home'
@@ -571,6 +571,7 @@ const PAGES: Page[] = [
   { key: 'market-pages-conversation-month', path: '/dashboard/market/conversations/c1', artboard: 'F2-Market-Conversation.dc.html', page: () => h(MarketConversationPage, { data: marketConversationFixture(1, { period: 'month' }) }) },
   { key: 'market-pages-conversation-no-subject', path: '/dashboard/market/conversations/c1', artboard: 'F2-Market-Conversation.dc.html', page: () => h(MarketConversationPage, { data: marketConversationFixture(1, { flagged: false, noNew: true, subjects: 'provisional', brands: 'not_counted', weeks: 'insufficient', noGroups: true }) }) },
   { key: 'market-pages-conversation-missing', path: '/dashboard/market/conversations/nope', artboard: 'F2-Market-Conversation.dc.html', page: () => h(MarketConversationPage, { data: { ...marketConversationFixture(1), convPage: null, missing: true } }) },
+  { key: 'market-pages-conversation-long', path: '/dashboard/market/conversations/c1', artboard: 'F2-Market-Conversation.dc.html', page: () => h(MarketConversationPage, { data: marketLongCrumbsFixture() }) },
   // The week's read: written, thin, and one that could not be read.
   { key: 'market-pages-week', path: '/dashboard/market/week', artboard: 'F2-Market-Week.dc.html', page: () => h(MarketWeekPage, { data: marketWeekFixture() }) },
   { key: 'market-pages-week-read-thin', path: '/dashboard/market/week', artboard: 'F2-Market-Week.dc.html', page: () => h(MarketWeekPage, { data: marketWeekFixture({ week: 'thin' }) }) },

@@ -1096,7 +1096,15 @@ This version has breaking changes — APIs, conventions, and file structure may 
     (palette A's muted at 45%: the board's warm `#B9B6AE` is a neutral the
     drift guard refuses), the page itself the one ink h1 at 700, 26px on the
     bar's 40px line; on a phone "‹ {parent}" at 14px/600 above a 24px title.
-    Every segment with siblings carries a 28px chevron (`aria-haspopup=
+    WHERE THE PATH WRAPS (17 Oct, drawn on production's names): each slash
+    rides at the head of the crumb after it, in one item, so a line never
+    ends on a slash; an ancestor stops at `ANCESTOR_MAX` (11rem, 20rem from
+    1680) in an ellipsis, its whole name still its text and its `title`, so a
+    real path holds one line at 1440 beside the period switch (Össur's
+    "Market / Community & … / Praise for resilience and courage"); the page's
+    own name is never cut, and where it cannot fit (1024, a long label) it
+    takes the next line with its slash and wraps inside itself, its chevron
+    on its first line. Every segment with siblings carries a 28px chevron (`aria-haspopup=
     "menu"`), ancestors included; one with none is plain text, never a
     disabled button. A subject's siblings are the tracked subjects in the top
     page's order (`subjectNavOf`, `subjectMenu`: the ready ranked, the

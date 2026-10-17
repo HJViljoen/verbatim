@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Fragment, useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { hasSiblings, type Crumb, type CrumbItem, type CrumbMenu, type CrumbSlot } from '@/lib/pages/crumbs'
 import { cn } from '@/lib/utils'
 
@@ -17,6 +17,16 @@ import { cn } from '@/lib/utils'
 // page's name at 24px and its chevron; the ancestors' own chevrons stay on
 // the wider bar.
 //
+// WHERE THE PATH WRAPS (17 Oct, drawn on production's names): each slash
+// rides at the head of the crumb after it, in one unbreakable item, so a line
+// never ends on a slash (at 1440 Össur's "Market / Community & encouragement
+// /" stood over its page's name). An ancestor stops at `ANCESTOR_MAX` and
+// ends in an ellipsis, its whole name still its text (a screen reader reads
+// it all) and its `title`, so a real path holds one line at 1440 beside the
+// period switch; the page's own name is never cut, and where it cannot fit
+// beside its ancestors (at 1024, or a long label) it takes the next line,
+// its slash with it, and wraps inside itself.
+//
 // THE SWITCHER (F2-Market-Subject-Switcher): the parent's set in the parent's
 // order, the current page ticked, a state in words where it has one and never
 // a figure, the unready below a hairline. Keyboard: Enter or Space on the
@@ -26,6 +36,16 @@ import { cn } from '@/lib/utils'
 //
 // CLIENT-SAFE BY CONSTRUCTION: it takes plain data (lib/pages/crumbs.ts) and
 // imports nothing a browser bundle cannot hold (lib/test/client-chains.ts).
+
+/** An ancestor's widest, before its ellipsis: Össur's "Community &
+ *  encouragement / Praise for resilience and courage" fits 1440's bar beside
+ *  the period switch; wider screens give a subject's name more. */
+export const ANCESTOR_MAX = 'max-w-[11rem] min-[1680px]:max-w-[20rem]'
+
+/** The light slash between two crumbs, at the head of the second. */
+function Slash({ className }: { className?: string }) {
+  return <span aria-hidden className={cn('shrink-0 text-[26px] leading-10 font-light text-muted-foreground/45', className)}>/</span>
+}
 
 /** A label replayed from a prose slot carries its node (the copy contract);
  *  a name a person gave, or the page's own words, is plain text. */
@@ -74,7 +94,13 @@ function Entry({ item, dim, onKeyDown }: { item: CrumbItem; dim?: boolean; onKey
 }
 
 /** A segment's chevron and the menu of its siblings. */
-export function Switcher({ menu, defaultOpen = false }: { menu: CrumbMenu; defaultOpen?: boolean }) {
+export function Switcher({ menu, defaultOpen = false, className }: {
+  menu: CrumbMenu
+  defaultOpen?: boolean
+  /** The chevron's placement beside its label (the page's own name sets it
+   *  on its first line). */
+  className?: string
+}) {
   // `defaultOpen` draws it open on first render (the board's open state, for
   // the render tier and the shots); the app never passes it.
   const [open, setOpen] = useState(defaultOpen)
@@ -152,6 +178,7 @@ export function Switcher({ menu, defaultOpen = false }: { menu: CrumbMenu; defau
         className={cn(
           'inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-[7px] text-muted-foreground transition-colors hover:bg-track hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           open ? 'bg-track text-foreground' : null,
+          className,
         )}
       >
         <UpDown />
@@ -198,23 +225,28 @@ export function Crumbs({ crumbs, open }: { crumbs: readonly Crumb[]; open?: 'cur
       <nav aria-label="Breadcrumb">
         <ol className="m-0 flex min-h-10 list-none flex-wrap items-center gap-x-2.5 p-0 max-sm:min-h-0">
           {crumbs.slice(0, -1).map((c, i) => (
-            <Fragment key={i}>
-              <li className="relative flex items-center gap-0.5 max-sm:hidden">
+            <li key={i} className="flex min-w-0 items-center gap-x-2.5 max-sm:hidden">
+              {i > 0 ? <Slash /> : null}
+              <span className="relative flex min-w-0 items-center gap-0.5">
                 {c.href ? (
-                  <Link href={c.href} className="text-[26px] leading-10 font-medium tracking-[-0.015em] text-muted-foreground no-underline underline-offset-[5px] decoration-1 hover:text-foreground hover:underline">
+                  <Link href={c.href} title={c.label} className={cn('min-w-0 truncate text-[26px] leading-10 font-medium tracking-[-0.015em] text-muted-foreground no-underline underline-offset-[5px] decoration-1 hover:text-foreground hover:underline', ANCESTOR_MAX)}>
                     <Label slot={c.slot}>{c.label}</Label>
                   </Link>
-                ) : <span className="text-[26px] leading-10 font-medium tracking-[-0.015em] text-muted-foreground"><Label slot={c.slot}>{c.label}</Label></span>}
+                ) : <span title={c.label} className={cn('min-w-0 truncate text-[26px] leading-10 font-medium tracking-[-0.015em] text-muted-foreground', ANCESTOR_MAX)}><Label slot={c.slot}>{c.label}</Label></span>}
                 {hasSiblings(c.menu) ? <Switcher menu={c.menu} /> : null}
-              </li>
-              <li aria-hidden className="text-[26px] leading-10 font-light text-muted-foreground/45 max-sm:hidden">/</li>
-            </Fragment>
+              </span>
+            </li>
           ))}
-          <li className="relative flex min-w-0 items-center gap-0.5">
-            <h1 aria-current="page" className="m-0 min-w-0 text-[26px] leading-10 font-bold tracking-[-0.015em] text-foreground max-sm:text-[24px] max-sm:leading-[1.2]">
-              <Label slot={current.slot}>{current.label}</Label>
-            </h1>
-            {hasSiblings(current.menu) ? <Switcher menu={current.menu} defaultOpen={open === 'current'} /> : null}
+          {/* A name that wraps keeps its slash and its chevron on its first
+              line (the chevron centred on that 40px line). */}
+          <li className="flex min-w-0 items-center gap-x-2.5 sm:items-start">
+            {crumbs.length > 1 ? <Slash className="max-sm:hidden" /> : null}
+            <span className="relative flex min-w-0 items-center gap-0.5 sm:items-start">
+              <h1 aria-current="page" className="m-0 min-w-0 text-[26px] leading-10 font-bold tracking-[-0.015em] text-foreground max-sm:text-[24px] max-sm:leading-[1.2]">
+                <Label slot={current.slot}>{current.label}</Label>
+              </h1>
+              {hasSiblings(current.menu) ? <Switcher menu={current.menu} defaultOpen={open === 'current'} className="sm:mt-1.5" /> : null}
+            </span>
           </li>
         </ol>
       </nav>

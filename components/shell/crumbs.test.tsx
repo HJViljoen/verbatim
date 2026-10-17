@@ -5,7 +5,7 @@ import { marketConversationFixture, marketSubjectFixture, marketWeekFixture, fix
 import { conversationCrumbs, marketParams, subjectCrumbs, subjectMenu, subjectNavOf, weekCrumbs, LITTLE_TALK, type SubjectNavItem } from '@/lib/pages/v2/market'
 import { SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import type { Crumb } from '@/lib/pages/crumbs'
-import { Crumbs, Switcher } from './crumbs'
+import { ANCESTOR_MAX, Crumbs, Switcher } from './crumbs'
 
 // THE BREADCRUMB AND ITS SWITCHERS (depth as pages, 17 Oct; the boards'
 // "Depth as pages"): what each level page's bar prints, and what a switcher
@@ -19,8 +19,8 @@ describe('the breadcrumb', () => {
   it('a subject: "Market / {subject}", Market a muted link, the slash light, the subject the page\'s ink h1 with its chevron', () => {
     const html = render(<Crumbs crumbs={subject.crumbs!} />)
     expect(html).toMatch(/<nav aria-label="Breadcrumb">/)
-    expect(html).toMatch(/<a class="[^"]*text-\[26px\][^"]*font-medium[^"]*text-muted-foreground[^"]*" href="\/dashboard\/market">Market<\/a>/)
-    expect(html).toMatch(/<li aria-hidden="true" class="[^"]*font-light text-muted-foreground\/45[^"]*">\/<\/li>/)
+    expect(html).toMatch(/<a title="Market" class="[^"]*text-\[26px\][^"]*font-medium[^"]*text-muted-foreground[^"]*" href="\/dashboard\/market">Market<\/a>/)
+    expect(html).toMatch(/<span aria-hidden="true" class="[^"]*font-light text-muted-foreground\/45[^"]*">\/<\/span>/)
     expect(html).toMatch(/<h1 aria-current="page" class="[^"]*text-\[26px\][^"]*font-bold[^"]*text-foreground[^"]*">Fit &amp; comfort<\/h1>/)
     expect(html.match(/aria-haspopup="menu"/g)).toHaveLength(1)
     expect(html).toContain('aria-label="Switch to another subject"')
@@ -32,8 +32,34 @@ describe('the breadcrumb', () => {
     const html = render(<Crumbs crumbs={subject.crumbs!} />)
     expect(html).toMatch(/<a class="[^"]*text-\[14px\] font-semibold text-muted-foreground[^"]*sm:hidden" href="\/dashboard\/market"><svg[^>]*><path d="m15 18-6-6 6-6"><\/path><\/svg>Market<\/a>/)
     expect(html).toMatch(/max-sm:text-\[24px\]/)
-    // The ancestors and their chevrons stand on the wider bar only.
-    expect(html).toMatch(/<li class="relative flex items-center gap-0.5 max-sm:hidden">/)
+    // The ancestors and their chevrons stand on the wider bar only, and so
+    // does the slash before the page's name.
+    expect(html).toMatch(/<li class="flex min-w-0 items-center gap-x-2.5 max-sm:hidden">/)
+    expect(html).toMatch(/<span aria-hidden="true" class="[^"]*max-sm:hidden">\/<\/span><span class="relative flex min-w-0 items-center gap-0.5 sm:items-start"><h1/)
+  })
+
+  it('never ends a line on a slash: each slash rides at the head of the crumb after it, in one item (17 Oct)', () => {
+    // At 1440 Össur's "Market / Community & encouragement ⌃ /" stood over
+    // "Praise for resilience and courage ⌃": the slash was an item of its own.
+    const html = render(<Crumbs crumbs={conv.crumbs!} />)
+    const items = html.match(/<li\b[^>]*>[\s\S]*?<\/li>/g)!
+    expect(items).toHaveLength(3)
+    expect(items[0]).not.toContain('>/<')
+    for (const item of items.slice(1)) expect(item).toMatch(/^<li[^>]*><span aria-hidden="true"[^>]*>\/<\/span><span class="relative /)
+    expect(html).not.toMatch(/<li aria-hidden/)
+  })
+
+  it('an ancestor stops at its max width in an ellipsis, its whole name its text and its title; the page\'s name is never cut', () => {
+    const long: Crumb[] = [
+      { label: 'Market', href: '/dashboard/market' },
+      { label: 'Community & encouragement', href: '/dashboard/market/subjects/s' },
+      { label: 'Praise for resilience and courage', href: null, slot: 'pass_b_theme' },
+    ]
+    const html = render(<Crumbs crumbs={long} />)
+    expect(html).toContain(`<a title="Community &amp; encouragement" class="min-w-0 truncate `)
+    expect(html).toMatch(new RegExp(`title="Community &amp; encouragement" class="[^"]*${ANCESTOR_MAX.replace(/[[\]]/g, '\\$&')}[^"]*" href="/dashboard/market/subjects/s">Community &amp; encouragement</a>`))
+    expect(html).toMatch(/<h1 aria-current="page" class="(?![^"]*truncate)[^"]*"><span data-copy="subject" data-slot="pass_b_theme">Praise for resilience and courage<\/span><\/h1>/)
+    expect(renderText(<Crumbs crumbs={long} />)).toBe('Community & encouragement Market / Community & encouragement / Praise for resilience and courage')
   })
 
   it('a conversation under a ready subject: "Market / {subject} ⌃⌄ / {conversation} ⌃⌄", the subject a link with its own chevron', () => {
