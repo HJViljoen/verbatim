@@ -451,11 +451,17 @@ export async function loadMovePage(scope: Scope, id: string, options: { canDecid
   let evidence: MoveEvidence = MOVE_EVIDENCE_EMPTY(object ? (ready ? 'unread' : 'held') : 'nothing')
   let facts: MoveFacts | null = null
   if (object && ready) {
+    // A conversation's kind rides with its members, so the gate holds its
+    // comments to it as Market's conversation page does; a subject has none.
+    let kind: string | null = null
     const membersRead = await soft<string[] | null>('move.members', object.kind === 'subject'
       ? loadMemberInsightIdsBySubject(db, clientId, [object.id]).then((byId) => byId?.get(object.id) ?? [])
-      : selectAll<{ member_insight_ids: string[] | null }>(() =>
-          db.from('theme_observations').select('member_insight_ids').eq('client_id', clientId).eq('run_id', runId).eq('theme_id', object.id).order('theme_id'),
-        ).then((rows) => [...new Set(rows.flatMap((r) => (r.member_insight_ids ?? []).map(String)))]), null)
+      : selectAll<{ member_insight_ids: string[] | null; category: string | null }>(() =>
+          db.from('theme_observations').select('member_insight_ids, category').eq('client_id', clientId).eq('run_id', runId).eq('theme_id', object.id).order('theme_id'),
+        ).then((rows) => {
+          kind = rows.find((r) => r.category)?.category ?? null
+          return [...new Set(rows.flatMap((r) => (r.member_insight_ids ?? []).map(String)))]
+        }), null)
     if (membersRead) {
       const members = new Set(membersRead)
       const citationsRead = await soft<ConvEvidenceRow[] | null>('move.citations', loadInsightCitations(db, clientId, membersRead, window), null)
@@ -480,7 +486,7 @@ export async function loadMovePage(scope: Scope, id: string, options: { canDecid
         const gate = gateFor(clientId, { claim: label, requireRelevance: true })
         const shownBase = moveEvidenceOf({
           moveId: card.id, claim: label, videoIds: kept.map((v) => v.id), commentIds, members, videos: kept, evidence: counted,
-          translations: new Map(), named, brand: core.brand, brands: namings?.brands ?? 'not_read', gate,
+          translations: new Map(), named, brand: core.brand, brands: namings?.brands ?? 'not_read', gate, kind,
           p: { video: typeof p.video === 'string' && /^[0-9a-f-]{36}$/i.test(p.video) ? p.video.toLowerCase() : null, videos: p.videos === 'all' },
         })
         // The English, read only for the comments of the videos shown.
@@ -490,7 +496,7 @@ export async function loadMovePage(scope: Scope, id: string, options: { canDecid
         const translations = await readTranslations(db, texts)
         evidence = translations.size > 0 ? moveEvidenceOf({
           moveId: card.id, claim: label, videoIds: kept.map((v) => v.id), commentIds, members, videos: kept, evidence: counted,
-          translations, named, brand: core.brand, brands: namings?.brands ?? 'not_read', gate,
+          translations, named, brand: core.brand, brands: namings?.brands ?? 'not_read', gate, kind,
           p: { video: typeof p.video === 'string' && /^[0-9a-f-]{36}$/i.test(p.video) ? p.video.toLowerCase() : null, videos: p.videos === 'all' },
         }) : shownBase
         facts = moveFactsOf({

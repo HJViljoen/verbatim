@@ -1865,7 +1865,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
     their citations dated in the window (`loadInsightCitations`, the
     comment embedded and the client's alone, one read a 250), on the
     market's videos (never the client's own posts), Market's video cards
-    over that window and set (`moveEvidenceOf`; `?video=` and `?videos=all`
+    over that window and set, a conversation's comments held to its kind
+    as Market's page holds them (`moveEvidenceOf`; `?video=` and `?videos=all`
     honoured only for its own videos); the facts beside them, each of those
     videos (`moveFactsOf`); its other moves and, for an owner, "Your next
     move". No week chip anywhere (decision 7). Statements

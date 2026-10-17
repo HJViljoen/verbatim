@@ -647,6 +647,10 @@ export function moveEvidenceOf(a: {
   brand: string
   brands: BrandsState
   gate: GateOptions
+  /** The conversation's kind (a theme or an advice move's), which the gate
+   *  holds each comment to, as Market's conversation page does; none for a
+   *  subject. */
+  kind?: string | null
   p: { video?: string | null; videos?: boolean }
 }): MoveEvidence {
   const order = convVideoOrder(a)
@@ -654,7 +658,7 @@ export function moveEvidenceOf(a: {
   const all = Boolean(a.p.videos)
   const shown = order.filter((o) => ids.includes(o.video.id))
   const videos: ConvVideo[] = shown.map(({ video, comments }) => {
-    const quotes = videoQuotes({ video, evidence: a.evidence, commentIds: a.commentIds, members: a.members, translations: a.translations, gate: a.gate, kind: null })
+    const quotes = videoQuotes({ video, evidence: a.evidence, commentIds: a.commentIds, members: a.members, translations: a.translations, gate: a.gate, kind: a.kind ?? null })
     const isOpen = video.id === open
     // A tracked brand its counted comments name, else its audience: these
     // are the market's videos, the tracked rivals' own posts among them, so

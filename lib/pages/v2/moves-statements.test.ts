@@ -154,6 +154,7 @@ describe('Your moves\' statements, page by page', () => {
     const onAdvice = await statements(move(M_ADVICE))
     vi.useRealTimers()
     expect(onAdvice.by['from:theme_observations']).toBe(1)
+    expect(onAdvice.calls.find((c) => c.table === 'theme_observations')).toMatchObject({ columns: 'member_insight_ids, category' })
     expect(onAdvice.calls.find((c) => c.table === 'theme_observations')?.filters).toContain(`run_id=${RUN}`)
     // The advice's cited comments are read once, for its numbers and its
     // quotes together; its videos once; no plan and no conclusions.

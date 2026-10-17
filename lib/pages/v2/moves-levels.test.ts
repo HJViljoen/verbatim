@@ -294,6 +294,16 @@ describe('a move\'s evidence: what people said after it (data 6, decision 6)', (
     expect(build().videos.every((v) => v.about === null)).toBe(true)
   })
 
+  it('on a conversation, the gate holds each comment to its kind, as Market\'s page does', () => {
+    const praise = [cite('p1', 'm1', 'c1', 'n1', 'The fitting clinic was amazing, the best day this year.')]
+    const draw = (kind: string | null) => moveEvidenceOf({
+      moveId: 'M1', claim: 'Community', videoIds: ['V1'], commentIds: new Set(['c1']), members: new Set(['m1']),
+      videos: [vids[0]], evidence: praise, translations: new Map(), named: new Map(), brand: 'Össur', brands: 'not_read', gate: {}, kind, p: {},
+    }).videos[0]
+    expect(draw('pain_point')).toMatchObject({ aboutCount: 1, quotable: 0, quotes: [] })
+    expect(draw(null).quotes.map((q) => q.text)).toEqual(['The fitting clinic was amazing, the best day this year.'])
+  })
+
   it('`?video=` opens only its own video; a foreign or unknown id names nothing', () => {
     expect(build({ video: 'V1' }).videos.find((v) => v.id === 'V1')).toMatchObject({ open: true, href: '/dashboard/moves/M1' })
     for (const id of ['V9', 'not-an-id']) expect(build({ video: id }).videos.every((v) => !v.open)).toBe(true)
