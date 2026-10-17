@@ -31,13 +31,16 @@ function tables() {
     }],
     week_reads: [{ client_id: CLIENT, run_id: RUN, kind: 'week', status: 'ready', month: '2026-10-01', window_end: read.window.to, data: read, created_at: '2026-10-12T06:00:00.000Z' }],
     themes: [{ client_id: CLIENT, run_id: RUN, created_at: '2026-10-12T05:00:00.000Z', registry_id: fixtureId(3), description: 'People describe insurance refusals.' }],
-    theme_observations: themes.map((n) => ({ client_id: CLIENT, run_id: RUN, theme_id: fixtureId(n), label: `Conversation ${n}`, category: 'question', member_insight_ids: [`ins-${n}`] })),
+    // Three members each, so the subject's placement (`placeSubject`, at
+    // least three of a conversation's members) puts all three inside Cost &
+    // access, and its page lists them.
+    theme_observations: themes.map((n) => ({ client_id: CLIENT, run_id: RUN, theme_id: fixtureId(n), label: `Conversation ${n}`, category: 'question', member_insight_ids: [`ins-${n}`, `ins-${n}-b`, `ins-${n}-c`] })),
     theme_registry: themes.map((n) => ({ id: fixtureId(n), client_id: CLIENT, canonical_label: `Conversation ${n}`, member_slugs: [] })),
     subjects: [{
       id: subject, client_id: CLIENT, name: 'Cost & access', description: 'Cost.', status: 'active', created_at: '2026-09-01T00:00:00.000Z',
       calibrated_at: '2026-10-01T00:00:00.000Z', calibration_precision: 0.9, calibration_n: 40, calibration_judge_version: judgeVersionFor(CLIENT),
     }],
-    subject_memberships: themes.map((n) => ({ client_id: CLIENT, subject_id: subject, audience_insight_id: `ins-${n}`, member: true })),
+    subject_memberships: themes.flatMap((n) => [`ins-${n}`, `ins-${n}-b`, `ins-${n}-c`].map((id) => ({ client_id: CLIENT, subject_id: subject, audience_insight_id: id, member: true }))),
     month_denominators: ['2026-09-01', '2026-10-01'].map((month) => ({ client_id: CLIENT, month, audience: 'industry-other', videos: 300, comments: 4000, platform_mix: { tiktok: 200, instagram: 100 }, status: 'filling', run_id: RUN, read_at: `${month.slice(0, 7)}-28T00:00:00.000Z` })),
     month_theme_readings: themes.map((n) => ({ client_id: CLIENT, month: '2026-10-01', audience: 'industry-other', theme_id: fixtureId(n), videos: 10 + n, platform_mix: { tiktok: 5, instagram: 5 + n }, status: 'filling', run_id: RUN })),
     // The category's, and the client's own posts, which the market leaves out.
@@ -84,11 +87,19 @@ async function statements(raw: Record<string, string>, view?: MarketView): Promi
 // 8be41baa): the week 39, the week with the lead conversation open in place
 // 45, the week with a subject open in place 40, the month 28. Each page now
 // reads only what it prints. At 2fc55c9b a conversation's page was 40 and a
-// subject's 34; each reads one more since 17 Oct: a conversation's counts its
+// subject's 34; each read one more on 17 Oct: a conversation's counts its
 // groups (`insight_evidence` on its counted comments, one read a 250), and a
 // subject's reads its week's share on the level's base
 // (`window_subject_readings`; the window's market is the window read's,
 // memoised).
+//
+// THE SUBJECT AS THE HUB (F3-Market-Subject, 17 Oct). Since the harness's
+// three conversations have three members each, all three sit inside Cost &
+// access, so its page reads who each is about (`monthly_evidence_refs`, one
+// read for the window, as at 13773763: 36 with them inside). The hub adds
+// three: its two earlier weeks on the level's base (`window_subject_readings`
+// for each; their markets are the window reads', memoised) and every
+// conversation's own description (`themes`, one read a 250). 39.
 describe('Market\'s statements, page by page', () => {
   it('counts each load', async () => {
     const week = await statements({})
@@ -97,15 +108,18 @@ describe('Market\'s statements, page by page', () => {
     const subject = await statements({}, { kind: 'subject', id: fixtureSubjectId('cost') })
     const subjectMonth = await statements({ period: 'month' }, { kind: 'subject', id: fixtureSubjectId('cost') })
     const read = await statements({}, { kind: 'week' })
-    expect({ week: week.total, month: month.total, conv: conv.total, subject: subject.total, read: read.total }).toEqual({ week: 36, month: 28, conv: 41, subject: 35, read: 15 })
+    expect({ week: week.total, month: month.total, conv: conv.total, subject: subject.total, read: read.total }).toEqual({ week: 36, month: 28, conv: 41, subject: 39, read: 15 })
     // A conversation's groups are counted on its page alone (the week's
     // read resolves its quotes' evidence refs there, as it always has).
     expect(conv.by['from:insight_evidence']).toBe(1)
     for (const page of [week, month, subject]) expect(page.by['from:insight_evidence']).toBeUndefined()
-    // The week's share is read once, on a subject's page this week alone.
-    expect(subject.by['rpc:window_subject_readings']).toBe(1)
-    // Its n is the newest window read's own market: three windows, no fourth.
+    // The subject's three weeks on the level's base are read once each, on a
+    // subject's page this week alone.
+    expect(subject.by['rpc:window_subject_readings']).toBe(3)
+    // Their n is each window read's own market: three windows, no fourth.
     expect(subject.by['rpc:window_denominators']).toBe(3)
+    // The conversations' descriptions: one read beside the themed run's.
+    expect(subject.by['from:themes']).toBe(2)
     for (const page of [week, month, conv, read, subjectMonth]) expect(page.by['rpc:window_subject_readings']).toBeUndefined()
     // The top page's week names no group and no "doing" on its small cards:
     // no profile read and no lead's kinds.
@@ -148,6 +162,24 @@ describe('a subject\'s week tile and month tile read one base', () => {
   it('a read that fails, or answers no row, is unread: never a figure from another base', async () => {
     expect((await load({ window_subject_readings: () => ({ error: { code: 'XX000', message: 'boom' } }) }))!.subjectPage!.week).toBe('unread')
     expect((await load({ window_subject_readings: () => [] }))!.subjectPage!.week).toBe('unread')
+  })
+
+  it('its three weeks on the same base, oldest first, the newest the week tile\'s (F3-Market-Subject)', async () => {
+    const page = (await load())!.subjectPage!
+    expect(page.weeks).toEqual([60, 60, 60])
+    // A window whose read fails is unread, never 0, and never from another base.
+    let call = 0
+    const failing = (await load({ window_subject_readings: () => (call++ === 0 ? { error: { code: 'XX000', message: 'boom' } } : [{ audience: 'industry-other', subject_id: fixtureSubjectId('cost'), videos: 50 }]) }))!.subjectPage!
+    expect(failing.weeks).toEqual([null, 50, 50])
+    expect(failing.week).toEqual({ k: 50, n: 226 })
+  })
+
+  it('every conversation inside it, biggest first, each with its own description and who it is about', async () => {
+    const page = (await load())!.subjectPage!
+    expect(page.inside.map((c) => [c.conv.label, c.conv.week, c.description ?? null])).toEqual([
+      ['Conversation 5', 9, null], ['Conversation 3', 7, 'People describe insurance refusals.'], ['Conversation 1', 5, null],
+    ])
+    expect(page.insideTotal).toBe(3)
   })
 
   it('this month there is no week tile', async () => {

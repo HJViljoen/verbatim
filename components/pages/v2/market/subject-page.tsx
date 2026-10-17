@@ -274,7 +274,7 @@ function InsideCard({ page, data }: { page: SubjectPage; data: MarketData }) {
       {(ready ? page.inside.length : panel.inside.length) === 0 ? (
         <p className="m-0 text-[13.5px] text-muted-foreground">No conversation in it reached three videos {data.period === 'week' ? 'this week' : `in ${panel.monthText}`}.</p>
       ) : ready ? (
-        <ConversationRows rows={page.inside} data={data} subjects={false} arrows />
+        <ConversationRows rows={page.inside.slice(0, 3)} data={data} subjects={false} arrows />
       ) : (
         <div className="flex flex-col">
           {panel.inside.map((c) => (

@@ -5,7 +5,7 @@ import { WEEKS_FAILED, type HomeWeeks } from '../home'
 import { notReadyIds } from '../subject-place'
 import type { UnusualFlag } from '../week'
 import {
-  buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, convGroupsOf, convHref, convPageOf, conversationCrumbs, flagCardOf, flagVerdict, groupsOf, insideOf,
+  buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, convGroupsOf, convHref, convPageOf, conversationCrumbs, flagCardOf, flagVerdict, groupsOf, insideConvsOf, insideOf, insightThemes,
   lineBars, marketLongRunFor, marketMonths, marketParams, monthsText, ourReadOf, panelStats, pickHero, pickWeekSides, platformRows, subjectCardsOf, subjectCrumbs, subjectHref,
   subjectDetailOf, subjectNavOf, subjectTableHref, subjectWeekLevel, tableMonths, weekWindows, convOf, doingOf, alsoTalkedOf, earlierNewOf, leadDoing, weekCardOf, weekCrumbs, weekPageOf, withMonthPlatforms,
   type ConvInput, type ConvPanel, type MarketConv, type MarketData, type MarketMonth, type MarketParams, type MarketWeek, type MonthCount,
@@ -47,6 +47,17 @@ const THEMES: [number, string, string, string, [number, number, number], number]
   [16, 'Showing it or hiding it', 'question', 'look', [3, 4, 6], 9],
   [17, 'Liner smell and cleaning', 'pain_point', 'fit', [0, 0, 5], 5],
 ]
+
+/** Each conversation's own one-line description (Pass B's), as its page
+ *  reads it: the F3 boards' words for the liner and sweat conversations,
+ *  illustrative for the rest. */
+export const FIXTURE_DESCRIPTIONS: Record<number, string> = {
+  1: 'People share how long their liners last before they lose grip, and when to replace one.',
+  2: 'Heat and sweat inside the liner, and what people use to stay dry.',
+  3: 'Appeals, letters from a prosthetist and the knee insurers will not pay for.',
+  7: 'A socket that fitted well starts to feel loose or tight as the limb changes.',
+  17: 'How people keep a liner clean, and what they do about the smell.',
+}
 
 const SUBJECTS: [string, string, [number, number], [number, number]][] = [
   // id, name, October so far (k of n), September (k of n)
@@ -710,7 +721,9 @@ export function marketSubjectFixture(key: string, opts: FixtureOptions & { detai
     readsOn: core.readsOn,
   })
   if (!panel) return { ...core.base, view: 'subject', missing: true, subjectNav, crumbs: subjectCrumbs(p, subjectNav, { id: sid, name: key }).slice(0, 1) }
-  const inside = convs.filter((c) => c.subjectId === sid)
+  const descriptions = new Map(Object.entries(FIXTURE_DESCRIPTIONS).map(([n, d]) => [id(Number(n)), d]))
+  const inside = insideConvsOf({ subjectId: sid, convs, descriptions, flag: core.flagOn, href: (cid) => convHref(p, cid) })
+  const week = period === 'week' && panel.level ? fixtureSubjectWeek(sid, panel.level, opts.subjectWeek === 'unread') : null
   return {
     ...core.base,
     view: 'subject',
@@ -718,10 +731,11 @@ export function marketSubjectFixture(key: string, opts: FixtureOptions & { detai
     crumbs: subjectCrumbs(p, subjectNav, { id: panel.id, name: panel.name }),
     subjectPage: {
       panel,
-      week: period === 'week' && panel.level ? fixtureSubjectWeek(sid, panel.level, opts.subjectWeek === 'unread') : null,
+      week,
+      weeks: period === 'week' && panel.level ? fixtureSubjectWeeks(panel.level, week) : null,
       weekLabels: WEEK.weekLabels,
       prevPct: board?.rows.find((r) => r.id === sid)?.prevPct ?? null,
-      inside: inside.slice(0, 3).map((c) => ({ conv: c, href: convHref(p, c.id) })),
+      inside,
       insideTotal: inside.length,
       allHref: subjectTableHref(p, sid),
     },
@@ -959,6 +973,15 @@ export function fixtureSubjectWeek(sid: string, level: { k: number; n: number },
   return subjectWeekLevel({ subjectId: sid, rows, denominators: WEEK_DENOMINATORS, rivalAudiences: ['competitor:Ottobock'] })
 }
 
+/** A ready subject's three weeks on its level's base, oldest first: its month
+ *  share carried to each window's market (218, 206 and this week's 241; Fit
+ *  & comfort's are the board's 74, 70 and 82), the newest `week`'s own, and
+ *  null where that read failed. */
+export function fixtureSubjectWeeks(level: { k: number; n: number }, week: ReturnType<typeof fixtureSubjectWeek> | null): (number | null)[] {
+  const share = level.k / Math.max(1, level.n)
+  return [Math.round(share * 218), Math.round(share * 206), week && week !== 'unread' ? week.k : null]
+}
+
 /** The open subject's blocks, by the page's own builder: Cost & access or
  *  Fit & comfort on many videos (`rich`), Look & style on one (`thin`). This
  *  week they read the three weekly windows too. */
@@ -975,6 +998,7 @@ export function fixtureSubjectDetail(kind: 'rich' | 'thin', period: MarketParams
     period, week: period === 'week' ? WINDOW : null, month,
     personas: SUBJECT_PERSONAS, namings, brands: 'counted', company: 'Össur', noun: null,
     gate: { claim: subject.claim, requireRelevance: true }, windows,
+    conversations: { themeOf: insightThemes(fixtureConvInput(period).themes), href: (cid) => convHref(marketParams(period === 'week' ? {} : { period }), cid) },
   })
 }
 

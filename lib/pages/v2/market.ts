@@ -482,6 +482,10 @@ export interface PanelQuote {
   source: string
   /** Who the video it was said under is filed under; null for the market. */
   about: WhoAbout | null
+  /** The conversation the comment is in (a subject's page, F3-Market-Subject:
+   *  "In their words · 3 comments, each from its conversation"), labelled
+   *  above the quote and opening its page. Absent elsewhere. */
+  from?: { id: string; label: string; href: string } | null
 }
 
 /** A conversation in full: its page's body (17 Oct; until then the panel that
@@ -682,15 +686,41 @@ export interface SubjectPage {
   /** This week: the three windows' labels, oldest first (the subject's own
    *  counts are `panel.detail.weeks`). */
   weekLabels: string[]
+  /** THIS WEEK BY WEEK, ON THE LEVEL'S BASE (F3-Market-Subject, 17 Oct):
+   *  its videos in each of the three weekly windows the conversations count
+   *  (`weekWindows`), oldest first, each read as `week` is
+   *  (`window_subject_readings` pooled over the market's audiences,
+   *  `subjectWeekLevel`), so the newest is `week`'s k; null where our own
+   *  change cut the window or its read failed. Three bare counts with no word
+   *  (decision 1). Null off the week and wherever the level prints none
+   *  (U6); absent on a dump from before it. */
+  weeks?: (number | null)[] | null
   /** Last month's share, for the change tile's words, where the pair may be
    *  printed. */
   prevPct: number | null
-  /** The biggest three conversations inside it, with who they are about. */
-  inside: { conv: MarketConv; href: string }[]
+  /** EVERY conversation inside it this period, biggest first (the period's
+   *  count), with who each is about, its own one-line description and the
+   *  week's chip where the check flagged it: the hub's "Inside {subject}"
+   *  (three cards, then all of them as a list). Each opens as its own page. */
+  inside: InsideConv[]
   /** Every conversation inside it this period. */
   insideTotal: number
   /** The top page's table filtered to it. */
   allHref: string
+}
+
+/** One conversation inside a subject, as its page lists it (F3-Market-Subject:
+ *  a card for the biggest three, a row of "All N conversations" for each). */
+export interface InsideConv {
+  conv: MarketConv
+  href: string
+  /** The conversation's own one-line description (Pass B's, `themes.
+   *  description` on the themed run), as its own page reads it. Null where
+   *  none is stored, or a dump from before it. */
+  description?: string | null
+  /** "Unusual this week": the anomaly check flagged this conversation. The
+   *  only chip a week earns (decision 1). Null where it did not. */
+  flag?: Verdict | null
 }
 
 /** A conversation's page (`/dashboard/market/conversations/[conv]`). */
@@ -1833,6 +1863,24 @@ async function loadDescription(db: SupabaseClient, clientId: string, runId: stri
   return (res.data as { description?: string | null } | null)?.description ?? null
 }
 
+/** These conversations' descriptions on the themed run (Pass B): a subject's
+ *  page lists each under its name, as its own page reads it. One read a 250
+ *  ids, every row the session's client's. */
+async function loadDescriptions(db: SupabaseClient, clientId: string, runId: string | null, ids: readonly string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  if (!runId || ids.length === 0) return out
+  const parts = await mapWithLimit(chunk([...new Set(ids)], UUID_IN_CHUNK), READ_CONCURRENCY, async (part) => {
+    const res = await db.from('themes').select('registry_id, description').eq('client_id', clientId).eq('run_id', runId).in('registry_id', part)
+    if (res.error) throw new Error(`themes descriptions: ${res.error.message}`)
+    return (res.data ?? []) as { registry_id: string | null; description: string | null }[]
+  })
+  for (const r of parts.flat()) {
+    const d = (r.description ?? '').trim()
+    if (r.registry_id && d && !out.has(String(r.registry_id))) out.set(String(r.registry_id), d)
+  }
+  return out
+}
+
 /** The theme series the cards, the table and the panel read: the category's
  *  months up to the reading month, for these themes. */
 async function loadThemeSeries(db: SupabaseClient, clientId: string, ids: readonly string[], month: string, months: number): Promise<Map<string, MonthSeries>> {
@@ -2336,10 +2384,14 @@ export async function loadMarket(input: {
     clientId, objects: [...subjectObjects, ...kindObjects], month, pair: pair as PairOn, asOf: nowIso, rivalAudiences,
   }), [] as ObjectReading[])
 
-  // THE SUBJECT A PAGE IS FOR, and the conversations inside it (its page's
-  // "Inside it" by the board's rule, `insideOf`).
+  // THE SUBJECT A PAGE IS FOR, and EVERY conversation inside it (the hub's
+  // "Inside {subject}", F3-Market-Subject: three cards, then all of them, each
+  // with who it is about and its own description).
   const subjectRow = view.kind === 'subject' ? subjects.all.find((x) => x.subject.id === view.id) ?? null : null
-  const insideIds = subjectRow ? convs.filter((c) => c.subjectId === subjectRow.subject.id).slice(0, MARKET_INSIDE).map((c) => c.id) : []
+  const insideIds = subjectRow ? convs.filter((c) => c.subjectId === subjectRow.subject.id).map((c) => c.id) : []
+  const descriptionsAhead = insideIds.length > 0
+    ? soft('descriptions', loadDescriptions(db, clientId, themedRunId, insideIds), new Map<string, string>())
+    : Promise.resolve(new Map<string, string>())
 
   // Who, for what prints a split: on the top page the table's shown rows (by
   // the table's own filter rule) and the month's lead; on a subject's page
@@ -2398,19 +2450,23 @@ export async function loadMarket(input: {
         period, week: weekBlock, month: monthBlock, market, personas, company: brand,
         rivals: competitors.map((c) => ({ id: c.id, name: c.name })), noun,
         windows: period === 'week' && windows ? windows.map((w, i) => ({ ...w, cut: cut[i] ?? false })) : null,
+        // Each of its three comments from a different conversation (F3).
+        conversations: { themeOf: insightThemes(runThemes), href: (id) => convHref(p, id) },
       })), null)
     : Promise.resolve(null)
   detailAhead.catch(() => {})
-  // ITS WEEK ON ITS LEVEL'S BASE (17 Oct): one more read, on a ready
-  // subject's page, this week only. The market's videos in the window are the
-  // window read's own (memoised: the newest window is read above already).
-  const newest = windows && windows.length > 0 ? windows[windows.length - 1] : null
-  const weekLevelAhead: Promise<Level | 'unread' | null> = openSubject && period === 'week' && newest
-    ? Promise.all([
-        soft('subjectWeek', readSubjectWindow(db, clientId, newest), null),
-        soft('subjectWeekBase', loadWindowReading(db, clientId, { from: newest.from, to: newest.to, audiences: market }), null),
-      ]).then(([rows, base]) => subjectWeekLevel({ subjectId: openSubject.id, rows, denominators: base?.denominators ?? null, rivalAudiences }))
+  // ITS WEEKS ON ITS LEVEL'S BASE (17 Oct; F3-Market-Subject's week by
+  // week): one read a weekly window, on a ready subject's page, this week
+  // only, a window our change cut not read. The market's videos in each
+  // window are the window read's own (memoised: the windows are read above).
+  const levelOf = (w: { from: string; to: string }, i: number): Promise<Level | 'unread'> => Promise.all([
+    soft(`subjectWeek${i}`, readSubjectWindow(db, clientId, w), null),
+    soft(`subjectWeekBase${i}`, loadWindowReading(db, clientId, { from: w.from, to: w.to, audiences: market }), null),
+  ]).then(([rows, base]) => subjectWeekLevel({ subjectId: openSubject!.id, rows, denominators: base?.denominators ?? null, rivalAudiences }))
+  const levelWeeksAhead: Promise<(Level | 'unread' | null)[] | null> = openSubject && period === 'week' && windows && windows.length > 0
+    ? Promise.all(windows.map((w, i) => (cut[i] ? Promise.resolve(null) : levelOf(w, i))))
     : Promise.resolve(null)
+  levelWeeksAhead.catch(() => {})
   const [readings, whoRead, personas, heroKinds, weekRowsRaw, earlierNew] = await Promise.all([
     readingsAhead, whoAhead, personasAhead, isTop && period === 'month' && heroId ? kindsFor(heroId) : Promise.resolve(null), weekRowsAhead, earlierNewAhead,
   ])
@@ -2458,7 +2514,8 @@ export async function loadMarket(input: {
       ? buildSubjectPanel({ id: subjectRow.subject.id, facts: subjectFacts, convs, period, p, read, month: monthBlock, flag: flagOn, detail: await detailAhead, readsOn })
       : null
     if (!panel) return { ...common, view: 'subject', missing: true, subjectNav, crumbs: [marketCrumb(p)] }
-    const inside = convs.filter((c) => c.subjectId === panel.id)
+    const [descriptions, levels] = await Promise.all([descriptionsAhead, panel.level ? levelWeeksAhead : Promise.resolve(null)])
+    const inside = insideConvsOf({ subjectId: panel.id, convs, descriptions, flag: flagOn, href: (id) => convHref(p, id) })
     return {
       ...common,
       view: 'subject',
@@ -2467,10 +2524,11 @@ export async function loadMarket(input: {
       subjectPage: {
         panel,
         // A figure only where the level prints one (U6).
-        week: panel.level ? await weekLevelAhead : null,
+        week: panel.level ? levels?.[levels.length - 1] ?? null : null,
+        weeks: levels ? levels.map((l) => (l && l !== 'unread' ? l.k : null)) : null,
         weekLabels: weekBlock?.weekLabels ?? [],
         prevPct: subjectBoard?.rows.find((r) => r.id === panel.id)?.prevPct ?? null,
-        inside: inside.slice(0, MARKET_INSIDE).map((c) => ({ conv: c, href: convHref(p, c.id) })),
+        inside,
         insideTotal: inside.length,
         allHref: subjectTableHref(p, panel.id),
       },
@@ -2868,6 +2926,67 @@ export function subjectQuoteOf(e: DatedEvidence): PanelQuote {
   }
 }
 
+/**
+ * THE CONVERSATIONS INSIDE A SUBJECT, AS ITS PAGE LISTS THEM (F3-Market-
+ * Subject, 17 Oct): every conversation of the period placed in it
+ * (`placeSubject`, the one rule), biggest first by the period's count (the
+ * order `buildConvs` gives), each with its own description (Pass B's, as its
+ * page reads it) and the week's chip only where the check flagged it. Pure.
+ */
+export function insideConvsOf(a: {
+  subjectId: string
+  convs: readonly MarketConv[]
+  descriptions: ReadonlyMap<string, string>
+  flag: { id: string; verdict: Verdict } | null
+  href: (id: string) => string
+}): InsideConv[] {
+  return a.convs
+    .filter((c) => c.subjectId === a.subjectId)
+    .map((c) => ({
+      conv: c,
+      href: a.href(c.id),
+      description: a.descriptions.get(c.id)?.trim() || null,
+      flag: a.flag?.id === c.id ? a.flag.verdict : null,
+    }))
+}
+
+/** Which conversation each insight is in on the themed run (its members),
+ *  the first theme that names it; a quote's conversation. Pure. */
+export function insightThemes(themes: ReadonlyMap<string, RunTheme>): Map<string, { id: string; label: string }> {
+  const out = new Map<string, { id: string; label: string }>()
+  for (const [id, t] of themes) {
+    const label = t.label.trim()
+    if (!label) continue
+    for (const m of t.memberIds) if (!out.has(m)) out.set(m, { id, label })
+  }
+  return out
+}
+
+/**
+ * THREE COMMENTS, EACH FROM A DIFFERENT CONVERSATION WHERE THREE EXIST
+ * (F3-Market-Subject's "In their words"): from the gate's picks, in the
+ * gate's order, the first of each conversation first; then, where fewer than
+ * `count` conversations have a quote, the rest of the picks in order, so a
+ * subject with one conversation still prints its three. A pick whose insight
+ * is in no conversation of the run comes only in the second pass. Pure.
+ */
+export function quotesAcrossConversations<T extends { insightId: string }>(picked: readonly T[], themeOf: ReadonlyMap<string, { id: string }>, count: number): T[] {
+  const out: T[] = []
+  const used = new Set<string>()
+  for (const q of picked) {
+    if (out.length >= count) break
+    const conv = themeOf.get(q.insightId)?.id
+    if (!conv || used.has(conv)) continue
+    used.add(conv)
+    out.push(q)
+  }
+  for (const q of picked) {
+    if (out.length >= count) break
+    if (!out.includes(q)) out.push(q)
+  }
+  return out
+}
+
 /** Each platform's distinct videos among these citations. Pure. */
 function platformMixOf(rows: readonly DatedEvidence[]): Record<string, number> {
   const per = new Map<string, Set<string>>()
@@ -2919,6 +3038,11 @@ export function subjectDetailOf(input: {
    *  conversations count, oldest first, each marked where our own change cut
    *  it. The evidence handed in spans them. */
   windows?: readonly { from: string; to: string; cut: boolean }[] | null
+  /** The conversation each insight is in (`insightThemes`) and its page: the
+   *  three comments then come each from a different conversation where three
+   *  exist, each labelled with it (F3-Market-Subject). Absent: the gate's
+   *  first three, unlabelled. */
+  conversations?: { themeOf: ReadonlyMap<string, { id: string; label: string }>; href: (id: string) => string } | null
 }): SubjectDetail {
   const m = monthStartOf(input.month.month)
   const within = (e: DatedEvidence, from: string, to: string) => {
@@ -2958,7 +3082,12 @@ export function subjectDetailOf(input: {
 
   const where = platformRows(platformMixOf(basis), weekRows ? 'week' : 'month')
   const span = [...new Set([...monthRows, ...(weekRows ?? [])])]
-  const quotes = subjectQuotes({ gate: input.gate, memberIds: input.members, evidence: span, market: input.market, prefer: weekRows ? input.week : null, count: MARKET_QUOTES })
+  // Each from its own conversation where the subject's talk spans three: the
+  // gate picks a wider pool, in its own order, and the first of each
+  // conversation goes first.
+  const convs = input.conversations ?? null
+  const pool = subjectQuotes({ gate: input.gate, memberIds: input.members, evidence: span, market: input.market, prefer: weekRows ? input.week : null, count: convs ? MARKET_QUOTES * 4 : MARKET_QUOTES })
+  const quotes = convs ? quotesAcrossConversations(pool, convs.themeOf, MARKET_QUOTES) : pool
   // This week with no video of its own and some in the month: who and where
   // keep their frame (the parity rule) with the week empty beside the month.
   const quietWeek = weekRows != null && basisVideos.size === 0 && monthVideos.size > 0
@@ -2979,7 +3108,10 @@ export function subjectDetailOf(input: {
     doing: doing.length > 0 ? { rows: doing, n: monthVideos.size, text: `in ${input.month.text}` } : null,
     groups,
     platforms: where ? { rows: where.rows, n: where.n, month: monthWhere } : quietWeek ? { rows: [], n: 0, month: monthWhere } : null,
-    quotes: quotes.map(subjectQuoteOf),
+    quotes: quotes.map((e) => {
+      const from = convs?.themeOf.get(e.insightId)
+      return { ...subjectQuoteOf(e), ...(convs ? { from: from ? { ...from, href: convs.href(from.id) } : null } : {}) }
+    }),
   }
 }
 
@@ -3128,6 +3260,8 @@ export async function loadSubjectDetail(a: {
   noun: string | null
   /** This week: the three weekly windows (the subject's week by week). */
   windows?: readonly { from: string; to: string; cut: boolean }[] | null
+  /** Which conversation each quote is in (`subjectDetailOf`). */
+  conversations?: { themeOf: ReadonlyMap<string, { id: string; label: string }>; href: (id: string) => string } | null
 }): Promise<SubjectDetail> {
   const m = monthStartOf(a.month.month)
   const monthFrom = `${m}T00:00:00.000Z`
@@ -3150,6 +3284,7 @@ export async function loadSubjectDetail(a: {
     subjectId: a.subject.id, name: a.subject.name, evidence, members: a.members, market, period: a.period, week,
     month: a.month, personas: a.personas, namings: mentions, brands,
     company: a.company, noun: a.noun, gate: subjectGate(a.clientId, a.subject), windows: week ? a.windows ?? null : null,
+    conversations: a.conversations ?? null,
   })
 }
 

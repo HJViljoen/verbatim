@@ -7,8 +7,8 @@ import type { DatedEvidence } from '../../written/evidence'
 import { subjectReadOf } from '../../written/published'
 import type { WeekReadData } from '../../written/types'
 import {
-  buildSubjectPanel, loadSubjectDetail, marketParams, personasOf, subjectDetailOf, subjectOwnRead, subjectQuoteOf, subjectReadLines, subjectWeekLevel,
-  type MarketMonth, type SubjectDetail,
+  buildSubjectPanel, insideConvsOf, insightThemes, loadSubjectDetail, marketParams, personasOf, quotesAcrossConversations, subjectDetailOf, subjectOwnRead, subjectQuoteOf, subjectReadLines, subjectWeekLevel,
+  type MarketConv, type MarketMonth, type SubjectDetail,
 } from './market'
 import { fixtureFacts, fixtureFactsIn, fixtureRead, fixtureSubjectEvidence, fixtureSubjectId, marketFixture, withSubjectHeadline, withSubjectReads } from './market-fixture'
 
@@ -354,5 +354,61 @@ describe('the fixture\'s subject evidence', () => {
     expect(evidence.filter((e) => e.commentDate.startsWith('2026-09')).length).toBeGreaterThan(0)
     expect(evidence.filter((e) => e.redacted)).toHaveLength(1)
     expect(fixtureSubjectEvidence('thin').evidence).toHaveLength(1)
+  })
+})
+
+// THE SUBJECT AS THE HUB (F3-Market-Subject, 17 Oct): every conversation
+// inside it with its own description and the week's chip, and three comments
+// each from a different conversation, each labelled with it.
+describe('the hub\'s parts', () => {
+  const conv = (id: string, subjectId: string | null, week: number): MarketConv => ({
+    id, label: `Conv ${id}`, kind: 'question', subjectId, subjectName: subjectId ? 'Fit' : null, week, weeks: [1, 2, week], month: week + 5,
+    months: [], who: [], mix: null, isNew: false, monthVerdict: null, setApart: null,
+  })
+
+  it('insideConvsOf: every conversation placed in it, in the given order, each with its description and the chip only where flagged', () => {
+    const convs = [conv('a', 's1', 9), conv('b', 's2', 8), conv('c', 's1', 4)]
+    const flag = { id: 'c', verdict: { state: 'moved' } as never }
+    const inside = insideConvsOf({ subjectId: 's1', convs, descriptions: new Map([['a', '  Liners wearing out. ']]), flag, href: (id) => `/c/${id}` })
+    expect(inside.map((x) => [x.conv.id, x.href, x.description, x.flag ? 'flag' : null])).toEqual([['a', '/c/a', 'Liners wearing out.', null], ['c', '/c/c', null, 'flag']])
+  })
+
+  it('insightThemes: each member insight\'s conversation, the first that names it; an unlabelled theme names none', () => {
+    const themes = new Map([
+      ['t1', { label: 'Liners', kind: null, memberIds: ['i1', 'i2'] }],
+      ['t2', { label: 'Sweat', kind: null, memberIds: ['i2', 'i3'] }],
+      ['t3', { label: ' ', kind: null, memberIds: ['i4'] }],
+    ])
+    const of = insightThemes(themes)
+    expect([...of.entries()]).toEqual([['i1', { id: 't1', label: 'Liners' }], ['i2', { id: 't1', label: 'Liners' }], ['i3', { id: 't2', label: 'Sweat' }]])
+  })
+
+  it('quotesAcrossConversations: the first of each conversation first, then the rest in the gate\'s order', () => {
+    const of = new Map([['i1', { id: 't1' }], ['i2', { id: 't1' }], ['i3', { id: 't2' }], ['i4', { id: 't3' }]])
+    const q = (insightId: string, n: number) => ({ insightId, n })
+    expect(quotesAcrossConversations([q('i1', 1), q('i2', 2), q('i3', 3), q('i4', 4)], of, 3).map((x) => x.n)).toEqual([1, 3, 4])
+    // Two conversations only: both first, then the next pick.
+    expect(quotesAcrossConversations([q('i1', 1), q('i2', 2), q('i3', 3)], of, 3).map((x) => x.n)).toEqual([1, 3, 2])
+    // A quote in no conversation comes only in the second pass.
+    expect(quotesAcrossConversations([q('x', 0), q('i1', 1), q('i3', 3)], of, 3).map((x) => x.n)).toEqual([1, 3, 0])
+  })
+
+  it('subjectDetailOf labels each quote with its conversation and its page, each from its own where they can be', () => {
+    const say = (s: string) => `${s} and the insurance paperwork goes on for months.`
+    const d = subjectDetailOf({
+      ...base,
+      evidence: [
+        ev({ i: 1, insight: 'm1', day: 6, text: say('First of one') }),
+        ev({ i: 2, insight: 'm1', day: 7, text: say('Second of one') }),
+        ev({ i: 3, insight: 'm2', day: 8, text: say('First of two') }),
+      ],
+      conversations: { themeOf: new Map([['m1', { id: 't1', label: 'Insurance refusals' }], ['m2', { id: 't2', label: 'Medical aid' }]]), href: (id) => `/dashboard/market/conversations/${id}` },
+    })
+    expect(d.quotes.map((x) => [x.text, x.from?.label ?? null])).toEqual([
+      [say('First of one'), 'Insurance refusals'], [say('First of two'), 'Medical aid'], [say('Second of one'), 'Insurance refusals'],
+    ])
+    expect(d.quotes[1].from).toEqual({ id: 't2', label: 'Medical aid', href: '/dashboard/market/conversations/t2' })
+    // Without the conversations, the gate's three as before, unlabelled.
+    expect(subjectDetailOf({ ...base, evidence: [ev({ i: 1, insight: 'm1', day: 6, text: say('One') })] }).quotes[0]).not.toHaveProperty('from')
   })
 })
