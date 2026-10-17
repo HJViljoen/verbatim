@@ -8,7 +8,7 @@ import { prevMonth } from '@/lib/reading/month-key'
 import { inlineMonth } from '@/lib/reading/month-label'
 import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import {
-  conversationsOverlap, countWords, GROUP_AFRESH, GROUP_NO_SUBJECTS, GROUP_NOT_COMPARED_TITLE, groupNoConversationsIn, HOW_THEY_TALK_NONE,
+  conversationsOverlap, countWords, GROUP_AFRESH, GROUP_NO_SUBJECTS, GROUP_NOT_COMPARED_TITLE, GROUP_QUOTES_UNREAD, groupNoConversationsIn, groupQuotesNone, HOW_THEY_TALK_NONE,
   type GroupPage, type GroupSubjectCard,
 } from '@/lib/pages/v2/voices-levels'
 import { GROUP_NO_WHO, GROUP_NOT_DESCRIBED, type GroupProducts } from '@/lib/pages/v2/voices'
@@ -383,15 +383,27 @@ function Numbers({ page }: { page: GroupPage }) {
   )
 }
 
+/** "In their words": three of their comments, each from its conversation.
+ *  With none to print the card keeps its frame and says why in one line (the
+ *  parity rule; the thin board draws the card). */
 function Quotes({ page }: { page: GroupPage }) {
   const labelled = page.quotes.length > 0 && page.quotes.every((q) => q.from)
   return (
     <section aria-label="In their words" className={PAGE_CARD}>
       <div className="flex flex-col gap-3">
-        <Caps>In their words · <Fig>{fmtInt(page.quotes.length)}</Fig> of their comments in {page.month.monthWords}{labelled ? ', each from its conversation' : null}</Caps>
-        <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-3">
-          {page.quotes.map((q) => <LevelQuoteCard key={q.ref} q={q} />)}
-        </div>
+        {page.quotes.length > 0 ? (
+          <>
+            <Caps>In their words · <Fig>{fmtInt(page.quotes.length)}</Fig> of their comments in {page.month.monthWords}{labelled ? ', each from its conversation' : null}</Caps>
+            <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-3">
+              {page.quotes.map((q) => <LevelQuoteCard key={q.ref} q={q} />)}
+            </div>
+          </>
+        ) : (
+          <>
+            <Caps>In their words</Caps>
+            <p data-quotes-gap={page.quotesUnread ? 'unread' : 'none'} className={GAPLINE}>{page.quotesUnread ? GROUP_QUOTES_UNREAD : groupQuotesNone(page.month.monthWords, page.videos)}</p>
+          </>
+        )}
       </div>
     </section>
   )
@@ -424,7 +436,7 @@ export function GroupPageBody({ page }: { page: GroupPage }) {
       <Conversations page={page} />
       <LevelSection title="The numbers" note={<>Their <Fig>{fmtInt(page.videos)}</Fig> videos, {page.month.monthWords}</>} />
       <Numbers page={page} />
-      {page.quotes.length > 0 ? <Quotes page={page} /> : null}
+      <Quotes page={page} />
       <AskBox text={<>Ask what <span data-copy="subject" data-slot="pass_e_persona">{page.name}</span> say, in your own words.</>} href={page.askHref} button="Ask the Agent about this group" />
     </>
   )

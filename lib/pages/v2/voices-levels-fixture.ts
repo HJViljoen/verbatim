@@ -107,7 +107,7 @@ const OCT_MONTH: LevelMonth = { month: OCT, soFar: true, monthWords: monthWordsO
 /** Caregivers and family, the board's: three ready subjects carded, Function &
  *  movement open, two more ready ones also in their videos. `checks` changes
  *  which subjects passed their check. */
-export function groupFixture(opts: { checks?: 'board' | 'tracked' | 'none_ready'; params?: LevelParams; brands?: GroupBrandRows; products?: GroupProducts } = {}): GroupPage {
+export function groupFixture(opts: { checks?: 'board' | 'tracked' | 'none_ready'; params?: LevelParams; brands?: GroupBrandRows; products?: GroupProducts; quotes?: LevelQuote[] | null } = {}): GroupPage {
   const checks = opts.checks ?? 'board'
   const state = (id: string): 'ready' | 'provisional' | 'failed' => checks === 'none_ready' ? 'provisional'
     : checks === 'tracked' ? ({ 's-function': 'ready', 's-look': 'ready', 's-cost': 'provisional', 's-fit': 'failed' } as Record<string, 'ready' | 'provisional' | 'failed'>)[id] ?? 'ready'
@@ -179,7 +179,7 @@ export function groupFixture(opts: { checks?: 'board' | 'tracked' | 'none_ready'
         all: new Set(mine.slice(0, 10)),
       },
     }),
-    quotes: CAREGIVER_QUOTES,
+    quotes: opts.quotes !== undefined ? opts.quotes : CAREGIVER_QUOTES,
     params: opts.params ?? {},
   })
 }

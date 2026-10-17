@@ -275,6 +275,8 @@ export interface GroupPage {
   brands: GroupBrandRows
   products: GroupProducts
   quotes: LevelQuote[]
+  /** Their comments could not be read (the card says so, never "none"). */
+  quotesUnread?: boolean
   askHref: string
   crumbs: Crumb[]
 }
@@ -285,6 +287,17 @@ export const GROUP_AFRESH = 'Each update describes the groups afresh'
 export const HOW_THEY_TALK_NONE = 'No phrasing of theirs could be checked against a comment yet.'
 export const GROUP_NO_SUBJECTS = 'No subject is tracked for this workspace yet.'
 export const groupNoConversationsIn = (monthWords: string): string => `None of their videos in ${monthWords} is in a named conversation.`
+/** Why a counted comment may not print on a level page: what the quote gate
+ *  tests there (readable, a person's own words, not the account's own reply,
+ *  not an offer). No relevance to a claim is required on these pages, so the
+ *  words claim none (Market's conversation page, which does, says "speaks to
+ *  this"). */
+export const LEVEL_QUOTE_RULE = 'a comment prints only where it reads clearly in the commenter’s own words'
+/** "In their words" with no comment to print (the parity rule: the card keeps
+ *  its frame and says why in one line). */
+export const groupQuotesNone = (monthWords: string, videos: number): string =>
+  videos === 0 ? `None of their comments in ${monthWords}.` : `None of their comments in ${monthWords} can be quoted: ${LEVEL_QUOTE_RULE}.`
+export const GROUP_QUOTES_UNREAD = 'Their comments could not be read just now.'
 export const GROUP_BRANDS_SHOWN = 4
 
 /** What a group's page reads, handed to its builder. */
@@ -310,7 +323,8 @@ export interface GroupInput {
   levels: ReadonlyMap<string, Level>
   brands: GroupBrandRows
   products: GroupProducts
-  quotes: LevelQuote[]
+  /** Null where they could not be read. */
+  quotes: LevelQuote[] | null
   englishOf?: (text: string) => string | null
   params: LevelParams
 }
@@ -413,7 +427,8 @@ export function buildGroupPage(input: GroupInput): GroupPage {
     conversations,
     brands: input.brands,
     products: input.products,
-    quotes: input.quotes,
+    quotes: input.quotes ?? [],
+    ...(input.quotes === null ? { quotesUnread: true } : {}),
     askHref: askHref(`What does the group "${persona.name}" in my market want, and what stops them?`),
     crumbs: [voicesCrumb(params), { label: persona.name, href: null, slot: 'pass_e_persona', menu: groupMenu(input.groups, persona.key, params) }],
   }
@@ -1233,7 +1248,7 @@ export async function loadVoicesGroup(input: LevelLoadInput & { key: string }): 
     readGroupProducts(handle, clientId, m, month.monthWords, [...mine], { month: params.month }),
     brandsAhead,
   ])
-  const quotes = await soft('quotes', loadGroupQuotes(handle, clientId, { persona, month: m, themes, listed }), [])
+  const quotes = await soft<LevelQuote[] | null>('quotes', loadGroupQuotes(handle, clientId, { persona, month: m, themes, listed }), null)
   const levels = new Map<string, Level>()
   for (const r of readings) if (r.curr && r.curr.k != null && r.curr.n != null) levels.set(r.object.id, { k: r.curr.k, n: r.curr.n })
   const groups = buildGroups({ profile, read: groupRead, platformOf: new Map(), params: {} })

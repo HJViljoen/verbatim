@@ -3,7 +3,7 @@ import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { VOICES_ONE_MONTH } from '@/lib/pages/v2/voices'
-import { BACK_TO_VOICES, BRAND_MISSING, CREATOR_REDDIT, GROUP_MISSING, VOICES_ONE_MONTH_SHORT, type BrandPage, type CreatorPage, type GroupPage, type LevelMissing } from '@/lib/pages/v2/voices-levels'
+import { BACK_TO_VOICES, BRAND_MISSING, CREATOR_REDDIT, GROUP_MISSING, GROUP_QUOTES_UNREAD, groupQuotesNone, VOICES_ONE_MONTH_SHORT, type BrandPage, type CreatorPage, type GroupPage, type LevelMissing } from '@/lib/pages/v2/voices-levels'
 import { brandFixture, creatorFixture, groupFixture, groupThinFixture, VOICES_LEVEL_FIXTURES } from '@/lib/pages/v2/voices-levels-fixture'
 import { VoicesBrandPage, VoicesCreatorPage, VoicesGroupPage } from './pages'
 
@@ -113,6 +113,23 @@ describe('a group\'s page (G3-Voices-Group)', () => {
     expect(t).toContain('Products in their videos Your products are not read for this workspace yet.')
     expect(t).toContain('“Onde vocês conseguiram a prótese? Minha mãe precisa de uma.” Portuguese · machine translation Where did you get the prosthesis? My mother needs one.')
     expect(t).toMatch(/^Voices \/ Caretaker Voices Group Caretaker September · the last full month · 97 of 521 videos/)
+  })
+
+  // The parity rule: a card is never removed because its data is thin; the
+  // thin board draws "In their words", so no comment to print is said inside it.
+  it('"In their words" keeps its card with no comment to print, and says a failed read apart from none', () => {
+    const none = groupFixture({ quotes: [] })
+    const t = renderText(group(none))
+    expect(t).toContain(`In their words ${groupQuotesNone('October so far', 45)}`)
+    expect(t).toContain('can be quoted: a comment prints only where it reads clearly in the commenter’s own words.')
+    expect(render(group(none))).toContain('data-quotes-gap="none"')
+    const unread = groupFixture({ quotes: null })
+    expect(unread).toMatchObject({ quotes: [], quotesUnread: true })
+    expect(renderText(group(unread))).toContain(`In their words ${GROUP_QUOTES_UNREAD}`)
+    expect(groupQuotesNone('September', 0)).toBe('None of their comments in September.')
+    // The Agent still closes the page, after the card.
+    expect(t.indexOf('In their words')).toBeLessThan(t.indexOf('Ask what Caregivers and family say'))
+    assertCopyContract(group(none))
   })
 
   it('a tracked subject is never hidden: the failed one\'s reason once on the page', () => {
