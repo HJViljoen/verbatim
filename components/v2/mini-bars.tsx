@@ -47,7 +47,13 @@ export interface MiniBarsProps {
   /** What the chart is, for a screen reader. The readings are appended. */
   label: string
   className?: string
+  /** The bars' colour role: the market's yellow by default; a brand's page
+   *  draws its months in the brand's own (a rival's grey, your gold; Voices,
+   *  17 Oct). Additive: every other drawing is unchanged. */
+  tone?: 'market' | 'rival' | 'you'
 }
+
+const TONE_FILL = { market: 'fill-brand', rival: 'fill-comp', you: 'fill-you' } as const
 
 /** One decimal of a user unit is finer than a pixel at any width drawn. */
 const r1 = (v: number): number => Math.round(v * 10) / 10
@@ -58,7 +64,7 @@ const GEOMETRY = {
   lg: { W: 560, H: 160, top: 24, base: 124, bar: 0.57, value: 12.5, axis: 11.5, sub: 10.5 },
 } as const
 
-export function MiniBars({ bars, highlight = 'last', size = 'sm', label, className }: MiniBarsProps) {
+export function MiniBars({ bars, highlight = 'last', size = 'sm', label, className, tone = 'market' }: MiniBarsProps) {
   const n = bars.length
   if (n === 0) return null
   const g = GEOMETRY[size]
@@ -82,7 +88,7 @@ export function MiniBars({ bars, highlight = 'last', size = 'sm', label, classNa
         const bh = b.value <= 0 ? 2 : r1(Math.max(2, (b.value / max) * room))
         const y = r1(g.base - bh)
         const w = r1(bw)
-        const fill = on ? 'fill-orange' : 'fill-brand'
+        const fill = on ? 'fill-orange' : TONE_FILL[tone]
         return (
           <g key={i} data-bar={on ? 'picked' : undefined}>
             {b.value <= 0 ? (

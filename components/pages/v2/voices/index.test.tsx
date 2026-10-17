@@ -6,8 +6,8 @@ import { readingMonthLabel } from '@/lib/reading/month-label'
 import { VOICES_ONE_MONTH } from '@/lib/pages/v2/voices'
 import { MonthSwitch, VoicesMeta, VoicesPage } from '.'
 
-describe('the Voices page (boards E3-Voices and E3-Voices-Open)', () => {
-  it('keeps the copy contract on every fixture, open or not', () => {
+describe('the Voices root (boards E3-Voices; G3-Voices since 17 Oct)', () => {
+  it('keeps the copy contract on every fixture', () => {
     for (const f of Object.values(VOICES_FIXTURES)) assertCopyContract(<VoicesPage data={f()} />)
   })
 
@@ -15,7 +15,7 @@ describe('the Voices page (boards E3-Voices and E3-Voices-Open)', () => {
     for (const f of Object.values(VOICES_FIXTURES)) expect(renderText(<VoicesPage data={f()} />)).not.toMatch(/this month/i)
   })
 
-  it('prints no quote at level 1: quotes are the panels\'', () => {
+  it('prints no quote at level 1: quotes are the level pages\'', () => {
     for (const key of ['ossur', 'sealand'] as const) {
       expect(render(<VoicesPage data={VOICES_FIXTURES[key]()} />)).not.toContain('data-copy="quote"')
     }
@@ -90,17 +90,15 @@ describe('the Voices page (boards E3-Voices and E3-Voices-Open)', () => {
     }
   })
 
-  it('a brand\'s or a creator\'s panel opens under its card, one at a time (T9)', () => {
-    const m = render(<VoicesPage data={VOICES_FIXTURES['sealand-brand']()} />)
-    // In the markup between the two cards: under Brands on a phone, under
-    // the pair from 1280 with its notch over Brands (7 of 12).
-    expect(m.indexOf('id="brand-panel"')).toBeGreaterThan(m.indexOf('Brands in your market'))
-    expect(m.indexOf('id="brand-panel"')).toBeLessThan(m.indexOf('Creators who drive the talk'))
-    expect(m).toContain('--panel-o-base:1;--panel-o-sm:1;--panel-o-md:1;--panel-o-lg:1;--panel-o-w1180:1;--panel-o-xl:3')
-    expect(m).toContain('--notch-xl:29.17%')
-    expect(m).not.toContain('id="creator-panel"')
-    expect(m).not.toContain('id="group-panel"')
-    const c = render(<VoicesPage data={VOICES_FIXTURES['ossur-creator']()} />)
-    expect(c).toContain('id="creator-panel"')
+  // G3-Voices (17 Oct): every row opens a page; nothing opens in place.
+  it('every row opens its page, ending in the chevron; no panel and no "Close"', () => {
+    const d = VOICES_FIXTURES.sealand()
+    const m = render(<VoicesPage data={d} />)
+    for (const id of ['group-panel', 'brand-panel', 'creator-panel']) expect(m).not.toContain(`id="${id}"`)
+    expect(m).not.toContain('Close ↑')
+    expect(m).not.toContain('aria-expanded')
+    expect(m.match(/data-row-chevron=""/g)?.length).toBe(d.groups.cards.length + d.brands.rows.length + d.creators.rows.length)
+    expect(m).toContain('href="/dashboard/voices/groups/one-bag"')
+    expect(m).toContain('href="/dashboard/voices/creators/youtube/Pack%20Hacker"')
   })
 })

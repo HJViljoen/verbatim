@@ -92,6 +92,7 @@ import { subjectsFixtureRows } from '../components/pages/settings/subjects/fixtu
 import { yourSubjectsView, type SubjectSettingsRow } from '../lib/settings/your-subjects'
 import { VoicesPage } from '../components/pages/v2/voices'
 import { VOICES_FIXTURES } from '../lib/pages/v2/voices-fixture'
+import { VOICES_LEVEL_SHOTS } from './shots/voices-levels'
 import type { VoicesData } from '../lib/pages/v2/voices'
 import { MovesV2Page } from '../components/pages/v2/moves'
 import { movesFailedFixture, movesFixture, movesHistoryFixture, movesOpenFixture, movesQuietFixture, movesRecordFixture, movesThinFixture, movesThinOpenFixture, statementsV2 } from '../lib/pages/v2/moves-fixture'
@@ -480,16 +481,14 @@ const PAGES: Page[] = [
   // `voices-real` draws a dump of the loader's production output
   // (`VOICES_JSON=<file>`, one per tenant, read once under the lock).
   { key: 'voices-ossur', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES.ossur() }) },
-  { key: 'voices-ossur-group', path: '/dashboard/voices', artboard: 'E3-Voices-Open.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['ossur-group']() }) },
-  { key: 'voices-ossur-creator', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['ossur-creator']() }) },
   { key: 'voices-sealand', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES.sealand() }) },
-  { key: 'voices-sealand-brand', path: '/dashboard/voices', artboard: 'E3-Voices-Open.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['sealand-brand']() }) },
-  { key: 'voices-sealand-creator', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['sealand-creator']() }) },
   // Only where a dump is named: unset, the entry is not listed, so a run of
   // every page never stops on a missing file.
   ...(process.env.VOICES_JSON
     ? [{ key: 'voices-real', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: JSON.parse(readFileSync(process.env.VOICES_JSON as string, 'utf8')) as VoicesData }) }]
     : []),
+  // Voices' level pages (17 Oct, the G3 boards): scripts/shots/voices-levels.ts.
+  ...VOICES_LEVEL_SHOTS,
   // Your moves, Design v2 (depth T7): the fixture beside the depth boards
   // (`--artboards ~/Documents/Heinrich/Verbatim-Design/depth-2026-10/canvas/project`),
   // and one real render per tenant from the loader's dumped output
@@ -667,8 +666,6 @@ const PAGES: Page[] = [
   // one whose check is open, one being re-described, on Market (its board, and
   // the failed one's panel) and Voices (the page, a group's and a rival's panel).
   { key: 'voices-tracked', path: '/dashboard/voices', artboard: 'E3-Voices.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['ossur-tracked']() }) },
-  { key: 'voices-tracked-group', path: '/dashboard/voices', artboard: 'E3-Voices-Open.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['ossur-tracked-group']() }) },
-  { key: 'voices-tracked-brand', path: '/dashboard/voices', artboard: 'E3-Voices-Open.dc.html', page: () => h(VoicesPage, { data: VOICES_FIXTURES['ossur-tracked-brand']() }) },
   // A tracked subject's panel says something (14 Oct): a ready subject in
   // full this week and this month, a ready one on a single video, and one
   // whose check is open and one being re-described, which keep the panel

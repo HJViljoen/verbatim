@@ -161,12 +161,12 @@ describe('Content: the week\'s most-asked question your posts have not touched, 
 })
 
 describe('Voices: the tracked brands, for a "Named most" row with no count yet', () => {
-  it('you first, then the page\'s order, at most two, each opening its panel', () => {
+  it('you first, then the page\'s order, at most two, each opening its page (17 Oct)', () => {
     const d = VOICES_FIXTURES.ossur()
     const top = topVoicesOf({ month: d.month, soFar: d.soFar, videos: d.videos, groups: d.groups, brands: d.brands })
     expect(top.tracked!.length).toBeLessThanOrEqual(2)
     expect(top.tracked![0].you).toBe(true)
-    for (const b of top.tracked!) expect(b.href).toMatch(/^\/dashboard\/voices\?brand=[^#]+#brand-panel$/)
+    for (const b of top.tracked!) expect(b.href).toMatch(/^\/dashboard\/voices\/brands\/[^?#/]+$/)
   })
 
   it('brands not counted yet: the chips are the brands table\'s first rows, in its order (`brandTable`)', () => {

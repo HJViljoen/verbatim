@@ -1,21 +1,19 @@
 import Link from 'next/link'
-import { Fragment, type CSSProperties, type ReactNode } from 'react'
+import type { CSSProperties } from 'react'
 import { Users } from 'lucide-react'
-import {
-  CARD, CardHead, equalColumns, InPlacePanel, panelItemOrder, panelPlacement, PanelSection, PanelSlot, PanelTitle, SELECTED_CARD_RING, SlopePair, StatCell, StatRow, TickBar,
-  type PanelLayout, type PerBreakpoint,
-} from '@/components/v2'
+import { CARD, CardHead, SlopePair, TickBar } from '@/components/v2'
 import { fmtInt, longMonth } from '@/lib/format'
 import { prevMonth } from '@/lib/reading/month-key'
-import { SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import {
-  GROUP_NO_WHO, GROUP_NOT_COMPARED, GROUP_NOT_DESCRIBED, groupNoConversations, MIX_WHY, mixNotRead, mixTitle, PANEL_ID, slopeLabel, WHO_SHOWN, type GroupPanel, type GroupProducts, type VoicesData, type VoicesGroupCard, type VoicesGroups,
+  GROUP_NOT_COMPARED, MIX_WHY, mixNotRead, mixTitle, slopeLabel, type VoicesData, type VoicesGroupCard, type VoicesGroups,
 } from '@/lib/pages/v2/voices'
 import { cn } from '@/lib/utils'
-import { AskButton, CAPS, EmptyLine, FailedSubjectsFoot, Fig, LevelText, MiniRow, NotMeasuredRows, OLINK, PanelTag, Phrase, PendingSubjectsLine, PlatformStrip, QuoteCard } from './parts'
+import { CAPS, EmptyLine, FailedSubjectsFoot, Fig, LevelText, MiniRow, NotMeasuredRows, OLINK, PendingSubjectsLine, PlatformStrip, RowChevron } from './parts'
 
 // THE GROUPS (board E3-Voices, "Who's in your market", the group cards and
-// "How the mix changed"; E3-Voices-Open, the group's panel). Decision 2
+// "How the mix changed"; since 17 Oct G3-Voices: each row and each card opens
+// the group's own page, the row ending in the leave-the-page chevron, and
+// nothing opens in place). Decision 2
 // holds: each group is this month's videos as a count of the market's, with
 // no share of the market and no change since last month. A video can hold
 // more than one group, so the counts are drawn as separate bars, never one
@@ -51,12 +49,13 @@ export function WhoCard({ groups, videos, monthWords, failed }: { groups: Voices
             // and the count, full width and compact (the fresh check, 13 Oct:
             // the board's phone draws its band there), and a long name wraps
             // rather than being cut (T9); from 1024 it sits between them.
-            <div key={c.key} role="listitem" className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 text-[13.5px] lg:grid-cols-[minmax(0,1.1fr)_minmax(0,2fr)_auto] lg:gap-y-0">
-              <Link href={c.href} scroll={false} className={cn('min-w-0 font-semibold text-foreground no-underline hover:underline hover:underline-offset-[3px]', c.selected ? 'underline underline-offset-[3px]' : null)}>
+            <div key={c.key} role="listitem" className="grid grid-cols-[minmax(0,1fr)_auto_16px] items-center gap-x-3 gap-y-1.5 text-[13.5px] lg:grid-cols-[minmax(0,1.1fr)_minmax(0,2fr)_auto_16px] lg:gap-y-0">
+              <Link href={c.href} className="min-w-0 font-semibold text-foreground no-underline hover:underline hover:underline-offset-[3px]">
                 <span data-copy="subject" data-slot="pass_e_persona">{c.name}</span>
               </Link>
-              <TickBar pct={(100 * c.videos) / n} size="lg" tone="market" label={`${c.name}: ${fmtInt(c.videos)} of ${fmtInt(n)} videos`} className="order-last col-span-2 max-lg:h-2 lg:order-none lg:col-span-1" />
+              <TickBar pct={(100 * c.videos) / n} size="lg" tone="market" label={`${c.name}: ${fmtInt(c.videos)} of ${fmtInt(n)} videos`} className="order-last col-span-3 max-lg:h-2 lg:order-none lg:col-span-1" />
               <LevelText k={c.videos} n={n} unit="videos" className="text-right text-[12.5px] text-secondary-foreground" />
+              <RowChevron href={c.href} />
             </div>
           ))}
         </div>
@@ -79,7 +78,7 @@ export function GroupCard({ card, n, monthWords, style }: { card: VoicesGroupCar
     <article
       data-group={card.key}
       style={style}
-      className={cn(CARD, 'gap-3.5 rounded-[14px] px-[22px] py-5', card.selected ? SELECTED_CARD_RING : null)}
+      className={cn(CARD, 'gap-3.5 rounded-[14px] px-[22px] py-5')}
     >
       <div>
         <h3 className="m-0 text-[16.5px] font-semibold leading-[1.3] text-foreground"><span data-copy="subject" data-slot="pass_e_persona">{card.name}</span></h3>
@@ -129,23 +128,10 @@ export function GroupCard({ card, n, monthWords, style }: { card: VoicesGroupCar
           : <span aria-hidden className="block h-1.5 rounded-full bg-track" />}
       </div>
       <div className="mt-auto flex items-center justify-between pt-1">
-        <Link
-          href={card.href}
-          scroll={false}
-          aria-expanded={card.selected}
-          aria-controls={card.selected ? PANEL_ID.group : undefined}
-          className={OLINK}
-        >
-          {card.selected ? 'Close ↑' : 'Open →'}
-        </Link>
+        <Link href={card.href} className={OLINK} aria-label={`Open ${card.name}`}>Open →</Link>
       </div>
     </article>
   )
-}
-
-/** A panel column's one quiet line, where it has nothing to list. */
-function Quiet({ children }: { children: ReactNode }) {
-  return <p className="m-0 text-[13.5px] leading-[1.5] text-muted-foreground">{children}</p>
 }
 
 /** A month's short name on the chart's axis: "Sep". */
@@ -183,182 +169,14 @@ export function MixCard({ cards, n, month, monthWords, style }: { cards: readonl
   )
 }
 
-/** E3-Voices-Open's "Products they mention", as the count is: your products
- *  named in the group's videos this month, each opening in Your products,
- *  and the videos about one of yours where we could not tell which. Where no
- *  catalogue is read the column keeps its place and says so in one line. */
-export function ProductsColumn({ products, videos }: { products: GroupProducts; videos: number }) {
-  const listed = products.rows.length > 0 || products.unclear > 0
-  return (
-    <PanelSection label={<>Products in their videos{listed && videos > 0 ? <> · of their <Fig>{fmtInt(videos)}</Fig></> : null}</>}>
-      {listed ? (
-        <>
-          <div className="flex flex-col gap-0.5">
-            {products.rows.map((p) => (
-              <Link key={p.id} href={p.href} className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-[14px] text-foreground no-underline hover:bg-inner">
-                <span className="min-w-0">{p.name}</span>
-                <LevelText k={p.k} n={videos} className="ml-auto shrink-0 whitespace-nowrap text-[13px] text-secondary-foreground" />
-              </Link>
-            ))}
-            {products.unclear > 0 ? (
-              <div className="-mx-2 flex items-center justify-between gap-3 px-2 py-1.5 text-[14px] text-foreground">
-                <span className="min-w-0">Couldn’t tell which product</span>
-                <LevelText k={products.unclear} n={videos} className="ml-auto shrink-0 whitespace-nowrap text-[13px] text-secondary-foreground" />
-              </div>
-            ) : null}
-          </div>
-          {products.rows.length > 0 ? <span className="text-[12px] text-muted-foreground">Each opens in Your products</span> : null}
-        </>
-      ) : (
-        <Quiet>{products.line}</Quiet>
-      )}
-    </PanelSection>
-  )
-}
-
-/** The group's panel, in place under its row (E3-Voices-Open). `notchAt`
- *  is the grid's placement, per breakpoint (`GroupGrid`); alone, the
- *  loader's three-across notch. */
-export function GroupPanelView({ panel, monthWords, notchAt }: { panel: GroupPanel; monthWords: string; notchAt?: number | PerBreakpoint }) {
-  // The headline cells name what their videos ARE about: ready subjects on
-  // at least one of them (the lead's ruling, 14 Oct). A ready one at 0 stays
-  // on the card's list, never in a headline cell; with none above 0, the
-  // cells fall back as before ("Not measured yet" where some are not).
-  const [first, second] = panel.subjects.filter((s) => s.k > 0)
-  const where = panel.platforms[0]
-  return (
-    <InPlacePanel
-      id={PANEL_ID.group}
-      notchAt={notchAt ?? panel.notchAt}
-      openKey={panel.key}
-      closeHref={panel.closeHref}
-      labelledBy="group-title"
-      closeLabel="Close this group"
-      head={
-        <>
-          <div className="flex flex-wrap items-center gap-2"><PanelTag>Group</PanelTag></div>
-          <PanelTitle id="group-title"><span data-copy="subject" data-slot="pass_e_persona">{panel.name}</span></PanelTitle>
-          {panel.oneLiner ? <p className="m-0 mt-1 text-[14px] leading-[1.4] text-muted-foreground"><span data-copy="subject" data-slot="pass_e_persona">{panel.oneLiner}</span></p> : null}
-        </>
-      }
-    >
-      <StatRow>
-        {panel.n ? <StatCell value={panel.videos} of={panel.n} label="videos they comment on" /> : <StatCell value={panel.videos} label="videos they comment on" />}
-        {first && panel.videos > 0 ? <StatCell value={first.k} of={panel.videos} label={<>are about {first.label}</>} /> : null}
-        {second && panel.videos > 0 ? <StatCell value={second.k} of={panel.videos} label={<>are about {second.label}</>} /> : null}
-        {/* Ruling U6: no ready subject, no "are about" figure; the two
-            cells' place says why, once, so the row keeps its four. */}
-        {!first && panel.videos > 0 && ((panel.subjectsPending ?? 0) > 0 || (panel.subjectsNotMeasured?.length ?? 0) > 0) ? (
-          <div className="min-w-0 rounded-[10px] bg-inner px-4 pt-4 pb-3.5 xl:col-span-2">
-            <div className="text-[15px] font-medium leading-[30px] text-muted-foreground">{SUBJECT_NOT_MEASURED}</div>
-            <div className="mt-2 text-[12.5px] leading-[1.4] text-muted-foreground">what their videos are about</div>
-          </div>
-        ) : null}
-        {where && panel.videos > 0 ? <StatCell value={where.k} of={panel.videos} label={<>are on {where.label}</>} /> : null}
-      </StatRow>
-
-      {/* THE PANEL'S TWO GRIDS NEVER REFLOW (the fresh check, 13 Oct): a
-          column with nothing to list keeps its place and says so in one
-          quiet line, so the next one never slides into its slot. */}
-      <div className="grid grid-cols-1 gap-7 lg:grid-cols-3">
-        <PanelSection label="What they want">{panel.wants ? <p className="m-0 text-[15px] leading-[1.6] text-foreground"><span data-copy="subject" data-slot="pass_e_persona">{panel.wants}</span></p> : <Quiet>{GROUP_NOT_DESCRIBED}</Quiet>}</PanelSection>
-        <PanelSection label="What stops them">{panel.stops ? <p className="m-0 text-[15px] leading-[1.6] text-foreground"><span data-copy="subject" data-slot="pass_e_persona">{panel.stops}</span></p> : <Quiet>{GROUP_NOT_DESCRIBED}</Quiet>}</PanelSection>
-        <PanelSection label="What tips them into acting">{panel.triggers ? <p className="m-0 text-[15px] leading-[1.6] text-foreground"><span data-copy="subject" data-slot="pass_e_persona">{panel.triggers}</span></p> : <Quiet>{GROUP_NOT_DESCRIBED}</Quiet>}</PanelSection>
-      </div>
-
-      <div className="grid grid-cols-1 gap-7 lg:grid-cols-3">
-        <PanelSection label="Who they say they are">
-          {panel.who.length > 0 ? (
-            <>
-              {/* The top three, near-repeats already merged (decision 8, `mergeWho`). */}
-              {panel.who.slice(0, WHO_SHOWN).map((w) => (
-                <div key={w.label} className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_30px] items-center gap-2.5 text-[13.5px]">
-                  <span className="min-w-0"><span data-copy="stored" data-slot="pass_a_audience_insight">{w.label}</span></span>
-                  <TickBar pct={(100 * w.count) / Math.max(1, ...panel.who.slice(0, WHO_SHOWN).map((x) => x.count))} size="md" label={`${w.label}: ${w.count}`} />
-                  <Fig className="text-right text-[12.5px]">{fmtInt(w.count)}</Fig>
-                </div>
-              ))}
-              <span className="text-[12px] text-muted-foreground">How often each came up in what they said</span>
-            </>
-          ) : <Quiet>{GROUP_NO_WHO}</Quiet>}
-        </PanelSection>
-        <PanelSection label="The conversations they’re in">
-          {panel.conversations.length > 0 ? (
-            <>
-              <div className="flex flex-col gap-0.5">
-                {panel.conversations.map((c) => (
-                  <Link key={c.registryId} href={c.href} className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-[14px] text-foreground no-underline hover:bg-inner">
-                    <span className="min-w-0"><span data-copy="subject" data-slot="pass_b_theme">{c.label}</span></span>
-                    <LevelText k={c.k} n={panel.videos} className="ml-auto shrink-0 whitespace-nowrap text-[13px] text-secondary-foreground" />
-                  </Link>
-                ))}
-              </div>
-              <span className="text-[12px] text-muted-foreground">Each opens in Market</span>
-            </>
-          ) : <Quiet>{groupNoConversations(monthWords)}</Quiet>}
-        </PanelSection>
-        {panel.products ? <ProductsColumn products={panel.products} videos={panel.videos} /> : (
-          // A panel read before the products column (a stored dump) keeps
-          // where the group comments in its place.
-          <PanelSection label={<>Where they comment{panel.videos > 0 ? <> · of <Fig>{fmtInt(panel.videos)}</Fig></> : null}</>}>
-            {panel.platforms.length > 0 && panel.videos > 0
-              ? panel.platforms.map((p) => <MiniRow key={p.platform} size="md" tone="ink" label={p.label} k={p.k} of={panel.videos} />)
-              : <Quiet>None of their comments in {monthWords}.</Quiet>}
-          </PanelSection>
-        )}
-      </div>
-
-      {panel.phrases.length > 0 ? (
-        <PanelSection label="How they talk">
-          <div>{panel.phrases.map((p) => <Phrase key={p.text} text={p.text} english={p.english} />)}</div>
-        </PanelSection>
-      ) : null}
-
-      {panel.quotes.length > 0 ? (
-        <PanelSection label={<>In their words · <Fig>{fmtInt(panel.quotes.length)}</Fig> of their comments in {monthWords}</>}>
-          <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-3">
-            {panel.quotes.map((q) => <QuoteCard key={q.ref} quote={q} />)}
-          </div>
-        </PanelSection>
-      ) : null}
-
-      <AskButton href={panel.askHref}>Ask the Agent about this group</AskButton>
-    </InPlacePanel>
-  )
-}
-
-/** The group grid's columns: one on a phone, two from 768, three from 1280.
- *  `count` is every item in the grid: the group cards and the mix card. */
-export function groupLayout(count: number): PanelLayout {
-  return { base: equalColumns(1, count), md: equalColumns(2, count), xl: equalColumns(3, count) }
-}
-
-/** The cards three to a row (two from 768, one on a phone), and the open
- *  group's panel under the row its card is in at every width: one grid, the
- *  panel a child of it placed after the card's row (`panelPlacement`), and in
- *  the markup right after the card that opened it. */
-export function GroupGrid({ data }: { data: Pick<VoicesData, 'groups' | 'videos' | 'panel' | 'monthWords' | 'month'> }) {
+/** The cards three to a row (two from 768, one on a phone), the mix card in
+ *  the grid's last place (the board's sixth). Each card opens its page. */
+export function GroupGrid({ data }: { data: Pick<VoicesData, 'groups' | 'videos' | 'monthWords' | 'month'> }) {
   const cards = data.groups.cards
-  const panel = data.panel?.kind === 'group' ? data.panel : null
-  const at = panel ? cards.findIndex((c) => c.key === panel.key) : -1
-  // The mix card is the grid's last item (the board's sixth place), so a
-  // panel opened from its row lands after it.
-  const place = at >= 0 ? panelPlacement(at, groupLayout(cards.length + 1)) : null
   return (
-    <>
-      <section aria-label="The groups" className="grid grid-cols-1 gap-x-4 gap-y-5 md:grid-cols-2 xl:grid-cols-3">
-        {cards.map((c, i) => (
-          <Fragment key={c.key}>
-            <GroupCard card={c} n={data.videos} monthWords={data.monthWords} style={panelItemOrder(i)} />
-            {panel && place && i === at ? (
-              <PanelSlot placement={place}><GroupPanelView panel={panel} monthWords={data.monthWords} notchAt={place.notch} /></PanelSlot>
-            ) : null}
-          </Fragment>
-        ))}
-        <MixCard cards={cards} n={data.videos} month={data.month} monthWords={data.monthWords} style={panelItemOrder(cards.length)} />
-      </section>
-      {/* A group no card names (an old link) still opens, under the grid. */}
-      {panel && at < 0 ? <GroupPanelView panel={panel} monthWords={data.monthWords} /> : null}
-    </>
+    <section aria-label="The groups" className="grid grid-cols-1 gap-x-4 gap-y-5 md:grid-cols-2 xl:grid-cols-3">
+      {cards.map((c) => <GroupCard key={c.key} card={c} n={data.videos} monthWords={data.monthWords} />)}
+      <MixCard cards={cards} n={data.videos} month={data.month} monthWords={data.monthWords} />
+    </section>
   )
 }

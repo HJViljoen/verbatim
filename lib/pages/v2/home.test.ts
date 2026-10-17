@@ -219,12 +219,11 @@ describe('every tile\'s link opens its page\'s panel (each parsed by that page\'
     if (quiet.hero && quiet.hero.kind !== 'flag') expect(path(quiet.hero.href)).toBe(`/dashboard/market/conversations/${quiet.hero.conv.id}`)
   })
 
-  it('Voices: `?group=` for the lead group, `?brand=` for each brand named', () => {
+  it('Voices: the lead group\'s page, and each brand named its page (17 Oct: pages, never a panel)', () => {
     const top = fixtureVoicesTop()
-    expect(path(top.group!.href)).toBe('/dashboard/voices')
-    expect(parseVoicesParams(query(top.group!.href))).toEqual({ group: top.group!.key })
-    expect(top.group!.href).toMatch(/#group-panel$/)
-    expect(top.named.map((b) => parseVoicesParams(query(b.href)).brand)).toEqual(['client', 'Ottobock'])
+    expect(path(top.group!.href)).toBe(`/dashboard/voices/groups/${top.group!.key}`)
+    expect(parseVoicesParams(query(top.group!.href))).toEqual({})
+    expect(top.named.map((b) => path(b.href))).toEqual(['/dashboard/voices/brands/client', '/dashboard/voices/brands/5ecfa431'])
   })
 
   it('Content: `?idea=1`, the brief in place', () => {

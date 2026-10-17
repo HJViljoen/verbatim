@@ -1,11 +1,11 @@
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
-import { panelItemOrder, panelPlacement, PanelSlot, PeriodSwitch, type PanelLayout, type Period, type PeriodOption } from '@/components/v2'
+import { PeriodSwitch, type Period, type PeriodOption } from '@/components/v2'
 import { fmtInt, longMonth } from '@/lib/format'
 import { surface } from '@/lib/nav'
 import { barMonth, monthHeading } from '@/lib/reading/month-label'
 import { VOICES_ONE_MONTH, voicesHref, type VoicesData } from '@/lib/pages/v2/voices'
-import { BrandPanelView, BrandsCard } from './brands'
-import { CreatorPanelView, CreatorsCard } from './creators'
+import { BrandsCard } from './brands'
+import { CreatorsCard } from './creators'
 import { GroupGrid, WhoCard } from './groups'
 import { Fig } from './parts'
 
@@ -13,17 +13,19 @@ import { Fig } from './parts'
 //   the bar: the title and its mono meta line (the month, the market's videos,
 //     the groups, the regular creators, the brands);
 //   who is in your market: every group's videos this month;
-//   the groups, three to a row, a group's panel in place under its row;
-//   brands in your market (7) beside creators who drive the talk (5);
-//   a brand's or a creator's panel in place under the pair.
+//   the groups, three to a row;
+//   brands in your market (7) beside creators who drive the talk (5).
+// Since 17 Oct (G3-Voices) every row and card opens its own page (a group, a
+// brand, a creator: components/pages/v2/voices/{group,brand,creator}-page.tsx)
+// and nothing opens in place.
 // The board's period switch is drawn with the month on (the parity pass, 13
 // Oct): the page reads one month (groups have no week or month-on-month
 // reading yet, decision 2), so "This week" and "Over time" are shown and not
 // offered, each saying why (`MonthSwitch`).
 
-export { BrandPanelView, BrandsCard } from './brands'
-export { CreatorPanelView, CreatorsCard } from './creators'
-export { GroupCard, GroupGrid, GroupPanelView, WhoCard } from './groups'
+export { BrandsCard } from './brands'
+export { CreatorsCard } from './creators'
+export { GroupCard, GroupGrid, WhoCard } from './groups'
 
 /** The bar's meta line: "September · the last full month · 487 videos · 5
  *  groups · 21 regular creators · 2 brands"; the month's label only where the
@@ -55,20 +57,7 @@ export function MonthSwitch({ data }: { data: Pick<VoicesData, 'month' | 'monthL
   return <PeriodSwitch value="month" options={options} hrefFor={() => voicesHref(data.params)} />
 }
 
-/** Brands beside creators: stacked on a phone and up to 1280, then 7 · 5. A
- *  brand's or a creator's panel sits under its card at every width: between
- *  the two where they stack, under the pair where they stand side by side. */
-export const PAIR_LAYOUT: PanelLayout = { base: { spans: [12, 12], of: 12 }, xl: { spans: [7, 5], of: 12 } }
-
 export function VoicesPage({ data }: { data: VoicesData }) {
-  const panel = data.panel
-  const pairAt = panel?.kind === 'brand' ? 0 : panel?.kind === 'creator' ? 1 : -1
-  const pair = pairAt >= 0 ? panelPlacement(pairAt, PAIR_LAYOUT) : null
-  const pairPanel = pair && panel?.kind === 'brand'
-    ? <BrandPanelView panel={panel} monthWords={data.monthWords} notchAt={pair.notch} />
-    : pair && panel?.kind === 'creator'
-      ? <CreatorPanelView panel={panel} monthWords={data.monthWords} notchAt={pair.notch} />
-      : null
   return (
     <PageFrame className="gap-5 leading-[normal]">
       <PageBar title={surface('voices').label} meta={<VoicesMeta data={data} />} phoneControls="below">
@@ -76,11 +65,10 @@ export function VoicesPage({ data }: { data: VoicesData }) {
       </PageBar>
       <WhoCard groups={data.groups} videos={data.videos} monthWords={data.monthWords} failed={data.subjectsFailed} />
       {data.groups.state === 'ready' ? <GroupGrid data={data} /> : null}
+      {/* Brands beside creators: stacked on a phone and up to 1280, then 7 · 5. */}
       <section aria-label="Brands and creators" className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
-        <BrandsCard brands={data.brands} monthWords={data.monthWords} style={panelItemOrder(0)} />
-        {pair && pairAt === 0 ? <PanelSlot placement={pair}>{pairPanel}</PanelSlot> : null}
-        <CreatorsCard creators={data.creators} monthWords={data.monthWords} style={panelItemOrder(1)} />
-        {pair && pairAt === 1 ? <PanelSlot placement={pair}>{pairPanel}</PanelSlot> : null}
+        <BrandsCard brands={data.brands} monthWords={data.monthWords} />
+        <CreatorsCard creators={data.creators} monthWords={data.monthWords} />
       </section>
     </PageFrame>
   )

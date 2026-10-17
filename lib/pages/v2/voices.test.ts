@@ -4,8 +4,8 @@ import { SUBJECT_NOT_MEASURED } from '../../subjects/calibration-state'
 import { brandMonthPair, type BrandCrossRow, type BrandMonthVideos, type CreatorThemes } from '../../reading/cross'
 import {
   failedSubjectsOf, notCountedOf, notMeasuredLine, NOT_MEASURED_LEAD,
-  buildBrandPanel, buildBrands, buildCreatorPanel, buildCreators, buildGroupPanel, buildGroups, clientNameCounts, clientNameCountsByCount,
-  creatorVideoIds, crossKeys, findingsFor, firstSentence, groupRows, initialsOf, matchesBrand, noteOf, openOf, parseVoicesParams, personasOf,
+  buildBrands, buildCreators, buildGroups, clientNameCounts, clientNameCountsByCount,
+  creatorVideoIds, crossKeys, findingsFor, firstSentence, initialsOf, matchesBrand, noteOf, parseVoicesParams, personasOf,
   phrasesOf, PHRASE_MAX_WORDS, resolveCreator, themeVideoSets, topFinding, topVoicesOf, voicesHref, whoLabel, mergeWho, whoKey, WHO_FILLER_WORDS, WHO_SHOWN,
   BRANDS_NOT_COUNTED, BRANDS_NOT_READ, BRANDS_UNREAD, GROUPS_NOT_RUN, GROUPS_NONE, GROUPS_UNREAD, type FindingRow,
   brandTable, MIX_WHY, mixNotRead, mixTitle, slopeLabel, SLOPE_LABEL_MAX, groupProducts, GROUP_PRODUCTS_OFF, GROUP_PRODUCTS_SHOWN, GROUP_PRODUCTS_UNREAD,
@@ -15,18 +15,16 @@ import { ossurCountedVoicesFixture, ossurThinVoicesFixture, ossurVoicesFixture, 
 const SEP = '2026-09-01'
 
 describe('the address', () => {
-  it('reads one value per key, and takes the old Conversation `?persona=` as a group', () => {
-    expect(parseVoicesParams({ persona: ' athlete ', brand: ['Ottobock', 'x'], creator: '', month: '2026-08' })).toEqual({ group: 'athlete', brand: 'Ottobock', month: '2026-08' })
-    expect(parseVoicesParams({ group: 'a', persona: 'b' }).group).toBe('a')
+  it('reads one value per key: the month and the creators list (an old panel param is redirected before it reaches here)', () => {
+    expect(parseVoicesParams({ persona: ' athlete ', brand: ['Ottobock', 'x'], creator: '', month: ['2026-08', '2026-07'], creators: 'all' })).toEqual({ month: '2026-08', creators: 'all' })
     expect(parseVoicesParams(null)).toEqual({})
   })
 
-  it('opens one item at a time, keeps the month and the creators list, and anchors the panel', () => {
-    const p = { month: '2026-08', creators: 'all', group: 'x', brand: 'y' }
+  it('keeps the month and the creators list, and opens nothing in place', () => {
+    const p = { month: '2026-08', creators: 'all' }
     expect(voicesHref(p)).toBe('/dashboard/voices?month=2026-08&creators=all')
-    expect(voicesHref(p, { kind: 'brand', key: 'The North Face' })).toBe('/dashboard/voices?month=2026-08&creators=all&brand=The+North+Face#brand-panel')
-    expect(voicesHref({}, { kind: 'group', key: 'athlete' })).toBe('/dashboard/voices?group=athlete#group-panel')
-    expect(voicesHref(p, null, { creators: null })).toBe('/dashboard/voices?month=2026-08')
+    expect(voicesHref(p, { creators: null })).toBe('/dashboard/voices?month=2026-08')
+    expect(voicesHref({})).toBe('/dashboard/voices')
   })
 })
 
@@ -145,38 +143,27 @@ describe('the groups (decision 2: this month\'s videos, no share, no change)', (
   })
 
   it('counts each group\'s videos this month, most first, its platforms from those videos and never the stored mix', () => {
-    const g = buildGroups({ profile, read, platformOf, params: { group: 'a' } })
+    const g = buildGroups({ profile, read, platformOf, params: { month: '2026-09' } })
     expect(g.cards.map((c) => [c.key, c.videos])).toEqual([['b', 3], ['a', 2]])
     const [beta, alpha] = g.cards
     expect(beta.subjects.map((s) => s.label)).toEqual(['Fit', 'Cost', 'Look'])
     expect(beta.platforms).toEqual([{ platform: 'tiktok', label: 'TikTok', k: 2 }, { platform: 'youtube', label: 'YouTube', k: 1 }])
     expect(alpha.platforms.reduce((s, p) => s + p.k, 0)).toBe(2)
     expect(alpha.wants).toBe('Want one.')
-    expect(alpha.selected).toBe(true)
-    expect(alpha.href).toBe('/dashboard/voices')
-    expect(beta.href).toBe('/dashboard/voices?group=b#group-panel')
+    // Each card opens the group's own page, the month kept (17 Oct).
+    expect(alpha.href).toBe('/dashboard/voices/groups/a?month=2026-09')
+    expect(beta.href).toBe('/dashboard/voices/groups/b?month=2026-09')
+    expect(buildGroups({ profile, read, platformOf, params: {} }).cards[0].href).toBe('/dashboard/voices/groups/b')
   })
 
-  it('lays the cards out three to a row', () => {
-    expect(groupRows([1, 2, 3, 4, 5])).toEqual([[1, 2, 3], [4, 5]])
-  })
-
-  it('opens a group: the conversations it is in, by its own videos in each', () => {
-    const ps = personasOf(profile)
-    const g = buildGroups({ profile, read, platformOf, params: { group: 'a' } })
+  it('pools each conversation\'s month videos over the audiences read', () => {
     const sets = themeVideoSets([
       { themeId: 't1', audience: 'industry-other', videoIds: ['v1', 'v9'] },
       { themeId: 't1', audience: 'competitor:X', videoIds: ['v2'] },
       { themeId: 't2', audience: 'industry-other', videoIds: ['v9'] },
     ])
-    const panel = buildGroupPanel({
-      persona: ps[0], card: g.cards[1], index: 4, perRow: 3, n: 10, subjects: [], videoIds: ['v1', 'v2'],
-      themeSets: sets, labels: new Map([['t1', 'Socket fit'], ['t2', 'Liners']]), quotes: [], params: {},
-    })
-    expect(panel.conversations).toEqual([{ registryId: 't1', label: 'Socket fit', k: 2, href: '/dashboard/market/conversations/t1' }])
-    expect(panel.notchAt).toBeCloseTo(0.5)
-    expect(panel.wants).toBe('Want one. Want two.')
-    expect(panel.askHref).toContain('/dashboard/agent?ask=')
+    expect([...(sets.get('t1') ?? [])].sort()).toEqual(['v1', 'v2', 'v9'])
+    expect([...(sets.get('t2') ?? [])]).toEqual(['v9'])
   })
 })
 
@@ -202,20 +189,21 @@ describe('the brands', () => {
   it('is not read for a tenant with no brand rules, and not counted where no month row exists (Össur today)', () => {
     expect(buildBrands({ clientId: OSSUR_CLIENT_ID, month: SEP, pairs: null, crosses: null, note: null, params: {} })).toMatchObject({ state: 'not_read', empty: BRANDS_NOT_READ })
     const none = brandMonthPair({ month: SEP, brands: brands.slice(0, 2), rows: [], audiences: ['industry-other'], pair: null })
-    const b = buildBrands({ clientId: OSSUR_CLIENT_ID, month: SEP, pairs: none, crosses: null, note: { rival: 'Patagonia', title: 'A finding' }, params: { brand: 'patagonia' } })
+    const b = buildBrands({ clientId: OSSUR_CLIENT_ID, month: SEP, pairs: none, crosses: null, note: { rival: 'Patagonia', title: 'A finding' }, params: {} })
     expect(b).toMatchObject({ state: 'not_counted', empty: BRANDS_NOT_COUNTED, rows: [] })
+    // Each opens its own page by its brand key (17 Oct).
     expect(b.tracked).toEqual([
-      { label: 'Sealand', href: '/dashboard/voices?brand=Sealand#brand-panel' },
-      { label: 'Patagonia', href: '/dashboard/voices' },
+      { label: 'Sealand', href: '/dashboard/voices/brands/client' },
+      { label: 'Patagonia', href: '/dashboard/voices/brands/p' },
     ])
     // Every tracked brand is still there to open, each saying it is not counted;
     // the latest update's finding is still the note, and its link opens.
     expect(b.all.map((r) => [r.label, r.state, r.stateWords])).toEqual([['Sealand', 'not_yet', 'not counted yet'], ['Patagonia', 'not_yet', 'not counted yet']])
-    expect(b.note).toEqual({ rival: 'Patagonia', title: 'A finding', href: '/dashboard/voices?brand=Patagonia#brand-panel' })
+    expect(b.note).toEqual({ rival: 'Patagonia', title: 'A finding', href: '/dashboard/voices/brands/p' })
   })
 
   it('counts unprompted on one base, you first, and the crosses over every video naming it', () => {
-    const b = buildBrands({ clientId: SEALAND_CLIENT_ID, month: SEP, pairs, crosses: { videos: sets, kinds, subjects }, note: { rival: 'patagonia', title: 'Lasts for years' }, params: { brand: 'competitor:Patagonia' } })
+    const b = buildBrands({ clientId: SEALAND_CLIENT_ID, month: SEP, pairs, crosses: { videos: sets, kinds, subjects }, note: { rival: 'patagonia', title: 'Lasts for years' }, params: { month: '2026-09' } })
     expect(b.state).toBe('ready')
     expect(b.rows.map((r) => [r.label, r.named?.k, r.named?.n])).toEqual([['Sealand', 1, 743], ['Patagonia', 13, 743]])
     const p = b.rows[1]
@@ -225,12 +213,12 @@ describe('the brands', () => {
     expect(p.topSubject).toEqual({ id: 's1', label: 'Durability', k: 19, n: 65 })
     expect(p.verdict?.state).toBe('too_little_data')
     expect(p.prevNamed).toEqual({ k: 4, n: 250, month: '2026-08-01' })
-    expect(p.selected).toBe(true)
+    expect(p.href).toBe('/dashboard/voices/brands/p?month=2026-09')
     expect(b.notNamed.map((x) => x.label)).toEqual(['Old School', 'Rareform'])
-    expect(b.notNamed[0].href).toBe('/dashboard/voices?brand=Old+School#brand-panel')
+    expect(b.notNamed[0].href).toBe('/dashboard/voices/brands/o?month=2026-09')
     expect(b.notCounted.map((x) => [x.label, x.words])).toEqual([['Freitag', 'mostly the German word for Friday · not counted'], ['Newcomer', 'not counted yet']])
     expect(b.all).toHaveLength(6)
-    expect(b.note).toEqual({ rival: 'Patagonia', title: 'Lasts for years', href: '/dashboard/voices?brand=Patagonia#brand-panel' })
+    expect(b.note).toEqual({ rival: 'Patagonia', title: 'Lasts for years', href: '/dashboard/voices/brands/p?month=2026-09' })
   })
 
   it('holds your own name to the hand reads: a match nobody read keeps the row uncounted', () => {
@@ -293,30 +281,6 @@ describe('the brands', () => {
     expect(topFinding(rows, ['Ottobock'])).toEqual({ rival: 'Ottobock', title: 'High one' })
     expect(topFinding(rows, [])).toBeNull()
   })
-
-  it('opens a brand: every kind but the flagged one, in the reader\'s words, and the pane\'s own parts', () => {
-    const b = buildBrands({ clientId: SEALAND_CLIENT_ID, month: SEP, pairs, crosses: { videos: sets, kinds, subjects }, note: null, params: {} })
-    const panel = buildBrandPanel({
-      row: b.rows[1], kinds: kinds[0], subjects: subjects[0], noun: 'bags', window: { from: '2026-07-03', to: '2026-10-01' },
-      asked: { themes: [{ registryId: 't9', label: 'Is it worth it', videos: 3 }] }, said: [],
-      findings: [{ id: 'f1', category: 'engagement_benchmark', title: 'held', body: null }, { id: 'f2', category: 'content_gap', title: 'kept', body: 'b' }],
-      params: {},
-    })
-    expect(panel.kinds.map((k) => k.label)).toEqual(['Praised a bag', 'Asked a question'])
-    expect(panel.asked?.themes[0].href).toBe('/dashboard/market/conversations/t9')
-    expect(panel.findings).toEqual([{ id: 'f2', kindWords: 'where the content differs', title: 'kept', body: 'b' }])
-    expect(panel.closeHref).toBe('/dashboard/voices')
-    expect(panel).toMatchObject({ stateWords: null, tooFew: false })
-  })
-
-  it('opens a brand the table does not print: its count half says why, its rival half stands', () => {
-    const b = buildBrands({ clientId: SEALAND_CLIENT_ID, month: SEP, pairs, crosses: { videos: sets, kinds, subjects }, note: null, params: {} })
-    const noise = buildBrandPanel({ row: b.all.find((r) => r.label === 'Freitag')!, kinds: undefined, subjects: undefined, noun: null, window: null, asked: null, said: [], findings: [{ id: 'f', category: 'content_gap', title: 't', body: null }], params: {} })
-    expect(noise).toMatchObject({ state: 'noise', stateWords: 'mostly the German word for Friday · not counted', tooFew: false, kinds: [], named: null })
-    expect(noise.findings).toHaveLength(1)
-    const zero = buildBrandPanel({ row: b.all.find((r) => r.label === 'Rareform')!, kinds: undefined, subjects: undefined, noun: null, window: null, asked: null, said: [], findings: [], params: {} })
-    expect(zero).toMatchObject({ state: 'counted', tooFew: true, named: { k: 0, n: 743 } })
-  })
 })
 
 describe('the creators', () => {
@@ -336,12 +300,13 @@ describe('the creators', () => {
   const brands = [{ label: 'Patagonia', you: false, any: new Set(['a', 'b']) }, { label: 'Sealand', you: true, any: new Set(['c']) }]
 
   it('lists the people and brands at the floor, never a Reddit community, with their conversation and the brand named most', () => {
-    const c = buildCreators({ month: SEP, read, labels: new Map([['t1', 'Laundry']]), videoIds: creatorVideoIds(market), brands, params: { creator: 'tiktok|kate' } })
+    const c = buildCreators({ month: SEP, read, labels: new Map([['t1', 'Laundry']]), videoIds: creatorVideoIds(market), brands, params: {} })
     expect(c.accounts).toBe(3)
     expect(c.atFloor).toBe(2)
     expect(c.communitiesLeftOut).toBe(true)
-    expect(c.rows.map((r) => [r.key, r.param])).toEqual([['tiktok|kate', 'tiktok|kate'], ['youtube|kate', 'youtube|kate']])
-    expect(c.rows[0]).toMatchObject({ top: null, brand: null, selected: true, followerWord: 'followers', followers: 88400 })
+    // Each opens its own page, two segments (board decision 1).
+    expect(c.rows.map((r) => [r.key, r.href])).toEqual([['tiktok|kate', '/dashboard/voices/creators/tiktok/kate'], ['youtube|kate', '/dashboard/voices/creators/youtube/kate']])
+    expect(c.rows[0]).toMatchObject({ top: null, brand: null, followerWord: 'followers', followers: 88400 })
     expect(c.rows[1].followerWord).toBe('subscribers')
     expect(c.more).toBe(0)
     expect(c.toggleHref).toBe('/dashboard/voices?creators=all')
@@ -369,34 +334,15 @@ describe('the creators', () => {
     expect(resolveCreator(read.creators, 'R/ONEBAG')?.key).toBe('reddit|r/onebag')
     expect(resolveCreator(read.creators, 'nobody')).toBeNull()
   })
-
-  it('opens a creator: its conversations with labels, and every brand named in its videos', () => {
-    const p = buildCreatorPanel({ creator: read.creators[0], n: 20, labels: new Map([['t0', 'Size'], ['t1', 'Laundry']]), videoIds: ['a', 'b', 'c'], brands, params: {} })
-    expect(p.conversations.map((c) => [c.label, c.k, c.ofTheme])).toEqual([['Size', 3, 4], ['Laundry', 2, 8]])
-    expect(p.brands).toEqual([{ label: 'Patagonia', k: 2, you: false }, { label: 'Sealand', k: 1, you: true }])
-    expect(p.followers).toBeNull()
-  })
 })
 
 describe('the page and the Dashboard tile', () => {
-  it('opens one item, a group before a brand before a creator, and nothing it cannot find', () => {
-    const d = sealandVoicesFixture()
-    expect(openOf(d, { group: 'eco', brand: 'Patagonia' })).toEqual({ kind: 'group', key: 'eco' })
-    expect(openOf(d, { group: 'gone', brand: 'patagonia' })?.kind).toBe('brand')
-    expect(openOf(d, { creator: 'Pack Hacker' })).toEqual({ kind: 'creator', key: 'youtube|Pack Hacker' })
-    expect(openOf(d, { brand: 'Nobody' })).toBeNull()
-    // ANY tracked brand opens: one the table does not print (Freedom of Movement, named
-    // in no video), and Össur's rival, counted or not.
-    expect(openOf(d, { brand: 'Freedom of Movement' })).toEqual({ kind: 'brand', key: 'c-fom' })
-    expect(openOf(ossurVoicesFixture(), { brand: 'competitor:Ottobock' })).toEqual({ kind: 'brand', key: '5ecfa431' })
-    // A subreddit is no creator.
-    expect(openOf(d, { creator: 'r/onebag' })).toBeNull()
-  })
-
   it('tops the tile with the group of the most videos, and the two brands named most', () => {
     const d = sealandVoicesFixture()
     const top = topVoicesOf({ month: d.month, soFar: false, videos: d.videos, groups: d.groups, brands: d.brands })
-    expect(top.group).toMatchObject({ key: 'one-bag', videos: 74, href: '/dashboard/voices?group=one-bag#group-panel' })
+    expect(top.group).toMatchObject({ key: 'one-bag', videos: 74, href: '/dashboard/voices/groups/one-bag' })
+    // The Dashboard's brands open their pages by key (17 Oct).
+    expect(top.named.map((n) => n.href)).toEqual(['/dashboard/voices/brands/c0000000-0000-0000-0000-000000000003', '/dashboard/voices/brands/c0000000-0000-0000-0000-000000000005'])
     expect(top.named.map((n) => [n.label, n.k, n.n])).toEqual([['Patagonia', 13, 743], ['The North Face', 10, 743]])
     expect(top.groups).toHaveLength(3)
     const o = ossurVoicesFixture()
@@ -476,16 +422,15 @@ describe('the board\'s shape in a thin month', () => {
   // Ruling U6: a subject whose check has not passed prints no figure resting
   // on its membership. The reader (`measuredSubjects`) counts the ready ones
   // alone; the page carries how many more are not measured yet.
-  it('U6, all provisional (Össur, 13 Oct): no group, panel or brand carries a subject count', () => {
-    const d = VOICES_FIXTURES['ossur-provisional-group']()
+  it('U6, all provisional (Össur, 13 Oct): no group or brand carries a subject count', () => {
+    const d = VOICES_FIXTURES['ossur-provisional']()
     for (const c of d.groups.cards) expect(c).toMatchObject({ subjects: [], subjectsPending: 6 })
-    expect(d.panel).toMatchObject({ kind: 'group', subjects: [], subjectsPending: 6 })
     const thin = ossurThinVoicesFixture()
     for (const c of thin.groups.cards) expect(c.subjects).toEqual([])
   })
 
   it('U6, mixed: the ready subjects alone are counted, and the rest are a number, never a row', () => {
-    const d = VOICES_FIXTURES['ossur-mixed-group']()
+    const d = VOICES_FIXTURES['ossur-mixed']()
     const ready = new Set(['Cost & access', 'Function & movement'])
     for (const c of d.groups.cards) {
       expect(c.subjectsPending).toBe(4)
@@ -495,13 +440,11 @@ describe('the board\'s shape in a thin month', () => {
     // checked. Function & movement is ready and on none of their videos: its
     // row stays, at 0 (14 Oct: a tracked subject is never hidden for being thin).
     expect(d.groups.cards.find((c) => c.key === 'caregivers')!.subjects.map((x) => [x.label, x.k])).toEqual([['Cost & access', 14], ['Function & movement', 0]])
-    const counted = VOICES_FIXTURES['ossur-counted-brand']()
+    const counted = VOICES_FIXTURES['ossur-counted']()
     const otto = counted.brands.all.find((r) => r.label === 'Ottobock')!
     // The lens gave Fit & comfort 25 of Ottobock's videos: never its top.
     expect(otto.topSubject).toMatchObject({ label: 'Cost & access', k: 21 })
     expect(otto.subjectsPending).toBe(4)
-    expect(counted.panel).toMatchObject({ kind: 'brand', subjectsPending: 4 })
-    expect((counted.panel as { subjects: { label: string }[] }).subjects.map((x) => x.label)).toEqual(['Cost & access', 'Function & movement'])
   })
 
   it('a thin Össur still has every group, one at no video and one with no subject', () => {
@@ -586,7 +529,5 @@ describe('a tracked subject is never hidden (14 Oct)', () => {
     ])
     const otto = d.brands.all.find((r) => r.label === 'Ottobock')!
     expect(otto).toMatchObject({ subjectsPending: 2, subjectsNotMeasured: [{ id: 's-cost', label: 'Cost & access' }, { id: 's-fit', label: 'Fit & comfort' }] })
-    const panel = VOICES_FIXTURES['ossur-tracked-brand']().panel as { subjects: { label: string; k: number }[] }
-    expect(panel.subjects.map((s) => [s.label, s.k])).toEqual([['Function & movement', 9], ['Look & style', 1]])
   })
 })

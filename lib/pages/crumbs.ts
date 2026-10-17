@@ -9,9 +9,10 @@
 // walks the switcher's imports.
 
 /** The prose slot a label is replayed from, where it is model prose written
- *  elsewhere (a conversation's label is Pass B's). Null for a name a person
- *  gave (a subject's) or a page's own words. */
-export type CrumbSlot = 'pass_b_theme' | null
+ *  elsewhere (a conversation's label is Pass B's; a Voices group's name is
+ *  Pass E's, 17 Oct). Null for a name a person gave (a subject's) or a page's
+ *  own words. */
+export type CrumbSlot = 'pass_b_theme' | 'pass_e_persona' | null
 
 /** One entry in a switcher: a sibling page, the period kept in its address. */
 export interface CrumbItem {

@@ -3,8 +3,7 @@ import { readingMonthLabel } from '../../reading/month-label'
 import { judgeVersionFor } from '../../subjects/types'
 import { brandMonthPair, creatorThemes, measuredSubjects, type PendingSubject, type BrandCrossRow, type BrandMonthVideos, type CreatorVideo, type GroupMonthVideos, type GroupSubjectRow, type StoredBrandMonthRow, type ThemeRef } from '../../reading/cross'
 import {
-  buildBrandPanel, buildBrands, failedSubjectsOf, buildCreatorPanel, buildCreators, buildGroupPanel, buildGroups, clientCountsOf, creatorVideoIds, crossKeys, groupProducts, monthWordsOf, openOf,
-  personasOf, themeVideoSets,
+  buildBrands, failedSubjectsOf, buildCreators, buildGroups, clientCountsOf, creatorVideoIds, crossKeys, groupProducts, monthWordsOf,
   type BrandSet, type VoicesData, type VoicesParams, type VoicesQuote,
 } from './voices'
 
@@ -266,45 +265,11 @@ export function ossurVoicesFixture(params: VoicesParams = {}, checks: OssurSubje
   const creators = buildCreators({ month: SEP, read: read2, labels: OSSUR_LABELS, videoIds, brands: [], params })
   // Why a failed subject shows no figure, once on the page (the loader's rule).
   const failed = failedSubjectsOf(read.pendingSubjects)
-  const data: VoicesData = {
+  return {
     client: 'Össur', month: SEP, soFar: false, monthWords: monthWordsOf(SEP, false), monthLabel: readingMonthLabel(SEP, VOICES_FIXTURE_NOW), videos: market.length,
-    groups, brands, creators, params, open: null, panel: null,
+    groups, brands, creators, params,
     ...(failed.length > 0 ? { subjectsFailed: failed } : {}),
   }
-  const open = openOf(data, params, { creators: read2 })
-  if (open?.kind === 'group') {
-    const index = groups.cards.findIndex((c) => c.key === open.key)
-    const persona = personasOf(profile).find((p) => p.key === open.key)!
-    const g = read.groups.find((x) => x.key === open.key)!
-    return {
-      ...data, open, panel: buildGroupPanel({
-        persona, card: groups.cards[index], index, perRow: 3, n: market.length,
-        subjects: g.subjects.map((s) => ({ id: s.subjectId, label: s.label, k: s.k })),
-        videoIds: read.videos.find((x) => x.key === open.key)!.videoIds, themeSets: themeVideoSets(refs), labels: OSSUR_LABELS,
-        quotes: open.key === 'caregivers' ? OSSUR_QUOTES : OSSUR_QUOTES.slice(0, 1), params,
-        products: ossurGroupProducts(read.videos.find((x) => x.key === open.key)!.videoIds, params),
-      }),
-    }
-  }
-  if (open?.kind === 'creator') {
-    const c = read2.creators.find((x) => x.key === open.key)!
-    return { ...data, open, panel: buildCreatorPanel({ creator: c, n: market.length, labels: OSSUR_LABELS, videoIds: videoIds.get(c.key) ?? [], brands: [], params }) }
-  }
-  if (open?.kind === 'brand') {
-    // A rival not counted yet: its count half says so, its Competitive half
-    // (filed videos over ninety days, findings) stands.
-    const row = brands.all.find((r) => r.brandKey === open.key)!
-    return {
-      ...data, open, panel: buildBrandPanel({
-        row, kinds: undefined, subjects: undefined, noun: null, window: { from: '2026-07-03', to: '2026-10-01' },
-        asked: { themes: [{ registryId: 'reg-insurance', label: 'Insurance refusals for powered knees', videos: 7 }] },
-        said: [{ ref: 'c:o1', text: 'The Genium changed my life but the fight with insurance took a year.', english: null, lang: null, platform: 'youtube', cite: 'YouTube · 18 Sep' }],
-        findings: [{ id: 'of1', category: 'topic_ownership', title: 'Ottobock’s talk turns on getting a knee paid for', body: 'Where the rest of the market talks about fit and daily life, talk about Ottobock gathers around appeals and coverage.' }],
-        params,
-      }),
-    }
-  }
-  return data
 }
 
 // ---- Össur's thin states (the parity pass, 13 Oct) ---------------------------------
@@ -343,7 +308,7 @@ export function ossurThinVoicesFixture(params: VoicesParams = {}): VoicesData {
   const creators = buildCreators({ month: SEP, read: read2, labels: OSSUR_LABELS, videoIds, brands: [], params })
   return {
     client: 'Össur', month: SEP, soFar: false, monthWords: monthWordsOf(SEP, false), monthLabel: readingMonthLabel(SEP, VOICES_FIXTURE_NOW), videos: market.length,
-    groups, brands, creators, params, open: null, panel: null,
+    groups, brands, creators, params,
   }
 }
 
@@ -400,18 +365,7 @@ export function ossurCountedVoicesFixture(params: VoicesParams = {}, checks: Oss
   const read2 = creatorThemes({ month: SEP, videos: creatorVideos, refs })
   const videoIds = creatorVideoIds(creatorVideos.map((v) => ({ id: v.videoId, platform: v.platform, account: v.account })))
   const creators = buildCreators({ month: SEP, read: read2, labels: OSSUR_LABELS, videoIds, brands: brandSets, params })
-  const data: VoicesData = { ...base, brands, creators }
-  const open = openOf(data, params)
-  if (open?.kind === 'brand') {
-    const row = brands.all.find((r) => r.brandKey === open.key)!
-    return {
-      ...data, open, panel: buildBrandPanel({
-        row, kinds: kinds.find((k) => k.brandKey === row.brandKey), subjects: subjects.find((k) => k.brandKey === row.brandKey), noun: null,
-        window: { from: '2026-07-03', to: '2026-10-01' }, asked: null, said: [], findings: [], params,
-      }),
-    }
-  }
-  return data
+  return { ...base, brands, creators }
 }
 
 // ---- Sealand -----------------------------------------------------------------------
@@ -561,61 +515,27 @@ export function sealandVoicesFixture(params: VoicesParams = {}, opts: { youQuiet
   const counted = new Set(brands.rows.map((r) => r.brandKey))
   const brandSets: BrandSet[] = videos.filter((b) => counted.has(b.brandKey)).map((b) => ({ label: b.label, you: b.brandKey === 'client', any: new Set(b.any) }))
   const creators = buildCreators({ month: SEP, read: read2, labels: SEALAND_LABELS, videoIds, brands: brandSets, params })
-  const data: VoicesData = {
+  return {
     client: 'Sealand', month: SEP, soFar: false, monthWords: monthWordsOf(SEP, false), monthLabel: readingMonthLabel(SEP, VOICES_FIXTURE_NOW), videos: market.length,
-    groups, brands, creators, params, open: null, panel: null,
+    groups, brands, creators, params,
   }
-  const open = openOf(data, params, { creators: read2 })
-  if (open?.kind === 'brand') {
-    const row = brands.rows.find((r) => r.brandKey === open.key)!
-    const rival = !row.you
-    return {
-      ...data, open, panel: buildBrandPanel({
-        row, kinds: kinds.find((k) => k.brandKey === row.brandKey), subjects: subjects.find((k) => k.brandKey === row.brandKey), noun: 'bags',
-        window: rival ? { from: '2026-06-30', to: '2026-09-28' } : null,
-        asked: rival ? { themes: [{ registryId: 'reg-question-patagonia', label: 'Is the Black Hole worth it', videos: 9 }, { registryId: 'reg-airline', label: 'Confusion over airline size rules', videos: 4 }] } : null,
-        said: rival ? [
-          { ref: 'c:s1', text: 'Mine is ten years old and they still fixed the zip for free.', english: null, lang: null, platform: 'youtube', cite: 'YouTube · 12 Sep' },
-          { ref: 'c:s2', text: 'The duffel is great but it is not waterproof in real rain.', english: null, lang: null, platform: 'reddit', cite: 'Reddit · 20 Sep' },
-        ] : [],
-        findings: rival ? [
-          { id: 'f1', category: 'sentiment_differential', title: 'Patagonia is praised for lasting for years, and the repair promise is what people repeat', body: 'Where the rest of the market argues about price, talk about Patagonia turns on how long a bag lasts and the free repairs that keep it going.' },
-          { id: 'f2', category: 'topic_ownership', title: 'Waterproofing questions gather under its duffels', body: null },
-        ] : [],
-        params,
-      }),
-    }
-  }
-  if (open?.kind === 'creator') {
-    const c = read2.creators.find((x) => x.key === open.key)!
-    return { ...data, open, panel: buildCreatorPanel({ creator: c, n: market.length, labels: SEALAND_LABELS, videoIds: videoIds.get(c.key) ?? [], brands: brandSets, params }) }
-  }
-  return data
 }
 
-/** The fixture each shot and render test draws. */
+/** The fixture each shot and render test draws (the root; the level pages'
+ *  are `VOICES_LEVEL_FIXTURES`, lib/pages/v2/voices-levels-fixture.ts). */
 export const VOICES_FIXTURES = {
   ossur: () => ossurVoicesFixture(),
-  'ossur-group': () => ossurVoicesFixture({ group: 'caregivers' }),
-  'ossur-creator': () => ossurVoicesFixture({ creator: 'A L I S' }),
   sealand: () => sealandVoicesFixture(),
-  'sealand-brand': () => sealandVoicesFixture({ brand: 'Patagonia' }),
-  'sealand-creator': () => sealandVoicesFixture({ creator: 'Pack Hacker' }),
-  'ossur-brand': () => ossurVoicesFixture({ brand: 'Ottobock' }),
   // The parity pass (13 Oct): the board's shape in Össur's thin states.
   'ossur-thin': () => ossurThinVoicesFixture(),
   'ossur-counted': () => ossurCountedVoicesFixture(),
   // Ruling U6: none of Össur's subjects checked (production, 13 Oct), and two
-  // of six checked, each with a group's panel and a counted rival's open.
-  'ossur-provisional-group': () => ossurVoicesFixture({ group: 'caregivers' }, 'provisional'),
-  'ossur-mixed-group': () => ossurVoicesFixture({ group: 'caregivers' }, 'mixed'),
-  'ossur-counted-brand': () => ossurCountedVoicesFixture({ brand: 'Ottobock' }),
+  // of six checked.
+  'ossur-provisional': () => ossurVoicesFixture({}, 'provisional'),
+  'ossur-mixed': () => ossurVoicesFixture({}, 'mixed'),
   // A tracked subject is never hidden (14 Oct): one ready, one ready and
-  // thin, one whose check is open, one being re-described; the page, a
-  // group's panel and a counted rival's.
+  // thin, one whose check is open, one being re-described.
   'ossur-tracked': () => ossurCountedVoicesFixture({}, 'tracked'),
-  'ossur-tracked-group': () => ossurCountedVoicesFixture({ group: 'caregivers' }, 'tracked'),
-  'ossur-tracked-brand': () => ossurCountedVoicesFixture({ brand: 'Ottobock' }, 'tracked'),
   // Your own row counted with nobody naming it unprompted: still crossed.
   'sealand-you-quiet': () => sealandVoicesFixture({}, { youQuiet: true }),
 } as const
