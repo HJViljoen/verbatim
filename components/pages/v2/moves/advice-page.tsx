@@ -240,7 +240,7 @@ function ConvList({ rows, base, monthText }: { rows: readonly AdviceConversation
             <tr>
               <th scope="col" className={TH}>Conversation</th>
               <th scope="col" className={cn(TH, 'text-right')}>Of its <span data-copy="figure">{fmtInt(base)}</span> videos</th>
-              <th scope="col" className={cn(TH, 'text-right')}>Market videos in {monthText}</th>
+              <th scope="col" className={cn(TH, 'text-right whitespace-normal')}>Market videos in {monthText}</th>
               <th scope="col" aria-label="Open" className={TH} />
             </tr>
           </thead>
@@ -274,7 +274,9 @@ function ConvList({ rows, base, monthText }: { rows: readonly AdviceConversation
 }
 
 function ConversationsSection({ page }: { page: AdvicePageData }) {
-  const monthText = longMonth(monthStartOf(page.month))
+  // The reading month, labelled where it is not the current one (decision
+  // 3): "in September, the last full month", in the one helper's words.
+  const monthText = inlineMonth(longMonth(monthStartOf(page.month)), page.monthLabel)
   if (page.conversations === 'unread') {
     return (
       <>

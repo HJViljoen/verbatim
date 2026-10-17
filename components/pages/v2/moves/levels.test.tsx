@@ -88,8 +88,18 @@ describe('a piece of advice, the hub (G6-Moves-Advice)', () => {
   it('the conversations behind it: the three biggest as cards, the rest as a list, each opening on Market\'s month view', () => {
     expect(html.match(/data-advice-conv=""/g)).toHaveLength(3)
     expect(text).toContain('Its 63 videos sit in 5 conversations · the three biggest, then the rest · each opens in Market')
-    expect(text).toContain('29 of its 63 videos 19 of 839 market videos in September The one it would move Open in Market →')
+    // The reading month carries its label where it is not the current one
+    // (decision 3, `inlineMonth`): the cards, the list's head and its rows.
+    expect(text).toContain('29 of its 63 videos 19 of 839 market videos in September, the last full month The one it would move Open in Market →')
     expect(text).toContain('2 more conversations Fewest of its videos.')
+    expect(text).toContain('Market videos in September, the last full month')
+    const inside = text.slice(text.indexOf('Its 63 videos sit in'), text.indexOf('A video can sit in more than one conversation'))
+    expect(inside).not.toMatch(/market videos in September(?!, the last full month)/i)
+    // In the current month there is no label.
+    const current = renderText(<MovesAdvicePage page={{ ...adviceFixture(), monthLabel: null }} />)
+    const currentInside = current.slice(current.indexOf('Its 63 videos sit in'), current.indexOf('A video can sit in more than one conversation'))
+    expect(currentInside).toContain('19 of 839 market videos in September The one it would move')
+    expect(currentInside).not.toContain('the last full month')
     expect(text).toContain('A video can sit in more than one conversation, so these add up to more than its 63 videos.')
     expect(html).toContain('href="/dashboard/market/conversations/d1000000-0000-4000-8000-000000000001?period=month&amp;month=2026-09"')
   })

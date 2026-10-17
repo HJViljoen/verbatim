@@ -1304,7 +1304,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
     renders as it did; Your moves' tile carries `reading: { month, label }`).
     Where it prints: the Voices and Your products bars; Your moves' bar where
     a move draws a line, and each move's latest month when it is the reading
-    month (`compareMonths`, `monthLabelOn`); Settings › Your products' "came
+    month (`compareMonths`, `monthLabelOn`), and a piece of advice's
+    conversation cards, list head and rows ("market videos in September, the
+    last full month", `inlineMonth`); Settings › Your products' "came
     up in …" line and its column header (the month's name, not "This month");
     the Dashboard's Voices and Your products tiles under their heads
     (`TileMonth`, components/pages/v2/home/parts.tsx), and Your moves' tile in
