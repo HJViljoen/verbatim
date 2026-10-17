@@ -1,140 +1,210 @@
 import { describe, expect, it } from 'vitest'
-import { render, renderText } from '@/lib/test/render'
-import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
-import { fixtureId, fixtureSubjectId, marketConversationFixture } from '@/lib/pages/v2/market-fixture'
+import { markupText, render, renderText } from '@/lib/test/render'
+import { assertCopyContract, copyNodes, copyViolations } from '@/lib/test/copy-contract'
+import { CONV_SPANISH, fixtureId, fixtureSubjectId, marketConversationFixture } from '@/lib/pages/v2/market-fixture'
 import { noGroupSaying, type MarketData } from '@/lib/pages/v2/market'
 import { BACK_TO_MARKET, CONVERSATION_MISSING, MarketConversationPage } from './pages'
-import { ConversationPageBody } from './conversation-page'
+import { ConversationPageBody, CONV_NONE_QUOTABLE, CONV_SAID_IN_VIDEO, CONV_VIDEOS_UNREAD, notQuoted } from './conversation-page'
 
-// A CONVERSATION'S PAGE (depth as pages, 17 Oct; F2-Market-Conversation): E2's
-// conversation panel, whole, as a page, from the page fixture through the
-// panel's own builders (`loadConvPanel`'s shape: `panelStats`, `ourReadOf`,
-// `lineBars`, `doingOf`, `convGroupsOf`, `platformRows`, the quote gate), under
-// its breadcrumb. Quotes live here (level 2), never on the top layer.
+// A CONVERSATION'S PAGE, THE EVIDENCE (F3-Market-Conversation, 17 Oct): the
+// header on the page (the title block, the one-line read, the week's chip
+// only where flagged), what people said under each of its videos, the facts
+// small beside them, its siblings and the Agent; from the page fixture
+// through the page's own builders (`convEvidenceOf`, `convSiblingsOf`,
+// `convGroupsOf`), against the copy contract and decision 1.
 
 const LINER = marketConversationFixture(1)
 const FLAG = marketConversationFixture(3)
 const page = (d: MarketData) => <MarketConversationPage data={d} />
 const body = (d: MarketData) => <ConversationPageBody page={d.convPage!} data={d} />
+const cards = (html: string): string[] => html.match(/<article id="video-[^"]*" data-video-card=""[\s\S]*?<\/article>/g) ?? []
 
 describe('a conversation under its ready subject, this week', () => {
   const text = renderText(page(LINER))
   const html = render(page(LINER))
 
-  it('its bar: "Market / Fit & comfort / How long a liner lasts", the week beside its month', () => {
+  it('the path, then the title block: "Conversation in Fit & comfort", the counts in the meta line, the period switch', () => {
     expect(text).toMatch(/^Market \/ Fit & comfort \/ How long a liner lasts Fit & comfort Conversation in Fit & comfort How long a liner lasts 5 to 11 October · 23 of 226 category videos this week · 35 of 300 in October so far This week This month Over time/)
     expect(html).toContain(`href="/dashboard/market/subjects/${fixtureSubjectId('fit')}"`)
     expect(html).toContain(`href="/dashboard/market/conversations/${fixtureId(1)}?period=month"`)
   })
 
-  it('E2\'s anatomy: its subject, its name, the stats with their n, our read, week by week and month by month', () => {
-    expect(renderText(body(LINER))).toMatch(/^Fit & comfort How long a liner lasts 23 of 226 category videos this week 35 of 300 category videos in October so far 19 of 780 category videos in September Our read People share how long their liners last/)
-    expect(text).toContain('Week by week · videos 9 14 23 21 Sep 28 Sep 5 Oct Month by month · share of the category’s videos 2% July 9 of 455')
+  it('the header on the page: its one-line read as the lead, no chip where the check flagged nothing, a hairline under; no tile row', () => {
+    const lead = html.match(/<div data-conv-lead=""[\s\S]*?<\/div>/)![0]
+    expect(lead).toMatch(/class="[^"]*border-b border-border[^"]*"><p data-copy="stored" data-slot="pass_b_theme" class="[^"]*text-\[21px\][^"]*">People share how long their liners last before they lose grip, and when to replace one\.<\/p><\/div>/)
+    expect(html).not.toContain('data-flag=')
+    expect(html).not.toContain('bg-inner px-4 pt-4')
   })
 
-  it('three stats leave no hole: two to a row under 1280, the third the row\'s width (the fresh check, 17 Oct)', () => {
-    const row = (d: MarketData) => render(body(d)).match(/<div class="grid grid-cols-2 gap-3 [^"]*">/)?.[0] ?? ''
-    expect(row(LINER)).toContain('xl:grid-cols-3')
-    expect(row(LINER)).toContain('max-xl:[&amp;&gt;*:last-child]:col-span-2')
-    // Four (a flag's baseline among them) fill two rows of two.
-    expect(row(FLAG)).not.toContain('col-span-2')
+  it('what people said: five videos, most comments about it first, each with three of its comments, "Show all", the link out', () => {
+    expect(text).toContain('What people said 23 videos this week, most comments about it first @stepbystep.amp TikTok · posted 3 Oct Össur Three signs your liner is done')
+    const all = cards(html)
+    expect(all).toHaveLength(5)
+    expect(markupText(all[0])).toBe('@stepbystep.amp TikTok · posted 3 Oct Össur Three signs your liner is done, and what my clinic never told me about replacing it 14 comments about this, of 212 on the video Watch the video ↗ “This liner gave me a rash after a week and I had to go back to my old one.” 5 Oct “Mine lasted eight months before it started slipping. Is that normal?” 6 Oct “Nobody at my fitting said anything about replacing the liner.” 7 Oct Show all 14 comments')
+    expect(all.map((c) => c.match(/<b class="[^"]*">(\d+)<\/b>/)?.[1])).toEqual(['14', '11', '9', '6', '5'])
+    expect(all[0]).toMatch(/<a href="https:\/\/example.com\/v\/1-1" target="_blank" rel="noopener noreferrer"[^>]*>Watch the video ↗<\/a>/)
+    expect(all[0]).toContain(`?video=${LINER.convPage!.evidence!.videos[0].id}#video-${LINER.convPage!.evidence!.videos[0].id}`)
+    // Each comment a quote node, its date only (the platform is on the video).
+    expect(all[0].match(/data-copy="quote"/g)).toHaveLength(3)
+    expect(all[0]).toMatch(/<span data-copy="level"><b[^>]*>14<\/b> comments about this, of 212 on the video<\/span>/)
   })
 
-  it('who it is about, what people did, who is saying it, where, each "of N"', () => {
-    // Who's saying it counts each group's videos of the conversation's 23 this
-    // week, the base in its label (F2-Market-Conversation, 17 Oct), the most first.
-    expect(text).toContain('Who it’s about Össur 4 · others 19 What people did · of 23 this week Complained about something 14 Asked a question 9 Pushed back 4 Who’s saying it · of 23 this week New amputees in their first year 15 of 23 Long-time users upgrading 5 of 23 Each opens in Voices Where · of 23 this week TikTok 14 Instagram 5 YouTube 4')
+  it('a comment in another language prints with its English, stamped a machine translation', () => {
+    // The gate ranks an English original first, so the Spanish comment is in
+    // its video's full list (it prints third of nine on the board's own).
+    const open = renderText(page(marketConversationFixture(1, { convVideo: 3 })))
+    expect(open).toContain(`“${CONV_SPANISH.text}” Spanish · machine translation ${CONV_SPANISH.english} 8 Oct`)
+  })
+
+  it('who the video is about only where counted: the client\'s chip on its videos, none on the market\'s', () => {
+    const all = cards(html)
+    expect(all.map((c) => (c.includes('data-who-chip="you"') ? 'you' : null))).toEqual(['you', null, null, 'you', null])
+  })
+
+  it('"Show more videos · 18 more" from 640, "· 20 more" on a phone (three there), both an address', () => {
+    expect(html).toMatch(new RegExp(`<a class="[^"]*self-start max-sm:hidden" href="/dashboard/market/conversations/${fixtureId(1)}\\?videos=all#what-people-said">Show more videos · <span data-copy="figure">18</span>\u00a0more</a>`))
+    expect(html).toMatch(/self-stretch sm:hidden" href="[^"]*">Show more videos · <span data-copy="figure">20<\/span>\u00a0more<\/a>/)
+  })
+
+  it('the facts, small, on the page: week by week, who it\'s about, what people did, who\'s saying it and where, each of the week\'s 23', () => {
+    expect(text).toContain('The facts Week by week · videos 9 14 23 21 Sep 28 Sep 5 Oct 23 this week · 35 in October so far Who it’s about Össur 4 · others 19 What people did · of 23 Complained about something 14 Asked a question 9 Pushed back 4 Who’s saying it · of 23 New amputees in their first year 15 of 23 Long-time users upgrading 5 of 23 Each opens in Voices Where · of 23 TikTok 14 Instagram 5 YouTube 4')
     expect(html).toContain('href="/dashboard/voices?group=new-amputees#group-panel"')
+    // No month chart and no tile row.
+    expect(text).not.toContain('Month by month')
   })
 
-  it('three comments at level 2, as quote nodes, with who the video is filed under; the Agent', () => {
-    expect(html.match(/data-copy="quote"/g)).toHaveLength(3)
-    expect(text).toContain('“This liner gave me a rash after a week.” TikTok · 6 Oct Össur Ask the Agent about this')
+  it('other conversations in its subject, with their week beside their month, and the whole subject', () => {
+    expect(text).toContain('Other conversations in Fit & comfort Fit & comfort, the whole subject → Sweat under the liner 21 this week · 30 in October so far Socket fit changing over time 14 this week · 20 in October so far Liner smell and cleaning 5 this week · 5 in October so far')
+    expect(html.match(/data-sibling=""/g)).toHaveLength(3)
+    expect(html).toContain(`href="/dashboard/market/subjects/${fixtureSubjectId('fit')}"`)
   })
 
-  it('keeps the copy contract', () => {
+  it('the Agent: about these videos and what people said under them', () => {
+    expect(text).toContain('Ask about these videos and what people said under them, in your own words. Ask the Agent about this')
+  })
+
+  it('no quotes outside the videos\' own cards, and the copy contract', () => {
+    const quotes = copyNodes(html).filter((n) => n.kind === 'quote')
+    expect(quotes.length).toBe(cards(html).reduce((s, c) => s + (c.match(/data-copy="quote"/g)?.length ?? 0), 0))
     assertCopyContract(page(LINER))
+    expect(text).not.toMatch(/[–—]/)
+  })
+})
+
+describe('on a phone (F3-Market-Conversation-Phone)', () => {
+  const html = render(page(LINER))
+
+  it('three videos with two comments each; the rest hidden there, and every list still opens', () => {
+    const all = cards(html)
+    expect(all.filter((c) => /^<article[^>]*class="[^"]*max-sm:hidden/.test(c))).toHaveLength(2)
+    expect(all[0].match(/data-video-comment="" class="[^"]*max-sm:hidden"/g)).toHaveLength(1)
+  })
+
+  it('the facts become a card; the siblings a two-line list with the whole subject under it', () => {
+    expect(html).toMatch(/<aside aria-labelledby="facts-title" class="[^"]*max-sm:rounded-\[14px\] max-sm:bg-card/)
+    expect(markupText(html.match(/<section aria-label="Other conversations in Fit &amp; comfort"[\s\S]*?<\/section>/)![0])).toBe('Other conversations in Fit & comfort This week, then October so far Sweat under the liner 21 30 in October so far Socket fit changing over time 14 20 in October so far Liner smell and cleaning 5 5 in October so far Fit & comfort, the whole subject →')
   })
 })
 
 describe('the flagged conversation', () => {
-  it('carries the check\'s chip and its baseline among the stats; our read is the week read\'s finding, stored prose', () => {
-    const text = renderText(body(FLAG))
-    expect(text).toMatch(/^Cost & access Unusual this week Insurance refusals for powered knees 19 of 226 category videos this week 31 of 300 category videos in October so far 19 of 780 category videos in September 39 of 1,906 videos in July to September, every audience together, your own posts included Our read People describe appeals/)
+  it('carries the check\'s chip under its lead, and nowhere else', () => {
     const html = render(body(FLAG))
-    expect(html).toContain('data-flag="unusual"')
-    expect(html).toContain('data-copy="stored" data-slot="week_read"')
-    // What it means, the read's last line, is the quieter one.
-    expect(html).toMatch(/data-slot="week_read" class="[^"]*text-secondary-foreground">Access, not the knee itself/)
+    expect(html.match(/data-flag="unusual"/g)).toHaveLength(1)
+    expect(html).toMatch(/<div data-conv-lead=""[\s\S]*?data-flag="unusual"/)
     assertCopyContract(page(FLAG))
   })
 
-  it('a description standing in for our read is Pass B\'s, in its slot', () => {
-    const d = LINER
-    const desc = { ...d.convPage!, panel: { ...d.convPage!.panel, ourRead: { slot: 'pass_b_theme' as const, lines: [{ body: 'A 16-inch liner.', figures: {} }] } } }
-    expect(copyViolations(<ConversationPageBody page={desc} data={d} />)).toEqual([])
+  it('a conversation first heard this week earns no chip here: the week\'s one chip is the check\'s (decision 1)', () => {
+    expect(render(body(marketConversationFixture(11)))).not.toContain('data-flag=')
+  })
+})
+
+describe('the params: a video\'s list opened, every video listed', () => {
+  it('?video= opens that video\'s every printable comment, closing again by its own link; nothing past the edge of the period', () => {
+    const d = marketConversationFixture(1, { convVideo: 1 })
+    const open = cards(render(page(d)))[0]
+    expect(open.match(/data-copy="quote"/g)).toHaveLength(14)
+    expect(open).not.toMatch(/data-video-comment="" class="[^"]*max-sm:hidden"/)
+    expect(open).toMatch(new RegExp(`href="/dashboard/market/conversations/${fixtureId(1)}">Show fewer comments</a>`))
+  })
+
+  it('opened, where fewer may print than are counted: the rest are said to be counted, not quoted', () => {
+    const d = marketConversationFixture(1, { convVideo: 7 })
+    const v = d.convPage!.evidence!.videos.find((x) => x.open)!
+    expect(v.aboutCount).toBeGreaterThan(v.quotable)
+    expect(renderText(body(d))).toContain(notQuoted(v.aboutCount - v.quotable))
+  })
+
+  it('?videos=all lists every one (and none is hidden on a phone); no "Show more"', () => {
+    const d = marketConversationFixture(1, { convVideos: 'all' })
+    const html = render(page(d))
+    expect(cards(html)).toHaveLength(23)
+    expect(cards(html).some((c) => /^<article[^>]*max-sm:hidden/.test(c))).toBe(false)
+    expect(html).not.toContain('Show more videos')
   })
 })
 
 describe('every state keeps its frame', () => {
-  it('this month: no week stat and no week by week; its month', () => {
+  it('this month: its month in the meta and the facts, no week by week', () => {
     const d = marketConversationFixture(1, { period: 'month' })
     const text = renderText(page(d))
     expect(text).toMatch(/^Market \/ Fit & comfort \/ How long a liner lasts Fit & comfort Conversation in Fit & comfort How long a liner lasts October so far · 35 of 300 category videos This week/)
-    // The groups count over the month's 35, as the stats do.
-    expect(text).toContain('Who’s saying it · of 35 in October so far New amputees in their first year 23 of 35 Long-time users upgrading 7 of 35 Each opens in Voices')
+    expect(text).toContain('What people said 35 videos in October so far, most comments about it first')
+    expect(text).toContain('Who’s saying it · of 35 New amputees in their first year 23 of 35 Long-time users upgrading 7 of 35 Each opens in Voices')
+    expect(text).toContain('Other conversations in Fit & comfort Fit & comfort, the whole subject → Sweat under the liner 30 in October so far')
     expect(text).not.toContain('Week by week')
     expect(text).not.toContain('this week')
     assertCopyContract(page(d))
   })
 
-  it('with no ready subject: "Market / {conversation}"; brands not counted says so in its place', () => {
+  it('with no ready subject: "Conversation", "Market / {conversation}", its siblings the week\'s biggest; brands not counted says so in its place', () => {
     const d = marketConversationFixture(1, { flagged: false, noNew: true, subjects: 'provisional', brands: 'not_counted', weeks: 'insufficient', noGroups: true })
     const text = renderText(page(d))
     expect(text).toMatch(/^Market \/ How long a liner lasts Market Conversation How long a liner lasts /)
     expect(text).toContain('Who it’s about Brands are not counted for this workspace yet.')
+    expect(text).toContain('Other conversations this week Sweat under the liner 21 this week · 30 in October so far Insurance refusals for powered knees 19 this week · 31 in October so far')
+    expect(render(page(d)).match(/data-sibling=""/g)).toHaveLength(8)
+    expect(render(page(d))).not.toContain('data-who-chip')
     assertCopyContract(page(d))
+  })
+
+  it('its videos could not be read: the section\'s frame and one line, never an empty list', () => {
+    const d = marketConversationFixture(1, { convEvidence: 'unread' })
+    const html = render(body(d))
+    expect(html).toContain('data-said-gap="unread"')
+    expect(renderText(body(d))).toContain(`What people said ${CONV_VIDEOS_UNREAD} The facts`)
+  })
+
+  it('no video in the period: the section\'s frame and one line', () => {
+    const d = marketConversationFixture(1, { convEvidence: 'none' })
+    expect(renderText(body(d))).toContain('What people said No video in it this week. The facts')
+  })
+
+  it('a video said on camera with no comment about it, and one whose comments none can print, each say so in their frame', () => {
+    const d = LINER
+    const ev = d.convPage!.evidence!
+    const [first, ...rest] = ev.videos
+    const oncam = { ...first, aboutCount: 0, quotes: [], quotable: 0 }
+    const unquotable = { ...rest[0], quotes: [], quotable: 0 }
+    const page2 = { ...d.convPage!, evidence: { ...ev, videos: [oncam, unquotable] } }
+    const text = renderText(<ConversationPageBody page={page2} data={d} />)
+    expect(text).toContain(CONV_SAID_IN_VIDEO)
+    expect(text).toContain(CONV_NONE_QUOTABLE)
+    expect(copyViolations(<ConversationPageBody page={page2} data={d} />)).toEqual([])
   })
 
   it('groups that could not be counted: Pass E\'s names, no count and no base; none counted says so in the period\'s words', () => {
     const names = { ...LINER.convPage!, panel: { ...LINER.convPage!.panel, groupBase: null, groups: LINER.convPage!.panel.groups.map(({ videos: _v, ...g }) => g) } }
-    const t = renderText(<ConversationPageBody page={names} data={LINER} />)
-    expect(t).toContain('Who’s saying it New amputees in their first year Long-time users upgrading Each opens in Voices Where')
+    expect(renderText(<ConversationPageBody page={names} data={LINER} />)).toContain('Who’s saying it New amputees in their first year Long-time users upgrading Each opens in Voices Where')
     const none = { ...LINER.convPage!, panel: { ...LINER.convPage!.panel, groups: [] } }
-    expect(renderText(<ConversationPageBody page={none} data={LINER} />)).toContain('Who’s saying it · of 23 this week This week, no video in it has a comment from one of the groups in Voices. Where')
+    expect(renderText(<ConversationPageBody page={none} data={LINER} />)).toContain('Who’s saying it · of 23 This week, no video in it has a comment from one of the groups in Voices. Where')
+    expect(noGroupSaying('in October so far')).toBe('In October so far, no video in it has a comment from one of the groups in Voices.')
     assertCopyContract(<ConversationPageBody page={names} data={LINER} />)
   })
 
-  it('a month with no figure is no tile, never an empty one: the stats that print each carry their figure (17 Oct)', () => {
-    // The subject page's empty change tile, checked here: a conversation's
-    // stats are only the figures it has (`panelStats`), so a month before
-    // with none drops its tile and the row closes up (an odd last one takes
-    // the row), and the month line's verdict sits in its label or not at all.
-    const conv = LINER.convPage!
-    const noPrev = { ...conv, panel: { ...conv.panel, stats: conv.panel.stats.filter((x) => !x.label.endsWith('in September')) } }
-    const html = render(<ConversationPageBody page={noPrev} data={LINER} />)
-    const cells = html.match(/<div data-copy="level" class="min-w-0 rounded-\[10px\] bg-inner[^"]*"><div[^>]*>[^<]*<\/div>/g) ?? []
-    expect(cells).toHaveLength(2)
-    for (const c of cells) expect(c).toMatch(/>\d[\d,]*<\/div>$/)
-    expect(html).not.toContain('data-tile-gap')
-  })
-
-  it('no group counted: plain words for what the count measures, in the period\'s own words (17 Oct)', () => {
-    // A group counts a video where one of its insights cites a comment in
-    // the conversation in the period (`groupCountsOf`): none, no such video.
-    expect(noGroupSaying('this week')).toBe('This week, no video in it has a comment from one of the groups in Voices.')
-    expect(noGroupSaying('in October so far')).toBe('In October so far, no video in it has a comment from one of the groups in Voices.')
-    const month = marketConversationFixture(1, { period: 'month' })
-    const none = { ...month.convPage!, panel: { ...month.convPage!.panel, groups: [] } }
-    const text = renderText(<ConversationPageBody page={none} data={month} />)
-    expect(text).toContain('Who’s saying it · of 35 in October so far In October so far, no video in it has a comment from one of the groups in Voices. Where')
-    expect(text).not.toContain('own talk')
-    assertCopyContract(<ConversationPageBody page={none} data={month} />)
-  })
-
-  it('a conversation first heard this week carries "New", the reader flag in a verdict node', () => {
-    const d = marketConversationFixture(11)
-    expect(render(body(d))).toContain('data-flag="new"')
+  it('no sibling in its subject this week: the section says so', () => {
+    const lone = { ...LINER.convPage!, siblings: { ...LINER.convPage!.siblings!, items: [] } }
+    expect(renderText(<ConversationPageBody page={lone} data={LINER} />)).toContain('No other conversation in Fit & comfort this week.')
   })
 
   it('an id Market cannot name: one calm line, and the way back', () => {

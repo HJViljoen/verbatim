@@ -791,7 +791,11 @@ export function fixtureConvEvidence(n: number, conv: MarketConv | null, period: 
       is_client: false, is_competitor: false, competitor_name: null, hashtags: ['amputee'], topics: ['prosthetics'], source: 'discovered',
     })
     for (let j = 0; j < count; j++) {
-      const words = board?.[5][j] ?? (j === 0 && n !== 1 ? `People ask about ${(conv?.label ?? 'this').toLowerCase()} under video ${i + 1}, and what helps.` : 'Same here.')
+      // The board's comments first; then, under the board's five, more of the
+      // same talk (so "Show all" lists them), and under the rest one line
+      // each and a few too short to quote.
+      const words = board?.[5][j]
+        ?? (board ? `My liner lasted ${4 + j} months before it needed replacing, and nobody warned me.` : j === 0 ? `People ask about ${(conv?.label ?? 'this').toLowerCase()} under video ${i + 1}, and what helps.` : 'Same here.')
       evidence.push({
         evidenceId: `cev-${n}-${i}-${j}`, insightId: `ins-${n}-${1 + (j % 4)}`, commentId: `ccm-${n}-${i}-${j}`, quote: words, rank: j + 1, redacted: false,
         comment: { date: `2026-10-${String(5 + ((i + j) % 6)).padStart(2, '0')}T10:00:00.000Z`, platform: videos[i].platform, videoId: videos[i].video_id, author: `viewer${i}-${j}` },

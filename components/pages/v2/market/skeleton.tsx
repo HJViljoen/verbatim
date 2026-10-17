@@ -91,23 +91,29 @@ export function MarketSubjectSkeleton() {
   )
 }
 
-/** A conversation's page loading (F2-Market-Conversation): the bar and the
- *  one card. */
+/** A conversation's page loading (F3-Market-Conversation): the path and
+ *  the title block, the lead and its hairline, the video cards beside the
+ *  facts, the siblings. */
 export function MarketConversationSkeleton() {
   return (
     <PageFrame>
       <div role="status" aria-busy="true" aria-label="Loading the conversation" className="flex flex-col gap-[22px]">
         <LevelBar label="Market" />
-        <div className={cn(CARD, 'gap-6')}>
-          <Bone className="h-5 w-48" />
-          <Bone className="h-8 w-3/4" />
-          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">{[0, 1, 2, 3].map((i) => <Bone key={i} className="h-[86px] w-full" />)}</div>
-          <div className="grid grid-cols-1 gap-10 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-            <div className="flex flex-col gap-6"><BoneLines lines={5} /><Bone className="h-[140px] w-full" /></div>
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">{[0, 1, 2, 3].map((i) => <BoneLines key={i} lines={3} />)}</div>
+        <div className="flex flex-col gap-3 border-b border-border pb-[22px]"><Bone className="h-6 w-3/4" /></div>
+        <div className="grid grid-cols-1 items-start gap-11 min-[1180px]:grid-cols-[minmax(0,1fr)_300px]">
+          <div className="flex flex-col gap-4">
+            <Bone className="h-5 w-48" />
+            {[0, 1, 2].map((i) => (
+              <div key={i} className={cn(CARD, 'gap-3')}>
+                <div className="flex items-center gap-3"><Bone className="size-9 rounded-[9px]" /><div className="flex flex-col gap-1.5"><Bone className="h-3.5 w-36" /><Bone className="h-3 w-28" /></div></div>
+                <Bone className="h-4 w-4/5" />
+                <Bone className="h-[120px] w-full rounded-[10px]" />
+              </div>
+            ))}
           </div>
-          <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-3">{[0, 1, 2].map((i) => <Bone key={i} className="h-[92px] w-full" />)}</div>
+          <div className="flex flex-col gap-4"><Bone className="h-4 w-24" /><Bone className="h-[86px] w-full" /><BoneLines lines={8} /></div>
         </div>
+        <div className="grid grid-cols-2 gap-3 min-[1180px]:grid-cols-4">{[0, 1, 2, 3].map((i) => <Bone key={i} className="h-[62px] w-full rounded-[12px]" />)}</div>
       </div>
     </PageFrame>
   )
