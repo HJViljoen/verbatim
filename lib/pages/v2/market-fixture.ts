@@ -290,7 +290,14 @@ const STATES: Record<string, 'ready' | 'provisional' | 'failed'> = { fit: 'ready
  * Look & style ready and thin (4 of 318), Cost & access's check open,
  * Community & encouragement's check failed.
  */
-export function fixtureFactsIn(state: 'provisional' | 'one_month' | 'tracked' | 'states'): SubjectFact[] {
+export function fixtureFactsIn(state: 'provisional' | 'one_month' | 'tracked' | 'states' | 'unread'): SubjectFact[] {
+  if (state === 'unread') {
+    // Össur on 17 Oct: every check passed and none read in October yet, so
+    // no level and no verdict; the earlier months keep their line.
+    return fixtureFacts().flatMap((f): SubjectFact[] => (f.calibration === 'failed' ? [] : [{
+      ...f, calibration: 'unread', level: null, verdict: null, trail: f.trail.filter((t) => t.month !== OCT),
+    }]))
+  }
   if (state === 'states') {
     // F2-Market-States: Function & movement's check open, Community &
     // encouragement's failed, the other four ready.
@@ -374,8 +381,10 @@ export interface FixtureOptions {
    *  ready, one thin, one open, one failed: `fixtureFactsIn('tracked')`), or
    *  F2-Market-States' six (`fixtureFactsIn('states')`: ready with a
    *  headline, ready with a read stored before headlines, thin, not
-   *  measured, failed, and ready with no read this month). */
-  subjects?: 'ready' | 'provisional' | 'one_month' | 'tracked' | 'states'
+   *  measured, failed, and ready with no read this month), or `unread`
+   *  (Össur on 17 Oct: every check passed, no subject read in the month yet,
+   *  each with its written read: `fixtureFactsIn('unread')`). */
+  subjects?: 'ready' | 'provisional' | 'one_month' | 'tracked' | 'states' | 'unread'
   /** The weekly volume: drawn (the default), too few clean weeks, or a read
    *  that failed. */
   weeks?: 'drawn' | 'insufficient' | 'failed'

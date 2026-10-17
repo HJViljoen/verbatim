@@ -645,6 +645,13 @@ export interface SubjectCard {
   /** "October so far". */
   monthText: string
   href: string
+  /** Its row has a level: a ready subject read in the month, so it stands
+   *  in the biggest-first order (`subjectOrder`) and the head may say so
+   *  (`subjectsNote`). A card's state is about its words, never its level:
+   *  a written read of a subject the month has no reading for is not
+   *  ranked (Össur, 17 Oct). Absent on a dump from before it, which claims
+   *  no order. */
+  ranked?: boolean
 }
 
 /** A tracked subject as the switcher lists it: in the top page's order, its
@@ -1901,7 +1908,7 @@ export function subjectCardsOf(a: {
 }): SubjectCard[] {
   const line = (body: string): StoredLine => ({ body: body.trim(), figures: {} })
   return subjectOrder(a.rows).map((row): SubjectCard => {
-    const base = { id: row.id, name: row.name, monthText: a.monthText, href: a.href(row.id), headline: null, body: null, note: null, inside: [] }
+    const base = { id: row.id, name: row.name, monthText: a.monthText, href: a.href(row.id), headline: null, body: null, note: null, inside: [], ranked: row.level != null }
     const named = row.inside.slice(0, MARKET_INSIDE).map((c) => ({ id: c.id, label: c.label, href: c.href }))
     if (row.pending?.state === 'provisional') return { ...base, state: 'provisional', note: SUBJECT_NOT_MEASURED, inside: named }
     if (row.pending?.state === 'failed') return { ...base, state: 'failed', note: FAILED_EXPLAINED, inside: named }

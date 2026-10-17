@@ -185,7 +185,33 @@ describe('the subject cards', () => {
   it('names the subjects in words and says "biggest first" only where some are ranked', () => {
     // Össur's thin state: every check open (and one failed), so none ranked.
     expect(renderText(<SubjectCardsView cards={marketThinFixture().subjectCards!} />)).toMatch(/^What the market is talking about Your seven subjects Choosing the right device/)
+    // Every ready one ranked by its videos in the month.
+    expect(WEEK.subjectCards!.every((c) => c.ranked)).toBe(true)
+    // F2-Market-States: the four with a level lead, ranked (the no-read card
+    // too: its words are missing, not its level); the unready follow, unranked.
+    expect(STATES.subjectCards!.map((c) => [c.state, c.ranked])).toEqual([['read', true], ['read', true], ['thin', true], ['no_read', true], ['failed', false], ['provisional', false]])
+    expect(renderText(<SubjectCardsView cards={STATES.subjectCards!} />)).toMatch(/^What the market is talking about Your six subjects, biggest first Fit & comfort/)
     expect(renderText(<SubjectCardsView cards={[]} />)).toBe('What the market is talking about Your subjects will appear here once they are named in Settings.')
+  })
+})
+
+describe('Össur on 17 Oct: six written reads, no subject read in October yet', () => {
+  // The cards' words are written (a card's state is about its words) but no
+  // row has a level, so nothing is ranked: the cards stand in name order and
+  // the head claims no order. Until 17 Oct it said "biggest first" off the
+  // cards' states, which was false.
+  const d = marketFixture({ subjects: 'unread' })
+
+  it('six cards with their reads, none ranked, in name order; "Your six subjects", never "biggest first"', () => {
+    expect(d.subjects!.rows.every((r) => r.level == null && r.pending?.state === 'unread')).toBe(true)
+    expect(d.subjectCards!.map((c) => [c.name, c.state, c.ranked])).toEqual([
+      ['Choosing the right device', 'thin', false], ['Community & encouragement', 'read', false], ['Cost & access', 'read', false],
+      ['Fit & comfort', 'read', false], ['Function & movement', 'read', false], ['Look & style', 'read', false],
+    ])
+    const text = renderText(<SubjectCardsView cards={d.subjectCards!} />)
+    expect(text).toMatch(/^What the market is talking about Your six subjects Choosing the right device /)
+    expect(text).not.toContain('biggest first')
+    assertCopyContract(<SubjectCardsView cards={d.subjectCards!} />)
   })
 })
 

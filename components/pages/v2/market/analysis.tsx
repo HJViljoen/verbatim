@@ -93,10 +93,13 @@ export function WeekCardView({ card }: { card: WeekCard }) {
 // ---- The subject cards ------------------------------------------------------------------
 
 /** The head's note: "Your six subjects, biggest first" (words to twelve, as
- *  the board writes it); "biggest first" only where some are ranked. */
+ *  the board writes it); "biggest first" only where some card's row has a
+ *  level (`ranked`), and those then lead (`subjectOrder`). Never from a
+ *  card's state, which is about its words: Össur's six written reads with
+ *  no reading in the month stand in name order (17 Oct). */
 export function subjectsNote(cards: readonly SubjectCard[]): ReactNode {
   const n = cards.length
-  const ranked = cards.some((c) => c.state === 'read' || c.state === 'thin' || c.state === 'no_read')
+  const ranked = cards.some((c) => c.ranked === true)
   const word = countWord(n)
   const count = /\d/.test(word) ? <span data-copy="figure">{word}</span> : word
   if (n === 1) return 'Your subject'

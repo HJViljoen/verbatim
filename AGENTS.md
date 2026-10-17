@@ -1424,7 +1424,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
     in the board's order (`subjectOrder` over `buildSubjectBoard`'s rows:
     the ready ones biggest first by the month's videos about each, the
     standing facts' order, then the ready ones not read this month, then
-    the unready, unranked); ALSO THIS WEEK, E2's three places small,
+    the unready, unranked), the head's "Your six subjects" adding
+    ", biggest first" only where some card's row has a level
+    (`SubjectCard.ranked`, `subjectsNote`), never off a card's state, which
+    is about its words (17 Oct: Össur's six written reads with no October
+    reading stood in name order under "biggest first"); ALSO THIS WEEK, E2's three places small,
     filled by today's rules (`weekLead`, `printableFlags`,
     `pickWeekSides`, `earlierNewOf`, `alsoTalkedOf`) and opening each
     conversation's page, the flag's chip alone ("Unusual this week", in the
