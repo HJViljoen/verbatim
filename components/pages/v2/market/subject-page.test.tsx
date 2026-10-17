@@ -170,7 +170,7 @@ describe('every state keeps its frame', () => {
   it('not measured yet (U6): its name, why, and the conversations inside it by name; no figure, line or chip count', () => {
     const d = marketSubjectFixture('cost', { flagged: false, noNew: true, subjects: 'provisional', brands: 'not_counted', weeks: 'insufficient', noGroups: true })
     const text = renderText(page(d))
-    expect(text).toBe(`Market Market / Cost & access This week This month Over time 5 to 11 October This week This month Over time Our read · October so far ${SUBJECT_NOT_MEASURED} The numbers ${SUBJECT_NOT_MEASURED} Inside it Each opens as its own page. Insurance refusals for powered knees Paying out of pocket Medical aid and liners Ask the Agent about Cost & access`)
+    expect(text).toBe(`Market Market / Cost & access This week This month Over time 5 to 11 October This week This month Over time Our read · October so far ${SUBJECT_NOT_MEASURED} The numbers ${SUBJECT_NUMBERS_HELD} Inside it Each opens as its own page. Insurance refusals for powered knees Paying out of pocket Medical aid and liners Ask the Agent about Cost & access`)
     expect(copyNodes(render(page(d))).filter((n) => n.kind === 'figure' || n.kind === 'level' || n.kind === 'verdict' || n.kind === 'quote')).toEqual([])
     assertCopyContract(page(d))
   })
@@ -194,10 +194,10 @@ describe('every state keeps its frame', () => {
   it('the numbers\' line names each state\'s own reason: unread, not measured, failed', () => {
     expect(subjectNumbersLine({ state: 'unread', monthText: 'October so far' })).toBe('No reading in October so far yet.')
     expect(subjectNumbersLine({ state: 'unread', monthText: 'October' })).toBe('No reading in October yet.')
-    expect(subjectNumbersLine({ state: 'provisional', monthText: 'October so far' })).toBe(SUBJECT_NOT_MEASURED)
+    expect(subjectNumbersLine({ state: 'provisional', monthText: 'October so far' })).toBe(SUBJECT_NUMBERS_HELD)
     expect(subjectNumbersLine({ state: 'failed', monthText: 'October so far' })).toBe(SUBJECT_NUMBERS_HELD)
     // Each on its page, in the numbers card's frame.
-    expect(render(body(marketSubjectFixture('function', { subjects: 'states' })))).toMatch(/data-numbers-gap="provisional"[^>]*><p[^>]*>Not measured yet<\/p>/)
+    expect(render(body(marketSubjectFixture('function', { subjects: 'states' })))).toMatch(new RegExp(`data-numbers-gap="provisional"[^>]*><p[^>]*>${SUBJECT_NUMBERS_HELD}</p>`))
     expect(render(body(marketSubjectFixture('community', { subjects: 'states' })))).toMatch(new RegExp(`data-numbers-gap="failed"[^>]*><p[^>]*>${SUBJECT_NUMBERS_HELD}</p>`))
   })
 

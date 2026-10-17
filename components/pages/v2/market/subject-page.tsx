@@ -52,13 +52,12 @@ export const SUBJECT_NUMBERS_HELD = 'No figure prints for this subject until its
  * THE NUMBERS CARD OF A SUBJECT THAT PRINTS NO FIGURE, in one line: the
  * state's own reason (17 Oct). Not read in the month yet, the month's own
  * line (`noReadingYet`): its check passed, so "until its check passes" was
- * false there (Össur's six, mid-October). Its check open, the not-measured
- * line every surface prints where a figure would be. Failed, why no figure
- * prints until the check passes again. Pure.
+ * false there (Össur's six, mid-October). Its check open or failed, why no
+ * figure prints until the check passes: Our read above already says "Not
+ * measured yet" (or the failed line), so this place does not repeat it. Pure.
  */
 export function subjectNumbersLine(panel: Pick<SubjectPanel, 'state' | 'monthText'>): string {
   if (panel.state === 'unread') return noReadingYet(panel.monthText)
-  if (panel.state === 'provisional') return SUBJECT_NOT_MEASURED
   return SUBJECT_NUMBERS_HELD
 }
 

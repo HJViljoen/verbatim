@@ -1491,8 +1491,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
     numbers card says the state's own reason in one line
     (`subjectNumbersLine`): a ready subject the month has no reading for yet,
     the month's line ("No reading in October so far yet.", `noReadingYet`);
-    its check open, `SUBJECT_NOT_MEASURED`; failed, that no figure prints
-    until its check passes. *A conversation's page* is E2's panel
+    its check open or failed, that no figure prints until its check passes
+    (Our read above already says "Not measured yet" or the failed line, so
+    it is not said twice). *A conversation's page* is E2's panel
     whole (`loadConvPanel`, `convPageOf`), "Month by month" where the data
     has months; its "Who's saying it" counts each group's videos of the
     conversation's in the period, "15 of 23", the base in the label ("of 23
