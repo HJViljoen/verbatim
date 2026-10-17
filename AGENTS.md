@@ -1761,7 +1761,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
     the couldn't-tell-which card with Tag for owners and admins (a member:
     the words, Watch the video, `PRODUCT_TAG_COPY.role`), its line true to
     what a tag does (an open month counts it; a closed one keeps it and
-    moves nothing, `tagSub`); the numbers: three months, what it's about
+    moves nothing, `tagSub`), "See all N" only where the opened list
+    (`UNCLEAR_ALL`, 30) draws every line that may print and the read took
+    every line, else "See the first N", said again under the opened list
+    (`unclearWhole`); the numbers: three months, what it's about
     (READY subjects, each opening its page on Market at the month; those on
     none of its videos named on one line; U6's rows by name), what people
     did, who's talking (Voices' groups crossed with the set, each opening

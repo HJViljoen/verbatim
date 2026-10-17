@@ -242,6 +242,13 @@ export interface CategoryDetail {
     /** Every line of the whole list is a comment (none a video's own
      *  words): "See all N comments". */
     allComments: boolean
+    /** Every line that may print fits the opened list (`UNCLEAR_ALL`) and
+     *  the read took every line: only then does the link say "See all N";
+     *  else "See the first N", and the opened list says it is the first N
+     *  (`unclearWhole`). */
+    whole: boolean
+    /** The lines the opened list draws. */
+    openCount: number
   }
 }
 
@@ -506,6 +513,18 @@ export interface CategoryReads {
   /** Voices' groups with their month's videos (`loadGroupSubjects`); null
    *  where the tenant has no profile; undefined where it was not read. */
   groups?: { key: string; name: string; videoIds: string[] }[] | null
+  /** The couldn't-tell-which list was longer than its read (`UNCLEAR_ALL`
+   *  twice over): lines past the read were never gated, so the page cannot
+   *  say how many of them may print. */
+  unclearCut?: boolean
+}
+
+/** Whether the couldn't-tell-which link may say "See all N": every line
+ *  that may print fits the opened list and the read took every line. A
+ *  list cut either way says "See the first N" instead, never "all" of a
+ *  number the opened list does not draw. PURE. */
+export function unclearWhole(printable: number, cut: boolean): boolean {
+  return !cut && printable <= UNCLEAR_ALL
 }
 
 /** The hub, from the root's data and its own reads. PURE. */
@@ -555,6 +574,8 @@ export function buildCategoryPage(input: {
       options: input.in.canTag && withAll.lines.length > 0 ? tagOptions(catalogue, g.id) : [],
       closed: input.in.now ? freezeStateFor(month, input.in.now) === 'frozen' : false,
       allComments: withAll.lines.every((l) => l.commentId != null),
+      whole: unclearWhole(withAll.lines.length + withAll.more, input.reads?.unclearCut ?? false),
+      openCount: withAll.lines.length,
     },
   }
   return {
@@ -857,16 +878,17 @@ export async function loadProductsLevel(input: ProductsLoadInput & { ask: LevelA
       ids.length > 0 ? readVideoRows(handle, ids).catch((e: unknown) => { say('level videos', e); return null }) : Promise.resolve(new Map<string, LevelVideoRow>()),
     ])
     const standing = ready.standing
+    const unclearList = standing && groupSet ? unclearTexts(standing, m, g, groupSet.unclear) : []
     const [texts, groups] = await Promise.all([
       standing && groupSet
         ? readTextLists(handle, [
-          { texts: unclearTexts(standing, m, g, groupSet.unclear), cap: UNCLEAR_ALL * 2 },
+          { texts: unclearList, cap: UNCLEAR_ALL * 2 },
           ...cardIds.map((id) => ({ texts: namedComments(standing, m, id, sets?.products.get(id) ?? new Set()), cap: HUB_QUOTE_READ })),
         ], videos ?? new Map()).catch((e: unknown) => { say('level texts', e); return null })
         : Promise.resolve([] as TextRead[][]),
       videos && ids.length > 0 ? readGroups(handle, m, ids, videos).catch((e: unknown) => { say('level groups', e); return undefined }) : Promise.resolve(videos ? null : undefined),
     ])
-    const reads: CategoryReads | null = texts ? { unclear: texts[0] ?? [], named: new Map(cardIds.map((id, i) => [id, texts[i + 1] ?? []])), groups } : null
+    const reads: CategoryReads | null = texts ? { unclear: texts[0] ?? [], named: new Map(cardIds.map((id, i) => [id, texts[i + 1] ?? []])), groups, unclearCut: unclearList.length > UNCLEAR_ALL * 2 } : null
     return buildLevelData({ in: { ...ready, crosses }, ask: input.ask, category: reads })
   }
 

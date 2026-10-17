@@ -97,6 +97,18 @@ describe('a category\'s page, the hub (G4-Products-Category)', () => {
     expect(renderText(member)).toContain('21 videos in September. “This liner')
   })
 
+  it('"See all N" only where the opened list draws all N; else "See the first N", and the opened list says so', () => {
+    expect(renderText(page(PRODUCTS_LEVEL_FIXTURES.liners()))).toContain('See all 6 →')
+    const cut = categoryFixture({ reads: { unclearCut: true } })
+    const closed = renderText(page(cut))
+    expect(closed).toContain('See the first 6 →')
+    expect(closed).not.toContain('See all')
+    assertCopyContract(page(cut))
+    const opened = renderText(page(categoryFixture({ params: { unclear: 'all' }, reads: { unclearCut: true } })))
+    expect(opened).toContain('The first 6 are listed here. Show fewer')
+    expect(renderText(page(PRODUCTS_LEVEL_FIXTURES['liners-all']()))).not.toContain('are listed here')
+  })
+
   it('"See all" makes the list longer on the same page, and the way back', () => {
     const all = renderText(page(PRODUCTS_LEVEL_FIXTURES['liners-all']()))
     expect(all).toContain('The video itself names one of your products here. YouTube · 15 Sep · video by @amputee.life')

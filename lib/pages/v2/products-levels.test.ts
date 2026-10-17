@@ -7,7 +7,7 @@ import { PRODUCT_IDS, linersUnclearTexts } from './products-fixture'
 import { categoryFixture, PRODUCTS_LEVEL_FIXTURES, productFixture, quietProductFixture, sealVideos, todayCategoryFixture } from './products-level-fixture'
 import {
   aboutLine, categoryHeadline, categoryMenu, groupsOf, HUB_CARDS, hubQuotes, keptMonth, namedByVideo, namedVideoOrder, platformsOf, productEvidence, productGroupOf, productLead,
-  productMenu, PRODUCT_VIDEO_QUOTES, PRODUCT_VIDEOS_MAX, PRODUCT_VIDEOS_SHOWN, quietWordsOf, shareWord, shownVideos, subjectRowsOf, type ProductCard,
+  productMenu, PRODUCT_VIDEO_QUOTES, PRODUCT_VIDEOS_MAX, PRODUCT_VIDEOS_SHOWN, quietWordsOf, shareWord, shownVideos, subjectRowsOf, unclearWhole, type ProductCard,
 } from './products-levels'
 import { OSSUR_CATALOGUE } from './products-fixture'
 
@@ -116,6 +116,22 @@ describe('the category\'s page, the hub', () => {
     expect(PRODUCTS_LEVEL_FIXTURES['liners-member']().category!.detail.unclear.options).toEqual([])
     // A frozen month keeps a tag and moves no count, and the page says so.
     expect(categoryFixture({ over: { now: '2026-11-20T08:00:00.000Z' } }).category!.detail.unclear.closed).toBe(true)
+  })
+
+  it('the couldn\'t-tell-which link says "all" only where the opened list draws every line that may print', () => {
+    expect([unclearWhole(6, false), unclearWhole(30, false), unclearWhole(31, false), unclearWhole(6, true)]).toEqual([true, true, false, false])
+    expect(page.detail.unclear).toMatchObject({ whole: true, openCount: 6 })
+    // Forty that may print: the opened list draws thirty, so the link never
+    // says "See all 40".
+    const base = linersUnclearTexts()[0]
+    const many: TextRead[] = Array.from({ length: 40 }, (_, i) => ({ ...base, key: `c:many-${i}`, commentId: `many-${i}`, text: 'This liner gave me a rash after a week, back to my old one now.', date: `2026-09-${String(28 - (i % 20)).padStart(2, '0')}` }))
+    const long = categoryFixture({ reads: { unclear: many } }).category!.detail.unclear
+    expect(long).toMatchObject({ whole: false, openCount: 30, more: 37 })
+    const opened = categoryFixture({ params: { unclear: 'all' }, reads: { unclear: many } }).category!.detail.unclear
+    expect(opened).toMatchObject({ whole: false, openCount: 30 })
+    expect(opened.lines).toHaveLength(30)
+    // A list longer than its read: never "all", whatever printed.
+    expect(categoryFixture({ reads: { unclearCut: true } }).category!.detail.unclear.whole).toBe(false)
   })
 
   it('the numbers: subjects open Market\'s pages at the month, groups open Voices, platforms from the month\'s market', () => {

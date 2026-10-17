@@ -53,6 +53,7 @@ export function UnclearCard({ detail, canTag, monthWords, monthName }: { detail:
   const u = detail.unclear
   const word = detail.name.toLowerCase()
   const all = u.lines.length + u.more
+  const comments = u.allComments ? ' comments' : null
   return (
     <section id={UNCLEAR_ID} aria-labelledby="unclear-title" className={cn(LIST_CARD, 'scroll-mt-6')}>
       <div className="flex items-start gap-3">
@@ -73,7 +74,12 @@ export function UnclearCard({ detail, canTag, monthWords, monthName }: { detail:
       ) : <p className="m-0 text-[13.5px] text-muted-foreground">None of their comments can be quoted here.</p>}
       {u.withheld > 0 ? <p className="m-0 text-[12.5px] text-muted-foreground"><span data-copy="figure">{fmtInt(u.withheld)}</span> more {u.withheld === 1 ? 'comment' : 'comments'} we do not quote here.</p> : null}
       {!canTag && u.videos > 0 ? <p className="m-0 text-[12.5px] text-muted-foreground">{PRODUCT_TAG_COPY.role}</p> : null}
-      {u.allHref ? <Link href={u.allHref} scroll={false} className={OLINK}>See all <span data-copy="figure">{fmtInt(all)}</span>{u.allComments ? ' comments' : null} →</Link> : null}
+      {/* "All" only where the opened list draws every line that may print
+          (`whole`); else what it does draw, the first N. */}
+      {u.fewerHref && !u.whole ? <p className="m-0 text-[12.5px] text-muted-foreground">The first <span data-copy="figure">{fmtInt(u.openCount)}</span> are listed here.</p> : null}
+      {u.allHref
+        ? <Link href={u.allHref} scroll={false} className={OLINK}>{u.whole ? <>See all <span data-copy="figure">{fmtInt(all)}</span>{comments}</> : <>See the first <span data-copy="figure">{fmtInt(u.openCount)}</span>{comments}</>} →</Link>
+        : null}
       {u.fewerHref ? <Link href={u.fewerHref} scroll={false} className={OLINK}>Show fewer</Link> : null}
     </section>
   )
