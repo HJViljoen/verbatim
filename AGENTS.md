@@ -255,7 +255,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
   ADDITIVE: `SubjectRead.headline?`, absent where the
   scrub left none, on a thin, held or failed read and on every read stored
   before v3, which print exactly as before; `subjectReadOf` and
-  `subjectReadLines` carry it and the panel does not print it. v3's prompt is
+  `subjectReadLines` carry it, and since 17 Oct Market's subject card and
+  the subject's page print it (a read without one prints its name, then
+  what it means). v3's prompt is
   tenant-neutral (the category words come from `WHAT_THEY_SELL`, else "what
   {company} sells"; no prosthetic part list; the coffee example models each
   rule it sits under: its meaning does not retell its saying, its headline
@@ -1060,12 +1062,54 @@ This version has breaking changes — APIs, conventions, and file structure may 
     are redirect stubs with no loader; `/dashboard/content` is no stub but
     the live Content page, which replaced This week's read there. ONE pure
     function maps every old address with its params, `redirectFor`
-    (`voice?theme=` → `market?conv=`,
+    (`voice?theme=` → `market/conversations/<theme>`,
     `competitive?vs=` → `voices?brand=`, `subjects?item=` →
-    `market?subject=`, a month → `market?period=month&month=`, Your moves'
-    `market?rec|item|ledger` → `moves?advice=`, `/dashboard?month=` too),
-    pinned by `lib/nav-redirects.test.ts`. A bare `/dashboard/market` is
-    Market now, so a link meaning Your moves must say `/dashboard/moves`.
+    `market/subjects/<item>`, a month → `market?period=month&month=`, Your
+    moves' `market?rec|item|ledger` → `moves?advice=`, `/dashboard?month=`
+    too, and Market's own `?conv=` / `?subject=`, below), pinned by
+    `lib/nav-redirects.test.ts`. A bare `/dashboard/market` is Market now, so
+    a link meaning Your moves must say `/dashboard/moves`.
+    **MARKET'S DEPTH IS PAGES (Heinrich, 16 and 17 Oct; the F2 boards).**
+    Market is a top layer and three kinds of page under it, each its own
+    address, written once in `lib/nav.ts` (`MARKET_WEEK_PATH`,
+    `marketSubjectPath` / `marketSubjectHref`, `marketConversationPath` /
+    `marketConversationHref`): `/dashboard/market/week` (the published read
+    in full), `/dashboard/market/subjects/<id>` (a tracked subject) and
+    `/dashboard/market/conversations/<conv>` (a registry id, or an old
+    link's slug, as `?conv=` took them). Each level page reads `?period=`
+    and `?month=`; the table's `?in=` and `?all=1` stay on the top page;
+    `?at=` is retired. Market stays the sidebar's active surface on every
+    one (`surfaceForPath`). Each has its own `loading.tsx`, keeps the shell
+    on a throw (`app/dashboard/error.tsx`) and prints one calm line with the
+    way back for an id Market does not follow, never a 404. Every stored
+    `market?conv=` and `market?subject=` (snapshots, sent emails, share
+    pages) redirects to its page FOR GOOD, other params kept and `?at=`
+    dropped, through `redirectFor` in the page itself (never
+    `next.config.ts`). Every builder that opened a Market panel now opens a
+    page: Market's `convHref` / `subjectHref` and its table, the flag card,
+    the Dashboard's Market and week tiles, the weekly email's lead
+    (`objectHref`), Voices, Content, Your moves, Settings › Your subjects and
+    the Agent. **THE BREADCRUMB AND ITS SWITCHERS.** On a level page the path
+    replaces the title in `PageBar` (its `crumbs`, `components/shell/crumbs.tsx`,
+    a client component fed plain data from `lib/pages/crumbs.ts`, so the
+    client-bundle guard holds): ancestors muted links at 500, a light slash
+    (palette A's muted at 45%: the board's warm `#B9B6AE` is a neutral the
+    drift guard refuses), the page itself the one ink h1 at 700, 26px on the
+    bar's 40px line; on a phone "‹ {parent}" at 14px/600 above a 24px title.
+    Every segment with siblings carries a 28px chevron (`aria-haspopup=
+    "menu"`), ancestors included; one with none is plain text, never a
+    disabled button. A subject's siblings are the tracked subjects in the top
+    page's order (`subjectNavOf`, `subjectMenu`: the ready ranked, the
+    unready below a hairline, unranked, U6; "Little talk so far" or
+    `SUBJECT_NOT_MEASURED` in words, never a figure); a conversation under a
+    READY subject (`placeSubject`) reads "Market / {subject} / {conversation}"
+    and lists that subject's Inside it, one with none "Market /
+    {conversation}" and the period's conversations in the table's order
+    (`conversationCrumbs`); the week's read has no chevron (`weekCrumbs`).
+    Every entry keeps the period. Keyboard: Enter or Space opens on the
+    current entry, the arrows, Home and End move, Escape closes and returns
+    focus, Tab or a click outside closes (`scripts/crumbs-keys.ts` drives it
+    in headless Chrome; the render tier presses no key).
     Parked pages leave clients through `TENANT_RETIRED` / `tenantAway` (the
     operator keeps them); Reports redirects into the Studio with its query
     (`?group=sent&item=`, `?view=`). Studio names a page key by
@@ -1289,8 +1333,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
     idea in a medical market, `printsMedicalLine`); Your moves (`topMoves`:
     Accept and Not for us for owners and admins, `mayDecideMoves`); and the
     Agent box (two questions to try, `agentTries`, from the read's frozen
-    `conversations`). Each tile's head link opens its page's panel in place
-    where the tile has an item, else the page; the Agent box has none either.
+    `conversations`). Each tile's head link opens what its item is, else the
+    page: on Market a conversation's or a subject's page (17 Oct), on the
+    other pages their panel in place; the Agent box has none either.
     There is no Subjects tile and no Competitive tile: the Competitive
     tile's "Named most" brands are the Voices tile's two brands named most
     unprompted (`NAMED_MOST`). The weekly email prints no "Named most" line
@@ -1338,10 +1383,83 @@ This version has breaking changes — APIs, conventions, and file structure may 
     recorded); a member is never told to accept or date anything. Each gap
     is said inside its part in one quiet line; `dashboardThinFixture` pins
     this.
-  - **Market** (T3; `lib/pages/v2/market.ts`, `app/dashboard/market/page.tsx`).
-    Nav key `market`, page key `overview`, unchanged: the `overview` module
-    (`overviewPage`) stays registered for stored snapshots, exports and the
-    monthly, on no route. Its week is the published read's run window plus
+  - **Market** (T3; analysis first, as pages, 17 Oct; `lib/pages/v2/market.ts`,
+    `app/dashboard/market/**`, `components/pages/v2/market/*`; boards
+    F2-Market, -Phone, -States, -Week, -Subject, -Subject-Switcher,
+    -Subject-Phone and -Conversation). Nav key `market`, page key
+    `overview`, unchanged: the `overview` module (`overviewPage`) stays
+    registered for stored snapshots, exports and the monthly, on no route.
+    `loadMarket` takes a `view` (`top`, `week`, `subject`, `conversation`;
+    the routes in the navigation bullet above) and reads only what that page
+    prints, through the same builders, so a page and the top layer never
+    disagree (`lib/pages/v2/market-statements.test.ts` pins each load's
+    statements offline: the top page's week 36, the month 28, a
+    conversation's page 40, a subject's 34, the week's read 15; today's
+    panels in place were 45 and 40). **TWO RULES ARE REVERSED (Heinrich, 16
+    Oct).** Design v2's "no model prose at the top of Market" is gone: the
+    week's read and each subject's read LEAD the top layer as stored
+    `week_read` prose, about 600 words above the first number (ruling 3),
+    and the numbers sit one layer down. The depth brief's "level 2 opens IN
+    PLACE, never a new page" is gone for Market: every Open is a page, and
+    Market no longer uses the T9 panel machinery (`InPlacePanel`,
+    `PanelSlot`, `panelPlacement`), which Voices, Your products, Content and
+    Your moves still use until they move over. Still true: no quote on the
+    top layer (quotes live on a page), decision 1, U6, the copy contract.
+    *The top page, This week*, top to bottom: the WEEK CARD (`weekCardOf`:
+    the published read's week in one line and its implications, up to
+    three, side by side and stacked on a phone, "Read the whole week" to
+    its page; thin and failed each say so in one line and open nothing, and
+    the card and the week's page share one thin rule: no line, no
+    implication, no story); WHAT THE MARKET IS TALKING ABOUT, one card per
+    tracked subject, two to a row from 1180 (`subjectCardsOf`: its v3
+    headline and what it means through `subjectReadOf`, where the tenant's
+    reads are on), with NO FIGURE in any state (Heinrich, 16 Oct): ready
+    with a headline, a read stored before headlines (its name, then what it
+    means), thin (code's line), not measured (`SUBJECT_NOT_MEASURED`, then
+    Inside it, up to three names), failed (`FAILED_EXPLAINED`, said once a
+    page, then Inside it, as an open one), ready with no read this month;
+    in the board's order (`subjectOrder` over `buildSubjectBoard`'s rows:
+    the ready ones biggest first by the month's videos about each, the
+    standing facts' order, then the ready ones not read this month, then
+    the unready, unranked); ALSO THIS WEEK, E2's three places small,
+    filled by today's rules (`weekLead`, `printableFlags`,
+    `pickWeekSides`, `earlierNewOf`, `alsoTalkedOf`) and opening each
+    conversation's page, the flag's chip alone ("Unusual this week", in the
+    eyebrow's place: decision 1 leaves no "3× its usual level"; no "Rising"
+    and no "New" chip, ruling 1), and what is new is the published read's
+    `newThisWeek`, so the card, the week's page and these never disagree;
+    THE NUMBERS BEHIND THE WEEK, the three side cards (what people do in
+    the comments, videos week by week, where it is said) in a row above
+    the full-width table, never a rail beside it (ruling 2), the table a
+    two-line list on a phone (name and videos, then subject and the month
+    beside the week) with no About chips (ruling 4). *This month and Over
+    time are drawn by no board*: the subject cards lead under the bar, no
+    week card and no Also this week, then today's numbers for the period
+    (the month's three biggest, or the market's months; the side cards; the
+    table), and This month still ends with its long-run read. Where the
+    week was asked for and its read could not be read, the failed week card
+    stands above the month. *A subject's page* (`buildSubjectPanel`,
+    `subjectDetailOf`, `loadSubjectDetail`, the 14 Oct panel's data and
+    builders moved into a page): Our read (the headline, what people are
+    saying beside what it means; else the state's line, the week read's
+    sentence under it where the tenant's reads are off); the numbers (this
+    week's share as k of n, the month's change from its `Verdict` alone, the
+    month's share, the conversations inside it; the one-base line; week by
+    week, the subject's videos in the three weekly windows by the week
+    tile's own rule, three bare counts; month by month; who is saying it,
+    each group "k of n"; what people did; where, the week beside the month;
+    three comments through the strict subject gate; the Agent); then the
+    biggest three conversations inside it as pages and "All N conversations
+    in {subject}" to the table filtered to it. A subject whose check has not
+    passed carries its name, why and its conversations by name, and NO
+    figure, line or chip count (U6). *A conversation's page* is E2's panel
+    whole (`loadConvPanel`, `convPageOf`), "Month by month" where the data
+    has months. *The week's page* is the published read in full
+    (`weekPageOf` over `weeklyReadView` after `hydrateData`): what
+    happened, each quote after the paragraph whose ref it carries, what it
+    means, new this week, worth watching, "Every conversation this week (N)"
+    to the top page's table, N the table's own total; no period switch.
+    Its week is the published read's run window plus
     the two equal windows before it (`weekWindows`, `MARKET_WEEKS`), cut by
     `WEEK_CUT_SURFACES` changes (`cutWindows`; the newest window is never
     cut). A conversation's counts are the category's videos, and the page
@@ -1357,9 +1475,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
     `MARKET_TABLE_FLOOR` (`POOL_FLOOR`, 3) of the period's category videos,
     ten until `?all=1`. A subject that prints no level says why
     (`unmeasuredOf`: `SUBJECT_NOT_MEASURED` while its check is open,
-    `FAILED_EXPLAINED`, or no reading in the month yet). `?conv=` takes a registry id or a slug;
-    `?subject=`, `?period=week|month|time`, `?month=` (`YYYY-MM` or a date),
-    `?at=` and `?in=` are read too (`marketParams`). THIS MONTH ENDS WITH
+    `FAILED_EXPLAINED`, or no reading in the month yet). A conversation's
+    page takes a registry id or a slug; `?period=week|month|time`, `?month=`
+    (`YYYY-MM` or a date) and, on the top page, `?in=` and `?all=1` are read
+    (`marketParams`). THIS MONTH ENDS WITH
     THE MONTH'S LONG-RUN READ (Heinrich, 13 Oct): below the conversation
     table, the last thing on the page, never at the top and never on This
     week or Over time (`MarketData.longRun`, `marketLongRunOf`,
@@ -1376,23 +1495,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
     each idea's months and videos are code's figures, and who they are
     about prints only where the brands are `counted`. No board draws it:
     the kit's card and head, the lead, then one row an idea (words left,
-    counts right). The lead card labels all three weeks' bars, as the side card and
-    the Dashboard's tile do, and its "What they're doing" never names the
-    conversation's own kind (`leadDoing`: a praise conversation's videos are
-    praise by definition). On a phone the table's month sits under the
-    week's figure in its cell, and its own column shows from 640, so no
-    figure column is cut at 390 (checked on Sealand's dump and the
-    long-label fixture, `marketLongRowsFixture`). E2-MARKET'S SHAPE IN EVERY
-    DATA STATE (parity pass): three top cards on This week, a row per
-    subject, the rail always a column, the weekly chart's eight slots
-    (`weeksAxis`, empty where a week is not drawn), and the table's Subject
-    and About columns. A card with nothing for it this week keeps its frame
-    and says so; with nothing new and no earlier week's new conversation
-    (`earlierNewOf`), the third card says "Nothing new this week" and names
-    the week's next biggest conversation not on the row under "Also talked
-    about" (`alsoTalkedOf`). A subject whose check is open keeps its row,
-    lists its conversations ("Inside it") and says `SUBJECT_NOT_MEASURED`
-    where its level goes. ONE PLACEMENT RULE, ON EVERY SURFACE THAT NAMES A
+    counts right). THE BOARDS' SHAPE IN EVERY DATA STATE (parity pass):
+    every subject card keeps its frame and its foot, the week card keeps
+    its frame thin or failed, Also this week its three places (a place
+    with nothing for it says so in its own card; with nothing new and no
+    earlier week's new conversation, the third names the week's next
+    biggest under "Also talked about"), the side cards their row (the
+    weekly chart's eight slots, `weeksAxis`, empty where a week is not
+    drawn), the table its Subject and About columns. ONE PLACEMENT RULE, ON EVERY SURFACE THAT NAMES A
     CONVERSATION'S SUBJECT (14 Oct): `placeSubject` over
     `loadSubjectPlacement` (`lib/pages/subject-place.ts`), on the
     conversation's member insights in the run the page reads, in three
@@ -1402,30 +1512,22 @@ This version has breaking changes — APIs, conventions, and file structure may 
     catches comments about other things and must never outbid an open one
     (`placementTiers`, `placeSubject`; until 14 Oct a failed one was never
     used). Market's
-    rows and table, Content's question cards and Also asked
+    cards, table and breadcrumbs, Content's question cards and Also asked
     (`readSubjects`, which until 14 Oct had its own one-tier rule over every
     active subject, failed ones included) and the legacy Voice surface
     (`loadPlacedSubjects`) all read it, so one conversation names one
     subject everywhere (`lib/pages/subject-place.test.ts` pins Market's
     `convOf` against Content's `placeConversations`). A name is not a
-    figure: a subject whose check is open keeps its row, its "Inside it"
-    and the table's Subject column, but prints no level, line, change or
-    chip count until its check clears (ruling U6); a failed subject keeps
-    its row, its panel and "Inside it" too, as an open one does, with
-    `FAILED_EXPLAINED` once, in its row (its panel then says "Not measured
-    yet."). The pipeline's written
+    figure: a subject whose check is open keeps its card, its page, its
+    "Inside it" and the table's Subject column, but prints no level, line,
+    change or chip count until its check clears (ruling U6); a failed
+    subject keeps all of them too, as an open one does, with
+    `FAILED_EXPLAINED` once a page (its card on the top page, its page
+    itself). The pipeline's written
     reads (`lib/written/pool.ts` `loadThemeSubjects`, `standing.ts`) still
     group by the one-tier `subjectForTheme` at write time, frozen into the
     stored read and replayed as sent, except the subjects' own reads, which
-    use `placeSubject`; no live page places a conversation from them. A
-    READY subject's panel has the conversation panel's blocks over its own
-    videos (members' comment citations dated in the period, on the market's
-    videos; `subjectDetailOf`, `loadSubjectDetail`, read only on
-    `?subject=`); where those are fewer than the level counts, one line
-    under the stats names the base. Its own read sits under Our read where
-    the tenant is switched on (else the week read's `panel.sentence`). The
-    week sits beside the month. An open or failed subject keeps the old
-    panel.
+    use `placeSubject`; no live page places a conversation from them.
   - **Voices** (T4; `lib/pages/v2/voices.ts`), on the reading month, its
     bar labelled where that is not the current month (decision 3, above).
     Groups are today's profile with this month's comment-dated videos: a
@@ -1662,7 +1764,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
     the subjects module's census (`lib/pages/subjects.ts` `loadOwnPosts`)
     still reads `is_client` or `source='owned'`, and `buildPlaybook` defaults
     to `clientSide: 'about'` everywhere but Content.
-  - **Panels at every width (T9).** A v2 panel opened from a card in a grid
+  - **Panels at every width (T9).** Voices, Your products, Content and Your
+    moves only: since 17 Oct Market opens pages, never a panel (the Market
+    bullet above), and the machinery stays for the four until they move
+    over. A v2 panel opened from a card in a grid
     is ONE child of that grid: cards take `panelItemOrder(i)`, the panel
     goes in a `PanelSlot` right after the clicked card, and
     `panelPlacement(index, layout)` (`components/v2/panel-place.ts`) gives
