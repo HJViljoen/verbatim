@@ -56,7 +56,6 @@ function monthBars(bars: readonly BrandMonthBar[]) {
 function Header({ page }: { page: BrandPage }) {
   const counted = page.state === 'counted'
   const tone = page.you ? 'you' : 'rival'
-  const n = page.month.n
   const v = page.verdict
   const nonAnswer = nonAnswerParts(v, 'pts')
   const prev = page.prevNamed
@@ -104,7 +103,9 @@ function Header({ page }: { page: BrandPage }) {
             {page.any ? (
               <>
                 <div data-copy="figure" className={FV}>{fmtInt(page.any.k)}</div>
-                <div className={FL}><span data-copy="level">of {fmtInt(n ?? page.any.n)} videos</span> named it at all</div>
+                {/* `k_any` of its own `n`, the row's (the root's panel's
+                    rule): never a k of one read over another's n. */}
+                <div className={FL}><span data-copy="level">of {fmtInt(page.any.n)} videos</span> named it at all</div>
                 <div className={FS}>what the figures below are of</div>
               </>
             ) : <p className={cn(FL, 'm-0 text-muted-foreground')}>Not read for {page.month.monthWords}.</p>}
@@ -253,7 +254,9 @@ function Numbers({ page }: { page: BrandPage }) {
           <VerdictLine page={page} />
         </div>
         <div className="flex min-w-0 flex-col gap-2 max-[1179px]:mt-6 max-sm:mt-[18px] max-sm:border-t max-sm:border-track max-sm:pt-[18px]">
-          <Caps>What people did in the comments{n > 0 ? <> · of its <Fig>{fmtInt(n)}</Fig></> : null}</Caps>
+          {/* Each cross's head names the cross's own base, the videos the
+              lens read (the root's panel's `crossN`), as its rows do. */}
+          <Caps>What people did in the comments{page.kinds.length > 0 ? <> · of its <Fig>{fmtInt(page.kinds[0].n)}</Fig></> : null}</Caps>
           {page.kinds.length > 0
             ? page.kinds.map((k) => <TickBarRow key={k.kind} name={k.label} value={fmtInt(k.k)} pct={k.n > 0 ? (100 * k.k) / k.n : 0} tone={tone} valueWidth="narrow" label={`${fmtInt(k.k)} of ${fmtInt(k.n)}`} />)
             : <p className="m-0 text-[13.5px] text-muted-foreground">Not read yet.</p>}
@@ -262,7 +265,7 @@ function Numbers({ page }: { page: BrandPage }) {
       </div>
       <div className="grid grid-cols-1 gap-x-10 gap-y-[26px] border-t border-track pt-6 max-sm:gap-y-0 max-sm:pt-[18px] min-[1180px]:grid-cols-3">
         <div className="flex min-w-0 flex-col gap-1.5">
-          <Caps className="mb-1">What its talk sits in{n > 0 && page.subjects.length > 0 ? <> · of its <Fig>{fmtInt(n)}</Fig></> : null}</Caps>
+          <Caps className="mb-1">What its talk sits in{page.subjects.length > 0 ? <> · of its <Fig>{fmtInt(page.subjects[0].n)}</Fig></> : null}</Caps>
           {page.subjects.map((s) => (
             <Link key={s.id} href={s.href} className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-[14px] text-foreground no-underline hover:bg-inner">
               <span className="inline-flex min-w-0 items-center gap-2"><LayersGlyph className="size-3.5 shrink-0 text-muted-foreground" />{s.label}</span>

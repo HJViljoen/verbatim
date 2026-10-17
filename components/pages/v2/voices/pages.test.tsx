@@ -166,6 +166,20 @@ describe('a brand\'s page (G3-Voices-Brand)', () => {
     expect(html).toContain('data-copy="stored" data-slot="pass_c_finding"')
   })
 
+  // A level is a k of its own n: named at all is the row's `k_any` of its
+  // `n` (never of another read's market count), and each cross's head names
+  // the base its rows are of (the lens's), as the root's panel did.
+  it('each figure is of its own base: named at all of the row\'s n, each cross of the lens\'s', () => {
+    const b = brandFixture()
+    const shifted = { ...b, month: { ...b.month, n: 321 }, kinds: b.kinds.map((k) => ({ ...k, n: 45 })), subjects: b.subjects.map((x) => ({ ...x, n: 45 })) }
+    const t = renderText(brand(shifted))
+    expect(t).toContain('named at all in 49 of 318')
+    expect(t).toContain('49 of 318 videos named it at all')
+    expect(t).not.toMatch(/of 321/)
+    expect(t).toContain('What people did in the comments · of its 45')
+    expect(t).toContain('What its talk sits in · of its 45 Cost & access 26 of 45')
+  })
+
   it('who talks about it: the groups and the creators, each row opening its page and ending in the chevron', () => {
     expect(text).toContain('The groups commenting on its videos A video can hold more than one group, so the counts overlap Long-time users upgrading Know what they want; fighting to get it paid for. 21 of 49')
     expect(text).toContain('Creators it comes up with Accounts with 3 or more of your market’s videos this month whose videos name it TA The Amputee Diaries YouTube · 96K subscribers 3 of its 49')

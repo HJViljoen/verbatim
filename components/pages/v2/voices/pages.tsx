@@ -36,7 +36,7 @@ export function brandMeta(page: BrandPage): ReactNode[][] {
   return [
     [levelBarMonth(page.month)],
     page.state === 'counted' && page.named ? [<>named without being asked in {lv(page.named.k, page.named.n)} videos</>] : [],
-    page.state === 'counted' && page.any ? [<>named at all in {lv(page.any.k, page.month.n ?? page.any.n)}</>] : [],
+    page.state === 'counted' && page.any ? [<>named at all in {lv(page.any.k, page.any.n)}</>] : [],
   ]
 }
 
