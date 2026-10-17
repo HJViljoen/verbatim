@@ -101,6 +101,8 @@ async function main() {
   if (!data) throw new Error(`--view ${asked}: root, group:<key>, brand:<key>, creator:<platform>/<account>, or group:first, brand:first, creator:first`)
   console.log(`${view}: ${Date.now() - t1} ms`)
   report(view)
+  // The page's calm line for an address it does not follow: nothing to draw.
+  if ('kind' in data && data.kind === 'missing') throw new Error(`${view}: the page says "${data.line}" (nothing written)`)
   writeFileSync(resolve(out), JSON.stringify(data, null, 2))
   console.log(`Wrote ${resolve(out)}`)
 }
