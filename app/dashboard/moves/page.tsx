@@ -8,7 +8,8 @@ import { maySeeStatements } from '@/lib/statements/visibility'
 import { MovesV2Page } from '@/components/pages/v2/moves'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Metadata } from 'next'
-import { surface } from '@/lib/nav'
+import { redirect } from 'next/navigation'
+import { redirectFor, surface } from '@/lib/nav'
 
 // The tab's title is the page's own name (finish-list item 25 polish; the root
 // layout's template adds ' · Verbatim').
@@ -26,11 +27,13 @@ export const maxDuration = 300
 // links, the briefs and the quarterly still read; this route reads its own
 // loader (lib/pages/v2/moves.ts).
 //
-// `?advice=` IS THE PAGE'S ONE SELECTION: a lineage opens that piece of advice
-// in place, `all` opens the advice record. The old `?rec=<id>` (four sent
-// emails and every digest until WP17), `?item=<lineage>` and `?ledger=all`
-// name Your moves at /dashboard/market, which sends them here as `?advice=`
-// (lib/nav.ts `redirectFor`); a recommendation id resolves to its lineage.
+// NOTHING OPENS IN PLACE (levels as pages, 17 Oct; the G6 boards): a piece
+// of advice, the advice record and a dated move are pages of their own
+// (lib/pages/v2/moves-address.ts). An old selection, `?advice=<lineage|id>`,
+// `?advice=all` or the `?item=` / `?rec=` / `?ledger=` it answered to before
+// Design v2, lands on its page FOR GOOD before anything is read
+// (lib/nav.ts `redirectFor`, one hop): stored snapshots, sent emails and
+// share pages carry them, and a stored link is never rewritten.
 //
 // WHO MAY DECIDE (lib/moves-access.ts): Accept, Not for us, Date a move and a
 // move's status are drawn for an owner or an admin only, and the actions
@@ -43,7 +46,10 @@ export default async function Page({
 }: {
   searchParams?: Promise<Record<string, string | undefined>>
 }) {
-  const params = (await searchParams) ?? {}
+  const sp = (await searchParams) ?? {}
+  const away = redirectFor('/dashboard/moves', sp)
+  if (away) redirect(away)
+  const params = sp
   const { supabase, clientId, role, operator } = await getSessionContext()
   const db = supabase as SupabaseClient
   const [data, statements] = await Promise.all([

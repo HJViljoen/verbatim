@@ -13,6 +13,7 @@ import {
   type MoveCard, type MovePoint, type MoveSlot, type MovesPageData, type ReadingLabel,
 } from '@/lib/pages/v2/moves'
 import { cn } from '@/lib/utils'
+import { MovesKindTile } from './level-tiles'
 import { MoveStatusControl } from './move-status'
 import { MONO, OLINK, SECTION_SUB, SECTION_TITLE } from './parts'
 
@@ -35,6 +36,11 @@ import { MONO, OLINK, SECTION_SUB, SECTION_TITLE } from './parts'
 //
 // The status control (`setMoveStatusAction`) is drawn for an owner or an
 // admin only.
+//
+// EACH MOVE OPENS AS ITS OWN PAGE (levels as pages, 17 Oct; board G6-Moves):
+// the flag tile names the level, the title and Open go to the move's page
+// (`/dashboard/moves/<id>`, the evidence), and "on {label}" opens what it is
+// on in Market (decision 4), its home.
 
 const W = 480
 const H = 140
@@ -81,7 +87,13 @@ export function lineGeometry(points: readonly MovePoint[], moveDay: string): { x
  * why a slot is empty (`axisLine`); a move with no line at all says why in its
  * sentence, and its chart is the axis and the mark alone.
  */
-function MoveChart({ card, readingMonth }: { card: MoveCard; readingMonth: string }) {
+export function MoveChart({ card, readingMonth, detail = false }: {
+  card: MoveCard
+  readingMonth: string
+  /** The move's page (G6-Moves-Move): each month named in full, its level
+   *  under it ("July / 46 of 455"). */
+  detail?: boolean
+}) {
   const slots = moveAxis(card, readingMonth)
   if (slots.length === 0) return null
   const { xs, ys, moveX } = slotGeometry(slots, card.day)
@@ -93,7 +105,7 @@ function MoveChart({ card, readingMonth }: { card: MoveCard; readingMonth: strin
   const line = axisLine(slots)
   return (
     <div className="flex flex-col gap-1.5">
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={`${card.label ?? 'It'} as a share of the market's videos${words ? `: ${words}` : ', no month drawn yet'}. The move was dated ${shortDate(card.day)}.`} className="block overflow-visible">
+      <svg viewBox={`0 0 ${W} ${detail ? H + 14 : H}`} width="100%" role="img" aria-label={`${card.label ?? 'It'} as a share of the market's videos${words ? `: ${words}` : ', no month drawn yet'}. The move was dated ${shortDate(card.day)}.`} className="block overflow-visible">
         <line x1={0} y1={BASE} x2={W} y2={BASE} className="stroke-border" />
         {moveX != null ? (
           <>
@@ -114,10 +126,19 @@ function MoveChart({ card, readingMonth }: { card: MoveCard; readingMonth: strin
               {s.point && y != null ? (
                 <>
                   <circle cx={xs[i]} cy={y} r={4} className={cn('stroke-foreground', s.point.soFar ? 'fill-card' : 'fill-foreground')} strokeWidth={2} />
-                  <text data-copy="figure" x={xs[i]} y={y - 10} textAnchor="middle" className={cn('fill-foreground font-mono text-[11.5px]', i === lastDrawn?.i ? 'font-semibold' : null)}>{sharePct(s.point.k, s.point.n)}</text>
+                  <text data-copy="figure" x={xs[i]} y={y - 10} textAnchor="middle" className={cn('fill-foreground font-mono text-[11.5px]', detail ? 'max-sm:text-[14px]' : null, i === lastDrawn?.i ? 'font-semibold' : null)}>{sharePct(s.point.k, s.point.n)}</text>
                 </>
               ) : null}
-              <text x={xs[i]} y={128} textAnchor="middle" className="fill-muted-foreground font-mono text-[10.5px]">{s.point ? pointMonth(s.point) : pointMonth({ month: s.month, soFar: false })}</text>
+              {detail ? (
+                <>
+                  {/* On a phone the chart scales to the column, so its words
+                      take a larger size in the chart's own units (G6-Moves-Move-Phone). */}
+                  <text x={xs[i]} y={127} textAnchor="middle" className="fill-muted-foreground font-mono text-[10.5px] max-sm:text-[13px]">{longMonth(s.month)}{s.point?.soFar ? ' so far' : ''}</text>
+                  {s.point ? <text data-copy="level" x={xs[i]} y={142} textAnchor="middle" className="fill-muted-foreground font-mono text-[10.5px] max-sm:text-[13px]">{fmtInt(s.point.k)} of {fmtInt(s.point.n)}</text> : null}
+                </>
+              ) : (
+                <text x={xs[i]} y={128} textAnchor="middle" className="fill-muted-foreground font-mono text-[10.5px]">{s.point ? pointMonth(s.point) : pointMonth({ month: s.month, soFar: false })}</text>
+              )}
             </g>
           )
         })}
@@ -140,7 +161,7 @@ function Level({ p }: { p: MovePoint }) {
 /** The one sentence a move earns. Its latest month carries the reading
  *  month's label where it is the reading month and not the current one
  *  ("September, the last full month", decision 3). */
-function MoveSentence({ card, reading }: { card: MoveCard; reading: ReadingLabel | null }) {
+export function MoveSentence({ card, reading }: { card: MoveCard; reading: ReadingLabel | null }) {
   if (card.unread) return <p className="m-0 text-[13.5px] leading-[1.5] text-muted-foreground">{MOVE_UNREAD[card.unread]}</p>
   if (card.pending) {
     // The months before a move dated after the reading month: the latest of
@@ -180,37 +201,57 @@ function MoveSentence({ card, reading }: { card: MoveCard; reading: ReadingLabel
 
 /** What a move is on: a subject is the client's own name for it, a theme the
  *  model's label for a conversation. */
+export function OnLabel({ card }: { card: Pick<MoveCard, 'kind' | 'label'> }) {
+  if (!card.label) return null
+  return card.kind === 'subject'
+    ? <span data-copy="quote">{card.label}</span>
+    : <span data-copy="subject" data-slot="pass_b_theme">{card.label}</span>
+}
+
+/** " · on {label}", the label opening what it is on in Market (decision 4). */
 function OnWhat({ card }: { card: MoveCard }) {
   if (!card.label) return null
   return (
     <>
       {' · on '}
-      {card.kind === 'subject'
-        ? <span data-copy="quote">{card.label}</span>
-        : <span data-copy="subject" data-slot="pass_b_theme">{card.label}</span>}
+      {card.onHref
+        ? <Link href={card.onHref} className="text-muted-foreground underline decoration-muted-foreground/40 underline-offset-[3px] hover:text-foreground"><OnLabel card={card} /></Link>
+        : <OnLabel card={card} />}
     </>
   )
 }
 
 const DOT: Record<MoveCard['status'], string> = { active: 'bg-you', done: 'bg-foreground', dropped: 'bg-comp' }
 
+/** A move's status chip: its dot and its word ("Active"). */
+export function MoveStatusChip({ status, className }: { status: MoveCard['status']; className?: string }) {
+  return (
+    <span className={cn('inline-flex shrink-0 items-center gap-1.5 rounded-full bg-inner px-2.5 py-1 text-[12px] font-semibold text-foreground', className)}>
+      <span aria-hidden className={cn('size-[7px] rounded-full', DOT[status])} />
+      {MOVE_STATUS_LABEL[status]}
+    </span>
+  )
+}
+
 function MoveCardView({ card, canDecide, reading }: { card: MoveCard; canDecide: boolean; reading: ReadingLabel }) {
   return (
     <article id={moveAnchor(card.id)} className={cn(CARD, 'scroll-mt-6')}>
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="m-0 text-[17px] font-semibold leading-[1.3] text-foreground"><span data-copy="quote">{card.title}</span></h3>
-          <p className="m-0 mt-0.5 text-[13px] leading-[1.4] text-muted-foreground">Dated {shortDate(card.day)}<OnWhat card={card} /></p>
+        <div className="flex min-w-0 items-start gap-3">
+          <MovesKindTile level="move" />
+          <div className="min-w-0">
+            <h3 className="m-0 text-[17px] font-semibold leading-[1.3] text-foreground">
+              <Link href={card.href} className="text-foreground no-underline underline-offset-[3px] hover:underline"><span data-copy="quote">{card.title}</span></Link>
+            </h3>
+            <p className="m-0 mt-0.5 text-[13px] leading-[1.4] text-muted-foreground">Dated {shortDate(card.day)}<OnWhat card={card} /></p>
+          </div>
         </div>
-        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-inner px-2.5 py-1 text-[12px] font-semibold text-foreground">
-          <span aria-hidden className={cn('size-[7px] rounded-full', DOT[card.status])} />
-          {MOVE_STATUS_LABEL[card.status]}
-        </span>
+        <MoveStatusChip status={card.status} />
       </div>
       <MoveChart card={card} readingMonth={reading.month} />
       <div className="mt-auto flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0 flex-1 basis-[260px]"><MoveSentence card={card} reading={reading} /></div>
-        {card.openHref ? <Link href={card.openHref} className={OLINK}>Open →</Link> : null}
+        <Link href={card.href} className={OLINK}>Open →</Link>
       </div>
       {canDecide ? <div className="border-t border-track pt-3"><MoveStatusControl id={card.id} status={card.status} /></div> : null}
     </article>

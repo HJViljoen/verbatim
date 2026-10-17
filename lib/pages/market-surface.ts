@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { adviceLanding, MOVES_PATH } from './v2/moves-address'
 
 import { recStatus, REC_STATUS_LABEL, type RecStatus } from '../calibration'
 import { gateTier, type GateTier } from '../curation'
@@ -2618,6 +2619,8 @@ export async function loadSubjects(supabase: SupabaseClient, clientId: string): 
 export { loadRegistryLabels }
 
 /** The ledger's own deep link, so the digest's `?rec=<id>` keeps landing on the
+ *  piece of advice it names (its own page since 17 Oct,
+ *  lib/pages/v2/moves-address.ts). Before that:
  *  row it names once that link points here. Your moves is at /dashboard/moves
  *  since Design v2 and names a row with `?advice=`; an old `?item=` or `?rec=`
  *  link to /dashboard/market lands there too (lib/nav.ts `redirectFor`).
@@ -2636,9 +2639,11 @@ export function marketSurfaceHref(lineageId?: string | null, params: Record<stri
   const dropped = new Set<string>([...OLD_SELECTION, 'advice'])
   for (const [k, v] of Object.entries(params)) if (typeof v === 'string' && v !== '' && !dropped.has(k)) q.set(k, v)
   const named = lineageId || OLD_SELECTION.map((k) => params[k]).find((v) => typeof v === 'string' && v !== '')
-  if (named) q.set('advice', named)
+  // Its page since 17 Oct (Your moves' levels are pages): the piece of
+  // advice's own address, or the record's for `all`, the other params kept.
+  const path = named ? adviceLanding(named) : MOVES_PATH
   const s = q.toString()
-  return s ? `/dashboard/moves?${s}` : '/dashboard/moves'
+  return s ? `${path}?${s}` : path
 }
 
 /**

@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { RETIRED_ADDRESSES, SURFACES, isMarketPage, redirectFor, type SearchParams } from './nav'
+import { ADVICE_RECORD_VALUE, advicePath, isMovesPage, movePath } from './pages/v2/moves-address'
 import { SETTINGS_ADDRESSES } from './settings/rail'
 import { ideaLanding, ideaRankParam, isContentPage } from './pages/v2/content-address'
 
@@ -85,13 +86,8 @@ const TABLE: readonly [string, string][] = [
   ['/dashboard/subjects?item=s1', '/dashboard/market/subjects/s1'],
   ['/dashboard/subjects?item=s1&questions=last_3', '/dashboard/market/subjects/s1?questions=last_3'],
   ['/dashboard/subjects?item=s1&month=2026-09', '/dashboard/market/subjects/s1?period=month&month=2026-09'],
-  // Your moves' old links on /dashboard/market → /dashboard/moves?advice=.
-  ['/dashboard/market?rec=rec-42', '/dashboard/moves?advice=rec-42'],
-  ['/dashboard/market?item=lin-7', '/dashboard/moves?advice=lin-7'],
-  ['/dashboard/market?item=lin-7#advice-lin-7', '/dashboard/moves?advice=lin-7#advice-lin-7'],
-  ['/dashboard/market?ledger=all', '/dashboard/moves?advice=all'],
-  ['/dashboard/market?ledger=all&item=lin-7', '/dashboard/moves?advice=lin-7'],
-  ['/dashboard/market?rec=rec-42&month=2026-09', '/dashboard/moves?advice=rec-42&month=2026-09'],
+  // Your moves' old links on /dashboard/market: the describe "Your moves"
+  // below (its levels are pages since 17 Oct).
   // Market's open panels are pages (17 Oct): every stored `?conv=` and
   // `?subject=` lands on its page, the other params kept, `?at=` dropped.
   ['/dashboard/market?conv=reg-123', '/dashboard/market/conversations/reg-123'],
@@ -116,7 +112,6 @@ const TABLE: readonly [string, string][] = [
   ['/dashboard/reports?group=sent&item=abc', '/dashboard/studio?group=sent&item=abc'],
   ['/dashboard/reports?view=x', '/dashboard/studio?view=x'],
   // An address that is no old page is not touched.
-  ['/dashboard/moves?advice=lin-7', '/dashboard/moves?advice=lin-7'],
   ['/dashboard/voices?brand=Ottobock', '/dashboard/voices?brand=Ottobock'],
 ]
 
@@ -201,16 +196,80 @@ describe('the five old reading pages are redirect stubs that ask the mapping', (
     expect(read('lib/nav.ts')).toMatch(/export function frontRedirect[\s\S]*?return redirectFor\('\/dashboard', params\)/)
   })
 
-  // Design v2 (T7): the page's own loader reads `?advice=` (a lineage, a
-  // recommendation id from an old `?rec=`, or `all` for the record), so the
-  // route hands it the params as they came.
-  it('Your moves reads `?advice=` itself, `all` as the advice record', async () => {
-    const src = read('app/dashboard/moves/page.tsx')
-    expect(src).toContain('loadMovesPage({ supabase, clientId, reading: readingHandle(clientId), params }')
-    const v2 = await import('./pages/v2/moves')
+})
+
+// ---- Your moves (levels as pages, 17 Oct; the G6 boards) ----------------------
+//
+// A piece of advice, the advice record and a dated move are pages
+// (lib/pages/v2/moves-address.ts). Every old selection, on Your moves' own
+// address and on Market's (where Your moves lived until Design v2), lands on
+// its page in one hop, every other param kept.
+describe('Your moves: every old selection lands on its page, in one hop', () => {
+  const MOVES_TABLE: readonly [string, string][] = [
+    // Your moves' old links on /dashboard/market, straight to the page.
+    ['/dashboard/market?rec=rec-42', '/dashboard/moves/advice/rec-42'],
+    ['/dashboard/market?item=lin-7', '/dashboard/moves/advice/lin-7'],
+    ['/dashboard/market?item=lin-7#advice-lin-7', '/dashboard/moves/advice/lin-7#advice-lin-7'],
+    ['/dashboard/market?ledger=all', '/dashboard/moves/advice'],
+    ['/dashboard/market?ledger=all&item=lin-7', '/dashboard/moves/advice/lin-7'],
+    ['/dashboard/market?rec=rec-42&month=2026-09', '/dashboard/moves/advice/rec-42?month=2026-09'],
+    // Its own `?advice=` (a lineage, a recommendation id, `all`), and the
+    // three names it answered to before Design v2.
+    ['/dashboard/moves?advice=lin-7', '/dashboard/moves/advice/lin-7'],
+    ['/dashboard/moves?advice=lin-7#advice-panel', '/dashboard/moves/advice/lin-7#advice-panel'],
+    ['/dashboard/moves?advice=rec-42', '/dashboard/moves/advice/rec-42'],
+    ['/dashboard/moves?advice=all', '/dashboard/moves/advice'],
+    ['/dashboard/moves?advice=all#advice-record', '/dashboard/moves/advice#advice-record'],
+    ['/dashboard/moves?ledger=all', '/dashboard/moves/advice'],
+    ['/dashboard/moves?item=lin-7&ledger=all', '/dashboard/moves/advice/lin-7'],
+    ['/dashboard/moves?rec=rec-42', '/dashboard/moves/advice/rec-42'],
+    ['/dashboard/moves?advice=lin-7&item=other', '/dashboard/moves/advice/lin-7'],
+    ['/dashboard/moves?advice=&rec=rec-9', '/dashboard/moves/advice/rec-9'],
+    ['/dashboard/moves?advice=lin-7&horizon=last_3', '/dashboard/moves/advice/lin-7?horizon=last_3'],
+    ['/dashboard/moves?month=2026-09&advice=all', '/dashboard/moves/advice?month=2026-09'],
+    // The pages themselves are not touched.
+    ['/dashboard/moves', '/dashboard/moves'],
+    ['/dashboard/moves?month=2026-09', '/dashboard/moves?month=2026-09'],
+    ['/dashboard/moves/advice', '/dashboard/moves/advice'],
+    ['/dashboard/moves/advice?all=1', '/dashboard/moves/advice?all=1'],
+    ['/dashboard/moves/advice/lin-7', '/dashboard/moves/advice/lin-7'],
+    ['/dashboard/moves/m-1?video=v1#video-v1', '/dashboard/moves/m-1?video=v1#video-v1'],
+  ]
+
+  it('holds each old link once', () => {
+    expect(new Set(MOVES_TABLE.map(([from]) => from)).size).toBe(MOVES_TABLE.length)
+    for (const [from] of MOVES_TABLE) expect(TABLE.map(([f]) => f), from).not.toContain(from)
+  })
+
+  it.each(MOVES_TABLE)('%s → %s', (from, to) => {
+    expect(decodeURIComponent(land(from))).toBe(decodeURIComponent(to))
+  })
+
+  it('lands every one on a page Your moves serves, in one hop: never a chain or a loop', () => {
+    for (const [from] of MOVES_TABLE) {
+      const { path, params } = request(from)
+      const to = redirectFor(path, params)
+      if (to === null) continue
+      const next = request(to)
+      expect(isMovesPage(next.path), `${from} → ${to}`).toBe(true)
+      expect(redirectFor(next.path, next.params), `${from} → ${to}`).toBeNull()
+    }
+  })
+
+  it('names the advice record as the legacy ledger did, and writes each page\'s address once', async () => {
     const { LEDGER_ALL_VALUE } = await import('./pages/market-surface')
-    expect(v2.ADVICE_PARAM).toBe('advice')
-    expect(v2.ADVICE_RECORD).toBe(LEDGER_ALL_VALUE)
+    expect(ADVICE_RECORD_VALUE).toBe(LEDGER_ALL_VALUE)
+    expect(advicePath('a b/c')).toBe('/dashboard/moves/advice/a%20b%2Fc')
+    expect(movePath('m-1')).toBe('/dashboard/moves/m-1')
+    expect(isMovesPage('/dashboard/moves/advice/x/y')).toBe(false)
+    expect(isMovesPage('/dashboard/market')).toBe(false)
+  })
+
+  it('the root sends an old selection on before it reads anything, and the level pages read their own', () => {
+    expect(read('app/dashboard/moves/page.tsx')).toMatch(/redirectFor\('\/dashboard\/moves', sp\)[\s\S]*getSessionContext\(/)
+    expect(read('app/dashboard/moves/advice/page.tsx')).toContain('loadRecordPage(')
+    expect(read('app/dashboard/moves/advice/[id]/page.tsx')).toContain('loadAdvicePage(')
+    expect(read('app/dashboard/moves/[id]/page.tsx')).toContain('loadMovePage(')
   })
 })
 

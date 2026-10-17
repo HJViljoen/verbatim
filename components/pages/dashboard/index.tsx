@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { advicePath } from '@/lib/pages/v2/moves-address'
 import { Fragment, type ReactNode } from 'react'
 import { HowToRead } from '@/components/how-to-read'
 import { ExportMenu, ExportScope } from '@/components/export-menu'
@@ -116,7 +117,7 @@ const hero: R = (d, mode) => {
   const claimEvidence = h.oneThing && h.voices > 0
     // The link opens the advice in place on Your moves, so its words name
     // Your moves (the voices are in the advice's panel there).
-    ? { voices: h.voices, platforms: h.platforms, quotes: h.quotes.map((q) => q.text), href: `/dashboard/moves?advice=${encodeURIComponent(h.oneThing.id)}`, hrefLabel: 'See this advice in Your moves →' }
+    ? { voices: h.voices, platforms: h.platforms, quotes: h.quotes.map((q) => q.text), href: advicePath(h.oneThing.id), hrefLabel: 'See this advice in Your moves →' }
     : null
   return (
     <Tile exportKey="dashboard.hero" col={7} row={3} variant="hero" distribute="between" eyebrow="Executive brief · this update" meta={weekdayDate(d.runDate)}
@@ -299,7 +300,7 @@ const recommendation: R = ({ hero: h }, mode) => {
       ) : undefined}
       footer={h.oneThing ? (
         app ? (
-          <Link href={`/dashboard/moves?advice=${encodeURIComponent(h.oneThing.id)}`} className="after:absolute after:inset-0">
+          <Link href={advicePath(h.oneThing.id)} className="after:absolute after:inset-0">
             {grounded ? `${grounded} →` : 'Why, and the voices →'}
           </Link>
         ) : (grounded ?? undefined)
@@ -412,7 +413,7 @@ function BriefBody({ d, mode }: { d: D; mode: RenderMode }) {
           <p className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{priorityLabel(h.oneThing.priority)}</p>
           <p className="mt-1 text-[13.5px] font-semibold">{h.oneThing.title}</p>
           <p className="mt-1 text-[12.5px] text-secondary-foreground">{h.oneThing.reasoning}</p>
-          {app && <Link href={`/dashboard/moves?advice=${encodeURIComponent(h.oneThing.id)}`} className="mt-2 inline-block text-[12px] font-medium underline underline-offset-2">See the full picture →</Link>}
+          {app && <Link href={advicePath(h.oneThing.id)} className="mt-2 inline-block text-[12px] font-medium underline underline-offset-2">See the full picture →</Link>}
         </div>
       )}
       {h.quotes.length > 0 && (

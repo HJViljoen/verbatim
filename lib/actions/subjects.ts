@@ -122,7 +122,8 @@ function revalidateSubjects(): void {
   revalidatePath('/dashboard')
   revalidatePath('/dashboard/settings')
   revalidatePath('/dashboard/settings/subjects')
-  revalidatePath('/dashboard/moves')
+  // Every page under Your moves (its levels are pages since 17 Oct).
+  revalidatePath('/dashboard/moves', 'layout')
 }
 
 /** The refusal a reader who may not change the set gets, in the same words the

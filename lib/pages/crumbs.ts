@@ -10,9 +10,11 @@
 
 /** The prose slot a label is replayed from, where it is model prose written
  *  elsewhere (a conversation's label is Pass B's; a post idea's title is the
- *  post-ideas writer's). Null for a name a person gave (a subject's) or a
- *  page's own words. */
-export type CrumbSlot = 'pass_b_theme' | 'post_idea' | null
+ *  post-ideas writer's; a piece of advice's title, Pass D-b's, drawn as a
+ *  stored node). `quote` marks a person's own words that are not a name we
+ *  gave (a dated move's title, the client's). Null for a name a person gave
+ *  (a subject's) or a page's own words. */
+export type CrumbSlot = 'pass_b_theme' | 'post_idea' | 'pass_d_b_recommendation' | 'quote' | null
 
 /** One entry in a switcher: a sibling page, the period kept in its address. */
 export interface CrumbItem {
@@ -37,9 +39,14 @@ export interface CrumbMenu {
   /** Below a hairline, unranked: the subjects whose check has not passed
    *  (ruling U6). */
   below?: CrumbItem[]
-  /** The board's wide menu (460px), for long entries such as a post idea's
-   *  title (G5-Content-Idea-Switcher). */
-  wide?: boolean
+  /** Above a hairline, before `items`: the page itself where the set does not
+   *  hold it (Your moves: a piece of advice opened from the record, ticked
+   *  above the advice waiting). */
+  above?: CrumbItem[]
+  /** A menu wider than Market's 320px, its board's width: 460 for a post
+   *  idea's title (G5-Content-Idea-Switcher), 400 for Your moves' advice and
+   *  its priority note (G6). */
+  wide?: 400 | 460
 }
 
 /** One segment of the path. The last is the page itself (no `href`). */
@@ -54,4 +61,4 @@ export interface Crumb {
 
 /** Whether a menu holds anything to switch to. */
 export const hasSiblings = (m: CrumbMenu | null | undefined): m is CrumbMenu =>
-  m != null && m.items.length + (m.below?.length ?? 0) > 0
+  m != null && m.items.length + (m.below?.length ?? 0) + (m.above?.length ?? 0) > 0

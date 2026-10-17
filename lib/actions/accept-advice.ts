@@ -102,7 +102,8 @@ export async function acceptAdvice(lineageId: string, title: string, datedOn?: s
   const status = await setRecommendationStatus(rec.id as string, 'acted_on')
   // Your moves (/dashboard/moves since Design v2), the Dashboard, and Market,
   // which took Your market's moves line with its address.
-  revalidatePath('/dashboard/moves')
+  // Every page under Your moves (its levels are pages since 17 Oct).
+  revalidatePath('/dashboard/moves', 'layout')
   revalidatePath('/dashboard')
   revalidatePath('/dashboard/market')
   if (!status.ok) return { ok: false, message: `${said} ${status.message}`.trim() }

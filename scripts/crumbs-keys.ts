@@ -4,7 +4,8 @@
 // (components/shell/crumbs.tsx) with esbuild, mounts it in headless Chrome
 // over the subject page's fixture, and drives it: Enter and Space open it on
 // the current entry, the arrows, Home and End move, Escape closes and hands
-// the chevron its focus back, Tab and a click outside close it.
+// the chevron its focus back, Tab and a click outside close it; then Your
+// moves' advice switcher, whose page sits above the set (`CrumbMenu.above`).
 //
 //   node --import tsx scripts/crumbs-keys.ts
 //
@@ -14,6 +15,7 @@ import { build } from 'esbuild'
 import { resolve } from 'path'
 import { withBrowser } from '../lib/render/chromium'
 import { marketConversationFixture } from '../lib/pages/v2/market-fixture'
+import { adviceThinFixture } from '../lib/pages/v2/moves-levels-fixture'
 
 const ROOT = resolve(__dirname, '..')
 
@@ -55,7 +57,8 @@ async function bundle(): Promise<string> {
 async function main() {
   const js = await bundle()
   const crumbs = marketConversationFixture(1).crumbs!
-  const html = `<!doctype html><html><body><div id="root"></div><script type="application/json" id="crumbs">${JSON.stringify(crumbs).replace(/</g, '\\u003c')}</script><script>${js}</script></body></html>`
+  const pageOf = (c: unknown) => `<!doctype html><html><body><div id="root"></div><script type="application/json" id="crumbs">${JSON.stringify(c).replace(/</g, '\\u003c')}</script><script>${js}</script></body></html>`
+  const html = pageOf(crumbs)
   const steps: [string, boolean][] = []
   await withBrowser(async (page) => {
     await page.setContent(html, { waitUntil: 'load' })
@@ -109,6 +112,31 @@ async function main() {
     await page.keyboard.press('Enter')
     a = await active()
     steps.push(['The ancestor\'s chevron opens the subjects on the subject ticked', a.checked === 'true' && a.label.startsWith('Fit & comfort')])
+
+    // AN ENTRY ABOVE THE SET (Your moves, 17 Oct): a piece of advice opened
+    // from the record is ticked above a hairline, over the advice waiting,
+    // with the record under another. The keys walk all three groups as one.
+    await page.setContent(pageOf(adviceThinFixture().crumbs), { waitUntil: 'load' })
+    const adviceChevron = (await page.$$('[data-crumb-chevron]')).pop()!
+    await adviceChevron.focus()
+    await page.keyboard.press('Enter')
+    a = await active()
+    steps.push(['Above the set: Enter opens on the piece ticked above the hairline', a.checked === 'true' && a.label.startsWith('Create an Össur Access Navigator')])
+    await page.keyboard.press('ArrowDown')
+    a = await active()
+    steps.push(['…ArrowDown crosses the hairline to the first piece waiting', a.label.startsWith('Set up a reimbursement help desk')])
+    await page.keyboard.press('End')
+    a = await active()
+    steps.push(['…End reaches the record under the other hairline', a.label.startsWith('The advice record, all 65')])
+    await page.keyboard.press('Home')
+    a = await active()
+    steps.push(['…Home returns to the piece above', a.label.startsWith('Create an Össur Access Navigator')])
+    await page.keyboard.press('ArrowUp')
+    a = await active()
+    steps.push(['…ArrowUp from it wraps to the record', a.label.startsWith('The advice record, all 65')])
+    await page.keyboard.press('Escape')
+    a = await active()
+    steps.push(['…Escape closes it and gives its chevron the focus', (await menuOpen()) === 0 && a.tag === 'BUTTON' && a.label.startsWith('Switch to another piece of advice')])
   })
   let failed = 0
   for (const [name, ok] of steps) {

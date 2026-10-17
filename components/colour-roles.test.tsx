@@ -18,7 +18,9 @@ import { ContentPostsPage } from '@/components/pages/v2/content/posts-page'
 import { contentIdeaFixture, contentPostsFixture, contentRepliesFixture } from '@/lib/pages/v2/content-levels-fixture'
 import { contentFixture } from '@/lib/pages/v2/content-fixture'
 import { MovesV2Page } from './pages/v2/moves'
-import { movesFixture, movesOpenFixture, statementsV2 } from '@/lib/pages/v2/moves-fixture'
+import { movesFixture, statementsV2 } from '@/lib/pages/v2/moves-fixture'
+import { adviceFixture, moveFixture } from '@/lib/pages/v2/moves-levels-fixture'
+import { MovesAdvicePage, MovesMovePage } from './pages/v2/moves/levels'
 import { ProductsTab } from './pages/settings/products'
 import { productsFixtureRead } from './pages/settings/products/fixture'
 import { productSettingsView } from '@/lib/settings/products'
@@ -122,7 +124,8 @@ describe('the bans that hold with more colour, on the pages', () => {
     ['content, worth a reply', render(<ContentRepliesPage data={contentRepliesFixture()} />), true],
     ['content, your posts', render(<ContentPostsPage data={contentPostsFixture()} />), false],
     ['your moves', render(<MovesV2Page data={movesFixture()} statements={statementsV2()} />), false],
-    ['your moves, advice open', render(<MovesV2Page data={movesOpenFixture()} statements={statementsV2()} />), false],
+    ['your moves, a piece of advice', render(<MovesAdvicePage page={adviceFixture()} />), false],
+    ['your moves, a dated move', render(<MovesMovePage page={moveFixture()} />), false],
     ['settings, your products', render(<ProductsTab view={productSettingsView(productsFixtureRead({}), { selected: null, canEdit: true })} />), false],
     ['settings, your subjects', render(<YourSubjectsTab view={yourSubjectsView(subjectsFixtureRows(), true)} />), false],
   ]

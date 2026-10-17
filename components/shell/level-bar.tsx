@@ -31,9 +31,12 @@ export type LevelKind = 'subject' | 'conversation' | 'week' | 'category' | 'prod
 // neutral (evidence, as a conversation is). `LevelTile` draws all five.
 
 /** A level another page names and draws its own tile for (depth as pages,
- *  17 Oct): Content's post idea, reply list and your posts. Closed, so a
- *  typo is a compile error: a page that moves over adds its own. */
-export type PageLevelKind = 'idea' | 'replies' | 'posts'
+ *  17 Oct): Content's post idea, reply list and your posts; Your moves'
+ *  piece of advice, dated move and advice record. Closed, so a typo is a
+ *  compile error: a page that moves over adds its own. */
+export type PageLevelKind =
+  | 'idea' | 'replies' | 'posts'
+  | 'advice' | 'move' | 'record'
 
 /** `LevelTile`'s levels (Market's three, Your products' two) take no tile;
  *  another page's level must bring its own, so a level `LevelTile` cannot

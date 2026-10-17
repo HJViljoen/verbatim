@@ -4,11 +4,10 @@ import { readingMonthLabel } from '../../reading/month-label'
 import { planCard } from '../../ask/plan-cards'
 import type { ClaimResult } from '../../ask/types'
 import { READING_VERSION, type StatementReading, type StatementsBlockData } from '../../statements/types'
-import { buildAdviceRows, type RecCopy } from '../market-surface'
+import type { RecCopy } from '../market-surface'
 import {
   adviceHistory,
   moveCards,
-  recordRows,
   type AdviceCard,
   type MovesPageData,
 } from './moves'
@@ -80,7 +79,7 @@ export const DESK: AdviceCard = {
   history: HISTORY(L_DESK),
   restsOn: [
     { id: 'mi-access', kind: 'market', title: 'Access, not the device, decides who gets fitted', videos: 286, anchor: 'conclusion-mi-access' },
-    { id: 'mi-families', kind: 'market', title: 'Families are a growing part of the buying decision', videos: 45, anchor: 'conclusion-mi-families' },
+    { id: 'mi-families', kind: 'market', title: 'Families are part of the buying decision', videos: 45, anchor: 'conclusion-mi-families' },
     { id: 'ci-ottobock', kind: 'rival', title: 'Most of Ottobock’s talk is about getting a knee paid for', videos: null, anchor: null },
   ],
   quote: null,
@@ -223,16 +222,15 @@ export function movesFixture(over: Partial<MovesPageData> = {}): MovesPageData {
     readingAt: OCT_13,
     canDecide: true,
     counts: { waiting: 3, dated: 3, plans: 1 },
-    advice: { cards: [DESK, LINER, SWEAT], more: 0, open: null, gone: false, total: 23, acted: 4 },
+    advice: { cards: [DESK, LINER, SWEAT], more: 0, total: 23, acted: 4 },
     moves: { cards: MOVE_CARDS, recorded: true },
     plan: PLAN,
     conclusions: [
       { id: 'mi-access', title: 'Access, not the device, decides who gets fitted', videos: 286, advice: [{ lineageId: L_DESK, title: DESK.title }] },
       { id: 'mi-liners', title: 'Liners are treated as consumables that nobody explains', videos: 117, advice: [{ lineageId: L_LINER, title: LINER.title }, { lineageId: L_SWEAT, title: SWEAT.title }] },
-      { id: 'mi-families', title: 'Families are a growing part of the buying decision', videos: 45, advice: [{ lineageId: L_DESK, title: DESK.title }] },
+      { id: 'mi-families', title: 'Families are part of the buying decision', videos: 45, advice: [{ lineageId: L_DESK, title: DESK.title }] },
       { id: 'mi-athletes', title: 'Athletes carry the most shared stories in the market', videos: 235, advice: [] },
     ],
-    record: { open: false, rows: [] },
     dating: {
       datable: true,
       today: '2026-10-13',
@@ -246,28 +244,12 @@ export function movesFixture(over: Partial<MovesPageData> = {}): MovesPageData {
   }
 }
 
-/** The board E6-Moves-Open: the first piece opened in place. */
-export function movesOpenFixture(): MovesPageData {
-  const base = movesFixture()
-  return { ...base, advice: { ...base.advice, open: { card: DESK_OPEN, index: 0, waiting: true } } }
-}
-
-/** The advice record opened (`?advice=all`): every piece, in the ledger's
- *  order, the July piece declined on 2 Aug. */
-export function movesRecordFixture(): MovesPageData {
-  const base = movesFixture()
-  const rows = buildAdviceRows(copies(), [
-    { id: 'd-1', lineage_id: L_OLD, status: 'dismissed', decided_at: '2026-08-02T10:00:00.000Z' },
-  ])
-  return { ...base, record: { open: true, rows: recordRows(rows) } }
-}
-
 /** A tenant with nothing dated and no plan, and no advice waiting (Sealand's
  *  shape with its advice decided). */
 export function movesQuietFixture(): MovesPageData {
   return movesFixture({
     counts: { waiting: 0, dated: 0, plans: 0 },
-    advice: { cards: [], more: 0, open: null, gone: false, total: 64, acted: 64 },
+    advice: { cards: [], more: 0, total: 64, acted: 64 },
     moves: { cards: [], recorded: true },
     plan: null,
     conclusions: [],
@@ -319,7 +301,7 @@ export function movesThinFixture(): MovesPageData {
   ]
   return movesFixture({
     counts: { waiting: 4, dated: 1, plans: 0 },
-    advice: { cards, more: 1, open: null, gone: false, total: 65, acted: 2 },
+    advice: { cards, more: 1, total: 65, acted: 2 },
     moves: { cards: THIN_MOVE, recorded: true },
     plan: null,
     conclusions: [
@@ -329,22 +311,6 @@ export function movesThinFixture(): MovesPageData {
       { id: 'mi-friction', title: 'Hope sits beside friction', videos: 74, advice: [] },
     ],
   })
-}
-
-/** The thin state with the first piece open: no comment can be shown. */
-export function movesThinOpenFixture(): MovesPageData {
-  const base = movesThinFixture()
-  return { ...base, advice: { ...base.advice, open: { card: { ...base.advice.cards[0], quote: null }, index: 0, waiting: true } } }
-}
-
-/** The thin state opened, its piece raised by the last `n` of the latest
- *  nine updates (the history row's phone and narrow-column cases). */
-export function movesHistoryFixture(n: number): MovesPageData {
-  const days = ['2026-08-10', '2026-08-17', '2026-08-24', '2026-08-31', '2026-09-07', '2026-09-14', '2026-09-21', '2026-09-28', '2026-10-05', '2026-10-12']
-  const dates = days.slice(-n)
-  const base = movesThinOpenFixture()
-  const card = { ...base.advice.open!.card, history: { dates, streak: n, since: dates[0], recent: Array.from({ length: 9 }, (_, i) => i >= 9 - n) } }
-  return { ...base, advice: { ...base.advice, open: { ...base.advice.open!, card } } }
 }
 
 /** Every read that can fail, failed on one load: each section says so once. */

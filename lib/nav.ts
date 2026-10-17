@@ -3,6 +3,7 @@ import { fullDate } from './format'
 import type { PageKey } from './renderables/types'
 import type { SessionContext } from './auth'
 import { productsCategoryPath, productsProductPath } from './pages/v2/products-address'
+import { adviceLanding } from './pages/v2/moves-address'
 
 /**
  * The shell's one table (Phase 1 WP9, items 42 and 38a, decision C).
@@ -475,10 +476,31 @@ export interface RedirectKnown {
   productGroup?: (productId: string) => string | null
 }
 
+// ---- YOUR MOVES (levels as pages, 17 Oct; the G6 boards) -------------------
+//
+// A piece of advice, the advice record and a dated move are pages now
+// (lib/pages/v2/moves-address.ts). Every older selection lands on its page
+// in ONE hop, every other param kept: Your moves' own `?advice=` (a lineage,
+// a recommendation id, or `all` for the record), the three it answered to
+// before Design v2 (`?item=`, `?rec=`, `?ledger=`), and the same three on
+// Market's address, where Your moves lived until Design v2.
+
 /** Your moves' legacy deep links on `/dashboard/market`, in the order one wins
  *  over another: `?item=<lineage>` (the ledger's row), `?rec=<id>` (the
  *  digest's, four sent emails), `?ledger=all` (Show all). */
 const MOVES_PARAMS = ['item', 'rec', 'ledger'] as const
+/** Your moves' selection on its own address: `?advice=` first, then the
+ *  three above. */
+const MOVES_OWN_PARAMS = ['advice', ...MOVES_PARAMS] as const
+
+/** The first of `keys` a link carries, landed on its page (`all`, the record;
+ *  else that piece of advice), those keys dropped and the rest kept; null
+ *  where it carries none. */
+function movesRedirect(params: SearchParams, keys: readonly string[]): string | null {
+  const advice = keys.map((k) => value(params[k])).find((v) => v !== undefined)
+  return advice === undefined ? null : withQuery(adviceLanding(advice), remap(params, keys))
+}
+// ---- (end of Your moves) ----------------------------------------------------
 
 /** A param's value, a repeated key's first; an empty one is no value. */
 function value(v: string | string[] | undefined): string | undefined {
@@ -552,7 +574,8 @@ export function contentRedirect(params: SearchParams = {}): string | null {
  * `lib/nav-redirects.test.ts` holds it to a table of old links.
  *
  *   /dashboard?month=M          → /dashboard/market?period=month&month=M
- *   /dashboard/market?item=L    → /dashboard/moves?advice=L   (also ?rec=, ?ledger=)
+ *   /dashboard/market?item=L    → /dashboard/moves/advice/L   (also ?rec=; ?ledger=all → /dashboard/moves/advice)
+ *   /dashboard/moves?advice=L   → /dashboard/moves/advice/L   (also ?item=, ?rec=; `all` → /dashboard/moves/advice)
  *   /dashboard/market?conv=C    → /dashboard/market/conversations/C   (17 Oct)
  *   /dashboard/market?subject=S → /dashboard/market/subjects/S        (17 Oct)
  *   /dashboard/overview?month=M → /dashboard/market?period=month&month=M
@@ -570,7 +593,8 @@ export function contentRedirect(params: SearchParams = {}): string | null {
  * month (Your market, Conversation, Subjects, the Dashboard's old link) gets
  * `period=month` with it. Null means the address still serves its own page:
  * the Dashboard without a month, Market without Your moves' params or an open
- * panel's, and any address this table does not know. The panel redirects are
+ * panel's, Your moves without an old selection, and any address this table
+ * does not know. The panel redirects are
  * permanent: stored snapshots, emails and share pages carry `?conv=` and
  * `?subject=`, and a stored link is never rewritten.
  *
@@ -584,8 +608,9 @@ export function redirectFor(path: string, params: SearchParams = {}, known: Redi
     case '/dashboard':
       return value(params.month) === undefined ? null : redirectFor('/dashboard/overview', params)
     case '/dashboard/market': {
-      const advice = MOVES_PARAMS.map((k) => value(params[k])).find((v) => v !== undefined)
-      if (advice !== undefined) return withQuery(surface('moves').href, remap(params, MOVES_PARAMS, { advice }))
+      // Your moves' old deep links, straight to their page (one hop).
+      const moves = movesRedirect(params, MOVES_PARAMS)
+      if (moves) return moves
       // MARKET'S OPEN PANELS ARE PAGES (17 Oct): `?conv=` and `?subject=`
       // opened a panel in place, and stored snapshots, sent emails and share
       // pages carry them, so they redirect for good, every other param kept
@@ -597,6 +622,10 @@ export function redirectFor(path: string, params: SearchParams = {}, known: Redi
       if (subject !== undefined) return withQuery(marketSubjectPath(subject), remap(params, ['subject', 'at']))
       return null
     }
+    // YOUR MOVES' LEVELS ARE PAGES (17 Oct): `?advice=` (and `?item=`,
+    // `?rec=`, `?ledger=`) opened in place; each lands on its page for good.
+    case '/dashboard/moves':
+      return movesRedirect(params, MOVES_OWN_PARAMS)
     case '/dashboard/overview':
       return withQuery(RETIRED_ADDRESSES[path], remap(params, [], marketMonth(params)))
     case '/dashboard/subjects': {

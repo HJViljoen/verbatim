@@ -52,6 +52,8 @@ function Slash({ className }: { className?: string }) {
 /** A label replayed from a prose slot carries its node (the copy contract);
  *  a name a person gave, or the page's own words, is plain text. */
 function Label({ children, slot }: { children: ReactNode; slot?: CrumbSlot }) {
+  if (slot === 'quote') return <span data-copy="quote">{children}</span>
+  if (slot === 'pass_d_b_recommendation') return <span data-copy="stored" data-slot={slot}>{children}</span>
   return slot ? <span data-copy="subject" data-slot={slot}>{children}</span> : <>{children}</>
 }
 
@@ -192,12 +194,18 @@ export function Switcher({ menu, defaultOpen = false, className }: {
           id={id}
           role="menu"
           aria-label={menu.label}
-          className={cn('absolute left-[-4px] top-[30px] z-20 flex max-h-[min(480px,70vh)]', menu.wide ? 'w-[460px]' : 'w-[320px]', 'max-w-[calc(100vw-32px)] flex-col gap-px overflow-y-auto rounded-[12px] bg-card p-1.5 shadow-panel ring-1 ring-foreground/6')}
+          className={cn('absolute left-[-4px] top-[30px] z-20 flex max-h-[min(480px,70vh)]', menu.wide === 460 ? 'w-[460px]' : menu.wide === 400 ? 'w-[400px]' : 'w-[320px]', 'max-w-[calc(100vw-32px)] flex-col gap-px overflow-y-auto rounded-[12px] bg-card p-1.5 shadow-panel ring-1 ring-foreground/6')}
         >
           {/* The board's small-caps label, for the eye: a menu may own only
               its items and separators (ARIA), and its name is already
               `aria-label`, so a screen reader is not told it twice. */}
           <p aria-hidden className="m-0 mx-2.5 mb-1.5 mt-2 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{menu.label}</p>
+          {menu.above && menu.above.length > 0 ? (
+            <>
+              {menu.above.map((item) => <Entry key={item.key} item={item} onKeyDown={onItemKey} />)}
+              <div role="separator" className="mx-1 my-[5px] h-px bg-track" />
+            </>
+          ) : null}
           {menu.items.map((item) => <Entry key={item.key} item={item} onKeyDown={onItemKey} />)}
           {menu.below && menu.below.length > 0 ? (
             <>

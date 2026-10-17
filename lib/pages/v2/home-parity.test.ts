@@ -79,7 +79,7 @@ describe('Your products: the tile draws the page\'s own shelf, cut as the page c
 
 describe('Your moves: the newest move, where none has a comparison to print', () => {
   const pending: MoveCard = {
-    ...MOVE_CARDS[0], id: 'newest', day: '2026-10-05', compare: null, unread: null, pending: '2026-10-01',
+    ...MOVE_CARDS[0], id: 'newest', href: '/dashboard/moves/newest', day: '2026-10-05', compare: null, unread: null, pending: '2026-10-01',
     points: [
       { month: '2026-08-01', role: 'before', k: 10, n: 400, soFar: false },
       { month: '2026-09-01', role: 'before', k: 19, n: 521, soFar: false },
@@ -88,7 +88,7 @@ describe('Your moves: the newest move, where none has a comparison to print', ()
 
   it('the newest by its day; its own month not read: the latest month before it, as Your moves prints it', () => {
     const n = newestMove([{ ...MOVE_CARDS[0], id: 'older', day: '2026-09-14' }, pending])!
-    expect(n).toMatchObject({ id: 'newest', pending: '2026-10-01', unread: null, point: { month: '2026-09-01', k: 19, n: 521 }, href: `${MOVES_PATH}#move-newest` })
+    expect(n).toMatchObject({ id: 'newest', pending: '2026-10-01', unread: null, point: { month: '2026-09-01', k: 19, n: 521 }, href: `${MOVES_PATH}/newest` })
     expect(newestMove([])).toBeNull()
     expect(newestMove([{ ...pending, points: [] }])!.point).toBeNull()
   })

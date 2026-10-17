@@ -48,7 +48,7 @@ describe('a post idea\'s path and switcher', () => {
     expect(crumbs.map((c) => [c.label, c.href])).toEqual([['Content', '/dashboard/content'], [set[0].title, null]])
     expect(crumbs[1].slot).toBe('post_idea')
     const menu = crumbs[1].menu!
-    expect(menu).toMatchObject({ label: 'Post ideas for 5 to 11 Oct', switchLabel: 'Switch to another post idea', wide: true })
+    expect(menu).toMatchObject({ label: 'Post ideas for 5 to 11 Oct', switchLabel: 'Switch to another post idea', wide: 460 })
     expect(menu.items.map((i) => [i.label, i.current, i.note])).toEqual([
       [set[0].title, true, null], [set[1].title, false, 'Unusual this week'], [set[2].title, false, null],
     ])

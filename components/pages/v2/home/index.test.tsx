@@ -208,7 +208,7 @@ describe('the Dashboard, as the board draws it (E1-Dashboard)', () => {
     expect(markup).toContain('href="/dashboard/products/g-feet/p-pivot"')
     // Content's idea is a page of its own, by its row (depth as pages, 17 Oct).
     expect(markup).toContain('href="/dashboard/content/ideas/i0000001-0000-4000-8000-000000000000"')
-    expect(markup).toMatch(/href="\/dashboard\/moves\?advice=[^"]+#advice-panel"/)
+    expect(markup).toMatch(/href="\/dashboard\/moves\/advice\/[^"?#]+"/)
   })
 
   it('prints no comment\'s words, no em dash, no left stripe and no highlight', () => {
@@ -313,7 +313,7 @@ describe('every tile\'s honest state when its page has nothing', () => {
     assertCopyContract(page(none))
     const t = tileText(render(page(none)), 'moves')
     expect(t).toContain(MOVES_NONE_WAITING)
-    expect(render(page(none))).toContain('href="/dashboard/moves?advice=all#advice-record"')
+    expect(render(page(none))).toContain('href="/dashboard/moves/advice"')
     // No move at all: the board's panel stays, and says so (parity pass).
     const noMove = render(page(dashboardFixture({ moves: 'no_move' })))
     expect(tileText(noMove, 'moves')).toContain(`After your move ${MOVES_NO_MOVE}`)
@@ -727,7 +727,7 @@ describe('the board\'s shape holds when the data is thin (parity pass)', () => {
   it('Your moves: the newest move keeps the panel, its month before printed and its own month left open', () => {
     const t = tileText(markup, 'moves')
     expect(t).toMatch(/After your move Create a guided access path, not a standalone price answer 4% → Share of market videos on Cost and affordability frustration ?: 19 of 521 in September, before the move\. October reads once the month has been read\.$/)
-    expect(tileMarkup(markup, 'moves')).toContain('href="/dashboard/moves#move-m-access"')
+    expect(tileMarkup(markup, 'moves')).toContain('href="/dashboard/moves/m-access"')
   })
 
   it('a dump from before the parity pass (no `tracked`, `asked`, unread shelf or `newest`) still draws, each part saying why', () => {

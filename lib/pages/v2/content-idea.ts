@@ -196,7 +196,7 @@ export function ideaCrumbs(page: { id: string; title: string }, set: readonly { 
       label: page.title,
       href: null,
       slot: 'post_idea',
-      menu: items.length > 1 ? { label: `Post ideas for ${week.label}`, switchLabel: 'Switch to another post idea', items, wide: true } : null,
+      menu: items.length > 1 ? { label: `Post ideas for ${week.label}`, switchLabel: 'Switch to another post idea', items, wide: 460 } : null,
     },
   ]
 }

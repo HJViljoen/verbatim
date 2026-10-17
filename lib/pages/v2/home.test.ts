@@ -14,7 +14,7 @@ import {
 } from './home-fixture'
 import { marketParams } from './market'
 import { FIXTURE_FLAG, FIXTURE_WEEKS, fixtureId } from './market-fixture'
-import { adviceParam } from './moves'
+import { advicePath, isMovesPage } from './moves-address'
 import { parseVoicesParams } from './voices'
 
 // The Dashboard's loader (Design v2, depth plan T8; lib/pages/v2/home.ts):
@@ -231,11 +231,11 @@ describe('every tile\'s link opens its page\'s panel (each parsed by that page\'
     expect(top.href).toBe(`/dashboard/content/ideas/${top.idea!.id}`)
   })
 
-  it('Your moves: `?advice=<lineage>`, the advice in place', () => {
+  it('Your moves: the advice\'s own page, and the move\'s (levels as pages, 17 Oct)', () => {
     const top = fixtureMovesTop()
-    expect(path(top.advice!.href)).toBe('/dashboard/moves')
-    expect(adviceParam(query(top.advice!.href))).toBe(top.advice!.lineageId)
-    expect(top.advice!.href).toMatch(/#advice-panel$/)
+    expect(top.advice!.href).toBe(advicePath(top.advice!.lineageId))
+    expect(isMovesPage(path(top.advice!.href))).toBe(true)
+    if (top.move) expect(top.move.href).toBe(`/dashboard/moves/${top.move.id}`)
   })
 
   it('the whole fixture page carries each of them', () => {

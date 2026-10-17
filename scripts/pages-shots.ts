@@ -94,7 +94,8 @@ import { VoicesPage } from '../components/pages/v2/voices'
 import { VOICES_FIXTURES } from '../lib/pages/v2/voices-fixture'
 import type { VoicesData } from '../lib/pages/v2/voices'
 import { MovesV2Page } from '../components/pages/v2/moves'
-import { movesFailedFixture, movesFixture, movesHistoryFixture, movesOpenFixture, movesQuietFixture, movesRecordFixture, movesThinFixture, movesThinOpenFixture, statementsV2 } from '../lib/pages/v2/moves-fixture'
+import { movesFailedFixture, movesFixture, movesQuietFixture, movesThinFixture, statementsV2 } from '../lib/pages/v2/moves-fixture'
+import { MOVES_LEVEL_PAGES } from './shots/moves-levels'
 import type { MovesPageData } from '../lib/pages/v2/moves'
 import { MarketPage } from '../components/pages/v2/market'
 import { marketConversationFixture, marketFixture, marketLongCrumbsFixture, marketLongRowsFixture, marketSubjectFixture, marketThinFixture, marketWeekFixture } from '../lib/pages/v2/market-fixture'
@@ -498,8 +499,6 @@ const PAGES: Page[] = [
   // (`--moves-dump <dir>` holding ossur.json and sealand.json, written by
   // scripts/moves-v2-dump.ts), as a tenant sees it: no statements.
   { key: 'moves-v2', path: '/dashboard/moves', artboard: 'E6-Moves.dc.html', page: () => h(MovesV2Page, { data: movesFixture(), statements: statementsV2() }) },
-  { key: 'moves-v2-open', path: '/dashboard/moves', artboard: 'E6-Moves-Open.dc.html', page: () => h(MovesV2Page, { data: movesOpenFixture(), statements: statementsV2() }) },
-  { key: 'moves-v2-record', path: '/dashboard/moves', artboard: 'E6-Moves.dc.html', page: () => h(MovesV2Page, { data: movesRecordFixture(), statements: statementsV2() }) },
   // Only where a dump folder is named, so a run of every page never stops on a missing file.
   ...(flag('moves-dump', '') ? (['ossur', 'sealand'] as const).map((tenant): Page => ({
     key: `moves-v2-${tenant}`, path: '/dashboard/moves', artboard: 'E6-Moves.dc.html',
@@ -510,18 +509,14 @@ const PAGES: Page[] = [
   // and the barest (nothing waiting, no move, no plan, no conclusion); and
   // the open dumps (`--moves-open-dump <dir>`), beside E6-Moves-Open.
   { key: 'moves-v2-thin', path: '/dashboard/moves', artboard: 'E6-Moves.dc.html', page: () => h(MovesV2Page, { data: movesThinFixture(), statements: null }) },
-  { key: 'moves-v2-thin-open', path: '/dashboard/moves', artboard: 'E6-Moves-Open.dc.html', page: () => h(MovesV2Page, { data: movesThinOpenFixture(), statements: null }) },
   { key: 'moves-v2-bare', path: '/dashboard/moves', artboard: 'E6-Moves.dc.html', page: () => h(MovesV2Page, { data: movesQuietFixture(), statements: null }) },
   // The fresh check: the history row raised by 2, 4 and 8 of the latest
   // nine updates (shoot at 390 and 1180), a member's thin page (no dating
   // invited), and every read failed on one load.
-  ...[2, 4, 8].map((n): Page => ({ key: `moves-v2-history-${n}`, path: '/dashboard/moves', artboard: 'E6-Moves-Open.dc.html', page: () => h(MovesV2Page, { data: movesHistoryFixture(n), statements: null }) })),
   { key: 'moves-v2-thin-member', path: '/dashboard/moves', artboard: 'E6-Moves.dc.html', page: () => h(MovesV2Page, { data: { ...movesThinFixture(), canDecide: false }, statements: null }) },
   { key: 'moves-v2-failed', path: '/dashboard/moves', artboard: 'E6-Moves.dc.html', page: () => h(MovesV2Page, { data: movesFailedFixture(), statements: null }) },
-  ...(flag('moves-open-dump', '') ? (['ossur', 'sealand'] as const).map((tenant): Page => ({
-    key: `moves-v2-open-${tenant}`, path: '/dashboard/moves', artboard: 'E6-Moves-Open.dc.html',
-    page: () => h(MovesV2Page, { data: JSON.parse(readFileSync(join(resolve(flag('moves-open-dump', '.')), `${tenant}.json`), 'utf8')).data as MovesPageData, statements: null }),
-  })) : []),
+  // Your moves' level pages (levels as pages, 17 Oct; the G6 boards): scripts/shots/moves-levels.ts.
+  ...MOVES_LEVEL_PAGES,
   // Market (depth v2, T3), to the E2 boards: the week with the check's flag,
   // the week with none (the biggest new conversation leads), a conversation
   // open under the top row, under the table, a subject open, the month and
