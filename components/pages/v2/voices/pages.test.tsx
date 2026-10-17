@@ -108,7 +108,12 @@ describe('a group\'s page (G3-Voices-Group)', () => {
     expect(t).toContain('Subject Community & encouragement Not measured yet Inside it, for them Praise for resilience and courage 31 Its check is still open Open in Market →')
     expect(t).toContain('What tips them into acting Not described in the latest update.')
     expect(t).toContain('Who they say they are Nothing they said told us who they are.')
-    expect(t).toContain(`${SUBJECT_NOT_MEASURED}: all 6 of your subjects. Each shows how many of their videos it holds once its check passes. Look & style holds one more of their conversations, in the list below`)
+    // Every subject NAMED, never folded into a count (14 Oct: a tracked
+    // subject is never hidden): the board's "all 6 of your subjects" left
+    // Choosing the right device and Fit & comfort named nowhere on the page.
+    expect(t).toContain(`${SUBJECT_NOT_MEASURED}: Choosing the right device, Community & encouragement, Cost & access, Fit & comfort, Function & movement, Look & style. Each shows how many of their videos it holds once its check passes. Look & style holds one more of their conversations, in the list below`)
+    expect(t).not.toMatch(/all \d+ of your subjects/)
+    for (const s of groupThinFixture().notMeasured) expect(t, s.label).toContain(s.label)
     expect(t).toContain('Brands named in their videos Brands are not counted for this workspace yet. Össur You Ottobock')
     expect(t).toContain('Products in their videos Your products are not read for this workspace yet.')
     expect(t).toContain('“Onde vocês conseguiram a prótese? Minha mãe precisa de uma.” Portuguese · machine translation Where did you get the prosthesis? My mother needs one.')

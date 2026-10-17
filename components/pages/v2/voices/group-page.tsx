@@ -209,12 +209,12 @@ function SubjectCard({ card, page }: { card: GroupSubjectCard; page: GroupPage }
 }
 
 /** The line under the cards (the boards' `.pend`): the subjects not measured
- *  yet, named; why a failed one shows no figure, once on the page; a subject
+ *  yet, every one named (the thin board's "all 6 of your subjects" left two
+ *  of them named nowhere on the page); why a failed one shows no figure, once on the page; a subject
  *  not carded that holds some of their conversations; and, at the right, the
  *  ready subjects not carded (their counts), and those on none of their
  *  videos (named). */
 function Pending({ page }: { page: GroupPage }) {
-  const all = page.subjectsState === 'none_ready'
   const nm = page.notMeasured
   const failed = nm.filter((s) => s.state === 'failed')
   const showLeft = nm.length > 0 || page.holdsMore.length > 0
@@ -226,10 +226,11 @@ function Pending({ page }: { page: GroupPage }) {
         <div className="flex min-w-0 flex-col gap-1">
           {nm.length > 0 ? (
             <p className="m-0 leading-[1.5]">
+              {/* Every one NAMED, never folded into a count, even where none
+                  has passed (14 Oct, lib/pages/not-measured.ts: a tracked
+                  subject is never hidden). */}
               <b className="font-semibold text-foreground">{SUBJECT_NOT_MEASURED}:</b>{' '}
-              {all
-                ? <>all <Fig>{fmtInt(nm.length)}</Fig> of your subjects. Each shows how many of their videos it holds once its check passes.</>
-                : <>{nm.map((s) => s.label).join(', ')}. {nm.length === 1 ? 'It shows how many of their videos it holds once its check passes.' : 'Each shows how many of their videos it holds once its check passes.'}</>}
+              {nm.map((s) => s.label).join(', ')}. {nm.length === 1 ? 'It shows how many of their videos it holds once its check passes.' : 'Each shows how many of their videos it holds once its check passes.'}
             </p>
           ) : null}
           {failed.map((f) => (
