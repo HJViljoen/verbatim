@@ -1013,7 +1013,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
   export path's shape; no one decides from an email, so `canDecide` is
   false), and the pure `weeklyReadLines` (`lib/reports/weekly-read-lines.ts`)
   turns each tile's data into a line: the same item, the tile's own link
-  (its open panel), its figures and its month words. So the email never
+  (its item's own page), its figures and its month words. So the email never
   ranks on another base or folds advice another way: Your products' line is
   the tile's standout under the tile's label ("Came up for the first time",
   "Talked about most"), on `marketProductMonth`, and gives no line while
@@ -1069,7 +1069,6 @@ This version has breaking changes — APIs, conventions, and file structure may 
     too, and Market's own `?conv=` / `?subject=`, below), pinned by
     `lib/nav-redirects.test.ts`. A bare `/dashboard/market` is Market now, so
     a link meaning Your moves must say `/dashboard/moves`.
-    **YOUR PRODUCTS' DEPTH IS PAGES TOO (17 Oct, the G4 boards):** `/dashboard/products/<category id>` (the hub) and `/dashboard/products/<category id>/<product id>` (the evidence), on `LevelBar` with the level tiles `category` and `product`; the root's `?group=` / `?product=` / `?unclear=all` redirect for good (`redirectFor`'s Your products block, the catalogue passed as `known.productGroup`), and every builder that opened a panel now opens a page (the Your products bullet below).
     **MARKET'S DEPTH IS PAGES (Heinrich, 16 and 17 Oct; the F2 boards).**
     Market is a top layer and three kinds of page under it, each its own
     address, written once in `lib/nav.ts` (`MARKET_WEEK_PATH`,
@@ -1136,8 +1135,36 @@ This version has breaking changes — APIs, conventions, and file structure may 
     the arrows, Home and End move, Escape closes and returns focus, Tab or a
     click outside closes (`scripts/crumbs-keys.ts` drives `CrumbRow` in
     headless Chrome; the render tier presses no key).
-    **CONTENT'S DEPTH IS PAGES TOO (17 Oct; the G5 boards):** `/dashboard/content/ideas/<post_ideas.id>`, `/dashboard/content/replies` and `/dashboard/content/posts` (`lib/pages/v2/content-address.ts`), old `?idea=`, `?replies=1`, `?reply=` and `?posts=1` redirecting to them (the Content bullet below).
-    **YOUR MOVES' DEPTH IS PAGES TOO (17 Oct; G6):** a piece of advice, a dated move and the advice record at `/dashboard/moves/advice/<id>`, `/dashboard/moves/<id>` and `/dashboard/moves/advice` (`lib/pages/v2/moves-address.ts`), every old `?advice=` / `?item=` / `?rec=` / `?ledger=` there for good in one hop, under `LevelBar` with Your moves' own tiles (the bullet "Your moves").
+    **EVERY PAGE'S DEPTH IS PAGES (17 Oct; Heinrich approved the G3 to G6
+    boards):** Market's way, above, on all five v2 pages. Nothing opens in
+    place: every level page opens with `LevelBar` and its own tile, has its
+    own `loading.tsx`, and every old panel link redirects for good in ONE
+    hop through `redirectFor` (each page's own block, pinned in its own
+    describe of `lib/nav-redirects.test.ts`). Voices:
+    `/dashboard/voices/groups/<key>`, `/brands/<key>` and
+    `/creators/<platform>/<account>` (`lib/pages/v2/voices-address.ts`; old
+    `voices?group=` / `?persona=` / `?brand=` / `?creator=`,
+    `voice?persona=` / `?brand=` and `competitive?vs=`). Your products:
+    `/dashboard/products/<category id>` (the hub) and
+    `/dashboard/products/<category id>/<product id>` (the evidence)
+    (`lib/pages/v2/products-address.ts`; old `?group=` / `?product=` /
+    `?unclear=all`, the catalogue passed as `known.productGroup`). Content:
+    `/dashboard/content/ideas/<post_ideas.id>`, `/dashboard/content/replies`
+    and `/dashboard/content/posts` (`lib/pages/v2/content-address.ts`; old
+    `?idea=`, `?replies=1`, `?reply=` and `?posts=1`). Your moves:
+    `/dashboard/moves/advice/<id>`, `/dashboard/moves/<id>` and
+    `/dashboard/moves/advice` (`lib/pages/v2/moves-address.ts`; old
+    `?advice=` / `?item=` / `?rec=` / `?ledger=`, on Your moves' address and
+    on Market's). `LevelBar`'s `level` is ONE closed union: a `LevelKind`
+    (Market's subject, conversation and week; Your products' category and
+    product) draws `LevelTile` and takes no tile, and a `PageLevelKind`
+    (Content's idea, replies and posts; Your moves' advice, move and record;
+    Voices' group, brand and creator) must bring its own `tile`, pinned by
+    `@ts-expect-error` in `components/shell/crumbs.test.tsx`. A switcher's
+    `menu.wide` is its board's width (460 for a post idea, 400 for a piece of
+    advice); `menu.above` lists the page itself above a hairline where its
+    set does not hold it, and `hasSiblings` counts it. Every builder that
+    opened a panel now opens its page (each page's bullet below).
     Parked pages leave clients through `TENANT_RETIRED` / `tenantAway` (the
     operator keeps them); Reports redirects into the Studio with its query
     (`?group=sent&item=`, `?view=`). Studio names a page key by
@@ -1242,7 +1269,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
     videos, the market last; a kind's split prints most first), one wording
     (`marketLabels`). The kind words are `talkKindLabel`
     (`lib/pages/overview-market/kinds.ts`), except on the Your products
-    panels, which name a kind by where it was found (`productKindLabel`,
+    level pages, which name a kind by where it was found (`productKindLabel`,
     `lib/pages/v2/products.ts`: "Praise in the comments", never "Praised
     it"), because a product's kind count is its videos with that kind
     anywhere in their comments. Every page title is the shared
@@ -1316,8 +1343,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
     empty, open or failed. A failed subject is shown exactly as an open one
     is, named where an open one is named, its reason (`FAILED_EXPLAINED`)
     said ONCE a page: in Market's row for it, in the foot of Voices' "Who's
-    in your market", in Your products' open panel, on Your moves' first card
-    for it; elsewhere the short named line ("Not measured yet: Fit &
+    in your market", on a Your products category or product page, on Your
+    moves' first card for it; elsewhere the short named line ("Not measured yet: Fit &
     comfort"). Ruling U6 is unchanged: neither prints a figure resting on
     its membership, and neither leads, ranks or "leads" anything. A ready
     subject on none of a set's videos is listed at 0 (`groupSubjects`,
@@ -1361,10 +1388,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
     idea in a medical market, `printsMedicalLine`); Your moves (`topMoves`:
     Accept and Not for us for owners and admins, `mayDecideMoves`); and the
     Agent box (two questions to try, `agentTries`, from the read's frozen
-    `conversations`). Each tile's head link opens what its item is, else the
-    page: on Market a conversation's or a subject's page, on Content the
-    idea's page (17 Oct), on the other pages their panel in place; the
-    Agent box has none either.
+    `conversations`). Each tile's head link opens its item's own page, else
+    the page (17 Oct: nothing opens in place): a conversation's or a
+    subject's on Market, a group's or a brand's on Voices, a product's or a
+    category's on Your products, the post idea's on Content, the advice's or the move's on
+    Your moves; the Agent box has none either.
     There is no Subjects tile and no Competitive tile: the Competitive
     tile's "Named most" brands are the Voices tile's two brands named most
     unprompted (`NAMED_MOST`). The weekly email prints no "Named most" line
@@ -1439,8 +1467,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
     and the numbers sit one layer down. The depth brief's "level 2 opens IN
     PLACE, never a new page" is gone for Market: every Open is a page, and
     Market no longer uses the T9 panel machinery (`InPlacePanel`,
-    `PanelSlot`, `panelPlacement`), which Voices, Your products and Your
-    moves still use until they move over (Content moved over on 17 Oct). Still true: no quote on the
+    `PanelSlot`, `panelPlacement`), and since 17 Oct no page does (the T9
+    bullet below). Still true: no quote on the
     top layer (quotes live on a page), decision 1, U6, the copy contract.
     *The top page, This week*, top to bottom: the WEEK CARD (`weekCardOf`:
     the published read's week in one line and its implications, up to
