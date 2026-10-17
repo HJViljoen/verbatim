@@ -1894,19 +1894,35 @@ This version has breaking changes — APIs, conventions, and file structure may 
     `recommendations` UPDATE) with ones that keep the tenant and actor pins
     and add `get_my_role()` owner or admin, or `is_superadmin()`; no grant
     or read changes, the service role untouched
-    (`scripts/pg-shim/moves-role-gate-checks.sql`; the undo is
-    `moves-role-gate-undo.sql` beside it). Until then a member's own JWT can
-    still write those four through PostgREST. A move reads the market from
-    `MOVE_MONTHS_BEFORE` (2) months before it to the reading month, and its
-    one comparison goes through `pairedVerdict` under the month-pair judge.
-    THE BOARDS' LAYOUT IN EVERY DATA STATE (parity pass): every section keeps
-    its card (the root's next move's card, `NEXT_MOVE`, `NO_MOVE_YET`,
-    `AdviceRest`, `PLAN_EMPTY`; the hub's third conversation place says why
-    it is empty, "In their words" says how many more could not be shown, a
-    failed read says so in its section; the record's empty group keeps its
-    card). A card's "Would move" is the theme its evidence leads with
-    (`adviceTargets`), with its level in the reading month (`adviceAims`),
-    never a week.
+    (`scripts/pg-shim/moves-role-gate-checks.sql`; the undo, proved to give
+    back the catalogue line for line, is `moves-role-gate-undo.sql` beside
+    it). The rows are written on the session client, so for a tenant's own
+    session the policy is the boundary; an operator viewing a tenant writes
+    with the service role, where `mayDecideMoves` is the only gate. Until
+    then a member's own JWT can still write those four through PostgREST. A
+    move reads the market from `MOVE_MONTHS_BEFORE` (2) months before it to
+    the reading month, and its one comparison goes through `pairedVerdict`
+    under the month-pair judge. THE BOARDS' LAYOUT IN EVERY DATA STATE
+    (parity pass): every section keeps its card. A move's chart is drawn on
+    its axis (`moveAxis`) whatever was read, with empty slots and one line,
+    on the root and on its page. An odd last move takes the next move's card
+    (`NEXT_MOVE`) on its neighbour's axis; no move at all is that card across
+    the row (`NO_MOVE_YET`), which invites a dated move only where the reader
+    may date one (an owner or admin, moves recorded, something to date it
+    on: `canDate`; a move's page's "Your next move" by the same rule). With
+    fewer than three pieces of advice waiting, the advice record's card
+    fills the row (`AdviceRest`). The plan card draws even with no plan
+    (`PLAN_EMPTY`). The hub's third conversation place says why it is empty,
+    "In their words" says in one line that no other comment can be shown,
+    and the record's empty group keeps its card. A FAILED READ IS NEVER AN
+    ABSENCE on the level pages: a section whose own read failed says so in
+    one line (the hub's conversations and its line when the themes or their
+    labels fail), and a read the page rests on (what the advice rests on and
+    its videos, `readCited` / `readAudience` with `onError`; a move's line)
+    throws, so the page keeps the shell (`app/dashboard/error.tsx`), never
+    "since replaced", "names nothing" or the missing line. A card's "Would
+    move" is the theme its evidence leads with (`adviceTargets`), with its
+    level in the reading month (`adviceAims`), never a week.
     `theme_registry`'s label column is `canonical_label`. Your statements
     (`client_statements` / `client_statement_readings`, migration
     `20261105090000`; gloss, band at the subjects' 0.40/0.60, judge, stance),
