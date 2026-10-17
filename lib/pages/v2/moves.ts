@@ -1,3 +1,4 @@
+import { marketConversationPath, marketSubjectPath } from '../../nav'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import type { RecStatus } from '../../calibration'
@@ -484,8 +485,8 @@ export function moveCards(input: {
         subject && m.subject_id ? { kind: 'subject', id: m.subject_id } : themeId ? { kind: 'theme', id: themeId } : null
       const label = subject?.name ?? (object?.kind === 'theme' ? input.themes.get(object.id) ?? null : null)
       const notReady = subject != null && subject.calibration !== 'ready'
-      const openHref = m.kind === 'subject' && m.subject_id ? `/dashboard/market?subject=${encodeURIComponent(m.subject_id)}`
-        : m.kind === 'theme' && themeId ? `/dashboard/market?conv=${encodeURIComponent(themeId)}`
+      const openHref = m.kind === 'subject' && m.subject_id ? marketSubjectPath(m.subject_id)
+        : m.kind === 'theme' && themeId ? marketConversationPath(themeId)
           : m.kind === 'advice' && m.lineage_id ? adviceHref(m.lineage_id) : null
       const base = {
         id: m.id,

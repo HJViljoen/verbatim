@@ -1,16 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract, copyNodes, copyViolations } from '@/lib/test/copy-contract'
-import { fixtureId, marketFixture, marketLongRowsFixture, marketThinFixture, FIXTURE_WEEKS } from '@/lib/pages/v2/market-fixture'
+import { marketFixture, marketLongRowsFixture, marketThinFixture, FIXTURE_WEEKS } from '@/lib/pages/v2/market-fixture'
 import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import type { MarketData } from '@/lib/pages/v2/market'
 import { MarketPage, MARKET_FIRST_RUN } from './index'
-import { ConversationPanel, SubjectPanelView, SUBJECT_NONE_THIS_WEEK } from './panel'
-import { KindsCard, KindsFrame, PlatformsCard, PlatformsFrame, RailView, WatchCard, WeeksCard, weeksLine, WEEKS_UNREAD } from './rail'
+import { KindsCard, KindsFrame, PlatformsCard, PlatformsFrame, RailView, WeeksCard, weeksLine, WEEKS_UNREAD } from './rail'
 import { WEEKS_FAILED } from '@/lib/pages/home'
 import { SubjectBoardView } from './subjects'
 import { ConversationTable } from './table'
-import { ALSO_TALKED, NO_GROUP, NOTHING_ELSE_NEW, NOTHING_NEW, TopRowView } from './top'
+import { ALSO_TALKED, NOTHING_ELSE_NEW, NOTHING_NEW, TopRowView } from './top'
 import { MarketSkeleton } from './skeleton'
 
 // MARKET'S RENDER TIER (depth v2, T3): every block, from the fixture, against
@@ -21,9 +20,6 @@ import { MarketSkeleton } from './skeleton'
 
 const WEEK = marketFixture()
 const QUIET = marketFixture({ flagged: false })
-const OPEN = marketFixture({ open: { n: 3, at: 'top' } })
-const TABLE_OPEN = marketFixture({ open: { n: 5, at: 'table' } })
-const SUBJECT = marketFixture({ subject: 'cost' })
 const MONTH = marketFixture({ period: 'month' })
 const TIME = marketFixture({ period: 'time' })
 
@@ -39,13 +35,12 @@ const quotesOutsidePanel = (data: MarketData): number => {
 
 describe('MarketPage', () => {
   it.each([
-    ['week, flagged', WEEK], ['week, quiet', QUIET], ['a conversation open', OPEN], ['a table row open', TABLE_OPEN],
-    ['a subject open', SUBJECT], ['the month', MONTH], ['over time', TIME],
+    ['week, flagged', WEEK], ['week, quiet', QUIET], ['the month', MONTH], ['over time', TIME],
   ])('%s keeps the copy contract', (_label, data) => {
     expect(copyViolations(<MarketPage data={data} />)).toEqual([])
   })
 
-  it.each([['week', WEEK], ['quiet', QUIET], ['open', OPEN], ['month', MONTH], ['time', TIME]])('%s prints none of the board\'s weekly direction words', (_l, data) => {
+  it.each([['week', WEEK], ['quiet', QUIET], ['month', MONTH], ['time', TIME]])('%s prints none of the board\'s weekly direction words', (_l, data) => {
     expect(renderText(<MarketPage data={data} />)).not.toMatch(RETIRED)
   })
 
@@ -59,7 +54,6 @@ describe('MarketPage', () => {
 
   it('prints no quote and no model sentence above the open panel (level 1)', () => {
     expect(quotesOutsidePanel(WEEK)).toBe(0)
-    expect(quotesOutsidePanel(OPEN)).toBe(0)
     const top = render(<TopRowView data={WEEK} />)
     expect(copyNodes(top).filter((n) => n.kind === 'stored' || n.kind === 'quote' || n.kind === 'prose')).toEqual([])
   })
@@ -80,10 +74,6 @@ describe('TopRowView', () => {
     expect(text.match(/Unusual this week/g)).toHaveLength(1)
     const html = render(<TopRowView data={WEEK} />)
     expect(html).toMatch(/data-copy="verdict" data-flag="unusual"/)
-    expect(text).toContain('Who’s saying it Long-time users upgrading , Caregivers and family')
-    // A complaint conversation: its lead card names the next kind, never
-    // "Complained about something" over its own videos (Phase 4 fix round).
-    expect(text).toContain('What they’re doing Asked a question · 9 of 31 in October so far')
     assertCopyContract(<TopRowView data={WEEK} />)
   })
 
@@ -119,26 +109,6 @@ describe('TopRowView', () => {
     for (const n of counts) expect(card.match(new RegExp(`>${n}<`, 'g'))?.length ?? 0, String(n)).toBeGreaterThanOrEqual(2)
   })
 
-  it('rings the card whose panel is open, and turns its link to Close', () => {
-    const html = render(<TopRowView data={OPEN} />)
-    expect(html).toMatch(/id="top-0" style="order:0" class="[^"]*ring-2 ring-foreground/)
-    expect(renderText(<TopRowView data={OPEN} />)).toContain('Close ↑')
-  })
-
-  it('draws the open panel under the card it was opened from, at every width (T9)', () => {
-    const html = render(<TopRowView data={OPEN} panel={(n) => (OPEN.panel ? <ConversationPanel panel={OPEN.panel} data={OPEN} notchAt={n} /> : null)} />)
-    // In the markup right after the hero, before the cards beside it.
-    const hero = html.indexOf('id="top-0"')
-    const slot = html.indexOf('data-panel-slot')
-    expect(slot).toBeGreaterThan(hero)
-    expect(slot).toBeLessThan(html.indexOf('id="top-1"'))
-    // Under the hero on a phone and from 768 (it is the row's width); under
-    // the 6 · 3 · 3 row from 1280.
-    expect(html).toContain('--panel-o-base:1;--panel-o-sm:1;--panel-o-md:1;--panel-o-lg:1;--panel-o-w1180:1;--panel-o-xl:5')
-    expect(html).toContain('--notch-base:50%;--notch-sm:50%;--notch-md:50%;--notch-lg:50%;--notch-w1180:50%;--notch-xl:25%')
-    expect(html.match(/id="conv-panel"/g)).toHaveLength(1)
-  })
-
   it('with nothing flagged and nothing new, the week\'s most talked about leads, headed plainly', () => {
     const plain = marketFixture({ flagged: false, noNew: true })
     const text = renderText(<TopRowView data={plain} />)
@@ -171,9 +141,6 @@ describe('SubjectBoardView', () => {
     expect(text).toMatch(/^What the market is talking about Your subjects, as a share of October so far’s 318 videos\. The black tick is September\./)
     expect(text).toContain('Cost & access 22% 70 of 318 ▲ 7 pts')
     expect(text).toContain('Fit & comfort 34% 108 of 318 no clear change')
-    // A tracked subject is never hidden (14 Oct): the failed one has its own
-    // row, its reason where the level goes, and what is inside it.
-    expect(text).toContain('Sport and running Being re-described: a check found the subject catching comments about other things, so it shows no figure while we reword it. Inside it No conversation in it reached three videos this week.')
     assertCopyContract(<SubjectBoardView board={board} data={WEEK} />)
   })
 
@@ -244,13 +211,6 @@ describe('the rail', () => {
     assertCopyContract(<PlatformsCard block={WEEK.rail.platforms!} data={WEEK} />)
   })
 
-  it('watch: the read\'s stored lines, slot week_read', () => {
-    const html = render(<WatchCard lines={WEEK.rail.watch} />)
-    expect(html).toContain('data-copy="stored" data-slot="week_read"')
-    assertCopyContract(<WatchCard lines={WEEK.rail.watch} />)
-    expect(render(<RailView data={MONTH} />)).not.toContain('Worth watching')
-  })
-
   // The parity pass (13 Oct): the rail never breaks out into a row of cards.
   it('stays a column beside the board, with no subject board too', () => {
     const html = render(<RailView data={{ ...WEEK, subjects: null }} />)
@@ -295,10 +255,11 @@ describe('ConversationTable', () => {
   it('this week: the week and the month, who it is about, subject filters, show all', () => {
     const text = renderText(<ConversationTable table={WEEK.table!} data={WEEK} />)
     expect(text).toMatch(/^Every conversation this week 17 conversations, biggest first, each counted in the category’s videos \( 226 this week\) All 17 Fit & comfort 4/)
-    // The month twice: under the week's figure for a phone, and in its own
-    // column from 640 (each shown at its width only).
-    expect(text).toContain('Conversation Subject About This week October so far How long a liner lasts Fit & comfort Össur 4 · others 19 23 35 in October so far 35')
-    expect(text).toContain('Insurance refusals for powered knees Cost & access Össur 3 · Ottobock 5 · others 11 19 31 in October so far 31')
+    // The table from 640; the phone's two-line list beside it (each shown at
+    // its width only).
+    expect(text).toContain('Conversation Subject About This week October so far How long a liner lasts Fit & comfort Össur 4 · others 19 23 35')
+    expect(text).toContain('Insurance refusals for powered knees Cost & access Össur 3 · Ottobock 5 · others 11 19 31')
+    expect(text).toContain('How long a liner lasts 23 Fit & comfort 35 in October so far')
     expect(text).toMatch(/Show all 17$/)
     expect(render(<ConversationTable table={WEEK.table!} data={WEEK} />)).toContain('href="/dashboard/market?all=1#conversations"')
     assertCopyContract(<ConversationTable table={WEEK.table!} data={WEEK} />)
@@ -312,16 +273,18 @@ describe('ConversationTable', () => {
     assertCopyContract(<ConversationTable table={held} data={WEEK} />)
   })
 
-  // Phase 4 fix round: at 390 two figure columns beside a label did not fit
-  // Sealand's table, and its own scroll cut "42" to "4" at the card's edge.
-  // On a phone the month sits under the week's figure, in its cell (Content's
-  // Also asked); the month column shows from 640. Checked at 390, 360 and 320
-  // on the long-label fixture and Sealand's dump by scripts/pages-shots.ts.
-  it('on a phone the month sits under the week, so no figure column is cut, with long labels and three-digit figures', () => {
+  // F2-Market-Phone (ruling 4): on a phone the table is a two-line list, the
+  // name and its videos, then its subject and the month beside the week; no
+  // About chips. Checked at 390 on the long-label fixture by
+  // scripts/pages-shots.ts (measure-390.json).
+  it('on a phone, a two-line list: name and videos, then subject and the month, with long labels and three-digit figures', () => {
     const d = marketLongRowsFixture()
     const html = render(<ConversationTable table={d.table!} data={d} />)
-    expect(html).toMatch(/<th scope="col" class="[^"]*hidden text-right sm:table-cell">October so far<\/th>/)
-    expect(html).toMatch(/>123<\/span><span class="block whitespace-nowrap[^"]*sm:hidden"><span data-copy="figure" class="font-mono">456<\/span> in October so far<\/span><\/td><td class="[^"]*hidden text-right[^"]*sm:table-cell"><span data-copy="figure">456<\/span>/)
+    expect(html).toMatch(/<div class="max-sm:hidden"><table/)
+    expect(html).toMatch(/<div class="flex flex-col sm:hidden"><div data-phone-row=""/)
+    const phone = html.slice(html.indexOf('data-phone-row'))
+    expect(phone).toMatch(/>123<\/span><\/span><span class="min-w-0 text-\[12\.5px\] text-muted-foreground">[^<]*<\/span><span class="[^"]*"><span data-copy="figure" class="font-mono">456<\/span> in October so far/)
+    expect(phone.slice(0, phone.indexOf('</div>'))).not.toContain('Össur')
     expect(renderText(<ConversationTable table={d.table!} data={d} />)).toContain('Whether the forty litre travel backpack really fits under the seat on budget airlines across Europe')
     assertCopyContract(<ConversationTable table={d.table!} data={d} />)
   })
@@ -343,88 +306,19 @@ describe('ConversationTable', () => {
     expect(text).toContain('Conversation Subject Jul of 455 Aug of 612 Sep of 780 Oct so far of 300 How long a liner lasts Fit & comfort 16 21 32 35')
     assertCopyContract(<ConversationTable table={TIME.table!} data={TIME} />)
   })
-
-  it('opens a row in place, as the table\'s next row', () => {
-    const html = render(<ConversationTable table={TABLE_OPEN.table!} data={TABLE_OPEN} />)
-    expect(html).toMatch(new RegExp(`id="conv-${fixtureId(5)}"[^>]*>[\\s\\S]*?</tr><tr><td colSpan="5"|id="conv-${fixtureId(5)}"[\\s\\S]*?<td colspan="5"`, 'i'))
-    expect(html).toContain('data-panel=""')
-  })
-})
-
-describe('ConversationPanel', () => {
-  const panel = OPEN.panel!
-  it('the conversation in full: its tags, its stats with their n, our read, its months, who, what, where', () => {
-    const text = renderText(<ConversationPanel panel={panel} data={OPEN} />)
-    expect(text).toMatch(/^Cost & access Unusual this week Insurance refusals for powered knees Close 19 of 226 category videos this week 31 of 300 category videos in October so far 19 of 780 category videos in September 39 of 1,906 videos in July to September, every audience together, your own posts included Our read People describe appeals/)
-    expect(text).toContain('Month by month · share of the category’s videos')
-    expect(text).toContain('October so far · 31 of 300')
-    expect(text).toContain('What people did · of 31 in October so far Complained about something 14')
-    expect(text).toContain('Who’s saying it Long-time users upgrading Caregivers and family Each opens in Voices')
-    expect(text).toContain('Where TikTok 12')
-    expect(text).toContain('Ask the Agent about this')
-    assertCopyContract(<ConversationPanel panel={panel} data={OPEN} />)
-  })
-
-  it('three quotes at level 2, as quote nodes, with who the video is filed under', () => {
-    const html = render(<ConversationPanel panel={panel} data={OPEN} />)
-    expect(html.match(/data-copy="quote"/g)).toHaveLength(3)
-    expect(renderText(<ConversationPanel panel={panel} data={OPEN} />)).toContain('YouTube · 3 Oct Ottobock')
-  })
-
-  it('our read is stored prose with its slot', () => {
-    expect(render(<ConversationPanel panel={panel} data={OPEN} />)).toContain('data-copy="stored" data-slot="week_read"')
-    const desc = { ...panel, ourRead: { slot: 'pass_b_theme' as const, lines: [{ body: 'A 16-inch liner.', figures: {} }] } }
-    expect(copyViolations(<ConversationPanel panel={desc} data={OPEN} />)).toEqual([])
-  })
-
-  it('points its notch at the clicked card and closes back to the row', () => {
-    const html = render(<ConversationPanel panel={panel} data={OPEN} />)
-    expect(html).toContain('calc(25% - 9px)')
-    expect(html).toContain('href="/dashboard/market#top-row"')
-  })
 })
 
 describe('brands not counted yet (Össur before its back-read)', () => {
-  const NC = marketFixture({ brands: 'not_counted', open: { n: 3, at: 'top' } })
+  const NC = marketFixture({ brands: 'not_counted' })
   it('prints no "about" split anywhere, and says once why', () => {
     const text = renderText(<MarketPage data={NC} />)
     expect(text).not.toContain('no brand named')
     expect(text).not.toMatch(/About Össur/)
     // Once, in each block's own place: the lead card's About slot and the
     // table's About header (the parity pass: the column stays).
-    expect(text).toContain('About · brands not counted yet Close ↑')
-    expect(renderText(<ConversationPanel panel={NC.panel!} data={NC} />)).toContain('Who it’s about Brands are not counted for this workspace yet.')
+    expect(text).toContain('About · brands not counted yet Open the conversation →')
     expect(renderText(<ConversationTable table={NC.table!} data={NC} />)).toContain('Conversation Subject About · brands not counted yet This week October so far')
     assertCopyContract(<MarketPage data={NC} />)
-  })
-})
-
-describe('SubjectPanelView', () => {
-  it('a subject being re-described says why and lists the conversations inside it, as an open one does (14 Oct)', () => {
-    const data = marketFixture({ subject: 'sport' })
-    const text = renderText(<SubjectPanelView panel={data.subjectPanel!} data={data} />)
-    // Its reason is said once a page, in its row on the board above (14 Oct).
-    expect(text).toContain(`Sport and running Close ${SUBJECT_NOT_MEASURED}.`)
-    expect(text).not.toContain(FAILED_EXPLAINED)
-    expect(text).toContain('Conversations inside it · this week, and October so far No conversation in it reached three videos.')
-    expect(text).not.toMatch(/\d+ of \d+ videos in your market/)
-    assertCopyContract(<SubjectPanelView panel={data.subjectPanel!} data={data} />)
-  })
-
-  it('a subject whose check is open says why and lists the conversations inside it', () => {
-    const data = marketThinFixture({ subject: 'cost' })
-    const text = renderText(<SubjectPanelView panel={data.subjectPanel!} data={data} />)
-    expect(text).toContain(`Cost & access Close ${SUBJECT_NOT_MEASURED}.`)
-    expect(text).toContain('Conversations inside it · this week, and October so far Insurance refusals for powered knees 19 31 Paying out of pocket 15 22 Medical aid and liners 9 12')
-    assertCopyContract(<SubjectPanelView panel={data.subjectPanel!} data={data} />)
-  })
-
-  it('the subject in full: its level, against last month, our read, its months and every conversation inside it', () => {
-    const p = SUBJECT.subjectPanel!
-    const text = renderText(<SubjectPanelView panel={p} data={SUBJECT} />)
-    expect(text).toMatch(/^Subject Cost & access Close 70 of 318 videos in your market, October so far 22% of the market’s videos ▲ 7 pts Our read People ask how to get a knee paid for/)
-    expect(text).toContain('Conversations inside it · this week, and October so far Insurance refusals for powered knees Unusual this week 19 31')
-    assertCopyContract(<SubjectPanelView panel={p} data={SUBJECT} />)
   })
 })
 
@@ -455,7 +349,7 @@ describe('the board\'s shape in the thin state (Össur today)', () => {
 
   it('the third card keeps the board\'s weight: nothing new, then the week\'s next biggest not on the row', () => {
     const third = renderText(<TopRowView data={THIN} />).split('New this week')[1]
-    expect(third).toBe(` ${NOTHING_NEW} ${ALSO_TALKED} Insurance refusals for powered knees 19 of 226 category videos this week 31 of 300 in October so far Who’s asking ${NO_GROUP} Open →`)
+    expect(third).toBe(` ${NOTHING_NEW} ${ALSO_TALKED} Insurance refusals for powered knees 19 of 226 category videos this week 31 of 300 in October so far Open →`)
     const top = render(<TopRowView data={THIN} />)
     expect(top).toMatch(/<span data-copy="verdict">New this week<\/span>/)
     // Each conversation on one card only.
@@ -485,8 +379,6 @@ describe('the board\'s shape in the thin state (Össur today)', () => {
     expect(html).toMatch(/id="top-1"[^>]*class="[^"]*xl:col-span-3/)
     expect(html).toMatch(/id="top-2"[^>]*data-top-card="new-none"|data-top-card="new-none"[^>]*id="top-2"|id="top-2" data-top-card="new-none"/)
     expect(text).toContain(`New this week ${NOTHING_NEW}`)
-    // Both of the lead's columns, the group's with its own words.
-    expect(text).toContain(`Who’s saying it ${NO_GROUP} What they’re doing Complained about something · 14 of 35 in October so far`)
     const earlier = renderText(<TopRowView data={marketThinFixture({ earlierNew: true })} />)
     expect(earlier).toContain(`New this week ${NOTHING_NEW} Newest Showing it or hiding it 6 of 226 category videos this week 9 of 300 in October so far First heard the week of 21 Sep Open →`)
   })
@@ -499,7 +391,7 @@ describe('the board\'s shape in the thin state (Össur today)', () => {
   })
 
   it('keeps the rail a column beside the board, the weekly chart drawn as its frame', () => {
-    expect(html).toContain('<div style="order:2" class="col-span-12 flex min-w-0 flex-col gap-5 xl:col-span-4">')
+    expect(html).toContain('<div class="col-span-12 flex min-w-0 flex-col gap-5 xl:col-span-4">')
     const weeks = html.slice(html.indexOf('id="weeks"'), html.indexOf('id="where"'))
     expect(weeks.match(/data-slot-empty=""/g)).toHaveLength(8)
     expect(text).toContain('Videos, week by week Your market’s videos, by the week people commented 17 Aug 7 Sep 5 Oct Insufficient data')
@@ -552,18 +444,6 @@ describe('a tracked subject is never hidden (14 Oct)', () => {
     expect(text).toContain('Look & style 1% 4 of 318 too few to compare')
   })
 
-  it('the failed subject\'s panel lists the conversations inside it, with no figure of its own; the page says why once, in its row', () => {
-    const data = marketFixture({ subjects: 'tracked', subject: 'community' })
-    const node = <SubjectPanelView panel={data.subjectPanel!} data={data} />
-    const text = renderText(node)
-    expect(text).toContain(`Community & encouragement Close ${SUBJECT_NOT_MEASURED}. Conversations inside it · this week, and October so far Running-blade stories 17 26`)
-    expect(text).not.toMatch(/videos in your market|of the market’s videos/)
-    assertCopyContract(node)
-    // Once a page: the board's row says it, the open panel does not repeat it.
-    const page = renderText(<MarketPage data={data} />)
-    expect(page.split(FAILED_EXPLAINED).length - 1).toBe(1)
-  })
-
   it('the table names the failed subject on its conversations and gives its chip no count, as an open one\'s', () => {
     const node = <ConversationTable table={TRACKED.table!} data={TRACKED} />
     const text = renderText(node)
@@ -575,131 +455,3 @@ describe('a tracked subject is never hidden (14 Oct)', () => {
   })
 })
 
-// A TRACKED SUBJECT'S PANEL SAYS SOMETHING (Heinrich, 14 Oct: "What's the
-// point of tracking a subject if we just have nothing there"). A READY
-// subject's panel has the conversation panel's anatomy over its own videos:
-// our read (its own written read), month by month, who it is about, what
-// people did, who is saying it, where, three quotes, Ask the Agent and the
-// conversations inside it. A subject whose check is open or failed keeps the
-// panel it had: no block rests on its membership (ruling U6).
-describe('SubjectPanelView: a ready subject in full (14 Oct)', () => {
-  const RICH = marketFixture({ subject: 'cost', subjectDetail: 'rich' })
-  const RICH_MONTH = marketFixture({ subject: 'cost', subjectDetail: 'rich', period: 'month' })
-  const THIN = marketFixture({ subjects: 'tracked', subject: 'look', subjectDetail: 'thin' })
-  const panelOf = (d: MarketData) => <SubjectPanelView panel={d.subjectPanel!} data={d} />
-
-  it('this week: the week beside the month, its own read, the four blocks, three quotes, then the conversations inside it', () => {
-    const text = renderText(panelOf(RICH))
-    // The week's videos stand beside the month's level (decision 1).
-    expect(text).toMatch(/^Subject Cost & access Close 40 of 241 videos in your market this week 70 of 318 videos in your market, October so far 22% of the market’s videos ▲ 7 pts The parts below read the videos where a comment was about it: 40 this week, and 64 of these 70 in October so far\. Our read People describe insurance refusals/)
-    // Our read: what people said, then what it means for the company.
-    expect(text).toContain('Paying out of pocket runs through all of it.')
-    expect(text).toContain('fundraisers when the funding does not come. What it means for Össur The refusals people describe are for powered knees, the kind of knee Össur sells.')
-    expect(text).toContain('Who it’s about · this week Össur 6 · Ottobock 3 · others 31 October so far Össur 7 · Ottobock 6 · others 51')
-    expect(text).toContain('What people did · of 64 in October so far Complained about something 44 Asked a question 20')
-    expect(text).toContain('Who’s saying it Long-time users upgrading Caregivers and family Each opens in Voices')
-    expect(text).toContain('Where This week October so far TikTok 20 32 of 64 Instagram 10 16 of 64 YouTube 10 16 of 64')
-    expect(text).toMatch(/In their words · 3 of the comments “The cost of a running blade/)
-    expect(text).toMatch(/Conversations inside it · this week, and October so far Insurance refusals for powered knees Unusual this week 19 31 .*Ask the Agent about this/)
-    const html = render(panelOf(RICH))
-    expect(html.match(/data-copy="quote"/g)).toHaveLength(3)
-    expect(html).toContain('href="/dashboard/voices?group=long-time-users#group-panel"')
-    // The quotes and the blocks come before the conversations inside it.
-    expect(html.indexOf('In their words')).toBeLessThan(html.indexOf('Conversations inside it'))
-    assertCopyContract(panelOf(RICH))
-  })
-
-  it('this month: the month alone, its one base named under the stats, where by platform as bars', () => {
-    const text = renderText(panelOf(RICH_MONTH))
-    expect(text).toMatch(/^Subject Cost & access Close 70 of 318 videos in your market, October so far 22% of the market’s videos ▲ 7 pts The parts below read the 64 of these 70 videos where a comment was about it\. Our read/)
-    // Every block reads that one base: none of them counts over the level's 70.
-    expect(text).toContain('What people did · of 64 in October so far')
-    expect(text).not.toContain('this week')
-    expect(text).toContain('Who it’s about Össur 7 · Ottobock 6 · others 51 What people did · of 64 in October so far')
-    expect(text).toContain('Where TikTok 32 Instagram 16 YouTube 16')
-    assertCopyContract(panelOf(RICH_MONTH))
-  })
-
-  it('ready and thin (one video): a small count as a small count, and code\'s one line as its read', () => {
-    const text = renderText(panelOf(THIN))
-    expect(text).toMatch(/^Subject Look & style Close 1 of 241 videos in your market this week 4 of 318 videos in your market, October so far 1% of the market’s videos too few to compare The parts below read the videos where a comment was about it: 1 this week, and 1 of these 4 in October so far\. Our read In October so far, talk about Look & style sat in “Covers and finishes” and “Showing it or hiding it”\./)
-    expect(text).toContain('What people did · of 1 in October so far Praised it 1')
-    expect(text).toContain('Where This week October so far Instagram 1 1 of 1')
-    expect(text).toContain('In their words · 1 of the comments')
-    // No group's talk is in it: the block is left out, as the conversation panel's is.
-    expect(text).not.toContain('Who’s saying it')
-    assertCopyContract(panelOf(THIN))
-  })
-
-  it('a v3 read\'s headline (16 Oct) is carried for the subject card and the panel prints exactly what it printed before', () => {
-    for (const period of ['week', 'month'] as const) {
-      const before = marketFixture({ subject: 'cost', subjectDetail: 'rich', period })
-      const after = marketFixture({ subject: 'cost', subjectDetail: 'rich', period, subjectHeadline: 'The appeal decides when a knee is fitted' })
-      expect(after.subjectPanel?.read?.headline?.body).toBe('The appeal decides when a knee is fitted')
-      expect(render(panelOf(after))).toBe(render(panelOf(before)))
-      expect(renderText(panelOf(after))).not.toContain('The appeal decides when a knee is fitted')
-    }
-  })
-
-  it('a tenant whose subject reads are switched off: the week read\'s sentence alone under Our read, the blocks as they are', () => {
-    const d = marketFixture({ subject: 'cost', subjectDetail: 'rich', subjectReadsOff: true })
-    const text = renderText(panelOf(d))
-    expect(text).toContain('Our read People ask how to get a knee paid for, and what to do when a claim is refused. Month by month')
-    expect(text).not.toMatch(/People describe insurance refusals|What it means for/)
-    expect(text).toContain('What people did · of 64 in October so far')
-    assertCopyContract(panelOf(d))
-  })
-
-  it('no base line where the blocks read every video the level counts', () => {
-    const d = marketFixture({ subject: 'cost', subjectDetail: 'rich', period: 'month' })
-    const panel = { ...d.subjectPanel!, level: { ...d.subjectPanel!.level!, k: 64 } }
-    expect(render(<SubjectPanelView panel={panel} data={d} />)).not.toContain('data-subject-base')
-  })
-
-  it('this week with none of its videos: who it is about and where keep their frame, say so in one line, and give the month', () => {
-    const d = marketFixture({ subject: 'cost', subjectDetail: 'rich' })
-    const detail = d.subjectPanel!.detail!
-    const quiet = {
-      ...d.subjectPanel!,
-      detail: { ...detail, week: { k: 0, n: 241 }, cited: { month: 64, week: 0 }, who: { parts: [], n: 0, month: detail.who!.month }, platforms: { rows: [], n: 0, month: detail.platforms!.month } },
-    }
-    const text = renderText(<SubjectPanelView panel={quiet} data={d} />)
-    expect(text).toContain(`Who it’s about · this week ${SUBJECT_NONE_THIS_WEEK} October so far Össur 7 · Ottobock 6 · others 51`)
-    expect(text).toContain(`Where This week October so far TikTok 0 32 of 64 Instagram 0 16 of 64 YouTube 0 16 of 64 ${SUBJECT_NONE_THIS_WEEK}`)
-    assertCopyContract(<SubjectPanelView panel={quiet} data={d} />)
-  })
-
-  it('brands not counted yet: who it is about says so, and nothing else changes', () => {
-    const d = marketFixture({ subject: 'cost', subjectDetail: 'rich', period: 'month' })
-    const panel = { ...d.subjectPanel!, detail: { ...d.subjectPanel!.detail!, brands: 'not_counted' as const } }
-    const text = renderText(<SubjectPanelView panel={panel} data={d} />)
-    expect(text).toContain('Who it’s about Brands are not counted for this workspace yet.')
-    expect(text).not.toContain('Össur 7')
-    assertCopyContract(<SubjectPanelView panel={panel} data={d} />)
-  })
-
-  it('a subject whose check is open keeps its panel: no read of its own, no block, no quote (U6)', () => {
-    const d = marketFixture({ flagged: false, noNew: true, subjects: 'provisional', brands: 'not_counted', weeks: 'insufficient', noGroups: true, subject: 'cost', subjectDetail: 'rich' })
-    expect(d.subjectPanel).toMatchObject({ state: 'provisional', detail: null, read: null })
-    const text = renderText(panelOf(d))
-    expect(text).toContain(`Cost & access Close ${SUBJECT_NOT_MEASURED}.`)
-    expect(text).not.toMatch(/Who it’s about|What people did|Who’s saying it|Where|In their words|People describe insurance refusals|videos in your market/)
-    expect(text).toContain('Conversations inside it · this week, and October so far Insurance refusals for powered knees 19 31')
-    expect(render(panelOf(d))).not.toContain('data-copy="quote"')
-    assertCopyContract(panelOf(d))
-  })
-
-  it('a subject being re-described keeps its panel: no read of its own, no block, no quote (U6)', () => {
-    const d = marketFixture({ subjects: 'tracked', subject: 'community', subjectDetail: 'rich' })
-    expect(d.subjectPanel).toMatchObject({ state: 'failed', detail: null, read: null })
-    const text = renderText(panelOf(d))
-    expect(text).toContain(`Community & encouragement Close ${SUBJECT_NOT_MEASURED}. Conversations inside it`)
-    expect(text).not.toMatch(/Who it’s about|What people did|Who’s saying it|In their words|Our read|videos in your market/)
-    assertCopyContract(panelOf(d))
-  })
-
-  it('the page with the rich panel open keeps the copy contract and prints its quotes inside the panel only', () => {
-    assertCopyContract(<MarketPage data={RICH} />)
-    expect(quotesOutsidePanel(RICH)).toBe(0)
-  })
-})

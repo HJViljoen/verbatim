@@ -123,7 +123,7 @@ describe('level 1 (depth v2, T11b): the email a new snapshot sends', () => {
     const v = levelOneView(levelOneRead())
     expect(v.headline).toMatch(/^Buyers treated bag choice/)
     expect(v.numbers).toEqual({ week: { videos: 274, comments: 4777 }, month: { videos: 852, comments: 21468 }, where: 'in September so far' })
-    expect(v.lead).toMatchObject({ kind: 'flag', usual: { k: 38, n: 1089, months: 'June, July and August' }, href: '/dashboard/market?conv=t3' })
+    expect(v.lead).toMatchObject({ kind: 'flag', usual: { k: 38, n: 1089, months: 'June, July and August' }, href: '/dashboard/market/conversations/t3' })
     expect(flagFigure(sealandFlag())).toBe('19 of 241 videos this week · usually 38 of 1,089 over June, July and August')
   })
   it('says the usual as the check pooled it, never a rounded month: a small baseline is not "0 of 363"', () => {
@@ -133,8 +133,8 @@ describe('level 1 (depth v2, T11b): the email a new snapshot sends', () => {
     expect(flagFigure(sealandFlag({ baselineMonths: [] }))).toBe('19 of 241 videos this week')
   })
   it('opens each object where it lives: a conversation and a subject in Market, a rival in its Voices brand panel', () => {
-    expect(objectHref('theme', 'reg 1')).toBe('/dashboard/market?conv=reg%201')
-    expect(objectHref('subject', 's9')).toBe('/dashboard/market?subject=s9')
+    expect(objectHref('theme', 'reg 1')).toBe('/dashboard/market/conversations/reg%201')
+    expect(objectHref('subject', 's9')).toBe('/dashboard/market/subjects/s9')
     expect(objectHref('rival', 'competitor:Ottobock')).toBe('/dashboard/voices?brand=Ottobock')
     expect(objectHref('rival', 'Osprey Packs')).toBe('/dashboard/voices?brand=Osprey%20Packs')
     expect(objectHref('kind', 'question')).toBe('/dashboard/market')
@@ -144,9 +144,9 @@ describe('level 1 (depth v2, T11b): the email a new snapshot sends', () => {
     const v = levelOneView(levelOneRead({ unusual: sealandUnusual([sealandFlag(), second]) }))
     expect(v.lead?.kind === 'flag' && v.lead.flag.objectId).toBe('t3')
     expect(v.also.map((r) => [r.kind, r.label, r.figure, r.href])).toEqual([
-      ['flag', 'Comfort', '19 of 241 videos this week · usually 38 of 1,089 over June, July and August', '/dashboard/market?subject=s9'],
-      ['heard', 'Comparing named bags by trip fit', '18 videos this week · 47 in September so far', '/dashboard/market?conv=t1'],
-      ['heard', 'Laptop sleeves that fit a 16-inch machine', '12 videos this week · 30 in September so far', '/dashboard/market?conv=t7'],
+      ['flag', 'Comfort', '19 of 241 videos this week · usually 38 of 1,089 over June, July and August', '/dashboard/market/subjects/s9'],
+      ['heard', 'Comparing named bags by trip fit', '18 videos this week · 47 in September so far', '/dashboard/market/conversations/t1'],
+      ['heard', 'Laptop sleeves that fit a 16-inch machine', '12 videos this week · 30 in September so far', '/dashboard/market/conversations/t7'],
     ])
     expect(v.also).toHaveLength(ALSO_ROWS)
   })
@@ -161,7 +161,7 @@ describe('level 1 (depth v2, T11b): the email a new snapshot sends', () => {
         { themeId: 'tm', label: 'Makers showing their own builds', body: 'Makers.', videos: { week: 20, month: 20 }, evidence: '' },
       ],
     }))
-    expect(v.lead).toEqual({ kind: 'new', themeId: 't7', label: 'Laptop sleeves that fit a 16-inch machine', labelKind: 'theme', body: 'Sleeves.', videos: { week: 12, month: 30 }, href: '/dashboard/market?conv=t7' })
+    expect(v.lead).toEqual({ kind: 'new', themeId: 't7', label: 'Laptop sleeves that fit a 16-inch machine', labelKind: 'theme', body: 'Sleeves.', videos: { week: 12, month: 30 }, href: '/dashboard/market/conversations/t7' })
     expect(v.also.map((r) => [r.kind, r.label])).toEqual([
       ['new', 'Straps that dig in on a long walk'],
       ['heard', 'Asking for the bag in more colours'],
@@ -170,7 +170,7 @@ describe('level 1 (depth v2, T11b): the email a new snapshot sends', () => {
   })
   it('with nothing flagged or new, the week\'s biggest conversation leads ("Most talked about this week"); a set-apart one never', () => {
     const v = levelOneView(levelOneRead({ unusual: sealandUnusual([]) }))
-    expect(v.lead).toEqual({ kind: 'biggest', themeId: 't3', label: 'Asking for the bag in more colours', labelKind: 'theme', body: null, videos: { week: 24, month: 61 }, href: '/dashboard/market?conv=t3' })
+    expect(v.lead).toEqual({ kind: 'biggest', themeId: 't3', label: 'Asking for the bag in more colours', labelKind: 'theme', body: null, videos: { week: 24, month: 61 }, href: '/dashboard/market/conversations/t3' })
     expect(v.also.map((r) => r.label)).toEqual(['Comparing named bags by trip fit', 'Laptop sleeves that fit a 16-inch machine', 'Straps that dig in on a long walk'])
     expect(BIGGEST_HEADING).toBe('Most talked about this week')
   })

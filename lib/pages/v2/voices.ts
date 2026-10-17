@@ -12,7 +12,7 @@ import { loadVoicesMany } from '../subjects'
 import { ACCOUNT_FLOOR } from '../voice-surface-where'
 import { talkKindLabel } from '../overview-market/kinds'
 import { WHAT_THEY_SELL } from '../market-frame'
-import { surface } from '../../nav'
+import { marketConversationPath, surface } from '../../nav'
 import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../../chunk'
 import { standingPlacements, type StandingText, type TextKey } from '../../products/match'
 import {
@@ -160,9 +160,8 @@ export function askHref(question: string): string {
   return `${surface('ask').href}?ask=${encodeURIComponent(question.slice(0, 300))}`
 }
 
-/** A conversation opens in Market (T3's `?conv=`, a registry id). */
-export const conversationHref = (registryId: string): string =>
-  `${surface('market').href}?conv=${encodeURIComponent(registryId)}#conversation-panel`
+/** A conversation opens as its page on Market (17 Oct), by its registry id. */
+export const conversationHref = (registryId: string): string => marketConversationPath(registryId)
 
 // ---- small helpers -----------------------------------------------------------------
 

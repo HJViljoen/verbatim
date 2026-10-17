@@ -128,7 +128,6 @@ function Row({ row, data, selected }: { row: SubjectRow; data: MarketData; selec
               key={c.id}
               href={c.href}
               label={c.label}
-              selected={data.panel?.at === 'subjects' && data.panel.id === c.id}
               chip={<><ConvChip flag={c.flag} isNew={c.isNew} id={c.id} label={c.label} k={c.month ?? c.count ?? 0} n={data.month.category ?? 0} month={data.month.month} /><SetApartTag setApart={c.setApart} /></>}
               counts={week ? [c.count, c.month] : [c.count]}
             />
@@ -164,7 +163,7 @@ function Unmeasured({ board, selected }: { board: SubjectBoard; selected: string
 }
 
 export function SubjectBoardView({ board, data, style }: { board: SubjectBoard | null; data: MarketData; style?: CSSProperties }) {
-  const openSubject = data.subjectPanel?.id ?? null
+  const openSubject: string | null = null
   const rows = board?.rows ?? []
   const measured = rows.some((r) => r.level != null)
   return (

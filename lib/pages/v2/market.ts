@@ -41,6 +41,11 @@ import { factsFromReadings, marketComparable, subjectGate, subjectQuotes } from 
 import { fetchRunningRunIds } from '../latest-video-run'
 import { loadRegistryLabels } from '../registry-labels'
 import { WHAT_THEY_SELL } from '../market-frame'
+import { hasSiblings, type Crumb, type CrumbItem, type CrumbMenu } from '../crumbs'
+import { readLead } from '../week-read'
+import { weeklyReadView, type ResolvedQuote } from '../../reports/weekly-read'
+import { hydrateData } from '../../snapshots'
+import { MARKET_TABLE_ANCHOR, MARKET_WEEK_PATH, marketConversationHref, marketPeriodQuery, marketSubjectHref } from '../../nav'
 import { homeWeeks, homeWeeksFrame, loadWeekRows, WEEKS_FAILED, type WeeksFailed, type WeeksRead } from '../home'
 import { loadThemeQuotes, loadThemeSegmentRows, makerRuleEnabled, voiceOf, type CiteCandidate } from '../overview'
 import { pickQuotes, POOL_FLOOR } from '../overview-market'
@@ -53,36 +58,38 @@ import { flagPrints, weekLead } from '../../reading/week-lead'
 import { setApartOf } from '../../written/conversations'
 import { frozenFlag } from '../../written/unusual'
 
-// MARKET (Design v2, depth plan T3; boards E2-Market and E2-Market-Open):
-// what the market is talking about, at `/dashboard/market`.
+// MARKET (Design v2, depth plan T3; analysis first, as pages, 17 Oct: the F2
+// boards): what the market is talking about, at `/dashboard/market`, and its
+// pages under it (lib/nav.ts): the week's read (`/week`), a tracked subject
+// (`/subjects/<id>`) and a conversation (`/conversations/<registry id or
+// slug>`). NOTHING OPENS IN PLACE (Heinrich, 16 Oct: "if for example you go
+// on a subject, it could maybe fill the whole page"): every Open is a page,
+// with the breadcrumb and its switchers in the bar (lib/pages/crumbs.ts).
 //
-// THE PAGE, TOP TO BOTTOM, AND WHERE EACH PART COMES FROM:
+// THE TOP PAGE, TOP TO BOTTOM, AND WHERE EACH PART COMES FROM:
 //   1. THE BAR: the period's dates and the market's videos and comments
 //      (the published week read's frozen figures; the month's pooled
 //      denominators), and the period switch (`?period=week|month|time`).
-//   2. THE TOP ROW (this week): the anomaly check's first flag where it flagged
+//   2. THE WEEK CARD (this week): the published read's week in one line and
+//      what it means (`weekCardOf`), "Read the whole week" to its page.
+//   3. WHAT THE MARKET IS TALKING ABOUT: one card per tracked subject, its
+//      own read (`subjectCardsOf`: a headline and what it means, the
+//      published read's `subjectReads`), NO FIGURE (Heinrich, 16 Oct), in the
+//      subject board's order (`buildSubjectBoard`, `subjectOrder`).
+//   4. ALSO THIS WEEK: the anomaly check's first flag where it flagged
 //      something (`raisedFlags`, This week's own rule, lib/pages/week.ts),
-//      else the week's biggest conversation first heard this week (the read's
-//      `newThisWeek`, `firstHeardThisWeek`), else the week's biggest; then the
-//      biggest conversation's three weekly counts with no word (decision 1);
-//      then the rest of "new this week". This month: the month's three biggest
-//      conversations with their month bars. Over time: the market's months.
-//   3. THE SUBJECT BOARD: every confirmed subject's month so far against last
-//      month, banded through a `Verdict` (`loadObjectReadings`, the standing
-//      reading, lib/written/standing.ts `factsFromReadings`), its month line,
-//      and the conversations inside it (`placeSubject`) with the period's
-//      counts.
-//   4. THE RAIL: what people do in the comments (the six kinds, the month so
-//      far against last month), the market's videos week by week (the
+//      else the week's biggest conversation first heard this week, else the
+//      week's biggest (`weekLead`); then the week's biggest; then the rest
+//      of "new this week", or its stand-in (`earlierNewOf`, `alsoTalkedOf`).
+//      This month: the month's three biggest conversations with their month
+//      bars. Over time: the market's months.
+//   5. THE NUMBERS: what people do in the comments (the six kinds, the month
+//      so far against last month), the market's videos week by week (the
 //      Dashboard's own chart, `homeWeeks`), where it is said (`platform_mix`
-//      of the window or the month) and, this week, the read's "worth
-//      watching".
-//   5. EVERY CONVERSATION: a table of the period's conversations, filterable
-//      by subject (`?in=`), ten shown until `?all=1`.
-//   6. THE OPEN PANEL (`?conv=<registry id or slug>`, `?subject=<id>`): the
-//      conversation in full, in place, under the row it was opened from
-//      (`?at=top|subjects|table`).
-//   7. THIS MONTH ONLY, AT THE BOTTOM: the month's long-run read ("What holds
+//      of the window or the month); then every conversation, a table of the
+//      period's conversations, filterable by subject (`?in=`), ten shown
+//      until `?all=1`, each row opening its conversation's page.
+//   6. THIS MONTH ONLY, AT THE BOTTOM: the month's long-run read ("What holds
 //      across August and September"), the published `week_reads` row of kind
 //      'month' for the month the view reads (`loadPublishedLongRun` with
 //      `month`; Heinrich, 13 Oct: below the month's data, never at the top,
@@ -91,8 +98,7 @@ import { frozenFlag } from '../../written/unusual'
 //      EARLIER month (usually last month's; `before: month`) stands in,
 //      headed with its own month ("September’s long-run read"),
 //      one read only (`marketLongRunFor`). A closed month with no read, no
-//      section. Stored `week_read` prose, read after the figures, so level 2
-//      by position.
+//      section.
 //
 // DECISION 1 (13 Oct): no weekly direction words and no week figure on its
 // own. A week count is printed beside its month ("19 this week · 31 in
@@ -104,8 +110,12 @@ import { frozenFlag } from '../../written/unusual'
 // conversation's k and n are the category's videos, never the pooled market's.
 // The bar states the market once; every conversation figure says "category".
 //
-// NO QUOTES AT LEVEL 1 and NO MODEL SENTENCE AT THE TOP (Heinrich, 13 Oct):
-// the gated quotes (`loadThemeQuotes`) and "our read" live in the open panel.
+// ANALYSIS FIRST (Heinrich, 16 Oct; this reverses 13 Oct's "no model sentence
+// at the top of Market"): the week's read and each subject's read lead the
+// top page as stored `week_read` prose, about 600 words above the first
+// number, and the numbers sit one layer down. NO QUOTE AT LEVEL 1: the gated
+// quotes (`loadThemeQuotes`, `subjectQuotes`) and each conversation's "our
+// read" live on its page.
 //
 // PURE BUILDERS FIRST, THEN THE READS. Every read is the service role's
 // (`reading.client`), scoped to the session's client; a read that fails costs
@@ -134,27 +144,30 @@ export const MARKET_TIME_MONTHS = 6
 export const MARKET_SUBJECT_MONTHS = 6
 /** The six kinds the rail prints, Your market's own (`PICTURE_KINDS`). */
 export const MARKET_KINDS = ['question', 'praise', 'pain_point', 'feature_request', 'purchase_intent', 'objection'] as const
-/** "Worth watching" items, at most. */
-export const MARKET_WATCH = 2
+/** "What it means" lines the week card prints, at most (F2-Market). */
+export const MARKET_WEEK_MEANS = 3
 
 // ---- The shapes --------------------------------------------------------------------------
 
-/** Where an open panel sits: under the top row, under the subject board, or as
- *  the table's own row. */
-export type PanelAt = 'top' | 'subjects' | 'table'
+/**
+ * WHICH OF MARKET'S PAGES A LOAD IS FOR (depth as pages, 17 Oct): the top
+ * layer, the week's read, a tracked subject (by its id) or a conversation (by
+ * its registry id, or an old link's slug). Each reads only what its page
+ * prints; every figure on every page comes from the same builders.
+ */
+export type MarketView =
+  | { kind: 'top' }
+  | { kind: 'week' }
+  | { kind: 'subject'; id: string }
+  | { kind: 'conversation'; id: string }
 
 export interface MarketParams {
   period: Period
   /** `?month=YYYY-MM`: the month the month and over-time periods read. */
   month: string | null
-  /** `?conv=`: a theme registry id, or a theme slug (an old `?themes=` link). */
-  conv: string | null
-  /** `?subject=`: a subject id. */
-  subject: string | null
-  at: PanelAt | null
-  /** `?in=`: the table's subject filter. */
+  /** `?in=`: the table's subject filter (the top page only). */
   in: string | null
-  /** `?all=1`: the table shows every row. */
+  /** `?all=1`: the table shows every row (the top page only). */
   all: boolean
 }
 
@@ -271,6 +284,11 @@ export interface GroupLink {
   key: string
   name: string
   href: string
+  /** A subject's groups only (17 Oct): the subject's videos in the month
+   *  with the group's own insights in their talk (the group × subject cross,
+   *  `groupSubjects`), printed "k of n". Absent on a conversation's groups,
+   *  which Pass E names without a count. */
+  videos?: number
 }
 
 export interface SideCard {
@@ -422,8 +440,6 @@ export interface MarketRail {
    *  week can be drawn, the card still draws these slots, empty. */
   weeksAxis?: string[]
   platforms: PlatformsBlock | null
-  /** The week read's "worth watching" (stored `week_read` prose). */
-  watch: StoredLine[]
 }
 
 export interface TableFilter {
@@ -441,7 +457,7 @@ export interface MarketTable {
    *  how many conversations it holds is not printed (it is the count its
    *  chip withholds). Absent on a dump from before it: printed. */
   totalHeld?: boolean
-  rows: { conv: MarketConv; href: string; open: boolean }[]
+  rows: { conv: MarketConv; href: string }[]
   filters: TableFilter[]
   filter: string | null
   all: boolean
@@ -463,13 +479,13 @@ export interface PanelQuote {
   about: WhoAbout | null
 }
 
+/** A conversation in full: its page's body (17 Oct; until then the panel that
+ *  opened in place under the row it was clicked in). */
 export interface ConvPanel {
   id: string
   label: string
   kind: string | null
   subjectName: string | null
-  at: PanelAt
-  notchAt: number
   flag: Verdict | null
   isNew: boolean
   stats: { value: number; of?: number; label: string }[]
@@ -483,9 +499,10 @@ export interface ConvPanel {
   platforms: { rows: PlatformRow[]; n: number } | null
   quotes: PanelQuote[]
   askHref: string
-  closeHref: string
 }
 
+/** A tracked subject in full: its page's body (17 Oct; until then the panel
+ *  under the subject board). */
 export interface SubjectPanel {
   id: string
   name: string
@@ -493,8 +510,6 @@ export interface SubjectPanel {
    *  inside it are listed in every state (a failed one's too, since 14 Oct). */
   state: 'ready' | 'provisional' | 'failed' | 'unread'
   note: string | null
-  at: PanelAt
-  notchAt: number
   level: (Level & { pct: number }) | null
   verdict: Verdict | null
   monthText: string
@@ -517,7 +532,6 @@ export interface SubjectPanel {
    *  null in every other state, and on a dump from before it. */
   detail?: SubjectDetail | null
   askHref: string
-  closeHref: string
 }
 
 /**
@@ -563,6 +577,119 @@ export interface SubjectDetail {
   platforms: { rows: PlatformRow[]; n: number; month: { counts: Record<string, number>; n: number; text: string } | null } | null
   /** Three gated quotes (`subjectQuotes`, the strict subject gate). */
   quotes: PanelQuote[]
+  /** This week only (the subject's page, 17 Oct): its videos in each of the
+   *  three weekly windows the conversations count (`weekWindows`), oldest
+   *  first, by the same rule as `week` (a comment citing one of its members
+   *  dated in the window, on the market's videos); null where our own change
+   *  cut the window (never 0). Three bare counts with no word (decision 1).
+   *  Absent off the week, and on a dump from before it. */
+  weeks?: (number | null)[]
+}
+
+/**
+ * THE WEEK CARD, first under Market's bar on This week (F2-Market, 17 Oct):
+ * the published read's week in one line and what it means (its implications,
+ * up to three), with "Read the whole week" to the week's page. A read with
+ * nothing to print is `thin`; one that could not be read, `failed`: each says
+ * so in one line and opens nothing. Stored `week_read` prose.
+ */
+export interface WeekCard {
+  state: 'ready' | 'thin' | 'failed'
+  /** "5 to 11 Oct": the read's own frozen window. Null where unread. */
+  dates: string | null
+  /** The week in one line (v3 and v4's `headline`; an older read's In short). */
+  line: StoredLine | null
+  /** "What it means": the read's implications, at most `MARKET_WEEK_MEANS`. */
+  means: StoredLine[]
+  /** The week's page, where the read has words to open. */
+  href: string | null
+}
+
+/**
+ * ONE CARD PER TRACKED SUBJECT on Market's top layer (F2-Market and
+ * F2-Market-States, 17 Oct): the subject's own read, a headline and what it
+ * means, with NO FIGURE in any state (Heinrich, 16 Oct). Every card keeps its
+ * frame and its foot (the month words and Open, to the subject's page).
+ *   read         ready, its written read (`headline` where v3 wrote one)
+ *   thin         ready, too little said to write: code's one line
+ *   provisional  its check is open: `SUBJECT_NOT_MEASURED`, then Inside it
+ *   failed       its check failed: `FAILED_EXPLAINED` (said once a page,
+ *                here), then Inside it, as an open one (14 Oct)
+ *   no_read      ready, with no read of the month (or the tenant's reads
+ *                switched off): one line saying so
+ */
+export interface SubjectCard {
+  id: string
+  name: string
+  state: 'read' | 'thin' | 'provisional' | 'failed' | 'no_read'
+  /** The v3 headline, where the stored read has one. */
+  headline: StoredLine | null
+  /** What it means (a written read), or code's one line (thin), or, for a
+   *  written read the scrub left no meaning, its first paragraph. */
+  body: StoredLine | null
+  /** The state's own line, where it has one (not measured, failed, no read). */
+  note: string | null
+  /** Not measured or failed: up to `MARKET_INSIDE` conversation names. */
+  inside: { id: string; label: string; href: string }[]
+  /** "October so far". */
+  monthText: string
+  href: string
+}
+
+/** A tracked subject as the switcher lists it: in the top page's order, its
+ *  state in words, never a figure. */
+export interface SubjectNavItem {
+  id: string
+  name: string
+  href: string
+  /** Its check passed (ranked above the hairline) or not (below it). */
+  ready: boolean
+  /** "Little talk so far" (a thin read), `SUBJECT_NOT_MEASURED`, or none. */
+  note: string | null
+}
+
+/** A tracked subject's page (`/dashboard/market/subjects/[id]`, 17 Oct). */
+export interface SubjectPage {
+  panel: SubjectPanel
+  /** This week: the three windows' labels, oldest first (the subject's own
+   *  counts are `panel.detail.weeks`). */
+  weekLabels: string[]
+  /** Last month's share, for the change tile's words, where the pair may be
+   *  printed. */
+  prevPct: number | null
+  /** The biggest three conversations inside it, with who they are about. */
+  inside: { conv: MarketConv; href: string }[]
+  /** Every conversation inside it this period. */
+  insideTotal: number
+  /** The top page's table filtered to it. */
+  allHref: string
+}
+
+/** A conversation's page (`/dashboard/market/conversations/[conv]`). */
+export interface ConvPage {
+  panel: ConvPanel
+  /** This week: its three weekly counts, oldest first (null where cut), with
+   *  the windows' labels; empty off the week. */
+  weeks: { label: string; count: number | null }[]
+}
+
+/** The week's page (`/dashboard/market/week`, F2-Market-Week): the published
+ *  read in full. Stored `week_read` prose; the quotes resolve at render. */
+export interface WeekPage {
+  state: 'ready' | 'thin' | 'failed'
+  dates: string | null
+  line: StoredLine | null
+  /** What happened, a paragraph each, each followed by the quote its ref
+   *  carries. */
+  story: { line: StoredLine; quote: PanelQuote | null }[]
+  means: StoredLine[]
+  /** New this week: the writer's line on each conversation first heard. */
+  fresh: StoredLine[]
+  watch: StoredLine[]
+  /** Every conversation this week: the top page's table total. */
+  conversations: number | null
+  askHref: string
+  tableHref: string
 }
 
 export interface MarketData {
@@ -578,8 +705,22 @@ export interface MarketData {
   subjects: SubjectBoard | null
   rail: MarketRail
   table: MarketTable | null
-  panel: ConvPanel | null
-  subjectPanel: SubjectPanel | null
+  /** Which page this is. Absent on a dump from before the pages: the top. */
+  view?: MarketView['kind']
+  /** The top page, This week: the week card (null off the week). */
+  weekCard?: WeekCard | null
+  /** The top page: one card per tracked subject, in the page's order. */
+  subjectCards?: SubjectCard[]
+  /** The level pages: the tracked subjects, for the switcher. */
+  subjectNav?: SubjectNavItem[]
+  /** The level pages: the breadcrumb (the last segment is the page). */
+  crumbs?: Crumb[]
+  subjectPage?: SubjectPage | null
+  convPage?: ConvPage | null
+  weekPage?: WeekPage | null
+  /** A level page whose id names nothing Market follows (unknown, or
+   *  retired): the page says so in one calm line. */
+  missing?: boolean
   /** Who the talk is about: `counted` (brand rules and their rows),
    *  `not_counted` (rules, no rows written yet: Össur before its back-read) or
    *  `not_read` (no brand rules). Only `counted` prints a split. */
@@ -651,65 +792,59 @@ const one = (v: string | string[] | undefined | null): string | null => {
 /**
  * The page's params. The period opens on the week (Heinrich, 11 Oct); a bare
  * `?month=` (an old `overview?month=` link redirects with the period set) reads
- * the month. `?month=` takes `YYYY-MM` or a full date.
+ * the month. `?month=` takes `YYYY-MM` or a full date. `?at=` (where a panel
+ * opened in place) is retired with the panels (17 Oct): nothing reads it.
  */
 export function marketParams(sp: Readonly<Record<string, string | string[] | undefined>>): MarketParams {
   const p = one(sp.period)
   const monthRaw = one(sp.month)
   const month = monthRaw && /^\d{4}-\d{2}/.test(monthRaw) ? `${monthRaw.slice(0, 7)}-01` : null
   const period: Period = p === 'week' || p === 'month' || p === 'time' ? p : month ? 'month' : 'week'
-  const at = one(sp.at)
   return {
     period,
     month,
-    conv: one(sp.conv),
-    subject: one(sp.subject),
-    at: at === 'top' || at === 'subjects' || at === 'table' ? at : null,
     in: one(sp.in),
     all: one(sp.all) === '1',
   }
 }
 
 /**
- * The page's address with these params. The period is left out on the week
- * (the default); the month only off the week. The hash is the panel's or the
- * block's anchor.
+ * The top page's address with these params. The period is left out on the
+ * week (the default); the month only off the week. The hash is a block's
+ * anchor.
  */
 export function marketHref(p: Partial<MarketParams>, hash?: string): string {
   const q = new URLSearchParams()
   if (p.period && p.period !== 'week') q.set('period', p.period)
   if (p.month && p.period && p.period !== 'week') q.set('month', p.month.slice(0, 7))
-  if (p.conv) q.set('conv', p.conv)
-  if (p.subject) q.set('subject', p.subject)
-  if (p.at && (p.conv || p.subject)) q.set('at', p.at)
   if (p.in) q.set('in', p.in)
   if (p.all) q.set('all', '1')
   const qs = q.toString()
   return `${MARKET}${qs ? `?${qs}` : ''}${hash ? `#${hash}` : ''}`
 }
 
-/** The page's own address, period and month kept, nothing open. */
-const baseOf = (p: MarketParams): Partial<MarketParams> => ({ period: p.period, month: p.month })
-
-/** Open a conversation from where it was clicked. */
-export function convHref(p: MarketParams, id: string, at: PanelAt): string {
-  return marketHref({ ...baseOf(p), in: p.in, all: p.all, conv: id, at }, 'conv-panel')
+/** A conversation's page (17 Oct: a page, never a panel in place), the
+ *  period and month kept (`marketConversationHref`, lib/nav.ts). */
+export function convHref(p: Pick<MarketParams, 'period' | 'month'>, id: string): string {
+  return marketConversationHref(id, p)
 }
 
-/** Open a subject from the board. */
-export function subjectHref(p: MarketParams, id: string): string {
-  return marketHref({ ...baseOf(p), in: p.in, all: p.all, subject: id, at: 'subjects' }, 'subject-panel')
+/** A tracked subject's page, the period and month kept. */
+export function subjectHref(p: Pick<MarketParams, 'period' | 'month'>, id: string): string {
+  return marketSubjectHref(id, p)
 }
 
-/** The page with nothing open, scrolled back to where the panel was. */
-export function closeHref(p: MarketParams, at: PanelAt): string {
-  const anchor = at === 'top' ? 'top-row' : at === 'subjects' ? 'subjects' : 'conversations'
-  return marketHref({ ...baseOf(p), in: p.in, all: p.all }, anchor)
+/** A period's address (the switch), the month kept off the week: the top
+ *  page by default, or the level page it sits on (`path`). */
+export function periodHref(p: MarketParams, period: Period, path: string = MARKET): string {
+  if (path === MARKET) return marketHref({ period, month: period === 'week' ? null : p.month })
+  return `${path}${marketPeriodQuery({ period, month: period === 'week' ? null : p.month })}`
 }
 
-/** A period's address (the switch), the month kept off the week. */
-export function periodHref(p: MarketParams, period: Period): string {
-  return marketHref({ period, month: period === 'week' ? null : p.month })
+/** The top page's table filtered to one subject, the period kept: where a
+ *  subject's page sends "All N conversations in {subject}". */
+export function subjectTableHref(p: Pick<MarketParams, 'period' | 'month'>, id: string): string {
+  return marketHref({ period: p.period, month: p.month, in: id }, MARKET_TABLE_ANCHOR)
 }
 
 // ---- Weeks (pure) -------------------------------------------------------------------------
@@ -1213,7 +1348,6 @@ export function tableFilterOf(convs: readonly MarketConv[], wanted: string | nul
 export function buildTable(input: {
   convs: readonly MarketConv[]
   params: MarketParams
-  openId: string | null
   months: MarketTable['months']
   /** Subjects whose check is open: their chips print no count. */
   pending: ReadonlySet<string>
@@ -1229,11 +1363,7 @@ export function buildTable(input: {
   }
   const filter = tableFilterOf(input.convs, p.in)
   const listed = filter ? input.convs.filter((c) => c.subjectId === filter) : input.convs
-  const shown = p.all ? listed : listed.slice(0, MARKET_TABLE_ROWS)
-  // An open conversation further down the list is shown, so its panel has a
-  // row to open under.
-  const openRow = input.openId && !shown.some((c) => c.id === input.openId) ? listed.find((c) => c.id === input.openId) : null
-  const rows = [...shown, ...(openRow ? [openRow] : [])]
+  const rows = p.all ? listed : listed.slice(0, MARKET_TABLE_ROWS)
   const base = { period: p.period, month: p.month }
   const chip = ([id, s]: [string, { name: string; count: number }], counted: boolean): TableFilter =>
     ({ id, name: s.name, count: counted ? s.count : null, href: marketHref({ ...base, in: id, all: p.all }, 'conversations') })
@@ -1252,7 +1382,7 @@ export function buildTable(input: {
   return {
     total: listed.length,
     ...(filter != null && input.pending.has(filter) ? { totalHeld: true } : {}),
-    rows: rows.map((c) => ({ conv: c, href: convHref(p, c.id, 'table'), open: c.id === input.openId })),
+    rows: rows.map((c) => ({ conv: c, href: convHref(p, c.id) })),
     filters: bySubject.size > 0 ? filters : [],
     filter,
     all: p.all,
@@ -1263,21 +1393,6 @@ export function buildTable(input: {
 }
 
 // ---- The open panel (pure) ----------------------------------------------------------------
-
-/**
- * Where the notch points: the centre of the clicked item, across the row. The
- * top row is laid out by how many cards stand beside the hero (`topSpans`):
- * 6 · 3 · 3 (the board's), 7 · 5 with one, the hero alone with none.
- */
-export function notchOf(at: PanelAt, index = 0, sides = 2): number {
-  if (at === 'top') {
-    const spans = topSpans(sides)
-    const before = spans.slice(0, index).reduce((a, b) => a + b, 0)
-    return (before + (spans[index] ?? spans[0]) / 2) / 12
-  }
-  if (at === 'subjects') return 0.3
-  return 0.12
-}
 
 /** The top row's column spans (of twelve), hero first. Pure. */
 export function topSpans(sides: number): number[] {
@@ -1678,21 +1793,224 @@ async function loadWeekFlag(db: SupabaseClient, clientId: string, runId: string)
   return first ? flagOfRow(first) : null
 }
 
+// ---- The pages' pure builders (17 Oct) -----------------------------------------------------
+
+/** The words a switcher prints beside a subject whose read is thin (the
+ *  F2-Market-Subject-Switcher board's own). */
+export const LITTLE_TALK = 'Little talk so far'
+
+/**
+ * THE TOP PAGE'S ORDER OF SUBJECTS, the cards' and the switcher's alike: the
+ * subjects with a level, biggest first by the board's own order (the standing
+ * facts': the month's videos about it, `level.k`, then the name); then the
+ * ready ones not read this month; then those whose check has not passed, by
+ * name, unranked (ruling U6). Pure.
+ */
+export function subjectOrder<T extends Pick<SubjectRow, 'level' | 'pending'>>(rows: readonly T[]): T[] {
+  return [
+    ...rows.filter((r) => r.level != null),
+    ...rows.filter((r) => r.level == null && r.pending?.state === 'unread'),
+    ...rows.filter((r) => r.level == null && r.pending != null && r.pending.state !== 'unread'),
+  ]
+}
+
+/**
+ * The week card (F2-Market): the published read's one line and its
+ * implications, or why there is none. `published` is the read, `'failed'`
+ * where it could not be read. Pure.
+ */
+export function weekCardOf(published: PublishedWeekRead | 'failed' | null): WeekCard | null {
+  if (published === 'failed') return { state: 'failed', dates: null, line: null, means: [], href: null }
+  if (!published) return null
+  const read = published.data
+  const figures = (read.figures ?? {}) as unknown as PrintedFigures
+  const lead = readLead(read)
+  const means = read.version === 2
+    ? (read.implications ?? []).map((x) => (x.body ?? '').trim()).filter(Boolean).slice(0, MARKET_WEEK_MEANS).map((body) => ({ body, figures }))
+    : []
+  const dates = weekReadDates(read.window) || null
+  if (!lead && means.length === 0) return { state: 'thin', dates, line: null, means: [], href: null }
+  return { state: 'ready', dates, line: lead ? { body: lead, figures } : null, means, href: MARKET_WEEK_PATH }
+}
+
+/**
+ * One card per tracked subject (F2-Market-States' six states), in the top
+ * page's order (`subjectOrder`). The words are the published read's own
+ * (`subjectReadOf`, where the tenant's reads are switched on); no card prints
+ * a figure in any state. Pure.
+ */
+export function subjectCardsOf(a: {
+  rows: readonly SubjectRow[]
+  read: WeekReadData | null
+  month: string
+  monthText: string
+  readsOn: boolean
+  href: (id: string) => string
+}): SubjectCard[] {
+  const line = (body: string): StoredLine => ({ body: body.trim(), figures: {} })
+  return subjectOrder(a.rows).map((row): SubjectCard => {
+    const base = { id: row.id, name: row.name, monthText: a.monthText, href: a.href(row.id), headline: null, body: null, note: null, inside: [] }
+    const named = row.inside.slice(0, MARKET_INSIDE).map((c) => ({ id: c.id, label: c.label, href: c.href }))
+    if (row.pending?.state === 'provisional') return { ...base, state: 'provisional', note: SUBJECT_NOT_MEASURED, inside: named }
+    if (row.pending?.state === 'failed') return { ...base, state: 'failed', note: FAILED_EXPLAINED, inside: named }
+    const r = a.readsOn ? subjectReadOf(a.read, row.id, a.month) : null
+    if (r?.status === 'thin') return { ...base, state: 'thin', body: line(r.saying.find((p) => p.trim()) ?? '') }
+    if (r) {
+      const means = r.means.trim()
+      return {
+        ...base,
+        state: 'read',
+        headline: r.status === 'ready' && r.headline?.trim() ? line(r.headline) : null,
+        body: line(means || (r.saying.find((p) => p.trim()) ?? '')),
+      }
+    }
+    return { ...base, state: 'no_read', note: `No read of ${row.name} in ${longMonth(a.month)} yet.` }
+  })
+}
+
+/** The switcher's subjects: the top page's order, a thin read's words, the
+ *  unready ones marked (`SUBJECT_NOT_MEASURED`), the period kept. Pure. */
+export function subjectNavOf(a: {
+  rows: readonly SubjectRow[]
+  read: WeekReadData | null
+  month: string
+  readsOn: boolean
+  href: (id: string) => string
+}): SubjectNavItem[] {
+  return subjectOrder(a.rows).map((row) => {
+    const ready = row.pending?.state !== 'provisional' && row.pending?.state !== 'failed'
+    const thin = ready && a.readsOn && subjectReadOf(a.read, row.id, a.month)?.status === 'thin'
+    return { id: row.id, name: row.name, href: a.href(row.id), ready, note: !ready ? SUBJECT_NOT_MEASURED : thin ? LITTLE_TALK : null }
+  })
+}
+
+/** The switcher's menu of subjects, the current one ticked: the ready ones
+ *  ranked, the rest below the hairline. Pure. */
+export function subjectMenu(nav: readonly SubjectNavItem[], currentId: string): CrumbMenu | null {
+  const item = (s: SubjectNavItem): CrumbItem => ({ key: s.id, label: s.name, href: s.href, current: s.id === currentId, note: s.note })
+  const menu: CrumbMenu = {
+    label: 'Your subjects',
+    switchLabel: 'Switch to another subject',
+    items: nav.filter((s) => s.ready).map(item),
+    below: nav.filter((s) => !s.ready).map(item),
+  }
+  return hasSiblings(menu) && nav.length > 1 ? menu : null
+}
+
+/** "Market": the breadcrumb's root, the period kept. */
+const marketCrumb = (p: MarketParams): Crumb => ({ label: 'Market', href: periodHref(p, p.period) })
+
+/** A subject's page: "Market / {subject} ⌃⌄". Pure. */
+export function subjectCrumbs(p: MarketParams, nav: readonly SubjectNavItem[], subject: { id: string; name: string }): Crumb[] {
+  return [marketCrumb(p), { label: subject.name, href: null, menu: subjectMenu(nav, subject.id) }]
+}
+
+/**
+ * A conversation's page. Under a READY subject (`placeSubject`, the one rule)
+ * it reads "Market / {subject} ⌃⌄ / {conversation} ⌃⌄", its siblings that
+ * subject's "Inside it"; with none, "Market / {conversation} ⌃⌄", its siblings
+ * the period's conversations in the table's order. A segment with no other
+ * page to switch to draws no chevron. Pure.
+ */
+export function conversationCrumbs(a: {
+  p: MarketParams
+  nav: readonly SubjectNavItem[]
+  conv: { id: string; label: string }
+  parent: { id: string; name: string } | null
+  /** The parent's set: the subject's conversations, or the period's. */
+  siblings: readonly { id: string; label: string; href: string }[]
+}): Crumb[] {
+  const items: CrumbItem[] = a.siblings.map((c) => ({ key: c.id, label: c.label, href: c.href, current: c.id === a.conv.id, slot: 'pass_b_theme' }))
+  const menu: CrumbMenu | null = items.length > 1 || (items.length === 1 && !items[0].current)
+    ? { label: a.parent ? `Inside ${a.parent.name}` : 'This period’s conversations', switchLabel: a.parent ? `Switch to another conversation in ${a.parent.name}` : 'Switch to another conversation', items }
+    : null
+  const self: Crumb = { label: a.conv.label, href: null, slot: 'pass_b_theme', menu }
+  if (!a.parent) return [marketCrumb(a.p), self]
+  return [marketCrumb(a.p), { label: a.parent.name, href: subjectHref(a.p, a.parent.id), menu: subjectMenu(a.nav, a.parent.id) }, self]
+}
+
+/** The week's page: "Market / This week's read", no chevron (a read is one
+ *  week's). */
+export const WEEK_PAGE_TITLE = 'This week’s read'
+export const weekCrumbs = (p: MarketParams): Crumb[] => [marketCrumb(p), { label: WEEK_PAGE_TITLE, href: null }]
+
+/** The question the week's page asks the Agent. */
+export const WEEK_ASK = 'What happened in my market this week?'
+
+/**
+ * The week's page (F2-Market-Week) from the HYDRATED published read: what
+ * happened, each paragraph followed by the quote its ref carries (words
+ * resolved at render, as every stored artefact's), what it means, new this
+ * week, worth watching. `conversations` is the top page's table total. Pure.
+ */
+export function weekPageOf(a: { published: PublishedWeekRead | 'failed' | null; read: WeekReadData | null; conversations: number | null; p: MarketParams }): WeekPage {
+  const base = {
+    dates: null, line: null, story: [], means: [], fresh: [], watch: [], conversations: a.conversations,
+    askHref: `/dashboard/agent?ask=${encodeURIComponent(WEEK_ASK)}`,
+    tableHref: marketHref({ period: 'week' }, MARKET_TABLE_ANCHOR),
+  }
+  if (a.published === 'failed' || !a.published || !a.read) return { ...base, state: 'failed' }
+  const read = a.read
+  const figures = (read.figures ?? {}) as unknown as PrintedFigures
+  const line = (body: string): StoredLine => ({ body: body.trim(), figures })
+  const view = weeklyReadView(read)
+  const dates = weekReadDates(read.window) || null
+  const story = view.story.map((s) => ({ line: line(s.body), quote: s.quote ? storedQuoteOf(s.quote) : null }))
+  const means = view.implications.map(line)
+  const lead = readLead(read)
+  if (!lead && story.length === 0 && means.length === 0) return { ...base, dates, state: 'thin' }
+  return {
+    ...base,
+    state: 'ready',
+    dates,
+    line: lead ? line(lead) : null,
+    story,
+    means,
+    fresh: read.version === 2 ? (read.newThisWeek ?? []).map((x) => (x.body ?? '').trim()).filter(Boolean).map(line) : [],
+    // As stored: a watch line is a bare clause (F2-Market-Week prints it so).
+    watch: read.version === 2 ? (read.watch ?? []).map((x) => (x.body ?? '').trim()).filter(Boolean).map(line) : [],
+  }
+}
+
+/** A stored quote, resolved, as a page prints it: "YouTube · 9 Oct". */
+export function storedQuoteOf(q: ResolvedQuote): PanelQuote {
+  return {
+    text: q.text,
+    lang: q.lang ?? null,
+    english: q.english ?? null,
+    source: [q.platform ? platformLabel(q.platform) : null, q.date ? shortDate(`${q.date.slice(0, 10)}T12:00:00.000Z`) : null].filter(Boolean).join(' · '),
+    about: null,
+  }
+}
+
 // ---- The loader ---------------------------------------------------------------------------
 
 /**
- * Market, for the session's client. Null is the first-run state: no delivered
- * update yet, so nothing has been read.
+ * Market, for the session's client: the top layer, or one of its pages
+ * (`view`, 17 Oct). Null is the first-run state: no delivered update yet, so
+ * nothing has been read.
+ *
+ * EACH PAGE READS WHAT IT PRINTS. The top page reads the week (or the month),
+ * the subject board's readings, the side cards, the table and the flag; the
+ * week's page the published read, its quotes and the week's conversations;
+ * a subject's page its readings, its blocks and the conversations inside it;
+ * a conversation's page its panel and the subjects its breadcrumb names.
+ * Every figure on every page comes from the same builders, so a page and the
+ * top layer never disagree.
  */
 export async function loadMarket(input: {
   supabase: SupabaseClient
   clientId: string
   reading: ReadingHandle
   params: MarketParams
+  view?: MarketView
   now?: Date
 }): Promise<MarketData | null> {
   const { supabase, clientId } = input
   const db = input.reading.client
+  const view: MarketView = input.view ?? { kind: 'top' }
+  const isTop = view.kind === 'top'
+  const isWeekPage = view.kind === 'week'
   const now = input.now ?? new Date()
   const nowIso = now.toISOString()
   const nowMonth = monthStartOf(nowIso)
@@ -1702,25 +2020,30 @@ export async function loadMarket(input: {
   for (let i = 0; i < 13; i++) from = prevMonth(from)
   const themedRunAhead = fetchRunningRunIds(supabase, clientId, 'market').then((ids) => fetchThemedRunId(supabase, clientId, ids, 'market'))
   themedRunAhead.catch(() => {})
-  const subjectsAhead = soft('subjects', loadSubjects(db, clientId), { all: [], placed: null })
-  const pairAhead = loadAppPairOn(input.reading, nowIso)
+  // The week's page places nothing in a subject and compares nothing.
+  const noSubjects = { all: [], placed: null } as Awaited<ReturnType<typeof loadSubjects>>
+  const subjectsAhead = isWeekPage ? Promise.resolve(noSubjects) : soft('subjects', loadSubjects(db, clientId), noSubjects)
+  const pairAhead: Promise<PairOn | null> = isWeekPage ? Promise.resolve(null) : loadAppPairOn(input.reading, nowIso)
   // A failed change-log or cadence read is null (both read an array or
-  // throw): the weekly bars are then WEEKS_FAILED, never drawn uncut.
-  const changesAhead = soft<Awaited<ReturnType<typeof loadChanges>> | null>('changes', loadChanges(db, clientId), null)
-  const cadenceAhead = soft<Awaited<ReturnType<typeof loadCadenceRuns>> | null>('cadence', loadCadenceRuns(supabase, clientId), null)
-  const personasAhead = soft('personas', loadPersonas(db, clientId), [])
+  // throw): the weekly bars are then WEEKS_FAILED, never drawn uncut. The
+  // week's page reads only the newest window, which no change cuts.
+  const changesAhead = isWeekPage ? Promise.resolve([] as Awaited<ReturnType<typeof loadChanges>>) : soft<Awaited<ReturnType<typeof loadChanges>> | null>('changes', loadChanges(db, clientId), null)
+  const cadenceAhead = isWeekPage ? Promise.resolve([] as Awaited<ReturnType<typeof loadCadenceRuns>>) : soft<Awaited<ReturnType<typeof loadCadenceRuns>> | null>('cadence', loadCadenceRuns(supabase, clientId), null)
   // A failed read is WEEKS_FAILED, never null: null is "too few clean weeks".
-  const weekRowsAhead = soft<Awaited<ReturnType<typeof loadWeekRows>> | typeof WEEKS_FAILED>('weeks', loadWeekRows(db, clientId, nowIso), WEEKS_FAILED)
-  const [clientRes, runs, rivals, competitors, published, history, schedule] = await Promise.all([
+  const weekRowsAhead = isTop
+    ? soft<Awaited<ReturnType<typeof loadWeekRows>> | typeof WEEKS_FAILED>('weeks', loadWeekRows(db, clientId, nowIso), WEEKS_FAILED)
+    : Promise.resolve(WEEKS_FAILED)
+  const [clientRes, runs, rivals, competitors, publishedRead, history, schedule] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     loadDeliveredRuns(supabase, clientId),
     loadTrackedRivals(supabase, clientId),
     soft('competitors', loadCompetitors(db, clientId), []),
-    soft('read', loadPublishedWeekRead(db, clientId), null as PublishedWeekRead | null),
+    soft<PublishedWeekRead | null | 'failed'>('read', loadPublishedWeekRead(db, clientId), 'failed'),
     loadMonthSeries(db, clientId, { from, to: nowIso, updatesByMonth: {}, firstRunMonth: null }),
     soft('schedule', loadReadingSchedule(db, clientId), null),
   ])
   if (runs.length === 0) return null
+  const published = publishedRead === 'failed' ? null : publishedRead
   const brand = ((clientRes.data as { company_name: string | null } | null)?.company_name ?? '').trim() || 'Your brand'
   const noun = WHAT_THEY_SELL[clientId] ?? null
   const rivalAudiences = marketRivalAudiences(rivals)
@@ -1728,17 +2051,19 @@ export async function loadMarket(input: {
   const read = published?.data ?? null
   const windows = read ? weekWindows(read.window) : null
   // THE WEEK NEEDS A PUBLISHED READ (its window is the week): without one the
-  // month shows, and the bar says why (`weekUnavailable`).
-  const weekUnavailable = input.params.period === 'week' && !windows
-  const period: Period = weekUnavailable ? 'month' : input.params.period
+  // month shows, and the bar says why (`weekUnavailable`). The week's page is
+  // the week's alone.
+  const asked: Period = isWeekPage ? 'week' : input.params.period
+  const weekUnavailable = asked === 'week' && !windows
+  const period: Period = weekUnavailable && !isWeekPage ? 'month' : asked
   const p: MarketParams = { ...input.params, period }
 
   // THE MONTH: the week's restatement month (`readingMonthOf`: a week that
   // starts in one month is restated against it, in full), else the reading
   // month every reading page reads (decision A), or `?month=`.
-  const view = readingViewFrom({ now: nowIso, runs, denominators: history.denominators, rivalAudiences, schedule, explicit: p.month ? p.month.slice(0, 7) : null })
+  const readingView = readingViewFrom({ now: nowIso, runs, denominators: history.denominators, rivalAudiences, schedule, explicit: p.month ? p.month.slice(0, 7) : null })
   const weekMonth = read ? readingMonthOf(read.window) : null
-  const month = period === 'week' && weekMonth ? monthStartOf(weekMonth.month) : monthStartOf(view.reading.month)
+  const month = period === 'week' && weekMonth ? monthStartOf(weekMonth.month) : monthStartOf(readingView.reading.month)
   // "So far" only while the month is under way (`monthSoFar`, the tile's too).
   const soFar = monthSoFar(month, nowMonth, period === 'week' && (weekMonth?.complete ?? false))
   const pooled = pooledDenominators(history.denominators.map((d) => ({ month: d.month, audience: d.audience, videos: d.videos, comments: d.comments ?? 0 })), rivalAudiences)
@@ -1762,36 +2087,44 @@ export async function loadMarket(input: {
   // is still filling and has none of its own, the newest earlier month's
   // (`marketLongRunFor`). A read that fails costs that section only.
   const noLongRun = { own: null, closed: null } as { own: StoredLongRun | null; closed: StoredLongRun | null }
-  const longRunAhead: Promise<typeof noLongRun | 'failed'> = period === 'month'
+  const longRunAhead: Promise<typeof noLongRun | 'failed'> = isTop && period === 'month'
     ? soft<typeof noLongRun | 'failed'>('longRun', (async () => {
         const own = await loadPublishedLongRun(db, clientId, { month })
         if (!soFar || marketLongRunOf(own, month)) return { own, closed: null }
         return { own, closed: await loadPublishedLongRun(db, clientId, { before: month }) }
       })(), 'failed')
     : Promise.resolve(noLongRun)
+  // The groups (names, each opening in Voices): the month's lead cards, a
+  // subject's page and a conversation's. The week's three small cards name none.
+  const personasAhead = (isTop && period === 'month') || view.kind === 'subject' || view.kind === 'conversation'
+    ? soft('personas', loadPersonas(db, clientId), [] as PersonaLink[])
+    : Promise.resolve([] as PersonaLink[])
 
   // ── wave 2: the period's readings ──
   const [themedRunId, changes, cadence] = await Promise.all([themedRunAhead.catch(() => null), changesAhead, cadenceAhead])
   const ourChanges = ourChangesWithoutGatherFlags((changes ?? []).filter((r) => !isFailOpenFix(r)))
-  const cut = period === 'week' && windows ? cutWindows(windows, ourChanges, cadence ?? []) : []
+  const cut = period === 'week' && windows ? (isWeekPage ? windows.map(() => false) : cutWindows(windows, ourChanges, cadence ?? [])) : []
+  const last = (windows?.length ?? 0) - 1
   const windowReadsAhead = period === 'week' && windows && themedRunId
-    ? Promise.all(windows.map((w, i) => (cut[i]
+    ? Promise.all(windows.map((w, i) => (cut[i] || (isWeekPage && i !== last)
       ? Promise.resolve(null)
       : soft(`window${i}`, loadWindowReading(db, clientId, { from: w.from, to: w.to, runId: themedRunId, audiences: market }), null))))
     : Promise.resolve([] as (WindowReading | null)[])
   const [windowReads, runThemes, monthRows, subjects, pair, segmentRows, flag] = await Promise.all([
     windowReadsAhead,
     soft('themes', loadRunThemes(db, clientId, themedRunId), new Map<string, RunTheme>()),
-    soft('monthThemes', loadMonthThemeRows(db, clientId, month), new Map<string, { videos: number; mix: PlatformMix | null }>()),
+    isWeekPage ? Promise.resolve(new Map<string, { videos: number; mix: PlatformMix | null }>()) : soft('monthThemes', loadMonthThemeRows(db, clientId, month), new Map<string, { videos: number; mix: PlatformMix | null }>()),
     subjectsAhead,
     pairAhead,
-    makerRuleEnabled(clientId) && themedRunId ? soft('segments', loadThemeSegmentRows(db, clientId, month, themedRunId), null) : Promise.resolve(null),
-    period === 'week' && published ? soft('flag', loadWeekFlag(db, clientId, published.runId), null) : Promise.resolve(null),
+    !isWeekPage && makerRuleEnabled(clientId) && themedRunId ? soft('segments', loadThemeSegmentRows(db, clientId, month, themedRunId), null) : Promise.resolve(null),
+    !isWeekPage && period === 'week' && published ? soft('flag', loadWeekFlag(db, clientId, published.runId), null) : Promise.resolve(null),
   ])
 
   // Maker-led and off-topic themes stay in every count and lead nothing.
   const setApart = setApartOf(segmentRows)
 
+  // ONE WEEK: what is new this week is the published read's (`newThisWeek`),
+  // so the week card, the week's page and "Also this week" never disagree.
   const newIds = new Set(read && read.version === 2 ? read.newThisWeek.map((n) => n.themeId) : [])
   const base: Omit<ConvInput, 'series'> = {
     period,
@@ -1808,20 +2141,15 @@ export async function loadMarket(input: {
     pair,
   }
   // The months the cards and the over-time table read (one series read, off
-  // the week: the week's cards draw weeks).
+  // the week, on the top page: the week's cards draw weeks).
   const ranked = buildConvs({ ...base, series: new Map() })
-  const series = period !== 'week' && ranked.length > 0
+  const series = isTop && period !== 'week' && ranked.length > 0
     ? await soft('series', loadThemeSeries(db, clientId, ranked.map((c) => c.id), month, MARKET_CARD_MONTHS), new Map<string, MonthSeries>())
     : new Map<string, MonthSeries>()
   const convInput: ConvInput = { ...base, series }
-  let convs = period === 'week' ? ranked : buildConvs(convInput)
+  let convs = period === 'week' || !isTop ? ranked : buildConvs(convInput)
 
-  // The open conversation, by registry id or by slug (an old `?themes=` link).
-  const openId = !p.conv ? null : isRegistryId(p.conv)
-    ? p.conv
-    : await soft('slug', resolveSlug(db, clientId, p.conv, convs.map((c) => c.id)), null)
-
-  // ── the week: its bar, and the flag ──
+  // ── the week: its bar ──
   const weekBlock: MarketWeek | null = read && period === 'week' && windows
     ? {
         window: read.window,
@@ -1835,69 +2163,106 @@ export async function loadMarket(input: {
         weekLabels: windows.map(windowLabel),
       }
     : null
+
+  const empty: Omit<MarketData, 'view'> = {
+    brand, noun, period, weekUnavailable, params: p, week: weekBlock, month: monthBlock,
+    top: { hero: null, sides: [], months: null }, subjects: null,
+    rail: { kinds: null, weeks: null, platforms: null }, table: null, brands: 'not_read', longRun: null, longRunUnread: false,
+  }
+
+  // ── THE WEEK'S PAGE: the read in full, its quotes resolved, the week's
+  //    conversations counted as the top page's table counts them ──
+  if (isWeekPage) {
+    const hydrated = read ? await soft('hydrate', hydrateData(db, read), read) : null
+    return {
+      ...empty,
+      view: 'week',
+      crumbs: weekCrumbs(p),
+      weekPage: weekPageOf({ published: publishedRead, read: hydrated, conversations: windowReads.length > 0 && windowReads[last] ? convs.length : null, p }),
+    }
+  }
+
+  // The page's conversation, by registry id or by slug (an old `?themes=` link).
+  const convId = view.kind === 'conversation'
+    ? isRegistryId(view.id) ? view.id : await soft('slug', resolveSlug(db, clientId, view.id, convs.map((c) => c.id)), null)
+    : null
   const flagCard: FlagCard | null = flag && read && weekBlock ? flagCardOf({ flag, window: read.window, convs, convInput, monthCategory: monthBlock.category, p, noun }) : null
+  const flagOn = flagCard?.conv ? { id: flagCard.conv.id, verdict: flagCard.verdict } : null
 
-  // ── the top row's picks ──
-  const heroPick = period === 'week' ? pickHero({ convs, flag: flagCard, setApart }) : null
-  const monthPicks = period === 'month' ? convs.filter((c) => !setApart.has(c.id)).slice(0, 3) : []
+  // ── the top row's picks (the top page: "Also this week", or the month's
+  //    three biggest) ──
+  const heroPick = isTop && period === 'week' ? pickHero({ convs, flag: flagCard, setApart }) : null
+  const monthPicks = isTop && period === 'month' ? convs.filter((c) => !setApart.has(c.id)).slice(0, 3) : []
   const heroId = heroPick ? (heroPick.kind === 'flag' ? flagCard?.conv?.id ?? null : heroPick.conv.id) : monthPicks[0]?.id ?? null
-  const sides = period === 'week' && heroPick ? pickWeekSides({ convs, heroId, setApart }) : null
+  const sides = isTop && period === 'week' && heroPick ? pickWeekSides({ convs, heroId, setApart }) : null
 
-  // ── wave 3: subjects' and kinds' readings, who, the hero's kinds ──
-  // A failed subject prints no figure, so it is not read; it keeps its row
+  // ── wave 3: subjects' and kinds' readings, who, what the page opens ──
+  // A failed subject prints no figure, so it is not read; it keeps its place
   // all the same (`factsFromReadings` files it as failed, `buildSubjectBoard`).
   const subjectObjects: MarketObjectRef[] = subjects.all
     .filter((x) => x.calibration !== 'failed')
     .map(({ subject, calibration }) => ({ kind: 'subject' as const, id: subject.id, label: subject.name, calibration }))
-  const kindObjects: MarketObjectRef[] = MARKET_KINDS.map((k) => ({ kind: 'kind' as const, id: k, label: k }))
+  const kindObjects: MarketObjectRef[] = isTop ? MARKET_KINDS.map((k) => ({ kind: 'kind' as const, id: k, label: k })) : []
   const readingsAhead = soft('readings', loadObjectReadings(db, {
-    clientId, objects: [...subjectObjects, ...kindObjects], month, pair, asOf: nowIso, rivalAudiences,
+    clientId, objects: [...subjectObjects, ...kindObjects], month, pair: pair as PairOn, asOf: nowIso, rivalAudiences,
   }), [] as ObjectReading[])
 
-  // Who, for what prints a split: the hero, the table's shown rows (by the
-  // table's own filter rule), the open one.
+  // THE SUBJECT A PAGE IS FOR, and the conversations inside it (its page's
+  // "Inside it" by the board's rule, `insideOf`).
+  const subjectRow = view.kind === 'subject' ? subjects.all.find((x) => x.subject.id === view.id) ?? null : null
+  const insideIds = subjectRow ? convs.filter((c) => c.subjectId === subjectRow.subject.id).slice(0, MARKET_INSIDE).map((c) => c.id) : []
+
+  // Who, for what prints a split: on the top page the table's shown rows (by
+  // the table's own filter rule) and the month's lead; on a subject's page
+  // the three conversations it lists; on a conversation's, the conversation.
   const tableFilter = tableFilterOf(convs, p.in)
-  const tableShown = (tableFilter ? convs.filter((c) => c.subjectId === tableFilter) : convs).slice(0, p.all ? undefined : MARKET_TABLE_ROWS)
-  const whoIds = [...new Set([...tableShown.map((c) => c.id), ...(heroId ? [heroId] : []), ...(openId ? [openId] : [])])]
+  const tableShown = isTop ? (tableFilter ? convs.filter((c) => c.subjectId === tableFilter) : convs).slice(0, p.all ? undefined : MARKET_TABLE_ROWS) : []
+  const whoIds = [...new Set([
+    ...tableShown.map((c) => c.id),
+    ...(isTop && period === 'month' && heroId ? [heroId] : []),
+    ...insideIds,
+    ...(convId ? [convId] : []),
+  ])]
   const whoAhead = soft('refs', loadRefs(db, clientId, { period, month, window: read?.window ?? null, runId: themedRunId, ids: whoIds }), [])
     .then((refs) => soft('who', loadWho(db, clientId, { refs, company: brand, rivals: competitors.map((c) => ({ id: c.id, name: c.name })) }), { who: new Map<string, WhoPart[]>(), brands: 'not_counted' as BrandsState }))
   // What people did in a conversation: its month's videos (the stored refs).
-  // Read once per conversation: the hero and its open panel share it.
+  // Read once per conversation: the month's lead and a conversation's page.
   const kindsRead = new Map<string, Promise<{ kind: string; label: string; videos: number }[] | null>>()
   const kindsFor = (id: string): Promise<{ kind: string; label: string; videos: number }[] | null> => {
     const held = kindsRead.get(id)
     if (held) return held
-    const read = (async () => {
+    const kinds = (async () => {
       const refs = await soft('monthRefs', loadRefs(db, clientId, { period: 'month', month, window: null, runId: themedRunId, ids: [id] }), [])
       const videos = refs.find((r) => r.theme_id === id)?.video_ids ?? []
       return soft('themeKinds', loadThemeKinds(db, clientId, themedRunId, id, videos), null)
     })()
-    kindsRead.set(id, read)
-    return read
+    kindsRead.set(id, kinds)
+    return kinds
   }
   // Nothing first heard this week, anywhere in the week (a New chip anywhere
   // means something was): the newest conversation an earlier week's read
   // first heard, for the third card (read only then).
   const anyNew = convs.some((c) => c.isNew)
-  const nothingNew = period === 'week' && heroPick != null && !anyNew && (sides?.fresh.length ?? 0) === 0
+  const nothingNew = isTop && period === 'week' && heroPick != null && !anyNew && (sides?.fresh.length ?? 0) === 0
   const earlierNewAhead = nothingNew && read
     ? soft('earlierNew', loadEarlierNewThisWeek(db, clientId, { before: read.window.from }), [] as EarlierNew[])
     : Promise.resolve([] as EarlierNew[])
-  // THE OPEN SUBJECT'S BLOCKS (14 Oct): read only when a subject's panel is
-  // open, and only for a subject whose check passed (ruling U6), beside the
-  // month's readings; the panel takes them where its level prints. Its
-  // members come off the placement the page holds (no membership read).
-  const openSubject = !openId && p.subject ? subjects.all.find((x) => x.subject.id === p.subject && x.calibration === 'ready')?.subject ?? null : null
+  // A READY SUBJECT'S BLOCKS (14 Oct), on its page only, and only for a
+  // subject whose check passed (ruling U6); its members come off the
+  // placement the page holds (no membership read). This week they read the
+  // three weekly windows too, for the subject's week by week.
+  const openSubject = subjectRow && subjectRow.calibration === 'ready' ? subjectRow.subject : null
   const detailAhead: Promise<SubjectDetail | null> = openSubject && subjects.placed
     ? soft('subjectDetail', personasAhead.then((personas) => loadSubjectDetail({
         db, clientId, subject: openSubject, members: placementMembers(subjects.placed).get(openSubject.id) ?? new Set<string>(),
         period, week: weekBlock, month: monthBlock, market, personas, company: brand,
         rivals: competitors.map((c) => ({ id: c.id, name: c.name })), noun,
+        windows: period === 'week' && windows ? windows.map((w, i) => ({ ...w, cut: cut[i] ?? false })) : null,
       })), null)
     : Promise.resolve(null)
   detailAhead.catch(() => {})
   const [readings, whoRead, personas, heroKinds, weekRowsRaw, earlierNew] = await Promise.all([
-    readingsAhead, whoAhead, personasAhead, heroId ? kindsFor(heroId) : Promise.resolve(null), weekRowsAhead, earlierNewAhead,
+    readingsAhead, whoAhead, personasAhead, isTop && period === 'month' && heroId ? kindsFor(heroId) : Promise.resolve(null), weekRowsAhead, earlierNewAhead,
   ])
   const { who, brands } = whoRead
   const withWho = (c: MarketConv): MarketConv => (who.has(c.id) ? { ...c, who: who.get(c.id) ?? [] } : c)
@@ -1907,11 +2272,12 @@ export async function loadMarket(input: {
     return c ? withWho(c) : null
   }
 
-  // ── the subject board and the rail ──
+  // ── the subject board: the order, the levels and the states every page
+  //    reads its subjects in ──
   const readingOf = new Map(readings.filter((r) => r.object.kind === 'subject').map((r) => [r.object.id, r]))
   const facts = factsFromReadings(
     subjects.all.map(({ subject, calibration }) => ({ subject, calibration, reading: readingOf.get(subject.id) ?? null })),
-    marketComparable(pair, month),
+    marketComparable(pair as PairOn, month),
   )
   // A subject whose reading did not come back is never "being re-described"
   // (`factsFromReadings` files a missing reading under failed): only its own
@@ -1927,11 +2293,68 @@ export async function loadMarket(input: {
     month,
     convs,
     period,
-    flag: flagCard?.conv ? { id: flagCard.conv.id, verdict: flagCard.verdict } : null,
-    convHref: (id) => convHref(p, id, 'subjects'),
+    flag: flagOn,
+    convHref: (id) => convHref(p, id),
     subjectHref: (id) => subjectHref(p, id),
     soFar,
   })
+  const readsOn = subjectReadsEnabled(clientId)
+  const subjectNav = subjectNavOf({ rows: subjectBoard?.rows ?? [], read, month, readsOn, href: (id) => subjectHref(p, id) })
+  const common = { ...empty, subjects: subjectBoard, brands }
+
+  // ── A SUBJECT'S PAGE ──
+  if (view.kind === 'subject') {
+    const panel = subjectRow
+      ? buildSubjectPanel({ id: subjectRow.subject.id, facts: subjectFacts, convs, period, p, read, month: monthBlock, flag: flagOn, detail: await detailAhead, readsOn })
+      : null
+    if (!panel) return { ...common, view: 'subject', missing: true, subjectNav, crumbs: [marketCrumb(p)] }
+    const inside = convs.filter((c) => c.subjectId === panel.id)
+    return {
+      ...common,
+      view: 'subject',
+      subjectNav,
+      crumbs: subjectCrumbs(p, subjectNav, { id: panel.id, name: panel.name }),
+      subjectPage: {
+        panel,
+        weekLabels: weekBlock?.weekLabels ?? [],
+        prevPct: subjectBoard?.rows.find((r) => r.id === panel.id)?.prevPct ?? null,
+        inside: inside.slice(0, MARKET_INSIDE).map((c) => ({ conv: c, href: convHref(p, c.id) })),
+        insideTotal: inside.length,
+        allHref: subjectTableHref(p, panel.id),
+      },
+    }
+  }
+
+  // ── A CONVERSATION'S PAGE ──
+  if (view.kind === 'conversation') {
+    const conv = convId ? findConv(convId) : null
+    const panel = convId
+      ? await soft('panel', loadConvPanel({
+          db, clientId, id: convId, period, month: monthBlock, week: weekBlock,
+          conv, read, flag, themedRunId, nowMonth, pair: pair as PairOn, personas, noun, kindsFor, runThemes,
+        }), null)
+      : null
+    if (!panel || !convId) return { ...common, view: 'conversation', missing: true, subjectNav, crumbs: [marketCrumb(p)] }
+    // The breadcrumb's parent: the READY subject the conversation sits in.
+    const parentId = conv?.subjectId && checkOf.get(conv.subjectId) === 'ready' ? conv.subjectId : null
+    const parent = parentId ? { id: parentId, name: subjects.placed?.names.get(parentId) ?? conv?.subjectName ?? '' } : null
+    const siblings = parent
+      ? insideOf(parent.id, convs, period, { limit: 50, href: (id) => convHref(p, id) })
+      : convs.map((c) => ({ id: c.id, label: c.label, href: convHref(p, c.id) }))
+    const labels = weekBlock?.weekLabels ?? []
+    return {
+      ...common,
+      view: 'conversation',
+      subjectNav,
+      crumbs: conversationCrumbs({ p, nav: subjectNav, conv: { id: convId, label: panel.label }, parent, siblings }),
+      convPage: {
+        panel,
+        weeks: period === 'week' && conv ? conv.weeks.map((count, i) => ({ label: labels[i] ?? '', count })) : [],
+      },
+    }
+  }
+
+  // ── THE TOP PAGE ──
   const weekRead = windowReads[windowReads.length - 1] ?? null
   const rail: MarketRail = {
     kinds: buildKinds(readings, month, noun, soFar),
@@ -1940,9 +2363,6 @@ export async function loadMarket(input: {
     platforms: period === 'week' && weekRead?.denominators
       ? withMonthPlatforms(platformRows(mergeMixes(weekRead.denominators.filter((d) => market.includes(d.audience)).map((d) => d.platform_mix)), 'week'), monthMix, inMonth(month, !soFar))
       : platformRows(monthMix, 'month'),
-    watch: period === 'week' && read && read.version === 2
-      ? read.watch.slice(0, MARKET_WATCH).map((w) => ({ body: w.body.trim(), figures: read.figures as unknown as PrintedFigures })).filter((l) => l.body)
-      : [],
   }
 
   // ── the top row ──
@@ -1951,76 +2371,58 @@ export async function loadMarket(input: {
   if (period === 'week' && heroPick) {
     if (heroPick.kind === 'flag' && flagCard) {
       const conv = flagCard.conv ? findConv(flagCard.conv.id) : null
-      top.hero = { kind: 'flag', card: { ...flagCard, conv }, groups: conv ? groupsOf(conv.id, personas) : [], doing: doing(conv) }
+      top.hero = { kind: 'flag', card: { ...flagCard, conv }, groups: [], doing: null }
     } else if (heroPick.kind !== 'flag') {
       const conv = findConv(heroPick.conv.id) ?? heroPick.conv
-      top.hero = { kind: heroPick.kind, conv, href: convHref(p, conv.id, 'top'), groups: groupsOf(conv.id, personas), doing: doing(conv) }
+      top.hero = { kind: heroPick.kind, conv, href: convHref(p, conv.id), groups: [], doing: null }
     }
     // THE BOARD'S THREE CARDS, ALWAYS (the parity pass, 13 Oct): a card with
     // nothing for it this week keeps its place and says so in its own frame.
     top.sides.push(sides?.biggest
-      ? { kind: 'biggest', convs: [withWho(sides.biggest)], hrefs: [convHref(p, sides.biggest.id, 'top')], groups: groupsOf(sides.biggest.id, personas) }
+      ? { kind: 'biggest', convs: [withWho(sides.biggest)], hrefs: [convHref(p, sides.biggest.id)], groups: [] }
       : { kind: 'biggest', convs: [], hrefs: [], groups: [] })
     if (sides && sides.fresh.length > 0) {
-      top.sides.push({ kind: 'new_list', convs: sides.fresh, hrefs: sides.fresh.map((c) => convHref(p, c.id, 'top')), groups: groupsOf(sides.fresh[0].id, personas) })
+      top.sides.push({ kind: 'new_list', convs: sides.fresh, hrefs: sides.fresh.map((c) => convHref(p, c.id)), groups: [] })
     } else {
       // Never a conversation the row already holds (one card each).
       const onRow = new Set([heroId, sides?.biggest?.id].filter((x): x is string => x != null))
-      const earlier = anyNew ? null : earlierNewOf(earlierNew, convInput, (id) => convHref(p, id, 'top'), onRow)
+      const earlier = anyNew ? null : earlierNewOf(earlierNew, convInput, (id) => convHref(p, id), onRow)
       const next = earlier ? null : alsoTalkedOf(convs, onRow, setApart)
       top.sides.push({
         kind: 'new_list', convs: [], hrefs: [], groups: [], anyNew, earlier,
-        also: next ? { conv: withWho(next), href: convHref(p, next.id, 'top'), groups: groupsOf(next.id, personas) } : null,
+        also: next ? { conv: withWho(next), href: convHref(p, next.id) } : null,
       })
     }
   } else if (period === 'month' && monthPicks[0]) {
     const conv = findConv(monthPicks[0].id) ?? monthPicks[0]
-    top.hero = { kind: 'biggest', conv, href: convHref(p, conv.id, 'top'), groups: groupsOf(conv.id, personas), doing: doing(conv) }
-    for (const c of monthPicks.slice(1)) top.sides.push({ kind: 'month', convs: [withWho(c)], hrefs: [convHref(p, c.id, 'top')], groups: groupsOf(c.id, personas) })
+    top.hero = { kind: 'biggest', conv, href: convHref(p, conv.id), groups: groupsOf(conv.id, personas), doing: doing(conv) }
+    for (const c of monthPicks.slice(1)) top.sides.push({ kind: 'month', convs: [withWho(c)], hrefs: [convHref(p, c.id)], groups: groupsOf(c.id, personas) })
   } else if (period === 'time') {
     top.months = marketMonths(pooled, month, nowMonth)
   }
 
   // ── the table ──
-  const at: PanelAt = p.at ?? (openId && topIndexOf(top, openId) >= 0 ? 'top' : 'table')
   const table = buildTable({
     convs,
     params: p,
-    openId: openId && at === 'table' ? openId : null,
     months: period === 'time' ? tableMonths(month, categoryOf, nowMonth) : [],
     // Open and failed alike: their chips print no count (ruling U6).
     pending: notReadyIds(subjects.placed),
   })
 
-  // ── the open panels ──
-  const panel = openId
-    ? await soft('panel', loadConvPanel({
-        db, clientId, id: openId, at, p, period, month: monthBlock, week: weekBlock,
-        conv: findConv(openId), read, flag, themedRunId, nowMonth, pair, personas, noun, kindsFor,
-        topIndex: topIndexOf(top, openId), sides: top.sides.length, runThemes,
-      }), null)
-    : null
-  const subjectPanel = !openId && p.subject
-    ? buildSubjectPanel({ id: p.subject, facts: subjectFacts, convs, period, p, read, month: monthBlock, flag: flagCard?.conv ? { id: flagCard.conv.id, verdict: flagCard.verdict } : null, detail: await detailAhead, readsOn: subjectReadsEnabled(clientId) })
-    : null
   const longRunRead = await longRunAhead
   const longRun = longRunRead === 'failed' ? null : marketLongRunFor({ ...longRunRead, month, filling: soFar })
 
   return {
-    brand,
-    noun,
-    period,
-    weekUnavailable,
-    params: p,
-    week: weekBlock,
-    month: monthBlock,
+    ...common,
+    view: 'top',
     top,
-    subjects: subjectBoard,
     rail,
     table,
-    panel,
-    subjectPanel,
-    brands,
+    // The week card where the page shows the week; where the week was asked
+    // for and its read could not be read, its failure, above the month.
+    weekCard: period === 'week' ? weekCardOf(published) : asked === 'week' && publishedRead === 'failed' ? weekCardOf('failed') : null,
+    subjectCards: subjectCardsOf({ rows: subjectBoard?.rows ?? [], read, month, monthText: monthBlock.text, readsOn, href: (id) => subjectHref(p, id) }),
     longRun,
     longRunUnread: longRunRead === 'failed',
   }
@@ -2147,17 +2549,8 @@ export function flagCardOf(a: {
     baselineText: monthsText(flag.baselineMonths),
     conv,
     month: conv && conv.month != null && a.monthCategory != null ? { k: conv.month, n: a.monthCategory } : null,
-    href: flag.objectKind === 'theme' ? convHref(a.p, flag.objectId, 'top') : flag.objectKind === 'subject' ? subjectHref(a.p, flag.objectId) : null,
+    href: flag.objectKind === 'theme' ? convHref(a.p, flag.objectId) : flag.objectKind === 'subject' ? subjectHref(a.p, flag.objectId) : null,
   }
-}
-
-/** The top card a conversation is (0 the hero), or -1. */
-function topIndexOf(top: TopRow, id: string): number {
-  const ids: (string | null)[] = [
-    top.hero ? (top.hero.kind === 'flag' ? top.hero.card.conv?.id ?? null : top.hero.conv.id) : null,
-    ...top.sides.map((s) => (sideIds(s).includes(id) ? id : sideIds(s)[0] ?? null)),
-  ]
-  return ids.indexOf(id)
 }
 
 /** The open conversation in full: its month line, who and where, what people
@@ -2166,8 +2559,6 @@ async function loadConvPanel(a: {
   db: SupabaseClient
   clientId: string
   id: string
-  at: PanelAt
-  p: MarketParams
   period: Period
   month: MarketMonth
   week: MarketWeek | null
@@ -2180,9 +2571,6 @@ async function loadConvPanel(a: {
   personas: readonly { key: string; name: string; registryIds: readonly string[] }[]
   noun: string | null
   kindsFor: (id: string) => Promise<{ kind: string; label: string; videos: number }[] | null>
-  topIndex: number
-  /** The cards beside the hero, which decide where the notch points. */
-  sides: number
   runThemes: ReadonlyMap<string, RunTheme>
 }): Promise<ConvPanel | null> {
   const { db, clientId, id } = a
@@ -2218,8 +2606,6 @@ async function loadConvPanel(a: {
     label,
     kind,
     subjectName: conv.subjectName,
-    at: a.at,
-    notchAt: notchOf(a.at, Math.max(0, a.topIndex), a.sides),
     flag: flagHere && a.week ? flagVerdict(flagHere, a.week.window) : null,
     isNew: conv.isNew,
     stats: panelStats({ conv, period: a.period, week: a.week, month: a.month, prevK: prevPoint?.k ?? null, flag: flagHere, baselineText: flagHere ? monthsText(flagHere.baselineMonths) : null }),
@@ -2231,7 +2617,6 @@ async function loadConvPanel(a: {
     platforms: platforms ? { rows: platforms.rows, n: platforms.n } : null,
     quotes: picked.map(panelQuoteOf),
     askHref: askAboutTheme({ label, kind }),
-    closeHref: closeHref(a.p, a.at),
   }
 }
 
@@ -2281,19 +2666,17 @@ export function buildSubjectPanel(a: {
     // Why a failed subject shows no figure is said once a page (14 Oct, the
     // lead's ruling): in its own row on the board, just above this panel, so
     // the panel says only that it is not measured yet.
-    note: unmeasured ? (unmeasured.state === 'failed' ? SUBJECT_NOT_MEASURED : unmeasured.note) : null,
-    at: 'subjects',
-    notchAt: notchOf('subjects'),
+    // A failed subject's page says why, once (it is the page's one place).
+    note: unmeasured ? unmeasured.note : null,
     level: measured && f.level ? { ...f.level, pct: share(f.level.k, f.level.n) } : null,
     verdict: measured ? f.verdict : null,
     monthText: a.month.text,
     bars: measured ? bars : [],
-    inside: insideOf(f.id, a.convs, a.period, { limit: 50, href: (id) => convHref(a.p, id, 'subjects'), flagId: a.flag?.id ?? null, flag: a.flag?.verdict ?? null }),
+    inside: insideOf(f.id, a.convs, a.period, { limit: 50, href: (id) => convHref(a.p, id), flagId: a.flag?.id ?? null, flag: a.flag?.verdict ?? null }),
     sentence: standing?.sentence?.trim() ? { body: standing.sentence.trim(), figures: (a.read?.figures ?? {}) as unknown as PrintedFigures } : null,
     read: measured && a.readsOn ? subjectReadLines(subjectReadOf(a.read, f.id, m)) : null,
     detail: measured ? a.detail ?? null : null,
     askHref: `/dashboard/agent?ask=${encodeURIComponent(`What does my market say about ${f.name}?`)}`,
-    closeHref: closeHref(a.p, 'subjects'),
   }
 }
 
@@ -2372,6 +2755,10 @@ export function subjectDetailOf(input: {
   company: string
   noun: string | null
   gate: GateOptions
+  /** This week (the subject's page): the three weekly windows the
+   *  conversations count, oldest first, each marked where our own change cut
+   *  it. The evidence handed in spans them. */
+  windows?: readonly { from: string; to: string; cut: boolean }[] | null
 }): SubjectDetail {
   const m = monthStartOf(input.month.month)
   const within = (e: DatedEvidence, from: string, to: string) => {
@@ -2411,7 +2798,7 @@ export function subjectDetailOf(input: {
     .map((g) => ({ g, k: g.subjects[0]?.k ?? 0 }))
     .filter((x) => x.k > 0)
     .sort((a, b) => b.k - a.k || a.g.name.localeCompare(b.g.name))
-    .map((x) => groupLink(x.g.key, x.g.name))
+    .map((x) => ({ ...groupLink(x.g.key, x.g.name), videos: x.k }))
 
   const where = platformRows(platformMixOf(basis), weekRows ? 'week' : 'month')
   const span = [...new Set([...monthRows, ...(weekRows ?? [])])]
@@ -2422,7 +2809,13 @@ export function subjectDetailOf(input: {
   const monthWho = weekRows ? whoFor(monthRows) : null
   const monthWhere = weekRows ? { counts: platformMixOf(monthRows), n: monthVideos.size, text: input.month.text } : null
 
+  // This week, the subject's videos in each of the three windows, by the
+  // week stat's own rule; a window our change cut is null, never 0.
+  const weeks = weekRows && input.windows && input.windows.length > 0
+    ? input.windows.map((w) => (w.cut ? null : videos(counted.filter((e) => within(e, w.from, w.to))).size))
+    : null
   return {
+    ...(weeks ? { weeks } : {}),
     basis: weekRows ? 'week' : 'month',
     cited: { month: monthVideos.size, week: weekRows ? basisVideos.size : null },
     week: weekRows && input.marketWeek != null ? { k: basisVideos.size, n: input.marketWeek } : null,
@@ -2456,13 +2849,19 @@ export async function loadSubjectDetail(a: {
   company: string
   rivals: readonly { id: string; name: string }[]
   noun: string | null
+  /** This week: the three weekly windows (the subject's week by week). */
+  windows?: readonly { from: string; to: string; cut: boolean }[] | null
 }): Promise<SubjectDetail> {
   const m = monthStartOf(a.month.month)
   const monthFrom = `${m}T00:00:00.000Z`
   const monthTo = `${nextMonth(m)}T00:00:00.000Z`
   const week = a.period === 'week' && a.week ? a.week.window : null
-  const from = week && Date.parse(week.from) < Date.parse(monthFrom) ? week.from : monthFrom
-  const to = week && Date.parse(week.to) > Date.parse(monthTo) ? week.to : monthTo
+  // ONE READ SPANS EVERYTHING THE BLOCKS COUNT: the month, the week and,
+  // this week, the three weekly windows (the oldest can open before the
+  // month does).
+  const spans = [{ from: monthFrom, to: monthTo }, ...(week ? [week] : []), ...(week ? (a.windows ?? []).filter((w) => !w.cut) : [])]
+  const from = spans.reduce((x, w) => (Date.parse(w.from) < Date.parse(x) ? w.from : x), monthFrom)
+  const to = spans.reduce((x, w) => (Date.parse(w.to) > Date.parse(x) ? w.to : x), monthTo)
   // A brand's own people are not the market (lib/written/evidence.ts): the
   // client and every rival it has tracked, by name.
   const brandNames = [...new Set([a.company, ...a.rivals.map((r) => r.name)].map((x) => x.trim()).filter(Boolean))]
@@ -2473,7 +2872,7 @@ export async function loadSubjectDetail(a: {
   return subjectDetailOf({
     subjectId: a.subject.id, name: a.subject.name, evidence, members: a.members, market, period: a.period, week,
     month: a.month, marketWeek: a.week?.market.videos ?? null, personas: a.personas, namings: mentions, brands,
-    company: a.company, noun: a.noun, gate: subjectGate(a.clientId, a.subject),
+    company: a.company, noun: a.noun, gate: subjectGate(a.clientId, a.subject), windows: week ? a.windows ?? null : null,
   })
 }
 
@@ -2602,12 +3001,12 @@ export async function topMarket(input: {
   const pick = pickHero({ convs, flag: card, setApart })
   const hero: MarketTop['hero'] = card
     ? { kind: 'flag', card }
-    : pick && pick.kind !== 'flag' ? { kind: pick.kind, conv: pick.conv, href: convHref(params, pick.conv.id, 'top') } : null
+    : pick && pick.kind !== 'flag' ? { kind: pick.kind, conv: pick.conv, href: convHref(params, pick.conv.id) } : null
   const heroId = card ? card.conv?.id ?? null : pick && pick.kind !== 'flag' ? pick.conv.id : null
   const sides = pickWeekSides({ convs, heroId, setApart })
   const rows: MarketTop['rows'] = []
-  if (sides.biggest) rows.push({ kind: 'biggest', conv: sides.biggest, href: convHref(params, sides.biggest.id, 'top') })
-  if (sides.fresh[0]) rows.push({ kind: 'new', conv: sides.fresh[0], href: convHref(params, sides.fresh[0].id, 'top') })
+  if (sides.biggest) rows.push({ kind: 'biggest', conv: sides.biggest, href: convHref(params, sides.biggest.id) })
+  if (sides.fresh[0]) rows.push({ kind: 'new', conv: sides.fresh[0], href: convHref(params, sides.fresh[0].id) })
   // Market's own rule for its third card's "Also talked about" (one function,
   // so the tile and the page name the same conversation).
   const onRow = new Set([heroId, ...rows.map((r) => r.conv.id)].filter((x): x is string => x != null))
@@ -2615,7 +3014,7 @@ export async function topMarket(input: {
   return {
     hero,
     rows,
-    also: next ? { conv: next, href: convHref(params, next.id, 'top') } : null,
+    also: next ? { conv: next, href: convHref(params, next.id) } : null,
     category: { week: categoryVideos(reads[last] ?? null), month: monthCategory },
     week: { dates: weekReadDates(read.window), inMonth: inMonth(month, !soFar), labels: windows.map(windowLabel) },
     href: MARKET,

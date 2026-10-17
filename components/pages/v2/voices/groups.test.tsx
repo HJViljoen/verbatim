@@ -188,7 +188,7 @@ describe('a group\'s panel (E3-Voices-Open)', () => {
     expect(text).not.toMatch(/since September|%/)
     const m = render(node)
     expect(m.match(/data-copy="quote"/g)?.length).toBe(5 + 3)
-    expect(m).toContain('href="/dashboard/market?conv=reg-growing#conversation-panel"')
+    expect(m).toContain('href="/dashboard/market/conversations/reg-growing"')
     expect(m).toContain('href="/dashboard/voices"')
     assertCopyContract(node)
   })

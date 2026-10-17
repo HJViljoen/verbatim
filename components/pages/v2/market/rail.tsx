@@ -191,7 +191,6 @@ export function RailView({ data, style }: { data: MarketData; style?: CSSPropert
       {rail.kinds ? <KindsCard block={rail.kinds} /> : <KindsFrame noun={data.noun} monthText={data.month.text} />}
       <WeeksCard weeks={rail.weeks} axis={rail.weeksAxis} />
       {rail.platforms ? <PlatformsCard block={rail.platforms} data={data} /> : <PlatformsFrame data={data} />}
-      {rail.watch.length > 0 ? <WatchCard lines={rail.watch} /> : null}
     </div>
   )
 }

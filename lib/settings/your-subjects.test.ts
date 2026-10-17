@@ -29,7 +29,7 @@ describe('yourSubjectsView', () => {
     expect(v.following.map((s) => s.name)).toEqual(['Durability', 'Recycled materials', 'Waterproofing', 'Looks & style', 'Price', 'Comfort'])
     expect(v.activeCount).toBe(6)
     expect(v.max).toBe(10)
-    expect(v.following[0].href).toBe(`/dashboard/market?subject=${fixtureSubjectId(1)}`)
+    expect(v.following[0].href).toBe(`/dashboard/market/subjects/${fixtureSubjectId(1)}`)
     expect(v.waiting.map((s) => [s.name, s.because])).toEqual([
       ['Community & purpose', 'you said this in your own posts'],
       ['Travel size rules', 'the category raised it in the videos we read'],

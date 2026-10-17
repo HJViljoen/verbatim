@@ -3,7 +3,7 @@ import { Sparkles } from 'lucide-react'
 import { BrandChip, TAG } from '@/components/colour-roles'
 import { MovementBadge } from '@/components/delta-badge'
 import { ProportionBar } from '@/components/proportion-bar'
-import { FlagChip, InPlacePanel, MiniBars, PanelSection, PanelTitle, StatCell, StatRow, TickBarRow, type PerBreakpoint } from '@/components/v2'
+import { CARD, FlagChip, MiniBars, PanelSection, PanelTitle, StatCell, StatRow, TickBarRow } from '@/components/v2'
 import { fmtInt, fmtPct } from '@/lib/format'
 import { marketLabelsOf } from '@/lib/brands/labels'
 import { MARKET_PANEL_MONTHS, platformRows, type ConvPanel, type MarketData, type MonthCount, type PanelQuote, type StoredLine, type SubjectDetail, type SubjectPanel } from '@/lib/pages/v2/market'
@@ -39,34 +39,24 @@ function shareBars(bars: readonly MonthCount[]) {
   })
 }
 
-/** `notchAt`: the placement's notch where the page placed the panel among
- *  its cards (T9); alone, the loader's. */
-export function ConversationPanel({ panel, data, notchAt }: { panel: ConvPanel; data: MarketData; notchAt?: number | PerBreakpoint }) {
+/** A conversation in full: its page's body (17 Oct). */
+export function ConversationPanel({ panel, data }: { panel: ConvPanel; data: MarketData }) {
   const chip = panel.flag
     ? <FlagChip verdict={panel.flag} />
     : panel.isNew && data.month.category != null
       ? <FlagChip verdict={newVerdict(panel.id, panel.label, panel.stats[0]?.value ?? 0, data.month.category, data.month.month)} />
       : null
   return (
-    <InPlacePanel
-      id="conv-panel"
-      notchAt={notchAt ?? panel.notchAt}
-      openKey={panel.id}
-      closeHref={panel.closeHref}
-      labelledBy="conv-panel-title"
-      closeLabel="Close this conversation"
-      head={
-        <>
-          {panel.subjectName || chip ? (
-            <div className="flex flex-wrap items-center gap-2">
-              {panel.subjectName ? <span className={cn(TAG, 'rounded-md px-2 py-[3px] text-[12px]')}>{panel.subjectName}</span> : null}
-              {chip}
-            </div>
-          ) : null}
-          <PanelTitle id="conv-panel-title"><span data-copy="subject" data-slot="pass_b_theme">{panel.label}</span></PanelTitle>
-        </>
-      }
-    >
+    <article id="conversation" aria-labelledby="conv-head" className={cn(CARD, 'gap-7 sm:px-[34px] sm:pt-[30px] sm:pb-8')}>
+      <div>
+        {panel.subjectName || chip ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {panel.subjectName ? <span className={cn(TAG, 'rounded-md px-2 py-[3px] text-[12px]')}>{panel.subjectName}</span> : null}
+            {chip}
+          </div>
+        ) : null}
+        <PanelTitle id="conv-head"><span data-copy="subject" data-slot="pass_b_theme">{panel.label}</span></PanelTitle>
+      </div>
       {panel.stats.length > 0 ? (
         <StatRow>
           {panel.stats.map((s, i) => <StatCell key={i} value={s.value} of={s.of} label={s.label} />)}
@@ -126,7 +116,7 @@ export function ConversationPanel({ panel, data, notchAt }: { panel: ConvPanel; 
       <div className="flex flex-wrap items-center gap-[18px] border-t border-track pt-5">
         <Link href={panel.askHref} className={ASK}><Sparkles className="size-3.5" aria-hidden />Ask the Agent about this</Link>
       </div>
-    </InPlacePanel>
+    </article>
   )
 }
 
@@ -270,7 +260,8 @@ function SubjectBlocks({ detail, data }: { detail: SubjectDetail; data: MarketDa
   )
 }
 
-export function SubjectPanelView({ panel, data, notchAt }: { panel: SubjectPanel; data: MarketData; notchAt?: number | PerBreakpoint }) {
+/** A tracked subject in full: its page's body (17 Oct). */
+export function SubjectPanelView({ panel, data }: { panel: SubjectPanel; data: MarketData }) {
   const week = data.period === 'week'
   // Ruling U6: the blocks rest on the subject's membership, so a READY
   // subject alone has them; every other state keeps the panel as it was.
@@ -313,20 +304,11 @@ export function SubjectPanelView({ panel, data, notchAt }: { panel: SubjectPanel
     </PanelSection>
   )
   return (
-    <InPlacePanel
-      id="subject-panel"
-      notchAt={notchAt ?? panel.notchAt}
-      openKey={panel.id}
-      closeHref={panel.closeHref}
-      labelledBy="subject-panel-title"
-      closeLabel="Close this subject"
-      head={
-        <>
-          <div className="flex flex-wrap items-center gap-2"><span className={cn(TAG, 'rounded-md px-2 py-[3px] text-[12px]')}>Subject</span></div>
-          <PanelTitle id="subject-panel-title">{panel.name}</PanelTitle>
-        </>
-      }
-    >
+    <article id="subject" aria-labelledby="subject-head" className={cn(CARD, 'gap-7 sm:px-[34px] sm:pt-[30px] sm:pb-8')}>
+      <div>
+        <div className="flex flex-wrap items-center gap-2"><span className={cn(TAG, 'rounded-md px-2 py-[3px] text-[12px]')}>Subject</span></div>
+        <PanelTitle id="subject-head">{panel.name}</PanelTitle>
+      </div>
       {panel.state !== 'ready' && panel.note ? (
         // No level: why, in one line, and the conversations inside it, as the
         // board lists them, in every state (14 Oct: one being re-described
@@ -366,7 +348,7 @@ export function SubjectPanelView({ panel, data, notchAt }: { panel: SubjectPanel
         <Link href={panel.askHref} className={ASK}><Sparkles className="size-3.5" aria-hidden />Ask the Agent about this</Link>
         <Label className="normal-case tracking-normal">Subjects are named in Settings</Label>
       </div>
-    </InPlacePanel>
+    </article>
   )
 }
 

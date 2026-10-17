@@ -85,7 +85,7 @@ describe('A post idea, opened in place', () => {
   it('offers the Agent and the conversation in Market', () => {
     const m = render(panel(1))
     expect(m).toContain('href="/dashboard/agent?ask=Draft%20an%20outline')
-    expect(m).toContain(`href="/dashboard/market?conv=`)
+    expect(m).toContain(`href="/dashboard/market/conversations/`)
   })
 
   it('names the days the idea read its questions from (Heinrich, 13 Oct: four weeks to its update)', () => {

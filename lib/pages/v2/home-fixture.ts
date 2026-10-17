@@ -69,18 +69,18 @@ export function fixtureMarketTop(opts: { flagged?: boolean; nothingNew?: boolean
   const pick = pickHero({ convs, flag: card, setApart: new Set() })
   const hero: MarketTop['hero'] = card
     ? { kind: 'flag', card }
-    : pick && pick.kind !== 'flag' ? { kind: pick.kind, conv: pick.conv, href: convHref(p, pick.conv.id, 'top') } : null
+    : pick && pick.kind !== 'flag' ? { kind: pick.kind, conv: pick.conv, href: convHref(p, pick.conv.id) } : null
   const heroId = card ? card.conv?.id ?? null : pick && pick.kind !== 'flag' ? pick.conv.id : null
   const sides = pickWeekSides({ convs, heroId, setApart: new Set() })
   const rows: MarketTop['rows'] = []
-  if (sides.biggest) rows.push({ kind: 'biggest', conv: sides.biggest, href: convHref(p, sides.biggest.id, 'top') })
-  if (sides.fresh[0]) rows.push({ kind: 'new', conv: sides.fresh[0], href: convHref(p, sides.fresh[0].id, 'top') })
+  if (sides.biggest) rows.push({ kind: 'biggest', conv: sides.biggest, href: convHref(p, sides.biggest.id) })
+  if (sides.fresh[0]) rows.push({ kind: 'new', conv: sides.fresh[0], href: convHref(p, sides.fresh[0].id) })
   const onRow = new Set([heroId, ...rows.map((r) => r.conv.id)].filter((x): x is string => x != null))
   const next = sides.fresh[0] ? null : convs.find((c) => !onRow.has(c.id) && c.setApart == null) ?? null
   return {
     hero,
     rows,
-    also: next ? { conv: next, href: convHref(p, next.id, 'top') } : null,
+    also: next ? { conv: next, href: convHref(p, next.id) } : null,
     category: { week: 226, month: 300 },
     week: { dates: '5 to 11 October', inMonth: 'in October so far', labels: ['21 Sep', '28 Sep', '5 Oct'] },
     href: '/dashboard/market',

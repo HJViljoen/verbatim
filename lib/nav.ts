@@ -136,6 +136,60 @@ export const surfacesIn = (group: NavGroup): Surface[] => SURFACES.filter((s) =>
  *  (components/pages/v2/market/long-run.tsx; Heinrich, 13 Oct). */
 export const MARKET_LONG_RUN_ANCHOR = 'long-run'
 
+// ---- Market's pages (depth as pages, 17 Oct) --------------------------------
+//
+// Market is a top layer and three kinds of page under it, each its own
+// address (Heinrich, 16 Oct: "if for example you go on a subject, it could
+// maybe fill the whole page"; the F2 boards, 17 Oct). Nothing opens in place:
+//
+//   /dashboard/market                         the top layer
+//   /dashboard/market/week                    the week's read in full
+//   /dashboard/market/subjects/<id>           a tracked subject, by its id
+//   /dashboard/market/conversations/<conv>    a conversation, by its registry
+//                                             id or an old link's slug
+//
+// Each level page reads `?period=` and `?month=` as the top page does; the
+// table's `?in=` and `?all=1` stay on the top page, and `?at=` (where a panel
+// opened) is retired. These are the ONE place the addresses are written:
+// Market's own builders (lib/pages/v2/market.ts `convHref`, `subjectHref`),
+// the Dashboard's tiles, the weekly email, Voices, Content, Your moves and the
+// Agent all write through them, and `redirectFor` sends every older link here.
+
+/** Market's week page: the published read, in full. */
+export const MARKET_WEEK_PATH = '/dashboard/market/week'
+/** The top page's table, where the week page's "Every conversation" lands. */
+export const MARKET_TABLE_ANCHOR = 'conversations'
+
+/** A tracked subject's page on Market. */
+export const marketSubjectPath = (id: string): string => `${surface('market').href}/subjects/${encodeURIComponent(id)}`
+/** A conversation's page on Market (a registry id, or an old link's slug). */
+export const marketConversationPath = (id: string): string => `${surface('market').href}/conversations/${encodeURIComponent(id)}`
+
+/** The period and month a Market address carries: the period left out on the
+ *  week (the default), the month only off the week, as `YYYY-MM`. */
+export function marketPeriodQuery(p: { period?: string | null; month?: string | null }): string {
+  const q = new URLSearchParams()
+  if (p.period && p.period !== 'week') q.set('period', p.period)
+  if (p.month && p.period && p.period !== 'week') q.set('month', p.month.slice(0, 7))
+  const qs = q.toString()
+  return qs ? `?${qs}` : ''
+}
+
+/** A subject's page with the period and month kept. */
+export const marketSubjectHref = (id: string, p: { period?: string | null; month?: string | null } = {}): string =>
+  `${marketSubjectPath(id)}${marketPeriodQuery(p)}`
+/** A conversation's page with the period and month kept. */
+export const marketConversationHref = (id: string, p: { period?: string | null; month?: string | null } = {}): string =>
+  `${marketConversationPath(id)}${marketPeriodQuery(p)}`
+
+/** Whether a path is one of Market's pages (the top layer or a level page),
+ *  for the redirect table's "an address something serves". */
+export function isMarketPage(path: string): boolean {
+  const market = surface('market').href
+  return path === market || path === MARKET_WEEK_PATH
+    || /^\/dashboard\/market\/(subjects|conversations)\/[^/]+$/.test(path)
+}
+
 /**
  * Market › This month for one month (`?period=month&month=YYYY-MM`), with an
  * anchor where given: where the operator's review email sends the reader of
@@ -451,20 +505,24 @@ function marketMonth(params: SearchParams): Record<string, string | undefined> {
  *
  *   /dashboard?month=M          → /dashboard/market?period=month&month=M
  *   /dashboard/market?item=L    → /dashboard/moves?advice=L   (also ?rec=, ?ledger=)
+ *   /dashboard/market?conv=C    → /dashboard/market/conversations/C   (17 Oct)
+ *   /dashboard/market?subject=S → /dashboard/market/subjects/S        (17 Oct)
  *   /dashboard/overview?month=M → /dashboard/market?period=month&month=M
  *   /dashboard/week             → /dashboard/market
- *   /dashboard/voice?theme=T    → /dashboard/market?conv=T    (or ?themes=T,…: the first)
+ *   /dashboard/voice?theme=T    → /dashboard/market/conversations/T   (or ?themes=T,…: the first)
  *   /dashboard/voice            → /dashboard/voices           (the cast, a brand's videos)
  *   /dashboard/competitive?vs=B → /dashboard/voices?brand=B
- *   /dashboard/subjects?item=S  → /dashboard/market?subject=S
+ *   /dashboard/subjects?item=S  → /dashboard/market/subjects/S
  *   the other RETIRED_ADDRESSES → their target, query kept
  *
  * Every param the mapping does not name travels as it came (a repeated key
  * stays repeated). A `?month=` landing on Market from a page that read one
  * month (Your market, Conversation, Subjects, the Dashboard's old link) gets
  * `period=month` with it. Null means the address still serves its own page:
- * the Dashboard without a month, Market without Your moves' params, and any
- * address this table does not know.
+ * the Dashboard without a month, Market without Your moves' params or an open
+ * panel's, and any address this table does not know. The panel redirects are
+ * permanent: stored snapshots, emails and share pages carry `?conv=` and
+ * `?subject=`, and a stored link is never rewritten.
  *
  * A `#fragment` never reaches the server, so nothing here can read one. The
  * browser carries the old one onto a Location that has none (RFC 9110
@@ -477,12 +535,26 @@ export function redirectFor(path: string, params: SearchParams = {}): string | n
       return value(params.month) === undefined ? null : redirectFor('/dashboard/overview', params)
     case '/dashboard/market': {
       const advice = MOVES_PARAMS.map((k) => value(params[k])).find((v) => v !== undefined)
-      return advice === undefined ? null : withQuery(surface('moves').href, remap(params, MOVES_PARAMS, { advice }))
+      if (advice !== undefined) return withQuery(surface('moves').href, remap(params, MOVES_PARAMS, { advice }))
+      // MARKET'S OPEN PANELS ARE PAGES (17 Oct): `?conv=` and `?subject=`
+      // opened a panel in place, and stored snapshots, sent emails and share
+      // pages carry them, so they redirect for good, every other param kept
+      // and the retired `?at=` dropped. A conversation wins where a link
+      // carried both, as the panel's did.
+      const conv = value(params.conv)
+      if (conv !== undefined) return withQuery(marketConversationPath(conv), remap(params, ['conv', 'subject', 'at']))
+      const subject = value(params.subject)
+      if (subject !== undefined) return withQuery(marketSubjectPath(subject), remap(params, ['subject', 'at']))
+      return null
     }
     case '/dashboard/overview':
       return withQuery(RETIRED_ADDRESSES[path], remap(params, [], marketMonth(params)))
-    case '/dashboard/subjects':
-      return withQuery(RETIRED_ADDRESSES[path], remap(params, ['item'], { subject: value(params.item), ...marketMonth(params) }))
+    case '/dashboard/subjects': {
+      const item = value(params.item)
+      return item === undefined
+        ? withQuery(RETIRED_ADDRESSES[path], remap(params, ['item'], marketMonth(params)))
+        : withQuery(marketSubjectPath(item), remap(params, ['item'], marketMonth(params)))
+    }
     case '/dashboard/voice': {
       // `?theme=` is a registry id (the Conversation board's own links);
       // `?themes=` is a stored link's comma list of theme slugs, and the page
@@ -490,7 +562,7 @@ export function redirectFor(path: string, params: SearchParams = {}): string | n
       const theme = value(params.theme) ?? value(params.themes)?.split(',').map((s) => s.trim()).find(Boolean)
       return theme === undefined
         ? withQuery(RETIRED_ADDRESSES[path], remap(params, ['theme', 'themes']))
-        : withQuery(surface('market').href, remap(params, ['theme', 'themes'], { conv: theme, ...marketMonth(params) }))
+        : withQuery(marketConversationPath(theme), remap(params, ['theme', 'themes'], marketMonth(params)))
     }
     case '/dashboard/competitive':
       return withQuery(RETIRED_ADDRESSES[path], remap(params, ['vs'], { brand: value(params.vs) }))

@@ -173,7 +173,7 @@ describe('the groups (decision 2: this month\'s videos, no share, no change)', (
       persona: ps[0], card: g.cards[1], index: 4, perRow: 3, n: 10, subjects: [], videoIds: ['v1', 'v2'],
       themeSets: sets, labels: new Map([['t1', 'Socket fit'], ['t2', 'Liners']]), quotes: [], params: {},
     })
-    expect(panel.conversations).toEqual([{ registryId: 't1', label: 'Socket fit', k: 2, href: '/dashboard/market?conv=t1#conversation-panel' }])
+    expect(panel.conversations).toEqual([{ registryId: 't1', label: 'Socket fit', k: 2, href: '/dashboard/market/conversations/t1' }])
     expect(panel.notchAt).toBeCloseTo(0.5)
     expect(panel.wants).toBe('Want one. Want two.')
     expect(panel.askHref).toContain('/dashboard/agent?ask=')
@@ -303,7 +303,7 @@ describe('the brands', () => {
       params: {},
     })
     expect(panel.kinds.map((k) => k.label)).toEqual(['Praised a bag', 'Asked a question'])
-    expect(panel.asked?.themes[0].href).toBe('/dashboard/market?conv=t9#conversation-panel')
+    expect(panel.asked?.themes[0].href).toBe('/dashboard/market/conversations/t9')
     expect(panel.findings).toEqual([{ id: 'f2', kindWords: 'where the content differs', title: 'kept', body: 'b' }])
     expect(panel.closeHref).toBe('/dashboard/voices')
     expect(panel).toMatchObject({ stateWords: null, tooFew: false })

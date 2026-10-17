@@ -1,3 +1,4 @@
+import { marketConversationPath } from '../../nav'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { chunk, UUID_IN_CHUNK } from '../../chunk'
@@ -1252,7 +1253,8 @@ export function ideaCard(input: {
 }
 
 export const agentHref = (text: string): string => `/dashboard/agent?ask=${encodeURIComponent(text)}`
-export const conversationHref = (registryId: string): string => `/dashboard/market?conv=${encodeURIComponent(registryId)}`
+/** A conversation's page on Market (17 Oct: a page, never a panel). */
+export const conversationHref = (registryId: string): string => marketConversationPath(registryId)
 export const groupHref = (key: string): string => `/dashboard/voices?group=${encodeURIComponent(key)}`
 
 // ---- the reads ----------------------------------------------------------------------

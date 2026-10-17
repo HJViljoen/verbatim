@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { RETIRED_ADDRESSES, SURFACES, redirectFor, type SearchParams } from './nav'
+import { RETIRED_ADDRESSES, SURFACES, isMarketPage, redirectFor, type SearchParams } from './nav'
 import { SETTINGS_ADDRESSES } from './settings/rail'
 
 // EVERY OLD LINK LANDS (Design v2, decision 6 of the depth plan).
@@ -59,14 +59,14 @@ const TABLE: readonly [string, string][] = [
   ['/dashboard/week#finding-3', '/dashboard/market#finding-3'],
   ['/dashboard/week?reply=question#reply', '/dashboard/market?reply=question#reply'],
   // Conversation (/dashboard/voice): an open theme → Market's `?conv=`; the rest → Voices.
-  ['/dashboard/voice?theme=reg-123', '/dashboard/market?conv=reg-123'],
-  ['/dashboard/voice?theme=reg-123#theme', '/dashboard/market?conv=reg-123#theme'],
-  ['/dashboard/voice?theme=reg-123&audience=industry-other', '/dashboard/market?conv=reg-123&audience=industry-other'],
-  ['/dashboard/voice?month=2026-09&theme=reg-123', '/dashboard/market?conv=reg-123&period=month&month=2026-09'],
-  ['/dashboard/voice?themes=fit-and-comfort', '/dashboard/market?conv=fit-and-comfort'],
-  ['/dashboard/voice?themes=fit-and-comfort,liner-sweat#grounding', '/dashboard/market?conv=fit-and-comfort#grounding'],
-  ['/dashboard/voice?themes=a&themes=b', '/dashboard/market?conv=a'],
-  ['/dashboard/voice?theme=reg-1&themes=slug-2', '/dashboard/market?conv=reg-1'],
+  ['/dashboard/voice?theme=reg-123', '/dashboard/market/conversations/reg-123'],
+  ['/dashboard/voice?theme=reg-123#theme', '/dashboard/market/conversations/reg-123#theme'],
+  ['/dashboard/voice?theme=reg-123&audience=industry-other', '/dashboard/market/conversations/reg-123?audience=industry-other'],
+  ['/dashboard/voice?month=2026-09&theme=reg-123', '/dashboard/market/conversations/reg-123?period=month&month=2026-09'],
+  ['/dashboard/voice?themes=fit-and-comfort', '/dashboard/market/conversations/fit-and-comfort'],
+  ['/dashboard/voice?themes=fit-and-comfort,liner-sweat#grounding', '/dashboard/market/conversations/fit-and-comfort#grounding'],
+  ['/dashboard/voice?themes=a&themes=b', '/dashboard/market/conversations/a'],
+  ['/dashboard/voice?theme=reg-1&themes=slug-2', '/dashboard/market/conversations/reg-1'],
   ['/dashboard/voice', '/dashboard/voices'],
   ['/dashboard/voice#cast', '/dashboard/voices#cast'],
   ['/dashboard/voice?persona=p1#cast', '/dashboard/voices?persona=p1#cast'],
@@ -78,11 +78,12 @@ const TABLE: readonly [string, string][] = [
   ['/dashboard/competitive?vs=Ottobock', '/dashboard/voices?brand=Ottobock'],
   ['/dashboard/competitive?vs=The%20North%20Face&month=2026-09', '/dashboard/voices?brand=The+North+Face&month=2026-09'],
   ['/dashboard/competitive?horizon=last_3', '/dashboard/voices?horizon=last_3'],
-  // Subjects (/dashboard/subjects) → Market; the open subject is `?subject=`.
+  // Subjects (/dashboard/subjects) → Market; the open subject is its page (17 Oct).
   ['/dashboard/subjects', '/dashboard/market'],
-  ['/dashboard/subjects?item=s1', '/dashboard/market?subject=s1'],
-  ['/dashboard/subjects?item=s1&questions=last_3', '/dashboard/market?subject=s1&questions=last_3'],
-  ['/dashboard/subjects?item=s1&month=2026-09', '/dashboard/market?subject=s1&period=month&month=2026-09'],
+  ['/dashboard/subjects?month=2026-09', '/dashboard/market?period=month&month=2026-09'],
+  ['/dashboard/subjects?item=s1', '/dashboard/market/subjects/s1'],
+  ['/dashboard/subjects?item=s1&questions=last_3', '/dashboard/market/subjects/s1?questions=last_3'],
+  ['/dashboard/subjects?item=s1&month=2026-09', '/dashboard/market/subjects/s1?period=month&month=2026-09'],
   // Your moves' old links on /dashboard/market → /dashboard/moves?advice=.
   ['/dashboard/market?rec=rec-42', '/dashboard/moves?advice=rec-42'],
   ['/dashboard/market?item=lin-7', '/dashboard/moves?advice=lin-7'],
@@ -90,10 +91,23 @@ const TABLE: readonly [string, string][] = [
   ['/dashboard/market?ledger=all', '/dashboard/moves?advice=all'],
   ['/dashboard/market?ledger=all&item=lin-7', '/dashboard/moves?advice=lin-7'],
   ['/dashboard/market?rec=rec-42&month=2026-09', '/dashboard/moves?advice=rec-42&month=2026-09'],
+  // Market's open panels are pages (17 Oct): every stored `?conv=` and
+  // `?subject=` lands on its page, the other params kept, `?at=` dropped.
+  ['/dashboard/market?conv=reg-123', '/dashboard/market/conversations/reg-123'],
+  ['/dashboard/market?conv=reg-123&at=top#conv-panel', '/dashboard/market/conversations/reg-123#conv-panel'],
+  ['/dashboard/market?period=month&month=2026-09&conv=reg-123&at=table', '/dashboard/market/conversations/reg-123?period=month&month=2026-09'],
+  ['/dashboard/market?conv=reg-123&subject=s1&at=subjects', '/dashboard/market/conversations/reg-123'],
+  ['/dashboard/market?conv=fit-and-comfort&in=s1&all=1', '/dashboard/market/conversations/fit-and-comfort?in=s1&all=1'],
+  ['/dashboard/market?subject=s1', '/dashboard/market/subjects/s1'],
+  ['/dashboard/market?subject=s1&at=subjects#subject-panel', '/dashboard/market/subjects/s1#subject-panel'],
+  ['/dashboard/market?period=time&subject=s1', '/dashboard/market/subjects/s1?period=time'],
   // Market's own links stay on Market.
   ['/dashboard/market', '/dashboard/market'],
-  ['/dashboard/market?conv=reg-123', '/dashboard/market?conv=reg-123'],
   ['/dashboard/market?period=month&month=2026-09', '/dashboard/market?period=month&month=2026-09'],
+  ['/dashboard/market?in=s1&all=1#conversations', '/dashboard/market?in=s1&all=1#conversations'],
+  ['/dashboard/market/week', '/dashboard/market/week'],
+  ['/dashboard/market/subjects/s1?period=month', '/dashboard/market/subjects/s1?period=month'],
+  ['/dashboard/market/conversations/reg-123', '/dashboard/market/conversations/reg-123'],
   // Phase 1's orphans and Reports, as before (Consumer Profile → Voices now).
   ['/dashboard/profile', '/dashboard/voices'],
   ['/dashboard/guide', '/dashboard/settings'],
@@ -120,7 +134,9 @@ describe('every old link lands (the table)', () => {
     for (const [from] of TABLE) {
       const { path, params } = request(from)
       const to = redirectFor(path, params)
-      if (to !== null) expect(served, from).toContain(new URL(to, ORIGIN).pathname)
+      if (to === null) continue
+      const landing = new URL(to, ORIGIN).pathname
+      if (!isMarketPage(landing)) expect(served, from).toContain(landing)
     }
   })
 

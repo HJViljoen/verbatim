@@ -14,7 +14,7 @@ import { printsMarket } from '@/lib/subjects/calibration-state'
 import { monthStartOf } from '@/lib/reading/month-key'
 import { marketLevel } from '@/lib/pages/overview-market/kinds'
 import { findingKey } from '@/lib/pages/agent-thread'
-import { surface } from '@/lib/nav'
+import { marketConversationPath } from '@/lib/nav'
 import { DirectionWord, FindingLevel, InferencePill } from './marks'
 
 // The answer, as the artboard draws it (Block D wave 2, E-ask · `ask.thread.*`,
@@ -438,13 +438,13 @@ function AnswerFooter({ f }: { f: FindingMeasure | null }) {
   if (!f || f.value.k <= 0) return null
   return (
     <>
-      {/* THE CONVERSATION, OPEN ON MARKET (Design v2): the verdict's object
-          is a theme's registry id, and Market opens one with `?conv=`. It
+      {/* THE CONVERSATION'S PAGE ON MARKET (17 Oct): the verdict's object
+          is a theme's registry id, and Market opens one as its page. It
           was Conversation's `?theme=` with `&audience=`, which the page read
           as nothing. The HORIZON deliberately does not travel: this figure
           is a calendar month, and the footer note beside this names it. */}
       <Link
-        href={`${surface('market').href}?conv=${encodeURIComponent(f.verdict?.objectId ?? '')}`}
+        href={marketConversationPath(f.verdict?.objectId ?? '')}
         className="hover:underline"
       >
         Open the <span data-copy="figure">{fmtInt(f.value.k)}</span> videos behind this →

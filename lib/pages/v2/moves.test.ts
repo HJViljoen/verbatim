@@ -119,7 +119,7 @@ describe('moveCards', () => {
     expect(c.compare?.verdict.state).toBe('moved')
     expect(c.compare?.verdict.value).toEqual({ k: 120, n: 600 })
     expect(c.compare?.verdict.baseline).toEqual({ k: 60, n: 600 })
-    expect(c.openHref).toBe('/dashboard/market?subject=s1')
+    expect(c.openHref).toBe('/dashboard/market/subjects/s1')
   })
 
   it('draws no month across a refused step, and a refused pair prints no earlier month', () => {

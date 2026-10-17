@@ -5,19 +5,24 @@ import { CARD, CardHead } from '@/components/v2'
 import { fmtInt, longMonth } from '@/lib/format'
 import type { MarketConv, MarketData, MarketTable } from '@/lib/pages/v2/market'
 import { cn } from '@/lib/utils'
-import { ConversationPanel } from './panel'
 import { About, ABOUT_NOT_COUNTED, ABOUT_NOT_READ, ConvChip, SetApartTag } from './parts'
 import { BRANDS_NOT_COUNTED, BRANDS_NOT_READ } from '@/lib/pages/v2/voices'
 
-// EVERY CONVERSATION (depth v2, T3; E2-Market's table): the period's
-// conversations at three of the category's videos or more, biggest first,
-// filterable by subject (`?in=`, links, so a filter is an address), ten shown
-// until "Show all". This week a row's week count stands beside its month's;
-// this month the last column is the month against the month before (the one
-// `Verdict` badge; nothing where the pair is refused); over time the columns
-// are the months. The board's "Against usual" column is not drawn: no rule
-// reads a week against a usual week (decision 1). A row opens its
-// conversation in place, as the table's own next row.
+// EVERY CONVERSATION (depth v2, T3; E2-Market's table, F2-Market's full-width
+// one): the period's conversations at three of the category's videos or more,
+// biggest first, filterable by subject (`?in=`, links, so a filter is an
+// address), ten shown until "Show all". This week a row's week count stands
+// beside its month's; this month the last column is the month against the
+// month before (the one `Verdict` badge; nothing where the pair is refused);
+// over time the columns are the months. The board's "Against usual" column is
+// not drawn: no rule reads a week against a usual week (decision 1).
+//
+// A ROW OPENS ITS CONVERSATION'S PAGE (17 Oct): nothing opens in place.
+//
+// ON A PHONE (F2-Market-Phone, ruling 4) the table is a two-line list: the
+// name and its videos, then its subject and, at the right, the month the week
+// sits beside (decision 1) or the month's verdict; no About chips. Nothing
+// passes the right edge at 390.
 
 const TH = 'whitespace-nowrap border-b border-border pb-2.5 pr-3 text-left text-[11.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground'
 const TD = 'border-b border-track py-[11px] pr-3 align-middle'
@@ -37,11 +42,11 @@ function title(data: MarketData): string {
   return `Every conversation in ${data.month.text}`
 }
 
-function Cells({ conv, data, table }: { conv: MarketConv; data: MarketData; table: MarketTable }) {
+function Cells({ conv, data, months }: { conv: MarketConv; data: MarketData; months: MarketTable['months'] }) {
   if (data.period === 'time') {
     return (
       <>
-        {table.months.map((m) => {
+        {months.map((m) => {
           const point = conv.months.find((x) => x.month === m.month)
           return <td key={m.month} className={cn(TD, 'text-right font-mono tabular-nums')}>{point?.k != null ? <span data-copy="figure">{fmtInt(point.k)}</span> : ''}</td>
         })}
@@ -49,17 +54,10 @@ function Cells({ conv, data, table }: { conv: MarketConv; data: MarketData; tabl
     )
   }
   if (data.period === 'week') {
-    // ON A PHONE THE MONTH SITS UNDER THE WEEK, IN ITS CELL (Content's Also
-    // asked, T9; Phase 4 fix round): two figure columns beside a label did not
-    // fit 390 on Sealand, and the table's own scroll cut "42" to "4" at the
-    // card's edge. The week stays beside its month (decision 1).
     return (
       <>
-        <td className={cn(TD, 'text-right font-mono tabular-nums')}>
-          {conv.week != null ? <span data-copy="figure">{fmtInt(conv.week)}</span> : ''}
-          {conv.month != null ? <span className="block whitespace-nowrap font-sans text-[12px] leading-[1.35] text-muted-foreground sm:hidden"><span data-copy="figure" className="font-mono">{fmtInt(conv.month)}</span> in {data.month.text}</span> : null}
-        </td>
-        <td className={cn(TD, 'hidden text-right font-mono tabular-nums text-muted-foreground sm:table-cell')}>{conv.month != null ? <span data-copy="figure">{fmtInt(conv.month)}</span> : ''}</td>
+        <td className={cn(TD, 'text-right font-mono tabular-nums')}>{conv.week != null ? <span data-copy="figure">{fmtInt(conv.week)}</span> : ''}</td>
+        <td className={cn(TD, 'text-right font-mono tabular-nums text-muted-foreground')}>{conv.month != null ? <span data-copy="figure">{fmtInt(conv.month)}</span> : ''}</td>
       </>
     )
   }
@@ -71,14 +69,108 @@ function Cells({ conv, data, table }: { conv: MarketConv; data: MarketData; tabl
   )
 }
 
+/** The name, with the chip it earned this week ("New", the reader flag) and
+ *  a set-apart conversation's tag. */
+function Name({ conv, href, data, arrow = false }: { conv: MarketConv; href: string; data: MarketData; arrow?: boolean }) {
+  return (
+    <span className="inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+      <Link href={href} className="min-w-0 font-medium text-foreground no-underline underline-offset-[3px] hover:underline">
+        <span data-copy="subject" data-slot="pass_b_theme">{conv.label}</span>
+        {arrow ? <span aria-hidden className="text-muted-foreground"> →</span> : null}
+      </Link>
+      {data.period === 'week' ? <ConvChip flag={null} isNew={conv.isNew} id={conv.id} label={conv.label} k={conv.month ?? conv.week ?? 0} n={data.month.category ?? 0} month={data.month.month} /> : null}
+      <SetApartTag setApart={conv.setApart} />
+    </span>
+  )
+}
+
+/** The phone's two-line row: the name and its videos, then its subject and
+ *  the month (this week) or the month's verdict. */
+function PhoneRow({ conv, href, data, subjects }: { conv: MarketConv; href: string; data: MarketData; subjects: boolean }) {
+  const count = data.period === 'week' ? conv.week : data.period === 'time' ? conv.months[conv.months.length - 1]?.k ?? null : conv.month
+  return (
+    <div data-phone-row="" className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-[3px] border-t border-track py-[11px] first:border-t-0 first:pt-0">
+      <span className="min-w-0 text-[14px]"><Name conv={conv} href={href} data={data} /></span>
+      <span className="text-right font-mono text-[13.5px] tabular-nums">{count != null ? <span data-copy="figure">{fmtInt(count)}</span> : ''}</span>
+      <span className="min-w-0 text-[12.5px] text-muted-foreground">{subjects ? conv.subjectName ?? '' : ''}</span>
+      <span className="justify-self-end whitespace-nowrap text-[12.5px] text-muted-foreground">
+        {data.period === 'week'
+          ? conv.month != null ? <><span data-copy="figure" className="font-mono">{fmtInt(conv.month)}</span> {data.week?.inMonth ?? `in ${data.month.text}`}</> : null
+          : data.period === 'month' ? <span data-copy="verdict"><MovementBadge verdict={conv.monthVerdict} unit="pts" good="neutral" bandTip /></span> : null}
+      </span>
+    </div>
+  )
+}
+
+/**
+ * Conversation rows as a table from 640 and a two-line list on a phone: the
+ * top page's every conversation, and a subject's page's biggest three
+ * (`subjects` false there: every row is that subject's).
+ */
+export function ConversationRows({ rows, data, months = [], subjects = true, arrows = false, hasSubjects = true }: {
+  rows: readonly { conv: MarketConv; href: string }[]
+  data: MarketData
+  months?: MarketTable['months']
+  /** Draw the Subject column (the top page). */
+  subjects?: boolean
+  /** A "→" after each name (a subject's page: each opens as its own page). */
+  arrows?: boolean
+  /** Whether any conversation has a subject: the column's header says
+   *  "none yet" where none does. */
+  hasSubjects?: boolean
+}) {
+  const time = data.period === 'time'
+  const about = !time
+  return (
+    <>
+      <div className="max-sm:hidden">
+        <table className={cn('w-full border-collapse text-[14px]', time ? 'min-w-[560px]' : null)}>
+          <thead>
+            <tr>
+              <th scope="col" className={TH}>Conversation</th>
+              {/* THE BOARD'S COLUMNS IN EVERY STATE (the parity pass, 13 Oct):
+                  Subject and About stay; where no conversation is in a subject,
+                  or brands are not counted, the header says so once and the
+                  cells stay empty. */}
+              {subjects ? <th scope="col" className={cn(TH, 'max-lg:hidden')}>Subject{hasSubjects ? null : <HeadNote>{SUBJECT_NONE}</HeadNote>}</th> : null}
+              {about ? (
+                <th scope="col" className={cn(TH, 'max-lg:hidden')} title={data.brands === 'counted' ? undefined : data.brands === 'not_counted' ? BRANDS_NOT_COUNTED : BRANDS_NOT_READ}>
+                  About{data.brands === 'counted' ? null : <HeadNote>{data.brands === 'not_counted' ? ABOUT_NOT_COUNTED : ABOUT_NOT_READ}</HeadNote>}
+                </th>
+              ) : null}
+              {time
+                ? months.map((m) => (
+                  <th key={m.month} scope="col" className={cn(TH, 'text-right')}>
+                    {longMonth(m.month).slice(0, 3)}{m.filling ? ' so far' : ''}
+                    {m.n != null ? <span data-copy="level" className="block font-mono font-normal normal-case tracking-normal">of {fmtInt(m.n)}</span> : null}
+                  </th>
+                ))
+                : data.period === 'week'
+                  ? <><th scope="col" className={cn(TH, 'text-right')}>This week</th><th scope="col" className={cn(TH, 'text-right')}>{data.month.text}</th></>
+                  : <><th scope="col" className={cn(TH, 'text-right')}>Videos</th><th scope="col" className={cn(TH, 'text-right')}>Against {data.month.prev.text}</th></>}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ conv, href }) => (
+              <tr key={conv.id} id={`conv-${conv.id}`} className="scroll-mt-6 [&:last-child>td]:border-b-0">
+                <td className={TD}><Name conv={conv} href={href} data={data} arrow={arrows} /></td>
+                {subjects ? <td className={cn(TD, 'text-muted-foreground max-lg:hidden')}>{conv.subjectName ?? ''}</td> : null}
+                {about ? <td className={cn(TD, 'max-lg:hidden')}>{conv.who.length > 0 && data.brands === 'counted' ? <About parts={conv.who} brand={data.brand} noun={data.noun} /> : null}</td> : null}
+                <Cells conv={conv} data={data} months={months} />
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex flex-col sm:hidden">
+        {rows.map(({ conv, href }) => <PhoneRow key={conv.id} conv={conv} href={href} data={data} subjects={subjects} />)}
+      </div>
+    </>
+  )
+}
+
 export function ConversationTable({ table, data }: { table: MarketTable; data: MarketData }) {
   const time = data.period === 'time'
-  // THE BOARD'S COLUMNS IN EVERY STATE (the parity pass, 13 Oct): Subject and
-  // About stay; where no conversation is in a subject, or brands are not
-  // counted, the header says so once and the cells stay empty.
-  const subjects = true
-  const about = !time
-  const cols = 1 + (subjects ? 1 : 0) + (time ? table.months.length : (about ? 1 : 0) + 2)
   const shown = table.rows.length
   return (
     <section id="conversations" aria-labelledby="conversations-title" className={cn(CARD, 'scroll-mt-6')}>
@@ -106,38 +198,10 @@ export function ConversationTable({ table, data }: { table: MarketTable; data: M
           })}
         </nav>
       ) : null}
-      {/* A query container, so an open conversation's row can hold its panel
-          to the scroller's visible width (T9: month by month, the table
-          scrolls sideways on a phone, and the panel would scroll with it). */}
-      <div className="@container -mx-1 overflow-x-auto px-1">
-        <table className={cn('w-full border-collapse text-[14px]', time ? 'min-w-[560px]' : null)}>
-          <thead>
-            <tr>
-              <th scope="col" className={TH}>Conversation</th>
-              {subjects ? <th scope="col" className={cn(TH, 'max-lg:hidden')}>Subject{table.subjects ? null : <HeadNote>{SUBJECT_NONE}</HeadNote>}</th> : null}
-              {about ? (
-                <th scope="col" className={cn(TH, 'max-lg:hidden')} title={data.brands === 'counted' ? undefined : data.brands === 'not_counted' ? BRANDS_NOT_COUNTED : BRANDS_NOT_READ}>
-                  About{data.brands === 'counted' ? null : <HeadNote>{data.brands === 'not_counted' ? ABOUT_NOT_COUNTED : ABOUT_NOT_READ}</HeadNote>}
-                </th>
-              ) : null}
-              {time
-                ? table.months.map((m) => (
-                  <th key={m.month} scope="col" className={cn(TH, 'text-right')}>
-                    {longMonth(m.month).slice(0, 3)}{m.filling ? ' so far' : ''}
-                    {m.n != null ? <span data-copy="level" className="block font-mono font-normal normal-case tracking-normal">of {fmtInt(m.n)}</span> : null}
-                  </th>
-                ))
-                : data.period === 'week'
-                  ? <><th scope="col" className={cn(TH, 'text-right')}>This week</th><th scope="col" className={cn(TH, 'hidden text-right sm:table-cell')}>{data.month.text}</th></>
-                  : <><th scope="col" className={cn(TH, 'text-right')}>Videos</th><th scope="col" className={cn(TH, 'text-right')}>Against {data.month.prev.text}</th></>}
-            </tr>
-          </thead>
-          <tbody>
-            {table.rows.map(({ conv, href, open }) => (
-              <RowWithPanel key={conv.id} conv={conv} href={href} open={open} data={data} table={table} cols={cols} subjects={subjects} about={about} />
-            ))}
-          </tbody>
-        </table>
+      {/* Over time, the months' columns scroll sideways inside the card; the
+          page never does. */}
+      <div className={time ? '-mx-1 overflow-x-auto px-1' : undefined}>
+        <ConversationRows rows={table.rows} data={data} months={table.months} hasSubjects={table.subjects} />
       </div>
       {table.showAllHref || shown < table.total ? (
         <div className="flex flex-wrap gap-2.5">
@@ -149,40 +213,5 @@ export function ConversationTable({ table, data }: { table: MarketTable; data: M
         </div>
       ) : null}
     </section>
-  )
-}
-
-function RowWithPanel({ conv, href, open, data, table, cols, subjects, about }: {
-  conv: MarketConv; href: string; open: boolean; data: MarketData; table: MarketTable; cols: number; subjects: boolean; about: boolean
-}) {
-  return (
-    <>
-      <tr id={`conv-${conv.id}`} className={cn('scroll-mt-6', open ? 'bg-accent/50' : null)}>
-        <td className={TD}>
-          <span className="inline-flex flex-wrap items-center gap-2">
-            <Link href={href} scroll={false} aria-current={open ? 'true' : undefined} className="font-medium text-foreground no-underline underline-offset-[3px] hover:underline">
-              <span data-copy="subject" data-slot="pass_b_theme">{conv.label}</span>
-            </Link>
-            {data.period === 'week' ? <ConvChip flag={null} isNew={conv.isNew} id={conv.id} label={conv.label} k={conv.month ?? conv.week ?? 0} n={data.month.category ?? 0} month={data.month.month} /> : null}
-            <SetApartTag setApart={conv.setApart} />
-          </span>
-        </td>
-        {subjects ? <td className={cn(TD, 'text-muted-foreground max-lg:hidden')}>{conv.subjectName ?? ''}</td> : null}
-        {about ? <td className={cn(TD, 'max-lg:hidden')}>{conv.who.length > 0 && data.brands === 'counted' ? <About parts={conv.who} brand={data.brand} noun={data.noun} /> : null}</td> : null}
-        <Cells conv={conv} data={data} table={table} />
-      </tr>
-      {open && data.panel && data.panel.id === conv.id ? (
-        <tr>
-          <td colSpan={cols} className="py-4">
-            {/* The scroller's width, held at its left edge: the panel never
-                runs wider than what shows, nor scrolls out of view with the
-                table's columns. */}
-            <div className="sticky left-0 w-[100cqw]">
-              <ConversationPanel panel={data.panel} data={data} />
-            </div>
-          </td>
-        </tr>
-      ) : null}
-    </>
   )
 }

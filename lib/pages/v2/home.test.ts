@@ -90,8 +90,9 @@ describe('the subjects on the week tile, as Market\'s board reads them', () => {
     // Cost & access: 70 of 318 against 126 of 839, the largest change that cleared its band.
     expect(s.moved?.name).toBe('Cost & access')
     expect(s.moved?.verdict.state).toBe('moved')
-    expect(marketParams(query(s.moved!.href))).toMatchObject({ subject: s.moved!.id, at: 'subjects' })
-    expect(path(s.biggest!.href)).toBe('/dashboard/market')
+    // Each opens its subject's page on Market (17 Oct).
+    expect(s.moved!.href).toBe(`/dashboard/market/subjects/${s.moved!.id}`)
+    expect(path(s.biggest!.href)).toBe(`/dashboard/market/subjects/${s.biggest!.id}`)
     expect(s.noneMoved).toBe(false)
   })
 
@@ -206,17 +207,16 @@ describe('Your products (T5\'s reader)', () => {
 })
 
 describe('every tile\'s link opens its page\'s panel (each parsed by that page\'s own parser)', () => {
-  it('Market: `?conv=` and `?at=top`, on the flag\'s conversation, the lead and each row', () => {
+  it('Market: each conversation\'s page (17 Oct), on the flag\'s conversation, the lead and each row', () => {
     const top = fixtureMarketTop()
     expect(top.hero?.kind).toBe('flag')
     const flagHref = top.hero?.kind === 'flag' ? top.hero.card.href! : ''
-    expect(path(flagHref)).toBe('/dashboard/market')
-    expect(marketParams(query(flagHref))).toMatchObject({ period: 'week', conv: FIXTURE_FLAG.objectId, at: 'top' })
-    expect(flagHref).toMatch(/#conv-panel$/)
-    for (const r of top.rows) expect(marketParams(query(r.href))).toMatchObject({ conv: r.conv.id, at: 'top' })
+    expect(flagHref).toBe(`/dashboard/market/conversations/${FIXTURE_FLAG.objectId}`)
+    expect(marketParams(query(flagHref))).toMatchObject({ period: 'week' })
+    for (const r of top.rows) expect(r.href).toBe(`/dashboard/market/conversations/${r.conv.id}`)
     const quiet = fixtureMarketTop({ flagged: false })
     expect(quiet.hero?.kind).toBe('new')
-    if (quiet.hero && quiet.hero.kind !== 'flag') expect(marketParams(query(quiet.hero.href)).conv).toBe(quiet.hero.conv.id)
+    if (quiet.hero && quiet.hero.kind !== 'flag') expect(path(quiet.hero.href)).toBe(`/dashboard/market/conversations/${quiet.hero.conv.id}`)
   })
 
   it('Voices: `?group=` for the lead group, `?brand=` for each brand named', () => {

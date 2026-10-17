@@ -202,7 +202,7 @@ describe('the Dashboard, as the board draws it (E1-Dashboard)', () => {
   })
 
   it('every tile links into its page\'s panel', () => {
-    expect(markup).toMatch(/href="\/dashboard\/market\?conv=[^"]+&amp;at=top#conv-panel"[^>]*>Open Market →/)
+    expect(markup).toMatch(/href="\/dashboard\/market\/conversations\/[^"?#]+"[^>]*>Open Market →/)
     expect(markup).toContain('href="/dashboard/voices?group=long-time-users#group-panel"')
     expect(markup).toContain('href="/dashboard/products?product=p-pivot#product-panel"')
     expect(markup).toContain('href="/dashboard/content?idea=1#idea-panel"')

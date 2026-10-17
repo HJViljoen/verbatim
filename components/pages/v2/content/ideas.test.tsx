@@ -153,7 +153,7 @@ describe('What to post next', () => {
     expect(text).toContain("Who's asking New amputees, first year, Caregivers and family Came up on TikTok 12, YouTube 6, Instagram 3, Reddit 2 Comments 71 this week, 97 in October so far Subject No subject holds it Your posts None of your 13 posts since August touched on it Open in Market")
     expect(text).toContain('Subject Fit & comfort Your posts')
     expect(text).not.toContain('Open the brief')
-    expect(render(node)).toContain('href="/dashboard/market?conv=a1000000-0000-4000-8000-000000000001"')
+    expect(render(node)).toContain('href="/dashboard/market/conversations/a1000000-0000-4000-8000-000000000001"')
     // The flag an idea on it would wear, only where it was earned.
     expect(copyNodes(render(node)).filter((n) => n.kind === 'verdict').map((n) => n.text)).toEqual(['Unusual this week'])
     // The label is the conversation's own, never a quote, and the three weeks are bare counts.

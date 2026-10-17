@@ -346,7 +346,7 @@ describe('the level-1 email: the board, top to bottom', () => {
   it('every line opens where it is: Market\'s conversation, each page\'s panel, the Dashboard, who gets this', () => {
     const html = l1Email()
     for (const href of [
-      `${APP}/dashboard/market?conv=t3`, `${APP}/dashboard/market?conv=t1`, `${APP}/dashboard/market?conv=t7`, `${APP}/dashboard/market?conv=t8`,
+      `${APP}/dashboard/market/conversations/t3`, `${APP}/dashboard/market/conversations/t1`, `${APP}/dashboard/market/conversations/t7`, `${APP}/dashboard/market/conversations/t8`,
       `${APP}/dashboard/voices?group=commuters`, `${APP}/dashboard/products?product=p1`, `${APP}/dashboard/content?idea=1`,
       `${APP}/dashboard/moves?advice=lin-1`, `${APP}/dashboard`, `${APP}/dashboard/settings/reports`, SHARE,
     ]) expect(html, href).toContain(`href="${href}"`)

@@ -4,7 +4,7 @@ import { fakeDb } from '../../test/fake-db'
 import { readingHandle } from '../../reading/read'
 import { judgeVersionFor } from '../../subjects/types'
 import { fixtureId, fixtureRead, fixtureSubjectId, withSubjectReads } from './market-fixture'
-import { loadMarket, marketParams } from './market'
+import { loadMarket, marketParams, type MarketView } from './market'
 
 // MARKET'S STATEMENTS, COUNTED OFFLINE. Every `.from(table)` and `.rpc(fn)` a
 // page load makes, against a table-driven stand-in for the database
@@ -62,23 +62,38 @@ function rpcs() {
 }
 
 /** One page load's statements: every table and function it named, counted. */
-async function statements(raw: Record<string, string>): Promise<{ total: number; by: Record<string, number> }> {
+async function statements(raw: Record<string, string>, view?: MarketView): Promise<{ total: number; by: Record<string, number> }> {
   const db = fakeDb(tables() as never, rpcs() as never)
-  await loadMarket({ supabase: db.client as never, clientId: CLIENT, reading: readingHandle(CLIENT, db.client as never), params: marketParams(raw), now: new Date("2026-10-14T09:00:00.000Z") })
+  await loadMarket({ supabase: db.client as never, clientId: CLIENT, reading: readingHandle(CLIENT, db.client as never), params: marketParams(raw), view, now: new Date('2026-10-14T09:00:00.000Z') })
   const by: Record<string, number> = {}
   for (const c of db.calls) by[`${c.op === 'rpc' ? 'rpc' : 'from'}:${c.table}`] = (by[`${c.op === 'rpc' ? 'rpc' : 'from'}:${c.table}`] ?? 0) + 1
   return { total: db.calls.length, by }
 }
 
-// TODAY'S MARKET (17 Oct, before the pages): one load of the week, the week
-// with the lead conversation open in place, the week with a subject open in
-// place, and the month.
-describe('Market\'s statements', () => {
+// TODAY'S MARKET before the pages (17 Oct, measured by this harness at
+// 8be41baa): the week 39, the week with the lead conversation open in place
+// 45, the week with a subject open in place 40, the month 28. Each page now
+// reads only what it prints.
+describe('Market\'s statements, page by page', () => {
   it('counts each load', async () => {
     const week = await statements({})
-    const conv = await statements({ conv: fixtureId(3), at: 'top' })
-    const subject = await statements({ subject: fixtureSubjectId('cost'), at: 'subjects' })
     const month = await statements({ period: 'month' })
-    expect({ week: week.total, conv: conv.total, subject: subject.total, month: month.total }).toEqual({ week: 39, conv: 45, subject: 40, month: 28 })
+    const conv = await statements({}, { kind: 'conversation', id: fixtureId(3) })
+    const subject = await statements({}, { kind: 'subject', id: fixtureSubjectId('cost') })
+    const read = await statements({}, { kind: 'week' })
+    expect({ week: week.total, month: month.total, conv: conv.total, subject: subject.total, read: read.total }).toEqual({ week: 36, month: 28, conv: 40, subject: 34, read: 15 })
+    // The top page's week names no group and no "doing" on its small cards:
+    // no profile read and no lead's kinds.
+    expect(week.by['from:consumer_profiles']).toBeUndefined()
+    expect(week.by['from:month_evidence_refs']).toBeUndefined()
+    // The week's page reads one window and no subject, flag or reading.
+    expect(read.by['rpc:window_theme_readings']).toBe(1)
+    expect(read.by['from:subjects']).toBeUndefined()
+    expect(read.by['from:anomaly_flags']).toBeUndefined()
+    // A conversation's and a subject's page read no weekly volume and no kinds.
+    for (const page of [conv, subject]) {
+      expect(page.by['rpc:market_week_volumes']).toBeUndefined()
+      expect(page.by['from:month_kind_readings']).toBeUndefined()
+    }
   })
 })

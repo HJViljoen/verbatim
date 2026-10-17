@@ -47,7 +47,7 @@ describe('the Your subjects tab', () => {
     expect(markup.match(/aria-label="Rename or stop /g)).toHaveLength(8)
     expect(markup.match(/aria-label="Confirm /g)).toHaveLength(2)
     // A followed subject's name opens it on Market.
-    expect(markup).toContain(`href="/dashboard/market?subject=${fixtureSubjectId(1)}"`)
+    expect(markup).toContain(`href="/dashboard/market/subjects/${fixtureSubjectId(1)}"`)
   })
 
   it('draws no control for a member, and says who can change the set', () => {

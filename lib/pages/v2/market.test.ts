@@ -10,15 +10,15 @@ import type { WindowReading } from '../../reading/read'
 import type { WeekReadData } from '../../written/types'
 import { MARKET_LONG_RUN_ANCHOR, marketMonthHref } from '../../nav'
 import {
-  buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, categoryThemeVideos, categoryVideos, closeHref, convHref,
+  buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, categoryThemeVideos, categoryVideos, convHref,
   convOf, cutWindows, doingOf, leadDoing, marketWeeksOf, flagCardOf, flagVerdict, groupsOf, isRegistryId, insideOf, marketHref, marketMonths, marketParams,
-  mergeMixes, monthsText, notchOf, ourReadOf, panelStats, periodHref, personasOf, pickHero, pickWeekSides, platformRows, subjectHref,
+  mergeMixes, monthsText, ourReadOf, panelStats, periodHref, personasOf, pickHero, pickWeekSides, platformRows, subjectHref, subjectTableHref,
   flagBaseWords, monthSoFar, tableFilterOf, tableMonths, topSpans, unmeasuredOf, weekWindows, whoOf, windowLabel, withMonthPlatforms, MARKET_TABLE_ROWS,
   alsoTalkedOf, earlierNewOf, printableFlags, sideIds, subjectAxis,
   type MarketConv,
 } from './market'
 import {
-  FIXTURE_FLAG, fixtureConvInput, fixtureFacts, fixtureFactsIn, fixtureId, fixtureKindReadings, fixtureRead, fixtureSubjectId, marketFixture, marketThinFixture,
+  FIXTURE_FLAG, fixtureConvInput, fixtureFacts, fixtureFactsIn, fixtureId, fixtureKindReadings, fixtureRead, fixtureSubjectId, marketConversationFixture, marketFixture, marketSubjectFixture, marketThinFixture,
 } from './market-fixture'
 
 const OCT = '2026-10-01'
@@ -30,25 +30,37 @@ describe('marketParams and the addresses', () => {
     expect(marketParams({ period: 'month', month: '2026-09-01' })).toMatchObject({ period: 'month', month: '2026-09-01' })
     expect(marketParams({ period: 'nope' }).period).toBe('week')
     expect(marketParams({ month: 'soon' }).month).toBeNull()
-    expect(marketParams({ at: 'side' }).at).toBeNull()
-    expect(marketParams({ all: '1', in: 's1', conv: 'abc', subject: 'x' })).toMatchObject({ all: true, in: 's1', conv: 'abc', subject: 'x' })
+    // `?at=` (where a panel opened in place) and `?conv=` / `?subject=` are
+    // read no more: the panels are pages, and the route redirects them.
+    expect(marketParams({ at: 'side', conv: 'abc', subject: 'x' })).toEqual({ period: 'week', month: null, in: null, all: false })
+    expect(marketParams({ all: '1', in: 's1' })).toMatchObject({ all: true, in: 's1' })
   })
 
-  it('accepts a registry id or a slug in ?conv=', () => {
+  it('tells a registry id from a slug (a conversation page takes either)', () => {
     expect(isRegistryId(fixtureId(3))).toBe(true)
     expect(isRegistryId('insurance-refusals')).toBe(false)
-    expect(marketParams({ conv: 'insurance-refusals' }).conv).toBe('insurance-refusals')
   })
 
   it('writes the period only off the week, and the month only with it', () => {
     expect(marketHref({ period: 'week', month: OCT })).toBe('/dashboard/market')
     expect(marketHref({ period: 'month', month: '2026-09-01' })).toBe('/dashboard/market?period=month&month=2026-09')
     const p = marketParams({ period: 'month', month: '2026-09', in: 's1' })
-    expect(convHref(p, 'c1', 'table')).toBe('/dashboard/market?period=month&month=2026-09&conv=c1&at=table&in=s1#conv-panel')
-    expect(subjectHref(p, 's2')).toBe('/dashboard/market?period=month&month=2026-09&subject=s2&at=subjects&in=s1#subject-panel')
-    expect(closeHref(p, 'subjects')).toBe('/dashboard/market?period=month&month=2026-09&in=s1#subjects')
     expect(periodHref(p, 'week')).toBe('/dashboard/market')
     expect(periodHref(p, 'time')).toBe('/dashboard/market?period=time&month=2026-09')
+  })
+
+  it('opens a conversation and a subject as pages (17 Oct), the period and month kept, nothing else', () => {
+    const p = marketParams({ period: 'month', month: '2026-09', in: 's1', all: '1' })
+    expect(convHref(p, 'c1')).toBe('/dashboard/market/conversations/c1?period=month&month=2026-09')
+    expect(subjectHref(p, 's2')).toBe('/dashboard/market/subjects/s2?period=month&month=2026-09')
+    expect(convHref(marketParams({}), fixtureId(3))).toBe(`/dashboard/market/conversations/${fixtureId(3)}`)
+    expect(convHref(marketParams({}), 'fit & comfort')).toBe('/dashboard/market/conversations/fit%20%26%20comfort')
+    expect(subjectHref(marketParams({ period: 'week', month: '2026-09' }), 's2')).toBe('/dashboard/market/subjects/s2')
+    // A level page's switch keeps its own path.
+    expect(periodHref(p, 'week', '/dashboard/market/subjects/s2')).toBe('/dashboard/market/subjects/s2')
+    expect(periodHref(p, 'time', '/dashboard/market/subjects/s2')).toBe('/dashboard/market/subjects/s2?period=time&month=2026-09')
+    // A subject's page sends "All N conversations" to the table, filtered.
+    expect(subjectTableHref(p, 's2')).toBe('/dashboard/market?period=month&month=2026-09&in=s2#conversations')
   })
 
   it('writes This month\'s address as the review email\'s link does (`marketMonthHref`), and its long-run anchor', () => {
@@ -182,7 +194,7 @@ describe('the top row', () => {
     expect(flag.conv?.id).toBe(fixtureId(3))
     expect(flag.month).toEqual({ k: 31, n: 300 })
     expect(flag.baselineText).toBe('July to September')
-    expect(flag.href).toBe('/dashboard/market?conv=00000000-0000-4000-8000-000000000003&at=top#conv-panel')
+    expect(flag.href).toBe('/dashboard/market/conversations/00000000-0000-4000-8000-000000000003')
     expect(flag.verdict).toMatchObject({ state: 'moved', window: { kind: 'week' }, value: { k: 19, n: 252 }, baseline: { k: 39, n: 1906 } })
     expect(flag.verdict.direction).toBeUndefined()
     expect(flagWordOf(flag.verdict)).toBe('unusual')
@@ -194,7 +206,7 @@ describe('the top row', () => {
     expect(kind.flag.label).toBe('Complained about something')
     expect(kind.href).toBeNull()
     const subject = flagCardOf({ flag: { ...FIXTURE_FLAG, objectKind: 'subject', objectId: 's1', label: 'Cost & access' }, window: fixtureRead().window, convs, convInput: input, monthCategory: 300, p: marketParams({}), noun: null })!
-    expect(subject.href).toContain('subject=s1')
+    expect(subject.href).toBe('/dashboard/market/subjects/s1')
   })
 
   it('carries the baseline\'s caveats onto the verdict', () => {
@@ -297,7 +309,7 @@ describe('the subject board', () => {
   })
 
   it('prints no count on the chip of a subject whose check is open, and lists those chips by name after the ready ones', () => {
-    const t = buildTable({ convs, params: marketParams({}), openId: null, months: [], pending: new Set([fixtureSubjectId('fit'), fixtureSubjectId('cost')]) })!
+    const t = buildTable({ convs, params: marketParams({}), months: [], pending: new Set([fixtureSubjectId('fit'), fixtureSubjectId('cost')]) })!
     expect(t.filters.map((f) => [f.name, f.count])).toEqual([
       ['All', 17], ['Community & encouragement', 3], ['Function & movement', 3], ['Choosing the right device', 2], ['Look & style', 2],
       ['Cost & access', null], ['Fit & comfort', null],
@@ -308,12 +320,12 @@ describe('the subject board', () => {
   // count of the table filtered to it, so that is held too.
   it('holds the table\'s total under the filter of a subject whose check is open, and prints it under a ready one', () => {
     const pending = new Set([fixtureSubjectId('fit'), fixtureSubjectId('cost')])
-    const open = buildTable({ convs, params: marketParams({ in: fixtureSubjectId('fit') }), openId: null, months: [], pending })!
+    const open = buildTable({ convs, params: marketParams({ in: fixtureSubjectId('fit') }), months: [], pending })!
     expect(open.filter).toBe(fixtureSubjectId('fit'))
     expect(open.totalHeld).toBe(true)
-    const ready = buildTable({ convs, params: marketParams({ in: fixtureSubjectId('community') }), openId: null, months: [], pending })!
+    const ready = buildTable({ convs, params: marketParams({ in: fixtureSubjectId('community') }), months: [], pending })!
     expect(ready.totalHeld).toBeUndefined()
-    expect(buildTable({ convs, params: marketParams({}), openId: null, months: [], pending })!.totalHeld).toBeUndefined()
+    expect(buildTable({ convs, params: marketParams({}), months: [], pending })!.totalHeld).toBeUndefined()
   })
 
   // Ruling U6 (14 Oct sweep): the anomaly check flags every active subject;
@@ -399,38 +411,39 @@ describe('the table', () => {
   const p = marketParams({})
 
   it('shows ten until all, with the subjects as filters', () => {
-    const t = buildTable({ convs, params: p, openId: null, months: [], pending: new Set() })!
+    const t = buildTable({ convs, params: p, months: [], pending: new Set() })!
     expect(t.rows).toHaveLength(MARKET_TABLE_ROWS)
     expect(t.total).toBe(convs.length)
     expect(t.showAllHref).toBe('/dashboard/market?all=1#conversations')
     expect(t.filters[0]).toMatchObject({ id: null, name: 'All', count: convs.length })
     expect(t.filters[1]).toMatchObject({ name: 'Fit & comfort', count: 4 })
-    const all = buildTable({ convs, params: marketParams({ all: '1' }), openId: null, months: [], pending: new Set() })!
+    const all = buildTable({ convs, params: marketParams({ all: '1' }), months: [], pending: new Set() })!
     expect(all.rows).toHaveLength(convs.length)
     expect(all.showAllHref).toBeNull()
   })
 
-  it('filters by subject, and keeps an open row further down', () => {
-    const t = buildTable({ convs, params: marketParams({ in: fixtureSubjectId('cost') }), openId: null, months: [], pending: new Set() })!
+  it('filters by subject, each row opening its conversation\'s page (17 Oct)', () => {
+    const t = buildTable({ convs, params: marketParams({ in: fixtureSubjectId('cost') }), months: [], pending: new Set() })!
     expect(t.rows.map((r) => r.conv.subjectName)).toEqual(['Cost & access', 'Cost & access', 'Cost & access'])
     expect(t.filter).toBe(fixtureSubjectId('cost'))
-    const open = buildTable({ convs, params: p, openId: fixtureId(16), months: [], pending: new Set() })!
-    expect(open.rows.at(-1)).toMatchObject({ open: true, conv: { id: fixtureId(16) } })
+    expect(t.rows[0].href).toBe(`/dashboard/market/conversations/${t.rows[0].conv.id}`)
+    const month = buildTable({ convs, params: marketParams({ period: 'month', month: '2026-09' }), months: [], pending: new Set() })!
+    expect(month.rows[0].href).toBe(`/dashboard/market/conversations/${month.rows[0].conv.id}?period=month&month=2026-09`)
   })
 
   it('is nothing with no conversation', () => {
-    expect(buildTable({ convs: [], params: p, openId: null, months: [], pending: new Set() })).toBeNull()
+    expect(buildTable({ convs: [], params: p, months: [], pending: new Set() })).toBeNull()
   })
 
   it('ignores an unknown ?in= (every row, and its who, stays)', () => {
     expect(tableFilterOf(convs, 'nope')).toBeNull()
-    expect(buildTable({ convs, params: marketParams({ in: 'nope' }), openId: null, months: [], pending: new Set() })!.rows).toHaveLength(MARKET_TABLE_ROWS)
+    expect(buildTable({ convs, params: marketParams({ in: 'nope' }), months: [], pending: new Set() })!.rows).toHaveLength(MARKET_TABLE_ROWS)
   })
 
   it('has no Subject column where no conversation is in a measured subject', () => {
     const none = convs.map((c) => ({ ...c, subjectId: null, subjectName: null }))
-    expect(buildTable({ convs: none, params: p, openId: null, months: [], pending: new Set() })!.subjects).toBe(false)
-    expect(buildTable({ convs, params: p, openId: null, months: [], pending: new Set() })!.subjects).toBe(true)
+    expect(buildTable({ convs: none, params: p, months: [], pending: new Set() })!.subjects).toBe(false)
+    expect(buildTable({ convs, params: p, months: [], pending: new Set() })!.subjects).toBe(true)
   })
 
   it('reads the over-time months off the category', () => {
@@ -439,15 +452,11 @@ describe('the table', () => {
   })
 })
 
-describe('the open panel', () => {
-  it('points the notch at the clicked item, on the row as it is laid out', () => {
-    expect(notchOf('top', 0)).toBe(0.25)
-    expect(notchOf('top', 2)).toBe(0.875)
-    expect(notchOf('top', 0, 1)).toBeCloseTo(3.5 / 12, 5)
-    expect(notchOf('top', 1, 1)).toBeCloseTo(9.5 / 12, 5)
-    expect(notchOf('top', 0, 0)).toBe(0.5)
+describe('a conversation\'s and a subject\'s page', () => {
+  it('lays the month\'s top row out 6 · 3 · 3, 7 · 5 with one card, the row alone', () => {
+    expect(topSpans(2)).toEqual([6, 3, 3])
     expect(topSpans(1)).toEqual([7, 5])
-    expect(notchOf('subjects')).toBe(0.3)
+    expect(topSpans(0)).toEqual([12])
   })
 
   it('names the flag\'s base', () => {
@@ -476,7 +485,7 @@ describe('the open panel', () => {
   })
 
   it('states the week, the month, last month and the flag\'s baseline, each with its n', () => {
-    const data = marketFixture({ open: { n: 3, at: 'top' } })
+    const data = marketFixture()
     const conv = { ...(data.table!.rows.find((r) => r.conv.id === fixtureId(3))!.conv) } as MarketConv
     const stats = panelStats({ conv, period: 'week', week: data.week, month: data.month, prevK: 19, flag: FIXTURE_FLAG, baselineText: monthsText(FIXTURE_FLAG.baselineMonths) })
     expect(stats).toEqual([
@@ -511,17 +520,17 @@ describe('the open panel', () => {
     expect(who.get('t1')).toEqual([{ about: 'client', videos: 1 }, { about: 'market', videos: 2 }])
   })
 
-  it('a subject being re-described opens as an open one does: not measured yet, the conversations inside it (here none), no figure', () => {
-    const data = marketFixture({ subject: 'sport' })
-    // Its reason, FAILED_EXPLAINED, is said once a page: in its row (14 Oct).
-    expect(data.subjectPanel).toMatchObject({ state: 'failed', note: SUBJECT_NOT_MEASURED, inside: [], bars: [], level: null })
-    expect(data.subjects!.rows.find((r) => r.id === data.subjectPanel!.id)!.pending).toEqual({ state: 'failed', note: FAILED_EXPLAINED })
+  it('a subject being re-described has its page as an open one does: why, once (its page is its one place), the conversations inside it, no figure', () => {
+    const data = marketSubjectFixture('community', { subjects: 'tracked' })
+    expect(data.subjectPage!.panel).toMatchObject({ state: 'failed', note: FAILED_EXPLAINED, bars: [], level: null })
+    expect(data.subjectPage!.panel.inside.length).toBeGreaterThan(0)
+    expect(data.subjectPage!.panel.detail).toBeNull()
   })
 
-  it('a subject whose check is open opens with why and the conversations inside it', () => {
-    const data = marketThinFixture({ subject: 'cost' })
-    expect(data.subjectPanel).toMatchObject({ state: 'provisional', note: SUBJECT_NOT_MEASURED, bars: [], level: null, verdict: null })
-    expect(data.subjectPanel!.inside.map((c) => c.label)).toEqual(['Insurance refusals for powered knees', 'Paying out of pocket', 'Medical aid and liners'])
+  it('a subject whose check is open has its page: why, and the conversations inside it', () => {
+    const data = marketSubjectFixture('cost', { flagged: false, noNew: true, subjects: 'provisional', brands: 'not_counted', weeks: 'insufficient', noGroups: true })
+    expect(data.subjectPage!.panel).toMatchObject({ state: 'provisional', note: SUBJECT_NOT_MEASURED, bars: [], level: null, verdict: null })
+    expect(data.subjectPage!.panel.inside.map((c) => c.label)).toEqual(['Insurance refusals for powered knees', 'Paying out of pocket', 'Medical aid and liners'])
   })
 
   it('lists a set-apart conversation inside its subject, tagged (only leading is barred)', () => {
@@ -530,19 +539,21 @@ describe('the open panel', () => {
     expect(rows.find((r) => r.id === fixtureId(1))?.setApart).toBe('makers')
   })
 
-  it('opens a subject with its line, every conversation inside it and the read\'s sentence', () => {
-    const data = marketFixture({ subject: 'cost' })
-    expect(data.subjectPanel).toMatchObject({ name: 'Cost & access', level: { k: 70, n: 318 }, sentence: { body: expect.stringContaining('paid for') } })
-    expect(data.subjectPanel!.inside.map((c) => c.label)).toEqual(['Insurance refusals for powered knees', 'Paying out of pocket', 'Medical aid and liners'])
+  it('a subject\'s page has its line, every conversation inside it and the read\'s sentence', () => {
+    const data = marketSubjectFixture('cost', { subjectReads: 'none' })
+    expect(data.subjectPage!.panel).toMatchObject({ name: 'Cost & access', level: { k: 70, n: 318 }, sentence: { body: expect.stringContaining('paid for') } })
+    expect(data.subjectPage!.panel.inside.map((c) => c.label)).toEqual(['Insurance refusals for powered knees', 'Paying out of pocket', 'Medical aid and liners'])
+    expect(data.subjectPage!).toMatchObject({ insideTotal: 3, allHref: `/dashboard/market?in=${fixtureSubjectId('cost')}#conversations` })
     expect(buildSubjectPanel({ id: 'nope', facts: fixtureFacts(), convs: [], period: 'week', p: marketParams({}), read: null, month: data.month })).toBeNull()
   })
 })
 
 describe('the fixture, end to end', () => {
-  it('opens a conversation under the top row with its quotes, and keeps the top free of quotes', () => {
-    const data = marketFixture({ open: { n: 3, at: 'top' } })
-    expect(data.panel).toMatchObject({ id: fixtureId(3), at: 'top', notchAt: 0.25, quotes: [{}, {}, {}] })
-    expect(data.top.hero?.kind).toBe('flag')
+  it('a conversation\'s page has its quotes; the top page none', () => {
+    const data = marketConversationFixture(3)
+    expect(data.convPage!.panel).toMatchObject({ id: fixtureId(3), quotes: [{}, {}, {}] })
+    expect(data.convPage!.weeks.map((w) => w.count)).toEqual([6, 5, 19])
+    expect(marketFixture().top.hero?.kind).toBe('flag')
   })
 
   it('a read stored before v3 has no new and no watch', () => {

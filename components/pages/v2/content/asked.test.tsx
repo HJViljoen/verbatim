@@ -21,7 +21,7 @@ describe('Also asked, and not yet in your posts', () => {
     expect(text).toContain('How a socket should fit as a child grows Caregivers and family Fit & comfort 12 17 in October so far 17 8 · 9 · 12')
     expect(text).not.toMatch(/Trend|▲|steady/)
     expect(text).toContain('1 more was touched on by your posts and is left out.')
-    expect(render(card())).toContain(`href="/dashboard/market?conv=`)
+    expect(render(card())).toContain(`href="/dashboard/market/conversations/`)
     assertCopyContract(card())
   })
 

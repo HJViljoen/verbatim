@@ -88,7 +88,7 @@ describe('subjectDetailOf: the subject\'s videos, by the conversation panel\'s r
     expect(d.quotes).toEqual([])
   })
 
-  it('who\'s saying it: the group × subject cross over its month\'s talk, the most videos first, names only', () => {
+  it('who\'s saying it: the group × subject cross over its month\'s talk, the most videos first, each with its videos (17 Oct: the subject page prints "k of n")', () => {
     const d = subjectDetailOf({
       ...base, period: 'month', week: null,
       evidence: [ev({ i: 1, day: 2, insight: 'm1' }), ev({ i: 2, day: 3, insight: 'm2' }), ev({ i: 3, day: 4, insight: 'm2' })],
@@ -100,8 +100,8 @@ describe('subjectDetailOf: the subject\'s videos, by the conversation panel\'s r
       ],
     })
     expect(d.groups).toEqual([
-      { key: 'b', name: 'Beta', href: '/dashboard/voices?group=b#group-panel' },
-      { key: 'a', name: 'Alpha', href: '/dashboard/voices?group=a#group-panel' },
+      { key: 'b', name: 'Beta', href: '/dashboard/voices?group=b#group-panel', videos: 2 },
+      { key: 'a', name: 'Alpha', href: '/dashboard/voices?group=a#group-panel', videos: 1 },
     ])
   })
 

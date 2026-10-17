@@ -1,3 +1,4 @@
+import { marketSubjectPath } from '../nav'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { originLine } from '../pages/subjects'
@@ -79,8 +80,8 @@ export interface YourSubjectsView {
   locked: boolean
 }
 
-/** Where a followed subject is read: Market, with it open. */
-export const marketSubjectHref = (id: string): string => `/dashboard/market?subject=${encodeURIComponent(id)}`
+/** Where a followed subject is read: its page on Market (17 Oct). */
+export const marketSubjectHref = (id: string): string => marketSubjectPath(id)
 
 /** The tab, from the read. `locked` is the tenant lock's answer for this
  *  session (the route asks `assertTenantMay`, the call the actions make). PURE. */

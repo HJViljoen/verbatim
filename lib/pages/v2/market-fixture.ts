@@ -5,14 +5,16 @@ import { WEEKS_FAILED, type HomeWeeks } from '../home'
 import { notReadyIds } from '../subject-place'
 import type { UnusualFlag } from '../week'
 import {
-  buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, convHref, closeHref, flagCardOf, flagVerdict, groupsOf,
-  lineBars, marketLongRunFor, marketMonths, marketParams, monthsText, notchOf, ourReadOf, panelStats, pickHero, pickWeekSides, platformRows, subjectHref,
-  subjectDetailOf, tableMonths, convOf, doingOf, alsoTalkedOf, earlierNewOf, leadDoing, withMonthPlatforms,
+  buildConvs, buildKinds, buildSubjectBoard, buildSubjectPanel, buildTable, convHref, conversationCrumbs, flagCardOf, flagVerdict, groupsOf, insideOf,
+  lineBars, marketLongRunFor, marketMonths, marketParams, monthsText, ourReadOf, panelStats, pickHero, pickWeekSides, platformRows, subjectCardsOf, subjectCrumbs, subjectHref,
+  subjectDetailOf, subjectNavOf, subjectTableHref, tableMonths, convOf, doingOf, alsoTalkedOf, earlierNewOf, leadDoing, weekCardOf, weekCrumbs, weekPageOf, withMonthPlatforms,
   type ConvInput, type ConvPanel, type MarketConv, type MarketData, type MarketMonth, type MarketParams, type MarketWeek, type MonthCount,
-  type PanelAt, type SubjectDetail, type SubjectFact, type TopRow,
+  type SubjectDetail, type SubjectFact, type TopRow,
 } from './market'
+import { OSSUR_SUBJECT_READS, SEALAND_SUBJECT_READS } from './market-reads-fixture'
 import type { DatedEvidence } from '../../written/evidence'
 import type { LongRunReadData, WeekReadData } from '../../written/types'
+import type { PublishedWeekRead } from '../../written/published'
 import type { ThemeMonthLine } from '../../reading/cross'
 
 // MARKET'S RENDER FIXTURE (depth v2, T3): an Össur-shaped week, drawn from the
@@ -100,21 +102,55 @@ export const FIXTURE_KIND_FLAG: Omit<UnusualFlag, 'quotes'> = {
   sentences: [],
 }
 
+/** Össur's week read as `week_read_v4` wrote it for the week of 5 Oct (the
+ *  real words of the 16 Oct offline run, `ossur-week-read-v4e-offline.json`):
+ *  the week in one line, what happened, what it means, worth watching. */
+export const OSSUR_WEEK = {
+  line: 'Prosthetic stories this week turn practical only when people can trust the footage and picture using the limb themselves.',
+  story: [
+    'The week\'s talk treats prosthetic clips as things to verify and understand, not just stories to admire. Athletic performances and personal journeys still draw praise for courage and skill, but people also ask how the limb works, why it is or is not worn in a sport, and whether long walks hurt. Some stop earlier and question whether the footage is genuine at all, pointing to a missing arm or limb that seems to appear and disappear.',
+    'Once viewers can picture the prosthesis as real and usable, the conversation turns to getting it. People ask who makes it, where the clinic is, how to order a similar device or leg cover, and what to do when a limb is in repair. Interest also comes with activity plans, such as hiking or walking, where people want to know which kind of prosthesis exists for that use.',
+    'Style and encouragement still matter, but they do not end the conversation. People praise a leg for looking natural, cool or like part of the wearer\'s identity, and they admire the person wearing it. What sits beside that praise is a check on the limb itself: can people understand it, trust the footage, and tell how to get it.',
+  ],
+  means: [
+    'Shoes are part of how a prosthetic foot is judged. Buyers ask how the foot works inside the shoe and whether pain shows up after time walking.',
+    'A second prosthesis appears as continuity of use, not an extra feature. People who depend on a limb think about repairs and time without it when they ask how to get one.',
+    'Insurance and low-cost builds shape what available means in this market. Buyers name denials, paperwork and bike-part limbs when they talk about getting a prosthesis they can use.',
+  ],
+  watch: [
+    'Whether viewers who doubt athlete clips keep naming limb inconsistencies over the story itself',
+    'Whether questions about how a prosthesis works keep centring on shoes, long walks and sport use',
+  ],
+} as const
+
+/** The quotes the read's story carries, after its first and second
+ *  paragraphs, as stored refs (`text: ''`; the words resolve at render). */
+const STORY_QUOTES = [
+  { ref: 'e:00000000-0000-4000-8000-00000000e001', text: '' as const, date: '2026-10-09', platform: 'youtube', thread: null },
+  { ref: 'e:00000000-0000-4000-8000-00000000e002', text: '' as const, date: '2026-10-09', platform: 'instagram', thread: null },
+]
+
+/** Their words, as `hydrateData` resolves them (illustrative). */
+export const STORY_QUOTE_WORDS = [
+  'Watching her sprint on that blade made me cry. Two years ago I couldn’t walk to my mailbox.',
+  'Insurance covered the leg but not the liners. Nobody warned us.',
+]
+
 /** The published read's parts the page uses. */
 export function fixtureRead(): WeekReadData {
   return {
     version: 2,
-    promptVersion: 'week_read_v3',
+    promptVersion: 'week_read_v4',
     window: WINDOW,
     month: OCT,
-    headline: 'Insurance refusals were the talk of the week.',
-    story: [],
-    implications: [],
+    headline: OSSUR_WEEK.line,
+    story: OSSUR_WEEK.story.map((body, i) => ({ body, basedOn: [], quote: STORY_QUOTES[i] ?? null })),
+    implications: OSSUR_WEEK.means.map((body) => ({ body, basedOn: [] })),
     newThisWeek: [
       { themeId: id(11), body: 'Swimmers asking whether a knee can go in a pool or the shower.', videos: { week: 8, month: 8 }, evidence: '' },
       { themeId: id(17), body: 'How to keep a liner from smelling.', videos: { week: 5, month: 5 }, evidence: '' },
     ],
-    watch: [{ body: 'Whether the insurance talk holds once the appeal stories settle.', basedOn: [id(3)] }],
+    watch: OSSUR_WEEK.watch.map((body) => ({ body, basedOn: [id(3)] })),
     market: { week: { videos: 241, comments: 3912 }, month: { videos: 318, comments: 5840 } },
     monthComplete: false,
     findings: [{
@@ -139,6 +175,17 @@ export function fixtureRead(): WeekReadData {
     model: 'gpt-5.4',
     costUsd: 0,
   } as WeekReadData
+}
+
+/** The read as `hydrateData` hands it back: each story quote with its words. */
+export function hydratedFixtureRead(read: WeekReadData = fixtureRead()): WeekReadData {
+  if (read.version !== 2) return read
+  return { ...read, story: read.story.map((p, i) => (p.quote ? { ...p, quote: { ...p.quote, text: STORY_QUOTE_WORDS[i] ?? '' } as never } : p)) }
+}
+
+/** The published read as the loader holds it. */
+export function fixturePublishedRead(read: WeekReadData = fixtureRead()): PublishedWeekRead {
+  return { runId: 'run-2026-10-11', month: OCT, windowEnd: read.window.to, data: read }
 }
 
 /** The conversations' inputs, as the loader assembles them. */
@@ -230,6 +277,9 @@ export function fixtureFacts(): SubjectFact[] {
  *  subject. */
 const TRACKED: Record<string, 'ready' | 'provisional' | 'failed'> = { fit: 'ready', look: 'ready', cost: 'provisional', community: 'failed' }
 
+/** F2-Market-States' six: four ready, one open, one failed. */
+const STATES: Record<string, 'ready' | 'provisional' | 'failed'> = { fit: 'ready', cost: 'ready', choosing: 'ready', look: 'ready', function: 'provisional', community: 'failed' }
+
 /**
  * The subjects in a thinner state (the parity pass, 13 Oct): `provisional`,
  * every check still open (Össur today: no level, no line, no change; the
@@ -239,7 +289,18 @@ const TRACKED: Record<string, 'ready' | 'provisional' | 'failed'> = { fit: 'read
  * Look & style ready and thin (4 of 318), Cost & access's check open,
  * Community & encouragement's check failed.
  */
-export function fixtureFactsIn(state: 'provisional' | 'one_month' | 'tracked'): SubjectFact[] {
+export function fixtureFactsIn(state: 'provisional' | 'one_month' | 'tracked' | 'states'): SubjectFact[] {
+  if (state === 'states') {
+    // F2-Market-States: Function & movement's check open, Community &
+    // encouragement's failed, the other four ready.
+    return fixtureFacts().flatMap((f): SubjectFact[] => {
+      const key = f.id.slice('subj-'.length)
+      if (key === 'sport') return []
+      if (key === 'function') return [{ ...f, calibration: 'provisional', level: null, verdict: null, trail: [] }]
+      if (key === 'community') return [{ ...f, calibration: 'failed', level: null, verdict: null, trail: [] }]
+      return [f]
+    })
+  }
   if (state === 'tracked') {
     return fixtureFacts().flatMap((f): SubjectFact[] => {
       const key = f.id.slice('subj-'.length)
@@ -300,10 +361,6 @@ export interface FixtureOptions {
   period?: MarketParams['period']
   /** The anomaly check flagged insurance refusals. Default true. */
   flagged?: boolean
-  /** Open a conversation (by its fixture number) from here. */
-  open?: { n: number; at: PanelAt } | null
-  /** Open a subject (its key). */
-  subject?: string | null
   /** Nothing was first heard this week. */
   noNew?: boolean
   /** Who the talk is about: counted (the default), or not counted yet. */
@@ -312,9 +369,12 @@ export interface FixtureOptions {
    *  in full): "October", never "so far". */
   closed?: boolean
   /** The subjects' state: every check passed (the default), every check
-   *  still open, read for this month only, or the tracked-always four (one
-   *  ready, one thin, one open, one failed: `fixtureFactsIn('tracked')`). */
-  subjects?: 'ready' | 'provisional' | 'one_month' | 'tracked'
+   *  still open, read for this month only, the tracked-always four (one
+   *  ready, one thin, one open, one failed: `fixtureFactsIn('tracked')`), or
+   *  F2-Market-States' six (`fixtureFactsIn('states')`: ready with a
+   *  headline, ready with a read stored before headlines, thin, not
+   *  measured, failed, and ready with no read this month). */
+  subjects?: 'ready' | 'provisional' | 'one_month' | 'tracked' | 'states'
   /** The weekly volume: drawn (the default), too few clean weeks, or a read
    *  that failed. */
   weeks?: 'drawn' | 'insufficient' | 'failed'
@@ -334,16 +394,21 @@ export interface FixtureOptions {
    *  (October still filling with none of its own: September's stands in),
    *  `unread` (the read failed), or none. Only the month period prints it. */
   longRun?: 'full' | 'partial' | 'earlier' | 'unread' | null
-  /** The open subject's blocks and its own read (14 Oct): `rich` (Cost &
-   *  access, a ready subject on many videos, its written read) or `thin`
-   *  (Look & style under `subjects: 'tracked'`, ready on one video, code's
-   *  one line). Absent: the panel as it was before them. */
-  subjectDetail?: 'rich' | 'thin' | null
-  /** The tenant's subject reads are switched off (`subjectReadsEnabled`): the
-   *  panel prints no stored read, the sentence stands in. */
+  /** The subjects' own reads on the published read: `v3` (the default:
+   *  Össur's real v3 reads, each written one with its headline), `v2` (the
+   *  14 Oct reads, stored before headlines existed: Cost & access written,
+   *  Look & style thin), `sealand` (Sealand's real v3 reads under its own
+   *  subject names), or `none` (no reads written yet). */
+  subjectReads?: 'v3' | 'v2' | 'sealand' | 'none'
+  /** The tenant's subject reads are switched off (`subjectReadsEnabled`):
+   *  no stored read prints, the week read's sentence stands in. */
   subjectReadsOff?: boolean
-  /** The open subject's written read carries a v3 headline (16 Oct). */
-  subjectHeadline?: string
+  /** The week card's read: written (the default), thin (nothing to print),
+   *  or one that could not be read. */
+  week?: 'ready' | 'thin' | 'failed'
+  /** The week read stored before `week_read_v3`: an In short, no
+   *  implications. */
+  v1Read?: boolean
 }
 
 const MONTH: MarketMonth = {
@@ -452,9 +517,9 @@ const HERO_KINDS = [{ kind: 'pain_point', videos: 14 }, { kind: 'question', vide
 
 /** The tracked-always four as the loader places them (`placementTiers`):
  *  the ready ones first, then the open one, then the failed one. */
-function trackedPlacement(all: NonNullable<ConvInput['subjects']>): NonNullable<ConvInput['subjects']> {
+function trackedPlacement(all: NonNullable<ConvInput['subjects']>, checks: Record<string, 'ready' | 'provisional' | 'failed'>): NonNullable<ConvInput['subjects']> {
   const tier = (keep: (check: string) => boolean) => {
-    const order = all.order.filter((sid) => keep(TRACKED[sid.slice('subj-'.length)] ?? ''))
+    const order = all.order.filter((sid) => keep(checks[sid.slice('subj-'.length)] ?? ''))
     const subjectsOf = new Map<string, string[]>()
     for (const [ins, list] of all.subjectsOf) {
       const kept = list.filter((sid) => order.includes(sid))
@@ -464,87 +529,67 @@ function trackedPlacement(all: NonNullable<ConvInput['subjects']>): NonNullable<
   }
   const ready = tier((c) => c === 'ready')
   return {
-    names: new Map([...all.names].filter(([sid]) => TRACKED[sid.slice('subj-'.length)] != null)),
+    names: new Map([...all.names].filter(([sid]) => checks[sid.slice('subj-'.length)] != null)),
     order: ready.order, subjectsOf: ready.subjectsOf, pending: tier((c) => c === 'provisional'), failed: tier((c) => c === 'failed'),
   }
 }
 
-/** Market as the route would hand it to the page. */
-export function marketFixture(opts: FixtureOptions = {}): MarketData {
+/** The fixture's subject reads, by the option (`FixtureOptions.subjectReads`). */
+function readsFor(opts: FixtureOptions, read: WeekReadData): WeekReadData {
+  const which = opts.subjects === 'states' ? 'states' : opts.subjectReads ?? 'v3'
+  if (which === 'none') return read
+  if (which === 'v2') return withSubjectReads(read)
+  if (which === 'states') return withStatesReads(read)
+  return withSubjectReadsV3(read, which === 'sealand' ? 'sealand' : 'ossur')
+}
+
+/** The week's read the fixture holds, by the option. */
+function weekReadFor(opts: FixtureOptions): WeekReadData {
+  const read = fixtureRead()
+  if (opts.v1Read) return { ...read, version: 1, inShort: 'Insurance refusals were the talk of the week, and liners came up all week.', promptVersion: 'week_read_v2' } as unknown as WeekReadData
+  if (opts.week === 'thin' && read.version === 2) return { ...read, headline: '', implications: [] }
+  return read
+}
+
+/** Every part the pages are built from, assembled by the page's own
+ *  builders as the loader assembles them. */
+function fixtureCore(opts: FixtureOptions) {
   const period = opts.period ?? 'week'
   const flagged = opts.flagged ?? true
   const month = opts.closed ? MONTH_CLOSED : MONTH
   const soFar = !opts.closed
   const raw: Record<string, string> = {}
   if (period !== 'week') raw.period = period
-  if (opts.open) {
-    raw.conv = id(opts.open.n)
-    raw.at = opts.open.at
-  }
-  if (opts.subject) {
-    raw.subject = subjectId(opts.subject)
-    raw.at = 'subjects'
-  }
   const p: MarketParams = marketParams(raw)
   const base = fixtureConvInput(period)
   // Every check open: the subjects place conversations only as the second
   // tier (`placeSubject`), as the loader hands them.
   const pendingTier = opts.subjects === 'provisional' && base.subjects
     ? { ...base.subjects, order: [] as string[], subjectsOf: new Map<string, string[]>(), pending: { order: base.subjects.order, subjectsOf: base.subjects.subjectsOf } }
-    : opts.subjects === 'tracked' && base.subjects ? trackedPlacement(base.subjects) : base.subjects
-  const input = { ...base, subjects: pendingTier, ...(opts.noNew ? { newIds: new Set<string>(opts.flagNew ? [id(11)] : []) } : {}) }
+    : opts.subjects === 'tracked' && base.subjects ? trackedPlacement(base.subjects, TRACKED)
+      : opts.subjects === 'states' && base.subjects ? trackedPlacement(base.subjects, STATES) : base.subjects
+  const named = opts.subjectReads === 'sealand' && pendingTier
+    ? { ...pendingTier, names: new Map([...pendingTier.names].flatMap(([sid]) => { const name = SEALAND_NAMES[sid.slice('subj-'.length)]; return name ? [[sid, name] as [string, string]] : [] })) }
+    : pendingTier
+  const input = { ...base, subjects: named, ...(opts.noNew ? { newIds: new Set<string>(opts.flagNew ? [id(11)] : []) } : {}) }
   const convs = buildConvs(input).map((c) => withWho(c, period))
-  const read = fixtureRead()
+  const read = readsFor(opts, weekReadFor(opts))
   const theFlag = opts.flagKind ? FIXTURE_KIND_FLAG : opts.flagNew ? { ...FIXTURE_FLAG, objectId: id(11), label: 'Waterproof knees' } : FIXTURE_FLAG
   const flag = (flagged || opts.flagKind || opts.flagNew) && period === 'week' ? flagCardOf({ flag: theFlag, window: WINDOW, convs, convInput: input, monthCategory: MONTH.category, p, noun: null }) : null
-  const groups = (cid: string) => (opts.noGroups ? [] : groupsOf(cid, PERSONAS))
-  const doing = (c: MarketConv | null) => (c ? leadDoing(doingOf(HERO_KINDS, c.month, null), c.kind) : null)
-
-  const top: TopRow = { hero: null, sides: [], months: null }
-  if (period === 'week') {
-    const pick = pickHero({ convs, flag, setApart: new Set() })
-    const heroId = flag ? flag.conv?.id ?? null : pick && pick.kind !== 'flag' ? pick.conv.id : null
-    if (flag) top.hero = { kind: 'flag', card: { ...flag, conv: convs.find((c) => c.id === flag.conv?.id) ?? flag.conv }, groups: groups(flag.flag.objectId), doing: doing(flag.conv) }
-    else if (pick && pick.kind !== 'flag') top.hero = { kind: pick.kind, conv: pick.conv, href: convHref(p, pick.conv.id, 'top'), groups: groups(pick.conv.id), doing: doing(pick.conv) }
-    const sides = pickWeekSides({ convs, heroId, setApart: new Set() })
-    // The loader's rule: the board's three cards, always.
-    top.sides.push(sides.biggest
-      ? { kind: 'biggest', convs: [sides.biggest], hrefs: [convHref(p, sides.biggest.id, 'top')], groups: groups(sides.biggest.id) }
-      : { kind: 'biggest', convs: [], hrefs: [], groups: [] })
-    if (sides.fresh.length > 0) {
-      top.sides.push({ kind: 'new_list', convs: sides.fresh, hrefs: sides.fresh.map((c) => convHref(p, c.id, 'top')), groups: groups(sides.fresh[0].id) })
-    } else {
-      const anyNew = convs.some((c) => c.isNew)
-      const onRow = new Set([heroId, sides.biggest?.id].filter((x): x is string => x != null))
-      const earlier = !anyNew && opts.earlierNew ? earlierNewOf([{ window: PREV_WINDOW, themeIds: [id(16)] }], input, (cid) => convHref(p, cid, 'top'), onRow) : null
-      const next = earlier ? null : alsoTalkedOf(convs, onRow, new Set())
-      top.sides.push({
-        kind: 'new_list', convs: [], hrefs: [], groups: [], anyNew, earlier,
-        also: next ? { conv: next, href: convHref(p, next.id, 'top'), groups: groups(next.id) } : null,
-      })
-    }
-  } else if (period === 'month') {
-    const [first, ...rest] = convs.slice(0, 3)
-    top.hero = { kind: 'biggest', conv: first, href: convHref(p, first.id, 'top'), groups: groups(first.id), doing: doing(first) }
-    for (const c of rest) top.sides.push({ kind: 'month', convs: [c], hrefs: [convHref(p, c.id, 'top')], groups: groups(c.id) })
-  } else {
-    top.months = marketMonths(new Map([['2026-05-01', { videos: 262 }], ['2026-06-01', { videos: 331 }], ['2026-07-01', { videos: 455 }], ['2026-08-01', { videos: 612 }], [SEP, { videos: 839 }], [OCT, { videos: 318 }]]), OCT, OCT)
-  }
-
-  const facts = !opts.subjects || opts.subjects === 'ready' ? fixtureFacts() : fixtureFactsIn(opts.subjects)
-  const subjects = buildSubjectBoard({
-    facts, month: OCT, convs, period,
-    flag: flag?.conv ? { id: flag.conv.id, verdict: flag.verdict } : null,
-    convHref: (cid) => convHref(p, cid, 'subjects'), subjectHref: (sid) => subjectHref(p, sid), soFar,
+  const flagOn = flag?.conv ? { id: flag.conv.id, verdict: flag.verdict } : null
+  const sealand = opts.subjectReads === 'sealand'
+  const facts0 = !opts.subjects || opts.subjects === 'ready' ? fixtureFacts().filter((f) => f.calibration !== 'failed') : fixtureFactsIn(opts.subjects)
+  // Sealand's five under its own names, over the fixture's subjects.
+  const facts = sealand
+    ? facts0.flatMap((f) => { const name = SEALAND_NAMES[f.id.slice('subj-'.length)]; return name ? [{ ...f, name }] : [] })
+    : facts0
+  const board = buildSubjectBoard({
+    facts, month: OCT, convs, period, flag: flagOn,
+    convHref: (cid) => convHref(p, cid), subjectHref: (sid) => subjectHref(p, sid), soFar,
   })
-  const openId = opts.open ? id(opts.open.n) : null
-  const table = buildTable({
-    convs, params: p, openId: opts.open?.at === 'table' ? openId : null,
-    pending: notReadyIds(input.subjects),
-    months: period === 'time' ? tableMonths(OCT, new Map([['2026-07-01', 455], ['2026-08-01', 612], [SEP, 780], [OCT, 300]]), OCT) : [],
-  })
-  const panel = opts.open ? fixturePanel(opts.open.n, opts.open.at, p, period, convs, input, read, flagged) : null
-  return {
+  const readsOn = !opts.subjectReadsOff
+  const subjectNav = subjectNavOf({ rows: board?.rows ?? [], read, month: OCT, readsOn, href: (sid) => subjectHref(p, sid) })
+  const base0: MarketData = {
     brand: 'Össur',
     noun: null,
     period,
@@ -552,8 +597,65 @@ export function marketFixture(opts: FixtureOptions = {}): MarketData {
     params: p,
     week: period === 'week' ? WEEK : null,
     month,
+    top: { hero: null, sides: [], months: null },
+    subjects: board,
+    rail: { kinds: null, weeks: null, platforms: null },
+    table: null,
+    brands: opts.brands ?? 'counted',
+    longRun: null,
+    longRunUnread: false,
+  }
+  return { opts, period, flagged, month, soFar, p, input, convs, read, flag, flagOn, facts, board, readsOn, subjectNav, base: base0 }
+}
+
+/** Market's top page as the route would hand it to the page. */
+export function marketFixture(opts: FixtureOptions = {}): MarketData {
+  const core = fixtureCore(opts)
+  const { period, p, input, convs, read, flag, board, soFar, month } = core
+  const groups = (cid: string) => (opts.noGroups ? [] : groupsOf(cid, PERSONAS))
+  const doing = (c: MarketConv | null) => (c ? leadDoing(doingOf(HERO_KINDS, c.month, null), c.kind) : null)
+
+  const top: TopRow = { hero: null, sides: [], months: null }
+  if (period === 'week') {
+    // The loader's rule: "Also this week" names no group and no "doing".
+    const pick = pickHero({ convs, flag, setApart: new Set() })
+    const heroId = flag ? flag.conv?.id ?? null : pick && pick.kind !== 'flag' ? pick.conv.id : null
+    if (flag) top.hero = { kind: 'flag', card: { ...flag, conv: convs.find((c) => c.id === flag.conv?.id) ?? flag.conv }, groups: [], doing: null }
+    else if (pick && pick.kind !== 'flag') top.hero = { kind: pick.kind, conv: pick.conv, href: convHref(p, pick.conv.id), groups: [], doing: null }
+    const sides = pickWeekSides({ convs, heroId, setApart: new Set() })
+    // The loader's rule: the board's three cards, always.
+    top.sides.push(sides.biggest
+      ? { kind: 'biggest', convs: [sides.biggest], hrefs: [convHref(p, sides.biggest.id)], groups: [] }
+      : { kind: 'biggest', convs: [], hrefs: [], groups: [] })
+    if (sides.fresh.length > 0) {
+      top.sides.push({ kind: 'new_list', convs: sides.fresh, hrefs: sides.fresh.map((c) => convHref(p, c.id)), groups: [] })
+    } else {
+      const anyNew = convs.some((c) => c.isNew)
+      const onRow = new Set([heroId, sides.biggest?.id].filter((x): x is string => x != null))
+      const earlier = !anyNew && opts.earlierNew ? earlierNewOf([{ window: PREV_WINDOW, themeIds: [id(16)] }], input, (cid) => convHref(p, cid), onRow) : null
+      const next = earlier ? null : alsoTalkedOf(convs, onRow, new Set())
+      top.sides.push({
+        kind: 'new_list', convs: [], hrefs: [], groups: [], anyNew, earlier,
+        also: next ? { conv: next, href: convHref(p, next.id) } : null,
+      })
+    }
+  } else if (period === 'month') {
+    const [first, ...rest] = convs.slice(0, 3)
+    top.hero = { kind: 'biggest', conv: first, href: convHref(p, first.id), groups: groups(first.id), doing: doing(first) }
+    for (const c of rest) top.sides.push({ kind: 'month', convs: [c], hrefs: [convHref(p, c.id)], groups: groups(c.id) })
+  } else {
+    top.months = marketMonths(new Map([['2026-05-01', { videos: 262 }], ['2026-06-01', { videos: 331 }], ['2026-07-01', { videos: 455 }], ['2026-08-01', { videos: 612 }], [SEP, { videos: 839 }], [OCT, { videos: 318 }]]), OCT, OCT)
+  }
+
+  const table = buildTable({
+    convs, params: p,
+    pending: notReadyIds(input.subjects),
+    months: period === 'time' ? tableMonths(OCT, new Map([['2026-07-01', 455], ['2026-08-01', 612], [SEP, 780], [OCT, 300]]), OCT) : [],
+  })
+  return {
+    ...core.base,
+    view: 'top',
     top,
-    subjects,
     rail: {
       kinds: buildKinds(fixtureKindReadings(), OCT, null, soFar),
       weeks: !opts.weeks || opts.weeks === 'drawn' ? FIXTURE_WEEKS : opts.weeks === 'failed' ? WEEKS_FAILED : null,
@@ -561,20 +663,10 @@ export function marketFixture(opts: FixtureOptions = {}): MarketData {
       platforms: period === 'week'
         ? withMonthPlatforms(platformRows({ tiktok: 128, instagram: 76, youtube: 37 }, 'week'), { tiktok: 170, instagram: 98, youtube: 50 }, 'in October so far')
         : platformRows({ tiktok: 170, instagram: 98, youtube: 50 }, 'month'),
-      watch: period === 'week' ? read.version === 2 ? read.watch.map((w) => ({ body: w.body, figures: {} })) : [] : [],
     },
     table,
-    panel,
-    brands: opts.brands ?? 'counted',
-    subjectPanel: opts.subject
-      ? buildSubjectPanel({
-          id: subjectId(opts.subject), facts, convs, period, p,
-          read: opts.subjectDetail ? (opts.subjectHeadline ? withSubjectHeadline(withSubjectReads(read), opts.subjectHeadline) : withSubjectReads(read)) : read, month,
-          flag: flag?.conv ? { id: flag.conv.id, verdict: flag.verdict } : null,
-          detail: opts.subjectDetail ? fixtureSubjectDetail(opts.subjectDetail, period, month) : null,
-          readsOn: Boolean(opts.subjectDetail) && !opts.subjectReadsOff,
-        })
-      : null,
+    weekCard: period === 'week' ? weekCardOf(opts.week === 'failed' ? 'failed' : fixturePublishedRead(read)) : null,
+    subjectCards: subjectCardsOf({ rows: board?.rows ?? [], read, month: OCT, monthText: month.text, readsOn: core.readsOn, href: (sid) => subjectHref(p, sid) }),
     // The loader's own rule (`marketLongRunFor`): the month period only, the
     // view's month's read, or on a filling month the newest earlier month's.
     longRun: period === 'month' && opts.longRun && opts.longRun !== 'unread'
@@ -586,8 +678,83 @@ export function marketFixture(opts: FixtureOptions = {}): MarketData {
   }
 }
 
+/** A tracked subject's page (its key: `fit`, `cost`, …), the page's own
+ *  builders over the fixture: its read, its blocks (`rich` for a ready
+ *  subject on many videos, `thin` for one on a single video; none for a
+ *  subject whose check has not passed), the conversations inside it. */
+export function marketSubjectFixture(key: string, opts: FixtureOptions & { detail?: 'rich' | 'thin' | null } = {}): MarketData {
+  const core = fixtureCore(opts)
+  const { period, p, convs, read, flagOn, facts, board, subjectNav, month } = core
+  const sid = subjectId(key)
+  const fact = facts.find((f) => f.id === sid)
+  const detailKind = opts.detail === undefined ? (fact?.calibration === 'ready' ? 'rich' : null) : opts.detail
+  const panel = buildSubjectPanel({
+    id: sid, facts, convs, period, p, read, month, flag: flagOn,
+    detail: detailKind ? fixtureSubjectDetail(detailKind, period, month) : null,
+    readsOn: core.readsOn,
+  })
+  if (!panel) return { ...core.base, view: 'subject', missing: true, subjectNav, crumbs: subjectCrumbs(p, subjectNav, { id: sid, name: key }).slice(0, 1) }
+  const inside = convs.filter((c) => c.subjectId === sid)
+  return {
+    ...core.base,
+    view: 'subject',
+    subjectNav,
+    crumbs: subjectCrumbs(p, subjectNav, { id: panel.id, name: panel.name }),
+    subjectPage: {
+      panel,
+      weekLabels: WEEK.weekLabels,
+      prevPct: board?.rows.find((r) => r.id === sid)?.prevPct ?? null,
+      inside: inside.slice(0, 3).map((c) => ({ conv: c, href: convHref(p, c.id) })),
+      insideTotal: inside.length,
+      allHref: subjectTableHref(p, sid),
+    },
+  }
+}
+
+/** A conversation's page (its fixture number): its panel, its three weekly
+ *  counts, and the breadcrumb under its ready subject (or Market alone). */
+export function marketConversationFixture(n: number, opts: FixtureOptions = {}): MarketData {
+  const core = fixtureCore(opts)
+  const { period, p, convs, input, read, flagged, subjectNav } = core
+  const cid = id(n)
+  const panel = fixturePanel(n, period, convs, input, read, flagged)
+  const conv = convs.find((c) => c.id === cid) ?? convOf(cid, input)
+  const ready = conv?.subjectId && core.facts.find((f) => f.id === conv.subjectId)?.calibration === 'ready' ? conv.subjectId : null
+  const parent = ready ? { id: ready, name: input.subjects?.names.get(ready) ?? '' } : null
+  const siblings = parent
+    ? insideOf(parent.id, convs, period, { limit: 50, href: (x) => convHref(p, x) })
+    : convs.map((c) => ({ id: c.id, label: c.label, href: convHref(p, c.id) }))
+  return {
+    ...core.base,
+    view: 'conversation',
+    subjectNav,
+    crumbs: conversationCrumbs({ p, nav: subjectNav, conv: { id: cid, label: panel.label }, parent, siblings }),
+    convPage: {
+      panel,
+      weeks: period === 'week' && conv ? conv.weeks.map((count, i) => ({ label: WEEK.weekLabels[i] ?? '', count })) : [],
+    },
+  }
+}
+
+/** The week's page: the published read in full, its quotes resolved. */
+export function marketWeekFixture(opts: FixtureOptions = {}): MarketData {
+  const core = fixtureCore({ ...opts, period: 'week' })
+  const read = core.read
+  return {
+    ...core.base,
+    view: 'week',
+    crumbs: weekCrumbs(core.p),
+    weekPage: weekPageOf({
+      published: opts.week === 'failed' ? 'failed' : fixturePublishedRead(read),
+      read: opts.week === 'failed' ? null : hydratedFixtureRead(read),
+      conversations: core.convs.length,
+      p: core.p,
+    }),
+  }
+}
+
 /** The open conversation in full. */
-function fixturePanel(n: number, at: PanelAt, p: MarketParams, period: MarketParams['period'], convs: readonly MarketConv[], input: ConvInput, read: WeekReadData, flagged: boolean): ConvPanel {
+function fixturePanel(n: number, period: MarketParams['period'], convs: readonly MarketConv[], input: ConvInput, read: WeekReadData, flagged: boolean): ConvPanel {
   const cid = id(n)
   const conv = convs.find((c) => c.id === cid) ?? convOf(cid, input)!
   const flagHere = flagged && period === 'week' && FIXTURE_FLAG.objectId === cid ? FIXTURE_FLAG : null
@@ -598,13 +765,12 @@ function fixturePanel(n: number, at: PanelAt, p: MarketParams, period: MarketPar
     ].map(([month, k, nn]) => ({ month: month as string, state: month === OCT ? 'filling' : 'frozen', k: k as number, n: nn as number, pct: null, clusteringKey: 'c1', regimeStep: 'same', refusedStep: null })) as ThemeMonthLine['points'],
   }
   const bars: MonthCount[] = lineBars(line, OCT)
+  const where = platformRows(conv.mix, period === 'week' ? 'week' : 'month')
   return {
     id: cid,
     label: conv.label,
     kind: conv.kind,
     subjectName: conv.subjectName,
-    at,
-    notchAt: notchOf(at, 0),
     flag: flagHere ? flagVerdict(flagHere, WINDOW) : null,
     isNew: conv.isNew,
     stats: panelStats({ conv, period, week: period === 'week' ? WEEK : null, month: MONTH, prevK: 19, flag: flagHere, baselineText: flagHere ? monthsText(flagHere.baselineMonths) : null }),
@@ -613,14 +779,13 @@ function fixturePanel(n: number, at: PanelAt, p: MarketParams, period: MarketPar
     who: conv.who.length > 0 ? { parts: conv.who, n: conv.who.reduce((s, x) => s + x.videos, 0) } : null,
     doing: { rows: doingOf(HERO_KINDS, conv.month, null), n: conv.month ?? 0, text: 'in October so far' },
     groups: groupsOf(cid, PERSONAS),
-    platforms: platformRows(conv.mix, period === 'week' ? 'week' : 'month')?.rows ? { rows: platformRows(conv.mix, period === 'week' ? 'week' : 'month')!.rows, n: platformRows(conv.mix, period === 'week' ? 'week' : 'month')!.n } : null,
+    platforms: where ? { rows: where.rows, n: where.n } : null,
     quotes: [
       { text: 'Third appeal denied. They say a mechanical knee is adequate. Adequate for sitting, maybe.', lang: null, english: null, source: 'TikTok · 7 Oct', about: null },
       { text: 'My prosthetist wrote three letters. Still no.', lang: null, english: null, source: 'Instagram · 8 Oct', about: null },
       { text: 'Got the C-Leg approved after a year of fighting. Worth it, but the fight nearly broke me.', lang: null, english: null, source: 'YouTube · 3 Oct', about: 'rival:Ottobock' },
     ],
     askHref: '/dashboard/agent?ask=What%20does%20my%20market%20say%20about%20insurance%20refusals%20for%20powered%20knees%3F',
-    closeHref: closeHref(p, at),
   }
 }
 
@@ -753,6 +918,57 @@ export function withSubjectReads(read: WeekReadData): WeekReadData {
   }
 }
 
+/** The fixture's subject keys by the subject names the reads are stored
+ *  under: Össur's own six, and Sealand's five laid over them. */
+const OSSUR_KEYS: Record<string, string> = {
+  'Fit & comfort': 'fit', 'Function & movement': 'function', 'Cost & access': 'cost',
+  'Community & encouragement': 'community', 'Choosing the right device': 'choosing', 'Look & style': 'look',
+}
+export const SEALAND_NAMES: Record<string, string> = { fit: 'Comfort', function: 'Buying & delivery', cost: 'Durability', community: 'Looks & style', choosing: 'Price' }
+
+/** The published read with every subject's v3 read on it (Össur's real
+ *  ones, or Sealand's under its own names): each written read with its
+ *  headline, the thin one with code's line. */
+export function withSubjectReadsV3(read: WeekReadData, tenant: 'ossur' | 'sealand' = 'ossur'): WeekReadData {
+  if (read.version !== 2) return read
+  const keyOf = (name: string): string | null => (tenant === 'ossur' ? OSSUR_KEYS[name] ?? null : Object.entries(SEALAND_NAMES).find(([, n]) => n === name)?.[0] ?? null)
+  const reads = tenant === 'ossur' ? OSSUR_SUBJECT_READS : SEALAND_SUBJECT_READS
+  return {
+    ...read,
+    subjectReads: {
+      version: 1,
+      promptVersion: 'subject_read_v3',
+      month: OCT,
+      read: { from: `${OCT}T00:00:00.000Z`, to: WINDOW.to },
+      status: 'ready',
+      model: 'gpt-5.4',
+      costUsd: 0.22,
+      subjects: reads.flatMap((r) => {
+        const key = keyOf(r.name)
+        if (!key) return []
+        return [{ subjectId: subjectId(key), name: r.name, status: r.status, saying: [...r.saying], means: r.means, ...(r.headline ? { headline: r.headline } : {}), basedOn: [] }]
+      }),
+    },
+  }
+}
+
+/** F2-Market-States' reads: Fit & comfort written by v3 (its headline),
+ *  Cost & access written before headlines existed, Choosing the right device
+ *  thin, Look & style with no read this month. */
+export function withStatesReads(read: WeekReadData): WeekReadData {
+  const v3 = withSubjectReadsV3(read)
+  if (v3.version !== 2 || !v3.subjectReads) return v3
+  return {
+    ...v3,
+    subjectReads: {
+      ...v3.subjectReads,
+      subjects: v3.subjectReads.subjects
+        .filter((r) => r.subjectId !== subjectId('look') && r.subjectId !== subjectId('function') && r.subjectId !== subjectId('community'))
+        .map((r) => (r.subjectId === subjectId('cost') ? { ...r, headline: undefined } : r)),
+    },
+  }
+}
+
 /** The same reads written by `subject_read_v3`: Cost & access's written read
  *  carries a headline (16 Oct); the thin one never has one. */
 export function withSubjectHeadline(read: WeekReadData, headline: string): WeekReadData {
@@ -776,7 +992,7 @@ export function withSubjectHeadline(read: WeekReadData, headline: string): WeekR
  * a column beside the board, the weekly chart's frame, and the table's
  * Subject and About columns.
  */
-export function marketThinFixture(opts: Pick<FixtureOptions, 'earlierNew' | 'open' | 'subject'> = {}): MarketData {
+export function marketThinFixture(opts: Pick<FixtureOptions, 'earlierNew'> = {}): MarketData {
   return marketFixture({ flagged: false, noNew: true, subjects: 'provisional', brands: 'not_counted', weeks: 'insufficient', noGroups: true, ...opts })
 }
 
