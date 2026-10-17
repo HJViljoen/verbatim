@@ -536,6 +536,13 @@ export const BRAND_MONTHS = 3
  *  says "this month" of it). */
 export const brandGroupsNone = (m: Pick<LevelMonth, 'month' | 'soFar'>): string => `None of the groups comments on its videos ${inMonthWords(m)}.`
 export const brandCreatorsNone = (m: Pick<LevelMonth, 'month' | 'soFar'>): string => `No creator with ${countWords(ACCOUNT_FLOOR)} or more videos ${inMonthWords(m)} made one that names it.`
+/** A brand not counted (`not_yet`, `noise`) or that no video names (`none`)
+ *  keeps every frame. Its header says why ONCE (the row's `stateWords`);
+ *  each frame below says only what it holds, true of all three states (a
+ *  brand no video names IS counted, and a noisy name is never counted, so
+ *  "not counted yet" is wrong of both). */
+export const brandFrameNone = (what: 'group' | 'creator' | 'figure', label: string, m: Pick<LevelMonth, 'month' | 'soFar'>): string =>
+  what === 'figure' ? `No figure prints for ${label} ${inMonthWords(m)}.` : `No ${what} is listed for ${label} ${inMonthWords(m)}.`
 export const brandCreatorsSub = (m: Pick<LevelMonth, 'month' | 'soFar'>): string => `Accounts with ${fmtInt(ACCOUNT_FLOOR)} or more of your market’s videos ${inMonthWords(m)} whose videos name it`
 export const BRAND_FINDINGS_NOTE = 'Findings are the latest update’s, so they carry no month of their own.'
 export const BRAND_YOU_NO_FINDING = 'Findings compare a rival’s talk with the rest of the market, so your own brand has none.'

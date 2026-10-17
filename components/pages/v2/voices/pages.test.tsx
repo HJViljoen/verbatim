@@ -219,8 +219,11 @@ describe('a brand\'s page (G3-Voices-Brand)', () => {
   it('a brand not counted keeps every frame and says why once; its ninety days stand', () => {
     const t = renderText(brand(brandFixture({ counted: false })))
     expect(t).toContain('Ottobock in October so far: not counted yet.')
-    expect(t).toContain('The groups commenting on its videos A video can hold more than one group, so the counts overlap Ottobock is not counted yet.')
-    expect(t).toContain('No figure prints for Ottobock until it is counted.')
+    expect(t).toContain('The groups commenting on its videos A video can hold more than one group, so the counts overlap No group is listed for Ottobock this month.')
+    expect(t).toContain('No creator is listed for Ottobock this month.')
+    expect(t).toContain('No figure prints for Ottobock this month.')
+    // The why is said once, in the header.
+    expect(t.split('not counted yet').length - 1).toBe(1)
     expect(t).toContain('Under its own content')
     expect(t).not.toMatch(/\d+ of 290/)
   })
@@ -231,6 +234,21 @@ describe('a brand\'s page (G3-Voices-Brand)', () => {
 // names September and never calls it "this month", in every frame the page
 // writes itself: the empty groups and creators, the creators' head, the
 // switcher's notes, a creator's empty "who comments".
+// A brand no video names is counted (`none`), and a noisy name is never
+// counted: neither may read "not counted yet" in the frames below the header.
+describe('a brand no video names', () => {
+  it('says why once in its header, and no frame calls it "not counted yet"', () => {
+    const p = brandFixture({ key: 'proteor' })
+    expect(p.state).toBe('none')
+    const t = renderText(brand(p))
+    expect(t).toContain('Proteor in October so far: no video names it.')
+    expect(t).toContain('No group is listed for Proteor this month.')
+    expect(t).toContain('No figure prints for Proteor this month.')
+    expect(t).not.toMatch(/not counted|until it is counted/)
+    assertCopyContract(brand(p))
+  })
+})
+
 describe('a level page reading a closed month never calls it "this month"', () => {
   it('a brand\'s and a creator\'s own words name the month', () => {
     const b = { ...brandFixture({ month: SEP_CLOSED_MONTH }), groups: [], creators: [] }
