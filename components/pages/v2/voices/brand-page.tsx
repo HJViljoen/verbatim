@@ -37,6 +37,15 @@ import { AskBox, Caps, EmptyBar, FL, FS, FV, FW, GAPLINE, HUB_LEAD, HubBar, HubC
 //   6. THE AGENT.
 // A brand not counted keeps every frame and says why once.
 
+/** Under praised and complained: the month's own counts, on base `any`,
+ *  which carries no verdict, so they are not compared; no reason is given
+ *  ("October's alone, not compared with September"). Pure. */
+export const brandNotCompared = (month: string, prev: string): string => `${month}’s alone, not compared with ${prev}`
+
+/** Under what people did in the comments, on the same base and rule:
+ *  "October's alone: these counts are not compared with September." Pure. */
+export const brandKindsNotCompared = (month: string, prev: string): string => `${month}’s alone: these counts are not compared with ${prev}.`
+
 const sentence = (s: string): string => `${s.charAt(0).toUpperCase()}${s.slice(1)}`
 
 /** The month bars' drawing: the share over each bar, "k of n" under it, a
@@ -155,7 +164,10 @@ function Header({ page }: { page: BrandPage }) {
               <>
                 <div className={FV}><Fig>{fmtInt(page.praised.k)}</Fig> · <Fig>{fmtInt(page.complained.k)}</Fig></div>
                 <div className={FL}>of its <Fig>{fmtInt(page.praised.n)}</Fig>: praised · complained</div>
-                <div className={FS}>{longMonth(page.month.month)}’s alone, too few to set against {longMonth(prev?.month ?? page.month.month)}</div>
+                {/* Read on base `any`, which carries no verdict: the count
+                    is not compared, and no reason is given (the board's
+                    "too few to set against" named one the code never tests). */}
+                <div className={FS}>{brandNotCompared(longMonth(page.month.month), longMonth(prev?.month ?? page.month.month))}</div>
               </>
             ) : <p className={cn(FL, 'm-0 text-muted-foreground')}>How people treat it is not read yet.</p>}
           </HubFig>
@@ -322,7 +334,7 @@ function Numbers({ page }: { page: BrandPage }) {
           {page.kinds.length > 0
             ? page.kinds.map((k) => <TickBarRow key={k.kind} name={k.label} value={fmtInt(k.k)} pct={k.n > 0 ? (100 * k.k) / k.n : 0} tone={tone} valueWidth="narrow" label={`${fmtInt(k.k)} of ${fmtInt(k.n)}`} />)
             : <p className="m-0 text-[13.5px] text-muted-foreground">Not read yet.</p>}
-          <p className="m-0 text-[12.5px] text-muted-foreground">{longMonth(page.month.month)}’s alone: its videos are too few to set against {prev}.</p>
+          <p className="m-0 text-[12.5px] text-muted-foreground">{brandKindsNotCompared(longMonth(page.month.month), prev)}</p>
         </div>
       </div>
       <div className="grid grid-cols-1 gap-x-10 gap-y-[26px] border-t border-track pt-6 max-sm:gap-y-0 max-sm:pt-[18px] min-[1180px]:grid-cols-3">

@@ -170,7 +170,10 @@ describe('a brand\'s page (G3-Voices-Brand)', () => {
   })
 
   it('the header: named without being asked in the rival grey, the verdict with its change, named at all, praised and complained', () => {
-    expect(text).toContain('Ottobock’s talk turns on getting a knee paid for 37 of 290 videos named it without being asked the videos we did not find by searching for a brand No clear change +2.4 pts against September 74 of 713 in September 49 of 318 videos named it at all what the figures below are of 16 · 24 of its 49 : praised · complained October’s alone, too few to set against September')
+    expect(text).toContain('Ottobock’s talk turns on getting a knee paid for 37 of 290 videos named it without being asked the videos we did not find by searching for a brand No clear change +2.4 pts against September 74 of 713 in September 49 of 318 videos named it at all what the figures below are of 16 · 24 of its 49 : praised · complained October’s alone, not compared with September')
+    // Base `any` carries no verdict, and the page gives no reason for it.
+    expect(text).not.toMatch(/too few to set against/)
+    expect(text).toContain('October’s alone: these counts are not compared with September.')
     expect(html).toMatch(/<div class="absolute inset-y-0 left-0 rounded-\[5px\] bg-comp"/)
     expect(html).toMatch(/data-copy="verdict" title="[^"]*"[^>]*>No clear change</)
     expect(html).toContain('data-copy="stored" data-slot="pass_c_finding"')
