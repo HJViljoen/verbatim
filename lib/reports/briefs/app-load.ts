@@ -132,18 +132,21 @@ export async function loadVoicesParts(admin: SupabaseClient, a: { clientId: stri
   const month = monthStartOf(a.month)
   const params = { month: yyyymm(month) }
   const refsAhead = loadBrandRefs(handle).catch(() => undefined)
-  const [rivals, profile, pair] = await Promise.all([
+  // The profile is the groups' alone: a read of it that fails loses the
+  // groups' pages (as on Voices, `failed`) and never the brands'.
+  const [rivals, read, pair] = await Promise.all([
     loadMarketRivalAudiences(admin, a.clientId),
-    loadLatestProfile(handle),
+    loadLatestProfile(handle).catch((e: unknown) => { console.warn(`[briefs] Voices' profile: ${e instanceof Error ? e.message : String(e)}`); return undefined }),
     loadPairOn(handle, a.now),
   ])
+  const profile = read ?? null
   const audiences = rivals ? marketAudiences(rivals) : await loadMarketAudiences(handle)
   const market = await loadMarketVideos(handle, month, audiences)
   const [groupRead, pairs] = await Promise.all([
     profile ? loadGroupSubjects(handle, { month, audiences, market, profile }).catch((e: unknown) => { console.warn(`[briefs] Voices' groups: ${e instanceof Error ? e.message : String(e)}`); return undefined }) : Promise.resolve(undefined),
     refsAhead.then((r) => (r === undefined ? undefined : loadBrandMonthPairs(handle, { month, now: a.now, pair, audiences }))).catch(() => undefined),
   ])
-  const groups = buildGroups({ profile, read: groupRead ?? null, platformOf: new Map(), params, failed: profile != null && groupRead == null })
+  const groups = buildGroups({ profile, read: groupRead ?? null, platformOf: new Map(), params, failed: read === undefined || (profile != null && groupRead == null) })
   const videosOf = new Map((groupRead?.videos ?? []).map((v) => [v.key, v.videoIds]))
   const products = new Map<string, GroupProducts>()
   for (const c of groups.cards) products.set(c.key, await readGroupProducts(handle, a.clientId, month, monthWordsOf(month, false), videosOf.get(c.key) ?? [], params))
