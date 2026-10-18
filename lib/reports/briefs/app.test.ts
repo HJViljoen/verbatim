@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { surface } from '../../nav'
+import { adviceTitle } from '../../pages/v2/advice-words'
 import { buildPlaybook, type PlaybookVideo } from '../../pages/playbook'
 import { fmtMultiple, postsBlock, worksBasis, type ContentMonth } from '../../pages/v2/content'
 import { contentFixture, OSSUR_IDEAS as OSSUR_IDEA_ROWS, OSSUR_OWNED } from '../../pages/v2/content-fixture'
@@ -325,5 +326,17 @@ describe('the pages each role reads from the app (`appSectionsFor`, the compose 
     // U6: a subject whose check is open is never on the page.
     const open = subjectsSection({ month: OCT, subjects: subjects.map((s) => ({ ...s, fact: { ...s.fact, calibration: 'provisional' as const } })), reads: OSSUR_SUBJECT_READS, sentenceOf: () => 'x', voiceOf: () => null, panel: {} })
     expect(open.section).toBeNull()
+  })
+})
+
+describe('a piece of advice is named by `adviceTitle`, as everywhere', () => {
+  it('a blank stored title takes its body\'s first clause', () => {
+    const m = movesOf({
+      month: OCT, monthLabel: null,
+      rows: [{ lineageId: 'a', title: '', why: 'Daily wear issues such as socket pain, sweat and skin irritation need one clear answer page, written with owners.', status: 'new', inLatest: true, firstMade: '2026-10-12' }],
+      aims: new Map(), cards: [], adviceHref: (id) => `/dashboard/moves/advice/${id}`,
+    })
+    expect(m.pool[0].title).toBe(adviceTitle('', m.pool[0].why))
+    expect(m.pool[0].title).not.toBe('')
   })
 })

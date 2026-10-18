@@ -6,7 +6,7 @@ import { OSSUR_APP, OSSUR_HOOKS, OSSUR_IDEAS, OSSUR_MOVES, OSSUR_PEOPLE, OSSUR_P
 import { canvasOf, printsSection } from './canvas'
 import { contentsOf, deckPages, planDeck, printedSections } from './deck'
 import { printedLines, printedPages } from './inshort'
-import type { BriefRole, MonthlyBriefData } from './types'
+import { APP_SECTION_KEYS, type BriefRole, type MonthlyBriefData } from './types'
 
 // The October canvas's page plan (the boards approved 18 Oct): which pages
 // each role prints, in which order, what a page needs to print (PAGE_NEEDS),
@@ -143,5 +143,25 @@ describe('In short says only what prints: the check reads the October pages\' ow
     // What buyers weigh is written and stored, and not on a printed page.
     const weigh = briefFixture('leadership').sections.find((s) => s.key === 'leadership.weigh')!.groups[0].items[0].text
     expect(lines).not.toContain(weigh)
+  })
+})
+
+describe('a deck from before the October canvas, handed an October brief (a rollback)', () => {
+  // The 12 Oct deck reads `sections` alone and ignores a field it does not
+  // know: an October brief, to it, is the same brief with no `fromApp`. That
+  // is the v1 path here, byte for byte the old deck (the September goldens).
+  it('draws it on the 12 Oct canvas, from the writer\'s sections, without throwing', () => {
+    for (const role of ['sales', 'marketing', 'content', 'leadership'] as const) {
+      const october = octoberFixture(role)
+      expect(october.sections.some((s) => APP_SECTION_KEYS.includes(s.key))).toBe(false)
+      const { fromApp: _ignored, ...asOld } = october
+      expect(canvasOf(asOld as MonthlyBriefData)).toBe('v1')
+      expect(deckPages(asOld).length).toBeGreaterThan(2)
+    }
+  })
+
+  it('which is why the new keys never go in `sections`: the old deck has no PAGE_NEEDS row for them and would throw', () => {
+    const { fromApp, ...asOld } = octoberFixture('leadership')
+    expect(() => planDeck({ ...asOld, sections: [...asOld.sections, ...(fromApp ?? [])].map((s) => (APP_SECTION_KEYS.includes(s.key) ? { ...s, key: 'not.a.key' as never } : s)) })).toThrow()
   })
 })

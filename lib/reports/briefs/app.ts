@@ -10,6 +10,7 @@ import {
   axisLine, compareMonths, comparePrintable, MOVE_STATUS_LABEL, MOVE_UNREAD, moveAxis, monthLabelOn, waitingAdvice,
   type AdviceAim, type MoveCard, type ReadingLabel,
 } from '../../pages/v2/moves'
+import { adviceTitle } from '../../pages/v2/advice-words'
 import { ADVICE_RECORD_ALL_HREF, MOVES_PATH } from '../../pages/v2/moves-address'
 import { productsHref } from '../../pages/v2/products-address'
 import type { ProductsData, ShelfCategoryView, Standout } from '../../pages/v2/products'
@@ -456,7 +457,9 @@ export function movesOf(a: {
     const aim = a.aims.get(r.lineageId) ?? null
     return {
       lineageId: r.lineageId,
-      title: r.title,
+      // Named as Your moves names it everywhere: its stored title, else its
+      // body's first clause (`adviceTitle`).
+      title: adviceTitle(r.title, r.why),
       why: r.why,
       status: r.status,
       inLatest: r.inLatest,
