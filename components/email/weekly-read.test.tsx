@@ -263,6 +263,41 @@ describe('a stored report (version 1) renders byte for byte as before level 1', 
 // ---- Level 1 (version 2; board E7) -----------------------------------------------------
 
 const levelOne = (read = levelOneRead(), lines = sealandLines()) => sealandSnapshot(read, lines)
+
+// ---- A stored level-1 issue (version 2), byte for byte ---------------------------------
+//
+// lib/test/weekly-read-golden/l1-* holds what the code before version 3
+// rendered (commit 7edb213a, the medical line included): the email, its text
+// and subject, the medical email, a new-conversation lead with no share link,
+// a bare issue, the share page, the paper and the viewer. Every issue built
+// between 13 and 18 Oct is version 2, and it must keep rendering as it was
+// sent once version 3 ships.
+
+describe('a stored level-1 issue (version 2) renders byte for byte as before version 3', () => {
+  const fresh = () => levelOneRead({
+    unusual: sealandUnusual([]),
+    newThisWeek: [
+      { themeId: 't7', label: 'Laptop sleeves that fit a 16-inch machine', body: 'People asked whether a sleeve fits a sixteen-inch machine.', videos: { week: 5, month: 5 }, evidence: '' },
+      { themeId: 't8', label: 'Straps that dig in on a long walk', body: 'Straps.', videos: { week: 3, month: 4 }, evidence: '' },
+    ],
+  })
+  const v2 = (read = levelOneRead(), lines = sealandLines()) => ({ ...levelOne(read, lines), version: 2 })
+  it('the email, its text, its subject, the medical email, a new lead and a bare issue', () => {
+    const e = renderWeeklyReadEmail({ data: v2(), appUrl: APP, shareUrl: SHARE, attached: false })
+    expect(e.html).toBe(golden('l1-email.html'))
+    expect(e.text).toBe(golden('l1-email.txt'))
+    expect(e.subject).toBe(golden('l1-email.subject.txt'))
+    expect(renderWeeklyReadEmail({ data: v2(), appUrl: APP, shareUrl: SHARE, attached: false, medical: true }).html).toBe(golden('l1-email-medical.html'))
+    expect(renderWeeklyReadEmail({ data: v2(fresh()), appUrl: APP, shareUrl: null, attached: true }).html).toBe(golden('l1-email-new.html'))
+    const empty = sealandRead({ market: null, findings: sealandRead().findings.map((f) => ({ ...f, basedOn: ['a', 'b'] })) })
+    expect(renderWeeklyReadEmail({ data: v2(empty, []), appUrl: APP, shareUrl: SHARE, attached: false }).html).toBe(golden('l1-email-empty.html'))
+  })
+  it('the share page, the paper and the viewer', () => {
+    expect(render(<WeeklyReadPage data={v2()} appUrl={APP} fill />)).toBe(golden('l1-page.html'))
+    expect(render(<WeeklyReadPage data={v2()} appUrl={APP} print medical />)).toBe(golden('l1-page-print.html'))
+    expect(render(<WeeklyReadPage data={v2(fresh())} appUrl="" medical />)).toBe(golden('l1-page-viewer.html'))
+  })
+})
 /** Each mark is found after the one before it. */
 function expectInOrder(text: string, marks: readonly string[]) {
   let from = 0
