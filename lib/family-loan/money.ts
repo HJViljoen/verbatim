@@ -42,24 +42,30 @@ export const MAX_ENTRY_CENTS = 10_000_000 * 100
  * A comma or a point followed by one or two digits at the end is the decimal
  * mark; a comma followed by three is a thousands separator, and so is a
  * space. A point followed by three digits ("1.250") could be either, so it is
- * refused, as is anything past two decimals, a sign, or a letter.
+ * refused, as is anything past two decimals, a sign, or a letter. Thousands
+ * separators group in threes after a first group that does not start with 0,
+ * one kind to a figure: "12 50", "5 00" and "0,500" are refused, never read
+ * as R1,250, R500 and R500.
  */
 export function parseRandCents(raw: unknown): number | null | undefined {
   if (raw === null || raw === undefined) return null
-  let s = String(raw).trim()
+  // \s takes the no-break spaces a pasted or formatted figure carries too; a
+  // run of them is one separator.
+  let s = String(raw).replace(/\s+/g, ' ').trim()
   if (s === '') return null
-  // \s takes the no-break spaces a pasted or formatted figure carries too.
-  s = s.replace(/^R/i, '').replace(/\s/g, '')
+  s = s.replace(/^R ?/i, '')
   if (s === '') return undefined
   const decimal = /^(.*?)([.,])(\d{1,2})$/.exec(s)
   let whole = decimal ? decimal[1] : s
   const frac = decimal ? decimal[3] : ''
   if (whole === '' && decimal) whole = '0'
   if (!/^\d+$/.test(whole)) {
-    // Commas as thousands separators, in threes, and never beside a decimal
-    // comma ("1,250,50" is not a number).
-    if (decimal?.[2] === ',' || !/^\d{1,3}(,\d{3})+$/.test(whole)) return undefined
-    whole = whole.replace(/,/g, '')
+    // Commas or spaces as thousands separators, in threes, and a comma never
+    // beside a decimal comma ("1,250,50" is not a number).
+    const commas = /^[1-9]\d{0,2}(,\d{3})+$/.test(whole)
+    const spaces = /^[1-9]\d{0,2}( \d{3})+$/.test(whole)
+    if (!(spaces || (commas && decimal?.[2] !== ','))) return undefined
+    whole = whole.replace(/[, ]/g, '')
   }
   const cents = Number(whole) * 100 + Number(frac.padEnd(2, '0'))
   return Number.isSafeInteger(cents) ? cents : undefined

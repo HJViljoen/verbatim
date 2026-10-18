@@ -35,6 +35,24 @@ describe('reading a typed amount', () => {
     }
   })
 
+  it('refuses a space or comma that is not a thousands separator, rather than read a different amount', () => {
+    // Each of these once stored a different figure: "12 50" R1,250, "5 00"
+    // R500, "0,500" R500, "1 2 3" R123.
+    for (const bad of ['12 50', '5 00', '2 50,00', '1 2 3', '1 2500', '0 500', '0,500', '01,000', '1,250 000', '1 250,000']) {
+      expect(parseRandCents(bad), bad).toBeUndefined()
+    }
+  })
+
+  it('still reads real spacing: groups of three, no-break and repeated spaces, a space after the R', () => {
+    expect(parseRandCents('1 000 000')).toBe(100_000_000)
+    expect(parseRandCents('2  500')).toBe(250_000)
+    expect(parseRandCents('2 500,00')).toBe(250_000)
+    expect(parseRandCents(' R 2 500 ')).toBe(250_000)
+    expect(parseRandCents('1 250.50')).toBe(125_050)
+    expect(parseRandCents('0,50')).toBe(50)
+    expect(parseRandCents('0500')).toBe(50_000)
+  })
+
   it('refuses a number too long to hold in cents exactly', () => {
     expect(parseRandCents('99999999999999999999')).toBeUndefined()
   })
