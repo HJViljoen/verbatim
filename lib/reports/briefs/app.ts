@@ -233,8 +233,8 @@ export function standoutOf(s: Standout, month: string, company: string): BriefSt
         ...base,
         label: s.yours.k === 0 ? STANDOUT_LABEL.general : 'Category, not you',
         text: s.yours.k === 0
-          ? `${videos(s.inGeneral.n)} about ${word} in ${m}. None named one of ${company}'s.`
-          : `${fmtInt(s.inGeneral.k)} of the ${videos(s.inGeneral.n)} about ${word} in ${m} named none of ${company}'s products.`,
+          ? `${videos(s.inGeneral.n)} about ${word} in ${m}. None named one of ${company}’s.`
+          : `${fmtInt(s.inGeneral.k)} of the ${videos(s.inGeneral.n)} about ${word} in ${m} named none of ${company}’s products.`,
       }
     case 'gap': {
       const less = s.product.k * s.category.n < s.category.k * s.product.n

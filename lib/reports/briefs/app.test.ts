@@ -147,7 +147,7 @@ describe('Your products (Össur only, behind PRODUCT_READINGS_ENABLED)', () => {
   it('words each kind of standout from the pick\'s own figures, never "praised it"', () => {
     const base = { open: { kind: 'group' as const, id: 'g' }, href: '/x', where: 'Liners' }
     expect(standoutOf({ ...base, kind: 'first', name: 'Pro-Flex LP Align', videos: 1, months: [{ month: '2026-06-01', k: 0 }, { month: OCT, k: 1 }], flag: {} as Verdict, lead: null }, OCT, 'Össur').text).toBe('Named in one video in October, its first since June.')
-    expect(standoutOf({ ...base, kind: 'general', name: 'Hands', inGeneral: { k: 48, n: 48 }, yours: { k: 0, n: 48 } }, OCT, 'Össur').text).toBe('48 videos about hands in October. None named one of Össur\'s.')
+    expect(standoutOf({ ...base, kind: 'general', name: 'Hands', inGeneral: { k: 48, n: 48 }, yours: { k: 0, n: 48 } }, OCT, 'Össur').text).toBe('48 videos about hands in October. None named one of Össur’s.')
     expect(standoutOf({ ...base, kind: 'praised', name: 'Liners', praised: { k: 13, n: 26 } }, OCT, 'Össur')).toMatchObject({ label: 'Praise in the comments', text: '13 of the 26 videos about liners have praise in their comments.' })
     expect(standoutOf({ ...base, kind: 'focus', name: 'Liners', subject: 'Fit & comfort', level: { k: 11, n: 26 }, ranked: false }, OCT, 'Össur')).toMatchObject({ name: 'Liners in Fit & comfort', text: '11 of the 26 videos about liners are in Fit & comfort.' })
   })

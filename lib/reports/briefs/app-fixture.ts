@@ -142,7 +142,7 @@ export const OSSUR_PRODUCTS: BriefProducts = {
     { id: 'knees', name: 'Knees', videos: 21, named: 2, products: [{ name: 'Power Knee', videos: 2, first: false, href: PRODUCT('knees', 'Power Knee') }], href: '/dashboard/products/knees?month=2026-10' },
   ],
   standouts: [
-    { kind: 'general', label: 'Talked about, none of yours named', name: 'Hands', text: '48 videos about hands in October. None named one of Össur\'s.', href: '/dashboard/products/hands?month=2026-10' },
+    { kind: 'general', label: 'Talked about, none of yours named', name: 'Hands', text: '48 videos about hands in October. None named one of Össur’s.', href: '/dashboard/products/hands?month=2026-10' },
     { kind: 'praised', label: 'Praise in the comments', name: 'Liners', text: '13 of the 26 videos about liners have praise in their comments.', href: '/dashboard/products/liners?month=2026-10' },
     { kind: 'first', label: 'Came up for the first time', name: 'Pro-Flex LP Align', text: 'Named in one video in October, its first since June.', href: PRODUCT('feet', 'Pro-Flex LP Align') },
     { kind: 'focus', label: 'Where it sits', name: 'Liners in Fit & comfort', text: '11 of the 26 videos about liners are in Fit & comfort.', href: '/dashboard/products/liners?month=2026-10' },
