@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import { briefFixture, octoberFixture, subjectsFixture } from '../../../components/briefs/fixture'
 import type { BriefAppInputs } from './app'
-import { OSSUR_APP, OSSUR_HOOKS, OSSUR_IDEAS, OSSUR_MOVES, OSSUR_PEOPLE, OSSUR_PRODUCTS, SEALAND_APP, SEALAND_NAMED, WORST_NAMED } from './app-fixture'
+import { OSSUR_APP, OSSUR_HOOKS, OSSUR_IDEAS, OSSUR_MOVES, OSSUR_PEOPLE, OSSUR_PRODUCTS, SEALAND_APP, SEALAND_NAMED, WORST_NAMED, WORST_PRODUCTS } from './app-fixture'
 import { canvasOf, printsSection } from './canvas'
-import { contentsOf, deckPages, planDeck, printedSections } from './deck'
+import { contentsOf, deckPages, H, planDeck, printedSections, productLines } from './deck'
 import { printedLines, printedPages } from './inshort'
 import { APP_SECTION_KEYS, type BriefRole, type MonthlyBriefData } from './types'
 
@@ -99,6 +99,21 @@ describe('a thin page is left out (PAGE_NEEDS), and a partial landing prints the
     expect(left(role('leadership', { moves: { ...OSSUR_MOVES, pool: OSSUR_MOVES.pool.slice(0, 1), moves: [] } }))).toContain('leadership.moves: 1 of the 2 pieces of advice and moves a page needs')
     expect(eyebrows(role('leadership', { moves: { ...OSSUR_MOVES, moves: [] } }))).toContain('Your moves')
     expect(left(role('leadership', { moves: { ...OSSUR_MOVES, record: { ...OSSUR_MOVES.record, total: 0 } } }))).toContain('leadership.moves: missing: The record')
+  })
+
+  it('Your products: a row is as tall as its products wrap, a name and its count never apart, so no row runs into the foot', () => {
+    // The worst case's rows as Chrome draws them (18 Oct): Sockets four lines
+    // (each name whole, the mark on a line of its own), Hands three, Feet five.
+    const [sockets, hands, feet] = WORST_PRODUCTS.categories
+    expect([sockets, hands, feet].map((c) => productLines(c.products, 222))).toEqual([4, 3, 5])
+    expect(productLines([], 222)).toBe(1)
+    expect(H.category(sockets)).toBe(21 + 4 * 13.5 * 1.5)
+    // A name of two lines makes its row two lines tall.
+    expect(H.category({ name: 'Hands and Accessories', products: [] })).toBeGreaterThan(H.category({ name: 'Hands', products: [] }))
+    // So the worst case prints the rows that fit, and Bracing & Supports (its
+    // fifth, which ran into the foot) waits in the stored brief.
+    const page = printedSections(octoberFixture('marketing', { app: app({ products: WORST_PRODUCTS }) })).find((s) => s.key === 'marketing.products')!
+    expect(page.products!.categories.map((c) => c.name)).toEqual(['Sockets & Locks', 'Hands and Accessories', 'Feet', 'Liners and Accessories'])
   })
 
   it('Your products: no standout, or one category, leaves it out', () => {

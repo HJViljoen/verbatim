@@ -2,9 +2,9 @@ import { aboutName } from '../../brands/labels'
 import { fmtInt, longMonth } from '../../format'
 import { monthsPhrase } from '../../written/month'
 import { languageName } from './markdown'
-import { adviceDetail, alsoInMarket, buyersSub, categoryProducts, ideaReadLine, inTheirVideos, moveLine, namedNotes, ownTouchWords, pageHref, recordLine, whoAsks } from './app-words'
+import { adviceDetail, alsoInMarket, buyersSub, ideaReadLine, inTheirVideos, moveLine, namedNotes, ownTouchWords, pageHref, recordLine, whoAsks } from './app-words'
 import { canvasOf, findingsAfter, printsSection, V2_PAGES } from './canvas'
-import type { BriefFinding, BriefGroup, BriefIdea, BriefIdeas, BriefItem, BriefQuote, BriefRole, BriefSection, StoredBriefData, SectionKey } from './types'
+import type { BriefFinding, BriefGroup, BriefIdea, BriefIdeas, BriefItem, BriefProducts, BriefQuote, BriefRole, BriefSection, StoredBriefData, SectionKey } from './types'
 import { APP_SECTION_KEYS, BRIEF_NAME, BRIEF_ROLES } from './types'
 
 // The brief as pages (pure): which page holds what, in the order the canvas
@@ -459,8 +459,11 @@ export const H = {
     + (m.verdict ? 9 + 19 : 0) + (m.axis ? 9 + heightOf(m.axis, 406, 12.5, 1.45) : 0) + 9 + 19,
   /** The record's card under it. */
   record: (line: string): number => 28 + 14 + 6 + heightOf(line, 410, 15, 1.45),
-  /** A category's row on Your products (its products in a column 222 wide). */
-  category: (text: string): number => 21 + Math.max(21, heightOf(text, 222, 13.5, 1.5)),
+  /** A category's row on Your products: its name (16px bold, 160 wide) and
+   *  its products in a column 222 wide, as the row wraps them
+   *  (`productLines`), whichever is taller. */
+  category: (c: Pick<BriefProducts['categories'][number], 'name' | 'products'>): number =>
+    21 + Math.max(21, productLines(c.products, 222) * 13.5 * 1.5, linesOf(c.name, 160, 16, 'bold') * 16 * 1.3),
   /** A standout in the panel beside it (387 wide inside). */
   standout: (name: string, text: string): number => 23 + 14 + 3 + heightOf(name, 387, 16, 1.3, 'bold') + 3 + heightOf(text, 387, 14, 1.45),
   /** An idea's card on What to post next, `w` wide, with `asks` of its
@@ -493,6 +496,44 @@ const appFootH = (s: Pick<BriefSection, 'foot' | 'link'>): number => (s.foot || 
 /** Who is in your market's rows of cards: five as three and two, four as
  *  two and two, fewer in one row. Pure. */
 export const groupRows = (n: number): number[] => (n >= 5 ? [3, n - 3] : n === 4 ? [2, 2] : [n])
+
+/** The first-month mark on Your products: "FIRST TIME" in 10px caps with its
+ *  padding (75.5 in Chrome) and its 6px margin. */
+const FIRST_CHIP_W = 81.5
+/** A product's name on Your products, 13.5px at 600, per character: wider
+ *  than the deck's bold measure (Chrome, 18 Oct: "Unity Vacuum Suspension"
+ *  at 0.52 of the size). */
+const PRODUCT_CHAR = 0.52
+/** The " ·" a line ends on before the next product (its last space hangs). */
+const PRODUCT_SEP_W = 7
+
+/**
+ * The lines a category's products take in a column `w` wide, at 13.5px, as
+ * the row wraps them (components/briefs/app-pages.tsx `ProductsPage`): a
+ * product's name (bold) and its count (mono) never break apart, so a line
+ * ends before a run that does not fit rather than inside it; the first-month
+ * mark is a chip that wraps on its own; and the " · " before the next product
+ * stays on the line it falls on. "None by name" is one line. Measured against
+ * Chrome on the worst case (18 Oct: four, three and five lines where words
+ * wrapping inside a run would have counted two, two and three, and the rows
+ * ran into the page's foot). Pure.
+ */
+export function productLines(products: readonly Pick<BriefProducts['categories'][number]['products'][number], 'name' | 'videos' | 'first'>[], w: number): number {
+  const size = 13.5
+  const pieces: number[] = []
+  products.forEach((p, k) => {
+    const sep = k < products.length - 1 ? PRODUCT_SEP_W : 0
+    const run = p.name.length * size * PRODUCT_CHAR + size * CHAR + fmtInt(p.videos).length * size * MONO_CHAR
+    if (p.first) pieces.push(run, FIRST_CHIP_W + sep)
+    else pieces.push(run + sep)
+  })
+  let lines = 1
+  let x = 0
+  for (const piece of pieces) {
+    if (x > 0 && x + piece > w) { lines += 1; x = piece } else x += piece
+  }
+  return lines
+}
 
 /**
  * A section cut to the canvas's page or pages: the items that fit at the
@@ -832,7 +873,7 @@ export function planSection(s: BriefSection, companion: BriefSection | null, d: 
       const p = s.products
       if (!p) return [page(s)]
       const top = BODY_HEIGHT - titleH(sub) - 16 - appFootH(s)
-      const rows = fitItems(p.categories, (c) => H.category(categoryProducts(c)), top - 40, max)
+      const rows = fitItems(p.categories, H.category, top - 40, max)
       const standouts = fitItems(p.standouts, (x) => H.standout(x.name, x.text), top - 22 - 15 - 8, 4)
       return [page({ ...s, products: { ...p, categories: rows, standouts } })]
     }
