@@ -232,6 +232,9 @@ export async function loadBriefSetInputs(
      *  (and whose themes have replaced the last one's); the script, the newest
      *  delivered run. */
     runId?: string
+    /** `plan-briefs`' clock: the app's pages are read inside it
+     *  (app-load.ts `appPartsBudgetMs`). None by hand. */
+    clock?: BriefClock | null
   },
 ): Promise<BriefSetInputs> {
   const { clientId } = opts
@@ -282,7 +285,7 @@ export async function loadBriefSetInputs(
   const longRun = await loadMonthLongRun(admin, clientId, month).catch(warn('long-run read'))
   // The October canvas's pages, read from the app for the month (no model
   // call; each part on its own).
-  const app = await loadBriefAppParts(admin, { clientId, company, month, now: opts.now, runId, standing, rival: rivals[0] ?? null, videos })
+  const app = await loadBriefAppParts(admin, { clientId, company, month, now: opts.now, runId, standing, rival: rivals[0] ?? null, videos, clock: opts.clock ?? null })
   return {
     clientId,
     company,

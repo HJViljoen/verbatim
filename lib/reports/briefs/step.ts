@@ -333,7 +333,11 @@ export async function planBriefsStep(
   depsIn: Partial<BriefStepDeps> = {},
 ): Promise<BriefPlan> {
   const d = deps(depsIn)
-  const asOf = new Date((d.now ?? Date.now)()).toISOString()
+  // The step's clock, from its start: the app's pages, read with the inputs,
+  // end inside it (app-load.ts `appPartsBudgetMs`), so a slow read never holds
+  // the step past the route's 300 s, where no failed row or alert is possible.
+  const clock = briefClock({ now: d.now })
+  const asOf = new Date(clock.startedAt).toISOString()
   const base = { clientId: opts.clientId, runId: opts.runId, company: '', asOf, inputs: null, questions: [], waves: [], spentAtPlan: 0 }
   if (!opts.window || !closesMonth(opts.window)) return { ...base, status: 'not_due', month: null }
   const month = endedMonthOf(opts.window)
@@ -369,7 +373,7 @@ export async function planBriefsStep(
       await failSet(admin, d, { clientId: opts.clientId, runId: opts.runId, company, month, step: 'plan-briefs', error: `the run has spent $${spent.toFixed(2)} of its $${RUN_MODEL_BUDGET_USD} model budget, and the briefs may cost up to $${BRIEF_SET_BUDGET_USD}; they were not started, so the run could not trip its budget` })
       return { ...base, company, status: 'failed', month, error: 'run budget' }
     }
-    const inputs = stepSafeInputs(await d.inputs(admin, { clientId: opts.clientId, month, now: new Date(asOf), runId: opts.runId }))
+    const inputs = stepSafeInputs(await d.inputs(admin, { clientId: opts.clientId, month, now: new Date(asOf), runId: opts.runId, clock }))
     const questions = questionsFor(inputs)
     return { ...base, status: 'due', company: inputs.company, month, inputs, questions, waves: researchWaves(questions), spentAtPlan: spent }
   } catch (e) {

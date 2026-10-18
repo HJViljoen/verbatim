@@ -173,6 +173,16 @@ describe('plan-briefs', () => {
     expect(seen).toBe('run-oct')
   })
 
+  it('passes its own clock to the inputs, from the step\'s start, so the app\'s pages are read inside it', async () => {
+    let at = 1_000_000
+    let clock: Parameters<BriefStepDeps['inputs']>[1]['clock']
+    const plan = await duePlan({ now: () => at, inputs: async (_a, o) => { clock = o.clock; return INPUTS } })
+    expect(clock?.startedAt).toBe(1_000_000)
+    expect(plan.asOf).toBe(new Date(1_000_000).toISOString())
+    at += 60_000
+    expect(clock?.now()).toBe(1_060_000)
+  })
+
   it('every other run is a no-op decided from its own window: no read, no alert, nothing spent', async () => {
     for (const window of [MID_MONTH, null]) {
       for (const testRun of [false, true]) {

@@ -2563,7 +2563,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
   page. WHERE EACH PART COMES FROM: read ONCE in `plan-briefs`
   (`loadBriefSetInputs` → `lib/reports/briefs/app-load.ts`, no model call,
   each part soft: a read that fails or a table not there loses that page and
-  nothing else), carried in the plan's frozen inputs (`BriefSetInputs.app`;
+  nothing else, and so does one still reading at the parts' one deadline,
+  inside the step's clock, `appPartsBudgetMs`: 90 s at most, never past 20 s
+  short of the step's 250 s, because a step Vercel kills at 300 s stores no
+  failed row and alerts nobody), carried in the plan's frozen inputs (`BriefSetInputs.app`;
   a plan from before the deploy has none and its briefs stay on v1), turned
   into sections by the pure builders in `lib/reports/briefs/app.ts` in
   `briefs:compose`, every count the app page's own: the subjects' words from

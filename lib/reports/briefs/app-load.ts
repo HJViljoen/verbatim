@@ -30,6 +30,7 @@ import {
   type BriefAppInputs, type BriefMovesIn, type BriefSubjectRead,
 } from './app'
 import { yyyymm } from './app-words'
+import { leftMs, type BriefClock } from './clock'
 import type { BriefHooks, BriefIdeas, BriefNamed, BriefPeople, BriefProducts } from './types'
 
 // WHAT THE OCTOBER CANVAS READS FROM THE APP, for one month (the I/O half of
@@ -60,6 +61,43 @@ function soft<T>(what: string, p: () => Promise<T>): Promise<T | null> {
     console.warn(`[briefs] the ${what} were not read from the app; the brief prints without that page: ${e instanceof Error ? e.message : String(e)}`)
     return null
   })
+}
+
+// SOFT IN TIME TOO (the fresh check, 18 Oct). The parts are read inside
+// `plan-briefs`, whose route Vercel kills at 300 s, before the body's own
+// catch can store a failed row or alert (clock.ts); the pipeline's `.catch`
+// then returns null and the ended month is never written, with nobody told.
+// So the app's pages share one deadline: a part still reading at it is left
+// out (its page with it), as a read that failed is, and the step goes on.
+
+/** The most the app's pages may take, all of them at once. */
+export const APP_PARTS_BUDGET_MS = 90_000
+/** What the step keeps after them: the inputs frozen, the questions, its
+ *  return. */
+export const APP_PARTS_RESERVE_MS = 20_000
+
+/** The time the app's pages may take: the cap, or what the step's clock has
+ *  left after the reserve, whichever is less; the cap alone with no clock
+ *  (the script). Never negative. Pure. */
+export function appPartsBudgetMs(clock?: BriefClock | null): number {
+  if (!clock) return APP_PARTS_BUDGET_MS
+  return Math.max(0, Math.min(APP_PARTS_BUDGET_MS, leftMs(clock) - APP_PARTS_RESERVE_MS))
+}
+
+const LATE = Symbol('late')
+
+/** `soft`, held to `ms`: a part still reading then is null, said once. */
+export async function softWithin<T>(what: string, p: () => Promise<T>, ms: number): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const late = new Promise<typeof LATE>((resolve) => { timer = setTimeout(() => resolve(LATE), Math.max(0, ms)) })
+  try {
+    const got = await Promise.race([soft(what, p), late])
+    if (got !== LATE) return got
+    console.warn(`[briefs] the ${what} were not read from the app within ${Math.round(ms / 1000)} s; the brief prints without that page`)
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 /**
@@ -189,8 +227,9 @@ export async function loadMovesPart(admin: SupabaseClient, a: { clientId: string
 }
 
 /**
- * Every part the October canvas reads, for one month. Never throws: each part
- * on its own (`soft`).
+ * Every part the October canvas reads, for one month. Never throws, and never
+ * outlasts its budget (`appPartsBudgetMs`): each part on its own, a part that
+ * fails or is still reading at the deadline left out (`softWithin`).
  */
 export async function loadBriefAppParts(
   admin: SupabaseClient,
@@ -204,17 +243,25 @@ export async function loadBriefAppParts(
     rival: string | null
     /** The playbook's videos where the set read them already. */
     videos?: readonly PlaybookVideo[] | null
+    /** `plan-briefs`' clock: the parts end inside it. None by hand. */
+    clock?: BriefClock | null
   },
 ): Promise<BriefAppInputs> {
   const month = monthStartOf(a.month)
   const now = a.now.toISOString()
+  const none: BriefAppInputs = { month, subjectReads: null, people: null, named: null, products: null, ideas: null, hooks: null, moves: null }
+  const ms = appPartsBudgetMs(a.clock)
+  if (ms <= 0) {
+    console.warn('[briefs] no time was left in the step to read the app\'s pages; the briefs print without them')
+    return none
+  }
   const [subjectReads, voices, products, ideas, hooks, moves] = await Promise.all([
-    soft('subject reads', () => loadSubjectReads(admin, { clientId: a.clientId, runId: a.runId, month, standing: a.standing })),
-    soft('groups and brands', () => loadVoicesParts(admin, { clientId: a.clientId, month, now })),
-    soft('products', () => loadProductsPart(admin, { clientId: a.clientId, company: a.company, month, now })),
-    soft('post ideas', () => loadIdeasPart(admin, { clientId: a.clientId, month, now: a.now })),
-    soft('formats and openings', () => loadHooksPart(admin, { clientId: a.clientId, company: a.company, month, rival: a.rival, videos: a.videos })),
-    soft('advice and moves', () => loadMovesPart(admin, { clientId: a.clientId, month })),
+    softWithin('subject reads', () => loadSubjectReads(admin, { clientId: a.clientId, runId: a.runId, month, standing: a.standing }), ms),
+    softWithin('groups and brands', () => loadVoicesParts(admin, { clientId: a.clientId, month, now }), ms),
+    softWithin('products', () => loadProductsPart(admin, { clientId: a.clientId, company: a.company, month, now }), ms),
+    softWithin('post ideas', () => loadIdeasPart(admin, { clientId: a.clientId, month, now: a.now }), ms),
+    softWithin('formats and openings', () => loadHooksPart(admin, { clientId: a.clientId, company: a.company, month, rival: a.rival, videos: a.videos }), ms),
+    softWithin('advice and moves', () => loadMovesPart(admin, { clientId: a.clientId, month }), ms),
   ])
-  return { month, subjectReads, people: voices?.people ?? null, named: voices?.named ?? null, products, ideas, hooks, moves }
+  return { ...none, subjectReads, people: voices?.people ?? null, named: voices?.named ?? null, products, ideas, hooks, moves }
 }
