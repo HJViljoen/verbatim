@@ -2683,7 +2683,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
   the first rival's column; What holds so far from the month's ready long-run
   read). The estimate is measured by `scripts/brief-render.ts --in
   <brief.json> --out <dir> [--pdf]` (local Chrome, a PNG a page, exits 1 on
-  any clipping): run it on a real brief and a worst case whenever a page
+  any clipping: past a page's body, or text drawn over text inside it, the
+  check `--write --from` makes too): run it on a real brief and a worst case whenever a page
   changes. The writers' words are the `monthly_brief` prose slot; the
   long-run patterns are `week_read`'s. Four wordings Heinrich ruled on, 12
   Oct, to keep as built: "about {brand}" on a quote's cite; the percentages in

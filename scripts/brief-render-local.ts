@@ -21,7 +21,8 @@ export interface QuoteWords { text: string; english?: string | null; lang?: stri
 
 export interface LocalRender {
   pages: number
-  /** Pages (1-based) whose body something runs past, and by how much. */
+  /** Pages (1-based) whose body something runs past, or where two runs of
+   *  text are drawn over each other, and by how much. */
   clipped: { page: number; px: number }[]
   /** The canvas's pages the deck left out as thin, and why. */
   left: LeftOut[]
@@ -66,7 +67,10 @@ export async function renderBriefLocal(
     await page.setViewport({ width: 1328, height: 800, deviceScaleFactor: 1 })
     await page.goto(`file://${html}`, { waitUntil: 'networkidle0' })
     await page.evaluate(() => document.fonts.ready)
-    // Anything inside a page's body that reaches past it, down or across.
+    // Anything inside a page's body that reaches past it, down or across; and
+    // two runs of text inside it drawn over each other (a row that overflows
+    // its column into the foot stays inside the body, so only this sees it:
+    // the October products page's last row did, by 7px, 18 Oct).
     const over = await page.evaluate(() => Array.from(document.querySelectorAll('[data-brief-page]')).map((el) => {
       const b = el.querySelector('[data-brief-body]') as HTMLElement | null
       if (!b) return 0
@@ -76,6 +80,24 @@ export async function renderBriefLocal(
         const r = (c as HTMLElement).getBoundingClientRect()
         if (r.height > 0) worst = Math.max(worst, Math.round(r.bottom - box.bottom))
         if (r.width > 0) worst = Math.max(worst, Math.round(r.right - box.right))
+      }
+      const rects: { node: number; r: DOMRect }[] = []
+      const walker = document.createTreeWalker(b, NodeFilter.SHOW_TEXT)
+      for (let n = walker.nextNode(), node = 0; n; n = walker.nextNode(), node += 1) {
+        if (!n.textContent?.trim()) continue
+        const range = document.createRange()
+        range.selectNodeContents(n)
+        for (const r of Array.from(range.getClientRects())) if (r.width > 1 && r.height > 1) rects.push({ node, r })
+      }
+      for (let i = 0; i < rects.length; i += 1) {
+        for (let j = i + 1; j < rects.length; j += 1) {
+          const a = rects[i]
+          const c = rects[j]
+          if (a.node === c.node) continue
+          const across = Math.min(a.r.right, c.r.right) - Math.max(a.r.left, c.r.left)
+          const down = Math.min(a.r.bottom, c.r.bottom) - Math.max(a.r.top, c.r.top)
+          if (across > 2 && down > 3) worst = Math.max(worst, Math.round(down))
+        }
       }
       return worst
     }))
