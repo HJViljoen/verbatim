@@ -2527,6 +2527,85 @@ This version has breaking changes — APIs, conventions, and file structure may 
   handle with care…) by an estimate of each layout's height, and what does
   not fit stays in the stored brief: no page carries on, no finding takes a
   second page. A component whose material does not stand does not print.
+  **The October canvas (v2; the boards `briefs-2026-10`, Heinrich approved
+  18 Oct with the designer's recommendations, copying v1's kit exactly).**
+  TWO CANVASES, NEVER MIXED (`lib/reports/briefs/canvas.ts`): a brief whose
+  data carries `fromApp` is drawn on v2, its pages `V2_PAGES` in order; one
+  without it (every brief stored before, September's) on v1, byte for byte
+  as before (`components/briefs/september-golden.test.tsx` pins the eight
+  September briefs rendered by the deck at 864050c3). The pages read from
+  the app are sections of their own keys (`APP_SECTION_KEYS`) kept in
+  `fromApp`, never in `sections`: a deck from before v2 reads `sections`
+  alone and draws an October brief on v1 from the writer's sections, where a
+  new key in `sections` would throw (its `PAGE_NEEDS` has no row for it).
+  WHAT EACH ROLE PRINTS ON V2 (after its findings, Leadership's after who is
+  in its market and where it stands): *Sales*: Who is buying (`sales.groups`:
+  Voices' groups, the four in the most videos two a sheet, the rest named at
+  the last sheet's foot; each its stored description, what it wants, what
+  stops it, what tips it, and code's "In their videos": the ready subject it
+  talks about most (U6) and the company's products in its videos where
+  products are on; in place of the writer's buyer types and "For a sale"),
+  What stops them, What tips them, Who buyers compare you with, Language to
+  handle with care. *Marketing*: Believes and doubts, In its own words, Says
+  and hears, How rivals are heard, then Your products in the conversation
+  (`marketing.products`, only where `PRODUCT_READINGS_ENABLED`: Össur) and Who
+  gets named without being asked (`marketing.named`, only where the brands
+  are counted: Sealand). *Content*: What to post next (`content.ideas`, where
+  The questions people ask stood), Hooks and formats (`content.hooks`, on
+  Content's response multiple with "Your posts in {month}"), What viewers
+  come for, What people want shown, Where the confusion starts.
+  *Leadership*: Where the market stands (`leadership.subjects`, two columns),
+  Who is in your market (`leadership.groups`), Where {company} stands, the
+  findings, The risks with the questions, Your moves (`leadership.moves`),
+  What holds so far. NOT DRAWN ON V2, STILL WRITTEN AND STORED (no writer
+  prompt changed for October): the writer's buyer types (`sales.buyers`), The
+  questions people ask, What buyers weigh, v1's formats table and its market
+  page. WHERE EACH PART COMES FROM: read ONCE in `plan-briefs`
+  (`loadBriefSetInputs` → `lib/reports/briefs/app-load.ts`, no model call,
+  each part soft: a read that fails or a table not there loses that page and
+  nothing else), carried in the plan's frozen inputs (`BriefSetInputs.app`;
+  a plan from before the deploy has none and its briefs stay on v1), turned
+  into sections by the pure builders in `lib/reports/briefs/app.ts` in
+  `briefs:compose`, every count the app page's own: the subjects' words from
+  the closing run's week row (`data.subjectReads` through `subjectsPart`,
+  ready subjects only; the headline and the first sentence of what it means,
+  the writer's sentence where the month holds no read, a voice where neither;
+  levels, kinds and mood as v1); the groups and the brands as `loadVoices`
+  composes them for the month (`loadGroupSubjects`, `buildGroups`,
+  `readGroupProducts`, `loadBrandMonthPairs`, `loadBrandCrosses`,
+  `buildBrands`; a group is a count of the market's videos, never a share,
+  never set against a month: decision 2; a brand named unprompted carries its
+  `Verdict`, praised and complained none); the products from `loadProducts`
+  at the month (the shelf's categories and first-month marks, each
+  category's videos naming one of yours from `month_product_readings`'
+  `k_named`, the strict `standouts` in code's words: "Praise in the comments",
+  never "praised"); the ideas from `loadContentPage` (the closing run's own
+  set only, `current`, its four weeks beside its month, its sub-questions by
+  videos from `post_ideas`, `MEDICAL_LINE` under every idea where
+  `printsMedicalLine`, Also asked over the month, Worth a reply); the measure
+  from `buildPlaybook({ clientSide: 'owned' })` with the first rival's column,
+  `postsBlock` and `mixSentence` ("Best this month" names a post by its
+  format, platform and day and links to it: no caption is stored); Your moves
+  from `readCore` at the month, `readCited` and `readMoveCards` (the dated
+  move's months by `moveAxis`, its sentence Your moves' own, its line
+  `axisLine`, the record), the advice named by `adviceTitle` and folded as the
+  page folds it by the compose step's own embedding batch (`Meaning.vectorOf`:
+  no call of its own; unmerged where it has no vectors, the page's fallback).
+  The Leadership groups' foot says what each group wants "is in the Sales
+  brief" only where that brief prints its groups (`pointToSalesGroups`,
+  checked by `--from`). EVERY PAGE LINKS TO ITS PAGE IN THE APP: on v2 each
+  page's header (`DeckPage.href`, `pageHref`) and every named item (a subject,
+  group, category, product, brand, idea, piece of advice, move, conversation)
+  is an `<a>` drawn as the board draws the name, absolute against
+  `appBaseUrl()` in the PDF and a share link so it clicks there, relative on
+  screen; v1 links nowhere. Each new page has its `PAGE_NEEDS` row (two of
+  its items, and the board's main pieces: the kinds and the mood; What stands
+  out; the notes; the record; both tables and Your posts), its fit and its
+  components in `components/briefs/app-pages.tsx`, drawn to the boards' HTML;
+  In short's check reads their words (`appLines`). Differences from the boards,
+  on the product's own rules: a group's bar is its share of the market's
+  videos (Voices' scale), refusal reasons are not printed on the products and
+  brands pages (T0a), praise is "in the comments", and no caption is quoted.
   **Thin pages are left out (Heinrich, 12 Oct):** a section's page prints
   only with every main piece the canvas draws on it (an opening line where
   the canvas draws one, both columns of a two-column page, the subject bars
@@ -2586,8 +2665,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
   Three sections the engine writes have no canvas page (who else is in the
   decision, how {company} is remembered, words to borrow): they are built and
   stored, never printed, behind ONE switch, `PRINT_UNDRAWN_SECTIONS`
-  (`lib/reports/briefs/canvas.ts`), and the set's repeat checks never name
-  them. The canvas's components come from the writer (`monthly_brief_v2`,
+  (`lib/reports/briefs/canvas.ts`; v1's: v2 prints `V2_PAGES` and nothing
+  else), and the set's repeat checks never name them. The canvas's components come from the writer (`monthly_brief_v2`,
   each field capped at its column's measure: a buyer's want, stops, moves and
   "For a sale" with a status where they mostly do not buy; a rival's job; the
   market's own words as chips and what it stops on, shares and argues over;
@@ -2614,7 +2693,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
   Chrome at `/render`, Storage, `artifacts`, `export_events`), then reuses the
   file; a stale one prints again; an id that is not a UUID is a 404. **By hand:** `scripts/monthly-briefs.ts
   --client <uuid> --month YYYY-MM --run <uuid>` (`--plan` free, dry by
-  default and paid for, `--write` stores, `--replace` over a written month).
+  default and paid for, `--write` stores, `--replace` over a written month;
+  `--pages` free but for its reads: the October canvas's app pages alone,
+  drawn with the month's real data into `Briefs-YYYY-MM-pages/<tenant>/`,
+  nothing written).
   A dry build (the default) is also drawn, as the product draws it, into
   `--designed` (default `~/Documents/Heinrich/Verbatim/Briefs-YYYY-MM-designed/
   <tenant>/`, never over a folder that holds a build): `<role>.json`
