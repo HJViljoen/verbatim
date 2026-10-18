@@ -126,7 +126,7 @@ describe('the email, Össur (H7-Email-Weekly-Alt): grouped by question, top to b
       `${APP}/dashboard/market/subjects/s-cost?period=month&amp;month=2026-10`,
       `${APP}/dashboard/voices/groups/caretaker`,
       `${APP}/dashboard/products/g-sock/p-ds`, `${APP}/dashboard/products/g-feet/p-lp`,
-      `${APP}/dashboard/content/ideas/i1`, `${APP}/dashboard/content/ideas/i3`, `${APP}/dashboard/content#worth-a-reply`,
+      `${APP}/dashboard/content/ideas/i1`, `${APP}/dashboard/content/ideas/i3`, `${APP}/dashboard/content/replies`,
       `${APP}/dashboard/moves/advice/l1`,
       `${APP}/dashboard/market`, SHARE, `${APP}/dashboard/studio`,
     ]) expect(html, href).toContain(`href="${href}"`)

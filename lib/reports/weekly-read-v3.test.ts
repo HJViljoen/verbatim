@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { describe, expect, it, vi } from 'vitest'
 
 import { fixtureAsked, fixtureContentTop, fixtureMovesTop, fixtureProductsTop, fixtureVoicesTop } from '../pages/v2/home-fixture'
+import { repliesHref } from '../pages/v2/content'
 import { TOP_LABELS, topProductsOf } from '../pages/v2/products'
 import { PRODUCTS_FIXTURES } from '../pages/v2/products-fixture'
 import { fakeDb } from '../test/fake-db'
@@ -97,7 +98,9 @@ describe('Content: this week\'s ideas, else the question asked most; Worth a rep
     expect(part.medical).toBe(true)
     // An idea prints: the stand-in question is not read into the issue.
     expect(part.asked).toBeNull()
-    expect(part.replies).toEqual({ href: '/dashboard/content#worth-a-reply', days: '5 to 11 Oct' })
+    expect(part.replies).toEqual({ href: '/dashboard/content/replies', days: '5 to 11 Oct' })
+    // The reply list's own page, the address Content's card opens it at.
+    expect(part.replies.href).toBe(repliesHref('week'))
     expect(contentPart({ ...top }, null, read).medical).toBe(true)
     expect(contentPart(fixtureContentTop('ready', { medical: false }), null, read).medical).toBe(false)
   })

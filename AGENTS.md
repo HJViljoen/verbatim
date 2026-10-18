@@ -1018,8 +1018,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
   Content (`topContent`, widened with every idea of the set: this week's
   ideas only, each title through the `week_read` scrub, the days they read,
   `medical` where `printsMedicalLine`; with no idea for this week the tile's
-  stand-in, `topAsked`; and Worth a reply, a link to Content's list with the
-  week's days and never a count) and Your moves (`topMoves`, widened with the
+  stand-in, `topAsked`; and Worth a reply, a link to the reply list's own
+  page, `repliesHref('week')`, with the week's days and never a count) and Your moves (`topMoves`, widened with the
   first `TOP_MOVES_LISTED` of `waitingAdvice`: the count, the first titles
   with the updates that raised them, and the move whose comparison may print
   with its verdict); and `monthClose`, only on the run that closes a month

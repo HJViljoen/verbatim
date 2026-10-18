@@ -1,6 +1,6 @@
 import { fmtInt } from '../format'
 import { MARKET_LONG_RUN_ANCHOR, marketMonthHref, marketSubjectHref, surface } from '../nav'
-import { CONTENT_PATH, daysLabel, REPLIES_ANCHOR, type TopAsked, type TopContent } from '../pages/v2/content'
+import { CONTENT_PATH, daysLabel, repliesHref, type TopAsked, type TopContent } from '../pages/v2/content'
 import { marketLongRunOf, subjectOwnRead } from '../pages/v2/market'
 import { compareMonths, RECORD_HREF, type TopMoves } from '../pages/v2/moves'
 import type { TopProducts } from '../pages/v2/products'
@@ -105,7 +105,9 @@ export function contentPart(top: TopContent | null | undefined, asked: TopAsked 
     read: ideas.length > 0 && idea ? idea.ideasWeek.read.label : null,
     medical: ideas.length > 0 && Boolean(idea?.medical),
     asked: question,
-    replies: { href: `${CONTENT_PATH}#${REPLIES_ANCHOR}`, days: replyDays(read) },
+    // The reply list's own page (Content's evidence page, 17 Oct), at the
+    // week, never the root card's anchor that old links land on.
+    replies: { href: repliesHref('week'), days: replyDays(read) },
     href: CONTENT_PATH,
   }
 }

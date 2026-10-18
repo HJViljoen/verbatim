@@ -144,7 +144,7 @@ export function ossurContent(over: Partial<WeeklyContentPart> = {}): WeeklyConte
     read: '21 Sep to 18 Oct',
     medical: true,
     asked: null,
-    replies: { href: '/dashboard/content#worth-a-reply', days: '12 to 18 Oct' },
+    replies: { href: '/dashboard/content/replies', days: '12 to 18 Oct' },
     href: '/dashboard/content',
     ...over,
   }
@@ -236,7 +236,7 @@ export function sealandPages(over: Partial<WeeklyPages> = {}): WeeklyPages {
     content: {
       ideas: [], read: null, medical: false,
       asked: { label: 'Questions about product details', week: 6, month: 8, weekWords: 'this week', monthWords: 'in October so far', href: '/dashboard/content#idea-slot-1' },
-      replies: { href: '/dashboard/content#worth-a-reply', days: '5 to 11 Oct' },
+      replies: { href: '/dashboard/content/replies', days: '5 to 11 Oct' },
       href: '/dashboard/content',
     },
     moves: {
