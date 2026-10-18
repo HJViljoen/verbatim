@@ -7,7 +7,7 @@ import { substituteFigures } from '@/lib/reports/cover'
 import type { FigureTable } from '@/lib/reports/types'
 import { BIGGEST_HEADING, WEEKLY_READ_TITLE, weeklyReadView, levelOneView, type LevelOneLead, type LevelOneRow, type LevelOneView, type ResolvedQuote, type WeeklyReadView } from '@/lib/reports/weekly-read'
 import { isLevelOne, staleWeeklyReadSnapshot, type WeeklyReadSnapshotData } from '@/lib/reports/weekly-read-build'
-import type { WeeklyReadLine } from '@/lib/reports/weekly-read-lines'
+import { pageLineNote, type WeeklyReadLine } from '@/lib/reports/weekly-read-lines'
 import { FLAG_WORDS, flagWordOf } from '@/components/v2/flag-chip'
 
 /**
@@ -177,10 +177,15 @@ export interface WeeklyReadReportProps {
   /** Level 1's mark: the yellow ditto, drawn on an ink tile (board E7).
    *  Absolute by default (`${appUrl}/brand/verbatim-mark-yellow.png`). */
   markOnInkSrc?: string
+  /** The workspace's market is medical (`printsMedicalLine(clientId)`): the
+   *  Content line prints the medical team line under its idea even where the
+   *  snapshot froze no note (one built before 18 Oct). Never twice. A
+   *  version 1 snapshot carries no lines, so this changes nothing there. */
+  medical?: boolean
 }
 
 /** The card itself, masthead to footer: the same in every frame. */
-export function WeeklyReadReport({ data, appUrl, markSrc, fullUrl = null, full = false, markOnInkSrc }: WeeklyReadReportProps) {
+export function WeeklyReadReport({ data, appUrl, markSrc, fullUrl = null, full = false, markOnInkSrc, medical = false }: WeeklyReadReportProps) {
   const stale = staleWeeklyReadSnapshot(data)
   const company = data.company || 'Your company'
   if (stale) {
@@ -200,7 +205,7 @@ export function WeeklyReadReport({ data, appUrl, markSrc, fullUrl = null, full =
   // viewer and the paper keep the report and add level 1's lead, rows and
   // page lines under the week's one line. A report (version 1) takes neither
   // branch and renders exactly as it was sent.
-  if (isLevelOne(data) && !full) return <LevelOneCard data={data} appUrl={appUrl} markSrc={markOnInkSrc} fullUrl={fullUrl} />
+  if (isLevelOne(data) && !full) return <LevelOneCard data={data} appUrl={appUrl} markSrc={markOnInkSrc} fullUrl={fullUrl} medical={medical} />
   const level = isLevelOne(data) ? onThePage(levelOneView(data.read, data.lines)) : null
   const v: WeeklyReadView = weeklyReadView(data.read)
   const mark = markSrc ?? `${appUrl}/brand/verbatim-mark-ink.png`
@@ -243,7 +248,7 @@ export function WeeklyReadReport({ data, appUrl, markSrc, fullUrl = null, full =
         ) : null}
 
         {/* Level 1's own parts, on the page (version 2 only). */}
-        {level ? <LevelOneOnPage view={level} appUrl={appUrl} /> : null}
+        {level ? <LevelOneOnPage view={level} appUrl={appUrl} medical={medical} /> : null}
 
         {/* 4 · What happened: the story, a quote after the paragraph it belongs to. */}
         {v.story.length > 0 ? (
@@ -572,29 +577,34 @@ function LineName({ line }: { line: WeeklyReadLine }) {
   return <>{line.name}</>
 }
 
-/** "Across your pages": the page's name, its line, its figure. */
-function PageRows({ lines, appUrl }: { lines: readonly WeeklyReadLine[]; appUrl: string }) {
+/** "Across your pages": the page's name, its line, its figure, and the
+ *  line's note under it (the tile's muted small type). */
+function PageRows({ lines, appUrl, medical = false }: { lines: readonly WeeklyReadLine[]; appUrl: string; medical?: boolean }) {
   return (
     <table width="100%" {...presentation} style={T}>
       <tbody>
-        {lines.map((line, i) => (
-          <tr key={line.page}>
-            <td style={{ padding: i === 0 ? '0 0 12px' : '12px 0', borderTop: i === 0 ? undefined : `1px solid ${L.rule}` }}>
-              <div style={{ fontFamily: FONT.sans, fontSize: 11.5, fontWeight: 600, lineHeight: '1.3', letterSpacing: '.06em', textTransform: 'uppercase', color: P.muted, marginBottom: 3 }}>{line.label}</div>
-              <div style={{ fontFamily: FONT.sans, fontSize: 14.5, lineHeight: '1.4', color: P.ink }}>
-                <a href={`${appUrl}${line.href}`} style={link}>{line.lead} <LineName line={line} /></a>
-              </div>
-              {line.figure ? <div data-copy="figure" style={{ ...mono, marginTop: 3 }}>{line.figure}</div> : null}
-            </td>
-          </tr>
-        ))}
+        {lines.map((line, i) => {
+          const note = pageLineNote(line, medical)
+          return (
+            <tr key={line.page}>
+              <td style={{ padding: i === 0 ? '0 0 12px' : '12px 0', borderTop: i === 0 ? undefined : `1px solid ${L.rule}` }}>
+                <div style={{ fontFamily: FONT.sans, fontSize: 11.5, fontWeight: 600, lineHeight: '1.3', letterSpacing: '.06em', textTransform: 'uppercase', color: P.muted, marginBottom: 3 }}>{line.label}</div>
+                <div style={{ fontFamily: FONT.sans, fontSize: 14.5, lineHeight: '1.4', color: P.ink }}>
+                  <a href={`${appUrl}${line.href}`} style={link}>{line.lead} <LineName line={line} /></a>
+                </div>
+                {line.figure ? <div data-copy="figure" style={{ ...mono, marginTop: 3 }}>{line.figure}</div> : null}
+                {note ? <div style={{ fontFamily: FONT.sans, fontSize: 12, lineHeight: '1.4', color: P.muted, marginTop: 4 }}>{note}</div> : null}
+              </td>
+            </tr>
+          )
+        })}
       </tbody>
     </table>
   )
 }
 
 /** Level 1's parts as the page prints them, under the week's one line. */
-function LevelOneOnPage({ view, appUrl }: { view: LevelOneView; appUrl: string }) {
+function LevelOneOnPage({ view, appUrl, medical }: { view: LevelOneView; appUrl: string; medical: boolean }) {
   return (
     <>
       {view.lead ? (
@@ -612,7 +622,7 @@ function LevelOneOnPage({ view, appUrl }: { view: LevelOneView; appUrl: string }
       {view.lines.length > 0 ? (
         <>
           <Divider />
-          <Band padding="26px 24px 22px"><div style={lab}>Across your pages</div><PageRows lines={view.lines} appUrl={appUrl} /></Band>
+          <Band padding="26px 24px 22px"><div style={lab}>Across your pages</div><PageRows lines={view.lines} appUrl={appUrl} medical={medical} /></Band>
         </>
       ) : null}
     </>
@@ -629,7 +639,7 @@ function Section({ children, first = false, padding = '24px 30px', align }: { ch
 }
 
 /** The level-1 email's card, masthead to footer (board E7). */
-function LevelOneCard({ data, appUrl, markSrc, fullUrl }: { data: WeeklyReadSnapshotData; appUrl: string; markSrc?: string; fullUrl: string | null }) {
+function LevelOneCard({ data, appUrl, markSrc, fullUrl, medical }: { data: WeeklyReadSnapshotData; appUrl: string; markSrc?: string; fullUrl: string | null; medical: boolean }) {
   const view = levelOneView(data.read, data.lines)
   const company = data.company
   const n = view.numbers
@@ -698,7 +708,7 @@ function LevelOneCard({ data, appUrl, markSrc, fullUrl }: { data: WeeklyReadSnap
                 {view.lines.length > 0 ? (
                   <Section>
                     <div style={lab}>Across your pages</div>
-                    <PageRows lines={view.lines} appUrl={appUrl} />
+                    <PageRows lines={view.lines} appUrl={appUrl} medical={medical} />
                   </Section>
                 ) : null}
 
@@ -742,7 +752,7 @@ export interface WeeklyReadEmailProps extends Omit<WeeklyReadReportProps, 'full'
 const FONTS_HREF = 'https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,500;1,400&display=swap'
 
 /** The email document: the card on the ground, centred, phone first. */
-export function WeeklyReadEmail({ data, appUrl, markSrc, markOnInkSrc, fullUrl, preheader }: WeeklyReadEmailProps) {
+export function WeeklyReadEmail({ data, appUrl, markSrc, markOnInkSrc, fullUrl, preheader, medical = false }: WeeklyReadEmailProps) {
   return (
     <html lang="en">
       <head>
@@ -758,7 +768,7 @@ export function WeeklyReadEmail({ data, appUrl, markSrc, markOnInkSrc, fullUrl, 
           <tbody>
             <tr>
               <td align="center" style={{ padding: '16px 0 24px' }}>
-                <WeeklyReadReport data={data} appUrl={appUrl} markSrc={markSrc} markOnInkSrc={markOnInkSrc} fullUrl={fullUrl} />
+                <WeeklyReadReport data={data} appUrl={appUrl} markSrc={markSrc} markOnInkSrc={markOnInkSrc} fullUrl={fullUrl} medical={medical} />
               </td>
             </tr>
           </tbody>
@@ -775,7 +785,7 @@ export function WeeklyReadEmail({ data, appUrl, markSrc, markOnInkSrc, fullUrl, 
  * prints at: A4, portrait, the column paginating as a document does, because
  * this report is one column to read down, not a deck of slides.
  */
-export function WeeklyReadPage({ data, appUrl, markSrc = '/brand/verbatim-mark-ink.png', print = false, fill = false }: Omit<WeeklyReadReportProps, 'full' | 'fullUrl'> & {
+export function WeeklyReadPage({ data, appUrl, markSrc = '/brand/verbatim-mark-ink.png', print = false, fill = false, medical = false }: Omit<WeeklyReadReportProps, 'full' | 'fullUrl'> & {
   print?: boolean
   /** The share page: the ground fills the window. */
   fill?: boolean
@@ -787,7 +797,7 @@ export function WeeklyReadPage({ data, appUrl, markSrc = '/brand/verbatim-mark-i
         <tbody>
           <tr>
             <td align="center">
-              <WeeklyReadReport data={data} appUrl={appUrl} markSrc={markSrc} full />
+              <WeeklyReadReport data={data} appUrl={appUrl} markSrc={markSrc} full medical={medical} />
             </td>
           </tr>
         </tbody>

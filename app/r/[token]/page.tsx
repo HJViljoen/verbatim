@@ -17,6 +17,7 @@ import { applyEdits, loadEdits } from '@/lib/reports/documents/edits'
 import { DocumentShareShell } from '@/components/share/document-share-shell'
 import { isWeeklyReadData } from '@/lib/reports/weekly-read-build'
 import { WeeklyReadPage } from '@/components/email/weekly-read'
+import { printsMedicalLine } from '@/lib/post-ideas/medical'
 import { BriefDeck } from '@/components/briefs/brief-deck'
 import { briefWordmarkFace } from '@/components/briefs/wordmark-face'
 import { FitWidth } from '@/components/reports/fit-width'
@@ -89,7 +90,7 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
   if (isWeeklyReadData(data)) {
     return (
       <main>
-        <WeeklyReadPage data={data} appUrl={APP_URL} fill />
+        <WeeklyReadPage data={data} appUrl={APP_URL} fill medical={printsMedicalLine(snapshot.client_id)} />
       </main>
     )
   }

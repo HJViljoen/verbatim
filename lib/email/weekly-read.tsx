@@ -30,10 +30,14 @@ export interface RenderWeeklyReadArgs {
   markSrc?: string
   /** Level 1's mark on its ink tile; absolute by default. */
   markOnInkSrc?: string
+  /** The workspace's market is medical (`printsMedicalLine(clientId)`): the
+   *  Content line prints the medical team line even where the snapshot froze
+   *  none. */
+  medical?: boolean
 }
 
 export function renderWeeklyReadEmail(a: RenderWeeklyReadArgs): { subject: string; html: string; text: string } {
   const preheader = a.data.subject.replace(/^[^:]*:\s*/, '')
-  const html = `<!doctype html>\n${renderStaticHtml(<WeeklyReadEmail data={a.data} appUrl={a.appUrl} markSrc={a.markSrc} markOnInkSrc={a.markOnInkSrc} fullUrl={a.shareUrl ?? null} preheader={preheader} />)}`
+  const html = `<!doctype html>\n${renderStaticHtml(<WeeklyReadEmail data={a.data} appUrl={a.appUrl} markSrc={a.markSrc} markOnInkSrc={a.markOnInkSrc} fullUrl={a.shareUrl ?? null} preheader={preheader} medical={a.medical ?? false} />)}`
   return { subject: a.data.subject, html, text: htmlToText(html) }
 }

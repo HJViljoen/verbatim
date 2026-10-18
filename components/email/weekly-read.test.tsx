@@ -3,6 +3,8 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { renderWeeklyReadEmail } from '@/lib/email/weekly-read'
+import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
+import type { WeeklyReadLine } from '@/lib/reports/weekly-read-lines'
 import { DIRECTION_WORDS, assertCopyContract, copyNodes } from '@/lib/test/copy-contract'
 import { markupText, render } from '@/lib/test/render'
 import { frozen, levelOneRead, olderRead, sealandFlag, sealandLines, sealandRead, sealandSnapshot, sealandUnusual, storedReportSnapshot } from '@/lib/test/weekly-read-fixture'
@@ -446,5 +448,70 @@ describe('level 1 on the page, the viewer and the paper', () => {
   })
   it('the paper is still A4 portrait', () => {
     expect(render(<WeeklyReadPage data={levelOne()} appUrl={APP} print />)).toContain('@page { size: 210mm 297mm')
+  })
+})
+
+// ---- The medical team line under the Content line (18 Oct) ----------------------------
+//
+// In a medical market every printed post idea carries `MEDICAL_LINE`, and the
+// Content line of "Across your pages" is a printed idea ("Post next: …"). A
+// snapshot built since 18 Oct freezes it as the line's note; one built before
+// (Össur's 18 Oct issue) gets it at render from the workspace
+// (`printsMedicalLine`, passed as `medical`). Once, under the line's figure;
+// never for Sealand; never on a version 1 snapshot, which has no lines.
+
+describe('the medical team line under the Content line', () => {
+  /** The page lines as a build since 18 Oct freezes them in a medical market. */
+  const noted = (): WeeklyReadLine[] => sealandLines().map((l) => (l.page === 'content' ? { ...l, note: MEDICAL_LINE } : l))
+  const count = (text: string) => text.split(MEDICAL_LINE).length - 1
+  const emailOf = (lines: WeeklyReadLine[], medical: boolean) => renderWeeklyReadEmail({ data: levelOne(levelOneRead(), lines), appUrl: APP, shareUrl: SHARE, medical })
+  const pageOf = (lines: WeeklyReadLine[], medical: boolean, print = false) => render(<WeeklyReadPage data={levelOne(levelOneRead(), lines)} appUrl={APP} fill={!print} print={print} medical={medical} />)
+
+  it('the email prints it once in a medical market, with a frozen note and without one, under the Content line\'s figure', () => {
+    for (const lines of [sealandLines(), noted()]) {
+      const out = emailOf(lines, true)
+      const t = markupText(out.html)
+      expect(count(t)).toBe(1)
+      expect(count(out.text)).toBe(1)
+      expectInOrder(t, ['Across your pages', 'Post next: Which bag fits a carry-on rule, and how to check', '7 videos this week · 16 in September so far', MEDICAL_LINE, 'Your moves'])
+      assertCopyContract(out.html)
+    }
+    // Email-safe: inline styles in the tile's muted small type, no class.
+    const html = emailOf(sealandLines(), true).html
+    expect(html).toMatch(new RegExp(`<div style="[^"]*font-size:12px;line-height:1\\.4;color:${WEEKLY_READ_PALETTE.muted}[^"]*">${MEDICAL_LINE.replace(/\./g, '\\.')}</div>`))
+    expect(html).not.toMatch(/class=/)
+  })
+
+  it('a snapshot that froze the note prints it once whatever the render is told', () => {
+    expect(count(markupText(emailOf(noted(), false).html))).toBe(1)
+    expect(count(markupText(pageOf(noted(), false)))).toBe(1)
+  })
+
+  it('the full page, the viewer and the paper print it once in a medical market, with a frozen note and without one', () => {
+    for (const lines of [sealandLines(), noted()]) {
+      for (const print of [false, true]) {
+        const html = pageOf(lines, true, print)
+        const t = markupText(html)
+        expect(count(t), `print ${print}`).toBe(1)
+        expectInOrder(t, ['Across your pages', 'Post next:', MEDICAL_LINE, 'Your moves', 'What happened'])
+        assertCopyContract(html)
+      }
+      expect(count(markupText(render(<WeeklyReadPage data={levelOne(levelOneRead(), lines)} appUrl="" medical />)))).toBe(1)
+    }
+  })
+
+  it('never for Sealand, and never where there is no Content line', () => {
+    expect(markupText(emailOf(sealandLines(), false).html)).not.toContain(MEDICAL_LINE)
+    expect(markupText(pageOf(sealandLines(), false))).not.toContain(MEDICAL_LINE)
+    expect(render(<WeeklyReadEmail data={levelOne()} appUrl={APP} fullUrl={SHARE} />)).not.toContain(MEDICAL_LINE)
+    const noContent = sealandLines().filter((l) => l.page !== 'content')
+    expect(markupText(emailOf(noContent, true).html)).not.toContain(MEDICAL_LINE)
+    expect(markupText(pageOf(noContent, true))).not.toContain(MEDICAL_LINE)
+  })
+
+  it('a stored report (version 1) renders byte for byte in a medical market too', () => {
+    expect(renderWeeklyReadEmail({ data: storedReportSnapshot(), appUrl: APP, shareUrl: `${APP}/r/tok`, attached: false, medical: true }).html).toBe(golden('email-sealand.html'))
+    expect(render(<WeeklyReadPage data={storedReportSnapshot()} appUrl={APP} fill medical />)).toBe(golden('page-sealand.html'))
+    expect(render(<WeeklyReadPage data={storedReportSnapshot()} appUrl={APP} print medical />)).toBe(golden('page-print.html'))
   })
 })

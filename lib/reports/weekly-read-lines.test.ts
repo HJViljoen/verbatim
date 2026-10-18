@@ -6,9 +6,10 @@ import { fixtureContentTop, fixtureMovesTop, fixtureProductsTop, fixtureVoicesTo
 import { UNTITLED_ADVICE } from '../pages/v2/advice-words'
 import { marketProductMonth, topProductsOf } from '../pages/v2/products'
 import { ossurProductRows, ossurProductsFixture, OSSUR_CATALOGUE, PRODUCTS_FIXTURES } from '../pages/v2/products-fixture'
+import { MEDICAL_LINE, printsMedicalLine } from '../post-ideas/medical'
 import { fakeDb } from '../test/fake-db'
 import { sealandRead } from '../test/weekly-read-fixture'
-import { contentLine, LINE_PAGES, movesLine, productsLine, voicesLine, weeklyReadLines } from './weekly-read-lines'
+import { contentLine, LINE_PAGES, movesLine, pageLineNote, productsLine, voicesLine, weeklyReadLines } from './weekly-read-lines'
 import { loadWeeklyReadLines } from './weekly-read-lines-load'
 
 // "Across your pages" (depth v2, T11b; Phase 4 fix round): one line per page
@@ -90,6 +91,35 @@ describe('the lines, from the pages\' tops', () => {
     expect(contentLine(fixtureContentTop())?.figure).not.toMatch(/last full month/)
     const lines = weeklyReadLines({ voices, products: fixtureProductsTop('ready', { september: true }), content: fixtureContentTop(), moves: fixtureMovesTop('member', { september: true }) })
     expect(lines.filter((l) => /last full month/.test(`${l.lead} ${l.figure ?? ''}`)).map((l) => l.page)).toEqual(['voices', 'products'])
+  })
+
+  // In a medical market the Content tile prints the medical team line under
+  // its idea (`idea.medical`, `printsMedicalLine`), and so does its line:
+  // frozen into the snapshot as the line's note (18 Oct, Össur's first ideas).
+  it('the Content line carries the medical team line where the tile\'s idea is medical, and only there', () => {
+    expect(printsMedicalLine(OSSUR_CLIENT_ID)).toBe(true)
+    expect(printsMedicalLine(SEALAND_CLIENT_ID)).toBe(false)
+    expect(contentLine(fixtureContentTop('ready', { medical: true }))?.note).toBe(MEDICAL_LINE)
+    expect(contentLine(fixtureContentTop('ready', { medical: false }))?.note).toBeNull()
+    // No other page's line carries one, medical market or not.
+    const lines = weeklyReadLines({ voices: fixtureVoicesTop(), products: fixtureProductsTop(), content: fixtureContentTop('ready', { medical: true }), moves: fixtureMovesTop('member') })
+    expect(lines.filter((l) => l.note).map((l) => [l.page, l.note])).toEqual([['content', MEDICAL_LINE]])
+    // A line dropped for any reason carries nothing: the note never prints alone.
+    expect(contentLine(fixtureContentTop('older', { medical: true }))).toBeNull()
+  })
+
+  it('at render, a Content line frozen without its note still gets the medical team line in a medical market; never twice, never elsewhere', () => {
+    const frozen = contentLine(fixtureContentTop('ready', { medical: true }))!
+    const before = { ...frozen, note: undefined }
+    // A snapshot built after the fix: its own note, whatever the market reads.
+    expect(pageLineNote(frozen, true)).toBe(MEDICAL_LINE)
+    expect(pageLineNote(frozen, false)).toBe(MEDICAL_LINE)
+    // One built before it (Össur's 18 Oct issue): the workspace's market.
+    expect(pageLineNote(before, true)).toBe(MEDICAL_LINE)
+    expect(pageLineNote({ ...before, note: null }, true)).toBe(MEDICAL_LINE)
+    expect(pageLineNote(before, false)).toBeNull()
+    // Never under another page's line.
+    for (const line of [voicesLine(fixtureVoicesTop()), productsLine(fixtureProductsTop()), movesLine(fixtureMovesTop('member'))]) expect(pageLineNote(line!, true), line!.page).toBeNull()
   })
 
   it('one video is a video', () => {

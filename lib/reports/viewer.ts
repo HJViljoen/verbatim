@@ -40,6 +40,9 @@ export interface ViewerSnapshot {
   /** The reports row this build came from; null for a build made on the
    *  command line, which has no report to open in the Studio. */
   reportId: string | null
+  /** The workspace that built it (the weekly read's medical team line,
+   *  `printsMedicalLine`). */
+  clientId: string
 }
 
 interface ArtifactLite { id: string; format: string; version: number }
@@ -69,6 +72,7 @@ export async function loadViewerSnapshot(admin: SupabaseClient, clientId: string
     builtAt: row.created_at,
     artifactId: pdf?.id ?? null,
     reportId: row.report_id,
+    clientId: row.client_id,
   }
 
   const raw = await hydrateSnapshot(admin, row)

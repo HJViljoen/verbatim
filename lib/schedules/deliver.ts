@@ -28,6 +28,7 @@ import { isLongRunData, loadWeekRead } from '../written/store'
 import { MARKET_LONG_RUN_ANCHOR, marketMonthHref } from '../nav'
 import type { LongRunReadData } from '../written/types'
 import { renderWeeklyReadEmail } from '../email/weekly-read'
+import { printsMedicalLine } from '../post-ideas/medical'
 import type { ReportSnapshotData } from '../reports/types'
 import { hydrateSnapshot, loadSnapshot } from '../snapshots'
 import { claimDecision, pruneInlineImages, type ExistingSend } from './claim'
@@ -389,7 +390,7 @@ export async function deliverSend(a: DeliverArgs): Promise<DeliverResult> {
       inline.push({ filename: `${k}.png`, content: rendered![i + 1].buffer, contentType: 'image/png', contentId: cid })
     })
     const email = weeklyRead
-      ? renderWeeklyReadEmail({ data: weeklyRead, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
+      ? renderWeeklyReadEmail({ data: weeklyRead, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf, medical: printsMedicalLine(schedule.client_id) })
       : monthly
       ? renderMonthlyEmail({ data: monthly, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
       : weekly

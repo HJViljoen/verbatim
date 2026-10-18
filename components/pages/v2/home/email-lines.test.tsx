@@ -6,6 +6,7 @@ import type { TileRead } from '@/lib/pages/v2/home'
 import { topProductsOf } from '@/lib/pages/v2/products'
 import { ossurProductsFixture } from '@/lib/pages/v2/products-fixture'
 import { contentLine, movesLine, productsLine, voicesLine, type WeeklyReadLine } from '@/lib/reports/weekly-read-lines'
+import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
 import { barMonth } from '@/lib/reading/month-label'
 import { decodeEntities, markupText, render } from '@/lib/test/render'
 import { ContentTileView } from './content-tile'
@@ -80,6 +81,16 @@ describe('each page line equals its Dashboard tile', () => {
     expect(text).toContain('48 of 640 videos, 14 Sep to 11 Oct')
     expect(text).toContain('35 of 318 in October so far')
     expect(line!.figure).toContain('14 Sep to 11 Oct')
+  })
+
+  it('Content: the medical team line under the idea in a medical market, on the tile and in the line alike', () => {
+    for (const medical of [true, false]) {
+      const top = fixtureContentTop('ready', { medical })
+      const line = contentLine(top)
+      const text = expectLineIsTile(line, <ContentTileView read={ok(top)} />)
+      expect(text.includes(MEDICAL_LINE), `medical ${medical}`).toBe(medical)
+      expect(line!.note ?? null).toBe(medical ? MEDICAL_LINE : null)
+    }
   })
 
   it('Content: the four weeks only with their month, on the tile and in the line alike; an older set\'s beside its own month', () => {

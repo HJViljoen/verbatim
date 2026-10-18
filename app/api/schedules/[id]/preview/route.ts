@@ -15,6 +15,7 @@ import { isQuarterlyData } from '@/lib/reports/quarterly-build'
 import { renderQuarterlyEmail } from '@/lib/email/quarterly'
 import { isWeeklyReadData } from '@/lib/reports/weekly-read-build'
 import { renderWeeklyReadEmail } from '@/lib/email/weekly-read'
+import { printsMedicalLine } from '@/lib/post-ideas/medical'
 import { runSchedule } from '@/lib/schedules/run'
 import { mayReadHeld } from '@/lib/reports/held'
 import { isMissingPublishColumns, onPlatform, type PlatformSendState } from '@/lib/schedules/platform-state'
@@ -87,7 +88,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     // The weekly read: the email exactly as it goes (or went) out, which is
     // what the operator reads on a held send before pressing Send.
     if (isWeeklyReadData(data)) {
-      return page(renderWeeklyReadEmail({ data, shareUrl, appUrl: appBaseUrl(), attached: s.attach_pdf }).html)
+      return page(renderWeeklyReadEmail({ data, shareUrl, appUrl: appBaseUrl(), attached: s.attach_pdf, medical: printsMedicalLine(row.client_id) }).html)
     }
     if (isMonthlyData(data)) {
       return page(renderMonthlyEmail({ data, shareUrl, appUrl: appBaseUrl(), attached: s.attach_pdf }).html)

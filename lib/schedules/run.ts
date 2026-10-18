@@ -29,6 +29,7 @@ import { quarterlyBlocksFor } from '../../components/blocks/quarterly'
 import { sendsBlockArtefact, sendsMonthly, sendsQuarterly, sendsWeekly, sendsWeeklyRead } from './artefact'
 import { snapshotWeeklyRead, WeeklyReadNotReadyError, type WeeklyReadSnapshotData } from '../reports/weekly-read-build'
 import { renderWeeklyReadEmail } from '../email/weekly-read'
+import { printsMedicalLine } from '../post-ideas/medical'
 import { alertWeeklyRead } from './weekly-read-alert'
 import { deliverSend, readyForReview } from './deliver'
 import { resolveScheduleReport } from './resolve'
@@ -475,7 +476,7 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
     const monthlyForEmail = monthly ? (snap.data as MonthlySnapshot) : null
     const renderEmail = (shareUrl: string | null, images?: Record<string, string>) =>
       weeklyRead
-        ? renderWeeklyReadEmail({ data: snap.data as WeeklyReadSnapshotData, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
+        ? renderWeeklyReadEmail({ data: snap.data as WeeklyReadSnapshotData, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf, medical: printsMedicalLine(schedule.client_id) })
         : monthlyForEmail
         ? renderMonthlyEmail({ data: monthlyForEmail, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
         : quarterly

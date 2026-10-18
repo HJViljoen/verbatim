@@ -27,6 +27,7 @@ import type { ReportSnapshotData } from '@/lib/reports/types'
 import { MethodNote, type MethodNoteData } from '@/components/print/method-note'
 import { isWeeklyReadData } from '@/lib/reports/weekly-read-build'
 import { WeeklyReadPage } from '@/components/email/weekly-read'
+import { printsMedicalLine } from '@/lib/post-ideas/medical'
 import { BriefDeck } from '@/components/briefs/brief-deck'
 import { briefWordmarkFace } from '@/components/briefs/wordmark-face'
 import { isMonthlyBriefData } from '@/lib/reports/briefs/types'
@@ -163,7 +164,7 @@ export default async function RenderPage({
       if (token.tileKey) notFound()
       return (
         <PrintRoot style={style}>
-          <WeeklyReadPage data={data} appUrl={appBaseUrl()} print />
+          <WeeklyReadPage data={data} appUrl={appBaseUrl()} print medical={printsMedicalLine(row.client_id)} />
         </PrintRoot>
       )
     }

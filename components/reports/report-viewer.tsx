@@ -12,6 +12,7 @@ import { MonthlyDeck } from '@/components/print/monthly-deck'
 import { QuarterlyDeck } from '@/components/print/quarterly-deck'
 import { isWeeklyReadData } from '@/lib/reports/weekly-read-build'
 import { WeeklyReadPage } from '@/components/email/weekly-read'
+import { printsMedicalLine } from '@/lib/post-ideas/medical'
 import type { ViewerSnapshot } from '@/lib/reports/viewer'
 import type { ReportSnapshotData } from '@/lib/reports/types'
 import { STUDIO_HREF } from '@/lib/studio-visibility'
@@ -55,7 +56,7 @@ export function ReportViewer({ snapshot, closeHref, showStudio = false }: { snap
         : isQuarterlyData(data)
           ? <QuarterlyDeck data={data} date={date} />
           : isWeeklyReadData(data)
-            ? <WeeklyReadPage data={data} appUrl="" />
+            ? <WeeklyReadPage data={data} appUrl="" medical={printsMedicalLine(snapshot.clientId)} />
             : <ReportDeck data={data as ReportSnapshotData} date={date} />
 
   return (

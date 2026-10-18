@@ -3,7 +3,7 @@
 // design (Weekly-v3), with no database and no network.
 //
 //   node --import tsx scripts/weekly-read-email.ts --read <read.json> --out <email.html> \
-//     [--quotes-from <dry-run.md>] [--company Sealand] [--run <uuid>] [--app <url>]
+//     [--quotes-from <dry-run.md>] [--company Sealand] [--client <uuid>] [--run <uuid>] [--app <url>]
 //
 // --read       a stored read: scripts/week-read.ts's JSON ({ status, data, … }),
 //              or a `week_reads.data` value on its own. Quotes are refs there.
@@ -13,6 +13,8 @@
 //              line. Without it a quote has no words and prints no panel, as a
 //              withdrawn one would.
 // --company    the name the masthead and "What it means for" print (Sealand).
+// --client     the workspace's id: in a medical market (`printsMedicalLine`)
+//              the Content line prints the medical team line, as a send does.
 // --app        where the email's links point (https://app.verbatimintel.com).
 // --share      the share link "Read this week in full" leads to, as a send
 //              mints one (default <app>/r/preview).
@@ -35,6 +37,7 @@ import { createElement } from 'react'
 import { WeeklyReadPage } from '../components/email/weekly-read'
 import { renderStaticHtml } from '../lib/email/render-html'
 import { renderWeeklyReadEmail } from '../lib/email/weekly-read'
+import { printsMedicalLine } from '../lib/post-ideas/medical'
 import { resolveQuotes } from '../lib/renderables/quotes-freeze'
 import { weekReadSendState } from '../lib/reports/weekly-read'
 import { WEEKLY_READ_REPORT_VERSION, weeklyReadSnapshotData } from '../lib/reports/weekly-read-build'
@@ -84,11 +87,12 @@ function main(): void {
   const mark = `data:image/png;base64,${readFileSync(resolve(process.cwd(), 'public/brand/verbatim-mark-ink.png')).toString('base64')}`
   const markOnInk = `data:image/png;base64,${readFileSync(resolve(process.cwd(), 'public/brand/verbatim-mark-yellow.png')).toString('base64')}`
   const app = flag('app', 'https://app.verbatimintel.com')
-  const email = renderWeeklyReadEmail({ data, appUrl: app, markSrc: mark, markOnInkSrc: markOnInk, shareUrl: flag('share', `${app}/r/preview`) })
+  const medical = printsMedicalLine(flag('client'))
+  const email = renderWeeklyReadEmail({ data, appUrl: app, markSrc: mark, markOnInkSrc: markOnInk, shareUrl: flag('share', `${app}/r/preview`), medical })
   writeFileSync(resolve(process.cwd(), outPath), email.html)
   const pageOut = flag('page-out')
   if (pageOut) {
-    const body = renderStaticHtml(createElement(WeeklyReadPage, { data, appUrl: app, markSrc: mark, fill: true }))
+    const body = renderStaticHtml(createElement(WeeklyReadPage, { data, appUrl: app, markSrc: mark, fill: true, medical }))
     const doc = `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${data.title}</title><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,500;1,400&display=swap" rel="stylesheet"></head><body style="margin:0">${body}</body></html>`
     writeFileSync(resolve(process.cwd(), pageOut), doc)
     console.log(`Wrote ${pageOut} (the share page)`)

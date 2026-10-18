@@ -5,6 +5,7 @@ import type { TopMoves } from '../pages/v2/moves'
 import type { TopProducts } from '../pages/v2/products'
 import type { TopVoices } from '../pages/v2/voices'
 import { streakLabel, UNTITLED_ADVICE } from '../pages/v2/advice-words'
+import { MEDICAL_LINE } from '../post-ideas/medical'
 import { scrubProse, type ProseSlot } from '../prose/scrub'
 import { inlineMonth } from '../reading/month-label'
 
@@ -36,6 +37,14 @@ import { inlineMonth } from '../reading/month-label'
 // title the scrub empties drops the line; and an idea from an older week
 // (the tile prints it under a line saying so) gives no line, because the
 // email is about this week.
+//
+// AND ONE PLACE IT CARRIES WHAT THE TILE CARRIES: in a medical market the
+// Content line's idea is a post idea like the tile's, so it carries the
+// medical team line under it (`MEDICAL_LINE`, where the tile's idea is
+// `medical`, `printsMedicalLine`), frozen into the snapshot as the line's
+// `note`. A snapshot frozen before the note existed gets it at render
+// instead, from the workspace (`pageLineNote` below, drawn by `PageRows` in
+// components/email/weekly-read.tsx with `medical`), never twice.
 
 /** The pages a line can be about, in the board's order. */
 export const LINE_PAGES = ['voices', 'products', 'content', 'moves'] as const satisfies readonly NavKey[]
@@ -64,6 +73,10 @@ export interface WeeklyReadLine {
   copy: LineNameCopy
   /** Code's figure under it, or null. */
   figure: string | null
+  /** Code's line under the figure, or null: the medical team line under a
+   *  post idea in a medical market (`MEDICAL_LINE`). Absent on every line
+   *  frozen before 18 Oct and on every page but Content. */
+  note?: string | null
 }
 
 /** Each page's tile data, as the Dashboard reads it. */
@@ -113,7 +126,8 @@ export function productsLine(top: TopProducts | null | undefined): WeeklyReadLin
 }
 
 /** Content: this week's first post idea, its videos over the days the
- *  ideas read beside its month, as the tile counts them. */
+ *  ideas read beside its month, as the tile counts them; in a medical market
+ *  the medical team line under it, as the tile prints it. */
 export function contentLine(top: TopContent | null | undefined): WeeklyReadLine | null {
   const idea = top?.state === 'ready' ? top.idea : null
   if (!top || !idea || !idea.ideasWeek.current) return null
@@ -129,6 +143,7 @@ export function contentLine(top: TopContent | null | undefined): WeeklyReadLine 
   return {
     page: 'content', label: surface('content').label, href: top.href,
     lead: 'Post next:', name: title, copy: { kind: 'prose' }, figure,
+    note: idea.medical ? MEDICAL_LINE : null,
   }
 }
 
@@ -145,6 +160,16 @@ export function movesLine(top: TopMoves | null | undefined): WeeklyReadLine | nu
     copy: a.title === UNTITLED_ADVICE ? { kind: 'plain' } : { kind: 'stored', slot: 'pass_d_b_recommendation' },
     figure: streak > 0 ? `${fmtInt(streak)} ${streakLabel(h)}` : null,
   }
+}
+
+/** The line printed under a page line's figure: the one the snapshot froze
+ *  (`note`), else, for the Content line in a medical market
+ *  (`printsMedicalLine`), the medical team line, which a snapshot frozen
+ *  before the note existed does not carry. One line at most, so a frozen
+ *  note and the workspace's market never print it twice. Pure. */
+export function pageLineNote(line: Pick<WeeklyReadLine, 'page' | 'note'>, medical: boolean): string | null {
+  if (line.note) return line.note
+  return medical && line.page === 'content' ? MEDICAL_LINE : null
 }
 
 /** The level-1 email's lines, one per page that has something, in the

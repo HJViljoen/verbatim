@@ -1026,7 +1026,17 @@ This version has breaking changes — APIs, conventions, and file structure may 
   failed read, a table not there yet or a switch off gives no line. The line
   is stricter than its tile in two ways, and only by leaving itself out: a
   post idea's title goes through the written read's scrub (`week_read`), and
-  an idea from an older week gives no line. Each line's month is its tile's:
+  an idea from an older week gives no line. And it carries what its tile
+  carries: in a medical market (`printsMedicalLine`) the Content line prints
+  `MEDICAL_LINE` under its figure, as the tile does under its idea (18 Oct,
+  Össur's first ideas). `contentLine` freezes it as the line's `note` where
+  the tile's idea is `medical`; a snapshot frozen before then has no note, so
+  every renderer (`renderWeeklyReadEmail` from `runSchedule`, `deliverSend`
+  and the preview; `WeeklyReadPage` on the share page, `/render` and the
+  viewer) passes `medical: printsMedicalLine(<the snapshot's or schedule's
+  client>)` and `pageLineNote` prints the line from it, once, never twice and
+  never under another page's line. A version 1 snapshot has no lines and
+  renders byte for byte. Each line's month is its tile's:
   the reading month for Voices and Your products (`loadReadingMonth`), and
   for Content the month its idea week is restated against (`contentMonth`,
   the `readingMonthOf` rule over the anchor week). Content's line states the
