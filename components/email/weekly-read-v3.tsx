@@ -536,10 +536,13 @@ function MonthClose({ view, appUrl }: { view: WeeklyV3View; appUrl: string }) {
 const LONG_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 const longMonthOf = (m: string): string => LONG_MONTHS[Number(m.slice(5, 7)) - 1] ?? m
 
-/** A part's own month at its head, only where it is not the section's (a
- *  whole-month reading of another month carries its label, decision 3). */
-const ownMonth = (month: string | null | undefined, words: string, label: string | null | undefined, sectionMonth: string): string | null =>
-  sameMonth(month, sectionMonth) ? null : words ? barMonth(words, label) : null
+/** A part's own month at its head: where it is not the section's, and
+ *  wherever it carries `readingMonthLabel`'s words (decision 3: a whole-month
+ *  reading of a month that is not the current calendar month says so, which
+ *  is the case on the issue that closes a month, whose section is that same
+ *  month: "October · the last full month"). */
+export const ownMonth = (month: string | null | undefined, words: string, label: string | null | undefined, sectionMonth: string): string | null =>
+  !words ? null : label ? barMonth(words, label) : sameMonth(month, sectionMonth) ? null : words
 
 /** "Ideas, replies and advice": what the last section holds, in a few words. */
 function nextNote(content: WeeklyContentPart | null, moves: WeeklyMovesPart | null): string {
@@ -1094,12 +1097,12 @@ function subjectsNote(v: WeeklyV3View): string {
 
 /** The Voices card: the group in the most videos, its share of the month's
  *  videos as a bar, its one-liner, the other groups, the brands named most. */
-function VoicesCard({ part, sectionMonth, appUrl, print, wide = false }: { part: WeeklyVoicesPart; sectionMonth: string; appUrl: string; print: boolean; wide?: boolean }) {
+function VoicesCard({ part, appUrl, print, wide = false }: { part: WeeklyVoicesPart; appUrl: string; print: boolean; wide?: boolean }) {
   const g = part.group!
   const share = part.videos ? Math.max(2, Math.min(100, Math.round((g.videos / part.videos) * 1000) / 10)) : null
-  // A whole-month reading: its month, labelled where it is not the current
-  // one (decision 3); the section's own words where it is the read's month.
-  const month = sameMonth(part.month, sectionMonth) ? part.monthWords : barMonth(part.monthWords, part.monthLabel)
+  // A whole-month reading: its month, labelled wherever it is not the
+  // current calendar month (decision 3).
+  const month = barMonth(part.monthWords, part.monthLabel)
   return (
     <article className={print ? 'w3-pc' : `w3-card w3-pcard${wide ? ' w3-wide' : ''}`}>
       <div className="w3-chead">
@@ -1275,10 +1278,10 @@ export function WeeklyV3Page({ data, appUrl, print = false, fill = false, medica
   const products = v.pages.products ?? null
   const content = v.pages.content ?? null
   const moves = v.pages.moves ?? null
-  const productsMonth = products ? (sameMonth(products.month, data.read.month) ? products.monthWords : barMonth(products.monthWords, products.monthLabel)) : ''
+  const productsMonth = products ? barMonth(products.monthWords, products.monthLabel) : ''
   // Two to a row; an odd last card takes the row (screen only).
   const makers = [
-    voices ? (wide: boolean) => <VoicesCard key="voices" part={voices} sectionMonth={data.read.month} appUrl={appUrl} print={print} wide={wide} /> : null,
+    voices ? (wide: boolean) => <VoicesCard key="voices" part={voices} appUrl={appUrl} print={print} wide={wide} /> : null,
     products ? (wide: boolean) => <ProductsCard key="products" part={products} appUrl={appUrl} print={print} monthWords={productsMonth} wide={wide} /> : null,
     content ? (wide: boolean) => <ContentCard key="content" part={content} appUrl={appUrl} print={print} medical={medical} wide={wide} /> : null,
     moves ? (wide: boolean) => <MovesCard key="moves" part={moves} appUrl={appUrl} print={print} wide={wide} /> : null,
@@ -1315,7 +1318,7 @@ export function WeeklyV3Page({ data, appUrl, print = false, fill = false, medica
     <div className={print ? 'w3-group' : undefined} style={print ? undefined : { display: 'contents' }}>
       <div className="w3-sec"><h2>Across your pages</h2><span className="w3-note">Each opens its page in Verbatim</span></div>
       {print
-        ? <PrintPages voices={voices} products={products} content={content} moves={moves} v={v} appUrl={appUrl} medical={medical} productsMonth={productsMonth} />
+        ? <PrintPages voices={voices} products={products} content={content} moves={moves} appUrl={appUrl} medical={medical} productsMonth={productsMonth} />
         : <div className="w3-grid">{cards}</div>}
     </div>
   ) : null
@@ -1381,17 +1384,16 @@ export function WeeklyV3Page({ data, appUrl, print = false, fill = false, medica
 
 /** Across your pages on paper: Voices beside Your products, what to post
  *  next beside the categories, then the advice across. */
-function PrintPages({ voices, products, content, moves, v, appUrl, medical, productsMonth }: {
+function PrintPages({ voices, products, content, moves, appUrl, medical, productsMonth }: {
   voices: WeeklyVoicesPart | null
   products: WeeklyProductsPart | null
   content: WeeklyContentPart | null
   moves: WeeklyMovesPart | null
-  v: WeeklyV3View
   appUrl: string
   medical: boolean
   productsMonth: string
 }) {
-  const left = [voices ? <VoicesCard key="v" part={voices} sectionMonth={v.month} appUrl={appUrl} print /> : null, content ? <ContentCard key="c" part={content} appUrl={appUrl} print medical={medical} /> : null].filter(Boolean)
+  const left = [voices ? <VoicesCard key="v" part={voices} appUrl={appUrl} print /> : null, content ? <ContentCard key="c" part={content} appUrl={appUrl} print medical={medical} /> : null].filter(Boolean)
   return (
     <>
       <div className="w3-cols">
