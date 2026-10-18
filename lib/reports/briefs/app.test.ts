@@ -9,11 +9,12 @@ import { ossurTodayFixture } from '../../pages/v2/products-fixture'
 import { ossurVoicesFixture, sealandVoicesFixture } from '../../pages/v2/voices-fixture'
 import type { GroupProducts } from '../../pages/v2/voices'
 import type { Verdict } from '../../reading/verdicts'
+import { fact } from '../../written/test-fixtures'
 import {
-  briefVerdict, buyersSection, groupsSection, hooksOf, hooksSection, ideasOf, ideasSection, moveOf, movesOf, movesSection, namedNotes, namedOf, namedSection,
-  peopleOf, productsOf, productsSection, RESPONSE_BASIS, standoutOf, subjectWords,
+  appSectionsFor, briefVerdict, buyersSection, groupsSection, hooksOf, hooksSection, ideasOf, ideasSection, moveOf, movesOf, movesSection, namedNotes, namedOf, namedSection,
+  peopleOf, productsOf, productsSection, RESPONSE_BASIS, standoutOf, subjectsSection, subjectWords,
 } from './app'
-import { OSSUR_MOVES, OSSUR_PEOPLE, SEALAND_NAMED } from './app-fixture'
+import { OSSUR_APP, OSSUR_MOVES, OSSUR_PEOPLE, OSSUR_SUBJECT_FACTS, OSSUR_SUBJECT_READS, SEALAND_APP, SEALAND_NAMED } from './app-fixture'
 import {
   adviceDetail, alsoInMarket, appLines, buyersSub, daysLong, ideaReadLine, inTheirVideos, moveLine, multipleText, ownTouchWords, pageHref, recordLine, slotWords, voicesMonthHref,
 } from './app-words'
@@ -309,5 +310,20 @@ describe('every page links to its page in the app, with the month', () => {
     expect(pageHref('leadership.holds', OCT)).toBe(`${surface('market').href}?period=month&month=2026-10#long-run`)
     expect(pageHref('sales.stops', OCT)).toBe(`${surface('market').href}?period=month&month=2026-10`)
     expect(voicesMonthHref(OCT)).toBe('/dashboard/voices?month=2026-10')
+  })
+})
+
+describe('the pages each role reads from the app (`appSectionsFor`, the compose step\'s and --pages\')', () => {
+  it('each role\'s, in the canvas\'s order; with no writer, a subject with no read of its own is held, never a bare name', () => {
+    expect(appSectionsFor('leadership', { company: 'Össur', app: OSSUR_APP, subjects: null, vectors: null }).map((s) => s.key)).toEqual(['leadership.groups', 'leadership.moves'])
+    expect(appSectionsFor('marketing', { company: 'Sealand', app: SEALAND_APP, subjects: null, vectors: null }).map((s) => s.key)).toEqual(['marketing.named'])
+    expect(appSectionsFor('content', { company: 'Össur', app: null, subjects: null, vectors: null })).toEqual([])
+    const subjects = OSSUR_SUBJECT_FACTS.map((f) => ({ id: f.id, fact: fact({ subjectId: f.subjectId, name: f.name, calibration: 'ready', level: { k: f.k, n: 902 }, rank: f.rank }) }))
+    const r = subjectsSection({ month: OCT, subjects, reads: OSSUR_SUBJECT_READS.slice(0, 4), sentenceOf: () => '', voiceOf: () => null, panel: {} })
+    expect(r.section!.groups[0].items.map((i) => i.title)).toEqual(['Community & encouragement', 'Function & movement', 'Cost & access', 'Fit & comfort'])
+    expect(r.held.map((h) => h.what)).toEqual(['subject: Look & style', 'subject: Choosing the right device'])
+    // U6: a subject whose check is open is never on the page.
+    const open = subjectsSection({ month: OCT, subjects: subjects.map((s) => ({ ...s, fact: { ...s.fact, calibration: 'provisional' as const } })), reads: OSSUR_SUBJECT_READS, sentenceOf: () => 'x', voiceOf: () => null, panel: {} })
+    expect(open.section).toBeNull()
   })
 })

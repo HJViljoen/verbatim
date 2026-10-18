@@ -4,7 +4,7 @@
 // steps existed (September 2026: scripts/backfill-briefs-september.sh).
 //
 //   node --env-file=.env.local --import tsx scripts/monthly-briefs.ts \
-//     --client <uuid> --month YYYY-MM --run <uuid> [--out <dir>] [--designed <dir>] [--plan] [--write [--replace] [--from <dir>]]
+//     --client <uuid> --month YYYY-MM --run <uuid> [--out <dir>] [--designed <dir>] [--plan | --pages] [--write [--replace] [--from <dir>]]
 //
 // --run is the run that closed the month: the briefs are stored under it, as
 // the pipeline stores them under its own run.
@@ -30,6 +30,18 @@
 // --plan makes no model call and reads a handful of rows: the probe, whether
 // the ledger is there, whether the month is written, and the run's window.
 // Run it first: it says what --write would do, for nothing.
+//
+// --pages makes NO model call either: it reads the month's inputs (what
+// \`plan-briefs\` reads, the October canvas's pages read from the app among
+// them, once) and draws ONLY those pages, each role's behind its cover, into
+// --designed (default ~/Documents/Heinrich/Verbatim/Briefs-YYYY-MM-pages/
+// <tenant>/): Where the market stands from the stored subject reads, Who is in
+// your market, Your moves (its advice unfolded: the fold rides the compose
+// step's embedding batch, which --pages does not make), Who is buying, Your
+// products, Who gets named without being asked, What to post next and Hooks
+// and formats. Nothing is written to any database. It is how the month's
+// app pages are seen with real data before the set is written, for nothing
+// but the reads; a page it leaves out says why.
 //
 // --write builds and stores: each brief that prints as its report snapshot
 // (quotes as refs, frozen), and the month's four `monthly_briefs` rows, ready
@@ -80,7 +92,9 @@ import { canvasOf } from '../lib/reports/briefs/canvas'
 import { BRIEF_AFTER_RESEARCH_USD, BRIEF_SET_BUDGET_USD } from '../lib/reports/briefs/step'
 import { SAVED_SET_FILE, checkSavedSet, savedSetOf, type SavedFile } from '../lib/reports/briefs/saved'
 import { briefPrints, monthBriefsWritten, monthlyBriefsApplied, storeBriefSet } from '../lib/reports/briefs/store'
-import { BRIEF_NAME, BRIEF_ROLES, type BriefRole, type MonthlyBriefData } from '../lib/reports/briefs/types'
+import { BRIEF_NAME, BRIEF_ROLES, storedBrief, type BriefRole, type MonthlyBriefData } from '../lib/reports/briefs/types'
+import { appSectionsFor, subjectsSection } from '../lib/reports/briefs/app'
+import { marketKinds } from '../lib/reports/briefs/compose'
 import { closesMonth, endedMonthOf, themedRunAsOf } from '../lib/written/longrun'
 
 const args = process.argv.slice(2)
@@ -90,7 +104,7 @@ const flag = (name: string, fallback = ''): string => {
 }
 const has = (name: string): boolean => args.includes(`--${name}`)
 for (const a of args) {
-  if (a.startsWith('--') && !['client', 'month', 'run', 'out', 'designed', 'plan', 'write', 'replace', 'from'].includes(a.slice(2))) {
+  if (a.startsWith('--') && !['client', 'month', 'run', 'out', 'designed', 'plan', 'pages', 'write', 'replace', 'from'].includes(a.slice(2))) {
     console.error(`unknown flag: ${a}`)
     process.exit(2)
   }
@@ -128,7 +142,7 @@ async function main() {
   const runId = flag('run')
   const fromDir = flag('from')
   if (!/^[0-9a-f-]{36}$/.test(clientId) || !/^\d{4}-\d{2}$/.test(monthArg) || !/^[0-9a-f-]{36}$/.test(runId) || (has('from') && !fromDir)) {
-    console.error('Usage: scripts/monthly-briefs.ts --client <uuid> --month YYYY-MM --run <uuid> [--out <dir>] [--designed <dir>] [--plan] [--write [--replace] [--from <dir>]]')
+    console.error('Usage: scripts/monthly-briefs.ts --client <uuid> --month YYYY-MM --run <uuid> [--out <dir>] [--designed <dir>] [--plan | --pages] [--write [--replace] [--from <dir>]]')
     process.exit(2)
   }
   if (fromDir && (!has('write') || has('plan'))) {
@@ -151,6 +165,10 @@ async function main() {
   if (write && written && !has('replace')) {
     console.error(`${longMonth(month)}'s briefs are written already. Pass --replace to write them again.`)
     process.exit(4)
+  }
+  if (has('pages')) {
+    await drawPages(db, { clientId, month, runId, company })
+    return
   }
   if (has('plan')) {
     if (!applied) console.log('\n--write refuses until supabase/migrations/20261107093000_monthly_briefs.sql is applied (app-setup.sh).')
@@ -217,6 +235,41 @@ async function main() {
     console.log(`\nStored the ${longMonth(month)} briefs under run ${runId}: ${rows.map((r) => `${r.role} ${r.status}${r.snapshot_id ? ` (${r.snapshot_id})` : ''}`).join(', ')}.`)
     console.log('They are in the Studio now, under Monthly briefs.')
   }
+}
+
+/**
+ * --pages: the October canvas's pages read from the app, drawn with the
+ * month's real inputs and no model call (each role's behind its cover; the
+ * writer's pages are not built). Into a folder of its own.
+ */
+async function drawPages(db: SupabaseClient, a: { clientId: string; month: string; runId: string; company: string }): Promise<void> {
+  const now = new Date()
+  const researchRun = (await themedRunAsOf(db, a.clientId, now.toISOString())) ?? a.runId
+  const inputs = await loadBriefSetInputs(db, { clientId: a.clientId, month: a.month, now, runId: researchRun })
+  const app = inputs.app ?? null
+  const parts: [string, unknown][] = [['subject reads', app?.subjectReads], ['groups', app?.people], ['brands named', app?.named], ['products', app?.products], ['post ideas', app?.ideas], ['formats and openings', app?.hooks], ['advice and moves', app?.moves]]
+  console.log(`Read from the app for ${longMonth(a.month)} (run ${researchRun}): ${parts.map(([name, v]) => `${name} ${v ? 'read' : 'none'}`).join(' · ')}`)
+  const subjects = subjectsSection({
+    month: a.month, subjects: inputs.standing.map((fact, n) => ({ id: `S${n + 1}`, fact })), reads: app?.subjectReads ?? null,
+    sentenceOf: () => '', voiceOf: () => null, panel: marketKinds(inputs.kinds ?? null, a.month),
+  }).section
+  const dir = resolve(process.cwd(), flag('designed') || join(homedir(), 'Documents', 'Heinrich', 'Verbatim', `Briefs-${a.month.slice(0, 7)}-pages`, slugOf(a.company)))
+  if (holdsBuild(dir)) {
+    console.error(`${dir} holds a build already (${SAVED_SET_FILE} or a brief's JSON). --pages never draws over one: pass --designed <a new folder>.`)
+    process.exit(4)
+  }
+  for (const role of BRIEF_ROLES) {
+    const fromApp = appSectionsFor(role, { company: inputs.company, app, subjects, vectors: null })
+    if (fromApp.length === 0) { console.log(`${BRIEF_NAME[role]}: nothing read from the app prints.`); continue }
+    const data: MonthlyBriefData = {
+      version: 1, kind: 'monthly_brief', role, title: `${BRIEF_NAME[role]} · ${longMonth(a.month)}`, company: inputs.company, noun: inputs.noun, month: a.month,
+      heardMonths: [], inShort: { summary: '', figures: [], also: [] }, findings: [], sections: [], fromApp, held: [], promptVersion: 'pages_only', model: 'none', costUsd: 0,
+    }
+    const out = await renderBriefLocal({ data: storedBrief(data), texts: {} }, dir, { name: `${role}-pages`, built: now.toISOString(), pdf: true })
+    console.log(`${BRIEF_NAME[role]}: ${out.pages - 1} page${out.pages === 2 ? '' : 's'} from the app${out.clipped.length ? `, CLIPPING on ${out.clipped.map((c) => `page ${c.page} (${c.px}px)`).join(', ')}` : ''}: ${out.pdf}`)
+    for (const l of out.left) if (l.key !== 'in_short') console.log(`  left out: ${l.title} (${l.why})`)
+  }
+  console.log(`Nothing was written to any database and no model was called. The pages are in ${dir}.`)
 }
 
 /** "Össur" → "ossur": a tenant's folder. */

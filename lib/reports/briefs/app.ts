@@ -1,5 +1,5 @@
 import { fmtInt, longMonth } from '../../format'
-import { marketConversationHref, marketSubjectHref } from '../../nav'
+import { marketConversationHref, marketMonthHref, marketSubjectHref } from '../../nav'
 import { currentAdvice } from '../../pages/advice-shortlist'
 import { contentPostsHref, WORKS_ANCHOR } from '../../pages/v2/content-address'
 import {
@@ -24,9 +24,10 @@ import type { Verdict } from '../../reading/verdicts'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, isRivalAudience } from '../../rivals'
 import { firstSentenceOf } from '../weekly-read-v3'
 import { andList, APP_TITLES, daysLong, numberWord, voicesMonthHref, yyyymm } from './app-words'
+import type { StandingFact } from '../../written/types'
 import type {
-  BriefAdvice, BriefGroup, BriefHookRow, BriefHooks, BriefHookTable, BriefIdea, BriefIdeas, BriefMove, BriefMoves, BriefNamed, BriefNamedRow,
-  BriefPeople, BriefProducts, BriefSection, BriefStandout, BriefVerdict, SectionKey,
+  BriefAdvice, BriefGroup, BriefHookRow, BriefHooks, BriefHookTable, BriefIdea, BriefIdeas, BriefItem, BriefMove, BriefMoves, BriefNamed, BriefNamedRow,
+  BriefPeople, BriefProducts, BriefQuote, BriefRole, BriefSection, BriefStandout, BriefVerdict, SectionKey,
 } from './types'
 
 export {
@@ -598,3 +599,66 @@ export function subjectWords(r: BriefSubjectRead | null | undefined): { headline
 
 /** The Market sub of Where the market stands (v2). Pure. */
 export const subjectsBase = (n: number, month: string): string => `Share of the ${fmtInt(n)} videos in your market in ${longMonth(month)} · each subject in Market’s own words`
+
+/**
+ * Where the market stands on the October canvas: each READY subject with a
+ * level (ruling U6), in Market's order, said in its own read on Market (its
+ * headline and the first sentence of what it means); where the month holds no
+ * read of it, the writer's sentence (`sentenceOf`), else one of its voices
+ * (`voiceOf`, asked only then: it spends the voice); a subject with none of
+ * them is held with why. The kinds and the mood under them (`panel`). Pure.
+ */
+export function subjectsSection(a: {
+  month: string
+  subjects: readonly { id: string; fact: StandingFact }[]
+  reads: readonly BriefSubjectRead[] | null
+  sentenceOf: (id: string) => string
+  voiceOf: (fact: StandingFact) => BriefQuote | null
+  panel: Pick<BriefSection, 'kinds' | 'mood'>
+}): { section: BriefSection | null; held: { what: string; reason: string }[] } {
+  const held: { what: string; reason: string }[] = []
+  const ready = a.subjects.filter(({ fact }) => fact.calibration === 'ready' && fact.level && fact.level.n > 0)
+    .sort((x, y) => (x.fact.rank || 99) - (y.fact.rank || 99))
+  if (ready.length === 0) return { section: null, held }
+  const reads = new Map((a.reads ?? []).map((r) => [r.id, r]))
+  const items: BriefItem[] = []
+  for (const { id, fact } of ready) {
+    const pct = Math.round((fact.level!.k / fact.level!.n) * 100)
+    const href = marketSubjectHref(fact.subjectId, { period: 'month', month: a.month })
+    const words = subjectWords(reads.get(fact.subjectId))
+    if (words) {
+      items.push({ title: fact.name, text: words.headline ?? words.meaning ?? '', ...(words.headline && words.meaning ? { detail: words.meaning } : {}), slot: 'week_read', measure: { pct }, href })
+      continue
+    }
+    const sentence = a.sentenceOf(id)
+    const voice = sentence ? null : a.voiceOf(fact)
+    if (!sentence && !voice) { held.push({ what: `subject: ${fact.name}`, reason: 'nothing was said about it, and the month holds no read of it' }); continue }
+    items.push({ title: fact.name, text: sentence, ...(voice ? { quote: voice } : {}), measure: { pct }, href })
+  }
+  if (items.length === 0) return { section: null, held }
+  return {
+    section: {
+      key: 'leadership.subjects', title: APP_TITLES['leadership.subjects'] ?? 'Where the market stands', groups: [{ items }],
+      base: subjectsBase(ready[0].fact.level!.n, a.month), ...a.panel,
+      foot: 'What people said inside each subject is on its Market page.',
+      link: { href: marketMonthHref(a.month), text: `Open ${longMonth(a.month)} on Market →` },
+    },
+    held,
+  }
+}
+
+/** Each role's October pages read from the app, in the canvas's order:
+ *  Leadership's subjects (built by the caller, which holds the writer's
+ *  sentences), its groups and its moves (folded by `vectors`); Sales' groups;
+ *  Marketing's products and named brands; Content's ideas and its measure.
+ *  Pure. */
+export function appSectionsFor(role: BriefRole, a: { company: string; app: BriefAppInputs | null; subjects: BriefSection | null; vectors: ReadonlyMap<string, number[]> | null }): BriefSection[] {
+  const app = a.app
+  const out: Record<BriefRole, (BriefSection | null)[]> = {
+    leadership: [a.subjects, groupsSection(app?.people ?? null), movesSection(app?.moves ?? null, a.vectors)],
+    sales: [buyersSection(app?.people ?? null)],
+    marketing: [productsSection(app?.products ?? null), namedSection(app?.named ?? null, a.company)],
+    content: [ideasSection(app?.ideas ?? null), hooksSection(app?.hooks ?? null)],
+  }
+  return out[role].filter((x): x is BriefSection => x != null)
+}

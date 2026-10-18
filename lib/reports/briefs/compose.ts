@@ -11,13 +11,9 @@ import type { WeekScrubCounts } from '../../written/scrub'
 import { monthsPhrase } from '../../written/month'
 import { collectQuoteRefs, resolveQuotes } from '../../renderables/quotes-freeze'
 import type { QuoteResolution } from '../../renderables/types'
-import { marketMonthHref, marketSubjectHref } from '../../nav'
 import { adviceText } from '../../pages/advice-shortlist'
 import { overlapOfSmaller, referencesFor } from './allocate'
-import {
-  buyersSection, groupsSection, hooksSection, ideasSection, movesSection, namedSection, productsSection, subjectsBase, subjectWords,
-  type BriefAppInputs,
-} from './app'
+import { appSectionsFor, subjectsSection, type BriefAppInputs } from './app'
 import { appLines, SALES_GROUPS_LINE } from './app-words'
 import { canvasOf } from './canvas'
 import { printedSections } from './deck'
@@ -754,33 +750,12 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
    *  no read of it, one of its voices where neither; the kinds and the mood
    *  under them, as on v1. */
   function subjects(): BriefSection | null {
-    const ready = (a.subjects ?? []).filter(({ fact }) => fact.calibration === 'ready' && fact.level && fact.level.n > 0)
-      .sort((x, y) => (x.fact.rank || 99) - (y.fact.rank || 99))
-    if (ready.length === 0) return null
-    const reads = new Map((a.app?.subjectReads ?? []).map((r) => [r.id, r]))
-    const items: BriefItem[] = []
-    for (const { id, fact } of ready) {
-      const pct = Math.round((fact.level!.k / fact.level!.n) * 100)
-      const href = marketSubjectHref(fact.subjectId, { period: 'month', month: a.month })
-      const words = subjectWords(reads.get(fact.subjectId))
-      if (words) {
-        const text = words.headline ?? words.meaning ?? ''
-        items.push({ title: fact.name, text, ...(words.headline && words.meaning ? { detail: words.meaning } : {}), slot: 'week_read', measure: { pct }, href })
-        continue
-      }
-      const sentence = sentencesOf().get(id.toUpperCase()) ?? ''
-      const voice = sentence ? null : subjectQuote(fact)
-      if (!sentence && !voice) { held.push({ what: `subject: ${fact.name}`, reason: 'nothing was said about it, and the month holds no read of it' }); continue }
-      items.push({ title: fact.name, text: sentence, ...(voice ? { quote: voice } : {}), measure: { pct }, href })
-    }
-    if (items.length === 0) return null
-    const n = ready[0].fact.level!.n
-    return {
-      key: 'leadership.subjects', title: 'Where the market stands', groups: [{ items }],
-      base: subjectsBase(n, a.month), ...kindsOf(),
-      foot: 'What people said inside each subject is on its Market page.',
-      link: { href: marketMonthHref(a.month), text: `Open ${month} on Market →` },
-    }
+    const r = subjectsSection({
+      month: a.month, subjects: a.subjects ?? [], reads: a.app?.subjectReads ?? null,
+      sentenceOf: (id) => sentencesOf().get(id.toUpperCase()) ?? '', voiceOf: subjectQuote, panel: kindsOf(),
+    })
+    for (const h of r.held) held.push(h)
+    return r.section
   }
 
   function market(): BriefSection | null {
@@ -823,20 +798,7 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
   /** What people did in the comments, and the mood, as the canvas's bars:
    *  shares only over enough videos (`marketLevel`'s floor). */
   function kindsOf(): Pick<BriefSection, 'kinds' | 'mood'> {
-    const m = a.kinds
-    if (!m || m.n == null || m.n < KIND_MIN_N) return {}
-    const n = m.n
-    const rows = m.kinds.filter((r) => r.k != null && r.k >= KIND_MIN_K)
-      .sort((x, y) => (y.k ?? 0) - (x.k ?? 0)).slice(0, 3)
-      .map((r) => ({ label: kindLabel(r.kind), pct: pctShort(((r.k ?? 0) / n) * 100) }))
-    const judged = m.judged ?? 0
-    const mood = judged >= KIND_MIN_N && m.mood.every((r) => r.k != null)
-      ? m.mood.map((r) => ({ mood: r.mood, label: `${r.mood[0].toUpperCase()}${r.mood.slice(1)}`, pct: pctShort(((r.k ?? 0) / judged) * 100) }))
-      : []
-    return {
-      ...(rows.length ? { kinds: { base: `Share of the ${fmtInt(n)} videos in your market in ${month}`, rows } } : {}),
-      ...(mood.length ? { mood: { base: judged === n ? `The same ${fmtInt(n)} videos` : `${fmtInt(judged)} of the same ${fmtInt(n)} videos`, rows: mood } } : {}),
-    }
+    return marketKinds(a.kinds, a.month)
   }
 
   // ---- leadership: where the company stands against its rivals -----------------------------------
@@ -902,23 +864,18 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
   const fromApp = a.app === undefined ? null : appPages()
   function appPages(): BriefSection[] {
     const app = a.app ?? null
-    const out: (BriefSection | null)[] = []
+    // Your moves' advice, folded as the page folds it, by this step's own
+    // vectors (`Meaning.vectorOf`: the texts join the compose step's one
+    // embedding batch; none in the first pass, and the list is drawn
+    // unmerged, the page's own fallback).
+    const vectors = new Map<string, number[]>()
     if (a.role === 'leadership') {
-      // Your moves' advice, folded as the page folds it, by this step's own
-      // vectors (`Meaning.vectorOf`: the texts join the compose step's one
-      // embedding batch; none in the first pass, and the list is drawn
-      // unmerged, the page's own fallback).
-      const vectors = new Map<string, number[]>()
       for (const r of app?.moves?.pool ?? []) {
         const v = a.meaning.vectorOf(adviceText(r))
         if (v) vectors.set(r.lineageId, [...v])
       }
-      out.push(subjectsPage, groupsSection(app?.people ?? null), movesSection(app?.moves ?? null, vectors.size ? vectors : null))
     }
-    if (a.role === 'sales') out.push(buyersSection(app?.people ?? null))
-    if (a.role === 'marketing') out.push(productsSection(app?.products ?? null), namedSection(app?.named ?? null, co))
-    if (a.role === 'content') out.push(ideasSection(app?.ideas ?? null), hooksSection(app?.hooks ?? null))
-    return out.filter((x): x is BriefSection => x != null)
+    return appSectionsFor(a.role, { company: co, app, subjects: subjectsPage, vectors: vectors.size ? vectors : null })
   }
 
   // ---- in short (filtered against what printed, at the set level: summaryAgainstPrinted) --------
@@ -942,6 +899,25 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
     costUsd: Math.round(a.costUsd * 10_000) / 10_000,
   }
   return { data, counts, scrubbed }
+}
+
+/** What people did in the comments, and the mood, as the canvas's bars:
+ *  shares only over enough videos (`marketLevel`'s floor). Pure. */
+export function marketKinds(m: MarketKindsIn | null | undefined, monthStart: string): Pick<BriefSection, 'kinds' | 'mood'> {
+  const month = longMonth(monthStart)
+  if (!m || m.n == null || m.n < KIND_MIN_N) return {}
+  const n = m.n
+  const rows = m.kinds.filter((r) => r.k != null && r.k >= KIND_MIN_K)
+    .sort((x, y) => (y.k ?? 0) - (x.k ?? 0)).slice(0, 3)
+    .map((r) => ({ label: kindLabel(r.kind), pct: pctShort(((r.k ?? 0) / n) * 100) }))
+  const judged = m.judged ?? 0
+  const mood = judged >= KIND_MIN_N && m.mood.every((r) => r.k != null)
+    ? m.mood.map((r) => ({ mood: r.mood, label: `${r.mood[0].toUpperCase()}${r.mood.slice(1)}`, pct: pctShort(((r.k ?? 0) / judged) * 100) }))
+    : []
+  return {
+    ...(rows.length ? { kinds: { base: `Share of the ${fmtInt(n)} videos in your market in ${month}`, rows } } : {}),
+    ...(mood.length ? { mood: { base: judged === n ? `The same ${fmtInt(n)} videos` : `${fmtInt(judged)} of the same ${fmtInt(n)} videos`, rows: mood } } : {}),
+  }
 }
 
 /** An item without its title: the title named its group. */
