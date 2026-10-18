@@ -19,6 +19,7 @@ import { isWeeklyReadData } from '@/lib/reports/weekly-read-build'
 import { WeeklyReadPage } from '@/components/email/weekly-read'
 import { printsMedicalLine } from '@/lib/post-ideas/medical'
 import { BriefDeck } from '@/components/briefs/brief-deck'
+import { appBaseUrl } from '@/lib/site'
 import { briefWordmarkFace } from '@/components/briefs/wordmark-face'
 import { FitWidth } from '@/components/reports/fit-width'
 import { isMonthlyBriefData } from '@/lib/reports/briefs/types'
@@ -119,7 +120,7 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
       <main>
         <div className="mx-auto flex w-full max-w-[1328px] flex-col gap-6 px-4 py-8 md:px-6">
           <FitWidth base={1280}>
-            <div className={briefWordmarkFace.variable}><BriefDeck data={data} builtAt={snapshot.created_at} gap={20} /></div>
+            <div className={briefWordmarkFace.variable}><BriefDeck data={data} builtAt={snapshot.created_at} gap={20} appUrl={appBaseUrl()} /></div>
           </FitWidth>
         </div>
       </main>

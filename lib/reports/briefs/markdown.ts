@@ -1,7 +1,8 @@
 import { aboutName, marketLabelsOf, type AboutPart } from '../../brands/labels'
 import { fmtInt, longMonth } from '../../format'
 import { monthsPhrase } from '../../written/month'
-import { FINDINGS_AFTER, printsSection } from './canvas'
+import { appLines } from './app-words'
+import { canvasOf, findingsAfter, printsSection, V2_PAGES, type Canvas } from './canvas'
 import type { BriefFinding, BriefQuote, BriefSection, MonthlyBriefData } from './types'
 import { BRIEF_LENS, BRIEF_NAME } from './types'
 
@@ -81,8 +82,8 @@ function findingBlock(f: BriefFinding, role: MonthlyBriefData['role'], textOf: T
 
 const STATUS: Readonly<Record<string, string>> = { heard_back: 'Heard back', not_echoed: 'Not echoed', heard_as_values: 'Heard as values', tested: 'Tested', confused: 'Confused' }
 
-function sectionBlock(s: BriefSection, textOf: TextOf, company: string, noun: string | null): string[] {
-  const out: string[] = [`## ${s.title}${printsSection(s.key) ? '' : ' _(stored, not printed: the canvas has no page for it)_'}`, '']
+function sectionBlock(s: BriefSection, textOf: TextOf, company: string, noun: string | null, canvas: Canvas = 'v1'): string[] {
+  const out: string[] = [`## ${s.title}${printsSection(s.key, canvas) ? '' : ' _(stored, not printed: the canvas has no page for it)_'}`, '']
   if (s.sub) out.push(`_${s.sub}_`, '')
   if (s.lead) out.push(s.lead, '')
   if (s.note) out.push(s.note, '')
@@ -134,12 +135,23 @@ export function briefMarkdown(d: MonthlyBriefData, textOf: TextOf, noun: string 
   if (d.inShort.also.length) {
     out.push('**Also this month, in the other briefs**', '', ...d.inShort.also.map((a) => `- ${BRIEF_NAME[a.brief]}: ${a.headline}`), '')
   }
-  const before = new Set(FINDINGS_AFTER[d.role])
+  const canvas = canvasOf(d)
+  const before = new Set(findingsAfter(d.role, canvas))
   const findings = d.findings.flatMap((f) => findingBlock(f, d.role, textOf, co, noun))
-  const anchor = d.sections.reduce((at, s, k) => (before.has(s.key) ? k : at), -1)
+  // The October canvas: its pages in their order (the app's and the writer's),
+  // then what the writer wrote that it does not print.
+  const ordered = canvas === 'v2'
+    ? [
+        ...V2_PAGES[d.role].map((k) => [...(d.fromApp ?? []), ...d.sections].find((s) => s.key === k)).filter((s): s is BriefSection => s != null),
+        ...d.sections.filter((s) => !V2_PAGES[d.role].includes(s.key)),
+      ]
+    : d.sections
+  const anchor = ordered.reduce((at, s, k) => (before.has(s.key) ? k : at), -1)
   if (anchor < 0) out.push(...findings)
-  d.sections.forEach((s, k) => {
-    out.push(...sectionBlock(s, textOf, co, noun))
+  ordered.forEach((s, k) => {
+    out.push(...sectionBlock(s, textOf, co, noun, canvas))
+    // An October page read from the app: its own lines.
+    if ((d.fromApp ?? []).includes(s)) out.push(...appLines(s).map((l) => `- ${l}`), '')
     if (k === anchor) out.push(...findings)
   })
   return `${out.join('\n').replace(/\n{3,}/g, '\n\n').trim()}\n`

@@ -138,7 +138,7 @@ export const ADVICE_CARDS_SHOWN = 3
  * list the page's "N pieces of advice waiting" and the Dashboard tile both
  * count.
  */
-export function waitingAdvice<R extends AdviceRow>(rows: readonly R[], vectors: ReadonlyMap<string, number[]> | null): R[] {
+export function waitingAdvice<R extends Pick<AdviceRow, 'lineageId' | 'inLatest'> & { status: string }>(rows: readonly R[], vectors: ReadonlyMap<string, number[]> | null): R[] {
   const list = adviceShortlist(rows, vectors ? (id) => vectors.get(id) : null, { shown: Number.MAX_SAFE_INTEGER })
   const byLineage = new Map(rows.map((r) => [r.lineageId, r]))
   return list.lineages.map((id) => byLineage.get(id)).filter((r): r is R => r != null && r.status === 'new')

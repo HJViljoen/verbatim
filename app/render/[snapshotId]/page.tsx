@@ -154,7 +154,8 @@ export default async function RenderPage({
       if (token.tileKey) notFound()
       return (
         <PrintRoot style={style}>
-          <div className={briefWordmarkFace.variable}><BriefDeck data={data} builtAt={row.created_at} print /></div>
+          {/* The October canvas's links, absolute so they click in the PDF. */}
+          <div className={briefWordmarkFace.variable}><BriefDeck data={data} builtAt={row.created_at} print appUrl={appBaseUrl()} /></div>
         </PrintRoot>
       )
     }

@@ -193,6 +193,14 @@ export interface BriefItem {
   /** A real voice printed with this item (a trigger moment's, a rival's, a
    *  subject's): code's pick. */
   quote?: BriefQuote | null
+  /** ADDITIVE (the October canvas): the item's own page in the app, a path
+   *  (`/dashboard/market/subjects/<id>?period=month&month=2026-10`), drawn
+   *  as a link against the app's address. */
+  href?: string
+  /** ADDITIVE (the October canvas): where the item's words were written,
+   *  where it is not this brief's writer: `week_read` for a subject's own
+   *  read on Market (its headline and what it means). */
+  slot?: 'week_read'
 }
 
 /** What the market does with one of the company's claims (Says and hears). */
@@ -271,6 +279,279 @@ export interface BriefSection {
   /** The rival whose column a table carries beside the company's (Hooks and
    *  formats that work). */
   rival?: string
+  // ---- ADDITIVE: the October canvas's pages read from the app (18 Oct) ----
+  /** The page's own page in the app: the link at its foot ("Open October on
+   *  Market →"), a path drawn against the app's address. */
+  link?: { href: string; text: string }
+  /** The muted line at the page's foot, beside its link (code's words). */
+  foot?: string
+  /** Voices' groups for the month (Who is in your market; Who is buying). */
+  people?: BriefPeople
+  /** Your moves: the advice waiting, the moves dated, the record. */
+  moves?: BriefMoves
+  /** Your products in the conversation. */
+  products?: BriefProducts
+  /** Who gets named without being asked. */
+  named?: BriefNamed
+  /** What to post next. */
+  ideas?: BriefIdeas
+  /** Hooks and formats, on Content's measure. */
+  hooks?: BriefHooks
+}
+
+// ---- The October canvas's parts (the boards Heinrich approved, 18 Oct) ----------------
+//
+// What the pages code reads from the app carry: counts, the stored words the
+// app prints (a group's description, a subject's read, an advice title, a post
+// idea), and each item's own page. No commenter's words: a part holds no quote.
+
+/** A verdict as a page prints it: its state and, where a comparison was
+ *  drawn, the change and its band in points. A refused comparison is not
+ *  stored at all (it prints nothing, T0a). */
+export interface BriefVerdict {
+  state: 'moved' | 'no_clear_change' | 'too_little_data' | 'baseline_forming'
+  change: number | null
+  band: number | null
+}
+
+/** One of Voices' groups in the month. */
+export interface BriefGroup {
+  /** The persona's key: its page's address. */
+  key: string
+  /** Stored Pass E prose (`pass_e_persona`): its name, its one line, and what
+   *  it wants, what stops it and what tips it, whole. */
+  name: string
+  oneLiner: string
+  wants: string
+  stops: string
+  tips: string
+  /** The month's market videos its comments are on (Voices' count: the groups
+   *  overlap, so never a share and never added up). */
+  videos: number
+  /** The READY subject most of its videos carry (ruling U6), on at least one.
+   *  Null where none is. */
+  top: { id: string; label: string; k: number; href: string } | null
+  /** The company's products named in its videos (Your products' rule), most
+   *  first; [] where none came up; null where Your products is off, or the
+   *  month is not read for it. */
+  products: { name: string; k: number; href: string }[] | null
+  href: string
+}
+
+export interface BriefPeople {
+  /** `YYYY-MM-01`. */
+  month: string
+  /** The market's videos in the month: every group's "of". */
+  market: number
+  /** Every group, the most videos first. */
+  groups: BriefGroup[]
+  /** The deck's, never stored: on Who is buying's last sheet, the groups no
+   *  sheet holds (its foot names them). */
+  rest?: Pick<BriefGroup, 'name' | 'videos' | 'href'>[]
+}
+
+/** A piece of advice waiting for a decision, as Your moves stores it. */
+export interface BriefAdvice {
+  lineageId: string
+  /** `adviceTitle`: stored, `pass_d_b_recommendation`. */
+  title: string
+  /** `YYYY-MM-DD`: the day it was first raised. */
+  firstMade: string
+  /** What it would move: the conversation its evidence leads with (stored,
+   *  `pass_b_theme`) and that conversation's videos in the month. */
+  aim: { label: string; k: number | null; n: number | null; href: string | null } | null
+  href: string
+}
+
+/** A month on a dated move's axis (`moveAxis`). */
+export interface BriefMoveSlot {
+  month: string
+  /** Read: its videos of the market's; null where not drawn. */
+  k: number | null
+  n: number | null
+  soFar: boolean
+  /** Not drawn, and why (`MoveSlot.why`). */
+  why: 'pending' | 'cut' | 'unread' | 'move' | 'unknown' | null
+}
+
+/** A move the company dated, read as Your moves reads it. */
+export interface BriefMove {
+  id: string
+  /** The client's own words. */
+  title: string
+  kind: 'subject' | 'theme' | 'advice'
+  /** `MOVE_STATUS_LABEL`'s word. */
+  status: string
+  /** `YYYY-MM-DD`. */
+  day: string
+  /** What it is read on: a subject's name or a conversation's label. */
+  label: string | null
+  labelHref: string | null
+  slots: BriefMoveSlot[]
+  /** The one sentence it earns (Your moves' `MoveSentence`), code's words. */
+  sentence: string
+  /** The comparison's verdict, where the earlier month may print beside the
+   *  later. */
+  verdict: BriefVerdict | null
+  /** Why its empty months are empty (`axisLine`), or null. */
+  axis: string | null
+  href: string
+}
+
+export interface BriefMoves {
+  /** `YYYY-MM-01`: the month the moves page reads. */
+  month: string
+  /** Every piece of advice waiting for a decision (folded as Your moves folds
+   *  it), in its order; the page prints what fits. */
+  waiting: BriefAdvice[]
+  /** How many pieces wait, all of them (the page may print fewer). */
+  waitingCount: number
+  /** The moves dated, the one whose comparison prints first, then the
+   *  newest. */
+  moves: BriefMove[]
+  /** Every piece of advice given, how many were decided, and since when. */
+  record: { total: number; decided: number; since: string | null; href: string }
+  /** Your moves' own page. */
+  href: string
+}
+
+/** A standout on Your products, in code's words. */
+export interface BriefStandout {
+  kind: 'first' | 'gap' | 'general' | 'praised' | 'focus'
+  /** The eyebrow ("Came up for the first time"). */
+  label: string
+  /** The product's or the category's name (the client's own catalogue). */
+  name: string
+  /** One sentence of code's, every figure counted. */
+  text: string
+  href: string
+}
+
+export interface BriefProducts {
+  /** `YYYY-MM-01`. */
+  month: string
+  /** Products with a video in the month, of the catalogue's, and the videos
+   *  about any of them or their categories (null where not read). */
+  cameUp: number
+  products: number
+  videos: number | null
+  /** The market's videos in the month. */
+  market: number | null
+  /** Each category, the most videos first: its videos, how many name one of
+   *  the company's products, and those products, each with its videos and
+   *  whether this is its first month with any (the shelf's rule). */
+  categories: { id: string; name: string; videos: number; named: number; products: { name: string; videos: number; first: boolean; href: string }[]; href: string }[]
+  standouts: BriefStandout[]
+  href: string
+}
+
+export interface BriefNamedRow {
+  label: string
+  you: boolean
+  /** Named unprompted: `k_organic` of `n_organic`. */
+  named: { k: number; n: number }
+  verdict: BriefVerdict | null
+  /** Over every video naming it (`k_any`): praised, complained. */
+  praised: { k: number; n: number } | null
+  complained: { k: number; n: number } | null
+  /** The READY subject most of its videos carry (U6). */
+  top: { label: string; k: number; n: number } | null
+  href: string
+}
+
+export interface BriefNamed {
+  /** `YYYY-MM-01`. */
+  month: string
+  /** The month's market videos no brand search found: every row's "of". */
+  base: number
+  rows: BriefNamedRow[]
+  /** Counted, and named unprompted in none of the month's videos. */
+  notNamed: string[]
+  href: string
+}
+
+export interface BriefIdea {
+  id: string
+  rank: number
+  /** Stored, `post_idea`. */
+  title: string
+  /** Its market videos over the days the ideas read, of the market's then;
+   *  and over the month beside it (decision 1: never the first alone). */
+  read: { k: number; n: number } | null
+  month: { k: number; n: number } | null
+  /** Who asks: group names (decision 5), at most `GROUPS_SHOWN`. */
+  groups: string[]
+  /** Whether the company's posts touched on it (`OwnTouch`). */
+  own: { state: 'touched' | 'none' | 'no_posts' | 'unread'; touched: number; posts: number; since: string }
+  /** What they want to know: its sub-questions (stored, `post_idea`), the
+   *  most videos first, and the videos they were grouped from. */
+  asks: { label: string; videos: number }[]
+  asksOf: number | null
+  /** The format and opening code chose, with their multiples (on the
+   *  question). */
+  format: { label: string; multiple: number | null } | null
+  opening: { label: string; multiple: number | null } | null
+  href: string
+}
+
+export interface BriefIdeas {
+  /** `YYYY-MM-01`: the month each idea's figure is printed beside. */
+  month: string
+  /** The days the ideas read their questions from. */
+  read: { from: string; to: string; label: string }
+  /** The first month of the company's posts the touch test read. */
+  since: string
+  /** Print the medical team line under every idea (`printsMedicalLine`). */
+  medical: boolean
+  ideas: BriefIdea[]
+  /** The month's other question conversations not yet in the company's
+   *  posts: their labels (stored, `pass_b_theme`) and videos in the month. */
+  asked: { label: string; videos: number; href: string }[]
+  /** Worth a reply's page, at the month. */
+  replies: string
+  href: string
+}
+
+export interface BriefHookRow {
+  label: string
+  /** The category's share of its videos with a value, 0 to 100. */
+  share: number
+  /** The company's own posts with it, and the rival's videos. */
+  own: number | null
+  rival: number | null
+  /** Its response against a typical market video (the median against the
+   *  market's median); null where too few were rated. */
+  multiple: number | null
+}
+
+export interface BriefHookTable {
+  /** The category's videos with a value, the company's posts and the
+   *  rival's videos with one. */
+  of: number
+  ownOf: number | null
+  rivalOf: number | null
+  rows: BriefHookRow[]
+}
+
+export interface BriefHooks {
+  /** `YYYY-MM-01`. */
+  month: string
+  rival: string | null
+  formats: BriefHookTable | null
+  openings: BriefHookTable | null
+  /** "Your posts in {month}": how many and where, the typical post's
+   *  response, code's sentence about the mix, and the best post. */
+  posts: {
+    total: number
+    byPlatform: { platform: string; posts: number }[]
+    response: { multiple: number; rated: number } | null
+    sentence: string | null
+    best: { platform: string; date: string; format: string | null; multiple: number; href: string } | null
+    href: string
+  } | null
+  /** What the response is, said once (Content's own words). */
+  basis: string
+  href: string
 }
 
 export interface BriefFinding {
@@ -308,6 +589,16 @@ export type SectionKey =
   | 'marketing.believe' | 'marketing.words' | 'marketing.say_hear' | 'marketing.recall' | 'marketing.rivals'
   | 'content.questions' | 'content.formats' | 'content.watch' | 'content.more' | 'content.confusion' | 'content.borrow'
   | 'leadership.market' | 'leadership.shares' | 'leadership.weigh' | 'leadership.risks' | 'leadership.decisions' | 'leadership.holds'
+  // The October canvas (18 Oct): the pages read from the app's own pages,
+  // kept in `fromApp`, never in `sections`.
+  | 'sales.groups' | 'marketing.products' | 'marketing.named' | 'content.ideas' | 'content.hooks'
+  | 'leadership.subjects' | 'leadership.groups' | 'leadership.moves'
+
+/** The October canvas's section keys: they live in `fromApp` alone. */
+export const APP_SECTION_KEYS: readonly SectionKey[] = [
+  'sales.groups', 'marketing.products', 'marketing.named', 'content.ideas', 'content.hooks',
+  'leadership.subjects', 'leadership.groups', 'leadership.moves',
+]
 
 export interface MonthlyBriefData {
   version: 1
@@ -331,6 +622,17 @@ export interface MonthlyBriefData {
   }
   findings: BriefFinding[]
   sections: BriefSection[]
+  /**
+   * ADDITIVE (the October canvas, approved 18 Oct): the pages code reads from
+   * the app's own pages (Market's subject reads, Voices' groups and brands,
+   * Your products, Content's ideas and its measure, Your moves), each a
+   * section of its own key. PRESENT, the deck draws the October canvas's page
+   * set (deck.ts `OCTOBER_PAGES`); ABSENT (every brief stored before it), the
+   * 12 Oct canvas's, exactly. Kept apart from `sections` so a deck from before
+   * it, which knows none of these keys (its `PAGE_NEEDS` has no row for them
+   * and would throw), draws a brief that has them as it always drew one.
+   */
+  fromApp?: BriefSection[]
   /** What was written and does not print, and why: the operator's, never a
    *  reader's. */
   held: { what: string; reason: string }[]

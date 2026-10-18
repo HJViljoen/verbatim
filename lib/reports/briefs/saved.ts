@@ -50,14 +50,89 @@ const item = z.strictObject({
   persona: z.strictObject({ want: z.string().optional(), stops: z.string().optional(), moves: z.string().optional(), forSale: z.string().optional() }).optional(),
   status: z.enum(['heard_back', 'not_echoed', 'heard_as_values', 'tested', 'confused']).optional(),
   you: z.boolean().optional(), quote: quote.nullable().optional(),
+  href: z.string().optional(), slot: z.literal('week_read').optional(),
 })
 const shareBar = z.strictObject({ client: z.number(), rivals: z.number(), rest: z.number(), line: z.string() })
+// The October canvas's parts (types.ts), field for field.
+const level = z.strictObject({ k: z.number(), n: z.number() })
+const verdict = z.strictObject({ state: z.enum(['moved', 'no_clear_change', 'too_little_data', 'baseline_forming']), change: z.number().nullable(), band: z.number().nullable() })
+const people = z.strictObject({
+  month: z.string(), market: z.number(),
+  groups: z.array(z.strictObject({
+    key: z.string(), name: z.string(), oneLiner: z.string(), wants: z.string(), stops: z.string(), tips: z.string(), videos: z.number(),
+    top: z.strictObject({ id: z.string(), label: z.string(), k: z.number(), href: z.string() }).nullable(),
+    products: z.array(z.strictObject({ name: z.string(), k: z.number(), href: z.string() })).nullable(),
+    href: z.string(),
+  })),
+  rest: z.array(z.strictObject({ name: z.string(), videos: z.number(), href: z.string() })).optional(),
+})
+const moves = z.strictObject({
+  month: z.string(),
+  waiting: z.array(z.strictObject({
+    lineageId: z.string(), title: z.string(), firstMade: z.string(),
+    aim: z.strictObject({ label: z.string(), k: z.number().nullable(), n: z.number().nullable(), href: z.string().nullable() }).nullable(),
+    href: z.string(),
+  })),
+  waitingCount: z.number(),
+  moves: z.array(z.strictObject({
+    id: z.string(), title: z.string(), kind: z.enum(['subject', 'theme', 'advice']), status: z.string(), day: z.string(),
+    label: z.string().nullable(), labelHref: z.string().nullable(),
+    slots: z.array(z.strictObject({ month: z.string(), k: z.number().nullable(), n: z.number().nullable(), soFar: z.boolean(), why: z.enum(['pending', 'cut', 'unread', 'move', 'unknown']).nullable() })),
+    sentence: z.string(), verdict: verdict.nullable(), axis: z.string().nullable(), href: z.string(),
+  })),
+  record: z.strictObject({ total: z.number(), decided: z.number(), since: z.string().nullable(), href: z.string() }),
+  href: z.string(),
+})
+const products = z.strictObject({
+  month: z.string(), cameUp: z.number(), products: z.number(), videos: z.number().nullable(), market: z.number().nullable(),
+  categories: z.array(z.strictObject({
+    id: z.string(), name: z.string(), videos: z.number(), named: z.number(),
+    products: z.array(z.strictObject({ name: z.string(), videos: z.number(), first: z.boolean(), href: z.string() })), href: z.string(),
+  })),
+  standouts: z.array(z.strictObject({ kind: z.enum(['first', 'gap', 'general', 'praised', 'focus']), label: z.string(), name: z.string(), text: z.string(), href: z.string() })),
+  href: z.string(),
+})
+const named = z.strictObject({
+  month: z.string(), base: z.number(),
+  rows: z.array(z.strictObject({
+    label: z.string(), you: z.boolean(), named: level, verdict: verdict.nullable(), praised: level.nullable(), complained: level.nullable(),
+    top: z.strictObject({ label: z.string(), k: z.number(), n: z.number() }).nullable(), href: z.string(),
+  })),
+  notNamed: z.array(z.string()), href: z.string(),
+})
+const recipe = z.strictObject({ label: z.string(), multiple: z.number().nullable() })
+const ideas = z.strictObject({
+  month: z.string(), read: z.strictObject({ from: z.string(), to: z.string(), label: z.string() }), since: z.string(), medical: z.boolean(),
+  ideas: z.array(z.strictObject({
+    id: z.string(), rank: z.number(), title: z.string(), read: level.nullable(), month: level.nullable(), groups: z.array(z.string()),
+    own: z.strictObject({ state: z.enum(['touched', 'none', 'no_posts', 'unread']), touched: z.number(), posts: z.number(), since: z.string() }),
+    asks: z.array(z.strictObject({ label: z.string(), videos: z.number() })), asksOf: z.number().nullable(),
+    format: recipe.nullable(), opening: recipe.nullable(), href: z.string(),
+  })),
+  asked: z.array(z.strictObject({ label: z.string(), videos: z.number(), href: z.string() })),
+  replies: z.string(), href: z.string(),
+})
+const hookTable = z.strictObject({
+  of: z.number(), ownOf: z.number().nullable(), rivalOf: z.number().nullable(),
+  rows: z.array(z.strictObject({ label: z.string(), share: z.number(), own: z.number().nullable(), rival: z.number().nullable(), multiple: z.number().nullable() })),
+})
+const hooks = z.strictObject({
+  month: z.string(), rival: z.string().nullable(), formats: hookTable.nullable(), openings: hookTable.nullable(),
+  posts: z.strictObject({
+    total: z.number(), byPlatform: z.array(z.strictObject({ platform: z.string(), posts: z.number() })),
+    response: z.strictObject({ multiple: z.number(), rated: z.number() }).nullable(), sentence: z.string().nullable(),
+    best: z.strictObject({ platform: z.string(), date: z.string(), format: z.string().nullable(), multiple: z.number(), href: z.string() }).nullable(),
+    href: z.string(),
+  }).nullable(),
+  basis: z.string(), href: z.string(),
+})
 const section = z.strictObject({
   key: z.enum([
     'sales.buyers', 'sales.deciders', 'sales.stops', 'sales.settle', 'sales.triggers', 'sales.rivals', 'sales.care',
     'marketing.believe', 'marketing.words', 'marketing.say_hear', 'marketing.recall', 'marketing.rivals',
     'content.questions', 'content.formats', 'content.watch', 'content.more', 'content.confusion', 'content.borrow',
     'leadership.market', 'leadership.shares', 'leadership.weigh', 'leadership.risks', 'leadership.decisions', 'leadership.holds',
+    'sales.groups', 'marketing.products', 'marketing.named', 'content.ideas', 'content.hooks', 'leadership.subjects', 'leadership.groups', 'leadership.moves',
   ]),
   title: z.string(), lead: z.string().optional(),
   groups: z.array(z.strictObject({ label: z.string().optional(), items: z.array(item), lines: z.array(z.string()).optional(), base: z.string().optional() })),
@@ -71,6 +146,8 @@ const section = z.strictObject({
   posts: z.strictObject({ title: z.string(), rows: z.array(z.strictObject({ name: z.string(), you: z.boolean(), posts: z.number(), five: z.number(), pct: z.number() })) }).optional(),
   position: item.nullable().optional(),
   rival: z.string().optional(),
+  link: z.strictObject({ href: z.string(), text: z.string() }).optional(), foot: z.string().optional(),
+  people: people.optional(), moves: moves.optional(), products: products.optional(), named: named.optional(), ideas: ideas.optional(), hooks: hooks.optional(),
 })
 const finding = z.strictObject({
   ideaId: z.string(), headline: z.string(), basedOn: z.array(z.string()), saw: z.array(z.string()), means: z.string(), practice: z.array(z.string()),
@@ -89,7 +166,7 @@ export const savedBriefSchema = z.strictObject({
     figures: z.array(z.strictObject({ value: z.string(), label: z.string() })),
     also: z.array(z.strictObject({ headline: z.string(), brief: role })),
   }),
-  findings: z.array(finding), sections: z.array(section),
+  findings: z.array(finding), sections: z.array(section), fromApp: z.array(section).optional(),
   held: z.array(z.strictObject({ what: z.string(), reason: z.string() })),
   promptVersion: z.string(), model: z.string(), costUsd: z.number(),
 })

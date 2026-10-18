@@ -4,9 +4,10 @@ import { splitSentences } from '../../prose/scrub'
 import { collectQuoteRefs, resolveQuotes } from '../../renderables/quotes-freeze'
 import type { QuoteResolution } from '../../renderables/types'
 import type { QuoteWordsOf } from './compose'
+import { appLines } from './app-words'
 import { distinctChips, heardIn, ideasArgued, planDeck, tagLine, type DeckPage } from './deck'
 import type { BriefRole, MonthlyBriefData, StoredBriefData } from './types'
-import { BRIEF_LENS, BRIEF_NAME, BRIEF_ROLES } from './types'
+import { APP_SECTION_KEYS, BRIEF_LENS, BRIEF_NAME, BRIEF_ROLES } from './types'
 
 // IN SHORT SAYS ONLY WHAT PRINTS (the September dry build, 12 Oct). The writer
 // writes In short before the deck is paginated, so it can sum up a section the
@@ -46,6 +47,9 @@ const pct = (x: number | undefined | null): string => (x == null ? '' : `${x}%`)
 /** A section page's lines: everything it prints in words, but its voices. */
 function sectionLines(b: Extract<DeckPage['body'], { kind: 'section' }>, d: StoredBriefData): string[] {
   const s = b.section
+  // An October page read from the app says its own words (app-words.ts
+  // `appLines`: its groups, advice, ideas, rows, notes and foot).
+  const app = APP_SECTION_KEYS.includes(s.key)
   const out: (string | null | undefined)[] = [b.continued ? `${s.title}, continued` : s.title, b.sub, s.lead, s.note]
   for (const g of s.groups) {
     if (g.label) out.push(g.label)
@@ -64,7 +68,8 @@ function sectionLines(b: Extract<DeckPage['body'], { kind: 'section' }>, d: Stor
     }
     out.push(...(g.lines ?? []))
   }
-  out.push(s.also, ...(s.lines ?? []))
+  if (app) out.push(...appLines(s))
+  else out.push(s.also, ...(s.lines ?? []))
   for (const c of s.chips ?? []) out.push(`${c.label}: ${c.words.join(', ')}`)
   if (s.panel?.rows.length) out.push(s.panel.title, ...s.panel.rows.map((r) => join([r.title, r.text])))
   if (s.kinds) out.push(join(['What people do in the comments', s.kinds.base, ...s.kinds.rows.map((r) => `${r.label} ${Math.round(r.pct)}%`)]))

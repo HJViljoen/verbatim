@@ -1,3 +1,8 @@
+import {
+  buyersSection, groupsSection, hooksSection, ideasSection, movesSection, namedSection, productsSection, subjectWords, subjectsBase,
+  type BriefAppInputs, type BriefSubjectRead,
+} from '@/lib/reports/briefs/app'
+import { OSSUR_APP, OSSUR_SUBJECT_FACTS, SEALAND_APP } from '@/lib/reports/briefs/app-fixture'
 import type { BriefFinding, BriefItem, BriefQuote, BriefRole, BriefSection, MonthlyBriefData } from '@/lib/reports/briefs/types'
 
 // Made-up briefs for the deck's tests and its canvas comparison: a company
@@ -399,4 +404,49 @@ export function briefFixture(role: BriefRole): MonthlyBriefData {
     ],
   }
   return { ...base, inShort: { summary, figures, also: also(role) }, findings: findings[role], sections: sections[role] }
+}
+
+// ---- The October canvas (the boards approved 18 Oct) ------------------------------------------
+
+/** Where the market stands on the October canvas, as the compose step builds
+ *  it (compose.ts `subjects`): each ready subject with its level, in its own
+ *  read on Market, the panel under them. */
+export function subjectsFixture(reads: readonly BriefSubjectRead[] | null, opts: { n?: number; facts?: typeof OSSUR_SUBJECT_FACTS; panel?: boolean } = {}): BriefSection {
+  const n = opts.n ?? 902
+  const byId = new Map((reads ?? []).map((r) => [r.id, r]))
+  const items: BriefItem[] = (opts.facts ?? OSSUR_SUBJECT_FACTS).map((f) => {
+    const words = subjectWords(byId.get(f.subjectId))
+    const base = { title: f.name, measure: { pct: Math.round((100 * f.k) / n) }, href: `/dashboard/market/subjects/${f.subjectId}?period=month&month=2026-10` }
+    return words
+      ? { ...base, text: words.headline ?? words.meaning ?? '', ...(words.headline && words.meaning ? { detail: words.meaning } : {}), slot: 'week_read' as const }
+      : { ...base, text: 'People ask which part does what before they trust it.' }
+  })
+  return {
+    key: 'leadership.subjects', title: 'Where the market stands', groups: [{ items }], base: subjectsBase(n, '2026-10-01'),
+    ...(opts.panel === false ? {} : {
+      kinds: { base: `Share of the ${n} videos in your market in October`, rows: [{ label: 'Saying it worked', pct: 61 }, { label: 'Asking how it works', pct: 47 }, { label: 'Hitting a problem', pct: 44 }] },
+      mood: { base: `The same ${n} videos`, rows: [{ mood: 'positive', label: 'Positive', pct: 74.8 }, { mood: 'mixed', label: 'Mixed', pct: 13.9 }, { mood: 'neutral', label: 'Neutral', pct: 7.2 }, { mood: 'negative', label: 'Negative', pct: 4.1 }] },
+    }),
+    foot: 'What people said inside each subject is on its Market page.',
+    link: { href: '/dashboard/market?period=month&month=2026-10', text: 'Open October on Market →' },
+  }
+}
+
+/** A brief on the October canvas: the v1 fixture's writer sections and
+ *  findings, and the pages read from the app (`fromApp`) built by the
+ *  builders the compose step calls, from Össur-shaped or Sealand-shaped parts
+ *  (app-fixture.ts). */
+export function octoberFixture(role: BriefRole, opts: { tenant?: 'ossur' | 'sealand'; app?: BriefAppInputs; subjects?: BriefSection | null } = {}): MonthlyBriefData {
+  const base = briefFixture(role)
+  const tenant = opts.tenant ?? 'ossur'
+  const app = opts.app ?? (tenant === 'ossur' ? OSSUR_APP : SEALAND_APP)
+  const company = tenant === 'ossur' ? 'Össur' : 'Sealand'
+  const subjects = opts.subjects !== undefined ? opts.subjects : subjectsFixture(app.subjectReads)
+  const fromApp: Record<BriefRole, (BriefSection | null)[]> = {
+    sales: [buyersSection(app.people)],
+    marketing: [productsSection(app.products), namedSection(app.named, company)],
+    content: [ideasSection(app.ideas), hooksSection(app.hooks)],
+    leadership: [subjects, groupsSection(app.people), movesSection(app.moves, null)],
+  }
+  return { ...base, company, noun: null, month: '2026-10-01', fromApp: fromApp[role].filter((x): x is BriefSection => x != null) }
 }
