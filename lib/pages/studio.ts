@@ -3,7 +3,7 @@
  * issues, as the approved Page-Studio artboard draws them.
  *
  * FIVE REPORTS, ONE ROW EACH, WHETHER OR NOT ANYTHING SENDS THEM. The weekly
- * (everyone, Mondays) and the four monthly briefs. Each row says who it is
+ * (everyone, after each weekly update) and the four monthly briefs. Each row says who it is
  * for, how often, who gets it (the schedule's recipients, named where they are
  * on the team) and the latest issue. The recipient list is the schedule's
  * `recipients`, keyed by artefact (`report_schedules.artefact`), which is what
@@ -13,6 +13,7 @@
  */
 
 import { artefactTitle, scheduleArtefact } from '@/lib/schedules/artefact'
+import { UPDATE_DAY } from '@/lib/update-rhythm'
 
 export type StudioArtefact = 'weekly_read' | 'brief:sales' | 'brief:marketing' | 'brief:content' | 'brief:leadership'
 
@@ -22,18 +23,37 @@ export interface StudioReportDef {
   /** The one line under the name. `{tenant}` is the workspace's name. */
   what: (tenant: string) => string
   forWho: string
+  /** How often (the weekly's, `WEEKLY_HOW_OFTEN_PAUSED` on a paused
+   *  workspace). */
   howOften: string
   kind: 'weekly' | 'monthly'
 }
+
+/** WHAT THE WEEKLY PRINTS (version 3, the H7 boards, 18 Oct): the week in one
+ *  line and what it means, what stood out, what the market is talking about
+ *  (the subjects, the groups, the products), and what to do next (the post
+ *  ideas, the replies, the advice). No findings: the full read is one click
+ *  away. */
+export const WEEKLY_WHAT = 'The week in one line and what it means, what stood out, what your market is talking about, and what to do next.'
+
+/** WHEN IT REALLY GOES: the issue is built when the workspace's update
+ *  finishes and goes in the past issues at once (the email follows at once,
+ *  or once it is reviewed). Every workspace updates weekly, on Sunday
+ *  (lib/update-rhythm.ts, the one source for the rhythm's words; the stored
+ *  day is never read for copy), so the weekly goes every Sunday; a paused
+ *  workspace is promised no update, and says only "after each weekly update".
+ *  Not a Monday, which is what this row said until version 3. */
+export const WEEKLY_HOW_OFTEN = `Every ${UPDATE_DAY.charAt(0).toUpperCase()}${UPDATE_DAY.slice(1)}, after the update`
+export const WEEKLY_HOW_OFTEN_PAUSED = 'After each weekly update'
 
 /** The artboard's five rows, in its order. */
 export const STUDIO_REPORTS: readonly StudioReportDef[] = [
   {
     artefact: 'weekly_read',
     name: 'The weekly',
-    what: (tenant) => `The week in one line, what happened, what it means for ${tenant}, and what to watch next.`,
+    what: () => WEEKLY_WHAT,
     forWho: 'Everyone',
-    howOften: 'Every Monday',
+    howOften: WEEKLY_HOW_OFTEN,
     kind: 'weekly',
   },
   {
@@ -154,11 +174,19 @@ export function issueDay(iso: string | Date): string {
 
 /** The next Monday on or after `now`, in the Studio's zone. */
 export function nextMonday(now: Date): Date {
+  return nextWeekday(now, 1)
+}
+
+/** The next given weekday (0 Sunday) on or after `now`, in the Studio's zone. */
+export function nextWeekday(now: Date, target: number): Date {
   const { weekday, day, month, year } = dayParts(now)
-  const ahead = (8 - weekday) % 7
+  const ahead = (target - weekday + 7) % 7
   // Noon UTC on that calendar day: safely inside the same date in the zone.
   return new Date(Date.UTC(year, month - 1, day + ahead, 12))
 }
+
+/** The next update day (`UPDATE_DAY`, Sunday) on or after `now`. */
+export const nextUpdateDay = (now: Date): Date => nextWeekday(now, ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'].indexOf(UPDATE_DAY))
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
@@ -213,6 +241,9 @@ export function studioRows(input: {
   sends: readonly StudioSend[]
   members: readonly StudioMember[]
   now: Date
+  /** The operator has paused the workspace's updates
+   *  (`isPausedRhythm`): no update, so no day is promised. */
+  paused?: boolean
 }): StudioRow[] {
   return STUDIO_REPORTS.map((def) => {
     const schedule = input.schedules.find((s) => studioArtefactOf(s) === def.artefact) ?? null
@@ -230,14 +261,16 @@ export function studioRows(input: {
     const latest = newest
       ? issueDay(issueAt(newest))
       : def.kind === 'weekly'
-        ? (sending ? `First issue ${issueDay(nextMonday(input.now))}` : null)
+        // The first issue is built when the next update finishes: Sunday's,
+        // or, on a paused workspace, whenever the next one is.
+        ? (sending ? (input.paused ? 'First issue after the next update' : `First issue ${issueDay(nextUpdateDay(input.now))}`) : null)
         : `First issue early ${firstBriefMonth(input.now)}`
     return {
       artefact: def.artefact,
       name: def.name,
       what: def.what(input.tenant),
       forWho: def.forWho,
-      howOften: def.howOften,
+      howOften: def.kind === 'weekly' && input.paused ? WEEKLY_HOW_OFTEN_PAUSED : def.howOften,
       people: recipients.map((e) => personOf(e, input.members)),
       recipients,
       active: Boolean(schedule?.active),

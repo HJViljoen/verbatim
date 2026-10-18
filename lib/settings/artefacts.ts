@@ -36,7 +36,7 @@ export const isArtefact = (v: unknown): v is Artefact =>
 export const ARTEFACT_COPY: Record<Artefact, { label: string; what: string }> = {
   weekly_read: {
     label: 'This week in your market',
-    what: 'The week in writing: what happened in your market, what it means for you, and what to watch next week.',
+    what: 'The week in one line and what it means, what stood out, what your market is talking about, and what to do next.',
   },
   weekly: {
     label: 'The weekly report',

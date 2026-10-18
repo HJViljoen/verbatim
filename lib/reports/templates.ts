@@ -88,7 +88,7 @@ export const STARTER_TEMPLATES: ReportTemplate[] = [
     artefact: true,
     name: 'This week in your market',
     audience: 'general',
-    description: 'The week in writing, one report for everyone: the week in one line, what happened, what it means for you, what to watch, and the week\u2019s findings.',
+    description: 'The week in writing, one report for everyone: the week in one line and what it means, what stood out, what your market is talking about, and what to do next; the week in full one click away.',
     sections: [],
   },
   {

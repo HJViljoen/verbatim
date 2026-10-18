@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  BRIEFS_BUILT, STUDIO_REPORTS, firstBriefMonth, initialsOf, issueDay, nextMonday, operatorOnlyRedirect, pastIssues, personOf, shownStudioRows, studioArtefactOf, studioRows,
+  BRIEFS_BUILT, STUDIO_REPORTS, firstBriefMonth, initialsOf, issueDay, nextMonday, nextUpdateDay, operatorOnlyRedirect, pastIssues, personOf, shownStudioRows, studioArtefactOf, studioRows,
   type StudioSchedule, type StudioSend,
 } from './studio'
 
@@ -27,8 +27,10 @@ describe('the five reports', () => {
     const rows = studioRows({ tenant: 'Sealand', schedules: [weeklyRead, digest], sends: [], members, now: NOW })
     expect(rows.map((r) => r.name)).toEqual(['The weekly', 'Sales brief', 'Marketing brief', 'Content brief', 'Leadership brief'])
     expect(rows.map((r) => r.forWho)).toEqual(['Everyone', 'Sales', 'Marketing', 'Content', 'Leadership, and anyone outside a team'])
-    expect(rows.map((r) => r.howOften)).toEqual(['Every Monday', 'Monthly', 'Monthly', 'Monthly', 'Monthly'])
-    expect(rows[0].what).toBe('The week in one line, what happened, what it means for Sealand, and what to watch next.')
+    expect(rows.map((r) => r.howOften)).toEqual(['Every Sunday, after the update', 'Monthly', 'Monthly', 'Monthly', 'Monthly'])
+    expect(rows[0].what).toBe('The week in one line and what it means, what stood out, what your market is talking about, and what to do next.')
+    // What version 3 prints: no findings, no "what happened" (the full read's).
+    expect(rows[0].what).not.toMatch(/findings|what happened|watch/)
     expect(STUDIO_REPORTS).toHaveLength(5)
   })
 
@@ -44,9 +46,19 @@ describe('the five reports', () => {
     expect(personOf('press@agency.example', members)).toEqual({ name: 'press@agency.example', initials: 'P', email: 'press@agency.example' })
   })
 
-  it('latest issue: the newest issue\'s day; else the weekly\'s first Monday where it sends; else early in the briefs\' month', () => {
+  it('the weekly goes every Sunday, after the update (every workspace updates weekly on Sunday); a paused one is promised no day', () => {
+    const rows = studioRows({ tenant: 'Sealand', schedules: [weeklyRead], sends: [], members, now: NOW })
+    expect(rows[0].howOften).toBe('Every Sunday, after the update')
+    // Thu 1 Oct: the next update is Sunday 4 Oct.
+    expect(rows[0].latest).toBe('First issue Sun 4 Oct')
+    expect(issueDay(nextUpdateDay(new Date('2026-10-04T03:00:00Z')))).toBe('Sun 4 Oct')
+    const paused = studioRows({ tenant: 'Sealand', schedules: [weeklyRead], sends: [], members, now: NOW, paused: true })
+    expect([paused[0].howOften, paused[0].latest]).toEqual(['After each weekly update', 'First issue after the next update'])
+  })
+
+  it('latest issue: the newest issue\'s day; else the weekly\'s first update where it sends; else early in the briefs\' month', () => {
     const none = studioRows({ tenant: 'Sealand', schedules: [weeklyRead], sends: [], members, now: NOW })
-    expect(none[0].latest).toBe('First issue Mon 5 Oct')
+    expect(none[0].latest).toBe('First issue Sun 4 Oct')
     expect(none.slice(1).map((r) => r.latest)).toEqual(Array(4).fill('First issue early October'))
 
     const sent: StudioSend[] = [

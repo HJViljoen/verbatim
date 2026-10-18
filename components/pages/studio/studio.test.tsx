@@ -37,7 +37,7 @@ describe('Your reports', () => {
 
   it('prints the artboard: the head, five rows, who gets each, the latest issue, and the privacy line once', () => {
     expect(text).toContain('Your reports Report For How often Who gets it Latest issue')
-    expect(text).toContain('The weekly The week in one line, what happened, what it means for Sealand, and what to watch next. Everyone Every Monday DS Daniela De Siena B Brayden First issue Mon 5 Oct Recipients')
+    expect(text).toContain('The weekly The week in one line and what it means, what stood out, what your market is talking about, and what to do next. Everyone Every Sunday, after the update DS Daniela De Siena B Brayden First issue Sun 4 Oct Recipients')
     expect(text).toContain('Sales brief Who is buying, what holds them back, and the words to use. Sales Monthly DS Daniela De Siena First issue early October Recipients')
     expect(text).toContain('Leadership brief Where your market stands, where you stand against rivals, and the risks. Leadership, and anyone outside a team Monthly First issue early October')
     expect(text.match(/Recipients/g)).toHaveLength(5)

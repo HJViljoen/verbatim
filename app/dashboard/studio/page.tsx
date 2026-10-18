@@ -1,4 +1,5 @@
 import { canManageTenant, getSessionContext, type SessionContext } from '@/lib/auth'
+import { isPausedRhythm } from '@/lib/update-rhythm'
 import { isMissingPublishColumns, onPlatform } from '@/lib/schedules/platform-state'
 import { PageTitle } from '@/components/pages/studio/ui'
 import { YourReports } from '@/components/pages/studio/your-reports'
@@ -71,7 +72,7 @@ export default async function StudioPage({ searchParams }: { searchParams?: Prom
   const { supabase, clientId, role } = session
   const isOperator = session.operator != null
 
-  const [clientRes, scheduleRes, sendRes, memberRes, briefs] = await Promise.all([
+  const [clientRes, scheduleRes, sendRes, memberRes, briefs, cadenceRes] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     // `*`, not a column list: `artefact` is M8's column, and a select naming
     // it fails outright on a database a migration behind.
@@ -83,7 +84,11 @@ export default async function StudioPage({ searchParams }: { searchParams?: Prom
     // The month's department briefs, on the platform as soon as a run writes
     // them (lib/pages/studio-briefs.ts; the ledger is service role only).
     loadStudioBriefs(createAdminClient(), clientId),
+    // When the weekly really goes: after Sunday's update, unless the
+    // operator has paused the workspace (lib/update-rhythm.ts).
+    supabase.from('tracking_configs').select('report_period').eq('client_id', clientId).maybeSingle(),
   ])
+  const paused = !cadenceRes.error && isPausedRhythm(cadenceRes.data as { report_period?: string | null } | null)
 
   const tenant = ((clientRes.data as { company_name?: string | null } | null)?.company_name ?? '').trim() || 'you'
   const schedules = readRows<StudioSchedule & { recipients: string[] | null; artefact?: string | null; starter_key?: string | null }>(scheduleRes, 'studio.schedules')
@@ -101,7 +106,7 @@ export default async function StudioPage({ searchParams }: { searchParams?: Prom
   const members = readRows<StudioMember>(memberRes, 'studio.members').filter((m) => m.email)
 
   // The weekly alone until the briefs are built (Heinrich, 1 Oct).
-  const rows = shownStudioRows(studioRows({ tenant, schedules, sends, members, now: new Date() }))
+  const rows = shownStudioRows(studioRows({ tenant, schedules, sends, members, now: new Date(), paused }))
   const issues = pastIssues(sends, schedules)
 
   // The viewer over the page.
