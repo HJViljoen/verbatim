@@ -178,6 +178,16 @@ describe('Content: what to post next (the month-closing run\'s ideas)', () => {
     expect(ownTouchWords(first.own)).toMatch(/^None of your \d+ posts since August touched on it$/)
   })
 
+  it('two ideas: the question Content sets in the card they leave leads Also asked, so the most asked question is never lost', () => {
+    const two = contentFixture({ ideas: 'two' })
+    expect(two.ideas.questions).toHaveLength(1)
+    const lead = two.ideas.questions[0]
+    const i = ideasOf(two, OSSUR_IDEA_ROWS, { month: OCT, medical: true })!
+    expect(i.ideas).toHaveLength(2)
+    expect(i.asked[0]).toEqual({ label: lead.label, videos: lead.month, href: `/dashboard/market/conversations/${lead.registryId}?period=month&month=2026-10` })
+    expect(i.asked.map((a) => a.label)).toEqual([lead, ...two.asked.rows].slice(0, 3).map((r) => r.label))
+  })
+
   it('an older set (not the closing run\'s), another month\'s set, or none: no page', () => {
     expect(ideasOf({ ...page, ideas: { ...page.ideas, week: { ...page.ideas.week!, current: false } } }, OSSUR_IDEA_ROWS, { month: OCT, medical: true })).toBeNull()
     expect(ideasOf(page, OSSUR_IDEA_ROWS, { month: SEP, medical: true })).toBeNull()

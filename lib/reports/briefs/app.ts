@@ -331,7 +331,11 @@ export function ideasOf(page: Pick<ContentPageData, 'ideas' | 'asked'>, rows: re
     since: page.asked.since,
     medical: a.medical,
     ideas,
-    asked: page.asked.unread ? [] : page.asked.rows
+    // Also asked from the top of Content's list: where fewer than three ideas
+    // print, the page sets its first questions in the cards the ideas leave
+    // (`b.questions`, `askedWithLead`) and its table goes on after them; the
+    // brief draws no question card, so they lead its line.
+    asked: page.asked.unread ? [] : [...b.questions, ...page.asked.rows]
       .filter((r) => r.label.trim() && (r.month ?? 0) > 0)
       .slice(0, 3)
       .map((r) => ({ label: r.label.trim(), videos: r.month ?? 0, href: marketConversationHref(r.registryId, { period: 'month', month }) })),
