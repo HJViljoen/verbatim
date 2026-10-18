@@ -14,7 +14,8 @@ export interface FormLike { get(name: string): FormDataEntryValue | null }
 
 export type Parsed<T> = { ok: true; value: T } | { ok: false; message: string }
 
-const text = (f: FormLike, k: string, max = 4000): string | null => {
+/** A trimmed text field cut at `max`, or null when blank. */
+export const text = (f: FormLike, k: string, max = 4000): string | null => {
   const v = String(f.get(k) ?? '').trim()
   return v === '' ? null : v.slice(0, max)
 }
@@ -31,7 +32,7 @@ function oneOf<T extends string>(f: FormLike, k: string, list: readonly T[]): T 
 
 /** A 'YYYY-MM-DD' that is a real day, or null when blank; undefined when it
  *  is not a day at all. */
-function day(f: FormLike, k: string): string | null | undefined {
+export function day(f: FormLike, k: string): string | null | undefined {
   const v = String(f.get(k) ?? '').trim()
   if (v === '') return null
   if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return undefined

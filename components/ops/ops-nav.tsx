@@ -1,7 +1,7 @@
 "use client"
 
 import { usePathname } from "next/navigation"
-import { Gauge, Receipt } from "lucide-react"
+import { Gauge, HandCoins, Receipt } from "lucide-react"
 
 import { SidebarMenu } from "@/components/ui/sidebar"
 import { NavHairline, NavRow } from "@/components/app-sidebar"
@@ -20,6 +20,8 @@ const OPS = [
   { href: "/dashboard/ops/readiness", label: "Readiness", icon: Gauge },
   // What Verbatim costs to run (9 Oct 2026). The page 404s for anyone else.
   { href: "/dashboard/ops/costs", label: "Costs", icon: Receipt },
+  // What the operator owes Dad, and what has been paid back (18 Oct 2026). The page 404s for anyone else.
+  { href: "/dashboard/ops/loan", label: "Dad", icon: HandCoins },
 ]
 
 export function OpsNavGroup() {

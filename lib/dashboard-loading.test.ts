@@ -45,6 +45,8 @@ const NO_LOADER: Readonly<Record<string, string>> = {
   // Operator only (9 Oct 2026): a client who guesses the address must get a
   // real 404, and a loader would stream a 200 before the gate's notFound().
   'ops/costs': 'throws notFound() for anyone but a platform admin; a loader would stream a 200 first',
+  // Operator only (18 Oct 2026), the same gate and the same reason.
+  'ops/loan': 'throws notFound() for anyone but a platform admin; a loader would stream a 200 first',
 }
 
 /** Redirect-only pages allowed to inherit whatever is above them. */

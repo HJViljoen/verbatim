@@ -24,7 +24,7 @@ import { Pill, StagePill, ZarUsd } from './fields'
 
 const PAD = 'gap-4 px-5 pt-[22px] pb-5 sm:px-[30px] sm:pt-[26px] sm:pb-[22px]'
 
-function Section({ icon, title, meta, children, className }: { icon: Parameters<typeof CardTitle>[0]['icon']; title: string; meta?: ReactNode; children: ReactNode; className?: string }) {
+export function Section({ icon, title, meta, children, className }: { icon: Parameters<typeof CardTitle>[0]['icon']; title: string; meta?: ReactNode; children: ReactNode; className?: string }) {
   return (
     <Card className={cn(PAD, 'min-w-0', className)}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
@@ -51,9 +51,9 @@ function Signed({ zar, rates, big = false }: { zar: number; rates: Rates; big?: 
 
 // ---- The figures at the top ------------------------------------------------------
 
-function Figure({ label, children, sub }: { label: string; children: ReactNode; sub?: ReactNode }) {
+export function Figure({ label, children, sub, className }: { label: string; children: ReactNode; sub?: ReactNode; className?: string }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1.5 rounded-[10px] bg-inner px-4 py-3.5">
+    <div className={cn('flex min-w-0 flex-col gap-1.5 rounded-[10px] bg-inner px-4 py-3.5', className)}>
       <span className="text-[12px] font-semibold text-secondary-foreground">{label}</span>
       <div>{children}</div>
       {sub ? <span className="text-[12px] leading-[1.4] text-muted-foreground">{sub}</span> : null}

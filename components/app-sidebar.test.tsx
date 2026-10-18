@@ -120,6 +120,15 @@ describe('the sidebar', () => {
     expect(html).toMatch(/aria-current="page"[^>]*>.*?<span>Costs<\/span>/)
   })
 
+  it('gives the operator Dad after Costs, lit on its own page', () => {
+    const html = sidebar('/dashboard/ops/loan', <OpsNavGroup />)
+    expect(html).toContain('href="/dashboard/ops/loan"')
+    expect(html.indexOf('>Dad<')).toBeGreaterThan(html.indexOf('>Costs<'))
+    expect(html.indexOf('>Dad<')).toBeLessThan(html.indexOf('>Studio<'))
+    expect(html).toMatch(/aria-current="page"[^>]*>.*?<span>Dad<\/span>/)
+    expect(html.match(/aria-current="page"/g)).toHaveLength(1)
+  })
+
   it('is 281px wide as the artboards render it (256px rows, 12px in, the hairline), with the sidebar\'s own shadow on its edge', () => {
     expect(readFileSync('app/dashboard/layout.tsx', 'utf8')).toContain("'--sidebar-width': '281px'")
     expect(sidebar('/dashboard')).toContain('border-r-[#E4E2DC] shadow-sidebar')
