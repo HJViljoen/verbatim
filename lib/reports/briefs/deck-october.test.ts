@@ -168,6 +168,18 @@ describe('In short says only what prints: the check reads the October pages\' ow
     const weigh = briefFixture('leadership').sections.find((s) => s.key === 'leadership.weigh')!.groups[0].items[0].text
     expect(lines).not.toContain(weigh)
   })
+
+  it('only what the October page draws: Who is in your market\'s cards name no products, and Your moves draws one move\'s card', () => {
+    const second = { ...OSSUR_MOVES.moves[0], id: 'm2', title: 'Run a second campaign', sentence: 'A sentence only the second move earns.' }
+    const d = octoberFixture('leadership', { app: app({ moves: { ...OSSUR_MOVES, moves: [...OSSUR_MOVES.moves, second] } }) })
+    const lines = printedLines(printedPages(d)).join('\n')
+    expect(lines).toContain('Talks most about Cost & access, 31 of their 88 videos.')
+    expect(lines).not.toContain('Your products in them')
+    expect(lines).toContain(OSSUR_MOVES.moves[0].sentence)
+    expect(lines).not.toContain(second.sentence)
+    // Who is buying's cards say both, as they print them.
+    expect(printedLines(printedPages(octoberFixture('sales'))).join('\n')).toContain('Your products in them: Pro-Flex Terra and Direct Socket.')
+  })
 })
 
 describe('a deck from before the October canvas, handed an October brief (a rollback)', () => {

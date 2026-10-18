@@ -201,12 +201,15 @@ export function appLines(s: BriefSection): string[] {
     for (const g of s.people.groups) {
       out.push(`${g.name}: ${fmtInt(g.videos)} of ${fmtInt(s.people.market)} videos. ${g.oneLiner}`)
       if (s.key === 'sales.groups') out.push(`What they want: ${g.wants}`, `What stops them: ${g.stops}`, `What tips them: ${g.tips}`)
-      out.push(inTheirVideos(g))
+      // Who is in your market's card says the subject alone (no products);
+      // Who is buying's "In their videos" says both.
+      out.push(inTheirVideos(s.key === 'sales.groups' ? g : { ...g, products: null }))
     }
   }
   if (s.moves) {
     for (const a of s.moves.waiting) out.push(`${a.title}${a.aim ? ` (would move ${a.aim.label})` : ''}`)
-    for (const m of s.moves.moves) out.push(`${m.title}: ${m.sentence}`)
+    // The page draws the first move's card; the rest are a count.
+    for (const m of s.moves.moves.slice(0, 1)) out.push(`${m.title}: ${m.sentence}`)
     out.push(recordLine(s.moves))
   }
   if (s.products) {
