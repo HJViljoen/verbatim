@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import { briefFixture, octoberFixture, subjectsFixture } from '../../../components/briefs/fixture'
-import type { BriefAppInputs } from './app'
+import { appSectionsFor, type BriefAppInputs } from './app'
+import { ROLE_SECTIONS } from './sections'
 import { OSSUR_APP, OSSUR_HOOKS, OSSUR_IDEAS, OSSUR_MOVES, OSSUR_PEOPLE, OSSUR_PRODUCTS, SEALAND_APP, SEALAND_NAMED, WORST_NAMED, WORST_PRODUCTS } from './app-fixture'
 import { canvasOf, printsSection } from './canvas'
 import { contentsOf, deckPages, H, planDeck, printedSections, productLines } from './deck'
@@ -193,6 +194,15 @@ describe('a deck from before the October canvas, handed an October brief (a roll
       const { fromApp: _ignored, ...asOld } = october
       expect(canvasOf(asOld as MonthlyBriefData)).toBe('v1')
       expect(deckPages(asOld).length).toBeGreaterThan(2)
+    }
+  })
+
+  it('and composeBrief cannot put one there: `sections` are the writer\'s specs alone (`selectRoleSections` over ROLE_SECTIONS), which name no October key, and every page read from the app is one', () => {
+    for (const role of ['sales', 'marketing', 'content', 'leadership'] as const) {
+      expect(ROLE_SECTIONS[role].filter((s) => APP_SECTION_KEYS.includes(s.key))).toEqual([])
+      const fromApp = appSectionsFor(role, { company: 'Össur', app: { ...OSSUR_APP, named: SEALAND_NAMED }, subjects: null, vectors: null })
+      expect(fromApp.length).toBeGreaterThan(0)
+      expect(fromApp.every((s) => APP_SECTION_KEYS.includes(s.key))).toBe(true)
     }
   })
 
