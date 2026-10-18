@@ -296,5 +296,8 @@ export function movedMoves(): WeeklyMovesPart {
 }
 
 export function monthEndSnapshot(): WeeklyReadSnapshotData {
-  return ossurSnapshot({ read: monthEndRead(), pages: ossurPages({ moves: movedMoves() }), monthClose: monthEndClose() })
+  // Built on 1 November: Voices and Your products read October, the month
+  // that closed, which is no longer the calendar's (decision 3).
+  const last = { month: '2026-10-01', monthWords: 'October', monthLabel: 'the last full month' }
+  return ossurSnapshot({ read: monthEndRead(), pages: ossurPages({ voices: ossurVoices(last), products: ossurProducts(last), moves: movedMoves() }), monthClose: monthEndClose() })
 }

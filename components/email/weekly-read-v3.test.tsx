@@ -12,7 +12,7 @@ import { DIRECTION_WORDS, assertCopyContract, copyNodes } from '@/lib/test/copy-
 import { markupText, render } from '@/lib/test/render'
 import { levelOneRead, olderRead, sealandLines, sealandSnapshot, storedReportSnapshot } from '@/lib/test/weekly-read-fixture'
 import {
-  knee, monthEndSnapshot, movedMoves, ossurContent, ossurPages, ossurProducts, ossurRead, ossurSnapshot, ossurSubjects, ossurVoices, sealandPages, sealandV3Snapshot,
+  knee, monthEndSnapshot, movedMoves, ossurContent, ossurPages, ossurRead, ossurSnapshot, ossurSubjects, sealandPages, sealandV3Snapshot,
 } from '@/lib/test/weekly-read-v3-fixture'
 import { bannedHits } from '@/lib/written/scrub'
 import { WeeklyReadEmail, WeeklyReadPage, WeeklyReadReport } from './weekly-read'
@@ -319,8 +319,7 @@ describe('the email\'s states: a part that is not there prints nothing (§0a.2)'
   it('the issue that closes a month: its section is that month, and Voices and Your products still say it is the last full month (decision 3)', () => {
     // Built on 1 November: the reading month is October, which is the
     // section's own month, and no longer the calendar's.
-    const last = { month: '2026-10-01', monthWords: 'October', monthLabel: 'the last full month' }
-    const data = { ...monthEndSnapshot(), pages: ossurPages({ voices: ossurVoices(last), products: ossurProducts(last), moves: movedMoves() }) }
+    const data = monthEndSnapshot()
     const t = cardText(data)
     expectInOrder(t, ['October', 'Each a reading of the whole month', 'Voices', 'October · the last full month', 'Caretaker', 'Your products', 'October · the last full month', 'Direct Socket'])
     const page = textOf(pageOf(data))
