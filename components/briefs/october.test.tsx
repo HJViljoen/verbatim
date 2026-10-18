@@ -10,6 +10,7 @@ import { BRIEF_ROLES, type BriefRole, type MonthlyBriefData } from '@/lib/report
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { BriefDeck } from './brief-deck'
+import { verdictSlotWidth } from './app-pages'
 import { briefFixture, octoberFixture, subjectsFixture } from './fixture'
 
 // The October canvas's pages, the render tier (AGENTS.md): what each prints
@@ -160,6 +161,19 @@ describe('Marketing: Your products in the conversation (Brief-Marketing-05) and 
     expect(t).toContain('Not named without being asked in October: Freedom of Movement.')
     expect(t).toContain('The North Face and Cotopaxi were named most without being asked: in 11 and 8 of the 941 videos.')
     expect(p).toMatch(/data-copy="verdict"[^>]*>too few to compare/)
+  })
+
+  it('a verdict beside one row never shortens that row\'s bar: every row keeps one slot of the same width, so the longest bar is the largest count', () => {
+    const d = octoberFixture('marketing', { tenant: 'sealand' })
+    const rows = d.fromApp!.find((s) => s.key === 'marketing.named')!.named!.rows
+    expect(rows.filter((r) => r.verdict).length).toBe(1)
+    const slots = [...page(d, 'Named without being asked').matchAll(/<span[^>]*data-verdict-slot=""[^>]*>/g)].map((m) => /width:(\d+)px/.exec(m[0])?.[1])
+    expect(slots).toHaveLength(rows.length)
+    expect(new Set(slots).size).toBe(1)
+    expect(Number(slots[0])).toBe(verdictSlotWidth(rows.map((r) => r.verdict)))
+    // No verdict in the table: no slot.
+    const none = octoberFixture('marketing', { app: { ...SEALAND_APP, named: { ...SEALAND_APP.named!, rows: rows.map((r) => ({ ...r, verdict: null })) } } })
+    expect(page(none, 'Named without being asked')).not.toContain('data-verdict-slot')
   })
 
   it('Össur, brands not counted: no named page; Sealand, no catalogue: no products page', () => {

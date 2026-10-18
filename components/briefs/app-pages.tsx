@@ -71,13 +71,30 @@ function Track({ pct, color = P.yellow, h = 10 }: { pct: number; color?: string;
   )
 }
 
-/** A comparison's words (the badge's: `MovementBadge`), in its own node. */
-function VerdictText({ v, color = P.muted }: { v: BriefVerdict | null; color?: string }) {
-  if (!v) return null
-  const words = v.state === 'moved' && v.change != null
+/** A comparison's words (the badge's: `MovementBadge`). */
+export function verdictWords(v: BriefVerdict): string {
+  return v.state === 'moved' && v.change != null
     ? `${v.change > 0 ? '▲' : '▼'} ${Math.abs(v.change).toLocaleString('en-US')} pts${v.band != null ? ` · band ±${Math.abs(v.band).toLocaleString('en-US')} pts` : ''}`
     : MOVEMENT_WORDS[v.state === 'moved' ? 'too_little_data' : v.state]
-  return <span data-copy="verdict" style={{ fontSize: 12.5, color, whiteSpace: 'nowrap' }}>{words}</span>
+}
+
+/** A comparison's words in their own node. With `width`, in a slot of that
+ *  width, drawn empty where the row has none, so every row's bar beside it
+ *  has the same track. */
+function VerdictText({ v, color = P.muted, width }: { v: BriefVerdict | null; color?: string; width?: number }) {
+  const slot = width ? { width, flexShrink: 0 } : {}
+  if (!v) return width ? <span data-verdict-slot="" style={slot} /> : null
+  return <span data-copy="verdict" {...(width ? { 'data-verdict-slot': '' } : {})} style={{ fontSize: 12.5, color, whiteSpace: 'nowrap', ...slot }}>{verdictWords(v)}</span>
+}
+
+/** The slot a table's verdicts share: as wide as its longest, none where no
+ *  row has one. A bar's track then has the same length on every row, so the
+ *  longest bar is the largest count (a verdict beside one row alone had
+ *  shortened that row's track: The North Face's 11 drew shorter than
+ *  Cotopaxi's 8). */
+export function verdictSlotWidth(verdicts: readonly (BriefVerdict | null)[]): number {
+  const longest = Math.max(0, ...verdicts.map((v) => (v ? verdictWords(v).length : 0)))
+  return longest ? Math.ceil(longest * 12.5 * 0.5) + 4 : 0
 }
 
 const pct1 = (x: number): string => `${(Math.round(x * 10) / 10).toFixed(1)}%`
@@ -446,6 +463,7 @@ export function NamedPage({ appUrl, s, sub }: AppPageProps) {
   const n = s.named
   if (!n) return null
   const most = Math.max(1, ...n.rows.map((r) => r.named.k))
+  const verdictW = verdictSlotWidth(n.rows.map((r) => r.verdict))
   const notes = s.lines ?? []
   const grid = { display: 'grid', gridTemplateColumns: 'repeat(24, minmax(0, 1fr))', gap: 20 } as const
   return (
@@ -468,7 +486,7 @@ export function NamedPage({ appUrl, s, sub }: AppPageProps) {
               <div data-copy="level" style={{ flexShrink: 0, width: 76, fontFamily: MONO, fontSize: 14 }}>
                 <span style={{ fontWeight: 500 }}>{fmtInt(r.named.k)}</span> <span style={{ color: P.muted }}>of {fmtInt(r.named.n)}</span>
               </div>
-              <VerdictText v={r.verdict} />
+              <VerdictText v={r.verdict} width={verdictW || undefined} />
             </div>
             <div data-copy="level" style={{ gridColumn: 'span 5', fontFamily: MONO, fontSize: 14 }}>
               {r.praised && r.complained ? <>{fmtInt(r.praised.k)} · {fmtInt(r.complained.k)} <span style={{ color: P.muted }}>of {fmtInt(r.praised.n)}</span></> : null}
