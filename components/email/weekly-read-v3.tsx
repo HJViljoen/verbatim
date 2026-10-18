@@ -843,6 +843,7 @@ function pageCss(print: boolean, footer: string): string {
 @bottom-left{content:${cssString(footer)};font-family:'IBM Plex Sans',-apple-system,sans-serif;font-size:8pt;color:${P.muted}}
 @bottom-right{content:counter(page) " of " counter(pages);font-family:'IBM Plex Mono',monospace;font-size:8pt;color:${P.muted}}}
 .w3.w3-print{background:${P.paper}}
+@media print{html,body{background:${P.paper} !important}}
 .w3-print .w3-sheet{max-width:none;padding:0;gap:14px}
 .w3-print .w3-card{box-shadow:none;border-radius:0;padding:0;gap:12px}
 .w3-print .w3-group{break-before:page}
@@ -1082,14 +1083,14 @@ function subjectsNote(v: WeeklyV3View): string {
 
 /** The Voices card: the group in the most videos, its share of the month's
  *  videos as a bar, its one-liner, the other groups, the brands named most. */
-function VoicesCard({ part, sectionMonth, appUrl, print }: { part: WeeklyVoicesPart; sectionMonth: string; appUrl: string; print: boolean }) {
+function VoicesCard({ part, sectionMonth, appUrl, print, wide = false }: { part: WeeklyVoicesPart; sectionMonth: string; appUrl: string; print: boolean; wide?: boolean }) {
   const g = part.group!
   const share = part.videos ? Math.max(2, Math.min(100, Math.round((g.videos / part.videos) * 1000) / 10)) : null
   // A whole-month reading: its month, labelled where it is not the current
   // one (decision 3); the section's own words where it is the read's month.
   const month = sameMonth(part.month, sectionMonth) ? part.monthWords : barMonth(part.monthWords, part.monthLabel)
   return (
-    <article className={print ? 'w3-pc' : 'w3-card w3-pcard'}>
+    <article className={print ? 'w3-pc' : `w3-card w3-pcard${wide ? ' w3-wide' : ''}`}>
       <div className="w3-chead">
         {print ? null : <Icon name="voices" />}
         <div><h3 className="w3-ctitle">Voices</h3><p className="w3-csub">{print ? `${month} · in the most videos` : `The groups in your market, ${month}`}</p></div>
@@ -1126,7 +1127,7 @@ function VoicesCard({ part, sectionMonth, appUrl, print }: { part: WeeklyVoicesP
 
 /** The Your products card: the table of the products that came up, and the
  *  categories' videos. */
-function ProductsCard({ part, appUrl, print, monthWords }: { part: WeeklyProductsPart; appUrl: string; print: boolean; monthWords: string }) {
+function ProductsCard({ part, appUrl, print, monthWords, wide = false }: { part: WeeklyProductsPart; appUrl: string; print: boolean; monthWords: string; wide?: boolean }) {
   const max = Math.max(1, ...part.categories.map((c) => c.videos))
   const table = part.top.length > 0 ? (
     <table className="w3-tbl">
@@ -1170,7 +1171,7 @@ function ProductsCard({ part, appUrl, print, monthWords }: { part: WeeklyProduct
     )
   }
   return (
-    <article className="w3-card w3-pcard">
+    <article className={`w3-card w3-pcard${wide ? ' w3-wide' : ''}`}>
       <div className="w3-chead"><Icon name="products" /><div><h3 className="w3-ctitle">Your products</h3>{sub}</div></div>
       {table}
       {cats}
@@ -1181,13 +1182,13 @@ function ProductsCard({ part, appUrl, print, monthWords }: { part: WeeklyProduct
 
 /** The Content card: what to post next (or the question asked most), the
  *  medical team line once, Worth a reply. */
-function ContentCard({ part, appUrl, print, medical }: { part: WeeklyContentPart; appUrl: string; print: boolean; medical: boolean }) {
+function ContentCard({ part, appUrl, print, medical, wide = false }: { part: WeeklyContentPart; appUrl: string; print: boolean; medical: boolean; wide?: boolean }) {
   const ideas = part.ideas
   const q = part.asked
   const title = ideas.length > 0 ? 'What to post next' : q ? 'Asked most, and not yet in your posts' : 'Content'
   const sub = ideas.length > 0 && part.read ? `From questions asked ${part.read}` : null
   return (
-    <article className={print ? 'w3-pc' : 'w3-card w3-pcard'}>
+    <article className={print ? 'w3-pc' : `w3-card w3-pcard${wide ? ' w3-wide' : ''}`}>
       <div className="w3-chead">{print ? null : <Icon name="content" />}<div><h3 className="w3-ctitle">{title}</h3>{sub ? <p className="w3-csub">{sub}</p> : null}</div></div>
       {ideas.length > 0 ? (
         <div className="w3-ideas">
@@ -1212,10 +1213,10 @@ function ContentCard({ part, appUrl, print, medical }: { part: WeeklyContentPart
 }
 
 /** The Your moves card: the advice waiting, and the move's one comparison. */
-function MovesCard({ part, appUrl, print }: { part: WeeklyMovesPart; appUrl: string; print: boolean }) {
+function MovesCard({ part, appUrl, print, wide = false }: { part: WeeklyMovesPart; appUrl: string; print: boolean; wide?: boolean }) {
   const n = part.waiting
   return (
-    <article className={print ? 'w3-pc' : 'w3-card w3-pcard'}>
+    <article className={print ? 'w3-pc' : `w3-card w3-pcard${wide ? ' w3-wide' : ''}`}>
       <div className="w3-chead">
         {print ? null : <Icon name="moves" />}
         <div>
@@ -1264,12 +1265,14 @@ export function WeeklyV3Page({ data, appUrl, print = false, fill = false, medica
   const content = v.pages.content ?? null
   const moves = v.pages.moves ?? null
   const productsMonth = products ? (sameMonth(products.month, data.read.month) ? products.monthWords : barMonth(products.monthWords, products.monthLabel)) : ''
-  const cards = [
-    voices ? <VoicesCard key="voices" part={voices} sectionMonth={data.read.month} appUrl={appUrl} print={print} /> : null,
-    products ? <ProductsCard key="products" part={products} appUrl={appUrl} print={print} monthWords={productsMonth} /> : null,
-    content ? <ContentCard key="content" part={content} appUrl={appUrl} print={print} medical={medical} /> : null,
-    moves ? <MovesCard key="moves" part={moves} appUrl={appUrl} print={print} /> : null,
-  ].filter((c): c is ReactElement => c != null)
+  // Two to a row; an odd last card takes the row (screen only).
+  const makers = [
+    voices ? (wide: boolean) => <VoicesCard key="voices" part={voices} sectionMonth={data.read.month} appUrl={appUrl} print={print} wide={wide} /> : null,
+    products ? (wide: boolean) => <ProductsCard key="products" part={products} appUrl={appUrl} print={print} monthWords={productsMonth} wide={wide} /> : null,
+    content ? (wide: boolean) => <ContentCard key="content" part={content} appUrl={appUrl} print={print} medical={medical} wide={wide} /> : null,
+    moves ? (wide: boolean) => <MovesCard key="moves" part={moves} appUrl={appUrl} print={print} wide={wide} /> : null,
+  ].filter((c): c is (wide: boolean) => ReactElement => c != null)
+  const cards = makers.map((make, i) => make(i === makers.length - 1 && makers.length % 2 === 1))
   const read = `Read ${shortDate(data.readingAt)}`
   const brow = (
     <div className="w3-brow">
@@ -1302,7 +1305,7 @@ export function WeeklyV3Page({ data, appUrl, print = false, fill = false, medica
       <div className="w3-sec"><h2>Across your pages</h2><span className="w3-note">Each opens its page in Verbatim</span></div>
       {print
         ? <PrintPages voices={voices} products={products} content={content} moves={moves} v={v} appUrl={appUrl} medical={medical} productsMonth={productsMonth} />
-        : <div className="w3-grid">{cards.map((c, i) => (i === cards.length - 1 && cards.length % 2 === 1 ? <div key={c.key} className="w3-wide" style={{ display: 'contents' }}>{c}</div> : c))}</div>}
+        : <div className="w3-grid">{cards}</div>}
     </div>
   ) : null
 

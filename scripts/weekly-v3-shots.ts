@@ -11,7 +11,7 @@
 // (or CHROME_PATH) and pdftoppm (poppler) for the paper's PNGs.
 
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 import { createElement } from 'react'
@@ -93,11 +93,19 @@ async function main() {
       await page.evaluate(() => document.fonts.ready)
       const pdf = join(out, `${issue.name}-print.pdf`)
       writeFileSync(pdf, await page.pdf({ printBackground: true, preferCSSPageSize: true }))
+      let pages: string[] = []
       try {
         execFileSync('pdftoppm', ['-r', '72', '-png', pdf, join(out, `${issue.name}-print`)])
-        console.log(`${issue.name}-print-*.png`)
+        pages = readdirSync(out).filter((f) => f.startsWith(`${issue.name}-print-`) && f.endsWith('.png') && /-\d+\.png$/.test(f)).sort().map((f) => join(out, f))
+        console.log(`${issue.name}-print-*.png (${pages.length} pages)`)
       } catch {
         console.log(`${issue.name}-print.pdf (pdftoppm not found: no PNGs)`)
+      }
+      // The paper's pages two to a row, beside the print board where there is one.
+      if (pages.length > 0) {
+        const grid = `<div style="display:grid;grid-template-columns:repeat(2,420px);gap:16px">${pages.map((pg) => `<img src="file://${pg}" style="width:420px;border:1px solid #3a382f;background:#fff">`).join('')}</div>`
+        const board = issue.boards.print && existsSync(join(BOARDS, issue.boards.print)) ? `<figure style="margin:0"><figcaption style="color:#e8e6df;font:600 18px -apple-system;padding:0 0 10px">the board</figcaption><img src="file://${join(BOARDS, issue.boards.print)}" style="width:860px;border:1px solid #3a382f"></figure>` : ''
+        await shoot(`<!doctype html><html><body style="margin:0;background:#11110f"><div style="display:flex;gap:24px;padding:24px;align-items:flex-start">${board}<figure style="margin:0"><figcaption style="color:#e8e6df;font:600 18px -apple-system;padding:0 0 10px">built, A4 pages</figcaption>${grid}</figure></div></body></html>`, `${issue.name}-print-beside`, board ? 1800 : 920)
       }
       const b = issue.boards
       const pair = async (built: string, board: string | undefined, tag: string, title: string, width: number) => {
