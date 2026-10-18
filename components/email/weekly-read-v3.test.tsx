@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { ALSO_TALKED as MARKET_ALSO, MOST_TALKED as MARKET_MOST, NOTHING_NEW as MARKET_NOTHING } from '@/components/pages/v2/market/analysis'
+import { MovementBadge } from '@/components/delta-badge'
 import { renderWeeklyReadEmail } from '@/lib/email/weekly-read'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
 import { WEEKLY_READ_SNAPSHOT_VERSION } from '@/lib/reports/weekly-read-build'
@@ -221,17 +222,27 @@ describe('the email, the issue that closes a month (H7-Email-Weekly-MonthEnd)', 
     expect(copyNodes(html).filter((n) => n.kind === 'verdict').map((n) => n.text)).toEqual(expect.arrayContaining(['Unusual this week']))
   })
   it('a dated move prints its one comparison, its verdict in a verdict node', () => {
-    expectInOrder(t, ['Your moves', 'After your move', 'Price transparency page, dated 2 Sep', 'Cost & access: 92 of 612 videos in August, the month before, against 134 of 839 in September, the month of the move', 'no clear change'])
-    expect(copyNodes(html).filter((n) => n.kind === 'verdict').map((n) => n.text)).toContain('no clear change')
+    expectInOrder(t, ['Your moves', 'After your move', 'Price transparency page, dated 2 Sep', 'Cost & access: 92 of 612 videos in August, the month before, against 134 of 839 in September, the month of the move', 'no clear change · +0.9 pts · band ±3.2 pts'])
+    expect(copyNodes(html).filter((n) => n.kind === 'verdict').map((n) => n.text)).toContain('no clear change · +0.9 pts · band ±3.2 pts')
     assertCopyContract(html)
     expect(outsideVerdicts(html)).not.toMatch(new RegExp(`\\b(${DIRECTION_WORDS.join('|')})\\b`, 'i'))
   })
-  it('a move that moved beyond its band says so with its band inline; a refused comparison prints nothing', () => {
+  it('the badge\'s words as Your moves\' move card prints them, the band inline (ruling I); a refused comparison prints nothing', () => {
     const v = movedMoves().move!.verdict
     expect(moveVerdictWords({ ...v, state: 'moved', changePts: 4.2, bandPts: 1.9 })).toBe('▲ 4.2 pts · band ±1.9 pts')
     expect(moveVerdictWords({ ...v, state: 'moved', changePts: -2, bandPts: 1 })).toBe('▼ 2 pts · band ±1 pts')
-    expect(moveVerdictWords(v)).toBe('no clear change')
+    // A non-answer prints the change it refused and its band (SH18), as the
+    // move card's badge does with no tooltip to hold them.
+    expect(moveVerdictWords(v)).toBe('no clear change · +0.9 pts · band ±3.2 pts')
+    expect(moveVerdictWords({ ...v, changePts: -0.4 })).toBe('no clear change · −0.4 pts · band ±3.2 pts')
+    expect(moveVerdictWords({ ...v, changePts: null, bandPts: null })).toBe('no clear change')
+    // Too thin to compare withholds both, as the badge does.
+    expect(moveVerdictWords({ ...v, state: 'too_little_data' })).toBe('too few to compare')
     expect(moveVerdictWords({ ...v, state: 'refused' })).toBeNull()
+    // The same words the badge prints on Your moves (no tooltip), one source.
+    for (const x of [v, { ...v, state: 'too_little_data' as const }, { ...v, state: 'moved' as const, changePts: 4.2, bandPts: 1.9 }]) {
+      expect(markupText(render(<MovementBadge verdict={x} unit="pts" />)).replace(/\s+/g, ' ').trim()).toBe(moveVerdictWords(x))
+    }
   })
 })
 

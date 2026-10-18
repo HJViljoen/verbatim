@@ -2,7 +2,7 @@
 import { Fragment, type CSSProperties, type ReactElement, type ReactNode } from 'react'
 import { translationLabel, translationNote } from '@/components/quote-block'
 import { FLAG_WORDS, flagWordOf } from '@/components/v2/flag-chip'
-import { MOVEMENT_WORDS } from '@/components/delta-badge'
+import { nonAnswerParts, signedChange } from '@/components/delta-badge'
 import { fmtInt, platformLabel, shortDate } from '@/lib/format'
 import { FONT } from '@/lib/email/theme'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
@@ -129,17 +129,28 @@ function RowFigure({ figure, bold }: { figure: StoodOutRow['figure']; bold: CSSP
   )
 }
 
-/** "▲ 2.1 pts · band ±1.4 pts" for a move whose market moved beyond its band
- *  (the band printed inline, ruling I: in an email a tooltip prints
- *  nothing), else the verdict's non-answer ("no clear change"); nothing for a
- *  refused comparison, which never prints. */
+/** A band as the badge prints it: "band ±1.4 pts". */
+const bandWords = (pts: number): string => `band ±${Math.abs(pts).toLocaleString('en-US')} pts`
+
+/** THE BADGE'S WORDS, AS YOUR MOVES PRINTS THEM ON ITS MOVE CARD
+ *  (`MovementBadge` with no `bandTip`, components/delta-badge.tsx): "▲ 2.1
+ *  pts · band ±1.4 pts" for a move whose market moved beyond its band; a
+ *  non-answer with the change it refused and its band where both exist ("no
+ *  clear change · +0.9 pts · band ±3.2 pts": a refusal a reader can check,
+ *  SH18), else its word alone ("too few to compare", which withholds both);
+ *  the band inline, ruling I, because in an email a tooltip prints nothing.
+ *  Nothing for a refused comparison, which never prints. */
 export function moveVerdictWords(v: Verdict): string | null {
   if (v.state === 'refused') return null
   if (v.state === 'moved' && v.changePts != null) {
-    const band = v.bandPts != null ? ` · band ±${Math.abs(v.bandPts).toLocaleString('en-US')} pts` : ''
+    const band = v.bandPts != null ? ` · ${bandWords(v.bandPts)}` : ''
     return `${v.changePts > 0 ? '▲' : '▼'} ${Math.abs(v.changePts).toLocaleString('en-US')} pts${band}`
   }
-  return v.state === 'moved' ? MOVEMENT_WORDS.too_little_data : MOVEMENT_WORDS[v.state]
+  const parts = nonAnswerParts(v, 'pts')
+  if (!parts) return null
+  return parts.change != null && parts.bandPts != null
+    ? `${parts.word} · ${signedChange(parts.change, 'pts')} · ${bandWords(parts.bandPts)}`
+    : parts.word
 }
 
 /** The mark: the yellow ditto on an ink tile in the email (an image: mail
