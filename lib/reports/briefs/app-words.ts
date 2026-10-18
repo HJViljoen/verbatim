@@ -2,7 +2,7 @@ import { fmtInt, longMonth, platformLabel, shortDate } from '../../format'
 import { MARKET_LONG_RUN_ANCHOR, marketMonthHref, surface } from '../../nav'
 import { monthStartOf } from '../../reading/month-key'
 import { coveredDays } from '../../written/month'
-import type { BriefAdvice, BriefGroup, BriefIdea, BriefIdeas, BriefMove, BriefMoves, BriefProducts, BriefSection, SectionKey } from './types'
+import type { BriefAdvice, BriefGroup, BriefIdea, BriefIdeas, BriefMove, BriefMoves, BriefNamed, BriefProducts, BriefSection, SectionKey } from './types'
 
 // The October canvas's words, light (pure; the deck imports it, so it reads
 // no page module): the titles, the lines code writes from the parts' counts,
@@ -146,6 +146,21 @@ export const recipeLabel = (x: Pick<BriefIdea, 'format' | 'opening'>): string | 
 
 /** The board's line where code chose neither. */
 export const NO_RECIPE = 'No format stands out on this question yet'
+
+/** The three notes under the brands table (code's), over the rows the
+ *  table prints. Pure. */
+export function namedNotes(n: BriefNamed, company: string): string[] {
+  const rivals = [...n.rows].filter((r) => !r.you).sort((x, y) => y.named.k - x.named.k || x.label.localeCompare(y.label))
+  const out: string[] = []
+  const top = rivals.filter((r) => r.named.k > 0).slice(0, 2)
+  if (top.length === 2) out.push(`${top[0].label} and ${top[1].label} were named most without being asked: in ${fmtInt(top[0].named.k)} and ${fmtInt(top[1].named.k)} of the ${fmtInt(n.base)} videos.`)
+  else if (top.length === 1) out.push(`${top[0].label} was named most without being asked: in ${fmtInt(top[0].named.k)} of the ${fmtInt(n.base)} videos.`)
+  const you = n.rows.find((r) => r.you)
+  if (you) out.push(you.named.k > 0 ? `${company} was named without being asked in ${fmtInt(you.named.k)} of them.` : `${company} was not named without being asked in ${longMonth(n.month)}.`)
+  const widest = [...rivals].filter((r) => r.praised && r.complained && r.praised.n > 0).sort((x, y) => (y.praised?.n ?? 0) - (x.praised?.n ?? 0) || x.label.localeCompare(y.label))[0]
+  if (widest?.praised && widest.complained) out.push(`Of the ${fmtInt(widest.praised.n)} videos naming ${widest.label} in any way, people praised it in ${fmtInt(widest.praised.k)} and complained in ${fmtInt(widest.complained.k)}.`)
+  return out
+}
 
 /** The line the Leadership groups' foot adds where the Sales brief prints its
  *  groups (compose.ts `pointToSalesGroups`). */

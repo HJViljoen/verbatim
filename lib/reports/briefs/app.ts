@@ -24,7 +24,7 @@ import { monthStartOf, prevMonth } from '../../reading/month-key'
 import type { Verdict } from '../../reading/verdicts'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, isRivalAudience } from '../../rivals'
 import { firstSentenceOf } from '../weekly-read-v3'
-import { andList, APP_TITLES, daysLong, numberWord, voicesMonthHref, yyyymm } from './app-words'
+import { andList, APP_TITLES, daysLong, namedNotes, numberWord, voicesMonthHref, yyyymm } from './app-words'
 import type { StandingFact } from '../../written/types'
 import type {
   BriefAdvice, BriefGroup, BriefHookRow, BriefHooks, BriefHookTable, BriefIdea, BriefIdeas, BriefItem, BriefMove, BriefMoves, BriefNamed, BriefNamedRow,
@@ -33,7 +33,7 @@ import type {
 
 export {
   adviceDetail, alsoInMarket, andList, APP_TITLES, appLines, buyersSub, categoryProducts, dayLong, daysLong, ideaReadLine, inTheirVideos, moveLine, multipleText, NO_RECIPE,
-  numberWord, ownTouchWords, pageHref, recipeLabel, recordLine, SALES_GROUPS_LINE, slotWords, voicesMonthHref, whoAsks,
+  namedNotes, numberWord, ownTouchWords, pageHref, recipeLabel, recordLine, SALES_GROUPS_LINE, slotWords, voicesMonthHref, whoAsks,
 } from './app-words'
 
 // THE OCTOBER CANVAS'S PAGES READ FROM THE APP (the boards Heinrich approved
@@ -536,20 +536,6 @@ export function productsSection(p: BriefProducts | null): BriefSection | null {
     foot: 'Counted on every video in your market, the comments on your own posts included. What your own posts say is never counted.',
     link: { href: p.href, text: 'Open Your products →' },
   })
-}
-
-/** The three notes under the brands table (code's). Pure. */
-export function namedNotes(n: BriefNamed, company: string): string[] {
-  const rivals = [...n.rows].filter((r) => !r.you).sort((x, y) => y.named.k - x.named.k || x.label.localeCompare(y.label))
-  const out: string[] = []
-  const top = rivals.filter((r) => r.named.k > 0).slice(0, 2)
-  if (top.length === 2) out.push(`${top[0].label} and ${top[1].label} were named most without being asked: in ${fmtInt(top[0].named.k)} and ${fmtInt(top[1].named.k)} of the ${fmtInt(n.base)} videos.`)
-  else if (top.length === 1) out.push(`${top[0].label} was named most without being asked: in ${fmtInt(top[0].named.k)} of the ${fmtInt(n.base)} videos.`)
-  const you = n.rows.find((r) => r.you)
-  if (you) out.push(you.named.k > 0 ? `${company} was named without being asked in ${fmtInt(you.named.k)} of them.` : `${company} was not named without being asked in ${longMonth(n.month)}.`)
-  const widest = [...rivals].filter((r) => r.praised && r.complained && r.praised.n > 0).sort((x, y) => (y.praised?.n ?? 0) - (x.praised?.n ?? 0) || x.label.localeCompare(y.label))[0]
-  if (widest?.praised && widest.complained) out.push(`Of the ${fmtInt(widest.praised.n)} videos naming ${widest.label} in any way, people praised it in ${fmtInt(widest.praised.k)} and complained in ${fmtInt(widest.complained.k)}.`)
-  return out
 }
 
 /** "Who gets named without being asked" (Marketing): only where the brands

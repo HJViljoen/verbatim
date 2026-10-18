@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { briefFixture, octoberFixture, subjectsFixture } from '../../../components/briefs/fixture'
 import type { BriefAppInputs } from './app'
-import { OSSUR_APP, OSSUR_HOOKS, OSSUR_IDEAS, OSSUR_MOVES, OSSUR_PEOPLE, OSSUR_PRODUCTS, SEALAND_APP, SEALAND_NAMED } from './app-fixture'
+import { OSSUR_APP, OSSUR_HOOKS, OSSUR_IDEAS, OSSUR_MOVES, OSSUR_PEOPLE, OSSUR_PRODUCTS, SEALAND_APP, SEALAND_NAMED, WORST_NAMED } from './app-fixture'
 import { canvasOf, printsSection } from './canvas'
 import { contentsOf, deckPages, planDeck, printedSections } from './deck'
 import { printedLines, printedPages } from './inshort'
@@ -118,6 +118,15 @@ describe('a thin page is left out (PAGE_NEEDS), and a partial landing prints the
     const noPanel = octoberFixture('leadership', { subjects: subjectsFixture(OSSUR_APP.subjectReads, { panel: false }) })
     expect(left(noPanel)).toContain('leadership.subjects: missing: What people do in the comments')
     expect(eyebrows(octoberFixture('leadership', { subjects: null }))[2]).toBe('Who is in your market')
+  })
+
+  it('Who gets named: where not every brand fits, the notes speak of the rows that print', () => {
+    const d = octoberFixture('marketing', { app: { ...SEALAND_APP, named: WORST_NAMED } })
+    const page = printedSections(d).find((s) => s.key === 'marketing.named')!
+    const shown = page.named!.rows.map((r) => r.label)
+    expect(shown.length).toBeLessThan(WORST_NAMED.rows.length)
+    const named = WORST_NAMED.rows.map((r) => r.label).filter((l) => !shown.includes(l))
+    for (const line of page.lines ?? []) for (const gone of named) expect(line).not.toContain(gone)
   })
 
   it('Sealand: no products page, no moves where none were read, brands named where counted', () => {

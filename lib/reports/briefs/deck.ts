@@ -2,7 +2,7 @@ import { aboutName } from '../../brands/labels'
 import { fmtInt, longMonth } from '../../format'
 import { monthsPhrase } from '../../written/month'
 import { languageName } from './markdown'
-import { adviceDetail, alsoInMarket, buyersSub, categoryProducts, ideaReadLine, inTheirVideos, moveLine, ownTouchWords, pageHref, recordLine, whoAsks } from './app-words'
+import { adviceDetail, alsoInMarket, buyersSub, categoryProducts, ideaReadLine, inTheirVideos, moveLine, namedNotes, ownTouchWords, pageHref, recordLine, whoAsks } from './app-words'
 import { canvasOf, findingsAfter, printsSection, V2_PAGES } from './canvas'
 import type { BriefFinding, BriefGroup, BriefIdea, BriefIdeas, BriefItem, BriefQuote, BriefRole, BriefSection, StoredBriefData, SectionKey } from './types'
 import { APP_SECTION_KEYS, BRIEF_NAME, BRIEF_ROLES } from './types'
@@ -847,7 +847,9 @@ export function planSection(s: BriefSection, companion: BriefSection | null, d: 
       let rows = fitItems(n.rows, () => 42, room, max)
       const you = n.rows.find((r) => r.you)
       if (you && !rows.includes(you) && rows.length > 0) rows = [...rows.slice(0, -1), you]
-      return [page({ ...s, named: { ...n, rows } })]
+      // The notes say only what the table prints.
+      const shown = { ...n, rows }
+      return [page({ ...s, named: shown, ...(rows.length < n.rows.length ? { lines: namedNotes(shown, d.company) } : {}) })]
     }
     case 'content.ideas': {
       // The board's three cards, each as tall as the row; where the tallest
