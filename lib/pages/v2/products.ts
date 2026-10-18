@@ -1507,6 +1507,31 @@ export interface TopProducts {
    *  SHELF_TILES tiles, then `more`, the page's "+N more"). Every state with
    *  a catalogue carries it but a failed read. */
   columns?: { id: string; name: string; products: { id: string; videos: number | null }[]; more?: number; named?: number | null }[]
+  /** OPTIONAL (the weekly read v3, 18 Oct; on a `ready` tile only): the month
+   *  the figures read (`YYYY-MM-01`); the videos about the products or their
+   *  categories (the page's header, `headerWords`); every product with a
+   *  video this month, most first, then the ones the shelf marks as in their
+   *  first month with videos (`flag`, `firstMonthOf`), then by name, each with
+   *  its category and its page; and every category with a video, most first.
+   *  All from the page's own shelf. A dump from before it carries none. */
+  month?: string
+  videos?: number | null
+  cameUpProducts?: { id: string; name: string; category: string; videos: number; first: boolean; href: string }[]
+  categories?: { id: string; name: string; videos: number; href: string }[]
+}
+
+/** The products and categories with a video this month, from the page's
+ *  shelf, in the order `TopProducts` lists them. PURE. */
+export function cameUpOf(shelf: readonly ShelfCategoryView[]): Pick<TopProducts, 'cameUpProducts' | 'categories'> {
+  const cameUpProducts = shelf
+    .flatMap((c) => c.products.flatMap((p) => ((p.videos ?? 0) > 0
+      ? [{ id: p.id, name: p.name, category: c.name, videos: p.videos as number, first: p.flag != null, href: p.href }]
+      : [])))
+    .sort((a, b) => b.videos - a.videos || Number(b.first) - Number(a.first) || a.name.localeCompare(b.name))
+  const categories = shelf
+    .flatMap((c) => ((c.videos ?? 0) > 0 ? [{ id: c.id, name: c.name, videos: c.videos as number, href: c.href }] : []))
+    .sort((a, b) => b.videos - a.videos || a.name.localeCompare(b.name))
+  return { cameUpProducts, categories }
 }
 
 /** The tile's mini shelf from the page's shelf, column by column, cut as the
@@ -1529,7 +1554,7 @@ export const TOP_LABELS: Readonly<Record<'first' | 'most', string>> = {
 /** The tile, from the page's level 1 (no crosses: the tile reads none). The
  *  standout is a product's first month with videos, else the product with
  *  the most videos, else the category with the most. PURE. */
-export function topProductsOf(data: Pick<ProductsData, 'state' | 'monthWords' | 'shelf' | 'header' | 'market' | 'params'> & { monthLabel?: string | null }, firsts: readonly FirstStandout[] = []): TopProducts {
+export function topProductsOf(data: Pick<ProductsData, 'state' | 'monthWords' | 'shelf' | 'header' | 'market' | 'params'> & { monthLabel?: string | null; month?: string }, firsts: readonly FirstStandout[] = []): TopProducts {
   const href = PRODUCTS_HREF
   // A state that reads no month carries no month's label either.
   const readsMonth = data.state !== 'not_applied' && data.state !== 'no_catalogue' && data.state !== 'not_on'
@@ -1547,7 +1572,10 @@ export function topProductsOf(data: Pick<ProductsData, 'state' | 'monthWords' | 
     case 'failed': return { ...base, state: 'quiet', note: 'failed' }
     default: break
   }
-  const extra = { cameUp: data.header?.cameUp ?? 0, products: data.header?.products ?? 0, columns }
+  const extra = {
+    cameUp: data.header?.cameUp ?? 0, products: data.header?.products ?? 0, columns,
+    ...(data.month ? { month: data.month } : {}), videos: data.header?.videos ?? null, ...cameUpOf(data.shelf),
+  }
   const first = firsts[0]
   if (first) {
     return { ...base, ...extra, state: 'ready', standout: { label: TOP_LABELS.first, name: first.name, k: first.videos, n: null, href: first.href } }

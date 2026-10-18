@@ -10,7 +10,10 @@ import { scrubProse, type ProseSlot } from '../prose/scrub'
 import { inlineMonth } from '../reading/month-label'
 
 // "Across your pages": the level-1 weekly email's one line per page (depth
-// v2, T11b; board E7). PURE and small on purpose: each page's line is that
+// v2, T11b; board E7). VERSION 2 ONLY since 18 Oct: a new snapshot is version
+// 3 and freezes each page's part instead (lib/reports/weekly-read-v3-build.ts,
+// from the same tops); these lines stay for every level-1 issue stored 13 to
+// 18 Oct, which renders from its frozen `lines` byte for byte. PURE and small on purpose: each page's line is that
 // page's Dashboard tile, said in a line. The build (lib/reports/weekly-read-
 // lines-load.ts) calls the same `top<Page>()` reader the Dashboard calls
 // (`topVoices`, `topProducts`, `topContent`, `topMoves`; Phase 4 fix round),

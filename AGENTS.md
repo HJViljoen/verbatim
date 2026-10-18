@@ -976,17 +976,102 @@ This version has breaking changes — APIs, conventions, and file structure may 
   in full ("16 in September", "September in total"), never "October so far";
   a week inside one month, against that month so far (`readingMonthOf`,
   `lib/written/month.ts`). Offline preview of a stored read:
-  `scripts/weekly-read-email.ts`. **Level 1 (depth v2, T11b, 13 Oct).**
+  `scripts/weekly-read-email.ts` (`--fixture ossur|sealand|month-end`, a
+  stored snapshot dump with `--snapshot`, or a stored read with `--read`;
+  `--page-out` and `--print-out` write the full read and the paper), and its
+  shots beside the H7 boards: `scripts/weekly-v3-shots.ts`. **Level 1 (depth
+  v2, T11b, 13 Oct) and version 3 (the H7 boards, 18 Oct).**
   *Versions:* a `weekly_read` snapshot's `version` names its email
   (`WEEKLY_READ_SNAPSHOT_VERSION`, `lib/reports/weekly-read-build.ts`). 1 is
   the report, every snapshot stored before 13 Oct, and it renders byte for
   byte as sent (`lib/test/weekly-read-golden/`, held by
-  `components/email/weekly-read.test.tsx`). 2 is level 1 (board E7): the
-  week in one line, the market's week beside its month, the lead, Also this
-  week, Across your pages, the way in. No quote. The share page, the viewer
-  and the PDF of a version 2 snapshot print the full report plus level 1's
-  flag, rows and page lines; that is where the full read lives now that This
-  week is not a page. *The lead* is ONE rule, shared with Market's top row:
+  `components/email/weekly-read.test.tsx`). 2 is level 1 (board E7), every
+  snapshot built 13 to 18 Oct: the week in one line, the market's week beside
+  its month, the lead, Also this week, Across your pages, the way in. No
+  quote. The share page, the viewer and the PDF of a version 2 snapshot print
+  the full report plus level 1's flag, rows and page lines. It too renders
+  byte for byte as sent (`lib/test/weekly-read-golden/l1-*`, pinned at
+  7edb213a before version 3 was written). **3 is the H7 issue (Heinrich, 18
+  Oct: "that's good for the weekly design"), and every new snapshot is 3.**
+  *What it freezes* (`snapshotWeeklyRead` through `loadWeeklyReadParts`,
+  `lib/reports/weekly-read-lines-load.ts`, each read soft on the admin
+  client, a part whose read fails left out; the pure builders are
+  `lib/reports/weekly-read-v3-build.ts`): the read whole, as before, its own
+  `subjectReads` left out; `subjects`, every READY subject's own stored read
+  (headline, what it means, status, a thin read's line) by `subjectOwnRead`'s
+  rule over the stored read, in Market's order (`loadReadySubjectOrder`:
+  `factsFromReadings` over the month's readings, a failed reading falling
+  back to name order), each opening its Market page for the read's month,
+  never an unready subject's words (U6); `pages`, each the Dashboard tile's
+  own top said for the issue: Voices (`topVoices`: the group in the most
+  videos with its one-liner, the other groups by name, and the two brands
+  named most unprompted only where `brandsState` is ready), Your products
+  (`topProducts`, only a `ready` tile, so behind `PRODUCT_READINGS_ENABLED`
+  and absent for Sealand: how many of the catalogue came up, the videos about
+  them or their categories, up to five products most videos first with
+  their category, videos, page and the first-time mark, and every category's
+  videos; `TopProducts` widened additively by `cameUpOf` over the page's own
+  shelf; FIRST TIME IS THE SHELF'S OWN FLAG, `firstMonthOf`: the product's
+  first month with videos among the months read under the same catalogue
+  version, at least two earlier months read with none, and at least
+  `STANDOUT_MIN` (3) videos, so a one-video product is never marked),
+  Content (`topContent`, widened with every idea of the set: this week's
+  ideas only, each title through the `week_read` scrub, the days they read,
+  `medical` where `printsMedicalLine`; with no idea for this week the tile's
+  stand-in, `topAsked`; and Worth a reply, a link to Content's list with the
+  week's days and never a count) and Your moves (`topMoves`, widened with the
+  first `TOP_MOVES_LISTED` of `waitingAdvice`: the count, the first titles
+  with the updates that raised them, and the move whose comparison may print
+  with its verdict); and `monthClose`, only on the run that closes a month
+  (`closesMonth`) whose long-run read is published and prints
+  (`marketLongRunOf`): "October’s read, “What holds across September and
+  October”, is on Market › This month", linking `marketMonthHref(month,
+  MARKET_LONG_RUN_ANCHOR)`. Every part is optional on the type: a snapshot
+  missing one renders without it, never an empty section. No model call is
+  made and no comment's words are read. *What the email prints*
+  (`components/email/weekly-read-v3.tsx` `WeeklyV3Card`, to
+  H7-Email-Weekly-Alt; its phone width, -Phone, by the head's one media
+  query, `WEEKLY_V3_EMAIL_CSS`, on `wr3-` classes over inline styles): grouped
+  BY QUESTION. This week: the week in one line, What it means as each
+  implication's first sentence (`firstSentenceOf`, never cut inside one), the
+  market's week beside its month in two cells, the month-closing line after
+  them, then What stood out in Market's eyebrows (`stoodOutOf` over the read's
+  frozen `conversations`: the lead by `weekLead`, a flag only as
+  `printableWeekRead` left it, with the check's own chip and no band
+  sentence; a heard row "Most talked about this week" where the lead is not
+  the biggest, else "Also talked about"; three in all). The month so far
+  ("October so far", or "October" for a week past its end; "Each a reading of
+  the whole month"): every frozen subject's name and stored headline (a thin
+  read its line, muted), Voices and Your products, each saying its own month
+  with `readingMonthLabel`'s words only where it is not the read's. What to do
+  next: Content (the ideas numbered, `MEDICAL_LINE` once under them, or the
+  question asked most with its week beside its month and no medical line,
+  then Worth a reply) and Your moves ("Advice waiting for a decision", the
+  first title, "4 waiting"; "After your move" with its one comparison in Your
+  moves' words and its verdict, `moveVerdictWords`, in a verdict node). Then
+  Open Market (yellow, `/dashboard/market`) and Read this week in full (the
+  share link); Who gets this goes to `/dashboard/studio`. No quote, no story,
+  no finding. *The full read* (`WeeklyV3Page`: the share page, the viewer and
+  the A4 paper, ONE visual system to H7-Weekly-Full / -Print, one scoped
+  stylesheet, `w3-`): the week card (the line; What happened with each quote
+  under its paragraph, as Market's week page places them, words resolved at
+  render; What it means in full; New this week, or "Nothing new this week.";
+  Worth watching), the month-closing card, Also this week (three cards, the
+  third "Nothing new this week" over what else was talked about where nothing
+  was new, as Market's), the subject cards with headline and meaning in full,
+  and Across your pages with room (Voices with its bar and groups, the
+  products table and the categories' bars, What to post next with Worth a
+  reply, Advice to decide on with when each was first raised and the move).
+  "This week's findings" is dropped from version 3 only. On paper each group
+  starts a page (`break-before`: the week and its story; what it means, new,
+  watching and Also this week; the subjects; the pages), flat, every page
+  footed with the issue and "N of M" through `@page` margin boxes (Chromium
+  131+, `preferCSSPageSize`). *The send gate* no longer needs a finding
+  (`weekReadPrints`): a ready read with its line, its story or what it means
+  is sent, since version 3 prints no finding; `staleWeeklyReadSnapshot` asks
+  versions 1 and 2 for their findings and version 3 for its read only. That
+  is where the full read lives now that This week is not a page. *The lead*
+  is ONE rule, shared with Market's top row:
   `weekLead` (`lib/reading/week-lead.ts`): the first flag in `weekFlagRows`'
   order, else the new conversation with the most videos this week, else the
   conversation with the most ("Most talked about this week"). Both rank on
@@ -1052,10 +1137,15 @@ This version has breaking changes — APIs, conventions, and file structure may 
   the tile's `monthLabel`); the week-based lines keep the week's own month.
   `components/pages/v2/home/email-lines.test.tsx` holds each line to its
   tile's markup. So a build long after its run (a backfill, a re-claim, Send
-  now on an old run) carries that day's lines. *Rollback hazard:* code from before this deploy
-  accepts only version 1 and prints a version 2 snapshot as the stale line
-  (`staleWeeklyReadSnapshot`). Do not roll back past this deploy without
-  first holding v2 sends.
+  now on an old run) carries that day's lines. Since version 3 these lines
+  are frozen into no new snapshot: they are how a version 2 issue renders.
+  *Rollback hazard:* code from before level 1 accepts only version 1, and
+  code from before version 3 (7edb213a and earlier) accepts only 1 and 2;
+  either prints a newer snapshot as the stale line
+  (`staleWeeklyReadSnapshot`), in the email, the share page, the viewer and
+  the PDF alike. Do not roll back past the version 3 deploy without first
+  holding weekly-read sends, and know that every issue built since then reads
+  as the stale line on the older code until it is redeployed.
 - **The pages and navigation (pages build, 1 Oct; Design v2, 13 Oct).**
   Every client page is drawn to its approved artboard (`Page-*.dc.html`;
   since Design v2 the depth boards, `E*.dc.html`); a deviation is Heinrich's

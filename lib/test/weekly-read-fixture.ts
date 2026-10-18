@@ -1,5 +1,5 @@
 import type { WeekReadConversation, WeekReadDataV1, WeekReadDataV2, WeekReadFlag, WeekReadUnusual, QuoteRef } from '../written/types'
-import { WEEKLY_READ_REPORT_VERSION, weeklyReadSnapshotData, type WeeklyReadSnapshotData } from '../reports/weekly-read-build'
+import { WEEKLY_READ_LEVEL_ONE_VERSION, WEEKLY_READ_REPORT_VERSION, weeklyReadSnapshotData, type WeeklyReadSnapshotData } from '../reports/weekly-read-build'
 import type { WeeklyReadLine } from '../reports/weekly-read-lines'
 
 // The weekly read as the render tier sees it, built from Sealand's 27 Sep dry
@@ -123,10 +123,11 @@ export function frozen<T>(read: T): T {
   return JSON.parse(JSON.stringify(read), (k, v) => (k === 'text' && typeof v === 'string' ? '' : v)) as T
 }
 
-/** The snapshot's data for a read, as the send path builds it (level 1,
- *  version 2, with the page lines given). */
+/** A level-1 snapshot (version 2) as every one built 13 to 18 Oct holds
+ *  it: the read, its page lines, no version-3 parts. */
 export function sealandSnapshot(read: WeekReadDataV2 | WeekReadDataV1 = sealandRead(), lines: WeeklyReadLine[] = []): WeeklyReadSnapshotData {
-  return weeklyReadSnapshotData({ company: 'Sealand', runId: 'run-27', read, writtenAt: '2026-09-27T07:20:00.000Z', lines })
+  const { subjects: _s, pages: _p, monthClose: _m, ...rest } = weeklyReadSnapshotData({ company: 'Sealand', runId: 'run-27', read, writtenAt: '2026-09-27T07:20:00.000Z' })
+  return { ...rest, version: WEEKLY_READ_LEVEL_ONE_VERSION, lines: [...lines] }
 }
 
 /** A snapshot as every one stored before level 1 holds it (version 1, the

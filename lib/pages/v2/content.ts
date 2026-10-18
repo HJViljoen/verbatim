@@ -1620,6 +1620,10 @@ export interface TopContent {
   /** The empty state's line where there is no idea; where the idea is from an
    *  older week, the line saying so. */
   line: string | null
+  /** OPTIONAL (the weekly read v3, 18 Oct): every idea of the set `idea`
+   *  leads, in rank order, each with its page, as Content's ideas row lists
+   *  them. Absent where there is no idea, and on a dump from before it. */
+  ideas?: { id: string; rank: PostIdeaRank; title: string; href: string }[]
 }
 
 /** Why there is no idea, in the reader's words. The table not there yet
@@ -1768,6 +1772,7 @@ export async function topContent(scope: Scope, opts: {
     },
     href: contentIdeaPath(idea.id),
     line: ideasWeek.current ? null : olderIdeasLine(ideasWeek),
+    ideas: read.rows.map((r) => ({ id: r.id, rank: r.rank, title: r.title, href: contentIdeaPath(r.id) })),
   }
 }
 

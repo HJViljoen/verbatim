@@ -27,8 +27,9 @@ import { overviewFixture } from '../components/pages/overview/fixture'
 import { createElement } from 'react'
 import { WeeklyReadPage } from '../components/email/weekly-read'
 import { renderWeeklyReadEmail } from '../lib/email/weekly-read'
-import { isLevelOne, isWeeklyReadData, staleWeeklyReadSnapshot, type WeeklyReadSnapshotData } from '../lib/reports/weekly-read-build'
+import { isLevelOne, isWeeklyReadData, isWeeklyV3, staleWeeklyReadSnapshot, type WeeklyReadSnapshotData } from '../lib/reports/weekly-read-build'
 import { levelOneRead, sealandLines, sealandSnapshot, storedReportSnapshot } from '../lib/test/weekly-read-fixture'
+import { ossurSnapshot } from '../lib/test/weekly-read-v3-fixture'
 
 interface Check { ok: boolean; what: string; detail?: string }
 const checks: Check[] = []
@@ -128,12 +129,13 @@ async function main() {
   //    shape and rendered through the page modules exactly as a snapshot is.
   storedCalibrationRows()
 
-  // 5. The weekly read at level 1 (depth v2, T11b): a NEW snapshot is version
-  //    2 and draws level 1; a stored one (version 1) still draws the report.
-  //    The stored ones are checked above, each in its own branch; these are
-  //    the two shapes from the fixtures, so the check runs whatever the
-  //    database holds.
-  renderWeeklyRead('a new level-1 snapshot (fixture)', sealandSnapshot(levelOneRead(), sealandLines()))
+  // 5. The weekly read's three versions: a NEW snapshot is version 3 (the H7
+  //    boards); one built 13 to 18 Oct is version 2 (level 1); one stored
+  //    before 13 Oct is version 1 (the report). The stored ones are checked
+  //    above, each in its own branch; these are the three shapes from the
+  //    fixtures, so the check runs whatever the database holds.
+  renderWeeklyRead('a new version-3 snapshot (fixture)', ossurSnapshot())
+  renderWeeklyRead('a level-1 snapshot as built 13 to 18 Oct (fixture)', sealandSnapshot(levelOneRead(), sealandLines()))
   renderWeeklyRead('a report snapshot as stored before level 1 (fixture)', storedReportSnapshot())
 
   const failed = checks.filter((c) => !c.ok)
@@ -195,11 +197,16 @@ function renderWeeklyRead(label: string, data: WeeklyReadSnapshotData) {
     return
   }
   const level = isLevelOne(data)
-  const emailOk = email.includes('This week in your market') && (level
-    ? email.includes('Open this week in Verbatim') && !email.includes('What happened')
-    : email.includes('>Open Verbatim<') && !email.includes('Across your pages'))
-  check(emailOk, `${what} renders its email as ${level ? 'level 1' : 'the report'}`, `${email.length} chars`)
-  check(page.includes('This week in your market') && page.includes('>Open Verbatim<'), `${what} renders its page (share, viewer, paper) as the full read`, `${page.length} chars`)
+  const v3 = isWeeklyV3(data)
+  const shape = v3 ? 'version 3' : level ? 'level 1' : 'the report'
+  const emailOk = email.includes('This week in your market') && (v3
+    ? email.includes('>Open Market<') && email.includes('What stood out') && !email.includes('This week’s findings')
+    : level
+      ? email.includes('Open this week in Verbatim') && !email.includes('What happened')
+      : email.includes('>Open Verbatim<') && !email.includes('Across your pages'))
+  check(emailOk, `${what} renders its email as ${shape}`, `${email.length} chars`)
+  const pageOk = page.includes('This week in your market') && (v3 ? page.includes('>Open Market<') && !page.includes('This week’s findings') : page.includes('>Open Verbatim<'))
+  check(pageOk, `${what} renders its page (share, viewer, paper) as the full read`, `${page.length} chars`)
 }
 
 function renderSection(label: string, page: string, section: ReportSection, data: unknown, isPage: boolean) {

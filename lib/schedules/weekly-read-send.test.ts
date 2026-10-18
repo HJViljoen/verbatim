@@ -124,7 +124,8 @@ describe('a run with no ready read sends NOTHING and tells the operator', () => 
     ['failed', { status: 'failed', data: null }],
     ['missing', null],
     ['missing table', 'no-table'],
-    ['ready but empty', { status: 'ready', data: frozen(sealandRead({ findings: [] })) }],
+    // Nothing the issue prints: no line, no story, no implication, no finding.
+    ['ready but empty', { status: 'ready', data: frozen(sealandRead({ findings: [], headline: '', story: [], implications: [] })) }],
   ]
   for (const [name, read] of cases) {
     it(`${name}: the send is skipped, nobody is emailed, one alert`, async () => {
@@ -206,14 +207,28 @@ describe('review mode: the build stops at ready and the OPERATOR reads it first'
     expect(snap.evidence_ids).toEqual(expect.arrayContaining(['e:bd2a2f71-2240-4365-9c44-01d685e970b1', 'e:e2e1146c-be79-452f-b943-2f3381a662f9']))
   })
 
-  it('a new build is level 1 (version 2) and freezes its page lines; a page with nothing, or no table, has no line', async () => {
+  it('a new build is version 3 and freezes its parts; a page with nothing, or no table, has no part', async () => {
     const w = world({ status: 'ready', data: frozen(sealandRead()) })
     await runSchedule({ admin: w.admin, schedule: schedule(), runId: RUN, baseUrl: APP, mode: 'send' })
-    const snap = w.tables.report_snapshots[0] as { data: { version: number; lines: unknown[] } }
-    expect(snap.data.version).toBe(2)
-    // No post ideas, no catalogue, no advice in this world: no lines, and the
-    // build stands.
-    expect(snap.data.lines).toEqual([])
+    const snap = w.tables.report_snapshots[0] as { data: { version: number; lines?: unknown[]; subjects: unknown[]; pages: Record<string, unknown>; monthClose: unknown } }
+    expect(snap.data.version).toBe(3)
+    expect(snap.data.lines).toBeUndefined()
+    // No subjects, no groups, no catalogue, no advice in this world: none of
+    // those parts, no month-closing line, and the build stands. Content keeps
+    // its Worth a reply, which is a link and never a count.
+    expect(snap.data.subjects).toEqual([])
+    expect(snap.data.pages.voices).toBeNull()
+    expect(snap.data.pages.products).toBeNull()
+    expect(snap.data.pages.moves).toBeNull()
+    expect(snap.data.monthClose).toBeNull()
+  })
+
+  it('version 3 needs no finding: a ready read with its line and story but no finding is built and sent', async () => {
+    const w = world({ status: 'ready', data: frozen(sealandRead({ findings: [] })) }, schedule({ review: false }))
+    const r = await runSchedule({ admin: w.admin, schedule: schedule({ review: false }), runId: RUN, baseUrl: APP, mode: 'send' })
+    expect(r.status).toBe('sent')
+    expect(mail.report).toHaveLength(1)
+    expect(mail.report[0].html).toContain('Buyers treated bag choice as a practical match')
   })
 
   it("the operator's Send delivers it to the list, under the read's subject, with the words resolved and no figures recorded", async () => {
@@ -224,9 +239,9 @@ describe('review mode: the build stops at ready and the OPERATOR reads it first'
     expect(mail.report).toHaveLength(1)
     expect(mail.report[0].to).toEqual(RECIPIENTS)
     expect(mail.report[0].subject).toBe(held.subject)
-    // Level 1 (T11b): the email prints no quote; the words are the share
-    // page's, one click down.
-    expect(mail.report[0].html).toContain('Open this week in Verbatim')
+    // The email prints no quote; the words are the share page's, one click
+    // down. Version 3's way in is Market.
+    expect(mail.report[0].html).toContain('Open Market')
     expect(mail.report[0].html).not.toContain('the words of')
     // "Read this week in full" is the share link minted at the Send.
     const token = (w.tables.share_links[0] as { token: string }).token
@@ -244,22 +259,22 @@ describe('review mode: the build stops at ready and the OPERATOR reads it first'
     expect(mail.report[0].to).toEqual(RECIPIENTS)
     expect(mail.review).toEqual([])
     expect(w.db.calls.some((c) => c.table === 'sent_figures')).toBe(false)
-    // Level 1: no quote at all in the email.
-    expect(mail.report[0].html).toContain('Open this week in Verbatim')
+    // No quote at all in the email.
+    expect(mail.report[0].html).toContain('Open Market')
     expect(mail.report[0].html).not.toContain('the words of')
   })
 
-  it('a test send and the Studio preview render the level-1 email the list would get, and keep no snapshot', async () => {
+  it('a test send and the Studio preview render the email the list would get, and keep no snapshot', async () => {
     const w = world({ status: 'ready', data: frozen(sealandRead()) })
     const t = await runSchedule({ admin: w.admin, schedule: schedule(), runId: RUN, baseUrl: APP, mode: 'test', to: ['heinrich@verbatim.test'] })
     expect(t.status).toBe('sent')
     expect(mail.report).toHaveLength(1)
     expect(mail.report[0].to).toEqual(['heinrich@verbatim.test'])
-    expect(mail.report[0].html).toContain('Open this week in Verbatim')
+    expect(mail.report[0].html).toContain('Open Market')
     expect(mail.report[0].html).not.toContain('the words of')
     const p = await runSchedule({ admin: w.admin, schedule: schedule(), runId: RUN, baseUrl: APP, mode: 'preview' })
     expect(p.status).toBe('preview')
-    expect(p.html).toContain('Open this week in Verbatim')
+    expect(p.html).toContain('Open Market')
     expect(w.tables.report_snapshots).toEqual([])
     expect(w.tables.report_sends).toEqual([])
   })

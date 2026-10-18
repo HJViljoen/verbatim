@@ -83,16 +83,30 @@ export const WEEK_READ_HELD_MESSAGE: Record<WeekReadHeldReason, string> = {
   missing: 'No written read was stored for this update, so nothing was sent.',
   failed: 'The written read for this update failed, so nothing was sent.',
   thin: 'The written read for this update was thin (no finding printed), so nothing was sent.',
-  empty: 'The written read for this update has no finding to print, so nothing was sent.',
+  empty: 'The written read for this update has nothing to print (no line, no story, no implication and no finding), so nothing was sent.',
+}
+
+/** Does a stored read hold anything the issue prints? Version 3 (18 Oct)
+ *  prints the week in one line, what happened and what it means, and no
+ *  finding, so a read with any of those prints; an older read (In short and
+ *  findings) needs its In short or a finding. */
+export function weekReadPrints(read: WeekReadData): boolean {
+  const findings = Array.isArray(read.findings) && read.findings.some((f) => (f?.headline ?? '').trim())
+  if (read.version !== 2) return findings || Boolean((read.inShort ?? '').trim())
+  return findings
+    || Boolean((read.headline ?? '').trim())
+    || (read.story ?? []).some((p) => (p?.body ?? '').trim())
+    || (read.implications ?? []).some((x) => (x?.body ?? '').trim())
 }
 
 /**
  * THE SEND RULE (plan T7): a run whose read is not `ready` sends NOTHING,
  * never an empty report. Missing (the step did not run, or its table is not
- * there), failed, thin, or "ready" with no finding in it (which compose never
- * writes; checked anyway, because the email would be a masthead and four
- * numbers): each is a reason, and the caller skips the send and tells the
- * operator.
+ * there), failed, thin, or "ready" with nothing the issue prints in it (which
+ * compose never writes; checked anyway, because the email would be a
+ * masthead and four numbers): each is a reason, and the caller skips the
+ * send and tells the operator. Since version 3 a finding is not required:
+ * the issue prints none (`weekReadPrints`).
  */
 export function weekReadSendState(row: Pick<StoredWeekRead, 'status' | 'data'> | null): WeekReadSendState {
   const held = (reason: WeekReadHeldReason): WeekReadSendState => ({ ok: false, reason, message: WEEK_READ_HELD_MESSAGE[reason] })
@@ -100,7 +114,7 @@ export function weekReadSendState(row: Pick<StoredWeekRead, 'status' | 'data'> |
   if (row.status === 'failed') return held('failed')
   if (row.status === 'thin') return held('thin')
   if (row.status !== 'ready' || !row.data) return held('missing')
-  if (!Array.isArray(row.data.findings) || row.data.findings.length === 0) return held('empty')
+  if (!weekReadPrints(row.data)) return held('empty')
   return { ok: true }
 }
 
@@ -268,6 +282,12 @@ export interface LevelOneRow {
   /** Code's figure: the week beside its month, or beside its months. */
   figure: string
   href: string
+  /** ADDITIVE (version 3): the counts behind `figure`, for a renderer that
+   *  sets each number in its own node: a conversation's week and month, or
+   *  the flag itself and what the check compared it with. */
+  counts?: { week: number; month: number | null }
+  flag?: WeekReadFlag
+  usual?: { k: number; n: number; months: string } | null
 }
 
 export interface LevelOneView {
@@ -376,7 +396,7 @@ export function levelOneView(read: WeekReadData, lines: readonly WeeklyReadLine[
     also.push(row)
   }
   for (const f of rest) {
-    push({ kind: 'flag', label: f.label.trim(), theme: f.objectKind === 'theme', verdict: f.verdict, figure: flagFigure(f), href: objectHref(f.objectKind, f.objectId) }, f.objectKind === 'theme' ? f.objectId : null)
+    push({ kind: 'flag', label: f.label.trim(), theme: f.objectKind === 'theme', verdict: f.verdict, figure: flagFigure(f), href: objectHref(f.objectKind, f.objectId), flag: f, usual: usualOver(f) }, f.objectKind === 'theme' ? f.objectId : null)
   }
   // The other new conversations, then what else was heard most: on the
   // conversations' own counts where the read kept them (the lead's), a
@@ -384,22 +404,22 @@ export function levelOneView(read: WeekReadData, lines: readonly WeeklyReadLine[
   if (convs.kept) {
     const ranked = convs.rows.filter((c) => !c.setApart && c.week > 0 && c.month != null).sort((a, b) => b.week - a.week || a.registryId.localeCompare(b.registryId))
     for (const c of ranked.filter((c) => freshById.has(c.registryId))) {
-      push({ kind: 'new', label: c.label, theme: true, verdict: null, figure: weekMonth(c.week, c.month as number), href: objectHref('theme', c.registryId) }, c.registryId)
+      push({ kind: 'new', label: c.label, theme: true, verdict: null, figure: weekMonth(c.week, c.month as number), href: objectHref('theme', c.registryId), counts: { week: c.week, month: c.month } }, c.registryId)
     }
     for (const c of ranked) {
-      push({ kind: 'heard', label: c.label, theme: true, verdict: null, figure: weekMonth(c.week, c.month as number), href: objectHref('theme', c.registryId) }, c.registryId)
+      push({ kind: 'heard', label: c.label, theme: true, verdict: null, figure: weekMonth(c.week, c.month as number), href: objectHref('theme', c.registryId), counts: { week: c.week, month: c.month } }, c.registryId)
     }
   } else {
     const freshRows = [...fresh].sort((a, b) => b.videos.week - a.videos.week || a.themeId.localeCompare(b.themeId))
     for (const x of freshRows) {
       if (!x.label?.trim()) continue
-      push({ kind: 'new', label: x.label.trim(), theme: true, verdict: null, figure: weekMonth(x.videos.week, x.videos.month), href: objectHref('theme', x.themeId) }, x.themeId)
+      push({ kind: 'new', label: x.label.trim(), theme: true, verdict: null, figure: weekMonth(x.videos.week, x.videos.month), href: objectHref('theme', x.themeId), counts: { week: x.videos.week, month: x.videos.month } }, x.themeId)
     }
     const heard = [...(read.alsoHeard ?? [])]
       .filter((h) => h.label.trim() && typeof h.monthVideos === 'number' && h.videos > 0)
       .sort((a, b) => b.videos - a.videos || a.label.localeCompare(b.label))
     for (const h of heard) {
-      push({ kind: 'heard', label: h.label.trim(), theme: true, verdict: null, figure: weekMonth(h.videos, h.monthVideos as number), href: objectHref('theme', h.themeId) }, h.themeId)
+      push({ kind: 'heard', label: h.label.trim(), theme: true, verdict: null, figure: weekMonth(h.videos, h.monthVideos as number), href: objectHref('theme', h.themeId), counts: { week: h.videos, month: h.monthVideos as number } }, h.themeId)
     }
   }
 

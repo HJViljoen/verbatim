@@ -1273,6 +1273,10 @@ export interface TopMoves {
   /** The advice waiting for a decision, folded and uncapped: the number Your
    *  moves' bar prints (`waitingAdvice`). */
   waiting: number
+  /** OPTIONAL (the weekly read v3, 18 Oct): the first `TOP_MOVES_LISTED`
+   *  pieces of that list, in its order (the first is `advice`), each with its
+   *  page and the updates that raised it. A dump from before it carries none. */
+  list?: { lineageId: string; title: string; href: string; history: AdviceHistory }[]
   /** The move whose comparison cleared its band (the largest change), else the
    *  newest move with a comparison that may print. Null: none. */
   move: (Pick<MoveCard, 'id' | 'title' | 'kind' | 'label' | 'day' | 'direction'> & {
@@ -1317,6 +1321,10 @@ export function newestMove(cards: readonly MoveCard[]): TopMoves['newest'] {
     pending: card.pending, unread: card.unread, point, href: card.href,
   }
 }
+
+/** How many pieces of advice `topMoves` lists (`TopMoves.list`): the weekly
+ *  read's full read prints them (18 Oct). */
+export const TOP_MOVES_LISTED = 4
 
 /** The move the tile shows, from the page's cards. Pure. */
 export function movedMove(cards: readonly MoveCard[]): MoveCard | null {
@@ -1368,6 +1376,7 @@ export async function topMoves(scope: Scope, options: { canDecide: boolean }): P
         }
       : null,
     waiting: latest.length,
+    list: latest.slice(0, TOP_MOVES_LISTED).map((r) => ({ lineageId: r.lineageId, title: adviceTitle(r.title, r.why), href: adviceHref(r.lineageId), history: adviceHistory(r.lineageId, core.copies) })),
     move: move && move.compare
       ? {
           id: move.id, title: move.title, kind: move.kind, label: move.label, day: move.day, direction: move.direction,

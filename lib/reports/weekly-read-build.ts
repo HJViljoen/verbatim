@@ -6,6 +6,7 @@ import type { WeekReadData } from '../written/types'
 import { STALE_ARTEFACT_LINE } from './stale'
 import { WEEKLY_READ_TITLE, weekReadDates, weekReadSendState, weeklyReadSubject, type WeekReadHeldReason } from './weekly-read'
 import type { WeeklyReadLine } from './weekly-read-lines'
+import type { WeeklyMonthClose, WeeklyPages, WeeklySubjectRead } from './weekly-read-v3'
 
 /**
  * Freezing the weekly read (artefact `weekly_read`): the run's stored
@@ -14,11 +15,15 @@ import type { WeeklyReadLine } from './weekly-read-lines'
  * precedent: no new snapshot kind, no migration, the render, share, erasure
  * and archive paths all work on it as they do on every report).
  *
- * NO SECOND MODEL CALL AND NO RE-READ OF A LIVE FIGURE. The read was written
- * and composed by the pipeline's `write-week-read` step (the update's anomaly
- * flag frozen into it there); this copies it whole. The one thing read here
- * is each page's line for the level-1 email (depth v2, T11b), because post
- * ideas are written after the read: read once, frozen with it, never again.
+ * NO MODEL CALL AND NO RE-READ OF A LIVE FIGURE AT RENDER. The read was
+ * written and composed by the pipeline's `write-week-read` step (the update's
+ * anomaly flag frozen into it there); this copies it whole. What is read here
+ * is what version 3 prints beside it (18 Oct, the H7 boards): the READY
+ * subjects' own stored reads in Market's order, each page's part from the
+ * Dashboard's own tops, and the month-closing line, because post ideas and
+ * the subjects' reads are written after the week's read: read once, frozen
+ * with it, never again (lib/reports/weekly-read-lines-load.ts
+ * `loadWeeklyReadParts`). No comment's words are read or sent anywhere.
  * Its quotes are refs with `text: ''` (lib/written/types.ts QuoteRef), which
  * `freezeQuotes` recognises and collects into `evidence_ids`, so erasure finds
  * a sent read like any other artefact and the words resolve at render.
@@ -34,14 +39,22 @@ import type { WeeklyReadLine } from './weekly-read-lines'
  * Oct carries), which keeps rendering exactly as it was sent, byte for byte.
  * 2: level 1 (board E7): the week in one line, the flag the update raised,
  * what else came up, one line per page, the way in; it carries its page
- * lines (`lines`). New snapshots are 2. `staleWeeklyReadSnapshot` turns any
- * other into a sentence rather than a stack trace.
+ * lines (`lines`); every snapshot built 13 to 18 Oct, held byte for byte by
+ * lib/test/weekly-read-golden/l1-*. 3 (18 Oct, the H7 boards): the email
+ * grouped by question (this week, the month so far, what to do next) and
+ * the full read as one visual system; it carries the ready subjects' stored
+ * reads (`subjects`), each page's part (`pages`) and the month-closing line
+ * (`monthClose`), every one optional, and no `lines`. New snapshots are 3.
+ * `staleWeeklyReadSnapshot` turns any other into a sentence rather than a
+ * stack trace.
  */
-export const WEEKLY_READ_SNAPSHOT_VERSION = 2
+export const WEEKLY_READ_SNAPSHOT_VERSION = 3
 /** The report: every snapshot stored before level 1. */
 export const WEEKLY_READ_REPORT_VERSION = 1
 /** Level 1 (T11b). */
 export const WEEKLY_READ_LEVEL_ONE_VERSION = 2
+/** Version 3 (the H7 boards, 18 Oct). */
+export const WEEKLY_READ_V3_VERSION = 3
 
 export interface WeeklyReadSnapshotData {
   /** `number`, not the literal, for the reason WeeklySnapshotData gives:
@@ -65,16 +78,30 @@ export interface WeeklyReadSnapshotData {
   /** The stored read, whole, quotes as refs. */
   read: WeekReadData
   /** Level 1 only (version 2): one line per page, frozen when the snapshot
-   *  was built (lib/reports/weekly-read-lines.ts). Absent on a report. */
+   *  was built (lib/reports/weekly-read-lines.ts). Absent on a report and on
+   *  version 3. */
   lines?: WeeklyReadLine[]
+  /** Version 3 only: every READY subject's own stored read, in Market's
+   *  order (ruling U6: no other subject's words are frozen). Absent or empty,
+   *  the issue prints no subjects. */
+  subjects?: WeeklySubjectRead[]
+  /** Version 3 only: each page's part, frozen when the snapshot was built.
+   *  A part that is absent prints nothing. */
+  pages?: WeeklyPages
+  /** Version 3 only: the month-closing line, on the run that closes a month
+   *  whose long-run read is published; else absent or null. */
+  monthClose?: WeeklyMonthClose | null
 }
 
 export function isWeeklyReadData(data: unknown): data is WeeklyReadSnapshotData {
   return Boolean(data) && typeof data === 'object' && (data as { kind?: unknown }).kind === 'weekly_read'
 }
 
-/** The line to print instead of a weekly read this build cannot draw, or null. */
+/** The line to print instead of a weekly read this build cannot draw, or
+ *  null. Versions 1 and 2 need the read's findings (both print them on the
+ *  page); version 3 prints none, so it needs only the read. */
 export function staleWeeklyReadSnapshot(data: WeeklyReadSnapshotData): string | null {
+  if (data.version === WEEKLY_READ_V3_VERSION) return data.read && typeof data.read === 'object' ? null : STALE_ARTEFACT_LINE
   const known = data.version === WEEKLY_READ_REPORT_VERSION || data.version === WEEKLY_READ_LEVEL_ONE_VERSION
   return known && data.read && Array.isArray(data.read.findings) ? null : STALE_ARTEFACT_LINE
 }
@@ -82,6 +109,11 @@ export function staleWeeklyReadSnapshot(data: WeeklyReadSnapshotData): string | 
 /** Is this snapshot the level-1 email (version 2), not the report? */
 export function isLevelOne(data: Pick<WeeklyReadSnapshotData, 'version'>): boolean {
   return data.version === WEEKLY_READ_LEVEL_ONE_VERSION
+}
+
+/** Is this snapshot version 3 (the H7 boards)? */
+export function isWeeklyV3(data: Pick<WeeklyReadSnapshotData, 'version'>): boolean {
+  return data.version === WEEKLY_READ_V3_VERSION
 }
 
 /** The run's read is not one that may go out: the send is skipped, nothing is
@@ -93,12 +125,19 @@ export class WeeklyReadNotReadyError extends Error {
   }
 }
 
-/** The snapshot's data for a stored read. Pure: the builder below and the
- *  preview script both go through it. The subjects' own reads
- *  (`subjectReads`, written onto the run's row for Market's subject panel, 14
- *  Oct) are no part of the issue: nothing in it prints them, so the snapshot
- *  does not carry them. */
-export function weeklyReadSnapshotData(a: { company: string; runId: string; read: WeekReadData; writtenAt: string; lines?: readonly WeeklyReadLine[] }): WeeklyReadSnapshotData {
+/** The snapshot's data for a stored read (version 3). Pure: the builder
+ *  below and the preview script both go through it. The read's own
+ *  `subjectReads` (written onto the run's row for Market's subject panel, 14
+ *  Oct) are left out of the read: every subject's, a subject whose check has
+ *  not passed included. What the issue prints of them is `parts.subjects`,
+ *  the READY subjects' alone (`subjectsPart`, ruling U6). */
+export function weeklyReadSnapshotData(a: {
+  company: string
+  runId: string
+  read: WeekReadData
+  writtenAt: string
+  parts?: { subjects?: readonly WeeklySubjectRead[]; pages?: WeeklyPages; monthClose?: WeeklyMonthClose | null }
+}): WeeklyReadSnapshotData {
   const company = a.company.trim()
   const period = weekReadDates(a.read.window)
   const read: WeekReadData = a.read.version === 2 && a.read.subjectReads
@@ -115,7 +154,9 @@ export function weeklyReadSnapshotData(a: { company: string; runId: string; read
     runId: a.runId,
     subject: weeklyReadSubject(company, a.read, period),
     read,
-    lines: [...(a.lines ?? [])],
+    subjects: [...(a.parts?.subjects ?? [])],
+    pages: a.parts?.pages ?? {},
+    monthClose: a.parts?.monthClose ?? null,
   }
 }
 
@@ -151,30 +192,36 @@ async function readySubjectsFor(admin: SupabaseClient, clientId: string): Promis
   }
 }
 
-/** Every page's line for the snapshot (lib/reports/weekly-read-lines-load.ts),
+/** The parts a version-3 snapshot freezes beside the read. */
+export type WeeklyReadPartsOf = { subjects: WeeklySubjectRead[]; pages: WeeklyPages; monthClose: WeeklyMonthClose | null }
+
+/** Every version-3 part for the snapshot (lib/reports/weekly-read-lines-load.ts),
  *  loaded on first use so the renderers and the offline preview, which import
- *  this file for the shape, never load the pages' readers. Never throws. */
-async function loadLines(admin: SupabaseClient, a: { clientId: string; runId: string; read: WeekReadData }): Promise<WeeklyReadLine[]> {
+ *  this file for the shape, never load the pages' readers. Never throws: a
+ *  part that fails is left out. */
+async function loadParts(admin: SupabaseClient, a: { clientId: string; runId: string; read: WeekReadData }): Promise<WeeklyReadPartsOf> {
   try {
-    const { loadWeeklyReadLines } = await import('./weekly-read-lines-load')
-    return await loadWeeklyReadLines(admin, a)
+    const { loadWeeklyReadParts } = await import('./weekly-read-lines-load')
+    return await loadWeeklyReadParts(admin, a)
   } catch (e) {
-    console.error(`[weekly-read lines] ${e instanceof Error ? e.message : String(e)}`)
-    return []
+    console.error(`[weekly-read parts] ${e instanceof Error ? e.message : String(e)}`)
+    return { subjects: [], pages: {}, monthClose: null }
   }
 }
 
-/** Load the run's read, refuse one that may not go out, read every page's
- *  line as it stands now, freeze them together. No rendering here: Chromium
- *  and the email body run in a route handler. */
+/** Load the run's read, refuse one that may not go out, read the ready
+ *  subjects' own reads, every page's part and the month-closing line as they
+ *  stand now, freeze them together. No rendering here: Chromium and the
+ *  email body run in a route handler. */
 export async function snapshotWeeklyRead(args: {
   admin: SupabaseClient
   clientId: string
   runId: string
   company: string
   userId?: string | null
-  /** The page lines' reader, for a test. */
-  lines?: (admin: SupabaseClient, a: { clientId: string; runId: string; read: WeekReadData }) => Promise<WeeklyReadLine[]>
+  /** The parts' reader, for a test. Handed the STORED read (with its
+   *  `subjectReads`), the flags already made printable. */
+  parts?: (admin: SupabaseClient, a: { clientId: string; runId: string; read: WeekReadData }) => Promise<WeeklyReadPartsOf>
   /** The ready subjects' reader, for a test. */
   readySubjects?: (admin: SupabaseClient, clientId: string) => Promise<ReadonlySet<string>>
 }): Promise<{ snapshotId: string; data: WeeklyReadSnapshotData; evidenceIds: string[] }> {
@@ -188,8 +235,9 @@ export async function snapshotWeeklyRead(args: {
   const read = subjectFlagged
     ? printableWeekRead(stored, await (args.readySubjects ?? readySubjectsFor)(args.admin, args.clientId).catch(() => new Set<string>()))
     : stored
-  const lines = await (args.lines ?? loadLines)(args.admin, { clientId: args.clientId, runId: args.runId, read }).catch(() => [] as WeeklyReadLine[])
-  const data = weeklyReadSnapshotData({ company: args.company, runId: args.runId, read, writtenAt: row!.created_at, lines })
+  const parts = await (args.parts ?? loadParts)(args.admin, { clientId: args.clientId, runId: args.runId, read })
+    .catch((): WeeklyReadPartsOf => ({ subjects: [], pages: {}, monthClose: null }))
+  const data = weeklyReadSnapshotData({ company: args.company, runId: args.runId, read, writtenAt: row!.created_at, parts })
   const snap = await createSnapshot(args.admin, {
     clientId: args.clientId,
     userId: args.userId ?? null,

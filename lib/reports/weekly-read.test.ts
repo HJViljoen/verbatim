@@ -4,7 +4,7 @@ import { levelOneRead, olderRead, sealandFlag, sealandRead, sealandUnusual, SEAL
 import {
   ALSO_ROWS, BIGGEST_HEADING, flagFigure, levelOneView, objectHref, usualOver, WEEK_READ_HELD_MESSAGE, weekReadDates, weekReadSendState, weeklyReadSubject, weeklyReadView,
 } from './weekly-read'
-import { isLevelOne, isWeeklyReadData, printableWeekRead, staleWeeklyReadSnapshot, weeklyReadSnapshotData } from './weekly-read-build'
+import { isLevelOne, isWeeklyReadData, isWeeklyV3, printableWeekRead, staleWeeklyReadSnapshot, weeklyReadSnapshotData } from './weekly-read-build'
 import { printableFlags } from '../pages/v2/market'
 import { weekLead } from '../reading/week-lead'
 
@@ -63,8 +63,17 @@ describe('weekReadSendState: only a ready read is sent', () => {
     expect(weekReadSendState({ status: 'failed', data: null })).toMatchObject({ ok: false, reason: 'failed' })
     expect(weekReadSendState({ status: 'thin', data: sealandRead({ findings: [] }) })).toMatchObject({ ok: false, reason: 'thin' })
     expect(weekReadSendState({ status: 'ready', data: null })).toMatchObject({ ok: false, reason: 'missing' })
-    expect(weekReadSendState({ status: 'ready', data: sealandRead({ findings: [] }) })).toMatchObject({ ok: false, reason: 'empty' })
+    expect(weekReadSendState({ status: 'ready', data: sealandRead({ findings: [], headline: '', story: [], implications: [] }) })).toMatchObject({ ok: false, reason: 'empty' })
     for (const m of Object.values(WEEK_READ_HELD_MESSAGE)) expect(m).toMatch(/nothing was sent/)
+  })
+  it('version 3 prints no finding, so a ready read needs none: its line, its story or what it means is enough', () => {
+    expect(weekReadSendState({ status: 'ready', data: sealandRead({ findings: [] }) })).toEqual({ ok: true })
+    expect(weekReadSendState({ status: 'ready', data: sealandRead({ findings: [], story: [], implications: [] }) })).toEqual({ ok: true })
+    expect(weekReadSendState({ status: 'ready', data: sealandRead({ findings: [], headline: '', implications: [] }) })).toEqual({ ok: true })
+    expect(weekReadSendState({ status: 'ready', data: sealandRead({ findings: [], headline: '', story: [] }) })).toEqual({ ok: true })
+    // An older read (In short and findings) still needs one or the other.
+    expect(weekReadSendState({ status: 'ready', data: { ...olderRead(), findings: [], inShort: '' } })).toMatchObject({ ok: false, reason: 'empty' })
+    expect(weekReadSendState({ status: 'ready', data: { ...olderRead(), findings: [] } })).toEqual({ ok: true })
   })
 })
 
@@ -106,15 +115,35 @@ describe('the snapshot', () => {
     const data = weeklyReadSnapshotData({ company: 'Sealand', runId: 'run-27', read: sealandRead(), writtenAt: '2026-09-27T07:20:00Z' })
     expect(isWeeklyReadData(data)).toBe(true)
     expect(isWeeklyReadData({ kind: 'weekly' })).toBe(false)
-    expect(data).toMatchObject({ kind: 'weekly_read', version: 2, title: 'Sealand · This week in your market', period: '21 to 27 September', month: '2026-09-01', readingAt: '2026-09-27T07:20:00Z', lines: [] })
+    expect(data).toMatchObject({ kind: 'weekly_read', version: 3, title: 'Sealand · This week in your market', period: '21 to 27 September', month: '2026-09-01', readingAt: '2026-09-27T07:20:00Z', subjects: [], pages: {}, monthClose: null })
+    expect(data.lines).toBeUndefined()
     expect(data.subject).toMatch(/^Sealand: Buyers treated bag choice/)
     expect(data.read.findings).toHaveLength(3)
     expect(staleWeeklyReadSnapshot(data)).toBeNull()
-    // The report every snapshot stored before level 1 carries still draws.
+    // The report every snapshot stored before level 1 carries still draws,
+    // and so does level 1.
     expect(staleWeeklyReadSnapshot({ ...data, version: 1 })).toBeNull()
-    expect(isLevelOne(data)).toBe(true)
-    expect(isLevelOne({ ...data, version: 1 })).toBe(false)
-    expect(staleWeeklyReadSnapshot({ ...data, version: 3 })).toMatch(/\S/)
+    expect(staleWeeklyReadSnapshot({ ...data, version: 2 })).toBeNull()
+    expect(isWeeklyV3(data)).toBe(true)
+    expect(isLevelOne(data)).toBe(false)
+    expect(isLevelOne({ ...data, version: 2 })).toBe(true)
+    expect(isWeeklyV3({ ...data, version: 2 })).toBe(false)
+    // A version this build does not know is a sentence, not a crash.
+    expect(staleWeeklyReadSnapshot({ ...data, version: 4 })).toMatch(/\S/)
+  })
+  it('version routing: 1 and 2 need their findings (they print them); 3 needs only the read', () => {
+    const data = weeklyReadSnapshotData({ company: 'Sealand', runId: 'run-27', read: sealandRead({ findings: [] }), writtenAt: '2026-09-27T07:20:00Z' })
+    expect(staleWeeklyReadSnapshot(data)).toBeNull()
+    expect(staleWeeklyReadSnapshot({ ...data, read: { ...data.read, findings: undefined as never } })).toBeNull()
+    expect(staleWeeklyReadSnapshot({ ...data, version: 2, read: { ...data.read, findings: undefined as never } })).toMatch(/\S/)
+    expect(staleWeeklyReadSnapshot({ ...data, version: 1, read: { ...data.read, findings: undefined as never } })).toMatch(/\S/)
+    expect(staleWeeklyReadSnapshot({ ...data, read: null as never })).toMatch(/\S/)
+  })
+  it("U6: the read keeps no subject's own read; the snapshot's subjects are the ones handed in", () => {
+    const read = sealandRead({ subjectReads: { version: 1, promptVersion: 'subject_read_v3', month: '2026-09-01', read: { from: '2026-09-01T00:00:00Z', to: '2026-09-27T04:03:42Z' }, status: 'ready', model: 'x', costUsd: 0, subjects: [{ subjectId: 'open', name: 'Comfort', status: 'ready', saying: ['Said.'], means: 'Means.', headline: 'An unready headline', basedOn: [] }] } })
+    const data = weeklyReadSnapshotData({ company: 'Sealand', runId: 'r', read, writtenAt: 'x' })
+    expect(JSON.stringify(data)).not.toContain('An unready headline')
+    expect(data.subjects).toEqual([])
   })
 })
 

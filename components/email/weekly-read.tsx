@@ -6,11 +6,18 @@ import { FONT } from '@/lib/email/theme'
 import { substituteFigures } from '@/lib/reports/cover'
 import type { FigureTable } from '@/lib/reports/types'
 import { BIGGEST_HEADING, WEEKLY_READ_TITLE, weeklyReadView, levelOneView, type LevelOneLead, type LevelOneRow, type LevelOneView, type ResolvedQuote, type WeeklyReadView } from '@/lib/reports/weekly-read'
-import { isLevelOne, staleWeeklyReadSnapshot, type WeeklyReadSnapshotData } from '@/lib/reports/weekly-read-build'
+import { isLevelOne, isWeeklyV3, staleWeeklyReadSnapshot, type WeeklyReadSnapshotData } from '@/lib/reports/weekly-read-build'
 import { pageLineNote, type WeeklyReadLine } from '@/lib/reports/weekly-read-lines'
 import { FLAG_WORDS, flagWordOf } from '@/components/v2/flag-chip'
+import { WEEKLY_V3_EMAIL_CSS, WeeklyV3Card, WeeklyV3Page } from './weekly-read-v3'
 
 /**
+ * THREE VERSIONS, ONE ENTRY. A snapshot's `version` says which email it is:
+ * 1 the report (below, every snapshot stored before 13 Oct), 2 level 1 (board
+ * E7, 13 to 18 Oct), 3 the H7 issue (18 Oct on: grouped by question, the full
+ * read one visual system; components/email/weekly-read-v3.tsx). Versions 1
+ * and 2 render byte for byte as they were sent (lib/test/weekly-read-golden/).
+ *
  * "This week in your market": the weekly read as a report (artefact
  * `weekly_read`), drawn to the approved design (Weekly-v3, a 390-wide phone
  * email, palette A). ONE body, three frames: the email (`WeeklyReadEmail`), the
@@ -200,6 +207,14 @@ export function WeeklyReadReport({ data, appUrl, markSrc, fullUrl = null, full =
         </tbody>
       </table>
     )
+  }
+  // VERSION 3 (18 Oct, the H7 boards): the email grouped by question, and
+  // the full read as one visual system (components/email/weekly-read-v3.tsx).
+  // Versions 1 and 2 take neither branch and render exactly as they were sent.
+  if (isWeeklyV3(data)) {
+    return full
+      ? <WeeklyV3Page data={data} appUrl={appUrl} medical={medical} />
+      : <WeeklyV3Card data={data} appUrl={appUrl} markSrc={markOnInkSrc} fullUrl={fullUrl} medical={medical} />
   }
   // LEVEL 1 (version 2, T11b): the email is its own card; the page, the
   // viewer and the paper keep the report and add level 1's lead, rows and
@@ -761,6 +776,8 @@ export function WeeklyReadEmail({ data, appUrl, markSrc, markOnInkSrc, fullUrl, 
         <meta name="color-scheme" content="light" />
         <title>{data.title}</title>
         <link href={FONTS_HREF} rel="stylesheet" />
+        {/* Version 3 only: the same parts at a phone's width. */}
+        {isWeeklyV3(data) && !staleWeeklyReadSnapshot(data) ? <style dangerouslySetInnerHTML={{ __html: WEEKLY_V3_EMAIL_CSS }} /> : null}
       </head>
       <body style={{ margin: 0, padding: 0, background: P.ground, fontFamily: FONT.sans, color: P.ink, WebkitTextSizeAdjust: '100%' }}>
         {preheader ? <div style={{ display: 'none', maxHeight: 0, overflow: 'hidden', opacity: 0, color: 'transparent' }}>{preheader}</div> : null}
@@ -790,6 +807,9 @@ export function WeeklyReadPage({ data, appUrl, markSrc = '/brand/verbatim-mark-i
   /** The share page: the ground fills the window. */
   fill?: boolean
 }) {
+  // Version 3 is its own page: one visual system for the share link, the
+  // viewer and the paper (H7-Weekly-Full / -Print).
+  if (isWeeklyV3(data) && !staleWeeklyReadSnapshot(data)) return <WeeklyV3Page data={data} appUrl={appUrl} print={print} fill={fill} medical={medical} />
   return (
     <div style={{ background: P.ground, padding: print ? 0 : '24px 0 40px', minHeight: fill ? '100vh' : undefined }}>
       {print ? <style>{'@page { size: 210mm 297mm; margin: 12mm 0; } tr { break-inside: avoid; }'}</style> : null}
