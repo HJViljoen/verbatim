@@ -107,7 +107,7 @@ describe('Leadership: Your moves (Brief-Leadership-07)', () => {
     expect(t).toContain('Dated 5 Oct · Done · read on Cost and affordability frustration')
     expect(t).toContain('August Left off the line')
     expect(t).toContain('October 31 of 902 the month of the move')
-    expect(t).toContain('Share of market videos: 3% (31 of 902) in October, the last full month.')
+    expect(t).toContain('Share of market videos: 3% (31 of 902) in October.')
     expect(t).toContain('65 pieces of advice since 13 June: 1 decided, 4 waiting.')
     expect(p).toContain('data-copy="stored" data-slot="pass_d_b_recommendation"')
     expect(p).not.toMatch(/<button|<form|<input/)

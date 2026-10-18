@@ -450,7 +450,6 @@ export function moveOf(card: MoveCard, reading: ReadingLabel): BriefMove {
  */
 export function movesOf(a: {
   month: string
-  monthLabel: string | null
   rows: readonly { lineageId: string; title: string; why: string | null; status: string; inLatest?: boolean; firstMade: string; timesMade?: number }[]
   aims: ReadonlyMap<string, AdviceAim | null>
   cards: readonly MoveCard[]
@@ -474,7 +473,11 @@ export function movesOf(a: {
       href: withMonth(a.adviceHref(r.lineageId), month),
     }
   })
-  const reading = { month, label: a.monthLabel }
+  // A brief is about its month, named on every page ("in October"); it is
+  // frozen, so a label relative to the day it was written ("the last full
+  // month", `readingMonthLabel`) would go stale and say what no other page
+  // of it says. A move's sentence names the month alone.
+  const reading = { month, label: null }
   const moves = a.cards.map((c) => moveOf(c, reading))
     .sort((x, y) => Number(y.verdict != null) - Number(x.verdict != null) || y.day.localeCompare(x.day))
   const firsts = a.rows.map((r) => r.firstMade).filter(Boolean).sort()

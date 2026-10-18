@@ -113,7 +113,7 @@ export const OSSUR_MOVES: BriefMovesIn = {
       { month: '2026-09-01', k: null, n: null, soFar: false, why: 'cut' },
       { month: '2026-10-01', k: 31, n: 902, soFar: false, why: null },
     ],
-    sentence: 'Share of market videos: 3% (31 of 902) in October, the last full month.',
+    sentence: 'Share of market videos: 3% (31 of 902) in October.',
     verdict: null,
     axis: 'August and September are left off the line: the newer month is not over, or has not been read to its end.',
     href: '/dashboard/moves/01a4c724-2b4a-416b-b905-86ad4383a90a',

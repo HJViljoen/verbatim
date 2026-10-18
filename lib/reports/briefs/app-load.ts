@@ -15,7 +15,6 @@ import { marketProductMonth } from '../../products/market-month'
 import { isMissingProductsSchema, loadMonthProductReadings } from '../../products/types'
 import { loadBrandCrosses, loadBrandMonthPairs, loadBrandRefs, loadGroupSubjects, loadLatestProfile, loadMarketAudiences, loadMarketVideos } from '../../reading/cross'
 import { marketAudiences } from '../../reading/market'
-import { readingMonthLabel } from '../../reading/month-label'
 import { monthStartOf, nextMonth } from '../../reading/month-key'
 import { ownedPosts, summariseOwnedPosts } from '../../reading/owned'
 import { loadPairOn, readingHandle } from '../../reading/read'
@@ -221,7 +220,6 @@ export async function loadMovesPart(admin: SupabaseClient, a: { clientId: string
   const read = await readMoveCards(core, core.moves ?? [], cited.market, waiting.map((r) => r.lineageId))
   return movesOf({
     month,
-    monthLabel: readingMonthLabel(month, core.readingAt),
     rows: core.adviceRows,
     aims: read.aims,
     cards: read.cards,

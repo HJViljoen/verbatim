@@ -12,7 +12,7 @@ import type { GroupProducts } from '../../pages/v2/voices'
 import type { Verdict } from '../../reading/verdicts'
 import { fact } from '../../written/test-fixtures'
 import {
-  appSectionsFor, briefVerdict, buyersSection, groupsSection, hooksOf, hooksSection, ideasOf, ideasSection, moveOf, movesOf, movesSection, namedNotes, namedOf, namedSection,
+  appSectionsFor, briefVerdict, buyersSection, groupsSection, hooksOf, hooksSection, ideasOf, ideasSection, moveOf, moveSentence, movesOf, movesSection, namedNotes, namedOf, namedSection,
   peopleOf, productsOf, productsSection, RESPONSE_BASIS, standoutOf, subjectsSection, subjectWords,
 } from './app'
 import { OSSUR_APP, OSSUR_MOVES, OSSUR_PEOPLE, OSSUR_SUBJECT_FACTS, OSSUR_SUBJECT_READS, SEALAND_APP, SEALAND_NAMED } from './app-fixture'
@@ -276,7 +276,7 @@ describe('Your moves: the advice waiting, the moves dated, the record', () => {
 
   it('reads the record and the current advice from the ledger, the move that compares first', () => {
     const m = movesOf({
-      month: OCT, monthLabel: null,
+      month: OCT,
       rows: [
         { lineageId: 'a', title: 'A', why: null, status: 'new', inLatest: true, firstMade: '2026-07-01' },
         { lineageId: 'b', title: 'B', why: null, status: 'accepted', inLatest: false, firstMade: '2026-06-13' },
@@ -296,6 +296,16 @@ describe('Your moves: the advice waiting, the moves dated, the record', () => {
     expect(m.pool[0].aim).toEqual({ label: 'Where can I get one', k: 41, n: 902, href: null })
     expect(m.moves[0].verdict != null || m.moves.every((x) => x.verdict == null)).toBe(true)
     expect(movesSection({ ...m, pool: [], moves: [] }, null)).toBeNull()
+  })
+
+  it('a frozen brief names its month alone: no move\'s words carry a label relative to the day it was written', () => {
+    // The fixture's moves read to September: a September brief.
+    const m = movesOf({ month: SEP, rows: [], aims: new Map(), cards: MOVE_CARDS, adviceHref: (id) => `/dashboard/moves/advice/${id}` })
+    const words = m.moves.flatMap((x) => [x.sentence, x.axis ?? ''])
+    expect(words.some((w) => /in September/.test(w))).toBe(true)
+    for (const w of words) expect(w).not.toMatch(/last full month|an earlier month/)
+    // Your moves' page, read live in October, labels the same month.
+    expect(MOVE_CARDS.map((c) => moveSentence(c, { month: SEP, label: 'the last full month' })).some((s) => s.includes('September, the last full month'))).toBe(true)
   })
 
   it('slots say why a month is empty, in a word or two', () => {
@@ -347,7 +357,7 @@ describe('the pages each role reads from the app (`appSectionsFor`, the compose 
 describe('a piece of advice is named by `adviceTitle`, as everywhere', () => {
   it('a blank stored title takes its body\'s first clause', () => {
     const m = movesOf({
-      month: OCT, monthLabel: null,
+      month: OCT,
       rows: [{ lineageId: 'a', title: '', why: 'Daily wear issues such as socket pain, sweat and skin irritation need one clear answer page, written with owners.', status: 'new', inLatest: true, firstMade: '2026-10-12' }],
       aims: new Map(), cards: [], adviceHref: (id) => `/dashboard/moves/advice/${id}`,
     })
