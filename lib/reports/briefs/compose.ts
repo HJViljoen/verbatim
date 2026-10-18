@@ -11,8 +11,17 @@ import type { WeekScrubCounts } from '../../written/scrub'
 import { monthsPhrase } from '../../written/month'
 import { collectQuoteRefs, resolveQuotes } from '../../renderables/quotes-freeze'
 import type { QuoteResolution } from '../../renderables/types'
+import { marketMonthHref, marketSubjectHref } from '../../nav'
+import { adviceText } from '../../pages/advice-shortlist'
 import { overlapOfSmaller, referencesFor } from './allocate'
+import {
+  buyersSection, groupsSection, hooksSection, ideasSection, movesSection, namedSection, productsSection, subjectsBase, subjectWords,
+  type BriefAppInputs,
+} from './app'
+import { appLines, SALES_GROUPS_LINE } from './app-words'
+import { canvasOf } from './canvas'
 import { printedSections } from './deck'
+import { APP_SECTION_KEYS } from './types'
 import { unionOf } from './ground'
 import { FIT, type Meaning } from './meaning'
 import { itemKey } from './repeats'
@@ -170,6 +179,11 @@ export interface ComposeInput {
   /** The subjects each of the findings' insights is a member of: a finding's
    *  "Part of {subject}" line. */
   insightSubjects?: ReadonlyMap<string, readonly string[]> | null
+  /** The October canvas: what code read from the app's own pages for the
+   *  month (app.ts). Given (null parts and all), the brief carries `fromApp`
+   *  and is drawn on the October canvas; absent, the 12 Oct canvas (a test, a
+   *  caller from before it). */
+  app?: BriefAppInputs | null
   model: string
   costUsd: number
 }
@@ -237,6 +251,9 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
       return !!p && p.usable && (q.has(p.questionId) || ideaPointIds.has(p.id))
     })
   }
+
+  /** The writer's sentences on the subjects, once scrubbed (`sentencesOf`). */
+  let subjectSentences: Map<string, string> | null = null
 
   // ---- findings --------------------------------------------------------------------------
   const findings: BriefFinding[] = []
@@ -500,6 +517,10 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
     const phrases = a.quotes.phrases([...ownPts].sort((x, y) => y.videoIds.length - x.videoIds.length).map((p) => ({ id: p.id, text: p.text })), PHRASES_MAX)
     built['content.borrow'] = phrases.length ? section('content.borrow', [], { voices: phrases }) : null
   }
+  // The October canvas's Where the market stands is built first, so a
+  // subject's own voice, where it needs one, is its (the writer's market page
+  // is still built and stored, and does not print on that canvas).
+  const subjectsPage = a.role === 'leadership' && a.app !== undefined ? subjects() : null
   if (a.role === 'leadership') {
     built['leadership.market'] = market()
     built['leadership.shares'] = shares()
@@ -719,10 +740,53 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
   }
 
   // ---- leadership: where the market stands (the subjects people talked about) --------------------
+  /** The writer's sentence on each subject, scrubbed once (both market
+   *  pages read it). */
+  function sentencesOf(): Map<string, string> {
+    subjectSentences ??= new Map((a.written?.subjects ?? []).map((s) => [String(s.subject).trim().toUpperCase(), run(s.sentence, Math.round(BRIEF_MAX.subject * SLACK), 'market', `subject.${s.subject}`, { maxSentences: 1 })]))
+    return subjectSentences
+  }
+
+  // ---- leadership (October canvas): where the market stands, in Market's own words -----------------
+  /** Each READY subject with its level (ruling U6), in Market's order, said in
+   *  its own read on Market (the closing run's: its headline, and the first
+   *  sentence of what it means), the writer's sentence where the month holds
+   *  no read of it, one of its voices where neither; the kinds and the mood
+   *  under them, as on v1. */
+  function subjects(): BriefSection | null {
+    const ready = (a.subjects ?? []).filter(({ fact }) => fact.calibration === 'ready' && fact.level && fact.level.n > 0)
+      .sort((x, y) => (x.fact.rank || 99) - (y.fact.rank || 99))
+    if (ready.length === 0) return null
+    const reads = new Map((a.app?.subjectReads ?? []).map((r) => [r.id, r]))
+    const items: BriefItem[] = []
+    for (const { id, fact } of ready) {
+      const pct = Math.round((fact.level!.k / fact.level!.n) * 100)
+      const href = marketSubjectHref(fact.subjectId, { period: 'month', month: a.month })
+      const words = subjectWords(reads.get(fact.subjectId))
+      if (words) {
+        const text = words.headline ?? words.meaning ?? ''
+        items.push({ title: fact.name, text, ...(words.headline && words.meaning ? { detail: words.meaning } : {}), slot: 'week_read', measure: { pct }, href })
+        continue
+      }
+      const sentence = sentencesOf().get(id.toUpperCase()) ?? ''
+      const voice = sentence ? null : subjectQuote(fact)
+      if (!sentence && !voice) { held.push({ what: `subject: ${fact.name}`, reason: 'nothing was said about it, and the month holds no read of it' }); continue }
+      items.push({ title: fact.name, text: sentence, ...(voice ? { quote: voice } : {}), measure: { pct }, href })
+    }
+    if (items.length === 0) return null
+    const n = ready[0].fact.level!.n
+    return {
+      key: 'leadership.subjects', title: 'Where the market stands', groups: [{ items }],
+      base: subjectsBase(n, a.month), ...kindsOf(),
+      foot: 'What people said inside each subject is on its Market page.',
+      link: { href: marketMonthHref(a.month), text: `Open ${month} on Market →` },
+    }
+  }
+
   function market(): BriefSection | null {
     const subjects = a.subjects ?? []
     if (subjects.length === 0) return null
-    const sentences = new Map((a.written?.subjects ?? []).map((s) => [String(s.subject).trim().toUpperCase(), run(s.sentence, Math.round(BRIEF_MAX.subject * SLACK), 'market', `subject.${s.subject}`, { maxSentences: 1 })]))
+    const sentences = sentencesOf()
     const ready = subjects.filter(({ fact }) => fact.calibration === 'ready' && fact.level && fact.level.n > 0)
       .sort((x, y) => (x.fact.rank || 99) - (y.fact.rank || 99))
     const rest = subjects.filter((s) => !ready.includes(s) && s.fact.calibration !== 'failed')
@@ -834,6 +898,29 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
   const { sections, held: sectionHeld } = selectRoleSections(a.role, built)
   for (const h of sectionHeld) held.push(h)
 
+  // ---- the October canvas's pages read from the app (app.ts) ----------------------------------
+  const fromApp = a.app === undefined ? null : appPages()
+  function appPages(): BriefSection[] {
+    const app = a.app ?? null
+    const out: (BriefSection | null)[] = []
+    if (a.role === 'leadership') {
+      // Your moves' advice, folded as the page folds it, by this step's own
+      // vectors (`Meaning.vectorOf`: the texts join the compose step's one
+      // embedding batch; none in the first pass, and the list is drawn
+      // unmerged, the page's own fallback).
+      const vectors = new Map<string, number[]>()
+      for (const r of app?.moves?.pool ?? []) {
+        const v = a.meaning.vectorOf(adviceText(r))
+        if (v) vectors.set(r.lineageId, [...v])
+      }
+      out.push(subjectsPage, groupsSection(app?.people ?? null), movesSection(app?.moves ?? null, vectors.size ? vectors : null))
+    }
+    if (a.role === 'sales') out.push(buyersSection(app?.people ?? null))
+    if (a.role === 'marketing') out.push(productsSection(app?.products ?? null), namedSection(app?.named ?? null, co))
+    if (a.role === 'content') out.push(ideasSection(app?.ideas ?? null), hooksSection(app?.hooks ?? null))
+    return out.filter((x): x is BriefSection => x != null)
+  }
+
   // ---- in short (filtered against what printed, at the set level: summaryAgainstPrinted) --------
   const summary = run(a.written?.in_short ?? '', BRIEF_MAX.summary, 'interpret', 'in_short', { maxSentences: BRIEF_MAX.summarySentences })
   const data: MonthlyBriefData = {
@@ -848,6 +935,7 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
     inShort: { summary, figures: figuresFor(a), also: referencesFor(a.role, a.allocation) },
     findings,
     sections,
+    ...(fromApp ? { fromApp } : {}),
     held,
     promptVersion: BRIEF_PROMPT_VERSION,
     model: a.model,
@@ -1008,6 +1096,8 @@ export function printedTexts(d: MonthlyBriefData, words?: QuoteWordsOf): { text:
       ...(s.panel?.rows ?? []).map((r) => r.text),
       ...(s.position ? [s.position.text] : []),
       ...s.groups.flatMap((g) => g.items.filter((i) => !i.tag && i.text).map(itemWords)),
+      // An October page's own words (its groups, advice, ideas, rows).
+      ...(APP_SECTION_KEYS.includes(s.key) ? appLines(s) : []),
     ]),
   ].map((text) => ({ text, brands: text }))
 }
@@ -1063,7 +1153,7 @@ export function namedAcross(briefs: readonly MonthlyBriefData[], meaning: Meanin
       groups: s.groups.map((g) => ({
         ...g,
         items: g.items.map((i) => {
-          if (i.tag || !i.videoIds?.length || s.key === 'leadership.decisions' || !printsSection(s.key)) return i
+          if (i.tag || !i.videoIds?.length || s.key === 'leadership.decisions' || !printsSection(s.key, canvasOf(d))) return i
           const said = `${i.title ? `${i.title}. ` : ''}${i.text}`
           const earlier = seen.find((e) => e.role !== d.role && overlapOfSmaller(i.videoIds!, e.videoIds) >= SAME_AS_FINDING && meaning.sim(said, e.text) >= FIT.same)
           if (!earlier) return i
@@ -1129,6 +1219,30 @@ export function footnotesOnlyPrinted(briefs: readonly MonthlyBriefData[], words?
     done.set(d.role, held.length === d.held.length ? d : { ...d, sections, held })
   }
   return briefs.map((d) => done.get(d.role)!)
+}
+
+/**
+ * THE LEADERSHIP GROUPS' FOOT POINTS AT THE SALES BRIEF ONLY WHERE IT PRINTS
+ * THEM (the October canvas; Heinrich, 12 Oct: a line never points at a page
+ * that did not print). Who is in your market says what each group wants and
+ * what stops it "is in the Sales brief" only where the set's Sales brief
+ * prints Who is buying; otherwise its foot is its own line alone. A set
+ * without a Sales brief (a dry run of one brief) is not judged. Pure.
+ */
+export function pointToSalesGroups(briefs: readonly MonthlyBriefData[], words?: QuoteWordsOf): MonthlyBriefData[] {
+  const sales = briefs.find((b) => b.role === 'sales')
+  if (!sales) return [...briefs]
+  const prints = printedOf(sales, words).some((s) => s.key === 'sales.groups')
+  return briefs.map((d) => {
+    if (d.role !== 'leadership' || !d.fromApp?.some((s) => s.key === 'leadership.groups')) return d
+    const fromApp = d.fromApp.map((s) => {
+      if (s.key !== 'leadership.groups') return s
+      const base = (s.foot ?? '').split(SALES_GROUPS_LINE).join('').replace(/\s+/g, ' ').trim()
+      const foot = prints ? [base, SALES_GROUPS_LINE].filter(Boolean).join(' ') : base
+      return foot === (s.foot ?? '') ? s : { ...s, foot }
+    })
+    return fromApp.every((s, k) => s === d.fromApp![k]) ? d : { ...d, fromApp }
+  })
 }
 
 /** Where two briefs of one set rest on the same research: each pair of items

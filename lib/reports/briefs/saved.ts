@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 import { alsoOnlyPrinted } from './build'
-import { footnotesOnlyPrinted, type QuoteWordsOf } from './compose'
+import { footnotesOnlyPrinted, pointToSalesGroups, type QuoteWordsOf } from './compose'
 import { planDeck } from './deck'
 import { hydrateBrief, inShortStillHolds } from './inshort'
 import { briefPrints, briefSnapshotRow } from './store'
@@ -328,6 +328,12 @@ export function checkSavedSet(
   const named = footnotesOnlyPrinted(briefs, wordsOf)
   named.forEach((d, k) => {
     if (d.held.length !== briefs[k].held.length) problems.push(`the ${BRIEF_NAME[d.role]} has a footnote naming what the other brief does not print: ${d.held[d.held.length - 1].what}`)
+  })
+
+  // The October canvas: Who is in your market points at the Sales brief's
+  // groups only where that brief prints them.
+  pointToSalesGroups(briefs, wordsOf).forEach((d, k) => {
+    if (d !== briefs[k]) problems.push(`the ${BRIEF_NAME[d.role]}'s Who is in your market says where the groups' wants are argued, and the Sales brief ${d.fromApp?.some((s) => s.key === 'leadership.groups' && (s.foot ?? '').includes('Sales brief')) ? 'prints them' : 'does not print them'}`)
   })
 
   if (problems.length) return { problems, set: null }

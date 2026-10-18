@@ -74,6 +74,22 @@ export class Meaning {
     return top
   }
 
+  /**
+   * A text's vector, where this pass has one (`vectors` mode); none in
+   * `collect` and `words` mode. Asked for and not had, the text is recorded,
+   * so the next embedding batch carries it: how Your moves' advice is folded
+   * by the compose step's own vectors, with no call of its own
+   * (app.ts `movesSection`).
+   */
+  vectorOf(text: string): readonly number[] | undefined {
+    const x = norm(text)
+    if (!x) return undefined
+    if (this.mode === 'words') return undefined
+    const v = this.mode === 'vectors' ? this.vectors.get(x) : undefined
+    if (!v) this.want.add(x)
+    return v
+  }
+
   /** Texts asked about that had no vector. */
   wanted(): string[] {
     return [...this.want]

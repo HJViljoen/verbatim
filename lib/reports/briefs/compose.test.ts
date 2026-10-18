@@ -3,11 +3,15 @@ import { describe, expect, it } from 'vitest'
 import type { WhoVideo } from '../../brands/attribution'
 import { fact } from '../../written/test-fixtures'
 import { allocateIdeas } from './allocate'
-import { composeBrief, figuresFor, footnotesOnlyPrinted, namedAcross, repeatsAcross, summaryAgainstPrinted, type AudienceRow, type ComposeInput } from './compose'
+import { composeBrief, figuresFor, footnotesOnlyPrinted, namedAcross, pointToSalesGroups, repeatsAcross, summaryAgainstPrinted, type AudienceRow, type ComposeInput } from './compose'
+import type { BriefAppInputs } from './app'
+import { OSSUR_MOVES, OSSUR_PEOPLE } from './app-fixture'
+import { SALES_GROUPS_LINE } from './app-words'
+import { canvasOf } from './canvas'
 import { briefMarkdown } from './markdown'
 import { Meaning } from './meaning'
 import { QuotePool } from './quotes'
-import { briefFixture } from '../../../components/briefs/fixture'
+import { briefFixture, octoberFixture } from '../../../components/briefs/fixture'
 import { cite, point } from './test-fixtures'
 import type { BriefRole, GroundedPoint, MonthlyBriefData } from './types'
 import type { BriefOutput } from './write'
@@ -490,5 +494,76 @@ describe('the canvas\'s components, each from material that stands', () => {
     const { data } = composeBrief(input('sales', salesOut(), POINTS, { subjects, insightSubjects }))
     expect(data.findings[0].subjectLine).toBe('Part of Buying & delivery, the biggest subject in your market: 23% of September\'s videos.')
     expect(composeBrief(input('sales', salesOut(), POINTS, { subjects })).data.findings[0].subjectLine).toBeUndefined()
+  })
+})
+
+describe('the October canvas: the pages read from the app (`fromApp`)', () => {
+  const leadOut: BriefOutput = {
+    findings: [{ idea: 'I2', saw: 'Owners describe the repair service in detail.', means: 'Repairs carry the brand\'s name with owners.', practice: [] }],
+    stand: part([]), weigh: part([]), stay: part([]), move: part([]),
+    decisions: part([]), risks: part([]),
+    subjects: [{ subject: 'S1', sentence: 'People talk about the fit of the socket through a long day.' }, { subject: 'S2', sentence: 'People compare running blades.' }],
+    in_short: 'Repairs matter.',
+  }
+  const subjects = [
+    { id: 'S1', fact: fact({ subjectId: 's1', name: 'Fit & comfort', calibration: 'ready', level: { k: 120, n: 400 }, rank: 1 }) },
+    { id: 'S2', fact: fact({ subjectId: 's2', name: 'Function', calibration: 'ready', level: { k: 90, n: 400 }, rank: 2 }) },
+    { id: 'S3', fact: fact({ subjectId: 's3', name: 'Cost & access', calibration: 'provisional', level: null, rank: 0 }) },
+  ]
+  const app = (over: Partial<BriefAppInputs> = {}): BriefAppInputs => ({ month: SEP, subjectReads: null, people: null, named: null, products: null, ideas: null, hooks: null, moves: null, ...over })
+
+  it('given what the app read, the brief carries fromApp (the October canvas); without it, none (the 12 Oct canvas)', () => {
+    const v2 = composeBrief(input('sales', salesOut(), POINTS, { app: app({ people: OSSUR_PEOPLE }) })).data
+    expect(v2.fromApp?.map((s) => s.key)).toEqual(['sales.groups'])
+    expect(canvasOf(v2)).toBe('v2')
+    // The writer's buyer types are still written and stored.
+    expect(v2.sections.some((s) => s.key === 'sales.stops')).toBe(true)
+    const empty = composeBrief(input('sales', salesOut(), POINTS, { app: null })).data
+    expect(empty.fromApp).toEqual([])
+    expect(canvasOf(empty)).toBe('v2')
+    const v1 = composeBrief(input('sales', salesOut(), POINTS)).data
+    expect('fromApp' in v1).toBe(false)
+    expect(canvasOf(v1)).toBe('v1')
+  })
+
+  it('Where the market stands: each READY subject in its own read on Market, the writer\'s sentence where the month holds none, an unready one never (U6)', () => {
+    const reads = [{ id: 's1', status: 'ready' as const, headline: 'The socket decides whether the leg is worn', means: 'Pain returns to the socket. More follows.', line: null }]
+    const { data } = composeBrief(input('leadership', leadOut, POINTS, { subjects, app: app({ subjectReads: reads }) }))
+    const page = data.fromApp!.find((s) => s.key === 'leadership.subjects')!
+    expect(page.groups[0].items).toEqual([
+      { title: 'Fit & comfort', text: 'The socket decides whether the leg is worn', detail: 'Pain returns to the socket.', slot: 'week_read', measure: { pct: 30 }, href: '/dashboard/market/subjects/s1?period=month&month=2026-09' },
+      { title: 'Function', text: 'People compare running blades.', measure: { pct: 23 }, href: '/dashboard/market/subjects/s2?period=month&month=2026-09' },
+    ])
+    expect(page.base).toBe('Share of the 400 videos in your market in September · each subject in Market’s own words')
+    expect(page.link).toEqual({ href: '/dashboard/market?period=month&month=2026-09', text: 'Open September on Market →' })
+    // The writer's market page is still built and stored.
+    expect(data.sections.some((s) => s.key === 'leadership.market')).toBe(true)
+  })
+
+  it('Your moves\' advice folds by the step\'s own vectors, and with none is drawn unmerged', () => {
+    const vectors = new Map<string, number[]>()
+    const same = [1, 0, 0]
+    OSSUR_MOVES.pool.forEach((r, k) => vectors.set(`${r.title}. ${r.why ?? ''}`.trim(), k < 2 ? same : [0, k === 2 ? 1 : 0, k === 3 ? 1 : 0]))
+    const folded = composeBrief(input('leadership', leadOut, POINTS, { subjects, meaning: new Meaning(vectors, 'vectors'), app: app({ moves: OSSUR_MOVES }) })).data
+    expect(folded.fromApp!.find((s) => s.key === 'leadership.moves')!.moves!.waiting).toHaveLength(3)
+    const collect = new Meaning(new Map(), 'collect')
+    const flat = composeBrief(input('leadership', leadOut, POINTS, { subjects, meaning: collect, app: app({ moves: OSSUR_MOVES }) })).data
+    expect(flat.fromApp!.find((s) => s.key === 'leadership.moves')!.moves!.waiting).toHaveLength(4)
+    // The first pass asks for every advice text, so the one embedding batch
+    // carries them: no call of its own.
+    expect(collect.wanted()).toContain('Create an Össur Access Navigator for new amputees and caregivers. Build one route through cover, providers and fitting.')
+  })
+
+  it('the Leadership groups\' foot points at the Sales brief only where the Sales brief prints its groups', () => {
+    const lead = octoberFixture('leadership')
+    const sales = octoberFixture('sales')
+    const [, pointed] = pointToSalesGroups([sales, lead])
+    expect(pointed.fromApp!.find((s) => s.key === 'leadership.groups')!.foot).toBe(`Each update describes the groups afresh, so no count is set against September. ${SALES_GROUPS_LINE}`)
+    const noGroups = { ...sales, fromApp: [] }
+    const [, alone] = pointToSalesGroups([noGroups, pointed])
+    expect(alone.fromApp!.find((s) => s.key === 'leadership.groups')!.foot).toBe('Each update describes the groups afresh, so no count is set against September.')
+    // Idempotent, and a set with no Sales brief is not judged.
+    expect(pointToSalesGroups([sales, pointed])[1]).toBe(pointed)
+    expect(pointToSalesGroups([lead])[0]).toBe(lead)
   })
 })

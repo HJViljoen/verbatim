@@ -27,7 +27,9 @@ import type { StandingFact } from '../../written/types'
 import type { ParseClient } from '../../written/write-model'
 import { allPoints, runResearch, type ResearchAnswer } from '../documents/research'
 import { allocateIdeas } from './allocate'
-import { composeBrief, footnotesOnlyPrinted, namedAcross, summaryAgainstPrinted, SHARE_MIN_VIDEOS, type AudienceRow, type LongRunIn, type MarketKindsIn, type OwnPostCount, type QuoteWordsOf } from './compose'
+import type { BriefAppInputs } from './app'
+import { loadBriefAppParts } from './app-load'
+import { composeBrief, footnotesOnlyPrinted, namedAcross, pointToSalesGroups, summaryAgainstPrinted, SHARE_MIN_VIDEOS, type AudienceRow, type LongRunIn, type MarketKindsIn, type OwnPostCount, type QuoteWordsOf } from './compose'
 import { Meaning } from './meaning'
 import { applyRepeats, REPEATS_IDEA_CHARS, repeatItemsOf, verdictsOf, type RepeatItem, type RepeatsOutput, type RepeatVerdict } from './repeats'
 import { capText } from '../documents/scrub'
@@ -102,6 +104,11 @@ export interface BriefSetInputs {
   /** The month's long-run read, as "What holds so far" prints it
    *  (Leadership); null where none is ready. */
   longRun?: LongRunIn | null
+  /** ADDITIVE (the October canvas, 18 Oct): what code read from the app's own
+   *  pages for the month (app-load.ts), each part null where it was not read.
+   *  Absent on inputs read before it (a plan carried across the deploy): the
+   *  briefs are then drawn on the 12 Oct canvas, as they were. */
+  app?: BriefAppInputs | null
 }
 
 /** What people did in the comments and the mood, for the month, pooled over
@@ -263,15 +270,19 @@ export async function loadBriefSetInputs(
   const brands = (await loadTrackedBrands(admin, clientId).catch(warn('tracked brands'))) ?? [company, ...tracked]
   const context = await loadCompanyContext(admin, { clientId, window }).catch(warn('company context'))
   const standing = (await loadStanding(admin, { clientId, month, window, asOf: opts.now, brands }).catch(warn('standing'))) ?? []
-  const playbook = await loadPlaybookVideos(admin, clientId, month)
-    .then((videos) => buildPlaybook({ month, brand: company, rival: rivals[0] ?? null, videos }))
-    .catch(warn('playbook'))
+  const videos = await loadPlaybookVideos(admin, clientId, month).catch(warn('playbook videos'))
+  const playbook = videos ? (() => {
+    try { return buildPlaybook({ month, brand: company, rival: rivals[0] ?? null, videos }) } catch (e) { return warn('playbook')(e) }
+  })() : null
   const sh = await admin.from('run_summary').select('say_vs_hear').eq('client_id', clientId).eq('run_id', runId).maybeSingle()
   const themedRunId = await themedRunAsOf(admin, clientId, opts.now.toISOString()).catch(warn('themed run'))
   const giveaway = await loadGiveaway(admin, clientId, month).catch(warn('giveaway posts'))
   const kinds = audiences ? await loadMarketKinds(admin, clientId, month, audiences, rivalAudiences).catch(warn('kinds and mood')) : null
   const posts = await loadOwnPostCounts(admin, clientId, month, company, tracked).catch(warn('own posts'))
   const longRun = await loadMonthLongRun(admin, clientId, month).catch(warn('long-run read'))
+  // The October canvas's pages, read from the app for the month (no model
+  // call; each part on its own).
+  const app = await loadBriefAppParts(admin, { clientId, company, month, now: opts.now, runId, standing, rival: rivals[0] ?? null, videos })
   return {
     clientId,
     company,
@@ -294,6 +305,7 @@ export async function loadBriefSetInputs(
     kinds,
     posts,
     longRun,
+    app,
   }
 }
 
@@ -590,6 +602,7 @@ export async function writeBriefSet(
         written: raws[role].raw, rivals: i.tracked, claims: role === 'marketing' ? claims : undefined, subjects, insightSubjects,
         audiences: i.audiences, market: i.market, ownPosts: i.context?.posts.month ?? null, giveaway: i.giveaway ?? null, playbook: i.playbook,
         kinds: i.kinds ?? null, posts: i.posts ?? null, longRun: i.longRun ?? null,
+        ...(i.app !== undefined ? { app: i.app } : {}),
         model: BRIEF_MODEL, costUsd: raws[role].costUsd, brandsCounted: counted,
       })
     }
@@ -600,7 +613,7 @@ export async function writeBriefSet(
     const words = (ref: string) => quotes.textOf(ref)
     const composed = roles.map((r) => out[r].data)
     const judged = verdicts ? applyRepeats(composed, verdicts, allocation.ideas, { meaning, texts: ideaTexts }) : composed
-    const named = footnotesOnlyPrinted(namedAcross(judged, meaning, words), words)
+    const named = pointToSalesGroups(footnotesOnlyPrinted(namedAcross(judged, meaning, words), words), words)
     const finished = named.map((d) => summaryAgainstPrinted(d, meaning, brands, words))
     return { out, composed, finished, quotes }
   }

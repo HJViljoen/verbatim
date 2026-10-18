@@ -76,6 +76,7 @@ import {
 } from '../lib/reports/briefs/build'
 import { briefMarkdown } from '../lib/reports/briefs/markdown'
 import { ROLE_SECTIONS, printsSection, sectionTitle } from '../lib/reports/briefs/sections'
+import { canvasOf } from '../lib/reports/briefs/canvas'
 import { BRIEF_AFTER_RESEARCH_USD, BRIEF_SET_BUDGET_USD } from '../lib/reports/briefs/step'
 import { SAVED_SET_FILE, checkSavedSet, savedSetOf, type SavedFile } from '../lib/reports/briefs/saved'
 import { briefPrints, monthBriefsWritten, monthlyBriefsApplied, storeBriefSet } from '../lib/reports/briefs/store'
@@ -316,8 +317,9 @@ async function drawDesigned(set: BriefSet, a: { clientId: string; runId: string;
     // The canvas's pages that do not print, and why: left out as thin, or
     // no section stood to draw (the held list says why).
     for (const l of out.left) console.log(`  left out: ${l.title} (${l.why})`)
-    const built = new Set(d.sections.map((s) => s.key))
-    for (const spec of ROLE_SECTIONS[r]) if (printsSection(spec.key) && !built.has(spec.key)) console.log(`  not built: ${sectionTitle(spec, d.company)} (nothing in it stood; see held)`)
+    const built = new Set([...d.sections, ...(d.fromApp ?? [])].map((s) => s.key))
+    for (const spec of ROLE_SECTIONS[r]) if (printsSection(spec.key, canvasOf(d)) && !built.has(spec.key)) console.log(`  not built: ${sectionTitle(spec, d.company)} (nothing in it stood; see held)`)
+    if (d.fromApp) console.log(`  read from the app: ${d.fromApp.map((s) => s.title).join(', ') || 'nothing (each page is left out)'}`)
   }
   console.log(`The designed briefs are in ${dir}.`)
   const back = readSaved(dir)
