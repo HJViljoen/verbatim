@@ -440,11 +440,12 @@ function ContentPg({ part, first, appUrl, medical }: { part: WeeklyContentPart; 
             <td style={pcell(0)}>
               <span style={E.cat}>Asked most, and not yet in your posts</span><br />
               <a href={`${appUrl}${q.href}`} style={E.pname}><span data-copy="subject" data-slot="pass_b_theme">{q.label}</span></a>
-              {q.week != null ? (
+              {q.week != null && q.month != null ? (
                 <span style={E.fig}>
-                  <N n={q.week} style={E.bold} /> {q.week === 1 ? 'video' : 'videos'} {q.weekWords}
-                  {q.month != null ? <> · <N n={q.month} style={E.bold} /> {q.monthWords}</> : null}
+                  <N n={q.week} style={E.bold} /> {q.week === 1 ? 'video' : 'videos'} {q.weekWords} · <N n={q.month} style={E.bold} /> {q.monthWords}
                 </span>
+              ) : q.month != null ? (
+                <span style={E.fig}><N n={q.month} style={E.bold} /> {q.month === 1 ? 'video' : 'videos'} {q.monthWords}</span>
               ) : null}
             </td>
           ),
@@ -1213,7 +1214,9 @@ function ContentCard({ part, appUrl, print, medical, wide = false }: { part: Wee
       ) : q ? (
         <div>
           <a href={`${appUrl}${q.href}`} style={{ fontSize: 15.5, fontWeight: 600, textDecoration: 'none' }}><span data-copy="subject" data-slot="pass_b_theme">{q.label}</span></a>
-          {q.week != null ? <p className="w3-nf"><b><N n={q.week} /></b> {q.week === 1 ? 'video' : 'videos'} {q.weekWords}{q.month != null ? <> · <b><N n={q.month} /></b> {q.monthWords}</> : null}</p> : null}
+          {q.week != null && q.month != null
+            ? <p className="w3-nf"><b><N n={q.week} /></b> {q.week === 1 ? 'video' : 'videos'} {q.weekWords} · <b><N n={q.month} /></b> {q.monthWords}</p>
+            : q.month != null ? <p className="w3-nf"><b><N n={q.month} /></b> {q.month === 1 ? 'video' : 'videos'} {q.monthWords}</p> : null}
         </div>
       ) : null}
       {ideas.length > 0 && (part.medical || medical) ? <p className="w3-med">{MEDICAL_LINE}</p> : null}

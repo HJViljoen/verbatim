@@ -247,6 +247,25 @@ describe('the email, the issue that closes a month (H7-Email-Weekly-MonthEnd)', 
 })
 
 describe('the email\'s states: a part that is not there prints nothing (§0a.2)', () => {
+  it('the stand-in question never prints a week\'s figure without its month (decision 1); the month alone stands', () => {
+    const base = sealandV3Snapshot()
+    const content = base.pages!.content!
+    const asked = content.asked!
+    const monthOnly = { ...base, pages: { ...base.pages, content: { ...content, asked: { ...asked, week: null } } } }
+    for (const html of [emailOf(monthOnly).html, pageOf(monthOnly)]) {
+      const t = textOf(html)
+      expect(t).toContain('Questions about product details')
+      expect(t).toContain('8 videos in October so far')
+      expect(t).not.toMatch(/videos this week(?! ·)/)
+    }
+    const neither = { ...base, pages: { ...base.pages, content: { ...content, asked: { ...asked, week: 6, month: null } } } }
+    for (const html of [emailOf(neither).html, pageOf(neither)]) {
+      const t = textOf(html)
+      const card = t.slice(t.indexOf('Questions about product details'), t.indexOf('Worth a reply'))
+      expect(card).toContain('Questions about product details')
+      expect(card).not.toMatch(/\d/)
+    }
+  })
   it('no ready subject: no "What the market is talking about"; the group heads with Voices', () => {
     const t = cardText(ossurSnapshot({ subjects: [] }))
     expect(t).not.toContain('What the market is talking about')

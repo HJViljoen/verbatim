@@ -93,7 +93,9 @@ export function contentPart(top: TopContent | null | undefined, asked: TopAsked 
   const question = ideas.length === 0 && asked && asked.label.trim()
     ? {
         label: asked.label.trim(),
-        week: asked.week?.k ?? null,
+        // Decision 1, as the tile draws it: a week's figure only beside its
+        // month; with no month read, the month alone or nothing.
+        week: asked.week && asked.month ? asked.week.k : null,
         month: asked.month?.k ?? null,
         weekWords: asked.weekWords,
         monthWords: asked.monthWords,

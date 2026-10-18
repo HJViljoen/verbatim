@@ -115,6 +115,12 @@ describe('Content: this week\'s ideas, else the question asked most; Worth a rep
       expect(part.medical).toBe(false)
       expect(part.asked).toEqual({ label: 'How long a liner lasts', week: 23, month: 35, weekWords: 'this week', monthWords: 'in October so far', href: fixtureAsked().href })
     }
+    // Decision 1: no week's figure without its month (the tile draws none);
+    // the month alone stands.
+    const noMonth = contentPart(fixtureContentTop('none'), { ...fixtureAsked(), month: null }, read)
+    expect([noMonth.asked?.week, noMonth.asked?.month]).toEqual([null, null])
+    const noWeek = contentPart(fixtureContentTop('none'), { ...fixtureAsked(), week: null }, read)
+    expect([noWeek.asked?.week, noWeek.asked?.month]).toEqual([null, 35])
     // Neither: Worth a reply alone.
     const bare = contentPart(null, null, read)
     expect([bare.ideas, bare.asked, bare.replies.days]).toEqual([[], null, '5 to 11 Oct'])
