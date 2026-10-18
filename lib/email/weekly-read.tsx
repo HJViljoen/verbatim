@@ -1,7 +1,7 @@
 import { WeeklyReadEmail } from '../../components/email/weekly-read'
 import { renderStaticHtml } from './render-html'
 import { htmlToText } from './text'
-import type { WeeklyReadSnapshotData } from '../reports/weekly-read-build'
+import { isWeeklyV3, type WeeklyReadSnapshotData } from '../reports/weekly-read-build'
 
 /**
  * Rendering the weekly read (artefact `weekly_read`): a hydrated snapshot (the
@@ -39,5 +39,8 @@ export interface RenderWeeklyReadArgs {
 export function renderWeeklyReadEmail(a: RenderWeeklyReadArgs): { subject: string; html: string; text: string } {
   const preheader = a.data.subject.replace(/^[^:]*:\s*/, '')
   const html = `<!doctype html>\n${renderStaticHtml(<WeeklyReadEmail data={a.data} appUrl={a.appUrl} markSrc={a.markSrc} markOnInkSrc={a.markOnInkSrc} fullUrl={a.shareUrl ?? null} preheader={preheader} medical={a.medical ?? false} />)}`
-  return { subject: a.data.subject, html, text: htmlToText(html) }
+  // Version 3's rows are links that wrap their eyebrow, name and figure
+  // (H7-Email-Weekly-Alt): its text keeps each on its own line. Versions 1
+  // and 2 read as they always have (lib/test/weekly-read-golden/).
+  return { subject: a.data.subject, html, text: htmlToText(html, { linkBlocks: isWeeklyV3(a.data) }) }
 }

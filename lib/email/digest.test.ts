@@ -172,6 +172,14 @@ describe('text helpers', () => {
     expect(text).not.toContain('advice=3D')
   })
 
+  it('htmlToText with linkBlocks keeps each block of a row link its own line and drops an arrow that repeats it; without it, nothing changes', () => {
+    const row = '<table><tr><td><a href="https://x.y/c"><p>Also talked about</p><div>How it works</div><div><span>14</span> videos</div></a></td><td><a href="https://x.y/c">→</a></td></tr></table>'
+    expect(htmlToText(row)).toBe('Also talked aboutHow it works14 videos (https://x.y/c) → (https://x.y/c)')
+    expect(htmlToText(row, { linkBlocks: true })).toBe('Also talked about\nHow it works\n14 videos (https://x.y/c)')
+    // A plain link reads the same either way, "Worth a reply →" included.
+    const plain = '<p><a href="https://x.y/z">Open</a> and <a href="https://x.y/r">Worth a reply →</a></p>'
+    expect(htmlToText(plain, { linkBlocks: true })).toBe(htmlToText(plain))
+  })
   it('htmlToText decodes hex entities too, so an apostrophe reads as one', () => {
     // React writes an apostrophe as &#x27;: Össur&#x27;s must not reach an inbox.
     expect(htmlToText('<p>Össur&#x27;s share &#8212; and &#x2019;s</p>')).toBe('Össur\'s share — and ’s')

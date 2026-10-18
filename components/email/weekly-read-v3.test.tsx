@@ -176,6 +176,22 @@ describe('the email, Össur (H7-Email-Weekly-Alt): grouped by question, top to b
     expectInOrder(e.text.replace(/\n/g, ' '), ['What it means', 'This week, 12 to 18 October', 'What stood out', 'October so far', 'What the market is talking about', 'Voices', 'Your products', 'What to do next', 'Content', 'Your moves', 'Open Market', 'Read this week in full', 'Who gets this'])
     expect(e.text).toContain(`Open Market (${APP}/dashboard/market)`)
   })
+  it('its plain text reads line by line: each note once, a row\'s eyebrow, name and figure each a line, each address once', () => {
+    const t = emailOf().text
+    for (const note of ['Beside October so far', 'Each a reading of the whole month', 'Ideas, replies and advice']) expect(count(t, note), note).toBe(1)
+    expect(t).toContain(`Most talked about this week\nPraise for resilience and courage\n19 videos this week · 54 in October so far (${APP}/dashboard/market/conversations/o1)`)
+    expect(t).toContain(`Cost & access\nInsurance cover decides whether a socket or knee joint feels obtainable (${APP}/dashboard/market/subjects/s-cost?period=month&month=2026-10)`)
+    expect(t).toContain('This week\n146 videos\n4,180 comments\nOctober so far\n434 videos\n11,178 comments')
+    expect(t).toContain('01 The residual limb is where wearers place the risk of a prosthetic leg.')
+    expect(t).toContain(`(${APP}/dashboard/moves/advice/l1)\n1 update, first raised 12 Oct`)
+    expect(count(t, `${APP}/dashboard/market/conversations/o1`)).toBe(1)
+    // No arrow link repeating its row's address ("Worth a reply →" is words).
+    expect(t.replace('Worth a reply → (', '')).not.toContain('→ (')
+    // The month-closing line reads as one, its arrow not doubled.
+    const m = emailOf(monthEndSnapshot()).text
+    expect(m).toContain(`The month’s long-run read\nOctober’s read, “What holds across September and October”, is on Market › This month (${APP}/dashboard/market?period=month&month=2026-10#long-run)`)
+    expect(count(m, '#long-run')).toBe(1)
+  })
 })
 
 describe('the email, Sealand (H7-Email-Weekly-Sealand, regrouped by question)', () => {

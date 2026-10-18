@@ -20,14 +20,38 @@ export function firstSentence(text: string, maxChars = 240): string {
 
 const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' }
 
+/** A link's text: its tags dropped, and, with `linkBlocks`, each block
+ *  inside it (a row's eyebrow, its name, its figure) its own line. */
+function linkText(inner: string, linkBlocks: boolean): string {
+  if (!linkBlocks) return inner.replace(/<[^>]+>/g, '').trim()
+  return inner
+    .replace(/<br\s*\/?>|<\/?(p|div|h[1-6])\b[^>]*>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .split('\n')
+    .map((l) => l.replace(/[ \t]+/g, ' ').trim())
+    .filter(Boolean)
+    .join('\n')
+}
+
 /** The plain-text alternative, read off the same HTML: block ends become line
- *  breaks, cells become spaces, links keep their address. No dependency. */
-export function htmlToText(html: string): string {
+ *  breaks, cells become spaces, links keep their address. No dependency.
+ *
+ *  `linkBlocks` (the weekly read's version 3 only, so every other email's
+ *  text stays exactly as it was): a link that wraps a whole row keeps each
+ *  block inside it on its own line, where a plain link's tags are dropped
+ *  and its words run together ("Also talked aboutHow the prosthesis
+ *  works14 videos"), and a link whose whole text is an arrow, which repeats
+ *  its row's link beside it, is left out. */
+export function htmlToText(html: string, opts: { linkBlocks?: boolean } = {}): string {
+  const linkBlocks = opts.linkBlocks === true
   let s = html
     .replace(/<head[\s\S]*?<\/head>/gi, '')
     .replace(/<style[\s\S]*?<\/style>/gi, '')
     .replace(/<img[^>]*alt="([^"]*)"[^>]*>/gi, (_, alt) => (alt ? `[${alt}]` : ''))
-    .replace(/<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, (_, href, inner) => `${inner.replace(/<[^>]+>/g, '').trim()} (${href})`)
+    .replace(/<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, (_, href, inner) => {
+      const text = linkText(inner, linkBlocks)
+      return linkBlocks && text === '→' ? '' : `${text} (${href})`
+    })
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/?(p|div|tr|h[1-6]|li|blockquote|table)\b[^>]*>/gi, '\n')
     .replace(/<\/t[dh]>/gi, '  ')

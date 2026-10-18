@@ -172,8 +172,8 @@ export const WEEKLY_V3_EMAIL_CSS = [
   '.wr3-line{font-size:20px !important}',
   '.wr3-nv{font-size:24px !important}',
   '.wr3-h2{font-size:16px !important}',
-  '.wr3-note{display:none !important}',
-  '.wr3-snote{display:block !important;max-height:none !important;overflow:visible !important}',
+  '.wr3-ht{display:block !important;width:100% !important}',
+  '.wr3-note{display:block !important;width:100% !important;text-align:left !important;white-space:normal !important;padding:3px 0 0 !important}',
   '.wr3-cta{padding:20px 18px 22px !important}',
   '.wr3-btns{width:100% !important}',
   '.wr3-btn{display:block !important;width:100% !important;box-sizing:border-box}',
@@ -219,12 +219,11 @@ function Head({ title, note }: { title: string; note?: string | null }) {
       <table width="100%" {...presentation} style={T}>
         <tbody>
           <tr>
-            <td style={{ padding: 0, verticalAlign: 'baseline' }}><h2 className="wr3-h2" style={E.h2}>{title}</h2></td>
+            <td className="wr3-ht" style={{ padding: 0, verticalAlign: 'baseline' }}><h2 className="wr3-h2" style={E.h2}>{title}</h2></td>
             {note ? <td className="wr3-note" style={E.note}>{note}</td> : null}
           </tr>
         </tbody>
       </table>
-      {note ? <div className="wr3-snote" style={{ display: 'none', maxHeight: 0, overflow: 'hidden', margin: '3px 0 0', fontFamily: FONT.sans, fontSize: 12.5, lineHeight: '1.4', color: P.muted }}>{note}</div> : null}
     </>
   )
 }
@@ -258,8 +257,8 @@ function StoodOut({ rows, appUrl, figures }: { rows: readonly StoodOutRow[]; app
           <td style={rowCell(i)}>
             <a href={`${appUrl}${r.href}`} style={E.link}>
               {r.chip ? <span data-copy="verdict" style={E.chip}>{r.chip}</span> : r.eyebrow ? <p style={E.meb}>{r.eyebrow.verdict ? <span data-copy="verdict">{r.eyebrow.text}</span> : r.eyebrow.text}</p> : null}
-              <span style={{ display: 'block', marginTop: r.lead ? 4 : 3, fontFamily: FONT.sans, fontSize: r.lead ? 16.5 : 15, lineHeight: r.lead ? '1.32' : '1.35', fontWeight: 600, color: P.ink }}><RowName row={r} figures={figures} /></span>
-              <span style={E.fig}><RowFigure figure={r.figure} bold={E.bold} /></span>
+              <div style={{ display: 'block', marginTop: r.lead ? 4 : 3, fontFamily: FONT.sans, fontSize: r.lead ? 16.5 : 15, lineHeight: r.lead ? '1.32' : '1.35', fontWeight: 600, color: P.ink }}><RowName row={r} figures={figures} /></div>
+              <div style={E.fig}><RowFigure figure={r.figure} bold={E.bold} /></div>
             </a>
           </td>
           <Arrow href={`${appUrl}${r.href}`} />
@@ -284,8 +283,8 @@ function SubjectRows({ subjects, appUrl, figures }: { subjects: readonly WeeklyS
             <td style={rowCell(i)}>
               <a href={href} style={E.link}>
                 <p style={E.meb}>{s.name}</p>
-                {head ? <Prose as="span" copy="stored" body={head} figures={figures} style={{ display: 'block', marginTop: 4, fontFamily: FONT.sans, fontSize: 15.5, lineHeight: '1.38', fontWeight: 600, letterSpacing: '-.005em', color: P.ink }} /> : null}
-                {quiet ? <Prose as="span" copy="stored" body={quiet} figures={figures} style={{ display: 'block', marginTop: 4, fontFamily: FONT.sans, fontSize: 14, lineHeight: '1.45', color: P.muted }} /> : null}
+                {head ? <Prose as="div" copy="stored" body={head} figures={figures} style={{ display: 'block', marginTop: 4, fontFamily: FONT.sans, fontSize: 15.5, lineHeight: '1.38', fontWeight: 600, letterSpacing: '-.005em', color: P.ink }} /> : null}
+                {quiet ? <Prose as="div" copy="stored" body={quiet} figures={figures} style={{ display: 'block', marginTop: 4, fontFamily: FONT.sans, fontSize: 14, lineHeight: '1.45', color: P.muted }} /> : null}
               </a>
             </td>
             <Arrow href={href} />
@@ -398,9 +397,9 @@ function Replies({ part, appUrl, ruled }: { part: WeeklyContentPart; appUrl: str
         <tr>
           <td style={{ padding: ruled ? '12px 0 0' : '0', fontFamily: FONT.sans }}>
             <a href={`${appUrl}${part.replies.href}`} style={{ fontSize: 14, fontWeight: 600, color: P.ink, textDecoration: 'none' }}>Worth a reply →</a>
-            <span style={{ display: 'block', marginTop: 2, fontSize: 12.5, lineHeight: '1.4', color: P.muted }}>
+            <div style={{ display: 'block', marginTop: 2, fontSize: 12.5, lineHeight: '1.4', color: P.muted }}>
               {part.replies.days ? `Comments written ${part.replies.days} worth an answer from you` : 'The comments worth an answer from you'}
-            </span>
+            </div>
           </td>
         </tr>
       </tbody>
@@ -441,11 +440,11 @@ function ContentPg({ part, first, appUrl, medical }: { part: WeeklyContentPart; 
               <span style={E.cat}>Asked most, and not yet in your posts</span><br />
               <a href={`${appUrl}${q.href}`} style={E.pname}><span data-copy="subject" data-slot="pass_b_theme">{q.label}</span></a>
               {q.week != null && q.month != null ? (
-                <span style={E.fig}>
+                <div style={E.fig}>
                   <N n={q.week} style={E.bold} /> {q.week === 1 ? 'video' : 'videos'} {q.weekWords} · <N n={q.month} style={E.bold} /> {q.monthWords}
-                </span>
+                </div>
               ) : q.month != null ? (
-                <span style={E.fig}><N n={q.month} style={E.bold} /> {q.month === 1 ? 'video' : 'videos'} {q.monthWords}</span>
+                <div style={E.fig}><N n={q.month} style={E.bold} /> {q.month === 1 ? 'video' : 'videos'} {q.monthWords}</div>
               ) : null}
             </td>
           ),
@@ -486,7 +485,7 @@ function MovesPg({ part, first, appUrl }: { part: WeeklyMovesPart; first: boolea
           <td style={pcell(0)}>
             <span style={E.cat}>Advice waiting for a decision</span><br />
             <a href={`${appUrl}${a.href}`} style={{ ...E.link, fontWeight: 600 }}><AdviceTitle a={a} /></a>
-            {a.figure ? <span data-copy="figure" style={E.fig}>{a.figure}</span> : null}
+            {a.figure ? <div data-copy="figure" style={E.fig}>{a.figure}</div> : null}
           </td>
           <td style={{ ...pcell(0), ...E.r }}><N n={part.waiting} /> waiting</td>
         </>
@@ -500,7 +499,7 @@ function MovesPg({ part, first, appUrl }: { part: WeeklyMovesPart; first: boolea
         <td colSpan={2} style={pcell(rows.length)}>
           <span style={E.cat}>After your move</span><br />
           <a href={`${appUrl}${m.href}`} style={{ ...E.link, fontWeight: 600 }}><span data-copy="quote">{m.title}</span>, dated {shortDate(`${m.day}T12:00:00.000Z`)}</a>
-          <span style={E.fig}><MoveLine move={m} /></span>
+          <div style={E.fig}><MoveLine move={m} /></div>
         </td>
       ),
     })
@@ -522,7 +521,7 @@ function MonthClose({ view, appUrl }: { view: WeeklyV3View; appUrl: string }) {
               <td className="wr3-sec" style={{ padding: '16px 28px', verticalAlign: 'top', borderTop: `1px solid ${P.closeEdge}`, borderBottom: `1px solid ${P.closeEdge}` }}>
                 <p style={E.meb}>The month’s long-run read</p>
                 <a href={href} style={E.link}>
-                  <span style={{ display: 'block', marginTop: 4, fontFamily: FONT.sans, fontSize: 15, lineHeight: '1.4', fontWeight: 600, color: P.ink }}>{name}’s read, “{c.title}”, is on Market › This month</span>
+                  <div style={{ display: 'block', marginTop: 4, fontFamily: FONT.sans, fontSize: 15, lineHeight: '1.4', fontWeight: 600, color: P.ink }}>{name}’s read, “{c.title}”, is on Market › This month</div>
                 </a>
               </td>
               <td style={{ ...E.arrow, padding: '16px 28px 16px 10px', borderTop: `1px solid ${P.closeEdge}`, borderBottom: `1px solid ${P.closeEdge}` }}><a href={href} style={{ color: P.orange, textDecoration: 'none' }}>→</a></td>
@@ -611,7 +610,7 @@ export function WeeklyV3Card({ data, appUrl, markSrc, fullUrl, medical = false }
                           {v.meansFirst.map((m, i) => (
                             <tr key={i}>
                               <td width={30} style={{ width: 30, padding: '9px 0 7px', verticalAlign: 'top', fontFamily: MONO, fontSize: 12, color: P.muted }}>{String(i + 1).padStart(2, '0')}</td>
-                              <td style={{ padding: '7px 0', verticalAlign: 'top' }}><Prose body={m} figures={v.figures} style={{ margin: 0, fontFamily: FONT.sans, fontSize: 14.5, lineHeight: '1.5', color: P.ink }} /></td>
+                              <td style={{ padding: '7px 0', verticalAlign: 'top' }}><Prose as="span" body={m} figures={v.figures} style={{ display: 'block', margin: 0, fontFamily: FONT.sans, fontSize: 14.5, lineHeight: '1.5', color: P.ink }} /></td>
                             </tr>
                           ))}
                         </tbody>
@@ -639,7 +638,7 @@ export function WeeklyV3Card({ data, appUrl, markSrc, fullUrl, medical = false }
                               <td key={c.label} width="50%" className="wr3-num" style={{ width: '50%', padding: '16px 28px 18px', verticalAlign: 'top', borderLeft: i === 1 ? `1px solid ${P.edge}` : undefined }}>
                                 <p style={E.mdl}>{c.label}</p>
                                 <div className="wr3-nv" style={{ marginTop: 8, fontFamily: MONO, fontSize: 28, lineHeight: '1', fontWeight: 500, letterSpacing: '-.02em', color: P.ink, fontVariantNumeric: 'tabular-nums' }}>
-                                  <N n={c.n.videos} /><span className="wr3-unit" style={{ fontFamily: FONT.sans, fontSize: 14, fontWeight: 500, letterSpacing: 0, marginLeft: 6, color: P.ink }}>videos</span>
+                                  <N n={c.n.videos} /><span className="wr3-unit" style={{ fontFamily: FONT.sans, fontSize: 14, fontWeight: 500, letterSpacing: 0, marginLeft: 2, color: P.ink }}> videos</span>
                                 </div>
                                 {c.n.comments != null ? <div style={{ marginTop: 6, fontFamily: FONT.sans, fontSize: 13, color: P.ink2 }}><N n={c.n.comments} style={{ fontFamily: MONO, color: P.ink }} /> comments</div> : null}
                               </td>
