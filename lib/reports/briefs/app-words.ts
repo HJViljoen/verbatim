@@ -174,6 +174,17 @@ const MOVES = '/dashboard/moves'
 /** The month's Voices page (`voicesMonthQuery`'s form). */
 export const voicesMonthHref = (month: string): string => `${VOICES}?month=${encodeURIComponent(yyyymm(month))}`
 
+/** A page that reads `?month=` (Your moves' and its advice, move and record
+ *  pages: `readCore`), at the brief's month, any query and anchor kept. So a
+ *  brief opened later lands on the month its figures are, not today's
+ *  reading month. Pure. */
+export function withMonth(href: string, month: string): string {
+  const at = href.indexOf('#')
+  const path = at < 0 ? href : href.slice(0, at)
+  const hash = at < 0 ? '' : href.slice(at)
+  return `${path}${path.includes('?') ? '&' : '?'}month=${encodeURIComponent(yyyymm(month))}${hash}`
+}
+
 /** The page of the app an October page's header links to (every page links
  *  to its app page, the boards' rule): the closest page, with the month. The
  *  paths are the surfaces' (lib/nav.ts `SURFACES`, pinned in app.test.ts).
@@ -186,7 +197,7 @@ export function pageHref(key: SectionKey | 'in_short' | 'finding', month: string
     case 'marketing.products': return `${PRODUCTS}?month=${encodeURIComponent(yyyymm(month))}`
     case 'content.ideas': case 'content.watch': case 'content.more': case 'content.confusion': return CONTENT
     case 'content.hooks': return `${CONTENT}#what-works`
-    case 'leadership.moves': return MOVES
+    case 'leadership.moves': return withMonth(MOVES, month)
     case 'leadership.holds': return marketMonthHref(month, MARKET_LONG_RUN_ANCHOR)
     default: return marketMonthHref(month)
   }

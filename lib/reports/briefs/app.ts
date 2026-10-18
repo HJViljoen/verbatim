@@ -24,7 +24,7 @@ import { monthStartOf, prevMonth } from '../../reading/month-key'
 import type { Verdict } from '../../reading/verdicts'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, isRivalAudience } from '../../rivals'
 import { firstSentenceOf } from '../weekly-read-v3'
-import { andList, APP_TITLES, daysLong, namedNotes, numberWord, voicesMonthHref, yyyymm } from './app-words'
+import { andList, APP_TITLES, daysLong, namedNotes, numberWord, voicesMonthHref, withMonth, yyyymm } from './app-words'
 import type { StandingFact } from '../../written/types'
 import type {
   BriefAdvice, BriefGroup, BriefHookRow, BriefHooks, BriefHookTable, BriefIdea, BriefIdeas, BriefItem, BriefMove, BriefMoves, BriefNamed, BriefNamedRow,
@@ -33,7 +33,7 @@ import type {
 
 export {
   adviceDetail, alsoInMarket, andList, APP_TITLES, appLines, buyersSub, categoryProducts, dayLong, daysLong, ideaReadLine, inTheirVideos, moveLine, multipleText, NO_RECIPE,
-  namedNotes, numberWord, ownTouchWords, pageHref, recipeLabel, recordLine, SALES_GROUPS_LINE, slotWords, voicesMonthHref, whoAsks,
+  namedNotes, numberWord, ownTouchWords, pageHref, recipeLabel, recordLine, SALES_GROUPS_LINE, slotWords, voicesMonthHref, whoAsks, withMonth,
 } from './app-words'
 
 // THE OCTOBER CANVAS'S PAGES READ FROM THE APP (the boards Heinrich approved
@@ -438,7 +438,8 @@ export function moveOf(card: MoveCard, reading: ReadingLabel): BriefMove {
     sentence: moveSentence(card, reading),
     verdict: comparePrintable(card.compare) ? briefVerdict(card.compare.verdict) : null,
     axis: card.unread ? null : axisLine(axis),
-    href: card.href,
+    // Your moves' pages read `?month=`: the move's page at the brief's month.
+    href: withMonth(card.href, reading.month),
   }
 }
 
@@ -469,7 +470,8 @@ export function movesOf(a: {
       inLatest: r.inLatest,
       firstMade: r.firstMade,
       aim: aim ? { label: aim.label, k: aim.level?.k ?? null, n: aim.level?.n ?? null, href: a.aimHref?.(aim) ?? null } : null,
-      href: a.adviceHref(r.lineageId),
+      // At the brief's month, as each figure beside it is (`?month=`).
+      href: withMonth(a.adviceHref(r.lineageId), month),
     }
   })
   const reading = { month, label: a.monthLabel }
@@ -480,7 +482,7 @@ export function movesOf(a: {
     month,
     pool,
     moves,
-    record: { total: a.rows.length, decided: a.rows.filter((r) => r.status !== 'new').length, since: firsts[0] ?? null, href: ADVICE_RECORD_ALL_HREF },
+    record: { total: a.rows.length, decided: a.rows.filter((r) => r.status !== 'new').length, since: firsts[0] ?? null, href: withMonth(ADVICE_RECORD_ALL_HREF, month) },
   }
 }
 
@@ -516,12 +518,13 @@ export function movesSection(m: BriefMovesIn | null, vectors: ReadonlyMap<string
   if (!m) return null
   const waiting = waitingAdvice(m.pool, vectors).map((r): BriefAdvice => ({ lineageId: r.lineageId, title: r.title, firstMade: r.firstMade, aim: r.aim, href: r.href }))
   if (waiting.length === 0 && m.moves.length === 0) return null
-  const moves: BriefMoves = { month: m.month, waiting, waitingCount: waiting.length, moves: m.moves, record: m.record, href: MOVES_PATH }
+  const page = withMonth(MOVES_PATH, m.month)
+  const moves: BriefMoves = { month: m.month, waiting, waitingCount: waiting.length, moves: m.moves, record: m.record, href: page }
   return appSection('leadership.moves', {
     moves,
     sub: m.moves.length > 0 ? 'The advice waiting for a decision, and the moves you dated, each read against the month before it.' : 'The advice waiting for a decision, and what was decided before it.',
     foot: m.moves.length > 0 ? 'Each piece of advice is printed as Your moves stores it. A dated move is read on what it is about, month by month.' : 'Each piece of advice is printed as Your moves stores it.',
-    link: { href: MOVES_PATH, text: 'Open Your moves →' },
+    link: { href: page, text: 'Open Your moves →' },
   })
 }
 

@@ -17,7 +17,7 @@ import {
 } from './app'
 import { OSSUR_APP, OSSUR_MOVES, OSSUR_PEOPLE, OSSUR_SUBJECT_FACTS, OSSUR_SUBJECT_READS, SEALAND_APP, SEALAND_NAMED } from './app-fixture'
 import {
-  adviceDetail, alsoInMarket, appLines, buyersSub, daysLong, ideaReadLine, inTheirVideos, moveLine, multipleText, ownTouchWords, pageHref, recordLine, slotWords, voicesMonthHref,
+  adviceDetail, alsoInMarket, appLines, buyersSub, daysLong, ideaReadLine, inTheirVideos, moveLine, multipleText, ownTouchWords, pageHref, recordLine, slotWords, voicesMonthHref, withMonth,
 } from './app-words'
 
 // The October canvas's parts, from the app pages' own data (the pages' fixtures:
@@ -286,7 +286,12 @@ describe('Your moves: the advice waiting, the moves dated, the record', () => {
       cards: MOVE_CARDS,
       adviceHref: (id) => `/dashboard/moves/advice/${id}`,
     })
-    expect(m.record).toEqual({ total: 3, decided: 1, since: '2026-06-13', href: '/dashboard/moves/advice?all=1' })
+    // Every Your moves address at the brief's month (its pages read `?month=`).
+    expect(m.record).toEqual({ total: 3, decided: 1, since: '2026-06-13', href: '/dashboard/moves/advice?all=1&month=2026-10' })
+    expect(m.pool.map((r) => r.href)).toEqual(['/dashboard/moves/advice/a?month=2026-10', '/dashboard/moves/advice/b?month=2026-10'])
+    expect(m.moves.every((x) => x.href.endsWith('?month=2026-10'))).toBe(true)
+    expect(movesSection(m, null)!.link).toEqual({ href: '/dashboard/moves?month=2026-10', text: 'Open Your moves →' })
+    expect(withMonth('/dashboard/moves/m1?video=v#what-people-said', OCT)).toBe('/dashboard/moves/m1?video=v&month=2026-10#what-people-said')
     expect(m.pool.map((r) => r.lineageId)).toEqual(['a', 'b'])
     expect(m.pool[0].aim).toEqual({ label: 'Where can I get one', k: 41, n: 902, href: null })
     expect(m.moves[0].verdict != null || m.moves.every((x) => x.verdict == null)).toBe(true)
@@ -317,7 +322,7 @@ describe('every page links to its page in the app, with the month', () => {
     expect(pageHref('leadership.groups', OCT)).toBe(`${surface('voices').href}?month=2026-10`)
     expect(pageHref('marketing.products', OCT)).toBe(`${surface('products').href}?month=2026-10`)
     expect(pageHref('content.watch', OCT)).toBe(surface('content').href)
-    expect(pageHref('leadership.moves', OCT)).toBe(surface('moves').href)
+    expect(pageHref('leadership.moves', OCT)).toBe(`${surface('moves').href}?month=2026-10`)
     expect(pageHref('leadership.holds', OCT)).toBe(`${surface('market').href}?period=month&month=2026-10#long-run`)
     expect(pageHref('sales.stops', OCT)).toBe(`${surface('market').href}?period=month&month=2026-10`)
     expect(voicesMonthHref(OCT)).toBe('/dashboard/voices?month=2026-10')
