@@ -1,0 +1,392 @@
+{
+  "version": 1,
+  "kind": "monthly_brief",
+  "role": "marketing",
+  "title": "Marketing brief · September",
+  "company": "Sealand",
+  "noun": "bags",
+  "month": "2026-09-01",
+  "heardMonths": [
+    "2026-08-01",
+    "2026-09-01"
+  ],
+  "inShort": {
+    "summary": "Buyers bring a hard distinction to weather protection: waterproof and water-resistant are not heard as the same thing, and rain is the test they use.",
+    "figures": [
+      {
+        "value": "940",
+        "label": "videos in your market in September"
+      },
+      {
+        "value": "27",
+        "label": "posts Sealand published in September"
+      }
+    ],
+    "also": [
+      {
+        "headline": "People ask to be shown what fits, pockets and how the bag carries",
+        "brief": "content"
+      },
+      {
+        "headline": "Durability has to be settled before people buy light or recycled bags",
+        "brief": "sales"
+      },
+      {
+        "headline": "Patagonia and Cotopaxi are chosen with repair and warranty in mind",
+        "brief": "leadership"
+      },
+      {
+        "headline": "Premium bag prices need a clear reason over cheaper bags",
+        "brief": "sales"
+      }
+    ]
+  },
+  "findings": [
+    {
+      "ideaId": "I3",
+      "headline": "People separate waterproof from water-resistant and ask what happens in rain",
+      "basedOn": [
+        "G50",
+        "G57"
+      ],
+      "saw": [
+        "Commenters do not treat water protection as one thing. Buyers ask whether a bag is waterproof or only water-resistant, and they bring up what happens after rain exposure.",
+        "People compare weather resistance alongside materials, ergonomics and style, often against known durable brands. Buyers name rolltops, rain covers, dry bags and laptop sleeves when they work through what would protect their things in rain."
+      ],
+      "means": "Water protection is a claim people test in detail, not a background feature. The words waterproof and water-resistant are heard as different promises, and rain is the moment people use to sort one from the other.",
+      "practice": [
+        "Buyers compare weather resistance with known durable brands.",
+        "People who ask about rain also name rolltops, rain covers, dry bags and laptop sleeves."
+      ],
+      "months": [
+        {
+          "month": "2026-08-01",
+          "videos": 4
+        },
+        {
+          "month": "2026-09-01",
+          "videos": 11
+        }
+      ],
+      "videos": 15,
+      "who": [
+        {
+          "about": "rival:The North Face",
+          "videos": 3
+        },
+        {
+          "about": "rival:Cotopaxi",
+          "videos": 1
+        },
+        {
+          "about": "rival:Patagonia",
+          "videos": 1
+        },
+        {
+          "about": "market",
+          "videos": 10
+        }
+      ],
+      "quotes": [
+        {
+          "ref": "e:872cfe05-25ff-4cab-a481-e743360825d1",
+          "text": "socket long feels often the a knee walk today after my I liner well and so it fits day",
+          "date": "2026-09-17",
+          "platform": "reddit",
+          "about": "market",
+          "ownPost": false,
+          "lang": null
+        },
+        {
+          "ref": "e:37db2349-4a36-40ce-9d6c-6bea028351ff",
+          "text": "fits day steady with socket long feels often the a knee walk today after my I liner well and so it fits day steady with socket long feels often the a knee walk today after my I liner well",
+          "date": "2026-09-18",
+          "platform": "reddit",
+          "about": "rival:Patagonia",
+          "ownPost": false,
+          "lang": null
+        }
+      ],
+      "short": "Rain proof or not"
+    },
+    {
+      "ideaId": "I6",
+      "headline": "Buyers want bags that look fashionable and show personality",
+      "basedOn": [
+        "G4",
+        "G28",
+        "G104",
+        "G125"
+      ],
+      "saw": [
+        "Buyers treat style as part of the job. People ask for bags and backpacks that look fashionable, cute or distinctive, with more colour and personality than school, hiking, or black-and-grey options.",
+        "Shoppers want a backpack to look good on them and express personality alongside function and sustainability. People reject eco and upcycled bags when the look reads as ugly, tacky, awkward, cheap, or not luxurious, and they question whether a bag feels stylish, convenient to carry, or premium enough for everyday use."
+      ],
+      "means": "Style decides whether eco and upcycled bags pass as a real choice or get dismissed before function is heard. Fashion and personality are part of the standard buyers apply, not decoration added after the practical checks.",
+      "practice": [
+        "Buyers weigh style alongside function and sustainability.",
+        "School, hiking and utility gear are the looks people push against."
+      ],
+      "months": [
+        {
+          "month": "2026-08-01",
+          "videos": 3
+        },
+        {
+          "month": "2026-09-01",
+          "videos": 5
+        }
+      ],
+      "videos": 8,
+      "who": [
+        {
+          "about": "market",
+          "videos": 8
+        }
+      ],
+      "quotes": [
+        {
+          "ref": "e:ee578204-7758-471a-b610-0c93c92431e7",
+          "text": "well and so it fits day steady with socket long feels of",
+          "date": "2026-09-24",
+          "platform": "youtube",
+          "about": "market",
+          "ownPost": false,
+          "lang": "zh",
+          "english": "long feels often the a knee walk today after my I liner well and so it fits day steady with socket long feels often the a knee walk today after my I liner well and so it fits day steady with socket long feels often the a knee walk today after my Ix"
+        },
+        {
+          "ref": "e:9bf37fb0-396a-4c91-91d5-ed83961da07f",
+          "text": "after my I liner well and so it fits day steady with socket long feelsx",
+          "date": "2026-08-12",
+          "platform": "tiktok",
+          "about": "market",
+          "ownPost": false,
+          "lang": null
+        }
+      ],
+      "short": "Fashion and personality"
+    }
+  ],
+  "sections": [
+    {
+      "key": "marketing.words",
+      "title": "In its own words",
+      "groups": [],
+      "chips": [
+        {
+          "label": "What they call it",
+          "words": [
+            "bag",
+            "bags"
+          ]
+        },
+        {
+          "label": "The problem, in their words",
+          "words": [
+            "rain",
+            "rain exposure",
+            "spills",
+            "weight",
+            "daily use",
+            "corner wear",
+            "holes in the bottom",
+            "damaged zippers",
+            "peeling interior coatings",
+            "plastic parts that break"
+          ]
+        }
+      ],
+      "lead": "Commenters describe the problem as protecting a bag and what is inside from rain, spills, weight and daily use without ending up with wear, holes, broken zippers or peeling coatings.",
+      "panel": {
+        "title": "What makes them stop and argue",
+        "rows": [
+          {
+            "text": "Thin straps, fixed pads and loose dangling webbing",
+            "videos": 7,
+            "who": [
+              {
+                "about": "rival:Cotopaxi",
+                "videos": 1
+              },
+              {
+                "about": "market",
+                "videos": 6
+              }
+            ],
+            "basedOn": [
+              "G60"
+            ],
+            "videoIds": [
+              "30d90754-0f14-43e8-a285-b43f74d0b210",
+              "69ddef09-ae72-4941-ae5b-2f5fbdf79c42",
+              "92821e5c-2cc0-45d6-a269-1e4041c3b043",
+              "aea45a3f-4959-4796-91c9-1fada0bd919b",
+              "b047c3a7-af8c-4861-a8a6-e4b33f5c7a63",
+              "c097d8ff-c22d-467d-b907-83d4c1cec806",
+              "e6a52cba-05ac-429b-97a5-1a4131a7a365"
+            ],
+            "title": "They stop on"
+          },
+          {
+            "text": "Whether a bag is waterproof or only water-resistant",
+            "videos": 9,
+            "who": [
+              {
+                "about": "rival:The North Face",
+                "videos": 2
+              },
+              {
+                "about": "rival:Patagonia",
+                "videos": 1
+              },
+              {
+                "about": "market",
+                "videos": 6
+              }
+            ],
+            "basedOn": [
+              "G57"
+            ],
+            "videoIds": [
+              "3b496618-a681-4b21-9ea4-4c121fa3c11b",
+              "7375154f-c738-4282-90d9-6d22bfb78335",
+              "7830607e-2ed6-4c12-af93-e0f034e8d008",
+              "8fe7baf7-91d9-476b-bddd-32e3d01a4b15",
+              "92821e5c-2cc0-45d6-a269-1e4041c3b043",
+              "b20d52aa-70f2-4439-976b-905fbf74b963",
+              "e744cb4f-61b3-488e-a6f0-560473aa2884",
+              "f5038936-ee09-4b1e-96d5-2e679484a3d4",
+              "fbbb2935-2867-4f24-9c54-d41acba06c5f"
+            ],
+            "title": "They argue over"
+          }
+        ]
+      }
+    },
+    {
+      "key": "marketing.rivals",
+      "title": "How rivals are heard",
+      "groups": [
+        {
+          "items": [
+            {
+              "title": "Patagonia",
+              "text": "Patagonia is known for quality and for gear that works for travel, everyday use and outdoors, though not always as the choice for technical backpacks.",
+              "pill": "Quality across uses",
+              "videos": 3,
+              "who": [
+                {
+                  "about": "rival:Patagonia",
+                  "videos": 3
+                }
+              ],
+              "basedOn": [
+                "G72"
+              ],
+              "videoIds": [
+                "2a2bd977-f508-4e1f-a0f7-598ff225e8ab",
+                "82466c62-9468-49ef-83e8-b2e8f6e3ba74",
+                "f5e225c4-a554-4d4d-9e99-199ec7de4882"
+              ]
+            },
+            {
+              "title": "Cotopaxi",
+              "text": "Cotopaxi is known for Allpa travel backpacks with organisation and comfort, plus fun colours, scrap materials, repairability and lifetime warranty.",
+              "tag": "Argued in the Leadership brief",
+              "named": {
+                "brief": "leadership",
+                "idea": "I4"
+              },
+              "pill": "Playful sustainable travel",
+              "videos": 8,
+              "who": [
+                {
+                  "about": "rival:Cotopaxi",
+                  "videos": 8
+                }
+              ],
+              "basedOn": [
+                "G76",
+                "G77"
+              ],
+              "videoIds": [
+                "2ec04d78-e2df-4900-b3c0-143b0cc36747",
+                "4bb270be-5e8e-4032-987c-50162f063048",
+                "4c36ce43-e58c-4e97-8fa8-a4364c8c447c",
+                "54d86160-a103-44c1-bb87-5b72f8e52da1",
+                "5f063ac7-9cf9-4f1d-b24e-6d81de3b3fc8",
+                "b20d52aa-70f2-4439-976b-905fbf74b963",
+                "e18d129c-7853-442b-bf34-05f445d3921e",
+                "f09e539f-2a42-4770-bf15-732c17906df1"
+              ]
+            }
+          ]
+        }
+      ],
+      "posts": {
+        "title": "Own posts published in September",
+        "rows": [
+          {
+            "name": "Sealand",
+            "you": true,
+            "posts": 27,
+            "five": 12,
+            "pct": 44
+          },
+          {
+            "name": "The North Face",
+            "you": false,
+            "posts": 33,
+            "five": 26,
+            "pct": 79
+          },
+          {
+            "name": "Patagonia",
+            "you": false,
+            "posts": 47,
+            "five": 25,
+            "pct": 53
+          },
+          {
+            "name": "Old School",
+            "you": false,
+            "posts": 17,
+            "five": 7,
+            "pct": 41
+          },
+          {
+            "name": "Freitag",
+            "you": false,
+            "posts": 27,
+            "five": 8,
+            "pct": 30
+          },
+          {
+            "name": "Cotopaxi",
+            "you": false,
+            "posts": 35,
+            "five": 10,
+            "pct": 29
+          },
+          {
+            "name": "Freedom of Movement",
+            "you": false,
+            "posts": 59,
+            "five": 16,
+            "pct": 27
+          },
+          {
+            "name": "Rareform",
+            "you": false,
+            "posts": 1,
+            "five": 0,
+            "pct": 0
+          }
+        ]
+      }
+    }
+  ],
+  "promptVersion": "monthly_brief_v2",
+  "model": "gpt-5.4"
+}

@@ -1,0 +1,599 @@
+{
+  "version": 1,
+  "kind": "monthly_brief",
+  "role": "sales",
+  "title": "Sales brief · September",
+  "company": "Sealand",
+  "noun": "bags",
+  "month": "2026-09-01",
+  "heardMonths": [
+    "2026-08-01",
+    "2026-09-01"
+  ],
+  "inShort": {
+    "summary": "They ask how fabrics, straps, bases and zips hold up, and premium prices stall when the reason over a cheaper bag is not concrete.",
+    "figures": [
+      {
+        "value": "940",
+        "label": "videos in your market in September"
+      },
+      {
+        "value": "23%",
+        "label": "of them about Buying & delivery, the biggest subject"
+      }
+    ],
+    "also": [
+      {
+        "headline": "People ask to be shown what fits, pockets and how the bag carries",
+        "brief": "content"
+      },
+      {
+        "headline": "People separate waterproof from water-resistant and ask what happens in rain",
+        "brief": "marketing"
+      },
+      {
+        "headline": "Patagonia and Cotopaxi are chosen with repair and warranty in mind",
+        "brief": "leadership"
+      },
+      {
+        "headline": "Buyers want bags that look fashionable and show personality",
+        "brief": "marketing"
+      }
+    ]
+  },
+  "findings": [
+    {
+      "ideaId": "I2",
+      "headline": "Durability has to be settled before people buy light or recycled bags",
+      "basedOn": [
+        "G16",
+        "G22",
+        "G58",
+        "G59",
+        "G97",
+        "G117",
+        "G124"
+      ],
+      "saw": [
+        "Buyers treat build quality as a gate, especially on light, recycled or natural-material bags. Comments ask how the fabric, seams, base, straps and zips hold up, what lifespan to expect, and what gives out first under daily carry or heavy loads.",
+        "Owners describe failure in concrete places: corner wear, holes in the bottom, tearing, strap trouble, broken plastic parts, damaged zips, peeling linings, stains and cheap-feeling finishing. Buyers ask for material details and proof that a lighter bag is not trading away toughness."
+      ],
+      "means": "Durability questions sit ahead of the appeal of light weight or recycled material. A buyer who cannot picture how the bag survives weight, spills and daily wear treats the spend as a risk.",
+      "practice": [
+        "Questions about straps, zips and the bag base come from buyers picturing daily load, not just appearance.",
+        "Recycled, cotton and light builds bring questions about lifespan and first failure points."
+      ],
+      "months": [
+        {
+          "month": "2026-08-01",
+          "videos": 6
+        },
+        {
+          "month": "2026-09-01",
+          "videos": 11
+        }
+      ],
+      "videos": 16,
+      "who": [
+        {
+          "about": "rival:The North Face",
+          "videos": 2
+        },
+        {
+          "about": "market",
+          "videos": 14
+        }
+      ],
+      "quotes": [
+        {
+          "ref": "e:db81a468-31ba-4cf0-8448-0b092e0c5d73",
+          "text": "socket long feels often the a knee walk today after my I liner well and so it fits day steady with s",
+          "date": "2026-09-21",
+          "platform": "reddit",
+          "about": "market",
+          "ownPost": false,
+          "lang": "nl",
+          "english": "after my I liner well and so it fits day steady with socket long feels often the a kneex"
+        },
+        {
+          "ref": "e:175e0000-59fc-483f-8964-677cc183d952",
+          "text": "fits day steady with socket long feels often the a knee walk today after my I liner well",
+          "date": "2026-09-06",
+          "platform": "youtube",
+          "about": "market",
+          "ownPost": false,
+          "lang": null
+        }
+      ],
+      "short": "Durability first",
+      "subjectLine": "Part of Durability, the fourth biggest subject in your market: 7% of September's videos."
+    },
+    {
+      "ideaId": "I5",
+      "headline": "Premium bag prices need a clear reason over cheaper bags",
+      "basedOn": [
+        "G18",
+        "G31",
+        "G46"
+      ],
+      "saw": [
+        "Buyers resist premium prices when they cannot tie the spend to better construction, materials, comfort or lifespan. Comments compare the bag with cheaper substitutes and say the category feels overpriced, not worth it or scam-like when the difference is unclear.",
+        "Price readiness appears at the moment of decision. Some people wait until work or savings make the purchase possible, and even then they ask whether build, ergonomics and longevity really justify the gap."
+      ],
+      "means": "Price does not stand alone. Buyers try to attach the premium to concrete benefits they expect to feel in use and over time, or they hold back and compare down.",
+      "practice": [
+        "Self-buyers often pace the purchase by what their budget allows."
+      ],
+      "months": [
+        {
+          "month": "2026-08-01",
+          "videos": 3
+        },
+        {
+          "month": "2026-09-01",
+          "videos": 7
+        }
+      ],
+      "videos": 10,
+      "who": [
+        {
+          "about": "rival:The North Face",
+          "videos": 1
+        },
+        {
+          "about": "market",
+          "videos": 9
+        }
+      ],
+      "quotes": [
+        {
+          "ref": "e:49fc861c-8024-4bd3-90a6-2706304f8a16",
+          "text": "well and so it fits day steady with socket long feels ofte",
+          "date": "2026-09-27",
+          "platform": "reddit",
+          "about": "market",
+          "ownPost": false,
+          "lang": null
+        },
+        {
+          "ref": "e:f53ee05a-a51b-4b79-992c-f1c9f89ba461",
+          "text": "after my I liner well and so it fits day steady with socket long feels often the a knee walkx",
+          "date": "2026-09-04",
+          "platform": "reddit",
+          "about": "market",
+          "ownPost": false,
+          "lang": null
+        }
+      ],
+      "short": "Reason for premium"
+    }
+  ],
+  "sections": [
+    {
+      "key": "sales.buyers",
+      "title": "Who is buying",
+      "groups": [
+        {
+          "items": [
+            {
+              "title": "Style buyer",
+              "text": "Style buyers want a bag that feels fashionable, cute or distinctive, not like a generic school or hiking pack.",
+              "tag": "Argued in the Marketing brief",
+              "named": {
+                "brief": "marketing",
+                "idea": "I6"
+              },
+              "videos": 3,
+              "who": [
+                {
+                  "about": "market",
+                  "videos": 3
+                }
+              ],
+              "basedOn": [
+                "G4"
+              ],
+              "videoIds": [
+                "184be4eb-d6d5-469b-b5ee-aa07d9d2c5f8",
+                "7818c264-6d27-4d80-9b8c-e2079aa2531f",
+                "b1ec05ab-bff0-4cf7-80c9-88ed73a3fe8a"
+              ]
+            },
+            {
+              "title": "Parent",
+              "text": "Parents look for a backpack a child will actually want to carry.",
+              "persona": {
+                "forSale": "The parent pays, the child uses."
+              },
+              "videos": 3,
+              "who": [
+                {
+                  "about": "rival:The North Face",
+                  "videos": 1
+                },
+                {
+                  "about": "market",
+                  "videos": 2
+                }
+              ],
+              "basedOn": [
+                "G6"
+              ],
+              "videoIds": [
+                "184be4eb-d6d5-469b-b5ee-aa07d9d2c5f8",
+                "45c59254-0259-4d2a-860a-dae1bc7f0d89",
+                "6f1aaf44-602b-458c-89c8-84fbd2aca546"
+              ]
+            },
+            {
+              "title": "Professional adult",
+              "text": "Adults look for a backpack that works outside school and can feel formal or professional.",
+              "persona": {
+                "moves": "A bag that fits work or other adult settings gives the format a reason.",
+                "forSale": "The buyer is the user, and the setting is work or adult daily life."
+              },
+              "videos": 3,
+              "who": [
+                {
+                  "about": "rival:The North Face",
+                  "videos": 1
+                },
+                {
+                  "about": "market",
+                  "videos": 2
+                }
+              ],
+              "basedOn": [
+                "G6"
+              ],
+              "videoIds": [
+                "184be4eb-d6d5-469b-b5ee-aa07d9d2c5f8",
+                "45c59254-0259-4d2a-860a-dae1bc7f0d89",
+                "6f1aaf44-602b-458c-89c8-84fbd2aca546"
+              ]
+            },
+            {
+              "title": "Gift or custom buyer",
+              "text": "Gift buyers and people asking for custom designs come with a named recipient or a specific brief.",
+              "persona": {
+                "forSale": "The user and the buyer may be different people."
+              },
+              "videos": 3,
+              "who": [
+                {
+                  "about": "rival:The North Face",
+                  "videos": 1
+                },
+                {
+                  "about": "market",
+                  "videos": 2
+                }
+              ],
+              "basedOn": [
+                "G6"
+              ],
+              "videoIds": [
+                "184be4eb-d6d5-469b-b5ee-aa07d9d2c5f8",
+                "45c59254-0259-4d2a-860a-dae1bc7f0d89",
+                "6f1aaf44-602b-458c-89c8-84fbd2aca546"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "sales.deciders",
+      "title": "Who else is in the decision",
+      "groups": [
+        {
+          "items": [
+            {
+              "title": "Self-buyer payer",
+              "text": "The person using the bag often pays for it and weighs the buy against budget, fair pricing and whether money allows the spend yet.",
+              "videos": 3,
+              "who": [
+                {
+                  "about": "market",
+                  "videos": 3
+                }
+              ],
+              "basedOn": [
+                "G11"
+              ],
+              "videoIds": [
+                "19995f62-e7a7-47c5-83bb-45414045ecc5",
+                "3e1ac138-8b0c-4f35-a5f7-318e754110e1",
+                "ecefeae7-b1fb-4d4b-acac-82253f311def"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "sales.stops",
+      "title": "What stops them",
+      "groups": [
+        {
+          "items": [
+            {
+              "title": "Messy upkeep",
+              "text": "Practical upkeep creates hesitation when materials seem likely to absorb spills, get dirty fast, hold odour or be hard to clean.",
+              "videos": 3,
+              "who": [
+                {
+                  "about": "market",
+                  "videos": 3
+                }
+              ],
+              "basedOn": [
+                "G17"
+              ],
+              "videoIds": [
+                "550660ea-749a-4be8-935d-89a763bb2993",
+                "62de0c48-0cb4-4ffa-9bb7-30c40217067b",
+                "6f1aaf44-602b-458c-89c8-84fbd2aca546"
+              ]
+            }
+          ]
+        }
+      ],
+      "quote": {
+        "ref": "e:86b7c5f4-29e1-45e1-90d1-e9c7b1b3bbfa",
+        "text": "a knee walk today after my I liner well and so it fitsx",
+        "date": "2026-07-05",
+        "platform": "tiktok",
+        "about": "market",
+        "ownPost": false,
+        "lang": null
+      }
+    },
+    {
+      "key": "sales.settle",
+      "title": "What they want settled first",
+      "groups": [
+        {
+          "items": [
+            {
+              "text": "Whether a tote or backpack suits the day, what fits inside and how it is organised.",
+              "tag": "Argued in the Content brief",
+              "named": {
+                "brief": "content",
+                "idea": "I1"
+              },
+              "videos": 4,
+              "who": [
+                {
+                  "about": "rival:The North Face",
+                  "videos": 1
+                },
+                {
+                  "about": "market",
+                  "videos": 3
+                }
+              ],
+              "basedOn": [
+                "G25"
+              ],
+              "videoIds": [
+                "1237223f-5a98-4ccf-bf24-30fe956831c8",
+                "45c59254-0259-4d2a-860a-dae1bc7f0d89",
+                "59edd273-5619-4226-8ae1-79b08161702a",
+                "7c8dc793-de1f-473f-95de-9de3842df877"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "sales.triggers",
+      "title": "What tips them into buying",
+      "groups": [
+        {
+          "items": [
+            {
+              "title": "Routine changes",
+              "text": "People buy when school, work or travel changes the job, such as wanting more structure, a backpack for comfort or a different size.",
+              "videos": 4,
+              "who": [
+                {
+                  "about": "market",
+                  "videos": 4
+                }
+              ],
+              "basedOn": [
+                "G30"
+              ],
+              "videoIds": [
+                "4cd4148f-84ce-45f1-9192-d98f78d73c0e",
+                "7818c264-6d27-4d80-9b8c-e2079aa2531f",
+                "8df5f0cd-b849-402d-a9c2-2f53bae93868",
+                "e6a52cba-05ac-429b-97a5-1a4131a7a365"
+              ],
+              "quote": {
+                "ref": "e:29048dd9-f64d-412f-96d3-671ee1fdea0c",
+                "text": "long feels often the a knee walk today after my I liner well and so",
+                "date": "2026-09-19",
+                "platform": "tiktok",
+                "about": "market",
+                "ownPost": false,
+                "lang": null
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "sales.rivals",
+      "title": "Who buyers compare you with",
+      "groups": [
+        {
+          "items": [
+            {
+              "title": "Patagonia",
+              "text": "Patagonia is chosen for everyday carry, travel and casual outdoor use because buyers trust the brand for product quality, cleaner supply chains, environmental values and customer care.",
+              "tag": "Argued in the Leadership brief",
+              "named": {
+                "brief": "leadership",
+                "idea": "I4"
+              },
+              "pill": "Bought for everyday and travel",
+              "videos": 4,
+              "who": [
+                {
+                  "about": "rival:Patagonia",
+                  "videos": 4
+                }
+              ],
+              "basedOn": [
+                "G35"
+              ],
+              "videoIds": [
+                "6a2bfff7-5f68-4541-be5f-85aced0dbfb6",
+                "82466c62-9468-49ef-83e8-b2e8f6e3ba74",
+                "dd543980-5c54-41fc-9580-f0e873d35382",
+                "f5e225c4-a554-4d4d-9e99-199ec7de4882"
+              ]
+            },
+            {
+              "title": "Cotopaxi",
+              "text": "Cotopaxi is chosen for travel and daily carry that feels colourful, light, practical and durable, with scrap-based sustainability.",
+              "tag": "Argued in the Leadership brief",
+              "named": {
+                "brief": "leadership",
+                "idea": "I4"
+              },
+              "pill": "Bought for travel and daily carry",
+              "videos": 9,
+              "who": [
+                {
+                  "about": "rival:Cotopaxi",
+                  "videos": 9
+                }
+              ],
+              "basedOn": [
+                "G37",
+                "G38"
+              ],
+              "videoIds": [
+                "2ec04d78-e2df-4900-b3c0-143b0cc36747",
+                "4bb270be-5e8e-4032-987c-50162f063048",
+                "4c36ce43-e58c-4e97-8fa8-a4364c8c447c",
+                "6a2bfff7-5f68-4541-be5f-85aced0dbfb6",
+                "86320d61-1419-4d14-bcee-25deea087f7d",
+                "b1ec05ab-bff0-4cf7-80c9-88ed73a3fe8a",
+                "b20d52aa-70f2-4439-976b-905fbf74b963",
+                "e18d129c-7853-442b-bf34-05f445d3921e",
+                "f09e539f-2a42-4770-bf15-732c17906df1"
+              ]
+            },
+            {
+              "title": "The North Face",
+              "text": "The North Face is chosen as a dependable bag for school, commuting and general use because buyers like the shoulder comfort, durability, roomy organisation, familiar models and easy availability.",
+              "detail": "Borealis and Generator-style packs are a reference point.",
+              "pill": "Bought for school and commuting",
+              "videos": 5,
+              "who": [
+                {
+                  "about": "rival:The North Face",
+                  "videos": 4
+                },
+                {
+                  "about": "rival:Cotopaxi",
+                  "videos": 1
+                }
+              ],
+              "basedOn": [
+                "G39"
+              ],
+              "videoIds": [
+                "84731183-8f01-4f8f-b0c1-415c362fdaab",
+                "a859173c-33d7-4162-a6ae-144221173ac5",
+                "b20d52aa-70f2-4439-976b-905fbf74b963",
+                "f3fed034-5bbe-4e79-96aa-6e12b97c44a6",
+                "f5038936-ee09-4b1e-96d5-2e679484a3d4"
+              ],
+              "quote": {
+                "ref": "e:3fcb11c9-fdec-4266-9fe5-a291e5ba57c4",
+                "text": "day steady with socket long feels often the a knee walk today after my I liner well and so it fits day steady",
+                "date": "2026-09-15",
+                "platform": "tiktok",
+                "about": "rival:The North Face",
+                "ownPost": false,
+                "lang": null
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "sales.care",
+      "title": "Language to handle with care",
+      "groups": [
+        {
+          "items": [
+            {
+              "title": "Waterproof",
+              "text": "People ask what holds up in rain and what fails.",
+              "videos": 3,
+              "who": [
+                {
+                  "about": "rival:The North Face",
+                  "videos": 1
+                },
+                {
+                  "about": "market",
+                  "videos": 2
+                }
+              ],
+              "basedOn": [
+                "G44"
+              ],
+              "videoIds": [
+                "1c9f803f-9cb0-4e00-8075-ba579e1e74bb",
+                "7830607e-2ed6-4c12-af93-e0f034e8d008",
+                "edae671c-5ea8-44b0-aeb9-ce2c4a4d23b2"
+              ],
+              "tag": "Argued in the Marketing brief",
+              "named": {
+                "brief": "marketing",
+                "idea": "I3"
+              }
+            },
+            {
+              "title": "Functional",
+              "text": "People ask to see how the bag wears, flexes and works in use.",
+              "tag": "Argued in the Content brief",
+              "named": {
+                "brief": "content",
+                "idea": "I1"
+              },
+              "videos": 4,
+              "who": [
+                {
+                  "about": "market",
+                  "videos": 4
+                }
+              ],
+              "basedOn": [
+                "G47"
+              ],
+              "videoIds": [
+                "69ddef09-ae72-4941-ae5b-2f5fbdf79c42",
+                "738fbf0b-cdd8-42a9-b6a9-4b0c4ddc4199",
+                "87dc7729-60b6-417d-bba9-55e758e07c83",
+                "b998ff05-a067-4ffe-8f7f-e42cf024b651"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "promptVersion": "monthly_brief_v2",
+  "model": "gpt-5.4"
+}

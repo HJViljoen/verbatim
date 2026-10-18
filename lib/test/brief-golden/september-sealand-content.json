@@ -1,0 +1,438 @@
+{
+  "version": 1,
+  "kind": "monthly_brief",
+  "role": "content",
+  "title": "Content brief · September",
+  "company": "Sealand",
+  "noun": "bags",
+  "month": "2026-09-01",
+  "heardMonths": [
+    "2026-08-01",
+    "2026-09-01"
+  ],
+  "inShort": {
+    "summary": "When people ask to see more, they also ask for brand and price basics, proof of build quality, and clear colour choices.",
+    "figures": [
+      {
+        "value": "940",
+        "label": "videos in your market in September"
+      },
+      {
+        "value": "5.0%",
+        "label": "median engagement on the category's story videos, against 2.0% for all its videos"
+      }
+    ],
+    "also": [
+      {
+        "headline": "Durability has to be settled before people buy light or recycled bags",
+        "brief": "sales"
+      },
+      {
+        "headline": "People separate waterproof from water-resistant and ask what happens in rain",
+        "brief": "marketing"
+      },
+      {
+        "headline": "Patagonia and Cotopaxi are chosen with repair and warranty in mind",
+        "brief": "leadership"
+      },
+      {
+        "headline": "Premium bag prices need a clear reason over cheaper bags",
+        "brief": "sales"
+      },
+      {
+        "headline": "Buyers want bags that look fashionable and show personality",
+        "brief": "marketing"
+      }
+    ]
+  },
+  "findings": [
+    {
+      "ideaId": "I1",
+      "headline": "People ask to be shown what fits, pockets and how the bag carries",
+      "basedOn": [
+        "G25",
+        "G47",
+        "G91",
+        "G96"
+      ],
+      "saw": [
+        "Shoppers ask what a bag actually takes in a normal day. Commenters name pockets, laptop space, water bottle holders, luggage pass through, size differences between models and the features included.",
+        "Buyers ask to see the bag in use, not only named. People also ask for the missing shopping basics, such as brand, price, buying links and adjustable parts."
+      ],
+      "means": "People do not treat function as a list on a spec card. Comments want the bag turned into a visible shopping decision, what it carries, how it is organised, and how it sits on a body in work, school and travel terms. The missing basics around price and where to buy sit in the same picture.",
+      "practice": [
+        "Buyers frame one bag against work, school and travel, not one setting.",
+        "Commenters ask for carry comfort and pocket layout alongside brand, price and links."
+      ],
+      "months": [
+        {
+          "month": "2026-08-01",
+          "videos": 7
+        },
+        {
+          "month": "2026-09-01",
+          "videos": 12
+        }
+      ],
+      "videos": 19,
+      "who": [
+        {
+          "about": "rival:Cotopaxi",
+          "videos": 1
+        },
+        {
+          "about": "rival:Patagonia",
+          "videos": 1
+        },
+        {
+          "about": "rival:The North Face",
+          "videos": 1
+        },
+        {
+          "about": "market",
+          "videos": 16
+        }
+      ],
+      "quotes": [
+        {
+          "ref": "e:79994dad-91c6-4de2-b007-d2a5ad4e2b60",
+          "text": "socket long feels often th",
+          "date": "2026-09-13",
+          "platform": "youtube",
+          "about": "market",
+          "ownPost": false,
+          "lang": "ja",
+          "english": "after my I liner well and so it fits day steady with socket lon"
+        },
+        {
+          "ref": "e:95d9ad20-4a2e-4cc2-ab9d-0448607f366e",
+          "text": "fits day steady with socket long feels often the a knee walk today after my I liner well and so it fits day stead",
+          "date": "2026-08-16",
+          "platform": "youtube",
+          "about": "market",
+          "ownPost": false,
+          "lang": null
+        }
+      ],
+      "short": "Fit, pockets, carry"
+    }
+  ],
+  "sections": [
+    {
+      "key": "content.questions",
+      "title": "The questions people ask",
+      "groups": [
+        {
+          "items": [
+            {
+              "text": "How do I wash the bag without damaging it?",
+              "detail": "Owners say colour can lift and some cleaners mark the material.",
+              "videos": 7,
+              "who": [
+                {
+                  "about": "market",
+                  "videos": 7
+                }
+              ],
+              "basedOn": [
+                "G82",
+                "G83"
+              ],
+              "videoIds": [
+                "5de46f10-dbf9-4323-9a59-a9b0b291372d",
+                "72d4b917-2dd7-49c2-aa4b-79fe2be70f16",
+                "79e54e8c-45c4-44b9-a60f-1dde8c67624d",
+                "7fbb51a5-2275-468f-bb9c-53723400aaad",
+                "8db94ad8-6307-4015-a3bc-3bf7479de077",
+                "8f7da620-3d6b-4716-8461-feda17c5ff08",
+                "abf14f2e-851f-42f6-94fb-8b5b0bdcc964"
+              ]
+            },
+            {
+              "text": "How do I clean and reuse the pouch properly?",
+              "videos": 6,
+              "who": [
+                {
+                  "about": "market",
+                  "videos": 6
+                }
+              ],
+              "basedOn": [
+                "G82"
+              ],
+              "videoIds": [
+                "72d4b917-2dd7-49c2-aa4b-79fe2be70f16",
+                "79e54e8c-45c4-44b9-a60f-1dde8c67624d",
+                "7fbb51a5-2275-468f-bb9c-53723400aaad",
+                "8db94ad8-6307-4015-a3bc-3bf7479de077",
+                "8f7da620-3d6b-4716-8461-feda17c5ff08",
+                "abf14f2e-851f-42f6-94fb-8b5b0bdcc964"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "content.formats",
+      "title": "Hooks and formats that work",
+      "groups": [
+        {
+          "label": "Format",
+          "items": [
+            {
+              "title": "Promotional",
+              "text": "27% of the category's videos published in September, at a median engagement of 2.0%.",
+              "measure": {
+                "pct": 27.4,
+                "median": 2,
+                "above": false,
+                "own": 9,
+                "ownOf": 12,
+                "rival": 22,
+                "rivalOf": 54
+              }
+            },
+            {
+              "title": "Tutorial",
+              "text": "21% of the category's videos published in September, at a median engagement of 1.8%.",
+              "measure": {
+                "pct": 21.4,
+                "median": 1.8,
+                "above": false,
+                "own": 0,
+                "ownOf": 12,
+                "rival": 0,
+                "rivalOf": 54
+              }
+            },
+            {
+              "title": "Review",
+              "text": "13% of the category's videos published in September, at a median engagement of 1.5%.",
+              "measure": {
+                "pct": 13.3,
+                "median": 1.5,
+                "above": false,
+                "own": 0,
+                "ownOf": 12,
+                "rival": 7,
+                "rivalOf": 54
+              }
+            },
+            {
+              "title": "Story",
+              "text": "13% of the category's videos published in September, at a median engagement of 5.0%.",
+              "measure": {
+                "pct": 12.5,
+                "median": 5,
+                "above": true,
+                "own": 3,
+                "ownOf": 12,
+                "rival": 10,
+                "rivalOf": 54
+              }
+            },
+            {
+              "title": "Educational",
+              "text": "10% of the category's videos published in September, at a median engagement of 1.6%.",
+              "measure": {
+                "pct": 9.7,
+                "median": 1.6,
+                "above": false,
+                "own": 0,
+                "ownOf": 12,
+                "rival": 5,
+                "rivalOf": 54
+              }
+            }
+          ],
+          "base": "Shares of 2,973 category videos · counts of 12 Sealand posts and 54 Patagonia videos"
+        },
+        {
+          "label": "Opening",
+          "items": [
+            {
+              "title": "Bold claim",
+              "text": "43% of the category's videos published in September, at a median engagement of 1.7%.",
+              "measure": {
+                "pct": 42.9,
+                "median": 1.7,
+                "above": false,
+                "own": 6,
+                "ownOf": 12,
+                "rival": 17,
+                "rivalOf": 52
+              }
+            },
+            {
+              "title": "Personal story",
+              "text": "33% of the category's videos published in September, at a median engagement of 3.3%.",
+              "measure": {
+                "pct": 32.5,
+                "median": 3.3,
+                "above": true,
+                "own": 5,
+                "ownOf": 12,
+                "rival": 23,
+                "rivalOf": 52
+              }
+            },
+            {
+              "title": "Question",
+              "text": "9% of the category's videos published in September, at a median engagement of 2.0%.",
+              "measure": {
+                "pct": 9.1,
+                "median": 2,
+                "above": false,
+                "own": 1,
+                "ownOf": 12,
+                "rival": 8,
+                "rivalOf": 52
+              }
+            }
+          ],
+          "base": "Shares of 2,776 category videos · counts of 12 Sealand posts and 52 Patagonia videos"
+        }
+      ],
+      "lines": [
+        "Story videos run at 5.0% median engagement in the category, against 2.0% for all its videos.",
+        "Personal story openings run at 3.3%. The most common opening, bold claim, runs at 1.7%.",
+        "Of these 12 Sealand posts, 9 were promotional posts and 6 opened with a bold claim. Patagonia's videos are most often promotional videos, and most often open with a personal story."
+      ],
+      "note": "Median engagement across all the category's videos: 2.0%",
+      "rival": "Patagonia"
+    },
+    {
+      "key": "content.more",
+      "title": "What people want to be shown",
+      "groups": [
+        {
+          "items": [
+            {
+              "title": "Hard use proof",
+              "text": "Comments ask to see how recycled or natural materials hold up and what lighter designs trade away.",
+              "tag": "Argued in the Sales brief",
+              "named": {
+                "brief": "sales",
+                "idea": "I2"
+              },
+              "videos": 5,
+              "who": [
+                {
+                  "about": "rival:The North Face",
+                  "videos": 1
+                },
+                {
+                  "about": "market",
+                  "videos": 4
+                }
+              ],
+              "basedOn": [
+                "G97"
+              ],
+              "videoIds": [
+                "1c9f803f-9cb0-4e00-8075-ba579e1e74bb",
+                "24435ae3-1f5b-4b6b-8642-3c8754b6520f",
+                "45c59254-0259-4d2a-860a-dae1bc7f0d89",
+                "62de0c48-0cb4-4ffa-9bb7-30c40217067b",
+                "7830607e-2ed6-4c12-af93-e0f034e8d008"
+              ]
+            },
+            {
+              "title": "Colour choices",
+              "text": "Comments ask which colours are available, especially black or brighter shades.",
+              "videos": 3,
+              "who": [
+                {
+                  "about": "market",
+                  "videos": 3
+                }
+              ],
+              "basedOn": [
+                "G98"
+              ],
+              "videoIds": [
+                "3d89f7d2-4ed6-495b-87fc-dda1818364f5",
+                "d20073d1-de56-49fc-a4b1-e532b190de1e",
+                "e18d129c-7853-442b-bf34-05f445d3921e"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "content.confusion",
+      "title": "Where the confusion starts",
+      "groups": [
+        {
+          "items": [
+            {
+              "title": "Style test",
+              "text": "People doubt that a bag in this space will look stylish, feel convenient to carry, or meet a premium aesthetic.",
+              "tag": "Argued in the Marketing brief",
+              "named": {
+                "brief": "marketing",
+                "idea": "I6"
+              },
+              "videos": 4,
+              "who": [
+                {
+                  "about": "market",
+                  "videos": 4
+                }
+              ],
+              "basedOn": [
+                "G104"
+              ],
+              "videoIds": [
+                "7818c264-6d27-4d80-9b8c-e2079aa2531f",
+                "87dc7729-60b6-417d-bba9-55e758e07c83",
+                "b1ec05ab-bff0-4cf7-80c9-88ed73a3fe8a",
+                "b998ff05-a067-4ffe-8f7f-e42cf024b651"
+              ]
+            }
+          ]
+        }
+      ],
+      "lead": "Buyers do not read bags in this space as practical objects alone. Comments test them against style, carry convenience and a premium look.",
+      "note": "Confusion starts when a bag in this space is read through fashion and everyday use expectations at the same time."
+    },
+    {
+      "key": "content.borrow",
+      "title": "Words to borrow",
+      "groups": [],
+      "voices": [
+        {
+          "ref": "e:da6d8717-074e-41a4-bebf-365a8e5bc346",
+          "text": "well and so it fits day steady with socket long feels often the a kneex",
+          "date": "2026-09-27",
+          "platform": "tiktok",
+          "about": "market",
+          "ownPost": false,
+          "lang": null
+        },
+        {
+          "ref": "e:1555d30c-46b0-4f03-83fc-1877e69c669a",
+          "text": "after my I liner well and so it fits day steady with socket long feels often the a knee wal",
+          "date": "2026-08-30",
+          "platform": "youtube",
+          "about": "market",
+          "ownPost": false,
+          "lang": null
+        },
+        {
+          "ref": "e:9568ac7d-20c8-49a3-82e5-0c442c522ed6",
+          "text": "a knee walk today after my I liner well and so it fits day steady with socket long feels oftenx",
+          "date": "2026-09-27",
+          "platform": "reddit",
+          "about": "market",
+          "ownPost": false,
+          "lang": null
+        }
+      ]
+    }
+  ],
+  "promptVersion": "monthly_brief_v2",
+  "model": "gpt-5.4"
+}

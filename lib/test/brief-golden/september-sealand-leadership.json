@@ -1,0 +1,554 @@
+{
+  "version": 1,
+  "kind": "monthly_brief",
+  "role": "leadership",
+  "title": "Leadership brief · September",
+  "company": "Sealand",
+  "noun": "bags",
+  "month": "2026-09-01",
+  "heardMonths": [
+    "2026-08-01",
+    "2026-09-01"
+  ],
+  "inShort": {
+    "summary": "Patagonia and Cotopaxi are picked not only for the bag itself but for the care around it, with repair and warranty helping buyers feel safe about daily and travel use.",
+    "figures": [
+      {
+        "value": "940",
+        "label": "videos and 23,018 comments in your market in September"
+      },
+      {
+        "value": "1.1%",
+        "label": "of September's comments were under Sealand's posts; Patagonia held 1.5%"
+      }
+    ],
+    "also": [
+      {
+        "headline": "People ask to be shown what fits, pockets and how the bag carries",
+        "brief": "content"
+      },
+      {
+        "headline": "Durability has to be settled before people buy light or recycled bags",
+        "brief": "sales"
+      },
+      {
+        "headline": "People separate waterproof from water-resistant and ask what happens in rain",
+        "brief": "marketing"
+      },
+      {
+        "headline": "Premium bag prices need a clear reason over cheaper bags",
+        "brief": "sales"
+      },
+      {
+        "headline": "Buyers want bags that look fashionable and show personality",
+        "brief": "marketing"
+      }
+    ]
+  },
+  "findings": [
+    {
+      "ideaId": "I4",
+      "headline": "Patagonia and Cotopaxi are chosen with repair and warranty in mind",
+      "basedOn": [
+        "G35",
+        "G37",
+        "G77",
+        "G112"
+      ],
+      "saw": [
+        "Buyers pick Patagonia for an everyday bag, a travel bag and a casual outdoor bag from a maker they trust. People tie that trust to product quality, cleaner supply chains, environmental values and customer care. Repair and warranty expectations add reassurance around the choice.",
+        "Buyers pick Cotopaxi for travel and daily carry that feels colourful, lightweight, practical and durable. People connect the brand with scrap-based materials, playful design, repairability and a lifetime warranty."
+      ],
+      "means": "Patagonia and Cotopaxi show that after-sale care sits inside the buying case, not outside it. Repair and warranty help turn trust in a brand's values and product quality into a bag people feel safe choosing for daily use and travel.",
+      "practice": [
+        "Buyers tie repairability to travel and daily carry bags, not only outdoor gear.",
+        "People treat warranty and repair as part of trust in a brand, alongside colour, weight and durability."
+      ],
+      "months": [
+        {
+          "month": "2026-08-01",
+          "videos": 3
+        },
+        {
+          "month": "2026-09-01",
+          "videos": 9
+        }
+      ],
+      "videos": 12,
+      "who": [
+        {
+          "about": "rival:Cotopaxi",
+          "videos": 8
+        },
+        {
+          "about": "rival:Patagonia",
+          "videos": 3
+        },
+        {
+          "about": "market",
+          "videos": 1
+        }
+      ],
+      "quotes": [
+        {
+          "ref": "e:a60f915c-e8c0-4b4b-a817-888ddee039b1",
+          "text": "socket long feels often the a knee walk today after my I liner well and so it fits day stea",
+          "date": "2026-09-23",
+          "platform": "reddit",
+          "about": "rival:Cotopaxi",
+          "ownPost": false,
+          "lang": null
+        },
+        {
+          "ref": "e:d879f70f-9e74-4613-99db-773cb7498887",
+          "text": "fits day steady with socket long feels often the a knee walk today after my I liner well and so it fits day steady with socket long feels often the a knee walk today after my I liner well and so it fits dayx",
+          "date": "2026-09-03",
+          "platform": "reddit",
+          "about": "market",
+          "ownPost": false,
+          "lang": null
+        }
+      ],
+      "short": "Repair backs trust",
+      "heardFor": [
+        {
+          "name": "Patagonia",
+          "you": false,
+          "phrase": "Trusted quality and care"
+        },
+        {
+          "name": "Cotopaxi",
+          "you": false,
+          "phrase": "Colourful repair-backed travel"
+        },
+        {
+          "name": "Sealand",
+          "you": true,
+          "phrase": "Values-led community action"
+        }
+      ]
+    }
+  ],
+  "sections": [
+    {
+      "key": "leadership.market",
+      "title": "Where the market stands",
+      "groups": [
+        {
+          "items": [
+            {
+              "title": "Buying & delivery",
+              "text": "Buyers ask where to buy specific bags, which shop or app has them, and whether a model is in stock.",
+              "detail": "23% of September's videos in the market, the biggest subject.",
+              "measure": {
+                "pct": 23
+              },
+              "tag": "Argued in the Content brief",
+              "named": {
+                "brief": "content",
+                "idea": "I1"
+              }
+            },
+            {
+              "title": "Looks & style",
+              "text": "Buyers want bags that look stylish and practical, and they reject hardware, colours or shapes that cheapen the look.",
+              "detail": "18% of September's videos in the market, the second biggest subject.",
+              "measure": {
+                "pct": 18
+              },
+              "tag": "Argued in the Marketing brief",
+              "named": {
+                "brief": "marketing",
+                "idea": "I6"
+              }
+            },
+            {
+              "title": "Comfort",
+              "text": "Buyers talk about padded straps, fit under load and access, and some say comfort depends on the person.",
+              "detail": "7% of September's videos in the market, the third biggest subject.",
+              "measure": {
+                "pct": 7
+              }
+            },
+            {
+              "title": "Durability",
+              "text": "Owners praise bags that last through daily use, travel and years of wear without damage.",
+              "detail": "7% of September's videos in the market, the fourth biggest subject.",
+              "measure": {
+                "pct": 7
+              }
+            },
+            {
+              "title": "Price",
+              "text": "Buyers question whether premium bag prices are justified when cheaper bags seem to do the same job.",
+              "detail": "4% of September's videos in the market, the fifth biggest subject.",
+              "measure": {
+                "pct": 4
+              },
+              "tag": "Argued in the Sales brief",
+              "named": {
+                "brief": "sales",
+                "idea": "I5"
+              }
+            }
+          ]
+        }
+      ],
+      "base": "Share of the 940 videos in your market in September",
+      "kinds": {
+        "base": "Share of the 940 videos in your market in September",
+        "rows": [
+          {
+            "label": "Saying it worked",
+            "pct": 73
+          },
+          {
+            "label": "Ready to buy",
+            "pct": 58.4
+          },
+          {
+            "label": "Asking how it works",
+            "pct": 52.6
+          }
+        ]
+      },
+      "mood": {
+        "base": "The same 940 videos",
+        "rows": [
+          {
+            "mood": "positive",
+            "label": "Positive",
+            "pct": 76.1
+          },
+          {
+            "mood": "mixed",
+            "label": "Mixed",
+            "pct": 13.6
+          },
+          {
+            "mood": "neutral",
+            "label": "Neutral",
+            "pct": 7.9
+          },
+          {
+            "mood": "negative",
+            "label": "Negative",
+            "pct": 2.4
+          }
+        ]
+      }
+    },
+    {
+      "key": "leadership.shares",
+      "title": "Where Sealand stands against its rivals",
+      "groups": [
+        {
+          "items": [
+            {
+              "title": "Patagonia",
+              "text": "1.5% of September's comments and 1.3% of its videos.",
+              "detail": "Reddit, TikTok, YouTube",
+              "measure": {
+                "comments": 1.5,
+                "videos": 1.3
+              }
+            },
+            {
+              "title": "Sealand (you)",
+              "text": "1.1% of September's comments and 1.1% of its videos.",
+              "detail": "Its own Instagram posts",
+              "you": true,
+              "measure": {
+                "comments": 1.1,
+                "videos": 1.1
+              }
+            },
+            {
+              "title": "The North Face",
+              "text": "0.6% of September's comments and 1.1% of its videos.",
+              "detail": "Reddit, YouTube, TikTok",
+              "measure": {
+                "comments": 0.6,
+                "videos": 1.1
+              }
+            },
+            {
+              "title": "Cotopaxi",
+              "text": "0.6% of September's comments and 1.1% of its videos.",
+              "detail": "Reddit, TikTok, YouTube",
+              "measure": {
+                "comments": 0.6,
+                "videos": 1.1
+              }
+            },
+            {
+              "title": "Freitag",
+              "text": "0.2% of September's comments and 0.6% of its videos.",
+              "detail": "TikTok, Reddit, Instagram",
+              "measure": {
+                "comments": 0.2,
+                "videos": 0.6
+              }
+            }
+          ]
+        }
+      ],
+      "sub": "Share of September's conversation: 23,263 comments and 950 videos, Sealand's own posts included.",
+      "shares": {
+        "comments": {
+          "client": 1.1,
+          "rivals": 2.9,
+          "rest": 96,
+          "line": "Sealand 1.1% · its four rivals 2.9% · the rest 96.0%"
+        },
+        "videos": {
+          "client": 1.1,
+          "rivals": 4,
+          "rest": 94.9,
+          "line": "Sealand 1.1% · its four rivals 4.0% · the rest 94.9%"
+        }
+      },
+      "lines": [
+        "Sealand holds 1.1% of the month's comments, second of these five brands, behind Patagonia's 1.5%. 149 of Sealand's comments were on 2 giveaway posts.",
+        "Sealand and its four rivals together hold 4.0% of the month's comments. The rest holds 96.0%.",
+        "Sealand's comments sit under its own Instagram posts. Its rivals are talked about on Reddit, TikTok and YouTube."
+      ]
+    },
+    {
+      "key": "leadership.weigh",
+      "title": "What buyers weigh, and what makes them switch",
+      "groups": [
+        {
+          "label": "What they weigh",
+          "items": [
+            {
+              "title": "Job to be done",
+              "text": "Buyers sort by capacity, laptop fit, bottle sleeve, travel use and budget.",
+              "videos": 4,
+              "who": [
+                {
+                  "about": "rival:Cotopaxi",
+                  "videos": 1
+                },
+                {
+                  "about": "rival:Patagonia",
+                  "videos": 1
+                },
+                {
+                  "about": "market",
+                  "videos": 2
+                }
+              ],
+              "basedOn": [
+                "G106"
+              ],
+              "videoIds": [
+                "0ef054d9-4128-4fbe-bf84-a9e301205b4a",
+                "26727ac7-eb0b-4f51-8002-c2498cc2df1f",
+                "2af356c9-a2a1-4e94-b485-4ba23a7d3884",
+                "bd10d6b6-2a30-4bec-b253-fe9d0f302b4f"
+              ],
+              "tag": "Argued in the Content brief",
+              "named": {
+                "brief": "content",
+                "idea": "I1"
+              }
+            },
+            {
+              "title": "Carry weight",
+              "text": "Buyers leave heavy, overbuilt bags that feel tiring and pick lighter ones.",
+              "videos": 4,
+              "who": [
+                {
+                  "about": "rival:Patagonia",
+                  "videos": 2
+                },
+                {
+                  "about": "market",
+                  "videos": 2
+                }
+              ],
+              "basedOn": [
+                "G107"
+              ],
+              "videoIds": [
+                "521f4ee1-d23e-4e48-ae14-f1bd8674931f",
+                "b690d58f-465e-4921-9c7a-776dfc123c1f",
+                "ba07a4c6-9c9e-4ebe-b5b6-393ce79abbed",
+                "f73ff339-b743-4ede-a017-a96d9d4c6276"
+              ]
+            }
+          ]
+        }
+      ],
+      "lead": "Buyers sort bags by the job they need done and by how the carry feels. Capacity and laptop fit matter, and extra bulk can rule a bag out.",
+      "quote": {
+        "ref": "e:1089d040-d78b-4dfc-9db2-3ea23caa7f17",
+        "text": "well and so it fits day steady with socket long feels oft",
+        "date": "2026-09-17",
+        "platform": "reddit",
+        "about": "rival:Cotopaxi",
+        "ownPost": false,
+        "lang": null
+      }
+    },
+    {
+      "key": "leadership.risks",
+      "title": "The risks, in business terms",
+      "groups": [
+        {
+          "items": [
+            {
+              "title": "Durability doubts can cut trust",
+              "text": "Buyers ask whether a bag can take heavy loads, and failures under load send them to tougher fabrics or a maker they trust.",
+              "tag": "Argued in the Sales brief",
+              "named": {
+                "brief": "sales",
+                "idea": "I2"
+              },
+              "videos": 12,
+              "who": [
+                {
+                  "about": "rival:The North Face",
+                  "videos": 1
+                },
+                {
+                  "about": "market",
+                  "videos": 11
+                }
+              ],
+              "basedOn": [
+                "G117",
+                "G124"
+              ],
+              "videoIds": [
+                "19995f62-e7a7-47c5-83bb-45414045ecc5",
+                "1b5b1f41-4287-47a1-9f4e-807d6cd29cf9",
+                "1c9f803f-9cb0-4e00-8075-ba579e1e74bb",
+                "20ae4bd2-e237-4473-a68b-55345c619992",
+                "41684317-d323-485d-9e79-c13f1149af7e",
+                "45c59254-0259-4d2a-860a-dae1bc7f0d89",
+                "5de46f10-dbf9-4323-9a59-a9b0b291372d",
+                "7830607e-2ed6-4c12-af93-e0f034e8d008",
+                "ccbe201f-6757-415a-afe5-3a3628fb9706",
+                "d46103e8-e7e7-4349-b6a7-6fd338517181",
+                "e744cb4f-61b3-488e-a6f0-560473aa2884",
+                "edae671c-5ea8-44b0-aeb9-ce2c4a4d23b2"
+              ]
+            },
+            {
+              "title": "Style can block eco bags",
+              "text": "Buyers reject eco and upcycled bags when the look reads ugly, tacky, awkward, cheap or not luxurious.",
+              "tag": "Argued in the Marketing brief",
+              "named": {
+                "brief": "marketing",
+                "idea": "I6"
+              },
+              "videos": 4,
+              "who": [
+                {
+                  "about": "market",
+                  "videos": 4
+                }
+              ],
+              "basedOn": [
+                "G125"
+              ],
+              "videoIds": [
+                "7818c264-6d27-4d80-9b8c-e2079aa2531f",
+                "b1ec05ab-bff0-4cf7-80c9-88ed73a3fe8a",
+                "bc20a3f2-58a7-4869-9fed-e5e980d89863",
+                "e744cb4f-61b3-488e-a6f0-560473aa2884"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "leadership.decisions",
+      "title": "Questions for the business",
+      "groups": [
+        {
+          "items": [
+            {
+              "text": "How does Sealand protect trust if shipping is slow, repairs are hard to access or a bag is discontinued?",
+              "videos": 3,
+              "who": [
+                {
+                  "about": "rival:Cotopaxi",
+                  "videos": 1
+                },
+                {
+                  "about": "rival:Patagonia",
+                  "videos": 1
+                },
+                {
+                  "about": "market",
+                  "videos": 1
+                }
+              ],
+              "basedOn": [
+                "G112"
+              ],
+              "videoIds": [
+                "26727ac7-eb0b-4f51-8002-c2498cc2df1f",
+                "399eabe9-cdf5-4d1d-9102-7d269fbae017",
+                "6a2bfff7-5f68-4541-be5f-85aced0dbfb6"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "leadership.holds",
+      "title": "What holds so far",
+      "groups": [
+        {
+          "items": [
+            {
+              "text": "Small functional details decide if a bag feels usable",
+              "videos": 52
+            },
+            {
+              "text": "People shop the exact colour, model and size they saw",
+              "videos": 51
+            },
+            {
+              "text": "Packed weight and carry comfort are part of the same judgment",
+              "videos": 47
+            },
+            {
+              "text": "Bag size is judged against airlines, body frame and trip type",
+              "videos": 42
+            }
+          ]
+        }
+      ],
+      "sub": "Patterns here describe August and September. Each was heard in both months.",
+      "position": {
+        "text": "Sealand is held as values-led and active beyond the product.",
+        "videos": 5,
+        "who": [
+          {
+            "about": "client",
+            "videos": 5
+          }
+        ],
+        "basedOn": [
+          "G116"
+        ],
+        "videoIds": [
+          "6b628644-d3ae-4bd6-9768-b52780591710",
+          "747f0d6a-fa99-4595-b58a-ce421df3fea4",
+          "76a8af8e-78fd-459e-bad5-8423b53aa933",
+          "c8e1824a-c6d6-4bc2-926d-9cca68e05e16",
+          "df0a32f5-c8de-4224-8631-0325172ef8a4"
+        ]
+      }
+    }
+  ],
+  "promptVersion": "monthly_brief_v2",
+  "model": "gpt-5.4"
+}

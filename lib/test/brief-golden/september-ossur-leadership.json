@@ -1,0 +1,622 @@
+{
+  "version": 1,
+  "kind": "monthly_brief",
+  "role": "leadership",
+  "title": "Leadership brief · September",
+  "company": "Össur",
+  "noun": null,
+  "month": "2026-09-01",
+  "heardMonths": [
+    "2026-08-01",
+    "2026-09-01"
+  ],
+  "inShort": {
+    "summary": "Owners judge a prosthesis by what it does to the body in daily wear. Ottobock is the named reference point for microprocessor knees, linked to smooth movement and independence.",
+    "figures": [
+      {
+        "value": "521",
+        "label": "videos and 17,218 comments in your market in September"
+      }
+    ],
+    "also": [
+      {
+        "headline": "Buyers want prosthetic type choices explained for their own body and life",
+        "brief": "sales"
+      },
+      {
+        "headline": "Comments ask to see daily wear, from putting it on to bathroom and water use",
+        "brief": "content"
+      },
+      {
+        "headline": "Provider search, approval and coverage shape whether buyers can get a prosthesis",
+        "brief": "sales"
+      },
+      {
+        "headline": "People do not treat prosthetic mechanics as obvious, they ask what each part does",
+        "brief": "marketing"
+      }
+    ]
+  },
+  "findings": [
+    {
+      "ideaId": "I5",
+      "headline": "Pain, fit and skin problems decide whether owners keep wearing a prosthesis",
+      "basedOn": [
+        "G60",
+        "G101",
+        "G104",
+        "G117"
+      ],
+      "saw": [
+        "Owners describe wear problems in body terms: pain, skin irritation, sweating, fatigue in rehab, tight or pinching fit, worn parts, and mechanisms that stick, corrode or fail to release cleanly.",
+        "Users treat fit, socket design, alignment, skin tolerance, maintenance and adaptation as decisive parts of prosthetic success, even though they are less visible than the hardware. When wearability is wrong, people talk about changing the socket, the suspension or the whole prosthesis, and some stop wearing one or look for a replacement."
+      ],
+      "means": "Wear time is judged on the body, not only by the hardware. Pain, skin damage and poor fit turn a device from a mobility aid into a product people leave off, replace or attach to a different clinic or brand.",
+      "practice": [
+        "Owners treat socket design and alignment as part of the prosthesis, not separate from it.",
+        "People replace the socket, the suspension or the whole prosthesis when comfort breaks down."
+      ],
+      "months": [
+        {
+          "month": "2026-08-01",
+          "videos": 7
+        },
+        {
+          "month": "2026-09-01",
+          "videos": 6
+        }
+      ],
+      "videos": 13,
+      "who": [
+        {
+          "about": "market",
+          "videos": 13
+        }
+      ],
+      "quotes": [
+        {
+          "ref": "e:0d73bf24-2019-44e6-ace1-043befca7d84",
+          "text": "socket long feels often the a knee walk today after my I liner wellx",
+          "date": "2026-09-27",
+          "platform": "instagram",
+          "about": "market",
+          "ownPost": false,
+          "lang": "ro",
+          "english": "after my I liner well and so it fits day steady with socket long feels often the a"
+        },
+        {
+          "ref": "e:f331d4a9-ae4d-42a0-8ae7-290f77f245e6",
+          "text": "fits day steady with socket long feels often the a knee walk today after my Ix",
+          "date": "2026-08-23",
+          "platform": "instagram",
+          "about": "market",
+          "ownPost": false,
+          "lang": "it",
+          "english": "a knee walk today after my I liner well and so it fits day steady with so"
+        }
+      ],
+      "short": "Wearability decides use"
+    },
+    {
+      "ideaId": "I6",
+      "headline": "Ottobock is known for microprocessor knees tied to smooth movement and independence",
+      "basedOn": [
+        "G33",
+        "G34",
+        "G72",
+        "G73",
+        "G114"
+      ],
+      "saw": [
+        "Above-knee users choose Ottobock microprocessor knees for walking they can depend on and for handling hills and uneven ground with less worry.",
+        "People attach Ottobock to high-technology prosthetics, especially microprocessor knees. Comments praise smooth movement, reliability and meaningful upgrades, and name the C-Leg line and other knee models when describing the brand. Users tie that technology to rehabilitation progress, confidence and independence after amputation."
+      ],
+      "means": "Ottobock is the named reference point for knee technology tied to movement and independence. That affects how buyers read knee claims across the category, especially for above-knee mobility.",
+      "practice": [
+        "People connect knee choice with hills and uneven ground, not only level walking.",
+        "Comments treat meaningful upgrades as part of what makes a premium knee worth wanting."
+      ],
+      "months": [
+        {
+          "month": "2026-08-01",
+          "videos": 4
+        },
+        {
+          "month": "2026-09-01",
+          "videos": 5
+        }
+      ],
+      "videos": 9,
+      "who": [
+        {
+          "about": "rival:Ottobock",
+          "videos": 9
+        }
+      ],
+      "quotes": [
+        {
+          "ref": "e:6c678bfa-8225-4923-a842-d71350e3c3ca",
+          "text": "well and so it fits day steady with socket long feels often the a knee walk today after my I liner well and so",
+          "date": "2026-09-26",
+          "platform": "tiktok",
+          "about": "rival:Ottobock",
+          "ownPost": false,
+          "lang": null
+        },
+        {
+          "ref": "e:6a291a93-5b24-49d2-bb64-ebdff7d0905a",
+          "text": "after my I liner well and so it fits day steady with socket l",
+          "date": "2026-09-26",
+          "platform": "youtube",
+          "about": "rival:Ottobock",
+          "ownPost": false,
+          "lang": null
+        }
+      ],
+      "short": "Ottobock knee reputation"
+    }
+  ],
+  "sections": [
+    {
+      "key": "leadership.market",
+      "title": "Where the market stands",
+      "groups": [
+        {
+          "items": [
+            {
+              "title": "Choosing the right device",
+              "text": "Buyers ask where to get a device, how heavy it feels, and how knee and hand types differ.",
+              "tag": "Argued in the Sales brief",
+              "named": {
+                "brief": "sales",
+                "idea": "I1"
+              }
+            },
+            {
+              "title": "Community & encouragement",
+              "text": "People praise resilience, offer support and advice, and ask how to handle dating after amputation."
+            },
+            {
+              "title": "Cost & access",
+              "text": "Buyers ask what a prosthesis costs, where it is available, and what insurance will pay for.",
+              "tag": "Argued in the Sales brief",
+              "named": {
+                "brief": "sales",
+                "idea": "I3"
+              }
+            },
+            {
+              "title": "Fit & comfort",
+              "text": "Owners describe socket pain, sore spots and leg length issues, and they value a prosthetist who adjusts fit."
+            },
+            {
+              "title": "Function & movement",
+              "text": "People ask how knees, hands and chargers work, and whether control, balance and walking feel natural.",
+              "tag": "Argued in the Marketing brief",
+              "named": {
+                "brief": "marketing",
+                "idea": "I4"
+              }
+            },
+            {
+              "title": "Look & style",
+              "text": "Owners want real-skin looks, covers and personal style, and they praise confidence in showing a prosthesis.",
+              "tag": "Argued in the Sales brief",
+              "named": {
+                "brief": "sales",
+                "idea": "I1"
+              }
+            }
+          ]
+        }
+      ],
+      "kinds": {
+        "base": "Share of the 521 videos in your market in September",
+        "rows": [
+          {
+            "label": "Saying it worked",
+            "pct": 62.4
+          },
+          {
+            "label": "Hitting a problem",
+            "pct": 45.1
+          },
+          {
+            "label": "Asking how it works",
+            "pct": 44.9
+          }
+        ]
+      },
+      "mood": {
+        "base": "The same 521 videos",
+        "rows": [
+          {
+            "mood": "positive",
+            "label": "Positive",
+            "pct": 75.4
+          },
+          {
+            "mood": "mixed",
+            "label": "Mixed",
+            "pct": 13.6
+          },
+          {
+            "mood": "neutral",
+            "label": "Neutral",
+            "pct": 6.9
+          },
+          {
+            "mood": "negative",
+            "label": "Negative",
+            "pct": 4
+          }
+        ]
+      }
+    },
+    {
+      "key": "leadership.weigh",
+      "title": "What buyers weigh, and what makes them switch",
+      "groups": [
+        {
+          "label": "What they weigh",
+          "items": [
+            {
+              "title": "Daily use",
+              "text": "Buyers compare weight, sport use and whether a setup suits them.",
+              "tag": "Argued in the Sales brief",
+              "named": {
+                "brief": "sales",
+                "idea": "I1"
+              },
+              "videos": 7,
+              "who": [
+                {
+                  "about": "market",
+                  "videos": 7
+                }
+              ],
+              "basedOn": [
+                "G105"
+              ],
+              "videoIds": [
+                "0c143d53-c580-40b6-b142-36eec3f65038",
+                "1aed14f2-6167-44ae-8767-ad600964fb65",
+                "8b663718-a5e7-4d47-996f-503d92ab6580",
+                "93f70db0-7900-4286-8f17-2c09405c4306",
+                "9936c297-b937-4477-b825-e738d325e7fc",
+                "a7c3bccc-3798-45de-90f7-b9ead2834c98",
+                "dde5f84e-2343-42fb-9c96-b37bbbf0f5a4"
+              ]
+            },
+            {
+              "title": "Look and identity",
+              "text": "Buyers want colour, materials and design that fit their style.",
+              "videos": 7,
+              "who": [
+                {
+                  "about": "market",
+                  "videos": 7
+                }
+              ],
+              "basedOn": [
+                "G106"
+              ],
+              "videoIds": [
+                "16e897d2-f70c-44fa-844d-b0473f686486",
+                "444a0e5b-298b-4c37-a380-7cf9a086ee65",
+                "91e0b110-5a13-41c2-a551-f746833e0691",
+                "9a79b4fd-aac8-4d86-a846-8b2cf45a30ab",
+                "a3c5777c-c5a3-48a3-8846-f9fce5d9d399",
+                "d7787e6a-3e72-4233-b220-b7b9e4ddab73",
+                "e8408819-a731-4f1d-b6bf-6d0adfdd8cab"
+              ],
+              "tag": "Argued in the Sales brief",
+              "named": {
+                "brief": "sales",
+                "idea": "I1"
+              }
+            },
+            {
+              "title": "Clinic and prosthetist",
+              "text": "Buyers treat the clinician as part of the product choice.",
+              "videos": 5,
+              "who": [
+                {
+                  "about": "market",
+                  "videos": 5
+                }
+              ],
+              "basedOn": [
+                "G107"
+              ],
+              "videoIds": [
+                "4d482548-53ca-4da3-b8c3-d07949ff5c14",
+                "541e641c-f2e7-4a05-8381-5b8adca8f54c",
+                "57d434fa-e6fb-437e-b93b-cf8bcb42ac7c",
+                "98662e96-9986-49ac-990a-535d4a371dbf",
+                "a3c5777c-c5a3-48a3-8846-f9fce5d9d399"
+              ],
+              "tag": "Argued in the Sales brief",
+              "named": {
+                "brief": "sales",
+                "idea": "I3"
+              }
+            },
+            {
+              "title": "Direct brand comparison",
+              "text": "Shoppers compare brands directly and ask to try components.",
+              "videos": 6,
+              "who": [
+                {
+                  "about": "market",
+                  "videos": 6
+                }
+              ],
+              "basedOn": [
+                "G108"
+              ],
+              "videoIds": [
+                "20191a4a-5bba-43ed-8f37-9f98633d9398",
+                "520ae7ad-c3dd-47f1-b1be-f7d09180df83",
+                "57d434fa-e6fb-437e-b93b-cf8bcb42ac7c",
+                "7f1b881f-ee2a-472e-822b-3d7afb17721f",
+                "e3154874-e3ac-4430-91d9-42f9ac7cce9b",
+                "eab375f5-3ff0-41ff-8674-1da8f77772ea"
+              ]
+            },
+            {
+              "title": "Price and availability",
+              "text": "Buyers weigh cost and whether they can get the device.",
+              "tag": "Argued in the Sales brief",
+              "named": {
+                "brief": "sales",
+                "idea": "I3"
+              },
+              "videos": 6,
+              "who": [
+                {
+                  "about": "client",
+                  "videos": 1
+                },
+                {
+                  "about": "market",
+                  "videos": 5
+                }
+              ],
+              "basedOn": [
+                "G109"
+              ],
+              "videoIds": [
+                "48b3f27e-983a-4ab8-9325-80989cea46da",
+                "520ae7ad-c3dd-47f1-b1be-f7d09180df83",
+                "57610b8a-c696-407f-af87-7af726fb3960",
+                "727ac494-b3c1-4501-9bcf-6ff33f23c9f5",
+                "bc1175fe-1f37-4ae1-9597-2d5212fe9cfd",
+                "e3932bdf-dc45-47f4-819e-e497babeef6b"
+              ]
+            }
+          ]
+        },
+        {
+          "label": "What holds them",
+          "items": [
+            {
+              "title": "Listening clinician",
+              "text": "Owners stay where adjustments are heard and custom work is done.",
+              "videos": 5,
+              "who": [
+                {
+                  "about": "market",
+                  "videos": 5
+                }
+              ],
+              "basedOn": [
+                "G107"
+              ],
+              "videoIds": [
+                "4d482548-53ca-4da3-b8c3-d07949ff5c14",
+                "541e641c-f2e7-4a05-8381-5b8adca8f54c",
+                "57d434fa-e6fb-437e-b93b-cf8bcb42ac7c",
+                "98662e96-9986-49ac-990a-535d4a371dbf",
+                "a3c5777c-c5a3-48a3-8846-f9fce5d9d399"
+              ]
+            },
+            {
+              "title": "Chosen look",
+              "text": "Owners value a prosthesis that reflects their style and interests.",
+              "videos": 7,
+              "who": [
+                {
+                  "about": "market",
+                  "videos": 7
+                }
+              ],
+              "basedOn": [
+                "G106"
+              ],
+              "videoIds": [
+                "16e897d2-f70c-44fa-844d-b0473f686486",
+                "444a0e5b-298b-4c37-a380-7cf9a086ee65",
+                "91e0b110-5a13-41c2-a551-f746833e0691",
+                "9a79b4fd-aac8-4d86-a846-8b2cf45a30ab",
+                "a3c5777c-c5a3-48a3-8846-f9fce5d9d399",
+                "d7787e6a-3e72-4233-b220-b7b9e4ddab73",
+                "e8408819-a731-4f1d-b6bf-6d0adfdd8cab"
+              ],
+              "tag": "Argued in the Sales brief",
+              "named": {
+                "brief": "sales",
+                "idea": "I1"
+              }
+            }
+          ]
+        }
+      ],
+      "lead": "Buyers weigh the prosthesis in daily use, on the body and through the clinic. Brand choice is compared directly, with price and availability carried into the same decision.",
+      "quote": {
+        "ref": "e:73da15d6-1efe-4710-b6df-6c8002fdb2b0",
+        "text": "a knee walk today after my I liner well and so it fits day steady with socket long feels often the a knee walk today after my",
+        "date": "2026-08-30",
+        "platform": "reddit",
+        "about": "market",
+        "ownPost": false,
+        "lang": null
+      }
+    },
+    {
+      "key": "leadership.risks",
+      "title": "The risks, in business terms",
+      "groups": [
+        {
+          "items": [
+            {
+              "title": "Basic use is questioned",
+              "text": "People question putting a prosthesis on, keeping it on, charging it and controlling it, which puts product claims under pressure.",
+              "videos": 6,
+              "who": [
+                {
+                  "about": "market",
+                  "videos": 6
+                }
+              ],
+              "basedOn": [
+                "G119"
+              ],
+              "videoIds": [
+                "1a12114e-d537-466f-80a6-00ea244d57fb",
+                "489d6c5f-28dd-4921-9fee-4d598e7aa9db",
+                "722d6e51-2497-4f48-b244-a52185a3c088",
+                "7f1b881f-ee2a-472e-822b-3d7afb17721f",
+                "828c252e-24e0-437c-9935-6384597c26c8",
+                "b66c46d9-b7c1-4d36-b320-c8e1570a6427"
+              ]
+            },
+            {
+              "title": "Other options stay live",
+              "text": "People compare hands with hooks, modern mechanical options and no prosthesis, so choice stays open after a device is shown.",
+              "videos": 6,
+              "who": [
+                {
+                  "about": "market",
+                  "videos": 6
+                }
+              ],
+              "basedOn": [
+                "G123"
+              ],
+              "videoIds": [
+                "1aed14f2-6167-44ae-8767-ad600964fb65",
+                "211d6b93-b011-4635-a7c8-23f0a5bd714e",
+                "7f1b881f-ee2a-472e-822b-3d7afb17721f",
+                "8b663718-a5e7-4d47-996f-503d92ab6580",
+                "9936c297-b937-4477-b825-e738d325e7fc",
+                "b7bc5a12-cabe-4f4f-a8db-be178eece3fb"
+              ],
+              "tag": "Argued in the Sales brief",
+              "named": {
+                "brief": "sales",
+                "idea": "I1"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "leadership.decisions",
+      "title": "Questions for the business",
+      "groups": [
+        {
+          "items": [
+            {
+              "text": "Does Ottobock set the terms of microprocessor knee choice around smooth movement and independence?",
+              "videos": 9,
+              "who": [
+                {
+                  "about": "rival:Ottobock",
+                  "videos": 9
+                }
+              ],
+              "basedOn": [
+                "G33",
+                "G34",
+                "G72",
+                "G73",
+                "G114"
+              ],
+              "videoIds": [
+                "0fd9f18c-68ca-4f45-b3e6-893acf22d9f8",
+                "2237a331-6439-449e-88c9-189bef05c788",
+                "293db208-ed72-4cf4-961e-a0c97b87955d",
+                "944c9b8c-03d3-4185-8e1f-43022987d904",
+                "9bc44c97-793b-4815-b5db-339d6c6fc0b3",
+                "9fe95f4f-f62e-4fd8-afb1-d1bbe38b156f",
+                "c0c3fbef-293a-48f1-b373-504a60cf1b75",
+                "d9d7fcd9-9891-4abc-9dc9-0f23886b8303",
+                "f2a5314a-169a-4caf-b863-330caf7c813d"
+              ]
+            },
+            {
+              "text": "Can quality decide the choice when price and availability enter the same decision?",
+              "videos": 6,
+              "who": [
+                {
+                  "about": "client",
+                  "videos": 1
+                },
+                {
+                  "about": "market",
+                  "videos": 5
+                }
+              ],
+              "basedOn": [
+                "G109"
+              ],
+              "videoIds": [
+                "48b3f27e-983a-4ab8-9325-80989cea46da",
+                "520ae7ad-c3dd-47f1-b1be-f7d09180df83",
+                "57610b8a-c696-407f-af87-7af726fb3960",
+                "727ac494-b3c1-4501-9bcf-6ff33f23c9f5",
+                "bc1175fe-1f37-4ae1-9597-2d5212fe9cfd",
+                "e3932bdf-dc45-47f4-819e-e497babeef6b"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "leadership.holds",
+      "title": "What holds so far",
+      "groups": [
+        {
+          "items": [
+            {
+              "text": "People read prosthetic stories through loss, effort and encouragement",
+              "videos": 211
+            },
+            {
+              "text": "Buyers want to see how a prosthetic works in daily life",
+              "videos": 146
+            },
+            {
+              "text": "Prosthetics are treated as part of style, beauty and self presentation",
+              "videos": 77
+            },
+            {
+              "text": "People treat price and availability as part of the product",
+              "videos": 45
+            },
+            {
+              "text": "Comfort on the body shapes what counts as a good prosthetic",
+              "videos": 38
+            }
+          ]
+        }
+      ],
+      "sub": "Patterns here describe July, August and September. Each was heard in all three months."
+    }
+  ],
+  "promptVersion": "monthly_brief_v2",
+  "model": "gpt-5.4"
+}

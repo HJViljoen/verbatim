@@ -1,0 +1,586 @@
+{
+  "version": 1,
+  "kind": "monthly_brief",
+  "role": "sales",
+  "title": "Sales brief · September",
+  "company": "Össur",
+  "noun": null,
+  "month": "2026-09-01",
+  "heardMonths": [
+    "2026-08-01",
+    "2026-09-01"
+  ],
+  "inShort": {
+    "summary": "Provider search, approval and coverage sit inside the purchase, alongside the device itself.",
+    "figures": [
+      {
+        "value": "521",
+        "label": "videos in your market in September"
+      }
+    ],
+    "also": [
+      {
+        "headline": "Comments ask to see daily wear, from putting it on to bathroom and water use",
+        "brief": "content"
+      },
+      {
+        "headline": "People do not treat prosthetic mechanics as obvious, they ask what each part does",
+        "brief": "marketing"
+      },
+      {
+        "headline": "Pain, fit and skin problems decide whether owners keep wearing a prosthesis",
+        "brief": "leadership"
+      },
+      {
+        "headline": "Ottobock is known for microprocessor knees tied to smooth movement and independence",
+        "brief": "leadership"
+      }
+    ]
+  },
+  "findings": [
+    {
+      "ideaId": "I1",
+      "headline": "Buyers want prosthetic type choices explained for their own body and life",
+      "basedOn": [
+        "G7",
+        "G20",
+        "G23",
+        "G32",
+        "G79",
+        "G83",
+        "G94",
+        "G99",
+        "G105"
+      ],
+      "saw": [
+        "Buyers ask which prosthetic type fits their amputation level, body size, age and activity need. They want the choice explained in practical terms, whether they are a candidate, how attachment works, what the trade-off is across options, and whether function or appearance is meant to lead the decision.",
+        "People compare everyday legs with running legs, hooks with hands, a prosthetic leg with no leg, and a later prosthetic arm with not getting one at all. People ask how heavy different systems feel, whether height can be restored or adjusted, how children are refit, how cosmetic or artistic customisation works, and whether a given setup will let them move naturally in sport and daily life.",
+        "Selection talk is not about having any prosthesis. People weigh comfort, appearance, activity specific use and the chance to trial components before they decide."
+      ],
+      "means": "Type choice is part of the sale itself. Buyers do not treat a leg, arm, hook, hand or sports setup as self explanatory, and uncertainty about fit with their body and life can hold the decision in place.",
+      "practice": [
+        "Parents ask how refitting works through childhood.",
+        "People compare function and appearance, not appearance alone."
+      ],
+      "months": [
+        {
+          "month": "2026-08-01",
+          "videos": 21
+        },
+        {
+          "month": "2026-09-01",
+          "videos": 11
+        }
+      ],
+      "videos": 31,
+      "who": [
+        {
+          "about": "market",
+          "videos": 31
+        }
+      ],
+      "quotes": [
+        {
+          "ref": "e:b9a94408-e2aa-438d-88f9-5a10083e4d52",
+          "text": "socket long feels often the a knee walk toda",
+          "date": "2026-08-15",
+          "platform": "tiktok",
+          "about": "market",
+          "ownPost": false,
+          "lang": null
+        },
+        {
+          "ref": "e:d19e34be-54bd-4f22-bbef-0143fe568dbe",
+          "text": "fits day steady with socket long feels often the a knee walk today after my I",
+          "date": "2026-08-07",
+          "platform": "instagram",
+          "about": "market",
+          "ownPost": false,
+          "lang": "it",
+          "english": "a knee walk today after my I liner well and so it fits day steady with socke"
+        }
+      ],
+      "short": "Type choice explained"
+    },
+    {
+      "ideaId": "I3",
+      "headline": "Provider search, approval and coverage shape whether buyers can get a prosthesis",
+      "basedOn": [
+        "G4",
+        "G13",
+        "G19",
+        "G21",
+        "G30",
+        "G53",
+        "G82",
+        "G96",
+        "G109"
+      ],
+      "saw": [
+        "Buyers ask where to go, who the provider is, how to contact a maker or seller, and what happens in ordering or approval. People say the path to getting a prosthesis is hard to read when they are trying to find a clinic, a company willing to help, or a provider in their region.",
+        "Insurers and public coverage sit inside the decision, not outside it. People ask what reimbursement pays for, whether Medicaid or insurance limits provider choice or blocks advanced devices, and what the price, compensation or public benefit picture will be.",
+        "Timing is tied to access as well as need. People look for a first device or a replacement while dealing with waiting, eligibility rules, delays, fundraising or donation support, and availability."
+      ],
+      "means": "Access questions are part of whether a buyer can reach the product at all. Provider search, approval and coverage shape which device gets fitted, which brand gets contacted and whether the purchase goes ahead.",
+      "practice": [
+        "People treat price, coverage and how to obtain a device as core facts.",
+        "People ask where to go in their region for a first device and for equipment that needs replacing."
+      ],
+      "months": [
+        {
+          "month": "2026-08-01",
+          "videos": 16
+        },
+        {
+          "month": "2026-09-01",
+          "videos": 12
+        }
+      ],
+      "videos": 28,
+      "who": [
+        {
+          "about": "client",
+          "videos": 3
+        },
+        {
+          "about": "market",
+          "videos": 25
+        }
+      ],
+      "quotes": [
+        {
+          "ref": "e:e6f34597-48f0-4aa3-b7c4-12d63ac79ef3",
+          "text": "well and so it fits day s",
+          "date": "2026-08-08",
+          "platform": "instagram",
+          "about": "market",
+          "ownPost": false,
+          "lang": "ja",
+          "english": "long feels often the a knee walk to"
+        },
+        {
+          "ref": "e:a14a2141-ddf2-4408-bca0-95b5df3279c5",
+          "text": "after my I liner well and so it fits day steady with socketx",
+          "date": "2026-08-31",
+          "platform": "instagram",
+          "about": "market",
+          "ownPost": false,
+          "lang": "ar",
+          "english": "day steady with socket long feels often the a knee walk today after my I liner well andx"
+        }
+      ],
+      "short": "Access shapes purchase"
+    }
+  ],
+  "sections": [
+    {
+      "key": "sales.buyers",
+      "title": "Who is buying",
+      "groups": [
+        {
+          "items": [
+            {
+              "title": "First-time wearer",
+              "text": "People after limb loss or a decision to amputate wait for a first prosthesis and try to picture a workable daily life.",
+              "persona": {
+                "forSale": "People need a clear picture of how the device changes daily movement."
+              },
+              "videos": 5,
+              "who": [
+                {
+                  "about": "market",
+                  "videos": 5
+                }
+              ],
+              "basedOn": [
+                "G1"
+              ],
+              "videoIds": [
+                "12665615-6540-480d-b9b0-0c1b144bb862",
+                "2980b467-aa93-48a3-a8ac-71e555a3466b",
+                "734246aa-b863-495b-bf08-473f694519dd",
+                "87a6b4f8-10a2-476e-9220-3ab125310f0f",
+                "b0a41ec9-4c7b-4cd0-b977-015a9c48045f"
+              ]
+            },
+            {
+              "title": "Replacement wearer",
+              "text": "People who wear one enter a replacement cycle when sockets wear out, limb shape changes, wounds interrupt use, or the device breaks.",
+              "persona": {
+                "want": "People want reliable use restored after wear, breakage or time out of the socket.",
+                "stops": "Wounds, damage or a poor socket can leave them without dependable use while they look for a replacement.",
+                "moves": "A worn socket, a break or a limb change turns attention to replacement.",
+                "forSale": "People need the replacement reason tied to what has changed in the limb or the device."
+              },
+              "videos": 4,
+              "who": [
+                {
+                  "about": "market",
+                  "videos": 4
+                }
+              ],
+              "basedOn": [
+                "G3"
+              ],
+              "videoIds": [
+                "5eb6d72d-a6a9-46f3-b7b6-dcecf9931cc8",
+                "5f72b1b5-f91e-4e42-a53f-756c0c7a220d",
+                "c16ba8a3-6647-48c1-a6a1-98490f485df5",
+                "eab375f5-3ff0-41ff-8674-1da8f77772ea"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "sales.deciders",
+      "title": "Who else is in the decision",
+      "groups": [
+        {
+          "items": [
+            {
+              "title": "Prosthetists and clinics",
+              "text": "Prosthetists, CPOs and clinics are the named route into choice and fit. People ask how to find, switch or replace one, and expect repeat alignment and socket adjustments.",
+              "videos": 11,
+              "who": [
+                {
+                  "about": "market",
+                  "videos": 11
+                }
+              ],
+              "basedOn": [
+                "G9",
+                "G11"
+              ],
+              "videoIds": [
+                "0111b999-efee-4b31-8c99-86e197f63c95",
+                "1410fcb3-d001-487f-b682-3062a70f3592",
+                "1e345d04-56a0-4c23-b97f-4587ef8e530d",
+                "3963e831-10d7-4dfe-a635-f10431f6f480",
+                "4d482548-53ca-4da3-b8c3-d07949ff5c14",
+                "541e641c-f2e7-4a05-8381-5b8adca8f54c",
+                "57d434fa-e6fb-437e-b93b-cf8bcb42ac7c",
+                "647936bc-1589-4b7f-aebe-1e4d76375cf8",
+                "8e99b885-4080-4a14-b230-d8a236d0231f",
+                "98662e96-9986-49ac-990a-535d4a371dbf",
+                "cfe7dbf2-dfcf-47af-b0ef-d9467fdf71e2"
+              ]
+            },
+            {
+              "title": "Brands and suppliers",
+              "text": "Makers, brands, hospitals and suppliers are contacted directly about sourcing and customisation. People ask which brand or foot is used, where it was made and how parts are bought.",
+              "videos": 7,
+              "who": [
+                {
+                  "about": "client",
+                  "videos": 1
+                },
+                {
+                  "about": "market",
+                  "videos": 6
+                }
+              ],
+              "basedOn": [
+                "G12"
+              ],
+              "videoIds": [
+                "17b84e16-d9b5-4870-8d8e-6e8819847801",
+                "2754beed-5abe-4df8-91f9-d30df903c7d7",
+                "520ae7ad-c3dd-47f1-b1be-f7d09180df83",
+                "9a79b4fd-aac8-4d86-a846-8b2cf45a30ab",
+                "bafafe14-e7ab-437e-b6d0-f73e786ece11",
+                "d0054d3b-1a86-4a3b-9c6b-f2295aa74984",
+                "e3932bdf-dc45-47f4-819e-e497babeef6b"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "sales.stops",
+      "title": "What stops them",
+      "groups": [
+        {
+          "items": [
+            {
+              "title": "Everyday wear is unclear",
+              "text": "Buyers ask how it goes on, how long it stays on, what clothing works, how it is cleaned, and what standing or long wear does to comfort, hips and balance.",
+              "videos": 11,
+              "who": [
+                {
+                  "about": "market",
+                  "videos": 11
+                }
+              ],
+              "basedOn": [
+                "G17"
+              ],
+              "videoIds": [
+                "0e97e8b6-a3eb-44e1-af7a-9a58493d9935",
+                "1a12114e-d537-466f-80a6-00ea244d57fb",
+                "34968a44-69ad-47d7-b44b-42e8e42770c6",
+                "489d6c5f-28dd-4921-9fee-4d598e7aa9db",
+                "587d6488-1daf-4979-81f5-ead22b2a23ba",
+                "6d7d1746-1890-4424-9799-c8834e403a73",
+                "722d6e51-2497-4f48-b244-a52185a3c088",
+                "c9f40efb-44e1-4cbf-85d6-82d7861cd321",
+                "dde5f84e-2343-42fb-9c96-b37bbbf0f5a4",
+                "ebe2a840-39e5-413e-ac76-99a28c57266a",
+                "fc37196c-27f9-4ff1-a8bd-445298d4bd30"
+              ],
+              "tag": "Argued in the Content brief",
+              "named": {
+                "brief": "content",
+                "idea": "I2"
+              }
+            },
+            {
+              "title": "Upkeep and failure",
+              "text": "Owners talk about worn parts, breakage, rust, blocked joints, inspection needs and failures that happen when they need the device.",
+              "videos": 4,
+              "who": [
+                {
+                  "about": "market",
+                  "videos": 4
+                }
+              ],
+              "basedOn": [
+                "G18"
+              ],
+              "videoIds": [
+                "0d859179-9391-415b-886d-5b6f01c01b86",
+                "12257345-0a94-45ae-932d-feb94353a76a",
+                "5eb6d72d-a6a9-46f3-b7b6-dcecf9931cc8",
+                "ffdc4e00-1ce3-4716-b669-d0353186150b"
+              ],
+              "tag": "Argued in the Leadership brief",
+              "named": {
+                "brief": "leadership",
+                "idea": "I5"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "sales.settle",
+      "title": "What they want settled first",
+      "groups": [
+        {
+          "items": [
+            {
+              "text": "How it feels on the body, weight, tightness, pinching, pain, skin irritation and height restored",
+              "videos": 9,
+              "who": [
+                {
+                  "about": "market",
+                  "videos": 9
+                }
+              ],
+              "basedOn": [
+                "G22"
+              ],
+              "videoIds": [
+                "4e36637d-5e51-4c12-aaf0-2ee98c2fe54c",
+                "894017a2-3459-4504-abda-6ab22319263e",
+                "90b82692-6766-42d2-8c27-48fc8048bb42",
+                "b17c8375-4e2c-4141-b46e-9d9be0b0a01b",
+                "bb3cb84d-ea2a-4dfd-b311-049c487e2f91",
+                "d010dd8d-9f97-4f7b-9d35-0004cf69e6b7",
+                "dde5f84e-2343-42fb-9c96-b37bbbf0f5a4",
+                "ebe2a840-39e5-413e-ac76-99a28c57266a",
+                "fdd344d2-f642-4dab-9c10-743329a892ca"
+              ],
+              "tag": "Argued in the Leadership brief",
+              "named": {
+                "brief": "leadership",
+                "idea": "I5"
+              }
+            },
+            {
+              "text": "What daily tasks it handles, from walking and stairs to sport, house mobility and clothing",
+              "videos": 10,
+              "who": [
+                {
+                  "about": "market",
+                  "videos": 10
+                }
+              ],
+              "basedOn": [
+                "G24"
+              ],
+              "videoIds": [
+                "0c143d53-c580-40b6-b142-36eec3f65038",
+                "1a12114e-d537-466f-80a6-00ea244d57fb",
+                "2d947680-9fbc-4742-b942-616d0e1e37e0",
+                "318bf41c-38c8-4793-83f4-8db8ce87716e",
+                "587d6488-1daf-4979-81f5-ead22b2a23ba",
+                "6e5e43c2-d901-4271-b256-35768ee1844a",
+                "8019c565-0885-462e-86b3-0f759dbf077d",
+                "98cbd803-4b55-4938-a1e1-276ce1f29547",
+                "be51d216-1119-46a8-92de-4f549afa6372",
+                "ebe2a840-39e5-413e-ac76-99a28c57266a"
+              ]
+            },
+            {
+              "text": "Durability and aftercare, materials, covers, warranty and why sockets or prostheses are remade",
+              "videos": 5,
+              "who": [
+                {
+                  "about": "market",
+                  "videos": 5
+                }
+              ],
+              "basedOn": [
+                "G26"
+              ],
+              "videoIds": [
+                "1b28ed9e-e3c4-48a6-b1e1-72bcbaf4550d",
+                "6daeaea8-1b27-41a0-a708-85d004fe0375",
+                "beb44a83-075a-409f-850b-f309aa9f1f3b",
+                "eab375f5-3ff0-41ff-8674-1da8f77772ea",
+                "ebe2a840-39e5-413e-ac76-99a28c57266a"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "sales.triggers",
+      "title": "What tips them into buying",
+      "groups": [
+        {
+          "items": [
+            {
+              "title": "Wear or breakdown",
+              "text": "Replacement or upgrade starts when the one they own becomes painful, worn, unreliable, due for adjustment, broken or obsolete.",
+              "videos": 4,
+              "who": [
+                {
+                  "about": "market",
+                  "videos": 4
+                }
+              ],
+              "basedOn": [
+                "G28"
+              ],
+              "videoIds": [
+                "541e641c-f2e7-4a05-8381-5b8adca8f54c",
+                "5eb6d72d-a6a9-46f3-b7b6-dcecf9931cc8",
+                "5f72b1b5-f91e-4e42-a53f-756c0c7a220d",
+                "eab375f5-3ff0-41ff-8674-1da8f77772ea"
+              ],
+              "tag": "Argued in the Leadership brief",
+              "named": {
+                "brief": "leadership",
+                "idea": "I5"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "sales.rivals",
+      "title": "Who buyers compare you with",
+      "groups": [
+        {
+          "items": [
+            {
+              "title": "Ottobock",
+              "text": "Ottobock microprocessor knees are chosen by above-knee users for dependable walking on hills and other variable terrain, with advanced technology, smooth movement and reliability.",
+              "tag": "Argued in the Leadership brief",
+              "named": {
+                "brief": "leadership",
+                "idea": "I6"
+              },
+              "pill": "Bought for above-knee walking",
+              "videos": 5,
+              "who": [
+                {
+                  "about": "rival:Ottobock",
+                  "videos": 5
+                }
+              ],
+              "basedOn": [
+                "G33",
+                "G34"
+              ],
+              "videoIds": [
+                "944c9b8c-03d3-4185-8e1f-43022987d904",
+                "9bc44c97-793b-4815-b5db-339d6c6fc0b3",
+                "9fe95f4f-f62e-4fd8-afb1-d1bbe38b156f",
+                "c0c3fbef-293a-48f1-b373-504a60cf1b75",
+                "d9d7fcd9-9891-4abc-9dc9-0f23886b8303"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "key": "sales.care",
+      "title": "Language to handle with care",
+      "groups": [
+        {
+          "items": [
+            {
+              "title": "Functionality",
+              "text": "Buyers test it against proper walking, weight support and natural movement.",
+              "videos": 3,
+              "who": [
+                {
+                  "about": "market",
+                  "videos": 3
+                }
+              ],
+              "basedOn": [
+                "G40"
+              ],
+              "videoIds": [
+                "20820e55-cd90-47bf-b647-50fd8d90c09d",
+                "2d947680-9fbc-4742-b942-616d0e1e37e0",
+                "347c2cbe-e208-4567-b5e5-bce9c44ab00f"
+              ],
+              "tag": "Argued in the Marketing brief",
+              "named": {
+                "brief": "marketing",
+                "idea": "I4"
+              }
+            },
+            {
+              "title": "Electronic",
+              "text": "Buyers ask about charging, controls, motorised action and what the electronics do.",
+              "videos": 3,
+              "who": [
+                {
+                  "about": "market",
+                  "videos": 3
+                }
+              ],
+              "basedOn": [
+                "G44"
+              ],
+              "videoIds": [
+                "57610b8a-c696-407f-af87-7af726fb3960",
+                "a5c1a510-aad4-4fdf-8249-0ac0ddb6dc1f",
+                "b66c46d9-b7c1-4d36-b320-c8e1570a6427"
+              ],
+              "tag": "Argued in the Marketing brief",
+              "named": {
+                "brief": "marketing",
+                "idea": "I4"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "promptVersion": "monthly_brief_v2",
+  "model": "gpt-5.4"
+}
