@@ -892,15 +892,44 @@ export const runPipeline = inngest.createFunction(
       }
     }
 
+    // The videos this update held: what `anomaly-check` measures against the
+    // trailing runs and `close-run` writes as `videos_scraped`. A gather's own
+    // kept count, above, except on an analysis-only run (below).
+    let updateVideos: number | null = totalVideos
+
     // Analysis-only resume: the corpus check runs against what's already in the DB.
+    //
+    // THE CORPUS IS ONLY THE GUARD, NEVER THE UPDATE'S SIZE (29 Oct). This
+    // step's count used to be written as `videos_scraped` too, so every resume
+    // recorded the tenant's whole corpus as one week's videos (Sealand's 18
+    // Oct resume 11,341 against a usual 1,000 to 1,400), and the trailing
+    // median `thinUpdate` reads rose until Sealand's ordinary Sunday updates of
+    // 27 Sep and 11 Oct read as "well under its usual number of videos" and
+    // were not compared with the months behind them. The size is now the
+    // videos this run's own gather stamped (`videos.run_id`, which the gather's
+    // upsert sets, `discovered` only: within 3% of the kept count every
+    // gathering run recorded, measured on production 29 Oct), so a resume of a
+    // Sunday gather records that Sunday's videos. A rehearsal, which gathered
+    // nothing, records null, which `thinUpdate` reads as not counted rather
+    // than as a zero, so it neither reads thin itself nor drags the median.
+    // A memoised number (a run in flight across the deploy) keeps the old
+    // reading for that run only.
     if (options.skipGather) {
-      totalVideos = await step.run('count-corpus', async () => {
+      const counted = await step.run('count-corpus', async () => {
         const admin = createAdminClient()
         const { count } = await admin
           .from('videos').select('id', { head: true, count: 'exact' })
           .eq('client_id', clientId)
-        return count ?? 0
-      })
+        const { count: held, error: heldError } = await admin
+          .from('videos').select('id', { head: true, count: 'exact' })
+          .eq('client_id', clientId)
+          .eq('run_id', runId)
+          .eq('source', 'discovered')
+        if (heldError) throw new Error(`count-corpus held: ${heldError.message}`)
+        return { corpus: count ?? 0, held: held ?? 0 }
+      }) as { corpus: number; held: number } | number
+      totalVideos = typeof counted === 'number' ? counted : counted.corpus
+      updateVideos = typeof counted === 'number' ? counted : counted.held || null
     }
 
     // No corpus → close as failed, stop (nothing for the analysis passes to chew on).
@@ -1088,7 +1117,7 @@ export const runPipeline = inngest.createFunction(
     //
     //     Non-fatal throughout: a video without a translation is analysed
     //     without one, exactly as before this existed.
-    const translate = { batches: 0, needing: 0, deferred: 0, translated: 0, english: 0, failed: 0, skipped: 0, cost: 0, rateLimited: false, batchesFailed: 0 }
+    const translate = { batches: 0, needing: 0, deferred: 0, translated: 0, english: 0, failed: 0, skipped: 0, outOfTime: 0, cost: 0, rateLimited: false, batchesFailed: 0 }
     // Gated on BOTH flags, like the backfill above it. With transcripts off,
     // Pass A cannot read a transcript at all (`useTranscripts ? … : null`), so
     // translating would pay for up to TRANSLATE_CAP gpt-4.1 calls producing
@@ -1115,7 +1144,7 @@ export const runPipeline = inngest.createFunction(
               // out of retries must not abandon the rest, and its videos simply
               // stay untranslated and re-plan next run.
               .catch((e: unknown) => ({
-                translated: 0, english: 0, skipped: 0, failed: 0, costUsd: 0, rateLimited: false,
+                translated: 0, english: 0, skipped: 0, failed: 0, outOfTime: 0, costUsd: 0, rateLimited: false,
                 errors: [`translate step failed: ${e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200)}`],
                 stepFailed: true,
               })),
@@ -1126,6 +1155,7 @@ export const runPipeline = inngest.createFunction(
           translate.english += r.english
           translate.failed += r.failed
           translate.skipped += r.skipped
+          translate.outOfTime += r.outOfTime
           translate.cost += r.costUsd
           if (r.rateLimited) translate.rateLimited = true
           if ('stepFailed' in r) {
@@ -1162,7 +1192,7 @@ export const runPipeline = inngest.createFunction(
           `[translate] ${plan.needing} needed of ${plan.offered} offered ` +
           `(${plan.excluded.english} already English, ${plan.excluded.exhausted} out of attempts) · ` +
           `${plan.retrying} re-attempts of a recorded failure · ${translate.translated} translated · ${translate.english} detected English · ` +
-          `${translate.failed} failed · ${plan.deferred} deferred by the cap · ~$${translate.cost.toFixed(3)} · ${langs}`,
+          `${translate.failed} failed · ${translate.outOfTime} left for next run by the step clock · ${plan.deferred} deferred by the cap · ~$${translate.cost.toFixed(3)} · ${langs}`,
         )
       }
       // A translation changes what Pass A sees on exactly those videos, and the
@@ -2043,7 +2073,7 @@ export const runPipeline = inngest.createFunction(
           // The videos this update held. `pipeline_runs.videos_scraped` is the
           // same measure on the trailing runs — and is not written until
           // close-run, which is why it is passed in rather than read.
-          updateVideos: totalVideos,
+          updateVideos,
         })
         console.log(`[anomaly-check] ${r.status} — ${r.note}`)
         if (r.baseline?.dropped.length) {
@@ -2410,7 +2440,7 @@ export const runPipeline = inngest.createFunction(
       const close = (extra: Record<string, unknown>) =>
         admin.from('pipeline_runs').update({
           status: runCloseStatus(totalErrors),
-          videos_scraped: totalVideos,
+          videos_scraped: updateVideos,
           completed_at: completedAt,
           // Findings ride along only on a run that is already partial — see
           // closingErrors. error_message stays keyed to the COUNTED errors, so

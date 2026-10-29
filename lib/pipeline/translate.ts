@@ -5,7 +5,8 @@ import { chunk } from '../chunk'
 import { openai } from '../openai'
 import { clipText } from '../gather/transcript'
 import {
-  ANALYSIS_TEMPERATURE, TRANSCRIPT_PROMPT_CHARS, TRANSLATE_BATCH, TRANSLATE_CAP, TRANSLATE_MODEL, estimateCost,
+  ANALYSIS_TEMPERATURE, TRANSCRIPT_PROMPT_CHARS, TRANSLATE_BATCH, TRANSLATE_CALL_CAP_MS, TRANSLATE_CALL_FLOOR_MS, TRANSLATE_CAP,
+  TRANSLATE_MAX_OUTPUT_TOKENS, TRANSLATE_MODEL, TRANSLATE_STEP_BUDGET_MS, estimateCost,
 } from '../config'
 import { normaliseLang } from '../gather/transcript'
 import { dbSafeText } from '../db-text'
@@ -279,6 +280,9 @@ export interface TranslateResult {
   english: number
   skipped: number
   failed: number
+  /** Not attempted: the step's clock ran out before their turn. Not stamped,
+   *  so they re-plan next run. */
+  outOfTime: number
   costUsd: number
   /** True when a 429 was seen — a fact about the account, not the corpus, and
    *  the one condition that degrades a run regardless of the failure ratio. */
@@ -296,21 +300,51 @@ export interface TranslateOutcome {
   prompt: { system: string; user: string }
 }
 
+/** The SDK's options for one call that must end by `deadline`. */
+export interface TranslateRequest { timeout: number; maxRetries: 1; signal: AbortSignal }
+
+/**
+ * The options for the next call of a step that must end by `deadline`, or
+ * null where too little is left to start one (TRANSLATE_CALL_FLOOR_MS).
+ *
+ * Each attempt is held to the lesser of the call's cap and what is left, and
+ * the whole call, the SDK's one retry and its backoff included, is aborted at
+ * the deadline itself. The retry stays because it is what rides out a passing
+ * 429 or 5xx; the signal is what stops it carrying the step past the route's
+ * 300 s, which is how one looping transcript failed a whole run on 28 Oct
+ * (TRANSLATE_CALL_CAP_MS). Shared by the quote steps.
+ */
+export function translateCallOptions(deadline: number, now: number, capMs: number): TranslateRequest | null {
+  const left = deadline - now
+  if (left < TRANSLATE_CALL_FLOOR_MS) return null
+  return { timeout: Math.min(capMs, left), maxRetries: 1, signal: AbortSignal.timeout(left) }
+}
+
 /** One transcript through the model. Returns the detected language and the
  *  translation (null when the text was already English) and what it cost;
- *  throws only on a failure the caller should record per video. */
-export async function translateTranscript(text: string, lang: string | null): Promise<TranslateOutcome> {
+ *  throws only on a failure the caller should record per video. Without a
+ *  `request` (a script) the call keeps its cap and output ceiling, with no
+ *  step clock. */
+export async function translateTranscript(
+  text: string,
+  lang: string | null,
+  request: Omit<TranslateRequest, 'signal'> & { signal?: AbortSignal } = { timeout: TRANSLATE_CALL_CAP_MS, maxRetries: 1 },
+): Promise<TranslateOutcome> {
   const prompt = buildTranslatePrompt(text, lang)
   const startedAt = Date.now()
   const completion = await openai.chat.completions.parse({
     model: TRANSLATE_MODEL,
     temperature: ANALYSIS_TEMPERATURE,
+    // A degenerate generation (one word repeated) stops here, in well under a
+    // minute, and throws the SDK's length error, which is stamped as an
+    // attempt like any other failure (TRANSLATE_MAX_OUTPUT_TOKENS).
+    max_completion_tokens: TRANSLATE_MAX_OUTPUT_TOKENS,
     messages: [
       { role: 'system', content: prompt.system },
       { role: 'user', content: prompt.user },
     ],
     response_format: zodResponseFormat(translationSchema, 'translation'),
-  })
+  }, request)
   const msg = completion.choices[0]?.message
   const parsed = msg?.parsed
   if (!parsed) throw new Error(msg?.refusal ?? 'no parsed translation')
@@ -394,10 +428,10 @@ export async function planTranslateBatches(clientId: string, cap = TRANSLATE_CAP
 /**
  * Translate one batch of videos and write the results.
  *
- * Sequential within the batch (8 × one gpt-4.1 call ≈ 80s, wide margin under
- * the 300s step cap) and idempotent: the selection rule is re-checked on the
- * freshly-read rows, so an Inngest step retry skips what the first attempt
- * already wrote. A per-video failure is stamped into transcript_en_error and
+ * Sequential within the batch, on one clock (TRANSLATE_STEP_BUDGET_MS from
+ * the step's start, `translateCallOptions`), and idempotent: the selection
+ * rule is re-checked on the freshly-read rows, so an Inngest step retry skips
+ * what the first attempt already wrote. A per-video failure is stamped into transcript_en_error and
  * counted — it never sinks the batch, and the video keeps reading as-is.
  *
  * EVERY failure is stamped, including a failed write and including an unexpected
@@ -419,11 +453,14 @@ export async function translateBatch(opts: {
   /** Seams, for the pure-logic test of the write paths. Production passes
    *  neither — the real client and the real model call are the defaults. */
   admin?: ReturnType<typeof createAdminClient>
-  translate?: (text: string, lang: string | null) => Promise<TranslateOutcome>
+  translate?: (text: string, lang: string | null, request?: TranslateRequest) => Promise<TranslateOutcome>
+  now?: () => number
 }): Promise<TranslateResult> {
   const admin = opts.admin ?? createAdminClient()
   const translate = opts.translate ?? translateTranscript
-  const out: TranslateResult = { translated: 0, english: 0, skipped: 0, failed: 0, costUsd: 0, rateLimited: false, errors: [] }
+  const now = opts.now ?? Date.now
+  const deadline = now() + TRANSLATE_STEP_BUDGET_MS
+  const out: TranslateResult = { translated: 0, english: 0, skipped: 0, failed: 0, outOfTime: 0, costUsd: 0, rateLimited: false, errors: [] }
   if (!opts.videoIds.length) return out
 
   /** Record a failure on one row. Writes ONLY the stamped message — never the
@@ -460,10 +497,14 @@ export async function translateBatch(opts: {
   let callIndex = (opts.batchNo ?? 1) * 1000
   for (const v of rows) {
     if (!needsTranslation(v)) { out.skipped++; continue }
+    // Out of time is not a failure of the video: nothing is stamped and the
+    // next run's plan offers it again.
+    const request = translateCallOptions(deadline, now(), TRANSLATE_CALL_CAP_MS)
+    if (!request) { out.outOfTime++; continue }
     callIndex++
     let r: TranslateOutcome
     try {
-      r = await translate(v.transcript!, v.transcript_lang)
+      r = await translate(v.transcript!, v.transcript_lang, request)
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       out.failed++

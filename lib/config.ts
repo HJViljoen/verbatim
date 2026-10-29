@@ -321,6 +321,31 @@ export const TRANSLATE_PARALLEL = 4
  *  clear the backlog instead of the first one. */
 export const TRANSLATE_CAP = 400
 
+/** One transcript translation's hard cap, and its output ceiling (29 Oct).
+ *  Neither existed: the call ran on the SDK's defaults, ten minutes and two
+ *  silent retries, with no output limit but the model's own 32,768 tokens. On
+ *  28 Oct a Swahili TikTok whose transcript is one word repeated sent the
+ *  model into the same loop on every attempt, each attempt generated until
+ *  Vercel killed the step at 300 s, and the third kill failed Sealand's whole
+ *  resumed run with a 504. The kill lands before translateBatch's own catch,
+ *  so nothing stamped the video either, and the next run would have died on
+ *  it again. The ledger, 60 days to 29 Oct (3,256 calls): output p99 1,084
+ *  tokens, max 2,215; duration p99 5.7 s, max 20.3 s. So 4,000 tokens and
+ *  60 s, about twice and three times the worst real call: a looping
+ *  generation now stops at the ceiling inside a minute and is stamped as an
+ *  attempt like any other failure. */
+export const TRANSLATE_CALL_CAP_MS = 60_000
+export const TRANSLATE_MAX_OUTPUT_TOKENS = 4_000
+
+/** How long a translate step's calls may run, from the step's start. A call
+ *  starts only with TRANSLATE_CALL_FLOOR_MS left, and is aborted at the budget
+ *  whatever its own cap says (an SDK retry and its backoff included), so the
+ *  step ends inside the route's 300 s with room for its writes. A video left
+ *  with no time is not attempted and not stamped: it re-plans next run. The
+ *  quote steps share it. */
+export const TRANSLATE_STEP_BUDGET_MS = 240_000
+export const TRANSLATE_CALL_FLOOR_MS = 15_000
+
 // --- Quote translation (Phase 1 WP6, item 8, decision A, 2026-09-18) ---------
 // A DIFFERENT THING FROM THE FOUR CONSTANTS ABOVE, and the numbers look alike
 // enough to be wired together by accident. Those translate a TRANSCRIPT — a
@@ -359,6 +384,14 @@ export const TRANSLATE_QUOTES_CALLS_PER_STEP = 8
  *  5-slot Inngest concurrency shared with the rest of the pipeline, and this
  *  step maintains a cache rather than producing the report. */
 export const TRANSLATE_QUOTES_PARALLEL = 2
+
+/** One quote-translation call's cap and output ceiling: TRANSLATE_CALL_CAP_MS's
+ *  rule, on this call's own ledger (60 days to 29 Oct, 1,941 calls): output p99
+ *  730 tokens, max 1,991; duration p99 9.0 s, max 58.1 s. Eight calls run one
+ *  after another in a step, so the step budget, not this cap, is what keeps
+ *  the step inside 300 s; this keeps one slow call from eating it. */
+export const TRANSLATE_QUOTES_CALL_CAP_MS = 90_000
+export const TRANSLATE_QUOTES_MAX_OUTPUT_TOKENS = 4_000
 
 /** Runaway BACKSTOP in TEXTS per run — TRANSLATE_CAP's shape, not a quality
  *  budget. TEXTS, because a text is what is billed and what a cache row is:

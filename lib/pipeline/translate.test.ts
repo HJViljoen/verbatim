@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
   needsTranslation, isEnglishLang, buildTranslatePrompt, planTranslation, translatePlanCounts, translateDeferred, translateAttempts,
-  translateErrorStamp, translationPatch, translateBatch, TRANSLATE_MAX_ATTEMPTS,
+  translateErrorStamp, translationPatch, translateBatch, translateCallOptions, TRANSLATE_MAX_ATTEMPTS,
   type TranslatableVideo, type TranslateOutcome,
 } from './translate'
-import { TRANSCRIPT_PROMPT_CHARS } from '../config'
+import { TRANSCRIPT_PROMPT_CHARS, TRANSLATE_CALL_CAP_MS, TRANSLATE_CALL_FLOOR_MS } from '../config'
 
 // Translation selection (WP6, 2026-09-11). The rule is stated ONCE, here, and
 // the Inngest plan step's SQL is only an index-friendly pre-filter over it —
@@ -369,6 +369,43 @@ describe('translateBatch write paths', () => {
     expect(writes.some((w) => w.table === 'ai_call_log')).toBe(true)
   })
 
+  // 28 Oct, run f9626309: a Swahili transcript of one word repeated looped the
+  // model on every attempt, and with no output ceiling and no timeout each
+  // attempt ran until Vercel killed the step, so nothing was stamped and the
+  // run failed. With the ceiling the SDK throws its length error instead.
+  it('stamps a generation that hit the output ceiling as an attempt', async () => {
+    const { admin, writes } = fakeAdmin([row()])
+    const r = await translateBatch({
+      clientId: 'c', runId: null, videoIds: ['v1'], admin,
+      translate: async () => { throw new Error('Could not parse response content as the length limit was reached') },
+    })
+    expect(r.failed).toBe(1)
+    expect(r.rateLimited).toBe(false)
+    expect(writes[0].patch).toEqual({ transcript_en_error: 'attempt 1/3: Could not parse response content as the length limit was reached' })
+  })
+
+  it('holds every call to the step clock and leaves what it cannot reach for the next run', async () => {
+    const { admin, writes } = fakeAdmin([row({ id: 'v1' }), row({ id: 'v2' }), row({ id: 'v3' })])
+    let t = 0
+    const timeouts: number[] = []
+    const r = await translateBatch({
+      clientId: 'c', runId: null, videoIds: ['v1', 'v2', 'v3'], admin,
+      now: () => t,
+      // v1 takes 200 s of the step's 240, so v2 gets the 40 s left, not its
+      // 60 s cap; v2 takes 30 s, which leaves v3 under the floor.
+      translate: async (_text, _lang, request) => {
+        timeouts.push(request!.timeout)
+        t += timeouts.length === 1 ? 200_000 : 30_000
+        return outcome('Hello.')
+      },
+    })
+    expect(timeouts).toEqual([TRANSLATE_CALL_CAP_MS, 40_000])
+    expect(r.translated).toBe(2)
+    expect(r.outOfTime).toBe(1)
+    // v3 is neither translated nor stamped: the next run's plan offers it.
+    expect(writes.filter((w) => w.table === 'videos').map((w) => w.id)).toEqual(['v1', 'v2'])
+  })
+
   it('re-reads the rule at write distance: an already-translated row is skipped, a failed one is not', async () => {
     const { admin } = fakeAdmin([
       row({ id: 'v1', transcript_en: 'Hello.' }),
@@ -383,6 +420,20 @@ describe('translateBatch write paths', () => {
     expect(calls).toBe(1)       // only v2
     expect(r.skipped).toBe(2)
     expect(r.translated).toBe(1)
+  })
+})
+
+describe('translateCallOptions', () => {
+  it('gives a call its cap while the step has room, and what is left after that', () => {
+    expect(translateCallOptions(240_000, 0, TRANSLATE_CALL_CAP_MS)?.timeout).toBe(TRANSLATE_CALL_CAP_MS)
+    expect(translateCallOptions(240_000, 200_000, TRANSLATE_CALL_CAP_MS)?.timeout).toBe(40_000)
+    expect(translateCallOptions(240_000, 0, TRANSLATE_CALL_CAP_MS)?.maxRetries).toBe(1)
+  })
+
+  it('starts nothing with less than the floor left', () => {
+    expect(translateCallOptions(240_000, 240_000 - TRANSLATE_CALL_FLOOR_MS, TRANSLATE_CALL_CAP_MS)).not.toBeNull()
+    expect(translateCallOptions(240_000, 240_000 - TRANSLATE_CALL_FLOOR_MS + 1, TRANSLATE_CALL_CAP_MS)).toBeNull()
+    expect(translateCallOptions(240_000, 300_000, TRANSLATE_CALL_CAP_MS)).toBeNull()
   })
 })
 

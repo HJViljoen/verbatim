@@ -5,15 +5,18 @@ import { chunk } from '../chunk'
 import { openai } from '../openai'
 import { normaliseLang } from '../gather/transcript'
 import { normaliseQuoteText, quoteTextHash } from '../quote-text'
-import { isEnglishLang } from './translate'
+import { isEnglishLang, translateCallOptions, type TranslateRequest } from './translate'
 import { dbSafeText } from '../db-text'
 import { logAiCall } from './ai-log'
 import {
   ANALYSIS_TEMPERATURE,
   TRANSLATE_QUOTES_BATCH,
   TRANSLATE_QUOTES_CALLS_PER_STEP,
+  TRANSLATE_QUOTES_CALL_CAP_MS,
   TRANSLATE_QUOTES_CAP,
+  TRANSLATE_QUOTES_MAX_OUTPUT_TOKENS,
   TRANSLATE_QUOTES_MODEL,
+  TRANSLATE_STEP_BUDGET_MS,
   estimateCost,
 } from '../config'
 
@@ -258,19 +261,24 @@ export interface QuoteTranslationOutcome {
 
 /** One batch through the model. Throws only on a failure the caller records for
  *  the whole batch — a per-item problem comes back as a result the reconciler
- *  drops. */
-export async function translateQuoteBatchCall(items: readonly { text: string }[]): Promise<QuoteTranslationOutcome> {
+ *  drops. Held to its cap and output ceiling, and to the step's clock where the
+ *  step passes one (TRANSLATE_QUOTES_CALL_CAP_MS). */
+export async function translateQuoteBatchCall(
+  items: readonly { text: string }[],
+  request: Omit<TranslateRequest, 'signal'> & { signal?: AbortSignal } = { timeout: TRANSLATE_QUOTES_CALL_CAP_MS, maxRetries: 1 },
+): Promise<QuoteTranslationOutcome> {
   const prompt = buildQuoteTranslatePrompt(items)
   const startedAt = Date.now()
   const completion = await openai.chat.completions.parse({
     model: TRANSLATE_QUOTES_MODEL,
     temperature: ANALYSIS_TEMPERATURE,
+    max_completion_tokens: TRANSLATE_QUOTES_MAX_OUTPUT_TOKENS,
     messages: [
       { role: 'system', content: prompt.system },
       { role: 'user', content: prompt.user },
     ],
     response_format: zodResponseFormat(quoteTranslationSchema, 'quote_translations'),
-  })
+  }, request)
   const msg = completion.choices[0]?.message
   const parsed = msg?.parsed
   if (!parsed) throw new Error(msg?.refusal ?? 'no parsed quote translations')
@@ -559,10 +567,13 @@ export async function translateQuotesBatch(opts: {
   dryRun?: boolean
   /** Seams for the pure-logic test. Production passes neither. */
   admin?: Admin
-  translate?: (items: readonly { text: string }[]) => Promise<QuoteTranslationOutcome>
+  translate?: (items: readonly { text: string }[], request?: TranslateRequest) => Promise<QuoteTranslationOutcome>
+  now?: () => number
 }): Promise<QuoteTranslationResult> {
   const admin = opts.admin ?? createAdminClient()
   const call = opts.translate ?? translateQuoteBatchCall
+  const now = opts.now ?? Date.now
+  const deadline = now() + TRANSLATE_STEP_BUDGET_MS
   const out = emptyResult()
   if (!opts.commentIds.length) return out
 
@@ -606,11 +617,16 @@ export async function translateQuotesBatch(opts: {
   if (!targets.length) return out
 
   let callIndex = (opts.batchNo ?? 1) * 1000
+  let outOfTime = 0
   for (const items of chunk(targets, TRANSLATE_QUOTES_BATCH)) {
+    // The step's clock ran out: these texts stay uncached and are planned
+    // again next run, which is this file's retry.
+    const request = translateCallOptions(deadline, now(), TRANSLATE_QUOTES_CALL_CAP_MS)
+    if (!request) { outOfTime += items.length; continue }
     callIndex++
     let r: QuoteTranslationOutcome
     try {
-      r = await call(items)
+      r = await call(items, request)
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       out.failed += items.length
@@ -669,6 +685,10 @@ export async function translateQuotesBatch(opts: {
     } catch (e) {
       console.warn(`[translate-quotes] ai_call_log insert threw: ${e instanceof Error ? e.message : String(e)}`)
     }
+  }
+  if (outOfTime) {
+    out.failed += outOfTime
+    out.errors.push(`translate-quotes: the step ran out of time with ${outOfTime} texts left for the next run`)
   }
   return out
 }

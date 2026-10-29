@@ -381,6 +381,28 @@ describe('the round trip on a 30-comment corpus', () => {
     expect(tables.comment_translations.rows).toEqual([])
   })
 
+  // 29 Oct: these calls had no bound, eight to a step, one after another.
+  it('holds every call to the step clock and leaves what it cannot reach for the next run', async () => {
+    const f = corpus()
+    const tables = tablesFor(f)
+    const admin = fakeAdmin(tables)
+    let t = 0
+    const timeouts: number[] = []
+    const model = fakeModel()
+    const r = await translateQuotesBatch({
+      clientId: 'tenant', runId: 'r', commentIds: f.comments.map((c) => c.id as string), admin,
+      now: () => t,
+      // The first call takes 230 s of the step's 240, so the second has
+      // under the floor left and is never started.
+      translate: async (items, request) => { timeouts.push(request!.timeout); t += 230_000; return model(items) },
+    })
+    expect(timeouts).toEqual([90_000])
+    expect(r.translated + r.english).toBe(25)
+    expect(r.failed).toBe(5)
+    expect(r.errors).toEqual(['translate-quotes: the step ran out of time with 5 texts left for the next run'])
+    expect(tables.comment_translations.rows).toHaveLength(25)
+  })
+
   it('the dry run counts what it would write and writes nothing', async () => {
     const f = corpus()
     const tables = tablesFor(f)
