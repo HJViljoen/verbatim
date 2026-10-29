@@ -925,9 +925,11 @@ export const runPipeline = inngest.createFunction(
           .eq('client_id', clientId)
           .eq('run_id', runId)
           .eq('source', 'discovered')
-        if (heldError) throw new Error(`count-corpus held: ${heldError.message}`)
-        return { corpus: count ?? 0, held: held ?? 0 }
-      }) as { corpus: number; held: number } | number
+        // A bookkeeping number: a failed read records the update as not
+        // counted rather than failing the run.
+        if (heldError) console.warn(`[count-corpus] the update's own videos could not be counted: ${heldError.message}`)
+        return { corpus: count ?? 0, held: heldError ? null : held ?? 0 }
+      }) as { corpus: number; held: number | null } | number
       totalVideos = typeof counted === 'number' ? counted : counted.corpus
       updateVideos = typeof counted === 'number' ? counted : counted.held || null
     }
@@ -1155,7 +1157,8 @@ export const runPipeline = inngest.createFunction(
           translate.english += r.english
           translate.failed += r.failed
           translate.skipped += r.skipped
-          translate.outOfTime += r.outOfTime
+          // `?? 0`: a step memoised before 29 Oct carries no outOfTime.
+          translate.outOfTime += r.outOfTime ?? 0
           translate.cost += r.costUsd
           if (r.rateLimited) translate.rateLimited = true
           if ('stepFailed' in r) {

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   needsTranslation, isEnglishLang, buildTranslatePrompt, planTranslation, translatePlanCounts, translateDeferred, translateAttempts,
-  translateErrorStamp, translationPatch, translateBatch, translateCallOptions, TRANSLATE_MAX_ATTEMPTS,
+  translateErrorStamp, translationPatch, translateBatch, translateCallOptions, untilAborted, cutByClock, TRANSLATE_MAX_ATTEMPTS,
   type TranslatableVideo, type TranslateOutcome,
 } from './translate'
 import { TRANSCRIPT_PROMPT_CHARS, TRANSLATE_CALL_CAP_MS, TRANSLATE_CALL_FLOOR_MS } from '../config'
@@ -406,6 +406,25 @@ describe('translateBatch write paths', () => {
     expect(writes.filter((w) => w.table === 'videos').map((w) => w.id)).toEqual(['v1', 'v2'])
   })
 
+  it('costs a video none of its attempts when the step clock cut its call short', async () => {
+    const { admin, writes } = fakeAdmin([row({ id: 'v1' }), row({ id: 'v2' })])
+    let t = 0
+    const r = await translateBatch({
+      clientId: 'c', runId: null, videoIds: ['v1', 'v2'], admin,
+      now: () => t,
+      // v1 takes 200 s; v2's attempt, shortened to the 40 s left, times out.
+      translate: async (_text, _lang, request) => {
+        if (request!.timeout < TRANSLATE_CALL_CAP_MS) throw new Error('Request timed out.')
+        t += 200_000
+        return outcome('Hello.')
+      },
+    })
+    expect(r.translated).toBe(1)
+    expect(r.outOfTime).toBe(1)
+    expect(r.failed).toBe(0)
+    expect(writes.filter((w) => w.table === 'videos').map((w) => w.id)).toEqual(['v1'])
+  })
+
   it('re-reads the rule at write distance: an already-translated row is skipped, a failed one is not', async () => {
     const { admin } = fakeAdmin([
       row({ id: 'v1', transcript_en: 'Hello.' }),
@@ -427,13 +446,35 @@ describe('translateCallOptions', () => {
   it('gives a call its cap while the step has room, and what is left after that', () => {
     expect(translateCallOptions(240_000, 0, TRANSLATE_CALL_CAP_MS)?.timeout).toBe(TRANSLATE_CALL_CAP_MS)
     expect(translateCallOptions(240_000, 200_000, TRANSLATE_CALL_CAP_MS)?.timeout).toBe(40_000)
-    expect(translateCallOptions(240_000, 0, TRANSLATE_CALL_CAP_MS)?.maxRetries).toBe(1)
+    expect(translateCallOptions(240_000, 0, TRANSLATE_CALL_CAP_MS)?.maxRetries).toBe(2)
   })
 
   it('starts nothing with less than the floor left', () => {
     expect(translateCallOptions(240_000, 240_000 - TRANSLATE_CALL_FLOOR_MS, TRANSLATE_CALL_CAP_MS)).not.toBeNull()
     expect(translateCallOptions(240_000, 240_000 - TRANSLATE_CALL_FLOOR_MS + 1, TRANSLATE_CALL_CAP_MS)).toBeNull()
     expect(translateCallOptions(240_000, 300_000, TRANSLATE_CALL_CAP_MS)).toBeNull()
+  })
+
+  // The SDK sleeps out a server's Retry-After where its signal cannot reach.
+  it('ends a call at the abort whatever the call is still doing', async () => {
+    const ctrl = new AbortController()
+    const never = new Promise<string>(() => {})
+    const raced = untilAborted(never, ctrl.signal)
+    ctrl.abort()
+    await expect(raced).rejects.toThrow('Request was aborted.')
+    await expect(untilAborted(Promise.resolve('ok'), new AbortController().signal)).resolves.toBe('ok')
+  })
+
+  it('blames the clock only for an abort, or a timeout the deadline shortened', () => {
+    const live = { timeout: TRANSLATE_CALL_CAP_MS, maxRetries: 2 as const, signal: new AbortController().signal }
+    const shortened = { ...live, timeout: 40_000 }
+    const ctrl = new AbortController()
+    ctrl.abort()
+    expect(cutByClock({ ...live, signal: ctrl.signal }, TRANSLATE_CALL_CAP_MS, new Error('anything'))).toBe(true)
+    expect(cutByClock(shortened, TRANSLATE_CALL_CAP_MS, new Error('Request timed out.'))).toBe(true)
+    // A full-length attempt that timed out is the video's, and so is a length error.
+    expect(cutByClock(live, TRANSLATE_CALL_CAP_MS, new Error('Request timed out.'))).toBe(false)
+    expect(cutByClock(shortened, TRANSLATE_CALL_CAP_MS, new Error('the length limit was reached'))).toBe(false)
   })
 })
 

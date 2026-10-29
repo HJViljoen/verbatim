@@ -5,7 +5,7 @@ import { chunk } from '../chunk'
 import { openai } from '../openai'
 import { normaliseLang } from '../gather/transcript'
 import { normaliseQuoteText, quoteTextHash } from '../quote-text'
-import { isEnglishLang, translateCallOptions, type TranslateRequest } from './translate'
+import { cutByClock, isEnglishLang, translateCallOptions, untilAborted, type TranslateRequest } from './translate'
 import { dbSafeText } from '../db-text'
 import { logAiCall } from './ai-log'
 import {
@@ -265,11 +265,11 @@ export interface QuoteTranslationOutcome {
  *  step passes one (TRANSLATE_QUOTES_CALL_CAP_MS). */
 export async function translateQuoteBatchCall(
   items: readonly { text: string }[],
-  request: Omit<TranslateRequest, 'signal'> & { signal?: AbortSignal } = { timeout: TRANSLATE_QUOTES_CALL_CAP_MS, maxRetries: 1 },
+  request: Omit<TranslateRequest, 'signal'> & { signal?: AbortSignal } = { timeout: TRANSLATE_QUOTES_CALL_CAP_MS, maxRetries: 2 },
 ): Promise<QuoteTranslationOutcome> {
   const prompt = buildQuoteTranslatePrompt(items)
   const startedAt = Date.now()
-  const completion = await openai.chat.completions.parse({
+  const completion = await untilAborted(openai.chat.completions.parse({
     model: TRANSLATE_QUOTES_MODEL,
     temperature: ANALYSIS_TEMPERATURE,
     max_completion_tokens: TRANSLATE_QUOTES_MAX_OUTPUT_TOKENS,
@@ -278,7 +278,7 @@ export async function translateQuoteBatchCall(
       { role: 'user', content: prompt.user },
     ],
     response_format: zodResponseFormat(quoteTranslationSchema, 'quote_translations'),
-  }, request)
+  }, request), request.signal)
   const msg = completion.choices[0]?.message
   const parsed = msg?.parsed
   if (!parsed) throw new Error(msg?.refusal ?? 'no parsed quote translations')
@@ -628,6 +628,7 @@ export async function translateQuotesBatch(opts: {
     try {
       r = await call(items, request)
     } catch (e) {
+      if (cutByClock(request, TRANSLATE_QUOTES_CALL_CAP_MS, e)) { outOfTime += items.length; continue }
       const msg = e instanceof Error ? e.message : String(e)
       out.failed += items.length
       if (isRateLimited(msg)) out.rateLimited = true

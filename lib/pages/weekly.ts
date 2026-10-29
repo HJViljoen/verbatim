@@ -516,7 +516,7 @@ export async function loadWeekly(scope: Scope): Promise<WeeklyData | null> {
   // ── section 1 ───────────────────────────────────────────────────────────
   // THE SAME QUANTITY THE STEP ITSELF PASSES, and it is deliberately
   // `videos_scraped`. `UpdateSize.analysedVideos` is misleadingly NAMED — the
-  // pipeline hands `runAnomalyCheck` its `totalVideos`, which is the number
+  // pipeline hands `runAnomalyCheck` its `updateVideos`, which is the number
   // `close-run` writes into `pipeline_runs.videos_scraped` for exactly this
   // comparison ("`pipeline_runs.videos_scraped` is the same measure on the
   // trailing runs", inngest/functions/pipeline.ts) — so this read and the

@@ -301,23 +301,50 @@ export interface TranslateOutcome {
 }
 
 /** The SDK's options for one call that must end by `deadline`. */
-export interface TranslateRequest { timeout: number; maxRetries: 1; signal: AbortSignal }
+export interface TranslateRequest { timeout: number; maxRetries: 2; signal: AbortSignal }
 
 /**
  * The options for the next call of a step that must end by `deadline`, or
  * null where too little is left to start one (TRANSLATE_CALL_FLOOR_MS).
  *
  * Each attempt is held to the lesser of the call's cap and what is left, and
- * the whole call, the SDK's one retry and its backoff included, is aborted at
- * the deadline itself. The retry stays because it is what rides out a passing
- * 429 or 5xx; the signal is what stops it carrying the step past the route's
- * 300 s, which is how one looping transcript failed a whole run on 28 Oct
+ * the whole call, the SDK's retries and their backoff included, ends at the
+ * deadline itself (the signal, and `untilAborted` for the backoff). The SDK's
+ * own two retries stay because they are what rides out a passing 429 or 5xx;
+ * the deadline is what stops them carrying the step past the route's 300 s,
+ * which is how one looping transcript failed a whole run on 28 Oct
  * (TRANSLATE_CALL_CAP_MS). Shared by the quote steps.
  */
 export function translateCallOptions(deadline: number, now: number, capMs: number): TranslateRequest | null {
   const left = deadline - now
   if (left < TRANSLATE_CALL_FLOOR_MS) return null
-  return { timeout: Math.min(capMs, left), maxRetries: 1, signal: AbortSignal.timeout(left) }
+  return { timeout: Math.min(capMs, left), maxRetries: 2, signal: AbortSignal.timeout(left) }
+}
+
+/** A call, ended when `signal` aborts whatever the SDK is doing. The SDK
+ *  checks its signal on a request, but waits out a server's Retry-After (up
+ *  to 60 s) on a plain sleep the signal does not reach, so a 429 just before
+ *  the deadline could carry the step past 300 s (review of 29 Oct). The
+ *  rejection is the SDK's own wording for an abort. */
+export function untilAborted<T>(call: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (!signal) return call
+  return Promise.race([
+    call,
+    new Promise<never>((_, reject) => {
+      const abort = () => reject(new Error('Request was aborted.'))
+      if (signal.aborted) abort()
+      else signal.addEventListener('abort', abort, { once: true })
+    }),
+  ])
+}
+
+/** Did the step's clock end this call, rather than anything about its input?
+ *  The deadline's abort, or a timeout on an attempt the deadline had already
+ *  shortened below its cap. */
+export function cutByClock(request: TranslateRequest, capMs: number, e: unknown): boolean {
+  if (request.signal.aborted) return true
+  const msg = e instanceof Error ? e.message : String(e)
+  return request.timeout < capMs && /timed out|aborted/i.test(msg)
 }
 
 /** One transcript through the model. Returns the detected language and the
@@ -328,11 +355,11 @@ export function translateCallOptions(deadline: number, now: number, capMs: numbe
 export async function translateTranscript(
   text: string,
   lang: string | null,
-  request: Omit<TranslateRequest, 'signal'> & { signal?: AbortSignal } = { timeout: TRANSLATE_CALL_CAP_MS, maxRetries: 1 },
+  request: Omit<TranslateRequest, 'signal'> & { signal?: AbortSignal } = { timeout: TRANSLATE_CALL_CAP_MS, maxRetries: 2 },
 ): Promise<TranslateOutcome> {
   const prompt = buildTranslatePrompt(text, lang)
   const startedAt = Date.now()
-  const completion = await openai.chat.completions.parse({
+  const completion = await untilAborted(openai.chat.completions.parse({
     model: TRANSLATE_MODEL,
     temperature: ANALYSIS_TEMPERATURE,
     // A degenerate generation (one word repeated) stops here, in well under a
@@ -344,7 +371,7 @@ export async function translateTranscript(
       { role: 'user', content: prompt.user },
     ],
     response_format: zodResponseFormat(translationSchema, 'translation'),
-  }, request)
+  }, request), request.signal)
   const msg = completion.choices[0]?.message
   const parsed = msg?.parsed
   if (!parsed) throw new Error(msg?.refusal ?? 'no parsed translation')
@@ -506,6 +533,9 @@ export async function translateBatch(opts: {
     try {
       r = await translate(v.transcript!, v.transcript_lang, request)
     } catch (e) {
+      // Ended by the step's clock: a fact about the step, not the video, so
+      // it costs none of the video's attempts and re-plans next run.
+      if (cutByClock(request, TRANSLATE_CALL_CAP_MS, e)) { out.outOfTime++; continue }
       const msg = e instanceof Error ? e.message : String(e)
       out.failed++
       if (isRateLimited(msg)) out.rateLimited = true
