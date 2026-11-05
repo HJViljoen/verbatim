@@ -179,6 +179,16 @@ describe('a brand\'s page (G3-Voices-Brand)', () => {
     expect(html).toContain('data-copy="stored" data-slot="pass_c_finding"')
   })
 
+  // The month compared with is the month before the one read, whether or not
+  // the brand had a reading then: Patagonia's page, with no September row,
+  // once said "October's alone, not compared with October" (5 Nov).
+  it('with no reading last month, every "compared with" names the month before, never the month read', () => {
+    const t = renderText(brand({ ...brandFixture(), prevNamed: null }))
+    expect(t).toContain('October’s alone, not compared with September')
+    expect(t).toContain('October’s alone: these counts are not compared with September.')
+    expect(t).not.toMatch(/compared with October|against October/)
+  })
+
   // A level is a k of its own n: named at all is the row's `k_any` of its
   // `n` (never of another read's market count), and each cross's head names
   // the base its rows are of (the lens's), as the root's panel did.

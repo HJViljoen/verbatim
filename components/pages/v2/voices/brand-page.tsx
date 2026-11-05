@@ -46,6 +46,12 @@ export const brandNotCompared = (month: string, prev: string): string => `${mont
  *  "October's alone: these counts are not compared with September." Pure. */
 export const brandKindsNotCompared = (month: string, prev: string): string => `${month}’s alone: these counts are not compared with ${prev}.`
 
+/** The month a brand's page compares with: always the month before the one
+ *  it reads (`prevMonth`), named in full. Never the month's own name: a brand
+ *  with no reading last month (`prevNamed` null) once printed "October's
+ *  alone, not compared with October". Pure. */
+export const brandCompareMonth = (page: Pick<BrandPage, 'month'>): string => longMonth(prevMonth(page.month.month))
+
 const sentence = (s: string): string => `${s.charAt(0).toUpperCase()}${s.slice(1)}`
 
 /** The month bars' drawing: the share over each bar, "k of n" under it, a
@@ -111,7 +117,7 @@ function Header({ page }: { page: BrandPage }) {
           </HubFig>
           <HubFig>
             <div className={cn(FW, 'text-muted-foreground')}>No comparison</div>
-            <div className={cn(FL, 'text-muted-foreground')}>against {longMonth(prevMonth(page.month.month))}</div>
+            <div className={cn(FL, 'text-muted-foreground')}>against {brandCompareMonth(page)}</div>
           </HubFig>
           <HubFig>
             <EmptyFigure />
@@ -142,7 +148,7 @@ function Header({ page }: { page: BrandPage }) {
                   : <div data-copy="verdict" className={cn(FW, '[&>span]:text-[length:inherit] [&>span]:leading-[inherit] [&>span]:font-[inherit]')}><MovementBadge verdict={v} unit="pts" good={page.you ? 'up' : 'neutral'} bandTip /></div>}
                 <div className={FL}>
                   {nonAnswer?.change != null ? <><span data-copy="verdict" className="whitespace-nowrap">{signedChange(nonAnswer.change, 'pts')}</span> </> : null}
-                  against {longMonth(prev?.month ?? page.month.month)}
+                  against {brandCompareMonth(page)}
                 </div>
                 {prev ? <div className={FS}><LevelText k={prev.k} n={prev.n} /> in {longMonth(prev.month)}</div> : null}
               </>
@@ -167,7 +173,7 @@ function Header({ page }: { page: BrandPage }) {
                 {/* Read on base `any`, which carries no verdict: the count
                     is not compared, and no reason is given (the board's
                     "too few to set against" named one the code never tests). */}
-                <div className={FS}>{brandNotCompared(longMonth(page.month.month), longMonth(prev?.month ?? page.month.month))}</div>
+                <div className={FS}>{brandNotCompared(longMonth(page.month.month), brandCompareMonth(page))}</div>
               </>
             ) : <p className={cn(FL, 'm-0 text-muted-foreground')}>How people treat it is not read yet.</p>}
           </HubFig>
@@ -269,7 +275,7 @@ function WhoTalks({ page }: { page: BrandPage }) {
 function VerdictLine({ page }: { page: BrandPage }) {
   const v = page.verdict
   if (!v || v.state === 'refused') return null
-  const prev = longMonth(page.prevNamed?.month ?? page.month.month)
+  const prev = brandCompareMonth(page)
   const nonAnswer = nonAnswerParts(v, 'pts')
   return (
     <p data-verdict-line="" className="m-0 text-[13px] text-secondary-foreground">
@@ -313,7 +319,7 @@ function Numbers({ page }: { page: BrandPage }) {
     )
   }
   const bars = monthBars(page.months)
-  const prev = longMonth(page.prevNamed?.month ?? page.month.month)
+  const prev = brandCompareMonth(page)
   return (
     <section aria-label={`${page.label} in numbers`} className={PAGE_CARD}>
       <div className="grid grid-cols-1 gap-11 max-sm:gap-0 min-[1180px]:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
