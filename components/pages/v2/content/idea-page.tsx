@@ -14,7 +14,7 @@ import {
 import { subAnchor } from '@/lib/pages/v2/content-address'
 import { surface } from '@/lib/nav'
 import { cn } from '@/lib/utils'
-import { OwnTouchLine } from './ideas'
+import { OwnTouchLine, weeksOverlapNote } from './ideas'
 import { AskCard, ContentLevelTile, ContentMissing, ContentSectionHead, QuestionGlyph } from './level'
 import { OLINK } from './parts'
 
@@ -253,6 +253,9 @@ function NumbersCard({ page }: { page: IdeaPage }) {
               <SpikeBars weeks={page.weeks} counts="all" size="phone" ghost highlightLast={false} className="sm:hidden" label="Market videos a week where it came up" />
               {four && page.month ? (
                 <p className="m-0 text-[12.5px] text-muted-foreground"><span data-copy="figure" className="font-mono">{fmtInt(four.k)}</span> over the four weeks · <span data-copy="figure" className="font-mono">{fmtInt(page.month.k)}</span> {page.typicalWords}</p>
+              ) : null}
+              {four && weeksOverlapNote(page.weeks, four.k) ? (
+                <p data-weeks-overlap="" className="m-0 text-[12px] leading-[1.45] text-muted-foreground"><span data-copy="figure">{weeksOverlapNote(page.weeks, four.k)}</span></p>
               ) : null}
             </>
           ) : <p className={GAPLINE}>Its weeks could not be counted just now.</p>}

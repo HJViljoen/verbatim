@@ -38,6 +38,15 @@ export function OwnTouchLine({ own }: { own: OwnTouch }) {
   return <span><Fig>{fmtInt(own.touched)}</Fig> of your <Fig>{fmtInt(own.posts)}</Fig> posts {when} touched on it</span>
 }
 
+/** Under the weekly bars, only where they add up to more than the four
+ *  weeks' total: a video is counted in every week it had comments in, and
+ *  the total counts it once (5 Nov: Sealand's first idea drew 8 + 1 + 2 + 5
+ *  beside "15 over the four weeks"). Null where they do not. Pure. */
+export function weeksOverlapNote(weeks: readonly { count: number | null }[], total: number): string | null {
+  const sum = weeks.reduce((a, w) => a + (w.count ?? 0), 0)
+  return sum > total ? `A video commented on in two of these weeks counts in both, so the weeks add up to more than ${fmtInt(total)}.` : null
+}
+
 /** The figure over the days the ideas read, with its month under it, or the
  *  month's alone. The four weeks never print without their month (decision
  *  1): no month, no four-week figure. */
@@ -90,6 +99,9 @@ export function IdeaCardView({ card, month, readLabel, style }: {
           </div>
         ) : null}
       </div>
+      {card.weeks && card.read && readLabel && card.month && weeksOverlapNote(card.weeks, card.read.k) ? (
+        <p data-weeks-overlap="" className="m-0 -mt-1 text-[12px] leading-[1.4] text-muted-foreground"><span data-copy="figure">{weeksOverlapNote(card.weeks, card.read.k)}</span></p>
+      ) : null}
       <div className="flex flex-col border-t border-track">
         <Fact name="Who's asking"><WhoAsks groups={card.groups} /></Fact>
         <Fact name="Your posts"><OwnTouchLine own={card.own} /></Fact>

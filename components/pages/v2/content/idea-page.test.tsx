@@ -6,6 +6,7 @@ import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
 import { IDEA_MISSING, IDEA_NOT_ON, IDEA_UNREAD } from '@/lib/pages/v2/content-idea'
 import { contentIdeaFixture } from '@/lib/pages/v2/content-levels-fixture'
 import { ContentIdeaPage, ideaMeta } from './idea-page'
+import { weeksOverlapNote } from './ideas'
 
 // A POST IDEA'S PAGE, THE HUB (G5-Content-Idea, -Idea-Switcher, -Idea-Thin,
 // -Idea-Phone): what it prints, in the board's order, in every state.
@@ -13,6 +14,24 @@ import { ContentIdeaPage, ideaMeta } from './idea-page'
 /** The page's words as read: a tag between a word and its comma is not a space. */
 const renderText = (node: Parameters<typeof rawText>[0]): string => rawText(node).replace(/\s+([,.])/g, '$1')
 const page = (o: Parameters<typeof contentIdeaFixture>[0] = {}) => <ContentIdeaPage data={contentIdeaFixture(o)} />
+
+// A video commented on in two weeks counts in each week's bar and once in
+// the total, so the bars can add up to more (Sealand, 5 Nov: 8 + 1 + 2 + 5
+// beside "15 over the four weeks"). Said under the bars only where they do.
+describe('the weekly bars beside the four weeks\' total', () => {
+  it('says why the weeks add up to more, only where they do', () => {
+    const weeks = [8, 1, 2, 5].map((count, i) => ({ label: `w${i}`, count }))
+    expect(weeksOverlapNote(weeks, 15)).toBe('A video commented on in two of these weeks counts in both, so the weeks add up to more than 15.')
+    expect(weeksOverlapNote(weeks, 16)).toBeNull()
+    expect(weeksOverlapNote([{ count: null }], 0)).toBeNull()
+    const d = contentIdeaFixture()
+    const over = { ...d, weeks: [30, 10, 6, 9].map((count, i) => ({ label: `w${i}`, count })) } as typeof d
+    const text = renderText(<ContentIdeaPage data={over} />)
+    expect(text).toContain('48 over the four weeks')
+    expect(text).toContain('so the weeks add up to more than 48.')
+    assertCopyContract(<ContentIdeaPage data={over} />)
+  })
+})
 
 describe('a post idea\'s page', () => {
   it('opens with the path and the title block: "Content / {idea}", the lightbulb, "Post idea 1, from {conversation}", the days it read beside its month', () => {
