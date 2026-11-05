@@ -1013,10 +1013,18 @@ export async function readMoveLevels(core: Core, moves: readonly DatedMove[], ad
 /** Each piece of advice named (an advice move's, or a card's "Would move"),
  *  to the theme its evidence leads with. Reads the themed update's themes only
  *  where some lineage is named. */
-export async function readAdviceTargets(core: Core, named: readonly string[], cited: Map<string, { evidence: string[] }>, onError?: () => void): Promise<Map<string, string>> {
+export async function readAdviceTargets(core: Core, named: readonly string[], cited: Map<string, { evidence: string[] }>, onError?: () => void, themedRun?: string | null): Promise<Map<string, string>> {
   const lineages = [...new Set(named)]
   if (lineages.length === 0) return new Map()
-  const themedRunId = await fetchRunningRunIds(core.supabase, core.clientId, 'moves-v2').then((ids) => fetchThemedRunId(core.supabase, core.clientId, ids, 'moves-v2'))
+  // `themedRun` names the run whose clustering the month's readings carry,
+  // where the caller knows it: the monthly briefs are built INSIDE the run
+  // that closes the month, after its freeze-months has rewritten the filling
+  // months under its own themes and while it still counts as running, so the
+  // newest themed run that is not running (a page's rule) is the update
+  // before, whose themes the readings no longer hold (5 Nov: two of Sealand's
+  // October advice printed "0 of 1,192 videos").
+  const themedRunId = themedRun
+    ?? await fetchRunningRunIds(core.supabase, core.clientId, 'moves-v2').then((ids) => fetchThemedRunId(core.supabase, core.clientId, ids, 'moves-v2'))
   const themes = await selectAll<{ supporting_insight_ids: string[] | null; registry_id: string | null }>(() =>
     core.supabase.from('themes').select('supporting_insight_ids, registry_id')
       .eq('client_id', core.clientId).eq('run_id', themedRunId ?? core.latestRunId).order('id'),
@@ -1042,14 +1050,14 @@ export async function readAdviceTargets(core: Core, named: readonly string[], ci
  * each card's "Would move" off the same reads: one themes read, one labels
  * read and one month series for the moves and the cards together.
  */
-export async function readMoveCards(core: Core, moves: readonly DatedMove[], cited: Map<string, { evidence: string[] }>, aimAt: readonly string[] = []): Promise<{ cards: MoveCard[]; aims: Map<string, AdviceAim | null>; aimsFailed: boolean }> {
+export async function readMoveCards(core: Core, moves: readonly DatedMove[], cited: Map<string, { evidence: string[] }>, aimAt: readonly string[] = [], opts: { themedRun?: string | null } = {}): Promise<{ cards: MoveCard[]; aims: Map<string, AdviceAim | null>; aimsFailed: boolean }> {
   if (moves.length === 0 && aimAt.length === 0) return { cards: [], aims: new Map(), aimsFailed: false }
   // A failed read under the aims is said as one ("could not be read just
   // now"), never printed as "no conversation".
   let aimsFailed = false
   const failed = () => { aimsFailed = true }
   const moveLineages = moves.filter((m) => m.kind === 'advice' && m.lineage_id).map((m) => m.lineage_id as string)
-  const targets = await readAdviceTargets(core, [...moveLineages, ...aimAt], cited, failed)
+  const targets = await readAdviceTargets(core, [...moveLineages, ...aimAt], cited, failed, opts.themedRun)
   const aimThemes = aimAt.map((l) => targets.get(l)).filter((t): t is string => Boolean(t))
   const themeIds = [...moves.flatMap((m) => (m.kind === 'theme' ? m.registry_ids ?? [] : [])), ...targets.values()]
   const [themes, levels] = await Promise.all([

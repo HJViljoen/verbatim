@@ -207,7 +207,13 @@ export async function loadHooksPart(admin: SupabaseClient, a: { clientId: string
 /** Your moves at the month (`?month=`): the current advice unfolded (the
  *  compose step folds it), what each would move, the dated moves' cards, the
  *  record. */
-export async function loadMovesPart(admin: SupabaseClient, a: { clientId: string; month: string }): Promise<BriefMovesIn | null> {
+export async function loadMovesPart(admin: SupabaseClient, a: {
+  clientId: string; month: string
+  /** The run the briefs are built on (`loadBriefAppParts`' `runId`): what
+   *  each piece of advice would move is read on ITS themes, the clustering
+   *  its freeze-months wrote the month's readings under. */
+  runId?: string | null
+}): Promise<BriefMovesIn | null> {
   const month = monthStartOf(a.month)
   const scope: Scope = { supabase: admin, reading: readingHandle(a.clientId, admin), clientId: a.clientId, params: { [MONTH_PARAM]: yyyymm(month) } }
   const core = await readCore(scope)
@@ -217,7 +223,7 @@ export async function loadMovesPart(admin: SupabaseClient, a: { clientId: string
   const moveLineages = (core.moves ?? []).filter((m) => m.kind === 'advice' && m.lineage_id).map((m) => m.lineage_id as string)
   const cites = [...waiting, ...moveLineages.map((id) => byLineage.get(id)).filter((r): r is NonNullable<typeof r> => r != null)]
   const cited = await readCited(core.supabase, a.clientId, cites.flatMap((r) => r.basedOn))
-  const read = await readMoveCards(core, core.moves ?? [], cited.market, waiting.map((r) => r.lineageId))
+  const read = await readMoveCards(core, core.moves ?? [], cited.market, waiting.map((r) => r.lineageId), { themedRun: a.runId ?? null })
   return movesOf({
     month,
     rows: core.adviceRows,
@@ -262,7 +268,7 @@ export async function loadBriefAppParts(
     softWithin('products', () => loadProductsPart(admin, { clientId: a.clientId, company: a.company, month, now }), ms),
     softWithin('post ideas', () => loadIdeasPart(admin, { clientId: a.clientId, month, now: a.now }), ms),
     softWithin('formats and openings', () => loadHooksPart(admin, { clientId: a.clientId, company: a.company, month, rival: a.rival, videos: a.videos }), ms),
-    softWithin('advice and moves', () => loadMovesPart(admin, { clientId: a.clientId, month }), ms),
+    softWithin('advice and moves', () => loadMovesPart(admin, { clientId: a.clientId, month, runId: a.runId }), ms),
   ])
   return { ...none, subjectReads, people: voices?.people ?? null, named: voices?.named ?? null, products, ideas, hooks, moves }
 }
