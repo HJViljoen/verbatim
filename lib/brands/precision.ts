@@ -190,6 +190,17 @@ export const NAME_READS: Readonly<Record<string, readonly NameRead[]>> = {
     // client by name. A comment dated in September, then the caption.
     { videoId: 'a8fdd6fe-e2d6-434c-a207-6f17eb3f9b26', brand: true, month: '2026-09-01', on: '2026-09-27', where: 'production' },
     { videoId: 'a8fdd6fe-e2d6-434c-a207-6f17eb3f9b26', brand: true, month: '2026-09-01', on: '2026-09-27', where: 'production' },
+    // 5 Nov, October's two videos naming the name outside its own posts, one
+    // entry a brands_v1 mention as above. r/capetown (reddit 1xhgsum), one
+    // comment dated in October, "Sealand has some good stuff…": the client.
+    { videoId: 'aed8de6c-ee7e-4c74-a51d-f580f50f37ee', brand: true, month: '2026-10-01', on: '2026-11-05', where: 'production' },
+    // r/hetalia (reddit 1xft4gm), a comment dated in October, then the
+    // caption: Sealand the micronation, not the client. The 5 Nov regate takes
+    // the video out (a homonym), and the October set naming the client is
+    // then r/capetown's alone, so the name line prints for October
+    // (`clientNameCounts`); while the video is still counted it does not.
+    { videoId: '9ae9c832-4ff1-4363-a898-559ed4894bb8', brand: false, month: '2026-10-01', on: '2026-11-05', where: 'production' },
+    { videoId: '9ae9c832-4ff1-4363-a898-559ed4894bb8', brand: false, month: '2026-10-01', on: '2026-11-05', where: 'production' },
   ],
 }
 

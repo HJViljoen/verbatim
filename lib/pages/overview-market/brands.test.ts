@@ -116,6 +116,12 @@ describe('buildBrandsBlock', () => {
     expect(buildBrandsBlock({ clientId: SEALAND_CLIENT_ID, month: '2026-09-01', n: 852, nOrganic: 672, rivals: SEPTEMBER_BRANDS, name: { hasRows: true, outside: ['a8fdd6fe-e2d6-434c-a207-6f17eb3f9b26', 'unread'], ownPosts: 0 } }).nameLine).toBeNull()
   })
 
+  it('prints October’s from the 5 Nov entries: both videos read, one of them you (the micronation is not)', () => {
+    const name = (outside: string[]) => buildBrandsBlock({ clientId: SEALAND_CLIENT_ID, month: '2026-10-01', n: 900, nOrganic: 700, rivals: SEPTEMBER_BRANDS, name: { hasRows: true, outside, ownPosts: 0 } }).nameLine
+    expect(name(['9ae9c832-4ff1-4363-a898-559ed4894bb8', 'aed8de6c-ee7e-4c74-a51d-f580f50f37ee'])).toEqual({ month: '2026-10-01', n: 900, k: 1, ownPosts: 0 })
+    expect(name(['aed8de6c-ee7e-4c74-a51d-f580f50f37ee'])).toEqual({ month: '2026-10-01', n: 900, k: 1, ownPosts: 0 })
+  })
+
   it('prints a brand measured under the floor as mostly another word, with no count', () => {
     const checks = { [SEALAND_CLIENT_ID]: { Freitag: { headline: { read: 1, brand: 1 }, rest: { read: 39, brand: 9 }, on: '2026-10-05', where: 'production' as const, ruleVersion: BRAND_RULE_VERSION, of: 'September', source: 'a test check' } } }
     const b = buildBrandsBlock({ clientId: SEALAND_CLIENT_ID, month: '2026-09-01', n: 654, nOrganic: 516, rivals: SEPTEMBER_BRANDS, name: { hasRows: true, outside: [], ownPosts: 8 }, checks })

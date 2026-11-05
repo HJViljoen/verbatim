@@ -241,6 +241,23 @@ describe('the brands', () => {
     expect(clientNameCountsByCount(SEALAND_CLIENT_ID, SEP, 2)).toBe(false)
   })
 
+  it('prints October’s name line once the micronation video is out of the month: every video naming you is read as you', () => {
+    const OCT = '2026-10-01'
+    const capetown = 'aed8de6c-ee7e-4c74-a51d-f580f50f37ee'
+    const hetalia = '9ae9c832-4ff1-4363-a898-559ed4894bb8'
+    // After the 5 Nov regate (r/hetalia is a homonym, on its drop list): the
+    // month's set naming you is r/capetown's video alone, read as you.
+    expect(clientNameCounts(SEALAND_CLIENT_ID, OCT, [capetown])).toBe(true)
+    // Before it, the set holds the micronation, which is not you: the count
+    // would include it, so the line waits.
+    expect(clientNameCounts(SEALAND_CLIENT_ID, OCT, [hetalia, capetown])).toBe(false)
+    // A video nobody read still holds it, as in September.
+    expect(clientNameCounts(SEALAND_CLIENT_ID, OCT, [capetown, 'unread'])).toBe(false)
+    // The tile's count-only gate cannot tell which video a count holds, so a
+    // month with a read that is not you stays closed there (fail closed).
+    expect(clientNameCountsByCount(SEALAND_CLIENT_ID, OCT, 1)).toBe(false)
+  })
+
   it('takes a brand by any name an old link carries', () => {
     const b = { brandKey: 'uuid-1', label: 'The North Face' }
     for (const w of ['the north face', 'uuid-1', 'competitor:The North Face', ' The North Face ']) expect(matchesBrand(b, w)).toBe(true)

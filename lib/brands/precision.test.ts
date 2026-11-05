@@ -44,10 +44,19 @@ describe('production’s hand check of 27 Sep (data/hand-check-brands-prod-20260
   })
 
   it('reads every match of your name outside your own posts: both in one September video, both you', () => {
-    expect(NAME_READS[SEALAND_CLIENT_ID]).toEqual([
+    expect(NAME_READS[SEALAND_CLIENT_ID].filter((r) => r.month === '2026-09-01')).toEqual([
       { videoId: A8, brand: true, month: '2026-09-01', on: '2026-09-27', where: 'production' },
       { videoId: A8, brand: true, month: '2026-09-01', on: '2026-09-27', where: 'production' },
     ])
+  })
+
+  it('and October’s, read 5 Nov one entry a mention: r/capetown’s comment is you, r/hetalia’s comment and caption the micronation', () => {
+    expect(NAME_READS[SEALAND_CLIENT_ID].filter((r) => r.month === '2026-10-01')).toEqual([
+      { videoId: 'aed8de6c-ee7e-4c74-a51d-f580f50f37ee', brand: true, month: '2026-10-01', on: '2026-11-05', where: 'production' },
+      { videoId: '9ae9c832-4ff1-4363-a898-559ed4894bb8', brand: false, month: '2026-10-01', on: '2026-11-05', where: 'production' },
+      { videoId: '9ae9c832-4ff1-4363-a898-559ed4894bb8', brand: false, month: '2026-10-01', on: '2026-11-05', where: 'production' },
+    ])
+    expect(NAME_READS[SEALAND_CLIENT_ID]).toHaveLength(5)
   })
 
   it('holds only while the rules are brands_v1: a new rule version sends all eight back to not counted yet', () => {
