@@ -204,6 +204,19 @@ export async function loadHooksPart(admin: SupabaseClient, a: { clientId: string
   return hooksOf({ month, rival: a.rival, playbook, posts: postsBlock({ owned, typical: typicalRate(playbook), month: cm }), sentence: works.sentence })
 }
 
+/** The run whose themes what advice would move is read on: the brief's own
+ *  where it holds themes, else `fallback` (the newest themed run as of the
+ *  brief), else null (the page's rule). One head count. Never throws. */
+export async function briefThemedRun(admin: SupabaseClient, clientId: string, runId: string | null, fallback: string | null): Promise<string | null> {
+  if (!runId) return fallback
+  const res = await admin.from('themes').select('id', { count: 'exact', head: true }).eq('client_id', clientId).eq('run_id', runId)
+  if (res.error) {
+    console.warn(`[briefs] the run's themes could not be counted; reading the newest themed run: ${res.error.message}`)
+    return fallback ?? runId
+  }
+  return (res.count ?? 0) > 0 ? runId : fallback
+}
+
 /** Your moves at the month (`?month=`): the current advice unfolded (the
  *  compose step folds it), what each would move, the dated moves' cards, the
  *  record. */
@@ -213,6 +226,9 @@ export async function loadMovesPart(admin: SupabaseClient, a: {
    *  each piece of advice would move is read on ITS themes, the clustering
    *  its freeze-months wrote the month's readings under. */
   runId?: string | null
+  /** Where that run holds no themes: the newest themed run as of the brief
+   *  (`themedRunAsOf`, build.ts). */
+  themedRun?: string | null
 }): Promise<BriefMovesIn | null> {
   const month = monthStartOf(a.month)
   const scope: Scope = { supabase: admin, reading: readingHandle(a.clientId, admin), clientId: a.clientId, params: { [MONTH_PARAM]: yyyymm(month) } }
@@ -223,7 +239,8 @@ export async function loadMovesPart(admin: SupabaseClient, a: {
   const moveLineages = (core.moves ?? []).filter((m) => m.kind === 'advice' && m.lineage_id).map((m) => m.lineage_id as string)
   const cites = [...waiting, ...moveLineages.map((id) => byLineage.get(id)).filter((r): r is NonNullable<typeof r> => r != null)]
   const cited = await readCited(core.supabase, a.clientId, cites.flatMap((r) => r.basedOn))
-  const read = await readMoveCards(core, core.moves ?? [], cited.market, waiting.map((r) => r.lineageId), { themedRun: a.runId ?? null })
+  const themedRun = await briefThemedRun(admin, a.clientId, a.runId ?? null, a.themedRun ?? null)
+  const read = await readMoveCards(core, core.moves ?? [], cited.market, waiting.map((r) => r.lineageId), { themedRun })
   return movesOf({
     month,
     rows: core.adviceRows,
@@ -250,6 +267,9 @@ export async function loadBriefAppParts(
     rival: string | null
     /** The playbook's videos where the set read them already. */
     videos?: readonly PlaybookVideo[] | null
+    /** The newest themed run as of the brief (`themedRunAsOf`): what advice
+     *  would move is read on it where `runId` holds no themes. */
+    themedRun?: string | null
     /** `plan-briefs`' clock: the parts end inside it. None by hand. */
     clock?: BriefClock | null
   },
@@ -268,7 +288,7 @@ export async function loadBriefAppParts(
     softWithin('products', () => loadProductsPart(admin, { clientId: a.clientId, company: a.company, month, now }), ms),
     softWithin('post ideas', () => loadIdeasPart(admin, { clientId: a.clientId, month, now: a.now }), ms),
     softWithin('formats and openings', () => loadHooksPart(admin, { clientId: a.clientId, company: a.company, month, rival: a.rival, videos: a.videos }), ms),
-    softWithin('advice and moves', () => loadMovesPart(admin, { clientId: a.clientId, month, runId: a.runId }), ms),
+    softWithin('advice and moves', () => loadMovesPart(admin, { clientId: a.clientId, month, runId: a.runId, themedRun: a.themedRun ?? null }), ms),
   ])
   return { ...none, subjectReads, people: voices?.people ?? null, named: voices?.named ?? null, products, ideas, hooks, moves }
 }

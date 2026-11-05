@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { fakeDb } from '../../test/fake-db'
-import { loadMovesPart } from './app-load'
+import { briefThemedRun, loadMovesPart } from './app-load'
 
 // WHAT EACH PIECE OF ADVICE WOULD MOVE, READ ON THE BRIEF'S OWN RUN (5 Nov).
 // The month's briefs are built inside the run that closes the month, after
@@ -68,5 +68,33 @@ describe('the leadership brief\'s "would move" is read on the run the brief is b
     const part = await loadMovesPart(db.client as never, { clientId: CLIENT, month: '2026-10-01' })
     vi.useRealTimers()
     expect(part?.pool.map((p) => p.aim)).toEqual([{ label: 'Price requests before purchase', k: 0, n: 300, href: null }])
+  })
+})
+
+// Where the run the brief is built on holds no themes, the newest themed run
+// as of the brief (`themedRunAsOf`, build.ts) stands in (5 Nov review), never
+// a run whose themes are not there.
+describe('the brief\'s run with no themes', () => {
+  it('reads what advice would move on the newest themed run instead', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-11-05T06:30:00.000Z'))
+    const t = tables()
+    const db = fakeDb({
+      ...t,
+      themes: t.themes.filter((x) => x.run_id !== CLOSING),
+      month_theme_readings: [{ ...t.month_theme_readings[0], theme_id: OLD_THEME, videos: 40, run_id: BEFORE }],
+    } as never)
+    const part = await loadMovesPart(db.client as never, { clientId: CLIENT, month: '2026-10-01', runId: CLOSING, themedRun: BEFORE })
+    vi.useRealTimers()
+    expect(part?.pool.map((p) => p.aim)).toEqual([{ label: 'Price requests before purchase', k: 40, n: 300, href: null }])
+    expect(db.calls.find((c) => c.table === 'themes' && c.columns === 'supporting_insight_ids, registry_id')?.filters).toContain(`run_id=${BEFORE}`)
+  })
+
+  it('briefThemedRun: the run where it holds themes, else the fallback, else none', async () => {
+    const db = fakeDb(tables() as never)
+    expect(await briefThemedRun(db.client as never, CLIENT, CLOSING, BEFORE)).toBe(CLOSING)
+    expect(await briefThemedRun(fakeDb({ themes: [] }).client as never, CLIENT, CLOSING, BEFORE)).toBe(BEFORE)
+    expect(await briefThemedRun(fakeDb({ themes: [] }).client as never, CLIENT, CLOSING, null)).toBeNull()
+    expect(await briefThemedRun(db.client as never, CLIENT, null, BEFORE)).toBe(BEFORE)
   })
 })

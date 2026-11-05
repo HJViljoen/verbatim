@@ -285,7 +285,7 @@ export async function loadBriefSetInputs(
   const longRun = await loadMonthLongRun(admin, clientId, month).catch(warn('long-run read'))
   // The October canvas's pages, read from the app for the month (no model
   // call; each part on its own).
-  const app = await loadBriefAppParts(admin, { clientId, company, month, now: opts.now, runId, standing, rival: rivals[0] ?? null, videos, clock: opts.clock ?? null })
+  const app = await loadBriefAppParts(admin, { clientId, company, month, now: opts.now, runId, themedRun: themedRunId ?? null, standing, rival: rivals[0] ?? null, videos, clock: opts.clock ?? null })
   return {
     clientId,
     company,
