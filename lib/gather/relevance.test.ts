@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // The model is a stub: these tests are about what the gate SENDS and what it
@@ -5,7 +8,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const { parse } = vi.hoisted(() => ({ parse: vi.fn() }))
 vi.mock('../openai', () => ({ openai: { chat: { completions: { parse } } } }))
 
-import { buildUserPrompt, classifyRelevance, type RelevanceCandidate } from './relevance'
+import {
+  buildSystemPrompt, buildUserPrompt, classifyRelevance, definitionHash, marketDefinitionOf, RELEVANCE_MARKET_PROMPT, relevancePromptVersion, type RelevanceCandidate,
+} from './relevance'
 import type { GatherConfig } from './types'
 
 const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/
@@ -87,5 +92,97 @@ describe('classifyRelevance — a failed batch', () => {
     const r = await classifyRelevance([cand('a', 'one')], { method: 'gpt', config })
     expect(r.failedBatches).toBe(0)
     expect(r.errors).toEqual([])
+  })
+})
+
+// ---- The market definition (5 Nov) -------------------------------------------------
+//
+// Where a tenant's market_description is set the gate judges by it; where it
+// is null (Össur today) the prompt is the one every gather sent before, byte
+// for byte. The golden was captured from 8875fe66's buildSystemPrompt for the
+// two configs below (lib/test/relevance-golden/legacy-prompts.json).
+
+const GOLDEN = JSON.parse(readFileSync(join(__dirname, '../test/relevance-golden/legacy-prompts.json'), 'utf8')) as { ossur: string; bare: string }
+const SEALAND_DEFINITION = readFileSync(join(__dirname, '../../scripts/seeds/sealand-market-description.txt'), 'utf8')
+
+const ossurConfig: GatherConfig = {
+  brand_keywords: ['össur', 'ossur'], competitor_keywords: ['ottobock'], competitor_names: ['Ottobock'],
+  industry_keywords: ['prosthetics', 'amputee', 'bionic leg', 'prosthetic leg', 'running blade'], exclude_terms: [],
+  platforms: ['tiktok', 'youtube', 'instagram', 'reddit'], max_videos: 25, comment_depth: 50, report_period: 'weekly', own_handles: {}, subreddits: [],
+}
+const bareConfig: GatherConfig = { ...ossurConfig, brand_keywords: [], competitor_names: [], industry_keywords: [], exclude_terms: [' ', 'Cotopaxi the volcano', 'Sealand the micronation '] }
+const sealandConfig: GatherConfig = {
+  ...config,
+  brand_keywords: ['sealand gear', 'sealand bag'],
+  competitor_names: ['The North Face', 'Patagonia', 'Cotopaxi', 'Freitag'],
+  industry_keywords: ['handmade bag', 'sustainable fashion', 'travel gear'],
+  exclude_terms: ['Sealand the micronation'],
+}
+
+describe('buildSystemPrompt: no market description is the old prompt, byte for byte', () => {
+  it('Össur (no description) gets exactly the bytes it got before', () => {
+    expect(buildSystemPrompt(ossurConfig)).toBe(GOLDEN.ossur)
+    expect(buildSystemPrompt(bareConfig)).toBe(GOLDEN.bare)
+  })
+  it('null, absent, empty and blank descriptions are all no description', () => {
+    for (const market_description of [null, undefined, '', '   \n\t ']) {
+      expect(buildSystemPrompt({ ...ossurConfig, market_description })).toBe(GOLDEN.ossur)
+      expect(buildSystemPrompt({ ...bareConfig, market_description })).toBe(GOLDEN.bare)
+    }
+  })
+  it('and the call sends that prompt, labelled as before', async () => {
+    parse.mockResolvedValueOnce(answer([{ index: 0, relevant: true, reason: 'legs' }]))
+    const r = await classifyRelevance([cand('a', 'my new leg')], { method: 'gpt', config: { ...ossurConfig, market_description: null } })
+    expect(parse.mock.calls[0][0].messages[0]).toEqual({ role: 'system', content: GOLDEN.ossur })
+    expect(r.promptVersion).toBe('relevance_gpt')
+  })
+})
+
+describe('buildSystemPrompt: a defined market is judged by its definition', () => {
+  const prompt = buildSystemPrompt({ ...sealandConfig, market_description: SEALAND_DEFINITION })
+
+  it('carries the whole definition, trimmed, and the brand, rivals and homonyms', () => {
+    expect(prompt).toContain(SEALAND_DEFINITION.trim())
+    expect(prompt).toContain('Brand: sealand gear. Competitors: The North Face, Patagonia, Cotopaxi, Freitag.')
+    expect(prompt).toContain('For THIS client, matches about any of these are NOT about the brand: Sealand the micronation.')
+    expect(prompt).toContain('NAME HOMONYM')
+  })
+  it('drops the broad-category framing, "when unsure, KEEP" and the search terms as the category', () => {
+    expect(prompt).not.toMatch(/BROAD product category/)
+    expect(prompt).not.toMatch(/When unsure, KEEP/)
+    expect(prompt).not.toMatch(/Category \(brand’s framing\)/)
+    expect(prompt).not.toContain('sustainable fashion, travel gear')
+    expect(prompt).not.toMatch(/ANY content about the brand or a competitor/)
+  })
+  it('is the definition the call sends', async () => {
+    parse.mockResolvedValueOnce(answer([{ index: 0, relevant: false, reason: 'crochet tutorial' }]))
+    const r = await classifyRelevance([cand('a', 'crochet bag tutorial')], { method: 'gpt', config: { ...sealandConfig, market_description: SEALAND_DEFINITION } })
+    expect(parse.mock.calls[0][0].messages[0]).toEqual({ role: 'system', content: prompt })
+    expect(r.promptVersion).toBe(relevancePromptVersion('gpt', { market_description: SEALAND_DEFINITION }))
+  })
+})
+
+describe('relevancePromptVersion: which definition judged', () => {
+  it('is unchanged without a definition, and for the methods that send no prompt', () => {
+    expect(relevancePromptVersion('gpt', { market_description: null })).toBe('relevance_gpt')
+    expect(relevancePromptVersion('gpt', {})).toBe('relevance_gpt')
+    expect(relevancePromptVersion('heuristic', { market_description: SEALAND_DEFINITION })).toBe('relevance_heuristic')
+    expect(relevancePromptVersion('off', { market_description: SEALAND_DEFINITION })).toBe('relevance_off')
+  })
+  it('names the definition by a short hash of its words, so it changes when they do', () => {
+    const v = relevancePromptVersion('gpt', { market_description: SEALAND_DEFINITION })
+    expect(v).toBe(`relevance_gpt·${RELEVANCE_MARKET_PROMPT}·${definitionHash(SEALAND_DEFINITION.trim())}`)
+    expect(v).toMatch(/^relevance_gpt·market_v1·[0-9a-f]{8}$/)
+    expect(relevancePromptVersion('gpt', { market_description: `${SEALAND_DEFINITION} Also tents.` })).not.toBe(v)
+  })
+  it('reads the words as the prompt does: surrounding space and line endings do not move it', () => {
+    const v = relevancePromptVersion('gpt', { market_description: SEALAND_DEFINITION })
+    expect(relevancePromptVersion('gpt', { market_description: `\n  ${SEALAND_DEFINITION.replace(/\n/g, '\r\n')}  ` })).toBe(v)
+    expect(marketDefinitionOf({ market_description: ' x \r\n y ' })).toBe('x \n y')
+  })
+  it('the heuristic and off methods report their own versions on the result', async () => {
+    const r = await classifyRelevance([cand('a', 'one')], { method: 'heuristic', config: { ...sealandConfig, market_description: SEALAND_DEFINITION } })
+    expect(r.promptVersion).toBe('relevance_heuristic')
+    expect(parse).not.toHaveBeenCalled()
   })
 })

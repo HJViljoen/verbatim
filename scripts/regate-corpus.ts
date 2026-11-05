@@ -1,9 +1,8 @@
 import { audienceOf } from '../lib/rivals'
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
 import { recordConfigChange, scriptActor, skipRetag } from '../lib/config-log'
+import { loadGatherConfig } from '../lib/gather/gather'
 import { classifyRelevance } from '../lib/gather/relevance'
-import { parseSubreddits } from '../lib/gather/subreddits'
-import type { GatherConfig } from '../lib/gather/types'
 
 // Post-hoc relevance re-gate of a client's STORED corpus (teardown 2026-07-09
 // §Run 1, defect 2): run 1 gathered with the pre-fix gate ("competitor content
@@ -82,22 +81,9 @@ async function main() {
   const { clientId, apply } = parseArgs(process.argv.slice(2))
   const admin = createAdminClient()
 
-  const { data: tc, error: tcErr } = await admin
-    .from('tracking_configs').select('*').eq('client_id', clientId).maybeSingle()
-  if (tcErr || !tc) throw new Error(`tracking_config: ${tcErr?.message ?? 'none'}`)
-  const config: GatherConfig = {
-    brand_keywords: tc.brand_keywords ?? [],
-    competitor_keywords: tc.competitor_keywords ?? [],
-    competitor_names: tc.competitor_names ?? [],
-    industry_keywords: tc.industry_keywords ?? [],
-    exclude_terms: tc.exclude_terms ?? [],
-    platforms: tc.platforms ?? ['tiktok', 'youtube', 'instagram'],
-    max_videos: tc.max_videos ?? 25,
-    comment_depth: tc.comment_depth ?? 50,
-    report_period: tc.report_period ?? 'weekly',
-    own_handles: tc.own_handles ?? {},
-    subreddits: parseSubreddits(tc.subreddits),
-  }
+  // The gather's own config reader (the market definition included), so the
+  // re-gate judges as a run does.
+  const config = await loadGatherConfig(clientId)
 
   const videos = (await selectAll<StoredVideo>(() =>
     admin.from('videos')

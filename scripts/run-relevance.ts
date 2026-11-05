@@ -1,7 +1,7 @@
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
-import { classifyRelevance, type RelevanceMethod, type RelevanceCandidate } from '../lib/gather/relevance'
+import { loadGatherConfig } from '../lib/gather/gather'
+import { classifyRelevance, relevancePromptVersion, type RelevanceMethod, type RelevanceCandidate } from '../lib/gather/relevance'
 import { COMMENT_THRESHOLD, OSSUR_CLIENT_ID as OSSUR } from '../lib/config'
-import type { GatherConfig } from '../lib/gather/types'
 
 // Inspector for the relevance gate — runs it over videos ALREADY in the DB so the
 // effect (and the comment-scrape it would have saved) is visible without any
@@ -47,21 +47,11 @@ async function main() {
   })
   console.log(`Relevance gate — method=${args.method} · ${rows.length} videos with >= ${args.minComments} comments (comment-scrape candidates)\n`)
 
-  const { data: tc } = await admin
-    .from('tracking_configs')
-    .select('brand_keywords, competitor_keywords, competitor_names, industry_keywords, platforms')
-    .eq('client_id', args.clientId)
-    .maybeSingle()
-  const config = {
-    brand_keywords: tc?.brand_keywords ?? [],
-    competitor_keywords: tc?.competitor_keywords ?? [],
-    competitor_names: tc?.competitor_names ?? [],
-    industry_keywords: tc?.industry_keywords ?? [],
-    platforms: tc?.platforms ?? [],
-    max_videos: 0,
-    comment_depth: 0,
-    report_period: 'monthly',
-  } as GatherConfig
+  // The gather's own config reader, so this judges as a run does: the
+  // homonyms (exclude_terms) and the market definition (market_description)
+  // included, read the one way every judging path reads them.
+  const config = await loadGatherConfig(args.clientId)
+  console.log(`prompt: ${relevancePromptVersion(args.method, config)}\n`)
 
   const { verdicts, costUsd } = await classifyRelevance(rows, { method: args.method, config })
 

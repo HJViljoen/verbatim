@@ -165,6 +165,8 @@ async function loadConfig(admin: Admin, clientId: string): Promise<GatherConfig>
     report_period: data.report_period ?? DEFAULT_CONFIG.report_period,
     own_handles: data.own_handles ?? {},
     subreddits: parseSubreddits(data.subreddits),
+    // `select('*')`: absent before MF3, and null for a tenant with none.
+    market_description: typeof data.market_description === 'string' ? data.market_description : null,
   }
 }
 
@@ -628,7 +630,7 @@ export async function gatePlatform(opts: {
         pass: 'relevance_gate',
         callIndex: 1,
         model: ANALYSIS_MODEL,
-        promptVersion: `relevance_${method}`,
+        promptVersion: gateResult.promptVersion,
         systemPrompt: `relevance gate (${method})`,
         userPrompt: `${adapter.platform} — ${videos.length} candidates`,
         response: report.response,

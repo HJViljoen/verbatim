@@ -60,6 +60,11 @@ export interface GatherConfig {
   /** Reddit communities this tenant searches, with how each earned its place.
    *  Empty = discovery has never run. See lib/gather/subreddits.ts. */
   subreddits: SubredditEntry[]
+  /** `tracking_configs.market_description` (MF3, operator-only;
+   *  scripts/set-market-description.ts): the market the relevance gate judges
+   *  by where it is set (lib/gather/relevance.ts `marketDefinitionOf`). Null or
+   *  absent: the gate's broad-category prompt, unchanged. */
+  market_description?: string | null
 }
 
 /** A row ready to upsert into `videos`. Only gather-owned columns — Pass A

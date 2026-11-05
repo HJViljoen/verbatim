@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import { chunk } from '../chunk'
 import { zodResponseFormat } from 'openai/helpers/zod'
@@ -20,6 +21,18 @@ import type { GatherConfig, VideoInsert } from './types'
 // wrong-industry case, then an optional single batched GPT call for the subtle
 // cases (viral human-interest, news) the heuristic can't see. Conservative by
 // design — when unsure, KEEP (a false drop loses real signal permanently).
+//
+// A TENANT'S OWN MARKET DEFINITION (5 Nov; client data, not code). Where
+// `tracking_configs.market_description` is set (scripts/set-market-description.ts),
+// the GPT layer judges by it: what is in, what is out, how a borderline case
+// reads. The broad-category framing and "when unsure, KEEP" are then not sent,
+// and nor are the industry keywords as the "category", because they are search
+// terms ("handmade bag", "sustainable fashion") and framing the category with
+// them is what let Sealand's maker and fashion videos in (67% of its kept
+// market videos, 28 Sep to 1 Nov). Where it is null the prompt is the one
+// the gate sent before this (8875fe66), byte for byte (pinned by
+// lib/test/relevance-golden/legacy-prompts.json), and `promptVersion` says
+// which of the two judged.
 
 export type RelevanceMethod = 'off' | 'heuristic' | 'gpt'
 
@@ -38,6 +51,9 @@ export type RelevanceCandidate = Pick<VideoInsert, 'video_id' | 'account_name' |
 
 export interface ClassifyResult {
   verdicts: Map<string, RelevanceVerdict>
+  /** Which prompt judged (`relevancePromptVersion`): ai_call_log.prompt_version
+   *  of the gate's row, so a run's verdicts name the definition behind them. */
+  promptVersion: string
   costUsd: number
   promptTokens: number
   completionTokens: number
@@ -78,16 +94,40 @@ const verdictSchema = z.object({
 })
 const batchSchema = z.object({ verdicts: z.array(verdictSchema) })
 
-function buildSystemPrompt(config: GatherConfig): string {
-  const brand = config.brand_keywords?.[0] ?? 'the brand'
-  const competitors = (config.competitor_names ?? []).join(', ') || '(none given)'
-  const industry = (config.industry_keywords ?? []).join(', ') || 'the brand’s category'
-  // The client's own homonyms (tracking_configs.exclude_terms). Hints, not a
-  // denylist: they name the WRONG SENSES of the name, so the gate can recognise
-  // "Cotopaxi" the volcano or "Sealand" the container line without dropping a
-  // comment that merely says "not the volcano, the jacket".
+/** The tenant's market definition as every judging path reads it: the stored
+ *  `market_description`, trimmed, line endings made `\n`; null where it is
+ *  absent, not a string or blank. The gather, the regate (lib/gather/rejudge.ts),
+ *  subreddit discovery's probe and scripts/run-relevance.ts all reach the gate
+ *  through `loadGatherConfig`, so all read it here, one way. Pure. */
+export function marketDefinitionOf(config: Pick<GatherConfig, 'market_description'>): string | null {
+  const raw = config.market_description
+  if (typeof raw !== 'string') return null
+  const text = raw.replace(/\r\n?/g, '\n').trim()
+  return text ? text : null
+}
+
+/** The defined-market prompt's own version: bump it when the words of
+ *  `definedSystemPrompt` change (the definition's words are in the hash). */
+export const RELEVANCE_MARKET_PROMPT = 'market_v1'
+
+/** The first eight hex of the definition's sha256: what a `promptVersion`
+ *  and the change log's row carry, so a verdict names the words that judged. */
+export const definitionHash = (definition: string): string => createHash('sha256').update(definition, 'utf8').digest('hex').slice(0, 8)
+
+/** The gate's prompt version, as its ai_call_log row stores it. Unchanged
+ *  (`relevance_<method>`) wherever no definition is sent: a tenant with no
+ *  market description, and the heuristic and off methods, which send no
+ *  prompt. With one, `relevance_gpt·market_v1·<hash>`. Nothing reads it to
+ *  decide anything (it is a label of the row, like every prompt_version here). */
+export function relevancePromptVersion(method: RelevanceMethod, config: Pick<GatherConfig, 'market_description'>): string {
+  const definition = method === 'gpt' ? marketDefinitionOf(config) : null
+  return definition ? `relevance_${method}·${RELEVANCE_MARKET_PROMPT}·${definitionHash(definition)}` : `relevance_${method}`
+}
+
+/** The client's homonym lines, as both prompts send them. */
+function exclusionLinesOf(config: GatherConfig): string[] {
   const excluded = (config.exclude_terms ?? []).map((t) => `${t}`.trim()).filter(Boolean)
-  const exclusionLines = excluded.length > 0
+  return excluded.length > 0
     ? [
         '',
         `For THIS client, matches about any of these are NOT about the brand: ${excluded.join(', ')}.`,
@@ -95,6 +135,63 @@ function buildSystemPrompt(config: GatherConfig): string {
         'the brand or its products stays relevant even if one of them appears in it.',
       ]
     : []
+}
+
+/** The prompt where the tenant has defined its market. The definition decides
+ *  what is in and out; the brand's own angle is still not required; the
+ *  homonym, human-interest and spam rules stand; "when unsure, KEEP" is gone,
+ *  because the definition says how a borderline case reads. The industry
+ *  keywords are not sent: they are search terms and contradict a definition
+ *  that rules their finds out. */
+function definedSystemPrompt(config: GatherConfig, definition: string): string {
+  const brand = config.brand_keywords?.[0] ?? 'the brand'
+  const competitors = (config.competitor_names ?? []).join(', ') || '(none given)'
+  return [
+    'You screen social videos for a consumer-intelligence report about a brand’s market.',
+    'This client has DEFINED its market. Judge every video against the definition below, not',
+    'against the brand’s wider product category: a video about a neighbouring category, or about',
+    'something the definition leaves out, is off-market even when it shares a word with the market.',
+    '',
+    'THE MARKET, AS THE CLIENT DEFINES IT:',
+    definition,
+    '',
+    'KEEP a video when its COMMENTS would plausibly be about the products inside that market:',
+    'real users and buyers, reviews, comparisons, questions, opinions, complaints, purchase',
+    'interest. Content genuinely about the brand itself is relevant. Content about a competitor',
+    'is relevant when it is about that company’s products inside the market, as the definition',
+    'draws it. The brand’s own angle (for example sustainable or recycled) is not required: a',
+    'product inside the market is relevant without it.',
+    '',
+    'DROP:',
+    '- anything the definition places outside the market, whatever the search word that found it;',
+    '- a NAME HOMONYM: brand or competitor names whose match is a different sense of the word —',
+    '  e.g. "Poler" (bag brand) matching pole-dancing or pole-fitness videos, "Patagonia" (brand)',
+    '  matching the Patagonia region, its marathons, or travel vlogs. The name appearing in a',
+    '  caption/hashtag is NOT enough — the video must be about the company or its products;',
+    '- pure human-interest virality or news with no angle on the market’s products;',
+    '- spam, reposts, or content unrelated to the market.',
+    '',
+    'Where the definition says how to read a borderline case, follow it. Otherwise ask what the',
+    'comments would mostly be about, and keep the video only when that is the market’s products.',
+    '',
+    `Brand: ${brand}. Competitors: ${competitors}.`,
+    ...exclusionLinesOf(config),
+  ].join('\n')
+}
+
+/** Exported for tests. With no market definition, the broad-category prompt,
+ *  byte for byte as before (lib/test/relevance-golden/legacy-prompts.json). */
+export function buildSystemPrompt(config: GatherConfig): string {
+  const definition = marketDefinitionOf(config)
+  if (definition) return definedSystemPrompt(config, definition)
+  const brand = config.brand_keywords?.[0] ?? 'the brand'
+  const competitors = (config.competitor_names ?? []).join(', ') || '(none given)'
+  const industry = (config.industry_keywords ?? []).join(', ') || 'the brand’s category'
+  // The client's own homonyms (tracking_configs.exclude_terms). Hints, not a
+  // denylist: they name the WRONG SENSES of the name, so the gate can recognise
+  // "Cotopaxi" the volcano or "Sealand" the container line without dropping a
+  // comment that merely says "not the volcano, the jacket".
+  const exclusionLines = exclusionLinesOf(config)
   return [
     'You screen social videos for a consumer-intelligence report about a brand’s market.',
     'KEEP a video if its COMMENTS would plausibly carry signal about the brand’s PRODUCT CATEGORY:',
@@ -151,7 +248,9 @@ export async function classifyRelevance(
   opts: { method: RelevanceMethod; config: GatherConfig },
 ): Promise<ClassifyResult> {
   const verdicts = new Map<string, RelevanceVerdict>()
-  const result: ClassifyResult = { verdicts, costUsd: 0, promptTokens: 0, completionTokens: 0, failedBatches: 0, errors: [] }
+  const result: ClassifyResult = {
+    verdicts, promptVersion: relevancePromptVersion(opts.method, opts.config), costUsd: 0, promptTokens: 0, completionTokens: 0, failedBatches: 0, errors: [],
+  }
 
   if (opts.method === 'off') {
     for (const c of candidates) verdicts.set(c.video_id, { relevant: true, reason: GATE_DEFAULT_REASONS.off, source: 'default' })
