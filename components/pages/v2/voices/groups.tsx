@@ -70,10 +70,14 @@ export function WhoCard({ groups, videos, monthWords, failed }: { groups: Voices
 
 /** One group (the board's `.pcard`). */
 export function GroupCard({ card, n, monthWords, style }: { card: VoicesGroupCard; n: number | null; monthWords: string; style?: CSSProperties }) {
-  // No ready subject on their videos, and some not measured yet (open or
-  // being re-described): the box cannot say "no subject", only that they are
-  // not measured, by name (ruling U6; 14 Oct).
-  const notMeasured = card.videos > 0 && card.subjects.length === 0 && ((card.subjectsPending ?? 0) > 0 || (card.subjectsNotMeasured?.length ?? 0) > 0)
+  // A ready subject is read on their videos, at a count or at none of them
+  // (`subjectsNone`): the box then lists the counted ones and names the rest.
+  // Every ready one at 0 is still a reading, never "No subject read" (5 Nov).
+  const ready = card.subjects.length > 0 || (card.subjectsNone?.length ?? 0) > 0
+  // No ready subject at all, and some not measured yet (open or being
+  // re-described): the box cannot say "no subject", only that they are not
+  // measured, by name (ruling U6; 14 Oct).
+  const notMeasured = card.videos > 0 && !ready && ((card.subjectsPending ?? 0) > 0 || (card.subjectsNotMeasured?.length ?? 0) > 0)
   return (
     <article
       data-group={card.key}
@@ -103,7 +107,7 @@ export function GroupCard({ card, n, monthWords, style }: { card: VoicesGroupCar
           and its rows' empty tracks. */}
       <div className="flex flex-col gap-2 rounded-[10px] bg-inner px-3.5 py-3">
         <p className={cn(CAPS, 'mb-0.5')}>What they talk about{card.videos > 0 && !notMeasured ? <> · of their <Fig>{fmtInt(card.videos)}</Fig></> : null}</p>
-        {card.subjects.length > 0 ? (
+        {card.videos > 0 && ready ? (
           <>
             {card.subjects.map((s) => <MiniRow key={s.id} label={s.label} k={s.k} of={card.videos} />)}
             {card.subjects.length < 3 && (card.subjectsNone?.length ?? 0) > 0 ? (

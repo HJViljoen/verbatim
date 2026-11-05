@@ -68,7 +68,7 @@ describe('Who is in your market and the group cards (decision 2)', () => {
   })
 
   it('a card whose videos carry no subject keeps its box and says so in it', () => {
-    const node = <GroupCard card={{ ...d.groups.cards[0], subjects: [] }} n={487} monthWords="September" />
+    const node = <GroupCard card={{ ...d.groups.cards[0], subjects: [], subjectsNone: [] }} n={487} monthWords="September" />
     expect(renderText(node)).toContain('What they talk about · of their 96 No subject read in their videos yet.')
     assertCopyContract(node)
   })
@@ -148,6 +148,32 @@ describe('the mix card (the board\'s sixth; decision 2)', () => {
   })
 })
 
+// EVERY READY SUBJECT AT 0 IS STILL A READING (5 Nov review): the box names
+// them as on none of their videos, never "No subject read in their videos
+// yet", and, with a subject not measured too, names both, never the
+// not-measured box alone.
+describe('a group whose every ready subject is on none of their videos', () => {
+  const p = ossurVoicesFixture()
+  const c = p.groups.cards.find((x) => x.videos > 0)!
+  const allZero = { ...c, subjects: [], subjectsNone: ['Comfort', 'Price'], subjectsPending: 0, subjectsNotMeasured: [] }
+
+  it('names them on none of their videos, under the box\'s base', () => {
+    const text = renderText(<GroupCard card={allZero} n={p.videos} monthWords={p.monthWords} />)
+    expect(text).toContain(`What they talk about · of their ${c.videos} In none of their videos: Comfort, Price`)
+    expect(text).not.toContain('No subject read in their videos yet')
+    assertCopyContract(<GroupCard card={allZero} n={p.videos} monthWords={p.monthWords} />)
+  })
+
+  it('with a subject not measured too: both named, the ready ones first', () => {
+    const withPending = { ...allZero, subjectsPending: 1, subjectsNotMeasured: [{ id: 's-x', label: 'Fit' }] }
+    const node = <GroupCard card={withPending} n={p.videos} monthWords={p.monthWords} />
+    const text = renderText(node)
+    expect(text).toContain(`What they talk about · of their ${c.videos} In none of their videos: Comfort, Price Not measured yet: Fit`)
+    expect(render(node)).not.toMatch(/border-dashed/)
+    assertCopyContract(node)
+  })
+})
+
 // A TRACKED SUBJECT IS NEVER HIDDEN (Heinrich, 14 Oct): Function & movement
 // ready, Look & style ready and thin, Cost & access's check open, Fit &
 // comfort being re-described.
@@ -168,7 +194,7 @@ describe('a tracked subject is never hidden (14 Oct)', () => {
   })
 
   it('a box with no ready subject names those not measured yet, the failed one among them, where "Not measured yet" stood alone', () => {
-    const only = { ...card('caregivers'), subjects: [], subjectsPending: 1, subjectsNotMeasured: [{ id: 's-fit', label: 'Fit & comfort' }] }
+    const only = { ...card('caregivers'), subjects: [], subjectsNone: [], subjectsPending: 1, subjectsNotMeasured: [{ id: 's-fit', label: 'Fit & comfort' }] }
     const node = <GroupCard card={only} n={d.videos} monthWords={d.monthWords} />
     const text = renderText(node)
     expect(text).toContain('What they talk about Not measured yet: Fit & comfort')

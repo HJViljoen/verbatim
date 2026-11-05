@@ -453,7 +453,8 @@ describe('the board\'s shape in a thin month', () => {
   it('a thin Össur still has every group, one at no video and one with no subject', () => {
     const d = ossurThinVoicesFixture()
     expect(d.groups.cards).toHaveLength(5)
-    expect(d.groups.cards.find((c) => c.key === 'clinicians')).toMatchObject({ videos: 0, subjects: [], platforms: [] })
+    // A group with no video this month names no subject as on none of them.
+    expect(d.groups.cards.find((c) => c.key === 'clinicians')).toMatchObject({ videos: 0, subjects: [], subjectsNone: [], platforms: [] })
     expect(d.groups.cards.find((c) => c.key === 'athlete')).toMatchObject({ videos: 12, subjects: [] })
     expect(d.brands).toMatchObject({ state: 'not_counted', note: null })
     expect(d.creators.atFloor).toBe(2)

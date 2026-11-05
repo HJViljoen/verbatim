@@ -498,7 +498,8 @@ export function buildGroups(input: {
       oneLiner: p.oneLiner,
       videos: ids.length,
       subjects: (subjectsOf.get(p.key) ?? []).filter((s) => s.k > 0).slice(0, 3).map((s) => ({ id: s.subjectId, label: s.label, k: s.k })),
-      subjectsNone: (subjectsOf.get(p.key) ?? []).filter((s) => s.k <= 0).map((s) => s.label),
+      // On none of their videos: only said of a group with videos this month.
+      subjectsNone: ids.length > 0 ? (subjectsOf.get(p.key) ?? []).filter((s) => s.k <= 0).map((s) => s.label) : [],
       ...notCounted,
       platforms: platformsOf(ids, input.platformOf),
       wants: firstSentence(p.wants),
