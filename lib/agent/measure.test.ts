@@ -21,6 +21,7 @@ import {
   scrubThreadAnswer,
 } from './measure'
 import { FIXTURE_ENDED } from '../test/pair-fixture'
+import { ASK_FINDING_FLOOR } from './floor'
 import { sealandJudge } from '../test/sealand-pairs'
 import { pairOn } from '../reading/pairs'
 
@@ -235,6 +236,32 @@ describe('measureAnswer', () => {
     // A later answer in the thread starts afresh.
     const next = measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings: [three[0], { findingId: '1:G1', registryIds: ['reg-big', 'reg-b'] }], series, month: MONTH, directionWords: true })
     expect(next.findings.map((f) => f.label)).toEqual(['Ready to buy the bag', 'Ready to buy the bag'])
+  })
+
+  // The review's two cases (5 Nov): the preference never pushes a finding
+  // under the answer's floor, and a document's findings, keyed with no turn,
+  // share no taken set.
+  it('never takes a finding under the floor to give it a theme of its own', () => {
+    const theme = (id: string, k: number): MonthSeries => ({
+      ...climbing(), objectId: id, objectLabel: id,
+      points: [point('2026-07-01', k, 900), point('2026-08-01', k, 900), point(MONTH, k, 900)],
+    })
+    const series = [theme('A', 8), theme('B', 1)]
+    const thread = measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings: [{ findingId: '0:G1', registryIds: ['A'] }, { findingId: '0:G2', registryIds: ['A', 'B'] }], series, month: MONTH, directionWords: true })
+    expect(ASK_FINDING_FLOOR).toBeGreaterThan(1)
+    expect(thread.findings.map((f) => [f.findingId, f.label, f.value.k])).toEqual([['0:G1', 'A', 8], ['0:G2', 'A', 8]])
+    // Where its own theme clears the floor, it takes it.
+    const own = measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings: [{ findingId: '0:G1', registryIds: ['A'] }, { findingId: '0:G2', registryIds: ['A', 'B'] }], series: [theme('A', 8), theme('B', ASK_FINDING_FLOOR)], month: MONTH, directionWords: true })
+    expect(own.findings.map((f) => f.label)).toEqual(['A', 'B'])
+  })
+
+  it('a research document\'s or a brief\'s findings (keys with no turn) share no taken set', () => {
+    const theme = (id: string, k: number): MonthSeries => ({
+      ...climbing(), objectId: id, objectLabel: id,
+      points: [point('2026-07-01', k, 900), point('2026-08-01', k, 900), point(MONTH, k, 900)],
+    })
+    const research = measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings: [{ findingId: 'G1', registryIds: ['A'] }, { findingId: 'G7', registryIds: ['A', 'B'] }], series: [theme('A', 80), theme('B', 30)], month: MONTH, directionWords: true })
+    expect(research.findings.map((f) => [f.findingId, f.label, f.value.k])).toEqual([['G1', 'A', 80], ['G7', 'A', 80]])
   })
 
   it('names the month every figure on it is a figure of', () => {

@@ -16,7 +16,7 @@ import { prevMonth, monthStartOf } from '../reading/month-key'
 import { isAnswer, priorPrintable, type Counted, type FigureTable, type Verdict, type VerdictFlag } from '../reading/verdicts'
 import type { Scope } from '../renderables/types'
 import { isThin, movementDirection } from './movement'
-import { storedAnswerThin, type StoredFloorAnswer } from './floor'
+import { ASK_FINDING_FLOOR, storedAnswerThin, type StoredFloorAnswer } from './floor'
 import { seriesToCalendar } from '../charts/from-series'
 import type { CalendarSeries } from '../charts/calendar'
 
@@ -302,7 +302,10 @@ function measuredPoints(series: MonthSeries, month: string): MeasuredPoint[] {
  * point with one insight in the market's biggest theme was measured on it:
  * three findings of one Sealand answer each printed "Ready to buy the bag:
  * 82 of 901 videos", the same sentence three times under points about three
- * things. A finding whose every theme is taken shares one, honestly.
+ * things. A finding whose every theme is taken shares one, honestly. The
+ * preference is only for an untaken theme that clears the answer's floor
+ * (`ASK_FINDING_FLOOR`): the thread drops a finding measured under it, and
+ * one that printed on a taken theme must never be pushed under it.
  */
 function chooseSide(
   candidates: readonly MonthSeries[],
@@ -323,11 +326,12 @@ function chooseSide(
   }
   const floored = rows.filter((r) => clearsFloor({ month: r.curr.month, videos: r.curr.videos, k: r.curr.k }))
   const pool = floored.length ? floored : rows
-  const own = (r: { series: MonthSeries }): number => (taken.has(r.series.objectId ?? '') ? 1 : 0)
+  // 1 for a theme no earlier finding took that clears the answer's floor.
+  const own = (r: { series: MonthSeries; curr: MonthPoint }): number => (!taken.has(r.series.objectId ?? '') && k(r) >= ASK_FINDING_FLOOR ? 1 : 0)
   return [...pool].sort(
     (a, b) =>
       n(b) - n(a) ||
-      own(a) - own(b) ||
+      own(b) - own(a) ||
       k(b) - k(a) ||
       rank(a) - rank(b) ||
       (a.series.objectId ?? '').localeCompare(b.series.objectId ?? '') ||
@@ -389,9 +393,15 @@ export function measureAnswer(input: MeasureAnswerInput): AnswerMeasure {
   const caveats: string[] = []
   let figures: FigureTable = {}
   // The themes each answer's findings are measured on so far, by the turn a
-  // finding's key names (`${turn}:${ref}`, lib/pages/agent-thread.ts).
+  // finding's key names (`${turn}:${ref}`, lib/pages/agent-thread.ts). A key
+  // with no turn (a research document's or a monthly brief's `G1..Gn`, its
+  // findings from different questions) shares no set: null.
   const takenBy = new Map<string, Set<string>>()
-  const answerOf = (findingId: string): string => (findingId.includes(':') ? findingId.slice(0, findingId.indexOf(':')) : '')
+  const answerOf = (findingId: string): string | null => (findingId.includes(':') ? findingId.slice(0, findingId.indexOf(':')) : null)
+  const takenOf = (findingId: string): Set<string> | undefined => {
+    const turn = answerOf(findingId)
+    return turn == null ? undefined : takenBy.get(turn)
+  }
 
   input.findings.forEach((finding, index) => {
     const ids = new Set(finding.registryIds.filter(Boolean))
@@ -406,13 +416,12 @@ export function measureAnswer(input: MeasureAnswerInput): AnswerMeasure {
       // The order the answer cited them in, which is the model's own ranking of
       // what the point rests on and the last tie-break before the ids.
       finding.registryIds.filter(Boolean),
-      takenBy.get(answerOf(finding.findingId)),
+      takenOf(finding.findingId),
     )
     if (!chosen) return
     const { series, curr } = chosen
-    const taken = takenBy.get(answerOf(finding.findingId)) ?? new Set<string>()
-    taken.add(series.objectId as string)
-    takenBy.set(answerOf(finding.findingId), taken)
+    const turn = answerOf(finding.findingId)
+    if (turn != null) takenBy.set(turn, new Set([...(takenBy.get(turn) ?? []), series.objectId as string]))
     const label = series.objectLabel ?? series.objectId ?? finding.findingId
     const objectId = series.objectId as string
     const byMonth = pointsByMonth(series)
