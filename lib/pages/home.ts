@@ -229,10 +229,27 @@ export const weeksFailed = (w: WeeksRead | undefined): w is WeeksFailed =>
 
 // ---- The reads ---------------------------------------------------------------------
 
-/** `market_week_volumes` over the chart's weeks. */
+/** Postgres's "canceling statement due to statement timeout". */
+export const STATEMENT_TIMEOUT = '57014'
+
+/**
+ * `market_week_volumes` over the chart's weeks.
+ *
+ * ONE MORE TRY, ON A STATEMENT TIMEOUT ALONE (5 Nov). On a cold cache the
+ * function can run past PostgREST's statement timeout (8 s; the production
+ * log shows it cancelled at 18:30 UTC on 5 Nov), and Week by week then said
+ * "This could not be read just now." The first try leaves the pages it read
+ * warm, so a second is the read that usually lands. Any other error, or a
+ * second timeout, throws as before. Never a loop: one retry.
+ */
 export async function loadWeekRows(reading: SupabaseClient, clientId: string, now: string): Promise<MarketWeekRowRaw[]> {
   const to = addDays(isoWeekOf(now), 7)
-  const res = await reading.rpc('market_week_volumes', { p_client: clientId, p_from: homeAxis(now)[0], p_to: to })
+  const ask = () => reading.rpc('market_week_volumes', { p_client: clientId, p_from: homeAxis(now)[0], p_to: to })
+  let res = await ask()
+  if (res.error?.code === STATEMENT_TIMEOUT) {
+    console.warn('[pages] home.weeks: market_week_volumes ran past the statement timeout; asking once more')
+    res = await ask()
+  }
   if (res.error) throw new Error(`market_week_volumes: ${res.error.message}`)
   return (res.data ?? []) as MarketWeekRowRaw[]
 }

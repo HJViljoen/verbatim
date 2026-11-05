@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { OurChange } from '../reading/comparability'
 import type { MarketWeekRowRaw } from '../reading/weeks'
-import { homeAxis, homeWeeks, homeWeeksFrame, isFailOpenFix, TILE_NAV, weeksDrawable, WEEK_COLUMNS } from './home'
+import { homeAxis, homeWeeks, homeWeeksFrame, isFailOpenFix, loadWeekRows, STATEMENT_TIMEOUT, TILE_NAV, weeksDrawable, WEEK_COLUMNS } from './home'
 import { surface, SURFACES } from '../nav'
 
 // The Dashboard's week by week (lib/pages/home.ts), the chart Design v2 keeps
@@ -308,5 +308,36 @@ describe('the tiles open their pages (Design v2, T8)', () => {
     expect(surface(TILE_NAV.products).href).toBe('/dashboard/products')
     expect(surface(TILE_NAV.content).href).toBe('/dashboard/content')
     expect(surface(TILE_NAV.moves).href).toBe('/dashboard/moves')
+  })
+})
+
+// A cold cache can run `market_week_volumes` past PostgREST's statement
+// timeout; Week by week then said "This could not be read just now" (5 Nov).
+// One more try on that error alone, never on another, never a third.
+describe('loadWeekRows', () => {
+  const client = (answers: { data?: unknown[]; error?: { code?: string; message: string } }[]) => {
+    const calls: string[] = []
+    return {
+      calls,
+      rpc: async (fn: string) => { calls.push(fn); return answers[Math.min(calls.length - 1, answers.length - 1)] },
+    }
+  }
+  const NOW = '2026-11-05T09:00:00.000Z'
+  const CLIENT = '00000000-0000-4000-8000-0000000000aa'
+  const timeout = { error: { code: STATEMENT_TIMEOUT, message: 'canceling statement due to statement timeout' } }
+
+  it('asks once more after a statement timeout, and returns what the second read gives', async () => {
+    const c = client([timeout, { data: [{ week: '2026-11-02' }] }])
+    expect(await loadWeekRows(c as never, CLIENT, NOW)).toEqual([{ week: '2026-11-02' }])
+    expect(c.calls).toEqual(['market_week_volumes', 'market_week_volumes'])
+  })
+
+  it('throws on a second timeout, and at once on any other error', async () => {
+    const twice = client([timeout, timeout])
+    await expect(loadWeekRows(twice as never, CLIENT, NOW)).rejects.toThrow(/statement timeout/)
+    expect(twice.calls).toHaveLength(2)
+    const other = client([{ error: { code: 'PGRST002', message: 'schema cache' } }])
+    await expect(loadWeekRows(other as never, CLIENT, NOW)).rejects.toThrow(/schema cache/)
+    expect(other.calls).toHaveLength(1)
   })
 })
