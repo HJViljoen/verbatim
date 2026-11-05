@@ -14,13 +14,20 @@ import { HORIZONS } from '@/lib/reading/horizon'
 
 /** One shimmering bar. Width via className (w-1/2, w-24 …). `tone` follows
  *  the tile it sits on (every tile is white since 2026-08-28; `dark` is kept
- *  for any future inverted surface). */
+ *  for any future inverted surface).
+ *
+ *  A SPAN SET TO BLOCK, NEVER A DIV (5 Nov). A bone stands where a line of
+ *  text will, and PageBar's meta is a `<p>`: a `<div>` inside it is invalid
+ *  HTML, so the browser closed the paragraph early and React's hydration met
+ *  a tree it had not sent (error #418 on the Dashboard, whose bar meta
+ *  streams behind a bone). A span is valid in a paragraph and in every place
+ *  a div was, and draws the same. */
 export function Bone({ className, tone = 'light' }: { className?: string; tone?: 'light' | 'dark' }) {
   return (
-    <div
+    <span
       aria-hidden
       className={cn(
-        'animate-pulse rounded-[4px]',
+        'block animate-pulse rounded-[4px]',
         tone === 'light' ? 'bg-muted' : 'bg-inner',
         className,
       )}
