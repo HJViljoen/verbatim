@@ -206,6 +206,10 @@ export interface AdviceCard {
  *  the category's, as on Market (`Core.marketN`). Pure. */
 export const levelBase = (kind: 'subject' | 'theme' | 'advice' | null | undefined): string => (kind === 'subject' ? 'market videos' : 'category videos')
 
+/** The audience a level's months are judged on, for the same reason: a
+ *  subject's the market's, a conversation's the category's. Pure. */
+export const judgedOn = (kind: 'subject' | 'theme'): string => (kind === 'theme' ? INDUSTRY_AUDIENCE : 'market')
+
 /** What a piece of advice would move, and where that stands this month. */
 export interface AdviceAim {
   /** A theme's label: stored model prose, `pass_b_theme`. */
@@ -454,8 +458,9 @@ export function moveCards(input: {
   levels: (kind: 'subject' | 'theme', id: string, month: string) => number | null
   /** The base of what the move is on (`Core.marketN`). */
   n: (month: string, kind: 'subject' | 'theme') => number | null
-  /** One calendar step on the market read the same way. Omitted: every step. */
-  joined?: (prevMonth: string, month: string) => boolean
+  /** One calendar step read the same way, on the audience the move's object
+   *  is read on (`judgedOn`). Omitted: every step. */
+  joined?: (prevMonth: string, month: string, audience: string) => boolean
   /** The month-pair judge on the market, for the comparison's span. */
   pair?: PairOn | null
 }): MoveCard[] {
@@ -523,7 +528,11 @@ export function moveCards(input: {
       // newest, and reads its own month once that month is read.
       const pending = moveMonth > reading
       const anchor = pending ? read[read.length - 1]?.month ?? null : moveMonth
-      const points = anchor ? joinedRun(read, anchor, joined) : []
+      // A conversation is judged on the category, as it is counted and as
+      // Market judges it; a subject on the market (5 Nov review: Your moves
+      // must never print a verdict Market refuses).
+      const on = judgedOn(object.kind)
+      const points = anchor ? joinedRun(read, anchor, (a, b) => joined(a, b, on)) : []
       // The axis's months that are not drawn, and why (the line's one quiet
       // line under it says so).
       const drawn = new Set(points.map((p) => p.month))
@@ -533,7 +542,7 @@ export function moveCards(input: {
       const first = points[0]?.month ?? null
       const last = points[points.length - 1]?.month ?? null
       const stepReason = (prev: string, next: string): RefusedReason | null =>
-        input.pair ? pairOnVerdict(input.pair(prev, next, 'market')).refused : null
+        input.pair ? pairOnVerdict(input.pair(prev, next, on)).refused : null
       const gaps = months.filter((x) => !drawn.has(x.month)).map((x) => {
         if (!wasRead.has(x.month)) return { month: x.month, why: 'unread' as const }
         const reason = first && x.month < first ? stepReason(prevMonth(first), first)
@@ -552,12 +561,12 @@ export function moveCards(input: {
               objectKind: object.kind,
               objectId: object.id,
               objectLabel: label ?? object.id,
-              audience: 'market',
+              audience: on,
               window: { kind: 'month', from: after.month, to: nextMonth(after.month) },
               basis: { from: before.month, to: nextMonth(before.month) },
               value: { k: after.k, n: after.n },
               baseline: { k: before.k, n: before.n },
-            }, input.pair ? input.pair(before.month, after.month, 'market') : null),
+            }, input.pair ? input.pair(before.month, after.month, on) : null),
           }
         : null
       return { ...base, points, compare, unread: null, pending: null, gaps }
@@ -1091,7 +1100,7 @@ export async function readMoveCards(core: Core, moves: readonly DatedMove[], cit
     adviceTargets: targets,
     levels,
     n: core.marketN,
-    joined: (prev, m) => joins(core.pair(prev, m, 'market')),
+    joined: (prev, m, on) => joins(core.pair(prev, m, on)),
     pair: core.pair,
   })
   return { cards, aims, aimsFailed }

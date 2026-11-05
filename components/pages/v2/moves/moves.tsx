@@ -105,7 +105,7 @@ export function MoveChart({ card, readingMonth, detail = false }: {
   const line = axisLine(slots)
   return (
     <div className="flex flex-col gap-1.5">
-      <svg viewBox={`0 0 ${W} ${detail ? H + 14 : H}`} width="100%" role="img" aria-label={`${card.label ?? 'It'} as a share of the market's videos${words ? `: ${words}` : ', no month drawn yet'}. The move was dated ${shortDate(card.day)}.`} className="block overflow-visible">
+      <svg viewBox={`0 0 ${W} ${detail ? H + 14 : H}`} width="100%" role="img" aria-label={`${card.label ?? 'It'} as a share of ${levelBase(card.kind)}${words ? `: ${words}` : ', no month drawn yet'}. The move was dated ${shortDate(card.day)}.`} className="block overflow-visible">
         <line x1={0} y1={BASE} x2={W} y2={BASE} className="stroke-border" />
         {moveX != null ? (
           <>
@@ -194,7 +194,7 @@ export function MoveSentence({ card, reading }: { card: MoveCard; reading: Readi
   if (!latest) return null
   return (
     <p className="m-0 text-[13.5px] leading-[1.5] text-foreground">
-      Share of market videos: <Level p={latest} /> in {inlineMonth(`${longMonth(latest.month)}${latest.soFar ? ' so far' : ''}`, monthLabelOn(latest.month, reading))}.
+      Share of {levelBase(card.kind)}: <Level p={latest} /> in {inlineMonth(`${longMonth(latest.month)}${latest.soFar ? ' so far' : ''}`, monthLabelOn(latest.month, reading))}.
     </p>
   )
 }

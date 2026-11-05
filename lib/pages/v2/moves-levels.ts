@@ -3,6 +3,7 @@ import { aboutNamed, type WhoVideo } from '../../brands/attribution'
 import { fmtInt, longMonth, platformLabel, shortDate } from '../../format'
 import type { GateOptions } from '../../quote-gate'
 import { joinedRun } from '../../reading/pairs'
+import { INDUSTRY_AUDIENCE } from '../../rivals'
 import { monthStartOf, nextMonth, prevMonth } from '../../reading/month-key'
 import { inlineMonth } from '../../reading/month-label'
 import { pairOnVerdict } from '../../reading/comparability'
@@ -254,7 +255,8 @@ export function wouldMoveLineOf(a: {
   const byMonth = new Map(drawn.map((p) => [p.month, p]))
   const wasRead = new Set(read.map((p) => p.month))
   const first = drawn[0]?.month ?? null
-  const stepReason = (prev: string, next: string): RefusedReason | null => (a.pair ? pairOnVerdict(a.pair(prev, next, 'market')).refused : null)
+  // A conversation's line is judged on the category, as Market judges it.
+  const stepReason = (prev: string, next: string): RefusedReason | null => (a.pair ? pairOnVerdict(a.pair(prev, next, INDUSTRY_AUDIENCE)).refused : null)
   const slots: MoveSlot[] = months.map((m) => {
     const point = byMonth.get(m) ?? null
     if (point) return { month: m, point, why: null }

@@ -5,7 +5,7 @@ import { priorPrintable } from '../../reading/verdicts'
 import type { PairComparability } from '../../reading/comparability'
 import type { RecCopy } from '../market-surface'
 import {
-  adviceAims, adviceHistory, axisLine, compareMonths, conclusionViews, headerParts, largestStance, leadClaims, moveAxis, moveCards, movedMove,
+  adviceAims, adviceHistory, axisLine, levelBase, compareMonths, conclusionViews, headerParts, largestStance, leadClaims, moveAxis, moveCards, movedMove,
   recordRows, restsOnRows, streakLabel, adviceHref, adviceTitle, waitingAdvice, MOVES_PATH, MOVE_UNREAD, RECORD_HREF, UNTITLED_ADVICE,
 } from './moves'
 import { buildAdviceRows } from '../market-surface'
@@ -124,6 +124,34 @@ describe('moveCards', () => {
     expect(c.href).toBe('/dashboard/moves/m')
     expect(c.onHref).toBe('/dashboard/market/subjects/s1?period=month&month=2026-09')
     expect(c.object).toEqual({ kind: 'subject', id: 's1' })
+  })
+
+  // A conversation is counted in the category, so it is judged there too: a
+  // theme move's pair, its steps and its verdict read the category's audience,
+  // a subject's the market's (5 Nov review: Your moves must never print a
+  // verdict Market refuses).
+  it('judges a theme move on the category and a subject move on the market', () => {
+    const asked: string[] = []
+    const refuseMarket = (prevMonth: string, month: string, audience: string): PairComparability => {
+      asked.push(audience)
+      return audience === 'market'
+        ? { prevMonth, month, mode: 'refuse', row: null, reasons: [{ kind: 'searches', changeId: 'ch-1', share: 0.2, changedAt: '2026-08-12T00:00:00Z', surface: null }] }
+        : { prevMonth, month, mode: 'comparable', row: null, reasons: [] }
+    }
+    const steps: string[] = []
+    const joined = (_a: string, _b: string, on: string) => { steps.push(on); return true }
+    const [theme] = moveCards({ ...base, moves: [move({ kind: 'theme', subject_id: null, registry_ids: ['t1'] })], pair: refuseMarket as never, joined })
+    expect(theme.compare?.verdict.state).not.toBe('refused')
+    expect(theme.compare?.verdict.audience).toBe('industry-other')
+    expect(new Set(asked)).toEqual(new Set(['industry-other']))
+    expect(new Set(steps)).toEqual(new Set(['industry-other']))
+    asked.length = 0
+    steps.length = 0
+    const [subject] = moveCards({ ...base, moves: [move({})], pair: refuseMarket as never, joined })
+    expect(subject.compare?.verdict.state).toBe('refused')
+    expect(new Set(asked)).toEqual(new Set(['market']))
+    expect(new Set(steps)).toEqual(new Set(['market']))
+    expect([levelBase('theme'), levelBase('advice'), levelBase('subject')]).toEqual(['category videos', 'category videos', 'market videos'])
   })
 
   it('draws no month across a refused step, and a refused pair prints no earlier month', () => {

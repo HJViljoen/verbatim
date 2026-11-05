@@ -7,7 +7,7 @@ import {
   type ContentPageData, type PostsBlock, type SentencePart,
 } from '../../pages/v2/content'
 import {
-  axisLine, compareMonths, comparePrintable, MOVE_STATUS_LABEL, MOVE_UNREAD, moveAxis, monthLabelOn, waitingAdvice,
+  axisLine, compareMonths, comparePrintable, levelBase, MOVE_STATUS_LABEL, MOVE_UNREAD, moveAxis, monthLabelOn, waitingAdvice,
   type AdviceAim, type MoveCard, type ReadingLabel,
 } from '../../pages/v2/moves'
 import { adviceTitle } from '../../pages/v2/advice-words'
@@ -411,16 +411,16 @@ export function moveSentence(card: MoveCard, reading: ReadingLabel | null): stri
   if (card.unread) return MOVE_UNREAD[card.unread]
   if (card.pending) {
     const last = card.points[card.points.length - 1]
-    return last ? `Share of market videos: ${level(last)} in ${longMonth(last.month)}, before the move.` : ''
+    return last ? `Share of ${levelBase(card.kind)}: ${level(last)} in ${longMonth(last.month)}, before the move.` : ''
   }
   const c = card.compare
   if (comparePrintable(c)) {
     const m = compareMonths(c, monthStartOf(card.day), reading)
-    return `Share of market videos went from ${level(c.before)} in ${m.before}, to ${level(c.after)} in ${m.after}.`
+    return `Share of ${levelBase(card.kind)} went from ${level(c.before)} in ${m.before}, to ${level(c.after)} in ${m.after}.`
   }
   const latest = card.compare?.after ?? card.points[card.points.length - 1]
   if (!latest) return ''
-  return `Share of market videos: ${level(latest)} in ${inlineMonth(`${longMonth(latest.month)}${latest.soFar ? ' so far' : ''}`, monthLabelOn(latest.month, reading))}.`
+  return `Share of ${levelBase(card.kind)}: ${level(latest)} in ${inlineMonth(`${longMonth(latest.month)}${latest.soFar ? ' so far' : ''}`, monthLabelOn(latest.month, reading))}.`
 }
 
 /** A dated move as the brief prints it: Your moves' card, said on paper. Pure. */

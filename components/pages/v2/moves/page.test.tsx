@@ -19,6 +19,7 @@ import {
 import { readingMonthLabel } from '@/lib/reading/month-label'
 import { MovesV2Page, MOVES_FIRST_RUN } from './index'
 import { AdviceSection } from './advice'
+import { MoveChart, MoveSentence } from './moves'
 import { SAY_FIRST } from './say'
 import { TrackThisSubject } from '@/components/subjects/track-this'
 import { MovesSection, lineGeometry } from './moves'
@@ -544,5 +545,16 @@ describe('the next move’s card', () => {
       expect(text).not.toContain(NEXT_MOVE.line)
       expect(text).not.toContain('Date a move')
     }
+  })
+})
+
+// A move on a conversation is a share of the category's videos in its
+// sentence's every branch and in its chart's name (5 Nov review).
+describe('a move on a conversation', () => {
+  const card = { ...MOVE_CARDS.find((c) => c.points.length > 0)!, kind: 'theme' as const, unread: null, pending: null, compare: null }
+  it('says the category\'s videos where only its latest month prints, and names its chart so', () => {
+    expect(markupText(render(<MoveSentence card={card} reading={null} />))).toMatch(/^Share of category videos: /)
+    expect(render(<MoveChart card={card} readingMonth="2026-09-01" />)).toMatch(/aria-label="[^"]* as a share of category videos/)
+    expect(render(<MoveChart card={{ ...card, kind: 'subject' }} readingMonth="2026-09-01" />)).toMatch(/aria-label="[^"]* as a share of market videos/)
   })
 })

@@ -308,6 +308,16 @@ describe('Your moves: the advice waiting, the moves dated, the record', () => {
     expect(MOVE_CARDS.map((c) => moveSentence(c, { month: SEP, label: 'the last full month' })).some((s) => s.includes('September, the last full month'))).toBe(true)
   })
 
+  // A conversation's share is of the category's videos, as on Your moves and
+  // Market; a subject's of the market's (5 Nov review).
+  it('a move on a conversation says the category\'s videos in every branch, a subject\'s the market\'s', () => {
+    const card = MOVE_CARDS.find((c) => c.points.length > 0)!
+    const latest = { ...card, kind: 'theme' as const, unread: null, pending: null, compare: null }
+    expect(moveSentence(latest, null)).toMatch(/^Share of category videos: /)
+    expect(moveSentence({ ...latest, pending: '2026-10-01' }, null)).toMatch(/^Share of category videos: .*before the move\.$/)
+    expect(moveSentence({ ...latest, kind: 'subject' }, null)).toMatch(/^Share of market videos: /)
+  })
+
   it('slots say why a month is empty, in a word or two', () => {
     expect(slotWords({ k: 31, n: 902, why: null })).toBe('31 of 902')
     expect(slotWords({ k: null, n: null, why: 'cut' })).toBe('Left off the line')

@@ -10,7 +10,7 @@ import { marketAudiences } from '../../reading/market'
 import { monthStartOf, prevMonth } from '../../reading/month-key'
 import { readingMonthLabel } from '../../reading/month-label'
 import type { Scope } from '../../renderables/types'
-import { loadCompetitors } from '../../rivals'
+import { INDUSTRY_AUDIENCE, loadCompetitors } from '../../rivals'
 import { selectAll } from '../../supabase-admin'
 import { audienceOfVideo } from '../../written/evidence'
 import { adviceVectors } from '../advice-shortlist'
@@ -317,7 +317,7 @@ export async function loadAdvicePage(scope: Scope, id: string, options: { canDec
       ? wouldMoveLineOf({
           themeId: target, label: targetLabel, month: core.month, monthLabel, now: core.readingAt,
           level: (m) => levels('theme', target, m), n: (m) => core.marketN(m, 'theme'),
-          joined: (prev, m) => joins(core.pair(prev, m, 'market')), pair: core.pair,
+          joined: (prev, m) => joins(core.pair(prev, m, INDUSTRY_AUDIENCE)), pair: core.pair,
         })
       : null
 
@@ -358,7 +358,7 @@ export async function loadAdvicePage(scope: Scope, id: string, options: { canDec
     cards: moveCards({
       moves: onIt, month: core.month, now: core.readingAt, subjects: subjectsOf(core),
       themes: labels, adviceTargets: targets, levels, n: core.marketN,
-      joined: (prev, m) => joins(core.pair(prev, m, 'market')), pair: core.pair,
+      joined: (prev, m, on) => joins(core.pair(prev, m, on)), pair: core.pair,
     }),
     recorded: core.moves != null,
   }
