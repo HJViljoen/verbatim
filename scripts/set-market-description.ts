@@ -26,9 +26,11 @@ import { createAdminClient } from '../lib/supabase-admin'
 // comparison break. Refused while the tenant has a running update (its gate
 // steps would judge part of one gather each way), unless --allow-running.
 //
-// THE BREAK HOLDS ONLY ONCE THE CORPUS IS RE-JUDGED: after this, regate the
-// stored corpus by the new definition and refresh the filling months the dry
-// run names. Until then those months still hold what the old rule let in.
+// THE BREAK HOLDS ONLY ONCE THE CORPUS IS REGATED: after this, remove what the
+// two raters' plan calls off-market under the definition (the regate script;
+// it does not re-run the gate, which judges only what later gathers find) and
+// refresh the filling months the dry run names. Until then those months still
+// hold what the old rule let in.
 //
 // UNDO: --clear --apply (or --file <the earlier words> --apply) writes the
 // old value back and logs a second row. The log is append-only, so the first
@@ -112,7 +114,7 @@ export async function runSetMarketDescription(argv: readonly string[], deps: Run
     for (const line of plan.after.market_description.split('\n')) log(`    | ${line}`)
   }
   if (running.length > 0) log(`  running update(s): ${running.join(', ')}`)
-  log(`  next: regate the stored corpus by the definition, then refresh ${monthName(plan.rejudgedFrom)} onward (the filling months); the break holds only once both are done`)
+  log(`  next: the regate (it removes what the raters' plan calls off-market), then the refresh of ${monthName(plan.rejudgedFrom)} onward (the filling months); the break holds only once both are done`)
 
   if (!args.apply) {
     log(`${NAME}: read-only, nothing written. --apply writes the column and logs one change row.`)
