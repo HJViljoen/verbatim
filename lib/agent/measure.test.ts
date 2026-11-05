@@ -213,6 +213,30 @@ describe('measureAnswer', () => {
     ).toBe('Will it survive a wet commute')
   })
 
+  // Sealand, 5 Nov: three findings each touching the market's biggest theme
+  // were all measured on it, and printed "82 of 901" three times.
+  it('measures each finding of an answer on a theme of its own where it has one, not on the biggest they all touch', () => {
+    const theme = (id: string, label: string, k: number): MonthSeries => ({
+      ...climbing(), objectId: id, objectLabel: label,
+      points: [point('2026-07-01', k, 1400), point('2026-08-01', k, 1455), point(MONTH, k, 1388)],
+    })
+    const series = [theme('reg-big', 'Ready to buy the bag', 82), theme('reg-a', 'Strap comfort', 30), theme('reg-b', 'Zip failures', 21)]
+    const three = [
+      { findingId: '0:G1', registryIds: ['reg-a', 'reg-big'] },
+      { findingId: '0:G2', registryIds: ['reg-big', 'reg-b'] },
+      { findingId: '0:G3', registryIds: ['reg-big'] },
+    ]
+    const m = measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings: three, series, month: MONTH, directionWords: true })
+    // The first takes the biggest it cites; the second its own; the third has
+    // no other theme, so it shares one rather than going unmeasured.
+    expect(m.findings.map((f) => [f.findingId, f.label, f.value.k])).toEqual([
+      ['0:G1', 'Ready to buy the bag', 82], ['0:G2', 'Zip failures', 21], ['0:G3', 'Ready to buy the bag', 82],
+    ])
+    // A later answer in the thread starts afresh.
+    const next = measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings: [three[0], { findingId: '1:G1', registryIds: ['reg-big', 'reg-b'] }], series, month: MONTH, directionWords: true })
+    expect(next.findings.map((f) => f.label)).toEqual(['Ready to buy the bag', 'Ready to buy the bag'])
+  })
+
   it('names the month every figure on it is a figure of', () => {
     expect(measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings, series: [climbing()], month: MONTH, directionWords: true }).month).toBe(MONTH)
     expect(measureAnswer({ pair: null, asOf: FIXTURE_ENDED, findings, series: [climbing()], month: '2026-08-14', directionWords: true }).month)

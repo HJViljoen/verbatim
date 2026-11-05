@@ -119,7 +119,9 @@ describe('what answers cover (WP3.9; §0a, 1 Oct)', () => {
     expect(text).toContain('What answers cover')
     expect(text).toContain('videos in September so far')
     expect(text).toContain('of those 655, about a brand you track')
-    expect(text).toContain('in September so far, kept apart from your market')
+    expect(text).toContain('Your own audience')
+    expect(text).toContain('videos by you or naming you in September so far, kept apart from your market')
+    expect(text).not.toContain('Your own posts 9')
   })
 
   it('says nothing about how it reads: no months read, no comparisons, no method link', () => {

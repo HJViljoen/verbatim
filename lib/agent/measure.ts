@@ -292,15 +292,23 @@ function measuredPoints(series: MonthSeries, month: string): MeasuredPoint[] {
  * direction word.
  *
  * So it is decided, in this order, and nothing in it can tie: the side that
- * clears the floor; the bigger DENOMINATOR (the side with the n); the bigger
+ * clears the floor; the bigger DENOMINATOR (the side with the n); a theme no
+ * earlier finding of the same answer is measured on (`taken`); the bigger
  * NUMERATOR, so the theme the month actually says more about wins; then the
  * order the ANSWER cited its themes in, which is the model's own ranking of
  * what the point rests on; then the ids, so two runs of the same data agree.
+ *
+ * EACH FINDING ITS OWN THEME WHERE IT HAS ONE (5 Nov). Without `taken`, every
+ * point with one insight in the market's biggest theme was measured on it:
+ * three findings of one Sealand answer each printed "Ready to buy the bag:
+ * 82 of 901 videos", the same sentence three times under points about three
+ * things. A finding whose every theme is taken shares one, honestly.
  */
 function chooseSide(
   candidates: readonly MonthSeries[],
   month: string,
   cited: readonly string[] = [],
+  taken: ReadonlySet<string> = new Set(),
 ): { series: MonthSeries; curr: MonthPoint } | null {
   const rows = candidates
     .map((s) => ({ series: s, curr: pointsByMonth(s).get(month) }))
@@ -315,9 +323,11 @@ function chooseSide(
   }
   const floored = rows.filter((r) => clearsFloor({ month: r.curr.month, videos: r.curr.videos, k: r.curr.k }))
   const pool = floored.length ? floored : rows
+  const own = (r: { series: MonthSeries }): number => (taken.has(r.series.objectId ?? '') ? 1 : 0)
   return [...pool].sort(
     (a, b) =>
       n(b) - n(a) ||
+      own(a) - own(b) ||
       k(b) - k(a) ||
       rank(a) - rank(b) ||
       (a.series.objectId ?? '').localeCompare(b.series.objectId ?? '') ||
@@ -378,6 +388,10 @@ export function measureAnswer(input: MeasureAnswerInput): AnswerMeasure {
   const findings: FindingMeasure[] = []
   const caveats: string[] = []
   let figures: FigureTable = {}
+  // The themes each answer's findings are measured on so far, by the turn a
+  // finding's key names (`${turn}:${ref}`, lib/pages/agent-thread.ts).
+  const takenBy = new Map<string, Set<string>>()
+  const answerOf = (findingId: string): string => (findingId.includes(':') ? findingId.slice(0, findingId.indexOf(':')) : '')
 
   input.findings.forEach((finding, index) => {
     const ids = new Set(finding.registryIds.filter(Boolean))
@@ -392,9 +406,13 @@ export function measureAnswer(input: MeasureAnswerInput): AnswerMeasure {
       // The order the answer cited them in, which is the model's own ranking of
       // what the point rests on and the last tie-break before the ids.
       finding.registryIds.filter(Boolean),
+      takenBy.get(answerOf(finding.findingId)),
     )
     if (!chosen) return
     const { series, curr } = chosen
+    const taken = takenBy.get(answerOf(finding.findingId)) ?? new Set<string>()
+    taken.add(series.objectId as string)
+    takenBy.set(answerOf(finding.findingId), taken)
     const label = series.objectLabel ?? series.objectId ?? finding.findingId
     const objectId = series.objectId as string
     const byMonth = pointsByMonth(series)

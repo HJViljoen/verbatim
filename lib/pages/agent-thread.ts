@@ -279,6 +279,8 @@ export interface AskReading {
    *  an answer measured on an earlier month states its base against. Absent
    *  where nothing was read. */
   months?: ReadonlyMap<string, MarketCount>
+  /** `own` by month, for the rail of a thread measured on an earlier month. */
+  ownMonths?: ReadonlyMap<string, number>
 }
 
 export const NO_ASK_READING: AskReading = { reading: null, market: null, own: null, monthsRead: [], earliest: null, next: null }
@@ -302,7 +304,8 @@ export function askReadingFrom(input: Parameters<typeof readingViewFrom>[0] & {
   const rivals = input.rivalAudiences ?? [...new Set(input.denominators.map((d) => d.audience).filter((a) => a.startsWith('competitor:')))]
   const pooled = pooledDenominators(input.denominators.map((d) => ({ month: d.month, audience: d.audience, videos: d.videos, comments: d.comments ?? 0 })), rivals)
   const month = monthStartOf(reading.month)
-  const own = input.denominators.find((d) => monthStartOf(d.month) === month && d.audience === CLIENT_AUDIENCE)?.videos ?? null
+  const ownMonths = new Map(input.denominators.filter((d) => d.audience === CLIENT_AUDIENCE && d.videos != null).map((d) => [monthStartOf(d.month), d.videos as number]))
+  const own = ownMonths.get(month) ?? null
   const monthsRead = [...pooled.values()]
     .filter((c) => c.videos != null && c.videos >= SHARE_BAND.minN && c.month <= month)
     .map((c) => c.month)
@@ -317,6 +320,7 @@ export function askReadingFrom(input: Parameters<typeof readingViewFrom>[0] & {
     earliest: months[0] ?? null,
     next: next ? { prevMonth: next.prevMonth, month: next.month, sameAgeFrom: next.sameAgeFrom } : null,
     months: pooled,
+    ownMonths,
   }
 }
 
@@ -353,10 +357,20 @@ const monthPhrase = (r: ReadingMonth | null, month: string): string =>
  * ("13 of 796 … not counting the 38 about brands you track", 834 in all), and
  * so does the window an answer looks over.
  */
-export function askReads(r: AskReading, window: AskWindowChoice | null): AskReads {
-  const month = r.reading ? monthStartOf(r.reading.month) : null
+export function askReads(r: AskReading, window: AskWindowChoice | null, measured?: string | null): AskReads {
+  // A THREAD'S RAIL IS ITS ANSWERS' MONTH (5 Nov). A thread answered while
+  // the pages read September is measured on September ("82 of 901", the
+  // findings' base line), and the rail beside it said October's "25 of
+  // 1,192": two bases side by side for one answer. `measured` is the month
+  // the thread's findings are measured on; Ask's own page passes none.
+  const reading = r.reading ? monthStartOf(r.reading.month) : null
+  const at = measured ? monthStartOf(measured) : null
+  const earlier = at != null && reading != null && at !== reading
+  const month = earlier ? at : reading
   const when = month ? monthPhrase(r.reading, month) : null
-  const total = r.market?.videos ?? null
+  const market = earlier ? r.months?.get(at) ?? null : r.market
+  const own = earlier ? r.ownMonths?.get(at) ?? null : r.own
+  const total = market?.videos ?? null
   const rows: AskReadsRow[] = [
     {
       key: 'market',
@@ -367,14 +381,19 @@ export function askReads(r: AskReading, window: AskWindowChoice | null): AskRead
     {
       key: 'brands',
       label: 'Brands you track',
-      value: r.market?.rivalFiled ?? null,
+      value: market?.rivalFiled ?? null,
       line: total == null ? 'videos about a brand you track' : `of those ${fmtInt(total)}, about a brand you track`,
     },
     {
+      // YOUR OWN AUDIENCE, NOT YOUR POSTS (5 Nov). The count is the `client`
+      // audience's videos in the month: your posts and creators' videos
+      // naming you, by the month people commented (the base `findingBase`
+      // calls "your own audience"). Labelled "Your own posts" it read 11
+      // beside Content's 37 posts published in October.
       key: 'own',
-      label: 'Your own posts',
-      value: r.own,
-      line: when ? `in ${when}, kept apart from your market` : 'kept apart from your market',
+      label: 'Your own audience',
+      value: own,
+      line: when ? `videos by you or naming you in ${when}, kept apart from your market` : 'videos by you or naming you, kept apart from your market',
     },
   ]
   const facts = [
@@ -1053,7 +1072,7 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
       r ? notAnsweredFrom(r.rows, r.from, undefined, (reply) => (reply.id != null && thinReply.has(reply.id) ? thinReply.get(reply.id) === true : undefined)) : null),
     planChip,
     history: await historyP,
-    reads: askReads(askReading, window),
+    reads: askReads(askReading, window, readMonth),
     bar: { question: surface('ask').question ?? '', context: askBasisLine(basis, { short: true }), reading: askReading.reading },
     about,
     window,

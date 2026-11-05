@@ -158,11 +158,30 @@ describe('what answers cover (WP3.9; §0a, 1 Oct)', () => {
     expect(r.rows).toEqual([
       { key: 'market', label: 'Your market', value: 655, line: 'videos in September so far' },
       { key: 'brands', label: 'Brands you track', value: 29, line: 'of those 655, about a brand you track' },
-      { key: 'own', label: 'Your own posts', value: 9, line: 'in September so far, kept apart from your market' },
+      { key: 'own', label: 'Your own audience', value: 9, line: 'videos by you or naming you in September so far, kept apart from your market' },
     ])
     // The months read and the first comparison "read the same way" were our
     // machinery; the window is what an answer looks over.
     expect(r.facts).toEqual([{ term: 'Window', value: 'the last 90 days' }])
+  })
+
+  // A thread measured on an earlier month says that month's market beside its
+  // findings, never the reading month's: September's "82 of 901" sat beside
+  // October's "25 of 1,192" (Sealand, 5 Nov).
+  it('a thread measured on an earlier month reads that month: its market, its brands and your own audience', () => {
+    const earlier = {
+      ...SEALAND_ASK_READING,
+      months: new Map([['2026-08-01', { month: '2026-08-01', videos: 378, comments: 9000, category: 360, rivalFiled: 18 }]]),
+      ownMonths: new Map([['2026-08-01', 4]]),
+    }
+    expect(askReads(earlier, 'days90', '2026-08-01').rows).toEqual([
+      { key: 'market', label: 'Your market', value: 378, line: 'videos in August' },
+      { key: 'brands', label: 'Brands you track', value: 18, line: 'of those 378, about a brand you track' },
+      { key: 'own', label: 'Your own audience', value: 4, line: 'videos by you or naming you in August, kept apart from your market' },
+    ])
+    // The reading month itself, or no month, is the reading's own.
+    expect(askReads(earlier, 'days90', '2026-09-14').rows[0]).toEqual({ key: 'market', label: 'Your market', value: 655, line: 'videos in September so far' })
+    expect(askReads(earlier, 'days90').rows[0].value).toBe(655)
   })
 
   it('names both windows where no answer has chosen one, and all time where one did', () => {
