@@ -147,7 +147,10 @@ export type VerdictFlag =
  */
 export interface VerdictPairNote {
   mode: 'flag' | 'refuse'
-  cause: 'searches' | 'ours' | 'not_yet' | 'running'
+  /** `rejudged`: a change of the market definition that the pair crosses
+   *  (`changeBearsOn`, lib/reading/comparability.ts); its `changeMonth` is
+   *  the month the definition applies FROM, not the month it was made. */
+  cause: 'searches' | 'ours' | 'rejudged' | 'not_yet' | 'running'
   changeMonth: string | null
   checkWith: string | null
 }

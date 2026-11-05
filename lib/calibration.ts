@@ -558,6 +558,12 @@ export const PAIR_FLAG_CHIP = (month: string | null): string =>
 export const PAIR_REFUSED_SEARCHES_CHIP = (month: string): string =>
   `not read as a change: we changed our searches in ${longMonth(month)}`
 
+/** A pair refused because the market definition the relevance check judges
+ *  by changed, and the pair crosses the month it applies from: named by that
+ *  month, since the frozen months before it keep the old rule's figures. */
+export const PAIR_REFUSED_REJUDGED_CHIP = (month: string): string =>
+  `not read as a change: we changed how we check videos from ${longMonth(month)} on`
+
 /** A pair refused because we changed how we check or file videos (the
  *  relevance check, the filing judge, a re-tag, the reader). */
 export const PAIR_REFUSED_OURS_CHIP = (month: string): string =>
@@ -589,6 +595,7 @@ export function pairChipWords(note: VerdictPairNote): string {
   if (note.mode === 'flag') return PAIR_FLAG_CHIP(note.changeMonth)
   if (note.cause === 'running' && note.changeMonth) return PAIR_RUNNING_CHIP(note.changeMonth)
   if (note.cause === 'not_yet' || note.cause === 'running' || !note.changeMonth) return PAIR_NOT_YET_CHIP(note.checkWith)
+  if (note.cause === 'rejudged') return PAIR_REFUSED_REJUDGED_CHIP(note.changeMonth)
   return note.cause === 'searches' ? PAIR_REFUSED_SEARCHES_CHIP(note.changeMonth) : PAIR_REFUSED_OURS_CHIP(note.changeMonth)
 }
 

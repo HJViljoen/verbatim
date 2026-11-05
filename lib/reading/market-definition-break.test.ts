@@ -69,13 +69,35 @@ describe('changesFromLog: a change of the market definition', () => {
     expect(regate.flatMap((c) => c.rowIds)).toEqual(REGATE.map((r) => r.id))
   })
 
-  it('fails closed to an ordinary relevance change where its band does not say a month', () => {
+  it('fails closed where its band does not say a month: no break, and it is still a market-definition change', () => {
     for (const affects_months of [null, '', '[2026-10-15,2026-12-01)', '[2026-12-01,2026-10-01)', '2026-10-01']) {
       expect(rejudgedFromOf({ ...DEFINITION, affects_months })).toBeNull()
-      expect(changesFromLog([{ ...DEFINITION, affects_months }])[0].rejudgedFrom).toBeUndefined()
+      const [c] = changesFromLog([{ ...DEFINITION, affects_months }])
+      expect(c.rejudgedFrom).toBeUndefined()
+      expect(c.marketDefinition).toBe(true)
     }
     expect(rejudgedFromOf({ ...DEFINITION, field: 'relevance_gate' })).toBeNull()
     expect(rejudgedFromOf({ ...DEFINITION, surface: 'other' })).toBeNull()
+    expect(CHANGES.filter((c) => c.marketDefinition).map((c) => c.id)).toEqual(['definition-1107'])
+  })
+
+  it('such a row refuses every pair in its span unmeasured, and a measure written for it is never read', () => {
+    const garbled = changesFromLog([{ ...DEFINITION, affects_months: null }, ...REGATE])
+    // A measure of it at none of either month, as the gate's reach would read: ignored.
+    const withMeasure = (prev: string, month: string): PairRow => {
+      const base = pairRow(prev, month)
+      return { ...base, codeChanges: [...base.codeChanges, { changeId: 'definition-1107', surface: 'gate_rule' as const, prev: { k: 0, n: 400 }, curr: { k: 0, n: 400 } }] }
+    }
+    for (const [prev, month] of [['2026-09-01', '2026-10-01'], ['2026-10-01', '2026-11-01'], ['2026-11-01', '2026-12-01']]) {
+      const r = comparabilityOf(prev, month, { row: withMeasure(prev, month), changes: garbled, view: 'market', later: ENDED })
+      expect(r.mode, `${prev} ${month}`).toBe('refuse')
+      expect(r.reasons.find((x) => x.changeId === 'definition-1107'), `${prev} ${month}`).toMatchObject({ kind: 'code_change', share: null })
+    }
+    // Outside its span (both months frozen before it was logged) it moves nothing.
+    expect(comparabilityOf('2026-08-01', '2026-09-01', { row: withMeasure('2026-08-01', '2026-09-01'), changes: garbled, view: 'market', later: ENDED }).mode).toBe('comparable')
+    // The page judge never reads its measure either.
+    const page = pairJudge({ now: '2026-11-20T00:00:00.000Z', changes: garbled, rows: [withMeasure('2026-10-01', '2026-11-01')], updates: [{ id: 'run-latest', finishedAt: '2026-11-15T05:00:00.000Z' }] })
+    expect(page('2026-10-01', '2026-11-01', 'market').reasons.find((x) => x.changeId === 'definition-1107')).toMatchObject({ share: null })
   })
 })
 
@@ -84,11 +106,12 @@ describe('month comparisons across the break are refused, and only those', () =>
     for (const view of COMPARABILITY_VIEWS) {
       const r = judge('2026-09-01', '2026-10-01', CHANGES, view)
       expect(r.mode, view).toBe('refuse')
-      expect(r.reasons, view).toEqual([{ kind: 'code_change', changeId: 'definition-1107', share: REJUDGED_SHARE, changedAt: DEFINITION.changed_at, surface: 'gate_rule' }])
+      expect(r.reasons, view).toEqual([{ kind: 'code_change', changeId: 'definition-1107', share: REJUDGED_SHARE, changedAt: DEFINITION.changed_at, surface: 'gate_rule', rejudgedFrom: '2026-10-01' }])
     }
+    // Named by the month it applies FROM, not the month it was logged in.
     const verdict = pairOnVerdict(judge('2026-09-01', '2026-10-01'))
-    expect(verdict.refused).toBe('tracking_change')
-    expect(pairSentence(verdict.note!)).toBe('Not read as a change: we changed how we check or file videos in November.')
+    expect(verdict).toMatchObject({ refused: 'tracking_change', note: { mode: 'refuse', cause: 'rejudged', changeMonth: '2026-10-01' } })
+    expect(pairSentence(verdict.note!)).toBe('Not read as a change: we changed how we check videos from October on.')
   })
 
   it('without the definition’s row the same pair would compare: the regate alone measures nothing left to judge', () => {

@@ -265,8 +265,10 @@ export function measurePair(ctx: MeasureContext, a: {
     // the pairs that cross its month, whatever any count says (`changeBearsOn`,
     // lib/reading/comparability.ts), and the unjudged videos the gate measure
     // counts are not what it changed.
-    if (c.rejudgedFrom) {
-      lines.push(`  change ${c.id} · ${c.changedAt.slice(0, 16)} · ${c.surface}: the market definition, re-judged from ${c.rejudgedFrom.slice(0, 7)}: it refuses only the pairs that cross that month; nothing to measure`)
+    if (c.marketDefinition) {
+      lines.push(c.rejudgedFrom
+        ? `  change ${c.id} · ${c.changedAt.slice(0, 16)} · ${c.surface}: the market definition, re-judged from ${c.rejudgedFrom.slice(0, 7)}: it refuses only the pairs that cross that month; nothing to measure`
+        : `  change ${c.id} · ${c.changedAt.slice(0, 16)} · ${c.surface}: a market definition with no readable band: it refuses every pair in its span unmeasured; nothing to measure`)
       continue
     }
     const touchedBy = c.surface === 'gate_rule'

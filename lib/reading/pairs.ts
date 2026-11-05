@@ -177,7 +177,7 @@ export function pairJudge(input: PairJudgeInput): PairJudge {
             ...input.changes
               .filter((c) => c.affects.includes(view) && changeBearsOn(c, pm, m))
               .sort((a, b) => msOf(a.changedAt) - msOf(b.changedAt))
-              .map((c) => ({ c, share: c.rejudgedFrom ? REJUDGED_SHARE : measuredShareOf(row, c, view) }))
+              .map((c) => ({ c, share: c.rejudgedFrom ? REJUDGED_SHARE : c.marketDefinition ? null : measuredShareOf(row, c, view) }))
               .filter(({ share }) => share == null || !(share < COMPARE_FLAG_SHARE))
               .map(({ c, share }) => ({
                 kind: isSearchSurface(c.surface) ? ('searches' as const) : ('code_change' as const),
@@ -185,6 +185,7 @@ export function pairJudge(input: PairJudgeInput): PairJudge {
                 share,
                 changedAt: c.changedAt,
                 surface: c.surface,
+                ...(c.rejudgedFrom ? { rejudgedFrom: c.rejudgedFrom } : {}),
               })),
           ],
         }

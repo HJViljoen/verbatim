@@ -156,6 +156,12 @@ export interface OurChange {
    *  parse: the change is then a relevance change like any other, which fails
    *  closed. */
   rejudgedFrom?: string
+  /** True on every change of the market definition, its band readable or not
+   *  (`isMarketDefinitionChange`). One with no readable band (no
+   *  `rejudgedFrom`) refuses every pair in its span UNMEASURED, whatever a
+   *  measure says, so a row that does not parse can never be measured into
+   *  comparability later; the measure step measures neither kind. */
+  marketDefinition?: true
 }
 
 /**
@@ -215,8 +221,9 @@ export function isMarketDefinitionChange(row: { surface: string; field?: string 
 
 /** The first month a market-definition change re-judged: its band's lower
  *  bound, `YYYY-MM-01`; null for any other row, or where the band is not a
- *  `[YYYY-MM-01,YYYY-MM-01)` daterange (then the change fails closed to an
- *  ordinary relevance change). Pure. */
+ *  `[YYYY-MM-01,YYYY-MM-01)` daterange (then the change refuses every pair in
+ *  its span unmeasured, `OurChange.marketDefinition`, and cuts the weeks as
+ *  any relevance change does). Pure. */
 export function rejudgedFromOf(row: Pick<ConfigChange, 'surface' | 'field'> & { affects_months?: string | null }): string | null {
   if (!isMarketDefinitionChange(row)) return null
   const m = /^\[(\d{4}-\d{2})-01,(\d{4}-\d{2})-01\)$/.exec((row.affects_months ?? '').trim())
@@ -292,7 +299,7 @@ export interface PairComparability {
    *  the change behind a `searches` or `code_change` reason when it is one the
    *  caller passed (WP1.3: the refusal's words name the month of the change);
    *  a measure for a change the caller did not pass carries its surface only. */
-  reasons: { kind: PairReason; changeId: string | null; share: number | null; changedAt?: string | null; surface?: OurChangeSurface | null }[]
+  reasons: { kind: PairReason; changeId: string | null; share: number | null; changedAt?: string | null; surface?: OurChangeSurface | null; rejudgedFrom?: string | null }[]
   row: PairRow | null
   /** The update the pair is next read with ("checked with the {date} update"),
    *  set by `pairJudge` from the tenant's schedule; null when none is scheduled
@@ -441,6 +448,7 @@ export function changesFromLog(rows: readonly ConfigChange[]): OurChange[] {
     // Re-judged from one month only when every row says the same month.
     const froms = new Set(g.rows.map(rejudgedFromOf))
     const rejudgedFrom = froms.size === 1 ? [...froms][0] : null
+    const marketDefinition = g.rows.every(isMarketDefinitionChange)
     out.push({
       id: first.id,
       surface,
@@ -451,6 +459,7 @@ export function changesFromLog(rows: readonly ConfigChange[]): OurChange[] {
       ...(g.rows.every(isFailOpenFix) ? { failOpenFix: true } : {}),
       ...(preGatherRunId ? { preGatherRunId } : {}),
       ...(rejudgedFrom ? { rejudgedFrom } : {}),
+      ...(marketDefinition ? { marketDefinition: true as const } : {}),
     })
   }
   return out
@@ -601,7 +610,7 @@ export function comparabilityOf(prevMonth: string, month: string, input: {
   const inSpan = input.changes
     .filter((c) => c.affects.includes(view) && changeBearsOn(c, pm, m))
     .sort((a, b) => msOf(a.changedAt) - msOf(b.changedAt))
-  const rejudged = (c: OurChange): Reason => ({ kind: 'code_change', changeId: c.id, share: REJUDGED_SHARE, changedAt: c.changedAt, surface: c.surface })
+  const rejudged = (c: OurChange): Reason => ({ kind: 'code_change', changeId: c.id, share: REJUDGED_SHARE, changedAt: c.changedAt, surface: c.surface, rejudgedFrom: c.rejudgedFrom ?? null })
 
   const row = input.row
   const measured = row != null
@@ -659,6 +668,12 @@ export function comparabilityOf(prevMonth: string, month: string, input: {
   for (const c of inSpan) {
     if (c.rejudgedFrom) {
       reasons.push(rejudged(c))
+      continue
+    }
+    // A market-definition change whose band does not parse: unmeasured, so it
+    // refuses as a tenth, and no measure of it is ever read (fail closed).
+    if (c.marketDefinition) {
+      reasons.push({ kind: 'code_change', changeId: c.id, share: null, changedAt: c.changedAt, surface: c.surface })
       continue
     }
     const ids = idsOf(c)
@@ -861,8 +876,11 @@ export function pairOnVerdict(pair: PairComparability | null | undefined): PairO
   // September" under the August point. A change dated inside the two months
   // is the one a reader looks for there; a later one in span is named only
   // when the two months hold none.
+  // A re-judging change is dated by the month it applies from, which is the
+  // month the pair crosses (`changeBearsOn`), not the month it was logged.
+  const monthOf = (r: Reason): string | null => (r.rejudgedFrom ? monthStartOf(r.rejudgedFrom) : monthOfInstant(r.changedAt))
   const ownMonths = (r: Reason): boolean => {
-    const m = monthOfInstant(r.changedAt)
+    const m = monthOf(r)
     return m === pair.prevMonth || m === pair.month
   }
   const pick = (rs: readonly Reason[]): Reason | null =>
@@ -870,8 +888,8 @@ export function pairOnVerdict(pair: PairComparability | null | undefined): PairO
   const named = (rs: readonly Reason[]): Reason | null => pick(rs.filter(ownMonths)) ?? pick(rs)
   const noteFor = (r: Reason, mode: 'flag' | 'refuse'): VerdictPairNote => ({
     mode,
-    cause: r.kind === 'searches' ? 'searches' : 'ours',
-    changeMonth: monthOfInstant(r.changedAt) ?? monthStartOf(pair.month),
+    cause: r.rejudgedFrom ? 'rejudged' : r.kind === 'searches' ? 'searches' : 'ours',
+    changeMonth: monthOf(r) ?? monthStartOf(pair.month),
     checkWith: null,
   })
 

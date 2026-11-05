@@ -94,6 +94,19 @@ describe('the pair measure, inside the run and in a paste', () => {
   })
 })
 
+describe('a change of the market definition is never measured', () => {
+  it('readable band or not, it writes no reach: the judge refuses on it alone (lib/reading/comparability.ts)', async () => {
+    const gate = 'gate_rule' as ConfigChange['surface'] // an MF1 surface (lib/config-surfaces-mf1.ts)
+    const definition = row({ id: 'definition', changed_at: '2026-11-07T15:00:00.000Z', surface: gate, field: 'market_description', affects_months: '[2026-10-01,2026-12-01)' })
+    const garbled = row({ id: 'garbled', changed_at: '2026-11-07T16:00:00.000Z', surface: gate, field: 'market_description', affects_months: null })
+    const [m] = await measurePairs(ctxAt({ inFlight: true, changes: [definition, garbled] }), io, [['2026-10-01', '2026-11-01']])
+    expect(m.row?.code_changes).toEqual([])
+    const lines = m.lines.join('\n')
+    expect(lines).toContain('the market definition, re-judged from 2026-10: it refuses only the pairs that cross that month; nothing to measure')
+    expect(lines).toContain('a market definition with no readable band: it refuses every pair in its span unmeasured; nothing to measure')
+  })
+})
+
 describe('append-only writes: only what is not held as it is', () => {
   it('a pair row identical to the newest held one is not written again; any difference is', async () => {
     const [m] = await measurePairs(ctxAt({ inFlight: true }), io, [['2026-10-01', '2026-11-01']])
