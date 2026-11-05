@@ -93,8 +93,9 @@ describe('Who is in your market and the group cards (decision 2)', () => {
     const p = ossurVoicesFixture({}, 'mixed')
     const node = <GroupCard card={p.groups.cards.find((c) => c.key === 'caregivers')!} n={p.videos} monthWords={p.monthWords} />
     const text = renderText(node)
-    // A ready subject on none of their videos keeps its row at 0 (14 Oct).
-    expect(text).toContain('What they talk about · of their 45 Cost & access 14 Function & movement 0 Not measured yet: Choosing the right device, Community & encouragement, Fit & comfort, Look & style')
+    // A ready subject on none of their videos is named, never a row at 0
+    // among what they talk about (5 Nov; never hidden, 14 Oct).
+    expect(text).toContain('What they talk about · of their 45 Cost & access 14 In none of their videos: Function & movement Not measured yet: Choosing the right device, Community & encouragement, Fit & comfort, Look & style')
     // Named, never counted: Fit & comfort (17 of their videos) prints no figure.
     expect(text).not.toMatch(/Fit & comfort \d/)
     assertCopyContract(node)
@@ -154,10 +155,10 @@ describe('a tracked subject is never hidden (14 Oct)', () => {
   const d = VOICES_FIXTURES['ossur-tracked']()
   const card = (key: string) => d.groups.cards.find((c) => c.key === key)!
 
-  it('a group\'s box: the ready rows, a thin one\'s small count and a 0, then ONE short line naming the open and the failed subject (the lead\'s ruling, 14 Oct)', () => {
+  it('a group\'s box: the ready rows, a thin one\'s small count, the one on none of their videos named, then ONE short line naming the open and the failed subject (the lead\'s ruling, 14 Oct)', () => {
     const node = <GroupCard card={card('caregivers')} n={d.videos} monthWords={d.monthWords} />
     const text = renderText(node)
-    expect(text).toContain('What they talk about · of their 45 Look & style 2 Function & movement 0 Not measured yet: Cost & access, Fit & comfort Wants:')
+    expect(text).toContain('What they talk about · of their 45 Look & style 2 In none of their videos: Function & movement Not measured yet: Cost & access, Fit & comfort Wants:')
     // The reason is said once on the page, never on a card.
     expect(text).not.toContain(FAILED_EXPLAINED)
     const html = render(node)

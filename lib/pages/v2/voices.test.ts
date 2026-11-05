@@ -437,9 +437,12 @@ describe('the board\'s shape in a thin month', () => {
       for (const x of c.subjects) expect(ready.has(x.label)).toBe(true)
     }
     // Caregivers talk about Fit & comfort most (17), but Fit & comfort is not
-    // checked. Function & movement is ready and on none of their videos: its
-    // row stays, at 0 (14 Oct: a tracked subject is never hidden for being thin).
-    expect(d.groups.cards.find((c) => c.key === 'caregivers')!.subjects.map((x) => [x.label, x.k])).toEqual([['Cost & access', 14], ['Function & movement', 0]])
+    // checked. Function & movement is ready and on none of their videos: it is
+    // no row of what they talk about (5 Nov), and is named as on none of them
+    // (a tracked subject is never hidden, 14 Oct).
+    const caregivers = d.groups.cards.find((c) => c.key === 'caregivers')!
+    expect(caregivers.subjects.map((x) => [x.label, x.k])).toEqual([['Cost & access', 14]])
+    expect(caregivers.subjectsNone).toEqual(['Function & movement'])
     const counted = VOICES_FIXTURES['ossur-counted']()
     const otto = counted.brands.all.find((r) => r.label === 'Ottobock')!
     // The lens gave Fit & comfort 25 of Ottobock's videos: never its top.
@@ -515,19 +518,21 @@ describe('a tracked subject is never hidden (14 Oct)', () => {
     expect(notMeasuredLine(undefined)).toBeNull()
   })
 
-  it('every group card and a counted brand row name the open and the failed subject; the page says the failed one\'s reason once; a ready one on none of a group\'s videos stays, at 0', () => {
+  it('every group card and a counted brand row name the open and the failed subject; the page says the failed one\'s reason once; a ready one on none of a group\'s videos is named, never a row at 0', () => {
     const d = VOICES_FIXTURES['ossur-tracked']()
     expect(d.subjectsFailed).toEqual([{ id: 's-fit', label: 'Fit & comfort' }])
     for (const c of d.groups.cards) {
       expect(c.subjectsPending).toBe(2)
       expect(c.subjectsNotMeasured).toEqual([{ id: 's-cost', label: 'Cost & access' }, { id: 's-fit', label: 'Fit & comfort' }])
-      // Both ready subjects, on every group with videos, the thin one included.
-      expect(c.subjects.map((s) => s.label).sort()).toEqual(['Function & movement', 'Look & style'])
+      // Both ready subjects, on every group with videos, the thin one
+      // included: a row where it is on their videos, named where it is not.
+      expect([...c.subjects.map((s) => s.label), ...(c.subjectsNone ?? [])].sort()).toEqual(['Function & movement', 'Look & style'])
+      expect(c.subjects.every((s) => s.k > 0)).toBe(true)
       expect(c.subjects.some((s) => s.label === 'Fit & comfort' || s.label === 'Cost & access')).toBe(false)
     }
-    expect(d.groups.cards.find((c) => c.key === 'caregivers')!.subjects).toEqual([
-      { id: 's-look', label: 'Look & style', k: 2 }, { id: 's-function', label: 'Function & movement', k: 0 },
-    ])
+    const caregivers = d.groups.cards.find((c) => c.key === 'caregivers')!
+    expect(caregivers.subjects).toEqual([{ id: 's-look', label: 'Look & style', k: 2 }])
+    expect(caregivers.subjectsNone).toEqual(['Function & movement'])
     const otto = d.brands.all.find((r) => r.label === 'Ottobock')!
     expect(otto).toMatchObject({ subjectsPending: 2, subjectsNotMeasured: [{ id: 's-cost', label: 'Cost & access' }, { id: 's-fit', label: 'Fit & comfort' }] })
   })

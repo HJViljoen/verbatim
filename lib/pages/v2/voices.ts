@@ -190,10 +190,14 @@ export interface VoicesGroupCard {
   videos: number
   /** The group's talk about each subject: of `videos`, largest first, three.
    *  READY subjects only (ruling U6: `measuredSubjects`, lib/reading/cross.ts,
-   *  the one place the rule is applied); a ready one the group never touches
-   *  reads 0 after the rest (14 Oct: a tracked subject is never hidden for
-   *  being thin), so the box holds its three rows where three are ready. */
+   *  the one place the rule is applied), and only those on at least one of
+   *  their videos: a box headed "What they talk about" listed "Comfort 0" and
+   *  "Price 0" among a group's three (5 Nov). */
   subjects: { id: string; label: string; k: number }[]
+  /** The ready subjects on none of their videos, by name (a tracked subject
+   *  is never hidden, 14 Oct), said in one line where the box holds fewer
+   *  than three rows. Absent in a dump from before it. */
+  subjectsNone?: string[]
   /** How many of the client's subjects are not measured yet (their check is
    *  open, or failed: being re-described). No count for them. The tenant's
    *  number, the same on every card: which of them a group's videos hold
@@ -493,7 +497,8 @@ export function buildGroups(input: {
       name: p.name,
       oneLiner: p.oneLiner,
       videos: ids.length,
-      subjects: (subjectsOf.get(p.key) ?? []).slice(0, 3).map((s) => ({ id: s.subjectId, label: s.label, k: s.k })),
+      subjects: (subjectsOf.get(p.key) ?? []).filter((s) => s.k > 0).slice(0, 3).map((s) => ({ id: s.subjectId, label: s.label, k: s.k })),
+      subjectsNone: (subjectsOf.get(p.key) ?? []).filter((s) => s.k <= 0).map((s) => s.label),
       ...notCounted,
       platforms: platformsOf(ids, input.platformOf),
       wants: firstSentence(p.wants),

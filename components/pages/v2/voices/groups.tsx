@@ -106,6 +106,9 @@ export function GroupCard({ card, n, monthWords, style }: { card: VoicesGroupCar
         {card.subjects.length > 0 ? (
           <>
             {card.subjects.map((s) => <MiniRow key={s.id} label={s.label} k={s.k} of={card.videos} />)}
+            {card.subjects.length < 3 && (card.subjectsNone?.length ?? 0) > 0 ? (
+              <p data-subjects-none="" className="m-0 text-[12px] leading-[1.4] text-muted-foreground">In none of their videos: {card.subjectsNone!.join(', ')}</p>
+            ) : null}
             <PendingSubjectsLine subjects={card.subjectsNotMeasured} count={card.subjectsPending ?? 0} />
           </>
         ) : notMeasured ? (
