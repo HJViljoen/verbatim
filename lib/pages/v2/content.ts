@@ -966,12 +966,18 @@ export function mixSentence(input: { formats: readonly WorksRow[]; openings: rea
   return out.length ? out : null
 }
 
-/** "Read from 412 of the 640 market videos published in October so far that
- *  have a format…": the classified n beside the published one (D6). */
+/** "Read from 412 of 640 category videos posted in October so far that have
+ *  a format…": the classified n beside the published one (D6).
+ *
+ *  WHY IT IS BIGGER THAN THE MARKET'S MONTH, SAID (5 Nov). These are the
+ *  category's videos by the day they were POSTED, every one we found, read
+ *  for their format; the month's market count elsewhere ("1,192 videos in
+ *  October") holds the videos whose comments we read that month. Called
+ *  "market videos" beside it, 6,416 read as a contradiction. */
 export function worksBasis(of: number, published: number, month: Pick<ContentMonth, 'month' | 'complete'>): SentencePart[] {
   return [
     'Read from ', { figure: `${fmtInt(of)} of ${fmtInt(published)}` },
-    ` market videos published ${monthWords(month)} that have a format. Response is each kind’s median against the market’s median video; Reddit is left out of response.`,
+    ` category videos posted ${monthWords(month)} that have a format. These are all the videos posted in the month that we found, so there are more of them than the videos whose comments we read. Response is each kind’s median against the market’s median video; Reddit is left out of response.`,
   ]
 }
 

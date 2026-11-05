@@ -36,7 +36,7 @@ describe('What works in your market’s videos', () => {
   it('prints the sentence about your mix with every number a figure', () => {
     const text = renderText(<WorksCard block={worksFixture()} />)
     expect(text).toContain('6 of your 9 posts in October so far were promotional videos, which draw 0.7× a typical video.')
-    expect(text).toContain('Read from 412 of 640 market videos published in October so far that have a format.')
+    expect(text).toContain('Read from 412 of 640 category videos posted in October so far that have a format. These are all the videos posted in the month that we found, so there are more of them than the videos whose comments we read.')
   })
 
   it('keeps both charts’ frames where it cannot be read, and says why once', () => {
