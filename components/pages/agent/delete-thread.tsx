@@ -10,15 +10,16 @@ import { deleteThreadAction, type DeleteThreadState } from '@/lib/actions/agent-
  *  thread. */
 export function deleteThreadWords(kind: 'question' | 'document'): { open: string; ask: string } {
   return kind === 'document'
-    ? { open: 'Delete this check', ask: 'Delete this check and what it found? It goes for everyone in your workspace, and it can’t be undone. The plan it checked stays on Market.' }
-    : { open: 'Delete this question', ask: 'Delete this question and its answers? It goes for everyone in your workspace, and it can’t be undone.' }
+    ? { open: 'Delete this check', ask: 'Delete this check and what it found? It goes for everyone in this workspace, and it can’t be undone. The plan it checked stays on Your moves.' }
+    : { open: 'Delete this question', ask: 'Delete this question and its answers? It goes for everyone in this workspace, and it can’t be undone.' }
 }
 
 const START: DeleteThreadState = { ok: false, message: null }
 
 /**
  * "Delete this question", at the foot of a thread (5 Nov). Drawn only for a
- * reader who may (`threadDeletable`); the action decides again on the server.
+ * platform operator (`mayDeleteThread`, for now); the action decides again on
+ * the server.
  * The confirm is the page's own, in place: the control opens a line asking
  * whether to, with Delete and Keep it, never the browser's dialog. A delete
  * lands on the Agent's page (the action redirects); a refusal or a failure is

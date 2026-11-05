@@ -15,7 +15,7 @@ describe('DeleteThread', () => {
   })
 
   it('the confirm says what goes, for whom, and that it is for good', () => {
-    expect(deleteThreadWords('question').ask).toBe('Delete this question and its answers? It goes for everyone in your workspace, and it can’t be undone.')
-    expect(deleteThreadWords('document').ask).toContain('The plan it checked stays on Market.')
+    expect(deleteThreadWords('question').ask).toBe('Delete this question and its answers? It goes for everyone in this workspace, and it can’t be undone.')
+    expect(deleteThreadWords('document').ask).toContain('The plan it checked stays on Your moves.')
   })
 })
