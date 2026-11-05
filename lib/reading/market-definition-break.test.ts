@@ -16,8 +16,8 @@ import { weekRules, weeksSinceOurChanges, type WeekVolume } from './weeks'
 // THE COMPARISON BREAK OF A MARKET-DEFINITION CHANGE (5 Nov; Heinrich: keep
 // the weekly bars drawn, refuse any month comparison from a frozen month to a
 // re-judged one). The operator sets Sealand's definition, the regate removes
-// what the two raters' plan calls off-market under it (not a re-run of the
-// gate) and October and November are refreshed; July to September stay frozen
+// its plan's list (both raters' calls, and the new gate's where they
+// disagreed) and October and November are refreshed; July to September stay frozen
 // with the old rule's figures. The definition's row is
 // `gate_rule` / `market_description`, `affects_months` the re-judged months.
 

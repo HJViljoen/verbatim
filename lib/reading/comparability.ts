@@ -209,10 +209,10 @@ export const MARKET_DEFINITION_FIELD = 'market_description'
  * A CHANGE OF THE MARKET THE GATE JUDGES BY (5 Nov, Heinrich: Sealand's market
  * is outdoor, travel and everyday carry gear). Unlike the fail-open fixes it
  * changes the judgement rule, and unlike any other rule change it reaches
- * every month still filling: the operator's regate removes what the two
- * raters' plan calls off-market under the new definition (a removal by that
- * plan, not a re-run of the gate, which judges only what later gathers find)
- * and the filling months are refreshed, while the frozen months keep the
+ * every month still filling: the operator's regate removes its plan's list
+ * (both raters' calls under the new definition, and the new gate's where they
+ * disagreed; not a re-run of the gate over the rest, which judges only what
+ * later gathers find) and the filling months are refreshed, while the frozen months keep the
  * figures the old rule gave them. Its row says where that line falls:
  * `affects_months` is `[first re-judged month, …)`, and `rejudgedFromOf`
  * reads it. Pure.

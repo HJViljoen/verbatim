@@ -26,10 +26,10 @@ import { createAdminClient } from '../lib/supabase-admin'
 // comparison break. Refused while the tenant has a running update (its gate
 // steps would judge part of one gather each way), unless --allow-running.
 //
-// THE BREAK HOLDS ONLY ONCE THE CORPUS IS REGATED: after this, remove what the
-// two raters' plan calls off-market under the definition (the regate script;
-// it does not re-run the gate, which judges only what later gathers find) and
-// refresh the filling months the dry run names. Until then those months still
+// THE BREAK HOLDS ONLY ONCE THE CORPUS IS REGATED: after this, remove the
+// regate plan's list (the regate script: where two raters both called a video
+// off-market, and, where they disagreed, what the new gate drops) and refresh
+// the filling months the dry run names. Until then those months still
 // hold what the old rule let in.
 //
 // UNDO: --clear --apply (or --file <the earlier words> --apply) writes the
@@ -114,7 +114,7 @@ export async function runSetMarketDescription(argv: readonly string[], deps: Run
     for (const line of plan.after.market_description.split('\n')) log(`    | ${line}`)
   }
   if (running.length > 0) log(`  running update(s): ${running.join(', ')}`)
-  log(`  next: the regate (it removes what the raters' plan calls off-market), then the refresh of ${monthName(plan.rejudgedFrom)} onward (the filling months); the break holds only once both are done`)
+  log(`  next: the regate (it removes its plan's list: both raters' calls, the new gate's where they disagreed), then the refresh of ${monthName(plan.rejudgedFrom)} onward (the filling months); the break holds only once both are done`)
 
   if (!args.apply) {
     log(`${NAME}: read-only, nothing written. --apply writes the column and logs one change row.`)

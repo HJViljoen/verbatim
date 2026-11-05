@@ -798,11 +798,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
   `affects_months` from the month after the newest frozen one to the end of this
   month). Seed: `scripts/seeds/sealand-market-description.txt`. **That row is the
   comparison break** (`isMarketDefinitionChange`, `rejudgedFromOf`,
-  `OurChange.rejudgedFrom`). The operator's regate then removes what the two
-  raters' plan calls off-market under the definition (a removal by that plan,
-  never a re-run of the gate, which judges only what later gathers find) and
-  the filling months are refreshed, while the frozen months keep the old rule's
-  figures. So a month pair is refused exactly when it crosses the band's first
+  `OurChange.rejudgedFrom`). The operator's regate then removes its plan's list
+  (where two raters both called a video off-market under the definition, and,
+  where they disagreed, what the new gate drops; never a re-run of the gate
+  over the rest, since it judges only what later gathers find) and the filling
+  months are refreshed, while the frozen months keep the old rule's figures. So a month pair is refused exactly when it crosses the band's first
   month (`changeBearsOn`, at `REJUDGED_SHARE`, whatever the pair row measured;
   "we changed how we check videos from {month} on", the month it applies from,
   `PAIR_REFUSED_REJUDGED_CHIP`), in `comparabilityOf`, the page judge's named
@@ -814,11 +814,17 @@ This version has breaking changes — APIs, conventions, and file structure may 
   measures neither kind. The weekly bars and Market's week windows do not cut
   at it (`weekRules`, `cutWindows`), because they count the regated corpus
   live; the same-age line, whose points are kept and never re-read, still does
-  (`weekPairOf`'s gate reason). **That leaves a possible step, uncut:** the
-  videos the raters disagreed on (256 for Sealand on 5 Nov) stay in the old
-  weeks, while new weeks face the stricter gate, which would drop 133 of them
-  (14 to 19% of each week's videos after the regate). The break is true only
-  once the regate and the refresh are done. `lib/reading/market-definition-break.test.ts`.
+  (`weekPairOf`'s gate reason). **Uncut, so the plan follows the gate where the
+  raters disagreed:** left in, the 133 of Sealand's 256 disagreements the new
+  gate drops (14 to 19% of each old week's videos) would have made the bars
+  step down as new weeks filled, so the plan removes them too (source
+  `new_gate_borderline`, each with the gate's reason). What is left between the
+  plan and the gate, over the 2,226 videos of 27 Jul to 1 Nov, is 60 the raters
+  removed that the gate would keep and 33 kept that it would drop (11
+  in-market, 22 cited by stored work): the old weeks hold 10% fewer to 4% more
+  videos than the gate would let in (13% fewer to 12% more comments), both
+  ways, not one step. The break is true only once the regate and the refresh
+  are done. `lib/reading/market-definition-break.test.ts`.
 - **The week chart's cut and cadence** (the release fix, 1 Oct night; made
   precise 5 Oct; `weeksSinceOurChanges`, `lib/reading/weeks.ts`). The bars
   never span a change on `WEEK_CUT_SURFACES` (the same-age line's search and

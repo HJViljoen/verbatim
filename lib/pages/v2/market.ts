@@ -1076,8 +1076,8 @@ export function weekWindows(window: { from: string; to: string }, count = MARKET
  * on `WEEK_CUT_SURFACES` took effect was not read the way the newest one was,
  * so its count is not drawn (null). A fix of failed judgements cuts nothing
  * (`failOpenFix`), nor does a change of the market definition, whose regate
- * removed what the raters' plan calls off-market from the corpus these
- * windows are read from (`rejudgedFrom`), and a
+ * removed its plan's list (the raters' calls, the new gate's where they
+ * disagreed) from the corpus these windows are read from (`rejudgedFrom`), and a
  * change the pipeline made inside a run before its gather takes effect at that
  * run (`preGatherCutBefore`).
  *

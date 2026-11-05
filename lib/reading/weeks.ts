@@ -406,12 +406,12 @@ export function weekRules(changes: readonly OurChange[], axis: readonly string[]
     if (!group) continue
     // A fix of failed judgements is not a method change (`isFailOpenFix`):
     // `unchecked` carries its weeks instead. A change of the market definition
-    // (`rejudgedFrom`) is one, but the regate beside it removed what the two
-    // raters' plan calls off-market under it from every week the bars can draw,
-    // and the bars count the corpus live, so it cuts none. NOT CUT, AND SO
-    // POSSIBLY A STEP: the videos the raters disagreed on stay in the old
-    // weeks while new weeks face the stricter gate (5 Nov: it would drop 133
-    // of those 256, 14 to 19% of each week's videos after the regate).
+    // (`rejudgedFrom`) is one, but the regate beside it removed its plan's
+    // list from every week the bars can draw (both raters' calls, and the new
+    // gate's where they disagreed, so old weeks lose what new weeks will), and
+    // the bars count the corpus live, so it cuts none. The residual mismatch
+    // with the gate runs both ways, 10% fewer to 4% more videos a week
+    // (Sealand, 5 Nov), not a step.
     if (c.failOpenFix || c.rejudgedFrom) continue
     const ms = msOfInstant(c.changedAt)
     if (Number.isNaN(ms)) continue
@@ -508,8 +508,8 @@ export const WEEK_CUT_SURFACES: readonly OurChangeSurface[] = ['terms', 'subredd
  *     line reads them); the other filing changes move no bar of the pooled
  *     market (decision E) and do not cut, and a fix of failed judgements
  *     (`failOpenFix`) is no rule at all (`weekRules`), nor is a change of the
- *     market definition, whose regate removed what the raters' plan calls
- *     off-market from every week the bars count (`rejudgedFrom`; month pairs
+ *     market definition, whose regate removed its plan's list (the raters'
+ *     calls, the new gate's where they disagreed) from every week the bars count (`rejudgedFrom`; month pairs
  *     across it are refused instead, `changeBearsOn`). A change made inside a
  *     run before that run's gather (`cutBefore`, `preGatherCutBefore`) cuts
  *     only the weeks that begin before every earlier gather ended: the week
