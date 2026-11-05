@@ -605,12 +605,20 @@ export function IdeasPage({ appUrl, s, sub }: AppPageProps) {
 
 // ---- Content: Hooks and formats that work (Brief-Content-05) ---------------------------------------
 
-function HookTable({ t, label, company, rival }: { t: BriefHookTable; label: string; company: string; rival: string | null }) {
+/** A table's counts are of the posts and videos with that kind read (a
+ *  format, an opening), so a company's are said as a part of all its posts
+ *  where some have none ("35 of Sealand's 37 posts"), and the line says
+ *  which kind: 35 and 33 once read as two more totals beside "Your posts in
+ *  October: 37" (5 Nov). */
+function HookTable({ t, label, read, company, rival, ownTotal }: { t: BriefHookTable; label: string; read: string; company: string; rival: string | null; ownTotal: number | null }) {
   const own = t.ownOf != null
   const showRival = rival != null && t.rivalOf != null
   const cols = { label: 4, cat: showRival ? 7 : own ? 10 : 13, own: 3, rival: 3, eng: 3 }
+  const ownPart = own && ownTotal != null && ownTotal > t.ownOf!
+    ? `${fmtInt(t.ownOf!)} of ${company}’s ${fmtInt(ownTotal)} posts`
+    : `${fmtInt(t.ownOf ?? 0)} ${company} ${t.ownOf === 1 ? 'post' : 'posts'}`
   const counts = [
-    ...(own ? [`${fmtInt(t.ownOf!)} ${company} ${t.ownOf === 1 ? 'post' : 'posts'}`] : []),
+    ...(own ? [ownPart] : []),
     ...(showRival ? [`${fmtInt(t.rivalOf!)} ${rival} ${t.rivalOf === 1 ? 'video' : 'videos'}`] : []),
   ]
   const head = { display: 'grid', gridTemplateColumns: 'repeat(20, minmax(0, 1fr))', gap: 14, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: P.muted } as const
@@ -624,7 +632,7 @@ function HookTable({ t, label, company, rival }: { t: BriefHookTable; label: str
           {showRival ? <div style={{ gridColumn: `span ${cols.rival}`, textAlign: 'right' }}>{rival}</div> : null}
           <div style={{ gridColumn: `span ${cols.eng}`, textAlign: 'right' }}>Response</div>
         </div>
-        <div data-copy="figure" style={{ fontSize: 12, color: P.muted }}>Shares of {fmtInt(t.of)} category videos{counts.length ? ` · counts of ${counts.join(' and ')}` : ''}</div>
+        <div data-copy="figure" style={{ fontSize: 12, color: P.muted }}>Shares of {fmtInt(t.of)} category videos{counts.length ? ` · counts of ${counts.join(' and ')}` : ''}, each with {read} read</div>
       </div>
       {t.rows.map((r) => (
         <div key={r.label} style={{ display: 'grid', gridTemplateColumns: 'repeat(20, minmax(0, 1fr))', gap: 14, alignItems: 'center', padding: '8px 0', borderTop: `1px solid ${P.hair}` }}>
@@ -652,8 +660,8 @@ export function HooksPage({ data, appUrl, s, sub }: AppPageProps) {
       <TitleBlock title={s.title} sub={sub} />
       <div style={{ display: 'flex', gap: 40, flexGrow: 1, minHeight: 0 }}>
         <div style={{ flex: 1.85, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>
-          {h.formats ? <HookTable t={h.formats} label="Format" company={data.company} rival={h.rival} /> : null}
-          {h.openings ? <HookTable t={h.openings} label="Opening" company={data.company} rival={h.rival} /> : null}
+          {h.formats ? <HookTable t={h.formats} label="Format" read="a format" company={data.company} rival={h.rival} ownTotal={p?.total ?? null} /> : null}
+          {h.openings ? <HookTable t={h.openings} label="Opening" read="an opening" company={data.company} rival={h.rival} ownTotal={p?.total ?? null} /> : null}
         </div>
         {p ? (
           <div style={{ flex: 1, minWidth: 0, background: P.ground, borderRadius: 16, padding: '16px 22px', display: 'flex', flexDirection: 'column', gap: 12 }}>

@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { WHAT_THEY_SELL } from '../pages/market-frame'
 import { loadBrandClaims, type BrandClaims } from '../pipeline/claims'
+import { OWNED_SOURCE } from '../reading/owned'
 import { inMonth, readingMonthOf } from './month'
 
 // The company, as the writer needs it for "What it means for {company}"
@@ -20,10 +21,13 @@ import { inMonth, readingMonthOf } from './month'
 //    newest run per video, deduped, the brand's voice split from creators
 //    talking about it). Pass A's paraphrase of each (`claim`), NEVER the
 //    transcript's words (`quote`);
-//  · whether it posted: the own-post census (the front page's rule,
-//    `videos.is_client`, DATED BY THE POST, `upload_date`) over the week's
-//    dates and the month to date. The writer is told yes or none, never a
-//    count: it has no numbers.
+//  · whether it posted: its own posts (`videos.source = 'owned'`, the one
+//    read of "your posts", lib/reading/owned.ts; never `is_client`, which a
+//    creator's video naming the brand carries too), DATED BY THE POST,
+//    `upload_date`, over the week's dates and the month to date. The writer
+//    is told yes or none, never a count: it has no numbers. The monthly
+//    briefs' In short prints the month's count (5 Nov: `is_client` gave
+//    Sealand's October 46 beside Content's 37, nine of them creators').
 //
 // The client's own posts are not the market (decision E), and neither are
 // its claims: the prompt says so, and the writer may set a finding against a
@@ -135,7 +139,7 @@ export async function loadCompanyContext(
   for (const key of ['week', 'month'] as const) {
     try {
       const res = await admin.from('videos').select('id', { count: 'exact', head: true })
-        .eq('client_id', clientId).eq('is_client', true)
+        .eq('client_id', clientId).eq('source', OWNED_SOURCE)
         .gte('upload_date', periods[key].from).lt('upload_date', periods[key].to)
       if (res.error) throw new Error(res.error.message)
       ctx.posts[key] = res.count ?? 0

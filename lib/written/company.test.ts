@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { companyLines, COMPANY_CLAIMS_MAX, ownClaimsOf, postPeriods, type CompanyContext } from './company'
+import { fakeDb } from '../test/fake-db'
+import { companyLines, COMPANY_CLAIMS_MAX, loadCompanyContext, ownClaimsOf, postPeriods, type CompanyContext } from './company'
 import { SEP } from './test-fixtures'
 
 // The company as the writer needs it for "What it means for {company}" (the
 // lead's ruling, 30 Sep): pure parts. The loader is the product's own readers
-// (tracking_configs, loadBrandClaims, the own-post census) and is not mocked.
+// (tracking_configs, loadBrandClaims, the own-post census) and is not mocked,
+// save one table-driven stand-in (lib/test/fake-db.ts) pinning which videos
+// count as the company's own posts.
 
 const brandClaim = (claim: string, voice: 'own' | 'about' = 'own') => ({ competitor: null, claim, quote: `VERBATIM TRANSCRIPT: ${claim}`, voice })
 
@@ -58,5 +61,22 @@ describe('companyLines', () => {
     const bare = companyLines('Sealand', { sells: { noun: null, description: null, keywords: [] }, claims: [], posts: { week: null, month: null } }, SEP)
     expect(bare).toBe('About Sealand (context for "What it means for Sealand"; none of this is what the market said):\n- What Sealand says about itself: nothing recorded.')
     expect(companyLines('Sealand', null, SEP)).toBe('')
+  })
+})
+
+// "Your posts" is `source = 'owned'`, never `is_client` (lib/reading/owned.ts):
+// a creator's video naming the brand carries `is_client` too, and Sealand's
+// October brief printed 46 posts beside Content's 37 (5 Nov).
+describe('loadCompanyContext', () => {
+  it('counts the posts off the client\'s own accounts, never a creator\'s video naming it', async () => {
+    const CLIENT = '00000000-0000-4000-8000-0000000000aa'
+    const video = (id: string, day: string, source: string) => ({ id, client_id: CLIENT, upload_date: day, is_client: true, source })
+    const db = fakeDb({
+      tracking_configs: [{ client_id: CLIENT, competitor_names: [], brand_keywords: [], own_handles: {}, competitor_handles: {} }],
+      videos: [video('v1', '2026-10-03', 'owned'), video('v2', '2026-10-20', 'owned'), video('v3', '2026-10-21', 'discovered'), video('v4', '2026-09-30', 'owned')],
+    })
+    const ctx = await loadCompanyContext(db.client as never, { clientId: CLIENT, window: { from: '2026-10-25T00:00:00.000Z', to: '2026-11-01T00:00:00.000Z' } })
+    expect(ctx.posts).toEqual({ week: 0, month: 2 })
+    expect(db.calls.filter((c) => c.table === 'videos').every((c) => c.filters.includes('source=owned') && !c.filters.some((f) => f.startsWith('is_client')))).toBe(true)
   })
 })

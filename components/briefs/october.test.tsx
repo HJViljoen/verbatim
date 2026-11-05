@@ -201,13 +201,25 @@ describe('Content: What to post next (Brief-Content-04) and Hooks and formats (-
     expect(p).toContain(`href="${APP}/dashboard/content/ideas/b1"`)
   })
 
+  // The tables count the posts with that kind read, a part of "Your posts in
+  // October" where some have none: Sealand's 35 and 33 beside its 37 (5 Nov).
+  it('Hooks and formats: where some posts have no format or opening read, the count is said as a part of them all', () => {
+    const d = octoberFixture('content')
+    const hooks = d.fromApp!.find((s) => s.key === 'content.hooks')!.hooks!
+    const posts = { ...hooks.posts!, total: 37 }
+    const fromApp = d.fromApp!.map((s) => (s.key === 'content.hooks' ? { ...s, hooks: { ...hooks, posts, formats: { ...hooks.formats!, ownOf: 35 }, openings: hooks.openings ? { ...hooks.openings, ownOf: 33 } : null } } : s))
+    const t = text(page({ ...d, fromApp }, 'Hooks and formats'))
+    expect(t).toContain('counts of 35 of Össur’s 37 posts and 182 Ottobock videos, each with a format read')
+    if (hooks.openings) expect(t).toMatch(/counts of 33 of Össur’s 37 posts[^,]*, each with an opening read/)
+  })
+
   it('Sealand: not a medical market, no medical line', () => {
     expect(text(page(octoberFixture('content', { tenant: 'sealand' }), 'What to post next'))).not.toContain(MEDICAL_LINE)
   })
 
   it('Hooks and formats: the category\'s share, your posts and the rival\'s, the response; your posts in the month, the best by its kind and day', () => {
     const t = text(page(octoberFixture('content'), 'Hooks and formats'))
-    expect(t).toContain('Shares of 1,024 category videos · counts of 15 Össur posts and 182 Ottobock videos')
+    expect(t).toContain('Shares of 1,024 category videos · counts of 15 Össur posts and 182 Ottobock videos, each with a format read')
     expect(t).toContain('Story 40.1% 1 41 1.3×')
     expect(t).toContain('Your posts in October')
     expect(t).toContain('posts on your own accounts · Instagram 7, TikTok 4, YouTube 4')
