@@ -974,14 +974,22 @@ export function mixSentence(input: { formats: readonly WorksRow[]; openings: rea
  *  for their format; the month's market count elsewhere ("1,192 videos in
  *  October") holds the videos whose comments we read that month. Called
  *  "market videos" beside it, 6,416 read as a contradiction. */
-export function worksBasis(of: number, published: number, month: Pick<ContentMonth, 'month' | 'complete'>): SentencePart[] {
+export function worksBasis(of: number, published: number, month: Pick<ContentMonth, 'month' | 'complete'>, read: number | null = null): SentencePart[] {
+  // Said only where the numbers say it: the month's videos whose comments
+  // we read (`read`, the market's month on this page) are fewer than these.
+  const more = read != null && published > read
   return [
     'Read from ', { figure: `${fmtInt(of)} of ${fmtInt(published)}` },
-    ` category videos posted ${monthWords(month)} that have a format. These are all the videos posted in the month that we found, so there are more of them than the videos whose comments we read. Response is each kind’s median against the market’s median video; Reddit is left out of response.`,
+    ` category videos posted ${monthWords(month)} that have a format.${more ? ' These are all the videos posted in the month that we found, so there are more of them than the videos whose comments we read.' : ''} Response is each kind’s median against the market’s median video; Reddit is left out of response.`,
   ]
 }
 
-export function worksBlock(input: { playbook: PlaybookBlock | null; owned: OwnedPosts | null; month: ContentMonth }): WorksBlock {
+export function worksBlock(input: {
+  playbook: PlaybookBlock | null; owned: OwnedPosts | null; month: ContentMonth
+  /** The month's videos whose comments we read (the page's market month),
+   *  for the footnote's comparison; none, and it is not said. */
+  read?: number | null
+}): WorksBlock {
   const { playbook, owned, month } = input
   const base = { month: month.month, complete: month.complete, formats: [], openings: [], posts: owned?.total ?? 0, sentence: null, basis: null }
   if (!playbook) return { ...base, unread: 'What works could not be read just now.' }
@@ -997,7 +1005,7 @@ export function worksBlock(input: { playbook: PlaybookBlock | null; owned: Owned
     formats,
     openings,
     sentence: mixSentence({ formats, openings, posts: owned?.total ?? 0, unclassified, month: month.month, complete: month.complete }),
-    basis: market ? worksBasis(market.of, market.published, month) : null,
+    basis: market ? worksBasis(market.of, market.published, month, input.read ?? null) : null,
     unread: null,
   }
 }
@@ -1587,7 +1595,7 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
     month,
     market: windows?.market ?? { week: null, month: null },
     ideas: { state: ideasState, cards, week: cards.length > 0 ? ideasWeek : null, questions: questionSlots },
-    works: worksBlock({ playbook, owned, month }),
+    works: worksBlock({ playbook, owned, month, read: windows?.market.month ?? null }),
     replies: repliesWindow ? repliesView(replies, repliesWindow) : { ...repliesView(null, null), unread: REPLIES_NO_WEEK },
     posts: postsBlock({ owned, typical, month }),
     asked,

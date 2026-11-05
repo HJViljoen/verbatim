@@ -993,7 +993,9 @@ export async function readAudience(supabase: SupabaseClient, clientId: string, i
   }
 }
 
-/** Each move's object, month by month in the market, pooled (Y4's read). */
+/** Each move's object, month by month (Y4's read): a subject pooled over the
+ *  market's audiences, a conversation in the category alone, each on the base
+ *  `Core.marketN` gives its kind. */
 export async function readMoveLevels(core: Core, moves: readonly DatedMove[], adviceTargets: ReadonlyMap<string, string>, alsoThemes: readonly string[] = [], onError?: () => void, fromMonth?: string): Promise<(kind: 'subject' | 'theme', id: string, month: string) => number | null> {
   const audiences = marketAudiences(core.rivals)
   // From two months before the earliest move (or `fromMonth`, the advice

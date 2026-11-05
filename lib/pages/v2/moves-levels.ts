@@ -221,7 +221,7 @@ export const LINE_MONTHS = 3
 
 /**
  * THE LINE A MOVE ON THIS ADVICE IS READ ON (board report, data 4): the
- * conversation its evidence leads with, its share of the market's videos in
+ * conversation its evidence leads with, its share of the category's videos in
  * the reading month and the two before. Only months read the same way are
  * drawn beside each other (`joinedRun`, anchored at the newest month read,
  * the one condition); a month left off says why, as a move's line does. A

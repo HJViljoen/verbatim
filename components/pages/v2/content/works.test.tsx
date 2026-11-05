@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { render, renderText as rawText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { worksFixture } from '@/lib/pages/v2/content-fixture'
+import { worksBasis } from '@/lib/pages/v2/content'
 import { MARKS_MAX, WorksCard } from './works'
 
 /** The page's words as read: a tag between a word and its comma is not a space. */
@@ -36,7 +37,19 @@ describe('What works in your market’s videos', () => {
   it('prints the sentence about your mix with every number a figure', () => {
     const text = renderText(<WorksCard block={worksFixture()} />)
     expect(text).toContain('6 of your 9 posts in October so far were promotional videos, which draw 0.7× a typical video.')
-    expect(text).toContain('Read from 412 of 640 category videos posted in October so far that have a format. These are all the videos posted in the month that we found, so there are more of them than the videos whose comments we read.')
+    expect(text).toContain('Read from 412 of 640 category videos posted in October so far that have a format.')
+  })
+
+  // The 6,416 of 5 Nov sat beside the market's 1,192: why it is bigger is
+  // said where the numbers say it, and nowhere else.
+  it('says why the posted videos outnumber the read ones only where they do', () => {
+    const month = { month: '2026-10-01', complete: false }
+    const words = (read: number | null) => worksBasis(412, 640, month, read).map((p) => (typeof p === 'string' ? p : p.figure)).join('')
+    const MORE = 'These are all the videos posted in the month that we found, so there are more of them than the videos whose comments we read.'
+    expect(words(318)).toContain(MORE)
+    expect(words(700)).not.toContain(MORE)
+    expect(words(null)).not.toContain(MORE)
+    expect(words(318)).toMatch(/^Read from 412 of 640 category videos posted in October so far that have a format\. These/)
   })
 
   it('keeps both charts’ frames where it cannot be read, and says why once', () => {
