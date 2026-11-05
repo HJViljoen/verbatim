@@ -1,7 +1,15 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
+import { SEALAND_CLIENT_ID } from '../config'
+import { contextLines } from '../reports/briefs/write'
 import { fakeDb } from '../test/fake-db'
-import { companyLines, COMPANY_CLAIMS_MAX, loadCompanyContext, ownClaimsOf, postPeriods, type CompanyContext } from './company'
+import {
+  companyLines, COMPANY_CLAIMS_MAX, loadCompanyContext, MARKET_SUMMARY_LABEL, marketSummaryOf, ownClaimsOf, postPeriods, sellsFromConfig, type CompanyContext,
+} from './company'
+import { buildLongRunPrompts } from './longrun-write'
 import { SEP } from './test-fixtures'
 
 // The company as the writer needs it for "What it means for {company}" (the
@@ -78,5 +86,54 @@ describe('loadCompanyContext', () => {
     const ctx = await loadCompanyContext(db.client as never, { clientId: CLIENT, window: { from: '2026-10-25T00:00:00.000Z', to: '2026-11-01T00:00:00.000Z' } })
     expect(ctx.posts).toEqual({ week: 0, month: 2 })
     expect(db.calls.filter((c) => c.table === 'videos').every((c) => c.filters.includes('source=owned') && !c.filters.some((f) => f.startsWith('is_client')))).toBe(true)
+  })
+})
+
+// THE WRITERS GET THE MARKET DEFINITION'S SUMMARY, NOT THE GATE'S DEFINITION
+// (the fresh review, 5 Nov). The stored description is the relevance gate's
+// whole classifier (In, Not the market, Borderline: judge by …); a writer
+// told "in its own words, its market is" all of it would print "Maker talk
+// sits outside Sealand's market". So: the first paragraph, one line, under a
+// label that claims no one's voice, and no keyword line beside it.
+describe('the market definition, as the writers read it (Sealand’s real seed)', () => {
+  const SEED = readFileSync(join(__dirname, '../../scripts/seeds/sealand-market-description.txt'), 'utf8')
+  const SUMMARY = SEED.trim().split(/\n\s*\n/)[0]
+  const KEYWORDS = ['eco backpack', 'handmade bag', 'recycled bag', 'sustainable fashion', 'travel gear']
+  const sells = sellsFromConfig(SEALAND_CLIENT_ID, { market_description: SEED, industry_keywords: KEYWORDS })
+  const ctx: CompanyContext = { sells, claims: [], posts: { week: null, month: null } }
+  const leaks = [/In the market:/, /Not the market/, /Borderline/, /judge by/i, /In its own words/, /followed by these words/, /handmade bag/, /sustainable fashion/, /\n- [a-z]/]
+
+  it('is the first paragraph, on one line, and drops the industry keywords', () => {
+    expect(SUMMARY.startsWith('Outdoor, travel and everyday carry gear: backpacks')).toBe(true)
+    expect(sells).toEqual({ noun: 'bags', description: SUMMARY, keywords: [] })
+    expect(marketSummaryOf(`  ${SUMMARY.replace(/; /, ';\n')}\r\n\r\nIn the market:\n- x`)).toBe(SUMMARY)
+    expect(marketSummaryOf('   ')).toBeNull()
+    expect(marketSummaryOf(null)).toBeNull()
+  })
+
+  it('the week and subject reads (companyLines) print it under the neutral label, and none of the classifier', () => {
+    const text = companyLines('Sealand', ctx, SEP)
+    expect(text).toContain(`- What Sealand sells: Sealand sells bags. ${MARKET_SUMMARY_LABEL} ${SUMMARY}`)
+    for (const leak of leaks) expect(text, String(leak)).not.toMatch(leak)
+  })
+
+  it('the briefs (contextLines) and the long-run read the same', () => {
+    const brief = contextLines('Sealand', ctx, null)
+    expect(brief).toContain(`- What Sealand sells: Sealand sells bags. ${MARKET_SUMMARY_LABEL} ${SUMMARY}`)
+    const pool = { clientId: SEALAND_CLIENT_ID, runId: 'r', month: '2026-11-01', months: ['2026-10-01', '2026-11-01'], window: { from: '2026-10-01T00:00:00.000Z', to: '2026-12-01T00:00:00.000Z' }, candidates: [], thin: false }
+    const user = buildLongRunPrompts({ company: 'Sealand', pool, context: ctx }).user
+    const about = user.slice(user.indexOf('About Sealand'), user.indexOf('- What Sealand says about itself'))
+    expect(about).toContain(`- ${MARKET_SUMMARY_LABEL} ${SUMMARY}`)
+    for (const leak of leaks) {
+      expect(brief, String(leak)).not.toMatch(leak)
+      expect(about, String(leak)).not.toMatch(leak)
+    }
+  })
+
+  it('a tenant with no definition keeps its keyword line, as before', () => {
+    const none = sellsFromConfig(SEALAND_CLIENT_ID, { market_description: null, industry_keywords: KEYWORDS })
+    expect(none).toEqual({ noun: 'bags', description: null, keywords: KEYWORDS })
+    expect(companyLines('Sealand', { sells: none, claims: [], posts: { week: null, month: null } }, SEP))
+      .toContain(`- What Sealand sells: Sealand sells bags. Its market is followed by these words: ${KEYWORDS.join(', ')}.`)
   })
 })

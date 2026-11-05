@@ -8,7 +8,7 @@ import { WHAT_THEY_SELL } from '../pages/market-frame'
 import { logAiCall } from '../pipeline/ai-log'
 import { CALIBRATED_PROSE_RULE, noDirectionRule } from '../pipeline/prose-rules'
 import { noDashes } from '../reports/documents/scrub'
-import type { CompanyContext } from './company'
+import { MARKET_SUMMARY_LABEL, type CompanyContext } from './company'
 import { asTimeout, isTimeout, UNTIMED_STEP, type CallBudget } from './deadline'
 import type { LongRunCandidate, LongRunPool } from './longrun'
 import { monthsPhrase } from './month'
@@ -165,7 +165,7 @@ export function buildLongRunPrompts(a: LongRunWriterArgs): { system: string; use
     ? [
         `About ${co} (context only; none of this is what the market said):`,
         ctx.sells.noun ? `- ${co} sells ${ctx.sells.noun}.` : '',
-        ctx.sells.description ? `- In its own words, its market is: ${ctx.sells.description}` : '',
+        ctx.sells.description ? `- ${MARKET_SUMMARY_LABEL} ${ctx.sells.description}` : '',
         ctx.sells.keywords.length ? `- Its market is followed by these words: ${ctx.sells.keywords.join(', ')}.` : '',
         ctx.claims.length
           ? `- What ${co} says about itself in its own videos (its claims, in paraphrase):\n${ctx.claims.map((c) => `  - ${c}`).join('\n')}`

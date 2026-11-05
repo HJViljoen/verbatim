@@ -9,12 +9,13 @@ import { marketDefinitionOf, relevancePromptVersion } from './relevance'
 //
 // The definition is CLIENT DATA (`tracking_configs.market_description`, MF3,
 // operator-only), never code: the relevance gate judges by it
-// (lib/gather/relevance.ts), and the written reads and the briefs print it as
-// the company's market ("In its own words, its market is: …",
-// lib/written/company.ts). So it is written as a description of the market,
-// not as instructions to a model, and with no digit and no em dash (plan
-// §4.0's rule for the operator's words, as scripts/operator-config.ts holds
-// its noun phrase to).
+// (lib/gather/relevance.ts) whole, and the written reads and the briefs print
+// its FIRST PARAGRAPH, by convention the definition's summary, as the market
+// the company sells into (`marketSummaryOf`, lib/written/company.ts): never
+// its lists or its borderline rule, which are a classifier's instructions. So
+// the first paragraph is one paragraph of prose saying what the market is,
+// and the whole text has no digit and no em dash (plan §4.0's rule for the
+// operator's words, as scripts/operator-config.ts holds its noun phrase to).
 //
 // THE ROW IS THE COMPARISON BREAK. Surface `gate_rule`, field
 // `market_description` (`isMarketDefinitionChange`), `affects_months` the
@@ -29,6 +30,8 @@ import { marketDefinitionOf, relevancePromptVersion } from './relevance'
 
 /** Long enough for a definition with its in, out and borderline parts. */
 export const MARKET_DEFINITION_MAX = 4000
+/** The first paragraph, the writers' summary, at most. */
+export const MARKET_SUMMARY_MAX = 700
 
 /** The file's words, checked and normalised as the gate reads them
  *  (`marketDefinitionOf`: line endings `\n`, trimmed). Throws a sentence on
@@ -41,6 +44,10 @@ export function checkMarketDefinition(raw: string): string {
   if (/—/.test(text)) throw new Error('the market definition carries an em dash (plan §4.0)')
   if (/\p{Nd}/u.test(text)) throw new Error('the market definition carries a digit: the written reads print it, and a figure there is a claim nothing measured')
   if (/[\u0000-\u0008\u000b-\u001f\u007f]/.test(text)) throw new Error('the market definition carries a control character')
+  // The first paragraph is what the writers read: prose, not a list, short.
+  const summary = text.split(/\n[ \t]*\n/)[0]
+  if (/^\s*[-*•]/m.test(summary)) throw new Error('the market definition\'s first paragraph is a list: it is the writers\' summary (lib/written/company.ts marketSummaryOf), so make it one paragraph of prose')
+  if (summary.length > MARKET_SUMMARY_MAX) throw new Error(`the market definition's first paragraph is ${summary.length} characters, over ${MARKET_SUMMARY_MAX}: it is the writers' summary, so keep it short`)
   return text
 }
 

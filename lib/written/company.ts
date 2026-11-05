@@ -14,8 +14,9 @@ import { inMonth, readingMonthOf } from './month'
 // THREE THINGS, EACH THROUGH THE PRODUCT'S OWN READER, AND NONE OF THEM THE
 // MARKET:
 //  · what it sells: the product's own noun (`WHAT_THEY_SELL`, the front
-//    page's), the stored market description (`tracking_configs`, MF3, null for
-//    Sealand today) and the industry keywords its market is followed by;
+//    page's), the stored market description's summary, its first paragraph
+//    (`marketSummaryOf`; `tracking_configs`, MF3), and, only where no
+//    description is set, the industry keywords its market is followed by;
 //  · what it says about itself: its OWN-VOICE claims in its own videos
 //    (`loadBrandClaims`, the loader Pass C and the document engine use: the
 //    newest run per video, deduped, the brand's voice split from creators
@@ -84,7 +85,7 @@ export function companyLines(company: string, ctx: CompanyContext | null | undef
   if (!ctx) return ''
   const sells = [
     ctx.sells.noun ? `${company} sells ${ctx.sells.noun}.` : '',
-    ctx.sells.description ? `In its own words, its market is: ${ctx.sells.description}` : '',
+    ctx.sells.description ? `${MARKET_SUMMARY_LABEL} ${ctx.sells.description}` : '',
     ctx.sells.keywords.length ? `Its market is followed by these words: ${ctx.sells.keywords.join(', ')}.` : '',
   ].filter(Boolean)
   const posted = (n: number | null, when: string) => (n == null ? '' : n > 0 ? `${company} published posts of its own ${when}.` : `${company} published no post of its own ${when}.`)
@@ -98,6 +99,38 @@ export function companyLines(company: string, ctx: CompanyContext | null | undef
     posts.length ? `- ${posts.join(' ')}` : '',
   ].filter(Boolean).join('\n')
 }
+
+/**
+ * THE WRITERS' SUMMARY OF A MARKET DEFINITION: its first paragraph, by
+ * convention (scripts/seeds/*-market-description.txt, AGENTS.md). The stored
+ * `market_description` is the relevance gate's whole definition, its In and
+ * Not-the-market lists and how to read a borderline case: a classifier's
+ * instructions, which a writer told "this is the company's market" turns into
+ * sentences ("Maker talk sits outside the market") that no scrub catches. So a
+ * writer gets the summary alone, on one line. Null where there is none. Pure.
+ */
+export function marketSummaryOf(description: unknown): string | null {
+  if (typeof description !== 'string') return null
+  const first = description.replace(/\r\n?/g, '\n').trim().split(/\n[ \t]*\n/)[0] ?? ''
+  const line = first.replace(/\s+/g, ' ').trim()
+  return line || null
+}
+
+/** What the company sells, from its tracking row: the product's noun, the
+ *  market definition's summary (`marketSummaryOf`), and the industry keywords
+ *  only where no definition is set (they are search terms, and a definition
+ *  may rule out what some of them find: Sealand's "handmade bag", "sustainable
+ *  fashion"). Pure. */
+export function sellsFromConfig(clientId: string, config: Record<string, unknown>): CompanyContext['sells'] {
+  const description = marketSummaryOf(config.market_description)
+  const keywords = description ? [] : [...new Set(((config.industry_keywords ?? []) as string[]).map((k) => String(k).trim()).filter(Boolean))].slice(0, COMPANY_KEYWORDS_MAX)
+  return { noun: WHAT_THEY_SELL[clientId] ?? null, description, keywords }
+}
+
+/** The label a writer reads the summary under: the product's own phrase for
+ *  the market ("The market Sealand sells into", lib/pages/market-frame.ts),
+ *  never "in its own words": the definition is ours, written for the gate. */
+export const MARKET_SUMMARY_LABEL = 'The market it sells into:'
 
 /** Read the context. READ-ONLY, one statement at a time, never throws. */
 export async function loadCompanyContext(
@@ -114,9 +147,7 @@ export async function loadCompanyContext(
     const res = await admin.from('tracking_configs').select('*').eq('client_id', clientId).maybeSingle()
     if (res.error) throw new Error(res.error.message)
     config = (res.data ?? {}) as Record<string, unknown>
-    const description = typeof config.market_description === 'string' ? config.market_description.trim() : ''
-    ctx.sells.description = description || null
-    ctx.sells.keywords = [...new Set(((config.industry_keywords ?? []) as string[]).map((k) => String(k).trim()).filter(Boolean))].slice(0, COMPANY_KEYWORDS_MAX)
+    ctx.sells = sellsFromConfig(clientId, config)
   } catch (e) {
     warn('tracking_configs', e)
   }

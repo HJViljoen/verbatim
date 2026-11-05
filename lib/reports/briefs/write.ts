@@ -7,7 +7,7 @@ import { CALIBRATED_PROSE_RULE, noDirectionRule } from '../../pipeline/prose-rul
 import type { StandingFact } from '../../written/types'
 import { monthsPhrase } from '../../written/month'
 import { noDashes } from '../documents/scrub'
-import type { CompanyContext } from '../../written/company'
+import { MARKET_SUMMARY_LABEL, type CompanyContext } from '../../written/company'
 import type { BriefQuestion } from './questions'
 import type { AllocatedIdea, BriefRole, GroundedPoint } from './types'
 import { BRIEF_LENS, BRIEF_NAME, BRIEF_ROLES } from './types'
@@ -526,7 +526,7 @@ export function contextLines(company: string, ctx: CompanyContext | null, claims
   if (!ctx) return ''
   const sells = [
     ctx.sells.noun ? `${company} sells ${ctx.sells.noun}.` : '',
-    ctx.sells.description ? `In its own words, its market is: ${ctx.sells.description}` : '',
+    ctx.sells.description ? `${MARKET_SUMMARY_LABEL} ${ctx.sells.description}` : '',
     ctx.sells.keywords.length ? `Its market is followed by these words: ${ctx.sells.keywords.join(', ')}.` : '',
   ].filter(Boolean)
   return [

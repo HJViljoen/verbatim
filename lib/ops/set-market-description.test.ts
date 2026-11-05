@@ -87,6 +87,9 @@ describe('set-market-description: the dry run', () => {
     await bad(ARGS, PROD_URL, 'Bags — all of them')
     await bad(ARGS, PROD_URL, 'Bags under 40 litres')
     await bad(ARGS, PROD_URL, '   ')
+    // The first paragraph is the writers' summary: prose, not a list, short.
+    await bad(ARGS, PROD_URL, '- backpacks\n- duffels\n\nNot the market: crochet.')
+    await bad(ARGS, PROD_URL, `${'carry gear '.repeat(80)}\n\nNot the market: crochet.`)
   })
 })
 
