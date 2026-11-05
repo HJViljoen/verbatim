@@ -7,6 +7,8 @@ import { AgentDocumentSplit } from '@/components/agent-document-split'
 import { ExportScope } from '@/components/export-menu'
 import { Tile, TileEmpty } from '@/components/shell/tile'
 import { canAsk } from '@/lib/agent/access'
+import { threadDeletable } from '@/lib/agent/delete-thread'
+import { DeleteThread } from '@/components/pages/agent/delete-thread'
 import { askBasisLine, nothingSearchable } from '@/lib/agent/basis'
 import { loadAgentThread } from '@/lib/pages/agent-thread'
 import { AgentComposer } from '@/components/agent-composer'
@@ -43,11 +45,14 @@ export default async function AgentThreadPage({
   const { id } = await params
   const sp = (await searchParams) ?? {}
   const { supabase, clientId, userId, role } = await getSessionContext()
-  const [canSend, data] = await Promise.all([
+  const [canSend, data, canDelete] = await Promise.all([
     canAsk(role, userId),
     loadAgentThread({ supabase, clientId, reading: readingHandle(clientId), params: { ...sp, thread: id } }),
+    // Its author, or an owner or admin; the action decides again.
+    threadDeletable(supabase, { clientId, userId, role }, id),
   ])
   if (!data) notFound()
+  const deleteControl = canDelete ? <DeleteThread threadId={id} kind={data.kind === 'document' || data.document ? 'document' : 'question'} /> : null
   // The one state where a follow-up cannot work, read off the basis this page
   // already loads (the landing page's own predicate, same sentence).
   const blocked = nothingSearchable(data.basis)
@@ -128,6 +133,7 @@ export default async function AgentThreadPage({
               notice={doc.notice}
             />
           </Tile>
+          {deleteControl}
         </AskShell>
       </ExportScope>
     )
@@ -153,6 +159,7 @@ export default async function AgentThreadPage({
                 month&rsquo;s questions, and you can bring the document again from the Agent&rsquo;s box.
               </TileEmpty>
             </Tile>
+            {deleteControl}
           </AskColumns>
         </AskShell>
       </ExportScope>
@@ -201,6 +208,7 @@ export default async function AgentThreadPage({
               planLimit={planLimit}
             />
           </div>
+          {deleteControl}
         </AskColumns>
       </AskShell>
     </ExportScope>
