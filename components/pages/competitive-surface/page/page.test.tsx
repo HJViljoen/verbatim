@@ -37,7 +37,7 @@ describe('Competitive · the artboard', () => {
       'No videos in the last 90 days: Old School, Rareform.',
       'Cotopaxi in full',
       'What people did in the comments, of its 17 videos',
-      'Praised a bag 12 Asked a question 12 Said they want to buy 12 Complained about something 6 Wished for something 2 Said they’re switching 2 Said who they are 1',
+      'Praised a bag 12 Asked a question 12 Said they want to buy 12 Complained about something 6 Wished for something 2 Said they’re switching 2 Said something about themselves 1',
       'Said about Cotopaxi',
       '“I second cotopaxi. I have their duffel and have had their allpa backpack and both are solid” Reddit · 23 Sep · Cotopaxi',
       '“Cotopaxi is ok but way overpriced.',

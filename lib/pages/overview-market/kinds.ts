@@ -50,7 +50,7 @@ export function talkKindLabel(kind: string, noun: string | null | undefined): st
     case 'objection': return 'Pushed back'
     case 'buying_trigger': return 'Said what made them look'
     case 'switching_signal': return 'Said they’re switching'
-    case 'demographic_signal': return 'Said who they are'
+    case 'demographic_signal': return 'Said something about themselves'
     default: return marketKindLabel(kind)
   }
 }

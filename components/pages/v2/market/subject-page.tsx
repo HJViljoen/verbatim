@@ -59,12 +59,13 @@ export const SUBJECT_NO_READ = subjectNoRead
  *  the block keeps its frame and says so (the parity rule, 14 Oct). */
 export const SUBJECT_NONE_THIS_WEEK = 'No video this week.'
 
-/** A subject that prints no figure: its numbers card, in one line (U6). */
-export const SUBJECT_NUMBERS_HELD = 'No figure prints for this subject until its check passes.'
+/** A subject that prints no figure: its numbers card, in one line (U6). In
+ *  plain words (5 Nov: "until its check passes" was our machinery). */
+export const SUBJECT_NUMBERS_HELD = 'We’re still checking which comments belong to this subject, so there are no figures for it yet.'
 
 /** A subject whose check has not passed: its read card, in one line. No read
  *  is written for it (`subjectOwnRead`), so none prints. */
-export const SUBJECT_READ_HELD = 'No read prints for this subject until its check passes.'
+export const SUBJECT_READ_HELD = 'We’re still checking which comments belong to this subject, so there’s no read of it yet.'
 
 /**
  * THE NUMBERS CARD OF A SUBJECT THAT PRINTS NO FIGURE, in one line: the

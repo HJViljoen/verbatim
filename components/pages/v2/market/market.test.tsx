@@ -306,10 +306,10 @@ describe('the numbers behind the week', () => {
 
   it('weeks: one set of words for the chart\'s line', () => {
     const c = (videos: number | null, settled = true) => ({ videos, settled })
-    expect(weeksLine(null)).toBe('Insufficient data: only weeks read the same way are drawn.')
-    expect(weeksLine([c(null), c(null)])).toBe('Insufficient data: only weeks read the same way are drawn.')
-    expect(weeksLine([c(null), c(5)])).toBe('Only weeks read the same way are drawn.')
-    expect(weeksLine([c(null), c(5, false)])).toBe('Only weeks read the same way are drawn; the newest are still filling.')
+    expect(weeksLine(null)).toBe('Insufficient data: we only draw weeks we counted the same way, so the bars compare fairly.')
+    expect(weeksLine([c(null), c(null)])).toBe('Insufficient data: we only draw weeks we counted the same way, so the bars compare fairly.')
+    expect(weeksLine([c(null), c(5)])).toBe('We only draw weeks we counted the same way, so the bars compare fairly.')
+    expect(weeksLine([c(null), c(5, false)])).toBe('We only draw weeks we counted the same way, so the bars compare fairly; the newest are still filling.')
     expect(weeksLine([c(4), c(5, false)])).toBe('The newest weeks are still filling.')
     expect(weeksLine([c(4), c(5)])).toBeNull()
     expect(weeksLine(null, true)).toBe(WEEKS_UNREAD)
@@ -326,7 +326,7 @@ describe('the numbers behind the week', () => {
     // A drawn chart with a week our rules leave out: its slot, and why.
     const gap = { ...FIXTURE_WEEKS, columns: FIXTURE_WEEKS.columns.map((c, i) => (i < 2 ? { ...c, videos: null, comments: null } : c)) }
     expect(render(<WeeksCard weeks={gap} />).match(/data-slot-empty=""/g)).toHaveLength(2)
-    expect(renderText(<WeeksCard weeks={gap} />)).toContain('Only weeks read the same way are drawn; the newest are still filling.')
+    expect(renderText(<WeeksCard weeks={gap} />)).toContain('We only draw weeks we counted the same way, so the bars compare fairly; the newest are still filling.')
   })
 
   it('kinds and platforms keep their cards with nothing read', () => {

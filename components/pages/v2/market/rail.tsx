@@ -84,8 +84,8 @@ export function PlatformsFrame({ data }: { data: MarketData }) {
 export const WEEKS_UNREAD = 'The weekly counts could not be read just now.'
 
 /** The chart's rule, said wherever a slot is empty: only weeks read one way
- *  are drawn (`homeWeeks`). */
-export const WEEKS_RULE = 'Only weeks read the same way are drawn'
+ *  are drawn (`homeWeeks`), in plain words (5 Nov). */
+export const WEEKS_RULE = 'We only draw weeks we counted the same way, so the bars compare fairly'
 
 /**
  * THE CHART'S ONE QUIET LINE, one set of words for every state (the parity
