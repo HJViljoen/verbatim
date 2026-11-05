@@ -303,12 +303,24 @@ function Side({ side, data, index, span }: { side: SideCard; data: MarketData; i
   )
 }
 
+/** Under the bars, always: they count what we read, and the early months
+ *  hold only what we found looking back (5 Nov: Sealand's 11, 50, 36, 378,
+ *  940, 1,192 from May read as a market growing tenfold). */
+export const MONTHS_READ_NOTE = 'These bars count the videos we read, not how big the market is: the early months hold only what we found when we looked back, and a month holds more as each update reads it.'
+/** And where the bars and the table's heads differ: the bars are the market,
+ *  the table's "of" the category alone (5 Nov: 940 over September's bar,
+ *  "of 901" over its column). */
+export const MONTHS_SPLIT_NOTE = 'Each bar is the category’s videos and the videos about brands you track; the table below counts the category’s alone.'
+
 /** Over time: the market's videos, month by month. */
 function MonthsCard({ months, data }: { months: readonly MonthCount[]; data: MarketData }) {
+  const category = new Map((data.table?.months ?? []).map((m) => [m.month, m.n]))
+  const split = months.some((m) => m.k != null && category.get(m.month) != null && category.get(m.month) !== m.k)
   return (
     <article className={cn(CARD, 'col-span-12')}>
       <CardHead icon={CalendarRange} title="Your market, month by month" sub={<>The market’s videos each month, by the month people commented. {data.month.soFar ? <>{longMonth(data.month.month)} is still filling.</> : null}</>} />
       <MiniBars bars={months.map((m) => ({ label: m.label, value: m.k ?? 0, filling: m.filling }))} size="lg" className="max-w-[760px]" label="The market's videos each month" />
+      <p data-months-note="" className="m-0 max-w-[760px] text-[12.5px] leading-[1.5] text-muted-foreground">{MONTHS_READ_NOTE}{split ? <> {MONTHS_SPLIT_NOTE}</> : null}</p>
     </article>
   )
 }

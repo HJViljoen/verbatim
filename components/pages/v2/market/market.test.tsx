@@ -9,7 +9,7 @@ import { AlsoThisWeek, ALSO_TALKED, MOST_TALKED, NOTHING_ELSE_NEW, NOTHING_NEW, 
 import { KindsCard, KindsFrame, NumbersRow, PlatformsCard, PlatformsFrame, WeeksCard, weeksLine, WEEKS_UNREAD } from './rail'
 import { WEEKS_FAILED } from '@/lib/pages/home'
 import { ConversationTable } from './table'
-import { TopRowView } from './top'
+import { MONTHS_READ_NOTE, MONTHS_SPLIT_NOTE, TopRowView } from './top'
 import { MarketSkeleton } from './skeleton'
 
 // MARKET'S TOP LAYER, RENDERED (analysis first, as pages, 17 Oct; boards
@@ -370,6 +370,19 @@ describe('TopRowView (the month\'s numbers)', () => {
 
   it('over time draws the market\'s months', () => {
     expect(renderText(<TopRowView data={TIME} />)).toContain('Your market, month by month')
+  })
+
+  // 5 Nov: the bars read as market growth, and 940 over September's bar sat
+  // beside "of 901" over its column.
+  it('over time says the bars count what we read, and, where they differ from the table\'s heads, which videos each holds', () => {
+    const text = renderText(<TopRowView data={TIME} />)
+    expect(text).toContain(MONTHS_READ_NOTE)
+    const months = TIME.top.months!
+    const same = { ...TIME, table: TIME.table ? { ...TIME.table, months: months.map((m) => ({ ...m, n: m.k })) } : TIME.table }
+    expect(renderText(<TopRowView data={same as typeof TIME} />)).not.toContain(MONTHS_SPLIT_NOTE)
+    const split = { ...TIME, table: TIME.table ? { ...TIME.table, months: months.map((m) => ({ ...m, n: m.k != null ? m.k - 3 : null })) } : TIME.table }
+    expect(renderText(<TopRowView data={split as typeof TIME} />)).toContain(`${MONTHS_READ_NOTE} ${MONTHS_SPLIT_NOTE}`)
+    assertCopyContract(<TopRowView data={split as typeof TIME} />)
   })
 
   it('draws nothing with nothing to lead with', () => {
