@@ -781,27 +781,43 @@ This version has breaking changes — APIs, conventions, and file structure may 
   regate, subreddit discovery's probe, `run-relevance.ts`, `regate-corpus.ts`),
   and the gate's `ai_call_log` row carries `relevance_gpt·market_v1·<sha256 8>`
   (`relevancePromptVersion`; unchanged `relevance_<method>` without one; nothing
-  reads it to decide anything). The written reads and the briefs already print
-  it as the company's market, so it is worded as a description, no digit, no em
-  dash (`checkMarketDefinition`). The one way in is
+  reads it to decide anything). **ITS FIRST PARAGRAPH IS THE WRITERS' SUMMARY,
+  BY CONVENTION.** The gate reads the whole text, its In and Not-the-market
+  lists and its borderline rule; the week, subject and long-run reads and the
+  briefs read only the first paragraph, on one line, as "The market it sells
+  into:" (`marketSummaryOf`, `sellsFromConfig`, `MARKET_SUMMARY_LABEL`,
+  `lib/written/company.ts`), and no industry-keyword line beside it, because a
+  writer told a classifier's lists are "the company's own words" writes them
+  into the read and no scrub catches it. So the first paragraph is prose that
+  says what the market is, and the whole text has no digit and no em dash
+  (`checkMarketDefinition` refuses a first paragraph that is a list or over
+  `MARKET_SUMMARY_MAX`). The one way in is
   `scripts/set-market-description.ts --client <uuid> --project <ref> --file <path>`
   (dry by default; `--apply` stamps the actor, `updateWithActor`, and logs ONE
   `gate_rule` / `market_description` row, `marketDefinitionChange`, with
   `affects_months` from the month after the newest frozen one to the end of this
   month). Seed: `scripts/seeds/sealand-market-description.txt`. **That row is the
   comparison break** (`isMarketDefinitionChange`, `rejudgedFromOf`,
-  `OurChange.rejudgedFrom`): the regate re-judges the stored corpus by the new
-  definition and the filling months are refreshed, while the frozen months keep
-  the old rule's figures, so a month pair is refused exactly when it crosses
-  the band's first month (`changeBearsOn`, at `REJUDGED_SHARE`, whatever the pair
-  row measured; "we changed how we check or file videos in {month}"), in
-  `comparabilityOf`, the page judge's named reasons, Settings' stops and
-  `nextComparablePair`; two frozen months, or two re-judged ones, compare as
-  before. The measure step does not measure it. The weekly bars and Market's
-  week windows do not cut at it (`weekRules`, `cutWindows`), because they count
-  the re-judged corpus live; the same-age line, whose points are kept and never
-  re-read, still does (`weekPairOf`'s gate reason). A row whose band does not
-  parse fails closed to an ordinary relevance change. The break is true only
+  `OurChange.rejudgedFrom`). The operator's regate then removes what the two
+  raters' plan calls off-market under the definition (a removal by that plan,
+  never a re-run of the gate, which judges only what later gathers find) and
+  the filling months are refreshed, while the frozen months keep the old rule's
+  figures. So a month pair is refused exactly when it crosses the band's first
+  month (`changeBearsOn`, at `REJUDGED_SHARE`, whatever the pair row measured;
+  "we changed how we check videos from {month} on", the month it applies from,
+  `PAIR_REFUSED_REJUDGED_CHIP`), in `comparabilityOf`, the page judge's named
+  reasons, Settings' stops and `nextComparablePair`; two frozen months, or two
+  re-judged ones, compare as before. **It fails closed**: every
+  `market_description` row is a market-definition change
+  (`OurChange.marketDefinition`), and one whose band does not parse refuses
+  every pair in its span unmeasured, its measures never read; the measure step
+  measures neither kind. The weekly bars and Market's week windows do not cut
+  at it (`weekRules`, `cutWindows`), because they count the regated corpus
+  live; the same-age line, whose points are kept and never re-read, still does
+  (`weekPairOf`'s gate reason). **That leaves a possible step, uncut:** the
+  videos the raters disagreed on (256 for Sealand on 5 Nov) stay in the old
+  weeks, while new weeks face the stricter gate, which would drop 133 of them
+  (14 to 19% of each week's videos after the regate). The break is true only
   once the regate and the refresh are done. `lib/reading/market-definition-break.test.ts`.
 - **The week chart's cut and cadence** (the release fix, 1 Oct night; made
   precise 5 Oct; `weeksSinceOurChanges`, `lib/reading/weeks.ts`). The bars

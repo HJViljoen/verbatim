@@ -150,11 +150,11 @@ export interface OurChange {
    *  keeps its figures; it and every month after are read under the new one.
    *  So a month pair is refused when it crosses this month and only then
    *  (`changeBearsOn`), whatever its measure, and the bars and the week
-   *  windows, which are read live from the re-judged corpus, are not cut at it
+   *  windows, which are read live from the regated corpus, are not cut at it
    *  (`weekRules`, `cutWindows`). The same-age line, whose points are kept
    *  and never re-read, still cuts at it. Absent where the band does not
-   *  parse: the change is then a relevance change like any other, which fails
-   *  closed. */
+   *  parse: the change then refuses every pair in its span unmeasured
+   *  (`marketDefinition`) and cuts the weeks as any relevance change does. */
   rejudgedFrom?: string
   /** True on every change of the market definition, its band readable or not
    *  (`isMarketDefinitionChange`). One with no readable band (no
@@ -208,10 +208,12 @@ export const MARKET_DEFINITION_FIELD = 'market_description'
 /**
  * A CHANGE OF THE MARKET THE GATE JUDGES BY (5 Nov, Heinrich: Sealand's market
  * is outdoor, travel and everyday carry gear). Unlike the fail-open fixes it
- * changes the judgement rule, and unlike any other rule change it is applied
- * to every month still filling: the regate re-judges the stored corpus by the
- * new definition and the filling months are refreshed, while the frozen months
- * keep the figures the old rule gave them. Its row says where that line falls:
+ * changes the judgement rule, and unlike any other rule change it reaches
+ * every month still filling: the operator's regate removes what the two
+ * raters' plan calls off-market under the new definition (a removal by that
+ * plan, not a re-run of the gate, which judges only what later gathers find)
+ * and the filling months are refreshed, while the frozen months keep the
+ * figures the old rule gave them. Its row says where that line falls:
  * `affects_months` is `[first re-judged month, …)`, and `rejudgedFromOf`
  * reads it. Pure.
  */

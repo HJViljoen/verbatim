@@ -20,11 +20,13 @@ import { marketDefinitionOf, relevancePromptVersion } from './relevance'
 // THE ROW IS THE COMPARISON BREAK. Surface `gate_rule`, field
 // `market_description` (`isMarketDefinitionChange`), `affects_months` the
 // months read under the new definition: from the first month still filling
-// (the regate re-judges the stored corpus by it and those months are
-// refreshed) to the end of this month. The frozen months before keep the old
-// rule's figures, so every month pair that crosses the band's first month is
-// refused and no other (`changeBearsOn`, lib/reading/comparability.ts); the
-// weekly bars, read live from the re-judged corpus, are not cut. No note:
+// to the end of this month. The operator's regate then removes what the two
+// raters' plan calls off-market under the definition (not a re-run of the
+// gate, which judges only what later gathers find) and those months are
+// refreshed. The frozen months before keep the old rule's figures, so every
+// month pair that crosses the band's first month is refused and no other
+// (`changeBearsOn`, lib/reading/comparability.ts); the weekly bars, read live
+// from the regated corpus, are not cut. No note:
 // our own changes carry none (Heinrich, 27 Sep); Settings titles it "How we
 // check relevance".
 
