@@ -137,7 +137,7 @@ function HubCard({ page }: { page: AdvicePageData }) {
                   : <span data-copy="subject" data-slot="pass_b_theme">{card.aim.label}</span>}
               </div>
               {card.aim.level
-                ? <div className={FL}><span data-copy="level">{fmtInt(card.aim.level.k)} of {fmtInt(card.aim.level.n)}</span> market videos in {longMonth(reading)}</div>
+                ? <div className={FL}><span data-copy="level">{fmtInt(card.aim.level.k)} of {fmtInt(card.aim.level.n)}</span> category videos in {longMonth(reading)}</div>
                 : <div className={FL}>No reading in {longMonth(reading)} yet</div>}
               {page.monthLabel ? <div className={FS}>{inlineMonth(longMonth(reading), page.monthLabel)}</div> : null}
             </>
@@ -212,7 +212,7 @@ function ConvCard({ c, base, monthText }: { c: AdviceConversation; base: number;
         <p className="m-0 text-[13.5px] leading-[1.45] text-muted-foreground">
           <b data-copy="figure" className="font-mono text-[15px] font-semibold tabular-nums text-foreground">{fmtInt(c.videos)}</b> of its <span data-copy="figure">{fmtInt(base)}</span> videos
           <br />
-          {c.level ? <><span data-copy="level"><span className="font-mono tabular-nums text-foreground">{fmtInt(c.level.k)}</span> of {fmtInt(c.level.n)}</span> market videos in {monthText}</> : <>No reading in {monthText} yet</>}
+          {c.level ? <><span data-copy="level"><span className="font-mono tabular-nums text-foreground">{fmtInt(c.level.k)}</span> of {fmtInt(c.level.n)}</span> category videos in {monthText}</> : <>No reading in {monthText} yet</>}
         </p>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -240,7 +240,7 @@ function ConvList({ rows, base, monthText }: { rows: readonly AdviceConversation
             <tr>
               <th scope="col" className={TH}>Conversation</th>
               <th scope="col" className={cn(TH, 'text-right')}>Of its <span data-copy="figure">{fmtInt(base)}</span> videos</th>
-              <th scope="col" className={cn(TH, 'text-right whitespace-normal')}>Market videos in {monthText}</th>
+              <th scope="col" className={cn(TH, 'text-right whitespace-normal')}>Category videos in {monthText}</th>
               <th scope="col" aria-label="Open" className={TH} />
             </tr>
           </thead>
@@ -264,7 +264,7 @@ function ConvList({ rows, base, monthText }: { rows: readonly AdviceConversation
           <div key={c.id} data-phone-row="" className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-[3px] border-t border-track py-[11px] first:border-t-0 first:pt-0">
             <Link href={c.href} className="min-w-0 text-[14px] font-medium text-foreground no-underline"><span data-copy="subject" data-slot="pass_b_theme">{c.label}</span></Link>
             <span data-copy="figure" className="text-right font-mono text-[13.5px] tabular-nums">{fmtInt(c.videos)}</span>
-            {c.level ? <span className="col-span-2 text-[12.5px] text-muted-foreground"><span data-copy="level"><span className="font-mono text-foreground">{fmtInt(c.level.k)}</span> of {fmtInt(c.level.n)}</span> market videos in {monthText}</span> : null}
+            {c.level ? <span className="col-span-2 text-[12.5px] text-muted-foreground"><span data-copy="level"><span className="font-mono text-foreground">{fmtInt(c.level.k)}</span> of {fmtInt(c.level.n)}</span> category videos in {monthText}</span> : null}
           </div>
         ))}
       </div>
@@ -324,7 +324,7 @@ function LineBars({ line }: { line: WouldMoveLine }) {
   const max = Math.max(0.0001, ...shares.map((x) => x ?? 0)) * 1.15
   const words = line.slots.map((s) => `${longMonth(s.month)} ${s.point ? `${sharePct(s.point.k, s.point.n)} (${fmtInt(s.point.k)} of ${fmtInt(s.point.n)})` : 'no reading'}`).join(', ')
   return (
-    <svg viewBox={`0 0 ${W} ${BASE + 40}`} role="img" aria-label={`${line.label}, share of market videos: ${words}.`} className="block h-auto w-full max-w-[520px] overflow-visible">
+    <svg viewBox={`0 0 ${W} ${BASE + 40}`} role="img" aria-label={`${line.label}, share of category videos: ${words}.`} className="block h-auto w-full max-w-[520px] overflow-visible">
       <line x1={0} y1={BASE} x2={W} y2={BASE} className="stroke-border" />
       {line.slots.map((s, i) => {
         const x = i * slot + (slot - bw) / 2
@@ -411,7 +411,7 @@ function NumbersCard({ page, noun }: { page: AdvicePageData; noun: string | null
   return (
     <section aria-label="This advice in numbers" className={PAGE_CARD}>
       <div className="grid grid-cols-1 gap-11 max-sm:gap-0 min-[1180px]:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-        <PanelSection label={page.line && page.line !== 'unread' ? <><span data-copy="subject" data-slot="pass_b_theme">{page.line.label}</span> · share of market videos</> : 'The line a move on it is read on'}>
+        <PanelSection label={page.line && page.line !== 'unread' ? <><span data-copy="subject" data-slot="pass_b_theme">{page.line.label}</span> · share of category videos</> : 'The line a move on it is read on'}>
           {page.line === 'unread'
             ? <p className={GAPLINE}>Its line {LEVEL_UNREAD}.</p>
             : page.line

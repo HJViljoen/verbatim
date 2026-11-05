@@ -73,7 +73,7 @@ describe('a piece of advice, the hub (G6-Moves-Advice)', () => {
 
   it('the header card leads with the argument\'s first sentence, and the four figures sit inside it', () => {
     expect(html).toMatch(/<h2 id="hub-head" data-copy="stored" data-slot="pass_d_b_recommendation"[^>]*>People refused cover for a powered knee say they would choose the brand that helps them through the paperwork\.<\/h2>/)
-    for (const words of ['63 videos it rests on all time, in 5 conversations', '9 updates in a row have raised it since 27 Jul', 'Would move Insurance refusals for powered knees 19 of 839 market videos in September September, the last full month', 'Not decided yet first suggested 27 Jul no move dated on it']) {
+    for (const words of ['63 videos it rests on all time, in 5 conversations', '9 updates in a row have raised it since 27 Jul', 'Would move Insurance refusals for powered knees 19 of 839 category videos in September September, the last full month', 'Not decided yet first suggested 27 Jul no move dated on it']) {
       expect(text, words).toContain(words)
     }
     expect(html.match(/data-fig=""/g)).toHaveLength(4)
@@ -90,22 +90,22 @@ describe('a piece of advice, the hub (G6-Moves-Advice)', () => {
     expect(text).toContain('Its 63 videos sit in 5 conversations · the three biggest, then the rest · each opens in Market')
     // The reading month carries its label where it is not the current one
     // (decision 3, `inlineMonth`): the cards, the list's head and its rows.
-    expect(text).toContain('29 of its 63 videos 19 of 839 market videos in September, the last full month The one it would move Open in Market →')
+    expect(text).toContain('29 of its 63 videos 19 of 839 category videos in September, the last full month The one it would move Open in Market →')
     expect(text).toContain('2 more conversations Fewest of its videos.')
-    expect(text).toContain('Market videos in September, the last full month')
+    expect(text).toContain('Category videos in September, the last full month')
     const inside = text.slice(text.indexOf('Its 63 videos sit in'), text.indexOf('A video can sit in more than one conversation'))
-    expect(inside).not.toMatch(/market videos in September(?!, the last full month)/i)
+    expect(inside).not.toMatch(/category videos in September(?!, the last full month)/i)
     // In the current month there is no label.
     const current = renderText(<MovesAdvicePage page={{ ...adviceFixture(), monthLabel: null }} />)
     const currentInside = current.slice(current.indexOf('Its 63 videos sit in'), current.indexOf('A video can sit in more than one conversation'))
-    expect(currentInside).toContain('19 of 839 market videos in September The one it would move')
+    expect(currentInside).toContain('19 of 839 category videos in September The one it would move')
     expect(currentInside).not.toContain('the last full month')
     expect(text).toContain('A video can sit in more than one conversation, so these add up to more than its 63 videos.')
     expect(html).toContain('href="/dashboard/market/conversations/d1000000-0000-4000-8000-000000000001?period=month&amp;month=2026-09"')
   })
 
   it('the numbers: the line a move on it is read on, then who raises it, who it is about, what people did and where, each of its videos', () => {
-    expect(text).toContain('Insurance refusals for powered knees · share of market videos')
+    expect(text).toContain('Insurance refusals for powered knees · share of category videos')
     expect(text).toContain('July 9 of 455')
     expect(text).toContain('September is the last full month. A move dated on this advice is read on this line, from two months before it.')
     for (const words of ['Who raises it · of its 63 videos Long-time users upgrading 31 of 63', 'Who it’s about · of its 63 videos', 'What people did · of its 63 videos Complained about something 41', 'Where · of its 63 videos TikTok 34']) {
@@ -211,7 +211,7 @@ describe('a dated move, the evidence (G6-Moves-Move)', () => {
   it('the thin real move (a member): its month before it alone, said once; no count of nothing; the siblings keep a frame', () => {
     const html = movePage(moveThinFixture())
     const t = markupText(html)
-    expect(t).toMatch(/Share of market videos on Cost and affordability frustration ?: 4% in September, before the move\./)
+    expect(t).toMatch(/Share of category videos on Cost and affordability frustration ?: 4% in September, before the move\./)
     expect(t.match(/October reads once the month has been read/g)).toHaveLength(1)
     expect(t).not.toMatch(/\b0 videos\b/)
     expect(html).toContain('data-no-other-move=""')

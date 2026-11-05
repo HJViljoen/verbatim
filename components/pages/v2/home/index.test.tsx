@@ -726,7 +726,7 @@ describe('the board\'s shape holds when the data is thin (parity pass)', () => {
 
   it('Your moves: the newest move keeps the panel, its month before printed and its own month left open', () => {
     const t = tileText(markup, 'moves')
-    expect(t).toMatch(/After your move Create a guided access path, not a standalone price answer 4% → Share of market videos on Cost and affordability frustration ?: 19 of 521 in September, before the move\. October reads once the month has been read\.$/)
+    expect(t).toMatch(/After your move Create a guided access path, not a standalone price answer 4% → Share of category videos on Cost and affordability frustration ?: 19 of 521 in September, before the move\. October reads once the month has been read\.$/)
     expect(tileMarkup(markup, 'moves')).toContain('href="/dashboard/moves/m-access"')
   })
 
@@ -805,7 +805,7 @@ describe('the thin states, after the fresh check', () => {
   it('Your moves: a comparison that may not print shows its latest month alone, with no arrow and no open after side', () => {
     const m = tileMarkup(markup, 'moves')
     const panel = m.slice(m.indexOf('data-move="newest"'))
-    expect(markupText(panel)).toMatch(/4% Share of market videos on Cost and affordability frustration ?: 23 of 521 in September, the last full month\.$/)
+    expect(markupText(panel)).toMatch(/4% Share of category videos on Cost and affordability frustration ?: 23 of 521 in September, the last full month\.$/)
     expect(panel).not.toContain('→')
     expect(panel).not.toContain('border-dashed')
   })

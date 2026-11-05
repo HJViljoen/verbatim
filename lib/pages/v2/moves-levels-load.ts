@@ -301,7 +301,7 @@ export async function loadAdvicePage(scope: Scope, id: string, options: { canDec
   const reading = monthStartOf(core.month)
   const levelOf = (themeId: string): { k: number; n: number } | null => {
     const k = levels('theme', themeId, reading)
-    const n = core.marketN(reading)
+    const n = core.marketN(reading, 'theme')
     return k != null && n != null && n > 0 ? { k, n } : null
   }
   // The themes or their labels unread: the conversations, and the line their
@@ -316,7 +316,7 @@ export async function loadAdvicePage(scope: Scope, id: string, options: { canDec
     : target && targetLabel
       ? wouldMoveLineOf({
           themeId: target, label: targetLabel, month: core.month, monthLabel, now: core.readingAt,
-          level: (m) => levels('theme', target, m), n: core.marketN,
+          level: (m) => levels('theme', target, m), n: (m) => core.marketN(m, 'theme'),
           joined: (prev, m) => joins(core.pair(prev, m, 'market')), pair: core.pair,
         })
       : null

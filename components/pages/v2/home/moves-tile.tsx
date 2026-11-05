@@ -8,7 +8,7 @@ import { PRIORITY_CHIP } from '@/components/pages/v2/moves/parts'
 import { fmtInt, longMonth } from '@/lib/format'
 import type { TileRead } from '@/lib/pages/v2/home'
 import { tileHref } from '@/lib/pages/home'
-import { compareMonths, groundedLabel, monthLabelOn, MOVE_UNREAD, noMoveWords, pendingLine, RECORD_HREF, sharePct, streakLabel, UNTITLED_ADVICE, type TopMoves } from '@/lib/pages/v2/moves'
+import { compareMonths, groundedLabel, levelBase, monthLabelOn, MOVE_UNREAD, noMoveWords, pendingLine, RECORD_HREF, sharePct, streakLabel, UNTITLED_ADVICE, type TopMoves } from '@/lib/pages/v2/moves'
 import { notMeasuredLine } from '@/lib/pages/not-measured'
 import { inlineMonth } from '@/lib/reading/month-label'
 import { monthStartOf } from '@/lib/reading/month-key'
@@ -87,7 +87,7 @@ function Move({ move, reading }: { move: NonNullable<TopMoves['move']>; reading:
       <p className={CSUB}>
         {/* What it is on, marked as Your moves marks it: a subject is the
             client's own name for it, a theme the model's label. */}
-        Share of market videos{move.label ? <> on {move.kind === 'subject' ? <span data-copy="quote">{move.label}</span> : <span data-copy="subject" data-slot="pass_b_theme">{move.label}</span>}</> : null}: <span data-copy="level">{fmtInt(c.before.k)} of {fmtInt(c.before.n)}</span> in {m.before}, against <span data-copy="level">{fmtInt(c.after.k)} of {fmtInt(c.after.n)}</span> in {m.after}
+        Share of {levelBase(move.kind)}{move.label ? <> on {move.kind === 'subject' ? <span data-copy="quote">{move.label}</span> : <span data-copy="subject" data-slot="pass_b_theme">{move.label}</span>}</> : null}: <span data-copy="level">{fmtInt(c.before.k)} of {fmtInt(c.before.n)}</span> in {m.before}, against <span data-copy="level">{fmtInt(c.after.k)} of {fmtInt(c.after.n)}</span> in {m.after}
       </p>
     </Link>
   )
@@ -140,13 +140,13 @@ function Newest({ move, reading }: { move: NonNullable<TopMoves['newest']>; read
     }
     sentence = (
       <>
-        {p ? <>Share of market videos<OnWhat move={move} />: <span data-copy="level">{fmtInt(p.k)} of {fmtInt(p.n)}</span> in {longMonth(p.month)}, before the move.{' '}</> : null}
+        {p ? <>Share of {levelBase(move.kind)}<OnWhat move={move} />: <span data-copy="level">{fmtInt(p.k)} of {fmtInt(p.n)}</span> in {longMonth(p.month)}, before the move.{' '}</> : null}
         {pendingLine(move.pending)}
       </>
     )
   } else if (p) {
     figures = <span data-copy="figure" className={PCT}>{sharePct(p.k, p.n)}</span>
-    sentence = <>Share of market videos<OnWhat move={move} />: <span data-copy="level">{fmtInt(p.k)} of {fmtInt(p.n)}</span> in {inlineMonth(`${longMonth(p.month)}${p.soFar ? ' so far' : ''}`, monthLabelOn(p.month, reading))}.</>
+    sentence = <>Share of {levelBase(move.kind)}<OnWhat move={move} />: <span data-copy="level">{fmtInt(p.k)} of {fmtInt(p.n)}</span> in {inlineMonth(`${longMonth(p.month)}${p.soFar ? ' so far' : ''}`, monthLabelOn(p.month, reading))}.</>
   }
   return (
     <Link href={move.href} data-move="newest" className={cn(PANEL, 'transition-colors hover:bg-track focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring')}>

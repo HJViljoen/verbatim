@@ -16,7 +16,7 @@ import { inlineMonth } from '@/lib/reading/month-label'
 import { monthStartOf } from '@/lib/reading/month-key'
 import { MARKET_VIDEO_QUOTES, MARKET_VIDEO_QUOTES_PHONE, noGroupSaying, type ConvComment, type ConvVideo } from '@/lib/pages/v2/market'
 import { BRANDS_NOT_COUNTED, BRANDS_NOT_READ } from '@/lib/pages/v2/voices'
-import { MOVES_PATH, MOVE_UNREAD, compareMonths, comparePrintable, monthLabelOn, sharePct, type MoveCard, type MovePoint, type ReadingLabel } from '@/lib/pages/v2/moves'
+import { MOVES_PATH, MOVE_UNREAD, compareMonths, levelBase, comparePrintable, monthLabelOn, sharePct, type MoveCard, type MovePoint, type ReadingLabel } from '@/lib/pages/v2/moves'
 import { MOVE_SAID_ANCHOR } from '@/lib/pages/v2/moves-address'
 import {
   NEXT_MOVE_PAGE, NO_CAUSE, OTHER_MOVES_TITLE, SAID_HELD, SAID_NOTHING, SAID_TITLE, SAID_UNREAD, saidNone,
@@ -50,7 +50,7 @@ function Lead({ page }: { page: MovePageData }) {
         <p className="m-0 text-[13px] leading-[1.5] text-muted-foreground">{NO_CAUSE}</p>
       </div>
       <div className="flex min-w-0 flex-col gap-1.5">
-        <Label>Month by month · share of market videos</Label>
+        <Label>Month by month · share of {levelBase(card.kind)}</Label>
         <MoveChart card={card} readingMonth={page.month} detail />
       </div>
     </div>
@@ -59,7 +59,7 @@ function Lead({ page }: { page: MovePageData }) {
 
 const LEAD = 'm-0 max-w-[820px] text-[20px] leading-[1.45] font-normal tracking-[-0.005em] text-foreground max-sm:text-[17px]'
 
-/** "Share of market videos on X went from 11% in August, the month before, to
+/** "Share of market (or category) videos on X went from 11% in August, the month before, to
  *  14% in September, the last full month and the month of the move." The
  *  move's own sentence, by the root's branches, as the page's lead. */
 function LeadSentence({ card, reading }: { card: MoveCard; reading: ReadingLabel }) {
@@ -69,17 +69,17 @@ function LeadSentence({ card, reading }: { card: MoveCard; reading: ReadingLabel
   if (card.pending) {
     const last = card.points[card.points.length - 1]
     return last
-      ? <p className={LEAD}>Share of market videos{on}: {pct(last)} in {longMonth(last.month)}, before the move.</p>
+      ? <p className={LEAD}>Share of {levelBase(card.kind)}{on}: {pct(last)} in {longMonth(last.month)}, before the move.</p>
       : <p className={cn(LEAD, 'text-muted-foreground')}>{longMonth(card.pending)} reads once the month has been read.</p>
   }
   const c = card.compare
   if (comparePrintable(c)) {
     const m = compareMonths(c, monthStartOf(card.day), reading)
-    return <p className={LEAD}>Share of market videos{on} went from {pct(c.before)} in {m.before}, to {pct(c.after)} in {m.after}.</p>
+    return <p className={LEAD}>Share of {levelBase(card.kind)}{on} went from {pct(c.before)} in {m.before}, to {pct(c.after)} in {m.after}.</p>
   }
   const latest = card.compare?.after ?? card.points[card.points.length - 1]
   if (!latest) return <p className={cn(LEAD, 'text-muted-foreground')}>{MOVE_UNREAD.no_reading}</p>
-  return <p className={LEAD}>Share of market videos{on}: {pct(latest)} in {inlineMonth(`${longMonth(latest.month)}${latest.soFar ? ' so far' : ''}`, monthLabelOn(latest.month, reading))}.</p>
+  return <p className={LEAD}>Share of {levelBase(card.kind)}{on}: {pct(latest)} in {inlineMonth(`${longMonth(latest.month)}${latest.soFar ? ' so far' : ''}`, monthLabelOn(latest.month, reading))}.</p>
 }
 
 /** The verdict beside it: the badge's word as the row's title and the change
@@ -225,7 +225,7 @@ function Facts({ page }: { page: MovePageData }) {
               : <span className="text-[14.5px] font-semibold text-foreground"><OnLabel card={page.card} /></span>}
             <p className="m-0 text-[12.5px] text-muted-foreground">
               {on.kind === 'subject' ? 'A subject you track' : 'A conversation in your market'}
-              {on.level ? <> · <span data-copy="level">{fmtInt(on.level.k)} of {fmtInt(on.level.n)}</span> market videos in {inlineMonth(longMonth(reading), page.monthLabel)}</> : on.ready ? null : <> · not measured yet</>}
+              {on.level ? <> · <span data-copy="level">{fmtInt(on.level.k)} of {fmtInt(on.level.n)}</span> {levelBase(on.kind)} in {inlineMonth(longMonth(reading), page.monthLabel)}</> : on.ready ? null : <> · not measured yet</>}
             </p>
             {on.href ? <Link href={on.href} className="text-[12.5px] font-semibold text-orange-text no-underline underline-offset-[3px] hover:underline">Open it in Market →</Link> : null}
           </>

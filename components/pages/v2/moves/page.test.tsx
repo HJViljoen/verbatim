@@ -372,7 +372,7 @@ describe('what you say, the plan and the conclusions', () => {
 describe('the board’s shape on thin data', () => {
   it('the three advice cards each carry "Would move", the month’s level beside its month', () => {
     const text = markupText(page(movesThinFixture(), null as never))
-    expect(text).toContain('Would move: Cost and affordability frustration · 19 of 521 videos in September, the last full month')
+    expect(text).toContain('Would move: Cost and affordability frustration · 19 of 521 category videos in September, the last full month')
     expect(text).toContain(`Would move: ${WOULD_MOVE_NOTHING}`)
   })
 
@@ -388,7 +388,7 @@ describe('the board’s shape on thin data', () => {
     expect(text).toContain('August is left off the line: what we track changed inside this window. October reads once the month has been read.')
     // The empty slots' names are muted at full strength, never faded.
     expect(markup).not.toMatch(/fill-muted-foreground[^"]*opacity-50/)
-    expect(text).toContain('Share of market videos: 4% (19 of 521) in September, before the move.')
+    expect(text).toContain('Share of category videos: 4% (19 of 521) in September, before the move.')
   })
 
   it('a move with no line at all still draws its axis', () => {

@@ -95,7 +95,7 @@ export function WouldMove({ aim, reading, failed }: { aim: AdviceAim | null | un
         <span className="text-foreground">
           <span data-copy="subject" data-slot="pass_b_theme">{aim.label}</span>
           {aim.level ? (
-            <> · <span data-copy="level">{fmtInt(aim.level.k)} of {fmtInt(aim.level.n)}</span> videos in {inlineMonth(longMonth(aim.month), monthLabelOn(aim.month, reading))}</>
+            <> · <span data-copy="level">{fmtInt(aim.level.k)} of {fmtInt(aim.level.n)}</span> category videos in {inlineMonth(longMonth(aim.month), monthLabelOn(aim.month, reading))}</>
           ) : null}
         </span>
       ) : WOULD_MOVE_NOTHING}

@@ -173,6 +173,26 @@ describe('Your moves\' statements, page by page', () => {
   })
 })
 
+// A CONVERSATION'S BASE IS THE CATEGORY'S, AS ON MARKET (5 Nov). Themes are
+// clustered per audience and read in the category; dividing by the pooled
+// market (the category plus the videos filed to tracked rivals) printed
+// "104 of 1,192" where Market said "104 of 1,167" of the same conversation.
+describe('what a piece of advice would move is read on the category\'s base', () => {
+  it('a tracked rival\'s videos are in the market\'s count, never under a conversation', async () => {
+    const withRival = {
+      tracking_configs: [{ client_id: CLIENT, competitor_names: ['Ottobock'], own_handles: {} }],
+      month_denominators: [
+        ...tables().month_denominators,
+        ...['2026-09-01', '2026-10-01'].map((month) => ({ client_id: CLIENT, month, audience: 'competitor:Ottobock', videos: 25, comments: 300, platform_mix: { tiktok: 25, instagram: 0 }, status: 'filling', run_id: RUN, read_at: `${month.slice(0, 7)}-28T00:00:00.000Z` })),
+      ],
+    }
+    const { data } = await statements(advice(L1), withRival as never)
+    const page = data as Exclude<Awaited<ReturnType<typeof loadAdvicePage>>, 'missing' | null>
+    expect(page.card.aim?.level).toEqual({ k: 10, n: 300 })
+    expect(page.conversations !== 'unread' && page.conversations.rows.map((c) => c.level)).toEqual([{ k: 10, n: 300 }, { k: 11, n: 300 }])
+  })
+})
+
 describe('a piece of advice\'s page reads its own rows only', () => {
   it('its conversations, its numbers and one comment from its conversation, from the tenant\'s rows', async () => {
     const { data } = await statements(advice(L1))

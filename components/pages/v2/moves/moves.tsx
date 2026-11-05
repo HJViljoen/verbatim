@@ -9,7 +9,7 @@ import { DateMove } from '@/components/pages/market-surface/date-move'
 import { canDate } from '@/lib/pages/date-move'
 import {
   MOVES_SUB, MOVES_TITLE, MOVES_UNREAD_TITLE, MOVE_STATUS_LABEL, MOVE_UNREAD, NEXT_MOVE, NO_MOVE_YET, READ_FAILED,
-  axisLine, compareMonths, comparePrintable, moveAnchor, moveAxis, monthLabelOn, pointMonth, sharePct,
+  axisLine, compareMonths, comparePrintable, levelBase, moveAnchor, moveAxis, monthLabelOn, pointMonth, sharePct,
   type MoveCard, type MovePoint, type MoveSlot, type MovesPageData, type ReadingLabel,
 } from '@/lib/pages/v2/moves'
 import { cn } from '@/lib/utils'
@@ -169,7 +169,7 @@ export function MoveSentence({ card, reading }: { card: MoveCard; reading: Readi
     const last = card.points[card.points.length - 1]
     return last ? (
       <p className="m-0 text-[13.5px] leading-[1.5] text-foreground">
-        Share of market videos: <Level p={last} /> in {longMonth(last.month)}, before the move.
+        Share of {levelBase(card.kind)}: <Level p={last} /> in {longMonth(last.month)}, before the move.
       </p>
     ) : null
   }
@@ -180,7 +180,7 @@ export function MoveSentence({ card, reading }: { card: MoveCard; reading: Readi
     return (
       <div className="flex flex-col gap-1.5">
         <p className="m-0 text-[13.5px] leading-[1.5] text-foreground">
-          Share of market videos went from <Level p={c.before} /> in {m.before}, to <Level p={c.after} /> in {m.after}.
+          Share of {levelBase(card.kind)} went from <Level p={c.before} /> in {m.before}, to <Level p={c.after} /> in {m.after}.
         </p>
         <span data-copy="verdict" className="inline-flex items-center gap-1.5 text-[12.5px]">
           <MovementBadge verdict={c.verdict} unit="pts" good={card.direction === 'down' ? 'down' : 'up'} />

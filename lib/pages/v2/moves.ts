@@ -13,6 +13,7 @@ import { pairedVerdict } from '../../reading/bands'
 import { joins, pairOnVerdict } from '../../reading/comparability'
 import { loadAppPairOn } from '../../reading/gather-flags'
 import { marketAudiences, pooledDenominators } from '../../reading/market'
+import { INDUSTRY_AUDIENCE } from '../../rivals'
 import { monthStartOf, nextMonth, prevMonth } from '../../reading/month-key'
 import { freezeStateFor } from '../../reading/monthly'
 import { joinedRun, type PairOn } from '../../reading/pairs'
@@ -199,6 +200,11 @@ export interface AdviceCard {
    *  month by month; absent in a dump from before it (nothing is drawn). */
   aim?: AdviceAim | null
 }
+
+/** What a level on Your moves is "of": a subject's base is the market's
+ *  videos; a conversation's (a theme move's, and what advice would move) is
+ *  the category's, as on Market (`Core.marketN`). Pure. */
+export const levelBase = (kind: 'subject' | 'theme' | 'advice' | null | undefined): string => (kind === 'subject' ? 'market videos' : 'category videos')
 
 /** What a piece of advice would move, and where that stands this month. */
 export interface AdviceAim {
@@ -446,7 +452,8 @@ export function moveCards(input: {
   themes: ReadonlyMap<string, string>
   adviceTargets: ReadonlyMap<string, string>
   levels: (kind: 'subject' | 'theme', id: string, month: string) => number | null
-  n: (month: string) => number | null
+  /** The base of what the move is on (`Core.marketN`). */
+  n: (month: string, kind: 'subject' | 'theme') => number | null
   /** One calendar step on the market read the same way. Omitted: every step. */
   joined?: (prevMonth: string, month: string) => boolean
   /** The month-pair judge on the market, for the comparison's span. */
@@ -507,7 +514,7 @@ export function moveCards(input: {
         at = nextMonth(at)
       }
       const read: MovePoint[] = months.flatMap((x) => {
-        const n = input.n(x.month)
+        const n = input.n(x.month, object.kind)
         const k = input.levels(object.kind, object.id, x.month)
         return n != null && n > 0 && k != null ? [{ ...x, k, n, soFar: monthOpen(x.month, input.now) }] : []
       })
@@ -853,7 +860,12 @@ export interface Core {
   moves: DatedMove[] | null
   subjects: SubjectName[] | null
   rivals: string[]
-  marketN: (month: string) => number | null
+  /** The base a level is read on, by what it is on: a SUBJECT's k is pooled
+   *  over the market's audiences, so its n is the pooled market; a THEME
+   *  (a conversation) is clustered per audience and read in the category, so
+   *  its n is the category's, as on Market (5 Nov: "104 of 1,192" here where
+   *  Market said "104 of 1,167" of the same conversation). */
+  marketN: (month: string, kind?: 'subject' | 'theme') => number | null
   pair: PairOn
 }
 
@@ -910,7 +922,10 @@ export async function readCore(scope: Scope): Promise<Core | null> {
     moves,
     subjects,
     rivals,
-    marketN: (m) => counts.get(monthStartOf(m))?.videos ?? null,
+    marketN: (m, kind = 'subject') => {
+      const c = counts.get(monthStartOf(m))
+      return (kind === 'theme' ? c?.category : c?.videos) ?? null
+    },
     pair,
   }
 }
@@ -988,7 +1003,9 @@ export async function readMoveLevels(core: Core, moves: readonly DatedMove[], ad
   const take = async (kind: 'subject' | 'theme', ids: string[]) => {
     if (ids.length === 0) return
     try {
-      const set = await loadMonthSeries(core.reading.client, core.clientId, { audiences, objectKind: kind, objectIds: ids, from, to: core.month })
+      // A conversation is read in the category, as Market reads it, on the
+      // category's base (`Core.marketN`); a subject over the market's.
+      const set = await loadMonthSeries(core.reading.client, core.clientId, { audiences: kind === 'theme' ? [INDUSTRY_AUDIENCE] : audiences, objectKind: kind, objectIds: ids, from, to: core.month })
       for (const series of set.series) {
         if (!series.objectId) continue
         for (const p of series.points) {
@@ -1007,7 +1024,7 @@ export async function readMoveLevels(core: Core, moves: readonly DatedMove[], ad
   // A month the object has rows in some month of, with no row of its own, is
   // zero: the market was read and nothing on it carried the object. An object
   // with no row in any month was never read, which is not zero (Y4's rule).
-  return (kind, id, m) => levels.get(`${kind}:${id}:${m}`) ?? (read.has(`${kind}:${id}`) && core.marketN(m) != null ? 0 : null)
+  return (kind, id, m) => levels.get(`${kind}:${id}:${m}`) ?? (read.has(`${kind}:${id}`) && core.marketN(m, kind) != null ? 0 : null)
 }
 
 /** Each piece of advice named (an advice move's, or a card's "Would move"),
@@ -1064,7 +1081,7 @@ export async function readMoveCards(core: Core, moves: readonly DatedMove[], cit
     loadRegistryLabels(core.supabase, core.clientId, themeIds, failed),
     readMoveLevels(core, moves, targets, aimThemes, failed),
   ])
-  const aims = aimsFailed ? new Map<string, AdviceAim | null>() : adviceAims({ lineages: aimAt, targets, labels: themes, levels, n: core.marketN, month: core.month })
+  const aims = aimsFailed ? new Map<string, AdviceAim | null>() : adviceAims({ lineages: aimAt, targets, labels: themes, levels, n: (m) => core.marketN(m, 'theme'), month: core.month })
   const cards = moveCards({
     moves,
     month: core.month,
