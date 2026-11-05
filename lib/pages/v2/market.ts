@@ -1075,8 +1075,10 @@ export function weekWindows(window: { from: string; to: string }, count = MARKET
  * weeks.ts, applied to the run windows): a window that BEGINS before a change
  * on `WEEK_CUT_SURFACES` took effect was not read the way the newest one was,
  * so its count is not drawn (null). A fix of failed judgements cuts nothing
- * (`failOpenFix`), and a change the pipeline made inside a run before its
- * gather takes effect at that run (`preGatherCutBefore`).
+ * (`failOpenFix`), nor does a change of the market definition, whose regate
+ * re-judged the corpus these windows are read from (`rejudgedFrom`), and a
+ * change the pipeline made inside a run before its gather takes effect at that
+ * run (`preGatherCutBefore`).
  *
  * THE NEWEST WINDOW IS NEVER CUT. It is the reference the others are read
  * against, and the run that read it gathered after any change made inside it
@@ -1091,7 +1093,7 @@ export function cutWindows<T extends { from: string }>(
   const surfaces = new Set<string>(WEEK_CUT_SURFACES)
   let cut = -Infinity
   for (const c of changes) {
-    if (!surfaces.has(c.surface) || c.failOpenFix) continue
+    if (!surfaces.has(c.surface) || c.failOpenFix || c.rejudgedFrom) continue
     const at = Date.parse(preGatherCutBefore(c, runs) ?? c.changedAt)
     if (Number.isFinite(at) && at > cut) cut = at
   }

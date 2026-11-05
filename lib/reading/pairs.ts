@@ -1,6 +1,6 @@
 import { pairSentence } from '../calibration'
 import {
-  changeInSpan,
+  changeBearsOn,
   comparabilityOf,
   COMPARE_FLAG_SHARE,
   isSearchSurface,
@@ -8,6 +8,7 @@ import {
   latestPairRow,
   measuredShareOf,
   pairOnVerdict,
+  REJUDGED_SHARE,
   type ComparabilityView,
   type OurChange,
   type PairComparability,
@@ -174,9 +175,9 @@ export function pairJudge(input: PairJudgeInput): PairJudge {
           reasons: [
             ...pair.reasons,
             ...input.changes
-              .filter((c) => c.affects.includes(view) && changeInSpan(c, pm, m))
+              .filter((c) => c.affects.includes(view) && changeBearsOn(c, pm, m))
               .sort((a, b) => msOf(a.changedAt) - msOf(b.changedAt))
-              .map((c) => ({ c, share: measuredShareOf(row, c, view) }))
+              .map((c) => ({ c, share: c.rejudgedFrom ? REJUDGED_SHARE : measuredShareOf(row, c, view) }))
               .filter(({ share }) => share == null || !(share < COMPARE_FLAG_SHARE))
               .map(({ c, share }) => ({
                 kind: isSearchSurface(c.surface) ? ('searches' as const) : ('code_change' as const),

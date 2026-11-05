@@ -143,6 +143,19 @@ export interface OurChange {
    *  that run's gather (`preGatherCutBefore`, lib/reading/weeks.ts), not at its
    *  own week. Absent on any other change, which keeps the change's own week. */
   preGatherRunId?: string
+  /** A CHANGE OF THE MARKET DEFINITION, RE-JUDGED FROM THIS MONTH
+   *  (`isMarketDefinitionChange`, 5 Nov): the first month (`YYYY-MM-01`)
+   *  read again under the new definition, the lower bound of the row's
+   *  `affects_months`. Every month before it had frozen under the old one and
+   *  keeps its figures; it and every month after are read under the new one.
+   *  So a month pair is refused when it crosses this month and only then
+   *  (`changeBearsOn`), whatever its measure, and the bars and the week
+   *  windows, which are read live from the re-judged corpus, are not cut at it
+   *  (`weekRules`, `cutWindows`). The same-age line, whose points are kept
+   *  and never re-read, still cuts at it. Absent where the band does not
+   *  parse: the change is then a relevance change like any other, which fails
+   *  closed. */
+  rejudgedFrom?: string
 }
 
 /**
@@ -180,6 +193,57 @@ export function preGatherRunOf(row: Pick<ConfigChange, 'actor_kind' | 'actor_lab
  */
 export function isFailOpenFix(row: { surface: string; field?: string | null }): boolean {
   return row.surface === 'gate_rule' && row.field === 'relevance_gate'
+}
+
+/** The field a change of the tenant's market definition is logged on
+ *  (`scripts/set-market-description.ts`), under surface `gate_rule`. */
+export const MARKET_DEFINITION_FIELD = 'market_description'
+
+/**
+ * A CHANGE OF THE MARKET THE GATE JUDGES BY (5 Nov, Heinrich: Sealand's market
+ * is outdoor, travel and everyday carry gear). Unlike the fail-open fixes it
+ * changes the judgement rule, and unlike any other rule change it is applied
+ * to every month still filling: the regate re-judges the stored corpus by the
+ * new definition and the filling months are refreshed, while the frozen months
+ * keep the figures the old rule gave them. Its row says where that line falls:
+ * `affects_months` is `[first re-judged month, …)`, and `rejudgedFromOf`
+ * reads it. Pure.
+ */
+export function isMarketDefinitionChange(row: { surface: string; field?: string | null }): boolean {
+  return row.surface === 'gate_rule' && row.field === MARKET_DEFINITION_FIELD
+}
+
+/** The first month a market-definition change re-judged: its band's lower
+ *  bound, `YYYY-MM-01`; null for any other row, or where the band is not a
+ *  `[YYYY-MM-01,YYYY-MM-01)` daterange (then the change fails closed to an
+ *  ordinary relevance change). Pure. */
+export function rejudgedFromOf(row: Pick<ConfigChange, 'surface' | 'field'> & { affects_months?: string | null }): string | null {
+  if (!isMarketDefinitionChange(row)) return null
+  const m = /^\[(\d{4}-\d{2})-01,(\d{4}-\d{2})-01\)$/.exec((row.affects_months ?? '').trim())
+  return m && m[1] < m[2] ? `${m[1]}-01` : null
+}
+
+/** The share a re-judging change carries on a pair that crosses its month:
+ *  the whole of the later month was read under the new definition and none
+ *  of the earlier one, so by construction it reaches all of one side. It is a
+ *  measure, not a missing one, so the refusal names the change (a reader is
+ *  told we changed how we check videos) and Settings never says "until
+ *  measured". */
+export const REJUDGED_SHARE = 1
+
+/**
+ * Can this change bear on the pair? A re-judging change bears only on a pair
+ * that CROSSES its month (the earlier month before it, the later at or after
+ * it): two frozen months were both read the old way, and two re-judged ones
+ * both the new way. Any other change bears on the pairs it is in span of
+ * (`changeInSpan`). Pure.
+ */
+export function changeBearsOn(change: Pick<OurChange, 'changedAt' | 'rejudgedFrom'>, prevMonth: string, month: string): boolean {
+  if (change.rejudgedFrom) {
+    const from = monthStartOf(change.rejudgedFrom)
+    return monthStartOf(prevMonth) < from && monthStartOf(month) >= from
+  }
+  return changeInSpan(change, prevMonth, month)
 }
 
 /** One row of `month_pair_comparability`; the newest `computedAt` wins. */
@@ -350,7 +414,11 @@ export function changesFromLog(rows: readonly ConfigChange[]): OurChange[] {
   const groups: { startMs: number; rows: ConfigChange[] }[] = []
   const open = new Map<string, { startMs: number; rows: ConfigChange[] }>()
   for (const { row, ms } of kept) {
-    const key = isPanelFreeze(row) ? `other/${PANEL_FREEZE_FIELD}` : row.surface
+    // A panel freeze and a market-definition change are grouped apart from
+    // their surface's other rows: the definition is usually set minutes before
+    // the regate's `relevance_gate` rows, and one group of both would be
+    // neither a fail-open fix nor a re-judging change.
+    const key = isPanelFreeze(row) ? `other/${PANEL_FREEZE_FIELD}` : isMarketDefinitionChange(row) ? `gate_rule/${MARKET_DEFINITION_FIELD}` : row.surface
     const g = open.get(key)
     if (g && ms - g.startMs <= CHANGE_GROUP_WINDOW_MS) {
       g.rows.push(row)
@@ -370,6 +438,9 @@ export function changesFromLog(rows: readonly ConfigChange[]): OurChange[] {
     // pre-gather write: a person's edit grouped with it keeps the change's own week.
     const runs = new Set(g.rows.map(preGatherRunOf))
     const preGatherRunId = runs.size === 1 ? [...runs][0] : null
+    // Re-judged from one month only when every row says the same month.
+    const froms = new Set(g.rows.map(rejudgedFromOf))
+    const rejudgedFrom = froms.size === 1 ? [...froms][0] : null
     out.push({
       id: first.id,
       surface,
@@ -379,6 +450,7 @@ export function changesFromLog(rows: readonly ConfigChange[]): OurChange[] {
       rowIds: g.rows.map((r) => r.id),
       ...(g.rows.every(isFailOpenFix) ? { failOpenFix: true } : {}),
       ...(preGatherRunId ? { preGatherRunId } : {}),
+      ...(rejudgedFrom ? { rejudgedFrom } : {}),
     })
   }
   return out
@@ -521,9 +593,15 @@ export function comparabilityOf(prevMonth: string, month: string, input: {
   if (!input.later.readToEnd) return answer([bare('not_read_to_end')])
 
   const view = input.view
+  // A re-judging change is here only where the pair crosses its month
+  // (`changeBearsOn`), and then it refuses on its own share whatever the row
+  // measured (`REJUDGED_SHARE`): the measure step's counts are of the live
+  // corpus, which the regate made the same on both sides, while the earlier
+  // month's figures are the frozen ones the old rule gave.
   const inSpan = input.changes
-    .filter((c) => c.affects.includes(view) && changeInSpan(c, pm, m))
+    .filter((c) => c.affects.includes(view) && changeBearsOn(c, pm, m))
     .sort((a, b) => msOf(a.changedAt) - msOf(b.changedAt))
+  const rejudged = (c: OurChange): Reason => ({ kind: 'code_change', changeId: c.id, share: REJUDGED_SHARE, changedAt: c.changedAt, surface: c.surface })
 
   const row = input.row
   const measured = row != null
@@ -536,7 +614,7 @@ export function comparabilityOf(prevMonth: string, month: string, input: {
   if (!row || !measured) {
     return answer([
       bare('unmeasured'),
-      ...inSpan.map((c): Reason => ({
+      ...inSpan.map((c): Reason => c.rejudgedFrom ? rejudged(c) : ({
         kind: isSearchSurface(c.surface) ? 'searches' : 'code_change',
         changeId: c.id,
         share: null,
@@ -579,6 +657,10 @@ export function comparabilityOf(prevMonth: string, month: string, input: {
     }
   }
   for (const c of inSpan) {
+    if (c.rejudgedFrom) {
+      reasons.push(rejudged(c))
+      continue
+    }
     const ids = idsOf(c)
     judge(row.codeChanges.filter((e) => ids.includes(e.changeId)), c.id, c.surface, c.changedAt)
   }
@@ -681,11 +763,19 @@ export function nextComparablePair(
   const view = opts.view ?? 'market'
   const reading = opts.readingMonth ? monthStartOf(opts.readingMonth) : prevMonth(monthStartOf(now))
   const floor = prevMonth(reading)
-  const times = changes
+  // The earliest earlier month each change leaves alone: the month after a
+  // change's own, or for a re-judging change its first re-judged month (pairs
+  // from it on are read one way, `changeBearsOn`).
+  const floors = changes
     .filter((c) => c.affects.includes(view))
-    .map((c) => msOf(c.changedAt))
-    .filter((t) => Number.isFinite(t))
-  const afterChange = times.length > 0 ? nextMonth(monthStartOf(new Date(Math.max(...times)).toISOString())) : null
+    .map((c) => {
+      if (c.rejudgedFrom) return monthStartOf(c.rejudgedFrom)
+      const t = msOf(c.changedAt)
+      return Number.isFinite(t) ? nextMonth(monthStartOf(new Date(t).toISOString())) : null
+    })
+    .filter((f): f is string => f != null)
+    .sort()
+  const afterChange = floors.at(-1) ?? null
   let p = afterChange != null && afterChange > floor ? afterChange : floor
 
   for (let guard = 0; guard < 36; guard++) {

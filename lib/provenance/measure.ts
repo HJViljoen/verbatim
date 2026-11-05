@@ -261,6 +261,14 @@ export function measurePair(ctx: MeasureContext, a: {
   // The changes of ours that are not search changes, each measured or named.
   const codeChanges: CodeEntry[] = []
   for (const c of ours.filter((x) => !isSearchSurface(x.surface) && changeInSpan(x, prev, month))) {
+    // A change of the market definition is not measured: it refuses exactly
+    // the pairs that cross its month, whatever any count says (`changeBearsOn`,
+    // lib/reading/comparability.ts), and the unjudged videos the gate measure
+    // counts are not what it changed.
+    if (c.rejudgedFrom) {
+      lines.push(`  change ${c.id} · ${c.changedAt.slice(0, 16)} · ${c.surface}: the market definition, re-judged from ${c.rejudgedFrom.slice(0, 7)}: it refuses only the pairs that cross that month; nothing to measure`)
+      continue
+    }
     const touchedBy = c.surface === 'gate_rule'
       ? (v: MonthVideo) => ctx.unjudgedIds.has(v.id)
       : c.surface === 'attribution'

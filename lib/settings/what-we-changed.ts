@@ -1,6 +1,6 @@
 import type { ConfigChange } from '../config-log'
 import { fmtInt, longMonth, platformLabel } from '../format'
-import { changeInSpan, isSearchSurface, modeForShare, type OurChange } from '../reading/comparability'
+import { changeBearsOn, isSearchSurface, modeForShare, type OurChange } from '../reading/comparability'
 import { communityDelta, type GatherRun } from '../provenance/searches'
 import { monthStartOf, nextMonth, prevMonth as monthBefore } from '../reading/month-key'
 import { BRANDS_PANEL, CATEGORY_AUDIENCE, type PairOn } from '../reading/pairs'
@@ -468,7 +468,8 @@ export function stopsOf(change: OurChange, pair: PairOn, pairs: readonly MonthPa
   const search = isSearchSurface(change.surface)
   const out: StopEntry[] = []
   for (const p of pairs) {
-    if (!changeInSpan(change, p.prevMonth, p.month)) continue
+    // A re-judging change stops only the pairs that cross its month.
+    if (!changeBearsOn(change, p.prevMonth, p.month)) continue
     const views: StopView[] = []
     let measured = false
     for (const { view, audience } of STOP_VIEWS) {

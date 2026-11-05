@@ -405,8 +405,11 @@ export function weekRules(changes: readonly OurChange[], axis: readonly string[]
     const group = weekRuleGroupOf(c.surface)
     if (!group) continue
     // A fix of failed judgements is not a method change (`isFailOpenFix`):
-    // `unchecked` carries its weeks instead.
-    if (c.failOpenFix) continue
+    // `unchecked` carries its weeks instead. A change of the market definition
+    // (`rejudgedFrom`) is one, but the regate re-judged the stored corpus by
+    // it, and the bars count that corpus live: every week they can draw is
+    // read under the one definition, so it cuts none.
+    if (c.failOpenFix || c.rejudgedFrom) continue
     const ms = msOfInstant(c.changedAt)
     if (Number.isNaN(ms)) continue
     const week = isoWeekOf(c.changedAt)
@@ -501,7 +504,10 @@ export const WEEK_CUT_SURFACES: readonly OurChangeSurface[] = ['terms', 'subredd
  *     a rival or handle change included (`WEEK_CUT_SURFACES`, as the same-age
  *     line reads them); the other filing changes move no bar of the pooled
  *     market (decision E) and do not cut, and a fix of failed judgements
- *     (`failOpenFix`) is no rule at all (`weekRules`). A change made inside a
+ *     (`failOpenFix`) is no rule at all (`weekRules`), nor is a change of the
+ *     market definition, whose regate re-judged every week the bars count
+ *     (`rejudgedFrom`; month pairs across it are refused instead,
+ *     `changeBearsOn`). A change made inside a
  *     run before that run's gather (`cutBefore`, `preGatherCutBefore`) cuts
  *     only the weeks that begin before every earlier gather ended: the week
  *     the run itself gathered was read under the change from its start;
