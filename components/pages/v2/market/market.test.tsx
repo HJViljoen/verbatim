@@ -239,8 +239,11 @@ describe('also this week', () => {
 
   it('with nothing new: the week\'s next biggest, "Also talked about", or an earlier week\'s newest', () => {
     const thin = marketThinFixture()
-    expect(renderText(<AlsoThisWeek data={thin} />)).toBe(`Also this week What stood out in this week’s conversations ${MOST_TALKED} How long a liner lasts Open → ${ALSO_TALKED} Sweat under the liner Open → ${NOTHING_NEW} Insurance refusals for powered knees ${ALSO_TALKED} Open →`)
-    expect(renderText(<AlsoThisWeek data={marketThinFixture({ earlierNew: true })} />)).toContain(`${NOTHING_NEW} Showing it or hiding it First heard the week of 21 Sep Open →`)
+    // The stand-in's eyebrow says what the card shows; that nothing was first
+    // heard is said under it (5 Nov: "Nothing new this week" headed a
+    // conversation that was simply the week's next biggest).
+    expect(renderText(<AlsoThisWeek data={thin} />)).toBe(`Also this week What stood out in this week’s conversations ${MOST_TALKED} How long a liner lasts Open → ${ALSO_TALKED} Sweat under the liner Open → ${ALSO_TALKED} Insurance refusals for powered knees ${NOTHING_NEW} . Open →`)
+    expect(renderText(<AlsoThisWeek data={marketThinFixture({ earlierNew: true })} />)).toContain(`Newest Showing it or hiding it First heard the week of 21 Sep. ${NOTHING_NEW} . Open →`)
     expect(renderText(<AlsoThisWeek data={marketFixture({ flagged: false, noNew: true, flagNew: true })} />)).toContain(NOTHING_ELSE_NEW)
     assertCopyContract(<AlsoThisWeek data={thin} />)
   })

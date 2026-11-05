@@ -160,6 +160,8 @@ export const NOTHING_ELSE_NEW = 'Nothing else new this week'
 export const ALSO_TALKED = 'Also talked about'
 /** The lead's eyebrow where it is the week's biggest. */
 export const MOST_TALKED = 'Most talked about this week'
+/** The stand-in's eyebrow where an earlier week first heard it. */
+export const NEWEST = 'Newest'
 
 interface Small {
   key: string
@@ -169,7 +171,7 @@ interface Small {
   eyebrow: ReactNode
   chip?: ReactNode
   title: ReactNode
-  sub?: string
+  sub?: ReactNode
   href: string | null
 }
 
@@ -202,11 +204,18 @@ export function alsoCards(hero: HeroCard | null, sides: readonly SideCard[]): Sm
       if (c) {
         out.push({ key: 'new', icon: Sparkles, eyebrow: <span data-copy="verdict">New this week</span>, title: conv(c.label), href: s.hrefs[0] ?? null })
       } else {
-        const none = <span data-copy="verdict">{s.anyNew ? NOTHING_ELSE_NEW : NOTHING_NEW}</span>
-        const pick = s.earlier ?? s.also ?? null
-        out.push(pick
-          ? { key: 'new', icon: Sparkles, eyebrow: none, title: conv(pick.conv.label), sub: s.earlier ? `First heard the week of ${s.earlier.week}` : ALSO_TALKED, href: pick.href }
-          : { key: 'new', icon: Sparkles, eyebrow: <span data-copy="verdict">New this week</span>, title: none, href: null })
+        // THE EYEBROW NAMES WHAT THE CARD SHOWS (5 Nov). It read "Nothing new
+        // this week" over the week's next biggest conversation, with "Also
+        // talked about" under it, so the conversation looked labelled as
+        // nothing new. The stand-in now heads the card ("Newest", "Also
+        // talked about") and that nothing was first heard is said under it.
+        const words = s.anyNew ? NOTHING_ELSE_NEW : NOTHING_NEW
+        const none = <span data-copy="verdict">{words}</span>
+        out.push(s.earlier
+          ? { key: 'new', icon: Sparkles, eyebrow: NEWEST, title: conv(s.earlier.conv.label), sub: <>First heard the week of {s.earlier.week}. <span data-copy="verdict">{words}</span>.</>, href: s.earlier.href }
+          : s.also
+            ? { key: 'new', icon: Sparkles, eyebrow: ALSO_TALKED, title: conv(s.also.conv.label), sub: <><span data-copy="verdict">{words}</span>.</>, href: s.also.href }
+            : { key: 'new', icon: Sparkles, eyebrow: <span data-copy="verdict">New this week</span>, title: none, href: null })
       }
     }
   }
