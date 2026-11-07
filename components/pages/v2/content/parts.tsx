@@ -87,33 +87,36 @@ export function PlatformCounts({ rows, label }: { rows: readonly { platform: str
   )
 }
 
-/** The tallest a week's column is drawn, in px (the boards' 48). */
-const WEEK_BAR_PX = 48
+/** The tallest a week's column is drawn, in px: the card's 48 and the idea
+ *  page's 120 (the boards'). */
+const WEEK_BAR_PX = { sm: 48, lg: 120 } as const
 
 /**
- * The weeks as small yellow columns, drawn in HTML so their words stay the
- * boards' 12px at every width (the kit's `MiniBars` is an SVG whose text
- * shrinks with its box: 7 to 9px on an idea card). Each week's count over
- * its column, its day under a hairline, the newest in ink at 600; each
- * column against the list's largest week. Bare counts: the base is said
- * once above them (decision 2).
+ * The weeks as yellow columns, drawn in HTML so their words stay the boards'
+ * size at every width (the kit's `MiniBars` is an SVG whose text shrinks with
+ * its box: 7 to 9px on an idea card). Each week's count over its column, its
+ * day under a hairline, the newest in ink at 600; each column against the
+ * list's largest week. Bare counts: the base is said once above them
+ * (decision 2). `sm` is an idea card's (42px columns, 12px words), `lg` the
+ * idea page's (the columns share up to 520px, 14px and 13px words).
  */
-export function WeekBars({ bars, label }: { bars: readonly { label: string; value: number }[]; label: string }) {
+export function WeekBars({ bars, label, size = 'sm' }: { bars: readonly { label: string; value: number }[]; label: string; size?: 'sm' | 'lg' }) {
   const max = Math.max(0, ...bars.map((b) => b.value))
+  const lg = size === 'lg'
   return (
     <div
       role="img"
       aria-label={`${label}: ${bars.map((b) => `${b.label} ${fmtInt(b.value)}`).join(', ')}`}
-      data-week-bars=""
-      className="grid shrink-0 grid-flow-col auto-cols-[42px] items-end gap-1.5"
+      data-week-bars={size}
+      className={lg ? 'grid max-w-[520px] grid-flow-col auto-cols-fr items-end gap-6 max-sm:gap-3' : 'grid shrink-0 grid-flow-col auto-cols-[42px] items-end gap-1.5'}
     >
       {bars.map((b, i) => {
         const newest = i === bars.length - 1
         return (
-          <div key={b.label} className="flex flex-col items-center gap-1">
-            <span data-copy="figure" className={cn('text-[12px] leading-[1.3] tabular-nums', newest ? 'font-semibold text-foreground' : 'text-secondary-foreground')}>{fmtInt(b.value)}</span>
-            <div className="w-full rounded-t-[3px] bg-brand" style={{ height: max > 0 ? Math.round((b.value / max) * WEEK_BAR_PX) : 0 }} />
-            <span className={cn('w-full whitespace-nowrap border-t border-control pt-1 text-center text-[12px] leading-[1.3]', newest ? 'font-semibold text-foreground' : 'text-muted-foreground')}>{b.label}</span>
+          <div key={b.label} className={cn('flex flex-col items-center', lg ? 'gap-1.5' : 'gap-1')}>
+            <span data-copy="figure" className={cn('leading-[1.3] tabular-nums', lg ? 'text-[14px]' : 'text-[12px]', newest ? 'font-semibold text-foreground' : 'text-secondary-foreground')}>{fmtInt(b.value)}</span>
+            <div className={cn('w-full bg-brand', lg ? 'rounded-t-[4px]' : 'rounded-t-[3px]')} style={{ height: max > 0 ? Math.round((b.value / max) * WEEK_BAR_PX[size]) : 0 }} />
+            <span className={cn('w-full whitespace-nowrap border-t border-control text-center leading-[1.3]', lg ? 'pt-1.5 text-[13px]' : 'pt-1 text-[12px]', newest ? 'font-semibold text-foreground' : 'text-muted-foreground')}>{b.label}</span>
           </div>
         )
       })}

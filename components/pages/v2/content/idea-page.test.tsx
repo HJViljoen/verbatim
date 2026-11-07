@@ -3,9 +3,9 @@ import { render, renderText as rawText } from '@/lib/test/render'
 import { assertCopyContract, copyNodes } from '@/lib/test/copy-contract'
 import { SEALAND_CLIENT_ID } from '@/lib/config'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
-import { IDEA_MISSING, IDEA_NOT_ON, IDEA_UNREAD } from '@/lib/pages/v2/content-idea'
+import { IDEA_MISSING, IDEA_NOT_ON, IDEA_UNREAD, SUB_NONE_QUOTABLE } from '@/lib/pages/v2/content-idea'
 import { contentIdeaFixture } from '@/lib/pages/v2/content-levels-fixture'
-import { ContentIdeaPage, ideaMeta } from './idea-page'
+import { ContentIdeaPage, ideaStats } from './idea-page'
 import { weeksOverlapNote } from './ideas'
 
 // A POST IDEA'S PAGE, THE HUB (G5-Content-Idea, -Idea-Switcher, -Idea-Thin,
@@ -34,16 +34,20 @@ describe('the weekly bars beside the four weeks\' total', () => {
 })
 
 describe('a post idea\'s page', () => {
-  it('opens with the path and the title block: "Content / {idea}", the lightbulb, "Post idea 1, from {conversation}", the days it read beside its month', () => {
+  it('opens with the path and the title block: "Content / {idea}", the title, "Post idea 1, from the conversation {conversation}", the figures row with the days it read beside its month', () => {
     const m = render(page())
     const text = renderText(page())
     expect(m).toMatch(/data-crumb-row=""[\s\S]*href="\/dashboard\/content"[^>]*>Content</)
     expect(m).toContain('data-level-bar="idea"')
-    expect(m).toContain('data-level-tile="idea"')
-    expect(m).toMatch(/data-level-tile="idea" class="[^"]*bg-accent text-orange-text/)
-    expect(text).toContain('Post idea 1, from How long a liner lasts')
+    // The audit design's title block: no tile, no label over the title.
+    expect(m).toContain('data-level-block="audit"')
+    expect(m).not.toContain('data-level-tile')
+    expect(text).toContain('Post idea 1, from the conversation How long a liner lasts')
     expect(m).toContain('href="/dashboard/market/conversations/a1000000-0000-4000-8000-000000000001"')
-    expect(text).toContain('From questions asked 14 Sep to 11 Oct · 48 of 640 videos · 31 of 318 in October so far')
+    // The four weeks beside their month, in the figures row (decision 1).
+    expect(text).toContain('Questions asked 14 Sep to 11 Oct Came up in 48 of 640 videos in your market October so far 31 of 318 videos')
+    expect(m).toContain('data-stat-strip=""')
+    expect(text).not.toContain('·')
     // The page's one h1 is the idea's title, the model's, stored.
     expect(m.match(/<h1\b/g)).toHaveLength(1)
     expect(m).toMatch(/<h1[^>]*><span data-copy="stored" data-slot="post_idea">How long does a liner last/)
@@ -51,13 +55,15 @@ describe('a post idea\'s page', () => {
     expect(m).not.toContain('aria-label="Period"')
   })
 
-  it('leads with what the post should cover, the medical line, and four figures in the header card', () => {
+  it('leads with what the post should cover, the medical line once, and how to make it in three facts in the header tile', () => {
     const text = renderText(page())
     const at = (s: string) => text.indexOf(s)
     expect(at('What the post should cover')).toBeGreaterThan(0)
     expect(at('How long liners usually last, the signs it is time, and what wears them out faster')).toBeGreaterThan(at('What the post should cover'))
-    expect(text).toContain(MEDICAL_LINE)
-    expect(text).toContain('Came up in 48 of 640 videos in your market, 14 Sep to 11 Oct 31 of 318 in October so far')
+    expect(text.split(MEDICAL_LINE)).toHaveLength(2)
+    // Where it came up is the figures row's now, said once.
+    expect(text.split('Came up in')).toHaveLength(2)
+    expect(at('Came up in')).toBeLessThan(at('What the post should cover'))
     expect(text).toContain('Make it as Tutorial 2.1× a typical video on this question')
     expect(text).toContain('Open with A question 1.8× a typical video on this question')
     expect(text).toContain('Length 30 to 45 seconds The middle half of 9 tutorial videos on this question that drew at least a typical response')
@@ -67,26 +73,36 @@ describe('a post idea\'s page', () => {
     const text = renderText(page())
     const order = ['What they want to know', 'Four questions inside it, sorted from 33 comments on 23 videos, the most videos first', 'The numbers', 'Over the four weeks the idea read, beside October so far', 'Market videos where this came up, best response first', 'It comes from the conversation How long a liner lasts', 'Draft this post with the Agent, from what people asked.']
     for (let i = 1; i < order.length; i++) expect(text.indexOf(order[i]), order[i]).toBeGreaterThan(text.indexOf(order[i - 1]))
-    expect(text).toContain('48 over the four weeks · 31 in October so far')
-    expect(text).toContain('Where it came up · of 48 TikTok 21 Instagram 16 YouTube 11')
-    expect(text).toContain('None of your 13 posts since August touched on it')
-    expect(text).toContain('Read over your posts published since 1 August, the touch test the idea was picked by.')
-    expect(text).toContain('New amputees, first year → Caregivers and family → Long-time users upgrading → Each opens in Voices')
+    // The month is the figures row's (decision 1), so the line says the four
+    // weeks alone; where it came up is a bare count of the row's 48 with bars
+    // against the largest (decisions 2 and 5).
+    expect(text).toContain('Market videos where it came up, week by week')
+    expect(text).toContain('48 over the four weeks.')
+    expect(text).toContain('Where it came up TikTok 21 Instagram 16 YouTube 11')
+    expect(text).toContain('None of your 13 posts since August touched on it. Read over your posts published since 1 August, the touch test the idea was picked by.')
+    expect(text).toContain('Who’s asking New amputees, first year in Voices Caregivers and family in Voices Long-time users upgrading in Voices')
+    expect(text).not.toMatch(/[→↗↓·]/)
+    expect(render(page())).toContain('data-week-bars="lg"')
     // Each opens its group's page in Voices (Voices' levels are pages, 17 Oct).
     expect(render(page())).toContain('href="/dashboard/voices/groups/new-amputees"')
-    expect(text).toContain('“Your liner has an expiry date. Here is how to read it.” The Amputee Diaries · YouTube · tutorial · opens with a question 2.6× a typical video')
+    // Each market video a whole link, its title in the commenters' serif, its
+    // line a sentence.
+    expect(text).toContain('“Your liner has an expiry date. Here is how to read it.” The Amputee Diaries on YouTube. Tutorial, opens with a question. 2.6× a typical video')
+    expect(render(page())).toMatch(/<a data-market-video="" href="[^"]+" target="_blank" rel="noopener noreferrer"/)
   })
 
-  it('gives each sub-question its card: its videos of the videos asked, its bar, its comments, two of them and "Show all"', () => {
+  it('gives each sub-question its card: its videos of the videos asked and its comments in one sentence, its bar, two comments and "Show all"', () => {
     const m = render(page())
     const text = renderText(page())
     expect(m.match(/data-sub-card=""/g)).toHaveLength(4)
-    expect(text).toContain('11 of 23 videos How long it should last 14 comments asking it')
+    expect(text).toContain('How long it should last In 11 of the 23 videos, with 14 comments asking it.')
+    // Its bar against the largest sub-question's (decision 5): the first full.
+    expect(m).toMatch(/data-sub-card=""[\s\S]*?width:100%/)
     expect(m.match(/data-sub-comment=""/g)!.length).toBeGreaterThanOrEqual(7)
     expect(m).toContain('href="/dashboard/content/ideas/i0000001-0000-4000-8000-000000000000?sub=1#sub-1"')
     expect(text).toContain('Show all 14 comments')
     // A comment in Spanish carries its English, as every quote does.
-    expect(renderText(page({ sub: 4 }))).toContain('“¿El seguro cubre un liner nuevo cada año?” Spanish · machine translation Does insurance cover a new liner every year?')
+    expect(renderText(page({ sub: 4 }))).toContain('“¿El seguro cubre un liner nuevo cada año?” Spanish, machine translation Does insurance cover a new liner every year?')
   })
 
   it('opens one sub-question\'s comments by its address, and closes it again', () => {
@@ -110,9 +126,9 @@ describe('a post idea\'s page', () => {
     const m = render(page({ thin: true }))
     const text = renderText(page({ thin: true }))
     expect(m).not.toContain('data-crumb-chevron')
-    expect(text).toContain('Post idea 1, from How the prosthesis works')
+    expect(text).toContain('Post idea 1, from the conversation How the prosthesis works')
     expect(text).toContain('Make it as Story 1.1× a typical video on this question')
-    expect(text).toContain('Open with · No opening stands out on this question yet')
+    expect(text).toContain('Open with No opening stands out on this question yet')
     expect(text).toContain('Length 10 to 60 seconds The middle half of 28 story videos')
     expect(text).toContain('Two questions inside it, sorted from 9 comments on 6 videos, the most videos first')
     expect(text).toContain('No group in your market’s profile cites it yet.')
@@ -132,12 +148,12 @@ describe('a post idea\'s page', () => {
     expect(text).toContain('This idea was written for the week of 21 Sep, before the ideas Content shows now.')
     expect(text).not.toContain('No new ideas this week')
     // Beside its own read window's month, in full.
-    expect(text).toMatch(/of \d+ in (August|September)/)
+    expect(text).toMatch(/(August|September) \d+ of \d+ videos/)
   })
 
   it('a sub-question whose comments could not be read keeps its card and says so', () => {
     const text = renderText(page({ commentsUnread: true }))
-    expect(text).toContain('14 comments asking it Its comments could not be read just now.')
+    expect(text).toContain('with 14 comments asking it. Its comments could not be read just now.')
     expect(text).not.toContain('Show all')
   })
 
@@ -148,7 +164,8 @@ describe('a post idea\'s page', () => {
   it('an address that names no idea prints one calm line and the way back, never a 404', () => {
     for (const [state, line] of [['missing', IDEA_MISSING], ['not_on', IDEA_NOT_ON], ['unread', IDEA_UNREAD]] as const) {
       const m = render(page({ state }))
-      expect(renderText(page({ state }))).toContain(`${line} Back to Content →`)
+      expect(renderText(page({ state }))).toContain(`${line} Back to Content`)
+      expect(renderText(page({ state }))).not.toContain('→')
       expect(m).toContain('href="/dashboard/content"')
       assertCopyContract(page({ state }))
     }
@@ -161,13 +178,24 @@ describe('a post idea\'s page', () => {
     expect(copyNodes(render(page())).filter((n) => n.kind === 'prose')).toEqual([])
   })
 
-  it('breaks its meta into its phone lines: the days, then the four weeks beside the month', () => {
-    const lines = ideaMeta(contentIdeaFixture().page!)
-    expect(lines).toHaveLength(2)
-    expect(lines[0]).toEqual(['From questions asked 14 Sep to 11 Oct'])
-    expect(lines[1]).toHaveLength(2)
-    // No month, no four-week figure (decision 1).
-    const noMonth = ideaMeta({ ...contentIdeaFixture().page!, month: null })
-    expect(noMonth[1]).toEqual([])
+  it('builds its figures row: the days, the four weeks of the market\'s, the month beside them', () => {
+    const cells = ideaStats(contentIdeaFixture().page!)
+    expect(cells.map((c) => c.term)).toEqual(['Questions asked', 'Came up in', 'October so far'])
+    expect(cells[0].value).toBe('14 Sep to 11 Oct')
+    // No month, no four-week figure (decision 1): each cell says so.
+    const noMonth = ideaStats({ ...contentIdeaFixture().page!, month: null })
+    expect(noMonth[1].value).toBe('Could not be counted just now')
+    expect(noMonth[2].value).toBe('Not read yet')
+  })
+
+  it('says once, under the tiles, that no comment can be quoted where none of them can', () => {
+    const d = contentIdeaFixture()
+    const none = { ...d, page: { ...d.page!, subquestions: d.page!.subquestions.map((c) => ({ ...c, quotes: [], quotable: 0 })) } }
+    const text = renderText(<ContentIdeaPage data={none} />)
+    expect(text.split(SUB_NONE_QUOTABLE)).toHaveLength(2)
+    expect(render(<ContentIdeaPage data={none} />)).toContain('data-sub-none-once=""')
+    assertCopyContract(<ContentIdeaPage data={none} />)
+    // Where only some have none, each says so in its own tile.
+    expect(render(page())).not.toContain('data-sub-none-once')
   })
 })

@@ -1,7 +1,7 @@
 import Link from 'next/link'
-import { Sparkles } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { CARD } from '@/components/v2'
+import { CARD, GoLink } from '@/components/v2'
+import { BTN_PRIMARY } from '@/components/v2/look'
 import { fmtInt } from '@/lib/format'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
 import type { Elsewhere } from '@/lib/pages/v2/content-levels'
@@ -65,9 +65,9 @@ export const BACK_TO_CONTENT = 'Back to Content'
  *  back, never a 404. */
 export function ContentMissing({ line }: { line: string }) {
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col items-start gap-2">
       <p data-content-missing="" className="m-0 text-[15px] text-muted-foreground">{line}</p>
-      <Link href={CONTENT_ROOT} className={OLINK}>{BACK_TO_CONTENT} →</Link>
+      <GoLink href={CONTENT_ROOT}>{BACK_TO_CONTENT}</GoLink>
     </div>
   )
 }
@@ -84,20 +84,15 @@ export function ContentSectionHead({ id, title, note, action }: { id?: string; t
   )
 }
 
-/** The Agent's yellow button. */
-export const ASK = 'inline-flex min-h-[38px] cursor-pointer items-center gap-2 rounded-lg bg-brand px-3.5 text-[13.5px] font-semibold text-brand-foreground no-underline transition-colors hover:bg-brand/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
-
-/** The Agent at a page's foot: a card from 640 (its line and its button), the
- *  button alone and full width on a phone, as Market's level pages close. */
+/** The Agent at a page's foot (the Content boards' last tile): its line and
+ *  the yellow button, the page's one primary, with no icon; the button under
+ *  the line on a phone. */
 export function AskCard({ line, label, href }: { line: string; label: string; href: string }) {
   return (
-    <>
-      <section aria-label="Ask the Agent" className={cn(CARD, 'flex-row flex-wrap items-center justify-between gap-3.5 px-[26px] py-5 max-sm:hidden')}>
-        <p className="m-0 text-[14.5px] text-secondary-foreground">{line}</p>
-        <Link href={href} className={ASK}><Sparkles className="size-3.5" aria-hidden />{label}</Link>
-      </section>
-      <Link href={href} className={cn(ASK, 'justify-center sm:hidden')}><Sparkles className="size-3.5" aria-hidden />{label}</Link>
-    </>
+    <section aria-label="Ask the Agent" className={cn(CARD, 'flex-row flex-wrap items-center justify-between gap-6 max-sm:gap-3')}>
+      <p className="m-0 min-w-0 flex-[1_1_420px] text-[15.5px] leading-[1.55]">{line}</p>
+      <Link href={href} className={cn(BTN_PRIMARY, 'no-underline max-sm:w-full')}>{label}</Link>
+    </section>
   )
 }
 

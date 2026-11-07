@@ -52,7 +52,7 @@ describe('What to post next', () => {
     // named by their weeks, at the boards' 12px (HTML, never a shrinking SVG).
     expect(copyNodes(m).filter((n) => n.kind === 'figure').map((n) => n.text)).toEqual(expect.arrayContaining(['6', '9', '14', '23']))
     expect(m).toContain('Market videos a week where it came up: 14 Sep 6, 21 Sep 9, 28 Sep 14, 5 Oct 23')
-    expect(m).toMatch(/data-week-bars=""/)
+    expect(m).toMatch(/data-week-bars="sm"/)
     expect(m).not.toMatch(/text-\[(9|10|11)(\.5)?px\]/)
     expect(m).not.toMatch(/videos this week/)
     expect(renderText(<IdeaCardView card={card} month={OCT} readLabel="14 Sep to 11 Oct" />)).not.toMatch(/Rising|usual level|trend/i)

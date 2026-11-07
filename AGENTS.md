@@ -2366,7 +2366,16 @@ This version has breaking changes — APIs, conventions, and file structure may 
     the conversation in Market, the Agent. Its comments pass the gate the
     root's panel ran (`gateFor` with the idea's title as the claim, comments
     under your own posts allowed), their words resolved at render, never
-    stored. *The reply list, EVIDENCE* (`loadContentReplies`): TODAY'S LIST
+    stored. Since the audit design (7 Nov, `Content-Brief.dc.html`) it has
+    no tile or label: the title, "Post idea 1, from the conversation {link}"
+    under it, the flag a tag, the figures row (`ideaStats`: the days, its
+    videos over them of the market's, its month's); the header tile's facts
+    are three (make it as, open with, length), where it came up being the
+    figures row's; the sub-questions three to a row, each one sentence and a
+    bar against the largest, `SUB_NONE_QUOTABLE` said once where none of
+    them may print; the numbers one tile of bare counts (their base the
+    figures row's, the four weeks' month too); each market video a whole
+    link. *The reply list, EVIDENCE* (`loadContentReplies`): TODAY'S LIST
     (`buildReplies`, the root card's own digest: three of an insight
     category, twelve in all, two from one video, `ENGAGE_*` in
     `lib/engage.ts`; wrong information ranked apart, at most `FLAGGED_SHOWN`,

@@ -1,5 +1,5 @@
 import { PageFrame } from '@/components/shell/page-grid'
-import { Bone, BoneLines } from '@/components/shell/skeleton'
+import { Bone, BoneBars, BoneLines, SkeletonStatStrip } from '@/components/shell/skeleton'
 import { CARD } from '@/components/v2'
 import { cn } from '@/lib/utils'
 
@@ -23,24 +23,39 @@ function LevelBar() {
   )
 }
 
-/** A post idea's page loading (G5-Content-Idea): the header card and its
- *  four figures, the sub-question cards two to a row, the numbers. */
+/** The audit design's title block (7 Nov), drawn as bones: the crumb row,
+ *  the title, the line under it and the figures row; no tile, no label. */
+function AuditBar({ cells }: { cells: number }) {
+  return (
+    <div role="presentation" className="flex flex-col">
+      <div className="pb-2 max-sm:hidden"><Bone className="h-[22px] w-56 max-w-full" /></div>
+      <Bone className="h-6 w-24 sm:hidden" />
+      <Bone className="mt-2.5 h-8 w-80 max-w-full" />
+      <Bone className="mt-2 h-4 w-64 max-w-full" />
+      <div className="mt-5"><SkeletonStatStrip cells={cells} /></div>
+    </div>
+  )
+}
+
+/** A post idea's page loading (Content-Brief.dc.html): the title block and
+ *  its three figures, the header tile and its three facts, the sub-question
+ *  tiles three to a row, the numbers' tile. */
 export function ContentIdeaSkeleton() {
   return (
     <PageFrame>
       <div role="status" aria-busy="true" aria-label="Loading the post idea" className="flex flex-col gap-[22px]">
-        <LevelBar />
-        <div className={cn(CARD, 'gap-5 overflow-hidden sm:px-[34px] sm:pt-[30px] sm:pb-0 max-sm:pb-0')}>
+        <AuditBar cells={3} />
+        <div className={cn(CARD, 'gap-3.5 sm:p-[30px]')}>
           <Bone className="h-4 w-40" />
           <Bone className="h-9 w-3/4" />
-          <div className="-mx-[34px] grid grid-cols-2 gap-px border-t border-track bg-inner max-sm:-mx-[18px] min-[1180px]:grid-cols-4">{[0, 1, 2, 3].map((i) => <div key={i} className="flex flex-col gap-2 px-[22px] pt-5 pb-[22px]"><Bone className="h-3 w-20" /><Bone className="h-8 w-24" /><Bone className="h-3 w-32" /></div>)}</div>
+          <div className="mt-3 grid grid-cols-1 gap-8 border-t border-track pt-[22px] min-[900px]:grid-cols-3">{[0, 1, 2].map((i) => <div key={i} className="flex flex-col gap-2"><Bone className="h-3 w-20" /><Bone className="h-6 w-28" /><Bone className="h-3 w-40" /></div>)}</div>
         </div>
-        <Bone className="h-5 w-56" />
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">{[0, 1, 2, 3].map((i) => <div key={i} className={cn(CARD, 'gap-3')}><Bone className="h-5 w-3/4" /><Bone className="h-1.5 w-full" /><Bone className="h-[110px] w-full rounded-[10px]" /></div>)}</div>
-        <Bone className="h-5 w-40" />
-        <div className={cn(CARD, 'gap-6')}>
-          <div className="grid grid-cols-1 gap-10 xl:grid-cols-2"><Bone className="h-[150px] w-full" /><BoneLines lines={4} /></div>
-          <div className="grid grid-cols-1 gap-8 xl:grid-cols-3">{[0, 1, 2].map((i) => <BoneLines key={i} lines={3} />)}</div>
+        <Bone className="mt-[26px] h-6 w-56" />
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">{[0, 1, 2].map((i) => <div key={i} className={cn(CARD, 'gap-3')}><Bone className="h-5 w-3/4" /><Bone className="h-2 w-full" /><BoneLines lines={2} /></div>)}</div>
+        <div className={cn(CARD, 'mt-[26px] gap-6')}>
+          <Bone className="h-6 w-40" />
+          <div className="grid grid-cols-1 gap-10 min-[1180px]:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]"><Bone className="h-[160px] w-full" /><BoneBars rows={3} /></div>
+          <div className="grid grid-cols-1 gap-10 min-[900px]:grid-cols-2">{[0, 1].map((i) => <BoneLines key={i} lines={3} />)}</div>
         </div>
       </div>
     </PageFrame>
