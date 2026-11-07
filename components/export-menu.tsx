@@ -7,7 +7,7 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { BarPill, barButtonClass } from '@/components/shell/page-grid'
-import { BTN_SECONDARY } from '@/components/v2/look'
+import { BTN_SECONDARY, LBL } from '@/components/v2/look'
 import { cn } from '@/lib/utils'
 import { FORMAT_NOUN, exportErrorLine, jobKey, pageSections, tileSections, type ExportJob, type ExportSection } from '@/lib/exports/jobs'
 import type { PageKey } from '@/lib/renderables/types'
@@ -112,15 +112,15 @@ function Body({ sections, ex }: { sections: ExportSection[]; ex: ReturnType<type
   const { state, elapsed } = ex
   if (state.phase === 'busy') {
     return (
-      <p role="status" className="flex items-center gap-2 px-1.5 py-2 text-[12.5px] text-secondary-foreground">
+      <p role="status" className="flex items-center gap-2 px-1.5 py-2 text-[13px] text-secondary-foreground">
         <LoaderCircle className="size-3.5 shrink-0 animate-spin" aria-hidden />
-        Preparing your {state.noun} · {elapsed}s
+        Preparing your {state.noun}, {elapsed} {elapsed === 1 ? 'second' : 'seconds'}
       </p>
     )
   }
   if (state.phase === 'done') {
     return (
-      <p role="status" className="flex items-center gap-2 px-1.5 py-2 text-[12.5px] text-secondary-foreground">
+      <p role="status" className="flex items-center gap-2 px-1.5 py-2 text-[13px] text-secondary-foreground">
         <Check className="size-3.5 shrink-0 text-primary" aria-hidden />
         Your {state.noun} is downloading.
       </p>
@@ -129,8 +129,8 @@ function Body({ sections, ex }: { sections: ExportSection[]; ex: ReturnType<type
   if (state.phase === 'error') {
     return (
       <div className="px-1.5 py-2">
-        <p role="alert" className="text-[12.5px] leading-[1.4] text-negative">{state.message}</p>
-        <button type="button" onClick={ex.reset} className="mt-1.5 cursor-pointer text-[12px] font-medium text-muted-foreground underline underline-offset-2 hover:text-foreground">
+        <p role="alert" className="text-[13px] leading-[1.4] text-negative">{state.message}</p>
+        <button type="button" onClick={ex.reset} className="mt-1.5 cursor-pointer text-[13px] font-medium text-muted-foreground underline underline-offset-2 hover:text-foreground">
           Back
         </button>
       </div>
@@ -142,7 +142,7 @@ function Body({ sections, ex }: { sections: ExportSection[]; ex: ReturnType<type
         <div key={s.label ?? i}>
           {i > 0 && <DropdownMenuSeparator />}
           {s.label && (
-            <DropdownMenuLabel className="font-mono text-[10.5px] font-normal uppercase tracking-[0.06em]">
+            <DropdownMenuLabel className={LBL}>
               {s.label}
             </DropdownMenuLabel>
           )}
@@ -152,10 +152,10 @@ function Body({ sections, ex }: { sections: ExportSection[]; ex: ReturnType<type
               // Keep the menu open: it is where the wait, the file and any
               // error are reported.
               onSelect={(e) => { e.preventDefault(); void ex.run(j) }}
-              className="cursor-pointer gap-3 text-[12.5px]"
+              className="cursor-pointer gap-3 text-[14px]"
             >
               <span className="min-w-0 truncate">{j.label}</span>
-              {j.hint && <span className="ml-auto shrink-0 font-mono text-[10.5px] uppercase text-muted-foreground">{j.hint}</span>}
+              {j.hint && <span className="ml-auto shrink-0 text-[13px] text-muted-foreground">{j.hint}</span>}
             </DropdownMenuItem>
           ))}
         </div>
