@@ -97,18 +97,19 @@ describe('the reply list\'s page', () => {
   it('ends with elsewhere on Content and the Agent', () => {
     const text = renderText(page())
     expect(text.indexOf('Elsewhere on Content')).toBeGreaterThan(text.indexOf('How the list is picked'))
-    expect(text).toContain('How long does a liner last, and how do you know it is time to replace it? Post idea 1 · 48 of 640 videos, 14 Sep to 11 Oct · 31 in October so far')
-    expect(text).toContain('Your posts 9 posts in October so far')
+    // Each idea a tile, its line a sentence (the four weeks beside their month).
+    expect(text).toContain('How long does a liner last, and how do you know it is time to replace it? Post idea 1, in 48 of 640 videos from 14 Sep to 11 Oct and 31 in October so far.')
+    expect(text).toContain('Your posts 9 posts in October so far.')
     expect(text).toContain('Ask about these comments and what people want from you, in your own words.')
     const m = render(page())
     expect(m).toContain('href="/dashboard/content/ideas/i0000001-0000-4000-8000-000000000000"')
     expect(m).toContain('href="/dashboard/content/posts"')
   })
 
-  it('prints the medical team line under each idea in the foot, in a medical market, as under every printed idea', () => {
+  it('prints the medical team line once under the foot\'s ideas, in a medical market (decision 14)', () => {
     const m = render(page())
-    // Two ideas, each in the wide row and in the phone's list.
-    expect(m.split(MEDICAL_LINE).length - 1).toBe(4)
+    // Two ideas, one line under them, at every width (one markup).
+    expect(m.split(MEDICAL_LINE).length - 1).toBe(1)
     const plain = contentRepliesFixture()
     expect(render(<ContentRepliesPage data={{ ...plain, elsewhere: { ...plain.elsewhere, medical: false } }} />)).not.toContain(MEDICAL_LINE)
     // No idea, no line.

@@ -2405,12 +2405,22 @@ This version has breaking changes — APIs, conventions, and file structure may 
     one chunked read for the posts shown; `?post=<id>` opens one in full,
     honoured only for the month's own posts); the facts (how they were made,
     how they open, where, the response, "What works in your market's
-    videos" back to the root). Both evidence pages end with "Elsewhere on
+    videos" back to the root). Since the audit design (7 Nov,
+    `Content-Posts.dc.html`) it has no tile or label and a figures row
+    (`postsStats`: the month, your posts, your typical post's response with
+    how many it was read from, which leaves the facts); the quote rule is
+    said once under "What you posted" and a card says only "None of them
+    can be quoted."; each post a tile ("Instagram, posted 30 Oct", "Watch
+    the post", its caption in two lines, its recipe a sentence, each comment
+    a figure cited "Instagram, 30 Oct"), "Show N more posts" a chip; the
+    facts one tile of bare counts with bars in your gold against the
+    largest. Both evidence pages end with "Elsewhere on
     Content" (the root's first two ideas with their four weeks beside their
     month and, in a medical market, `MEDICAL_LINE` once under them, as under
     every screen's ideas; and the other evidence page: your posts' count, or the reply
-    list's days with no count, since the foot does not read the list) and
-    the Agent. OLD LINKS LAND (`redirectFor` in the root page, before
+    list's days with no count, since the foot does not read the list; since
+    the audit design a tile each, every tile its link, "Open Content" in the
+    head) and the Agent (a tile with the yellow button). OLD LINKS LAND (`redirectFor` in the root page, before
     anything is read; `contentRedirect`, `lib/nav.ts`): `?replies=1` and
     `?reply=<intent>` on the reply list (the intent its section's anchor,
     the period kept), `?posts=1` on your posts, every other param kept;

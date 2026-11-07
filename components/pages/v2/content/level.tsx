@@ -1,13 +1,13 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { CARD, GoLink } from '@/components/v2'
+import { CARD, GoLink, SectionHead } from '@/components/v2'
 import { BTN_PRIMARY } from '@/components/v2/look'
 import { fmtInt } from '@/lib/format'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
 import type { Elsewhere } from '@/lib/pages/v2/content-levels'
 import { CONTENT_ROOT } from '@/lib/pages/v2/content-address'
 import { cn } from '@/lib/utils'
-import { OLINK, Sentence } from './parts'
+import { Sentence } from './parts'
 
 // CONTENT'S LEVEL PAGES, THE PIECES THEY SHARE (depth as pages, 17 Oct; the
 // G5 boards): the level tiles (a post idea is a lightbulb on the yellow, the
@@ -72,18 +72,6 @@ export function ContentMissing({ line }: { line: string }) {
   )
 }
 
-/** The boards' section head between blocks: its title, a quiet note at the
- *  right (under it on a phone). */
-export function ContentSectionHead({ id, title, note, action }: { id?: string; title: string; note?: ReactNode; action?: ReactNode }) {
-  return (
-    <div className="mt-3.5 flex items-baseline justify-between gap-3 px-0.5 max-sm:mt-2.5 max-sm:flex-col max-sm:items-start max-sm:gap-0.5">
-      <h2 id={id} className="m-0 text-[19px] leading-[1.3] font-semibold tracking-[-0.005em] text-foreground max-sm:text-[18px]">{title}</h2>
-      {note ? <span className="text-[13px] leading-[1.4] text-muted-foreground">{note}</span> : null}
-      {action}
-    </div>
-  )
-}
-
 /** The Agent at a page's foot (the Content boards' last tile): its line and
  *  the yellow button, the page's one primary, with no icon; the button under
  *  the line on a phone. */
@@ -96,64 +84,51 @@ export function AskCard({ line, label, href }: { line: string; label: string; hr
   )
 }
 
-const SIB = 'flex min-w-0 flex-col gap-1.5 rounded-[12px] bg-card px-4 pt-3.5 pb-[13px] no-underline shadow-card transition-shadow hover:shadow-panel'
+/** A tile of the foot, the whole tile its link (the board's). */
+const SIB = cn(CARD, 'gap-1.5 text-foreground no-underline transition-shadow hover:shadow-panel focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground')
+const SIB_TITLE = 'text-[16px] leading-[1.35] font-semibold underline decoration-control underline-offset-4'
+const SIB_LINE = 'text-[14px] leading-[1.5] text-secondary-foreground'
 
-/** One idea in the foot: its title (`stored`), "Post idea 1 · 48 of 640
- *  videos, 14 Sep to 11 Oct · 31 in October so far", and in a medical market
- *  the medical team line, as under every printed idea. */
-function IdeaSibling({ idea, medical }: { idea: Elsewhere['ideas'][number]; medical: boolean }) {
+/** One idea in the foot: its title (`stored`), and "Post idea 1, in 48 of 640
+ *  videos from 14 Sep to 11 Oct and 31 in October so far." (decision 1: the
+ *  four weeks beside their month; their base is no figures row's here, so it
+ *  stays). */
+function IdeaSibling({ idea }: { idea: Elsewhere['ideas'][number] }) {
   return (
     <>
-      <span data-copy="stored" data-slot="post_idea" className="text-[14px] leading-[1.35] font-semibold text-foreground">{idea.title}</span>
-      <span className="text-[12.5px] leading-[1.45] text-muted-foreground">
+      <span data-copy="stored" data-slot="post_idea" className={SIB_TITLE}>{idea.title}</span>
+      <span className={SIB_LINE}>
         Post idea {idea.rank}
         {idea.read && idea.month != null ? (
-          <> · <span data-copy="level"><span className="font-mono text-foreground">{fmtInt(idea.read.k)}</span> of {fmtInt(idea.read.n)} videos</span>, {idea.readLabel} · <span data-copy="figure" className="font-mono text-foreground">{fmtInt(idea.month)}</span> {idea.monthWords}</>
-        ) : null}
+          <>, in <span data-copy="level">{fmtInt(idea.read.k)} of {fmtInt(idea.read.n)} videos</span> from {idea.readLabel} and <span data-copy="figure">{fmtInt(idea.month)}</span> {idea.monthWords}</>
+        ) : null}.
       </span>
-      {medical ? <span data-medical-line="" className="text-[12px] leading-[1.4] text-muted-foreground">{MEDICAL_LINE}</span> : null}
     </>
   )
 }
 
 /** "Elsewhere on Content": the root's first two ideas and the other evidence
- *  page, three cards from 640, a list in one card on a phone, then the root. */
+ *  page, a tile each (stacked on a phone), "Open Content" in the head, and in
+ *  a medical market the medical team line once under the ideas (decision 14). */
 export function ElsewhereSection({ data }: { data: Elsewhere }) {
-  const root = <Link href={CONTENT_ROOT} className={OLINK}>Content →</Link>
-  const page = (
-    <>
-      <span className="text-[14px] leading-[1.35] font-semibold text-foreground">{data.page.label}</span>
-      <span className="text-[12.5px] leading-[1.45] text-muted-foreground"><Sentence parts={data.page.line} /></span>
-    </>
-  )
   return (
-    <>
-      <div className="max-sm:hidden"><ContentSectionHead title="Elsewhere on Content" action={root} /></div>
-      <nav aria-label="Elsewhere on Content" data-elsewhere="" className="grid grid-cols-1 gap-3 max-sm:hidden lg:grid-cols-3">
-        {data.ideas.map((i) => <Link key={i.id} href={i.href} className={SIB}><IdeaSibling idea={i} medical={data.medical ?? false} /></Link>)}
+    <section aria-labelledby="elsewhere-title" className="flex flex-col">
+      <SectionHead id="elsewhere-title" title="Elsewhere on Content" action={<GoLink href={CONTENT_ROOT}>Open Content</GoLink>} />
+      <nav aria-label="Elsewhere on Content" data-elsewhere="" className="mt-[22px] grid grid-cols-1 gap-5 lg:grid-cols-3">
+        {data.ideas.map((i) => <Link key={i.id} href={i.href} className={SIB}><IdeaSibling idea={i} /></Link>)}
         {data.ideas.length === 0 ? (
           <Link href={CONTENT_ROOT} className={SIB}>
-            <span className="text-[14px] leading-[1.35] font-semibold text-foreground">What to post next</span>
-            <span className="text-[12.5px] leading-[1.45] text-muted-foreground">{data.ideasLine}</span>
+            <span className={SIB_TITLE}>What to post next</span>
+            <span className={SIB_LINE}>{data.ideasLine}</span>
           </Link>
         ) : null}
-        <Link href={data.page.href} className={SIB}>{page}</Link>
+        <Link href={data.page.href} className={SIB}>
+          <span className={SIB_TITLE}>{data.page.label}</span>
+          <span className={SIB_LINE}><Sentence parts={data.page.line} />.</span>
+        </Link>
       </nav>
-      <section aria-label="Elsewhere on Content" className={cn(CARD, 'gap-3 sm:hidden')}>
-        <h2 className="m-0 text-[17px] leading-[1.3] font-semibold text-foreground">Elsewhere on Content</h2>
-        <div className="flex flex-col">
-          {data.ideas.map((i) => <Link key={i.id} href={i.href} className="flex min-w-0 flex-col gap-1 border-t border-track py-[11px] no-underline first:border-t-0 first:pt-0"><IdeaSibling idea={i} medical={data.medical ?? false} /></Link>)}
-          {data.ideas.length === 0 ? (
-            <Link href={CONTENT_ROOT} className="flex min-w-0 flex-col gap-1 border-t border-track py-[11px] no-underline first:border-t-0 first:pt-0">
-              <span className="text-[14px] font-semibold text-foreground">What to post next</span>
-              <span className="text-[12.5px] text-muted-foreground">{data.ideasLine}</span>
-            </Link>
-          ) : null}
-          <Link href={data.page.href} className="flex min-w-0 flex-col gap-1 border-t border-track py-[11px] no-underline first:border-t-0 first:pt-0">{page}</Link>
-        </div>
-        {root}
-      </section>
-    </>
+      {data.medical && data.ideas.length > 0 ? <p data-medical-line="" className="m-0 mx-0.5 mt-3.5 text-[14px] leading-[1.5] text-secondary-foreground">{MEDICAL_LINE}</p> : null}
+    </section>
   )
 }
 
