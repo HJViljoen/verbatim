@@ -102,6 +102,32 @@ describe('Sparkline, shared scales (SH22)', () => {
   })
 })
 
+describe('CalendarLine, screen type (the audit design, 7 Nov)', () => {
+  // The Agent's answer is the one caller that draws only on a screen: its
+  // labels go sans at 12 units or more there, and every other caller (paper,
+  // the brief goldens) keeps the mono at its own size, byte for byte.
+  const labelTexts = (markup: string) => [...markup.matchAll(/<(?:text|tspan)[^>]*>/g)].map((m) => m[0])
+  it('draws every label in sans at 12 units or more with `screen`, and no mono anywhere', () => {
+    const markup = render(<CalendarLine axis={AXIS} series={[you, rival]} format={(v) => `${v}%`} screen />)
+    expect(markup).not.toContain('font-plex-mono')
+    expect(markup).not.toContain('font-mono')
+    for (const tag of labelTexts(markup)) {
+      const size = /calc\(([\d.]+)px/.exec(tag)?.[1]
+      if (size) expect(Number(size), tag).toBeGreaterThanOrEqual(12)
+    }
+    // The legend's Reddit note joins with a comma, not a middle dot.
+    expect(markupText(markup)).toContain('Freitag , excludes Reddit')
+    assertCopyContract(markup)
+  })
+  it('keeps the paper drawing as it was without it', () => {
+    const paper = render(<CalendarLine axis={AXIS} series={[you, rival]} format={(v) => `${v}%`} />)
+    expect(paper).toContain('font-family="var(--font-plex-mono), monospace"')
+    expect(paper).toContain('font-size:calc(10px * var(--cal-k, 1))')
+    expect(paper).toContain('<span class="text-[10.5px]">· excludes Reddit</span>')
+    expect(render(<CalendarLine axis={AXIS} series={[you, rival]} format={(v) => `${v}%`} screen={false} />)).toBe(paper)
+  })
+})
+
 describe('CalendarLine', () => {
   it('renders without a React error and keeps the copy contract', () => {
     const markup = render(chart())

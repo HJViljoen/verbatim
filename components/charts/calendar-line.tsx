@@ -98,6 +98,13 @@ const ts = (px: number) => ({ fontSize: `calc(${px}px * var(--cal-k, 1))` })
 /** The same, for the end label in the right gutter — clamped (see above). */
 const tsEnd = (px: number) => ({ fontSize: `calc(${px}px * var(--cal-ke, 1))` })
 
+/** The labels' face and their least size: the mono at the given size on
+ *  paper, the sans at 12 units or more on a screen (`screen`). */
+const MONO_FACE = 'var(--font-plex-mono), monospace'
+const SANS_FACE = 'var(--font-plex-sans), sans-serif'
+const labelFace = (screen: boolean) => (screen ? SANS_FACE : MONO_FACE)
+const labelSize = (screen: boolean, px: number) => (screen ? Math.max(12, px) : px)
+
 /** How many dated rules can carry a printed date before the labels collide.
  *  Past it the rules are still drawn and still carry their `<title>`; only the
  *  printed tick label is dropped, because four overlapping 9px dates are less
@@ -148,8 +155,16 @@ export function CalendarLine({
   axis, series: givenSeries, rules = [], bands = [], format = (v) => `${v}`,
   width = 880, height = 210, padL = 56, padR = 180,
   zeroBase = true, legend = true, maxLabels = 12, endLabels = true,
-  annotate = null, caption, label, id, className, minMonths = MIN_CHART_MONTHS, scaleTo,
+  annotate = null, caption, label, id, className, minMonths = MIN_CHART_MONTHS, scaleTo, screen = false,
 }: {
+  /**
+   * SCREEN TYPE (the audit design, 7 Nov): every label in sans and at 12
+   * viewBox units or more, for a caller that only ever draws on a screen
+   * (the Agent's answer). OFF BY DEFAULT: the chart reaches paper through
+   * `components/blocks/calendar.tsx` and two brief goldens hold its output,
+   * so without it every byte is as it was.
+   */
+  screen?: boolean
   /** The value the scale reaches at least: a caller drawing two charts on one
    *  scale passes both charts' largest value (T0a, BR-38). */
   scaleTo?: number
@@ -222,7 +237,7 @@ export function CalendarLine({
   // chart's furniture read as a trend; the figures say the same thing without
   // claiming one, and a sentence says when the line arrives.
   if (!chartReady(given, minMonths)) {
-    return <CalendarFigures series={given} format={format} caption={caption} className={className} />
+    return <CalendarFigures series={given} format={format} caption={caption} className={className} screen={screen} />
   }
 
   // ONLY THE SERIES THAT DRAW TAKE PART IN THE PICTURE (2026-09-24). A series
@@ -321,10 +336,10 @@ export function CalendarLine({
       {showLegend && (
         <div className="flex flex-wrap gap-x-4 gap-y-1">
           {series.map((s) => (
-            <span key={s.label} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <span key={s.label} className={screen ? 'flex items-center gap-1.5 text-[13px] text-muted-foreground' : 'flex items-center gap-1.5 text-[11px] text-muted-foreground'}>
               <span className="size-2 rounded-full" style={{ background: s.color }} aria-hidden />
               {s.labelSlot ? <span data-copy="subject" data-slot={s.labelSlot}>{s.legendLabel ?? s.label}</span> : (s.legendLabel ?? s.label)}
-              {s.excludes ? <span className="text-[10.5px]">· {s.excludes}</span> : null}
+              {s.excludes ? (screen ? <span>, {s.excludes}</span> : <span className="text-[10.5px]">· {s.excludes}</span>) : null}
             </span>
           ))}
           {states.map((state) => {
@@ -334,14 +349,14 @@ export function CalendarLine({
             // and the one a cap at two months left silent.
             const every = months.length === 0 && legendEveryMonth(series, state, axis)
             return (
-              <span key={state} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <span key={state} className={screen ? 'flex items-center gap-1.5 text-[13px] text-muted-foreground' : 'flex items-center gap-1.5 text-[11px] text-muted-foreground'}>
                 <LegendToken state={state} color={tokenColor} />
                 {STATE_LABEL[state]}
                 {months.length > 0 ? ` (${months.map(shortMonth).join(', ')})` : every ? ' (every month)' : ''}
               </span>
             )
           })}
-          {missing ? <span className="basis-full text-[11px] text-muted-foreground">{missing}</span> : null}
+          {missing ? <span className={screen ? 'basis-full text-[13px] text-muted-foreground' : 'basis-full text-[11px] text-muted-foreground'}>{missing}</span> : null}
         </div>
       )}
 
@@ -409,15 +424,15 @@ export function CalendarLine({
             could lie under the whole series — Ask's finding 1 read 0% and 5%
             with the line ending at 9.4%. The mock's Subjects board prints the
             top of its scale ("50") and was right to. */}
-        <text data-copy="figure" x={g.padL - 10} y={g.baseline + 3} textAnchor="end" style={ts(10)} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">{format(scale.lo)}</text>
-        <text data-copy="figure" x={g.padL - 10} y={scale.y(scale.mid) + 3} textAnchor="end" style={ts(10)} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">{format(scale.mid)}</text>
+        <text data-copy="figure" x={g.padL - 10} y={g.baseline + 3} textAnchor="end" style={ts(labelSize(screen, 10))} fontFamily={labelFace(screen)} fill="var(--muted-foreground)">{format(scale.lo)}</text>
+        <text data-copy="figure" x={g.padL - 10} y={scale.y(scale.mid) + 3} textAnchor="end" style={ts(labelSize(screen, 10))} fontFamily={labelFace(screen)} fill="var(--muted-foreground)">{format(scale.mid)}</text>
         {/* AND THE TOP, WHERE A ROUND ONE FITS (SH13, see `niceTop`). With its
             own rule, because a number printed at a height nothing is drawn at
             is the objection the two-label rule was written against. */}
         {drawTop && topY != null && topLabel != null ? (
           <>
             <line x1={g.padL} y1={topY} x2={g.padR} y2={topY} stroke="var(--muted)" strokeWidth={1} />
-            <text data-copy="figure" x={g.padL - 10} y={topY + 3} textAnchor="end" style={ts(10)} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">{format(topLabel)}</text>
+            <text data-copy="figure" x={g.padL - 10} y={topY + 3} textAnchor="end" style={ts(labelSize(screen, 10))} fontFamily={labelFace(screen)} fill="var(--muted-foreground)">{format(topLabel)}</text>
           </>
         ) : null}
 
@@ -432,7 +447,7 @@ export function CalendarLine({
                 <title>{r.label}</title>
               </line>
               {printRuleLabels && (
-                <text x={x - 3} y={g.top} textAnchor="end" style={ts(9)} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">
+                <text x={x - 3} y={g.top} textAnchor="end" style={ts(labelSize(screen, 9))} fontFamily={labelFace(screen)} fill="var(--muted-foreground)">
                   {r.at ? shortDate(r.at) : monthName(r.month)}
                 </text>
               )}
@@ -451,6 +466,7 @@ export function CalendarLine({
             gutterY={gutterY}
             labelY={labelYs[i]}
             endLabel={endLabels}
+            screen={screen}
           />
         ))}
 
@@ -473,7 +489,7 @@ export function CalendarLine({
           return (
             <g>
               <line x1={x} y1={y1 + 4} x2={x} y2={y2 - 4} stroke="var(--cat)" strokeWidth={1} strokeDasharray="3 3" />
-              <text data-copy="figure" x={x - 10} y={(y1 + y2) / 2 + 3} textAnchor="end" style={ts(10)} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">
+              <text data-copy="figure" x={x - 10} y={(y1 + y2) / 2 + 3} textAnchor="end" style={ts(labelSize(screen, 10))} fontFamily={labelFace(screen)} fill="var(--muted-foreground)">
                 {annotate.label}
               </text>
             </g>
@@ -488,8 +504,8 @@ export function CalendarLine({
               x={g.xAt(i)}
               y={g.labelY}
               textAnchor="middle"
-              style={ts(10)}
-              fontFamily="var(--font-plex-mono), monospace"
+              style={ts(labelSize(screen, 10))}
+              fontFamily={labelFace(screen)}
               fill={read.has(m) ? 'var(--muted-foreground)' : 'var(--border)'}
             >
               {shortMonth(m)}
@@ -523,7 +539,7 @@ export function CalendarLine({
         ))}
       </svg>
 
-      {caption ? <p className="m-0 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">{caption}</p> : null}
+      {caption ? <p className={screen ? 'm-0 text-[13px] leading-[1.4] text-muted-foreground' : 'm-0 font-mono text-[9.5px] leading-[1.35] text-muted-foreground'}>{caption}</p> : null}
     </div>
   )
 }
@@ -531,8 +547,10 @@ export function CalendarLine({
 /** One series: its segments, its points, its gutter marks, its filling bar and
  *  its end label. Split out so the chart body reads as a list of layers. */
 function SeriesMarks({
-  series, geometry: g, y, format, padR, gutterY, labelY = null, endLabel = true,
+  series, geometry: g, y, format, padR, gutterY, labelY = null, endLabel = true, screen = false,
 }: {
+  /** The chart's `screen` (sans labels, 12 units or more). */
+  screen?: boolean
   series: CalendarSeries
   geometry: ReturnType<typeof calendarGeometry>
   y: (v: number) => number
@@ -618,7 +636,7 @@ function SeriesMarks({
                 same month read at this point last month" is a reading, and two
                 series filling together have two of them. */}
             {p.state === 'filling' && p.atLastMonth != null && (
-              <LastMonthTick x={x} atLastMonth={p.atLastMonth} y={y} slot={g.slot} format={format} padR={padR} />
+              <LastMonthTick x={x} atLastMonth={p.atLastMonth} y={y} slot={g.slot} format={format} padR={padR} screen={screen} />
             )}
             <circle
               className={lone.has(i) ? 'vb-cal-point-lone' : undefined}
@@ -639,10 +657,10 @@ function SeriesMarks({
           once, above the plot (`undrawnLine`). A label the chart could not
           place without an overlap (`spreadLabels` → null) is dropped too. */}
       {endLabel && end && endX != null && end.value != null && labelY != null && (
-        <text x={padR + 10} y={labelY} style={tsEnd(11)} fontWeight={600} fontFamily="var(--font-plex-sans), sans-serif" fill="var(--foreground)">
+        <text x={padR + 10} y={labelY} style={tsEnd(labelSize(screen, 11))} fontWeight={600} fontFamily="var(--font-plex-sans), sans-serif" fill="var(--foreground)">
           {series.labelSlot ? <tspan data-copy="subject" data-slot={series.labelSlot}>{series.label}</tspan> : series.label}{' '}
-          <tspan data-copy="figure" fontFamily="var(--font-plex-mono), monospace" fontWeight={500}>{format(end.value)}</tspan>
-          {series.endNote ? <tspan data-copy="figure" fontFamily="var(--font-plex-mono), monospace" fontWeight={400} style={tsEnd(9.5)} fill="var(--muted-foreground)"> {series.endNote}</tspan> : null}
+          <tspan data-copy="figure" fontFamily={labelFace(screen)} fontWeight={500}>{format(end.value)}</tspan>
+          {series.endNote ? <tspan data-copy="figure" fontFamily={labelFace(screen)} fontWeight={400} style={tsEnd(labelSize(screen, 9.5))} fill="var(--muted-foreground)"> {series.endNote}</tspan> : null}
         </text>
       )}
     </g>
@@ -703,8 +721,10 @@ function FillingTint({
  * saying when the chart appears.
  */
 function CalendarFigures({
-  series, format, caption, className,
+  series, format, caption, className, screen = false,
 }: {
+  /** The chart's `screen`: sans, 13px. */
+  screen?: boolean
   series: readonly CalendarSeries[]
   format: (v: number) => string
   caption?: ReactNode
@@ -721,12 +741,12 @@ function CalendarFigures({
           <span className="font-medium">
             {r.labelSlot ? <span data-copy="subject" data-slot={r.labelSlot}>{r.label}</span> : r.label}
           </span>{' '}
-          <span data-copy="figure" className="font-mono text-[12px] tabular-nums">{r.text}</span>
+          <span data-copy="figure" className={screen ? 'text-[13px] tabular-nums' : 'font-mono text-[12px] tabular-nums'}>{r.text}</span>
         </p>
       ))}
-      {missing ? <p className="m-0 text-[11px] text-muted-foreground">{missing}</p> : null}
-      <p className="m-0 text-[11px] text-muted-foreground">{CHART_WAITING}</p>
-      {caption ? <p className="m-0 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">{caption}</p> : null}
+      {missing ? <p className={screen ? 'm-0 text-[13px] text-muted-foreground' : 'm-0 text-[11px] text-muted-foreground'}>{missing}</p> : null}
+      <p className={screen ? 'm-0 text-[13px] text-muted-foreground' : 'm-0 text-[11px] text-muted-foreground'}>{CHART_WAITING}</p>
+      {caption ? <p className={screen ? 'm-0 text-[13px] leading-[1.4] text-muted-foreground' : 'm-0 font-mono text-[9.5px] leading-[1.35] text-muted-foreground'}>{caption}</p> : null}
     </div>
   )
 }
@@ -734,8 +754,9 @@ function CalendarFigures({
 /** What the same month read at this point LAST month — a reading, so it stays
  *  with its series. */
 function LastMonthTick({
-  x, atLastMonth, y, slot, format, padR,
+  x, atLastMonth, y, slot, format, padR, screen = false,
 }: {
+  screen?: boolean
   x: number
   atLastMonth: number
   y: (v: number) => number
@@ -757,8 +778,8 @@ function LastMonthTick({
         x={x + w + 6 < padR ? x + w + 6 : x - w - 6}
         y={y(atLastMonth) + 13}
         textAnchor={x + w + 6 < padR ? 'start' : 'end'}
-        style={ts(9)}
-        fontFamily="var(--font-plex-mono), monospace"
+        style={ts(labelSize(screen, 9))}
+        fontFamily={labelFace(screen)}
         fill="var(--muted-foreground)"
       >
         at this point last month

@@ -223,9 +223,13 @@ function FindingChart({ f }: { f: FindingMeasure }) {
         padL={30}
         // 184 since the audit design's card (18px padding on a phone, the
         // tile's was 16): "The category 9.4% of 1,388" ran 9px past the
-        // card's content at 390 with 170.
-        padR={184}
+        // card's content at 390 with 170. 192 since the screen type (sans at
+        // 12 units): at 184 the label ran 3px past the card at 390.
+        padR={192}
         legend={false}
+        // Screen type (the audit design's chart rule): every label in sans at
+        // 12px or more. The shared chart's paper defaults are untouched.
+        screen
         format={(v) => `${v}%`}
         label={`${f.audienceLabel}, month by month`}
       />
