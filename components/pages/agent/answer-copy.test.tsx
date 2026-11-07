@@ -128,7 +128,11 @@ describe('the live thread, as Heinrich read it (1 Oct)', () => {
   it('highlights no phrase anywhere on the page', () => {
     const markup = viewMarkup(d)
     expect(markup).not.toMatch(/data-copy="level"[^>]*class="[^"]*\bbg-/)
-    expect(markup).not.toContain('bg-accent')
+    // The one pale yellow is the "this one is inference" tag (the kit's
+    // `Tag`, the P8-9 review): a label of its own, never a phrase of prose.
+    const tags = markup.match(/<span data-tag="tint"[^>]*>this one is inference<\/span>/g) ?? []
+    expect(tags.length).toBeLessThanOrEqual(1)
+    expect(markup.replace(/<span data-tag="tint"[^>]*>this one is inference<\/span>/g, '')).not.toContain('bg-accent')
   })
 
   it('says what a point covers in one short line', () => {

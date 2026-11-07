@@ -189,6 +189,10 @@ describe('the registers', () => {
     expect(text).toContain('What I’d do')
     expect(text).toContain('this one is inference')
     expect(text).toContain('Based on finding 1 below.')
+    // The kit's pale-yellow tag (the audit design), not a round amber pill.
+    const markup = render(tile(measured))
+    expect(markup).toMatch(/<span data-tag="tint" class="[^"]*rounded-\[6px\][^"]*bg-accent[^"]*">this one is inference<\/span>/)
+    expect(markup).not.toContain('ring-warning')
   })
 
   it('puts "What I’d do" under the answer and above the evidence (Heinrich, 1 Oct)', () => {

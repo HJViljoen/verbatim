@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { TAG, TAG_TONE } from '@/components/v2/look'
 import { fmtInt } from '@/lib/format'
 import type { Direction } from '@/lib/reading/bands'
 import type { Counted } from '@/lib/reading/verdicts'
@@ -92,8 +93,8 @@ export function DirectionWord({ direction }: { direction: Direction | null | und
  * A verdict chip on a plan claim — the three words `PLAN_VERDICT_LABEL`
  * already fixes, in the sentiment tints §3.6 assigns them.
  *
- * THE RED IS IN THE TINT AND THE RING, NOT IN THE TEXT — the fix
- * `InferencePill` argues twenty lines below, in the colour it had not been
+ * THE RED IS IN THE TINT AND THE RING, NOT IN THE TEXT — the fix the
+ * inference pill made before the audit design, in the colour it had not been
  * applied to. `bg-negative/12 text-negative` is `#DB3B2E` on `#FBE7E6`:
  * **3.78:1** at 12px against a 4.5:1 floor, and it renders on the plan rail of
  * both routes in every populated shot ("1 contradicted"). Moving the words to
@@ -107,8 +108,8 @@ export function DirectionWord({ direction }: { direction: Direction | null | und
  * that pair is app-wide — fourteen other call sites and `lib/ui-colors.ts` —
  * and moving it here alone would make this file the one place the product's
  * quiet grey means something different. Same answer, and the same reason, as
- * the `--warning-foreground` token `InferencePill` refers to whoever owns
- * `app/globals.css`.
+ * the `--warning-foreground` token the inference pill's old note left to
+ * whoever owns `app/globals.css`.
  */
 export function ClaimChip({ tone, children }: { tone: 'supported' | 'contradicted' | 'untested'; children: ReactNode }) {
   // NO TINT (round 2, 1 Oct; Heinrich's ban on highlighted phrases): the three
@@ -119,25 +120,17 @@ export function ClaimChip({ tone, children }: { tone: 'supported' | 'contradicte
 }
 
 /**
- * The amber "this one is inference" pill — a block-level mark, not a per-point
- * one. See `Judgement`.
+ * The "this one is inference" mark: a block-level mark, not a per-point one.
+ * See `Judgement`.
  *
- * THE AMBER IS IN THE TINT AND THE RING, NOT IN THE TEXT. `bg-warning/15
- * text-warning` is #E6B03C on a 15% tint of ITSELF — about 1.9:1, so the two
- * honesty flags this surface added ("this one is inference", "1 claim crossed")
- * were the least legible text on the page. The colour still has to signal, so
- * it moves to a ring and a slightly stronger tint and the words go to
- * `foreground`, which reads at well over 4.5:1 on that tint.
- *
- * The `bg-warning/15 text-warning` pair is app-wide (fourteen other call sites,
- * `lib/ui-colors.ts` included) and the real fix is a `--warning-foreground`
- * token dark enough to carry text — that is a palette change and it belongs to
- * whoever owns `app/globals.css`, named in the merge note. This file fixes the
- * two marks this package put the product's inference marker on.
+ * SINCE THE AUDIT DESIGN (7 Nov, the P8-9 review): the kit's pale-yellow tag
+ * (`TAG`, `TAG_TONE.tint`, as `Tag` draws it), the same words. It was the
+ * last fully rounded pill with a ring, in an amber (`--warning`) outside
+ * palette A. Ink on the pale yellow reads at well over 4.5:1.
  */
 export function InferencePill({ children = 'this one is inference' }: { children?: ReactNode }) {
   return (
-    <span className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-warning/15 px-2 py-px text-[12px] font-medium text-foreground ring-1 ring-warning/50">
+    <span data-tag="tint" className={`${TAG} ${TAG_TONE.tint} shrink-0`}>
       {children}
     </span>
   )
