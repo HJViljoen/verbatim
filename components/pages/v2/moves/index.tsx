@@ -1,26 +1,23 @@
-import Link from 'next/link'
-
 import { DateMove } from '@/components/pages/market-surface/date-move'
-import { PageBar } from '@/components/shell/page-grid'
-import { longMonth } from '@/lib/format'
+import { PageBar, PageFrame } from '@/components/shell/page-grid'
+import { GoLink, type StatItem } from '@/components/v2'
+import { fmtInt, longMonth } from '@/lib/format'
 import { canDate } from '@/lib/pages/date-move'
-import { barMonth } from '@/lib/reading/month-label'
+import { inlineMonth } from '@/lib/reading/month-label'
 import { CHECK_A_PLAN_HREF, PAGE_TITLE, headerParts, type MovesPageData } from '@/lib/pages/v2/moves'
 import type { StatementsBlockData } from '@/lib/statements/types'
-import { cn } from '@/lib/utils'
 import { AdviceSection } from './advice'
 import { ConclusionsSection } from './conclusions'
 import { MovesSection } from './moves'
-import { BTN, MONO } from './parts'
 import { PlanCard } from './plan'
 import { WhatYouSay } from './say'
 
-// YOUR MOVES, DESIGN v2 (depth plan T7; boards E6-Moves and E6-Moves-Open),
-// at /dashboard/moves. Its own layout, in the board's order: the bar (the
-// three counts; Check a plan; Date a move), the advice to decide on (three
-// cards across, one opened in place under its row), your moves and what
-// happened after (two across), what you say beside your plan (two across, or
-// the plan alone), and what we concluded with the advice record.
+// YOUR MOVES, DESIGN v2 (depth plan T7; boards E6-Moves and E6-Moves-Open;
+// since the audit design, 7 Nov, Moves.dc.html), at /dashboard/moves. Its own
+// layout, in the board's order: the title (Check a plan; Date a move) and the
+// figures row, the advice to decide on (three cards across), your moves and
+// what happened after (two across), what you say beside your plan (two
+// across, or the plan alone), and what we concluded with the advice record.
 //
 // The data is `loadMovesPage` (lib/pages/v2/moves.ts); the statements are
 // read by the route behind `maySeeStatements` and drawn only where rows
@@ -32,30 +29,44 @@ import { WhatYouSay } from './say'
 
 export { CHECK_A_PLAN_HREF }
 
+const fig = (n: number) => <span data-copy="figure">{fmtInt(n)}</span>
+
+/**
+ * The figures row (the board's `.strip`; the audit design, 7 Nov): the
+ * advice waiting, the moves dated, the plans checked (`headerParts`' counts),
+ * and the reading month with the market's videos in it, its label where it
+ * is not the current month (decision 3, the one helper's words). The
+ * market's videos are the base a subject's level is of, said once
+ * (decision 2). Pure.
+ */
+export function movesStats(data: MovesPageData): StatItem[] {
+  const [waiting, dated, plans] = headerParts(data.counts)
+  const market = data.marketN?.market
+  return [
+    { key: 'waiting', term: 'Advice waiting', value: <>{fig(waiting.n)} {waiting.n === 1 ? 'piece' : 'pieces'}</> },
+    { key: 'dated', term: 'Moves dated', value: fig(dated.n) },
+    { key: 'plans', term: 'Plans checked', value: fig(plans.n) },
+    {
+      key: 'month',
+      term: inlineMonth(longMonth(data.month), data.monthLabel ?? null),
+      value: market != null ? <>{fig(market)} market videos</> : 'Not read yet',
+    },
+  ]
+}
+
+/** The title, its two controls (Check a plan, a link; Date a move, the
+ *  page's yellow button, for an owner or an admin) and the figures row. */
 function Header({ data }: { data: MovesPageData }) {
-  const parts = headerParts(data.counts)
-  // Decision 3: the month the moves' lines are read to, where it is not the
-  // current calendar month; only where a move draws a line at all.
-  const month = data.monthLabel && data.moves.cards.some((c) => c.points.length > 0)
-    ? barMonth(longMonth(data.month), data.monthLabel)
-    : null
   return (
     <PageBar
       title={PAGE_TITLE}
-      // Two buttons beside the title leave it one word a line on a phone, so
-      // there they go under the bar (T9).
+      stats={movesStats(data)}
+      // Two controls beside the title leave it one word a line on a phone,
+      // so there they go under the bar (T9).
       phoneControls="below"
-      meta={(
-        <span className={cn(MONO, 'text-[12.5px] text-muted-foreground')}>
-          {parts.map((p, i) => (
-            <span key={p.words}>{i > 0 ? ' · ' : null}<span data-copy="figure">{p.n}</span> {p.words}</span>
-          ))}
-          {month ? <span> · {month}</span> : null}
-        </span>
-      )}
     >
-      <div className="flex flex-wrap items-center justify-end gap-2" data-print-hide>
-        <Link href={CHECK_A_PLAN_HREF} className={BTN}>Check a plan</Link>
+      <div className="flex flex-wrap items-center justify-end gap-5" data-print-hide>
+        <GoLink href={CHECK_A_PLAN_HREF}>Check a plan</GoLink>
         {data.canDecide && canDate(data.dating) ? <DateMove dating={data.dating} place="ink" /> : null}
       </div>
     </PageBar>
@@ -68,29 +79,29 @@ export const MOVES_FIRST_RUN = 'Advice, moves and plans land with your first upd
 export function MovesV2Page({ data, statements }: { data: MovesPageData | null; statements: StatementsBlockData | null }) {
   if (!data) {
     return (
-      <div className="flex flex-col gap-5 leading-[normal]">
+      <PageFrame>
         <PageBar title={PAGE_TITLE} />
-        <p className="m-0 text-[14px] text-muted-foreground">{MOVES_FIRST_RUN}</p>
-      </div>
+        <p className="m-0 text-[15px] text-muted-foreground">{MOVES_FIRST_RUN}</p>
+      </PageFrame>
     )
   }
   // Drawn where there are statements, or where the reader may add the first
   // (the operator: the route reads none for a tenant, `maySeeStatements`).
   const say = statements && (statements.statements.length > 0 || statements.canEdit) ? statements : null
   return (
-    <div className="flex min-w-0 flex-col gap-5 leading-[normal]">
+    <PageFrame>
       <Header data={data} />
       <AdviceSection data={data} />
       <MovesSection data={data} />
-      {/* The board's two across: what you say beside the plan. The plan card
-          is always drawn (with no plan, its empty shape); the statements are
-          held from tenants (AGENTS.md, open ruling 7), so for a tenant the
-          plan takes the row. */}
-      <div className="grid grid-cols-1 gap-5 min-[1180px]:grid-cols-2">
+      {/* The board's two across: what you say beside the plan, each its own
+          height. The plan card is always drawn (with no plan, its empty
+          shape); the statements are held from tenants (AGENTS.md, open
+          ruling 7), so for a tenant the plan takes the row. */}
+      <div className="grid grid-cols-1 items-start gap-5 min-[1180px]:grid-cols-2">
         {say ? <WhatYouSay data={say} /> : null}
         <PlanCard plan={data.plan} failed={data.failed?.plan === true} className={say ? undefined : 'min-[1180px]:col-span-2'} />
       </div>
       <ConclusionsSection data={data} />
-    </div>
+    </PageFrame>
   )
 }

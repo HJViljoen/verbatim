@@ -1,9 +1,11 @@
 import Link from 'next/link'
 
-import { CARD } from '@/components/v2'
-import { MovementBadge } from '@/components/delta-badge'
+import { CARD, EmptyBox, GoLink, Label, SectionHead, Tag } from '@/components/v2'
+import { ROW } from '@/components/v2/look'
+import { MovementBadge, nonAnswerParts, signedChange } from '@/components/delta-badge'
+import type { Verdict } from '@/lib/reading/verdicts'
 import { fmtInt, longMonth, shortDate } from '@/lib/format'
-import { monthStartOf, prevMonth } from '@/lib/reading/month-key'
+import { monthStartOf } from '@/lib/reading/month-key'
 import { inlineMonth } from '@/lib/reading/month-label'
 import { DateMove } from '@/components/pages/market-surface/date-move'
 import { canDate } from '@/lib/pages/date-move'
@@ -13,9 +15,7 @@ import {
   type MoveCard, type MovePoint, type MoveSlot, type MovesPageData, type ReadingLabel,
 } from '@/lib/pages/v2/moves'
 import { cn } from '@/lib/utils'
-import { MovesKindTile } from './level-tiles'
 import { MoveStatusControl } from './move-status'
-import { MONO, OLINK, SECTION_SUB, SECTION_TITLE } from './parts'
 
 // "Your moves, and what happened after" (board E6-Moves).
 //
@@ -152,8 +152,8 @@ export function MoveChart({ card, readingMonth, detail = false }: {
 function Level({ p }: { p: MovePoint }) {
   return (
     <>
-      <span data-copy="figure" className={MONO}>{sharePct(p.k, p.n)}</span>{' '}
-      <span data-copy="level" className={cn(MONO, 'text-muted-foreground')}>({fmtInt(p.k)} of {fmtInt(p.n)})</span>
+      <span data-copy="figure" className="tabular-nums">{sharePct(p.k, p.n)}</span>{' '}
+      <span data-copy="level" className="tabular-nums text-secondary-foreground">({fmtInt(p.k)} of {fmtInt(p.n)})</span>
     </>
   )
 }
@@ -162,13 +162,13 @@ function Level({ p }: { p: MovePoint }) {
  *  month's label where it is the reading month and not the current one
  *  ("September, the last full month", decision 3). */
 export function MoveSentence({ card, reading }: { card: MoveCard; reading: ReadingLabel | null }) {
-  if (card.unread) return <p className="m-0 text-[13.5px] leading-[1.5] text-muted-foreground">{MOVE_UNREAD[card.unread]}</p>
+  if (card.unread) return <p className="m-0 text-[14px] leading-[1.5] text-muted-foreground">{MOVE_UNREAD[card.unread]}</p>
   if (card.pending) {
     // The months before a move dated after the reading month: the latest of
     // them as a level. When the move's own month reads is the chart's line.
     const last = card.points[card.points.length - 1]
     return last ? (
-      <p className="m-0 text-[13.5px] leading-[1.5] text-foreground">
+      <p className="m-0 text-[14px] leading-[1.5] text-foreground">
         Share of {levelBase(card.kind)}: <Level p={last} /> in {longMonth(last.month)}, before the move.
       </p>
     ) : null
@@ -179,12 +179,10 @@ export function MoveSentence({ card, reading }: { card: MoveCard; reading: Readi
     const m = compareMonths(c, moveMonth, reading)
     return (
       <div className="flex flex-col gap-1.5">
-        <p className="m-0 text-[13.5px] leading-[1.5] text-foreground">
+        <p className="m-0 text-[14px] leading-[1.5] text-foreground">
           Share of {levelBase(card.kind)} went from <Level p={c.before} /> in {m.before}, to <Level p={c.after} /> in {m.after}.
         </p>
-        <span data-copy="verdict" className="inline-flex items-center gap-1.5 text-[12.5px]">
-          <MovementBadge verdict={c.verdict} unit="pts" good={card.direction === 'down' ? 'down' : 'up'} />
-        </span>
+        <span className="text-[14px] text-secondary-foreground"><VerdictWords verdict={c.verdict} good={card.direction === 'down' ? 'down' : 'up'} /></span>
       </div>
     )
   }
@@ -193,9 +191,39 @@ export function MoveSentence({ card, reading }: { card: MoveCard; reading: Readi
   const latest = card.compare?.after ?? card.points[card.points.length - 1]
   if (!latest) return null
   return (
-    <p className="m-0 text-[13.5px] leading-[1.5] text-foreground">
+    <p className="m-0 text-[14px] leading-[1.5] text-foreground">
       Share of {levelBase(card.kind)}: <Level p={latest} /> in {inlineMonth(`${longMonth(latest.month)}${latest.soFar ? ' so far' : ''}`, monthLabelOn(latest.month, reading))}.
     </p>
+  )
+}
+
+const capital = (s: string): string => `${s.charAt(0).toUpperCase()}${s.slice(1)}`
+
+/**
+ * A comparison's answer in words, then its change, in commas ("No clear
+ * change, +3 pts"; "Beyond its normal swing, +6.3 pts"), the margin in the
+ * word's title: the form the brand page's "Against last month" takes (the
+ * review of Phases 4 and 5), never the badge's middle dots on a screen. The
+ * badge itself is untouched (print and email draw it). A verdict with no
+ * change to print falls back to the badge.
+ */
+export function VerdictWords({ verdict, good }: { verdict: Verdict; good: 'up' | 'down' }) {
+  const non = nonAnswerParts(verdict, 'pts')
+  if (non) {
+    return (
+      <>
+        <span data-copy="verdict" title={non.title}>{capital(non.word)}</span>
+        {non.change != null ? <>, <span data-copy="verdict" className="whitespace-nowrap">{signedChange(non.change, 'pts')}</span></> : null}
+      </>
+    )
+  }
+  const change = verdict.changePts
+  if (change == null) return <span data-copy="verdict"><MovementBadge verdict={verdict} unit="pts" good={good} /></span>
+  return (
+    <>
+      <span data-copy="verdict" title={verdict.bandPts != null ? `moved beyond the ${verdict.bandPts} pt margin of this measurement` : undefined}>Beyond its normal swing</span>
+      , <span data-copy="verdict" className="whitespace-nowrap">{signedChange(change, 'pts')}</span>
+    </>
   )
 }
 
@@ -208,52 +236,103 @@ export function OnLabel({ card }: { card: Pick<MoveCard, 'kind' | 'label'> }) {
     : <span data-copy="subject" data-slot="pass_b_theme">{card.label}</span>
 }
 
-/** " · on {label}", the label opening what it is on in Market (decision 4). */
+/** ", on {label}", the label opening what it is on in Market (decision 4). */
 function OnWhat({ card }: { card: MoveCard }) {
   if (!card.label) return null
   return (
     <>
-      {' · on '}
+      {', on '}
       {card.onHref
-        ? <Link href={card.onHref} className="text-muted-foreground underline decoration-muted-foreground/40 underline-offset-[3px] hover:text-foreground"><OnLabel card={card} /></Link>
+        ? <Link href={card.onHref} className="text-foreground underline decoration-control underline-offset-[3px] hover:decoration-foreground"><OnLabel card={card} /></Link>
         : <OnLabel card={card} />}
     </>
   )
 }
 
-const DOT: Record<MoveCard['status'], string> = { active: 'bg-you', done: 'bg-foreground', dropped: 'bg-comp' }
+/** A move's status as the boards' quiet tag ("Active"). */
+export function MoveStatusChip({ status }: { status: MoveCard['status']; className?: string }) {
+  return <Tag tone="mid">{MOVE_STATUS_LABEL[status]}</Tag>
+}
 
-/** A move's status chip: its dot and its word ("Active"). */
-export function MoveStatusChip({ status, className }: { status: MoveCard['status']; className?: string }) {
+/** What an empty month says on a move's months, in a word or two (the line
+ *  under them says why at length, `axisLine`). */
+const SLOT_WORDS: Record<NonNullable<MoveSlot['why']>, string> = {
+  cut: 'Left off',
+  unknown: 'Left off',
+  unread: 'No reading',
+  pending: 'Not read yet',
+  move: 'Not drawn',
+}
+
+/** A month's term on a move's months: its name, "so far" while it fills, and
+ *  where it stands against the move. */
+function slotTerm(s: MoveSlot, moveMonth: string): string {
+  const name = `${longMonth(s.month)}${s.point?.soFar ? ' so far' : ''}`
+  return s.month === moveMonth ? `${name}, the month of your move` : s.month > moveMonth ? `${name}, after your move` : name
+}
+
+/**
+ * THE MOVE'S MONTHS (the audit design's card, Moves.dc.html): the months from
+ * two before the move to the reading month as a list, each its share and
+ * its count, an empty month saying why in a word, the move's month under a
+ * gold rule. Bare where its base is the figures row's (the market's videos),
+ * "k of n" otherwise (a conversation's, the category's; decision 2). The
+ * line under it says why at length (`axisLine`).
+ */
+export function MoveMonths({ card, readingMonth, base = null }: { card: MoveCard; readingMonth: string; base?: number | null }) {
+  const slots = moveAxis(card, readingMonth)
+  if (slots.length === 0) return null
+  const moveMonth = monthStartOf(card.day)
+  const line = axisLine(slots)
   return (
-    <span className={cn('inline-flex shrink-0 items-center gap-1.5 rounded-full bg-inner px-2.5 py-1 text-[12px] font-semibold text-foreground', className)}>
-      <span aria-hidden className={cn('size-[7px] rounded-full', DOT[status])} />
-      {MOVE_STATUS_LABEL[status]}
-    </span>
+    <div data-move-months="" className="flex flex-col gap-2.5">
+      <Label as="p">Share of {levelBase(card.kind)}, month by month</Label>
+      <dl className="m-0 grid gap-3.5" style={{ gridTemplateColumns: `repeat(${slots.length}, minmax(0, 1fr))` }}>
+        {slots.map((s) => (
+          <div key={s.month} data-move-month={s.month === moveMonth ? 'move' : ''} className={cn('min-w-0', s.month === moveMonth ? 'border-t-2 border-you pt-[9px]' : 'border-t border-border pt-2.5')}>
+            <dt className="text-[13px] leading-[1.35] text-muted-foreground">{slotTerm(s, moveMonth)}</dt>
+            {s.point ? (
+              <>
+                <dd data-copy="figure" className="m-0 mt-1 text-[26px] font-bold leading-[1.1] tabular-nums">{sharePct(s.point.k, s.point.n)}</dd>
+                <dd className="m-0 mt-1 text-[14px] text-secondary-foreground">
+                  {s.point.n === base
+                    ? <><span data-copy="figure">{fmtInt(s.point.k)}</span> {s.point.k === 1 ? 'video' : 'videos'}</>
+                    : <span data-copy="level">{fmtInt(s.point.k)} of {fmtInt(s.point.n)}</span>}
+                </dd>
+              </>
+            ) : <dd className="m-0 mt-1.5 text-[14.5px] text-muted-foreground">{SLOT_WORDS[s.why ?? 'unknown']}</dd>}
+          </div>
+        ))}
+      </dl>
+      {line ? <p className="m-0 text-[13px] leading-[1.45] text-muted-foreground">{line}</p> : null}
+    </div>
   )
 }
 
-function MoveCardView({ card, canDecide, reading }: { card: MoveCard; canDecide: boolean; reading: ReadingLabel }) {
+function MoveCardView({ card, canDecide, reading, base }: { card: MoveCard; canDecide: boolean; reading: ReadingLabel; base: number | null }) {
   return (
-    <article id={moveAnchor(card.id)} className={cn(CARD, 'scroll-mt-6')}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-3">
-          <MovesKindTile level="move" />
-          <div className="min-w-0">
-            <h3 className="m-0 text-[17px] font-semibold leading-[1.3] text-foreground">
-              <Link href={card.href} className="text-foreground no-underline underline-offset-[3px] hover:underline"><span data-copy="quote">{card.title}</span></Link>
-            </h3>
-            <p className="m-0 mt-0.5 text-[13px] leading-[1.4] text-muted-foreground">Dated {shortDate(card.day)}<OnWhat card={card} /></p>
-          </div>
-        </div>
+    <article id={moveAnchor(card.id)} className={cn(CARD, 'scroll-mt-6 gap-3.5')}>
+      <div className="flex items-start justify-between gap-3.5">
+        <h3 className="m-0 min-w-0 text-[19px] font-semibold leading-[1.35] text-foreground">
+          <Link href={card.href} className={ROW}><span data-copy="quote">{card.title}</span></Link>
+        </h3>
         <MoveStatusChip status={card.status} />
       </div>
-      <MoveChart card={card} readingMonth={reading.month} />
-      <div className="mt-auto flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0 flex-1 basis-[260px]"><MoveSentence card={card} reading={reading} /></div>
-        <Link href={card.href} className={OLINK}>Open →</Link>
+      <p className="m-0 text-[14.5px] text-secondary-foreground">Dated {shortDate(card.day)}<OnWhat card={card} /></p>
+      {/* A move with no line says why in the dashed box, with no empty months
+          (decision 4); one with a line draws its months and its sentence. */}
+      {card.unread ? <EmptyBox>{MOVE_UNREAD[card.unread]}</EmptyBox> : (
+        <>
+          <MoveMonths card={card} readingMonth={reading.month} base={base} />
+          <MoveSentence card={card} reading={reading} />
+        </>
+      )}
+      <div className="flex-1" />
+      <div className="flex flex-wrap items-center gap-2.5 border-t border-track pt-3.5">
+        {canDecide ? <MoveStatusControl id={card.id} status={card.status} /> : null}
+        <span className="flex-1" />
+        <GoLink href={card.href}>Open the move</GoLink>
       </div>
-      {canDecide ? <div className="border-t border-track pt-3"><MoveStatusControl id={card.id} status={card.status} /></div> : null}
     </article>
   )
 }
@@ -261,63 +340,31 @@ function MoveCardView({ card, canDecide, reading }: { card: MoveCard; canDecide:
 /** The page's reading month and its label, as a move's sentence takes it. */
 const readingOf = (data: Pick<MovesPageData, 'month' | 'monthLabel'>): ReadingLabel => ({ month: data.month, label: data.monthLabel ?? null })
 
-/** The months an empty card's axis names where it has no neighbour: two
- *  before the reading month to the reading month, the board's frame. */
-function frameMonths(readingMonth: string): string[] {
-  let at = monthStartOf(readingMonth)
-  const out = [at]
-  for (let i = 0; i < 2; i++) {
-    at = prevMonth(at)
-    out.unshift(at)
-  }
-  return out
-}
-
-/** A bare axis on the move chart's own geometry: the baseline and the month
- *  names, nothing above it. `w` widens it across a row. */
-function BareAxis({ months, w = W, className }: { months: readonly string[]; w?: number; className?: string }) {
-  const n = months.length
-  const xs = months.map((_, i) => (n > 1 ? 45 + (i * (w - 90)) / (n - 1) : w / 2))
-  return (
-    <svg viewBox={`0 0 ${w} ${H}`} width="100%" aria-hidden className={cn('block overflow-visible', className)}>
-      <line x1={0} y1={BASE} x2={w} y2={BASE} className="stroke-border" />
-      {months.map((m, i) => (
-        <text key={m} x={xs[i]} y={128} textAnchor="middle" className="fill-muted-foreground font-mono text-[10.5px]">{pointMonth({ month: m, soFar: false })}</text>
-      ))}
-    </svg>
-  )
-}
+/** Where an empty card's months would be, said where the reader may not date
+ *  a move (the invitation is an owner's or an admin's). */
+const NEXT_MOVE_QUIET = 'A move’s months are drawn here once one is dated.'
 
 /**
  * THE BOARD'S SECOND CARD WHERE THERE IS NO SECOND MOVE (and its only one
  * where there is none, or where the moves could not be read): the move
- * card's own frame, title and chart, holding the next move. Its chart is the
- * neighbour's axis, same months, same geometry, with nothing on it (no point,
- * no "your move"); alone, the reading month and the two before. Its one line
- * sits above the axis, in flow. It invites dating only where the reader may
- * date one (an owner or an admin, where moves are recorded); otherwise its
- * title says it.
+ * card's own frame and title, holding the next move: its one line in the
+ * dashed box (decision 4: no empty months), and "Date a move" only where the
+ * reader may date one (an owner or an admin, where moves are recorded).
  */
-function NextMoveCard({ data, first, wide, neighbour, failed }: { data: MovesPageData; first: boolean; wide: boolean; neighbour: MoveCard | null; failed: boolean }) {
-  const months = neighbour ? moveAxis(neighbour, data.month).map((s) => s.month) : frameMonths(data.month)
+function NextMoveCard({ data, first, wide, failed }: { data: MovesPageData; first: boolean; wide: boolean; failed: boolean }) {
   const invite = !failed && data.canDecide && data.moves.recorded && data.dating != null && canDate(data.dating)
   const title = failed ? MOVES_UNREAD_TITLE : first ? NO_MOVE_YET.title : NEXT_MOVE.title
   const sub = failed ? null : first ? NO_MOVE_YET.sub : NEXT_MOVE.sub
   return (
-    <article data-move-slot="" className={cn(CARD, wide ? 'min-[1180px]:col-span-2' : null)}>
+    <article data-move-slot="" className={cn(CARD, 'gap-3.5', wide ? 'min-[1180px]:col-span-2' : null)}>
       <div className="min-w-0">
-        <h3 className="m-0 text-[17px] font-semibold leading-[1.3] text-foreground">{title}</h3>
-        {sub ? <p className="m-0 mt-0.5 text-[13px] leading-[1.4] text-muted-foreground">{sub}</p> : null}
+        <h3 className="m-0 text-[19px] font-semibold leading-[1.35] text-foreground">{title}</h3>
+        {sub ? <p className="m-0 mt-1 text-[14px] leading-[1.4] text-muted-foreground">{sub}</p> : null}
       </div>
-      {failed ? <p className="m-0 text-[13.5px] leading-[1.5] text-muted-foreground">{`Your moves ${READ_FAILED}.`}</p>
-        : invite ? <p className="m-0 text-[13.5px] leading-[1.5] text-muted-foreground">{NEXT_MOVE.line}</p> : null}
-      {wide ? (
-        <>
-          <BareAxis months={months} className="min-[1180px]:hidden" />
-          <BareAxis months={months} w={2 * W} className="hidden min-[1180px]:block" />
-        </>
-      ) : <BareAxis months={months} />}
-      {invite ? <div className="mt-auto flex flex-wrap items-center gap-2"><DateMove dating={data.dating!} place="quiet" /></div> : null}
+      <div className="flex flex-1 flex-col [&>[data-empty-box]]:flex-1 [&>[data-empty-box]]:justify-center">
+        <EmptyBox>{failed ? `Your moves ${READ_FAILED}.` : invite ? NEXT_MOVE.line : NEXT_MOVE_QUIET}</EmptyBox>
+      </div>
+      {invite ? <div className="flex flex-wrap items-center gap-2"><DateMove dating={data.dating!} place="quiet" /></div> : null}
     </article>
   )
 }
@@ -326,18 +373,16 @@ export function MovesSection({ data }: { data: MovesPageData }) {
   const cards = data.moves.cards
   const failed = data.failed?.moves === true
   // THE BOARD'S TWO ACROSS, ALWAYS: an odd last row takes the next move's
-  // card beside it, on its neighbour's axis; no move at all (or moves that
-  // could not be read) is that card across the row.
+  // card beside it; no move at all (or moves that could not be read) is that
+  // card across the row.
   const filler = cards.length % 2 === 1 || cards.length === 0
+  const base = data.marketN?.market ?? null
   return (
-    <section aria-labelledby="moves-title" className="flex min-w-0 flex-col gap-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-0.5">
-        <h2 id="moves-title" className={SECTION_TITLE}>{MOVES_TITLE}</h2>
-        <p className={SECTION_SUB}>{MOVES_SUB}</p>
-      </div>
-      <div className="grid grid-cols-1 gap-5 min-[1180px]:grid-cols-2">
-        {cards.map((c) => <MoveCardView key={c.id} card={c} canDecide={data.canDecide} reading={readingOf(data)} />)}
-        {filler ? <NextMoveCard data={data} first={cards.length === 0} wide={cards.length === 0} neighbour={cards.length > 0 ? cards[cards.length - 1] : null} failed={failed && cards.length === 0} /> : null}
+    <section aria-labelledby="moves-title" className="flex min-w-0 flex-col">
+      <SectionHead id="moves-title" title={MOVES_TITLE} note={MOVES_SUB} />
+      <div className="mt-[22px] grid grid-cols-1 gap-5 min-[1180px]:grid-cols-2">
+        {cards.map((c) => <MoveCardView key={c.id} card={c} canDecide={data.canDecide} reading={readingOf(data)} base={c.kind === 'subject' ? base : null} />)}
+        {filler ? <NextMoveCard data={data} first={cards.length === 0} wide={cards.length === 0} failed={failed && cards.length === 0} /> : null}
       </div>
     </section>
   )

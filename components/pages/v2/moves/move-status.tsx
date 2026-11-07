@@ -2,8 +2,10 @@
 
 import { useState, useTransition } from 'react'
 
+import { BTN_SECONDARY, BTN_SM } from '@/components/v2/look'
 import { setMoveStatusAction } from '@/lib/actions/subjects'
 import type { MoveStatus } from '@/lib/subjects/types'
+import { cn } from '@/lib/utils'
 
 /** What the control says once a status is set, in the page's words
  *  (lib/subjects/moves.ts `MOVE_STATUS_SAID` says "dropped", a direction
@@ -22,8 +24,10 @@ export const MOVE_STATUS_SET: Record<MoveStatus, string> = {
 // either way: nothing here deletes. An owner's or an admin's
 // (lib/moves-access.ts): the page draws it for no one else.
 
-const LINK = 'cursor-pointer text-[12.5px] font-semibold text-foreground underline-offset-2 hover:underline disabled:cursor-default disabled:opacity-50'
-const QUIET = 'cursor-pointer text-[12.5px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:cursor-default disabled:opacity-50'
+// The boards' small white buttons (`.btn2 sm`), from the import-free look
+// (a client file's style never comes from a page's parts, the client-bundle
+// guard), merged so the small size wins.
+const BTN = cn(BTN_SECONDARY, BTN_SM)
 
 export function MoveStatusControl({ id, status }: { id: string; status: MoveStatus }) {
   const [pending, start] = useTransition()
@@ -33,17 +37,17 @@ export function MoveStatusControl({ id, status }: { id: string; status: MoveStat
     setSaid(r.ok ? { ok: true, message: MOVE_STATUS_SET[next] } : r)
   })
   return (
-    <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1" data-print-hide>
+    <span className="inline-flex flex-wrap items-center gap-2.5" data-print-hide>
       {status === 'active' ? (
         <>
-          <button type="button" disabled={pending} className={LINK} onClick={() => set('done')}>Mark done</button>
-          <button type="button" disabled={pending} className={QUIET} onClick={() => set('dropped')}>Stop it</button>
+          <button type="button" disabled={pending} className={BTN} onClick={() => set('done')}>Mark done</button>
+          <button type="button" disabled={pending} className={BTN} onClick={() => set('dropped')}>Stop it</button>
         </>
       ) : (
-        <button type="button" disabled={pending} className={QUIET} onClick={() => set('active')}>Track it again</button>
+        <button type="button" disabled={pending} className={BTN} onClick={() => set('active')}>Track it again</button>
       )}
       {said?.message ? (
-        <span role={said.ok ? 'status' : 'alert'} className={`text-[12px] ${said.ok ? 'text-muted-foreground' : 'text-negative'}`}>{said.message}</span>
+        <span role={said.ok ? 'status' : 'alert'} className={`text-[13px] ${said.ok ? 'text-muted-foreground' : 'text-negative'}`}>{said.message}</span>
       ) : null}
     </span>
   )

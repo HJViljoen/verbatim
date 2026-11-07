@@ -17,7 +17,7 @@ import {
   ADVICE_NONE, ADVICE_REST, MOVES_UNREAD_TITLE, NEXT_MOVE, NO_CONCLUSIONS, NO_MOVE_YET, WOULD_MOVE_NOTHING, monthLabelOn,
 } from '@/lib/pages/v2/moves'
 import { readingMonthLabel } from '@/lib/reading/month-label'
-import { MovesV2Page, MOVES_FIRST_RUN } from './index'
+import { MovesV2Page, MOVES_FIRST_RUN, movesStats } from './index'
 import { AdviceSection } from './advice'
 import { MoveChart, MoveSentence } from './moves'
 import { SAY_FIRST } from './say'
@@ -72,9 +72,28 @@ describe('the page', () => {
       expect(i, words).toBeGreaterThan(at)
       at = i
     }
-    expect(text).toContain('3 pieces of advice waiting · 3 moves dated · 1 plan checked')
+    // The figures row (the audit design): the three counts and the reading
+    // month's market videos, the base a subject's level is of.
+    expect(text).toContain('Advice waiting 3 pieces Moves dated 3 Plans checked 1')
     expect(text).toContain('Check a plan')
     expect(text).toContain('Date a move')
+  })
+
+  it('builds the figures row: the counts, and the reading month with the market’s videos, said once', () => {
+    const cells = movesStats(movesFixture({ marketN: { market: 700, category: 521 } }))
+    expect(cells.map((c) => c.term)).toEqual(['Advice waiting', 'Moves dated', 'Plans checked', 'September, the last full month'])
+    const text = markupText(page(movesFixture({ marketN: { market: 700, category: 521 } })))
+    expect(text).toContain('September, the last full month 700 market videos')
+    // A subject move's months are then bare counts of that base; a
+    // conversation's (the category's) keep their "of N".
+    expect(text).toContain('September, the month of your move 14% 98 videos')
+    expect(text).toContain('August 11% 75 of 680')
+    // Check a plan is a link; Date a move the page's yellow button.
+    const m = page(movesFixture())
+    expect(m).toMatch(/href="\/dashboard\/agent"[^>]*>Check a plan</)
+    expect(m).toMatch(/<button[^>]*class="[^"]*bg-brand[^"]*"[^>]*>Date a move<\/button>/)
+    // A dump from before the bases says so in the cell, never a zero.
+    expect(markupText(page())).toContain('September, the last full month Not read yet')
   })
 
   it('says so once when there is no update yet', () => {
@@ -134,16 +153,20 @@ describe('the advice', () => {
     expect(text).toContain('High priority')
     expect(text).toContain('Customer experience')
     expect(text).toContain(DESK.title)
-    expect(text).toContain('63 videos it rests on, all time')
-    expect(text).toContain('9 updates in a row, since 27 Jul')
-    expect(text).toContain('4 updates in a row, since 14 Sep')
-    expect(text).toContain('Open →')
+    expect(text).toContain('Rests on 63 videos, all time')
+    expect(text).toContain('Raised in 9 updates in a row, since 27 Jul')
+    expect(text).toContain('Raised in 4 updates in a row, since 14 Sep')
+    expect(text).toContain('Open the advice')
+    // The priority a quiet tag on the caution pair, never the orange.
+    const markup = render(<AdviceSection data={movesFixture()} />)
+    expect(markup).toMatch(/data-tag="hi"[^>]*>High priority</)
+    expect(markup).not.toMatch(/bg-orange|text-orange/)
     expect(text).toContain('Strongest first. Each opens as its own page.')
   })
 
-  it('each card names its level (the signpost), and its title and Open go to its page (G6-Moves)', () => {
+  it('each card opens its page by its title and "Open the advice", with no icon tile (the audit design)', () => {
     const markup = render(<AdviceSection data={movesFixture()} />)
-    expect(markup.match(/data-kind-tile="advice"/g)).toHaveLength(3)
+    expect(markup).not.toContain('data-kind-tile')
     expect(markup.match(new RegExp(`href="/dashboard/moves/advice/${DESK.lineageId}"`, 'g'))).toHaveLength(2)
     expect(markup).not.toContain('Why →')
   })
@@ -171,8 +194,8 @@ describe('the board’s three cards, and the rest waiting', () => {
     const base = movesFixture()
     const markup = page({ ...base, counts: { ...base.counts, waiting: 5 }, advice: { ...base.advice, more: 2 } })
     const text = markupText(markup)
-    expect(text).toContain('5 pieces of advice waiting')
-    expect(text).toContain('2 more waiting →')
+    expect(text).toContain('Advice waiting 5 pieces')
+    expect(text).toContain('See the 2 more waiting')
     expect(markup).toContain('href="/dashboard/moves/advice"')
     expect(page()).not.toContain('more waiting')
   })
@@ -230,17 +253,21 @@ describe('the moves', () => {
     const markup = render(<MovesSection data={movesFixture()} />)
     const text = markupText(markup)
     expect(text).toContain('Running & Mobility Clinic campaign')
-    expect(text).toContain('Dated 14 Sep · on Community & encouragement')
+    expect(text).toContain('Dated 14 Sep, on Community & encouragement')
     expect(text).toContain('Active')
     // Jul and Aug before a mid-September move, then September.
     expect(text).toMatch(/Jul.*Aug.*Sep/)
     // Decision 3: on 13 October the latest month read is September, the last
     // full month, and the sentence says so.
     expect(text).toContain('Share of market videos went from 11% (75 of 680) in August, the month before, to 14% (98 of 700) in September, the last full month and the month of the move.')
-    expect(text).toContain('your move')
-    // The price page: July against September, outside its band.
+    expect(text).toContain('the month of your move')
+    // The price page: July against September, outside its band, said in
+    // words and its change in commas (the badge's middle dots stay off a
+    // screen).
     expect(text).toContain('in July, the month before, to 21% (150 of 700) in September, the last full month.')
-    expect(markup).toMatch(/data-copy="verdict"[^>]*>[\s\S]*?▲/)
+    expect(markup).toMatch(/data-copy="verdict"[^>]*>Beyond its normal swing</)
+    expect(text).toMatch(/No clear change ?, \+3 pts/)
+    expect(text).not.toContain('·')
   })
 
   // Ruling U6: the fixture's Fit & comfort is provisional, so its move says
@@ -260,10 +287,10 @@ describe('the moves', () => {
     const data = { ...base, moves: { ...base.moves, cards: [card] } }
     const markup = render(<MovesSection data={data} />)
     expect(markupText(markup)).toContain(FAILED_EXPLAINED)
-    // The chart keeps its axis (the parity pass) with no month drawn on it.
+    // Its reason in the dashed box, with no empty months (decision 4).
     const drawn = markup.slice(markup.indexOf('<article id="move-'), markup.indexOf('</article>'))
-    expect(drawn).toContain('no month drawn yet')
-    expect(drawn).not.toMatch(/<circle|data-copy="(figure|level|verdict)"/)
+    expect(drawn).toContain('data-empty-box=""')
+    expect(drawn).not.toMatch(/data-move-months|data-copy="(figure|level|verdict)"/)
     assertCopyContract(<MovesSection data={data} />)
   })
 
@@ -285,28 +312,29 @@ describe('the moves', () => {
 // Decision 3 (13 Oct): the moves read the reading month, which on days 1 to
 // 15 is the month that has just ended; the bar and the latest month say so.
 describe('the reading month, labelled where it is not the current one', () => {
-  /** The bar's meta line: its counts and, where it is labelled, the month. */
+  /** The figures row: its counts and the month, labelled where it is not
+   *  the current one. */
   const head = (data: ReturnType<typeof movesFixture>) => {
     const t = markupText(page(data))
-    const at = t.indexOf('pieces of advice waiting') - 2
-    return t.slice(at, t.indexOf('Advice to decide on') >= 0 ? t.indexOf('Advice to decide on') : at + 120)
+    const at = t.indexOf('Advice waiting')
+    return t.slice(at, t.indexOf('Advice to decide on') >= 0 ? t.indexOf('Advice to decide on') : at + 160)
   }
 
-  it('the bar names September, the last full month, beside its counts', () => {
-    expect(head(movesFixture())).toContain('3 pieces of advice waiting · 3 moves dated · 1 plan checked · September · the last full month')
+  it('the figures row names September, the last full month, beside its counts', () => {
+    expect(head(movesFixture())).toContain('Advice waiting 3 pieces Moves dated 3 Plans checked 1 September, the last full month')
   })
 
   it('the current month prints nothing extra, on the bar or in a sentence', () => {
     const current = movesFixture({ month: '2026-09-01', readingAt: '2026-09-20T08:00:00.000Z', monthLabel: readingMonthLabel('2026-09-01', '2026-09-20T08:00:00.000Z') })
     expect(current.monthLabel).toBeNull()
     const text = markupText(page(current))
-    expect(head(current)).toContain('3 pieces of advice waiting · 3 moves dated · 1 plan checked')
+    expect(head(current)).toContain('Advice waiting 3 pieces Moves dated 3 Plans checked 1 September')
     expect(text).not.toMatch(/last full month|earlier month/)
     expect(text).toContain('to 14% (98 of 700) in September, the month of the move.')
   })
 
-  it('a page with no move line names no month on its bar', () => {
-    expect(head(movesFixture({ moves: { cards: [], recorded: true } }))).not.toContain('September')
+  it('a page with no move line still names its month in the figures row, beside the market’s videos it counts', () => {
+    expect(head(movesFixture({ moves: { cards: [], recorded: true }, marketN: { market: 700, category: 521 } }))).toContain('September, the last full month 700 market videos')
   })
 
   it('the latest level alone carries the label too, where the pair is refused', () => {
@@ -334,28 +362,41 @@ describe('what you say, the plan and the conclusions', () => {
     expect(text).toContain('11 of 20 back it up')
     expect(text).toContain('9 of 14 ask about it')
     expect(text).toContain('Nobody raises it')
-    expect(text).toContain('not read yet')
+    expect(text).toContain('Not read yet')
     expect(text).toContain('in September')
+    // A real table with sentence-case heads, no mono.
+    const markup = render(<WhatYouSay data={statementsV2()} />)
+    expect(markupText(markup)).toContain('You say Videos How it lands So far')
+    expect(markup).not.toMatch(/uppercase|font-mono/)
   })
 
   it('the plan: supported of all, the three counts, what changed, the lead claims', () => {
     const text = markupText(render(<PlanCard plan={PLAN} />))
     expect(text).toContain('6 of 9 claims supported')
-    expect(text).toContain('supported 6')
-    expect(text).toContain('contradicted 2')
-    expect(text).toContain('untested 1')
+    expect(text).toContain('Supported 6')
+    expect(text).toContain('Contradicted 2')
+    expect(text).toContain('Untested 1')
+    expect(text).toContain('Plan Q4 marketing plan.pdf Uploaded 28 Sep Re-read Not since upload')
     expect(text).toContain('Changed since you uploaded it')
-    expect(text).toMatch(/“Our audience is mainly athletes” is now contradicted ?, from untested/)
-    expect(text).toContain('at least 44 videos')
-    expect(text).toContain('Claim by claim →')
+    expect(text).toMatch(/“Our audience is mainly athletes” is now contradicted ?, from untested\. Moved 5 Oct\. 1 reading has carried it since\./)
+    expect(text).toContain('Claim Read Videos behind it')
+    expect(text).toContain('at least 44')
+    expect(text).toContain('Go claim by claim')
+    // Contradicted in the caution pair (decision 12.3), never the red.
+    const markup = render(<PlanCard plan={PLAN} />)
+    expect(markup).toContain('bg-caution')
+    expect(markup).not.toContain('bg-negative')
   })
 
   it('conclusions: the videos behind each, all time, and the advice built on it or none yet', () => {
     const text = markupText(render(<ConclusionsSection data={movesFixture()} />))
     expect(text).toContain('Access, not the device, decides who gets fitted')
-    expect(text).toContain('286 videos, all time')
+    // "All time" said once, in the column's head; each row a bare count.
+    expect(text).toContain('Conclusion Rests on, all time Advice built on it')
+    expect(text).toContain('286 videos')
+    expect(text).not.toContain('286 videos, all time')
     expect(text).toContain('No advice yet')
-    expect(text).toContain('The advice record: all 23 pieces of advice and what you decided →')
+    expect(text).toContain('The advice record: all 23 pieces of advice and what you decided')
   })
 
   it('the advice record is its own page: the link goes there, and each tag opens its piece\'s page', () => {
@@ -373,30 +414,37 @@ describe('what you say, the plan and the conclusions', () => {
 describe('the board’s shape on thin data', () => {
   it('the three advice cards each carry "Would move", the month’s level beside its month', () => {
     const text = markupText(page(movesThinFixture(), null as never))
-    expect(text).toContain('Would move: Cost and affordability frustration · 19 of 521 category videos in September, the last full month')
-    expect(text).toContain(`Would move: ${WOULD_MOVE_NOTHING}`)
+    // Its base is the category's, not the figures row's (the market's), so
+    // it keeps its "of N" (decision 2).
+    expect(text).toMatch(/Would move Cost and affordability frustration ?, 19 of 521 category videos in September, the last full month/)
+    expect(text).toContain(`Would move ${WOULD_MOVE_NOTHING}`)
+    // Where the card carries its conversation's page, the name links to it.
+    const base = movesThinFixture()
+    const linked = { ...base, advice: { ...base.advice, cards: base.advice.cards.map((c) => (c.aim ? { ...c, aim: { ...c.aim, href: '/dashboard/market/conversations/t1?period=month&month=2026-09' } } : c)) } }
+    expect(render(<AdviceSection data={linked} />)).toMatch(/href="\/dashboard\/market\/conversations\/t1\?period=month&amp;month=2026-09"[^>]*><span data-copy="subject"/)
   })
 
   it('a card from a dump before "Would move" draws no line for it', () => {
     expect(markupText(render(<AdviceSection data={movesFixture()} />))).not.toContain('Would move')
   })
 
-  it('a move with one month read keeps the board’s chart: its axis, the move, the month it has, and why the rest are empty', () => {
+  it('a move with one month read keeps the board’s months: the months from two before the move, the one it has, and each empty one in words', () => {
     const markup = render(<MovesSection data={movesThinFixture()} />)
     const text = markupText(markup)
-    expect(markup).toContain('your move')
-    expect(text).toMatch(/Aug.*4%.*Sep.*Oct/)
+    expect(markup).toContain('data-move-months=""')
+    expect(text).toContain('August Left off September 4% 19 of 521 October, the month of your move Not read yet')
     expect(text).toContain('August is left off the line: what we track changed inside this window. October reads once the month has been read.')
-    // The empty slots' names are muted at full strength, never faded.
-    expect(markup).not.toMatch(/fill-muted-foreground[^"]*opacity-50/)
+    // The move's month under the gold rule.
+    expect(markup).toMatch(/data-move-month="move" class="[^"]*border-you/)
     expect(text).toContain('Share of category videos: 4% (19 of 521) in September, before the move.')
   })
 
-  it('a move with no line at all still draws its axis', () => {
+  it('a move with no line at all says why in the dashed box, with no empty months (decision 4)', () => {
     const socket = MOVE_CARDS.find((c) => c.unread === 'not_measured')!
     const markup = render(<MovesSection data={movesFixture({ moves: { cards: [socket], recorded: true } })} />)
-    expect(markup).toContain('<svg')
-    expect(markupText(markup)).toMatch(/Jun.*Jul.*Aug.*Sep/)
+    expect(markup).not.toContain('<svg')
+    expect(markup).not.toContain('data-move-months')
+    expect(markup).toMatch(/data-empty-box=""[^>]*><div>This subject is not measured yet/)
   })
 
   it('one move takes the next move’s card beside it, two across as the board; two moves take none', () => {
@@ -417,7 +465,8 @@ describe('the board’s shape on thin data', () => {
     expect(text).toContain('Your plan, checked against the market')
     // One line for the one gap, the Agent's own words, and no second line.
     expect(text).toContain(PLAN_EMPTY)
-    expect(text).toContain('Check a plan →')
+    expect(text).toContain('Check a plan')
+    expect(markup).toMatch(/data-plan-empty=""[\s\S]*data-empty-box=""/)
     expect(text).not.toContain('claims supported')
     expect(text).not.toContain('no claims read yet')
     // Beside the statements, the plan is half the row; for a tenant (no
@@ -432,16 +481,18 @@ describe('the board’s shape on thin data', () => {
     const markup = render(<AdviceSection data={data} />)
     const text = markupText(markup)
     expect(text).toContain(ADVICE_REST.title)
-    expect(text).toContain('65 pieces of advice so far')
-    expect(text).toContain('2 of 65 decided on')
+    expect(text).toContain('So far 65 pieces of advice')
+    expect(text).toContain('Decided on 2 of 65')
     expect(markup).toContain('min-[1180px]:col-span-2')
     assertCopyContract(markup)
     expect(markup).toContain('href="/dashboard/moves/advice"')
   })
 
-  it('a conclusion’s advice stays at the row’s end, however many pieces', () => {
+  it('a conclusion’s advice stays in its own column, each piece whole on its line, however many', () => {
     const markup = render(<ConclusionsSection data={movesThinFixture()} />)
-    expect(markup.match(/sm:grid-cols-\[minmax\(0,1fr\)_auto_minmax\(0,auto\)\]/g)).toHaveLength(4)
+    expect(markup.match(/<tr[^>]*data-conclusion=""/g)).toHaveLength(4)
+    expect(markup).not.toMatch(/truncate/)
+    expect(markupText(markup)).toContain('Translate engineering into everyday outcomes before a rival defines the category Replace pure inspiration with guided real-life stories')
   })
 })
 
@@ -458,7 +509,7 @@ describe('a failed read says so, once, in its own place', () => {
 
   it('the advice cards: "Would move: could not be read just now", never "no conversation"', () => {
     const text = markupText(page(failed({ aims: true }), null as never))
-    expect(text.match(/Would move: could not be read just now/g)).toHaveLength(3)
+    expect(text.match(/Would move could not be read just now/g)).toHaveLength(3)
     expect(text).not.toContain(WOULD_MOVE_NOTHING)
   })
 
@@ -472,10 +523,10 @@ describe('a failed read says so, once, in its own place', () => {
   it('the plan: one line beside the bar’s count, never "none checked"', () => {
     const data = { ...failed({ plan: true }), counts: { waiting: 4, dated: 1, plans: 2 } }
     const text = markupText(page(data, null as never))
-    expect(text).toContain('2 plans checked')
+    expect(text).toContain('Plans checked 2')
     expect(text).toContain('Your plan could not be read just now.')
     expect(text).not.toContain(PLAN_EMPTY)
-    expect(text).not.toContain('Check a plan →')
+    expect(text.split('Check a plan')).toHaveLength(2)
   })
 
   it('the moves: one card saying so, never "no move dated yet"', () => {

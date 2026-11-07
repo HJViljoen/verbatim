@@ -500,7 +500,10 @@ const PAGES: Page[] = [
   // and one real render per tenant from the loader's dumped output
   // (`--moves-dump <dir>` holding ossur.json and sealand.json, written by
   // scripts/moves-v2-dump.ts), as a tenant sees it: no statements.
-  { key: 'moves-v2', path: '/dashboard/moves', artboard: 'E6-Moves.dc.html', page: () => h(MovesV2Page, { data: movesFixture(), statements: statementsV2() }) },
+  // The reading month's bases (the audit design's figures row, decision 16):
+  // the fixture's own September, the market's 700 its subject moves are of
+  // and the category's 521 its advice would move.
+  { key: 'moves-v2', path: '/dashboard/moves', artboard: 'E6-Moves.dc.html', page: () => h(MovesV2Page, { data: movesFixture({ marketN: { market: 700, category: 521 } }), statements: statementsV2() }) },
   // Only where a dump folder is named, so a run of every page never stops on a missing file.
   ...(flag('moves-dump', '') ? (['ossur', 'sealand'] as const).map((tenant): Page => ({
     key: `moves-v2-${tenant}`, path: '/dashboard/moves', artboard: 'E6-Moves.dc.html',

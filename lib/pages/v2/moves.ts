@@ -219,6 +219,10 @@ export interface AdviceAim {
   /** Its videos out of the market's that month; null where the month has no
    *  reading of it. */
   level: { k: number; n: number } | null
+  /** The conversation's page on Market, on the reading month's view (the
+   *  audit design's "Would move" link, decision 16: the loader holds the
+   *  theme; no new read). Absent in a dump from before it. */
+  href?: string
 }
 
 /** A month on a move's line. */
@@ -313,6 +317,11 @@ export interface MovesPageData {
   /** The reader may accept, decline, date and set a move's status. */
   canDecide: boolean
   counts: { waiting: number; dated: number; plans: number }
+  /** The reading month's bases (`Core.marketN`): the market's videos, which a
+   *  subject's level is of, and the category's, which a conversation's is
+   *  of. The audit design's figures row states the market's once (decision
+   *  16: already read, no new read). Absent in a dump from before it. */
+  marketN?: { market: number | null; category: number | null }
   advice: {
     /** The first `ADVICE_CARDS_SHOWN` pieces waiting (the board's three). */
     cards: AdviceCard[]
@@ -1093,6 +1102,12 @@ export async function readMoveCards(core: Core, moves: readonly DatedMove[], cit
     readMoveLevels(core, moves, targets, aimThemes, failed),
   ])
   const aims = aimsFailed ? new Map<string, AdviceAim | null>() : adviceAims({ lineages: aimAt, targets, labels: themes, levels, n: (m) => core.marketN(m, 'theme'), month: core.month })
+  // Where each aim opens: its conversation's page on Market, on the reading
+  // month's view, as a move's `onHref` (the audit design, decision 16).
+  for (const [lineage, aim] of aims) {
+    const theme = targets.get(lineage)
+    if (aim && theme) aims.set(lineage, { ...aim, href: marketConversationHref(theme, { period: 'month', month: aim.month }) })
+  }
   const cards = moveCards({
     moves,
     month: core.month,
@@ -1237,6 +1252,7 @@ export async function loadMovesPage(scope: Scope, options: { canDecide: boolean 
     readingAt: core.readingAt,
     canDecide: options.canDecide,
     counts: { waiting: waitingAll.length, dated: (core.moves ?? []).length, plans: plansCount ?? plans.length },
+    marketN: { market: core.marketN(core.month, 'subject'), category: core.marketN(core.month, 'theme') },
     advice: {
       cards,
       more: waitingAll.length - cards.length,

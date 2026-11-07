@@ -5,6 +5,7 @@ import { Plus } from 'lucide-react'
 import { CalendarPlus } from '@/components/design-icons'
 
 import { Button } from '@/components/ui/button'
+import { BTN_PRIMARY, BTN_SECONDARY } from '@/components/v2/look'
 import { Input } from '@/components/ui/input'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { dateMoveAction } from '@/lib/actions/date-move'
@@ -35,11 +36,13 @@ const GREEN = 'cursor-pointer items-center justify-center gap-2 whitespace-nowra
  *  white with a hairline, the calendar-plus icon. */
 const SECONDARY = 'inline-flex h-10 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-[10px] border border-[#E4E2DC] bg-white px-4 text-[14px] font-semibold text-[#26292C] transition-colors hover:bg-[#F7F6F2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#26292C]/30'
 
-/** Your moves' v2 head (depth v2, board E6-Moves): the board's ink button. */
-const INK = 'inline-flex min-h-[38px] cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-primary px-3.5 text-[13.5px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+/** Your moves' v2 head (the audit design, Moves.dc.html): the page's yellow
+ *  button (decision 8), from the import-free look (a client file's style
+ *  never comes from a page's parts). */
+const INK = BTN_PRIMARY
 
-/** Your moves' v2 next-move card: the board's light `.btn`. */
-const QUIET = 'inline-flex min-h-[38px] cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-inner px-3.5 text-[13.5px] font-semibold text-foreground transition-colors hover:bg-track focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+/** Your moves' next-move card (Moves.dc.html): the white button. */
+const QUIET = BTN_SECONDARY
 
 export function DateMove({ dating, place = 'block' }: { dating: MoveDating; place?: 'block' | 'bar' | 'head' | 'ink' | 'quiet' }) {
   const [open, setOpen] = useState(false)

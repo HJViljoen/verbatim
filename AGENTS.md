@@ -2504,7 +2504,25 @@ This version has breaking changes — APIs, conventions, and file structure may 
     their titles and Open go to the pages, and a move's "on {label}" opens
     what it is on in Market on the reading month (`MoveCard.onHref`; its own
     page is `href`, and `object` names what its line reads); the record and
-    "N more waiting" open the record's page. *The hub* (G6-Moves-Advice,
+    "N more waiting" open the record's page. Since the audit design (7 Nov,
+    `Moves.dc.html`) the root has no level tiles and a figures row under its
+    title (`movesStats`: the advice waiting, the moves dated, the plans
+    checked, and the reading month with the market's videos,
+    `MovesPageData.marketN`, decision 16), "Check a plan" a link and "Date a
+    move" the yellow button; an advice card is a priority tag, its kind in
+    words, the title, the lead in five lines and its facts as a list (Rests
+    on, Raised in, Would move: the conversation a link to its page,
+    `AdviceAim.href`, its level keeping "of N" because its base is the
+    category's, not the figures row's); a move card is its title and status
+    tag, "Dated 14 Sep, on {it}", its months as a list (`MoveMonths` over
+    `moveAxis`: each month's share and count, bare where the base is the
+    figures row's, an empty month in a word, the move's month under a gold
+    rule), its sentence (`MoveSentence`, the briefs' words) with its verdict
+    in words ("No clear change, +3 pts"), and Mark done / Stop it as small
+    white buttons; the plan card a list of its name and days, the partition
+    bar (contradicted in the caution), what changed in sentences and the
+    claims a table; the conclusions a table, "all time" once in its head.
+    *The hub* (G6-Moves-Advice,
     -Switcher, -Thin, -Phone; `loadAdvicePage`): a header card led by the
     argument's FIRST SENTENCE at 32px (`argumentParts`; "Why" holds the
     rest) with four figures inside it (its videos all time and the
@@ -2582,10 +2600,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
     move reads the market from `MOVE_MONTHS_BEFORE` (2) months before it to
     the reading month, and its one comparison goes through `pairedVerdict`
     under the month-pair judge. THE BOARDS' LAYOUT IN EVERY DATA STATE
-    (parity pass): every section keeps its card. A move's chart is drawn on
-    its axis (`moveAxis`) whatever was read, with empty slots and one line,
-    on the root and on its page. An odd last move takes the next move's card
-    (`NEXT_MOVE`) on its neighbour's axis; no move at all is that card across
+    (parity pass): every section keeps its card. A move's months are drawn
+    on its axis (`moveAxis`) whatever was read, each empty month saying why
+    in a word and one line under them; a move with no line at all says why
+    in the dashed box (decision 4). An odd last move takes the next move's
+    card (`NEXT_MOVE`), its line in the dashed box; no move at all is that card across
     the row (`NO_MOVE_YET`), which invites a dated move only where the reader
     may date one (an owner or admin, moves recorded, something to date it
     on: `canDate`; a move's page's "Your next move" by the same rule). With
