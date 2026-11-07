@@ -1555,8 +1555,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
     one sentence where no week is drawn, decision 4; no head link); Voices (`topVoices`: the group in the
     most videos, every group's videos as separate bars, the two brands named
     most unprompted, `NAMED_MOST`, with no verdict); Your products
-    (`topProducts`: the standout as the heading's sentence, how many came
-    up, the four that came up most against the largest, how many were
+    (`topProducts`: the standout as the heading's sentence, its own count
+    under it where it ranks below the list, how many came up, the four that
+    came up most against the largest, how many were
     quiet; a thin state says why in the dashed box); Content (`topContent`:
     the idea as the heading, its facts as a list, "×" said as "times", with
     `MEDICAL_LINE` once at the tile's foot in a medical market,
@@ -2501,7 +2502,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
     neither, `recordGroupsOf`'s `also`; since the audit design, 7 Nov,
     `Moves-AdviceList.dc.html`, its line under the title and a figures row,
     `recordStats`, and each group a tile of one table, "raised by the latest
-    update" said once in the group's head, never on a row);
+    update" said once in the group's head where it holds for every row, and
+    on each row it holds for where it holds for only some);
     the addresses are written once in `lib/pages/v2/moves-address.ts`, and
     every old `?advice=<lineage|id>`, `?advice=all` and `?item=` / `?rec=` /
     `?ledger=` (on this address and Market's) lands on its page for good in
@@ -2563,7 +2565,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
     what it would move with its level, the category's base said there
     once); the header card and the argument are one tile, the lead its
     heading; the conversations one table, biggest first, the target a tag,
-    bars against the largest and bare counts; the numbers one tile, the line
+    bars against the largest and bare counts, then each line only where it
+    is true (fewer than three: that no other or no third conversation holds
+    its videos; the overlap line only where the rows add up past them);
+    the numbers one tile, the line
     a month list, the labels with no "of N" (the section's note says it);
     the comments a tile each, cited in commas; the history dated rules with
     no dots; a gap in the dashed box. Its switcher holds the advice
