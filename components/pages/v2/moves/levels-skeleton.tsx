@@ -1,5 +1,5 @@
 import { PageFrame } from '@/components/shell/page-grid'
-import { Bone, BoneLines } from '@/components/shell/skeleton'
+import { Bone, BoneLines, SkeletonStatStrip } from '@/components/shell/skeleton'
 import { CARD } from '@/components/v2'
 import { cn } from '@/lib/utils'
 
@@ -76,16 +76,34 @@ export function MovesMoveSkeleton() {
   )
 }
 
-/** The advice record loading: three list cards. */
+/** The audit design's title block (7 Nov), drawn as bones: the crumb row,
+ *  the title, the line under it and the figures row; no tile, no label. */
+function AuditBar({ label, cells, controls = false }: { label: string; cells: number; controls?: boolean }) {
+  return (
+    <div role="presentation" className="flex flex-col">
+      <span className="sr-only">{label}</span>
+      <div className="pb-2 max-sm:hidden"><Bone className="h-[22px] w-64 max-w-full" /></div>
+      <Bone className="h-6 w-28 sm:hidden" />
+      <div className="mt-2.5 flex flex-wrap items-start justify-between gap-3.5">
+        <div className="flex min-w-0 flex-col gap-2"><Bone className="h-8 w-96 max-w-full" /><Bone className="h-4 w-64 max-w-full" /></div>
+        {controls ? <div className="flex gap-2"><Bone className="h-10 w-52 rounded-[8px]" /><Bone className="h-10 w-24 rounded-[8px]" /></div> : null}
+      </div>
+      <div className="mt-5"><SkeletonStatStrip cells={cells} /></div>
+    </div>
+  )
+}
+
+/** The advice record loading (Moves-AdviceList.dc.html): the title block and
+ *  its four figures, three tiles of rows. */
 export function MovesRecordSkeleton() {
   return (
     <PageFrame>
       <div role="status" aria-busy="true" aria-label="Loading the advice record" className="flex flex-col gap-[22px]">
-        <Bar label="Your moves" />
+        <AuditBar label="Your moves" cells={4} />
         {[3, 4, 6].map((n, i) => (
-          <div key={i} className={cn(CARD, 'gap-3')}>
-            <Bone className="h-5 w-48" />
-            {Array.from({ length: n }, (_, j) => <div key={j} className="flex items-center gap-3.5"><Bone className="size-[26px] shrink-0 rounded-[7px]" /><BoneLines lines={2} widths={['w-2/3', 'w-1/2']} /></div>)}
+          <div key={i} className={cn(CARD, 'gap-3.5')}>
+            <Bone className="h-6 w-56" />
+            <BoneLines lines={n} />
           </div>
         ))}
       </div>

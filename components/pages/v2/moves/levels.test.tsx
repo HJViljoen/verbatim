@@ -232,16 +232,23 @@ describe('a dated move, the evidence (G6-Moves-Move)', () => {
 describe('the advice record, an index (G6-Moves-Record)', () => {
   const html = recordPage()
   const text = markupText(html)
-  it('"Your moves / The advice record" with no chevron; the check-list on the neutral; its meta', () => {
-    expect(renderText(<MovesRecordPage page={recordFixture()} />)).toMatch(/^Your moves \/ The advice record Your moves Every piece of advice, and what you decided The advice record 23 pieces of advice since 20 Jul · you have decided on 4 · 3 waiting for a decision/)
+  it('"Your moves / The advice record" with no chevron; the title, its line under it and the figures row; no tile', () => {
+    expect(renderText(<MovesRecordPage page={recordFixture()} />)).toMatch(/^Your moves \/ The advice record Your moves The advice record Every piece of advice, and what you decided Advice since 20 Jul 23 pieces You have decided on 4 Waiting for a decision 3 No longer raised 16/)
     expect(html).not.toContain('data-crumb-chevron')
-    expect(html).toMatch(/data-level-tile="record" class="[^"]*bg-track/)
+    expect(html).toContain('data-level-block="audit"')
+    expect(html).not.toContain('data-level-tile')
   })
 
-  it('three list cards, every piece once, each opening its page; six no longer raised, then "Show the other 10"', () => {
+  it('three tiles of tables, every piece once, each opening its page; six no longer raised, then "Show the other 10" as a chip', () => {
     expect(html.match(/data-record-group="/g)).toHaveLength(3)
-    expect(text).toContain('Waiting for a decision 3')
-    expect(text).toContain('Decided 4 Answer liner questions in the comments within a day Customer experience · first suggested 7 Sep · 3 updates Accepted since 28 Sep')
+    expect(text).toMatch(/Waiting for a decision 3/)
+    // Sentence-case heads, the decision capitalised, "raised by the latest
+    // update" said once in a group's head, never on a row.
+    expect(text).toContain('Decided 4 Advice Kind First suggested Updates Decision Answer liner questions in the comments within a day Customer experience 7 Sep 3 Accepted since 28 Sep')
+    expect(text).toContain('Not decided')
+    expect(text).not.toMatch(/·|not decided/)
+    expect(html.match(/<tr data-record-row=""/g)).toHaveLength(13)
+    expect(html).toMatch(/class="[^"]*rounded-\[8px\][^"]*" href="\/dashboard\/moves\/advice\?all=1#no-longer-raised"/)
     expect(text).toContain('Not for us since 7 Sep')
     expect(text).toContain('No longer raised 16')
     expect(html.match(/data-record-row=""/g)).toHaveLength(13)
@@ -264,15 +271,25 @@ describe('the advice record, an index (G6-Moves-Record)', () => {
     const at = (k: string) => m.lastIndexOf('<section', m.indexOf(`data-record-group="${k}"`))
     const waiting = m.slice(at('waiting'), at('decided'))
     expect(waiting.match(/data-record-row=""/g)).toHaveLength(3)
-    expect(markupText(waiting)).toMatch(/^Waiting for a decision 3 /)
-    expect(markupText(m)).toContain('3 waiting for a decision')
+    expect(markupText(waiting)).toMatch(/^Waiting for a decision 3[ ,]/)
+    expect(markupText(m)).toContain('Waiting for a decision 3')
     expect(markupText(waiting)).toContain(`${RECORD_SAME_IDEA_HEAD} Say how long a liner lasts in every liner post`)
     expect(waiting).toContain('href="/dashboard/moves/advice/f-folded"')
     assertCopyContract(<MovesRecordPage page={page} />)
   })
 
-  it('a group with no row keeps its card and says so', () => {
-    expect(markupText(recordPage(recordQuietFixture()))).toContain('Waiting for a decision 0 Nothing is waiting for a decision. Decided 0 Nothing has been decided on yet.')
+  it('a group with no row keeps its card and says so in the dashed box', () => {
+    const quiet = recordPage(recordQuietFixture())
+    expect(markupText(quiet)).toContain('Waiting for a decision 0 Nothing is waiting for a decision. Decided 0 Nothing has been decided on yet.')
+    expect(quiet).toMatch(/data-empty-box=""[^>]*><div>Nothing is waiting for a decision\./)
+  })
+
+  it('says "raised by the latest update" once a group, where its rows were', () => {
+    const base = recordFixture()
+    const all = { ...base, groups: [{ ...base.groups[0], rows: base.groups[0].rows.map((r) => ({ ...r, current: true })), hidden: 0 }, ...base.groups.slice(1)] }
+    const t = markupText(recordPage(all))
+    expect(t.split('raised by the latest update')).toHaveLength(2)
+    expect(t).toMatch(/Waiting for a decision 3 ?, all raised by the latest update/)
   })
 })
 
@@ -280,6 +297,7 @@ describe('an address that names nothing', () => {
   it('one calm line and the way back, never a 404', () => {
     const t = markupText(render(<MovesMissing line={ADVICE_MISSING} />))
     expect(t).toContain(ADVICE_MISSING)
-    expect(t).toContain(`${BACK_TO_MOVES} →`)
+    expect(t).toContain(BACK_TO_MOVES)
+    expect(t).not.toContain('→')
   })
 })

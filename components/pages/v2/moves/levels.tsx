@@ -2,7 +2,7 @@ import Link from 'next/link'
 
 import { LevelBar } from '@/components/shell/level-bar'
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
-import { OLINK } from '@/components/pages/v2/market/parts'
+import { GoLink } from '@/components/v2'
 import { MOVES_PATH, PAGE_TITLE } from '@/lib/pages/v2/moves'
 import type { AdvicePageData } from '@/lib/pages/v2/moves-levels-load'
 import { ADVICE_LEVEL, BACK_TO_MOVES, RECORD_LEVEL, RECORD_TITLE, moveReadWords, type MovePageData, type RecordPageData } from '@/lib/pages/v2/moves-levels'
@@ -13,7 +13,7 @@ import { MovesLevelTile } from './level-tiles'
 import { MoveStatusControl } from './move-status'
 import { MovePageBody, moveMeta } from './move-page'
 import { MoveStatusChip, OnLabel } from './moves'
-import { RecordPageBody, recordMeta } from './record-page'
+import { RecordPageBody, recordStats } from './record-page'
 
 // YOUR MOVES' LEVEL PAGES (levels as pages, 17 Oct; the G6 boards): a piece
 // of advice (the hub), a dated move (the evidence) and the advice record (the
@@ -34,9 +34,9 @@ export function MovesMissing({ line }: { line: string }) {
   return (
     <PageFrame className="text-foreground">
       <PageBar title={PAGE_TITLE} />
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col items-start gap-2">
         <p data-moves-missing="" className="m-0 text-[15px] text-muted-foreground">{line}</p>
-        <Link href={MOVES_PATH} className={OLINK}>{BACK_TO_MOVES} →</Link>
+        <GoLink href={MOVES_PATH}>{BACK_TO_MOVES}</GoLink>
       </div>
     </PageFrame>
   )
@@ -104,17 +104,17 @@ export function MovesMovePage({ page, switcherOpen = false }: { page: MovePageDa
 }
 
 /** The advice record's page (`/dashboard/moves/advice`): no chevron, it has
- *  no siblings. */
+ *  no siblings. The audit design's title block: the title, its line under
+ *  it, the figures row. */
 export function MovesRecordPage({ page }: { page: RecordPageData }) {
   return (
     <PageFrame className="text-foreground">
       <LevelBar
         crumbs={page.crumbs}
         level="record"
-        tile={<MovesLevelTile level="record" />}
-        label={RECORD_LEVEL}
         title={RECORD_TITLE}
-        meta={recordMeta(page)}
+        sub={RECORD_LEVEL}
+        stats={recordStats(page)}
       />
       <RecordPageBody page={page} />
     </PageFrame>

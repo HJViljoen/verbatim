@@ -2492,7 +2492,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
     its "Waiting for a decision" counts the rows it lists, the advice
     waiting alone, as the meta's "N waiting" and the root do, and names any
     piece the short list folded into one of them under the rows, counted in
-    neither, `recordGroupsOf`'s `also`);
+    neither, `recordGroupsOf`'s `also`; since the audit design, 7 Nov,
+    `Moves-AdviceList.dc.html`, its line under the title and a figures row,
+    `recordStats`, and each group a tile of one table, "raised by the latest
+    update" said once in the group's head, never on a row);
     the addresses are written once in `lib/pages/v2/moves-address.ts`, and
     every old `?advice=<lineage|id>`, `?advice=all` and `?item=` / `?rec=` /
     `?ledger=` (on this address and Market's) lands on its page for good in
