@@ -71,7 +71,7 @@ export function WhatYouSay({ data, className }: { data: StatementsBlockData; cla
       {data.statements.length === 0 ? <p className="m-0 text-[14.5px] leading-[1.55] text-secondary-foreground">{SAY_FIRST}</p> : null}
       {data.statements.length > 0 ? (<>
       <div className="min-w-0 overflow-x-auto">
-        <table className={cn(TBL, 'min-w-[480px] text-[14.5px]')}>
+        <table className={cn(TBL, 'min-w-[440px] text-[14.5px]')}>
           <thead>
             <tr>
               <th scope="col" className={TH}>You say</th>
