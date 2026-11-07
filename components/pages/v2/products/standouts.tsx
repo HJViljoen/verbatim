@@ -199,7 +199,7 @@ export function emptyTitle(slot: Pick<StandoutSlot, 'slot' | 'reason'>, monthNam
 function EmptyCard({ slot, title, frame = false }: { slot: Pick<StandoutSlot, 'slot' | 'months' | 'newest' | 'reason'>; title: string; frame?: boolean }) {
   const sub = slot.newest
     ? <>Newest on your shelf: {slot.newest.name}, first named in {longMonth(slot.newest.month)}.</>
-    : slot.reason === 'pending' ? SUBJECT_NOT_MEASURED : null
+    : slot.reason === 'pending' ? SUBJECT_NOT_MEASURED : frame ? FRAME_LINES[slot.slot] : null
   return (
     // A frame (no month read) holds the height of the board's cards, so the
     // row keeps the page's weight with nothing in it.
@@ -233,6 +233,16 @@ export const FRAME_TITLES: Readonly<Record<SlotKey, string>> = {
   category: 'A category against your products in it',
   praised: 'Praise in the comments on a product',
   focus: 'What one product’s talk is about',
+}
+
+/** What each frame will show, in one sentence of its own (decision 4: a
+ *  title and one sentence in the dashed box; the review of Phases 4 and 5).
+ *  Why no month is read is said once, in the catalogue's box below. */
+export const FRAME_LINES: Readonly<Record<SlotKey, string>> = {
+  first: 'A product named for the first time in a month, and in how many videos.',
+  category: 'How much of a category’s talk names none of your products.',
+  praised: 'How many of a product’s videos have praise in their comments.',
+  focus: 'The subject a product’s talk is mostly about.',
 }
 
 /** The four frames for a page that reads no month: each place's label and

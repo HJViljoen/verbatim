@@ -3,6 +3,7 @@
 import { useActionState, useId, useState } from 'react'
 import { tagProduct, type ProductTagState } from '@/lib/actions/product-tags'
 import { cn } from '@/lib/utils'
+import { BTN_SM } from '@/components/v2/look'
 import { BTN, BTN_INK } from './buttons'
 
 // "Tag the product" (board E4-Products-Liners, the couldn't-tell-which list):
@@ -62,8 +63,11 @@ export function TagControlView({ videoId, commentId, options, label, open, pendi
   const id = useId()
   const said = tagSaid(state)
   return (
-    <div className="relative flex flex-col items-end gap-1.5" data-tag-control={open ? 'open' : 'closed'}>
-      <button type="button" className={BTN_INK} aria-expanded={open} aria-controls={open ? id : undefined} onClick={onToggle}>
+    <div className="relative flex flex-col items-start gap-1.5" data-tag-control={open ? 'open' : 'closed'}>
+      {/* A row's own action, on every line of the list: the small white
+          button, so no yellow repeats down it (the review of Phases 4 and
+          5: one yellow primary a screen at most). */}
+      <button type="button" className={cn(BTN, BTN_SM)} aria-expanded={open} aria-controls={open ? id : undefined} onClick={onToggle}>
         Tag the product
       </button>
       {open ? (
@@ -71,7 +75,7 @@ export function TagControlView({ videoId, commentId, options, label, open, pendi
           id={id}
           action={action}
           aria-label={`Tag the product: ${label}`}
-          className="absolute top-[calc(100%+6px)] right-0 z-20 flex w-[300px] max-w-[calc(100vw-48px)] flex-col gap-3 rounded-[12px] border border-border bg-card p-3.5 text-left text-[13px] text-foreground shadow-panel"
+          className="absolute top-[calc(100%+6px)] left-0 z-20 flex w-[300px] max-w-[calc(100vw-48px)] flex-col gap-3 rounded-[12px] border border-border bg-card p-3.5 text-left text-[13px] text-foreground shadow-panel"
         >
           <input type="hidden" name="videoId" value={videoId} />
           {commentId ? <input type="hidden" name="commentId" value={commentId} /> : null}

@@ -7,7 +7,6 @@ import { UNCLEAR_ID, type UnclearLine } from '@/lib/pages/v2/products'
 import type { CategoryDetail } from '@/lib/pages/v2/products-levels'
 import { PRODUCT_TAG_COPY } from '@/lib/products/tags'
 import { cn } from '@/lib/utils'
-import { BTN } from './buttons'
 import { LIST_CARD } from './level-parts'
 import { TagControl } from './tag-control'
 
@@ -20,19 +19,22 @@ import { TagControl } from './tag-control'
 // all" makes the list longer on the same page (`?unclear=all`); it opens no
 // panel. A member reads the words and the one line why there is no Tag.
 
-/** One line: the words (or the video), where and when, Watch, Tag. */
+/** One line: the words (or the video) across the card's width, where and
+ *  when, then its actions under them, quiet: Watch the video a link, Tag the
+ *  product a small white button (the review of Phases 4 and 5: the quotes
+ *  had half a row, and a yellow button repeated on every row). */
 export function UnclearRow({ line, options, category }: { line: UnclearLine; options: CategoryDetail['unclear']['options']; category: string }) {
   const words = line.quote ? quoteWords({ text: line.quote.text, english: line.quote.english }) : null
   return (
-    <div role="listitem" data-unclear-row="" className="grid grid-cols-1 items-center gap-3 border-t border-track py-3 first:border-t-0 first:pt-0.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:gap-4">
+    <div role="listitem" data-unclear-row="" className="flex flex-col gap-2.5 border-t border-track py-3.5 first:border-t-0 first:pt-0.5">
       <div className="min-w-0">
         {words
           ? <p data-copy="quote" lang={line.quote?.english ? 'en' : undefined} className={cn('m-0 text-foreground', QUOTE)}>“{words}”</p>
           : <p className="m-0 text-[15px] leading-[1.5] text-foreground">The video itself names one of your products here.</p>}
         {line.cite ? <span className="text-[13px] text-muted-foreground">{commaCite(line.cite)}</span> : null}
       </div>
-      <div className="flex flex-wrap items-start gap-2 sm:justify-end">
-        {line.watchHref ? <a href={line.watchHref} target="_blank" rel="noreferrer noopener" className={BTN}>Watch the video</a> : null}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        {line.watchHref ? <a href={line.watchHref} target="_blank" rel="noreferrer noopener" className={GO}>Watch the video</a> : null}
         {options.length > 0
           ? <TagControl videoId={line.videoId} commentId={line.commentId} options={options.map((o) => ({ value: o.value, label: o.label }))} label={words ?? `a video about ${category}`} />
           : null}

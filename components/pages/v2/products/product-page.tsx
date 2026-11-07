@@ -145,7 +145,7 @@ function VideoCard({ v, index, all, brand, onceSaid }: { v: NamedVideo; index: n
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
             <h3 className="m-0 min-w-0 text-[17px] leading-[1.35] font-semibold text-foreground">{v.owned ? brand : v.account || 'Unnamed account'}</h3>
-            {v.owned ? <BrandChip who="you" className="px-2 py-[3px] text-[12.5px]">Your post</BrandChip> : null}
+            {v.owned ? <BrandChip who="you" plain className="text-[13px] font-semibold text-you">Your post</BrandChip> : null}
           </div>
           {meta ? <p className="m-0 mt-0.5 text-[14px] leading-[1.4] text-muted-foreground">{meta}</p> : null}
         </div>
@@ -270,14 +270,20 @@ function Facts({ page, d }: { page: ProductPage; d: ProductsLevelData }) {
   const c = page.crosses
   const n = c?.n ?? page.videos ?? 0
   const when = `in ${d.base.monthWords}`
-  const quietLine = <p className={QUIETLINE}>{QUIET_FACT}</p>
   const blocks: { key: string; label: ReactNode; body: ReactNode }[] = [
     { key: 'place', label: <>Its place in {page.groupName}{page.place ? <>, {of(page.place.n)}</> : null}</>, body: <Place page={page} /> },
     { key: 'months', label: 'Month by month, share naming it', body: <MonthTable line={page.line} mode="product" rail /> },
-    { key: 'kinds', label: <>What people did{!quiet && c ? <>, {of(n)}</> : null}</>, body: quiet ? quietLine : <KindsBlock crosses={c} rail /> },
-    { key: 'subjects', label: <>What it’s about{!quiet && c ? <>, {of(n)}</> : null}</>, body: quiet ? quietLine : <SubjectsBlock rows={page.subjects} crosses={c} n={n} rail /> },
-    { key: 'groups', label: <>Who’s talking{!quiet && page.groups.state === 'ready' ? <>, {of(page.groups.n)}</> : null}</>, body: quiet ? quietLine : <GroupsBlockView block={page.groups} when={when} /> },
-    { key: 'where', label: <>Where{!quiet && page.platforms ? <>, {of(page.platforms.n)}</> : null}</>, body: quiet ? quietLine : <PlatformsBlockView block={page.platforms} rail /> },
+    // A quiet month holds nothing for the four blocks drawn from its videos:
+    // they are named once, and the month's line said once in the dashed box
+    // (decision 4; the review of Phases 4 and 5), never four times.
+    ...(quiet
+      ? [{ key: 'quiet', label: 'What people did, what it’s about, who’s talking and where', body: <div data-quiet-facts=""><EmptyBox>{QUIET_FACT}</EmptyBox></div> }]
+      : [
+          { key: 'kinds', label: <>What people did{c ? <>, {of(n)}</> : null}</>, body: <KindsBlock crosses={c} rail /> },
+          { key: 'subjects', label: <>What it’s about{c ? <>, {of(n)}</> : null}</>, body: <SubjectsBlock rows={page.subjects} crosses={c} n={n} rail /> },
+          { key: 'groups', label: <>Who’s talking{page.groups.state === 'ready' ? <>, {of(page.groups.n)}</> : null}</>, body: <GroupsBlockView block={page.groups} when={when} /> },
+          { key: 'where', label: <>Where{page.platforms ? <>, {of(page.platforms.n)}</> : null}</>, body: <PlatformsBlockView block={page.platforms} rail /> },
+        ]),
   ]
   return (
     <section aria-labelledby="facts-title" className="flex min-w-0 flex-col gap-5">

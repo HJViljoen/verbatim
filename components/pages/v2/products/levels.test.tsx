@@ -115,6 +115,13 @@ describe('a category\'s page, the hub (G4-Products-Category)', () => {
     expect(text).toContain('“This liner gave me a rash after a week, back to my old one now.” TikTok, 29 Sep, video by @stepbystep.amp Watch the video Tag the product')
     expect(text).toContain('See all 6')
     expect(render(page(d))).toContain('data-tag-control="closed"')
+    // The quotes take the row's width and its actions are quiet: Watch a
+    // link, Tag a small white button; no yellow repeats down the list (the
+    // review of Phases 4 and 5).
+    const rows = render(page(d)).split('data-unclear-row=""').slice(1).map((r) => r.slice(0, r.indexOf('data-tag-control')))
+    expect(rows.length).toBeGreaterThan(1)
+    for (const r of rows) expect(r).not.toMatch(/bg-brand|sm:grid-cols-/)
+    expect(render(page(d))).toMatch(/data-tag-control="closed"><button type="button" class="[^"]*bg-card[^"]*h-9/)
     // A closed month keeps a tag and moves no count: the page says so.
     expect(renderText(page(categoryFixture({ over: { now: '2026-11-20T08:00:00.000Z' } })))).toContain(tagSub(true, 'September'))
   })
@@ -221,6 +228,8 @@ describe('a product\'s page, the evidence (G4-Products-Product)', () => {
     expect(text).not.toMatch(/[→↗↓·]/)
     expect(text).toContain('Show the other 6 videos')
     expect(render(page(d))).toContain('data-who-chip="you"')
+    // "Your post" in the gold words, as the boards mark you, never a solid chip.
+    expect(render(page(d))).toMatch(/data-who-chip="you" data-plain="" class="[^"]*text-you[^"]*">Your post</)
   })
 
   it('the facts: its place, month by month, what people did, what it is about (U6), who, where', () => {
@@ -287,12 +296,16 @@ describe('a product\'s page, the evidence (G4-Products-Product)', () => {
     expect(render(page(PRODUCTS_LEVEL_FIXTURES['sealinx-all']()))).not.toContain('data-in-video-only')
   })
 
-  it('a quiet month (Thin, frame 1): no video, one last month and the way to it, the facts in one line each', () => {
+  it('a quiet month (Thin, frame 1): no video, one last month and the way to it, the quiet facts said once in the dashed box', () => {
     const q = renderText(page(PRODUCTS_LEVEL_FIXTURES['quiet-product']()))
     expect(q).toContain('A product in Feet August September October so far Month October so far Named in No video')
     expect(q).toContain('Nobody in your market named it in October so far. Where it was named No video in October so far No video named it in October so far. One did in September. See September')
     expect(render(page(PRODUCTS_LEVEL_FIXTURES['quiet-product']()))).toMatch(/data-named-none=""[\s\S]*?data-empty-box=""/)
-    expect(q.match(new RegExp(QUIET_FACT, 'g'))).toHaveLength(4)
+    // The four blocks drawn from its videos are named once and the month's
+    // line said once, in the dashed box (decision 4), never four times.
+    expect(q.match(new RegExp(QUIET_FACT, 'g'))).toHaveLength(1)
+    expect(q).toContain(`What people did, what it’s about, who’s talking and where ${QUIET_FACT}`)
+    expect(render(page(PRODUCTS_LEVEL_FIXTURES['quiet-product']()))).toMatch(/data-quiet-facts=""><div data-empty-box=""/)
     expect(q).toContain('Its place in Feet, of 14 Proprio Foot 0 Your other feet 1')
   })
 

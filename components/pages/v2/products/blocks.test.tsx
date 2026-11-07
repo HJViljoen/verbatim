@@ -180,10 +180,12 @@ describe('the four places, in production\'s thin state', () => {
     assertCopyContract(node)
   })
 
-  it('the frames for a page that reads no month: the four labels, what each will show in the dashed box, no number and no link', () => {
+  it('the frames for a page that reads no month: the four labels, each a title and its own sentence in the dashed box, no number and no link', () => {
     const node = <StandoutFrames />
     const text = renderText(node)
-    expect(text).toBe('New A product’s first month Category, not you A category against your products in it Praise in the comments Praise in the comments on a product Worth a look What one product’s talk is about')
+    // Decision 4: a title and one sentence; each frame's sentence its own,
+    // so none is said twice (the review of Phases 4 and 5).
+    expect(text).toBe('New A product’s first month A product named for the first time in a month, and in how many videos. Category, not you A category against your products in it How much of a category’s talk names none of your products. Praise in the comments Praise in the comments on a product How many of a product’s videos have praise in their comments. Worth a look What one product’s talk is about The subject a product’s talk is mostly about.')
     expect(render(node).match(/data-empty-box=""/g)).toHaveLength(4)
     expect(render(node)).not.toContain('href=')
     expect(render(node)).not.toContain('data-copy="figure"')

@@ -231,7 +231,7 @@ function PhoneRow({ r, d, prevName }: { r: ListRow; d: ProductsLevelData; prevNa
         <span className="col-span-2 text-[14px] text-muted-foreground">
           {quiet ? (d.base.soFar ? 'Quiet so far' : `Quiet in ${d.base.monthName}`) : null}
           {quiet && r.prev != null ? ', ' : null}
-          {r.prev != null ? (r.prev === 0 ? `quiet in ${prevName}` : <><span data-copy="figure" className="text-foreground">{fmtInt(r.prev)}</span> in {prevName}</>) : null}
+          {r.prev != null ? (r.prev === 0 ? `${quiet ? 'quiet' : 'Quiet'} in ${prevName}` : <><span data-copy="figure" className="text-foreground">{fmtInt(r.prev)}</span> in {prevName}</>) : null}
         </span>
       ) : null}
     </div>
@@ -250,7 +250,7 @@ function ProductsSection({ page, d }: { page: CategoryPage; d: ProductsLevelData
   return (
     <>
       <div id="products" className="scroll-mt-6"><SectionHead title={`Your ${word}`} note={note} /></div>
-      <section aria-label={`Your ${word} that came up in ${d.base.monthWords}`} className="grid grid-cols-1 items-start gap-5 min-[1180px]:grid-cols-2">
+      <section aria-label={`Your ${word} that came up in ${d.base.monthWords}`} className="grid grid-cols-1 gap-5 min-[1180px]:grid-cols-2">
         {page.cards.length > 0
           ? page.cards.map((c) => <Card key={c.id} card={c} d={d} prevName={prevName} />)
           : (
@@ -285,11 +285,11 @@ function NumbersCard({ page, d }: { page: CategoryPage; d: ProductsLevelData }) 
   }
   return (
     <section id="category-numbers" aria-label={`${detail.name} in numbers`} className="flex flex-col gap-5">
-      <div className="grid grid-cols-1 items-start gap-5 min-[1180px]:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 min-[1180px]:grid-cols-2">
         {months}
         <BlockTile label={<>What it’s about, {of(n)}</>}><SubjectsBlock rows={page.subjects} crosses={c} n={n} /></BlockTile>
       </div>
-      <div className="grid grid-cols-1 items-start gap-5 min-[1180px]:grid-cols-3">
+      <div className="grid grid-cols-1 gap-5 min-[1180px]:grid-cols-3">
         <BlockTile label={<>What people did, {of(n)}</>}><KindsBlock crosses={c} /></BlockTile>
         <BlockTile label={page.groups.state === 'ready' ? <>Who’s talking, {of(page.groups.n)}</> : 'Who’s talking'}><GroupsBlockView block={page.groups} when={when} /></BlockTile>
         <BlockTile label={page.platforms ? <>Where, {of(page.platforms.n)}</> : 'Where'}><PlatformsBlockView block={page.platforms} /></BlockTile>

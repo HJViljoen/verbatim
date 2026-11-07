@@ -76,8 +76,8 @@ import { productPageHref, productsCategoryPath, productsHref, productsProductPat
 // ---- the words -------------------------------------------------------------------------
 
 /** An address whose category or product the catalogue does not hold. */
-export const CATEGORY_MISSING = 'Your products has no category at this address.'
-export const PRODUCT_MISSING = 'Your products has no product at this address.'
+export const CATEGORY_MISSING = 'There is no category of your products at this address.'
+export const PRODUCT_MISSING = 'There is no product of yours at this address.'
 export const BACK_TO_PRODUCTS = 'Back to Your products'
 
 /** The hub's headline, in code's words (decision 1 of the G4 board report:
