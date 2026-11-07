@@ -2,6 +2,7 @@ import { notFound, redirect } from 'next/navigation'
 
 import { ReadinessTable } from '@/components/ops/readiness-table'
 import { SettingsFrame } from '@/components/settings-frame'
+import { Card } from '@/components/pages/studio/ui'
 import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { fullDate } from '@/lib/format'
 import { gateAccessFor } from '@/lib/gate-record'
@@ -89,6 +90,13 @@ export default async function SettingsReadinessPage() {
     facts: { inputs, searchesHeld: tenantLocked(clientId, 'tracking'), searchChangedAt, advice },
   })
   const bar = await settingsBar(supabase, clientId, inputs.tenant, now.toISOString())
+  // "Not built yet", grouped by page in the order the pages first come.
+  const notBuiltByPage: [string, string[]][] = []
+  for (const n of NOT_BUILT) {
+    const group = notBuiltByPage.find(([page]) => page === n.page)
+    if (group) group[1].push(n.what)
+    else notBuiltByPage.push([n.page, [n.what]])
+  }
 
   return (
     <SettingsFrame
@@ -99,24 +107,30 @@ export default async function SettingsReadinessPage() {
       bar={bar}
       contentTitle="Readiness"
     >
-      <div className="flex flex-col gap-3">
-        <ReadinessTable
-          rows={view.rows}
-          title="What each part of the product needs from this workspace"
-          description={`Read ${fullDate(now.toISOString())}. ${READINESS_CONTACT}`}
-          nextLabel={CLIENT_NEXT_LABEL}
-        />
-        <section className="rounded-md bg-inner px-4 py-3.5">
-          <h3 className="text-[14px] font-semibold">Not built yet on the reading pages</h3>
-          <ul className="mt-2 flex flex-col gap-1">
-            {NOT_BUILT.map((n) => (
-              <li key={n.what} className="flex gap-2 text-[12px] leading-[1.45] text-secondary-foreground">
-                <span className="w-[84px] shrink-0 font-mono text-[11px] text-muted-foreground">{n.page}</span>
-                {n.what}
-              </li>
+      <div className="flex flex-col gap-5">
+        <Card className="px-[30px] pt-[30px] pb-2 max-sm:px-[18px] max-sm:pt-[18px]">
+          <ReadinessTable
+            rows={view.rows}
+            title="What each part of the product needs from this workspace"
+            description={`Read ${fullDate(now.toISOString())}. ${READINESS_CONTACT}`}
+            nextLabel={CLIENT_NEXT_LABEL}
+          />
+        </Card>
+        <Card className="p-[30px] max-sm:p-[18px]">
+          <h2 className="m-0 text-[21px] font-semibold leading-[1.3]">Not built yet on the reading pages</h2>
+          {/* Grouped by page, three to a row (the board's), each page's items
+              a list in the order they come. */}
+          <div className="mt-[18px] grid grid-cols-1 gap-7 md:grid-cols-3">
+            {notBuiltByPage.map(([page, items]) => (
+              <div key={page}>
+                <h3 className="m-0 mb-2 text-[16px] font-semibold">{page}</h3>
+                <ul className="m-0 flex list-disc flex-col gap-2 pl-[18px] text-[14.5px] leading-[1.6] text-secondary-foreground">
+                  {items.map((what) => <li key={what}>{what}</li>)}
+                </ul>
+              </div>
             ))}
-          </ul>
-        </section>
+          </div>
+        </Card>
       </div>
     </SettingsFrame>
   )

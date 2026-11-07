@@ -1,30 +1,29 @@
-import { SettingsCard } from '@/components/settings-frame'
+import { TAG, TAG_TONE } from '@/components/v2/look'
 import { OWNER_LABEL, STATUS_LABEL, type ReadinessRow, type ReadinessStatus } from '@/lib/readiness/types'
+import { cn } from '@/lib/utils'
 
-// The readiness rows (Phase 0 WP10, design item 18). The anatomy is the one
-// `components/settings-frame.tsx` already uses — a tile holding one flat tinted
-// card, rows inside it, a rounded status pill on the right — so this page reads
-// as part of the product rather than as an operator console bolted to its side.
+// The readiness rows (Phase 0 WP10, design item 18), on the client's
+// Settings › Readiness and the operator's /dashboard/ops/readiness.
 //
-// Two nesting levels only (design system §tiles): the page's tile, then this
-// card. A row is not a third level — it has no ground and no border of its own
-// beyond the hairline that separates it from the one above.
+// SINCE THE AUDIT DESIGN (7 Nov, Settings-Readiness.dc.html): the title and
+// its line, then one ruled `article` a row in two columns: on the left the
+// block as a heading, the input under it, the detail, its notes as a list and
+// "{Next}: …"; on the right who changes it, in grey, and the status as a
+// tag. No " · ", no mono, no capitals. The table draws no card of its own:
+// Settings puts it in a tile, the ops console in its pane.
 //
-// Colour carries meaning only where it is a verdict: the pill, and nothing
-// else on the page.
+// Colour carries meaning only where it is a verdict: the status tag. "In
+// place" is the board's quiet outlined tag; "Partly" and "Missing" take the
+// kit's track and caution tones.
 
-const PILL: Record<ReadinessStatus, string> = {
-  exists: 'bg-accent text-accent-foreground',
-  partial: 'bg-warning/15 text-warning',
-  missing: 'bg-negative/12 text-negative',
+const STATUS_TAG: Record<ReadinessStatus, string> = {
+  exists: 'border border-control bg-card text-foreground',
+  partial: TAG_TONE.mid,
+  missing: TAG_TONE.hi,
 }
 
-function StatusPill({ status }: { status: ReadinessStatus }) {
-  return (
-    <span className={`inline-flex shrink-0 items-center rounded-full px-2 py-px text-[10.5px] font-medium ${PILL[status]}`}>
-      {STATUS_LABEL[status]}
-    </span>
-  )
+function StatusTag({ status }: { status: ReadinessStatus }) {
+  return <span className={cn(TAG, 'h-[26px] shrink-0 px-2.5 text-[13.5px]', STATUS_TAG[status])}>{STATUS_LABEL[status]}</span>
 }
 
 /** A row, plus what the client view adds to it (Phase 1 WP16): the owner in
@@ -35,41 +34,34 @@ export type ReadinessTableRow = ReadinessRow & { ownerWords?: string; by?: strin
 function Row({ row, nextLabel }: { row: ReadinessTableRow; nextLabel: string }) {
   const owner = row.ownerWords ?? OWNER_LABEL[row.owner]
   return (
-    <div className="flex flex-col gap-1.5 border-t border-border/70 py-3 first:border-t-0 first:pt-0 last:pb-0">
-      <div className="flex items-baseline gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-[13px] font-medium">
-            {row.block}
-            <span className="text-muted-foreground"> · {row.input}</span>
-          </p>
-          <p className="mt-0.5 text-[12.5px] text-secondary-foreground">{row.detail}</p>
-        </div>
-        <span className="hidden shrink-0 font-mono text-[10.5px] text-muted-foreground sm:inline">
-          {owner}
-        </span>
-        <StatusPill status={row.status} />
+    <article className="grid grid-cols-1 gap-x-7 gap-y-2 border-t border-track py-[22px] sm:grid-cols-[minmax(0,1fr)_150px]">
+      <div className="min-w-0">
+        <h3 className="m-0 text-[17px] font-semibold leading-[1.3]">{row.block}</h3>
+        <p className="m-0 mt-0.5 text-[14.5px] text-muted-foreground">{row.input}</p>
+        <p className="m-0 mt-2.5 text-[15.5px] leading-[1.55]">{row.detail}</p>
+        {/* Keyed by position, not by text: two notes on one row are identical
+            whenever two updates share a day and an outcome, which is live today
+            (three updates finished on 17 Aug 2026 on the trial workspace). A
+            duplicate key makes React drop or mis-reuse a line on re-render, and
+            a silently missing line is the one thing this row must never do. */}
+        {row.notes.length > 0 && (
+          <ul className="m-0 mt-2.5 list-none p-0 py-1 text-[14.5px] leading-[1.7] text-secondary-foreground">
+            {row.notes.map((note, index) => (
+              <li key={`${row.id}-${index}`}>{note}</li>
+            ))}
+          </ul>
+        )}
+        <p className="m-0 mt-2.5 text-[14.5px] leading-[1.55] text-secondary-foreground">
+          <span className="font-semibold text-foreground">{nextLabel}:</span>{' '}
+          {row.unlocks}
+          {row.by && <span> By {row.by}.</span>}
+        </p>
       </div>
-
-      {/* Keyed by position, not by text: two notes on one row are identical
-          whenever two updates share a day and an outcome, which is live today
-          (three updates finished on 17 Aug 2026 on the trial workspace). A
-          duplicate key makes React drop or mis-reuse a line on re-render, and
-          a silently missing line is the one thing this row must never do. */}
-      {row.notes.length > 0 && (
-        <ul className="flex flex-col gap-0.5 pl-3">
-          {row.notes.map((note, index) => (
-            <li key={`${row.id}-${index}`} className="font-mono text-[11px] leading-[1.45] text-muted-foreground">{note}</li>
-          ))}
-        </ul>
-      )}
-
-      <p className="text-[11.5px] text-muted-foreground">
-        <span className="font-mono text-[10.5px] uppercase tracking-[0.06em]">{nextLabel}</span>{' '}
-        {row.unlocks}
-        {row.by && <span className="text-secondary-foreground"> By {row.by}.</span>}
-        <span className="sm:hidden"> · {owner}</span>
-      </p>
-    </div>
+      <div className="flex flex-row flex-wrap items-center gap-x-3 gap-y-1.5 text-[14px] sm:flex-col sm:items-start">
+        <span className="text-secondary-foreground">{owner}</span>
+        <StatusTag status={row.status} />
+      </div>
+    </article>
   )
 }
 
@@ -77,8 +69,10 @@ function Row({ row, nextLabel }: { row: ReadinessTableRow; nextLabel: string }) 
  *  "Unlocks"; the client's Settings › Readiness says "Next" (sw-2 item 6). */
 export function ReadinessTable({ rows, title, description, nextLabel = 'Unlocks' }: { rows: readonly ReadinessTableRow[]; title: string; description: string; nextLabel?: string }) {
   return (
-    <SettingsCard title={title} description={description}>
+    <section className="flex min-w-0 flex-col">
+      <h2 className="m-0 text-[21px] font-semibold leading-[1.3]">{title}</h2>
+      <p className="m-0 mt-1.5 mb-[18px] text-[15px] leading-[1.55] text-secondary-foreground">{description}</p>
       {rows.map((row) => <Row key={row.id} row={row} nextLabel={nextLabel} />)}
-    </SettingsCard>
+    </section>
   )
 }
