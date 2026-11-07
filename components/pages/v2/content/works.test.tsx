@@ -70,16 +70,16 @@ describe('What works in your market’s videos', () => {
     expect(words(318)).toMatch(/^Read from 412 of 640 category videos posted in October so far that have a format\. These/)
   })
 
-  it('keeps both charts’ frames where it cannot be read, and says why once', () => {
+  it('keeps its card where it cannot be read, and says why once, in one dashed box in the tables’ place', () => {
     const empty = { ...worksFixture(), formats: [], openings: [], sentence: null, basis: null, unread: 'Too few videos.' }
     const text = renderText(<WorksCard block={empty} />)
-    expect(text).toContain('How the video is made')
-    expect(text).toContain('How it opens')
+    expect(text).toContain('What works in your market’s videos')
+    expect(text).toContain('Not drawn yet Too few videos.')
     expect(text.split('Too few videos.')).toHaveLength(2)
-    // Each table keeps its caption, the dashed box in its place (decision 4).
+    // One box, never a box a table beside a panel saying it again (decision 4).
     const m = render(<WorksCard block={empty} />)
-    expect(m.match(/data-works-empty=""/g)).toHaveLength(2)
-    expect(m.match(/data-empty-box=""/g)).toHaveLength(2)
+    expect(m.match(/data-works-empty=""/g)).toHaveLength(1)
+    expect(m.match(/data-empty-box=""/g)).toHaveLength(1)
     assertCopyContract(<WorksCard block={empty} />)
     // One table empty: that table says why, in its own box.
     const one = { ...worksFixture(), openings: [] }

@@ -104,14 +104,21 @@ export function WorksCard({ block, className, style }: { block: WorksBlock; clas
         title="What works in your market’s videos"
         sub={`How well each kind of video does against a typical video in your market, and how often your own posts use it. Videos published ${when}. The dark line on each bar marks 1×, a typical video.`}
       />
-      {/* Both tables and the sentence's panel in every state (the board's
-          shape): a table with no rows says so in its place, and where the
-          whole reading could not be made, the panel says why. */}
-      <div className="grid grid-cols-1 gap-7">
-        <Chart title="How the video is made" head="Kind of video" rows={block.formats} empty={neither ? 'Not drawn yet.' : 'Too few rated videos of any one format yet.'} />
-        <Chart title="How it opens" head="Opening" rows={block.openings} empty={neither ? 'Not drawn yet.' : 'Too few rated videos of any one opening yet.'} />
-      </div>
-      {block.unread || block.sentence ? (
+      {/* Both tables and the sentence's panel where there is a reading (the
+          board's shape): a table with no rows says so in its place. Where
+          the whole reading could not be made, one dashed box in the tables'
+          place says why, once (decision 4). */}
+      {neither ? (
+        <div data-works-empty="">
+          <EmptyBox title="Not drawn yet">{block.unread ?? 'Too few of the market’s videos have a format and a response figure to compare yet.'}</EmptyBox>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-7">
+          <Chart title="How the video is made" head="Kind of video" rows={block.formats} empty="Too few rated videos of any one format yet." />
+          <Chart title="How it opens" head="Opening" rows={block.openings} empty="Too few rated videos of any one opening yet." />
+        </div>
+      )}
+      {!neither && (block.unread || block.sentence) ? (
         <p className={cn('m-0 rounded-[10px] bg-inner px-5 py-4 text-[15.5px] leading-[1.6]', block.unread ? 'text-secondary-foreground' : null)}>
           {block.unread ?? <Sentence parts={block.sentence!} />}
         </p>
