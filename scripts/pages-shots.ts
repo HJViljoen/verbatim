@@ -553,7 +553,7 @@ const PAGES: Page[] = [
       const model = settingsModel()
       return h(SettingsFrame, {
         active: 'tracking', title: 'Settings', operator: false,
-        children: h('div', { className: 'grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]' },
+        children: h('div', { className: 'grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]' },
           h('div', { className: 'flex min-w-0 flex-col gap-5' },
             h(SearchTerms, { terms: model.terms, canEdit: true }),
             h(YourAccounts, { rows: model.ownAccounts, handles: model.ownHandles, canEdit: true, action: noop }),

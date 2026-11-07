@@ -2,6 +2,7 @@ import { SettingsFrame } from '@/components/settings-frame'
 import { SearchTerms } from '@/components/pages/settings/search-terms'
 import { YourAccounts } from '@/components/pages/settings/your-accounts'
 import { BrandsYouTrack, Communities, NotYourMarket } from '@/components/pages/settings/tracked-cards'
+import { EMPTY } from '@/components/v2/look'
 import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { surface } from '@/lib/nav'
 import { loadWhatYouTrack } from '@/lib/pages/settings'
@@ -30,6 +31,11 @@ export const metadata: Metadata = { title: surface('settings').label }
 // account change waits for the 1st and says the date.
 //
 // Owners and admins see the controls; everyone else reads the lists.
+//
+// Since the audit design (7 Nov, Settings.dc.html) the columns are 1.3 to 1
+// from 1280 (one column below, the app's own stacking point, decision 14),
+// and a page that did not load, or tracks nothing yet, says so in the dashed
+// box.
 
 export default async function SettingsTrackingPage() {
   const session = await getSessionContext()
@@ -40,11 +46,11 @@ export default async function SettingsTrackingPage() {
   return (
     <SettingsFrame active="tracking" title="Settings" operator={session.operator != null}>
       {failed ? (
-        <p className="m-0 text-[14px] text-[#5F656B]">Your settings did not load. Refresh the page.</p>
+        <p className={`m-0 ${EMPTY}`}>Your settings did not load. Refresh the page.</p>
       ) : !model ? (
-        <p className="m-0 text-[14px] text-[#5F656B]">Nothing is tracked yet. We set this up with you.</p>
+        <p className={`m-0 ${EMPTY}`}>Nothing is tracked yet. We set this up with you.</p>
       ) : (
-        <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+        <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
           <div className="flex min-w-0 flex-col gap-5">
             <SearchTerms terms={model.terms} canEdit={canEdit} />
             <YourAccounts rows={model.ownAccounts} handles={model.ownHandles} canEdit={canEdit} action={updateOwnHandles} />

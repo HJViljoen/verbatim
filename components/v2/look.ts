@@ -89,6 +89,10 @@ export const SEG_ITEM =
   'inline-flex h-9 cursor-pointer items-center whitespace-nowrap rounded-[7px] px-3.5 text-[14.5px] leading-[1.2] text-foreground no-underline transition-colors hover:bg-inner focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground max-sm:h-11'
 export const SEG_ON = 'bg-accent font-semibold text-accent-foreground hover:bg-accent'
 
+/** A term or a product's other name (Settings, the boards' `.term`): one
+ *  tone for every list, the ground's colour on a hairline, radius 8. */
+export const TERM = 'inline-flex min-h-[30px] items-center gap-1.5 rounded-[8px] border border-border bg-inner px-2.5 text-[14px] leading-[1.3] text-foreground'
+
 /** The dashed box a thin or empty state is said in (decision 4). */
 export const EMPTY = 'rounded-[10px] border border-dashed border-control px-[18px] py-4 text-[14.5px] leading-[1.55] text-secondary-foreground'
 

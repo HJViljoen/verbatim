@@ -15,9 +15,8 @@ import { cn } from '@/lib/utils'
 // · pale yellow #FFF4C7
 //
 // The colour roles (components/colour-roles.tsx, colour pass 1 Oct): the card
-// shadow, a title's icon tile, and a term chip coloured by whose words it is
-// (your name gold, the category's the pale yellow, a rival's on the track
-// with the grey dot, a left-out word on the ground).
+// shadow. (The term chip coloured by whose words it is went with Settings'
+// audit design, 7 Nov: every term is the kit's one `TERM` look.)
 //
 // SINCE THE AUDIT DESIGN (7 Nov, Studio.dc.html): the card at radius 12, its
 // title a 21px heading with no icon tile (the `icon` prop is accepted and
@@ -60,25 +59,4 @@ const BTN_KIND = {
 export function buttonClass(kind: keyof typeof BTN_KIND = 'secondary', size: keyof typeof BTN_SIZE = 'normal'): string {
   if (kind === 'primary') return cn(BTN_PRIMARY, size === 'small' && BTN_SM)
   return cn(BTN_BASE, BTN_SIZE[size], BTN_KIND[kind])
-}
-
-/** Whose words a term chip holds. */
-export type ChipTone = 'you' | 'market' | 'rival' | 'out'
-
-const CHIP_TONE: Record<ChipTone, string> = {
-  you: 'bg-you font-medium text-you-foreground',
-  market: 'bg-accent text-accent-foreground',
-  rival: 'bg-track text-[#26292C]',
-  out: 'bg-[#F7F6F2] text-[#26292C]',
-}
-
-/** A chip: a term, coloured by whose words it is (on the ground when not
- *  said). A rival's carries the rival grey's dot. */
-export function Chip({ children, tone = 'out' }: { children: ReactNode; tone?: ChipTone }) {
-  return (
-    <span data-chip={tone} className={cn('inline-flex items-center gap-1.5 rounded-full px-2.5 py-[5px] text-[13px] leading-[1.3]', CHIP_TONE[tone])}>
-      {tone === 'rival' ? <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-comp" /> : null}
-      {children}
-    </span>
-  )
 }

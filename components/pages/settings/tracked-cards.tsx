@@ -1,7 +1,6 @@
 import { renameTrackedRival } from '@/app/dashboard/settings/rivals-actions'
 import { updateCommunity, updateTrackingConfig } from '@/app/dashboard/settings/actions'
 import { RIVALS_PRESENT } from '@/app/dashboard/settings/constants'
-import { Ban, Tag, Users } from 'lucide-react'
 import { Card, CardTitle } from '@/components/pages/studio/ui'
 import type { BrandRow } from '@/lib/pages/settings'
 import { InlineAdd } from './inline-add'
@@ -9,19 +8,27 @@ import { BrandMenu } from './brand-menu'
 
 // The right-hand column of What you track (Page-Settings artboard): Brands you
 // track, with their accounts, and the Reddit communities that count as the
-// market. Then, where any exist, the videos marked as not your market. A
-// tracked brand carries the rival grey's dot (the colour roles, 1 Oct).
+// market. Then, where any exist, the videos marked as not your market.
+//
+// SINCE THE AUDIT DESIGN (7 Nov, Settings.dc.html): no icon tile and no dot
+// before a brand's name; a brand's accounts are a list, one a line, each
+// platform beside its handle in ink (no mono); the communities a plain list
+// of r/ names (the card's line already says they are Reddit's).
+
+const LEAD = 'm-0 mt-1.5 text-[15px] leading-[1.55] text-secondary-foreground'
 
 export function BrandsYouTrack({ brands, names, canEdit }: { brands: readonly BrandRow[]; names: string[]; canEdit: boolean }) {
   if (!canEdit && brands.length === 0) return null
   return (
-    <Card className="gap-3.5 px-[30px] pt-[26px] pb-3.5">
-      <div className="flex items-center justify-between gap-3">
-        <CardTitle icon={Tag}>Brands you track</CardTitle>
+    <Card className="p-[26px] max-sm:p-[18px]">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <CardTitle>Brands you track</CardTitle>
+          <p className={LEAD}>Each brand and its own accounts. The names people call them by are under Search terms.</p>
+        </div>
         {canEdit ? (
           <InlineAdd
             label="Add a brand"
-            kind="secondary"
             field="competitor_names"
             inputLabel="The brand's name"
             placeholder="a brand"
@@ -33,20 +40,20 @@ export function BrandsYouTrack({ brands, names, canEdit }: { brands: readonly Br
           />
         ) : null}
       </div>
-      <div className="flex flex-col">
+      <div className="mt-[18px] flex flex-col">
         {brands.map((b) => (
-          <div key={b.name} className="flex items-center justify-between gap-3 border-t border-[#E4E2DC] py-[13px]">
-            <div className="flex min-w-0 flex-col gap-[3px]">
-              <div className="flex items-center gap-2 text-[15px] font-bold"><span aria-hidden className="size-2 shrink-0 rounded-full bg-comp" />{b.name}</div>
+          <div key={b.name} className="flex items-start justify-between gap-4 border-t border-track py-4 last:pb-0">
+            <div className="min-w-0">
+              <h3 className="m-0 text-[16px] font-semibold">{b.name}</h3>
               {b.accounts.length > 0 ? (
-                <div className="text-[13px]">
-                  {b.accounts.map((a, i) => (
-                    <span key={a.platform}>
-                      {i > 0 ? ' · ' : ''}{a.platform}
-                      {a.handle ? <> <span className="font-mono text-[12px] text-[#5F656B]">{a.handle}</span></> : null}
-                    </span>
+                <ul className="m-0 mt-2 list-none p-0 text-[14.5px] leading-[1.7] text-secondary-foreground">
+                  {b.accounts.map((a) => (
+                    <li key={a.platform}>
+                      {a.platform}
+                      {a.handle ? <> <span className="break-all text-foreground">{a.handle}</span></> : null}
+                    </li>
                   ))}
-                </div>
+                </ul>
               ) : null}
             </div>
             {canEdit ? <BrandMenu name={b.name} id={b.id} names={names} rename={renameTrackedRival} save={updateTrackingConfig} /> : null}
@@ -60,13 +67,15 @@ export function BrandsYouTrack({ brands, names, canEdit }: { brands: readonly Br
 export function Communities({ communities, canEdit }: { communities: readonly string[]; canEdit: boolean }) {
   if (!canEdit && communities.length === 0) return null
   return (
-    <Card className="gap-3.5 px-[30px] pt-[26px] pb-3.5">
-      <div className="flex items-center justify-between gap-3">
-        <CardTitle icon={Users}>Communities</CardTitle>
+    <Card className="p-[26px] max-sm:p-[18px]">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <CardTitle>Communities</CardTitle>
+          <p className={LEAD}>Reddit communities that count as your market.</p>
+        </div>
         {canEdit ? (
           <InlineAdd
             label="Add a community"
-            kind="secondary"
             field="name"
             inputLabel="The community's name"
             placeholder="r/community"
@@ -75,16 +84,12 @@ export function Communities({ communities, canEdit }: { communities: readonly st
           />
         ) : null}
       </div>
-      <p className="m-0 -mt-1 text-[14px] text-[#5F656B]">Reddit communities that count as your market.</p>
       {communities.length > 0 ? (
-        <div className="flex flex-col">
+        <ul className="m-0 mt-[18px] list-none p-0 text-[15px] font-semibold">
           {communities.map((c) => (
-            <div key={c} className="flex items-center justify-between border-t border-[#E4E2DC] py-3">
-              <div className="text-[15px] font-semibold">r/{c}</div>
-              <div className="text-[13px] text-[#5F656B]">Reddit</div>
-            </div>
+            <li key={c} className="border-t border-track py-[13px] last:pb-0">r/{c}</li>
           ))}
-        </div>
+        </ul>
       ) : null}
     </Card>
   )
@@ -95,9 +100,9 @@ export function Communities({ communities, canEdit }: { communities: readonly st
 export function NotYourMarket({ count }: { count: number | null }) {
   if (!count) return null
   return (
-    <Card className="gap-3.5 px-[30px] pt-[26px] pb-[22px]">
-      <CardTitle icon={Ban}>Not your market</CardTitle>
-      <p className="m-0 -mt-1 text-[14px] text-[#5F656B]">
+    <Card className="p-[26px] max-sm:p-[18px]">
+      <CardTitle>Not your market</CardTitle>
+      <p className={LEAD}>
         <span data-copy="figure">{count}</span> {count === 1 ? 'video' : 'videos'} you marked as not your market.
       </p>
     </Card>

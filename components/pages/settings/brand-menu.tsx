@@ -2,7 +2,8 @@
 
 import { useActionState, useEffect, useState } from 'react'
 import { Ellipsis } from 'lucide-react'
-import { buttonClass } from '@/components/pages/studio/ui'
+import { BTN_PRIMARY, BTN_SECONDARY, BTN_SM, INPUT } from '@/components/v2/look'
+import { cn } from '@/lib/utils'
 import { saveWords } from '@/lib/pages/settings-words'
 import { TENANT_LOCK_REFUSAL } from '@/lib/tenant-locks'
 import { RIVALS_PRESENT } from '@/app/dashboard/settings/constants'
@@ -13,6 +14,11 @@ import type { RenameState } from '@/app/dashboard/settings/rivals-actions'
 // A rename is the one logged rival rename (lib/rivals.ts, needs the brand's
 // identity); stopping posts the tracked list without it, through the same
 // action that adds one.
+//
+// SINCE THE AUDIT DESIGN (7 Nov, Settings.dc.html): the "…" is the white
+// secondary button, square; the menu's field is the kit's input and its
+// confirm the yellow button. Styles from components/v2/look.ts (import-free,
+// the client-bundle guard).
 
 const initial = { ok: false, message: '' }
 const LOCKS = [TENANT_LOCK_REFUSAL.tracking]
@@ -54,26 +60,26 @@ export function BrandMenu({
         aria-label={`More for ${name}`}
         aria-expanded={mode !== 'closed'}
         onClick={() => setMode((m) => (m === 'closed' ? 'menu' : 'closed'))}
-        className="inline-flex size-[34px] items-center justify-center rounded-[8px] border border-transparent bg-transparent text-[#5F656B] hover:bg-[#F7F6F2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#26292C]/40"
+        className={cn(BTN_SECONDARY, BTN_SM, 'w-9 px-0 max-sm:size-11')}
       >
         <Ellipsis aria-hidden className="size-4" strokeWidth={2} />
       </button>
       {mode !== 'closed' && (
-        <div className="absolute right-0 top-[calc(100%+6px)] z-20 flex w-[260px] flex-col gap-2 rounded-[16px] border border-[#E4E2DC] bg-white p-3 text-[13px] shadow-[0_6px_24px_rgba(0,0,0,0.08)]">
+        <div className="absolute right-0 top-[calc(100%+6px)] z-20 flex w-[280px] flex-col gap-2 rounded-[10px] border border-border bg-card p-3 text-[14px] shadow-[0_6px_24px_rgba(0,0,0,0.08)]">
           {mode === 'menu' && (
             <>
-              {id ? <button type="button" onClick={() => setMode('rename')} className="rounded-[8px] px-2 py-1.5 text-left font-medium hover:bg-[#F7F6F2]">Rename</button> : null}
-              <button type="button" onClick={() => setMode('stop')} className="rounded-[8px] px-2 py-1.5 text-left font-medium hover:bg-[#F7F6F2]">Stop tracking</button>
+              {id ? <button type="button" onClick={() => setMode('rename')} className="min-h-9 rounded-[8px] px-2.5 text-left font-medium hover:bg-inner max-sm:min-h-11">Rename</button> : null}
+              <button type="button" onClick={() => setMode('stop')} className="min-h-9 rounded-[8px] px-2.5 text-left font-medium hover:bg-inner max-sm:min-h-11">Stop tracking</button>
             </>
           )}
           {mode === 'rename' && id && (
             <form action={runRename} className="flex flex-col gap-2">
               <input type="hidden" name="id" value={id} />
               <label htmlFor={`rename-${id}`} className="font-semibold">Rename {name}</label>
-              <input id={`rename-${id}`} name="name" defaultValue={name} required autoFocus className="h-[34px] rounded-[10px] border border-[#E4E2DC] px-3 text-[13px] outline-none focus-visible:border-[#26292C]" />
+              <input id={`rename-${id}`} name="name" defaultValue={name} required autoFocus className={cn(INPUT, 'max-sm:h-11')} />
               <div className="flex gap-2">
-                <button type="submit" disabled={renaming} className={buttonClass('primary', 'small')}>{renaming ? 'Saving' : 'Rename'}</button>
-                <button type="button" onClick={() => setMode('closed')} className={buttonClass('ghost', 'small')}>Cancel</button>
+                <button type="submit" disabled={renaming} className={cn(BTN_PRIMARY, BTN_SM, 'max-sm:h-11')}>{renaming ? 'Saving' : 'Rename'}</button>
+                <button type="button" onClick={() => setMode('closed')} className={cn(BTN_SECONDARY, BTN_SM, 'max-sm:h-11')}>Cancel</button>
               </div>
             </form>
           )}
@@ -83,12 +89,12 @@ export function BrandMenu({
               {names.filter((n) => n !== name).map((n) => <input key={n} type="hidden" name="competitor_names" value={n} />)}
               <p className="m-0 font-semibold">Stop tracking {name}?</p>
               <div className="flex gap-2">
-                <button type="submit" disabled={stopping} className={buttonClass('primary', 'small')}>{stopping ? 'Saving' : 'Stop tracking'}</button>
-                <button type="button" onClick={() => setMode('closed')} className={buttonClass('ghost', 'small')}>Cancel</button>
+                <button type="submit" disabled={stopping} className={cn(BTN_PRIMARY, BTN_SM, 'max-sm:h-11')}>{stopping ? 'Saving' : 'Stop tracking'}</button>
+                <button type="button" onClick={() => setMode('closed')} className={cn(BTN_SECONDARY, BTN_SM, 'max-sm:h-11')}>Cancel</button>
               </div>
             </form>
           )}
-          {words && mode !== 'menu' ? <p role="status" className={`m-0 text-[12px] ${last.ok ? 'text-[#5F656B]' : 'text-[#C2410C]'}`}>{words}</p> : null}
+          {words && mode !== 'menu' ? <p role="status" className={cn('m-0 text-[13px] leading-[1.45]', last.ok ? 'text-muted-foreground' : 'text-caution')}>{words}</p> : null}
         </div>
       )}
     </div>

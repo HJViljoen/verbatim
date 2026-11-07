@@ -2,7 +2,8 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { LogOut } from 'lucide-react'
 import { signOut } from '@/app/login/actions'
-import { buttonClass, PageTitle } from '@/components/pages/studio/ui'
+import { PageTitle } from '@/components/pages/studio/ui'
+import { BTN_SECONDARY, SEG, SEG_ITEM, SEG_ON, TBL, TD, TH, TAG, TAG_TONE } from '@/components/v2/look'
 import type { ContextLineInput } from '@/lib/shell/bar'
 import { settingsSubPage, settingsTabs, type SettingsSection } from '@/lib/settings/rail'
 import { cn } from '@/lib/utils'
@@ -29,6 +30,12 @@ import { cn } from '@/lib/utils'
 // SUB-PAGES THE ARTBOARD DOES NOT DRAW keep their own header (`contentMeta`,
 // `contentRule`) above their content. Its title is dropped where it only
 // repeats the lit tab.
+//
+// SINCE THE AUDIT DESIGN (7 Nov, Settings.dc.html): the tabs are the white
+// segmented control (`SEG`, the boards' period control; each tab 44px to tap
+// on a phone, and the row still wraps), the lit one the pale yellow at 600;
+// Log out the white secondary button with its icon; a sub-page's own title a
+// 21px heading and its meta in sans, never mono.
 
 export type { SettingsSection }
 
@@ -58,24 +65,20 @@ export function SettingsFrame({
       <PageTitle title={title}>
         {controls}
         <form action={signOut}>
-          <button type="submit" className={buttonClass('secondary', 'normal')}>
+          <button type="submit" className={cn(BTN_SECONDARY, 'px-4 max-sm:h-11')}>
             <LogOut aria-hidden className="size-4" strokeWidth={2} />
             Log out
           </button>
         </form>
       </PageTitle>
-      <nav aria-label="Settings" className="flex flex-wrap gap-1">
+      <nav aria-label="Settings" className={cn(SEG, 'mb-1.5 self-start')}>
         {settingsTabs(operator).map((s) => (
           <Link
             key={s.key}
             href={s.href}
             aria-current={active === s.key ? 'page' : undefined}
-            className={cn(
-              'inline-flex h-[38px] shrink-0 items-center whitespace-nowrap rounded-[8px] px-4 text-[14px] transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#26292C]/40',
-              // The lit tab is a selected state: the pale yellow (the colour roles).
-              active === s.key ? 'bg-accent font-semibold text-[#26292C]' : 'font-medium text-[#5F656B] hover:text-[#26292C]',
-            )}
+            // The lit tab is a selected state: the pale yellow (the colour roles).
+            className={cn(SEG_ITEM, active === s.key && SEG_ON)}
           >
             {s.label}
           </Link>
@@ -86,11 +89,11 @@ export function SettingsFrame({
           <header className="flex flex-col gap-1 pb-4">
             {heading || contentMeta ? (
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                {heading ? <h2 className="shrink-0 text-[15px] font-semibold">{heading}</h2> : null}
-                {contentMeta && <span className="min-w-0 font-mono text-[11px] text-muted-foreground">{contentMeta}</span>}
+                {heading ? <h2 className="m-0 shrink-0 text-[21px] font-semibold leading-[1.3]">{heading}</h2> : null}
+                {contentMeta && <span className="min-w-0 text-[14px] text-muted-foreground">{contentMeta}</span>}
               </div>
             ) : null}
-            {contentRule && <p className="text-[12.5px] text-muted-foreground">{contentRule}</p>}
+            {contentRule && <p className="m-0 text-[14px] leading-[1.5] text-muted-foreground">{contentRule}</p>}
           </header>
         ) : null}
         {children}
@@ -128,15 +131,15 @@ export function FactRow({ label, children }: { label: ReactNode; children: React
  *  toggle that does nothing (honest empties). */
 export function ConnectionRow({ name, what, status, action }: { name: ReactNode; what: ReactNode; status: 'connected' | 'not-connected' | 'coming-soon' | 'in-development' | 'paused'; action?: ReactNode }) {
   const label = status === 'connected' ? 'Connected' : status === 'not-connected' ? 'Not connected' : status === 'in-development' ? 'In development' : status === 'paused' ? 'Paused' : 'Coming soon'
-  const cls = status === 'connected' ? 'bg-accent text-accent-foreground' : status === 'not-connected' ? 'bg-warning/15 text-warning' : status === 'paused' ? 'bg-inner text-muted-foreground' : 'bg-tile text-muted-foreground ring-1 ring-border'
+  const tone = status === 'connected' ? TAG_TONE.tint : status === 'not-connected' ? TAG_TONE.hi : TAG_TONE.mid
   return (
-    <div className="flex items-center gap-3 border-t border-border/70 py-2.5 first:border-t-0 first:pt-0 last:pb-0">
+    <div className="flex items-center gap-3 border-t border-track py-2.5 first:border-t-0 first:pt-0 last:pb-0">
       <div className="min-w-0 flex-1">
-        <p className="text-[13px] font-medium">{name}</p>
-        <p className="text-[11.5px] text-muted-foreground">{what}</p>
+        <p className="m-0 text-[15px] font-semibold">{name}</p>
+        <p className="m-0 text-[13px] text-muted-foreground">{what}</p>
       </div>
       {action}
-      <span className={`inline-flex shrink-0 items-center rounded-full px-2 py-px text-[10.5px] font-medium ${cls}`}>{label}</span>
+      <span className={cn(TAG, tone, 'shrink-0')}>{label}</span>
     </div>
   )
 }
@@ -146,14 +149,14 @@ export function ConnectionRow({ name, what, status, action }: { name: ReactNode;
  *  five tables cannot drift apart. */
 export function SettingsTable({ head, children, empty }: { head: readonly string[]; children: ReactNode; empty?: ReactNode }) {
   const hasRows = Array.isArray(children) ? children.flat().filter(Boolean).length > 0 : Boolean(children)
-  if (!hasRows && empty) return <p className="text-[12px] text-muted-foreground">{empty}</p>
+  if (!hasRows && empty) return <p className="m-0 text-[14px] text-muted-foreground">{empty}</p>
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[420px] border-collapse text-[12.5px]">
+      <table className={cn(TBL, 'min-w-[420px]')}>
         <thead>
-          <tr className="border-b border-border/70">
+          <tr>
             {head.map((h, i) => (
-              <th key={h} className={`pb-1.5 font-mono text-[10.5px] font-medium uppercase tracking-[0.06em] text-muted-foreground ${i === 0 ? 'text-left' : 'text-right'}`}>{h}</th>
+              <th key={h} className={cn(TH, i === 0 ? 'text-left' : 'text-right')}>{h}</th>
             ))}
           </tr>
         </thead>
@@ -167,9 +170,9 @@ export function SettingsTable({ head, children, empty }: { head: readonly string
  *  and set tabular figures, because every one of them is a count. */
 export function SettingsRow({ cells }: { cells: readonly ReactNode[] }) {
   return (
-    <tr className="border-b border-border/50 last:border-b-0">
+    <tr>
       {cells.map((c, i) => (
-        <td key={i} className={`py-1.5 align-top ${i === 0 ? 'pr-3 text-left' : 'pl-3 text-right tabular-nums'}`}>{c}</td>
+        <td key={i} className={cn(TD, i === 0 ? 'text-left' : 'text-right tabular-nums')}>{c}</td>
       ))}
     </tr>
   )
