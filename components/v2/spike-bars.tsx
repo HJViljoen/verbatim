@@ -7,14 +7,15 @@ import { cn } from '@/lib/utils'
  * One bar a week, the market yellow (MASTER §Colour roles: a bar counting the
  * market's videos), the newest in the orange (the colour of what is new this
  * week), its count over it. An optional comparison line runs dashed across
- * the weeks before the newest with its own label ("usual · 6"); what the line
+ * the weeks before the newest with its own label ("usual, 6"); what the line
  * IS, and whether a page may draw one, is the caller's: decision 1 keeps a
  * week's figure beside its month, and the comparison a page states is a
  * `Verdict` printed elsewhere, never this line.
  *
  * Counts only: no percentage, no arrow, no word. Server SVG (no chart
  * library), scaled to its column's width from the board's 480 by 132, every
- * count a `data-copy="figure"` text in the mono. A week with no reading
+ * count a `data-copy="figure"` text in the page's sans with tabular figures
+ * (the audit design: no mono on screens, every text at least 12px). A week with no reading
  * (null) keeps its slot and draws nothing (with `ghost`, a faint empty slot
  * the plot's height); a week of zero draws a 2px stub, so "none" and "not
  * read" never look alike. `variant="ink"` is the rail's
@@ -31,7 +32,7 @@ export interface SpikeWeek {
 export interface SpikeBarsProps {
   weeks: readonly SpikeWeek[]
   /** A dashed line across the weeks before the newest, labelled at its left
-   *  ("usual · 6"). Null draws none. */
+   *  ("usual, 6"). Null draws none. */
   compare?: { value: number; label: string } | null
   /** The newest bar in the orange. Default true (false on `ink`). */
   highlightLast?: boolean
@@ -59,14 +60,18 @@ export interface SpikeBarsProps {
 /** One decimal of a user unit is finer than a pixel at any width drawn. */
 const r1 = (v: number): number => Math.round(v * 10) / 10
 
+// The audit design (7 Nov): every text at least 12 user units, which is 12px
+// wherever a drawing is shown at its own width or wider (brief §3: no text
+// under 12px), in the page's sans with tabular figures (no mono on screens,
+// decision 9).
 const GEOMETRY: Record<NonNullable<SpikeBarsProps['size']>, { W: number; H: number; BASE: number; TOP: number; small: number; big: number; axis?: number }> = {
-  lg: { W: 480, H: 132, BASE: 110, TOP: 14, small: 10.5, big: 12 },
-  md: { W: 300, H: 112, BASE: 92, TOP: 16, small: 9.5, big: 9.5 },
-  // F3: counts over every bar, the axis a size under them, as drawn.
-  wide: { W: 520, H: 150, BASE: 134, TOP: 14, small: 12.5, big: 12.5, axis: 11.5 },
-  rail: { W: 300, H: 86, BASE: 70, TOP: 14, small: 11, big: 11, axis: 10 },
-  xs: { W: 136, H: 58, BASE: 42, TOP: 14, small: 11, big: 11, axis: 10 },
-  phone: { W: 300, H: 150, BASE: 134, TOP: 14, small: 12.5, big: 12.5, axis: 11.5 },
+  lg: { W: 480, H: 132, BASE: 110, TOP: 14, small: 12, big: 13 },
+  md: { W: 300, H: 112, BASE: 92, TOP: 16, small: 12, big: 12 },
+  // F3: counts over every bar, the axis beside them, as drawn.
+  wide: { W: 520, H: 150, BASE: 134, TOP: 14, small: 12.5, big: 12.5, axis: 12 },
+  rail: { W: 300, H: 86, BASE: 70, TOP: 14, small: 12, big: 12, axis: 12 },
+  xs: { W: 136, H: 58, BASE: 42, TOP: 14, small: 12, big: 12, axis: 12 },
+  phone: { W: 300, H: 150, BASE: 134, TOP: 14, small: 12.5, big: 12.5, axis: 12 },
 }
 
 export function SpikeBars({ weeks, compare = null, highlightLast, counts = 'last', variant = 'market', size = 'lg', label, ghost = false, className }: SpikeBarsProps) {
@@ -89,8 +94,8 @@ export function SpikeBars({ weeks, compare = null, highlightLast, counts = 'last
       {compare && cy != null ? (
         <g data-compare="">
           <line x1={0} y1={cy} x2={pick ? r1((n - 1) * slot) : W} y2={cy} className="stroke-foreground" strokeWidth={1} strokeDasharray="3 4" />
-          <text x={0} y={cy - 6} fontSize={small} className="fill-muted-foreground font-mono">
-            {compare.label} · <tspan data-copy="figure">{fmtInt(compare.value)}</tspan>
+          <text x={0} y={cy - 6} fontSize={small} className="fill-muted-foreground">
+            {compare.label}, <tspan data-copy="figure">{fmtInt(compare.value)}</tspan>
           </text>
         </g>
       ) : null}
@@ -119,7 +124,7 @@ export function SpikeBars({ weeks, compare = null, highlightLast, counts = 'last
             textAnchor="middle"
             fontSize={last ? big : small}
             fontWeight={last ? 600 : 400}
-            className={cn('font-mono tabular-nums', last ? 'fill-foreground' : 'fill-secondary-foreground')}
+            className={cn('tabular-nums', last ? 'fill-foreground' : 'fill-secondary-foreground')}
           >
             {fmtInt(w.count)}
           </text>
@@ -133,7 +138,7 @@ export function SpikeBars({ weeks, compare = null, highlightLast, counts = 'last
           textAnchor="middle"
           fontSize={axis}
           fontWeight={i === n - 1 ? 600 : 400}
-          className={cn('font-mono', i === n - 1 ? 'fill-foreground' : 'fill-muted-foreground')}
+          className={cn('tabular-nums', i === n - 1 ? 'fill-foreground' : 'fill-muted-foreground')}
         >
           {w.label}
         </text>

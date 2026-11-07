@@ -58,10 +58,14 @@ const TONE_FILL = { market: 'fill-brand', rival: 'fill-comp', you: 'fill-you' } 
 /** One decimal of a user unit is finer than a pixel at any width drawn. */
 const r1 = (v: number): number => Math.round(v * 10) / 10
 
+// The audit design (7 Nov): every text at least 12 user units, which is 12px
+// wherever a drawing is shown at its own width or wider (brief §3: no text
+// under 12px), in the page's sans with tabular figures (no mono on screens,
+// decision 9).
 const GEOMETRY = {
-  sm: { W: 200, H: 84, top: 14, base: 66, bar: 0.54, value: 11, axis: 10, sub: 10 },
-  md: { W: 300, H: 140, top: 22, base: 104, bar: 0.64, value: 12, axis: 11, sub: 10 },
-  lg: { W: 560, H: 160, top: 24, base: 124, bar: 0.57, value: 12.5, axis: 11.5, sub: 10.5 },
+  sm: { W: 200, H: 84, top: 14, base: 66, bar: 0.54, value: 12, axis: 12, sub: 12 },
+  md: { W: 300, H: 140, top: 22, base: 104, bar: 0.64, value: 12.5, axis: 12, sub: 12 },
+  lg: { W: 560, H: 160, top: 24, base: 124, bar: 0.57, value: 13, axis: 12.5, sub: 12 },
 } as const
 
 export function MiniBars({ bars, highlight = 'last', size = 'sm', label, className, tone = 'market' }: MiniBarsProps) {
@@ -70,7 +74,7 @@ export function MiniBars({ bars, highlight = 'last', size = 'sm', label, classNa
   const g = GEOMETRY[size]
   const hasSub = bars.some((b) => b.sub)
   // Room under the labels for the sub line, where any bar has one.
-  const H = hasSub && size === 'sm' ? g.H + 14 : g.H
+  const H = hasSub && size === 'sm' ? g.H + 16 : g.H
   const picked = highlight === 'last' ? n - 1 : highlight
   const max = Math.max(1, ...bars.map((b) => b.value))
   const slot = g.W / n
@@ -108,7 +112,7 @@ export function MiniBars({ bars, highlight = 'last', size = 'sm', label, classNa
               textAnchor="middle"
               fontSize={g.value}
               fontWeight={on ? 600 : 400}
-              className="fill-foreground font-mono tabular-nums"
+              className="fill-foreground tabular-nums"
             >
               {b.display ?? fmtInt(b.value)}
             </text>
@@ -118,7 +122,7 @@ export function MiniBars({ bars, highlight = 'last', size = 'sm', label, classNa
               textAnchor="middle"
               fontSize={g.axis}
               fontWeight={on ? 600 : 400}
-              className={cn('font-mono', on ? 'fill-foreground' : 'fill-muted-foreground')}
+              className={cn('tabular-nums', on ? 'fill-foreground' : 'fill-muted-foreground')}
             >
               {b.label}
             </text>
@@ -129,7 +133,7 @@ export function MiniBars({ bars, highlight = 'last', size = 'sm', label, classNa
                 y={g.base + 15 + g.sub + 4}
                 textAnchor="middle"
                 fontSize={g.sub}
-                className="fill-muted-foreground font-mono tabular-nums"
+                className="fill-muted-foreground tabular-nums"
               >
                 {b.sub}
               </text>

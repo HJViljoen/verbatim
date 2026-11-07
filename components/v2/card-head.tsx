@@ -18,7 +18,7 @@ import { Label } from './ui'
  * pixels rather than 290.
  *
  * `CardHead` is the boards' card head: the title at 18px (21px at lg) and an
- * optional muted line under it, and an optional action at the right-hand end
+ * optional muted line under it at the boards' 14px, and an optional action at the right-hand end
  * (a key, a link). A hero card's head carries a label and a flag over a 21px
  * title (`size="lg"`). Since the audit design it draws NO icon tile: `icon` is
  * accepted and ignored until the last caller drops it (T12.1), and the label
@@ -67,7 +67,7 @@ export function CardHead({ title, sub, eyebrow, flag, action, size = 'md', as: T
         >
           {title}
         </Title>
-        {sub ? <p className="m-0 mt-0.5 text-[13px] leading-[1.4] text-muted-foreground">{sub}</p> : null}
+        {sub ? <p className="m-0 mt-1.5 text-[14px] leading-[1.45] text-muted-foreground">{sub}</p> : null}
       </div>
       {action ? <div className="ml-auto shrink-0">{action}</div> : null}
     </div>

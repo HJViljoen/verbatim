@@ -24,7 +24,7 @@ describe('SpikeBars', () => {
   it('draws a comparison line, dashed, short of the newest week, with its label and figure', () => {
     const m = render(<SpikeBars weeks={SPIKE_WEEKS} compare={{ value: 6, label: 'usual' }} label="x" />)
     expect(m).toMatch(/<line x1="0" y1="[\d.]+" x2="440" y2="[\d.]+" class="stroke-foreground" stroke-width="1" stroke-dasharray="3 4"/)
-    expect(renderText(<SpikeBars weeks={SPIKE_WEEKS} compare={{ value: 6, label: 'usual' }} label="x" />)).toContain('usual · 6')
+    expect(renderText(<SpikeBars weeks={SPIKE_WEEKS} compare={{ value: 6, label: 'usual' }} label="x" />)).toContain('usual, 6')
     expect(figures(m)).toEqual(['6', '19'])
     assertCopyContract(<SpikeBars weeks={SPIKE_WEEKS} compare={{ value: 6, label: 'usual' }} label="x" />)
   })

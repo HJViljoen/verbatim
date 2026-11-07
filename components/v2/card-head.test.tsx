@@ -13,7 +13,7 @@ describe('CardHead and CARD', () => {
     expect(m).not.toContain('text-orange-text')
     expect(m).not.toContain('<svg')
     expect(m).toMatch(/<h2 class="[^"]*text-\[18px\][^"]*">What the market is talking about<\/h2>/)
-    expect(m).toMatch(/<p class="[^"]*text-\[13px\][^"]*text-muted-foreground">Your six subjects, October so far<\/p>/)
+    expect(m).toMatch(/<p class="[^"]*text-\[14px\][^"]*text-muted-foreground">Your six subjects, October so far<\/p>/)
   })
 
   it('carries a hero\'s eyebrow and flag over a 21px title', () => {
