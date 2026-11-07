@@ -7,7 +7,7 @@ import { marketLabelsOf } from '@/lib/brands/labels'
 import { MARKET_PANEL_MONTHS, type GroupLink, type MarketData, type MonthCount, type PanelQuote, type SubjectDetail } from '@/lib/pages/v2/market'
 import type { WhoPart } from '@/lib/written/types'
 import { translationLabel, translationNote } from '@/components/quote-block'
-import { About, OLINK } from './parts'
+import { About } from './parts'
 import { BTN_PRIMARY, ROW, toMax } from '@/components/v2/look'
 import { cn } from '@/lib/utils'
 
@@ -47,7 +47,7 @@ export function shareBars(bars: readonly MonthCount[]) {
 /** The quotes a panel prints: the conversation panel's markup, one card each. */
 export function QuotesSection({ quotes, data }: { quotes: readonly PanelQuote[]; data: MarketData }) {
   return (
-    <PanelSection label={<>In their words · <span data-copy="figure">{quotes.length}</span> of the comments</>}>
+    <PanelSection label={<>In their words, <span data-copy="figure">{quotes.length}</span> of the comments</>}>
       <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-3">
         {quotes.map((q, i) => {
           const note = translationNote({ lang: q.lang, english: q.english })
@@ -146,4 +146,3 @@ export function SubjectBase({ level, week = null, detail, monthText }: { level: 
 
 /** For a test: the link class of the panel's Ask. */
 export const PANEL_ASK = ASK
-export const PANEL_OLINK = OLINK

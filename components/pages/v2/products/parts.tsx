@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
 // draws (a figure, a level, a mini bar row, the panel's tag and Ask button)
 // are Voices' own, imported, never copied.
 
-export { AskButton, CAPS, EmptyLine, Fig, LevelText, MiniRow, OLINK, PanelTag } from '@/components/pages/v2/voices/parts'
+export { AskButton, CAPS, EmptyLine, Fig, LevelText, MiniRow, PanelTag } from '@/components/pages/v2/voices/parts'
 
 // The buttons live in ./buttons so the client Tag control can import them
 // without pulling the page's loader (and its server imports) into the browser.

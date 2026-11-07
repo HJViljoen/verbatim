@@ -1,4 +1,3 @@
-import type { LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { Label } from './ui'
@@ -20,17 +19,13 @@ import { Label } from './ui'
  * `CardHead` is the boards' card head: the title at 18px (21px at lg) and an
  * optional muted line under it at the boards' 14px, and an optional action at the right-hand end
  * (a key, a link). A hero card's head carries a label and a flag over a 21px
- * title (`size="lg"`). Since the audit design it draws NO icon tile: `icon` is
- * accepted and ignored until the last caller drops it (T12.1), and the label
- * over the title is the kit's sentence-case `Label`, never an orange or
- * uppercase eyebrow.
+ * title (`size="lg"`). Since the audit design it draws NO icon tile (the
+ * `icon` prop went with the tidy-up, T12.1), and the label over the title is
+ * the kit's sentence-case `Label`, never an orange or uppercase eyebrow.
  */
 export const CARD = 'flex min-w-0 flex-col gap-4 rounded-[12px] bg-card p-[26px] shadow-card max-sm:gap-3 max-sm:p-[18px]'
 
 export interface CardHeadProps {
-  /** Accepted and ignored since the audit design (no icon tiles); removed
-   *  with its callers in T12.1. */
-  icon?: LucideIcon
   title: ReactNode
   /** The muted line under the title. Numbers in it are the caller's to mark. */
   sub?: ReactNode

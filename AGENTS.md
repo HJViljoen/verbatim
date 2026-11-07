@@ -1251,7 +1251,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
     an icon tile (`LevelTile`, the boards' glyphs in
     `components/shell/level-glyphs.tsx`), a small level label, the 28px title
     as the page's one h1, the mono meta line, and the period switch at the
-    block's right-hand end. A subject: stacked layers on the kit's yellow,
+    block's right-hand end (since the audit design, 7 Nov, the boards' block
+    instead, and since its tidy-up `LevelBar` draws only that: the 28px h1
+    with its controls, `sub`, `tags` and the figures row; no tile, no level
+    label, no mono meta; `LevelTile`, the glyphs file and
+    `ConversationLabel` are gone, and the rest of this sentence is the 17
+    Oct history). A subject: stacked layers on the kit's yellow,
     "Subject". A conversation: a speech bubble on the neutral, "Conversation
     in {subject}" with the subject a link up (`ConversationLabel`), or
     "Conversation" where no ready subject holds it. The week's read: a

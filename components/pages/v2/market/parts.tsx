@@ -10,7 +10,7 @@ import { nextMonth } from '@/lib/reading/month-key'
 import { bandVerdict, type Verdict } from '@/lib/reading/verdicts'
 import type { WhoPart } from '@/lib/written/types'
 import { cn } from '@/lib/utils'
-import { GO, LBL } from '@/components/v2/look'
+import { LBL } from '@/components/v2/look'
 
 // The small pieces Market's blocks share (depth v2, T3), since the audit
 // design (7 Nov) drawn from the kit's look (components/v2/look): the link
@@ -18,13 +18,6 @@ import { GO, LBL } from '@/components/v2/look'
 // its videos are about, a stored sentence with its figures put back. Your
 // products and Your moves borrow these, so they take the new look with
 // Market's; their words are fixed in their own phases.
-
-/** The link that says where it goes, with no arrow (the kit's `GO`; the name
- *  stays for the pages that borrow it until the tidy-up). */
-export const OLINK = GO
-
-/** The muted figure line under a big figure, tabular sans. */
-export const MONO_MUTED = 'text-[13px] tabular-nums text-muted-foreground'
 
 /** The big and mid figures, tabular sans. */
 export const BIG = 'text-[40px] leading-none font-bold tracking-[-0.01em] tabular-nums text-foreground'

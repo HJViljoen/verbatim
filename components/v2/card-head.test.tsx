@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { MessageSquareText, TrendingUp } from 'lucide-react'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { CARD, CardHead } from './card-head'
@@ -13,7 +12,7 @@ describe('CardHead and CARD', () => {
   })
 
   it('draws no icon tile (the audit design), then the 18px title and its muted line', () => {
-    const m = render(<CardHead icon={MessageSquareText} title="What the market is talking about" sub="Your six subjects, October so far" />)
+    const m = render(<CardHead title="What the market is talking about" sub="Your six subjects, October so far" />)
     expect(m).not.toContain('data-icon-tile')
     expect(m).not.toContain('text-orange-text')
     expect(m).not.toContain('<svg')
@@ -22,7 +21,7 @@ describe('CardHead and CARD', () => {
   })
 
   it('carries a hero\'s eyebrow and flag over a 21px title', () => {
-    const node = <CardHead icon={TrendingUp} size="lg" eyebrow="Unusual this week" flag={<FlagChip verdict={WEEK_FLAG} />} title="Insurance refusals for powered knees" />
+    const node = <CardHead size="lg" eyebrow="Unusual this week" flag={<FlagChip verdict={WEEK_FLAG} />} title="Insurance refusals for powered knees" />
     const m = render(node)
     // The label over the title is the kit's sentence-case Label, never an
     // orange or uppercase eyebrow.
@@ -36,7 +35,7 @@ describe('CardHead and CARD', () => {
   })
 
   it('puts an action at the right-hand end and centres the head', () => {
-    const m = render(<CardHead icon={TrendingUp} title="Your catalogue" action={<a href="#">Edit</a>} />)
+    const m = render(<CardHead title="Your catalogue" action={<a href="#">Edit</a>} />)
     expect(m).toMatch(/^<div class="flex gap-3 items-center">/)
     expect(m).toContain('<div class="ml-auto shrink-0"><a href="#">Edit</a></div>')
   })

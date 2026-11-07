@@ -6,7 +6,7 @@ import { conversationCrumbs, marketParams, subjectCrumbs, subjectMenu, subjectNa
 import { SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import type { Crumb } from '@/lib/pages/crumbs'
 import { ANCESTOR_MAX, BackLink, CrumbRow, Switcher } from './crumbs'
-import { ConversationLabel, LevelBar } from './level-bar'
+import { LevelBar } from './level-bar'
 import { GoLink } from '@/components/v2/ui'
 
 // THE PATH AND ITS SWITCHERS, THEN THE TITLE BLOCK (F3-Market-Nav, 17 Oct):
@@ -93,32 +93,6 @@ describe('the title block', () => {
   const subject = marketSubjectFixture('fit')
   const conv = marketConversationFixture(1)
 
-  it('names the level: the tile, the small label, the 28px title as the page\'s one h1, the mono meta, the control at the right', () => {
-    const node = <LevelBar crumbs={subject.crumbs!} level="subject" label="Subject" meta={[['5 to 11 October', '82 of 241 videos this week'], ['108 of 318 in October so far']]} controls={<span>switch</span>} />
-    const html = render(node)
-    expect(html).toMatch(/<span aria-hidden="true" data-level-tile="subject" class="[^"]*size-\[46px\][^"]*bg-accent text-orange-text">/)
-    expect(html).toMatch(/<p data-level-label="" class="m-0 text-\[13px\] leading-\[18px\] font-semibold text-muted-foreground">Subject<\/p>/)
-    expect(html).toMatch(/<h1 class="[^"]*text-\[28px\][^"]*font-bold[^"]*max-sm:text-\[24px\][^"]*">Fit &amp; comfort<\/h1>/)
-    expect(html.match(/<h1\b/g)).toHaveLength(1)
-    expect(renderText(node)).toBe('Market / Fit & comfort Market Subject Fit & comfort 5 to 11 October · 82 of 241 videos this week · 108 of 318 in October so far switch')
-    // On a phone the meta breaks into its lines, and the separator between
-    // them goes.
-    expect(html).toMatch(/<span class="max-sm:block"><span class="max-sm:hidden"> · <\/span>108 of 318/)
-    // The page's own chevron rides after the title on a phone only.
-    expect(html).toMatch(/<\/h1><span class="relative shrink-0 sm:hidden"><button[^>]*aria-label="Switch to another subject"/)
-  })
-
-  it('a conversation: the speech bubble on the neutral, "Conversation in {subject}" with the subject a link up', () => {
-    const parent = conv.crumbs![1]
-    const node = <LevelBar crumbs={conv.crumbs!} level="conversation" label={<ConversationLabel parent={parent} />} />
-    const html = render(node)
-    expect(html).toMatch(/data-level-tile="conversation" class="[^"]*bg-track text-secondary-foreground"/)
-    expect(html).toMatch(/Conversation in <a class="[^"]*underline[^"]*" href="\/dashboard\/market\/subjects\/subj-fit">Fit &amp; comfort<\/a><\/p>/)
-    expect(html).toMatch(/<h1[^>]*><span data-copy="subject" data-slot="pass_b_theme">How long a liner lasts<\/span><\/h1>/)
-    expect(renderText(<ConversationLabel parent={null} />)).toBe('Conversation')
-    assertCopyContract(node)
-  })
-
   it('the audit design\'s block: the h1, then the line under it, its tags and the figures row; no tile and no label', () => {
     const node = (
       <LevelBar
@@ -151,16 +125,11 @@ describe('the title block', () => {
     expect(render(<LevelBar crumbs={subject.crumbs!} level="idea" sub="Post idea 1" />)).toContain('data-level-bar="idea"')
   })
 
-  it('takes a closed set of levels: Market\'s draw their own tile, another page\'s must bring one (checked by tsc)', () => {
+  it('takes a closed set of levels (checked by tsc)', () => {
     const crumbs = conv.crumbs!
-    const tile = <span data-level-tile="idea" />
     // @ts-expect-error a level no page names is a compile error
-    void (<LevelBar crumbs={crumbs} level="subjct" label="Subject" />)
-    // @ts-expect-error another page's level brings its own tile
-    void (<LevelBar crumbs={crumbs} level="idea" label="Post idea 1" />)
-    // @ts-expect-error Market's levels draw LevelTile and take no tile
-    void (<LevelBar crumbs={crumbs} level="subject" tile={tile} label="Subject" />)
-    expect(render(<LevelBar crumbs={crumbs} level="idea" tile={tile} label="Post idea 1" />)).toContain('data-level-bar="idea"')
+    void (<LevelBar crumbs={crumbs} level="subjct" />)
+    expect(render(<LevelBar crumbs={crumbs} level="idea" />)).toContain('data-level-bar="idea"')
   })
 })
 

@@ -27,7 +27,7 @@ import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import postcss from 'postcss'
 import tailwind from '@tailwindcss/postcss'
-import { BarChart3, Boxes, Lightbulb, ListChecks, MessageSquareText, Smartphone, Sparkles, Target, TrendingUp, Users } from 'lucide-react'
+import { Sparkles } from 'lucide-react'
 
 import { PageBar } from '../components/shell/page-grid'
 import { BrandChip, ChipSep, TAG } from '../components/colour-roles'
@@ -112,7 +112,7 @@ function Movers() {
       <Label>CARD + CardHead (lg, FlagChip) + SpikeBars + SELECTED_CARD_RING · MiniBars (sm) · UnitSquares · then InPlacePanel (notchAt 0.25) + PanelTitle + StatRow/StatCell + PanelSection + MiniBars (lg) + TickBarRow + ProportionBar</Label>
       <div className="grid grid-cols-12 gap-5">
         <article className={cn(CARD, 'col-span-6', SELECTED_CARD_RING)}>
-          <CardHead icon={TrendingUp} size="lg" flag={<FlagChip verdict={WEEK_FLAG} />} title="Insurance refusals for powered knees" />
+          <CardHead size="lg" flag={<FlagChip verdict={WEEK_FLAG} />} title="Insurance refusals for powered knees" />
           <div className="flex flex-wrap items-baseline gap-3.5">
             <div data-copy="figure" className="font-mono text-[44px] leading-none font-medium tracking-[-0.02em] tabular-nums">19</div>
             <div className={cn(MONO_MUTED, 'leading-[1.5]')}>
@@ -129,14 +129,14 @@ function Movers() {
           </div>
         </article>
         <article className={cn(CARD, 'col-span-3')}>
-          <CardHead icon={BarChart3} eyebrow="Three weeks" title="How long a liner lasts" />
+          <CardHead eyebrow="Three weeks" title="How long a liner lasts" />
           <div className="flex items-baseline gap-2"><span data-copy="figure" className="font-mono text-[30px] leading-none font-medium tracking-[-0.02em]">23</span><span data-copy="level" className={MONO_MUTED}>of 241 videos</span></div>
           <MiniBars bars={THREE_WEEKS} label="Videos asking how long a liner lasts" />
           <p className="m-0 text-[14px] leading-[1.5] text-secondary-foreground">New amputees asking when a liner stops holding and how often to replace it.</p>
           <div className="mt-auto"><a href="#" className={OLINK}>Open →</a></div>
         </article>
         <article className={cn(CARD, 'col-span-3')}>
-          <CardHead icon={Sparkles} eyebrow="First heard" flag={<FlagChip verdict={NEW_FLAG} />} title="Waterproof knees" />
+          <CardHead eyebrow="First heard" flag={<FlagChip verdict={NEW_FLAG} />} title="Waterproof knees" />
           <div className="flex items-baseline gap-2"><span data-copy="figure" className="font-mono text-[30px] leading-none font-medium tracking-[-0.02em]">8</span><span data-copy="level" className={MONO_MUTED}>of 241 videos</span></div>
           <UnitSquares k={6} n={8} tone="ink" label="6 of the 8 videos are from active and athletic users" />
           <p className="m-0 text-[14px] leading-[1.5] text-secondary-foreground">Mostly swimmers, asking whether a knee can go in a pool or the shower.</p>
@@ -258,7 +258,7 @@ function Board() {
       <Label>Subject board: TickBar (lg, tick) + MovementBadge + Sparkline + FlagChip in rows · rail: TickBarRow + TickKey, SpikeBars (ink, md), ProportionBar</Label>
       <div className="grid grid-cols-12 gap-5">
         <article className={cn(CARD, 'col-span-8')}>
-          <CardHead icon={MessageSquareText} title="What the market is talking about" sub={<>Your subjects, as a share of October’s <span data-copy="figure">318</span> videos so far. The black tick is September.</>} />
+          <CardHead title="What the market is talking about" sub={<>Your subjects, as a share of October’s <span data-copy="figure">318</span> videos so far. The black tick is September.</>} />
           <div>
             <SubjectRow name="Cost & access" k={70} n={318} pct={22} tick={15} verdict={MOVED} months={[14, 15, 15, 16, 15, 22]}
               inside={<><ConvRow name="Insurance refusals for powered knees" n={19} flag={<FlagChip verdict={WEEK_FLAG} />} /><ConvRow name="Paying out of pocket" n={15} /><ConvRow name="Medical aid and liners" n={9} /></>} />
@@ -270,7 +270,7 @@ function Board() {
         </article>
         <div className="col-span-4 flex flex-col gap-5">
           <article className={CARD}>
-            <CardHead icon={ListChecks} title="What people do in the comments" sub={<>Share of October’s <span data-copy="figure">318</span> videos where at least one comment did it</>} />
+            <CardHead title="What people do in the comments" sub={<>Share of October’s <span data-copy="figure">318</span> videos where at least one comment did it</>} />
             <div className="flex flex-col gap-[11px]">
               <TickBarRow name="Asked a question" value="45%" pct={45} tick={44} label="45% this month, 44% last month" />
               <TickBarRow name="Praised a device" value="37%" pct={37} tick={38} label="37% this month, 38% last month" />
@@ -280,11 +280,11 @@ function Board() {
             <TickKey fill="October so far" tick="September" />
           </article>
           <article className={CARD}>
-            <CardHead icon={BarChart3} title="Videos, week by week" sub="Your market’s videos, by the week people commented" />
+            <CardHead title="Videos, week by week" sub="Your market’s videos, by the week people commented" />
             <SpikeBars weeks={VOLUME_WEEKS} variant="ink" counts="all" size="md" label="Videos a week" />
           </article>
           <article className={CARD}>
-            <CardHead icon={Smartphone} title="Where it’s said" sub={<>The <span data-copy="figure">241</span> videos, by platform</>} />
+            <CardHead title="Where it’s said" sub={<>The <span data-copy="figure">241</span> videos, by platform</>} />
             <ProportionBar of="videos" segments={PLATFORMS} />
             <div className="flex flex-wrap justify-between gap-2.5 text-[13px]">
               {PLATFORMS.map((p) => <span key={p.label} className="inline-flex items-center gap-1.5"><i aria-hidden className={cn('inline-block size-2 rounded-[2px]', p.color)} />{p.label} <span data-copy="figure" className="font-mono">{p.count}</span></span>)}
@@ -302,11 +302,11 @@ function VoicesAndMoves() {
       <Label>SlopePair · StatCell (sm) + UnitSquares (dot) · StatCell (md) · TickBar (xl, figure) + UnitSquares (bar) · FlagChip, every word</Label>
       <div className="grid grid-cols-12 gap-5">
         <article className={cn(CARD, 'col-span-4')}>
-          <CardHead icon={Users} title="How the mix changed" sub="Each group’s share of the market’s videos, September against October so far" />
+          <CardHead title="How the mix changed" sub="Each group’s share of the market’s videos, September against October so far" />
           <SlopePair fromLabel="Sep" toLabel="Oct" rows={SLOPE_ROWS} highlight="caregivers" label="Each group's share of the market's videos" />
         </article>
         <article className={cn(CARD, 'col-span-4')}>
-          <CardHead icon={Target} title="What it rests on" sub="Your moves: the advice’s evidence cells" />
+          <CardHead title="What it rests on" sub="Your moves: the advice’s evidence cells" />
           <div className="grid grid-cols-2 gap-2.5">
             <StatCell size="sm" value={19} of={241} label="videos this week" />
             <StatCell size="sm" value={4} label="updates in a row, since 14 Sep">
@@ -317,7 +317,7 @@ function VoicesAndMoves() {
           </div>
         </article>
         <article className={cn(CARD, 'col-span-4')}>
-          <CardHead icon={Sparkles} title="FlagChip" sub="Every word a verdict can earn, then the small size; nothing for a month that moved, a refusal or no verdict" />
+          <CardHead title="FlagChip" sub="Every word a verdict can earn, then the small size; nothing for a month that moved, a refusal or no verdict" />
           <div className="flex flex-wrap items-center gap-2">
             {[WEEK_FLAG, NEW_FLAG, GONE_QUIET, GROWING, { ...MOVED, direction: 'fading' as const }].map((v, i) => <FlagChip key={i} verdict={v} />)}
             <FlagChip verdict={NEW_FLAG} size="sm" />
@@ -326,7 +326,7 @@ function VoicesAndMoves() {
       </div>
       <div className="grid grid-cols-12 gap-5">
         <article className={cn(CARD, 'col-span-8')}>
-          <CardHead icon={Lightbulb} title="How the video is made" sub="Content: response, 1× is typical, and your posts" />
+          <CardHead title="How the video is made" sub="Content: response, 1× is typical, and your posts" />
           <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,2.2fr)_minmax(0,0.9fr)] items-center gap-x-3.5 gap-y-2.5 text-[13.5px]">
             <span>Story</span><TickBar pct={77.5} tick={25} size="xl" figure="3.1×" label="3.1 times the typical response" /><UnitSquares k={1} n={9} tone="you" shape="bar" label="1 of your 9 posts" />
             <span>A question</span><TickBar pct={45} tick={25} size="xl" figure="1.8×" label="1.8 times the typical response" /><UnitSquares k={0} n={9} tone="you" shape="bar" label="0 of your 9 posts" />
@@ -375,7 +375,7 @@ function Products() {
         </article>
       </div>
       <article className={CARD}>
-        <CardHead icon={Boxes} title="Your catalogue" sub="Every product, by category. The darker the tile, the more videos talked about it this month." action={<ShelfLegend />} />
+        <CardHead title="Your catalogue" sub="Every product, by category. The darker the tile, the more videos talked about it this month." action={<ShelfLegend />} />
         <CatalogueShelf
           columns={SHELF.map((c) => (c.id === 'liners'
             ? { ...c, line: <><span data-copy="figure">16%</span> of the market <span data-copy="verdict"><MovementBadge verdict={MOVED} unit="pts" good="neutral" bandTip /></span></>, note: <>Fit &amp; comfort leads, <span data-copy="level">34 of 52</span></> }
@@ -417,17 +417,17 @@ function Dark() {
       <Label>The same pieces under .dark (tokens, both themes)</Label>
       <div className="grid grid-cols-12 gap-5">
         <article className={cn(CARD, 'col-span-4', SELECTED_CARD_RING)}>
-          <CardHead icon={TrendingUp} eyebrow="Unusual this week" flag={<FlagChip verdict={WEEK_FLAG} />} title="Insurance refusals" />
+          <CardHead eyebrow="Unusual this week" flag={<FlagChip verdict={WEEK_FLAG} />} title="Insurance refusals" />
           <SpikeBars weeks={SPIKE_WEEKS} size="md" label="Videos a week" />
         </article>
         <article className={cn(CARD, 'col-span-4')}>
-          <CardHead icon={ListChecks} title="What people do" />
+          <CardHead title="What people do" />
           <TickBarRow name="Complained" value="32%" pct={32} tick={27} verdict={MOVED} label="x" />
           <TickBarRow name="Asked" value="45%" pct={45} tick={44} label="x" />
           <UnitSquares k={7} n={9} tone="you" label="7 of 9" />
         </article>
         <article className={cn(CARD, 'col-span-4')}>
-          <CardHead icon={Users} title="How the mix changed" />
+          <CardHead title="How the mix changed" />
           <SlopePair fromLabel="Sep" toLabel="Oct" rows={SLOPE_ROWS.slice(0, 3)} highlight="long-time" label="x" />
         </article>
       </div>

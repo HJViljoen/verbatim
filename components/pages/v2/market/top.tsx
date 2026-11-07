@@ -4,7 +4,11 @@ import { fmtInt, fmtPct, longMonth } from '@/lib/format'
 import { talkKindLabel } from '@/lib/pages/overview-market/kinds'
 import { flagBaseWords, topSpans, type Doing, type GroupLink, type HeroCard, type MarketConv, type MarketData, type MonthCount, type SideCard } from '@/lib/pages/v2/market'
 import { cn } from '@/lib/utils'
-import { ABOUT_NOT_COUNTED, ABOUT_NOT_READ, BIG, BrandsNamed, Fig, Label, MID, MONO_MUTED, newVerdict } from './parts'
+import { ABOUT_NOT_COUNTED, ABOUT_NOT_READ, BIG, BrandsNamed, Fig, Label, MID, newVerdict } from './parts'
+
+/** The muted figure line under a big figure, tabular sans (was the parts'
+ *  `MUTED_FIGURE`, gone with the tidy-up). */
+const MUTED_FIGURE = 'text-[13px] tabular-nums text-muted-foreground'
 
 // MARKET'S TOP ROW (depth v2, T3; E2-Market's "what moved", re-cut to decision
 // 1). This week: the anomaly check's first flag where it raised one, else the
@@ -29,7 +33,7 @@ const SIDE_SPAN: Record<number, string> = { 5: 'col-span-12 md:col-span-6 xl:col
 function WeekLines({ conv, data }: { conv: MarketConv; data: MarketData }) {
   const week = data.week
   return (
-    <div className={cn(MONO_MUTED, 'leading-[1.5]')}>
+    <div className={cn(MUTED_FIGURE, 'leading-[1.5]')}>
       {week?.category != null ? <span data-copy="level" className="block">of {fmtInt(week.category)} category videos this week</span> : null}
       <MonthLine k={conv.month} data={data} />
     </div>
@@ -95,7 +99,7 @@ function Context({ groups, doing, kind, noun, monthText }: { groups: readonly Gr
         {doing
           // On a phone the two columns stand as the board's do, so the
           // figure line may wrap inside its own (T9: nothing past the card).
-          ? <>{doing.label}, <span className={cn(MONO_MUTED, 'whitespace-nowrap max-sm:whitespace-normal')}><span data-copy="level">{fmtInt(doing.k)} of {fmtInt(doing.n)}</span> {monthText}</span></>
+          ? <>{doing.label}, <span className={cn(MUTED_FIGURE, 'whitespace-nowrap max-sm:whitespace-normal')}><span data-copy="level">{fmtInt(doing.k)} of {fmtInt(doing.n)}</span> {monthText}</span></>
           : kind ? talkKindLabel(kind, noun) : <span className="text-muted-foreground">Not read yet</span>}
       </div>
     </div>
@@ -149,7 +153,7 @@ function FlagHero({ hero, data, span }: { hero: Extract<HeroCard, { kind: 'flag'
       <CardHead size="lg" flag={<FlagChip verdict={card.verdict} />} title={f.objectKind === 'theme' ? <span data-copy="subject" data-slot="pass_b_theme">{title}</span> : title} />
       <div className="flex flex-wrap items-baseline gap-3.5">
         <div data-copy="figure" className={BIG}>{fmtInt(f.week.k)}</div>
-        <div className={cn(MONO_MUTED, 'leading-[1.5]')}>
+        <div className={cn(MUTED_FIGURE, 'leading-[1.5]')}>
           <span data-copy="level" className="block">of {fmtInt(f.week.n)} videos this week, {flagBaseWords(f.denominator)}</span>
           <span data-copy="level" className="block">{fmtInt(f.baseline.k)} of {fmtInt(f.baseline.n)} in {card.baselineText}, the same base</span>
           {card.month ? <span data-copy="level" className="block">{fmtInt(card.month.k)} of {fmtInt(card.month.n)} category videos {data.week?.inMonth ?? `in ${data.month.text}`}</span> : null}
@@ -182,7 +186,7 @@ function ConvHero({ hero, data, span }: { hero: Extract<HeroCard, { kind: 'new' 
         <Fig n={figure} className={BIG} />
         {week
           ? <WeekLines conv={conv} data={data} />
-          : <div className={cn(MONO_MUTED, 'leading-[1.5]')}>{data.month.category != null ? <span data-copy="level" className="block">of {fmtInt(data.month.category)} category videos {data.month.soFar ? `in ${longMonth(data.month.month)} so far` : `in ${longMonth(data.month.month)}`}</span> : null}</div>}
+          : <div className={cn(MUTED_FIGURE, 'leading-[1.5]')}>{data.month.category != null ? <span data-copy="level" className="block">of {fmtInt(data.month.category)} category videos {data.month.soFar ? `in ${longMonth(data.month.month)} so far` : `in ${longMonth(data.month.month)}`}</span> : null}</div>}
       </div>
       {week
         ? <>
@@ -291,7 +295,7 @@ function Side({ side, data, index, span }: { side: SideCard; data: MarketData; i
         <Fig n={week ? conv.week : conv.month} className={MID} />
         {week
           ? <WeekLines conv={conv} data={data} />
-          : data.month.category != null ? <span data-copy="level" className={MONO_MUTED}>of {fmtInt(data.month.category)} category videos</span> : null}
+          : data.month.category != null ? <span data-copy="level" className={MUTED_FIGURE}>of {fmtInt(data.month.category)} category videos</span> : null}
       </div>
       {week
         ? <SpikeBars weeks={weekBars(conv, data)} counts="all" size="md" ghost className="max-w-[300px]" label={`Category videos a week about ${conv.label}`} />

@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { Sparkles } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { EmptyBox, GO, LBL, TickBar } from '@/components/v2'
+import { EmptyBox, LBL, TickBar } from '@/components/v2'
 import { TAG } from '@/components/colour-roles'
 import { fmtCompact, fmtInt } from '@/lib/format'
 import { quoteWords } from '@/lib/pages/brands'
@@ -14,13 +14,9 @@ import { cn } from '@/lib/utils'
 // E3-Voices and E3-Voices-Open; since the audit design, 7 Nov, drawn to
 // Voices.dc.html from the kit): a name with its bar and count, a phrase, a
 // quote card, the panel's tag and its Ask button. Your products re-exports
-// `CAPS`, `OLINK`, `Fig`, `LevelText`, `MiniRow`, `EmptyLine`, `AskButton`
+// `CAPS`, `Fig`, `LevelText`, `MiniRow`, `EmptyLine`, `AskButton`
 // and `PanelTag` (components/pages/v2/products/parts.tsx), so they keep their
 // names and take the kit's look in place.
-
-/** A link that says where it goes (the kit's `GO`; the name kept for Your
- *  products, which borrows it). */
-export const OLINK = GO
 
 /** A label in sentence case (the kit's `LBL`; the name kept for Your
  *  products). */

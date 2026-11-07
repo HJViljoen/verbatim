@@ -273,8 +273,8 @@ screens since the audit design brands read as plain words in a comma list ("Otto
 white only: on the ground they are 4.3:1 and on the pale yellow 4.2:1, both under AA.
 
 **Icon tiles are retired** (the audit design, 7 Nov). Card titles, Dashboard tiles and level pages open on
-their words alone; `IconTile` and `LevelTile` stay only until the last legacy caller goes (print reaches
-`IconTile` through the legacy modules).
+their words alone; `LevelTile` and its glyphs went with the tidy-up (8 Nov), and `IconTile` stays only
+until the last legacy caller goes (print reaches it through the legacy modules).
 
 **Bans that still hold.** No left stripe; no marker fill behind words in prose (a chip is a label on a brand
 line, never inside a sentence; `components/colour-roles.test.tsx` checks the pages); no beige or warm-white
