@@ -1,22 +1,24 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
+import { GO } from '@/components/v2/look'
 import { fmtInt } from '@/lib/format'
-import type { GroupName, Recipe, SentencePart } from '@/lib/pages/v2/content'
-import { fmtMultiple, groupHref } from '@/lib/pages/v2/content'
+import type { GroupName, SentencePart } from '@/lib/pages/v2/content'
+import { groupHref } from '@/lib/pages/v2/content'
 import { cn } from '@/lib/utils'
 
-// The Content page's small shared pieces (depth v2, T6): the boards' `.olink`,
-// `.rchip`, `.fact`, `.dlabel` and the code-written sentence with its figures
-// marked. Server components, no client JS.
+// The Content page's small shared pieces (depth v2, T6; the audit design, 7
+// Nov): the code-written sentence with its figures marked, the link, group
+// names and platform counts. Server components, no client JS. Figures are
+// tabular sans (no mono on screens, decision 9).
 
 /** A number code computed, marked for the copy contract. */
 export function Fig({ children, className }: { children: ReactNode; className?: string }) {
-  return <span data-copy="figure" className={cn('font-mono tabular-nums', className)}>{children}</span>
+  return <span data-copy="figure" className={cn('tabular-nums', className)}>{children}</span>
 }
 
 /** "k of N", marked a level. */
 export function Lvl({ children, className }: { children: ReactNode; className?: string }) {
-  return <span data-copy="level" className={cn('font-mono tabular-nums', className)}>{children}</span>
+  return <span data-copy="level" className={cn('tabular-nums', className)}>{children}</span>
 }
 
 /** A sentence code wrote: words as they are, every number a figure. */
@@ -28,33 +30,30 @@ export function Sentence({ parts }: { parts: readonly SentencePart[] }) {
   )
 }
 
-/** The boards' `.olink`: an orange-text link with its arrow. */
-export const OLINK = 'text-[13.5px] font-semibold text-orange-text no-underline transition-colors hover:text-orange-text/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm'
+/** The level pages' links, until each page draws the kit's `GoLink` (T6.2
+ *  to T6.4 drop it): the audit design's link, ink and underlined. */
+export const OLINK = GO
 
+/** A link that says where it goes (the kit's `GO`), with `scroll` for the
+ *  table's show-more, which keeps the reader's place. */
 export function OLink({ href, children, scroll, className, ...rest }: { href: string; children: ReactNode; scroll?: boolean; className?: string; 'aria-expanded'?: boolean; 'aria-controls'?: string }) {
-  return <Link href={href} scroll={scroll} className={cn(OLINK, className)} {...rest}>{children}</Link>
+  return <Link href={href} scroll={scroll} className={cn(GO, className)} {...rest}>{children}</Link>
 }
 
-/** The boards' `.dlabel`: small grey caps over a section. */
-export const LABEL = 'm-0 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground'
-
-/** A format or an opening, with its response multiple (the boards' `.rchip`). */
-export function RecipeChip({ recipe }: { recipe: Recipe }) {
+/** A list of facts as the boards draw them on a card: the term muted on the
+ *  left, its words on the right, a hairline above. */
+export function Facts({ rows, className }: { rows: readonly (readonly [string, ReactNode] | null | false)[]; className?: string }) {
+  const shown = rows.filter((r): r is readonly [string, ReactNode] => Boolean(r))
+  if (shown.length === 0) return null
   return (
-    <span className="inline-flex items-baseline gap-1.5 rounded-[8px] bg-inner px-2.5 py-[7px] text-[13px] leading-[1.3]">
-      {recipe.label}
-      {recipe.multiple != null ? <Fig className="text-[12px] font-semibold">{fmtMultiple(recipe.multiple)}</Fig> : null}
-    </span>
-  )
-}
-
-/** One row of a card's facts (the boards' `.fact`): a grey name, its value. */
-export function Fact({ name, children }: { name: string; children: ReactNode }) {
-  return (
-    <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-2.5 border-b border-track py-[9px] text-[13.5px] leading-[1.4]">
-      <span className="text-muted-foreground">{name}</span>
-      <span className="min-w-0">{children}</span>
-    </div>
+    <dl className={cn('m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2.5 border-t border-track pt-4 text-[14.5px] leading-[1.45]', className)}>
+      {shown.map(([term, words]) => (
+        <div key={term} className="contents">
+          <dt className="text-muted-foreground">{term}</dt>
+          <dd className="m-0 min-w-0">{words}</dd>
+        </div>
+      ))}
+    </dl>
   )
 }
 
@@ -85,5 +84,39 @@ export function PlatformCounts({ rows, label }: { rows: readonly { platform: str
         <span key={r.platform}>{i > 0 ? ', ' : null}{label(r.platform)} <Fig>{fmtInt(r.posts)}</Fig></span>
       ))}
     </>
+  )
+}
+
+/** The tallest a week's column is drawn, in px (the boards' 48). */
+const WEEK_BAR_PX = 48
+
+/**
+ * The weeks as small yellow columns, drawn in HTML so their words stay the
+ * boards' 12px at every width (the kit's `MiniBars` is an SVG whose text
+ * shrinks with its box: 7 to 9px on an idea card). Each week's count over
+ * its column, its day under a hairline, the newest in ink at 600; each
+ * column against the list's largest week. Bare counts: the base is said
+ * once above them (decision 2).
+ */
+export function WeekBars({ bars, label }: { bars: readonly { label: string; value: number }[]; label: string }) {
+  const max = Math.max(0, ...bars.map((b) => b.value))
+  return (
+    <div
+      role="img"
+      aria-label={`${label}: ${bars.map((b) => `${b.label} ${fmtInt(b.value)}`).join(', ')}`}
+      data-week-bars=""
+      className="grid shrink-0 grid-flow-col auto-cols-[42px] items-end gap-1.5"
+    >
+      {bars.map((b, i) => {
+        const newest = i === bars.length - 1
+        return (
+          <div key={b.label} className="flex flex-col items-center gap-1">
+            <span data-copy="figure" className={cn('text-[12px] leading-[1.3] tabular-nums', newest ? 'font-semibold text-foreground' : 'text-secondary-foreground')}>{fmtInt(b.value)}</span>
+            <div className="w-full rounded-t-[3px] bg-brand" style={{ height: max > 0 ? Math.round((b.value / max) * WEEK_BAR_PX) : 0 }} />
+            <span className={cn('w-full whitespace-nowrap border-t border-control pt-1 text-center text-[12px] leading-[1.3]', newest ? 'font-semibold text-foreground' : 'text-muted-foreground')}>{b.label}</span>
+          </div>
+        )
+      })}
+    </div>
   )
 }

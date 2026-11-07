@@ -19,8 +19,10 @@ describe('Worth a reply', () => {
     const node = <RepliesCard view={view()} state={STATE} />
     const text = renderText(node)
     expect(text).toContain('Comments written between 5 and 11 Oct worth an answer from you')
-    expect(text).toContain('12 comments · 6 under your posts, 3 under posts about you, 3 elsewhere')
-    expect(text).toContain('5 ready to buy 3 questions 3 objections 1 wrong information')
+    expect(text).toContain('12 comments, 6 under your posts, 3 under posts about you and 3 elsewhere')
+    expect(text).toContain('Ready to buy 5 Questions 3 Objections 3 Wrong information 1')
+    // The four kinds as a list of names and counts, as the board draws them.
+    expect(render(node).match(/<dt/g)).toHaveLength(4)
     expect(text).not.toMatch(/waiting|oldest/i)
     expect(copyNodes(render(node)).filter((n) => n.kind === 'quote')).toEqual([])
     assertCopyContract(node)
@@ -39,27 +41,29 @@ describe('Worth a reply', () => {
   it('always says where the comments sit (the board’s line): in words where they all sit in one place', () => {
     const one = { ...view(), total: 9, under: { own: 0, about: 0, elsewhere: 9 } }
     const text = renderText(<RepliesCard view={one} state={STATE} />)
-    // "9 comments · 9 elsewhere" repeated the count and read oddly (Phase 4).
-    expect(text).toContain('9 comments · all elsewhere in your market')
+    // "9 comments, 9 elsewhere" repeated the count and read oddly (Phase 4).
+    expect(text).toContain('9 comments, all elsewhere in your market')
     expect(text).not.toContain('9 elsewhere')
     assertCopyContract(<RepliesCard view={one} state={STATE} />)
-    expect(renderText(<RepliesCard view={{ ...one, under: { own: 9, about: 0, elsewhere: 0 } }} state={STATE} />)).toContain('9 comments · all under your posts')
+    expect(renderText(<RepliesCard view={{ ...one, under: { own: 9, about: 0, elsewhere: 0 } }} state={STATE} />)).toContain('9 comments, all under your posts')
     const two = { ...view(), total: 9, under: { own: 2, about: 0, elsewhere: 7 } }
-    expect(renderText(<RepliesCard view={two} state={STATE} />)).toContain('9 comments · 2 under your posts, 7 elsewhere')
+    expect(renderText(<RepliesCard view={two} state={STATE} />)).toContain('9 comments, 2 under your posts and 7 elsewhere')
   })
 
-  it('keeps its count, its four cells and its foot where there is no list, and says why once', () => {
+  it('keeps its four kinds where there is no list, and says why once, in the dashed box', () => {
     const none = repliesView(null, null)
     const unread = <RepliesCard view={{ ...none, unread: 'No update has covered a week yet, so there is no reply list.' }} state={STATE} />
     const text = renderText(unread)
     expect(text).toContain('No update has covered a week yet')
-    // The cells keep their frames and labels, with no number they cannot know.
-    expect(text).toContain('· ready to buy · questions · objections · wrong information')
+    // The kinds keep their names, with no number they cannot know (decision 4).
+    expect(render(unread)).toContain('data-empty-box=""')
+    expect(text).toContain('Ready to buy Not read Questions Not read Objections Not read Wrong information Not read')
+    expect(text.split('No update has covered a week yet')).toHaveLength(2)
     expect(copyNodes(render(unread)).filter((n) => n.kind === 'figure')).toEqual([])
     assertCopyContract(unread)
     const empty = <RepliesCard view={{ ...repliesView({ ...OSSUR_EMPTY_QUEUE }, view().window) }} state={STATE} />
     const zero = renderText(empty)
-    expect(zero).toContain('0 comments 0 ready to buy 0 questions 0 objections 0 wrong information No comment from these days read as a question')
+    expect(zero).toContain('0 comments Ready to buy 0 Questions 0 Objections 0 Wrong information 0 No comment from these days read as a question')
     expect(zero).not.toContain('Open the replies')
     assertCopyContract(empty)
   })

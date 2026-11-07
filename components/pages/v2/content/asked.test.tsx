@@ -15,10 +15,15 @@ const card = (over: Partial<Parameters<typeof AskedCard>[0]> = {}) => (
 
 describe('Also asked, and not yet in your posts', () => {
   it('lists the questions with who asks (no counts), the subject, the week beside its month, and three bare weekly counts', () => {
+    // A missing group or subject is said in words.
+    const bare = { ...askedFixture(), rows: askedFixture().rows.map((r) => ({ ...r, groups: [], subject: null })) }
+    expect(renderText(card({ block: bare }))).toMatch(/No group Not assigned/)
     const text = renderText(card())
-    expect(text).toContain('Question people asked Who asks Subject This week October so far The last three weeks')
-    // The month beside the week; on a phone the same month under it, in its cell.
-    expect(text).toContain('How a socket should fit as a child grows Caregivers and family Fit & comfort 12 17 in October so far 17 8 · 9 · 12')
+    expect(text).toContain('Question people asked Who asks Subject This week October Last three weeks, oldest first')
+    // The month beside the week, the three weeks in commas; every column at
+    // every width (on a phone the table scrolls inside its tile).
+    expect(text).toContain('How a socket should fit as a child grows Caregivers and family Fit & comfort 12 17 8, 9, 12')
+    expect(render(card())).not.toMatch(/hidden [a-z]+:table-cell|sm:hidden/)
     expect(text).not.toMatch(/Trend|▲|steady/)
     expect(text).toContain('1 more was touched on by your posts and is left out.')
     expect(render(card())).toContain(`href="/dashboard/market/conversations/`)
@@ -34,7 +39,7 @@ describe('Also asked, and not yet in your posts', () => {
 
   it('names a window that is not a week by its days (decision 1), and ranks the month by the month', () => {
     const long = renderText(card({ weekWord: 'between 10 Sep and 10 Oct', weekHead: '10 Sep to 10 Oct' }))
-    expect(long).toContain('Question people asked Who asks Subject 10 Sep to 10 Oct October so far')
+    expect(long).toContain('Question people asked Who asks Subject 10 Sep to 10 Oct October')
     expect(long).not.toContain('This week')
     const month = renderText(card({ block: askedFixture('month'), state: { ...STATE, period: 'month' } }))
     expect(month).toContain('Conversations filed as questions in October so far')
@@ -42,13 +47,14 @@ describe('Also asked, and not yet in your posts', () => {
     expect(month.indexOf('Which knee suits')).toBeLessThan(month.indexOf('Looking after the skin'))
   })
 
-  it('keeps its frame where it has no row: the headings, and one line in the table', () => {
+  it('keeps its tile where it has no row, and says why in the dashed box in the table’s place (decision 4)', () => {
     const none = { ...askedFixture(), rows: [], total: 0, touched: 0 }
     const text = renderText(card({ block: none }))
-    expect(text).toContain('Question people asked Who asks Subject This week October so far The last three weeks No other question came up this week.')
+    expect(text).toContain('Also asked, and not yet in your posts Conversations filed as questions this week, besides those above, that none of your posts since August touched on, the most videos first No other question came up this week.')
+    expect(render(card({ block: none }))).toContain('data-empty-box=""')
     expect(renderText(card({ block: none, afterIdeas: false }))).toContain('No question came up this week.')
     const unread = { ...none, unread: 'The questions people asked could not be read just now.' }
-    expect(renderText(card({ block: unread }))).toContain('The last three weeks The questions people asked could not be read just now.')
+    expect(renderText(card({ block: unread }))).toContain('the most videos first The questions people asked could not be read just now.')
     assertCopyContract(card({ block: unread }))
   })
 
@@ -60,7 +66,7 @@ describe('Also asked, and not yet in your posts', () => {
 
   it('names how many more the link shows, not all of them: the cards above hold some', () => {
     const many = { ...askedFixture(), total: 12 }
-    expect(renderText(card({ block: many }))).toContain('7 more questions not yet in your posts →')
+    expect(renderText(card({ block: many }))).toContain('See 7 more questions not yet in your posts')
     expect(renderText(card({ block: many }))).not.toMatch(/All \d+ questions/)
     // Every question touched on, with nothing above: no "other".
     const none = { ...askedFixture(), rows: [], total: 0, touched: 3 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { render, renderText as rawText } from '@/lib/test/render'
 import { assertCopyContract, copyNodes } from '@/lib/test/copy-contract'
 import { contentEmptyFixture, contentFixture, contentThinFixture } from '@/lib/pages/v2/content-fixture'
-import { ContentPage, weekWordOf } from './index'
+import { ContentPage, contentStats, weekWordOf } from './index'
 
 /** The page's words as read: a tag between a word and its comma is not a space. */
 const renderText = (node: Parameters<typeof rawText>[0]): string => rawText(node).replace(/\s+([,.])/g, '$1')
@@ -14,17 +14,31 @@ describe('Content', () => {
     expect(at('Content')).toBe(0)
     expect(at('What to post next')).toBeLessThan(at('What works in your market’s videos'))
     expect(at('What works in your market’s videos')).toBeLessThan(at('Worth a reply'))
-    expect(at('Worth a reply')).toBeLessThan(at('Your posts this month'))
-    expect(at('Your posts this month')).toBeLessThan(at('Also asked, and not yet in your posts'))
+    expect(at('Worth a reply')).toBeLessThan(at('Your posts in October so far Published on your own accounts'))
+    expect(at('Your posts in October so far Published on your own accounts')).toBeLessThan(at('Also asked, and not yet in your posts'))
   })
 
-  it('states the week beside its month in the bar, and switches the period by link', () => {
+  it('states the week beside its month in the figures row, and switches the period by link, the month by its name', () => {
     const m = render(<ContentPage data={contentFixture()} />)
     // Each total names its clock: the market's by comment, your posts by publishing.
-    expect(renderText(<ContentPage data={contentFixture()} />)).toContain('5 to 11 Oct · 241 videos in your market with a comment this week, 318 in October so far · 9 posts of your own published in October so far')
+    expect(renderText(<ContentPage data={contentFixture()} />)).toContain('Content This week October so far Week 5 to 11 Oct Your market this week 241 videos with a comment October so far 318 videos Your posts in October so far 9 published')
+    expect(m).toContain('data-stat-strip=""')
     expect(m).toContain('href="/dashboard/content?period=month"')
     expect(m).toMatch(/aria-current="page"[^>]*>This week</)
-    expect(renderText(<ContentPage data={contentFixture({ period: 'month' })} />)).toContain('October so far · 318 videos in your market with a comment · 9 posts of your own published in October so far')
+    expect(m).not.toContain('>This month<')
+    expect(renderText(<ContentPage data={contentFixture({ period: 'month' })} />)).toContain('Month October so far Your market 318 videos with a comment Your posts in October so far 9 published')
+  })
+
+  it('builds the figures row from the page’s own counts: four cells for the week, three for the month, each base once', () => {
+    const terms = (d: Parameters<typeof contentStats>[0]) => contentStats(d).map((c) => c.term)
+    expect(terms(contentFixture())).toEqual(['Week', 'Your market this week', 'October so far', 'Your posts in October so far'])
+    expect(terms(contentFixture({ period: 'month' }))).toEqual(['Month', 'Your market', 'Your posts in October so far'])
+    // A read that failed is said in its cell, never a zero.
+    const unread = contentFixture()
+    const failed = { ...unread, market: { week: null, month: null }, posts: { ...unread.posts, unread: 'Your posts could not be read just now.' } }
+    const text = renderText(<ContentPage data={failed} />)
+    expect(text).toContain('Your market this week Not read yet October so far Not read yet Your posts in October so far Could not be read just now')
+    assertCopyContract(<ContentPage data={failed} />)
   })
 
   it('keeps the copy contract, in every period and state', () => {
@@ -80,13 +94,13 @@ describe('Content', () => {
     const text = renderText(node)
     expect(text).toContain('How the video is made')
     expect(text).toContain('How it opens')
-    expect(text).toContain('9 comments · all elsewhere in your market 5 ready to buy 3 questions 1 objection 0 wrong information Open the replies')
-    // No post has a response figure: the cell states how many have one, of all, and the best post's place says why it names none.
-    expect(text).toContain('13 posts · Instagram 13 0 of 13 with a response figure, too few to state a typical one Best this month None to name without a response figure. All your posts')
-    expect(text).toContain('Question people asked Who asks Subject This week October so far The last three weeks')
-    // Thirteen posts' marks stay one row: each narrows rather than wraps.
-    expect(m).toContain('data-units="2/13"')
-    expect(m).toMatch(/data-units="2\/13" class="[^"]*flex-nowrap/)
+    expect(text).toContain('9 comments, all elsewhere in your market Ready to buy 5 Questions 3 Objections 1 Wrong information 0 Open the replies')
+    // No post has a response figure: the list states how many have one, of all, and the best post's place says why it names none.
+    expect(text).toContain('Where Instagram 13 Typical response 0 of 13 with a response figure, too few to state a typical one Best in October so far None to name without a response figure. All your posts')
+    expect(text).toContain('Question people asked Who asks Subject This week October Last three weeks, oldest first')
+    // Your posts of each kind are a plain count (their base is the figures
+    // row's "Your posts"), never marks that narrow or wrap.
+    expect(m).not.toContain('data-units=')
     assertCopyContract(node)
   })
 

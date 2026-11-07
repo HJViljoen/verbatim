@@ -25,7 +25,9 @@ describe('What to post next', () => {
     // "when they were picked": a card can say a post has touched on it since,
     // and the heading must not be contradicted by one.
     // The ideas read four weeks of questions (Heinrich, 13 Oct), and say which.
-    expect(text).toMatch(/^What to post next From questions asked 14 Sep to 11 Oct that none of your posts since August had touched on when they were picked, biggest first/)
+    // The four weeks' base said once, in the lead (decision 2), and the note
+    // "Biggest first" beside the heading (the audit design).
+    expect(text).toMatch(/^What to post next Biggest first From questions asked 14 Sep to 11 Oct, across 640 market videos, that none of your posts since August had touched on when they were picked\./)
     expect(text.indexOf('How long does a liner last')).toBeLessThan(text.indexOf('What to do when insurance'))
     expect(text.indexOf('What to do when insurance')).toBeLessThan(text.indexOf('Can you get a prosthetic leg wet?'))
     assertCopyContract(section())
@@ -37,13 +39,21 @@ describe('What to post next', () => {
 
   it('states the four weeks the ideas read beside the month, and each of those weeks as a bare count with no word', () => {
     const [card] = ideaCards()
-    const m = render(<IdeaCardView card={card} month={OCT} readLabel="14 Sep to 11 Oct" />)
-    const levels = copyNodes(m).filter((n) => n.kind === 'level').map((n) => n.text)
-    expect(levels).toEqual(['48 of 640 videos, 14 Sep to 11 Oct', '31 of 318 in October so far'])
+    // The bases said once on the screen (the lead's four weeks, the figures
+    // row's month): the counts are bare figures in one sentence (decision 2).
+    const node = <IdeaCardView card={card} month={OCT} readLabel="14 Sep to 11 Oct" readBase={640} monthBase={318} />
+    const m = render(node)
+    expect(copyNodes(m).filter((n) => n.kind === 'level')).toEqual([])
+    expect(renderText(node)).toContain('48 videos from 14 Sep to 11 Oct, and 31 in October so far.')
+    // Where the screen does not say a base, its count keeps its "of N".
+    const own = copyNodes(render(<IdeaCardView card={card} month={OCT} readLabel="14 Sep to 11 Oct" />)).filter((n) => n.kind === 'level').map((n) => n.text)
+    expect(own).toEqual([expect.stringMatching(/^48\s*of 640 videos, 14 Sep to 11 Oct$/), '31 of 318 in October so far'])
     // The four weekly counts are the bars' own figures: 6, 9, 14 and 23,
-    // named by their weeks.
+    // named by their weeks, at the boards' 12px (HTML, never a shrinking SVG).
     expect(copyNodes(m).filter((n) => n.kind === 'figure').map((n) => n.text)).toEqual(expect.arrayContaining(['6', '9', '14', '23']))
-    expect(m).toContain('the weeks of 14 Sep, 21 Sep, 28 Sep, 5 Oct')
+    expect(m).toContain('Market videos a week where it came up: 14 Sep 6, 21 Sep 9, 28 Sep 14, 5 Oct 23')
+    expect(m).toMatch(/data-week-bars=""/)
+    expect(m).not.toMatch(/text-\[(9|10|11)(\.5)?px\]/)
     expect(m).not.toMatch(/videos this week/)
     expect(renderText(<IdeaCardView card={card} month={OCT} readLabel="14 Sep to 11 Oct" />)).not.toMatch(/Rising|usual level|trend/i)
   })
@@ -53,18 +63,24 @@ describe('What to post next', () => {
     const noMonth = render(<IdeaCardView card={{ ...card, month: null }} month={OCT} readLabel="14 Sep to 11 Oct" />)
     expect(copyNodes(noMonth).filter((n) => n.kind === 'level')).toEqual([])
     expect(noMonth).not.toContain('of 640 videos')
-    // The month alone where the four weeks were not read.
-    const noRead = render(<IdeaCardView card={{ ...card, read: null }} month={OCT} readLabel="14 Sep to 11 Oct" />)
-    expect(copyNodes(noRead).filter((n) => n.kind === 'level').map((n) => n.text)).toEqual(['31 of 318 in October so far'])
+    // The month alone where the four weeks were not read: bare beside the
+    // figures row's base, its "of N" without it.
+    const noRead = <IdeaCardView card={{ ...card, read: null }} month={OCT} readLabel="14 Sep to 11 Oct" monthBase={318} />
+    expect(copyNodes(render(noRead)).filter((n) => n.kind === 'level')).toEqual([])
+    expect(renderText(noRead)).toContain('31 videos in October so far.')
+    expect(copyNodes(render(<IdeaCardView card={{ ...card, read: null }} month={OCT} readLabel="14 Sep to 11 Oct" />)).filter((n) => n.kind === 'level').map((n) => n.text))
+      .toEqual([expect.stringMatching(/^31\s*of 318 videos in October so far\.$/)])
   })
 
   it('an older set prints its figure beside ITS month, never the page’s', () => {
     const older = contentFixture({ olderIdeas: true })
     expect(older.ideas.week?.month).toMatchObject({ month: '2026-08-01', complete: true })
+    // Its month is not the figures row's, so the month keeps its "of N"; the
+    // four weeks' base is the lead's, so that count is bare.
     const levels = copyNodes(render(row(older))).filter((n) => n.kind === 'level').map((n) => n.text)
-    expect(levels[0]).toBe('48 of 640 videos, 31 Aug to 27 Sep')
-    expect(levels[1]).toBe('31 of 318 in August')
+    expect(levels[0]).toBe('31 of 318 in August')
     expect(levels.join(' ')).not.toContain('October so far')
+    expect(renderText(row(older))).toContain('48 videos from 31 Aug to 27 Sep, and 31 of 318 in August.')
   })
 
   it('prints a flag only where one was earned: the anomaly check’s, or the week read’s new', () => {
@@ -89,13 +105,18 @@ describe('What to post next', () => {
 
   it('suggests the format and the opening with their multiples', () => {
     const text = renderText(<IdeaCardView card={ideaCards()[0]} month={OCT} readLabel="14 Sep to 11 Oct" />)
-    // T13's multiples are on the question: 1× is a typical market video on it.
-    expect(text).toContain('Suggested format and opening Tutorial 2.1× Open with a question 1.8× 1× is a typical market video on this question')
+    expect(text).toContain('Suggested format Tutorial, 2.1× Suggested opening A question, 1.8×')
+    // T13's multiples are on the question: what 1× is, said once over the
+    // row (the audit design), never on each card.
+    const row = renderText(section())
+    expect(row.split('1× is a typical market video on this question')).toHaveLength(2)
+    expect(text).not.toContain('1× is a typical')
   })
 
-  it('carries the medical team line on every Össur idea, and on no Sealand one', () => {
+  it('carries the medical team line once under the Össur ideas (decision 14), and on no Sealand one', () => {
     const ossur = renderText(section(OSSUR_CLIENT_ID))
-    expect(ossur.split(MEDICAL_LINE)).toHaveLength(4)
+    expect(ossur.split(MEDICAL_LINE)).toHaveLength(2)
+    expect(ossur.indexOf(MEDICAL_LINE)).toBeGreaterThan(ossur.lastIndexOf('Open the brief'))
     expect(renderText(section(SEALAND_CLIENT_ID))).not.toContain(MEDICAL_LINE)
   })
 
@@ -142,9 +163,10 @@ describe('What to post next', () => {
     expect(text).not.toContain('Post idea ')
     // The top of the also-asked list, the most videos first.
     expect(text.indexOf('Liner lifespan and replacement')).toBeLessThan(text.indexOf('Insurance refusals for powered knees'))
-    const levels = copyNodes(render(node)).filter((n) => n.kind === 'level').map((n) => n.text)
-    // The week's figure beside its month (decision 1).
-    expect(levels.slice(0, 2)).toEqual(['23 of 241 videos this week', '31 of 318 in October so far'])
+    // The week's figure beside its month (decision 1), both bare: their bases
+    // are the figures row's (decision 2).
+    expect(copyNodes(render(node)).filter((n) => n.kind === 'level')).toEqual([])
+    expect(text).toContain('Liner lifespan and replacement 23 videos this week, and 31 in October so far.')
     expect(text).toContain("Who's asking New amputees, first year, Caregivers and family")
     expect(text).toContain('Your posts None of your 13 posts since August touched on it')
     // The facts the data holds, flowing from the top as an idea card's do.
@@ -157,7 +179,7 @@ describe('What to post next', () => {
     // The label is the conversation's own, never a quote, and the three weeks are bare counts.
     expect(copyNodes(render(node)).filter((n) => n.kind === 'quote')).toEqual([])
     expect(copyNodes(render(node)).filter((n) => n.kind === 'subject' && n.slot === 'pass_b_theme').map((n) => n.text)).toEqual(['Liner lifespan and replacement', 'Insurance refusals for powered knees', 'How a socket should fit as a child grows'])
-    expect(render(node)).toContain('the weeks of 21 Sep, 28 Sep, 5 Oct')
+    expect(render(node)).toContain('Market videos a week where it came up: 21 Sep ')
     expect(text).not.toMatch(/Rising|usual level|trend/i)
     assertCopyContract(node)
   })
@@ -177,8 +199,9 @@ describe('What to post next', () => {
     const unreadFacts = renderText(<QuestionCardView row={{ ...q, platforms: null, comments: { week: 40, month: null } }} rank={1} state="not_on" ctx={ctx} />)
     expect(unreadFacts).not.toMatch(/Came up on|Comments/)
     // The month's figure leads where the page reads the month.
-    const month = render(<QuestionCardView row={q} rank={1} state="not_on" ctx={{ ...ctx, period: 'month', when: 'in October so far' }} />)
-    expect(copyNodes(month).filter((n) => n.kind === 'level').map((n) => n.text)).toEqual(['31 of 288 videos in October so far'])
+    const month = <QuestionCardView row={q} rank={1} state="not_on" ctx={{ ...ctx, period: 'month', when: 'in October so far' }} />
+    expect(copyNodes(render(month)).filter((n) => n.kind === 'level')).toEqual([])
+    expect(renderText(month)).toContain('31 videos in October so far.')
     // A set with fewer ideas says it of the question, not of the workspace.
     expect(renderText(<QuestionCardView row={q} rank={2} state="ready" ctx={ctx} />)).toContain('Your posts None of your 13 posts since August touched on it Post idea None was written for this question Open in Market')
   })
@@ -187,7 +210,7 @@ describe('What to post next', () => {
     const data = contentFixture({ ideas: 'fewer' })
     const text = renderText(row(data))
     // The line over the row names the questions after the idea too.
-    expect(text).toMatch(/^What to post next From questions asked 14 Sep to 11 Oct that none of your posts since August had touched on when they were picked, biggest first, then the next questions asked this week /)
+    expect(text).toMatch(/^What to post next Biggest first From questions asked 14 Sep to 11 Oct, across 640 market videos, that none of your posts since August had touched on when they were picked, then the next questions asked this week\. /)
     expect(text).toContain('Open the brief')
     expect(text.split('Post idea None was written for this question')).toHaveLength(3)
     expect(text).not.toContain('not switched on')
@@ -203,8 +226,8 @@ describe('What to post next', () => {
     const older = contentFixture({ olderIdeas: true })
     const node = row(older)
     // An older set prints ITS four weeks, and the week it was written for.
-    expect(renderText(node)).toContain('From questions asked 31 Aug to 27 Sep that none of your posts')
-    expect(renderText(node)).toContain('of 640 videos, 31 Aug to 27 Sep')
+    expect(renderText(node)).toContain('From questions asked 31 Aug to 27 Sep, across 640 market videos, that none of your posts')
+    expect(renderText(node)).toContain('48 videos from 31 Aug to 27 Sep')
     expect(renderText(node)).toContain('No new ideas this week. These are from the week of 21 Sep.')
     assertCopyContract(node)
   })
@@ -213,12 +236,13 @@ describe('What to post next', () => {
     const [card] = ideaCards()
     const view = (c: typeof card) => renderText(<IdeaCardView card={c} month={OCT} readLabel="14 Sep to 11 Oct" />)
     const noOpening = view({ ...card, opening: null })
-    expect(noOpening).toContain('Suggested format Tutorial 2.1× 1× is a typical market video on this question')
-    expect(noOpening).not.toContain('format and opening')
-    expect(view({ ...card, format: null })).toContain('Suggested opening Open with a question 1.8×')
+    expect(noOpening).toContain('Suggested format Tutorial, 2.1× Open the brief')
+    expect(noOpening).not.toContain('Suggested opening')
+    expect(view({ ...card, format: null })).toContain('Your posts None of your 13 posts since August touched on it Suggested opening A question, 1.8×')
     const neither = view({ ...card, format: null, opening: null })
     expect(neither).not.toMatch(/Suggested|1× is a typical/)
-    expect(neither).toContain(MEDICAL_LINE)
+    // The medical line is the row's, said once under the cards (decision 14).
+    expect(neither).not.toContain(MEDICAL_LINE)
     assertCopyContract(<IdeaCardView card={{ ...card, format: null, opening: null }} month={OCT} readLabel="14 Sep to 11 Oct" />)
   })
 })

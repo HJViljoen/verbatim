@@ -2427,7 +2427,19 @@ This version has breaking changes — APIs, conventions, and file structure may 
     clock named. In a medical market `MEDICAL_LINE` prints ONCE A SCREEN,
     directly under the ideas it covers (the audit design, decision 14,
     Heinrich's call on 7 Nov; until then it printed under every idea), and
-    the weekly email keeps its own words. THE IDEAS ROW ALWAYS DRAWS THREE CARDS (`IDEA_SLOTS`;
+    the weekly email keeps its own words. SINCE THE AUDIT DESIGN (7 Nov,
+    `Content.dc.html`) the root has the figures row under its title
+    (`contentStats`: the week, the market's videos this week, the month's,
+    your posts in the month; the switch names the month), so its counts are
+    bare (decision 2): the ideas' lead says the four weeks' base once ("From
+    questions asked 14 Sep to 11 Oct, across 640 market videos, …", with what
+    the bars count and what 1× is), each card a plain rank, a figure and a
+    sentence, its weeks small yellow columns, its facts one list (format and
+    opening among them); an older set's month keeps its "of N", since the
+    figures row's month is not its. What works is two tables whose bars run
+    to the list's largest multiple, never below 1× (decision 5); Worth a
+    reply and Your posts are lists; Also asked is a table with every column
+    ("No group", "Not assigned"), its empty state in the dashed box. THE IDEAS ROW ALWAYS DRAWS THREE CARDS (`IDEA_SLOTS`;
     parity pass): the places the ideas leave hold the next questions in line
     (`IdeasBlock.questions`, the top of `askedWithLead`, each card's anchor
     `questionSlotId(rank)`), and Also asked goes on after them, so no
