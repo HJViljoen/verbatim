@@ -4,7 +4,7 @@ import { BrandChip } from '@/components/colour-roles'
 import { translationNote } from '@/components/quote-block'
 import { LevelBar } from '@/components/shell/level-bar'
 import { PageFrame } from '@/components/shell/page-grid'
-import { CARD, EmptyBox, GoLink, listWords, PeriodSwitch, SectionHead, shortDates, Tag, TickBar, toMax, translationLine, withMonthName, type StatItem } from '@/components/v2'
+import { CARD, EmptyBox, GoLink, listWords, PeriodSwitch, SectionHead, shortDates, TickBar, toMax, translationLine, withMonthName, type StatItem } from '@/components/v2'
 import { CHIP, QUOTE } from '@/components/v2/look'
 import { fmtInt, longMonth, platformLabel } from '@/lib/format'
 import { CONTENT_PERIODS } from '@/lib/pages/v2/content'
@@ -79,10 +79,11 @@ function Comment({ c, platform }: { c: ReplyCommentView; platform: string }) {
   )
 }
 
-/** Whose post it is: "Your post" a tag on your own, your brand's name in
+/** Whose post it is: "Your post" in your gold words on your own (as Your
+ *  products marks it; the review of Phases 6 and 7), your brand's name in
  *  your gold on a post about you, nothing elsewhere. */
 function Under({ under, brand }: { under: ReplyVideoView['under']; brand: string }) {
-  if (under === 'own_post') return <span data-under="own" className="shrink-0"><Tag>Your post</Tag></span>
+  if (under === 'own_post') return <span data-under="own" className="shrink-0"><BrandChip who="you" plain className="text-[13px] font-semibold text-you">Your post</BrandChip></span>
   if (under === 'names_you') return <BrandChip who="you" plain className="shrink-0 text-[13px] font-semibold text-you">{brand}</BrandChip>
   return null
 }
@@ -114,10 +115,12 @@ function VideoCard({ v, brand, hideOnPhone, wrong }: { v: ReplyVideoView; brand:
 /** One kind: its title and counts, what it holds, its videos (two on a phone,
  *  then "Show all … in {kind}"). Its heading and the dashed box where it
  *  holds none (decision 4). */
+/** The list's days in words ("this week", "in October so far", "in
+ *  September"): a month that has ended is never "this month". */
+const when = (data: RepliesPageData): string =>
+  data.period === 'month' ? data.view.window?.phrase ?? 'this month' : data.isWeek ? 'this week' : 'in these days'
+
 function KindSection({ k, data }: { k: ReplyKindView; data: RepliesPageData }) {
-  // The month in its own words ("in October so far", "in September"): a
-  // month that has ended is never "this month".
-  const when = data.period === 'month' ? data.view.window?.phrase ?? 'this month' : data.isWeek ? 'this week' : 'in these days'
   return (
     <section id={k.key} aria-labelledby={`h-${k.key}`} data-reply-kind={k.key} className="flex scroll-mt-6 flex-col">
       <SectionHead
@@ -128,7 +131,7 @@ function KindSection({ k, data }: { k: ReplyKindView; data: RepliesPageData }) {
       <p className="m-0 mx-0.5 mt-2.5 mb-4 text-[14.5px] leading-[1.5] text-secondary-foreground">{k.sub}</p>
       <div className="flex flex-col gap-4">
         {k.videos.length === 0 ? (
-          <EmptyBox>None {when}.</EmptyBox>
+          <EmptyBox>None {when(data)}.</EmptyBox>
         ) : (
           <>
             {k.videos.map((v, i) => <VideoCard key={v.key} v={v} brand={data.brand} wrong={k.key === 'wrong'} hideOnPhone={!k.full && i >= REPLY_VIDEOS_PHONE} />)}
@@ -170,7 +173,9 @@ function Facts({ data }: { data: RepliesPageData }) {
     <aside aria-labelledby="facts-title" className="flex min-w-0 flex-col">
       <SectionHead id="facts-title" title="The facts" />
       <div className={cn(CARD, 'mt-[22px] gap-[22px]')}>
-        {view.unread ? null : (
+        {/* Unread, or nothing on the list: no bars at 0 and no box saying
+            it again; the list's own column says it once. */}
+        {view.unread || view.total === 0 ? null : (
           <>
             <div>
               <h3 className={H3}>Whose post they sit under</h3>
@@ -188,7 +193,7 @@ function Facts({ data }: { data: RepliesPageData }) {
             </div>
           </>
         )}
-        <div className={view.unread ? undefined : RULED}>
+        <div className={view.unread || view.total === 0 ? undefined : RULED}>
           <h3 className={cn(H3, 'mb-2')}>How the list is picked</h3>
           <p className="m-0 text-[14px] leading-[1.55] text-secondary-foreground">
             Picked from the comments written {view.window?.phrase ?? 'this week'}: up to twelve, no more than two from one video; wrong information is listed apart, up to three. We cannot see whether you have replied, so a comment stays on the list.
@@ -202,6 +207,7 @@ function Facts({ data }: { data: RepliesPageData }) {
 /** The reply list's page body under its title block. */
 export function RepliesPageBody({ data }: { data: RepliesPageData }) {
   const { view } = data
+  const empty = !view.unread && view.total === 0
   return (
     <>
       <div data-replies-lead="" className="flex flex-col gap-[18px]">
@@ -220,7 +226,12 @@ export function RepliesPageBody({ data }: { data: RepliesPageData }) {
         <div className="flex min-w-0 flex-col">
           {view.unread
             ? <div data-replies-gap="" className={cn(CARD, 'mt-[26px]')}><EmptyBox>{view.unread}</EmptyBox></div>
-            : data.kinds.map((k) => <KindSection key={k.key} k={k} data={data} />)}
+            : empty
+              // NOTHING ON THE LIST: said once, in one dashed box (the
+              // review of Phases 6 and 7), never "None this week." under each
+              // of the four kinds; the chips above name the kinds at 0.
+              ? <div data-replies-gap="none" className={cn(CARD, 'mt-[26px]')}><EmptyBox>No comment worth a reply {when(data)}.</EmptyBox></div>
+              : data.kinds.map((k) => <KindSection key={k.key} k={k} data={data} />)}
         </div>
         <Facts data={data} />
       </div>
@@ -240,6 +251,8 @@ export function ContentRepliesPage({ data }: { data: RepliesPageData }) {
         level="replies"
         title="Worth a reply"
         stats={repliesStats(data)}
+        // The board keeps its two cells in the four-column grid.
+        statsColumns={4}
         controls={<PeriodSwitch value={data.period} options={month ? withMonthName(CONTENT_PERIODS, month) : CONTENT_PERIODS} hrefFor={(period) => contentRepliesHref({ period })} />}
       />
       <RepliesPageBody data={data} />

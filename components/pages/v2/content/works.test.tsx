@@ -14,6 +14,12 @@ describe('What works in your market’s videos', () => {
     const text = renderText(node)
     expect(text).toContain('How the video is made Kind of video Share of market videos Response Your posts')
     expect(text).toContain('How it opens Opening Share of market videos Response Your posts')
+    // On a phone (decision 14) the kind, its share and its response stay on
+    // screen; your posts are the wide table's column (the panel says them).
+    const phone = render(node)
+    expect(phone).toMatch(/<th scope="col" class="[^"]*max-sm:hidden[^"]*">Your posts<\/th>/)
+    expect(phone).toMatch(/<table class="[^"]*sm:min-w-\[520px\]/)
+    expect(phone).not.toMatch(/class="[^"]*max-sm:hidden[^"]*">Response</)
     expect(text).toContain('The dark line on each bar marks 1×, a typical video.')
     expect(text.indexOf('Story')).toBeLessThan(text.indexOf('Promotional'))
     // The share its own column, no middle dot; your posts a bare count (the

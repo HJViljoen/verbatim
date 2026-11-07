@@ -63,18 +63,19 @@ export function AskedCard({ block, state, month, weekWord, weekHead, afterIdeas 
     <section id={ASKED_ID} aria-labelledby="asked-title" className={cn(CARD, 'scroll-mt-6')}>
       <CardHead id="asked-title" size="lg" title="Also asked, and not yet in your posts" sub={sub} />
       {empty ? <EmptyBox>{empty}</EmptyBox> : (
-        // Every column at every width; on a phone the table scrolls inside
-        // its tile (the boards' phone rule).
+        // On a phone (decision 14, the app's own phone layout): the question
+        // and its count, the month's under it; who asks, the subject and the
+        // weeks are the wide table's.
         <div className="min-w-0 overflow-x-auto">
-          <table className={cn(TBL, 'min-w-[720px]')}>
+          <table className={cn(TBL, 'sm:min-w-[720px]')}>
             <thead>
               <tr>
                 <th scope="col" className={TH}>Question people asked</th>
-                <th scope="col" className={TH}>Who asks</th>
-                <th scope="col" className={TH}>Subject</th>
-                <th scope="col" className={cn(TH, 'w-[90px] text-right')}>{weekHead}</th>
-                <th scope="col" className={cn(TH, 'w-[90px] text-right')}>{longMonth(month.month)}</th>
-                {trend ? <th scope="col" className={cn(TH, 'pr-0 text-right')}>Last three weeks, oldest first</th> : null}
+                <th scope="col" className={cn(TH, 'max-sm:hidden')}>Who asks</th>
+                <th scope="col" className={cn(TH, 'max-sm:hidden')}>Subject</th>
+                <th scope="col" className={cn(TH, 'w-[90px] text-right max-sm:pr-0')}>{weekHead}</th>
+                <th scope="col" className={cn(TH, 'w-[90px] text-right max-sm:hidden')}>{longMonth(month.month)}</th>
+                {trend ? <th scope="col" className={cn(TH, 'pr-0 text-right max-sm:hidden')}>Last three weeks, oldest first</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -85,12 +86,15 @@ export function AskedCard({ block, state, month, weekWord, weekHead, afterIdeas 
                       <span data-copy="subject" data-slot="pass_b_theme">{r.label}</span>
                     </Link>
                   </td>
-                  <td className={TD}>{r.groups.length > 0 ? <GroupNames groups={r.groups} /> : <span className="text-muted-foreground">No group</span>}</td>
-                  <td className={TD}>{r.subject ?? <span className="text-muted-foreground">Not assigned</span>}</td>
-                  <td className={cn(TD, TD_NUM, 'font-semibold')}>{r.week != null ? <Fig>{fmtInt(r.week)}</Fig> : <span className="font-normal text-muted-foreground">Not read</span>}</td>
-                  <td className={cn(TD, TD_NUM, 'text-secondary-foreground')}>{r.month != null ? <Fig>{fmtInt(r.month)}</Fig> : <span className="text-muted-foreground">Not read</span>}</td>
+                  <td className={cn(TD, 'max-sm:hidden')}>{r.groups.length > 0 ? <GroupNames groups={r.groups} /> : <span className="text-muted-foreground">No group</span>}</td>
+                  <td className={cn(TD, 'max-sm:hidden')}>{r.subject ?? <span className="text-muted-foreground">Not assigned</span>}</td>
+                  <td className={cn(TD, TD_NUM, 'font-semibold max-sm:pr-0')}>
+                    {r.week != null ? <Fig>{fmtInt(r.week)}</Fig> : <span className="font-normal text-muted-foreground">Not read</span>}
+                    {r.month != null ? <span className="mt-0.5 block text-[13px] font-normal text-secondary-foreground sm:hidden"><Fig>{fmtInt(r.month)}</Fig> {monthWords(month)}</span> : null}
+                  </td>
+                  <td className={cn(TD, TD_NUM, 'text-secondary-foreground max-sm:hidden')}>{r.month != null ? <Fig>{fmtInt(r.month)}</Fig> : <span className="text-muted-foreground">Not read</span>}</td>
                   {trend ? (
-                    <td className={cn(TD, TD_NUM, 'pr-0 text-secondary-foreground')}>
+                    <td className={cn(TD, TD_NUM, 'pr-0 text-secondary-foreground max-sm:hidden')}>
                       {r.weeks ? <Fig>{r.weeks.map(fmtInt).join(', ')}</Fig> : <span className="text-muted-foreground">Not read</span>}
                     </td>
                   ) : null}

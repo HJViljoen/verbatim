@@ -3,7 +3,7 @@ import { render, renderText as rawText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { contentPostsFixture } from '@/lib/pages/v2/content-levels-fixture'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
-import { ContentPostsPage, openedPostNote, opensWords, POST_NONE_QUOTABLE, POST_QUOTE_RULE, postsStats, showPostComments } from './posts-page'
+import { ContentPostsPage, openedPostNote, opensWords, POST_NONE_QUOTABLE, POST_QUOTE_RULE, POSTS_COMMENTS_UNREAD, postsStats, showPostComments } from './posts-page'
 
 // YOUR POSTS, THE EVIDENCE (G5-Content-Posts and -Posts-Phone): what it
 // prints, in the board's order, in every state.
@@ -110,11 +110,16 @@ describe('your posts\' page', () => {
   })
 
   it('keeps its frame where you published nothing, where your posts or their comments could not be read', () => {
+    // Each state said ONCE, in one dashed box (the review of Phases 6 and 7):
+    // no lead and no facts box say it again.
     const none = renderText(page({ state: 'none' }))
-    expect(none).toContain('You published nothing of your own in October so far.')
-    expect(renderText(page({ state: 'unread' }))).toContain('Your posts could not be read just now.')
+    expect(none.split('You published nothing of your own in October so far.')).toHaveLength(2)
+    expect(render(page({ state: 'none' })).match(/data-empty-box=""/g)).toHaveLength(1)
+    const unread = renderText(page({ state: 'unread' }))
+    expect(unread.split('Your posts could not be read just now.')).toHaveLength(2)
     const comments = renderText(page({ state: 'comments_unread' }))
-    expect(comments).toContain('The comments under it could not be read just now.')
+    expect(comments.split(POSTS_COMMENTS_UNREAD)).toHaveLength(2)
+    expect(comments).not.toContain('The comments under it could not be read just now.')
     expect(comments).not.toContain('Show all')
     // A card none of whose comments may print says so in its own words.
     const d = contentPostsFixture()

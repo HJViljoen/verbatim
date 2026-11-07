@@ -3,9 +3,9 @@ import { render, renderText as rawText } from '@/lib/test/render'
 import { assertCopyContract, copyNodes } from '@/lib/test/copy-contract'
 import { SEALAND_CLIENT_ID } from '@/lib/config'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
-import { IDEA_MISSING, IDEA_NOT_ON, IDEA_UNREAD, SUB_NONE_QUOTABLE } from '@/lib/pages/v2/content-idea'
+import { IDEA_MISSING, IDEA_NOT_ON, IDEA_UNREAD, SUB_NONE_QUOTABLE, SUB_UNREAD } from '@/lib/pages/v2/content-idea'
 import { contentIdeaFixture } from '@/lib/pages/v2/content-levels-fixture'
-import { ContentIdeaPage, ideaStats } from './idea-page'
+import { ContentIdeaPage, ideaStats, SUBS_UNREAD } from './idea-page'
 import { weeksOverlapNote } from './ideas'
 
 // A POST IDEA'S PAGE, THE HUB (G5-Content-Idea, -Idea-Switcher, -Idea-Thin,
@@ -152,9 +152,20 @@ describe('a post idea\'s page', () => {
   })
 
   it('a sub-question whose comments could not be read keeps its card and says so', () => {
+    // Where no tile's comments could be read it is said ONCE, in the dashed
+    // box under the tiles (the review of Phases 6 and 7), never per tile.
     const text = renderText(page({ commentsUnread: true }))
-    expect(text).toContain('with 14 comments asking it. Its comments could not be read just now.')
+    expect(text).toContain('with 14 comments asking it.')
+    expect(text).not.toContain(SUB_UNREAD)
+    expect(text.split(SUBS_UNREAD)).toHaveLength(2)
+    expect(render(page({ commentsUnread: true }))).toMatch(/data-sub-unread-once=""><div data-empty-box=""/)
     expect(text).not.toContain('Show all')
+    // Where only one tile's could not be read, that tile says so itself.
+    const d = contentIdeaFixture()
+    const one = { ...d, page: { ...d.page!, subquestions: d.page!.subquestions.map((c, i) => (i === 0 ? { ...c, quotes: [], quotable: null } : c)) } }
+    const oneText = renderText(<ContentIdeaPage data={one} />)
+    expect(oneText).toContain(`with 14 comments asking it. ${SUB_UNREAD}`)
+    expect(oneText).not.toContain(SUBS_UNREAD)
   })
 
   it('carries the medical line only in a medical market', () => {

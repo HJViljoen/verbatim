@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import { CARD, FlagChip, GoLink } from '@/components/v2'
+import { CARD, EmptyBox, FlagChip, GoLink } from '@/components/v2'
 import { fmtInt, longMonth, platformLabel } from '@/lib/format'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
 import {
@@ -124,7 +124,11 @@ function Rank({ n }: { n: number }) {
 
 const TITLE = 'm-0 text-[19px] font-semibold leading-[1.35] tracking-[-0.005em]'
 
-export function IdeaCardView({ card, month, readLabel, readBase = null, monthBase = null, style }: {
+/** Said once in the row's lead where any card's weeks add up to more than
+ *  its figure (the review of Phases 6 and 7: never once a card). */
+export const WEEKS_OVERLAP_ONCE = 'A video commented on in two of these weeks counts in both, so a card’s weeks can add up to more than its figure.'
+
+export function IdeaCardView({ card, month, readLabel, readBase = null, monthBase = null, overlapSaid = false, style }: {
   card: IdeaCard
   month: { month: string; complete: boolean }
   /** The days the ideas read, "14 Sep to 11 Oct" (`IdeasRead.label`). */
@@ -134,9 +138,12 @@ export function IdeaCardView({ card, month, readLabel, readBase = null, monthBas
   readBase?: number | null
   /** The month's base where the figures row says it. */
   monthBase?: number | null
+  /** The row's lead says once why the weeks can add up to more, so the card
+   *  does not. */
+  overlapSaid?: boolean
   style?: CSSProperties
 }) {
-  const overlap = card.weeks && card.read && readLabel && card.month ? weeksOverlapNote(card.weeks, card.read.k) : null
+  const overlap = !overlapSaid && card.weeks && card.read && readLabel && card.month ? weeksOverlapNote(card.weeks, card.read.k) : null
   return (
     <article id={`idea-${card.rank}`} aria-labelledby={`idea-${card.rank}-title`} style={style} className={cn(CARD, 'scroll-mt-6 gap-[18px]')}>
       <div className="flex items-baseline gap-3">
@@ -263,15 +270,16 @@ function questionBars(row: QuestionSlot, ctx: QuestionSlotsContext): { label: st
   return row.weeks && ctx.weekLabels && row.weeks.length === ctx.weekLabels.length ? row.weeks.map((n, i) => ({ label: ctx.weekLabels![i], value: n })) : null
 }
 
-/** A card with neither an idea nor a question left for it: its rank and,
- *  on the first such card, the one line saying why. */
-function EmptySlotCard({ rank, line, style }: { rank: number; line: string | null; style?: CSSProperties }) {
+/** The places no idea or question is left for: ONE dashed box across them
+ *  with the one sentence why (decision 4; the review of Phases 6 and 7),
+ *  never a numbered white card each. */
+const SPAN: Record<number, string> = { 1: '', 2: 'xl:col-span-2', 3: 'xl:col-span-3' }
+
+function EmptySlots({ count, line }: { count: number; line: string | null }) {
+  if (count <= 0 || !line) return null
   return (
-    <div data-idea-slot="empty" style={style} className={CARD}>
-      <div className="flex items-baseline gap-3">
-        <Rank n={rank} />
-        {line ? <p className="m-0 text-[14.5px] leading-[1.5] text-secondary-foreground">{line}</p> : null}
-      </div>
+    <div data-idea-slot="empty" className={cn('flex min-w-0', SPAN[count])}>
+      <div className="flex w-full flex-col [&>[data-empty-box]]:flex-1"><EmptyBox>{line}</EmptyBox></div>
     </div>
   )
 }
@@ -281,12 +289,12 @@ function EmptySlotCard({ rank, line, style }: { rank: number; line: string | nul
  *  base, so each card's count is bare), the untouched rule, what the bars
  *  count and what 1× is; or, where every card is a question, what the
  *  questions are. Null where the row has nothing to say. */
-function RowLead({ block, ctx, month, readBase }: { block: IdeasBlock; ctx: QuestionSlotsContext; month: { month: string }; readBase: number | null }) {
+function RowLead({ block, ctx, month, readBase, overlap }: { block: IdeasBlock; ctx: QuestionSlotsContext; month: { month: string }; readBase: number | null; overlap: boolean }) {
   const read = block.week?.read ?? null
   const since = block.cards[0]?.own.since
   const bars = block.cards.some((c) => c.weeks) || block.questions.some((q) => questionBars(q, ctx))
   const typical = block.cards.some((c) => c.format?.multiple != null || c.opening?.multiple != null)
-  const tail = <>{bars ? ' The bars count market videos a week where the question came up.' : null}{typical ? ' In the suggestions, 1× is a typical market video on this question.' : null}</>
+  const tail = <>{bars ? ' The bars count market videos a week where the question came up.' : null}{overlap ? ` ${WEEKS_OVERLAP_ONCE}` : null}{typical ? ' In the suggestions, 1× is a typical market video on this question.' : null}</>
   if (block.cards.length > 0 && read) {
     // A row of fewer ideas says what its other cards are too.
     const after = block.questions.length > 0 ? questionsAfterIdeas(ctx) : ''
@@ -327,19 +335,18 @@ export function IdeasSection({ block, month, ctx }: {
   const cards = block.cards.slice(0, IDEA_SLOTS)
   const questions = block.questions.slice(0, IDEA_SLOTS - cards.length)
   const empty = IDEA_SLOTS - cards.length - questions.length
-  // An empty card says one thing each: where no card holds anything, why
-  // there is no idea (no question card says it), then why no question is
-  // left; the rest keep the row's place.
-  const emptyLines = [
-    ...(cards.length === 0 && questions.length === 0 && block.state !== 'ready' ? [IDEAS_EMPTY[block.state]] : []),
-    ctx.emptyLine,
-  ]
+  // The places left say ONE thing, once: where no card holds anything, why
+  // there is no idea (no question card says it), else why no question is
+  // left.
+  const emptyLine = (cards.length === 0 && questions.length === 0 && block.state !== 'ready' ? IDEAS_EMPTY[block.state] : null) ?? ctx.emptyLine ?? null
   // The bases said once: the four weeks' in the lead (every idea of a set
   // reads the same days), the month's in the figures row where the ideas'
   // month is the page's.
   const readBase = read ? cards[0]?.read?.n ?? null : null
   const monthBase = ideasMonth.month === month.month ? ctx.market.month : null
-  const lead = RowLead({ block, ctx, month, readBase })
+  // Why a card's weeks can add up to more than its figure: once, in the lead.
+  const overlap = Boolean(read) && cards.some((c) => c.weeks && c.read && c.month && weeksOverlapNote(c.weeks, c.read.k) != null)
+  const lead = RowLead({ block, ctx, month, readBase, overlap })
   return (
     <section aria-labelledby="ideas-title" className="flex flex-col">
       <div className="mx-0.5 mt-1 mb-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
@@ -351,14 +358,11 @@ export function IdeasSection({ block, month, ctx }: {
         <p data-ideas-older="" className="mx-0.5 mt-0 mb-[18px] text-[15px] leading-[1.55]">{olderIdeasLine(block.week)}</p>
       ) : null}
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-3" data-ideas-state={block.state}>
-        {cards.map((c) => <IdeaCardView key={c.rank} card={c} month={ideasMonth} readLabel={read?.label ?? null} readBase={readBase} monthBase={monthBase} />)}
+        {cards.map((c) => <IdeaCardView key={c.rank} card={c} month={ideasMonth} readLabel={read?.label ?? null} readBase={readBase} monthBase={monthBase} overlapSaid={overlap} />)}
         {questions.map((q, i) => (
           <QuestionCardView key={q.registryId} row={q} rank={cards.length + i + 1} state={block.state} ctx={ctx} />
         ))}
-        {Array.from({ length: empty }, (_, i) => {
-          const rank = cards.length + questions.length + i + 1
-          return <EmptySlotCard key={`empty-${rank}`} rank={rank} line={emptyLines[i] ?? null} />
-        })}
+        <EmptySlots count={empty} line={emptyLine} />
       </div>
       {cards.some((c) => c.medical) ? <p data-medical="" className="mx-0.5 mt-4 mb-0 text-[14px] leading-[1.5] text-secondary-foreground">{MEDICAL_LINE}</p> : null}
     </section>

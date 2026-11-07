@@ -40,10 +40,16 @@ export const STAT_STRIP_COLS: Record<number, string> = {
  * `data-stat-strip`, NOT `data-strip`: the Voices pages' test asserts that a
  * creator's page carries no `data-strip`.
  */
-export function StatStrip({ items }: { items: readonly StatItem[] }): ReactNode {
+export function StatStrip({ items, columns }: {
+  items: readonly StatItem[]
+  /** The columns from 900px where the board keeps a wider grid than its
+   *  cells (Worth a reply's two cells in four columns); the cell count by
+   *  default. */
+  columns?: number
+}): ReactNode {
   if (!items.length) return null
   return (
-    <StatStripFrame cells={items.length}>
+    <StatStripFrame cells={Math.max(items.length, columns ?? 0)}>
       {items.map((item, i) => <StatStripCell key={item.key ?? (typeof item.term === 'string' ? item.term : i)} item={item} />)}
     </StatStripFrame>
   )

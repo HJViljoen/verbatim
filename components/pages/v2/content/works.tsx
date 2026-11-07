@@ -63,15 +63,17 @@ function Chart({ title, head, rows, empty }: { title: string; head: string; rows
     )
   }
   return (
+    // On a phone (decision 14, the app's own phone layout): the kind, its
+    // share and its response bar; your posts are the panel's sentence there.
     <div className="min-w-0 overflow-x-auto">
-      <table className={cn(TBL, 'min-w-[520px]')}>
+      <table className={cn(TBL, 'sm:min-w-[520px]')}>
         <caption className="pb-2 text-left text-[16px] font-semibold">{title}</caption>
         <thead>
           <tr>
             <th scope="col" className={cn(TH, 'pr-3')}>{head}</th>
             <th scope="col" className={cn(TH, 'pr-3 text-right')}>Share of market videos</th>
-            <th scope="col" className={cn(TH, 'w-[38%] px-3')}>Response</th>
-            <th scope="col" className={cn(TH, 'pr-0 text-right')}>Your posts</th>
+            <th scope="col" className={cn(TH, 'w-[38%] px-3 max-sm:w-[44%] max-sm:pr-0')}>Response</th>
+            <th scope="col" className={cn(TH, 'pr-0 text-right max-sm:hidden')}>Your posts</th>
           </tr>
         </thead>
         <tbody>
@@ -81,8 +83,8 @@ function Chart({ title, head, rows, empty }: { title: string; head: string; rows
               <td className={cn(TD, 'py-2.5 pr-3 text-right tabular-nums text-secondary-foreground')}>
                 {r.share != null ? <Fig>{Math.round(r.share)}%</Fig> : <span className="text-muted-foreground">Not read</span>}
               </td>
-              <td className={cn(TD, 'py-2.5 px-3 align-middle')}><ResponseBar row={r} scale={scale} tick={tick} /></td>
-              <td className={cn(TD, 'py-2.5 pr-0 text-right')}><Fig>{fmtInt(r.yours)}</Fig></td>
+              <td className={cn(TD, 'py-2.5 px-3 align-middle max-sm:pr-0')}><ResponseBar row={r} scale={scale} tick={tick} /></td>
+              <td className={cn(TD, 'py-2.5 pr-0 text-right max-sm:hidden')}><Fig>{fmtInt(r.yours)}</Fig></td>
             </tr>
           ))}
         </tbody>

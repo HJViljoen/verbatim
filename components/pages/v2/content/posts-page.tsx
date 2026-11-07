@@ -58,6 +58,9 @@ export const POST_QUOTE_RULE = 'A comment is quoted only where it reads clearly.
 export const POST_NONE_QUOTABLE = 'None of them can be quoted.'
 export const POST_COMMENTS_UNREAD = 'The comments under it could not be read just now.'
 export const POST_NO_COMMENTS = 'No comment under it has been read yet.'
+/** Said once over the cards where the comments under every one of them
+ *  could not be read (the review of Phases 6 and 7: never once a card). */
+export const POSTS_COMMENTS_UNREAD = 'The comments under your posts could not be read just now.'
 
 /** "Show all 6 comments" where every comment under it may print, else "Show
  *  4 of 6", at most the opened list's cap; null where the card shows every one
@@ -118,9 +121,12 @@ export const onPlatformTail = (card: Pick<PostCard, 'ownLeftOut'>): string =>
 /** One post (the board's tile): its account, platform and day, "Watch the
  *  post" at the right, the best month's tag, its caption in two lines, its
  *  recipe in a sentence, then under a hairline its comments, a figure each. */
-function PostCardView({ card, index, all }: { card: PostCard; index: number; all: boolean }) {
+function PostCardView({ card, index, all, unreadSaid }: { card: PostCard; index: number; all: boolean; unreadSaid: boolean }) {
   const show = showPostComments(card)
   const note = openedPostNote(card)
+  // Where every card's comments could not be read, the page says so once
+  // over the cards and a card says nothing of its own about them.
+  const quiet = unreadSaid && card.held == null && card.quotes.length === 0
   return (
     <article id={postAnchor(card.id)} data-post-card="" className={cn(CARD, 'scroll-mt-6 gap-3', !all && !card.open && index >= POSTS_SHOWN_PHONE ? 'max-sm:hidden' : null)}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1.5">
@@ -135,6 +141,7 @@ function PostCardView({ card, index, all }: { card: PostCard; index: number; all
       </div>
       {card.caption ? <p data-copy="quote" className="m-0 line-clamp-2 text-[15.5px] leading-[1.55] text-foreground">{card.caption}</p> : null}
       <Recipe card={card} />
+      {quiet ? null : (
       <div className={cn('flex flex-col border-t border-track pt-3 text-[14.5px]', card.quotes.length > 0 ? 'gap-3.5' : 'gap-1.5')}>
         {card.held != null ? (
           <span className="font-semibold">
@@ -157,6 +164,7 @@ function PostCardView({ card, index, all }: { card: PostCard; index: number; all
           </Link>
         ) : null}
       </div>
+      )}
     </article>
   )
 }
@@ -192,9 +200,9 @@ function Facts({ data }: { data: PostsPageData }) {
     <aside aria-labelledby="facts-title" className="flex min-w-0 flex-col">
       <SectionHead id="facts-title" title="The facts" />
       <div className={cn(CARD, 'mt-[22px] gap-[22px]')}>
-        {b.unread || total === 0 ? (
-          <EmptyBox>{b.unread ?? `You published nothing of your own in ${monthText(data.month)}.`}</EmptyBox>
-        ) : (
+        {/* Nothing posted, or nothing read: "What you posted" says so once,
+            so the facts hold only how response is read. */}
+        {b.unread || total === 0 ? null : (
           <>
             <div>
               <h3 className={H3}>How they were made</h3>
@@ -212,7 +220,7 @@ function Facts({ data }: { data: PostsPageData }) {
             </div>
           </>
         )}
-        <div className={cn(RULED, 'flex flex-col gap-3')}>
+        <div className={cn(b.unread || total === 0 ? null : RULED, 'flex flex-col gap-3')}>
           <h3 className={cn(H3, 'mb-0')}>How response is read</h3>
           <p className="m-0 text-[14px] leading-[1.55] text-secondary-foreground">Response is the post’s likes, shares and comments against its views, as a multiple of a typical market video published in {monthText(data.month)}. Reddit is left out, and a photo has no views to read it against.</p>
           <GoLink href={`${CONTENT_PATH}#${WORKS_ANCHOR}`} className="self-start">What works in your market’s videos</GoLink>
@@ -225,9 +233,13 @@ function Facts({ data }: { data: PostsPageData }) {
 /** Your posts' page body under its title block. */
 export function PostsPageBody({ data }: { data: PostsPageData }) {
   const b = data.block
+  // Nothing posted, or nothing read: said once, in "What you posted"'s box
+  // (the review of Phases 6 and 7), so no lead says it first.
+  const gap = Boolean(b.unread) || data.cards.length === 0
+  const unreadAll = !gap && data.cards.every((c) => c.held == null && c.quotes.length === 0)
   return (
     <>
-      {data.lead ? (
+      {data.lead && !gap ? (
         <p data-posts-lead="" className="m-0 max-w-[1000px] text-[21px] leading-[1.45] text-foreground max-sm:text-[18px]">
           {data.lead.map((p, i) => (typeof p === 'string' ? <span key={i}>{p}</span> : <span key={i} data-copy="figure" className="tabular-nums">{p.figure}</span>))}
         </p>
@@ -235,13 +247,14 @@ export function PostsPageBody({ data }: { data: PostsPageData }) {
       <div className="grid grid-cols-1 items-start gap-7 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <section id="posted" aria-labelledby="posted-title" className="flex min-w-0 scroll-mt-6 flex-col">
           <SectionHead id="posted-title" title="What you posted" note={data.cards.length > 0 ? 'Newest first, each with what people said under it' : undefined} />
-          {data.cards.length > 0 && !b.unread ? <p data-quote-rule="" className="m-0 mx-0.5 mt-1.5 text-[14px] text-secondary-foreground">{POST_QUOTE_RULE}</p> : null}
+          {!gap && !unreadAll ? <p data-quote-rule="" className="m-0 mx-0.5 mt-1.5 text-[14px] text-secondary-foreground">{POST_QUOTE_RULE}</p> : null}
           <div className="mt-4 flex flex-col gap-4">
-            {b.unread || data.cards.length === 0 ? (
+            {unreadAll ? <div data-comments-unread=""><EmptyBox>{POSTS_COMMENTS_UNREAD}</EmptyBox></div> : null}
+            {gap ? (
               <div data-posts-gap="" className={CARD}><EmptyBox>{b.unread ?? `You published nothing of your own in ${monthText(data.month)}.`}</EmptyBox></div>
             ) : (
               <>
-                {data.cards.map((c, i) => <PostCardView key={c.id} card={c} index={i} all={data.all} />)}
+                {data.cards.map((c, i) => <PostCardView key={c.id} card={c} index={i} all={data.all} unreadSaid={unreadAll} />)}
                 {data.capped != null ? <p className="m-0 text-[13px] text-muted-foreground">The first <span data-copy="figure">{fmtInt(data.capped)}</span> of <span data-copy="figure">{fmtInt(b.total)}</span> are listed.</p> : null}
                 {data.more && data.more.desktop > 0 ? <Link href={data.more.href} className={cn(CHIP, 'h-10 self-start font-semibold no-underline max-sm:hidden')}>Show <span data-copy="figure" className="mx-1">{fmtInt(data.more.desktop)}</span> more {data.more.desktop === 1 ? 'post' : 'posts'}</Link> : null}
                 {data.more && data.more.phone > 0 ? <Link href={data.more.href} className={cn(CHIP, 'h-10 justify-center self-stretch font-semibold no-underline sm:hidden')}>Show <span data-copy="figure" className="mx-1">{fmtInt(data.more.phone)}</span> more {data.more.phone === 1 ? 'post' : 'posts'}</Link> : null}

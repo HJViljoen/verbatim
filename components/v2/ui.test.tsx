@@ -41,6 +41,13 @@ describe('StatStrip', () => {
     expect(render(<StatStrip items={[]} />)).toBe('')
   })
 
+  it('keeps a wider grid than its cells where the board does, never a narrower one', () => {
+    const two = [{ term: 'Written', value: '5 to 11 Oct' }, { term: 'Comments worth a reply', value: '12' }]
+    expect(render(<StatStrip items={two} columns={4} />)).toContain('min-[900px]:grid-cols-4')
+    expect(render(<StatStrip items={two} />)).toContain('min-[900px]:grid-cols-2')
+    expect(render(<StatStrip items={two} columns={1} />)).toContain('min-[900px]:grid-cols-2')
+  })
+
   it('draws no mono, no uppercase and no middle dot', () => {
     expect(m).not.toContain('font-mono')
     expect(m).not.toContain('uppercase')

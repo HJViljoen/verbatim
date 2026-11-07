@@ -158,11 +158,15 @@ function Comment({ c }: { c: SubComment }) {
   )
 }
 
+/** Said once under the tiles where no sub-question's comments could be
+ *  read (each tile's own words are `SUB_UNREAD`). */
+export const SUBS_UNREAD = 'Their comments could not be read just now.'
+
 /** A sub-question's tile: its label, its bar against the largest
  *  sub-question's (decision 5), one sentence of its videos and its comments,
  *  two of its comments and "Show all". `noneOnce`: the page says once, under
  *  the tiles, that none of their comments can be quoted. */
-function SubCard({ card, bar, noneOnce }: { card: SubquestionCard; bar: number; noneOnce: boolean }) {
+function SubCard({ card, bar, noneOnce, unreadOnce }: { card: SubquestionCard; bar: number; noneOnce: boolean; unreadOnce: boolean }) {
   const show = showSubComments(card)
   const note = openedSubNote(card)
   const asking = <><span data-copy="figure">{fmtInt(card.comments)}</span> {card.comments === 1 ? 'comment' : 'comments'} asking it</>
@@ -181,7 +185,7 @@ function SubCard({ card, bar, noneOnce }: { card: SubquestionCard; bar: number; 
         <div data-sub-comments="" className="rounded-[10px] bg-inner px-4 py-0.5 max-sm:px-3.5">
           {card.quotes.map((c) => <Comment key={c.ref} c={c} />)}
         </div>
-      ) : card.comments > 0 && !(noneOnce && card.quotable != null) ? (
+      ) : card.comments > 0 && !(noneOnce && card.quotable != null) && !(unreadOnce && card.quotable == null) ? (
         <EmptyBox>{card.quotable == null ? SUB_UNREAD : SUB_NONE_QUOTABLE}</EmptyBox>
       ) : null}
       {note ? <p className="m-0 text-[13px] text-muted-foreground">{note}</p> : null}
@@ -348,6 +352,11 @@ export function IdeaPageBody({ page }: { page: IdeaPage }) {
   // Said once, under the tiles, where no sub-question has a comment that may
   // print (and each could be read); per tile where only some have none.
   const noneOnce = page.subquestions.length > 0 && page.subquestions.every((c) => c.quotable === 0 && c.quotes.length === 0)
+  // And where no tile's comments could be read, that is said once too, in
+  // the dashed box under the tiles (the review of Phases 6 and 7), never
+  // the same box in every tile.
+  const asked = page.subquestions.filter((c) => c.comments > 0)
+  const unreadOnce = asked.length > 1 && asked.every((c) => c.quotable == null && c.quotes.length === 0)
   return (
     <>
       {page.older ? <p data-ideas-older="" className="m-0 text-[15px] leading-[1.55]">{page.older}</p> : null}
@@ -356,9 +365,10 @@ export function IdeaPageBody({ page }: { page: IdeaPage }) {
       {page.subquestions.length > 0 ? (
         <section aria-label="What they want to know" className="flex flex-col gap-3.5">
           <div className="grid grid-cols-1 gap-5 max-sm:gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {page.subquestions.map((c) => <SubCard key={c.n} card={c} bar={bar(c.videos)} noneOnce={noneOnce} />)}
+            {page.subquestions.map((c) => <SubCard key={c.n} card={c} bar={bar(c.videos)} noneOnce={noneOnce} unreadOnce={unreadOnce} />)}
           </div>
           {noneOnce ? <p data-sub-none-once="" className="m-0 mx-0.5 text-[14px] leading-[1.5] text-secondary-foreground">{SUB_NONE_QUOTABLE}</p> : null}
+          {unreadOnce ? <div data-sub-unread-once=""><EmptyBox>{SUBS_UNREAD}</EmptyBox></div> : null}
         </section>
       ) : (
         <div className={CARD}><EmptyBox>No sub-questions were sorted for it.</EmptyBox></div>

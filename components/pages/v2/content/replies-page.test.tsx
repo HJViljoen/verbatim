@@ -29,6 +29,8 @@ describe('the reply list\'s page', () => {
     // A cap, never a level: no "of N" and no month beside the count.
     expect(copyNodes(m.slice(0, m.indexOf('data-replies-lead'))).filter((n) => n.kind === 'level')).toEqual([])
     expect(repliesStats(contentRepliesFixture()).map((c) => c.term)).toEqual(['Written', 'Comments worth a reply'])
+    // Its two cells sit in the board's four-column grid, not spread across it.
+    expect(m).toMatch(/<dl data-stat-strip="" class="[^"]*min-\[900px\]:grid-cols-4/)
     // No card or figures up top: the lead is the page's own words.
     expect(text).toContain('Comments from these seven days that ask you something, push back, or say they want to buy, each under the video it was written on.')
   })
@@ -52,9 +54,11 @@ describe('the reply list\'s page', () => {
     expect(text).toContain('Reply on YouTube')
     expect(text).not.toMatch(/[→↗↓·]/)
     const m = render(page())
-    // A post about you names you in your gold; your own post is a tag.
+    // A post about you names you in your gold; your own post says "Your
+    // post" in the same gold words, as Your products does.
     expect(m).toMatch(/data-who-chip="you" data-plain="" class="[^"]*text-you[^"]*">Össur</)
-    expect(m).toMatch(/data-under="own"[^>]*><span data-tag="tint"/)
+    expect(m).toMatch(/data-under="own"[^>]*><span data-who-chip="you" data-plain="" class="[^"]*text-you[^"]*">Your post</)
+    expect(m).not.toMatch(/data-under="own"[^>]*><span data-tag=/)
     expect(m.match(/<figure data-reply-comment=""/g)!.length).toBeGreaterThan(4)
     expect(m).toMatch(/href="https:\/\/example\.com\/m\/1\?lc=native5" target="_blank" rel="noopener noreferrer"/)
   })
@@ -135,15 +139,22 @@ describe('the reply list\'s page', () => {
 
   it('keeps its frame where the list is empty, could not be read, or no update has covered a week', () => {
     const empty = renderText(page({ state: 'empty', noIdeas: true }))
-    expect(empty).toContain('Ready to buy They say they want one')
-    expect(empty).toContain('None this week.')
-    expect(render(page({ state: 'empty', noIdeas: true }))).toMatch(/data-empty-box=""[^>]*><div>None this week\.</)
+    // Nothing on the list: said ONCE, in one dashed box (the review of
+    // Phases 6 and 7); the chips name the four kinds at 0, and the facts
+    // draw no bars at 0.
+    expect(empty).toContain('Ready to buy 0 Questions 0 Objections 0 Wrong information 0')
+    expect(empty.split('No comment worth a reply this week.')).toHaveLength(2)
+    expect(empty).not.toContain('None this week.')
+    expect(empty).not.toContain('Whose post they sit under')
+    const emptyHtml = render(page({ state: 'empty', noIdeas: true }))
+    expect(emptyHtml).toMatch(/data-empty-box=""[^>]*><div>No comment worth a reply this week\.</)
+    expect(emptyHtml.match(/data-empty-box=""/g)).toHaveLength(1)
     expect(empty).toContain('What to post next Post ideas are not switched on for this workspace.')
     // The month is named, never "this month" for one that has ended.
-    expect(renderText(page({ state: 'empty', period: 'month' }))).toContain('None in October so far.')
+    expect(renderText(page({ state: 'empty', period: 'month' }))).toContain('No comment worth a reply in October so far.')
     const september = contentRepliesFixture({ state: 'empty', period: 'month' })
     const ended = renderText(<ContentRepliesPage data={{ ...september, view: { ...september.view, window: { ...september.view.window!, phrase: 'in September' } } }} />)
-    expect(ended).toContain('None in September.')
+    expect(ended).toContain('No comment worth a reply in September.')
     expect(ended).not.toContain('this month')
     expect(renderText(page({ state: 'unread' }))).toContain('The comments worth a reply could not be read just now.')
     const noWeek = renderText(page({ state: 'no_week' }))

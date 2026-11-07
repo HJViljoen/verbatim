@@ -124,6 +124,9 @@ type AuditBlock = {
   tags?: ReactNode
   /** The figures row (`StatStrip`). */
   stats?: readonly StatItem[]
+  /** Its columns from 900px, where the board keeps a wider grid than its
+   *  cells (`StatStrip`'s `columns`). */
+  statsColumns?: number
 }
 
 export function LevelBar(props: LevelBarCommon & (LegacyBlock | AuditBlock)) {
@@ -132,7 +135,7 @@ export function LevelBar(props: LevelBarCommon & (LegacyBlock | AuditBlock)) {
   const menu = current?.menu
   const named = title ?? (current?.slot ? <span data-copy="subject" data-slot={current.slot}>{current.label}</span> : current?.label)
   if (props.label == null || props.sub != null || props.stats != null) {
-    const { sub, tags, stats } = props as AuditBlock
+    const { sub, tags, stats, statsColumns } = props as AuditBlock
     return (
       <header data-level-bar={level} data-level-block="audit" className="flex flex-col">
         <CrumbRow crumbs={crumbs} open={open} />
@@ -153,7 +156,7 @@ export function LevelBar(props: LevelBarCommon & (LegacyBlock | AuditBlock)) {
           {controls ? <div data-level-controls="" className="shrink-0">{controls}</div> : null}
         </div>
         {tags != null ? <div data-level-tags="" className="mt-3 flex flex-wrap items-center gap-2">{tags}</div> : null}
-        {stats && stats.length > 0 ? <div className="mt-5"><StatStrip items={stats} /></div> : null}
+        {stats && stats.length > 0 ? <div className="mt-5"><StatStrip items={stats} columns={statsColumns} /></div> : null}
       </header>
     )
   }

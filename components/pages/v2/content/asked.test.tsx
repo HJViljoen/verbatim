@@ -20,10 +20,14 @@ describe('Also asked, and not yet in your posts', () => {
     expect(renderText(card({ block: bare }))).toMatch(/No group Not assigned/)
     const text = renderText(card())
     expect(text).toContain('Question people asked Who asks Subject This week October Last three weeks, oldest first')
-    // The month beside the week, the three weeks in commas; every column at
-    // every width (on a phone the table scrolls inside its tile).
-    expect(text).toContain('How a socket should fit as a child grows Caregivers and family Fit & comfort 12 17 8, 9, 12')
-    expect(render(card())).not.toMatch(/hidden [a-z]+:table-cell|sm:hidden/)
+    // The month beside the week, the three weeks in commas. The week's count carries the month's under it for a phone, where the
+    // wide table's other columns hide (decision 14).
+    expect(text).toContain('How a socket should fit as a child grows Caregivers and family Fit & comfort 12 17 in October so far 17 8, 9, 12')
+    const m = render(card())
+    expect(m).toMatch(/<th scope="col" class="[^"]*max-sm:hidden[^"]*">Who asks<\/th>/)
+    expect(m).toMatch(/<span class="[^"]*sm:hidden[^"]*"><span data-copy="figure"[^>]*>17<\/span> in October so far<\/span>/)
+    // From 640 every column shows (the wide table's own min width).
+    expect(m).toMatch(/<table class="[^"]*sm:min-w-\[720px\]/)
     expect(text).not.toMatch(/Trend|▲|steady/)
     expect(text).toContain('1 more was touched on by your posts and is left out.')
     expect(render(card())).toContain(`href="/dashboard/market/conversations/`)

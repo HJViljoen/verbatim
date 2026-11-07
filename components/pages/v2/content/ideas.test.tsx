@@ -5,7 +5,7 @@ import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '@/lib/config'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
 import { contentEmptyFixture, contentFixture, contentThinFixture, ideaCards, OCT } from '@/lib/pages/v2/content-fixture'
 import { IDEA_SLOTS, questionSlotsContext, type ContentPageData } from '@/lib/pages/v2/content'
-import { IdeaCardView, IdeasSection, OwnTouchLine, QuestionCardView } from './ideas'
+import { IdeaCardView, IdeasSection, OwnTouchLine, QuestionCardView, WEEKS_OVERLAP_ONCE } from './ideas'
 
 /** The page's words as read: a tag between a word and its comma is not a space. */
 const renderText = (node: Parameters<typeof rawText>[0]): string => rawText(node).replace(/\s+([,.])/g, '$1')
@@ -56,6 +56,12 @@ describe('What to post next', () => {
     expect(m).not.toMatch(/text-\[(9|10|11)(\.5)?px\]/)
     expect(m).not.toMatch(/videos this week/)
     expect(renderText(<IdeaCardView card={card} month={OCT} readLabel="14 Sep to 11 Oct" />)).not.toMatch(/Rising|usual level|trend/i)
+    // Why a card's weeks add up to more than its figure: said once in the
+    // row's lead (the review of Phases 6 and 7), never on every card.
+    const rowText = renderText(section())
+    expect(rowText.split(WEEKS_OVERLAP_ONCE)).toHaveLength(2)
+    expect(rowText).not.toMatch(/so the weeks add up to more than \d/)
+    expect(render(section())).not.toContain('data-weeks-overlap')
   })
 
   it('prints the four weeks only beside their month: no month, the four-week figure goes too (decision 1)', () => {
@@ -132,7 +138,7 @@ describe('What to post next', () => {
     expect(titles.map((n) => n.slot)).toEqual(['post_idea', 'post_idea', 'post_idea'])
   })
 
-  it('keeps the board’s three cards in every state: ideas first, then the next questions in line, then empty cards (parity pass)', () => {
+  it('keeps the board’s row in every state: ideas first, then the next questions in line, then one dashed box across the places left (parity pass)', () => {
     expect(slots(render(section()))).toEqual(['idea', 'idea', 'idea'])
     expect(slots(render(row(contentFixture({ ideas: 'fewer' }))))).toEqual(['idea', 'question', 'question'])
     for (const ideas of ['not_on', 'none', 'stale', 'unread'] as const) {
@@ -140,15 +146,19 @@ describe('What to post next', () => {
       assertCopyContract(row(contentFixture({ ideas })))
     }
     expect(slots(render(row(contentThinFixture())))).toHaveLength(IDEA_SLOTS)
-    // No update yet: three cards still, each empty, the first two saying why.
+    // No update yet: one sentence in one dashed box across the row (decision
+    // 4; the review of Phases 6 and 7), never three numbered white cards.
     const empty = contentEmptyFixture()
-    expect(slots(render(row(empty)))).toEqual(['empty', 'empty', 'empty'])
-    expect(renderText(row(empty))).toContain('1 Post ideas are not switched on for this workspace. 2 No update has covered a week yet. 3')
-    // Questions came up but your posts touched on all of them: the empty
-    // card says that, not that none came up (the fresh check).
+    expect(slots(render(row(empty)))).toEqual(['empty'])
+    expect(render(row(empty))).toMatch(/data-idea-slot="empty" class="[^"]*xl:col-span-3[^"]*"><div[^>]*><div data-empty-box=""[^>]*><div>Post ideas are not switched on for this workspace\.<\/div>/)
+    expect(renderText(row(empty))).not.toMatch(/\b[123] /)
+    // Questions came up but your posts touched on all of them: the box says
+    // that, not that none came up (the fresh check), across the places left.
     const touched = contentFixture({ ideas: 'fewer' })
     const allTouched = { ...touched, ideas: { ...touched.ideas, questions: [] }, asked: { ...touched.asked, rows: [], total: 0, touched: 4 } }
-    expect(renderText(row(allTouched))).toContain('2 Every other question people asked was touched on by one of your posts. 3')
+    expect(slots(render(row(allTouched)))).toEqual(['idea', 'empty'])
+    expect(renderText(row(allTouched))).toContain('Every other question people asked was touched on by one of your posts.')
+    expect(render(row(allTouched))).toMatch(/data-idea-slot="empty" class="[^"]*xl:col-span-2/)
     assertCopyContract(row(empty))
   })
 
