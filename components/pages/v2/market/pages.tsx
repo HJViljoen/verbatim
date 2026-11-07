@@ -1,12 +1,11 @@
-import type { ReactNode } from 'react'
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
-import { ConversationLabel, LevelBar } from '@/components/shell/level-bar'
+import { LevelBar } from '@/components/shell/level-bar'
 import { GoLink, PERIODS, PeriodSwitch, withMonthName, type StatItem } from '@/components/v2'
 import { periodHref, WEEK_PAGE_TITLE, type MarketData } from '@/lib/pages/v2/market'
 import { marketConversationPath, marketSubjectPath, surface } from '@/lib/nav'
 import { MARKET_FIRST_RUN, MARKET_TITLE } from './index'
 import { WeekPageBody } from './week-page'
-import { ConversationPageBody } from './conversation-page'
+import { ConversationPageBody, conversationStats } from './conversation-page'
 import { SubjectPageBody, subjectStats } from './subject-page'
 import { fmtInt } from '@/lib/format'
 
@@ -71,7 +70,6 @@ export function MarketSubjectPage({ data, switcherOpen = false }: { data: Market
   )
 }
 
-const lv = (k: number, n: number) => <span data-copy="level">{fmtInt(k)} of {fmtInt(n)}</span>
 
 
 /** A conversation's page (`/dashboard/market/conversations/[conv]`). */
@@ -88,29 +86,16 @@ export function MarketConversationPage({ data }: { data: MarketData | null }) {
   }
   const path = marketConversationPath(page.panel.id)
   const crumbs = data.crumbs ?? []
-  const parent = crumbs.length > 2 ? crumbs[crumbs.length - 2] : null
   return (
     <PageFrame className="text-foreground">
       {crumbs.length > 0 ? (
-        <LevelBar crumbs={crumbs} level="conversation" label={<ConversationLabel parent={parent} />} meta={conversationMeta(page, data)} controls={<Switch data={data} path={path} />} />
+        <LevelBar crumbs={crumbs} level="conversation" title={page.panel.label} stats={conversationStats(page, data)} controls={<Switch data={data} path={path} />} />
       ) : <PageBar title={page.panel.label} />}
       <ConversationPageBody page={page} data={data} />
     </PageFrame>
   )
 }
 
-/** A conversation's meta line, as its phone lines: the dates, its category
- *  videos this week, its month (decision 1: the week beside its month). */
-export function conversationMeta(page: NonNullable<MarketData['convPage']>, data: MarketData): ReactNode[][] {
-  if (data.period === 'week' && data.week) {
-    return [
-      [data.week.dates],
-      page.week ? [<>{lv(page.week.k, page.week.n)} category videos this week</>] : [],
-      page.month ? [<>{lv(page.month.k, page.month.n)} {data.week.inMonth}</>] : [],
-    ]
-  }
-  return [[data.period === 'time' ? `Month by month, to ${data.month.text}` : data.month.text], page.month ? [<>{lv(page.month.k, page.month.n)} category videos{data.period === 'time' ? ` in ${data.month.text}` : null}</>] : []]
-}
 
 /** The week's page's title (the board's, and the level's old label; the
  *  crumb keeps the path's own words, `WEEK_PAGE_TITLE`). */

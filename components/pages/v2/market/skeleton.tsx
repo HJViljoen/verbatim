@@ -58,61 +58,54 @@ function LevelBar({ label, cells = 4 }: { label: string; cells?: number }) {
   )
 }
 
-/** A tracked subject's page loading (F3-Market-Subject): the path and the
- *  title block, the header card and its strip, our read, the three cards and
- *  the list inside it, the numbers. */
+/** A tracked subject's page loading (Market-Subject.dc.html): the path,
+ *  the title and its figures row, the read tile, the list inside it, the
+ *  numbers' tiles. */
 export function MarketSubjectSkeleton() {
   return (
     <PageFrame>
       <div role="status" aria-busy="true" aria-label="Loading the subject" className="flex flex-col gap-[22px]">
-        <LevelBar label="Market" />
-        <div className={cn(CARD, 'gap-5 overflow-hidden sm:px-[34px] sm:pt-[30px] sm:pb-0 max-sm:pb-0')}>
-          <Bone className="h-4 w-40" />
-          <Bone className="h-9 w-3/4" />
-          <div className="-mx-[34px] grid grid-cols-2 gap-px border-t border-track bg-inner max-sm:-mx-[18px] min-[1180px]:grid-cols-4">{[0, 1, 2, 3].map((i) => <div key={i} className="flex flex-col gap-2 px-[22px] pt-5 pb-[22px]"><Bone className="h-8 w-16" /><Bone className="h-3 w-32" /></div>)}</div>
-        </div>
-        <div className={cn(CARD, 'gap-6')}>
-          <div className="grid grid-cols-1 gap-10 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+        <LevelBar label="Market" cells={4} />
+        <div className={cn(CARD, 'gap-[26px] sm:p-[30px]')}>
+          <Bone className="h-8 w-3/4" />
+          <div className="grid grid-cols-1 gap-12 border-t border-track pt-[26px] min-[1180px]:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
             <BoneLines lines={7} />
             <BoneLines lines={5} />
           </div>
         </div>
-        <Bone className="h-5 w-56" />
-        <div className="grid grid-cols-1 gap-5 min-[1180px]:grid-cols-3">{[0, 1, 2].map((i) => <div key={i} className={cn(CARD, 'gap-3')}><Bone className="h-5 w-3/4" /><BoneLines lines={2} /><Bone className="h-[58px] w-full" /></div>)}</div>
-        <div className={CARD}><Bone className="h-5 w-48" /><BoneLines lines={6} /></div>
-        <Bone className="h-5 w-40" />
-        <div className={cn(CARD, 'gap-6')}>
-          <div className="grid grid-cols-1 gap-10 xl:grid-cols-2"><Bone className="h-[150px] w-full" /><Bone className="h-[150px] w-full" /></div>
-          <div className="grid grid-cols-1 gap-8 xl:grid-cols-3">{[0, 1, 2].map((i) => <BoneLines key={i} lines={4} />)}</div>
-        </div>
+        <Bone className="mt-[26px] h-5 w-56" />
+        <div className={CARD}><BoneLines lines={6} /></div>
+        <Bone className="mt-[26px] h-5 w-40" />
+        <div className="grid grid-cols-1 gap-5 min-[1180px]:grid-cols-2">{[0, 1].map((i) => <div key={i} className={CARD}><Bone className="h-5 w-48" /><Bone className="h-[150px] w-full" /></div>)}</div>
+        <div className="grid grid-cols-1 gap-5 min-[1180px]:grid-cols-3">{[0, 1, 2].map((i) => <div key={i} className={CARD}><Bone className="h-5 w-40" /><BoneLines lines={4} /></div>)}</div>
       </div>
     </PageFrame>
   )
 }
 
-/** A conversation's page loading (F3-Market-Conversation): the path and
- *  the title block, the lead and its hairline, the video cards beside the
- *  facts, the siblings. */
+/** A conversation's page loading (Market-Conversation.dc.html): the path,
+ *  the title and its figures row, the lead, the video tiles beside the
+ *  facts' tile, the siblings. */
 export function MarketConversationSkeleton() {
   return (
     <PageFrame>
       <div role="status" aria-busy="true" aria-label="Loading the conversation" className="flex flex-col gap-[22px]">
-        <LevelBar label="Market" />
-        <div className="flex flex-col gap-3 border-b border-border pb-[22px]"><Bone className="h-6 w-3/4" /></div>
-        <div className="grid grid-cols-1 items-start gap-11 min-[1180px]:grid-cols-[minmax(0,1fr)_300px]">
+        <LevelBar label="Market" cells={4} />
+        <Bone className="h-5 w-3/4" />
+        <div className="grid grid-cols-1 items-start gap-x-11 gap-y-[22px] min-[1180px]:grid-cols-[minmax(0,1fr)_340px]">
           <div className="flex flex-col gap-4">
-            <Bone className="h-5 w-48" />
+            <Bone className="mt-[26px] h-5 w-48" />
             {[0, 1, 2].map((i) => (
               <div key={i} className={cn(CARD, 'gap-3')}>
-                <div className="flex items-center gap-3"><Bone className="size-9 rounded-[9px]" /><div className="flex flex-col gap-1.5"><Bone className="h-3.5 w-36" /><Bone className="h-3 w-28" /></div></div>
-                <Bone className="h-4 w-4/5" />
+                <div className="flex items-center justify-between"><Bone className="h-4 w-36" /><Bone className="h-3 w-28" /></div>
+                <BoneLines lines={2} />
                 <Bone className="h-[120px] w-full rounded-[10px]" />
               </div>
             ))}
           </div>
-          <div className="flex flex-col gap-4"><Bone className="h-4 w-24" /><Bone className="h-[86px] w-full" /><BoneLines lines={8} /></div>
+          <div className="flex flex-col gap-4"><Bone className="mt-[26px] h-5 w-24" /><div className={CARD}><BoneLines lines={10} /></div></div>
         </div>
-        <div className="grid grid-cols-2 gap-3 min-[1180px]:grid-cols-4">{[0, 1, 2, 3].map((i) => <Bone key={i} className="h-[62px] w-full rounded-[12px]" />)}</div>
+        <div className="mt-[26px] grid grid-cols-2 gap-4 min-[1180px]:grid-cols-4">{[0, 1, 2, 3].map((i) => <Bone key={i} className="h-[72px] w-full rounded-[12px]" />)}</div>
       </div>
     </PageFrame>
   )

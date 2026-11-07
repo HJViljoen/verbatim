@@ -1813,6 +1813,18 @@ This version has breaking changes — APIs, conventions, and file structure may 
     and "{subject}, the whole subject →" (under no ready subject, the
     period's biggest `MARKET_SIBLINGS`, 8); then the Agent, "about these
     videos and what people said under them".
+    SINCE THE AUDIT DESIGN (7 Nov, `Market-Conversation.dc.html`) a
+    conversation's page has no tile or label over its title and a figures
+    row (`conversationStats`: the week, its category videos this week and in
+    the month, and the brands its videos name, which leave the facts), its
+    lead a plain paragraph with no hairline; each video a tile (the account
+    a 16px heading, "TikTok, posted 3 Oct", the caption in full, "Watch the
+    video" with no arrow), `CONV_NONE_QUOTABLE_ALL` said once under the head
+    where no video's comments may print (`CONV_NONE_QUOTABLE` on a card only
+    where some may), "Show N more videos" a chip; the facts one tile with
+    its base said once ("Counted in this week's 23 videos."), week by week
+    or the dashed box, and bare counts with bars against the largest; the
+    siblings "17 this week, 66 in October so far"; the Agent one link.
     *The week's page* is the published read in full
     (`weekPageOf` over `weeklyReadView` after `hydrateData`): what
     happened, each quote after the paragraph whose ref it carries, what it
