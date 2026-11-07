@@ -40,17 +40,6 @@ function AuditBar({ label, cells }: { label: string; cells: number }) {
   )
 }
 
-/** A hub's header card: its eyebrow, its lead and the four figures. */
-function Hub() {
-  return (
-    <div className={cn(CARD, 'gap-5 overflow-hidden sm:px-[34px] sm:pt-[30px] sm:pb-0 max-sm:pb-0')}>
-      <Bone className="h-4 w-48" />
-      <Bone className="h-9 w-3/4" />
-      <div className="-mx-[34px] grid grid-cols-2 gap-px border-t border-track bg-inner max-sm:-mx-[18px] min-[1180px]:grid-cols-4">{[0, 1, 2, 3].map((i) => <div key={i} className="flex flex-col gap-2 px-[22px] pt-5 pb-[22px]"><Bone className="h-8 w-16" /><Bone className="h-3 w-32" /></div>)}</div>
-    </div>
-  )
-}
-
 /** A group's page loading (Voices-Group.dc.html): the title block, who they
  *  are, the read, the subject tiles, the conversations, the numbers' three
  *  tiles and the comments' three. */
@@ -81,22 +70,31 @@ export function VoicesGroupSkeleton() {
   )
 }
 
-/** A brand's page loading (G3-Voices-Brand). */
+/** A brand's page loading (Voices-Brand.dc.html): the title block, the lead,
+ *  how the talk differs, who talks about it (two tiles), the numbers (two
+ *  tiles, then three). */
 export function VoicesBrandSkeleton() {
   return (
     <PageFrame>
       <div role="status" aria-busy="true" aria-label="Loading the brand" className="flex flex-col gap-[22px]">
-        <Bar label="Voices" />
-        <Hub />
-        <div className={cn(CARD, 'gap-6')}>
-          <div className="grid grid-cols-1 gap-10 min-[1180px]:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]"><BoneLines lines={5} /><BoneLines lines={5} /></div>
+        <AuditBar label="Voices" cells={4} />
+        <div className={cn(CARD, 'gap-5 sm:p-[30px]')}>
+          <Bone className="h-8 w-4/5" />
+          <div className="grid grid-cols-1 gap-8 border-t border-track pt-5 min-[900px]:grid-cols-3">{[0, 1, 2].map((i) => <BoneLines key={i} lines={2} />)}</div>
         </div>
-        <Bone className="h-5 w-56" />
-        <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+        <div className={cn(CARD, 'sm:p-[30px]')}>
+          <div className="grid grid-cols-1 gap-10 min-[900px]:grid-cols-2"><BoneLines lines={5} /><BoneLines lines={5} /></div>
+        </div>
+        <Bone className="mt-[26px] h-5 w-56" />
+        <div className="grid grid-cols-1 items-start gap-5 min-[1180px]:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
           <div className={CARD}><Bone className="h-5 w-56" /><BoneBars rows={5} /></div>
-          <div className={CARD}><Bone className="h-5 w-48" /><BoneBars rows={4} /></div>
+          <div className={CARD}><Bone className="h-5 w-48" /><BoneLines lines={5} /></div>
         </div>
-        <div className={CARD}><Bone className="h-5 w-64" /><BoneLines lines={6} /></div>
+        <Bone className="mt-[26px] h-5 w-40" />
+        <div className="grid grid-cols-1 gap-5 min-[1180px]:grid-cols-2">
+          <div className={CARD}><Bone className="h-5 w-64" /><BoneLines lines={4} /></div>
+          <div className={CARD}><Bone className="h-5 w-56" /><BoneBars rows={4} /></div>
+        </div>
       </div>
     </PageFrame>
   )

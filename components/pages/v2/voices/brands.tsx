@@ -44,7 +44,7 @@ const COLS = 6
  *  at the table's head says so; a row then prints its name alone. */
 function BrandRow({ row, pending }: { row: VoicesBrandRow; pending: boolean }) {
   const name = (
-    <td className={cn(TD, 'font-semibold')}>
+    <td className={cn(TD, 'font-semibold whitespace-nowrap')}>
       <Link href={row.href} className={ROW}>{row.label}</Link>
       {row.you ? <> <BrandChip who="you" plain className="ml-1.5 text-[13px] font-semibold text-you">You</BrandChip></> : null}
     </td>

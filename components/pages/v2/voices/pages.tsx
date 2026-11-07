@@ -4,7 +4,7 @@ import { LevelBar } from '@/components/shell/level-bar'
 import { fmtCompact, fmtInt } from '@/lib/format'
 import { voicesBrandHref, voicesCreatorHref, voicesGroupHref } from '@/lib/pages/v2/voices-address'
 import { levelBarMonth, VOICES_ONE_MONTH_SHORT, type BrandPage, type CreatorPage, type GroupPage, type LevelMissing, type LevelParams } from '@/lib/pages/v2/voices-levels'
-import { BrandPageBody } from './brand-page'
+import { BrandPageBody, brandStats, brandSub } from './brand-page'
 import { CreatorPageBody } from './creator-page'
 import { GroupPageBody, groupStats } from './group-page'
 import { LevelMonthSwitch, VoicesLevelMissing, VoicesLevelTile } from './levels'
@@ -21,15 +21,6 @@ import { LevelMonthSwitch, VoicesLevelMissing, VoicesLevelTile } from './levels'
 // Voices honours it. On a phone the row becomes "‹ Voices".
 
 const lv = (k: number, n: number) => <span data-copy="level">{fmtInt(k)} of {fmtInt(n)}</span>
-
-/** A brand's meta line: the month, named without being asked, named at all. */
-export function brandMeta(page: BrandPage): ReactNode[][] {
-  return [
-    [levelBarMonth(page.month)],
-    page.state === 'counted' && page.named ? [<>named without being asked in {lv(page.named.k, page.named.n)} videos</>] : [],
-    page.state === 'counted' && page.any ? [<>named at all in {lv(page.any.k, page.any.n)}</>] : [],
-  ]
-}
 
 /** A creator's meta line: the month, their videos of the market's, their
  *  following as of the month's videos (never Reddit's). */
@@ -69,9 +60,8 @@ export function VoicesBrandPage({ data, params = {}, switcherOpen = false }: { d
       <LevelBar
         crumbs={data.crumbs}
         level="brand"
-        tile={<VoicesLevelTile level="brand" you={data.you} />}
-        label={data.you ? 'Your brand' : data.watched ? 'Brand you watch' : 'Rival brand'}
-        meta={brandMeta(data)}
+        sub={brandSub(data)}
+        stats={brandStats(data)}
         controls={<LevelMonthSwitch month={data.month} href={voicesBrandHref(data.brandKey, keep(params))} reason={VOICES_ONE_MONTH_SHORT} />}
         open={switcherOpen ? 'current' : undefined}
       />

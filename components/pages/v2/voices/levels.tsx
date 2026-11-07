@@ -1,7 +1,6 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { translationLabel, translationNote } from '@/components/quote-block'
-import { BubbleGlyph, LayersGlyph } from '@/components/shell/level-glyphs'
+import { translationNote } from '@/components/quote-block'
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
 import { BTN_PRIMARY, CARD, commaCite, GoLink, PeriodSwitch, QUOTE, translationLine, type Period, type PeriodOption } from '@/components/v2'
 import { surface } from '@/lib/nav'
@@ -62,22 +61,6 @@ export function VoicesLevelTile({ level, you = false }: { level: VoicesLevel; yo
   )
 }
 
-/** A small tile inside a card or a row (the boards' `.mt`): each names the
- *  level it opens (a subject's layers or a group's people on yellow, a
- *  conversation's bubble on the neutral). */
-export function MiniTile({ kind, size = 'md' }: { kind: 'subject' | 'group' | 'conversation'; size?: 'md' | 'sm' }) {
-  const Glyph = kind === 'subject' ? LayersGlyph : kind === 'group' ? PeopleGlyph : BubbleGlyph
-  return (
-    <span aria-hidden className={cn(
-      'flex shrink-0 items-center justify-center',
-      size === 'md' ? 'size-[26px] rounded-[7px]' : 'size-[22px] rounded-[6px]',
-      kind === 'conversation' ? 'bg-track text-secondary-foreground' : 'bg-accent text-orange-text',
-    )}>
-      <Glyph className={size === 'md' ? 'size-3.5' : 'size-3'} />
-    </span>
-  )
-}
-
 /** The month switch as Voices honours it on a level page: the month on, by
  *  its name ("October", "November so far"), the week and over time shown and
  *  not offered (a group has no reading of either yet, decision 2); the
@@ -110,82 +93,10 @@ export function VoicesLevelMissing({ line }: { line: string }) {
   )
 }
 
-// ---- the hub's header card -------------------------------------------------------------
-
-/** The boards' `.pcard`: a page card's padding and rhythm (Market's). */
-export const PAGE_CARD = cn(CARD, 'gap-[26px] sm:px-[34px] sm:pt-[30px] sm:pb-8 max-sm:gap-5 max-sm:px-[18px] max-sm:py-5')
-/** Written prose on a page (the boards' `.read`). */
-export const READ = 'm-0 text-[15.5px] leading-[1.62] text-foreground max-sm:text-[15px] max-sm:leading-[1.6]'
 /** A state said in one line inside its card. */
 export const GAPLINE = 'm-0 text-[15px] leading-[1.55] text-muted-foreground max-sm:text-[14.5px]'
-const EYEBROW = 'm-0 text-[12px] font-semibold uppercase tracking-[0.06em] text-orange-text'
-
-export const FV = 'font-mono text-[34px] leading-none font-medium tracking-[-0.02em] tabular-nums text-foreground max-sm:text-[26px]'
-export const FW = 'text-[22px] leading-[34px] font-semibold tracking-[-0.01em] text-foreground max-sm:text-[17px] max-sm:leading-[26px]'
-export const FL = 'text-[13.5px] leading-[1.4] text-foreground max-sm:text-[12.5px]'
-export const FS = 'text-[12.5px] leading-[1.4] text-muted-foreground max-sm:text-[12px]'
-
-/** One figure of the strip (the boards' `.fig`): four in a row from 1180, two
- *  to a row under it and on a phone, a hairline between. */
-export function HubFig({ children }: { children: ReactNode }) {
-  return (
-    <div data-fig="" className="flex min-w-0 flex-col gap-1.5 border-border px-[22px] pt-5 pb-[22px] max-sm:px-4 max-sm:pt-[15px] max-sm:pb-4 min-[1180px]:border-l min-[1180px]:first:border-l-0 min-[1180px]:first:pl-[34px] max-[1179px]:odd:pl-[34px] max-[1179px]:even:border-l max-[1179px]:[&:nth-child(n+3)]:border-t max-sm:odd:pl-[18px]">
-      {children}
-    </div>
-  )
-}
-
-/** The bar under a level figure (the boards' `.sbar`), in a colour role. */
-export function HubBar({ pct, tone = 'market' }: { pct: number; tone?: 'market' | 'rival' | 'you' }) {
-  return (
-    <div aria-hidden className="relative mt-1 mb-0.5 h-2.5 max-w-[240px] rounded-[5px] bg-border">
-      <div className={cn('absolute inset-y-0 left-0 rounded-[5px]', tone === 'rival' ? 'bg-comp' : tone === 'you' ? 'bg-you' : 'bg-brand')} style={{ width: `${Math.max(0, Math.min(100, pct))}%` }} />
-    </div>
-  )
-}
-
-/** The hub card: its eyebrow, its lead (stored prose, never invented), then
- *  the four figures inside the card. */
-export function HubCard({ id, eyebrow, lead, label, children }: { id: string; eyebrow: ReactNode; lead: ReactNode | null; label: string; children: ReactNode }) {
-  return (
-    <article id={id} aria-label={label} className={cn(CARD, 'gap-[22px] overflow-hidden sm:px-[34px] sm:pt-[30px] sm:pb-0 max-sm:gap-4 max-sm:px-[18px] max-sm:pt-5 max-sm:pb-0')}>
-      <div className="flex flex-col gap-2.5">
-        <p className={EYEBROW}>{eyebrow}</p>
-        {lead}
-      </div>
-      <div role="group" aria-label={`${label} in figures`} data-strip="" className="-mx-[34px] mt-1.5 grid grid-cols-2 border-t border-track bg-inner max-sm:-mx-[18px] max-sm:mt-1 min-[1180px]:grid-cols-[minmax(0,1.35fr)_repeat(3,minmax(0,1fr))]">
-        {children}
-      </div>
-    </article>
-  )
-}
-
-/** The hub's lead sentence (the boards' `.hubhd`). */
-export const HUB_LEAD = 'm-0 max-w-[900px] text-[32px] leading-[1.24] font-semibold tracking-[-0.02em] text-foreground max-sm:text-[23px] max-sm:leading-[1.28]'
 
 // ---- a comment, labelled ----------------------------------------------------------------
-
-/** One comment (the boards' `.qpanel`), labelled with its conversation where
- *  the page names one; its words the commenter's own, translated as every
- *  quote is (the original, the label, the English). */
-export function LevelQuoteCard({ q }: { q: LevelQuote }) {
-  const note = translationNote({ lang: q.lang, english: q.english })
-  const label = translationLabel(note)
-  return (
-    <figure className="m-0 flex min-w-0 flex-col gap-1.5 rounded-[10px] bg-inner px-[15px] py-[13px]">
-      {q.from ? (
-        <Link href={q.from.href} data-quote-from="" className="mb-0.5 inline-flex items-center gap-1.5 self-start text-[12px] font-semibold text-secondary-foreground no-underline underline-offset-[3px] hover:text-foreground hover:underline">
-          <BubbleGlyph className="size-3 text-muted-foreground" />
-          <span data-copy="subject" data-slot="pass_b_theme">{q.from.label}</span>
-        </Link>
-      ) : null}
-      <blockquote data-copy="quote" className="m-0 font-serif text-[15.5px] italic leading-[1.5] text-foreground max-sm:text-[15px]">“{q.text}”</blockquote>
-      {label ? <span className="text-[12px] text-muted-foreground">{label}</span> : null}
-      {note.english ? <p data-copy="quote" className="m-0 text-[14px] leading-[1.5] text-foreground">{note.english}</p> : null}
-      {q.cite ? <figcaption className="text-[12px] text-muted-foreground">{q.cite}</figcaption> : null}
-    </figure>
-  )
-}
 
 /** One comment as the audit design's boards draw it on a level page (7 Nov):
  *  a tile, its conversation's link above, the commenter's words in the serif,
@@ -238,10 +149,4 @@ export function LevelSection({ id, title, note }: { id?: string; title: ReactNod
 /** A small caps label (the boards' `.dlabel`). */
 export function Caps({ children, className }: { children: ReactNode; className?: string }) {
   return <p className={cn('m-0 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground', className)}>{children}</p>
-}
-
-/** A dashed empty track where a figure would be (the boards' `.etrack`):
- *  decoration, the words say why once. */
-export function EmptyBar({ className }: { className?: string }) {
-  return <span aria-hidden data-empty-track="" className={cn('block h-2 rounded-full border border-dashed border-foreground/20', className)} />
 }

@@ -44,11 +44,11 @@ describe('every level page', () => {
     expect(g).toContain(`title="${VOICES_ONE_MONTH}"`)
     expect(g).toContain('href="/dashboard/voices/groups/caregivers"')
     const b = render(brand(brandFixture()))
-    expect(b).toContain('data-level-tile="brand"')
-    expect(b).toMatch(/data-level-tile="brand" class="[^"]*bg-comp/)
+    expect(b).toContain('data-level-block="audit"')
+    expect(b).not.toContain('data-level-tile')
     expect(b).toContain(`title="${VOICES_ONE_MONTH_SHORT}"`)
-    expect(render(brand(brandFixture({ key: 'client' })))).toMatch(/data-level-tile="brand" class="[^"]*bg-you/)
-    expect(renderText(brand(brandFixture({ key: 'client' })))).toContain('Your brand Össur')
+    expect(renderText(brand(brandFixture()))).toMatch(/^Voices \/ Ottobock Voices Ottobock A rival brand This week/)
+    expect(renderText(brand(brandFixture({ key: 'client' })))).toMatch(/^Voices \/ Össur Voices Össur Your brand This week/)
     expect(renderText(creator(creatorFixture()))).toMatch(/^Voices \/ @stepbystep\.amp Voices Creator on TikTok @stepbystep\.amp October so far · 14 of 318 videos · 182K followers/)
   })
 
@@ -186,18 +186,19 @@ describe('a brand\'s page (G3-Voices-Brand)', () => {
 
   it('in the board\'s order: the finding leads, how the talk differs, who talks about it, the numbers, under its own content, the Agent', () => {
     const at = (s: string) => text.indexOf(s)
-    const order = ['Where its talk differs · the 11 Oct update', 'How the talk differs', 'Who talks about Ottobock', 'The numbers', 'Under its own content', 'Ask what your market says about Ottobock']
+    const order = ['Named at all 49 of 318 videos', 'Where its talk differs, from the 11 Oct update', 'How the talk differs', 'Who talks about Ottobock', 'The numbers', 'Under its own content', 'Said about Ottobock', 'Ask what your market says about Ottobock']
     for (let i = 1; i < order.length; i++) expect(at(order[i]), order[i]).toBeGreaterThan(at(order[i - 1]))
   })
 
-  it('the header: named without being asked in the rival grey, the verdict with its change, named at all, praised and complained', () => {
-    expect(text).toContain('Ottobock’s talk turns on getting a knee paid for 37 of 290 videos named it without being asked the videos we did not find by searching for a brand No clear change +2.4 pts against September 74 of 713 in September 49 of 318 videos named it at all what the figures below are of 16 · 24 of its 49 : praised · complained October’s alone, not compared with September')
+  it('the figures row and the lead: named without being asked, named at all, the verdict with its change; the finding, praised and complained, one note', () => {
+    expect(text).toContain('Month October so far Named without being asked 37 of 290 videos Named at all 49 of 318 videos Against last month No clear change , +2.4 pts')
+    expect(text).toContain('Ottobock’s talk turns on getting a knee paid for Where its talk differs, from the 11 Oct update Named without being asked Counted in the 290 videos we did not find by searching for a brand Praised it 16 of the 49 videos naming it Complained about something 24 of the 49 videos naming it The 49 videos naming it are what every figure below is of, and its counts are October’s alone, not compared with September.')
     // Base `any` carries no verdict, and the page gives no reason for it.
     expect(text).not.toMatch(/too few to set against/)
-    expect(text).toContain('October’s alone: these counts are not compared with September.')
-    expect(html).toMatch(/<div class="absolute inset-y-0 left-0 rounded-\[5px\] bg-comp"/)
     expect(html).toMatch(/data-copy="verdict" title="[^"]*"[^>]*>No clear change</)
     expect(html).toContain('data-copy="stored" data-slot="pass_c_finding"')
+    // The finding's kind under its title, in sentence case.
+    expect(text).toContain('Prosthetists in the comments mention it as what their clinic fits first How the talk differs')
   })
 
   // The month compared with is the month before the one read, whether or not
@@ -206,7 +207,6 @@ describe('a brand\'s page (G3-Voices-Brand)', () => {
   it('with no reading last month, every "compared with" names the month before, never the month read', () => {
     const t = renderText(brand({ ...brandFixture(), prevNamed: null }))
     expect(t).toContain('October’s alone, not compared with September')
-    expect(t).toContain('October’s alone: these counts are not compared with September.')
     expect(t).not.toMatch(/compared with October|against October/)
   })
 
@@ -217,11 +217,10 @@ describe('a brand\'s page (G3-Voices-Brand)', () => {
     const b = brandFixture()
     const shifted = { ...b, month: { ...b.month, n: 321 }, kinds: b.kinds.map((k) => ({ ...k, n: 45 })), subjects: b.subjects.map((x) => ({ ...x, n: 45 })) }
     const t = renderText(brand(shifted))
-    expect(t).toContain('named at all in 49 of 318')
-    expect(t).toContain('49 of 318 videos named it at all')
+    expect(t).toContain('Named at all 49 of 318 videos')
     expect(t).not.toMatch(/of 321/)
-    expect(t).toContain('What people did in the comments · of its 45')
-    expect(t).toContain('What its talk sits in · of its 45 Cost & access 26 of 45')
+    expect(t).toContain('What people did in the comments, of its 45')
+    expect(t).toContain('What its talk sits in, of its 45 Cost & access 26')
   })
 
   // A subject being re-described is named with the open ones, and why it
@@ -231,31 +230,34 @@ describe('a brand\'s page (G3-Voices-Brand)', () => {
     const b = brandFixture()
     const failed = { ...b, notMeasured: [{ id: 's-function', label: 'Function & movement' }, { id: 's-fit', label: 'Fit & comfort', failed: true }] }
     const h = render(brand(failed))
-    expect(renderText(brand(failed))).toContain('Not measured yet: Function & movement, Fit & comfort · each opens in Market Fit & comfort. Being re-described:')
+    expect(renderText(brand(failed))).toContain('Not measured yet: Function & movement, Fit & comfort. Each opens in Market. Fit & comfort. Being re-described:')
     expect(h.split(FAILED_EXPLAINED).length - 1).toBe(1)
     expect(render(brand(b))).not.toContain(FAILED_EXPLAINED)
   })
 
-  it('who talks about it: the groups and the creators, each row opening its page and ending in the chevron', () => {
-    expect(text).toContain('The groups commenting on its videos A video can hold more than one group, so the counts overlap Long-time users upgrading Know what they want; fighting to get it paid for. 21 of 49')
-    expect(text).toContain('Creators it comes up with Accounts with 3 or more of your market’s videos this month whose videos name it TA The Amputee Diaries YouTube · 96K subscribers 3 of its 49')
+  it('who talks about it: the groups with bars against the largest, the creators a table, each opening its page by its name (no chevron)', () => {
+    expect(text).toContain('Who talks about Ottobock Its 49 videos, October so far. Each opens its page in Voices.')
+    expect(text).toContain('The groups commenting on its videos A video can hold more than one group, so the counts overlap. Long-time users upgrading Know what they want; fighting to get it paid for. 21')
+    expect(text).toContain('Creators it comes up with Accounts with 3 or more of your market’s videos this month whose videos name it. Creator Platform Audience Its videos The Amputee Diaries YouTube 96K subscribers 3')
     expect(html).toContain('href="/dashboard/voices/groups/long-time"')
     expect(html).toContain('href="/dashboard/voices/creators/youtube/The%20Amputee%20Diaries"')
-    expect(html.match(/data-row-chevron=""/g)).toHaveLength(9)
+    expect(html).not.toContain('data-row-chevron')
+    expect(html).toContain('aria-label="21 of 49"')
   })
 
-  it('the numbers: three months in the rival grey with the verdict line, the kinds, the subjects with those not measured named, where it was named, where', () => {
-    expect(html).toContain('class="fill-comp"')
-    expect(text).toContain('No clear change against September: October so far is inside September’s normal swing.')
-    expect(text).toContain('What its talk sits in · of its 49 Cost & access 26 of 49 Choosing the right device 11 of 49 Fit & comfort 7 of 49 Look & style 2 of 49 Not measured yet: Function & movement · each opens in Market')
-    expect(text).toContain('Where it was named · of its 49 In the comments 34 In the video: caption, speech or on screen 21 A video can name it in both')
+  it('the numbers: three months as a table, the kinds, the subjects with those not measured named, where it was named, where (the verdict in the figures row)', () => {
+    expect(text).toContain('Named without being asked, month by month Month Named without being asked Share August 52 of 520 10% September 74 of 713 10% October so far 37 of 290 13%')
+    expect(html).not.toContain('fill-comp')
+    expect(text).toContain('What its talk sits in, of its 49 Cost & access 26 Choosing the right device 11 Fit & comfort 7 Look & style 2 Not measured yet: Function & movement. Each opens in Market.')
+    expect(text).toContain('Where it was named, of its 49 In the comments 34 In the video: caption, speech or on screen 21 A video can name it in both.')
+    expect(html.match(/data-brand-month="filling"/g)).toHaveLength(1)
   })
 
   it('under its own content (D4): its own heading and window chip, what is asked, what it says (stored, never a quote), three comments each from its conversation', () => {
-    expect(html).toMatch(/data-window-chip=""[^>]*>14 Jul to 11 Oct · <span class="max-sm:hidden">the ninety days to the month’s last update<\/span><span class="sm:hidden">ninety days<\/span>/)
+    expect(html).toContain('<span data-window-chip="">14 Jul to 11 Oct, the ninety days to the month’s last update</span>')
     expect(text).toContain('Asked under its content Insurance refusals for powered knees 14 videos')
     expect(html).toContain('data-copy="stored" data-slot="pass_a_brand_claim"')
-    expect(text).toContain('Said about Ottobock · 3 comments, each from its conversation Insurance refusals for powered knees “Got the C-Leg approved after a year of fighting. Worth it, but the fight nearly broke me.” YouTube · 3 Oct')
+    expect(text).toContain('Said about Ottobock 3 comments, each from its conversation Insurance refusals for powered knees “Got the C-Leg approved after a year of fighting. Worth it, but the fight nearly broke me.” YouTube, 3 Oct')
   })
 
   it('the switcher drawn open (G3-Voices-Brand-Switcher): brands you track, you first, the unnamed below the hairline in words', () => {
@@ -266,31 +268,33 @@ describe('a brand\'s page (G3-Voices-Brand)', () => {
 
   it('your own brand: no finding to lead and no ninety days, said in one line', () => {
     const t = renderText(brand(brandFixture({ key: 'client' })))
-    expect(t).toContain('Your brand · October so far 41 of 290 videos named it without being asked')
+    expect(t).toContain('Your brand This week')
+    expect(t).toContain('Named without being asked 41 of 290 videos')
     expect(t).toContain('How the talk differs Findings compare a rival’s talk with the rest of the market, so your own brand has none.')
     expect(t).not.toContain('Under its own content')
-    expect(render(brand(brandFixture({ key: 'client' })))).toMatch(/class="absolute inset-y-0 left-0 rounded-\[5px\] bg-you"/)
+    // How people treat it, not read: said once, not under both heads.
+    expect(t.match(/Not read yet\./g)?.length).toBe(2)
+    expect(t).toContain('How people treat it Not read yet.')
   })
 
   it('a brand not counted keeps every frame and says why once; its ninety days stand', () => {
     const t = renderText(brand(brandFixture({ counted: false })))
-    expect(t).toContain('Ottobock in October so far: not counted yet.')
-    expect(t).toContain('The groups commenting on its videos A video can hold more than one group, so the counts overlap No group is listed for Ottobock this month.')
+    // The why is said once, in the figures row.
+    expect(t).toContain('Named without being asked Not counted yet Against last month No comparison yet')
+    expect(t.split(/not counted yet/i).length - 1).toBe(1)
+    expect(t).toContain('The groups commenting on its videos A video can hold more than one group, so the counts overlap. No group is listed for Ottobock this month.')
     expect(t).toContain('No creator is listed for Ottobock this month.')
-    expect(t).toContain('No figure prints for Ottobock this month.')
-    // The why is said once, in the header.
-    expect(t.split('not counted yet').length - 1).toBe(1)
-    // THE PARITY RULE: the strip keeps its four places and the numbers card
-    // its five, each with empty tracks, the months on their axis with no bar;
-    // never one line in the card's place.
+    expect(t.split('No figure prints for Ottobock this month.').length - 1).toBe(1)
+    // THE PARITY RULE, in the audit design's shape (decision 4): every
+    // numbers tile keeps its title; the months keep their names with no
+    // figure; each other frame says it holds none in the dashed box; no empty
+    // tracks, no bar.
     const h = render(brand(brandFixture({ counted: false })))
-    expect(h.match(/data-fig=""/g)).toHaveLength(4)
-    expect(t).toContain('videos named it without being asked Ottobock in October so far: not counted yet. No comparison against September videos named it at all praised · complained')
-    expect(t).toContain('Named without being asked · month by month')
-    expect(t).toContain('What people did in the comments')
-    expect(t).toContain('What its talk sits in Where it was named Where')
-    expect(h.match(/data-empty-row=""/g)).toHaveLength(12)
-    expect(h).not.toContain('data-filling=""')
+    expect(t).toContain('Named without being asked, month by month Month Named without being asked Share August September October so far What people did in the comments No figure prints here. What its talk sits in No figure prints here. Where it was named No figure prints here. Where No figure prints here.')
+    expect(h).not.toContain('data-empty-row')
+    expect(h).not.toContain('data-empty-track')
+    expect(h.match(/data-empty-box=""/g)?.length).toBeGreaterThanOrEqual(7)
+    expect(h).toContain('data-numbers-gap="not_yet"')
     expect(t).toContain('Under its own content')
     expect(t).not.toMatch(/\d+ of 290/)
   })
@@ -308,7 +312,7 @@ describe('a brand no video names', () => {
     const p = brandFixture({ key: 'proteor' })
     expect(p.state).toBe('none')
     const t = renderText(brand(p))
-    expect(t).toContain('Proteor in October so far: no video names it.')
+    expect(t).toContain('Named without being asked No video names it Against last month')
     expect(t).toContain('No group is listed for Proteor this month.')
     expect(t).toContain('No figure prints for Proteor this month.')
     expect(t).not.toMatch(/not counted|until it is counted/)
@@ -321,7 +325,7 @@ describe('a level page reading a closed month never calls it "this month"', () =
     const b = { ...brandFixture({ month: SEP_CLOSED_MONTH }), groups: [], creators: [] }
     const bt = renderText(brand(b, true))
     expect(bt).toContain('None of the groups comments on its videos in September.')
-    expect(bt).toContain('Creators it comes up with Accounts with 3 or more of your market’s videos in September whose videos name it No creator with three or more videos in September made one that names it.')
+    expect(bt).toContain('Creators it comes up with Accounts with 3 or more of your market’s videos in September whose videos name it. No creator with three or more videos in September made one that names it.')
     expect(bt).toContain('Proteor Not named in September')
     expect(bt).not.toMatch(/this month/i)
     const c = { ...creatorFixture({ month: SEP_CLOSED_MONTH }), groups: [] }

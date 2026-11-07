@@ -1992,6 +1992,13 @@ This version has breaking changes — APIs, conventions, and file structure may 
     picks' evidence ids for their insights, `quotesAcrossConversations`);
     with none to print the card keeps its frame and says why in one line,
     and a failed read says so (`quotesUnread`), never the look of none.
+    Since the audit design (7 Nov, `Voices-Group.dc.html`) no tile or label
+    over the title: "A group in your market" under it and the figures row
+    (`groupStats`: the month, their videos of the market's, the update that
+    described them, "Not compared yet" against last month); the one-liner
+    leads a tile of three facts; the subject cards, the conversations
+    (`#talk`, "Not assigned"), the numbers and the comments are tiles, the
+    numbers bare counts of their videos with bars against the largest.
     *A brand's page* (G3-Voices-Brand, -Phone, -Switcher;
     `buildBrandPage`): the header card (Pass C's weightiest finding about a
     rival as its lead, "Where its talk differs · the {date} update"; named
@@ -2021,7 +2028,21 @@ This version has breaking changes — APIs, conventions, and file structure may 
     strip's first place (the row's `stateWords`); each frame says only what
     it holds
     (`brandFrameNone`), never "not counted yet" of a brand that is counted
-    or never will be; its ninety days stand. *A creator's page* (G3-Voices-Creator,
+    or never will be; its ninety days stand. Since the audit design (7 Nov,
+    `Voices-Brand.dc.html`): "A rival brand" (or "Your brand", "A brand you
+    watch") under the title and the figures row (`brandStats`: the month,
+    named without being asked, named at all, and against last month with the
+    verdict and its change, where the verdict line now prints); the finding
+    leads a tile with praised and complained and one note (the videos naming
+    it are what every figure below is of, the month's alone); the month bars
+    are a table (month, named without being asked, share); every list is a
+    tile of bare counts with bars against the largest, in the yellow; the
+    ninety days are named in "Under its own content"'s head, and "Said about
+    {brand}" is its own section of quote tiles. A brand not counted says why
+    once in the figures row, "No figure prints for {brand}" once in the lead
+    tile, and each frame below "No figure prints here." in the dashed box
+    (decision 4), the months keeping their names with no figure.
+    *A creator's page* (G3-Voices-Creator,
     -Phone; `buildCreatorPage`): a flat header, one line code builds ("Their
     biggest conversation is X: 6 of their 14 videos, of the 24 in it this
     month") and the brands named in their videos; their videos, the most
