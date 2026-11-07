@@ -312,6 +312,11 @@ export interface ProductEvidence {
   capped: number | null
   all: boolean
   fewerHref: string | null
+  /** Of `total`, the videos named only in their own words, no comment
+   *  naming it (the audit design's decision 16: the page says it once where
+   *  it holds for every video, and on each card otherwise). From the order
+   *  the evidence is built on; no read of its own. */
+  inVideoOnly: number
 }
 
 export interface ProductPage {
@@ -661,8 +666,9 @@ export function productEvidence(input: {
 }): ProductEvidence {
   const kept = keptMonth(input.params)
   const total = input.order.length
+  const inVideoOnly = input.order.filter((o) => o.named === 0).length
   const fewerHref = input.shown.all ? productPageHref(input.groupId, input.productId, kept) : null
-  if (!input.videos) return { state: 'unread', total, videos: [], more: null, capped: null, all: input.shown.all, fewerHref }
+  if (!input.videos) return { state: 'unread', total, videos: [], more: null, capped: null, all: input.shown.all, fewerHref, inVideoOnly }
   const gate = gateFor(input.clientId, { allowOwn: true })
   const byVideo = new Map<string, NamedComment[]>()
   for (const t of input.texts) {
@@ -700,7 +706,7 @@ export function productEvidence(input: {
   const more = !input.shown.all && total > PRODUCT_VIDEOS_SHOWN_PHONE
     ? { href: productPageHref(input.groupId, input.productId, kept, { videos: 'all' }), desktop: Math.max(0, total - PRODUCT_VIDEOS_SHOWN), phone: total - PRODUCT_VIDEOS_SHOWN_PHONE }
     : null
-  return { state: 'ready', total, videos, more, capped: input.shown.all && total > PRODUCT_VIDEOS_MAX ? PRODUCT_VIDEOS_MAX : null, all: input.shown.all, fewerHref }
+  return { state: 'ready', total, videos, more, capped: input.shown.all && total > PRODUCT_VIDEOS_MAX ? PRODUCT_VIDEOS_MAX : null, all: input.shown.all, fewerHref, inVideoOnly }
 }
 
 /** Reads the evidence is built from beyond the root's. */
@@ -743,7 +749,7 @@ export function buildProductPage(input: {
   const owned = new Set((input.in.market ?? []).filter((v) => v.owned).map((v) => v.id))
   const evidence = input.reads && input.in.standing
     ? productEvidence({ order, shown, videos: input.reads.videos, texts: input.reads.named, owned, clientId: input.in.clientId, groupId: g.id, productId: p.id, params })
-    : { state: 'unread' as const, total: order.length, videos: [], more: null, capped: null, all: shown.all, fewerHref: null }
+    : { state: 'unread' as const, total: order.length, videos: [], more: null, capped: null, all: shown.all, fewerHref: null, inVideoOnly: order.filter((o) => o.named === 0).length }
   return {
     id: p.id, name: p.name, groupId: g.id, groupName: g.name,
     flag: tile?.flag ?? null,

@@ -1,18 +1,15 @@
 import Link from 'next/link'
-import type { ReactNode } from 'react'
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
 import { LevelBar } from '@/components/shell/level-bar'
 import { CARD, EmptyBox, GoLink, PeriodSwitch } from '@/components/v2'
 import { ROW, TBL, TD, TH } from '@/components/v2/look'
-import { fmtInt, longMonth } from '@/lib/format'
+import { fmtInt } from '@/lib/format'
 import { surface } from '@/lib/nav'
-import { PRODUCTS_FAILED, PRODUCTS_NO_CATALOGUE, PRODUCTS_NOT_APPLIED, type ProductsData } from '@/lib/pages/v2/products'
+import { PRODUCTS_FAILED, PRODUCTS_NO_CATALOGUE, PRODUCTS_NOT_APPLIED } from '@/lib/pages/v2/products'
 import { BACK_TO_PRODUCTS, CATEGORY_MISSING, PRODUCT_MISSING, type ProductsLevelData } from '@/lib/pages/v2/products-levels'
-import { barMonth } from '@/lib/reading/month-label'
-import { prevMonth } from '@/lib/reading/month-key'
 import { cn } from '@/lib/utils'
 import { CategoryPageBody, categoryStats } from './category-page'
-import { ProductPageBody } from './product-page'
+import { ProductPageBody, productStats } from './product-page'
 import { LIST_CARD, SectionHead } from './level-parts'
 
 // YOUR PRODUCTS' LEVEL PAGES (17 Oct; the G4 boards): a category's and a
@@ -24,8 +21,9 @@ import { LIST_CARD, SectionHead } from './level-parts'
 // pattern, `LevelBar`; since the audit design, 7 Nov, its audit block): the
 // crumb row with its switchers, the title, the level said under it ("A
 // category of your products"), the month switch at its right, and the
-// figures row (`categoryStats`); no tile and no label over the title. (A
-// product's page keeps its tile and meta line until its own task, T5.3.)
+// figures row (`categoryStats`, `productStats`); no tile and no label over
+// the title. A product's line names its category, a link up ("A product in
+// Liners").
 //
 // EVERY STATE KEEPS THE FRAME (the parity rule; decision 5 of the G4 report):
 // switched off, not read for the month, or not read just now, the page keeps
@@ -65,33 +63,6 @@ function MonthSwitch({ data }: { data: ProductsLevelData }) {
       label="Month"
     />
   )
-}
-
-const lv = (k: number, n: number) => <span data-copy="level">{fmtInt(k)} of {fmtInt(n)}</span>
-const fig = (n: number) => <span data-copy="figure">{fmtInt(n)}</span>
-
-/** The month on a bar, where the page reads one. */
-const monthPart = (base: ProductsData): ReactNode[] => (base.state === 'ready' || base.state === 'unread' ? [barMonth(base.monthWords, base.monthLabel)] : [])
-
-/** A product's meta line: "October so far · named in 6 of 318 videos · 6 of
- *  52 about liners · 9 comments name it"; a quiet month, "named in no video ·
- *  1 in September". */
-export function productMeta(data: ProductsLevelData): ReactNode[][] {
-  const base = data.base
-  const p = data.product
-  if (!p || base.state !== 'ready') return [monthPart(base), data.group ? [<>In {data.group.name}</>] : []]
-  const prevName = longMonth(prevMonth(base.month))
-  if (!p.videos) {
-    return [monthPart(base), [p.videos === 0 ? 'named in no video' : 'not read yet'], p.prev != null ? [<>{fig(p.prev)} in {prevName}</>] : []]
-  }
-  return [
-    monthPart(base),
-    [<>named in {lv(p.videos, p.market ?? 0)} videos</>],
-    [
-      ...(p.categoryVideos != null ? [<>{lv(p.videos, p.categoryVideos)} about {p.groupName.toLowerCase()}</>] : []),
-      ...(p.comments ? [<>{fig(p.comments)} {p.comments === 1 ? 'comment names' : 'comments name'} it</>] : []),
-    ],
-  ]
 }
 
 /** A level whose month reads no count (switched off, not read, failed): the
@@ -152,10 +123,10 @@ export function ProductsCategoryPage({ data, switcherOpen = false }: { data: Pro
   )
 }
 
-/** "Product in {category}", the category a link up. */
-function ProductLabel({ data }: { data: ProductsLevelData }) {
+/** "A product in {category}", the category a link up (the board's). */
+function ProductSub({ data }: { data: ProductsLevelData }) {
   const up = data.crumbs?.[1]
-  return <>Product in {up?.href ? <Link href={up.href} className="text-muted-foreground underline decoration-muted-foreground/40 underline-offset-[3px] hover:text-foreground">{up.label}</Link> : up?.label}</>
+  return <>A product in {up?.href ? <GoLink href={up.href} className="text-[15px]">{up.label}</GoLink> : up?.label}</>
 }
 
 /** A product's page (`/dashboard/products/[group]/[product]`). */
@@ -164,7 +135,7 @@ export function ProductsProductPage({ data, switcherOpen = false }: { data: Prod
   const ready = data.base.state === 'ready' && data.product
   return (
     <PageFrame className="text-foreground">
-      <LevelBar crumbs={data.crumbs} level="product" label={<ProductLabel data={data} />} meta={productMeta(data)} controls={<MonthSwitch data={data} />} open={switcherOpen ? 'current' : undefined} />
+      <LevelBar crumbs={data.crumbs} level="product" sub={<ProductSub data={data} />} stats={productStats(data)} controls={<MonthSwitch data={data} />} open={switcherOpen ? 'current' : undefined} />
       {ready ? <ProductPageBody page={data.product!} d={data} /> : <LevelOff data={data} />}
     </PageFrame>
   )

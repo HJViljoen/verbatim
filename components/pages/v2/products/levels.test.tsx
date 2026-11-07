@@ -35,14 +35,16 @@ describe('every level page, every state', () => {
     }
   })
 
-  it('names its level: a category\'s in words under its title (no tile, the audit design), a product\'s single box on the neutral, never the brand tag', () => {
+  it('names its level in words under its title (no tile, the audit design): a category of your products, a product in its category, a link up', () => {
     const c = render(page(PRODUCTS_LEVEL_FIXTURES.liners()))
     expect(c).toContain('data-level-block="audit"')
     expect(c).not.toContain('data-level-tile')
     expect(renderText(page(PRODUCTS_LEVEL_FIXTURES.liners()))).toMatch(/^Your products \/ Liners Your products Liners A category of your products /)
     const p = render(page(PRODUCTS_LEVEL_FIXTURES.sealinx()))
-    expect(p).toMatch(/data-level-tile="product" class="[^"]*bg-track text-secondary-foreground/)
-    expect(renderText(page(PRODUCTS_LEVEL_FIXTURES.sealinx()))).toContain('Product in Liners Iceross Seal-In X')
+    expect(p).toContain('data-level-block="audit"')
+    expect(p).not.toContain('data-level-tile')
+    expect(renderText(page(PRODUCTS_LEVEL_FIXTURES.sealinx()))).toContain('Iceross Seal-In X A product in Liners')
+    expect(p).toMatch(/A product in <a [^>]*href="\/dashboard\/products\/[^"]+"/)
     // The board's tag glyph (Voices' brand tag) is drawn nowhere.
     for (const m of [c, p]) expect(m).not.toContain('M12.6 2.6A2 2 0 0 0 11.2 2H4')
   })
@@ -206,31 +208,37 @@ describe('a product\'s page, the evidence (G4-Products-Product)', () => {
   const d = PRODUCTS_LEVEL_FIXTURES.sealinx()
   const text = renderText(page(d))
 
-  it('opens with its meta and its one line in code\'s words', () => {
-    expect(text).toContain('September · the last full month · named in 10 of 839 videos · 10 of 118 about liners · 8 comments name it')
+  it('opens with its figures row (a fourth cell where comments name it) and its one line in code\'s words', () => {
+    expect(text).toContain('A product in Liners July August September The last full month September Named in 10 of 839 videos Of the category 10 of 118 about liners Comments naming it 8')
     expect(text).toContain('Almost every video naming it is about Fit & comfort, and most have praise in their comments.')
   })
 
   it('where it was named: each video, the comments naming it under it, an own post marked, the rest one click on', () => {
-    expect(text).toContain('Where it was named 10 videos in September, most comments naming it first The Amputee Diaries YouTube · posted 2 Sep Named in the video Twelve miles on the Seal-In X: an honest review after a month')
-    expect(text).toContain('3 comments name it, of 148 on the video Watch the video ↗ “Switched from the Comfort to the Seal-In X and the slipping stopped.” 6 Sep')
-    expect(text).toContain(`Össur Instagram · posted 1 Sep Your post Meet the people who make our liners 2 comments name it, of 64 on the post Watch the video ↗ ${OWN_POST_NOTE}`)
-    expect(text).toContain('Spanish · machine translation The Seal-In X holds all day for me, but putting it on is hard. 9 Sep')
+    expect(text).toContain('Where it was named 10 videos in September, most comments naming it first The Amputee Diaries YouTube, posted 2 Sep, named in the video Watch the video on YouTube Twelve miles on the Seal-In X: an honest review after a month')
+    expect(text).toContain('3 comments name it, of 148 on the video “Switched from the Comfort to the Seal-In X and the slipping stopped.” 6 Sep')
+    expect(text).toContain(`Össur Your post Instagram, posted 1 Sep Watch the post on Instagram Meet the people who make our liners 2 comments name it, of 64 on the post ${OWN_POST_NOTE}`)
+    expect(text).toContain('Spanish, machine translation The Seal-In X holds all day for me, but putting it on is hard. 9 Sep')
+    expect(text).not.toMatch(/[→↗↓·]/)
     expect(text).toContain('Show the other 6 videos')
     expect(render(page(d))).toContain('data-who-chip="you"')
   })
 
   it('the facts: its place, month by month, what people did, what it is about (U6), who, where', () => {
-    expect(text).toContain('The facts Its place in liners · of 118 Iceross Seal-In X 10 Your other liners 9 One of yours, not which 21 Liners in general 78')
-    expect(text).toContain('Month by month · share naming it 1.0% Jul 5 of 520 1.0% Aug 6 of 612 1.2% Sep 10 of 839')
-    expect(text).toContain('What people did · of 10 Praise in the comments 7 Questions in the comments 6 Complaints in the comments 3')
-    expect(text).toContain(`What it’s about · of 10 Fit & comfort 8 Choosing the right device 3 Cost & access 1 On none of its videos: Community & encouragement, Look & style. Function & movement ${SUBJECT_NOT_MEASURED}`)
-    expect(text).toContain('Who’s talking · of 10')
+    expect(text).toContain('The facts Its place in Liners, of 118 Iceross Seal-In X 10 Your other liners 9 One of yours, not which 21 Liners in general 78')
+    expect(text).toContain('Month by month, share naming it Month Naming it Share July 5 of 520 1.0% August 6 of 612 1.0% September 10 of 839 1.2%')
+    expect(text).toContain('What people did, of 10 Praise in the comments 7 Questions in the comments 6 Complaints in the comments 3')
+    expect(text).toContain(`What it’s about, of 10 Fit & comfort 8 Choosing the right device 3 Cost & access 1 On none of its videos: Community & encouragement, Look & style. Function & movement ${SUBJECT_NOT_MEASURED}`)
+    expect(text).toContain('Who’s talking, of 10')
+    // Bars against the largest row (decision 5), no chart of months.
+    expect(render(page(d))).toContain('aria-label="7 of 10"')
+    expect(render(page(d))).not.toContain('videos naming Iceross Seal-In X, month by month')
   })
 
   it('its siblings, the whole category, the Agent', () => {
-    expect(text).toContain('Your other liners Liners, the whole category → Iceross Comfort 5 videos in September Iceross Synergy 3 videos in September Iceross Dermo 1 video in September Iceross Seal-In V Quiet in September')
-    expect(text).toContain('Ask about these videos and what people said about the Iceross Seal-In X, in your own words. Ask the Agent about this Edit its names in Settings')
+    expect(text).toContain('Your other liners Iceross Comfort 5 videos in September Iceross Synergy 3 videos in September Iceross Dermo 1 video in September Iceross Seal-In V Quiet in September')
+    expect(text).toContain('AeroFit Seal-In Quiet in September Liners, the whole category Ask about these videos and what people said about the Iceross Seal-In X, in your own words. Ask the Agent about this Edit its names in Settings')
+    // One table, at every width.
+    expect(render(page(d)).match(/data-sibling=""/g)).toHaveLength(9)
   })
 
   it('one video opened shows its comments and the way back; every video listed', () => {
@@ -267,12 +275,25 @@ describe('a product\'s page, the evidence (G4-Products-Product)', () => {
     expect(renderText(page(PRODUCTS_LEVEL_FIXTURES['sealinx-all']()))).toContain(NAMED_IN_VIDEO_ONLY)
   })
 
+  it('where every video was named only in its own words, it is said once above them, never on each (decision 16: the loader\'s count)', () => {
+    const d = PRODUCTS_LEVEL_FIXTURES.sealinx()
+    const ev = d.product!.evidence
+    const only = { ...d, product: { ...d.product!, evidence: { ...ev, inVideoOnly: ev.total, videos: ev.videos.map((v) => ({ ...v, named: 0, quotes: [], quotable: 0 })) } } }
+    const t = renderText(page(only))
+    expect(t).toContain('Where it was named 10 videos in September, most comments naming it first All ten named it in the video itself, with no comment naming it.')
+    expect(t).not.toContain(NAMED_IN_VIDEO_ONLY)
+    assertCopyContract(page(only))
+    // Some named only so: each says it on its own card, and no line above.
+    expect(render(page(PRODUCTS_LEVEL_FIXTURES['sealinx-all']()))).not.toContain('data-in-video-only')
+  })
+
   it('a quiet month (Thin, frame 1): no video, one last month and the way to it, the facts in one line each', () => {
     const q = renderText(page(PRODUCTS_LEVEL_FIXTURES['quiet-product']()))
-    expect(q).toContain('October so far · named in no video · 1 in September')
-    expect(q).toContain('Nobody in your market named it in October so far. Where it was named No video in October so far No video named it in October so far. One did in September. See September →')
+    expect(q).toContain('A product in Feet August September October so far Month October so far Named in No video')
+    expect(q).toContain('Nobody in your market named it in October so far. Where it was named No video in October so far No video named it in October so far. One did in September. See September')
+    expect(render(page(PRODUCTS_LEVEL_FIXTURES['quiet-product']()))).toMatch(/data-named-none=""[\s\S]*?data-empty-box=""/)
     expect(q.match(new RegExp(QUIET_FACT, 'g'))).toHaveLength(4)
-    expect(q).toContain('Its place in feet · of 14 Proprio Foot 0 Your other feet 1')
+    expect(q).toContain('Its place in Feet, of 14 Proprio Foot 0 Your other feet 1')
   })
 
   it('a first month wears its flag', () => {
@@ -288,7 +309,7 @@ describe('the states around the two levels', () => {
     expect(off).toContain('All 10 of your liners Each opens as its own page. Product Videos Iceross Seal-In X Not read yet')
     expect(render(page(PRODUCTS_LEVEL_FIXTURES['not-on']()))).not.toContain('aria-label="Month"')
     const product = renderText(page(PRODUCTS_LEVEL_FIXTURES['not-on-product']()))
-    expect(product).toContain(`Product in Liners Iceross Seal-In X In Liners ${PRODUCTS_NOT_ON}`)
+    expect(product).toContain(`Iceross Seal-In X A product in Liners ${PRODUCTS_NOT_ON}`)
     expect(product).toContain('Your other liners')
     expect(product).not.toMatch(/Iceross Seal-In X Not read yet/)
   })

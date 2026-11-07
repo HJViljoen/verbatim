@@ -12,7 +12,7 @@ import { monthTerm } from '@/lib/reading/month-label'
 import { SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { cn } from '@/lib/utils'
 import { subjectChangeGap } from '@/components/pages/v2/market/subject-page'
-import { AskCard, BlockTile, GAPLINE, GroupsBlockView, KindsBlock, LIST_CARD, MonthTable, of, PlatformsBlockView, SectionHead, SubjectsBlock } from './level-parts'
+import { AskCard, BlockTile, GAPLINE, GroupsBlockView, inWords, KindsBlock, LIST_CARD, MonthTable, of, PlatformsBlockView, SectionHead, SubjectsBlock } from './level-parts'
 import { UnclearCard } from './unclear'
 
 // A CATEGORY'S PAGE, THE HUB (G4-Products-Category, 17 Oct; since the audit
@@ -24,11 +24,6 @@ import { UnclearCard } from './unclear'
 // naming each product, the Agent and Settings. The board's read card ("What
 // people are saying / What it means") is not drawn: decision 1 of the G4
 // report, no category read is written (Thin, frame 3).
-
-/** One to twelve in words, as the boards write a count in a sentence ("those
- *  three, then all eight"); a digit past that. */
-const WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve']
-const inWords = (n: number): ReactNode => (n >= 0 && n < WORDS.length ? WORDS[n] : <span data-copy="figure">{fmtInt(n)}</span>)
 
 /** "Liners’", "Bracing & Supports’", "Foot’s": a name's possessive. */
 export const possessive = (name: string): string => (/s$/i.test(name) ? `${name}’` : `${name}’s`)

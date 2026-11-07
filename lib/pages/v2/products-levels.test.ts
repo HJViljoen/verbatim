@@ -228,6 +228,8 @@ describe('the product\'s page, the evidence', () => {
     const ev = productEvidence({ order, shown: { ids: ['v'], open: null, all: false }, videos: new Map([['v', { id: 'v', platform: 'tiktok', video_id: 'p', video_url: null, account_name: 'a', comments_count: 1 }]]), texts: [t('1', 'liner?'), t('2', 'This liner finally stopped slipping on my long walks to work.')], owned: new Set(), clientId: OSSUR_CLIENT_ID, groupId: 'g', productId: 'p', params: {} })
     expect(ev.videos[0]).toMatchObject({ named: 2, quotable: 1, total: null })
     expect(productEvidence({ order, shown: { ids: ['v'], open: null, all: false }, videos: null, texts: [], owned: new Set(), clientId: OSSUR_CLIENT_ID, groupId: 'g', productId: 'p', params: {} }).state).toBe('unread')
+    // How many were named only in the video itself, from the order (decision 16).
+    expect(productEvidence({ order: [{ id: 'a', named: 0, inVideo: true }, { id: 'b', named: 2, inVideo: true }, { id: 'c', named: 0, inVideo: true }], shown: { ids: ['a'], open: null, all: false }, videos: null, texts: [], owned: new Set(), clientId: OSSUR_CLIENT_ID, groupId: 'g', productId: 'p', params: {} }).inVideoOnly).toBe(2)
   })
 
   it('a busy video never crowds another out: each video\'s comments are one list, read whole, and every printable one is counted', () => {

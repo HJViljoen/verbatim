@@ -2237,7 +2237,22 @@ This version has breaking changes — APIs, conventions, and file structure may 
     the facts (its place in its category: this product, your other
     products there, one of yours but not which, the category in general,
     adding up to the category's videos; month by month; what people did;
-    what it's about; who's talking; where); its siblings; the Agent.
+    what it's about; who's talking; where); its siblings; the Agent. Since
+    the audit design (7 Nov, `Products-Product.dc.html`): no tile or label
+    over the title, "A product in {category}" under it (the category a
+    link up) and the figures row (`productStats`: the month, named in its
+    videos of the market's, of its category's, and "Comments naming it"
+    where any do); the line as a 22px lead with no hairline; the videos
+    beside the facts, 1.65 to 1; each video a tile (its account, "TikTok,
+    posted 14 Oct" and "named in the video" where its own words name it as
+    well, "Watch the video on TikTok" with no arrow, the caption in full);
+    where EVERY video was named only in its own words the page says so once
+    under the head ("All three named it in the video itself, with no comment
+    naming it.", from the loader's `inVideoOnly`, decision 16) and no card
+    repeats it, else each such card says `NAMED_IN_VIDEO_ONLY`; the facts
+    one tile, its place and month by month as tables, the lists with bars
+    against the largest; the siblings one table under it; a quiet month's
+    "nobody named it" in the dashed box.
     THE OFF STATES KEEP THE FRAME (decision 5): switched off, unread and
     failed draw the path, the title block, the state's line with its way
     on and the list (or the siblings) with no count; no month switch where

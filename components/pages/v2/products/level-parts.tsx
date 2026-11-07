@@ -1,7 +1,6 @@
 import Link from 'next/link'
 import { Fragment, type ReactNode } from 'react'
-import { BoxGlyph } from '@/components/shell/level-glyphs'
-import { BTN_PRIMARY, CARD, GoLink, MiniBars, TickBar, toMax } from '@/components/v2'
+import { BTN_PRIMARY, CARD, GoLink, TickBar, toMax } from '@/components/v2'
 import { ROW, TBL, TD, TD_NUM, TH } from '@/components/v2/look'
 import { fmtInt, fmtPct, longMonth } from '@/lib/format'
 import { catalogueBreak, sharePct, type Crosses, type LineBar } from '@/lib/pages/v2/products'
@@ -29,21 +28,10 @@ export const GAPLINE = 'm-0 text-[15px] leading-[1.55] text-muted-foreground'
 /** A quiet line inside a section. */
 export const QUIETLINE = 'm-0 text-[13.5px] leading-[1.45] text-muted-foreground'
 
-/** A product's small tile (G4's `.ptile`): the single box on the neutral.
- *  The product page's until its own task (T5.3). */
-export function ProductTile({ className }: { className?: string }) {
-  return (
-    <span aria-hidden className={cn('flex size-[26px] shrink-0 items-center justify-center rounded-[7px] bg-track text-secondary-foreground', className)}>
-      <BoxGlyph className="size-3.5" />
-    </span>
-  )
-}
-
-/** A quiet product's mark: a short rule, never a dash character (G4's `.qd`).
- *  The product page's until its own task (T5.3). */
-export function QuietMark() {
-  return <span role="img" aria-label="no videos" data-quiet-mark="" className="inline-block h-[1.5px] w-[9px] rounded-[1px] bg-muted-foreground/60 align-middle" />
-}
+/** One to twelve in words, as the boards write a count in a sentence ("those
+ *  three, then all eight", "All three named it"); a digit past that. */
+const WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve']
+export const inWords = (n: number): ReactNode => (n >= 0 && n < WORDS.length ? WORDS[n] : <span data-copy="figure">{fmtInt(n)}</span>)
 
 /** "of 52" as a level. */
 export const of = (n: number) => <span data-copy="level">of {fmtInt(n)}</span>
@@ -89,33 +77,6 @@ export function MonthTable({ line, mode, rail = false }: { line: readonly LineBa
           ))}
         </tbody>
       </table>
-      {changed ? <p className={QUIETLINE}>Your product list changed before {longMonth(changed)}: the months before it were read on the earlier list.</p> : null}
-    </>
-  )
-}
-
-/** Month by month, as bars: the product page's until its own task (T5.3),
- *  which draws `MonthTable` in its place. */
-export function MonthBars({ line, name, mode, size }: { line: readonly LineBar[]; name: string; mode: 'category' | 'product'; size: 'sm' | 'md' | 'lg' }) {
-  const changed = catalogueBreak(line)
-  if (line.length === 0) return <p className={QUIETLINE}>No month read yet.</p>
-  return (
-    <>
-      <MiniBars
-        size={size}
-        highlight={null}
-        label={mode === 'category' ? `${name} as a share of your market's videos, month by month` : `Share of your market's videos naming ${name}, month by month`}
-        bars={line.map((b) => {
-          const pct = b.n > 0 ? (100 * b.k) / b.n : 0
-          return {
-            label: mode === 'product' ? `${longMonth(b.month).slice(0, 3)}${b.filling && b.current ? ' so far' : ''}` : longMonth(b.month),
-            value: pct,
-            display: shareOf(b, mode),
-            sub: `${fmtInt(b.k)} of ${fmtInt(b.n)}`,
-            filling: b.filling && b.current,
-          }
-        })}
-      />
       {changed ? <p className={QUIETLINE}>Your product list changed before {longMonth(changed)}: the months before it were read on the earlier list.</p> : null}
     </>
   )
