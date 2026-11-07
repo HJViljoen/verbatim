@@ -7,31 +7,34 @@ import { SHELF } from './fixture'
 const shelf = (selected: string | null = 'liners') => <CatalogueShelf columns={SHELF} selected={selected} panelId="group-panel" />
 
 describe('CatalogueShelf', () => {
-  it('shades each product by its videos: quiet, one or two, three to five, six or more', () => {
+  it('shades each product by its videos: quiet, one or two, three to five, six or more; a row a category (the audit design)', () => {
     expect([0, 1, 2, 3, 5, 6, 40].map(shelfTone)).toEqual([0, 1, 1, 2, 2, 3, 3])
     const m = render(shelf())
     // Next's Link writes `href` last.
     expect(m).toMatch(/<a data-tone="3" class="[^"]*bg-brand text-brand-foreground" href="\?product=seal-in-x"/)
     expect(m).toMatch(/<a data-tone="2" class="[^"]*bg-brand\/65 text-brand-foreground" href="\?product=comfort"/)
     expect(m).toMatch(/<a data-tone="1" class="[^"]*bg-accent text-accent-foreground" href="\?product=synergy"/)
-    expect(m).toMatch(/<a data-tone="0" class="[^"]*border-dashed[^"]*" href="\?product=dermo"/)
+    expect(m).toMatch(/<a data-tone="0" class="[^"]*border-dashed border-input-line[^"]*" href="\?product=dermo"/)
+    // The board's `.catrow`: the head at 220px beside the tiles' grid.
+    expect(m).toContain('min-[900px]:grid-cols-[220px_minmax(0,1fr)]')
+    expect(m).toContain('grid-cols-[repeat(auto-fill,minmax(176px,1fr))]')
   })
 
-  it('prints every count, a quiet product a short rule (never a dash) a screen reader hears as none', () => {
+  it('prints every count, a quiet product its name alone (a screen reader hears none), never a dash', () => {
     const text = renderText(shelf())
-    expect(text).toContain('Liners 52 videos Iceross Seal-In X 6 Iceross Comfort 3 Iceross Synergy 2 Iceross Seal-In V no videos')
-    expect(text).toContain('Couldn’t tell which · 11')
+    expect(text).toContain('Liners 52 videos Couldn’t tell which: 11 videos Iceross Seal-In X 6 Iceross Comfort 3 Iceross Synergy 2 Iceross Seal-In V no videos')
     // The quiet category prints its zero and no "couldn't tell" link.
     expect(text).toContain('Sockets & suspension 0 videos Direct Socket no videos Icelock 200 no videos')
-    // The quiet mark is drawn, not typed: no en or em dash on the shelf.
-    expect(render(shelf())).toContain('data-quiet-mark=""')
+    // The quiet words are a screen reader's: no en or em dash on the shelf.
+    expect(render(shelf())).toContain('<span data-quiet-mark="" class="sr-only">no videos</span>')
     expect(render(shelf())).not.toMatch(/[\u2013\u2014]/)
     assertCopyContract(shelf())
   })
 
-  it('says each head opens a page with a small arrow, only where asked (Your products, 17 Oct)', () => {
-    expect(render(<CatalogueShelf columns={SHELF} opens />).match(/data-head-opens=""/g)).toHaveLength(SHELF.length)
-    expect(render(shelf())).not.toContain('data-head-opens')
+  it('each head\'s name is its page\'s link, with no arrow, asked or not (the audit design; `opens` is ignored)', () => {
+    expect(render(<CatalogueShelf columns={SHELF} opens />)).not.toContain('data-head-opens')
+    expect(render(<CatalogueShelf columns={SHELF} opens />).match(/<h3 [^>]*><a /g)).toHaveLength(SHELF.length)
+    expect(renderText(<CatalogueShelf columns={SHELF} opens />)).not.toMatch(/[→↗↓]/)
   })
 
   it('says "not read yet" for a product or a category the period holds no reading for, never a quiet zero', () => {
@@ -54,7 +57,7 @@ describe('CatalogueShelf', () => {
     assertCopyContract(node)
   })
 
-  it('cuts a long column to a "+N more" tile into its category\'s panel', () => {
+  it('cuts a long row to a "+N more" tile into its category\'s page, where a caller still cuts', () => {
     const cols = SHELF.map((c, i) => (i === 0 ? { ...c, products: c.products.slice(0, 2), more: { count: 6, href: '?group=liners#group-panel' } } : c))
     const node = <CatalogueShelf columns={cols} />
     const m = render(node)
@@ -63,9 +66,9 @@ describe('CatalogueShelf', () => {
     assertCopyContract(node)
   })
 
-  it('rings the open column\'s head and ties it to the panel', () => {
+  it('rings the open row\'s name and ties it to the panel', () => {
     const m = render(shelf('liners'))
-    expect(m).toMatch(/<a aria-expanded="true" aria-controls="group-panel" aria-current="true" class="[^"]*ring-2 ring-foreground" href="\?group=liners#group-panel"/)
+    expect(m).toMatch(/<a aria-expanded="true" aria-controls="group-panel" aria-current="true" class="[^"]*ring-2 ring-foreground[^"]*" href="\?group=liners#group-panel"/)
     expect(m.match(/ring-2 ring-foreground/g)).toHaveLength(1)
     expect(render(shelf(null))).not.toContain('ring-2 ring-foreground')
   })
@@ -75,8 +78,9 @@ describe('CatalogueShelf', () => {
     expect(m).toMatch(/Navii<\/span><span data-copy="verdict" data-flag="new"[^>]*>New<\/span>/)
   })
 
-  it('keys the shades in its legend', () => {
-    expect(renderText(<ShelfLegend />)).toBe('1 to 2 3 to 5 6+ quiet')
+  it('keys the shades in its legend, as the board\'s chips, naming the month where given', () => {
+    expect(renderText(<ShelfLegend />)).toBe('1 to 2 3 to 5 6 or more Quiet, no videos')
+    expect(renderText(<ShelfLegend month="October" />)).toBe('Videos in October 1 to 2 3 to 5 6 or more Quiet, no videos')
     // No en or em dash anywhere in the key (the lead's ruling, 17 Oct).
     expect(render(<ShelfLegend />)).not.toMatch(/[\u2013\u2014]/)
     assertCopyContract(<ShelfLegend />)

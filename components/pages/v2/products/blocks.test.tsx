@@ -3,9 +3,9 @@ import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { bandVerdict } from '@/lib/reading/verdicts'
 import { ossurProductsFixture, ossurTodayFixture, PRODUCT_IDS, PRODUCTS_FIXTURES } from '@/lib/pages/v2/products-fixture'
-import { SHELF_TILES, type FocusStandout, type GapStandout } from '@/lib/pages/v2/products'
+import { type FocusStandout, type GapStandout } from '@/lib/pages/v2/products'
 import { CatalogueCard, CatalogueFrame, shelfColumn } from './shelf'
-import { emptyTitle, shareWords, StandoutCard, StandoutFrames, Standouts, SQUARES_MAX } from './standouts'
+import { emptyTitle, shareWords, StandoutCard, StandoutFrames, Standouts } from './standouts'
 
 // Every block of Your products' root, rendered statically against the copy
 // contract and the board's words (depth v2, T5). The level pages' blocks
@@ -19,21 +19,27 @@ describe('the standouts (E4-Products, the four cards)', () => {
     const text = renderText(node)
     expect(text).toContain('Navii came up for the first time 3 videos in September')
     expect(text).toContain('2 of its 3 videos are about Function & movement.')
-    expect(text).toContain('Hands talk is mostly about hands in general Hands in general 98 of 110 · 89% One of yours 12 of 110 · 11%')
+    // One treatment for every card (the audit design): a figure and its
+    // words, then one sentence, where the share rows were.
+    expect(text).toContain('Hands talk is mostly about hands in general 98 of 110 name none of your products Of the 110 videos about hands in September, 12 name one of yours.')
     // What is counted: videos naming it with praise in their comments, about anything.
     expect(text).toContain('Praise in the comments Feet Almost every Flex-Foot Cheetah video has praise in its comments 7 of its 9 videos Videos that name it with praise in their comments, about it or about anything else in the video.')
     expect(text).not.toMatch(/is praised|said it worked/)
     expect(text).toContain('Rheo Knee talk is mostly about Cost & access 5 of its 7 videos')
-    expect(text.match(/Open →/g)).toHaveLength(4)
+    expect(text).toContain('Open Navii')
+    expect(text.match(/Open [A-Z]/g)).toHaveLength(4)
+    expect(text).not.toMatch(/[→↗↓]/)
+    expect(render(node)).not.toContain('<svg')
     expect(render(node)).not.toContain('data-copy="quote"')
     expect(text).not.toMatch(/this week|rising|usual/i)
     assertCopyContract(node)
   })
 
-  it('the first month is the flag chip, a verdict node fed by its verdict, over the months read', () => {
+  it('the first month is the flag chip, a verdict node fed by its verdict; its figure says the month, with no strip of dots', () => {
     const m = render(<StandoutCard s={d.standouts[0]} monthName="September" />)
     expect(m).toContain('data-flag="new"')
-    expect(m).toMatch(/aria-label="Videos naming Navii each month, June to September: none until September, then 3\."/)
+    expect(renderText(<StandoutCard s={d.standouts[0]} monthName="September" />)).toContain('3 videos in September')
+    expect(m).not.toContain('<svg')
   })
 
   it('the gap card, where its band clears, words the pair in the direction the verdict gives', () => {
@@ -47,7 +53,7 @@ describe('the standouts (E4-Products, the four cards)', () => {
     }
     expect(verdict.state).toBe('moved')
     const node = <StandoutCard s={s} monthName="September" />
-    expect(renderText(node)).toContain('Sweat and heat is a liners matter, not a Iceross Seal-In X one All liners 150 of 400 · 38% Iceross Seal-In X 12 of 120 · 10%')
+    expect(renderText(node)).toContain('Sweat and heat is a liners matter, not a Iceross Seal-In X one 12 of 120 Iceross Seal-In X videos are about Sweat and heat All liners: 150 of 400 videos, 38% .')
     expect(render(node)).toContain('data-copy="verdict"')
     assertCopyContract(node)
   })
@@ -62,17 +68,19 @@ describe('the standouts (E4-Products, the four cards)', () => {
 })
 
 describe('the catalogue (E4-Products, "Your catalogue")', () => {
-  it('every category a column and every product a tile shaded by its videos, the quiet ones dashed', () => {
+  it('every category a row and every product a tile shaded by its videos, the quiet ones dashed', () => {
     const node = <CatalogueCard data={d} />
     const m = render(node)
     expect(m.match(/data-column=/g)).toHaveLength(6)
     expect(m).toContain('data-tone="3"')
     expect(m).toContain('data-tone="0"')
-    expect(m).toContain('xl:grid-cols-6')
     const text = renderText(node)
-    expect(text).toContain('Liners → 117 videos 14% of the market no clear change')
-    expect(text).toContain('Fit & comfort leads, 70 of 117')
-    expect(text).toContain('Couldn’t tell which · 21')
+    // The head outside the tile, its note the catalogue's size.
+    expect(text).toMatch(/^Your catalogue All \d+ products, by category /)
+    // A row's head: its videos and share (a non-answer in commas, never the
+    // badge's dot), its lead, how many came up, couldn't tell which.
+    expect(text).toContain('Liners 117 videos , 14% of the market No clear change, +2 pts Fit & comfort leads, 70 of 117 4 of your 10 came up Couldn’t tell which: 21 videos')
+    expect(text).not.toContain('·')
     expect(text).toContain('Counted on every video in your market, including creators’ videos about Össur')
     assertCopyContract(node)
   })
@@ -86,7 +94,7 @@ describe('the catalogue (E4-Products, "Your catalogue")', () => {
     const sockets = shelfColumn(d.shelf.find((c) => c.name === 'Sockets & Locks')!, 'September')
     expect(renderText(<>{sockets.line}</>)).toBe('1% of the market')
     const quiet = shelfColumn({ ...d.shelf[0], videos: 0, lead: null }, 'September')
-    expect(renderText(<>{quiet.line}</>)).toBe('Quiet in September')
+    expect(renderText(<>{quiet.line}</>)).toBe('quiet in September')
     expect(quiet.note).toBeNull()
   })
 
@@ -114,7 +122,7 @@ describe('the fresh check\'s fixes, as drawn', () => {
 // THE PARITY PASS (13 Oct night): every state keeps the board's shape. The
 // four places are always drawn, with what the month can honestly show.
 describe('the four places, in production\'s thin state', () => {
-  it('Össur today: the first place under the floor, then the three picks; four cards, each with its visual', () => {
+  it('Össur today: the first place under the floor, then the three picks; four cards in one treatment', () => {
     const d = PRODUCTS_FIXTURES['ossur-today']()
     const node = <Standouts slots={d.slots} monthName={d.monthName} />
     const m = render(node)
@@ -125,32 +133,31 @@ describe('the four places, in production\'s thin state', () => {
     expect(text).toContain('New Feet Proprio Foot came up for the first time 1 video in September')
     expect(text).toContain('Also new in September: Pro-Flex Terra, Total Knee 2000 and Rebound Post-Op Knee.')
     expect(m).not.toContain('data-flag="new"')
-    expect(text).toContain('Hands talk is mostly about hands in general Hands in general 59 of 60 · 98% One of yours 1 of 60 · 2%')
+    expect(text).toContain('Hands talk is mostly about hands in general 59 of 60 name none of your products Of the 60 videos about hands in September, 1 names one of yours.')
     expect(text).toContain('Most Feet videos have praise in their comments 16 of its 29 videos')
     // Össur's subjects are provisional (ruling U6): the subject place names
     // none and prints no figure.
     expect(text).toContain('Worth a look What one product’s talk is about Not measured yet')
     expect(text).not.toMatch(/mostly about Fit|most often about/)
-    // Past SQUARES_MAX the marks are one bar the board's row long.
-    expect(m).toContain('data-units="16/29"')
-    expect(m.match(/data-units="16\/29"[^>]*><i /)).toBeTruthy()
-    expect(text.match(/Open →/g)).toHaveLength(3)
+    // No marks, squares or bars on a card: the figure says it.
+    expect(m).not.toContain('data-units')
+    expect(text.match(/Open [A-Z]/g)).toHaveLength(3)
     expect(m).not.toContain('data-copy="quote"')
     assertCopyContract(node)
     // Once the subjects' checks pass, the subject place is the board's card.
     const calibrated = ossurTodayFixture({ calibrated: true })
     const after = renderText(<Standouts slots={calibrated.slots} monthName={calibrated.monthName} />)
     expect(after).toContain('Liners talk is mostly about Fit & comfort 12 of its 23 videos')
-    expect(after.match(/Open →/g)).toHaveLength(4)
+    expect(after.match(/Open [A-Z]/g)).toHaveLength(4)
   })
 
-  it('the thin state: nothing new (the strip, hollow, and the newest on the shelf), the praise and the subject under half, worded for it', () => {
+  it('the thin state: nothing new (said in the dashed box, with the newest on the shelf), the praise and the subject under half, worded for it', () => {
     const d = PRODUCTS_FIXTURES['ossur-thin']()
     const node = <Standouts slots={d.slots} monthName={d.monthName} />
     const text = renderText(node)
     // Every dot of a short strip is named.
-    expect(text).toContain('New Nothing came up for the first time in September Jun Jul Aug Sep Newest on your shelf: Proprio Foot, first named in August. Open →')
-    expect(render(node)).toContain('aria-label="No product came up for the first time in September."')
+    expect(text).toContain('New Nothing came up for the first time in September Newest on your shelf: Proprio Foot, first named in August. Open Proprio Foot')
+    expect(render(node)).toMatch(/data-empty-box=""[^>]*><p [^>]*>Nothing came up for the first time in September<\/p>/)
     expect(text).toContain('Feet videos with praise in their comments 12 of its 29 videos')
     expect(text).not.toMatch(/Most Feet videos/)
     expect(text).toContain('Worth a look What one product’s talk is about Not measured yet')
@@ -160,44 +167,44 @@ describe('the four places, in production\'s thin state', () => {
     assertCopyContract(node)
   })
 
-  it('an empty place keeps its eyebrow, its visual (empty) and one line; it opens nothing', () => {
+  it('an empty place keeps its label and says its line in the dashed box; it opens nothing', () => {
     const d = ossurTodayFixture({ over: { crosses: new Map() } })
     const node = <Standouts slots={d.slots} monthName={d.monthName} />
     const text = renderText(node)
     expect(text).toContain('Praise in the comments Not read for September yet')
     expect(text).toContain('Worth a look Not read for September yet')
-    expect(text.match(/Open →/g)).toHaveLength(2)
+    expect(text.match(/Open [A-Z]/g)).toHaveLength(2)
+    expect(render(node).match(/data-empty-box=""/g)).toHaveLength(2)
     expect(emptyTitle({ slot: 'praised', reason: 'quiet' }, 'September')).toBe('No praise in the comments to show for September')
     expect(emptyTitle({ slot: 'category' }, 'September')).toBe('No category came up in September')
     assertCopyContract(node)
   })
 
-  it('the frames for a page that reads no month: the four eyebrows, what each will show, no number and no link', () => {
+  it('the frames for a page that reads no month: the four labels, what each will show in the dashed box, no number and no link', () => {
     const node = <StandoutFrames />
     const text = renderText(node)
-    expect(text).toBe('New A product’s first month Category, not you A category against your products in it In general One of yours Praise in the comments Praise in the comments on a product Worth a look What one product’s talk is about')
+    expect(text).toBe('New A product’s first month Category, not you A category against your products in it Praise in the comments Praise in the comments on a product Worth a look What one product’s talk is about')
+    expect(render(node).match(/data-empty-box=""/g)).toHaveLength(4)
     expect(render(node)).not.toContain('href=')
     expect(render(node)).not.toContain('data-copy="figure"')
     assertCopyContract(node)
   })
-
-  it('squares up to two of the board\'s rows', () => {
-    expect(SQUARES_MAX).toBe(18)
-  })
 })
 
 describe('the catalogue card where no month is read', () => {
-  it('no catalogue: the board\'s card, its one line and the way on, over the shelf\'s empty shape', () => {
+  it('no catalogue: the board\'s section, its one line in the dashed box and the way on', () => {
     const node = <CatalogueFrame data={PRODUCTS_FIXTURES.sealand()} link="Add your products in Settings" />
     const text = renderText(node)
     expect(text).toContain('Your catalogue Add the products you sell')
-    expect(text).toContain('Add your products in Settings →')
+    expect(text).toContain('Add your products in Settings')
+    expect(text).not.toContain('→')
     expect(render(node)).toContain('data-empty-shelf=""')
+    expect(render(node)).toContain('data-empty-box=""')
     expect(render(node)).not.toContain('data-column=')
     assertCopyContract(node)
   })
 
-  it('a catalogue not read: every category a column, "Not read yet" once a column, every tile its name alone', () => {
+  it('a catalogue not read: every category a row, "Not read yet" once a row, every tile its name alone', () => {
     const node = <CatalogueFrame data={PRODUCTS_FIXTURES['not-on']()} link="Review your products in Settings" />
     const m = render(node)
     expect(m.match(/data-column=/g)).toHaveLength(6)
@@ -212,7 +219,7 @@ describe('ruling U6, as drawn: a provisional subject prints its name and "Not me
     const d = PRODUCTS_FIXTURES['ossur-today']()
     const text = renderText(<CatalogueCard data={d} />)
     expect(text).not.toMatch(/ leads,/)
-    expect(text.match(/What it’s about · Not measured yet/g)).toHaveLength(6)
+    expect(text.match(/What it’s about: Not measured yet/g)).toHaveLength(6)
     assertCopyContract(<CatalogueCard data={d} />)
     // Some ready, some not: the ready one's level, but not "leads" over the rest.
     const partial = { ...d.shelf[0], lead: { label: 'Fit & comfort', k: 12 }, subjectsPending: true, leads: false }
@@ -243,20 +250,21 @@ describe('the fresh check\'s fixes on the parity pass, as drawn', () => {
     assertCopyContract(<StandoutCard s={focus({ ranked: false })} monthName="September" tier="next" />)
   })
 
-  it('the shelf keeps the board\'s height: eight tiles, the most videos first, then "+N more" into the category\'s page, which lists every product', () => {
+  it('the page prints every product, the most videos first, with no "+N more" (the board\'s Feet shows all twenty; `shelfCut` stays the Dashboard\'s, lib/pages/v2/home-parity.test.ts)', () => {
     const d = PRODUCTS_FIXTURES['ossur-today']()
     const feet = d.shelf.find((c) => c.name === 'Feet')!
     expect(feet.products).toHaveLength(20)
     const col = shelfColumn(feet, 'September')
-    expect(col.products).toHaveLength(SHELF_TILES)
+    expect(col.products).toHaveLength(20)
     expect(col.products.slice(0, 3).map((p) => p.name)).toEqual(['Pro-Flex XC', 'Proprio Foot', 'Pro-Flex Terra'])
-    expect(col.more).toEqual({ count: 12, href: feet.href })
+    expect(col.more).toBeNull()
+    expect(col.cameUp).toEqual({ k: 3, n: 20 })
     const m = render(<CatalogueCard data={d} />)
-    // Liners (10), Feet (20), Knees (10) and Bracing & Supports (15).
-    expect(m.match(/data-more=""/g)).toHaveLength(4)
-    expect(renderText(<CatalogueCard data={d} />)).toContain('Pro-Flex LP Align no videos + 12 more →')
-    // A column at the cap or under it has no "more".
-    expect(shelfColumn(d.shelf.find((c) => c.name === 'Hands')!, 'September').more).toBeNull()
+    expect(m).not.toContain('data-more=""')
+    const tiles = d.shelf.reduce((s, c) => s + c.products.length, 0)
+    expect(m.match(/data-tone="/g)).toHaveLength(tiles)
+    expect(renderText(<CatalogueCard data={d} />)).toContain('Pro-Flex LP Align no videos Pro-Flex ST no videos')
+    expect(renderText(<CatalogueCard data={d} />)).not.toMatch(/\+ ?\d+ more/)
     assertCopyContract(<CatalogueCard data={d} />)
   })
 })

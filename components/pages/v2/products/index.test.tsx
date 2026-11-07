@@ -3,7 +3,10 @@ import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { ossurProductsFixture, PRODUCTS_FIXTURES } from '@/lib/pages/v2/products-fixture'
 import { productsBasis, PRODUCTS_NO_CATALOGUE, PRODUCTS_NOT_APPLIED, PRODUCTS_NOT_ON } from '@/lib/pages/v2/products'
-import { ProductsEmpty, ProductsMeta, ProductsPage } from '.'
+import { StatStrip } from '@/components/v2'
+import { ProductsEmpty, ProductsPage, productsStats } from '.'
+
+const strip = (d: Parameters<typeof productsStats>[0]) => renderText(<StatStrip items={productsStats(d)} />)
 
 describe('the Your products page (boards E4-Products and G4-Products)', () => {
   it('keeps the copy contract on every fixture, every state', () => {
@@ -23,20 +26,29 @@ describe('the Your products page (boards E4-Products and G4-Products)', () => {
     }
   })
 
-  it('says each column head opens a page, with the board\'s small arrow (G4-Products)', () => {
+  it('each category is a row whose name opens its page, with no arrow (the audit design)', () => {
     const m = render(<ProductsPage data={PRODUCTS_FIXTURES.ossur()} />)
-    expect(m.match(/data-head-opens=""/g)).toHaveLength(6)
+    expect(m.match(/data-column="/g)).toHaveLength(6)
+    expect(m).not.toContain('data-head-opens')
+    expect(m.match(/<h3 class="[^"]*"><a [^>]*href="\/dashboard\/products\/[^"/]+"/g)).toHaveLength(6)
+    expect(renderText(<ProductsPage data={PRODUCTS_FIXTURES.ossur()} />)).not.toMatch(/[→↗↓]/)
   })
 
   it('prints no en or em dash: the legend reads "1 to 2" and "3 to 5", a quiet tile a drawn rule', () => {
     for (const f of Object.values(PRODUCTS_FIXTURES)) expect(render(<ProductsPage data={f()} />)).not.toMatch(/[\u2013\u2014]/)
-    expect(renderText(<ProductsPage data={PRODUCTS_FIXTURES.ossur()} />)).toContain('1 to 2 3 to 5 6+ quiet')
+    expect(renderText(<ProductsPage data={PRODUCTS_FIXTURES.ossur()} />)).toContain('Videos in September 1 to 2 3 to 5 6 or more Quiet, no videos')
   })
 
-  it('the bar: the month, the products that came up of the catalogue, the videos about them; the board\'s switch in months', () => {
+  it('the figures row: the month, the products that came up of the catalogue, those quiet, the categories, the videos about them; the board\'s switch in months', () => {
     const d = PRODUCTS_FIXTURES.ossur()
-    expect(renderText(<ProductsMeta data={d} />)).toBe('September · the last full month · 15 of your 66 products came up · 412 videos about them or their categories'.replace('66', String(d.catalogue.products)))
+    const quiet = d.shelf.reduce((s, c) => s + c.products.filter((p) => p.videos === 0).length, 0)
+    expect(strip(d)).toBe(`The last full month September Your products that came up 15 of your ${d.catalogue.products} Quiet in September ${quiet} products Categories 6 About them or their categories 412 videos`)
+    // Quiet counts the products read at none, never one not read yet.
+    const withUnread = { ...d, shelf: d.shelf.map((c, i) => (i === 0 ? { ...c, products: c.products.map((p, j) => (j === c.products.length - 1 ? { ...p, videos: null } : p)) } : c)) }
+    expect(strip(withUnread)).toContain(`Quiet in September ${quiet - 1} products`)
     const m = render(<ProductsPage data={d} />)
+    expect(m).toContain('data-stat-strip=""')
+    expect(m).not.toContain('data-bar-meta')
     expect(m).toContain('>Your products</h1>')
     expect(m).not.toContain('aria-label="Period"')
     // THE SWITCH (the parity pass): the board's control, in the months the
@@ -49,21 +61,23 @@ describe('the Your products page (boards E4-Products and G4-Products)', () => {
     const unread = render(<ProductsPage data={PRODUCTS_FIXTURES.unread()} />)
     expect(unread).toMatch(/<a aria-current="page" [^>]*href="\/dashboard\/products\?month=2026-10">October so far<\/a>/)
     expect(unread).toContain('href="/dashboard/products?month=2026-09"')
-    // No switch, no empty wrapper.
+    // No switch, no empty wrapper; and the switch is drawn once, never a
+    // second copy for a phone.
     expect(render(<ProductsPage data={PRODUCTS_FIXTURES.sealand()} />)).not.toContain('-mt-2')
+    expect(m.match(/aria-label="Month"/g)).toHaveLength(1)
   })
 
   // Decision 3: the month's label on the bar only where the page reads a
   // month that is not the current calendar month.
-  it('labels the month on the bar only where it is not the current calendar month', () => {
-    expect(renderText(<ProductsMeta data={ossurProductsFixture({}, { now: '2026-10-13T08:00:00.000Z' })} />)).toMatch(/^September · the last full month · 15 of your/)
-    expect(renderText(<ProductsMeta data={ossurProductsFixture({}, { now: '2026-12-02T08:00:00.000Z' })} />)).toMatch(/^September · an earlier month · /)
-    expect(renderText(<ProductsMeta data={ossurProductsFixture({}, { now: '2026-09-20T08:00:00.000Z', soFar: true })} />)).toMatch(/^September so far · 15 of your/)
-    expect(renderText(<ProductsMeta data={ossurProductsFixture({}, { now: undefined })} />)).toMatch(/^September · 15 of your/)
+  it('labels the month in the figures row only where it is not the current calendar month', () => {
+    expect(strip(ossurProductsFixture({}, { now: '2026-10-13T08:00:00.000Z' }))).toMatch(/^The last full month September Your products that came up 15 of your/)
+    expect(strip(ossurProductsFixture({}, { now: '2026-12-02T08:00:00.000Z' }))).toMatch(/^An earlier month September /)
+    expect(strip(ossurProductsFixture({}, { now: '2026-09-20T08:00:00.000Z', soFar: true }))).toMatch(/^Month September so far Your products that came up 15 of your/)
+    expect(strip(ossurProductsFixture({}, { now: undefined }))).toMatch(/^Month September Your products that came up 15 of your/)
     // The current month, not read yet: "October so far", no label.
-    expect(renderText(<ProductsMeta data={PRODUCTS_FIXTURES.unread()} />)).toMatch(/^October so far · \d+ products in 6 categories$/)
+    expect(strip(PRODUCTS_FIXTURES.unread())).toMatch(/^Month October so far Your products \d+ products in 6 categories$/)
     // A state that reads no month names none, label or not.
-    expect(renderText(<ProductsMeta data={PRODUCTS_FIXTURES['not-on']()} />)).not.toMatch(/month/)
+    expect(strip(PRODUCTS_FIXTURES['not-on']())).not.toMatch(/month/i)
     for (const d of [ossurProductsFixture(), PRODUCTS_FIXTURES['ossur-today']()]) assertCopyContract(<ProductsPage data={d} />)
   })
 
@@ -85,7 +99,7 @@ describe('the Your products page (boards E4-Products and G4-Products)', () => {
       expect(m, key).toContain('id="catalogue-title"')
       // No count of talk: no shaded tile, no "Open" into a reading.
       expect(m, key).not.toMatch(/data-tone="[123]"/)
-      expect(renderText(<ProductsPage data={PRODUCTS_FIXTURES[key]()} />), key).not.toContain('Open →')
+      expect(renderText(<ProductsPage data={PRODUCTS_FIXTURES[key]()} />), key).not.toMatch(/Open [A-Z]/)
       assertCopyContract(<ProductsPage data={PRODUCTS_FIXTURES[key]()} />)
     }
     // No catalogue: the shelf's empty shape, no name. A catalogue not read:
@@ -93,9 +107,11 @@ describe('the Your products page (boards E4-Products and G4-Products)', () => {
     expect(render(<ProductsPage data={PRODUCTS_FIXTURES.sealand()} />)).toContain('data-empty-shelf=""')
     const notOn = render(<ProductsPage data={PRODUCTS_FIXTURES['not-on']()} />)
     expect(notOn.match(/data-column=/g)).toHaveLength(6)
-    expect(renderText(<ProductsPage data={PRODUCTS_FIXTURES['not-on']()} />)).toContain('Liners → Not read yet Iceross Seal-In X')
+    expect(renderText(<ProductsPage data={PRODUCTS_FIXTURES['not-on']()} />)).toContain('Liners Not read yet Iceross Seal-In X')
     expect(renderText(<ProductsPage data={PRODUCTS_FIXTURES['not-on']()} />)).not.toContain('not read yet')
-    expect(renderText(<ProductsMeta data={PRODUCTS_FIXTURES.sealand()} />)).toBe('No products added yet')
+    expect(strip(PRODUCTS_FIXTURES.sealand())).toBe('Your products None added yet')
+    // The state's line in the dashed box (decision 4).
+    expect(render(<ProductsPage data={PRODUCTS_FIXTURES['not-on']()} />)).toContain('data-empty-box=""')
   })
 
   it('the honest states print their line and no count, and a missing catalogue links to Settings', () => {
@@ -115,10 +131,10 @@ describe('the Your products page (boards E4-Products and G4-Products)', () => {
     expect(render(<ProductsPage data={PRODUCTS_FIXTURES.sealand()} />)).toContain('href="/dashboard/settings/products"')
     // Not switched on: the catalogue's size, never a count of talk.
     // Not switched on: no month over a page that reads none (Phase 4 fix round).
-    expect(renderText(<ProductsMeta data={PRODUCTS_FIXTURES['not-on']()} />)).toMatch(/^\d+ products in 6 categories$/)
-    expect(renderText(<ProductsMeta data={PRODUCTS_FIXTURES['not-applied']()} />)).not.toMatch(/September|October/)
-    expect(renderText(<ProductsMeta data={PRODUCTS_FIXTURES.sealand()} />)).not.toMatch(/September|October/)
+    expect(strip(PRODUCTS_FIXTURES['not-on']())).toMatch(/^Your products \d+ products in 6 categories$/)
+    expect(strip(PRODUCTS_FIXTURES['not-applied']())).not.toMatch(/September|October/)
+    expect(strip(PRODUCTS_FIXTURES.sealand())).not.toMatch(/September|October/)
     // Read but not yet for the month: the month is what is missing, so it stays.
-    expect(renderText(<ProductsMeta data={PRODUCTS_FIXTURES.unread()} />)).toMatch(/^October/)
+    expect(strip(PRODUCTS_FIXTURES.unread())).toMatch(/^Month October/)
   })
 })

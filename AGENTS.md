@@ -2160,9 +2160,20 @@ This version has breaking changes — APIs, conventions, and file structure may 
     `('/dashboard/products', 'layout')`, every page under the root. THE
     ROOT reads what it read (33 statements in Össur's fixture database,
     `products-statements.test.ts`) and no text: its quotes are the level
-    pages'. Each column head carries the board's small arrow
-    (`CatalogueShelf`'s `opens`); the shelf's key reads "1 to 2" and "3 to
-    5" and a quiet tile's mark is a drawn rule, never an en dash.
+    pages'. Since the audit design (7 Nov, `Products.dc.html`): the figures
+    row (`productsStats`: the month, "10 of your 65" that came up, those
+    quiet in the month (read at none, never not read), the categories, and,
+    small call 10, the videos about them or their categories), the month
+    switch once; the four standout places in one treatment (the place's
+    label and where it sits, the title, a figure with its words, one
+    sentence, "Open {name}"; no month dots, squares or share rows; an empty
+    place says its line in the dashed box); "Your catalogue" headed outside
+    its tile, its key the board's chips ("Videos in {month}", "1 to 2", "3
+    to 5", "6 or more", "Quiet, no videos"); every category a ROW (its head
+    beside its tiles: its videos and share, its lead, "N of your M came
+    up", "Couldn't tell which: N videos"), its name the link, with no
+    arrow; a quiet tile dashed with its name alone (a screen reader hears
+    "no videos"), never an en dash.
     THE HUB (`buildCategoryPage`, 30 statements): the path "Your products /
     {category}" and its switcher (the categories in the shelf's order, a
     quiet one "Quiet so far" or "Quiet in {month}", never a figure); the
@@ -2260,12 +2271,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
     no figure (U6): it is named, with `SUBJECT_NOT_MEASURED` where its count
     would be. Every state with a catalogue draws the shelf
     (`buildProductsData` fills `shelf` with no count where the month was
-    not read). A shelf column shows every tile where it holds nine or
-    fewer, else `SHELF_TILES` (8), most videos first, then "+N more" into
-    the category's page; never "+1 more" (the lead, 14 Oct; `shelfCut`,
-    which the Dashboard's mini shelf cuts by too). A column's head puts its
-    verdict on its own line under "N% of the market", as the board's "▲
-    from 14%".
+    not read). Since the audit design the page's shelf shows EVERY product,
+    most videos first (the board's Feet shows all twenty); `shelfCut` and
+    `SHELF_TILES` (8, never "+1 more", the lead, 14 Oct) are the Dashboard's
+    mini shelf's alone now. A row's head puts its verdict on its own line
+    under "N% of the market", as the board's "▲ from 14%", a non-answer in
+    words and commas ("No clear change, +2 pts").
   - **Content** (T6; depth as pages, 17 Oct; `lib/pages/v2/content.ts`
     `loadContentPage`, `topContent`; the level pages' loaders
     `content-idea.ts`, `content-replies.ts`, `content-posts.ts` beside

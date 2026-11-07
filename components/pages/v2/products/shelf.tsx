@@ -1,26 +1,26 @@
-import Link from 'next/link'
-import { Box } from 'lucide-react'
-import { CARD, CardHead, CatalogueShelf, ShelfLegend, type ShelfColumn } from '@/components/v2'
+import { CARD, CatalogueShelf, EmptyBox, GoLink, SectionHead, ShelfLegend, type ShelfColumn } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
-import { productsBasis, sharePct, shelfColumns, shelfCut, type ProductsData, type ShelfCategoryView } from '@/lib/pages/v2/products'
+import { productsBasis, sharePct, type ProductsData, type ShelfCategoryView } from '@/lib/pages/v2/products'
 import { SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { cn } from '@/lib/utils'
-import { OLINK, VerdictBadge } from './parts'
+import { VerdictBadge } from './parts'
 
-// THE CATALOGUE (board E4-Products, "Your catalogue"): every category the
-// client keeps a column, every product a tile shaded by its videos this
-// month (`CatalogueShelf`, the kit's), the products with videos first. A
-// column's head is its videos, its share of the market with this month
-// against last (a verdict, printed only where it is an answer: moved, or no
-// clear change), and what most of its videos are about. Every head, tile and
-// link opens a PAGE (17 Oct, the G4 boards; each head carries a small arrow
-// to say so): a head and "+N more" the category's page (the hub lists every
-// product), a tile the product's page, "Couldn't tell which · N" the
-// category's page at its list (`#unclear`).
+// THE CATALOGUE (since the audit design, 7 Nov: Products.dc.html's "Your
+// catalogue"): every category the client keeps a ROW, every product a tile
+// shaded by its videos this month (`CatalogueShelf`, the kit's), the products
+// with videos first, and EVERY product shown (the board's Feet shows all
+// twenty; `shelfCut` and `SHELF_TILES` stay for the Dashboard's tile, which
+// still cuts by them). A row's head is its videos and its share of the market
+// with this month against last (a verdict, printed only where it is an
+// answer: moved, or no clear change), what most of its videos are about, how
+// many of its products came up, and "Couldn't tell which". Every head, tile
+// and link opens a PAGE (17 Oct, the G4 boards): a head the category's page
+// (the hub), a tile the product's page, "Couldn't tell which" the category's
+// page at its list (`#unclear`).
 
-/** One column, as the kit draws it. */
+/** One row, as the kit draws it. */
 export function shelfColumn(c: ShelfCategoryView, monthName: string): ShelfColumn {
-  const { shown, more } = shelfCut(c.products)
+  const read = c.products.filter((p) => p.videos != null)
   return {
     id: c.id,
     name: c.name,
@@ -31,7 +31,7 @@ export function shelfColumn(c: ShelfCategoryView, monthName: string): ShelfColum
     line: c.videos == null
       ? null
       : c.videos === 0
-      ? <>Quiet in {monthName}</>
+      ? <>quiet in {monthName}</>
       : c.share
         // The verdict on its own line under the share, as the board draws
         // "▲ from 14%" (the lead, 14 Oct: on one line it ran on as one phrase).
@@ -45,82 +45,63 @@ export function shelfColumn(c: ShelfCategoryView, monthName: string): ShelfColum
       : c.lead
         ? <>{c.lead.label}{c.leads ? ' leads,' : ','} <span data-copy="level">{fmtInt(c.lead.k)} of {fmtInt(c.videos)}</span></>
         : c.subjectsPending
-          ? <span className="text-muted-foreground">What it’s about · {SUBJECT_NOT_MEASURED}</span>
+          ? <span className="text-muted-foreground">What it’s about: {SUBJECT_NOT_MEASURED}</span>
           : null,
-    // The board's height: the first SHELF_TILES tiles (the most videos
-    // first, `buildShelf`), then "+N more" into the category's page, which
-    // lists every product (`shelfCut`, which the Dashboard's mini shelf cuts
-    // by too).
-    products: shown.map((p) => ({ id: p.id, name: p.name, videos: p.videos, href: p.href, flag: p.flag })),
-    more: more > 0 ? { count: more, href: c.href } : null,
+    // How many of its products came up, of all of them, where the month is
+    // read for them.
+    cameUp: c.videos != null && read.length > 0 ? { k: read.filter((p) => (p.videos ?? 0) > 0).length, n: c.products.length } : null,
+    products: c.products.map((p) => ({ id: p.id, name: p.name, videos: p.videos, href: p.href, flag: p.flag })),
+    more: null,
     unclear: c.unclear > 0 ? { count: c.unclear, href: c.unclearHref } : null,
   }
 }
 
-export function CatalogueCard({ data }: { data: Pick<ProductsData, 'shelf' | 'monthName' | 'client'> }) {
+/** "Your catalogue", its head outside the tile (the board's `.h2row`): "All
+ *  65 products, by category". */
+function CatalogueHead({ products }: { products: number }) {
   return (
-    <section aria-labelledby="catalogue-title" className={CARD}>
-      {/* The key sits at the head's right on a wide screen and wraps under it
-          on a phone, so the head's icon stays level with its title. */}
-      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-        <div className="min-w-0 flex-1 basis-[420px]">
-          <CardHead
-            icon={Box}
-            id="catalogue-title"
-            title="Your catalogue"
-            sub={<>Every product, by category. The darker the tile, the more videos talked about it in {data.monthName}. Category counts include talk that names none of your products. {productsBasis(data.client)}</>}
-          />
-        </div>
-        <div className="pt-1"><ShelfLegend /></div>
-      </div>
-      <CatalogueShelf
-        columns={data.shelf.map((c) => shelfColumn(c, data.monthName))}
-        opens
-        className={shelfColumns(data.shelf.length) === 6 ? 'xl:grid-cols-6' : undefined}
-      />
-    </section>
+    <SectionHead
+      id="catalogue-title"
+      title="Your catalogue"
+      note={products > 0 ? <>All <span data-copy="figure">{fmtInt(products)}</span> products, by category</> : null}
+    />
   )
 }
 
-/** An empty shelf's shape (no catalogue yet): five columns, each a dashed
- *  head and a few dashed tiles (the quiet tile's outline), every one blank:
- *  places to fill, not a page still loading. It carries no name and no
- *  number. */
-const FRAME_TILES = [6, 4, 5, 3, 4] as const
-
-function EmptyShelf() {
+export function CatalogueCard({ data }: { data: Pick<ProductsData, 'shelf' | 'monthName' | 'client' | 'catalogue'> }) {
   return (
-    <div aria-hidden data-empty-shelf="" className="grid grid-cols-2 gap-3.5 md:grid-cols-3 xl:grid-cols-5">
-      {FRAME_TILES.map((tiles, i) => (
-        <div key={i} className={cn('flex min-w-0 flex-col gap-2', i >= 2 ? 'max-md:hidden' : null, i >= 3 ? 'max-xl:hidden' : null)}>
-          <div className="mb-1 min-h-[150px] rounded-[10px] border border-dashed border-foreground/15 bg-inner/40" />
-          {Array.from({ length: tiles }, (_, t) => <i key={t} className="block min-h-[38px] rounded-lg border border-dashed border-foreground/15" />)}
-        </div>
-      ))}
-    </div>
+    <>
+      <CatalogueHead products={data.catalogue.products} />
+      <section aria-labelledby="catalogue-title" className={cn(CARD, 'gap-[18px] sm:p-[30px]')}>
+        <p className="m-0 max-w-[940px] text-[15px] leading-[1.6] text-secondary-foreground">
+          Every product, by category. The darker the tile, the more videos talked about it in {data.monthName}. Category counts include talk that names none of your products. {productsBasis(data.client)}
+        </p>
+        <ShelfLegend month={data.monthName} />
+        <CatalogueShelf columns={data.shelf.map((c) => shelfColumn(c, data.monthName))} className="mt-1" />
+      </section>
+    </>
   )
 }
 
 /**
- * THE CATALOGUE CARD WHERE NO MONTH IS READ (the parity pass, 13 Oct night):
- * the board's card in every state. Its head says the state's one line and
- * the way on (Settings); under it, the catalogue itself where the client has
- * one (every column "Not read yet", the tiles their names alone), or the
- * shelf's empty shape where it has none.
+ * THE CATALOGUE WHERE NO MONTH IS READ (the parity pass, 13 Oct night; since
+ * the audit design in the dashed box, decision 4): the board's section in
+ * every state. Its tile says the state's one line and the way on (Settings);
+ * under it, the catalogue itself where the client has one (every row "Not
+ * read yet", the tiles their names alone). With no catalogue there is
+ * nothing to draw but the line.
  */
-export function CatalogueFrame({ data, link }: { data: Pick<ProductsData, 'shelf' | 'monthName' | 'empty' | 'settingsHref' | 'state'>; link: string | null }) {
+export function CatalogueFrame({ data, link }: { data: Pick<ProductsData, 'shelf' | 'monthName' | 'empty' | 'settingsHref' | 'state' | 'catalogue'>; link: string | null }) {
   return (
-    <section aria-labelledby="catalogue-title" data-state={data.state} className={CARD}>
-      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-        <div className="min-w-0 flex-1 basis-[420px]">
-          <CardHead icon={Box} id="catalogue-title" title="Your catalogue" sub={data.empty} />
-          {link ? <div className="mt-2.5 pl-10 max-sm:pl-0"><Link href={data.settingsHref} className={OLINK}>{link} →</Link></div> : null}
-        </div>
-        <div className="pt-1"><ShelfLegend /></div>
-      </div>
-      {data.shelf.length > 0
-        ? <CatalogueShelf columns={data.shelf.map((c) => shelfColumn(c, data.monthName))} unread opens className={shelfColumns(data.shelf.length) === 6 ? 'xl:grid-cols-6' : undefined} />
-        : <EmptyShelf />}
-    </section>
+    <>
+      <CatalogueHead products={data.catalogue.products} />
+      <section aria-labelledby="catalogue-title" data-state={data.state} className={cn(CARD, 'gap-[18px] sm:p-[30px]')}>
+        <EmptyBox>
+          <span data-empty-shelf={data.shelf.length === 0 ? '' : undefined}>{data.empty}</span>
+        </EmptyBox>
+        {link ? <GoLink href={data.settingsHref} className="self-start">{link}</GoLink> : null}
+        {data.shelf.length > 0 ? <CatalogueShelf columns={data.shelf.map((c) => shelfColumn(c, data.monthName))} unread /> : null}
+      </section>
+    </>
   )
 }
