@@ -51,6 +51,12 @@ export const barMonth = (words: string, label: string | null | undefined): strin
 export const inlineMonth = (words: string, label: string | null | undefined): string =>
   label ? `${words}, ${label}` : words
 
+/** The term of a figures row's month cell (the audit design, 7 Nov): the
+ *  label's own words as a heading ("The last full month", "An earlier
+ *  month"), or "Month" where the month is the current one and has no label. */
+export const monthTerm = (label: string | null | undefined): string =>
+  label ? label.charAt(0).toUpperCase() + label.slice(1) : 'Month'
+
 /** What a column of the month's counts is headed: "This month" only while
  *  it is (no label); the month's name once it is not ("September"). */
 export const THIS_MONTH = 'This month'

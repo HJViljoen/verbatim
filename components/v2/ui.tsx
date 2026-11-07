@@ -1,0 +1,149 @@
+import Link from 'next/link'
+import type { ReactNode } from 'react'
+import { cn } from '@/lib/utils'
+import { EMPTY, GO, LBL, TAG, TAG_TONE } from './look'
+
+// THE AUDIT DESIGN'S COMPONENTS (7 Nov): the figures row under a page title,
+// the section head, the dashed empty box, the label, the link and the tag,
+// drawn to the boards (Market-After.dc.html's `.strip`, `.h2row`, the dashed
+// "Not drawn yet" box, `.lbl`, `.go`). Server components, exported through
+// '@/components/v2'. Their class strings live in ./look, which client
+// components import directly.
+
+/** One cell of a figures row: what it is, and its value. */
+export interface StatItem {
+  term: ReactNode
+  value: ReactNode
+  /** A stable React key where the term is not a plain string. */
+  key?: string
+}
+
+/** The columns from 900px, one a cell (written out in full, MASTER rule 1). */
+const STRIP_COLS: Record<number, string> = {
+  1: 'min-[900px]:grid-cols-1',
+  2: 'min-[900px]:grid-cols-2',
+  3: 'min-[900px]:grid-cols-3',
+  4: 'min-[900px]:grid-cols-4',
+  5: 'min-[900px]:grid-cols-5',
+  6: 'min-[900px]:grid-cols-6',
+}
+
+/**
+ * The figures row under a page title (the boards' `<dl class="strip">`): the
+ * screen's base said once, so the lines below may print bare counts
+ * (decision 2). One column below 900px, a column a cell from 900. Renders
+ * nothing for an empty list.
+ *
+ * `data-stat-strip`, NOT `data-strip`: the Voices pages' test asserts that a
+ * creator's page carries no `data-strip`.
+ */
+export function StatStrip({ items }: { items: readonly StatItem[] }): ReactNode {
+  if (!items.length) return null
+  return (
+    <dl
+      data-stat-strip=""
+      className={cn('m-0 grid grid-cols-1 gap-6 border-b border-border pb-5', STRIP_COLS[Math.min(items.length, 6)])}
+    >
+      {items.map((item, i) => (
+        <div key={item.key ?? (typeof item.term === 'string' ? item.term : i)} className="min-w-0">
+          <dt className="text-[13px] leading-[1.4] text-muted-foreground">{item.term}</dt>
+          <dd className="m-0 mt-1 text-[16px] font-semibold leading-[1.4] tabular-nums text-foreground">{item.value}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
+/** A section's heading row (the boards' `.h2row`): the heading, and a muted
+ *  note or an action at its right. */
+export function SectionHead({
+  title,
+  note,
+  action,
+  id,
+  as: Heading = 'h2',
+}: {
+  title: ReactNode
+  note?: ReactNode
+  action?: ReactNode
+  id?: string
+  as?: 'h2' | 'h3'
+}): ReactNode {
+  return (
+    <div data-section-head="" className="mx-0.5 mt-12 mb-[18px] flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+      <Heading id={id} className="m-0 text-[21px] font-semibold leading-[1.3] text-foreground">
+        {title}
+      </Heading>
+      {note != null ? <p className="m-0 text-[14px] leading-[1.45] text-muted-foreground">{note}</p> : null}
+      {action != null ? <div className="shrink-0">{action}</div> : null}
+    </div>
+  )
+}
+
+/**
+ * The dashed box a thin or empty state is said in (decision 4): a short
+ * title and one sentence, inside the card that keeps its title and its place.
+ * `chart` stands it in a chart's place: at least 180px tall, its words
+ * centred, as the boards' "Not drawn yet".
+ */
+export function EmptyBox({ title, chart, children }: { title?: ReactNode; chart?: boolean; children: ReactNode }): ReactNode {
+  return (
+    <div data-empty-box="" className={cn(EMPTY, 'flex flex-col gap-1.5', chart && 'min-h-[180px] justify-center gap-2')}>
+      {title != null ? <p className="m-0 text-[15px] font-semibold leading-[1.4] text-foreground">{title}</p> : null}
+      <div>{children}</div>
+    </div>
+  )
+}
+
+/** A label in sentence case (`LBL`). */
+export function Label({
+  as: El = 'p',
+  id,
+  children,
+}: {
+  as?: 'p' | 'span' | 'h3' | 'h4' | 'dt'
+  id?: string
+  children: ReactNode
+}): ReactNode {
+  return (
+    <El id={id} className={cn('m-0', LBL)}>
+      {children}
+    </El>
+  )
+}
+
+/** A link that says where it goes (`GO`), with no arrow. `external` opens a
+ *  new tab with `rel="noopener noreferrer"`. */
+export function GoLink({
+  href,
+  children,
+  className,
+  external,
+}: {
+  href: string
+  children: ReactNode
+  className?: string
+  external?: boolean
+}): ReactNode {
+  if (external) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" className={cn(GO, className)}>
+        {children}
+      </a>
+    )
+  }
+  return (
+    <Link href={href} className={cn(GO, className)}>
+      {children}
+    </Link>
+  )
+}
+
+/** A tag (`TAG`) on one of its tones; the pale yellow by default. */
+export function Tag({ tone = 'tint', children }: { tone?: 'hi' | 'mid' | 'tint'; children: ReactNode }): ReactNode {
+  return (
+    <span data-tag={tone} className={cn(TAG, TAG_TONE[tone])}>
+      {children}
+    </span>
+  )
+}

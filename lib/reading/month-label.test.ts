@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { DIRECTION_WORDS } from '../calibration'
-import { barMonth, EARLIER_MONTH, inlineMonth, LAST_FULL_MONTH, monthHeading, readingMonthLabel, THIS_MONTH } from './month-label'
+import { barMonth, EARLIER_MONTH, inlineMonth, LAST_FULL_MONTH, monthHeading, monthTerm, readingMonthLabel, THIS_MONTH } from './month-label'
 import { readingMonthFor } from './reading-month'
 
 // Decision 3 (13 Oct): keep both clocks, and label a whole-month reading that
@@ -60,6 +60,15 @@ describe('the two places a label is written', () => {
   it('a column of the month\'s counts: "This month" while it is, the month\'s name once it is not', () => {
     expect(monthHeading('October', null)).toBe(THIS_MONTH)
     expect(monthHeading('September', LAST_FULL_MONTH)).toBe('September')
+  })
+
+  it('a figures row\'s month cell: the label as its term, "Month" without one', () => {
+    expect(monthTerm(LAST_FULL_MONTH)).toBe('The last full month')
+    expect(monthTerm(EARLIER_MONTH)).toBe('An earlier month')
+    expect(monthTerm(null)).toBe('Month')
+    expect(monthTerm(undefined)).toBe('Month')
+    expect(monthTerm(readingMonthLabel('2026-09-01', '2026-10-13T08:00:00.000Z'))).toBe('The last full month')
+    expect(monthTerm(readingMonthLabel('2026-10-01', '2026-10-13T08:00:00.000Z'))).toBe('Month')
   })
 
   it('a sentence: "September, the last full month"', () => {
