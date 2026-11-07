@@ -460,6 +460,22 @@ describe('version routing: 1 and 2 render exactly as they did, 3 renders the H7 
   })
 })
 
+describe('the version-3 email, byte for byte (pinned before the share page\'s audit restyle, T9.3a)', () => {
+  // The share page, the viewer and the PDF (`WeeklyV3Page`) take the audit
+  // design; the email (`WeeklyV3Card`) does not move. These four renders were
+  // written from the code before the restyle touched this file.
+  const GOLDEN = join(process.cwd(), 'lib/test/weekly-read-golden')
+  const golden = (name: string) => readFileSync(join(GOLDEN, name), 'utf8')
+  it.each([
+    ['v3-email-ossur.html', () => emailOf(ossurSnapshot())],
+    ['v3-email-ossur-medical.html', () => emailOf(ossurSnapshot(), true)],
+    ['v3-email-sealand.html', () => emailOf(sealandV3Snapshot())],
+    ['v3-email-monthend.html', () => emailOf(monthEndSnapshot())],
+  ] as const)('%s', (name, make) => {
+    expect(make().html).toBe(golden(name))
+  })
+})
+
 describe('ruling U6 in the issue', () => {
   it('prints exactly the subjects the build froze, which are the ready ones', () => {
     const ready = ossurSubjects().slice(0, 2)
