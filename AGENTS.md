@@ -351,7 +351,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
   render tier: one static `renderToStaticMarkup` per block (`lib/test/render.ts`)
   asserted against the copy contract (`lib/test/copy-contract.ts` — no digit in
   a model-prose node, every level prints "of N", no direction word outside a
-  verdict node). Every block gets one. No jsdom, no testing-library, no new
+  verdict node; a bare count whose base the screen states once is a `figure`,
+  not a `level`: the audit design's decision 2, "New reading surfaces say
+  videos" below). Every block gets one. No jsdom, no testing-library, no new
   dependency: the tier checks what a block PRINTS.
   The marker is `data-copy`, and it has SEVEN kinds, not four: `prose` ·
   `figure` · `level` · `verdict` · `subject` · `stored` · `quote`. The last
@@ -678,8 +680,15 @@ This version has breaking changes — APIs, conventions, and file structure may 
   bare counts with no word.
 - **New reading surfaces say "videos".** `conversations` keeps its meaning and
   its name on the legacy pages that still compute it (`lib/calibration.ts`
-  GLOSSARY); a new surface counts videos, and a level without its "of N" is a
-  score, which this product does not show. **A new surface draws its vocabulary
+  GLOSSARY); a new surface counts videos, and a level without its base is a
+  score, which this product does not show. A calibrated word or a percentage
+  prints its "of N" beside it. Since the audit design (7 Nov, decision 2) a
+  bare count may stand alone where the same screen states its base once, in
+  the figures row under the page title or in its section's heading ("Your
+  market in October: 766 videos", then "121 videos"); such a count is marked
+  `data-copy="figure"`, never `level`, so the copy contract's code is
+  unchanged. The weekly email keeps its exact words (it is checked byte for
+  byte). **A new surface draws its vocabulary
   from `THIRTEEN_WORDS` plus the two `READER_FLAGS`** (`lib/calibration.ts`) and
   prints no term outside them — that is a WORD LIST, and it is not the ladders:
   `SENTIMENT_LADDER` and the evidence ladder above it are cutoffs that decide
@@ -1150,6 +1159,27 @@ This version has breaking changes — APIs, conventions, and file structure may 
   Every client page is drawn to its approved artboard (`Page-*.dc.html`;
   since Design v2 the depth boards, `E*.dc.html`); a deviation is Heinrich's
   call, never a builder's. What the builds fixed in place:
+  - **The audit design (7 Nov; Heinrich approved the boards and every
+    recommendation of its plan).** Every client screen is drawn to
+    `~/.claude/plans/verbatim-audit-design/boards/*.dc.html` by the rules of
+    its brief's §3 (`~/.claude/plans/verbatim-audit-design/design-brief.md`);
+    a deviation is Heinrich's call. Only the look changes: the data, the
+    addresses and what every control does stay. The look is
+    `design-system/verbatim/MASTER.md`, built from one kit
+    (`components/v2/look.ts`, `ui.tsx`, `words.ts`). Its rules where this
+    file's older words differ: one base per screen (decision 2, "New reading
+    surfaces say videos" below); a thin chart is a dashed box (decision 4,
+    the parity bullet below); the medical line once per screen (decision 14,
+    Content's bullet); and how long a bar is (decision 5, next).
+  - **How long a bar is (the audit design, decision 5).** A list whose rows
+    print a count scales its bars to its largest row (`toMax`,
+    `components/v2/look.ts`): the largest bar is full and the others are
+    drawn against it, never against the whole market, so a group's bar
+    compares its count with the other groups', never with the market
+    (decision 2: groups are counts, never shares). A row that prints a
+    percentage ("64%") keeps a bar of that percentage. Content's What works
+    scales to the list's largest multiple but never below 1×
+    (`toMaxAtLeast(…, 1)`), so the "typical" tick stays on the bar.
   - **Navigation** (`lib/nav.ts`; Design v2, depth plan T1, 13 Oct): nine
     surfaces in three unlabelled groups: Dashboard · Market · Voices · Your
     products · Content · Your moves, the Agent, then Studio · Settings. The
@@ -1417,12 +1447,16 @@ This version has breaking changes — APIs, conventions, and file structure may 
     parity pass, 13 Oct night; Heinrich: "the page shouldn't look too
     different if everything isn't as populated as the design"). A component
     is never removed, collapsed into a line of text or reflowed into another
-    grid because its data is thin: the board's grid, its components in their
-    places and roughly their sizes hold on every tenant, and a gap is said
-    INSIDE its component, in its own shape, in one calm line (a chart's
-    empty slots on its axis, rows that keep their tracks, a column head that
-    says "not counted yet"), never as a grey box and never with an invented
-    figure. Decision 1, no quotes at level 1, no model prose at the top of
+    grid because its data is thin: the board's grid, its cards in their
+    places and roughly their sizes hold on every tenant, each card keeps its
+    title, and a gap is said INSIDE its card, in one calm line, never with
+    an invented figure. Since the audit design (7 Nov, decision 4) a chart
+    or a list with too little to draw says so in the boards' dashed box
+    (`EmptyBox`, `components/v2/ui.tsx`: a short title such as "Not drawn
+    yet" and one sentence) in the chart's place inside the same card, never
+    as empty bar slots or empty tracks; rows that name something (a group, a
+    brand) keep their names and say their state in words, with no empty
+    bar; a column head may still say "not counted yet". Decision 1, no quotes at level 1, no model prose at the top of
     Market, the copy contract and colour roles are unchanged; where a
     board's words break them, the board's SHAPE stays with the decided
     words. Each page's states are pinned by fixtures and render tests
@@ -2206,8 +2240,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
     how they open, where, the response, "What works in your market's
     videos" back to the root). Both evidence pages end with "Elsewhere on
     Content" (the root's first two ideas with their four weeks beside their
-    month and, in a medical market, `MEDICAL_LINE` under each, as under every
-    printed idea; and the other evidence page: your posts' count, or the reply
+    month and, in a medical market, `MEDICAL_LINE` once under them, as under
+    every screen's ideas; and the other evidence page: your posts' count, or the reply
     list's days with no count, since the foot does not read the list) and
     the Agent. OLD LINKS LAND (`redirectFor` in the root page, before
     anything is read; `contentRedirect`, `lib/nav.ts`): `?replies=1` and
@@ -2232,8 +2266,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
     names, never a count. "Your posts" is `ownedPosts`, and "touched on" is
     `questionTouch` over the reading month and the two before. What works is
     `buildPlaybook({ clientSide: 'owned' })`, dated by publish date, with the
-    clock named. In a medical market every printed idea carries
-    `MEDICAL_LINE`. THE IDEAS ROW ALWAYS DRAWS THREE CARDS (`IDEA_SLOTS`;
+    clock named. In a medical market `MEDICAL_LINE` prints ONCE A SCREEN,
+    directly under the ideas it covers (the audit design, decision 14,
+    Heinrich's call on 7 Nov; until then it printed under every idea), and
+    the weekly email keeps its own words. THE IDEAS ROW ALWAYS DRAWS THREE CARDS (`IDEA_SLOTS`;
     parity pass): the places the ideas leave hold the next questions in line
     (`IdeasBlock.questions`, the top of `askedWithLead`, each card's anchor
     `questionSlotId(rank)`), and Also asked goes on after them, so no

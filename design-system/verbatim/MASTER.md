@@ -8,8 +8,52 @@
 
 **Project:** Verbatim
 **System:** palette A (live in `app/globals.css` since 2026-10-01; the approved page designs)
-**Updated:** 2026-10-01 (evening) — the colour roles and the card shadow (§Colour roles, §Shape & Elevation); 2026-10-01 — palette A replaced the 2026-08-28 green (§Color Palette); 2026-08-28 — visual-identity target added (see first section); 2026-07-03 replaced the stale April blue/amber system.
-**Source of truth:** `app/globals.css` (tokens) + `lib/ui-colors.ts` (accent/status helpers). This file describes them; if they disagree, the code wins.
+**Updated:** 2026-11-07 — the audit design (§The audit design, and §Colour roles, §Typography, §Shape & Elevation, §Signature components, §Anti-patterns rewritten to it); 2026-10-01 (evening) — the colour roles and the card shadow; 2026-10-01 — palette A replaced the 2026-08-28 green (§Color Palette); 2026-08-28 — visual-identity target added (see first section); 2026-07-03 replaced the stale April blue/amber system.
+**Source of truth:** `app/globals.css` (tokens), `components/v2/look.ts` and `components/v2/ui.tsx` (the screens' building blocks) + `lib/ui-colors.ts` (accent/status helpers). This file describes them; if they disagree, the code wins.
+
+---
+
+## The audit design — 2026-11-07 (APPROVED; the target for every client screen)
+
+> **Status:** Heinrich approved the boards and every recommendation of the plan on 2026-11-07
+> ("all recommended"). The boards are `~/.claude/plans/verbatim-audit-design/boards/*.dc.html`
+> (`Market-After.dc.html` is the reference) and the rules are the design brief's §3
+> (`~/.claude/plans/verbatim-audit-design/design-brief.md`). It changes the look only: palette A's
+> values, the data, the addresses and what each control does stay. Where an older section below
+> disagrees, this one wins, and each retired rule says so where it stands.
+
+1. **One face on screen: IBM Plex Sans,** figures in tabular sans (`tabular-nums`). Plex Serif
+   italic is for a person's own quoted words, on depth pages only. **Mono is retired on screens**
+   (decision 9): print, email, the monthly briefs and stored legacy reports keep their mono
+   figures, and the font stays loaded for them.
+2. **Labels are sentence case,** 13px/600 in the secondary ink (`LBL`). Uppercase labels,
+   letter-spaced capitals and the orange eyebrow over a heading are **retired**: an eyebrow folds
+   into the heading it sat over.
+3. **No icon tiles** (an icon in a coloured square): retired on every screen, with glyph squares,
+   initials avatars, decorative dots and row chevrons. The row or card itself is the link.
+4. **Links say where they go, with no arrow** (`GO` / `GoLink`): 14px/500 ink, underlined in
+   `--control`, ink underline on hover. "Open Market", "See all 5 waiting"; never "Open →",
+   "↗" or "↓". Rows and cards that open a page are real links (`ROW`).
+5. **No " · " joins on screen.** Commas, a sentence, a `<dl>` or a line break. Cites read
+   "TikTok, 9 Oct"; translation labels "Thai, machine translation" (`words.ts`, screen only: no
+   string in `lib/` changes, so the email's and the briefs' words stay byte for byte).
+6. **One base per screen** (decision 2): the screen's figures row under its title states the
+   base once ("Your market in October: 766 videos"), and a line under it may print a bare count
+   ("121 videos", a `figure`). A calibrated word or a percentage keeps its "of N".
+7. **One figures row under every page title** (`StatStrip`, through `PageBar` / `LevelBar`
+   `stats`), replacing the " · " meta line.
+8. **Bars scale to the largest row in their list** (decision 5, `toMax`); a row that prints a
+   percentage keeps a bar of that percentage.
+9. **Thin or empty charts are a dashed box with a short sentence** (decision 4, `EmptyBox`),
+   inside the card that keeps its title and place, never ghost bars or empty tracks.
+10. **Primary buttons are the brand yellow with ink words** (decision 8, `BTN_PRIMARY`);
+    secondary buttons are white with a `--control` edge. The `--primary` token stays ink, so print,
+    the login button and the guards do not move.
+11. **A repeated line is said once per screen** (the medical line once, under the ideas it
+    covers: decision 14).
+12. **The shell:** the sidebar's yellow Agent row and the crowd behind the app are **retired**
+    (the Agent is an ordinary row; the signed-out frame keeps its crowd). Text is at least 12px and
+    body text 14 to 16px.
 
 ---
 
@@ -40,10 +84,10 @@ this is a positive spec: grey-scale chrome, colour reserved for meaning, and a g
 | Ink | `#26292C` | charcoal — never black; no black blocks / dark heroes |
 | Ink-2 / muted / faint | `#45494D` / `#5F656B` / `#9AA0A6` | greys |
 | Hairline / track | `#E4E2DC` / `#ECEAE4` | rules; the background a bar is drawn on |
-| Primary button | `#26292C` | ink, white text ("Ask", "Open") |
-| **Brand yellow** | `#FFD43B` | the brand fill: bars, the Agent sidebar row, badges, report mastheads. Ink on it, never a text colour |
-| Pale yellow | `#FFF4C7` | soft panels, chips, hover fills (`--accent`) |
-| Orange text / orange | `#C2410C` / `#F2651D` | small labels and links / the accent, never text |
+| Primary token | `#26292C` | `--primary` stays ink (print, the login button, drift guard (e)); the ink primary BUTTON is retired on screens: buttons use the brand yellow (the audit design) |
+| **Brand yellow** | `#FFD43B` | the brand fill: bars, primary buttons, badges, report mastheads. Ink on it, never a text colour (the yellow Agent sidebar row is retired) |
+| Pale yellow | `#FFF4C7` | selected states (the current nav row, a segmented control's current item, a chosen chip), tags (`--accent`) |
+| Orange text / orange | `#C2410C` / `#F2651D` | the current nav row's icon only (since the audit design) / the accent, never text |
 | You | `#9A6B00` | dark gold: "you" in every chart, and "good" |
 | Rival | `#8A9097` | data only |
 | Category / rest of field | `#9AA1A9` | data only |
@@ -58,39 +102,39 @@ this is a positive spec: grey-scale chrome, colour reserved for meaning, and a g
 
 ### Rules (decided, 2026-08-28)
 1. **Chrome is ink and paper.** The brand yellow and the orange do the jobs palette A gives them (above),
-   and since 1 Oct the colour roles (§Colour roles) give the chrome small, fixed jobs too: icon tiles,
-   selected states, tags. Nothing in the frame carries a hue that has no role.
+   and the colour roles (§Colour roles) give the chrome small, fixed jobs too: selected states, tags,
+   the yellow primary button (the 1 Oct icon tiles are retired by the audit design). Nothing in the
+   frame carries a hue that has no role.
 2. **Colour = meaning.** You gold · rivals grey · the market yellow in bars and ink in lines; valence gold / amber / red.
    Category chips are grey text labels — retire the hashed `ACCENT_TINTS` cycling in `lib/ui-colors.ts`.
    Accepted: "you" and "positive" share the gold, as they shared the green before it.
-3. **Depth by elevation, not tone or borders.** Cards on `--shadow-card`, the sidebar on `--shadow-sidebar`
-   (Heinrich, 1 Oct: the shadows back). No 1px border on every card, no pill-everything; radius 6;
-   `rounded-full` only on single-line pills (existing rule).
+3. **Depth by elevation, not tone or borders.** Cards on `--shadow-card` (Heinrich, 1 Oct: the shadows
+   back). No 1px border on every card, no pill-everything; the radii are §Shape & Elevation's;
+   `rounded-full` only on single-line pills (existing rule). Since the audit design the sidebar's edge is
+   a 1px `--track` rule with no shadow (`--shadow-sidebar` stays defined for drift guard (g)).
 4. **Type — DECIDED 2026-08-28: IBM Plex Sans (UI) · IBM Plex Serif (verbatim quotes only — quotes are speech) ·
-   IBM Plex Mono (counts, metadata; tabular figures).** One superfamily, so all three share the same bones.
-   Google Fonts via `next/font` (replaces Plus Jakarta Sans + JetBrains Mono). Chosen by eye from three sets on
-   the Dashboard tile (Schibsted/Source Serif/JetBrains · Plex · Manrope/Literata/DM Mono). No Inter, no display
-   serifs. Marketing keeps its own `DESIGN.md` faces until it is migrated deliberately.
+   IBM Plex Mono (print and email figures only since the audit design; retired on screens, decision 9).**
+   One superfamily, so all three share the same bones. Google Fonts via `next/font` (replaces Plus Jakarta
+   Sans + JetBrains Mono). Chosen by eye from three sets on the Dashboard tile (Schibsted/Source
+   Serif/JetBrains · Plex · Manrope/Literata/DM Mono). No Inter, no display serifs. Screen figures are
+   tabular sans. Marketing keeps its own `DESIGN.md` faces until it is migrated deliberately.
 5. **Claims are clickable evidence** (the Agent page's document-review pattern): a sentence with voices behind it
    gets a quiet grey dotted underline; click → popover with count, platform split, two quotes, link to the page
    that holds the rest. **Nothing is underlined that cannot be clicked.** No highlighter fills, no coloured tints.
-6. **The crowd backdrop is in the app shell** (Heinrich's call; it left on 2026-08-28, came back 2026-09-24, left
-   with the 1 Oct navigation build and came back with CROWD on 2 Oct: "it would add a nice depth to the page").
-   `.crowd-bg crowd-bg--shell` (`public/crowd.svg`, centre bottom, cover, 7% with the top fade) sits on the
-   `#F7F6F2` ground behind every dashboard page, absolute in the non-scrolling pane right of the sidebar
-   (`app/dashboard/layout.tsx`): one element, `aria-hidden`, never interactive, no scroll height, never behind the
-   sidebar, hidden in print. Cards stay opaque white on top of it, so it shows in the gutters and the open ground.
-   The art is a mask over one fill of `--crowd` (the ink; `.dark` has its own), scaled by `--crowd-gain`; a warm
-   variant (`[data-crowd="warm"]`, the gold at gain 1.15) is kept for comparison and is not set anywhere.
-   The signed-out frame keeps its own, at 10%.
+6. **The crowd backdrop in the app shell is RETIRED** (the audit design, 7 Nov: the boards draw the plain
+   `#F7F6F2` ground). It had left on 2026-08-28, come back 2026-09-24, left with the 1 Oct navigation build
+   and come back with CROWD on 2 Oct; `app/dashboard/layout.tsx` no longer mounts the retired
+   `.crowd-bg crowd-bg--shell` element. The CSS stays in `app/globals.css` because **the signed-out frame keeps
+   its crowd**, at 10% (`components/auth/auth-card.tsx`): the art is a mask over one fill of `--crowd` (the ink;
+   `.dark` has its own), scaled by `--crowd-gain`, hidden in print; the retired warm variant
+   (`[data-crowd="warm"]`) is set nowhere.
 7. **Pages may scroll.** The 2026-08-22 "one screen, no scroll at 1440×900" rule is **retired** — it is no longer
    a constraint, not a new requirement. The 12-column grid, `Tile`, `PageGrid` and `Drawer` stay; the 6-row height
    cap goes. Whether a given page fits one screen or scrolls is a per-page judgment.
 8. **No top bar.** The 48px `<header>` in `app/dashboard/layout.tsx` only ever held the mobile sidebar trigger
    (the drift fix was the `h-dvh` inner-scrolling `<main>`, not the bar). Remove it; move the trigger into the
-   sidebar rail (desktop) / a floating control (mobile). Keep the inner-scroll pane: with the crowd back in the
-   shell (rule 6) it is what holds the backdrop still while content scrolls, and what stopped the mobile toolbar
-   from shifting it.
+   sidebar rail (desktop) / a floating control (mobile). Keep the inner-scroll pane: it is what stopped the
+   mobile toolbar from shifting the page (it once also held the retired shell backdrop still, rule 6).
 9. **Drift guards (mechanical, run before merge):** every neutral must have blue ≥ red in RGB (cream fails)
    except palette A's three warm neutrals (ground, hairline, track); no green in the app tokens; palette A's
    jobs hold their values; no `backdrop-blur` in the app (`scripts/check-design-drift.sh`). Retired green in
@@ -155,20 +199,26 @@ Mobile must work but is the secondary pass.
 | Page ground | `#F7F6F2` | `--background` |
 | Cards / paper | `#FFFFFF` | `--card`, `--tile`, `--popover` |
 | Inner block (inside a card) | `#F7F6F2` | `--inner`, `--muted`, `--secondary` — the ground again |
-| Ink (text, primary buttons) | `#26292C` | `--foreground`, `--primary` (white `--primary-foreground`), `--ring` |
+| Ink (text; the primary token) | `#26292C` | `--foreground`, `--primary` (white `--primary-foreground`; print and the login button), `--ring` |
 | Ink-2 / muted | `#45494D` / `#5F656B` | `--secondary-foreground`, `--muted-foreground` |
 | Hairlines / borders | `#E4E2DC` | `--border`, `--input`, `--sidebar-border` |
-| Track (a bar's background) | `#ECEAE4` | `--track` → `bg-track` |
-| Brand yellow | `#FFD43B`, ink on it | `--brand` / `--brand-foreground` → `bg-brand text-brand-foreground`; `--sidebar-primary` (the Agent row) |
-| Pale yellow (soft panels) | `#FFF4C7`, ink on it | `--accent` / `--accent-foreground` |
-| Orange text (small labels, links) | `#C2410C` | `--orange-text` → `text-orange-text` |
+| Track (a bar's background; table rules; the sidebar's edge) | `#ECEAE4` | `--track` → `bg-track`, `border-track` |
+| Brand yellow | `#FFD43B`, ink on it | `--brand` / `--brand-foreground` → `bg-brand text-brand-foreground` (bars, primary buttons); `--sidebar-primary` (pinned by drift guard (e); the yellow Agent row it painted is retired) |
+| Pale yellow (selected states, tags) | `#FFF4C7`, ink on it | `--accent` / `--accent-foreground` |
+| Orange text (the current nav row's icon) | `#C2410C` | `--orange-text` → `text-orange-text` |
 | Orange accent (never text) | `#F2651D` | `--orange` → `bg-orange` |
-| Sidebar active row | ink at 7% | `--sidebar-accent` (a pill, with weight; no bar) |
+| Sidebar hover row | ink at 7% | `--sidebar-accent` (the current row is the pale yellow, with weight; no bar) |
+| Control grey (the audit design) | `#C9CCD0` | `--control` → `border-control`, `decoration-control`: link underlines, secondary button edges, dashed boxes |
+| Input line (the audit design) | `#A9AEB4` | `--input-line` → `border-input-line`: every input's edge |
+| Caution (the audit design) | `#9A3412` on `#FDE7DA` | `--caution` / `--caution-soft` → `text-caution`, `bg-caution`, `bg-caution-soft`: high priority, a contradicted claim |
+
+Pages use these tokens, never raw hex values.
 
 **Data buckets** (colour = meaning, data only): you `--you` `#9A6B00` (dark gold) · rival
 `--comp` `#8A9097` (grey; the second rival `--comp-2` `#ADB1B6`) · category / rest of field
 `--cat` `#9AA1A9` · mixed / early `--mixed` `#E6B03C` · neutral segment `--neutral-seg` `#CDD2D7`.
-Bars that state a share fill with the brand yellow on the track, drawn against 100%.
+Bars fill with the brand yellow on the track. A list whose rows print a count is drawn against its
+largest row (decision 5, `toMax`); a row that prints a percentage is drawn against 100%.
 
 **The market-first inks** (decision K, WP3.10): who a mark belongs to, by name. The market takes the
 main ink `--ink-market` `#26292C` (dark `#ECEEF0`), you take the dark gold `--ink-you` `#9A6B00` (`#E0A82E`),
@@ -198,31 +248,33 @@ surface must read in both.
 > His words: "I kinda want more of the colours that we have in the colour palette to actually show up on
 > this site, because at the moment it's really just yellow, white and the darker colour, none of the orange
 > or brown." More colour, and every colour keeps ONE job, so colour carries meaning and a reader learns it
-> once. The classes live in **`components/colour-roles.tsx`** (`BAR_FILL`, `IconTile`, `BrandChip`,
-> `ChipSep`, `NewNumber`, `EYEBROW`, `SELECTED`, `TAG`, `KIND_ICON`); a page never picks a colour for itself.
-> Tokens, not literals, so each role holds in `.dark`.
+> once. The classes live in **`components/colour-roles.tsx`** (`BAR_FILL`, `BrandChip`, `ChipSep`, `SELECTED`,
+> `TAG`; the retired `IconTile`, `EYEBROW`, `NewNumber` and `KIND_ICON` stay only for the legacy modules and
+> print) and, for the screens since the audit design, **`components/v2/look.ts`** (`TAG_TONE`, `BTN_PRIMARY`,
+> `GO`); a page never picks a colour for itself. Tokens, not literals, so each role holds in `.dark`.
 
 | Colour | Role | Where it shows |
 |---|---|---|
-| Yellow `#FFD43B` | **The market and the brand.** Ink on it | Bars counting the market's videos; the Agent (sidebar row, its tile); a market read's numbered ideas (Your market); the videos series |
-| Orange `#F2651D` | **New, attention, the second series. FILLS ONLY** | This week's finding numerals (the week's new talk; Dashboard and This week); the comments line and its keys; the format the Competitive lead sentence names (a dot); the High priority chip. Ink on it, 4.6:1 |
-| Orange text `#C2410C` | **Labels and links** | Eyebrows (In short, What it means, A conversation in full, What holds across …); Open →, Every conversation →; the glyph in an icon tile; a section label over tags ("Conversations inside it") |
-| Gold `#9A6B00` | **You (the client)** | Its brand chip (white on gold, 4.7:1); its bars where the base is its own posts (Your statements); its figures (Dashboard "posts published"); its handles (Settings › Your accounts); its term chips ("Your name"); its dot and "You" chip in Brands in your market |
-| Grey `#8A9097` | **Rivals** | A rival's chip dot; a rival's own bars (Competitive › "{brand} in full"); the dot before a tracked brand (Brands in your market, Brands you track, their term chips) |
-| Pale yellow `#FFF4C7` | **Small surfaces** | Icon tiles; tags (a conversation or subject, "Part of …", the category's terms, Medium priority); selected states (the sidebar row, a Settings tab, a subject, a conversation, a brand pill); the Dashboard Agent's header band |
-| Ink / muted / hairline / ground / paper / track | Neutral chrome | Text, the primary button, lines in a chart (the market line), the quote panel (ground), cards (paper), a bar's track |
+| Yellow `#FFD43B` | **The market and the brand.** Ink on it | Bars counting the market's videos; primary buttons (`BTN_PRIMARY`, decision 8); a market read's numbered ideas (Your market); the videos series |
+| Orange `#F2651D` | **Attention, the second series. FILLS ONLY** | The newest bar of a conversation the check flagged (Market's only orange); the comments line and its keys on the legacy modules. Ink on it, 4.6:1 |
+| Orange text `#C2410C` | **The current nav row's icon** | The sidebar's current row only. Retired on screens by the audit design: eyebrows, "Open →" links, the glyph in an icon tile |
+| Gold `#9A6B00` | **You (the client)** | Its brand chip (white on gold, 4.7:1) or its plain name (`BrandChip plain`); its bars where the base is its own posts (Your statements, Your posts); its figures; its handles (Settings › Your accounts); its term chips ("Your name") |
+| Grey `#8A9097` | **Rivals** | A rival's chip dot; a rival's own bars; the dot before a tracked brand on the legacy modules |
+| Pale yellow `#FFF4C7` | **Selected states and tags** | The current nav row; a segmented control's current item (the period switch, the Settings tabs); a chosen chip (`CHIP_ON`); tags (`TAG_TONE.tint`: a flag such as "Unusual this week", a conversation or subject, the category's terms) |
+| Caution `#9A3412` on `#FDE7DA` | **High priority, contradicted** | The "High priority" tag (`TAG_TONE.hi`); a contradicted claim on the plan check |
+| Ink / muted / hairline / ground / paper / track | Neutral chrome | Text, lines in a chart (the market line), the quote panel (ground), cards (paper), a bar's track and table rules; the medium-priority tag (`TAG_TONE.mid`, on the track) |
+| Control grey `#C9CCD0` / input line `#A9AEB4` | Neutral controls | Link underlines, secondary button edges, dashed empty boxes / every input's edge |
 
-**The brand line.** A brand named on a line of talk is a chip: you gold with white words, a rival on the
-track with the grey dot, its videos inside the chip; the market stays muted words (it is the default, and a
-chip on every row would make the exception the rule). Chips bound themselves, so the " · " between them is
-kept for a screen reader and the line's words (`ChipSep`) and not drawn. Gold WORDS sit on white only: on the
-ground they are 4.3:1 and on the pale yellow 4.2:1, both under AA, which is why a quote panel's source line
-names the client by its chip.
+**The brand line.** On print and the legacy modules a brand named on a line of talk is a chip: you gold
+with white words, a rival on the track with the grey dot, its videos inside the chip. Chips bound themselves,
+so the " · " between them is kept for a screen reader and the line's words (`ChipSep`) and not drawn. On the
+screens since the audit design brands read as plain words in a comma list ("Ottobock (1), others (10)",
+`BrandChip plain`, which still carries `data-who-chip` so the colour-role check finds them). Gold WORDS sit on
+white only: on the ground they are 4.3:1 and on the pale yellow 4.2:1, both under AA.
 
-**Icon tiles.** Every card's title (and every Dashboard tile) opens on a 28px tile, pale yellow under an
-orange-text glyph; a Conversation kind card on a 24px tile with its kind's glyph (`KIND_ICON`). The tile takes
-no height (a negative block margin, 18px of layout), so no row moves. Where a tile would wrap a title's base
-(Your market's pair of half-width cards at 1440), the card has none: no layout change.
+**Icon tiles are retired** (the audit design, 7 Nov). Card titles, Dashboard tiles and level pages open on
+their words alone; `IconTile` and `LevelTile` stay only until the last legacy caller goes (print reaches
+`IconTile` through the legacy modules).
 
 **Bans that still hold.** No left stripe; no marker fill behind words in prose (a chip is a label on a brand
 line, never inside a sentence; `components/colour-roles.test.tsx` checks the pages); no beige or warm-white
@@ -231,27 +283,42 @@ paragraph); no gradient; the orange never as text (drift guard (h), `lib/palette
 
 ## Typography
 
-- **Sans + headings:** IBM Plex Sans (`--font-plex-sans`, via `next/font/google`)
-- **Serif:** IBM Plex Serif (`--font-plex-serif`) — **verbatim quotes only**; quotes are speech
-- **Mono:** IBM Plex Mono (`--font-plex-mono`) — counts, metadata, tabular figures
+- **Sans + headings + figures:** IBM Plex Sans (`--font-plex-sans`, via `next/font/google`). Figures on
+  screen are tabular sans (`tabular-nums`).
+- **Serif:** IBM Plex Serif (`--font-plex-serif`) — **verbatim quotes only**; quotes are speech. On screen
+  a quote is italic 16px/1.6 (`QUOTE`), on depth pages only, with typographic quotes.
+- **Mono:** IBM Plex Mono (`--font-plex-mono`) — print-only since the audit design (decision 9): PDFs,
+  emails, the monthly briefs and stored legacy reports keep their mono figures, and the face stays loaded
+  for them. Retired on every screen the audit design draws.
 - `--font-emoji` (Noto Color Emoji) is referenced ONLY from the `.vb-print` stacks: Vercel's
   Chromium ships no emoji face, so a customer's "🙌" printed as a blank box on paper.
-- Page title: `text-2xl font-bold`. Section headings: `text-sm font-semibold uppercase tracking-wide text-muted-foreground`, optionally with a normal-case hint suffix.
+- **The screen scale** (the boards): page title 28px/700, `-0.01em` (every page, `PageBar` and `LevelBar`);
+  the line under it 14 to 14.5px secondary; section heading 21px/600 (`SectionHead`) with a 14px muted note
+  or an action at its right; card title 18px (21px at lg); label 13px/600 secondary, sentence case (`LBL`);
+  table head 13px/500 muted (`TH`); body 14 to 16px; nothing under 12px.
+- **Retired on screens:** section headings in `uppercase tracking-wide`, any uppercase or letter-spaced
+  label, and the orange eyebrow over a heading (fold it into the heading).
 
 ## Shape & Elevation
 
 - Radius base `--radius: 0.375rem` (6px — the value in `app/globals.css`, which is the source of
-  truth); chips/pills `rounded-full`, single-line only. This doc drifted to `1rem`, was corrected
+  truth; the shadcn base layer derives from it). This doc drifted to `1rem`, was corrected
   to `0.3rem` on 2026-08-18 and to the shipped `0.375rem` on 2026-09-15 — when the two disagree,
   the stylesheet wins.
+- **The screens' radii (the audit design):** cards 12 (`CARD`, padding 26, 18 on a phone); buttons,
+  chips and inputs 8; tags 6; dashed empty boxes 10; the segmented control (the period switch, the
+  Settings tabs) a white group at 10 with a 1px `--border` edge and 7px items. Legacy cards keep 14 or 16
+  until they go.
 - **The card shadow (1 Oct, evening; Heinrich: "we don't really have drop shadows anymore, like for
   the sidebar or the large blocks, which I also want brought back").** ONE token for every large card on
   the ten client pages: `--shadow-card` → `shadow-card`, `0 1px 2px rgba(38,41,44,.06), 0 4px 14px
   rgba(38,41,44,.06), 0 12px 32px rgba(38,41,44,.04)` — the Dashboard tiles' own design shadow (`0 1px 2px
   rgba(0,0,0,.05), 0 4px 14px rgba(0,0,0,.04)`) in the ink, a step stronger so it reads on the ground, with a
-  third, wider layer for depth. The sidebar's right edge: `--shadow-sidebar` → `shadow-sidebar`, `1px 0 0
-  rgba(38,41,44,.04), 4px 0 16px rgba(38,41,44,.06), 12px 0 40px rgba(38,41,44,.04)`, beside its hairline.
-  Both are set in `.dark` (a white hairline at 6% and black layers). **Inner panels stay flat**: a quote on
+  third, wider layer for depth (the boards' `.tile` shadow differs by a hair; the token is unchanged).
+  `--shadow-sidebar` (`1px 0 0 rgba(38,41,44,.04), 4px 0 16px rgba(38,41,44,.06), 12px 0 40px
+  rgba(38,41,44,.04)`) stays defined, but since the audit design the sidebar draws no shadow: its edge is a
+  1px `border-track` rule, as the boards draw it. Both are set in `.dark` (a white hairline at 6% and black
+  layers). **Inner panels stay flat**: a quote on
   the ground, an inner block. No card writes a shadow literal (drift guard (g); `lib/palette-guard.test.ts`).
 - **The opened panel (depth v2, 13 Oct).** The full-width panel that opens in place under a clicked item
   (`components/v2/panel.tsx`, the boards' `.panel`) is one step above the cards: `--shadow-panel` →
@@ -265,18 +332,37 @@ paragraph); no gradient; the orange never as text (drift guard (h), `lib/palette
 
 ## Signature components
 
-- **`.crowd-bg`** — ambient crowd illustration, on the signed-out frame and (rule 6) behind every dashboard page
-  via the shell. Its colour is `--crowd`, never baked into the SVG.
-- **Chips** — `px-2 py-0.5 rounded-full text-xs font-medium`; category chips use `categoryTint(key)`
+- **The building blocks of the audit design** (one set; the pages' own copies go):
+  - `components/v2/look.ts`, class strings and two pure functions with NO imports, so client components
+    can take them: `LBL` (the label), `GO` (a link), `ROW` (a row or card title link), `CHIP` / `CHIP_ON`
+    (a filter chip and the chosen one), `BTN_PRIMARY` (yellow, ink words), `BTN_SECONDARY` (white,
+    `--control` edge), `BTN_SM`, `TAG` with `TAG_TONE` (`hi` caution, `mid` the track, `tint` the pale
+    yellow), `TBL` / `TH` / `TD` / `TD_NUM` (a table with horizontal rules only), `EMPTY` (the dashed box),
+    `INPUT`, `QUOTE`; `toMax(values)` and `toMaxAtLeast(values, floor)` (decision 5's bar lengths).
+  - `components/v2/ui.tsx`, server components: `StatStrip` (the figures row, a `<dl data-stat-strip>`),
+    `SectionHead` (the boards' heading row), `EmptyBox` (decision 4's dashed box), `Label`, `GoLink`, `Tag`.
+  - `components/v2/words.ts`, screen-only wording: `commaCite`, `translationLine`, `listWords`, `longDay`;
+    and `monthTerm` (`lib/reading/month-label.ts`), the figures row's month cell.
+  - `PageBar` and `LevelBar` take `stats` (the figures row) and `sub` (the line under the h1); the period
+    switch (`PeriodSwitch`) is the white segmented control, its month option named for the month
+    (`withMonthName`).
+- **`.crowd-bg`** — ambient crowd illustration, on the signed-out frame only (`components/auth/auth-card.tsx`).
+  It is retired from the app shell (rule 6). Its colour is `--crowd`, never baked into the SVG.
+- **Chips** (legacy modules and print) — `px-2 py-0.5 rounded-full text-xs font-medium`; category chips use `categoryTint(key)`
   (grey, always), sentiment uses `SENTIMENT_BADGE`, prevalence uses `PREVALENCE_BADGE`,
   evidence tiers show "Strong evidence" (pale yellow) / "Early signal" (warning tint) — never numeric scores.
-- **Voice links** — pill outline in primary: `text-primary ring-1 ring-primary/25 hover:bg-primary/5`.
+  On screen, chips are `CHIP` and tags are `TAG`.
+- **Voice links** (legacy) — pill outline in primary: `text-primary ring-1 ring-primary/25 hover:bg-primary/5`.
 - **`.stat-hero`** is RETIRED. Rule 1 ("no black blocks / dark heroes") removed it from
   `app/globals.css`; the class name survives only in a comment in `components/stat-band.tsx`.
 
 ## One-screen grid pages (2026-08-22 redesign — Dashboard first)
 
 > **2026-08-28:** the *no-scroll one-screen* rule is retired (§Visual identity rule 9). `PageGrid`/`Tile`/`Drawer` and the 12-column grid stay.
+
+> **Legacy since the audit design (2026-11-07):** `Tile`, `PageGrid` and this section's charts draw the
+> legacy modules that render stored snapshots, exports, print and email; no screen the audit design draws
+> uses them. Their caps, eyebrows and mono figures stay there and are retired on screens.
 
 The redesign spec is `docs/redesign-2026-08/README.md` (+ the approved canvas linked there). Grid pages are
 built from `components/shell/` and `components/charts/`, not from `Card`:
@@ -288,14 +374,14 @@ built from `components/shell/` and `components/charts/`, not from `Card`:
   right controls · How-to-read) → `PageGrid` (12 cols × 6 equal rows on ≥xl, one screen at 1440×900; single
   stacked column below xl). A 1280×800 laptop scrolls ~70px by design rather than crushing tiles.
 - **Tile** (`col`, `row` spans; `variant` default | hero (`.stat-hero`) | warm (clay ring, for the top
-  recommendation) | strip): eyebrow 10.5px caps + meta 11px · body · footer (link deeper, left; quiet note,
+  recommendation) | strip): eyebrow 10.5px caps + meta 11px (legacy and print only; retired on screens) · body · footer (link deeper, left; quiet note,
   right). Tiles clamp their own content (`overflow-hidden`, `min-h-0`); long lists scroll or truncate inside.
   `StripCell` = one counted receipt; `TileEmpty` = the honest one-line empty state — a tile keeps its size.
 - **Drawer:** `DetailDrawer` (client, on `ui/sheet`, right, ~480px) is the universal one-click-deeper surface,
   URL-driven like `DetailOverlay` (`?detail=<id>`; closing navigates to `closeHref`). Pages stay server
   components; only the drawer shell is client code.
 - **Charts** (server SVG, no libraries): `Sparkline` (now `(number|null)[]` — a gap is a gap),
-  `StatValue` (mono 24/30/18, tabular) + `Delta` (favourability-coloured, `good: up|down|neutral`),
+  `StatValue` (mono 24/30/18, tabular; legacy and print only) + `Delta` (favourability-coloured, `good: up|down|neutral`),
   `RankedBar` (dot · label · bar · count; bar colour follows the entity, never the rank), `Mover`
   (label · spark · value · delta), `LineChart` (end labels, no legend box for ≤4 series),
   `CalendarLine` (the dated axis — see §Chart rules), `Ring` (the ONE circle allowed: share of
@@ -304,13 +390,17 @@ built from `components/shell/` and `components/charts/`, not from `Card`:
 - **Colour jobs on tiles:** you / positive = dark gold (`--you`, `--positive`); rivals grey (`--comp`); the
   market ink; share bars brand yellow on `--track`; mixed / early = warning amber. A quote carries **no left
   rule** (palette A's stripe ban): serif italic on the page, or a plain panel on the ground.
-- **Numbers:** counts of real voices, videos, themes and shares are shown big and in mono; model confidence is
+- **Numbers:** counts of real voices, videos, themes and shares are shown big and in mono on the legacy modules and print (tabular sans on screens since the audit design); model confidence is
   never a number. Formatters in `lib/format.ts` are hydration-safe (UTC dates, hand-rolled separators).
 - **Rounding follows the content, not the box:** `rounded-full` ONLY on single-line pills (fixed height or
   `whitespace-nowrap`). Anything that can wrap — quotes, phrases, labels in a list — takes a fixed radius
   (`rounded-lg`/`rounded-[10px]`), otherwise a three-line chip renders as an oval (Heinrich, 2026-08-22).
 
 ## Chart rules (amended 2026-09-15 — Phase 1 WP10, decision U)
+
+> **Since the audit design (2026-11-07)** the charts below (`CalendarLine`, the week bars, `WeekLineStrip`)
+> draw the legacy modules, stored snapshots, print and email only; their mono labels are print-only and stay
+> (decision 9). The screens' bars are the v2 kit's, drawn to §The audit design.
 
 > **This section AMENDS the mock's `spec/design-system.md` §3.9**, which is code-lifted from
 > `components/charts/line-chart.tsx` and says: *"No gridlines beyond baseline + midline, no axis
@@ -353,7 +443,7 @@ baseline, and rules drawn behind the lines.
 
 - **Dated rules** (`tracking change` / `clustering change` / `rename`): a vertical
   `stroke-dasharray="2 3"` in `--border` from `top−4` to the baseline, carrying the change note as
-  its `<title>` and the change's own day as a 9px mono tick label. Drawn at the month the change was
+  its `<title>` and the change's own day as a 9px mono tick label (print and legacy only). Drawn at the month the change was
   MADE.
 - **A reconstructed row draws a SECOND token**: `stroke-dasharray="1 4"` in `--muted-foreground` at
   `.5` opacity. "We worked out that this probably happened" is not "this was recorded".
@@ -398,13 +488,13 @@ The design the next chart built on weeks follows. Drawn as the approved preview 
 - **Counts only.** The market's videos and comments per ISO week (Monday to Sunday, UTC, by comment
   date), two rows on one week axis as small multiples, videos first, each row on its own scale. No
   share, no percentage, no verdict, no arrow, no direction word, no gridline, no y axis: a count
-  over every bar (13px/600 mono for videos, 12px/500 for comments) on a halo of the ground colour.
+  over every bar (13px/600 mono for videos, 12px/500 for comments; mono on print and the legacy modules only) on a halo of the ground colour.
 - **Bars** are 55% of their slot, radius 2, in the ink (`--foreground`), on a hairline baseline in
   `--border`. Rows: 208 px and 60 px on the front page, 128 px and 70 px on This week.
 - **A week still being read** ("so far"; "filling": ended, under two updates since) is drawn
   OUTLINED (the ground colour, a 1.5 ink stroke), with its word under the axis, so its state never
   rests on colour alone. (The WP's 40% ink is superseded by the preview.)
-- **A week with nothing gathered** draws no bar and keeps its slot; one 12px mono label spans a run
+- **A week with nothing gathered** draws no bar and keeps its slot; one 12px mono label (print and legacy only) spans a run
   of them: "none gathered".
 - **Our changes** are marks on the day they were made: a filled 9px triangle for our searches, a
   hollow one for our relevance check. Front page: the mark above the plot with the day beside it and
@@ -412,7 +502,7 @@ The design the next chart built on weeks follows. Drawn as the approved preview 
   labelled "Our changes". One key sentence under the chart names them ("We changed our searches on
   9, 13 and 17 Sep, and how we check relevance on 26 Sep."): a key, not a note. Filing changes are
   not drawn: the pooled market does not move when a video is re-filed (decision E).
-- **Axis:** the Monday's day in 12px mono under each week, the month under the first week that starts
+- **Axis:** the Monday's day in 12px mono (print and legacy only) under each week, the month under the first week that starts
   in it, the state words under those.
 - **Responsive without script:** heights in px, every horizontal position a percentage of the plot,
   rule labels placed at the plot's narrowest width (520 px). Under that the strip scrolls sideways
@@ -432,10 +522,10 @@ The design the next chart built on weeks follows. Drawn as the approved preview 
   narrowest plot, so each point sits under the bar of the week it reads, scrolling and opening at the
   latest week as the bars do, the gutter held in place while the plot scrolls under it. One row per
   kind (Your market draws the six kinds; a subject's weeks are Subjects' strip): a 24 px plot, 8 px to
-  the next row, each on its own y scale with its highest and lowest shares as 9 px mono ticks in the
+  the next row, each on its own y scale with its highest and lowest shares as 9 px mono ticks (print and legacy only) in the
   gutter; the line 1.5 px in the ink (`--foreground`), points solid and ringed in `--tile`, the latest
   larger. Over each plot, held in view while it scrolls, the name (12 px sans) at the left and the
-  latest share with its "of N" (12 px mono) and the verdict through `MovementBadge` (neutral axis: "no
+  latest share with its "of N" (12 px mono, print and legacy only) and the verdict through `MovementBadge` (neutral axis: "no
   clear change" muted; a provisional subject says "provisional") at the right, the reading wrapping
   under the name where both do not fit. A pair not read the same way draws both points and no segment,
   and is named in a "not read as a change" style chip under the strip ("28 Sep and 5 Oct not read the
@@ -489,6 +579,13 @@ copy contract by construction (`lib/test/copy-contract.ts`).
 - ❌ The retired green (`#0E8A5F` and its tints) anywhere in the app
 - ❌ Raw confidence/opportunity scores in client-facing UI
 - ❌ Layout-shifting hovers; instant state changes (use 150–300ms transitions)
+- ❌ On the screens the audit design draws (all retired 7 Nov; print, email and the briefs keep their own):
+  icon tiles, glyph squares, initials avatars and decorative dots; uppercase or letter-spaced labels and
+  the orange eyebrow over a heading; monospace figures; arrows in link text ("→", "↗", "↓"); " · " joins;
+  "of N" repeated on every line where the figures row states the base once; empty bar slots, empty tracks
+  or ghost charts for a thin state (use `EmptyBox`); a bar scaled to the whole market on a list that prints
+  counts; an ink primary button; the yellow Agent sidebar row; the crowd behind the app; a raw hex literal
+  in a page (use the tokens); text under 12px
 - ❌ Low-contrast text (4.5:1 minimum) or invisible focus states
 - ❌ Cool grays, pure white surfaces, neon accents — everything stays warm
 
