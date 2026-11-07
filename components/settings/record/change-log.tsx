@@ -135,14 +135,14 @@ export function sameRows(changes: readonly ClientChange[]): { change: ClientChan
 function ChangeRow({ change, count = 1, now, prehistoric = false }: { change: ClientChange; count?: number; now: string; prehistoric?: boolean }) {
   return (
     <div className={ROW}>
-      <span className="text-[13px] leading-[1.5] tabular-nums text-secondary-foreground">{change.dateShort}</span>
-      <span className="min-w-0 text-[13px] leading-[1.5]">
+      <span className="whitespace-nowrap text-[15px] font-semibold leading-[1.5] tabular-nums">{change.dateShort}</span>
+      <span className="min-w-0 text-[15px] leading-[1.5]">
         <span className="inline-flex flex-wrap items-center gap-2">
           {/* The count trails the sentence's last line, never a line of its own. */}
           <span>
             {change.said}
             {count > 1 ? (
-              <>{' '}<span data-copy="figure" aria-label={`${count} changes like this one`} className="whitespace-nowrap text-[13px] tabular-nums text-muted-foreground">×{count}</span></>
+              <>{' '}<span data-copy="figure" aria-label={`${count} changes like this one`} className="whitespace-nowrap text-[14px] tabular-nums text-muted-foreground">×{count}</span></>
             ) : null}
           </span>
           {madeThisMonth(change, now) ? <MonthFlag>this month</MonthFlag> : null}
@@ -155,7 +155,7 @@ function ChangeRow({ change, count = 1, now, prehistoric = false }: { change: Cl
             is "added to, never edited" cannot hide the edit; the line wraps
             instead, and only on the rows that carry one. */}
         {change.before && change.after ? (
-          <span className="mt-0.5 block break-words text-[13px] leading-[1.45] text-muted-foreground">
+          <span className="mt-1.5 block break-words text-[14px] leading-[1.45] text-secondary-foreground">
             {/* In words since the audit design (no arrow on a screen). */}
             Was {change.before}, now {change.after}
           </span>
@@ -164,7 +164,7 @@ function ChangeRow({ change, count = 1, now, prehistoric = false }: { change: Cl
       {/* A reconstructed row's "Not known" and "Reconstructed, not recorded"
           are said ONCE, under the prehistory's heading (WP3.10 copy debt): on
           every row they read as a stutter, not a record. */}
-      <span className="min-w-0 break-words text-[13px] leading-[1.5] text-muted-foreground">{prehistoric && change.breaks === RECONSTRUCTED_BREAKS ? '' : commaCite(change.breaks)}</span>
+      <span className="min-w-0 break-words text-[15px] leading-[1.5] text-secondary-foreground">{prehistoric && change.breaks === RECONSTRUCTED_BREAKS ? '' : commaCite(change.breaks)}</span>
       {/* BREAKS LIKE ITS SIBLING (Block D wave 3, RC3). `minmax(0, 0.5fr)`
           stops the TRACK demanding width; it does not stop the CONTENT
           escaping it. The prehistory rows' actor is "Reconstructed, not
@@ -175,7 +175,7 @@ function ChangeRow({ change, count = 1, now, prehistoric = false }: { change: Cl
           21px over; 1220 → 3px over; 1280 and up clean. In the shell the word
           was clipped with no indication, on the one row whose whole purpose is
           to say the entry was inferred rather than recorded. */}
-      <span className="min-w-0 break-words text-[13px] leading-[1.5] text-secondary-foreground">{prehistoric && change.who === RECONSTRUCTED_WHO ? '' : change.who}</span>
+      <span className="min-w-0 break-words text-[15px] leading-[1.5]">{prehistoric && change.who === RECONSTRUCTED_WHO ? '' : change.who}</span>
     </div>
   )
 }
@@ -197,10 +197,10 @@ function Prehistory({ log, rows, now }: { log: ChangeLogView; rows: number; now:
     <div className="flex flex-col gap-2 pt-2">
       {/* A sub-heading with its count, as the preview heads a group of rows
           ("What we search"); each row's "made by" says what the entries are. */}
-      <h3 className="m-0 text-[15px] font-semibold">
+      <h3 className="m-0 text-[17px] font-semibold">
         Before the record began, {fmtInt(log.prehistory.length)} {log.prehistory.length === 1 ? 'entry' : 'entries'}
       </h3>
-      <p className="m-0 text-[13px] leading-[1.5] text-muted-foreground">{PREHISTORY_LINE}</p>
+      <p className="m-0 text-[15px] leading-[1.55] text-secondary-foreground">{PREHISTORY_LINE}</p>
       <div className="flex flex-col">
         <ShowAll
           items={sameRows(log.prehistory)}

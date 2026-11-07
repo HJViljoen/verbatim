@@ -1,6 +1,9 @@
 import type { ReactNode } from 'react'
 
-import { fmtInt } from '@/lib/format'
+import { commaCite } from '@/components/v2/words'
+import { LBL, QUOTE } from '@/components/v2/look'
+import { cn } from '@/lib/utils'
+import { fmtInt, platformLabel } from '@/lib/format'
 import { carriesShare, levelText } from '@/lib/reading/level'
 import { REJECT_ROWS, type KeptRate, type RejectRow } from '@/lib/settings/reject-log'
 
@@ -79,7 +82,8 @@ export function RejectLogBlock({
   rows, summary, unavailable, unjudged, byTerm, byPlatform, lookedAt = 'Looked at', withheld, control, countsOnly = false,
 }: {
   rows: readonly RejectRow[]
-  /** "N of M candidates were set aside (38.0%) · recorded from 9 Sep 2026". */
+  /** "N of M candidates were set aside (38.0%) · recorded from 9 Sep 2026",
+   *  as the loader builds it; printed with a comma. */
   summary: string
   /** The sentence to print instead of the whole block, where the gate's own
    *  record is not open to this workspace yet. */
@@ -108,7 +112,9 @@ export function RejectLogBlock({
   const platformRate = keptRateText(byPlatform)
   return (
     <RecordSection title="The reject log">
-      {summary ? <p className="m-0 text-[15px] leading-[1.5]">{summary}</p> : null}
+      {/* The loader's summary joins with a middle dot; the screen with a comma
+          ("…(38.0%), recorded from 9 Sep 2026"), the lib string untouched. */}
+      {summary ? <p className="m-0 text-[16px] leading-[1.5]">{commaCite(summary)}</p> : null}
       {unjudged ? <p className="m-0 text-[13px] text-muted-foreground">{unjudged}</p> : null}
 
       {countsOnly ? null : withheld ? (
@@ -132,18 +138,21 @@ export function RejectLogBlock({
               key={`${r.runId}-${r.platform}-${r.videoId}`}
               className={`grid grid-cols-1 items-center gap-x-3 gap-y-2 border-b border-border/60 py-3 last:border-b-0 xl:min-h-[60px] xl:py-2 ${TRACKS}`}
             >
-              <span className="min-w-0 text-[13px] leading-[1.5] [overflow-wrap:anywhere]">
+              <span className="min-w-0 [overflow-wrap:anywhere]">
                 {/* The stranger's own words, and rule (c) may not police them
                     (lib/test/copy-contract.ts): a caption can say "growing" and
-                    the product has made no direction claim by quoting it. */}
-                <span data-copy="quote">“{r.captionExcerpt ?? 'No caption was stored for this one.'}”</span>
-                <span className="mt-0.5 block text-[13px] leading-[1.45] text-muted-foreground">
-                  {r.platform}
+                    the product has made no direction claim by quoting it.
+                    Real quotes, so the serif, leaning (the board's `.q`). */}
+                {r.captionExcerpt
+                  ? <span data-copy="quote" className={cn(QUOTE, 'block text-[15.5px] leading-[1.5]')}>“{r.captionExcerpt}”</span>
+                  : <span className="block text-[15px] leading-[1.5] text-muted-foreground">No caption was stored for this one.</span>}
+                <span className="mt-1 block text-[13.5px] leading-[1.45] text-muted-foreground">
+                  {platformLabel(r.platform)}
                   {r.accountName ? `, ${r.accountName}` : ''}
                   {r.keyword ? `, found on “${r.keyword}”` : ''}
                 </span>
               </span>
-              <span className="inline-flex min-w-0 items-center gap-1.5 text-[13px] leading-[1.45] text-secondary-foreground">
+              <span className="inline-flex min-w-0 items-center gap-1.5 text-[14.5px] leading-[1.5] text-secondary-foreground">
                 <span className="min-w-0">
                   {r.reason ?? (r.source === 'default' ? 'Nobody judged this one.' : 'No reason was recorded.')}
                 </span>
@@ -156,7 +165,7 @@ export function RejectLogBlock({
 
       {byTerm.length > 0 ? (
         <div className="flex flex-col gap-3 pt-2">
-          <h3 className="m-0 text-[15px] font-semibold">What each term brings back</h3>
+          <h3 className="m-0 text-[17px] font-semibold">What each term brings back</h3>
           {/* THE TAB'S TABLE VOICE (13px sentence-case heads over the rule, as
               The record's above), not the settings forms' mono capitals; the
               rates' base rides in the "Looked at" head. */}
@@ -164,30 +173,39 @@ export function RejectLogBlock({
               about 250px) the table scrolls inside its own box, never the
               page (deploy 2 review). */}
           <div className="-mx-1 overflow-x-auto px-1">
-          <table className="w-full border-collapse text-[13px] leading-[1.45]">
+          <table className="w-full border-collapse text-[15px] leading-[1.5]">
             <thead>
               <tr className="border-b border-border">
                 {['Term', lookedAt, 'Kept', 'Kept rate'].map((h, i) => (
-                  <th key={h} scope="col" className={`pb-2 align-bottom font-medium text-muted-foreground ${i === 0 ? 'pr-3 text-left' : 'pl-3 text-right'}`}>{h}</th>
+                  <th key={h} scope="col" className={`pb-2 align-bottom text-[13px] font-medium text-muted-foreground ${i === 0 ? 'pr-3 text-left' : 'pl-3 text-right'}`}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {byTerm.map((t) => (
                 <tr key={t.key} className="border-b border-border/60 last:border-b-0">
-                  <td className="py-2 pr-3 text-left align-top">{t.label}</td>
+                  <td className="py-3 pr-3 text-left align-top">{t.label}</td>
                   {[fmtInt(t.found), fmtInt(t.kept), termRate(t)].map((c, i) => (
-                    <td key={i} className="py-2 pl-3 text-right align-top tabular-nums">{c}</td>
+                    <td key={i} className="py-3 pl-3 text-right align-top tabular-nums">{c}</td>
                   ))}
                 </tr>
               ))}
             </tbody>
           </table>
           </div>
+          {/* The board's strip: a cell a platform, its name over its rate. */}
           {byPlatform.length > 0 ? (
-            <p className="m-0 text-[13px] text-secondary-foreground">
-              By platform: {byPlatform.map((p) => `${p.label} ${platformRate(p)}`).join(', ')}.
-            </p>
+            <div data-by-platform="" className="mt-2 border-t border-border pt-3.5">
+              <p className={cn('m-0', LBL)}>Kept rate by platform</p>
+              <dl className="m-0 mt-2.5 grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
+                {byPlatform.map((p) => (
+                  <div key={p.key} className="min-w-0">
+                    <dt className="text-[13px] text-muted-foreground">{p.label}</dt>
+                    <dd className="m-0 mt-1 text-[16px] font-semibold tabular-nums">{platformRate(p)}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
           ) : null}
         </div>
       ) : null}

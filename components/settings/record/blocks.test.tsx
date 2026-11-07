@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { commaCite } from '@/components/v2/words'
 
 import { AppealControl } from '@/app/dashboard/settings/record/appeal-control'
 import { APPEAL_ASK, APPEAL_FILED } from '@/app/dashboard/settings/record/appeal-copy'
@@ -84,10 +85,17 @@ describe('the delivery block', () => {
     expect(text).toContain('updates')
     // 35 days = 5 weeks, and the month the gap ended in.
     expect(text).toContain('5')
-    expect(text).toContain('longest gap, in May')
+    expect(text).toContain('Longest gap, in May')
     expect(text).toContain('27 Sep')
     // Four 28px mono figures, one per cell: What we changed's stat scale.
     expect(render(delivery).match(/text-\[28px\]/g)).toHaveLength(4)
+  })
+
+  it('each cell its label first, then its figure (the board\'s strip), in a list of terms', () => {
+    const markup = render(delivery)
+    expect(markup).toMatch(/<dl class="m-0 grid grid-cols-2 gap-4 xl:grid-cols-4">/)
+    expect(markup).toMatch(/<dt class="[^"]*">First update on record<\/dt><dd class="[^"]*"><span data-copy="figure"[^>]*>6 Apr<\/span><\/dd>/)
+    expect(renderText(delivery)).toMatch(/First update on record 6 Apr Updates run 22 21 finished Longest gap, in May 5 weeks Last update 27 Sep/)
   })
 
   it('opens its four-abreast grid at xl and its 172px gutter at lg, where the rails have stopped taking the pane', () => {
@@ -112,7 +120,7 @@ describe('the delivery block', () => {
     // Nothing in the product knows when the next gather runs.
     expect(text).not.toContain('next 4 Oct')
     expect(text).not.toContain('next ')
-    expect(text).toContain('first update on record')
+    expect(text).toContain('First update on record')
   })
 
   it('dates the pills in the reader’s form and marks the update that did not finish', () => {
@@ -261,7 +269,7 @@ describe('the change log', () => {
     // an unbreakable 85px word in a 53px track at 1024, where the document
     // genuinely scrolled 8px. Both cells now carry `break-words`; before, only
     // "What it breaks" did.
-    expect(render(changeLog).match(/min-w-0 break-words text-\[13px\]/g)).toHaveLength(
+    expect(render(changeLog).match(/min-w-0 break-words text-\[15px\]/g)).toHaveLength(
       (changeLogFixture().recorded.length + changeLogFixture().prehistory.length) * 2,
     )
   })
@@ -326,11 +334,32 @@ describe('the reject log', () => {
   it('answers with the set-aside count as its first line, and carries the rates’ base in the column head', () => {
     const markup = render(rejects)
     const header = markup.match(/<header[^>]*>([\s\S]*?)<\/header>/)?.[1] ?? ''
-    expect(header).not.toContain(gateSummaryFixture())
+    // The loader's " · " joined with a comma on the screen (commaCite).
+    const summary = commaCite(gateSummaryFixture())
+    expect(summary).not.toContain('·')
+    expect(header).not.toContain(summary)
     const text = renderText(rejects)
-    expect(text.indexOf(gateSummaryFixture())).toBeLessThan(text.indexOf('Thrown away'))
+    expect(text.indexOf(summary)).toBeGreaterThan(-1)
+    expect(text.indexOf(summary)).toBeLessThan(text.indexOf('Thrown away'))
+    expect(text).not.toContain(' · ')
     expect(text).toContain('Looked at (of the last 1,000)')
     expect(text).not.toContain('most recent judgements')
+  })
+
+  it('the board\'s rows: each post a real quote in the serif, leaning, its platform named as the product names it, at 15px; the rates by platform a strip', () => {
+    const markup = render(rejects)
+    // Real quotes (the board's `.q`): the serif, italic.
+    expect(markup).toMatch(/<span data-copy="quote" class="[^"]*font-serif[^"]*italic[^"]*">“Sealand sardines recipe”<\/span>/)
+    const text = renderText(rejects)
+    expect(text).toContain('YouTube, Coastal Kitchen, found on “sealand”')
+    expect(text).not.toMatch(/\byoutube,|\btiktok,/)
+    // The rule that fired at 14.5px, never the old 13px rows.
+    expect(markup).toMatch(/<span class="inline-flex min-w-0 items-center gap-1\.5 text-\[14\.5px\]/)
+    expect(markup).not.toMatch(/text-\[13px\] leading-\[1\.5\] \[overflow-wrap:anywhere\]/)
+    // By platform: a strip of cells, each its name over its rate.
+    expect(markup).toMatch(/data-by-platform=""[\s\S]*?Kept rate by platform<\/p><dl class="[^"]*sm:grid-cols-4">/)
+    expect(text).toMatch(/Kept rate by platform TikTok 6\d(\.\d)?% YouTube 6\d(\.\d)?%/)
+    expect(text).not.toContain('By platform:')
   })
 
   it('prints its one line in the two states that have no rows', () => {
@@ -571,7 +600,7 @@ describe('the reject log, as a client reads it', () => {
 
   it('prints the counts and the rates per term, and no posts and no control', () => {
     const text = renderText(counts)
-    expect(text).toContain(gateSummaryFixture())
+    expect(text).toContain(commaCite(gateSummaryFixture()))
     expect(text).toContain('What each term brings back')
     expect(text).not.toContain('Sealand sardines recipe')
     expect(text).not.toContain('Thrown away')

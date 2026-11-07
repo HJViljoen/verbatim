@@ -6,7 +6,7 @@ import { EMPTY, GO, TBL, TD, TH } from '@/components/v2/look'
 import { StatStrip, type StatItem } from '@/components/v2/ui'
 import { fmtInt } from '@/lib/format'
 import { noReadingYet } from '@/lib/pages/v2/market'
-import { inlineMonth, monthHeading } from '@/lib/reading/month-label'
+import { inlineMonth } from '@/lib/reading/month-label'
 import { PRODUCTS_HELD, PRODUCTS_NOT_APPLIED, PRODUCTS_PAGE_OFF, type AliasChip, type OpenCategory, type ProductLine, type ProductSettingsView } from '@/lib/settings/products'
 import { cn } from '@/lib/utils'
 import { ALIAS_CHIP, CHECKED_TAG } from './chip'
@@ -184,9 +184,10 @@ function OpenCategoryCard({ open, view }: { open: OpenCategory; view: ProductSet
   ]
   if (open.cameUp != null) stats.push({ key: 'came-up', term: `Came up in ${monthText}`, value: <span data-copy="figure">{fmtInt(open.cameUp)}</span> })
   if (open.unclear) stats.push({ key: 'unclear', term: 'Couldn\u2019t place yet', value: <><span data-copy="figure">{fmtInt(open.unclear)}</span> {open.unclear === 1 ? 'video' : 'videos'}</> })
-  // The month column, named for its month, only where the month was read:
-  // a month nothing has read is said once, in the dashed box.
-  const month = view.readingsOn && open.cameUp != null ? monthHeading(view.monthName, view.monthLabel) : null
+  // The month column, named for its month in the figures row's own words
+  // ("October so far", or "September" once it has ended), only where the
+  // month was read: a month nothing has read is said once, in the dashed box.
+  const month = view.readingsOn && open.cameUp != null ? `${view.monthWords.charAt(0).toUpperCase()}${view.monthWords.slice(1)}` : null
   return (
     <Card className="min-w-0 p-[30px] max-sm:p-[18px]">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -207,8 +208,8 @@ function OpenCategoryCard({ open, view }: { open: OpenCategory; view: ProductSet
             <tr>
               <th scope="col" className={cn(TH, 'w-[26%]')}>Product</th>
               <th scope="col" className={TH}>Other names people use</th>
-              {/* "This month" only while it is: a reading month that has ended is
-                  named (decision 3). */}
+              {/* The figures row's month: "October so far" while it fills, the
+                  month's name once it has ended (decision 3). */}
               {month ? <th scope="col" className={cn(TH, 'w-[12%]')}>{month}</th> : null}
               {view.canEdit ? <th scope="col" className={cn(TH, 'w-[70px] pr-0')}><span className="sr-only">Edit</span></th> : null}
             </tr>
@@ -229,7 +230,7 @@ function OpenCategoryCard({ open, view }: { open: OpenCategory; view: ProductSet
         <div className="mt-[22px] flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2 border-t border-track pt-[18px]">
           <p className="m-0 min-w-0 text-[15px] leading-[1.5]">
             <span data-copy="figure">{fmtInt(open.unclear)}</span> {open.unclear === 1 ? 'video' : 'videos'} in {view.monthName}{' '}
-            {open.unclear === 1 ? 'is' : 'are'} about one of your products in {open.name}, but we couldn&apos;t tell which.
+            {open.unclear === 1 ? 'is' : 'are'} about one of your products in {open.name}, but we couldn’t tell which.
           </p>
           <Link href={open.tagHref} className={cn(GO, 'inline-flex min-h-11 items-center sm:min-h-0')}>Tag them in Your products</Link>
         </div>

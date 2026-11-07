@@ -88,10 +88,11 @@ export function LabelRow({ label, sub, children }: { label: ReactNode; sub?: Rea
 }
 
 /**
- * One of the delivery block's stat cells: a 28px figure, an optional unit
- * beside it, a caption under it, on the scale of What we changed's cells
- * (fresh design check, 26 Sep: this tab set two stat cells at two scales, and
- * these captions at 11.5px).
+ * One of the delivery block's stat cells, in a `<dl>`: its label first, then
+ * a 28px figure with an optional unit beside it (the board's strip: "First
+ * update on record", then "6 Apr"; the audit design's review of Phase 11),
+ * on the scale of What we changed's cells (fresh design check, 26 Sep: this
+ * tab set two stat cells at two scales, and these captions at 11.5px).
  *
  * NOT `FigureCell` (components/blocks/frame.tsx). That primitive is the
  * artboards' TABLE cell — a 13px figure over a mono "of N" — and it stamps
@@ -103,11 +104,11 @@ export function LabelRow({ label, sub, children }: { label: ReactNode; sub?: Rea
 export function StatCell({ figure, unit, caption }: { figure: ReactNode; unit?: ReactNode; caption: ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <span className="flex items-baseline gap-1.5">
+      <dt className="text-[14px] leading-[1.45] text-secondary-foreground [text-wrap:pretty]">{caption}</dt>
+      <dd className="m-0 flex items-baseline gap-1.5">
         <span data-copy="figure" className="text-[28px] font-semibold leading-none tracking-[-0.01em] tabular-nums">{figure}</span>
         {unit ? <span className="text-[15px] text-muted-foreground">{unit}</span> : null}
-      </span>
-      <span className="text-[15px] leading-[1.5] text-secondary-foreground [text-wrap:pretty]">{caption}</span>
+      </dd>
     </div>
   )
 }

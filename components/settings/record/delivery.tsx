@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { fmtInt, shortDate } from '@/lib/format'
 import { DELIVERED_STATUSES, type DeliveryRecord, type DeliveryStat } from '@/lib/settings/delivery'
 import type { ReadingsRecord } from '@/lib/settings/readings'
@@ -26,6 +27,15 @@ import { DatePill, LabelRow, RecordSection, StatCell } from './frame'
  * over a strip saying 21, two lines above a pill reading "· did not finish".
  * A failed update is marked on its own pill rather than quietly dropped.
  */
+/** A stat as the board's cell, its label first: the lib's caption with its
+ *  first word capitalised ("First update on record"), and the updates run
+ *  where some did not finish as the board says it ("Updates run", then "22",
+ *  "19 finished"). The lib's words are untouched. */
+function cellOf(s: DeliveryStat, record: DeliveryRecord): { figure: ReactNode; unit: ReactNode; caption: string } {
+  if (s.id === 'delivered' && record.finished < record.total) return { figure: s.figure, unit: `${fmtInt(record.finished)} finished`, caption: 'Updates run' }
+  return { figure: s.figure, unit: s.unit, caption: `${s.caption.charAt(0).toUpperCase()}${s.caption.slice(1)}` }
+}
+
 export function DeliveryBlock({
   record, stats, updates, month, readings,
 }: {
@@ -55,11 +65,9 @@ export function DeliveryBlock({
            tile with a 32px inset and the figure became the tab's 28px (What
            we changed's cells), so at 1024 four cells would get 96px against
            the ~100px a 28px mono "28 Jun" needs. From 1280 each gets 160px. */
-        <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-          {stats.map((s) => (
-            <StatCell key={s.id} figure={s.figure} unit={s.unit} caption={s.caption} />
-          ))}
-        </div>
+        <dl className="m-0 grid grid-cols-2 gap-4 xl:grid-cols-4">
+          {stats.map((s) => <StatCell key={s.id} {...cellOf(s, record)} />)}
+        </dl>
       )}
 
       {/* HOW MANY OF THE LAST FEW FINISHED belongs to the four cells above:

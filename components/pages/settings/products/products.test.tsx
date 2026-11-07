@@ -59,13 +59,14 @@ describe('the Your products tab', () => {
       'Categories', '38 products', 'Liners 8', 'Feet 9', 'Knees 6', 'Bracing & supports 9', 'Sockets & suspension 6', 'Add a category',
       'Liners Rename Add a product', 'Products 8 Came up in October so far 3 Couldn’t place yet 11 videos',
       'Words for the category liner liners prosthetic liner Add a word', 'Names for the whole range Iceross Add a name',
-      'Product Other names people use This month',
-      'Iceross Seal-In X seal in x sealin seal-in liner Add a name This month: 6 videos Edit',
-      'Iceross Seal-In V seal in v Add a name This month: quiet Edit',
-      'Iceross Synergy synergy checked Add a name This month: 2 videos Edit',
+      // The month column says the figures row's month, "October so far".
+      'Product Other names people use October so far',
+      'Iceross Seal-In X seal in x sealin seal-in liner Add a name October so far: 6 videos Edit',
+      'Iceross Seal-In V seal in v Add a name October so far: quiet Edit',
+      'Iceross Synergy synergy checked Add a name October so far: 2 videos Edit',
       'Iceross Comfort Cushion',
       'checked: an everyday word as well, so each mention is checked before it counts.',
-      '11 videos in October are about one of your products in Liners, but we couldn\'t tell which.', 'Tag them in Your products',
+      '11 videos in October are about one of your products in Liners, but we couldn’t tell which.', 'Tag them in Your products',
     ]
     const at = order.map((s) => t.indexOf(s))
     expect(at.filter((x) => x < 0), order.filter((_, i) => at[i] < 0).join(' | ')).toEqual([])
@@ -141,7 +142,8 @@ describe('the Your products tab', () => {
   it('names the month it reads, and labels one that is not the current month', () => {
     const current = text(productSettingsView(productsFixtureRead(), { selected: null, canEdit: true, now: FIXTURE_NOW.toISOString() }))
     expect(current).toContain('Liners Rename Add a product Products 8 Came up in October so far 3 Couldn’t place yet 11 videos')
-    expect(current).toContain('Product Other names people use This month')
+    expect(current).toContain('Product Other names people use October so far')
+    expect(current).not.toContain('This month')
     expect(current).not.toMatch(/last full month|earlier month/)
     const v = productSettingsView(productsFixtureRead(), { selected: null, canEdit: true, now: '2026-11-09T09:00:00.000Z' })
     expect(v.monthLabel).toBe('the last full month')
@@ -170,7 +172,7 @@ describe('the Your products tab', () => {
     expect(t).not.toMatch(/This month|came up in|quiet|couldn.t place|Tag them|\d+ videos?\b/)
     // The only figures are the list's own sizes: products per category.
     const on = text(productSettingsView(productsFixtureRead(), { selected: fid(1, 1), canEdit: true }))
-    expect(on).toContain('This month')
+    expect(on).toContain('Product Other names people use October so far')
     expect(on).not.toContain(PRODUCTS_PAGE_OFF)
     assertCopyContract(node)
   })
@@ -193,6 +195,6 @@ describe('the Your products tab', () => {
     const read = await loadProductSettings(db.client as never, FIXTURE_CLIENT, FIXTURE_NOW, { readingsOn: true })
     if (read.state !== 'ready') throw new Error('expected a catalogue')
     const t = text(productSettingsView(read, { selected: fid(1, 1), canEdit: true }))
-    expect(t).toMatch(/Iceross Sport iceross sport liner Add a name This month: quiet Edit/)
+    expect(t).toMatch(/Iceross Sport iceross sport liner Add a name October so far: quiet Edit/)
   })
 })

@@ -3,6 +3,8 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Search } from 'lucide-react'
+import { INPUT } from '@/components/v2/look'
+import { cn } from '@/lib/utils'
 
 // Search inside a pane without a server round trip: the rows are already in
 // the payload (ListRow writes its text to data-search), so typing only toggles
@@ -41,8 +43,12 @@ export function ListSearch({ scope, placeholder = 'Search…', label }: { scope:
   }
 
   return (
+    // The kit's field (the audit design): 40px, bordered, 15px words; the
+    // count in sans at 13px. Its visible label is the caller's (How to read
+    // wraps it in one); the legacy modules that also use it name it by
+    // `aria-label` alone, as before.
     <div className="relative">
-      <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
       <input
         id={id}
         type="search"
@@ -51,10 +57,10 @@ export function ListSearch({ scope, placeholder = 'Search…', label }: { scope:
         placeholder={placeholder}
         aria-label={label ?? placeholder.replace(/…$/, '')}
         aria-controls={scope}
-        className="h-8 w-full rounded-[4px] bg-inner pl-8 pr-14 text-[12.5px] text-foreground placeholder:text-muted-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className={cn(INPUT, 'w-full pl-9 pr-20')}
       />
       {shown && (
-        <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 font-mono text-[10.5px] tabular-nums text-muted-foreground" role="status">
+        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[13px] tabular-nums text-muted-foreground" role="status">
           {shown.visible} of {shown.total}
         </span>
       )}

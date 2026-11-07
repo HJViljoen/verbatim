@@ -123,7 +123,7 @@ export function AddCategory({ locked = false }: { locked?: boolean }) {
   }
   return (
     <form action={run} className="flex flex-col gap-2 pt-3">
-      <label htmlFor="add-category" className="sr-only">The category&apos;s name</label>
+      <label htmlFor="add-category" className="sr-only">The category’s name</label>
       <input ref={input} id="add-category" name="name" required maxLength={60} placeholder="The category, as you name it" className={FIELD}
         onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }} />
       <div className="flex gap-2">
