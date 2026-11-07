@@ -1,11 +1,10 @@
 import Link from 'next/link'
-import { BarChart3, CalendarRange, MessageSquareText, Sparkles, TrendingUp } from 'lucide-react'
-import { CARD, CardHead, FlagChip, MiniBars, SpikeBars, type MiniBar } from '@/components/v2'
+import { CARD, CardHead, FlagChip, GoLink, MiniBars, SpikeBars, type MiniBar } from '@/components/v2'
 import { fmtInt, fmtPct, longMonth } from '@/lib/format'
 import { talkKindLabel } from '@/lib/pages/overview-market/kinds'
 import { flagBaseWords, topSpans, type Doing, type GroupLink, type HeroCard, type MarketConv, type MarketData, type MonthCount, type SideCard } from '@/lib/pages/v2/market'
 import { cn } from '@/lib/utils'
-import { About, ABOUT_NOT_COUNTED, ABOUT_NOT_READ, BIG, Fig, Label, MID, MONO_MUTED, OLINK, newVerdict } from './parts'
+import { About, ABOUT_NOT_COUNTED, ABOUT_NOT_READ, BIG, Fig, Label, MID, MONO_MUTED, newVerdict } from './parts'
 
 // MARKET'S TOP ROW (depth v2, T3; E2-Market's "what moved", re-cut to decision
 // 1). This week: the anomaly check's first flag where it raised one, else the
@@ -96,7 +95,7 @@ function Context({ groups, doing, kind, noun, monthText }: { groups: readonly Gr
         {doing
           // On a phone the two columns stand as the board's do, so the
           // figure line may wrap inside its own (T9: nothing past the card).
-          ? <>{doing.label} <span className={cn(MONO_MUTED, 'whitespace-nowrap max-sm:whitespace-normal')}>· <span data-copy="level">{fmtInt(doing.k)} of {fmtInt(doing.n)}</span> {monthText}</span></>
+          ? <>{doing.label}, <span className={cn(MONO_MUTED, 'whitespace-nowrap max-sm:whitespace-normal')}><span data-copy="level">{fmtInt(doing.k)} of {fmtInt(doing.n)}</span> {monthText}</span></>
           : kind ? talkKindLabel(kind, noun) : <span className="text-muted-foreground">Not read yet</span>}
       </div>
     </div>
@@ -126,9 +125,9 @@ function Foot({ conv, href, data, open = 'Open the conversation' }: {
           <About parts={conv.who} brand={data.brand} noun={data.noun} />
         </div>
       ) : conv && data.brands !== 'counted' ? (
-        <div className="text-[12.5px] text-muted-foreground">About · {data.brands === 'not_counted' ? ABOUT_NOT_COUNTED : ABOUT_NOT_READ}</div>
+        <div className="text-[13px] text-muted-foreground">About: {data.brands === 'not_counted' ? ABOUT_NOT_COUNTED : ABOUT_NOT_READ}</div>
       ) : <span />}
-      {href ? <Link href={href} className={OLINK}>{open} →</Link> : null}
+      {href ? <GoLink href={href}>{open}</GoLink> : null}
     </div>
   )
 }
@@ -146,7 +145,7 @@ function FlagHero({ hero, data, span }: { hero: Extract<HeroCard, { kind: 'flag'
   const title = card.conv?.label ?? f.label
   return (
     <article id="top-0" className={cn(CARD, span, 'scroll-mt-6')}>
-      <CardHead icon={TrendingUp} size="lg" flag={<FlagChip verdict={card.verdict} />} title={f.objectKind === 'theme' ? <span data-copy="subject" data-slot="pass_b_theme">{title}</span> : title} />
+      <CardHead size="lg" flag={<FlagChip verdict={card.verdict} />} title={f.objectKind === 'theme' ? <span data-copy="subject" data-slot="pass_b_theme">{title}</span> : title} />
       <div className="flex flex-wrap items-baseline gap-3.5">
         <div data-copy="figure" className={BIG}>{fmtInt(f.week.k)}</div>
         <div className={cn(MONO_MUTED, 'leading-[1.5]')}>
@@ -177,7 +176,7 @@ function ConvHero({ hero, data, span }: { hero: Extract<HeroCard, { kind: 'new' 
   const figure = week ? conv.week : conv.month
   return (
     <article id="top-0" className={cn(CARD, span, 'scroll-mt-6')}>
-      <CardHead icon={hero.kind === 'new' ? Sparkles : MessageSquareText} size="lg" eyebrow={eyebrow} title={<span data-copy="subject" data-slot="pass_b_theme">{conv.label}</span>} />
+      <CardHead size="lg" eyebrow={eyebrow} title={<span data-copy="subject" data-slot="pass_b_theme">{conv.label}</span>} />
       <div className="flex flex-wrap items-baseline gap-3.5">
         <Fig n={figure} className={BIG} />
         {week
@@ -210,7 +209,7 @@ function NothingNew({ side, data, index, span }: { side: SideCard; data: MarketD
   const pick = e ?? a
   return (
     <article id={`top-${index}`} data-top-card="new-none" className={cn(CARD, span, 'scroll-mt-6')}>
-      <CardHead icon={Sparkles} eyebrow={<span data-copy="verdict">New this week</span>} title={<span data-copy="verdict">{side.anyNew ? NOTHING_ELSE_NEW : NOTHING_NEW}</span>} />
+      <CardHead eyebrow={<span data-copy="verdict">New this week</span>} title={<span data-copy="verdict">{side.anyNew ? NOTHING_ELSE_NEW : NOTHING_NEW}</span>} />
       {pick ? (
         <>
           <div className="flex flex-col gap-2.5 border-t border-track pt-3">
@@ -222,7 +221,7 @@ function NothingNew({ side, data, index, span }: { side: SideCard; data: MarketD
             {e ? <p className="m-0 text-[13px] leading-[1.5] text-muted-foreground">First heard the week of {e.week}</p> : null}
           </div>
           {a?.groups ? <GroupsLine groups={a.groups} /> : null}
-          <div className="mt-auto"><Link href={pick.href} className={OLINK}>Open →</Link></div>
+          <div className="mt-auto"><GoLink href={pick.href}>Open the conversation</GoLink></div>
         </>
       ) : null}
     </article>
@@ -237,7 +236,7 @@ export const ALSO_TALKED = 'Also talked about'
 function NoOther({ index, span }: { index: number; span: string }) {
   return (
     <article id={`top-${index}`} data-top-card="biggest-none" className={cn(CARD, span, 'scroll-mt-6')}>
-      <CardHead icon={BarChart3} eyebrow="Three weeks" title="No other conversation this week" />
+      <CardHead eyebrow="Three weeks" title="No other conversation this week" />
       <p className="m-0 text-[13.5px] leading-[1.5] text-muted-foreground">Nothing else reached three of the category’s videos.</p>
     </article>
   )
@@ -260,7 +259,7 @@ function Side({ side, data, index, span }: { side: SideCard; data: MarketData; i
     const rest = side.convs.slice(1)
     return (
       <article id={`top-${index}`} className={cn(CARD, span, 'scroll-mt-6')}>
-        <CardHead icon={Sparkles} eyebrow={<span data-copy="verdict">New this week</span>} title={<span data-copy="subject" data-slot="pass_b_theme">{conv.label}</span>} />
+        <CardHead eyebrow={<span data-copy="verdict">New this week</span>} title={<span data-copy="subject" data-slot="pass_b_theme">{conv.label}</span>} />
         <div className="flex flex-wrap items-baseline gap-2"><Fig n={conv.week} className={MID} /><WeekLines conv={conv} data={data} /></div>
         {rest.length > 0 ? (
           <div className="flex flex-col gap-1 border-t border-track pt-3 text-[13px] leading-[1.5]">
@@ -270,23 +269,23 @@ function Side({ side, data, index, span }: { side: SideCard; data: MarketData; i
               // line (a narrow card, a phone) rather than run past the card (T9).
               <Link key={c.id} href={side.hrefs[i + 1]} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-foreground no-underline hover:underline underline-offset-[3px]">
                 <span data-copy="subject" data-slot="pass_b_theme">{c.label}</span>
-                <span className="font-mono text-[12px] text-muted-foreground">
-                  <Fig n={c.week} className="text-[12.5px] text-secondary-foreground" /> this week
-                  {c.month != null && data.month.category != null ? <> · <MonthLine k={c.month} data={data} className="" /></> : null}
+                <span className="text-[13px] tabular-nums text-muted-foreground">
+                  <Fig n={c.week} className="text-secondary-foreground" /> this week
+                  {c.month != null && data.month.category != null ? <>, <MonthLine k={c.month} data={data} className="" /></> : null}
                 </span>
               </Link>
             ))}
           </div>
         ) : null}
         <GroupsLine groups={side.groups} />
-        <div className="mt-auto"><Link href={href} className={OLINK}>Open →</Link></div>
+        <div className="mt-auto"><GoLink href={href}>Open the conversation</GoLink></div>
       </article>
     )
   }
   const week = side.kind === 'biggest'
   return (
     <article id={`top-${index}`} className={cn(CARD, span, 'scroll-mt-6')}>
-      <CardHead icon={week ? BarChart3 : CalendarRange} eyebrow={week ? 'Three weeks' : 'Month by month'} title={<span data-copy="subject" data-slot="pass_b_theme">{conv.label}</span>} />
+      <CardHead eyebrow={week ? 'Three weeks' : 'Month by month'} title={<span data-copy="subject" data-slot="pass_b_theme">{conv.label}</span>} />
       <div className="flex flex-wrap items-baseline gap-2">
         <Fig n={week ? conv.week : conv.month} className={MID} />
         {week
@@ -298,7 +297,7 @@ function Side({ side, data, index, span }: { side: SideCard; data: MarketData; i
         : conv.months.length > 1 ? <MiniBars bars={monthBars(conv.months).map(({ sub: _sub, ...b }) => b)} className="max-w-[300px]" label={`Category videos a month about ${conv.label}`} /> : null}
       <GroupsLine groups={side.groups} />
       {conv.who.length > 0 && data.brands === 'counted' ? <div className="flex flex-wrap items-center gap-1.5 text-[12.5px] text-muted-foreground"><span>About</span><About parts={conv.who} brand={data.brand} noun={data.noun} /></div> : null}
-      <div className="mt-auto"><Link href={href} className={OLINK}>Open →</Link></div>
+      <div className="mt-auto"><GoLink href={href}>Open the conversation</GoLink></div>
     </article>
   )
 }
@@ -318,7 +317,7 @@ function MonthsCard({ months, data }: { months: readonly MonthCount[]; data: Mar
   const split = months.some((m) => m.k != null && category.get(m.month) != null && category.get(m.month) !== m.k)
   return (
     <article className={cn(CARD, 'col-span-12')}>
-      <CardHead icon={CalendarRange} title="Your market, month by month" sub={<>The market’s videos each month, by the month people commented. {data.month.soFar ? <>{longMonth(data.month.month)} is still filling.</> : null}</>} />
+      <CardHead title="Your market, month by month" sub={<>The market’s videos each month, by the month people commented. {data.month.soFar ? <>{longMonth(data.month.month)} is still filling.</> : null}</>} />
       <MiniBars bars={months.map((m) => ({ label: m.label, value: m.k ?? 0, filling: m.filling }))} size="lg" className="max-w-[760px]" label="The market's videos each month" />
       <p data-months-note="" className="m-0 max-w-[760px] text-[12.5px] leading-[1.5] text-muted-foreground">{MONTHS_READ_NOTE}{split ? <> {MONTHS_SPLIT_NOTE}</> : null}</p>
     </article>

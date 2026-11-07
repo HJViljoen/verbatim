@@ -1,11 +1,10 @@
-import { Layers } from 'lucide-react'
 import { CARD, CardHead } from '@/components/v2'
 import { fmtInt, longMonth, shortDate } from '@/lib/format'
 import { MARKET_LONG_RUN_ANCHOR } from '@/lib/nav'
 import type { MarketData, MarketLongRun } from '@/lib/pages/v2/market'
 import { monthsPhrase } from '@/lib/written/month'
 import { cn } from '@/lib/utils'
-import { About } from './parts'
+import { BrandsNamed } from './parts'
 
 // THE MONTH'S LONG-RUN READ, ON MARKET › THIS MONTH (Heinrich, 13 Oct: below
 // the month's data, never at the top, never on This week or Over time). The
@@ -20,7 +19,7 @@ import { About } from './parts'
 // head, the lead, then each idea as a row: its headline and sentences on the
 // left (the writer's words as stored, `week_read` prose), on the right the
 // months it was heard in and its videos (code's counts), and who those videos
-// are about where the brands are counted (`About`, the page's own chips). It
+// are about where the brands are counted (`BrandsNamed`, the page's comma list). It
 // is the last thing on the page, so it is read after the month's figures
 // (level 2 by position), and it holds no comment's words: the long-run read
 // stores none.
@@ -64,7 +63,7 @@ export function LongRunSection({ read, data }: { read: MarketLongRun; data: Pick
       data-long-run-month={read.month.slice(0, 7)}
       className={cn(CARD, 'scroll-mt-6')}
     >
-      <CardHead icon={Layers} id="long-run-title" title={read.title} sub={longRunSub(read)} />
+      <CardHead id="long-run-title" title={read.title} sub={longRunSub(read)} />
       {read.inShort ? (
         <p data-copy="stored" data-slot={SLOT} className="m-0 max-w-[920px] text-[17px] leading-[1.55] font-medium text-foreground max-sm:text-[16px]">
           {read.inShort}
@@ -86,14 +85,14 @@ export function LongRunSection({ read, data }: { read: MarketLongRun; data: Pick
             </div>
             <div className="flex min-w-0 flex-col gap-2 md:col-span-2 md:pt-0.5">
               <p className="m-0 text-[13px] leading-[1.45] text-muted-foreground">
-                {idea.heard.length > 0 ? <>Heard in {monthsPhrase(idea.heard)} · </> : null}
-                <span data-copy="figure" className="font-mono text-foreground">{fmtInt(idea.videos)}</span> {idea.videos === 1 ? 'video' : 'videos'}
+                {idea.heard.length > 0 ? <>Heard in {monthsPhrase(idea.heard)}, </> : null}
+                <span data-copy="figure" className="tabular-nums text-foreground">{fmtInt(idea.videos)}</span> {idea.videos === 1 ? 'video' : 'videos'}
               </p>
               {/* Who the videos are about, only where the brands are counted
                   (the page's one rule: no split on a tenant whose brand rows
                   are not written yet). */}
               {data.brands === 'counted' && idea.who.length > 0 ? (
-                <div><About parts={idea.who} brand={data.brand} noun={data.noun} /></div>
+                <div className="text-[14px]"><BrandsNamed parts={idea.who} brand={data.brand} noun={data.noun} /></div>
               ) : null}
             </div>
           </li>

@@ -78,6 +78,36 @@ export function About({ parts, brand, noun, className }: { parts: readonly WhoPa
   )
 }
 
+/**
+ * The brands a set of videos names, as the boards' tables print them
+ * ("Ottobock (1), others (10)"; "None" where no brand is named): the
+ * client's name, the rivals' (each `BrandChip plain`, so the colour-role
+ * check still finds them), then the rest of the market in words, each with
+ * its videos. The comma list of the audit design (7 Nov), in place of the
+ * chips.
+ */
+export function BrandsNamed({ parts, brand, noun }: { parts: readonly WhoPart[]; brand: string; noun: string | null }) {
+  const named = parts.filter((p) => p.about !== 'market')
+  if (named.length === 0) return <span data-brands-named="" className="text-muted-foreground">None</span>
+  const words = marketLabelsOf(noun)
+  const ordered = [...parts].sort((a, b) => rank(a) - rank(b) || b.videos - a.videos)
+  return (
+    <span data-brands-named="">
+      {ordered.map((p, i) => (
+        <Fragment key={p.about}>
+          {i > 0 ? ', ' : null}
+          {p.about === 'client'
+            ? <BrandChip who="you" plain>{brand}</BrandChip>
+            : p.about === 'market'
+              ? <span className="text-muted-foreground">{words.short}</span>
+              : <BrandChip who="rival" plain>{p.about.slice('rival:'.length)}</BrandChip>}
+          {' ('}<Fig n={p.videos} className="tabular-nums" />)
+        </Fragment>
+      ))}
+    </span>
+  )
+}
+
 /** Who the videos are about where brands are not counted (or not read): the
  *  slot keeps its place with the reason in a few words, said once per block
  *  (the parity pass, 13 Oct; Voices' longer words in a title). */

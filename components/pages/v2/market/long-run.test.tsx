@@ -43,7 +43,10 @@ describe('the month\'s long-run read, as a section', () => {
 
   it('states each idea\'s months and videos as code\'s figures, and who they are about only where the brands are counted', () => {
     const text = renderText(section())
-    expect(text).toContain('Heard in September and October · 64 videos')
+    // The audit design: commas, never " · "; who they are about as the
+    // tables' comma list.
+    expect(text).toContain('Heard in September and October, 64 videos')
+    expect(text.replace(/\s+([,)])/g, '$1').replace(/\(\s+/g, '(')).toContain('Össur (6), Ottobock (9), others (49)')
     expect(copyNodes(render(section())).filter((n) => n.kind === 'figure').map((n) => n.text)).toEqual(expect.arrayContaining(['64', '52', '41']))
     expect(render(section())).toContain('data-who-chip')
     expect(text).toContain('Ottobock')
@@ -136,7 +139,7 @@ describe('a month still filling has no read of its own: the newest earlier month
     expect(text).toMatch(/^September’s long-run read What holds across August and September: our read, written once September had closed\. October has no read of its own yet\./)
     expect(text).not.toMatch(/What holds across September and October|October’s long-run read/)
     // Its ideas name its own months.
-    expect(text).toContain('Heard in August and September · 64 videos')
+    expect(text).toContain('Heard in August and September, 64 videos')
     const html = render(<MarketPage data={EARLIER} />)
     expect(html).toContain('data-long-run-month="2026-09"')
     const at = html.indexOf(`id="${LONG_RUN_ID}"`)

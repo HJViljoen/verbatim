@@ -1,42 +1,43 @@
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
-import { Bone, BoneLines } from '@/components/shell/skeleton'
+import { Bone, BoneLines, SkeletonStatStrip } from '@/components/shell/skeleton'
 import { CARD } from '@/components/v2'
 import { cn } from '@/lib/utils'
 import { MARKET_TITLE } from './index'
 
-// Market's loading skeleton (analysis first, 17 Oct): the top page's own
-// shape, so the blocks fill in place. The bar, the week card, the subject
-// cards two to a row, "Also this week", the three side cards and the table.
-// The route's loading.tsx renders this.
+// Market's loading skeleton, in the audit design's shape (7 Nov): the top
+// page's own shape, so the blocks fill in place: the title, the figures
+// row's bones, the week card, the subject cards two to a row, the three side
+// cards and the table. No tile bone, no "Also this week". The route's
+// loading.tsx renders this.
 
 export function MarketSkeleton() {
   return (
     <PageFrame>
       <div role="status" aria-busy="true" aria-label="Loading Market" className="flex flex-col gap-[22px]">
-        <PageBar title={MARKET_TITLE} meta={<Bone className="h-3 w-64" />} />
-        <div className={cn(CARD, 'gap-[18px]')}>
-          <Bone className="h-4 w-40" />
-          <Bone className="h-8 w-4/5" />
-          <div className="grid grid-cols-1 gap-x-9 gap-y-2.5 border-t border-track pt-4 min-[1180px]:grid-cols-3">{[0, 1, 2].map((i) => <BoneLines key={i} lines={3} />)}</div>
+        <div className="flex shrink-0 flex-col">
+          <PageBar title={MARKET_TITLE} />
+          <div className="mt-5"><SkeletonStatStrip cells={4} /></div>
         </div>
-        <Bone className="h-5 w-72" />
-        <div className="grid grid-cols-12 gap-5">
+        <div className={cn(CARD, 'gap-[18px] sm:p-[30px]')}>
+          <Bone className="h-8 w-4/5" />
+          <Bone className="h-4 w-32" />
+          <div className="grid grid-cols-1 gap-x-8 gap-y-3 min-[1180px]:grid-cols-3">{[0, 1, 2].map((i) => <BoneLines key={i} lines={3} />)}</div>
+        </div>
+        <Bone className="mt-[26px] h-5 w-72" />
+        <div className="grid grid-cols-1 gap-5 min-[1180px]:grid-cols-2">
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className={cn(CARD, 'col-span-12 gap-3 min-[1180px]:col-span-6')}>
-              <Bone className="h-4 w-32" />
-              <Bone className="h-6 w-3/4" />
+            <div key={i} className={cn(CARD, 'gap-2.5')}>
+              <Bone className="h-5 w-48" />
+              <Bone className="h-5 w-3/4" />
               <BoneLines lines={4} />
             </div>
           ))}
         </div>
-        <Bone className="h-5 w-48" />
-        <div className="grid grid-cols-12 gap-5">
-          {[0, 1, 2].map((i) => <div key={i} className={cn(CARD, 'col-span-12 min-[1180px]:col-span-4')}><Bone className="h-4 w-36" /><Bone className="h-5 w-3/4" /></div>)}
-        </div>
+        <Bone className="mt-[26px] h-5 w-56" />
         <div className="grid grid-cols-12 gap-5">
           {[0, 1, 2].map((i) => <div key={i} className={cn(CARD, 'col-span-12 min-[1180px]:col-span-4')}><Bone className="h-5 w-3/4" /><BoneLines lines={5} /></div>)}
         </div>
-        <div className={CARD}><Bone className="h-5 w-64" /><BoneLines lines={6} /></div>
+        <div className={cn(CARD, 'mt-[26px]')}><Bone className="h-5 w-64" /><BoneLines lines={6} /></div>
       </div>
     </PageFrame>
   )

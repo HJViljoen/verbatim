@@ -1678,7 +1678,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
     table's rows; its words, `MOST_TALKED`, `ALSO_TALKED`, `NOTHING_NEW`,
     `NOTHING_ELSE_NEW`, stay exported for the weekly email's test); THE NUMBERS BEHIND THE WEEK, the three side cards (what people do in
     the comments, videos week by week, where it is said) in a row above
-    the full-width table, never a rail beside it (ruling 2), the table a
+    the full-width table, never a rail beside it (ruling 2; since the audit
+    design the side cards' bases are the figures row's, where it is said a
+    table of the week beside the month, "172 (22%)", and the table's line
+    says where nothing new surfaced this week), the table a
     two-line list on a phone (name and videos, then subject and the month
     beside the week) with no About chips (ruling 4). *This month and Over
     time are drawn by no board*: the subject cards lead under the bar, no
@@ -1839,9 +1842,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
     the kit's card and head, the lead, then one row an idea (words left,
     counts right). THE BOARDS' SHAPE IN EVERY DATA STATE (parity pass):
     every subject card keeps its frame and its foot, the week card keeps
-    its frame thin or failed, the side cards their row (the
-    weekly chart's eight slots, `weeksAxis`, empty where a week is not
-    drawn), the table its Subject and About columns. ONE PLACEMENT RULE, ON EVERY SURFACE THAT NAMES A
+    its frame thin or failed, the side cards their row (since the audit
+    design the weekly chart's place is the dashed box, "Not drawn yet",
+    where no week is drawn, decision 4), the table its Subject and Brands
+    named columns ("Not assigned", "None"; "Ottobock (1), others (10)",
+    `BrandsNamed`). ONE PLACEMENT RULE, ON EVERY SURFACE THAT NAMES A
     CONVERSATION'S SUBJECT (14 Oct): `placeSubject` over
     `loadSubjectPlacement` (`lib/pages/subject-place.ts`), on the
     conversation's member insights in the run the page reads, in three

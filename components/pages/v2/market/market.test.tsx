@@ -6,9 +6,10 @@ import { OSSUR_SUBJECT_READS } from '@/lib/pages/v2/market-reads-fixture'
 import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { MarketPage, MARKET_FIRST_RUN } from './index'
 import { ALSO_TALKED, MOST_TALKED, NOTHING_ELSE_NEW, NOTHING_NEW, SubjectCardsView, WeekCardView, WEEK_CARD_TITLE, WEEK_THIN, WEEK_UNREAD } from './analysis'
-import { KindsCard, KindsFrame, NumbersRow, PlatformsCard, PlatformsFrame, WeeksCard, weeksLine, WEEKS_UNREAD } from './rail'
+import { KindsCard, KindsFrame, NumbersRow, PlatformsCard, PlatformsFrame, WeeksCard, weeksLine, WEEKS_NOT_DRAWN, WEEKS_NOT_DRAWN_TITLE, WEEKS_UNREAD } from './rail'
+import { About } from './parts'
 import { WEEKS_FAILED } from '@/lib/pages/home'
-import { ConversationTable } from './table'
+import { ConversationTable, TABLE_NOTHING_NEW } from './table'
 import { MONTHS_READ_NOTE, MONTHS_SPLIT_NOTE, TopRowView } from './top'
 import { MarketSkeleton } from './skeleton'
 
@@ -29,6 +30,10 @@ const STATES = marketFixture({ subjects: 'states' })
 
 /** The board words decision 1 retired. */
 const RETIRED = /Rising|\busual\b|3×|▲ up\b|busy week|normal range|Against usual/
+
+/** The words as a reader sees them: no space the markup's tags leave
+ *  before a comma, a stop or a bracket, or after an opening bracket. */
+const tight = (t: string): string => t.replace(/\s+([,.)])/g, '$1').replace(/\(\s+/g, '(')
 
 /** The subject cards' section of a page's markup. */
 const subjectsOf = (html: string): string => html.slice(html.indexOf('id="subjects"'), html.indexOf('</section>', html.indexOf('id="subjects"')))
@@ -254,27 +259,33 @@ describe('the numbers behind the week', () => {
     assertCopyContract(<NumbersRow data={WEEK} />)
   })
 
-  it('keeps its cards in the thin state: the kinds\' frame, the weekly chart\'s eight empty slots', () => {
+  it('keeps its cards in the thin state: the kinds\' frame, the weekly chart\'s dashed box (decision 4)', () => {
     const thin = marketThinFixture()
     const html = render(<NumbersRow data={thin} />)
-    expect(html.slice(html.indexOf('id="weeks"'), html.indexOf('id="where"')).match(/data-slot-empty=""/g)).toHaveLength(8)
+    const weeks = html.slice(html.indexOf('id="weeks"'), html.indexOf('id="where"'))
+    expect(weeks).not.toContain('data-slot-empty')
+    expect(weeks).toContain('data-empty-box')
+    expect(renderText(<NumbersRow data={thin} />)).toContain(`Videos, week by week By the week people commented ${WEEKS_NOT_DRAWN_TITLE} ${WEEKS_NOT_DRAWN}`)
   })
   it('this week, each platform\'s week sits beside its month', () => {
     const block = { ...WEEK.rail.platforms!, month: { counts: { tiktok: 170, instagram: 98, youtube: 50 }, n: 318, text: 'in October so far' } }
-    expect(renderText(<PlatformsCard block={block} data={WEEK} />)).toContain('This week October so far TikTok 128 170 of 318 Instagram 76 98 of 318 YouTube 37 50 of 318')
+    // The board's table: this week beside the month, the month's count with
+    // its share of the month's videos.
+    expect(tight(renderText(<PlatformsCard block={block} data={WEEK} />))).toContain('Platform This week October so far TikTok 128 170 (53%) Instagram 76 98 (31%) YouTube 37 50 (16%)')
     assertCopyContract(<PlatformsCard block={block} data={WEEK} />)
   })
 
   it('kinds: the month so far against last month, a badge only where it moved', () => {
     const block = WEEK.rail.kinds!
-    expect(renderText(<KindsCard block={block} />)).toMatch(/^What people do in the comments Share of October so far’s 318 videos where at least one comment did it Asked a question 45%/)
+    // The base is the figures row's (decision 2): no count in the sub.
+    expect(renderText(<KindsCard block={block} />)).toMatch(/^What people do in the comments Share of October so far’s videos where at least one comment did it Asked a question 45%/)
     expect(renderText(<KindsCard block={block} />)).toMatch(/October so far September$/)
     assertCopyContract(<KindsCard block={block} />)
   })
 
-  it('weeks: the Dashboard\'s chart, or "Insufficient data" for too few clean weeks, or the failure where the read failed', () => {
+  it('weeks: the Dashboard\'s chart, or the dashed box for too few clean weeks, or the failure where the read failed', () => {
     expect(renderText(<WeeksCard weeks={FIXTURE_WEEKS} />)).toContain('198 205 214 188 230 226 219 241')
-    expect(renderText(<WeeksCard weeks={null} />)).toContain('Insufficient data')
+    expect(renderText(<WeeksCard weeks={null} />)).toContain(`${WEEKS_NOT_DRAWN_TITLE} ${WEEKS_NOT_DRAWN}`)
     expect(renderText(<WeeksCard weeks={null} />)).not.toContain(WEEKS_UNREAD)
     // Phase 4 fix round: a read that threw is a failure, never an absence.
     expect(renderText(<WeeksCard weeks={WEEKS_FAILED} />)).toContain(WEEKS_UNREAD)
@@ -284,8 +295,8 @@ describe('the numbers behind the week', () => {
   })
 
   it('platforms: the week\'s, or the month\'s', () => {
-    expect(renderText(<PlatformsCard block={{ ...WEEK.rail.platforms!, month: null }} data={WEEK} />)).toBe('Where it’s said This week’s 241 videos, by platform TikTok 128 Instagram 76 YouTube 37')
-    expect(renderText(<PlatformsCard block={MONTH.rail.platforms!} data={MONTH} />)).toContain('The 318 videos in October so far, by platform')
+    expect(tight(renderText(<PlatformsCard block={{ ...WEEK.rail.platforms!, month: null }} data={WEEK} />))).toBe('Where it’s said This week’s videos, by platform Platform Videos TikTok 128 (53%) Instagram 76 (32%) YouTube 37 (15%)')
+    expect(renderText(<PlatformsCard block={MONTH.rail.platforms!} data={MONTH} />)).toContain('The videos in October so far, by platform')
     assertCopyContract(<PlatformsCard block={WEEK.rail.platforms!} data={WEEK} />)
   })
 
@@ -300,17 +311,18 @@ describe('the numbers behind the week', () => {
     expect(weeksLine(null, true)).toBe(WEEKS_UNREAD)
   })
 
-  it('weeks: with no week to draw, the eight weeks\' axis with empty slots and one line', () => {
+  it('weeks: with no week to draw, the dashed box in the chart\'s place, never empty slots (decision 4)', () => {
     const axis = FIXTURE_WEEKS.columns.map((c) => c.label)
     for (const weeks of [null, WEEKS_FAILED] as const) {
       const html = render(<WeeksCard weeks={weeks} axis={axis} />)
-      expect(html.match(/data-slot-empty=""/g)).toHaveLength(8)
-      expect(renderText(<WeeksCard weeks={weeks} axis={axis} />)).toMatch(/17 Aug 7 Sep 5 Oct/)
+      expect(html).not.toContain('data-slot-empty')
+      expect(html).toMatch(/data-empty-box="" class="[^"]*min-h-\[180px\]/)
       assertCopyContract(<WeeksCard weeks={weeks} axis={axis} />)
     }
-    // A drawn chart with a week our rules leave out: its slot, and why.
+    // A drawn chart with a week our rules leave out: its column draws
+    // nothing (no empty slot), and the line says why.
     const gap = { ...FIXTURE_WEEKS, columns: FIXTURE_WEEKS.columns.map((c, i) => (i < 2 ? { ...c, videos: null, comments: null } : c)) }
-    expect(render(<WeeksCard weeks={gap} />).match(/data-slot-empty=""/g)).toHaveLength(2)
+    expect(render(<WeeksCard weeks={gap} />)).not.toContain('data-slot-empty')
     expect(renderText(<WeeksCard weeks={gap} />)).toContain('We only draw weeks we counted the same way, so the bars compare fairly; the newest are still filling.')
   })
 
@@ -380,12 +392,19 @@ describe('TopRowView (the month\'s numbers)', () => {
 
 describe('ConversationTable', () => {
   it('this week: the week and the month, who it is about, subject filters, show all', () => {
-    const text = renderText(<ConversationTable table={WEEK.table!} data={WEEK} />)
-    expect(text).toMatch(/^Every conversation this week 17 conversations, biggest first, each counted in the category’s videos \( 226 this week\) All 17 Fit & comfort 4/)
+    const text = tight(renderText(<ConversationTable table={WEEK.table!} data={WEEK} />))
+    // The audit design: the base in words (the figures row has 226), the
+    // filters as chips with their counts in brackets.
+    expect(text).toMatch(/^Every conversation this week 17 conversations, biggest first, counted in the category’s videos All \(17\) Fit & comfort \(4\)/)
     // The table from 640; the phone's two-line list beside it (each shown at
-    // its width only).
-    expect(text).toContain('Conversation Subject About This week October so far How long a liner lasts Fit & comfort Össur 4 · others 19 23 35')
-    expect(text).toContain('Insurance refusals for powered knees Cost & access Össur 3 · Ottobock 5 · others 11 19 31')
+    // its width only). "Brands named" as a comma list (BrandChip plain).
+    expect(text).toContain('Conversation Subject Brands named This week October so far How long a liner lasts Fit & comfort Össur (4), others (19) 23 35')
+    expect(text).toContain('Insurance refusals for powered knees Cost & access Össur (3), Ottobock (5), others (11) 19 31')
+    expect(render(<ConversationTable table={WEEK.table!} data={WEEK} />)).not.toMatch(/uppercase|font-mono|→/)
+    // Nothing new: the table's line (from the removed "Also this week").
+    expect(renderText(<ConversationTable table={WEEK.table!} data={WEEK} />)).not.toContain(TABLE_NOTHING_NEW)
+    const thin = marketThinFixture()
+    expect(renderText(<ConversationTable table={thin.table!} data={thin} />)).toContain(TABLE_NOTHING_NEW)
     expect(text).toContain('How long a liner lasts 23 Fit & comfort 35 in October so far')
     expect(text).toMatch(/Show all 17$/)
     expect(render(<ConversationTable table={WEEK.table!} data={WEEK} />)).toContain('href="/dashboard/market?all=1#conversations"')
@@ -396,7 +415,12 @@ describe('ConversationTable', () => {
   // row drops the spaces between its items, so the row carries the boards'
   // 6px itself, on the table, a subject's page and a conversation's alike.
   it('About keeps the boards\' gap between its chips and before "others"', () => {
-    const html = render(<ConversationTable table={WEEK.table!} data={WEEK} />)
+    // The table names its brands as a comma list now; About (its chips) is
+    // still drawn by the pages that borrow it, and keeps its gap.
+    const table = render(<ConversationTable table={WEEK.table!} data={WEEK} />)
+    expect(table).not.toContain('data-about=""')
+    expect(table).toContain('data-brands-named=""')
+    const html = render(<About parts={WEEK.table!.rows[0].conv.who} brand={WEEK.brand} noun={WEEK.noun} />)
     const abouts = html.match(/<span data-about="" class="[^"]*"/g) ?? []
     expect(abouts.length).toBeGreaterThan(0)
     for (const a of abouts) expect(a).toMatch(/\binline-flex\b[^"]*\bgap-x-1\.5\b/)
@@ -420,7 +444,7 @@ describe('ConversationTable', () => {
     expect(html).toMatch(/<div class="max-sm:hidden"><table/)
     expect(html).toMatch(/<div class="flex flex-col sm:hidden"><div data-phone-row=""/)
     const phone = html.slice(html.indexOf('data-phone-row'))
-    expect(phone).toMatch(/>123<\/span><\/span><span class="col-span-2 flex[^"]*"><span class="min-w-0">[^<]*<\/span><span class="shrink-0 whitespace-nowrap"><span data-copy="figure" class="font-mono">456<\/span> in October so far/)
+    expect(phone).toMatch(/>123<\/span><\/span><span class="col-span-2 flex[^"]*"><span class="min-w-0">[^<]*<\/span><span class="shrink-0 whitespace-nowrap"><span data-copy="figure" class="tabular-nums">456<\/span> in October so far/)
     expect(phone.slice(0, phone.indexOf('</div>'))).not.toContain('Össur')
     expect(renderText(<ConversationTable table={d.table!} data={d} />)).toContain('Whether the forty litre travel backpack really fits under the seat on budget airlines across Europe')
     assertCopyContract(<ConversationTable table={d.table!} data={d} />)
@@ -452,7 +476,7 @@ describe('brands not counted yet (Össur before its back-read)', () => {
     const text = renderText(<MarketPage data={NC} />)
     expect(text).not.toContain('no brand named')
     expect(text).not.toMatch(/About Össur/)
-    expect(renderText(<ConversationTable table={NC.table!} data={NC} />)).toContain('Conversation Subject About · brands not counted yet This week October so far')
+    expect(tight(renderText(<ConversationTable table={NC.table!} data={NC} />))).toContain('Conversation Subject Brands named (brands not counted yet) This week October so far')
     assertCopyContract(<MarketPage data={NC} />)
   })
 })
@@ -480,7 +504,10 @@ describe('MarketSkeleton', () => {
   it('says it is loading, in the page\'s new shape', () => {
     const html = render(<MarketSkeleton />)
     expect(html).toMatch(/role="status"/)
-    expect(html.match(/min-\[1180px\]:col-span-6/g)).toHaveLength(4)
+    // The figures row's bones, the subject cards two to a row, no meta line.
+    expect(html).toMatch(/data-stat-strip-bones="" class="[^"]*min-\[900px\]:grid-cols-4"/)
+    expect(html.match(/min-\[1180px\]:grid-cols-2/g)).toHaveLength(1)
+    expect(html).not.toContain('data-bar-meta')
   })
 })
 

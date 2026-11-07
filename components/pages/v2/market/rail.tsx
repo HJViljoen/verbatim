@@ -1,34 +1,33 @@
-import { BarChart3, ListChecks, Smartphone } from 'lucide-react'
 import { ProportionBar } from '@/components/proportion-bar'
-import { CARD, CardHead, SpikeBars, TickBar, TickBarRow, TickKey } from '@/components/v2'
+import { CARD, CardHead, EmptyBox, SpikeBars, TBL, TD, TD_NUM, TH, TickBarRow, TickKey } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
 import { INSUFFICIENT, weeksFailed, type WeeksRead } from '@/lib/pages/home'
 import { MARKET_KINDS, type KindsBlock, type MarketData, type PlatformsBlock } from '@/lib/pages/v2/market'
 import { talkKindLabel } from '@/lib/pages/overview-market/kinds'
 import { cn } from '@/lib/utils'
 
-// THE NUMBERS' SIDE CARDS (depth v2, T3; E2-Market's right-hand column, a row
-// of three since F2-Market, 17 Oct): what people do in the comments (the month
-// so far against last month, the tick at last month), the market's videos
-// week by week (the Dashboard's own chart and rules), where it is said (the
-// period's videos by platform). What is worth watching moved to the week's
-// page with the rest of the read. The boards'
-// "a usual week" tick and "a busy week, but within the normal range" are not
-// drawn: no rule bands a week against a usual one (decision 1).
+// THE NUMBERS' SIDE CARDS, drawn to the audit design's board (Market.dc.html,
+// "The numbers behind the week", 7 Nov): what people do in the comments (the
+// month so far, each row's bar its percentage, decision 5, the tick at last
+// month where there is one), the market's videos week by week (the
+// Dashboard's own chart and rules, or the dashed box where nothing can be
+// drawn, decision 4), where it is said (the period's videos by platform, a
+// table of the week beside the month). Their bases are the figures row's
+// (decision 2). No board draws "a usual week" (decision 1).
 
 /** The platforms' greys, largest first (the boards': ink, the rival grey,
  *  the pale grey), then the track. */
 const PLATFORM_TONES = ['bg-foreground', 'bg-comp', 'bg-neutral-seg', 'bg-track'] as const
 
+/** A side card's sub: what its rows are of, in words (the base is the
+ *  figures row's). */
+const kindsSub = (monthText: string) => <>Share of {monthText}’s videos where at least one comment did it</>
+
 export function KindsCard({ block }: { block: KindsBlock }) {
   return (
     <article id="kinds" className={cn(CARD, 'scroll-mt-6')}>
-      <CardHead
-        icon={ListChecks}
-        title="What people do in the comments"
-        sub={<>Share of {block.monthText}’s <span data-copy="figure">{fmtInt(block.n)}</span> videos where at least one comment did it</>}
-      />
-      <div className="flex flex-col gap-[11px]">
+      <CardHead title="What people do in the comments" sub={kindsSub(block.monthText)} />
+      <div className="flex flex-col gap-3">
         {block.rows.map((r) => (
           <TickBarRow
             key={r.kind}
@@ -47,34 +46,26 @@ export function KindsCard({ block }: { block: KindsBlock }) {
 }
 
 /** What people do in the comments with no kind read for the month: the six
- *  rows keep their places on empty tracks, and one line says why (the parity
- *  pass, 13 Oct). */
+ *  kinds keep their names, with no empty bar, and the dashed box says why
+ *  (decision 4). */
 export function KindsFrame({ noun, monthText }: { noun: string | null; monthText: string }) {
   return (
     <article id="kinds" data-empty="" className={cn(CARD, 'scroll-mt-6')}>
-      <CardHead icon={ListChecks} title="What people do in the comments" sub={<>Share of {monthText}’s videos where at least one comment did it</>} />
-      <div className="flex flex-col gap-[11px]">
-        {MARKET_KINDS.map((k) => (
-          <div key={k} className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_44px] items-center gap-2.5 text-[13.5px] leading-[1.35] text-muted-foreground">
-            <span className="min-w-0">{talkKindLabel(k, noun)}</span>
-            <TickBar pct={0} label={`${talkKindLabel(k, noun)}: not read`} />
-            <span />
-          </div>
-        ))}
-      </div>
-      <p className="m-0 text-[13px] text-muted-foreground">Not read for {monthText} yet.</p>
+      <CardHead title="What people do in the comments" sub={kindsSub(monthText)} />
+      <ul className="m-0 flex list-none flex-col gap-2 p-0 text-[15px] leading-[1.4] text-secondary-foreground">
+        {MARKET_KINDS.map((k) => <li key={k}>{talkKindLabel(k, noun)}</li>)}
+      </ul>
+      <EmptyBox>Not read for {monthText} yet.</EmptyBox>
     </article>
   )
 }
 
-/** Where it's said with no video counted by platform: the bar's empty track
- *  and one line. */
+/** Where it's said with no video counted by platform: the dashed box. */
 export function PlatformsFrame({ data }: { data: MarketData }) {
   return (
     <article id="where" data-empty="" className={cn(CARD, 'scroll-mt-6')}>
-      <CardHead icon={Smartphone} title="Where it’s said" sub={data.period === 'week' ? 'This week’s videos, by platform' : <>The videos in {data.month.text}, by platform</>} />
-      <div aria-hidden className="h-3 rounded-[6px] bg-track" />
-      <p className="m-0 text-[13px] text-muted-foreground">No video counted by platform yet.</p>
+      <CardHead title="Where it’s said" sub={data.period === 'week' ? 'This week’s videos, by platform' : <>The videos in {data.month.text}, by platform</>} />
+      <EmptyBox>No video counted by platform yet.</EmptyBox>
     </article>
   )
 }
@@ -106,67 +97,85 @@ export function weeksLine(columns: readonly { videos: number | null; settled: bo
   return null
 }
 
-export function WeeksCard({ weeks: read, axis = [] }: { weeks: WeeksRead; axis?: readonly string[] }) {
+/** The board's dashed box where no week can be drawn (decision 4). */
+export const WEEKS_NOT_DRAWN_TITLE = 'Not drawn yet'
+export const WEEKS_NOT_DRAWN = 'Only weeks read the same way are drawn, and there aren’t enough of them yet. The chart starts on its own once there are.'
+
+export function WeeksCard({ weeks: read }: { weeks: WeeksRead; axis?: readonly string[] }) {
   const failed = weeksFailed(read)
   const weeks = failed ? null : read
   const drawn = weeks ? weeks.columns.some((c) => c.videos != null) : false
-  // THE BOARD'S CHART IN EVERY STATE (the parity pass, 13 Oct): with no week
-  // to draw (too few clean weeks, or a read that failed) the card still draws
-  // its eight weeks' axis with the slots empty, and one quiet line says why.
-  const line = weeksLine(weeks?.columns ?? null, failed)
-  const columns = weeks && drawn
-    ? weeks.columns.map((c) => ({ label: c.label, count: c.videos }))
-    : (weeks?.columns.map((c) => c.label) ?? axis).map((label) => ({ label, count: null }))
+  // With no week to draw (too few clean weeks), the board's dashed box in
+  // the chart's place; a read that failed says so in it (never the words
+  // for too few weeks). A drawn chart keeps its weeks, a week our rules
+  // leave out an empty column, and one quiet line says why.
+  const line = drawn ? weeksLine(weeks!.columns, false) : null
   return (
     <article id="weeks" className={cn(CARD, 'scroll-mt-6')}>
-      <CardHead icon={BarChart3} title="Videos, week by week" sub="Your market’s videos, by the week people commented" />
-      {columns.length > 0
-        ? <SpikeBars weeks={columns} variant="ink" counts="all" size="md" ghost label="The market's videos a week" />
-        : null}
-      {line ? <p className="m-0 text-[13px] text-muted-foreground">{line}</p> : null}
-    </article>
-  )
-}
-
-export function PlatformsCard({ block, data }: { block: PlatformsBlock; data: MarketData }) {
-  const segments = block.rows.map((r, i) => ({ label: r.label, count: r.videos, pct: Math.round(r.pct), color: PLATFORM_TONES[Math.min(i, PLATFORM_TONES.length - 1)] }))
-  return (
-    <article id="where" className={cn(CARD, 'scroll-mt-6')}>
-      <CardHead icon={Smartphone} title="Where it’s said" sub={block.basis === 'week'
-        ? <>This week’s <span data-copy="figure">{fmtInt(block.n)}</span> videos, by platform</>
-        : <>The <span data-copy="figure">{fmtInt(block.n)}</span> videos in {data.month.text}, by platform</>} />
-      <ProportionBar of="videos" segments={segments} />
-      {block.month ? (
-        // This week: each platform's week beside its month (decision 1).
-        <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-baseline gap-x-4 gap-y-1.5 text-[13px]">
-          <span />
-          <span className="text-right text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">This week</span>
-          <span className="text-right text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{block.month.text.replace(/^in /, '')}</span>
-          {block.rows.map((r, i) => (
-            <PlatformMonthRow key={r.platform} label={r.label} color={segments[i].color} week={r.videos} month={block.month!.counts[r.platform] ?? 0} n={block.month!.n} />
-          ))}
-        </div>
+      <CardHead title="Videos, week by week" sub="By the week people commented" />
+      {drawn ? (
+        <>
+          <SpikeBars weeks={weeks!.columns.map((c) => ({ label: c.label, count: c.videos }))} variant="ink" counts="all" size="md" label="The market's videos a week" />
+          {line ? <p className="m-0 text-[13.5px] text-muted-foreground">{line}</p> : null}
+        </>
       ) : (
-        <div className="flex flex-wrap justify-between gap-2.5 text-[13px]">
-          {segments.map((s) => (
-            <span key={s.label} className="inline-flex items-center gap-1.5">
-              <i aria-hidden className={cn('inline-block size-2 rounded-[2px]', s.color)} />{s.label} <span data-copy="figure" className="font-mono">{fmtInt(s.count)}</span>
-            </span>
-          ))}
-        </div>
+        <EmptyBox chart title={failed ? 'Not read' : WEEKS_NOT_DRAWN_TITLE}>{failed ? WEEKS_UNREAD : WEEKS_NOT_DRAWN}</EmptyBox>
       )}
     </article>
   )
 }
 
-/** One platform's week, then its month with the month's n (the rail's, and a
- *  subject panel's "Where" this week, with no swatch). */
+/** "172 (22%)": a count and its share of the period's videos. */
+function CountShare({ k, n }: { k: number; n: number }) {
+  return (
+    <>
+      <span data-copy="figure">{fmtInt(k)}</span>
+      {n > 0 ? <span className="text-muted-foreground"> (<span data-copy="figure">{Math.round((100 * k) / n)}%</span>)</span> : null}
+    </>
+  )
+}
+
+export function PlatformsCard({ block, data }: { block: PlatformsBlock; data: MarketData }) {
+  const segments = block.rows.map((r, i) => ({ label: r.label, count: r.videos, pct: Math.round(r.pct), color: PLATFORM_TONES[Math.min(i, PLATFORM_TONES.length - 1)] }))
+  const month = block.month
+  return (
+    <article id="where" className={cn(CARD, 'scroll-mt-6')}>
+      <CardHead title="Where it’s said" sub={block.basis === 'week' ? 'This week’s videos, by platform' : <>The videos in {data.month.text}, by platform</>} />
+      <ProportionBar of="videos" segments={segments} />
+      {/* The board's table: this week beside the month (decision 1), the
+          month's count with its share of the month's videos. */}
+      <table className={TBL}>
+        <thead>
+          <tr>
+            <th scope="col" className={TH}>Platform</th>
+            {month ? <th scope="col" className={cn(TH, TD_NUM)}>This week</th> : null}
+            <th scope="col" className={cn(TH, TD_NUM, 'pr-0')}>{month ? month.text.replace(/^in /, '').replace(/^./, (c) => c.toUpperCase()) : 'Videos'}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {block.rows.map((r) => (
+            <tr key={r.platform}>
+              <td className={cn(TD, 'py-2.5')}>{r.label}</td>
+              {month ? <td className={cn(TD, TD_NUM, 'py-2.5')}><span data-copy="figure">{fmtInt(r.videos)}</span></td> : null}
+              <td className={cn(TD, TD_NUM, 'py-2.5 pr-0 text-secondary-foreground')}>
+                {month ? <CountShare k={month.counts[r.platform] ?? 0} n={month.n} /> : <CountShare k={r.videos} n={block.n} />}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </article>
+  )
+}
+
+/** One platform's week, then its month with the month's n (a subject's
+ *  page's "Where" this week, until its own table). */
 export function PlatformMonthRow({ label, color, week, month, n }: { label: string; color?: string; week: number; month: number; n: number }) {
   return (
     <>
       <span className="inline-flex items-center gap-1.5">{color ? <i aria-hidden className={cn('inline-block size-2 rounded-[2px]', color)} /> : null}{label}</span>
-      <span data-copy="figure" className="text-right font-mono tabular-nums">{fmtInt(week)}</span>
-      <span data-copy="level" className="text-right font-mono tabular-nums text-muted-foreground">{fmtInt(month)} of {fmtInt(n)}</span>
+      <span data-copy="figure" className="text-right tabular-nums">{fmtInt(week)}</span>
+      <span data-copy="level" className="text-right tabular-nums text-muted-foreground">{fmtInt(month)} of {fmtInt(n)}</span>
     </>
   )
 }
