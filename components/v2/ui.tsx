@@ -18,8 +18,11 @@ export interface StatItem {
   key?: string
 }
 
-/** The columns from 900px, one a cell (written out in full, MASTER rule 1). */
-const STRIP_COLS: Record<number, string> = {
+/** The figures row's grid: one column below 900px, a column a cell from 900
+ *  (written out in full, MASTER rule 1). Its bones
+ *  (`SkeletonStatStrip`, components/shell/skeleton.tsx) draw the same. */
+export const STAT_STRIP_GRID = 'm-0 grid grid-cols-1 gap-6 border-b border-border pb-5'
+export const STAT_STRIP_COLS: Record<number, string> = {
   1: 'min-[900px]:grid-cols-1',
   2: 'min-[900px]:grid-cols-2',
   3: 'min-[900px]:grid-cols-3',
@@ -42,7 +45,7 @@ export function StatStrip({ items }: { items: readonly StatItem[] }): ReactNode 
   return (
     <dl
       data-stat-strip=""
-      className={cn('m-0 grid grid-cols-1 gap-6 border-b border-border pb-5', STRIP_COLS[Math.min(items.length, 6)])}
+      className={cn(STAT_STRIP_GRID, STAT_STRIP_COLS[Math.min(items.length, 6)])}
     >
       {items.map((item, i) => (
         <div key={item.key ?? (typeof item.term === 'string' ? item.term : i)} className="min-w-0">

@@ -1406,7 +1406,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
     `lib/pages/v2/products.ts`: "Praise in the comments", never "Praised
     it"), because a product's kind count is its videos with that kind
     anywhere in their comments. Every page title is the shared
-    `PageBar` (26px on 40px).
+    `PageBar` (28px on 40px since the audit design, 7 Nov; 26px before), and
+    a page's figures row is its `stats` (`StatStrip`), its line under the
+    title its `sub`; a level page passing `sub` or `stats` to `LevelBar` gets
+    the audit design's title block (no tile, no label over the h1).
   - **Legacy modules stay registered, never routed**: `OverviewPage`,
     `WeekPage` / `WEEK_BLOCKS`, the subjects module, `COMPETITIVE_BLOCKS`,
     `MARKET_BLOCKS` / `MarketSurfacePage` and the six `voice.*` blocks render

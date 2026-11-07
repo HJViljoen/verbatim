@@ -4,6 +4,7 @@ import { PageFrame, PageGrid, PageBar } from '@/components/shell/page-grid'
 import { Tile, StripCell, type TileVariant } from '@/components/shell/tile'
 import { hasHorizon, surface, type NavKey } from '@/lib/nav'
 import { HORIZONS } from '@/lib/reading/horizon'
+import { STAT_STRIP_COLS, STAT_STRIP_GRID } from '@/components/v2/ui'
 
 // Skeletons for the one-screen pages. Each route's loading.tsx composes these
 // into the SAME grid its page renders (same col/row spans, same variants), so
@@ -32,6 +33,23 @@ export function Bone({ className, tone = 'light' }: { className?: string; tone?:
         className,
       )}
     />
+  )
+}
+
+/** The figures row's bones (the audit design, 7 Nov): a term and a value a
+ *  cell, in the strip's own grid (`StatStrip`, components/v2/ui.tsx), so a
+ *  page's loading screen holds the strip's shape. Between one and six cells. */
+export function SkeletonStatStrip({ cells }: { cells: number }) {
+  const n = Math.max(1, Math.min(6, Math.round(cells)))
+  return (
+    <div aria-hidden data-stat-strip-bones="" className={cn(STAT_STRIP_GRID, STAT_STRIP_COLS[n])}>
+      {Array.from({ length: n }, (_, i) => (
+        <span key={i} className="block min-w-0">
+          <Bone className="h-3 w-20" />
+          <Bone className="mt-2 h-4 w-32 max-w-full" />
+        </span>
+      ))}
+    </div>
   )
 }
 

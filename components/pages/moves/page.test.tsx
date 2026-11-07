@@ -28,7 +28,7 @@ describe('the head', () => {
   it('draws the title and the two buttons the artboard draws', () => {
     const data = sealandPage()
     const m = render(<MovesHeader dating={data.moves.dating} />)
-    expect(m).toMatch(/<h1[^>]*text-\[26px\][^>]*>Your moves<\/h1>/)
+    expect(m).toMatch(/<h1[^>]*text-\[28px\][^>]*>Your moves<\/h1>/)
     expect(m).toMatch(/<a[^>]*href="\/dashboard\/agent"[^>]*>[\s\S]*?Check a plan<\/a>/)
     expect(m).toMatch(/<button[^>]*border-\[#E4E2DC\][^>]*>[\s\S]*?Date a move<\/button>/)
     // No month line, no "as at", no Export.

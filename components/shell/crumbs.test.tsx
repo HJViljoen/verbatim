@@ -114,6 +114,37 @@ describe('the title block', () => {
     assertCopyContract(node)
   })
 
+  it('the audit design\'s block: the h1, then the line under it, its tags and the figures row; no tile and no label', () => {
+    const node = (
+      <LevelBar
+        crumbs={subject.crumbs!}
+        level="subject"
+        sub={<>A subject in <a href="/dashboard/market">your market</a></>}
+        tags={<span data-tag="tint">Unusual this week</span>}
+        stats={[{ term: 'Week', value: '5 to 11 October' }, { term: 'This week', value: <span data-copy="figure">32 videos</span> }]}
+        controls={<span>switch</span>}
+      />
+    )
+    const html = render(node)
+    expect(html).toMatch(/^<header data-level-bar="subject" data-level-block="audit"/)
+    expect(html).not.toContain('data-level-tile')
+    expect(html).not.toContain('data-level-label')
+    expect(html).not.toContain('data-bar-meta')
+    expect(html).toMatch(/<h1 class="[^"]*text-\[28px\][^"]*font-bold[^"]*">Fit &amp; comfort<\/h1>/)
+    expect(html.match(/<h1\b/g)).toHaveLength(1)
+    const at = (s: string) => html.indexOf(s)
+    expect(at('<h1')).toBeLessThan(at('data-level-sub'))
+    expect(at('data-level-sub')).toBeLessThan(at('data-level-tags'))
+    expect(at('data-level-tags')).toBeLessThan(at('data-stat-strip'))
+    expect(html).toMatch(/<p data-level-sub="" class="[^"]*text-\[14\.5px\][^"]*text-secondary-foreground">A subject in <a href="\/dashboard\/market">your market<\/a><\/p>/)
+    // The control at the right of the h1's row.
+    expect(html).toMatch(/<\/h1>(<span class="relative shrink-0 sm:hidden">[\s\S]*?<\/span>)?<\/div><div data-level-controls="" class="shrink-0"><span>switch<\/span><\/div>/)
+    expect(renderText(node)).toBe('Market / Fit & comfort Market Fit & comfort switch A subject in your market Unusual this week Week 5 to 11 October This week 32 videos')
+    assertCopyContract(node)
+    // Another page's level needs no tile in the audit block.
+    expect(render(<LevelBar crumbs={subject.crumbs!} level="idea" sub="Post idea 1" />)).toContain('data-level-bar="idea"')
+  })
+
   it('takes a closed set of levels: Market\'s draw their own tile, another page\'s must bring one (checked by tsc)', () => {
     const crumbs = conv.crumbs!
     const tile = <span data-level-tile="idea" />
@@ -150,6 +181,11 @@ describe('the switcher', () => {
     const html = render(<Switcher menu={subjectMenu(nav, fixtureSubjectId('fit'))!} defaultOpen />)
     const inside = html.slice(html.indexOf('role="menu"'))
     expect(inside).toMatch(/^role="menu" aria-label="Your subjects"[^>]*><p aria-hidden="true"[^>]*>Your subjects<\/p>/)
+    // Its label is the kit's sentence-case LBL, never caps; the menu is radius 8
+    // on a 1px hairline (the audit design).
+    expect(inside).toMatch(/<p aria-hidden="true" class="m-0 mx-2\.5 mb-1\.5 mt-2 text-\[13px\] font-semibold leading-\[1\.3\] text-secondary-foreground">Your subjects<\/p>/)
+    expect(inside).not.toContain('uppercase')
+    expect(html).toMatch(/role="menu" aria-label="Your subjects" class="[^"]*rounded-\[8px\] border border-border bg-card/)
     // Every other child is an entry or the separator.
     const children = inside.replace(/^[^>]*>/, '').replace(/<p aria-hidden="true"[^>]*>[^<]*<\/p>/, '').match(/<(a|div) [^>]*>/g) ?? []
     expect(children.length).toBeGreaterThan(0)

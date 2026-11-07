@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { Fragment, type ReactElement, type ReactNode } from 'react'
 import { hasSiblings, type Crumb } from '@/lib/pages/crumbs'
 import { cn } from '@/lib/utils'
+import { StatStrip, type StatItem } from '@/components/v2/ui'
 import { BackLink, CrumbRow, Switcher } from './crumbs'
 import { BoxesGlyph, BoxGlyph, BubbleGlyph, CalendarGlyph, LayersGlyph } from './level-glyphs'
 
@@ -23,6 +24,15 @@ import { BoxesGlyph, BoxGlyph, BubbleGlyph, CalendarGlyph, LayersGlyph } from '.
 // above the level label and the title; the page's own chevron rides after
 // the title; the meta breaks into its lines (a week figure stays beside its
 // month on its line); the control goes under the block.
+//
+// THE AUDIT DESIGN'S TITLE BLOCK (7 Nov). A page that passes `sub` or
+// `stats` (and no `label`) gets the boards' block instead: the crumb row,
+// then the 28px h1 with the page's controls at the right of its row, then
+// `sub` (14.5px secondary, which may hold a link up), then `tags` (a row of
+// `Tag`s), then the figures row (`StatStrip`). NO tile and NO label above the
+// h1. A page that passes `label` keeps today's block, unchanged, until its
+// phase moves it over; T12.1 deletes that branch with `label`, `tile`, `meta`
+// and `LevelTile`.
 
 export type LevelKind = 'subject' | 'conversation' | 'week' | 'category' | 'product'
 
@@ -73,29 +83,76 @@ export function LevelTile({ level }: { level: LevelKind }) {
   )
 }
 
-export function LevelBar({ crumbs, level, tile, label, title, meta, controls, open }: LevelAndTile & {
+/** What every title block takes. */
+interface LevelBarCommon {
   /** The path; its last segment is the page (its menu rides after the title
    *  on a phone). */
   crumbs: readonly Crumb[]
-  /** "Subject", "Conversation in {subject}", "The week's read". */
-  label: ReactNode
   /** The page's h1: the path's last segment by default. */
   title?: ReactNode
-  /** The mono meta line as its phone lines: each line's parts joined by
-   *  " · ", the lines joined by " · " from 640 and broken on a phone. */
-  meta?: ReactNode[][] | null
   /** The period switch, or nothing (the week's read has none). */
   controls?: ReactNode
   /** Draw the page's own switcher open (the board's open state, for the
    *  render tier and the shots). */
   open?: 'current'
-  /** The level's tile, where the page is not one of Market's (whose tiles
-   *  `LevelTile` draws): additive, so Market's bar is unchanged. */
-  tile?: ReactNode
-}) {
+}
+
+/** Today's block (legacy until its page's phase): a tile, a level label over
+ *  the h1, the mono meta. */
+type LegacyBlock = LevelAndTile & {
+  /** "Subject", "Conversation in {subject}", "The week's read". */
+  label: ReactNode
+  /** The mono meta line as its phone lines: each line's parts joined by
+   *  " · ", the lines joined by " · " from 640 and broken on a phone. */
+  meta?: ReactNode[][] | null
+  sub?: undefined
+  tags?: undefined
+  stats?: undefined
+}
+
+/** The audit design's block: no tile, no label, the line under the h1, its
+ *  tags and the figures row. */
+type AuditBlock = {
+  level: LevelKind | PageLevelKind
+  tile?: undefined
+  label?: undefined
+  meta?: undefined
+  /** The line under the h1 ("A group in your market"); may hold a `GoLink`. */
+  sub?: ReactNode
+  /** A row of `Tag`s under the line (Your moves' advice: its kind and its
+   *  priority). */
+  tags?: ReactNode
+  /** The figures row (`StatStrip`). */
+  stats?: readonly StatItem[]
+}
+
+export function LevelBar(props: LevelBarCommon & (LegacyBlock | AuditBlock)) {
+  const { crumbs, level, title, controls, open } = props
   const current = crumbs[crumbs.length - 1]
   const menu = current?.menu
   const named = title ?? (current?.slot ? <span data-copy="subject" data-slot={current.slot}>{current.label}</span> : current?.label)
+  if (props.label == null || props.sub != null || props.stats != null) {
+    const { sub, tags, stats } = props as AuditBlock
+    return (
+      <header data-level-bar={level} data-level-block="audit" className="flex flex-col">
+        <CrumbRow crumbs={crumbs} open={open} />
+        <BackLink crumbs={crumbs} />
+        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-x-5 gap-y-3 max-sm:mt-1">
+          <div className="flex min-w-0 items-center gap-1">
+            <h1 className="m-0 min-w-0 text-[28px] leading-[1.2] font-bold tracking-[-0.01em] text-foreground">{named}</h1>
+            {/* On a phone the page's own chevron rides after its title;
+                from 640 it sits in the crumb row. */}
+            {hasSiblings(menu) ? <span className="relative shrink-0 sm:hidden"><Switcher menu={menu} /></span> : null}
+          </div>
+          {controls ? <div data-level-controls="" className="shrink-0">{controls}</div> : null}
+        </div>
+        {sub != null ? <p data-level-sub="" className="m-0 mt-1.5 text-[14.5px] leading-[1.5] text-secondary-foreground">{sub}</p> : null}
+        {tags != null ? <div data-level-tags="" className="mt-3 flex flex-wrap items-center gap-2">{tags}</div> : null}
+        {stats && stats.length > 0 ? <div className="mt-5"><StatStrip items={stats} /></div> : null}
+      </header>
+    )
+  }
+  const { tile, label, meta } = props as LegacyBlock & { tile?: ReactNode }
   const lines = (meta ?? []).filter((l) => l.length > 0)
   return (
     <header data-level-bar={level} className="flex flex-col">

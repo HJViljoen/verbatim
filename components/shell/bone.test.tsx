@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { render } from '@/lib/test/render'
 import { PageBar } from './page-grid'
-import { Bone } from './skeleton'
+import { Bone, SkeletonStatStrip } from './skeleton'
 import { HomeSkeleton } from '@/components/pages/v2/home/skeleton'
 
 // A bone stands where a line of text will, and PageBar's meta is a <p>. A
@@ -20,5 +20,21 @@ describe('Bone', () => {
       expect(meta).not.toBeNull()
       expect(meta![1]).not.toMatch(/<(div|section|article|p|ul|ol|h[1-6])\b/)
     }
+  })
+})
+
+// The figures row's bones (the audit design, 7 Nov): the strip's own grid, a
+// term and a value a cell, nothing a screen reader reads.
+describe('SkeletonStatStrip', () => {
+  it('draws a term and a value bone a cell, in the strip\'s grid', () => {
+    const html = render(<SkeletonStatStrip cells={4} />)
+    expect(html).toMatch(/^<div aria-hidden="true" data-stat-strip-bones="" class="m-0 grid grid-cols-1 gap-6 border-b border-border pb-5 min-\[900px\]:grid-cols-4">/)
+    expect(html.match(/animate-pulse/g)).toHaveLength(8)
+    expect(html).not.toMatch(/<(div|p)\b[^>]*>[^<]*<div/)
+  })
+
+  it('holds between one and six cells', () => {
+    expect(render(<SkeletonStatStrip cells={0} />).match(/animate-pulse/g)).toHaveLength(2)
+    expect(render(<SkeletonStatStrip cells={9} />)).toContain('min-[900px]:grid-cols-6')
   })
 })

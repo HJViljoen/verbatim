@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
+import { StatStrip, type StatItem } from '@/components/v2/ui'
 
 // The page frame. Inside the app shell's <main> (h-dvh, 24px padding) the page
 // is a flex column: PageBar on top, then the grid. On ≥xl the grid is 12
@@ -187,9 +188,16 @@ export function TileColumns({ of, rule = true, rail, children, className }: {
 }
 
 /** Page title, and under it the bar's ONE context line where the page has
- *  one; the right-hand controls sit at the end of the pair. */
+ *  one; the right-hand controls sit at the end of the pair. Since the audit
+ *  design (7 Nov) a page passes `sub` (the line under the h1) and `stats`
+ *  (the figures row under the title block) in place of `meta`. */
+
+/** The rows under the title, in order (written out, MASTER rule 1). */
+const UNDER_ROW = ['row-start-2', 'row-start-3', 'row-start-4'] as const
+const CONTROLS_END: Record<number, string> = { 1: 'sm:row-end-3', 2: 'sm:row-end-4', 3: 'sm:row-end-5' }
+
 export function PageBar({
-  title, crumbs, line, meta, children, phoneControls = 'beside',
+  title, crumbs, line, meta, sub, stats, children, phoneControls = 'beside',
 }: {
   title: ReactNode
   /**
@@ -215,6 +223,20 @@ export function PageBar({
    * (`data-copy="figure"` or `"level"`). Under `line` where a page has both.
    */
   meta?: ReactNode
+  /**
+   * THE AUDIT DESIGN'S LINE UNDER THE TITLE (7 Nov): 14px in the secondary
+   * ink, directly under the h1 (above `line` and `meta` where a legacy page
+   * has them).
+   */
+  sub?: ReactNode
+  /**
+   * THE FIGURES ROW (the audit design, 7 Nov; the boards' `.strip`): the
+   * screen's base said once, as a `StatStrip` under the title block. It
+   * replaces the " · " meta line: no routed page passes `meta` after its
+   * phase, and `meta` stays exactly as it was for the unrouted legacy
+   * modules.
+   */
+  stats?: readonly StatItem[]
   /** IGNORED, as since 2026-09-24. A free-text context from a page that is
    *  not a reading (Studio, Settings, the parked pages) is not the ruled line,
    *  so it stays unprinted; the prop remains so those callers compile. */
@@ -226,7 +248,7 @@ export function PageBar({
    * ON A PHONE (below 640; depth v2, T9): the controls stay `beside` the
    * title (the default, every existing caller), or go `below` the title and
    * its lines, on their own row at the left. For a bar whose controls would
-   * squeeze the 26px title onto two lines (Your moves' two buttons).
+   * squeeze the 28px title onto two lines (Your moves' two buttons).
    */
   phoneControls?: 'beside' | 'below'
 }) {
@@ -240,27 +262,34 @@ export function PageBar({
   // Whatever stands under the title: the context line, the meta line, or both.
   // Truthiness, as the line alone was tested before the meta existed, so every
   // existing caller draws exactly what it drew.
-  const under = Boolean(line) || Boolean(meta)
+  const under = Boolean(sub) || Boolean(line) || Boolean(meta)
+  // Each line under the title takes the next row: `sub`, then `line`, then
+  // `meta` (a bar with no `sub` places them exactly as before).
+  const rows = [Boolean(sub) && 'sub', Boolean(line) && 'line', Boolean(meta) && 'meta'].filter(Boolean)
+  const rowOf = (k: 'sub' | 'line' | 'meta') => UNDER_ROW[rows.indexOf(k)]
   // Controls under the title on a phone: the title takes the whole row there,
   // and the controls, auto-placed, land on the first free row after the
   // title's lines.
   const below = Boolean(children) && phoneControls === 'below'
-  return (
+  const bar = (
     <div className={cn('grid shrink-0 items-center', crumbs ? 'gap-y-0.5' : 'gap-y-2', children ? 'grid-cols-[minmax(0,1fr)_auto] gap-x-6' : 'grid-cols-1', children && under ? 'sm:items-end' : null)}>
-      {/* 26px bold on a 40px line (the navigation of 1 Oct: every
-          `Page-*.dc.html` artboard's title, `font-size: 26px; font-weight: 700`
-          in a 40px-high bar). It was MASTER's `text-2xl`. */}
+      {/* 28px bold on a 40px line, -0.01em (the audit design's boards, 7 Nov:
+          every page title is 28px; it was 26px from the 1 Oct navigation's
+          `Page-*.dc.html` artboards, and MASTER's `text-2xl` before that). */}
       {crumbs
         ? <div className={cn('col-start-1 row-start-1 min-w-0', below ? 'max-sm:col-span-2' : null)}>{crumbs}</div>
-        : <h1 className={cn('col-start-1 row-start-1 m-0 text-[26px] leading-10 font-bold', below ? 'max-sm:col-span-2' : null)}>{title}</h1>}
+        : <h1 className={cn('col-start-1 row-start-1 m-0 text-[28px] leading-10 font-bold tracking-[-0.01em]', below ? 'max-sm:col-span-2' : null)}>{title}</h1>}
       {children ? (
         // 10px between the controls: the artboards' own gap (Your moves,
         // Settings), since the bar became every page's title (integration).
         <div className={cn(
           'col-start-2 row-start-1 flex shrink-0 items-center justify-end gap-2.5',
-          line && meta ? 'sm:row-end-4' : under ? 'sm:row-end-3' : null,
+          under ? CONTROLS_END[rows.length] : null,
           below ? 'max-sm:col-span-2 max-sm:col-start-1 max-sm:row-start-auto max-sm:flex-wrap max-sm:justify-start' : null,
         )}>{children}</div>
+      ) : null}
+      {sub ? (
+        <p data-bar-sub="" className={cn(rowOf('sub'), 'm-0 text-[14px] leading-[1.5] text-secondary-foreground', children ? 'col-span-2 sm:col-span-1' : null)}>{sub}</p>
       ) : null}
       {/* THE CONTEXT WRAPS (Block D wave 3, SH17). It was `truncate`, with no
           wrap fallback, and it is the line that says what the page's numbers
@@ -269,13 +298,23 @@ export function PageBar({
           read "…reading as at 2…"; Competitive at 768 read "Össur ·
           September 20…". It wraps and takes the lines it needs. */}
       {line ? (
-        <p className={cn('row-start-2 m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-[14px] leading-6 text-secondary-foreground', children ? 'col-span-2 sm:col-span-1' : null)}>{line}</p>
+        <p className={cn(rowOf('line'), 'm-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-[14px] leading-6 text-secondary-foreground', children ? 'col-span-2 sm:col-span-1' : null)}>{line}</p>
       ) : null}
       {/* The depth boards' meta: 12.5px mono in the muted ink, 6px under the
           title's own line on the board (the grid's 8px here). It wraps. */}
       {meta ? (
-        <p data-bar-meta="" className={cn(line ? 'row-start-3' : 'row-start-2', 'm-0 font-mono text-[12.5px] leading-[1.5] text-muted-foreground', children ? 'col-span-2 sm:col-span-1' : null)}>{meta}</p>
+        <p data-bar-meta="" className={cn(rowOf('meta'), 'm-0 font-mono text-[12.5px] leading-[1.5] text-muted-foreground', children ? 'col-span-2 sm:col-span-1' : null)}>{meta}</p>
       ) : null}
+    </div>
+  )
+  if (!stats || stats.length === 0) return bar
+  // The figures row under the title block, 20px under it (the boards' strip).
+  return (
+    <div className="flex shrink-0 flex-col">
+      {bar}
+      <div className="mt-5">
+        <StatStrip items={stats} />
+      </div>
     </div>
   )
 }

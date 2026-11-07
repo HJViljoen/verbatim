@@ -157,10 +157,11 @@ describe('HorizonControl', () => {
 })
 
 describe('one title for every page (integration, 1 Oct)', () => {
-  // Every artboard draws its title the same way: 26px bold in a 40px bar,
-  // its controls 10px apart. The shared PageBar draws it, and the rebuilt
-  // pages and their skeletons go through it instead of each writing a local
-  // 26px h1 (lead's ruling 12).
+  // Every artboard draws its title the same way: 28px bold in a 40px bar
+  // since the audit design (26px from 1 Oct), its controls 10px apart. The
+  // shared PageBar draws it, and the rebuilt pages and their skeletons go
+  // through it instead of each writing a local h1 at the title's size (lead's
+  // ruling 12).
   const ROOT = join(__dirname, '..', '..')
   const files = (dir: string): string[] =>
     readdirSync(join(ROOT, dir), { withFileTypes: true }).flatMap((e) =>
@@ -172,7 +173,11 @@ describe('one title for every page (integration, 1 Oct)', () => {
   ]
   it.each(PAGES)('%s draws no title of its own', (p) => {
     const list = p.endsWith('.tsx') ? [p] : files(p)
-    for (const f of list) expect(readFileSync(join(ROOT, f), 'utf8'), f).not.toMatch(/<h1[^>]*text-\[26px\]/)
+    for (const f of list) expect(readFileSync(join(ROOT, f), 'utf8'), f).not.toMatch(/<h1[^>]*text-\[2[68]px\]/)
+  })
+
+  it('draws the title at 28px bold on a 40px line, -0.01em, for every caller (the audit design)', () => {
+    expect(render(<PageBar title="Market" />)).toBe('<div class="grid shrink-0 items-center gap-y-2 grid-cols-1"><h1 class="col-start-1 row-start-1 m-0 text-[28px] leading-10 font-bold tracking-[-0.01em]">Market</h1></div>')
   })
 
   it('the bar keeps the artboards\' 10px between its controls', () => {
@@ -212,6 +217,45 @@ describe('the depth boards\' meta line (depth v2, T2)', () => {
     expect(lined).toContain('sm:items-end')
     expect(lined).toContain('sm:row-end-3')
     expect(lined).not.toContain('data-bar-meta')
+  })
+})
+
+describe('the audit design\'s line under the title and figures row (7 Nov)', () => {
+  const stats = [
+    { term: 'Week', value: '26 Oct to 1 Nov' },
+    { term: 'October', value: <span data-copy="figure">766 videos</span> },
+  ]
+
+  it('prints the line under the h1 in the secondary ink, the control spanning the pair', () => {
+    const m = render(<PageBar title="Market" sub="Your market, read every week"><a href="?period=week">This week</a></PageBar>)
+    expect(m).toMatch(/<h1[^>]*>Market<\/h1>/)
+    expect(m).toMatch(/<p data-bar-sub="" class="row-start-2 m-0 text-\[14px\] leading-\[1\.5\] text-secondary-foreground[^"]*">Your market, read every week<\/p>/)
+    expect(m).toContain('sm:row-end-3')
+    expect(m).toContain('sm:items-end')
+    expect(m.indexOf('<h1')).toBeLessThan(m.indexOf('data-bar-sub'))
+  })
+
+  it('puts the figures row under the title block, 20px under it', () => {
+    const node = <PageBar title="Market" stats={stats}><a href="?period=week">This week</a></PageBar>
+    const m = render(node)
+    expect(m).toMatch(/^<div class="flex shrink-0 flex-col"><div class="grid [^"]*">/)
+    expect(m).toContain('<div class="mt-5"><dl data-stat-strip=""')
+    expect(m.indexOf('</h1>')).toBeLessThan(m.indexOf('data-stat-strip'))
+    expect(m).not.toContain('data-bar-meta')
+    expect(renderText(node)).toBe('Market This week Week 26 Oct to 1 Nov October 766 videos')
+    assertCopyContract(node)
+  })
+
+  it('draws no strip for an empty list, and the bar as before', () => {
+    expect(render(<PageBar title="Voices" stats={[]} />)).toBe(render(<PageBar title="Voices" />))
+  })
+
+  it('stacks sub, the context line and the meta in that order where a page has all three', () => {
+    const m = render(<PageBar title="Market" sub="A" line="B" meta="C"><a>Export</a></PageBar>)
+    expect(m).toMatch(/data-bar-sub="" class="row-start-2 /)
+    expect(m).toMatch(/<p class="row-start-3 m-0 flex/)
+    expect(m).toMatch(/data-bar-meta="" class="row-start-4 /)
+    expect(m).toContain('sm:row-end-5')
   })
 })
 

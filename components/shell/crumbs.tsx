@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { hasSiblings, type Crumb, type CrumbItem, type CrumbMenu, type CrumbSlot } from '@/lib/pages/crumbs'
 import { cn } from '@/lib/utils'
+import { LBL } from '@/components/v2/look'
 
 // THE PATH, A SLIM ROW OF ITS OWN (F3-Market-Nav, 17 Oct; Heinrich: the
 // subject's page and the conversation's "look the same and say the same", so
@@ -69,7 +70,7 @@ function UpDown() {
 
 function Tick() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden className="size-4 shrink-0 text-orange-text">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden className="size-4 shrink-0 text-foreground">
       <path d="M5 12.5l4.5 4.5L19 7.5" />
     </svg>
   )
@@ -86,7 +87,7 @@ function Entry({ item, dim, onKeyDown }: { item: CrumbItem; dim?: boolean; onKey
       data-menu-item=""
       onKeyDown={onKeyDown}
       className={cn(
-        'flex min-h-[38px] items-center gap-2 rounded-lg px-2.5 py-[9px] text-[14px] leading-[1.3] text-foreground no-underline outline-none transition-colors hover:bg-inner focus-visible:bg-inner focus-visible:ring-2 focus-visible:ring-ring',
+        'flex min-h-[38px] items-center gap-2 rounded-[6px] px-2.5 py-[9px] text-[14px] leading-[1.3] text-foreground no-underline outline-none transition-colors hover:bg-inner focus-visible:bg-inner focus-visible:ring-2 focus-visible:ring-ring',
         item.current ? 'bg-accent font-semibold hover:bg-accent focus-visible:bg-accent' : null,
       )}
     >
@@ -181,7 +182,7 @@ export function Switcher({ menu, defaultOpen = false, className }: {
         onClick={() => (open ? close(false) : setOpen(true))}
         onKeyDown={onButtonKey}
         className={cn(
-          'inline-flex size-[22px] shrink-0 cursor-pointer items-center justify-center rounded-[5px] text-muted-foreground transition-colors hover:bg-track hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          'inline-flex size-[22px] shrink-0 cursor-pointer items-center justify-center rounded-[8px] border border-border bg-card text-muted-foreground transition-colors hover:bg-inner hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           open ? 'bg-track text-foreground' : null,
           className,
         )}
@@ -194,12 +195,13 @@ export function Switcher({ menu, defaultOpen = false, className }: {
           id={id}
           role="menu"
           aria-label={menu.label}
-          className={cn('absolute left-[-4px] top-[30px] z-20 flex max-h-[min(480px,70vh)]', menu.wide === 460 ? 'w-[460px]' : menu.wide === 400 ? 'w-[400px]' : 'w-[320px]', 'max-w-[calc(100vw-32px)] flex-col gap-px overflow-y-auto rounded-[12px] bg-card p-1.5 shadow-panel ring-1 ring-foreground/6')}
+          className={cn('absolute left-[-4px] top-[30px] z-20 flex max-h-[min(480px,70vh)]', menu.wide === 460 ? 'w-[460px]' : menu.wide === 400 ? 'w-[400px]' : 'w-[320px]', 'max-w-[calc(100vw-32px)] flex-col gap-px overflow-y-auto rounded-[8px] border border-border bg-card p-1.5 shadow-panel')}
         >
-          {/* The board's small-caps label, for the eye: a menu may own only
-              its items and separators (ARIA), and its name is already
+          {/* The menu's label, for the eye (the kit's sentence-case `LBL`
+              since the audit design, never caps): a menu may own only its
+              items and separators (ARIA), and its name is already
               `aria-label`, so a screen reader is not told it twice. */}
-          <p aria-hidden className="m-0 mx-2.5 mb-1.5 mt-2 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{menu.label}</p>
+          <p aria-hidden className={cn('m-0 mx-2.5 mb-1.5 mt-2', LBL)}>{menu.label}</p>
           {menu.above && menu.above.length > 0 ? (
             <>
               {menu.above.map((item) => <Entry key={item.key} item={item} onKeyDown={onItemKey} />)}
