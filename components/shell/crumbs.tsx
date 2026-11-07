@@ -255,14 +255,15 @@ export function CrumbRow({ crumbs, open }: { crumbs: readonly Crumb[]; open?: 'c
   )
 }
 
-/** On a phone, the row becomes the way back to the parent ("‹ Market",
- *  "‹ Fit & comfort"), above the level label and the title. */
+/** On a phone, the row becomes the way back to the parent ("Market", "Fit &
+ *  comfort"), above the title: the crumb row's own underlined link with no
+ *  chevron (no arrow glued to a link, brief §3), 44px to tap (the review of
+ *  Phases 4 and 5). */
 export function BackLink({ crumbs }: { crumbs: readonly Crumb[] }) {
   const parent = crumbs.length > 1 ? crumbs[crumbs.length - 2] : null
   if (!parent?.href) return null
   return (
-    <Link href={parent.href} data-back-link="" className="inline-flex min-h-8 items-center gap-1 text-[14px] font-semibold text-muted-foreground no-underline hover:text-foreground sm:hidden">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden className="size-4"><path d="m15 18-6-6 6-6" /></svg>
+    <Link href={parent.href} data-back-link="" className="inline-flex min-h-11 items-center self-start text-[14px] font-medium text-secondary-foreground underline decoration-control underline-offset-4 hover:decoration-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground sm:hidden">
       <Label slot={parent.slot}>{parent.label}</Label>
     </Link>
   )

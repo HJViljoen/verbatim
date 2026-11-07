@@ -81,9 +81,10 @@ describe('the crumb row', () => {
     expect(html).toContain(`href="/dashboard/market/subjects/${fixtureSubjectId('fit')}?period=month"`)
   })
 
-  it('on a phone the row becomes the way back: "‹ {parent}" at 14px/600', () => {
+  it('on a phone the row becomes the way back: "{parent}", an underlined link with no chevron, 44px to tap', () => {
     const html = render(<BackLink crumbs={conv.crumbs!} />)
-    expect(html).toMatch(/<a data-back-link="" class="[^"]*text-\[14px\] font-semibold text-muted-foreground[^"]*sm:hidden" href="\/dashboard\/market\/subjects\/subj-fit"><svg[^>]*><path d="m15 18-6-6 6-6"><\/path><\/svg>Fit &amp; comfort<\/a>/)
+    expect(html).toMatch(/<a data-back-link="" class="[^"]*min-h-11[^"]*text-\[14px\] font-medium text-secondary-foreground underline[^"]*sm:hidden" href="\/dashboard\/market\/subjects\/subj-fit">Fit &amp; comfort<\/a>/)
+    expect(html).not.toContain('<svg')
     expect(renderText(<BackLink crumbs={subject.crumbs!} />)).toBe('Market')
   })
 })

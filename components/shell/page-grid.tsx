@@ -272,7 +272,10 @@ export function PageBar({
   // title's lines.
   const below = Boolean(children) && phoneControls === 'below'
   const bar = (
-    <div className={cn('grid shrink-0 items-center', crumbs ? 'gap-y-0.5' : 'gap-y-2', children ? 'grid-cols-[minmax(0,1fr)_auto] gap-x-6' : 'grid-cols-1', children && under ? 'sm:items-end' : null)}>
+    // With controls and nothing under the title, the title and the controls
+    // share their top edge (the boards; the review of Phases 4 and 5: Voices'
+    // switch carries a line under it, and a centred title sat 27px low).
+    <div className={cn('grid shrink-0', children && !under ? 'items-start' : 'items-center', crumbs ? 'gap-y-0.5' : 'gap-y-2', children ? 'grid-cols-[minmax(0,1fr)_auto] gap-x-6' : 'grid-cols-1', children && under ? 'sm:items-end' : null)}>
       {/* 28px bold on a 40px line, -0.01em (the audit design's boards, 7 Nov:
           every page title is 28px; it was 26px from the 1 Oct navigation's
           `Page-*.dc.html` artboards, and MASTER's `text-2xl` before that). */}
