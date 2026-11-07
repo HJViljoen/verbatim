@@ -82,16 +82,22 @@ export function RepliesCard({ view, state, className, style }: { view: RepliesVi
           </p>
         </div>
       )}
-      <dl className="m-0 grid grid-cols-[minmax(0,1fr)_auto] text-[14.5px]">
-        {kinds.map(([n, words]) => (
-          <div key={words} className="contents">
-            <dt className="border-t border-track py-2.5">{words}</dt>
-            <dd className="m-0 border-t border-track py-2.5 text-right font-semibold">
-              {view.unread ? <span className="font-normal text-muted-foreground">Not read</span> : <Fig>{fmtInt(n)}</Fig>}
-            </dd>
-          </div>
-        ))}
-      </dl>
+      {/* Unread, the four kinds are named with no word beside each: the box
+          above says why once (the P8-9 review: "Not read" four times). */}
+      {view.unread ? (
+        <ul className="m-0 list-none p-0 text-[14.5px]">
+          {kinds.map(([, words]) => <li key={words} className="border-t border-track py-2.5">{words}</li>)}
+        </ul>
+      ) : (
+        <dl className="m-0 grid grid-cols-[minmax(0,1fr)_auto] text-[14.5px]">
+          {kinds.map(([n, words]) => (
+            <div key={words} className="contents">
+              <dt className="border-t border-track py-2.5">{words}</dt>
+              <dd className="m-0 border-t border-track py-2.5 text-right font-semibold"><Fig>{fmtInt(n)}</Fig></dd>
+            </div>
+          ))}
+        </dl>
+      )}
       {view.unread ? null : (
         <div className="mt-auto">
           {view.total === 0 ? (

@@ -57,7 +57,9 @@ describe('Worth a reply', () => {
     expect(text).toContain('No update has covered a week yet')
     // The kinds keep their names, with no number they cannot know (decision 4).
     expect(render(unread)).toContain('data-empty-box=""')
-    expect(text).toContain('Ready to buy Not read Questions Not read Objections Not read Wrong information Not read')
+    // The reason is said once, in the box: no "Not read" beside each kind.
+    expect(text).toContain('Ready to buy Questions Objections Wrong information')
+    expect(text).not.toContain('Not read')
     expect(text.split('No update has covered a week yet')).toHaveLength(2)
     expect(copyNodes(render(unread)).filter((n) => n.kind === 'figure')).toEqual([])
     assertCopyContract(unread)
