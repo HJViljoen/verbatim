@@ -140,7 +140,7 @@ export function ContentTileView({ read }: { read: TileRead<ContentTile> }) {
         : asked ? <Asked asked={asked} line={top.state === 'ready' ? null : IDEAS_EMPTY[top.state]} />
           : !idea ? <TileLine>{top.line ?? IDEAS_EMPTY.none}</TileLine> : (
         <>
-          {top.line ? <TileLine className="text-[13.5px] text-muted-foreground">{top.line}</TileLine> : null}
+          {top.line ? <p className="m-0 text-[13.5px] leading-[1.5] text-muted-foreground">{top.line}</p> : null}
           <h2 className={TT}>
             <Link href={top.href} className={ROW}><span data-copy="stored" data-slot={POST_IDEA_SLOT}>{idea.title}</span></Link>
           </h2>

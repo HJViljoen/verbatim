@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { CARD, GoLink } from '@/components/v2'
+import { CARD, EmptyBox, GoLink } from '@/components/v2'
 import { LBL } from '@/components/v2/look'
 import { fmtInt } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -71,10 +71,11 @@ export function TileHead({ label, open, id }: {
   )
 }
 
-/** A tile's one quiet line where its page has nothing to show, or where its
- *  read failed. */
-export function TileLine({ children, className }: { children: ReactNode; className?: string }) {
-  return <p className={cn('m-0 text-[14.5px] leading-[1.5] text-secondary-foreground', className)}>{children}</p>
+/** A tile's one sentence where its page has nothing to show, or where its
+ *  read failed: in the boards' dashed box, as Your products' (decision 4;
+ *  the review of 7 Nov). */
+export function TileLine({ children }: { children: ReactNode }) {
+  return <EmptyBox>{children}</EmptyBox>
 }
 
 /** The words a tile prints where its read failed (it loses only itself). */

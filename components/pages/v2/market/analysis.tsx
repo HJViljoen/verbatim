@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { CARD, GoLink, SectionHead as KitSectionHead } from '@/components/v2'
+import { CARD, EmptyBox, GoLink, SectionHead as KitSectionHead } from '@/components/v2'
 import { ROW } from '@/components/v2/look'
 import { countWord } from '@/lib/settings/search-set'
 import type { SubjectCard, WeekCard } from '@/lib/pages/v2/market'
@@ -69,7 +69,7 @@ export function WeekCardView({ card }: { card: WeekCard }) {
       ) : (
         <>
           <h2 id="week-head" className="m-0 text-[21px] leading-[1.3] font-semibold text-foreground">{WEEK_CARD_TITLE}</h2>
-          <p className={GAPLINE}>{card.state === 'thin' ? WEEK_THIN : WEEK_UNREAD}</p>
+          <EmptyBox>{card.state === 'thin' ? WEEK_THIN : WEEK_UNREAD}</EmptyBox>
         </>
       )}
     </article>
