@@ -92,7 +92,7 @@ import { FitWidth } from '../components/reports/fit-width'
 import { BriefDeck } from '../components/briefs/brief-deck'
 import { briefFixture } from '../components/briefs/fixture'
 import { storedBrief } from '../lib/reports/briefs/types'
-import { WeeklyReadPage } from '../components/email/weekly-read'
+import { WeeklyV3Page } from '../components/email/weekly-read-v3'
 import { ossurSnapshot } from '../lib/test/weekly-read-v3-fixture'
 import type { ViewerSnapshot } from '../lib/reports/viewer'
 import { PRIVACY_LINE } from '../lib/reading/method'
@@ -247,7 +247,7 @@ function studioViewer(kind: 'weekly' | 'brief'): ReactNode {
     ? { id: 'snap-w', kind: 'weekly_read', data: ossurSnapshot(), title: 'Össur · This week in your market', builtAt: '2026-10-18T06:00:00.000Z', pageCount: 1, artifactId: null, reportId: 'r-1', clientId: 'c-1' }
     : { id: 'snap-s', kind: 'monthly_brief', data: storedBrief({ ...briefFixture('sales'), company: 'Össur' }), title: 'brief', builtAt: '2026-10-04T05:30:00.000Z', pageCount: 7, artifactId: null, pdfHref: '/api/briefs/snap-s/pdf', reportId: null, clientId: 'c-1' }
   const body = kind === 'weekly'
-    ? h(WeeklyReadPage, { data: (snapshot.data as ReturnType<typeof ossurSnapshot>), appUrl: '', medical: true })
+    ? h(WeeklyV3Page, { data: (snapshot.data as ReturnType<typeof ossurSnapshot>), appUrl: '', medical: true, framed: true })
     : h('div', { className: 'rounded-[12px] bg-inner p-3 md:p-5' }, h(FitWidth, { base: 1280, children: h(BriefDeck, { data: snapshot.data as ReturnType<typeof storedBrief>, builtAt: snapshot.builtAt, gap: 20 }) }))
   return h(ViewerFrame, { snapshot, closeHref: '/dashboard/studio', children: body })
 }

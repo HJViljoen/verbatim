@@ -9,8 +9,9 @@ import { isQuarterlyData } from '@/lib/reports/quarterly-build'
 import { WeeklyDeck } from '@/components/print/weekly-deck'
 import { MonthlyDeck } from '@/components/print/monthly-deck'
 import { QuarterlyDeck } from '@/components/print/quarterly-deck'
-import { isWeeklyReadData, isWeeklyV3 } from '@/lib/reports/weekly-read-build'
+import { isWeeklyReadData, isWeeklyV3, staleWeeklyReadSnapshot } from '@/lib/reports/weekly-read-build'
 import { WeeklyReadPage } from '@/components/email/weekly-read'
+import { WeeklyV3Page } from '@/components/email/weekly-read-v3'
 import { printsMedicalLine } from '@/lib/post-ideas/medical'
 import type { ViewerSnapshot } from '@/lib/reports/viewer'
 import type { ReportSnapshotData } from '@/lib/reports/types'
@@ -55,9 +56,11 @@ export function ReportViewer({ snapshot, closeHref, showStudio = false }: { snap
         </FitWidth>
       </div>
     )
-  } else if (isWeeklyReadData(data) && isWeeklyV3(data)) {
-    // The share page's own responsive page, in the column.
-    body = <WeeklyReadPage data={data} appUrl="" medical={printsMedicalLine(snapshot.clientId)} />
+  } else if (isWeeklyReadData(data) && isWeeklyV3(data) && !staleWeeklyReadSnapshot(data)) {
+    // The share page's own responsive page, in the column, FRAMED: this page
+    // already carries its title, figures row and way back, so the sheet
+    // starts at the week (WeeklyReadPage's own version-3 route, plus that).
+    body = <WeeklyV3Page data={data} appUrl="" medical={printsMedicalLine(snapshot.clientId)} framed />
   } else {
     const deck = isDocumentData(data)
       ? <DocumentDeck data={data} date={date} />

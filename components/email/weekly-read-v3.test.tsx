@@ -323,9 +323,11 @@ describe('the email\'s states: a part that is not there prints nothing (§0a.2)'
     const t = cardText(data)
     expectInOrder(t, ['October', 'Each a reading of the whole month', 'Voices', 'October · the last full month', 'Caretaker', 'Your products', 'October · the last full month', 'Direct Socket'])
     const page = textOf(pageOf(data))
-    expectInOrder(page, ['The groups in your market, October · the last full month', 'Your products', 'October · the last full month · 5 of your 65 products came up'])
+    // The page and the paper say the month in commas (the audit design); the
+    // email above keeps its words.
+    expectInOrder(page, ['The groups in your market, October, the last full month', 'Your products', 'October, the last full month. 5 of your 65 products came up'])
     const paper = textOf(pageOf(data, { print: true }))
-    expectInOrder(paper, ['October · the last full month · in the most videos', 'Videos about each category', 'A product named or not, October · the last full month'])
+    expectInOrder(paper, ['October, the last full month, in the most videos', 'Videos about each category', 'A product named or not, October, the last full month'])
     // The month's own words where the reading month is the current one.
     expect(ownMonth('2026-10-01', 'October so far', null, '2026-10-01')).toBeNull()
     expect(ownMonth('2026-10-01', 'October', 'the last full month', '2026-10-01')).toBe('October · the last full month')
@@ -344,31 +346,50 @@ describe('the full read: the share page and the viewer (H7-Weekly-Full)', () => 
   const html = pageOf()
   const t = textOf(html)
   it('one visual system: the week card with each quote under its paragraph, also this week, the subjects in full, the pages', () => {
+    // Since the audit design (7 Nov, Studio-Weekly.dc.html): the title over
+    // its figures row, the week card led by its line, labels in sentence
+    // case, sources in commas, worth watching a list, Also this week one
+    // table, the subjects and the pages as tiles, links that say where they
+    // go with no arrow, the footer's links and "Össur, made with Verbatim".
     expectInOrder(t, [
-      'Verbatim', 'Össur', 'Read 18 Oct · shared from Verbatim',
-      'This week in your market', '12 to 18 October · 146 videos · 4,180 comments this week · 434 videos and 11,178 comments in October so far',
-      'This week · 12 to 18 October', 'Interest in prosthetics turns quickly',
-      'What happened', 'The week’s talk treated a prosthetic leg', '“My socket is fine in the morning', 'TikTok · 14 Oct',
-      'Once the fit was settled', '“Insurance approved the knee', 'Instagram · 15 Oct',
-      'For hands, the proof was in plain tasks', '“Watching her pick up a grape', 'YouTube · 16 Oct',
+      'Verbatim', 'Össur', 'Read 18 Oct, shared from Verbatim',
+      'This week in your market', 'Week', '12 to 18 October', 'This week', '146 videos, 4,180 comments', 'October so far', '434 videos, 11,178 comments',
+      'Interest in prosthetics turns quickly',
+      'What happened', 'The week’s talk treated a prosthetic leg', '“My socket is fine in the morning', 'TikTok, 14 Oct',
+      'Once the fit was settled', '“Insurance approved the knee', 'Instagram, 15 Oct',
+      'For hands, the proof was in plain tasks', '“Watching her pick up a grape', 'YouTube, 16 Oct',
       'What it means', 'The residual limb is where wearers place the risk of a prosthetic leg. Bruising, swelling',
       'New this week', 'Nothing new this week.',
       'Worth watching', 'Whether questions about socket comfort keep naming the residual limb, or start naming the liner and socks instead.',
-      'Also this week', 'What stood out in this week’s conversations',
-      'Most talked about this week', 'Praise for resilience and courage', 'Open →',
-      'Also talked about', 'How the prosthesis works',
-      'Nothing new this week', 'Insurance barriers and delays', 'Also talked about',
-      'What the market is talking about', 'October so far · your six subjects',
-      'Cost & access', 'Insurance cover decides whether a socket or knee joint feels obtainable', 'For buyers, the socket, knee joint and hand are where access becomes concrete',
+      'Also this week', 'What stood out in this week’s conversations', 'Conversation', 'What stood out', 'This week', 'October so far',
+      'Praise for resilience and courage', 'Most talked about this week', '19', '54',
+      'How the prosthesis works', 'Also talked about',
+      'Insurance barriers and delays', 'Also talked about. Nothing new this week.',
+      'What the market is talking about', 'October so far, your six subjects',
+      'Cost & access', 'Insurance cover decides whether a socket or knee joint feels obtainable', 'For buyers, the socket, knee joint and hand are where access becomes concrete', 'Open Cost & access',
       'Community & encouragement',
       'Across your pages', 'Each opens its page in Verbatim',
-      'Voices', 'The groups in your market, October so far', 'In the most videos', 'Caretaker', '47 of 434 videos', 'This person is supporting someone', 'The other groups', 'First-time buyer', 'Open Voices →',
-      'Your products', 'October so far · 5 of your 65 products came up · 72 videos about them or their categories', 'Product', 'Category', 'Videos', 'Direct Socket', 'Sockets & Locks',
-      'Videos about each category, a product named or not', 'Sockets & Locks', '24', 'Open Your products →',
-      'What to post next', 'From questions asked 21 Sep to 18 Oct', 'Why can a prosthetic feel heavy', MEDICAL_LINE, 'Worth a reply', 'Comments written 12 to 18 Oct worth an answer from you', 'Open the replies →', 'Open Content →',
-      'Advice to decide on', '4 pieces of advice waiting for a decision', 'Create an Össur Access Navigator', 'first raised 12 Oct', 'The advice record →', 'Open Your moves →',
-      'Open Market', 'Who gets this', 'Össur · made with Verbatim',
+      'Voices', 'The groups in your market, October so far', 'In the most videos', 'Caretaker', '47 of 434 videos', 'This person is supporting someone', 'The other groups', 'First-time buyer, Athlete', 'Open Voices',
+      'Your products', 'October so far. 5 of your 65 products came up, 72 videos about them or their categories.', 'Product', 'Category', 'Videos', 'Direct Socket', 'Sockets & Locks',
+      'Videos about each category, a product named or not', 'Sockets & Locks', '24', 'Open Your products',
+      'What to post next', 'From questions asked 21 Sep to 18 Oct', 'Why can a prosthetic feel heavy', MEDICAL_LINE, 'Worth a reply', 'Comments written 12 to 18 Oct worth an answer from you', 'Open the replies', 'Open Content',
+      'Advice to decide on', '4 pieces of advice waiting for a decision', 'Advice', 'First raised', 'Create an Össur Access Navigator', '12 Oct', 'The advice record', 'Open Your moves',
+      'Open Market', 'Who gets this', 'Össur, made with Verbatim',
     ])
+    // No arrow glued to a link, no middle dot, no icon tile, no uppercase
+    // label and no monospace on the screen rules.
+    expect(t).not.toMatch(/[→·]/)
+    expect(html).not.toContain('w3-itile')
+    const screenCss = html.match(/<style>([\s\S]*?)<\/style>/)![1]
+    expect(screenCss).not.toMatch(/text-transform:uppercase|Plex Mono|monospace/)
+    expect(html).toMatch(/<dl class="w3-strip">/)
+    expect(html).toMatch(/<table class="w3-tbl st"><thead><tr><th scope="col">Conversation<\/th>/)
+    // On a phone the table stacks, each row its name, what stood out, then
+    // "19 this week, 54 in October so far" (decision 14: the page's cards
+    // stacked there before).
+    expect(screenCss).toMatch(/@media \(max-width:760px\)\{\.w3-tbl\.st thead\{display:none\}/)
+    expect(html).toContain('data-l=" this week"')
+    expect(html).toContain('data-l=" in October so far"')
   })
   it('"This week\'s findings" is gone from version 3, and every quote is a ref resolved at render', () => {
     expect(t).not.toContain('This week’s findings')
@@ -396,11 +417,13 @@ describe('the full read: the share page and the viewer (H7-Weekly-Full)', () => 
   it('Sealand: no products card, the stand-in question, the brands named most; the month-closing line as a card', () => {
     const s = textOf(pageOf(sealandV3Snapshot()))
     expect(s).not.toContain('Your products')
-    expectInOrder(s, ['Asked most, and not yet in your posts', 'Questions about product details', '6 videos this week · 8 in October so far', 'Worth a reply'])
+    expectInOrder(s, ['Asked most, and not yet in your posts', 'Questions about product details', '6 videos this week, 8 in October so far', 'Worth a reply'])
     expectInOrder(s, ['Named most, unprompted', 'The North Face', '4 of 364 videos'])
     expect(s).not.toContain(MEDICAL_LINE)
     const m = textOf(pageOf(monthEndSnapshot()))
-    expectInOrder(m, ['Worth watching', 'The month’s long-run read', 'October’s read, “What holds across September and October”, is on Market › This month', 'Also this week', 'Unusual this week'])
+    // The month-closing line in its box in the week card's right column, its
+    // link saying where it goes.
+    expectInOrder(m, ['Worth watching', 'The month’s long-run read', 'October’s read, “What holds across September and October”, is on Market, This month.', 'Open October’s long-run read in Market', 'Also this week', 'Unusual this week'])
     expectInOrder(m, ['After your move', 'Price transparency page, dated 2 Sep', 'no clear change'])
     assertCopyContract(pageOf(monthEndSnapshot()))
   })
@@ -419,10 +442,10 @@ describe('the full read on A4 (H7-Weekly-Full-Print)', () => {
   it('the share page\'s parts, in its order: the week and its story; what it means, new, watching and also; the subjects; the pages', () => {
     expectInOrder(t, [
       'This week in your market', '12 to 18 October', 'The week in one line', 'Interest in prosthetics',
-      'This week · 12 to 18 Oct', '146', 'October so far', '434',
+      'This week, 12 to 18 Oct', '146', 'October so far', '434',
       'What happened', '“My socket is fine',
       'What it means', 'New this week', 'Nothing new this week.', 'Worth watching',
-      'Also this week', 'Most talked about this week', 'Nothing new this week · Also talked about', 'Insurance barriers and delays',
+      'Also this week', 'Most talked about this week', 'Also talked about. Nothing new this week.', 'Insurance barriers and delays',
       'What the market is talking about', 'Cost & access',
       'Across your pages', 'Voices', 'Caretaker', 'What to post next', MEDICAL_LINE, 'Worth a reply', 'Your products', 'Videos about each category', 'Advice to decide on',
       'Open this week in Verbatim: app.verbatimintel.com/dashboard/market',

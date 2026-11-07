@@ -728,7 +728,6 @@ export function WeeklyV3Card({ data, appUrl, markSrc, fullUrl, medical = false }
 
 const SANS = "var(--font-plex-sans, 'IBM Plex Sans'), 'IBM Plex Sans', -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
 const SERIF = "var(--font-plex-serif, 'IBM Plex Serif'), 'IBM Plex Serif', Georgia, serif"
-const MONOP = "var(--font-plex-mono, 'IBM Plex Mono'), 'IBM Plex Mono', SFMono-Regular, Menlo, monospace"
 
 /** A string as CSS writes it in `content:`: quoted, anything past printable
  *  ASCII (and the three characters HTML cares about) escaped, so a workspace
@@ -739,114 +738,129 @@ export function cssString(s: string): string {
   return `"${s.replace(/[^\x20-\x7E]|["\\<>&]/g, (c) => `\\${c.codePointAt(0)!.toString(16).padStart(6, '0')} `)}"`
 }
 
-/** The page's one stylesheet (the boards' own classes, prefixed). */
+/** The page's one stylesheet (the boards' own classes, prefixed). Since the
+ *  audit design (7 Nov, Studio-Weekly.dc.html) the screen rules are the
+ *  boards': sentence-case labels, sans figures, 12px cards with the tile's
+ *  shadow, tables with horizontal rules, links that say where they go. They
+ *  reach the paper too, under the print overrides below, which are as they
+ *  were (decision 6A: the viewer, the share page and the PDF together). A
+ *  part the paper inherits without an override of its own has a compact
+ *  base size, and the board's size inside the screen's own containers
+ *  (`.w3-week`, `.w3-card`), or a size in em of a parent the paper sizes. */
 function pageCss(print: boolean, footer: string): string {
   const screen = `
-.w3{background:${P.ground};font-family:${SANS};color:${P.ink};-webkit-font-smoothing:antialiased}
+.w3{background:${P.ground};font-family:${SANS};color:${P.ink};-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
 .w3 *{box-sizing:border-box}
-.w3 a{color:${P.ink}}
+.w3 a{color:${P.ink};text-decoration:none}
+.w3-card a{text-decoration:underline}
+.w3 a:hover{color:#000}
+.w3.w3-framed{background:transparent}
 .w3-sheet{max-width:1040px;margin:0 auto;padding:22px 40px 48px;display:flex;flex-direction:column;gap:20px}
+.w3-framed .w3-sheet{max-width:none;padding:0}
 .w3-brow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:16px;border-bottom:1px solid ${P.edge}}
 .w3-bl{display:flex;align-items:center;gap:10px}
 .w3-mark{width:24px;height:24px;border-radius:6px;background:${P.yellow};display:flex;align-items:center;justify-content:center;flex:0 0 24px}
 .w3-word{font-size:17px;font-weight:700;letter-spacing:-0.01em}
-.w3-co{font-size:13px;color:${P.muted};padding-left:10px;margin-left:2px;border-left:1px solid ${P.edge}}
-.w3-br{font-family:${MONOP};font-size:12.5px;color:${P.muted}}
-.w3-ttl{margin:2px 0 0;font-size:28px;line-height:1.15;font-weight:700;letter-spacing:-0.015em}
-.w3-meta{margin:6px 0 0;font-family:${MONOP};font-size:12.5px;line-height:1.5;color:${P.muted}}
-.w3-card{background:${P.paper};border-radius:16px;box-shadow:0 1px 2px rgba(38,41,44,.06),0 4px 14px rgba(38,41,44,.06),0 12px 32px rgba(38,41,44,.04);padding:24px 26px;display:flex;flex-direction:column;gap:16px;min-width:0}
-.w3-week{gap:18px;padding:28px 30px 26px}
-.w3-chead{display:flex;align-items:flex-start;gap:12px}
-.w3-chead.c{align-items:center}
-.w3-itile{width:28px;height:28px;border-radius:7px;background:${P.pale};color:${P.orange};display:flex;align-items:center;justify-content:center;flex:0 0 28px}
-.w3-itile svg{width:16px;height:16px}
-.w3-eb{margin:0;font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:${P.orange}}
-.w3-whead{margin:0;font-size:26px;line-height:1.32;font-weight:600;letter-spacing:-0.015em;max-width:900px}
-.w3-wcols{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:44px;border-top:1px solid ${P.rule};padding-top:20px}
-.w3-wcol{display:flex;flex-direction:column;gap:14px;min-width:0}
-.w3-dl{margin:0;font-size:11.5px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:${P.muted}}
-.w3-gap{margin-top:14px}
-.w3-read{margin:0;font-size:15.5px;line-height:1.62}
-.w3-items{display:flex;flex-direction:column;margin-top:-2px}
-.w3-items p{margin:0;font-size:15px;line-height:1.55;padding:11px 0;border-top:1px solid ${P.rule}}
-.w3-items p:first-child{border-top:0;padding-top:0}
-.w3-nothing{margin:0;font-size:15px;color:${P.muted}}
-.w3-q{background:${P.ground};border-radius:10px;padding:13px 15px;display:flex;flex-direction:column;gap:6px}
-.w3-qt{margin:0;font-family:${SERIF};font-style:italic;font-size:15px;line-height:1.5}
-.w3-qen{margin:0;font-family:${SERIF};font-size:13.5px;line-height:1.5;color:${P.muted}}
-.w3-qsrc{font-size:12px;color:${P.muted}}
-.w3-sec{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:0 2px;margin-top:14px}
-.w3-sec h2{margin:0;font-size:19px;line-height:1.3;font-weight:600;letter-spacing:-0.005em}
-.w3-note{margin:0;font-size:12.5px;color:${P.muted}}
-.w3-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:20px}
-.w3-news{grid-column:span 4}
-.w3-scard{grid-column:span 6;gap:12px}
-.w3-pcard{grid-column:span 6;gap:16px}
-.w3-wide{grid-column:span 12}
-.w3-ct{margin:4px 0 0;font-size:17px;line-height:1.3;font-weight:600;letter-spacing:-0.005em}
-.w3-csub{margin:2px 0 0;font-size:13px;line-height:1.4;color:${P.muted}}
-.w3-nf{margin:6px 0 0;font-family:${MONOP};font-size:12.5px;line-height:1.5;color:${P.muted};font-variant-numeric:tabular-nums}
-.w3-nf b{font-weight:500;color:${P.ink}}
-.w3-nw{white-space:nowrap}
-.w3-chip{display:inline-flex;align-items:center;font-size:12px;font-weight:600;line-height:1;padding:5px 8px;border-radius:999px;background:${P.fill};color:${P.ink};white-space:nowrap}
-.w3-chip.s{font-size:11px;padding:4px 7px;margin-left:6px}
-.w3-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:auto}
-.w3-foot.r{justify-content:flex-end}
-.w3-olink{font-size:13.5px;font-weight:600;color:${P.orange} !important;text-decoration:none}
-.w3-when{font-size:12.5px;color:${P.muted}}
-.w3-shead{margin:0;font-size:20px;line-height:1.32;font-weight:600;letter-spacing:-0.01em}
+.w3-co{font-size:14px;color:${P.muted};padding-left:10px;margin-left:2px;border-left:1px solid ${P.edge}}
+.w3-br{font-size:13.5px;color:${P.muted}}
+.w3-ttl{margin:2px 0 0;font-size:28px;line-height:1.2;font-weight:700;letter-spacing:-0.01em}
+.w3-meta{margin:6px 0 0;font-size:14px;line-height:1.5;color:${P.muted}}
+.w3-strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;margin:20px 0 6px;padding:0 0 20px;border-bottom:1px solid ${P.edge}}
+.w3-strip dt{font-size:13px;color:${P.muted}}
+.w3-strip dd{margin:4px 0 0;font-size:16px;font-weight:600}
+.w3-card{background:${P.paper};border-radius:12px;box-shadow:0 1px 2px rgba(38,41,44,.05),0 6px 20px rgba(38,41,44,.05);padding:26px;display:flex;flex-direction:column;gap:16px;min-width:0}
+.w3-week{gap:24px;padding:30px}
+.w3-eb{margin:0;font-size:13px;font-weight:600;color:${P.ink2}}
+.w3-whead{margin:0;font-size:28px;line-height:1.3;font-weight:700;letter-spacing:-0.01em;max-width:1000px}
+.w3-wcols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:44px;border-top:1px solid ${P.rule};padding-top:24px}
+.w3-wcol{display:flex;flex-direction:column;gap:18px;min-width:0}
+.w3-wright{gap:26px}
+.w3-dl{margin:0;font-size:15px;font-weight:600;color:${P.ink2}}
+.w3-read{margin:0;font-size:16px;line-height:1.65}
+.w3-items{display:flex;flex-direction:column;margin-top:8px}
+.w3-items p{margin:0;font-size:16px;line-height:1.6;padding:14px 0;border-top:1px solid ${P.rule}}
+.w3-items p:first-child{border-top:0;padding-top:4px}
+.w3-list{margin:8px 0 0;padding-left:20px;list-style:disc;font-size:12px;line-height:1.55;display:flex;flex-direction:column;gap:4px}
+.w3-week .w3-list{font-size:15.5px;line-height:1.6;gap:8px}
+.w3-nothing{margin:8px 0 0;font-size:15px;color:${P.muted}}
+.w3-q{margin:0;background:${P.ground};border-radius:10px;padding:14px 18px;display:flex;flex-direction:column;gap:6px}
+.w3-qt{margin:0;font-family:${SERIF};font-style:italic;font-size:18px;line-height:1.55}
+.w3-qen{margin:0;font-size:12px;line-height:1.55;color:${P.ink}}
+.w3-qsrc{font-size:11px;color:${P.muted}}
+.w3-week .w3-qen{font-size:15px}
+.w3-week .w3-qsrc{font-size:13.5px}
+.w3-close{background:${P.ground};border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:6px}
+.w3-close .t{margin:0;font-size:15px;line-height:1.55}
+.w3-sec{display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding:0 2px;margin-top:28px}
+.w3-sec h2{margin:0;font-size:21px;line-height:1.3;font-weight:600}
+.w3-note{margin:0;font-size:14px;color:${P.muted}}
+.w3-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+.w3-scard{gap:10px}
+.w3-pcard{gap:16px}
+.w3-wide{grid-column:span 2}
+.w3-ctitle{margin:0;font-size:19px;line-height:1.3;font-weight:600}
+.w3-csub{margin:4px 0 0;font-size:14px;line-height:1.5;color:${P.muted}}
+.w3-sname{margin:0;font-size:14px;line-height:1.3;font-weight:600}
+.w3-card .w3-sname{font-size:19px}
+.w3-shead{margin:0;font-size:16px;line-height:1.45;font-weight:500}
 .w3-sread{margin:0;font-size:15px;line-height:1.6;color:${P.ink2}}
 .w3-sthin{margin:0;font-size:15px;line-height:1.55;color:${P.muted}}
-.w3-ctitle{margin:0;font-size:17px;line-height:1.3;font-weight:600;letter-spacing:-0.005em}
-.w3-big{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-top:8px}
-.w3-big a{font-size:22px;font-weight:600;letter-spacing:-0.01em;text-decoration:none}
-.w3-big .m{font-family:${MONOP};font-size:13px;color:${P.ink2};white-space:nowrap}
-.w3-bar{position:relative;height:10px;border-radius:5px;background:${P.rule};margin-top:10px;overflow:hidden}
-.w3-bar i{position:absolute;left:0;top:0;bottom:0;border-radius:5px;background:${P.yellow}}
-.w3-one{margin:0;font-size:14.5px;line-height:1.55;color:${P.ink2}}
-.w3-tags{display:flex;flex-wrap:wrap;gap:6px}
-.w3-tag{display:inline-block;font-size:12px;line-height:1.3;background:${P.ground};color:${P.ink};border-radius:6px;padding:3px 8px;white-space:nowrap}
-.w3-tbl{width:100%;border-collapse:collapse;font-size:14px}
-.w3-tbl th{text-align:left;font-size:11.5px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:${P.muted};padding:0 12px 10px 0;border-bottom:1px solid ${P.edge};white-space:nowrap}
-.w3-tbl td{padding:9px 12px 9px 0;border-bottom:1px solid ${P.rule};vertical-align:middle}
-.w3-tbl tr:last-child td{border-bottom:0}
-.w3-tbl .r{text-align:right;padding-right:0}
-.w3-tbl td.r{font-family:${MONOP};font-variant-numeric:tabular-nums;font-size:13px}
-.w3-tbl td.mu{color:${P.muted};white-space:nowrap}
-.w3-tbl a{text-decoration:none;font-weight:500}
-.w3-cats{display:flex;flex-direction:column;gap:8px}
-.w3-rrow{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) 34px;gap:10px;align-items:center;font-size:13.5px}
+.w3-fill{flex:1}
+.w3 .w3-go{font-size:14px;font-weight:500;color:${P.ink};text-decoration:underline;text-decoration-color:#C9CCD0;text-underline-offset:4px;align-self:flex-start}
+.w3 .w3-go:hover{text-decoration-color:${P.ink}}
+.w3-links{display:flex;flex-wrap:wrap;gap:12px 24px}
+.w3-tw{overflow-x:auto}
+.w3-tbl{width:100%;border-collapse:collapse;font-size:15px}
+.w3-tbl th{text-align:left;font-size:.867em;font-weight:500;color:${P.muted};padding:8px 16px 8px 0;vertical-align:bottom}
+.w3-tbl td{padding:14px 16px 14px 0;border-top:1px solid ${P.rule};vertical-align:top;line-height:1.45}
+.w3-tbl th:last-child,.w3-tbl td:last-child{padding-right:0}
+.w3-tbl .r{text-align:right}
+.w3-tbl td.mu{color:${P.ink2}}
+.w3-tbl td.b{font-weight:600}
+.w3-tbl a{font-weight:600}
+.w3-tbl a.row{text-decoration:none}
+.w3-tbl.p td{padding:10px 16px 10px 0}
+.w3-tbl.p td:last-child{padding-right:0}
+@media (min-width:761px){.w3-tbl td.nw{white-space:nowrap}}
+.w3-part{border-top:1px solid ${P.rule};padding-top:14px}
+.w3-lbl{display:block;font-size:10.5px;font-weight:600;color:${P.ink2}}
+.w3-card .w3-lbl{font-size:13px}
+.w3-big{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-top:8px}
+.w3-big a{font-size:20px;font-weight:600}
+.w3-big .m{font-size:15px;white-space:nowrap}
+.w3-kv{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-top:6px;font-size:11.5px}
+.w3-card .w3-kv{margin-top:8px;font-size:15px}
+.w3-one{margin:8px 0 0;font-size:15px;line-height:1.6;color:${P.ink2}}
+.w3-plain{margin:6px 0 0;font-size:11.5px;line-height:1.5}
+.w3-card .w3-plain{margin-top:8px;font-size:15px;line-height:1.55}
+.w3-chip{display:inline-flex;align-items:center;font-size:.867em;font-weight:600;line-height:1.4;padding:3px 8px;border-radius:6px;background:${P.pale};color:${P.ink};white-space:nowrap}
+.w3-chip.s{margin-left:8px}
+.w3-cats{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.w3-rrow{display:grid;grid-template-columns:minmax(0,1fr) 150px 30px;gap:14px;align-items:center;font-size:14.5px}
 .w3-rtrack{position:relative;height:8px;border-radius:4px;background:${P.rule};overflow:hidden}
 .w3-rtrack i{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:${P.yellow}}
-.w3-rnum{font-family:${MONOP};font-variant-numeric:tabular-nums;font-size:12.5px;text-align:right}
-.w3-ideas{display:flex;flex-direction:column}
-.w3-idea{display:grid;grid-template-columns:28px minmax(0,1fr);gap:10px;align-items:start;padding:11px 0;border-top:1px solid ${P.rule}}
-.w3-idea:first-child{border-top:0;padding-top:2px}
-.w3-idea a{font-size:15.5px;line-height:1.4;font-weight:600;text-decoration:none}
-.w3-num{width:22px;height:22px;border-radius:11px;background:${P.num};color:${P.paper};font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px}
-.w3-med{margin:0;font-size:13px;line-height:1.5;color:${P.muted}}
-.w3-reply{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;background:${P.ground};border-radius:10px;padding:13px 15px;text-decoration:none}
-.w3-reply .t{margin:0;font-size:14.5px;font-weight:600}
-.w3-reply .s{margin:2px 0 0;font-size:12.5px;color:${P.muted}}
-.w3-adv{display:flex;flex-direction:column}
-.w3-adv a{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:11px 0;border-top:1px solid ${P.rule};text-decoration:none;font-size:14.5px;line-height:1.42;font-weight:500}
-.w3-adv a:first-child{border-top:0;padding-top:2px}
-.w3-adv .w{flex:0 0 auto;font-family:${MONOP};font-size:12px;color:${P.muted};white-space:nowrap;padding-top:2px;text-align:right}
-.w3-move{background:${P.ground};border-radius:10px;padding:13px 15px;display:flex;flex-direction:column;gap:4px;text-decoration:none}
-.w3-move .l{font-size:11.5px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:${P.orange}}
-.w3-move .t{font-size:14.5px;font-weight:600;line-height:1.4}
-.w3-move .f{font-family:${MONOP};font-size:12.5px;line-height:1.5;color:${P.muted}}
-.w3-verd{display:inline-block;font-family:${SANS};font-size:12px;font-weight:600;color:${P.ink2};background:${P.rule};border-radius:999px;padding:3px 8px;white-space:nowrap}
-.w3-close{display:flex;align-items:center;justify-content:space-between;gap:12px;background:${P.close};border:1px solid ${P.closeEdge};border-radius:12px;padding:14px 18px;text-decoration:none}
-.w3-close .t{display:block;margin-top:4px;font-size:15px;line-height:1.4;font-weight:600}
-.w3-arr{color:${P.orange};font-weight:600}
-.w3-end{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:18px 2px 0;border-top:1px solid ${P.edge}}
-.w3-end .l{display:flex;align-items:center;gap:16px}
-.w3-fine{font-size:12.5px;color:${P.muted}}
-.w3-btn{display:inline-block;background:${P.yellow};color:${P.ink} !important;text-decoration:none;font-size:13.5px;font-weight:600;border-radius:8px;padding:9px 18px;line-height:22px}
+.w3-rnum{font-size:inherit;text-align:right}
+.w3-ideas{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.w3-idea{display:flex;gap:14px;align-items:baseline;padding:12px 0;border-top:1px solid ${P.rule}}
+.w3-idea:last-child{border-bottom:1px solid ${P.rule}}
+.w3-idea a{font-size:16px;line-height:1.4;font-weight:600}
+.w3-num{flex:0 0 14px;width:14px;font-size:14px;color:${P.muted}}
+.w3-med{margin:0;font-size:13.5px;line-height:1.5;color:${P.muted}}
+.w3-reply{background:${P.ground};border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:4px}
+.w3-reply .t{margin:0;font-size:15px;font-weight:600}
+.w3-reply .s{margin:0;font-size:14.5px;line-height:1.5;color:${P.ink2}}
+.w3-reply .w3-go{margin-top:4px}
+.w3-move{background:${P.ground};border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:4px}
+.w3-move .l{font-size:13px;font-weight:600;color:${P.ink2}}
+.w3-move .t{font-size:15px;font-weight:600;line-height:1.45}
+.w3-move .f{font-size:14px;line-height:1.5;color:${P.ink2}}
+.w3-verd{display:inline-block;font-size:13px;font-weight:600;color:${P.ink2};background:${P.rule};border-radius:6px;padding:2px 8px;white-space:nowrap}
+.w3-end{display:flex;align-items:baseline;gap:12px 24px;flex-wrap:wrap;margin-top:16px;padding-top:18px;border-top:1px solid ${P.edge}}
+.w3-fine{font-size:13.5px;color:${P.muted};margin-left:auto}
 .w3-bar2{display:flex;flex-direction:column;gap:2px}
-@media (max-width:1000px){.w3-news{grid-column:span 12}.w3-scard,.w3-pcard{grid-column:span 12}}
-@media (max-width:760px){.w3-sheet{padding:16px 16px 40px}.w3-wcols{grid-template-columns:minmax(0,1fr);gap:24px}.w3-whead{font-size:21px}.w3-ttl{font-size:24px}.w3-sec{flex-direction:column;gap:2px}.w3-brow{flex-wrap:wrap}}
+@media (max-width:900px){.w3-grid{grid-template-columns:minmax(0,1fr)}.w3-wide{grid-column:auto}.w3-strip{grid-template-columns:minmax(0,1fr);gap:14px}}
+@media (max-width:760px){.w3-tbl.st thead{display:none}.w3-tbl.st tr{display:flex;flex-wrap:wrap;gap:4px 0;border-top:1px solid ${P.rule};padding:14px 0}.w3-tbl.st tbody tr:first-child{border-top:0;padding-top:0}.w3-tbl.st td{border:0;padding:0}.w3-tbl.st td.w{flex:0 0 100%}.w3-tbl.st td.r{text-align:left;font-weight:400;color:${P.ink2}}.w3-tbl.st td.r:empty{display:none}.w3-tbl.st td[data-l]::after{content:attr(data-l)}.w3-tbl.st td.b+td.r:not(:empty)::before{content:',\\00a0'}}
+@media (max-width:760px){.w3-sheet{padding:16px 16px 40px}.w3-framed .w3-sheet{padding:0}.w3-card,.w3-week{padding:18px}.w3-wcols{grid-template-columns:minmax(0,1fr);gap:24px}.w3-whead{font-size:22px}.w3-ttl{font-size:24px}.w3-sec{flex-direction:column;gap:2px}.w3-brow{flex-wrap:wrap}.w3-fine{margin-left:0}}
 `
   if (!print) return screen
   // THE PAPER (H7-Weekly-Full-Print): the same parts, flat (no card shadow),
@@ -910,77 +924,70 @@ function pageCss(print: boolean, footer: string): string {
 `
 }
 
-/** The boards' card icons (lucide's, 24-unit, stroked). */
-const ICON: Record<string, ReactNode> = {
-  calendar: <><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></>,
-  talk: <><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /><path d="M13 8H7" /><path d="M17 12H7" /></>,
-  bars: <><path d="M3 3v18h18" /><path d="M8 17V11M13 17V7M18 17v-4" /></>,
-  spark: <path d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.4z" />,
-  trend: <><path d="M22 7 13.5 15.5 8.5 10.5 2 17" /><path d="M16 7h6v6" /></>,
-  voices: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>,
-  products: <><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><path d="M3.3 7 12 12l8.7-5" /><path d="M12 22V12" /></>,
-  content: <><rect x="3" y="3" width="18" height="18" rx="2" /><path d="m10 8 6 4-6 4Z" /></>,
-  moves: <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1.5" /></>,
-}
+/** " · " joins in a lib string printed on the page (`barMonth`'s "October ·
+ *  the last full month") said with a comma on screen and paper; the email
+ *  keeps its words. */
+const commas = (s: string): string => s.replace(/\s*·\s*/g, ', ')
 
-const Icon = ({ name }: { name: keyof typeof ICON }) => (
-  <div className="w3-itile" aria-hidden="true">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">{ICON[name]}</svg>
-  </div>
-)
-
-/** A quote under its paragraph, as Market's week page places it. */
+/** A quote under its paragraph, as Market's week page places it: a figure,
+ *  its words, the English where there is one, then "TikTok, 26 Oct". */
 function QuotePanel({ q }: { q: ResolvedQuote }) {
   const note = translationNote({ lang: q.lang, english: q.english })
   const label = translationLabel(note)
-  const cite = [q.platform ? platformLabel(q.platform) : null, q.date ? shortDate(`${q.date.slice(0, 10)}T12:00:00.000Z`) : null].filter(Boolean).join(' · ')
+  const cite = [q.platform ? platformLabel(q.platform) : null, q.date ? shortDate(`${q.date.slice(0, 10)}T12:00:00.000Z`) : null].filter(Boolean).join(', ')
   return (
-    <div className="w3-q">
-      <p data-copy="quote" className="w3-qt">“{q.text}”</p>
-      {label ? <span className="w3-qsrc">{label}</span> : null}
+    <figure className="w3-q">
+      <blockquote style={{ margin: 0 }}><p data-copy="quote" className="w3-qt">“{q.text}”</p></blockquote>
+      {label ? <span className="w3-qsrc">{commas(label)}</span> : null}
       {note.english ? <p className="w3-qen">{note.english}</p> : null}
-      {cite ? <span className="w3-qsrc">{cite}</span> : null}
-    </div>
+      {cite ? <figcaption className="w3-qsrc">{cite}</figcaption> : null}
+    </figure>
   )
 }
 
-/** "12 to 18 October · 146 videos · 4,180 comments this week · 434 videos
- *  and 11,178 comments in October so far". */
-function Meta({ v }: { v: WeeklyV3View }) {
+/** "146 videos, 4,180 comments": a cell of the figures row. */
+function Counts({ x }: { x: { videos: number; comments: number | null } }) {
+  return <><N n={x.videos} /> {x.videos === 1 ? 'video' : 'videos'}{x.comments != null ? <>, <N n={x.comments} /> {x.comments === 1 ? 'comment' : 'comments'}</> : null}</>
+}
+
+/** The figures row under the title (the boards' strip): the week, the
+ *  market's videos and comments this week and in its month. */
+function Strip({ v }: { v: WeeklyV3View }) {
   const n = v.numbers
+  if (!v.dates && !n) return null
   return (
-    <p className="w3-meta">
-      {v.dates}
-      {n ? (
-        <>
-          {v.dates ? ' · ' : null}<N n={n.week.videos} /> videos{n.week.comments != null ? <> · <N n={n.week.comments} /> comments</> : null} this week · <N n={n.month.videos} /> videos{n.month.comments != null ? <> and <N n={n.month.comments} /> comments</> : null} {v.where}
-        </>
-      ) : null}
-    </p>
+    <dl className="w3-strip">
+      {v.dates ? <div><dt>Week</dt><dd>{v.dates}</dd></div> : null}
+      {n ? <div><dt>This week</dt><dd><Counts x={n.week} /></dd></div> : null}
+      {n ? <div><dt>{v.monthGroup}</dt><dd><Counts x={n.month} /></dd></div> : null}
+    </dl>
   )
 }
 
 /** The week card's right column: what it means, new this week, worth
- *  watching. */
-function WeekRight({ v }: { v: WeeklyV3View }) {
+ *  watching (a list), and on screen the month's long-run read in its box. */
+function WeekRight({ v, close }: { v: WeeklyV3View; close?: ReactNode }) {
   return (
     <>
       {v.means.length > 0 ? (
-        <>
-          <p className="w3-dl">What it means</p>
+        <div>
+          <h3 className="w3-dl">What it means</h3>
           <div className="w3-items">{v.means.map((m, i) => <Prose key={i} body={m} figures={v.figures} />)}</div>
-        </>
+        </div>
       ) : null}
-      <p className={`w3-dl${v.means.length > 0 ? ' w3-gap' : ''}`}>New this week</p>
-      {v.fresh.length > 0
-        ? <div className="w3-items">{v.fresh.map((m, i) => <Prose key={i} body={m} figures={v.figures} />)}</div>
-        : <p className="w3-nothing"><span data-copy="verdict">Nothing new this week.</span></p>}
+      <div>
+        <h3 className="w3-dl">New this week</h3>
+        {v.fresh.length > 0
+          ? <div className="w3-items">{v.fresh.map((m, i) => <Prose key={i} body={m} figures={v.figures} />)}</div>
+          : <p className="w3-nothing"><span data-copy="verdict">Nothing new this week.</span></p>}
+      </div>
       {v.watch.length > 0 ? (
-        <>
-          <p className="w3-dl w3-gap">Worth watching</p>
-          <div className="w3-items">{v.watch.map((m, i) => <Prose key={i} body={m} figures={v.figures} />)}</div>
-        </>
+        <div>
+          <h3 className="w3-dl">Worth watching</h3>
+          <ul className="w3-list">{v.watch.map((m, i) => <li key={i}><Prose as="span" body={m} figures={v.figures} /></li>)}</ul>
+        </div>
       ) : null}
+      {close}
     </>
   )
 }
@@ -990,7 +997,7 @@ function Story({ v }: { v: WeeklyV3View }) {
   if (v.story.length === 0) return null
   return (
     <>
-      <p className="w3-dl">What happened</p>
+      <h3 className="w3-dl">What happened</h3>
       {v.story.map((p, i) => (
         <Fragment key={i}>
           <Prose className="w3-read" body={p.body} figures={v.figures} />
@@ -1008,13 +1015,13 @@ function NumbersBand({ v }: { v: WeeklyV3View }) {
   const cell = (label: string, x: { videos: number; comments: number | null }, ruled: boolean) => (
     <div style={{ flex: 1, padding: '12px 16px', borderLeft: ruled ? `1px solid ${P.edge}` : undefined }}>
       <p className="w3-dl" style={{ fontSize: 10.5 }}>{label}</p>
-      <div style={{ marginTop: 8, fontFamily: MONOP, fontSize: 22, lineHeight: 1, fontWeight: 500, letterSpacing: '-.02em' }}><N n={x.videos} /><span style={{ fontFamily: SANS, fontSize: 12.5, fontWeight: 500, letterSpacing: 0, marginLeft: 6 }}>videos</span></div>
+      <div style={{ marginTop: 8, fontSize: 22, lineHeight: 1, fontWeight: 600, letterSpacing: '-.01em' }}><N n={x.videos} /><span style={{ fontSize: 12.5, fontWeight: 500, letterSpacing: 0, marginLeft: 6 }}>videos</span></div>
       {x.comments != null ? <div style={{ marginTop: 6, fontSize: 11.5, color: P.ink2 }}><N n={x.comments} /> comments</div> : null}
     </div>
   )
   return (
     <div style={{ display: 'flex', background: P.ground, borderRadius: 10, breakInside: 'avoid' }}>
-      {cell(v.dates ? `This week · ${shortDays(v.dates)}` : 'This week', n.week, false)}
+      {cell(v.dates ? `This week, ${shortDays(v.dates)}` : 'This week', n.week, false)}
       {cell(v.monthCell, n.month, true)}
     </div>
   )
@@ -1023,56 +1030,84 @@ function NumbersBand({ v }: { v: WeeklyV3View }) {
 /** "12 to 18 Oct" from "12 to 18 October" (the paper's cell label). */
 const shortDays = (dates: string): string => dates.replace(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\b/g, (m) => m.slice(0, 3))
 
-/** The month-closing line, as a slim card. */
+/** The month-closing line, in its box (the week card's right column on
+ *  screen): what it is, where it is, and the link that says so. */
 function CloseCard({ v, appUrl }: { v: WeeklyV3View; appUrl: string }) {
   const c = v.monthClose
   if (!c) return null
+  const month = longMonthOf(c.month)
   return (
-    <a className="w3-close" href={`${appUrl}${c.href}`}>
-      <span><span className="w3-eb">The month’s long-run read</span><span className="t">{longMonthOf(c.month)}’s read, “{c.title}”, is on Market › This month</span></span>
-      <span className="w3-arr" aria-hidden="true">→</span>
-    </a>
+    <div className="w3-close">
+      <h3 className="w3-dl">The month’s long-run read</h3>
+      <p className="t">{month}’s read, “{c.title}”, is on Market, This month.</p>
+      <a className="w3-go" href={`${appUrl}${c.href}`}>Open {month}’s long-run read in Market</a>
+    </div>
   )
 }
 
-/** A stood-out card (screen) or row (paper). */
-function NewsCard({ r, appUrl, figures, print }: { r: StoodOutRow; appUrl: string; figures: FigureTable; print: boolean }) {
-  const icon: keyof typeof ICON = r.chip ? 'trend' : r.eyebrow?.verdict ? 'spark' : r.lead ? 'talk' : 'bars'
-  const eyebrow = r.chip
-    ? <span data-copy="verdict" className="w3-chip">{r.chip}</span>
-    : r.eyebrow ? <p className="w3-eb">{r.eyebrow.verdict ? <span data-copy="verdict">{r.eyebrow.text}</span> : r.eyebrow.text}{print && r.sub ? <> · {r.sub}</> : null}</p> : null
-  const figure = <p className="w3-nf"><RowFigure figure={r.figure} bold={{ fontWeight: 500, color: P.ink }} /></p>
-  if (print) {
-    return (
-      <div className="w3-prow">
-        <div>{eyebrow}<div style={{ fontSize: 12.5, marginTop: 2 }}><RowName row={r} figures={figures} /></div></div>
-        <div style={{ textAlign: 'right' }}>{figure}</div>
-      </div>
-    )
-  }
+/** What stood out about a row: "Most talked about this week", or "Also
+ *  talked about. Nothing new this week."; a flag its check's chip. */
+function StoodOutWords({ r }: { r: StoodOutRow }) {
+  if (r.chip) return <span data-copy="verdict" className="w3-chip">{r.chip}</span>
+  if (!r.eyebrow) return r.sub ? <>{r.sub}</> : null
+  const eyebrow = r.eyebrow.verdict ? <span data-copy="verdict">{r.eyebrow.text}</span> : <>{r.eyebrow.text}</>
+  return r.sub ? <>{r.sub}. {eyebrow}.</> : eyebrow
+}
+
+/** A row's counts: this week (a flag's k of n) and the month's. */
+function weekCell(r: StoodOutRow): ReactNode {
+  return r.figure.kind === 'flag'
+    ? <><N n={r.figure.k} /> of <N n={r.figure.n} /></>
+    : <N n={r.figure.week} />
+}
+function monthCell(r: StoodOutRow): ReactNode {
+  return r.figure.kind !== 'flag' && r.figure.month != null ? <N n={r.figure.month} /> : null
+}
+
+/** Also this week on screen: one table (the board's), each conversation its
+ *  page's link. */
+function AlsoTable({ v, appUrl }: { v: WeeklyV3View; appUrl: string }) {
   return (
-    <article className="w3-card w3-news">
-      <div className="w3-chead">
-        <Icon name={icon} />
-        <div style={{ minWidth: 0 }}>
-          {eyebrow}
-          <h3 className="w3-ct"><RowName row={r} figures={figures} /></h3>
-          {r.sub ? <p className="w3-csub">{r.sub}</p> : null}
-          {figure}
-        </div>
+    <section className="w3-card">
+      <div className="w3-tw">
+        <table className="w3-tbl st">
+          <thead><tr><th scope="col">Conversation</th><th scope="col">What stood out</th><th scope="col" className="r" style={{ width: 110 }}>This week</th><th scope="col" className="r" style={{ width: 110 }}>{v.monthGroup}</th></tr></thead>
+          <tbody>
+            {v.stoodOut.map((r) => (
+              <tr key={r.key}>
+                <td className="w"><a className="row" href={`${appUrl}${r.href}`}><RowName row={r} figures={v.figures} /></a></td>
+                <td className="w"><StoodOutWords r={r} /></td>
+                <td className="r b" data-l=" this week">{weekCell(r)}</td>
+                <td className="r mu" data-l={` in ${v.monthGroup}`}>{monthCell(r)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
-      <div className="w3-foot r"><a className="w3-olink" href={`${appUrl}${r.href}`}>Open →</a></div>
-    </article>
+    </section>
   )
 }
 
-/** A subject's card (screen) or block (paper): its name, its headline, what
- *  it means in full. */
+/** A stood-out row on paper: its words and name, its counts. */
+function NewsRow({ r, figures }: { r: StoodOutRow; figures: FigureTable }) {
+  const month = monthCell(r)
+  return (
+    <div className="w3-prow">
+      <div><p className="w3-eb"><StoodOutWords r={r} /></p><div style={{ fontSize: 12.5, marginTop: 2 }}><RowName row={r} figures={figures} /></div></div>
+      <div style={{ textAlign: 'right', fontSize: 12 }}>
+        <b style={{ fontWeight: 600 }}>{weekCell(r)}</b> this week{month ? <>, {month} {r.figure.kind !== 'flag' ? r.figure.where : null}</> : null}
+      </div>
+    </div>
+  )
+}
+
+/** A subject's tile (screen) or block (paper): its name, its headline, what
+ *  it means in full, and on screen the link that opens it. */
 function SubjectCard({ s, v, appUrl, print }: { s: WeeklySubjectRead; v: WeeklyV3View; appUrl: string; print: boolean }) {
   const body = (
     <>
-      <p className="w3-eb">{s.name}</p>
-      {s.headline ? <Prose as="h3" copy="stored" className="w3-shead" body={s.headline} figures={v.figures} /> : null}
+      <h3 className="w3-sname">{s.name}</h3>
+      {s.headline ? <Prose copy="stored" className="w3-shead" body={s.headline} figures={v.figures} /> : null}
       {s.status === 'thin'
         ? (s.line ? <Prose copy="stored" className="w3-sthin" body={s.line} figures={v.figures} /> : null)
         : (s.means ? <Prose copy="stored" className="w3-sread" body={s.means} figures={v.figures} /> : null)}
@@ -1082,75 +1117,69 @@ function SubjectCard({ s, v, appUrl, print }: { s: WeeklySubjectRead; v: WeeklyV
   return (
     <article className="w3-card w3-scard">
       {body}
-      <div className="w3-foot"><span className="w3-when">{v.monthGroup}</span><a className="w3-olink" href={`${appUrl}${s.href}`}>Open →</a></div>
+      <div className="w3-fill" />
+      <a className="w3-go" href={`${appUrl}${s.href}`}>Open {s.name}</a>
     </article>
   )
 }
 
-/** "October so far · your six subjects". */
+/** "October so far, your six subjects". */
 function subjectsNote(v: WeeklyV3View): string {
   const n = v.subjects.length
   const words = ['', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve']
   const count = n === 1 ? 'your subject' : `your ${words[n] ?? fmtInt(n)} subjects`
-  return `${v.monthGroup} · ${count}`
+  return `${v.monthGroup}, ${count}`
 }
 
-/** The Voices card: the group in the most videos, its share of the month's
- *  videos as a bar, its one-liner, the other groups, the brands named most. */
+/** The Voices tile: the group in the most videos with its videos and its
+ *  one-liner, the other groups, the brands named most. */
 function VoicesCard({ part, appUrl, print, wide = false }: { part: WeeklyVoicesPart; appUrl: string; print: boolean; wide?: boolean }) {
   const g = part.group!
-  const share = part.videos ? Math.max(2, Math.min(100, Math.round((g.videos / part.videos) * 1000) / 10)) : null
   // A whole-month reading: its month, labelled wherever it is not the
   // current calendar month (decision 3).
-  const month = barMonth(part.monthWords, part.monthLabel)
+  const month = commas(barMonth(part.monthWords, part.monthLabel))
   return (
     <article className={print ? 'w3-pc' : `w3-card w3-pcard${wide ? ' w3-wide' : ''}`}>
-      <div className="w3-chead">
-        {print ? null : <Icon name="voices" />}
-        <div><h3 className="w3-ctitle">Voices</h3><p className="w3-csub">{print ? `${month} · in the most videos` : `The groups in your market, ${month}`}</p></div>
-      </div>
-      <div>
-        {print ? null : <p className="w3-dl">In the most videos</p>}
+      <div><h3 className="w3-ctitle">Voices</h3><p className="w3-csub">{print ? `${month}, in the most videos` : `The groups in your market, ${month}`}</p></div>
+      <div className={print ? undefined : 'w3-part'}>
+        {print ? null : <span className="w3-lbl">In the most videos</span>}
         <div className="w3-big">
           <a href={`${appUrl}${g.href}`}><span data-copy="subject" data-slot="pass_e_persona">{g.name}</span></a>
           <span className="m">{part.videos ? <><N n={g.videos} /> of <N n={part.videos} /> videos</> : <><N n={g.videos} /> {g.videos === 1 ? 'video' : 'videos'}</>}</span>
         </div>
-        {share != null && !print ? <div className="w3-bar" aria-hidden="true"><i style={{ width: `${share}%` }} /></div> : null}
+        {g.oneLiner ? <p className="w3-one"><span data-copy="subject" data-slot="pass_e_persona">{g.oneLiner}</span></p> : null}
       </div>
-      {g.oneLiner ? <p className="w3-one"><span data-copy="subject" data-slot="pass_e_persona">{g.oneLiner}</span></p> : null}
       {part.others.length > 0 ? (
-        <div>
-          <p className="w3-dl" style={{ marginBottom: 8 }}>The other groups</p>
-          <div className="w3-tags">{part.others.map((o) => <span key={o} className="w3-tag"><span data-copy="subject" data-slot="pass_e_persona">{o}</span></span>)}</div>
+        <div className={print ? undefined : 'w3-part'}>
+          <span className="w3-lbl">The other groups</span>
+          <p className="w3-plain">{part.others.map((o, i) => <Fragment key={o}>{i > 0 ? ', ' : null}<span data-copy="subject" data-slot="pass_e_persona">{o}</span></Fragment>)}</p>
         </div>
       ) : null}
       {part.named.length > 0 ? (
-        <div>
-          <p className="w3-dl" style={{ marginBottom: 4 }}>Named most, unprompted</p>
-          <div className="w3-adv">
-            {part.named.map((b) => (
-              <a key={b.href} href={`${appUrl}${b.href}`}><span>{b.label}</span><span className="w"><N n={b.k} /> of <N n={b.n} /> videos</span></a>
-            ))}
-          </div>
+        <div className={print ? undefined : 'w3-part'}>
+          <span className="w3-lbl">Named most, unprompted</span>
+          {part.named.map((b) => (
+            <div key={b.href} className="w3-kv"><a href={`${appUrl}${b.href}`}>{b.label}</a><span><N n={b.k} /> of <N n={b.n} /> videos</span></div>
+          ))}
         </div>
       ) : null}
-      {print ? null : <div className="w3-foot r"><a className="w3-olink" href={`${appUrl}${part.href}`}>Open Voices →</a></div>}
+      {print ? null : <><div className="w3-fill" /><a className="w3-go" href={`${appUrl}${part.href}`}>Open Voices</a></>}
     </article>
   )
 }
 
-/** The Your products card: the table of the products that came up, and the
+/** The Your products tile: the table of the products that came up, and the
  *  categories' videos. */
 function ProductsCard({ part, appUrl, print, monthWords, wide = false }: { part: WeeklyProductsPart; appUrl: string; print: boolean; monthWords: string; wide?: boolean }) {
   const max = Math.max(1, ...part.categories.map((c) => c.videos))
   const table = part.top.length > 0 ? (
-    <table className="w3-tbl">
-      <thead><tr><th>Product</th><th>Category</th><th className="r">Videos</th></tr></thead>
+    <table className="w3-tbl p">
+      <thead><tr><th scope="col">Product</th><th scope="col">Category</th><th scope="col" className="r">Videos</th></tr></thead>
       <tbody>
         {part.top.map((p) => (
           <tr key={p.id}>
             <td><a href={`${appUrl}${p.href}`}>{p.name}</a>{p.first ? <span data-copy="verdict" className="w3-chip s">{FIRST_TIME}</span> : null}</td>
-            <td className="mu">{p.category}</td>
+            <td className="mu nw">{p.category}</td>
             <td className="r"><N n={p.videos} /></td>
           </tr>
         ))}
@@ -1159,7 +1188,7 @@ function ProductsCard({ part, appUrl, print, monthWords, wide = false }: { part:
   ) : null
   const cats = part.categories.length > 0 ? (
     <div>
-      {print ? null : <p className="w3-dl" style={{ marginBottom: 10 }}>Videos about each category, a product named or not</p>}
+      {print ? null : <span className="w3-lbl">Videos about each category, a product named or not</span>}
       <div className="w3-cats">
         {part.categories.map((c) => (
           <div key={c.id} className="w3-rrow">
@@ -1171,30 +1200,34 @@ function ProductsCard({ part, appUrl, print, monthWords, wide = false }: { part:
       </div>
     </div>
   ) : null
+  const month = commas(monthWords)
   const sub = (
     <p className="w3-csub">
-      {monthWords}{part.products > 0 ? <> · <ProductsLead part={part} /></> : null}
+      {month}{part.products > 0 ? (
+        <>. <N n={part.cameUp} /> of your <N n={part.products} /> products came up{part.videos != null ? <>, <N n={part.videos} /> videos about them or their categories</> : null}.</>
+      ) : null}
     </p>
   )
   if (print) {
     return (
       <>
         <article className="w3-pc"><h3 className="w3-ctitle">Your products</h3>{sub}{table}</article>
-        {cats ? <article className="w3-pc" data-part="categories"><h3 className="w3-ctitle">Videos about each category</h3><p className="w3-csub">A product named or not, {monthWords}</p>{cats}</article> : null}
+        {cats ? <article className="w3-pc" data-part="categories"><h3 className="w3-ctitle">Videos about each category</h3><p className="w3-csub">A product named or not, {month}</p>{cats}</article> : null}
       </>
     )
   }
   return (
     <article className={`w3-card w3-pcard${wide ? ' w3-wide' : ''}`}>
-      <div className="w3-chead"><Icon name="products" /><div><h3 className="w3-ctitle">Your products</h3>{sub}</div></div>
+      <div><h3 className="w3-ctitle">Your products</h3>{sub}</div>
       {table}
       {cats}
-      <div className="w3-foot r"><a className="w3-olink" href={`${appUrl}${part.href}`}>Open Your products →</a></div>
+      <div className="w3-fill" />
+      <a className="w3-go" href={`${appUrl}${part.href}`}>Open Your products</a>
     </article>
   )
 }
 
-/** The Content card: what to post next (or the question asked most), the
+/** The Content tile: what to post next (or the question asked most), the
  *  medical team line once, Worth a reply. */
 function ContentCard({ part, appUrl, print, medical, wide = false }: { part: WeeklyContentPart; appUrl: string; print: boolean; medical: boolean; wide?: boolean }) {
   const ideas = part.ideas
@@ -1203,58 +1236,64 @@ function ContentCard({ part, appUrl, print, medical, wide = false }: { part: Wee
   const sub = ideas.length > 0 && part.read ? `From questions asked ${part.read}` : null
   return (
     <article className={print ? 'w3-pc' : `w3-card w3-pcard${wide ? ' w3-wide' : ''}`}>
-      <div className="w3-chead">{print ? null : <Icon name="content" />}<div><h3 className="w3-ctitle">{title}</h3>{sub ? <p className="w3-csub">{sub}</p> : null}</div></div>
+      <div><h3 className="w3-ctitle">{title}</h3>{sub ? <p className="w3-csub">{sub}</p> : null}</div>
       {ideas.length > 0 ? (
-        <div className="w3-ideas">
+        <ol className="w3-ideas">
           {ideas.map((x, i) => (
-            <div key={x.id} className="w3-idea"><span data-copy="figure" className="w3-num">{i + 1}</span><a href={`${appUrl}${x.href}`}><span data-copy="prose">{x.title}</span></a></div>
+            <li key={x.id} className="w3-idea"><span data-copy="figure" className="w3-num">{i + 1}</span><a href={`${appUrl}${x.href}`}><span data-copy="prose">{x.title}</span></a></li>
           ))}
-        </div>
+        </ol>
       ) : q ? (
         <div>
-          <a href={`${appUrl}${q.href}`} style={{ fontSize: 15.5, fontWeight: 600, textDecoration: 'none' }}><span data-copy="subject" data-slot="pass_b_theme">{q.label}</span></a>
+          <a href={`${appUrl}${q.href}`} style={{ fontSize: 16, fontWeight: 600 }}><span data-copy="subject" data-slot="pass_b_theme">{q.label}</span></a>
           {q.week != null && q.month != null
-            ? <p className="w3-nf"><b><N n={q.week} /></b> {q.week === 1 ? 'video' : 'videos'} {q.weekWords} · <b><N n={q.month} /></b> {q.monthWords}</p>
-            : q.month != null ? <p className="w3-nf"><b><N n={q.month} /></b> {q.month === 1 ? 'video' : 'videos'} {q.monthWords}</p> : null}
+            ? <p className="w3-one"><N n={q.week} /> {q.week === 1 ? 'video' : 'videos'} {q.weekWords}, <N n={q.month} /> {q.monthWords}</p>
+            : q.month != null ? <p className="w3-one"><N n={q.month} /> {q.month === 1 ? 'video' : 'videos'} {q.monthWords}</p> : null}
         </div>
       ) : null}
       {ideas.length > 0 && (part.medical || medical) ? <p className="w3-med">{MEDICAL_LINE}</p> : null}
-      <a className="w3-reply" href={`${appUrl}${part.replies.href}`}>
-        <div><p className="t">Worth a reply</p><p className="s">{part.replies.days ? `Comments written ${part.replies.days} worth an answer from you` : 'The comments worth an answer from you'}</p></div>
-        {print ? null : <span className="w3-olink" style={{ whiteSpace: 'nowrap' }}>Open the replies →</span>}
-      </a>
-      {print ? null : <div className="w3-foot r"><a className="w3-olink" href={`${appUrl}${part.href}`}>Open Content →</a></div>}
+      <div className="w3-reply">
+        <h4 className="t">Worth a reply</h4>
+        <p className="s">{part.replies.days ? `Comments written ${part.replies.days} worth an answer from you` : 'The comments worth an answer from you'}</p>
+        {print ? null : <a className="w3-go" href={`${appUrl}${part.replies.href}`}>Open the replies</a>}
+      </div>
+      {print ? null : <><div className="w3-fill" /><a className="w3-go" href={`${appUrl}${part.href}`}>Open Content</a></>}
     </article>
   )
 }
 
-/** The Your moves card: the advice waiting, and the move's one comparison. */
+/** The Your moves tile: the advice waiting as a table, and the move's one
+ *  comparison. */
 function MovesCard({ part, appUrl, print, wide = false }: { part: WeeklyMovesPart; appUrl: string; print: boolean; wide?: boolean }) {
   const n = part.waiting
+  const dated = part.advice.some((a) => a.since)
   return (
     <article className={print ? 'w3-pc' : `w3-card w3-pcard${wide ? ' w3-wide' : ''}`}>
-      <div className="w3-chead">
-        {print ? null : <Icon name="moves" />}
-        <div>
-          <h3 className="w3-ctitle">Advice to decide on</h3>
-          {n > 0 ? <p className="w3-csub"><N n={n} /> {n === 1 ? 'piece of advice waiting' : 'pieces of advice waiting'} for a decision</p> : null}
-        </div>
+      <div>
+        <h3 className="w3-ctitle">Advice to decide on</h3>
+        {n > 0 ? <p className="w3-csub"><N n={n} /> {n === 1 ? 'piece of advice waiting' : 'pieces of advice waiting'} for a decision</p> : null}
       </div>
       {part.advice.length > 0 ? (
-        <div className="w3-adv">
-          {part.advice.map((a) => (
-            <a key={a.href} href={`${appUrl}${a.href}`}><span><AdviceTitle a={a} /></span>{a.since ? <span className="w">first raised {shortDate(`${a.since.slice(0, 10)}T12:00:00.000Z`)}</span> : a.figure ? <span className="w" data-copy="figure">{a.figure}</span> : null}</a>
-          ))}
-        </div>
+        <table className="w3-tbl">
+          <thead><tr><th scope="col">Advice</th><th scope="col" className="r" style={{ width: 110 }}>{dated ? 'First raised' : <span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>How long</span>}</th></tr></thead>
+          <tbody>
+            {part.advice.map((a) => (
+              <tr key={a.href}>
+                <td><a className="row" href={`${appUrl}${a.href}`}><AdviceTitle a={a} /></a></td>
+                <td className="r mu">{a.since ? shortDate(`${a.since.slice(0, 10)}T12:00:00.000Z`) : a.figure ? <span data-copy="figure">{a.figure}</span> : null}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       ) : null}
       {part.move ? (
-        <a className="w3-move" href={`${appUrl}${part.move.href}`}>
+        <a className="w3-move" href={`${appUrl}${part.move.href}`} style={{ textDecoration: 'none' }}>
           <span className="l">After your move</span>
           <span className="t"><span data-copy="quote">{part.move.title}</span>, dated {shortDate(`${part.move.day}T12:00:00.000Z`)}</span>
           <span className="f"><MoveLineFull move={part.move} /></span>
         </a>
       ) : null}
-      {print ? null : <div className="w3-foot"><a className="w3-olink" href={`${appUrl}${part.recordHref}`}>The advice record →</a><a className="w3-olink" href={`${appUrl}${part.href}`}>Open Your moves →</a></div>}
+      {print ? null : <><div className="w3-fill" /><div className="w3-links"><a className="w3-go" href={`${appUrl}${part.recordHref}`}>The advice record</a><a className="w3-go" href={`${appUrl}${part.href}`}>Open Your moves</a></div></>}
     </article>
   )
 }
@@ -1264,15 +1303,17 @@ function MoveLineFull({ move }: { move: NonNullable<WeeklyMovesPart['move']> }) 
   return (
     <>
       {move.label ? <>{move.kind === 'subject' ? <span data-copy="quote">{move.label}</span> : <span data-copy="subject" data-slot="pass_b_theme">{move.label}</span>}: </> : null}
-      <b style={{ fontWeight: 500, color: P.ink }}><N n={move.before.k} /></b> of <N n={move.before.n} /> videos in {move.months.before}, against <b style={{ fontWeight: 500, color: P.ink }}><N n={move.after.k} /></b> of <N n={move.after.n} /> in {move.months.after}
-      {words ? <> · <span data-copy="verdict" className="w3-verd">{words}</span></> : null}
+      <b style={{ fontWeight: 600, color: P.ink }}><N n={move.before.k} /></b> of <N n={move.before.n} /> videos in {move.months.before}, against <b style={{ fontWeight: 600, color: P.ink }}><N n={move.after.k} /></b> of <N n={move.after.n} /> in {move.months.after}
+      {words ? <span style={{ display: 'block', marginTop: 6 }}><span data-copy="verdict" className="w3-verd">{commas(words)}</span></span> : null}
     </>
   )
 }
 
 /** The full read: the share page (`fill`), the viewer and, with `print`, the
- *  A4 paper. */
-export function WeeklyV3Page({ data, appUrl, print = false, fill = false, medical = false }: { data: WeeklyReadSnapshotData; appUrl: string; print?: boolean; fill?: boolean; medical?: boolean }) {
+ *  A4 paper. `framed`: the Studio's viewer, whose own page already carries
+ *  the title, the figures row and the way back (Studio-Weekly.dc.html), so
+ *  the sheet starts at the week and draws no brow or title of its own. */
+export function WeeklyV3Page({ data, appUrl, print = false, fill = false, medical = false, framed = false }: { data: WeeklyReadSnapshotData; appUrl: string; print?: boolean; fill?: boolean; medical?: boolean; framed?: boolean }) {
   const v = weeklyV3View({ read: data.read, subjects: data.subjects, pages: data.pages, monthClose: data.monthClose, chipOf, full: true })
   const company = data.company
   const footer = [company, WEEKLY_READ_TITLE, v.dates].filter(Boolean).join(' · ')
@@ -1290,22 +1331,22 @@ export function WeeklyV3Page({ data, appUrl, print = false, fill = false, medica
   ].filter((c): c is (wide: boolean) => ReactElement => c != null)
   const cards = makers.map((make, i) => make(i === makers.length - 1 && makers.length % 2 === 1))
   const read = `Read ${shortDate(data.readingAt)}`
-  const brow = (
+  const brow = framed ? null : (
     <div className="w3-brow">
       <div className="w3-bl">
         <div className="w3-mark" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 12 12"><path d={DITTO} fill={P.ink} /></svg></div>
         <span className="w3-word">Verbatim</span>
         {company ? <span className="w3-co">{company}</span> : null}
       </div>
-      <span className="w3-br">{fill ? `${read} · shared from Verbatim` : read}</span>
+      <span className="w3-br">{fill ? `${read}, shared from Verbatim` : read}</span>
     </div>
   )
   const also = v.stoodOut.length > 0 ? (
     <>
       <div className="w3-sec"><h2>Also this week</h2>{print ? null : <span className="w3-note">What stood out in this week’s conversations</span>}</div>
       {print
-        ? <div>{v.stoodOut.map((r) => <NewsCard key={r.key} r={r} appUrl={appUrl} figures={v.figures} print />)}</div>
-        : <div className="w3-grid">{v.stoodOut.map((r) => <NewsCard key={r.key} r={r} appUrl={appUrl} figures={v.figures} print={false} />)}</div>}
+        ? <div>{v.stoodOut.map((r) => <NewsRow key={r.key} r={r} figures={v.figures} />)}</div>
+        : <AlsoTable v={v} appUrl={appUrl} />}
     </>
   ) : null
   const subjects = v.subjects.length > 0 ? (
@@ -1324,9 +1365,10 @@ export function WeeklyV3Page({ data, appUrl, print = false, fill = false, medica
         : <div className="w3-grid">{cards}</div>}
     </div>
   ) : null
+  const made = company ? `${company}, made with Verbatim` : 'Made with Verbatim'
 
   return (
-    <div className={`w3${print ? ' w3-print' : ''}`} style={{ minHeight: fill ? '100vh' : undefined }}>
+    <div className={`w3${print ? ' w3-print' : ''}${framed ? ' w3-framed' : ''}`} style={{ minHeight: fill ? '100vh' : undefined }}>
       <style dangerouslySetInnerHTML={{ __html: pageCss(print, footer) }} />
       <div className="w3-sheet">
         {brow}
@@ -1353,16 +1395,14 @@ export function WeeklyV3Page({ data, appUrl, print = false, fill = false, medica
           </>
         ) : (
           <>
-            <div><h1 className="w3-ttl">{WEEKLY_READ_TITLE}</h1><Meta v={v} /></div>
+            {framed ? null : <div><h1 className="w3-ttl">{WEEKLY_READ_TITLE}</h1><Strip v={v} /></div>}
             <section className="w3-card w3-week">
-              <div className="w3-chead c"><Icon name="calendar" /><p className="w3-eb">{v.dates ? `This week · ${v.dates}` : 'This week'}</p></div>
               {v.line ? <Prose as="h2" className="w3-whead" body={v.line} figures={v.figures} /> : null}
               <div className="w3-wcols">
                 <div className="w3-wcol"><Story v={v} /></div>
-                <div className="w3-wcol"><WeekRight v={v} /></div>
+                <div className="w3-wcol w3-wright"><WeekRight v={v} close={<CloseCard v={v} appUrl={appUrl} />} /></div>
               </div>
             </section>
-            <CloseCard v={v} appUrl={appUrl} />
             {also}
             {subjects}
             {pages}
@@ -1371,13 +1411,13 @@ export function WeeklyV3Page({ data, appUrl, print = false, fill = false, medica
         <div className="w3-end">
           {print ? (
             <div className="w3-bar2">
-              <span style={{ fontSize: 12 }}>Open this week in Verbatim: <span style={{ fontFamily: MONOP }}>{`${appUrl.replace(/^https?:\/\//, '')}/dashboard/market`}</span></span>
+              <span style={{ fontSize: 12 }}>Open this week in Verbatim: <span>{`${appUrl.replace(/^https?:\/\//, '')}/dashboard/market`}</span></span>
               <span className="w3-fine">Every section above opens its page there: a subject, a conversation, a group, a product, an idea, a piece of advice.</span>
             </div>
           ) : (
-            <div className="l"><a className="w3-btn" href={`${appUrl}/dashboard/market`}>Open Market</a><a className="w3-olink" href={`${appUrl}/dashboard/studio`}>Who gets this</a></div>
+            <><a className="w3-go" href={`${appUrl}/dashboard/market`}>Open Market</a><a className="w3-go" href={`${appUrl}/dashboard/studio`}>Who gets this</a></>
           )}
-          <span className="w3-fine">{company ? `${company} · made with Verbatim` : 'Made with Verbatim'}</span>
+          <span className="w3-fine">{made}</span>
         </div>
       </div>
     </div>

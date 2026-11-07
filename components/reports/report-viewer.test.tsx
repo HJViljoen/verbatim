@@ -41,9 +41,14 @@ describe('the viewer, a page of its own', () => {
     // No stored file: no Download; a client is not offered the Studio's workbench.
     expect(m).not.toContain('Download PDF')
     expect(m).not.toContain('Open in the Studio')
-    // The body is the share page's own, flowing in the column (no slide scaling).
-    expect(m).toContain('class="w3')
+    // The body is the share page's own, flowing in the column (no slide
+    // scaling), FRAMED: no brow, title or figures row of its own under the
+    // page's, so the page has one h1 and says when it was read once.
+    expect(m).toContain('class="w3 w3-framed"')
     expect(m).not.toMatch(/data-viewer-body=""[^>]*><div class="rounded-\[12px\] bg-inner/)
+    expect(m.match(/<h1\b/g)).toHaveLength(1)
+    expect(m).not.toContain('class="w3-brow"')
+    expect(m).not.toContain('class="w3-strip"')
   })
 
   it('a monthly brief: "Studio / Monthly briefs", its name, the brand and month under it, Download PDF, and who it is for, its market, when it was written and its length', () => {
