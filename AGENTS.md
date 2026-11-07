@@ -1555,11 +1555,19 @@ This version has breaking changes — APIs, conventions, and file structure may 
     `printsMedicalLine`); Your moves (`topMoves`:
     Accept and Not for us for owners and admins, `mayDecideMoves`); and the
     Agent box (two questions to try, `agentTries`, from the read's frozen
-    `conversations`). Each tile's head link opens its item's own page, else
-    the page (17 Oct: nothing opens in place): a conversation's or a
-    subject's on Market, a group's or a brand's on Voices, a product's or a
-    category's on Your products, the post idea's on Content, the advice's or the move's on
-    Your moves; the Agent box has none either.
+    `conversations`, as chips). Since the audit design (7 Nov) each tile's
+    head opens its SECTION ("Open Market", "Open Voices", "Open products",
+    "Open Content"; Your moves' "See all N waiting" opens the advice record,
+    `RECORD_HREF`, else "Open Your moves"), and each item inside is a link
+    of its own (17 Oct: nothing opens in place): a conversation's or a
+    subject's page on Market, a group's or a brand's on Voices, a product's
+    on Your products, the post idea's on Content, the advice's or the move's
+    on Your moves. The week tile's head has no link; the Agent box's label
+    and heading open the Agent. Your moves' tile: the advice's priority as
+    a tag, its title its page's link, "Rests on" and "Raised in", Accept
+    (the brand yellow) and Not for us; beside it "After your last move", the
+    move's title, the day it was dated, its latest month's share with its
+    verdict, its sentence and `NO_CAUSE`.
     There is no Subjects tile and no Competitive tile: the Competitive
     tile's "Named most" brands are the Voices tile's two brands named most
     unprompted (`NAMED_MOST`). The weekly email prints no "Named most" line
@@ -1603,7 +1611,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
     question is `lead[0]` and opens its card, `questionSlotId(1)`, never the
     Also asked table, which goes on after the cards); and `TopMoves.newest`
     (the newest move where none has a comparison to print) with
-    `TopMoves.invite`. With no move at all, "After your move" says Your
+    `TopMoves.invite`. With no move at all, "After your last move" says Your
     moves' words (`noMoveWords`: "No move dated yet.", with the invitation
     to date one only where `invite`, the reader may decide and moves are
     recorded); a member is never told to accept or date anything. Each gap

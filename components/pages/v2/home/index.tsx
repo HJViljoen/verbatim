@@ -10,10 +10,13 @@ import { ContentTileView } from './content-tile'
 import { MarketTileView } from './market-tile'
 import { MovesTileView } from './moves-tile'
 import { ProductsTileView } from './products-tile'
+import { DASHBOARD_GRID } from './parts'
 import { TileBones } from './skeleton'
 import { TileBoundary } from './tile-boundary'
 import { VoicesTileView } from './voices-tile'
 import { WeekTileView } from './week-tile'
+
+export { DASHBOARD_GRID }
 
 // THE DASHBOARD, drawn to the audit design's board (Dashboard.dc.html, 7
 // Nov): the title, the figures row under it (the week, its videos and
@@ -109,10 +112,6 @@ function CellBones() {
     </div>
   )
 }
-
-/** The tiles' grid: three columns from 1180px, one below (the board's
- *  `.grid3`, 20px between tiles). */
-export const DASHBOARD_GRID = 'grid grid-cols-1 gap-5 min-[1180px]:grid-cols-3'
 
 function Layout({ strip, market, week, voices, products, content, moves, agent }: Record<'strip' | 'market' | 'week' | 'voices' | 'products' | 'content' | 'moves' | 'agent', ReactNode>) {
   return (

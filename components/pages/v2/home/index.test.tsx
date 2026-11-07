@@ -24,6 +24,7 @@ import { MARKET_LEADS, MARKET_NONE, MARKET_NOTHING_ELSE_NEW, MARKET_NOTHING_NEW 
 import { ASKED_TITLE } from './content-tile'
 import { MOVES_FIRST_RUN, MOVES_NO_MOVE, MOVES_NO_MOVE_MEMBER, MOVES_NONE_WAITING } from './moves-tile'
 import { MOVE_UNREAD } from '@/lib/pages/v2/moves'
+import { NO_CAUSE } from '@/lib/pages/v2/moves-levels'
 import { PRODUCTS_LINES, PRODUCTS_SETTINGS, PRODUCTS_UNREAD } from './products-tile'
 import { TILE_FAILED } from './parts'
 import { HomeSkeleton } from './skeleton'
@@ -241,19 +242,38 @@ describe('the Dashboard, as the board draws it (E1-Dashboard)', () => {
 
   it('Your moves: the advice waiting, Accept and Not for us, and the move whose market moved', () => {
     const t = tileText(markup, 'moves')
-    expect(t).toMatch(/High priority 3 pieces of advice waiting Set up a reimbursement help desk for powered knees/)
-    expect(t).toMatch(/63 videos it rests on, all time · 9 updates in a row, since 27 Jul/)
+    // The audit design: the head opens every piece waiting; the priority a
+    // tag; the title its page's link; what it rests on and what raised it as
+    // the board's two facts.
+    expect(t).toMatch(/^Your moves See all 3 waiting High priority Set up a reimbursement help desk for powered knees Rests on 63 videos, all time Raised in 9 updates in a row, since 27 Jul/)
     expect(t).toMatch(/Accept Not for us/)
-    expect(t).toMatch(/After your move/)
+    expect(t).toMatch(/After your last move Price transparency page Dated 2 Aug 21% ▲ 6\.3 pts/)
     expect(t).toMatch(/Share of market videos on .*: \d+ of \d+ in \w+, the month before, against \d+ of \d+ in/)
+    // Your moves' own words: the move is never claimed as the cause.
+    expect(t).toContain(NO_CAUSE)
+    const m = tileMarkup(markup, 'moves')
+    expect(m).toMatch(/href="\/dashboard\/moves\/advice"[^>]*>See all 3 waiting</)
+    expect(m).toMatch(/data-tag="hi"[^>]*>High priority</)
+    // Accept is the brand yellow, Not for us the white secondary (decision 8).
+    expect(m).toMatch(/<button type="button" class="[^"]*bg-brand[^"]*">Accept</)
+    expect(m).toMatch(/<button type="button" class="[^"]*border-control bg-card[^"]*">Not for us</)
+    expect(t).not.toMatch(/→|·/)
   })
 
   it('the Agent: a question box that opens the Agent with it, and two questions to try', () => {
     const t = tileText(markup, 'agent')
-    expect(t).toContain(AGENT_LINE)
+    expect(t).toMatch(new RegExp(`^Agent Ask your market ${AGENT_LINE.replace('.', '\\.')}`))
     expect(markup).toMatch(/<form[^>]*action="\/dashboard\/agent" method="get"/)
     expect(markup).toContain('name="ask"')
-    expect(t).toMatch(/Try asking about How long a liner lasts → Insurance refusals for powered knees →/)
+    // The questions to try as chips, with no label and no arrow.
+    expect(t).toMatch(/Ask How long a liner lasts Insurance refusals for powered knees$/)
+    expect(t).not.toMatch(/Try asking about|→/)
+    const a = tileMarkup(markup, 'agent')
+    const chips = a.match(/<a [^>]*min-h-\[34px\][^>]*>/g) ?? []
+    expect(chips).toHaveLength(2)
+    for (const c of chips) expect(c).toContain('href="/dashboard/agent?ask=')
+    // The label and the heading open the Agent.
+    expect(a.match(/href="\/dashboard\/agent"/g)).toHaveLength(2)
     expect(markup).toContain(`href="/dashboard/agent?ask=${encodeURIComponent('What does my market say about "How long a liner lasts"?')}"`)
   })
 
@@ -373,8 +393,10 @@ describe('every tile\'s honest state when its page has nothing', () => {
     expect(render(page(none))).toContain('href="/dashboard/moves/advice"')
     // No move at all: the board's panel stays, and says so (parity pass).
     const noMove = render(page(dashboardFixture({ moves: 'no_move' })))
-    expect(tileText(noMove, 'moves')).toContain(`After your move ${MOVES_NO_MOVE}`)
+    expect(tileText(noMove, 'moves')).toContain(`After your last move ${MOVES_NO_MOVE}`)
     expect(tileMarkup(noMove, 'moves')).toContain('md:grid-cols-')
+    // With nothing waiting, the head opens Your moves.
+    expect(tileMarkup(render(page(none)), 'moves')).toMatch(/href="\/dashboard\/moves"[^>]*>Open Your moves</)
   })
 
   it('a tile whose read failed loses only itself', () => {
@@ -404,8 +426,11 @@ describe('the phone board (E1-Dashboard-Phone)', () => {
     // (the boards draw no phone variant; small call 14).
     expect(tileMarkup(markup, 'voices')).not.toMatch(/max-sm:hidden/)
     expect(tileMarkup(markup, 'content')).not.toMatch(/max-sm:hidden/)
-    expect(tileMarkup(markup, 'moves')).toMatch(/bg-inner[^"]*max-sm:hidden/)
-    expect(tileMarkup(markup, 'agent')).toMatch(/max-sm:hidden"><span class="text-muted-foreground">Try asking about/)
+    // The move's column stacks under the advice, and the questions to try
+    // stay, at every width (the audit design draws no phone variant).
+    expect(tileMarkup(markup, 'moves')).not.toMatch(/max-sm:hidden/)
+    expect(tileMarkup(markup, 'moves')).toMatch(/data-move="compared" class="[^"]*max-md:border-t[^"]*md:border-l/)
+    expect(tileMarkup(markup, 'agent')).not.toMatch(/max-sm:hidden/)
   })
   it('keeps the week beside its month, and the medical team line, on a phone too', () => {
     expect(tileMarkup(markup, 'market')).not.toMatch(/data-copy="level"[^>]*max-sm:hidden/)
@@ -468,6 +493,11 @@ describe('the Dashboard skeleton', () => {
     const markup = render(<HomeSkeleton />)
     expect(renderText(<HomeSkeleton />)).toContain('Dashboard')
     expect(markup).toMatch(/role="status"/)
+    // The audit design: the figures row's four cells as bones, no meta line,
+    // and the tiles' bones on the one three-column grid.
+    expect(markup).toMatch(/data-stat-strip-bones="" class="[^"]*min-\[900px\]:grid-cols-4"/)
+    expect(markup).not.toContain('data-bar-meta')
+    expect(markup.match(/class="grid grid-cols-1 gap-5 min-\[1180px\]:grid-cols-3"/g)).toHaveLength(1)
     expect(markup.match(/min-\[1180px\]:col-span-2/g)).toHaveLength(2)
     expect(markup.match(/min-\[1180px\]:col-span-1/g)).toHaveLength(5)
     expect(markup).not.toMatch(STRIPE)
@@ -712,7 +742,7 @@ describe('the board\'s shape holds when the data is thin (parity pass)', () => {
       // The ranked list, or the catalogue's size, or why in the dashed box.
       products: { title: t('products').includes('<h2'), list: /role="list"|data-catalogue|data-empty-box/.test(t('products')) },
       content: { title: t('content').includes('<h2'), facts: t('content').includes('<dl') },
-      moves: { title: t('moves').includes('<h3'), panel: markupText(t('moves')).includes('After your move') },
+      moves: { title: t('moves').includes('<h2'), panel: markupText(t('moves')).includes('After your last move') },
     }
   }
   const board = shapeOf(render(page(dashboardFixture())))
@@ -806,7 +836,9 @@ describe('the board\'s shape holds when the data is thin (parity pass)', () => {
 
   it('Your moves: the newest move keeps the panel, its month before printed and its own month left open', () => {
     const t = tileText(markup, 'moves')
-    expect(t).toMatch(/After your move Create a guided access path, not a standalone price answer 4% → Share of category videos on Cost and affordability frustration ?: 19 of 521 in September, before the move\. October reads once the month has been read\.$/)
+    // Decision 4: the month still to read is said, never drawn as an open slot.
+    expect(t).toMatch(/After your last move Create a guided access path, not a standalone price answer Dated 5 Oct 4% Share of category videos on Cost and affordability frustration ?: 19 of 521 in September, before the move\. October reads once the month has been read\.$/)
+    expect(tileMarkup(markup, 'moves')).not.toContain('border-dashed')
     expect(tileMarkup(markup, 'moves')).toContain('href="/dashboard/moves/m-access"')
   })
 
@@ -825,7 +857,7 @@ describe('the board\'s shape holds when the data is thin (parity pass)', () => {
     expect(tileText(m, 'voices')).toMatch(new RegExp(`${VOICES_NAMED} not counted yet$`))
     expect(tileMarkup(m, 'products')).toContain('data-empty-box')
     expect(tileText(m, 'content')).toContain(IDEAS_EMPTY.not_on)
-    expect(tileText(m, 'moves')).toContain(`After your move ${MOVES_NO_MOVE}`)
+    expect(tileText(m, 'moves')).toContain(`After your last move ${MOVES_NO_MOVE}`)
   })
 })
 
@@ -903,7 +935,7 @@ describe('the thin states, after the fresh check', () => {
       const top: TopMoves = { ...read.top, newest: { ...read.top.newest!, kind: 'subject' as const, label: 'Fit & comfort', unread } }
       const data: DashboardData = { ...base, moves: { state: 'ok', top } }
       const t = tileText(render(page(data)), 'moves')
-      expect(t).toMatch(/After your move Create a guided access path, not a standalone price answer Not measured yet: Fit & comfort$/)
+      expect(t).toMatch(/After your last move Create a guided access path, not a standalone price answer Dated 5 Oct Not measured yet: Fit & comfort$/)
       expect(t).not.toContain(FAILED_EXPLAINED)
       expect(t).not.toMatch(/\d+%/)
     }
@@ -912,7 +944,7 @@ describe('the thin states, after the fresh check', () => {
 
   it('Your moves: a move no line can be drawn for says why, and prints no level', () => {
     const t = tileText(render(page(dashboardThinFixture({ moves: 'unread_move' }))), 'moves')
-    expect(t).toMatch(new RegExp(`After your move Create a guided access path, not a standalone price answer ${MOVE_UNREAD.several}$`))
+    expect(t).toMatch(new RegExp(`After your last move Create a guided access path, not a standalone price answer Dated 5 Oct ${MOVE_UNREAD.several}$`))
     expect(t).not.toMatch(/\d+%/)
   })
 

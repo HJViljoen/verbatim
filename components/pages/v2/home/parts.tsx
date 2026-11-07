@@ -11,6 +11,10 @@ import { cn } from '@/lib/utils'
 // sees them, in the app's tokens (palette A; no literal colour and no shadow
 // of our own).
 
+/** The tiles' grid: three columns from 1180px, one below (the board's
+ *  `.grid3`, 20px between tiles; the app's own point, small call 14). */
+export const DASHBOARD_GRID = 'grid grid-cols-1 gap-5 min-[1180px]:grid-cols-3'
+
 /** A tile: the kit's card, its rows 14px apart (the board's `.tile`). */
 export const TILE = cn(CARD, 'gap-3.5')
 
@@ -23,14 +27,8 @@ export const TT_WIDE = 'm-0 text-[22px] leading-[1.3] font-semibold text-foregro
 export const BIG = 'text-[40px] leading-none font-bold tabular-nums text-foreground max-sm:text-[34px]'
 export const MID = 'text-[32px] leading-none font-bold tabular-nums text-foreground max-sm:text-[28px]'
 
-/** The quiet line under a figure, or a list's note (the board's 13.5px). */
-export const MONO_MUTED = 'text-[13.5px] leading-[1.5] tabular-nums text-muted-foreground'
-
 /** A quiet line of the page's own words. */
 export const CSUB = 'm-0 text-[13.5px] leading-[1.5] text-muted-foreground'
-
-/** A row under a tile's lead, a hairline over it. */
-export const MROW = 'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-track py-3 text-[14.5px] leading-[1.4]'
 
 /** A row of a tile's bar list (the board's): the name, a 96px bar, the
  *  count; fixed columns, so the rows line up. */

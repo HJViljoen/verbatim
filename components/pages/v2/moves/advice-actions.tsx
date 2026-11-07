@@ -4,9 +4,11 @@ import { useState, useTransition } from 'react'
 
 import { acceptAdvice } from '@/lib/actions/accept-advice'
 import { setRecommendationStatus } from '@/lib/actions/rec-status'
-import { BTN, BTN_INK } from './parts'
+import { BTN_PRIMARY, BTN_SECONDARY } from '@/components/v2/look'
 
-// A piece of advice's answers (boards E6-Moves and E6-Moves-Open). Accept
+// A piece of advice's answers (boards E6-Moves and E6-Moves-Open; since the
+// audit design, 7 Nov, the brand yellow primary and the white secondary from
+// components/v2/look, an import-free module a client file may use). Accept
 // dates it as a move on its LINEAGE (`acceptAdvice`), Not for us files it
 // dismissed on the newest copy (`setRecommendationStatus`). Both are an
 // owner's or an admin's (lib/moves-access.ts): the page draws neither for
@@ -39,10 +41,10 @@ export function AdviceAnswers({ lineageId, recommendationId, title }: { lineageI
   const { pending, said, run } = useAnswer()
   return (
     <>
-      <button type="button" disabled={pending} className={BTN_INK} onClick={() => run(() => acceptAdvice(lineageId, title.slice(0, 120)))}>
+      <button type="button" disabled={pending} className={BTN_PRIMARY} onClick={() => run(() => acceptAdvice(lineageId, title.slice(0, 120)))}>
         Accept
       </button>
-      <button type="button" disabled={pending} className={BTN} onClick={() => run(() => setRecommendationStatus(recommendationId, 'dismissed'))}>
+      <button type="button" disabled={pending} className={BTN_SECONDARY} onClick={() => run(() => setRecommendationStatus(recommendationId, 'dismissed'))}>
         Not for us
       </button>
       <Said said={said} />
@@ -77,10 +79,10 @@ export function AcceptDated({
           />
         </label>
       ) : null}
-      <button type="button" disabled={pending} className={BTN_INK} onClick={() => run(() => acceptAdvice(lineageId, title.slice(0, 120), dating ? day || null : null))}>
+      <button type="button" disabled={pending} className={BTN_PRIMARY} onClick={() => run(() => acceptAdvice(lineageId, title.slice(0, 120), dating ? day || null : null))}>
         Accept and date it as a move
       </button>
-      <button type="button" disabled={pending} className={BTN} onClick={() => run(() => setRecommendationStatus(recommendationId, 'dismissed'))}>
+      <button type="button" disabled={pending} className={BTN_SECONDARY} onClick={() => run(() => setRecommendationStatus(recommendationId, 'dismissed'))}>
         Not for us
       </button>
       <Said said={said} />
@@ -123,15 +125,15 @@ export function AdviceDecision({
               className="h-[38px] rounded-lg border border-border bg-card px-2.5 text-[13.5px] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
           </label>
-          <button type="button" disabled={pending} className={BTN_INK} onClick={accept}>Date it</button>
-          <button type="button" disabled={pending} className={BTN} onClick={() => setAsking(false)}>Cancel</button>
+          <button type="button" disabled={pending} className={BTN_PRIMARY} onClick={accept}>Date it</button>
+          <button type="button" disabled={pending} className={BTN_SECONDARY} onClick={() => setAsking(false)}>Cancel</button>
         </>
       ) : (
         <>
-          <button type="button" disabled={pending} className={BTN_INK} onClick={() => (dating ? setAsking(true) : accept())}>
+          <button type="button" disabled={pending} className={BTN_PRIMARY} onClick={() => (dating ? setAsking(true) : accept())}>
             Accept and date it as a move
           </button>
-          <button type="button" disabled={pending} className={BTN} onClick={() => run(() => setRecommendationStatus(recommendationId, 'dismissed'))}>
+          <button type="button" disabled={pending} className={BTN_SECONDARY} onClick={() => run(() => setRecommendationStatus(recommendationId, 'dismissed'))}>
             Not for us
           </button>
         </>

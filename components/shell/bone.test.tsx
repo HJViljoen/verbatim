@@ -15,11 +15,18 @@ describe('Bone', () => {
   })
 
   it('leaves no block element inside a page bar\'s meta paragraph, on the Dashboard\'s loading screen too', () => {
-    for (const html of [render(<PageBar title="Dashboard" meta={<Bone className="h-3 w-72" />} />), render(<HomeSkeleton />)]) {
+    for (const html of [render(<PageBar title="Dashboard" meta={<Bone className="h-3 w-72" />} />)]) {
       const meta = html.match(/<p data-bar-meta=""[^>]*>([\s\S]*?)<\/p>/)
       expect(meta).not.toBeNull()
       expect(meta![1]).not.toMatch(/<(div|section|article|p|ul|ol|h[1-6])\b/)
     }
+    // The Dashboard's loading screen has no meta paragraph since the audit
+    // design (7 Nov): its figures row's bones are spans in a <div>, never a
+    // block inside a <p>.
+    const home = render(<HomeSkeleton />)
+    expect(home).not.toContain('data-bar-meta')
+    const strip = home.slice(home.indexOf('data-stat-strip-bones'), home.indexOf('</div>', home.indexOf('data-stat-strip-bones')))
+    expect(strip).not.toMatch(/<(p|section|article|ul|ol|h[1-6])\b/)
   })
 })
 
