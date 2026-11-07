@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { MovementBadge, nonAnswerParts, signedChange } from '@/components/delta-badge'
 import { translationNote } from '@/components/quote-block'
 import { CARD, commaCite, EmptyBox, FlagChip, GoLink, translationLine, type StatItem } from '@/components/v2'
-import { QUOTE, ROW, TBL, TD, TD_NUM, TH } from '@/components/v2/look'
+import { QUOTE, ROW, STACK, STACK_CELL, STACK_HEAD, STACK_ROW, TBL, TD, TD_NUM, TH } from '@/components/v2/look'
 import { fmtInt, longMonth } from '@/lib/format'
 import { sharePct, type Compare } from '@/lib/pages/v2/products'
 import type { AboutLine, CategoryPage, HubQuote, ListRow, ProductCard, ProductsLevelData } from '@/lib/pages/v2/products-levels'
@@ -335,25 +335,33 @@ function CompareCard({ page, d }: { page: CategoryPage; d: ProductsLevelData }) 
   return (
     <section aria-labelledby="compare-title" className={cn(CARD, 'gap-3.5')}>
       {head}
+      {/* From 640 the board's table; on a phone (decision 14, the app's
+          own phone layout) each subject stacks, its columns a line each with
+          the column's name. */}
       <div className="-mx-1 overflow-x-auto px-1">
-        <table className={cn(TBL, compare.columns.length > 2 ? 'min-w-[560px]' : null)}>
-          <thead>
+        <table className={cn(TBL, STACK, compare.columns.length > 2 ? 'sm:min-w-[560px]' : null)}>
+          <thead className={STACK_HEAD}>
             <tr>
               <th scope="col" className={TH}>What it’s about</th>
               {compare.columns.map((c) => <th key={c.key} scope="col" className={cn(TH, 'pr-0 pl-3.5 text-right')}>{c.label}</th>)}
             </tr>
           </thead>
-          <tbody>
+          <tbody className={STACK}>
             {rows.map((r) => (
-              <tr key={r.key}>
-                <td className={TD}>{r.label}</td>
-                {r.cells.map((cell, i) => <td key={i} className={cn(TD, TD_NUM, 'pr-0 pl-3.5', compare.columns[i]?.tone === 'you' ? 'font-semibold' : null)}><CompareCell cell={cell} /></td>)}
+              <tr key={r.key} className={STACK_ROW}>
+                <td className={cn(TD, STACK_CELL, 'max-sm:font-semibold')}>{r.label}</td>
+                {r.cells.map((cell, i) => (
+                  <td key={i} className={cn(TD, TD_NUM, 'pr-0 pl-3.5', STACK_CELL, 'max-sm:flex max-sm:justify-between max-sm:gap-3', compare.columns[i]?.tone === 'you' ? 'font-semibold' : null)}>
+                    <span className="font-normal text-secondary-foreground sm:hidden">{compare.columns[i]?.label}</span>
+                    <CompareCell cell={cell} />
+                  </td>
+                ))}
               </tr>
             ))}
             {rowsPending.map((r) => (
-              <tr key={r.key} data-compare-pending="">
-                <td className={TD}>{r.label}</td>
-                <td colSpan={compare.columns.length} className={cn(TD, 'pr-0 pl-3.5 text-right text-muted-foreground')}>{SUBJECT_NOT_MEASURED}</td>
+              <tr key={r.key} data-compare-pending="" className={STACK_ROW}>
+                <td className={cn(TD, STACK_CELL, 'max-sm:font-semibold')}>{r.label}</td>
+                <td colSpan={compare.columns.length} className={cn(TD, 'pr-0 pl-3.5 text-right text-muted-foreground', STACK_CELL)}>{SUBJECT_NOT_MEASURED}</td>
               </tr>
             ))}
           </tbody>

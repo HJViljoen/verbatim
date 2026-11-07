@@ -13,7 +13,7 @@ import {
 } from '@/lib/pages/v2/voices-levels'
 import { cn } from '@/lib/utils'
 import { CAPS, FailedSubjectLine, Fig, LevelText } from './parts'
-import { AskBox, GAPLINE, LevelQuoteTile } from './levels'
+import { AskBox, LevelQuoteTile } from './levels'
 
 // A BRAND'S PAGE, A HUB (G3-Voices-Brand; since the audit design, 7 Nov,
 // drawn to Voices-Brand.dc.html). In the board's order:
@@ -162,7 +162,9 @@ function ReadCard({ page }: { page: BrandPage }) {
     return (
       <article aria-label={`Where ${page.label}'s talk differs`} data-brand-read="none" className={cn(CARD, 'gap-2.5 sm:p-[30px]')}>
         <h3 className={CAPS}>How the talk differs</h3>
-        <p className={GAPLINE}>{page.you ? BRAND_YOU_NO_FINDING : BRAND_NO_FINDING}</p>
+        {/* No finding: said in the dashed box (decision 4; the review of
+            Phases 6 and 7), as every other gap on the page. */}
+        <EmptyBox>{page.you ? BRAND_YOU_NO_FINDING : BRAND_NO_FINDING}</EmptyBox>
       </article>
     )
   }
@@ -248,22 +250,29 @@ function WhoTalks({ page }: { page: BrandPage }) {
       </Tile>
       <Tile title="Creators it comes up with" sub={`${brandCreatorsSub(page.month)}.`}>
         {!counted ? gap('creator') : page.creators.length === 0 ? <EmptyBox>{brandCreatorsNone(page.month)}</EmptyBox> : (
+          // From 640 the table; on a phone (decision 14) the creator with its
+          // platform and audience in a line under it, and its videos.
           <div className="-mx-1 overflow-x-auto px-1">
-            <table className={cn(TBL, 'min-w-[420px]')}>
+            <table className={cn(TBL, 'sm:min-w-[420px]')}>
               <thead>
                 <tr>
                   <th scope="col" className={TH}>Creator</th>
-                  <th scope="col" className={TH}>Platform</th>
-                  <th scope="col" className={TH}>Audience</th>
+                  <th scope="col" className={cn(TH, 'max-sm:hidden')}>Platform</th>
+                  <th scope="col" className={cn(TH, 'max-sm:hidden')}>Audience</th>
                   <th scope="col" className={cn(TH, 'pr-0 pl-3.5 text-right')}>Its videos</th>
                 </tr>
               </thead>
               <tbody>
                 {page.creators.map((c) => (
                   <tr key={c.key}>
-                    <td className={cn(TD, 'font-semibold')}><Link href={c.href} className={ROW}>{c.account}</Link></td>
-                    <td className={TD}>{c.platformLabel}</td>
-                    <td className={cn(TD, 'whitespace-nowrap text-secondary-foreground')}>{c.followers != null ? <><Fig>{fmtCompact(c.followers)}</Fig> {c.followerWord}</> : null}</td>
+                    <td className={cn(TD, 'font-semibold')}>
+                      <Link href={c.href} className={ROW}>{c.account}</Link>
+                      <span className="mt-1 block text-[14px] font-normal leading-[1.45] text-secondary-foreground sm:hidden">
+                        {c.platformLabel}{c.followers != null ? <>, <Fig>{fmtCompact(c.followers)}</Fig> {c.followerWord}</> : null}
+                      </span>
+                    </td>
+                    <td className={cn(TD, 'max-sm:hidden')}>{c.platformLabel}</td>
+                    <td className={cn(TD, 'whitespace-nowrap text-secondary-foreground max-sm:hidden')}>{c.followers != null ? <><Fig>{fmtCompact(c.followers)}</Fig> {c.followerWord}</> : null}</td>
                     <td className={cn(TD, TD_NUM, 'pr-0 pl-3.5 font-semibold')}><Fig>{fmtInt(c.k)}</Fig></td>
                   </tr>
                 ))}

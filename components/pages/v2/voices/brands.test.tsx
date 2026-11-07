@@ -9,7 +9,7 @@ describe('Brands in your market: ruling U6', () => {
     const d = VOICES_FIXTURES['ossur-counted']()
     const card = renderText(<BrandsCard brands={d.brands} monthWords={d.monthWords} />)
     // A bare count: its base is the row's own "Videos naming it" (decision 2).
-    expect(card).toContain('Ottobock 12 of 402 videos too few to compare 37 12 18 Cost & access, 21')
+    expect(card).toContain('Ottobock Named without being asked 12 of 402 videos too few to compare Videos naming it 37 Praised it 12 Complained 18 Talked about most for Cost & access, 21')
     expect(card).not.toContain('Fit & comfort')
   })
 
@@ -27,11 +27,11 @@ describe('Brands in your market', () => {
     const d = sealandVoicesFixture()
     const node = <BrandsCard brands={d.brands} monthWords={d.monthWords} />
     const text = renderText(node)
-    expect(text).toContain('Sealand You 1 of 743 videos too few to compare')
+    expect(text).toContain('Sealand You Named without being asked 1 of 743 videos too few to compare')
     // Named without being asked, then the videos naming it, praised and
     // complained in them, and the subject most of them carry (the board's
     // six columns, no bars).
-    expect(text).toContain('Patagonia 13 of 743 videos too few to compare 65 50 43 Durability, 19')
+    expect(text).toContain('Patagonia Named without being asked 13 of 743 videos too few to compare Videos naming it 65 Praised it 50 Complained 43 Talked about most for Durability, 19')
     // (renderText spaces every tag: on the page the comma sits on the link.)
     expect(text).toContain('Not named without being asked in September: Freedom of Movement , Rareform')
     expect(text).toContain('Praised, complained and talked about are September’s alone: each brand’s videos are too few to set against August')
@@ -56,8 +56,12 @@ describe('Brands in your market', () => {
     expect(m).toContain('data-copy="stored" data-slot="pass_c_finding"')
     expect(m).not.toContain('data-copy="quote"')
     // You first, then the most named.
-    expect(text.indexOf('Sealand You')).toBeLessThan(text.indexOf('Patagonia 13'))
-    expect(text.indexOf('Patagonia 13')).toBeLessThan(text.indexOf('The North Face'))
+    expect(text.indexOf('Sealand You')).toBeLessThan(text.indexOf('Patagonia Named without being asked 13'))
+    expect(text.indexOf('Patagonia Named without being asked 13')).toBeLessThan(text.indexOf('The North Face'))
+    // On a phone each brand stacks (decision 14): the head hides, and each
+    // figure says what it is, the labels a phone's alone.
+    expect(m).toMatch(/<thead class="max-sm:hidden">/)
+    expect(m).toMatch(/<span class="[^"]*sm:hidden[^"]*">Praised it <\/span>/)
     assertCopyContract(node)
   })
 
@@ -89,8 +93,8 @@ describe('Brands in your market', () => {
     const d = VOICES_FIXTURES['ossur-counted']()
     const node = <BrandsCard brands={d.brands} monthWords={d.monthWords} />
     const text = renderText(node)
-    expect(text).toContain('Össur You Not counted yet Ottobock 12 of 402 videos')
-    expect(text).toContain('37 12 18 Cost & access, 21')
+    expect(text).toContain('Össur You Not counted yet Ottobock Named without being asked 12 of 402 videos')
+    expect(text).toContain('Videos naming it 37 Praised it 12 Complained 18 Talked about most for Cost & access, 21')
     // Your row is drawn, so the lines under the table do not name it again.
     expect(text.match(/Össur/g)).toHaveLength(1)
     const m = render(node)
@@ -102,8 +106,8 @@ describe('Brands in your market', () => {
     const d = VOICES_FIXTURES['sealand-you-quiet']()
     const node = <BrandsCard brands={d.brands} monthWords={d.monthWords} />
     const text = renderText(node)
-    expect(text).toContain('Sealand You 0 of 743 videos')
-    expect(text).toContain('Sealand You 0 of 743 videos too few to compare 1 0 0 Durability, 1')
+    expect(text).toContain('Sealand You Named without being asked 0 of 743 videos')
+    expect(text).toContain('Sealand You Named without being asked 0 of 743 videos too few to compare Videos naming it 1 Praised it 0 Complained 0 Talked about most for Durability, 1')
     expect(text).not.toMatch(/not read/i)
     assertCopyContract(node)
   })

@@ -243,7 +243,7 @@ describe('a brand\'s page (G3-Voices-Brand)', () => {
   it('who talks about it: the groups with bars against the largest, the creators a table, each opening its page by its name (no chevron)', () => {
     expect(text).toContain('Who talks about Ottobock Its 49 videos, October so far. Each opens its page in Voices.')
     expect(text).toContain('The groups commenting on its videos A video can hold more than one group, so the counts overlap. Long-time users upgrading Know what they want; fighting to get it paid for. 21')
-    expect(text).toContain('Creators it comes up with Accounts with 3 or more of your market’s videos this month whose videos name it. Creator Platform Audience Its videos The Amputee Diaries YouTube 96K subscribers 3')
+    expect(text).toContain('Creators it comes up with Accounts with 3 or more of your market’s videos this month whose videos name it. Creator Platform Audience Its videos The Amputee Diaries YouTube, 96K subscribers YouTube 96K subscribers 3')
     expect(html).toContain('href="/dashboard/voices/groups/long-time"')
     expect(html).toContain('href="/dashboard/voices/creators/youtube/The%20Amputee%20Diaries"')
     expect(html).not.toContain('data-row-chevron')
@@ -276,6 +276,8 @@ describe('a brand\'s page (G3-Voices-Brand)', () => {
     expect(t).toContain('Your brand This week')
     expect(t).toContain('Named without being asked 41 of 290 videos')
     expect(t).toContain('How the talk differs Findings compare a rival’s talk with the rest of the market, so your own brand has none.')
+    // In the dashed box, as every other gap on the page (decision 4).
+    expect(render(brand(brandFixture({ key: 'client' }))).match(/data-brand-read="none"[\s\S]*?data-empty-box=""[^>]*><div>Findings compare/)).not.toBeNull()
     expect(t).not.toContain('Under its own content')
     // How people treat it, not read: said once, not under both heads.
     expect(t.match(/Not read yet\./g)?.length).toBe(2)

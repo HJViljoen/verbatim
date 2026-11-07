@@ -13,8 +13,12 @@ describe('Creators who drive the talk', () => {
     expect(text).not.toContain('r/amputee')
     expect(text).toContain('Reddit is left out: there a post’s account is the community it was posted in, not who made it.')
     // The board's table: creator, platform, audience, most made in, videos.
-    expect(text).toContain('Creator Platform Audience Most made in Videos A L I S TikTok 186K followers Running on a blade (made 8 of 24 ) 8 The Amputee Diaries YouTube 96K subscribers')
+    expect(text).toContain('Creator Platform Audience Most made in Videos A L I S TikTok, 186K followers, made 8 of the 24 videos in Running on a blade TikTok 186K followers Running on a blade (made 8 of 24 ) 8 The Amputee Diaries YouTube, 96K subscribers, made 7 of the 38 videos in Insurance refusals for powered knees YouTube 96K subscribers')
     expect(text).toContain('All 6 accounts with 3 or more videos')
+    // On a phone (decision 14) the name, a line of its facts, and its videos:
+    // the wide table's other columns hide.
+    expect(render(node)).toMatch(/<th scope="col" class="[^"]*max-sm:hidden[^"]*">Platform<\/th>/)
+    expect(render(node)).not.toMatch(/max-sm:hidden[^"]*">Videos</)
     expect(text).not.toContain('→')
     expect(render(node)).not.toContain('data-copy="quote"')
     // Each row opens the creator's page by its name, two segments, with no

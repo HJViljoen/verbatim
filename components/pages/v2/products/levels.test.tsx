@@ -176,7 +176,9 @@ describe('a category\'s page, the hub (G4-Products-Category)', () => {
   })
 
   it('the products against the category, a comment naming each product, the Agent and Settings', () => {
-    expect(text).toContain('Your liners against liners in general What their videos are about What it’s about All liners Iceross Seal-In X Iceross Comfort Iceross Synergy Fit & comfort 70 of 117 8 of 10')
+    // Each cell carries its column's name for a phone, where the head hides
+    // and each subject stacks (decision 14).
+    expect(text).toContain('Your liners against liners in general What their videos are about What it’s about All liners Iceross Seal-In X Iceross Comfort Iceross Synergy Fit & comfort All liners 70 of 117 Iceross Seal-In X 8 of 10')
     expect(text).toContain('In their words 3 comments, each naming its product Iceross Seal-In X “El Seal-In X me aguanta todo el día, pero ponérmelo cuesta.” Spanish, machine translation The Seal-In X holds all day for me, but putting it on is hard. TikTok, 9 Sep')
     // The Agent's tile, then Settings under it, outside the tile (the board's).
     expect(text).toContain('Ask what people say about liners, in your own words. Ask the Agent about liners Edit Liners in Settings')

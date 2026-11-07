@@ -3,7 +3,7 @@ import { BrandChip } from '@/components/colour-roles'
 import { MovementBadge } from '@/components/delta-badge'
 import type { CSSProperties } from 'react'
 import { CARD, commaCite, GoLink, SectionHead } from '@/components/v2'
-import { ROW, TBL, TD, TD_NUM, TH } from '@/components/v2/look'
+import { ROW, STACK, STACK_HEAD, TBL, TD, TD_NUM, TH } from '@/components/v2/look'
 import { fmtInt, longMonth } from '@/lib/format'
 import { brandTable, type VoicesBrandRow, type VoicesBrands } from '@/lib/pages/v2/voices'
 import type { Verdict } from '@/lib/reading/verdicts'
@@ -37,23 +37,31 @@ export function VerdictNote({ verdict, you }: { verdict: Verdict | null; you: bo
 /** A state's words in a cell, in sentence case ("Not counted yet"). */
 const cellWords = (w: string): string => commaCite(w.charAt(0).toUpperCase() + w.slice(1))
 
-const R = cn(TD, TD_NUM, 'pr-0 pl-3.5')
+const R = cn(TD, TD_NUM, 'pr-0 pl-3.5', 'max-sm:border-0 max-sm:p-0')
 const COLS = 6
+
+// ON A PHONE (decision 14, the app's own phone layout): each brand stacks,
+// its name, then what it was named in, then its three counts on one line and
+// what it is talked about most for, each figure saying what it is, as the
+// hidden head said it.
+const PHONE_ROW = 'max-sm:flex max-sm:flex-wrap max-sm:items-baseline max-sm:gap-x-4 max-sm:gap-y-1.5 max-sm:border-t max-sm:border-track max-sm:py-3.5'
+const PHONE_FULL = 'max-sm:basis-full max-sm:border-0 max-sm:p-0'
+const PHONE_LABEL = 'text-[13.5px] font-normal text-muted-foreground sm:hidden'
 
 /** One brand's row. `pending`: nothing in the table is counted, and the line
  *  at the table's head says so; a row then prints its name alone. */
 function BrandRow({ row, pending }: { row: VoicesBrandRow; pending: boolean }) {
   const name = (
-    <td className={cn(TD, 'font-semibold whitespace-nowrap')}>
+    <td className={cn(TD, 'font-semibold whitespace-nowrap', PHONE_FULL)}>
       <Link href={row.href} className={ROW}>{row.label}</Link>
       {row.you ? <> <BrandChip who="you" plain className="ml-1.5 text-[13px] font-semibold text-you">You</BrandChip></> : null}
     </td>
   )
   if (row.state !== 'counted') {
     return (
-      <tr data-brand={row.brandKey}>
+      <tr data-brand={row.brandKey} className={PHONE_ROW}>
         {name}
-        <td colSpan={COLS - 1} className={cn(TD, 'text-muted-foreground')}>{!pending && row.stateWords ? cellWords(row.stateWords) : null}</td>
+        <td colSpan={COLS - 1} className={cn(TD, 'text-muted-foreground', PHONE_FULL, !pending && row.stateWords ? null : 'max-sm:hidden')}>{!pending && row.stateWords ? cellWords(row.stateWords) : null}</td>
       </tr>
     )
   }
@@ -61,24 +69,26 @@ function BrandRow({ row, pending }: { row: VoicesBrandRow; pending: boolean }) {
   const videos = row.any?.k ?? row.praised?.n ?? null
   const crossed = row.praised && row.complained
   return (
-    <tr data-brand={row.brandKey}>
+    <tr data-brand={row.brandKey} className={PHONE_ROW}>
       {name}
-      <td className={TD}>
+      <td className={cn(TD, PHONE_FULL)}>
         {named ? (
           <span className="flex flex-wrap items-baseline gap-x-2">
+            <span className={PHONE_LABEL}>Named without being asked</span>
             <LevelText k={named.k} n={named.n} unit="videos" />
             <VerdictNote verdict={row.verdict} you={row.you} />
           </span>
         ) : null}
       </td>
-      <td className={R}>{videos != null ? <Fig>{fmtInt(videos)}</Fig> : null}</td>
+      <td className={R}>{videos != null ? <><span className={PHONE_LABEL}>Videos naming it </span><Fig>{fmtInt(videos)}</Fig></> : null}</td>
       {crossed ? (
         <>
-          <td className={R}><Fig>{fmtInt(row.praised!.k)}</Fig></td>
-          <td className={R}><Fig>{fmtInt(row.complained!.k)}</Fig></td>
+          <td className={R}><span className={PHONE_LABEL}>Praised it </span><Fig>{fmtInt(row.praised!.k)}</Fig></td>
+          <td className={R}><span className={PHONE_LABEL}>Complained </span><Fig>{fmtInt(row.complained!.k)}</Fig></td>
         </>
-      ) : <td colSpan={2} className={cn(R, 'text-muted-foreground')}>Not read</td>}
-      <td className={cn(TD, 'pl-7')}>
+      ) : <td colSpan={2} className={cn(R, 'text-muted-foreground')}><span className={PHONE_LABEL}>Praised and complained </span>Not read</td>}
+      <td className={cn(TD, 'pl-7', PHONE_FULL)}>
+        <span className={PHONE_LABEL}>Talked about most for </span>
         {row.topSubject ? (
           <>{row.topSubject.label}, <Fig>{fmtInt(row.topSubject.k)}</Fig></>
         ) : (
@@ -138,11 +148,11 @@ export function BrandsCard({ brands, monthWords, style }: { brands: VoicesBrands
       <SectionHead id="voices-brands" title="Brands in your market" note={monthWords} />
       <section aria-labelledby="voices-brands" style={style} className={CARD}>
         <p className="m-0 text-[15px] leading-[1.55] text-secondary-foreground">Videos that named each brand without being asked, and how people treat it in every video naming it.</p>
-        {/* The board's table at every width: on a phone it scrolls inside
-            its card, as the board's own phone rule does. */}
+        {/* The board's table from 640; on a phone each brand stacks
+            (decision 14), see `PHONE_ROW`. */}
         <div className="-mx-1 overflow-x-auto px-1">
-          <table className={cn(TBL, 'min-w-[640px]')}>
-            <thead>
+          <table className={cn(TBL, STACK, 'sm:min-w-[640px]')}>
+            <thead className={STACK_HEAD}>
               <tr>
                 <th scope="col" className={TH}>Brand</th>
                 <th scope="col" className={TH}>Named without being asked</th>
@@ -152,8 +162,8 @@ export function BrandsCard({ brands, monthWords, style }: { brands: VoicesBrands
                 <th scope="col" className={cn(TH, 'pl-7')}>Talked about most for</th>
               </tr>
             </thead>
-            <tbody>
-              {line ? <tr><td colSpan={COLS} className={cn(TD, 'text-[14.5px] text-muted-foreground')}>{line}</td></tr> : null}
+            <tbody className={STACK}>
+              {line ? <tr className="max-sm:block"><td colSpan={COLS} className={cn(TD, 'text-[14.5px] text-muted-foreground', 'max-sm:block max-sm:px-0')}>{line}</td></tr> : null}
               {table.rows.map((r) => <BrandRow key={r.brandKey} row={r} pending={table.pending} />)}
             </tbody>
           </table>

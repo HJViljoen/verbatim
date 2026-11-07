@@ -23,10 +23,18 @@ import { Fig, Followers } from './parts'
 function CreatorRow({ row, brands }: { row: VoicesCreatorRow; brands: boolean }) {
   return (
     <tr data-creator={row.key}>
-      <td className={cn(TD, 'font-semibold')}><Link href={row.href} className={ROW}>{row.account}</Link></td>
-      <td className={TD}>{row.platformLabel}</td>
-      <td className={cn(TD, 'whitespace-nowrap text-secondary-foreground')}><Followers n={row.followers} word={row.followerWord} /></td>
-      <td className={TD}>
+      <td className={cn(TD, 'font-semibold')}>
+        <Link href={row.href} className={ROW}>{row.account}</Link>
+        {/* On a phone (decision 14, the app's own phone layout) the row's
+            facts are one line under the name; the wide table's columns hide. */}
+        <span className="mt-1 block text-[14px] font-normal leading-[1.45] text-secondary-foreground sm:hidden">
+          {row.platformLabel}{row.followers != null ? <>, <Followers n={row.followers} word={row.followerWord} /></> : null}
+          {row.top ? <>, made <Fig>{fmtInt(row.top.k)}</Fig> of the <Fig>{fmtInt(row.top.ofTheme)}</Fig> videos in <span data-copy="subject" data-slot="pass_b_theme">{row.top.label}</span></> : null}
+        </span>
+      </td>
+      <td className={cn(TD, 'max-sm:hidden')}>{row.platformLabel}</td>
+      <td className={cn(TD, 'whitespace-nowrap text-secondary-foreground max-sm:hidden')}><Followers n={row.followers} word={row.followerWord} /></td>
+      <td className={cn(TD, 'max-sm:hidden')}>
         {row.top ? (
           <>
             <span data-copy="subject" data-slot="pass_b_theme">{row.top.label}</span>{' '}
@@ -35,7 +43,7 @@ function CreatorRow({ row, brands }: { row: VoicesCreatorRow; brands: boolean })
         ) : null}
       </td>
       {brands ? (
-        <td className={cn(TD, 'whitespace-nowrap')}>
+        <td className={cn(TD, 'whitespace-nowrap max-sm:hidden')}>
           {row.brand ? <><BrandChip who={row.brand.you ? 'you' : 'rival'} plain>{row.brand.label}</BrandChip> (<Fig>{fmtInt(row.brand.k)}</Fig>)</> : <span className="text-muted-foreground">None</span>}
         </td>
       ) : null}
@@ -55,17 +63,17 @@ export function CreatorsCard({ creators, monthWords, style }: { creators: Voices
       <section id="creators" aria-labelledby="voices-creators" style={style} className={cn(CARD, 'scroll-mt-[76px]')}>
         {creators.empty ? <EmptyBox>{creators.empty}</EmptyBox> : (
           <>
-            {/* On a phone the table scrolls inside its card, as the board's
-                own phone rule does. */}
+            {/* From 640 the board's table; on a phone the creator, a line of
+                its facts and its videos (decision 14). */}
             <div className="-mx-1 overflow-x-auto px-1">
-              <table className={cn(TBL, 'min-w-[600px]')}>
+              <table className={cn(TBL, 'sm:min-w-[600px]')}>
                 <thead>
                   <tr>
                     <th scope="col" className={TH}>Creator</th>
-                    <th scope="col" className={TH}>Platform</th>
-                    <th scope="col" className={TH}>Audience</th>
-                    <th scope="col" className={TH}>Most made in</th>
-                    {brands ? <th scope="col" className={TH}>Brand named most</th> : null}
+                    <th scope="col" className={cn(TH, 'max-sm:hidden')}>Platform</th>
+                    <th scope="col" className={cn(TH, 'max-sm:hidden')}>Audience</th>
+                    <th scope="col" className={cn(TH, 'max-sm:hidden')}>Most made in</th>
+                    {brands ? <th scope="col" className={cn(TH, 'max-sm:hidden')}>Brand named most</th> : null}
                     <th scope="col" className={cn(TH, 'pr-0 pl-3.5 text-right')}>Videos</th>
                   </tr>
                 </thead>
