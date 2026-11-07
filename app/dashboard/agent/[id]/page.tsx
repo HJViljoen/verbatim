@@ -1,21 +1,22 @@
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft } from 'lucide-react'
 import { getSessionContext } from '@/lib/auth'
 import { readingHandle } from '@/lib/reading/read'
 import { AgentDocumentSplit } from '@/components/agent-document-split'
-import { ExportScope } from '@/components/export-menu'
-import { Tile, TileEmpty } from '@/components/shell/tile'
+import { PlanJudgement } from '@/components/agent-document'
+import { ExportMenu, ExportScope } from '@/components/export-menu'
+import { LevelBar } from '@/components/shell/level-bar'
+import { PageFrame } from '@/components/shell/page-grid'
+import { CARD, EmptyBox, Label } from '@/components/v2'
 import { canAsk } from '@/lib/agent/access'
 import { mayDeleteThread } from '@/lib/agent/delete-thread'
 import { DeleteThread } from '@/components/pages/agent/delete-thread'
-import { askBasisLine, nothingSearchable } from '@/lib/agent/basis'
+import { nothingSearchable } from '@/lib/agent/basis'
 import { loadAgentThread } from '@/lib/pages/agent-thread'
 import { AgentComposer } from '@/components/agent-composer'
 import { AnswerTile } from '@/components/pages/agent/answer'
 import { AskBoxTile } from '@/components/pages/agent/ask-box'
 import { EarlierQuestionsTile, NotAnsweredTile, ReadsTile } from '@/components/pages/agent/rail'
-import { ASK_TILE_ROW, AskColumns, AskShell } from '@/components/pages/agent/surface'
+import { AskColumns, AskShell, askSub, planCheckStats } from '@/components/pages/agent/surface'
 import { ASK_PDF_MAX_BYTES } from '@/lib/config'
 import type { Metadata } from 'next'
 import { surface } from '@/lib/nav'
@@ -70,72 +71,48 @@ export default async function AgentThreadPage({
     : []
 
   /**
-   * ONE WAY BACK PER SCREEN, and this is not it wherever the rail is.
-   *
-   * "← All questions" here and "All questions →" in the history tile
-   * (`rail.tsx`) are two controls with the same name and the same destination,
-   * ~230px apart at 1440, pointing opposite ways. The artboard draws no back
-   * link at all and gives the history tile the only one. So the rail's is the
-   * one that stays — it sits under the list of what those questions ARE, which
-   * is what makes it worth following — and this one is drawn ONLY on the
-   * document branch below, which composes no rail and would otherwise strand a
-   * reader on a plan check with nothing to leave by.
+   * ONE WAY BACK PER SCREEN. A question thread's is the rail's "All
+   * questions"; the plan check, which composes no rail, has the crumb "All
+   * questions / {plan}" (Agent-Thread.dc.html), which replaced the arrowed
+   * back link it had.
    */
-  const back = (
-    <Link
-      href="/dashboard/agent"
-      className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
-    >
-      <ArrowLeft className="size-3.5" aria-hidden />
-      All questions
-    </Link>
-  )
-
   const rail = (
     <>
-      <EarlierQuestionsTile history={data.history} row={ASK_TILE_ROW} openThread />
-      <ReadsTile reads={data.reads} row={ASK_TILE_ROW} />
-      <NotAnsweredTile notAnswered={data.notAnswered} row={ASK_TILE_ROW} />
+      <EarlierQuestionsTile history={data.history} openThread />
+      <ReadsTile reads={data.reads} />
+      <NotAnsweredTile notAnswered={data.notAnswered} />
     </>
   )
 
-  // A document thread takes the left column: the check on the left, their
-  // document on the right, each scrolling independently. Same shape as an
-  // artifact panel, and the reason Heinrich's idea works — the annotation is
-  // markup over text WE rendered, so their file is never stored or edited.
+  // THE PLAN CHECK (Agent-Thread.dc.html, the audit design): the crumb "All
+  // questions / {plan}", the title "The plan check" with "{brand}, {month}"
+  // under it and Export beside it, the figures row, then the check and their
+  // document as two tiles that flow with the page, and "What I'd take from
+  // that" under both. The annotation is markup over text WE rendered, so
+  // their file is never stored or edited.
   if (data.document) {
     const doc = data.document
     return (
       <ExportScope page="agent" params={{ thread: id }} tiles={[]}>
-        <AskShell bar={{ brand: data.brand, reading: data.bar.reading }} params={sp}>
-          {back}
-          {/* `ASK_TILE_ROW`, like every other tile on this surface. `row` is a
-              `MIN_H[n]` floor at every width below `xl` and an inert span at
-              and above it (`surface.tsx:ASK_TILE_ROW` argues the whole rule),
-              so `row={6}` forced `min-h-[776px]` under a document split that
-              is its own height, and `row={2}` forced `min-h-[248px]` under a
-              two-sentence empty state — about 190px of white under ~60px of
-              text at 1024. These are the two branches H8 did not visit. */}
-          <Tile col={12} row={ASK_TILE_ROW} eyebrow="The plan check" meta={data.method.period}>
-            {/* AS3, as the exported deck carries it: what this document was
-                CHECKED against. A document thread has no answer to hang it
-                under, which is how the screen and the deck both came to leave
-                it off. */}
-            <p className="m-0 font-mono text-[11px] text-muted-foreground">
-              {askBasisLine(data.basis, { asked: true, verb: 'Checked' })}
-            </p>
-            <AgentDocumentSplit
-              claims={doc.claims}
-              summary={doc.summary}
-              judgement={doc.judgement}
-              quotesByClaim={new Map(Object.entries(doc.quotesByClaim).map(([ref, qs]) => [ref, qs.map((q) => ({ text: q.text, lang: q.lang, english: q.english }))]))}
-              segments={doc.segments}
-              anchored={doc.anchored}
-              notice={doc.notice}
-            />
-          </Tile>
+        <PageFrame>
+          <LevelBar
+            crumbs={[{ label: 'All questions', href: '/dashboard/agent' }, { label: data.title, href: null }]}
+            level="plan"
+            title="The plan check"
+            sub={askSub({ brand: data.brand, reading: data.bar.reading })}
+            controls={<ExportMenu variant="secondary" />}
+            stats={planCheckStats(data)}
+          />
+          <AgentDocumentSplit
+            claims={doc.claims}
+            quotesByClaim={new Map(Object.entries(doc.quotesByClaim).map(([ref, qs]) => [ref, qs.map((q) => ({ text: q.text, lang: q.lang, english: q.english }))]))}
+            segments={doc.segments}
+            anchored={doc.anchored}
+            notice={doc.notice}
+          />
+          <PlanJudgement claims={doc.claims} judgement={doc.judgement} />
           {deleteControl}
-        </AskShell>
+        </PageFrame>
       </ExportScope>
     )
   }
@@ -151,15 +128,16 @@ export default async function AgentThreadPage({
   if (data.kind === 'document') {
     return (
       <ExportScope page="agent" params={{ thread: id }} tiles={[]}>
-        <AskShell bar={{ brand: data.brand, reading: data.bar.reading }} params={sp}>
+        <AskShell bar={{ brand: data.brand, reading: data.bar.reading }}>
           <AskColumns rail={rail}>
-            <Tile col={12} row={ASK_TILE_ROW} eyebrow="The plan check" meta="nothing saved">
-              <TileEmpty>
-                Nothing was saved against this document. Either nothing in it read as a claim about customers or the
-                market, or the check failed on our side before it finished. It still counted as one of this
-                month&rsquo;s questions, and you can bring the document again from the Agent&rsquo;s box.
-              </TileEmpty>
-            </Tile>
+            <section aria-label="The plan check" className={CARD}>
+              <Label as="h3">The plan check</Label>
+              <EmptyBox title="Nothing was saved against this document">
+                Either nothing in it read as a claim about customers or the market, or the check failed on our side
+                before it finished. It still counted as one of this month&rsquo;s questions, and you can bring the
+                document again from the Agent&rsquo;s box.
+              </EmptyBox>
+            </section>
             {deleteControl}
           </AskColumns>
         </AskShell>
@@ -169,16 +147,15 @@ export default async function AgentThreadPage({
 
   return (
     <ExportScope page="agent" params={{ thread: id }} tiles={exportTiles}>
-      <AskShell bar={{ brand: data.brand, reading: data.bar.reading }} params={sp}>
+      <AskShell bar={{ brand: data.brand, reading: data.bar.reading }}>
         <AskColumns rail={rail}>
           {/* THE ASK BOX STAYS ABOVE THE ANSWER, as the artboard draws it: a
               reader with an answer in front of them is one keystroke from the
               next question, and the plan chip lives on this tile. Its control
-              is the pill, as on the Agent page. */}
+              is the Agent page's box. */}
           <AskBoxTile
             basis={data.basis}
             plan={data.planChip}
-            row={ASK_TILE_ROW}
             composer={<AgentComposer canSend={canSend && !blocked} disabledNote={disabledNote} planLimit={planLimit} />}
           />
           {data.turns.map((turn, i) => (
@@ -187,13 +164,12 @@ export default async function AgentThreadPage({
               turn={turn}
               turnIndex={i}
               measure={data.measure}
-              row={ASK_TILE_ROW}
               // What the question NAMES, read on the market (WP3.9): a
               // subject's own figure and trail, under the first answer.
               about={i === 0 ? data.about : undefined}
             />
           ))}
-          {/* ONE FOLLOW-UP CONTROL, AT THE BOTTOM OF THE THREAD: the same pill
+          {/* ONE FOLLOW-UP CONTROL, AT THE BOTTOM OF THE THREAD: the same box
               as the Agent page, on the page's ground under the last answer,
               where a reader who has just finished reading is (Heinrich, 1 Oct;
               the 22 Aug thread drew it here too). One of it, never one per

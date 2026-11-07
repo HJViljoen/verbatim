@@ -211,7 +211,7 @@ describe('the tile’s chrome', () => {
     const text = renderText(tile(measured))
     expect(text).toContain('The answer')
     // The date is the "You asked" line's; no meta repeats it beside the title.
-    expect(text).toContain('You asked · 28 Sep')
+    expect(text).toContain('You asked on 28 Sep')
     expect(text).not.toContain('answered 28 Sep')
     expect(text).toContain('Open the 130 videos behind this')
     // The population and the month are on the finding the link opens, never a
@@ -352,7 +352,7 @@ describe('"Ask about this" on a subject: its own figure and trail', () => {
     const text = renderText(<AboutReadings readings={[ready]} />)
     expect(text).toContain('Looks & style')
     expect(text).toContain('104 of 626 videos')
-    expect(text).toContain('in your market · September')
+    expect(text).toContain('in your market in September')
     // T0a (the one condition): the pair is refused, so no trail across it
     // ("Aug 11% of 351 · Sep 17% of 626" was the comparison itself) and no
     // sentence saying why.
@@ -401,7 +401,8 @@ describe('"Ask about this" on a subject: its own figure and trail', () => {
       points: [{ month: '2026-06-01', k: 5, n: 50 }, { month: '2026-07-01', k: 4, n: 36 }, { month: '2026-08-01', k: 38, n: 377 }, { month: '2026-09-01', k: 103, n: 654 }],
     }, '2026-09-01', joined, '2026-10-02T06:00:00.000Z')
     const text = renderText(<AboutReadings readings={[long]} />)
-    expect(text).toContain('Jul 4 of 36 · Aug 10% of 377 · Sep 16% of 654')
+    // The months in commas (the text extraction spaces a tag before its comma).
+    expect(text.replace(/\s+,/g, ',')).toContain('Jul 4 of 36, Aug 10% of 377, Sep 16% of 654')
     expect(text).not.toContain('Jun')
   })
 

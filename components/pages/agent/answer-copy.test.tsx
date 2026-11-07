@@ -132,7 +132,7 @@ describe('the live thread, as Heinrich read it (1 Oct)', () => {
   })
 
   it('says what a point covers in one short line', () => {
-    expect(tile).toContain('Covers: Products that hold up well · Loyalty to preferred bag brands · Trust in long-lasting bag quality · Willing to pay for quality')
+    expect(tile).toContain('Covers: Products that hold up well, Loyalty to preferred bag brands, Trust in long-lasting bag quality, Willing to pay for quality')
   })
 
   it('draws nothing in the right column where there is no line, and says nothing about it', () => {

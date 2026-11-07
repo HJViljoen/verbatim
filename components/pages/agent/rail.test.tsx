@@ -39,7 +39,9 @@ describe('earlier questions', () => {
     expect(text).toContain('Your questions')
     expect(text).not.toContain('3 of 3')
     expect(text).not.toContain('earliest')
-    expect(text).toContain('All questions →')
+    // The link says where it goes, with no arrow (the audit design).
+    expect(text).toContain('All questions')
+    expect(text).not.toContain('→')
   })
 
   it('draws the newest three of what is left', () => {
@@ -170,7 +172,8 @@ describe('not answered this month', () => {
   })
 
   it('points at what we track', () => {
-    expect(renderText(<NotAnsweredTile notAnswered={measured.notAnswered} />)).toContain('What we track →')
+    expect(renderText(<NotAnsweredTile notAnswered={measured.notAnswered} />)).toContain('What we track')
+    expect(renderText(<NotAnsweredTile notAnswered={measured.notAnswered} />)).not.toContain('→')
   })
 })
 
@@ -186,7 +189,8 @@ describe('the ask box', () => {
 
   it('asks the market’s question (WP3.9)', () => {
     const text = renderText(box(measured))
-    expect(text).toContain('Ask your market')
+    // The eyebrow folds into the heading (the audit design's rule).
+    expect(text).not.toContain('Ask your market')
     expect(text).toContain('What does your market say about this?')
     expect(text).not.toContain('monthly readings searchable')
   })
@@ -212,7 +216,7 @@ describe('the ask box', () => {
     // surface ever told a reader they had one.
     const text = renderText(box(measured))
     expect(text).toContain('Summer 2026/27 campaign brief.pdf')
-    expect(text).toContain('uploaded 20 Aug · 9 claims')
+    expect(text).toMatch(/uploaded 20 Aug ?, 9 claims/)
     expect(text).toContain('6 supported')
     expect(text).toContain('1 contradicted')
     expect(text).toContain('2 untested')
@@ -256,7 +260,7 @@ describe('the starter questions (WP3.9)', () => {
     expect(text).toContain('written from Your market · September so far')
     expect(text).toMatch(/Ready to buy handmade bags\s*69 videos/)
     expect(text).toContain('about a third makers')
-    expect(text).toContain('provisional · over a third makers')
+    expect(text).toContain('provisional, over a third makers')
   })
 
   it('sends the reader to the box with the question in it, and asks nothing', () => {

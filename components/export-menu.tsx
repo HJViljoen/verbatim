@@ -7,6 +7,8 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { BarPill, barButtonClass } from '@/components/shell/page-grid'
+import { BTN_SECONDARY } from '@/components/v2/look'
+import { cn } from '@/lib/utils'
 import { FORMAT_NOUN, exportErrorLine, jobKey, pageSections, tileSections, type ExportJob, type ExportSection } from '@/lib/exports/jobs'
 import type { PageKey } from '@/lib/renderables/types'
 
@@ -170,14 +172,22 @@ function Body({ sections, ex }: { sections: ExportSection[]; ex: ReturnType<type
  * kept on the pages whose bar still pairs Export with the How to read pill,
  * so one row never mixes the two shapes.
  */
-export function ExportMenu({ variant = 'pill' }: { variant?: 'pill' | 'button' } = {}) {
+export function ExportMenu({ variant = 'pill' }: { variant?: 'pill' | 'button' | 'secondary' } = {}) {
   const scope = useContext(ExportScopeContext)
   const { open, setOpen, ex } = useExportControl(scope)
   if (!scope) return null
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
-        {variant === 'button' ? (
+        {variant === 'secondary' ? (
+          // The audit design's secondary button (the Agent's boards: Export
+          // as `.btn2`): the word alone at rest, the export's state beside it
+          // while one runs.
+          <button type="button" data-print-hide="" className={cn(BTN_SECONDARY, open && 'bg-inner')}>
+            {ex.state.phase === 'idle' ? null : <StateIcon phase={ex.state.phase} className="size-4 shrink-0" />}
+            Export
+          </button>
+        ) : variant === 'button' ? (
           <button type="button" data-print-hide="" className={barButtonClass(open)}>
             <StateIcon phase={ex.state.phase} className={ex.state.phase === 'done' ? 'size-4 shrink-0' : 'size-4 shrink-0 text-muted-foreground'} />
             Export

@@ -1,29 +1,28 @@
 import type { ReactNode } from 'react'
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
-import { ReadingContext } from '@/components/shell/page-bar'
 import type { ReadingMonth } from '@/lib/reading/reading-month'
 import { ExportMenu } from '@/components/export-menu'
+import type { StatItem } from '@/components/v2'
 import { surface } from '@/lib/nav'
+import { fmtInt, shortDate, weekdayDate } from '@/lib/format'
+import { monthLabel } from '@/lib/shell/bar'
+import type { AgentThreadData } from '@/lib/pages/agent-thread'
 import { THIRTEEN_WORDS, READER_FLAGS } from '@/lib/calibration'
 
 // Ask's shell (Block D wave 2, E-ask · `ask.shell`, `ask.bar.question`).
 //
-// THE PAGE BAR WAS ABSENT ENTIRELY. `lib/nav.ts` has carried Ask's title, its
-// question ("What does the conversation say about this?") and — since wave 1 —
-// `hasRecord` for years of commits, and no route on this surface mounted
-// `SurfacePageBar`. So the one question the page answers, the "How to read
-// this page" legend and Export (which existed only inside a thread) never
-// printed. This mounts the bar the other six surfaces already wear.
-//
-// ASK'S BAR IS THE ONE-LINE BAR (WP3.9): the month selector's chip and "as at
-// the {update} update · next update {date}", as on every reading page. The
-// ask basis (which update an answer was given against) is printed with the
-// answer, not in the bar. See `AskShell`.
+// SINCE THE AUDIT DESIGN (7 Nov; Agent-Thread.dc.html draws the plan check,
+// and a question thread takes the recipe): the title "Agent", the line under
+// it "{brand}, {month}" (the plan check's board), and Export as the kit's
+// secondary button. The month was a chip with a menu of months until then;
+// on the Agent its options led back to the Agent's own page, which reads no
+// month, so the line says the month in words. The ask basis (which update an
+// answer was given against) is printed with the answer, not in the bar.
 //
 // NO "HOW SOUND IS THIS" BAND (25 Sep rulings, market-first WP1.2). Ask used
 // to mount its own record band and drawer under the bar; the band left every
 // page, Ask's too. What an answer reads is stated in the open, in the rail's
-// "What an answer reads" tile.
+// "What answers cover" tile.
 
 /**
  * The words the legend explains on this surface.
@@ -34,44 +33,60 @@ import { THIRTEEN_WORDS, READER_FLAGS } from '@/lib/calibration'
  */
 export const ASK_LEGEND = [...THIRTEEN_WORDS, ...READER_FLAGS]
 
+/** "Össur, October 2026": the brand and the reading month an answer's
+ *  window ends in, the line under the title (the plan check's board); the
+ *  brand alone where nothing has been delivered. Pure. */
+export function askSub(bar: { brand: string; reading: ReadingMonth | null } | null): string | null {
+  if (!bar) return null
+  return bar.reading ? `${bar.brand}, ${monthLabel(bar.reading.month)}` : bar.brand
+}
+
 /**
- * THE ONE-LINE BAR, ON ASK TOO (WP3.9; 25 Sep rulings, §5.12): "Sealand ·
- * September 2026", without the update line since round 2 (1 Oct). Ask's `lib/nav.ts` bar
- * kind stays `title` (that file is not this package's), so the shell composes
- * `PageBar` with the bar's own `line`, drawn by the same `ReadingContext` the
- * reading pages use, over the reading month an answer's window ends in. The
- * selector offers no other month here: an answer's window is chosen with the
- * window switch, not the month. Where nothing has been delivered there is no
- * reading month, and the bar is the title alone, which is true.
+ * The Agent's page bar on a thread: the title, its line, Export.
  */
 export function AskShell({
   bar,
-  params = {},
   children,
 }: {
   /** The tenant's name and the reading month, or null. */
   bar: { brand: string; reading: ReadingMonth | null } | null
-  params?: Record<string, string | undefined>
   children: ReactNode
 }) {
   const s = surface('ask')
-  // THE BRAND AND THE MONTH, AND NO UPDATE LINE (round 2, 1 Oct): "as at the
-  // 27 Sep update · next update Sun 4 Oct" is our process as an event (§0a.1),
-  // and the nine other pages' bars already print none. "September 2026" is
-  // the date a reader needs.
-  const line = bar?.reading
-    ? <ReadingContext context={{ brand: bar.brand, reading: bar.reading, others: [] }} basePath={s.href} params={params} line={false} />
-    : undefined
   return (
     <PageFrame>
-      <div className="flex shrink-0 flex-col gap-1.5">
-        <PageBar title={s.label} line={line}>
-          <ExportMenu />
-        </PageBar>
-      </div>
+      <PageBar title={s.label} sub={askSub(bar) ?? undefined}>
+        <ExportMenu variant="secondary" />
+      </PageBar>
       {children}
     </PageFrame>
   )
+}
+
+/**
+ * The plan check's figures row (Agent-Thread.dc.html): the plan, when it was
+ * asked, the update it was checked against, and its claims by verdict. A
+ * verdict no claim earned is left out of the sentence (absent rather than
+ * zero, the plan chip's rule). Pure.
+ */
+export function planCheckStats(d: Pick<AgentThreadData, 'title' | 'createdAt' | 'basis' | 'document'>): StatItem[] {
+  const s = d.document?.summary
+  const total = d.document?.claims.length ?? 0
+  const parts = s
+    ? ([[s.supported, 'supported'], [s.contradicted, 'contradicted'], [s.untested, 'untested']] as [number, string][]).filter(([n]) => n > 0)
+    : []
+  return [
+    { key: 'plan', term: 'Plan', value: <span data-copy="subject" data-slot="ask_extract_title">{d.title}</span> },
+    { key: 'asked', term: 'Asked', value: weekdayDate(d.createdAt) },
+    { key: 'checked', term: 'Checked against', value: d.basis.updateAt ? `The update of ${shortDate(d.basis.updateAt)}` : 'No update read yet' },
+    {
+      key: 'claims',
+      term: <><span data-copy="figure">{fmtInt(total)}</span> {total === 1 ? 'claim' : 'claims'}</>,
+      value: parts.length > 0
+        ? parts.map(([n, w], i) => <span key={w}>{i > 0 ? ', ' : null}<span data-copy="figure">{fmtInt(n)}</span> {w}</span>)
+        : 'None read',
+    },
+  ]
 }
 
 /**
@@ -87,33 +102,12 @@ export function AskShell({
  */
 export function AskColumns({ children, rail }: { children: ReactNode; rail: ReactNode }) {
   return (
-    <div className="flex flex-col items-start gap-4 xl:flex-row">
-      <div className="flex w-full min-w-0 flex-1 flex-col gap-4">{children}</div>
-      <div className="flex w-full flex-col gap-4 xl:w-[320px] xl:flex-none">{rail}</div>
+    <div className="flex flex-col items-start gap-5 xl:flex-row">
+      <div className="flex w-full min-w-0 flex-1 flex-col gap-5">{children}</div>
+      <div className="flex w-full flex-col gap-5 xl:w-[320px] xl:flex-none">{rail}</div>
     </div>
   )
 }
-
-/**
- * `Tile.row` ON THIS SURFACE, and why every tile here passes 1.
- *
- * `Tile.row` does two things: `xl:row-span-N` on a GRID, and `MIN_H[row]` below
- * `xl` where the grid is not in play. `AskColumns` composes with flex, so the
- * span half is inert at desktop — and the floor half still applied, on its own,
- * at every width under 1280. A history tile at `row={3}` forced 380px against
- * about 200px of content, and `distribute="between"` then pushed the footer to
- * the floor: measured at 1024, roughly 150px of white inside the history tile,
- * 60px in draws, 120px in the ask box. The props did nothing where they were
- * meant to and damage where they were not.
- *
- * One row unit is a floor low enough that no tile here has spare height to
- * distribute, at any width. `distribute="between"` stays — it is right the day
- * this surface is composed on a grid, and it costs nothing while the tiles are
- * their own height. Ask is NOT `PageGrid` and never becomes it (see
- * `AskColumns`): the left column's answer runs to any height and expressing
- * that as spans would make the rail's height a function of the answer's.
- */
-export const ASK_TILE_ROW = 1
 
 /**
  * The INDEX's composition — the ask box over three tiles, not beside them.

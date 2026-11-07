@@ -31,7 +31,7 @@
 
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'fs'
 import { join, resolve } from 'path'
-import { createElement as h, Fragment, type ReactNode } from 'react'
+import { createElement as h, Fragment, type ComponentType, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import postcss from 'postcss'
 import tailwind from '@tailwindcss/postcss'
@@ -45,6 +45,7 @@ import { SidebarClientName } from '../components/sidebar-client-name'
 import { PhoneTopBar } from '../components/shell/phone-bar'
 import { VerbatimMark } from '../components/brand/mark'
 import { PageBar, PageFrame } from '../components/shell/page-grid'
+import { LevelBar } from '../components/shell/level-bar'
 import { SEALAND_CLIENT_ID } from '../lib/config'
 import { surface } from '../lib/nav'
 
@@ -74,10 +75,12 @@ import { AgentComposer } from '../components/agent-composer'
 import { AnswerTile } from '../components/pages/agent/answer'
 import { AskBoxTile } from '../components/pages/agent/ask-box'
 import { EarlierQuestionsTile, NotAnsweredTile, ReadsTile } from '../components/pages/agent/rail'
-import { ASK_TILE_ROW, AskColumns, AskShell } from '../components/pages/agent/surface'
-import { agentFixture, sealandLongTermFixture } from '../components/pages/agent/fixture'
+import { AskColumns, AskShell, askSub, planCheckStats } from '../components/pages/agent/surface'
+import { agentFixture, planCheckFixture, sealandLongTermFixture } from '../components/pages/agent/fixture'
 import { askHistory, inHouseStyle } from '../lib/pages/agent-thread'
-import { ExportScope } from '../components/export-menu'
+import { ExportMenu, ExportScope } from '../components/export-menu'
+import { AgentDocumentSplit } from '../components/agent-document-split'
+import { PlanJudgement } from '../components/agent-document'
 import { PageTitle } from '../components/pages/studio/ui'
 import { YourReports } from '../components/pages/studio/your-reports'
 import { shownStudioRows, studioRows } from '../lib/pages/studio'
@@ -305,20 +308,49 @@ const agentThread = (raw = agentFixture()) => {
   const data = { ...raw, turns: raw.turns.map((t) => (t.answer ? { ...t, answer: inHouseStyle(t.answer) } : t)) }
   const planLimit = 'PDF, up to 4 MB'
   const rail = h(Fragment, null,
-    h(EarlierQuestionsTile, { history: data.history, row: ASK_TILE_ROW, openThread: true }),
-    h(ReadsTile, { reads: data.reads, row: ASK_TILE_ROW }),
-    h(NotAnsweredTile, { notAnswered: data.notAnswered, row: ASK_TILE_ROW }))
+    h(EarlierQuestionsTile, { history: data.history, openThread: true }),
+    h(ReadsTile, { reads: data.reads }),
+    h(NotAnsweredTile, { notAnswered: data.notAnswered }))
   const column = h(Fragment, null,
-    h(AskBoxTile, { basis: data.basis, plan: data.planChip, row: ASK_TILE_ROW, composer: h(AgentComposer, { canSend: true, planLimit }) }),
+    h(AskBoxTile, { basis: data.basis, plan: data.planChip, composer: h(AgentComposer, { canSend: true, planLimit }) }),
     ...data.turns.map((turn, i) => h(AnswerTile, {
-      key: i, turn, turnIndex: i, measure: data.measure, row: ASK_TILE_ROW, about: i === 0 ? data.about : undefined,
+      key: i, turn, turnIndex: i, measure: data.measure, about: i === 0 ? data.about : undefined,
     })),
     h('div', { className: 'w-full pt-1' },
       h(AgentComposer, { canSend: true, threadId: data.threadId, placeholder: 'Ask a follow-up in this thread', window: data.window ?? undefined, planLimit })),
   )
   return h(ExportScope, {
     page: 'agent', params: { thread: data.threadId }, tiles: [],
-    children: h(AskShell, { bar: { brand: data.brand, reading: data.bar.reading }, params: {}, children: h(AskColumns, { rail, children: column }) }),
+    children: h(AskShell, { bar: { brand: data.brand, reading: data.bar.reading }, children: h(AskColumns, { rail, children: column }) }),
+  })
+}
+
+/** app/dashboard/agent/[id]/page.tsx, the plan check's branch (the audit
+ *  design, Agent-Thread.dc.html), on the board's own plan abridged. */
+const agentPlan = () => {
+  const data = planCheckFixture()
+  const doc = data.document!
+  return h(ExportScope, {
+    page: 'agent', params: { thread: data.threadId }, tiles: [],
+    children: h(PageFrame, {
+      children: h(Fragment, null,
+        h(LevelBar, {
+          crumbs: [{ label: 'All questions', href: '/dashboard/agent' }, { label: data.title, href: null }],
+          level: 'plan', title: 'The plan check',
+          sub: askSub({ brand: data.brand, reading: data.bar.reading }),
+          // The route's `<ExportMenu variant="secondary" />` (its optional
+          // props argument does not infer through createElement).
+          controls: h(ExportMenu as ComponentType<{ variant?: 'pill' | 'button' | 'secondary' }>, { variant: 'secondary' }),
+          stats: planCheckStats(data),
+        }),
+        h(AgentDocumentSplit, {
+          claims: doc.claims,
+          quotesByClaim: new Map(Object.entries(doc.quotesByClaim).map(([ref, qs]) => [ref, qs.map((q) => ({ text: q.text, lang: q.lang, english: q.english }))])),
+          segments: doc.segments, anchored: doc.anchored, notice: doc.notice,
+        }),
+        h(PlanJudgement, { claims: doc.claims, judgement: doc.judgement }),
+      ),
+    }),
   })
 }
 
@@ -453,6 +485,7 @@ const PAGES: Page[] = [
   { key: 'agent-history', path: '/dashboard/agent', artboard: 'Page-Agent.dc.html', page: () => agentIndex() },
   { key: 'agent-thread', path: '/dashboard/agent', artboard: 'Page-Agent.dc.html', page: () => agentThread() },
   { key: 'agent-thread-live', path: '/dashboard/agent', artboard: 'Page-Agent.dc.html', page: () => agentThread(sealandLongTermFixture()) },
+  { key: 'agent-thread-plan', path: '/dashboard/agent', artboard: 'Page-Agent.dc.html', page: () => agentPlan() },
   {
     key: 'studio', path: '/dashboard/studio', artboard: 'Page-Studio.dc.html',
     page: () => h('div', { className: 'flex min-h-0 flex-1 flex-col gap-[22px] text-[#26292C]' },

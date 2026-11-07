@@ -49,6 +49,9 @@ export type PageLevelKind =
   | 'idea' | 'replies' | 'posts'
   | 'advice' | 'move' | 'record'
   | 'group' | 'brand' | 'creator'
+  // The Agent's plan check (the audit design, Agent-Thread.dc.html): the
+  // audit block only, so it draws no tile.
+  | 'plan'
 
 /** `LevelTile`'s levels (Market's three, Your products' two) take no tile;
  *  another page's level must bring its own, so a level `LevelTile` cannot

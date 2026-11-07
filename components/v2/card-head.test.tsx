@@ -3,10 +3,15 @@ import { MessageSquareText, TrendingUp } from 'lucide-react'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { CARD, CardHead } from './card-head'
+import { CARD_FRAME } from './look'
 import { FlagChip } from './flag-chip'
 import { WEEK_FLAG } from './fixture'
 
 describe('CardHead and CARD', () => {
+  it('has a client-safe copy in look.ts, the same classes (a client component draws its own tiles from it)', () => {
+    expect(CARD_FRAME).toBe(CARD)
+  })
+
   it('draws no icon tile (the audit design), then the 18px title and its muted line', () => {
     const m = render(<CardHead icon={MessageSquareText} title="What the market is talking about" sub="Your six subjects, October so far" />)
     expect(m).not.toContain('data-icon-tile')

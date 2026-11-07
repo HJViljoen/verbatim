@@ -1,8 +1,11 @@
+import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { fmtInt, shortDate } from '@/lib/format'
 import type { NotAnswered } from '@/lib/agent/measure'
 import type { AskHistory, AskReads } from '@/lib/pages/agent-thread'
-import { Tile, TileEmpty } from '@/components/shell/tile'
+import { CARD, EmptyBox, GoLink } from '@/components/v2'
+import { GO, LBL } from '@/components/v2/look'
+import { cn } from '@/lib/utils'
 
 // The right rail — three tiles (Block D wave 2, E-ask · `ask.history.*`,
 // `ask.draws.*`, `ask.notanswered*`).
@@ -13,8 +16,25 @@ import { Tile, TileEmpty } from '@/components/shell/tile'
 // beside the answer, and each of them is a question a reader of an answer asks
 // next: what else have I asked, what stands behind an answer, and what could
 // this not answer.
+//
+// SINCE THE AUDIT DESIGN (7 Nov; a question thread has no board, so the
+// recipe): each a kit card with its title a sentence-case label, its gap in
+// the dashed box, its figures in tabular sans and its link words with no
+// arrow.
 
-/** Where "What we track →" goes, and where the rail's last tile sends a reader
+/** A rail tile: the kit's card, its title a label (the `Tile` eyebrow it
+ *  was), its link at the foot. */
+function RailTile({ title, link, children }: { title: string; link?: ReactNode; children: ReactNode }) {
+  return (
+    <section className={cn(CARD, 'gap-3.5')}>
+      <h2 className={cn('m-0', LBL)}>{title}</h2>
+      {children}
+      {link ? <div className="mt-auto pt-1">{link}</div> : null}
+    </section>
+  )
+}
+
+/** Where "What we track" goes, and where the rail's last tile sends a reader
  *  who wants a refusal to stop being a refusal. */
 export const TRACKED_HREF = '/dashboard/settings'
 
@@ -29,64 +49,50 @@ export const TRACKED_HREF = '/dashboard/settings'
  * whole reading layer exists to stop. The rows carry what is recorded: the
  * question, when it was answered, and the one flag that is a fact.
  */
-export function EarlierQuestionsTile({ history, col = 12, row = 2, openThread = false }: {
+export function EarlierQuestionsTile({ history, openThread = false }: {
   history: AskHistory | null
-  col?: number
-  row?: number
   /** A thread is open beside the tile (its page): the empty line says "nothing
    *  ELSE". On Ask's own page no thread is open, and "else" there reads as
    *  though a question had been asked (sw-2 item 5). */
   openThread?: boolean
 }) {
-  /** Whether this tile has a LIST — what both halves of the footer, and the
-   *  meta, are facts about. */
+  /** Whether this tile has a LIST — what its link is a fact about. */
   const drawn = Boolean(history && history.rows.length > 0)
   return (
-    <Tile
-      col={col}
-      row={row}
-      // THE PREVIEW'S TITLE, AND THE TITLE ALONE (25 Sep rulings, WP3.9): a
-      // header carries its title and a footer its link, so the "3 of 12"
-      // meta and the "earliest 28 Sep" note left the tile. The month's asking
-      // is still stated once, by `NotAnsweredTile`'s budget line.
-      eyebrow="Your questions"
-      footer={drawn ? <Link href={history!.href} className="hover:underline">All questions →</Link> : undefined}
-      distribute="between"
-    >
+    // THE PREVIEW'S TITLE, AND THE TITLE ALONE (25 Sep rulings, WP3.9): a
+    // header carries its title and a footer its link. The month's asking is
+    // stated once, by `NotAnsweredTile`'s budget line.
+    <RailTile title="Your questions" link={drawn ? <GoLink href={history!.href}>All questions</GoLink> : undefined}>
       {!history ? (
-        <TileEmpty>Your earlier questions could not be read just now.</TileEmpty>
+        <EmptyBox>Your earlier questions could not be read just now.</EmptyBox>
       ) : history.rows.length === 0 ? (
         // TRUE ON BOTH ROUTES. The open thread is excluded from the rows
         // (`askHistory`'s `exclude`) but still counted in the month, so on a
         // thread page "no question has been asked" would be a lie told beside
         // the question the reader is reading.
-        <TileEmpty>{openThread ? 'Nothing else has been asked in this workspace yet.' : 'Nothing has been asked in this workspace yet.'}</TileEmpty>
+        <EmptyBox>{openThread ? 'Nothing else has been asked in this workspace yet.' : 'Nothing has been asked in this workspace yet.'}</EmptyBox>
       ) : (
-        <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
+        <ul className="m-0 flex list-none flex-col p-0">
           {history.rows.map((r, i) => (
-            <li key={r.threadId} className={i > 0 ? 'border-t border-border/70 pt-2.5' : undefined}>
-              <Link href={`/dashboard/agent/${r.threadId}`} className="flex flex-col gap-1 hover:underline">
+            <li key={r.threadId} className={cn('flex flex-col gap-1 py-3', i > 0 ? 'border-t border-track' : 'pt-0')}>
+              <Link href={`/dashboard/agent/${r.threadId}`} className={cn(GO, 'self-start text-[14.5px] font-normal leading-[1.45]')}>
                 {/* The thread's title is model prose (`ask_extract_title`), so
                     the node names its slot rather than silencing rule (c) for
                     free — a question titled "Is price fading?" is the reader's
                     word, not a claim of ours. */}
-                <span data-copy="subject" data-slot="ask_extract_title" className="text-[12.5px] font-medium text-foreground">
-                  {r.title}
-                </span>
+                <span data-copy="subject" data-slot="ask_extract_title">{r.title}</span>
               </Link>
-              <div className="mt-1 flex flex-wrap items-center gap-2">
-                <span className="font-mono text-[10.5px] text-muted-foreground">
-                  answered <span data-copy="figure">{shortDate(r.askedAt)}</span>
-                </span>
+              <span className="flex flex-wrap items-baseline gap-x-2 text-[13px] text-muted-foreground">
+                <span>answered <span data-copy="figure" className="tabular-nums">{shortDate(r.askedAt)}</span></span>
                 {/* `=== true` on purpose: null is "we did not re-read that plan",
                     which is not "nothing crossed" (`AskHistoryRow.claimCrossed`). */}
-                {r.claimCrossed === true && <span className="font-mono text-[10.5px] font-semibold text-foreground">1 claim crossed</span>}
-              </div>
+                {r.claimCrossed === true && <span className="font-semibold text-foreground">1 claim crossed</span>}
+              </span>
             </li>
           ))}
         </ul>
       )}
-    </Tile>
+    </RailTile>
   )
 }
 
@@ -119,42 +125,37 @@ const READ_SWATCH: Record<AskReads['rows'][number]['key'], string> = {
  * the same way" under the counts. The counts stay: they are what a finding's
  * base adds up to (796 + 38 = 834, the Dashboard's figure).
  */
-export function ReadsTile({ reads, col = 12, row = 2 }: { reads: AskReads; col?: number; row?: number }) {
+export function ReadsTile({ reads }: { reads: AskReads }) {
   return (
-    <Tile
-      col={col}
-      row={row}
-      eyebrow="What answers cover"
-      distribute="between"
-    >
-      <p className="m-0 text-[13px] text-foreground">Your market, not only your own posts.</p>
+    <RailTile title="What answers cover">
+      <p className="m-0 text-[14px] leading-[1.5] text-foreground">Your market, not only your own posts.</p>
       <ul className="m-0 flex list-none flex-col p-0">
         {reads.rows.map((r, i) => (
-          <li key={r.key} className={`flex flex-col gap-1 py-2.5 ${i > 0 ? 'border-t border-border/70' : ''}`}>
+          <li key={r.key} className={cn('flex flex-col gap-1 py-3', i > 0 ? 'border-t border-track' : 'pt-0')}>
             <div className="flex items-baseline gap-2.5">
               <span aria-hidden className="size-2.5 flex-none translate-y-px rounded-[2px]" style={{ background: READ_SWATCH[r.key] }} />
-              <span className="min-w-0 flex-1 text-[13px] font-semibold text-foreground">{r.label}</span>
+              <span className="min-w-0 flex-1 text-[14px] font-semibold text-foreground">{r.label}</span>
               {r.value != null && (
-                <span data-copy="figure" className="font-mono text-[13px] font-semibold tabular-nums text-foreground">{fmtInt(r.value)}</span>
+                <span data-copy="figure" className="text-[15px] font-semibold tabular-nums text-foreground">{fmtInt(r.value)}</span>
               )}
             </div>
-            <p className="m-0 pl-5 text-[12px] leading-[1.45] text-muted-foreground">
+            <p className="m-0 pl-5 text-[13px] leading-[1.45] text-muted-foreground">
               <span data-copy="figure">{r.line}</span>
             </p>
           </li>
         ))}
       </ul>
-      <dl className="m-0 grid grid-cols-[96px_1fr] gap-x-3 gap-y-2 border-t border-border/70 pt-2.5">
+      <dl className="m-0 grid grid-cols-[96px_1fr] gap-x-3 gap-y-2 border-t border-track pt-3">
         {reads.facts.map((f) => (
           <div key={f.term} className="contents">
-            <dt className="text-[12px] text-muted-foreground">{f.term}</dt>
-            <dd className="m-0 text-[12.5px] text-foreground">
+            <dt className="text-[13px] text-muted-foreground">{f.term}</dt>
+            <dd className="m-0 text-[13.5px] text-foreground">
               <span data-copy="figure">{f.value}</span>
             </dd>
           </div>
         ))}
       </dl>
-    </Tile>
+    </RailTile>
   )
 }
 
@@ -172,33 +173,27 @@ export function ReadsTile({ reads, col = 12, row = 2 }: { reads: AskReads; col?:
  * the money is spent). The meta says "asked this month" rather than naming a
  * month, so it cannot be read as a reading of September.
  */
-export function NotAnsweredTile({ notAnswered, col = 12, row = 2 }: { notAnswered: NotAnswered | null; col?: number; row?: number }) {
+export function NotAnsweredTile({ notAnswered }: { notAnswered: NotAnswered | null }) {
   return (
-    <Tile
-      col={col}
-      row={row}
-      eyebrow="Not answered this month"
-      // TITLE ALONE, LINK ALONE (25 Sep rulings, WP3.9): the "2 of 3 asked"
-      // meta and the "Settings" note left; the budget line says the month.
-      footer={<Link href={notAnswered?.href ?? TRACKED_HREF} className="hover:underline">What we track →</Link>}
-      distribute="between"
-    >
+    // TITLE ALONE, LINK ALONE (25 Sep rulings, WP3.9): the "2 of 3 asked"
+    // meta and the "Settings" note left; the budget line says the month.
+    <RailTile title="Not answered this month" link={<GoLink href={notAnswered?.href ?? TRACKED_HREF}>What we track</GoLink>}>
       {!notAnswered ? (
-        <TileEmpty>This month&rsquo;s questions could not be read just now.</TileEmpty>
+        <EmptyBox>This month&rsquo;s questions could not be read just now.</EmptyBox>
       ) : (
-        <div className="flex flex-col gap-2.5">
+        <div className="flex flex-col gap-3">
           {notAnswered.declined.length === 0 ? (
             // ONE SENTENCE, NOT TWO. The budget line below already says "1 of
             // 40 questions asked this month. Every one was answered from the
             // conversation", so an empty state saying it again made the tile
             // state the same fact twice in the state a fresh workspace is in.
             notAnswered.asked === 0 ? (
-              <TileEmpty>No question has been asked this month.</TileEmpty>
+              <EmptyBox>No question has been asked this month.</EmptyBox>
             ) : null
           ) : (
-            <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
+            <ul className="m-0 flex list-none flex-col p-0">
               {notAnswered.declined.map((d, i) => (
-                <li key={`${d.question}-${i}`} className={`flex flex-col gap-0.5 ${i > 0 ? 'border-t border-border/70 pt-2.5' : ''}`}>
+                <li key={`${d.question}-${i}`} className={cn('flex flex-col gap-1 py-3', i > 0 ? 'border-t border-track' : 'pt-0')}>
                   {/* The reader's own question, verbatim, AND MARKED AS
                       THEIRS. Not our prose and not the model's — a question a
                       reader typed is the one string on this page neither
@@ -209,19 +204,19 @@ export function NotAnsweredTile({ notAnswered, col = 12, row = 2 }: { notAnswere
                       not the product's: the model-written thread title two
                       tiles up already names its slot, and this is the other
                       reader-authored string on the same page. */}
-                  <p data-copy="quote" className="m-0 text-[12.5px] font-medium text-foreground">{d.question}</p>
-                  <span className="font-mono text-[10.5px] leading-[1.35] text-muted-foreground">{d.why}</span>
+                  <p data-copy="quote" className="m-0 text-[14.5px] font-medium leading-[1.45] text-foreground">{d.question}</p>
+                  <span className="text-[13px] leading-[1.45] text-muted-foreground">{d.why}</span>
                 </li>
               ))}
             </ul>
           )}
           {/* The budget, said once. `line` is composed by `notAnsweredFrom` and
               carries its own "of N" (lib/agent/measure.ts). */}
-          <p className="m-0 border-t border-border/70 pt-2.5 font-mono text-[10.5px] leading-[1.35] text-muted-foreground">
+          <p className="m-0 border-t border-track pt-3 text-[13px] leading-[1.45] text-muted-foreground">
             <span data-copy="figure">{notAnswered.line}</span>
           </p>
         </div>
       )}
-    </Tile>
+    </RailTile>
   )
 }

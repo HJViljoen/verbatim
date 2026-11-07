@@ -18,6 +18,7 @@ import type { Verdict } from '@/lib/reading/verdicts'
 import { FIXTURE_ENDED } from '@/lib/test/pair-fixture'
 import { objectReading } from '@/lib/agent/movement'
 import { pairOn } from '@/lib/reading/pairs'
+import type { ClaimResult } from '@/lib/ask/types'
 import { sealandJudge } from '@/lib/test/sealand-pairs'
 
 // Ask's fixtures (Phase 1 Block D, package D8).
@@ -657,5 +658,71 @@ export function sealandLongTermFixture(): AgentThreadData {
     window: 'all',
     // What the loader writes for a question: who and when, nothing else.
     method: { company: 'Sealand', period: 'Asked Thu 1 Oct', platforms: [], videos: null, comments: null, note: null },
+  })
+}
+
+/**
+ * A plan check (a document thread), the board's own plan abridged
+ * (Agent-Thread.dc.html: Össur's "Built For The Day", six of its fifteen
+ * claims and two of its four proposals). Its claims carry the board's
+ * verdicts, its document the board's opening paragraphs with each written
+ * claim's sentence anchored; one claim the document never states, and one
+ * supported claim with a comment, so every branch of the view draws.
+ */
+export function planCheckFixture(): AgentThreadData {
+  const claim = (ref: string, text: string, verdict: ClaimResult['verdict'], theySay: string | null, conversations: number, labels: string[]): ClaimResult => ({
+    ref, claim: text, verdict, theySay, conversationCount: conversations,
+    themeRefs: labels.map((label, i) => ({ themeId: `${ref}-t${i}`, registryId: null, label })),
+    insightIds: [],
+  })
+  const claims: ClaimResult[] = [
+    claim('C1', 'Össur competes in a category where the product is well understood and the purchase is rarely impulsive.', 'contradicts',
+      'People ask what the product is for, how it works in daily life and sport, what it costs, and how to contact the company, which shows the category is not already fully understood by the audience.',
+      22, ['Questions about Ossur pricing', 'Questions about Ossur performance', 'How to contact Ossur']),
+    claim('C2', 'The brand is trusted on engineering and under-represented on lived experience.', 'contradicts',
+      'The conversation does show trust in Ossur’s expertise, but it also includes amputees and users speaking from personal experience.',
+      5, ['Trust in the Ossur brand', 'Amputees sharing lived experience']),
+    claim('C3', 'Buyers in this category make their decision primarily on technical specification, before they ever speak to a clinician.', 'silent', null, 0, []),
+    claim('C4', 'Cost is rarely the deciding factor once a prosthetist has made a recommendation.', 'contradicts',
+      'People treat price, coverage, and financial help as central to access, and some describe advanced prosthetics as out of reach because of cost.',
+      44, ['Cost and insurance barriers', 'Prosthetics cost too much']),
+    claim('C5', 'Performance stories carry the brand when they show the training behind the result.', 'echoes',
+      'People respond to skill, balance and achievement, and stay with a story that shows the work behind it.',
+      9, ['Amputee athletes training']),
+    claim('C6', 'One ambassador outperforms a roster for recall.', 'silent', null, 0, []),
+  ]
+  const seg = (text: string, ref: string | null = null) => ({ text, ref })
+  return agentFixture({
+    threadId: 'th-plan',
+    kind: 'document',
+    title: 'Built For The Day, a brand campaign proposal',
+    brand: 'Össur',
+    createdAt: '2026-08-22T09:00:00.000Z',
+    turns: [],
+    document: {
+      sourceFilename: 'built-for-the-day.pdf',
+      notice: null,
+      claims,
+      summary: { supported: 1, contradicted: 3, untested: 2 },
+      judgement: [
+        { text: 'Reframe the category as explained, not assumed. The audience is not arriving fluent in what the products do, who they are for, or what the next step is.', basedOnRefs: ['C1', 'C4'] },
+        { text: 'Keep performance-led storytelling, but stop separating mastery from reality. Show what achievement requires: training, setbacks and adjustments.', basedOnRefs: ['C2', 'C5'] },
+      ],
+      quotesByClaim: { C5: [{ ref: 'q-c5', text: 'Watching her train for a year before that race is what got me back on the track.', lang: 'en', english: null }] },
+      segments: [
+        seg('Built For The Day\nA brand campaign proposal for Össur, prosthetic solutions\n\n1. Where we think the opportunity sits\n'),
+        seg('Össur competes in a category where the product is well understood and the purchase is rarely impulsive.', 'C1'),
+        seg(' Our starting position is that '),
+        seg('the brand is trusted on engineering and under-represented on lived experience.', 'C2'),
+        seg('\n\nBuyers in this category make their decision primarily on technical specification, before they ever speak to a clinician. '),
+        seg('Cost is rarely the deciding factor once a prosthetist has made a recommendation.', 'C4'),
+        seg('\n\n2. The story\n'),
+        seg('Performance stories carry the brand when they show the training behind the result.', 'C5'),
+        seg(' One face carries the campaign.'),
+      ],
+      anchored: ['C1', 'C2', 'C3', 'C4', 'C5'],
+    },
+    planChip: null,
+    method: { company: 'Össur', period: 'Asked Sat 22 Aug', platforms: [], videos: null, comments: null, note: null },
   })
 }

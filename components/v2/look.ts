@@ -62,6 +62,11 @@ export const TH = 'pb-2 pr-4 text-left align-bottom text-[13px] font-medium text
 export const TD = 'border-t border-track py-3.5 pr-4 align-top leading-[1.5]'
 export const TD_NUM = 'text-right tabular-nums'
 
+/** The kit's card (`CARD`, components/v2/card-head.tsx), for a client
+ *  component that draws its own tiles (the plan check's split). The same
+ *  classes; `card-head.test.tsx` holds the two equal. */
+export const CARD_FRAME = 'flex min-w-0 flex-col gap-4 rounded-[12px] bg-card p-[26px] shadow-card max-sm:gap-3 max-sm:p-[18px]'
+
 /** A table that STACKS ON A PHONE (decision 14: the app keeps its own
  *  points where columns stack; below 640 each row is a block and the head is
  *  hidden, so the first column reads whole and the key figure stays on

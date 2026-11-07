@@ -1,7 +1,9 @@
 import { Fragment } from 'react'
-import Link from 'next/link'
 import { CalendarLine } from '@/components/charts/calendar-line'
-import { Tile, TileBlock } from '@/components/shell/tile'
+import { TileExportButton } from '@/components/export-menu'
+import { CARD, EmptyBox, GoLink } from '@/components/v2'
+import { LBL } from '@/components/v2/look'
+import { cn } from '@/lib/utils'
 import { answerFallback, findingSentence, findingSentenceParts, findingsBaseLine, ownBase, type AnswerMeasure, type FindingMeasure } from '@/lib/agent/measure'
 import { DO_HEADING, NEAREST_HEADING, basedOnLine, saidHeading } from '@/lib/agent/types'
 import { monthlyLineLabel } from '@/lib/pages/overview'
@@ -50,6 +52,15 @@ import { DirectionWord, FindingLevel, InferencePill } from './marks'
 //     Freitag beside it; a rival's filed videos are read only when a question
 //     names that rival (WP3.9's market scope), and its months stay the brands
 //     view's, so a finding's line is never a rival's drawn beside the market.
+//
+// SINCE THE AUDIT DESIGN (7 Nov; a question thread has no board, so the
+// recipe): the answer is a kit card, not a `Tile` (whose eyebrow reaches
+// print and stays as it is); its heads are sentence-case labels; its figures
+// tabular sans at 13px and up; what a point covers in commas, as the plan
+// check's board writes a claim's conversations; the month trails keep their
+// "→" (small call 15: notation inside a figure, not a link arrow); the link to
+// the videos says where it goes with no arrow; and a turn with no answer says
+// so in the dashed box.
 //
 // AND NOTHING ON IT ABOUT HOW IT WAS MADE (§0a, 1 Oct). Heinrich, on Sealand's
 // live answer: "what's this 796 number". The page said "The sentence here named
@@ -112,7 +123,7 @@ function Marks({ f, level = true }: { f: FindingMeasure; level?: boolean }) {
           the audience it is a direction IN is not checkable. */}
       <span className="inline-flex items-center gap-2">
         <DirectionWord direction={f.direction} />
-        {base ? <span data-copy="figure" className="font-mono text-[11px] text-muted-foreground">{base}</span> : null}
+        {base ? <span data-copy="figure" className="text-[13px] text-muted-foreground">{base}</span> : null}
       </span>
     </div>
   )
@@ -127,7 +138,7 @@ function Baseline({ f }: { f: FindingMeasure }) {
   // stored with its baseline, prints the month read alone.
   if (!prev || !from || !priorPrintable(f.verdict)) return null
   return (
-    <p className="m-0 font-mono text-[11px] text-muted-foreground">
+    <p className="m-0 text-[13px] text-muted-foreground">
       the month before:{' '}
       <span data-copy="figure">
         {fmtInt(prev.k)} of {fmtInt(prev.n)} videos in {longMonth(from)}
@@ -149,7 +160,7 @@ function Baseline({ f }: { f: FindingMeasure }) {
 function OwnSide({ f }: { f: FindingMeasure }) {
   if (!f.own || f.own.thin) return null
   return (
-    <p className="m-0 text-[12.5px] leading-[1.5] text-secondary-foreground">
+    <p className="m-0 text-[13.5px] leading-[1.5] text-secondary-foreground">
       In your own audience:{' '}
       <span data-copy="figure">
         {fmtInt(f.own.value.k)} of {fmtInt(f.own.value.n)} videos
@@ -210,12 +221,19 @@ function FindingChart({ f }: { f: FindingMeasure }) {
         // denominator is a level without its "of N".
         height={104}
         padL={30}
-        padR={170}
+        // 184 since the audit design's card (18px padding on a phone, the
+        // tile's was 16): "The category 9.4% of 1,388" ran 9px past the
+        // card's content at 390 with 170.
+        padR={184}
         legend={false}
         format={(v) => `${v}%`}
         label={`${f.audienceLabel}, month by month`}
-        caption={`share of videos · ${f.audienceLabel.toLowerCase()} · to ${longMonth(f.chart.axis[f.chart.axis.length - 1] ?? '')}`}
       />
+      {/* The chart's caption, in sans at 13px (the shared chart prints its
+          own in small mono, which reaches print, so the answer says it). */}
+      <p className="m-0 text-[13px] leading-[1.4] text-muted-foreground">
+        Share of videos, {f.audienceLabel.toLowerCase()}, to {longMonth(f.chart.axis[f.chart.axis.length - 1] ?? '')}
+      </p>
       <MonthTrail f={f} />
     </div>
   )
@@ -264,7 +282,7 @@ function MonthTrail({ f }: { f: FindingMeasure }) {
   const months = f.series.filter((p) => f.chart.axis.includes(p.month) && (since == null || monthStartOf(p.month) >= since))
   if (months.length === 0) return null
   return (
-    <p className="m-0 font-mono text-[10px] leading-[1.4] text-muted-foreground">
+    <p className="m-0 text-[13px] leading-[1.45] tabular-nums text-muted-foreground">
       {months.map((p, i) => {
         const when = monthName(p.month).split(' ')[0]
         const read = p.pct != null && p.k != null && p.n != null
@@ -344,7 +362,7 @@ function Finding({
     // line always "fitted" and the sentence was squeezed to whatever the chart
     // left over.
     <div className="flex flex-wrap items-start gap-3">
-      <span className="w-3.5 shrink-0 font-mono text-[12px] font-semibold leading-[1.5] text-primary tabular-nums">
+      <span className="w-5 shrink-0 text-[15px] font-semibold leading-[1.55] text-muted-foreground tabular-nums">
         {index + 1}
       </span>
       <div className="flex min-w-0 grow basis-[16rem] flex-col gap-1.5">
@@ -352,9 +370,9 @@ function Finding({
             own (`findingSentence`, code's digits, so not a `prose` node), in
             the same ink as any other, and nothing says it was replaced. */}
         {point.replaced && f && point.text === findingSentence(f) ? (
-          <p className="m-0 text-[12.5px] leading-[1.5] text-foreground"><Sentence f={f} /></p>
+          <p className="m-0 text-[15px] leading-[1.55] text-foreground"><Sentence f={f} /></p>
         ) : point.text ? (
-          <p data-copy={point.replaced ? undefined : 'prose'} className="m-0 text-[12.5px] leading-[1.5] text-foreground">
+          <p data-copy={point.replaced ? undefined : 'prose'} className="m-0 text-[15px] leading-[1.55] text-foreground">
             {point.text}
           </p>
         ) : null}
@@ -369,15 +387,16 @@ function Finding({
         ) : null}
         {covers.length > 0 && (
           // ONE SHORT LINE: what the point covers. It said "measured on", our
-          // word for our method (§0a). The separator is a dot because a label
-          // can carry a comma ("Buy less, make it better").
-          <p className="m-0 font-mono text-[11px] text-muted-foreground">
-            Covers:{' '}
+          // word for our method (§0a). The labels in commas, as the plan
+          // check's board lists a claim's conversations (it was a middle dot,
+          // for a label that carries a comma: "Buy less, make it better").
+          <p className="m-0 text-[13.5px] leading-[1.5] text-muted-foreground">
+            <span className="font-semibold text-secondary-foreground">Covers:</span>{' '}
             {/* The theme's label is the model's words (`pass_b_theme`), which
                 the prose policy never direction-scrubs — so the node names its
                 slot rather than silencing rule (c) for free. */}
             <span data-copy="subject" data-slot="pass_b_theme" className="text-secondary-foreground">
-              {covers.join(' · ')}
+              {covers.join(', ')}
             </span>
           </p>
         )}
@@ -405,21 +424,21 @@ function Judgement({ answer }: { answer: ThreadAnswer }) {
   if (answer.judgement.length === 0) return null
   const numberOf = new Map(answer.grounded.map((g, i) => [g.id, i + 1]))
   return (
-    <TileBlock className="flex flex-col gap-2.5">
+    <div className="flex flex-col gap-3 rounded-[10px] bg-inner px-5 py-4 max-sm:px-4">
       <div className="flex items-center gap-2">
-        <h3 className="m-0 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">{DO_HEADING}</h3>
+        <h3 className={cn('m-0', LBL)}>{DO_HEADING}</h3>
         <InferencePill />
       </div>
       {answer.judgement.map((j, i) => {
         const cites = j.basedOn.map((ref) => numberOf.get(ref)).filter((n): n is number => Boolean(n)).sort((a, b) => a - b)
         return (
-          <div key={i} className="flex flex-col gap-0.5">
-            <p data-copy="prose" className="m-0 max-w-[82ch] text-[12.5px] leading-[1.5] text-foreground">{j.text}</p>
-            <p className="m-0 text-[11px] text-muted-foreground">{basedOnLine(cites, answer.grounded.length > 0 ? 'below' : null)}</p>
+          <div key={i} className="flex flex-col gap-1">
+            <p data-copy="prose" className="m-0 max-w-[82ch] text-[15px] leading-[1.55] text-foreground">{j.text}</p>
+            <p className="m-0 text-[13px] text-muted-foreground">{basedOnLine(cites, answer.grounded.length > 0 ? 'below' : null)}</p>
           </div>
         )
       })}
-    </TileBlock>
+    </div>
   )
 }
 
@@ -443,12 +462,9 @@ function AnswerFooter({ f }: { f: FindingMeasure | null }) {
           was Conversation's `?theme=` with `&audience=`, which the page read
           as nothing. The HORIZON deliberately does not travel: this figure
           is a calendar month, and the footer note beside this names it. */}
-      <Link
-        href={marketConversationPath(f.verdict?.objectId ?? '')}
-        className="hover:underline"
-      >
-        Open the <span data-copy="figure">{fmtInt(f.value.k)}</span> videos behind this →
-      </Link>
+      <GoLink href={marketConversationPath(f.verdict?.objectId ?? '')}>
+        Open the <span data-copy="figure">{fmtInt(f.value.k)}</span> videos behind this
+      </GoLink>
     </>
   )
 }
@@ -493,7 +509,7 @@ export function AboutReadings({ readings }: { readings: readonly ObjectReading[]
   if (readings.length === 0) return null
   return (
     <section className="flex flex-col gap-2.5" aria-label="What you asked about, in your market">
-      <h3 className="m-0 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">In your market</h3>
+      <h3 className={cn('m-0', LBL)}>In your market</h3>
       {readings.map((r) => {
         const label = aboutLabel(r)
         // A SUBJECT THAT IS NOT READY IS ITS NAME ALONE (T0a, AK-24; ruling
@@ -508,21 +524,18 @@ export function AboutReadings({ readings }: { readings: readonly ObjectReading[]
         // THE SUBJECT PANE'S OWN TRAIL (S7): the last three months read, each
         // a level on its own base with its "of N", the month read in bold.
         const trailLine = trail.length > 1 || (unread && trail.length > 0) ? (
-          <p className="m-0 flex flex-wrap items-baseline gap-x-2 font-mono text-[11px] tabular-nums text-muted-foreground">
+          <p className="m-0 text-[13px] leading-[1.5] tabular-nums text-muted-foreground">
             {trail.map((t, i) => (
-              <span key={t.month} className="inline-flex items-baseline gap-2">
-                {i > 0 ? <span aria-hidden>·</span> : null}
-                <span data-copy="level">{monthName(t.month).split(' ')[0]} <span className={t.month === current && !unread ? 'font-semibold text-foreground' : undefined}>{t.text}</span> {t.of}</span>
-              </span>
+              <Fragment key={t.month}>
+                {i > 0 ? ', ' : null}
+                <span data-copy="level" className="whitespace-nowrap">{monthName(t.month).split(' ')[0]} <span className={t.month === current && !unread ? 'font-semibold text-foreground' : undefined}>{t.text}</span> {t.of}</span>
+              </Fragment>
             ))}
           </p>
         ) : null
         return (
-          <TileBlock key={`${r.object.kind}:${r.object.id}`} className="flex flex-col gap-1.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[13px] font-semibold text-foreground">{label}</span>
-
-            </div>
+          <div key={`${r.object.kind}:${r.object.id}`} className="flex flex-col gap-1.5 rounded-[10px] bg-inner px-[18px] py-3.5 max-sm:px-4">
+            <span className="text-[15px] font-semibold text-foreground">{label}</span>
             {failed ? null : unread ? (
               trailLine
             ) : r.state === 'not_read' || !r.curr || r.curr.n == null || r.curr.k == null ? (
@@ -535,14 +548,14 @@ export function AboutReadings({ readings }: { readings: readonly ObjectReading[]
                   <FindingLevel value={{ k: r.curr.k, n: r.curr.n }} />
                   {r.verdict && !refused ? <Comparison v={r.verdict} /> : null}
                   <DirectionWord direction={r.direction} />
-                  <span className="font-mono text-[11px] text-muted-foreground">
-                    in your market · <span data-copy="figure">{longMonth(r.curr.month)}</span>
+                  <span className="text-[13px] text-muted-foreground">
+                    in your market in <span data-copy="figure">{longMonth(r.curr.month)}</span>
                   </span>
                 </div>
                 {trailLine}
               </>
             )}
-          </TileBlock>
+          </div>
         )
       })}
     </section>
@@ -553,13 +566,11 @@ export function AnswerTile({
   turn,
   turnIndex,
   measure,
-  row = 6,
   about,
 }: {
   turn: Turn
   turnIndex: number
   measure: AnswerMeasure | null
-  row?: number
   /** What the question named, read on the market (WP3.9), under the first
    *  answer. */
   about?: readonly ObjectReading[]
@@ -570,32 +581,26 @@ export function AnswerTile({
   // another turn's figure.
   const f = turnFindings(turn, measure, turnIndex)[0] ?? null
   return (
-    <Tile
-      col={12}
-      row={row}
-      // TITLE ALONE, LINKS ALONE (25 Sep rulings, WP3.9): the "answered"
-      // meta is the "You asked" line's own date, and the footer's audience
-      // note is on the finding the link opens.
-      eyebrow={turnIndex === 0 ? 'The answer' : 'The follow-up'}
-      exportKey={`agent.answer:${turnIndex}`}
-      footer={<AnswerFooter f={f} />}
-    >
-      {/* The question, under a mono eyebrow — the artboard's device, and the
-          one the build printed only on paper. */}
+    // The kit's card (the recipe; `Tile` stays as it is, it reaches print).
+    // TITLE ALONE, LINKS ALONE (25 Sep rulings, WP3.9): the "answered" meta is
+    // the "You asked" line's own date. The per-tile export rides at the
+    // head's right, shown on hover and focus, as it did on the tile.
+    <section className={cn(CARD, 'group/tile relative gap-[18px]')}>
+      <header className="relative flex items-baseline justify-between gap-2">
+        <h2 className={cn('m-0', LBL)}>{turnIndex === 0 ? 'The answer' : 'The follow-up'}</h2>
+        <TileExportButton tileKey={`agent.answer:${turnIndex}`} />
+      </header>
+      {/* The question, under the date it was asked. */}
       <div className="flex flex-col gap-1">
-        {/* The un-faded token: `/80` at 10px is about 3.3:1 on white against a
-            4.5:1 floor, and this eyebrow carries a date. Every other eyebrow on
-            the page uses the token straight. */}
-        <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
-          You asked · {shortDate(turn.askedAt)}
+        <span className="text-[13px] text-muted-foreground">
+          You asked on <span data-copy="figure" className="tabular-nums">{shortDate(turn.askedAt)}</span>
         </span>
-        <p className="m-0 text-[15px] font-semibold text-foreground">{turn.question}</p>
+        <p className="m-0 text-[16px] font-semibold leading-[1.45] text-foreground">{turn.question}</p>
       </div>
-
       {answer ? (
         <>
           {answer.notice && (
-            <p className="m-0 rounded-[4px] bg-inner px-3 py-2 text-[12px] text-muted-foreground">{answer.notice}</p>
+            <p className="m-0 rounded-[10px] bg-inner px-4 py-3 text-[13.5px] leading-[1.5] text-secondary-foreground">{answer.notice}</p>
           )}
 
           {/* THE FALLBACK IS PRINTED INSTEAD OF THE ANSWER, never beside it. A
@@ -625,8 +630,8 @@ export function AnswerTile({
           {about && about.length > 0 ? <AboutReadings readings={about} /> : null}
 
           {answer.grounded.length > 0 && (
-            <section className="flex flex-col gap-2.5">
-              <h3 className="m-0 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">
+            <section className="flex flex-col gap-3">
+              <h3 className={cn('m-0', LBL)}>
                 {/* The heading follows the evidence: "your customers" is a claim
                     about whose audience spoke and is said only where every point
                     rests on the client's own videos. */}
@@ -638,7 +643,7 @@ export function AnswerTile({
                   "13 of 796 videos". */}
               {(() => {
                 const line = findingsBaseLine(turnFindings(turn, measure, turnIndex))
-                return line ? <p data-copy="figure" className="m-0 text-[12px] leading-[1.45] text-muted-foreground">{line}</p> : null
+                return line ? <p data-copy="figure" className="m-0 text-[13px] leading-[1.45] text-muted-foreground">{line}</p> : null
               })()}
               {answer.grounded.map((point, i) => (
                 <Finding key={point.id} point={point} index={i} measure={measure} turnIndex={turnIndex} />
@@ -647,10 +652,10 @@ export function AnswerTile({
           )}
 
           {answer.nearest.length > 0 && (
-            <section className="flex flex-col gap-1.5">
-              <h3 className="m-0 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">{NEAREST_HEADING}</h3>
+            <section className="flex flex-col gap-2">
+              <h3 className={cn('m-0', LBL)}>{NEAREST_HEADING}</h3>
               {answer.nearest.map((n, i) => (
-                <p key={i} data-copy="prose" className="m-0 text-[12.5px] leading-[1.5] text-secondary-foreground">{n.text}</p>
+                <p key={i} data-copy="prose" className="m-0 text-[14.5px] leading-[1.55] text-secondary-foreground">{n.text}</p>
               ))}
             </section>
           )}
@@ -663,10 +668,9 @@ export function AnswerTile({
       ) : turn.prose ? (
         <p className="m-0 text-[15px] leading-[1.45] text-foreground">{turn.prose}</p>
       ) : (
-        <p className="m-0 text-[12.5px] text-negative">
-          That question did not get an answer. Asking it again is safe.
-        </p>
+        <EmptyBox>That question did not get an answer. Asking it again is safe.</EmptyBox>
       )}
-    </Tile>
+      {f && f.value.k > 0 ? <div className="mt-auto"><AnswerFooter f={f} /></div> : null}
+    </section>
   )
 }
