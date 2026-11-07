@@ -181,17 +181,21 @@ describe('a dated move, the evidence (G6-Moves-Move)', () => {
   const html = movePage()
   const text = markupText(html)
 
-  it('the title block: the flag on the neutral, "Move on {it}" linking to Market (decision 4), its meta, its status and controls at the right', () => {
-    expect(renderText(<MovesMovePage page={moveFixture()} />)).toMatch(/^Your moves \/ Running & Mobility Clinic campaign Your moves Move on Community & encouragement Running & Mobility Clinic campaign Dated 14 Sep · read July to September, the last full month · 112 videos on Community & encouragement since 14 Sep Active Mark done Stop it/)
-    expect(html).toMatch(/data-level-tile="move" class="[^"]*bg-track/)
-    expect(html).toMatch(/Move on <a [^>]*href="\/dashboard\/market\/subjects\/b1000000-0000-4000-8000-000000000001\?period=month&amp;month=2026-09"/)
+  it('the title block: the title, its status as a tag and its controls at the right, the figures row with "Move on {it}" linking to Market (decision 4); no tile, no label', () => {
+    expect(renderText(<MovesMovePage page={moveFixture()} />)).toMatch(/^Your moves \/ Running & Mobility Clinic campaign Your moves Running & Mobility Clinic campaign Active Mark done Stop it Move on Community & encouragement Dated 14 Sep Read on September, the last full month 700 market videos Since 14 Sep 112 videos on Community & encouragement/)
+    expect(html).toContain('data-level-block="audit"')
+    expect(html).not.toContain('data-level-tile')
+    expect(html).toMatch(/data-move-controls=""[^>]*><span data-tag="mid"[^>]*>Active</)
+    expect(html).toMatch(/Move on<\/dt><dd[^>]*><a [^>]*href="\/dashboard\/market\/subjects\/b1000000-0000-4000-8000-000000000001\?period=month&amp;month=2026-09"/)
   })
 
-  it('a flat header: the one comparison and its verdict beside its line, then the no-cause line; no card and no figure tiles', () => {
-    expect(text).toContain('Share of market videos on Community & encouragement went from 11% in August, the month before, to 14% in September, the last full month and the month of the move. No clear change +3 pts · band ±3.6 pts We show what the conversation did after a move. We never claim the move caused it.')
-    expect(text).toContain('Month by month · share of market videos')
-    expect(text).toContain('July 61 of 610')
+  it('the lead tile: the one comparison and its verdict, the no-cause line, beside its months, each "k of n"; no figure tiles, no chart', () => {
+    expect(text).toMatch(/Share of market videos on Community & encouragement went from 11% in August, the month before, to 14% in September, the last full month and the month of the move\. No clear change ?, \+3 pts We show what the conversation did after a move\. We never claim the move caused it\./)
+    expect(html).toMatch(/title="[^"]*inside the 3\.6 pt margin/)
+    expect(text).toContain('Share of market videos, month by month July 10% 61 of 610')
+    expect(html).toMatch(/data-move-lead="" class="[^"]*rounded/)
     expect(html).not.toContain('data-fig=""')
+    expect(html).not.toContain('<svg viewBox="0 0 480')
   })
 
   it('what people said after it: five videos, most comments first, each opening its own list; "Show more videos" lists every one', () => {
@@ -199,15 +203,19 @@ describe('a dated move, the evidence (G6-Moves-Move)', () => {
     expect(html.match(/data-video-card=""/g)).toHaveLength(5)
     expect(html).toContain('href="/dashboard/moves/m-clinic?video=e1000000-0000-4000-8000-000000000001#video-e1000000-0000-4000-8000-000000000001"')
     expect(html).toContain('href="/dashboard/moves/m-clinic?videos=all#what-people-said"')
-    expect(text).toContain('Spanish · machine translation My son ran for the first time with his prosthesis. Thank you.')
+    expect(text).toContain('Spanish, machine translation My son ran for the first time with his prosthesis. Thank you.')
+    // Market's video tiles: the account a heading, the platform and the day in commas.
+    expect(text).toContain('The Amputee Diaries YouTube, posted 6 Oct, Össur A day at a running clinic')
   })
 
   it('the facts beside it, each of its videos since the day; its other moves, and the next move for an owner', () => {
-    expect(text).toContain('What it is on Community & encouragement A subject you track · 98 of 700 market videos in September, the last full month Open it in Market →')
-    expect(text).toContain('Who it’s about · of 112 since 14 Sep')
-    expect(text).toContain('Who’s saying it · of 112 Active and athletic 44')
-    expect(text).toContain('Your other moves All your moves → Price transparency page')
-    expect(html).toContain('data-next-move=""')
+    // The base said once under the tile's heading; the rows bare counts.
+    expect(text).toContain('The facts Of the 112 videos since 14 Sep What it is on Community & encouragement A subject you track. 98 of 700 market videos in September, the last full month. Open it in Market')
+    expect(text).toContain('Who it’s about Össur 38 Others 74 What people did Praised it 51')
+    expect(text).toContain('Who’s saying it Active and athletic 44')
+    expect(text).toContain('Your other moves All your moves Price transparency page Active Dated 2 Aug, on Cost & access')
+    expect(text).not.toMatch(/→|·/)
+    expect(html).toMatch(/data-next-move=""[^>]*><div data-empty-box=""/)
   })
 
   it('a member sees the status and no control, and no invitation', () => {
@@ -234,7 +242,10 @@ describe('a dated move, the evidence (G6-Moves-Move)', () => {
     const t = markupText(movePage(moveHeldFixture()))
     expect(t).toContain('This subject is not measured yet: its line is drawn once its check has passed.')
     expect(t.split(SAID_HELD)).toHaveLength(2)
-    expect(t).toContain('A subject you track · not measured yet')
+    // The short line once, in the figures row; the facts only name it.
+    expect(t).toContain('Read on September, the last full month Not measured yet')
+    expect(t.split('Not measured yet')).toHaveLength(2)
+    expect(t).toContain('What it is on Fit & comfort A subject you track. Open it in Market')
     expect(movePage(moveHeldFixture())).not.toContain('data-video-card')
   })
 })

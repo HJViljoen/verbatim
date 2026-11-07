@@ -1,18 +1,15 @@
-import Link from 'next/link'
-
 import { LevelBar } from '@/components/shell/level-bar'
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
 import { GoLink } from '@/components/v2'
 import { MOVES_PATH, PAGE_TITLE } from '@/lib/pages/v2/moves'
 import type { AdvicePageData } from '@/lib/pages/v2/moves-levels-load'
-import { BACK_TO_MOVES, RECORD_LEVEL, RECORD_TITLE, moveReadWords, type MovePageData, type RecordPageData } from '@/lib/pages/v2/moves-levels'
+import { BACK_TO_MOVES, RECORD_LEVEL, RECORD_TITLE, type MovePageData, type RecordPageData } from '@/lib/pages/v2/moves-levels'
 import { AdviceDecision } from './advice-actions'
 import { AdvicePageBody, AdviceTags, AdviceTitle, adviceStats } from './advice-page'
 import { MOVES_FIRST_RUN } from './index'
-import { MovesLevelTile } from './level-tiles'
 import { MoveStatusControl } from './move-status'
-import { MovePageBody, moveMeta } from './move-page'
-import { MoveStatusChip, OnLabel } from './moves'
+import { MovePageBody, moveStats } from './move-page'
+import { MoveStatusChip } from './moves'
 import { RecordPageBody, recordStats } from './record-page'
 
 // YOUR MOVES' LEVEL PAGES (levels as pages, 17 Oct; the G6 boards): a piece
@@ -20,13 +17,12 @@ import { RecordPageBody, recordStats } from './record-page'
 // index), each its own address under Your moves (lib/pages/v2/moves-address.ts).
 // Your moves stays the sidebar's active surface on every one.
 //
-// EACH OPENS WITH THE PATH, THEN THE PAGE NAMING ITS LEVEL (Market's
-// `LevelBar`, F3): the slim crumb row ("Your moves / {page} ⌃⌄") and the
-// title block, its tile Your moves' own (a signpost on yellow, a flag or a
-// check-list on the neutral). The advice's two decision controls sit at the
-// block's right-hand end, where Market keeps its period switch, for an owner
-// or an admin only (decision 3); a move's status chip and its Mark done and
-// Stop it sit there too, the controls again only for an owner or an admin.
+// EACH OPENS WITH THE PATH, THEN ITS TITLE BLOCK (Market's `LevelBar`, F3;
+// since the audit design, 7 Nov, no tile and no label: the title, its tags
+// or its line under it, and the figures row). The advice's two decision
+// controls sit at the block's right-hand end, for an owner or an admin only
+// (decision 3); a move's status tag and its Mark done and Stop it sit there
+// too, the controls again only for an owner or an admin.
 
 /** An address that names nothing this tenant holds: one calm line inside the
  *  page, and the way back. Never a 404. */
@@ -72,26 +68,21 @@ export function MovesAdvicePage({ page, switcherOpen = false }: { page: AdvicePa
   )
 }
 
-/** A dated move's page (`/dashboard/moves/[id]`). The level label names what
- *  it is on and links to it in Market (decision 4); the crumb already links
- *  up. */
+/** A dated move's page (`/dashboard/moves/[id]`). The figures row names
+ *  what it is on and links to it in Market (decision 4); the crumb already
+ *  links up. */
 export function MovesMovePage({ page, switcherOpen = false }: { page: MovePageData; switcherOpen?: boolean }) {
   const { card } = page
-  const label = card.label
-    ? <>Move on {card.onHref ? <Link href={card.onHref} className="text-muted-foreground underline decoration-muted-foreground/40 underline-offset-[3px] hover:text-foreground"><OnLabel card={card} /></Link> : <OnLabel card={card} />}</>
-    : 'Move'
   return (
     <PageFrame className="text-foreground">
       <LevelBar
         crumbs={page.crumbs}
         level="move"
-        tile={<MovesLevelTile level="move" />}
-        label={label}
         title={<span data-copy="quote">{card.title}</span>}
-        meta={moveMeta(page, moveReadWords(card, page.monthLabel, page.month))}
+        stats={moveStats(page)}
         controls={(
-          <div data-move-controls="" className="flex flex-wrap items-center gap-3.5">
-            <MoveStatusChip status={card.status} className="bg-transparent px-0" />
+          <div data-move-controls="" className="flex flex-wrap items-center gap-2.5">
+            <MoveStatusChip status={card.status} />
             {page.canDecide ? <MoveStatusControl id={card.id} status={card.status} /> : null}
           </div>
         )}

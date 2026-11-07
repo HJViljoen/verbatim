@@ -7,25 +7,6 @@ import { cn } from '@/lib/utils'
 // each page's own shape, so its blocks fill in place. The routes' loading.tsx
 // render these.
 
-/** The path and the title block, as `LevelBar` draws them. */
-function Bar({ label, controls = false }: { label: string; controls?: boolean }) {
-  return (
-    <div role="presentation" className="flex flex-col">
-      <span className="sr-only">{label}</span>
-      <div className="pb-2 max-sm:hidden"><Bone className="h-[22px] w-72 max-w-full" /></div>
-      <Bone className="h-6 w-28 sm:hidden" />
-      <div className="mt-2.5 flex flex-wrap items-end justify-between gap-3.5">
-        <div className="flex min-w-0 items-center gap-3.5">
-          <Bone className="size-[46px] shrink-0 rounded-[11px] max-sm:size-[38px]" />
-          <div className="flex min-w-0 flex-col gap-1.5"><Bone className="h-3 w-24" /><Bone className="h-7 w-96 max-w-full" /></div>
-        </div>
-        {controls ? <div className="flex gap-2"><Bone className="h-[38px] w-52 rounded-lg" /><Bone className="h-[38px] w-24 rounded-lg" /></div> : null}
-      </div>
-      <Bone className="mt-3 h-3 w-80 max-w-full" />
-    </div>
-  )
-}
-
 /** A piece of advice loading (Moves-Advice.dc.html): the title block with
  *  its tags, its decisions and four figures, the argument's tile, the
  *  conversations' table, the numbers, the comments, the history. */
@@ -48,23 +29,24 @@ export function MovesAdviceSkeleton() {
   )
 }
 
-/** A dated move loading: the flat header with its line, the videos and the
- *  facts beside them, the other moves. */
+/** A dated move loading (Moves-Move.dc.html): the title block with its
+ *  status and four figures, the lead tile beside its months, the videos and
+ *  the facts' tile beside them. */
 export function MovesMoveSkeleton() {
   return (
     <PageFrame>
       <div role="status" aria-busy="true" aria-label="Loading the move" className="flex flex-col gap-[22px]">
-        <Bar label="Your moves" />
-        <div className="grid grid-cols-1 gap-5 border-b border-border pb-[22px] min-[1180px]:grid-cols-[minmax(0,1fr)_460px]">
+        <AuditBar label="Your moves" cells={4} controls />
+        <div className={cn(CARD, 'grid grid-cols-1 gap-10 sm:p-[30px] xl:grid-cols-2')}>
           <BoneLines lines={4} />
-          <Bone className="h-[140px] w-full rounded-[10px]" />
+          <Bone className="h-[110px] w-full rounded-[10px]" />
         </div>
-        <div className="grid grid-cols-1 items-start gap-11 min-[1180px]:grid-cols-[minmax(0,1fr)_300px]">
-          <div className="flex flex-col gap-4">
-            <Bone className="h-5 w-56" />
-            {[0, 1, 2].map((i) => <div key={i} className={CARD}><Bone className="h-9 w-48" /><BoneLines lines={4} /></div>)}
+        <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+          <div className="flex flex-col gap-[18px]">
+            <Bone className="mt-[26px] h-6 w-56" />
+            {[0, 1, 2].map((i) => <div key={i} className={CARD}><Bone className="h-5 w-48" /><BoneLines lines={4} /></div>)}
           </div>
-          <div className="flex flex-col gap-3"><Bone className="h-4 w-24" /><BoneLines lines={10} /></div>
+          <div className={cn(CARD, 'xl:mt-[67px]')}><Bone className="h-5 w-24" /><BoneLines lines={10} /></div>
         </div>
       </div>
     </PageFrame>

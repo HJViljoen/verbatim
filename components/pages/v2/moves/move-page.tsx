@@ -1,21 +1,15 @@
 import Link from 'next/link'
-import type { ReactNode } from 'react'
-import { Sparkles } from 'lucide-react'
 
-import { BrandChip } from '@/components/colour-roles'
-import { MovementBadge, nonAnswerParts, signedChange } from '@/components/delta-badge'
-import { translationLabel, translationNote } from '@/components/quote-block'
-import { PlayGlyph } from '@/components/shell/level-glyphs'
-import { CARD, TickBarRow } from '@/components/v2'
-import { SectionHead } from '@/components/pages/v2/market/analysis'
-import { CONV_NONE_QUOTABLE, CONV_SAID_IN_VIDEO, openedNote, showCommentsOf } from '@/components/pages/v2/market/conversation-page'
-import { ASK, GroupRows } from '@/components/pages/v2/market/panel'
-import { Label } from '@/components/pages/v2/market/parts'
+import { CARD, EmptyBox, GoLink, Label, SectionHead, type StatItem } from '@/components/v2'
+import { CHIP, ROW } from '@/components/v2/look'
+import { CONV_NONE_QUOTABLE_ALL, VideoCard, unquotable } from '@/components/pages/v2/market/conversation-page'
+import { GroupRows } from '@/components/pages/v2/market/panel'
 import { fmtInt, longMonth, shortDate } from '@/lib/format'
 import { inlineMonth } from '@/lib/reading/month-label'
 import { monthStartOf } from '@/lib/reading/month-key'
-import { MARKET_VIDEO_QUOTES, MARKET_VIDEO_QUOTES_PHONE, noGroupSaying, type ConvComment, type ConvVideo } from '@/lib/pages/v2/market'
+import { noGroupSaying } from '@/lib/pages/v2/market'
 import { BRANDS_NOT_COUNTED, BRANDS_NOT_READ } from '@/lib/pages/v2/voices'
+import { SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { MOVES_PATH, MOVE_UNREAD, compareMonths, levelBase, comparePrintable, monthLabelOn, sharePct, type MoveCard, type MovePoint, type ReadingLabel } from '@/lib/pages/v2/moves'
 import { MOVE_SAID_ANCHOR } from '@/lib/pages/v2/moves-address'
 import {
@@ -23,41 +17,69 @@ import {
   type MoveEvidence, type MovePageData,
 } from '@/lib/pages/v2/moves-levels'
 import { cn } from '@/lib/utils'
-import { WhoLine } from './advice-page'
-import { MoveChart, MoveStatusChip, OnLabel } from './moves'
+import { BarRows, WhoLine } from './advice-page'
+import { MoveMonths, MoveStatusChip, OnLabel, VerdictWords } from './moves'
 
-// A DATED MOVE, THE EVIDENCE (board G6-Moves-Move; -Phone). One concrete
-// thing, so it is lighter than the advice's page and led by its one reading:
-//   1. A FLAT HEADER under the title block (no card, no figure tiles): the
-//      one comparison in a sentence and its verdict, beside its month line on
-//      its axis with the move marked; the no-cause line; a hairline under.
-//   2. WHAT PEOPLE SAID AFTER IT: one card per video with a comment about
-//      what the move is on, dated from its day to the latest update (decision
-//      6), most of those comments first, Market's video cards over a different
-//      window and set; THE FACTS beside it, small, each "of" those videos.
-//   3. YOUR OTHER MOVES (and "Your next move" for an owner), then the Agent.
+// A DATED MOVE, THE EVIDENCE (board G6-Moves-Move; -Phone; since the audit
+// design, 7 Nov, Moves-Move.dc.html). One concrete thing, so it is lighter
+// than the advice's page and led by its one reading:
+//   0. THE TITLE BLOCK: the move's own words, its status as a tag and Mark
+//      done and Stop it at its right for an owner or an admin, and the
+//      figures row (`moveStats`: what it is on, the day, the month it is
+//      read on with that month's base, its videos since the day);
+//   1. THE LEAD TILE: the one comparison in a sentence and its verdict, the
+//      no-cause line, beside the move's months (`MoveMonths`, the top
+//      page's), each "k of n";
+//   2. WHAT PEOPLE SAID AFTER IT: Market's video tiles (`VideoCard`) over
+//      the videos with a comment about what the move is on, dated from its
+//      day to the latest update (decision 6), most of those comments first;
+//      THE FACTS beside it, one tile, its base said once ("Of the 24 videos
+//      since 5 Oct"), bare counts with bars against the largest;
+//   3. YOUR OTHER MOVES, and "Your next move" in the dashed box for an
+//      owner; then the Agent.
 // No week chip (decision 7): this page prints no week figure.
 
-/** The flat header: the one reading beside its line. */
-function Lead({ page }: { page: MovePageData }) {
-  const { card } = page
-  const reading: ReadingLabel = { month: page.month, label: page.monthLabel }
-  return (
-    <div data-move-lead="" className="-mt-0.5 grid grid-cols-1 items-center gap-x-12 gap-y-5 border-b border-border pb-[22px] max-sm:gap-y-3.5 max-sm:pb-4 min-[1180px]:grid-cols-[minmax(0,1fr)_460px]">
-      <div className="flex min-w-0 flex-col gap-3">
-        <LeadSentence card={card} reading={reading} />
-        <VerdictRow card={card} />
-        <p className="m-0 text-[13px] leading-[1.5] text-muted-foreground">{NO_CAUSE}</p>
-      </div>
-      <div className="flex min-w-0 flex-col gap-1.5">
-        <Label>Month by month · share of {levelBase(card.kind)}</Label>
-        <MoveChart card={card} readingMonth={page.month} detail />
-      </div>
-    </div>
-  )
+const fig = (n: number) => <span data-copy="figure">{fmtInt(n)}</span>
+const LINK = 'text-foreground underline decoration-control underline-offset-[3px] hover:decoration-foreground'
+
+// ---- 0. the title block -----------------------------------------------------------------
+
+/** The figures row (the board's `.strip`): what it is on (its page in
+ *  Market), the day, the month it is read on and that month's base, and its
+ *  videos since the day. A state that prints no figure says so in its cell,
+ *  in a word or two; the lead says why. Pure. */
+export function moveStats(page: MovePageData): StatItem[] {
+  const { card, on } = page
+  const ev = page.evidence
+  const since = shortDate(card.day)
+  const label = card.label ? <OnLabel card={card} /> : null
+  const href = on?.href ?? card.onHref ?? null
+  const reading = inlineMonth(longMonth(monthStartOf(page.month)), page.monthLabel)
+  return [
+    {
+      key: 'on',
+      term: 'Move on',
+      value: label ? (href ? <Link href={href} className={LINK}>{label}</Link> : label) : card.unread === 'several' ? 'Several themes' : 'Nothing read month by month',
+    },
+    { key: 'dated', term: 'Dated', value: since },
+    {
+      key: 'read',
+      term: `Read on ${reading}`,
+      value: on?.level ? <>{fig(on.level.n)} {levelBase(on.kind)}</> : on && !on.ready ? SUBJECT_NOT_MEASURED : 'No reading yet',
+    },
+    {
+      key: 'since',
+      term: `Since ${since}`,
+      value: ev.state === 'ready'
+        ? ev.total > 0 ? <>{fig(ev.total)} {ev.total === 1 ? 'video' : 'videos'}{label ? <> on {label}</> : null}</> : 'No video yet'
+        : ev.state === 'unread' ? 'Could not be read just now' : ev.state === 'held' ? 'Not counted yet' : 'No video read after it',
+    },
+  ]
 }
 
-const LEAD = 'm-0 max-w-[820px] text-[20px] leading-[1.45] font-normal tracking-[-0.005em] text-foreground max-sm:text-[17px]'
+// ---- 1. the lead tile -------------------------------------------------------------------
+
+const LEAD = 'm-0 max-w-[820px] text-[24px] leading-[1.4] font-semibold tracking-[-0.005em] text-foreground max-sm:text-[20px]'
 
 /** "Share of market (or category) videos on X went from 11% in August, the month before, to
  *  14% in September, the last full month and the month of the move." The
@@ -65,7 +87,6 @@ const LEAD = 'm-0 max-w-[820px] text-[20px] leading-[1.45] font-normal tracking-
 function LeadSentence({ card, reading }: { card: MoveCard; reading: ReadingLabel }) {
   const on = card.label ? <> on <OnLabel card={card} /></> : null
   const pct = (p: MovePoint) => <span data-copy="figure">{sharePct(p.k, p.n)}</span>
-  if (card.unread) return <p className={cn(LEAD, 'text-muted-foreground')}>{MOVE_UNREAD[card.unread]}</p>
   if (card.pending) {
     const last = card.points[card.points.length - 1]
     return last
@@ -82,95 +103,36 @@ function LeadSentence({ card, reading }: { card: MoveCard; reading: ReadingLabel
   return <p className={LEAD}>Share of {levelBase(card.kind)}{on}: {pct(latest)} in {inlineMonth(`${longMonth(latest.month)}${latest.soFar ? ' so far' : ''}`, monthLabelOn(latest.month, reading))}.</p>
 }
 
-/** The verdict beside it: the badge's word as the row's title and the change
- *  and its band in the mono beside it ("No clear change +3 pts · band ±3.4
- *  pts"); a movement as the one badge. Nothing where no comparison prints. */
-function VerdictRow({ card }: { card: MoveCard }) {
+/** The lead tile: the sentence, its verdict in Your moves' words (the band
+ *  in its title), the no-cause line, beside the move's months. A move with
+ *  no line says why in the dashed box, in the months' place (decision 4). */
+function Lead({ page }: { page: MovePageData }) {
+  const { card } = page
+  const reading: ReadingLabel = { month: page.month, label: page.monthLabel }
   const c = card.compare
-  if (!comparePrintable(c)) return null
-  const parts = nonAnswerParts(c.verdict, 'pts')
-  if (!parts) {
+  if (card.unread) {
     return (
-      <div data-copy="verdict" className="flex flex-wrap items-center gap-2 text-[15px]">
-        <MovementBadge verdict={c.verdict} unit="pts" good={card.direction === 'down' ? 'down' : 'up'} />
-      </div>
+      <section aria-label="After your move" data-move-lead="" className={cn(CARD, 'gap-3.5 sm:p-[30px]')}>
+        <EmptyBox title="No line drawn">{MOVE_UNREAD[card.unread]}</EmptyBox>
+        <p className="m-0 text-[15px] leading-[1.55] text-secondary-foreground">{NO_CAUSE}</p>
+      </section>
     )
   }
-  const word = `${parts.word.charAt(0).toUpperCase()}${parts.word.slice(1)}`
   return (
-    <div data-copy="verdict" title={parts.title} className="flex flex-wrap items-center gap-2">
-      <span className="text-[15px] font-semibold text-secondary-foreground max-sm:text-[14.5px]">{word}</span>
-      {parts.change != null ? (
-        <span className="font-mono text-[12.5px] tabular-nums text-muted-foreground">
-          {signedChange(parts.change, 'pts')}{parts.bandPts != null ? ` · band ±${parts.bandPts.toLocaleString('en-US')} pts` : null}
-        </span>
-      ) : null}
-    </div>
-  )
-}
-
-// ---- what people said after it --------------------------------------------------------
-
-function Comment({ c, hideOnPhone }: { c: ConvComment; hideOnPhone: boolean }) {
-  const note = translationNote({ lang: c.lang, english: c.english })
-  const label = translationLabel(note)
-  return (
-    <div data-video-comment="" className={cn('flex flex-col gap-[5px] border-t border-border py-3 first:border-t-0', hideOnPhone ? 'max-sm:hidden' : null)}>
-      <p data-copy="quote" className="m-0 font-serif text-[15px] italic leading-[1.5] text-foreground max-sm:text-[14.5px]">“{c.text}”</p>
-      {label ? <span className="text-[12px] text-muted-foreground">{label}</span> : null}
-      {note.english ? <p data-copy="quote" className="m-0 text-[14px] leading-[1.5] text-foreground">{note.english}</p> : null}
-      {c.date ? <span className="text-[12px] text-muted-foreground">{c.date}</span> : null}
-    </div>
-  )
-}
-
-/** One video (Market's `.vcard`, over the move's window and set). */
-function VideoCard({ v, brand, index, all }: { v: ConvVideo; brand: string; index: number; all: boolean }) {
-  const phoneMore = !v.open && v.quotable > MARKET_VIDEO_QUOTES_PHONE
-  const deskMore = !v.open && v.quotable > MARKET_VIDEO_QUOTES
-  const show = showCommentsOf(v)
-  const note = v.open ? openedNote(v) : null
-  return (
-    <article id={`video-${v.id}`} data-video-card="" className={cn(CARD, 'scroll-mt-6 gap-3 px-[22px] pt-5 pb-[18px] max-sm:gap-2.5 max-sm:px-4 max-sm:pt-4 max-sm:pb-3.5', !all && !v.open && index >= 3 ? 'max-sm:hidden' : null)}>
-      <div className="flex min-w-0 items-center gap-3">
-        <span aria-hidden className="flex size-9 shrink-0 items-center justify-center rounded-[9px] bg-track text-foreground"><PlayGlyph className="size-[15px]" /></span>
-        <div className="min-w-0">
-          <span className="block truncate text-[14.5px] leading-[1.3] font-semibold text-foreground">{v.account || 'Unnamed account'}</span>
-          <span className="block text-[12.5px] leading-[1.35] text-muted-foreground">{v.platform}{v.posted ? ` · posted ${v.posted}` : null}</span>
-        </div>
-        {v.about === 'client' ? <BrandChip who="you" className="ml-auto">{brand}</BrandChip> : v.about && v.about !== 'market' ? <BrandChip who="rival" className="ml-auto">{v.about.slice('rival:'.length)}</BrandChip> : null}
+    <section aria-label="After your move" data-move-lead="" className={cn(CARD, 'grid grid-cols-1 gap-10 max-sm:gap-6 sm:p-[30px] xl:grid-cols-2')}>
+      <div className="flex min-w-0 flex-col gap-3.5">
+        <LeadSentence card={card} reading={reading} />
+        {comparePrintable(c)
+          ? <p className="m-0 text-[16px] font-semibold text-secondary-foreground"><VerdictWords verdict={c.verdict} good={card.direction === 'down' ? 'down' : 'up'} /></p>
+          : null}
+        <p className="m-0 text-[15px] leading-[1.55] text-secondary-foreground">{NO_CAUSE}</p>
       </div>
-      {v.caption ? <p className="m-0 truncate text-[14.5px] leading-[1.5] text-secondary-foreground">{v.caption}</p> : null}
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[13px] text-muted-foreground">
-        {v.aboutCount === 0
-          ? <span>{CONV_SAID_IN_VIDEO}</span>
-          : v.total != null && v.total >= v.aboutCount
-            ? <span data-copy="level"><b className="font-mono font-semibold tabular-nums text-foreground">{fmtInt(v.aboutCount)}</b> {v.aboutCount === 1 ? 'comment' : 'comments'} about this, of {fmtInt(v.total)} on the video</span>
-            : <span><b data-copy="figure" className="font-mono font-semibold tabular-nums text-foreground">{fmtInt(v.aboutCount)}</b> {v.aboutCount === 1 ? 'comment' : 'comments'} about this</span>}
-        {v.url ? <a href={v.url} target="_blank" rel="noopener noreferrer" className="text-[13px] text-muted-foreground no-underline underline-offset-[3px] hover:text-foreground hover:underline">Watch the video ↗</a> : null}
-      </div>
-      {v.quotes.length > 0 ? (
-        <div data-video-comments="" className="rounded-[10px] bg-inner px-4 py-0.5 max-sm:px-3.5">
-          {v.quotes.map((c, i) => <Comment key={i} c={c} hideOnPhone={!v.open && i >= MARKET_VIDEO_QUOTES_PHONE} />)}
-        </div>
-      ) : v.aboutCount > 0 ? <p className="m-0 rounded-[10px] bg-inner px-4 py-3 text-[13.5px] text-muted-foreground">{CONV_NONE_QUOTABLE}</p> : null}
-      {note ? <p className="m-0 text-[12.5px] text-muted-foreground">{note}</p> : null}
-      {v.open ? (
-        <div><Link href={v.href} scroll={false} className="text-[13.5px] font-semibold text-foreground no-underline underline-offset-[3px] hover:underline">Show fewer comments</Link></div>
-      ) : phoneMore || deskMore ? (
-        <div className={cn(!deskMore ? 'sm:hidden' : null, !phoneMore ? 'max-sm:hidden' : null)}>
-          <Link href={v.href} scroll={false} className="text-[13.5px] font-semibold text-foreground no-underline underline-offset-[3px] hover:underline">
-            {show.of == null
-              ? <>Show all <span data-copy="figure">{fmtInt(show.shown)}</span> comments</>
-              : <>Show <span data-copy="figure">{fmtInt(show.shown)}</span> of <span data-copy="figure">{fmtInt(show.of)}</span> comments</>}
-          </Link>
-        </div>
-      ) : null}
-    </article>
+      <div className="min-w-0"><MoveMonths card={card} readingMonth={page.month} /></div>
+    </section>
   )
 }
 
-const MORE = 'inline-flex min-h-[38px] cursor-pointer items-center justify-center rounded-lg bg-card px-3.5 text-[13.5px] font-semibold text-foreground no-underline ring-1 ring-border hover:bg-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+// ---- 2. what people said after it, and the facts -----------------------------------------
 
 /** The line a section with nothing to list says, by its state. */
 function saidGap(ev: MoveEvidence, day: string): string {
@@ -180,124 +142,117 @@ function saidGap(ev: MoveEvidence, day: string): string {
 function Said({ page }: { page: MovePageData }) {
   const ev = page.evidence
   const since = shortDate(page.card.day)
+  const listed = ev.state === 'ready' && ev.total > 0
+  const noneAll = listed && ev.videos.some(unquotable) && ev.videos.every((v) => v.aboutCount === 0 || unquotable(v))
   return (
-    <section id={MOVE_SAID_ANCHOR} aria-labelledby="said-title" className="flex min-w-0 scroll-mt-6 flex-col gap-4 max-sm:gap-3.5">
-      <div className="flex items-baseline justify-between gap-3 px-0.5 max-sm:flex-col max-sm:items-start max-sm:gap-0.5">
-        <h2 id="said-title" className="m-0 text-[19px] leading-[1.3] font-semibold tracking-[-0.005em] text-foreground max-sm:text-[18px]">{SAID_TITLE}</h2>
-        {ev.state === 'ready' && ev.total > 0 ? (
-          <span className="text-[13px] leading-[1.4] text-muted-foreground"><span data-copy="figure">{fmtInt(ev.total)}</span> {ev.total === 1 ? 'video' : 'videos'} since {since}, most comments about it first</span>
-        ) : null}
-      </div>
-      {ev.state !== 'ready' || ev.total === 0 ? (
-        <div data-said-gap={ev.state} className={cn(CARD, 'gap-2')}>
-          <p className="m-0 text-[15px] leading-[1.55] text-muted-foreground">{saidGap(ev, page.card.day)}</p>
-        </div>
-      ) : (
+    <section id={MOVE_SAID_ANCHOR} aria-labelledby="said-title" className="flex min-w-0 scroll-mt-6 flex-col gap-[18px] max-sm:gap-3.5">
+      <SectionHead id="said-title" title={SAID_TITLE} note={listed ? <>{fig(ev.total)} {ev.total === 1 ? 'video' : 'videos'} since {since}, most comments about it first</> : null} />
+      {!listed ? <div data-said-gap={ev.state}><EmptyBox>{saidGap(ev, page.card.day)}</EmptyBox></div> : (
         <>
-          {ev.videos.map((v, i) => <VideoCard key={v.id} v={v} brand={page.brand} index={i} all={ev.all} />)}
-          {ev.capped != null ? <p className="m-0 text-[12.5px] text-muted-foreground">The first <span data-copy="figure">{fmtInt(ev.capped)}</span> of <span data-copy="figure">{fmtInt(ev.total)}</span> are listed.</p> : null}
-          {ev.more && ev.more.desktop > 0 ? <Link href={ev.more.href} className={cn(MORE, 'self-start max-sm:hidden')}><span>Show more videos · <span data-copy="figure">{fmtInt(ev.more.desktop)}</span>&nbsp;more</span></Link> : null}
-          {ev.more && ev.more.phone > 0 ? <Link href={ev.more.href} className={cn(MORE, 'self-stretch sm:hidden')}><span>Show more videos · <span data-copy="figure">{fmtInt(ev.more.phone)}</span>&nbsp;more</span></Link> : null}
+          {noneAll ? <p data-none-quotable="" className="m-0 text-[14.5px] leading-[1.55] text-secondary-foreground">{CONV_NONE_QUOTABLE_ALL}</p> : null}
+          {ev.videos.map((v, i) => <VideoCard key={v.id} v={v} brand={page.brand} index={i} all={ev.all} onceSaid={noneAll} />)}
+          {ev.capped != null ? <p className="m-0 text-[13.5px] text-muted-foreground">The first {fig(ev.capped)} of {fig(ev.total)} are listed.</p> : null}
+          {ev.more && ev.more.desktop > 0 ? <Link href={ev.more.href} className={cn(CHIP, 'self-start font-semibold no-underline max-sm:hidden')}>Show <span data-copy="figure" className="mx-1">{fmtInt(ev.more.desktop)}</span> more videos</Link> : null}
+          {ev.more && ev.more.phone > 0 ? <Link href={ev.more.href} className={cn(CHIP, 'self-stretch justify-center font-semibold no-underline sm:hidden')}>Show <span data-copy="figure" className="mx-1">{fmtInt(ev.more.phone)}</span> more videos</Link> : null}
         </>
       )}
     </section>
   )
 }
 
-// ---- the facts --------------------------------------------------------------------------
+const QUIET = 'm-0 text-[14.5px] leading-[1.5] text-secondary-foreground'
 
-const FACT = 'flex min-w-0 flex-col gap-[9px] border-t border-border py-4 first-of-type:border-t-0 first-of-type:pt-2'
-
+/** "The facts": one tile beside the videos (the board's), its base said
+ *  once under its heading, then what it is on (its level in the reading
+ *  month, "k of n", and its page in Market), who it is about, what people
+ *  did, who's saying it and where, each a list of bare counts against its
+ *  largest. */
 function Facts({ page }: { page: MovePageData }) {
   const { on, facts } = page
   const since = shortDate(page.card.day)
-  const reading = monthStartOf(page.month)
-  const of = (x: number | null | undefined, words?: string): ReactNode => (x != null ? <> · <span data-copy="level">of {fmtInt(x)}</span>{words ? ` ${words}` : null}</> : null)
+  const reading = inlineMonth(longMonth(monthStartOf(page.month)), page.monthLabel)
   return (
-    <aside aria-labelledby="facts-title" className="flex min-w-0 flex-col sm:-mx-2 sm:px-2 max-sm:rounded-[14px] max-sm:bg-card max-sm:px-[18px] max-sm:pt-4 max-sm:pb-1.5 max-sm:shadow-card">
-      <h2 id="facts-title" className="m-0 mb-1 text-[15px] font-semibold text-foreground">The facts</h2>
-      <div className={FACT}>
-        <Label>What it is on</Label>
+    <aside aria-labelledby="facts-title" className={cn(CARD, 'gap-0 xl:mt-[67px] [&>section]:mt-[18px] [&>section]:flex [&>section]:flex-col [&>section]:gap-2.5 [&>section]:border-t [&>section]:border-track [&>section]:pt-4')}>
+      <h2 id="facts-title" className="m-0 text-[19px] font-semibold leading-[1.3] text-foreground">The facts</h2>
+      {facts ? <p className="m-0 mt-1 text-[14px] text-muted-foreground">Of the {fig(facts.n)} {facts.n === 1 ? 'video' : 'videos'} since {since}</p> : null}
+      <section>
+        <Label as="h3">What it is on</Label>
         {on ? (
           <>
-            {on.href
-              ? <Link href={on.href} className="text-[14.5px] font-semibold text-foreground no-underline underline-offset-[3px] hover:underline"><OnLabel card={page.card} /></Link>
-              : <span className="text-[14.5px] font-semibold text-foreground"><OnLabel card={page.card} /></span>}
-            <p className="m-0 text-[12.5px] text-muted-foreground">
-              {on.kind === 'subject' ? 'A subject you track' : 'A conversation in your market'}
-              {on.level ? <> · <span data-copy="level">{fmtInt(on.level.k)} of {fmtInt(on.level.n)}</span> {levelBase(on.kind)} in {inlineMonth(longMonth(reading), page.monthLabel)}</> : on.ready ? null : <> · not measured yet</>}
+            <p className="m-0 text-[16px] font-semibold text-foreground"><OnLabel card={page.card} /></p>
+            <p className={QUIET}>
+              {on.kind === 'subject' ? 'A subject you track.' : 'A conversation in your market.'}
+              {/* A subject whose check is open says so once, in the figures
+                  row (U6); here it is only named. */}
+              {on.level ? <> <span data-copy="level">{fmtInt(on.level.k)} of {fmtInt(on.level.n)}</span> {levelBase(on.kind)} in {reading}.</> : null}
             </p>
-            {on.href ? <Link href={on.href} className="text-[12.5px] font-semibold text-orange-text no-underline underline-offset-[3px] hover:underline">Open it in Market →</Link> : null}
+            {on.href ? <div><GoLink href={on.href}>Open it in Market</GoLink></div> : null}
           </>
-        ) : <p className="m-0 text-[13px] text-muted-foreground">{MOVE_UNREAD[page.card.unread ?? 'nothing']}</p>}
-      </div>
+        ) : <p className={QUIET}>{MOVE_UNREAD[page.card.unread ?? 'nothing']}</p>}
+      </section>
       {facts ? (
         <>
-          <div className={FACT}>
-            <Label>Who it’s about{of(facts.n, `since ${since}`)}</Label>
+          <section>
+            <Label as="h3">Who it’s about</Label>
             {facts.brands !== 'counted'
-              ? <p className="m-0 text-[13px] text-muted-foreground">{facts.brands === 'not_counted' ? BRANDS_NOT_COUNTED : BRANDS_NOT_READ}</p>
-              : facts.who ? <WhoLine parts={facts.who.parts} brand={page.brand} noun={page.noun} /> : <p className="m-0 text-[13px] text-muted-foreground">No video read for who it is about.</p>}
-          </div>
-          <div className={FACT}>
-            <Label>What people did{of(facts.n)}</Label>
+              ? <p className={QUIET}>{facts.brands === 'not_counted' ? BRANDS_NOT_COUNTED : BRANDS_NOT_READ}</p>
+              : facts.who ? <WhoLine parts={facts.who.parts} brand={page.brand} noun={page.noun} /> : <p className={QUIET}>No brand named</p>}
+          </section>
+          <section>
+            <Label as="h3">What people did</Label>
             {facts.doing.length > 0
-              ? facts.doing.map((r) => <TickBarRow key={r.kind} name={r.label} value={fmtInt(r.k)} pct={r.n > 0 ? (100 * r.k) / r.n : 0} valueWidth="narrow" label={`${fmtInt(r.k)} of ${fmtInt(r.n)}`} className="text-[13px]" />)
-              : <p className="m-0 text-[13px] text-muted-foreground">Not read yet.</p>}
-          </div>
-          <div className={FACT}>
-            <Label>Who’s saying it{of(facts.n)}</Label>
+              ? <BarRows rows={facts.doing.map((r) => ({ key: r.kind, name: r.label, k: r.k }))} />
+              : <p className={QUIET}>Not read yet.</p>}
+          </section>
+          <section>
+            <Label as="h3">Who’s saying it</Label>
             {facts.groups && facts.groups.length > 0
               ? <GroupRows groups={facts.groups} n={facts.n} />
-              : <p className="m-0 text-[13px] text-muted-foreground">{facts.groups ? noGroupSaying(`since ${since}`) : 'Not linked to a group.'}</p>}
-          </div>
-          <div className={FACT}>
-            <Label>Where{of(facts.where?.n ?? null)}</Label>
+              : <p className={QUIET}>{facts.groups ? noGroupSaying(`since ${since}`) : 'Not linked to a group.'}</p>}
+          </section>
+          <section>
+            <Label as="h3">Where</Label>
             {facts.where
-              ? facts.where.rows.map((r) => <TickBarRow key={r.platform} name={r.label} value={fmtInt(r.videos)} pct={r.pct} tone="ink" valueWidth="narrow" label={`${fmtInt(r.videos)} of ${fmtInt(facts.where!.n)}`} className="text-[13px]" />)
-              : <p className="m-0 text-[13px] text-muted-foreground">No video counted by platform yet.</p>}
-          </div>
+              ? <BarRows rows={facts.where.rows.map((r) => ({ key: r.platform, name: r.label, k: r.videos }))} />
+              : <p className={QUIET}>No video counted by platform yet.</p>}
+          </section>
         </>
       ) : page.evidence.state === 'ready' || page.evidence.state === 'unread' ? (
         // Its videos not read, or none yet: said once here beside the list's
         // own line. A subject whose check is open, or a move on nothing read
         // month by month, already says why above and in "What it is on".
-        <div className={FACT}>
-          <Label>Since {since}</Label>
-          <p className="m-0 text-[13px] text-muted-foreground">{page.evidence.state === 'unread' ? 'Not read just now.' : 'No video yet.'}</p>
-        </div>
+        <section>
+          <Label as="h3">Since {since}</Label>
+          <p className={QUIET}>{page.evidence.state === 'unread' ? 'Not read just now.' : 'No video yet.'}</p>
+        </section>
       ) : null}
     </aside>
   )
 }
 
-// ---- your other moves -------------------------------------------------------------------
+// ---- 3. your other moves ----------------------------------------------------------------
+
+/** A dashed box that fills its grid cell. */
+const FILL = 'flex [&>[data-empty-box]]:flex-1'
 
 function OtherMoves({ page }: { page: MovePageData }) {
-  const all = <Link href={`${MOVES_PATH}#moves-title`} className="text-[13.5px] font-semibold text-orange-text no-underline underline-offset-[3px] hover:underline">All your moves →</Link>
   return (
     <>
-      <SectionHead title={OTHER_MOVES_TITLE} note={all} />
-      <nav aria-label={OTHER_MOVES_TITLE} className="grid grid-cols-2 gap-3 max-sm:grid-cols-1 min-[1180px]:grid-cols-4">
+      <SectionHead title={OTHER_MOVES_TITLE} action={<GoLink href={`${MOVES_PATH}#moves-title`}>All your moves</GoLink>} />
+      <nav aria-label={OTHER_MOVES_TITLE} className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
         {page.others.map((m) => (
-          <Link key={m.id} href={m.href} data-sibling="" className="flex min-w-0 flex-col gap-1.5 rounded-[12px] bg-card px-4 pt-3.5 pb-[13px] no-underline shadow-card transition-shadow hover:shadow-panel">
-            <span className="text-[14px] leading-[1.35] font-semibold text-foreground"><span data-copy="quote">{m.title}</span></span>
-            <span className="text-[12.5px] text-muted-foreground">Dated {shortDate(m.day)}{m.label ? <> · on <OnLabel card={m} /></> : null}</span>
-            <MoveStatusChip status={m.status} className="self-start bg-transparent px-0 py-0" />
-          </Link>
-        ))}
-        {page.invite ? (
-          <div data-next-move="" className="flex min-w-0 flex-col gap-1.5 rounded-[12px] px-4 pt-3.5 pb-[13px] ring-1 ring-border">
-            <span className="text-[14px] leading-[1.35] font-semibold text-foreground">{NEXT_MOVE_PAGE.title}</span>
-            <span className="text-[12.5px] text-muted-foreground">{NEXT_MOVE_PAGE.line}</span>
+          <div key={m.id} data-sibling="" className={cn(CARD, 'gap-2')}>
+            <div className="flex items-start justify-between gap-3">
+              <Link href={m.href} className={cn(ROW, 'min-w-0 text-[16px] leading-[1.35]')}><span data-copy="quote">{m.title}</span></Link>
+              <MoveStatusChip status={m.status} />
+            </div>
+            <p className="m-0 text-[14px] text-muted-foreground">Dated {shortDate(m.day)}{m.label ? <>, on <OnLabel card={m} /></> : null}</p>
           </div>
-        ) : null}
+        ))}
+        {page.invite ? <div data-next-move="" className={FILL}><EmptyBox title={NEXT_MOVE_PAGE.title}>{NEXT_MOVE_PAGE.line}</EmptyBox></div> : null}
         {page.others.length === 0 && !page.invite ? (
           // The row keeps a card's frame where there is nothing else to show.
-          <div data-no-other-move="" className="flex min-w-0 flex-col gap-1.5 rounded-[12px] px-4 pt-3.5 pb-[13px] ring-1 ring-border">
-            <span className="text-[14px] leading-[1.35] font-semibold text-foreground">No other move yet</span>
-            <span className="text-[12.5px] text-muted-foreground">This is the only move dated so far.</span>
-          </div>
+          <div data-no-other-move="" className={FILL}><EmptyBox title="No other move yet">This is the only move dated so far.</EmptyBox></div>
         ) : null}
       </nav>
     </>
@@ -309,27 +264,15 @@ export function MovePageBody({ page }: { page: MovePageData }) {
   return (
     <>
       <Lead page={page} />
-      <div className="grid grid-cols-1 items-start gap-11 max-sm:gap-[22px] min-[1180px]:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <Said page={page} />
         <Facts page={page} />
       </div>
       <OtherMoves page={page} />
-      <section aria-label="Ask the Agent" className={cn(CARD, 'flex-row flex-wrap items-center justify-between gap-3.5 px-[26px] py-5 max-sm:hidden')}>
-        <p className="m-0 text-[14.5px] text-secondary-foreground">Ask what people said about {page.card.label ? <OnLabel card={page.card} /> : 'it'} after this move, in your own words.</p>
-        <Link href={page.askHref} className={ASK}><Sparkles className="size-3.5" aria-hidden />Ask the Agent about this</Link>
+      <section aria-label="Ask the Agent" className={cn(CARD, 'flex-row flex-wrap items-center justify-between gap-5 max-sm:gap-3')}>
+        <p className="m-0 min-w-0 flex-[1_1_420px] text-[15.5px] leading-[1.55] text-secondary-foreground">Ask what people said about {page.card.label ? <OnLabel card={page.card} /> : 'it'} after this move, in your own words.</p>
+        <GoLink href={page.askHref}>Ask the Agent about this</GoLink>
       </section>
-      <Link href={page.askHref} className={cn(ASK, 'justify-center sm:hidden')}><Sparkles className="size-3.5" aria-hidden />Ask the Agent about this</Link>
     </>
   )
-}
-
-/** The title block's meta line, as its phone lines: the day, the months its
- *  line reads, and its videos since the day. */
-export function moveMeta(page: MovePageData, read: string | null): ReactNode[][] {
-  const ev = page.evidence
-  return [
-    [`Dated ${shortDate(page.card.day)}`],
-    read ? [read] : [],
-    ev.state === 'ready' && ev.total > 0 && page.card.label ? [<><span data-copy="figure">{fmtInt(ev.total)}</span> {ev.total === 1 ? 'video' : 'videos'} on <OnLabel card={page.card} /> since {shortDate(page.card.day)}</>] : [],
-  ]
 }

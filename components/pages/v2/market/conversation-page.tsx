@@ -130,20 +130,21 @@ function Comment({ c, hideOnPhone }: { c: ConvComment; hideOnPhone: boolean }) {
 }
 
 /** A video whose comments about this are counted and none may print. */
-const unquotable = (v: Pick<ConvVideo, 'quotes' | 'aboutCount'>): boolean => v.quotes.length === 0 && v.aboutCount > 0
+export const unquotable = (v: Pick<ConvVideo, 'quotes' | 'aboutCount'>): boolean => v.quotes.length === 0 && v.aboutCount > 0
 
 /** One video in the conversation (the board's tile): its creator as the
  *  heading, "TikTok, posted 31 Oct" (and who it is about where counted), its
  *  caption in full, its comments about this of its own, the link out, its
  *  comments, "Show all". `onceSaid`: the page has said that none can be
- *  quoted, so the card does not. */
-function VideoCard({ v, data, index, all, onceSaid }: { v: ConvVideo; data: MarketData; index: number; all: boolean; onceSaid: boolean }) {
+ *  quoted, so the card does not. A dated move's page draws its videos with
+ *  it too (Moves-Move.dc.html). */
+export function VideoCard({ v, brand, index, all, onceSaid }: { v: ConvVideo; brand: string; index: number; all: boolean; onceSaid: boolean }) {
   const shown = v.quotes
   const phoneMore = !v.open && v.quotable > MARKET_VIDEO_QUOTES_PHONE
   const deskMore = !v.open && v.quotable > MARKET_VIDEO_QUOTES
   const show = showCommentsOf(v)
   const note = v.open ? openedNote(v) : null
-  const about = v.about === 'client' ? <BrandChip who="you" plain>{data.brand}</BrandChip> : v.about && v.about !== 'market' ? <BrandChip who="rival" plain>{v.about.slice('rival:'.length)}</BrandChip> : null
+  const about = v.about === 'client' ? <BrandChip who="you" plain>{brand}</BrandChip> : v.about && v.about !== 'market' ? <BrandChip who="rival" plain>{v.about.slice('rival:'.length)}</BrandChip> : null
   return (
     <article id={`video-${v.id}`} data-video-card="" className={cn(CARD, 'scroll-mt-6 gap-3', !all && !v.open && index >= 3 ? 'max-sm:hidden' : null)}>
       <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
@@ -198,7 +199,7 @@ function Said({ ev, data }: { ev: ConvEvidence; data: MarketData }) {
       ) : (
         <>
           {noneAll ? <p data-none-quotable="" className="m-0 text-[14.5px] leading-[1.55] text-secondary-foreground">{CONV_NONE_QUOTABLE_ALL}</p> : null}
-          {ev.videos.map((v, i) => <VideoCard key={v.id} v={v} data={data} index={i} all={ev.all} onceSaid={noneAll} />)}
+          {ev.videos.map((v, i) => <VideoCard key={v.id} v={v} brand={data.brand} index={i} all={ev.all} onceSaid={noneAll} />)}
           {ev.capped != null ? <p className="m-0 text-[13.5px] text-muted-foreground">The first <span data-copy="figure">{fmtInt(ev.capped)}</span> of <span data-copy="figure">{fmtInt(ev.total)}</span> are listed.</p> : null}
           {ev.more && ev.more.desktop > 0 ? <Link href={ev.more.href} className={cn(CHIP, 'self-start font-semibold no-underline max-sm:hidden')}>Show <span data-copy="figure" className="mx-1">{fmtInt(ev.more.desktop)}</span> more videos</Link> : null}
           {ev.more && ev.more.phone > 0 ? <Link href={ev.more.href} className={cn(CHIP, 'self-stretch justify-center font-semibold no-underline sm:hidden')}>Show <span data-copy="figure" className="mx-1">{fmtInt(ev.more.phone)}</span> more videos</Link> : null}

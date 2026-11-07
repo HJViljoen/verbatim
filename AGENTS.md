@@ -2501,8 +2501,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
     `?ledger=` (on this address and Market's) lands on its page for good in
     one hop (`redirectFor`, its "Your moves" block; the root redirects before
     it reads anything). Each opens with Market's `LevelBar` ("Your moves /
-    {page}"), its tile Your moves' own (`level-tiles.tsx`: a signpost on the
-    yellow for advice, a flag and a check-list on the neutral). *The root*
+    {page}"), its tile Your moves' own (a signpost on the yellow for advice,
+    a flag and a check-list on the neutral; since the audit design, 7 Nov,
+    no page has a tile, `level-tiles.tsx` is gone). *The root*
     (G6-Moves): the advice cards and the move cards carry their level's tile,
     their titles and Open go to the pages, and a move's "on {label}" opens
     what it is on in Market on the reading month (`MoveCard.onHref`; its own
@@ -2577,7 +2578,17 @@ This version has breaking changes — APIs, conventions, and file structure may 
     as Market's page holds them (`moveEvidenceOf`; `?video=` and `?videos=all`
     honoured only for its own videos); the facts beside them, each of those
     videos (`moveFactsOf`); its other moves and, for an owner, "Your next
-    move". No week chip anywhere (decision 7). Statements
+    move". Since the audit design (7 Nov, `Moves-Move.dc.html`) it has no
+    tile or label: its status a tag beside Mark done / Stop it, and the
+    figures row (`moveStats`: what it is on, its page in Market; the day;
+    the month it is read on with that month's base; its videos since the
+    day); the lead a tile, the sentence and its verdict in words beside its
+    months (`MoveMonths`, the root's, "k of n" kept; the SVG line,
+    `MoveChart`, is gone); its videos Market's tiles (`VideoCard`, shared
+    with the conversation's page); the facts one tile, its base said once
+    ("Of the 24 videos since 5 Oct"), bare counts with bars against the
+    largest; the other moves tiles and "Your next move" the dashed box; the
+    Agent one link. No week chip anywhere (decision 7). Statements
     (`lib/pages/v2/moves-statements.test.ts`, offline): the root 37 before
     and after; a piece of advice opened in place was 43, its page is 33;
     the record rode on every root read (37) and is 3 now; a move's page 35

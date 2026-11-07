@@ -19,10 +19,10 @@ import {
 import { readingMonthLabel } from '@/lib/reading/month-label'
 import { MovesV2Page, MOVES_FIRST_RUN, movesStats } from './index'
 import { AdviceSection } from './advice'
-import { MoveChart, MoveSentence } from './moves'
+import { MoveMonths, MoveSentence } from './moves'
 import { SAY_FIRST } from './say'
 import { TrackThisSubject } from '@/components/subjects/track-this'
-import { MovesSection, lineGeometry } from './moves'
+import { MovesSection } from './moves'
 import { WhatYouSay } from './say'
 import { PlanCard } from './plan'
 import { ConclusionsSection } from './conclusions'
@@ -294,19 +294,6 @@ describe('the moves', () => {
     assertCopyContract(<MovesSection data={data} />)
   })
 
-  it('draws the move’s day inside its month', () => {
-    const pts = [
-      { month: '2026-07-01', role: 'before' as const, k: 1, n: 10, soFar: false },
-      { month: '2026-08-01', role: 'before' as const, k: 1, n: 10, soFar: false },
-      { month: '2026-09-01', role: 'move' as const, k: 2, n: 10, soFar: false },
-    ]
-    const g = lineGeometry(pts, '2026-09-14')
-    expect(g.xs).toHaveLength(3)
-    expect(g.moveX).not.toBeNull()
-    expect(g.moveX!).toBeLessThan(g.xs[2])
-    expect(g.moveX!).toBeGreaterThan(g.xs[1])
-    expect(g.ys[2]).toBeLessThan(g.ys[0])
-  })
 })
 
 // Decision 3 (13 Oct): the moves read the reading month, which on days 1 to
@@ -593,12 +580,13 @@ describe('the next move’s card', () => {
 })
 
 // A move on a conversation is a share of the category's videos in its
-// sentence's every branch and in its chart's name (5 Nov review).
+// sentence's every branch and in its months' name (5 Nov review; since the
+// audit design the months are a list, `MoveMonths`).
 describe('a move on a conversation', () => {
   const card = { ...MOVE_CARDS.find((c) => c.points.length > 0)!, kind: 'theme' as const, unread: null, pending: null, compare: null }
-  it('says the category\'s videos where only its latest month prints, and names its chart so', () => {
+  it('says the category\'s videos where only its latest month prints, and names its months so', () => {
     expect(markupText(render(<MoveSentence card={card} reading={null} />))).toMatch(/^Share of category videos: /)
-    expect(render(<MoveChart card={card} readingMonth="2026-09-01" />)).toMatch(/aria-label="[^"]* as a share of category videos/)
-    expect(render(<MoveChart card={{ ...card, kind: 'subject' }} readingMonth="2026-09-01" />)).toMatch(/aria-label="[^"]* as a share of market videos/)
+    expect(markupText(render(<MoveMonths card={card} readingMonth="2026-09-01" />))).toMatch(/^Share of category videos, month by month/)
+    expect(markupText(render(<MoveMonths card={{ ...card, kind: 'subject' }} readingMonth="2026-09-01" />))).toMatch(/^Share of market videos, month by month/)
   })
 })

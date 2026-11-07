@@ -309,8 +309,9 @@ export function WhoLine({ parts, brand, noun }: { parts: readonly WhoPart[]; bra
 }
 
 /** A list's rows: a name, a bar against the list's largest (decision 5), a
- *  bare count of the base the section names once. */
-function BarRows({ rows, bar = 90 }: { rows: readonly { key: string; name: ReactNode; k: number }[]; bar?: 90 | 110 }) {
+ *  bare count of the base the section names once. The move page's facts
+ *  draw with it too. */
+export function BarRows({ rows, bar = 90 }: { rows: readonly { key: string; name: ReactNode; k: number }[]; bar?: 90 | 110 }) {
   const at = toMax(rows.map((r) => r.k))
   return (
     <div className={cn('grid items-center gap-3 text-[14.5px]', bar === 110 ? 'grid-cols-[minmax(0,1fr)_110px_30px]' : 'grid-cols-[minmax(0,1fr)_90px_30px]')}>

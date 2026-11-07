@@ -11,7 +11,7 @@ import { DateMove } from '@/components/pages/market-surface/date-move'
 import { canDate } from '@/lib/pages/date-move'
 import {
   MOVES_SUB, MOVES_TITLE, MOVES_UNREAD_TITLE, MOVE_STATUS_LABEL, MOVE_UNREAD, NEXT_MOVE, NO_MOVE_YET, READ_FAILED,
-  axisLine, compareMonths, comparePrintable, levelBase, moveAnchor, moveAxis, monthLabelOn, pointMonth, sharePct,
+  axisLine, compareMonths, comparePrintable, levelBase, moveAnchor, moveAxis, monthLabelOn, sharePct,
   type MoveCard, type MovePoint, type MoveSlot, type MovesPageData, type ReadingLabel,
 } from '@/lib/pages/v2/moves'
 import { cn } from '@/lib/utils'
@@ -28,125 +28,20 @@ import { MoveStatusControl } from './move-status'
 // the latest level alone where the month-pair judge refuses the pair. Never a
 // cause: the section says so once, in the board's words.
 //
-// THE CHART IS ALWAYS THE BOARD'S (the parity pass, 13 Oct): the axis from
-// two months before the move, the months read as points, the rest as empty
-// slots with their names lighter, and one quiet line under it saying why.
-// The row keeps the board's two across: an odd last move takes the next
-// move's card beside it.
+// THE MONTHS ARE ALWAYS THE BOARD'S (the parity pass, 13 Oct; since the
+// audit design, 7 Nov, a list of months, `MoveMonths`, on the top page and
+// the move's own; the SVG line is gone): from two months before the move,
+// the months read with their share, the rest in a word, and one quiet line
+// under them saying why. The row keeps the board's two across: an odd last
+// move takes the next move's card beside it.
 //
 // The status control (`setMoveStatusAction`) is drawn for an owner or an
 // admin only.
 //
 // EACH MOVE OPENS AS ITS OWN PAGE (levels as pages, 17 Oct; board G6-Moves):
-// the flag tile names the level, the title and Open go to the move's page
+// the title and Open go to the move's page
 // (`/dashboard/moves/<id>`, the evidence), and "on {label}" opens what it is
 // on in Market (decision 4), its home.
-
-const W = 480
-const H = 140
-const BASE = 110
-const TOP = 26
-
-/** The axis's geometry, pure: an x per month slot, a y per drawn share (null
- *  on an empty slot), and the move's mark. */
-export function slotGeometry(slots: readonly Pick<MoveSlot, 'month' | 'point'>[], moveDay: string): {
-  xs: number[]
-  ys: (number | null)[]
-  moveX: number | null
-} {
-  const n = slots.length
-  const step = n > 1 ? (W - 90) / (n - 1) : 0
-  const xs = slots.map((_, i) => (n > 1 ? 45 + i * step : W / 2))
-  const shares = slots.map((s) => (s.point ? (s.point.n > 0 ? s.point.k / s.point.n : 0) : null))
-  // One month read sits a little above the middle, where the board's line
-  // runs, rather than pinned to the top.
-  const many = shares.filter((x) => x != null).length > 1
-  const max = Math.max(...shares.map((x) => x ?? 0), 0.0001) * (many ? 1.15 : 1.8)
-  const ys = shares.map((x) => (x == null ? null : BASE - (x / max) * (BASE - TOP)))
-  // THE MOVE'S MONTH, AT ITS FRONT EDGE: the dashed line stands where the
-  // month the move was made in begins on the line (half a slot before its
-  // point), so it reads "from here on" without claiming a day inside a month
-  // the line reads as one point. Its first month, the line's own left edge.
-  const moveMonth = monthStartOf(moveDay)
-  const at = slots.findIndex((s) => s.month === moveMonth)
-  const moveX = at < 0 ? null : Math.max(8, xs[at] - (n > 1 ? step / 2 : 40))
-  return { xs, ys, moveX }
-}
-
-/** The line's geometry over its drawn months alone (every slot drawn). */
-export function lineGeometry(points: readonly MovePoint[], moveDay: string): { xs: number[]; ys: number[]; moveX: number | null } {
-  const g = slotGeometry(points.map((p) => ({ month: p.month, point: p })), moveDay)
-  return { xs: g.xs, ys: g.ys.map((y) => y ?? BASE), moveX: g.moveX }
-}
-
-/**
- * THE BOARD'S CHART, WHATEVER THE DATA: the axis from two months before the
- * move to the reading month (or the move's own, where it is later), the
- * "your move" mark, the months read as points on the line, and the months
- * not drawn as empty slots, their names lighter. One quiet line under it says
- * why a slot is empty (`axisLine`); a move with no line at all says why in its
- * sentence, and its chart is the axis and the mark alone.
- */
-export function MoveChart({ card, readingMonth, detail = false }: {
-  card: MoveCard
-  readingMonth: string
-  /** The move's page (G6-Moves-Move): each month named in full, its level
-   *  under it ("July / 46 of 455"). */
-  detail?: boolean
-}) {
-  const slots = moveAxis(card, readingMonth)
-  if (slots.length === 0) return null
-  const { xs, ys, moveX } = slotGeometry(slots, card.day)
-  const drawn = slots.map((s, i) => ({ s, i, y: ys[i] })).filter((x): x is { s: MoveSlot & { point: MovePoint }; i: number; y: number } => x.s.point != null && x.y != null)
-  const solid = drawn.filter(({ s }) => !s.point.soFar)
-  const lastDrawn = drawn[drawn.length - 1]
-  const beforeLast = drawn[drawn.length - 2]
-  const words = drawn.map(({ s }) => `${pointMonth(s.point)} ${sharePct(s.point.k, s.point.n)}`).join(', ')
-  const line = axisLine(slots)
-  return (
-    <div className="flex flex-col gap-1.5">
-      <svg viewBox={`0 0 ${W} ${detail ? H + 14 : H}`} width="100%" role="img" aria-label={`${card.label ?? 'It'} as a share of ${levelBase(card.kind)}${words ? `: ${words}` : ', no month drawn yet'}. The move was dated ${shortDate(card.day)}.`} className="block overflow-visible">
-        <line x1={0} y1={BASE} x2={W} y2={BASE} className="stroke-border" />
-        {moveX != null ? (
-          <>
-            <line x1={moveX} y1={14} x2={moveX} y2={BASE} className="stroke-orange-text" strokeWidth={1.5} strokeDasharray="3 3" />
-            <text x={moveX > W - 80 ? moveX - 7 : moveX + 7} y={22} textAnchor={moveX > W - 80 ? 'end' : 'start'} className="fill-orange-text font-sans text-[11px] font-semibold">your move</text>
-          </>
-        ) : null}
-        {solid.length > 1 ? (
-          <polyline points={solid.map(({ i, y }) => `${xs[i].toFixed(1)},${y.toFixed(1)}`).join(' ')} fill="none" className="stroke-foreground" strokeWidth={2} strokeLinejoin="round" />
-        ) : null}
-        {lastDrawn?.s.point.soFar && beforeLast ? (
-          <line x1={xs[beforeLast.i]} y1={beforeLast.y} x2={xs[lastDrawn.i]} y2={lastDrawn.y} className="stroke-foreground" strokeWidth={2} strokeDasharray="4 3" />
-        ) : null}
-        {slots.map((s, i) => {
-          const y = ys[i]
-          return (
-            <g key={s.month}>
-              {s.point && y != null ? (
-                <>
-                  <circle cx={xs[i]} cy={y} r={4} className={cn('stroke-foreground', s.point.soFar ? 'fill-card' : 'fill-foreground')} strokeWidth={2} />
-                  <text data-copy="figure" x={xs[i]} y={y - 10} textAnchor="middle" className={cn('fill-foreground font-mono text-[11.5px]', detail ? 'max-sm:text-[14px]' : null, i === lastDrawn?.i ? 'font-semibold' : null)}>{sharePct(s.point.k, s.point.n)}</text>
-                </>
-              ) : null}
-              {detail ? (
-                <>
-                  {/* On a phone the chart scales to the column, so its words
-                      take a larger size in the chart's own units (G6-Moves-Move-Phone). */}
-                  <text x={xs[i]} y={127} textAnchor="middle" className="fill-muted-foreground font-mono text-[10.5px] max-sm:text-[13px]">{longMonth(s.month)}{s.point?.soFar ? ' so far' : ''}</text>
-                  {s.point ? <text data-copy="level" x={xs[i]} y={142} textAnchor="middle" className="fill-muted-foreground font-mono text-[10.5px] max-sm:text-[13px]">{fmtInt(s.point.k)} of {fmtInt(s.point.n)}</text> : null}
-                </>
-              ) : (
-                <text x={xs[i]} y={128} textAnchor="middle" className="fill-muted-foreground font-mono text-[10.5px]">{s.point ? pointMonth(s.point) : pointMonth({ month: s.month, soFar: false })}</text>
-              )}
-            </g>
-          )
-        })}
-      </svg>
-      {line ? <p className="m-0 text-[12px] leading-[1.4] text-muted-foreground">{line}</p> : null}
-    </div>
-  )
-}
 
 /** "11% (75 of 680)": a share and its level. */
 function Level({ p }: { p: MovePoint }) {
