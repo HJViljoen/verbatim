@@ -12,7 +12,13 @@ describe('Who is in your market and the group cards (decision 2)', () => {
   it('draws each group\'s videos this month as its own bar, never a share and never an "Other"', () => {
     const node = <WhoCard groups={d.groups} videos={d.videos} monthWords={d.monthWords} />
     const text = renderText(node)
-    expect(text).toContain('New amputees, first year 96 of 487 videos')
+    // The audit design (7 Nov): a bare count, its base the figures row's
+    // (decision 2), and the bars against the largest (decision 5).
+    expect(text).toContain('New amputees, first year 96 videos')
+    expect(text).not.toMatch(/of 487/)
+    const m = render(node)
+    expect(m).toContain('style="width:100%"')
+    expect(m).toContain('aria-label="New amputees, first year: 96 videos"')
     expect(text).toContain('the counts overlap')
     expect(text).not.toMatch(/%|Other/)
     assertCopyContract(node)
@@ -22,13 +28,13 @@ describe('Who is in your market and the group cards (decision 2)', () => {
     expect(render(<WhoCard groups={d.groups} videos={d.videos} monthWords={d.monthWords} />)).toMatch(/<section id="cast" /)
   })
 
-  // G3-Voices (17 Oct): each row opens the group's own page, and ends in the
-  // leave-the-page chevron (board decision 8), out of the tab order.
-  it('each row opens the group\'s page, and ends in the chevron', () => {
+  // G3-Voices (17 Oct): each row opens the group's own page. The audit
+  // design (7 Nov): the name is the row's link, with no chevron.
+  it('each row opens the group\'s page by its name, with no chevron', () => {
     const m = render(<WhoCard groups={d.groups} videos={d.videos} monthWords={d.monthWords} />)
     expect(m).toContain('href="/dashboard/voices/groups/caregivers"')
-    expect(m.match(/data-row-chevron=""/g)).toHaveLength(d.groups.cards.length)
-    expect(m).toMatch(/<a tabindex="-1" aria-hidden="true" data-row-chevron="" [^>]*href="\/dashboard\/voices\/groups\/new-amputees"/)
+    expect(m.match(/href="\/dashboard\/voices\/groups\//g)).toHaveLength(d.groups.cards.length)
+    expect(m).not.toContain('data-row-chevron')
     expect(m).not.toContain('scroll=')
   })
 
@@ -42,13 +48,17 @@ describe('Who is in your market and the group cards (decision 2)', () => {
     const node = <GroupCard card={d.groups.cards[3]} n={d.videos} monthWords={d.monthWords} />
     const text = renderText(node)
     expect(text).toContain('Caregivers and family')
-    expect(text).toContain('45 of 487 videos')
-    expect(text).toContain('What they talk about · of their 45 Fit & comfort 17 Cost & access 14')
-    expect(text).toContain('Wants: Clear answers they can act on for someone else: what to buy, what’s covered, what recovery looks like.')
-    expect(text).toContain('Open →')
+    expect(text).toContain('45 videos in September')
+    expect(text).toContain('What they talk about, of their 45 videos Fit & comfort 17 Cost & access 14')
+    expect(text).toContain('Wants Clear answers they can act on for someone else: what to buy, what’s covered, what recovery looks like.')
+    expect(text).toContain('Open Caregivers and family')
     expect(render(node)).toContain('href="/dashboard/voices/groups/caregivers"')
-    // Wants and stops hold three lines each on the card; the page has them whole.
-    expect(render(node).match(/class="line-clamp-3"/g)).toHaveLength(2)
+    // Wants and stops are a list of two, printed whole, as the board draws
+    // them (the audit design, 7 Nov).
+    expect(render(node)).toMatch(/<dl [^>]*><div><dt [^>]*>Wants<\/dt><dd /)
+    expect(render(node)).not.toContain('line-clamp')
+    // Where they comment: a figure a platform.
+    expect(text).toMatch(/Where they comment( [A-Za-z]+ \d+)+ Open Caregivers/)
     expect(text).not.toMatch(/%|no clear change|since September/)
     expect(render(node)).not.toContain('data-copy="quote"')
     assertCopyContract(node)
@@ -60,16 +70,16 @@ describe('Who is in your market and the group cards (decision 2)', () => {
   it('a card with no video this month keeps the board\'s card: the level at 0, the box and the strip', () => {
     const node = <GroupCard card={{ ...d.groups.cards[0], videos: 0, subjects: [], platforms: [] }} n={487} monthWords="September" />
     const text = renderText(node)
-    expect(text).toContain('0 of 487 videos not compared yet')
+    expect(text).toContain('0 videos in September')
     expect(text).toContain('What they talk about None of their comments in September.')
-    expect(text).toContain('Where')
+    expect(text).toContain('Where they comment None in September.')
     expect(text).not.toContain('of their 0')
     assertCopyContract(node)
   })
 
   it('a card whose videos carry no subject keeps its box and says so in it', () => {
     const node = <GroupCard card={{ ...d.groups.cards[0], subjects: [], subjectsNone: [] }} n={487} monthWords="September" />
-    expect(renderText(node)).toContain('What they talk about · of their 96 No subject read in their videos yet.')
+    expect(renderText(node)).toContain('What they talk about, of their 96 videos No subject read in their videos yet.')
     assertCopyContract(node)
   })
 
@@ -84,8 +94,9 @@ describe('Who is in your market and the group cards (decision 2)', () => {
     expect(text).toContain('What they talk about Not measured yet: Choosing the right device, Community & encouragement, Cost & access, Fit & comfort, Function & movement, Look & style')
     expect(text).not.toContain('of their 45')
     expect(render(node)).not.toMatch(/<span data-copy="figure"[^>]*>\d+<\/span> more/)
-    // Its rows' empty tracks hold the box's height.
-    expect(render(node).match(/border-dashed/g)?.length).toBeGreaterThanOrEqual(4)
+    // The line is said in the dashed box, with no empty tracks (decision 4).
+    expect(render(node).match(/data-empty-box=""/g)).toHaveLength(1)
+    expect(render(node)).not.toContain('data-empty-track')
     assertCopyContract(node)
   })
 
@@ -95,15 +106,17 @@ describe('Who is in your market and the group cards (decision 2)', () => {
     const text = renderText(node)
     // A ready subject on none of their videos is named, never a row at 0
     // among what they talk about (5 Nov; never hidden, 14 Oct).
-    expect(text).toContain('What they talk about · of their 45 Cost & access 14 In none of their videos: Function & movement Not measured yet: Choosing the right device, Community & encouragement, Fit & comfort, Look & style')
+    expect(text).toContain('What they talk about, of their 45 videos Cost & access 14 In none of their videos: Function & movement Not measured yet: Choosing the right device, Community & encouragement, Fit & comfort, Look & style')
     // Named, never counted: Fit & comfort (17 of their videos) prints no figure.
     expect(text).not.toMatch(/Fit & comfort \d/)
     assertCopyContract(node)
   })
 
-  it('a card\'s verdict slot says the change is not compared (decision 2), never a direction', () => {
-    const text = renderText(<GroupCard card={d.groups.cards[0]} n={d.videos} monthWords={d.monthWords} />)
-    expect(text).toContain('96 of 487 videos not compared yet')
+  it('the section head says once that no group is compared (decision 2), never a direction, and no card says it again', () => {
+    expect(renderText(<GroupCard card={d.groups.cards[0]} n={d.videos} monthWords={d.monthWords} />)).not.toMatch(/compared/i)
+    const text = renderText(<GroupGrid data={d} />)
+    expect(text).toMatch(/^Each group in September Not compared with August yet /)
+    expect(text.match(/compared/gi)).toHaveLength(1)
   })
 
   it('the grid: every card, then the mix card; nothing opens in place (17 Oct)', () => {
@@ -120,7 +133,7 @@ describe('Who is in your market and the group cards (decision 2)', () => {
 describe('the mix card (the board\'s sixth; decision 2)', () => {
   const d = ossurVoicesFixture()
 
-  it('keeps its place, named for what it shows: this month\'s column drawn, last month\'s axis empty and dashed', () => {
+  it('keeps its place, named for what it shows: the dashed box in its chart\'s place says why (decision 4)', () => {
     const node = <MixCard cards={d.groups.cards} n={d.videos} month={d.month} monthWords={d.monthWords} />
     const text = renderText(node)
     expect(text).toContain('The mix in September August isn’t read for these groups')
@@ -128,16 +141,10 @@ describe('the mix card (the board\'s sixth; decision 2)', () => {
     // No word that claims a comparison (the fresh check, 13 Oct).
     expect(text).not.toMatch(/How the mix changed|against|changed|%|no clear change|moved/)
     const m = render(node)
-    // Both columns are named; only September's carries points, and no line
-    // joins the two (a line needs both ends). Last month's axis is dashed.
-    expect(m).toContain('>Aug</text>')
-    expect(m).toContain('>Sep</text>')
-    expect(m.match(/<circle /g)).toHaveLength(d.groups.cards.length)
-    expect(m).not.toMatch(/<line [^>]*stroke-cat/)
-    expect(m).toContain('[&amp;&gt;line:first-of-type]:[stroke-dasharray:3_4]')
-    // Long names are shortened on the chart, whole for a screen reader.
-    expect(m).toContain('New amputees…')
-    expect(m).toMatch(/aria-label="[^"]*New amputees, first year none to 96/)
+    // No ghost chart: the board's dashed box, its title and its sentence.
+    expect(m.match(/data-empty-box=""/g)).toHaveLength(1)
+    expect(m).not.toContain('<svg')
+    expect(m).not.toContain('<circle')
     assertCopyContract(node)
   })
 
@@ -159,7 +166,7 @@ describe('a group whose every ready subject is on none of their videos', () => {
 
   it('names them on none of their videos, under the box\'s base', () => {
     const text = renderText(<GroupCard card={allZero} n={p.videos} monthWords={p.monthWords} />)
-    expect(text).toContain(`What they talk about · of their ${c.videos} In none of their videos: Comfort, Price`)
+    expect(text).toContain(`What they talk about, of their ${c.videos} videos In none of their videos: Comfort, Price`)
     expect(text).not.toContain('No subject read in their videos yet')
     assertCopyContract(<GroupCard card={allZero} n={p.videos} monthWords={p.monthWords} />)
   })
@@ -168,7 +175,7 @@ describe('a group whose every ready subject is on none of their videos', () => {
     const withPending = { ...allZero, subjectsPending: 1, subjectsNotMeasured: [{ id: 's-x', label: 'Fit' }] }
     const node = <GroupCard card={withPending} n={p.videos} monthWords={p.monthWords} />
     const text = renderText(node)
-    expect(text).toContain(`What they talk about · of their ${c.videos} In none of their videos: Comfort, Price Not measured yet: Fit`)
+    expect(text).toContain(`What they talk about, of their ${c.videos} videos In none of their videos: Comfort, Price Not measured yet: Fit`)
     expect(render(node)).not.toMatch(/border-dashed/)
     assertCopyContract(node)
   })
@@ -184,7 +191,7 @@ describe('a tracked subject is never hidden (14 Oct)', () => {
   it('a group\'s box: the ready rows, a thin one\'s small count, the one on none of their videos named, then ONE short line naming the open and the failed subject (the lead\'s ruling, 14 Oct)', () => {
     const node = <GroupCard card={card('caregivers')} n={d.videos} monthWords={d.monthWords} />
     const text = renderText(node)
-    expect(text).toContain('What they talk about · of their 45 Look & style 2 In none of their videos: Function & movement Not measured yet: Cost & access, Fit & comfort Wants:')
+    expect(text).toContain('What they talk about, of their 45 videos Look & style 2 In none of their videos: Function & movement Not measured yet: Cost & access, Fit & comfort Wants ')
     // The reason is said once on the page, never on a card.
     expect(text).not.toContain(FAILED_EXPLAINED)
     const html = render(node)
@@ -205,7 +212,7 @@ describe('a tracked subject is never hidden (14 Oct)', () => {
   it('the page says why a failed subject shows no figure ONCE, in the foot of "Who\'s in your market", one line a subject', () => {
     const node = <WhoCard groups={d.groups} videos={d.videos} monthWords={d.monthWords} failed={d.subjectsFailed} />
     const text = renderText(node)
-    expect(text.endsWith(`Clinicians and prosthetists 29 of 487 videos Fit & comfort. ${FAILED_EXPLAINED}`)).toBe(true)
+    expect(text.endsWith(`Clinicians and prosthetists 29 videos Fit & comfort. ${FAILED_EXPLAINED}`)).toBe(true)
     // One colon, the sentence's own: never "Fit & comfort: Being re-described:".
     expect(text).not.toContain('Fit & comfort: Being')
     expect(render(node).match(/data-subject-failed/g)).toHaveLength(1)

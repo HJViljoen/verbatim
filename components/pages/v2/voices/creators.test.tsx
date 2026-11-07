@@ -12,20 +12,26 @@ describe('Creators who drive the talk', () => {
     // A subreddit is a community, not a creator: left out, and said once.
     expect(text).not.toContain('r/amputee')
     expect(text).toContain('Reddit is left out: there a post’s account is the community it was posted in, not who made it.')
-    expect(text).toContain('A L I S TikTok · 186K followers · made 8 of the 24 videos in Running on a blade 8 videos')
-    expect(text).toContain('The Amputee Diaries YouTube · 96K subscribers')
-    expect(text).toContain('All 6 accounts with 3 or more videos →')
+    // The board's table: creator, platform, audience, most made in, videos.
+    expect(text).toContain('Creator Platform Audience Most made in Videos A L I S TikTok 186K followers Running on a blade (made 8 of 24 ) 8 The Amputee Diaries YouTube 96K subscribers')
+    expect(text).toContain('All 6 accounts with 3 or more videos')
+    expect(text).not.toContain('→')
     expect(render(node)).not.toContain('data-copy="quote"')
-    // Each row opens the creator's page, two segments, and ends in the chevron.
+    // Each row opens the creator's page by its name, two segments, with no
+    // chevron (the audit design).
     expect(render(node)).toContain('href="/dashboard/voices/creators/tiktok/A%20L%20I%20S"')
-    expect(render(node).match(/data-row-chevron=""/g)?.length).toBe(d.creators.rows.length)
+    expect(render(node)).not.toContain('data-row-chevron')
+    expect(render(node).match(/<tr data-creator="/g)?.length).toBe(d.creators.rows.length)
+    // No brand named in any row, so no brand column (the board's month).
+    expect(text).not.toContain('Brand named most')
     assertCopyContract(node)
   })
 
-  it('Sealand: the brand named in most of a creator\'s videos, as its chip', () => {
+  it('Sealand: the brand named in most of a creator\'s videos, in its own column (small call 10)', () => {
     const d = sealandVoicesFixture()
     const m = render(<CreatorsCard creators={d.creators} monthWords={d.monthWords} />)
     expect(m).toMatch(/data-who-chip="(rival|you)"/)
+    expect(renderText(<CreatorsCard creators={d.creators} monthWords={d.monthWords} />)).toContain('Most made in Brand named most Videos')
     assertCopyContract(<CreatorsCard creators={d.creators} monthWords={d.monthWords} />)
   })
 
@@ -33,7 +39,8 @@ describe('Creators who drive the talk', () => {
     const d = ossurVoicesFixture({ creators: 'all' })
     const text = renderText(<CreatorsCard creators={d.creators} monthWords={d.monthWords} />)
     expect(text).toContain('Stepping Forward')
-    expect(text).toContain('Show the first five →')
+    expect(text).toContain('Show the first five')
+    expect(text).not.toContain('→')
   })
 
   it('says so when no account reaches the floor', () => {

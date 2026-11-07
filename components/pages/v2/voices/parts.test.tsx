@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
-import { AskButton, Followers, LevelText, MiniRow, Phrase, PlatformStrip, QuoteCard } from './parts'
+import { AskButton, Followers, LevelText, MiniRow, Phrase, QuoteCard } from './parts'
 
 describe('the Voices parts', () => {
-  it('a mini row prints its count as a figure and draws its bar against the head\'s n', () => {
+  it('a mini row prints its count as a figure and draws its bar against the head\'s n, or the list\'s largest', () => {
     const node = <MiniRow label="Fit & comfort" k={46} of={96} />
     expect(renderText(node)).toBe('Fit & comfort 46')
     expect(render(node)).toContain('aria-label="46 of 96"')
+    expect(render(node)).toMatch(/style="width:47\.9\d*%"/)
+    // Decision 5: against the list's largest row, the largest full.
+    expect(render(<MiniRow label="Fit & comfort" k={46} of={96} max={46} />)).toContain('style="width:100%"')
+    expect(render(<MiniRow label="Cost & access" k={23} of={96} max={46} />)).toContain('style="width:50%"')
     assertCopyContract(node)
   })
 
@@ -16,14 +20,6 @@ describe('the Voices parts', () => {
     expect(renderText(node)).toBe('97 of 521 videos')
     expect(render(node)).toContain('data-copy="level"')
     assertCopyContract(node)
-  })
-
-  it('a platform strip adds up, and draws nothing for no video', () => {
-    const node = <PlatformStrip label="Where" platforms={[{ platform: 'tiktok', label: 'TikTok', k: 50 }, { platform: 'reddit', label: 'Reddit', k: 11 }]} />
-    expect(renderText(node)).toBe('TikTok 50 · Reddit 11')
-    expect(render(node)).toMatch(/width:81\.9\d*%/)
-    assertCopyContract(node)
-    expect(render(<PlatformStrip label="x" platforms={[]} />)).toBe('')
   })
 
   it('followers are compact, and Reddit\'s are never printed', () => {

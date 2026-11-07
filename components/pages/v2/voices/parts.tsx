@@ -1,59 +1,69 @@
 import Link from 'next/link'
 import { ChevronRight, Sparkles } from 'lucide-react'
-import { Fragment, type ReactNode } from 'react'
-import { TickBar } from '@/components/v2'
+import type { ReactNode } from 'react'
+import { EmptyBox, GO, LBL, TickBar } from '@/components/v2'
 import { TAG } from '@/components/colour-roles'
 import { fmtCompact, fmtInt } from '@/lib/format'
 import { quoteWords } from '@/lib/pages/brands'
 import { notMeasuredLine } from '@/lib/pages/not-measured'
-import type { VoicesPlatform, VoicesQuote } from '@/lib/pages/v2/voices'
+import type { VoicesQuote } from '@/lib/pages/v2/voices'
 import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { cn } from '@/lib/utils'
 
 // The small pieces the Voices page draws more than once (depth v2, T4; boards
-// E3-Voices and E3-Voices-Open): the board's `.mini` row (a name, a short
-// bar, its count), the platform strip (`.plat`), a phrase chip (`.phr`), a
-// quote card (`.qpanel`), the panel's tag and its Ask button.
+// E3-Voices and E3-Voices-Open; since the audit design, 7 Nov, drawn to
+// Voices.dc.html from the kit): a name with its bar and count, a phrase, a
+// quote card, the panel's tag and its Ask button. Your products re-exports
+// `CAPS`, `OLINK`, `Fig`, `LevelText`, `MiniRow`, `EmptyLine`, `AskButton`
+// and `PanelTag` (components/pages/v2/products/parts.tsx), so they keep their
+// names and take the kit's look in place.
 
-/** The board's `.olink`: an orange-text link, 13.5px semibold. */
-export const OLINK = 'text-[13.5px] font-semibold text-orange-text no-underline hover:underline hover:underline-offset-[3px]'
+/** A link that says where it goes (the kit's `GO`; the name kept for Your
+ *  products, which borrows it). */
+export const OLINK = GO
 
-/** The board's small caps label (`.ptag`, `.dlabel`). */
-export const CAPS = 'm-0 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground'
+/** A label in sentence case (the kit's `LBL`; the name kept for Your
+ *  products). */
+export const CAPS = cn('m-0', LBL)
 
-/** One mono figure. */
+/** One figure, in tabular sans. */
 export function Fig({ children, className }: { children: ReactNode; className?: string }) {
-  return <span data-copy="figure" className={cn('font-mono tabular-nums', className)}>{children}</span>
+  return <span data-copy="figure" className={cn('tabular-nums', className)}>{children}</span>
 }
 
 /** "96 of 318 videos": one level node, so it carries its denominator. */
 export function LevelText({ k, n, unit, className }: { k: number; n: number; unit?: string; className?: string }) {
   return (
-    <span data-copy="level" className={cn('font-mono tabular-nums', className)}>
+    <span data-copy="level" className={cn('tabular-nums', className)}>
       {fmtInt(k)} of {fmtInt(n)}{unit ? ` ${unit}` : ''}
     </span>
   )
 }
 
 /**
- * A name, a short bar of k against n, and k at the row's end (the board's
- * `.mini`, 6px track). `of` is what the bar is drawn against; the row prints
- * k alone, so the block's head names the n ("of their 96").
+ * A name, its bar and its count at the row's end (the board's three columns:
+ * the name, a 72px bar, the count). `max` is the list's largest count: the
+ * bar is drawn against it (decision 5, `toMax`: the largest row is full).
+ * Without it the bar is drawn against `of`, as before. The row prints k
+ * alone, so the block's head names the n ("of their 121 videos"); `of` is
+ * what the screen reader hears ("27 of 121").
  */
-export function MiniRow({ label, k, of, tone = 'market', size = 'sm', className }: {
+export function MiniRow({ label, k, of, max, tone = 'market', className }: {
   label: ReactNode
   k: number
   of: number
+  max?: number
   tone?: 'market' | 'you' | 'rival' | 'ink'
   size?: 'sm' | 'md'
   className?: string
 }) {
-  const pct = of > 0 ? (100 * k) / of : 0
+  const base = max ?? of
+  const pct = base > 0 ? (100 * k) / base : 0
   return (
-    <div className={cn('grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_34px] items-center gap-2', size === 'md' ? 'text-[13.5px]' : 'text-[12.5px]', className)}>
-      <span className="min-w-0 leading-[1.3] text-foreground">{label}</span>
-      <TickBar pct={pct} tone={tone} size={size === 'md' ? 'md' : 'sm'} label={`${fmtInt(k)} of ${fmtInt(of)}`} />
-      <Fig className="text-right text-[12px] text-foreground">{fmtInt(k)}</Fig>
+    <div className={cn('grid grid-cols-[minmax(0,1fr)_72px_30px] items-center gap-x-3.5 text-[14.5px] leading-[1.4]', className)}>
+      <span className="min-w-0 text-foreground">{label}</span>
+      <TickBar pct={pct} tone={tone} size="md" label={`${fmtInt(k)} of ${fmtInt(of)}`} />
+      <Fig className="text-right text-foreground">{fmtInt(k)}</Fig>
     </div>
   )
 }
@@ -65,7 +75,7 @@ export function MiniRow({ label, k, of, tone = 'market', size = 'sm', className 
  *  figure. */
 export function FailedSubjectLine({ label, className }: { label: string; className?: string }) {
   return (
-    <p data-subject-failed="" className={cn('m-0 text-[12.5px] leading-[1.45] text-muted-foreground', className)}>
+    <p data-subject-failed="" className={cn('m-0 text-[13.5px] leading-[1.5] text-muted-foreground', className)}>
       {/* The name, then the sentence: FAILED_EXPLAINED opens with its own
           colon ("Being re-described: …"), so the name takes a full stop,
           never a second colon (the fresh check, 14 Oct). */}
@@ -96,7 +106,7 @@ export function PendingSubjectsLine({ subjects, count = 0, className }: { subjec
   const line = notMeasuredLine(subjects)
   if (!line && count <= 0) return null
   return (
-    <p data-subjects-not-measured="" className={cn('m-0 text-[12px] leading-[1.4] text-muted-foreground', className)}>
+    <p data-subjects-not-measured="" className={cn('m-0 text-[13.5px] leading-[1.5] text-muted-foreground', className)}>
       {line ?? <><Fig>{fmtInt(count)}</Fig> more {count === 1 ? 'subject' : 'subjects'} not measured yet</>}
     </p>
   )
@@ -104,55 +114,13 @@ export function PendingSubjectsLine({ subjects, count = 0, className }: { subjec
 
 /** RULING U6, a box with no ready subject: the one short line naming the
  *  subjects not measured yet (SUBJECT_NOT_MEASURED alone where a dump names
- *  none), and the rows' empty tracks under it, so the box keeps its frame and
- *  roughly its height (the parity pass: the component carries the gap). */
-export function NotMeasuredRows({ rows = 2, size = 'sm', subjects }: { rows?: number; size?: 'sm' | 'md'; subjects?: readonly { id: string; label: string }[] }) {
+ *  none), said in the dashed box in the rows' place (decision 4: the box
+ *  keeps its frame, with no empty tracks). */
+export function NotMeasuredRows({ subjects }: { rows?: number; size?: 'sm' | 'md'; subjects?: readonly { id: string; label: string }[] }) {
   return (
-    <>
-      <p data-subjects-not-measured="" className={cn('m-0 leading-[1.4] text-muted-foreground', size === 'md' ? 'text-[13.5px]' : 'text-[12.5px]')}>{notMeasuredLine(subjects) ?? SUBJECT_NOT_MEASURED}</p>
-      {Array.from({ length: rows }, (_, i) => (
-        <div key={i} aria-hidden className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_34px] items-center gap-2">
-          <span className="block h-2.5 w-3/5 rounded-full border border-dashed border-foreground/15" />
-          <span className="block h-2 rounded-full border border-dashed border-foreground/15" />
-          <span />
-        </div>
-      ))}
-    </>
-  )
-}
-
-/** Each platform's fill: ink and greys, never a colour that means a party
- *  (gold is you, the orange is a flag). */
-const PLATFORM_FILL: Record<string, string> = {
-  tiktok: 'bg-foreground',
-  instagram: 'bg-comp',
-  youtube: 'bg-foreground/25',
-  reddit: 'bg-foreground/55',
-}
-
-/** A strip of where a set of videos sits, and the counts under it in words
- *  (the board's `.plat` and its `.cmeta`). A video is on one platform, so the
- *  parts make the whole. */
-export function PlatformStrip({ platforms, label }: { platforms: readonly VoicesPlatform[]; label: string }) {
-  const total = platforms.reduce((s, p) => s + p.k, 0)
-  if (total === 0) return null
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div role="img" aria-label={`${label}: ${platforms.map((p) => `${p.label} ${p.k}`).join(', ')}`} className="flex h-1.5 gap-0.5 overflow-hidden rounded-full">
-        {platforms.map((p) => (
-          <span key={p.platform} className={cn('h-full', PLATFORM_FILL[p.platform] ?? 'bg-foreground/40')} style={{ width: `${(100 * p.k) / total}%` }} />
-        ))}
-      </div>
-      <div className="text-[12.5px] leading-[1.4] text-muted-foreground">
-        {/* Each platform holds together; the line breaks between them, at
-            the separator, where a narrow card cannot hold all four (T9). */}
-        {platforms.map((p, i) => (
-          <Fragment key={p.platform}>
-            {i > 0 ? ' · ' : null}<span className="whitespace-nowrap">{p.label} <Fig>{fmtInt(p.k)}</Fig></span>
-          </Fragment>
-        ))}
-      </div>
-    </div>
+    <EmptyBox>
+      <p data-subjects-not-measured="" className="m-0">{notMeasuredLine(subjects) ?? SUBJECT_NOT_MEASURED}</p>
+    </EmptyBox>
   )
 }
 

@@ -8,7 +8,8 @@ describe('Brands in your market: ruling U6', () => {
   it('a counted brand\'s top subject counts the ready subjects alone', () => {
     const d = VOICES_FIXTURES['ossur-counted']()
     const card = renderText(<BrandsCard brands={d.brands} monthWords={d.monthWords} />)
-    expect(card).toContain('Cost & access · 21 of 37')
+    // A bare count: its base is the row's own "Videos naming it" (decision 2).
+    expect(card).toContain('Ottobock 12 of 402 videos too few to compare 37 12 18 Cost & access, 21')
     expect(card).not.toContain('Fit & comfort')
   })
 
@@ -16,7 +17,7 @@ describe('Brands in your market: ruling U6', () => {
     const d = VOICES_FIXTURES['ossur-counted']()
     const brands = { ...d.brands, rows: d.brands.rows.map((r) => ({ ...r, topSubject: null, subjectsPending: 6 })) }
     const t = renderText(<BrandsCard brands={brands} monthWords={d.monthWords} />)
-    expect(t).not.toContain('no subject yet')
+    expect(t).not.toMatch(/no subject yet/i)
     expect(t).toContain('Not measured yet')
   })
 })
@@ -27,21 +28,29 @@ describe('Brands in your market', () => {
     const node = <BrandsCard brands={d.brands} monthWords={d.monthWords} />
     const text = renderText(node)
     expect(text).toContain('Sealand You 1 of 743 videos too few to compare')
-    expect(text).toContain('Patagonia 13 of 743 videos too few to compare 50 · 43 of 65 Durability · 19 of 65')
+    // Named without being asked, then the videos naming it, praised and
+    // complained in them, and the subject most of them carry (the board's
+    // six columns, no bars).
+    expect(text).toContain('Patagonia 13 of 743 videos too few to compare 65 50 43 Durability, 19')
     // (renderText spaces every tag: on the page the comma sits on the link.)
     expect(text).toContain('Not named without being asked in September: Freedom of Movement , Rareform')
     expect(text).toContain('Praised, complained and talked about are September’s alone: each brand’s videos are too few to set against August')
     expect(text).not.toContain('this month')
-    // What the 743 are, said where the table starts.
-    expect(text).toContain('Brand Named in Praised · complained Talked about for Named in: of the 743 videos in September we did not find by searching for a brand')
+    // The six heads; what the 743 are, said once in the note under the
+    // table with why the crosses carry no change (the board's one note).
+    expect(text).toContain('Brand Named without being asked Videos naming it Praised it Complained Talked about most for Sealand You')
+    expect(text).toContain('Named without being asked counts the 743 videos in September we did not find by searching for a brand, so a brand named in them was named without being asked. Praised, complained and talked about are September’s alone')
     const m0 = render(node)
     // The board's header is drawn at every width (two rows of two below lg).
     expect(m0).not.toContain('max-lg:hidden')
     expect(m0).toContain('href="/dashboard/voices/brands/c-fom"')
-    // Each row opens the brand's page and ends in the chevron (17 Oct).
+    // Each row opens the brand's page by its name (17 Oct), with no chevron
+    // (the audit design).
     expect(m0).toContain('href="/dashboard/voices/brands/c0000000-0000-0000-0000-000000000003"')
-    expect(m0.match(/data-row-chevron=""/g)?.length).toBe(d.brands.rows.length)
-    expect(text).toContain('Patagonia: Patagonia is praised for lasting for years')
+    expect(m0).not.toContain('data-row-chevron')
+    expect(m0.match(/<tr data-brand="/g)?.length).toBe(d.brands.rows.length)
+    // The finding, and its brand's page named in the link.
+    expect(text).toContain('Patagonia is praised for lasting for years, and the repair promise is what people repeat Open Patagonia')
     const m = render(node)
     expect(m).toMatch(/data-copy="verdict"[^>]*><span class="text-xs font-medium text-muted-foreground"[^>]*>too few to compare/)
     expect(m).toContain('data-copy="stored" data-slot="pass_c_finding"')
@@ -60,17 +69,19 @@ describe('Brands in your market', () => {
     const d = ossurVoicesFixture()
     const node = <BrandsCard brands={d.brands} monthWords={d.monthWords} />
     const text = renderText(node)
-    expect(text).toContain('Brand Named in Praised · complained Talked about for Brands are not counted for this workspace yet. Össur You Ottobock')
+    expect(text).toContain('Brand Named without being asked Videos naming it Praised it Complained Talked about most for Brands are not counted for this workspace yet. Össur You Ottobock')
     expect(text.match(/not counted/g)).toHaveLength(1)
     expect(text).not.toMatch(/\d+ of \d+/)
     const m = render(node)
     expect(m.match(/data-brand="/g)).toHaveLength(2)
-    expect(m.match(/data-empty-track=""/g)).toHaveLength(2 * 3)
+    // The names stay, their cells empty: no empty tracks (decision 4).
+    expect(m).not.toContain('data-empty-track')
     // The key names the bars' colours: no bar, no key.
     expect(text).not.toContain('videos where people praised')
     // Each tracked brand still opens, and the latest finding is the note.
     expect(m).toContain('href="/dashboard/voices/brands/5ecfa431"')
-    expect(text).toContain('Ottobock: Ottobock’s talk turns on getting a knee paid for Open Ottobock →')
+    expect(text).toContain('Ottobock’s talk turns on getting a knee paid for Open Ottobock')
+    expect(text).not.toContain('→')
     assertCopyContract(node)
   })
 
@@ -78,8 +89,8 @@ describe('Brands in your market', () => {
     const d = VOICES_FIXTURES['ossur-counted']()
     const node = <BrandsCard brands={d.brands} monthWords={d.monthWords} />
     const text = renderText(node)
-    expect(text).toContain('Össur You not counted yet Ottobock 12 of 402 videos')
-    expect(text).toContain('12 · 18 of 37 Cost & access · 21 of 37')
+    expect(text).toContain('Össur You Not counted yet Ottobock 12 of 402 videos')
+    expect(text).toContain('37 12 18 Cost & access, 21')
     // Your row is drawn, so the lines under the table do not name it again.
     expect(text.match(/Össur/g)).toHaveLength(1)
     const m = render(node)
@@ -92,8 +103,8 @@ describe('Brands in your market', () => {
     const node = <BrandsCard brands={d.brands} monthWords={d.monthWords} />
     const text = renderText(node)
     expect(text).toContain('Sealand You 0 of 743 videos')
-    expect(text).toContain('0 · 0 of 1 Durability · 1 of 1')
-    expect(text).not.toContain('not read')
+    expect(text).toContain('Sealand You 0 of 743 videos too few to compare 1 0 0 Durability, 1')
+    expect(text).not.toMatch(/not read/i)
     assertCopyContract(node)
   })
 
@@ -101,7 +112,7 @@ describe('Brands in your market', () => {
     const d = sealandVoicesFixture()
     const quiet = { ...d.brands, rows: [], all: d.brands.all.filter((r) => !r.you), notNamed: [] }
     const text = renderText(<BrandsCard brands={quiet} monthWords={d.monthWords} />)
-    expect(text).toContain('Brand Named in Praised · complained Talked about for No brand you track was named without being asked in September.')
+    expect(text).toContain('Brand Named without being asked Videos naming it Praised it Complained Talked about most for No brand you track was named without being asked in September.')
     assertCopyContract(<BrandsCard brands={quiet} monthWords={d.monthWords} />)
   })
 

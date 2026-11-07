@@ -1955,10 +1955,18 @@ This version has breaking changes — APIs, conventions, and file structure may 
     that opened a Voices panel opens a page: the root's rows and cards,
     `topVoicesOf` (the Dashboard's tile and the weekly email's Voices line),
     Market's `groupLink`, Content's `groupHref` and the email's rival line
-    (`objectHref`). *The root* is the same shape with decision 2's counts:
-    its Who rows, brand rows and creator rows end in the leave-the-page
-    chevron (`RowChevron`, board decision 8; out of the tab order, the name
-    is the link). *A group's page* (G3-Voices-Group, -Phone, -Thin;
+    (`objectHref`). *The root* is the same shape with decision 2's counts;
+    since the audit design (7 Nov, `Voices.dc.html`) its base is said once,
+    in the figures row (`voicesStats`: the month, the market's videos, the
+    groups, the regular creators, the brands), so its counts are bare ("121
+    videos", the audit design's decision 2) and each list's bars are drawn
+    against its largest row (decision 5); `VOICES_ONE_MONTH` is a visible
+    line beside the month switch; the Who rows, the group cards, the brand
+    rows and the creator rows open their pages by their names, with no
+    chevron; "Each group in {month}" says once that no group is compared
+    with last month; the brands and the creators are full-width sections,
+    each a table (the brands' six columns; the creators' "Brand named most"
+    only where a row has one, small call 10). *A group's page* (G3-Voices-Group, -Phone, -Thin;
     `buildGroupPage`): the header card (the stored one-liner as its lead,
     "Who they are · described at the {date} update"; their videos of the
     market's, "Not compared yet" against last month, the READY subject they
@@ -2074,12 +2082,16 @@ This version has breaking changes — APIs, conventions, and file structure may 
     followers. THIN MONTHS KEEP E3-VOICES' SHAPE (parity pass), and the thin
     group keeps G3-Voices-Group-Thin's:
     the month switch shows the month, and This week and Over time are drawn
-    but not offered (the kit's `disabled`). Each group card's verdict slot
-    reads `GROUP_NOT_COMPARED` ("not compared yet"). "The mix in {month}"
-    draws this month's column with last month's axis empty and dashed
-    (decision 2). The brands table always draws its column heads with your
-    row first; before any month row exists, every tracked brand is a row
-    with empty cells and one "not counted yet" line (`brandTable`). A
+    but not offered (the kit's `disabled`). The groups' section head says
+    once that they are not compared with last month (it was each card's
+    verdict slot, `GROUP_NOT_COMPARED`, until the audit design). "The mix in
+    {month}" keeps the grid's last place, its chart's place the dashed box
+    saying last month is not read for these groups (decision 2; decision 4
+    since the audit design). The brands table always draws its column heads
+    with your row first; before any month row exists, every tracked brand is
+    a row with its name, its cells empty, and one "not counted yet" line
+    (`brandTable`); a group card whose subjects are none of them measured
+    says so in the dashed box, with no empty tracks. A
     group's page lists "Products in their videos" by Your products' rule
     (`productMonthSets` over the group's videos: named in the video or a
     comment on it), never as the group's own words; its "Who they say they
