@@ -35,10 +35,11 @@ describe('every level page, every state', () => {
     }
   })
 
-  it('names its level: a category\'s three boxes on the yellow, a product\'s single box on the neutral, never the brand tag', () => {
+  it('names its level: a category\'s in words under its title (no tile, the audit design), a product\'s single box on the neutral, never the brand tag', () => {
     const c = render(page(PRODUCTS_LEVEL_FIXTURES.liners()))
-    expect(c).toMatch(/data-level-tile="category" class="[^"]*bg-accent text-orange-text/)
-    expect(c).toMatch(/data-level-label=""[^>]*>Category<\/p>/)
+    expect(c).toContain('data-level-block="audit"')
+    expect(c).not.toContain('data-level-tile')
+    expect(renderText(page(PRODUCTS_LEVEL_FIXTURES.liners()))).toMatch(/^Your products \/ Liners Your products Liners A category of your products /)
     const p = render(page(PRODUCTS_LEVEL_FIXTURES.sealinx()))
     expect(p).toMatch(/data-level-tile="product" class="[^"]*bg-track text-secondary-foreground/)
     expect(renderText(page(PRODUCTS_LEVEL_FIXTURES.sealinx()))).toContain('Product in Liners Iceross Seal-In X')
@@ -62,9 +63,11 @@ describe('a category\'s page, the hub (G4-Products-Category)', () => {
   const d = PRODUCTS_LEVEL_FIXTURES.liners()
   const text = renderText(page(d))
 
-  it('opens with its meta and switch, then the header card in code\'s words and its four figures', () => {
-    expect(text).toContain('September · the last full month · 118 of 839 videos · 4 of your 10 liners came up July August September')
-    expect(text).toContain('Liners · September Liners talk is mostly about liners in general 14% of your market’s videos 118 of 839 in September No clear change +2.1 pts against August, 12% 73 of 612 in August 19 of the 118 name one of your liners 78 are about liners in general, none of yours named 21 are about one of yours, but we couldn’t tell which Tag them below ↓')
+  it('opens with its switch and figures row, then the headline in code\'s words and its three facts (last month\'s figures are the month table\'s)', () => {
+    expect(text).toContain('A category of your products July August September The last full month September Videos about liners 118 of 839 , 14% of your market Yours that came up 4 of your 10 Against August No clear change , +2.1 pts')
+    expect(text).toContain('Liners talk is mostly about liners in general In general 78 of the 118 are about liners in general, none of yours named Name one of yours 19 of the 118 name one of your liners One of yours, not which 21 are about one of yours, but we couldn’t tell which. Tag them below')
+    expect(text).toContain('August 73 of 612 12%')
+    expect(render(page(d))).toContain('href="#unclear"')
     // No read card: the board's "Our read" is not written (decision 1).
     expect(text).not.toMatch(/Our read|What people are saying|What it means/)
   })
@@ -90,20 +93,25 @@ describe('a category\'s page, the hub (G4-Products-Category)', () => {
     expect(renderText(page(unread))).toContain('No comparison with August yet.')
   })
 
-  it('then the products: three cards, all of them as a list in the shelf\'s order, each opening its page', () => {
-    expect(text).toContain('Your liners 4 of your 10 came up in September · the three with the most, then all ten')
-    expect(text).toContain('Iceross Seal-In X Praise in the comments under 7 of its 10 videos. 10 videos in September 6 in August Fit & comfort, 8 of 10 Open →')
+  it('then the products: three cards with the couldn\'t-tell-which card beside them, all of them as a list in the shelf\'s order, each opening its page', () => {
+    expect(text).toContain('Your liners 4 of your 10 came up in September: the three with the most, then all ten')
+    expect(text).toContain('Iceross Seal-In X Praise in the comments under 7 of its 10 videos. September 10 videos August 6 videos About most Fit & comfort, 8 of 10 Open Iceross Seal-In X')
+    expect(text.indexOf('Open Iceross Synergy')).toBeLessThan(text.indexOf('About one of your liners, but we couldn’t tell which'))
+    expect(text.indexOf('About one of your liners, but we couldn’t tell which')).toBeLessThan(text.indexOf('All 10 of your liners'))
     expect(text).toContain('All 10 of your liners Most videos first, as on your shelf. Each opens as its own page.')
     expect(text).toContain('Product What its videos are about most September August Iceross Seal-In X Fit & comfort, 8 of 10 10 6')
+    // A read zero says "None", the board's word.
+    expect(text).toContain('Iceross Seal-In V Quiet in September None None')
     const m = render(page(d))
     expect(m).toContain(`href="/dashboard/products/${PRODUCT_IDS.liners()}/${PRODUCT_IDS.sealInX()}"`)
     expect(m.match(/data-quiet-mark=""/g)!.length).toBeGreaterThanOrEqual(6)
+    expect(text).not.toMatch(/[→↗↓]/)
   })
 
   it('the couldn\'t-tell-which list with Tag, true to what a tag does in an open month', () => {
     expect(text).toContain(`About one of your liners, but we couldn’t tell which 21 videos in September. ${tagSub(false, 'September')}`)
-    expect(text).toContain('“This liner gave me a rash after a week, back to my old one now.” TikTok · 29 Sep · video by @stepbystep.amp Watch the video Tag the product')
-    expect(text).toContain('See all 6 →')
+    expect(text).toContain('“This liner gave me a rash after a week, back to my old one now.” TikTok, 29 Sep, video by @stepbystep.amp Watch the video Tag the product')
+    expect(text).toContain('See all 6')
     expect(render(page(d))).toContain('data-tag-control="closed"')
     // A closed month keeps a tag and moves no count: the page says so.
     expect(renderText(page(categoryFixture({ over: { now: '2026-11-20T08:00:00.000Z' } })))).toContain(tagSub(true, 'September'))
@@ -114,16 +122,16 @@ describe('a category\'s page, the hub (G4-Products-Category)', () => {
     expect(render(member)).not.toContain('data-tag-control')
     expect(renderText(member)).not.toContain('Tag the product')
     expect(renderText(member)).not.toContain('Tag them below')
-    expect(renderText(member)).toContain('See them below ↓')
+    expect(renderText(member)).toContain('See them below')
     expect(renderText(member)).toContain(PRODUCT_TAG_COPY.role)
     expect(renderText(member)).toContain('21 videos in September. “This liner')
   })
 
   it('"See all N" only where the opened list draws all N; else "See the first N", and the opened list says so', () => {
-    expect(renderText(page(PRODUCTS_LEVEL_FIXTURES.liners()))).toContain('See all 6 →')
+    expect(renderText(page(PRODUCTS_LEVEL_FIXTURES.liners()))).toContain('See all 6')
     const cut = categoryFixture({ reads: { unclearCut: true } })
     const closed = renderText(page(cut))
-    expect(closed).toContain('See the first 6 →')
+    expect(closed).toContain('See the first 6')
     expect(closed).not.toContain('See all')
     assertCopyContract(page(cut))
     const opened = renderText(page(categoryFixture({ params: { unclear: 'all' }, reads: { unclearCut: true } })))
@@ -139,16 +147,18 @@ describe('a category\'s page, the hub (G4-Products-Category)', () => {
 
   it('"See all" makes the list longer on the same page, and the way back', () => {
     const all = renderText(page(PRODUCTS_LEVEL_FIXTURES['liners-all']()))
-    expect(all).toContain('The video itself names one of your products here. YouTube · 15 Sep · video by @amputee.life')
+    expect(all).toContain('The video itself names one of your products here. YouTube, 15 Sep, video by @amputee.life')
     expect(all).not.toContain('See all')
     expect(all).toContain('Show fewer')
   })
 
-  it('the numbers: month by month, subjects opening Market, kinds, groups opening Voices, where', () => {
-    expect(text).toContain('The numbers Liners’ videos in September, every audience together, your own posts’ comments included')
-    expect(text).toContain('What it’s about · of 117 Fit & comfort 70 Cost & access 18 Choosing the right device 12 Look & style 4 Each opens its subject in Market')
-    expect(text).toContain('Who’s talking · of 118 New amputees, first year 47')
-    expect(text).toContain('Each opens in Voices')
+  it('the numbers as tiles: month by month a table, subjects opening Market, kinds, groups opening Voices, where, bars against the largest', () => {
+    expect(text).toContain('The numbers Liners’ videos in September, every audience together, your own posts’ comments included Month by month, share of your market’s videos Month Videos Share of your market July 55 of 520 11% August 73 of 612 12% September 118 of 839 14%')
+    expect(text).toContain('What it’s about, of 117 Fit & comfort 70 Cost & access 18 Choosing the right device 12 Look & style 4 Each opens its subject in Market.')
+    expect(text).toContain('Who’s talking, of 118 New amputees, first year 47')
+    expect(text).toContain('Each opens in Voices.')
+    expect(render(page(d))).toContain('aria-label="70 of 117"')
+    expect(render(page(d))).not.toContain('<svg viewBox="0 0 560')
     const m = render(page(d))
     expect(m).toContain('href="/dashboard/market/subjects/s-fit-comfort?period=month&amp;month=2026-09"')
     expect(m).toContain('href="/dashboard/voices/groups/new"')
@@ -157,18 +167,19 @@ describe('a category\'s page, the hub (G4-Products-Category)', () => {
   })
 
   it('the products against the category, a comment naming each product, the Agent and Settings', () => {
-    expect(text).toContain('Your liners against liners in general · what their videos are about What it’s about All liners Iceross Seal-In X Iceross Comfort Iceross Synergy')
-    expect(text).toContain('In their words · 3 comments, each naming its product Iceross Seal-In X “El Seal-In X me aguanta todo el día, pero ponérmelo cuesta.” Spanish · machine translation The Seal-In X holds all day for me, but putting it on is hard.')
-    expect(text).toContain('Ask what people say about liners, in your own words. Edit Liners in Settings → Ask the Agent about liners')
+    expect(text).toContain('Your liners against liners in general What their videos are about What it’s about All liners Iceross Seal-In X Iceross Comfort Iceross Synergy Fit & comfort 70 of 117 8 of 10')
+    expect(text).toContain('In their words 3 comments, each naming its product Iceross Seal-In X “El Seal-In X me aguanta todo el día, pero ponérmelo cuesta.” Spanish, machine translation The Seal-In X holds all day for me, but putting it on is hard. TikTok, 9 Sep')
+    // The Agent's tile, then Settings under it, outside the tile (the board's).
+    expect(text).toContain('Ask what people say about liners, in your own words. Ask the Agent about liners Edit Liners in Settings')
   })
 
   it('U6: subjects not measured yet are named, never counted; the comparison keeps its rows and says why once', () => {
     const today = renderText(page(PRODUCTS_LEVEL_FIXTURES['today-liners']()))
-    expect(today).toContain(`What it’s about · of 23 Choosing the right device ${SUBJECT_NOT_MEASURED} Community & encouragement ${SUBJECT_NOT_MEASURED}`)
+    expect(today).toContain(`What it’s about, of 23 Choosing the right device ${SUBJECT_NOT_MEASURED} Community & encouragement ${SUBJECT_NOT_MEASURED}`)
     expect(today).toContain('What these videos are about: Not measured yet. A subject is counted here once its check has passed.')
     expect(today).toContain('None of your liners was named in September.')
     const feet = renderText(page(PRODUCTS_LEVEL_FIXTURES['today-feet']()))
-    expect(feet).toContain(`What it’s about · ${SUBJECT_NOT_MEASURED}`)
+    expect(feet).toContain(`What it’s about: ${SUBJECT_NOT_MEASURED}`)
     expect(feet).toContain('Product What its videos are about September')
     expect(feet).not.toContain('about most')
   })
@@ -185,7 +196,7 @@ describe('a category\'s page, the hub (G4-Products-Category)', () => {
     const node = page(d)
     const html = render(node)
     expect(html.split(FAILED_EXPLAINED).length - 1).toBe(1)
-    expect(renderText(node)).toContain('On none of its videos: Function & movement')
+    expect(renderText(node)).toContain('On none of its videos: Function & movement.')
     expect(renderText(node)).toContain(`Cost & access ${SUBJECT_NOT_MEASURED}`)
     assertCopyContract(node)
   })
@@ -213,13 +224,13 @@ describe('a product\'s page, the evidence (G4-Products-Product)', () => {
     expect(text).toContain('The facts Its place in liners · of 118 Iceross Seal-In X 10 Your other liners 9 One of yours, not which 21 Liners in general 78')
     expect(text).toContain('Month by month · share naming it 1.0% Jul 5 of 520 1.0% Aug 6 of 612 1.2% Sep 10 of 839')
     expect(text).toContain('What people did · of 10 Praise in the comments 7 Questions in the comments 6 Complaints in the comments 3')
-    expect(text).toContain(`What it’s about · of 10 Fit & comfort 8 Choosing the right device 3 Cost & access 1 On none of its videos: Community & encouragement, Look & style Function & movement ${SUBJECT_NOT_MEASURED}`)
+    expect(text).toContain(`What it’s about · of 10 Fit & comfort 8 Choosing the right device 3 Cost & access 1 On none of its videos: Community & encouragement, Look & style. Function & movement ${SUBJECT_NOT_MEASURED}`)
     expect(text).toContain('Who’s talking · of 10')
   })
 
   it('its siblings, the whole category, the Agent', () => {
     expect(text).toContain('Your other liners Liners, the whole category → Iceross Comfort 5 videos in September Iceross Synergy 3 videos in September Iceross Dermo 1 video in September Iceross Seal-In V Quiet in September')
-    expect(text).toContain('Ask about these videos and what people said about the Iceross Seal-In X, in your own words. Edit its names in Settings → Ask the Agent about this')
+    expect(text).toContain('Ask about these videos and what people said about the Iceross Seal-In X, in your own words. Ask the Agent about this Edit its names in Settings')
   })
 
   it('one video opened shows its comments and the way back; every video listed', () => {
@@ -272,7 +283,8 @@ describe('a product\'s page, the evidence (G4-Products-Product)', () => {
 describe('the states around the two levels', () => {
   it('switched off keeps the path, the title and the list with no count, and says so (Thin, frame 2)', () => {
     const off = renderText(page(PRODUCTS_LEVEL_FIXTURES['not-on']()))
-    expect(off).toContain(`Your products / Liners Your products Category Liners 10 products in Liners ${PRODUCTS_NOT_ON} Review your products in Settings →`)
+    expect(off).toContain(`Your products / Liners Your products Liners A category of your products Your products 10 products in Liners ${PRODUCTS_NOT_ON} Review your products in Settings`)
+    expect(render(page(PRODUCTS_LEVEL_FIXTURES['not-on']()))).toContain('data-empty-box=""')
     expect(off).toContain('All 10 of your liners Each opens as its own page. Product Videos Iceross Seal-In X Not read yet')
     expect(render(page(PRODUCTS_LEVEL_FIXTURES['not-on']()))).not.toContain('aria-label="Month"')
     const product = renderText(page(PRODUCTS_LEVEL_FIXTURES['not-on-product']()))
@@ -288,9 +300,9 @@ describe('the states around the two levels', () => {
   })
 
   it('an address the catalogue does not hold: one calm line and the way back, never a 404', () => {
-    expect(renderText(page(PRODUCTS_LEVEL_FIXTURES.missing()))).toBe(`Your products ${CATEGORY_MISSING} Back to Your products →`)
-    expect(renderText(page(PRODUCTS_LEVEL_FIXTURES['missing-product']()))).toBe(`Your products ${PRODUCT_MISSING} Back to Your products →`)
-    expect(renderText(page(PRODUCTS_LEVEL_FIXTURES.sealand()))).toBe(`Your products ${PRODUCTS_NO_CATALOGUE} Add your products in Settings →`)
+    expect(renderText(page(PRODUCTS_LEVEL_FIXTURES.missing()))).toBe(`Your products ${CATEGORY_MISSING} Back to Your products`)
+    expect(renderText(page(PRODUCTS_LEVEL_FIXTURES['missing-product']()))).toBe(`Your products ${PRODUCT_MISSING} Back to Your products`)
+    expect(renderText(page(PRODUCTS_LEVEL_FIXTURES.sealand()))).toBe(`Your products ${PRODUCTS_NO_CATALOGUE} Add your products in Settings`)
   })
 
   it('the product fixture builds its own page, not a redirect', () => {

@@ -1,11 +1,12 @@
-// Button classes for the Your products page. Plain strings with no imports, so
-// the client Tag control (tag-control.tsx) can use them without bundling the
-// page loader, which reaches lib/gather and node: modules.
+// Button classes for the Your products page, from the audit design's look
+// (components/v2/look.ts, itself import-free), so the client Tag control
+// (tag-control.tsx) can use them without bundling the page loader, which
+// reaches lib/gather and node: modules. Nothing else is imported here.
 
-/** The board's `.btn`: 38px, the inner ground, ink words. */
-export const BTN =
-  'inline-flex min-h-[38px] cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-inner px-3.5 text-[13.5px] font-semibold text-foreground no-underline transition-colors hover:bg-track focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-60'
+import { BTN_PRIMARY, BTN_SECONDARY } from '@/components/v2/look'
 
-/** The board's `.btn.ink`: ink with white words. */
-export const BTN_INK =
-  'inline-flex min-h-[38px] cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-primary px-3.5 text-[13.5px] font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-60'
+/** The secondary button: white, the control grey's edge, ink words. */
+export const BTN = BTN_SECONDARY
+
+/** The primary button: the brand yellow with ink words (decision 8). */
+export const BTN_INK = BTN_PRIMARY

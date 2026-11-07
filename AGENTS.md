@@ -2201,7 +2201,20 @@ This version has breaking changes — APIs, conventions, and file structure may 
     (the month's market, no read); the products against the category
     (`buildCompare`, pending subjects as rows with no figure); a comment
     naming each card's product (the root's gate, `allowOwn`), labelled with
-    it; the Agent and Settings.
+    it; the Agent and Settings. Since the audit design (7 Nov,
+    `Products-Category.dc.html`): no tile or label over the title, "A
+    category of your products" under it and the figures row
+    (`categoryStats`: the month, its videos of the market's with its share,
+    "1 of your 4" that came up, and against last month, the verdict in words
+    and commas or `categoryChangeGap`; last month's own figures are the
+    month table's); the headline leads a tile of three facts (in general,
+    naming one of yours, one of yours but not which); the cards are
+    `<dl>`s (the month, last month, about most) with the couldn't-tell-which
+    card beside them, its empty state the dashed box; the list says "None"
+    for a read zero; the numbers are tiles, month by month a table, every
+    list with bars against the largest; the comparison a plain table; the
+    comments a tile each; the Agent a tile with the yellow button and
+    Settings under it, no arrow anywhere.
     THE EVIDENCE (`buildProductPage`, 24 statements: no month-pair judge,
     it prints no verdict): the path with both switchers (the category's
     products in the shelf's order, the quiet ones under a hairline in
