@@ -1804,6 +1804,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
     happened, each quote after the paragraph whose ref it carries, what it
     means, new this week, worth watching, "Every conversation this week (N)"
     to the top page's table, N the table's own total; no period switch.
+    Since the audit design (7 Nov, `Market-Week.dc.html`) it is titled "The
+    week's read" with the figures row (`weekStats`: the week, the market's
+    videos and comments, the month's videos) and no tile; the read's grid is
+    3fr / 2fr, each quote's source in commas (`commaCite`), worth watching
+    a list, and the foot "See all N conversations this week" then the Agent,
+    both links.
     Its week is the published read's run window plus
     the two equal windows before it (`weekWindows`, `MARKET_WEEKS`), cut by
     `WEEK_CUT_SURFACES` changes (`cutWindows`; the newest window is never

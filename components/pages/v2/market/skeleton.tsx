@@ -43,19 +43,17 @@ export function MarketSkeleton() {
   )
 }
 
-/** The bar of a level page (F3-Market-Nav): the crumb row with its
- *  hairline, then the title block's tile, label, title and meta. */
-function LevelBar({ label }: { label: string }) {
+/** The bar of a level page, in the audit design's title block (7 Nov): the
+ *  crumb row with its hairline, the title, and the figures row's bones; no
+ *  tile and no label. */
+function LevelBar({ label, cells = 4 }: { label: string; cells?: number }) {
   return (
     <div role="presentation" className="flex flex-col">
       <span className="sr-only">{label}</span>
-      <div className="border-b border-border pt-3 pb-[11px] max-sm:hidden sm:-mx-4 sm:-mt-[18px] sm:px-4 md:-mx-10 md:-mt-7 md:px-10"><Bone className="h-[22px] w-64 max-w-full" /></div>
+      <div className="border-b border-border pt-3 pb-[11px] max-sm:hidden sm:-mx-4 sm:-mt-[18px] sm:px-4 md:-mx-10 md:-mt-9 md:px-10"><Bone className="h-[22px] w-64 max-w-full" /></div>
       <Bone className="h-6 w-24 sm:hidden" />
-      <div className="mt-2.5 flex items-center gap-3.5">
-        <Bone className="size-[46px] shrink-0 rounded-[11px] max-sm:size-[38px]" />
-        <div className="flex min-w-0 flex-col gap-1.5"><Bone className="h-3 w-24" /><Bone className="h-7 w-72 max-w-full" /></div>
-      </div>
-      <Bone className="mt-3 h-3 w-80 max-w-full" />
+      <Bone className="mt-3 h-8 w-80 max-w-full" />
+      <div className="mt-5"><SkeletonStatStrip cells={cells} /></div>
     </div>
   )
 }
@@ -120,16 +118,15 @@ export function MarketConversationSkeleton() {
   )
 }
 
-/** The week's page loading (F2-Market-Week): the bar and the read. */
+/** The week's page loading (Market-Week.dc.html): the bar and the read. */
 export function MarketWeekSkeleton() {
   return (
     <PageFrame>
       <div role="status" aria-busy="true" aria-label="Loading this week’s read" className="flex flex-col gap-[22px]">
-        <LevelBar label="Market" />
-        <div className={cn(CARD, 'gap-6')}>
-          <Bone className="h-4 w-40" />
+        <LevelBar label="Market" cells={3} />
+        <div className={cn(CARD, 'gap-[26px] sm:p-[30px]')}>
           <Bone className="h-8 w-4/5" />
-          <div className="grid grid-cols-1 gap-10 border-t border-track pt-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+          <div className="grid grid-cols-1 gap-12 border-t border-track pt-[26px] min-[1180px]:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
             <BoneLines lines={10} />
             <BoneLines lines={8} />
           </div>

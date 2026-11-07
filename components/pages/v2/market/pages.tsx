@@ -2,7 +2,7 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
 import { ConversationLabel, LevelBar } from '@/components/shell/level-bar'
-import { PERIODS, PeriodSwitch } from '@/components/v2'
+import { PERIODS, PeriodSwitch, type StatItem } from '@/components/v2'
 import { periodHref, WEEK_PAGE_TITLE, type MarketData } from '@/lib/pages/v2/market'
 import { marketConversationPath, marketSubjectPath, surface } from '@/lib/nav'
 import { MARKET_FIRST_RUN, MARKET_TITLE } from './index'
@@ -132,16 +132,21 @@ export function conversationMeta(page: NonNullable<MarketData['convPage']>, data
   return [[data.period === 'time' ? `Month by month, to ${data.month.text}` : data.month.text], page.month ? [<>{lv(page.month.k, page.month.n)} category videos{data.period === 'time' ? ` in ${data.month.text}` : null}</>] : []]
 }
 
-/** The week's page (`/dashboard/market/week`, F2-Market-Week): the published
- *  read in full, titled by its dates ("5 to 11 October", F3-Market-Nav 7). No
- *  period switch and no chevron: a read is one week's. */
+/** The week's page's title (the board's, and the level's old label; the
+ *  crumb keeps the path's own words, `WEEK_PAGE_TITLE`). */
+export const THE_WEEKS_READ = 'The week’s read'
+
+/** The week's page (`/dashboard/market/week`), drawn to the audit design's
+ *  board (Market-Week.dc.html): "Market / The week's read", the title "The
+ *  week's read", and the figures row (`weekStats`). No period switch and no
+ *  chevron: a read is one week's. */
 export function MarketWeekPage({ data }: { data: MarketData | null }) {
   if (!data) return <FirstRun />
   return (
     <PageFrame className="text-foreground">
       {data.crumbs ? (
-        <LevelBar crumbs={data.crumbs} level="week" label="The week’s read" title={data.week?.dates || WEEK_PAGE_TITLE} meta={weekMeta(data)} />
-      ) : <PageBar title={WEEK_PAGE_TITLE} />}
+        <LevelBar crumbs={data.crumbs} level="week" title={THE_WEEKS_READ} stats={weekStats(data)} />
+      ) : <PageBar title={WEEK_PAGE_TITLE} stats={weekStats(data)} />}
       {data.weekPage ? <WeekPageBody page={data.weekPage} data={data} /> : null}
     </PageFrame>
   )
@@ -149,14 +154,16 @@ export function MarketWeekPage({ data }: { data: MarketData | null }) {
 
 const fig = (n: number | null | undefined) => (n == null ? null : <span data-copy="figure">{fmtInt(n)}</span>)
 
-/** The week's meta: the market's videos and comments this week, then its
- *  month (decision 1); the dates are the title. */
-export function weekMeta(data: MarketData): ReactNode[][] | null {
+/** The week's figures row (the board's three cells): the week, the market's
+ *  videos and comments this week, and the month's videos (decision 1: the
+ *  week beside its month). Pure. */
+export function weekStats(data: MarketData): StatItem[] {
   const week = data.week
-  if (!week) return null
+  if (!week) return []
   const { videos, comments } = week.market
-  const first = videos != null && comments != null
-    ? <>{fig(videos)} videos and {fig(comments)} comments this week</>
-    : videos != null ? <>{fig(videos)} videos this week</> : null
-  return [first ? [first] : [], data.month.market.videos != null ? [<>{fig(data.month.market.videos)} videos {week.inMonth}</>] : []]
+  return [
+    { key: 'week', term: 'Week', value: week.dates },
+    { key: 'market', term: 'Your market this week', value: videos != null ? <>{fig(videos)} videos{comments != null ? <>, {fig(comments)} comments</> : null}</> : 'Not read yet' },
+    { key: 'month', term: data.month.text, value: data.month.market.videos != null ? <>{fig(data.month.market.videos)} videos</> : 'Not read yet' },
+  ]
 }
