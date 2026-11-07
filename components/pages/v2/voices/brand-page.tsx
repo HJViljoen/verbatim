@@ -39,9 +39,9 @@ import { AskBox, GAPLINE, LevelQuoteTile } from './levels'
 //      it says in them; then SAID ABOUT IT, three comments, a tile each;
 //   6. THE AGENT.
 // A brand not counted keeps every frame and says why once (the figures row),
-// that no figure prints for it once (the lead tile), and each frame below
-// only that it holds no figure, in the dashed box (decision 4); the months
-// keep their names.
+// that no figure prints for it once (the lead tile), and its numbers are one
+// tile naming what they would hold in the dashed box (decision 4; the review
+// of Phases 4 and 5: no empty table, no line repeated a frame).
 
 /** The month a brand's page compares with: always the month before the one
  *  it reads (`prevMonth`), named in full. Never the month's own name: a brand
@@ -60,7 +60,20 @@ function Against({ page }: { page: BrandPage }) {
   const v = page.verdict
   if (page.state !== 'counted' || !v || v.state === 'refused') return <span data-fig-gap="">No comparison yet</span>
   const nonAnswer = nonAnswerParts(v, 'pts')
-  if (!nonAnswer) return <span data-copy="verdict" className="[&>span]:text-[length:inherit] [&>span]:leading-[inherit] [&>span]:font-[inherit]"><MovementBadge verdict={v} unit="pts" good={page.you ? 'up' : 'neutral'} bandTip /></span>
+  // A movement in the same form as a non-answer, the word then the change
+  // (the review of Phases 4 and 5: your own brand read "▲ 7.1 pts" with no
+  // word, a rival "No clear change, +2.4 pts"), the band in the title.
+  if (!nonAnswer) {
+    const change = 'changePts' in v ? v.changePts : null
+    const band = 'bandPts' in v ? v.bandPts : null
+    if (change == null) return <span data-copy="verdict" className="[&>span]:text-[length:inherit] [&>span]:leading-[inherit] [&>span]:font-[inherit]"><MovementBadge verdict={v} unit="pts" good={page.you ? 'up' : 'neutral'} bandTip /></span>
+    return (
+      <>
+        <span data-copy="verdict" title={band != null ? `moved beyond the ${band} pt margin of this measurement` : undefined}>Beyond its normal swing</span>
+        , <span data-copy="verdict" className="whitespace-nowrap">{signedChange(change, 'pts')}</span>
+      </>
+    )
+  }
   return (
     <>
       <span data-copy="verdict" title={nonAnswer.title}>{sentence(nonAnswer.word)}</span>
@@ -126,7 +139,7 @@ function Header({ page }: { page: BrandPage }) {
                 <Fact term="Praised it"><Fig className={BIG}>{fmtInt(page.praised.k)}</Fig> of the <Fig>{fmtInt(page.praised.n)}</Fig> videos naming it</Fact>
                 <Fact term="Complained about something"><Fig className={BIG}>{fmtInt(page.complained.k)}</Fig> of the <Fig>{fmtInt(page.complained.n)}</Fig> videos naming it</Fact>
               </>
-            ) : <Fact term="How people treat it">Not read yet.</Fact>}
+            ) : <Fact term="How people treat it"><EmptyBox>Not read yet.</EmptyBox></Fact>}
           </dl>
           {/* One note for both of the old footnotes: what the figures below
               are of, and that its counts are the month's alone (base `any`
@@ -208,7 +221,6 @@ function BarRows({ rows, bar = 96, label }: { rows: readonly { key: string; name
 }
 
 const NOTE = 'm-0 text-[13.5px] leading-[1.45] text-muted-foreground'
-const LINE = 'm-0 text-[15px] leading-[1.5] text-secondary-foreground'
 
 /** "Who talks about it": the groups commenting on its videos, the creators it
  *  comes up with, each opening its page by its name. */
@@ -219,7 +231,7 @@ function WhoTalks({ page }: { page: BrandPage }) {
   // holds.
   const gap = (what: 'group' | 'creator') => <EmptyBox><span data-brand-frame-gap={page.state}>{brandFrameNone(what, page.label, page.month)}</span></EmptyBox>
   return (
-    <section aria-label={`Who talks about ${page.label}`} className="grid grid-cols-1 items-start gap-5 min-[1180px]:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+    <section aria-label={`Who talks about ${page.label}`} className="grid grid-cols-1 gap-5 min-[1180px]:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
       <Tile title="The groups commenting on its videos" sub="A video can hold more than one group, so the counts overlap.">
         {!counted ? gap('group') : page.groups.length === 0 ? <EmptyBox>{page.groupsLine ?? brandGroupsNone(page.month)}</EmptyBox> : (
           <BarRows
@@ -265,19 +277,26 @@ function WhoTalks({ page }: { page: BrandPage }) {
   )
 }
 
-/** A frame with no figure for a brand not counted: one short line in the
- *  dashed box (decision 4); why is said once, in the figures row. */
-const NoFigure = () => <EmptyBox>No figure prints here.</EmptyBox>
+/** The numbers of a brand with no figure (not counted, noisy, or named in no
+ *  video): one tile, its parts named once in the dashed box (decision 4; the
+ *  review of Phases 4 and 5), never an empty table or a line a frame. Why is
+ *  said once, in the figures row; that no figure prints, once, in the lead. */
+export const BRAND_NUMBERS_NONE = 'Month by month, what people did in the comments, what its talk sits in, where it was named and where: each is drawn here once it has a figure.'
 
 function Numbers({ page }: { page: BrandPage }) {
   const counted = page.state === 'counted'
   const n = page.any?.k ?? 0
+  if (!counted) {
+    return (
+      <section aria-label={`${page.label} in numbers`} data-numbers-gap={page.state} className={CARD}>
+        <EmptyBox>{BRAND_NUMBERS_NONE}</EmptyBox>
+      </section>
+    )
+  }
   return (
-    <section aria-label={`${page.label} in numbers`} data-numbers-gap={counted ? undefined : page.state} className="flex flex-col gap-5">
+    <section aria-label={`${page.label} in numbers`} className="flex flex-col gap-5">
       <div className="grid grid-cols-1 gap-5 min-[1180px]:grid-cols-2">
         <Tile title="Named without being asked, month by month">
-          {/* The months keep their names in every state (decision 4: rows
-              that name something keep their names and say their state). */}
           <table className={TBL}>
             <thead>
               <tr>
@@ -290,27 +309,29 @@ function Numbers({ page }: { page: BrandPage }) {
               {page.months.map((m) => (
                 <tr key={m.month} data-brand-month={m.filling ? 'filling' : 'closed'}>
                   <td className={TD}>{m.label}{m.filling ? ' so far' : null}</td>
-                  <td className={cn(TD, TD_NUM, 'pr-0 pl-3.5')}>{!counted ? null : m.k != null && m.n != null ? <LevelText k={m.k} n={m.n} /> : <span className="text-muted-foreground">Not read</span>}</td>
-                  <td className={cn(TD, TD_NUM, 'pr-0 pl-3.5 font-semibold')}>{counted && m.k != null && m.n ? <Fig>{Math.round((100 * m.k) / m.n)}%</Fig> : null}</td>
+                  <td className={cn(TD, TD_NUM, 'pr-0 pl-3.5')}>{m.k != null && m.n != null ? <LevelText k={m.k} n={m.n} /> : <span className="text-muted-foreground">Not read</span>}</td>
+                  <td className={cn(TD, TD_NUM, 'pr-0 pl-3.5 font-semibold')}>{m.k != null && m.n ? <Fig>{Math.round((100 * m.k) / m.n)}%</Fig> : null}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </Tile>
-        <Tile title={<>What people did in the comments{counted && page.kinds.length > 0 ? <>, of its <Fig>{fmtInt(page.kinds[0].n)}</Fig></> : null}</>}>
-          {!counted ? <NoFigure /> : page.kinds.length > 0
+        <Tile title={<>What people did in the comments{page.kinds.length > 0 ? <>, of its <Fig>{fmtInt(page.kinds[0].n)}</Fig></> : null}</>}>
+          {page.kinds.length > 0
             ? <BarRows bar={120} rows={page.kinds.map((k) => ({ key: k.kind, name: k.label, k: k.k }))} label={(k) => `${fmtInt(k)} of ${fmtInt(page.kinds[0].n)}`} />
-            : <p className={LINE}>Not read yet.</p>}
+            : <EmptyBox>Not read yet.</EmptyBox>}
         </Tile>
       </div>
       <div className="grid grid-cols-1 gap-5 min-[1180px]:grid-cols-3">
-        <Tile title={<>What its talk sits in{counted && page.subjects.length > 0 ? <>, of its <Fig>{fmtInt(page.subjects[0].n)}</Fig></> : null}</>}>
-          {!counted ? <NoFigure /> : (
+        <Tile title={<>What its talk sits in{page.subjects.length > 0 ? <>, of its <Fig>{fmtInt(page.subjects[0].n)}</Fig></> : null}</>}>
+          {(
             <>
               {page.subjects.length > 0
                 ? <BarRows bar={70} rows={page.subjects.map((s) => ({ key: s.id, name: <Link href={s.href} className={cn(ROW, 'font-normal')}>{s.label}</Link>, k: s.k }))} label={(k) => `${fmtInt(k)} of ${fmtInt(page.subjects[0].n)}`} />
-                : page.notMeasured.length === 0 ? <p className={LINE}>No subject read in its videos yet.</p> : null}
-              {page.notMeasured.length > 0 ? <p className={NOTE}>{notMeasuredLine(page.notMeasured)}.</p> : null}
+                : page.notMeasured.length === 0 ? <EmptyBox>No subject read in its videos yet.</EmptyBox> : null}
+              {/* With no subject measured, its state is the tile's one
+                  sentence, in the dashed box (decision 4). */}
+              {page.notMeasured.length > 0 ? (page.subjects.length > 0 ? <p className={NOTE}>{notMeasuredLine(page.notMeasured)}.</p> : <EmptyBox>{notMeasuredLine(page.notMeasured)}.</EmptyBox>) : null}
               {page.subjects.length > 0 ? <p className={NOTE}>Each opens in Market.</p> : null}
               {/* Why one being re-described shows no figure, said once on the
                   page (14 Oct), as the root's foot and a group's page say it. */}
@@ -318,18 +339,18 @@ function Numbers({ page }: { page: BrandPage }) {
             </>
           )}
         </Tile>
-        <Tile title={<>Where it was named{counted && page.where ? <>, of its <Fig>{fmtInt(page.where.n)}</Fig></> : null}</>}>
-          {!counted ? <NoFigure /> : page.where ? (
+        <Tile title={<>Where it was named{page.where ? <>, of its <Fig>{fmtInt(page.where.n)}</Fig></> : null}</>}>
+          {page.where ? (
             <>
               <BarRows bar={70} rows={[{ key: 'comment', name: 'In the comments', k: page.where.comment }, { key: 'content', name: 'In the video: caption, speech or on screen', k: page.where.content }]} label={(k) => `${fmtInt(k)} of ${fmtInt(page.where!.n)}`} />
               <p className={NOTE}>A video can name it in both.</p>
             </>
-          ) : <p className={LINE}>Not read for {page.month.monthWords}.</p>}
+          ) : <EmptyBox>Not read for {page.month.monthWords}.</EmptyBox>}
         </Tile>
-        <Tile title={<>Where{counted && n > 0 ? <>, of its <Fig>{fmtInt(n)}</Fig></> : null}</>}>
-          {!counted ? <NoFigure /> : page.platforms.length > 0
+        <Tile title={<>Where{n > 0 ? <>, of its <Fig>{fmtInt(n)}</Fig></> : null}</>}>
+          {page.platforms.length > 0
             ? <BarRows bar={90} rows={page.platforms.map((p) => ({ key: p.platform, name: p.label, k: p.k }))} label={(k) => `${fmtInt(k)} of ${fmtInt(n)}`} />
-            : <p className={LINE}>No video counted by platform yet.</p>}
+            : <EmptyBox>No video counted by platform yet.</EmptyBox>}
         </Tile>
       </div>
     </section>

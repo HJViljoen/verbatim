@@ -323,7 +323,6 @@ function NumbersTile({ title, children }: { title: ReactNode; children: ReactNod
 }
 
 const NOTE = 'm-0 text-[13.5px] leading-[1.45] text-muted-foreground'
-const LINE = 'm-0 text-[15px] leading-[1.5] text-secondary-foreground'
 
 /** "Your products in their videos": your products named in their videos this
  *  month, each opening in Your products; where none is read, one line. */
@@ -352,7 +351,7 @@ function ProductsTile({ products }: { products: GroupProducts }) {
           </div>
           {products.rows.length > 0 ? <p className={NOTE}>Each opens in Your products.</p> : null}
         </>
-      ) : <p className={LINE}>{products.line}</p>}
+      ) : <EmptyBox>{products.line}</EmptyBox>}
     </NumbersTile>
   )
 }
@@ -365,7 +364,9 @@ function Numbers({ page }: { page: GroupPage }) {
   return (
     <section aria-label={`${page.name} in numbers`} className="grid grid-cols-1 gap-5 min-[1180px]:grid-cols-3">
       <NumbersTile title="Brands named in their videos">
-        {b.line && !counted ? <p className={LINE}>{b.line}</p> : null}
+        {/* A thin or unread state's one sentence, in the dashed box
+            (decision 4); the brands keep their names under it. */}
+        {b.line && !counted ? <EmptyBox>{b.line}</EmptyBox> : null}
         {b.rows.length > 0 ? (
           <div className={BAR_ROW}>
             {b.rows.map((r) => (
@@ -382,7 +383,7 @@ function Numbers({ page }: { page: GroupPage }) {
             ))}
           </div>
         ) : null}
-        {counted && b.line ? <p className={LINE}>{b.line}</p> : null}
+        {counted && b.line ? <EmptyBox>{b.line}</EmptyBox> : null}
         {counted && b.rows.length > 0 ? <p className={NOTE}>Each opens its page in Voices.</p> : null}
       </NumbersTile>
       <ProductsTile products={page.products} />
@@ -397,7 +398,7 @@ function Numbers({ page }: { page: GroupPage }) {
               </Fragment>
             ))}
           </div>
-        ) : <p className={LINE}>None of their comments in {page.month.monthWords}.</p>}
+        ) : <EmptyBox>None of their comments in {page.month.monthWords}.</EmptyBox>}
       </NumbersTile>
     </section>
   )

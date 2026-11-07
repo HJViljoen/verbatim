@@ -6,6 +6,7 @@ import { VOICES_ONE_MONTH } from '@/lib/pages/v2/voices'
 import { BACK_TO_VOICES, BRAND_MISSING, CREATOR_REDDIT, GROUP_MISSING, GROUP_QUOTES_UNREAD, groupQuotesNone, VOICES_ONE_MONTH_SHORT, type BrandPage, type CreatorPage, type GroupPage, type LevelMissing } from '@/lib/pages/v2/voices-levels'
 import { brandFixture, creatorFixture, groupFixture, groupThinFixture, SEP_CLOSED_MONTH, VOICES_LEVEL_FIXTURES } from '@/lib/pages/v2/voices-levels-fixture'
 import { VoicesBrandPage, VoicesCreatorPage, VoicesGroupPage } from './pages'
+import { BRAND_NUMBERS_NONE } from './brand-page'
 
 // VOICES' LEVEL PAGES, AS THEY PRINT (17 Oct; the G3 boards): each from its
 // fixture through the page's own builders, against the copy contract, the
@@ -289,16 +290,18 @@ describe('a brand\'s page (G3-Voices-Brand)', () => {
     expect(t).toContain('The groups commenting on its videos A video can hold more than one group, so the counts overlap. No group is listed for Ottobock this month.')
     expect(t).toContain('No creator is listed for Ottobock this month.')
     expect(t.split('No figure prints for Ottobock this month.').length - 1).toBe(1)
-    // THE PARITY RULE, in the audit design's shape (decision 4): every
-    // numbers tile keeps its title; the months keep their names with no
-    // figure; each other frame says it holds none in the dashed box; no empty
-    // tracks, no bar.
+    // THE PARITY RULE, in the audit design's shape (decision 4; the review
+    // of Phases 4 and 5): the numbers keep their section and one tile, its
+    // parts named once in the dashed box; no empty table, no line said a
+    // frame, no empty tracks, no bar.
     const h = render(brand(brandFixture({ counted: false })))
-    expect(t).toContain('Named without being asked, month by month Month Named without being asked Share August September October so far What people did in the comments No figure prints here. What its talk sits in No figure prints here. Where it was named No figure prints here. Where No figure prints here.')
+    expect(t).toContain(`The numbers ${BRAND_NUMBERS_NONE}`)
+    expect(t).not.toContain('No figure prints here.')
+    expect(h).not.toContain('data-brand-month')
     expect(h).not.toContain('data-empty-row')
     expect(h).not.toContain('data-empty-track')
-    expect(h.match(/data-empty-box=""/g)?.length).toBeGreaterThanOrEqual(7)
-    expect(h).toContain('data-numbers-gap="not_yet"')
+    expect(h.match(/data-empty-box=""/g)?.length).toBeGreaterThanOrEqual(4)
+    expect(h).toMatch(/data-numbers-gap="not_yet"[^>]*><div data-empty-box=""/)
     expect(t).toContain('Under its own content')
     expect(t).not.toMatch(/\d+ of 290/)
   })
