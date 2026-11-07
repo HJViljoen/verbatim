@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 
 import { BrandChip } from '@/components/colour-roles'
 import { translationNote } from '@/components/quote-block'
-import { CARD, commaCite, EmptyBox, GoLink, Label, SectionHead, Tag, TBL, TD, TD_NUM, TH, TickBar, toMax, translationLine, type StatItem } from '@/components/v2'
+import { CARD, commaCite, EmptyBox, GoLink, Label, SectionHead, STACK, STACK_CELL, STACK_HEAD, STACK_ROW, Tag, TBL, TD, TD_NUM, TH, TickBar, toMax, translationLine, type StatItem } from '@/components/v2'
 import { QUOTE, ROW } from '@/components/v2/look'
 import { priorityLabel, typeLabel } from '@/components/pages/moves/words'
 import { GroupRows } from '@/components/pages/v2/market/panel'
@@ -173,32 +173,37 @@ function ArgumentCard({ page }: { page: AdvicePageData }) {
 function ConversationsTable({ rows, videos, monthText, base }: { rows: readonly AdviceConversation[]; videos: number; monthText: string; base: number | null }) {
   const bar = toMax(rows.map((c) => c.videos))
   return (
+    // On a phone each conversation stacks (decision 14): its name, tag and
+    // line, then its share of the advice's videos, then its month, each
+    // figure saying what it is of where the hidden head said it.
     <div className="min-w-0 overflow-x-auto">
-      <table className={cn(TBL, 'min-w-[640px]')}>
-        <thead>
+      <table className={cn(TBL, STACK, 'sm:min-w-[680px]')}>
+        <thead className={STACK_HEAD}>
           <tr>
             <th scope="col" className={TH}>Conversation</th>
             <th scope="col" className={cn(TH, 'w-[220px]')}>Of its {fig(videos)} videos</th>
-            <th scope="col" className={cn(TH, 'w-[170px] pr-0 text-right')}>Category videos in {monthText}</th>
+            <th scope="col" className={cn(TH, 'w-[210px] pr-0 text-right')}>Category videos in {monthText}</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className={STACK}>
           {rows.map((c) => (
-            <tr key={c.id} data-advice-conv="">
-              <td className={TD}>
+            <tr key={c.id} data-advice-conv="" className={STACK_ROW}>
+              <td className={cn(TD, STACK_CELL)}>
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <Link href={c.href} className={ROW}><span data-copy="subject" data-slot="pass_b_theme">{c.label}</span></Link>
                   {c.target ? <Tag tone="mid">The one it would move</Tag> : null}
                 </span>
                 {c.description ? <p data-copy="subject" data-slot="pass_b_theme" className="m-0 mt-1.5 text-[14.5px] leading-[1.5] text-secondary-foreground">{c.description}</p> : null}
               </td>
-              <td className={TD}>
+              <td className={cn(TD, STACK_CELL)}>
+                <span className="mt-1 block text-[13px] text-muted-foreground sm:hidden">Of its {fig(videos)} videos</span>
                 <div className="grid grid-cols-[minmax(0,1fr)_34px] items-center gap-2.5 pt-1.5">
                   <TickBar pct={bar(c.videos)} size="md" label={`${fmtInt(c.videos)} of its ${fmtInt(videos)} videos`} />
                   <span className="text-right font-semibold">{fig(c.videos)}</span>
                 </div>
               </td>
-              <td className={cn(TD, TD_NUM, 'pr-0 pt-[18px]')}>
+              <td className={cn(TD, TD_NUM, 'pr-0 pt-[18px]', STACK_CELL, 'max-sm:text-[14px]')}>
+                <span className="text-secondary-foreground sm:hidden">Category videos in {monthText}: </span>
                 {c.level
                   ? (c.level.n === base ? fig(c.level.k) : <span data-copy="level">{fmtInt(c.level.k)} of {fmtInt(c.level.n)}</span>)
                   : <span className="text-muted-foreground">No reading</span>}

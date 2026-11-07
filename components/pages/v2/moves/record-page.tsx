@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 
-import { CARD, EmptyBox, GoLink, TBL, TD, TD_NUM, TH, type StatItem } from '@/components/v2'
+import { CARD, EmptyBox, GoLink, STACK, STACK_CELL, STACK_HEAD, STACK_ROW, TBL, TD, TD_NUM, TH, type StatItem } from '@/components/v2'
 import { CHIP, ROW } from '@/components/v2/look'
 import { typeLabel } from '@/components/pages/moves/words'
 import { fmtInt, shortDate } from '@/lib/format'
@@ -38,17 +38,24 @@ const stateWords = (s: string): string => `${s.charAt(0).toUpperCase()}${s.slice
 function RecordRowView({ r }: { r: RecordGroup['rows'][number] }) {
   const untitled = r.title === UNTITLED_ADVICE
   const state = r.note ?? recordState(r)
+  const first = r.firstMade ? shortDate(r.firstMade) : null
   return (
-    <tr data-record-row="">
-      <td className={TD}>
+    // ON A PHONE (decision 14) the row stacks as the app drew it before the
+    // audit design: the title, a line of its kind, when it was first
+    // suggested and its updates, then the decision.
+    <tr data-record-row="" className={STACK_ROW}>
+      <td className={cn(TD, STACK_CELL)}>
         <Link href={adviceHref(r.lineageId)} className={ROW}>
           {untitled ? r.title : <span data-copy="stored" data-slot="pass_d_b_recommendation">{r.title}</span>}
         </Link>
+        <span className="mt-1 block text-[14px] leading-[1.45] text-secondary-foreground sm:hidden">
+          {typeLabel(r.kind)}{first ? `, first suggested ${first}` : null}, {fig(r.updates)} {r.updates === 1 ? 'update' : 'updates'}
+        </span>
       </td>
-      <td className={cn(TD, 'text-secondary-foreground')}>{typeLabel(r.kind)}</td>
-      <td className={cn(TD, 'whitespace-nowrap')}>{r.firstMade ? shortDate(r.firstMade) : null}</td>
-      <td className={cn(TD, TD_NUM)}>{fig(r.updates)}</td>
-      <td className={cn(TD, 'whitespace-nowrap pl-6 pr-0', r.status === 'new' ? 'text-muted-foreground' : 'font-semibold text-foreground')}>{stateWords(state)}</td>
+      <td className={cn(TD, 'text-secondary-foreground max-sm:hidden')}>{typeLabel(r.kind)}</td>
+      <td className={cn(TD, 'whitespace-nowrap max-sm:hidden')}>{first}</td>
+      <td className={cn(TD, TD_NUM, 'max-sm:hidden')}>{fig(r.updates)}</td>
+      <td className={cn(TD, 'whitespace-nowrap pl-6 pr-0', STACK_CELL, r.status === 'new' ? 'text-muted-foreground' : 'font-semibold text-foreground')}>{stateWords(state)}</td>
     </tr>
   )
 }
@@ -75,8 +82,8 @@ function GroupCard({ g }: { g: RecordGroup }) {
         <EmptyBox>{RECORD_GROUP_EMPTY[g.key]}</EmptyBox>
       ) : (
         <div className="min-w-0 overflow-x-auto">
-          <table className={cn(TBL, 'min-w-[660px]')}>
-            <thead>
+          <table className={cn(TBL, STACK, 'sm:min-w-[660px]')}>
+            <thead className={STACK_HEAD}>
               <tr>
                 <th scope="col" className={TH}>Advice</th>
                 <th scope="col" className={cn(TH, 'w-[190px]')}>Kind</th>
@@ -85,7 +92,7 @@ function GroupCard({ g }: { g: RecordGroup }) {
                 <th scope="col" className={cn(TH, 'w-[200px] pl-6 pr-0')}>Decision</th>
               </tr>
             </thead>
-            <tbody>{g.rows.map((r) => <RecordRowView key={r.lineageId} r={r} />)}</tbody>
+            <tbody className={STACK}>{g.rows.map((r) => <RecordRowView key={r.lineageId} r={r} />)}</tbody>
           </table>
         </div>
       )}

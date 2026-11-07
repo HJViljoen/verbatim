@@ -8,6 +8,7 @@ import {
 } from '@/lib/pages/v2/moves-levels-fixture'
 import { ADVICE_MISSING, BACK_TO_MOVES, NO_THIRD_CONVERSATION, NO_OTHER_COMMENT, SAID_HELD, SAME_IDEA_NOTE } from '@/lib/pages/v2/moves-levels'
 import { RECORD_SAME_IDEA_HEAD } from './record-page'
+import { HELD_WORDS } from './move-page'
 import { MovesAdvicePage, MovesMissing, MovesMovePage, MovesRecordPage } from './levels'
 
 // YOUR MOVES' LEVEL PAGES, AS THEY PRINT (levels as pages, 17 Oct; the G6
@@ -93,13 +94,17 @@ describe('a piece of advice, the hub (G6-Moves-Advice)', () => {
     // The reading month carries its label where it is not the current one
     // (decision 3, `inlineMonth`), in the column's head; the counts are bare,
     // their base (the would-move's 839) said once in the figures row.
-    expect(text).toContain('Conversation Of its 63 videos Category videos in September, the last full month Insurance refusals for powered knees The one it would move Appeals that drag on for months, and knees judged not medically necessary. 29 19')
+    // On a phone the head hides and each figure says what it is of (decision
+    // 14), so a row's phone labels sit beside its cells in the markup.
+    expect(text).toContain('Conversation Of its 63 videos Category videos in September, the last full month Insurance refusals for powered knees The one it would move Appeals that drag on for months, and knees judged not medically necessary. Of its 63 videos 29 Category videos in September, the last full month: 19')
+    expect(html).toMatch(/<thead class="max-sm:hidden">/)
     expect(html).toMatch(/data-tag="mid"[^>]*>The one it would move</)
     expect(html).toMatch(/style="width:100%"/)
     expect(text).not.toMatch(/Open in Market|→|·/)
     // In the current month there is no label.
     const current = renderText(<MovesAdvicePage page={{ ...adviceFixture(), monthLabel: null }} />)
     expect(current).toContain('Category videos in September Insurance refusals')
+    expect(current).toContain('Category videos in September: 19')
     expect(current.slice(current.indexOf('Its 63 videos sit in'), current.indexOf('A video can sit in more than one conversation'))).not.toContain('the last full month')
     expect(text).toContain('A video can sit in more than one conversation, so these add up to more than its 63 videos.')
     expect(html).toContain('href="/dashboard/market/conversations/d1000000-0000-4000-8000-000000000001?period=month&amp;month=2026-09"')
@@ -206,6 +211,9 @@ describe('a dated move, the evidence (G6-Moves-Move)', () => {
     expect(text).toContain('Spanish, machine translation My son ran for the first time with his prosthesis. Thank you.')
     // Market's video tiles: the account a heading, the platform and the day in commas.
     expect(text).toContain('The Amputee Diaries YouTube, posted 6 Oct, Össur A day at a running clinic')
+    // The link names its platform, as the move's board does.
+    expect(text).toContain('Watch the video on YouTube')
+    expect(text).not.toMatch(/Watch the video(?! on)/)
   })
 
   it('the facts beside it, each of its videos since the day; its other moves, and the next move for an owner', () => {
@@ -240,8 +248,12 @@ describe('a dated move, the evidence (G6-Moves-Move)', () => {
 
   it('U6: a move on a subject whose check is open prints no line, no figure and nothing it said, and says why once', () => {
     const t = markupText(movePage(moveHeldFixture()))
-    expect(t).toContain('This subject is not measured yet: its line is drawn once its check has passed.')
-    expect(t.split(SAID_HELD)).toHaveLength(2)
+    // Said once in the lead's box for the line and the videos both (the
+    // review of Phases 6 and 7), never again under "What people said after it".
+    expect(t).toContain(HELD_WORDS)
+    expect(t.split('once its check has passed')).toHaveLength(2)
+    expect(t).not.toContain(SAID_HELD)
+    expect(t).not.toContain('What people said after it')
     // The short line once, in the figures row; the facts only name it.
     expect(t).toContain('Read on September, the last full month Not measured yet')
     expect(t.split('Not measured yet')).toHaveLength(2)
@@ -265,7 +277,11 @@ describe('the advice record, an index (G6-Moves-Record)', () => {
     expect(text).toMatch(/Waiting for a decision 3/)
     // Sentence-case heads, the decision capitalised, "raised by the latest
     // update" said once in a group's head, never on a row.
-    expect(text).toContain('Decided 4 Advice Kind First suggested Updates Decision Answer liner questions in the comments within a day Customer experience 7 Sep 3 Accepted since 28 Sep')
+    expect(text).toContain('Decided 4 Advice Kind First suggested Updates Decision Answer liner questions in the comments within a day Customer experience, first suggested 7 Sep, 3 updates Customer experience 7 Sep 3 Accepted since 28 Sep')
+    // On a phone each row stacks (decision 14): the head hides, and the row's
+    // facts are one line under its title, the wide table's cells hidden.
+    expect(html).toMatch(/<thead class="max-sm:hidden">/)
+    expect(html).toMatch(/<span class="[^"]*\bsm:hidden\b[^"]*">Customer experience, first suggested 7 Sep, <span data-copy="figure">3<\/span> updates<\/span>/)
     expect(text).toContain('Not decided')
     expect(text).not.toMatch(/·|not decided/)
     expect(html.match(/<tr data-record-row=""/g)).toHaveLength(13)

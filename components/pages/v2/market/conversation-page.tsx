@@ -138,7 +138,12 @@ export const unquotable = (v: Pick<ConvVideo, 'quotes' | 'aboutCount'>): boolean
  *  comments, "Show all". `onceSaid`: the page has said that none can be
  *  quoted, so the card does not. A dated move's page draws its videos with
  *  it too (Moves-Move.dc.html). */
-export function VideoCard({ v, brand, index, all, onceSaid }: { v: ConvVideo; brand: string; index: number; all: boolean; onceSaid: boolean }) {
+export function VideoCard({ v, brand, index, all, onceSaid, namePlatform = false }: {
+  v: ConvVideo; brand: string; index: number; all: boolean; onceSaid: boolean
+  /** "Watch the video on TikTok" (the move page's board), where Market's
+   *  board says "Watch the video". */
+  namePlatform?: boolean
+}) {
   const shown = v.quotes
   const phoneMore = !v.open && v.quotable > MARKET_VIDEO_QUOTES_PHONE
   const deskMore = !v.open && v.quotable > MARKET_VIDEO_QUOTES
@@ -158,7 +163,7 @@ export function VideoCard({ v, brand, index, all, onceSaid }: { v: ConvVideo; br
           : v.total != null && v.total >= v.aboutCount
             ? <span data-copy="level"><b className="font-semibold tabular-nums text-foreground">{fmtInt(v.aboutCount)}</b> {v.aboutCount === 1 ? 'comment' : 'comments'} about this, of {fmtInt(v.total)} on the video</span>
             : <span><b data-copy="figure" className="font-semibold tabular-nums text-foreground">{fmtInt(v.aboutCount)}</b> {v.aboutCount === 1 ? 'comment' : 'comments'} about this</span>}
-        {v.url ? <GoLink href={v.url} external>Watch the video</GoLink> : null}
+        {v.url ? <GoLink href={v.url} external>{namePlatform && v.platform ? `Watch the video on ${v.platform}` : 'Watch the video'}</GoLink> : null}
       </div>
       {shown.length > 0 ? (
         <div data-video-comments="" className="rounded-[10px] bg-inner px-[18px] py-0.5 max-sm:px-3.5">

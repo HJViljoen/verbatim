@@ -103,6 +103,17 @@ function LeadSentence({ card, reading }: { card: MoveCard; reading: ReadingLabel
   return <p className={LEAD}>Share of {levelBase(card.kind)}{on}: {pct(latest)} in {inlineMonth(`${longMonth(latest.month)}${latest.soFar ? ' so far' : ''}`, monthLabelOn(latest.month, reading))}.</p>
 }
 
+/** A move on a subject whose check has not passed (U6) says why ONCE, in
+ *  the lead's box (the review of Phases 6 and 7): its line and what people
+ *  said after it both wait for the check, so "What people said after it"
+ *  is not drawn as a second box saying the same. The figures row's short
+ *  line is the other place it is said. */
+export const HELD_WORDS = 'This subject is not measured yet: its line, and what people said after it, print once its check has passed.'
+
+/** Whether the move's line and its videos both wait for its subject's
+ *  check (U6), so the page says it once. */
+const isHeld = (page: MovePageData): boolean => page.evidence.state === 'held' && page.card.unread != null
+
 /** The lead tile: the sentence, its verdict in Your moves' words (the band
  *  in its title), the no-cause line, beside the move's months. A move with
  *  no line says why in the dashed box, in the months' place (decision 4). */
@@ -111,9 +122,10 @@ function Lead({ page }: { page: MovePageData }) {
   const reading: ReadingLabel = { month: page.month, label: page.monthLabel }
   const c = card.compare
   if (card.unread) {
+    const why = !isHeld(page) ? MOVE_UNREAD[card.unread] : card.unread === 'not_measured' ? HELD_WORDS : `${MOVE_UNREAD[card.unread]} ${SAID_HELD}`
     return (
       <section aria-label="After your move" data-move-lead="" className={cn(CARD, 'gap-3.5 sm:p-[30px]')}>
-        <EmptyBox title="No line drawn">{MOVE_UNREAD[card.unread]}</EmptyBox>
+        <EmptyBox title="No line drawn">{why}</EmptyBox>
         <p className="m-0 text-[15px] leading-[1.55] text-secondary-foreground">{NO_CAUSE}</p>
       </section>
     )
@@ -150,7 +162,7 @@ function Said({ page }: { page: MovePageData }) {
       {!listed ? <div data-said-gap={ev.state}><EmptyBox>{saidGap(ev, page.card.day)}</EmptyBox></div> : (
         <>
           {noneAll ? <p data-none-quotable="" className="m-0 text-[14.5px] leading-[1.55] text-secondary-foreground">{CONV_NONE_QUOTABLE_ALL}</p> : null}
-          {ev.videos.map((v, i) => <VideoCard key={v.id} v={v} brand={page.brand} index={i} all={ev.all} onceSaid={noneAll} />)}
+          {ev.videos.map((v, i) => <VideoCard key={v.id} v={v} brand={page.brand} index={i} all={ev.all} onceSaid={noneAll} namePlatform />)}
           {ev.capped != null ? <p className="m-0 text-[13.5px] text-muted-foreground">The first {fig(ev.capped)} of {fig(ev.total)} are listed.</p> : null}
           {ev.more && ev.more.desktop > 0 ? <Link href={ev.more.href} className={cn(CHIP, 'self-start font-semibold no-underline max-sm:hidden')}>Show <span data-copy="figure" className="mx-1">{fmtInt(ev.more.desktop)}</span> more videos</Link> : null}
           {ev.more && ev.more.phone > 0 ? <Link href={ev.more.href} className={cn(CHIP, 'self-stretch justify-center font-semibold no-underline sm:hidden')}>Show <span data-copy="figure" className="mx-1">{fmtInt(ev.more.phone)}</span> more videos</Link> : null}
@@ -167,12 +179,12 @@ const QUIET = 'm-0 text-[14.5px] leading-[1.5] text-secondary-foreground'
  *  month, "k of n", and its page in Market), who it is about, what people
  *  did, who's saying it and where, each a list of bare counts against its
  *  largest. */
-function Facts({ page }: { page: MovePageData }) {
+function Facts({ page, besideLead = false }: { page: MovePageData; besideLead?: boolean }) {
   const { on, facts } = page
   const since = shortDate(page.card.day)
   const reading = inlineMonth(longMonth(monthStartOf(page.month)), page.monthLabel)
   return (
-    <aside aria-labelledby="facts-title" className={cn(CARD, 'gap-0 xl:mt-[67px] [&>section]:mt-[18px] [&>section]:flex [&>section]:flex-col [&>section]:gap-2.5 [&>section]:border-t [&>section]:border-track [&>section]:pt-4')}>
+    <aside aria-labelledby="facts-title" className={cn(CARD, besideLead ? 'gap-0' : 'gap-0 xl:mt-[67px]', '[&>section]:mt-[18px] [&>section]:flex [&>section]:flex-col [&>section]:gap-2.5 [&>section]:border-t [&>section]:border-track [&>section]:pt-4')}>
       <h2 id="facts-title" className="m-0 text-[19px] font-semibold leading-[1.3] text-foreground">The facts</h2>
       {facts ? <p className="m-0 mt-1 text-[14px] text-muted-foreground">Of the {fig(facts.n)} {facts.n === 1 ? 'video' : 'videos'} since {since}</p> : null}
       <section>
@@ -263,11 +275,23 @@ function OtherMoves({ page }: { page: MovePageData }) {
 export function MovePageBody({ page }: { page: MovePageData }) {
   return (
     <>
-      <Lead page={page} />
-      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <Said page={page} />
-        <Facts page={page} />
-      </div>
+      {isHeld(page) ? (
+        // Held (U6): the lead's one box says why for the line and the videos
+        // both, with the facts beside it; no second box under a heading. The
+        // two tiles share their row's height.
+        <div className="grid grid-cols-1 items-stretch gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+          <Lead page={page} />
+          <Facts page={page} besideLead />
+        </div>
+      ) : (
+        <>
+          <Lead page={page} />
+          <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+            <Said page={page} />
+            <Facts page={page} />
+          </div>
+        </>
+      )}
       <OtherMoves page={page} />
       <section aria-label="Ask the Agent" className={cn(CARD, 'flex-row flex-wrap items-center justify-between gap-5 max-sm:gap-3')}>
         <p className="m-0 min-w-0 flex-[1_1_420px] text-[15.5px] leading-[1.55] text-secondary-foreground">Ask what people said about {page.card.label ? <OnLabel card={page.card} /> : 'it'} after this move, in your own words.</p>

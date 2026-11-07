@@ -1,4 +1,4 @@
-import { CARD, CardHead, TBL, TD, TH } from '@/components/v2'
+import { CARD, CardHead, STACK, STACK_CELL, STACK_HEAD, TBL, TD, TH } from '@/components/v2'
 import { AddStatement } from '@/components/pages/moves/add-statement'
 import { StatementMenu } from '@/components/pages/moves/statement-menu'
 import { fmtInt, longMonth } from '@/lib/format'
@@ -51,6 +51,10 @@ function SoFar({ r }: { r: StatementReading | null }) {
   )
 }
 
+/** A statement's row on a phone: the quote across, its videos beside how it
+ *  lands, what it reads so far across (the app's own phone grid). */
+const SAY_PHONE_ROW = 'max-sm:grid max-sm:grid-cols-[48px_minmax(0,1fr)] max-sm:items-center max-sm:gap-x-3.5 max-sm:gap-y-2 max-sm:border-t max-sm:border-track max-sm:py-3.5'
+
 /** What the card says where the operator has added no statement yet. */
 export const SAY_FIRST = 'Add something you say about yourself, and each update reads how your market treats it.'
 
@@ -71,8 +75,11 @@ export function WhatYouSay({ data, className }: { data: StatementsBlockData; cla
       {data.statements.length === 0 ? <p className="m-0 text-[14.5px] leading-[1.55] text-secondary-foreground">{SAY_FIRST}</p> : null}
       {data.statements.length > 0 ? (<>
       <div className="min-w-0 overflow-x-auto">
-        <table className={cn(TBL, 'min-w-[440px] text-[14.5px]')}>
-          <thead>
+        {/* On a phone each statement stacks as the app drew it before the
+            audit design (decision 14): the quote, its videos beside how it
+            lands, then what it reads so far. */}
+        <table className={cn(TBL, STACK, 'text-[14.5px] sm:min-w-[440px]')}>
+          <thead className={STACK_HEAD}>
             <tr>
               <th scope="col" className={TH}>You say</th>
               <th scope="col" className={cn(TH, 'text-right')}>Videos</th>
@@ -80,18 +87,18 @@ export function WhatYouSay({ data, className }: { data: StatementsBlockData; cla
               <th scope="col" className={cn(TH, 'pr-0')}>So far</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className={STACK}>
             {data.statements.map((s) => (
-              <tr key={s.id}>
-                <td className={TD}>
+              <tr key={s.id} className={SAY_PHONE_ROW}>
+                <td className={cn(TD, STACK_CELL, 'max-sm:col-span-2')}>
                   <span className="flex min-w-0 items-start gap-2">
                     <span data-copy="quote" className="min-w-0 text-foreground">“{s.text}”</span>
                     {data.canEdit ? <StatementMenu id={s.id} text={s.text} /> : null}
                   </span>
                 </td>
-                <td className={cn(TD, 'text-right tabular-nums')}><span data-copy="figure">{s.reading ? fmtInt(s.reading.market.videos) : ''}</span></td>
-                <td className={cn(TD, 'align-middle')}>{s.reading?.stance ? <Stance s={s.reading.stance} /> : <div className="h-2.5 rounded-[5px] bg-track" aria-hidden />}</td>
-                <td className={cn(TD, 'pr-0')}><SoFar r={s.reading} /></td>
+                <td className={cn(TD, 'text-right tabular-nums', STACK_CELL)}><span data-copy="figure">{s.reading ? fmtInt(s.reading.market.videos) : ''}</span></td>
+                <td className={cn(TD, 'align-middle', STACK_CELL)}>{s.reading?.stance ? <Stance s={s.reading.stance} /> : <div className="h-2.5 rounded-[5px] bg-track" aria-hidden />}</td>
+                <td className={cn(TD, 'pr-0', STACK_CELL, 'max-sm:col-span-2')}><SoFar r={s.reading} /></td>
               </tr>
             ))}
           </tbody>

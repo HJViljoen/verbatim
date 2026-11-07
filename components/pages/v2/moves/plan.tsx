@@ -1,4 +1,4 @@
-import { CARD, CardHead, EmptyBox, GoLink, Label, TBL, TD, TH } from '@/components/v2'
+import { CARD, CardHead, EmptyBox, GoLink, Label, STACK, STACK_CELL, STACK_HEAD, TBL, TD, TH } from '@/components/v2'
 import { PLAN_EMPTY, type PlanCheckCard, type PlanClaimRow } from '@/lib/ask/plan-cards'
 import { fmtInt, shortDate } from '@/lib/format'
 import { CHECK_A_PLAN_HREF, PLAN_TITLE, READ_FAILED, leadClaims } from '@/lib/pages/v2/moves'
@@ -44,13 +44,17 @@ export function movedWords(on: string): string {
   return `${s.charAt(0).toUpperCase()}${s.slice(1)}${/[.!?]$/.test(s) ? '' : '.'}`
 }
 
+/** A claim's row on a phone (decision 14, the app's own phone layout): the
+ *  claim beside its read, then the videos behind it across. */
+const CLAIM_PHONE_ROW = 'max-sm:grid max-sm:grid-cols-[minmax(0,1fr)_auto] max-sm:gap-x-3 max-sm:gap-y-1 max-sm:border-t max-sm:border-track max-sm:py-3.5'
+
 function ClaimRow({ c }: { c: PlanClaimRow }) {
   return (
-    <tr>
-      <td className={TD}><span data-copy="quote">“{c.claim}”</span></td>
-      <td className={cn(TD, VERDICT_TONE[c.verdict] ?? 'text-foreground')}>{c.verdictLabel}</td>
-      <td className={cn(TD, 'whitespace-nowrap pr-0 text-right')}>
-        {c.verdict === 'silent' ? <span className="text-muted-foreground">Nobody raises it</span> : <>at least <span data-copy="figure" className="tabular-nums">{fmtInt(c.value.k)}</span></>}
+    <tr className={CLAIM_PHONE_ROW}>
+      <td className={cn(TD, STACK_CELL)}><span data-copy="quote">“{c.claim}”</span></td>
+      <td className={cn(TD, STACK_CELL, 'max-sm:text-right', VERDICT_TONE[c.verdict] ?? 'text-foreground')}>{c.verdictLabel}</td>
+      <td className={cn(TD, 'whitespace-nowrap pr-0 text-right', STACK_CELL, 'max-sm:col-span-2 max-sm:text-[14px] max-sm:text-secondary-foreground')}>
+        {c.verdict === 'silent' ? <span className="text-muted-foreground">Nobody raises it</span> : <>at least <span data-copy="figure" className="tabular-nums">{fmtInt(c.value.k)}</span><span className="sm:hidden"> videos</span></>}
       </td>
     </tr>
   )
@@ -136,15 +140,15 @@ export function PlanCard({ plan, className, failed = false }: { plan: PlanCheckC
       {plan.empty ? <p className="m-0 text-[14px] text-muted-foreground">{plan.empty}</p> : null}
       {claims.length > 0 ? (
         <div className="min-w-0 overflow-x-auto">
-          <table className={cn(TBL, 'text-[14.5px]')}>
-            <thead>
+          <table className={cn(TBL, STACK, 'text-[14.5px]')}>
+            <thead className={STACK_HEAD}>
               <tr>
                 <th scope="col" className={TH}>Claim</th>
                 <th scope="col" className={TH}>Read</th>
                 <th scope="col" className={cn(TH, 'whitespace-nowrap pr-0 text-right')}>Videos behind it</th>
               </tr>
             </thead>
-            <tbody>{claims.map((c, i) => <ClaimRow key={`${c.claim}:${i}`} c={c} />)}</tbody>
+            <tbody className={STACK}>{claims.map((c, i) => <ClaimRow key={`${c.claim}:${i}`} c={c} />)}</tbody>
           </table>
         </div>
       ) : null}

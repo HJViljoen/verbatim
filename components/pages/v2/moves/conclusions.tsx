@@ -1,6 +1,6 @@
 import Link from 'next/link'
 
-import { CARD, CardHead, EmptyBox, GoLink, TBL, TD, TD_NUM, TH } from '@/components/v2'
+import { CARD, CardHead, EmptyBox, GoLink, STACK, STACK_CELL, STACK_HEAD, STACK_ROW, TBL, TD, TD_NUM, TH } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
 import {
   CONCLUSIONS_SUB, CONCLUSIONS_TITLE, GROUNDED_BASIS, NO_ADVICE_YET, NO_CONCLUSIONS, READ_FAILED, RECORD_HREF,
@@ -33,24 +33,26 @@ export function ConclusionsSection({ data }: { data: MovesPageData }) {
         ? <EmptyBox>The conclusions {READ_FAILED}.</EmptyBox>
         : conclusions.length === 0 ? <EmptyBox>{NO_CONCLUSIONS}</EmptyBox> : (
           <div className="min-w-0 overflow-x-auto">
-            <table className={cn(TBL, 'min-w-[560px]')}>
-              <thead>
+            {/* On a phone each row stacks (decision 14): the conclusion, its
+                videos "all time", then the advice built on it. */}
+            <table className={cn(TBL, STACK, 'sm:min-w-[560px]')}>
+              <thead className={STACK_HEAD}>
                 <tr>
                   <th scope="col" className={cn(TH, 'w-[38%]')}>Conclusion</th>
                   <th scope="col" className={cn(TH, 'w-[130px] text-right')}>Rests on, {GROUNDED_BASIS}</th>
                   <th scope="col" className={cn(TH, 'pl-7 pr-0')}>Advice built on it</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className={STACK}>
                 {conclusions.map((c) => (
-                  <tr key={c.id} id={conclusionAnchor(c.id)} data-conclusion="" className="scroll-mt-6">
-                    <td className={cn(TD, 'font-semibold')}><span data-copy="stored" data-slot="pass_d_a_insight">{c.title}</span></td>
+                  <tr key={c.id} id={conclusionAnchor(c.id)} data-conclusion="" className={cn('scroll-mt-6', STACK_ROW)}>
+                    <td className={cn(TD, STACK_CELL, 'font-semibold')}><span data-copy="stored" data-slot="pass_d_a_insight">{c.title}</span></td>
                     {/* A conclusion resting on rival findings alone resolves to
                         no video: it prints no count rather than "0 videos". */}
-                    <td className={cn(TD, TD_NUM, 'whitespace-nowrap')}>
-                      {c.videos > 0 ? <><span data-copy="figure">{fmtInt(c.videos)}</span> {c.videos === 1 ? 'video' : 'videos'}</> : null}
+                    <td className={cn(TD, TD_NUM, 'whitespace-nowrap', STACK_CELL, 'max-sm:text-[14px] max-sm:text-secondary-foreground')}>
+                      {c.videos > 0 ? <><span data-copy="figure">{fmtInt(c.videos)}</span> {c.videos === 1 ? 'video' : 'videos'}<span className="sm:hidden">, {GROUNDED_BASIS}</span></> : null}
                     </td>
-                    <td className={cn(TD, 'pl-7 pr-0')}>
+                    <td className={cn(TD, 'pl-7 pr-0', STACK_CELL)}>
                       {c.advice.length > 0
                         ? c.advice.map((a) => (
                             <Link key={a.lineageId} href={adviceHref(a.lineageId)} className="block text-foreground underline decoration-control underline-offset-[3px] hover:decoration-foreground">

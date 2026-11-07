@@ -62,6 +62,18 @@ export const TH = 'pb-2 pr-4 text-left align-bottom text-[13px] font-medium text
 export const TD = 'border-t border-track py-3.5 pr-4 align-top leading-[1.5]'
 export const TD_NUM = 'text-right tabular-nums'
 
+/** A table that STACKS ON A PHONE (decision 14: the app keeps its own
+ *  points where columns stack; below 640 each row is a block and the head is
+ *  hidden, so the first column reads whole and the key figure stays on
+ *  screen). `STACK` on the table and its tbody, `STACK_HEAD` on the thead,
+ *  `STACK_ROW` on each row and `STACK_CELL` on each cell that stays; a cell
+ *  only the wide table needs takes `max-sm:hidden`, its words said in the
+ *  row's phone line instead. A table's `min-w` takes `sm:`. */
+export const STACK = 'max-sm:block'
+export const STACK_HEAD = 'max-sm:hidden'
+export const STACK_ROW = 'max-sm:flex max-sm:flex-col max-sm:gap-1.5 max-sm:border-t max-sm:border-track max-sm:py-3.5'
+export const STACK_CELL = 'max-sm:border-0 max-sm:p-0 max-sm:text-left'
+
 /** The white segmented control (small call 2; the boards' period control):
  *  the group, an item, and the chosen item (combine: `cn(SEG_ITEM, SEG_ON)`).
  *  `PeriodSwitch` draws the same values; this is the client-safe copy for a
