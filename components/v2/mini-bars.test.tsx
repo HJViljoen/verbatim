@@ -9,8 +9,9 @@ describe('MiniBars', () => {
     const node = <MiniBars bars={THREE_WEEKS} label="Videos asking how long a liner lasts" />
     const m = render(node)
     expect(renderText(node)).toBe('9 21 Sep 14 28 Sep 23 5 Oct')
-    expect(m.match(/class="fill-brand"/g)).toHaveLength(2)
-    expect(m).toMatch(/<g data-bar="picked"><rect [^>]*class="fill-orange"/)
+    expect(m.match(/class="fill-brand"/g)).toHaveLength(3)
+    expect(m).toMatch(/<g data-bar="picked"><rect [^>]*class="fill-brand"/)
+    expect(m).not.toContain('orange')
     expect(m).toContain('aria-label="Videos asking how long a liner lasts: 21 Sep 9, 28 Sep 14, 5 Oct 23."')
     assertCopyContract(node)
   })
@@ -20,7 +21,8 @@ describe('MiniBars', () => {
     const m = render(node)
     expect(m).toContain('viewBox="0 0 560 160"')
     expect(renderText(node)).toContain('9.7% October so far · 31 of 318')
-    expect(m).toMatch(/<rect [^>]*fill-opacity="0.18" stroke-width="1.5" class="fill-orange stroke-orange" data-filling=""/)
+    expect(m).toMatch(/<g data-bar="picked"><rect [^>]*fill-opacity="0.35" stroke-width="1.5" class="fill-brand stroke-foreground" data-filling=""/)
+    expect(m).not.toContain('orange')
     expect(render(<MiniBars bars={MONTHS} highlight={null} label="x" />)).toMatch(/<rect [^>]*fill-opacity="0.35" stroke-width="1.5" class="fill-brand stroke-foreground" data-filling=""/)
     expect([...m.matchAll(/data-copy="level"[^>]*>([^<]*)</g)].map((x) => x[1])).toEqual(['9 of 455', '13 of 612', '19 of 839', 'so far · 31 of 318'])
     assertCopyContract(node)
@@ -34,7 +36,7 @@ describe('MiniBars', () => {
 
   it('picks out another bar, or none, and draws a zero as a stub', () => {
     const none = render(<MiniBars bars={THREE_WEEKS} highlight={null} label="x" />)
-    expect(none).not.toContain('fill-orange')
+    expect(none).not.toContain('data-bar="picked"')
     const zero = render(<MiniBars bars={[{ label: 'a', value: 0 }, { label: 'b', value: 8 }]} label="x" />)
     expect(zero).toContain('class="fill-border"')
     expect(render(<MiniBars bars={[]} label="x" />)).toBe('')

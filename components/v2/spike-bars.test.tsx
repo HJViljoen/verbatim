@@ -7,10 +7,11 @@ import { SPIKE_WEEKS, VOLUME_WEEKS } from './fixture'
 const figures = (m: string) => [...m.matchAll(/data-copy="figure"[^>]*>([^<]*)</g)].map((x) => x[1])
 
 describe('SpikeBars', () => {
-  it('draws a yellow bar a week and the newest in the orange, its count over it', () => {
+  it('draws a yellow bar a week and picks out the newest (no orange: the audit design), its count over it', () => {
     const m = render(<SpikeBars weeks={SPIKE_WEEKS} label="Videos a week about insurance refusals" />)
-    expect(m.match(/class="fill-brand"/g)).toHaveLength(11)
-    expect(m).toMatch(/<rect [^>]*class="fill-orange" data-week="newest"/)
+    expect(m.match(/class="fill-brand"/g)).toHaveLength(12)
+    expect(m).toMatch(/<rect [^>]*class="fill-brand" data-week="newest"/)
+    expect(m).not.toContain('orange')
     expect(figures(m)).toEqual(['19'])
     expect(m).toMatch(/^<svg viewBox="0 0 480 132" role="img" aria-label="Videos a week about insurance refusals: 20 Jul 5, 27 Jul 6, [^"]*5 Oct 19\."/)
     assertCopyContract(<SpikeBars weeks={SPIKE_WEEKS} label="Videos a week about insurance refusals" />)

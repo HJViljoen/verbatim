@@ -115,7 +115,7 @@ export function WeeksCard({ weeks: read }: { weeks: WeeksRead; axis?: readonly s
       <CardHead title="Videos, week by week" sub="By the week people commented" />
       {drawn ? (
         <>
-          <SpikeBars weeks={weeks!.columns.map((c) => ({ label: c.label, count: c.videos }))} variant="ink" counts="all" size="md" label="The market's videos a week" />
+          <SpikeBars weeks={weeks!.columns.map((c) => ({ label: c.label, count: c.videos }))} counts="all" size="md" highlightLast={false} label="The market's videos a week" />
           {line ? <p className="m-0 text-[13.5px] text-muted-foreground">{line}</p> : null}
         </>
       ) : (
@@ -141,7 +141,15 @@ export function PlatformsCard({ block, data }: { block: PlatformsBlock; data: Ma
   return (
     <article id="where" className={cn(CARD, 'scroll-mt-6')}>
       <CardHead title="Where it’s said" sub={block.basis === 'week' ? 'This week’s videos, by platform' : <>The videos in {data.month.text}, by platform</>} />
-      <ProportionBar of="videos" segments={segments} />
+      <div>
+        <ProportionBar of="videos" segments={segments} />
+        {/* Each part named under it at its own width, as the board draws it;
+            a part too narrow for its name is left unnamed (the table under
+            names every platform). */}
+        <div aria-hidden data-where-names="" className="mt-1.5 flex gap-0.5 text-[12.5px] leading-[1.3] text-secondary-foreground">
+          {segments.map((s) => <span key={s.label} className="min-w-0 truncate" style={{ width: `${Math.max(2, s.pct)}%` }}>{s.pct >= 10 ? s.label : null}</span>)}
+        </div>
+      </div>
       {/* The board's table: this week beside the month (decision 1), the
           month's count with its share of the month's videos. */}
       <table className={TBL}>

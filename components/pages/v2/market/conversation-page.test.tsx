@@ -125,9 +125,11 @@ describe('the flagged conversation', () => {
     const html = render(body(FLAG))
     expect(html.match(/data-flag="unusual"/g)).toHaveLength(1)
     expect(html).toMatch(/<div data-conv-lead=""[\s\S]*?data-flag="unusual"/)
-    // Its newest week in the accent in the facts; an unflagged one's yellow.
-    expect(html.match(/<aside aria-labelledby="facts-title"[\s\S]*?<\/aside>/)![0]).toContain('fill-orange')
-    expect(render(body(LINER)).match(/<aside aria-labelledby="facts-title"[\s\S]*?<\/aside>/)![0]).not.toContain('fill-orange')
+    // Its newest week picked out in the facts (in bold, never orange: the
+    // audit design); an unflagged one's is not.
+    expect(html.match(/<aside aria-labelledby="facts-title"[\s\S]*?<\/aside>/)![0]).toContain('data-week="newest"')
+    expect(html.match(/<aside aria-labelledby="facts-title"[\s\S]*?<\/aside>/)![0]).not.toContain('orange')
+    expect(render(body(LINER)).match(/<aside aria-labelledby="facts-title"[\s\S]*?<\/aside>/)![0]).not.toContain('data-week="newest"')
     assertCopyContract(page(FLAG))
   })
 

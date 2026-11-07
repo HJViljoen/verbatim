@@ -9,11 +9,12 @@ import { cn } from '@/lib/utils'
  * these counts with no word), the opened conversation's month by month
  * (E2-Market-Open) and a category's month by month (E4-Products-Liners). The
  * bars are the market yellow; the one the card is about (the newest, by
- * default) is the orange. Its value prints over every bar, its label under,
+ * default) is picked out by its figure and label in bold (since the audit
+ * design, 7 Nov: no orange outside the nav's current icon). Its value prints over every bar, its label under,
  * and optionally a level under that ("9 of 455").
  *
  * A bar still filling (a month so far) is drawn as a tint of its colour under
- * an outline (the orange's own, the yellow's in ink), so its state never rests
+ * an outline in ink, so its state never rests
  * on colour alone (MASTER: a week still being read is outlined). A zero draws
  * a 2px stub.
  *
@@ -37,13 +38,15 @@ export interface MiniBar {
 
 export interface MiniBarsProps {
   bars: readonly MiniBar[]
-  /** The bar the card is about, in the orange: the newest by default; an
+  /** The bar the card is about, in bold: the newest by default; an
    *  index; or null for none. */
   highlight?: number | 'last' | null
   /** The boards' three drawings, each sized for its column: `sm` 200 by 84 (a
    *  mover card), `md` 300 by 140 (a third of a panel), `lg` 560 by 160 (half
-   *  a panel). Default `sm`. */
-  size?: 'sm' | 'md' | 'lg'
+   *  a panel); and `half` 480 by 160 (the audit design, 7 Nov: a half-width
+   *  tile at 1440, about 490 wide, so its text stays at 12px). Default
+   *  `sm`. */
+  size?: 'sm' | 'md' | 'lg' | 'half'
   /** What the chart is, for a screen reader. The readings are appended. */
   label: string
   className?: string
@@ -66,6 +69,7 @@ const GEOMETRY = {
   sm: { W: 200, H: 84, top: 14, base: 66, bar: 0.54, value: 12, axis: 12, sub: 12 },
   md: { W: 300, H: 140, top: 22, base: 104, bar: 0.64, value: 12.5, axis: 12, sub: 12 },
   lg: { W: 560, H: 160, top: 24, base: 124, bar: 0.57, value: 13, axis: 12.5, sub: 12 },
+  half: { W: 480, H: 160, top: 24, base: 124, bar: 0.57, value: 13, axis: 12.5, sub: 12 },
 } as const
 
 export function MiniBars({ bars, highlight = 'last', size = 'sm', label, className, tone = 'market' }: MiniBarsProps) {
@@ -92,16 +96,15 @@ export function MiniBars({ bars, highlight = 'last', size = 'sm', label, classNa
         const bh = b.value <= 0 ? 2 : r1(Math.max(2, (b.value / max) * room))
         const y = r1(g.base - bh)
         const w = r1(bw)
-        const fill = on ? 'fill-orange' : TONE_FILL[tone]
+        const fill = TONE_FILL[tone]
         return (
           <g key={i} data-bar={on ? 'picked' : undefined}>
             {b.value <= 0 ? (
               <rect x={x} y={g.base - 2} width={w} height={2} className="fill-border" />
             ) : b.filling ? (
-              // The boards' tint: the orange at 18% under its own outline
-              // (E2-Market-Open); the yellow at 35% under the ink, because a
-              // yellow outline does not read on white.
-              <rect x={x} y={y} width={w} height={bh} rx={2} fillOpacity={on ? 0.18 : 0.35} strokeWidth={1.5} className={cn(fill, on ? 'stroke-orange' : 'stroke-foreground')} data-filling="" />
+              // The tint: its colour at 35% under the ink, because a yellow
+              // outline does not read on white.
+              <rect x={x} y={y} width={w} height={bh} rx={2} fillOpacity={0.35} strokeWidth={1.5} className={cn(fill, 'stroke-foreground')} data-filling="" />
             ) : (
               <rect x={x} y={y} width={w} height={bh} rx={2} className={fill} />
             )}

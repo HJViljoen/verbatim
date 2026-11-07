@@ -318,7 +318,8 @@ function MonthsCard({ months, data }: { months: readonly MonthCount[]; data: Mar
   return (
     <article className={cn(CARD, 'col-span-12')}>
       <CardHead title="Your market, month by month" sub={<>The market’s videos each month, by the month people commented. {data.month.soFar ? <>{longMonth(data.month.month)} is still filling.</> : null}</>} />
-      <MiniBars bars={months.map((m) => ({ label: m.label, value: m.k ?? 0, filling: m.filling }))} size="lg" className="max-w-[760px]" label="The market's videos each month" />
+      <MiniBars bars={months.map((m) => ({ label: m.label, value: m.k ?? 0, filling: m.filling }))} size="lg" className="max-w-[760px] max-sm:hidden" label="The market's videos each month" />
+      <MiniBars bars={months.map((m) => ({ label: m.label, value: m.k ?? 0, filling: m.filling }))} size="md" className="max-w-[360px] sm:hidden" label="The market's videos each month" />
       <p data-months-note="" className="m-0 max-w-[760px] text-[12.5px] leading-[1.5] text-muted-foreground">{MONTHS_READ_NOTE}{split ? <> {MONTHS_SPLIT_NOTE}</> : null}</p>
     </article>
   )

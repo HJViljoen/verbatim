@@ -90,7 +90,9 @@ describe('a ready subject, this week, in the board\'s order', () => {
 
   it('the numbers: week by week on the level\'s base, the share month by month with its change, then the parts in tiles on their own base', () => {
     const t = tight(text)
-    expect(t).toContain('The numbers Videos, week by week By the week people commented 74 70 82 21 Sep 28 Sep 5 Oct Share of your market’s videos Month by month No clear change +0.9 pts against September, 33% 277 of 839 in September 32% August 194 of 612 33% September 277 of 839 34% October so far, 108 of 318')
+    // Each chart twice: the tile's drawing, then the phone's (its text at
+    // 12px at both widths).
+    expect(t).toContain('The numbers Videos, week by week By the week people commented 74 70 82 21 Sep 28 Sep 5 Oct 74 70 82 21 Sep 28 Sep 5 Oct Share of your market’s videos Month by month No clear change +0.9 pts against September, 33% 277 of 839 in September 32% August 194 of 612 33% September 277 of 839 34% October so far, 108 of 318 32% August 194 of 612 33% September 277 of 839 34% October so far, 108 of 318')
     expect(t).toContain('The parts below read the videos where a comment was about it: 40 of these 82 this week, and 64 of these 108 in October so far.')
     // Each tile's sub says its base once; the rows print bare counts and
     // bars against the list's largest (decisions 2 and 5).
@@ -134,7 +136,7 @@ describe('a ready subject whose week could not be read on the level\'s base', ()
     expect(text).not.toMatch(/of 241 videos/)
     // Week by week keeps the two weeks read; the newest draws nothing in
     // its column (no empty slot, decision 4).
-    expect(text).toContain('Videos, week by week By the week people commented 74 70 21 Sep 28 Sep 5 Oct Share of')
+    expect(text).toContain('Videos, week by week By the week people commented 74 70 21 Sep 28 Sep 5 Oct 74 70 21 Sep 28 Sep 5 Oct Share of')
     expect(text).toContain('The parts below read the videos where a comment was about it: 40 this week, and 64 of these 108 in October so far.')
     assertCopyContract(page(d))
   })

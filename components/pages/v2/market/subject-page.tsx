@@ -407,13 +407,24 @@ function NumbersSection({ page, data }: { page: SubjectPage; data: MarketData })
               // Three bare counts on the level's base, in the market's yellow
               // (a subject earns no week chip); a week our own change cut
               // draws nothing in its column.
-              <SpikeBars weeks={weeks.map((count, i) => ({ label: page.weekLabels[i] ?? '', count }))} counts="all" size="wide" highlightLast={false} className="max-w-[520px]" label={`${panel.name}, videos a week`} />
+              // The phone's own drawing under 640, so its text stays at 12px.
+              <>
+                <SpikeBars weeks={weeks.map((count, i) => ({ label: page.weekLabels[i] ?? '', count }))} counts="all" size="wide" highlightLast={false} className="max-w-[520px] max-sm:hidden" label={`${panel.name}, videos a week`} />
+                <SpikeBars weeks={weeks.map((count, i) => ({ label: page.weekLabels[i] ?? '', count }))} counts="all" size="phone" highlightLast={false} className="max-w-[360px] sm:hidden" label={`${panel.name}, videos a week`} />
+              </>
             ) : <EmptyBox chart title={WEEKS_NOT_DRAWN_TITLE}>{WEEKS_NOT_DRAWN}</EmptyBox>}
           </Tile>
         ) : null}
         <Tile title="Share of your market’s videos" sub="Month by month" data-share="">
           <Change page={page} data={data} />
-          {panel.bars.length > 0 ? <MiniBars bars={shareBars(panel.bars)} size="lg" highlight={null} label={`Share of the market's videos about ${panel.name}, month by month`} /> : null}
+          {/* The tile's own drawing at 640 and over, the phone's under it, so
+              the text stays at 12px at both. */}
+          {panel.bars.length > 0 ? (
+            <>
+              <MiniBars bars={shareBars(panel.bars)} size="half" highlight={null} className="max-w-[480px] max-sm:hidden" label={`Share of the market's videos about ${panel.name}, month by month`} />
+              <MiniBars bars={shareBars(panel.bars)} size="md" highlight={null} className="max-w-[360px] sm:hidden" label={`Share of the market's videos about ${panel.name}, month by month`} />
+            </>
+          ) : null}
         </Tile>
       </div>
       {detail ? <SubjectBase level={level} week={weekLevel} detail={detail} monthText={panel.monthText} /> : null}

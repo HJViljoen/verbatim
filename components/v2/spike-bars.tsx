@@ -5,8 +5,9 @@ import { cn } from '@/lib/utils'
  * WEEKLY COUNTS, THE NEWEST WEEK PICKED OUT (depth v2, T2; E2-Market's hero).
  *
  * One bar a week, the market yellow (MASTER §Colour roles: a bar counting the
- * market's videos), the newest in the orange (the colour of what is new this
- * week), its count over it. An optional comparison line runs dashed across
+ * market's videos), the newest picked out by its count and its label in bold
+ * (since the audit design, 7 Nov: no orange outside the nav's current icon),
+ * its count over it. An optional comparison line runs dashed across
  * the weeks before the newest with its own label ("usual, 6"); what the line
  * IS, and whether a page may draw one, is the caller's: decision 1 keeps a
  * week's figure beside its month, and the comparison a page states is a
@@ -34,7 +35,8 @@ export interface SpikeBarsProps {
   /** A dashed line across the weeks before the newest, labelled at its left
    *  ("usual, 6"). Null draws none. */
   compare?: { value: number; label: string } | null
-  /** The newest bar in the orange. Default true (false on `ink`). */
+  /** The newest bar picked out (its count and label in bold, `data-week`).
+   *  Default true (false on `ink`). */
   highlightLast?: boolean
   /** Which bars print their count: the newest only (default) or every one. */
   counts?: 'last' | 'all'
@@ -68,7 +70,9 @@ const GEOMETRY: Record<NonNullable<SpikeBarsProps['size']>, { W: number; H: numb
   lg: { W: 480, H: 132, BASE: 110, TOP: 14, small: 12, big: 13 },
   md: { W: 300, H: 112, BASE: 92, TOP: 16, small: 12, big: 12 },
   // F3: counts over every bar, the axis beside them, as drawn.
-  wide: { W: 520, H: 150, BASE: 134, TOP: 14, small: 12.5, big: 12.5, axis: 12 },
+  // Drawn a little under its width in a half-width tile at 1440 (about 490
+  // of its 520), so its text is a size up to stay at 12px there.
+  wide: { W: 520, H: 150, BASE: 134, TOP: 14, small: 13, big: 13, axis: 13 },
   rail: { W: 300, H: 86, BASE: 70, TOP: 14, small: 12, big: 12, axis: 12 },
   xs: { W: 136, H: 58, BASE: 42, TOP: 14, small: 12, big: 12, axis: 12 },
   phone: { W: 300, H: 150, BASE: 134, TOP: 14, small: 12.5, big: 12.5, axis: 12 },
@@ -105,10 +109,10 @@ export function SpikeBars({ weeks, compare = null, highlightLast, counts = 'last
         }
         const last = i === n - 1
         const x = r1(i * slot + (slot - bw) / 2)
-        const fill = last && pick ? 'fill-orange' : variant === 'ink' ? 'fill-foreground' : 'fill-brand'
+        const fill = variant === 'ink' ? 'fill-foreground' : 'fill-brand'
         if (w.count === 0) return <rect key={i} x={x} y={BASE - 2} width={r1(bw)} height={2} className="fill-border" />
         const bh = r1(Math.max(2, h(w.count)))
-        return <rect key={i} x={x} y={r1(BASE - bh)} width={r1(bw)} height={bh} rx={2} className={fill} data-week={last ? 'newest' : undefined} />
+        return <rect key={i} x={x} y={r1(BASE - bh)} width={r1(bw)} height={bh} rx={2} className={fill} data-week={last && pick ? 'newest' : undefined} />
       })}
       {weeks.map((w, i) => {
         const last = i === n - 1
