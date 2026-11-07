@@ -33,7 +33,9 @@ export const metadata: Metadata = { title: surface('studio').label }
 // only where `session.operator` is set, and the routes behind it (`/new`,
 // `/edit`) send anyone else back here.
 //
-// DEEP LINKS KEEP WORKING. `?view=<snapshot>` opens the viewer over the page;
+// DEEP LINKS KEEP WORKING. `?view=<snapshot>` opens the viewer, since the
+// audit design (7 Nov, Studio-Weekly / -Brief) a page drawn IN PLACE of the
+// lists at the same address, with the way back to them;
 // `?group=sent&item=<send>` (Reports' old address for an issue, and the
 // workbench's history) opens that issue's snapshot; `?item=` selects a report
 // in the workbench.
@@ -120,6 +122,9 @@ export default async function StudioPage({ searchParams }: { searchParams?: Prom
   const openHref = (snapshotId: string) => viewerHref(BASE, keep, snapshotId)
   const closeHref = viewerHref(BASE, keep, null)
 
+  // The viewer is its own page, in place of the lists (the boards').
+  if (viewer) return <ReportViewer snapshot={viewer} closeHref={closeHref} showStudio={isOperator} />
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-[22px] text-[#26292C]">
       <PageTitle title={surface('studio').label} />
@@ -127,7 +132,6 @@ export default async function StudioPage({ searchParams }: { searchParams?: Prom
       <MonthlyBriefs briefs={briefs} openHref={openHref} />
       <PastIssues issues={issues} openHref={openHref} />
       {isOperator ? <OperatorWorkbench session={session} sp={{ item: sp.group === 'sent' ? undefined : sp.item }} /> : null}
-      {viewer && <ReportViewer snapshot={viewer} closeHref={closeHref} showStudio={isOperator} />}
     </div>
   )
 }

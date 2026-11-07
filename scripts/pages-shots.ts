@@ -87,6 +87,14 @@ import { MonthlyBriefs } from '../components/pages/studio/monthly-briefs'
 import { PastIssues } from '../components/pages/studio/past-issues'
 import { pastIssues, shownStudioRows, studioRows, type StudioSchedule, type StudioSend } from '../lib/pages/studio'
 import { studioBriefs } from '../lib/pages/studio-briefs'
+import { ViewerFrame } from '../components/reports/viewer-frame'
+import { FitWidth } from '../components/reports/fit-width'
+import { BriefDeck } from '../components/briefs/brief-deck'
+import { briefFixture } from '../components/briefs/fixture'
+import { storedBrief } from '../lib/reports/briefs/types'
+import { WeeklyReadPage } from '../components/email/weekly-read'
+import { ossurSnapshot } from '../lib/test/weekly-read-v3-fixture'
+import type { ViewerSnapshot } from '../lib/reports/viewer'
 import { PRIVACY_LINE } from '../lib/reading/method'
 import { SettingsFrame } from '../components/settings-frame'
 import { SearchTerms } from '../components/pages/settings/search-terms'
@@ -228,6 +236,20 @@ function studioData(withIssues = false) {
     ],
     now: new Date('2026-10-01T12:00:00Z'),
   }))
+}
+
+/** The Studio's viewer as its route draws it (`ReportViewer`'s body, the
+ *  frame from viewer-frame.tsx: the route loads the brief's wordmark face
+ *  through next/font, which only Next's compiler runs, so the harness draws
+ *  the brief without it). */
+function studioViewer(kind: 'weekly' | 'brief'): ReactNode {
+  const snapshot: ViewerSnapshot = kind === 'weekly'
+    ? { id: 'snap-w', kind: 'weekly_read', data: ossurSnapshot(), title: 'Össur · This week in your market', builtAt: '2026-10-18T06:00:00.000Z', pageCount: 1, artifactId: null, reportId: 'r-1', clientId: 'c-1' }
+    : { id: 'snap-s', kind: 'monthly_brief', data: storedBrief({ ...briefFixture('sales'), company: 'Össur' }), title: 'brief', builtAt: '2026-10-04T05:30:00.000Z', pageCount: 7, artifactId: null, pdfHref: '/api/briefs/snap-s/pdf', reportId: null, clientId: 'c-1' }
+  const body = kind === 'weekly'
+    ? h(WeeklyReadPage, { data: (snapshot.data as ReturnType<typeof ossurSnapshot>), appUrl: '', medical: true })
+    : h('div', { className: 'rounded-[12px] bg-inner p-3 md:p-5' }, h(FitWidth, { base: 1280, children: h(BriefDeck, { data: snapshot.data as ReturnType<typeof storedBrief>, builtAt: snapshot.builtAt, gap: 20 }) }))
+  return h(ViewerFrame, { snapshot, closeHref: '/dashboard/studio', children: body })
 }
 
 /** The month's four briefs, ready (the board's monthly briefs). */
@@ -509,6 +531,8 @@ const PAGES: Page[] = [
       h(YourReports, { rows: studioData(), canEdit: true, privacy: PRIVACY_LINE, openHref: (id: string) => `/dashboard/studio?view=${id}` }),
     ),
   },
+  { key: 'studio-viewer-weekly', path: '/dashboard/studio', artboard: 'Page-Studio.dc.html', page: () => studioViewer('weekly') },
+  { key: 'studio-viewer-brief', path: '/dashboard/studio', artboard: 'Page-Studio.dc.html', page: () => studioViewer('brief') },
   {
     // The Studio as the board draws it: a latest issue, the month's briefs
     // and the past issues (the route's three lists, in its order).

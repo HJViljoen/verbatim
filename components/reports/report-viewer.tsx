@@ -1,8 +1,7 @@
-import Link from 'next/link'
+import type { ReactNode } from 'react'
 import { DocumentDeck } from '@/components/print/document-deck'
 import { ReportDeck } from '@/components/print/report-deck'
 import { FitWidth } from '@/components/reports/fit-width'
-import { ViewerEscape } from '@/components/reports/report-viewer-close'
 import { isDocumentData } from '@/lib/reports/documents/types'
 import { isWeeklyData } from '@/lib/reports/weekly-build'
 import { isMonthlyData } from '@/lib/reports/monthly-build'
@@ -10,93 +9,75 @@ import { isQuarterlyData } from '@/lib/reports/quarterly-build'
 import { WeeklyDeck } from '@/components/print/weekly-deck'
 import { MonthlyDeck } from '@/components/print/monthly-deck'
 import { QuarterlyDeck } from '@/components/print/quarterly-deck'
-import { isWeeklyReadData } from '@/lib/reports/weekly-read-build'
+import { isWeeklyReadData, isWeeklyV3 } from '@/lib/reports/weekly-read-build'
 import { WeeklyReadPage } from '@/components/email/weekly-read'
 import { printsMedicalLine } from '@/lib/post-ideas/medical'
 import type { ViewerSnapshot } from '@/lib/reports/viewer'
 import type { ReportSnapshotData } from '@/lib/reports/types'
-import { STUDIO_HREF } from '@/lib/studio-visibility'
 import { BriefDeck } from '@/components/briefs/brief-deck'
 import { briefWordmarkFace } from '@/components/briefs/wordmark-face'
 import { isMonthlyBriefData } from '@/lib/reports/briefs/types'
+import { fullDate } from '@/lib/format'
+import { ViewerFrame } from './viewer-frame'
+
+export { viewerHead, viewerStats } from './viewer-frame'
 
 // Read a build in the app (Heinrich, 2026-09-09): the pages the PDF prints,
-// on a panel over the page, with the sidebar still showing and still working.
-// Server-rendered from the frozen snapshot; opening and closing are Links, so
-// none of it needs hydration. The deck components are the ones the PDF is
-// printed from, under the same print root, scaled to the panel by FitWidth.
+// server-rendered from the frozen snapshot, the deck components the PDF is
+// printed from under the same print root, scaled to the column by FitWidth.
 //
-// Geometry: the backdrop starts where the sidebar ends, so the sidebar is
-// never covered and stays clickable; the panel leaves a hair of the page
-// showing on the other three sides. On a phone the sidebar is off canvas, so
-// the panel takes the screen with a small inset.
-
-const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-const PILL = 'inline-flex h-8 items-center rounded-full bg-tile px-3 text-[12px] font-medium text-secondary-foreground ring-1 ring-border transition-colors hover:bg-inner'
+// SINCE THE AUDIT DESIGN (7 Nov, Studio-Weekly.dc.html and Studio-Brief.dc.
+// html): the viewer is A PAGE, drawn in place of the Studio's lists at the
+// same address (`?view=`), not a panel over them. Its title block is the
+// crumb "Studio / {it}", the h1, the links (Download PDF where there is one,
+// Open in the Studio for the operator, Back to the Studio), and the figures
+// row (`viewerStats`); the body is the deck, untouched. The weekly read is a
+// responsive page of its own (the share page's), so it flows in the column
+// rather than being scaled to a slide's width. Esc still goes back
+// (`ViewerEscape`), and a held build is still refused before this is drawn
+// (the Studio route's `mayReadHeld`).
 
 // showStudio: the caller has already asked canSeeStudio (lib/studio-visibility.ts).
 // The viewer itself is untouched by the gate — a client still reads the pages
 // and downloads the PDF; only the way back into the Studio goes.
 export function ReportViewer({ snapshot, closeHref, showStudio = false }: { snapshot: ViewerSnapshot; closeHref: string; showStudio?: boolean }) {
-  const { data, title, builtAt, pageCount, artifactId, reportId } = snapshot
-  const date = fmtDate(builtAt)
-  const pdf = snapshot.pdfHref ?? (artifactId ? `/api/artifacts/${artifactId}` : null)
-  // A monthly brief is its own deck of 1280-wide sheets (the canvas's), not
-  // the print root's 297mm slides.
-  const brief = isMonthlyBriefData(data)
+  const { data, builtAt } = snapshot
+  const date = fullDate(builtAt)
 
-  const deck = isMonthlyBriefData(data)
-    ? null
-    : isDocumentData(data)
-    ? <DocumentDeck data={data} date={date} />
-    : isWeeklyData(data)
-      ? <WeeklyDeck data={data} date={date} />
-      : isMonthlyData(data)
-        ? <MonthlyDeck data={data} date={date} />
-        : isQuarterlyData(data)
-          ? <QuarterlyDeck data={data} date={date} />
-          : isWeeklyReadData(data)
-            ? <WeeklyReadPage data={data} appUrl="" medical={printsMedicalLine(snapshot.clientId)} />
-            : <ReportDeck data={data as ReportSnapshotData} date={date} />
-
-  return (
-    <>
-      <Link
-        href={closeHref}
-        scroll={false}
-        aria-label="Close the report"
-        className="fixed inset-0 z-30 bg-foreground/30 md:left-(--sidebar-width)"
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Report viewer"
-        className="fixed inset-2 z-40 flex flex-col overflow-hidden rounded-lg bg-card shadow-tile-hover md:inset-y-4 md:right-4 md:left-[calc(var(--sidebar-width)+1rem)]"
-      >
-        {/* pl-14 on a phone: the floating navigation trigger sits in the shell
-            above this panel, and the title has to start clear of it. */}
-        <header className="flex shrink-0 flex-wrap items-baseline gap-x-3 gap-y-1.5 border-b border-border/70 py-3 pr-5 pl-14 md:pl-5">
-          <h2 className="min-w-0 truncate text-[15px] font-semibold leading-[1.3] tracking-[-0.005em]">{title}</h2>
-          <p className="font-mono text-[11px] text-muted-foreground">{date} · {pageCount} {pageCount === 1 ? 'page' : 'pages'}</p>
-          <div className="ml-auto flex shrink-0 items-center gap-2">
-            {pdf && <a href={pdf} className={PILL}>Download PDF</a>}
-            {showStudio && reportId && <Link href={`${STUDIO_HREF}?item=${reportId}`} className={PILL}>Open in the Studio</Link>}
-            <Link href={closeHref} scroll={false} className={PILL}>Close</Link>
-          </div>
-        </header>
-        <div className="min-h-0 flex-1 overflow-y-auto bg-inner px-3 py-3 md:px-6 md:py-5">
-          {brief && isMonthlyBriefData(data) ? (
-            <FitWidth base={1280}>
-              <div className={briefWordmarkFace.variable}><BriefDeck data={data} builtAt={builtAt} gap={20} /></div>
-            </FitWidth>
-          ) : (
-            <FitWidth base={1123}>
-              <div className="vb-print vb-preview" data-print-variant="b">{deck}</div>
-            </FitWidth>
-          )}
-        </div>
+  let body: ReactNode
+  if (isMonthlyBriefData(data)) {
+    // A monthly brief is its own deck of 1280-wide sheets (the canvas's), not
+    // the print root's 297mm slides.
+    body = (
+      <div className="rounded-[12px] bg-inner p-3 md:p-5">
+        <FitWidth base={1280}>
+          <div className={briefWordmarkFace.variable}><BriefDeck data={data} builtAt={builtAt} gap={20} /></div>
+        </FitWidth>
       </div>
-      <ViewerEscape closeHref={closeHref} />
-    </>
-  )
+    )
+  } else if (isWeeklyReadData(data) && isWeeklyV3(data)) {
+    // The share page's own responsive page, in the column.
+    body = <WeeklyReadPage data={data} appUrl="" medical={printsMedicalLine(snapshot.clientId)} />
+  } else {
+    const deck = isDocumentData(data)
+      ? <DocumentDeck data={data} date={date} />
+      : isWeeklyData(data)
+        ? <WeeklyDeck data={data} date={date} />
+        : isMonthlyData(data)
+          ? <MonthlyDeck data={data} date={date} />
+          : isQuarterlyData(data)
+            ? <QuarterlyDeck data={data} date={date} />
+            : isWeeklyReadData(data)
+              ? <WeeklyReadPage data={data} appUrl="" medical={printsMedicalLine(snapshot.clientId)} />
+              : <ReportDeck data={data as ReportSnapshotData} date={date} />
+    body = (
+      <div className="rounded-[12px] bg-inner p-3 md:p-5">
+        <FitWidth base={1123}>
+          <div className="vb-print vb-preview" data-print-variant="b">{deck}</div>
+        </FitWidth>
+      </div>
+    )
+  }
+
+  return <ViewerFrame snapshot={snapshot} closeHref={closeHref} showStudio={showStudio}>{body}</ViewerFrame>
 }
