@@ -144,10 +144,11 @@ export function PlatformsCard({ block, data }: { block: PlatformsBlock; data: Ma
       <div>
         <ProportionBar of="videos" segments={segments} />
         {/* Each part named under it at its own width, as the board draws it;
-            a part too narrow for its name is left unnamed (the table under
-            names every platform). */}
+            a part too narrow for its name (about 7px a letter on a 210px bar,
+            the card's at 1440) is left unnamed, and the table under names
+            every platform. */}
         <div aria-hidden data-where-names="" className="mt-1.5 flex gap-0.5 text-[12.5px] leading-[1.3] text-secondary-foreground">
-          {segments.map((s) => <span key={s.label} className="min-w-0 truncate" style={{ width: `${Math.max(2, s.pct)}%` }}>{s.pct >= 10 ? s.label : null}</span>)}
+          {segments.map((s) => <span key={s.label} className="min-w-0 truncate" style={{ width: `${Math.max(2, s.pct)}%` }}>{s.label.length * 3.4 <= s.pct ? s.label : null}</span>)}
         </div>
       </div>
       {/* The board's table: this week beside the month (decision 1), the

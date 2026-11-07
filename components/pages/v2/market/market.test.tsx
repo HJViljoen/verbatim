@@ -295,7 +295,7 @@ describe('the numbers behind the week', () => {
   })
 
   it('platforms: the week\'s, or the month\'s', () => {
-    expect(tight(renderText(<PlatformsCard block={{ ...WEEK.rail.platforms!, month: null }} data={WEEK} />))).toBe('Where it’s said This week’s videos, by platform TikTok Instagram YouTube Platform Videos TikTok 128 (53%) Instagram 76 (32%) YouTube 37 (15%)')
+    expect(tight(renderText(<PlatformsCard block={{ ...WEEK.rail.platforms!, month: null }} data={WEEK} />))).toBe('Where it’s said This week’s videos, by platform TikTok Instagram Platform Videos TikTok 128 (53%) Instagram 76 (32%) YouTube 37 (15%)')
     expect(renderText(<PlatformsCard block={MONTH.rail.platforms!} data={MONTH} />)).toContain('The videos in October so far, by platform')
     assertCopyContract(<PlatformsCard block={WEEK.rail.platforms!} data={WEEK} />)
   })
