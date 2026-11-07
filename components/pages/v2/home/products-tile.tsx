@@ -1,12 +1,12 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { NAV_ICON } from '@/components/nav-icons'
 import { shelfTone } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
 import { tileHref } from '@/lib/pages/home'
 import type { TileRead, TopProducts } from '@/lib/pages/v2/home'
 import { cn } from '@/lib/utils'
-import { CSUB, MID, MONO_MUTED, OLINK, TILE, TILE_FAILED, TileHead, TileLine, TileMonth, TT } from './parts'
+import { GO } from '@/components/v2/look'
+import { CSUB, MID, MONO_MUTED, TILE, TILE_FAILED, TileHead, TileLine, TileMonth, TT } from './parts'
 
 // THE DASHBOARD'S YOUR PRODUCTS TILE (Design v2, T8; E1-Dashboard's second
 // row), from T5's `TopProducts` (lib/pages/v2/products.ts, re-exported by
@@ -174,7 +174,7 @@ function Thin({ top }: { top: TopProducts }) {
         <h3 className={TT}>{PRODUCTS_TITLES.invite}</h3>
         <GhostShelf />
         <p className={CSUB}>{PRODUCTS_LINES.no_catalogue}</p>
-        <Link href={PRODUCTS_SETTINGS} className={cn(OLINK, 'mt-auto self-start')}>Add your products →</Link>
+        <Link href={PRODUCTS_SETTINGS} className={cn(GO, 'mt-auto self-start')}>Add your products</Link>
       </>
     )
   }
@@ -219,8 +219,8 @@ export function ProductsTileView({ read }: { read: TileRead<TopProducts> }) {
   const top = read.state === 'ok' ? read.top : null
   const standout = top?.state === 'ready' ? top.standout : null
   return (
-    <article aria-labelledby="home-products" data-tile="products" data-state={top?.state ?? 'failed'} className={cn(TILE, 'col-span-12 min-[1180px]:col-span-4')}>
-      <TileHead icon={NAV_ICON.products} name="Your products" id="home-products" href={standout?.href ?? top?.href ?? tileHref('products')} />
+    <article aria-labelledby="home-products" data-tile="products" data-state={top?.state ?? 'failed'} className={cn(TILE, 'min-[1180px]:col-span-1')}>
+      <TileHead label="Your products" id="home-products" open={{ href: standout?.href ?? top?.href ?? tileHref('products'), words: 'Open' }} />
       {/* Decision 3: the month the tile reads, labelled where it is not the
           current one (a state that reads no month carries no label). */}
       {top && top.note !== 'failed' ? <TileMonth words={top.monthWords} label={top.monthLabel} /> : null}

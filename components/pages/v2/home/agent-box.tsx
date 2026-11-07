@@ -1,6 +1,5 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { NAV_ICON } from '@/components/nav-icons'
 import type { AgentBox, AgentTry } from '@/lib/pages/v2/home'
 import { cn } from '@/lib/utils'
 import { TILE, TileHead } from './parts'
@@ -22,8 +21,8 @@ export const AGENT_LINE_PHONE = 'Ask the Agent about anything in your market'
  *  questions to try) under it. */
 export function AgentBoxShell({ action, children }: { action: string; children?: ReactNode }) {
   return (
-    <article aria-labelledby="home-agent" data-tile="agent" className={cn(TILE, 'col-span-12 min-[1180px]:col-span-4')}>
-      <div className="max-sm:hidden"><TileHead icon={NAV_ICON.ask} name="Agent" id="home-agent" href={null} /></div>
+    <article aria-labelledby="home-agent" data-tile="agent" className={cn(TILE, 'min-[1180px]:col-span-1')}>
+      <div className="max-sm:hidden"><TileHead label="Agent" id="home-agent" /></div>
       <form action={action} method="get" className="flex flex-col gap-3">
         <label htmlFor="home-ask" className="text-[13px] leading-[1.45] text-muted-foreground max-sm:font-medium max-sm:text-foreground">
           <span className="max-sm:hidden">{AGENT_LINE}</span>

@@ -1,7 +1,6 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { BrandChip } from '@/components/colour-roles'
-import { NAV_ICON } from '@/components/nav-icons'
 import { TickBar } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
 import { tileHref } from '@/lib/pages/home'
@@ -84,8 +83,8 @@ export function VoicesTileView({ read }: { read: TileRead<TopVoices | null> }) {
   const n = top?.videos ?? null
   const bars = (top?.groups ?? []).filter((g) => g.videos > 0).slice(0, VOICES_GROUP_BARS)
   return (
-    <article aria-labelledby="home-voices" data-tile="voices" className={cn(TILE, 'col-span-12 min-[1180px]:col-span-4')}>
-      <TileHead icon={NAV_ICON.voices} name="Voices" id="home-voices" href={lead?.href ?? top?.href ?? tileHref('voices')} />
+    <article aria-labelledby="home-voices" data-tile="voices" className={cn(TILE, 'min-[1180px]:col-span-1')}>
+      <TileHead label="Voices" id="home-voices" open={{ href: lead?.href ?? top?.href ?? tileHref('voices'), words: 'Open' }} />
       {/* A failed read of the groups is a failure, never "nothing yet"; a
           workspace whose groups are not switched on, or too thin to describe,
           gets Voices' own words for it, and its "Named most" row stays. */}

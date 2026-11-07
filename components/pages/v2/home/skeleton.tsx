@@ -11,8 +11,8 @@ import { TILE } from './parts'
 
 /** Each tile's place in the grid, written out whole for Tailwind's scanner. */
 export const TILE_SPAN = {
-  wide: 'col-span-12 min-[1180px]:col-span-8',
-  narrow: 'col-span-12 min-[1180px]:col-span-4',
+  wide: 'min-[1180px]:col-span-2',
+  narrow: 'min-[1180px]:col-span-1',
 } as const
 
 /** One tile's bones: its head, a title, a figure and a block. */

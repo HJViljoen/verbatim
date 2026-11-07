@@ -1519,16 +1519,26 @@ This version has breaking changes — APIs, conventions, and file structure may 
     weeks, `homeWeeks` null): it carries `WEEKS_FAILED` (`lib/pages/home.ts`,
     `WeeksRead`), and the week tile prints `TILE_FAILED` in the chart's
     place while Market's "Videos, week by week" prints `WEEKS_UNREAD` (Phase
-    4 fix round). The
-    tiles: Market (`topMarket`); Your market this week (the published read's
-    frozen market videos and comments this week beside the month,
-    `weekTileOf`; Week by week below them; the biggest ready subject and the
+    4 fix round). Since the audit design (7 Nov, `Dashboard.dc.html`) the
+    title has the figures row under it (`dashboardStats`: the week, its
+    videos and comments, its month's, and the next update, or "Paused"; the
+    two figure cells stream in with the week tile's read) and the tiles sit
+    on one three-column grid (spans 2+1, 1+1+1, 2+1, one column under
+    1180px). The
+    tiles: Market (`topMarket`: the lead as the heading's sentence, "… led
+    the conversation", or its chip beside its name for a flag or the week's
+    biggest new one, then one table of up to three conversations, each its
+    page's link, its bar against the list's largest, its bare counts' base
+    said once in the foot); Your market this week (the published read's
+    frozen market videos and comments this week, the month's being the
+    figures row's, `weekTileOf`; the biggest ready subject and the
     one that moved most against last month through its `Verdict`, or "No
     subject moved beyond its normal swing", `weekSubjectsOf` over Market's
     own subject facts; while any subject's check is open or failed the rows claim no
     rank over it, "Measured subject" and "Moved" for "Biggest subject" and
     "Moved most", Your products' "leads" rule (`pending`,
-    `weekSubjectLabels`, 14 Oct, ruling U6); no head link); Voices (`topVoices`: the group in the
+    `weekSubjectLabels`, 14 Oct, ruling U6); Week by week under them, or
+    one sentence where no week is drawn, decision 4; no head link); Voices (`topVoices`: the group in the
     most videos, every group's videos as separate bars, the two brands named
     most unprompted, `NAMED_MOST`, with no verdict); Your products
     (`topProducts`); Content (`topContent`, with `MEDICAL_LINE` under the

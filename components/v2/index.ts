@@ -10,7 +10,7 @@
 // directly rather than through this barrel), the components (./ui) and the
 // screen-only wording (./words).
 export { LBL, GO, ROW, CHIP, CHIP_ON, BTN_PRIMARY, BTN_SECONDARY, BTN_SM, TAG, TAG_TONE, TBL, TH, TD, TD_NUM, EMPTY, INPUT, QUOTE, toMax, toMaxAtLeast } from './look'
-export { StatStrip, SectionHead, EmptyBox, Label, GoLink, Tag, type StatItem } from './ui'
+export { StatStrip, StatStripFrame, StatStripCell, SectionHead, EmptyBox, Label, GoLink, Tag, type StatItem } from './ui'
 export { commaCite, translationLine, listWords, longDay } from './words'
 export { InPlacePanel, PanelSection, PanelSlot, PanelTitle, SELECTED_CARD_RING, type InPlacePanelProps } from './panel'
 export { equalColumns, panelItemOrder, panelPlacement, PANEL_BREAKPOINTS, type PanelBreakpoint, type PanelLayout, type PanelPlacement, type PanelRow, type PerBreakpoint } from './panel-place'

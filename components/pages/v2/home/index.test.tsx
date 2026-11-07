@@ -29,7 +29,7 @@ import { TILE_FAILED } from './parts'
 import { HomeSkeleton } from './skeleton'
 import { VOICES_BRANDS_FAILED, VOICES_NONE } from './voices-tile'
 import { HomeWeeksPlot } from './weeks-plot'
-import { weekSubjectLabels } from './week-tile'
+import { weekSubjectLabels, WEEKS_NOT_DRAWN } from './week-tile'
 
 // The Dashboard's render tier (Design v2, T8): what the page PRINTS, against
 // the boards E1-Dashboard and E1-Dashboard-Phone, decision 1, the copy
@@ -67,9 +67,9 @@ describe('the Dashboard\'s two clocks, labelled (decision 3)', () => {
 
   it('Voices and Your products say September, the last full month, under their heads', () => {
     const voices = tileText(markup, 'voices')
-    expect(voices).toMatch(/^Voices Open → September · the last full month In the most videos in September Long-time users upgrading/)
+    expect(voices).toMatch(/^Voices Open September · the last full month In the most videos in September Long-time users upgrading/)
     const products = tileText(markup, 'products')
-    expect(products).toMatch(/^Your products Open → September · the last full month Named in the most videos Pro-Flex Pivot/)
+    expect(products).toMatch(/^Your products Open September · the last full month Named in the most videos Pro-Flex Pivot/)
     expect(products).toContain('came up in September')
   })
 
@@ -108,8 +108,8 @@ describe('the Dashboard, as the board draws it (E1-Dashboard)', () => {
   })
 
   it('prints the board\'s tiles in its order, three rows on a twelve-column grid', () => {
-    const order = ['Dashboard', 'Week of 5 to 11 October', 'updated Sun 11 Oct', 'next update Sun 18 Oct',
-      'Market', 'Open Market', 'Your market this week', 'Voices', 'Your products', 'Content', 'Your moves', 'Agent']
+    const order = ['Dashboard', 'Week', '5 to 11 Oct', 'Next update', 'Sunday 18 Oct',
+      'Market this week', 'Open Market', 'Your market this week', 'Voices', 'Your products', 'Content', 'Your moves', 'Agent']
     let at = -1
     for (const words of order) {
       const i = text.indexOf(words, at + 1)
@@ -117,8 +117,25 @@ describe('the Dashboard, as the board draws it (E1-Dashboard)', () => {
       at = i
     }
     const spans = [...markup.matchAll(/data-tile="([a-z]+)"(?: data-state="[^"]*")? class="[^"]*min-\[1180px\]:col-span-(\d+)/g)].map((m) => `${m[1]}:${m[2]}`)
-    expect(spans).toEqual(['market:8', 'week:4', 'voices:4', 'products:4', 'content:4', 'moves:8', 'agent:4'])
-    expect(markup.match(/<section aria-label="[^"]*" class="grid grid-cols-12 gap-5">/g)).toHaveLength(3)
+    expect(spans).toEqual(['market:2', 'week:1', 'voices:1', 'products:1', 'content:1', 'moves:2', 'agent:1'])
+    // The audit design (7 Nov): one three-column grid, spans 2+1, 1+1+1, 2+1.
+    expect(markup.match(/<div data-dashboard-grid="" class="grid grid-cols-1 gap-5 min-\[1180px\]:grid-cols-3">/g)).toHaveLength(1)
+    expect(markup).not.toMatch(/grid-cols-12/)
+  })
+
+  it('the figures row under the title: the week, its videos and comments, its month\'s, and the next update, once', () => {
+    const strip = markup.slice(markup.indexOf('<dl data-stat-strip'), markup.indexOf('</dl>') + 5)
+    expect(markupText(strip)).toBe('Week 5 to 11 Oct This week 241 videos, 3,912 comments October so far 318 videos, 5,840 comments Next update Sunday 18 Oct')
+    expect(strip).toContain('min-[900px]:grid-cols-4')
+    expect(strip.match(/<dt/g)).toHaveLength(4)
+    // The " · " meta line is gone, and "updated" with it.
+    expect(markup).not.toContain('data-bar-meta')
+    expect(text).not.toMatch(/updated Sun|Week of/)
+    // A paused schedule has its own cell; a workspace with no read says so.
+    const paused = render(page({ ...data, bar: { ...data.bar, paused: true } }))
+    expect(markupText(paused.slice(paused.indexOf('<dl data-stat-strip'), paused.indexOf('</dl>')))).toMatch(/Updates Paused$/)
+    const empty = render(page(dashboardEmptyFixture()))
+    expect(markupText(empty.slice(empty.indexOf('<dl data-stat-strip'), empty.indexOf('</dl>')))).toBe('Week No update yet This week Not read yet Month Not read yet Next update Sunday 18 Oct')
   })
 
   it('Market: the check\'s flag as its chip, the week beside its month and the months before, then three bare weekly counts and one new conversation', () => {
@@ -127,20 +144,33 @@ describe('the Dashboard, as the board draws it (E1-Dashboard)', () => {
     expect(t).toContain('Insurance refusals for powered knees')
     expect(t).toMatch(/19 of 252 videos this week, every audience together/)
     expect(t).toMatch(/39 of 1,906 in July to September, the same base/)
-    expect(t).toMatch(/31 of 300 category videos in October so far/)
     // Decision 1: no weekly direction word, no "usual" multiple.
     expect(t).not.toMatch(/Rising|usual level|usually|×/)
-    expect(t).toMatch(/How long a liner lasts 9 · 14 · 23 videos/)
-    expect(t).toMatch(/Waterproof knees New 8 this week · 8 of 300 in October so far/)
+    // The audit design: one table, the flag's conversation first, then the
+    // week's biggest and the one first heard this week; bare counts, their
+    // base said once in the foot (decision 2).
+    expect(t).toContain('Conversation Share of this week This week October so far Insurance refusals for powered knees 19 31 How long a liner lasts 23 35 Waterproof knees New 8 8')
+    expect(t).toMatch(/Counted in the category’s videos: 226 this week, 300 in October so far\.$/)
+    expect(t).not.toContain(' · ')
+    // The bars against the list's largest (decision 5): 23 is full.
+    const m = tileMarkup(markup, 'market')
+    expect([...m.matchAll(/class="h-2 rounded-\[4px\] bg-brand" style="width:([0-9.]+)%"/g)].map((x) => Math.round(Number(x[1])))).toEqual([83, 100, 35])
     // The chip is a verdict, never a free word.
-    expect(tileMarkup(markup, 'market')).toMatch(/data-copy="verdict"[^>]*>Unusual this week</)
+    expect(m).toMatch(/data-copy="verdict"[^>]*>Unusual this week</)
+    // Each conversation opens its own page; the head opens Market.
+    expect(m.match(/href="\/dashboard\/market\/conversations\/[^"]+"/g)).toHaveLength(3)
+    expect(m).toMatch(/href="\/dashboard\/market"[^>]*>Open Market</)
   })
 
   it('Your market this week: the week\'s videos and comments, the month beside them, the weekly volume, the subjects against last month', () => {
     const t = tileText(markup, 'week')
-    expect(t).toMatch(/241 videos this week .*3,912 comments · 318 videos and 5,840 comments in October so far/)
+    // The month's figures are in the figures row (decision 2), not here.
+    expect(t).toMatch(/^Your market this week 241 videos, with 3,912 comments Biggest subject/)
+    expect(t).not.toContain('5,840')
     expect(t).toContain('Week by week')
-    expect(t).toMatch(/Biggest subject Fit & comfort 34% · 108 of 318/)
+    // The board's order: the subjects, then the week by week.
+    expect(t.indexOf('Moved most')).toBeLessThan(t.indexOf('Week by week'))
+    expect(t).toMatch(/Biggest subject in October so far Fit & comfort 108 videos, 34% of October so far/)
     expect(t).toMatch(/Moved most Cost & access ▲ [\d.]+ pts against September/)
     // A subject moving is neither good nor bad news: the badge is neutral, as Market draws it.
     expect(tileMarkup(markup, 'week')).not.toMatch(/data-copy="verdict"><span[^>]*class="[^"]*text-(?:positive|negative|you|good|bad)/)
@@ -202,7 +232,8 @@ describe('the Dashboard, as the board draws it (E1-Dashboard)', () => {
   })
 
   it('every tile links to its item\'s own page', () => {
-    expect(markup).toMatch(/href="\/dashboard\/market\/conversations\/[^"?#]+"[^>]*>Open Market →/)
+    expect(markup).toMatch(/href="\/dashboard\/market\/conversations\/[^"?#]+"/)
+    expect(markup).toMatch(/href="\/dashboard\/market"[^>]*>Open Market</)
     // Each tile opens its item's own page (depth as pages, 17 Oct): a
     // Voices group's, the product's, the post idea's by its row, the advice's.
     expect(markup).toContain('href="/dashboard/voices/groups/long-time-users"')
@@ -276,7 +307,7 @@ describe('every tile\'s honest state when its page has nothing', () => {
     const t = tileText(render(page(data)), 'market')
     // The category's count is named inside the market's (the week tile's 241).
     // The reader flag's chip beside the name, where the board draws its chip.
-    expect(t).toMatch(/^Market Open Market → New Waterproof knees 8 of 226 category videos this week \( ?241 in your market\) · 8 of 300 in October so far/)
+    expect(t).toMatch(/^Market this week Open Market New Waterproof knees Conversation Share of this week This week October so far Waterproof knees 8 8 /)
     expect(tileMarkup(render(page(data)), 'market')).toMatch(/data-copy="verdict"[^>]*>New</)
     expect(t).not.toContain('Unusual this week')
   })
@@ -327,7 +358,9 @@ describe('every tile\'s honest state when its page has nothing', () => {
     for (const t of ['market', 'week', 'voices', 'products', 'content', 'moves']) expect(tileText(markup, t), t).toContain(TILE_FAILED)
     // The Agent and the bar stand.
     expect(tileText(markup, 'agent')).toContain(AGENT_LINE)
-    expect(renderText(page(data))).toContain('Week of 5 to 11 October')
+    // The figures row keeps the week and the next update; its two figure
+    // cells say the week was not read.
+    expect(renderText(page(data))).toMatch(/Week 5 to 11 Oct This week Not read yet Month Not read yet Next update Sunday 18 Oct/)
     // One failed tile, the rest drawn.
     const one = render(page(dashboardFixture({ failed: ['voices'] })))
     expect(tileText(one, 'voices')).toContain(TILE_FAILED)
@@ -340,7 +373,7 @@ describe('the phone board (E1-Dashboard-Phone)', () => {
   it('drops what the phone board drops, under 640px', () => {
     // The weekly chart, Voices' bars and its brands, the recipe chips, the
     // move beside the advice, the questions to try.
-    expect(tileMarkup(markup, 'week')).toMatch(/class="flex flex-col gap-2 max-sm:hidden" data-weeks=""/)
+    expect(tileMarkup(markup, 'week')).toMatch(/data-weeks="" class="[^"]*max-sm:hidden"/)
     expect(tileMarkup(markup, 'voices')).toMatch(/role="list"[^>]*class="[^"]*max-sm:hidden/)
     expect(tileMarkup(markup, 'content')).toMatch(/class="flex flex-wrap gap-2 max-sm:hidden"/)
     expect(tileMarkup(markup, 'moves')).toMatch(/bg-inner[^"]*max-sm:hidden/)
@@ -367,7 +400,9 @@ describe('the route streams each tile on its own', () => {
     const out = await html(settled(dashboardFixture()))
     for (const t of ['market', 'week', 'voices', 'products', 'content', 'moves', 'agent']) expect(out).toContain(`data-tile="${t}"`)
     expect(out).toContain('Unusual this week')
-    expect(out).toContain('Week of 5 to 11 October')
+    expect(out).toContain('5 to 11 Oct')
+    expect(out).toContain('Sunday 18 Oct')
+    expect(markupText(out)).toMatch(/This week 241 videos ?, 3,912 comments/)
   })
 
   it('paints the shell and every other tile while one tile\'s read is still out', async () => {
@@ -405,8 +440,8 @@ describe('the Dashboard skeleton', () => {
     const markup = render(<HomeSkeleton />)
     expect(renderText(<HomeSkeleton />)).toContain('Dashboard')
     expect(markup).toMatch(/role="status"/)
-    expect(markup.match(/min-\[1180px\]:col-span-8/g)).toHaveLength(2)
-    expect(markup.match(/min-\[1180px\]:col-span-4/g)).toHaveLength(5)
+    expect(markup.match(/min-\[1180px\]:col-span-2/g)).toHaveLength(2)
+    expect(markup.match(/min-\[1180px\]:col-span-1/g)).toHaveLength(5)
     expect(markup).not.toMatch(STRIPE)
   })
 })
@@ -558,11 +593,13 @@ describe('the board\'s details (the fresh check)', () => {
     expect(tileMarkup(failed, 'moves')).toContain('href="/dashboard/moves"')
   })
 
-  it('the empty week tile says "Insufficient data" once at each width', () => {
+  it('the empty week tile says "Insufficient data" once, at every width, and the chart says why in one sentence', () => {
     const w = tileMarkup(render(page(dashboardEmptyFixture())), 'week')
-    expect(w.match(/Insufficient data/g)).toHaveLength(2)
-    expect(w).toMatch(/<p class="m-0 text-\[14px\] leading-\[1\.5\] text-muted-foreground sm:hidden">Insufficient data/)
-    expect(w).toMatch(/data-weeks=""[\s\S]*Insufficient data/)
+    expect(w.match(/Insufficient data/g)).toHaveLength(1)
+    expect(w).not.toMatch(/sm:hidden">Insufficient data/)
+    // Decision 4: no wells, no empty frame; the board's sentence.
+    expect(w).not.toContain('data-week-state')
+    expect(markupText(w.slice(w.indexOf('data-weeks=""')))).toContain(WEEKS_NOT_DRAWN)
   })
 
   // Phase 4 fix round: a weekly volume read that THREW printed "Insufficient
@@ -575,12 +612,13 @@ describe('the board\'s details (the fresh check)', () => {
     const chart = w.slice(w.indexOf('data-weeks=""'))
     expect(chart).toContain(TILE_FAILED)
     expect(chart).not.toContain('Insufficient data')
+    expect(chart).not.toContain(WEEKS_NOT_DRAWN)
     // The week's own figures still print: only the chart failed.
-    expect(markupText(w)).toContain('241 videos this week')
-    // Too few clean weeks keeps its words.
+    expect(markupText(w)).toContain('241 videos, with 3,912 comments')
+    // Too few clean weeks keeps its words: the board's sentence.
     const thin = { ...base, week: { state: 'ok' as const, top: weekTileOf({ read: fixturePublished(), weeks: null, subjects: null, now: DASHBOARD_NOW }) } }
     const t = tileMarkup(render(page(thin)), 'week')
-    expect(t.slice(t.indexOf('data-weeks=""'))).toContain('Insufficient data')
+    expect(t.slice(t.indexOf('data-weeks=""'))).toContain(WEEKS_NOT_DRAWN)
     expect(t).not.toContain(TILE_FAILED)
   })
 })
@@ -589,26 +627,34 @@ describe('the phone board (E1-Dashboard-Phone), after the check', () => {
   const markup = render(page(dashboardFixture()))
 
   it('the bar is the short line', () => {
-    expect(markup).toContain('<span class="sm:hidden">5 to 11 Oct · next update Sun 18 Oct</span>')
-    expect(markup).toContain('<span class="max-sm:hidden">Week of 5 to 11 October · updated Sun 11 Oct · next update Sun 18 Oct</span>')
+    // The audit design: one figures row at every width, no phone variant.
+    const strip = markup.slice(markup.indexOf('<dl data-stat-strip'), markup.indexOf('</dl>'))
+    expect(markupText(strip)).toMatch(/^Week 5 to 11 Oct /)
+    expect(strip).not.toMatch(/sm:hidden/)
+    expect(markup).not.toContain('next update Sun')
   })
 
   it('Your market this week is one line of figures, the month still beside the week, and no chart', () => {
     const w = tileMarkup(markup, 'week')
-    expect(markupText(w.match(/<span class="[^"]* sm:hidden">videos ·[\s\S]*?in October so far<\/span>/)![0])).toBe('videos · 3,912 comments this week · 318 in October so far')
-    expect(w).toMatch(/data-weeks=""/)
+    // The figures at every width (the month is the figures row's), the chart
+    // not on a phone.
+    expect(markupText(w.slice(w.indexOf('data-week-figures'), w.indexOf('data-subjects')))).toMatch(/241 videos, with 3,912 comments/)
+    expect(w.slice(w.indexOf('data-week-figures'), w.indexOf('data-subjects'))).not.toMatch(/sm:hidden/)
+    expect(w).toMatch(/data-weeks="" class="[^"]*max-sm:hidden"/)
   })
 
   it('the phone board\'s one "Moved most" row, in every state, with no hairline over it; the biggest subject is the wide board\'s', () => {
     const d = dashboardFixture()
     const week = d.week.state === 'ok' ? d.week.top : null!
     const only = { ...d, week: { state: 'ok' as const, top: { ...week, subjects: { ...week.subjects!, moved: null, noneMoved: false } } } }
+    // The audit design: both rows stacked, each under its hairline, at every
+    // width (the board draws no phone variant).
     for (const m of [tileMarkup(render(page(only)), 'week'), tileMarkup(markup, 'week')]) {
-      expect(m).toMatch(/<div data-subjects="ready" class="flex flex-col gap-1\.5 border-t border-track pt-3 text-\[13\.5px\] leading-\[1\.4\] max-sm:border-t-0 max-sm:pt-0">/)
-      expect(m).toMatch(/max-sm:hidden"><span class="whitespace-nowrap text-muted-foreground">Biggest subject/)
-      expect(m).toMatch(/<div class="grid grid-cols-\[auto_minmax\(0,1fr\)\] items-baseline gap-3"><span class="whitespace-nowrap text-muted-foreground">Moved most/)
+      expect(m).toMatch(/<div data-subjects="ready" class="border-t border-track pt-3\.5"><div class="text-\[13px\] leading-\[1\.4\] text-muted-foreground">Biggest subject in October so far<\/div>/)
+      expect(m).toMatch(/<div data-moved="" class="border-t border-track pt-3\.5"><div class="text-\[13px\] leading-\[1\.4\] text-muted-foreground">Moved most<\/div>/)
+      expect(m.slice(m.indexOf('data-subjects'), m.indexOf('data-weeks'))).not.toMatch(/sm:hidden/)
     }
-    expect(markupText(tileMarkup(render(page(only)), 'week'))).toMatch(/Moved most no comparison with September yet$/)
+    expect(markupText(tileMarkup(render(page(only)), 'week'))).toMatch(/Moved most No comparison with September yet\. Week by week/)
   })
 })
 
@@ -622,20 +668,22 @@ describe('the board\'s shape holds when the data is thin (parity pass)', () => {
   const shapeOf = (markup: string) => {
     const t = (k: string) => tileMarkup(markup, k)
     return {
+      // The audit design: the heading, the table and its three rows.
       market: {
-        chip: /data-chip="leads"|data-copy="verdict"/.test(t('market')),
-        title: t('market').includes('<h3'),
-        chart: /<svg[^>]*role="img"/.test(t('market')),
-        rows: (t('market').match(/border-t border-track py-2\.5/g) ?? []).length,
+        title: t('market').includes('<h2'),
+        table: t('market').includes('<table'),
+        rows: (t('market').match(/data-market-row=/g) ?? []).length,
       },
+      // The week by week keeps its block in every state: the chart, or its
+      // sentence (decision 4).
       week: {
         figure: t('week').includes('text-[40px]'),
-        weeks: (t('week').match(/data-week-state="/g) ?? []).length,
+        weeks: t('week').includes('data-weeks=""'),
         subjects: (markupText(t('week')).match(/Biggest subject|Moved most/g) ?? []).length,
       },
       voices: { title: t('voices').includes('<h3'), bars: t('voices').includes('role="list"'), named: t('voices').includes('data-named=') },
       products: { title: t('products').includes('<h3'), shelf: /role="img"|data-shelf="ghost"/.test(t('products')) },
-      content: { title: t('content').includes('<h3'), figure: t('content').includes('text-[30px]') },
+      content: { title: t('content').includes('<h3'), figure: t('content').includes('text-[32px]') },
       moves: { title: t('moves').includes('<h3'), panel: markupText(t('moves')).includes('After your move') },
     }
   }
@@ -645,8 +693,8 @@ describe('the board\'s shape holds when the data is thin (parity pass)', () => {
 
   it('the full fixture draws every part the board draws', () => {
     expect(board).toEqual({
-      market: { chip: true, title: true, chart: true, rows: 2 },
-      week: { figure: true, weeks: 8, subjects: 2 },
+      market: { title: true, table: true, rows: 3 },
+      week: { figure: true, weeks: true, subjects: 2 },
       voices: { title: true, bars: true, named: true },
       products: { title: true, shelf: true },
       content: { title: true, figure: true },
@@ -664,21 +712,24 @@ describe('the board\'s shape holds when the data is thin (parity pass)', () => {
 
   it('Market: the lead with its chip beside its name, the week\'s biggest, and the new row saying nothing was', () => {
     const t = tileText(markup, 'market')
-    expect(t).toMatch(new RegExp(`^Market Open Market → ${MARKET_LEADS} How long a liner lasts 23 of 226 category videos this week`))
+    expect(t).toMatch(new RegExp(`^Market this week Open Market How long a liner lasts ${MARKET_LEADS} Conversation Share of this week This week October so far How long a liner lasts 23 35`))
     // Where nothing more is new, the week's next conversation keeps the
-    // board's second row, and one quiet line says nothing is new.
-    expect(t).toMatch(new RegExp(`Sweat under the liner 12 · 15 · 21 videos Insurance refusals for powered knees 6 · 5 · 19 videos ${MARKET_NOTHING_NEW}$`))
-    expect(tileMarkup(markup, 'market')).toMatch(/data-chip="leads" class="bg-accent text-accent-foreground/)
+    // board's third row, and one quiet line says nothing is new.
+    expect(t).toMatch(new RegExp(`Sweat under the liner 21 30 Insurance refusals for powered knees 19 31 Counted in the category’s videos: 226 this week, 300 in October so far\\. ${MARKET_NOTHING_NEW.replace('.', '\\.')}$`))
+    // The lead is the heading's sentence (the board's), no chip.
+    expect(tileMarkup(markup, 'market')).toMatch(/<h2 class="[^"]*"><span data-copy="subject" data-slot="pass_b_theme">How long a liner lasts<\/span> led the conversation<\/h2>/)
+    expect(tileMarkup(markup, 'market')).not.toContain('data-chip="leads"')
   })
 
   it('Your market this week: every week a faint slot on the board\'s axis, the gap said once in the chart\'s key, both subject rows', () => {
     const w = tileMarkup(markup, 'week')
-    expect(w.match(/data-week-state="empty"/g)).toHaveLength(8)
-    expect(markupText(w.slice(w.indexOf('data-weeks=""'))).match(/Insufficient data/g)).toHaveLength(1)
-    expect(markupText(w)).toMatch(new RegExp(`Biggest subject ${SUBJECT_NOT_MEASURED} Moved most ${SUBJECT_NOT_MEASURED}$`))
+    // Decision 4: no week to draw is one sentence, never eight empty slots.
+    expect(w).not.toContain('data-week-state')
+    expect(markupText(w.slice(w.indexOf('data-weeks=""'))).match(new RegExp(WEEKS_NOT_DRAWN.replace('.', '\\.'), 'g'))).toHaveLength(1)
+    expect(markupText(w)).toMatch(new RegExp(`Biggest subject in October so far ${SUBJECT_NOT_MEASURED}\\. Moved most ${SUBJECT_NOT_MEASURED}\\. Week by week`))
     expect(SUBJECT_NOT_MEASURED).toBe('Not measured yet')
     const s = tileText(render(page(sealand)), 'week')
-    expect(s).toMatch(/Biggest subject Fit & comfort 34% · 108 of 318 Moved most no comparison with September yet$/)
+    expect(s).toMatch(/Biggest subject in October so far Fit & comfort 108 videos, 34% of October so far Moved most No comparison with September yet\. Week by week/)
   })
 
   // Ruling U6 (14 Oct): while any subject is not measured yet the rows claim
@@ -690,10 +741,10 @@ describe('the board\'s shape holds when the data is thin (parity pass)', () => {
     const withSubjects = (subjects: NonNullable<typeof wk>['subjects']): DashboardData => ({ ...full, week: { state: 'ok', top: { ...wk!, subjects } } })
     const mixed = withSubjects({ ...wk!.subjects!, pending: 2 })
     const t = tileText(render(page(mixed)), 'week')
-    expect(t).toMatch(/Measured subject Fit & comfort 34% · 108 of 318 Moved Cost & access ▲ [\d.]+ pts against September$/)
+    expect(t).toMatch(/Measured subject in October so far Fit & comfort 108 videos, 34% of October so far Moved Cost & access ▲ [\d.]+ pts against September Week by week/)
     expect(t).not.toMatch(/Biggest|Moved most/)
     const none = withSubjects({ ...wk!.subjects!, moved: null, noneMoved: true, pending: 2 })
-    expect(tileText(render(page(none)), 'week')).toMatch(/Moved no measured subject beyond its normal swing against September$/)
+    expect(tileText(render(page(none)), 'week')).toMatch(/Moved No measured subject beyond its normal swing against September\. Week by week/)
     assertCopyContract(page(mixed))
     expect(weekSubjectLabels({ prevText: 'September' })).toEqual({ biggest: 'Biggest subject', moved: 'Moved most', noneMoved: 'none beyond its normal swing against September' })
     expect(weekSubjectLabels({ prevText: 'September', pending: 1 }).biggest).toBe('Measured subject')
@@ -713,7 +764,7 @@ describe('the board\'s shape holds when the data is thin (parity pass)', () => {
 
   it('Content, no post ideas: the week\'s most-asked question your posts have not touched, beside its month, then why there is no idea', () => {
     const t = tileText(markup, 'content')
-    expect(t).toBe(`Content Open → ${ASKED_TITLE}: How long a liner lasts 23 of 226 videos this week 35 of 300 in October so far Who asks New amputees in their first year None of your 25 posts since August touched on it Sweat under the liner 21 this week · 30 of 300 in October so far ${IDEAS_EMPTY.not_on}`)
+    expect(t).toBe(`Content Open ${ASKED_TITLE}: How long a liner lasts 23 of 226 videos this week 35 of 300 in October so far Who asks New amputees in their first year None of your 25 posts since August touched on it Sweat under the liner 21 this week · 30 of 300 in October so far ${IDEAS_EMPTY.not_on}`)
     // Nothing pins the why line to the tile's foot (it flows).
     expect(tileMarkup(markup, 'content')).not.toContain('mt-auto')
     // It opens Content's first question card, which holds its question (the
@@ -778,7 +829,7 @@ describe('the thin states, after the fresh check', () => {
 
   it('Market: a row first heard this week carries its chip, and the line never says "Nothing new" beside it', () => {
     const t = tileText(markup, 'market')
-    expect(t).toMatch(/How long a liner lasts New 9 · 14 · 23 videos/)
+    expect(t).toMatch(/How long a liner lasts New 23 35/)
     expect(t).toMatch(new RegExp(`${MARKET_NOTHING_ELSE_NEW}$`))
     expect(t).not.toContain(MARKET_NOTHING_NEW)
     // Wherever any conversation on the tile is new, the line says "else".
@@ -791,15 +842,18 @@ describe('the thin states, after the fresh check', () => {
   it('Your market this week: some weeks drawn, the rest low faint wells on the baseline, never as tall as a week', () => {
     const w = tileMarkup(markup, 'week')
     expect(w.match(/data-week-state="(?:settled|filling)"/g)).toHaveLength(3)
-    const wells = w.match(/<div aria-hidden="true" class="[^"]*" data-week-state="empty"/g) ?? []
-    expect(wells).toHaveLength(5)
-    for (const x of wells) {
-      expect(x).toContain('h-2')
-      expect(x).not.toMatch(/h-\[\d+%\]/)
+    // The audit design (decision 4): a week with nothing drawn keeps its
+    // column and draws nothing in it, no well.
+    const empty = w.match(/<div aria-hidden="true" class="[^"]*" data-week-state="empty"/g) ?? []
+    expect(empty).toHaveLength(5)
+    for (const x of empty) {
+      expect(x).toContain('h-0')
+      expect(x).not.toContain('bg-track')
     }
     // Weeks drawn: the key names the two series, and no gap line.
     expect(markupText(w)).toContain('Videos Comments')
     expect(markupText(w)).not.toContain('Insufficient data')
+    expect(markupText(w)).not.toContain(WEEKS_NOT_DRAWN)
   })
 
   it('Your moves: a comparison that may not print shows its latest month alone, with no arrow and no open after side', () => {
@@ -859,7 +913,7 @@ describe('the thin states, after the fresh check', () => {
       const d = { ...base, content: { state: 'ok' as const, top: { ...c, asked: { ...c.asked!, own } } } }
       assertCopyContract(page(d))
       const t = tileText(render(page(d)), 'content')
-      expect(t).toMatch(/^Content Open → Asked this week: How long a liner lasts 23 of 226 videos this week/)
+      expect(t).toMatch(/^Content Open Asked this week: How long a liner lasts 23 of 226 videos this week/)
       expect(t).not.toContain(ASKED_TITLE)
     }
     const days = { ...base, content: { state: 'ok' as const, top: { ...c, asked: { ...c.asked!, own: null, weekWords: 'between 28 Sep and 11 Oct' } } } }

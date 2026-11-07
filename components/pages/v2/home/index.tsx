@@ -1,9 +1,10 @@
 import { Suspense, type ReactNode } from 'react'
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
-import { Bone } from '@/components/shell/skeleton'
-import { weekdayDate } from '@/lib/format'
+import { Bone, SkeletonStatStrip } from '@/components/shell/skeleton'
+import { longDay, StatStripCell, StatStripFrame, type StatItem } from '@/components/v2'
+import { fmtInt } from '@/lib/format'
 import { surface } from '@/lib/nav'
-import type { DashboardBar, DashboardData, DashboardReads } from '@/lib/pages/v2/home'
+import type { DashboardBar, DashboardData, DashboardReads, TileRead, WeekTile } from '@/lib/pages/v2/home'
 import { AgentBoxShell, AgentTries } from './agent-box'
 import { ContentTileView } from './content-tile'
 import { MarketTileView } from './market-tile'
@@ -14,45 +15,117 @@ import { TileBoundary } from './tile-boundary'
 import { VoicesTileView } from './voices-tile'
 import { WeekTileView } from './week-tile'
 
-// THE DASHBOARD (Design v2, depth plan T8), drawn to the boards E1-Dashboard
-// (1440) and E1-Dashboard-Phone (390): the bar, then three rows of tiles on a
-// twelve-column grid, as the board lays them: Market (8) beside Your market
-// this week (4); Voices, Your products and Content (4 each); Your moves (8)
-// beside the Agent (4). Under 1180px every tile takes the row (the board's own
-// breakpoint), and under 640px each takes the phone board's tighter card and
-// drops what that board drops. `lib/pages/v2/home.ts` says what each reads.
+// THE DASHBOARD, drawn to the audit design's board (Dashboard.dc.html, 7
+// Nov): the title, the figures row under it (the week, its videos and
+// comments, its month's, and the next update: the screen's base said once,
+// decision 2), then one three-column grid of tiles, as the board lays them:
+// Market (two columns) beside Your market this week; Voices, Your products
+// and Content; Your moves (two columns) beside the Agent. Under 1180px every
+// tile takes the row (the app's own point, small call 14). `lib/pages/v2/home.ts`
+// says what each reads.
 //
 // TWO WAYS IN, ONE DRAWING. `DashboardPage` draws a settled `DashboardData`
 // (the render tests, the shots, a dump); `DashboardStream` is what the route
 // draws: the same tiles, each behind its own Suspense boundary with its own
 // bones, so the page paints at once and a slow page's read holds only its
-// tile.
+// tile. The figures row draws the week and the next update as soon as the
+// bar's read settles, and its two figure cells as soon as the week's does
+// (small call 9).
 
 export const DASHBOARD_TITLE = surface('home').label
 
-/** The bar's quiet line: "Week of 5 to 11 October · updated Sun 11 Oct ·
- *  next update Sun 18 Oct"; on a phone the board's short one, "5 to 11 Oct ·
- *  next update Sun 18 Oct". */
-export function BarMeta({ bar }: { bar: DashboardBar }) {
-  const next = bar.paused ? 'updates paused' : bar.nextUpdate ? `next update ${weekdayDate(bar.nextUpdate)}` : null
-  const wide = [bar.dates ? `Week of ${bar.dates}` : null, bar.asAt ? `updated ${weekdayDate(bar.asAt)}` : null, next].filter(Boolean).join(' · ')
-  const phone = [bar.short, next].filter(Boolean).join(' · ')
-  if (!wide && !phone) return null
+/** The month the week is restated against, as a cell's term: "October so
+ *  far", "September" (the week tile's own words, `inMonth`, without "in"). */
+const monthWords = (inMonth: string | null | undefined): string | null => {
+  const w = (inMonth ?? '').replace(/^\s*in\s+/i, '').trim()
+  return w ? w.charAt(0).toUpperCase() + w.slice(1) : null
+}
+
+/** "241 videos, 3,912 comments"; the videos alone where the comments were
+ *  not read; null where neither was. */
+function videosAndComments(f: { videos: number | null; comments: number | null }): ReactNode {
+  if (f.videos == null) return null
   return (
     <>
-      <span className="max-sm:hidden">{wide}</span>
-      <span className="sm:hidden">{phone}</span>
+      <span data-copy="figure">{fmtInt(f.videos)}</span> videos
+      {f.comments != null ? <>, <span data-copy="figure">{fmtInt(f.comments)}</span> comments</> : null}
     </>
   )
 }
 
-function Layout({ meta, market, week, voices, products, content, moves, agent }: Record<'meta' | 'market' | 'week' | 'voices' | 'products' | 'content' | 'moves' | 'agent', ReactNode>) {
+/** The words a cell prints where it has nothing to say a figure of. */
+export const STRIP_NONE = { week: 'No update yet', figures: 'Not read yet', next: 'Not scheduled', paused: 'Paused' } as const
+
+/**
+ * The Dashboard's figures row, in the board's four cells and order: Week
+ * ("5 to 11 Oct"), This week (its videos and comments, the read's frozen
+ * figures), the week's month by name (its videos and comments) and Next
+ * update ("Sunday 18 Oct"); a paused schedule says so in the last cell's
+ * place. A week tile that failed, or holds no read, says so in its two
+ * cells. Pure.
+ */
+export function dashboardStats(bar: DashboardBar, week: WeekTile | null): StatItem[] {
+  const month = monthWords(week?.inMonth)
+  return [
+    { key: 'week', term: 'Week', value: bar.short ?? bar.dates ?? STRIP_NONE.week },
+    { key: 'this-week', term: 'This week', value: (week && videosAndComments(week.week)) ?? STRIP_NONE.figures },
+    { key: 'month', term: month ?? 'Month', value: (week && videosAndComments(week.month)) ?? STRIP_NONE.figures },
+    bar.paused
+      ? { key: 'next', term: 'Updates', value: STRIP_NONE.paused }
+      : { key: 'next', term: 'Next update', value: bar.nextUpdate ? longDay(bar.nextUpdate) : STRIP_NONE.next },
+  ]
+}
+
+const ok = (r: TileRead<WeekTile>): WeekTile | null => (r.state === 'ok' ? r.top : null)
+
+/** The figures row from settled data. */
+export function DashboardStrip({ bar, week }: { bar: DashboardBar; week: TileRead<WeekTile> }) {
+  const items = dashboardStats(bar, ok(week))
+  return <StatStripFrame cells={items.length}>{items.map((it) => <StatStripCell key={it.key} item={it} />)}</StatStripFrame>
+}
+
+/** The figures row as the route streams it: the week and the next update
+ *  at once, the two figure cells as bones until the week's read settles. */
+function DashboardStripStream({ bar, week }: { bar: DashboardBar; week: Promise<TileRead<WeekTile>> }) {
+  const [first, , , last] = dashboardStats(bar, null)
+  return (
+    <StatStripFrame cells={4}>
+      <StatStripCell item={first} />
+      <Suspense fallback={<><CellBones /><CellBones /></>}>
+        <Settled read={week}>
+          {(r) => dashboardStats(bar, ok(r)).slice(1, 3).map((it) => <StatStripCell key={it.key} item={it} />)}
+        </Settled>
+      </Suspense>
+      <StatStripCell item={last} />
+    </StatStripFrame>
+  )
+}
+
+function CellBones() {
+  return (
+    <div aria-hidden className="min-w-0">
+      <Bone className="h-3 w-20" />
+      <Bone className="mt-2 h-4 w-32 max-w-full" />
+    </div>
+  )
+}
+
+/** The tiles' grid: three columns from 1180px, one below (the board's
+ *  `.grid3`, 20px between tiles). */
+export const DASHBOARD_GRID = 'grid grid-cols-1 gap-5 min-[1180px]:grid-cols-3'
+
+function Layout({ strip, market, week, voices, products, content, moves, agent }: Record<'strip' | 'market' | 'week' | 'voices' | 'products' | 'content' | 'moves' | 'agent', ReactNode>) {
   return (
     <PageFrame className="text-foreground">
-      <PageBar title={DASHBOARD_TITLE} meta={meta} />
-      <section aria-label="Your market this week" className="grid grid-cols-12 gap-5">{market}{week}</section>
-      <section aria-label="Who, what you sell and what to post" className="grid grid-cols-12 gap-5">{voices}{products}{content}</section>
-      <section aria-label="Your moves and the Agent" className="grid grid-cols-12 gap-5">{moves}{agent}</section>
+      <div className="flex shrink-0 flex-col">
+        <PageBar title={DASHBOARD_TITLE} />
+        <div className="mt-5">{strip}</div>
+      </div>
+      <div data-dashboard-grid="" className={DASHBOARD_GRID}>
+        {market}{week}
+        {voices}{products}{content}
+        {moves}{agent}
+      </div>
     </PageFrame>
   )
 }
@@ -74,7 +147,7 @@ export const FAILED_TILE = {
 export function DashboardPage({ data }: { data: DashboardData }) {
   return (
     <Layout
-      meta={<BarMeta bar={data.bar} />}
+      strip={<DashboardStrip bar={data.bar} week={data.week} />}
       market={<TileBoundary name="market" fallback={FAILED_TILE.market}><MarketTileView read={data.market} /></TileBoundary>}
       week={<TileBoundary name="week" fallback={FAILED_TILE.week}><WeekTileView read={data.week} /></TileBoundary>}
       voices={<TileBoundary name="voices" fallback={FAILED_TILE.voices}><VoicesTileView read={data.voices} /></TileBoundary>}
@@ -102,7 +175,7 @@ async function Settled<T>({ read, children }: { read: Promise<T>; children: (val
 export function DashboardStream({ reads }: { reads: DashboardReads }) {
   return (
     <Layout
-      meta={<TileBoundary name="bar" fallback={null}><Suspense fallback={<Bone className="h-3 w-72" />}><Settled read={reads.bar}>{(bar) => <BarMeta bar={bar} />}</Settled></Suspense></TileBoundary>}
+      strip={<TileBoundary name="bar" fallback={null}><Suspense fallback={<SkeletonStatStrip cells={4} />}><Settled read={reads.bar}>{(bar) => <DashboardStripStream bar={bar} week={reads.week} />}</Settled></Suspense></TileBoundary>}
       market={<TileBoundary name="market" fallback={FAILED_TILE.market}><Suspense fallback={<TileBones span="wide" tall label="Loading Market" />}><Settled read={reads.market}>{(r) => <MarketTileView read={r} />}</Settled></Suspense></TileBoundary>}
       week={<TileBoundary name="week" fallback={FAILED_TILE.week}><Suspense fallback={<TileBones span="narrow" tall label="Loading your market this week" />}><Settled read={reads.week}>{(r) => <WeekTileView read={r} />}</Settled></Suspense></TileBoundary>}
       voices={<TileBoundary name="voices" fallback={FAILED_TILE.voices}><Suspense fallback={<TileBones span="narrow" label="Loading Voices" />}><Settled read={reads.voices}>{(r) => <VoicesTileView read={r} />}</Settled></Suspense></TileBoundary>}

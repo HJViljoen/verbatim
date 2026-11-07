@@ -18,13 +18,15 @@ import { cn } from '@/lib/utils'
 // on Your market). The numbers are the column's own (`homeWeekDetail`),
 // handed in: nothing here counts.
 //
-// PALETTE A: the market's yellow bars, the orange second series, the
+// PALETTE A: the market's yellow bars, the second series in the secondary
+// ink (the audit design, 7 Nov: orange is the current nav icon's alone), the
 // hairline and the ground's wash under the week shown.
 //
 // DESIGN V2 (depth plan T8) moves it into "Your market this week", a third of
 // the row wide (E1-Dashboard): the same chart, the same columns, the same
-// numbers on hover, focus and a tap, drawn shorter (`size="sm"`, the board's
-// 92px plot) with its week labels a step smaller so eight fit the tile.
+// numbers on hover, focus and a tap, drawn shorter (`size="sm"`). Since the
+// audit design (7 Nov) its week labels are 12px at every size (text is never
+// under 12px) and a week with nothing drawn is an empty column, no well.
 
 /** Headroom over the tallest bar and the highest point, so neither touches the top. */
 const PLOT_TOP = 0.88
@@ -33,13 +35,10 @@ const PLOT_TOP = 0.88
  *  comments line sits over the plot area: the height less the labels' row (at
  *  normal leading, 1.3 of the type), its 8px gap and the 1px baseline. */
 const SIZES = {
-  lg: { box: 'h-[190px]', label: 'text-[12px] max-sm:text-[10px]', under: 'bottom-[24.6px]' },
-  sm: { box: 'h-[112px]', label: 'text-[10.5px]', under: 'bottom-[22.65px]' },
+  lg: { box: 'h-[190px]', label: 'text-[12px]', under: 'bottom-[24.6px]' },
+  sm: { box: 'h-[112px]', label: 'text-[12px]', under: 'bottom-[24.6px]' },
 } as const
 const HAIR = 'border-[#E4E2DC]'
-/** An empty week's well: a low faint slab on the baseline, too short and too
- *  pale to read as a week beside a drawn bar. */
-const WELL = 'h-2'
 const MUTED = 'text-[#5F656B]'
 
 export function HomeWeeksPlot({ weeks, details, label, open = null, size = 'lg' }: {
@@ -94,14 +93,17 @@ export function HomeWeeksPlot({ weeks, details, label, open = null, size = 'lg' 
                 // (Heinrich, 1 Oct); solid once it has settled.
                 <div className={`relative w-[44%] max-w-8 rounded-t-[3px] bg-brand ${c.settled ? '' : 'opacity-45'}`} data-week-state={c.settled ? 'settled' : 'filling'} data-week={c.week} style={{ height: `${at(c.videos, weeks.maxVideos)}%` }} />
               ) : (
-                // A week with nothing drawn keeps its slot: a low faint well on
-                // the baseline where its bar would stand, so the frame carries
-                // the gap (parity pass, 13 Oct: "the week tile's chart frame
-                // with faint slots").
-                <div aria-hidden className={`relative w-[44%] max-w-8 rounded-t-[2px] bg-track ${WELL}`} data-week-state="empty" />
+                // A week with nothing drawn keeps its column and draws
+                // nothing in it (the audit design, decision 4: no empty
+                // slots); a chart with no week at all is not drawn, and the
+                // tile says why in a sentence.
+                <div aria-hidden className="relative h-0 w-[44%] max-w-8" data-week-state="empty" />
               )}
             </div>
-            <div className={cn('whitespace-nowrap', sz.label, MUTED)}>{c.label}</div>
+            {/* The tile's drawing labels every other week, the newest always
+                (eight 12px labels do not fit a third of the row); each week's
+                own name is in its button and its numbers. */}
+            <div className={cn('whitespace-nowrap', sz.label, MUTED, size === 'sm' && (n - 1 - i) % 2 === 1 ? 'invisible' : null)}>{c.label}</div>
             {d ? (
               <button
                 type="button"
@@ -115,7 +117,7 @@ export function HomeWeeksPlot({ weeks, details, label, open = null, size = 'lg' 
         )
       })}
       {/* The comments line, over the plot area (`SIZES`). The second series,
-          so the orange (its key above and in the numbers). */}
+          in the secondary ink (its key above). */}
       <div className={cn('pointer-events-none absolute inset-x-0 top-0', sz.under)} aria-hidden>
         <svg className="absolute inset-0 size-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
           {segments.map((seg, i) =>
@@ -124,7 +126,7 @@ export function HomeWeeksPlot({ weeks, details, label, open = null, size = 'lg' 
                 key={i}
                 points={seg.map((p) => `${p.x},${p.y}`).join(' ')}
                 fill="none"
-                stroke="var(--orange)"
+                stroke="var(--secondary-foreground)"
                 strokeWidth={2}
                 vectorEffect="non-scaling-stroke"
                 strokeLinejoin="round"
@@ -136,7 +138,7 @@ export function HomeWeeksPlot({ weeks, details, label, open = null, size = 'lg' 
         {segments.flat().map((p, i) => (
           <span
             key={i}
-            className={`absolute size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-orange ${p.settled ? '' : 'opacity-45'}`}
+            className={`absolute size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-secondary-foreground ${p.settled ? '' : 'opacity-45'}`}
             style={{ left: `${p.x}%`, top: `${p.y}%` }}
           />
         ))}

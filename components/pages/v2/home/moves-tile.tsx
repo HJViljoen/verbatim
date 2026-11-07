@@ -1,7 +1,6 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { MovementBadge } from '@/components/delta-badge'
-import { NAV_ICON } from '@/components/nav-icons'
 import { priorityLabel } from '@/components/pages/moves/words'
 import { AdviceAnswers } from '@/components/pages/v2/moves/advice-actions'
 import { PRIORITY_CHIP } from '@/components/pages/v2/moves/parts'
@@ -13,7 +12,8 @@ import { notMeasuredLine } from '@/lib/pages/not-measured'
 import { inlineMonth } from '@/lib/reading/month-label'
 import { monthStartOf } from '@/lib/reading/month-key'
 import { cn } from '@/lib/utils'
-import { CSUB, OLINK, TILE, TILE_FAILED, TileHead, TileLine, TT } from './parts'
+import { GO } from '@/components/v2/look'
+import { CSUB, TILE, TILE_FAILED, TileHead, TileLine, TT } from './parts'
 
 // THE DASHBOARD'S YOUR MOVES TILE (Design v2, T8; E1-Dashboard's third row),
 // from `topMoves`: the first piece of advice waiting for a decision, which
@@ -37,7 +37,7 @@ function Advice({ top }: { top: TopMoves }) {
     return (
       <div className="flex flex-col gap-2">
         <TileLine>{MOVES_NONE_WAITING}</TileLine>
-        <Link href={RECORD_HREF} className={cn(OLINK, 'self-start')}>See the advice record →</Link>
+        <Link href={RECORD_HREF} className={cn(GO, 'self-start')}>See the advice record</Link>
       </div>
     )
   }
@@ -158,16 +158,13 @@ function Newest({ move, reading }: { move: NonNullable<TopMoves['newest']>; read
   )
 }
 
-/** Where the tile's link goes: the advice's panel, else the move, else the page. */
-export function movesTileHref(top: TopMoves | null): string {
-  return top?.advice?.href ?? top?.move?.href ?? tileHref('moves')
-}
+
 
 export function MovesTileView({ read }: { read: TileRead<TopMoves | null> }) {
   const top = read.state === 'ok' ? read.top : null
   return (
-    <article aria-labelledby="home-moves" data-tile="moves" className={cn(TILE, 'col-span-12 min-[1180px]:col-span-8')}>
-      <TileHead icon={NAV_ICON.moves} name="Your moves" id="home-moves" href={movesTileHref(top)} />
+    <article aria-labelledby="home-moves" data-tile="moves" className={cn(TILE, 'min-[1180px]:col-span-2')}>
+      <TileHead label="Your moves" id="home-moves" open={{ href: top?.advice?.href ?? top?.move?.href ?? tileHref('moves'), words: 'Open' }} />
       {read.state === 'failed' ? <TileLine>{TILE_FAILED}</TileLine> : (
         // The board's two columns in every state (parity pass): the advice,
         // and "After your move" beside it, on the move whose market moved, else

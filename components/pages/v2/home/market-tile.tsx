@@ -1,162 +1,153 @@
 import Link from 'next/link'
-import { FlagChip, MiniBars, SpikeBars, type MiniBar } from '@/components/v2'
-import { NAV_ICON } from '@/components/nav-icons'
+import { FlagChip, TBL, TD, TD_NUM, TH, toMax } from '@/components/v2'
+import { ROW } from '@/components/v2/look'
 import { newVerdict } from '@/components/pages/v2/market/parts'
 import { MARKET_FIRST_RUN } from '@/components/pages/v2/market'
-import { fmtInt, fmtPct } from '@/lib/format'
+import { fmtInt } from '@/lib/format'
 import { tileHref } from '@/lib/pages/home'
 import { flagBaseWords, type MarketConv, type MarketTop } from '@/lib/pages/v2/market'
 import type { MarketTile, TileRead } from '@/lib/pages/v2/home'
-import { TAG } from '@/components/colour-roles'
 import { cn } from '@/lib/utils'
-import { BIG, Fig, MONO_MUTED, MROW, TILE, TILE_FAILED, TileHead, TileLine, TT } from './parts'
+import { CSUB, Fig, TILE, TILE_FAILED, TileHead, TileLine, TT_WIDE } from './parts'
 
-// THE DASHBOARD'S MARKET TILE (Design v2, T8; E1-Dashboard's first card),
-// from `topMarket`: the same picks Market's top row makes, so the two never
-// disagree. The anomaly check's flag where it raised one, else the week's
-// biggest conversation first heard this week, else its biggest; then the
-// week's biggest with its three weekly counts and one more first heard this
-// week. Each opens its conversation's page on Market (17 Oct).
+// THE DASHBOARD'S MARKET TILE, drawn to the audit design's board
+// (Dashboard.dc.html, "Market this week", 7 Nov), from `topMarket`: the same
+// picks Market's top row makes, so the two never disagree. The lead is the
+// anomaly check's flag where it raised one, else the week's biggest
+// conversation first heard this week, else its biggest; then one table of up
+// to three conversations, each opening its own page on Market: its share of
+// the week drawn against the list's largest (decision 5), its videos this
+// week and in the month (bare counts: the foot line says once what they are
+// of, decision 2).
 //
-// DECISION 1: the board's "3× its usual level", "Rising 3 weeks" and
-// "usually about 6" go. The flag prints the check's own chip ("Unusual this
-// week") and its two sides as levels; a week's count sits beside its month;
-// the three weeks are three bare counts. No quote and no "our read" here: both
-// are one click down, in the panel.
+// DECISION 1: no "3× its usual level", no "Rising", no "usually about 6".
+// The flag prints the check's own chip and its two sides as levels. No quote
+// and no "our read" here: both are one click down.
 
 /** Market's own words for "no conversation leads". */
 export const MARKET_NONE = 'No conversation leads this week yet.'
 
-/** "of 151 category videos this week (153 in your market)" and "35 of
- *  279 in October so far". The category's count sits inside the market's
- *  (the week tile's figure), and both are named, so the two totals on the
- *  page read as one inside the other. On a phone the two run as one line, as
- *  the phone board draws it. */
-function WeekLines({ conv, top, marketWeek }: { conv: MarketConv; top: MarketTop; marketWeek: number | null }) {
-  const inside = marketWeek != null && top.category.week != null && marketWeek !== top.category.week
-  return (
-    <div className={cn(MONO_MUTED, 'mt-2')}>
-      {top.category.week != null ? (
-        <span className="sm:block">
-          <span data-copy="level">of {fmtInt(top.category.week)} category videos this week</span>
-          {inside ? <> (<span data-copy="figure">{fmtInt(marketWeek!)}</span> in your market)</> : null}
-        </span>
-      ) : null}
-      {conv.month != null && top.category.month != null
-        ? <span className="sm:block"><span className="sm:hidden"> · </span><span data-copy="level">{fmtInt(conv.month)} of {fmtInt(top.category.month)}</span> {top.week.inMonth}</span>
-        : null}
-    </div>
-  )
-}
+/** The heading's words where the week's biggest leads: a rank, and no claim
+ *  of movement (the board's "{lead} led the conversation"). */
+export const MARKET_LEADS = 'led the conversation'
 
-/** The three weekly windows as bars, oldest first: counts only. */
-const weekBars = (conv: MarketConv, top: MarketTop) => conv.weeks.map((count, i) => ({ label: top.week.labels[i] ?? '', count }))
+/** The foot's words where nothing on the tile was first heard this week
+ *  (the board's), and where only the lead was. */
+export const MARKET_NOTHING_NEW = 'Nothing new surfaced this week.'
+export const MARKET_NOTHING_ELSE_NEW = 'Nothing else new surfaced this week.'
 
-/** The chip beside a lead conversation's name, where the board draws its flag
- *  chip (parity pass, 13 Oct: chip and title on one line in every state): the
- *  reader flag "New" where it was first heard this week, else the pale tag
- *  saying why it leads, which is a rank and no claim of movement. */
-export const MARKET_LEADS = 'Most talked about this week'
+/** Why the table draws no earlier weeks, said only where one of its rows has
+ *  a week our own change cut (the board's foot line). */
+export const MARKET_WEEKS_CUT = 'Earlier weeks are left out until they compare fairly.'
 
-/** The row the board keeps for what was first heard this week, where nothing
- *  was (the brief's own words for Market's third card). */
-export const MARKET_NOTHING_NEW = 'Nothing new this week'
-/** The same, where the lead itself is the week's one new conversation. */
-export const MARKET_NOTHING_ELSE_NEW = 'Nothing else new this week'
+/** The tile's conversations: the lead, then the week's biggest and what was
+ *  first heard this week, then (where nothing more was) the week's next
+ *  biggest, at most three, none twice. */
+export const MARKET_TABLE_ROWS = 3
 
-function LeadChip({ hero, top, month }: { hero: { kind: 'new' | 'biggest'; conv: MarketConv }; top: MarketTop; month: string | null }) {
-  const c = hero.conv
-  if (hero.kind === 'new' && month) {
-    return <FlagChip verdict={newVerdict(c.id, c.label, c.month ?? c.week ?? 0, top.category.month ?? 0, month)} />
+type Row = { conv: MarketConv; href: string }
+
+function tableRows(top: MarketTop): Row[] {
+  const out: Row[] = []
+  const add = (r: Row | null | undefined) => {
+    if (r && out.length < MARKET_TABLE_ROWS && !out.some((x) => x.conv.id === r.conv.id)) out.push(r)
   }
-  return <span data-chip="leads" className={cn(TAG, 'whitespace-nowrap rounded-full px-2 py-[5px] text-[12px] leading-none font-semibold')}>{MARKET_LEADS}</span>
+  const hero = top.hero
+  if (hero?.kind === 'flag') add(hero.card.conv && hero.card.href ? { conv: hero.card.conv, href: hero.card.href } : null)
+  else if (hero) add({ conv: hero.conv, href: hero.href })
+  for (const r of top.rows) add(r)
+  if (!top.rows.some((r) => r.kind === 'new')) add(top.also ?? null)
+  return out
 }
 
-function Hero({ top, marketWeek, month }: { top: MarketTop; marketWeek: number | null; month: string | null }) {
+/** The heading: the lead as a sentence ("How long a liner lasts led the
+ *  conversation"), or, for a flag or the week's biggest new conversation,
+ *  its chip beside its name; a flag's two sides under it, as levels. */
+function Hero({ top, month }: { top: MarketTop; month: string | null }) {
   const hero = top.hero
   if (!hero) return null
   if (hero.kind === 'flag') {
     const { card } = hero
     const f = card.flag
     const title = card.conv?.label ?? f.label
-    const weekPct = f.week.n > 0 ? (100 * f.week.k) / f.week.n : 0
-    const basePct = f.baseline.n > 0 ? (100 * f.baseline.k) / f.baseline.n : 0
-    const bars: MiniBar[] = [
-      { label: card.baselineText, value: basePct, display: fmtPct(basePct), sub: `${fmtInt(f.baseline.k)} of ${fmtInt(f.baseline.n)}` },
-      { label: 'This week', value: weekPct, display: fmtPct(weekPct), sub: `${fmtInt(f.week.k)} of ${fmtInt(f.week.n)}` },
-    ]
     return (
-      <>
+      <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
           <FlagChip verdict={card.verdict} />
-          <h3 className={TT}>{f.objectKind === 'theme' ? <span data-copy="subject" data-slot="pass_b_theme">{title}</span> : title}</h3>
+          <h2 className={TT_WIDE}>{f.objectKind === 'theme' ? <span data-copy="subject" data-slot="pass_b_theme">{title}</span> : title}</h2>
         </div>
-        <div className="grid grid-cols-[minmax(0,5fr)_minmax(0,6fr)] items-end gap-7 max-sm:grid-cols-1 max-sm:gap-3">
-          <div>
-            <div data-copy="figure" className={BIG}>{fmtInt(f.week.k)}</div>
-            <div className={cn(MONO_MUTED, 'mt-2')}>
-              <span data-copy="level" className="block">of {fmtInt(f.week.n)} videos this week, {flagBaseWords(f.denominator)}</span>
-              <span data-copy="level" className="block">{fmtInt(f.baseline.k)} of {fmtInt(f.baseline.n)} in {card.baselineText}, the same base</span>
-              {card.month ? <span data-copy="level" className="block">{fmtInt(card.month.k)} of {fmtInt(card.month.n)} category videos {top.week.inMonth}</span> : null}
-            </div>
-          </div>
-          <MiniBars bars={bars} size="md" className="w-full max-w-[400px] justify-self-end max-sm:justify-self-start" label={`Share of every audience's videos about ${title}, the months before against this week`} />
-        </div>
-      </>
+        <p className={cn(CSUB, 'text-[14px] text-secondary-foreground')}>
+          <span data-copy="level">{fmtInt(f.week.k)} of {fmtInt(f.week.n)} videos</span> this week, {flagBaseWords(f.denominator)}, against{' '}
+          <span data-copy="level">{fmtInt(f.baseline.k)} of {fmtInt(f.baseline.n)}</span> in {card.baselineText}, the same base.
+          {/* A flag on no conversation the table lists: its month here. */}
+          {card.month && !card.conv ? <> <span data-copy="level">{fmtInt(card.month.k)} of {fmtInt(card.month.n)}</span> category videos {top.week.inMonth}.</> : null}
+        </p>
+      </div>
     )
   }
   const { conv } = hero
-  return (
-    <>
+  const label = <span data-copy="subject" data-slot="pass_b_theme">{conv.label}</span>
+  if (hero.kind === 'new' && month) {
+    return (
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
-        <LeadChip hero={hero} top={top} month={month} />
-        <h3 className={TT}><span data-copy="subject" data-slot="pass_b_theme">{conv.label}</span></h3>
+        <FlagChip verdict={newVerdict(conv.id, conv.label, conv.month ?? conv.week ?? 0, top.category.month ?? 0, month)} />
+        <h2 className={TT_WIDE}>{label}</h2>
       </div>
-      <div className="grid grid-cols-[minmax(0,5fr)_minmax(0,6fr)] items-end gap-7 max-sm:grid-cols-1 max-sm:gap-3">
-        <div>
-          <Fig n={conv.week} className={cn(BIG, 'block')} />
-          <WeekLines conv={conv} top={top} marketWeek={marketWeek} />
-        </div>
-        <SpikeBars weeks={weekBars(conv, top)} counts="all" size="md" className="w-full max-w-[400px] justify-self-end max-sm:justify-self-start" label={`Category videos a week about ${conv.label}`} />
-      </div>
-    </>
-  )
+    )
+  }
+  return <h2 className={TT_WIDE}>{label} {MARKET_LEADS}</h2>
 }
 
-/** A row under the lead: its name, a chip where earned, its counts. */
-function Row({ row, top, month }: { row: MarketTop['rows'][number]; top: MarketTop; month: string | null }) {
-  const c = row.conv
+/** The month a count is restated against, as a column's head: "October so
+ *  far" (the tile's own words, `inMonth`, without "in"). */
+const monthHead = (inMonth: string): string => {
+  const w = inMonth.replace(/^\s*in\s+/i, '').trim()
+  return w ? w.charAt(0).toUpperCase() + w.slice(1) : 'This month'
+}
+
+/** The board's table: each conversation's name (its page), its share of the
+ *  week against the list's largest, its videos this week and in the month. */
+function Table({ top, rows, month }: { top: MarketTop; rows: readonly Row[]; month: string | null }) {
+  const bar = toMax(rows.map((r) => r.conv.week ?? 0))
   return (
-    <Link href={row.href} className={cn(MROW, '-mx-2 rounded-md px-2 text-foreground no-underline hover:bg-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring')}>
-      <span className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
-        <span data-copy="subject" data-slot="pass_b_theme" className="min-w-0">{c.label}</span>
-        {/* Any row first heard this week carries the chip, the week's
-            biggest included. */}
-        {month && c.isNew
-          ? <FlagChip size="sm" verdict={newVerdict(c.id, c.label, c.month ?? c.week ?? 0, top.category.month ?? 0, month)} />
-          : null}
-      </span>
-      {row.kind === 'biggest' && c.weeks.length > 0 && c.weeks.every((w) => w != null) ? (
-        // Decision 1: three weeks are three bare counts, no word. A window our
-        // own change cut is never a count, so a row missing one prints its
-        // week beside its month instead.
-        <span className="whitespace-nowrap font-mono text-[13px] tabular-nums text-secondary-foreground" aria-label={`${c.weeks.map((w) => fmtInt(w ?? 0)).join(', ')} videos, the last three weeks`}>
-          {c.weeks.map((w, i) => (
-            <span key={i}>{i > 0 ? ' · ' : null}<span data-copy="figure">{fmtInt(w ?? 0)}</span></span>
-          ))}
-          {' videos'}
-        </span>
-      ) : (
-        // A week's count, its month beside it (decision 1), on two lines on a
-        // phone rather than past the tile's edge.
-        <span className="text-right font-mono text-[13px] tabular-nums text-secondary-foreground">
-          <span className="whitespace-nowrap"><Fig n={c.week} /> this week</span>
-          {c.month != null && top.category.month != null
-            ? <span className="whitespace-nowrap text-muted-foreground max-sm:block"><span className="max-sm:hidden"> · </span><span data-copy="level">{fmtInt(c.month)} of {fmtInt(top.category.month)}</span> {top.week.inMonth}</span>
-            : null}
-        </span>
-      )}
-    </Link>
+    <table className={cn(TBL, 'tabular-nums')}>
+      <thead>
+        <tr>
+          <th scope="col" className={TH}>Conversation</th>
+          <th scope="col" className={cn(TH, 'w-[34%] max-sm:hidden')}><span className="sr-only">Share of this week</span></th>
+          <th scope="col" className={cn(TH, TD_NUM, 'w-[90px]')}>This week</th>
+          <th scope="col" className={cn(TH, TD_NUM, 'w-[110px] pr-0')}>{monthHead(top.week.inMonth)}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r, i) => {
+          const c = r.conv
+          return (
+            <tr key={c.id} data-market-row={c.id}>
+              <td className={cn(TD, 'py-3')}>
+                <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                  <Link href={r.href} className={cn(ROW, i === 0 ? null : 'font-normal')}>
+                    <span data-copy="subject" data-slot="pass_b_theme">{c.label}</span>
+                  </Link>
+                  {/* A row first heard this week carries the reader flag, a
+                      quiet tag (the lead's sits beside its heading). */}
+                  {i > 0 && month && c.isNew
+                    ? <FlagChip size="sm" verdict={newVerdict(c.id, c.label, c.month ?? c.week ?? 0, top.category.month ?? 0, month)} />
+                    : null}
+                </span>
+              </td>
+              <td className={cn(TD, 'py-3 align-middle max-sm:hidden')}>
+                <div aria-hidden className="h-2 rounded-[4px] bg-track">
+                  <div className="h-2 rounded-[4px] bg-brand" style={{ width: `${bar(c.week ?? 0)}%` }} />
+                </div>
+              </td>
+              <td className={cn(TD, TD_NUM, 'py-3', i === 0 ? 'font-semibold' : null)}>{c.week != null ? <Fig n={c.week} /> : null}</td>
+              <td className={cn(TD, TD_NUM, 'py-3 pr-0 text-secondary-foreground')}>{c.month != null ? <Fig n={c.month} /> : null}</td>
+            </tr>
+          )
+        })}
+      </tbody>
+    </table>
   )
 }
 
@@ -168,45 +159,49 @@ export function anyNewOnTile(top: MarketTop): boolean {
   return lead || top.rows.some((r) => r.conv.isNew)
 }
 
-/** The rows under the lead: the week's biggest, and what was first heard
- *  this week. Where nothing more was, the board's second row is the week's
- *  next biggest (`also`), and one quiet line says nothing (else) is new, so
- *  the tile keeps the board's two rows and its weight (parity pass). */
-function Rows({ top, month }: { top: MarketTop; month: string | null }) {
+/** The foot: what the counts are of (decision 2: the base said once), that
+ *  nothing (else) was new where nothing was, and why no earlier week is
+ *  drawn where a row's week was cut. */
+function Foot({ top, rows }: { top: MarketTop; rows: readonly Row[] }) {
   const hasNew = top.rows.some((r) => r.kind === 'new')
+  const cut = rows.some((r) => r.conv.weeks.some((w) => w == null))
+  const { week, month } = top.category
   return (
-    <div className="flex flex-col">
-      {top.rows.map((r) => <Row key={r.conv.id} row={r} top={top} month={month} />)}
-      {!hasNew && top.also ? <Row row={{ kind: 'biggest', conv: top.also.conv, href: top.also.href }} top={top} month={month} /> : null}
-      {hasNew ? null : (
-        <p data-row="nothing-new" className="m-0 border-t border-track pt-2.5 text-[13px] leading-[1.4] text-muted-foreground">
-          {anyNewOnTile(top) ? MARKET_NOTHING_ELSE_NEW : MARKET_NOTHING_NEW}
-        </p>
-      )}
-    </div>
+    <p data-market-foot="" className={CSUB}>
+      {week != null || month != null ? (
+        <>
+          Counted in the category&rsquo;s videos:{' '}
+          {week != null ? <><Fig n={week} /> this week</> : null}
+          {week != null && month != null ? ', ' : null}
+          {month != null ? <><Fig n={month} /> {top.week.inMonth}</> : null}.{' '}
+        </>
+      ) : null}
+      {hasNew ? null : <span data-row="nothing-new">{anyNewOnTile(top) ? MARKET_NOTHING_ELSE_NEW : MARKET_NOTHING_NEW}</span>}
+      {cut ? <> {MARKET_WEEKS_CUT}</> : null}
+    </p>
   )
 }
 
-/** Where the tile's link goes: the lead's panel, else Market. */
-export function marketTileHref(top: MarketTop | null): string {
-  const hero = top?.hero
-  if (!hero) return top?.href ?? tileHref('market')
-  return hero.kind === 'flag' ? hero.card.href ?? top!.href : hero.href
+/** Where a tile with nothing to open links: Market. */
+export function marketTileHref(): string {
+  return tileHref('market')
 }
 
 export function MarketTileView({ read }: { read: TileRead<MarketTile> }) {
   const top = read.state === 'ok' ? read.top.top : null
   const month = read.state === 'ok' ? read.top.month : null
+  const rows = top ? tableRows(top) : []
   return (
-    <article aria-labelledby="home-market" data-tile="market" className={cn(TILE, 'col-span-12 min-[1180px]:col-span-8')}>
-      <TileHead icon={NAV_ICON.market} name="Market" id="home-market" href={read.state === 'ok' ? marketTileHref(top) : tileHref('market')} open="Open Market" />
+    <article aria-labelledby="home-market" data-tile="market" className={cn(TILE, 'min-[1180px]:col-span-2')}>
+      <TileHead label="Market this week" id="home-market" open={{ href: marketTileHref(), words: 'Open Market' }} />
       {read.state === 'failed' ? <TileLine>{TILE_FAILED}</TileLine>
         : !top ? <TileLine>{MARKET_FIRST_RUN}</TileLine>
           : !top.hero && top.rows.length === 0 ? <TileLine>{MARKET_NONE}</TileLine>
             : (
               <>
-                <Hero top={top} marketWeek={read.state === 'ok' ? read.top.marketWeek : null} month={month} />
-                <Rows top={top} month={month} />
+                <Hero top={top} month={month} />
+                {rows.length > 0 ? <Table top={top} rows={rows} month={month} /> : null}
+                <Foot top={top} rows={rows} />
               </>
             )}
     </article>

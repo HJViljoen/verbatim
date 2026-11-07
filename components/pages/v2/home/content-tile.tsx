@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import { NAV_ICON } from '@/components/nav-icons'
 import { RecipeChip } from '@/components/pages/v2/content/parts'
 import { fmtInt, longMonth } from '@/lib/format'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
@@ -110,8 +109,8 @@ export function ContentTileView({ read }: { read: TileRead<ContentTile> }) {
   // Where no idea prints, the tile opens Content on its question's card.
   const href = asked ? asked.href : top?.href ?? tileHref('content')
   return (
-    <article aria-labelledby="home-content" data-tile="content" data-state={top?.state ?? 'failed'} className={cn(TILE, 'col-span-12 min-[1180px]:col-span-4')}>
-      <TileHead icon={NAV_ICON.content} name="Content" id="home-content" href={href} />
+    <article aria-labelledby="home-content" data-tile="content" data-state={top?.state ?? 'failed'} className={cn(TILE, 'min-[1180px]:col-span-1')}>
+      <TileHead label="Content" id="home-content" open={{ href, words: 'Open' }} />
       {!top ? <TileLine>{TILE_FAILED}</TileLine>
         : asked ? <Asked asked={asked} line={top.state === 'ready' ? null : IDEAS_EMPTY[top.state]} />
           : !idea ? <TileLine>{top.line ?? IDEAS_EMPTY.none}</TileLine> : (

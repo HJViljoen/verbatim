@@ -43,17 +43,30 @@ export const STAT_STRIP_COLS: Record<number, string> = {
 export function StatStrip({ items }: { items: readonly StatItem[] }): ReactNode {
   if (!items.length) return null
   return (
-    <dl
-      data-stat-strip=""
-      className={cn(STAT_STRIP_GRID, STAT_STRIP_COLS[Math.min(items.length, 6)])}
-    >
-      {items.map((item, i) => (
-        <div key={item.key ?? (typeof item.term === 'string' ? item.term : i)} className="min-w-0">
-          <dt className="text-[13px] leading-[1.4] text-muted-foreground">{item.term}</dt>
-          <dd className="m-0 mt-1 text-[16px] font-semibold leading-[1.4] tabular-nums text-foreground">{item.value}</dd>
-        </div>
-      ))}
+    <StatStripFrame cells={items.length}>
+      {items.map((item, i) => <StatStripCell key={item.key ?? (typeof item.term === 'string' ? item.term : i)} item={item} />)}
+    </StatStripFrame>
+  )
+}
+
+/** The figures row's `<dl>` alone, for a page that fills its cells in as its
+ *  reads settle (the Dashboard streams two of its four): `cells` sets the
+ *  columns, so the row keeps its shape while a cell is still a bone. */
+export function StatStripFrame({ cells, children }: { cells: number; children: ReactNode }): ReactNode {
+  return (
+    <dl data-stat-strip="" className={cn(STAT_STRIP_GRID, STAT_STRIP_COLS[Math.max(1, Math.min(cells, 6))])}>
+      {children}
     </dl>
+  )
+}
+
+/** One cell of the figures row: its term over its value. */
+export function StatStripCell({ item }: { item: StatItem }): ReactNode {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[13px] leading-[1.4] text-muted-foreground">{item.term}</dt>
+      <dd className="m-0 mt-1 text-[16px] font-semibold leading-[1.4] tabular-nums text-foreground">{item.value}</dd>
+    </div>
   )
 }
 
