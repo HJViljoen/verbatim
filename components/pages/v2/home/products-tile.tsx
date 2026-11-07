@@ -1,22 +1,27 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { shelfTone } from '@/components/v2'
+import { EmptyBox, GoLink, toMax } from '@/components/v2'
+import { ROW } from '@/components/v2/look'
 import { fmtInt } from '@/lib/format'
 import { tileHref } from '@/lib/pages/home'
 import type { TileRead, TopProducts } from '@/lib/pages/v2/home'
+import { TOP_LABELS } from '@/lib/pages/v2/products'
+import { inlineMonth } from '@/lib/reading/month-label'
 import { cn } from '@/lib/utils'
-import { GO } from '@/components/v2/look'
-import { CSUB, MID, MONO_MUTED, TILE, TILE_FAILED, TileHead, TileLine, TileMonth, TT } from './parts'
+import { Bar, BAR_ROW, CSUB, TILE, TILE_FAILED, TileHead, TT } from './parts'
 
-// THE DASHBOARD'S YOUR PRODUCTS TILE (Design v2, T8; E1-Dashboard's second
-// row), from T5's `TopProducts` (lib/pages/v2/products.ts, re-exported by
-// lib/pages/v2/home.ts): the product that stands out this month, which opens its panel on
-// Your products (`?product=`), how many of your products came up ("9 of your
-// 38") and the catalogue as the board's mini shelf, each product shaded by its
-// videos this month, where the read carries them; or the page's honest state
-// where it has nothing: no catalogue yet (a link to Settings), the readings
-// not switched on, its month not read yet or its read failed, or nothing of
-// yours named this month.
+// THE DASHBOARD'S YOUR PRODUCTS TILE, drawn to the audit design's board
+// (Dashboard.dc.html, "Your products in October", 7 Nov), from T5's
+// `TopProducts` (lib/pages/v2/products.ts, re-exported by
+// lib/pages/v2/home.ts): the product that stands out this month as the
+// heading's sentence ("Direct Socket was talked about most", its name opening
+// its page), how many of your products came up ("10 of your 65 products came
+// up."), the ones that came up most as a ranked list against the largest
+// (`cameUpProducts`, decision 5), each opening its page, and how many were
+// quiet; or the page's honest state where it has nothing, said in the
+// boards' dashed box (decision 4): no catalogue yet (a link to Settings), the
+// readings not switched on, its month not read yet or its read failed, or
+// nothing of yours named this month.
 
 /** Where products are added. */
 export const PRODUCTS_SETTINGS = '/dashboard/settings/products'
@@ -32,19 +37,14 @@ export const PRODUCTS_LINES: Record<Exclude<TopProducts['state'], 'ready'>, stri
 /** A quiet tile whose month was not read: not "none named". */
 export const PRODUCTS_UNREAD = 'Your products have not been read for this month yet.'
 
+/** Products the ranked list draws (the board's four). */
+export const PRODUCTS_LISTED = 4
+
 /** "in October so far", whichever way the month's words arrive. */
 const inWords = (m: string): string => (/^in\s/i.test(m.trim()) ? m.trim() : `in ${m.trim()}`)
 
-/** The mini shelf's shades: none, one or two, three to five, six or more
- *  (`shelfTone`, the catalogue shelf's own steps). */
-const SHADE: Record<0 | 1 | 2 | 3, string> = { 0: 'bg-track', 1: 'bg-accent', 2: 'bg-brand/65', 3: 'bg-brand' }
-/** A product whose month was not read: a faint empty slot, lighter than a
- *  quiet product's track (an unread product is not a quiet one; the tile's
- *  line says which). */
-const UNREAD_SLOT = 'bg-track/50'
-
 /** The tile's titles where nothing stands out (parity pass, 13 Oct: the
- *  board's title, figure, shelf and line in every state). */
+ *  board's title in every state). */
 export const PRODUCTS_TITLES = {
   quiet: (month: string) => `None of your products came up${month}`,
   catalogue: 'Your catalogue',
@@ -53,164 +53,141 @@ export const PRODUCTS_TITLES = {
   invite: 'What your market says about each product you sell',
 } as const
 
-type MiniColumn = NonNullable<TopProducts['columns']>[number]
+/** The standout as the heading's sentence, from the tile's own label
+ *  (`TOP_LABELS`): "Direct Socket was talked about most", "Navii came up for
+ *  the first time"; any other label before the name ("Named in the most
+ *  videos: Pro-Flex Pivot"). The name is the client's own, as Settings holds
+ *  it, and opens its page. */
+function Standout({ standout }: { standout: NonNullable<TopProducts['standout']> }) {
+  const name = <Link href={standout.href} className={ROW}>{standout.name}</Link>
+  if (standout.label === TOP_LABELS.most) return <h2 className={TT}>{name} was talked about most</h2>
+  if (standout.label === TOP_LABELS.first) return <h2 className={TT}>{name} came up for the first time</h2>
+  return <h2 className={TT}>{standout.label}: {name}</h2>
+}
 
-/** Every product in a column, past the page's cut too. */
-const columnSize = (c: MiniColumn): number => c.products.length + (c.more ?? 0)
-/** How many came up in the whole column; null where none of it was read (a
- *  dump from before `named` counts what it drew). */
-const columnNamed = (c: MiniColumn): number | null =>
-  c.named !== undefined ? c.named : c.products.every((p) => p.videos == null) ? null : c.products.filter((p) => (p.videos ?? 0) > 0).length
+type Listed = { key: string; name: string; videos: number; href: string }
 
-/** The board's `.minishelf`: a column a category, a bar a product, shaded by
- *  its videos this month; unshaded where it was not read. The page's own
- *  shelf, cut as the page cuts it (`shelfCut`): at most SHELF_TILES bars a
- *  column, then "+N more". */
-function MiniShelf({ columns }: { columns: readonly MiniColumn[] }) {
-  const said = columns.map((c) => {
-    const named = columnNamed(c)
-    return named != null ? `${c.name} ${named} of ${columnSize(c)} named` : `${c.name} ${columnSize(c)} products, not read`
-  }).join(', ')
+/** The ranked list: the products that came up, most first, at most
+ *  `PRODUCTS_LISTED`, each a bar against the largest. A tile from before
+ *  `cameUpProducts` lists its standout alone. */
+function Ranked({ rows }: { rows: readonly Listed[] }) {
+  const bar = toMax(rows.map((r) => r.videos))
   return (
-    <div role="img" aria-label={`Your catalogue: ${said}`} className="grid gap-1.5 max-sm:hidden" style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))` }}>
-      {columns.map((c) => (
-        <div key={c.id} className="flex min-w-0 flex-col gap-[3px]">
-          <b className="mb-0.5 truncate text-[10.5px] font-semibold tracking-[0.02em] text-muted-foreground">{c.name}</b>
-          {c.products.map((p) => p.videos == null
-            ? <span key={p.id} data-tone="unread" className={cn('h-[9px] rounded-[2px]', UNREAD_SLOT)} />
-            : <span key={p.id} data-tone={shelfTone(p.videos)} className={cn('h-[9px] rounded-[2px]', SHADE[shelfTone(p.videos)])} />)}
-          {c.more ? <span data-more="" className="text-[10.5px] leading-[1.2] text-muted-foreground">+<span data-copy="figure">{fmtInt(c.more)}</span> more</span> : null}
+    <div role="list" aria-label="The products that came up most" className="flex flex-col gap-2.5 text-[14.5px] leading-[1.35]">
+      {rows.map((r, i) => (
+        <div key={r.key} role="listitem" className={BAR_ROW}>
+          <Link href={r.href} className={cn(ROW, 'min-w-0', i === 0 ? null : 'font-normal')}>{r.name}</Link>
+          <Bar pct={bar(r.videos)} />
+          <span data-copy="figure" className={cn('text-right tabular-nums', i === 0 ? 'font-semibold' : null)}>{fmtInt(r.videos)}</span>
         </div>
       ))}
     </div>
   )
 }
 
-/** The shelf before there is a catalogue to draw (or while it cannot be
- *  read): the board's five columns as empty slots, unlabelled, so the tile
- *  keeps its shape and claims no product. */
-const GHOST = [8, 8, 8, 8, 8]
-function GhostShelf() {
+/** A row under a hairline at the tile's foot: its name, and its value. */
+function Foot({ name, children }: { name: string; children: ReactNode }) {
   return (
-    <div aria-hidden data-shelf="ghost" className="grid gap-1.5 max-sm:hidden" style={{ gridTemplateColumns: `repeat(${GHOST.length}, minmax(0, 1fr))` }}>
-      {GHOST.map((n, i) => (
-        <div key={i} className="flex min-w-0 flex-col gap-[3px]">
-          <span className="mb-1 h-[7px] w-3/5 rounded-[2px] bg-track/80" />
-          {Array.from({ length: n }, (_, j) => <span key={j} className={cn('h-[9px] rounded-[2px]', UNREAD_SLOT)} />)}
-        </div>
-      ))}
-    </div>
-  )
-}
-
-/** The tile's figure: a count, and its words. */
-function Figure({ n, children }: { n: number; children: ReactNode }) {
-  // The board's `.mid` with its words wrapping beside it, not under it.
-  return (
-    <div className="flex items-baseline gap-x-2.5">
-      <span data-copy="figure" className={MID}>{fmtInt(n)}</span>
-      <span className={cn(MONO_MUTED, 'min-w-0')}>{children}</span>
+    <div className="mt-auto flex items-start justify-between gap-x-4 border-t border-track pt-3 text-[14px] leading-[1.45]">
+      <span className="shrink-0 text-muted-foreground">{name}</span>
+      <span className="min-w-0 text-right font-semibold">{children}</span>
     </div>
   )
 }
 
 function Ready({ top, standout }: { top: TopProducts; standout: NonNullable<TopProducts['standout']> }) {
-  const month = top.monthWords ? ` ${inWords(top.monthWords)}` : ''
   const counted = top.cameUp != null && top.products != null && top.products > 0
-  const own = standout.n != null && standout.n > 0
-    ? <><span data-copy="level">{fmtInt(standout.k)} of {fmtInt(standout.n)} videos</span>{month}</>
-    : <><span data-copy="figure">{fmtInt(standout.k)}</span> videos{month}</>
+  const all = top.cameUpProducts ?? []
+  const rows: Listed[] = all.length > 0
+    ? all.slice(0, PRODUCTS_LISTED).map((p) => ({ key: p.id, name: p.name, videos: p.videos, href: p.href }))
+    : [{ key: 'standout', name: standout.name, videos: standout.k, href: standout.href }]
+  const more = all.length > PRODUCTS_LISTED ? all.length - PRODUCTS_LISTED : 0
+  const quiet = counted ? top.products! - top.cameUp! : null
   return (
     <>
-      <div className="flex flex-col gap-1.5">
-        <p className="m-0 text-[12px] leading-[1.3] font-semibold uppercase tracking-[0.06em] text-orange-text">{standout.label}</p>
-        {/* A product's name is the client's own, as Settings holds it. */}
-        <h3 className={TT}>{standout.name}</h3>
-      </div>
+      <Standout standout={standout} />
       {counted ? (
-        <>
-          <Figure n={top.cameUp!}>of your <span data-copy="figure">{fmtInt(top.products!)}</span> products came up{month}</Figure>
-          {top.columns && top.columns.length > 0 ? <MiniShelf columns={top.columns} /> : null}
-          <p className={CSUB}>{standout.name}: {own}.</p>
-        </>
-      ) : (
-        <div className="flex flex-wrap items-baseline gap-x-2.5">
-          <span data-copy="figure" className={MID}>{fmtInt(standout.k)}</span>
-          {standout.n != null && standout.n > 0
-            ? <span className={MONO_MUTED}><span data-copy="level">of {fmtInt(standout.n)} videos</span>{month}</span>
-            : <span className={MONO_MUTED}>videos{month}</span>}
-        </div>
-      )}
+        <p className="m-0 text-[14.5px] leading-[1.5] text-secondary-foreground">
+          <span data-copy="figure">{fmtInt(top.cameUp!)}</span> of your <span data-copy="figure">{fmtInt(top.products!)}</span> products came up.
+        </p>
+      ) : null}
+      <Ranked rows={rows} />
+      <p data-products-note="" className={CSUB}>
+        Videos per product
+        {/* The base is the figures row's for the week's month; a tile on
+            another month says its own (decision 2). */}
+        {top.monthLabel && standout.n ? <>, of <span data-copy="figure">{fmtInt(standout.n)}</span> {inWords(top.monthWords)}</> : null}
+        {more > 0 ? <>, and <span data-copy="figure">{fmtInt(more)}</span> more {more === 1 ? 'product' : 'products'} that came up.</> : '.'}
+      </p>
+      {quiet != null ? (
+        <Foot name={top.monthLabel ? `Quiet ${inWords(top.monthWords)}` : 'Quiet this month'}>
+          <span data-copy="figure">{fmtInt(quiet)}</span> {quiet === 1 ? 'product' : 'products'}
+        </Foot>
+      ) : null}
     </>
   )
 }
 
-/** "38 products across 5 categories" (or "in one category"). */
-function CatalogueFigure({ products, categories }: { products: number; categories: number }) {
+/** Every product in a column of the page's shelf, past the page's cut too. */
+const columnSize = (c: NonNullable<TopProducts['columns']>[number]): number => c.products.length + (c.more ?? 0)
+
+/** "38 products across 5 categories." (or "in one category"). */
+function Catalogue({ columns }: { columns: NonNullable<TopProducts['columns']> }) {
+  const products = columns.reduce((n, c) => n + columnSize(c), 0)
   return (
-    <Figure n={products}>
-      products {categories === 1 ? 'in one category' : <>across <span data-copy="figure">{fmtInt(categories)}</span> categories</>}
-    </Figure>
+    <p data-catalogue="" className="m-0 text-[14.5px] leading-[1.5] text-secondary-foreground">
+      <span data-copy="figure">{fmtInt(products)}</span> products {columns.length === 1 ? 'in one category' : <>across <span data-copy="figure">{fmtInt(columns.length)}</span> categories</>}.
+    </p>
   )
 }
 
-/** Every state with nothing standing out, in the board's shape: a title, a
- *  figure where the catalogue gives one, the shelf (shaded, unshaded or
- *  empty), and one calm line where one is needed. */
+/** Every state with nothing standing out: the board's title, the
+ *  catalogue's size where there is one, and why there is no list, in the
+ *  dashed box (decision 4). */
 function Thin({ top }: { top: TopProducts }) {
   const month = top.monthWords ? ` ${inWords(top.monthWords)}` : ''
   if (top.note === 'failed') {
     return (
       <>
-        <h3 className={TT}>{PRODUCTS_TITLES.invite}</h3>
-        <GhostShelf />
-        <TileLine className="text-[13px]">{TILE_FAILED}</TileLine>
+        <h2 className={TT}>{PRODUCTS_TITLES.invite}</h2>
+        <EmptyBox>{TILE_FAILED}</EmptyBox>
       </>
     )
   }
   if (top.state === 'no_catalogue') {
     return (
       <>
-        <h3 className={TT}>{PRODUCTS_TITLES.invite}</h3>
-        <GhostShelf />
-        <p className={CSUB}>{PRODUCTS_LINES.no_catalogue}</p>
-        <Link href={PRODUCTS_SETTINGS} className={cn(GO, 'mt-auto self-start')}>Add your products</Link>
+        <h2 className={TT}>{PRODUCTS_TITLES.invite}</h2>
+        <EmptyBox>{PRODUCTS_LINES.no_catalogue}</EmptyBox>
+        <GoLink href={PRODUCTS_SETTINGS} className="mt-auto self-start">Add your products</GoLink>
       </>
     )
   }
   if (top.state === 'not_applied') {
     return (
       <>
-        <h3 className={TT}>{PRODUCTS_TITLES.invite}</h3>
-        <GhostShelf />
-        <p className={CSUB}>{PRODUCTS_LINES.not_applied}</p>
+        <h2 className={TT}>{PRODUCTS_TITLES.invite}</h2>
+        <EmptyBox>{PRODUCTS_LINES.not_applied}</EmptyBox>
       </>
     )
   }
   const columns = top.columns ?? []
-  const products = columns.reduce((n, c) => n + columnSize(c), 0)
-  // Read, and nothing of yours named: the shelf drawn, every product quiet.
+  // Read, and nothing of yours named: the catalogue, every product quiet.
   if ((top.state === 'quiet' || top.state === 'ready') && top.note !== 'unread' && columns.length > 0) {
     return (
       <>
-        <h3 className={TT}>{PRODUCTS_TITLES.quiet(month)}</h3>
-        <CatalogueFigure products={products} categories={columns.length} />
-        <MiniShelf columns={columns} />
+        <h2 className={TT}>{PRODUCTS_TITLES.quiet(month)}</h2>
+        <Catalogue columns={columns} />
       </>
     )
   }
-  // Not switched on, or the month not read yet: the page's shelf, unshaded.
+  // Not switched on, or the month not read yet: the catalogue's size, and why.
   const words = top.state === 'not_on' ? PRODUCTS_LINES.not_on : top.note === 'unread' ? PRODUCTS_UNREAD : `${PRODUCTS_LINES.quiet}${month}.`
   return (
     <>
-      <h3 className={TT}>{top.state === 'quiet' && top.note !== 'unread' ? PRODUCTS_TITLES.quiet(month) : PRODUCTS_TITLES.catalogue}</h3>
-      {columns.length > 0 ? (
-        <>
-          <CatalogueFigure products={products} categories={columns.length} />
-          <MiniShelf columns={columns} />
-        </>
-      ) : <GhostShelf />}
-      <p className={CSUB}>{words}</p>
+      <h2 className={TT}>{top.state === 'quiet' && top.note !== 'unread' ? PRODUCTS_TITLES.quiet(month) : PRODUCTS_TITLES.catalogue}</h2>
+      {columns.length > 0 ? <Catalogue columns={columns} /> : null}
+      <EmptyBox>{words}</EmptyBox>
     </>
   )
 }
@@ -218,17 +195,18 @@ function Thin({ top }: { top: TopProducts }) {
 export function ProductsTileView({ read }: { read: TileRead<TopProducts> }) {
   const top = read.state === 'ok' ? read.top : null
   const standout = top?.state === 'ready' ? top.standout : null
+  // Decision 3: the month the tile reads, in its label, in the one helper's
+  // words where it is not the current month; a state that reads no month,
+  // or a failed read, names none.
+  const reads = top && top.note !== 'failed' && top.monthWords && top.state !== 'not_applied' && top.state !== 'no_catalogue' && top.state !== 'not_on'
+  const label = reads ? `Your products ${inWords(inlineMonth(top.monthWords, top.monthLabel))}` : 'Your products'
   return (
     <article aria-labelledby="home-products" data-tile="products" data-state={top?.state ?? 'failed'} className={cn(TILE, 'min-[1180px]:col-span-1')}>
-      <TileHead label="Your products" id="home-products" open={{ href: standout?.href ?? top?.href ?? tileHref('products'), words: 'Open' }} />
-      {/* Decision 3: the month the tile reads, labelled where it is not the
-          current one (a state that reads no month carries no label). */}
-      {top && top.note !== 'failed' ? <TileMonth words={top.monthWords} label={top.monthLabel} /> : null}
+      <TileHead label={label} id="home-products" open={{ href: tileHref('products'), words: 'Open products' }} />
       {!top ? (
         <>
-          <h3 className={TT}>{PRODUCTS_TITLES.invite}</h3>
-          <GhostShelf />
-          <TileLine className="text-[13px]">{TILE_FAILED}</TileLine>
+          <h2 className={TT}>{PRODUCTS_TITLES.invite}</h2>
+          <EmptyBox>{TILE_FAILED}</EmptyBox>
         </>
       ) : standout ? <Ready top={top} standout={standout} /> : <Thin top={top} />}
     </article>

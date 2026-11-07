@@ -27,7 +27,9 @@ import { MOVE_UNREAD } from '@/lib/pages/v2/moves'
 import { PRODUCTS_LINES, PRODUCTS_SETTINGS, PRODUCTS_UNREAD } from './products-tile'
 import { TILE_FAILED } from './parts'
 import { HomeSkeleton } from './skeleton'
-import { VOICES_BRANDS_FAILED, VOICES_NONE } from './voices-tile'
+import { VOICES_BRANDS_FAILED, VOICES_NAMED, VOICES_NONE } from './voices-tile'
+import { topProductsOf } from '@/lib/pages/v2/products'
+import { ossurProductsFixture } from '@/lib/pages/v2/products-fixture'
 import { HomeWeeksPlot } from './weeks-plot'
 import { weekSubjectLabels, WEEKS_NOT_DRAWN } from './week-tile'
 
@@ -50,6 +52,9 @@ const tileMarkup = (markup: string, tile: string): string => {
   return markup.slice(markup.lastIndexOf('<article', i), markup.indexOf('</article>', i))
 }
 const page = (data: DashboardData) => <DashboardPage data={data} />
+/** The words as a reader sees them: no space the markup's tags leave before
+ *  a comma or a bracket, or after an opening bracket. */
+const tight = (t: string): string => t.replace(/\s+([,.)])/g, '$1').replace(/\(\s+/g, '(')
 
 // Decision 3 (13 Oct): both clocks on one Dashboard. Market and the week
 // tile read the week's own month (October so far); Voices, Your products and
@@ -67,10 +72,13 @@ describe('the Dashboard\'s two clocks, labelled (decision 3)', () => {
 
   it('Voices and Your products say September, the last full month, under their heads', () => {
     const voices = tileText(markup, 'voices')
-    expect(voices).toMatch(/^Voices Open September · the last full month In the most videos in September Long-time users upgrading/)
+    // The audit design: the month in the tile's label, in the one helper's
+    // words; the base said in the note, as the figures row holds October's.
+    expect(voices).toMatch(/^Voices in September, the last full month Open Voices In the most videos: Long-time users upgrading/)
+    expect(voices).toContain('Videos per group, of 318 in September.')
     const products = tileText(markup, 'products')
-    expect(products).toMatch(/^Your products Open September · the last full month Named in the most videos Pro-Flex Pivot/)
-    expect(products).toContain('came up in September')
+    expect(products).toMatch(/^Your products in September, the last full month Open products Named in the most videos: Pro-Flex Pivot/)
+    expect(products).toContain('Videos per product, of 318 in September.')
   })
 
   it('Your moves says it in the move\'s sentence, where the month is named', () => {
@@ -90,7 +98,7 @@ describe('the Dashboard\'s two clocks, labelled (decision 3)', () => {
     for (const state of ['not_applied', 'not_on', 'no_catalogue'] as const) {
       expect(tileText(render(page(dashboardFixture({ twoClocks: true, products: state }))), 'products'), state).not.toMatch(/September|last full month/)
     }
-    expect(tileText(render(page(dashboardFixture({ twoClocks: true, products: 'quiet' }))), 'products')).toMatch(/September · the last full month None of your products came up in September/)
+    expect(tileText(render(page(dashboardFixture({ twoClocks: true, products: 'quiet' }))), 'products')).toMatch(/^Your products in September, the last full month Open products None of your products came up in September/)
   })
 
   it('keeps the copy contract', () => {
@@ -181,34 +189,52 @@ describe('the Dashboard, as the board draws it (E1-Dashboard)', () => {
 
   it('Voices: the group in the most videos as a count of the month\'s, every group a bar of its own, the two brands named most', () => {
     const t = tileText(markup, 'voices')
-    expect(t).toMatch(/In the most videos in October so far Long-time users upgrading 86 of 318 videos/)
-    expect(t).toMatch(/Named most Össur 41 Ottobock 37/)
+    // The audit design: the group as the heading (small call 8), every group
+    // a bar with its bare count (the month's base is the figures row's).
+    expect(t).toMatch(/^Voices in October so far Open Voices In the most videos: Long-time users upgrading Long-time users upgrading 86 New amputees in their first year 74 Active and athletic users 51 Caregivers and family 38 Videos per group\. A video can hold more than one group\./)
+    expect(tight(t)).toMatch(/Brand named most Össur \(41\), Ottobock \(37\)$/)
     // Decision 2: no share of the mix, no change of it, never one stacked bar.
     expect(t).not.toMatch(/%|\d\s*→|bigger part/)
-    expect(tileMarkup(markup, 'voices').match(/role="img"/g)).toHaveLength(4)
+    // Decision 5: the bars against the largest group (86 is full).
+    const v = tileMarkup(markup, 'voices')
+    expect([...v.matchAll(/bg-brand" style="width:([0-9.]+)%"/g)].map((x) => Math.round(Number(x[1])))).toEqual([100, 86, 59, 44])
+    // Each group opens its page, each brand its page, the head Voices.
+    expect(v.match(/href="\/dashboard\/voices\/groups\/[^"]+"/g)).toHaveLength(4)
+    expect(v.match(/data-who-chip="(?:you|rival)" data-plain=""/g)).toHaveLength(2)
+    expect(v).toMatch(/href="\/dashboard\/voices"[^>]*>Open Voices</)
   })
 
-  it('Your products: the standout, how many of yours came up, the mini shelf, and the standout\'s count of the month\'s videos', () => {
+  it('Your products: the standout as a sentence, how many of yours came up, the ones that came up most as a ranked list, and the quiet ones', () => {
     const t = tileText(markup, 'products')
-    expect(t).toMatch(/Named in the most videos Pro-Flex Pivot 9 of your 38 products came up in October so far .*Pro-Flex Pivot: 9 of 318 videos in October so far\./)
-    const shelf = tileMarkup(markup, 'products')
-    expect(shelf).toContain('aria-label="Your catalogue: Liners 3 of 8 named, Feet 2 of 9 named, Knees 3 of 6 named, Bracing 1 of 9 named, Sockets 0 of 6 named"')
-    // The page's cut (`shelfCut`): never "+1 more" (the lead, 14 Oct). Feet
-    // and Bracing hold nine, so the board draws all nine bars of each.
-    expect(shelf.match(/data-tone="/g)).toHaveLength(38)
-    expect(shelf).not.toContain('data-more=""')
-    expect(shelf).toMatch(/role="img"[^>]*class="grid gap-1\.5 max-sm:hidden"/)
+    // A tile from before `cameUpProducts` lists its standout alone.
+    expect(t).toBe('Your products in October so far Open products Named in the most videos: Pro-Flex Pivot 9 of your 38 products came up. Pro-Flex Pivot 9 Videos per product. Quiet this month 29 products')
+    // The mini shelf goes: the board's ranked list stands in its place.
+    expect(tileMarkup(markup, 'products')).not.toContain('data-tone=')
+    // With `cameUpProducts`: the four that came up most, against the largest
+    // (decision 5), each opening its page; the rest counted; the quiet ones.
+    const ready = render(page({ ...data, products: { state: 'ok', top: topProductsOf(ossurProductsFixture()) } }))
+    const r = tileMarkup(ready, 'products')
+    expect(markupText(r)).toBe('Your products in September, the last full month Open products Iceross Seal-In X was talked about most 15 of your 65 products came up. Flex-Foot Cheetah 9 Iceross Seal-In X 9 Rheo Knee 7 Pro-Flex XC 6 Videos per product, of 839 in September, and 11 more products that came up. Quiet in September 50 products')
+    expect([...r.matchAll(/bg-brand" style="width:([0-9.]+)%"/g)].map((x) => Math.round(Number(x[1])))).toEqual([100, 100, 78, 67])
+    expect(r.match(/href="\/dashboard\/products\/[^"/]+\/[^"]+"/g)).toHaveLength(5)
+    assertCopyContract(page({ ...data, products: { state: 'ok', top: topProductsOf(ossurProductsFixture()) } }))
   })
 
   it('Content: the first idea, its four weeks of questions beside its month, its format and opening, your posts, and the medical team line', () => {
     const t = tileText(markup, 'content')
-    expect(t).toMatch(/Post next: How long a liner lasts, and when it is time to replace one/)
-    // The ideas read the four weeks to their update (Heinrich, 13 Oct), named.
-    expect(t).toMatch(/48 of 640 videos, 14 Sep to 11 Oct 35 of 318 in October so far/)
+    expect(t).toMatch(/^Post next Open Content How long a liner lasts, and when it is time to replace one Asked under/)
+    // The ideas read the four weeks to their update (Heinrich, 13 Oct),
+    // named, beside their month (decision 1); their bases are not the
+    // figures row's, so they stay (decision 2).
+    expect(t).toMatch(/Asked under 48 of 640 videos, 14 Sep to 11 Oct , and 35 of 318 in October so far Your posts/)
     expect(t).not.toMatch(/videos this week/)
-    expect(t).toMatch(/Tutorial 2\.1× Open with a question 1\.8×/)
+    // "×" said as "times" (the board's sentence).
+    expect(t).toContain('Works best Tutorial format, 2.1 times a typical video on this question. Opening with a question, 1.8 times.')
+    expect(t).not.toContain('×')
     expect(t).toContain('None of your 25 posts since August touched on it')
-    expect(t).toContain(MEDICAL_LINE)
+    // The medical team line once, at the tile's foot (decision 14).
+    expect(t.split(MEDICAL_LINE)).toHaveLength(2)
+    expect(t.endsWith(MEDICAL_LINE)).toBe(true)
     // No reply count: nothing can see whether you replied (decision 5).
     expect(t).not.toMatch(/waiting for a reply/)
   })
@@ -297,7 +323,7 @@ describe('every tile\'s honest state when its page has nothing', () => {
     const data = dashboardFixture({ content: 'older' })
     assertCopyContract(page(data))
     const t = tileText(render(page(data)), 'content')
-    expect(t).toMatch(/No new ideas this week\. These are from the week of 28 Sep\. Post next:/)
+    expect(t).toMatch(/^Post next Open Content No new ideas this week\. These are from the week of 28 Sep\. How long a liner lasts/)
     expect(t).toContain(MEDICAL_LINE)
   })
 
@@ -323,8 +349,8 @@ describe('every tile\'s honest state when its page has nothing', () => {
     const data = dashboardFixture({ named: false })
     assertCopyContract(page(data))
     const v = tileMarkup(render(page(data)), 'voices')
-    expect(markupText(v)).toMatch(/Tracked not counted yet Össur Ottobock$/)
-    expect(markupText(v)).not.toContain('Named most')
+    expect(tight(markupText(v))).toMatch(/Tracked not counted yet Össur, Ottobock$/)
+    expect(markupText(v)).not.toContain(VOICES_NAMED)
     expect(markupText(v).match(/not counted yet/g)).toHaveLength(1)
     const row = v.slice(v.indexOf('data-named='))
     expect(row.match(/data-who-chip/g)).toHaveLength(2)
@@ -374,14 +400,16 @@ describe('the phone board (E1-Dashboard-Phone)', () => {
     // The weekly chart, Voices' bars and its brands, the recipe chips, the
     // move beside the advice, the questions to try.
     expect(tileMarkup(markup, 'week')).toMatch(/data-weeks="" class="[^"]*max-sm:hidden"/)
-    expect(tileMarkup(markup, 'voices')).toMatch(/role="list"[^>]*class="[^"]*max-sm:hidden/)
-    expect(tileMarkup(markup, 'content')).toMatch(/class="flex flex-wrap gap-2 max-sm:hidden"/)
+    // The audit design keeps Voices' bars and Content's facts at every width
+    // (the boards draw no phone variant; small call 14).
+    expect(tileMarkup(markup, 'voices')).not.toMatch(/max-sm:hidden/)
+    expect(tileMarkup(markup, 'content')).not.toMatch(/max-sm:hidden/)
     expect(tileMarkup(markup, 'moves')).toMatch(/bg-inner[^"]*max-sm:hidden/)
     expect(tileMarkup(markup, 'agent')).toMatch(/max-sm:hidden"><span class="text-muted-foreground">Try asking about/)
   })
   it('keeps the week beside its month, and the medical team line, on a phone too', () => {
     expect(tileMarkup(markup, 'market')).not.toMatch(/data-copy="level"[^>]*max-sm:hidden/)
-    expect(tileMarkup(markup, 'content')).toMatch(/<p class="m-0 text-\[12px\] leading-\[1\.4\] text-muted-foreground">Check any clinical claim/)
+    expect(tileMarkup(markup, 'content')).toMatch(/<p data-medical="" class="m-0 mt-auto border-t border-track pt-3 text-\[13px\] leading-\[1\.45\] text-muted-foreground">Check any clinical claim/)
   })
 })
 
@@ -552,7 +580,7 @@ describe('a failed read says so, never "nothing yet"', () => {
     const off = { ...d, voices: { state: 'ok' as const, top: { ...voices, group: null, groups: [], groupsState: 'not_run' as const, groupsEmpty: GROUPS_NOT_RUN } } }
     expect(tileText(render(page(off)), 'voices')).toContain(GROUPS_NOT_RUN)
     const brands = { ...d, voices: { state: 'ok' as const, top: { ...voices, named: [], brandsState: 'unread' as const } } }
-    expect(tileText(render(page(brands)), 'voices')).toContain(`Named most ${VOICES_BRANDS_FAILED}`)
+    expect(tileText(render(page(brands)), 'voices')).toContain(`${VOICES_NAMED} ${VOICES_BRANDS_FAILED}`)
     for (const x of [failed, off, brands]) assertCopyContract(page(x))
   })
 
@@ -571,10 +599,9 @@ describe('the board\'s details (the fresh check)', () => {
 
   it('Content\'s own-posts line is grey: the tile\'s only orange words are its link', () => {
     const c = tileMarkup(markup, 'content')
-    expect(c).toMatch(/<p class="m-0 text-\[13px\] leading-\[1\.4\] text-muted-foreground">None of your/)
-    // Past the head (its glyph and its link), no orange words.
-    const body = c.slice(c.indexOf('</h2>'))
-    expect(body.slice(body.indexOf('</a>'))).not.toContain('text-orange-text')
+    expect(c).toMatch(/<dd class="m-0 min-w-0">None of your/)
+    // The audit design: no orange words anywhere on the tile.
+    expect(c).not.toContain('text-orange-text')
   })
 
   it('a link to another page lets the browser land on its panel: no tile link holds the scroll', () => {
@@ -681,9 +708,10 @@ describe('the board\'s shape holds when the data is thin (parity pass)', () => {
         weeks: t('week').includes('data-weeks=""'),
         subjects: (markupText(t('week')).match(/Biggest subject|Moved most/g) ?? []).length,
       },
-      voices: { title: t('voices').includes('<h3'), bars: t('voices').includes('role="list"'), named: t('voices').includes('data-named=') },
-      products: { title: t('products').includes('<h3'), shelf: /role="img"|data-shelf="ghost"/.test(t('products')) },
-      content: { title: t('content').includes('<h3'), figure: t('content').includes('text-[32px]') },
+      voices: { title: t('voices').includes('<h2'), bars: t('voices').includes('role="list"'), named: t('voices').includes('data-named=') },
+      // The ranked list, or the catalogue's size, or why in the dashed box.
+      products: { title: t('products').includes('<h2'), list: /role="list"|data-catalogue|data-empty-box/.test(t('products')) },
+      content: { title: t('content').includes('<h2'), facts: t('content').includes('<dl') },
       moves: { title: t('moves').includes('<h3'), panel: markupText(t('moves')).includes('After your move') },
     }
   }
@@ -696,8 +724,8 @@ describe('the board\'s shape holds when the data is thin (parity pass)', () => {
       market: { title: true, table: true, rows: 3 },
       week: { figure: true, weeks: true, subjects: 2 },
       voices: { title: true, bars: true, named: true },
-      products: { title: true, shelf: true },
-      content: { title: true, figure: true },
+      products: { title: true, list: true },
+      content: { title: true, facts: true },
       moves: { title: true, panel: true },
     })
   })
@@ -750,21 +778,22 @@ describe('the board\'s shape holds when the data is thin (parity pass)', () => {
     expect(weekSubjectLabels({ prevText: 'September', pending: 1 }).biggest).toBe('Measured subject')
   })
 
-  it('Your products, not switched on: the catalogue as the mini shelf, unshaded, its size, and why in one line', () => {
+  it('Your products, not switched on: the catalogue\'s size, and why in the dashed box', () => {
     const p = tileMarkup(markup, 'products')
-    expect(markupText(p)).toMatch(/Your catalogue 38 products across 5 categories .*Product readings are not switched on for this workspace yet\.$/)
-    expect(p.match(/data-tone="unread"/g)).toHaveLength(38)
-    expect(p).not.toContain('data-more=""')
-    expect(p).not.toMatch(/data-tone="[0-3]"/)
+    expect(markupText(p)).toMatch(/Your catalogue 38 products across 5 categories\. Product readings are not switched on for this workspace yet\.$/)
+    // Decision 4: the dashed box, never an unshaded shelf or a ghost one.
+    expect(p).toContain('data-empty-box')
+    expect(p).not.toContain('data-tone=')
     const none = tileMarkup(render(page(sealand)), 'products')
-    expect(none).toContain('data-shelf="ghost"')
+    expect(none).toContain('data-empty-box')
+    expect(none).not.toContain('data-shelf="ghost"')
     expect(markupText(none)).toContain(PRODUCTS_LINES.no_catalogue)
     expect(none).toContain(`href="${PRODUCTS_SETTINGS}"`)
   })
 
   it('Content, no post ideas: the week\'s most-asked question your posts have not touched, beside its month, then why there is no idea', () => {
     const t = tileText(markup, 'content')
-    expect(t).toBe(`Content Open ${ASKED_TITLE}: How long a liner lasts 23 of 226 videos this week 35 of 300 in October so far Who asks New amputees in their first year None of your 25 posts since August touched on it Sweat under the liner 21 this week · 30 of 300 in October so far ${IDEAS_EMPTY.not_on}`)
+    expect(t).toBe(`Content Open Content ${ASKED_TITLE}: How long a liner lasts Asked under 23 of 226 videos this week, and 35 of 300 in October so far Who asks New amputees in their first year Your posts None of your 25 posts since August touched on it Also asked Sweat under the liner , 21 this week and 30 of 300 in October so far ${IDEAS_EMPTY.not_on}`)
     // Nothing pins the why line to the tile's foot (it flows).
     expect(tileMarkup(markup, 'content')).not.toContain('mt-auto')
     // It opens Content's first question card, which holds its question (the
@@ -793,8 +822,8 @@ describe('the board\'s shape holds when the data is thin (parity pass)', () => {
     } as DashboardData
     assertCopyContract(page(data))
     const m = render(page(data))
-    expect(tileText(m, 'voices')).toMatch(/Named most not counted yet$/)
-    expect(tileMarkup(m, 'products')).toContain('data-shelf="ghost"')
+    expect(tileText(m, 'voices')).toMatch(new RegExp(`${VOICES_NAMED} not counted yet$`))
+    expect(tileMarkup(m, 'products')).toContain('data-empty-box')
     expect(tileText(m, 'content')).toContain(IDEAS_EMPTY.not_on)
     expect(tileText(m, 'moves')).toContain(`After your move ${MOVES_NO_MOVE}`)
   })
@@ -913,11 +942,11 @@ describe('the thin states, after the fresh check', () => {
       const d = { ...base, content: { state: 'ok' as const, top: { ...c, asked: { ...c.asked!, own } } } }
       assertCopyContract(page(d))
       const t = tileText(render(page(d)), 'content')
-      expect(t).toMatch(/^Content Open Asked this week: How long a liner lasts 23 of 226 videos this week/)
+      expect(t).toMatch(/^Content Open Content Asked this week: How long a liner lasts Asked under 23 of 226 videos this week/)
       expect(t).not.toContain(ASKED_TITLE)
     }
     const days = { ...base, content: { state: 'ok' as const, top: { ...c, asked: { ...c.asked!, own: null, weekWords: 'between 28 Sep and 11 Oct' } } } }
-    expect(tileText(render(page(days)), 'content')).toMatch(/Asked between 28 Sep and 11 Oct: How long a liner lasts 23 of 226 videos between 28 Sep and 11 Oct/)
+    expect(tileText(render(page(days)), 'content')).toMatch(/Asked between 28 Sep and 11 Oct: How long a liner lasts Asked under 23 of 226 videos between 28 Sep and 11 Oct/)
   })
 })
 

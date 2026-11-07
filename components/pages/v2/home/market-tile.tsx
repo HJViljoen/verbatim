@@ -8,7 +8,7 @@ import { tileHref } from '@/lib/pages/home'
 import { flagBaseWords, type MarketConv, type MarketTop } from '@/lib/pages/v2/market'
 import type { MarketTile, TileRead } from '@/lib/pages/v2/home'
 import { cn } from '@/lib/utils'
-import { CSUB, Fig, TILE, TILE_FAILED, TileHead, TileLine, TT_WIDE } from './parts'
+import { Bar, CSUB, Fig, TILE, TILE_FAILED, TileHead, TileLine, TT_WIDE } from './parts'
 
 // THE DASHBOARD'S MARKET TILE, drawn to the audit design's board
 // (Dashboard.dc.html, "Market this week", 7 Nov), from `topMarket`: the same
@@ -137,9 +137,7 @@ function Table({ top, rows, month }: { top: MarketTop; rows: readonly Row[]; mon
                 </span>
               </td>
               <td className={cn(TD, 'py-3 align-middle max-sm:hidden')}>
-                <div aria-hidden className="h-2 rounded-[4px] bg-track">
-                  <div className="h-2 rounded-[4px] bg-brand" style={{ width: `${bar(c.week ?? 0)}%` }} />
-                </div>
+                <Bar pct={bar(c.week ?? 0)} />
               </td>
               <td className={cn(TD, TD_NUM, 'py-3', i === 0 ? 'font-semibold' : null)}>{c.week != null ? <Fig n={c.week} /> : null}</td>
               <td className={cn(TD, TD_NUM, 'py-3 pr-0 text-secondary-foreground')}>{c.month != null ? <Fig n={c.month} /> : null}</td>

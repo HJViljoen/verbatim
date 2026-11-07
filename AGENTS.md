@@ -1144,8 +1144,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
   month is not the current one they carry its label as the tile does ("In
   the most videos in September, the last full month:", `inlineMonth` over
   the tile's `monthLabel`); the week-based lines keep the week's own month.
-  `components/pages/v2/home/email-lines.test.tsx` holds each line to its
-  tile's markup. So a build long after its run (a backfill, a re-claim, Send
+  `components/pages/v2/home/email-lines.test.tsx` holds each line to the
+  Dashboard: its item's name, its link and every figure it prints appear on
+  the screen, the figures row included (the audit design's decision 2: the
+  screen says each base once, the email keeps its words). So a build long after its run (a backfill, a re-claim, Send
   now on an old run) carries that day's lines. Since version 3 these lines
   are frozen into no new snapshot: they are how a version 2 issue renders.
   *Rollback hazard:* code from before level 1 accepts only version 1, and
@@ -1446,8 +1448,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
     conversation cards, list head and rows ("market videos in September, the
     last full month", `inlineMonth`); Settings › Your products' "came
     up in …" line and its column header (the month's name, not "This month");
-    the Dashboard's Voices and Your products tiles under their heads
-    (`TileMonth`, components/pages/v2/home/parts.tsx), and Your moves' tile in
+    the Dashboard's Voices and Your products tiles in their labels ("Voices
+    in September, the last full month", `inlineMonth`; since the audit
+    design, which also says the tile's base in its note there, decision 2),
+    and Your moves' tile in
     its move's sentence; and the weekly email's Voices and Your products
     lines, inline (`weeklyReadLines`, frozen into the snapshot at build). A
     state that reads no month carries no label.
@@ -1478,8 +1482,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
     ("Not measured yet", `lib/subjects/calibration-state.ts`) on Market,
     Your products and the Dashboard alike; the Market tile's stand-in is
     Market's third card's `alsoTalkedOf`; the Content tile's question is the
-    page's first question card; the products tile draws the page's own shelf
-    (`miniShelfOf`, `shelfCut`); the moves tile's no-move words are Your
+    page's first question card; the products tile counts the page's own
+    shelf (`miniShelfOf`, `shelfCut`) and, since the audit design, lists the
+    page's products that came up (`cameUpProducts`) in place of the mini
+    shelf; the moves tile's no-move words are Your
     moves' (`noMoveWords`); the Voices tile's tracked brands are
     `brandTable`'s rows.
   - **A tracked subject is never hidden** (Heinrich, 14 Oct: "If someone
@@ -1541,8 +1547,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
     one sentence where no week is drawn, decision 4; no head link); Voices (`topVoices`: the group in the
     most videos, every group's videos as separate bars, the two brands named
     most unprompted, `NAMED_MOST`, with no verdict); Your products
-    (`topProducts`); Content (`topContent`, with `MEDICAL_LINE` under the
-    idea in a medical market, `printsMedicalLine`); Your moves (`topMoves`:
+    (`topProducts`: the standout as the heading's sentence, how many came
+    up, the four that came up most against the largest, how many were
+    quiet; a thin state says why in the dashed box); Content (`topContent`:
+    the idea as the heading, its facts as a list, "×" said as "times", with
+    `MEDICAL_LINE` once at the tile's foot in a medical market,
+    `printsMedicalLine`); Your moves (`topMoves`:
     Accept and Not for us for owners and admins, `mayDecideMoves`); and the
     Agent box (two questions to try, `agentTries`, from the read's frozen
     `conversations`). Each tile's head link opens its item's own page, else
@@ -1585,7 +1595,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
     unshaded where the month was not read, cut as the page cuts it,
     `shelfCut`: all of a column of `SHELF_TILES + 1` or fewer, else
     `SHELF_TILES` bars and "+N more", never "+1 more", its words
-    counting the whole column, `named`); `ContentTile.asked` via
+    counting the whole column, `named`; since the audit design the tile
+    draws no shelf and counts the catalogue from it, "38 products across 5
+    categories"); `ContentTile.asked` via
     `topAsked`, read only where no idea prints (the page's split with no
     idea on the row, `askedWithLead` with `lead: IDEA_SLOTS`: the tile's
     question is `lead[0]` and opens its card, `questionSlotId(1)`, never the

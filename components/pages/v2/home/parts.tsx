@@ -2,7 +2,6 @@ import type { ReactNode } from 'react'
 import { CARD, GoLink } from '@/components/v2'
 import { LBL } from '@/components/v2/look'
 import { fmtInt } from '@/lib/format'
-import { barMonth } from '@/lib/reading/month-label'
 import { cn } from '@/lib/utils'
 
 // The Dashboard's furniture, drawn to the audit design's board
@@ -32,6 +31,21 @@ export const CSUB = 'm-0 text-[13.5px] leading-[1.5] text-muted-foreground'
 
 /** A row under a tile's lead, a hairline over it. */
 export const MROW = 'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-track py-3 text-[14.5px] leading-[1.4]'
+
+/** A row of a tile's bar list (the board's): the name, a 96px bar, the
+ *  count; fixed columns, so the rows line up. */
+export const BAR_ROW = 'grid grid-cols-[minmax(0,1fr)_96px_34px] items-center gap-3'
+
+/** A list's bar (the board's 8px track and the market's yellow), its length
+ *  given 0 to 100 (`toMax`, decision 5). Drawn for the eye: the row's count
+ *  says it in words. */
+export function Bar({ pct }: { pct: number }) {
+  return (
+    <div aria-hidden className="h-2 rounded-[4px] bg-track">
+      <div className="h-2 rounded-[4px] bg-brand" style={{ width: `${pct}%` }} />
+    </div>
+  )
+}
 
 /** A count code computed, marked for the copy contract. */
 export function Fig({ n, className }: { n: number | null | undefined; className?: string }) {
@@ -76,19 +90,4 @@ export const asSentence = (words: string): string => {
   if (!w) return w
   const s = w.charAt(0).toUpperCase() + w.slice(1)
   return /[.!?]$/.test(s) ? s : `${s}.`
-}
-
-/**
- * The month a whole-month tile reads, under its head, where that month is
- * not the current calendar month: "September · the last full month"
- * (decision 3; the words are `readingMonthLabel`'s). Until the new month is
- * half over, has had two updates and is not thin (`readingMonthFor`), Market
- * and the week tile read the week's own month ("in October so far") while
- * Voices, Your products and Your moves read the month that has just ended;
- * this line is what makes one Dashboard showing both read as meant. Nothing
- * where there is no label (the current month), or no month.
- */
-export function TileMonth({ words, label }: { words: string | null | undefined; label: string | null | undefined }) {
-  if (!label || !words) return null
-  return <p data-tile-month className={cn(MONO_MUTED, 'm-0 -mt-2.5 max-sm:-mt-1.5')}>{barMonth(words, label)}</p>
 }

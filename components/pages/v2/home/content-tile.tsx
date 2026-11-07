@@ -1,29 +1,33 @@
 import Link from 'next/link'
-import { RecipeChip } from '@/components/pages/v2/content/parts'
+import type { ReactNode } from 'react'
+import { ROW } from '@/components/v2/look'
 import { fmtInt, longMonth } from '@/lib/format'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
-import { groupHref, IDEAS_EMPTY, POST_IDEA_SLOT, type OwnTouch, type TopAsked } from '@/lib/pages/v2/content'
+import { groupHref, IDEAS_EMPTY, POST_IDEA_SLOT, type OwnTouch, type Recipe, type TopAsked } from '@/lib/pages/v2/content'
 import { tileHref } from '@/lib/pages/home'
 import type { ContentTile, TileRead } from '@/lib/pages/v2/home'
 import { cn } from '@/lib/utils'
-import { MID, MONO_MUTED, TILE, TILE_FAILED, TileHead, TileLine, TT } from './parts'
+import { TILE, TILE_FAILED, TileHead, TileLine, TT } from './parts'
 
-// THE DASHBOARD'S CONTENT TILE (Design v2, T8; E1-Dashboard's second row),
-// from `topContent`: the week's first post idea, which opens its own page
-// (`/dashboard/content/ideas/<id>`, depth as pages, 17 Oct), with how many of the market's videos it
-// came up in over the days the ideas read ("of 640 videos, 14 Sep to 11
-// Oct": four weeks of questions, Heinrich, 13 Oct) and the month beside it
-// (decision 1), the format and opening code chose, and whether your posts
-// touched on it; or why there is no idea (not switched on, none written, too
-// old). In a medical market the medical team line prints under the idea,
-// always (T13's done-when).
+// THE DASHBOARD'S CONTENT TILE, drawn to the audit design's board
+// (Dashboard.dc.html, "Post next", 7 Nov), from `topContent`: the week's
+// first post idea as the heading, which opens its own page
+// (`/dashboard/content/ideas/<id>`), then its facts in one list: the videos
+// it was asked under over the days the ideas read, beside its month
+// (decision 1; four weeks of questions, Heinrich, 13 Oct), whether your
+// posts touched on it, and what works best (the format and opening code
+// chose, "×" said as "times"); or the week's most-asked question where there
+// is no idea, and why. In a medical market the medical team line prints once,
+// at the tile's foot (decision 14).
+//
+// The bases stay beside their counts here: the four weeks' videos and an
+// older idea's month are not the figures row's (decision 2's own rule).
 //
 // The board's "12 comments are waiting for a reply" is not printed: nothing
 // can see whether you replied (decision 5), so Content lists the comments
 // worth an answer instead, one click down.
 
-/** Whether your posts touched on it, in Content's words (`OwnTouchLine`), in
- *  the board's grey: the kit draws no orange words. */
+/** Whether your posts touched on it, in Content's words (`OwnTouchLine`). */
 export function OwnLine({ own }: { own: OwnTouch }) {
   const when = `since ${longMonth(own.since)}`
   if (own.state === 'unread') return <>Your posts could not be read just now</>
@@ -41,63 +45,86 @@ export const ASKED_TITLE = 'Not in your posts yet'
  *  out, so the question is the week's own ("Asked this week"). */
 export const askedTitleUnread = (weekWords: string): string => `Asked ${weekWords}`
 
-/** The tile with no post idea (parity pass, 13 Oct): the board's "Post next"
- *  card, title, count of the week's videos beside its month, and your posts,
- *  on the question the week asked most; why there is no idea, in one quiet
- *  line under it. */
+/** A multiple, in words: "2.1 times". */
+const times = (m: number | null) => (m != null ? <><span data-copy="figure">{m.toFixed(1)}</span> times</> : null)
+
+/** The format and opening code chose, as one sentence each (the board's
+ *  "Story format, 1.3 times a typical video on this question. Opening on a
+ *  personal story, 1.5 times."): "×" said as "times". Null where neither. */
+export function WorksBest({ format, opening }: { format: Recipe | null; opening: Recipe | null }) {
+  if (!format && !opening) return null
+  const typical = ' a typical video on this question'
+  // The opening's chip words ("Open with a question") as the board's
+  // sentence ("Opening with a question").
+  const open = opening ? opening.label.replace(/^Open\b/, 'Opening') : null
+  return (
+    <>
+      {format ? <>{format.name} format{format.multiple != null ? <>, {times(format.multiple)}{typical}</> : null}.</> : null}
+      {format && opening ? ' ' : null}
+      {opening ? <>{open}{opening.multiple != null ? <>, {times(opening.multiple)}{format?.multiple != null ? null : typical}</> : null}.</> : null}
+    </>
+  )
+}
+
+/** The tile's facts: a term over its words, two columns (the board's
+ *  `<dl>`). */
+function Facts({ rows }: { rows: readonly (readonly [string, ReactNode] | null)[] }) {
+  const shown = rows.filter((r): r is readonly [string, ReactNode] => r != null)
+  if (shown.length === 0) return null
+  return (
+    <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-[14.5px] leading-[1.5]">
+      {shown.map(([term, words]) => (
+        <div key={term} className="contents">
+          <dt className="text-muted-foreground">{term}</dt>
+          <dd className="m-0 min-w-0">{words}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
+/** The medical team line, once, at the tile's foot. */
+function Medical() {
+  return <p data-medical="" className="m-0 mt-auto border-t border-track pt-3 text-[13px] leading-[1.45] text-muted-foreground">{MEDICAL_LINE}</p>
+}
+
+/** The tile with no post idea (parity pass, 13 Oct): the question the week
+ *  asked most that your posts have not touched, its videos beside its month,
+ *  who asks, your posts and what else was asked; why there is no idea, in
+ *  one quiet line under it. */
 function Asked({ asked, line }: { asked: TopAsked; line: string | null }) {
   // "Not in your posts yet" only where your posts were read: a failed read
   // left nothing out, so the title says only that it was asked.
   const read = asked.own != null && asked.own.state !== 'unread'
   return (
     <>
-      <h3 className={TT}>
-        {read ? ASKED_TITLE : askedTitleUnread(asked.weekWords)}: <span data-copy="subject" data-slot="pass_b_theme">{asked.label}</span>
-      </h3>
-      {/* The week's figure only beside its month (decision 1). */}
-      {asked.week && asked.month ? (
-        <>
-          <div data-copy="level" className="flex flex-wrap items-baseline gap-x-2.5">
-            <span className={MID}>{fmtInt(asked.week.k)}</span>
-            <span className={MONO_MUTED}>of {fmtInt(asked.week.n)} videos {asked.weekWords}</span>
-          </div>
-          <p data-copy="level" className={cn(MONO_MUTED, 'm-0 -mt-2 max-sm:-mt-1')}>
-            {fmtInt(asked.month.k)} of {fmtInt(asked.month.n)} {asked.monthWords}
-          </p>
-        </>
-      ) : asked.month ? (
-        <p data-copy="level" className={cn(MONO_MUTED, 'm-0 text-[14px] text-foreground')}>{fmtInt(asked.month.k)} of {fmtInt(asked.month.n)} {asked.monthWords}</p>
-      ) : null}
-      {/* Who asks, where the board draws its chips (names only, decision 5). */}
-      {asked.groups.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-2 text-[12.5px] max-sm:hidden">
-          <span className="text-muted-foreground">Who asks</span>
-          {asked.groups.map((g) => (
-            <Link key={g.key} href={groupHref(g.key)} className="rounded-md bg-inner px-2.5 py-1.5 leading-none text-foreground no-underline hover:bg-track">
-              <span data-copy="subject" data-slot="pass_e_persona">{g.name}</span>
-            </Link>
-          ))}
-        </div>
-      ) : null}
-      {asked.own ? <p className="m-0 text-[13px] leading-[1.4] text-muted-foreground"><OwnLine own={asked.own} /></p> : null}
-      {/* What else the week asked, next in line on Content: the board's
-          weight in rows the data holds, each week beside its month
-          (decision 1), each opening its own card or the Also asked table. */}
-      {asked.next.length > 0 ? (
-        <div data-asked-next="" className="flex flex-col max-sm:hidden">
-          {asked.next.map((r) => (
-            <Link key={r.registryId} href={r.href} className="-mx-2 flex flex-col gap-0.5 rounded-md border-t border-track px-2 py-2 text-[14px] leading-[1.35] text-foreground no-underline hover:bg-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              <span data-copy="subject" data-slot="pass_b_theme" className="min-w-0">{r.label}</span>
-              {r.week != null && r.month != null && asked.week && asked.month ? (
-                <span className={MONO_MUTED}>
-                  <span data-copy="figure">{fmtInt(r.week)}</span> {asked.weekWords} · <span data-copy="level">{fmtInt(r.month)} of {fmtInt(asked.month.n)}</span> {asked.monthWords}
-                </span>
-              ) : null}
-            </Link>
-          ))}
-        </div>
-      ) : null}
-      {line ? <p data-content-why="" className="m-0 text-[12px] leading-[1.4] text-muted-foreground">{line}</p> : null}
+      <h2 className={TT}>
+        {read ? ASKED_TITLE : askedTitleUnread(asked.weekWords)}:{' '}
+        <Link href={asked.href} className={ROW}><span data-copy="subject" data-slot="pass_b_theme">{asked.label}</span></Link>
+      </h2>
+      <Facts rows={[
+        // The week's figure only beside its month (decision 1).
+        asked.month ? ['Asked under', asked.week
+          ? <><span data-copy="level">{fmtInt(asked.week.k)} of {fmtInt(asked.week.n)} videos</span> {asked.weekWords}, and <span data-copy="level">{fmtInt(asked.month.k)} of {fmtInt(asked.month.n)}</span> {asked.monthWords}</>
+          : <><span data-copy="level">{fmtInt(asked.month.k)} of {fmtInt(asked.month.n)} videos</span> {asked.monthWords}</>] as const : null,
+        // Who asks (names only, decision 5), each opening its group.
+        asked.groups.length > 0 ? ['Who asks', <>{asked.groups.map((g, i) => (
+          <span key={g.key}>{i > 0 ? ', ' : null}<Link href={groupHref(g.key)} className={cn(ROW, 'font-normal underline')}><span data-copy="subject" data-slot="pass_e_persona">{g.name}</span></Link></span>
+        ))}</>] as const : null,
+        asked.own ? ['Your posts', <OwnLine key="own" own={asked.own} />] as const : null,
+        // What else the week asked, next in line on Content, each opening its
+        // own card; its week beside its month (decision 1).
+        asked.next.length > 0 ? ['Also asked', <>{asked.next.map((r, i) => (
+          <span key={r.registryId} data-asked-next="">
+            {i > 0 ? '; ' : null}
+            <Link href={r.href} className={cn(ROW, 'font-normal underline')}><span data-copy="subject" data-slot="pass_b_theme">{r.label}</span></Link>
+            {r.week != null && r.month != null && asked.week && asked.month
+              ? <>, <span data-copy="figure">{fmtInt(r.week)}</span> {asked.weekWords} and <span data-copy="level">{fmtInt(r.month)} of {fmtInt(asked.month.n)}</span> {asked.monthWords}</>
+              : null}
+          </span>
+        ))}</>] as const : null,
+      ]} />
+      {line ? <p data-content-why="" className="m-0 border-t border-track pt-3 text-[13px] leading-[1.45] text-muted-foreground">{line}</p> : null}
     </>
   )
 }
@@ -106,42 +133,28 @@ export function ContentTileView({ read }: { read: TileRead<ContentTile> }) {
   const top = read.state === 'ok' ? read.top : null
   const idea = top?.state === 'ready' ? top.idea : null
   const asked = !idea ? top?.asked ?? null : null
-  // Where no idea prints, the tile opens Content on its question's card.
-  const href = asked ? asked.href : top?.href ?? tileHref('content')
   return (
     <article aria-labelledby="home-content" data-tile="content" data-state={top?.state ?? 'failed'} className={cn(TILE, 'min-[1180px]:col-span-1')}>
-      <TileHead label="Content" id="home-content" open={{ href, words: 'Open' }} />
+      <TileHead label={idea ? 'Post next' : 'Content'} id="home-content" open={{ href: tileHref('content'), words: 'Open Content' }} />
       {!top ? <TileLine>{TILE_FAILED}</TileLine>
         : asked ? <Asked asked={asked} line={top.state === 'ready' ? null : IDEAS_EMPTY[top.state]} />
           : !idea ? <TileLine>{top.line ?? IDEAS_EMPTY.none}</TileLine> : (
         <>
-          {top.line ? <TileLine className="text-[13px]">{top.line}</TileLine> : null}
-          <h3 className={TT}>
-            Post next: <span data-copy="stored" data-slot={POST_IDEA_SLOT}>{idea.title}</span>
-          </h3>
-          {/* The four weeks only beside their month (decision 1), as on
-              Content and in the email. */}
-          {idea.read && idea.month ? (
-            <div data-copy="level" className="flex flex-wrap items-baseline gap-x-2.5">
-              <span className={MID}>{fmtInt(idea.read.k)}</span>
-              <span className={MONO_MUTED}>of {fmtInt(idea.read.n)} videos, <span className="whitespace-nowrap">{idea.ideasWeek.read.label}</span></span>
-            </div>
-          ) : null}
-          {/* The ideas' days beside the month (decision 1); the month alone
-              where those days were not read. */}
-          {idea.month ? (
-            <p data-copy="level" className={cn(MONO_MUTED, 'm-0', idea.read ? '-mt-2 max-sm:-mt-1' : 'text-[14px] text-foreground')}>
-              {fmtInt(idea.month.k)} of {fmtInt(idea.month.n)} {idea.monthWords}
-            </p>
-          ) : null}
-          {idea.format || idea.opening ? (
-            <div className="flex flex-wrap gap-2 max-sm:hidden">
-              {idea.format ? <RecipeChip recipe={idea.format} /> : null}
-              {idea.opening ? <RecipeChip recipe={idea.opening} /> : null}
-            </div>
-          ) : null}
-          <p className="m-0 text-[13px] leading-[1.4] text-muted-foreground"><OwnLine own={idea.own} /></p>
-          {idea.medical ? <p className="m-0 text-[12px] leading-[1.4] text-muted-foreground">{MEDICAL_LINE}</p> : null}
+          {top.line ? <TileLine className="text-[13.5px] text-muted-foreground">{top.line}</TileLine> : null}
+          <h2 className={TT}>
+            <Link href={top.href} className={ROW}><span data-copy="stored" data-slot={POST_IDEA_SLOT}>{idea.title}</span></Link>
+          </h2>
+          <Facts rows={[
+            // The four weeks only beside their month (decision 1), as on
+            // Content and in the email; the month alone where those days
+            // were not read.
+            idea.month ? ['Asked under', idea.read
+              ? <><span data-copy="level">{fmtInt(idea.read.k)} of {fmtInt(idea.read.n)} videos, {idea.ideasWeek.read.label}</span>, and <span data-copy="level">{fmtInt(idea.month.k)} of {fmtInt(idea.month.n)}</span> {idea.monthWords}</>
+              : <><span data-copy="level">{fmtInt(idea.month.k)} of {fmtInt(idea.month.n)} videos</span> {idea.monthWords}</>] as const : null,
+            ['Your posts', <OwnLine key="own" own={idea.own} />] as const,
+            idea.format || idea.opening ? ['Works best', <WorksBest key="best" format={idea.format} opening={idea.opening} />] as const : null,
+          ]} />
+          {idea.medical ? <Medical /> : null}
         </>
       )}
     </article>
