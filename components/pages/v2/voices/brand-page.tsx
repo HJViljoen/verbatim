@@ -227,7 +227,7 @@ function WhoTalks({ page }: { page: BrandPage }) {
             rows={page.groups.map((g) => ({
               key: g.key,
               k: g.k,
-              name: <Link href={g.href} className={ROW}><span data-copy="subject" data-slot="pass_e_persona">{g.name}</span></Link>,
+              name: <Link href={g.href} className={cn(ROW, 'font-normal')}><span data-copy="subject" data-slot="pass_e_persona">{g.name}</span></Link>,
               note: g.oneLiner ? <span data-copy="subject" data-slot="pass_e_persona">{g.oneLiner}</span> : null,
             }))}
             label={(k) => `${fmtInt(k)} of ${fmtInt(n)}`}

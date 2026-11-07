@@ -8,58 +8,11 @@ import { BACK_TO_VOICES, type LevelMonth, type LevelQuote } from '@/lib/pages/v2
 import { VOICES_ONE_MONTH } from '@/lib/pages/v2/voices'
 import { cn } from '@/lib/utils'
 
-// THE PARTS VOICES' LEVEL PAGES SHARE (G3, 17 Oct): the level tiles (a group
-// is people on the hub yellow; a brand is a tag on its colour role, yours or a
-// rival's; a creator is a camera on the evidence neutral, since a video keeps
-// the play mark), the month switch as Voices honours it, the hub's figure
-// strip, a comment labelled with its conversation, the Agent's box and the
-// calm missing state. Server components, no client code.
-
-type Glyph = { className?: string }
-
-function Svg({ className, children }: Glyph & { children: ReactNode }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" aria-hidden className={cn('shrink-0', className)}>
-      {children}
-    </svg>
-  )
-}
-
-/** A group: people (the boards' glyph). */
-export function PeopleGlyph(p: Glyph) {
-  return <Svg {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></Svg>
-}
-
-/** A brand: a tag. */
-export function TagGlyph(p: Glyph) {
-  return <Svg {...p}><path d="M12.6 2.6A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .6 1.4l8.7 8.7a2.4 2.4 0 0 0 3.4 0l6.6-6.6a2.4 2.4 0 0 0 0-3.4z" /><circle cx="7.5" cy="7.5" r="1.5" /></Svg>
-}
-
-/** A creator: a camera. */
-export function CameraGlyph(p: Glyph) {
-  return <Svg {...p}><path d="m16 13 5.2 3.5a.5.5 0 0 0 .8-.4V7.9a.5.5 0 0 0-.8-.4L16 10.5" /><rect x="2" y="6" width="14" height="12" rx="2" /></Svg>
-}
-
-export type VoicesLevel = 'group' | 'brand' | 'creator'
-
-const TILE: Record<'group' | 'rival' | 'you' | 'creator', string> = {
-  group: 'bg-accent text-orange-text',
-  rival: 'bg-comp text-white',
-  you: 'bg-you text-you-foreground',
-  creator: 'bg-track text-secondary-foreground',
-}
-
-/** A level's tile in the title block: 46px, its glyph 22px (38px and 19px on
- *  a phone), as Market's `LevelTile`. A brand's in its colour role. */
-export function VoicesLevelTile({ level, you = false }: { level: VoicesLevel; you?: boolean }) {
-  const tone = level === 'brand' ? (you ? 'you' : 'rival') : level
-  const Glyph = level === 'group' ? PeopleGlyph : level === 'brand' ? TagGlyph : CameraGlyph
-  return (
-    <span aria-hidden data-level-tile={level} className={cn('flex size-[46px] shrink-0 items-center justify-center rounded-[11px] max-sm:size-[38px] max-sm:rounded-[10px]', TILE[tone])}>
-      <Glyph className="size-[22px] max-sm:size-[19px]" />
-    </span>
-  )
-}
+// THE PARTS VOICES' LEVEL PAGES SHARE (G3, 17 Oct; since the audit design, 7
+// Nov, drawn to the Voices boards): the month switch as Voices honours it
+// with its line, a state's line, a comment as a tile labelled with its
+// conversation, the Agent's tile and the calm missing state. Server
+// components, no client code.
 
 /** The month switch as Voices honours it on a level page: the month on, by
  *  its name ("October", "November so far"), the week and over time shown and
@@ -133,20 +86,4 @@ export function AskBox({ text, href, button }: { text: ReactNode; href: string; 
       <Link href={href} className={cn(BTN_PRIMARY, 'no-underline max-sm:w-full')}>{button}</Link>
     </section>
   )
-}
-
-/** A section's head on a level page (the boards' `.sec`): its title, its note
- *  at the right (under it on a phone). */
-export function LevelSection({ id, title, note }: { id?: string; title: ReactNode; note?: ReactNode }) {
-  return (
-    <div id={id} className="mt-3.5 flex scroll-mt-6 items-baseline justify-between gap-3 px-0.5 max-sm:mt-2.5 max-sm:flex-col max-sm:items-start max-sm:gap-0.5">
-      <h2 className="m-0 text-[19px] leading-[1.3] font-semibold tracking-[-0.005em] text-foreground max-sm:text-[18px]">{title}</h2>
-      {note ? <span className="text-[13px] leading-[1.4] text-muted-foreground">{note}</span> : null}
-    </div>
-  )
-}
-
-/** A small caps label (the boards' `.dlabel`). */
-export function Caps({ children, className }: { children: ReactNode; className?: string }) {
-  return <p className={cn('m-0 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground', className)}>{children}</p>
 }

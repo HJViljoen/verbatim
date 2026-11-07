@@ -2056,7 +2056,16 @@ This version has breaking changes — APIs, conventions, and file structure may 
     to this");
     the facts (followers as of the month's videos, their conversations
     theirs of all its videos, who comments, what people did off one lens
-    call); the other creators; the Agent. READS: each page reads only what it
+    call); the other creators; the Agent. Since the audit design (7 Nov,
+    `Voices-Creator.dc.html`): "A creator on {platform}" under the title and
+    the figures row (`creatorStats`: the month, their videos of the market's,
+    their following as of the month's videos, so the facts drop "On
+    {platform}"); the lead line, the brands named as a list of names; their
+    videos as tiles (the caption in full, "Posted 8 Oct, in {conversation}",
+    "Watch the video on TikTok", each comment a figure, "24 Oct, in X") two
+    to one beside the facts (a tile: their conversations a table, who
+    comments and what people did with bars against the largest) and the
+    other creators (a table, "All N in Voices"). READS: each page reads only what it
     prints (`lib/pages/v2/voices-statements.test.ts`, offline: the root 27,
     a group's page 40, a brand's 39, a creator's 24; before, at fff60bbb, the
     root 27 and its panels 35, 39 and 28; a video opened or every video

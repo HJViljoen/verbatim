@@ -27,7 +27,7 @@ describe('every level page', () => {
     }
   })
 
-  it('opens with the path and the title block: the crumb row, the h1, the level said under it and the figures row (a group\'s; a brand\'s and a creator\'s tile and label until their tasks), the month switch with the week and over time not offered', () => {
+  it('opens with the path and the title block: the crumb row, the h1, the level said under it and the figures row, the month switch with the week and over time not offered and its line; no tile and no label', () => {
     const g = render(group(groupFixture()))
     expect(g).toContain('data-level-bar="group"')
     // The audit design (7 Nov): no tile and no label over the h1.
@@ -49,7 +49,11 @@ describe('every level page', () => {
     expect(b).toContain(`title="${VOICES_ONE_MONTH_SHORT}"`)
     expect(renderText(brand(brandFixture()))).toMatch(/^Voices \/ Ottobock Voices Ottobock A rival brand This week/)
     expect(renderText(brand(brandFixture({ key: 'client' })))).toMatch(/^Voices \/ Össur Voices Össur Your brand This week/)
-    expect(renderText(creator(creatorFixture()))).toMatch(/^Voices \/ @stepbystep\.amp Voices Creator on TikTok @stepbystep\.amp October so far · 14 of 318 videos · 182K followers/)
+    const c = render(creator(creatorFixture()))
+    expect(c).toContain('data-level-block="audit"')
+    expect(c).not.toContain('data-level-tile')
+    expect(renderText(creator(creatorFixture()))).toMatch(/^Voices \/ @stepbystep\.amp Voices @stepbystep\.amp A creator on TikTok This week/)
+    expect(renderText(creator(creatorFixture()))).toContain(`${VOICES_ONE_MONTH_SHORT} Month October so far Their videos 14 of the market’s 318 On TikTok 182K followers, as of their videos in October`)
   })
 
   it('an address naming nothing prints one calm line and the way back, never a 404', () => {
@@ -330,7 +334,7 @@ describe('a level page reading a closed month never calls it "this month"', () =
     expect(bt).not.toMatch(/this month/i)
     const c = { ...creatorFixture({ month: SEP_CLOSED_MONTH }), groups: [] }
     const ct = renderText(creator(c))
-    expect(ct).toContain('Who comments · of 14 No group comments on their videos in September.')
+    expect(ct).toContain('Who comments, of 14 No group comments on their videos in September.')
     expect(ct).toContain('of the 24 in it in September.')
     expect(ct).not.toMatch(/this month/i)
     expect(renderText(group(groupThinFixture()))).not.toMatch(/this month/i)
@@ -347,21 +351,23 @@ describe('a creator\'s page (G3-Voices-Creator)', () => {
   const text = renderText(creator(creatorFixture()))
   const html = render(creator(creatorFixture()))
 
-  it('the flat header: one line from figures, the brands named in their videos; no hub card', () => {
-    expect(text).toContain('Their biggest conversation is Running on a blade : 6 of their 14 videos, of the 24 in it this month. Össur 4 Ottobock 1 brands named in their videos')
+  it('the lead: one line from figures, the brands named in their videos as a list of names; no hub card', () => {
+    expect(text).toContain('Their biggest conversation is Running on a blade : 6 of their 14 videos, of the 24 in it this month. Brands named in their videos: Össur ( 4 ), Ottobock ( 1 )')
     expect(html).not.toContain('data-strip=""')
     expect(html).toContain('data-creator-lead=""')
+    // The figures row's own hook, never `data-strip` (that guard above).
+    expect(html).toContain('data-stat-strip=""')
+    expect(html.match(/data-who-chip=/g)?.length).toBeGreaterThanOrEqual(2)
   })
 
-  it('their videos, caption first: the day and the conversation, the brand, comments counted of all on it, each comment naming its conversation', () => {
-    // From 640 the brand's chip sits at the card's right; on a phone it rides
-    // after the day and the conversation takes its own line.
-    expect(text).toContain('Their videos 14 videos in October so far, the most comments counted first First 5k on the Cheetah, and what nobody tells you about the socket Posted 8 Oct · Össur · in Running on a blade Össur 22 comments counted, of 340 on the video Watch the video ↗ “Mile 3 on the new foot and I forgot I was wearing it.”')
-    expect(text).toContain('“How long before you could run without the socket rubbing?” 2 Oct · in Socket fit causes pain')
-    expect(text).toContain('Spanish · machine translation Which foot do you run with in the mountains? I can’t find one that holds up.')
+  it('their videos, caption first: the day, the brand and the conversation, the link to watch it on its platform, comments counted of all on it, each comment naming its conversation', () => {
+    expect(text).toContain('Their videos 14 videos in October so far, the most comments counted first First 5k on the Cheetah, and what nobody tells you about the socket Posted 8 Oct, Össur , in Running on a blade Watch the video on TikTok 22 comments counted, of 340 on the video “Mile 3 on the new foot and I forgot I was wearing it.”')
+    expect(text).toContain('“How long before you could run without the socket rubbing?” 2 Oct, in Socket fit causes pain')
+    expect(text).toContain('Spanish, machine translation Which foot do you run with in the mountains? I can’t find one that holds up.')
     expect(html.match(/data-video-card=""/g)).toHaveLength(5)
     expect(text).toContain('Show 3 of 22 comments')
-    expect(text).toContain('Show more videos · 9 more')
+    expect(text).toContain('Show 9 more videos')
+    expect(text).not.toMatch(/[→↗↓]/)
     expect(html).toMatch(/<a href="https:\/\/www\.tiktok\.com\/@stepbystep\.amp\/video\/1" target="_blank" rel="noopener noreferrer"/)
   })
 
@@ -376,12 +382,15 @@ describe('a creator\'s page (G3-Voices-Creator)', () => {
     expect(render(creator(creatorFixture({ all: true }))).match(/data-video-card=""/g)).toHaveLength(14)
   })
 
-  it('the facts, small: on its platform, their conversations, who comments, what people did; then the other creators and the root\'s list', () => {
-    expect(text).toContain('The facts On TikTok 182K followers, as of their videos in October 14 of your market’s 318 videos, October so far Conversations their videos are in · of 14 Running on a blade 6 · of 24')
-    expect(text).toContain('Who comments · of 14 Active and athletic 9 of 14')
-    expect(text).toContain('What people did · of 14 Praised a device 11')
-    expect(text).toContain('Other creators, October so far All 9 in Voices →')
+  it('the facts beside their videos: their conversations a table, who comments and what people did with bars; then the other creators a table and the root\'s list (the platform is the figures row\'s)', () => {
+    expect(text).toContain('The facts Conversations their videos are in, of 14 Conversation Theirs All in it Running on a blade 6 24')
+    expect(text).not.toContain('The facts On TikTok')
+    expect(text).toContain('Theirs, then all the videos in it. Each opens in Market. Who comments, of 14 Active and athletic 9')
+    expect(text).toContain('What people did, of 14 Praised a device 11')
+    expect(text).toContain('Other creators, October so far Creator Platform Videos The Amputee Diaries YouTube 9')
+    expect(text).toContain('All 9 in Voices')
     expect(html).toContain('href="/dashboard/voices?creators=all#creators"')
     expect(html.match(/data-sibling=""/g)).toHaveLength(8)
+    expect(html).toContain('aria-label="9 of 14"')
   })
 })

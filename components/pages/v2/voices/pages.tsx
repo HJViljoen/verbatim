@@ -1,36 +1,23 @@
-import type { ReactNode } from 'react'
 import { PageFrame } from '@/components/shell/page-grid'
 import { LevelBar } from '@/components/shell/level-bar'
-import { fmtCompact, fmtInt } from '@/lib/format'
 import { voicesBrandHref, voicesCreatorHref, voicesGroupHref } from '@/lib/pages/v2/voices-address'
-import { levelBarMonth, VOICES_ONE_MONTH_SHORT, type BrandPage, type CreatorPage, type GroupPage, type LevelMissing, type LevelParams } from '@/lib/pages/v2/voices-levels'
+import { VOICES_ONE_MONTH_SHORT, type BrandPage, type CreatorPage, type GroupPage, type LevelMissing, type LevelParams } from '@/lib/pages/v2/voices-levels'
 import { BrandPageBody, brandStats, brandSub } from './brand-page'
-import { CreatorPageBody } from './creator-page'
+import { CreatorPageBody, creatorStats } from './creator-page'
 import { GroupPageBody, groupStats } from './group-page'
-import { LevelMonthSwitch, VoicesLevelMissing, VoicesLevelTile } from './levels'
+import { LevelMonthSwitch, VoicesLevelMissing } from './levels'
 
 // VOICES' LEVEL PAGES (depth as pages, 17 Oct; the G3 boards; since the
-// audit design, 7 Nov, a page at a time drawn to Voices-Group, -Brand and
-// -Creator.dc.html: no tile, the level said under the h1, the figures row):
-// a group, a brand and a creator, each its own address under Voices
+// audit design, 7 Nov, drawn to Voices-Group, -Brand and -Creator.dc.html): a
+// group, a brand and a creator, each its own address under Voices
 // (lib/pages/v2/voices-address.ts). Voices stays the sidebar's active surface
 // on every one (`surfaceForPath`: the longest match). Each opens with
-// Market's path and title block (`LevelBar`, F3-Market-Nav): the slim crumb
-// row, "Voices / {name} ⌃⌄" with the switcher of its siblings, then the level's
-// tile, its label, the 28px title, the mono meta line and the month switch as
-// Voices honours it. On a phone the row becomes "‹ Voices".
-
-const lv = (k: number, n: number) => <span data-copy="level">{fmtInt(k)} of {fmtInt(n)}</span>
-
-/** A creator's meta line: the month, their videos of the market's, their
- *  following as of the month's videos (never Reddit's). */
-export function creatorMeta(page: CreatorPage): ReactNode[][] {
-  return [
-    [levelBarMonth(page.month)],
-    page.month.n != null ? [<>{lv(page.videos, page.month.n)} videos</>] : [],
-    page.followers != null ? [<><span data-copy="figure">{fmtCompact(page.followers)}</span> {page.followerWord}</>] : [],
-  ]
-}
+// Market's path and the audit design's title block (`LevelBar` with `sub` and
+// `stats`): the crumb row, "Voices / {name} ⌃⌄" with the switcher of its
+// siblings, the 28px title, the level said under it ("A group in your
+// market"), the month switch as Voices honours it with its line, and the
+// figures row; no tile and no label over the title. On a phone the row
+// becomes "‹ Voices".
 
 const keep = (p: LevelParams) => (p.month ? { month: p.month } : {})
 
@@ -78,9 +65,8 @@ export function VoicesCreatorPage({ data, params = {}, switcherOpen = false }: {
       <LevelBar
         crumbs={data.crumbs}
         level="creator"
-        tile={<VoicesLevelTile level="creator" />}
-        label={`Creator on ${data.platformLabel}`}
-        meta={creatorMeta(data)}
+        sub={`A creator on ${data.platformLabel}`}
+        stats={creatorStats(data)}
         controls={<LevelMonthSwitch month={data.month} href={voicesCreatorHref(data.platform, data.account, keep(params))} reason={VOICES_ONE_MONTH_SHORT} />}
         open={switcherOpen ? 'current' : undefined}
       />
