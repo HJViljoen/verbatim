@@ -27,12 +27,16 @@ describe('every level page', () => {
     }
   })
 
-  it('opens with the path and the title block: the crumb row, the level\'s tile and label, the h1, the meta line, the month switch with the week and over time not offered', () => {
+  it('opens with the path and the title block: the crumb row, the h1, the level said under it and the figures row (a group\'s; a brand\'s and a creator\'s tile and label until their tasks), the month switch with the week and over time not offered', () => {
     const g = render(group(groupFixture()))
     expect(g).toContain('data-level-bar="group"')
-    expect(g).toContain('data-level-tile="group"')
+    // The audit design (7 Nov): no tile and no label over the h1.
+    expect(g).toContain('data-level-block="audit"')
+    expect(g).not.toContain('data-level-tile')
     expect(g.match(/<h1\b/g)).toHaveLength(1)
-    expect(renderText(group(groupFixture()))).toMatch(/^Voices \/ Caregivers and family Voices Group Caregivers and family October so far · 45 of 318 videos · described at the 11 Oct update This week/)
+    expect(renderText(group(groupFixture()))).toMatch(/^Voices \/ Caregivers and family Voices Caregivers and family This week/)
+    expect(renderText(group(groupFixture()))).toContain(`${VOICES_ONE_MONTH} A group in your market Month October so far Their videos 45 of the market’s 318 Described at The 11 Oct update Against September Not compared yet`)
+    expect(g.match(/data-voices-one-month=""/g)).toHaveLength(1)
     // On a phone the row becomes the way back.
     expect(g).toMatch(/data-back-link=""[^>]*href="\/dashboard\/voices"/)
     expect(g.match(/aria-disabled="true"/g)).toHaveLength(2)
@@ -50,7 +54,7 @@ describe('every level page', () => {
   it('an address naming nothing prints one calm line and the way back, never a 404', () => {
     for (const [node, line] of [[group({ kind: 'missing', level: 'group', line: GROUP_MISSING }), GROUP_MISSING], [brand({ kind: 'missing', level: 'brand', line: BRAND_MISSING }), BRAND_MISSING], [creator({ kind: 'missing', level: 'creator', line: CREATOR_REDDIT }), CREATOR_REDDIT]] as const) {
       const text = renderText(node)
-      expect(text).toBe(`Voices ${line} ${BACK_TO_VOICES} →`)
+      expect(text).toBe(`Voices ${line} ${BACK_TO_VOICES}`)
       expect(render(node)).toContain('href="/dashboard/voices"')
     }
   })
@@ -67,34 +71,46 @@ describe('a group\'s page (G3-Voices-Group)', () => {
 
   it('in the board\'s order: who they are, the read card, what they talk about, every conversation, the numbers, their words, the Agent', () => {
     const at = (s: string) => text.indexOf(s)
-    const order = ['Who they are · described at the 11 Oct update', 'What they want', 'Who they say they are', 'What they talk about', 'All 6 conversations they’re in', 'The numbers', 'In their words', 'Ask what Caregivers and family say']
+    const order = ['Described at The 11 Oct update', 'Parents and partners asking', 'What they want', 'Who they say they are', 'What they talk about', 'All 6 conversations they’re in', 'The numbers', 'In their words', 'Ask what Caregivers and family say']
     for (let i = 1; i < order.length; i++) expect(at(order[i]), order[i]).toBeGreaterThan(at(order[i - 1]))
   })
 
-  it('the header card: the one-liner leads, then the four figures (decision 2: "Not compared yet")', () => {
-    expect(text).toContain('Parents and partners asking on someone’s behalf. 45 of your market’s 318 videos carry their comments October so far Not compared yet against September Each update describes the groups afresh 17 of their 45 are about Fit & comfort the subject they talk about most 6 conversations they’re in See them below ↓')
+  it('who they are: the one-liner leads, then three facts (decision 2: "Not compared yet" is the figures row\'s)', () => {
+    expect(text).toContain('Parents and partners asking on someone’s behalf. The subject they talk about most 17 of their 45 are about Fit & comfort Conversations they’re in 6 conversations, listed below Why there is no September Each update describes the groups afresh.')
     expect(html).toContain('href="#talk"')
+    expect(html).toContain('id="talk"')
+    // The subject they talk about most opens its Market page.
+    expect(html).toMatch(/are about <a [^>]*href="\/dashboard\/market\/subjects\/s-fit\?period=month&amp;month=2026-10"/)
     expect(text).not.toMatch(/%|no clear change|since September/)
   })
 
   it('three subject cards, each with the conversations inside it for them and its level on the market; the open one named once, the others also in their videos', () => {
     expect(html.match(/data-subject-card="ready"/g)).toHaveLength(3)
-    expect(text).toContain('Subject Fit & comfort 17 of their 45 videos Inside it, for them Growing out of a socket 12 Socket fit changing over time 5 108 of 318 in the market Open in Market →')
-    expect(text).toContain(`${SUBJECT_NOT_MEASURED}: Function & movement. It shows how many of their videos it holds once its check passes. Also in their videos: Choosing the right device 4 · Look & style 1`)
+    expect(text).toContain('Fit & comfort 17 of their 45 videos Inside it, for them Growing out of a socket 12 Socket fit changing over time 5 108 videos in the market Open Fit & comfort in Market')
+    expect(text).toContain(`${SUBJECT_NOT_MEASURED} Function & movement. It shows how many of their videos it holds once its check passes. Also in their videos Choosing the right device 4 , Look & style 1`)
+    expect(html).not.toContain('→')
   })
 
   it('every conversation: its description, its subject, theirs of their videos, all its videos; a two-line list on a phone', () => {
-    expect(text).toContain('Growing out of a socket A child’s socket stops fitting within months, and parents ask how often that is normal. Fit & comfort 12 of 45 19')
+    expect(text).toContain('Conversation Subject Their videos All videos in it, October so far Growing out of a socket A child’s socket stops fitting within months, and parents ask how often that is normal. Fit & comfort 12 19')
     expect(html.match(/data-phone-row=""/g)).toHaveLength(6)
+    expect(text).toContain('Growing out of a socket 12 Fit & comfort, 19 in October so far')
+    // A conversation no subject holds says so in its cell (the board's words).
+    const g = groupFixture()
+    const unplaced = { ...g, conversations: g.conversations.map((c, i) => (i === 0 ? { ...c, subject: null } : c)) }
+    expect(renderText(group(unplaced))).toContain('is normal. Not assigned 12 19')
     // The footnote's second half only where the counts add up past their videos.
     expect(text).toContain('A video can sit in more than one conversation.')
   })
 
   it('the numbers: the brands (you first) and products in their videos, where they comment; three comments each labelled with its conversation', () => {
-    expect(text).toContain('Brands named in their videos · of their 45 Össur You 6 of 45 Ottobock 4 of 45 Fillauer 1 of 45 Each opens its page in Voices')
-    expect(text).toContain('Products in their videos · of their 45 Iceross Comfort 2 of 45 Iceross Seal-In X 1 of 45 Couldn’t tell which product 7 of 45 Each opens in Your products')
-    expect(text).toContain('Where they comment · of their 45 Instagram 21 TikTok 16 YouTube 8')
-    expect(text).toContain('In their words · 3 of their comments in October so far, each from its conversation Growing out of a socket “My daughter outgrew her socket in four months. Is that normal?” Instagram · 4 Oct')
+    // The section says the base once ("Their 45 videos"); the tiles print bare
+    // counts with bars against their largest (decisions 2 and 5).
+    expect(text).toContain('The numbers Their 45 videos, October so far Brands named in their videos Össur You 6 Ottobock 4 Fillauer 1 Each opens its page in Voices.')
+    expect(text).toContain('Your products in their videos Iceross Comfort 2 Iceross Seal-In X 1 Couldn’t tell which product 7 Each opens in Your products.')
+    expect(text).toContain('Where they comment Instagram 21 TikTok 16 YouTube 8')
+    expect(text).toContain('In their words 3 of their comments in October so far, each from its conversation Growing out of a socket “My daughter outgrew her socket in four months. Is that normal?” Instagram, 4 Oct')
+    expect(text).not.toMatch(/\d+ of 45\b/)
     expect(html.match(/data-quote-from=""/g)).toHaveLength(3)
   })
 
@@ -102,22 +118,25 @@ describe('a group\'s page (G3-Voices-Group)', () => {
   it('the thin state keeps every frame: U6 said once in the strip, the cards by name with no figure, the read card\'s gaps in their places', () => {
     const t = renderText(group(groupThinFixture()))
     const h = render(group(groupThinFixture()))
-    expect(t).toContain('Not measured yet what their videos are about No subject has passed its check yet')
+    expect(t).toContain('The subject they talk about most Not measured yet. No subject has passed its check yet.')
     expect(t).not.toMatch(/of their 97 are about/)
     expect(h.match(/data-subject-card="provisional"/g)).toHaveLength(3)
-    expect(t).toContain('Subject Community & encouragement Not measured yet Inside it, for them Praise for resilience and courage 31 Its check is still open Open in Market →')
+    expect(t).toContain('Community & encouragement Not measured yet Inside it, for them Praise for resilience and courage 31 Its check is still open Open Community & encouragement in Market')
     expect(t).toContain('What tips them into acting Not described in the latest update.')
     expect(t).toContain('Who they say they are Nothing they said told us who they are.')
     // Every subject NAMED, never folded into a count (14 Oct: a tracked
     // subject is never hidden): the board's "all 6 of your subjects" left
     // Choosing the right device and Fit & comfort named nowhere on the page.
-    expect(t).toContain(`${SUBJECT_NOT_MEASURED}: Choosing the right device, Community & encouragement, Cost & access, Fit & comfort, Function & movement, Look & style. Each shows how many of their videos it holds once its check passes. Look & style holds one more of their conversations, in the list below`)
+    expect(t).toContain(`${SUBJECT_NOT_MEASURED} Choosing the right device, Community & encouragement, Cost & access, Fit & comfort, Function & movement, Look & style. Each shows how many of their videos it holds once its check passes. Look & style holds one more of their conversations, in the list below`)
     expect(t).not.toMatch(/all \d+ of your subjects/)
     for (const s of groupThinFixture().notMeasured) expect(t, s.label).toContain(s.label)
     expect(t).toContain('Brands named in their videos Brands are not counted for this workspace yet. Össur You Ottobock')
-    expect(t).toContain('Products in their videos Your products are not read for this workspace yet.')
-    expect(t).toContain('“Onde vocês conseguiram a prótese? Minha mãe precisa de uma.” Portuguese · machine translation Where did you get the prosthesis? My mother needs one.')
-    expect(t).toMatch(/^Voices \/ Caretaker Voices Group Caretaker September · the last full month · 97 of 521 videos/)
+    expect(t).toContain('Your products in their videos Your products are not read for this workspace yet.')
+    expect(t).toContain('“Onde vocês conseguiram a prótese? Minha mãe precisa de uma.” Portuguese, machine translation Where did you get the prosthesis? My mother needs one.')
+    expect(t).toContain('A group in your market The last full month September Their videos 97 of the market’s 521')
+    // Who they say they are, with nothing: its one line, no empty tracks
+    // (decision 4).
+    expect(h).not.toContain('data-empty-track')
   })
 
   // The parity rule: a card is never removed because its data is thin; the
@@ -142,7 +161,7 @@ describe('a group\'s page (G3-Voices-Group)', () => {
   it('no subject tracked at all: the section says so, and claims no check', () => {
     const g = { ...groupFixture(), subjectsState: 'none' as const, cards: [], notMeasured: [], alsoIn: [], inNone: [], holdsMore: [], topSubject: null }
     const t = renderText(group(g))
-    expect(t).toContain('What they talk about No subject is tracked yet · every conversation they’re in opens in Market')
+    expect(t).toContain('What they talk about No subject is tracked yet. Every conversation they’re in opens in Market.')
     expect(t).not.toContain('passed its check')
     expect(render(group(g))).toContain('data-group-subjects-none=""')
   })

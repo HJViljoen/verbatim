@@ -6,11 +6,13 @@ import { voicesBrandHref, voicesCreatorHref, voicesGroupHref } from '@/lib/pages
 import { levelBarMonth, VOICES_ONE_MONTH_SHORT, type BrandPage, type CreatorPage, type GroupPage, type LevelMissing, type LevelParams } from '@/lib/pages/v2/voices-levels'
 import { BrandPageBody } from './brand-page'
 import { CreatorPageBody } from './creator-page'
-import { describedAt, GroupPageBody } from './group-page'
+import { GroupPageBody, groupStats } from './group-page'
 import { LevelMonthSwitch, VoicesLevelMissing, VoicesLevelTile } from './levels'
 
-// VOICES' LEVEL PAGES (depth as pages, 17 Oct; the G3 boards): a group, a
-// brand and a creator, each its own address under Voices
+// VOICES' LEVEL PAGES (depth as pages, 17 Oct; the G3 boards; since the
+// audit design, 7 Nov, a page at a time drawn to Voices-Group, -Brand and
+// -Creator.dc.html: no tile, the level said under the h1, the figures row):
+// a group, a brand and a creator, each its own address under Voices
 // (lib/pages/v2/voices-address.ts). Voices stays the sidebar's active surface
 // on every one (`surfaceForPath`: the longest match). Each opens with
 // Market's path and title block (`LevelBar`, F3-Market-Nav): the slim crumb
@@ -19,17 +21,6 @@ import { LevelMonthSwitch, VoicesLevelMissing, VoicesLevelTile } from './levels'
 // Voices honours it. On a phone the row becomes "‹ Voices".
 
 const lv = (k: number, n: number) => <span data-copy="level">{fmtInt(k)} of {fmtInt(n)}</span>
-
-/** A group's meta line: the month, its videos of the market's, when the
- *  groups were described. */
-export function groupMeta(page: GroupPage): ReactNode[][] {
-  const described = describedAt(page.profileDate)
-  return [
-    [levelBarMonth(page.month)],
-    page.month.n != null ? [<>{lv(page.videos, page.month.n)} videos</>] : [],
-    described ? [described] : [],
-  ]
-}
 
 /** A brand's meta line: the month, named without being asked, named at all. */
 export function brandMeta(page: BrandPage): ReactNode[][] {
@@ -60,9 +51,8 @@ export function VoicesGroupPage({ data, params = {}, switcherOpen = false }: { d
       <LevelBar
         crumbs={data.crumbs}
         level="group"
-        tile={<VoicesLevelTile level="group" />}
-        label="Group"
-        meta={groupMeta(data)}
+        sub="A group in your market"
+        stats={groupStats(data)}
         controls={<LevelMonthSwitch month={data.month} href={voicesGroupHref(data.key, keep(params))} />}
         open={switcherOpen ? 'current' : undefined}
       />

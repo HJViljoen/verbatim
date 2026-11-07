@@ -1,5 +1,5 @@
 import { PageFrame } from '@/components/shell/page-grid'
-import { Bone, BoneBars, BoneLines } from '@/components/shell/skeleton'
+import { Bone, BoneBars, BoneLines, SkeletonStatStrip } from '@/components/shell/skeleton'
 import { CARD } from '@/components/v2'
 import { cn } from '@/lib/utils'
 
@@ -25,6 +25,21 @@ function Bar({ label }: { label: string }) {
   )
 }
 
+/** The audit design's title block (7 Nov), drawn as bones: the crumb row,
+ *  the title, the line under it and the figures row; no tile, no label. */
+function AuditBar({ label, cells }: { label: string; cells: number }) {
+  return (
+    <div role="presentation" className="flex flex-col">
+      <span className="sr-only">{label}</span>
+      <div className="pb-2 max-sm:hidden"><Bone className="h-[22px] w-56 max-w-full" /></div>
+      <Bone className="h-6 w-24 sm:hidden" />
+      <Bone className="mt-2.5 h-8 w-72 max-w-full" />
+      <Bone className="mt-2 h-4 w-48" />
+      <div className="mt-5"><SkeletonStatStrip cells={cells} /></div>
+    </div>
+  )
+}
+
 /** A hub's header card: its eyebrow, its lead and the four figures. */
 function Hub() {
   return (
@@ -36,22 +51,31 @@ function Hub() {
   )
 }
 
-/** A group's page loading (G3-Voices-Group). */
+/** A group's page loading (Voices-Group.dc.html): the title block, who they
+ *  are, the read, the subject tiles, the conversations, the numbers' three
+ *  tiles and the comments' three. */
 export function VoicesGroupSkeleton() {
   return (
     <PageFrame>
       <div role="status" aria-busy="true" aria-label="Loading the group" className="flex flex-col gap-[22px]">
-        <Bar label="Voices" />
-        <Hub />
-        <div className={cn(CARD, 'gap-6')}>
-          <div className="grid grid-cols-1 gap-9 min-[1180px]:grid-cols-3">{[0, 1, 2].map((i) => <BoneLines key={i} lines={4} />)}</div>
-          <div className="grid grid-cols-1 gap-10 border-t border-track pt-6 min-[1180px]:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]"><BoneBars rows={3} /><BoneLines lines={3} /></div>
+        <AuditBar label="Voices" cells={4} />
+        <div className={cn(CARD, 'gap-5 sm:p-[30px]')}>
+          <Bone className="h-8 w-4/5" />
+          <div className="grid grid-cols-1 gap-8 border-t border-track pt-5 min-[900px]:grid-cols-3">{[0, 1, 2].map((i) => <BoneLines key={i} lines={2} />)}</div>
         </div>
-        <Bone className="h-5 w-56" />
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 min-[1180px]:grid-cols-3">
-          {[0, 1, 2].map((i) => <div key={i} className={cn(CARD, 'gap-3')}><Bone className="h-6 w-6 rounded-[7px]" /><Bone className="h-5 w-40" /><Bone className="h-7 w-28" /><BoneBars rows={2} /></div>)}
+        <div className={cn(CARD, 'gap-6 sm:p-[30px]')}>
+          <div className="grid grid-cols-1 gap-8 min-[900px]:grid-cols-3">{[0, 1, 2].map((i) => <BoneLines key={i} lines={4} />)}</div>
+          <div className="grid grid-cols-1 gap-8 border-t border-track pt-6 min-[900px]:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]"><BoneBars rows={3} /><BoneLines lines={2} /></div>
+        </div>
+        <Bone className="mt-[26px] h-5 w-56" />
+        <div className="grid grid-cols-1 gap-5 min-[1180px]:grid-cols-3">
+          {[0, 1, 2].map((i) => <div key={i} className={cn(CARD, 'gap-3.5')}><Bone className="h-5 w-40" /><Bone className="h-8 w-28" /><BoneLines lines={2} /></div>)}
         </div>
         <div className={CARD}><Bone className="h-5 w-64" /><BoneLines lines={6} /></div>
+        <Bone className="mt-[26px] h-5 w-40" />
+        <div className="grid grid-cols-1 gap-5 min-[1180px]:grid-cols-3">
+          {[0, 1, 2].map((i) => <div key={i} className={CARD}><Bone className="h-5 w-48" /><BoneBars rows={3} /></div>)}
+        </div>
       </div>
     </PageFrame>
   )

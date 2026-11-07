@@ -1,17 +1,13 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { Sparkles } from 'lucide-react'
 import { translationLabel, translationNote } from '@/components/quote-block'
 import { BubbleGlyph, LayersGlyph } from '@/components/shell/level-glyphs'
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
-import { CARD, PeriodSwitch, type Period, type PeriodOption } from '@/components/v2'
-import { longMonth } from '@/lib/format'
-import { monthHeading } from '@/lib/reading/month-label'
+import { BTN_PRIMARY, CARD, commaCite, GoLink, PeriodSwitch, QUOTE, translationLine, type Period, type PeriodOption } from '@/components/v2'
 import { surface } from '@/lib/nav'
 import { BACK_TO_VOICES, type LevelMonth, type LevelQuote } from '@/lib/pages/v2/voices-levels'
 import { VOICES_ONE_MONTH } from '@/lib/pages/v2/voices'
 import { cn } from '@/lib/utils'
-import { OLINK } from './parts'
 
 // THE PARTS VOICES' LEVEL PAGES SHARE (G3, 17 Oct): the level tiles (a group
 // is people on the hub yellow; a brand is a tag on its colour role, yours or a
@@ -82,16 +78,22 @@ export function MiniTile({ kind, size = 'md' }: { kind: 'subject' | 'group' | 'c
   )
 }
 
-/** The month switch as Voices honours it on a level page: the month on, named
- *  as decision 3 names a month column, the week and over time shown and not
- *  offered (a group has no reading of either yet, decision 2). */
-export function LevelMonthSwitch({ month, href, reason = VOICES_ONE_MONTH }: { month: Pick<LevelMonth, 'month' | 'monthLabel'>; href: string; reason?: string }) {
+/** The month switch as Voices honours it on a level page: the month on, by
+ *  its name ("October", "November so far"), the week and over time shown and
+ *  not offered (a group has no reading of either yet, decision 2); the
+ *  reason is their tooltip and the line under the switch (the boards'). */
+export function LevelMonthSwitch({ month, href, reason = VOICES_ONE_MONTH }: { month: Pick<LevelMonth, 'month' | 'monthWords'>; href: string; reason?: string }) {
   const options: PeriodOption<Period>[] = [
     { value: 'week', label: 'This week', disabled: reason },
-    { value: 'month', label: monthHeading(longMonth(month.month), month.monthLabel) },
+    { value: 'month', label: month.monthWords },
     { value: 'time', label: 'Over time', disabled: reason },
   ]
-  return <PeriodSwitch value="month" options={options} hrefFor={() => href} />
+  return (
+    <div className="flex flex-col items-end gap-2 max-sm:items-start">
+      <PeriodSwitch value="month" options={options} hrefFor={() => href} />
+      <p data-voices-one-month="" className="m-0 max-w-[360px] text-right text-[13px] leading-[1.45] text-muted-foreground max-sm:text-left">{reason}</p>
+    </div>
+  )
 }
 
 /** A page whose address names nothing Voices follows: one calm line inside
@@ -102,7 +104,7 @@ export function VoicesLevelMissing({ line }: { line: string }) {
       <PageBar title={surface('voices').label} />
       <div className="flex flex-col gap-2">
         <p data-voices-missing="" className="m-0 text-[15px] text-muted-foreground">{line}</p>
-        <Link href={surface('voices').href} className={OLINK}>{BACK_TO_VOICES} →</Link>
+        <GoLink href={surface('voices').href} className="self-start">{BACK_TO_VOICES}</GoLink>
       </div>
     </PageFrame>
   )
@@ -185,20 +187,40 @@ export function LevelQuoteCard({ q }: { q: LevelQuote }) {
   )
 }
 
+/** One comment as the audit design's boards draw it on a level page (7 Nov):
+ *  a tile, its conversation's link above, the commenter's words in the serif,
+ *  its language line and its English where it has them, then where and when
+ *  in commas ("TikTok, 9 Oct"). */
+export function LevelQuoteTile({ q }: { q: LevelQuote }) {
+  const note = translationNote({ lang: q.lang, english: q.english })
+  const line = translationLine({ language: note.language, english: note.english })
+  return (
+    <article className={CARD}>
+      <figure className="m-0 flex min-w-0 flex-col gap-2">
+        {q.from ? (
+          <GoLink href={q.from.href} className="self-start text-[13.5px]">
+            <span data-quote-from=""><span data-copy="subject" data-slot="pass_b_theme">{q.from.label}</span></span>
+          </GoLink>
+        ) : null}
+        <blockquote data-copy="quote" className={cn('m-0 text-foreground', QUOTE, 'text-[17px] leading-[1.5]')}>“{q.text}”</blockquote>
+        {line ? <span className="text-[13px] text-muted-foreground">{line}</span> : null}
+        {note.english ? <p data-copy="quote" className="m-0 text-[15px] leading-[1.55] text-secondary-foreground">{note.english}</p> : null}
+        {q.cite ? <figcaption className="text-[13.5px] text-muted-foreground">{commaCite(q.cite)}</figcaption> : null}
+      </figure>
+    </article>
+  )
+}
+
 // ---- the Agent ---------------------------------------------------------------------------
 
-const ASK = 'inline-flex min-h-[38px] cursor-pointer items-center gap-2 rounded-lg bg-brand px-3.5 text-[13.5px] font-semibold text-brand-foreground no-underline transition-colors hover:bg-brand/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
-
-/** The Agent's box at a page's foot; on a phone the button alone, full width. */
+/** The Agent's tile at a page's foot (the boards': the line, then the yellow
+ *  button, no icon), 48px under what it follows. */
 export function AskBox({ text, href, button }: { text: ReactNode; href: string; button: ReactNode }) {
   return (
-    <>
-      <section aria-label="Ask the Agent" className={cn(CARD, 'flex-row flex-wrap items-center justify-between gap-3.5 px-[26px] py-5 max-sm:hidden')}>
-        <p className="m-0 text-[14.5px] text-secondary-foreground">{text}</p>
-        <Link href={href} className={ASK}><Sparkles className="size-3.5" aria-hidden />{button}</Link>
-      </section>
-      <Link href={href} className={cn(ASK, 'justify-center sm:hidden')}><Sparkles className="size-3.5" aria-hidden />{button}</Link>
-    </>
+    <section aria-label="Ask the Agent" className={cn(CARD, 'mt-[26px] flex-row flex-wrap items-center justify-between gap-5')}>
+      <p className="m-0 text-[16px] leading-[1.5] text-foreground">{text}</p>
+      <Link href={href} className={cn(BTN_PRIMARY, 'no-underline max-sm:w-full')}>{button}</Link>
+    </section>
   )
 }
 
