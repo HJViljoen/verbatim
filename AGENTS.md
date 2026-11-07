@@ -1750,7 +1750,21 @@ This version has breaking changes — APIs, conventions, and file structure may 
     subject the month has no reading for yet (`unread`) prints its read and
     its conversations' own counts (the category's, not the subject's), and
     the strip and the numbers say the month's line ("No reading in October so
-    far yet.", `noReadingYet`). *A conversation's page* (F3-Market-
+    far yet.", `noReadingYet`). SINCE THE AUDIT DESIGN (7 Nov,
+    `Market-Subject.dc.html`) the page draws this in the board's shape: the
+    header card's figures are the title's figures row (`subjectStats`: the
+    week, this week on the level's base, the month's videos and share, the
+    conversations inside it; a subject that prints no figure says its
+    state's line there, once), the headline heads one read tile ("Our read
+    of {month}", what people are saying beside what it means), the three
+    conversation cards and the list's three-weeks column are gone (the one
+    list in a tile holds every conversation, its brands as the comma list),
+    the numbers are tiles (week by week or the dashed box; the share month
+    by month with the change from its `Verdict`; who is saying it, what
+    people did and where, each tile's sub naming its base, the rows bare
+    counts with bars against the largest; `GroupRows` draws those bars for
+    every page that borrows it), the comments are a tile each, and the Agent
+    is one link. *A conversation's page* (F3-Market-
     Conversation; `loadConvPanel`, `convPageOf`, `convEvidenceOf`,
     `convSiblingsOf`): the HEADER ON THE PAGE, no card and no tile row: the
     title block, its own one-line description as a 21px lead (Pass B's, the
