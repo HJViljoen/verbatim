@@ -122,9 +122,9 @@ function Foot({ conv, href, data, open = 'Open the conversation' }: {
       {conv && conv.who.length > 0 && data.brands === 'counted' ? (
         // The plain comma list the rest of Market prints ("Össur (4),
         // others (31)"; the review of 7 Nov), never the chips.
-        <p className="m-0 text-[13.5px] leading-[1.5] text-secondary-foreground">
+        <div className="text-[13.5px] leading-[1.5] text-secondary-foreground">
           <span className="text-muted-foreground">Brands named:</span> <BrandsNamed parts={conv.who} brand={data.brand} noun={data.noun} />
-        </p>
+        </div>
       ) : conv && data.brands !== 'counted' ? (
         <div className="text-[13px] text-muted-foreground">About: {data.brands === 'not_counted' ? ABOUT_NOT_COUNTED : ABOUT_NOT_READ}</div>
       ) : <span />}
@@ -297,7 +297,7 @@ function Side({ side, data, index, span }: { side: SideCard; data: MarketData; i
         ? <SpikeBars weeks={weekBars(conv, data)} counts="all" size="md" ghost className="max-w-[300px]" label={`Category videos a week about ${conv.label}`} />
         : conv.months.length > 1 ? <MiniBars bars={monthBars(conv.months).map(({ sub: _sub, ...b }) => b)} className="max-w-[300px]" label={`Category videos a month about ${conv.label}`} /> : null}
       <GroupsLine groups={side.groups} />
-      {conv.who.length > 0 && data.brands === 'counted' ? <p className="m-0 text-[13.5px] leading-[1.5] text-secondary-foreground"><span className="text-muted-foreground">Brands named:</span> <BrandsNamed parts={conv.who} brand={data.brand} noun={data.noun} /></p> : null}
+      {conv.who.length > 0 && data.brands === 'counted' ? <div className="text-[13.5px] leading-[1.5] text-secondary-foreground"><span className="text-muted-foreground">Brands named:</span> <BrandsNamed parts={conv.who} brand={data.brand} noun={data.noun} /></div> : null}
       <div className="mt-auto"><GoLink href={href}>Open the conversation</GoLink></div>
     </article>
   )

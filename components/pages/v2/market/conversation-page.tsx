@@ -200,8 +200,8 @@ function Said({ ev, data }: { ev: ConvEvidence; data: MarketData }) {
           {noneAll ? <p data-none-quotable="" className="m-0 text-[14.5px] leading-[1.55] text-secondary-foreground">{CONV_NONE_QUOTABLE_ALL}</p> : null}
           {ev.videos.map((v, i) => <VideoCard key={v.id} v={v} data={data} index={i} all={ev.all} onceSaid={noneAll} />)}
           {ev.capped != null ? <p className="m-0 text-[13.5px] text-muted-foreground">The first <span data-copy="figure">{fmtInt(ev.capped)}</span> of <span data-copy="figure">{fmtInt(ev.total)}</span> are listed.</p> : null}
-          {ev.more && ev.more.desktop > 0 ? <Link href={ev.more.href} className={cn(CHIP, 'self-start no-underline max-sm:hidden')}>Show <span data-copy="figure" className="mx-1">{fmtInt(ev.more.desktop)}</span> more videos</Link> : null}
-          {ev.more && ev.more.phone > 0 ? <Link href={ev.more.href} className={cn(CHIP, 'self-stretch justify-center no-underline sm:hidden')}>Show <span data-copy="figure" className="mx-1">{fmtInt(ev.more.phone)}</span> more videos</Link> : null}
+          {ev.more && ev.more.desktop > 0 ? <Link href={ev.more.href} className={cn(CHIP, 'self-start font-semibold no-underline max-sm:hidden')}>Show <span data-copy="figure" className="mx-1">{fmtInt(ev.more.desktop)}</span> more videos</Link> : null}
+          {ev.more && ev.more.phone > 0 ? <Link href={ev.more.href} className={cn(CHIP, 'self-stretch justify-center font-semibold no-underline sm:hidden')}>Show <span data-copy="figure" className="mx-1">{fmtInt(ev.more.phone)}</span> more videos</Link> : null}
         </>
       )}
     </section>
@@ -238,7 +238,8 @@ function Facts({ page, data }: { page: ConvPage; data: MarketData }) {
   return (
     <aside aria-labelledby="facts-title" className="flex min-w-0 flex-col gap-4">
       <ColHead id="facts-title" title="The facts" />
-      <div className={cn(CARD, 'gap-[22px]')}>
+      {/* A hairline between its parts, as the board rules them. */}
+      <div className={cn(CARD, 'gap-[22px] [&>section+section]:border-t [&>section+section]:border-track [&>section+section]:pt-[22px]')}>
         {n != null ? <p data-facts-base="" className="m-0 text-[14px] leading-[1.45] text-secondary-foreground">{data.period === 'week' ? <>Counted in this week’s <span data-copy="figure">{fmtInt(n)}</span> videos.</> : <>Counted in the <span data-copy="figure">{fmtInt(n)}</span> videos {whenOf(data)}.</>}</p> : null}
         {weeks ? (
           <section className="flex flex-col gap-3">

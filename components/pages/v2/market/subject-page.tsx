@@ -51,7 +51,7 @@ const GAPLINE = 'm-0 text-[15px] leading-[1.55] text-secondary-foreground'
 const H3 = 'm-0 text-[15px] leading-[1.4] font-semibold text-secondary-foreground'
 /** The kit's table cells, at the board's rhythm. */
 const TH = cn(KIT_TH, 'whitespace-nowrap')
-const TD = cn(KIT_TD, 'py-3 align-middle')
+const TD = cn(KIT_TD, 'py-3 align-top')
 
 /** A ready subject with no read for the month: its card's line. */
 export const SUBJECT_NO_READ = subjectNoRead
@@ -481,20 +481,24 @@ function QuoteTile({ q, data }: { q: PanelQuote; data: MarketData }) {
   const note = translationNote({ lang: q.lang, english: q.english })
   const line = translationLine({ language: note.language, english: note.english })
   return (
-    <figure className={cn(CARD, 'm-0 gap-2.5')}>
+    // The tile, its conversation's link, then the quote in the grey box the
+    // week's and the conversation's pages give theirs (the board's `.q`).
+    <article className={cn(CARD, 'gap-3.5')}>
       {q.from ? (
-        <Link href={q.from.href} data-quote-from="" className={cn(ROW, 'self-start text-[14px]')}>
+        <Link href={q.from.href} data-quote-from="" className={cn(ROW, 'self-start text-[15px]')}>
           <span data-copy="subject" data-slot="pass_b_theme">{q.from.label}</span>
         </Link>
       ) : null}
-      <blockquote data-copy="quote" className={cn('m-0 text-foreground', QUOTE)}>“{q.text}”</blockquote>
-      {line ? <span className="text-[13px] text-muted-foreground">{line}</span> : null}
-      {note.english ? <p data-copy="quote" className="m-0 text-[15px] leading-[1.55] text-secondary-foreground">{note.english}</p> : null}
-      <figcaption className="text-[13px] text-muted-foreground">
-        {commaCite(q.source)}
-        {q.about === 'client' ? <>, <BrandChip who="you" plain>{data.brand}</BrandChip></> : q.about && q.about !== 'market' ? <>, <BrandChip who="rival" plain>{q.about.slice('rival:'.length)}</BrandChip></> : null}
-      </figcaption>
-    </figure>
+      <figure className="m-0 flex flex-col gap-2 rounded-[10px] bg-inner px-[18px] py-4">
+        <blockquote data-copy="quote" className={cn('m-0 text-foreground', QUOTE)}>“{q.text}”</blockquote>
+        {line ? <span className="text-[13px] text-muted-foreground">{line}</span> : null}
+        {note.english ? <p data-copy="quote" className="m-0 text-[15px] leading-[1.55] text-secondary-foreground">{note.english}</p> : null}
+        <figcaption className="text-[13px] text-muted-foreground">
+          {commaCite(q.source)}
+          {q.about === 'client' ? <>, <BrandChip who="you" plain>{data.brand}</BrandChip></> : q.about && q.about !== 'market' ? <>, <BrandChip who="rival" plain>{q.about.slice('rival:'.length)}</BrandChip></> : null}
+        </figcaption>
+      </figure>
+    </article>
   )
 }
 

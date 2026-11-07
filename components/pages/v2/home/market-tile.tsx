@@ -113,10 +113,13 @@ function Table({ top, rows, month }: { top: MarketTop; rows: readonly Row[]; mon
     <table className={cn(TBL, 'tabular-nums')}>
       <thead>
         <tr>
-          <th scope="col" className={TH}>Conversation</th>
+          <th scope="col" className={cn(TH, 'max-sm:pr-2')}>Conversation</th>
           <th scope="col" className={cn(TH, 'w-[34%] max-sm:hidden')}><span className="sr-only">Share of this week</span></th>
-          <th scope="col" className={cn(TH, TD_NUM, 'w-[90px] max-sm:w-[64px]')}>This week</th>
-          <th scope="col" className={cn(TH, TD_NUM, 'w-[110px] pr-0 max-sm:w-[76px]')}>{monthHead(top.week.inMonth)}</th>
+          {/* On a phone the two counts keep 52 and 60px, so a name keeps two
+              thirds of the row (the review of 7 Nov: it wrapped on four
+              lines). */}
+          <th scope="col" className={cn(TH, TD_NUM, 'w-[90px] max-sm:w-[52px] max-sm:pr-2')}>This week</th>
+          <th scope="col" className={cn(TH, TD_NUM, 'w-[110px] pr-0 max-sm:w-[60px]')}>{monthHead(top.week.inMonth)}</th>
         </tr>
       </thead>
       <tbody>
@@ -124,7 +127,7 @@ function Table({ top, rows, month }: { top: MarketTop; rows: readonly Row[]; mon
           const c = r.conv
           return (
             <tr key={c.id} data-market-row={c.id}>
-              <td className={cn(TD, 'py-3')}>
+              <td className={cn(TD, 'py-3 max-sm:pr-2')}>
                 <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                   <Link href={r.href} className={cn(ROW, i === 0 ? null : 'font-normal')}>
                     <span data-copy="subject" data-slot="pass_b_theme">{c.label}</span>
@@ -139,7 +142,7 @@ function Table({ top, rows, month }: { top: MarketTop; rows: readonly Row[]; mon
               <td className={cn(TD, 'py-3 align-middle max-sm:hidden')}>
                 <Bar pct={bar(c.week ?? 0)} />
               </td>
-              <td className={cn(TD, TD_NUM, 'py-3', i === 0 ? 'font-semibold' : null)}>{c.week != null ? <Fig n={c.week} /> : null}</td>
+              <td className={cn(TD, TD_NUM, 'py-3 max-sm:pr-2', i === 0 ? 'font-semibold' : null)}>{c.week != null ? <Fig n={c.week} /> : null}</td>
               <td className={cn(TD, TD_NUM, 'py-3 pr-0 text-secondary-foreground')}>{c.month != null ? <Fig n={c.month} /> : null}</td>
             </tr>
           )

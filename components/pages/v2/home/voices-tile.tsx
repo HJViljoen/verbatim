@@ -57,10 +57,13 @@ function BrandList({ brands }: { brands: readonly { label: string; you: boolean;
       {brands.map((b, i) => (
         <span key={b.label}>
           {i > 0 ? ', ' : null}
-          <Link href={b.href} className={ROW} aria-label={b.k != null && b.n != null ? `${b.label}: named in ${fmtInt(b.k)} of ${fmtInt(b.n)} videos` : `${b.label}: ${VOICES_BRANDS_NOT_COUNTED}`}>
-            <BrandChip who={b.you ? 'you' : 'rival'} plain>{b.label}</BrandChip>
-          </Link>
-          {b.k != null ? <>{' ('}<span data-copy="figure">{fmtInt(b.k)}</span>)</> : null}
+          {/* A name keeps its count on its line ("Ottobock (37)"). */}
+          <span className="whitespace-nowrap">
+            <Link href={b.href} className={ROW} aria-label={b.k != null && b.n != null ? `${b.label}: named in ${fmtInt(b.k)} of ${fmtInt(b.n)} videos` : `${b.label}: ${VOICES_BRANDS_NOT_COUNTED}`}>
+              <BrandChip who={b.you ? 'you' : 'rival'} plain>{b.label}</BrandChip>
+            </Link>
+            {b.k != null ? <>{' ('}<span data-copy="figure">{fmtInt(b.k)}</span>)</> : null}
+          </span>
         </span>
       ))}
     </>
