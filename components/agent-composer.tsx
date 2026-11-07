@@ -1,38 +1,42 @@
 'use client'
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowUp, Loader2 } from 'lucide-react'
-import { FileUp } from '@/components/design-icons'
+import { Loader2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { BTN_PRIMARY, BTN_SECONDARY, INPUT, SEG, SEG_ITEM, SEG_ON } from '@/components/v2/look'
 import { ASK_WINDOW_WORDS, type AskWindowChoice } from '@/lib/agent/scope'
 
-// The ask box: THE PILL (Heinrich, 1 Oct: "a few versions back the AI chat had
-// a pill in the centre where you could ask questions ... combine the new stuff
-// with the pill"). The shape is the one 1671e484 introduced on 22 Aug and the
-// 18 Sep port replaced with a block inside a tile: a rounded field with the
-// arrow INSIDE it on the right. What the rebuild added stays, drawn under the
-// pill rather than in a card around it: "Check a plan", the window switch and
-// the month's allowance. No instructions around it; the shape says "type here
-// and press the arrow".
+// The ask box. Since the audit design (7 Nov, Agent.dc.html): a labelled
+// field ("Your question", visible; a thread's follow-up keeps its name as
+// `aria-label`), the yellow "Ask" beside it, outside the field, and under
+// them, on a hairline, "Check a plan" as a secondary button with its limit,
+// the window as the white segmented control and the month's allowance in
+// tabular sans. It was a pill with the arrow inside it from 1 Oct (Heinrich:
+// "a few versions back the AI chat had a pill in the centre"); what the
+// rebuild added around it, the plan, the window and the allowance, stays.
 //
-// ONE CONTROL, BOTH ROUTES. The Agent page centres it (`size="large"`, with the
-// window and the allowance); a thread draws the same pill for a follow-up and
-// for a new question. The requests are the ones the box has always made: a
-// question posts JSON to /api/agent and opens (or refreshes) its thread; a plan
-// posts the PDF as multipart to the same endpoint, which branches on content
-// type.
+// ONE CONTROL, BOTH ROUTES. The Agent page draws it in its tile
+// (`size="large"`, with the window and the allowance); a thread draws the
+// same box a size down for a follow-up and for a new question. The requests
+// are the ones the box has always made: a question posts JSON to /api/agent
+// and opens (or refreshes) its thread; a plan posts the PDF as multipart to
+// the same endpoint, which branches on content type.
 //
-// `canSend` is computed on the SERVER and passed in. When it is false the pill
+// `canSend` is computed on the SERVER and passed in. When it is false the box
 // is drawn and disabled, with the reason as its placeholder: a reader should
 // see what this page is and that answers live here, and "only an owner or
 // admin can ask here" explains a STATE rather than teaching a mechanism.
+//
+// Its styles come from the kit's import-free `look.ts` (the client-bundle
+// guard, lib/test/client-chains.test.ts).
 
 /** The shortest string the endpoint will treat as a question. */
 const MIN_QUESTION = 8
 
 /** The rule, said rather than enforced in silence: next to the field as the
- *  reader types, and again if they press the arrow anyway. */
+ *  reader types, and again if they press Ask anyway. */
 const TOO_SHORT = 'A question needs a few more words before we can answer it.'
 const FAILED = 'That did not work. Try again shortly.'
 const PLAN_FAILED = 'That document could not be checked.'
@@ -41,24 +45,24 @@ const PLAN_FAILED = 'That document could not be checked.'
 const MAX_FIELD_PX = 220
 
 const SIZES = {
-  // The Agent page: the pill is the page.
+  // The Agent page: the box in its tile (Agent.dc.html: a field two lines
+  // tall, its own height growing with the question, and a 56px Ask).
   large: {
-    form: 'min-h-16 rounded-[32px] py-2 pl-6 pr-2',
-    field: 'py-[11px] text-[17px] leading-[26px] max-sm:text-[16px]',
-    send: 'size-12',
+    gap: 'gap-[18px]',
+    field: 'min-h-[78px] py-[14px] text-[16px] leading-[1.5]',
+    send: 'h-14 px-[22px] text-[15px]',
   },
-  // A thread: the same pill, a size down, under the answer it follows.
+  // A thread: the same box, a size down, under the answer it follows.
   regular: {
-    form: 'min-h-14 rounded-[28px] py-1.5 pl-5 pr-1.5',
-    field: 'py-[11px] text-[16px] leading-[22px] sm:text-[15px]',
-    send: 'size-11',
+    gap: 'gap-3',
+    field: 'min-h-12 py-[11px] text-[15px] leading-[1.5]',
+    send: 'h-12 px-5',
   },
 } as const
 
 /**
- * One line until there is more to say, so the shape is a pill on arrival; a
- * long question (or one another page sent) stays readable instead of
- * scrolling sideways out of a one-line field. An empty field is sized on its
+ * One line until there is more to say; a long question (or one another page
+ * sent) stays readable instead of scrolling sideways out of a one-line field. An empty field is sized on its
  * placeholder, so a reason or a prompt that wraps on a phone is read whole
  * rather than cut at its first line.
  *
@@ -94,7 +98,7 @@ export interface AgentComposerProps {
    *  to all time; absent is the last 90 days. Posted with the question. */
   window?: AskWindowChoice
   size?: keyof typeof SIZES
-  /** The window switch under the pill, on the Agent page. Two links, not a
+  /** The window switch under the box, on the Agent page. Two links, not a
    *  control: the window is in the URL, so each option is an address. */
   windowSwitch?: { current: AskWindowChoice; href: Record<AskWindowChoice, string> }
   /** "6 of 40 questions asked this month", where the month could be read. */
@@ -123,6 +127,7 @@ export function AgentComposer({
   const [error, setError] = useState<string | null>(null)
   const [elapsed, setElapsed] = useState(0)
   const s = SIZES[size]
+  const fieldId = useId()
 
   // A live count, not a promise. The old copy said "an answer takes about half
   // a minute" whether or not it did; this says what is actually happening, and
@@ -135,7 +140,7 @@ export function AgentComposer({
     return () => clearInterval(id)
   }, [busy])
 
-  // THE PILL GROWS WITH ITS QUESTION (`fitField`), and again when its width
+  // THE FIELD GROWS WITH ITS QUESTION (`fitField`), and again when its width
   // changes, which is the only other thing that moves where a line breaks.
   useLayoutEffect(() => fitField(fieldRef.current), [question, canSend])
   useEffect(() => {
@@ -207,109 +212,108 @@ export function AgentComposer({
     }
   }
 
-  // LIVE IS THE ONLY GATE ON THE ARROW: grey for a reader who may not ask and
+  // LIVE IS THE ONLY GATE ON ASK: grey for a reader who may not ask and
   // for a question in flight, never for "you have not typed yet" (19 Sep). The
   // length rule is said beside the field instead.
   const live = canSend && !busy
   const tooShort = canSend && question.trim().length > 0 && question.trim().length < MIN_QUESTION
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-3">
-      <form
-        onSubmit={onSubmit}
-        // The soft card shadow (brand/colour's elevation) and a hairline; the
-        // ring that shows focus is the border turning ink, on the pill itself,
-        // because the field inside it draws no outline of its own.
-        className={`flex w-full min-w-0 items-end gap-2 border border-border bg-tile shadow-[0_1px_2px_rgba(0,0,0,0.05),0_4px_14px_rgba(0,0,0,0.04)] transition-colors focus-within:border-foreground ${s.form}`}
-      >
-        <textarea
-          ref={fieldRef}
-          rows={1}
-          value={question}
-          onChange={(e) => {
-            setQuestion(e.target.value)
-            setError(null)
-          }}
-          onKeyDown={(e) => {
-            // Enter asks, as a one-line field does; Shift+Enter is a new line.
-            if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return
-            e.preventDefault()
-            if (live) e.currentTarget.form?.requestSubmit()
-          }}
-          disabled={busy || !canSend}
-          placeholder={canSend ? placeholder : disabledNote}
-          aria-label={threadId ? 'Your follow-up' : 'Your question'}
-          className={`block max-h-[220px] min-w-0 flex-1 resize-none bg-transparent px-0 field-sizing-content text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-60 ${s.field}`}
-        />
-        <button
-          type="submit"
-          disabled={!live}
-          aria-label="Ask"
-          className={`grid shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-40 ${s.send}`}
-        >
-          {busy ? <Loader2 className="size-[18px] animate-spin" aria-hidden /> : <ArrowUp className="size-5" aria-hidden />}
-        </button>
+    <div className={cn('flex w-full min-w-0 flex-col', s.gap)}>
+      <form onSubmit={onSubmit} className="flex w-full min-w-0 flex-col gap-2">
+        {/* A visible label on the Agent page; a follow-up is named by its
+            place under the answer and keeps its name for a screen reader. */}
+        {threadId ? null : (
+          <label htmlFor={fieldId} className="text-[14px] font-semibold leading-[1.3] text-secondary-foreground">
+            Your question
+          </label>
+        )}
+        <div className="flex w-full min-w-0 items-start gap-2.5">
+          <textarea
+            id={fieldId}
+            ref={fieldRef}
+            rows={1}
+            value={question}
+            onChange={(e) => {
+              setQuestion(e.target.value)
+              setError(null)
+            }}
+            onKeyDown={(e) => {
+              // Enter asks, as a one-line field does; Shift+Enter is a new line.
+              if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return
+              e.preventDefault()
+              if (live) e.currentTarget.form?.requestSubmit()
+            }}
+            disabled={busy || !canSend}
+            placeholder={canSend ? placeholder : disabledNote}
+            aria-label={threadId ? 'Your follow-up' : undefined}
+            className={cn(INPUT, 'block h-auto max-h-[220px] min-w-0 flex-1 resize-none rounded-[10px] px-4 field-sizing-content disabled:opacity-60', s.field)}
+          />
+          <button type="submit" disabled={!live} className={cn(BTN_PRIMARY, 'shrink-0 rounded-[10px]', s.send)}>
+            {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+            Ask
+          </button>
+        </div>
       </form>
 
       {/* What is happening, the rule, or what went wrong: one line, under the
-          pill, before the controls. */}
+          field, before the controls. */}
       {busy ? (
-        <p className="m-0 px-5 font-mono text-[11px] text-muted-foreground tabular-nums" aria-live="polite">
-          Reading the conversation · {elapsed}s
+        <p className="m-0 text-[13px] tabular-nums text-muted-foreground" aria-live="polite">
+          Reading the conversation, {elapsed}s
         </p>
       ) : error ? (
-        <p className="m-0 px-5 text-[13px] text-negative" role="alert">{error}</p>
+        <p className="m-0 text-[13px] text-negative" role="alert">{error}</p>
       ) : tooShort ? (
-        <p className="m-0 px-5 text-[13px] text-muted-foreground">{TOO_SHORT}</p>
+        <p className="m-0 text-[13px] text-muted-foreground">{TOO_SHORT}</p>
       ) : null}
 
-      {/* Centred under the pill on a phone, where the row breaks into lines;
-          from sm the plan at the left edge and the window and allowance at the
-          right. */}
-      <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 px-1 sm:justify-between">
-        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
+      {/* On the Agent page the controls sit on a hairline under the field:
+          the plan at the left, the window, the allowance at the right; they
+          wrap onto their own lines on a phone. */}
+      <div
+        className={cn(
+          'flex flex-wrap items-center justify-between gap-x-7 gap-y-4',
+          (windowSwitch || asked) && 'border-t border-track pt-[18px]',
+        )}
+      >
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           {/* LABELLED, AND ON BOTH ROUTES. The file input inside is `sr-only`
               and is the thing that takes focus, so the label wears the ring. */}
           <label
-            className={`inline-flex h-9 cursor-pointer items-center gap-2 rounded-full border border-border bg-tile px-3.5 text-[13.5px] font-semibold text-foreground transition-colors hover:bg-background has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring ${live ? '' : 'pointer-events-none opacity-50'}`}
+            className={cn(
+              BTN_SECONDARY,
+              'has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-foreground max-sm:h-11',
+              !live && 'pointer-events-none opacity-50',
+            )}
           >
-            <FileUp className="size-4" aria-hidden />
             Check a plan
             <input ref={fileRef} type="file" accept="application/pdf" onChange={onFile} disabled={!live} className="sr-only" />
           </label>
-          {planLimit ? <span className="text-[13px] text-muted-foreground">{planLimit}</span> : null}
+          {planLimit ? <span className="text-[14px] text-muted-foreground">{planLimit}</span> : null}
         </div>
 
-        {windowSwitch || asked ? (
-          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
-            {windowSwitch ? (
-              <div className="flex items-center gap-2.5">
-                <span className="text-[13px] text-muted-foreground">Window</span>
-                <div role="group" aria-label="Window" className="inline-flex gap-0.5 rounded-full bg-track p-[3px]">
-                  {(['days90', 'all'] as const).map((w) => (
-                    <Link
-                      key={w}
-                      href={windowSwitch.href[w]}
-                      aria-current={windowSwitch.current === w ? 'true' : undefined}
-                      className={`inline-flex h-[30px] items-center rounded-full px-3.5 text-[13px] no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                        windowSwitch.current === w
-                          ? 'bg-tile font-semibold text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
-                          : 'font-medium text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      {ASK_WINDOW_WORDS[w]}
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-            {asked ? (
-              <span className="text-[13px] text-muted-foreground">
-                <span data-copy="figure" className="font-mono text-foreground">{asked.asked}</span> of{' '}
-                <span data-copy="figure" className="font-mono text-foreground">{asked.cap}</span> questions asked this month
-              </span>
-            ) : null}
+        {windowSwitch ? (
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className="text-[14px] text-secondary-foreground">Window</span>
+            <div role="group" aria-label="Window" className={SEG}>
+              {(['days90', 'all'] as const).map((w) => (
+                <Link
+                  key={w}
+                  href={windowSwitch.href[w]}
+                  aria-current={windowSwitch.current === w ? 'true' : undefined}
+                  className={cn(SEG_ITEM, windowSwitch.current === w && SEG_ON)}
+                >
+                  {ASK_WINDOW_WORDS[w]}
+                </Link>
+              ))}
+            </div>
           </div>
+        ) : null}
+        {asked ? (
+          <span className="text-[14px] tabular-nums text-secondary-foreground">
+            <span data-copy="figure">{asked.asked}</span> of <span data-copy="figure">{asked.cap}</span> questions asked this month
+          </span>
         ) : null}
       </div>
     </div>

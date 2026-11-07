@@ -9,7 +9,7 @@
 // strings and bar lengths (./look, import-free, which client components import
 // directly rather than through this barrel), the components (./ui) and the
 // screen-only wording (./words).
-export { LBL, GO, ROW, CHIP, CHIP_ON, BTN_PRIMARY, BTN_SECONDARY, BTN_SM, TAG, TAG_TONE, TBL, TH, TD, TD_NUM, EMPTY, INPUT, QUOTE, toMax, toMaxAtLeast } from './look'
+export { LBL, GO, ROW, CHIP, CHIP_ON, BTN_PRIMARY, BTN_SECONDARY, BTN_SM, TAG, TAG_TONE, TBL, TH, TD, TD_NUM, SEG, SEG_ITEM, SEG_ON, EMPTY, INPUT, QUOTE, toMax, toMaxAtLeast } from './look'
 export { StatStrip, StatStripFrame, StatStripCell, SectionHead, EmptyBox, Label, GoLink, Tag, type StatItem } from './ui'
 export { commaCite, translationLine, listWords, longDay, shortDates } from './words'
 export { InPlacePanel, PanelSection, PanelSlot, PanelTitle, SELECTED_CARD_RING, type InPlacePanelProps } from './panel'

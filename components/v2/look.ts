@@ -62,6 +62,16 @@ export const TH = 'pb-2 pr-4 text-left align-bottom text-[13px] font-medium text
 export const TD = 'border-t border-track py-3.5 pr-4 align-top leading-[1.5]'
 export const TD_NUM = 'text-right tabular-nums'
 
+/** The white segmented control (small call 2; the boards' period control):
+ *  the group, an item, and the chosen item (combine: `cn(SEG_ITEM, SEG_ON)`).
+ *  `PeriodSwitch` draws the same values; this is the client-safe copy for a
+ *  client component's own switch (the Agent's window). Each item is 44px to
+ *  tap on a phone. */
+export const SEG = 'inline-flex max-w-full shrink-0 flex-wrap gap-1 rounded-[10px] border border-border bg-card p-1'
+export const SEG_ITEM =
+  'inline-flex h-9 cursor-pointer items-center whitespace-nowrap rounded-[7px] px-3.5 text-[14.5px] leading-[1.2] text-foreground no-underline transition-colors hover:bg-inner focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground max-sm:h-11'
+export const SEG_ON = 'bg-accent font-semibold text-accent-foreground hover:bg-accent'
+
 /** The dashed box a thin or empty state is said in (decision 4). */
 export const EMPTY = 'rounded-[10px] border border-dashed border-control px-[18px] py-4 text-[14.5px] leading-[1.55] text-secondary-foreground'
 

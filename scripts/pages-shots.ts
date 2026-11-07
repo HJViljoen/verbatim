@@ -69,7 +69,7 @@ import { MovesPage } from '../components/pages/moves'
 import { consideringFixture, statementsFixture } from '../components/pages/moves/fixture'
 import { sealandMovesFixture } from '../components/pages/market-surface/fixture'
 import { AskPill } from '../components/pages/agent/ask-pill'
-import { HistoryDrawer } from '../components/pages/agent/history-drawer'
+import { EarlierQuestions } from '../components/pages/agent/history-drawer'
 import { AgentComposer } from '../components/agent-composer'
 import { AnswerTile } from '../components/pages/agent/answer'
 import { AskBoxTile } from '../components/pages/agent/ask-box'
@@ -281,20 +281,19 @@ const AGENT_HISTORY = askHistory([
 ], 20)
 
 /** app/dashboard/agent/page.tsx, as an owner with six questions asked sees it
- *  (or, `first`, a workspace that has asked none: no sheet). */
-const agentIndex = (open: boolean, first = false) => h(PageFrame, {
-  className: 'min-h-full',
+ *  (or, `first`, a workspace that has asked none: no earlier questions).
+ *  Since the audit design the earlier questions are a static table, so
+ *  `agent` and `agent-history` draw the same page. */
+const agentIndex = (first = false) => h(PageFrame, {
   children: h(Fragment, null,
     h(PageBar, { title: surface('ask').label }),
-    h('div', { className: 'flex flex-1 items-center justify-center pt-4 pb-24 max-sm:pb-20' },
-      h(AskPill, {
-        canSend: true,
-        window: { current: 'days90', href: { days90: '/dashboard/agent', all: '/dashboard/agent?window=all' } },
-        asked: { asked: first ? 0 : 6, cap: 40 },
-        planLimit: 'PDF, up to 4 MB',
-      }),
-    ),
-    h(HistoryDrawer, { history: first ? askHistory([], 20) : AGENT_HISTORY, defaultOpen: open }),
+    h(AskPill, {
+      canSend: true,
+      window: { current: 'days90', href: { days90: '/dashboard/agent', all: '/dashboard/agent?window=all' } },
+      asked: { asked: first ? 0 : 6, cap: 40 },
+      planLimit: 'PDF, up to 4 MB',
+    }),
+    h(EarlierQuestions, { history: first ? askHistory([], 20) : AGENT_HISTORY }),
   ),
 })
 
@@ -449,9 +448,9 @@ const PAGES: Page[] = [
   { key: 'competitive', path: '/dashboard/competitive', artboard: 'Page-Competitive.dc.html', page: () => h(CompetitivePage, { data: designFixture() }) },
   { key: 'subjects', path: '/dashboard/subjects', artboard: 'Page-Subjects.dc.html', page: () => h(SubjectsPage, { view: subjectsData() }) },
   { key: 'your-moves', path: '/dashboard/moves', artboard: 'Page-Your-moves.dc.html', page: () => h(MovesPage, { market: movesData(), statements: statementsFixture() }) },
-  { key: 'agent', path: '/dashboard/agent', artboard: 'Page-Agent.dc.html', fixed: true, page: () => agentIndex(false) },
-  { key: 'agent-first', path: '/dashboard/agent', artboard: 'Page-Agent.dc.html', fixed: true, page: () => agentIndex(false, true) },
-  { key: 'agent-history', path: '/dashboard/agent', artboard: 'Page-Agent.dc.html', fixed: true, page: () => agentIndex(true) },
+  { key: 'agent', path: '/dashboard/agent', artboard: 'Page-Agent.dc.html', page: () => agentIndex() },
+  { key: 'agent-first', path: '/dashboard/agent', artboard: 'Page-Agent.dc.html', page: () => agentIndex(true) },
+  { key: 'agent-history', path: '/dashboard/agent', artboard: 'Page-Agent.dc.html', page: () => agentIndex() },
   { key: 'agent-thread', path: '/dashboard/agent', artboard: 'Page-Agent.dc.html', page: () => agentThread() },
   { key: 'agent-thread-live', path: '/dashboard/agent', artboard: 'Page-Agent.dc.html', page: () => agentThread(sealandLongTermFixture()) },
   {

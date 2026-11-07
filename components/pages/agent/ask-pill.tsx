@@ -1,14 +1,14 @@
-import { Sparkles } from '@/components/design-icons'
 import { AgentComposer } from '@/components/agent-composer'
+import { CARD } from '@/components/v2'
+import { cn } from '@/lib/utils'
 import type { AskWindowChoice } from '@/lib/agent/scope'
 
-// The Agent page's question (Heinrich, 1 Oct): the pill in the centre, as the
-// page was from 22 Aug (1671e484) until the 18 Sep port, with what the pages
-// rebuild added drawn around it: "Check a plan", the window and the month's
-// allowance, close under the pill and not in a card. The Agent's yellow mark
-// stands where the 22 Aug figure stood; the crowd that page stood in is the
-// shell's backdrop again (CROWD, 2 Oct), behind the pill rather than drawn by
-// it. No subheading and no how-it-works line: the shape explains itself.
+// The Agent page's question. Since the audit design (7 Nov, Agent.dc.html):
+// one tile, at most 1000px wide, holding a 26px heading and the box (its
+// visible label, the field, the yellow Ask, then "Check a plan", the window
+// and the month's allowance on a hairline). No mark in a square, no starters
+// (decision 11: the page does not load the week's conversations they would
+// come from) and no how-it-works line: the shape explains itself.
 
 export interface AskPillProps {
   canSend: boolean
@@ -25,15 +25,13 @@ export interface AskPillProps {
 
 export function AskPill({ canSend, disabledNote, ask, window, asked, planLimit }: AskPillProps) {
   return (
-    <section aria-labelledby="agent-ask-title" className="flex w-full max-w-[800px] flex-col items-center gap-7 leading-[normal]">
-      <div className="flex flex-col items-center gap-4 text-center">
-        <span className="flex size-12 items-center justify-center rounded-[14px] bg-brand" aria-hidden>
-          <Sparkles className="size-[22px] text-brand-foreground" />
-        </span>
-        <h2 id="agent-ask-title" className="m-0 text-[28px] font-bold leading-[1.2] tracking-[-0.01em] text-foreground [text-wrap:balance] max-sm:text-[23px]">
-          What does your market say about this?
-        </h2>
-      </div>
+    <section
+      aria-labelledby="agent-ask-title"
+      className={cn(CARD, 'w-full max-w-[1000px] gap-[18px] p-[30px] max-sm:gap-4 max-sm:p-[18px]')}
+    >
+      <h2 id="agent-ask-title" className="m-0 text-[26px] font-bold leading-[1.25] tracking-[-0.01em] text-foreground [text-wrap:balance] max-sm:text-[22px]">
+        What does your market say about this?
+      </h2>
       <AgentComposer
         size="large"
         canSend={canSend}
