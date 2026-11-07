@@ -435,7 +435,7 @@ describe('the full read on A4 (H7-Weekly-Full-Print)', () => {
   it('A4 portrait, flat, each section group on a new page, every page footed with the issue and its page', () => {
     expect(html).toContain('@page{size:210mm 297mm;')
     expect(html).toContain('counter(page) &quot; of &quot; counter(pages)'.replace(/&quot;/g, '"'))
-    expect(html).toContain(`@bottom-left{content:${cssString('Össur · This week in your market · 12 to 18 October')}`)
+    expect(html).toContain(`@bottom-left{content:${cssString('Össur, This week in your market, 12 to 18 October')}`)
     expect(html).toContain('.w3-print .w3-group{break-before:page}')
     expect(count(html, 'class="w3-group')).toBe(3)
   })

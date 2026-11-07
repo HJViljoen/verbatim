@@ -834,7 +834,7 @@ function pageCss(print: boolean, footer: string): string {
 .w3-plain{margin:6px 0 0;font-size:11.5px;line-height:1.5}
 .w3-card .w3-plain{margin-top:8px;font-size:15px;line-height:1.55}
 .w3-chip{display:inline-flex;align-items:center;font-size:.867em;font-weight:600;line-height:1.4;padding:3px 8px;border-radius:6px;background:${P.pale};color:${P.ink};white-space:nowrap}
-.w3-chip.s{margin-left:8px}
+.w3-chip.s{display:flex;width:fit-content;margin:6px 0 0}
 .w3-cats{display:flex;flex-direction:column;gap:10px;margin-top:12px}
 .w3-rrow{display:grid;grid-template-columns:minmax(0,1fr) 150px 30px;gap:14px;align-items:center;font-size:14.5px}
 .w3-rtrack{position:relative;height:8px;border-radius:4px;background:${P.rule};overflow:hidden}
@@ -1316,7 +1316,8 @@ function MoveLineFull({ move }: { move: NonNullable<WeeklyMovesPart['move']> }) 
 export function WeeklyV3Page({ data, appUrl, print = false, fill = false, medical = false, framed = false }: { data: WeeklyReadSnapshotData; appUrl: string; print?: boolean; fill?: boolean; medical?: boolean; framed?: boolean }) {
   const v = weeklyV3View({ read: data.read, subjects: data.subjects, pages: data.pages, monthClose: data.monthClose, chipOf, full: true })
   const company = data.company
-  const footer = [company, WEEKLY_READ_TITLE, v.dates].filter(Boolean).join(' · ')
+  // In commas (the P8-9 review): the paper's footer, through `@page`.
+  const footer = [company, WEEKLY_READ_TITLE, v.dates].filter(Boolean).join(', ')
   const voices = v.pages.voices && v.pages.voices.group ? v.pages.voices : null
   const products = v.pages.products ?? null
   const content = v.pages.content ?? null
