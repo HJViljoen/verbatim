@@ -5,9 +5,9 @@ import { PageBar, PageFrame } from '@/components/shell/page-grid'
 import { GoLink } from '@/components/v2'
 import { MOVES_PATH, PAGE_TITLE } from '@/lib/pages/v2/moves'
 import type { AdvicePageData } from '@/lib/pages/v2/moves-levels-load'
-import { ADVICE_LEVEL, BACK_TO_MOVES, RECORD_LEVEL, RECORD_TITLE, moveReadWords, type MovePageData, type RecordPageData } from '@/lib/pages/v2/moves-levels'
+import { BACK_TO_MOVES, RECORD_LEVEL, RECORD_TITLE, moveReadWords, type MovePageData, type RecordPageData } from '@/lib/pages/v2/moves-levels'
 import { AdviceDecision } from './advice-actions'
-import { AdvicePageBody, AdviceTitle, adviceMeta } from './advice-page'
+import { AdvicePageBody, AdviceTags, AdviceTitle, adviceStats } from './advice-page'
 import { MOVES_FIRST_RUN } from './index'
 import { MovesLevelTile } from './level-tiles'
 import { MoveStatusControl } from './move-status'
@@ -61,10 +61,9 @@ export function MovesAdvicePage({ page, switcherOpen = false }: { page: AdvicePa
       <LevelBar
         crumbs={page.crumbs}
         level="advice"
-        tile={<MovesLevelTile level="advice" />}
-        label={ADVICE_LEVEL}
         title={<AdviceTitle card={card} />}
-        meta={adviceMeta(page)}
+        tags={<AdviceTags page={page} />}
+        stats={adviceStats(page)}
         controls={decide ? <AdviceDecision lineageId={card.lineageId} recommendationId={card.recommendationId} title={card.title} dating={page.dating} /> : null}
         open={switcherOpen ? 'current' : undefined}
       />

@@ -2548,7 +2548,18 @@ This version has breaking changes — APIs, conventions, and file structure may 
     relevance and its kind (`adviceQuotesOf` over `videoQuotes`), never one
     voice twice;
     ITS HISTORY (the nine-dot row, `history-row.tsx`) and the moves made on
-    it (`moves.lineage_id`); the Agent. Its switcher holds the advice
+    it (`moves.lineage_id`); the Agent. Since the audit design (7 Nov,
+    `Moves-Advice.dc.html`) it has no tile or label: its tags under the
+    title (priority, kind, decision, the moves dated on it), the decisions
+    at its right, and the figures row (`adviceStats`: first suggested, the
+    videos it rests on and their conversations, the updates that raised it,
+    what it would move with its level, the category's base said there
+    once); the header card and the argument are one tile, the lead its
+    heading; the conversations one table, biggest first, the target a tag,
+    bars against the largest and bare counts; the numbers one tile, the line
+    a month list, the labels with no "of N" (the section's note says it);
+    the comments a tile each, cited in commas; the history dated rules with
+    no dots; a gap in the dashed box. Its switcher holds the advice
     waiting, strongest first, each priority in words, then the record under
     a hairline; a piece opened from the record shows above a hairline,
     ticked (`adviceMenu`, `CrumbMenu.above` and `.wide`). *A move*

@@ -63,64 +63,71 @@ describe('a piece of advice, the hub (G6-Moves-Advice)', () => {
   const html = advicePage()
   const text = markupText(html)
 
-  it('the path, then the title block naming the level: the signpost on yellow, "Advice", the title, the meta, the two decisions at its right', () => {
-    expect(renderText(<MovesAdvicePage page={adviceFixture()} />)).toMatch(/^Your moves \/ Set up a reimbursement help desk for powered knees Your moves Advice Set up a reimbursement help desk for powered knees Customer experience · first suggested 27 Jul · 63 videos it rests on, all time Accept and date it as a move Not for us/)
+  it('the path, then the title block: the title, the two decisions at its right, its tags under it; no tile, no label', () => {
+    expect(renderText(<MovesAdvicePage page={adviceFixture()} />)).toMatch(/^Your moves \/ Set up a reimbursement help desk for powered knees Your moves Set up a reimbursement help desk for powered knees Accept and date it as a move Not for us High priority Customer experience Not decided yet No move dated on it/)
     expect(html).toContain('data-level-bar="advice"')
-    expect(html).toMatch(/data-level-tile="advice" class="[^"]*bg-accent text-orange-text/)
+    expect(html).toContain('data-level-block="audit"')
+    expect(html).not.toContain('data-level-tile')
+    expect(html).toMatch(/data-level-tags=""[^>]*><span data-tag="hi"[^>]*>High priority</)
     expect(html).toContain('data-advice-decision=""')
     expect(html).toContain('href="/dashboard/moves"')
   })
 
-  it('the header card leads with the argument\'s first sentence, and the four figures sit inside it', () => {
+  it('the figures row says each fact once (the old header card\'s four figures and the meta), and the argument\'s tile leads with its first sentence', () => {
     expect(html).toMatch(/<h2 id="hub-head" data-copy="stored" data-slot="pass_d_b_recommendation"[^>]*>People refused cover for a powered knee say they would choose the brand that helps them through the paperwork\.<\/h2>/)
-    for (const words of ['63 videos it rests on all time, in 5 conversations', '9 updates in a row have raised it since 27 Jul', 'Would move Insurance refusals for powered knees 19 of 839 category videos in September September, the last full month', 'Not decided yet first suggested 27 Jul no move dated on it']) {
-      expect(text, words).toContain(words)
-    }
-    expect(html.match(/data-fig=""/g)).toHaveLength(4)
+    expect(text).toContain('First suggested 27 Jul Rests on, all time 63 videos, in 5 conversations Raised by 9 updates in a row, since 27 Jul Would move Insurance refusals for powered knees 19 of 839 category videos in September, the last full month')
+    expect(html).not.toContain('data-fig=""')
+    expect(text.split('first suggested 27 Jul')).toHaveLength(1)
   })
 
   it('"Why" holds the rest of the argument; "What it rests on" its conclusions and the rival\'s finding, which opens in Voices', () => {
     expect(text).toContain('Why Insurance refusals have come up in the conversation every month since July.')
+    expect(text).toContain('Most of Ottobock’s talk is about getting it paid for About a rival, in Voices')
     expect(text).not.toMatch(/Why People refused/)
     expect(text).toContain('Two conclusions about your market and one finding about a rival. The finding opens in Voices.')
   })
 
-  it('the conversations behind it: the three biggest as cards, the rest as a list, each opening on Market\'s month view', () => {
-    expect(html.match(/data-advice-conv=""/g)).toHaveLength(3)
-    expect(text).toContain('Its 63 videos sit in 5 conversations · the three biggest, then the rest · each opens in Market')
+  it('the conversations behind it: one table, biggest first, each opening on Market\'s month view, its bar against the largest', () => {
+    expect(html.match(/<tr data-advice-conv=""/g)).toHaveLength(5)
+    expect(text).toContain('Its 63 videos sit in 5 conversations, biggest first. Each opens in Market.')
     // The reading month carries its label where it is not the current one
-    // (decision 3, `inlineMonth`): the cards, the list's head and its rows.
-    expect(text).toContain('29 of its 63 videos 19 of 839 category videos in September, the last full month The one it would move Open in Market →')
-    expect(text).toContain('2 more conversations Fewest of its videos.')
-    expect(text).toContain('Category videos in September, the last full month')
-    const inside = text.slice(text.indexOf('Its 63 videos sit in'), text.indexOf('A video can sit in more than one conversation'))
-    expect(inside).not.toMatch(/category videos in September(?!, the last full month)/i)
+    // (decision 3, `inlineMonth`), in the column's head; the counts are bare,
+    // their base (the would-move's 839) said once in the figures row.
+    expect(text).toContain('Conversation Of its 63 videos Category videos in September, the last full month Insurance refusals for powered knees The one it would move Appeals that drag on for months, and knees judged not medically necessary. 29 19')
+    expect(html).toMatch(/data-tag="mid"[^>]*>The one it would move</)
+    expect(html).toMatch(/style="width:100%"/)
+    expect(text).not.toMatch(/Open in Market|→|·/)
     // In the current month there is no label.
     const current = renderText(<MovesAdvicePage page={{ ...adviceFixture(), monthLabel: null }} />)
-    const currentInside = current.slice(current.indexOf('Its 63 videos sit in'), current.indexOf('A video can sit in more than one conversation'))
-    expect(currentInside).toContain('19 of 839 category videos in September The one it would move')
-    expect(currentInside).not.toContain('the last full month')
+    expect(current).toContain('Category videos in September Insurance refusals')
+    expect(current.slice(current.indexOf('Its 63 videos sit in'), current.indexOf('A video can sit in more than one conversation'))).not.toContain('the last full month')
     expect(text).toContain('A video can sit in more than one conversation, so these add up to more than its 63 videos.')
     expect(html).toContain('href="/dashboard/market/conversations/d1000000-0000-4000-8000-000000000001?period=month&amp;month=2026-09"')
   })
 
   it('the numbers: the line a move on it is read on, then who raises it, who it is about, what people did and where, each of its videos', () => {
-    expect(text).toContain('Insurance refusals for powered knees · share of category videos')
-    expect(text).toContain('July 9 of 455')
+    // The base said once in the section's note; the labels in sentence
+    // case; the line's months as a list.
+    expect(text).toContain('The numbers Its 63 videos, all time, and the line a move on it is read on')
+    expect(text).toMatch(/Insurance refusals for powered knees ?, share of category videos July 2% 9 of 455/)
+    expect(html).toMatch(/data-line-month="" class="[^"]*border-brand/)
     expect(text).toContain('September is the last full month. A move dated on this advice is read on this line, from two months before it.')
-    for (const words of ['Who raises it · of its 63 videos Long-time users upgrading 31', 'Who it’s about · of its 63 videos', 'What people did · of its 63 videos Complained about something 41', 'Where · of its 63 videos TikTok 34']) {
+    for (const words of ['Who raises it Long-time users upgrading 31', 'Who it’s about Össur 9 Ottobock 16 Others 38', 'What people did Complained about something 41', 'Where TikTok 34']) {
       expect(text, words).toContain(words)
     }
   })
 
   it('three comments, each labelled with its conversation, which opens on Market', () => {
-    expect(text).toContain('In their words · 3 comments, each from its conversation')
+    expect(text).toContain('In their words 3 comments, each from its conversation')
     expect(html.match(/data-advice-quote=""/g)).toHaveLength(3)
+    // Each a tile, its cite in commas.
+    expect(text).toContain('“Third appeal denied. They say a mechanical knee is ‘adequate’. Adequate for sitting, maybe.” TikTok, 7 Oct')
     expect(copyNodes(html).filter((n) => n.kind === 'quote').length).toBeGreaterThanOrEqual(3)
   })
 
   it('its history: every update that raised it, and the moves made on it, with the invitation for an owner', () => {
-    expect(text).toContain('How long we have been saying it · 9 updates')
+    expect(text).toContain('How long we have been saying it, 9 updates 27 Jul 3 Aug 17 Aug')
+    expect(html.match(/data-update-date=""/g)).toHaveLength(9)
     expect(text).toContain('First suggested 27 Jul. Nobody has decided on it yet.')
     expect(text).toContain('None yet. Accept it and date the change you make, and the move gets its own page, read month by month on Insurance refusals for powered knees.')
     expect(html).toContain('href="/dashboard/moves/advice"')
@@ -151,14 +158,17 @@ describe('the thin real state, as a member sees it (G6-Moves-Advice-Thin)', () =
   it('no decision controls and no invitation; every component keeps its frame and says its gap in one line', () => {
     expect(html).not.toContain('data-advice-decision')
     expect(text).not.toContain('Accept and date it as a move')
-    expect(text).toContain('1 update has raised it first raised 12 Oct')
-    expect(text).toContain(NO_THIRD_CONVERSATION)
-    expect(text).toContain('July no reading August no reading')
+    expect(text).toContain('Raised by 1 update, first raised 12 Oct')
+    // Fewer than three conversations: one table, no empty slot to fill.
+    expect(text).not.toContain(NO_THIRD_CONVERSATION)
+    expect(text).toContain('July No reading August No reading')
     expect(text).toContain('July and August have no reading. September is the last full month. A move dated on this advice is read on this line.')
-    expect(text).toContain(`In their words · 1 comment Price and location questions “How can i get a leg like urs?” TikTok · 2 Oct ${NO_OTHER_COMMENT}`)
+    expect(text).toContain(`In their words 1 comment Price and location questions “How can i get a leg like urs?” TikTok, 2 Oct ${NO_OTHER_COMMENT}`)
+    expect(html).toMatch(/data-quotes-gap=""[^>]*><div data-empty-box=""/)
     expect(text).toContain('Moves made on it None yet.')
     expect(text).not.toContain('Accept it and date')
-    expect(text).toContain('The advice record, all 65 →')
+    expect(text).toContain('The advice record, all 65')
+    expect(text).not.toContain('→')
   })
 
   it('every read that failed says so in its own place', () => {

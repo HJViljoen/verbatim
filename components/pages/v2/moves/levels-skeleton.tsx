@@ -26,28 +26,23 @@ function Bar({ label, controls = false }: { label: string; controls?: boolean })
   )
 }
 
-/** A piece of advice loading: the header card and its four figures, the
- *  argument, three conversation cards, the numbers, the comments, the history. */
+/** A piece of advice loading (Moves-Advice.dc.html): the title block with
+ *  its tags, its decisions and four figures, the argument's tile, the
+ *  conversations' table, the numbers, the comments, the history. */
 export function MovesAdviceSkeleton() {
   return (
     <PageFrame>
       <div role="status" aria-busy="true" aria-label="Loading the advice" className="flex flex-col gap-[22px]">
-        <Bar label="Your moves" controls />
-        <div className={cn(CARD, 'gap-5 overflow-hidden sm:px-[34px] sm:pt-[30px] sm:pb-0 max-sm:pb-0')}>
-          <Bone className="h-5 w-56" />
-          <Bone className="h-9 w-4/5" />
-          <div className="-mx-[34px] grid grid-cols-2 gap-px border-t border-track bg-inner max-sm:-mx-[18px] min-[1180px]:grid-cols-4">{[0, 1, 2, 3].map((i) => <div key={i} className="flex flex-col gap-2 px-[22px] pt-5 pb-[22px]"><Bone className="h-8 w-16" /><Bone className="h-3 w-32" /></div>)}</div>
+        <AuditBar label="Your moves" cells={4} controls />
+        <div className={cn(CARD, 'gap-[22px] sm:p-[30px]')}>
+          <Bone className="h-8 w-4/5" />
+          <div className="grid grid-cols-1 gap-9 border-t border-track pt-[22px] min-[900px]:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]"><BoneLines lines={4} /><BoneLines lines={3} /></div>
         </div>
-        <div className={cn(CARD, 'gap-6')}>
-          <div className="grid grid-cols-1 gap-10 min-[1180px]:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]"><BoneLines lines={6} /><BoneLines lines={4} /></div>
-        </div>
-        <Bone className="h-5 w-64" />
-        <div className="grid grid-cols-1 gap-5 min-[1180px]:grid-cols-3">
-          {[0, 1, 2].map((i) => <div key={i} className={CARD}><Bone className="size-[26px] rounded-[7px]" /><Bone className="h-5 w-3/4" /><BoneLines lines={3} /></div>)}
-        </div>
-        <Bone className="h-5 w-40" />
+        <Bone className="mt-[26px] h-6 w-64" />
+        <div className={CARD}><BoneLines lines={8} /></div>
+        <Bone className="mt-[26px] h-6 w-40" />
         <div className={CARD}><BoneLines lines={7} /></div>
-        <div className={CARD}><BoneLines lines={4} /></div>
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">{[0, 1, 2].map((i) => <div key={i} className={CARD}><BoneLines lines={4} /></div>)}</div>
       </div>
     </PageFrame>
   )

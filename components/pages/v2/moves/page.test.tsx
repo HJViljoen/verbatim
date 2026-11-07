@@ -545,36 +545,29 @@ describe('a failed read says so, once, in its own place', () => {
   })
 })
 
-describe('the history row (the advice page\'s), on a phone and in the narrow column', () => {
+describe('the history row (the advice page\'s): every update that raised it, as dated rules', () => {
   /** The history over `n` updates in a row, of the latest nine. */
   const history = (n: number) => {
     const days = ['2026-08-10', '2026-08-17', '2026-08-24', '2026-08-31', '2026-09-07', '2026-09-14', '2026-09-21', '2026-09-28', '2026-10-05', '2026-10-12']
     const dates = days.slice(-n)
     const recent = Array.from({ length: 9 }, (_, i) => i >= 9 - n)
     const markup = render(<Timeline history={{ dates, streak: n, since: dates[0], recent }} />)
-    return markup.slice(markup.indexOf('aria-label="The updates that raised it"'), markup.indexOf('</ol>'))
+    return markup
   }
-  const labels = (row: string) => [...row.matchAll(/<span class="([^"]*)">(\d+ \w{3})<\/span>/g)].map((m) => ({ date: m[2], spaced: m[1].includes('max-sm:hidden min-[1180px]:max-[1319.98px]:hidden') }))
 
-  it.each([2, 4, 8])('%s dates: the nine dots, the newest dated always, every other one where the column is narrow', (n) => {
+  it.each([2, 4, 8])('%s dates: one dated rule each, oldest first, no dots, at the boards’ 15px', (n) => {
     const row = history(n)
-    expect(row.match(/size-2\.5 rounded-full/g)).toHaveLength(9)
-    const ls = labels(row)
-    expect(ls).toHaveLength(n)
-    expect(ls.at(-1)).toMatchObject({ date: '12 Oct', spaced: false })
-    // Never two neighbours both printed where the column is narrow: at most
-    // five of the nine, every other one counted back from the newest.
-    const always = ls.filter((l) => !l.spaced)
-    expect(always.length).toBeLessThanOrEqual(5)
-    expect(always).toHaveLength(Math.ceil(n / 2))
+    expect(row.match(/data-update-date=""/g)).toHaveLength(n)
+    expect(row).not.toMatch(/rounded-full|size-2\.5|font-mono|text-\[10px\]/)
+    expect(markupText(row).match(/\d+ \w{3}/g)!.at(-1)).toBe('12 Oct')
+    expect(row).toMatch(/border-t-2 border-foreground[^"]*text-\[15px\]/)
   })
 
-  it('a date older than the latest nine updates draws every date as a list, five to a phone’s row', () => {
+  it('a date older than the latest nine updates draws every date, three to a phone’s row, five from 640', () => {
     const dates = ['2026-06-01', '2026-10-05', '2026-10-12']
     const markup = render(<Timeline history={{ dates, streak: 2, since: '2026-10-05', recent: [false, false, false, false, false, false, false, true, true] }} />)
-    const row = markup.slice(markup.indexOf('aria-label="The updates that raised it"'), markup.indexOf('</ol>'))
-    expect(markupText(row).match(/\d+ \w{3}/g)).toEqual(['1 Jun', '5 Oct', '12 Oct'])
-    expect(markup).toContain('--cn:3')
+    expect(markupText(markup).match(/\d+ \w{3}/g)).toEqual(['1 Jun', '5 Oct', '12 Oct'])
+    expect(markup).toMatch(/grid-cols-3[^"]*sm:grid-cols-5/)
   })
 })
 
