@@ -10,12 +10,19 @@ import { splitRecipients } from '@/lib/schedules/validate'
 import { SCHEDULE_RECIPIENTS_MAX } from '@/lib/config'
 import { PUBLISHED_NOT_EMAILED } from '@/lib/schedules/platform-state'
 import { sendsWeeklyRead } from '@/lib/schedules/artefact'
+import { BTN_PRIMARY, BTN_SECONDARY, BTN_SM, INPUT, LBL } from '@/components/v2/look'
+import { cn } from '@/lib/utils'
 
 // A report's sending (Stage 3, reshaped 2026-08-30): who gets it, after which
 // updates, with the PDF and a share link. One schedule per report; saved
 // through a server action (owner/admin). "Send me a test" and "Send now" go
 // through the send route, the same path the update takes on Sunday. No
 // browser dialogs: a destructive click asks again inline.
+//
+// SINCE THE AUDIT DESIGN (7 Nov, Studio.dc.html): sentence-case labels over
+// the kit's 40px fields, 18px checkboxes, Save the yellow button and the
+// rest white (while a build waits for review, Send it is the yellow one and
+// Save turns white: one yellow at a time), the lines in words with no " · ".
 
 interface Props {
   /** The workspace's own template this schedule sends, or null for a schedule
@@ -45,11 +52,13 @@ interface Props {
   reviewer?: 'operator' | 'members'
 }
 
-const inputCls = 'h-8 w-full rounded-[4px] border border-input bg-tile px-2.5 text-[13px] outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60'
-const labelCls = 'text-[10.5px] font-semibold uppercase tracking-[0.07em] text-muted-foreground'
-const btn = 'inline-flex h-8 items-center rounded-full px-3 text-[12px] font-medium disabled:opacity-50'
-const btnPrimary = `${btn} bg-primary text-primary-foreground hover:bg-accent-foreground`
-const btnQuiet = `${btn} bg-tile text-secondary-foreground ring-1 ring-border hover:bg-inner`
+const inputCls = cn(INPUT, 'w-full text-[14.5px] disabled:opacity-60 max-sm:h-11')
+const labelCls = LBL
+const btnPrimary = cn(BTN_PRIMARY, 'max-sm:h-11')
+const btnQuiet = cn(BTN_SECONDARY, 'max-sm:h-11')
+const btnSmall = cn(BTN_SECONDARY, BTN_SM, 'max-sm:h-11')
+const QUIET_TEXT = 'min-h-9 text-[13px] text-muted-foreground underline decoration-control underline-offset-4 hover:text-foreground max-sm:min-h-11'
+const checkCls = 'size-[18px] accent-foreground'
 
 export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedule, canManage, userEmail, sendable, ready, isDocument, reviewer = 'members' }: Props) {
   const router = useRouter()
@@ -163,15 +172,17 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
   const readyOn = ready?.readyAt ? new Date(ready.readyAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' }) : null
   const published = Boolean(ready?.publishedAt) && !ready?.stalled
   const canPublish = Boolean(ready) && !ready?.stalled && !published && !isDocument
+  // One yellow at a time: a build waiting for review makes Send it the act.
+  const sendIsPrimary = Boolean(ready && schedule)
 
   return (
     <div className="flex flex-col gap-4">
       {ready && schedule && (
-        <div className="flex flex-col gap-2 rounded-[6px] bg-inner px-4 py-3">
-          <p className="text-[13px] font-medium text-foreground">
-            {ready.stalled ? 'Stopped partway through sending' : `${published ? PUBLISHED_NOT_EMAILED : 'Ready for review'}${readyOn ? ` · built ${readyOn}` : ''}`}
+        <div className="flex flex-col gap-2 rounded-[10px] bg-inner px-5 py-4">
+          <p className="m-0 text-[15px] font-semibold text-foreground">
+            {ready.stalled ? 'Stopped partway through sending' : `${published ? PUBLISHED_NOT_EMAILED.split(' \u00b7 ').join(', ') : 'Ready for review'}${readyOn ? `, built ${readyOn}` : ''}`}
           </p>
-          <p className="text-[12px] leading-[1.45] text-muted-foreground">
+          <p className="m-0 text-[14px] leading-[1.5] text-secondary-foreground">
             {ready.stalled
               ? `The report is built, and nothing was recorded as sent. It stopped partway, so it is possible some of the ${schedule.recipients.length} ${schedule.recipients.length === 1 ? 'person' : 'people'} already have it; sending it again goes to all of them. Anyone here can send it.`
               : published
@@ -180,13 +191,13 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
                   : `It is in the client's past issues, and nobody was emailed. Send it to email it to ${schedule.recipients.length} ${schedule.recipients.length === 1 ? 'person' : 'people'} as well.`
                 : `${isDocument ? 'Read it, change anything that needs changing, then send it' : 'Read it, then send it'} to ${schedule.recipients.length} ${schedule.recipients.length === 1 ? 'person' : 'people'}.${reviewer === 'members' ? ' Anyone here can send it.' : ''}${canPublish ? ' Or add it to the past issues without emailing anyone.' : ''}`}
           </p>
-          {ready.error && <p className="text-[12px] text-negative">The last attempt did not go: {ready.error}</p>}
+          {ready.error && <p className="m-0 text-[14px] text-caution">The last attempt did not go: {ready.error}</p>}
           <div className="mt-1 flex flex-wrap items-center gap-2">
             {confirm === 'deliver' ? (
-              <span className="inline-flex items-center gap-2 text-[12px]">
+              <span className="inline-flex flex-wrap items-center gap-2 text-[14px]">
                 Send it to {schedule.recipients.length} {schedule.recipients.length === 1 ? 'person' : 'people'} now?
                 <button type="button" onClick={() => send('deliver')} className={btnPrimary}>Yes, send</button>
-                <button type="button" onClick={() => setConfirm(null)} className="text-muted-foreground hover:text-foreground">Cancel</button>
+                <button type="button" onClick={() => setConfirm(null)} className={QUIET_TEXT}>Cancel</button>
               </span>
             ) : (
               <button type="button" onClick={() => setConfirm('deliver')} disabled={busy != null || schedule.recipients.length === 0} className={btnPrimary}>
@@ -197,10 +208,10 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
               ? <Link href={`/dashboard/studio/edit/${reportId}`} className={btnQuiet}>Read and edit it</Link>
               : <button type="button" onClick={() => setHeldPreview((v) => !v)} className={btnQuiet}>{heldPreview ? 'Hide the email' : 'Read the email'}</button>}
             {canPublish && (confirm === 'publish' ? (
-              <span className="inline-flex items-center gap-2 text-[12px]">
+              <span className="inline-flex flex-wrap items-center gap-2 text-[14px]">
                 Add it to the past issues without emailing anyone?
-                <button type="button" onClick={publish} className={btnPrimary}>Yes, add it</button>
-                <button type="button" onClick={() => setConfirm(null)} className="text-muted-foreground hover:text-foreground">Cancel</button>
+                <button type="button" onClick={publish} className={btnQuiet}>Yes, add it</button>
+                <button type="button" onClick={() => setConfirm(null)} className={QUIET_TEXT}>Cancel</button>
               </span>
             ) : (
               <button type="button" onClick={() => setConfirm('publish')} disabled={busy != null} className={btnQuiet}>
@@ -211,26 +222,26 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
           {heldPreview && !isDocument && (
             <div className="mt-2 flex flex-col gap-1">
               <span className={labelCls}>The email as it will go out</span>
-              <iframe src={`/api/schedules/${schedule.id}/preview?send=${ready.id}`} sandbox="allow-popups allow-popups-to-escape-sandbox" title="The email waiting for review" className="h-[720px] w-full rounded-[4px] bg-tile ring-1 ring-border" />
+              <iframe src={`/api/schedules/${schedule.id}/preview?send=${ready.id}`} sandbox="allow-popups allow-popups-to-escape-sandbox" title="The email waiting for review" className="h-[720px] w-full rounded-[8px] bg-tile ring-1 ring-border" />
             </div>
           )}
         </div>
       )}
-      <label className="flex flex-col gap-1">
+      <label className="flex flex-col gap-1.5">
         <span className={labelCls}>To</span>
-        <textarea value={recipients} disabled={readOnly} rows={2} onChange={(e) => setRecipients(e.target.value)} className={`${inputCls} h-auto py-1.5 leading-relaxed`} placeholder="one@company.com, two@company.com" />
-        <span className={`text-[11px] ${tooMany ? 'text-negative' : 'text-muted-foreground'}`}>
-          {parsedRecipients.length} address{parsedRecipients.length === 1 ? '' : 'es'} · commas, spaces or new lines between them · at most {SCHEDULE_RECIPIENTS_MAX}
+        <textarea value={recipients} disabled={readOnly} rows={3} onChange={(e) => setRecipients(e.target.value)} className={cn(inputCls, 'h-auto resize-y px-3 py-2.5 leading-[1.5]')} placeholder="one@company.com, two@company.com" />
+        <span className={`text-[13px] ${tooMany ? 'text-caution' : 'text-muted-foreground'}`}>
+          {parsedRecipients.length} address{parsedRecipients.length === 1 ? '' : 'es'}. Commas, spaces or new lines between them, at most {SCHEDULE_RECIPIENTS_MAX}.
         </span>
       </label>
       <div className="grid gap-4 md:grid-cols-2">
-        <label className="flex flex-col gap-1">
+        <label className="flex flex-col gap-1.5">
           <span className={labelCls}>When</span>
           <select value={cadence} disabled={readOnly} onChange={(e) => setCadence(e.target.value as ScheduleRow['cadence'])} className={inputCls}>
             {CADENCES.map((c) => <option key={c.key} value={c.key}>{c.label}: {c.help}</option>)}
           </select>
         </label>
-        <label className="flex flex-col gap-1">
+        <label className="flex flex-col gap-1.5">
           <span className={labelCls}>Share link in the email</span>
           <select value={shareDays} disabled={readOnly} onChange={(e) => setShareDays(e.target.value)} className={inputCls}>
             <option value="7">Opens for 7 days</option>
@@ -240,13 +251,13 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
           </select>
         </label>
       </div>
-      <div className="flex flex-wrap items-center gap-5 text-[13px]">
-        <label className="flex items-center gap-2"><input type="checkbox" checked={attachPdf} disabled={readOnly} onChange={(e) => setAttachPdf(e.target.checked)} className="size-3.5 accent-primary" /> Attach the PDF</label>
-        <label className="flex items-center gap-2"><input type="checkbox" checked={active} disabled={readOnly} onChange={(e) => setActive(e.target.checked)} className="size-3.5 accent-primary" /> Sending is on</label>
-        <label className="flex items-center gap-2"><input type="checkbox" checked={review} disabled={readOnly} onChange={(e) => setReview(e.target.checked)} className="size-3.5 accent-primary" /> Review before sending</label>
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[15px]">
+        <label className="flex min-h-9 items-center gap-2 max-sm:min-h-11"><input type="checkbox" checked={attachPdf} disabled={readOnly} onChange={(e) => setAttachPdf(e.target.checked)} className={checkCls} /> Attach the PDF</label>
+        <label className="flex min-h-9 items-center gap-2 max-sm:min-h-11"><input type="checkbox" checked={active} disabled={readOnly} onChange={(e) => setActive(e.target.checked)} className={checkCls} /> Sending is on</label>
+        <label className="flex min-h-9 items-center gap-2 max-sm:min-h-11"><input type="checkbox" checked={review} disabled={readOnly} onChange={(e) => setReview(e.target.checked)} className={checkCls} /> Review before sending</label>
       </div>
       {review && (
-        <p className="-mt-2 text-[11px] text-muted-foreground">
+        <p className="m-0 -mt-1 text-[14px] leading-[1.5] text-muted-foreground">
           {weeklyRead ? 'Each issue is in the client\'s past issues as soon as it is built; only the email waits. ' : ''}
           {reviewer === 'operator'
             ? 'The review email goes to Heinrich at Verbatim, not to this workspace: he reads it and presses Send. Nothing goes to the list above until then.'
@@ -255,8 +266,8 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
       )}
 
       {canManage && (
-        <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-4">
-          <button type="button" onClick={save} disabled={pending || tooMany} className={btnPrimary}>
+        <div className="flex flex-wrap items-center gap-2.5 border-t border-border pt-4">
+          <button type="button" onClick={save} disabled={pending || tooMany} className={sendIsPrimary ? btnQuiet : btnPrimary}>
             {pending ? <><LoaderCircle className="mr-1.5 size-3 animate-spin" aria-hidden /> Saving…</> : schedule ? 'Save' : 'Start sending'}
           </button>
           {schedule && (
@@ -265,10 +276,10 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
                 {busy === 'test' ? <><LoaderCircle className="mr-1.5 size-3 animate-spin" aria-hidden /> Sending…</> : 'Send me a test'}
               </button>
               {confirm === 'send' ? (
-                <span className="inline-flex items-center gap-2 text-[12px]">
+                <span className="inline-flex flex-wrap items-center gap-2 text-[14px]">
                   Send the latest update to {schedule.recipients.length} {schedule.recipients.length === 1 ? 'person' : 'people'} now?
-                  <button type="button" onClick={() => send('now')} className={btnPrimary}>Yes, send</button>
-                  <button type="button" onClick={() => setConfirm(null)} className="text-muted-foreground hover:text-foreground">Cancel</button>
+                  <button type="button" onClick={() => send('now')} className={btnQuiet}>Yes, send</button>
+                  <button type="button" onClick={() => setConfirm(null)} className={QUIET_TEXT}>Cancel</button>
                 </span>
               ) : (
                 <button type="button" onClick={() => setConfirm('send')} disabled={busy != null || !sendable || schedule.recipients.length === 0} className={btnQuiet}>
@@ -277,34 +288,34 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
               )}
               <button type="button" onClick={() => setPreview((v) => !v)} className={btnQuiet}>{preview ? 'Hide the email' : 'Preview the email'}</button>
               {schedule.is_default ? (
-                <span className="ml-auto text-[11px] text-muted-foreground">The workspace digest can be switched off, not removed.</span>
+                <span className="ml-auto text-[13.5px] text-muted-foreground">The workspace digest can be switched off, not removed.</span>
               ) : confirm === 'delete' ? (
-                <form action={deleteSchedule} className="ml-auto inline-flex items-center gap-2 text-[12px]">
+                <form action={deleteSchedule} className="ml-auto inline-flex flex-wrap items-center gap-2 text-[14px]">
                   <input type="hidden" name="id" value={schedule.id} />
                   Stop sending this report and forget its list?
-                  <button type="submit" className={`${btn} bg-negative text-white hover:opacity-90`}>Yes</button>
-                  <button type="button" onClick={() => setConfirm(null)} className="text-muted-foreground hover:text-foreground">Cancel</button>
+                  <button type="submit" className={cn(btnSmall, 'border-negative text-negative')}>Yes</button>
+                  <button type="button" onClick={() => setConfirm(null)} className={QUIET_TEXT}>Cancel</button>
                 </form>
               ) : (
-                <button type="button" onClick={() => setConfirm('delete')} className="ml-auto text-[12px] text-muted-foreground hover:text-negative">Remove the sending</button>
+                <button type="button" onClick={() => setConfirm('delete')} className={cn(QUIET_TEXT, 'ml-auto')}>Remove the sending</button>
               )}
             </>
           )}
         </div>
       )}
       {!canManage && schedule && (
-        <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-4">
+        <div className="flex flex-wrap items-center gap-2.5 border-t border-border pt-4">
           <button type="button" onClick={() => setPreview((v) => !v)} className={btnQuiet}>{preview ? 'Hide the email' : 'Preview the email'}</button>
-          <span className="text-[12px] text-muted-foreground">An owner or admin changes who gets this.</span>
+          <span className="text-[14px] text-muted-foreground">An owner or admin changes who gets this.</span>
         </div>
       )}
-      {status && <p className={`font-mono text-[11px] ${status.ok ? 'text-positive' : 'text-negative'}`} aria-live="polite">{status.message}</p>}
-      {!sendable && canManage && <p className="text-[11px] text-muted-foreground">Sending and previewing start with your first completed update.</p>}
+      {status && <p className={`m-0 text-[14px] ${status.ok ? 'text-secondary-foreground' : 'text-caution'}`} aria-live="polite">{status.message}</p>}
+      {!sendable && canManage && <p className="m-0 text-[14px] text-muted-foreground">Sending and previewing start with your first completed update.</p>}
 
       {preview && schedule && (
         <div className="flex flex-col gap-1">
           <span className={labelCls}>The email, at today’s data</span>
-          <iframe src={`/api/schedules/${schedule.id}/preview`} sandbox="allow-popups allow-popups-to-escape-sandbox" title="Email preview" className="h-[720px] w-full rounded-[4px] bg-tile ring-1 ring-border" />
+          <iframe src={`/api/schedules/${schedule.id}/preview`} sandbox="allow-popups allow-popups-to-escape-sandbox" title="Email preview" className="h-[720px] w-full rounded-[8px] bg-tile ring-1 ring-border" />
         </div>
       )}
     </div>

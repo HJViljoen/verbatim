@@ -1,8 +1,10 @@
 import Link from 'next/link'
 import { canManageTenant, type SessionContext } from '@/lib/auth'
 import { isMissingPublishColumns, publishedNotEmailed, PUBLISHED_NOT_EMAILED } from '@/lib/schedules/platform-state'
-import { BarPill } from '@/components/shell/page-grid'
-import { PaneHeader, PaneBody, PaneEmpty, DetailHeader, DetailSection } from '@/components/shell/master-list'
+import type { ReactNode } from 'react'
+import { Card } from '@/components/pages/studio/ui'
+import { GO, ROW, STACK, STACK_CELL, STACK_HEAD, STACK_ROW, TBL, TD, TH } from '@/components/v2/look'
+import { EmptyBox, GoLink, StatStrip, type StatItem } from '@/components/v2/ui'
 import { BuildButton } from '@/components/reports/build-button'
 import { DocumentBuildControl } from '@/components/documents/build-control'
 import { BUILD_ACTIVE, type ReportBuildRow, type ReportKind } from '@/lib/reports/types'
@@ -36,6 +38,16 @@ import { cn } from '@/lib/utils'
 // who it is written for) plus its sending (who gets it after which updates,
 // PDF attached, share link inside). New report = pick a template or go
 // custom. Reports (the other page) is the archive of what went out.
+//
+// SINCE THE AUDIT DESIGN (7 Nov, Studio.dc.html, its lower half): one tile
+// that flows with the page, no panes that scroll on their own: "Build and
+// send" with "New report" a link, the reports a table (Report, Written,
+// Sends to; the open one lit, `aria-current`), then the open report under
+// it: its title and actions, a figures row (Written for, Sections, Built or
+// draft with the last edit, Sends), Sending in an inner box (the form),
+// Sends a table (Issue, Outcome, When), Builds with their links, Share. No
+// mono, no capitals, no " · ". The one yellow is the form's Save (or Send it
+// while a build waits). What each control does is unchanged.
 
 const BASE = '/dashboard/studio'
 const fmtWhen = (iso: string) => new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
@@ -56,13 +68,59 @@ async function loadSends(supabase: SessionContext['supabase'], clientId: string)
   return res.error && isMissingPublishColumns(res.error) ? read(SEND_COLS) : res
 }
 
-/** A send's line in the schedule's history. */
-function historyLine(s: SendRow, nameOf: ReadonlyMap<string, string>): string {
-  if (s.status === 'sent' && s.sent_at) return `sent ${fmtWhen(s.sent_at)} to ${s.recipients.length}${s.approved_by ? ` · sent by ${nameOf.get(s.approved_by) ?? 'a teammate'}` : ''}`
-  if (publishedNotEmailed(s) && s.published_at) return `${PUBLISHED_NOT_EMAILED.toLowerCase()} · ${fmtWhen(s.published_at)}`
-  if (s.status === 'failed') return `did not send ${fmtWhen(s.claimed_at)} · ${sendFailureSentence(s.error)}`
-  if (s.status === 'ready') return `ready for review ${fmtWhen(s.ready_at ?? s.claimed_at)}`
-  return `${s.status} ${fmtWhen(s.claimed_at)}`
+/** A send's row in the schedule's history: what happened, and when. */
+function sendRow(s: SendRow, nameOf: ReadonlyMap<string, string>): { outcome: string; when: string } {
+  if (s.status === 'sent' && s.sent_at) return { outcome: `Sent to ${s.recipients.length}${s.approved_by ? `, by ${nameOf.get(s.approved_by) ?? 'a teammate'}` : ''}`, when: fmtWhen(s.sent_at) }
+  if (publishedNotEmailed(s) && s.published_at) return { outcome: PUBLISHED_NOT_EMAILED.split(' \u00b7 ').join(', '), when: fmtWhen(s.published_at) }
+  if (s.status === 'failed') return { outcome: `Did not send: ${sendFailureSentence(s.error)}`, when: fmtWhen(s.claimed_at) }
+  if (s.status === 'ready') return { outcome: 'Ready for review', when: fmtWhen(s.ready_at ?? s.claimed_at) }
+  return { outcome: s.status.charAt(0).toUpperCase() + s.status.slice(1), when: fmtWhen(s.claimed_at) }
+}
+
+/** The schedule's sends as the board's table: the issue (its page where it
+ *  went out), what happened, when. */
+function SendsTable({ history, nameOf }: { history: SendRow[]; nameOf: ReadonlyMap<string, string> }) {
+  return (
+    <div>
+      <h4 className="m-0 mb-1.5 text-[16px] font-semibold">Sends</h4>
+      <table className={cn(TBL, STACK, 'text-[14.5px]')}>
+        <thead className={STACK_HEAD}>
+          <tr>
+            <th scope="col" className={TH}>Issue</th>
+            <th scope="col" className={cn(TH, 'w-[220px]')}>Outcome</th>
+            <th scope="col" className={cn(TH, 'w-[150px] pr-0')}>When</th>
+          </tr>
+        </thead>
+        <tbody className={STACK}>
+          {history.map((s) => {
+            const row = sendRow(s, nameOf)
+            return (
+              <tr key={s.id} className={STACK_ROW}>
+                <td className={cn(TD, STACK_CELL)}>
+                  {/* A ready send has no archive page yet: Reports lists what went out. */}
+                  {s.status === 'ready'
+                    ? <span className="font-semibold">{s.subject ?? 'Update'}</span>
+                    : <Link href={`/dashboard/studio?group=sent&item=${s.id}`} className={ROW}>{s.subject ?? 'Update'}</Link>}
+                </td>
+                <td className={cn(TD, STACK_CELL, s.status === 'sent' ? '' : 'text-muted-foreground')}>{row.outcome}</td>
+                <td className={cn(TD, STACK_CELL, 'pr-0 tabular-nums')}>{row.when}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+/** A part of the open report under its heading. */
+function Part({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div>
+      <h4 className="m-0 mb-2.5 text-[16px] font-semibold">{title}</h4>
+      {children}
+    </div>
+  )
 }
 
 const readerOf = (r: Pick<Report, 'audience' | 'cover'>) => r.cover?.reader?.trim() || AUDIENCES.find((a) => a.key === r.audience)?.label || 'General'
@@ -171,184 +229,186 @@ export async function OperatorWorkbench({ session, sp }: { session: SessionConte
   const openViewer = (snapshotId: string) => viewerHref(BASE, { item: itemKey }, snapshotId)
 
   const sendingLine = (s: ScheduleRow | null) => {
-    if (!s) return 'not sent to anyone yet'
-    const cadence = CADENCES.find((c) => c.key === s.cadence)?.label.toLowerCase() ?? s.cadence
-    return `${s.active ? 'sends' : 'sending off'} · ${cadence} · ${s.recipients.length} ${s.recipients.length === 1 ? 'person' : 'people'}`
+    if (!s) return 'Not sent to anyone yet'
+    const cadence = CADENCES.find((c) => c.key === s.cadence)?.label ?? s.cadence
+    const people = `${s.recipients.length} ${s.recipients.length === 1 ? 'person' : 'people'}`
+    return s.active ? `${cadence}, to ${people}` : `Sending off (${cadence.toLowerCase()}, ${people})`
   }
+  const sendsTo = (s: ScheduleRow | undefined, otherwise: string) => (s?.active ? `${s.recipients.length} ${s.recipients.length === 1 ? 'person' : 'people'}` : s ? 'Sending off' : otherwise)
+  const sendingBox = (form: ReactNode) => (
+    <div className="flex flex-col gap-4 rounded-[10px] bg-inner p-[22px] max-sm:p-4">
+      <h4 className="m-0 text-[16px] font-semibold">Sending</h4>
+      {form}
+    </div>
+  )
+
+  const readyProp = readySend ? { id: readySend.id, subject: readySend.subject, readyAt: readySend.ready_at, error: readySend.error ? sendFailureSentence(readySend.error) : null, stalled, publishedAt: readySend.published_at ?? null } : null
+  const reportStats: StatItem[] = selected
+    ? isDocument
+      ? [
+          { key: 'for', term: 'Written for', value: readerOf(selected) },
+          { key: 'template', term: 'Written', value: `${documentTemplate(selected.template_key)?.name ?? 'Written report'}, by Verbatim from the update` },
+          { key: 'built', term: selected.status === 'built' ? 'Built, last edited' : 'Not built yet, last edited', value: fmtWhen(selected.updated_at) },
+          { key: 'sends', term: 'Sends', value: sendingLine(schedule) },
+        ]
+      : [
+          { key: 'for', term: 'Written for', value: readerOf(selected) },
+          { key: 'sections', term: 'Sections', value: selected.sections.length ? `${selected.sections.length}: ${pagesOf(selected.sections).join(', ')}` : 'None yet' },
+          { key: 'built', term: selected.status === 'built' ? 'Built, last edited' : 'Draft, last edited', value: fmtWhen(selected.updated_at) },
+          { key: 'sends', term: 'Sends', value: sendingLine(schedule) },
+        ]
+    : []
 
   return (
-    <section aria-label="Build and send" className="flex min-h-0 flex-col gap-3">
-      <div className="flex min-h-10 items-center justify-between gap-4">
-        <h2 className="m-0 text-[20px] font-bold">Build and send</h2>
-        <Link href={`${BASE}/new`}><BarPill primary>New report</BarPill></Link>
-      </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-3 md:h-[calc(100dvh_-_6.75rem)] md:flex-row">
-        <section className="flex min-h-0 flex-col overflow-hidden rounded-lg bg-tile shadow-tile md:w-[280px] md:shrink-0">
-          <PaneHeader title="Reports" meta={reports.length ? `${reports.length}` : undefined}>
-            <Link href={`${BASE}/new`} aria-label="New report" className="inline-flex size-6 items-center justify-center rounded-full bg-inner text-[15px] leading-none text-secondary-foreground ring-1 ring-border hover:bg-tile">+</Link>
-          </PaneHeader>
-          <PaneBody>
-            {reports.length || artefacts.length ? (
-              <ul className="flex flex-col">
-                {reports.map((r) => (
-                  <li key={r.id}>
-                    <Link href={`${BASE}?item=${r.id}`} className={cn('block rounded-[4px] px-3 py-2 hover:bg-inner', r.id === selectedId && 'bg-inner')}>
-                      <p className={cn('truncate text-[13px] leading-[1.3]', r.id === selectedId ? 'font-semibold' : 'font-medium')}>{r.title}</p>
-                      <p className="mt-0.5 truncate font-mono text-[10.5px] text-muted-foreground">for {readerOf(r)} · {scheduleOf.get(r.id)?.active ? `sends to ${scheduleOf.get(r.id)!.recipients.length}` : r.status === 'built' ? 'built' : 'draft'}</p>
-                    </Link>
-                  </li>
-                ))}
-                {artefacts.map((s) => (
-                  <li key={s.id}>
-                    <Link href={`${BASE}?item=${artefactKey(s)}`} className={cn('block rounded-[4px] px-3 py-2 hover:bg-inner', pickedArtefact?.id === s.id && 'bg-inner')}>
-                      <p className={cn('truncate text-[13px] leading-[1.3]', pickedArtefact?.id === s.id ? 'font-semibold' : 'font-medium')}>{artefactTitle(scheduleArtefact(s))}</p>
-                      <p className="mt-0.5 truncate font-mono text-[10.5px] text-muted-foreground">written by Verbatim · {s.active ? `sends to ${s.recipients.length}` : 'sending off'}</p>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <PaneEmpty>No reports yet. Start one from a template, or go custom.</PaneEmpty>
-            )}
-          </PaneBody>
-        </section>
+    <section aria-label="Build and send">
+      <Card className="gap-3.5 p-[26px] max-sm:p-[18px]">
+        <div className="flex flex-wrap items-baseline justify-between gap-4">
+          <h2 className="m-0 text-[21px] font-semibold leading-[1.3]">Build and send</h2>
+          <GoLink href={`${BASE}/new`}>New report</GoLink>
+        </div>
 
-        <section className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-lg bg-tile shadow-tile">
-          {pickedArtefact ? (
-            <>
-              <DetailHeader
-                eyebrow="Written by Verbatim · nothing to arrange"
-                title={artefactTitle(scheduleArtefact(pickedArtefact))}
-                meta={sendingLine(pickedArtefact)}
-              />
-              <DetailSection>
-                <p className="max-w-[60ch] text-[12.5px] leading-relaxed text-muted-foreground">
-                  Verbatim writes this one from your update, so there is no outline to edit. What you choose here is who receives it, when, and what rides along.
-                </p>
-              </DetailSection>
-              <DetailSection label="Sending">
-                <ScheduleForm
-                  key={`${pickedArtefact.id}:${pickedArtefact.updated_at}:${readySend?.id ?? 'none'}`}
-                  reportId={null}
-                  starterKey={pickedArtefact.starter_key}
-                  reportTitle={pickedArtefact.name}
-                  schedule={pickedArtefact}
-                  canManage={canManage}
-                  userEmail={email ?? null}
-                  sendable={sendable}
-                  ready={readySend ? { id: readySend.id, subject: readySend.subject, readyAt: readySend.ready_at, error: readySend.error ? sendFailureSentence(readySend.error) : null, stalled, publishedAt: readySend.published_at ?? null } : null}
-                  reviewer={reviewAudience(clientId)}
-                />
-                {history.length > 0 && (
-                  <ul className="mt-4 flex flex-col gap-1.5 border-t border-border/60 pt-3">
-                    {history.map((s) => (
-                      <li key={s.id} className="flex flex-wrap items-baseline gap-x-3 text-[12.5px]">
-                        {s.status === 'ready'
-                          ? <span className="font-medium">{s.subject ?? 'Update'}</span>
-                          : <Link href={`/dashboard/studio?group=sent&item=${s.id}`} className="font-medium underline-offset-2 hover:underline">{s.subject ?? 'Update'}</Link>}
-                        <span className="font-mono text-[10.5px] text-muted-foreground">{historyLine(s, nameOf)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </DetailSection>
-            </>
-          ) : selected ? (
-            <>
-              <DetailHeader eyebrow={`${isDocument ? 'Written report' : 'Report'} · written for ${readerOf(selected)}`} title={selected.title}
-                meta={isDocument
-                  ? `${documentTemplate(selected.template_key)?.name ?? 'written'} · written by Verbatim from the update · ${selected.status === 'built' ? 'built' : 'not built yet'} · edited ${fmtWhen(selected.updated_at)} · ${sendingLine(schedule)}`
-                  : `${selected.sections.length} section${selected.sections.length === 1 ? '' : 's'} · ${pagesOf(selected.sections).join(' · ') || 'empty'} · ${selected.status === 'built' ? 'built' : 'draft'} · edited ${fmtWhen(selected.updated_at)} · ${sendingLine(schedule)}`} />
-              <DetailSection>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Link href={`${BASE}/edit/${selected.id}`} className="inline-flex h-8 items-center rounded-full bg-tile px-3 text-[12px] font-medium text-secondary-foreground ring-1 ring-border hover:bg-inner">Edit</Link>
-                  {isDocument
-                    ? <DocumentBuildControl reportId={selected.id} inFlight={docBuilds[0] && BUILD_ACTIVE.includes(docBuilds[0].status) ? { id: docBuilds[0].id, status: docBuilds[0].status, startedAt: docBuilds[0].started_at } : null} />
-                    : <BuildButton reportId={selected.id} />}
-                  <DeleteReport id={selected.id} />
-                </div>
-              </DetailSection>
-              <DetailSection label="Sending">
-                <ScheduleForm
-                  key={`${selected.id}:${schedule?.updated_at ?? 'none'}:${readySend?.id ?? 'none'}`}
-                  reportId={selected.id}
-                  reportTitle={selected.title}
-                  schedule={schedule}
-                  canManage={canManage}
-                  userEmail={email ?? null}
-                  sendable={sendable}
-                  isDocument={isDocument}
-                  ready={readySend ? { id: readySend.id, subject: readySend.subject, readyAt: readySend.ready_at, error: readySend.error ? sendFailureSentence(readySend.error) : null, stalled, publishedAt: readySend.published_at ?? null } : null}
-                  reviewer={reviewAudience(clientId)}
-                />
-                {history.length > 0 && (
-                  <ul className="mt-4 flex flex-col gap-1.5 border-t border-border/60 pt-3">
-                    {history.map((s) => (
-                      <li key={s.id} className="flex flex-wrap items-baseline gap-x-3 text-[12.5px]">
-                        {/* A ready send has no archive page yet: Reports lists what went out. */}
-                        {s.status === 'ready'
-                          ? <span className="font-medium">{s.subject ?? 'Update'}</span>
-                          : <Link href={`/dashboard/studio?group=sent&item=${s.id}`} className="font-medium underline-offset-2 hover:underline">{s.subject ?? 'Update'}</Link>}
-                        <span className="font-mono text-[10.5px] text-muted-foreground">{historyLine(s, nameOf)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </DetailSection>
-              <DetailSection label="Builds">
-                {isDocument ? (
-                  docBuilds.length > 0 ? (
-                    <ul className="flex flex-col gap-2">
-                      {docBuilds.map((b) => {
-                        const art = builds.find((x) => x.id === b.snapshot_id)?.artifacts.find((a) => a.format === 'pdf') ?? null
-                        return (
-                          <li key={b.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-[4px] bg-inner px-4 py-2.5 text-[12.5px]">
-                            <span className="font-mono text-[10.5px] text-muted-foreground">{fmtWhen(b.started_at)}</span>
-                            <span className={b.status === 'failed' ? 'text-negative' : b.status === 'done' ? '' : 'text-secondary-foreground'}>{b.status === 'done' ? 'Built' : BUILD_PHASE_WORDS[b.status]}{b.status === 'failed' && b.error ? `: ${b.error}` : ''}</span>
-                            {b.needs_review && <span className="text-warning">a check flagged this one, read it before sending</span>}
-                            {b.snapshot_id && editedSnapshots.has(b.snapshot_id) && <span className="font-mono text-[10.5px] text-muted-foreground">edited</span>}
-                            {Number(b.cost_usd) > 0 && <span className="font-mono text-[10.5px] text-muted-foreground">${Number(b.cost_usd).toFixed(2)}</span>}
-                            {b.snapshot_id && b.status === 'done' && <Link href={openViewer(b.snapshot_id)} scroll={false} className="font-medium underline underline-offset-2">Open</Link>}
-                            {art && <a href={`/api/artifacts/${art.id}`} className="font-medium underline underline-offset-2">PDF · {fmtBytes(art.bytes)}{art.stale ? ' · re-renders' : ''}</a>}
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  ) : (
-                    <p className="text-[12px] text-muted-foreground">Not built yet. Building reads the update, asks the data, writes the brief for its reader and prints the PDF. Three to five minutes.</p>
-                  )
-                ) : builds.length > 0 ? (
-                  <ul className="flex flex-col gap-3">
-                    {builds.map((b) => (
-                      <li key={b.id} className="rounded-[4px] bg-inner px-4 py-3">
-                        <p className="font-mono text-[10.5px] text-muted-foreground">built {fmtWhen(b.created_at)}{b === builds[0] && selected.status === 'draft' ? ' · edited since, build again for a current PDF' : ''}</p>
-                        {b.cover && b.figures && <p className="mt-1.5 text-[12.5px] leading-relaxed text-secondary-foreground">{coverPlainText(b.cover.body, b.figures)}</p>}
-                        <div className="mt-2 flex flex-wrap gap-3">
-                          <Link href={openViewer(b.id)} scroll={false} className="text-[12px] font-medium underline underline-offset-2">Open</Link>
-                          {b.artifacts.map((a) => (
-                            <a key={a.id} href={`/api/artifacts/${a.id}`} className="text-[12px] font-medium underline underline-offset-2">Download {a.format.toUpperCase()} · {fmtBytes(a.bytes)}{a.stale ? ' · re-renders' : ''}</a>
-                          ))}
-                        </div>
-                      </li>
-                    ))}
+        {reports.length || artefacts.length ? (
+          <table className={cn(TBL, STACK)}>
+            <thead className={STACK_HEAD}>
+              <tr>
+                <th scope="col" className={cn(TH, 'pl-3')}>Report</th>
+                <th scope="col" className={cn(TH, 'w-[220px]')}>Written</th>
+                <th scope="col" className={cn(TH, 'w-[130px] pr-3 text-right')}>Sends to</th>
+              </tr>
+            </thead>
+            <tbody className={STACK}>
+              {reports.map((r) => {
+                const on = r.id === selectedId
+                return (
+                  <tr key={r.id} aria-current={on ? 'true' : undefined} className={cn(STACK_ROW, 'max-sm:px-3', on && 'bg-accent')}>
+                    <td className={cn(TD, STACK_CELL, 'pl-3')}><Link href={`${BASE}?item=${r.id}`} className={cn(ROW, 'max-sm:inline-flex max-sm:min-h-11 max-sm:items-center')}>{r.title}</Link></td>
+                    <td className={cn(TD, STACK_CELL)}>For {readerOf(r)}</td>
+                    <td className={cn(TD, STACK_CELL, 'pr-3 text-right tabular-nums')}>{sendsTo(scheduleOf.get(r.id), r.status === 'built' ? 'Built' : 'Draft')}</td>
+                  </tr>
+                )
+              })}
+              {artefacts.map((s) => {
+                const on = pickedArtefact?.id === s.id
+                return (
+                  <tr key={s.id} aria-current={on ? 'true' : undefined} className={cn(STACK_ROW, 'max-sm:px-3', on && 'bg-accent')}>
+                    <td className={cn(TD, STACK_CELL, 'pl-3')}><Link href={`${BASE}?item=${artefactKey(s)}`} className={cn(ROW, 'max-sm:inline-flex max-sm:min-h-11 max-sm:items-center')}>{artefactTitle(scheduleArtefact(s))}</Link></td>
+                    <td className={cn(TD, STACK_CELL)}>By Verbatim</td>
+                    <td className={cn(TD, STACK_CELL, 'pr-3 text-right tabular-nums')}>{sendsTo(s, 'Sending off')}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        ) : (
+          <EmptyBox>No reports yet. Start one from a template, or go custom.</EmptyBox>
+        )}
+
+        {pickedArtefact ? (
+          <div className="mt-3.5 flex flex-col gap-[18px] border-t border-border pt-[22px]">
+            <h3 className="m-0 text-[19px] font-semibold leading-[1.3]">{artefactTitle(scheduleArtefact(pickedArtefact))}</h3>
+            <StatStrip items={[
+              { key: 'by', term: 'Written', value: 'By Verbatim, nothing to arrange' },
+              { key: 'sends', term: 'Sends', value: sendingLine(pickedArtefact) },
+            ]} />
+            <p className="m-0 max-w-[60ch] text-[15px] leading-[1.55] text-secondary-foreground">
+              Verbatim writes this one from your update, so there is no outline to edit. What you choose here is who receives it, when, and what rides along.
+            </p>
+            {sendingBox(
+              <ScheduleForm
+                key={`${pickedArtefact.id}:${pickedArtefact.updated_at}:${readySend?.id ?? 'none'}`}
+                reportId={null}
+                starterKey={pickedArtefact.starter_key}
+                reportTitle={pickedArtefact.name}
+                schedule={pickedArtefact}
+                canManage={canManage}
+                userEmail={email ?? null}
+                sendable={sendable}
+                ready={readyProp}
+                reviewer={reviewAudience(clientId)}
+              />,
+            )}
+            {history.length > 0 && <SendsTable history={history} nameOf={nameOf} />}
+          </div>
+        ) : selected ? (
+          <div className="mt-3.5 flex flex-col gap-[18px] border-t border-border pt-[22px]">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <h3 className="m-0 min-w-0 text-[19px] font-semibold leading-[1.3]">{selected.title}</h3>
+              <div className="flex flex-wrap items-center gap-2.5">
+                <Link href={`${BASE}/edit/${selected.id}`} className={cn(GO, 'mr-2 inline-flex min-h-9 items-center max-sm:min-h-11')}>Edit the report</Link>
+                {isDocument
+                  ? <DocumentBuildControl reportId={selected.id} inFlight={docBuilds[0] && BUILD_ACTIVE.includes(docBuilds[0].status) ? { id: docBuilds[0].id, status: docBuilds[0].status, startedAt: docBuilds[0].started_at } : null} />
+                  : <BuildButton reportId={selected.id} />}
+                <DeleteReport id={selected.id} />
+              </div>
+            </div>
+            <StatStrip items={reportStats} />
+            {sendingBox(
+              <ScheduleForm
+                key={`${selected.id}:${schedule?.updated_at ?? 'none'}:${readySend?.id ?? 'none'}`}
+                reportId={selected.id}
+                reportTitle={selected.title}
+                schedule={schedule}
+                canManage={canManage}
+                userEmail={email ?? null}
+                sendable={sendable}
+                isDocument={isDocument}
+                ready={readyProp}
+                reviewer={reviewAudience(clientId)}
+              />,
+            )}
+            {history.length > 0 && <SendsTable history={history} nameOf={nameOf} />}
+            <Part title="Builds">
+              {isDocument ? (
+                docBuilds.length > 0 ? (
+                  <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
+                    {docBuilds.map((b) => {
+                      const art = builds.find((x) => x.id === b.snapshot_id)?.artifacts.find((a) => a.format === 'pdf') ?? null
+                      return (
+                        <li key={b.id} className="flex flex-wrap items-baseline gap-x-4 gap-y-1.5 rounded-[10px] border border-track px-5 py-3.5 text-[15px]">
+                          <span className="text-[13.5px] text-muted-foreground">{fmtWhen(b.started_at)}</span>
+                          <span className={b.status === 'failed' ? 'text-caution' : b.status === 'done' ? '' : 'text-secondary-foreground'}>{b.status === 'done' ? 'Built' : BUILD_PHASE_WORDS[b.status]}{b.status === 'failed' && b.error ? `: ${b.error}` : ''}</span>
+                          {b.needs_review && <span className="text-caution">A check flagged this one: read it before sending.</span>}
+                          {b.snapshot_id && editedSnapshots.has(b.snapshot_id) && <span className="text-[13.5px] text-muted-foreground">Edited</span>}
+                          {Number(b.cost_usd) > 0 && <span className="text-[13.5px] tabular-nums text-muted-foreground">${Number(b.cost_usd).toFixed(2)}</span>}
+                          {b.snapshot_id && b.status === 'done' && <Link href={openViewer(b.snapshot_id)} scroll={false} className={GO}>Open the build</Link>}
+                          {art && <a href={`/api/artifacts/${art.id}`} className={GO}>Download PDF, {fmtBytes(art.bytes)}{art.stale ? ', re-renders' : ''}</a>}
+                        </li>
+                      )
+                    })}
                   </ul>
                 ) : (
-                  <p className="text-[12px] text-muted-foreground">Not built yet. Building freezes the figures as they are now, writes the cover for its reader and prints the PDF.</p>
-                )}
-              </DetailSection>
-              <DetailSection label="Share">
-                <ShareLinks snapshotId={builds[0]?.id ?? null} links={shareLinks} />
-              </DetailSection>
-            </>
-          ) : (
-            <div className="flex flex-1 flex-col items-start justify-center gap-3 px-8">
-              <p className="text-[14px] font-medium">Nothing here yet.</p>
-              <p className="max-w-[44ch] text-[12.5px] text-muted-foreground">A report arranges the pages you already have for a reader you name, and can go out to a list of people after each update.</p>
-              <Link href={`${BASE}/new`}><BarPill primary>New report</BarPill></Link>
-            </div>
-          )}
-        </section>
-      </div>
+                  <EmptyBox>Not built yet. Building reads the update, asks the data, writes the brief for its reader and prints the PDF. Three to five minutes.</EmptyBox>
+                )
+              ) : builds.length > 0 ? (
+                <ul className="m-0 flex list-none flex-col gap-3 p-0">
+                  {builds.map((b) => (
+                    <li key={b.id} className="flex flex-col gap-2.5 rounded-[10px] border border-track px-5 py-[18px]">
+                      <span className="text-[13.5px] text-muted-foreground">Built {fmtWhen(b.created_at)}{b === builds[0] && selected.status === 'draft' ? ', edited since: build again for a current PDF' : ''}</span>
+                      {b.cover && b.figures && <p className="m-0 text-[15px] leading-[1.65]">{coverPlainText(b.cover.body, b.figures)}</p>}
+                      <div className="flex flex-wrap gap-x-5 gap-y-2">
+                        <Link href={openViewer(b.id)} scroll={false} className={GO}>Open the build</Link>
+                        {b.artifacts.map((a) => (
+                          <a key={a.id} href={`/api/artifacts/${a.id}`} className={GO}>Download {a.format.toUpperCase()}, {fmtBytes(a.bytes)}{a.stale ? ', re-renders' : ''}</a>
+                        ))}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <EmptyBox>Not built yet. Building freezes the figures as they are now, writes the cover for its reader and prints the PDF.</EmptyBox>
+              )}
+            </Part>
+            <Part title="Share">
+              <ShareLinks snapshotId={builds[0]?.id ?? null} links={shareLinks} />
+            </Part>
+          </div>
+        ) : (
+          <div className="mt-3.5 flex flex-col items-start gap-3 border-t border-border pt-[22px]">
+            <EmptyBox title="Nothing here yet.">A report arranges the pages you already have for a reader you name, and can go out to a list of people after each update.</EmptyBox>
+            <GoLink href={`${BASE}/new`}>New report</GoLink>
+          </div>
+        )}
+      </Card>
     </section>
   )
 }
