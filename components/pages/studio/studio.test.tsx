@@ -22,6 +22,7 @@ const schedules: StudioSchedule[] = [
   { id: 's-sb', name: 'The sales brief', artefact: 'brief:sales', starter_key: 'weekly_report', recipients: ['daniela@sealandgear.com'], active: false },
 ]
 const rows = studioRows({ tenant: 'Sealand', schedules, sends: [], members, now: NOW })
+const view = (id: string) => `/dashboard/studio?view=${id}`
 
 /** The design bans (Heinrich, 30 Sep): no left stripe, no highlight, no em dash. */
 function bans(markup: string, text: string) {
@@ -32,20 +33,35 @@ function bans(markup: string, text: string) {
 }
 
 describe('Your reports', () => {
-  const markup = render(<YourReports rows={rows} canEdit privacy={PRIVACY_LINE} />)
-  const text = renderText(<YourReports rows={rows} canEdit privacy={PRIVACY_LINE} />)
+  const markup = render(<YourReports rows={rows} canEdit privacy={PRIVACY_LINE} openHref={view} />)
+  const text = renderText(<YourReports rows={rows} canEdit privacy={PRIVACY_LINE} openHref={view} />)
 
   it('prints the artboard: the head, five rows, who gets each, the latest issue, and the privacy line once', () => {
-    expect(text).toContain('Your reports Report For How often Who gets it Latest issue')
-    expect(text).toContain('The weekly The week in one line and what it means, what stood out, what your market is talking about, and what to do next. Everyone Every Sunday, after the update DS Daniela De Siena B Brayden First issue Sun 4 Oct Recipients')
-    expect(text).toContain('Sales brief Who is buying, what holds them back, and the words to use. Sales Monthly DS Daniela De Siena First issue early October Recipients')
-    expect(text).toContain('Leadership brief Where your market stands, where you stand against rivals, and the risks. Leadership, and anyone outside a team Monthly First issue early October')
+    // A real table (the audit design); each cell carries its head's words for
+    // a phone, where the table's head hides and each report stacks.
+    expect(text).toContain('Your reports Report For How often Who gets it Latest issue Edit')
+    expect(markup).toMatch(/<table class="[^"]*"><thead class="max-sm:hidden">/)
+    expect(text).toContain('The weekly The week in one line and what it means, what stood out, what your market is talking about, and what to do next. For Everyone How often Every Sunday, after the update Who gets it Daniela De Siena Brayden Latest issue First issue Sun 4 Oct Recipients')
+    // Names, one a line: no initials (the audit design).
+    expect(markup).toMatch(/<span class="block">Daniela De Siena<\/span><span class="block">Brayden<\/span>/)
+    expect(text).not.toMatch(/\bDS\b/)
+    expect(text).toContain('Sales brief Who is buying, what holds them back, and the words to use. For Sales How often Monthly Who gets it Daniela De Siena Latest issue First issue early October Recipients')
+    expect(text).toContain('Leadership brief Where your market stands, where you stand against rivals, and the risks. For Leadership, and anyone outside a team How often Monthly')
     expect(text.match(/Recipients/g)).toHaveLength(5)
     expect(text.endsWith(PRIVACY_LINE)).toBe(true)
   })
 
+  it('opens the latest issue from the report\'s name and its day where there is one (decision 16), and links nothing where there is none', () => {
+    const sent: StudioSend = { id: 'x1', schedule_id: 's-wr', schedule_name: null, snapshot_id: 'snap-w', artifact_id: null, subject: 'This week in your market', sent_at: '2026-10-05T07:10:00Z' }
+    const withIssue = studioRows({ tenant: 'Sealand', schedules, sends: [sent], members, now: NOW })
+    const m = render(<YourReports rows={withIssue} canEdit privacy={PRIVACY_LINE} openHref={view} />)
+    expect(m).toMatch(/<a[^>]*href="\/dashboard\/studio\?view=snap-w"[^>]*>The weekly<\/a>/)
+    expect(m).toMatch(/<a[^>]*href="\/dashboard\/studio\?view=snap-w"[^>]*>Mon 5 Oct<\/a>/)
+    expect(markup).not.toContain('?view=')
+  })
+
   it('draws no Recipients button for someone who cannot edit', () => {
-    expect(renderText(<YourReports rows={rows} canEdit={false} privacy={PRIVACY_LINE} />)).not.toContain('Recipients')
+    expect(renderText(<YourReports rows={rows} canEdit={false} privacy={PRIVACY_LINE} openHref={view} />)).not.toContain('Recipients')
   })
 
   it('keeps the copy contract and the design bans, and scrolls inside the card on a phone', () => {
@@ -67,13 +83,14 @@ describe('Past issues', () => {
     expect(render(<PastIssues issues={[]} openHref={open} />)).toBe('')
   })
 
-  it('lists each issue newest first, with Open, the PDF where there is one, and a share link', () => {
+  it('lists each issue newest first, its title opening it, the PDF where there is one, and a share link', () => {
     const markup = render(<PastIssues issues={issues} openHref={open} />)
     const text = renderText(<PastIssues issues={issues} openHref={open} />)
     expect(text).toContain('Past issues Issue Report Sent')
     expect(text.indexOf('Sales brief, September')).toBeLessThan(text.indexOf('This week in your market'))
-    expect(text).toContain('Sales brief, September Sales brief Tue 6 Oct Open PDF Share link')
-    expect(text).toContain('This week in your market The weekly Mon 5 Oct Open Share link')
+    expect(text).toContain('Sales brief, September Report Sales brief Sent Tue 6 Oct Download PDF Share link')
+    expect(text).toContain('This week in your market Report The weekly Sent Mon 5 Oct Share link')
+    expect(markup).toMatch(/<a[^>]*href="\/dashboard\/studio\?view=snap-2"[^>]*>Sales brief, September<\/a>/)
     expect(markup).toContain('href="/dashboard/studio?view=snap-2"')
     expect(markup).toContain('href="/api/artifacts/pdf-2"')
     assertCopyContract(markup)
@@ -84,7 +101,7 @@ describe('Past issues', () => {
     const published = pastIssues([{ id: 'p1', schedule_id: 's-wr', schedule_name: null, snapshot_id: 'snap-p', artifact_id: null, subject: 'Sealand: the week', sent_at: null, published_at: '2026-10-01T18:00:00Z' }], schedules)
     const markup = render(<PastIssues issues={published} openHref={open} />)
     const text = renderText(<PastIssues issues={published} openHref={open} />)
-    expect(text).toContain('Sealand: the week The weekly Thu 1 Oct Open Share link')
+    expect(text).toContain('Sealand: the week Report The weekly Sent Thu 1 Oct Share link')
     expect(text).not.toMatch(/platform|emailed/i)
     expect(text).not.toContain('PDF')
     assertCopyContract(markup)
@@ -101,10 +118,11 @@ describe('Monthly briefs', () => {
   const markup = render(<MonthlyBriefs briefs={briefs} openHref={open} />)
   const text = renderText(<MonthlyBriefs briefs={briefs} openHref={open} />)
 
-  it('lists the month\'s briefs in the Your reports idiom: who each is for, the month, the day it was written, Open and PDF', () => {
-    expect(text).toContain('Monthly briefs Brief For Month Written')
-    expect(text).toContain('Sales brief Who is buying, what holds them back, and the words to use. Sales September 2026 Sun 4 Oct Open PDF')
-    expect(text).toContain('Leadership brief Where your market stands, where you stand against rivals, and the risks. Leadership, and anyone outside a team September 2026 Sun 4 Oct Open PDF')
+  it('lists the month\'s briefs in the Your reports idiom: who each is for, the month, the day it was written, its name opening it and Download PDF', () => {
+    expect(text).toContain('Monthly briefs Brief For Month Written PDF')
+    expect(text).toContain('Sales brief Who is buying, what holds them back, and the words to use. For Sales Month September 2026 Written Sun 4 Oct Download PDF')
+    expect(text).toContain('Leadership brief Where your market stands, where you stand against rivals, and the risks. For Leadership, and anyone outside a team Month September 2026 Written Sun 4 Oct Download PDF')
+    expect(markup).toMatch(/<a[^>]*href="\/dashboard\/studio\?view=snap-s"[^>]*>Sales brief<\/a>/)
     expect(markup).toContain('href="/dashboard/studio?view=snap-s"')
     expect(markup).toContain('href="/api/briefs/snap-s/pdf"')
   })

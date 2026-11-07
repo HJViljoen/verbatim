@@ -1,49 +1,53 @@
 import Link from 'next/link'
-import { FileText } from 'lucide-react'
 import type { StudioBrief } from '@/lib/pages/studio-briefs'
 import { briefPdfHref } from '@/lib/reports/viewer'
-import { buttonClass, Card, CardTitle } from './ui'
+import { GO, ROW, STACK, STACK_CELL, STACK_HEAD, STACK_ROW, TBL, TD, TH } from '@/components/v2/look'
+import { cn } from '@/lib/utils'
+import { Card, CardTitle } from './ui'
+import { PHONE_HEAD } from './your-reports'
 
 // "Monthly briefs" (T8 wired): each month's four department briefs, newest
 // month first, to open in the viewer or download as a PDF. On the platform as
 // soon as the run that closes a month writes them; there is no email to hold.
-//
-// THE ARTBOARD DOES NOT DRAW THIS CARD (Page-Studio drew "Your reports" with
-// the briefs' rows as email schedules, hidden until the briefs exist). It is
-// the "Your reports" and "Past issues" cards' idiom, the same title, head and
-// rows, so the three read as one page; a deviation listed for Heinrich.
-
-const COLS = 'grid grid-cols-[minmax(0,2.3fr)_minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1.4fr)] gap-5'
+// Since the audit design (7 Nov, Studio.dc.html): a real table, the brief's
+// name its link to the viewer, "Download PDF" a link that says where it goes.
+// On a phone each brief stacks (decision 14).
 
 export function MonthlyBriefs({ briefs, openHref }: { briefs: readonly StudioBrief[]; openHref: (snapshotId: string) => string }) {
   if (briefs.length === 0) return null
   return (
-    <Card className="gap-4 px-[30px] pt-[26px] pb-[22px]">
-      <CardTitle icon={FileText}>Monthly briefs</CardTitle>
-      <div className="-mx-1 overflow-x-auto px-1">
-        <div role="table" aria-label="Monthly briefs" className="flex min-w-[820px] flex-col">
-          <div role="row" className={`${COLS} pb-2.5`}>
-            {['Brief', 'For', 'Month', 'Written'].map((h) => (
-              <div key={h} role="columnheader" className="text-[12px] font-semibold text-[#5F656B]">{h}</div>
+    <Card className="gap-3.5 p-[26px] max-sm:p-[18px]">
+      <CardTitle>Monthly briefs</CardTitle>
+      <div className="min-w-0 overflow-x-auto">
+        <table className={cn(TBL, STACK, 'sm:min-w-[760px]')}>
+          <thead className={STACK_HEAD}>
+            <tr>
+              <th scope="col" className={TH}>Brief</th>
+              <th scope="col" className={cn(TH, 'w-[190px]')}>For</th>
+              <th scope="col" className={cn(TH, 'w-[140px]')}>Month</th>
+              <th scope="col" className={cn(TH, 'w-[110px]')}>Written</th>
+              <th scope="col" className={cn(TH, 'w-[130px] pr-0 text-right')}><span className="sr-only">PDF</span></th>
+            </tr>
+          </thead>
+          <tbody className={STACK}>
+            {briefs.map((b) => (
+              <tr key={b.snapshotId} className={STACK_ROW}>
+                <td className={cn(TD, STACK_CELL)}>
+                  <Link href={openHref(b.snapshotId)} scroll={false} className={ROW}>{b.name}</Link>
+                  <p className="m-0 mt-1 text-[14.5px] leading-[1.5] text-secondary-foreground">{b.what}</p>
+                </td>
+                <td className={cn(TD, STACK_CELL)}><span className={PHONE_HEAD}>For</span>{b.forWho}</td>
+                <td className={cn(TD, STACK_CELL)}><span className={PHONE_HEAD}>Month</span>{b.monthLabel}</td>
+                <td className={cn(TD, STACK_CELL)}><span className={PHONE_HEAD}>Written</span>{b.writtenOn}</td>
+                <td className={cn(TD, 'pr-0 text-right whitespace-nowrap', STACK_CELL, 'max-sm:pt-1')}>
+                  {/* A plain link, never a prefetching one: the PDF is printed
+                      on its first download. */}
+                  <a href={briefPdfHref(b.snapshotId)} className={GO}>Download PDF</a>
+                </td>
+              </tr>
             ))}
-            <div role="columnheader" aria-label="Open" />
-          </div>
-          {briefs.map((b) => (
-            <div key={b.snapshotId} role="row" className={`${COLS} items-center border-t border-[#E4E2DC] py-[18px]`}>
-              <div role="cell" className="flex flex-col gap-1">
-                <div className="text-[16px] font-bold">{b.name}</div>
-                <div className="text-[13px] leading-[1.45] text-[#5F656B]">{b.what}</div>
-              </div>
-              <div role="cell" className="text-[14px]">{b.forWho}</div>
-              <div role="cell" className="text-[14px]">{b.monthLabel}</div>
-              <div role="cell" className="text-[14px]">{b.writtenOn}</div>
-              <div role="cell" className="flex flex-wrap items-start justify-end gap-2">
-                <Link href={openHref(b.snapshotId)} scroll={false} className={buttonClass('secondary', 'small')}>Open</Link>
-                <a href={briefPdfHref(b.snapshotId)} className={buttonClass('secondary', 'small')}>PDF</a>
-              </div>
-            </div>
-          ))}
-        </div>
+          </tbody>
+        </table>
       </div>
     </Card>
   )

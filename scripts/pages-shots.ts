@@ -83,7 +83,10 @@ import { AgentDocumentSplit } from '../components/agent-document-split'
 import { PlanJudgement } from '../components/agent-document'
 import { PageTitle } from '../components/pages/studio/ui'
 import { YourReports } from '../components/pages/studio/your-reports'
-import { shownStudioRows, studioRows } from '../lib/pages/studio'
+import { MonthlyBriefs } from '../components/pages/studio/monthly-briefs'
+import { PastIssues } from '../components/pages/studio/past-issues'
+import { pastIssues, shownStudioRows, studioRows, type StudioSchedule, type StudioSend } from '../lib/pages/studio'
+import { studioBriefs } from '../lib/pages/studio-briefs'
 import { PRIVACY_LINE } from '../lib/reading/method'
 import { SettingsFrame } from '../components/settings-frame'
 import { SearchTerms } from '../components/pages/settings/search-terms'
@@ -205,12 +208,20 @@ function movesData() {
 
 /** Studio: what production holds for Sealand on 1 Oct (the weekly read's one
  *  schedule, Daniela and Brayden; no brief schedule yet), seen by an owner. */
-function studioData() {
+const STUDIO_SCHEDULES: StudioSchedule[] = [{ id: 's-wr', name: 'This week in your market', artefact: 'weekly_read', starter_key: 'weekly_read', recipients: ['daniela@sealandgear.com', 'brayden@sealandgear.com'], active: true }]
+/** Two issues on the platform (the board's past issues, abridged): a weekly
+ *  read, and the legacy digest with its stored PDF. */
+const STUDIO_SENDS: StudioSend[] = [
+  { id: 'x2', schedule_id: 's-wr', schedule_name: null, snapshot_id: 'snap-w2', artifact_id: null, subject: 'Sealand: Durability is the question underneath the category, asked rather than praised', sent_at: '2026-09-28T07:10:00Z' },
+  { id: 'x1', schedule_id: null, schedule_name: 'Weekly digest', snapshot_id: 'snap-d1', artifact_id: 'pdf-d1', subject: 'Sealand: what changed. 41 new themes', sent_at: '2026-09-13T07:10:00Z' },
+]
+
+function studioData(withIssues = false) {
   // The route shows the weekly alone until the briefs are built.
   return shownStudioRows(studioRows({
     tenant: 'Sealand',
-    schedules: [{ id: 's-wr', name: 'This week in your market', artefact: 'weekly_read', starter_key: 'weekly_read', recipients: ['daniela@sealandgear.com', 'brayden@sealandgear.com'], active: true }],
-    sends: [],
+    schedules: STUDIO_SCHEDULES,
+    sends: withIssues ? STUDIO_SENDS : [],
     members: [
       { email: 'daniela@sealandgear.com', full_name: 'Daniela De Siena' },
       { email: 'brayden@sealandgear.com', full_name: 'Brayden' },
@@ -218,6 +229,11 @@ function studioData() {
     now: new Date('2026-10-01T12:00:00Z'),
   }))
 }
+
+/** The month's four briefs, ready (the board's monthly briefs). */
+const studioBriefRows = () => studioBriefs((['sales', 'marketing', 'content', 'leadership'] as const).map((role) => (
+  { role, month: '2026-09-01', status: 'ready', snapshot_id: `snap-${role}`, report_snapshots: { created_at: '2026-10-04T05:30:00.000Z' } }
+)))
 
 /** Settings: Sealand's tracking config as the artboard read it
  *  (pages3_data.json `settings_tracking`). */
@@ -490,8 +506,22 @@ const PAGES: Page[] = [
     key: 'studio', path: '/dashboard/studio', artboard: 'Page-Studio.dc.html',
     page: () => h('div', { className: 'flex min-h-0 flex-1 flex-col gap-[22px] text-[#26292C]' },
       h(PageTitle, { title: surface('studio').label }),
-      h(YourReports, { rows: studioData(), canEdit: true, privacy: PRIVACY_LINE }),
+      h(YourReports, { rows: studioData(), canEdit: true, privacy: PRIVACY_LINE, openHref: (id: string) => `/dashboard/studio?view=${id}` }),
     ),
+  },
+  {
+    // The Studio as the board draws it: a latest issue, the month's briefs
+    // and the past issues (the route's three lists, in its order).
+    key: 'studio-lists', path: '/dashboard/studio', artboard: 'Page-Studio.dc.html',
+    page: () => {
+      const open = (id: string) => `/dashboard/studio?view=${id}`
+      return h('div', { className: 'flex min-h-0 flex-1 flex-col gap-[22px] text-[#26292C]' },
+        h(PageTitle, { title: surface('studio').label }),
+        h(YourReports, { rows: studioData(true), canEdit: true, privacy: PRIVACY_LINE, openHref: open }),
+        h(MonthlyBriefs, { briefs: studioBriefRows(), openHref: open }),
+        h(PastIssues, { issues: pastIssues(STUDIO_SENDS, STUDIO_SCHEDULES), openHref: open }),
+      )
+    },
   },
   {
     key: 'settings', path: '/dashboard/settings', artboard: 'Page-Settings.dc.html',

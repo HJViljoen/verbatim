@@ -1,8 +1,10 @@
 import Link from 'next/link'
-import { History } from 'lucide-react'
 import type { PastIssue } from '@/lib/pages/studio'
-import { buttonClass, Card, CardTitle } from './ui'
+import { GO, ROW, STACK, STACK_CELL, STACK_HEAD, STACK_ROW, TBL, TD, TH } from '@/components/v2/look'
+import { cn } from '@/lib/utils'
+import { Card, CardTitle } from './ui'
 import { ShareLinkButton } from './share-link-button'
+import { PHONE_HEAD } from './your-reports'
 
 // Past issues: every issue that went out, newest first, to open in the
 // viewer, download as a PDF or share by link. Only issues ON THE PLATFORM reach
@@ -13,38 +15,44 @@ import { ShareLinkButton } from './share-link-button'
 // a build was not emailed is the operator's to know (the workbench's history),
 // never a client's (§0a.1).
 //
-// THE ARTBOARD DOES NOT DRAW THIS CARD: Sealand had no sent issue when it was
-// made. It is the "Your reports" card's idiom (the same title, head and rows)
-// so the two read as one page.
-
-const COLS = 'grid grid-cols-[minmax(0,2.3fr)_minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,2fr)] gap-5'
+// Since the audit design (7 Nov, Studio.dc.html): a real table, the issue's
+// title its link to the viewer, "Download PDF" a link where there is a stored
+// file, "Share link" the small secondary button. On a phone each issue stacks
+// (decision 14).
 
 export function PastIssues({ issues, openHref }: { issues: readonly PastIssue[]; openHref: (snapshotId: string) => string }) {
   if (issues.length === 0) return null
   return (
-    <Card className="gap-4 px-[30px] pt-[26px] pb-[22px]">
-      <CardTitle icon={History}>Past issues</CardTitle>
-      <div className="-mx-1 overflow-x-auto px-1">
-        <div role="table" aria-label="Past issues" className="flex min-w-[760px] flex-col">
-          <div role="row" className={`${COLS} pb-2.5`}>
-            {['Issue', 'Report', 'Sent'].map((h) => (
-              <div key={h} role="columnheader" className="text-[12px] font-semibold text-[#5F656B]">{h}</div>
+    <Card className="gap-3.5 p-[26px] max-sm:p-[18px]">
+      <CardTitle>Past issues</CardTitle>
+      <div className="min-w-0 overflow-x-auto">
+        <table className={cn(TBL, STACK, 'sm:min-w-[700px]')}>
+          <thead className={STACK_HEAD}>
+            <tr>
+              <th scope="col" className={TH}>Issue</th>
+              <th scope="col" className={cn(TH, 'w-[150px]')}>Report</th>
+              <th scope="col" className={cn(TH, 'w-[110px]')}>Sent</th>
+              <th scope="col" className={cn(TH, 'w-[250px] pr-0 text-right')}><span className="sr-only">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody className={STACK}>
+            {issues.map((i) => (
+              <tr key={i.id} id={`issue-${i.id}`} className={STACK_ROW}>
+                <td className={cn(TD, STACK_CELL)}>
+                  {i.snapshotId ? <Link href={openHref(i.snapshotId)} scroll={false} className={ROW}>{i.title}</Link> : <span className="font-semibold">{i.title}</span>}
+                </td>
+                <td className={cn(TD, STACK_CELL)}><span className={PHONE_HEAD}>Report</span>{i.report}</td>
+                <td className={cn(TD, STACK_CELL)}><span className={PHONE_HEAD}>Sent</span>{i.sentOn}</td>
+                <td className={cn(TD, 'pr-0 text-right', STACK_CELL, 'max-sm:pt-1')}>
+                  <span className="inline-flex flex-wrap items-center justify-end gap-x-4 gap-y-2 max-sm:justify-start">
+                    {i.artifactId ? <a href={`/api/artifacts/${i.artifactId}`} className={GO}>Download PDF</a> : null}
+                    {i.snapshotId ? <ShareLinkButton snapshotId={i.snapshotId} /> : null}
+                  </span>
+                </td>
+              </tr>
             ))}
-            <div role="columnheader" aria-label="Open" />
-          </div>
-          {issues.map((i) => (
-            <div key={i.id} id={`issue-${i.id}`} role="row" className={`${COLS} items-center border-t border-[#E4E2DC] py-[18px]`}>
-              <div role="cell" className="text-[15px] font-semibold">{i.title}</div>
-              <div role="cell" className="text-[14px]">{i.report}</div>
-              <div role="cell" className="text-[14px]">{i.sentOn}</div>
-              <div role="cell" className="flex flex-wrap items-start justify-end gap-2">
-                {i.snapshotId ? <Link href={openHref(i.snapshotId)} scroll={false} className={buttonClass('secondary', 'small')}>Open</Link> : null}
-                {i.artifactId ? <a href={`/api/artifacts/${i.artifactId}`} className={buttonClass('secondary', 'small')}>PDF</a> : null}
-                {i.snapshotId ? <ShareLinkButton snapshotId={i.snapshotId} /> : null}
-              </div>
-            </div>
-          ))}
-        </div>
+          </tbody>
+        </table>
       </div>
     </Card>
   )

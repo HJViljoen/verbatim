@@ -2,4 +2,4 @@
 // app/dashboard/studio/page.tsx; the operator's workbench lives beside it.
 export { YourReports } from './your-reports'
 export { PastIssues } from './past-issues'
-export { PageTitle, Card, CardTitle, Chip, PersonChip, buttonClass } from './ui'
+export { PageTitle, Card, CardTitle, Chip, buttonClass } from './ui'

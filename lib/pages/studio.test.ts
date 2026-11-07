@@ -150,6 +150,10 @@ describe('past issues: a build put on the platform without its email (the backfi
     expect(studioRows({ tenant: 'Sealand', schedules: [weeklyRead], sends: [sent, laterPublished], members, now: NOW })[0].latest).toBe('Mon 12 Oct')
     // With nobody on the list, a published issue is still the latest (no "First issue" promise needed).
     expect(studioRows({ tenant: 'Ossur', schedules: [{ ...weeklyRead, recipients: [] }], sends: [published], members, now: NOW })[0].latest).toBe('Thu 1 Oct')
+    // Its snapshot, so the row opens it (decision 16: the send already read);
+    // none where no issue has been made.
+    expect(studioRows({ tenant: 'Sealand', schedules: [weeklyRead], sends: [published, sent], members, now: NOW })[0].latestSnapshotId).toBe(sent.snapshot_id)
+    expect(studioRows({ tenant: 'Sealand', schedules: [weeklyRead], sends: [], members, now: NOW })[0].latestSnapshotId).toBeNull()
   })
 })
 

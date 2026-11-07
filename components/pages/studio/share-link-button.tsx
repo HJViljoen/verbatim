@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { buttonClass } from './ui'
+import { BTN_SECONDARY, BTN_SM } from '@/components/v2/look'
+import { cn } from '@/lib/utils'
 
 // A share link to one past issue: made on the first press (the default
 // expiry, no password), copied to the clipboard, and shown where the browser
@@ -33,8 +34,8 @@ export function ShareLinkButton({ snapshotId }: { snapshotId: string }) {
 
   return (
     <span className="inline-flex flex-col items-end gap-1">
-      <button type="button" onClick={share} disabled={busy} className={buttonClass('secondary', 'small')}>Share link</button>
-      {note ? <span role="status" className="max-w-[260px] break-all text-[12px] text-[#5F656B]">{note}</span> : null}
+      <button type="button" onClick={share} disabled={busy} className={cn(BTN_SECONDARY, BTN_SM, 'max-sm:h-11')}>Share link</button>
+      {note ? <span role="status" className="max-w-[260px] break-all text-[13px] text-[#5F656B]">{note}</span> : null}
     </span>
   )
 }

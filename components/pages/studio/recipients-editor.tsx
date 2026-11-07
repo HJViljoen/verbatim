@@ -1,8 +1,9 @@
 'use client'
 
 import { useActionState, useEffect, useRef, useState } from 'react'
-import { Pencil } from 'lucide-react'
 import { updateArtefactRecipients, type RecipientsState } from '@/app/dashboard/settings/reports/actions'
+import { BTN_PRIMARY, BTN_SECONDARY, BTN_SM, INPUT } from '@/components/v2/look'
+import { cn } from '@/lib/utils'
 import { buttonClass } from './ui'
 
 // Who gets one report, edited from its row (moved in from Settings › Reports
@@ -17,6 +18,10 @@ import { buttonClass } from './ui'
 // sending on is still refused for a locked tenant, in the lock's own words
 // (lib/tenant-locks.ts), and the briefs, which nothing sends on a schedule
 // yet, are stored switched off by the action.
+//
+// Since the audit design (7 Nov, Studio.dc.html): "Recipients" the small
+// secondary button with no icon, Save the yellow one, the field the kit's
+// input; styles from `look.ts` (a client file).
 
 const initial: RecipientsState = { ok: false, message: '' }
 
@@ -34,12 +39,11 @@ export function RecipientsEditor({ artefact, name, recipients, active }: { artef
 
   return (
     <div ref={box} className="relative">
-      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={buttonClass('secondary', 'small')}>
-        <Pencil aria-hidden className="size-[15px]" strokeWidth={2} />
+      <button type="button" aria-expanded={open} onClick={() => setOpen((o) => !o)} className={cn(BTN_SECONDARY, BTN_SM, 'max-sm:h-11')}>
         Recipients
       </button>
       {open && (
-        <form action={action} className="absolute right-0 top-[calc(100%+8px)] z-20 flex w-[320px] max-w-[calc(100vw-48px)] flex-col gap-3 rounded-[16px] border border-[#E4E2DC] bg-white p-4 text-left shadow-[0_6px_24px_rgba(0,0,0,0.08)]">
+        <form action={action} className="absolute right-0 top-[calc(100%+8px)] z-20 flex w-[320px] max-w-[calc(100vw-48px)] flex-col gap-3 rounded-[12px] border border-[#E4E2DC] bg-white p-4 text-left shadow-[0_6px_24px_rgba(0,0,0,0.08)] max-sm:left-0 max-sm:right-auto">
           <input type="hidden" name="artefact" value={artefact} />
           {active ? <input type="hidden" name="active" value="on" /> : null}
           <label htmlFor={`recipients-${artefact}`} className="text-[14px] font-semibold text-[#26292C]">Who gets {name.startsWith('The ') ? name.replace(/^The /, 'the ') : `the ${name.toLowerCase()}`}</label>
@@ -49,14 +53,14 @@ export function RecipientsEditor({ artefact, name, recipients, active }: { artef
             rows={3}
             defaultValue={recipients.join(', ')}
             placeholder="name@company.com, someone@company.com"
-            className="w-full resize-y rounded-[10px] border border-[#E4E2DC] bg-white px-3 py-2 text-[13px] leading-normal text-[#26292C] outline-none focus-visible:border-[#26292C]"
+            className={cn(INPUT, 'h-auto w-full resize-y rounded-[10px] py-2 text-[14px] leading-normal')}
           />
-          <p className="m-0 text-[12px] text-[#5F656B]">Email addresses, separated by commas.</p>
+          <p className="m-0 text-[13px] text-[#5F656B]">Email addresses, separated by commas.</p>
           <div className="flex items-center gap-2">
-            <button type="submit" disabled={pending} className={buttonClass('primary', 'small')}>{pending ? 'Saving' : 'Save'}</button>
+            <button type="submit" disabled={pending} className={cn(BTN_PRIMARY, BTN_SM)}>{pending ? 'Saving' : 'Save'}</button>
             <button type="button" onClick={() => setOpen(false)} className={buttonClass('ghost', 'small')}>Cancel</button>
           </div>
-          {state.message ? <p role="status" className={`m-0 text-[12px] ${state.ok ? 'text-[#5F656B]' : 'text-[#C2410C]'}`}>{state.message}</p> : null}
+          {state.message ? <p role="status" className={`m-0 text-[13px] ${state.ok ? 'text-[#5F656B]' : 'text-negative'}`}>{state.message}</p> : null}
         </form>
       )}
     </div>

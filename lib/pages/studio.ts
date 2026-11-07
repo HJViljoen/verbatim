@@ -147,6 +147,10 @@ export interface StudioRow {
   /** "Mon 5 Oct", "First issue Mon 5 Oct", "First issue early October", or
    *  null where nothing can be said. */
   latest: string | null
+  /** The latest issue's snapshot, where there is one: its name and its day
+   *  open it in the viewer (the audit design, decision 16: the send the row
+   *  already reads, no new read). */
+  latestSnapshotId: string | null
 }
 
 /** Studio's own time zone: the client's week starts on a South African Monday. */
@@ -276,6 +280,7 @@ export function studioRows(input: {
       active: Boolean(schedule?.active),
       scheduled: schedule != null,
       latest,
+      latestSnapshotId: newest?.snapshot_id ?? null,
     }
   })
 }
