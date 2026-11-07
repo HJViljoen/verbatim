@@ -30,10 +30,6 @@ export function Sentence({ parts }: { parts: readonly SentencePart[] }) {
   )
 }
 
-/** The level pages' links, until each page draws the kit's `GoLink` (T6.2
- *  to T6.4 drop it): the audit design's link, ink and underlined. */
-export const OLINK = GO
-
 /** A link that says where it goes (the kit's `GO`), with `scroll` for the
  *  table's show-more, which keeps the reader's place. */
 export function OLink({ href, children, scroll, className, ...rest }: { href: string; children: ReactNode; scroll?: boolean; className?: string; 'aria-expanded'?: boolean; 'aria-controls'?: string }) {

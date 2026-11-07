@@ -3,7 +3,7 @@ import { render, renderText as rawText } from '@/lib/test/render'
 import { assertCopyContract, copyNodes } from '@/lib/test/copy-contract'
 import { contentRepliesFixture } from '@/lib/pages/v2/content-levels-fixture'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
-import { ContentRepliesPage, repliesMeta } from './replies-page'
+import { ContentRepliesPage, repliesMonthText, repliesStats } from './replies-page'
 import { ENGAGE_PER_VIDEO, ENGAGE_TOTAL } from '@/lib/engage'
 import { FLAGGED_SHOWN } from '@/lib/pages/week'
 
@@ -15,18 +15,20 @@ const renderText = (node: Parameters<typeof rawText>[0]): string => rawText(node
 const page = (o: Parameters<typeof contentRepliesFixture>[0] = {}) => <ContentRepliesPage data={contentRepliesFixture(o)} />
 
 describe('the reply list\'s page', () => {
-  it('opens flat: "Content / Worth a reply", a reply arrow on the neutral, "Comments", the days and the counts, the period switch', () => {
+  it('opens with "Content / Worth a reply", the title, the period switch (the month by its name) and the figures row: the days, the comments', () => {
     const m = render(page())
     const text = renderText(page())
     expect(m).toMatch(/data-crumb-row=""[\s\S]*href="\/dashboard\/content"[^>]*>Content</)
     expect(m).not.toContain('data-crumb-chevron')
-    expect(m).toMatch(/data-level-tile="replies" class="[^"]*bg-track/)
-    expect(text).toContain('Comments Worth a reply Written 5 to 11 October · 12 comments · 6 under your posts, 3 under posts about you, 3 elsewhere')
+    expect(m).toContain('data-level-block="audit"')
+    expect(m).not.toContain('data-level-tile')
+    // The split by whose post leaves the header: it is the facts'.
+    expect(text).toContain('Worth a reply This week October so far Written 5 to 11 Oct Comments worth a reply 12')
     expect(m).toContain('href="/dashboard/content/replies?period=month"')
     expect(m).toMatch(/aria-current="page"[^>]*>This week</)
     // A cap, never a level: no "of N" and no month beside the count.
     expect(copyNodes(m.slice(0, m.indexOf('data-replies-lead'))).filter((n) => n.kind === 'level')).toEqual([])
-    expect(repliesMeta(contentRepliesFixture()).flat().join(' ')).not.toMatch(/ of |so far/)
+    expect(repliesStats(contentRepliesFixture()).map((c) => c.term)).toEqual(['Written', 'Comments worth a reply'])
     // No card or figures up top: the lead is the page's own words.
     expect(text).toContain('Comments from these seven days that ask you something, push back, or say they want to buy, each under the video it was written on.')
   })
@@ -34,6 +36,8 @@ describe('the reply list\'s page', () => {
   it('carries the chips by kind, each to its section', () => {
     const m = render(page())
     expect(renderText(page())).toContain('Ready to buy 5 Questions 3 Objections 3 Wrong information 1 Ready to buy')
+    // The chips are the kit's (radius 8), the counts in sans.
+    expect(m).toMatch(/href="#buy" class="[^"]*rounded-\[8px\]/)
     for (const a of ['buy', 'questions', 'objections', 'wrong']) {
       expect(m).toContain(`href="#${a}"`)
       expect(m).toContain(`id="${a}"`)
@@ -43,26 +47,36 @@ describe('the reply list\'s page', () => {
   it('lists each kind\'s comments under the video they were written on: its poster, day, whose post, caption, the comments, the reply link', () => {
     const text = renderText(page())
     expect(text).toContain('Ready to buy 5 comments on 4 videos They say they want one, ask where to try it, or ask what it would cost them.')
-    expect(text).toContain('@ossur Instagram · posted 7 Oct Your post Rheo Knee. Designed around you. “Where can I try the Navii in Cape Town? My clinic only has older knees.” 9 Oct · 12 likes · about looking for a fitting “How do I get a quote for the Rheo through my prosthetist?” 7 Oct · 3 likes · about asking how to buy Open the post on Instagram ↗')
-    expect(text).toContain('The Amputee Diaries YouTube · posted 4 Oct Össur Trying the Pro-Flex foot for a month')
-    expect(text).toContain('Reply on YouTube ↗')
+    expect(text).toContain('@ossur Instagram, posted 7 Oct Your post Rheo Knee. Designed around you. “Where can I try the Navii in Cape Town? My clinic only has older knees.” Instagram, 9 Oct, 12 likes, about looking for a fitting “How do I get a quote for the Rheo through my prosthetist?” Instagram, 7 Oct, 3 likes, about asking how to buy Open the post on Instagram')
+    expect(text).toContain('The Amputee Diaries YouTube, posted 4 Oct Össur Trying the Pro-Flex foot for a month')
+    expect(text).toContain('Reply on YouTube')
+    expect(text).not.toMatch(/[→↗↓·]/)
     const m = render(page())
-    expect(m).toMatch(/data-who-chip="you"[^>]*>Össur</)
+    // A post about you names you in your gold; your own post is a tag.
+    expect(m).toMatch(/data-who-chip="you" data-plain="" class="[^"]*text-you[^"]*">Össur</)
+    expect(m).toMatch(/data-under="own"[^>]*><span data-tag="tint"/)
+    expect(m.match(/<figure data-reply-comment=""/g)!.length).toBeGreaterThan(4)
     expect(m).toMatch(/href="https:\/\/example\.com\/m\/1\?lc=native5" target="_blank" rel="noopener noreferrer"/)
   })
 
   it('gives wrong information no reply link, for awareness', () => {
     const text = renderText(page())
     expect(text).toContain('Wrong information, for awareness 1 comment on 1 video')
-    expect(text).toContain('Beach day, leg off or leg on? “You can’t swim with any prosthetic leg, the water ruins them all.” 6 Oct · about water and prostheses For awareness only, no reply link')
+    expect(text).toContain('Beach day, leg off or leg on? “You can’t swim with any prosthetic leg, the water ruins them all.” TikTok, 6 Oct, about water and prostheses For awareness only, no reply link')
     const m = render(page())
     const wrong = m.slice(m.indexOf('id="wrong"'))
     expect(wrong.slice(0, wrong.indexOf('</section>'))).not.toMatch(/Reply on|Open the post on/)
   })
 
-  it('sets the facts beside it: what they are, whose post, where, and how the list is picked (today\'s limits)', () => {
+  it('sets the facts beside it in one tile: whose post, where, and how the list is picked (today\'s limits)', () => {
     const text = renderText(page())
-    expect(text).toContain('The facts What they are Ready to buy 5 Questions 3 Objections 3 Wrong information 1 Whose post they sit under Your posts 6 Posts about you 3 Elsewhere in your market 3 Where Instagram 4 TikTok 4 YouTube 4')
+    // "What they are" went: the chips say the four counts.
+    expect(text).toContain('The facts Whose post they sit under Your posts 6 Posts about you 3 Elsewhere in your market 3 Where Instagram 4 TikTok 4 YouTube 4')
+    expect(text).not.toContain('What they are')
+    // Your own posts in your gold, the rest in the yellow, each against the largest.
+    const m = render(page())
+    expect(m).toMatch(/aria-label="Your posts: 6 comments"[^>]*><div class="[^"]*bg-you[^"]*" style="width:100%"/)
+    expect(m).toMatch(/aria-label="Posts about you: 3 comments"[^>]*><div class="[^"]*bg-brand[^"]*" style="width:50%"/)
     expect(text).toContain('Picked from the comments written between 5 and 11 Oct: up to twelve, no more than two from one video; wrong information is listed apart, up to three. We cannot see whether you have replied, so a comment stays on the list.')
     // The words say what the code does: the digest's total and per-video caps
     // (`rankEngageCandidates`) and the flagged list's own (`FLAGGED_SHOWN`).
@@ -91,7 +105,10 @@ describe('the reply list\'s page', () => {
     const text = renderText(page({ period: 'month' }))
     expect(text).toContain('Written October so far')
     expect(text).toContain('Comments from October so far that ask you something')
-    expect(render(page({ period: 'month' }))).toMatch(/aria-current="page"[^>]*>This month</)
+    // The switch names the month, as the root's does.
+    expect(render(page({ period: 'month' }))).toMatch(/aria-current="page"[^>]*>October so far</)
+    expect(repliesMonthText(contentRepliesFixture())).toBe('October so far')
+    expect(repliesMonthText(contentRepliesFixture({ state: 'no_week' }))).toBeNull()
   })
 
   it('ends with elsewhere on Content and the Agent', () => {
@@ -120,6 +137,7 @@ describe('the reply list\'s page', () => {
     const empty = renderText(page({ state: 'empty', noIdeas: true }))
     expect(empty).toContain('Ready to buy They say they want one')
     expect(empty).toContain('None this week.')
+    expect(render(page({ state: 'empty', noIdeas: true }))).toMatch(/data-empty-box=""[^>]*><div>None this week\.</)
     expect(empty).toContain('What to post next Post ideas are not switched on for this workspace.')
     // The month is named, never "this month" for one that has ended.
     expect(renderText(page({ state: 'empty', period: 'month' }))).toContain('None in October so far.')
@@ -137,9 +155,9 @@ describe('the reply list\'s page', () => {
     for (const o of [{}, { period: 'month' as const }, { kind: 'buy' as const }, { state: 'empty' as const, noIdeas: true }, { state: 'unread' as const }, { state: 'no_week' as const }]) assertCopyContract(page(o))
   })
 
-  it('breaks its meta into its phone lines', () => {
-    const lines = repliesMeta(contentRepliesFixture())
-    expect(lines[0]).toEqual(['Written 5 to 11 October'])
-    expect(lines[1]).toHaveLength(2)
+  it('builds its figures row: the days in the short form, the comments a bare cap; no days where no update has covered a week', () => {
+    const cells = repliesStats(contentRepliesFixture())
+    expect(cells[0].value).toBe('5 to 11 Oct')
+    expect(repliesStats(contentRepliesFixture({ state: 'no_week' })).map((c) => c.term)).toEqual(['Comments worth a reply'])
   })
 })

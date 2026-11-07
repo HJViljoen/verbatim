@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import type { ReactNode } from 'react'
 import { CARD, GoLink, SectionHead } from '@/components/v2'
 import { BTN_PRIMARY } from '@/components/v2/look'
 import { fmtInt } from '@/lib/format'
@@ -10,54 +9,9 @@ import { cn } from '@/lib/utils'
 import { Sentence } from './parts'
 
 // CONTENT'S LEVEL PAGES, THE PIECES THEY SHARE (depth as pages, 17 Oct; the
-// G5 boards): the level tiles (a post idea is a lightbulb on the yellow, the
-// HUB; the reply list a reply arrow and your posts a person, each on the
-// neutral, the EVIDENCE), drawn exactly as the boards draw them; the one calm
-// line an address that names nothing prints; "Elsewhere on Content"; and the
-// Agent's card. Server components, no client code.
-
-type Glyph = { className?: string }
-
-function Svg({ className, children }: Glyph & { children: ReactNode }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" aria-hidden className={cn('shrink-0', className)}>
-      {children}
-    </svg>
-  )
-}
-
-/** A post idea: a lightbulb. */
-export function LightbulbGlyph(p: Glyph) {
-  return <Svg {...p}><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" /><path d="M9 18h6" /><path d="M10 22h4" /></Svg>
-}
-
-/** The reply list: a reply arrow. */
-export function ReplyGlyph(p: Glyph) {
-  return <Svg {...p}><path d="M20 18v-2a4 4 0 0 0-4-4H4" /><path d="m9 17-5-5 5-5" /></Svg>
-}
-
-/** Your posts: a person. */
-export function PersonGlyph(p: Glyph) {
-  return <Svg {...p}><circle cx="12" cy="8" r="4" /><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1" /></Svg>
-}
-
-/** A sub-question: a question mark in a ring. */
-export function QuestionGlyph(p: Glyph) {
-  return <Svg {...p}><circle cx="12" cy="12" r="9" /><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3" /><path d="M12 17h.01" /></Svg>
-}
-
-export type ContentLevel = 'idea' | 'replies' | 'posts'
-
-/** The level's tile: 46px, its glyph 22px (38px and 19px on a phone), the
- *  idea on the yellow, the two evidence pages on the neutral. */
-export function ContentLevelTile({ level }: { level: ContentLevel }) {
-  const Glyph = level === 'idea' ? LightbulbGlyph : level === 'replies' ? ReplyGlyph : PersonGlyph
-  return (
-    <span aria-hidden data-level-tile={level} className={cn('flex size-[46px] shrink-0 items-center justify-center rounded-[11px] max-sm:size-[38px] max-sm:rounded-[10px]', level === 'idea' ? 'bg-accent text-orange-text' : 'bg-track text-secondary-foreground')}>
-      <Glyph className="size-[22px] max-sm:size-[19px]" />
-    </span>
-  )
-}
+// G5 boards; since the audit design, 7 Nov, the Content boards, with no level
+// tile): the one calm line an address that names nothing prints; "Elsewhere
+// on Content"; and the Agent's tile. Server components, no client code.
 
 export const BACK_TO_CONTENT = 'Back to Content'
 
@@ -129,30 +83,5 @@ export function ElsewhereSection({ data }: { data: Elsewhere }) {
       </nav>
       {data.medical && data.ideas.length > 0 ? <p data-medical-line="" className="m-0 mx-0.5 mt-3.5 text-[14px] leading-[1.5] text-secondary-foreground">{MEDICAL_LINE}</p> : null}
     </section>
-  )
-}
-
-/** The evidence pages' rail and its facts (F3's `.rail3`; a card on a phone). */
-export const FACT = 'flex min-w-0 flex-col gap-[9px] border-t border-border py-4 first-of-type:border-t-0 first-of-type:pt-2'
-export const RAIL = 'flex min-w-0 flex-col sm:-mx-2 sm:px-2 max-sm:rounded-[14px] max-sm:bg-card max-sm:px-[18px] max-sm:pt-4 max-sm:pb-1.5 max-sm:shadow-card'
-
-/** A rail fact's row (the boards' `.fact .rrow`): 13px, its name wider than
- *  the kit's, so "Elsewhere in your market" holds one line in the 300px rail. */
-export const RAIL_ROW = 'text-[13px] grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_26px]'
-
-/** A rail fact's small caps label. */
-export function FactLabel({ children }: { children: ReactNode }) {
-  return <p className="m-0 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{children}</p>
-}
-
-/** The evidence pages' "Show more" button. */
-export const MORE = 'inline-flex min-h-[38px] cursor-pointer items-center justify-center rounded-lg bg-card px-3.5 text-[13.5px] font-semibold text-foreground no-underline ring-1 ring-border hover:bg-inner focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
-
-/** A video's play mark, the evidence cards' 36px tile. */
-export function VideoTile() {
-  return (
-    <span aria-hidden className="flex size-9 shrink-0 items-center justify-center rounded-[9px] bg-track text-foreground">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" className="size-[15px]"><path d="m8 6 10 6-10 6z" /></svg>
-    </span>
   )
 }

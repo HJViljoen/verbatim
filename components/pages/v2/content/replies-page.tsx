@@ -1,25 +1,28 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { BrandChip } from '@/components/colour-roles'
-import { translationLabel, translationNote } from '@/components/quote-block'
+import { translationNote } from '@/components/quote-block'
 import { LevelBar } from '@/components/shell/level-bar'
 import { PageFrame } from '@/components/shell/page-grid'
-import { CARD, PeriodSwitch, TickBarRow } from '@/components/v2'
-import { fmtInt, platformLabel } from '@/lib/format'
+import { CARD, EmptyBox, GoLink, listWords, PeriodSwitch, SectionHead, shortDates, Tag, TickBar, toMax, translationLine, withMonthName, type StatItem } from '@/components/v2'
+import { CHIP, QUOTE } from '@/components/v2/look'
+import { fmtInt, longMonth, platformLabel } from '@/lib/format'
 import { CONTENT_PERIODS } from '@/lib/pages/v2/content'
 import { contentRepliesHref } from '@/lib/pages/v2/content-address'
 import { REPLY_VIDEOS_PHONE, type RepliesPageData, type ReplyCommentView, type ReplyKindView, type ReplyVideoView } from '@/lib/pages/v2/content-replies'
+import { readingMonthOf } from '@/lib/written/month'
 import { cn } from '@/lib/utils'
-import { AskCard, ContentLevelTile, ElsewhereSection, FACT, FactLabel, MORE, RAIL, RAIL_ROW, VideoTile } from './level'
+import { AskCard, ElsewhereSection } from './level'
 
 // THE COMMENTS WORTH A REPLY, THE EVIDENCE (depth as pages, 17 Oct; boards
-// G5-Content-Replies and -Replies-Phone). Lighter than an idea's page and led
-// by what people said: the flat header (a reply arrow on the neutral,
-// "Comments", "Worth a reply", the days and the counts in mono, the period
-// switch), a one-line read and the chips by kind, a hairline; then the comments
-// by kind, each under the video it was written on, beside the facts; elsewhere
-// on Content; the Agent. No card or figures up top: the count is a cap, never a
-// level, so no month sits beside it.
+// G5-Content-Replies and -Replies-Phone; since the audit design, 7 Nov, drawn
+// to Content-Replies.dc.html). Lighter than an idea's page and led by what
+// people said: the title with the period switch (the month by its name) and
+// the figures row (the days written, the comments on the list), a one-line
+// read and the chips by kind; then the comments by kind, each under the video
+// it was written on, a figure a comment, beside the facts in a tile;
+// elsewhere on Content; the Agent. The count is a cap, never a level, so no
+// "of N" and no month sits beside it.
 
 /** "6 under your posts, 3 under posts about you, 3 elsewhere": the split by
  *  whose post, each count a figure; where every comment sits in one place,
@@ -31,127 +34,166 @@ export function underWords(under: RepliesPageData['view']['under']): ReactNode {
   return <>{parts.map(([n, w], i) => <span key={w}>{i > 0 ? ', ' : null}<span data-copy="figure">{fmtInt(n)}</span> {w}</span>)}</>
 }
 
-/** The meta line as its phone lines: the days written, then the count and
- *  its split. */
-export function repliesMeta(data: RepliesPageData): ReactNode[][] {
-  const first = data.dates ? [`Written ${data.dates}`] : []
-  if (data.view.unread) return [first]
-  const total = data.view.total
-  const split = total > 0 ? underWords(data.view.under) : null
-  return [first, [<><span data-copy="figure">{fmtInt(total)}</span> {total === 1 ? 'comment' : 'comments'}</>, ...(split ? [split] : [])]]
+/** The figures row (the board's `.strip`): the days the comments were
+ *  written, and how many are on the list (a cap, never a level). The split
+ *  by whose post is the facts'. Pure. */
+export function repliesStats(data: RepliesPageData): StatItem[] {
+  const cells: StatItem[] = []
+  // A week's days in the short form ("5 to 11 Oct"); a month's words as
+  // they are ("October so far").
+  if (data.dates) cells.push({ key: 'written', term: 'Written', value: data.period === 'week' ? shortDates(data.dates) : data.dates })
+  cells.push({
+    key: 'comments',
+    term: 'Comments worth a reply',
+    value: data.view.unread ? 'Not read just now' : <span data-copy="figure">{fmtInt(data.view.total)}</span>,
+  })
+  return cells
 }
 
-/** One comment under its video: the commenter's words, its English, when,
- *  its likes, and why it surfaced. */
-function Comment({ c }: { c: ReplyCommentView }) {
+/** The month as the switch names it ("October so far", "October"): the
+ *  page's month, the root's rule (`readingMonthOf` over the week the list is
+ *  read from; the month's own words where the month is read). Null where no
+ *  update has covered a week. */
+export function repliesMonthText(data: Pick<RepliesPageData, 'period' | 'view'>): string | null {
+  const w = data.view.window
+  if (!w) return null
+  if (data.period === 'month') return w.phrase.replace(/^in /, '')
+  const m = readingMonthOf({ from: w.from, to: w.to })
+  return m.complete ? longMonth(m.month) : `${longMonth(m.month)} so far`
+}
+
+/** One comment under its video, a figure of its own (the board's): the
+ *  commenter's words, its English, then its platform, day, likes and why it
+ *  surfaced, in commas. */
+function Comment({ c, platform }: { c: ReplyCommentView; platform: string }) {
   const note = translationNote({ lang: c.lang, english: c.english })
-  const label = translationLabel(note)
-  const cite = [c.date, c.likes ? `${fmtInt(c.likes)} ${c.likes === 1 ? 'like' : 'likes'}` : null, c.reason ? `about ${c.reason.charAt(0).toLowerCase()}${c.reason.slice(1)}` : null].filter(Boolean).join(' · ')
+  const label = translationLine(note)
+  const cite = listWords([platform, c.date, c.likes ? `${fmtInt(c.likes)} ${c.likes === 1 ? 'like' : 'likes'}` : null, c.reason ? `about ${c.reason.charAt(0).toLowerCase()}${c.reason.slice(1)}` : null])
   return (
-    <div data-reply-comment="" className="flex flex-col gap-[5px] border-t border-border py-3 first:border-t-0">
-      <p data-copy="quote" className="m-0 font-serif text-[15px] italic leading-[1.5] text-foreground max-sm:text-[14.5px]">“{c.text}”</p>
-      {label ? <span className="text-[12px] text-muted-foreground">{label}</span> : null}
-      {note.english ? <p data-copy="quote" className="m-0 text-[14px] leading-[1.5] text-foreground">{note.english}</p> : null}
-      {cite ? <span className="text-[12px] text-muted-foreground">{cite}</span> : null}
-    </div>
+    <figure data-reply-comment="" className="m-0 flex flex-col gap-1.5 rounded-[10px] bg-inner px-[22px] py-[18px] max-sm:px-4 max-sm:py-3.5">
+      <blockquote className="m-0"><p data-copy="quote" className={cn('m-0 text-foreground', QUOTE)}>“{c.text}”</p></blockquote>
+      {label ? <span className="text-[13px] text-muted-foreground">{label}</span> : null}
+      {note.english ? <p data-copy="quote" className="m-0 text-[14.5px] leading-[1.5] text-foreground">{note.english}</p> : null}
+      {cite ? <figcaption className="mt-1 text-[13px] text-muted-foreground">{cite}</figcaption> : null}
+    </figure>
   )
 }
 
-/** Whose post it is: "Your post" on your own, your brand's chip on a post
- *  about you, nothing elsewhere. */
+/** Whose post it is: "Your post" a tag on your own, your brand's name in
+ *  your gold on a post about you, nothing elsewhere. */
 function Under({ under, brand }: { under: ReplyVideoView['under']; brand: string }) {
-  if (under === 'own_post') return <span data-under="own" className="ml-auto inline-flex items-center rounded-full bg-accent px-2 py-[5px] text-[12px] leading-none font-semibold whitespace-nowrap text-foreground">Your post</span>
-  if (under === 'names_you') return <BrandChip who="you" className="ml-auto text-[12px]">{brand}</BrandChip>
+  if (under === 'own_post') return <span data-under="own" className="shrink-0"><Tag>Your post</Tag></span>
+  if (under === 'names_you') return <BrandChip who="you" plain className="shrink-0 text-[13px] font-semibold text-you">{brand}</BrandChip>
   return null
 }
 
-/** A video in a kind (F3's `.vcard`): its poster, platform and day, whose
- *  post, its caption on one line, the comments, the reply link. */
+/** A video in a kind (the board's tile): its poster, platform and day, whose
+ *  post at the right, its caption in two lines, the comments, the reply
+ *  link. */
 function VideoCard({ v, brand, hideOnPhone, wrong }: { v: ReplyVideoView; brand: string; hideOnPhone: boolean; wrong: boolean }) {
   return (
-    <article data-reply-video="" className={cn(CARD, 'gap-3 px-[22px] pt-5 pb-[18px] max-sm:gap-2.5 max-sm:px-4 max-sm:pt-4 max-sm:pb-3.5', hideOnPhone ? 'max-sm:hidden' : null)}>
-      <div className="flex min-w-0 items-center gap-3">
-        <VideoTile />
+    <article data-reply-video="" className={cn(CARD, 'gap-3.5', hideOnPhone ? 'max-sm:hidden' : null)}>
+      <div className="flex items-baseline justify-between gap-4">
         <div className="min-w-0">
-          <span className="block truncate text-[14.5px] leading-[1.3] font-semibold text-foreground">{v.account ?? v.platform}</span>
-          <span className="block text-[12.5px] leading-[1.35] text-muted-foreground">{v.platform}{v.posted ? ` · posted ${v.posted}` : null}</span>
+          <h3 className="m-0 text-[16px] leading-[1.35] font-semibold text-foreground">{v.account ?? v.platform}</h3>
+          <span className="block text-[14px] leading-[1.4] text-muted-foreground">{v.platform}{v.posted ? `, posted ${v.posted}` : null}</span>
         </div>
         <Under under={v.under} brand={brand} />
       </div>
-      {v.caption ? <p data-copy="quote" className="m-0 truncate text-[14.5px] leading-[1.5] text-secondary-foreground">{v.caption}</p> : null}
-      <div className="rounded-[10px] bg-inner px-4 py-0.5 max-sm:px-3.5">
-        {v.comments.map((c) => <Comment key={c.ref} c={c} />)}
-      </div>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {wrong
-          ? <span className="text-[12.5px] text-muted-foreground">For awareness only, no reply link</span>
-          : v.href && v.hrefLabel
-            ? <a href={v.href} target="_blank" rel="noopener noreferrer" className="text-[13.5px] font-semibold text-orange-text no-underline underline-offset-[3px] hover:underline">{v.hrefLabel} ↗</a>
-            : null}
-      </div>
+      {v.caption ? <p data-copy="quote" className="m-0 line-clamp-2 text-[15px] leading-[1.55] text-secondary-foreground">{v.caption}</p> : null}
+      {v.comments.map((c) => <Comment key={c.ref} c={c} platform={v.platform} />)}
+      {wrong
+        ? <span className="text-[14px] text-muted-foreground">For awareness only, no reply link</span>
+        : v.href && v.hrefLabel
+          ? <GoLink href={v.href} external className="self-start">{v.hrefLabel}</GoLink>
+          : null}
     </article>
   )
 }
 
 /** One kind: its title and counts, what it holds, its videos (two on a phone,
- *  then "Show all … in {kind}"). Its frame and one line where it holds none. */
+ *  then "Show all … in {kind}"). Its heading and the dashed box where it
+ *  holds none (decision 4). */
 function KindSection({ k, data }: { k: ReplyKindView; data: RepliesPageData }) {
   // The month in its own words ("in October so far", "in September"): a
   // month that has ended is never "this month".
   const when = data.period === 'month' ? data.view.window?.phrase ?? 'this month' : data.isWeek ? 'this week' : 'in these days'
   return (
-    <section id={k.key} aria-labelledby={`h-${k.key}`} data-reply-kind={k.key} className="flex scroll-mt-6 flex-col gap-3 [&+&]:mt-[18px] max-sm:[&+&]:mt-2.5">
-      <div className="flex items-baseline justify-between gap-3 px-0.5 max-sm:flex-col max-sm:items-start max-sm:gap-0.5">
-        <h2 id={`h-${k.key}`} className="m-0 text-[19px] leading-[1.3] font-semibold tracking-[-0.005em] text-foreground max-sm:text-[18px]">{k.title}</h2>
-        {k.comments > 0 ? (
-          <span className="text-[13px] text-muted-foreground"><span data-copy="figure" className="font-mono">{fmtInt(k.comments)}</span> {k.comments === 1 ? 'comment' : 'comments'} on <span data-copy="figure" className="font-mono">{fmtInt(k.videos.length)}</span> {k.videos.length === 1 ? 'video' : 'videos'}</span>
-        ) : null}
+    <section id={k.key} aria-labelledby={`h-${k.key}`} data-reply-kind={k.key} className="flex scroll-mt-6 flex-col">
+      <SectionHead
+        id={`h-${k.key}`}
+        title={k.title}
+        note={k.comments > 0 ? <><span data-copy="figure">{fmtInt(k.comments)}</span> {k.comments === 1 ? 'comment' : 'comments'} on <span data-copy="figure">{fmtInt(k.videos.length)}</span> {k.videos.length === 1 ? 'video' : 'videos'}</> : undefined}
+      />
+      <p className="m-0 mx-0.5 mt-2.5 mb-4 text-[14.5px] leading-[1.5] text-secondary-foreground">{k.sub}</p>
+      <div className="flex flex-col gap-4">
+        {k.videos.length === 0 ? (
+          <EmptyBox>None {when}.</EmptyBox>
+        ) : (
+          <>
+            {k.videos.map((v, i) => <VideoCard key={v.key} v={v} brand={data.brand} wrong={k.key === 'wrong'} hideOnPhone={!k.full && i >= REPLY_VIDEOS_PHONE} />)}
+            {k.moreHref ? <Link href={k.moreHref} className={cn(CHIP, 'h-10 justify-center self-stretch font-semibold no-underline sm:hidden')}>Show all <span data-copy="figure" className="mx-1">{fmtInt(k.comments)}</span> in {k.chip}</Link> : null}
+          </>
+        )}
       </div>
-      <p className="-mt-1.5 m-0 px-0.5 text-[13px] leading-[1.45] text-muted-foreground">{k.sub}</p>
-      {k.videos.length === 0 ? (
-        <div className={cn(CARD, 'gap-2')}><p className="m-0 text-[14.5px] leading-[1.55] text-muted-foreground">None {when}.</p></div>
-      ) : (
-        <>
-          {k.videos.map((v, i) => <VideoCard key={v.key} v={v} brand={data.brand} wrong={k.key === 'wrong'} hideOnPhone={!k.full && i >= REPLY_VIDEOS_PHONE} />)}
-          {k.moreHref ? <Link href={k.moreHref} className={cn(MORE, 'self-stretch sm:hidden')}><span>Show all <span data-copy="figure">{fmtInt(k.comments)}</span> in {k.chip}</span></Link> : null}
-        </>
-      )}
     </section>
   )
 }
 
-/** The facts (F3's `.rail3`; a card on a phone). */
+/** A fact's rows: a name, a bar against the list's largest (decision 5), a
+ *  bare count; the bar in your gold for your own posts, the yellow for the
+ *  rest. */
+function BarRows({ rows }: { rows: readonly { key: string; name: string; n: number; you?: boolean }[] }) {
+  const at = toMax(rows.map((r) => r.n))
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_80px_24px] items-center gap-x-3 gap-y-2.5 text-[14.5px]">
+      {rows.map((r) => (
+        <div key={r.key} className="contents">
+          <span className="min-w-0">{r.name}</span>
+          <TickBar pct={at(r.n)} tone={r.you ? 'you' : 'market'} size="md" label={`${r.name}: ${fmtInt(r.n)} comments`} />
+          <span data-copy="figure" className="text-right tabular-nums">{fmtInt(r.n)}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+const H3 = 'm-0 mb-3 text-[15px] font-semibold text-foreground'
+const RULED = 'border-t border-track pt-5'
+
+/** The facts, one tile (the board's): whose post they sit under, where, and
+ *  how the list is picked. What they are is the chips' (it said the four
+ *  counts again). */
 function Facts({ data }: { data: RepliesPageData }) {
   const { view } = data
-  const total = Math.max(1, view.total)
-  const kinds: [string, string, number][] = [['buy', 'Ready to buy', view.counts.buying], ['questions', 'Questions', view.counts.question], ['objections', 'Objections', view.counts.objection], ['wrong', 'Wrong information', view.counts.flagged]]
-  const under: [string, number][] = [['Your posts', view.under.own], ['Posts about you', view.under.about], ['Elsewhere in your market', view.under.elsewhere]]
   return (
-    <aside aria-labelledby="facts-title" className={RAIL}>
-      <h2 id="facts-title" className="m-0 mb-1 text-[15px] font-semibold text-foreground">The facts</h2>
-      {view.unread ? null : (
-        <>
-          <div className={FACT}>
-            <FactLabel>What they are</FactLabel>
-            {kinds.map(([anchor, name, n]) => <TickBarRow key={anchor} name={<a href={`#${anchor}`} className="text-foreground no-underline hover:underline">{name}</a>} value={fmtInt(n)} pct={(100 * n) / total} valueWidth="narrow" label={`${fmtInt(n)} of ${fmtInt(view.total)}`} className={RAIL_ROW} />)}
-          </div>
-          <div className={FACT}>
-            <FactLabel>Whose post they sit under</FactLabel>
-            {under.map(([name, n]) => <TickBarRow key={name} name={name} value={fmtInt(n)} pct={(100 * n) / total} valueWidth="narrow" label={`${fmtInt(n)} of ${fmtInt(view.total)}`} className={RAIL_ROW} />)}
-          </div>
-          <div className={FACT}>
-            <FactLabel>Where</FactLabel>
-            {data.platforms.length > 0
-              ? data.platforms.map((p) => <TickBarRow key={p.platform} name={platformLabel(p.platform)} value={fmtInt(p.comments)} pct={(100 * p.comments) / total} tone="ink" valueWidth="narrow" label={`${fmtInt(p.comments)} of ${fmtInt(view.total)}`} className={RAIL_ROW} />)
-              : <p className="m-0 text-[13px] text-muted-foreground">No comment on the list.</p>}
-          </div>
-        </>
-      )}
-      <div className={FACT}>
-        <FactLabel>How the list is picked</FactLabel>
-        <p className="m-0 text-[12.5px] leading-[1.5] text-secondary-foreground">
-          Picked from the comments written {view.window?.phrase ?? 'this week'}: up to twelve, no more than two from one video; wrong information is listed apart, up to three. We cannot see whether you have replied, so a comment stays on the list.
-        </p>
+    <aside aria-labelledby="facts-title" className="flex min-w-0 flex-col">
+      <SectionHead id="facts-title" title="The facts" />
+      <div className={cn(CARD, 'mt-[22px] gap-[22px]')}>
+        {view.unread ? null : (
+          <>
+            <div>
+              <h3 className={H3}>Whose post they sit under</h3>
+              <BarRows rows={[
+                { key: 'own', name: 'Your posts', n: view.under.own, you: true },
+                { key: 'about', name: 'Posts about you', n: view.under.about },
+                { key: 'elsewhere', name: 'Elsewhere in your market', n: view.under.elsewhere },
+              ]} />
+            </div>
+            <div className={RULED}>
+              <h3 className={H3}>Where</h3>
+              {data.platforms.length > 0
+                ? <BarRows rows={data.platforms.map((p) => ({ key: p.platform, name: platformLabel(p.platform), n: p.comments }))} />
+                : <EmptyBox>No comment on the list.</EmptyBox>}
+            </div>
+          </>
+        )}
+        <div className={view.unread ? undefined : RULED}>
+          <h3 className={cn(H3, 'mb-2')}>How the list is picked</h3>
+          <p className="m-0 text-[14px] leading-[1.55] text-secondary-foreground">
+            Picked from the comments written {view.window?.phrase ?? 'this week'}: up to twelve, no more than two from one video; wrong information is listed apart, up to three. We cannot see whether you have replied, so a comment stays on the list.
+          </p>
+        </div>
       </div>
     </aside>
   )
@@ -162,22 +204,22 @@ export function RepliesPageBody({ data }: { data: RepliesPageData }) {
   const { view } = data
   return (
     <>
-      <div data-replies-lead="" className="-mt-0.5 flex flex-col gap-3 border-b border-border pb-[22px] max-sm:gap-2.5 max-sm:pb-4">
-        <p className="m-0 max-w-[820px] text-[21px] leading-[1.45] font-normal tracking-[-0.005em] text-foreground max-sm:text-[18px]">{data.lead}</p>
+      <div data-replies-lead="" className="flex flex-col gap-[18px]">
+        <p className="m-0 max-w-[1000px] text-[21px] leading-[1.45] text-foreground max-sm:text-[18px]">{data.lead}</p>
         {view.unread ? null : (
-          <nav aria-label="Kinds of comment" className="flex flex-wrap gap-1.5">
+          <nav aria-label="Kinds of comment" className="flex flex-wrap gap-2">
             {data.kinds.map((k) => (
-              <a key={k.key} href={`#${k.key}`} className="rounded-full bg-card px-3 py-1.5 text-[13px] whitespace-nowrap text-foreground no-underline ring-1 ring-border hover:bg-inner max-sm:px-2.5">
-                {k.chip}<span data-copy="figure" className="ml-1 font-mono font-semibold">{fmtInt(k.comments)}</span>
+              <a key={k.key} href={`#${k.key}`} className={cn(CHIP, 'gap-1.5 no-underline')}>
+                {k.chip} <span data-copy="figure" className="font-semibold">{fmtInt(k.comments)}</span>
               </a>
             ))}
           </nav>
         )}
       </div>
-      <div className="grid grid-cols-1 items-start gap-11 max-sm:gap-[22px] min-[1180px]:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="grid grid-cols-1 items-start gap-7 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col">
           {view.unread
-            ? <div data-replies-gap="" className={cn(CARD, 'gap-2')}><p className="m-0 text-[15px] leading-[1.55] text-muted-foreground">{view.unread}</p></div>
+            ? <div data-replies-gap="" className={cn(CARD, 'mt-[26px]')}><EmptyBox>{view.unread}</EmptyBox></div>
             : data.kinds.map((k) => <KindSection key={k.key} k={k} data={data} />)}
         </div>
         <Facts data={data} />
@@ -190,16 +232,15 @@ export function RepliesPageBody({ data }: { data: RepliesPageData }) {
 
 /** The reply list's page (`/dashboard/content/replies`). */
 export function ContentRepliesPage({ data }: { data: RepliesPageData }) {
+  const month = repliesMonthText(data)
   return (
     <PageFrame className="text-foreground">
       <LevelBar
         crumbs={data.crumbs}
         level="replies"
-        tile={<ContentLevelTile level="replies" />}
-        label="Comments"
         title="Worth a reply"
-        meta={repliesMeta(data)}
-        controls={<PeriodSwitch value={data.period} options={CONTENT_PERIODS} hrefFor={(period) => contentRepliesHref({ period })} />}
+        stats={repliesStats(data)}
+        controls={<PeriodSwitch value={data.period} options={month ? withMonthName(CONTENT_PERIODS, month) : CONTENT_PERIODS} hrefFor={(period) => contentRepliesHref({ period })} />}
       />
       <RepliesPageBody data={data} />
     </PageFrame>

@@ -2392,7 +2392,18 @@ This version has breaking changes — APIs, conventions, and file structure may 
     `likes`, additive, carry what the cards need and the page reads the
     videos once), two videos a section on a phone and "Show all … in {kind}"
     (`?kind=`), the facts and how the list is picked. Nothing here can see
-    whether you replied: never "N waiting". *Your posts, EVIDENCE*
+    whether you replied: never "N waiting". Since the audit design (7 Nov,
+    `Content-Replies.dc.html`) it has no tile or label: the title with the
+    switch naming the month (the root's month, `readingMonthOf` over the
+    week the list reads), the figures row (`repliesStats`: the days written,
+    the comments on the list, a bare cap), the lead and the kit's chips; each
+    kind a section with its count in the head, each video a tile ("Your
+    post" a tag, your brand on a post about you in your gold), each comment
+    a figure cited "TikTok, 26 Oct, 493 likes, about …", an empty kind's
+    "None this week." in the dashed box; the facts one tile (whose post
+    they sit under, your own posts in your gold and the rest yellow, where,
+    how the list is picked), "What they are" gone since the chips say it.
+    *Your posts, EVIDENCE*
     (`loadContentPosts`): the month the root's card reads, no switch; code's
     sentence about your mix (`mixSentence`, its formats half) as the lead;
     your posts newest first (five, three on a phone, then "Show N more posts",
