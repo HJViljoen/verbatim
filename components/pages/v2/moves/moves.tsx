@@ -109,6 +109,7 @@ export function VerdictWords({ verdict, good }: { verdict: Verdict; good: 'up' |
       <>
         <span data-copy="verdict" title={non.title}>{capital(non.word)}</span>
         {non.change != null ? <>, <span data-copy="verdict" className="whitespace-nowrap">{signedChange(non.change, 'pts')}</span></> : null}
+        <Band pts={non.change != null ? non.bandPts : null} />
       </>
     )
   }
@@ -118,8 +119,17 @@ export function VerdictWords({ verdict, good }: { verdict: Verdict; good: 'up' |
     <>
       <span data-copy="verdict" title={verdict.bandPts != null ? `moved beyond the ${verdict.bandPts} pt margin of this measurement` : undefined}>Beyond its normal swing</span>
       , <span data-copy="verdict" className="whitespace-nowrap">{signedChange(change, 'pts')}</span>
+      <Band pts={verdict.bandPts} />
     </>
   )
+}
+
+/** The band beside the change, visible as the badge printed it, in brackets
+ *  rather than after a middle dot: " (band ±3.6 pts)". Nothing where the
+ *  verdict withholds it. */
+function Band({ pts }: { pts: number | null | undefined }) {
+  if (pts == null) return null
+  return <> <span data-copy="verdict" className="whitespace-nowrap">(band ±{Math.abs(pts).toLocaleString('en-US')} pts)</span></>
 }
 
 /** What a move is on: a subject is the client's own name for it, a theme the

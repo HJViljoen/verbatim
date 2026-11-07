@@ -13,16 +13,16 @@ import { inlineMonth } from '@/lib/reading/month-label'
 import { monthStartOf } from '@/lib/reading/month-key'
 import { noGroupSaying } from '@/lib/pages/v2/market'
 import { BRANDS_NOT_COUNTED, BRANDS_NOT_READ } from '@/lib/pages/v2/voices'
-import { GROUNDED_BASIS, RECORD_HREF, askAboutHref, sharePct, streakLabel, type MoveSlot, type RestsOnRow } from '@/lib/pages/v2/moves'
+import { GROUNDED_BASIS, RECORD_HREF, askAboutHref, sharePct, type MoveSlot, type RestsOnRow } from '@/lib/pages/v2/moves'
 import type { AdvicePageData } from '@/lib/pages/v2/moves-levels-load'
 import {
-  CONVERSATIONS_TITLE, HISTORY_TITLE, LEVEL_UNREAD, NO_COMMENT, NO_CONVERSATION, NO_MOVE_ON_IT, NO_OTHER_COMMENT,
+  CONVERSATIONS_TITLE, HISTORY_TITLE, LEVEL_UNREAD, NO_COMMENT, NO_CONVERSATION, NO_MOVE_ON_IT, NO_OTHER_COMMENT, NO_THIRD_CONVERSATION,
   NUMBERS_TITLE, countWords, decisionWords, hubDecisionLine, movesDatedLine, noMoveOnItInvite, restsOnNote,
   type AdviceConversation, type AdviceNumbers, type AdviceQuote,
 } from '@/lib/pages/v2/moves-levels'
 import type { WhoPart } from '@/lib/written/types'
 import { cn } from '@/lib/utils'
-import { AdviceTitle, priorityTone } from './advice'
+import { AdviceTitle, priorityTone, RaisedWords } from './advice'
 import { Timeline } from './history-row'
 import { MoveStatusChip } from './moves'
 
@@ -97,7 +97,7 @@ export function adviceStats(page: AdvicePageData): StatItem[] {
         ? <>{fig(card.grounded.videos)} {card.grounded.videos === 1 ? 'video' : 'videos'}{convs != null && convs > 0 ? <>, in {fig(convs)} {convs === 1 ? 'conversation' : 'conversations'}</> : null}</>
         : card.grounded?.pruned ? 'Since replaced' : 'Not recorded',
     },
-    { key: 'raised', term: 'Raised by', value: <>{fig(h.streak > 0 ? h.streak : h.dates.length)} {streakLabel(h)}</> },
+    { key: 'raised', term: 'Raised by', value: <RaisedWords history={h} /> },
     {
       key: 'would',
       term: 'Would move',
@@ -145,7 +145,14 @@ function ArgumentCard({ page }: { page: AdvicePageData }) {
     <article aria-labelledby={lead ? 'hub-head' : undefined} aria-label={lead ? undefined : card.title} data-advice-hub="" className={cn(CARD, 'gap-[22px] sm:p-[30px]')}>
       {lead
         ? <h2 id="hub-head" data-copy="stored" data-slot="pass_d_b_recommendation" className="m-0 max-w-[1040px] text-[24px] leading-[1.4] font-semibold tracking-[-0.005em] text-foreground max-sm:text-[20px]">{lead}</h2>
-        : <EmptyBox>This piece of advice carries no argument we can print.</EmptyBox>}
+        : (
+          // The h1's next heading is an h2 in every state: with no lead the
+          // tile's heading is said to a screen reader only.
+          <>
+            <h2 className="sr-only">The argument</h2>
+            <EmptyBox>This piece of advice carries no argument we can print.</EmptyBox>
+          </>
+        )}
       <div className="grid grid-cols-1 gap-9 border-t border-track pt-[22px] max-sm:gap-6 min-[900px]:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="flex min-w-0 flex-col gap-2">
           <h3 className={H}>Why</h3>
@@ -233,6 +240,12 @@ function ConversationsSection({ page }: { page: AdvicePageData }) {
     ? <>Its {fig(videos)} videos sit in {fig(rows.length)} {rows.length === 1 ? 'conversation' : 'conversations'}{rows.length > 1 ? ', biggest first' : null}. Each opens in Market.</>
     : null
   const base = page.card.aim?.level?.n ?? null
+  // Each line under the table only where it is true: with fewer than
+  // three conversations, that no other holds its videos (the old third
+  // card's words); the overlap line only where the rows do add up past its
+  // videos.
+  const fewer = rows.length === 1 ? NO_OTHER_CONVERSATION : rows.length === 2 ? NO_THIRD_CONVERSATION : null
+  const overlap = rows.reduce((s, c) => s + c.videos, 0) > videos
   return (
     <>
       <div id="inside" className="scroll-mt-6"><SectionHead title={CONVERSATIONS_TITLE} note={note} /></div>
@@ -240,13 +253,17 @@ function ConversationsSection({ page }: { page: AdvicePageData }) {
         {rows.length === 0 ? <EmptyBox>{NO_CONVERSATION}</EmptyBox> : (
           <>
             <ConversationsTable rows={rows} videos={videos} monthText={monthText} base={base} />
-            {rows.length > 1 ? <p className="m-0 text-[13px] text-muted-foreground">A video can sit in more than one conversation, so these add up to more than its {fig(videos)} videos.</p> : null}
+            {fewer ? <p data-advice-conv-fewer="" className="m-0 text-[14px] leading-[1.5] text-muted-foreground">{fewer}</p> : null}
+            {overlap ? <p data-advice-conv-overlap="" className="m-0 text-[13px] text-muted-foreground">A video can sit in more than one conversation, so these add up to more than its {fig(videos)} videos.</p> : null}
           </>
         )}
       </section>
     </>
   )
 }
+
+/** The old third card's words where its videos sit in one conversation. */
+export const NO_OTHER_CONVERSATION = 'No other conversation holds its videos. The rest sit in no conversation Market reads month by month.'
 
 // ---- 3. the numbers ---------------------------------------------------------------------
 

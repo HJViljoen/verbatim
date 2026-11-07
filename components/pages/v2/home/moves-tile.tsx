@@ -3,12 +3,13 @@ import type { ReactNode } from 'react'
 import { MovementBadge } from '@/components/delta-badge'
 import { priorityLabel } from '@/components/pages/moves/words'
 import { AdviceAnswers } from '@/components/pages/v2/moves/advice-actions'
+import { RaisedWords } from '@/components/pages/v2/moves/advice'
 import { Label, Tag } from '@/components/v2'
 import { GO, ROW } from '@/components/v2/look'
 import { fmtInt, longMonth, shortDate } from '@/lib/format'
 import type { TileRead } from '@/lib/pages/v2/home'
 import { tileHref } from '@/lib/pages/home'
-import { compareMonths, levelBase, monthLabelOn, MOVE_UNREAD, noMoveWords, pendingLine, RECORD_HREF, sharePct, streakLabel, UNTITLED_ADVICE, type TopMoves } from '@/lib/pages/v2/moves'
+import { compareMonths, levelBase, monthLabelOn, MOVE_UNREAD, noMoveWords, pendingLine, RECORD_HREF, sharePct, UNTITLED_ADVICE, type TopMoves } from '@/lib/pages/v2/moves'
 import { NO_CAUSE } from '@/lib/pages/v2/moves-levels'
 import { notMeasuredLine } from '@/lib/pages/not-measured'
 import { GROUNDED_BASIS } from '@/lib/reading/afterwards'
@@ -68,7 +69,6 @@ function Advice({ top }: { top: TopMoves }) {
   }
   const chip = priorityLabel(a.priority)
   const h = a.history
-  const streak = h.streak > 0 ? h.streak : h.dates.length
   return (
     <div className="flex min-w-0 flex-col gap-3.5">
       {chip ? <span className="self-start"><Tag tone={PRIORITY_TONE[chip] ?? 'mid'}>{chip}</Tag></span> : null}
@@ -80,7 +80,7 @@ function Advice({ top }: { top: TopMoves }) {
       {/* What it rests on, all time, and the updates that raised it. */}
       <dl className="m-0 grid grid-cols-2 gap-4 text-[14.5px] leading-[1.5]">
         {a.grounded && !a.grounded.pruned ? <Fact term="Rests on"><span data-copy="figure">{fmtInt(a.grounded.videos)}</span> videos, {GROUNDED_BASIS}</Fact> : null}
-        <Fact term="Raised in"><span data-copy="figure">{fmtInt(streak)}</span> {streakLabel(h)}</Fact>
+        <Fact term="Raised in"><RaisedWords history={h} /></Fact>
       </dl>
       {top.canDecide ? (
         <div className="mt-0.5 flex flex-wrap gap-2.5 max-sm:[&>button]:flex-1">

@@ -10,8 +10,9 @@ import { inlineMonth } from '@/lib/reading/month-label'
 import {
   ADVICE_NONE, ADVICE_REST, ADVICE_SUB, ADVICE_TITLE, GROUNDED_BASIS, READ_FAILED, RECORD_HREF, WOULD_MOVE_NOTHING,
   adviceHref, monthLabelOn, streakLabel,
-  type AdviceAim, type AdviceCard, type MovesPageData, type ReadingLabel,
+  type AdviceAim, type AdviceCard, type AdviceHistory, type MovesPageData, type ReadingLabel,
 } from '@/lib/pages/v2/moves'
+import { streakWords } from '@/lib/pages/v2/moves-levels'
 import { cn } from '@/lib/utils'
 import { AdviceAnswers } from './advice-actions'
 
@@ -45,6 +46,22 @@ export const priorityTone = (label: string): 'hi' | 'mid' => (label === 'High pr
  *  stored title is blank. */
 export function AdviceTitle({ card }: { card: Pick<AdviceCard, 'title' | 'untitled'> }) {
   return card.untitled ? <>{card.title}</> : <span data-copy="stored" data-slot="pass_d_b_recommendation">{card.title}</span>
+}
+
+/** The updates that raised it, in words true for each streak: "9 updates in
+ *  a row, since 27 Jul", "1 update, first raised 12 Oct", and where the
+ *  latest update did not raise it, "2 updates, not raised by the latest
+ *  update" (`streakWords`' words). After "Raised in" or "Raised by". */
+export function RaisedWords({ history: h }: { history: AdviceHistory }) {
+  if (h.streak > 0 && h.since) return <><span data-copy="figure">{fmtInt(h.streak)}</span> {streakLabel(h)}</>
+  const n = h.streak > 0 ? h.streak : h.dates.length
+  return (
+    <>
+      <span data-copy="figure">{fmtInt(n)}</span> {n === 1 ? 'update' : 'updates'}
+      {h.streak > 1 ? ' in a row' : null}
+      {h.streak === 0 ? <>, {streakWords(h).sub}</> : null}
+    </>
+  )
 }
 
 /** The priority's tag, then the kind in plain words. */
@@ -110,7 +127,7 @@ function AdviceCardView({ card, canDecide, reading, aimFailed }: { card: AdviceC
             ? <>{fig(card.grounded.videos)} {card.grounded.videos === 1 ? 'video' : 'videos'}, {GROUNDED_BASIS}</>
             : <span className="text-muted-foreground">{card.grounded?.pruned ? 'The evidence it was written from has since been replaced.' : 'No evidence was recorded for it.'}</span>}
         </Fact>
-        <Fact term="Raised in">{fig(h.streak > 0 ? h.streak : h.dates.length)} {streakLabel(h)}</Fact>
+        <Fact term="Raised in"><RaisedWords history={h} /></Fact>
         {would ? <Fact term="Would move" wide><WouldMove aim={card.aim} reading={reading} failed={aimFailed} /></Fact> : null}
       </dl>
       <div className="mt-1 flex flex-wrap items-center gap-2.5" data-print-hide>

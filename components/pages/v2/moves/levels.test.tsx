@@ -6,8 +6,9 @@ import { bansBroken } from '@/components/pages/moves/fixture'
 import {
   adviceFailedFixture, adviceFixture, adviceThinFixture, adviceWithMoveFixture, moveFixture, moveHeldFixture, moveThinFixture, recordFixture, recordQuietFixture,
 } from '@/lib/pages/v2/moves-levels-fixture'
-import { ADVICE_MISSING, BACK_TO_MOVES, NO_THIRD_CONVERSATION, NO_OTHER_COMMENT, SAID_HELD, SAME_IDEA_NOTE } from '@/lib/pages/v2/moves-levels'
-import { RECORD_SAME_IDEA_HEAD } from './record-page'
+import { ADVICE_MISSING, BACK_TO_MOVES, NO_CONVERSATION, NO_THIRD_CONVERSATION, NO_OTHER_COMMENT, SAID_HELD, SAME_IDEA_NOTE } from '@/lib/pages/v2/moves-levels'
+import { NO_OTHER_CONVERSATION } from './advice-page'
+import { RAISED_NOW, RECORD_SAME_IDEA_HEAD } from './record-page'
 import { HELD_WORDS } from './move-page'
 import { MovesAdvicePage, MovesMissing, MovesMovePage, MovesRecordPage } from './levels'
 
@@ -142,6 +143,39 @@ describe('a piece of advice, the hub (G6-Moves-Advice)', () => {
   })
 })
 
+describe('the lines under the conversations, each only where it is true', () => {
+  it('one conversation: no other holds its videos; two: no third does; the overlap line only where the rows add up past its videos', () => {
+    const thin = adviceThinFixture()
+    const convs = thin.conversations as Exclude<typeof thin.conversations, 'unread'>
+    const one = markupText(advicePage({ ...thin, conversations: { ...convs, rows: convs.rows.slice(0, 1) } }))
+    expect(one).toContain(NO_OTHER_CONVERSATION)
+    expect(one).not.toContain(NO_THIRD_CONVERSATION)
+    expect(one).not.toContain('A video can sit in more than one conversation')
+    // Two conversations whose videos overlap (64 and 38 of 80): both lines.
+    const over = markupText(advicePage({ ...thin, conversations: { ...convs, videos: 80 } }))
+    expect(over).toContain(`${NO_THIRD_CONVERSATION} A video can sit in more than one conversation, so these add up to more than its 80 videos.`)
+    // Five conversations adding up to 68 of 63: the overlap line, no
+    // fewer-than-three line.
+    const five = markupText(advicePage())
+    expect(five).toContain('A video can sit in more than one conversation, so these add up to more than its 63 videos.')
+    expect(five).not.toContain(NO_THIRD_CONVERSATION)
+    expect(five).not.toContain(NO_OTHER_CONVERSATION)
+    for (const page of [one, over, five]) expect(page).not.toContain(NO_CONVERSATION)
+  })
+})
+
+describe('the updates that raised it, true for every streak', () => {
+  it('where the latest update did not raise it, it says so; a streak says "in a row"', () => {
+    const thin = adviceThinFixture()
+    const notLatest = { ...thin, card: { ...thin.card, history: { streak: 0, since: null, dates: ['2026-08-01', '2026-08-08'], recent: [true, true, false] } } }
+    const t = markupText(advicePage(notLatest))
+    expect(t).toContain('Raised by 2 updates, not raised by the latest update')
+    expect(t).not.toContain('updates raised it')
+    expect(markupText(advicePage())).toContain('Raised by 9 updates in a row, since 27 Jul')
+    expect(markupText(advicePage(adviceThinFixture()))).toContain('Raised by 1 update, first raised 12 Oct')
+  })
+})
+
 describe('the advice switcher (G6-Moves-Advice-Switcher, decision 2)', () => {
   it('the advice waiting, strongest first, each with its priority in words; under a hairline, the record', () => {
     const t = markupText(advicePage(adviceFixture(), true))
@@ -164,8 +198,10 @@ describe('the thin real state, as a member sees it (G6-Moves-Advice-Thin)', () =
     expect(html).not.toContain('data-advice-decision')
     expect(text).not.toContain('Accept and date it as a move')
     expect(text).toContain('Raised by 1 update, first raised 12 Oct')
-    // Fewer than three conversations: one table, no empty slot to fill.
-    expect(text).not.toContain(NO_THIRD_CONVERSATION)
+    // Two conversations: one table, then the old third card's words, true
+    // here; and no overlap line, since 64 and 38 do not add up past 203.
+    expect(text).toContain(`Cost and affordability frustration Frustration at what a device costs, and at cover that leaves gaps. Of its 203 videos 38 Category videos in September, the last full month: 19 ${NO_THIRD_CONVERSATION} The numbers`)
+    expect(text).not.toContain('A video can sit in more than one conversation')
     expect(text).toContain('July No reading August No reading')
     expect(text).toContain('July and August have no reading. September is the last full month. A move dated on this advice is read on this line.')
     expect(text).toContain(`In their words 1 comment Price and location questions “How can i get a leg like urs?” TikTok, 2 Oct ${NO_OTHER_COMMENT}`)
@@ -195,7 +231,7 @@ describe('a dated move, the evidence (G6-Moves-Move)', () => {
   })
 
   it('the lead tile: the one comparison and its verdict, the no-cause line, beside its months, each "k of n"; no figure tiles, no chart', () => {
-    expect(text).toMatch(/Share of market videos on Community & encouragement went from 11% in August, the month before, to 14% in September, the last full month and the month of the move\. No clear change ?, \+3 pts We show what the conversation did after a move\. We never claim the move caused it\./)
+    expect(text).toMatch(/Share of market videos on Community & encouragement went from 11% in August, the month before, to 14% in September, the last full month and the month of the move\. No clear change ?, \+3 pts \(band ±3\.6 pts\) We show what the conversation did after a move\. We never claim the move caused it\./)
     expect(html).toMatch(/title="[^"]*inside the 3\.6 pt margin/)
     expect(text).toContain('Share of market videos, month by month July 10% 61 of 610')
     expect(html).toMatch(/data-move-lead="" class="[^"]*rounded/)
@@ -319,6 +355,22 @@ describe('the advice record, an index (G6-Moves-Record)', () => {
     const quiet = recordPage(recordQuietFixture())
     expect(markupText(quiet)).toContain('Waiting for a decision 0 Nothing is waiting for a decision. Decided 0 Nothing has been decided on yet.')
     expect(quiet).toMatch(/data-empty-box=""[^>]*><div>Nothing is waiting for a decision\./)
+  })
+
+  it('where only some of a group\'s rows were raised by the latest update, each of those rows says so, and the head counts them', () => {
+    const base = recordFixture()
+    const rows = base.groups[1].rows.map((r, i) => ({ ...r, current: i === 0 }))
+    const page = { ...base, groups: [base.groups[0], { ...base.groups[1], rows }, base.groups[2]] }
+    const m = recordPage(page)
+    const at = (k: string) => m.lastIndexOf('<section', m.indexOf(`data-record-group="${k}"`))
+    const decided = m.slice(at('decided'), at('gone'))
+    expect(markupText(decided)).toMatch(/^Decided 4 ?, 1 raised by the latest update/)
+    expect(decided.match(/data-record-raised=""/g)).toHaveLength(1)
+    expect(markupText(decided)).toContain(`${rows[0].title} ${RAISED_NOW}`)
+    // A group the latest update raised every row of says it once, in its head.
+    const all = { ...base, groups: [{ ...base.groups[0], rows: base.groups[0].rows.map((r) => ({ ...r, current: true })), hidden: 0 }, ...base.groups.slice(1)] }
+    expect(recordPage(all)).not.toContain('data-record-raised')
+    assertCopyContract(<MovesRecordPage page={page} />)
   })
 
   it('says "raised by the latest update" once a group, where its rows were', () => {

@@ -15,7 +15,9 @@ import { cn } from '@/lib/utils'
 // tiles, every piece of advice once in a table, grouped by what was decided:
 // waiting for a decision, decided, no longer raised (six, then "Show the
 // other N", an address: `?all=1`). Each row opens its piece's page; "raised
-// by the latest update" is said once in a group's head. Then the Agent.
+// by the latest update" is said once in a group's head where it holds for
+// every row, and on each row it holds for where it holds for only some (the
+// fact is the row's). Then the Agent.
 
 /** The words of a group with no row. */
 export const RECORD_GROUP_EMPTY: Record<RecordGroup['key'], string> = {
@@ -35,7 +37,10 @@ const fig = (n: number) => <span data-copy="figure">{fmtInt(n)}</span>
  *  are untouched). */
 const stateWords = (s: string): string => `${s.charAt(0).toUpperCase()}${s.slice(1)}`
 
-function RecordRowView({ r }: { r: RecordGroup['rows'][number] }) {
+/** Said on a row whose group holds rows the latest update did not raise. */
+export const RAISED_NOW = 'Raised by the latest update'
+
+function RecordRowView({ r, mark = false }: { r: RecordGroup['rows'][number]; mark?: boolean }) {
   const untitled = r.title === UNTITLED_ADVICE
   const state = r.note ?? recordState(r)
   const first = r.firstMade ? shortDate(r.firstMade) : null
@@ -48,6 +53,7 @@ function RecordRowView({ r }: { r: RecordGroup['rows'][number] }) {
         <Link href={adviceHref(r.lineageId)} className={ROW}>
           {untitled ? r.title : <span data-copy="stored" data-slot="pass_d_b_recommendation">{r.title}</span>}
         </Link>
+        {mark && r.current ? <span data-record-raised="" className="mt-1 block text-[14px] leading-[1.45] text-secondary-foreground">{RAISED_NOW}</span> : null}
         <span className="mt-1 block text-[14px] leading-[1.45] text-secondary-foreground sm:hidden">
           {typeLabel(r.kind)}{first ? `, first suggested ${first}` : null}, {fig(r.updates)} {r.updates === 1 ? 'update' : 'updates'}
         </span>
@@ -60,9 +66,16 @@ function RecordRowView({ r }: { r: RecordGroup['rows'][number] }) {
   )
 }
 
+/** Whether a group holds rows the latest update raised and rows it did
+ *  not: then each raised row says so, as the note cannot say which. */
+const mixed = (g: RecordGroup): boolean => {
+  const current = g.rows.filter((r) => r.current).length
+  return current > 0 && current < g.rows.length + g.hidden
+}
+
 /** A group's note: its count, and where its rows were raised by the latest
- *  update, that said once ("5, all raised by the latest update"), never on
- *  each row. */
+ *  update, that said once ("5, all raised by the latest update"); where only
+ *  some were, how many, and each of those rows says so itself. */
 function groupNote(g: RecordGroup): ReactNode {
   const total = g.rows.length + g.hidden
   const current = g.rows.filter((r) => r.current).length
@@ -92,7 +105,7 @@ function GroupCard({ g }: { g: RecordGroup }) {
                 <th scope="col" className={cn(TH, 'w-[200px] pl-6 pr-0')}>Decision</th>
               </tr>
             </thead>
-            <tbody className={STACK}>{g.rows.map((r) => <RecordRowView key={r.lineageId} r={r} />)}</tbody>
+            <tbody className={STACK}>{g.rows.map((r) => <RecordRowView key={r.lineageId} r={r} mark={mixed(g)} />)}</tbody>
           </table>
         </div>
       )}
