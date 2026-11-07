@@ -4,7 +4,7 @@ import { fmtInt, fmtPct, longMonth } from '@/lib/format'
 import { talkKindLabel } from '@/lib/pages/overview-market/kinds'
 import { flagBaseWords, topSpans, type Doing, type GroupLink, type HeroCard, type MarketConv, type MarketData, type MonthCount, type SideCard } from '@/lib/pages/v2/market'
 import { cn } from '@/lib/utils'
-import { About, ABOUT_NOT_COUNTED, ABOUT_NOT_READ, BIG, Fig, Label, MID, MONO_MUTED, newVerdict } from './parts'
+import { ABOUT_NOT_COUNTED, ABOUT_NOT_READ, BIG, BrandsNamed, Fig, Label, MID, MONO_MUTED, newVerdict } from './parts'
 
 // MARKET'S TOP ROW (depth v2, T3; E2-Market's "what moved", re-cut to decision
 // 1). This week: the anomaly check's first flag where it raised one, else the
@@ -120,10 +120,11 @@ function Foot({ conv, href, data, open = 'Open the conversation' }: {
   return (
     <div className="mt-auto flex flex-wrap items-center justify-between gap-3">
       {conv && conv.who.length > 0 && data.brands === 'counted' ? (
-        <div className="flex flex-wrap items-center gap-1.5 text-[12.5px] text-muted-foreground">
-          <span>About</span>
-          <About parts={conv.who} brand={data.brand} noun={data.noun} />
-        </div>
+        // The plain comma list the rest of Market prints ("Össur (4),
+        // others (31)"; the review of 7 Nov), never the chips.
+        <p className="m-0 text-[13.5px] leading-[1.5] text-secondary-foreground">
+          <span className="text-muted-foreground">Brands named:</span> <BrandsNamed parts={conv.who} brand={data.brand} noun={data.noun} />
+        </p>
       ) : conv && data.brands !== 'counted' ? (
         <div className="text-[13px] text-muted-foreground">About: {data.brands === 'not_counted' ? ABOUT_NOT_COUNTED : ABOUT_NOT_READ}</div>
       ) : <span />}
@@ -296,7 +297,7 @@ function Side({ side, data, index, span }: { side: SideCard; data: MarketData; i
         ? <SpikeBars weeks={weekBars(conv, data)} counts="all" size="md" ghost className="max-w-[300px]" label={`Category videos a week about ${conv.label}`} />
         : conv.months.length > 1 ? <MiniBars bars={monthBars(conv.months).map(({ sub: _sub, ...b }) => b)} className="max-w-[300px]" label={`Category videos a month about ${conv.label}`} /> : null}
       <GroupsLine groups={side.groups} />
-      {conv.who.length > 0 && data.brands === 'counted' ? <div className="flex flex-wrap items-center gap-1.5 text-[12.5px] text-muted-foreground"><span>About</span><About parts={conv.who} brand={data.brand} noun={data.noun} /></div> : null}
+      {conv.who.length > 0 && data.brands === 'counted' ? <p className="m-0 text-[13.5px] leading-[1.5] text-secondary-foreground"><span className="text-muted-foreground">Brands named:</span> <BrandsNamed parts={conv.who} brand={data.brand} noun={data.noun} /></p> : null}
       <div className="mt-auto"><GoLink href={href}>Open the conversation</GoLink></div>
     </article>
   )

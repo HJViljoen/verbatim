@@ -31,6 +31,15 @@ export function listWords(parts: readonly (string | null | undefined)[]): string
     .join(', ')
 }
 
+const MONTH_NAMES = /\b(January|February|March|April|May|June|July|August|September|October|November|December)\b/g
+
+/** A week's dates as the boards print them, each month's name short ("5 to
+ *  11 October" to "5 to 11 Oct", "26 October to 1 November" to "26 Oct to 1
+ *  Nov"), for the dates a loader built in the long form the email keeps. */
+export function shortDates(dates: string): string {
+  return dates.replace(MONTH_NAMES, (m) => m.slice(0, 3))
+}
+
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 

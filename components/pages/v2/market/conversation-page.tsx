@@ -2,7 +2,7 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { BrandChip } from '@/components/colour-roles'
 import { translationNote } from '@/components/quote-block'
-import { CARD, CHIP, EmptyBox, FlagChip, GoLink, SpikeBars, toMax, translationLine, type StatItem } from '@/components/v2'
+import { CARD, CHIP, EmptyBox, FlagChip, GoLink, shortDates, SpikeBars, toMax, translationLine, type StatItem } from '@/components/v2'
 import { GO, QUOTE, ROW } from '@/components/v2/look'
 import { fmtInt } from '@/lib/format'
 import { CONV_SAID_ANCHOR, MARKET_VIDEO_COMMENTS_MAX, MARKET_VIDEO_QUOTES, MARKET_VIDEO_QUOTES_PHONE, noGroupSaying, type ConvComment, type ConvEvidence, type ConvPage, type ConvSiblings, type ConvVideo, type MarketData } from '@/lib/pages/v2/market'
@@ -80,7 +80,7 @@ const lv = (k: number, n: number) => <span data-copy="level">{fmtInt(k)} of {fmt
 export function conversationStats(page: ConvPage, data: MarketData): StatItem[] {
   const week = data.period === 'week' && data.week ? data.week : null
   const cells: StatItem[] = []
-  if (week) cells.push({ key: 'week', term: 'Week', value: week.dates })
+  if (week) cells.push({ key: 'week', term: 'Week', value: shortDates(week.dates) })
   if (week && page.week) cells.push({ key: 'this-week', term: 'This week', value: lv(page.week.k, page.week.n) })
   if (page.month) cells.push({ key: 'month', term: `${data.month.text.charAt(0).toUpperCase()}${data.month.text.slice(1)}`, value: lv(page.month.k, page.month.n) })
   const who = page.panel.who

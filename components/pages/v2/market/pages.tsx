@@ -1,6 +1,6 @@
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
 import { LevelBar } from '@/components/shell/level-bar'
-import { GoLink, PERIODS, PeriodSwitch, withMonthName, type StatItem } from '@/components/v2'
+import { GoLink, PERIODS, PeriodSwitch, shortDates, withMonthName, type StatItem } from '@/components/v2'
 import { periodHref, WEEK_PAGE_TITLE, type MarketData } from '@/lib/pages/v2/market'
 import { marketConversationPath, marketSubjectPath, surface } from '@/lib/nav'
 import { MARKET_FIRST_RUN, MARKET_TITLE } from './index'
@@ -129,7 +129,7 @@ export function weekStats(data: MarketData): StatItem[] {
   if (!week) return []
   const { videos, comments } = week.market
   return [
-    { key: 'week', term: 'Week', value: week.dates },
+    { key: 'week', term: 'Week', value: shortDates(week.dates) },
     { key: 'market', term: 'Your market this week', value: videos != null ? <>{fig(videos)} videos{comments != null ? <>, {fig(comments)} comments</> : null}</> : 'Not read yet' },
     { key: 'month', term: data.month.text, value: data.month.market.videos != null ? <>{fig(data.month.market.videos)} videos</> : 'Not read yet' },
   ]

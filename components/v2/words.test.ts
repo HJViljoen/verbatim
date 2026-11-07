@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { translationLabel } from '@/components/quote-block'
-import { commaCite, listWords, longDay, translationLine } from './words'
+import { commaCite, listWords, longDay, shortDates, translationLine } from './words'
 
 // The screens' own wording (the audit design, 7 Nov): commas where `lib/`
 // builds " · ", so the email's and the briefs' words never move.
@@ -61,6 +61,15 @@ describe('longDay', () => {
 
   it('gives back an unreadable date as it came', () => {
     expect(longDay('not a date')).toBe('not a date')
+  })
+})
+
+describe('shortDates', () => {
+  it('shortens each month\'s name in a week\'s dates, as the boards print them', () => {
+    expect(shortDates('5 to 11 October')).toBe('5 to 11 Oct')
+    expect(shortDates('26 October to 1 November')).toBe('26 Oct to 1 Nov')
+    expect(shortDates('28 December 2026 to 3 January 2027')).toBe('28 Dec 2026 to 3 Jan 2027')
+    expect(shortDates('5 to 11 Oct')).toBe('5 to 11 Oct')
   })
 })
 

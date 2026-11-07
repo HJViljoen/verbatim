@@ -36,7 +36,7 @@ describe('a ready subject, this week, in the board\'s order', () => {
   it('the path, then the title block: its name, the period switch, and the figures row (the week a count on the level\'s base beside its month)', () => {
     // The audit design (Market-Subject.dc.html): no tile and no "Subject"
     // label; the figures row's four cells; the month by its name.
-    expect(tight(text)).toMatch(/^Market \/ Fit & comfort Market Fit & comfort This week October so far Over time Week 5 to 11 October This week 82 of 241 videos October so far 108 of 318 videos, 34% Conversations this week 4 /)
+    expect(tight(text)).toMatch(/^Market \/ Fit & comfort Market Fit & comfort This week October so far Over time Week 5 to 11 Oct This week 82 of 241 videos October so far 108 of 318 videos, 34% Conversations this week 4 /)
     expect(html).not.toContain('data-level-tile')
     expect(html).toMatch(/<a (?=[^>]*aria-current="page")(?=[^>]*href="\/dashboard\/market\/subjects\/subj-fit")[^>]*>This week</)
     expect(html).toContain('href="/dashboard/market/subjects/subj-fit?period=month"')
@@ -236,7 +236,7 @@ describe('every state keeps its frame', () => {
   it('not measured yet (U6): its state\'s line once in the figures row, its conversations by name, no figure, line, chip or quote', () => {
     const d = marketSubjectFixture('cost', { flagged: false, noNew: true, subjects: 'provisional', brands: 'not_counted', weeks: 'insufficient', noGroups: true })
     const text = renderText(page(d))
-    expect(text).toBe(`Market / Cost & access Market Cost & access This week October so far Over time Week 5 to 11 October October so far ${SUBJECT_NOT_MEASURED} Our read of October so far What people are saying ${SUBJECT_READ_HELD} Inside Cost & access Each opens as its own page. Conversation Insurance refusals for powered knees Appeals, letters from a prosthetist and the knee insurers will not pay for. Paying out of pocket Medical aid and liners Insurance refusals for powered knees Paying out of pocket Medical aid and liners The numbers ${SUBJECT_NUMBERS_HELD} Ask what people say about Cost & access, in your own words. Ask the Agent about Cost & access`)
+    expect(text).toBe(`Market / Cost & access Market Cost & access This week October so far Over time Week 5 to 11 Oct October so far ${SUBJECT_NOT_MEASURED} Our read of October so far What people are saying ${SUBJECT_READ_HELD} Inside Cost & access Each opens as its own page. Conversation Insurance refusals for powered knees Appeals, letters from a prosthetist and the knee insurers will not pay for. Paying out of pocket Medical aid and liners Insurance refusals for powered knees Paying out of pocket Medical aid and liners The numbers ${SUBJECT_NUMBERS_HELD} Ask what people say about Cost & access, in your own words. Ask the Agent about Cost & access`)
     expect(text.split(SUBJECT_NOT_MEASURED).length - 1).toBe(1)
     expect(copyNodes(render(page(d))).filter((n) => n.kind === 'figure' || n.kind === 'level' || n.kind === 'verdict' || n.kind === 'quote')).toEqual([])
     assertCopyContract(page(d))
@@ -264,7 +264,7 @@ describe('every state keeps its frame', () => {
     const d = marketSubjectFixture('fit', { subjects: 'unread' })
     const html = render(body(d))
     const strip = stripOf(render(page(d)))
-    expect(markupText(strip)).toBe('Week 5 to 11 October October so far No reading in October so far yet. Conversations this week 4')
+    expect(markupText(strip)).toBe('Week 5 to 11 Oct October so far No reading in October so far yet. Conversations this week 4')
     expect(copyNodes(strip).filter((n) => n.kind === 'level' || n.kind === 'verdict')).toEqual([])
     expect(markupText(readOf(html))).toMatch(new RegExp(`^${fit.headline!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} Our read of October so far`))
     expect(renderText(body(d))).toMatch(/ The numbers No reading in October so far yet\. Ask what people say/)

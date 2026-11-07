@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { MovementBadge, nonAnswerParts, signedChange } from '@/components/delta-badge'
 import { BrandChip } from '@/components/colour-roles'
 import { translationNote } from '@/components/quote-block'
-import { CARD, commaCite, EmptyBox, FlagChip, GoLink, MiniBars, SpikeBars, TBL, TD as KIT_TD, TD_NUM, TH as KIT_TH, toMax, translationLine, type StatItem } from '@/components/v2'
+import { CARD, commaCite, EmptyBox, FlagChip, GoLink, MiniBars, shortDates, SpikeBars, TBL, TD as KIT_TD, TD_NUM, TH as KIT_TH, toMax, translationLine, type StatItem } from '@/components/v2'
 import { QUOTE, ROW } from '@/components/v2/look'
 import { fmtInt } from '@/lib/format'
 import { noGroupSaying, noReadingYet, platformRows, subjectNoRead, subjectNotCompared, type InsideConv, type MarketData, type PanelQuote, type SubjectPage, type SubjectPanel } from '@/lib/pages/v2/market'
@@ -132,7 +132,7 @@ export function subjectStats(page: SubjectPage, data: MarketData): StatItem[] {
   const week = data.period === 'week' && data.week ? data.week : null
   const level = panel.level
   // Off the week, the month's own cell names the period.
-  const cells: StatItem[] = week ? [{ key: 'week', term: 'Week', value: week.dates }] : []
+  const cells: StatItem[] = week ? [{ key: 'week', term: 'Week', value: shortDates(week.dates) }] : []
   const conversations: StatItem = {
     key: 'conversations',
     term: week ? 'Conversations this week' : `Conversations in ${panel.monthText}`,

@@ -62,7 +62,7 @@ describe('MarketPage', () => {
     const text = renderText(<MarketPage data={WEEK} />)
     // The period switch once, the month by its name; the figures row's four
     // cells (decision 2: the base said once).
-    expect(text).toMatch(/^Market This week October so far Over time Week 5 to 11 October Your market this week 241 videos, 3,912 comments The category this week 226 videos October so far 318 videos /)
+    expect(text).toMatch(/^Market This week October so far Over time Week 5 to 11 Oct Your market this week 241 videos, 3,912 comments The category this week 226 videos October so far 318 videos /)
     expect(html.match(/aria-current="page"[^>]*>This week</g)).toHaveLength(1)
     expect(html).toMatch(/<a (?=[^>]*href="\/dashboard\/market")(?=[^>]*aria-current="page")[^>]*>This week</)
     expect(html).not.toContain('data-bar-meta')

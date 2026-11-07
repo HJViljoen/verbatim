@@ -29,7 +29,7 @@ describe('a conversation under its ready subject, this week', () => {
   it('the path, then the title block: the conversation, the period switch, and the figures row with the brands named', () => {
     // The audit design (Market-Conversation.dc.html): no tile and no label
     // over the title; who it is about moves from the facts to the figures row.
-    expect(tight(text)).toMatch(/^Market \/ Fit & comfort \/ How long a liner lasts Fit & comfort How long a liner lasts This week October so far Over time Week 5 to 11 October This week 23 of 226 category videos October so far 35 of 300 category videos Brands named Össur \(4\), others \(19\) /)
+    expect(tight(text)).toMatch(/^Market \/ Fit & comfort \/ How long a liner lasts Fit & comfort How long a liner lasts This week October so far Over time Week 5 to 11 Oct This week 23 of 226 category videos October so far 35 of 300 category videos Brands named Össur \(4\), others \(19\) /)
     expect(html).not.toContain('data-level-tile')
     expect(html).toContain(`href="/dashboard/market/subjects/${fixtureSubjectId('fit')}"`)
     expect(html).toContain(`href="/dashboard/market/conversations/${fixtureId(1)}?period=month"`)

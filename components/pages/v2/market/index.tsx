@@ -1,5 +1,5 @@
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
-import { PERIODS, PeriodSwitch, withMonthName, type StatItem } from '@/components/v2'
+import { PERIODS, PeriodSwitch, shortDates, withMonthName, type StatItem } from '@/components/v2'
 import { fmtInt } from '@/lib/format'
 import { periodHref, type MarketData } from '@/lib/pages/v2/market'
 import { SectionHead, SubjectCardsView, WeekCardView } from './analysis'
@@ -48,7 +48,7 @@ export function marketStats(data: MarketData): StatItem[] {
   if (data.period === 'week' && data.week) {
     const w = data.week
     return [
-      { key: 'week', term: 'Week', value: w.dates },
+      { key: 'week', term: 'Week', value: shortDates(w.dates) },
       { key: 'market', term: 'Your market this week', value: videosAnd(w.market) ?? NOT_READ },
       { key: 'category', term: 'The category this week', value: w.category != null ? <>{fig(w.category)} videos</> : NOT_READ },
       { key: 'month', term: data.month.text, value: data.month.market.videos != null ? <>{fig(data.month.market.videos)} videos</> : NOT_READ },
