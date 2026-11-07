@@ -86,6 +86,16 @@ describe('palette contrast', () => {
     }
   })
 
+  it('reaches 4.5:1 for the caution words on their own ground and on a card', () => {
+    // The audit design (7 Nov): "High priority" and a contradicted claim are the
+    // caution ink on the caution's soft ground, and the ink alone on a card.
+    for (const mode of [':root', '.dark'] as const) {
+      for (const ground of ['--caution-soft', '--tile']) {
+        expect(contrast(token(mode, '--caution'), token(mode, ground)), `${mode} --caution on ${ground}`).toBeGreaterThanOrEqual(4.5)
+      }
+    }
+  })
+
   it('knows the reading it was written to catch', () => {
     // The retired value, on the tint the ports put it inside.
     expect(contrast('#6E7378', '#F6F7F8')).toBeLessThan(4.5)

@@ -72,6 +72,13 @@
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
+  /* The audit design (7 Nov): the controls' grey (link underlines, secondary
+     button edges, dashed boxes), every input's edge, and the caution pair
+     (high priority, a contradicted claim). */
+  --color-control: var(--control);
+  --color-input-line: var(--input-line);
+  --color-caution: var(--caution);
+  --color-caution-soft: var(--caution-soft);
   --color-destructive: var(--destructive);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
@@ -164,6 +171,16 @@
   /* Hairlines */
   --border: #E4E2DC;
   --input: #E4E2DC;
+
+  /* The audit design (7 Nov): the controls' grey (a link's underline, a
+     secondary button's edge, the dashed empty box), every input's edge (the
+     darker of the boards' two greys, so a field stays visible), and the
+     caution pair: high priority and a contradicted claim (6.1:1 on its soft
+     ground, 7.3:1 on a card). */
+  --control: #C9CCD0;
+  --input-line: #A9AEB4;
+  --caution: #9A3412;
+  --caution-soft: #FDE7DA;
 
   /* Data buckets: you are dark gold, rivals grey, the market ink. */
   --you: #9A6B00;
@@ -282,6 +299,10 @@
   --track: #2E3237;
   --border: rgba(255, 255, 255, 0.08);
   --input: rgba(255, 255, 255, 0.12);
+  --control: #4A4F55;
+  --input-line: #6B7178;
+  --caution: #F4A27A;
+  --caution-soft: #4A2414;
   --you: #E0A82E;
   --you-foreground: #26292C;
   --comp: #8A9097;
