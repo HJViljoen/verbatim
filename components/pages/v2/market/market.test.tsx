@@ -5,7 +5,7 @@ import { fixtureSubjectId, marketFixture, marketLongRowsFixture, marketThinFixtu
 import { OSSUR_SUBJECT_READS } from '@/lib/pages/v2/market-reads-fixture'
 import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import { MarketPage, MARKET_FIRST_RUN } from './index'
-import { AlsoThisWeek, ALSO_TALKED, MOST_TALKED, NOTHING_ELSE_NEW, NOTHING_NEW, SubjectCardsView, WeekCardView, WEEK_THIN, WEEK_UNREAD } from './analysis'
+import { ALSO_TALKED, MOST_TALKED, NOTHING_ELSE_NEW, NOTHING_NEW, SubjectCardsView, WeekCardView, WEEK_CARD_TITLE, WEEK_THIN, WEEK_UNREAD } from './analysis'
 import { KindsCard, KindsFrame, NumbersRow, PlatformsCard, PlatformsFrame, WeeksCard, weeksLine, WEEKS_UNREAD } from './rail'
 import { WEEKS_FAILED } from '@/lib/pages/home'
 import { ConversationTable } from './table'
@@ -40,6 +40,10 @@ describe('MarketPage', () => {
     ['Sealand\'s reads', marketFixture({ subjectReads: 'sealand' })], ['no reads yet', marketFixture({ subjectReads: 'none' })],
     ['a thin week', marketFixture({ week: 'thin' })], ['a week that could not be read', marketFixture({ week: 'failed' })],
     ['a read stored before v3', marketFixture({ v1Read: true })], ['the tracked four', marketFixture({ subjects: 'tracked' })],
+    // The data states "Also this week" drew (small call 12 took the
+    // section; the states stay covered on the page).
+    ['a flag on a kind of comment', marketFixture({ flagKind: true })], ['an earlier week\'s newest', marketThinFixture({ earlierNew: true })],
+    ['the flag new, nothing else new', marketFixture({ flagged: false, noNew: true, flagNew: true })],
   ])('%s keeps the copy contract', (_label, data) => {
     expect(copyViolations(<MarketPage data={data} />)).toEqual([])
   })
@@ -48,28 +52,33 @@ describe('MarketPage', () => {
     expect(renderText(<MarketPage data={data} />)).not.toMatch(RETIRED)
   })
 
-  it('opens on the week: the bar, then the week\'s read, the subjects, what else stood out, then the numbers', () => {
+  it('opens on the week: the bar, then the week\'s read, the subjects, then the numbers (Also this week is gone, small call 12)', () => {
     const html = render(<MarketPage data={WEEK} />)
     const text = renderText(<MarketPage data={WEEK} />)
-    expect(text).toMatch(/^Market This week This month Over time 5 to 11 October · 241 videos · 3,912 comments · 318 videos in October so far/)
+    // The period switch once, the month by its name; the figures row's four
+    // cells (decision 2: the base said once).
+    expect(text).toMatch(/^Market This week October so far Over time Week 5 to 11 October Your market this week 241 videos, 3,912 comments The category this week 226 videos October so far 318 videos /)
+    expect(html.match(/aria-current="page"[^>]*>This week</g)).toHaveLength(1)
     expect(html).toMatch(/<a (?=[^>]*href="\/dashboard\/market")(?=[^>]*aria-current="page")[^>]*>This week</)
+    expect(html).not.toContain('data-bar-meta')
     const at = (s: string) => html.indexOf(s)
-    expect(at('data-week-card="ready"')).toBeGreaterThan(at('data-bar-meta'))
+    expect(at('data-week-card="ready"')).toBeGreaterThan(at('data-stat-strip'))
     expect(at('id="subjects"')).toBeGreaterThan(at('data-week-card'))
-    expect(at('id="top-row"')).toBeGreaterThan(at('id="subjects"'))
-    expect(at('id="numbers"')).toBeGreaterThan(at('id="top-row"'))
+    expect(at('id="numbers"')).toBeGreaterThan(at('id="subjects"'))
     expect(at('id="conversations"')).toBeGreaterThan(at('id="numbers"'))
-    expect(text).toContain('What the market is talking about Your six subjects, biggest first')
-    expect(text).toContain('Also this week What stood out in this week’s conversations')
-    expect(text).toContain('The numbers behind the week Your market’s 241 videos and 3,912 comments this week · 318 in October so far')
+    expect(html).not.toContain('id="top-row"')
+    expect(text).not.toContain('Also this week')
+    expect(text).toContain('What the market is talking about Six subjects, biggest first')
+    expect(text).toContain('The numbers behind the week What people do in the comments')
   })
 
   it('leads with written analysis and no number above it: the first figure is in the numbers layer, and no quote anywhere', () => {
     const html = render(<MarketPage data={WEEK} />)
-    const meta = html.indexOf('data-bar-meta')
-    const firstFigure = html.indexOf('data-copy="figure"', html.indexOf('</p>', meta))
+    // Past the figures row (the screen's base), the first figure is below
+    // the subject cards.
+    const firstFigure = html.indexOf('data-copy="figure"', html.indexOf('</dl>'))
     expect(firstFigure).toBeGreaterThan(html.indexOf('id="numbers"') - 2000)
-    expect(firstFigure).toBeGreaterThan(html.indexOf('id="top-row"'))
+    expect(firstFigure).toBeGreaterThan(html.indexOf('id="subjects"'))
     expect(html).not.toContain('data-copy="quote"')
     // About 600 words of analysis above the first number (ruling 3).
     const words = renderText(<WeekCardView card={WEEK.weekCard!} />).split(' ').length + renderText(<SubjectCardsView cards={WEEK.subjectCards!} />).split(' ').length
@@ -82,7 +91,7 @@ describe('MarketPage', () => {
   })
 
   it('says why the month shows when the week has no read yet', () => {
-    expect(renderText(<MarketPage data={{ ...MONTH, weekUnavailable: true }} />)).toContain('This week’s read is not ready yet · October so far')
+    expect(renderText(<MarketPage data={{ ...MONTH, weekUnavailable: true }} />)).toContain('This week’s read is not ready yet. Month October so far')
   })
 })
 
@@ -90,8 +99,12 @@ describe('the week card', () => {
   it('ready: the week in one line, what it means side by side, and the way into the week\'s page', () => {
     const node = <WeekCardView card={WEEK.weekCard!} />
     const html = render(node)
-    expect(renderText(node)).toBe(`This week · 5 to 11 October ${OSSUR_WEEK.line} What it means ${OSSUR_WEEK.means.join(' ')} Read the whole week →`)
-    expect(html).toMatch(/<h2 id="week-head" data-copy="stored" data-slot="week_read" class="[^"]*text-\[26px\]/)
+    // The audit design: no icon tile and no eyebrow (the dates are the
+    // figures row's); the line as a 28px heading; a link with no arrow.
+    expect(renderText(node)).toBe(`${OSSUR_WEEK.line} What it means ${OSSUR_WEEK.means.join(' ')} Read the whole week`)
+    expect(html).toMatch(/<h2 id="week-head" data-copy="stored" data-slot="week_read" class="[^"]*text-\[28px\]/)
+    expect(html).toMatch(/<h3 class="[^"]*text-\[15px\][^"]*">What it means<\/h3>/)
+    expect(html).not.toMatch(/<svg|uppercase/)
     expect(html.match(/data-copy="stored" data-slot="week_read"/g)).toHaveLength(4)
     expect(html).toContain('href="/dashboard/market/week"')
     // Three across from 1180, stacked under it, a hairline between on a phone.
@@ -105,7 +118,7 @@ describe('the week card', () => {
   it('thin and failed each say so in one line and open nothing (F2-Market-States)', () => {
     for (const [d, words] of [[marketFixture({ week: 'thin' }), WEEK_THIN], [marketFixture({ week: 'failed' }), WEEK_UNREAD]] as const) {
       const node = <WeekCardView card={d.weekCard!} />
-      expect(renderText(node)).toMatch(new RegExp(`^This week( · 5 to 11 October)? ${words}$`))
+      expect(renderText(node)).toMatch(new RegExp(`^${WEEK_CARD_TITLE} ${words}$`))
       expect(render(node)).not.toContain('href=')
       assertCopyContract(node)
     }
@@ -113,7 +126,7 @@ describe('the week card', () => {
 
   it('a read stored before v3 prints its In short as the line, with no "What it means"', () => {
     const d = marketFixture({ v1Read: true })
-    expect(renderText(<WeekCardView card={d.weekCard!} />)).toBe('This week · 5 to 11 October Insurance refusals were the talk of the week, and liners came up all week. Read the whole week →')
+    expect(renderText(<WeekCardView card={d.weekCard!} />)).toBe('Insurance refusals were the talk of the week, and liners came up all week. Read the whole week')
   })
 
   it('is the week\'s alone: no week card on This month or Over time', () => {
@@ -134,16 +147,20 @@ describe('the subject cards', () => {
     ])
     expect(html.match(/data-subject-card=/g)).toHaveLength(6)
     // Two to a row from 1180, one below; a row's cards share a height.
-    expect(html.match(/data-subject-card="[a-z_]+" class="[^"]*col-span-12[^"]*min-\[1180px\]:col-span-6/g)).toHaveLength(6)
+    expect(html).toMatch(/id="subjects"[^>]*class="[^"]*grid-cols-1[^"]*min-\[1180px\]:grid-cols-2/)
   })
 
   it('a written card is its name, its headline and what it means, the month words and Open: the real v3 words', () => {
     const fit = OSSUR_SUBJECT_READS.find((r) => r.name === 'Fit & comfort')!
-    expect(text).toContain(`Fit & comfort ${fit.headline} ${fit.means} October so far Open →`)
-    expect(html).toMatch(/<h3 data-copy="stored" data-slot="week_read" class="[^"]*text-\[20px\]/)
+    // The audit design: the name an h3 link to its page, the headline a 16px
+    // lead, "Open {subject}" at the foot; no month words.
+    expect(text).toContain(`Fit & comfort ${fit.headline} ${fit.means} Open Fit & comfort`)
+    expect(html).toMatch(/<h3 class="[^"]*text-\[19px\][^"]*"><a [^>]*href="\/dashboard\/market\/subjects\/[^"]+"/)
+    expect(html).toMatch(/<p data-copy="stored" data-slot="week_read" class="[^"]*text-\[16px\][^"]*font-medium/)
     expect(html).toContain(`href="/dashboard/market/subjects/${fixtureSubjectId('fit')}"`)
     const thin = OSSUR_SUBJECT_READS.find((r) => r.status === 'thin')!
-    expect(text).toContain(`Choosing the right device ${thin.saying[0]} October so far Open →`)
+    expect(text).toContain(`Choosing the right device ${thin.saying[0]} Open Choosing the right device`)
+    expect(text).not.toContain('October so far Open')
     assertCopyContract(<SubjectCardsView cards={WEEK.subjectCards!} />)
   })
 
@@ -151,7 +168,7 @@ describe('the subject cards', () => {
     for (const d of [WEEK, STATES, marketThinFixture(), marketFixture({ subjects: 'tracked' }), marketFixture({ subjectReads: 'sealand' })]) {
       const cards = subjectsOf(render(<MarketPage data={d} />))
       expect(cards).not.toMatch(/data-copy="(figure|level|verdict)"/)
-      expect(renderText(<SubjectCardsView cards={d.subjectCards!} />).replace(/^What the market is talking about Your [a-z]+ subjects(, biggest first)? /, '')).not.toMatch(/\d/)
+      expect(renderText(<SubjectCardsView cards={d.subjectCards!} />).replace(/^What the market is talking about [A-Z][a-z]+ subjects(, biggest first)? /, '')).not.toMatch(/\d/)
     }
   })
 
@@ -160,17 +177,17 @@ describe('the subject cards', () => {
     const fit = OSSUR_SUBJECT_READS.find((r) => r.name === 'Fit & comfort')!
     const cost = OSSUR_SUBJECT_READS.find((r) => r.name === 'Cost & access')!
     // (a) ready, with a headline.
-    expect(s).toContain(`Fit & comfort ${fit.headline} ${fit.means} October so far Open →`)
+    expect(s).toContain(`Fit & comfort ${fit.headline} ${fit.means} Open Fit & comfort`)
     // (b) ready, a read stored before headlines: the name, then what it means.
-    expect(s).toContain(`Cost & access ${cost.means} October so far Open →`)
+    expect(s).toContain(`Cost & access ${cost.means} Open Cost & access`)
     // (c) thin: code's one line.
-    expect(s).toContain('Choosing the right device In October so far, talk about Choosing the right device sat in “Value of a skilled prosthetist”. October so far Open →')
+    expect(s).toContain('Choosing the right device In October so far, talk about Choosing the right device sat in “Value of a skilled prosthetist”. Open Choosing the right device')
     // (f) ready, no read for the month yet.
-    expect(s).toContain('Look & style No read of Look & style in October yet. October so far Open →')
+    expect(s).toContain('Look & style No read of Look & style in October yet. Open Look & style')
     // (d) not measured yet: its conversations, no read and no figure.
-    expect(s).toContain(`Function & movement ${SUBJECT_NOT_MEASURED} Inside it Stairs and slopes Powered knees in daily life Waterproof knees October so far Open →`)
+    expect(s).toContain(`Function & movement ${SUBJECT_NOT_MEASURED} Inside it Stairs and slopes Powered knees in daily life Waterproof knees Open Function & movement`)
     // (e) failed: why, once a page, then Inside it as an open one (14 Oct).
-    expect(s).toContain(`Community & encouragement ${FAILED_EXPLAINED} Inside it Running-blade stories First steps after amputation Support from other amputees October so far Open →`)
+    expect(s).toContain(`Community & encouragement ${FAILED_EXPLAINED} Inside it Running-blade stories First steps after amputation Support from other amputees Open Community & encouragement`)
     expect(renderText(<MarketPage data={STATES} />).split(FAILED_EXPLAINED).length - 1).toBe(1)
     // The unready after the ready, unranked (U6).
     expect(STATES.subjectCards!.map((c) => c.state)).toEqual(['read', 'read', 'thin', 'no_read', 'failed', 'provisional'])
@@ -184,13 +201,13 @@ describe('the subject cards', () => {
 
   it('names the subjects in words and says "biggest first" only where some are ranked', () => {
     // Össur's thin state: every check open (and one failed), so none ranked.
-    expect(renderText(<SubjectCardsView cards={marketThinFixture().subjectCards!} />)).toMatch(/^What the market is talking about Your seven subjects Choosing the right device/)
+    expect(renderText(<SubjectCardsView cards={marketThinFixture().subjectCards!} />)).toMatch(/^What the market is talking about Seven subjects Choosing the right device/)
     // Every ready one ranked by its videos in the month.
     expect(WEEK.subjectCards!.every((c) => c.ranked)).toBe(true)
     // F2-Market-States: the four with a level lead, ranked (the no-read card
     // too: its words are missing, not its level); the unready follow, unranked.
     expect(STATES.subjectCards!.map((c) => [c.state, c.ranked])).toEqual([['read', true], ['read', true], ['thin', true], ['no_read', true], ['failed', false], ['provisional', false]])
-    expect(renderText(<SubjectCardsView cards={STATES.subjectCards!} />)).toMatch(/^What the market is talking about Your six subjects, biggest first Fit & comfort/)
+    expect(renderText(<SubjectCardsView cards={STATES.subjectCards!} />)).toMatch(/^What the market is talking about Six subjects, biggest first Fit & comfort/)
     expect(renderText(<SubjectCardsView cards={[]} />)).toBe('What the market is talking about Your subjects will appear here once they are named in Settings.')
   })
 })
@@ -202,62 +219,30 @@ describe('Össur on 17 Oct: six written reads, no subject read in October yet', 
   // cards' states, which was false.
   const d = marketFixture({ subjects: 'unread' })
 
-  it('six cards with their reads, none ranked, in name order; "Your six subjects", never "biggest first"', () => {
+  it('six cards with their reads, none ranked, in name order; "Six subjects", never "biggest first"', () => {
     expect(d.subjects!.rows.every((r) => r.level == null && r.pending?.state === 'unread')).toBe(true)
     expect(d.subjectCards!.map((c) => [c.name, c.state, c.ranked])).toEqual([
       ['Choosing the right device', 'thin', false], ['Community & encouragement', 'read', false], ['Cost & access', 'read', false],
       ['Fit & comfort', 'read', false], ['Function & movement', 'read', false], ['Look & style', 'read', false],
     ])
     const text = renderText(<SubjectCardsView cards={d.subjectCards!} />)
-    expect(text).toMatch(/^What the market is talking about Your six subjects Choosing the right device /)
+    expect(text).toMatch(/^What the market is talking about Six subjects Choosing the right device /)
     expect(text).not.toContain('biggest first')
     assertCopyContract(<SubjectCardsView cards={d.subjectCards!} />)
   })
 })
 
 describe('also this week', () => {
-  const node = <AlsoThisWeek data={WEEK} />
-  const html = render(node)
-
-  it('three small cards: the flag, the week\'s biggest, the new; each an eyebrow, a title and Open to its page', () => {
-    expect(renderText(node)).toBe(`Also this week What stood out in this week’s conversations Unusual this week Insurance refusals for powered knees Open → ${MOST_TALKED} How long a liner lasts Open → New this week Waterproof knees Open →`)
-    expect(html.match(/data-also=/g)).toHaveLength(3)
-    expect(html.match(/href="\/dashboard\/market\/conversations\/[^"]+"/g)).toHaveLength(3)
-    expect(html.match(/data-also="[a-z]+" class="[^"]*min-\[1180px\]:col-span-4/g)).toHaveLength(3)
-    assertCopyContract(node)
-  })
-
-  it('carries the flag\'s chip alone: no "Rising" and no "New" chip (ruling 1)', () => {
-    expect(html.match(/data-flag="/g)).toEqual(['data-flag="'])
-    expect(html).toContain('data-flag="unusual"')
-    expect(html).not.toContain('data-flag="new"')
-  })
-
-  it('with no flag, the biggest new conversation leads, then the week\'s biggest, then the rest of the new', () => {
-    expect(renderText(<AlsoThisWeek data={QUIET} />)).toBe(`Also this week What stood out in this week’s conversations New this week Waterproof knees Open → ${MOST_TALKED} How long a liner lasts Open → New this week Liner smell and cleaning Open →`)
-  })
-
-  it('with nothing new: the week\'s next biggest, "Also talked about", or an earlier week\'s newest', () => {
-    const thin = marketThinFixture()
-    // The stand-in's eyebrow says what the card shows; that nothing was first
-    // heard is said under it (5 Nov: "Nothing new this week" headed a
-    // conversation that was simply the week's next biggest).
-    expect(renderText(<AlsoThisWeek data={thin} />)).toBe(`Also this week What stood out in this week’s conversations ${MOST_TALKED} How long a liner lasts Open → ${ALSO_TALKED} Sweat under the liner Open → ${ALSO_TALKED} Insurance refusals for powered knees ${NOTHING_NEW} . Open →`)
-    expect(renderText(<AlsoThisWeek data={marketThinFixture({ earlierNew: true })} />)).toContain(`Newest Showing it or hiding it First heard the week of 21 Sep. ${NOTHING_NEW} . Open →`)
-    expect(renderText(<AlsoThisWeek data={marketFixture({ flagged: false, noNew: true, flagNew: true })} />)).toContain(NOTHING_ELSE_NEW)
-    assertCopyContract(<AlsoThisWeek data={thin} />)
-  })
-
-  it('a flag on a kind of comment names the kind and opens nothing (there is no page for a kind)', () => {
-    const d = marketFixture({ flagKind: true })
-    const t = renderText(<AlsoThisWeek data={d} />)
-    expect(t).toMatch(/^Also this week What stood out in this week’s conversations Unusual this week Complained about something Most talked about this week/)
-    expect(render(<AlsoThisWeek data={d} />).match(/href=/g)).toHaveLength(2)
-  })
-
-  it('is the week\'s alone', () => {
-    expect(render(<MarketPage data={MONTH} />)).not.toContain('Also this week')
-    expect(render(<MarketPage data={TIME} />)).not.toContain('Also this week')
+  // Small call 12: the section is gone from every period (its conversations
+  // are the table's rows; its "nothing new" line is the table's). Its five
+  // cases went with its component (`AlsoThisWeek`, `alsoCards`); their data
+  // states stay in the copy-contract cases above. Its words stay, because
+  // the weekly email's test holds the email's own words to them.
+  it('is drawn on no period, and its words stay exported', () => {
+    for (const d of [WEEK, QUIET, MONTH, TIME, marketThinFixture()]) expect(render(<MarketPage data={d} />)).not.toContain('Also this week')
+    // The week's page has no top row at all; the month's numbers keep theirs.
+    for (const d of [WEEK, QUIET, marketThinFixture()]) expect(render(<MarketPage data={d} />)).not.toContain('id="top-row"')
+    expect([MOST_TALKED, ALSO_TALKED, NOTHING_NEW, NOTHING_ELSE_NEW]).toEqual(['Most talked about this week', 'Also talked about', 'Nothing new this week', 'Nothing else new this week'])
   })
 })
 
@@ -342,8 +327,10 @@ describe('this month and over time (not drawn by a board)', () => {
   it('this month: the subject cards lead under the bar, then the month\'s numbers: its three biggest, the side cards, the table', () => {
     const html = render(<MarketPage data={MONTH} />)
     const text = renderText(<MarketPage data={MONTH} />)
-    expect(text).toMatch(/^Market This week This month Over time October so far · 318 videos · 5,840 comments This week This month Over time What the market is talking about Your six subjects, biggest first Fit & comfort/)
-    expect(text).toContain('The numbers behind the month Your market’s 318 videos and 5,840 comments in October so far Most talked about in October so far')
+    // The period switch once, the month by its name; the month's figures
+    // row; the numbers' head with no note (the figures row has the base).
+    expect(text).toMatch(/^Market This week October so far Over time Month October so far Your market 318 videos, 5,840 comments The category 300 videos What the market is talking about Six subjects, biggest first Fit & comfort/)
+    expect(text).toContain('The numbers behind the month Most talked about in October so far')
     expect(html.indexOf('id="top-row"')).toBeGreaterThan(html.indexOf('id="subjects"'))
     expect(html.indexOf('id="numbers"')).toBeGreaterThan(html.indexOf('id="top-row"'))
     expect(html).toContain(`href="/dashboard/market/subjects/${fixtureSubjectId('fit')}?period=month"`)
@@ -357,7 +344,8 @@ describe('this month and over time (not drawn by a board)', () => {
 
   it('over time: the subject cards, then the market\'s months, the side cards and the table', () => {
     const text = renderText(<MarketPage data={TIME} />)
-    expect(text).toContain('The numbers over time Month by month, to October so far Your market, month by month')
+    expect(text).toMatch(/^Market This week October so far Over time Months Month by month, to October so far Your market in October so far 318 videos, 5,840 comments /)
+    expect(text).toContain('The numbers over time Your market, month by month')
   })
 })
 

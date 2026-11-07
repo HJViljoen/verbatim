@@ -10,21 +10,25 @@ import { nextMonth } from '@/lib/reading/month-key'
 import { bandVerdict, type Verdict } from '@/lib/reading/verdicts'
 import type { WhoPart } from '@/lib/written/types'
 import { cn } from '@/lib/utils'
+import { GO, LBL } from '@/components/v2/look'
 
-// The small pieces Market's blocks share (depth v2, T3), drawn to the boards
-// E2-Market and E2-Market-Open on the v2 kit's tokens: the orange-text link,
-// the mono muted figure line, a conversation's row, who its videos are about,
-// a stored sentence with its figures put back.
+// The small pieces Market's blocks share (depth v2, T3), since the audit
+// design (7 Nov) drawn from the kit's look (components/v2/look): the link
+// that says where it goes, the muted figure line, a conversation's row, who
+// its videos are about, a stored sentence with its figures put back. Your
+// products and Your moves borrow these, so they take the new look with
+// Market's; their words are fixed in their own phases.
 
-/** The boards' `.olink`: the orange-text action link. */
-export const OLINK = 'text-[13.5px] font-semibold text-orange-text no-underline hover:underline underline-offset-[3px] cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-[2px]'
+/** The link that says where it goes, with no arrow (the kit's `GO`; the name
+ *  stays for the pages that borrow it until the tidy-up). */
+export const OLINK = GO
 
-/** The boards' `.mono.muted` line under a big figure. */
-export const MONO_MUTED = 'font-mono text-[12.5px] tabular-nums text-muted-foreground'
+/** The muted figure line under a big figure, tabular sans. */
+export const MONO_MUTED = 'text-[13px] tabular-nums text-muted-foreground'
 
-/** The boards' big and mid figures. */
-export const BIG = 'font-mono text-[44px] leading-none font-medium tracking-[-0.02em] tabular-nums text-foreground'
-export const MID = 'font-mono text-[30px] leading-none font-medium tracking-[-0.02em] tabular-nums text-foreground'
+/** The big and mid figures, tabular sans. */
+export const BIG = 'text-[40px] leading-none font-bold tracking-[-0.01em] tabular-nums text-foreground'
+export const MID = 'text-[30px] leading-none font-bold tracking-[-0.01em] tabular-nums text-foreground'
 
 /** A count as the page prints it, or nothing. */
 export function Fig({ n, className }: { n: number | null | undefined; className?: string }) {
@@ -64,10 +68,10 @@ export function About({ parts, brand, noun, className }: { parts: readonly WhoPa
         <Fragment key={p.about}>
           {i > 0 ? <ChipSep /> : null}
           {p.about === 'client'
-            ? <BrandChip who="you">{brand} <Fig n={p.videos} className="font-mono font-normal" /></BrandChip>
+            ? <BrandChip who="you">{brand} <Fig n={p.videos} className="font-normal tabular-nums" /></BrandChip>
             : p.about === 'market'
-              ? <span className="text-muted-foreground">{ordered.length === 1 ? 'no brand named' : words.short} {ordered.length === 1 ? null : <Fig n={p.videos} className="font-mono" />}</span>
-              : <BrandChip who="rival">{p.about.slice('rival:'.length)} <Fig n={p.videos} className="font-mono font-normal" /></BrandChip>}
+              ? <span className="text-muted-foreground">{ordered.length === 1 ? 'no brand named' : words.short} {ordered.length === 1 ? null : <Fig n={p.videos} className="tabular-nums" />}</span>
+              : <BrandChip who="rival">{p.about.slice('rival:'.length)} <Fig n={p.videos} className="font-normal tabular-nums" /></BrandChip>}
         </Fragment>
       ))}
     </span>
@@ -123,7 +127,7 @@ export function ConvRow({ href, label, chip, counts, selected }: {
       </span>
       <span className="ml-auto flex shrink-0 items-baseline gap-3">
         {counts.map((c, i) => (
-          <span key={i} className={cn('w-9 whitespace-nowrap text-right font-mono text-[13px] tabular-nums', i === 0 ? 'text-secondary-foreground' : 'text-muted-foreground')}>
+          <span key={i} className={cn('w-9 whitespace-nowrap text-right text-[14px] tabular-nums', i === 0 ? 'text-secondary-foreground' : 'text-muted-foreground')}>
             {c == null ? '' : <span data-copy="figure">{fmtInt(c)}</span>}
           </span>
         ))}
@@ -145,10 +149,11 @@ export const SET_APART_WORDS = { makers: 'mostly makers’ own posts', noise: 'm
 /** The quiet tag a set-apart conversation carries wherever it is listed. */
 export function SetApartTag({ setApart }: { setApart: 'makers' | 'noise' | null }) {
   if (!setApart) return null
-  return <span className="whitespace-nowrap text-[12px] text-muted-foreground">{SET_APART_WORDS[setApart]}</span>
+  return <span className="whitespace-nowrap text-[13px] text-muted-foreground">{SET_APART_WORDS[setApart]}</span>
 }
 
-/** A small caps section label (the boards' `.lbl` / `.dlabel`). */
+/** A section label (the boards' `.lbl`): the kit's look, sentence case,
+ *  never uppercase. */
 export function Label({ children, className }: { children: ReactNode; className?: string }) {
-  return <p className={cn('m-0 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground', className)}>{children}</p>
+  return <p className={cn('m-0', LBL, className)}>{children}</p>
 }

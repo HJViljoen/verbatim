@@ -52,7 +52,8 @@ describe('SectionHead', () => {
   it('is the boards\' heading row: a 21px/600 heading, a muted note at its right', () => {
     const node = <SectionHead title="What the market is talking about" note="Six subjects, biggest first" id="subjects" />
     const m = render(node)
-    expect(m).toContain('mt-12 mb-[18px]')
+    // The boards' 48px above and 18px under, inside PageFrame's 22px gap.
+    expect(m).toContain('mt-[26px] -mb-1')
     expect(m).toMatch(/<h2 id="subjects" class="[^"]*text-\[21px\] font-semibold[^"]*">What the market is talking about<\/h2>/)
     expect(m).toMatch(/<p class="[^"]*text-\[14px\][^"]*text-muted-foreground">Six subjects, biggest first<\/p>/)
     assertCopyContract(node)

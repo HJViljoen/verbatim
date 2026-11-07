@@ -70,8 +70,10 @@ export function StatStripCell({ item }: { item: StatItem }): ReactNode {
   )
 }
 
-/** A section's heading row (the boards' `.h2row`): the heading, and a muted
- *  note or an action at its right. */
+/** A section's heading row (the boards' `.h2row`, 48px above it and 18px
+ *  under it): the heading, and a muted note or an action at its right. Its
+ *  margins allow for `PageFrame`'s 22px between children, which every page
+ *  sits in: 26px above and -4px under make the boards' 48 and 18. */
 export function SectionHead({
   title,
   note,
@@ -86,7 +88,7 @@ export function SectionHead({
   as?: 'h2' | 'h3'
 }): ReactNode {
   return (
-    <div data-section-head="" className="mx-0.5 mt-12 mb-[18px] flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+    <div data-section-head="" className="mx-0.5 mt-[26px] -mb-1 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
       <Heading id={id} className="m-0 text-[21px] font-semibold leading-[1.3] text-foreground">
         {title}
       </Heading>

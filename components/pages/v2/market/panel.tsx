@@ -8,6 +8,8 @@ import { MARKET_PANEL_MONTHS, type GroupLink, type MarketData, type MonthCount, 
 import type { WhoPart } from '@/lib/written/types'
 import { translationLabel, translationNote } from '@/components/quote-block'
 import { About, OLINK } from './parts'
+import { BTN_PRIMARY } from '@/components/v2/look'
+import { cn } from '@/lib/utils'
 
 // THE PARTS MARKET'S PAGES SHARE (17 Oct; until then the open panels', E2-
 // Market-Open): the Agent's button, a share line's month bars, the three
@@ -16,7 +18,10 @@ import { About, OLINK } from './parts'
 // named. The pages
 // themselves are ./subject-page.tsx and ./conversation-page.tsx.
 
-export const ASK = 'inline-flex min-h-[38px] cursor-pointer items-center gap-2 rounded-lg bg-brand px-3.5 text-[13.5px] font-semibold text-brand-foreground no-underline transition-colors hover:bg-brand/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+/** The Agent's button for the pages that borrow it (Your products, Your
+ *  moves): the kit's primary (the brand yellow, decision 8). Market's own
+ *  pages ask with a link (`GoLink`), as its boards do. */
+export const ASK = cn(BTN_PRIMARY, 'no-underline')
 
 /** The month bars of a share line: the share over each bar, "k of n" under.
  *  WHOLE PERCENTS (the fresh check, 17 Oct): the subject's page printed

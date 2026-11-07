@@ -1647,7 +1647,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
     `PanelSlot`, `panelPlacement`), and since 17 Oct no page does (the T9
     bullet below). Still true: no quote on the
     top layer (quotes live on a page), decision 1, U6, the copy contract.
-    *The top page, This week*, top to bottom: the WEEK CARD (`weekCardOf`:
+    *The top page, This week*, top to bottom (since the audit design, 7
+    Nov, `Market.dc.html`: the title with the period switch once, the month
+    by its name, `withMonthName`, and the figures row, `marketStats`: the
+    week, the market's videos and comments, the category's videos, the
+    month's videos): the WEEK CARD (`weekCardOf`:
     the published read's week in one line and its implications, up to
     three, side by side and stacked on a phone, "Read the whole week" to
     its page; thin and failed each say so in one line and open nothing, and
@@ -1663,24 +1667,22 @@ This version has breaking changes — APIs, conventions, and file structure may 
     in the board's order (`subjectOrder` over `buildSubjectBoard`'s rows:
     the ready ones biggest first by the month's videos about each, the
     standing facts' order, then the ready ones not read this month, then
-    the unready, unranked), the head's "Your six subjects" adding
+    the unready, unranked), each card its name (its page's link), its
+    headline as the lead and "Open {subject}" at its foot, the head's
+    "Six subjects" adding
     ", biggest first" only where some card's row has a level
     (`SubjectCard.ranked`, `subjectsNote`), never off a card's state, which
     is about its words (17 Oct: Össur's six written reads with no October
-    reading stood in name order under "biggest first"); ALSO THIS WEEK, E2's three places small,
-    filled by today's rules (`weekLead`, `printableFlags`,
-    `pickWeekSides`, `earlierNewOf`, `alsoTalkedOf`) and opening each
-    conversation's page, the flag's chip alone ("Unusual this week", in the
-    eyebrow's place: decision 1 leaves no "3× its usual level"; no "Rising"
-    and no "New" chip, ruling 1), and what is new is the published read's
-    `newThisWeek`, so the card, the week's page and these never disagree;
-    THE NUMBERS BEHIND THE WEEK, the three side cards (what people do in
+    reading stood in name order under "biggest first"); ALSO THIS WEEK is
+    gone since the audit design (small call 12: its conversations are the
+    table's rows; its words, `MOST_TALKED`, `ALSO_TALKED`, `NOTHING_NEW`,
+    `NOTHING_ELSE_NEW`, stay exported for the weekly email's test); THE NUMBERS BEHIND THE WEEK, the three side cards (what people do in
     the comments, videos week by week, where it is said) in a row above
     the full-width table, never a rail beside it (ruling 2), the table a
     two-line list on a phone (name and videos, then subject and the month
     beside the week) with no About chips (ruling 4). *This month and Over
     time are drawn by no board*: the subject cards lead under the bar, no
-    week card and no Also this week, then today's numbers for the period
+    week card, then today's numbers for the period
     (the month's three biggest, or the market's months; the side cards; the
     table), and This month still ends with its long-run read. Where the
     week was asked for and its read could not be read, the failed week card
@@ -1837,10 +1839,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
     the kit's card and head, the lead, then one row an idea (words left,
     counts right). THE BOARDS' SHAPE IN EVERY DATA STATE (parity pass):
     every subject card keeps its frame and its foot, the week card keeps
-    its frame thin or failed, Also this week its three places (a place
-    with nothing for it says so in its own card; with nothing new and no
-    earlier week's new conversation, the third names the week's next
-    biggest under "Also talked about"), the side cards their row (the
+    its frame thin or failed, the side cards their row (the
     weekly chart's eight slots, `weeksAxis`, empty where a week is not
     drawn), the table its Subject and About columns. ONE PLACEMENT RULE, ON EVERY SURFACE THAT NAMES A
     CONVERSATION'S SUBJECT (14 Oct): `placeSubject` over
