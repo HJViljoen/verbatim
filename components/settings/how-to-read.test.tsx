@@ -41,9 +41,21 @@ describe('How to read, the page cards', () => {
       const header = html.slice(0, html.indexOf('</h3>'))
       expect(header, s.key).not.toContain('<a ')
       const footer = html.slice(html.indexOf('<footer'))
-      expect(footer.replace(/<[^>]+>/g, '').trim(), s.key).toBe(`Open ${s.label} →`)
+      // The link says where it goes, with no arrow (the audit design).
+      expect(footer.replace(/<[^>]+>/g, '').trim(), s.key).toBe(`Open ${s.label}`)
       expect(footer, s.key).toContain(`href="${s.href}"`)
     }
+  })
+
+  it('names each card’s words as a comma list, with no definition beside them: each word is defined once (the audit design)', () => {
+    for (const c of READING_CARDS) {
+      if (c.read.length === 0) continue
+      const html = cardMarkup(c.key)
+      expect(renderText(<div dangerouslySetInnerHTML={{ __html: html.slice(html.indexOf('>') + 1) }} />)).toContain(`Words this page uses ${c.read.map((k) => GLOSSARY[k][0]).join(', ')}`)
+      expect(html, c.key).not.toContain('<dl')
+    }
+    expect(text).toContain('Each page below lists the words it uses; every word is defined once, under The words every page uses.')
+    for (const gone of ['font-mono', 'uppercase', '→']) expect(markup, gone).not.toContain(gone)
   })
 
   it('prints §2.1’s question under the title, where the page has one', () => {

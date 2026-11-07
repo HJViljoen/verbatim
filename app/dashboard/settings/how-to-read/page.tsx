@@ -52,7 +52,16 @@ export default async function HowToReadPage() {
       bar={bar}
       contentTitle="How to read"
     >
-      <HowToReadBody search={<ListSearch scope="reading-cards" placeholder="Search…" />} />
+      {/* A visible label over the search (the audit design, Settings-
+          HowToRead.dc.html); the field itself is the shared ListSearch. */}
+      <HowToReadBody
+        search={
+          <label className="flex max-w-[520px] flex-col gap-1.5">
+            <span className="text-[13px] font-semibold leading-[1.3] text-secondary-foreground">Search How to read</span>
+            <ListSearch scope="reading-cards" placeholder="Search…" label="Search How to read" />
+          </label>
+        }
+      />
     </SettingsFrame>
   )
 }
