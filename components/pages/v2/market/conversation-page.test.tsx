@@ -24,7 +24,7 @@ describe('a conversation under its ready subject, this week', () => {
   const html = render(page(LINER))
 
   it('the path, then the title block: "Conversation in Fit & comfort", the counts in the meta line, the period switch', () => {
-    expect(text).toMatch(/^Market \/ Fit & comfort \/ How long a liner lasts Fit & comfort Conversation in Fit & comfort How long a liner lasts 5 to 11 October · 23 of 226 category videos this week · 35 of 300 in October so far This week This month Over time/)
+    expect(text).toMatch(/^Market \/ Fit & comfort \/ How long a liner lasts Fit & comfort Conversation in Fit & comfort How long a liner lasts 5 to 11 October · 23 of 226 category videos this week · 35 of 300 in October so far This week October so far Over time/)
     expect(html).toContain(`href="/dashboard/market/subjects/${fixtureSubjectId('fit')}"`)
     expect(html).toContain(`href="/dashboard/market/conversations/${fixtureId(1)}?period=month"`)
   })
@@ -67,7 +67,7 @@ describe('a conversation under its ready subject, this week', () => {
   })
 
   it('the facts, small, on the page: week by week, who it\'s about, what people did, who\'s saying it and where, each of the week\'s 23', () => {
-    expect(text).toContain('The facts Week by week · videos 9 14 23 21 Sep 28 Sep 5 Oct 23 this week · 35 in October so far Who it’s about Össur 4 · others 19 What people did · of 23 Complained about something 14 Asked a question 9 Pushed back 4 Who’s saying it · of 23 New amputees in their first year 15 of 23 Long-time users upgrading 5 of 23 Each opens in Voices Where · of 23 TikTok 14 Instagram 5 YouTube 4')
+    expect(text).toContain('The facts Week by week · videos 9 14 23 21 Sep 28 Sep 5 Oct 23 this week · 35 in October so far Who it’s about Össur 4 · others 19 What people did · of 23 Complained about something 14 Asked a question 9 Pushed back 4 Who’s saying it · of 23 New amputees in their first year 15 Long-time users upgrading 5 Each opens in Voices Where · of 23 TikTok 14 Instagram 5 YouTube 4')
     expect(html).toContain('href="/dashboard/voices/groups/new-amputees"')
     // No month chart and no tile row.
     expect(text).not.toContain('Month by month')
@@ -172,7 +172,7 @@ describe('every state keeps its frame', () => {
     const text = renderText(page(d))
     expect(text).toMatch(/^Market \/ Fit & comfort \/ How long a liner lasts Fit & comfort Conversation in Fit & comfort How long a liner lasts October so far · 35 of 300 category videos This week/)
     expect(text).toContain('What people said 35 category videos in October so far, most comments about it first')
-    expect(text).toContain('Who’s saying it · of 35 New amputees in their first year 23 of 35 Long-time users upgrading 7 of 35 Each opens in Voices')
+    expect(text).toContain('Who’s saying it · of 35 New amputees in their first year 23 Long-time users upgrading 7 Each opens in Voices')
     expect(text).toContain('Other conversations in Fit & comfort Fit & comfort, the whole subject → Sweat under the liner 30 in October so far')
     expect(text).not.toContain('Week by week')
     expect(text).not.toContain('this week')
@@ -231,6 +231,6 @@ describe('every state keeps its frame', () => {
 
   it('an id Market cannot name: one calm line, and the way back', () => {
     const d = { ...LINER, convPage: null, missing: true }
-    expect(renderText(page(d))).toBe(`Market ${CONVERSATION_MISSING} ${BACK_TO_MARKET} →`)
+    expect(renderText(page(d))).toBe(`Market ${CONVERSATION_MISSING} ${BACK_TO_MARKET}`)
   })
 })

@@ -147,7 +147,7 @@ describe('a category\'s page, the hub (G4-Products-Category)', () => {
   it('the numbers: month by month, subjects opening Market, kinds, groups opening Voices, where', () => {
     expect(text).toContain('The numbers Liners’ videos in September, every audience together, your own posts’ comments included')
     expect(text).toContain('What it’s about · of 117 Fit & comfort 70 Cost & access 18 Choosing the right device 12 Look & style 4 Each opens its subject in Market')
-    expect(text).toContain('Who’s talking · of 118 New amputees, first year 47 of 118')
+    expect(text).toContain('Who’s talking · of 118 New amputees, first year 47')
     expect(text).toContain('Each opens in Voices')
     const m = render(page(d))
     expect(m).toContain('href="/dashboard/market/subjects/s-fit-comfort?period=month&amp;month=2026-09"')

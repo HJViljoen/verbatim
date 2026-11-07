@@ -1,16 +1,14 @@
-import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
 import { ConversationLabel, LevelBar } from '@/components/shell/level-bar'
-import { PERIODS, PeriodSwitch, type StatItem } from '@/components/v2'
+import { GoLink, PERIODS, PeriodSwitch, withMonthName, type StatItem } from '@/components/v2'
 import { periodHref, WEEK_PAGE_TITLE, type MarketData } from '@/lib/pages/v2/market'
 import { marketConversationPath, marketSubjectPath, surface } from '@/lib/nav'
 import { MARKET_FIRST_RUN, MARKET_TITLE } from './index'
 import { WeekPageBody } from './week-page'
 import { ConversationPageBody } from './conversation-page'
-import { SubjectPageBody, weekLevelOf } from './subject-page'
+import { SubjectPageBody, subjectStats } from './subject-page'
 import { fmtInt } from '@/lib/format'
-import { OLINK } from './parts'
 
 // MARKET'S LEVEL PAGES (depth as pages, 17 Oct): a tracked subject, a
 // conversation and the week's read, each its own address under Market
@@ -31,7 +29,7 @@ export function MarketMissing({ line }: { line: string }) {
   return (
     <div className="flex flex-col gap-2">
       <p data-market-missing="" className="m-0 text-[15px] text-muted-foreground">{line}</p>
-      <Link href={surface('market').href} className={OLINK}>{BACK_TO_MARKET} →</Link>
+      <GoLink href={surface('market').href} className="self-start">{BACK_TO_MARKET}</GoLink>
     </div>
   )
 }
@@ -47,7 +45,7 @@ function FirstRun() {
 }
 
 function Switch({ data, path }: { data: MarketData; path: string }) {
-  return <PeriodSwitch value={data.period} options={PERIODS} hrefFor={(p) => periodHref(data.params, p, path)} />
+  return <PeriodSwitch value={data.period} options={withMonthName(PERIODS, data.month.text)} hrefFor={(p) => periodHref(data.params, p, path)} />
 }
 
 /** A tracked subject's page (`/dashboard/market/subjects/[id]`). */
@@ -66,7 +64,7 @@ export function MarketSubjectPage({ data, switcherOpen = false }: { data: Market
   return (
     <PageFrame className="text-foreground">
       {data.crumbs ? (
-        <LevelBar crumbs={data.crumbs} level="subject" label="Subject" title={page.panel.name} meta={subjectMeta(page, data)} controls={<Switch data={data} path={path} />} open={switcherOpen ? 'current' : undefined} />
+        <LevelBar crumbs={data.crumbs} level="subject" title={page.panel.name} stats={subjectStats(page, data)} controls={<Switch data={data} path={path} />} open={switcherOpen ? 'current' : undefined} />
       ) : <PageBar title={page.panel.name} />}
       <SubjectPageBody page={page} data={data} />
     </PageFrame>
@@ -75,24 +73,6 @@ export function MarketSubjectPage({ data, switcherOpen = false }: { data: Market
 
 const lv = (k: number, n: number) => <span data-copy="level">{fmtInt(k)} of {fmtInt(n)}</span>
 
-/** A subject's meta line, as its phone lines: the period's dates, and where
- *  its check passed its videos this week beside its month's (decision 1),
- *  "82 of 241 videos this week · 108 of 318 in October so far". No figure for
- *  one whose check has not (U6). */
-export function subjectMeta(page: NonNullable<MarketData['subjectPage']>, data: MarketData): ReactNode[][] {
-  const level = page.panel.level
-  const week = data.period === 'week' && data.week ? data.week : null
-  // This week's count on the level's base (17 Oct); none where unread.
-  const stat = weekLevelOf(page)
-  if (week) {
-    return [
-      [week.dates, ...(level && stat ? [<>{lv(stat.k, stat.n)} videos this week</>] : [])],
-      level ? [<>{lv(level.k, level.n)} {week.inMonth}</>] : [],
-    ]
-  }
-  const when = data.period === 'time' ? `Month by month, to ${data.month.text}` : data.month.text
-  return [[when], level ? [<>{lv(level.k, level.n)} videos{data.period === 'time' ? ` in ${data.month.text}` : null}</>] : []]
-}
 
 /** A conversation's page (`/dashboard/market/conversations/[conv]`). */
 export function MarketConversationPage({ data }: { data: MarketData | null }) {

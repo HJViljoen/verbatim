@@ -108,7 +108,7 @@ describe('a piece of advice, the hub (G6-Moves-Advice)', () => {
     expect(text).toContain('Insurance refusals for powered knees · share of category videos')
     expect(text).toContain('July 9 of 455')
     expect(text).toContain('September is the last full month. A move dated on this advice is read on this line, from two months before it.')
-    for (const words of ['Who raises it · of its 63 videos Long-time users upgrading 31 of 63', 'Who it’s about · of its 63 videos', 'What people did · of its 63 videos Complained about something 41', 'Where · of its 63 videos TikTok 34']) {
+    for (const words of ['Who raises it · of its 63 videos Long-time users upgrading 31', 'Who it’s about · of its 63 videos', 'What people did · of its 63 videos Complained about something 41', 'Where · of its 63 videos TikTok 34']) {
       expect(text, words).toContain(words)
     }
   })
@@ -195,7 +195,7 @@ describe('a dated move, the evidence (G6-Moves-Move)', () => {
   it('the facts beside it, each of its videos since the day; its other moves, and the next move for an owner', () => {
     expect(text).toContain('What it is on Community & encouragement A subject you track · 98 of 700 market videos in September, the last full month Open it in Market →')
     expect(text).toContain('Who it’s about · of 112 since 14 Sep')
-    expect(text).toContain('Who’s saying it · of 112 Active and athletic 44 of 112')
+    expect(text).toContain('Who’s saying it · of 112 Active and athletic 44')
     expect(text).toContain('Your other moves All your moves → Price transparency page')
     expect(html).toContain('data-next-move=""')
   })

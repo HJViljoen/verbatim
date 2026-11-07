@@ -8,7 +8,7 @@ import { MARKET_PANEL_MONTHS, type GroupLink, type MarketData, type MonthCount, 
 import type { WhoPart } from '@/lib/written/types'
 import { translationLabel, translationNote } from '@/components/quote-block'
 import { About, OLINK } from './parts'
-import { BTN_PRIMARY } from '@/components/v2/look'
+import { BTN_PRIMARY, ROW, toMax } from '@/components/v2/look'
 import { cn } from '@/lib/utils'
 
 // THE PARTS MARKET'S PAGES SHARE (17 Oct; until then the open panels', E2-
@@ -38,7 +38,7 @@ export function shareBars(bars: readonly MonthCount[]) {
       label: b.label,
       value: pct,
       display: fmtPct(pct, 0),
-      sub: b.n != null ? `${soFar ? 'so far · ' : ''}${fmtInt(b.k ?? 0)} of ${fmtInt(b.n)}` : undefined,
+      sub: b.n != null ? `${soFar ? 'so far, ' : ''}${fmtInt(b.k ?? 0)} of ${fmtInt(b.n)}` : undefined,
       filling: soFar,
     }
   })
@@ -90,20 +90,31 @@ export function WhoLine({ parts, data }: { parts: readonly WhoPart[]; data: Mark
 
 /**
  * WHO'S SAYING IT, one list for a subject's page and a conversation's (17
- * Oct): each group by name, opening in Voices, with its videos "k of n" where
- * they were counted (`GroupLink.videos`, `groupCountsOf`) over `n`, the base
- * the section's label names. A count, never a share (decision 2).
+ * Oct; the audit design, 7 Nov): each group by name, opening in Voices, a bar
+ * against the list's largest (decision 5) and its videos as a bare count,
+ * where they were counted (`GroupLink.videos`, `groupCountsOf`); `n`, the
+ * base, is said once by the caller's head. A count, never a share (decision
+ * 2). `note` keeps "Each opens in Voices" under the list for the pages that
+ * do not say it in their head.
  */
-export function GroupRows({ groups, n }: { groups: readonly GroupLink[]; n: number | null }) {
+export function GroupRows({ groups, n, note = true }: { groups: readonly GroupLink[]; n: number | null; note?: boolean }) {
+  const bar = toMax(groups.map((g) => g.videos ?? 0))
   return (
     <>
-      {groups.map((g) => (
-        <Link key={g.key} href={g.href} className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-[14px] text-foreground no-underline hover:bg-inner">
-          <span data-copy="subject" data-slot="pass_e_persona">{g.name}</span>
-          {g.videos != null && n != null ? <span data-copy="level" className="whitespace-nowrap font-mono text-[13px] tabular-nums text-secondary-foreground">{fmtInt(g.videos)} of {fmtInt(n)}</span> : null}
-        </Link>
-      ))}
-      <p className="m-0 text-[12px] text-muted-foreground">Each opens in Voices</p>
+      <div role="list" className="flex flex-col gap-2.5">
+        {groups.map((g) => (
+          <div key={g.key} role="listitem" className="grid grid-cols-[minmax(0,1fr)_96px_40px] items-center gap-3 text-[15px] leading-[1.35]">
+            <Link href={g.href} className={cn(ROW, 'min-w-0 font-normal')}><span data-copy="subject" data-slot="pass_e_persona">{g.name}</span></Link>
+            {g.videos != null && n != null ? (
+              <>
+                <div aria-hidden className="h-2 rounded-[4px] bg-track"><div className="h-2 rounded-[4px] bg-brand" style={{ width: `${bar(g.videos)}%` }} /></div>
+                <span data-copy="figure" className="text-right tabular-nums">{fmtInt(g.videos)}</span>
+              </>
+            ) : null}
+          </div>
+        ))}
+      </div>
+      {note ? <p className="m-0 text-[13px] text-muted-foreground">Each opens in Voices</p> : null}
     </>
   )
 }
@@ -125,7 +136,7 @@ export function SubjectBase({ level, week = null, detail, monthText }: { level: 
   if (cited.month >= level.k && !(weekOf && cited.week! < weekOf.k)) return null
   const fig = (n: number) => <span data-copy="figure">{fmtInt(n)}</span>
   return (
-    <p data-subject-base="" className="m-0 text-[13px] leading-[1.5] text-muted-foreground">
+    <p data-subject-base="" className="m-0 text-[14px] leading-[1.5] text-secondary-foreground">
       {cited.week != null
         ? <>The parts below read the videos where a comment was about it: {fig(cited.week)} {weekOf ? <>of these {fig(weekOf.k)} </> : null}this week, and {fig(cited.month)} of these {fig(level.k)} in {monthText}.</>
         : <>The parts below read the {fig(cited.month)} of these {fig(level.k)} videos where a comment was about it.</>}
