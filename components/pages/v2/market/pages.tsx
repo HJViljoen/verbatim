@@ -97,8 +97,8 @@ export function MarketConversationPage({ data }: { data: MarketData | null }) {
 }
 
 
-/** The week's page's title (the board's, and the level's old label; the
- *  crumb keeps the path's own words, `WEEK_PAGE_TITLE`). */
+/** The week's page's title and its crumb (the board's words; the path's own
+ *  words, `WEEK_PAGE_TITLE`, stay in `lib`). */
 export const THE_WEEKS_READ = 'The week’s read'
 
 /** The week's page (`/dashboard/market/week`), drawn to the audit design's
@@ -110,7 +110,9 @@ export function MarketWeekPage({ data }: { data: MarketData | null }) {
   return (
     <PageFrame className="text-foreground">
       {data.crumbs ? (
-        <LevelBar crumbs={data.crumbs} level="week" title={THE_WEEKS_READ} stats={weekStats(data)} />
+        // The crumb says the board's words too ("Market / The week's
+        // read"); the path's own words are `lib`'s and stay there.
+        <LevelBar crumbs={data.crumbs.map((c, i, all) => (i === all.length - 1 ? { ...c, label: THE_WEEKS_READ } : c))} level="week" title={THE_WEEKS_READ} stats={weekStats(data)} />
       ) : <PageBar title={WEEK_PAGE_TITLE} stats={weekStats(data)} />}
       {data.weekPage ? <WeekPageBody page={data.weekPage} data={data} /> : null}
     </PageFrame>

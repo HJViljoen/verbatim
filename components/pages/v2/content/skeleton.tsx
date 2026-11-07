@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
 function LevelBar() {
   return (
     <div role="presentation" className="flex flex-col">
-      <div className="border-b border-border pt-3 pb-[11px] max-sm:hidden sm:-mx-4 sm:-mt-[18px] sm:px-4 md:-mx-10 md:-mt-7 md:px-10"><Bone className="h-[22px] w-64 max-w-full" /></div>
+      <div className="pb-2 max-sm:hidden"><Bone className="h-[22px] w-64 max-w-full" /></div>
       <Bone className="h-6 w-24 sm:hidden" />
       <div className="mt-2.5 flex items-center gap-3.5">
         <Bone className="size-[46px] shrink-0 rounded-[11px] max-sm:size-[38px]" />

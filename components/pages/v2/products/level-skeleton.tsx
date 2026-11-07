@@ -13,7 +13,7 @@ function LevelBones({ label }: { label: string }) {
   return (
     <div role="presentation" className="flex flex-col">
       <span className="sr-only">{label}</span>
-      <div className="border-b border-border pt-3 pb-[11px] max-sm:hidden sm:-mx-4 sm:-mt-[18px] sm:px-4 md:-mx-10 md:-mt-7 md:px-10"><Bone className="h-[22px] w-64 max-w-full" /></div>
+      <div className="pb-2 max-sm:hidden"><Bone className="h-[22px] w-64 max-w-full" /></div>
       <Bone className="h-6 w-28 sm:hidden" />
       <div className="mt-2.5 flex flex-wrap items-end justify-between gap-3.5">
         <div className="flex min-w-0 flex-col gap-3">

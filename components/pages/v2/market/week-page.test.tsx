@@ -17,10 +17,10 @@ describe('the week\'s page', () => {
   const text = renderText(<MarketWeekPage data={READ} />)
   const html = render(<MarketWeekPage data={READ} />)
 
-  it('its bar: "Market / This week\'s read", no switch, no chevron; the week beside its month', () => {
+  it('its bar: "Market / The week\'s read", no switch, no chevron; the week beside its month', () => {
     // The audit design: the title "The week's read" with no tile and no
     // label over it; the figures row's three cells (the board's).
-    expect(text).toMatch(/^Market \/ This week’s read Market The week’s read Week 5 to 11 October Your market this week 241 videos, 3,912 comments October so far 318 videos /)
+    expect(text).toMatch(/^Market \/ The week’s read Market The week’s read Week 5 to 11 October Your market this week 241 videos, 3,912 comments October so far 318 videos /)
     expect(html).not.toContain('data-level-tile')
     expect(html).toContain('data-stat-strip')
     expect(html).not.toContain('aria-haspopup')

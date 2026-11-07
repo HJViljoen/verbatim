@@ -44,13 +44,13 @@ export function MarketSkeleton() {
 }
 
 /** The bar of a level page, in the audit design's title block (7 Nov): the
- *  crumb row with its hairline, the title, and the figures row's bones; no
+ *  crumb row (no rule under it), the title, and the figures row's bones; no
  *  tile and no label. */
 function LevelBar({ label, cells = 4 }: { label: string; cells?: number }) {
   return (
     <div role="presentation" className="flex flex-col">
       <span className="sr-only">{label}</span>
-      <div className="border-b border-border pt-3 pb-[11px] max-sm:hidden sm:-mx-4 sm:-mt-[18px] sm:px-4 md:-mx-10 md:-mt-9 md:px-10"><Bone className="h-[22px] w-64 max-w-full" /></div>
+      <div className="pb-2 max-sm:hidden"><Bone className="h-[22px] w-64 max-w-full" /></div>
       <Bone className="h-6 w-24 sm:hidden" />
       <Bone className="mt-3 h-8 w-80 max-w-full" />
       <div className="mt-5"><SkeletonStatStrip cells={cells} /></div>

@@ -1244,7 +1244,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
     top of the content column, 14px, ancestors muted links at 500, the page
     itself ink at 600, a light slash (palette A's muted at 45%: the board's
     warm `#B9B6AE` is a neutral the drift guard refuses), a hairline under it
-    edge to edge of the column; then the TITLE BLOCK that names the level:
+    edge to edge of the column (since the audit design, 7 Nov, the boards'
+    `.crumbs`: the ancestors underlined links in the secondary ink, the page
+    ink at 500, NO hairline, and on the week's page "Market / The week's
+    read"; the switcher drawn at 22px and 44px to tap on a phone); then the TITLE BLOCK that names the level:
     an icon tile (`LevelTile`, the boards' glyphs in
     `components/shell/level-glyphs.tsx`), a small level label, the 28px title
     as the page's one h1, the mono meta line, and the period switch at the

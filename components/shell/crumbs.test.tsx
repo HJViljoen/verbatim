@@ -18,17 +18,18 @@ describe('the crumb row', () => {
   const conv = marketConversationFixture(1)
   const week = marketWeekFixture()
 
-  it('a subject: "Market / {subject}" at 14px, Market a muted link at 500, the slash light, the subject ink at 600 with its 22px chevron', () => {
+  it('a subject: "Market / {subject}" at 14px, Market an underlined link, the slash light, the subject ink at 500 with its 22px chevron, 44px to tap on a phone', () => {
     const html = render(<CrumbRow crumbs={subject.crumbs!} />)
-    expect(html).toMatch(/<div data-crumb-row="" class="border-b border-border pt-3 pb-\[11px\] max-sm:hidden sm:-mx-4 sm:-mt-\[18px\] sm:px-4 md:-mx-10 md:-mt-9 md:px-10">/)
-    // Edge to edge of the column: the negative margins are <main>'s padding
-    // (app/dashboard/layout.tsx, 36px over the title from 768 since the audit design).
+    // The boards' crumbs: above the title, no rule under them (the audit
+    // design, 7 Nov).
+    expect(html).toMatch(/<div data-crumb-row="" class="pb-2 max-sm:hidden">/)
+    expect(html).not.toMatch(/data-crumb-row="" class="[^"]*border-b/)
     expect(html).toMatch(/<nav aria-label="Breadcrumb"><ol class="[^"]*text-\[14px\][^"]*">/)
-    expect(html).toMatch(/<a title="Market" class="[^"]*font-medium text-muted-foreground[^"]*" href="\/dashboard\/market">Market<\/a>/)
+    expect(html).toMatch(/<a title="Market" class="[^"]*text-secondary-foreground underline decoration-control underline-offset-4[^"]*" href="\/dashboard\/market">Market<\/a>/)
     expect(html).toMatch(/<span aria-hidden="true" class="[^"]*text-\[17px\][^"]*font-light text-muted-foreground\/45">\/<\/span>/)
-    expect(html).toMatch(/<span aria-current="page" class="[^"]*font-semibold text-foreground">Fit &amp; comfort<\/span>/)
+    expect(html).toMatch(/<span aria-current="page" class="[^"]*font-medium text-foreground">Fit &amp; comfort<\/span>/)
     expect(html.match(/aria-haspopup="menu"/g)).toHaveLength(1)
-    expect(html).toMatch(/aria-label="Switch to another subject"[^>]*class="[^"]*size-\[22px\]/)
+    expect(html).toMatch(/aria-label="Switch to another subject"[^>]*class="[^"]*size-\[22px\][^"]*max-sm:before:-inset-\[11px\]/)
     // The page's h1 is the title block's, never the row's.
     expect(html).not.toContain('<h1')
     assertCopyContract(<CrumbRow crumbs={subject.crumbs!} />)

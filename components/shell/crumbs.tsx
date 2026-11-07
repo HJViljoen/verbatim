@@ -182,7 +182,9 @@ export function Switcher({ menu, defaultOpen = false, className }: {
         onClick={() => (open ? close(false) : setOpen(true))}
         onKeyDown={onButtonKey}
         className={cn(
-          'inline-flex size-[22px] shrink-0 cursor-pointer items-center justify-center rounded-[8px] border border-border bg-card text-muted-foreground transition-colors hover:bg-inner hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          // 22px drawn, 44px to tap on a phone (the review of 7 Nov): the
+          // hit area grows past the box by 11px each way, not the layout.
+          'relative inline-flex size-[22px] shrink-0 cursor-pointer items-center justify-center rounded-[8px] border border-border bg-card text-muted-foreground transition-colors hover:bg-inner hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-sm:before:absolute max-sm:before:-inset-[11px]',
           open ? 'bg-track text-foreground' : null,
           className,
         )}
@@ -221,15 +223,16 @@ export function Switcher({ menu, defaultOpen = false, className }: {
   )
 }
 
-/** The row's path (F3-Market-Nav): the ancestors and the page, each with
- *  its switcher where it has siblings, a hairline under the row edge to edge
- *  of the content column. From 640 only: a phone has the way back
- *  (`BackLink`) and the title's own chevron instead. */
+/** The row's path (F3-Market-Nav; since the audit design, 7 Nov, the
+ *  boards' `.crumbs`): the ancestors as underlined links, then the page, each
+ *  with its switcher where it has siblings, above the title with no rule
+ *  under it. From 640 only: a phone has the way back (`BackLink`) and the
+ *  title's own chevron instead. */
 export function CrumbRow({ crumbs, open }: { crumbs: readonly Crumb[]; open?: 'current' }) {
   const current = crumbs[crumbs.length - 1]
   if (!current) return null
   return (
-    <div data-crumb-row="" className="border-b border-border pt-3 pb-[11px] max-sm:hidden sm:-mx-4 sm:-mt-[18px] sm:px-4 md:-mx-10 md:-mt-9 md:px-10">
+    <div data-crumb-row="" className="pb-2 max-sm:hidden">
       <nav aria-label="Breadcrumb">
         <ol className="m-0 flex min-h-[26px] min-w-0 list-none flex-wrap items-center p-0 text-[14px] leading-[22px]">
           {crumbs.map((c, i) => {
@@ -238,10 +241,10 @@ export function CrumbRow({ crumbs, open }: { crumbs: readonly Crumb[]; open?: 'c
               <li key={i} className="relative flex min-w-0 items-center">
                 {i > 0 ? <Slash /> : null}
                 {here
-                  ? <span aria-current="page" className="min-w-0 px-[5px] py-px font-semibold text-foreground"><Label slot={c.slot}>{c.label}</Label></span>
+                  ? <span aria-current="page" className="min-w-0 px-[5px] py-px font-medium text-foreground"><Label slot={c.slot}>{c.label}</Label></span>
                   : c.href
-                    ? <Link href={c.href} title={c.label} className={cn('min-w-0 truncate rounded-[5px] px-[5px] py-px font-medium text-muted-foreground no-underline transition-colors hover:bg-track hover:text-foreground', ANCESTOR_MAX)}><Label slot={c.slot}>{c.label}</Label></Link>
-                    : <span title={c.label} className={cn('min-w-0 truncate px-[5px] py-px font-medium text-muted-foreground', ANCESTOR_MAX)}><Label slot={c.slot}>{c.label}</Label></span>}
+                    ? <Link href={c.href} title={c.label} className={cn('min-w-0 truncate px-[5px] py-px text-secondary-foreground underline decoration-control underline-offset-4 transition-colors hover:decoration-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground', ANCESTOR_MAX)}><Label slot={c.slot}>{c.label}</Label></Link>
+                    : <span title={c.label} className={cn('min-w-0 truncate px-[5px] py-px text-secondary-foreground', ANCESTOR_MAX)}><Label slot={c.slot}>{c.label}</Label></span>}
                 {hasSiblings(c.menu) ? <Switcher menu={c.menu} defaultOpen={here && open === 'current'} /> : null}
               </li>
             )
