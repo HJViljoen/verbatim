@@ -18,13 +18,16 @@ describe('TickBar', () => {
     expect(render(<TickBar pct={17} tone="rival" label="x" />)).toContain('bg-comp')
     expect(render(<TickBar pct={58} tone="ink" size="sm" label="x" />)).toContain('h-1.5')
     expect(render(<TickBar pct={58} label="x" />)).not.toContain('data-tick')
+    // The boards' 8px bar on a 4px radius (the audit design).
+    expect(render(<TickBar pct={58} label="x" />)).toContain('bg-track h-2 rounded-[4px]')
     expect(render(<TickBar pct={140} label="x" />)).toContain('width:100%')
     expect(render(<TickBar pct={0} label="x" />)).not.toContain('style="width')
   })
 
   it('prints a figure past the fill where one is given, marked', () => {
     const node = <TickBar pct={77.5} tick={25} size="xl" figure="3.1×" label="x" />
-    expect(render(node)).toMatch(/<span data-copy="figure" class="[^"]*font-mono[^"]*" style="left:calc\(77\.5% \+ 6px\)">3\.1×<\/span>/)
+    expect(render(node)).toMatch(/<span data-copy="figure" class="[^"]*text-\[13px\][^"]*tabular-nums[^"]*" style="left:calc\(77\.5% \+ 6px\)">3\.1×<\/span>/)
+    expect(render(node)).not.toContain('font-mono')
     expect(render(node)).toContain('rounded-[4px]')
     assertCopyContract(node)
     // A tick just past the fill: the figure starts past the tick.
@@ -45,6 +48,10 @@ describe('TickBarRow and TickKey', () => {
     expect(renderText(node)).toBe('Complained ▲ 7 pts 32%')
     expect(m).toContain('data-copy="verdict"')
     expect(m).toContain('font-semibold')
+    // A 15px name and a tabular sans figure (the audit design).
+    expect(m).toMatch(/^<div class="grid items-center gap-2\.5 text-\[15px\]/)
+    expect(m).toContain('<span data-copy="figure" class="text-right tabular-nums text-foreground">32%</span>')
+    expect(m).not.toContain('font-mono')
     assertCopyContract(node)
     expect(renderText(<TickBarRow name="Asked" value="45%" pct={45} verdict={NO_CLEAR} label="x" />)).toBe('Asked no clear change · +0.1 pts 45%')
     expect(renderText(<TickBarRow name="Asked" value="45%" pct={45} verdict={REFUSED} label="x" />)).toBe('Asked 45%')

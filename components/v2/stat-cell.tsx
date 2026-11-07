@@ -3,7 +3,8 @@ import { fmtInt } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 /**
- * A big mono number over its label, on the inner ground (depth v2, T2).
+ * A big number over its label, on the inner ground (depth v2, T2), in
+ * tabular sans since the audit design (7 Nov: no mono on screens).
  *
  * The boards draw it three sizes: the opened panel's four-up `.stats` (30px),
  * Content's question counts (24px) and Your moves' evidence cells (20px). A
@@ -55,7 +56,7 @@ export function StatCell({ value, label, of, size = 'lg', children, className }:
     <div data-copy={level ? 'level' : undefined} className={cn('min-w-0 rounded-[10px] bg-inner', PAD[size], className)}>
       <div
         data-copy={level ? undefined : 'figure'}
-        className={cn('font-mono font-medium leading-none tracking-[-0.02em] tabular-nums text-foreground', VALUE[size])}
+        className={cn('font-semibold leading-none tracking-[-0.01em] tabular-nums text-foreground', VALUE[size])}
       >
         {shown}
       </div>

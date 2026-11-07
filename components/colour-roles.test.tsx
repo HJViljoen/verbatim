@@ -63,6 +63,14 @@ describe('the colour roles', () => {
     for (const m of [you, rival]) expect(m).toContain('leading-none')
   })
 
+  it('prints a brand as plain words where asked, still marked for the colour-role check (the audit design)', () => {
+    expect(render(<BrandChip who="rival" plain>Ottobock</BrandChip>)).toBe('<span data-who-chip="rival" data-plain="">Ottobock</span>')
+    expect(render(<BrandChip who="you" plain className="font-semibold">Össur</BrandChip>)).toBe('<span data-who-chip="you" data-plain="" class="font-semibold">Össur</span>')
+    // The default chip is unchanged: print reaches it.
+    expect(render(<BrandChip who="you">Sealand</BrandChip>)).toContain('bg-you')
+    expect(render(<BrandChip who="you">Sealand</BrandChip>)).not.toContain('data-plain')
+  })
+
   it('keeps the separator between chips for the words, and does not draw it', () => {
     expect(renderText(<>A<ChipSep />B</>)).toBe('A · B')
     expect(render(<ChipSep />)).toContain('<span class="sr-only">·</span>')
@@ -150,7 +158,7 @@ describe('the bans that hold with more colour, on the pages', () => {
   it('lifts every card on the one card shadow, and an opened panel on its own token a step above', () => {
     for (const [name, m] of pages) {
       // A card is a section, or a v2 tile's article (the kit's `CARD`).
-      const cards = m.match(/<(?:section|article)\b[^>]*class="[^"]*rounded-\[1[46]px\][^"]*"/g) ?? []
+      const cards = m.match(/<(?:section|article)\b[^>]*class="[^"]*rounded-\[1[246]px\][^"]*"/g) ?? []
       expect(cards.length, name).toBeGreaterThan(0)
       for (const c of cards) {
         // The kit's `InPlacePanel` (`data-panel`) is `shadow-panel`; every

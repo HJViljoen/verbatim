@@ -5,10 +5,11 @@ import { StatCell, StatRow } from './stat-cell'
 import { UnitSquares } from './unit-squares'
 
 describe('StatCell', () => {
-  it('prints a big mono number over its label on the inner ground', () => {
+  it('prints a big tabular sans number over its label on the inner ground', () => {
     const m = render(<StatCell value={6} label="in a usual month, over the last three" />)
     expect(m).toContain('bg-inner')
-    expect(m).toMatch(/<div data-copy="figure" class="[^"]*font-mono[^"]*text-\[30px\][^"]*">6<\/div>/)
+    expect(m).toMatch(/<div data-copy="figure" class="[^"]*tabular-nums[^"]*text-\[30px\][^"]*">6<\/div>/)
+    expect(m).not.toContain('font-mono')
     expect(m).not.toMatch(/shadow-/)
     assertCopyContract(<StatCell value={6} label="in a usual month, over the last three" />)
   })

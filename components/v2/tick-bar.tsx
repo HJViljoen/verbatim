@@ -24,7 +24,7 @@ import { cn } from '@/lib/utils'
 
 const HEIGHT = {
   sm: 'h-1.5 rounded-full',
-  md: 'h-2 rounded-full',
+  md: 'h-2 rounded-[4px]',
   lg: 'h-2.5 rounded-full',
   xl: 'h-3.5 rounded-[4px]',
 } as const
@@ -38,8 +38,9 @@ const clamp = (v: number): number => Math.min(100, Math.max(0, Number.isFinite(v
 const FIGURE_BAR_MIN_PX = 160
 
 /** How far past the fill, as a share of the track, a tick must stand for the
- *  figure to fit between them on the narrowest bar: the figure's width (mono
- *  11.5px, about 7px a character) and 6px either side. Nearer than that, the
+ *  figure to fit between them on the narrowest bar: the figure's width (13px
+ *  tabular sans since the audit design, about 7px a character, as the 11.5px
+ *  mono was) and 6px either side. Nearer than that, the
  *  figure starts past the tick (Phase 4 fix round: "0.5×" printed over the
  *  1× marker, which stands 12.5 points past a 0.5× fill, inside the old fixed
  *  12). */
@@ -80,7 +81,7 @@ export function TickBar({ pct, tick = null, tone = 'market', size = 'md', figure
       {figure ? (
         <span
           data-copy="figure"
-          className="absolute top-1/2 -translate-y-1/2 whitespace-nowrap font-mono text-[11.5px] leading-none font-semibold tabular-nums text-foreground"
+          className="absolute top-1/2 -translate-y-1/2 whitespace-nowrap text-[13px] leading-none font-semibold tabular-nums text-foreground"
           style={{ left: `calc(${figureAt}% + 6px)` }}
         >
           {figure}
@@ -110,17 +111,17 @@ export function TickBarRow({ name, value, verdict = null, good = 'neutral', valu
   return (
     <div
       className={cn(
-        'grid items-center gap-2.5 text-[13.5px] leading-[1.35]',
+        'grid items-center gap-2.5 text-[15px] leading-[1.35]',
         valueWidth === 'wide' ? 'grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_44px]' : 'grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_30px]',
         className,
       )}
     >
       <span className={cn('min-w-0', verdict?.state === 'moved' ? 'font-semibold' : null)}>
         {name}
-        {verdict ? <span data-copy="verdict" className="ml-1.5 whitespace-nowrap text-[11.5px]"><MovementBadge verdict={verdict} unit="pts" good={good} bandTip /></span> : null}
+        {verdict ? <span data-copy="verdict" className="ml-1.5 whitespace-nowrap text-[13px]"><MovementBadge verdict={verdict} unit="pts" good={good} bandTip /></span> : null}
       </span>
       <TickBar {...bar} />
-      <span data-copy="figure" className="text-right font-mono text-[12.5px] tabular-nums text-foreground">{value}</span>
+      <span data-copy="figure" className="text-right tabular-nums text-foreground">{value}</span>
     </div>
   )
 }

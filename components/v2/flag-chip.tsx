@@ -2,6 +2,7 @@ import { fmtInt } from '@/lib/format'
 import { glossaryRule } from '@/lib/calibration'
 import type { Verdict } from '@/lib/reading/verdicts'
 import { cn } from '@/lib/utils'
+import { TAG, TAG_TONE } from './look'
 
 /**
  * THE FLAG CHIP (depth v2, T2; plan decision 1).
@@ -26,8 +27,10 @@ import { cn } from '@/lib/utils'
  * Anything else, and any refused verdict, prints no chip at all: a chip with
  * nothing earned is the claim the rule exists to stop.
  *
- * Orange fill, ink on it (4.6:1; MASTER §Colour roles: the orange is a fill
- * and never a text colour). A single-line pill, so `rounded-full` is allowed.
+ * Since the audit design (7 Nov) it is the kit's tag (`TAG`) on the pale
+ * yellow (`TAG_TONE.tint`), ink on it: a quiet single-line tag at 13px, never
+ * the orange pill. `FLAG_WORDS` and `flagWordOf` are unchanged, because the
+ * weekly email imports them.
  */
 
 /** Every word a flag chip may print, keyed by what earned it. */
@@ -66,8 +69,8 @@ function flagTitle(word: FlagWord, verdict: Verdict): string {
 }
 
 const SIZE = {
-  md: 'px-2 py-[5px] text-[12px]',
-  sm: 'px-1.5 py-[3px] text-[10.5px]',
+  md: null,
+  sm: 'px-1.5 py-[2px]',
 } as const
 
 export interface FlagChipProps {
@@ -86,11 +89,7 @@ export function FlagChip({ verdict, size = 'md', className }: FlagChipProps) {
       data-copy="verdict"
       data-flag={word}
       title={flagTitle(word, verdict)}
-      className={cn(
-        'inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-orange font-semibold leading-none text-brand-foreground',
-        SIZE[size],
-        className,
-      )}
+      className={cn('shrink-0', TAG, TAG_TONE.tint, SIZE[size], className)}
     >
       {FLAG_WORDS[word]}
     </span>

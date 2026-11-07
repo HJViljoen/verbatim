@@ -58,7 +58,9 @@ describe('InPlacePanel', () => {
     expect(SELECTED_CARD_RING).toBe('ring-2 ring-foreground')
   })
 
-  it('labels a section in the small grey caps', () => {
-    expect(render(<PanelSection label="Who it's about"><p>x</p></PanelSection>)).toContain('uppercase tracking-[0.06em] text-muted-foreground')
+  it('labels a section in the kit\'s sentence-case label, never caps (the audit design)', () => {
+    const m = render(<PanelSection label="Who it's about"><p>x</p></PanelSection>)
+    expect(m).toContain('<p class="m-0 text-[13px] font-semibold leading-[1.3] text-secondary-foreground">Who it&#x27;s about</p>')
+    expect(m).not.toContain('uppercase')
   })
 })

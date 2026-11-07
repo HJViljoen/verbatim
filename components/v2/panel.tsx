@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { X } from 'lucide-react'
 import type { CSSProperties, ReactNode } from 'react'
 import { cn } from '@/lib/utils'
+import { LBL } from './look'
 import { NOTCH_VAR_CLASS, notchPct, notchStyle, PANEL_SLOT_CLASS, panelSlotStyle, sameEverywhere, type PanelPlacement, type PerBreakpoint } from './panel-place'
 import { PanelScrollIn } from './panel-scroll-in'
 
@@ -131,13 +132,14 @@ export function PanelTitle({ id, children, className }: { id?: string; children:
   )
 }
 
-/** One section inside a panel: its small grey caps label, then its content
- *  (the boards' `.dsec` and `.dlabel`). Numbers in the label are the
- *  caller's to mark. */
+/** One section inside a panel: its label, then its content (the boards'
+ *  `.dsec` and `.dlabel`; since the audit design the label is the kit's
+ *  sentence-case `LBL`, never caps). Numbers in the label are the caller's
+ *  to mark. */
 export function PanelSection({ label, children, className }: { label: ReactNode; children: ReactNode; className?: string }) {
   return (
     <div className={cn('flex min-w-0 flex-col gap-2.5', className)}>
-      <p className="m-0 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{label}</p>
+      <p className={cn('m-0', LBL)}>{label}</p>
       {children}
     </div>
   )

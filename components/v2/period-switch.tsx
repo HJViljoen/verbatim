@@ -11,9 +11,12 @@ import { cn } from '@/lib/utils'
  * control's pills are (components/shell/page-bar.tsx). Server-rendered, no
  * client JS.
  *
- * A white segmented control on a hairline ring; the selected segment is the
- * pale yellow with ink and weight (MASTER §Colour roles: a selected state) and
- * carries `aria-current="page"`.
+ * The audit design's segmented control (7 Nov; Market-After.dc.html): a white
+ * group on a 1px hairline, radius 10 and 4px of padding, 36px items at 14.5px;
+ * the selected segment is the pale yellow with ink and weight (MASTER §Colour
+ * roles: a selected state) and carries `aria-current="page"`. The Settings
+ * tabs draw the same control. The month option names its month
+ * (`withMonthName`: "October", "November so far").
  */
 
 export type Period = 'week' | 'month' | 'time'
@@ -33,6 +36,12 @@ export const PERIODS: readonly PeriodOption<Period>[] = [
   { value: 'month', label: 'This month' },
   { value: 'time', label: 'Over time' },
 ]
+
+/** The options with the month's own name on the `month` option ("October",
+ *  or "November so far"), as the boards label it; the others unchanged. */
+export function withMonthName<V extends string>(options: readonly PeriodOption<V>[], label: string): PeriodOption<V>[] {
+  return options.map((o) => (o.value === 'month' ? { ...o, label } : o))
+}
 
 /** `?period=` as a `Period`; anything else is the page's default. */
 export function parsePeriod(raw: string | string[] | null | undefined, fallback: Period = 'week'): Period {
@@ -55,7 +64,7 @@ export function PeriodSwitch<V extends string = Period>({ value, options, hrefFo
     <nav
       aria-label={label}
       data-print-hide
-      className="inline-flex max-w-full shrink-0 flex-wrap gap-0.5 rounded-[9px] bg-card p-[3px] shadow-block ring-1 ring-foreground/6"
+      className="inline-flex max-w-full shrink-0 flex-wrap gap-1 rounded-[10px] border border-border bg-card p-1"
     >
       {options.map((o) => {
         const on = o.value === value
@@ -65,7 +74,7 @@ export function PeriodSwitch<V extends string = Period>({ value, options, hrefFo
               key={o.value}
               aria-disabled="true"
               title={o.disabled}
-              className="cursor-default whitespace-nowrap rounded-[7px] px-[13px] py-[7px] text-[13.5px] leading-[1.2] text-muted-foreground/70"
+              className="inline-flex h-9 cursor-default items-center whitespace-nowrap rounded-[7px] px-3.5 text-[14.5px] leading-[1.2] text-muted-foreground/70"
             >
               {o.label}<span className="sr-only"> ({o.disabled})</span>
             </span>
@@ -77,8 +86,8 @@ export function PeriodSwitch<V extends string = Period>({ value, options, hrefFo
             href={hrefFor(o.value)}
             aria-current={on ? 'page' : undefined}
             className={cn(
-              'cursor-pointer whitespace-nowrap rounded-[7px] px-[13px] py-[7px] text-[13.5px] leading-[1.2] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              on ? 'bg-accent font-semibold text-accent-foreground' : 'text-secondary-foreground hover:bg-inner hover:text-foreground',
+              'inline-flex h-9 cursor-pointer items-center whitespace-nowrap rounded-[7px] px-3.5 text-[14.5px] leading-[1.2] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground',
+              on ? 'bg-accent font-semibold text-accent-foreground' : 'text-foreground hover:bg-inner',
             )}
           >
             {o.label}

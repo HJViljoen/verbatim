@@ -29,13 +29,15 @@ describe('FlagChip', () => {
     expect(flagWordOf({ ...MOVED, direction: 'flat' })).toBeNull()
   })
 
-  it('is an orange fill with ink words, inside a verdict node', () => {
+  it('is the kit\'s tag on the pale yellow with ink words, inside a verdict node (the audit design)', () => {
     const m = render(<FlagChip verdict={NEW_FLAG} />)
-    expect(m).toMatch(/^<span data-copy="verdict" data-flag="new" title="[^"]+" class="[^"]*bg-orange[^"]*text-brand-foreground[^"]*">New<\/span>$/)
-    expect(m).toContain('rounded-full')
+    expect(m).toMatch(/^<span data-copy="verdict" data-flag="new" title="[^"]+" class="[^"]*bg-accent text-accent-foreground[^"]*">New<\/span>$/)
+    expect(m).toContain('rounded-[6px]')
     expect(m).toContain('whitespace-nowrap')
+    expect(m).not.toContain('bg-orange')
     expect(m).not.toMatch(/text-orange(?!-text)/)
-    expect(render(<FlagChip verdict={NEW_FLAG} size="sm" />)).toContain('text-[10.5px]')
+    expect(render(<FlagChip verdict={NEW_FLAG} size="sm" />)).toContain('text-[13px]')
+    expect(render(<FlagChip verdict={NEW_FLAG} size="sm" />)).not.toContain('text-[10.5px]')
   })
 
   it('keeps the copy contract, direction words included, because they sit in the verdict node', () => {

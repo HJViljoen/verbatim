@@ -104,8 +104,20 @@ export function IconTile({
  * Shorter than any line it sits in (its own leading 1.2, no padding), so it
  * never grows a line, wrapped lines never touch, and the words keep their
  * order for a screen reader.
+ *
+ * `plain` (the audit design, 7 Nov) prints the name as plain words, as the
+ * boards' comma lists do ("Ottobock (1), others (10)"), still carrying
+ * `data-who-chip` so the colour-role check finds the brand. The default output
+ * is unchanged, because print reaches this file.
  */
-export function BrandChip({ who, children, className }: { who: 'you' | 'rival'; children: ReactNode; className?: string }) {
+export function BrandChip({ who, plain, children, className }: { who: 'you' | 'rival'; plain?: boolean; children: ReactNode; className?: string }) {
+  if (plain) {
+    return (
+      <span data-who-chip={who} data-plain="" className={className}>
+        {children}
+      </span>
+    )
+  }
   if (who === 'you') {
     return (
       <span data-who-chip="you" className={cn('inline-block whitespace-nowrap rounded-[4px] bg-you px-1.5 py-px leading-none font-semibold text-you-foreground', className)}>
