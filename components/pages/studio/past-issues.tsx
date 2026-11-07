@@ -39,7 +39,7 @@ export function PastIssues({ issues, openHref }: { issues: readonly PastIssue[];
             {issues.map((i) => (
               <tr key={i.id} id={`issue-${i.id}`} className={STACK_ROW}>
                 <td className={cn(TD, STACK_CELL)}>
-                  {i.snapshotId ? <Link href={openHref(i.snapshotId)} scroll={false} className={ROW}>{i.title}</Link> : <span className="font-semibold">{i.title}</span>}
+                  {i.snapshotId ? <Link href={openHref(i.snapshotId)} className={ROW}>{i.title}</Link> : <span className="font-semibold">{i.title}</span>}
                 </td>
                 <td className={cn(TD, STACK_CELL)}><span className={PHONE_HEAD}>Report</span>{i.report}</td>
                 <td className={cn(TD, STACK_CELL)}><span className={PHONE_HEAD}>Sent</span>{i.sentOn}</td>

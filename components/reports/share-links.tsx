@@ -73,7 +73,10 @@ export function ShareLinks({ snapshotId, links }: { snapshotId: string | null; l
             </label>
             <label className="flex min-w-0 flex-[0_1_260px] flex-col gap-1.5">
               <span className="text-[13px] text-secondary-foreground">Password (optional)</span>
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" className={cn(INPUT, 'w-full max-sm:h-11')} />
+              {/* A plain text field, as before the audit design: the password
+                  is one the operator makes up to send, so no saved login is
+                  offered or filled here. */}
+              <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password (optional)" autoComplete="off" className={cn(INPUT, 'w-full max-sm:h-11')} />
             </label>
             <button type="button" onClick={create} disabled={busy} className={cn(BTN_SECONDARY, 'max-sm:h-11')}>
               {busy && <LoaderCircle className="size-3.5 animate-spin" aria-hidden />} Create link

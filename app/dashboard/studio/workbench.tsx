@@ -370,7 +370,7 @@ export async function OperatorWorkbench({ session, sp }: { session: SessionConte
                           {b.needs_review && <span className="text-caution">A check flagged this one: read it before sending.</span>}
                           {b.snapshot_id && editedSnapshots.has(b.snapshot_id) && <span className="text-[13.5px] text-muted-foreground">Edited</span>}
                           {Number(b.cost_usd) > 0 && <span className="text-[13.5px] tabular-nums text-muted-foreground">${Number(b.cost_usd).toFixed(2)}</span>}
-                          {b.snapshot_id && b.status === 'done' && <Link href={openViewer(b.snapshot_id)} scroll={false} className={GO}>Open the build</Link>}
+                          {b.snapshot_id && b.status === 'done' && <Link href={openViewer(b.snapshot_id)} className={GO}>Open the build</Link>}
                           {art && <a href={`/api/artifacts/${art.id}`} className={GO}>Download PDF, {fmtBytes(art.bytes)}{art.stale ? ', re-renders' : ''}</a>}
                         </li>
                       )
@@ -386,7 +386,7 @@ export async function OperatorWorkbench({ session, sp }: { session: SessionConte
                       <span className="text-[13.5px] text-muted-foreground">Built {fmtWhen(b.created_at)}{b === builds[0] && selected.status === 'draft' ? ', edited since: build again for a current PDF' : ''}</span>
                       {b.cover && b.figures && <p className="m-0 text-[15px] leading-[1.65]">{coverPlainText(b.cover.body, b.figures)}</p>}
                       <div className="flex flex-wrap gap-x-5 gap-y-2">
-                        <Link href={openViewer(b.id)} scroll={false} className={GO}>Open the build</Link>
+                        <Link href={openViewer(b.id)} className={GO}>Open the build</Link>
                         {b.artifacts.map((a) => (
                           <a key={a.id} href={`/api/artifacts/${a.id}`} className={GO}>Download {a.format.toUpperCase()}, {fmtBytes(a.bytes)}{a.stale ? ', re-renders' : ''}</a>
                         ))}

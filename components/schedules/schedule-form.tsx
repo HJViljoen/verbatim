@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useId, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { LoaderCircle } from 'lucide-react'
@@ -64,6 +64,7 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
   const router = useRouter()
   const [pending, start] = useTransition()
   const [cadence, setCadence] = useState<ScheduleRow['cadence']>(schedule?.cadence ?? 'every_update')
+  const cadenceHelpId = useId()
   const [recipients, setRecipients] = useState(schedule?.recipients.join(', ') ?? '')
   const [attachPdf, setAttachPdf] = useState(schedule?.attach_pdf ?? true)
   const [shareDays, setShareDays] = useState(schedule ? (schedule.share_days == null ? 'never' : String(schedule.share_days)) : '30')
@@ -235,12 +236,19 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
         </span>
       </label>
       <div className="grid gap-4 md:grid-cols-2">
-        <label className="flex flex-col gap-1.5">
-          <span className={labelCls}>When</span>
-          <select value={cadence} disabled={readOnly} onChange={(e) => setCadence(e.target.value as ScheduleRow['cadence'])} className={inputCls}>
-            {CADENCES.map((c) => <option key={c.key} value={c.key}>{c.label}: {c.help}</option>)}
-          </select>
-        </label>
+        {/* The option says its name; what it means is the line under the
+            field, in full at every width (a closed select cannot wrap, and
+            at 390 "Every update: Goes out after each scheduled update." was
+            cut mid-word). */}
+        <div className="flex flex-col gap-1.5">
+          <label className="flex flex-col gap-1.5">
+            <span className={labelCls}>When</span>
+            <select value={cadence} disabled={readOnly} onChange={(e) => setCadence(e.target.value as ScheduleRow['cadence'])} aria-describedby={cadenceHelpId} className={inputCls}>
+              {CADENCES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+            </select>
+          </label>
+          <span id={cadenceHelpId} data-cadence-help="" className="text-[13px] leading-[1.45] text-muted-foreground">{CADENCES.find((c) => c.key === cadence)?.help}</span>
+        </div>
         <label className="flex flex-col gap-1.5">
           <span className={labelCls}>Share link in the email</span>
           <select value={shareDays} disabled={readOnly} onChange={(e) => setShareDays(e.target.value)} className={inputCls}>

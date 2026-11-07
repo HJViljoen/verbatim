@@ -33,7 +33,7 @@ export function MonthlyBriefs({ briefs, openHref }: { briefs: readonly StudioBri
             {briefs.map((b) => (
               <tr key={b.snapshotId} className={STACK_ROW}>
                 <td className={cn(TD, STACK_CELL)}>
-                  <Link href={openHref(b.snapshotId)} scroll={false} className={ROW}>{b.name}</Link>
+                  <Link href={openHref(b.snapshotId)} className={ROW}>{b.name}</Link>
                   <p className="m-0 mt-1 text-[14.5px] leading-[1.5] text-secondary-foreground">{b.what}</p>
                 </td>
                 <td className={cn(TD, STACK_CELL)}><span className={PHONE_HEAD}>For</span>{b.forWho}</td>

@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { LoaderCircle } from 'lucide-react'
+import { BTN_PRIMARY, BTN_SECONDARY, BTN_SM } from '@/components/v2/look'
+import { cn } from '@/lib/utils'
 
 // Build a WRITTEN report (T8, 2026-08-31): POST /api/reports/[id]/build
 // answers 202 {buildId} and the agent works for minutes, so this control
@@ -23,7 +25,7 @@ type State =
 
 const POLL_MS = 3000
 
-export function DocumentBuildControl({ reportId, inFlight = null, primary = true, className = '', blocked = null }: { reportId: string; inFlight?: { id: string; status: Status; startedAt: string } | null; primary?: boolean; className?: string; /** Why this report cannot be built yet, in the operator's words. */ blocked?: string | null }) {
+export function DocumentBuildControl({ reportId, inFlight = null, primary = false, className = '', blocked = null }: { reportId: string; inFlight?: { id: string; status: Status; startedAt: string } | null; primary?: boolean; className?: string; /** Why this report cannot be built yet, in the operator's words. */ blocked?: string | null }) {
   const router = useRouter()
   const [state, setState] = useState<State>(() => (inFlight && !['done', 'failed'].includes(inFlight.status) ? { phase: 'busy', buildId: inFlight.id, started: new Date(inFlight.startedAt).getTime(), words: 'Picking up the build' } : { phase: 'idle' }))
   const [now, setNow] = useState(() => Date.now())
@@ -76,26 +78,25 @@ export function DocumentBuildControl({ reportId, inFlight = null, primary = true
   const busy = state.phase === 'busy' || state.phase === 'starting'
   const elapsed = busy ? Math.max(0, Math.floor((now - (state as { started: number }).started) / 1000)) : 0
   const mm = Math.floor(elapsed / 60), ss = String(elapsed % 60).padStart(2, '0')
-  const cls = primary
-    ? 'bg-primary text-primary-foreground hover:bg-accent-foreground'
-    : 'bg-tile text-secondary-foreground ring-1 ring-border hover:bg-inner'
+  // The kit's buttons (the audit design): the small white one by default, as
+  // the Studio board draws Build PDF beside it; 44px to tap on a phone.
   return (
     <div className={`flex flex-col items-end gap-1 ${className}`}>
       <button type="button" onClick={start} disabled={busy || Boolean(blocked)} title={blocked ?? undefined}
-        className={`inline-flex h-[26px] items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-70 ${cls}`}>
+        className={cn(primary ? BTN_PRIMARY : BTN_SECONDARY, BTN_SM, 'max-sm:h-11')}>
         {busy && <LoaderCircle className="size-3.5 animate-spin" aria-hidden />}
-        {busy ? `Building · ${mm}:${ss}` : state.phase === 'done' ? 'Build again' : 'Build'}
+        {busy ? `Building, ${mm}:${ss}` : state.phase === 'done' ? 'Build again' : 'Build'}
       </button>
-      {!busy && blocked && <p className="max-w-[38ch] text-right text-[11.5px] text-muted-foreground">{blocked}</p>}
-      {busy && <p className="text-right text-[11.5px] text-muted-foreground" aria-live="polite" title="A build takes three to five minutes.">{state.phase === 'busy' ? state.words : 'Starting'}.</p>}
+      {!busy && blocked && <p className="m-0 max-w-[38ch] text-right text-[13px] leading-[1.45] text-muted-foreground">{blocked}</p>}
+      {busy && <p className="m-0 text-right text-[13px] leading-[1.45] text-muted-foreground" aria-live="polite" title="A build takes three to five minutes.">{state.phase === 'busy' ? state.words : 'Starting'}.</p>}
       {state.phase === 'done' && (
-        <p className="text-right text-[11.5px] text-muted-foreground" aria-live="polite">
+        <p className="m-0 text-right text-[13px] leading-[1.45] text-muted-foreground" aria-live="polite">
           Built.{' '}
-          {state.artifactId && <a href={`/api/artifacts/${state.artifactId}`} className="font-medium text-foreground underline underline-offset-2">Download the PDF</a>}
+          {state.artifactId && <a href={`/api/artifacts/${state.artifactId}`} className="font-medium text-foreground underline decoration-control underline-offset-4 hover:decoration-foreground">Download the PDF</a>}
           {state.needsReview && <span className="block text-warning">A check flagged this build. Read it before sending.</span>}
         </p>
       )}
-      {state.phase === 'error' && <p className="text-right text-[11.5px] text-negative" aria-live="polite">{state.message}</p>}
+      {state.phase === 'error' && <p className="m-0 text-right text-[13px] leading-[1.45] text-caution" aria-live="polite">{state.message}</p>}
     </div>
   )
 }

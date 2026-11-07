@@ -47,7 +47,7 @@ export function YourReports({ rows, canEdit, privacy, openHref }: {
               <tr key={r.artefact} data-report={r.artefact} className={STACK_ROW}>
                 <td className={cn(TD, STACK_CELL)}>
                   {r.latestSnapshotId
-                    ? <Link href={openHref(r.latestSnapshotId)} scroll={false} className={cn(ROW, 'text-[16px]')}>{r.name}</Link>
+                    ? <Link href={openHref(r.latestSnapshotId)} className={cn(ROW, 'text-[16px]')}>{r.name}</Link>
                     : <span className="text-[16px] font-semibold">{r.name}</span>}
                   <p className="m-0 mt-1 max-w-[440px] text-[14.5px] leading-[1.5] text-secondary-foreground">{r.what}</p>
                 </td>
