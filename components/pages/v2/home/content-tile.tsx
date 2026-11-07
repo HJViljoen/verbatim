@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { ROW } from '@/components/v2/look'
 import { fmtInt, longMonth } from '@/lib/format'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
-import { groupHref, IDEAS_EMPTY, POST_IDEA_SLOT, type OwnTouch, type Recipe, type TopAsked } from '@/lib/pages/v2/content'
+import { fmtMultiple, groupHref, IDEAS_EMPTY, POST_IDEA_SLOT, type OwnTouch, type Recipe, type TopAsked } from '@/lib/pages/v2/content'
 import { tileHref } from '@/lib/pages/home'
 import type { ContentTile, TileRead } from '@/lib/pages/v2/home'
 import { cn } from '@/lib/utils'
@@ -45,8 +45,9 @@ export const ASKED_TITLE = 'Not in your posts yet'
  *  out, so the question is the week's own ("Asked this week"). */
 export const askedTitleUnread = (weekWords: string): string => `Asked ${weekWords}`
 
-/** A multiple, in words: "2.1 times". */
-const times = (m: number | null) => (m != null ? <><span data-copy="figure">{m.toFixed(1)}</span> times</> : null)
+/** A multiple, in words: "2.1 times", rounded as Content rounds it
+ *  (`fmtMultiple`), so the tile and the page agree. */
+const times = (m: number | null) => (m != null ? <><span data-copy="figure">{fmtMultiple(m).replace(/×$/, '')}</span> times</> : null)
 
 /** The format and opening code chose, as one sentence each (the board's
  *  "Story format, 1.3 times a typical video on this question. Opening on a

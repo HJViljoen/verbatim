@@ -147,7 +147,7 @@ describe('the Dashboard, as the board draws it (E1-Dashboard)', () => {
     expect(markupText(empty.slice(empty.indexOf('<dl data-stat-strip'), empty.indexOf('</dl>')))).toBe('Week No update yet This week Not read yet Month Not read yet Next update Sunday 18 Oct')
   })
 
-  it('Market: the check\'s flag as its chip, the week beside its month and the months before, then three bare weekly counts and one new conversation', () => {
+  it('Market: the check\'s flag as its chip and its page\'s link, the week beside its month and the months before, then the table and one new conversation', () => {
     const t = tileText(markup, 'market')
     expect(t).toContain('Unusual this week')
     expect(t).toContain('Insurance refusals for powered knees')
@@ -166,8 +166,11 @@ describe('the Dashboard, as the board draws it (E1-Dashboard)', () => {
     expect([...m.matchAll(/class="h-2 rounded-\[4px\] bg-brand" style="width:([0-9.]+)%"/g)].map((x) => Math.round(Number(x[1])))).toEqual([83, 100, 35])
     // The chip is a verdict, never a free word.
     expect(m).toMatch(/data-copy="verdict"[^>]*>Unusual this week</)
-    // Each conversation opens its own page; the head opens Market.
-    expect(m.match(/href="\/dashboard\/market\/conversations\/[^"]+"/g)).toHaveLength(3)
+    // Each conversation opens its own page, the flag's name too (its page,
+    // the flag's own link, as the tile's head did before the audit design);
+    // the head opens Market.
+    expect(m.match(/href="\/dashboard\/market\/conversations\/[^"]+"/g)).toHaveLength(4)
+    expect(m).toMatch(/<h2 class="[^"]*"><a class="[^"]*" href="\/dashboard\/market\/conversations\/[^"]+"><span data-copy="subject" data-slot="pass_b_theme">Insurance refusals for powered knees<\/span><\/a><\/h2>/)
     expect(m).toMatch(/href="\/dashboard\/market"[^>]*>Open Market</)
   })
 
@@ -179,7 +182,7 @@ describe('the Dashboard, as the board draws it (E1-Dashboard)', () => {
     expect(t).toContain('Week by week')
     // The board's order: the subjects, then the week by week.
     expect(t.indexOf('Moved most')).toBeLessThan(t.indexOf('Week by week'))
-    expect(t).toMatch(/Biggest subject in October so far Fit & comfort 108 videos, 34% of October so far/)
+    expect(t).toMatch(/Biggest subject in October so far Fit & comfort 34% ?, 108 of 318 videos/)
     expect(t).toMatch(/Moved most Cost & access ▲ [\d.]+ pts against September/)
     // A subject moving is neither good nor bad news: the badge is neutral, as Market draws it.
     expect(tileMarkup(markup, 'week')).not.toMatch(/data-copy="verdict"><span[^>]*class="[^"]*text-(?:positive|negative|you|good|bad)/)
@@ -407,8 +410,8 @@ describe('every tile\'s honest state when its page has nothing', () => {
     // The Agent and the bar stand.
     expect(tileText(markup, 'agent')).toContain(AGENT_LINE)
     // The figures row keeps the week and the next update; its two figure
-    // cells say the week was not read.
-    expect(renderText(page(data))).toMatch(/Week 5 to 11 Oct This week Not read yet Month Not read yet Next update Sunday 18 Oct/)
+    // cells say the week's read failed, never that it is not read yet.
+    expect(renderText(page(data))).toMatch(/Week 5 to 11 Oct This week Could not be read just now Month Could not be read just now Next update Sunday 18 Oct/)
     // One failed tile, the rest drawn.
     const one = render(page(dashboardFixture({ failed: ['voices'] })))
     expect(tileText(one, 'voices')).toContain(TILE_FAILED)
@@ -787,7 +790,7 @@ describe('the board\'s shape holds when the data is thin (parity pass)', () => {
     expect(markupText(w)).toMatch(new RegExp(`Biggest subject in October so far ${SUBJECT_NOT_MEASURED}\\. Moved most ${SUBJECT_NOT_MEASURED}\\. Week by week`))
     expect(SUBJECT_NOT_MEASURED).toBe('Not measured yet')
     const s = tileText(render(page(sealand)), 'week')
-    expect(s).toMatch(/Biggest subject in October so far Fit & comfort 108 videos, 34% of October so far Moved most No comparison with September yet\. Week by week/)
+    expect(s).toMatch(/Biggest subject in October so far Fit & comfort 34% ?, 108 of 318 videos Moved most No comparison with September yet\. Week by week/)
   })
 
   // Ruling U6 (14 Oct): while any subject is not measured yet the rows claim
@@ -799,7 +802,7 @@ describe('the board\'s shape holds when the data is thin (parity pass)', () => {
     const withSubjects = (subjects: NonNullable<typeof wk>['subjects']): DashboardData => ({ ...full, week: { state: 'ok', top: { ...wk!, subjects } } })
     const mixed = withSubjects({ ...wk!.subjects!, pending: 2 })
     const t = tileText(render(page(mixed)), 'week')
-    expect(t).toMatch(/Measured subject in October so far Fit & comfort 108 videos, 34% of October so far Moved Cost & access ▲ [\d.]+ pts against September Week by week/)
+    expect(t).toMatch(/Measured subject in October so far Fit & comfort 34% ?, 108 of 318 videos Moved Cost & access ▲ [\d.]+ pts against September Week by week/)
     expect(t).not.toMatch(/Biggest|Moved most/)
     const none = withSubjects({ ...wk!.subjects!, moved: null, noneMoved: true, pending: 2 })
     expect(tileText(render(page(none)), 'week')).toMatch(/Moved No measured subject beyond its normal swing against September\. Week by week/)

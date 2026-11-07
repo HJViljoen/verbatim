@@ -70,11 +70,15 @@ function Hero({ top, month }: { top: MarketTop; month: string | null }) {
     const { card } = hero
     const f = card.flag
     const title = card.conv?.label ?? f.label
+    const named = f.objectKind === 'theme' ? <span data-copy="subject" data-slot="pass_b_theme">{title}</span> : title
     return (
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
           <FlagChip verdict={card.verdict} />
-          <h2 className={TT_WIDE}>{f.objectKind === 'theme' ? <span data-copy="subject" data-slot="pass_b_theme">{title}</span> : title}</h2>
+          {/* The flag's name opens its page (a subject's or a conversation's),
+              as the tile's head did before the audit design: a flag on a
+              subject has no row in the table to open it. */}
+          <h2 className={TT_WIDE}>{card.href ? <Link href={card.href} className={ROW}>{named}</Link> : named}</h2>
         </div>
         <p className={cn(CSUB, 'text-[14px] text-secondary-foreground')}>
           <span data-copy="level">{fmtInt(f.week.k)} of {fmtInt(f.week.n)} videos</span> this week, {flagBaseWords(f.denominator)}, against{' '}

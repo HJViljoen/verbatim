@@ -103,9 +103,18 @@ function Ready({ top, standout }: { top: TopProducts; standout: NonNullable<TopP
     : [{ key: 'standout', name: standout.name, videos: standout.k, href: standout.href }]
   const more = all.length > PRODUCTS_LISTED ? all.length - PRODUCTS_LISTED : 0
   const quiet = counted ? top.products! - top.cameUp! : null
+  // The heading names the standout, so its count prints on the tile always:
+  // in its ranked row, or, where it ranks below the list (a first month
+  // with fewer videos than the four listed), on the line under the heading.
+  const listed = rows.some((r) => r.href === standout.href || r.name === standout.name)
   return (
     <>
       <Standout standout={standout} />
+      {listed ? null : (
+        <p data-products-standout="" className="m-0 text-[14.5px] leading-[1.5] text-secondary-foreground">
+          {standout.name}: <span data-copy="figure">{fmtInt(standout.k)}</span> {standout.k === 1 ? 'video' : 'videos'}.
+        </p>
+      )}
       {counted ? (
         <p className="m-0 text-[14.5px] leading-[1.5] text-secondary-foreground">
           <span data-copy="figure">{fmtInt(top.cameUp!)}</span> of your <span data-copy="figure">{fmtInt(top.products!)}</span> products came up.

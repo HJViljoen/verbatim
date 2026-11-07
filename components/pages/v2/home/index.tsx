@@ -56,8 +56,9 @@ function videosAndComments(f: { videos: number | null; comments: number | null }
   )
 }
 
-/** The words a cell prints where it has nothing to say a figure of. */
-export const STRIP_NONE = { week: 'No update yet', figures: 'Not read yet', next: 'Not scheduled', paused: 'Paused' } as const
+/** The words a cell prints where it has nothing to say a figure of: a week
+ *  with no read yet, or a read that failed (never "not read yet" for that). */
+export const STRIP_NONE = { week: 'No update yet', figures: 'Not read yet', failed: 'Could not be read just now', next: 'Not scheduled', paused: 'Paused' } as const
 
 /**
  * The Dashboard's figures row, in the board's four cells and order: Week
@@ -67,12 +68,13 @@ export const STRIP_NONE = { week: 'No update yet', figures: 'Not read yet', next
  * place. A week tile that failed, or holds no read, says so in its two
  * cells. Pure.
  */
-export function dashboardStats(bar: DashboardBar, week: WeekTile | null): StatItem[] {
+export function dashboardStats(bar: DashboardBar, week: WeekTile | null, failed = false): StatItem[] {
   const month = monthWords(week?.inMonth)
+  const none = failed ? STRIP_NONE.failed : STRIP_NONE.figures
   return [
     { key: 'week', term: 'Week', value: bar.short ?? bar.dates ?? STRIP_NONE.week },
-    { key: 'this-week', term: 'This week', value: (week && videosAndComments(week.week)) ?? STRIP_NONE.figures },
-    { key: 'month', term: month ?? 'Month', value: (week && videosAndComments(week.month)) ?? STRIP_NONE.figures },
+    { key: 'this-week', term: 'This week', value: (week && videosAndComments(week.week)) ?? none },
+    { key: 'month', term: month ?? 'Month', value: (week && videosAndComments(week.month)) ?? none },
     bar.paused
       ? { key: 'next', term: 'Updates', value: STRIP_NONE.paused }
       : { key: 'next', term: 'Next update', value: bar.nextUpdate ? longDay(bar.nextUpdate) : STRIP_NONE.next },
@@ -83,7 +85,7 @@ const ok = (r: TileRead<WeekTile>): WeekTile | null => (r.state === 'ok' ? r.top
 
 /** The figures row from settled data. */
 export function DashboardStrip({ bar, week }: { bar: DashboardBar; week: TileRead<WeekTile> }) {
-  const items = dashboardStats(bar, ok(week))
+  const items = dashboardStats(bar, ok(week), week.state === 'failed')
   return <StatStripFrame cells={items.length}>{items.map((it) => <StatStripCell key={it.key} item={it} />)}</StatStripFrame>
 }
 
@@ -96,7 +98,7 @@ function DashboardStripStream({ bar, week }: { bar: DashboardBar; week: Promise<
       <StatStripCell item={first} />
       <Suspense fallback={<><CellBones /><CellBones /></>}>
         <Settled read={week}>
-          {(r) => dashboardStats(bar, ok(r)).slice(1, 3).map((it) => <StatStripCell key={it.key} item={it} />)}
+          {(r) => dashboardStats(bar, ok(r), r.state === 'failed').slice(1, 3).map((it) => <StatStripCell key={it.key} item={it} />)}
         </Settled>
       </Suspense>
       <StatStripCell item={last} />

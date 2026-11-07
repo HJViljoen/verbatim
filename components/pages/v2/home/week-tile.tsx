@@ -144,9 +144,9 @@ function Subjects({ s }: { s: WeekSubjects | null }) {
         {gap ? <Gap>{gap.biggest}</Gap> : s?.biggest ? (
           <>
             <Link href={s.biggest.href} className={cn(ROW, 'text-[15px]')}>{s.biggest.name}</Link>
-            {/* The month's base is the figures row's (decision 2). */}
+            {/* A percentage carries its "of N" (decision 2 A). */}
             <div className="mt-0.5 text-[14px] text-secondary-foreground">
-              <span data-copy="figure">{fmtInt(s.biggest.k)}</span> videos, <span data-copy="figure">{pct(s.biggest.k, s.biggest.n)}%</span> of {s.monthText}
+              <span data-copy="figure">{pct(s.biggest.k, s.biggest.n)}%</span>, <span data-copy="level">{fmtInt(s.biggest.k)} of {fmtInt(s.biggest.n)}</span> videos
             </div>
           </>
         ) : <Gap>{SUBJECT_NO_LEVEL}</Gap>}
