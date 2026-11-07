@@ -2,7 +2,11 @@ import { getSessionContext } from '@/lib/auth'
 import { settingsBar } from '@/lib/settings/bar'
 import { billingAccess, type BillingClient } from '@/lib/billing'
 import { isStripeConfigured } from '@/lib/stripe'
-import { SettingsFrame, SettingsCard, FactRow } from '@/components/settings-frame'
+import type { ReactNode } from 'react'
+import { SettingsFrame } from '@/components/settings-frame'
+import { Card } from '@/components/pages/studio/ui'
+import { EmptyBox, STAT_STRIP_COLS, StatStripCell, type StatItem } from '@/components/v2/ui'
+import { cn } from '@/lib/utils'
 import { planLabel, TRIAL_BY_AGREEMENT, TRIAL_BY_AGREEMENT_LABEL, TRIAL_BY_AGREEMENT_LINE } from '@/lib/billing-copy'
 import { CONTACT_EMAIL } from '@/lib/legal'
 import { BillingControls } from './billing-ui'
@@ -17,6 +21,13 @@ export const metadata: Metadata = { title: `Plan & billing · ${surface('setting
 // everyone else sees a read-only summary (billing is owner-only). Entitlement is
 // driven by billingAccess() so the comp bypass (partners / Ossur) is consistent
 // with the rest of the app.
+//
+// SINCE THE AUDIT DESIGN (7 Nov, Settings-Billing.dc.html): "Your plan" a
+// white tile with its line and a figures row (Plan, Access, and Trial ends
+// while on trial) in place of the fact rows; Billing and Invoices side by
+// side from 1024, each with its state in the dashed box where there is
+// nothing to do; the access shown once (no meta beside the title). No render
+// test covers this page: it is checked on the dev server.
 
 interface ClientBillingRow extends BillingClient {
   company_name?: string | null
@@ -30,7 +41,19 @@ const REASON_LABEL: Record<string, string> = {
   past_due: 'Payment past due',
   trialing: 'Free trial',
   suspended: 'Suspended',
+  pending: 'Not switched on yet',
   none: 'No active plan',
+}
+
+/** A tile on this page: its 18px title, its line, then what it holds. */
+function Tile({ title, line, muted = false, children }: { title: string; line: ReactNode; muted?: boolean; children?: ReactNode }) {
+  return (
+    <Card className="gap-3 p-[26px] max-sm:p-[18px]">
+      <h3 className="m-0 text-[18px] font-semibold leading-[1.3]">{title}</h3>
+      <p className={cn('m-0 text-[15px] leading-[1.55]', muted && 'text-secondary-foreground')}>{line}</p>
+      {children}
+    </Card>
+  )
 }
 
 export default async function BillingPage({
@@ -58,7 +81,7 @@ export default async function BillingPage({
   // A FREE TRIAL PRICED WITH HEINRICH (lib/billing-copy.ts, a default): the
   // comp stays in the database and in `billingAccess`; only the words change.
   const byAgreement = TRIAL_BY_AGREEMENT.has(clientId)
-  const accessLabel = byAgreement ? TRIAL_BY_AGREEMENT_LABEL : (REASON_LABEL[access.reason] ?? '—')
+  const accessLabel = byAgreement ? TRIAL_BY_AGREEMENT_LABEL : (REASON_LABEL[access.reason] ?? 'Not set')
 
   const description =
     byAgreement ? TRIAL_BY_AGREEMENT_LINE
@@ -70,43 +93,60 @@ export default async function BillingPage({
     : access.reason === 'pending' ? 'This workspace is set up but not yet switched on. You’ll hear from us.'
     : 'Subscribe to keep access to your dashboards and scheduled updates.'
 
+  // The plan's figures row: Plan, Access, and while on trial the day it ends.
+  const plan: StatItem[] = [
+    { key: 'plan', term: 'Plan', value: byAgreement ? TRIAL_BY_AGREEMENT_LABEL : planLabel(client.plan) },
+    { key: 'access', term: 'Access', value: byAgreement ? 'Full access' : accessLabel },
+    ...(client.trial_ends_at && access.reason === 'trialing'
+      ? [{ key: 'trial', term: 'Trial ends', value: new Date(client.trial_ends_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) }]
+      : []),
+  ]
+
   // THE ONE-LINE BAR (the 25 Sep rulings, market-first WP3.10), as on every
   // Settings sub-page.
   const bar = await settingsBar(supabase, clientId, client.company_name ?? 'Your workspace')
   return (
-    <SettingsFrame active="billing" operator={operator != null} title="Settings" context={`${client.company_name ?? 'Your workspace'}${!isOwner ? ' · read-only' : ''}`} bar={bar} contentTitle="Plan & billing" contentMeta={byAgreement ? TRIAL_BY_AGREEMENT_LABEL : (REASON_LABEL[access.reason] ?? 'Plan')}>
-      <div className="flex flex-col gap-3">
+    <SettingsFrame active="billing" operator={operator != null} title="Settings" context={`${client.company_name ?? 'Your workspace'}${!isOwner ? ', read-only' : ''}`} bar={bar} contentTitle="Plan & billing">
+      <div className="flex max-w-[1060px] flex-col gap-5">
         {status === 'success' && (
-          <p className="rounded-md bg-accent px-4 py-3 text-[12.5px] text-accent-foreground">Thanks. Your subscription is being activated. It may take a moment to reflect here.</p>
+          <p role="status" className="m-0 rounded-[10px] bg-accent px-4 py-3 text-[14px] text-accent-foreground">Thanks. Your subscription is being activated. It may take a moment to reflect here.</p>
         )}
         {status === 'cancelled' && (
-          <p className="rounded-md bg-inner px-4 py-3 text-[12.5px] text-muted-foreground">Checkout cancelled. No charge was made.</p>
+          <p role="status" className="m-0 rounded-[10px] bg-inner px-4 py-3 text-[14px] text-secondary-foreground">Checkout cancelled. No charge was made.</p>
         )}
 
-        <SettingsCard title="Your plan" description={description}>
-          <FactRow label="Plan">{byAgreement ? TRIAL_BY_AGREEMENT_LABEL : planLabel(client.plan)}</FactRow>
-          <FactRow label="Access">{byAgreement ? 'Full access' : accessLabel}</FactRow>
-          {client.trial_ends_at && access.reason === 'trialing' && <FactRow label="Trial ends">{new Date(client.trial_ends_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</FactRow>}
-        </SettingsCard>
+        <Card className="p-[26px] max-sm:p-[18px]">
+          <h3 className="m-0 text-[18px] font-semibold leading-[1.3]">Your plan</h3>
+          <p className="m-0 mt-1.5 text-[15px] leading-[1.55] text-secondary-foreground">{description}</p>
+          <dl className={cn('m-0 mt-5 grid grid-cols-1 gap-6 border-t border-border pt-[18px]', STAT_STRIP_COLS[plan.length])}>
+            {plan.map((item) => <StatStripCell key={item.key} item={item} />)}
+          </dl>
+        </Card>
 
-        <SettingsCard title="Billing" description={access.reason === 'comped' ? 'No billing action needed.' : isOwner ? 'Card, invoices and cancellation are handled by Stripe.' : 'Only the workspace owner can manage billing.'}>
-          {byAgreement ? (
-            <p className="text-[12.5px] text-muted-foreground">
-              Nothing is charged here. To talk about pricing, write to{' '}
-              <a href={`mailto:${CONTACT_EMAIL}`} className="underline underline-offset-2">{CONTACT_EMAIL}</a>.
-            </p>
-          ) : access.reason === 'comped' ? (
-            <p className="text-[12.5px] text-muted-foreground">Nothing to do here.</p>
-          ) : isOwner ? (
-            <BillingControls stripeConfigured={isStripeConfigured} hasCustomer={hasCustomer} />
-          ) : (
-            <p className="text-[12.5px] text-muted-foreground">Ask the owner if something needs changing.</p>
-          )}
-        </SettingsCard>
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+          <Tile title="Billing" line={access.reason === 'comped' ? 'No billing action needed.' : isOwner ? 'Card, invoices and cancellation are handled by Stripe.' : 'Only the workspace owner can manage billing.'}>
+            {byAgreement ? (
+              <EmptyBox>
+                Nothing is charged here. To talk about pricing, write to{' '}
+                <a href={`mailto:${CONTACT_EMAIL}`} className="font-medium text-foreground underline decoration-control underline-offset-4 hover:decoration-foreground">{CONTACT_EMAIL}</a>.
+              </EmptyBox>
+            ) : access.reason === 'comped' ? (
+              <EmptyBox>Nothing to do here.</EmptyBox>
+            ) : isOwner ? (
+              <BillingControls stripeConfigured={isStripeConfigured} hasCustomer={hasCustomer} />
+            ) : (
+              <p className="m-0 text-[15px] leading-[1.55] text-secondary-foreground">Ask the owner if something needs changing.</p>
+            )}
+          </Tile>
 
-        <SettingsCard title="Invoices" description="Your invoice history lives in the Stripe billing portal (Manage billing). It will be listed here once billing is live for this workspace.">
-          <p className="text-[12.5px] text-muted-foreground">{hasCustomer ? 'Open Manage billing to see them.' : 'No invoices yet.'}</p>
-        </SettingsCard>
+          <Tile title="Invoices" muted line="Your invoice history lives in the Stripe billing portal (Manage billing). It will be listed here once billing is live for this workspace.">
+            {hasCustomer ? (
+              <p className="m-0 text-[15px] leading-[1.55]">Open Manage billing to see them.</p>
+            ) : (
+              <EmptyBox>No invoices yet.</EmptyBox>
+            )}
+          </Tile>
+        </div>
       </div>
     </SettingsFrame>
   )

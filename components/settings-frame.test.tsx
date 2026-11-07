@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { render, renderText } from '@/lib/test/render'
-import { SettingsFrame, SettingsTable, SettingsRow, SettingsCard, FactRow } from '@/components/settings-frame'
+import { SettingsFrame, SettingsTable, SettingsRow, SettingsCard } from '@/components/settings-frame'
 import { ReadinessTable } from '@/components/ops/readiness-table'
 import type { ReadinessRow } from '@/lib/readiness/types'
 
@@ -65,7 +65,7 @@ describe('the settings vocabulary', () => {
   it('draws no elevated card of its own: the sub-page decides its grounds', () => {
     const markup = render(
       <SettingsFrame active="guide" title="Settings" contentTitle="How to read" contentMeta="nine pages" contentRule="What each page tells you.">
-        <FactRow label="Platforms">TikTok · YouTube</FactRow>
+        <p>TikTok, YouTube</p>
       </SettingsFrame>,
     )
     expect(markup).not.toContain('shadow-tile')

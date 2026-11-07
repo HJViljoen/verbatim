@@ -1,19 +1,27 @@
 'use client'
 
 import { useActionState, useState } from 'react'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
-import { Check, Copy, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
+import { BTN_PRIMARY, BTN_SECONDARY, INPUT, LBL } from '@/components/v2/look'
+import { cn } from '@/lib/utils'
 import {
   inviteMember, revokeInvitation, resendInvitation, changeMemberRole, removeMember,
   type ActionState,
 } from './actions'
 import type { Role } from '@/lib/auth'
 
+// The Team tab's client controls. Since the audit design (7 Nov,
+// Settings-Team.dc.html): labelled fields in the kit's input, Invite the
+// yellow button (the tab's one primary), Copy link, Resend, Revoke and Remove
+// the white secondary button with no icon; a member's role a labelled select
+// in its own table cell, Remove in the next. What each does is unchanged.
+// Styles from components/v2/look.ts (import-free, the client-bundle guard).
+
 const idleState: ActionState = { ok: false, message: '' }
 
-const selectCls =
-  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50'
+const FIELD = cn(INPUT, 'max-sm:h-11')
+const BUTTON = cn(BTN_SECONDARY, 'max-sm:h-11')
+const SAID = 'text-[13px] leading-[1.45]'
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
@@ -38,12 +46,21 @@ export function CopyLinkButton({ url }: { url: string }) {
           /* clipboard blocked — the link is visible to select manually */
         }
       }}
-      className="inline-flex items-center gap-1.5 rounded-lg border border-input px-2.5 h-8 text-xs hover:bg-accent"
+      className={BUTTON}
       title="Copy invite link"
     >
-      {copied ? <Check className="h-3.5 w-3.5 text-positive" /> : <Copy className="h-3.5 w-3.5" />}
       {copied ? 'Copied' : 'Copy link'}
     </button>
+  )
+}
+
+/** The invite link as the board draws it: a labelled, read-only field. */
+export function InviteLinkField({ id, url }: { id: string; url: string }) {
+  return (
+    <div className="flex min-w-0 flex-[1_1_360px] flex-col gap-1.5">
+      <label htmlFor={id} className={LBL}>Invite link</label>
+      <input id={id} type="text" readOnly value={url} className={cn(FIELD, 'w-full text-secondary-foreground')} />
+    </div>
   )
 }
 
@@ -52,31 +69,31 @@ export function InviteForm({ inviterRole }: { inviterRole: Role }) {
   const roles = grantableRoles(inviterRole)
 
   return (
-    <form action={formAction} className="space-y-3">
-      <div className="flex flex-col sm:flex-row gap-2">
-        <Input
-          name="email"
-          type="email"
-          required
-          placeholder="teammate@brand.com"
-          className="sm:flex-1"
-          disabled={pending}
-        />
-        <select name="role" defaultValue={roles[roles.length - 1]} className={selectCls} disabled={pending}>
-          {roles.map((r) => <option key={r} value={r}>{cap(r)}</option>)}
-        </select>
-        <Button type="submit" disabled={pending}>
-          {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Invite'}
-        </Button>
+    <form action={formAction} className="flex flex-col gap-3.5">
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-1.5">
+          <label htmlFor="invite-email" className={LBL}>Email</label>
+          <input id="invite-email" name="email" type="email" required placeholder="teammate@brand.com" disabled={pending} className={cn(FIELD, 'w-full')} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="invite-role" className={LBL}>Role</label>
+          <select id="invite-role" name="role" defaultValue={roles[roles.length - 1]} disabled={pending} className={cn(FIELD, 'w-[140px]')}>
+            {roles.map((r) => <option key={r} value={r}>{cap(r)}</option>)}
+          </select>
+        </div>
+        <button type="submit" disabled={pending} className={cn(BTN_PRIMARY, 'px-5 max-sm:h-11')}>
+          {pending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+          Invite
+        </button>
       </div>
 
       {state.message && (
-        <p className={`text-sm ${state.ok ? 'text-positive' : 'text-destructive'}`}>{state.message}</p>
+        <p role="status" className={cn(SAID, 'm-0', state.ok ? 'text-secondary-foreground' : 'text-caution')}>{state.message}</p>
       )}
 
       {state.ok && state.inviteUrl && (
-        <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2">
-          <code className="flex-1 truncate text-xs text-muted-foreground">{state.inviteUrl}</code>
+        <div className="flex flex-wrap items-end gap-2">
+          <InviteLinkField id="invite-new-link" url={state.inviteUrl} />
           <CopyLinkButton url={state.inviteUrl} />
         </div>
       )}
@@ -87,13 +104,12 @@ export function InviteForm({ inviterRole }: { inviterRole: Role }) {
 export function RevokeButton({ id }: { id: string }) {
   const [state, formAction, pending] = useActionState(revokeInvitation, idleState)
   return (
-    <form action={formAction}>
+    <form action={formAction} className="flex flex-col items-start gap-1">
       <input type="hidden" name="id" value={id} />
-      <Button type="submit" variant="ghost" size="sm" disabled={pending}
-        className="text-destructive hover:text-destructive">
+      <button type="submit" disabled={pending} className={BUTTON}>
         {pending ? 'Revoking…' : 'Revoke'}
-      </Button>
-      {!state.ok && state.message && <span className="ml-2 text-xs text-destructive">{state.message}</span>}
+      </button>
+      {!state.ok && state.message && <span role="status" className={cn(SAID, 'text-caution')}>{state.message}</span>}
     </form>
   )
 }
@@ -103,46 +119,50 @@ export function RevokeButton({ id }: { id: string }) {
 export function ResendButton({ id }: { id: string }) {
   const [state, formAction, pending] = useActionState(resendInvitation, idleState)
   return (
-    <form action={formAction} className="flex items-center">
+    <form action={formAction} className="flex flex-col items-start gap-1">
       <input type="hidden" name="id" value={id} />
-      <Button type="submit" variant="outline" size="sm" disabled={pending}>
+      <button type="submit" disabled={pending} className={BUTTON}>
         {pending ? 'Sending…' : 'Resend'}
-      </Button>
-      {state.message && <span className={`ml-2 text-xs ${state.ok ? 'text-positive' : 'text-destructive'}`}>{state.message}</span>}
+      </button>
+      {state.message && <span role="status" className={cn(SAID, state.ok ? 'text-secondary-foreground' : 'text-caution')}>{state.message}</span>}
     </form>
   )
 }
 
-// Owner-only controls for a teammate row: change role + remove.
-export function MemberControls({ userId, currentRole }: { userId: string; currentRole: Role }) {
-  const [roleState, roleAction, rolePending] = useActionState(changeMemberRole, idleState)
-  const [removeState, removeAction, removePending] = useActionState<ActionState, FormData>(removeMember, idleState)
-  const err = (!roleState.ok && roleState.message) || (!removeState.ok && removeState.message) || ''
-
+// Owner-only controls for a teammate row: the role (its own cell) and Remove
+// (the next cell). Changing the role submits at once, as before.
+export function RoleSelect({ userId, currentRole, name }: { userId: string; currentRole: Role; name: string }) {
+  const [state, action, pending] = useActionState(changeMemberRole, idleState)
   return (
-    <div className="flex items-center justify-end gap-2">
-      <form action={roleAction} className="flex items-center gap-2">
-        <input type="hidden" name="userId" value={userId} />
-        <select
-          name="role"
-          defaultValue={currentRole}
-          disabled={rolePending}
-          className={selectCls}
-          onChange={(e) => e.currentTarget.form?.requestSubmit()}
-        >
-          {(['owner', 'admin', 'member'] as Role[]).map((r) => (
-            <option key={r} value={r}>{cap(r)}</option>
-          ))}
-        </select>
-      </form>
-      <form action={removeAction}>
-        <input type="hidden" name="userId" value={userId} />
-        <Button type="submit" variant="ghost" size="sm" disabled={removePending}
-          className="text-destructive hover:text-destructive">
-          {removePending ? 'Removing…' : 'Remove'}
-        </Button>
-      </form>
-      {err && <span className="text-xs text-destructive">{err}</span>}
-    </div>
+    <form action={action} className="flex flex-col items-start gap-1">
+      <input type="hidden" name="userId" value={userId} />
+      <label htmlFor={`role-${userId}`} className="sr-only">Role for {name}</label>
+      <select
+        id={`role-${userId}`}
+        name="role"
+        defaultValue={currentRole}
+        disabled={pending}
+        className={cn(INPUT, 'h-9 w-[130px] max-sm:h-11')}
+        onChange={(e) => e.currentTarget.form?.requestSubmit()}
+      >
+        {(['owner', 'admin', 'member'] as Role[]).map((r) => (
+          <option key={r} value={r}>{cap(r)}</option>
+        ))}
+      </select>
+      {!state.ok && state.message ? <span role="status" className={cn(SAID, 'text-caution')}>{state.message}</span> : null}
+    </form>
+  )
+}
+
+export function RemoveMember({ userId, name }: { userId: string; name: string }) {
+  const [state, action, pending] = useActionState<ActionState, FormData>(removeMember, idleState)
+  return (
+    <form action={action} className="flex flex-col items-end gap-1 max-sm:items-start">
+      <input type="hidden" name="userId" value={userId} />
+      <button type="submit" disabled={pending} aria-label={`Remove ${name}`} className={cn(BTN_SECONDARY, 'h-9 px-3.5 max-sm:h-11')}>
+        {pending ? 'Removing…' : 'Remove'}
+      </button>
+      {!state.ok && state.message ? <span role="status" className={cn(SAID, 'text-caution')}>{state.message}</span> : null}
+    </form>
   )
 }

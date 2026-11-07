@@ -1,14 +1,16 @@
 import Link from 'next/link'
-import { UserPlus, Users, Clock, Mail } from 'lucide-react'
 import { SettingsFrame } from '@/components/settings-frame'
+import { Card, CardTitle } from '@/components/pages/studio/ui'
+import { STACK, STACK_CELL, STACK_HEAD, STACK_ROW, TBL, TD, TH, TAG, TAG_TONE } from '@/components/v2/look'
+import { EmptyBox, GoLink } from '@/components/v2/ui'
+import { cn } from '@/lib/utils'
 import { getSessionContext, canManageTenant } from '@/lib/auth'
 import { settingsBar } from '@/lib/settings/bar'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { recipientsBySchedule } from '@/lib/schedules/default'
 import { getBaseUrl } from '@/lib/site'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { InviteForm, RevokeButton, ResendButton, MemberControls, CopyLinkButton } from './team-ui'
-import { canResendInvite, inviteState, memberUpdateStatus, scheduleLine, UPDATE_STATUS_WORDS } from '@/lib/team-copy'
+import { InviteForm, InviteLinkField, RevokeButton, ResendButton, RoleSelect, RemoveMember, CopyLinkButton } from './team-ui'
+import { canResendInvite, inviteState, memberUpdateStatus, UPDATE_STATUS_WORDS } from '@/lib/team-copy'
 import { canSeeStudio, STUDIO_HREF } from '@/lib/studio-visibility'
 import { CONTACT_EMAIL } from '@/lib/legal'
 import type { Metadata } from 'next'
@@ -23,6 +25,17 @@ export const metadata: Metadata = { title: `${settingsSubPage('team').label} · 
 // roles. Owners/admins can invite + revoke; only owners change roles or remove
 // members. Members see a read-only roster. Authorization is enforced in the
 // server actions and by RLS — the UI gating below is only UX.
+//
+// SINCE THE AUDIT DESIGN (7 Nov, Settings-Team.dc.html): four white tiles
+// with 21px titles and no icon; Invite with labelled fields; Members a table
+// (Name, Email, The update, Role, a hidden Remove head) with the count in its
+// head ("5 members", out of the frame's meta), the role a labelled select per
+// row for the owner; Who gets the update a table of schedules, each one's
+// addresses one a line from the data (not `scheduleLine`'s " · " join);
+// Invites with the link a labelled read-only field and Copy link, Resend and
+// Revoke white buttons. On a phone each table row stacks (STACK). The empty
+// states are in the dashed box. No render test covers this page: it is
+// checked on the dev server.
 
 interface MemberRow { id: string; full_name: string | null; email: string; role: 'owner' | 'admin' | 'member' }
 interface InviteRow { id: string; email: string; role: 'owner' | 'admin' | 'member'; expires_at: string; token: string | null }
@@ -32,16 +45,23 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 /** Heinrich's address, as a link (finish-list item 18): "ask us" with no way
  *  to reach anyone is a dead end. */
 function ContactLink() {
-  return <a href={`mailto:${CONTACT_EMAIL}`} className="underline underline-offset-2">{CONTACT_EMAIL}</a>
+  return <a href={`mailto:${CONTACT_EMAIL}`} className={INLINE_GO}>{CONTACT_EMAIL}</a>
 }
 
-function RoleBadge({ role }: { role: string }) {
+/** The kit's link look at the size of the sentence it sits in. */
+const INLINE_GO = 'font-medium text-foreground underline decoration-control underline-offset-4 hover:decoration-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground'
+
+/** A tile's head: its title, and a count at the right. */
+function Head({ title, count }: { title: string; count?: string }) {
   return (
-    <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-      {cap(role)}
-    </span>
+    <div className="flex items-baseline justify-between gap-4">
+      <CardTitle>{title}</CardTitle>
+      {count ? <span className="text-[14px] text-muted-foreground">{count}</span> : null}
+    </div>
   )
 }
+
+const TILE = 'p-[26px] max-sm:p-[18px]'
 
 export default async function TeamPage() {
   const session = await getSessionContext()
@@ -116,132 +136,159 @@ export default async function TeamPage() {
   // Settings sub-page.
   const bar = await settingsBar(supabase, clientId, client?.company_name ?? 'Your workspace')
   return (
-    <SettingsFrame active="team" title="Settings" context={`${client?.company_name ?? 'Workspace'}${!canManage ? ' · read-only' : ''}`} bar={bar} contentTitle="Team" contentMeta={`${memberRows.length} member${memberRows.length === 1 ? '' : 's'}`} operator={session.operator != null}>
-    <div className="max-w-3xl space-y-4">
+    <SettingsFrame active="team" title="Settings" context={`${client?.company_name ?? 'Workspace'}${!canManage ? ', read-only' : ''}`} bar={bar} contentTitle="Team" operator={session.operator != null}>
+    <div className="flex max-w-[1060px] flex-col gap-5">
 
       {canManage && (
-        <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2 text-sm"><UserPlus className="size-4 text-muted-foreground" aria-hidden /> Invite a teammate</CardTitle></CardHeader>
-          <CardContent className="space-y-3">
-            <InviteForm inviterRole={role} />
-            <p className="text-[11px] text-muted-foreground/70">
-              We email the invite link directly. You can also copy the generated link and share it
-              yourself. It signs the person in and adds them to {client?.company_name ?? 'your workspace'}.
-            </p>
-          </CardContent>
+        <Card className={TILE}>
+          <CardTitle>Invite a teammate</CardTitle>
+          <div className="mt-[18px]"><InviteForm inviterRole={role} /></div>
+          <p className="m-0 mt-3.5 text-[14px] leading-[1.55] text-secondary-foreground">
+            We email the invite link directly. You can also copy the generated link and share it
+            yourself. It signs the person in and adds them to {client?.company_name ?? 'your workspace'}.
+          </p>
         </Card>
       )}
 
-      <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2 text-sm"><Users className="size-4 text-muted-foreground" aria-hidden /> Members ({memberRows.length})</CardTitle></CardHeader>
-        <CardContent className="divide-y">
-          {memberRows.map((m) => {
-            const isSelf = m.id === userId
-            const status = memberUpdateStatus(m.email, schedules)
-            return (
-              <div key={m.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">
-                    {m.full_name || m.email}
-                    {isSelf && <span className="ml-2 text-[11px] text-muted-foreground">(you)</span>}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {m.email}
-                    <span className={`ml-2 text-[11px] ${status === 'gets' ? 'text-positive' : 'text-muted-foreground/70'}`}>{UPDATE_STATUS_WORDS[status]}</span>
-                  </p>
-                </div>
-                {isOwner && !isSelf
-                  ? <MemberControls userId={m.id} currentRole={m.role} />
-                  : <RoleBadge role={m.role} />}
-              </div>
-            )
-          })}
-        </CardContent>
+      <Card className={TILE}>
+        <Head title="Members" count={`${memberRows.length} member${memberRows.length === 1 ? '' : 's'}`} />
+        <table className={cn(TBL, STACK, 'mt-3')}>
+          <thead className={STACK_HEAD}>
+            <tr>
+              <th scope="col" className={TH}>Name</th>
+              <th scope="col" className={TH}>Email</th>
+              <th scope="col" className={TH}>The update</th>
+              <th scope="col" className={cn(TH, 'w-[140px]')}>Role</th>
+              {isOwner ? <th scope="col" className={cn(TH, 'w-[90px] pr-0')}><span className="sr-only">Remove</span></th> : null}
+            </tr>
+          </thead>
+          <tbody className={STACK}>
+            {memberRows.map((m) => {
+              const isSelf = m.id === userId
+              const status = memberUpdateStatus(m.email, schedules)
+              const name = m.full_name || m.email
+              const controls = isOwner && !isSelf
+              return (
+                <tr key={m.id} className={STACK_ROW}>
+                  <th scope="row" className={cn(TD, STACK_CELL, 'text-left font-semibold sm:align-middle')}>
+                    {name}
+                    {isSelf && <span className="font-normal text-muted-foreground"> (you)</span>}
+                  </th>
+                  <td className={cn(TD, STACK_CELL, 'break-all sm:align-middle')}>{m.email}</td>
+                  <td className={cn(TD, STACK_CELL, 'text-secondary-foreground sm:align-middle')}>{cap(UPDATE_STATUS_WORDS[status])}</td>
+                  <td className={cn(TD, STACK_CELL, 'sm:align-middle')}>
+                    {controls ? <RoleSelect userId={m.id} currentRole={m.role} name={name} /> : <><span className="sm:hidden">Role: </span>{cap(m.role)}</>}
+                  </td>
+                  {isOwner ? (
+                    <td className={cn(TD, STACK_CELL, 'pr-0 text-right sm:align-middle', !controls && 'max-sm:hidden')}>
+                      {controls ? <RemoveMember userId={m.id} name={name} /> : null}
+                    </td>
+                  ) : null}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       </Card>
 
-      <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2 text-sm"><Mail className="size-4 text-muted-foreground" aria-hidden /> Who gets the update</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          {totalRecipients === 0 ? (
-            <p className="text-sm text-muted-foreground">
+      <Card className={TILE}>
+        <CardTitle>Who gets the update</CardTitle>
+        {totalRecipients === 0 ? (
+          <div className="mt-3">
+            <EmptyBox>
               {studio ? (
                 <>
                   Nobody yet. Add addresses to a schedule in{' '}
-                  <Link href={STUDIO_HREF} className="underline underline-offset-2">the Studio</Link>,
+                  <Link href={STUDIO_HREF} className={INLINE_GO}>the Studio</Link>,
                   or invite a teammate, they join the Weekly digest when they accept.
                 </>
               ) : (
                 <>Nobody yet. Heinrich sets up who gets the update with you: write to <ContactLink />.</>
               )}
-            </p>
-          ) : (
-            schedules.map((s) => (
-              <div key={s.id}>
-                <p className="text-xs font-medium text-muted-foreground">
-                  {s.name}
-                  {s.is_default && <span className="ml-1.5 text-[10px] text-muted-foreground/70">default</span>}
-                </p>
-                <p className={`text-sm ${s.active && s.recipients.length > 0 ? '' : 'text-muted-foreground'}`}>{scheduleLine(s)}</p>
-              </div>
-            ))
-          )}
-          {membersOffReport.length > 0 && (
-            <p className="text-xs text-muted-foreground">
-              {membersOffReport.length} teammate{membersOffReport.length === 1 ? '' : 's'} on this workspace {membersOffReport.length === 1 ? 'is' : 'are'} not on any schedule.
-              {canManage ? (
-                studio ? (
-                  <>
-                    {' '}Add them in{' '}
-                    <Link href={STUDIO_HREF} className="underline underline-offset-2">the Studio</Link>.
-                  </>
-                ) : (
-                  <> Heinrich adds them once your reports are set up: write to <ContactLink />.</>
-                )
-              ) : null}
-            </p>
-          )}
-        </CardContent>
+            </EmptyBox>
+          </div>
+        ) : (
+          <table className={cn(TBL, STACK, 'mt-3')}>
+            <thead className={STACK_HEAD}>
+              <tr>
+                <th scope="col" className={cn(TH, 'w-[32%]')}>Schedule</th>
+                <th scope="col" className={TH}>Who gets it</th>
+              </tr>
+            </thead>
+            <tbody className={STACK}>
+              {schedules.map((s) => (
+                <tr key={s.id} className={STACK_ROW}>
+                  <th scope="row" className={cn(TD, STACK_CELL, 'text-left font-semibold')}>
+                    {s.name}
+                    {s.is_default && <span className="font-normal text-muted-foreground"> (default)</span>}
+                  </th>
+                  <td className={cn(TD, STACK_CELL)}>
+                    {/* The addresses from the data, one a line; a paused
+                        schedule says so first (`scheduleLine`'s words, in
+                        sentences: it joins with " · "). */}
+                    {!s.active ? (
+                      <p className="m-0 text-secondary-foreground">{s.recipients.length === 0 ? 'Paused, with no addresses on it.' : 'Paused, so nothing is sent.'}</p>
+                    ) : s.recipients.length === 0 ? (
+                      <p className="m-0 text-secondary-foreground">No addresses yet</p>
+                    ) : null}
+                    {s.recipients.length > 0 ? (
+                      <ul className={cn('m-0 list-none break-all p-0 leading-[1.7]', !s.active && 'mt-1 text-secondary-foreground')}>
+                        {s.recipients.map((r) => <li key={r}>{r}</li>)}
+                      </ul>
+                    ) : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        {membersOffReport.length > 0 && (
+          <p className="m-0 mt-4 text-[15px] leading-[1.55]">
+            {membersOffReport.length} teammate{membersOffReport.length === 1 ? '' : 's'} on this workspace {membersOffReport.length === 1 ? 'is' : 'are'} not on any schedule.
+            {canManage ? (
+              studio ? (
+                <>
+                  {' '}Add them in{' '}
+                  <GoLink href={STUDIO_HREF} className="text-[15px]">the Studio</GoLink>.
+                </>
+              ) : (
+                <> Heinrich adds them once your reports are set up: write to <ContactLink />.</>
+              )
+            ) : null}
+          </p>
+        )}
       </Card>
 
       {canManage && (
-        <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2 text-sm"><Clock className="size-4 text-muted-foreground" aria-hidden /> Invites ({waiting} pending{invites.length > waiting ? `, ${invites.length - waiting} expired` : ''})</CardTitle></CardHeader>
-          <CardContent className="divide-y">
-            {invites.length === 0 ? (
-              <p className="py-3 text-sm text-muted-foreground first:pt-0">No pending invites.</p>
-            ) : invites.map((inv) => {
-              const state = inviteState(inv.expires_at, nowIso)
-              return (
-              <div key={inv.id} className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0">
-                <div className="min-w-0 flex-1">
-                  <p className="flex items-center gap-2 truncate text-sm font-medium">
-                    <span className="truncate">{inv.email}</span>
-                    {state.expired ? <span className="shrink-0 rounded-full bg-inner px-1.5 py-px text-[10.5px] font-medium text-secondary-foreground">Expired</span> : null}
+        <Card className={TILE}>
+          <Head title="Invites" count={`${waiting} pending${invites.length > waiting ? `, ${invites.length - waiting} expired` : ''}`} />
+          {invites.length === 0 ? (
+            <div className="mt-3"><EmptyBox>No pending invites.</EmptyBox></div>
+          ) : invites.map((inv) => {
+            const state = inviteState(inv.expires_at, nowIso)
+            return (
+              <div key={inv.id} className="mt-4 flex flex-col gap-3 border-t border-track pt-4">
+                <div className="min-w-0">
+                  <p className="m-0 flex flex-wrap items-center gap-2 text-[15px] font-semibold">
+                    <span className="min-w-0 break-all">{inv.email}</span>
+                    {state.expired ? <span className={cn(TAG, TAG_TONE.mid)}>Expired</span> : null}
                   </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {cap(inv.role)} · {state.line}
-                  </p>
+                  <p className="m-0 mt-1 text-[14px] text-secondary-foreground">{cap(inv.role)}, {state.line}</p>
                   {state.expired ? (
-                    <p className="mt-1 text-[11px] text-muted-foreground/70">
-                      This link no longer works. Resend sends a fresh one.
-                    </p>
-                  ) : inv.token ? (
-                    <code className="mt-1 block truncate text-[11px] text-muted-foreground/70">
-                      {baseUrl}/invite/{inv.token}
-                    </code>
-                  ) : (
-                    <p className="mt-1 text-[11px] text-muted-foreground/70">
-                      Link is visible to whoever sent this invite. We emailed it to them.
-                    </p>
+                    <p className="m-0 mt-1 text-[14px] text-muted-foreground">This link no longer works. Resend sends a fresh one.</p>
+                  ) : inv.token ? null : (
+                    <p className="m-0 mt-1 text-[14px] text-muted-foreground">Link is visible to whoever sent this invite. We emailed it to them.</p>
                   )}
                 </div>
-                {inv.token && !state.expired && <CopyLinkButton url={`${baseUrl}/invite/${inv.token}`} />}
-                {canResendInvite(role, inv.role) && <ResendButton id={inv.id} />}
-                <RevokeButton id={inv.id} />
+                <div className="flex flex-wrap items-end gap-2">
+                  {inv.token && !state.expired ? <InviteLinkField id={`invite-link-${inv.id}`} url={`${baseUrl}/invite/${inv.token}`} /> : null}
+                  {inv.token && !state.expired && <CopyLinkButton url={`${baseUrl}/invite/${inv.token}`} />}
+                  {canResendInvite(role, inv.role) && <ResendButton id={inv.id} />}
+                  <RevokeButton id={inv.id} />
+                </div>
               </div>
-              )
-            })}
-          </CardContent>
+            )
+          })}
         </Card>
       )}
     </div>

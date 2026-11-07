@@ -1,7 +1,8 @@
 "use client"
 
 import { useActionState } from "react"
-import { Button } from "@/components/ui/button"
+import { BTN_PRIMARY, BTN_SECONDARY } from "@/components/v2/look"
+import { cn } from "@/lib/utils"
 import {
   startCheckout,
   openBillingPortal,
@@ -13,6 +14,8 @@ const idle: BillingActionState = { ok: true, message: "" }
 // Owner-only billing controls. The page decides which of these to mount based on
 // whether the tenant already has a Stripe customer; this component just wires the
 // server actions (each redirects to Stripe on success, or returns a message).
+// Since the audit design (7 Nov, Settings-Billing.dc.html): Manage billing the
+// white button, Subscribe the yellow one; the Stripe keys named in sans.
 export function BillingControls({
   stripeConfigured,
   hasCustomer,
@@ -25,9 +28,9 @@ export function BillingControls({
 
   if (!stripeConfigured) {
     return (
-      <p className="text-sm text-muted-foreground">
-        Billing isn’t set up yet. Add the Stripe keys (<code>STRIPE_SECRET_KEY</code>,{" "}
-        <code>STRIPE_PRICE_ID</code>, <code>STRIPE_WEBHOOK_SECRET</code>) to enable subscriptions.
+      <p className="m-0 text-[15px] leading-[1.55] text-secondary-foreground">
+        Billing isn’t set up yet. Add the Stripe keys (<span className="font-semibold">STRIPE_SECRET_KEY</span>,{" "}
+        <span className="font-semibold">STRIPE_PRICE_ID</span>, <span className="font-semibold">STRIPE_WEBHOOK_SECRET</span>) to enable subscriptions.
       </p>
     )
   }
@@ -39,19 +42,19 @@ export function BillingControls({
       <div className="flex flex-wrap gap-3">
         {hasCustomer ? (
           <form action={portal}>
-            <Button type="submit" variant="outline" disabled={portalPending}>
+            <button type="submit" disabled={portalPending} className={cn(BTN_SECONDARY, "max-sm:h-11")}>
               {portalPending ? "Opening…" : "Manage billing"}
-            </Button>
+            </button>
           </form>
         ) : (
           <form action={checkout}>
-            <Button type="submit" disabled={checkoutPending}>
+            <button type="submit" disabled={checkoutPending} className={cn(BTN_PRIMARY, "max-sm:h-11")}>
               {checkoutPending ? "Starting…" : "Subscribe"}
-            </Button>
+            </button>
           </form>
         )}
       </div>
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <p role="status" className="m-0 text-[14px] leading-[1.45] text-caution">{error}</p>}
     </div>
   )
 }

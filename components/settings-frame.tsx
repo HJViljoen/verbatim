@@ -117,16 +117,6 @@ export function SettingsCard({ title, description, children, className, action }
   )
 }
 
-/** A read-only fact row inside a card: label · value. */
-export function FactRow({ label, children }: { label: ReactNode; children: ReactNode }) {
-  return (
-    <div className="flex items-baseline justify-between gap-4 border-t border-border/70 py-2 first:border-t-0 first:pt-0 last:pb-0">
-      <span className="shrink-0 text-[12px] text-muted-foreground">{label}</span>
-      <span className="min-w-0 text-right text-[12.5px]">{children}</span>
-    </div>
-  )
-}
-
 /** A connection row: name · what it does · status. Status is a word, never a
  *  toggle that does nothing (honest empties). */
 export function ConnectionRow({ name, what, status, action }: { name: ReactNode; what: ReactNode; status: 'connected' | 'not-connected' | 'coming-soon' | 'in-development' | 'paused'; action?: ReactNode }) {
