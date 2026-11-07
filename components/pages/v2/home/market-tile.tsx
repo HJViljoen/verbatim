@@ -115,8 +115,8 @@ function Table({ top, rows, month }: { top: MarketTop; rows: readonly Row[]; mon
         <tr>
           <th scope="col" className={TH}>Conversation</th>
           <th scope="col" className={cn(TH, 'w-[34%] max-sm:hidden')}><span className="sr-only">Share of this week</span></th>
-          <th scope="col" className={cn(TH, TD_NUM, 'w-[90px]')}>This week</th>
-          <th scope="col" className={cn(TH, TD_NUM, 'w-[110px] pr-0')}>{monthHead(top.week.inMonth)}</th>
+          <th scope="col" className={cn(TH, TD_NUM, 'w-[90px] max-sm:w-[64px]')}>This week</th>
+          <th scope="col" className={cn(TH, TD_NUM, 'w-[110px] pr-0 max-sm:w-[76px]')}>{monthHead(top.week.inMonth)}</th>
         </tr>
       </thead>
       <tbody>
