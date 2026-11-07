@@ -6,11 +6,13 @@ import { render, renderText } from '@/lib/test/render'
 import { AppSidebar } from './app-sidebar'
 import { LogOutButton } from './log-out-button'
 import { OpsNavGroup } from './ops/ops-nav'
+import { SidebarClientName } from './sidebar-client-name'
 
-// THE SIDEBAR OF DESIGN V2, AS IT PRINTS (the sidebar of every `E*.dc.html`
-// board). What a static render can pin: the nine rows in the design's order
-// and groups, no group label, the hairlines, the Agent's yellow row, the
-// active pill with no left bar, and Log out gone from the foot.
+// THE SIDEBAR OF THE AUDIT DESIGN, AS IT PRINTS (the sidebar of every board,
+// Market-After.dc.html the reference). What a static render can pin: the nine
+// rows in the boards' order, no group label, the one hairline, the Agent an
+// ordinary row, the active pill with no left bar, and Log out gone from the
+// foot.
 
 const path = vi.hoisted(() => ({ current: '/dashboard/voices' }))
 vi.mock('next/navigation', () => ({ usePathname: () => path.current }))
@@ -58,16 +60,30 @@ describe('the sidebar', () => {
     for (const gone of ['Your market', 'This week']) expect(text, gone).not.toContain(gone)
   })
 
-  it('separates the groups by two hairlines, 12px in and 8px above and below: under the six, and over the foot', () => {
+  it('draws one hairline of the track, 12px in and 12px above and below: after the Agent, with the Studio and Settings right under it (the audit design)', () => {
     const html = sidebar('/dashboard')
-    const hairlines = html.match(/<div aria-hidden="true" class="mx-3 my-2 h-px shrink-0 bg-\[#E4E2DC\]"><\/div>/g) ?? []
-    expect(hairlines).toHaveLength(2)
-    // In order: … Your moves · hairline · Agent … hairline · Studio · Settings.
+    const hairlines = html.match(/<div aria-hidden="true" class="mx-3 my-3 h-px shrink-0 bg-track"><\/div>/g) ?? []
+    expect(hairlines).toHaveLength(1)
+    expect(html.match(/h-px/g)).toHaveLength(1)
+    // In order: … Your moves · Agent · hairline · Studio · Settings.
     const at = (s: string) => html.indexOf(s)
-    expect(at('>Your moves<')).toBeLessThan(html.indexOf('h-px'))
-    expect(html.indexOf('h-px')).toBeLessThan(at('>Agent<'))
-    expect(html.lastIndexOf('h-px')).toBeGreaterThan(at('>Agent<'))
-    expect(html.lastIndexOf('h-px')).toBeLessThan(at('>Studio<'))
+    expect(at('>Your moves<')).toBeLessThan(at('>Agent<'))
+    expect(at('>Agent<')).toBeLessThan(html.indexOf('h-px'))
+    expect(html.indexOf('h-px')).toBeLessThan(at('>Studio<'))
+    // No foot pinned to the bottom: the Studio and Settings sit in the content.
+    expect(html).not.toContain('data-slot="sidebar-footer"')
+  })
+
+  it('draws the boards\' rows: 40px, 15px, an 8px radius, the icon 19px at a 1.8 stroke in the muted ink', () => {
+    const html = sidebar('/dashboard/voices')
+    const start = html.lastIndexOf('<a ', html.indexOf('>Market<'))
+    const row = html.slice(start, html.indexOf('</a>', start))
+    expect(row).toContain('h-10 gap-3.5 rounded-[8px] px-3 text-[15px]')
+    expect(row).toContain('[&amp;_svg]:size-[19px]')
+    expect(row).not.toContain('[&amp;_svg]:size-4')
+    expect(row).toMatch(/<svg [^>]*stroke-width="1.8"[^>]*class="[^"]*size-\[19px\] text-muted-foreground"/)
+    const lit = html.slice(html.lastIndexOf('<a ', html.indexOf('aria-current="page"')), html.indexOf('</a>', html.indexOf('aria-current="page"')))
+    expect(lit).toMatch(/<svg [^>]*stroke-width="1.9"[^>]*class="[^"]*size-\[19px\] text-orange-text"/)
   })
 
   it('marks the active page with the pale-yellow pill (a selected state), weight and an orange-text icon, and no left bar (the stripe ban)', () => {
@@ -84,14 +100,16 @@ describe('the sidebar', () => {
     expect(html).not.toMatch(/before:w-\[3px\]|before:w-0\.5|before:bg-primary|border-l-/)
   })
 
-  it('draws the Agent as a filled yellow row with the Sparkles icon, on every page', () => {
+  it('draws the Agent as an ordinary row with the Sparkles icon, lit only on its own page (the audit design)', () => {
     for (const at of ['/dashboard', '/dashboard/agent']) {
       const html = sidebar(at)
       const start = html.lastIndexOf('<a ', html.indexOf('>Agent<'))
       const agent = html.slice(start, html.indexOf('</a>', start))
-      expect(agent).toContain('bg-[#FFD43B]')
-      expect(agent).toContain('font-semibold')
+      expect(agent).not.toContain('bg-[#FFD43B]')
+      expect(agent).not.toContain('bg-brand')
+      expect(agent).toContain('h-10 gap-3.5 rounded-[8px] px-3 text-[15px]')
       expect(agent).toContain('lucide-sparkles')
+      expect(agent).toContain(at === '/dashboard/agent' ? 'data-active="true"' : 'data-active="false"')
     }
   })
 
@@ -104,10 +122,12 @@ describe('the sidebar', () => {
     expect(sidebar('/dashboard/reports')).toMatch(/aria-current="page"[^>]*>.*?<span>Studio<\/span>/)
   })
 
-  it('puts the operator\'s group above the Studio, drawn with the same rows', () => {
+  it('puts the operator\'s group between the Agent and the Studio, under the one hairline, drawn with the same rows', () => {
     const html = sidebar('/dashboard/ops/readiness', <OpsNavGroup />)
     expect(html.indexOf('>Readiness<')).toBeGreaterThan(html.indexOf('>Agent<'))
     expect(html.indexOf('>Readiness<')).toBeLessThan(html.indexOf('>Studio<'))
+    expect(html.indexOf('h-px')).toBeLessThan(html.indexOf('>Readiness<'))
+    expect(html.match(/h-px/g)).toHaveLength(1)
     expect(html).toMatch(/aria-current="page"[^>]*>.*?<span>Readiness<\/span>/)
     expect(renderText(<SidebarProvider><OpsNavGroup /></SidebarProvider>)).not.toContain('Operator')
   })
@@ -129,13 +149,25 @@ describe('the sidebar', () => {
     expect(html.match(/aria-current="page"/g)).toHaveLength(1)
   })
 
-  it('is 281px wide as the artboards render it (256px rows, 12px in, the hairline), with the sidebar\'s own shadow on its edge', () => {
+  it('is 281px wide as the artboards render it (256px rows, 12px in), its edge a 1px rule of the track with no shadow (the audit design)', () => {
     expect(readFileSync('app/dashboard/layout.tsx', 'utf8')).toContain("'--sidebar-width': '281px'")
-    expect(sidebar('/dashboard')).toContain('border-r-[#E4E2DC] shadow-sidebar')
-    // Heinrich, 1 Oct: the shadows back. One token, set in both themes.
+    const html = sidebar('/dashboard')
+    expect(html).toMatch(/data-slot="sidebar-container"[^>]*class="[^"]*border-r border-track/)
+    expect(html).not.toContain('shadow-sidebar')
+    // The token stays defined, in both themes (drift guard (g)).
     const css = readFileSync('app/globals.css', 'utf8')
     expect(css).toContain('--shadow-sidebar: var(--shadow-sidebar);')
     expect(css.match(/^\s*--shadow-sidebar: \d/gm)).toHaveLength(2)
+  })
+})
+
+describe('the header a client sees (the audit design, decision 13)', () => {
+  it('is the yellow mark beside the client\'s own name at 17px bold ink, in the boards\' 46px row, with no arrow and nothing to press', () => {
+    const html = render(<SidebarClientName name="Össur" />)
+    expect(html).toMatch(/^<div class="flex h-\[46px\] min-w-0 items-center gap-3 px-3"><svg[^>]*class="[^"]*shrink-0 text-brand[^"]*"/)
+    expect(html).toContain('<span class="min-w-0 truncate text-[17px] font-bold tracking-[-0.01em] text-foreground">Össur</span>')
+    expect(html).not.toMatch(/<button|lucide-chevrons-up-down|aria-haspopup/)
+    expect(renderText(<SidebarClientName name="Össur" />)).toBe('Össur')
   })
 })
 

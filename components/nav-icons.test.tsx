@@ -28,13 +28,14 @@ describe('the sidebar’s icons', () => {
     expect(Object.keys(NAV_ICON).sort()).toEqual(SURFACES.map((s) => s.key).sort())
   })
 
-  it('renders an SVG the browser can draw, at the app’s own 16px', () => {
-    // `size-4` in the app; 16 × 16 in `Main.dc.html`. The harness passes the
-    // number because it has no Tailwind class to hand a static string.
-    const markup = renderToStaticMarkup(createElement(NAV_ICON.market, { width: 16, height: 16 }))
+  it('renders an SVG the browser can draw, at the app’s own 19px', () => {
+    // `size-[19px]` in the app since the audit design; 19 × 19 on the boards
+    // (`.nav svg`). The harness passes the number because it has no Tailwind
+    // class to hand a static string.
+    const markup = renderToStaticMarkup(createElement(NAV_ICON.market, { width: 19, height: 19 }))
     expect(markup).toContain('<svg')
-    expect(markup).toContain('width="16"')
-    expect(markup).toContain('height="16"')
+    expect(markup).toContain('width="19"')
+    expect(markup).toContain('height="19"')
   })
 
   it('draws the boards’ glyph on each of the nine, not a near-enough one (Design v2)', () => {

@@ -10,6 +10,13 @@ import { switchWorkspace } from "@/app/dashboard/workspace/actions"
 import type { OperatorView } from "@/lib/auth"
 import type { WorkspaceRow } from "@/lib/workspaces"
 import { VerbatimMark } from "@/components/brand/mark"
+import { TAG, TAG_TONE } from "@/components/v2/look"
+import { cn } from "@/lib/utils"
+
+/** A plan's tag in sentence case ("trial" reads "Trial"): the tags were
+ *  uppercase mono until the audit design. */
+const planWord = (plan: string | null | undefined): string =>
+  plan ? plan.charAt(0).toUpperCase() + plan.slice(1) : "No plan"
 
 /**
  * The tenant switcher, rendered only for platform admins (the loader decides;
@@ -35,11 +42,12 @@ export function WorkspaceSwitcher({
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger
         disabled={pending}
-        className="flex w-full items-center gap-[7px] rounded-md px-3 pt-1 pb-[18px] text-left outline-hidden hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-60"
+        className="flex h-[46px] w-full items-center gap-3 rounded-[8px] px-3 text-left outline-hidden hover:bg-sidebar-accent hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-60"
       >
-        {/* The wordmark's own geometry and colours (components/workspace-switcher-loader.tsx
-            SidebarWordmark: the yellow mark, the name in ink), so the header
-            does not shift when this replaces it. */}
+        {/* The boards' header (the audit design): the 46px row the wordmark
+            and the client's name draw too (components/workspace-switcher-loader.tsx),
+            the yellow mark, the name in ink, so the header does not shift when
+            this replaces the fallback. */}
         <VerbatimMark size={20} className="shrink-0 text-brand" />
         <span className="truncate text-[17px] font-bold tracking-[-0.02em] text-foreground">
           {operator.viewingName}
@@ -48,11 +56,11 @@ export function WorkspaceSwitcher({
           // Only when you are somewhere that isn't yours — the tag is a warning
           // that writes from here land on someone else's tenant, so it must not
           // become wallpaper by showing all the time.
-          <span className="shrink-0 rounded-sm bg-sidebar-accent px-1 py-px font-mono text-[9px] uppercase tracking-[0.08em] text-muted-foreground">
+          <span className={cn("shrink-0", TAG, TAG_TONE.mid)}>
             Operator
           </span>
         )}
-        <ChevronsUpDown className="ml-auto size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+        <ChevronsUpDown className="ml-auto size-4 shrink-0 text-muted-foreground" aria-hidden />
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="start" className="w-56 min-w-56">
@@ -64,8 +72,8 @@ export function WorkspaceSwitcher({
           >
             <Check className={w.id === operator.viewingClientId ? "size-3.5 opacity-100" : "size-3.5 opacity-0"} aria-hidden />
             <span className={w.is_active ? "truncate" : "truncate text-muted-foreground"}>{w.company_name}</span>
-            <span className="ml-auto font-mono text-[10px] uppercase tracking-[0.06em] text-muted-foreground">
-              {w.is_active ? w.plan : "inactive"}
+            <span className={cn("ml-auto", TAG, TAG_TONE.mid)}>
+              {w.is_active ? planWord(w.plan) : "Inactive"}
             </span>
           </DropdownMenuItem>
         ))}
@@ -75,7 +83,7 @@ export function WorkspaceSwitcher({
         <DropdownMenuItem onSelect={() => go(null)} disabled={operator.isHome} className="gap-2">
           <CornerUpLeft className="size-3.5" aria-hidden />
           <span className="truncate">Back to your workspace</span>
-          {homeName && <span className="ml-auto truncate text-[11px] text-muted-foreground">{homeName}</span>}
+          {homeName && <span className="ml-auto truncate text-[12px] text-muted-foreground">{homeName}</span>}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

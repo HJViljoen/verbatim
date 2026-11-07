@@ -4,6 +4,7 @@ import { viewedClientRow } from "@/lib/shell/viewed-client"
 import { listWorkspaces } from "@/lib/workspaces"
 import { WorkspaceSwitcher } from "@/components/workspace-switcher"
 import { VerbatimMark } from "@/components/brand/mark"
+import { SidebarClientName } from "@/components/sidebar-client-name"
 
 // THE WORDMARK'S FACE (the navigation of 1 Oct: every `Page-*.dc.html` sidebar
 // sets "Verbatim" in Bricolage Grotesque 700). The bold cut alone, latin only,
@@ -13,23 +14,21 @@ import { VerbatimMark } from "@/components/brand/mark"
 const wordmarkFace = Bricolage_Grotesque({ subsets: ["latin"], weight: "700", display: "swap" })
 
 /**
- * The wordmark, for everyone who is not a platform admin. Also the Suspense
- * fallback, so the header never shifts: the operator's company name simply
- * replaces it in place when it arrives.
+ * The wordmark: the Suspense fallback while the session resolves, and the
+ * header for a workspace whose name could not be read. The same 46px row as
+ * the client's name and the operator's switcher (the boards' header), so the
+ * header never shifts when the name replaces it in place.
  *
- * As the design draws it (`sidebar2.py`): 4px above, 12px either side and 18px
- * below, inside the sidebar's own 12px; the mark at 20px and the word at 18px,
- * 7px apart. The mark is the brand yellow (Heinrich, 1 Oct: "at the top left,
- * I want the logo to be yellow"); the word stays ink, because yellow text on
- * the white sidebar does not read (1.3:1).
+ * The mark at 20px and the word at 18px, 7px apart. The mark is the brand
+ * yellow (Heinrich, 1 Oct: "at the top left, I want the logo to be yellow");
+ * the word stays ink, because yellow text on the white sidebar does not read
+ * (1.3:1).
  */
 export function SidebarWordmark() {
   return (
-    <div className="px-3 pt-1 pb-[18px]">
-      <div className="flex items-center gap-[7px]">
-        <VerbatimMark size={20} className="shrink-0 text-brand" />
-        <span className={`${wordmarkFace.className} text-[18px] leading-[normal] font-bold tracking-[-0.02em] text-foreground`}>Verbatim</span>
-      </div>
+    <div className="flex h-[46px] items-center gap-[7px] px-3">
+      <VerbatimMark size={20} className="shrink-0 text-brand" />
+      <span className={`${wordmarkFace.className} text-[18px] leading-[normal] font-bold tracking-[-0.02em] text-foreground`}>Verbatim</span>
     </div>
   )
 }
@@ -39,14 +38,20 @@ export function SidebarWordmark() {
  * dashboard layout can stay synchronous (an async layout sits above every
  * route's loading.tsx and would freeze the whole shell on a session round-trip).
  *
- * getSessionContext() is request-cached, so for a normal tenant user this costs
- * nothing beyond what the page already resolved, and it renders exactly the
- * wordmark they see today — the switcher is not hidden with CSS, it is never
- * sent.
+ * getSessionContext() is request-cached, and so is the workspace's row
+ * (`viewedClientRow`, which the billing banner and the phone bar read in the
+ * same request), so for a tenant user this costs no query beyond what the
+ * page already makes. A tenant sees its own name (`SidebarClientName`), or
+ * the wordmark where the row could not be read; the switcher is not hidden
+ * with CSS, it is never sent.
  */
 export async function WorkspaceSwitcherLoader() {
   const { operator } = await getSessionContext()
-  if (!operator) return <SidebarWordmark />
+  if (!operator) {
+    const row = await viewedClientRow()
+    const name = typeof row?.company_name === "string" && row.company_name.trim() ? row.company_name : null
+    return name ? <SidebarClientName name={name} /> : <SidebarWordmark />
+  }
   return <WorkspaceSwitcher operator={operator} workspaces={await listWorkspaces()} />
 }
 

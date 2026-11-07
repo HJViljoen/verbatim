@@ -198,8 +198,8 @@ describe('palette A guard', () => {
     // The artboard's literal, and any card-sized shadow written out by hand.
     const pages = FILES.filter((f) => f.startsWith('components/pages/') && !f.startsWith('components/pages/agent/'))
     expect(hits([/shadow-\[0_1px_2px_rgba\(0,0,0,0\.05\),0_4px_14px/], pages)).toEqual([])
-    // The sidebar's edge.
-    expect(read('components/app-sidebar.tsx')).toContain('className="border-r-[#E4E2DC] shadow-sidebar"')
+    // The sidebar's edge: a 1px rule of the track, no shadow (the audit design).
+    expect(read('components/app-sidebar.tsx')).toContain('className="border-r border-track"')
   })
 
   it('keeps the inner panels flat: a quote on the ground carries no shadow', () => {

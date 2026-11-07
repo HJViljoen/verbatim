@@ -19,9 +19,11 @@
 // WHAT IS THE HARNESS'S (and so not a finding):
 //   - the pane grows with the page instead of scrolling inside itself, and the
 //     viewport is set to the page's height, so one shot holds all of it;
-//   - the sidebar's header is the wordmark's markup drawn here (the shipped
-//     `SidebarWordmark` loads Bricolage through next/font, which only Next's
-//     compiler runs), with Bricolage from Google Fonts;
+//   - the sidebar's header is the client's name (the shipped
+//     `SidebarClientName`, decision 13), the workspace given by `--workspace`;
+//     the phone bar's wordmark is its markup drawn here (the shipped one loads
+//     Bricolage through next/font, which only Next's compiler runs), with
+//     Bricolage from Google Fonts;
 //   - no billing banner and no operator rows (a client's view).
 //
 // LOCAL ONLY: no database, no network but Google Fonts, nothing written but
@@ -39,6 +41,7 @@ import { withBrowser } from '../lib/render/chromium'
 
 import { SidebarProvider } from '../components/ui/sidebar'
 import { AppSidebar } from '../components/app-sidebar'
+import { SidebarClientName } from '../components/sidebar-client-name'
 import { PhoneTopBar } from '../components/shell/phone-bar'
 import { VerbatimMark } from '../components/brand/mark'
 import { PageBar, PageFrame } from '../components/shell/page-grid'
@@ -694,14 +697,10 @@ const PAGES: Page[] = [
 
 const router = { back() {}, forward() {}, refresh() {}, push() {}, replace() {}, prefetch() {} }
 
-/** The wordmark as `SidebarWordmark` draws it (components/workspace-switcher-loader.tsx). */
-const wordmark = () =>
-  h('div', { className: 'px-3 pt-1 pb-[18px]' },
-    h('div', { className: 'flex items-center gap-[7px]' },
-      h(VerbatimMark, { size: 20, className: 'shrink-0 text-brand' }),
-      h('span', { className: 'text-[18px] leading-[normal] font-bold tracking-[-0.02em] text-foreground', style: { fontFamily: "'Bricolage Grotesque', sans-serif" } }, 'Verbatim'),
-    ),
-  )
+/** The sidebar's header as a client sees it since the audit design
+ *  (decision 13): the shipped `SidebarClientName`, the workspace's name beside
+ *  the mark (`--workspace <name>`, Össur by default). */
+const header = () => h(SidebarClientName, { name: workspace || 'Össur' })
 
 /** The phone top bar's brand as `PhoneWordmark` draws it (the wordmark, then
  *  the workspace's name; `--workspace <name>`, Össur by default, as the
@@ -722,7 +721,7 @@ const shell = (path: string, page: ReactNode, fixed = false) =>
   h(AppRouterContext.Provider, { value: router as never },
     h(PathnameContext.Provider, { value: path },
       h(SidebarProvider, { style: { '--sidebar-width': '281px' } as never },
-        h(AppSidebar, { header: wordmark() }),
+        h(AppSidebar, { header: header() }),
         h('div', { className: `relative flex flex-col flex-1 min-w-0 bg-[#F7F6F2] ${fixed ? 'h-dvh overflow-hidden' : 'min-h-dvh'}` },
           // The crowd holds still while <main> scrolls, which a page grown to
           // its full height cannot show; only the shipped pane draws it.

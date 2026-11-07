@@ -1182,7 +1182,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
     (`toMaxAtLeast(…, 1)`), so the "typical" tick stays on the bar.
   - **Navigation** (`lib/nav.ts`; Design v2, depth plan T1, 13 Oct): nine
     surfaces in three unlabelled groups: Dashboard · Market · Voices · Your
-    products · Content · Your moves, the Agent, then Studio · Settings. The
+    products · Content · Your moves, the Agent, then Studio · Settings (since
+    the audit design, 7 Nov, the sidebar draws the first two groups as one
+    list of seven, the Agent an ordinary row, then one hairline, the
+    operator's rows and Studio · Settings, with no foot pinned to the
+    bottom; a client's header is the mark beside its own name, an
+    operator's the switcher). The
     Dashboard is `/dashboard` (nav key `home`, NO page key: page key
     `dashboard` names the legacy module that stored snapshots and Össur's
     digest still render). Market is `/dashboard/market` (page key
