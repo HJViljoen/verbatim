@@ -57,15 +57,15 @@ describe('the Your products tab', () => {
     const order = [
       'We filled this in from ossur.com on 11 Oct.', 'Check the list, and add the other names people use for a product',
       'Categories', '38 products', 'Liners 8', 'Feet 9', 'Knees 6', 'Bracing & supports 9', 'Sockets & suspension 6', 'Add a category',
-      'Liners 8 products · 3 came up in October so far · 11 videos we couldn\'t place yet', 'Rename', 'Add a product',
-      'Words for the category liner liners prosthetic liner + Add a word', 'Names for the whole range Iceross + Add a name',
+      'Liners Rename Add a product', 'Products 8 Came up in October so far 3 Couldn’t place yet 11 videos',
+      'Words for the category liner liners prosthetic liner Add a word', 'Names for the whole range Iceross Add a name',
       'Product Other names people use This month',
-      'Iceross Seal-In X seal in x sealin seal-in liner + Add a name 6 videos Edit',
-      'Iceross Seal-In V seal in v + Add a name quiet Edit',
-      'Iceross Synergy synergy checked + Add a name 2 videos Edit',
+      'Iceross Seal-In X seal in x sealin seal-in liner Add a name This month: 6 videos Edit',
+      'Iceross Seal-In V seal in v Add a name This month: quiet Edit',
+      'Iceross Synergy synergy checked Add a name This month: 2 videos Edit',
       'Iceross Comfort Cushion',
       'checked: an everyday word as well, so each mention is checked before it counts.',
-      '11 videos in October are about one of your products in Liners, but we couldn\'t tell which.', 'Tag them in Your products →',
+      '11 videos in October are about one of your products in Liners, but we couldn\'t tell which.', 'Tag them in Your products',
     ]
     const at = order.map((s) => t.indexOf(s))
     expect(at.filter((x) => x < 0), order.filter((_, i) => at[i] < 0).join(' | ')).toEqual([])
@@ -75,19 +75,38 @@ describe('the Your products tab', () => {
   it('marks every count as a figure, lights the open category, and links the unclear videos to Your products', () => {
     const markup = render(<ProductsTab view={view()} />)
     expect(markup).toContain('<span data-copy="figure">38</span>')
-    expect(markup).toContain('<span data-copy="figure" class="font-mono text-[14px]">6</span>')
+    expect(markup).toContain('<span data-copy="figure" class="tabular-nums">6</span> videos')
     expect(markup).toMatch(/<a[^>]*aria-current="true"[^>]*href="\/dashboard\/settings\/products\?group=10000000-0000-4000-8000-000000000001"|<a[^>]*href="\/dashboard\/settings\/products\?group=10000000-0000-4000-8000-000000000001"[^>]*aria-current="true"/)
     expect(markup).toContain('href="/dashboard/products/10000000-0000-4000-8000-000000000001?month=2026-10#unclear"')
     // A product's own name is not printed again among its other names.
     expect(text(view())).not.toContain('Iceross Seal-In X Iceross Seal-In X')
   })
 
-  it('prints a dot, never "quiet", for a month nothing has read, and drops the month from the line', () => {
-    const t = text(view(true, { readings: [] }))
+  it('draws the board\'s figures row, a real table, every name in sans, and no icon, dot or arrow (the audit design)', () => {
+    const markup = render(<ProductsTab view={view()} />)
+    // The figures row in place of the " · " line under the title.
+    const strip = markup.slice(markup.indexOf('<dl data-stat-strip'), markup.indexOf('</dl>', markup.indexOf('<dl data-stat-strip')))
+    expect(renderText(<div dangerouslySetInnerHTML={{ __html: strip }} />).replace(/\s+/g, ' ').trim()).toBe('Products 8 Came up in October so far 3 Couldn’t place yet 11 videos')
+    // A real table: column heads, and each product a row head.
+    expect(markup).toContain('<table aria-label="Products in Liners"')
+    expect(markup.match(/<th scope="col"/g)).toHaveLength(4)
+    expect(markup.match(/<th scope="row"/g)).toHaveLength(8)
+    for (const gone of ['font-mono', 'uppercase', 'text-orange-text', '<svg class="lucide-info', ' · ', '→']) expect(markup, gone).not.toContain(gone)
+    // Every name the one `.term` look, in a list.
+    expect(markup).toMatch(/<li data-alias="[a-z_]+" class="inline-flex min-h-\[30px\][^"]*rounded-\[8px\][^"]*">seal in x<\/li>/)
+  })
+
+  it('says once, in the dashed box, that a month nothing has read is not read yet, never "quiet", and drops the month from the strip and the table', () => {
+    const v = view(true, { readings: [] })
+    const t = text(v)
     expect(t).not.toContain('quiet')
     expect(t).not.toContain('came up')
+    expect(t).not.toContain('Came up')
     expect(t).not.toContain('couldn\'t tell which')
-    expect(t).toContain('8 products Rename')
+    expect(t).not.toContain('This month')
+    expect(t).toContain('Products 8 No reading in October so far yet.')
+    expect(t.split('No reading in').length).toBe(2)
+    expect(render(<ProductsTab view={v} />)).toMatch(/<p class="[^"]*border-dashed[^"]*">No reading in October so far yet\.<\/p>/)
   })
 
   it('draws no control for a member, and no instruction they cannot follow', () => {
@@ -121,13 +140,13 @@ describe('the Your products tab', () => {
   // named for it rather than "This month".
   it('names the month it reads, and labels one that is not the current month', () => {
     const current = text(productSettingsView(productsFixtureRead(), { selected: null, canEdit: true, now: FIXTURE_NOW.toISOString() }))
-    expect(current).toContain('Liners 8 products · 3 came up in October so far · 11 videos')
+    expect(current).toContain('Liners Rename Add a product Products 8 Came up in October so far 3 Couldn’t place yet 11 videos')
     expect(current).toContain('Product Other names people use This month')
     expect(current).not.toMatch(/last full month|earlier month/)
     const v = productSettingsView(productsFixtureRead(), { selected: null, canEdit: true, now: '2026-11-09T09:00:00.000Z' })
     expect(v.monthLabel).toBe('the last full month')
     const ended = text(v)
-    expect(ended).toContain('Liners 8 products · 3 came up in October, the last full month · 11 videos')
+    expect(ended).toContain('Liners Rename Add a product Products 8 Came up in October, the last full month 3 Couldn’t place yet 11 videos')
     expect(ended).toContain('Product Other names people use October')
     expect(ended).not.toContain('This month')
     expect(ended).not.toContain('October so far')
@@ -174,6 +193,6 @@ describe('the Your products tab', () => {
     const read = await loadProductSettings(db.client as never, FIXTURE_CLIENT, FIXTURE_NOW, { readingsOn: true })
     if (read.state !== 'ready') throw new Error('expected a catalogue')
     const t = text(productSettingsView(read, { selected: fid(1, 1), canEdit: true }))
-    expect(t).toMatch(/Iceross Sport iceross sport liner \+ Add a name quiet Edit/)
+    expect(t).toMatch(/Iceross Sport iceross sport liner Add a name This month: quiet Edit/)
   })
 })

@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { buttonClass } from '@/components/pages/studio/ui'
+import { BTN_SECONDARY, BTN_SM } from '@/components/v2/look'
 import { confirmSubjectAction } from '@/lib/actions/subjects'
+import { cn } from '@/lib/utils'
 
 /** "Confirm" on a suggestion: the write that starts the counting (decision E),
  *  the same action the row's menu offers, drawn where the reader looks first.
@@ -17,10 +18,10 @@ export function ConfirmSubject({ id, name, locked = false }: { id: string; name:
   })
   return (
     <span className="inline-flex flex-col items-end gap-1">
-      <button type="button" disabled={pending || locked} onClick={confirm} aria-label={`Confirm ${name}`} className={buttonClass('secondary', 'small')}>
+      <button type="button" disabled={pending || locked} onClick={confirm} aria-label={`Confirm ${name}`} className={cn(BTN_SECONDARY, BTN_SM, 'max-sm:h-11')}>
         {pending ? 'Confirming' : 'Confirm'}
       </button>
-      {said ? <span role="status" className="max-w-[260px] text-right text-[12px] text-orange-text">{said}</span> : null}
+      {said ? <span role="status" className="max-w-[260px] text-right text-[13px] leading-[1.45] text-caution">{said}</span> : null}
     </span>
   )
 }

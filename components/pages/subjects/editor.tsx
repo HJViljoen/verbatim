@@ -1,9 +1,9 @@
 'use client'
 
 import { useActionState, useState, useTransition } from 'react'
-import { Ellipsis, Pencil, Plus } from 'lucide-react'
 
-import { Input } from '@/components/ui/input'
+import { BTN_PRIMARY, BTN_SECONDARY, BTN_SM, INPUT, LBL } from '@/components/v2/look'
+import { cn } from '@/lib/utils'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import {
@@ -39,14 +39,15 @@ import { SUBJECTS_HELD } from '@/lib/tenant-locks'
 // already follow) names and confirms in one act. A rename is a new subject
 // that supersedes the old one (the database grants no UPDATE on a name or a
 // description), and everything already reported about the old one stays.
+//
+// SINCE THE AUDIT DESIGN (7 Nov, Settings-Subjects.dc.html): the row's menu
+// opens from a white button that says "Rename or stop"; Add a subject and
+// Edit the white button with no icon; the sheets' fields the kit's input and
+// their act the yellow button (the sheet's one primary). Styles from
+// components/v2/look.ts (import-free, the client-bundle guard).
 
-const OUTLINE_BUTTON =
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[10px] border border-[#E4E2DC] bg-white font-semibold text-[#26292C] ' +
-  'transition-colors hover:bg-[#F7F6F2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50'
-
-const INK_BUTTON =
-  'inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-[10px] bg-[#26292C] px-4 text-[14px] font-semibold text-white ' +
-  'transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50'
+const SMALL = cn(BTN_SECONDARY, BTN_SM, 'max-sm:h-11')
+const SUBMIT = cn(BTN_PRIMARY, BTN_SM, 'max-sm:h-11')
 
 export interface EditableSubject {
   id: string
@@ -73,9 +74,9 @@ export function SubjectRowMenu({ subject, locked = false }: { subject: EditableS
         <DropdownMenuTrigger
           aria-label={`Rename or stop ${subject.name}`}
           disabled={pending || locked}
-          className="inline-flex size-[30px] shrink-0 cursor-pointer items-center justify-center rounded-[8px] border-none bg-transparent text-[#5F656B] hover:bg-[rgba(38,41,44,0.07)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+          className={SMALL}
         >
-          <Ellipsis className="size-4" aria-hidden />
+          Rename or stop
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-36">
           {subject.status === 'proposed' ? <DropdownMenuItem onSelect={confirm}>Confirm</DropdownMenuItem> : null}
@@ -102,9 +103,8 @@ export function AddSubjectButton({ activeCount, locked = false }: { activeCount:
         onClick={() => setOpen(true)}
         disabled={atCeiling || locked}
         title={locked ? SUBJECTS_HELD : atCeiling ? `You follow ${SUBJECTS_MAX} subjects. Stop one before you add another.` : undefined}
-        className={`${OUTLINE_BUTTON} h-10 px-4 text-[14px]`}
+        className={SMALL}
       >
-        <Plus className="size-4" aria-hidden />
         Add a subject
       </button>
       <SubjectSheet open={open} onOpenChange={setOpen} subject={null} />
@@ -117,8 +117,7 @@ export function EditSubjectButton({ subject }: { subject: EditableSubject }) {
   const [open, setOpen] = useState(false)
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className={`${OUTLINE_BUTTON} h-[34px] shrink-0 px-3 text-[13px]`}>
-        <Pencil className="size-[15px]" aria-hidden />
+      <button type="button" onClick={() => setOpen(true)} className={cn(SMALL, 'shrink-0')}>
         Edit
       </button>
       <SubjectSheet open={open} onOpenChange={setOpen} subject={subject} />
@@ -151,9 +150,9 @@ function SubjectSheet({ open, onOpenChange, subject }: {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full gap-0 bg-white p-0 data-[side=right]:sm:max-w-[26rem]">
-        <SheetHeader className="border-b border-[#E4E2DC] px-5 py-4 pr-12">
-          <SheetTitle className="text-[17px] font-bold text-[#26292C]">{subject ? `Edit ${subject.name}` : 'Add a subject'}</SheetTitle>
-          <SheetDescription className="text-[13px] text-[#5F656B]">
+        <SheetHeader className="border-b border-border px-5 py-4 pr-12">
+          <SheetTitle className="text-[17px] font-bold text-foreground">{subject ? `Edit ${subject.name}` : 'Add a subject'}</SheetTitle>
+          <SheetDescription className="text-[14px] text-muted-foreground">
             {subject
               ? 'A changed name or description starts a fresh subject from today. What was already reported about this one stays as it was.'
               : 'Something your market talks about that you want to follow, named the way a buyer would say it.'}
@@ -164,22 +163,22 @@ function SubjectSheet({ open, onOpenChange, subject }: {
           <input type="hidden" name="origin" value="client" />
           <fieldset disabled={pending} className="space-y-4">
             <label className="block space-y-1.5">
-              <span className="text-[13px] font-semibold text-[#26292C]">The subject</span>
-              <Input name="name" defaultValue={subject?.name} maxLength={60} required autoComplete="off" />
+              <span className={cn(LBL, 'block')}>The subject</span>
+              <input name="name" defaultValue={subject?.name} maxLength={60} required autoComplete="off" className={cn(INPUT, 'w-full max-sm:h-11')} />
             </label>
             <label className="block space-y-1.5">
-              <span className="text-[13px] font-semibold text-[#26292C]">What it covers</span>
+              <span className={cn(LBL, 'block')}>What it covers</span>
               <textarea
                 name="description"
                 defaultValue={subject?.description ?? undefined}
                 maxLength={400}
                 rows={4}
-                className="block w-full resize-y rounded-md border border-input bg-white px-3 py-2 text-[14px] leading-[1.5] text-[#26292C] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className={cn(INPUT, 'block h-auto w-full resize-y py-2 leading-[1.5]')}
               />
             </label>
             <div className="flex items-center gap-3 pt-1">
-              <button type="submit" disabled={pending} className={INK_BUTTON}>{pending ? 'Saving…' : subject ? 'Save' : 'Add it'}</button>
-              {message ? <span className="text-[12.5px] text-negative" aria-live="polite">{message}</span> : null}
+              <button type="submit" disabled={pending} className={SUBMIT}>{pending ? 'Saving…' : subject ? 'Save' : 'Add it'}</button>
+              {message ? <span className="text-[13px] text-caution" aria-live="polite">{message}</span> : null}
             </div>
           </fieldset>
         </form>
@@ -200,20 +199,20 @@ function StopSheet({ open, onOpenChange, subject }: { open: boolean; onOpenChang
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full gap-0 bg-white p-0 data-[side=right]:sm:max-w-[26rem]">
-        <SheetHeader className="border-b border-[#E4E2DC] px-5 py-4 pr-12">
-          <SheetTitle className="text-[17px] font-bold text-[#26292C]">Stop following {subject.name}?</SheetTitle>
-          <SheetDescription className="text-[13px] text-[#5F656B]">
+        <SheetHeader className="border-b border-border px-5 py-4 pr-12">
+          <SheetTitle className="text-[17px] font-bold text-foreground">Stop following {subject.name}?</SheetTitle>
+          <SheetDescription className="text-[14px] text-muted-foreground">
             It leaves your subjects from today. What was already reported about it stays as it was.
           </SheetDescription>
         </SheetHeader>
         <div className="flex items-center gap-3 px-5 py-4">
-          <button type="button" disabled={pending} onClick={stop} className={INK_BUTTON}>
+          <button type="button" disabled={pending} onClick={stop} className={SUBMIT}>
             {pending ? 'Stopping…' : 'Stop following'}
           </button>
-          <button type="button" disabled={pending} onClick={() => onOpenChange(false)} className={`${OUTLINE_BUTTON} h-9 px-4 text-[14px]`}>
+          <button type="button" disabled={pending} onClick={() => onOpenChange(false)} className={SMALL}>
             Cancel
           </button>
-          {said ? <span className="text-[12.5px] text-negative" role="alert">{said}</span> : null}
+          {said ? <span className="text-[13px] text-caution" role="alert">{said}</span> : null}
         </div>
       </SheetContent>
     </Sheet>

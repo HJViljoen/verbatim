@@ -1,8 +1,8 @@
 'use client'
 
 import { useActionState, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Plus, X } from 'lucide-react'
-import { buttonClass } from '@/components/pages/studio/ui'
+import { X } from 'lucide-react'
+import { BTN_PRIMARY, BTN_SECONDARY, BTN_SM, INPUT } from '@/components/v2/look'
 import {
   addProduct,
   addProductAlias,
@@ -33,18 +33,26 @@ import { ALIAS_CHIP, CHECKED_TAG } from './chip'
 // LOCKED: an owner or admin the tenant lock holds sees every control
 // disabled, under the lock's own line on the tab (`locked`), rather than
 // learning about the lock from a refusal after a submit.
+//
+// SINCE THE AUDIT DESIGN (7 Nov, Settings-Products.dc.html): Rename, Edit and
+// Add a category the white secondary button, Add a product the yellow one
+// (the tab's one primary), "Add a name" the board's dashed `.add` chip with
+// no "+", every field the kit's input, every name the `.term` look in sans,
+// a refusal in the caution ink; each control 44px to tap on a phone. Styles
+// from components/v2/look.ts (import-free, the client-bundle guard).
 
 type Action = (prev: ProductFormState, form: FormData) => Promise<ProductFormState>
 
 const INITIAL: ProductFormState = { ok: false, message: '' }
 
-const FIELD = 'h-[34px] min-w-0 rounded-[10px] border border-[#E4E2DC] bg-white px-3 text-[13px] text-[#26292C] outline-none focus-visible:border-[#26292C]'
-/** The board's `.btn`: on the ground, no border. */
-const GROUND_BUTTON = 'inline-flex min-h-[38px] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[8px] bg-[#F7F6F2] px-3.5 text-[13.5px] font-semibold text-[#26292C] transition-colors hover:bg-[#ECEAE4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#26292C]/40 disabled:opacity-50'
-/** The board's `.btn.ink`. */
-const INK_BUTTON = 'inline-flex min-h-[38px] shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-[8px] bg-[#26292C] px-3.5 text-[13.5px] font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#26292C]/40 disabled:opacity-50'
-/** The board's `.addc`: a dashed chip at the end of a row of names. */
-const ADD_CHIP = 'mb-1.5 mr-1.5 inline-flex items-center rounded-[6px] border border-dashed border-[#C9C6BE] bg-transparent px-2 py-[3px] text-[12.5px] text-[#5F656B] hover:border-[#26292C] hover:text-[#26292C] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#26292C]/40'
+const FIELD = cn(INPUT, 'min-w-0 max-sm:h-11')
+const SMALL = cn(BTN_SECONDARY, BTN_SM, 'max-sm:h-11')
+const SUBMIT = cn(BTN_PRIMARY, BTN_SM, 'max-sm:h-11')
+/** The board's `.add`: a dashed chip at the end of a row of names, 44px to
+ *  tap on a phone through its hit area. */
+const ADD_CHIP = "relative inline-flex h-[30px] items-center whitespace-nowrap rounded-[8px] border border-dashed border-control bg-card px-2.5 text-[14px] font-medium text-foreground hover:border-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground disabled:opacity-50 disabled:hover:border-control max-sm:before:absolute max-sm:before:inset-x-0 max-sm:before:-inset-y-[7px] max-sm:before:content-['']"
+/** A link-like button inside a card ("Remove this category"). */
+const QUIET_LINK = 'text-[13px] font-semibold text-muted-foreground underline decoration-control underline-offset-4 hover:text-foreground'
 
 /** One action's state, closing what it opened on a save that landed. */
 function useSave(action: Action, onSaved: () => void) {
@@ -57,7 +65,7 @@ function useSave(action: Action, onSaved: () => void) {
 
 function Said({ state }: { state: ProductFormState }) {
   if (!state.message || state.ok) return null
-  return <p role="status" className="m-0 text-[12px] text-orange-text">{state.message}</p>
+  return <p role="status" className="m-0 text-[13px] leading-[1.45] text-caution">{state.message}</p>
 }
 
 /** Escape closes whatever is open. */
@@ -77,7 +85,7 @@ function Pop({ children, align = 'right', label }: { children: ReactNode; align?
       role="dialog"
       aria-label={label}
       className={cn(
-        'absolute top-[calc(100%+6px)] z-20 flex w-[300px] max-w-[calc(100vw-48px)] flex-col gap-3 rounded-[12px] border border-[#E4E2DC] bg-white p-3.5 text-left text-[13px] font-normal text-[#26292C] shadow-panel',
+        'absolute top-[calc(100%+6px)] z-20 flex w-[300px] max-w-[calc(100vw-48px)] flex-col gap-3 rounded-[12px] border border-border bg-card p-3.5 text-left text-[14px] font-normal text-foreground shadow-panel',
         align === 'right' ? 'right-0' : 'left-0',
       )}
     >
@@ -88,8 +96,8 @@ function Pop({ children, align = 'right', label }: { children: ReactNode; align?
 
 function CommonWord({ id }: { id: string }) {
   return (
-    <label htmlFor={id} className="flex items-start gap-2 text-[12.5px] leading-[1.4] text-[#5F656B]">
-      <input id={id} type="checkbox" name="common" className="mt-0.5 size-3.5 shrink-0 accent-[#26292C]" />
+    <label htmlFor={id} className="flex items-start gap-2 text-[13px] leading-[1.45] text-secondary-foreground">
+      <input id={id} type="checkbox" name="common" className="mt-0.5 size-[18px] shrink-0 accent-foreground" />
       <span>An everyday word as well: check each mention before it counts</span>
     </label>
   )
@@ -105,22 +113,22 @@ export function AddCategory({ locked = false }: { locked?: boolean }) {
   useEffect(() => { if (open) input.current?.focus() }, [open])
   if (!open) {
     return (
-      <div className="flex flex-col gap-1.5 px-2 pt-2.5 pb-1">
-        <button type="button" disabled={locked} onClick={() => setOpen(true)} className={cn(GROUND_BUTTON, 'w-full')}>
-          <Plus aria-hidden className="size-[15px]" strokeWidth={2} />Add a category
+      <div className="flex flex-col gap-1.5 pt-3">
+        <button type="button" disabled={locked} onClick={() => setOpen(true)} className={cn(BTN_SECONDARY, 'w-full max-sm:h-11')}>
+          Add a category
         </button>
-        {state.ok && state.message ? <p role="status" className="m-0 text-[12px] text-[#5F656B]">{state.message}</p> : null}
+        {state.ok && state.message ? <p role="status" className="m-0 text-[13px] text-muted-foreground">{state.message}</p> : null}
       </div>
     )
   }
   return (
-    <form action={run} className="flex flex-col gap-2 px-2 pt-2.5 pb-1">
+    <form action={run} className="flex flex-col gap-2 pt-3">
       <label htmlFor="add-category" className="sr-only">The category&apos;s name</label>
       <input ref={input} id="add-category" name="name" required maxLength={60} placeholder="The category, as you name it" className={FIELD}
         onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }} />
       <div className="flex gap-2">
-        <button type="submit" disabled={pending} className={buttonClass('primary', 'small')}>{pending ? 'Saving' : 'Add'}</button>
-        <button type="button" onClick={() => setOpen(false)} className={buttonClass('ghost', 'small')}>Cancel</button>
+        <button type="submit" disabled={pending} className={SUBMIT}>{pending ? 'Saving' : 'Add'}</button>
+        <button type="button" onClick={() => setOpen(false)} className={SMALL}>Cancel</button>
       </div>
       <Said state={state} />
     </form>
@@ -136,7 +144,7 @@ export function RenameCategory({ id, name, products, locked = false }: { id: str
   const [removed, remove, removing] = useSave(retireProductGroup, close)
   return (
     <div className="relative">
-      <button type="button" disabled={locked} aria-expanded={mode !== 'closed'} onClick={() => setMode((m) => (m === 'closed' ? 'rename' : 'closed'))} className={GROUND_BUTTON}>
+      <button type="button" disabled={locked} aria-expanded={mode !== 'closed'} onClick={() => setMode((m) => (m === 'closed' ? 'rename' : 'closed'))} className={SMALL}>
         Rename
       </button>
       {mode === 'rename' ? (
@@ -146,13 +154,13 @@ export function RenameCategory({ id, name, products, locked = false }: { id: str
             <label htmlFor={`rename-${id}`} className="font-semibold">Rename {name}</label>
             <input id={`rename-${id}`} name="name" defaultValue={name} required maxLength={60} autoFocus className={FIELD} />
             <div className="flex gap-2">
-              <button type="submit" disabled={renaming} className={buttonClass('primary', 'small')}>{renaming ? 'Saving' : 'Rename'}</button>
-              <button type="button" onClick={close} className={buttonClass('ghost', 'small')}>Cancel</button>
+              <button type="submit" disabled={renaming} className={SUBMIT}>{renaming ? 'Saving' : 'Rename'}</button>
+              <button type="button" onClick={close} className={SMALL}>Cancel</button>
             </div>
             <Said state={renamed} />
           </form>
-          <div className="border-t border-[#E4E2DC] pt-2.5">
-            <button type="button" onClick={() => setMode('remove')} className="text-[12.5px] font-semibold text-[#5F656B] underline underline-offset-2 hover:text-[#26292C]">
+          <div className="border-t border-border pt-2.5">
+            <button type="button" onClick={() => setMode('remove')} className={QUIET_LINK}>
               Remove this category
             </button>
           </div>
@@ -163,13 +171,13 @@ export function RenameCategory({ id, name, products, locked = false }: { id: str
           <form action={remove} className="flex flex-col gap-2">
             <input type="hidden" name="id" value={id} />
             <p className="m-0 font-semibold">Remove {name}?</p>
-            <p className="m-0 text-[12.5px] leading-[1.45] text-[#5F656B]">
+            <p className="m-0 text-[13px] leading-[1.45] text-muted-foreground">
               {products > 0 ? 'Its products and their names leave your list from today. ' : 'It leaves your list from today. '}
               What was already read about them keeps its numbers.
             </p>
             <div className="flex gap-2">
-              <button type="submit" disabled={removing} className={buttonClass('primary', 'small')}>{removing ? 'Removing' : 'Remove'}</button>
-              <button type="button" onClick={close} className={buttonClass('ghost', 'small')}>Cancel</button>
+              <button type="submit" disabled={removing} className={SUBMIT}>{removing ? 'Removing' : 'Remove'}</button>
+              <button type="button" onClick={close} className={SMALL}>Cancel</button>
             </div>
             <Said state={removed} />
           </form>
@@ -189,8 +197,8 @@ export function AddProduct({ groupId, groupName, locked = false }: { groupId: st
   const [state, run, pending] = useSave(addProduct, close)
   return (
     <div className="relative">
-      <button type="button" disabled={locked} aria-expanded={open} onClick={() => setOpen((o) => !o)} className={INK_BUTTON}>
-        <Plus aria-hidden className="size-[15px]" strokeWidth={2} />Add a product
+      <button type="button" disabled={locked} aria-expanded={open} onClick={() => setOpen((o) => !o)} className={SUBMIT}>
+        Add a product
       </button>
       {open ? (
         <Pop label={`Add a product to ${groupName}`}>
@@ -200,8 +208,8 @@ export function AddProduct({ groupId, groupName, locked = false }: { groupId: st
             <input id={`add-product-${groupId}`} name="name" required maxLength={80} autoFocus placeholder="Its name, as you sell it" className={FIELD} />
             <CommonWord id={`add-product-common-${groupId}`} />
             <div className="flex gap-2">
-              <button type="submit" disabled={pending} className={buttonClass('primary', 'small')}>{pending ? 'Saving' : 'Add'}</button>
-              <button type="button" onClick={close} className={buttonClass('ghost', 'small')}>Cancel</button>
+              <button type="submit" disabled={pending} className={SUBMIT}>{pending ? 'Saving' : 'Add'}</button>
+              <button type="button" onClick={close} className={SMALL}>Cancel</button>
             </div>
             <Said state={state} />
           </form>
@@ -228,13 +236,13 @@ export function AddName({ productId, groupId, kind, label, owner, locked = false
   const key = productId ?? groupId ?? 'x'
   if (!open) {
     return (
-      <button type="button" disabled={locked} onClick={() => setOpen(true)} className={cn(ADD_CHIP, 'disabled:opacity-50 disabled:hover:border-[#C9C6BE] disabled:hover:text-[#5F656B]')}>
-        + {label}
+      <button type="button" disabled={locked} onClick={() => setOpen(true)} className={ADD_CHIP}>
+        {label}
       </button>
     )
   }
   return (
-    <form action={run} className="mb-1.5 flex w-full max-w-[340px] flex-col gap-2">
+    <form action={run} className="flex w-full max-w-[340px] flex-col gap-2">
       {productId ? <input type="hidden" name="product_id" value={productId} /> : null}
       {groupId ? <input type="hidden" name="group_id" value={groupId} /> : null}
       <input type="hidden" name="kind" value={kind} />
@@ -244,8 +252,8 @@ export function AddName({ productId, groupId, kind, label, owner, locked = false
         onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false) }} />
       <CommonWord id={`add-name-common-${key}-${kind}`} />
       <div className="flex gap-2">
-        <button type="submit" disabled={pending} className={buttonClass('primary', 'small')}>{pending ? 'Saving' : 'Add'}</button>
-        <button type="button" onClick={() => setOpen(false)} className={buttonClass('ghost', 'small')}>Cancel</button>
+        <button type="submit" disabled={pending} className={SUBMIT}>{pending ? 'Saving' : 'Add'}</button>
+        <button type="button" onClick={() => setOpen(false)} className={SMALL}>Cancel</button>
       </div>
       <Said state={state} />
     </form>
@@ -260,19 +268,20 @@ function RemoveName({ alias, children }: { alias: AliasChip; children: (ask: () 
   return (
     <>
       {asking ? (
-        <form action={run} className="mb-1.5 mr-1.5 inline-flex flex-wrap items-center gap-2 rounded-[6px] bg-[#F7F6F2] px-2 py-1 text-[12.5px]">
+        <form action={run} className={cn(ALIAS_CHIP, 'flex-wrap gap-2 py-1')}>
           <input type="hidden" name="id" value={alias.id} />
-          <span>Remove <span className="font-mono">{alias.alias}</span>?</span>
-          <button type="submit" disabled={pending} className="font-semibold text-[#26292C] underline underline-offset-2 disabled:opacity-50">{pending ? 'Removing' : 'Remove'}</button>
-          <button type="button" onClick={() => setAsking(false)} className="text-[#5F656B] underline underline-offset-2">Cancel</button>
+          <span>Remove {alias.alias}?</span>
+          <button type="submit" disabled={pending} className="min-h-7 font-semibold text-foreground underline decoration-control underline-offset-4 disabled:opacity-50 max-sm:min-h-11">{pending ? 'Removing' : 'Remove'}</button>
+          <button type="button" onClick={() => setAsking(false)} className="min-h-7 text-muted-foreground underline decoration-control underline-offset-4 max-sm:min-h-11">Cancel</button>
         </form>
       ) : children(() => setAsking(true))}
-      {state.message && !state.ok ? <p role="status" className="m-0 w-full text-[12px] text-orange-text">{state.message}</p> : null}
+      {state.message && !state.ok ? <p role="status" className="m-0 w-full text-[13px] leading-[1.45] text-caution">{state.message}</p> : null}
     </>
   )
 }
 
-const REMOVE_X = 'inline-flex size-5 shrink-0 items-center justify-center rounded-[4px] text-[#5F656B] hover:bg-[#ECEAE4] hover:text-[#26292C] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#26292C]/40 disabled:opacity-50'
+/** The board's `.x`: 20px, 44px to tap on a phone through its hit area. */
+const REMOVE_X = "relative -mr-1 inline-flex size-5 shrink-0 items-center justify-center rounded-[4px] text-muted-foreground hover:bg-track hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground disabled:opacity-50 max-sm:before:absolute max-sm:before:-inset-3 max-sm:before:content-['']"
 
 /** One name in the Edit card, with its Remove. */
 function NameRow({ alias }: { alias: AliasChip }) {
@@ -281,7 +290,7 @@ function NameRow({ alias }: { alias: AliasChip }) {
       <RemoveName alias={alias}>
         {(ask) => (
           <>
-            <span className="min-w-0 truncate font-mono text-[12.5px]">{alias.alias}</span>
+            <span className="min-w-0 truncate text-[14px]">{alias.alias}</span>
             <button type="button" onClick={ask} aria-label={`Remove the name ${alias.alias}`} className={REMOVE_X}>
               <X aria-hidden className="size-3.5" strokeWidth={2} />
             </button>
@@ -295,17 +304,19 @@ function NameRow({ alias }: { alias: AliasChip }) {
 /** A category's word or range name, with the × that removes it (asked once). */
 export function RemovableAlias({ alias, locked = false }: { alias: AliasChip; locked?: boolean }) {
   return (
-    <RemoveName alias={alias}>
-      {(ask) => (
-        <span data-alias={alias.kind} className={cn(ALIAS_CHIP, 'gap-1 pr-1')}>
-          {alias.alias}
-          {alias.needsConfirm ? <span className={CHECKED_TAG}>checked</span> : null}
-          <button type="button" disabled={locked} onClick={ask} aria-label={`Remove the name ${alias.alias}`} className={REMOVE_X}>
-            <X aria-hidden className="size-3" strokeWidth={2} />
-          </button>
-        </span>
-      )}
-    </RemoveName>
+    <li className="flex flex-wrap items-center gap-2">
+      <RemoveName alias={alias}>
+        {(ask) => (
+          <span data-alias={alias.kind} className={ALIAS_CHIP}>
+            {alias.alias}
+            {alias.needsConfirm ? <span className={CHECKED_TAG}>checked</span> : null}
+            <button type="button" disabled={locked} onClick={ask} aria-label={`Remove the name ${alias.alias}`} className={REMOVE_X}>
+              <X aria-hidden className="size-[13px]" strokeWidth={2} />
+            </button>
+          </span>
+        )}
+      </RemoveName>
+    </li>
   )
 }
 
@@ -325,7 +336,7 @@ export function EditProduct({ id, name, groupId, aliases, choices, locked = fals
   const [removed, remove, removing] = useSave(retireProduct, close)
   return (
     <div className="relative justify-self-end">
-      <button type="button" disabled={locked} aria-label={`Edit ${name}`} aria-expanded={mode !== 'closed'} onClick={() => setMode((m) => (m === 'closed' ? 'edit' : 'closed'))} className={GROUND_BUTTON}>
+      <button type="button" disabled={locked} aria-label={`Edit ${name}`} aria-expanded={mode !== 'closed'} onClick={() => setMode((m) => (m === 'closed' ? 'edit' : 'closed'))} className={SMALL}>
         Edit
       </button>
       {mode === 'edit' ? (
@@ -343,19 +354,19 @@ export function EditProduct({ id, name, groupId, aliases, choices, locked = fals
               </>
             ) : <input type="hidden" name="group_id" value={groupId} />}
             <div className="flex gap-2">
-              <button type="submit" disabled={saving} className={buttonClass('primary', 'small')}>{saving ? 'Saving' : 'Save'}</button>
-              <button type="button" onClick={close} className={buttonClass('ghost', 'small')}>Cancel</button>
+              <button type="submit" disabled={saving} className={SUBMIT}>{saving ? 'Saving' : 'Save'}</button>
+              <button type="button" onClick={close} className={SMALL}>Cancel</button>
             </div>
             <Said state={saved} />
           </form>
           {aliases.length > 0 ? (
-            <div className="flex flex-col gap-1 border-t border-[#E4E2DC] pt-2.5">
+            <div className="flex flex-col gap-1 border-t border-border pt-2.5">
               <p className="m-0 font-semibold">Other names people use</p>
               {aliases.map((a) => <NameRow key={a.id} alias={a} />)}
             </div>
           ) : null}
-          <div className="border-t border-[#E4E2DC] pt-2.5">
-            <button type="button" onClick={() => setMode('remove')} className="text-[12.5px] font-semibold text-[#5F656B] underline underline-offset-2 hover:text-[#26292C]">
+          <div className="border-t border-border pt-2.5">
+            <button type="button" onClick={() => setMode('remove')} className={QUIET_LINK}>
               Remove this product
             </button>
           </div>
@@ -366,10 +377,10 @@ export function EditProduct({ id, name, groupId, aliases, choices, locked = fals
           <form action={remove} className="flex flex-col gap-2">
             <input type="hidden" name="id" value={id} />
             <p className="m-0 font-semibold">Remove {name}?</p>
-            <p className="m-0 text-[12.5px] leading-[1.45] text-[#5F656B]">It and its names leave your list from today. What was already read about it keeps its numbers.</p>
+            <p className="m-0 text-[13px] leading-[1.45] text-muted-foreground">It and its names leave your list from today. What was already read about it keeps its numbers.</p>
             <div className="flex gap-2">
-              <button type="submit" disabled={removing} className={buttonClass('primary', 'small')}>{removing ? 'Removing' : 'Remove'}</button>
-              <button type="button" onClick={close} className={buttonClass('ghost', 'small')}>Cancel</button>
+              <button type="submit" disabled={removing} className={SUBMIT}>{removing ? 'Removing' : 'Remove'}</button>
+              <button type="button" onClick={close} className={SMALL}>Cancel</button>
             </div>
             <Said state={removed} />
           </form>

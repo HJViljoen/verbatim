@@ -50,6 +50,21 @@ describe('the Your subjects tab', () => {
     expect(markup).toContain(`href="/dashboard/market/subjects/${fixtureSubjectId(1)}"`)
   })
 
+  it('draws each list as a real table with a visible "Change" head, the menu a button in words, and no icon (the audit design)', () => {
+    const markup = render(<YourSubjectsTab view={view()} />)
+    expect(markup).toContain('<table aria-label="Subjects you follow"')
+    expect(markup).toContain('<table aria-label="Suggested subjects"')
+    expect(markup).toMatch(/<th scope="col" class="[^"]*">Change<\/th>/)
+    expect(markup.match(/<th scope="row"/g)).toHaveLength(8)
+    // The board's "Rename or stop" says itself; no "…" glyph, no icon tile.
+    expect(text(view())).toContain('Rename or stop')
+    for (const gone of ['<svg', 'font-mono', 'uppercase', 'text-orange-text']) expect(markup, gone).not.toContain(gone)
+    // A member reads the same table with no "Change" column.
+    expect(render(<YourSubjectsTab view={view(false)} />)).not.toMatch(/>Change<\/th>/)
+    // Nothing followed: the line in the dashed box.
+    expect(render(<YourSubjectsTab view={view(true, [])} />)).toMatch(/<p class="[^"]*border-dashed[^"]*">You follow no subject yet\./)
+  })
+
   it('draws no control for a member, and says who can change the set', () => {
     const t = text(view(false))
     for (const gone of ['Add a subject', 'Confirm', 'Rename']) expect(t, gone).not.toContain(gone)
