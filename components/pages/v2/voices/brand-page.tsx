@@ -161,7 +161,9 @@ function ReadCard({ page }: { page: BrandPage }) {
   if (!page.lead) {
     return (
       <article aria-label={`Where ${page.label}'s talk differs`} data-brand-read="none" className={cn(CARD, 'gap-2.5 sm:p-[30px]')}>
-        <h3 className={CAPS}>How the talk differs</h3>
+        {/* An h2: with no finding the lead tile above has no heading, so this
+            is the h1's next. */}
+        <h2 className={CAPS}>How the talk differs</h2>
         {/* No finding: said in the dashed box (decision 4; the review of
             Phases 6 and 7), as every other gap on the page. */}
         <EmptyBox>{page.you ? BRAND_YOU_NO_FINDING : BRAND_NO_FINDING}</EmptyBox>

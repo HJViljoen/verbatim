@@ -100,7 +100,7 @@ function GapCard({ s }: { s: GapStandout }) {
           ? <>{s.subject} is a {s.where.toLowerCase()} matter, not a {s.product.name} one</>
           : <>{s.subject} stands out on {s.product.name}</>}
       </Title>
-      <MidFigure value={s.product.k} of={s.product.n}>{s.product.name} videos are about {s.subject}</MidFigure>
+      <MidFigure value={s.product.k} of={s.product.n}>{s.product.name} videos are about {s.subject} <span data-copy="figure">({sharePct(s.product.k, s.product.n)})</span></MidFigure>
       <Sub>
         All {s.where.toLowerCase()}: <span data-copy="level">{fmtInt(s.category.k)} of {fmtInt(s.category.n)}</span> videos, <span data-copy="figure">{sharePct(s.category.k, s.category.n)}</span>. <VerdictBadge verdict={s.verdict} />
       </Sub>
@@ -121,9 +121,9 @@ function GeneralCard({ s, monthName }: { s: GeneralStandout; monthName: string }
     <>
       <Head word={SLOT_WORDS.category} where={s.where} />
       <Title>{title}</Title>
-      <MidFigure value={s.inGeneral.k} of={s.inGeneral.n}>name none of your products</MidFigure>
+      <MidFigure value={s.inGeneral.k} of={s.inGeneral.n}>name none of your products <span data-copy="figure">({sharePct(s.inGeneral.k, s.inGeneral.n)})</span></MidFigure>
       <Sub>
-        Of the <span data-copy="figure">{fmtInt(s.inGeneral.n)}</span> videos about {word} in {monthName}, <span data-copy="figure">{fmtInt(s.yours.k)}</span> {s.yours.k === 1 ? 'names' : 'name'} one of yours.
+        Of the <span data-copy="figure">{fmtInt(s.inGeneral.n)}</span> videos about {word} in {monthName}, <span data-copy="figure">{fmtInt(s.yours.k)}</span> <span data-copy="figure">({sharePct(s.yours.k, s.yours.n)})</span> {s.yours.k === 1 ? 'names' : 'name'} one of yours.
       </Sub>
     </>
   )

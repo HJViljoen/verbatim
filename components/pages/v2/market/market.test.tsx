@@ -270,8 +270,9 @@ describe('the numbers behind the week', () => {
   it('this week, each platform\'s week sits beside its month', () => {
     const block = { ...WEEK.rail.platforms!, month: { counts: { tiktok: 170, instagram: 98, youtube: 50 }, n: 318, text: 'in October so far' } }
     // The board's table: this week beside the month, the month's count with
-    // its share of the month's videos.
-    expect(tight(renderText(<PlatformsCard block={block} data={WEEK} />))).toContain('Platform This week October so far TikTok 128 170 (53%) Instagram 76 98 (31%) YouTube 37 50 (16%)')
+    // its share of the month's videos, the share carrying its "of N"
+    // (decision 2 A).
+    expect(tight(renderText(<PlatformsCard block={block} data={WEEK} />))).toContain('Platform This week October so far TikTok 128 170 of 318 (53%) Instagram 76 98 of 318 (31%) YouTube 37 50 of 318 (16%)')
     assertCopyContract(<PlatformsCard block={block} data={WEEK} />)
   })
 
@@ -295,7 +296,7 @@ describe('the numbers behind the week', () => {
   })
 
   it('platforms: the week\'s, or the month\'s', () => {
-    expect(tight(renderText(<PlatformsCard block={{ ...WEEK.rail.platforms!, month: null }} data={WEEK} />))).toBe('Where it’s said This week’s videos, by platform TikTok Instagram Platform Videos TikTok 128 (53%) Instagram 76 (32%) YouTube 37 (15%)')
+    expect(tight(renderText(<PlatformsCard block={{ ...WEEK.rail.platforms!, month: null }} data={WEEK} />))).toBe('Where it’s said This week’s videos, by platform TikTok Instagram Platform Videos TikTok 128 of 241 (53%) Instagram 76 of 241 (32%) YouTube 37 of 241 (15%)')
     expect(renderText(<PlatformsCard block={MONTH.rail.platforms!} data={MONTH} />)).toContain('The videos in October so far, by platform')
     assertCopyContract(<PlatformsCard block={WEEK.rail.platforms!} data={WEEK} />)
   })

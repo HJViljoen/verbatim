@@ -19,6 +19,19 @@ import { tagSub } from './unclear'
 const page = (d: ProductsLevelData) => (d.level === 'category' ? <ProductsCategoryPage data={d} /> : <ProductsProductPage data={d} />)
 const ALL = Object.entries(PRODUCTS_LEVEL_FIXTURES) as [keyof typeof PRODUCTS_LEVEL_FIXTURES, () => ProductsLevelData][]
 
+/** Heading levels in document order that drop more than one below the last
+ *  (an h1 straight to an h3): none on any page. */
+const headingSkips = (html: string): string[] => {
+  const out: string[] = []
+  let last = 0
+  for (const m of html.matchAll(/<h([1-6])\b/g)) {
+    const level = Number(m[1])
+    if (last && level > last + 1) out.push(`h${last} to h${level}`)
+    last = level
+  }
+  return out
+}
+
 describe('every level page, every state', () => {
   it('keeps the copy contract', () => {
     for (const [k, f] of ALL) {
@@ -248,8 +261,11 @@ describe('a product\'s page, the evidence (G4-Products-Product)', () => {
   it('its siblings, the whole category, the Agent', () => {
     expect(text).toContain('Your other liners Iceross Comfort 5 videos in September Iceross Synergy 3 videos in September Iceross Dermo 1 video in September Iceross Seal-In V Quiet in September')
     expect(text).toContain('AeroFit Seal-In Quiet in September Liners, the whole category Ask about these videos and what people said about the Iceross Seal-In X, in your own words. Ask the Agent about this Edit its names in Settings')
-    // One table, at every width.
+    // One table, at every width; each product its row's header, as each
+    // place in the facts' table is.
     expect(render(page(d)).match(/data-sibling=""/g)).toHaveLength(9)
+    expect(render(page(d)).match(/<tr data-sibling=""><th scope="row"/g)).toHaveLength(9)
+    expect(render(page(d)).match(/<tr data-place="[a-z]+"><th scope="row"/g)).toHaveLength(4)
   })
 
   it('one video opened shows its comments and the way back; every video listed', () => {
@@ -322,6 +338,8 @@ describe('the states around the two levels', () => {
     expect(off).toContain(`Your products / Liners Your products Liners A category of your products Your products 10 products in Liners ${PRODUCTS_NOT_ON} Review your products in Settings`)
     expect(render(page(PRODUCTS_LEVEL_FIXTURES['not-on']()))).toContain('data-empty-box=""')
     expect(off).toContain('All 10 of your liners Each opens as its own page. Product Videos Iceross Seal-In X Not read yet')
+    // The list's heading is the h1's next: an h2.
+    expect(headingSkips(render(page(PRODUCTS_LEVEL_FIXTURES['not-on']())))).toEqual([])
     expect(render(page(PRODUCTS_LEVEL_FIXTURES['not-on']()))).not.toContain('aria-label="Month"')
     const product = renderText(page(PRODUCTS_LEVEL_FIXTURES['not-on-product']()))
     expect(product).toContain(`Iceross Seal-In X A product in Liners ${PRODUCTS_NOT_ON}`)

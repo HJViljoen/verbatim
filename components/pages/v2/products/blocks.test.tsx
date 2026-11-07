@@ -20,8 +20,9 @@ describe('the standouts (E4-Products, the four cards)', () => {
     expect(text).toContain('Navii came up for the first time 3 videos in September')
     expect(text).toContain('2 of its 3 videos are about Function & movement.')
     // One treatment for every card (the audit design): a figure and its
-    // words, then one sentence, where the share rows were.
-    expect(text).toContain('Hands talk is mostly about hands in general 98 of 110 name none of your products Of the 110 videos about hands in September, 12 name one of yours.')
+    // words, then one sentence, where the share rows were; each share keeps
+    // its percentage beside its "of N" (decision 2 A).
+    expect(text).toContain('Hands talk is mostly about hands in general 98 of 110 name none of your products (89%) Of the 110 videos about hands in September, 12 (11%) name one of yours.')
     // What is counted: videos naming it with praise in their comments, about anything.
     expect(text).toContain('Praise in the comments Feet Almost every Flex-Foot Cheetah video has praise in its comments 7 of its 9 videos Videos that name it with praise in their comments, about it or about anything else in the video.')
     expect(text).not.toMatch(/is praised|said it worked/)
@@ -53,7 +54,7 @@ describe('the standouts (E4-Products, the four cards)', () => {
     }
     expect(verdict.state).toBe('moved')
     const node = <StandoutCard s={s} monthName="September" />
-    expect(renderText(node)).toContain('Sweat and heat is a liners matter, not a Iceross Seal-In X one 12 of 120 Iceross Seal-In X videos are about Sweat and heat All liners: 150 of 400 videos, 38% .')
+    expect(renderText(node)).toContain('Sweat and heat is a liners matter, not a Iceross Seal-In X one 12 of 120 Iceross Seal-In X videos are about Sweat and heat (10%) All liners: 150 of 400 videos, 38% .')
     expect(render(node)).toContain('data-copy="verdict"')
     assertCopyContract(node)
   })
@@ -133,7 +134,7 @@ describe('the four places, in production\'s thin state', () => {
     expect(text).toContain('New Feet Proprio Foot came up for the first time 1 video in September')
     expect(text).toContain('Also new in September: Pro-Flex Terra, Total Knee 2000 and Rebound Post-Op Knee.')
     expect(m).not.toContain('data-flag="new"')
-    expect(text).toContain('Hands talk is mostly about hands in general 59 of 60 name none of your products Of the 60 videos about hands in September, 1 names one of yours.')
+    expect(text).toContain('Hands talk is mostly about hands in general 59 of 60 name none of your products (98%) Of the 60 videos about hands in September, 1 (2%) names one of yours.')
     expect(text).toContain('Most Feet videos have praise in their comments 16 of its 29 videos')
     // Össur's subjects are provisional (ruling U6): the subject place names
     // none and prints no figure.

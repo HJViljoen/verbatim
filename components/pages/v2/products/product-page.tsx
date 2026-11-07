@@ -254,7 +254,7 @@ function Place({ page }: { page: ProductPage }) {
       <tbody>
         {rows.map((r, i) => (
           <tr key={r.key} data-place={r.key}>
-            <td className={cn(TD, i === 0 ? 'border-t-0' : null, r.own ? 'font-semibold' : null)}>{r.label}</td>
+            <th scope="row" className={cn(TD, i === 0 ? 'border-t-0' : null, 'text-left', r.own ? 'font-semibold' : 'font-normal')}>{r.label}</th>
             <td className={cn(TD, i === 0 ? 'border-t-0' : null, 'pr-0 pl-3.5 text-right tabular-nums', r.own ? 'font-semibold' : null)}><span data-copy="figure">{fmtInt(r.k)}</span></td>
           </tr>
         ))}
@@ -317,7 +317,7 @@ function Siblings({ page, d }: { page: ProductPage; d: ProductsLevelData }) {
           <tbody>
             {page.siblings.map((s, i) => (
               <tr key={s.id} data-sibling="">
-                <td className={cn(TD, i === 0 ? 'border-t-0' : null, 'font-semibold')}><Link href={s.href} className={ROW}>{s.name}</Link></td>
+                <th scope="row" className={cn(TD, i === 0 ? 'border-t-0' : null, 'text-left font-semibold')}><Link href={s.href} className={ROW}>{s.name}</Link></th>
                 <td className={cn(TD, i === 0 ? 'border-t-0' : null, 'pr-0 pl-3.5 text-right')}><SiblingCount videos={s.videos} monthWords={d.base.monthWords} /></td>
               </tr>
             ))}

@@ -89,7 +89,7 @@ export function MarketConversationPage({ data }: { data: MarketData | null }) {
   return (
     <PageFrame className="text-foreground">
       {crumbs.length > 0 ? (
-        <LevelBar crumbs={crumbs} level="conversation" title={page.panel.label} stats={conversationStats(page, data)} controls={<Switch data={data} path={path} />} />
+        <LevelBar crumbs={crumbs} level="conversation" title={<span data-copy="subject" data-slot="pass_b_theme">{page.panel.label}</span>} stats={conversationStats(page, data)} controls={<Switch data={data} path={path} />} />
       ) : <PageBar title={page.panel.label} />}
       <ConversationPageBody page={page} data={data} />
     </PageFrame>

@@ -6,7 +6,9 @@ import { PlanJudgement } from '@/components/agent-document'
 import { ExportMenu, ExportScope } from '@/components/export-menu'
 import { LevelBar } from '@/components/shell/level-bar'
 import { PageFrame } from '@/components/shell/page-grid'
-import { CARD, EmptyBox, Label } from '@/components/v2'
+import { CARD, EmptyBox } from '@/components/v2'
+import { LBL } from '@/components/v2/look'
+import { cn } from '@/lib/utils'
 import { canAsk } from '@/lib/agent/access'
 import { mayDeleteThread } from '@/lib/agent/delete-thread'
 import { DeleteThread } from '@/components/pages/agent/delete-thread'
@@ -131,7 +133,7 @@ export default async function AgentThreadPage({
         <AskShell bar={{ brand: data.brand, reading: data.bar.reading }}>
           <AskColumns rail={rail}>
             <section aria-label="The plan check" className={CARD}>
-              <Label as="h3">The plan check</Label>
+              <h2 className={cn('m-0', LBL)}>The plan check</h2>
               <EmptyBox title="Nothing was saved against this document">
                 Either nothing in it read as a claim about customers or the market, or the check failed on our side
                 before it finished. It still counted as one of this month&rsquo;s questions, and you can bring the

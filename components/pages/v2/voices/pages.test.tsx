@@ -15,6 +15,19 @@ import { BRAND_NUMBERS_NONE } from './brand-page'
 const group = (d: GroupPage | LevelMissing, switcherOpen = false) => <VoicesGroupPage data={d} switcherOpen={switcherOpen} />
 const brand = (d: BrandPage | LevelMissing, switcherOpen = false) => <VoicesBrandPage data={d} switcherOpen={switcherOpen} />
 const creator = (d: CreatorPage | LevelMissing) => <VoicesCreatorPage data={d} />
+/** Heading levels in document order that drop more than one below the last
+ *  (an h1 straight to an h3): none on any page. */
+const headingSkips = (html: string): string[] => {
+  const out: string[] = []
+  let last = 0
+  for (const m of html.matchAll(/<h([1-6])\b/g)) {
+    const level = Number(m[1])
+    if (last && level > last + 1) out.push(`h${last} to h${level}`)
+    last = level
+  }
+  return out
+}
+
 const nodeOf = (key: keyof typeof VOICES_LEVEL_FIXTURES) => {
   const d = VOICES_LEVEL_FIXTURES[key]() as never
   return key.startsWith('group') ? group(d) : key.startsWith('brand') ? brand(d) : creator(d)
@@ -26,6 +39,16 @@ describe('every level page', () => {
       assertCopyContract(nodeOf(key))
       expect(renderText(nodeOf(key)), key).not.toMatch(/[—–]/)
     }
+  })
+
+  it('skips no heading level, a group with no one-liner and a brand with no finding included', () => {
+    for (const key of Object.keys(VOICES_LEVEL_FIXTURES) as (keyof typeof VOICES_LEVEL_FIXTURES)[]) expect(headingSkips(render(nodeOf(key))), key).toEqual([])
+    const noLiner = render(group({ ...groupFixture(), oneLiner: '' }))
+    expect(noLiner).toContain('<h2 class="sr-only">Who they are</h2>')
+    expect(headingSkips(noLiner)).toEqual([])
+    const client = render(brand(brandFixture({ key: 'client' })))
+    expect(client).toMatch(/data-brand-read="none"[^>]*><h2 /)
+    expect(headingSkips(client)).toEqual([])
   })
 
   it('opens with the path and the title block: the crumb row, the h1, the level said under it and the figures row, the month switch with the week and over time not offered and its line; no tile and no label', () => {

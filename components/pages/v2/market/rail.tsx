@@ -125,12 +125,14 @@ export function WeeksCard({ weeks: read }: { weeks: WeeksRead; axis?: readonly s
   )
 }
 
-/** "172 (22%)": a count and its share of the period's videos. */
+/** "172 of 318 (54%)": a count of the period's videos and its share, the
+ *  percentage carrying its "of N" (decision 2 A). */
 function CountShare({ k, n }: { k: number; n: number }) {
+  if (n <= 0) return <span data-copy="figure">{fmtInt(k)}</span>
   return (
     <>
-      <span data-copy="figure">{fmtInt(k)}</span>
-      {n > 0 ? <span className="text-muted-foreground"> (<span data-copy="figure">{Math.round((100 * k) / n)}%</span>)</span> : null}
+      <span data-copy="level">{fmtInt(k)} of {fmtInt(n)}</span>
+      <span className="text-muted-foreground"> (<span data-copy="figure">{Math.round((100 * k) / n)}%</span>)</span>
     </>
   )
 }

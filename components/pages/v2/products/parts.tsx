@@ -25,7 +25,8 @@ export function MidFigure({ value, of, children }: { value: number; of?: number;
   return (
     <p className="m-0 flex flex-wrap items-baseline gap-x-2 gap-y-1 border-t border-track pt-3.5">
       <span className="text-[32px] leading-none font-bold tabular-nums text-foreground">
-        <span data-copy="figure">{fmtInt(value)}</span>{of != null ? <> of <span data-copy="figure">{fmtInt(of)}</span></> : null}
+        {/* "k of n" is a level, so the copy contract sees its base. */}
+        {of != null ? <span data-copy="level">{fmtInt(value)} of {fmtInt(of)}</span> : <span data-copy="figure">{fmtInt(value)}</span>}
       </span>
       {children ? <span className="text-[15px] text-secondary-foreground">{children}</span> : null}
     </p>

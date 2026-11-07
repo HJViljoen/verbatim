@@ -4,7 +4,7 @@ import { assertCopyContract, copyNodes, copyViolations } from '@/lib/test/copy-c
 import { CONV_SPANISH, fixtureId, fixtureSubjectId, marketConversationFixture } from '@/lib/pages/v2/market-fixture'
 import { noGroupSaying, type MarketData } from '@/lib/pages/v2/market'
 import { BACK_TO_MARKET, CONVERSATION_MISSING, MarketConversationPage } from './pages'
-import { ConversationPageBody, CONV_NONE_QUOTABLE, CONV_NONE_QUOTABLE_ALL, CONV_SAID_IN_VIDEO, CONV_VIDEOS_UNREAD, notQuoted, openedNote, showCommentsOf } from './conversation-page'
+import { ConversationPageBody, CONV_NONE_QUOTABLE, CONV_WHO_UNREAD, CONV_NONE_QUOTABLE_ALL, CONV_SAID_IN_VIDEO, CONV_VIDEOS_UNREAD, notQuoted, openedNote, showCommentsOf } from './conversation-page'
 
 // A CONVERSATION'S PAGE, THE EVIDENCE (F3-Market-Conversation, 17 Oct): the
 // header on the page (the title block, the one-line read, the week's chip
@@ -31,6 +31,8 @@ describe('a conversation under its ready subject, this week', () => {
     // over the title; who it is about moves from the facts to the figures row.
     expect(tight(text)).toMatch(/^Market \/ Fit & comfort \/ How long a liner lasts Fit & comfort How long a liner lasts This week October so far Over time Week 5 to 11 Oct This week 23 of 226 category videos October so far 35 of 300 category videos Brands named Össur \(4\), others \(19\) /)
     expect(html).not.toContain('data-level-tile')
+    // The h1 is the model's label, replayed from its slot.
+    expect(html).toMatch(/<h1[^>]*><span data-copy="subject" data-slot="pass_b_theme">How long a liner lasts<\/span><\/h1>/)
     expect(html).toContain(`href="/dashboard/market/subjects/${fixtureSubjectId('fit')}"`)
     expect(html).toContain(`href="/dashboard/market/conversations/${fixtureId(1)}?period=month"`)
   })
@@ -193,6 +195,14 @@ describe('every state keeps its frame', () => {
     expect(text).toContain('Other conversations in Fit & comfort Fit & comfort, the whole subject Sweat under the liner 30 in October so far')
     expect(text).not.toContain('Videos, week by week')
     expect(text).not.toContain('this week')
+    assertCopyContract(page(d))
+  })
+
+  it('brands counted, but no video of it read for who it is about: says so, never "None"', () => {
+    const d = { ...LINER, convPage: { ...LINER.convPage!, panel: { ...LINER.convPage!.panel, who: null } } }
+    const text = renderText(page(d))
+    expect(text).toContain(`Brands named ${CONV_WHO_UNREAD}`)
+    expect(text).not.toMatch(/Brands named None/)
     assertCopyContract(page(d))
   })
 

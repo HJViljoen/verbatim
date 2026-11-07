@@ -1688,7 +1688,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
     the comments, videos week by week, where it is said) in a row above
     the full-width table, never a rail beside it (ruling 2; since the audit
     design the side cards' bases are the figures row's, where it is said a
-    table of the week beside the month, "172 (22%)", and the table's line
+    table of the week beside the month, "172 of 766 (22%)", a percentage
+    keeping its "of N", and the table's line
     says where nothing new surfaced this week), the table a
     two-line list on a phone (name and videos, then subject and the month
     beside the week) with no About chips (ruling 4). *This month and Over

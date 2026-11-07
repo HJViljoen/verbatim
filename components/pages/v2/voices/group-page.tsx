@@ -83,7 +83,7 @@ function Header({ page }: { page: GroupPage }) {
         <h2 className="m-0 max-w-[1000px] text-[28px] leading-[1.3] font-bold tracking-[-0.01em] text-foreground max-sm:text-[23px]">
           <span data-copy="subject" data-slot="pass_e_persona">{page.oneLiner}</span>
         </h2>
-      ) : null}
+      ) : <h2 className="sr-only">Who they are</h2>}
       <dl className={cn('m-0 grid grid-cols-1 gap-8 min-[900px]:grid-cols-3', page.oneLiner ? 'border-t border-track pt-5' : null)}>
         <Fact term="The subject they talk about most">
           {top ? (

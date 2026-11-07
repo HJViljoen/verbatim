@@ -117,12 +117,18 @@ describe('the title block', () => {
     expect(at('data-level-tags')).toBeLessThan(at('data-stat-strip'))
     expect(html).toMatch(/<p data-level-sub="" class="[^"]*text-\[14\.5px\][^"]*text-secondary-foreground">A subject in <a class="[^"]*decoration-control[^"]*" href="\/dashboard\/market">your market<\/a><\/p>/)
     // The control at the right of the h1 and the line under it (the Voices
-    // boards: the switch with its line stands beside both).
-    expect(html).toMatch(/<\/h1>(<span class="relative shrink-0 sm:hidden">[\s\S]*?<\/span>)?<\/div><p data-level-sub=""[\s\S]*?<\/p><\/div><div data-level-controls="" class="shrink-0"><span>switch<\/span><\/div>/)
+    // boards: the switch with its line stands beside both). The page's own
+    // switcher rides after the h1 on a phone, always where it has siblings
+    // (decision 15 keeps the menus): a menu button, never an arrow glued to
+    // a link. The way back's chevron is gone (the review of Phases 4 and 5).
+    expect(html).toMatch(/<\/h1><span class="relative shrink-0 sm:hidden"><button type="button" aria-haspopup="menu"[^>]*aria-label="Switch to another subject"[\s\S]*?<\/span><\/div><p data-level-sub=""[\s\S]*?<\/p><\/div><div data-level-controls="" class="shrink-0"><span>switch<\/span><\/div>/)
+    expect(html).not.toContain('m15 18-6-6 6-6')
     expect(renderText(node)).toBe('Market / Fit & comfort Market Fit & comfort A subject in your market switch Unusual this week Week 5 to 11 October This week 32 videos')
     assertCopyContract(node)
     // Another page's level needs no tile in the audit block.
     expect(render(<LevelBar crumbs={subject.crumbs!} level="idea" sub="Post idea 1" />)).toContain('data-level-bar="idea"')
+    // A conversation's title is the model's label, replayed from its slot.
+    expect(render(<LevelBar crumbs={conv.crumbs!} level="conversation" />)).toMatch(/<h1[^>]*><span data-copy="subject" data-slot="pass_b_theme">How long a liner lasts<\/span><\/h1>/)
   })
 
   it('takes a closed set of levels (checked by tsc)', () => {

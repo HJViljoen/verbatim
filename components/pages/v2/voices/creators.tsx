@@ -30,6 +30,8 @@ function CreatorRow({ row, brands }: { row: VoicesCreatorRow; brands: boolean })
         <span className="mt-1 block text-[14px] font-normal leading-[1.45] text-secondary-foreground sm:hidden">
           {row.platformLabel}{row.followers != null ? <>, <Followers n={row.followers} word={row.followerWord} /></> : null}
           {row.top ? <>, made <Fig>{fmtInt(row.top.k)}</Fig> of the <Fig>{fmtInt(row.top.ofTheme)}</Fig> videos in <span data-copy="subject" data-slot="pass_b_theme">{row.top.label}</span></> : null}
+          {/* The wide table's "Brand named most", which hides below 640. */}
+          {row.brand ? <>, brand named most <BrandChip who={row.brand.you ? 'you' : 'rival'} plain>{row.brand.label}</BrandChip> (<Fig>{fmtInt(row.brand.k)}</Fig>)</> : null}
         </span>
       </td>
       <td className={cn(TD, 'max-sm:hidden')}>{row.platformLabel}</td>

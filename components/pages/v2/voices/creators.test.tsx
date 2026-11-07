@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { render, renderText } from '@/lib/test/render'
+import { markupText, render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { ossurVoicesFixture, sealandVoicesFixture } from '@/lib/pages/v2/voices-fixture'
 import { CreatorsCard } from './creators'
@@ -36,6 +36,10 @@ describe('Creators who drive the talk', () => {
     const m = render(<CreatorsCard creators={d.creators} monthWords={d.monthWords} />)
     expect(m).toMatch(/data-who-chip="(rival|you)"/)
     expect(renderText(<CreatorsCard creators={d.creators} monthWords={d.monthWords} />)).toContain('Most made in Brand named most Videos')
+    // On a phone the column hides, and the row's line under its name says it.
+    const row = d.creators.rows.find((r) => r.brand)!
+    const phone = [...m.matchAll(/<span class="mt-1 block [^"]*sm:hidden">([\s\S]*?)<\/span><\/td>/g)].map((x) => markupText(x[1]).replace(/\s+/g, ' '))
+    expect(phone.some((line) => new RegExp(`, brand named most ${row.brand!.label} \\( ?${row.brand!.k} ?\\)$`).test(line.trim())), phone.join(' | ')).toBe(true)
     assertCopyContract(<CreatorsCard creators={d.creators} monthWords={d.monthWords} />)
   })
 

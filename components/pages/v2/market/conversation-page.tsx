@@ -66,6 +66,10 @@ export function openedNote(v: Pick<ConvVideo, 'quotable' | 'aboutCount'>): strin
   return unquoted > 0 ? notQuoted(unquoted) : null
 }
 
+/** Brands counted, but no video of it read for who it is about: said so,
+ *  never "None" (the page's words before the audit design). */
+export const CONV_WHO_UNREAD = 'No video read for who it is about'
+
 /** The period in the page's words. */
 const whenOf = (data: MarketData): string => (data.period === 'week' ? 'this week' : `in ${data.month.text}`)
 
@@ -74,8 +78,9 @@ const lv = (k: number, n: number) => <span data-copy="level">{fmtInt(k)} of {fmt
 /**
  * The conversation's figures row (the board's four cells): the week; its
  * category videos this week and in the month, each with its base; the
- * brands its videos name ("Ottobock (1), others (10)", "None", or why they
- * are not said). Off the week, the month and the brands. Pure.
+ * brands its videos name ("Ottobock (1), others (10)", or why they are not
+ * said: not counted, not read, or no video read for who it is about). Off
+ * the week, the month and the brands. Pure.
  */
 export function conversationStats(page: ConvPage, data: MarketData): StatItem[] {
   const week = data.period === 'week' && data.week ? data.week : null
@@ -86,7 +91,7 @@ export function conversationStats(page: ConvPage, data: MarketData): StatItem[] 
   const who = page.panel.who
   const brands: ReactNode = data.brands !== 'counted'
     ? <span className="font-normal">{(data.brands === 'not_counted' ? ABOUT_NOT_COUNTED : ABOUT_NOT_READ).replace(/^./, (c) => c.toUpperCase())}</span>
-    : who ? <BrandsNamed parts={who.parts} brand={data.brand} noun={data.noun} /> : <span className="font-normal">None</span>
+    : who ? <BrandsNamed parts={who.parts} brand={data.brand} noun={data.noun} /> : <span className="font-normal">{CONV_WHO_UNREAD}</span>
   cells.push({ key: 'brands', term: 'Brands named', value: brands })
   return cells
 }

@@ -64,7 +64,7 @@ describe('Your products: the tile draws the page\'s own shelf, cut as the page c
     expect(topProductsOf(failed).columns).toBeUndefined()
   })
 
-  it('the page\'s shelf and the tile cut by one rule (`shelfCut`)', () => {
+  it('the tile\'s shelf is cut by one rule (`shelfCut`), never "+1 more"; the page lists every product (plan T5.1)', () => {
     expect(shelfCut([1, 2, 3])).toEqual({ shown: [1, 2, 3], more: 0 })
     const twenty = Array.from({ length: 20 }, (_, i) => i)
     expect(shelfCut(twenty)).toEqual({ shown: twenty.slice(0, SHELF_TILES), more: 20 - SHELF_TILES })

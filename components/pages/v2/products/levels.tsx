@@ -85,7 +85,7 @@ function LevelOff({ data }: { data: ProductsLevelData }) {
         <section aria-label={data.level === 'product' ? `Your other ${word}` : `All ${rows.length} of your ${word}`} className={LIST_CARD}>
           {data.level === 'category' ? (
             <div>
-              <h3 className="m-0 text-[19px] leading-[1.3] font-semibold text-foreground">All <span data-copy="figure">{fmtInt(rows.length)}</span> of your {word}</h3>
+              <h2 className="m-0 text-[19px] leading-[1.3] font-semibold text-foreground">All <span data-copy="figure">{fmtInt(rows.length)}</span> of your {word}</h2>
               <p className="m-0 mt-1.5 text-[14px] leading-[1.45] text-muted-foreground">Each opens as its own page.</p>
             </div>
           ) : null}
