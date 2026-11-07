@@ -141,9 +141,10 @@ describe('the title block', () => {
     expect(at('data-level-sub')).toBeLessThan(at('data-level-tags'))
     expect(at('data-level-tags')).toBeLessThan(at('data-stat-strip'))
     expect(html).toMatch(/<p data-level-sub="" class="[^"]*text-\[14\.5px\][^"]*text-secondary-foreground">A subject in <a class="[^"]*decoration-control[^"]*" href="\/dashboard\/market">your market<\/a><\/p>/)
-    // The control at the right of the h1's row.
-    expect(html).toMatch(/<\/h1>(<span class="relative shrink-0 sm:hidden">[\s\S]*?<\/span>)?<\/div><div data-level-controls="" class="shrink-0"><span>switch<\/span><\/div>/)
-    expect(renderText(node)).toBe('Market / Fit & comfort Market Fit & comfort switch A subject in your market Unusual this week Week 5 to 11 October This week 32 videos')
+    // The control at the right of the h1 and the line under it (the Voices
+    // boards: the switch with its line stands beside both).
+    expect(html).toMatch(/<\/h1>(<span class="relative shrink-0 sm:hidden">[\s\S]*?<\/span>)?<\/div><p data-level-sub=""[\s\S]*?<\/p><\/div><div data-level-controls="" class="shrink-0"><span>switch<\/span><\/div>/)
+    expect(renderText(node)).toBe('Market / Fit & comfort Market Fit & comfort A subject in your market switch Unusual this week Week 5 to 11 October This week 32 videos')
     assertCopyContract(node)
     // Another page's level needs no tile in the audit block.
     expect(render(<LevelBar crumbs={subject.crumbs!} level="idea" sub="Post idea 1" />)).toContain('data-level-bar="idea"')

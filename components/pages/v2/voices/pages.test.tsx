@@ -34,8 +34,9 @@ describe('every level page', () => {
     expect(g).toContain('data-level-block="audit"')
     expect(g).not.toContain('data-level-tile')
     expect(g.match(/<h1\b/g)).toHaveLength(1)
-    expect(renderText(group(groupFixture()))).toMatch(/^Voices \/ Caregivers and family Voices Caregivers and family This week/)
-    expect(renderText(group(groupFixture()))).toContain(`${VOICES_ONE_MONTH} A group in your market Month October so far Their videos 45 of the market’s 318 Described at The 11 Oct update Against September Not compared yet`)
+    expect(renderText(group(groupFixture()))).toMatch(/^Voices \/ Caregivers and family Voices Caregivers and family A group in your market This week/)
+    expect(renderText(group(groupFixture()))).toContain(`Caregivers and family A group in your market This week`)
+    expect(renderText(group(groupFixture()))).toContain(`${VOICES_ONE_MONTH} Month October so far Their videos 45 of the market’s 318 Described at The 11 Oct update Against September Not compared yet`)
     expect(g.match(/data-voices-one-month=""/g)).toHaveLength(1)
     // On a phone the row becomes the way back.
     expect(g).toMatch(/data-back-link=""[^>]*href="\/dashboard\/voices"/)
@@ -133,7 +134,8 @@ describe('a group\'s page (G3-Voices-Group)', () => {
     expect(t).toContain('Brands named in their videos Brands are not counted for this workspace yet. Össur You Ottobock')
     expect(t).toContain('Your products in their videos Your products are not read for this workspace yet.')
     expect(t).toContain('“Onde vocês conseguiram a prótese? Minha mãe precisa de uma.” Portuguese, machine translation Where did you get the prosthesis? My mother needs one.')
-    expect(t).toContain('A group in your market The last full month September Their videos 97 of the market’s 521')
+    expect(t).toContain('Caretaker A group in your market This week')
+    expect(t).toContain('The last full month September Their videos 97 of the market’s 521')
     // Who they say they are, with nothing: its one line, no empty tracks
     // (decision 4).
     expect(h).not.toContain('data-empty-track')

@@ -137,16 +137,21 @@ export function LevelBar(props: LevelBarCommon & (LegacyBlock | AuditBlock)) {
       <header data-level-bar={level} data-level-block="audit" className="flex flex-col">
         <CrumbRow crumbs={crumbs} open={open} />
         <BackLink crumbs={crumbs} />
-        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-x-5 gap-y-3 max-sm:mt-1">
-          <div className="flex min-w-0 items-center gap-1">
-            <h1 className="m-0 min-w-0 text-[28px] leading-[1.2] font-bold tracking-[-0.01em] text-foreground">{named}</h1>
-            {/* On a phone the page's own chevron rides after its title;
-                from 640 it sits in the crumb row. */}
-            {hasSiblings(menu) ? <span className="relative shrink-0 sm:hidden"><Switcher menu={menu} /></span> : null}
+        {/* The title and the line under it on the left, the controls at the
+            right beside both (the Voices boards' switch carries a line of
+            its own under it, so it stands taller than the title). */}
+        <div className={cn('mt-2.5 flex flex-wrap justify-between gap-x-5 gap-y-3 max-sm:mt-1', sub != null ? 'items-start' : 'items-center')}>
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-1">
+              <h1 className="m-0 min-w-0 text-[28px] leading-[1.2] font-bold tracking-[-0.01em] text-foreground">{named}</h1>
+              {/* On a phone the page's own chevron rides after its title;
+                  from 640 it sits in the crumb row. */}
+              {hasSiblings(menu) ? <span className="relative shrink-0 sm:hidden"><Switcher menu={menu} /></span> : null}
+            </div>
+            {sub != null ? <p data-level-sub="" className="m-0 mt-1.5 text-[14.5px] leading-[1.5] text-secondary-foreground">{sub}</p> : null}
           </div>
           {controls ? <div data-level-controls="" className="shrink-0">{controls}</div> : null}
         </div>
-        {sub != null ? <p data-level-sub="" className="m-0 mt-1.5 text-[14.5px] leading-[1.5] text-secondary-foreground">{sub}</p> : null}
         {tags != null ? <div data-level-tags="" className="mt-3 flex flex-wrap items-center gap-2">{tags}</div> : null}
         {stats && stats.length > 0 ? <div className="mt-5"><StatStrip items={stats} /></div> : null}
       </header>
