@@ -229,7 +229,7 @@ export function CrumbRow({ crumbs, open }: { crumbs: readonly Crumb[]; open?: 'c
   const current = crumbs[crumbs.length - 1]
   if (!current) return null
   return (
-    <div data-crumb-row="" className="border-b border-border pt-3 pb-[11px] max-sm:hidden sm:-mx-4 sm:-mt-[18px] sm:px-4 md:-mx-10 md:-mt-7 md:px-10">
+    <div data-crumb-row="" className="border-b border-border pt-3 pb-[11px] max-sm:hidden sm:-mx-4 sm:-mt-[18px] sm:px-4 md:-mx-10 md:-mt-9 md:px-10">
       <nav aria-label="Breadcrumb">
         <ol className="m-0 flex min-h-[26px] min-w-0 list-none flex-wrap items-center p-0 text-[14px] leading-[22px]">
           {crumbs.map((c, i) => {

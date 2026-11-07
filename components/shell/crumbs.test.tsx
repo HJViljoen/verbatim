@@ -7,6 +7,7 @@ import { SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
 import type { Crumb } from '@/lib/pages/crumbs'
 import { ANCESTOR_MAX, BackLink, CrumbRow, Switcher } from './crumbs'
 import { ConversationLabel, LevelBar } from './level-bar'
+import { GoLink } from '@/components/v2/ui'
 
 // THE PATH AND ITS SWITCHERS, THEN THE TITLE BLOCK (F3-Market-Nav, 17 Oct):
 // what each level page's crumb row and title block print, and what a
@@ -19,7 +20,9 @@ describe('the crumb row', () => {
 
   it('a subject: "Market / {subject}" at 14px, Market a muted link at 500, the slash light, the subject ink at 600 with its 22px chevron', () => {
     const html = render(<CrumbRow crumbs={subject.crumbs!} />)
-    expect(html).toMatch(/<div data-crumb-row="" class="border-b border-border pt-3 pb-\[11px\] max-sm:hidden sm:-mx-4 sm:-mt-\[18px\] sm:px-4 md:-mx-10 md:-mt-7 md:px-10">/)
+    expect(html).toMatch(/<div data-crumb-row="" class="border-b border-border pt-3 pb-\[11px\] max-sm:hidden sm:-mx-4 sm:-mt-\[18px\] sm:px-4 md:-mx-10 md:-mt-9 md:px-10">/)
+    // Edge to edge of the column: the negative margins are <main>'s padding
+    // (app/dashboard/layout.tsx, 36px over the title from 768 since the audit design).
     expect(html).toMatch(/<nav aria-label="Breadcrumb"><ol class="[^"]*text-\[14px\][^"]*">/)
     expect(html).toMatch(/<a title="Market" class="[^"]*font-medium text-muted-foreground[^"]*" href="\/dashboard\/market">Market<\/a>/)
     expect(html).toMatch(/<span aria-hidden="true" class="[^"]*text-\[17px\][^"]*font-light text-muted-foreground\/45">\/<\/span>/)
@@ -119,7 +122,7 @@ describe('the title block', () => {
       <LevelBar
         crumbs={subject.crumbs!}
         level="subject"
-        sub={<>A subject in <a href="/dashboard/market">your market</a></>}
+        sub={<>A subject in <GoLink href="/dashboard/market">your market</GoLink></>}
         tags={<span data-tag="tint">Unusual this week</span>}
         stats={[{ term: 'Week', value: '5 to 11 October' }, { term: 'This week', value: <span data-copy="figure">32 videos</span> }]}
         controls={<span>switch</span>}
@@ -136,7 +139,7 @@ describe('the title block', () => {
     expect(at('<h1')).toBeLessThan(at('data-level-sub'))
     expect(at('data-level-sub')).toBeLessThan(at('data-level-tags'))
     expect(at('data-level-tags')).toBeLessThan(at('data-stat-strip'))
-    expect(html).toMatch(/<p data-level-sub="" class="[^"]*text-\[14\.5px\][^"]*text-secondary-foreground">A subject in <a href="\/dashboard\/market">your market<\/a><\/p>/)
+    expect(html).toMatch(/<p data-level-sub="" class="[^"]*text-\[14\.5px\][^"]*text-secondary-foreground">A subject in <a class="[^"]*decoration-control[^"]*" href="\/dashboard\/market">your market<\/a><\/p>/)
     // The control at the right of the h1's row.
     expect(html).toMatch(/<\/h1>(<span class="relative shrink-0 sm:hidden">[\s\S]*?<\/span>)?<\/div><div data-level-controls="" class="shrink-0"><span>switch<\/span><\/div>/)
     expect(renderText(node)).toBe('Market / Fit & comfort Market Fit & comfort switch A subject in your market Unusual this week Week 5 to 11 October This week 32 videos')

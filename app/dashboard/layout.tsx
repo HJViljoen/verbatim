@@ -20,9 +20,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <SidebarProvider style={{ '--sidebar-width': '281px' } as React.CSSProperties}>
       {/* The sidebar header streams: the shell paints the wordmark immediately
-          and, for a platform admin only, the tenant switcher replaces it when
-          the session resolves. Same reason as the banner below — this layout
-          must not await anything. */}
+          and, when the session resolves, the client's own name (the audit
+          design, decision 13) or, for a platform admin only, the tenant
+          switcher replaces it in the same row. Same reason as the banner below:
+          this layout must not await anything. */}
       <AppSidebar
         header={
           <Suspense fallback={<SidebarWordmark />}>
@@ -52,22 +53,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           outside its scroll, and <main> keeps the board's 16px gutters and
           18px above the title; the floating trigger is gone.
           1 Oct (the navigation build, every `Page-*.dc.html` artboard): the
-          pane is the design's ground, Palette A `#F7F6F2`, and <main> sits
-          28px from the top and 40px from the other three edges. Palette A is
-          used locally: the app's own --background is still the old white, and
-          the app-wide colour swap is a separate task.
-          2 Oct (CROWD, Heinrich: "add the background art back again … it would
-          add a nice depth to the page"): the crowd backdrop is back on that
-          ground, as it was from 24 Sep until the navigation build took it out.
-          It is absolute inside this pane, not inside <main>: the pane does not
-          scroll, so the crowd stays put while <main> scrolls the cards over
-          it, adds no scroll height, never reaches behind the sidebar, and
-          follows it when it collapses. <main> is `relative z-10`, so every
-          white card paints on top and the crowd shows in the gutters and the
-          open ground. One element, aria-hidden, pointer-events none, hidden
-          in print (`.crowd-bg`, app/globals.css). */}
+          pane is the design's ground, Palette A `#F7F6F2`. Palette A is used
+          locally: the app's own --background is still the old white, and the
+          app-wide colour swap is a separate task.
+          7 Nov (the audit design; Market-After.dc.html's main, `padding: 36px
+          40px 48px`): <main> sits 36px from the top, 40px from either side and
+          48px from the foot (it was 28/40/40). The crowd backdrop that sat on
+          this ground from 2 Oct (CROWD) is retired from the app: the boards
+          draw the plain ground. Its CSS stays in app/globals.css for the
+          signed-out frame (components/auth/auth-card.tsx). <main> keeps
+          `relative z-10`. A level page's crumb row reaches edge to edge of the
+          column with negative margins equal to this padding
+          (components/shell/crumbs.tsx `CrumbRow`): move both together. */}
       <div className="relative flex flex-col flex-1 min-w-0 h-dvh overflow-hidden bg-[#F7F6F2]">
-        <div className="crowd-bg crowd-bg--shell" aria-hidden />
         <PhoneTopBar
           brand={
             <Suspense fallback={<PhoneWordmark />}>
@@ -75,7 +73,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </Suspense>
           }
         />
-        <main className="relative z-10 flex-1 min-h-0 overflow-y-auto px-4 pt-[18px] pb-12 md:px-10 md:pt-7 md:pb-10">
+        <main className="relative z-10 flex-1 min-h-0 overflow-y-auto px-4 pt-[18px] pb-12 md:px-10 md:pt-9 md:pb-12">
           <Suspense fallback={null}>
             <AccessBannerLoader />
           </Suspense>

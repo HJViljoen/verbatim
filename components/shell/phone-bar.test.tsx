@@ -43,13 +43,13 @@ describe('the dashboard layout on a phone', () => {
     expect(layout).toContain('<PhoneWordmarkLoader />')
   })
 
-  it('gives <main> the board\'s 16px gutters and 18px over the title on a phone, as before from 768', () => {
-    expect(layout).toContain('<main className="relative z-10 flex-1 min-h-0 overflow-y-auto px-4 pt-[18px] pb-12 md:px-10 md:pt-7 md:pb-10">')
+  it('gives <main> the board\'s 16px gutters and 18px over the title on a phone, and from 768 the audit design\'s 36/40/48', () => {
+    expect(layout).toContain('<main className="relative z-10 flex-1 min-h-0 overflow-y-auto px-4 pt-[18px] pb-12 md:px-10 md:pt-9 md:pb-12">')
   })
 
   it('the shots harness draws the same shell', () => {
     const harness = readFileSync('scripts/pages-shots.ts', 'utf8')
     expect(harness).toContain('h(PhoneTopBar, { brand: phoneBrand() })')
-    expect(harness).toContain('px-4 pt-[18px] pb-12 md:px-10 md:pt-7 md:pb-10')
+    expect(harness).toContain('px-4 pt-[18px] pb-12 md:px-10 md:pt-9 md:pb-12')
   })
 })

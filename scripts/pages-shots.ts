@@ -714,20 +714,17 @@ const phoneBrand = () =>
   )
 
 /** app/dashboard/layout.tsx, as a client sees it. The harness's one change:
- *  the pane grows to the page (`h-dvh` and the inner scroll go, and with them
- *  the crowd backdrop), except for a `fixed` page or `--screen`, which is shot
- *  in the shipped pane. */
+ *  the pane grows to the page (`h-dvh` and the inner scroll go), except for a
+ *  `fixed` page or `--screen`, which is shot in the shipped pane. (The crowd
+ *  backdrop is retired from the app since the audit design, 7 Nov.) */
 const shell = (path: string, page: ReactNode, fixed = false) =>
   h(AppRouterContext.Provider, { value: router as never },
     h(PathnameContext.Provider, { value: path },
       h(SidebarProvider, { style: { '--sidebar-width': '281px' } as never },
         h(AppSidebar, { header: header() }),
         h('div', { className: `relative flex flex-col flex-1 min-w-0 bg-[#F7F6F2] ${fixed ? 'h-dvh overflow-hidden' : 'min-h-dvh'}` },
-          // The crowd holds still while <main> scrolls, which a page grown to
-          // its full height cannot show; only the shipped pane draws it.
-          fixed ? h('div', { className: 'crowd-bg crowd-bg--shell', 'aria-hidden': true }) : null,
           h(PhoneTopBar, { brand: phoneBrand() }),
-          h('main', { className: `relative z-10 flex-1 min-h-0 px-4 pt-[18px] pb-12 md:px-10 md:pt-7 md:pb-10 ${fixed ? 'overflow-y-auto' : ''}` }, page),
+          h('main', { className: `relative z-10 flex-1 min-h-0 px-4 pt-[18px] pb-12 md:px-10 md:pt-9 md:pb-12 ${fixed ? 'overflow-y-auto' : ''}` }, page),
         ),
       ),
     ),
