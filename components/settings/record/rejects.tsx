@@ -137,14 +137,13 @@ export function RejectLogBlock({
                     (lib/test/copy-contract.ts): a caption can say "growing" and
                     the product has made no direction claim by quoting it. */}
                 <span data-copy="quote">“{r.captionExcerpt ?? 'No caption was stored for this one.'}”</span>
-                <span className="mt-0.5 block font-mono text-[12px] leading-[1.45] text-muted-foreground">
+                <span className="mt-0.5 block text-[13px] leading-[1.45] text-muted-foreground">
                   {r.platform}
-                  {r.accountName ? ` · ${r.accountName}` : ''}
-                  {r.keyword ? ` · found on “${r.keyword}”` : ''}
+                  {r.accountName ? `, ${r.accountName}` : ''}
+                  {r.keyword ? `, found on “${r.keyword}”` : ''}
                 </span>
               </span>
               <span className="inline-flex min-w-0 items-center gap-1.5 text-[13px] leading-[1.45] text-secondary-foreground">
-                <span className="h-[7px] w-[7px] flex-none rounded-full bg-border" />
                 <span className="min-w-0">
                   {r.reason ?? (r.source === 'default' ? 'Nobody judged this one.' : 'No reason was recorded.')}
                 </span>
@@ -178,7 +177,7 @@ export function RejectLogBlock({
                 <tr key={t.key} className="border-b border-border/60 last:border-b-0">
                   <td className="py-2 pr-3 text-left align-top">{t.label}</td>
                   {[fmtInt(t.found), fmtInt(t.kept), termRate(t)].map((c, i) => (
-                    <td key={i} className="py-2 pl-3 text-right align-top font-mono tabular-nums">{c}</td>
+                    <td key={i} className="py-2 pl-3 text-right align-top tabular-nums">{c}</td>
                   ))}
                 </tr>
               ))}
@@ -187,7 +186,7 @@ export function RejectLogBlock({
           </div>
           {byPlatform.length > 0 ? (
             <p className="m-0 text-[13px] text-secondary-foreground">
-              By platform: {byPlatform.map((p) => `${p.label} ${platformRate(p)}`).join(' · ')}.
+              By platform: {byPlatform.map((p) => `${p.label} ${platformRate(p)}`).join(', ')}.
             </p>
           ) : null}
         </div>

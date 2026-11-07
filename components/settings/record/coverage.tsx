@@ -1,5 +1,7 @@
+import type { ReactNode } from 'react'
 import type { RecordRow } from '@/lib/reading/record'
 
+import { commaCite } from '@/components/v2/words'
 import { RecordSection } from './frame'
 
 /**
@@ -40,11 +42,14 @@ import { RecordSection } from './frame'
  */
 
 export function CoverageBlock({
-  title, rows,
+  title, rows, children,
 }: {
-  /** "Coverage · September 2026". */
+  /** "Coverage in September 2026, and what it does not cover". */
   title: string
   rows: readonly RecordRow[]
+  /** What follows the grid inside the same section: the page's scope
+   *  statement (the audit design merges "What this covers" into Coverage). */
+  children?: ReactNode
   /** The mono one-liner under the grid: the readings counter and
    *  `howSoundLine`, which every reading surface prints in its page bar and
    *  this page did not print at all. */
@@ -100,6 +105,7 @@ export function CoverageBlock({
           <Row key={row.id} row={row} />
         ))}
       </div>
+      {children}
     </RecordSection>
   )
 }
@@ -117,18 +123,20 @@ function Row({ row }: { row: RecordRow }) {
   return (
     <>
       <span className="border-t border-border/70 pt-3 text-[13px] font-medium leading-[22px] text-muted-foreground lg:pb-3">
-        {row.label}
+        {commaCite(row.label)}
       </span>
       <span className="min-w-0 pb-3 lg:border-t lg:border-border/70 lg:pt-3">
         <span className="block text-[15px] leading-[22px]">
-          {row.lead ? `${row.lead} ` : ''}
+          {/* The words are composed in lib/, some joined with a middle dot:
+              said in commas on this screen (the audit design). */}
+          {row.lead ? `${commaCite(row.lead)} ` : ''}
           {row.figure != null ? (
-            <span data-copy="figure" className="font-mono font-semibold tabular-nums">{row.figure}</span>
+            <span data-copy="figure" className="font-semibold tabular-nums">{row.figure}</span>
           ) : null}
-          {row.figure != null && row.rest ? (row.dash ? ' · ' : ' ') : ''}
-          {row.rest}
+          {row.figure != null && row.rest ? (row.dash ? ', ' : ' ') : ''}
+          {row.rest ? commaCite(row.rest) : null}
         </span>
-        {row.basis ? <span className="mt-0.5 block text-[13px] leading-[1.45] text-muted-foreground">{row.basis}</span> : null}
+        {row.basis ? <span className="mt-0.5 block text-[13px] leading-[1.45] text-muted-foreground">{commaCite(row.basis)}</span> : null}
       </span>
     </>
   )

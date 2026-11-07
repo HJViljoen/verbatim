@@ -47,12 +47,12 @@ export function HeldStillAside({ state, lines }: { state: 'available' | 'unavail
           {lines.map((l) => (
             <li key={`${l.field}-${l.queuedAt}`} className="flex flex-col gap-0.5 border-t border-border py-2.5 first:border-t-0 first:pt-0">
               <span className="text-[14px] leading-[1.5]"><span className="font-semibold">{l.label}:</span> {l.words}</span>
-              <span className="font-mono text-[12px] text-muted-foreground">from {effectiveWords(l.month)}</span>
+              <span className="text-[13px] text-muted-foreground">from {effectiveWords(l.month)}</span>
             </li>
           ))}
         </ul>
       ) : state === 'available' ? (
-        <p className="m-0 font-mono text-[13px] text-muted-foreground">queued: none yet</p>
+        <p className="m-0 text-[14px] text-muted-foreground">Queued: none yet</p>
       ) : null}
       <Link href={ASK_HREF} className="inline-flex h-11 items-center gap-2 self-start rounded-lg bg-tile px-4 text-[14px] font-medium text-foreground ring-1 ring-border transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0 text-muted-foreground">
@@ -74,7 +74,7 @@ export function PagesCanSay({ now }: { now: string }) {
       <ol className="m-0 flex max-w-[760px] list-none flex-col p-0">
         {rows.map((r) => (
           <li key={r.when} className="grid grid-cols-[120px_minmax(0,1fr)] gap-x-4 border-b border-border/60 py-3 last:border-b-0">
-            <span className={cn('font-mono text-[13px] leading-[1.6]', r.state === 'next' ? 'font-semibold text-foreground' : 'text-muted-foreground')}>{r.when}</span>
+            <span className={cn('text-[13px] leading-[1.6] tabular-nums', r.state === 'next' ? 'font-semibold text-foreground' : 'text-muted-foreground')}>{r.when}</span>
             <span className={cn('text-[15px] leading-[1.5] [text-wrap:pretty]', r.state === 'reached' ? 'text-secondary-foreground' : 'text-foreground')}>{r.says}</span>
           </li>
         ))}

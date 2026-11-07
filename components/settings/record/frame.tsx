@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
 
-import { BlockFrame } from '@/components/blocks/frame'
 import { cn } from '@/lib/utils'
 
 /**
@@ -32,6 +31,12 @@ import { cn } from '@/lib/utils'
  * note (the Phase 1 header carried both); the footer is links only; and no
  * explanatory or method line sits under a section's data. Where a method needs
  * saying, that is Settings › How to read's job.
+ *
+ * SINCE THE AUDIT DESIGN (7 Nov, Settings-Record.dc.html): the tile draws its
+ * own head, the title a 21px heading in sentence case (it was `BlockFrame`'s
+ * 13px capitals; `BlockFrame` itself is untouched, it reaches email and
+ * print), the body 20px under it and its groups 24px apart, the footer links
+ * in a row. Still the title alone in the header (the 25 Sep rulings).
  */
 export function RecordSection({
   title, footer, id, children, className,
@@ -45,11 +50,13 @@ export function RecordSection({
   className?: string
 }) {
   return (
-    <div id={id} data-record-section="" className={cn('min-w-0 scroll-mt-6 rounded-lg bg-tile shadow-tile', className)}>
-      <BlockFrame title={title} mode="app" roomy footer={footer}>
-        {children}
-      </BlockFrame>
-    </div>
+    <section id={id} data-record-section="" className={cn('flex min-w-0 scroll-mt-6 flex-col gap-5 rounded-[12px] bg-tile p-[30px] shadow-tile max-sm:p-[18px]', className)}>
+      <header>
+        <h2 className="m-0 text-[21px] font-semibold leading-[1.3]">{title}</h2>
+      </header>
+      <div className="flex min-w-0 flex-col gap-6">{children}</div>
+      {footer ? <footer className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-track pt-4">{footer}</footer> : null}
+    </section>
   )
 }
 
@@ -73,7 +80,7 @@ export function LabelRow({ label, sub, children }: { label: ReactNode; sub?: Rea
     <div className="grid grid-cols-1 items-start gap-y-1.5 lg:grid-cols-[172px_minmax(0,1fr)] lg:gap-x-6">
       <div className="flex flex-col gap-px pt-px">
         <span className="text-[15px] font-medium leading-[1.5]">{label}</span>
-        {sub ? <span className="font-mono text-[13px] text-muted-foreground">{sub}</span> : null}
+        {sub ? <span className="text-[13px] text-muted-foreground">{sub}</span> : null}
       </div>
       <div className="min-w-0">{children}</div>
     </div>
@@ -81,7 +88,7 @@ export function LabelRow({ label, sub, children }: { label: ReactNode; sub?: Rea
 }
 
 /**
- * One of the delivery block's stat cells: a 28px mono figure, an optional unit
+ * One of the delivery block's stat cells: a 28px figure, an optional unit
  * beside it, a caption under it, on the scale of What we changed's cells
  * (fresh design check, 26 Sep: this tab set two stat cells at two scales, and
  * these captions at 11.5px).
@@ -97,7 +104,7 @@ export function StatCell({ figure, unit, caption }: { figure: ReactNode; unit?: 
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       <span className="flex items-baseline gap-1.5">
-        <span data-copy="figure" className="font-mono text-[28px] font-semibold leading-none tracking-[-0.03em] tabular-nums">{figure}</span>
+        <span data-copy="figure" className="text-[28px] font-semibold leading-none tracking-[-0.01em] tabular-nums">{figure}</span>
         {unit ? <span className="text-[15px] text-muted-foreground">{unit}</span> : null}
       </span>
       <span className="text-[15px] leading-[1.5] text-secondary-foreground [text-wrap:pretty]">{caption}</span>
@@ -120,18 +127,17 @@ export function StatCell({ figure, unit, caption }: { figure: ReactNode; unit?: 
  */
 export function DatePill({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex items-center whitespace-nowrap rounded-full bg-inner px-3 py-[5px] font-mono text-[13px] text-secondary-foreground">
+    <span className="inline-flex items-center whitespace-nowrap rounded-[6px] bg-inner px-2.5 py-[3px] text-[13px] tabular-nums text-secondary-foreground">
       {children}
     </span>
   )
 }
 
-/** The amber "this month" flag beside a change. The one saturated colour on the
- *  page, and it is the theme's `--warning`, which is the artboard's own
- *  `rgba(230,176,60,.2)`. */
+/** The "this month" flag beside a change: since the audit design the kit's
+ *  pale-yellow tag (`TAG`, `TAG_TONE.tint`), no amber (outside palette A). */
 export function MonthFlag({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-block whitespace-nowrap rounded-full bg-warning/20 px-2 py-px text-[12px] font-semibold text-foreground">
+    <span className="inline-flex items-center whitespace-nowrap rounded-[6px] bg-accent px-2 py-[3px] text-[13px] font-semibold leading-[1.4] text-accent-foreground">
       {children}
     </span>
   )

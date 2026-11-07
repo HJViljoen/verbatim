@@ -87,7 +87,7 @@ export function DeliveryBlock({
                     chips that sit under it. */}
                 <DatePill>
                   {shortDate(u.startedAt)}
-                  {DELIVERED_STATUSES.has(u.status) ? '' : ' · did not finish'}
+                  {DELIVERED_STATUSES.has(u.status) ? '' : ', did not finish'}
                 </DatePill>
               </li>
             ))}
@@ -112,9 +112,9 @@ export function DeliveryBlock({
           <p className="m-0 text-[15px] leading-[1.5]">
             {readings.months.map((m, i) => (
               <span key={m.month}>
-                {i > 0 ? ' · ' : ''}
+                {i > 0 ? ', ' : ''}
                 {m.label}{' '}
-                <span data-copy="figure" className="font-mono text-[15px] tabular-nums text-secondary-foreground">
+                <span data-copy="figure" className="text-[15px] tabular-nums text-secondary-foreground">
                   {fmtInt(m.updates)}
                 </span>{' '}
                 {m.current ? 'so far' : m.updates === 1 ? 'update' : 'updates'}

@@ -26,7 +26,7 @@ describe('Searches held still until January, the aside in What we changed', () =
     expect(render(<HeldStillAside state="available" lines={[]} />)).toContain('href="/dashboard/settings#search-set"')
   })
   it('says none yet, and before MF3 claims no queue', () => {
-    expect(renderText(<HeldStillAside state="available" lines={[]} />)).toContain('queued: none yet')
+    expect(renderText(<HeldStillAside state="available" lines={[]} />)).toContain('Queued: none yet')
     const before = renderText(<HeldStillAside state="unavailable" lines={[]} />)
     expect(before).toContain('Tell us what you would change and we will note it for then.')
     expect(before).not.toContain('queued')

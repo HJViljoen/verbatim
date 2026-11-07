@@ -2,6 +2,7 @@ import { fmtInt } from '@/lib/format'
 import type { ChangeLogView, ClientChange } from '@/lib/settings/change-log'
 import { madeThisMonth } from '@/lib/settings/change-log'
 
+import { commaCite } from '@/components/v2/words'
 import { MonthFlag, RecordSection } from './frame'
 import { LOG_LINES_SHOWN, ShowAll } from './show-all'
 
@@ -134,14 +135,14 @@ export function sameRows(changes: readonly ClientChange[]): { change: ClientChan
 function ChangeRow({ change, count = 1, now, prehistoric = false }: { change: ClientChange; count?: number; now: string; prehistoric?: boolean }) {
   return (
     <div className={ROW}>
-      <span className="font-mono text-[13px] leading-[1.5] text-secondary-foreground">{change.dateShort}</span>
+      <span className="text-[13px] leading-[1.5] tabular-nums text-secondary-foreground">{change.dateShort}</span>
       <span className="min-w-0 text-[13px] leading-[1.5]">
         <span className="inline-flex flex-wrap items-center gap-2">
           {/* The count trails the sentence's last line, never a line of its own. */}
           <span>
             {change.said}
             {count > 1 ? (
-              <>{' '}<span data-copy="figure" aria-label={`${count} changes like this one`} className="whitespace-nowrap font-mono text-[12px] tabular-nums text-muted-foreground">×{count}</span></>
+              <>{' '}<span data-copy="figure" aria-label={`${count} changes like this one`} className="whitespace-nowrap text-[13px] tabular-nums text-muted-foreground">×{count}</span></>
             ) : null}
           </span>
           {madeThisMonth(change, now) ? <MonthFlag>this month</MonthFlag> : null}
@@ -154,15 +155,16 @@ function ChangeRow({ change, count = 1, now, prehistoric = false }: { change: Cl
             is "added to, never edited" cannot hide the edit; the line wraps
             instead, and only on the rows that carry one. */}
         {change.before && change.after ? (
-          <span className="mt-0.5 block break-words font-mono text-[12px] leading-[1.45] text-muted-foreground">
-            {change.before} → {change.after}
+          <span className="mt-0.5 block break-words text-[13px] leading-[1.45] text-muted-foreground">
+            {/* In words since the audit design (no arrow on a screen). */}
+            Was {change.before}, now {change.after}
           </span>
         ) : null}
       </span>
       {/* A reconstructed row's "Not known" and "Reconstructed, not recorded"
           are said ONCE, under the prehistory's heading (WP3.10 copy debt): on
           every row they read as a stutter, not a record. */}
-      <span className="min-w-0 break-words text-[13px] leading-[1.5] text-muted-foreground">{prehistoric && change.breaks === RECONSTRUCTED_BREAKS ? '' : change.breaks}</span>
+      <span className="min-w-0 break-words text-[13px] leading-[1.5] text-muted-foreground">{prehistoric && change.breaks === RECONSTRUCTED_BREAKS ? '' : commaCite(change.breaks)}</span>
       {/* BREAKS LIKE ITS SIBLING (Block D wave 3, RC3). `minmax(0, 0.5fr)`
           stops the TRACK demanding width; it does not stop the CONTENT
           escaping it. The prehistory rows' actor is "Reconstructed, not
@@ -196,7 +198,7 @@ function Prehistory({ log, rows, now }: { log: ChangeLogView; rows: number; now:
       {/* A sub-heading with its count, as the preview heads a group of rows
           ("What we search"); each row's "made by" says what the entries are. */}
       <h3 className="m-0 text-[15px] font-semibold">
-        Before the record began · {fmtInt(log.prehistory.length)} {log.prehistory.length === 1 ? 'entry' : 'entries'}
+        Before the record began, {fmtInt(log.prehistory.length)} {log.prehistory.length === 1 ? 'entry' : 'entries'}
       </h3>
       <p className="m-0 text-[13px] leading-[1.5] text-muted-foreground">{PREHISTORY_LINE}</p>
       <div className="flex flex-col">

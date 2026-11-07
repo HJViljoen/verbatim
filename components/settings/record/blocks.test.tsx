@@ -197,14 +197,16 @@ describe('the delivery block', () => {
 })
 
 describe('the change log', () => {
-  it('prints one row per recorded change, with the short date and the amber flag', () => {
+  it('prints one row per recorded change, with the short date and the this-month flag', () => {
     const text = renderText(changeLog)
     expect(text).toContain('3 Sep')
     expect(text).toContain('Poler added as a rival')
     expect(text).toContain('this month')
     // 19 Aug is not this month and carries no flag.
     expect(text).toContain('19 Aug')
-    expect(render(changeLog).match(/bg-warning\/20/g)).toHaveLength(1)
+    // The flag is the kit's pale-yellow tag since the audit design (no amber).
+    expect(render(changeLog).match(/bg-accent px-2/g)).toHaveLength(1)
+    expect(render(changeLog)).not.toContain('bg-warning')
   })
 
   it('prints the before→after whole, because on those rows it is the change', () => {
@@ -225,7 +227,7 @@ describe('the change log', () => {
 
   it('keeps the reconstructed rows apart from the record, under their own heading', () => {
     const text = renderText(changeLog)
-    expect(text).toContain('Before the record began · 1 entry')
+    expect(text).toContain('Before the record began, 1 entry')
     expect(text).toContain('Reconstructed, not recorded')
   })
 
@@ -416,8 +418,10 @@ describe('the coverage grid', () => {
     // One label cell per row, each opening its own hairline, in the tab's
     // 13px sentence-case head voice, not mono capitals.
     expect(markup.match(/border-t border-border\/70 pt-3 text-\[13px\] font-medium/g)).toHaveLength(coverageRowsFixture().length)
-    // The section's own eyebrow is the one thing set in capitals.
-    expect(markup.match(/uppercase/g)).toHaveLength(1)
+    // Nothing in capitals since the audit design: the section's title is a
+    // 21px sentence-case heading.
+    expect(markup).not.toContain('uppercase')
+    expect(markup).toMatch(/<h2 class="m-0 text-\[21px\] font-semibold leading-\[1\.3\]">Coverage/)
   })
 
   it('refuses the artboard’s four dishonest figures and says what it prints instead', () => {
@@ -444,7 +448,8 @@ describe('the coverage grid', () => {
     expect(text).toContain('Poler added as a rival, 3 Sep')
     // Off `belowFloorTotal`, the way the route composes it: four months are
     // under the floor and three are listed (code review finding 2).
-    expect(text).toContain('under 100 · 3 other months too')
+    // The lib's words, said in commas on the screen (the audit design).
+    expect(text).toContain('under 100, 3 other months too')
   })
 
   it('prints no one-line summary of the rows under it (copy de-clutter C8)', () => {

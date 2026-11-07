@@ -45,8 +45,10 @@ export const NO_EXPORT_WHY =
 export function ScopeStatement({ text, why }: { text: string; why?: ReactNode }) {
   return (
     <div className="flex flex-col gap-2">
-      {why ? <p className="m-0 text-[13px] text-muted-foreground">{why}</p> : null}
-      <div className="whitespace-pre-wrap rounded-[4px] bg-inner px-4 py-3 font-mono text-[13px] leading-[1.6] text-secondary-foreground ring-1 ring-border">
+      {why ? <p className="m-0 text-[14px] text-muted-foreground">{why}</p> : null}
+      {/* Sans since the audit design: no mono on a screen. Still one block of
+          plain text, to select and paste. */}
+      <div className="whitespace-pre-wrap rounded-[10px] bg-inner px-5 py-4 text-[15px] leading-[1.6] text-secondary-foreground">
         {text}
       </div>
     </div>

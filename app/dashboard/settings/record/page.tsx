@@ -11,7 +11,6 @@ import { loadRecordReadingMonth, loadWhatWeChanged } from '@/lib/settings/what-w
 import { monthStartOf } from '@/lib/reading/month-key'
 import { CoverageBlock } from '@/components/settings/record/coverage'
 import { DeliveryBlock } from '@/components/settings/record/delivery'
-import { RecordSection } from '@/components/settings/record/frame'
 import { ScopeStatement } from '@/components/settings/record/header'
 import { RejectLogBlock } from '@/components/settings/record/rejects'
 import { canManageTenant, getSessionContext } from '@/lib/auth'
@@ -208,7 +207,7 @@ export default async function SettingsRecordPage() {
         tenant,
         delivery.since ? `first update ${shortDate(delivery.since)}` : null,
         save.lastSavedAt ? `last saved ${shortDate(save.lastSavedAt)}` : null,
-      ].filter(Boolean).join(' · ')}
+      ].filter(Boolean).join(', ')}
     >
       {/* THE PREVIEW'S RHYTHM: each section a tile, 24px apart (market-first
           WP1.6, Heinrich's default of 26 Sep). */}
@@ -296,16 +295,16 @@ export default async function SettingsRecordPage() {
           control={(r) => <AppealButton runId={r.runId} platform={r.platform} videoId={r.videoId} filed={r.appealed} />}
         />
 
+        {/* ONE SECTION (the audit design, Settings-Record.dc.html): the
+            coverage grid, then what it does and does not cover. */}
         <CoverageBlock
-          title={`Coverage · ${longMonth(`${month}-01`)}`}
+          title={`Coverage in ${longMonth(`${month}-01`)}, and what it does not cover`}
           rows={rows}
-        />
-
-        <RecordSection title="What this covers, and what it does not">
+        >
           <ScopeStatement
             text={scopeStatement(tenant, lines, asAt)}
           />
-        </RecordSection>
+        </CoverageBlock>
       </div>
     </SettingsFrame>
   )
@@ -331,7 +330,8 @@ function scopeStatement(tenant: string, lines: readonly string[], readingAt: str
   return [
     `${tenant}: what this reading covers, as at ${fullDate(readingAt)}.`,
     '',
-    ...lines.map((l) => `· ${l}`),
+    // One line each, with no middle-dot bullet (the audit design).
+    ...lines,
     '',
     'Every figure is a share of what we read, not of everything said. We read public comment on the videos our search terms find, plus the accounts you and your rivals post from where those are configured. A month is dated by the day a comment was written, not by the day we read it.',
   ].join('\n')

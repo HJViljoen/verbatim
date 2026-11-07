@@ -226,7 +226,8 @@ describe('When two months are compared', () => {
   it('opens How to read from its footer, a link and nothing else', () => {
     const footer = render(rules).match(/<footer[^>]*>([\s\S]*?)<\/footer>/)?.[1] ?? ''
     expect(footer).toContain('href="/dashboard/settings/how-to-read"')
-    expect(footer.replace(/<[^>]+>/g, '').trim()).toBe('How to read →')
+    // The link says where it goes, with no arrow (the audit design).
+    expect(footer.replace(/<[^>]+>/g, '').trim()).toBe('How to read')
     expect(footer.replace(/<a [^>]*>[\s\S]*?<\/a>/g, '').replace(/<[^>]+>/g, '').trim()).toBe('')
   })
 })

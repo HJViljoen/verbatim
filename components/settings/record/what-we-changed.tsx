@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-import { openLink } from '@/components/blocks/open-link'
+import { GoLink } from '@/components/v2/ui'
 import { TokenProse } from '@/components/blocks/prose'
 import { pairChipWords } from '@/lib/calibration'
 import { fmtInt, longMonth, shortDate } from '@/lib/format'
@@ -45,7 +45,7 @@ export function sideBySide(block: ChangeBlock): string | null {
   return `${longMonth(pair.prevMonth)} and ${longMonth(pair.month)} sit side by side, ${words}.`
 }
 
-const MONO_FIGURE = 'font-mono font-semibold tabular-nums text-foreground'
+const MONO_FIGURE = 'font-semibold tabular-nums text-foreground'
 
 /** A figure and its base, set as the preview sets them: the count in weight,
  *  "of 654" beside it in mono, or "against 21" with the older month's median
@@ -57,7 +57,7 @@ function Counted({ figure, word, base, size }: { figure: number; word: 'of' | 'a
     return (
       <span data-copy="level" className="inline-flex items-baseline gap-2 whitespace-nowrap">
         <span className={cn(MONO_FIGURE, fig)}>{fmtInt(figure)}</span>
-        <span className={cn('font-mono font-medium tabular-nums text-secondary-foreground', baseSize)}>of {fmtInt(base)}</span>
+        <span className={cn('font-medium tabular-nums text-secondary-foreground', baseSize)}>of {fmtInt(base)}</span>
       </span>
     )
   }
@@ -65,7 +65,7 @@ function Counted({ figure, word, base, size }: { figure: number; word: 'of' | 'a
     <span className="inline-flex items-baseline gap-2 whitespace-nowrap">
       <span data-copy="figure" className={cn(MONO_FIGURE, fig)}>{fmtInt(figure)}</span>
       <span className="text-[15px] text-muted-foreground">against</span>
-      <span data-copy="figure" className="font-mono text-[15px] font-medium tabular-nums text-muted-foreground">{fmtInt(base)}</span>
+      <span data-copy="figure" className="text-[15px] font-medium tabular-nums text-muted-foreground">{fmtInt(base)}</span>
     </span>
   )
 }
@@ -79,7 +79,7 @@ function WhyStat({ cell, said }: { cell: WhyCell; said: string | null }) {
     <div className="flex min-w-0 flex-col gap-2">
       <Counted figure={cell.figure} word={cell.base.word} base={cell.base.value} size="stat" />
       <span className="text-[15px] leading-[1.5] text-secondary-foreground [text-wrap:pretty]">{cell.caption}</span>
-      {cell.readWith && cell.readWith !== said ? <span className="font-mono text-[12px] leading-[1.4] text-muted-foreground">read with the {shortDate(cell.readWith)} update</span> : null}
+      {cell.readWith && cell.readWith !== said ? <span className="text-[13px] leading-[1.4] text-muted-foreground">read with the {shortDate(cell.readWith)} update</span> : null}
     </div>
   )
 }
@@ -114,7 +114,7 @@ export function WhatWeChangedLead({ block, aside = null }: { block: ChangeBlock;
         <div className="flex max-w-[720px] flex-col gap-4 border-t border-border/60 pt-6 @container">
           <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
             <h3 className="m-0 text-[15px] font-semibold">{why.title}</h3>
-            {said ? <span className="font-mono text-[13px] text-muted-foreground">read with the {shortDate(said)} update</span> : null}
+            {said ? <span className="text-[13px] text-muted-foreground">read with the {shortDate(said)} update</span> : null}
           </div>
           {why.cells.length > 0 ? (
             // THREE ACROSS ONLY WHERE THREE FIT (deploy 2 review): keyed to
@@ -159,21 +159,22 @@ export function WhatWeChangedLead({ block, aside = null }: { block: ChangeBlock;
 
 type Line = LedgerLine & { items?: { added: string[]; removed: string[] } | null }
 
-/** The names a change took in and out, in mono. Where it only added (or only
- *  took out) and its title says which, the names alone, as the preview sets
- *  the 13 Sep line ("handmade bag, sustainable fashion, travel gear and
- *  frtg"); "in: … · out: …" where it did both. */
+/** The names a change took in and out. Where it only added (or only took
+ *  out) and its title says which, the names alone, as the preview sets the 13
+ *  Sep line ("handmade bag, sustainable fashion, travel gear and frtg"); "In:
+ *  …; out: …" where it did both (since the audit design, no " · " and no
+ *  mono: a term is in the text face like a rival's name). */
 function Items({ items, names: kind }: { items: { added: string[]; removed: string[] }; names: 'terms' | 'brands' }) {
-  // Search terms and communities in mono, as the preview sets them; a
-  // rival's name is a name, in the text face ("Rivals: The North Face, …").
-  const face = kind === 'terms' ? 'font-mono text-[14px]' : ''
+  // A search term in the ink, a rival's name in the text face ("Rivals: The
+  // North Face, …"); neither in mono since the audit design.
+  const face = kind === 'terms' ? 'text-foreground' : ''
   const list = (names: string[]): ReactNode => names.map((n, i) => (
     <span key={n}>{i === 0 ? '' : i === names.length - 1 ? ' and ' : ', '}<span className={face}>{n}</span></span>
   ))
   const both = items.added.length > 0 && items.removed.length > 0
   return (
     <span className="max-w-[440px] text-[15px] leading-[1.5] text-secondary-foreground [text-wrap:pretty]">
-      {both ? <>in: {list(items.added)} · out: {list(items.removed)}</> : list(items.added.length > 0 ? items.added : items.removed)}
+      {both ? <>In: {list(items.added)}; out: {list(items.removed)}</> : list(items.added.length > 0 ? items.added : items.removed)}
     </span>
   )
 }
@@ -254,7 +255,8 @@ function Stops({ stops, noneNote, note = null }: { stops: readonly string[]; non
  *  quiet dot under the head in a month it did not touch (nothing on a phone). */
 function MonthCell({ cell, readWith, caption = null }: { cell: RecordCell; readWith: string | null; caption?: string | null }) {
   if (cell.state === 'untouched' || cell.state === 'blank') {
-    return <span role="cell" className="hidden text-right text-[13px] leading-[22px] text-muted-foreground @min-[560px]/rec:block">·</span>
+    // Nothing in a month the change did not touch: an empty cell, no dot.
+    return <span role="cell" className="hidden @min-[560px]/rec:block" />
   }
   return (
     <span role="cell" className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 @min-[560px]/rec:flex-col @min-[560px]/rec:items-end @min-[560px]/rec:text-right">
@@ -275,7 +277,7 @@ function LineHead({ line }: { line: Line }) {
     <>
       <span role="cell" className="flex min-h-[22px] items-center gap-2">
         <ChangeMark />
-        <span className="font-mono text-[15px] font-medium leading-[22px] tabular-nums text-foreground">{shortDate(line.date)}</span>
+        <span className="text-[15px] font-medium leading-[22px] tabular-nums text-foreground">{shortDate(line.date)}</span>
       </span>
       <span role="cell" className="flex min-w-0 flex-col gap-1 @min-[760px]/rec:pr-4">
         <span className="text-[15px] font-semibold leading-[22px] [text-wrap:pretty]">{line.words}</span>
@@ -293,7 +295,7 @@ function GroupHead({ group }: { group: RecordGroup }) {
   return (
     <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 pt-8 first:pt-6">
       <h3 className="m-0 text-[15px] font-semibold">{group.title}</h3>
-      {group.readWith ? <span className="font-mono text-[13px] text-muted-foreground">read with the {shortDate(group.readWith)} update</span> : null}
+      {group.readWith ? <span className="text-[13px] text-muted-foreground">read with the {shortDate(group.readWith)} update</span> : null}
     </div>
   )
 }
@@ -328,7 +330,7 @@ function SearchAsideBox({ aside }: { aside: SearchAside }) {
 }
 
 export function TheRecord({ view }: { view: RecordView }) {
-  const footer = openLink('app', TRACKING_HREF, 'What we search now →')
+  const footer = <GoLink href={TRACKING_HREF}>What we search now</GoLink>
   if (view.groups.length === 0) {
     return (
       <RecordSection title="The record" footer={footer}>
@@ -404,7 +406,7 @@ export function WhenCompared({ rules, block, asAt }: { rules: readonly CompareRu
   const column = pair ? `${longMonth(pair.prevMonth)} against ${longMonth(pair.month)}${asAt ? `, as at ${shortDate(asAt)}` : ''}` : null
   const cols = 'lg:grid-cols-[24px_minmax(0,1.5fr)_minmax(0,1fr)]'
   return (
-    <RecordSection title="When two months are compared" footer={openLink('app', HOW_TO_READ_HREF, 'How to read →')}>
+    <RecordSection title="When two months are compared" footer={<GoLink href={HOW_TO_READ_HREF}>How to read</GoLink>}>
       <p className="m-0 max-w-[620px] text-[17px] font-medium leading-[1.5] tracking-[-0.01em] [text-wrap:pretty]">Only when both were read the same way. All four must hold.</p>
       <div role="table" className="flex flex-col">
         <div role="row" className={cn('hidden items-end gap-x-4 border-b border-border pb-2 text-[13px] font-medium leading-[1.35] text-muted-foreground lg:grid', cols)}>
@@ -414,7 +416,7 @@ export function WhenCompared({ rules, block, asAt }: { rules: readonly CompareRu
         </div>
         {rules.map((r) => (
           <div key={r.n} role="row" className={cn('grid grid-cols-[24px_minmax(0,1fr)] gap-x-4 gap-y-2 border-b border-border/60 py-4 last:border-b-0', cols)}>
-            <span role="cell" className="font-mono text-[15px] font-semibold leading-[1.55] text-muted-foreground">{fmtInt(r.n)}</span>
+            <span role="cell" className="text-[15px] font-semibold leading-[1.55] tabular-nums text-muted-foreground">{fmtInt(r.n)}</span>
             <span role="cell" className="text-[15px] leading-[1.55] [text-wrap:pretty]">{r.rule}</span>
             {pair ? (
               <span role="cell" className="col-start-2 flex items-start gap-2 text-[15px] leading-[1.5] lg:col-start-auto">
