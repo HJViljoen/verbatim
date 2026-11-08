@@ -53,6 +53,10 @@ describe('a conversation under its ready subject, this week', () => {
     expect(tight(markupText(all[0]))).toBe('@stepbystep.amp TikTok, posted 3 Oct, Össur Three signs your liner is done, and what my clinic never told me about replacing it 14 comments about this, of 212 on the video Watch the video “This liner gave me a rash after a week and I had to go back to my old one.” 5 Oct “Mine lasted eight months before it started slipping. Is that normal?” 6 Oct “Nobody at my fitting said anything about replacing the liner.” 7 Oct Show all 14 comments')
     expect(all[0]).toMatch(/<h3 class="[^"]*text-\[16px\][^"]*">@stepbystep\.amp<\/h3>/)
     expect(all[0]).not.toMatch(/<svg|truncate/)
+    // The caption keeps at most the board's three lines (a real YouTube
+    // description runs to 70), and a long link breaks inside the card.
+    expect(all[0]).toMatch(/<p data-video-caption="" class="[^"]*line-clamp-3 \[overflow-wrap:anywhere\]">Three signs your liner is done/)
+    expect(all.every((c) => !/data-video-caption=""/.test(c) || /data-video-caption="" class="[^"]*line-clamp-3/.test(c))).toBe(true)
     expect(all.map((c) => c.match(/<b class="[^"]*">(\d+)<\/b>/)?.[1])).toEqual(['14', '11', '9', '6', '5'])
     expect(all[0]).toMatch(/<a href="https:\/\/example.com\/v\/1-1" target="_blank" rel="noopener noreferrer"[^>]*>Watch the video<\/a>/)
     expect(all[0]).toContain(`?video=${LINER.convPage!.evidence!.videos[0].id}#video-${LINER.convPage!.evidence!.videos[0].id}`)

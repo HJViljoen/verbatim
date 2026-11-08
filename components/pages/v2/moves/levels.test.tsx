@@ -247,6 +247,10 @@ describe('a dated move, the evidence (G6-Moves-Move)', () => {
     expect(text).toContain('Spanish, machine translation My son ran for the first time with his prosthesis. Thank you.')
     // Market's video tiles: the account a heading, the platform and the day in commas.
     expect(text).toContain('The Amputee Diaries YouTube, posted 6 Oct, Össur A day at a running clinic')
+    // Each caption on one line, cut with an ellipsis, as the move's board
+    // draws it (a real YouTube description runs to 70 lines).
+    expect(html).toMatch(/<p data-video-caption="" class="[^"]*truncate">A day at a running clinic/)
+    expect(html).not.toContain('line-clamp-3')
     // The link names its platform, as the move's board does.
     expect(text).toContain('Watch the video on YouTube')
     expect(text).not.toMatch(/Watch the video(?! on)/)

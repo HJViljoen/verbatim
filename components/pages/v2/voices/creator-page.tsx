@@ -114,9 +114,12 @@ function Comment({ c, hideOnPhone }: { c: CreatorComment; hideOnPhone: boolean }
   )
 }
 
-/** One of their videos (the board's tile): its caption in full, the day, the
- *  brand named in it and its conversation, the link to watch it, its comments
- *  counted of all on it, then those that may print. */
+/** One of their videos (the board's tile): its caption as the heading, in up
+ *  to four lines (the most Voices-Creator.dc.html draws at 1440; the
+ *  real-data pass, 8 Nov: a YouTube description runs to 70 lines, and a long
+ *  link breaks inside the card), the day, the brand named in it and its
+ *  conversation, the link to watch it, its comments counted of all on it,
+ *  then those that may print. */
 function VideoCard({ v, index, all, platform }: { v: CreatorVideoCard; index: number; all: boolean; platform: string }) {
   const phoneMore = !v.open && v.quotable > MARKET_VIDEO_QUOTES_PHONE
   const deskMore = !v.open && v.quotable > MARKET_VIDEO_QUOTES
@@ -124,7 +127,7 @@ function VideoCard({ v, index, all, platform }: { v: CreatorVideoCard; index: nu
   const note = v.open ? openedCountedNote(v) : null
   return (
     <article id={`video-${v.id}`} data-video-card="" className={cn(CARD, 'scroll-mt-6', !all && !v.open && index >= 3 ? 'max-sm:hidden' : null)}>
-      <h3 className="m-0 text-[16px] leading-[1.5] font-semibold text-foreground">{v.caption ?? 'A video with no caption'}</h3>
+      <h3 data-video-caption="" className="m-0 line-clamp-4 text-[16px] leading-[1.5] font-semibold text-foreground [overflow-wrap:anywhere]">{v.caption ?? 'A video with no caption'}</h3>
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-[14px] text-secondary-foreground">
         <span>
           {v.posted ? <>Posted {v.posted}</> : null}

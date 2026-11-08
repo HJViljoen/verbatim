@@ -242,6 +242,9 @@ describe('a product\'s page, the evidence (G4-Products-Product)', () => {
     expect(text).toContain('Spanish, machine translation The Seal-In X holds all day for me, but putting it on is hard. 9 Sep')
     expect(text).not.toMatch(/[→↗↓·]/)
     expect(text).toContain('Show the other 6 videos')
+    // Each caption in at most the board's seven lines (a real YouTube
+    // description runs to 70), a long link breaking inside the card.
+    expect(render(page(d))).toMatch(/<p data-copy="quote" data-video-caption="" class="[^"]*line-clamp-7[^"]*\[overflow-wrap:anywhere\]">Twelve miles on the Seal-In X/)
     expect(render(page(d))).toContain('data-who-chip="you"')
     // "Your post" in the gold words, as the boards mark you, never a solid chip.
     expect(render(page(d))).toMatch(/data-who-chip="you" data-plain="" class="[^"]*text-you[^"]*">Your post</)

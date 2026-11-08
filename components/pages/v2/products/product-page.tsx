@@ -129,7 +129,10 @@ function videoMeta(v: NamedVideo): string {
 }
 
 /** One video naming the product (the board's tile): its account as the
- *  heading and "Watch the video on TikTok" beside it, its caption in full,
+ *  heading and "Watch the video on TikTok" beside it, its caption in up to
+ *  seven lines (the most Products-Product.dc.html draws at 1440; the
+ *  real-data pass, 8 Nov: a YouTube description runs to 70 lines, and a long
+ *  link breaks inside the card),
  *  how many comments name it, those comments, "Show all". `onceSaid`: the
  *  page has said every video was named only in its own words. */
 function VideoCard({ v, index, all, brand, onceSaid }: { v: NamedVideo; index: number; all: boolean; brand: string; onceSaid: boolean }) {
@@ -151,7 +154,7 @@ function VideoCard({ v, index, all, brand, onceSaid }: { v: NamedVideo; index: n
         </div>
         {v.url ? <GoLink href={v.url} external>{`Watch the ${where}${v.platform ? ` on ${v.platform}` : ''}`}</GoLink> : null}
       </div>
-      {v.caption ? <p data-copy="quote" className="m-0 text-[15px] leading-[1.6] text-foreground">{v.caption}</p> : null}
+      {v.caption ? <p data-copy="quote" data-video-caption="" className="m-0 line-clamp-7 text-[15px] leading-[1.6] text-foreground [overflow-wrap:anywhere]">{v.caption}</p> : null}
       {v.named === 0
         ? (onceSaid ? null : <p className="m-0 text-[14px] text-secondary-foreground">{NAMED_IN_VIDEO_ONLY}</p>)
         : (

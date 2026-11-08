@@ -30,9 +30,10 @@ import { MoveMonths, MoveStatusChip, OnLabel, VerdictWords } from './moves'
 //   1. THE LEAD TILE: the one comparison in a sentence and its verdict, the
 //      no-cause line, beside the move's months (`MoveMonths`, the top
 //      page's), each "k of n";
-//   2. WHAT PEOPLE SAID AFTER IT: Market's video tiles (`VideoCard`) over
-//      the videos with a comment about what the move is on, dated from its
-//      day to the latest update (decision 6), most of those comments first;
+//   2. WHAT PEOPLE SAID AFTER IT: Market's video tiles (`VideoCard`, each
+//      caption on one line, as the board draws it) over the videos with a
+//      comment about what the move is on, dated from its day to the latest
+//      update (decision 6), most of those comments first;
 //      THE FACTS beside it, one tile, its base said once ("Of the 24 videos
 //      since 5 Oct"), bare counts with bars against the largest;
 //   3. YOUR OTHER MOVES, and "Your next move" in the dashed box for an
@@ -162,7 +163,7 @@ function Said({ page }: { page: MovePageData }) {
       {!listed ? <div data-said-gap={ev.state}><EmptyBox>{saidGap(ev, page.card.day)}</EmptyBox></div> : (
         <>
           {noneAll ? <p data-none-quotable="" className="m-0 text-[14.5px] leading-[1.55] text-secondary-foreground">{CONV_NONE_QUOTABLE_ALL}</p> : null}
-          {ev.videos.map((v, i) => <VideoCard key={v.id} v={v} brand={page.brand} index={i} all={ev.all} onceSaid={noneAll} namePlatform />)}
+          {ev.videos.map((v, i) => <VideoCard key={v.id} v={v} brand={page.brand} index={i} all={ev.all} onceSaid={noneAll} namePlatform oneLine />)}
           {ev.capped != null ? <p className="m-0 text-[13.5px] text-muted-foreground">The first {fig(ev.capped)} of {fig(ev.total)} are listed.</p> : null}
           {ev.more && ev.more.desktop > 0 ? <Link href={ev.more.href} className={cn(CHIP, 'self-start font-semibold no-underline max-sm:hidden')}>Show <span data-copy="figure" className="mx-1">{fmtInt(ev.more.desktop)}</span> more videos</Link> : null}
           {ev.more && ev.more.phone > 0 ? <Link href={ev.more.href} className={cn(CHIP, 'self-stretch justify-center font-semibold no-underline sm:hidden')}>Show <span data-copy="figure" className="mx-1">{fmtInt(ev.more.phone)}</span> more videos</Link> : null}

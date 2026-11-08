@@ -393,6 +393,9 @@ describe('a creator\'s page (G3-Voices-Creator)', () => {
     expect(text).toContain('“How long before you could run without the socket rubbing?” 2 Oct, in Socket fit causes pain')
     expect(text).toContain('Spanish, machine translation Which foot do you run with in the mountains? I can’t find one that holds up.')
     expect(html.match(/data-video-card=""/g)).toHaveLength(5)
+    // The caption heads its tile in at most the board's four lines (a real
+    // YouTube description runs to 70), a long link breaking inside the card.
+    expect(html.match(/<h3 data-video-caption="" class="[^"]*line-clamp-4[^"]*\[overflow-wrap:anywhere\]">/g)).toHaveLength(5)
     expect(text).toContain('Show 3 of 22 comments')
     expect(text).toContain('Show 9 more videos')
     expect(text).not.toMatch(/[→↗↓]/)

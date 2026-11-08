@@ -137,17 +137,28 @@ function Comment({ c, hideOnPhone }: { c: ConvComment; hideOnPhone: boolean }) {
 /** A video whose comments about this are counted and none may print. */
 export const unquotable = (v: Pick<ConvVideo, 'quotes' | 'aboutCount'>): boolean => v.quotes.length === 0 && v.aboutCount > 0
 
+/** A video's caption keeps at most the lines its board draws at 1440 (the
+ *  real-data pass, 8 Nov: a YouTube description runs to 30 to 70 lines of
+ *  chapters and links). Market-Conversation.dc.html draws up to three;
+ *  Moves-Move.dc.html one, cut with an ellipsis. A long link or hashtag run
+ *  breaks inside the card. */
+export const CAPTION_LINES = 'line-clamp-3 [overflow-wrap:anywhere]'
+export const CAPTION_ONE_LINE = 'truncate'
+
 /** One video in the conversation (the board's tile): its creator as the
  *  heading, "TikTok, posted 31 Oct" (and who it is about where counted), its
- *  caption in full, its comments about this of its own, the link out, its
- *  comments, "Show all". `onceSaid`: the page has said that none can be
- *  quoted, so the card does not. A dated move's page draws its videos with
- *  it too (Moves-Move.dc.html). */
-export function VideoCard({ v, brand, index, all, onceSaid, namePlatform = false }: {
+ *  caption in up to three lines, its comments about this of its own, the
+ *  link out, its comments, "Show all". `onceSaid`: the page has said that
+ *  none can be quoted, so the card does not. A dated move's page draws its
+ *  videos with it too (Moves-Move.dc.html). */
+export function VideoCard({ v, brand, index, all, onceSaid, namePlatform = false, oneLine = false }: {
   v: ConvVideo; brand: string; index: number; all: boolean; onceSaid: boolean
   /** "Watch the video on TikTok" (the move page's board), where Market's
    *  board says "Watch the video". */
   namePlatform?: boolean
+  /** The caption on one line (the move page's board), where Market's board
+   *  draws up to three. */
+  oneLine?: boolean
 }) {
   const shown = v.quotes
   const phoneMore = !v.open && v.quotable > MARKET_VIDEO_QUOTES_PHONE
@@ -161,7 +172,7 @@ export function VideoCard({ v, brand, index, all, onceSaid, namePlatform = false
         <h3 className="m-0 min-w-0 text-[16px] leading-[1.35] font-semibold text-foreground">{v.account || 'Unnamed account'}</h3>
         <span className="text-[13.5px] leading-[1.4] text-muted-foreground">{v.platform}{v.posted ? `, posted ${v.posted}` : null}{about ? <>, {about}</> : null}</span>
       </div>
-      {v.caption ? <p className="m-0 text-[15px] leading-[1.55] text-secondary-foreground">{v.caption}</p> : null}
+      {v.caption ? <p data-video-caption="" className={cn('m-0 text-[15px] leading-[1.55] text-secondary-foreground', oneLine ? CAPTION_ONE_LINE : CAPTION_LINES)}>{v.caption}</p> : null}
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[14px] text-secondary-foreground">
         {v.aboutCount === 0
           ? <span>{CONV_SAID_IN_VIDEO}</span>

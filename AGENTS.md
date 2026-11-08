@@ -1828,8 +1828,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
     row (`conversationStats`: the week, its category videos this week and in
     the month, and the brands its videos name, which leave the facts), its
     lead a plain paragraph with no hairline; each video a tile (the account
-    a 16px heading, "TikTok, posted 3 Oct", the caption in full, "Watch the
-    video" with no arrow), `CONV_NONE_QUOTABLE_ALL` said once under the head
+    a 16px heading, "TikTok, posted 3 Oct", the caption in at most three
+    lines as the board draws it, since a real YouTube description runs to
+    70, a long link breaking inside the card, "Watch the video" with no
+    arrow), `CONV_NONE_QUOTABLE_ALL` said once under the head
     where no video's comments may print (`CONV_NONE_QUOTABLE` on a card only
     where some may), "Show N more videos" a chip; the facts one tile with
     its base said once ("Counted in this week's 23 videos."), week by week
@@ -2068,7 +2070,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
     the figures row (`creatorStats`: the month, their videos of the market's,
     their following as of the month's videos, so the facts drop "On
     {platform}"); the lead line, the brands named as a list of names; their
-    videos as tiles (the caption in full, "Posted 8 Oct, in {conversation}",
+    videos as tiles (the caption in at most four lines, the board's longest,
+    "Posted 8 Oct, in {conversation}",
     "Watch the video on TikTok", each comment a figure, "24 Oct, in X") two
     to one beside the facts (a tile: their conversations a table, who
     comments and what people did with bars against the largest) and the
@@ -2252,7 +2255,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
     where any do); the line as a 22px lead with no hairline; the videos
     beside the facts, 1.65 to 1; each video a tile (its account, "TikTok,
     posted 14 Oct" and "named in the video" where its own words name it as
-    well, "Watch the video on TikTok" with no arrow, the caption in full);
+    well, "Watch the video on TikTok" with no arrow, the caption in at most
+    seven lines, the board's longest);
     where EVERY video was named only in its own words the page says so once
     under the head ("All three named it in the video itself, with no comment
     naming it.", from the loader's `inVideoOnly`, decision 16) and no card
@@ -2596,7 +2600,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
     day); the lead a tile, the sentence and its verdict in words beside its
     months (`MoveMonths`, the root's, "k of n" kept; the SVG line,
     `MoveChart`, is gone); its videos Market's tiles (`VideoCard`, shared
-    with the conversation's page); the facts one tile, its base said once
+    with the conversation's page, each caption on one line as the board
+    draws it); the facts one tile, its base said once
     ("Of the 24 videos since 5 Oct"), bare counts with bars against the
     largest; the other moves tiles and "Your next move" the dashed box; the
     Agent one link. No week chip anywhere (decision 7). Statements
