@@ -4,7 +4,7 @@ import { fmtInt } from '@/lib/format'
 import type { Verdict } from '@/lib/reading/verdicts'
 import { cn } from '@/lib/utils'
 import { FlagChip } from './flag-chip'
-import { GO, LBL } from './look'
+import { GO, LBL, TAP } from './look'
 import { SELECTED_CARD_RING } from './panel'
 
 /**
@@ -135,7 +135,7 @@ export function CatalogueShelf({ columns, selected = null, panelId, unread = fal
                   aria-expanded={on && panelId ? true : undefined}
                   aria-controls={on && panelId ? panelId : undefined}
                   aria-current={on ? 'true' : undefined}
-                  className={cn('rounded-[4px] text-foreground no-underline decoration-control underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground', on ? SELECTED_CARD_RING : null)}
+                  className={cn('rounded-[4px] text-foreground no-underline decoration-control underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground', TAP, on ? SELECTED_CARD_RING : null)}
                 >
                   {c.name}
                 </Link>

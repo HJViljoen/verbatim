@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { ROW } from '@/components/v2/look'
+import { ROW, ROW_TEXT } from '@/components/v2/look'
 import { fmtInt, longMonth } from '@/lib/format'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
 import { fmtMultiple, groupHref, IDEAS_EMPTY, POST_IDEA_SLOT, type OwnTouch, type Recipe, type TopAsked } from '@/lib/pages/v2/content'
@@ -110,7 +110,7 @@ function Asked({ asked, line }: { asked: TopAsked; line: string | null }) {
           : <><span data-copy="level">{fmtInt(asked.month.k)} of {fmtInt(asked.month.n)} videos</span> {asked.monthWords}</>] as const : null,
         // Who asks (names only, decision 5), each opening its group.
         asked.groups.length > 0 ? ['Who asks', <>{asked.groups.map((g, i) => (
-          <span key={g.key}>{i > 0 ? ', ' : null}<Link href={groupHref(g.key)} className={cn(ROW, 'font-normal underline')}><span data-copy="subject" data-slot="pass_e_persona">{g.name}</span></Link></span>
+          <span key={g.key}>{i > 0 ? ', ' : null}<Link href={groupHref(g.key)} className={cn(ROW_TEXT, 'font-normal underline')}><span data-copy="subject" data-slot="pass_e_persona">{g.name}</span></Link></span>
         ))}</>] as const : null,
         asked.own ? ['Your posts', <OwnLine key="own" own={asked.own} />] as const : null,
         // What else the week asked, next in line on Content, each opening its
@@ -118,7 +118,7 @@ function Asked({ asked, line }: { asked: TopAsked; line: string | null }) {
         asked.next.length > 0 ? ['Also asked', <>{asked.next.map((r, i) => (
           <span key={r.registryId} data-asked-next="">
             {i > 0 ? '; ' : null}
-            <Link href={r.href} className={cn(ROW, 'font-normal underline')}><span data-copy="subject" data-slot="pass_b_theme">{r.label}</span></Link>
+            <Link href={r.href} className={cn(ROW_TEXT, 'font-normal underline')}><span data-copy="subject" data-slot="pass_b_theme">{r.label}</span></Link>
             {r.week != null && r.month != null && asked.week && asked.month
               ? <>, <span data-copy="figure">{fmtInt(r.week)}</span> {asked.weekWords} and <span data-copy="level">{fmtInt(r.month)} of {fmtInt(asked.month.n)}</span> {asked.monthWords}</>
               : null}

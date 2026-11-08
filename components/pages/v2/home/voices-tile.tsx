@@ -2,7 +2,7 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { BrandChip } from '@/components/colour-roles'
 import { toMax } from '@/components/v2'
-import { ROW } from '@/components/v2/look'
+import { ROW, ROW_TEXT } from '@/components/v2/look'
 import { fmtInt } from '@/lib/format'
 import { tileHref } from '@/lib/pages/home'
 import type { TileRead } from '@/lib/pages/v2/home'
@@ -57,9 +57,11 @@ function BrandList({ brands }: { brands: readonly { label: string; you: boolean;
       {brands.map((b, i) => (
         <span key={b.label}>
           {i > 0 ? ', ' : null}
-          {/* A name keeps its count on its line ("Ottobock (37)"). */}
+          {/* A name keeps its count on its line ("Ottobock (37)"). A comma
+              list of names, so the names keep the line's height (`ROW_TEXT`,
+              the 44px rule's exception for links in running text). */}
           <span className="whitespace-nowrap">
-            <Link href={b.href} className={ROW} aria-label={b.k != null && b.n != null ? `${b.label}: named in ${fmtInt(b.k)} of ${fmtInt(b.n)} videos` : `${b.label}: ${VOICES_BRANDS_NOT_COUNTED}`}>
+            <Link href={b.href} className={ROW_TEXT} aria-label={b.k != null && b.n != null ? `${b.label}: named in ${fmtInt(b.k)} of ${fmtInt(b.n)} videos` : `${b.label}: ${VOICES_BRANDS_NOT_COUNTED}`}>
               <BrandChip who={b.you ? 'you' : 'rival'} plain>{b.label}</BrandChip>
             </Link>
             {b.k != null ? <>{' ('}<span data-copy="figure">{fmtInt(b.k)}</span>)</> : null}

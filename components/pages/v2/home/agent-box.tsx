@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { BTN_PRIMARY, CHIP, INPUT, LBL, ROW } from '@/components/v2/look'
+import { BTN_PRIMARY, CHIP, INPUT, LBL, ROW, TAP } from '@/components/v2/look'
 import { surface } from '@/lib/nav'
 import type { AgentBox, AgentTry } from '@/lib/pages/v2/home'
 import { cn } from '@/lib/utils'
@@ -26,7 +26,7 @@ export function AgentBoxShell({ action, children }: { action: string; children?:
   const agent = surface('ask').href
   return (
     <article aria-labelledby="home-agent" data-tile="agent" className={cn(TILE, 'min-[1180px]:col-span-1')}>
-      <Link href={agent} id="home-agent" className={cn(LBL, 'self-start no-underline underline-offset-4 hover:underline')}>Agent</Link>
+      <Link href={agent} id="home-agent" className={cn(LBL, 'self-start no-underline underline-offset-4 hover:underline', TAP)}>Agent</Link>
       <h2 className={TT}><Link href={agent} className={ROW}>{AGENT_ASK}</Link></h2>
       <p className="m-0 text-[14.5px] leading-[1.5] text-secondary-foreground">{AGENT_LINE}</p>
       <form action={action} method="get" className="flex gap-2">

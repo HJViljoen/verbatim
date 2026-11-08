@@ -3,7 +3,7 @@ import { Fragment, type ReactNode } from 'react'
 import { BrandChip } from '@/components/colour-roles'
 import { translationNote } from '@/components/quote-block'
 import { CARD, EmptyBox, GoLink, TickBar, toMax, translationLine, type StatItem } from '@/components/v2'
-import { GO, QUOTE, ROW, TBL, TD, TD_NUM, TH } from '@/components/v2/look'
+import { GO, QUOTE, ROW, ROW_TEXT, TBL, TD, TD_NUM, TH } from '@/components/v2/look'
 import { fmtCompact, fmtInt, longMonth } from '@/lib/format'
 import { monthTerm } from '@/lib/reading/month-label'
 import { MARKET_VIDEO_COMMENTS_MAX, MARKET_VIDEO_QUOTES, MARKET_VIDEO_QUOTES_PHONE } from '@/lib/pages/v2/market'
@@ -93,7 +93,7 @@ function Lead({ page }: { page: CreatorPage }) {
           {page.brands.map((b, i) => (
             <Fragment key={b.label}>
               {i > 0 ? ', ' : null}
-              <Link href={b.href} className={cn(ROW, 'font-normal')}><BrandChip who={b.you ? 'you' : 'rival'} plain>{b.label}</BrandChip></Link> (<Fig>{fmtInt(b.k)}</Fig>)
+              <Link href={b.href} className={cn(ROW_TEXT, 'font-normal')}><BrandChip who={b.you ? 'you' : 'rival'} plain>{b.label}</BrandChip></Link> (<Fig>{fmtInt(b.k)}</Fig>)
             </Fragment>
           ))}
         </div>
@@ -115,7 +115,7 @@ function Comment({ c, hideOnPhone }: { c: CreatorComment; hideOnPhone: boolean }
       {note.english ? <p data-copy="quote" className="m-0 text-[15px] leading-[1.5] text-secondary-foreground">{note.english}</p> : null}
       <figcaption className="text-[13.5px] text-muted-foreground">
         {c.date}
-        {c.conv ? <>{c.date ? ', ' : null}in <GoLink href={c.conv.href} className="text-[13.5px]"><span data-copy="subject" data-slot="pass_b_theme">{c.conv.label}</span></GoLink></> : null}
+        {c.conv ? <>{c.date ? ', ' : null}in <GoLink href={c.conv.href} inText className="text-[13.5px]"><span data-copy="subject" data-slot="pass_b_theme">{c.conv.label}</span></GoLink></> : null}
       </figcaption>
     </figure>
   )
@@ -139,7 +139,7 @@ function VideoCard({ v, index, all, platform, onceSaid }: { v: CreatorVideoCard;
         <span>
           {v.posted ? <>Posted {v.posted}</> : null}
           {v.brand ? <>{v.posted ? ', ' : null}<BrandChip who={v.brand.you ? 'you' : 'rival'} plain>{v.brand.label}</BrandChip></> : null}
-          {v.conv ? <>{v.posted || v.brand ? ', ' : null}in <GoLink href={v.conv.href}><span data-copy="subject" data-slot="pass_b_theme">{v.conv.label}</span></GoLink></> : null}
+          {v.conv ? <>{v.posted || v.brand ? ', ' : null}in <GoLink href={v.conv.href} inText><span data-copy="subject" data-slot="pass_b_theme">{v.conv.label}</span></GoLink></> : null}
         </span>
         {v.url ? <GoLink href={v.url} external>Watch the video on {platform}</GoLink> : null}
       </div>

@@ -50,7 +50,9 @@ const SMALL = cn(BTN_SECONDARY, BTN_SM, 'max-sm:h-11')
 const SUBMIT = cn(BTN_PRIMARY, BTN_SM, 'max-sm:h-11')
 /** The board's `.add`: a dashed chip at the end of a row of names, 44px to
  *  tap on a phone through its hit area. */
-const ADD_CHIP = "relative inline-flex h-[30px] items-center whitespace-nowrap rounded-[8px] border border-dashed border-control bg-card px-2.5 text-[14px] font-medium text-foreground hover:border-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground disabled:opacity-50 disabled:hover:border-control max-sm:before:absolute max-sm:before:inset-x-0 max-sm:before:-inset-y-[7px] max-sm:before:content-['']"
+// 44px to tap on a phone, a true 44 (the real-data fixes, 8 Nov: an area
+// grown past the chip lay over the × beside it).
+const ADD_CHIP = "relative inline-flex h-[30px] items-center whitespace-nowrap rounded-[8px] border border-dashed border-control bg-card px-2.5 text-[14px] font-medium text-foreground hover:border-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground disabled:opacity-50 disabled:hover:border-control max-sm:h-11"
 /** A link-like button inside a card ("Remove this category"). */
 const QUIET_LINK = 'text-[13px] font-semibold text-muted-foreground underline decoration-control underline-offset-4 hover:text-foreground'
 
@@ -280,13 +282,16 @@ function RemoveName({ alias, children }: { alias: AliasChip; children: (ask: () 
   )
 }
 
-/** The board's `.x`: 20px, 44px to tap on a phone through its hit area. */
-const REMOVE_X = "relative -mr-1 inline-flex size-5 shrink-0 items-center justify-center rounded-[4px] text-muted-foreground hover:bg-track hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground disabled:opacity-50 max-sm:before:absolute max-sm:before:-inset-3 max-sm:before:content-['']"
+// The board's `.x`: 20px drawn; on a phone its tap area is 44px tall and stays inside
+// its own chip or row, which is 44px there (the name row and `ALIAS_CHIP`, with
+// `max-sm:min-h-11`), so it never lies over a neighbour: 12px above and
+// below, 8px over its own name to the left, 4px into the chip's padding.
+const REMOVE_X = "relative -mr-1 inline-flex size-5 shrink-0 items-center justify-center rounded-[4px] text-muted-foreground hover:bg-track hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground disabled:opacity-50 max-sm:before:absolute max-sm:before:-inset-y-3 max-sm:before:-left-2 max-sm:before:-right-1 max-sm:before:content-['']"
 
 /** One name in the Edit card, with its Remove. */
 function NameRow({ alias }: { alias: AliasChip }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className="flex flex-wrap items-center justify-between gap-2 max-sm:min-h-11">
       <RemoveName alias={alias}>
         {(ask) => (
           <>
@@ -307,7 +312,7 @@ export function RemovableAlias({ alias, locked = false }: { alias: AliasChip; lo
     <li className="flex flex-wrap items-center gap-2">
       <RemoveName alias={alias}>
         {(ask) => (
-          <span data-alias={alias.kind} className={ALIAS_CHIP}>
+          <span data-alias={alias.kind} className={cn(ALIAS_CHIP, 'max-sm:min-h-11')}>
             {alias.alias}
             {alias.needsConfirm ? <span className={CHECKED_TAG}>checked</span> : null}
             <button type="button" disabled={locked} onClick={ask} aria-label={`Remove the name ${alias.alias}`} className={REMOVE_X}>

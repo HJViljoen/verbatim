@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { Fragment, type ReactNode } from 'react'
 import { BrandChip } from '@/components/colour-roles'
 import { andList, CARD, EmptyBox, FAILED_EXPLAINED_EACH, GoLink, SectionHead, TickBar, toMax, type StatItem } from '@/components/v2'
-import { GO, QUOTE, ROW, TBL, TD, TD_NUM, TH } from '@/components/v2/look'
+import { GO_TEXT, QUOTE, ROW, TBL, TD, TD_NUM, TH } from '@/components/v2/look'
 import { fmtInt, longMonth, shortDate } from '@/lib/format'
 import { quoteWords } from '@/lib/pages/brands'
 import { prevMonth } from '@/lib/reading/month-key'
@@ -88,7 +88,7 @@ function Header({ page }: { page: GroupPage }) {
       <dl className={cn('m-0 grid grid-cols-1 gap-8 min-[900px]:grid-cols-3', page.oneLiner ? 'border-t border-track pt-5' : null)}>
         <Fact term="The subject they talk about most">
           {top ? (
-            <><Fig className={BIG}>{fmtInt(top.k)}</Fig> of their <Fig>{fmtInt(page.videos)}</Fig> are about <GoLink href={topHref!} className="text-[16px]">{top.label}</GoLink></>
+            <><Fig className={BIG}>{fmtInt(top.k)}</Fig> of their <Fig>{fmtInt(page.videos)}</Fig> are about <GoLink href={topHref!} inText className="text-[16px]">{top.label}</GoLink></>
           ) : page.subjectsState === 'none_ready' ? (
             // Ruling U6: no subject has passed its check, so none carries a
             // figure; the place says so once.
@@ -100,7 +100,7 @@ function Header({ page }: { page: GroupPage }) {
           )}
         </Fact>
         <Fact term="Conversations they’re in">
-          <Fig className={BIG}>{fmtInt(convs)}</Fig> {convs === 1 ? 'conversation' : 'conversations'}{convs > 0 ? <>, <a href="#talk" className={cn(GO, 'text-[16px]')}>listed below</a></> : null}
+          <Fig className={BIG}>{fmtInt(convs)}</Fig> {convs === 1 ? 'conversation' : 'conversations'}{convs > 0 ? <>, <a href="#talk" className={cn(GO_TEXT, 'text-[16px]')}>listed below</a></> : null}
         </Fact>
         <Fact term={`Why there is no ${longMonth(prevMonth(page.month.month))}`}>
           <span className="text-[15px] text-secondary-foreground">{GROUP_AFRESH}.</span>
@@ -228,7 +228,8 @@ function Pending({ page }: { page: GroupPage }) {
   const nm = page.notMeasured
   const failed = nm.filter((s) => s.state === 'failed')
   if (nm.length === 0 && page.holdsMore.length === 0 && page.alsoIn.length === 0 && page.inNone.length === 0) return null
-  const link = (href: string, label: string) => <Link href={href} className={cn(GO, 'text-[15px]')}>{label}</Link>
+  // Names in a comma list, inside running text: the sentence keeps its lines.
+  const link = (href: string, label: string) => <Link href={href} className={cn(GO_TEXT, 'text-[15px]')}>{label}</Link>
   return (
     <div data-group-pending="" className="-mt-0.5 mx-0.5 flex flex-col gap-2">
       <dl className="m-0 grid grid-cols-1 gap-x-4 gap-y-2 text-[15px] leading-[1.5] sm:grid-cols-[auto_minmax(0,1fr)]">

@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
-import { EMPTY, GO, LBL, TAG, TAG_TONE } from './look'
+import { EMPTY, GO, GO_TEXT, LBL, TAG, TAG_TONE } from './look'
 
 // THE AUDIT DESIGN'S COMPONENTS (7 Nov): the figures row under a page title,
 // the section head, the dashed empty box, the label, the link and the tag,
@@ -137,27 +137,32 @@ export function Label({
 }
 
 /** A link that says where it goes (`GO`), with no arrow. `external` opens a
- *  new tab with `rel="noopener noreferrer"`. */
+ *  new tab with `rel="noopener noreferrer"`. `inText`: the link sits inside
+ *  a sentence, so it keeps the sentence's line (`GO_TEXT`, the 44px rule's
+ *  exception); every other link is 44px to tap on a phone. */
 export function GoLink({
   href,
   children,
   className,
   external,
+  inText = false,
 }: {
   href: string
   children: ReactNode
   className?: string
   external?: boolean
+  inText?: boolean
 }): ReactNode {
+  const look = inText ? GO_TEXT : GO
   if (external) {
     return (
-      <a href={href} target="_blank" rel="noopener noreferrer" className={cn(GO, className)}>
+      <a href={href} target="_blank" rel="noopener noreferrer" className={cn(look, className)}>
         {children}
       </a>
     )
   }
   return (
-    <Link href={href} className={cn(GO, className)}>
+    <Link href={href} className={cn(look, className)}>
       {children}
     </Link>
   )

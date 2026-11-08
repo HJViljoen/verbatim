@@ -103,7 +103,7 @@ export function adviceStats(page: AdvicePageData): StatItem[] {
       term: 'Would move',
       value: aim ? (
         <>
-          {targetHref ? <Link href={targetHref} className="text-foreground underline decoration-control underline-offset-[3px] hover:decoration-foreground">{label}</Link> : label}
+          {targetHref ? <Link href={targetHref} className="text-foreground underline decoration-control underline-offset-[3px] hover:decoration-foreground max-sm:inline-block max-sm:min-h-11 max-sm:content-center">{label}</Link> : label}
           <span className="mt-0.5 block text-[14px] font-normal text-secondary-foreground">
             {aim.level
               ? <><span data-copy="level">{fmtInt(aim.level.k)} of {fmtInt(aim.level.n)}</span> category videos in {inlineMonth(longMonth(reading), page.monthLabel)}</>

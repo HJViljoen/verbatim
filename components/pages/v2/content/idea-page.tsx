@@ -50,7 +50,7 @@ const MISSING_LINES: Record<Exclude<ContentIdeaData['state'], 'ready'>, string> 
 export function IdeaLabel({ page }: { page: Pick<IdeaPage, 'rank' | 'label' | 'conversationHref'> }) {
   if (!page.label) return <>Post idea {page.rank}</>
   return (
-    <>Post idea {page.rank}, from the conversation <GoLink href={page.conversationHref} className="text-[15px]"><span data-copy="subject" data-slot="pass_b_theme">{page.label}</span></GoLink></>
+    <>Post idea {page.rank}, from the conversation <GoLink href={page.conversationHref} inText className="text-[15px]"><span data-copy="subject" data-slot="pass_b_theme">{page.label}</span></GoLink></>
   )
 }
 

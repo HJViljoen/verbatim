@@ -9,7 +9,7 @@
 // strings and bar lengths (./look, import-free, which client components import
 // directly rather than through this barrel), the components (./ui) and the
 // screen-only wording (./words).
-export { LBL, GO, ROW, CHIP, CHIP_ON, BTN_PRIMARY, BTN_SECONDARY, BTN_SM, TAG, TAG_TONE, TBL, TH, TD, TD_NUM, STACK, STACK_HEAD, STACK_ROW, STACK_CELL, SEG, SEG_ITEM, SEG_ON, TERM, EMPTY, INPUT, QUOTE, toMax, toMaxAtLeast } from './look'
+export { LBL, GO, GO_TEXT, ROW, ROW_TEXT, TAP, CHIP, CHIP_ON, BTN_PRIMARY, BTN_SECONDARY, BTN_SM, TAG, TAG_TONE, TBL, TH, TD, TD_NUM, STACK, STACK_HEAD, STACK_ROW, STACK_CELL, SEG, SEG_ITEM, SEG_ON, TERM, EMPTY, INPUT, QUOTE, toMax, toMaxAtLeast } from './look'
 export { StatStrip, StatStripFrame, StatStripCell, SectionHead, EmptyBox, Label, GoLink, Tag, type StatItem } from './ui'
 export { andList, commaCite, translationLine, listWords, longDay, shortDates } from './words'
 export { FAILED_EXPLAINED_EACH, FAILED_STATE } from './failed-words'

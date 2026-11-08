@@ -81,7 +81,7 @@ function Row({ name, href, covers, because, controls }: { name: string; href?: s
   return (
     <tr className={T_ROW}>
       <th scope="row" className={cn(TD, T_CELL, 'text-left text-[16px] font-semibold lg:py-[18px] max-lg:col-start-1 max-lg:row-start-1 max-lg:self-center')}>
-        {href ? <Link href={href} className="text-foreground underline decoration-control underline-offset-4 hover:decoration-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground">{name}</Link> : name}
+        {href ? <Link href={href} className="text-foreground underline decoration-control underline-offset-4 hover:decoration-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground max-sm:inline-block max-sm:min-h-11 max-sm:content-center">{name}</Link> : name}
       </th>
       <td className={cn(TD, T_CELL, 'leading-[1.6] text-secondary-foreground lg:py-[18px] max-lg:col-span-2 max-lg:row-start-2')}>
         {covers ? covers : <span className="text-muted-foreground">No description.</span>}

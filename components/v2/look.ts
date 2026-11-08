@@ -19,26 +19,37 @@
 export const LBL = 'text-[13px] font-semibold leading-[1.3] text-secondary-foreground'
 
 /** 44px TO TAP ON A PHONE (the standing rule; the real-data pass, 8 Nov,
- *  measured links at 20 to 23px, buttons at 40, chips at 34). Below 640 a
- *  text link (`GO`, `ROW`, which carry these classes written out) gets an
- *  invisible box 44px tall centred on it, so no line moves and the desktop is
- *  unchanged; a button or a chip (`BTN_*`, `CHIP`) is at least 44px tall
- *  (`max-sm:min-h-11`, so a page's own height still holds from 640). An
- *  inline link inside running text is exempt from the rule; the box does it
- *  no harm. For a link drawn by hand, combine with `cn`. */
-export const TAP =
-  'max-sm:relative max-sm:before:absolute max-sm:before:inset-x-0 max-sm:before:top-1/2 max-sm:before:h-11 max-sm:before:-translate-y-1/2'
+ *  measured links at 20 to 23px, buttons at 40, chips at 34). Below 640 every
+ *  target is a TRUE 44: its own box is at least 44px tall, its words centred
+ *  in it, so a list of links grows on a phone and no target's area can lie
+ *  over another's (an invisible box past the link, 8 Nov's first fix, let a
+ *  tap on one row's words open the next row's page). A text link (`GO`,
+ *  `ROW`, which carry these classes written out; `TAP` for a link drawn by
+ *  hand, combined with `cn`) becomes an inline block; a button or a chip
+ *  (`BTN_*`, `CHIP`, `INPUT`) takes `max-sm:min-h-11`. The desk keeps every
+ *  size. A link inside running text is exempt (the rule's own exception) and
+ *  takes `GO_TEXT` / `ROW_TEXT`, so its sentence keeps its lines. */
+export const TAP = 'max-sm:inline-block max-sm:min-h-11 max-sm:content-center'
 
 /** A link that says where it goes, with no arrow: ink, underlined in the
  *  control grey, the underline turning ink on hover; 44px to tap on a phone
  *  (`TAP`). */
 export const GO =
-  'text-[14px] font-medium text-foreground underline decoration-control underline-offset-4 transition-colors hover:decoration-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground max-sm:relative max-sm:before:absolute max-sm:before:inset-x-0 max-sm:before:top-1/2 max-sm:before:h-11 max-sm:before:-translate-y-1/2'
+  'text-[14px] font-medium text-foreground underline decoration-control underline-offset-4 transition-colors hover:decoration-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground max-sm:inline-block max-sm:min-h-11 max-sm:content-center'
+
+/** `GO` inside running text: the same look, its sentence's line height (the
+ *  tap rule's exception for a link in a sentence). */
+export const GO_TEXT =
+  'text-[14px] font-medium text-foreground underline decoration-control underline-offset-4 transition-colors hover:decoration-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground'
 
 /** A row's or a card's title that opens a page: ink at 600, no underline at
  *  rest, the link's underline on hover; 44px to tap on a phone (`TAP`). */
 export const ROW =
-  'font-semibold text-foreground no-underline decoration-control underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground max-sm:relative max-sm:before:absolute max-sm:before:inset-x-0 max-sm:before:top-1/2 max-sm:before:h-11 max-sm:before:-translate-y-1/2'
+  'font-semibold text-foreground no-underline decoration-control underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground max-sm:inline-block max-sm:min-h-11 max-sm:content-center'
+
+/** `ROW` inside running text (a comma list of names in a sentence). */
+export const ROW_TEXT =
+  'font-semibold text-foreground no-underline decoration-control underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground'
 
 /** A filter chip, and the chosen one (combine: `cn(CHIP, CHIP_ON)`). */
 export const CHIP =
@@ -110,9 +121,9 @@ export const TERM = 'inline-flex min-h-[30px] items-center gap-1.5 rounded-[8px]
 /** The dashed box a thin or empty state is said in (decision 4). */
 export const EMPTY = 'rounded-[10px] border border-dashed border-control px-[18px] py-4 text-[14.5px] leading-[1.55] text-secondary-foreground'
 
-/** Every input's field. */
+/** Every input's field; 44px on a phone (`TAP`'s rule). */
 export const INPUT =
-  'h-10 rounded-[8px] border border-input-line bg-card px-3 text-[15px] text-foreground placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground'
+  'h-10 rounded-[8px] border border-input-line bg-card px-3 text-[15px] text-foreground placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground max-sm:min-h-11'
 
 /** A person's own quoted words (depth pages only): the serif, leaning. */
 export const QUOTE = 'font-serif text-[16px] italic leading-[1.6]'

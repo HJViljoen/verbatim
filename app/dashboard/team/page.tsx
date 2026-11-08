@@ -256,7 +256,7 @@ export default async function TeamPage() {
               studio ? (
                 <>
                   {' '}Add them in{' '}
-                  <GoLink href={STUDIO_HREF} className="text-[15px]">the Studio</GoLink>.
+                  <GoLink href={STUDIO_HREF} inText className="text-[15px]">the Studio</GoLink>.
                 </>
               ) : (
                 <> Heinrich adds them once your reports are set up: write to <ContactLink />.</>

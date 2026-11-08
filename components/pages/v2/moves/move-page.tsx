@@ -41,7 +41,8 @@ import { MoveMonths, MoveStatusChip, OnLabel, VerdictWords } from './moves'
 // No week chip (decision 7): this page prints no week figure.
 
 const fig = (n: number) => <span data-copy="figure">{fmtInt(n)}</span>
-const LINK = 'text-foreground underline decoration-control underline-offset-[3px] hover:decoration-foreground'
+// 44px to tap on a phone (`TAP`, written out): it stands alone in its cell.
+const LINK = 'text-foreground underline decoration-control underline-offset-[3px] hover:decoration-foreground max-sm:inline-block max-sm:min-h-11 max-sm:content-center'
 
 // ---- 0. the title block -----------------------------------------------------------------
 

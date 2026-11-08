@@ -55,7 +55,7 @@ export function ConclusionsSection({ data }: { data: MovesPageData }) {
                     <td className={cn(TD, 'pl-7 pr-0', STACK_CELL)}>
                       {c.advice.length > 0
                         ? c.advice.map((a) => (
-                            <Link key={a.lineageId} href={adviceHref(a.lineageId)} className="block text-foreground underline decoration-control underline-offset-[3px] hover:decoration-foreground">
+                            <Link key={a.lineageId} href={adviceHref(a.lineageId)} className="block text-foreground underline decoration-control underline-offset-[3px] hover:decoration-foreground max-sm:min-h-11 max-sm:content-center">
                               <span data-copy="stored" data-slot="pass_d_b_recommendation">{a.title}</span>
                             </Link>
                           ))

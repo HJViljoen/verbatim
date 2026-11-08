@@ -113,7 +113,7 @@ function GroupCard({ g }: { g: RecordGroup }) {
         <div data-record-same="" className="flex flex-col gap-1 border-t border-track pt-3">
           <p className="m-0 text-[14px] text-muted-foreground">{RECORD_SAME_IDEA_HEAD}</p>
           {g.also.map((r) => (
-            <Link key={r.lineageId} href={adviceHref(r.lineageId)} className="self-start text-[14.5px] leading-[1.45] text-foreground underline decoration-control underline-offset-[3px] hover:decoration-foreground">
+            <Link key={r.lineageId} href={adviceHref(r.lineageId)} className="self-start text-[14.5px] leading-[1.45] text-foreground underline decoration-control underline-offset-[3px] hover:decoration-foreground max-sm:inline-block max-sm:min-h-11 max-sm:content-center">
               {r.title === UNTITLED_ADVICE ? r.title : <span data-copy="stored" data-slot="pass_d_b_recommendation">{r.title}</span>}
             </Link>
           ))}

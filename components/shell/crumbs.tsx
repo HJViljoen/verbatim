@@ -182,16 +182,25 @@ export function Switcher({ menu, defaultOpen = false, className }: {
         onClick={() => (open ? close(false) : setOpen(true))}
         onKeyDown={onButtonKey}
         className={cn(
-          // 22px drawn, 44px to tap on a phone (the review of 7 Nov): the
-          // hit area grows past the box, not the layout, by 12px each way,
-          // since it grows from the 20px inside the 1px border (11 made 42;
-          // the real-data pass, 8 Nov).
-          'relative inline-flex size-[22px] shrink-0 cursor-pointer items-center justify-center rounded-[8px] border border-border bg-card text-muted-foreground transition-colors hover:bg-inner hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-sm:before:absolute max-sm:before:-inset-[12px]',
-          open ? 'bg-track text-foreground' : null,
+          // 22px drawn, 44px to tap on a phone (the review of 7 Nov): below
+          // 640 the button itself is a 44px square around the drawn 22px
+          // box, a true 44, so its tap area can never lie over a neighbour's
+          // (the real-data fixes, 8 Nov: an area grown past the box with a
+          // pseudo-element covered the back link above the title). The desk
+          // draws the same 22px box as before.
+          'group relative inline-flex shrink-0 cursor-pointer items-center justify-center rounded-[8px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-sm:size-11',
           className,
         )}
       >
-        <UpDown />
+        <span
+          aria-hidden
+          className={cn(
+            'inline-flex size-[22px] items-center justify-center rounded-[8px] border border-border bg-card text-muted-foreground transition-colors group-hover:bg-inner group-hover:text-foreground',
+            open ? 'bg-track text-foreground' : null,
+          )}
+        >
+          <UpDown />
+        </span>
       </button>
       {open ? (
         <div

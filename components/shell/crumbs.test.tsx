@@ -29,7 +29,10 @@ describe('the crumb row', () => {
     expect(html).toMatch(/<span aria-hidden="true" class="[^"]*text-\[17px\][^"]*font-light text-muted-foreground\/45">\/<\/span>/)
     expect(html).toMatch(/<span aria-current="page" class="[^"]*font-medium text-foreground">Fit &amp; comfort<\/span>/)
     expect(html.match(/aria-haspopup="menu"/g)).toHaveLength(1)
-    expect(html).toMatch(/aria-label="Switch to another subject"[^>]*class="[^"]*size-\[22px\][^"]*max-sm:before:-inset-\[12px\]/)
+    // A true 44 on a phone: the button is a 44px square around the drawn
+    // 22px box, never an area grown past it (the real-data fixes, 8 Nov).
+    expect(html).toMatch(/aria-label="Switch to another subject"[^>]*class="[^"]*max-sm:size-11[^"]*"><span aria-hidden="true" class="[^"]*size-\[22px\][^"]*border[^"]*">/)
+    expect(html).not.toMatch(/max-sm:before:/)
     // The page's h1 is the title block's, never the row's.
     expect(html).not.toContain('<h1')
     assertCopyContract(<CrumbRow crumbs={subject.crumbs!} />)
@@ -176,7 +179,7 @@ describe('the switcher', () => {
   it('opens from a 22px button, and is closed until asked', () => {
     const menu = subjectMenu(nav, fixtureSubjectId('fit'))!
     const closed = render(<Switcher menu={menu} />)
-    expect(closed).toMatch(/<button type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Switch to another subject"[^>]*class="[^"]*size-\[22px\]/)
+    expect(closed).toMatch(/<button type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Switch to another subject"[^>]*><span aria-hidden="true" class="[^"]*size-\[22px\]/)
     expect(closed).not.toContain('role="menu"')
     expect(render(<Switcher menu={menu} defaultOpen />)).toContain('aria-expanded="true"')
   })

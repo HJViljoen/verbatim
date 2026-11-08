@@ -126,7 +126,7 @@ export function ProductsCategoryPage({ data, switcherOpen = false }: { data: Pro
 /** "A product in {category}", the category a link up (the board's). */
 function ProductSub({ data }: { data: ProductsLevelData }) {
   const up = data.crumbs?.[1]
-  return <>A product in {up?.href ? <GoLink href={up.href} className="text-[15px]">{up.label}</GoLink> : up?.label}</>
+  return <>A product in {up?.href ? <GoLink href={up.href} inText className="text-[15px]">{up.label}</GoLink> : up?.label}</>
 }
 
 /** A product's page (`/dashboard/products/[group]/[product]`). */

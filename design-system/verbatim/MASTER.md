@@ -48,11 +48,15 @@
    inside the card that keeps its title and place, never ghost bars or empty tracks.
 10. **Primary buttons are the brand yellow with ink words** (decision 8, `BTN_PRIMARY`);
     secondary buttons are white with a `--control` edge. The `--primary` token stays ink, so print,
-    the login button and the guards do not move. **Everything you tap is 44px tall on a phone**
-    (below 640; the real-data pass, 8 Nov): buttons and chips grow to it (`max-sm:min-h-11` in
-    `BTN_*` and `CHIP`), a text link (`GO`, `ROW`, `TAP`) gets an invisible 44px box centred on it
-    so no line moves, and the period switch, the crumb switcher, the phone's menu button and the
-    Sheet's rows are 44px. The desk keeps its sizes; an inline link inside running text is exempt.
+    the login button and the guards do not move. **Everything you tap is a TRUE 44px on a phone**
+    (below 640; the real-data pass and its fixes, 8 Nov): the target's own box is at least 44px
+    tall, never an invisible area grown past it, so no target's area lies over another's. Buttons,
+    chips and inputs take `max-sm:min-h-11` (`BTN_*`, `CHIP`, `INPUT`); a text link (`GO`, `ROW`,
+    or `TAP` for one drawn by hand) is an inline block at least 44px tall with its words centred,
+    so a list of links grows on a phone; the period switch, the crumb switcher (a 44px button
+    round its drawn 22px box), the phone's menu button and the Sheet's rows are 44px. The desk
+    keeps its sizes. A link inside running text is exempt and keeps its sentence's line
+    (`GO_TEXT`, `ROW_TEXT`, `GoLink`'s `inText`).
 11. **A repeated line is said once per screen** (the medical line once, under the ideas it
     covers: decision 14).
 12. **The shell:** the sidebar's yellow Agent row and the crowd behind the app are **retired**
