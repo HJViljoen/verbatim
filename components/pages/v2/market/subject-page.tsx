@@ -4,7 +4,7 @@ import { MovementBadge, nonAnswerParts, signedChange } from '@/components/delta-
 import { BrandChip } from '@/components/colour-roles'
 import { translationNote } from '@/components/quote-block'
 import { CARD, commaCite, EmptyBox, FlagChip, GoLink, MiniBars, shortDates, SpikeBars, TBL, TD as KIT_TD, TD_NUM, TH as KIT_TH, toMax, translationLine, type StatItem } from '@/components/v2'
-import { QUOTE, ROW } from '@/components/v2/look'
+import { GO, QUOTE, ROW } from '@/components/v2/look'
 import { fmtInt } from '@/lib/format'
 import { noGroupSaying, noReadingYet, platformRows, subjectNoRead, subjectNotCompared, type InsideConv, type MarketData, type PanelQuote, type SubjectPage, type SubjectPanel } from '@/lib/pages/v2/market'
 import { SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
@@ -136,7 +136,11 @@ export function subjectStats(page: SubjectPage, data: MarketData): StatItem[] {
   const conversations: StatItem = {
     key: 'conversations',
     term: week ? 'Conversations this week' : `Conversations in ${panel.monthText}`,
-    value: <span data-copy="figure">{fmtInt(page.insideTotal)}</span>,
+    // "See them below" jumps to the list (live's link, lost in the redesign
+    // and restored: the operator pass, 8 Nov), underlined, no arrow.
+    value: page.insideTotal > 0
+      ? <><span data-copy="figure">{fmtInt(page.insideTotal)}</span> <a href="#inside" data-see-below="" className={cn(GO, 'ml-1.5 text-[13.5px] font-normal')}>See them below</a></>
+      : <span data-copy="figure">{fmtInt(page.insideTotal)}</span>,
   }
   if (!level) {
     // Its check open or failed: its state's line, once (U6). Its check

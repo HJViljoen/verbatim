@@ -1774,7 +1774,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
     `Market-Subject.dc.html`) the page draws this in the board's shape: the
     header card's figures are the title's figures row (`subjectStats`: the
     week, this week on the level's base, the month's videos and share, the
-    conversations inside it; a subject that prints no figure says its
+    conversations inside it with live's "See them below" to the list,
+    `#inside`, underlined and with no arrow (restored by the operator pass,
+    8 Nov); a subject that prints no figure says its
     state's line there, once), the headline heads one read tile ("Our read
     of {month}", what people are saying beside what it means), the three
     conversation cards and the list's three-weeks column are gone (the one

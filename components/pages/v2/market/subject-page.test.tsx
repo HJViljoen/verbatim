@@ -36,7 +36,10 @@ describe('a ready subject, this week, in the board\'s order', () => {
   it('the path, then the title block: its name, the period switch, and the figures row (the week a count on the level\'s base beside its month)', () => {
     // The audit design (Market-Subject.dc.html): no tile and no "Subject"
     // label; the figures row's four cells; the month by its name.
-    expect(tight(text)).toMatch(/^Market \/ Fit & comfort Market Fit & comfort This week October so far Over time Week 5 to 11 Oct This week 82 of 241 videos October so far 108 of 318 videos, 34% Conversations this week 4 /)
+    expect(tight(text)).toMatch(/^Market \/ Fit & comfort Market Fit & comfort This week October so far Over time Week 5 to 11 Oct This week 82 of 241 videos October so far 108 of 318 videos, 34% Conversations this week 4 See them below /)
+    // Live's "See them below", restored (the operator pass, 8 Nov): the list's
+    // anchor, underlined, no arrow; none where nothing is inside it.
+    expect(html).toMatch(/<a href="#inside" data-see-below="" class="[^"]*underline[^"]*">See them below<\/a>/)
     expect(html).not.toContain('data-level-tile')
     expect(html).toMatch(/<a (?=[^>]*aria-current="page")(?=[^>]*href="\/dashboard\/market\/subjects\/subj-fit")[^>]*>This week</)
     expect(html).toContain('href="/dashboard/market/subjects/subj-fit?period=month"')
@@ -204,7 +207,7 @@ describe('a ready subject, this month', () => {
   const html = render(page(d))
 
   it('three figures, no week figure and no week by week; the list\'s month alone; a read stored before headlines leads with no sentence', () => {
-    expect(tight(text)).toMatch(/^Market \/ Cost & access Market Cost & access This week October so far Over time October so far 70 of 318 videos, 22% Conversations in October so far 3 Our read of October so far /)
+    expect(tight(text)).toMatch(/^Market \/ Cost & access Market Cost & access This week October so far Over time October so far 70 of 318 videos, 22% Conversations in October so far 3 See them below Our read of October so far /)
     expect(stripOf(html).match(/<dt/g)).toHaveLength(2)
     // A read stored before headlines: the read's heading is "Our read of
     // October so far", never a stored line.
@@ -264,7 +267,7 @@ describe('every state keeps its frame', () => {
     const d = marketSubjectFixture('fit', { subjects: 'unread' })
     const html = render(body(d))
     const strip = stripOf(render(page(d)))
-    expect(markupText(strip)).toBe('Week 5 to 11 Oct October so far No reading in October so far yet. Conversations this week 4')
+    expect(markupText(strip)).toBe('Week 5 to 11 Oct October so far No reading in October so far yet. Conversations this week 4 See them below')
     expect(copyNodes(strip).filter((n) => n.kind === 'level' || n.kind === 'verdict')).toEqual([])
     expect(markupText(readOf(html))).toMatch(new RegExp(`^${fit.headline!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} Our read of October so far`))
     expect(renderText(body(d))).toMatch(/ The numbers No reading in October so far yet\. Ask what people say/)
