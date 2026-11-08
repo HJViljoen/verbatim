@@ -11,7 +11,8 @@
 // screen-only wording (./words).
 export { LBL, GO, ROW, CHIP, CHIP_ON, BTN_PRIMARY, BTN_SECONDARY, BTN_SM, TAG, TAG_TONE, TBL, TH, TD, TD_NUM, STACK, STACK_HEAD, STACK_ROW, STACK_CELL, SEG, SEG_ITEM, SEG_ON, TERM, EMPTY, INPUT, QUOTE, toMax, toMaxAtLeast } from './look'
 export { StatStrip, StatStripFrame, StatStripCell, SectionHead, EmptyBox, Label, GoLink, Tag, type StatItem } from './ui'
-export { commaCite, translationLine, listWords, longDay, shortDates } from './words'
+export { andList, commaCite, translationLine, listWords, longDay, shortDates } from './words'
+export { FAILED_EXPLAINED_EACH, FAILED_STATE } from './failed-words'
 export { InPlacePanel, PanelSection, PanelSlot, PanelTitle, SELECTED_CARD_RING, type InPlacePanelProps } from './panel'
 export { equalColumns, panelItemOrder, panelPlacement, PANEL_BREAKPOINTS, type PanelBreakpoint, type PanelLayout, type PanelPlacement, type PanelRow, type PerBreakpoint } from './panel-place'
 export { panelScrollPlan, PANEL_HEAD_PX } from './panel-scroll'

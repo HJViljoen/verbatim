@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { translationLabel } from '@/components/quote-block'
-import { commaCite, listWords, longDay, shortDates, translationLine } from './words'
+import { andList, commaCite, listWords, longDay, shortDates, translationLine } from './words'
 
 // The screens' own wording (the audit design, 7 Nov): commas where `lib/`
 // builds " · ", so the email's and the briefs' words never move.
@@ -49,6 +49,15 @@ describe('listWords', () => {
     expect(listWords(['Össur (41)', null, 'Ottobock (37)', undefined, '', '  '])).toBe('Össur (41), Ottobock (37)')
     expect(listWords(['One'])).toBe('One')
     expect(listWords([])).toBe('')
+  })
+})
+
+describe('andList', () => {
+  it('lists names as a sentence does', () => {
+    expect(andList([])).toBe('')
+    expect(andList(['Fit & comfort'])).toBe('Fit & comfort')
+    expect(andList(['Fit & comfort', 'Cost & access'])).toBe('Fit & comfort and Cost & access')
+    expect(andList(['Repair & warranty', 'Community & purpose', 'Waterproofing'])).toBe('Repair & warranty, Community & purpose and Waterproofing')
   })
 })
 

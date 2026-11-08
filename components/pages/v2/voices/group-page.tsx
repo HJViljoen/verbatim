@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { Fragment, type ReactNode } from 'react'
 import { BrandChip } from '@/components/colour-roles'
-import { CARD, EmptyBox, GoLink, SectionHead, TickBar, toMax, type StatItem } from '@/components/v2'
+import { andList, CARD, EmptyBox, FAILED_EXPLAINED_EACH, GoLink, SectionHead, TickBar, toMax, type StatItem } from '@/components/v2'
 import { GO, QUOTE, ROW, TBL, TD, TD_NUM, TH } from '@/components/v2/look'
 import { fmtInt, longMonth, shortDate } from '@/lib/format'
 import { quoteWords } from '@/lib/pages/brands'
@@ -240,9 +240,13 @@ function Pending({ page }: { page: GroupPage }) {
             <dt className="text-muted-foreground">{SUBJECT_NOT_MEASURED}</dt>
             <dd className="m-0">
               {nm.map((s) => s.label).join(', ')}. {nm.length === 1 ? 'It shows how many of their videos it holds once its check passes.' : 'Each shows how many of their videos it holds once its check passes.'}
-              {failed.map((f) => (
-                <span key={f.id} data-subject-failed="" className="mt-1 block text-[14px] text-muted-foreground"><span className="font-medium text-foreground">{f.label}.</span> {FAILED_EXPLAINED}</span>
-              ))}
+              {/* Why they show no figure, once for all of them (the
+                  real-data pass, 8 Nov). */}
+              {failed.length === 1 ? (
+                <span data-subject-failed="" className="mt-1 block text-[14px] text-muted-foreground"><span className="font-medium text-foreground">{failed[0].label}.</span> {FAILED_EXPLAINED}</span>
+              ) : failed.length > 1 ? (
+                <span data-subject-failed="" className="mt-1 block text-[14px] text-muted-foreground"><span className="font-medium text-foreground">{andList(failed.map((f) => f.label))}.</span> {FAILED_EXPLAINED_EACH}</span>
+              ) : null}
             </dd>
           </>
         ) : null}

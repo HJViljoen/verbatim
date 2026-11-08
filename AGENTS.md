@@ -1506,7 +1506,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
     said ONCE a page: in Market's row for it, in the foot of Voices' "Who's
     in your market", on a Your products category or product page, on Your
     moves' first card for it; elsewhere the short named line ("Not measured yet: Fit &
-    comfort"). Ruling U6 is unchanged: neither prints a figure resting on
+    comfort"). Where two or more are being re-described on one screen they
+    are named together and the reason is said once for all of them
+    (`FAILED_EXPLAINED_EACH`, `components/v2/failed-words.ts`: "Repair &
+    warranty, Community & purpose and Waterproofing. Being re-described: a
+    check found each of them …"), each card or row then saying its state
+    alone ("Being re-described", `FAILED_STATE`; the real-data pass, 8 Nov:
+    Sealand's three printed the sentence three times on Market, Voices, a
+    group's page and a rival's page). Ruling U6 is unchanged: neither prints a figure resting on
     its membership, and neither leads, ranks or "leads" anything. A ready
     subject on none of a set's videos is listed at 0 (`groupSubjects`,
     `brandSubjects`, `Crosses.quiet`), never as a top, a lead or a headline
@@ -2072,7 +2079,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
     video's comments, each naming the conversation whose refs hold it, every
     conversation of theirs labelled; gated with no claim, so no relevance
     test, and its reason says so, `LEVEL_QUOTE_RULE`, never Market's "speaks
-    to this");
+    to this"; where none of any listed video's may print it is said once
+    under the head, `CREATOR_NONE_QUOTABLE_ALL`, as Market's conversation
+    page does, and `CREATOR_NONE_QUOTABLE` on a card only where some
+    video's may; the real-data pass, 8 Nov);
     the facts (followers as of the month's videos, their conversations
     theirs of all its videos, who comments, what people did off one lens
     call); the other creators; the Agent. Since the audit design (7 Nov,

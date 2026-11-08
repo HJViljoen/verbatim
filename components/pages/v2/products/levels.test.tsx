@@ -7,6 +7,7 @@ import { PRODUCTS_NO_CATALOGUE, PRODUCTS_NOT_ON, setKey, type Crosses } from '@/
 import { CATEGORY_MISSING, PRODUCT_MISSING, type ProductsLevelData } from '@/lib/pages/v2/products-levels'
 import { PRODUCT_TAG_COPY } from '@/lib/products/tags'
 import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
+import { FAILED_EXPLAINED_EACH } from '@/components/v2'
 import { ProductsCategoryPage, ProductsProductPage } from './levels'
 import { categoryChangeGap } from './category-page'
 import { NAMED_IN_VIDEO_ONLY, openedNamedNote, OWN_POST_NOTE, QUIET_FACT, showNamedOf } from './product-page'
@@ -223,6 +224,14 @@ describe('a category\'s page, the hub (G4-Products-Category)', () => {
     expect(renderText(node)).toContain('On none of its videos: Function & movement.')
     expect(renderText(node)).toContain(`Cost & access ${SUBJECT_NOT_MEASURED}`)
     assertCopyContract(node)
+    // Two or more being re-described: each row its state, why said once
+    // under them (the real-data pass, 8 Nov).
+    const two: Crosses = { ...crosses, pending: [{ id: 's-cost', label: 'Cost & access', state: 'failed' }, { id: 's-community', label: 'Community & encouragement', state: 'failed' }] }
+    const m = page(categoryFixture({ over: { crosses: new Map([[setKey('group', PRODUCT_IDS.liners()), two]]) } }))
+    const t = renderText(m)
+    expect(t).toContain(`Cost & access Being re-described Community & encouragement Being re-described Cost & access and Community & encouragement. ${FAILED_EXPLAINED_EACH}`)
+    expect(t).not.toContain(FAILED_EXPLAINED)
+    assertCopyContract(m)
   })
 })
 

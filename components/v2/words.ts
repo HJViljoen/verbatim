@@ -50,3 +50,8 @@ export function longDay(iso: string): string {
   if (Number.isNaN(d.getTime())) return iso
   return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`
 }
+
+/** Names as a sentence lists them: "A", "A and B", "A, B and C". */
+export function andList(names: readonly string[]): string {
+  return names.length <= 1 ? names[0] ?? '' : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}

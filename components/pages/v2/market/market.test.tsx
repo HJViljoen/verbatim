@@ -4,6 +4,7 @@ import { assertCopyContract, copyNodes, copyViolations } from '@/lib/test/copy-c
 import { fixtureSubjectId, marketFixture, marketLongRowsFixture, marketThinFixture, FIXTURE_WEEKS, OSSUR_WEEK } from '@/lib/pages/v2/market-fixture'
 import { OSSUR_SUBJECT_READS } from '@/lib/pages/v2/market-reads-fixture'
 import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
+import { FAILED_EXPLAINED_EACH } from '@/components/v2'
 import { MarketPage, MARKET_FIRST_RUN } from './index'
 import { ALSO_TALKED, MOST_TALKED, NOTHING_ELSE_NEW, NOTHING_NEW, SubjectCardsView, WeekCardView, WEEK_CARD_TITLE, WEEK_THIN, WEEK_UNREAD } from './analysis'
 import { KindsCard, KindsFrame, NumbersRow, PlatformsCard, PlatformsFrame, WeeksCard, weeksLine, WEEKS_NOT_DRAWN, WEEKS_NOT_DRAWN_TITLE, WEEKS_UNREAD } from './rail'
@@ -197,6 +198,16 @@ describe('the subject cards', () => {
     // The unready after the ready, unranked (U6).
     expect(STATES.subjectCards!.map((c) => c.state)).toEqual(['read', 'read', 'thin', 'no_read', 'failed', 'provisional'])
     assertCopyContract(<SubjectCardsView cards={STATES.subjectCards!} />)
+    // Two or more being re-described: why is said once under the head,
+    // after their names, and each card says its state alone (the real-data
+    // pass, 8 Nov: Sealand's three cards each printed the sentence).
+    const many = STATES.subjectCards!.map((c) => (c.state === 'thin' || c.state === 'no_read' ? { ...c, state: 'failed' as const, note: FAILED_EXPLAINED, headline: null, body: null } : c))
+    const m = renderText(<SubjectCardsView cards={many} />)
+    expect(m).toContain(`What the market is talking about Six subjects, biggest first Choosing the right device, Look & style and Community & encouragement. ${FAILED_EXPLAINED_EACH}`)
+    expect(m).not.toContain(FAILED_EXPLAINED)
+    expect(m).toContain('Community & encouragement Being re-described Inside it Running-blade stories')
+    expect(m.split('Being re-described').length - 1).toBe(4)
+    assertCopyContract(<SubjectCardsView cards={many} />)
   })
 
   it('a tenant whose reads are switched off has the no-read line on every ready card', () => {

@@ -36,6 +36,13 @@ import { AskBox } from './levels'
  *  relevance test it does not run. */
 const QUOTE_RULE = LEVEL_QUOTE_RULE
 export const CREATOR_NONE_QUOTABLE = `None of its counted comments can be quoted: ${QUOTE_RULE}.`
+/** The same, said ONCE under the head where it holds for every video listed
+ *  (Market's `CONV_NONE_QUOTABLE_ALL`; the real-data pass, 8 Nov: Sealand's
+ *  creator printed `CREATOR_NONE_QUOTABLE` on all five cards). */
+export const CREATOR_NONE_QUOTABLE_ALL = `None of the counted comments on these videos can be quoted: ${QUOTE_RULE}.`
+
+/** A video whose counted comments are all held back. */
+const unquotableCard = (v: Pick<CreatorVideoCard, 'quotes' | 'counted'>): boolean => v.quotes.length === 0 && v.counted > 0
 export const CREATOR_VIDEOS_UNREAD = 'Their videos could not be read just now.'
 
 /** "Show all 22 comments", or "Show 9 of 22 comments" where fewer may print
@@ -120,7 +127,7 @@ function Comment({ c, hideOnPhone }: { c: CreatorComment; hideOnPhone: boolean }
  *  link breaks inside the card), the day, the brand named in it and its
  *  conversation, the link to watch it, its comments counted of all on it,
  *  then those that may print. */
-function VideoCard({ v, index, all, platform }: { v: CreatorVideoCard; index: number; all: boolean; platform: string }) {
+function VideoCard({ v, index, all, platform, onceSaid }: { v: CreatorVideoCard; index: number; all: boolean; platform: string; onceSaid: boolean }) {
   const phoneMore = !v.open && v.quotable > MARKET_VIDEO_QUOTES_PHONE
   const deskMore = !v.open && v.quotable > MARKET_VIDEO_QUOTES
   const show = showCountedOf(v)
@@ -145,7 +152,7 @@ function VideoCard({ v, index, all, platform }: { v: CreatorVideoCard; index: nu
         <div data-video-comments="" className="flex flex-col gap-4 rounded-[10px] bg-inner px-5 py-[18px] max-sm:px-3.5 max-sm:py-3.5">
           {v.quotes.map((c, i) => <Comment key={i} c={c} hideOnPhone={!v.open && i >= MARKET_VIDEO_QUOTES_PHONE} />)}
         </div>
-      ) : v.counted > 0 ? <p className="m-0 rounded-[10px] bg-inner px-5 py-3 text-[14px] text-secondary-foreground">{CREATOR_NONE_QUOTABLE}</p> : null}
+      ) : v.counted > 0 && !onceSaid ? <p className="m-0 rounded-[10px] bg-inner px-5 py-3 text-[14px] text-secondary-foreground">{CREATOR_NONE_QUOTABLE}</p> : null}
       {note ? <p className="m-0 text-[13.5px] text-muted-foreground">{note}</p> : null}
       {v.open ? (
         <div><Link href={v.href} scroll={false} className={GO}>Show fewer comments</Link></div>
@@ -174,6 +181,9 @@ function ColumnHead({ id, title, note }: { id: string; title: ReactNode; note?: 
 
 function Videos({ page }: { page: CreatorPage }) {
   const ev = page.evidence
+  // Said once under the head where every listed video with counted comments
+  // has none that may print; on a card only where some video's may.
+  const noneAll = ev.state === 'ready' && ev.cards.some(unquotableCard) && ev.cards.every((v) => v.counted === 0 || unquotableCard(v))
   return (
     <section id="their-videos" aria-labelledby="videos-title" className="flex min-w-0 scroll-mt-6 flex-col gap-[18px]">
       <ColumnHead
@@ -187,7 +197,8 @@ function Videos({ page }: { page: CreatorPage }) {
         </div>
       ) : (
         <div className="flex flex-col gap-5">
-          {ev.cards.map((v, i) => <VideoCard key={v.id} v={v} index={i} all={ev.all} platform={page.platformLabel} />)}
+          {noneAll ? <p data-none-quotable="" className="m-0 -mt-1 text-[14.5px] leading-[1.55] text-secondary-foreground">{CREATOR_NONE_QUOTABLE_ALL}</p> : null}
+          {ev.cards.map((v, i) => <VideoCard key={v.id} v={v} index={i} all={ev.all} platform={page.platformLabel} onceSaid={noneAll} />)}
           {ev.capped != null ? <p className="m-0 text-[13.5px] text-muted-foreground">The first <Fig>{fmtInt(ev.capped)}</Fig> of <Fig>{fmtInt(ev.total)}</Fig> are listed.</p> : null}
           {ev.more && ev.more.desktop > 0 ? <Link href={ev.more.href} className={cn(GO, 'self-start max-sm:hidden')}>Show <Fig>{fmtInt(ev.more.desktop)}</Fig> more videos</Link> : null}
           {ev.more && ev.more.phone > 0 ? <Link href={ev.more.href} className={cn(GO, 'self-start sm:hidden')}>Show <Fig>{fmtInt(ev.more.phone)}</Fig> more videos</Link> : null}

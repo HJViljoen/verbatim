@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { Sparkles } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { EmptyBox, LBL, TickBar } from '@/components/v2'
+import { andList, EmptyBox, FAILED_EXPLAINED_EACH, LBL, TickBar } from '@/components/v2'
 import { TAG } from '@/components/colour-roles'
 import { fmtCompact, fmtInt } from '@/lib/format'
 import { quoteWords } from '@/lib/pages/brands'
@@ -80,13 +80,26 @@ export function FailedSubjectLine({ label, className }: { label: string; classNa
   )
 }
 
-/** The page's one place for why each subject being re-described shows no
- *  figure: one calm line a subject, under a hairline. Nothing where none is. */
+/** Every subject being re-described, named, with the reason said ONCE for
+ *  all of them (the real-data pass, 8 Nov: one sentence a subject printed the
+ *  same words three times on a screen). One subject is `FailedSubjectLine`. */
+export function FailedSubjectsLine({ labels, className }: { labels: readonly string[]; className?: string }) {
+  if (labels.length === 0) return null
+  if (labels.length === 1) return <FailedSubjectLine label={labels[0]} className={className} />
+  return (
+    <p data-subject-failed="" className={cn('m-0 text-[13.5px] leading-[1.5] text-muted-foreground', className)}>
+      <span className="font-medium text-foreground">{andList(labels)}.</span> {FAILED_EXPLAINED_EACH}
+    </p>
+  )
+}
+
+/** The page's one place for why the subjects being re-described show no
+ *  figure: one calm line, under a hairline. Nothing where none is. */
 export function FailedSubjectsFoot({ failed }: { failed?: readonly { id: string; label: string }[] }) {
   if (!failed || failed.length === 0) return null
   return (
     <div data-subjects-failed="" className="flex flex-col gap-1 border-t border-track pt-3">
-      {failed.map((f) => <FailedSubjectLine key={f.id} label={f.label} />)}
+      <FailedSubjectsLine labels={failed.map((f) => f.label)} />
     </div>
   )
 }

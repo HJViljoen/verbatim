@@ -124,6 +124,13 @@ export default async function TeamPage() {
   // `pending`, and five that expired on 24 Sep were listed as pending.
   const nowIso = new Date().toISOString()
   const waiting = invites.filter((inv) => !inviteState(inv.expires_at, nowIso).expired).length
+  // Two or more expired invites: why their links no longer work is said once,
+  // under the head, and each row keeps its "Expired" tag and its date (the
+  // real-data pass, 8 Nov: Sealand's five rows each said it). "Resend sends a
+  // fresh one" only where this reader may resend one of them.
+  const expired = invites.filter((inv) => inviteState(inv.expires_at, nowIso).expired)
+  const expiredOnce = expired.length > 1
+  const expiredLine = `${expiredOnce ? 'These links no longer work.' : 'This link no longer works.'}${expired.some((inv) => canResendInvite(role, inv.role)) ? ' Resend sends a fresh one.' : ''}`
   // ON A LIST IS NOT THE SAME AS SENT TO (sw-2 item 2): a member on the
   // paused digest is on it, and the page says it is paused.
   const membersOffReport = memberRows.filter((m) => memberUpdateStatus(m.email, schedules) === 'none')
@@ -262,6 +269,7 @@ export default async function TeamPage() {
       {canManage && (
         <Card className={TILE}>
           <Head title="Invites" count={`${waiting} pending${invites.length > waiting ? `, ${invites.length - waiting} expired` : ''}`} />
+          {expiredOnce ? <p data-invites-expired="" className="m-0 mt-2 text-[14px] text-muted-foreground">{expiredLine}</p> : null}
           {invites.length === 0 ? (
             <div className="mt-3"><EmptyBox>No pending invites.</EmptyBox></div>
           ) : invites.map((inv) => {
@@ -275,7 +283,7 @@ export default async function TeamPage() {
                   </p>
                   <p className="m-0 mt-1 text-[14px] text-secondary-foreground">{cap(inv.role)}, {state.line}</p>
                   {state.expired ? (
-                    <p className="m-0 mt-1 text-[14px] text-muted-foreground">This link no longer works. Resend sends a fresh one.</p>
+                    expiredOnce ? null : <p className="m-0 mt-1 text-[14px] text-muted-foreground">{expiredLine}</p>
                   ) : inv.token ? null : (
                     <p className="m-0 mt-1 text-[14px] text-muted-foreground">Link is visible to whoever sent this invite. We emailed it to them.</p>
                   )}

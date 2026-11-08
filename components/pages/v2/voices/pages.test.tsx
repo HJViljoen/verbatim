@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { FAILED_EXPLAINED, SUBJECT_NOT_MEASURED } from '@/lib/subjects/calibration-state'
+import { FAILED_EXPLAINED_EACH } from '@/components/v2'
 import { VOICES_ONE_MONTH } from '@/lib/pages/v2/voices'
 import { BACK_TO_VOICES, BRAND_MISSING, CREATOR_REDDIT, GROUP_MISSING, GROUP_QUOTES_UNREAD, groupQuotesNone, VOICES_ONE_MONTH_SHORT, type BrandPage, type CreatorPage, type GroupPage, type LevelMissing } from '@/lib/pages/v2/voices-levels'
 import { brandFixture, creatorFixture, groupFixture, groupThinFixture, SEP_CLOSED_MONTH, VOICES_LEVEL_FIXTURES } from '@/lib/pages/v2/voices-levels-fixture'
 import { VoicesBrandPage, VoicesCreatorPage, VoicesGroupPage } from './pages'
 import { BRAND_NUMBERS_NONE } from './brand-page'
+import { CREATOR_NONE_QUOTABLE, CREATOR_NONE_QUOTABLE_ALL } from './creator-page'
 
 // VOICES' LEVEL PAGES, AS THEY PRINT (17 Oct; the G3 boards): each from its
 // fixture through the page's own builders, against the copy contract, the
@@ -218,6 +220,16 @@ describe('a group\'s page (G3-Voices-Group)', () => {
     expect(render(group(g))).toContain('data-group-subjects-none=""')
   })
 
+  it('two or more being re-described: why said once for all of them, after their names (the real-data pass, 8 Nov)', () => {
+    const g = groupFixture({ checks: 'tracked' })
+    const failed = { ...g, notMeasured: [{ id: 's-fit', label: 'Fit & comfort', state: 'failed' as const }, { id: 's-cost', label: 'Cost & access', state: 'failed' as const }, { id: 's-look', label: 'Look & style', state: 'failed' as const }] }
+    const t = renderText(group(failed))
+    expect(t).toContain(`Fit & comfort, Cost & access and Look & style. ${FAILED_EXPLAINED_EACH}`)
+    expect(t).not.toContain(FAILED_EXPLAINED)
+    expect(t.split('Being re-described').length - 1).toBe(1)
+    assertCopyContract(group(failed))
+  })
+
   it('a tracked subject is never hidden: the failed one\'s reason once on the page', () => {
     const h = render(group(groupFixture({ checks: 'tracked' })))
     expect(h.split(FAILED_EXPLAINED).length - 1).toBe(1)
@@ -283,6 +295,13 @@ describe('a brand\'s page (G3-Voices-Brand)', () => {
     expect(renderText(brand(failed))).toContain('Not measured yet: Function & movement, Fit & comfort. Each opens in Market. Fit & comfort. Being re-described:')
     expect(h.split(FAILED_EXPLAINED).length - 1).toBe(1)
     expect(render(brand(b))).not.toContain(FAILED_EXPLAINED)
+    // Two or more: named together, and why said once (the real-data pass, 8
+    // Nov: a rival's page said it three times and stretched its tile).
+    const many = { ...b, notMeasured: [{ id: 's-function', label: 'Function & movement', failed: true }, { id: 's-fit', label: 'Fit & comfort', failed: true }] }
+    const tm = renderText(brand(many))
+    expect(tm).toContain(`Function & movement and Fit & comfort. ${FAILED_EXPLAINED_EACH}`)
+    expect(tm.split('Being re-described').length - 1).toBe(1)
+    assertCopyContract(brand(many))
   })
 
   it('who talks about it: the groups with bars against the largest, the creators a table, each opening its page by its name (no chevron)', () => {
@@ -422,6 +441,24 @@ describe('a creator\'s page (G3-Voices-Creator)', () => {
     expect(text).toContain('Show 9 more videos')
     expect(text).not.toMatch(/[→↗↓]/)
     expect(html).toMatch(/<a href="https:\/\/www\.tiktok\.com\/@stepbystep\.amp\/video\/1" target="_blank" rel="noopener noreferrer"/)
+  })
+
+  it('none of any video\'s counted comments may print: said once under the head, never on each card; on a card only where some may', () => {
+    // The real-data pass (8 Nov): Sealand's creator printed the line on all
+    // five cards (Market's conversation page says it once the same way).
+    const c = creatorFixture()
+    const none = { ...c, evidence: { ...c.evidence, cards: c.evidence.cards.map((v) => ({ ...v, quotes: [] })) } }
+    const t = renderText(creator(none))
+    expect(t).toContain(`the most comments counted first ${CREATOR_NONE_QUOTABLE_ALL}`)
+    expect(t).not.toContain(CREATOR_NONE_QUOTABLE)
+    expect(render(creator(none)).match(/data-none-quotable=""/g)).toHaveLength(1)
+    assertCopyContract(creator(none))
+    // A card held back among cards that print: that card says it.
+    const held = (t: string) => t.split(CREATOR_NONE_QUOTABLE).length - 1
+    const one = { ...c, evidence: { ...c.evidence, cards: c.evidence.cards.map((v, i) => (i === 0 ? { ...v, quotes: [] } : v)) } }
+    const to = renderText(creator(one))
+    expect(held(to)).toBe(held(renderText(creator(c))) + 1)
+    expect(to).not.toContain(CREATOR_NONE_QUOTABLE_ALL)
   })
 
   it('a video opened says what it does not print and closes; every video listed has no "Show more"', () => {

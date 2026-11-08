@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { CARD, EmptyBox, GoLink, SectionHead as KitSectionHead } from '@/components/v2'
+import { andList, CARD, EmptyBox, FAILED_EXPLAINED_EACH, FAILED_STATE, GoLink, SectionHead as KitSectionHead } from '@/components/v2'
 import { ROW } from '@/components/v2/look'
 import { countWord } from '@/lib/settings/search-set'
 import type { SubjectCard, WeekCard } from '@/lib/pages/v2/market'
@@ -94,8 +94,10 @@ export function subjectsNote(cards: readonly SubjectCard[]): ReactNode {
 
 /** One tracked subject's card: its name opening its page, its headline as
  *  the lead, what it means, and "Open {subject}" at its foot; no figure in
- *  any state (decision 3). */
-function SubjectCardView({ card }: { card: SubjectCard }) {
+ *  any state (decision 3). `failedOnce`: two or more cards are being
+ *  re-described and the section says why once, so this card says only its
+ *  state ("Being re-described"). */
+function SubjectCardView({ card, failedOnce = false }: { card: SubjectCard; failedOnce?: boolean }) {
   return (
     <article data-subject-card={card.state} className={cn(CARD, 'gap-2.5')}>
       <h3 className="m-0 text-[19px] leading-[1.3] font-semibold text-foreground max-sm:text-[18px]">
@@ -104,7 +106,7 @@ function SubjectCardView({ card }: { card: SubjectCard }) {
       {card.headline ? <Stored line={card.headline} slot="week_read" className="m-0 text-[16px] leading-[1.45] font-medium text-foreground" /> : null}
       {card.state === 'read' && card.body ? <Stored line={card.body} slot="week_read" className="m-0 text-[15px] leading-[1.6] text-secondary-foreground max-sm:text-[14.5px] max-sm:leading-[1.58]" /> : null}
       {card.state === 'thin' && card.body ? <Stored line={card.body} slot="week_read" className={GAPLINE} /> : null}
-      {card.note ? <p className={GAPLINE}>{card.note}</p> : null}
+      {card.note ? <p className={GAPLINE}>{card.state === 'failed' && failedOnce ? FAILED_STATE : card.note}</p> : null}
       {card.state === 'provisional' || card.state === 'failed' ? (
         <div className="mt-0.5 flex flex-col gap-0.5">
           <Label className="mb-1">Inside it</Label>
@@ -123,14 +125,20 @@ function SubjectCardView({ card }: { card: SubjectCard }) {
 }
 
 /** "What the market is talking about": one card per tracked subject, two to
- *  a row from 1180 and one below; cards in a row share a height. */
+ *  a row from 1180 and one below; cards in a row share a height. Where two or
+ *  more are being re-described, why is said once under the head, after their
+ *  names, and each of their cards says its state alone (the real-data pass,
+ *  8 Nov: Sealand's three cards printed the same sentence three times). */
 export function SubjectCardsView({ cards }: { cards: readonly SubjectCard[] }) {
+  const failed = cards.filter((c) => c.state === 'failed')
+  const failedOnce = failed.length > 1
   return (
     <>
       <SectionHead id="subjects-title" title="What the market is talking about" note={cards.length > 0 ? subjectsNote(cards) : null} />
+      {failedOnce ? <p data-subjects-failed="" className="m-0 mx-0.5 -mt-1 text-[14px] leading-[1.55] text-secondary-foreground"><span className="font-medium text-foreground">{andList(failed.map((c) => c.name))}.</span> {FAILED_EXPLAINED_EACH}</p> : null}
       <section id="subjects" aria-labelledby="subjects-title" className="grid scroll-mt-6 grid-cols-1 gap-5 min-[1180px]:grid-cols-2 max-sm:gap-3.5">
         {cards.length > 0
-          ? cards.map((c) => <SubjectCardView key={c.id} card={c} />)
+          ? cards.map((c) => <SubjectCardView key={c.id} card={c} failedOnce={failedOnce} />)
           : (
             <article data-subject-card="none" className={cn(CARD, 'min-[1180px]:col-span-2')}>
               <p className={GAPLINE}>Your subjects will appear here once they are named in Settings.</p>

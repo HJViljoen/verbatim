@@ -12,7 +12,7 @@ import {
   type BrandPage,
 } from '@/lib/pages/v2/voices-levels'
 import { cn } from '@/lib/utils'
-import { CAPS, FailedSubjectLine, Fig, LevelText } from './parts'
+import { CAPS, FailedSubjectsLine, Fig, LevelText } from './parts'
 import { AskBox, LevelQuoteTile } from './levels'
 
 // A BRAND'S PAGE, A HUB (G3-Voices-Brand; since the audit design, 7 Nov,
@@ -344,9 +344,10 @@ function Numbers({ page }: { page: BrandPage }) {
                   sentence, in the dashed box (decision 4). */}
               {page.notMeasured.length > 0 ? (page.subjects.length > 0 ? <p className={NOTE}>{notMeasuredLine(page.notMeasured)}.</p> : <EmptyBox>{notMeasuredLine(page.notMeasured)}.</EmptyBox>) : null}
               {page.subjects.length > 0 ? <p className={NOTE}>Each opens in Market.</p> : null}
-              {/* Why one being re-described shows no figure, said once on the
-                  page (14 Oct), as the root's foot and a group's page say it. */}
-              {page.notMeasured.filter((s) => s.failed).map((s) => <FailedSubjectLine key={s.id} label={s.label} />)}
+              {/* Why those being re-described show no figure, said once on
+                  the page for all of them (14 Oct; the real-data pass, 8
+                  Nov), as the root's foot and a group's page say it. */}
+              <FailedSubjectsLine labels={page.notMeasured.filter((s) => s.failed).map((s) => s.label)} />
             </>
           )}
         </Tile>

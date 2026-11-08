@@ -3,6 +3,7 @@ import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { ossurVoicesFixture, VOICES_FIXTURES } from '@/lib/pages/v2/voices-fixture'
 import { FAILED_EXPLAINED } from '@/lib/subjects/calibration-state'
+import { FAILED_EXPLAINED_EACH } from '@/components/v2'
 import { GroupCard, GroupGrid, MixCard, WhoCard } from './groups'
 import { VoicesPage } from './index'
 
@@ -219,6 +220,17 @@ describe('a tracked subject is never hidden (14 Oct)', () => {
     assertCopyContract(node)
     // None where no subject failed.
     expect(render(<WhoCard groups={d.groups} videos={d.videos} monthWords={d.monthWords} />)).not.toContain('data-subjects-failed')
+  })
+
+  it('two or more being re-described: named together, and why said once for all of them (the real-data pass, 8 Nov)', () => {
+    const two = [{ id: 's-fit', label: 'Fit & comfort' }, { id: 's-cost', label: 'Cost & access' }, { id: 's-look', label: 'Look & style' }]
+    const node = <WhoCard groups={d.groups} videos={d.videos} monthWords={d.monthWords} failed={two} />
+    const text = renderText(node)
+    expect(text.endsWith(`Clinicians and prosthetists 29 videos Fit & comfort, Cost & access and Look & style. ${FAILED_EXPLAINED_EACH}`)).toBe(true)
+    expect(text).not.toContain(FAILED_EXPLAINED)
+    expect(text.split('Being re-described').length - 1).toBe(1)
+    expect(render(node).match(/data-subject-failed/g)).toHaveLength(1)
+    assertCopyContract(node)
   })
 
   it('the whole page prints FAILED_EXPLAINED once, however many cards name the subject', () => {

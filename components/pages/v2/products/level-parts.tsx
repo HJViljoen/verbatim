@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Fragment, type ReactNode } from 'react'
-import { BTN_PRIMARY, CARD, GoLink, TickBar, toMax } from '@/components/v2'
+import { andList, BTN_PRIMARY, CARD, FAILED_EXPLAINED_EACH, FAILED_STATE, GoLink, TickBar, toMax } from '@/components/v2'
 import { ROW, TBL, TD, TD_NUM, TH } from '@/components/v2/look'
 import { fmtInt, fmtPct, longMonth } from '@/lib/format'
 import { catalogueBreak, sharePct, type Crosses, type LineBar } from '@/lib/pages/v2/products'
@@ -101,8 +101,17 @@ export function BarRows({ rows, label, rail = false, bar = 'md' }: { rows: reado
 }
 
 /** A subject not measured yet (U6): its name, then the words where its bar
- *  and count go; one being re-described says why under its name. */
-function PendingRow({ label, failed }: { label: string; failed: boolean }) {
+ *  and count go; one being re-described says why under its name, or, where
+ *  the list says why once for two or more (`failedOnce`), its state alone. */
+function PendingRow({ label, failed, failedOnce = false }: { label: string; failed: boolean; failedOnce?: boolean }) {
+  if (failed && failedOnce) {
+    return (
+      <div data-subject-failed="" className="flex flex-wrap items-baseline justify-between gap-x-3 text-[15px]">
+        <span className="min-w-0 text-foreground">{label}</span>
+        <span className="text-[13.5px] text-muted-foreground">{FAILED_STATE}</span>
+      </div>
+    )
+  }
   if (failed) {
     return (
       <div data-subject-failed="" className="flex flex-col gap-0.5 text-[15px]">
@@ -126,6 +135,7 @@ export function SubjectsBlock({ rows, crosses, n, rail = false }: { rows: readon
   const counted = rows.filter((r) => r.k > 0)
   const none = rows.filter((r) => r.k === 0)
   const pending = crosses?.pending ?? []
+  const failedRows = pending.filter((r) => r.state === 'failed')
   if (counted.length === 0 && none.length === 0 && pending.length === 0) return <p className={QUIETLINE}>No subject read for these videos yet.</p>
   return (
     <>
@@ -138,7 +148,10 @@ export function SubjectsBlock({ rows, crosses, n, rail = false }: { rows: readon
         />
       ) : null}
       {none.length > 0 ? <p className={QUIETLINE}>On none of its videos: {none.map((r) => r.label).join(', ')}.</p> : null}
-      {pending.map((r) => <PendingRow key={r.id} label={r.label} failed={r.state === 'failed'} />)}
+      {pending.map((r) => <PendingRow key={r.id} label={r.label} failed={r.state === 'failed'} failedOnce={failedRows.length > 1} />)}
+      {/* Why two or more being re-described show no figure, once for all of
+          them (the real-data pass, 8 Nov). */}
+      {failedRows.length > 1 ? <p data-subjects-failed="" className={QUIETLINE}>{andList(failedRows.map((r) => r.label))}. {FAILED_EXPLAINED_EACH}</p> : null}
       {counted.length > 0 && !rail ? <p className={QUIETLINE}>Each opens its subject in Market.</p> : null}
     </>
   )
