@@ -13,7 +13,11 @@ import { cn } from '@/lib/utils'
 // Dashboard's own chart and rules, or the dashed box where nothing can be
 // drawn, decision 4), where it is said (the period's videos by platform, a
 // table of the week beside the month). Their bases are the figures row's
-// (decision 2). No board draws "a usual week" (decision 1).
+// (decision 2), except where it is said: its platform mix sums to a count the
+// figures row does not state (the market's videos as the week reads now,
+// where the row's are as the update left them), so its heading says it
+// ("This week's 393 videos, by platform"; the real-data pass, 8 Nov). No
+// board draws "a usual week" (decision 1).
 
 /** The platforms' greys, largest first (the boards': ink, the rival grey,
  *  the pale grey), then the track. */
@@ -142,7 +146,12 @@ export function PlatformsCard({ block, data }: { block: PlatformsBlock; data: Ma
   const month = block.month
   return (
     <article id="where" className={cn(CARD, 'scroll-mt-6')}>
-      <CardHead title="Where it’s said" sub={block.basis === 'week' ? 'This week’s videos, by platform' : <>The videos in {data.month.text}, by platform</>} />
+      <CardHead
+        title="Where it’s said"
+        sub={block.basis === 'week'
+          ? <>This week’s <span data-copy="figure">{fmtInt(block.n)}</span> videos, by platform</>
+          : <>The <span data-copy="figure">{fmtInt(block.n)}</span> videos in {data.month.text}, by platform</>}
+      />
       <div>
         <ProportionBar of="videos" segments={segments} />
         {/* Each part named under it at its own width, as the board draws it;

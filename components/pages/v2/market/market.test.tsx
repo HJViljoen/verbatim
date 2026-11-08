@@ -296,8 +296,12 @@ describe('the numbers behind the week', () => {
   })
 
   it('platforms: the week\'s, or the month\'s', () => {
-    expect(tight(renderText(<PlatformsCard block={{ ...WEEK.rail.platforms!, month: null }} data={WEEK} />))).toBe('Where it’s said This week’s videos, by platform TikTok Instagram Platform Videos TikTok 128 of 241 (53%) Instagram 76 of 241 (32%) YouTube 37 of 241 (15%)')
-    expect(renderText(<PlatformsCard block={MONTH.rail.platforms!} data={MONTH} />)).toContain('The videos in October so far, by platform')
+    // The platform mix sums to a count the figures row does not state, so the
+    // heading says it (decision 2 A; the real-data pass, 8 Nov: Sealand's
+    // "This week's 393 videos" beside a figures row of 348 and 383).
+    expect(tight(renderText(<PlatformsCard block={{ ...WEEK.rail.platforms!, month: null }} data={WEEK} />))).toBe('Where it’s said This week’s 241 videos, by platform TikTok Instagram Platform Videos TikTok 128 of 241 (53%) Instagram 76 of 241 (32%) YouTube 37 of 241 (15%)')
+    expect(render(<PlatformsCard block={WEEK.rail.platforms!} data={WEEK} />)).toContain('This week’s <span data-copy="figure">241</span> videos, by platform')
+    expect(renderText(<PlatformsCard block={MONTH.rail.platforms!} data={MONTH} />)).toContain('The 318 videos in October so far, by platform')
     assertCopyContract(<PlatformsCard block={WEEK.rail.platforms!} data={WEEK} />)
   })
 

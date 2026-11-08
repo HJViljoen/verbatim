@@ -1690,7 +1690,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
     the full-width table, never a rail beside it (ruling 2; since the audit
     design the side cards' bases are the figures row's, where it is said a
     table of the week beside the month, "172 of 766 (22%)", a percentage
-    keeping its "of N", and the table's line
+    keeping its "of N", its heading stating its own base, "This week's 393
+    videos, by platform", because the platform mix sums to a count the row
+    does not state (the market's videos as the week reads now, the row's as
+    the update left them; the real-data pass, 8 Nov), and the table's line
     says where nothing new surfaced this week), the table a
     two-line list on a phone (name and videos, then subject and the month
     beside the week) with no About chips (ruling 4). *This month and Over
@@ -2007,7 +2010,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
     described them, "Not compared yet" against last month); the one-liner
     leads a tile of three facts; the subject cards, the conversations
     (`#talk`, "Not assigned"), the numbers and the comments are tiles, the
-    numbers bare counts of their videos with bars against the largest.
+    numbers bare counts of their videos with bars against the largest. A
+    subject card's videos in the market are on Market's base, the month's
+    denominators its level is read on, which need not equal the figures
+    row's (`market_month_videos`, read live; Sealand's October, 8 Nov: 1,192
+    on Market, 1,204 here): bare where the two agree, said once in the
+    section's note as "the 1,192 Market counts in October" where they
+    differ, and "108 of 318" on each card where the cards differ
+    (`subjectMarketBase`).
     *A brand's page* (G3-Voices-Brand, -Phone, -Switcher;
     `buildBrandPage`): the header card (Pass C's weightiest finding about a
     rival as its lead, "Where its talk differs · the {date} update"; named

@@ -120,6 +120,28 @@ describe('a group\'s page (G3-Voices-Group)', () => {
     expect(html).not.toContain('→')
   })
 
+  it('the cards\' market base: bare where the figures row states it, said once as Market\'s where the row counts another, on each card where the cards differ', () => {
+    // The real-data pass (8 Nov): Sealand's October is 1,192 videos on Market,
+    // the base a subject's level is read on, and 1,204 as this page reads the
+    // market (the figures row's), so a bare "204 videos in the market" read
+    // as a share of the wrong base (decision 2 A).
+    const g = groupFixture()
+    expect(text).not.toContain('Market counts in')
+    const other = { ...g, month: { ...g.month, n: 330 } }
+    const t = renderText(group(other))
+    expect(t).toContain('then every conversation they’re in . Each subject’s videos in the market are of the 318 Market counts in October so far. Each opens in Market.')
+    expect(t).toContain('Their videos 45 of the market’s 330')
+    expect(t).toContain('Socket fit changing over time 5 108 videos in the market Open Fit & comfort in Market')
+    expect(render(group(other))).toMatch(/of the <span data-copy="figure" class="tabular-nums">318<\/span> Market counts in/)
+    assertCopyContract(group(other))
+    const mixed = { ...g, cards: g.cards.map((c, i) => (i === 1 && c.market ? { ...c, market: { ...c.market, n: 300 } } : c)) }
+    const tm = renderText(group(mixed))
+    expect(tm).not.toContain('Market counts in')
+    expect(tm).toContain('108 of 318 in the market Open Fit & comfort in Market')
+    expect(render(group(mixed))).toContain('<span data-copy="level">108 of 318</span> in the market')
+    assertCopyContract(group(mixed))
+  })
+
   it('every conversation: its description, its subject, theirs of their videos, all its videos; a two-line list on a phone', () => {
     expect(text).toContain('Conversation Subject Their videos All videos in it, October so far Growing out of a socket A child’s socket stops fitting within months, and parents ask how often that is normal. Fit & comfort 12 19')
     expect(html.match(/data-phone-row=""/g)).toHaveLength(6)

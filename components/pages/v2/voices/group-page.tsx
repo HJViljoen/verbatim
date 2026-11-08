@@ -31,7 +31,8 @@ import { AskBox, GAPLINE, LevelQuoteTile } from './levels'
 //      talk (their own phrasings, each checked against a comment);
 //   3. WHAT THEY TALK ABOUT: its parts are Market's levels (board D3), the
 //      subjects their videos sit in, each a tile with the conversations
-//      inside it for them, each opening in Market; the subjects not carded
+//      inside it for them and its videos in the market (on Market's base,
+//      `subjectMarketBase`), each opening in Market; the subjects not carded
 //      and those not measured yet named; then every conversation they are in
 //      (`#talk`);
 //   4. THE NUMBERS: the brands and your products in their videos, and where
@@ -162,11 +163,25 @@ function ReadCard({ page }: { page: GroupPage }) {
   )
 }
 
+/** The base the subject cards' "videos in the market" are of, where every
+ *  card shares one: Market's own count of the month, the base each subject's
+ *  level is read on (`loadObjectReadings` over the month's denominators).
+ *  The figures row's base is the market's videos as this page reads them
+ *  (`market_month_videos`), and the two need not agree (the real-data pass,
+ *  8 Nov: Sealand's October, 1,192 on Market against 1,204 here). Null where
+ *  no card has one or the cards differ, so each card says its own. Pure. */
+export function subjectMarketBase(cards: readonly GroupSubjectCard[]): number | null {
+  const ns = new Set(cards.filter((c) => c.state === 'ready' && c.k != null && c.market).map((c) => c.market!.n))
+  return ns.size === 1 ? [...ns][0] : null
+}
+
 /** One subject their videos sit in: its name (Market's page), their videos in
  *  it (READY only), the conversations inside it for them (each a
  *  conversation's own count, never the subject's), its videos in the market,
- *  and Market's page for it. */
-function SubjectCard({ card, page }: { card: GroupSubjectCard; page: GroupPage }) {
+ *  and Market's page for it. `base`: the market base the page says once
+ *  (`subjectMarketBase`), so the card's count is bare; null and the card
+ *  says "108 of 318". */
+function SubjectCard({ card, page, base }: { card: GroupSubjectCard; page: GroupPage; base: number | null }) {
   const ready = card.state === 'ready' && card.k != null
   return (
     <article data-subject-card={card.state} className={cn(CARD, 'gap-3.5')}>
@@ -192,7 +207,11 @@ function SubjectCard({ card, page }: { card: GroupSubjectCard; page: GroupPage }
       ) : null}
       <div className="mt-auto flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-t border-track pt-3">
         <span className="text-[14px] text-muted-foreground">
-          {ready && card.market ? <><Fig>{fmtInt(card.market.k)}</Fig> videos in the market</> : card.state === 'failed' ? 'Being re-described' : card.state !== 'ready' ? 'Its check is still open' : null}
+          {ready && card.market
+            ? base === card.market.n
+              ? <><Fig>{fmtInt(card.market.k)}</Fig> videos in the market</>
+              : <><span data-copy="level">{fmtInt(card.market.k)} of {fmtInt(card.market.n)}</span> in the market</>
+            : card.state === 'failed' ? 'Being re-described' : card.state !== 'ready' ? 'Its check is still open' : null}
         </span>
         <GoLink href={card.href}>Open {card.name} in Market</GoLink>
       </div>
@@ -430,6 +449,13 @@ function Quotes({ page }: { page: GroupPage }) {
 
 /** The page's body under its title block, in the board's order. */
 export function GroupPageBody({ page }: { page: GroupPage }) {
+  // The cards' market base: the figures row's where they agree, else said
+  // once in the section's note, labelled as Market's (decision 2 A). Only a
+  // page with ready cards has one, and its note is the ready one below.
+  const base = subjectMarketBase(page.cards)
+  const marketBase = base != null && base !== page.month.n
+    ? <> Each subject’s videos in the market are of the <Fig>{fmtInt(base)}</Fig> Market counts in {page.month.monthWords}.</>
+    : null
   return (
     <>
       <Header page={page} />
@@ -441,11 +467,11 @@ export function GroupPageBody({ page }: { page: GroupPage }) {
           : page.subjectsState === 'none'
             // No subject is tracked at all: none has a check to pass.
             ? <>{GROUP_NO_SUBJECTS_SHORT}. Every conversation they’re in opens in Market.</>
-            : <>Their <Fig>{fmtInt(page.videos)}</Fig> videos in your subjects<span className="max-sm:hidden">, then every conversation they’re in</span>. Each opens in Market.</>}
+            : <>Their <Fig>{fmtInt(page.videos)}</Fig> videos in your subjects<span className="max-sm:hidden">, then every conversation they’re in</span>.{marketBase} Each opens in Market.</>}
       />
       {page.cards.length > 0 ? (
         <section aria-label="The subjects their videos sit in" className="grid grid-cols-1 gap-5 min-[1180px]:grid-cols-3">
-          {page.cards.map((c) => <SubjectCard key={c.id} card={c} page={page} />)}
+          {page.cards.map((c) => <SubjectCard key={c.id} card={c} page={page} base={base} />)}
         </section>
       ) : (
         <section aria-label="The subjects their videos sit in" data-group-subjects-none="" className={CARD}>
