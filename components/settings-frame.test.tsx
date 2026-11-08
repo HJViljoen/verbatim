@@ -141,6 +141,25 @@ describe('the readiness table, read by a client', () => {
     expect(operator).toContain('Verbatim ops')
     expect(operator).not.toContain('By ')
   })
+
+  it('says lib\'s " · " lines in commas, each row\'s line in sentence case, and "Partly" in the board\'s outlined tag (Settings-Readiness.dc.html)', () => {
+    // The operator pass (8 Nov): nine lines kept lib's middle dots, the
+    // lines under the headings were lower case, and "Partly" was grey.
+    const r = row({
+      status: 'partial', input: 'the rival accounts we read',
+      detail: 'All 1 rival you track have their accounts set · 107 posts of their own collected · 38 read so far.',
+      notes: ['Ottobock: Instagram, TikTok & YouTube · 93 posts collected · 46 in the last 30 days · 38 read'],
+      unlocks: 'Nothing to give us · each update reads their new posts.',
+    })
+    const html = render(<ReadinessTable rows={[r]} title="t" description="d" />)
+    const text = renderText(<ReadinessTable rows={[r]} title="t" description="d" />)
+    expect(text).toContain('The rival accounts we read All 1 rival you track have their accounts set, 107 posts of their own collected, 38 read so far.')
+    expect(text).toContain('Ottobock: Instagram, TikTok & YouTube, 93 posts collected, 46 in the last 30 days, 38 read')
+    expect(text).toContain('Nothing to give us, each update reads their new posts.')
+    expect(text).not.toContain('·')
+    expect(html).toMatch(/<span class="[^"]*border border-control bg-card text-foreground[^"]*">Partly<\/span>/)
+    expect(render(<ReadinessTable rows={[row()]} title="t" description="d" />)).toMatch(/<span class="[^"]*border border-control bg-card text-foreground[^"]*">In place<\/span>/)
+  })
 })
 
 describe('no context line under the title (rule 1, pages build 1 Oct)', () => {
