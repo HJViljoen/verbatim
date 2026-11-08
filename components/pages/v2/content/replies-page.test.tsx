@@ -60,6 +60,10 @@ describe('the reply list\'s page', () => {
     expect(m).toMatch(/data-under="own"[^>]*><span data-who-chip="you" data-plain="" class="[^"]*text-you[^"]*">Your post</)
     expect(m).not.toMatch(/data-under="own"[^>]*><span data-tag=/)
     expect(m.match(/<figure data-reply-comment=""/g)!.length).toBeGreaterThan(4)
+    // Every quote breaks a long unbroken run, its figure free to shrink, so
+    // a pasted link never pushes the page sideways (the operator pass, 8
+    // Nov: a 296-character Reddit link made the page 693px wide at 390).
+    expect(m).toMatch(/<figure data-reply-comment="" class="m-0 flex min-w-0 flex-col[^"]*"><blockquote class="m-0"><p data-copy="quote" class="[^"]*\[overflow-wrap:anywhere\]"/)
     expect(m).toMatch(/href="https:\/\/example\.com\/m\/1\?lc=native5" target="_blank" rel="noopener noreferrer"/)
   })
 

@@ -70,7 +70,7 @@ function Comment({ c, platform }: { c: ReplyCommentView; platform: string }) {
   const label = translationLine(note)
   const cite = listWords([platform, c.date, c.likes ? `${fmtInt(c.likes)} ${c.likes === 1 ? 'like' : 'likes'}` : null, c.reason ? `about ${c.reason.charAt(0).toLowerCase()}${c.reason.slice(1)}` : null])
   return (
-    <figure data-reply-comment="" className="m-0 flex flex-col gap-1.5 rounded-[10px] bg-inner px-[22px] py-[18px] max-sm:px-4 max-sm:py-3.5">
+    <figure data-reply-comment="" className="m-0 flex min-w-0 flex-col gap-1.5 rounded-[10px] bg-inner px-[22px] py-[18px] max-sm:px-4 max-sm:py-3.5">
       <blockquote className="m-0"><p data-copy="quote" className={cn('m-0 text-foreground', QUOTE)}>“{c.text}”</p></blockquote>
       {label ? <span className="text-[13px] text-muted-foreground">{label}</span> : null}
       {note.english ? <p data-copy="quote" className="m-0 text-[14.5px] leading-[1.5] text-foreground">{note.english}</p> : null}

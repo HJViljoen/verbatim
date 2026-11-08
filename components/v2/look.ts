@@ -125,8 +125,11 @@ export const EMPTY = 'rounded-[10px] border border-dashed border-control px-[18p
 export const INPUT =
   'h-10 rounded-[8px] border border-input-line bg-card px-3 text-[15px] text-foreground placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground max-sm:min-h-11'
 
-/** A person's own quoted words (depth pages only): the serif, leaning. */
-export const QUOTE = 'font-serif text-[16px] italic leading-[1.6]'
+/** A person's own quoted words (depth pages only): the serif, leaning. A
+ *  long unbroken run (a pasted link, a markdown image) breaks anywhere, so a
+ *  quote never pushes its page sideways (the operator pass, 8 Nov: a Reddit
+ *  comment's 296-character link made Worth a reply 693px wide at 390). */
+export const QUOTE = 'font-serif text-[16px] italic leading-[1.6] [overflow-wrap:anywhere]'
 
 /** How long each bar of a list is, 0 to 100, against the list's largest row
  *  (decision 5: the largest bar is full). An empty list, or one with nothing
