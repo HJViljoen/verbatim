@@ -84,6 +84,14 @@ function WhyStat({ cell, said }: { cell: WhyCell; said: string | null }) {
   )
 }
 
+/** "Why … is not compared"'s columns from 560px: as many as its cells (up to
+ *  three), so a lone cell's caption takes the section's width (the operator
+ *  pass, 8 Nov: one cell sat in a third and its caption was squeezed to about
+ *  150px). Pure. */
+export function whyCols(cells: number): string | null {
+  return cells >= 3 ? '@min-[560px]:grid-cols-3' : cells === 2 ? '@min-[560px]:grid-cols-2' : null
+}
+
 /** The one update every cell was read with, or null where they differ. */
 export function oneReadWith(cells: readonly Pick<WhyCell, 'readWith'>[]): string | null {
   const dates = new Set(cells.map((c) => c.readWith))
@@ -122,7 +130,10 @@ export function WhatWeChangedLead({ block, aside = null }: { block: ChangeBlock;
             // settings rail gave each cell about 60px, "376 of 625" printed
             // over "65 of 654" and the page scrolled sideways. The section's
             // own width decides (a container query): stacked below 560px.
-            <div className="grid grid-cols-1 gap-6 @min-[560px]:grid-cols-3 @min-[560px]:gap-x-8">
+            // As many columns as cells: one cell takes the section's width,
+            // its caption with it (the operator pass, 8 Nov: a lone cell sat
+            // in a third, its caption squeezed to about 150px).
+            <div className={cn('grid grid-cols-1 gap-6 @min-[560px]:gap-x-8', whyCols(why.cells.length))}>
               {why.cells.map((c) => <WhyStat key={c.key} cell={c} said={said} />)}
             </div>
           ) : !rowMeasuresPair(block.pair) ? (
@@ -132,10 +143,7 @@ export function WhatWeChangedLead({ block, aside = null }: { block: ChangeBlock;
             // refusal's sentence again (fresh design check, 26 Sep): the
             // headline above is that sentence, word for word, so printing it
             // here said the same thing twice and answered nothing.
-            <p className="m-0 flex items-start gap-2 text-[15px] leading-[1.6] text-secondary-foreground">
-              <RuleMark state="unmeasured" />
-              <span>not measured yet</span>
-            </p>
+            <p className="m-0 text-[15px] leading-[1.6] text-secondary-foreground">{RULE_STATE_WORDS.unmeasured}.</p>
           ) : (
             // MEASURED, BUT NO MEASURE FAILS (the month refused for its own
             // reason, such as not being over): the refusal in its own words.
@@ -207,21 +215,7 @@ const LEFT: Record<1 | 2, string> = {
   2: '@min-[560px]/rec:grid-cols-[76px_minmax(0,1fr)_104px_104px]',
 }
 
-/** The preview's mark before a change's date: a change of ours made. */
-function ChangeMark() {
-  return <svg width="9" height="8" viewBox="0 0 9 8" aria-hidden="true" className="shrink-0 text-foreground"><path d="M4.5 0 9 7.5H0z" fill="currentColor" /></svg>
-}
-
-/** The ⊘ before a comparison a change stops. */
-function StopMark() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="mt-[4px] shrink-0 text-muted-foreground">
-      <circle cx="12" cy="12" r="9" /><path d="M5.6 5.6l12.8 12.8" />
-    </svg>
-  )
-}
-
-/** What a change stops, each comparison on its own line with the ⊘; "none"
+/** What a change stops, each comparison on its own line, a bullet; "none"
  *  (and why, where a reader would ask) where it stops none; and under a stop
  *  for themes alone, the category count that stops it. */
 function Stops({ stops, noneNote, note = null }: { stops: readonly string[]; noneNote: string | null; note?: { line: string; text: string } | null }) {
@@ -237,13 +231,11 @@ function Stops({ stops, noneNote, note = null }: { stops: readonly string[]; non
     <span className="flex flex-col gap-1">
       {stops.map((s) => (
         <span key={s} className="flex flex-col gap-0.5">
-          <span className="flex items-start gap-2 text-[15px] leading-[22px] [text-wrap:pretty]">
-            <StopMark />
-            <span className="sr-only">Stops </span>
-            <span>{s}</span>
-          </span>
+          {/* A bulleted list, as Settings-Record.dc.html draws "Together,
+              these stop", never a ⊘ (the operator pass, 8 Nov). */}
+          <span className="ml-[18px] list-item list-disc text-[15px] leading-[22px] [text-wrap:pretty]"><span className="sr-only">Stops </span>{s}</span>
           {/* The category count that stops it, under its own line. */}
-          {note && note.line === s ? <span data-copy="level" className="pl-[22px] text-[13px] leading-[1.45] text-muted-foreground [text-wrap:pretty]">{note.text}</span> : null}
+          {note && note.line === s ? <span data-copy="level" className="pl-[18px] text-[13px] leading-[1.45] text-muted-foreground [text-wrap:pretty]">{note.text}</span> : null}
         </span>
       ))}
     </span>
@@ -275,8 +267,9 @@ function MonthCell({ cell, readWith, caption = null }: { cell: RecordCell; readW
 function LineHead({ line }: { line: Line }) {
   return (
     <>
-      <span role="cell" className="flex min-h-[22px] items-center gap-2">
-        <ChangeMark />
+      {/* The date alone, as Settings-Record.dc.html writes it (the operator
+          pass, 8 Nov: the preview's ▲ before every date is gone). */}
+      <span role="cell" className="flex min-h-[22px] items-center">
         <span className="text-[15px] font-medium leading-[22px] tabular-nums text-foreground">{shortDate(line.date)}</span>
       </span>
       <span role="cell" className="flex min-w-0 flex-col gap-1 @min-[760px]/rec:pr-4">
@@ -390,16 +383,10 @@ export function TheRecord({ view }: { view: RecordView }) {
   )
 }
 
-/** The rule's mark: the preview's ⊘ where it does not hold, a tick where it
- *  does, an open ring where it is not measured yet. */
-function RuleMark({ state }: { state: CompareRule['state'] }) {
-  const common = { width: 14, height: 14, viewBox: '0 0 24 24', fill: 'none', strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, 'aria-hidden': true }
-  if (state === 'held') return <svg {...common} stroke="currentColor" className="mt-[4px] shrink-0 text-positive"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
-  if (state === 'not_held') return <svg {...common} stroke="currentColor" className="mt-[4px] shrink-0 text-muted-foreground"><circle cx="12" cy="12" r="9" /><path d="M5.6 5.6l12.8 12.8" /></svg>
-  return <svg {...common} stroke="currentColor" className="mt-[4px] shrink-0 text-muted-foreground"><circle cx="12" cy="12" r="5" /></svg>
-}
-
-const STATE_WORDS: Record<CompareRule['state'], string> = { held: 'holds', not_held: 'does not hold', unmeasured: 'not measured yet' }
+/** The rule's state in words, as Settings-Record.dc.html writes it ("Holds:",
+ *  "Does not hold:"), never an icon (the operator pass, 8 Nov: a tick, a ⊘
+ *  and a ring stood where the board writes the words). */
+export const RULE_STATE_WORDS: Record<CompareRule['state'], string> = { held: 'Holds', not_held: 'Does not hold', unmeasured: 'Not measured yet' }
 
 export function WhenCompared({ rules, block, asAt }: { rules: readonly CompareRule[]; block: ChangeBlock; asAt: string | null }) {
   const pair = block.pair
@@ -419,9 +406,8 @@ export function WhenCompared({ rules, block, asAt }: { rules: readonly CompareRu
             <span role="cell" className="text-[15px] font-semibold leading-[1.55] tabular-nums text-muted-foreground">{fmtInt(r.n)}</span>
             <span role="cell" className="text-[15px] leading-[1.55] [text-wrap:pretty]">{r.rule}</span>
             {pair ? (
-              <span role="cell" className="col-start-2 flex items-start gap-2 text-[15px] leading-[1.5] lg:col-start-auto">
-                <RuleMark state={r.state} />
-                <span className="sr-only">{STATE_WORDS[r.state]}: </span>
+              <span role="cell" data-rule-state={r.state} className={cn('col-start-2 text-[15px] leading-[1.5] lg:col-start-auto', r.state === 'not_held' ? '-mx-2 rounded-[6px] bg-inner px-2' : null)}>
+                <span className="font-semibold">{RULE_STATE_WORDS[r.state]}:</span>{' '}
                 {r.counts ? (
                   // Inline, so ", for themes" breaks after its comma in the
                   // narrower column beside the timeline, never before it.

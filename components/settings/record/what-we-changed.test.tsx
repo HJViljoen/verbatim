@@ -4,7 +4,7 @@ import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { WHAT_WE_CHANGED_HREF } from '@/components/pages/overview/change'
 
-import { TheRecord, WHAT_WE_CHANGED_ID, WhatWeChangedLead, WhenCompared } from './what-we-changed'
+import { TheRecord, WHAT_WE_CHANGED_ID, WhatWeChangedLead, WhenCompared, whyCols } from './what-we-changed'
 import { recordFixture, whatWeChangedFixture } from './fixture'
 
 // Settings › What we changed (market-first WP1.6, plan §2.10 D2): the three
@@ -46,11 +46,25 @@ describe('What we changed', () => {
     // Three cells, not the one sentence the front page prints.
     expect(t).not.toContain('Not a change we can stand behind yet')
     expect((render(lead).match(/data-copy="level"/g) ?? []).length).toBe(2)
+    // Three cells, three columns; as many columns as cells, so a lone cell's
+    // caption takes the section's width (the operator pass, 8 Nov).
+    expect(render(lead)).toContain('@min-[560px]:grid-cols-3')
+  })
+
+  it('a lone cell takes the section\'s width, its caption with it; a date stands alone, with no mark before it', () => {
+    expect(whyCols(1)).toBeNull()
+    expect(whyCols(2)).toBe('@min-[560px]:grid-cols-2')
+    expect(whyCols(3)).toBe('@min-[560px]:grid-cols-3')
+    const list = render(<TheRecord view={recordFixture().view} />)
+    expect(list).not.toContain('<svg width="9"')
+    // What a change stops: a bulleted list, as the board draws it, no ⊘.
+    expect(list).not.toContain('M5.6 5.6l12.8 12.8')
+    expect(list).toContain('list-item list-disc')
   })
 
   it('without a measured row (MF1 not applied) says the figures are not measured yet, never a zero, and does not repeat the headline', () => {
     const t = read(<WhatWeChangedLead block={whatWeChangedFixture({ measured: false }).block} />)
-    expect(t).toContain('Why September is not compared not measured yet')
+    expect(t).toContain('Why September is not compared Not measured yet.')
     // The headline says the refusal; the section under it does not say it again.
     expect(t.match(/not read as a change: we changed our searches in September/gi) ?? []).toHaveLength(1)
     expect(t).not.toMatch(/\b0 of\b/)
@@ -213,12 +227,17 @@ describe('When two months are compared', () => {
     expect(t).toContain('August against September, as at 27 Sep')
     expect(t).toContain('September has ended and was read past it')
     // Rule 2 keeps the strict count in its own words, on the category (the 26 Sep ruling), never the added-only figure.
-    expect(t).toContain('does not hold: 376 of 625')
+    // The state in words, as Settings-Record.dc.html writes it, never an
+    // icon (the operator pass, 8 Nov).
+    expect(t).toContain('Does not hold: 376 of 625')
     expect(t).not.toContain('356')
     // Rule 3: held for the market (65 of 654), not for themes, grouped in the
     // category (64 of 625), as the record's gate line says (the artboard's
     // "63 of 626, for themes").
-    expect(t).toContain('does not hold: 64 of 625, for themes')
+    expect(t).toContain('Does not hold: 64 of 625, for themes')
+    expect(t).toContain('Holds:')
+    expect(render(rules)).not.toMatch(/<svg/)
+    expect(render(rules)).not.toContain('sr-only')
     expect(t).toContain('15 against 23')
     assertCopyContract(render(rules))
   })

@@ -12,6 +12,7 @@ import { monthStartOf } from '@/lib/reading/month-key'
 import { CoverageBlock } from '@/components/settings/record/coverage'
 import { DeliveryBlock } from '@/components/settings/record/delivery'
 import { ScopeStatement } from '@/components/settings/record/header'
+import { commaCite } from '@/components/v2/words'
 import { RejectLogBlock } from '@/components/settings/record/rejects'
 import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { fullDate, longMonth, monthName, shortDate } from '@/lib/format'
@@ -330,8 +331,10 @@ function scopeStatement(tenant: string, lines: readonly string[], readingAt: str
   return [
     `${tenant}: what this reading covers, as at ${fullDate(readingAt)}.`,
     '',
-    // One line each, with no middle-dot bullet (the audit design).
-    ...lines,
+    // One line each, with no middle-dot bullet (the audit design), and lib's
+    // " · " joins said in commas (the platform mix, `platformMixLine`; the
+    // operator pass, 8 Nov), as T11.4 says the record's other lib words.
+    ...lines.map(commaCite),
     '',
     'Every figure is a share of what we read, not of everything said. We read public comment on the videos our search terms find, plus the accounts you and your rivals post from where those are configured. A month is dated by the day a comment was written, not by the day we read it.',
   ].join('\n')
