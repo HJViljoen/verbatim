@@ -64,12 +64,14 @@ const r1 = (v: number): number => Math.round(v * 10) / 10
 // The audit design (7 Nov): every text at least 12 user units, which is 12px
 // wherever a drawing is shown at its own width or wider (brief §3: no text
 // under 12px), in the page's sans with tabular figures (no mono on screens,
-// decision 9).
+// decision 9). `half` is shown at about 477 of its 480 in a subject's tile at
+// 1440, so its smallest text is a size up to stay at 12px there (the
+// real-data pass, 8 Nov, measured 11.9).
 const GEOMETRY = {
   sm: { W: 200, H: 84, top: 14, base: 66, bar: 0.54, value: 12, axis: 12, sub: 12 },
   md: { W: 300, H: 140, top: 22, base: 104, bar: 0.64, value: 12.5, axis: 12, sub: 12 },
   lg: { W: 560, H: 160, top: 24, base: 124, bar: 0.57, value: 13, axis: 12.5, sub: 12 },
-  half: { W: 480, H: 160, top: 24, base: 124, bar: 0.57, value: 13, axis: 12.5, sub: 12 },
+  half: { W: 480, H: 160, top: 24, base: 124, bar: 0.57, value: 13, axis: 12.5, sub: 12.5 },
 } as const
 
 export function MiniBars({ bars, highlight = 'last', size = 'sm', label, className, tone = 'market' }: MiniBarsProps) {

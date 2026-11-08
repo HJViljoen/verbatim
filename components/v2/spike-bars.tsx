@@ -65,15 +65,17 @@ const r1 = (v: number): number => Math.round(v * 10) / 10
 // The audit design (7 Nov): every text at least 12 user units, which is 12px
 // wherever a drawing is shown at its own width or wider (brief §3: no text
 // under 12px), in the page's sans with tabular figures (no mono on screens,
-// decision 9).
+// decision 9). A drawing shown a little under its width at 1440 takes its
+// text a size up, so it stays at 12px there (the real-data pass, 8 Nov,
+// measured 11.5 and 11.9): `md` in a third-width card is about 294 of its
+// 300, `wide` in a half-width tile 477 of its 520, `rail` in a
+// conversation's facts 288 of its 300.
 const GEOMETRY: Record<NonNullable<SpikeBarsProps['size']>, { W: number; H: number; BASE: number; TOP: number; small: number; big: number; axis?: number }> = {
   lg: { W: 480, H: 132, BASE: 110, TOP: 14, small: 12, big: 13 },
-  md: { W: 300, H: 112, BASE: 92, TOP: 16, small: 12, big: 12 },
+  md: { W: 300, H: 112, BASE: 92, TOP: 16, small: 12.5, big: 12.5 },
   // F3: counts over every bar, the axis beside them, as drawn.
-  // Drawn a little under its width in a half-width tile at 1440 (about 490
-  // of its 520), so its text is a size up to stay at 12px there.
-  wide: { W: 520, H: 150, BASE: 134, TOP: 14, small: 13, big: 13, axis: 13 },
-  rail: { W: 300, H: 86, BASE: 70, TOP: 14, small: 12, big: 12, axis: 12 },
+  wide: { W: 520, H: 150, BASE: 134, TOP: 14, small: 13.5, big: 13.5, axis: 13.5 },
+  rail: { W: 300, H: 86, BASE: 70, TOP: 14, small: 13, big: 13, axis: 13 },
   xs: { W: 136, H: 58, BASE: 42, TOP: 14, small: 12, big: 12, axis: 12 },
   phone: { W: 300, H: 150, BASE: 134, TOP: 14, small: 12.5, big: 12.5, axis: 12 },
 }

@@ -47,6 +47,20 @@ describe('SpikeBars', () => {
     assertCopyContract(<SpikeBars weeks={VOLUME_WEEKS} variant="ink" counts="all" size="md" label="Videos a week" />)
   })
 
+  it('keeps every text at 12px where it is drawn at 1440, a size up where it is drawn under its width', () => {
+    // The real-data pass (8 Nov) measured 11.5px on a conversation's facts
+    // (rail, 288 of its 300) and 11.9px on a subject's tile (wide, 477 of its
+    // 520); a third-width card draws md at about 294 of its 300.
+    const sizes = (m: string) => [...m.matchAll(/<text [^>]*font-size="([\d.]+)"/g)].map((x) => Number(x[1]))
+    for (const [size, drawn, W] of [['md', 294, 300], ['wide', 477, 520], ['rail', 288, 300]] as const) {
+      const m = render(<SpikeBars weeks={VOLUME_WEEKS} counts="all" size={size} highlightLast={false} label="x" />)
+      expect(m).toContain(`viewBox="0 0 ${W} `)
+      const all = sizes(m)
+      expect(all.length).toBeGreaterThan(0)
+      for (const fs of all) expect(fs * (drawn / W), `${size} ${fs}`).toBeGreaterThanOrEqual(12)
+    }
+  })
+
   it('draws nothing with no weeks', () => {
     expect(render(<SpikeBars weeks={[]} label="x" />)).toBe('')
   })

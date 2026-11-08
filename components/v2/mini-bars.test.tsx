@@ -29,6 +29,15 @@ describe('MiniBars', () => {
     assertCopyContract(<MiniBars bars={LINER_MONTHS} size="md" label="x" />)
   })
 
+  it('keeps every text at 12px in a subject\'s tile at 1440, where `half` is drawn at about 477 of its 480', () => {
+    // The real-data pass (8 Nov) measured its "252 of 1,192" at 11.9px.
+    const m = render(<MiniBars bars={MONTHS} size="half" label="x" />)
+    expect(m).toContain('viewBox="0 0 480 160"')
+    const all = [...m.matchAll(/<text [^>]*font-size="([\d.]+)"/g)].map((x) => Number(x[1]))
+    expect(all.length).toBeGreaterThan(0)
+    for (const fs of all) expect(fs * (477 / 480)).toBeGreaterThanOrEqual(12)
+  })
+
   it('fails the contract when a sub is not a level, which is what marking it is for', () => {
     const bad = [{ label: 'Oct', value: 3, sub: 'three a week' }]
     expect(copyViolations(<MiniBars bars={bad} label="x" />).map((v) => v.rule)).toEqual(['level-denominator'])
