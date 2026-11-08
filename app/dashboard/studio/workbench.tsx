@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { canManageTenant, type SessionContext } from '@/lib/auth'
-import { isMissingPublishColumns, publishedNotEmailed, PUBLISHED_NOT_EMAILED } from '@/lib/schedules/platform-state'
+import { isMissingPublishColumns, onPlatform, publishedNotEmailed, PUBLISHED_NOT_EMAILED } from '@/lib/schedules/platform-state'
 import type { ReactNode } from 'react'
 import { Card } from '@/components/pages/studio/ui'
 import { GO, ROW, STACK, STACK_CELL, STACK_HEAD, STACK_ROW, TBL, TD, TH } from '@/components/v2/look'
@@ -55,7 +55,7 @@ const fmtBytes = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}
 
 interface Report { id: string; kind: ReportKind; template_key: string | null; title: string; audience: string; cover: CoverSpec; status: 'draft' | 'built'; sections: ReportSection[]; latest_snapshot_id: string | null; updated_at: string }
 interface BuildRow { id: string; title: string; created_at: string; cover: CoverText | null; figures: FigureTable | null; artifacts: { id: string; format: string; bytes: number; stale: boolean; rendered_at: string; version: number }[] }
-interface SendRow { id: string; schedule_id: string | null; status: string; subject: string | null; recipients: string[]; sent_at: string | null; claimed_at: string; error: string | null; ready_at: string | null; approved_by: string | null; snapshot_id: string | null; published_at?: string | null }
+export interface SendRow { id: string; schedule_id: string | null; status: string; subject: string | null; recipients: string[]; sent_at: string | null; claimed_at: string; error: string | null; ready_at: string | null; approved_by: string | null; snapshot_id: string | null; published_at?: string | null }
 
 const SEND_COLS = 'id, schedule_id, status, subject, recipients, sent_at, claimed_at, error, ready_at, approved_by, snapshot_id'
 
@@ -79,7 +79,7 @@ function sendRow(s: SendRow, nameOf: ReadonlyMap<string, string>): { outcome: st
 
 /** The schedule's sends as the board's table: the issue (its page where it
  *  went out), what happened, when. */
-function SendsTable({ history, nameOf }: { history: SendRow[]; nameOf: ReadonlyMap<string, string> }) {
+export function SendsTable({ history, nameOf }: { history: SendRow[]; nameOf: ReadonlyMap<string, string> }) {
   return (
     <div>
       <h4 className="m-0 mb-1.5 text-[16px] font-semibold">Sends</h4>
@@ -97,10 +97,14 @@ function SendsTable({ history, nameOf }: { history: SendRow[]; nameOf: ReadonlyM
             return (
               <tr key={s.id} className={STACK_ROW}>
                 <td className={cn(TD, STACK_CELL)}>
-                  {/* A ready send has no archive page yet: Reports lists what went out. */}
-                  {s.status === 'ready'
-                    ? <span className="font-semibold">{s.subject ?? 'Update'}</span>
-                    : <Link href={`/dashboard/studio?group=sent&item=${s.id}`} className={ROW}>{s.subject ?? 'Update'}</Link>}
+                  {/* Only an issue on the platform (sent, or put there without
+                      its email) opens at `?group=sent&item=`; a ready, skipped,
+                      failed or claimed send has nothing there, so it is plain
+                      text (the operator pass, 8 Nov: main linked them too, to
+                      the same address, which opened nothing). */}
+                  {onPlatform(s)
+                    ? <Link href={`/dashboard/studio?group=sent&item=${s.id}`} className={ROW}>{s.subject ?? 'Update'}</Link>
+                    : <span className="font-semibold">{s.subject ?? 'Update'}</span>}
                 </td>
                 <td className={cn(TD, STACK_CELL, s.status === 'sent' ? '' : 'text-muted-foreground')}>{row.outcome}</td>
                 <td className={cn(TD, STACK_CELL, 'pr-0 tabular-nums')}>{row.when}</td>
