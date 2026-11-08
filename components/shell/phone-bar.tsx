@@ -10,7 +10,9 @@ import { useSidebar } from "@/components/ui/sidebar"
  * Below 768 the sidebar is a drawer (`components/ui/sidebar.tsx` renders it
  * as a Sheet under `useIsMobile`), and this bar stands where it stood: white,
  * a hairline under it, the wordmark and the workspace's name on the left and
- * the menu button on the right, 14px by 16px of padding round a 40px button.
+ * the menu button on the right, 12px by 16px of padding round a 44px button
+ * (44px to tap, the standing rule; the real-data pass, 8 Nov, measured 40;
+ * the bar keeps its 68px).
  * It sits above `<main>` in the pane, outside the scroll, so it stays put while
  * the page scrolls under it. From 768 up it is not drawn and the sidebar is.
  *
@@ -28,7 +30,7 @@ export function PhoneTopBar({ brand }: { brand: ReactNode }) {
   return (
     <header
       data-phone-bar=""
-      className="relative z-20 flex shrink-0 items-center justify-between gap-3 border-b border-[#E4E2DC] bg-white px-4 py-3.5 md:hidden print:hidden"
+      className="relative z-20 flex shrink-0 items-center justify-between gap-3 border-b border-[#E4E2DC] bg-white px-4 py-3 md:hidden print:hidden"
     >
       <div className="min-w-0">{brand}</div>
       <button
@@ -36,7 +38,7 @@ export function PhoneTopBar({ brand }: { brand: ReactNode }) {
         aria-label="Open navigation"
         aria-expanded={openMobile}
         onClick={() => setOpenMobile(true)}
-        className="flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-[#F7F6F2] text-foreground transition-colors hover:bg-track focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-[#F7F6F2] text-foreground transition-colors hover:bg-track focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <Menu className="size-[18px]" strokeWidth={2} aria-hidden />
       </button>

@@ -18,31 +18,45 @@
 /** A label: sentence case, never uppercase, never an orange eyebrow. */
 export const LBL = 'text-[13px] font-semibold leading-[1.3] text-secondary-foreground'
 
+/** 44px TO TAP ON A PHONE (the standing rule; the real-data pass, 8 Nov,
+ *  measured links at 20 to 23px, buttons at 40, chips at 34). Below 640 a
+ *  text link (`GO`, `ROW`, which carry these classes written out) gets an
+ *  invisible box 44px tall centred on it, so no line moves and the desktop is
+ *  unchanged; a button or a chip (`BTN_*`, `CHIP`) is at least 44px tall
+ *  (`max-sm:min-h-11`, so a page's own height still holds from 640). An
+ *  inline link inside running text is exempt from the rule; the box does it
+ *  no harm. For a link drawn by hand, combine with `cn`. */
+export const TAP =
+  'max-sm:relative max-sm:before:absolute max-sm:before:inset-x-0 max-sm:before:top-1/2 max-sm:before:h-11 max-sm:before:-translate-y-1/2'
+
 /** A link that says where it goes, with no arrow: ink, underlined in the
- *  control grey, the underline turning ink on hover. */
+ *  control grey, the underline turning ink on hover; 44px to tap on a phone
+ *  (`TAP`). */
 export const GO =
-  'text-[14px] font-medium text-foreground underline decoration-control underline-offset-4 transition-colors hover:decoration-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground'
+  'text-[14px] font-medium text-foreground underline decoration-control underline-offset-4 transition-colors hover:decoration-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground max-sm:relative max-sm:before:absolute max-sm:before:inset-x-0 max-sm:before:top-1/2 max-sm:before:h-11 max-sm:before:-translate-y-1/2'
 
 /** A row's or a card's title that opens a page: ink at 600, no underline at
- *  rest, the link's underline on hover. */
+ *  rest, the link's underline on hover; 44px to tap on a phone (`TAP`). */
 export const ROW =
-  'font-semibold text-foreground no-underline decoration-control underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground'
+  'font-semibold text-foreground no-underline decoration-control underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground max-sm:relative max-sm:before:absolute max-sm:before:inset-x-0 max-sm:before:top-1/2 max-sm:before:h-11 max-sm:before:-translate-y-1/2'
 
 /** A filter chip, and the chosen one (combine: `cn(CHIP, CHIP_ON)`). */
 export const CHIP =
-  'inline-flex h-[34px] cursor-pointer items-center whitespace-nowrap rounded-[8px] border border-border bg-card px-3 text-[14px] text-foreground transition-colors hover:bg-inner focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground'
+  'inline-flex h-[34px] cursor-pointer items-center whitespace-nowrap rounded-[8px] border border-border bg-card px-3 text-[14px] text-foreground transition-colors hover:bg-inner focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground max-sm:min-h-11'
 export const CHIP_ON = 'border-transparent bg-accent font-semibold hover:bg-accent'
 
 /** The primary button: the brand yellow with ink words (decision 8; the
- *  `--primary` token stays ink for print and the login button). */
+ *  `--primary` token stays ink for print and the login button). 40px, and
+ *  44px on a phone (`TAP`'s rule). */
 export const BTN_PRIMARY =
-  'inline-flex h-10 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-[8px] bg-brand px-[18px] text-[14px] font-semibold text-brand-foreground transition-colors hover:bg-brand/85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground disabled:cursor-not-allowed disabled:opacity-50'
+  'inline-flex h-10 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-[8px] bg-brand px-[18px] text-[14px] font-semibold text-brand-foreground transition-colors hover:bg-brand/85 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground disabled:cursor-not-allowed disabled:opacity-50 max-sm:min-h-11'
 
 /** The secondary button: the same box, white with the control grey's edge. */
 export const BTN_SECONDARY =
-  'inline-flex h-10 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-[8px] border border-control bg-card px-[18px] text-[14px] font-semibold text-foreground transition-colors hover:bg-inner focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground disabled:cursor-not-allowed disabled:opacity-50'
+  'inline-flex h-10 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-[8px] border border-control bg-card px-[18px] text-[14px] font-semibold text-foreground transition-colors hover:bg-inner focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground disabled:cursor-not-allowed disabled:opacity-50 max-sm:min-h-11'
 
-/** The small size of either button (combine: `cn(BTN_SECONDARY, BTN_SM)`). */
+/** The small size of either button (combine: `cn(BTN_SECONDARY, BTN_SM)`);
+ *  44px on a phone like the others. */
 export const BTN_SM = 'h-9 px-3.5'
 
 /** A tag: a short, single-line word on a tone. */

@@ -87,7 +87,7 @@ function Entry({ item, dim, onKeyDown }: { item: CrumbItem; dim?: boolean; onKey
       data-menu-item=""
       onKeyDown={onKeyDown}
       className={cn(
-        'flex min-h-[38px] items-center gap-2 rounded-[6px] px-2.5 py-[9px] text-[14px] leading-[1.3] text-foreground no-underline outline-none transition-colors hover:bg-inner focus-visible:bg-inner focus-visible:ring-2 focus-visible:ring-ring',
+        'flex min-h-[38px] items-center gap-2 rounded-[6px] px-2.5 py-[9px] text-[14px] leading-[1.3] text-foreground no-underline outline-none transition-colors hover:bg-inner focus-visible:bg-inner focus-visible:ring-2 focus-visible:ring-ring max-sm:min-h-11',
         item.current ? 'bg-accent font-semibold hover:bg-accent focus-visible:bg-accent' : null,
       )}
     >
@@ -183,8 +183,10 @@ export function Switcher({ menu, defaultOpen = false, className }: {
         onKeyDown={onButtonKey}
         className={cn(
           // 22px drawn, 44px to tap on a phone (the review of 7 Nov): the
-          // hit area grows past the box by 11px each way, not the layout.
-          'relative inline-flex size-[22px] shrink-0 cursor-pointer items-center justify-center rounded-[8px] border border-border bg-card text-muted-foreground transition-colors hover:bg-inner hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-sm:before:absolute max-sm:before:-inset-[11px]',
+          // hit area grows past the box, not the layout, by 12px each way,
+          // since it grows from the 20px inside the 1px border (11 made 42;
+          // the real-data pass, 8 Nov).
+          'relative inline-flex size-[22px] shrink-0 cursor-pointer items-center justify-center rounded-[8px] border border-border bg-card text-muted-foreground transition-colors hover:bg-inner hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-sm:before:absolute max-sm:before:-inset-[12px]',
           open ? 'bg-track text-foreground' : null,
           className,
         )}

@@ -29,7 +29,7 @@ describe('the crumb row', () => {
     expect(html).toMatch(/<span aria-hidden="true" class="[^"]*text-\[17px\][^"]*font-light text-muted-foreground\/45">\/<\/span>/)
     expect(html).toMatch(/<span aria-current="page" class="[^"]*font-medium text-foreground">Fit &amp; comfort<\/span>/)
     expect(html.match(/aria-haspopup="menu"/g)).toHaveLength(1)
-    expect(html).toMatch(/aria-label="Switch to another subject"[^>]*class="[^"]*size-\[22px\][^"]*max-sm:before:-inset-\[11px\]/)
+    expect(html).toMatch(/aria-label="Switch to another subject"[^>]*class="[^"]*size-\[22px\][^"]*max-sm:before:-inset-\[12px\]/)
     // The page's h1 is the title block's, never the row's.
     expect(html).not.toContain('<h1')
     assertCopyContract(<CrumbRow crumbs={subject.crumbs!} />)

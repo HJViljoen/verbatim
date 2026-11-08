@@ -41,7 +41,9 @@ type NavItem = { href: string; label: string; icon: LucideIcon }
 // text is left on a screen; a hover is the ink at 7%. NO LEFT BAR (the stripe
 // ban; page review §4).
 const ROW_CLASS =
-  "h-10 gap-3.5 rounded-[8px] px-3 text-[15px] font-normal text-foreground [&_svg]:size-[19px] " +
+  // 44px in the phone's Sheet (below 768, `useIsMobile`), the standing tap
+  // rule (the real-data pass, 8 Nov, measured 40); 40 on the desk.
+  "h-10 gap-3.5 rounded-[8px] px-3 text-[15px] font-normal text-foreground [&_svg]:size-[19px] max-md:h-11 " +
   "hover:bg-sidebar-accent hover:text-foreground " +
   // `data-active` is on EVERY row ("true" or "false"), so the primitive's own
   // `data-active:` grey and medium weight would reach the inactive rows too.

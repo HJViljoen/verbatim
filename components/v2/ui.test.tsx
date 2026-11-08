@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { EmptyBox, GoLink, Label, SectionHead, StatStrip, Tag } from './ui'
-import { BTN_PRIMARY, BTN_SECONDARY, EMPTY, GO, LBL, TAG_TONE, toMax, toMaxAtLeast } from './look'
+import { BTN_PRIMARY, BTN_SECONDARY, CHIP, EMPTY, GO, LBL, ROW, TAG_TONE, TAP, toMax, toMaxAtLeast } from './look'
 import * as barrel from './index'
 
 // The audit design's building blocks (7 Nov): one render each, to the boards
@@ -119,6 +119,15 @@ describe('Label, GoLink and Tag', () => {
     expect(GO).toContain('decoration-control underline-offset-4')
     expect(GO).toContain('hover:decoration-foreground')
     expect(GO).toContain('focus-visible:outline-2')
+    // 44px to tap on a phone, the line unmoved: an invisible box centred on
+    // the link below 640 (the real-data pass, 8 Nov, measured 20px), the
+    // same box a list row's title gets.
+    for (const c of TAP.split(' ')) {
+      expect(GO.split(' ')).toContain(c)
+      expect(ROW.split(' ')).toContain(c)
+    }
+    expect(TAP).toContain('max-sm:before:h-11')
+    expect(TAP.split(' ').every((c) => c.startsWith('max-sm:'))).toBe(true)
     expect(m).not.toMatch(/[→↗↓]/)
     assertCopyContract(node)
   })
@@ -145,6 +154,10 @@ describe('the look', () => {
     expect(BTN_PRIMARY).not.toContain('bg-primary')
     expect(BTN_SECONDARY).toContain('border-control bg-card')
     expect(EMPTY).toContain('border-dashed border-control')
+    // 40px on the desk, at least 44px to tap on a phone (the real-data pass,
+    // 8 Nov); a chip 34px, then 44. A page's own height still holds from 640.
+    for (const c of [BTN_PRIMARY, BTN_SECONDARY]) expect(c.split(' ')).toEqual(expect.arrayContaining(['h-10', 'max-sm:min-h-11']))
+    expect(CHIP.split(' ')).toEqual(expect.arrayContaining(['h-[34px]', 'max-sm:min-h-11']))
   })
 
   it('is import-free, so a client component may take its styles from it', () => {

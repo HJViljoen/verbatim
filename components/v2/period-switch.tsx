@@ -12,7 +12,8 @@ import { cn } from '@/lib/utils'
  * client JS.
  *
  * The audit design's segmented control (7 Nov; Market-After.dc.html): a white
- * group on a 1px hairline, radius 10 and 4px of padding, 36px items at 14.5px;
+ * group on a 1px hairline, radius 10 and 4px of padding, 36px items at 14.5px
+ * (44px to tap on a phone, as `SEG_ITEM`; the real-data pass, 8 Nov);
  * the selected segment is the pale yellow with ink and weight (MASTER §Colour
  * roles: a selected state) and carries `aria-current="page"`. The Settings
  * tabs draw the same control. The month option names its month
@@ -74,7 +75,7 @@ export function PeriodSwitch<V extends string = Period>({ value, options, hrefFo
               key={o.value}
               aria-disabled="true"
               title={o.disabled}
-              className="inline-flex h-9 cursor-default items-center whitespace-nowrap rounded-[7px] px-3.5 text-[14.5px] leading-[1.2] text-muted-foreground/70"
+              className="inline-flex h-9 cursor-default items-center whitespace-nowrap rounded-[7px] px-3.5 text-[14.5px] leading-[1.2] text-muted-foreground/70 max-sm:h-11"
             >
               {o.label}<span className="sr-only"> ({o.disabled})</span>
             </span>
@@ -86,7 +87,7 @@ export function PeriodSwitch<V extends string = Period>({ value, options, hrefFo
             href={hrefFor(o.value)}
             aria-current={on ? 'page' : undefined}
             className={cn(
-              'inline-flex h-9 cursor-pointer items-center whitespace-nowrap rounded-[7px] px-3.5 text-[14.5px] leading-[1.2] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground',
+              'inline-flex h-9 cursor-pointer items-center whitespace-nowrap rounded-[7px] px-3.5 text-[14.5px] leading-[1.2] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground max-sm:h-11',
               on ? 'bg-accent font-semibold text-accent-foreground' : 'text-foreground hover:bg-inner',
             )}
           >

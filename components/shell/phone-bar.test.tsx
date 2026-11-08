@@ -19,13 +19,17 @@ describe('PhoneTopBar', () => {
   it('is a white bar with a hairline under it, drawn only below 768 and never on paper', () => {
     const m = bar()
     expect(m).toMatch(/<header data-phone-bar="" class="[^"]*"/)
-    for (const c of ['md:hidden', 'print:hidden', 'bg-white', 'border-b', 'border-[#E4E2DC]', 'px-4', 'py-3.5']) expect(m).toContain(c)
+    for (const c of ['md:hidden', 'print:hidden', 'bg-white', 'border-b', 'border-[#E4E2DC]', 'px-4', 'py-3']) expect(m).toContain(c)
+    // 12px of padding round a 44px button keeps the bar at 68px.
+    expect(m).not.toContain('py-3.5')
   })
 
   it('holds the brand slot on the left and the menu button on the right', () => {
     const m = bar()
     expect(m.indexOf('data-brand')).toBeLessThan(m.indexOf('<button'))
-    expect(m).toMatch(/<button type="button" aria-label="Open navigation" aria-expanded="false" class="[^"]*size-10[^"]*rounded-lg[^"]*bg-\[#F7F6F2\]/)
+    expect(m).toMatch(/<button type="button" aria-label="Open navigation" aria-expanded="false" class="[^"]*size-11[^"]*rounded-lg[^"]*bg-\[#F7F6F2\]/)
+    // 44px to tap (the standing rule; the real-data pass, 8 Nov, measured 40).
+    expect(m).not.toContain('size-10')
     // The lucide menu glyph, decorative.
     expect(m).toMatch(/<svg[^>]*lucide-menu[^>]*aria-hidden="true"/)
   })
