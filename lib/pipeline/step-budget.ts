@@ -122,6 +122,11 @@ export type MemberOutcome<R> = { ok: true; value: R } | { ok: false; error: stri
  * `signal` aborts, so a late batch stops STARTING work (a comment batch
  * starts no further actor); what it already started finishes and is written,
  * and its own step skips it (`refsStillToScrape`, `backfillStillDue`).
+ * NOTHING ABORTS A PROMISE: a late batch runs on in the instance after its
+ * wave's step returns, alongside its own step. So a writer whose write is not
+ * idempotent stops writing at the signal (transcribe, cover text: a late
+ * `failed` would land over its own step's `ok`); comments upsert on their key
+ * and a backfill write never lands on a settled transcript.
  */
 export async function settleMembers<T, R>(
   items: readonly T[],

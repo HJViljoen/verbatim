@@ -1190,6 +1190,12 @@ export async function transcribeBatch(opts: {
   /** 1-based batch number for the ai_call_log call_index (fan-out mode). */
   batchNo?: number
   dryRun?: boolean
+  /** Aborted at the batch's wave deadline (step-budget.ts settleMembers): the
+   *  batch then runs again as a step of its own, which redoes every video
+   *  this pass had not written and owns its row. So past it this pass starts
+   *  no further video and writes no row: a late answer here (a Whisper
+   *  fallback's `failed`) would land over that step's `ok`. */
+  signal?: AbortSignal
 }): Promise<{ transcribed: number; skipped: number; isolatedBatches: number; errors: string[] }> {
   const admin = createAdminClient()
   const adapter = adapters[opts.platform]
@@ -1273,6 +1279,7 @@ export async function transcribeBatch(opts: {
   const statusCounts: Record<string, number> = {}
   let outOfBudget = 0
   for (const row of pending) {
+    if (opts.signal?.aborted) break
     // Out of step budget: stop resolving. The untouched rows keep a NULL
     // status, so they re-plan (this run's backfill, or the next run) instead of
     // being stamped with a verdict nothing measured.
@@ -1326,6 +1333,8 @@ export async function transcribeBatch(opts: {
       gate.prompt += t.gateTokens?.prompt ?? 0
       gate.completion += t.gateTokens?.completion ?? 0
       statusCounts[t.status] = (statusCounts[t.status] ?? 0) + 1
+      // Past the wave's deadline (`signal`): the row is the batch's own step's.
+      if (opts.signal?.aborted) break
       if (!opts.dryRun) {
         const { error } = await admin
           .from('videos')

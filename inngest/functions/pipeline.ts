@@ -815,9 +815,10 @@ export const runPipeline = inngest.createFunction(
               memberId: (w, j) => `transcribe:${platform}:${w + j + 1}-of-${txBatches.length}`,
               items: txBatches,
               parallel: TRANSCRIBE_PARALLEL,
-              run: (videoIds, i) =>
+              // `signal` is the wave's deadline: past it the batch writes no row.
+              run: (videoIds, i, signal) =>
                 withApifyRunContext({ clientId, runId, step: `transcribe:${platform}:${i + 1}-of-${txBatches.length}` }, () =>
-                  transcribeBatch({ clientId, runId, platform, videoIds, batchNo: i + 1 }),
+                  transcribeBatch({ clientId, runId, platform, videoIds, batchNo: i + 1, signal }),
                 ),
               // Per-batch fallback (comments-fan-out precedent): one batch
               // exhausting its retries must not abandon the remaining
@@ -882,8 +883,9 @@ export const runPipeline = inngest.createFunction(
               memberId: (w, j) => `ocr:${platform}:${w + j + 1}-of-${ocrBatches.length}`,
               items: ocrBatches,
               parallel: OCR_PARALLEL,
-              run: (videoIds, i): Promise<OcrResult & { stepFailed?: true }> =>
-                ocrBatch({ clientId, runId, platform: platform as Platform, videoIds, batchNo: i + 1 }),
+              // `signal` is the wave's deadline: past it the batch writes no row.
+              run: (videoIds, i, signal): Promise<OcrResult & { stepFailed?: true }> =>
+                ocrBatch({ clientId, runId, platform: platform as Platform, videoIds, batchNo: i + 1, signal }),
               // Per-batch fallback (the transcribe fan-out's precedent): one
               // batch out of retries must not abandon the remaining waves.
               // Its videos keep a NULL ocr_status and re-plan — but only
@@ -1279,8 +1281,9 @@ export const runPipeline = inngest.createFunction(
         memberId: (w, j) => `ocr-backfill:${w + j + 1}-of-${plan.batches.length}`,
         items: plan.batches,
         parallel: OCR_PARALLEL,
-        run: (videoIds, i): Promise<OcrResult & { stepFailed?: true }> =>
-          ocrBackfillBatch({ clientId, runId, videoIds, batchNo: i + 1 }),
+        // `signal` is the wave's deadline: past it the batch writes no row.
+        run: (videoIds, i, signal): Promise<OcrResult & { stepFailed?: true }> =>
+          ocrBackfillBatch({ clientId, runId, videoIds, batchNo: i + 1, signal }),
         fallback: (_videoIds, _i, e) => ({
           ...emptyOcrResult(),
           errors: [`ocr-backfill step failed: ${e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200)}`],

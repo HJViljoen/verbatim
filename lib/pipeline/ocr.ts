@@ -433,11 +433,13 @@ async function ocrOne(
     attempts: number
     callIndex: number
     dryRun?: boolean
+    /** The batch's wave deadline (`ocrBatch`): past it the row is not written. */
+    signal?: AbortSignal
   },
   out: OcrResult,
 ): Promise<void> {
   const write = async (patch: Record<string, unknown>) => {
-    if (opts.dryRun) return null
+    if (opts.dryRun || opts.signal?.aborted) return null
     const { error } = await admin
       .from('videos')
       .update(patch)
@@ -549,6 +551,12 @@ export async function ocrBatch(opts: {
   videoIds: string[]
   batchNo?: number
   dryRun?: boolean
+  /** Aborted at the batch's wave deadline (step-budget.ts settleMembers): the
+   *  batch then runs again as a step of its own, which reads every cover this
+   *  pass had not written and owns its row. So past it this pass starts no
+   *  further cover and writes no row: a late `failed` here would land over
+   *  that step's `ok`. */
+  signal?: AbortSignal
 }): Promise<OcrResult> {
   const admin = createAdminClient()
   const out = emptyOcrResult()
@@ -600,6 +608,7 @@ export async function ocrBatch(opts: {
 
   let callIndex = (opts.batchNo ?? 1) * 1000
   for (const row of rawRows) {
+    if (opts.signal?.aborted) break
     if (done.has(row.video_id)) { out.skipped++; continue }
     callIndex++
     await ocrOne(admin, {
@@ -611,6 +620,7 @@ export async function ocrBatch(opts: {
       attempts: attempts.get(row.video_id) ?? 0,
       callIndex,
       dryRun: opts.dryRun,
+      signal: opts.signal,
     }, out)
   }
   return out
@@ -662,6 +672,8 @@ export async function ocrBackfillBatch(opts: {
   videoIds: string[]
   batchNo?: number
   dryRun?: boolean
+  /** As `ocrBatch`'s: the batch's wave deadline. */
+  signal?: AbortSignal
 }): Promise<OcrResult> {
   const admin = createAdminClient()
   const out = emptyOcrResult()
@@ -691,6 +703,7 @@ export async function ocrBackfillBatch(opts: {
 
   let callIndex = (opts.batchNo ?? 1) * 1000
   for (const row of rows) {
+    if (opts.signal?.aborted) break
     if (!needsOcr(row, { durableCover: true })) { out.skipped++; continue }
     callIndex++
     await ocrOne(admin, {
@@ -702,6 +715,7 @@ export async function ocrBackfillBatch(opts: {
       attempts: row.ocr_attempts ?? 0,
       callIndex,
       dryRun: opts.dryRun,
+      signal: opts.signal,
     }, out)
   }
   return out
