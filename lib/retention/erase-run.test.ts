@@ -1,0 +1,91 @@
+import { describe, expect, it } from 'vitest'
+
+import { fakeDb } from '../test/fake-db'
+import { runErasure, type EraseStep } from './erase-run'
+import { scrubStoredPlanChecks, scrubStoredPostIdeas } from './stored-prose'
+
+// Review, 9 Nov: a scrub that threw after the comments were deleted skipped
+// the suppression after it, and a re-run found no comments and never scrubbed.
+// Suppression now runs first, each scrub on its own, and the delete last, only
+// where every scrub succeeded.
+
+const ERASED = 'my socket rubs raw after an hour every single day'
+
+const recorder = () => {
+  const ran: string[] = []
+  const step = (name: string, fail = false): EraseStep => ({
+    name,
+    run: async () => { ran.push(name); if (fail) throw new Error(`${name} broke`) },
+  })
+  return { ran, step }
+}
+
+describe('runErasure', () => {
+  it('records suppression first, runs every other scrub when one throws, and keeps the comments for a re-run', async () => {
+    const { ran, step } = recorder()
+    const logged: string[] = []
+    const out = await runErasure({
+      suppress: step('suppression'),
+      scrubs: [step('ai_call_log bodies'), step('stored Ask answers', true), step('stored agent answers'), step('stored post ideas')],
+      erase: step('delete the comments'),
+    }, (l) => { logged.push(l) })
+    expect(ran).toEqual(['suppression', 'ai_call_log bodies', 'stored Ask answers', 'stored agent answers', 'stored post ideas'])
+    expect(out).toEqual({ failed: ['stored Ask answers'], erased: false })
+    expect(logged.join('\n')).toContain('FAILED: stored Ask answers: stored Ask answers broke')
+    expect(logged.join('\n')).toContain('not deleted')
+  })
+
+  it('deletes the comments last, once every scrub has succeeded', async () => {
+    const { ran, step } = recorder()
+    const out = await runErasure({ suppress: step('suppression'), scrubs: [step('a'), step('b')], erase: step('delete the comments') }, () => {})
+    expect(ran).toEqual(['suppression', 'a', 'b', 'delete the comments'])
+    expect(out).toEqual({ failed: [], erased: true })
+  })
+
+  it('still scrubs and deletes where suppression itself failed (a re-run records it from the handle alone)', async () => {
+    const { ran, step } = recorder()
+    const out = await runErasure({ suppress: step('suppression', true), scrubs: [step('a')], erase: step('delete the comments') }, () => {})
+    expect(ran).toEqual(['suppression', 'a', 'delete the comments'])
+    expect(out).toEqual({ failed: ['suppression'], erased: true })
+  })
+
+  it('over the real scrubs: a post-ideas read that fails leaves suppression recorded and the plan checks scrubbed', async () => {
+    const db = fakeDb({
+      suppressed_commenters: [],
+      plan_checks: [{ id: 'pc1', client_id: 'c1', claims: [{ ref: 'C1', theySay: `People say "${ERASED}".` }], judgement: [{ text: `Quote: "${ERASED}".`, basedOnRefs: [] }] }],
+      plan_check_evaluations: [],
+      // post_ideas present but its read fails as a transient error would.
+    })
+    const client = db.client as { from: (t: string) => unknown }
+    const failingIdeas = {
+      from(table: string) {
+        if (table !== 'post_ideas') return client.from(table)
+        const failed = { data: null, error: { code: '57014', message: 'canceling statement due to statement timeout' } }
+        const chain: Record<string, unknown> = { then: (r: (v: unknown) => unknown) => Promise.resolve(failed).then(r) }
+        for (const m of ['select', 'in', 'limit', 'order', 'range']) chain[m] = () => chain
+        return chain
+      },
+    }
+    let suppressed = false
+    const out = await runErasure({
+      suppress: {
+        name: 'suppression',
+        run: async () => {
+          const { error } = await (db.client as { from: (t: string) => { insert: (r: unknown) => PromiseLike<{ error: unknown }> } })
+            .from('suppressed_commenters').insert({ platform: 'youtube', author_key: 'someone' })
+          if (error) throw new Error('suppress')
+          suppressed = true
+        },
+      },
+      scrubs: [
+        { name: 'stored post ideas', run: async () => { await scrubStoredPostIdeas(failingIdeas as never, ['c1'], [ERASED], { apply: true }) } },
+        { name: 'stored Ask answers', run: async () => { await scrubStoredPlanChecks(db.client as never, ['c1'], [ERASED], { apply: true }) } },
+      ],
+      erase: { name: 'delete the comments', run: async () => {} },
+    }, () => {})
+    expect(suppressed).toBe(true)
+    expect(out).toEqual({ failed: ['stored post ideas'], erased: false })
+    const scrubbedPlan = db.calls.find((c) => c.op === 'update' && c.table === 'plan_checks')
+    expect(JSON.stringify(scrubbedPlan?.values)).not.toContain(ERASED)
+  })
+})

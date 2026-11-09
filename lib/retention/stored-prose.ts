@@ -120,7 +120,7 @@ export function scrubPostIdeaRow(
 ): { title?: string; cover?: unknown; subquestions?: unknown[] } | null {
   const patch: { title?: string; cover?: unknown; subquestions?: unknown[] } = {}
   if (typeof row.title === 'string') {
-    const cleaned = scrubText(row.title, texts)
+    const cleaned = fitTitle(scrubText(row.title, texts), row.title, texts)
     if (cleaned !== row.title) patch.title = cleaned
   }
   const cover = row.cover as { text?: unknown } | null | undefined
@@ -140,6 +140,26 @@ export function scrubPostIdeaRow(
     if (touched) patch.subquestions = next
   }
   return Object.keys(patch).length ? patch : null
+}
+
+/** `post_ideas_title_check`: 1 to 200 characters, trimmed. */
+export const POST_IDEA_TITLE_MAX = 200
+const SHORT_ERASED = '[removed]'
+
+/**
+ * A scrubbed title inside the table's check. The marker is longer than the
+ * shortest text it replaces, so a title near the limit could pass it and the
+ * write would fail: then the short marker, and where even that is too long,
+ * the title cut at the last space before the limit. Never empty. Pure.
+ */
+export function fitTitle(scrubbed: string, original: string, texts: readonly string[]): string {
+  if (scrubbed.trim().length <= POST_IDEA_TITLE_MAX) return scrubbed
+  let short = original
+  for (const t of texts) if (t) short = short.split(t).join(SHORT_ERASED)
+  if (short.trim().length <= POST_IDEA_TITLE_MAX) return short
+  const cut = short.trim().slice(0, POST_IDEA_TITLE_MAX)
+  const space = cut.lastIndexOf(' ')
+  return (space > 0 ? cut.slice(0, space) : cut).trim() || SHORT_ERASED
 }
 
 /** "There is no post_ideas table here" (its products migration not applied),

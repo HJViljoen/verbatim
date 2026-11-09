@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { fakeDb } from '../test/fake-db'
-import { ERASED_WORDS, scrubPlanCheckRow, scrubPostIdeaRow, scrubStoredPlanChecks, scrubStoredPostIdeas } from './stored-prose'
+import { ERASED_WORDS, POST_IDEA_TITLE_MAX, scrubPlanCheckRow, scrubPostIdeaRow, scrubStoredPlanChecks, scrubStoredPostIdeas } from './stored-prose'
 
 // An erasure request reaches a plan check's model prose (scripts/
 // erase-commenter.ts, step 7b): each claim's `theySay`, and since 9 Nov the
@@ -139,6 +139,32 @@ describe('an erasure scrubs the post ideas written from the commenter’s words'
   it('reads nothing where the table is not in this database', async () => {
     const db = fakeDb({})
     expect(await scrubStoredPostIdeas(db.client as never, ['c1'], [ERASED], { apply: true })).toBe(0)
+  })
+})
+
+// Review, 9 Nov: the marker is longer than the shortest text it replaces, so a
+// title near `post_ideas_title_check`'s 200 characters could pass it and the
+// write would fail. A scrubbed title always fits.
+describe('a scrubbed post-idea title stays inside its check', () => {
+  const erased = 'rubs raw!'  // 9 characters: the shortest the script sends is 8
+  it('uses the short marker, then cuts at a space, never past 200 and never empty', () => {
+    const near = `${'Why liners slip '.repeat(11)}${erased} ${erased}`.slice(0, 199)
+    expect(near.length).toBeLessThanOrEqual(POST_IDEA_TITLE_MAX)
+    const out = scrubPostIdeaRow({ title: near }, [erased])!.title!
+    expect(out.length).toBeLessThanOrEqual(POST_IDEA_TITLE_MAX)
+    expect(out).not.toContain(erased)
+    // Eight characters, one shorter than the short marker: five of them grow
+    // a 200-character title by five, so it is cut at its last space.
+    const eight = 'rubsraw!'
+    const long = `${'a'.repeat(150)} ${eight.repeat(6)}`.slice(0, 200)
+    expect(long.length).toBe(199)
+    const cut = scrubPostIdeaRow({ title: long }, [eight])!.title!
+    expect(cut).toBe('a'.repeat(150))
+    expect(cut.length).toBeLessThanOrEqual(POST_IDEA_TITLE_MAX)
+  })
+
+  it('keeps the long marker where the title has room', () => {
+    expect(scrubPostIdeaRow({ title: `Why ${erased}` }, [erased])!.title).toBe(`Why ${ERASED_WORDS}`)
   })
 })
 

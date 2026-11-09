@@ -6,6 +6,7 @@ import { deleteCommentsProperly } from '../lib/retention/youtube-refresh-io'
 import { AI_LOG_BODY_RETENTION_DAYS, DEMO_CLIENT_ID } from '../lib/config'
 import { markSnapshotsStale } from '../lib/artifacts'
 import { scrubStoredPlanChecks, scrubStoredPostIdeas } from '../lib/retention/stored-prose'
+import { runErasure } from '../lib/retention/erase-run'
 
 // Erase one commenter on request (Tier 1.5, 2026-08-22). The privacy notice
 // says: write with the handle and platform and we will remove the comments tied
@@ -45,6 +46,11 @@ import { scrubStoredPlanChecks, scrubStoredPostIdeas } from '../lib/retention/st
 //   7e. post_ideas — what a post should cover and its sub-questions' labels
 //      are model prose written from comments sent to the model; scrubbed the
 //      same way.
+// The ORDER they run in is not that list's (lib/retention/erase-run.ts):
+// matching (1, 2), suppression (6) first, every scrub (5, 7, 7b to 7e) each on
+// its own with a failure logged and the next one run, and the delete (3, 4,
+// 8) LAST, only where every scrub succeeded, so a re-run still finds the
+// comments' words. A run that did not finish exits 1 and prints no reply.
 // video_raw is not touched: it never carries comment items (only video-search
 // and transcribe payloads).
 // What it cannot undo, and the reply must say so: reports already emailed;
@@ -122,233 +128,286 @@ async function main() {
     console.log('\nnothing to erase. Suppression will still be recorded with --apply so a future scrape never adds this handle.')
   }
 
-  // 3–4. Dependents + hero quotes, counted; deleted with --apply (cascade).
-  const ids = rows.map((r) => r.id)
-  let evidenceRows = 0
-  let sampleRows = 0
-  for (const part of chunk(ids, 200)) {
-    const [ev, ls] = await Promise.all([
-      admin.from('insight_evidence').select('id', { count: 'exact', head: true }).in('comment_id', part),
-      admin.from('language_samples').select('id', { count: 'exact', head: true }).in('comment_id', part),
-    ])
-    evidenceRows += ev.count ?? 0
-    sampleRows += ls.count ?? 0
-  }
-  const del = await deleteCommentsProperly(admin, rows, { dryRun: !args.apply })
-  console.log(`\nwill ${args.apply ? '' : '(would) '}delete ${del.deleted} comment row(s) → cascades ${evidenceRows} evidence row(s) + ${sampleRows} language sample(s), touching ${del.insightsAffected} insight(s); hero quotes nulled: ${del.heroQuotesNulled}`)
-  // 8. Stored exports (Reports & Exports): a PDF/PNG whose snapshot cited one of
-  //    these voices has the words in a file. deleteCommentsProperly finds those
-  //    snapshots by ref, deletes the files and flags the artifacts stale; the
-  //    next download re-renders without the voice. Copies already downloaded
-  //    or emailed are out of reach — say so in the reply.
-  console.log(`stored exports carrying the voice: ${del.artifactsStaled} → ${args.apply ? 'files deleted, flagged for re-render' : 'would have files deleted + be flagged for re-render'}`)
-
-  // 5. ai_call_log bodies inside the window that carry the text.
   const clientIds = [...byClient.keys()]
   const texts = rows.map((r) => (r.text ?? '').replace(/\s+/g, ' ').trim()).filter((t) => t.length >= 8)
-  let bodiesMatched: string[] = []
-  if (clientIds.length && texts.length) {
-    const since = new Date(Date.now() - AI_LOG_BODY_RETENTION_DAYS * 86_400_000).toISOString()
-    const logs = await selectAll<{ id: string; request: { user?: string } | null }>(() =>
-      admin.from('ai_call_log').select('id, request').in('client_id', clientIds).gte('created_at', since).not('request', 'is', null).order('id', { ascending: true }),
-    )
-    bodiesMatched = logs.filter((l) => { const u = String(l.request?.user ?? ''); return texts.some((t) => u.includes(t)) }).map((l) => l.id)
-    console.log(`ai_call_log bodies in the last ${AI_LOG_BODY_RETENTION_DAYS}d carrying the text: ${bodiesMatched.length} of ${logs.length} scanned → ${args.apply ? 'nulled' : 'would be nulled'}`)
-    if (args.apply) {
-      for (const part of chunk(bodiesMatched, 200)) {
-        const { error } = await admin.from('ai_call_log').update({ request: null, response: null }).in('id', part)
-        if (error) throw new Error(`null ai_call_log bodies: ${error.message}`)
-      }
-    }
-  }
-
-  // 7. Stored report copies — the LEGACY weekly_reports rows only (nothing has
-  //    written there since Stage 3; a scheduled send stores ids, and its
-  //    snapshot is caught by step 6 like any other). Best-effort: the renderer
-  //    HTML-escaped text, so both the raw and the escaped forms are replaced.
-  //    Reports already emailed cannot be recalled — the reply says so.
-  let reportsScrubbed = 0
-  if (clientIds.length && texts.length) {
-    const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
-    const needles = [...new Set(texts.flatMap((t) => [t, esc(t)]))]
-    const reports = await selectAll<{ id: string; html_content: string }>(() =>
-      admin.from('weekly_reports').select('id, html_content').in('client_id', clientIds).order('id', { ascending: true }),
-    )
-    for (const r of reports) {
-      let html = r.html_content
-      for (const n of needles) html = html.split(n).join('[removed at the commenter\'s request]')
-      if (html !== r.html_content) {
-        reportsScrubbed++
-        if (args.apply) {
-          const { error } = await admin.from('weekly_reports').update({ html_content: html }).eq('id', r.id)
-          if (error) throw new Error(`scrub weekly_reports ${r.id}: ${error.message}`)
-        }
-      }
-    }
-    console.log(`stored report copies carrying the text: ${reportsScrubbed} of ${reports.length} → ${args.apply ? 'scrubbed' : 'would be scrubbed'}`)
-  }
-
-  // 7b. Stored Ask answers. A plan check's model prose is written AFTER the
-  //     model was shown real comments, so it can carry a commenter's words even
-  //     though no quote field is stored: each claim's `theySay` and, since
-  //     9 Nov, the judgement ("What I'd take from that", written from those
-  //     readings), on the upload's row and on every re-reading's
-  //     (lib/retention/stored-prose.ts). Nothing else reaches them: there is no
-  //     FK, and the insight ids they store resolve through evidence rows that
-  //     this script has already deleted. Same treatment as the report copies:
-  //     replace the text in place, best effort.
-  let askAnswersScrubbed = 0
-  if (clientIds.length && texts.length) {
-    askAnswersScrubbed = await scrubStoredPlanChecks(admin, clientIds, texts, { apply: args.apply })
-    console.log(`stored Ask answers carrying the text: ${askAnswersScrubbed} → ${args.apply ? 'scrubbed' : 'would be scrubbed'}`)
-  }
-
-  // 7c. Stored Verbatim Agent turns. Same escape as 7b through a different
-  //     door: `agent_messages.content` is the agent's own prose for an answer
-  //     row, and `result.grounded[].text` is prose written AFTER the model was
-  //     shown real comments — both can carry a commenter's words even though no
-  //     quote text is stored anywhere in the table (CORRECTED 2026-08-22: it
-  //     WAS, for a few hours — grounded[].quotes[].text held real comment text
-  //     and this sweep walked straight past it. The route no longer stores it
-  //     and the words resolve live, but this still scrubs those keys, because a
-  //     sweep that only works if the writer behaved is not a sweep). The
-  //     `nearest[]` and `judgement[]` registers are model prose written AFTER
-  //     the model was shown real comments, so they are scrubbed too.
-  //
-  //     User rows are deliberately NOT scrubbed: their `content` is the
-  //     client's own question, not a third party's words, and rewriting a
-  //     client's question would corrupt the demand-signal log this table exists
-  //     to keep. If a question happened to quote a commenter verbatim it came
-  //     from the client, not from us.
-  let agentTurnsScrubbed = 0
-  if (clientIds.length && texts.length) {
-    interface AgentRow {
-      id: string
-      role: string
-      content: string | null
-      result: {
-        answer?: string | null
-        grounded?: { text?: string | null; quotes?: { text?: string | null }[] }[]
-        nearest?: { text?: string | null }[]
-        judgement?: { text?: string | null }[]
-      } | null
-    }
-    const scrub = (s: string): string => {
-      let out = s
-      for (const t of texts) out = out.split(t).join('[removed at the commenter\'s request]')
-      return out
-    }
-    const turns = await selectAll<AgentRow>(() =>
-      admin
-        .from('agent_messages')
-        .select('id, role, content, result')
-        .in('client_id', clientIds)
-        .eq('role', 'agent')
-        .order('id', { ascending: true }),
-    )
-    for (const row of turns) {
-      const patch: { content?: string; result?: unknown } = {}
-      if (typeof row.content === 'string') {
-        const cleaned = scrub(row.content)
-        if (cleaned !== row.content) patch.content = cleaned
-      }
-      const res = row.result
-      if (res && typeof res === 'object') {
-        let touched = false
-        const mapText = <T extends { text?: string | null }>(items: T[] | undefined): T[] | undefined => {
-          if (!Array.isArray(items)) return items
-          return items.map((it) => {
-            const text = typeof it?.text === 'string' ? it.text : null
-            if (!text) return it
-            const cleaned = scrub(text)
-            if (cleaned === text) return it
-            touched = true
-            return { ...it, text: cleaned }
-          })
-        }
-        const answer = typeof res.answer === 'string' ? scrub(res.answer) : res.answer
-        if (typeof res.answer === 'string' && answer !== res.answer) touched = true
-        // grounded[] needs both its own prose AND the quotes hanging off it.
-        const grounded = Array.isArray(res.grounded)
-          ? mapText(res.grounded)?.map((g) => {
-              const gq = (g as { quotes?: { text?: string | null }[] }).quotes
-              if (!Array.isArray(gq)) return g
-              return { ...g, quotes: mapText(gq) }
-            })
-          : res.grounded
-        const next = {
-          ...res,
-          answer,
-          grounded,
-          nearest: mapText(res.nearest),
-          judgement: mapText(res.judgement),
-        }
-        if (touched) patch.result = next
-      }
-      if (!patch.content && !patch.result) continue
-      agentTurnsScrubbed++
-      if (args.apply) {
-        const { error } = await admin.from('agent_messages').update(patch).eq('id', row.id)
-        if (error) throw new Error(`scrub agent_messages ${row.id}: ${error.message}`)
-      }
-    }
-    console.log(`stored agent answers carrying the text: ${agentTurnsScrubbed} → ${args.apply ? 'scrubbed' : 'would be scrubbed'}`)
-  }
-
-  // 7d. Operator edits of a written report. `report_edits.text` is a person's
-  //     own words typed over a block, saved literally (no scrub at write
-  //     time, deliberately) — so an operator who quoted a commenter while
-  //     editing has put that commenter's words in a table nothing else
-  //     reaches: the snapshot's own quotes are refs, and this text is not.
-  //     Same treatment as the report copies, and the snapshot's artifacts are
-  //     staled so the next download re-renders without the words.
   let editsScrubbed = 0
-  if (clientIds.length && texts.length) {
-    const stored = await selectAll<{ id: string; snapshot_id: string; text: string }>(() =>
-      admin.from('report_edits').select('id, snapshot_id, text').in('client_id', clientIds).order('id', { ascending: true }),
-    )
-    const touchedSnapshots = new Set<string>()
-    for (const row of stored) {
-      let cleaned = row.text
-      for (const t of texts) cleaned = cleaned.split(t).join('[removed at the commenter\'s request]')
-      if (cleaned === row.text) continue
-      editsScrubbed++
-      touchedSnapshots.add(row.snapshot_id)
-      if (args.apply) {
-        const { error } = await admin.from('report_edits').update({ text: cleaned }).eq('id', row.id)
-        if (error) throw new Error(`scrub report_edits ${row.id}: ${error.message}`)
-      }
-    }
-    if (touchedSnapshots.size) {
-      const staled = await markSnapshotsStale(admin, [...touchedSnapshots], { apply: args.apply })
-      console.log(`edited report text carrying the words: ${editsScrubbed} of ${stored.length} → ${args.apply ? 'scrubbed' : 'would be scrubbed'}, ${staled.artifacts} export(s) ${args.apply ? 'flagged for re-render' : 'would be flagged'}`)
-    } else {
-      console.log(`edited report text carrying the words: 0 of ${stored.length}`)
-    }
-  }
+  // Filled by the delete step (a holder: an assignment inside a closure is not
+  // seen by the type narrowing at the reply template).
+  const deleted: { del: Awaited<ReturnType<typeof deleteCommentsProperly>> | null } = { del: null }
 
-  // 7e. The week's post ideas. Written from comments sent to the model by
-  //     handle: a title or label that copies one is held at write time, but
-  //     what the post should cover is never checked, so it can carry the
-  //     commenter's words (lib/retention/stored-prose.ts). Same treatment.
-  if (clientIds.length && texts.length) {
-    const ideas = await scrubStoredPostIdeas(admin, clientIds, texts, { apply: args.apply })
-    console.log(`stored post ideas carrying the text: ${ideas} → ${args.apply ? 'scrubbed' : 'would be scrubbed'}`)
-  }
+  // THE ORDER (lib/retention/erase-run.ts): suppression first; then every
+  // scrub of stored text, each on its own, a failure logged and the next one
+  // run; then the comments are deleted, LAST and only where every scrub
+  // succeeded, because a scrub needs their words to find them: while one has
+  // failed they stay, and a re-run finds them and tries again.
+  const outcome = await runErasure({
+    suppress: {
+      name: 'suppression',
+      run: async () => {
+        // 6. Suppression — every key variant we know of.
+        const keys = [...new Set([authorKey(args.platform, args.handle), ...exactAuthors.map((a) => authorKey(args.platform, a))].filter((k): k is string => !!k))]
+        console.log(`suppression keys (${args.platform}): ${keys.join(', ')} → ${args.apply ? 'recorded' : 'would be recorded'}`)
+        if (args.apply && keys.length) {
+          const { error } = await admin.from('suppressed_commenters').upsert(
+            keys.map((k) => ({ platform: args.platform, author_key: k, note: args.note || null })),
+            { onConflict: 'platform,author_key' },
+          )
+          if (error) throw new Error(`suppress: ${error.message}`)
+        }
+      },
+    },
+    scrubs: [
+      {
+        name: 'ai_call_log bodies',
+        run: async () => {
+          // 5. ai_call_log bodies inside the window that carry the text.
+          let bodiesMatched: string[] = []
+          if (clientIds.length && texts.length) {
+            const since = new Date(Date.now() - AI_LOG_BODY_RETENTION_DAYS * 86_400_000).toISOString()
+            const logs = await selectAll<{ id: string; request: { user?: string } | null }>(() =>
+              admin.from('ai_call_log').select('id, request').in('client_id', clientIds).gte('created_at', since).not('request', 'is', null).order('id', { ascending: true }),
+            )
+            bodiesMatched = logs.filter((l) => { const u = String(l.request?.user ?? ''); return texts.some((t) => u.includes(t)) }).map((l) => l.id)
+            console.log(`ai_call_log bodies in the last ${AI_LOG_BODY_RETENTION_DAYS}d carrying the text: ${bodiesMatched.length} of ${logs.length} scanned → ${args.apply ? 'nulled' : 'would be nulled'}`)
+            if (args.apply) {
+              for (const part of chunk(bodiesMatched, 200)) {
+                const { error } = await admin.from('ai_call_log').update({ request: null, response: null }).in('id', part)
+                if (error) throw new Error(`null ai_call_log bodies: ${error.message}`)
+              }
+            }
+          }
+        },
+      },
+      {
+        name: 'stored report copies',
+        run: async () => {
+          // 7. Stored report copies — the LEGACY weekly_reports rows only (nothing has
+          //    written there since Stage 3; a scheduled send stores ids, and its
+          //    snapshot is caught by step 6 like any other). Best-effort: the renderer
+          //    HTML-escaped text, so both the raw and the escaped forms are replaced.
+          //    Reports already emailed cannot be recalled — the reply says so.
+          let reportsScrubbed = 0
+          if (clientIds.length && texts.length) {
+            const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+            const needles = [...new Set(texts.flatMap((t) => [t, esc(t)]))]
+            const reports = await selectAll<{ id: string; html_content: string }>(() =>
+              admin.from('weekly_reports').select('id, html_content').in('client_id', clientIds).order('id', { ascending: true }),
+            )
+            for (const r of reports) {
+              let html = r.html_content
+              for (const n of needles) html = html.split(n).join('[removed at the commenter\'s request]')
+              if (html !== r.html_content) {
+                reportsScrubbed++
+                if (args.apply) {
+                  const { error } = await admin.from('weekly_reports').update({ html_content: html }).eq('id', r.id)
+                  if (error) throw new Error(`scrub weekly_reports ${r.id}: ${error.message}`)
+                }
+              }
+            }
+            console.log(`stored report copies carrying the text: ${reportsScrubbed} of ${reports.length} → ${args.apply ? 'scrubbed' : 'would be scrubbed'}`)
+          }
+        },
+      },
+      {
+        name: 'stored Ask answers',
+        run: async () => {
+          // 7b. Stored Ask answers. A plan check's model prose is written AFTER the
+          //     model was shown real comments, so it can carry a commenter's words even
+          //     though no quote field is stored: each claim's `theySay` and, since
+          //     9 Nov, the judgement ("What I'd take from that", written from those
+          //     readings), on the upload's row and on every re-reading's
+          //     (lib/retention/stored-prose.ts). Nothing else reaches them: there is no
+          //     FK, and the insight ids they store resolve through evidence rows that
+          //     this script has already deleted. Same treatment as the report copies:
+          //     replace the text in place, best effort.
+          let askAnswersScrubbed = 0
+          if (clientIds.length && texts.length) {
+            askAnswersScrubbed = await scrubStoredPlanChecks(admin, clientIds, texts, { apply: args.apply })
+            console.log(`stored Ask answers carrying the text: ${askAnswersScrubbed} → ${args.apply ? 'scrubbed' : 'would be scrubbed'}`)
+          }
+        },
+      },
+      {
+        name: 'stored agent answers',
+        run: async () => {
+          // 7c. Stored Verbatim Agent turns. Same escape as 7b through a different
+          //     door: `agent_messages.content` is the agent's own prose for an answer
+          //     row, and `result.grounded[].text` is prose written AFTER the model was
+          //     shown real comments — both can carry a commenter's words even though no
+          //     quote text is stored anywhere in the table (CORRECTED 2026-08-22: it
+          //     WAS, for a few hours — grounded[].quotes[].text held real comment text
+          //     and this sweep walked straight past it. The route no longer stores it
+          //     and the words resolve live, but this still scrubs those keys, because a
+          //     sweep that only works if the writer behaved is not a sweep). The
+          //     `nearest[]` and `judgement[]` registers are model prose written AFTER
+          //     the model was shown real comments, so they are scrubbed too.
+          //
+          //     User rows are deliberately NOT scrubbed: their `content` is the
+          //     client's own question, not a third party's words, and rewriting a
+          //     client's question would corrupt the demand-signal log this table exists
+          //     to keep. If a question happened to quote a commenter verbatim it came
+          //     from the client, not from us.
+          let agentTurnsScrubbed = 0
+          if (clientIds.length && texts.length) {
+            interface AgentRow {
+              id: string
+              role: string
+              content: string | null
+              result: {
+                answer?: string | null
+                grounded?: { text?: string | null; quotes?: { text?: string | null }[] }[]
+                nearest?: { text?: string | null }[]
+                judgement?: { text?: string | null }[]
+              } | null
+            }
+            const scrub = (s: string): string => {
+              let out = s
+              for (const t of texts) out = out.split(t).join('[removed at the commenter\'s request]')
+              return out
+            }
+            const turns = await selectAll<AgentRow>(() =>
+              admin
+                .from('agent_messages')
+                .select('id, role, content, result')
+                .in('client_id', clientIds)
+                .eq('role', 'agent')
+                .order('id', { ascending: true }),
+            )
+            for (const row of turns) {
+              const patch: { content?: string; result?: unknown } = {}
+              if (typeof row.content === 'string') {
+                const cleaned = scrub(row.content)
+                if (cleaned !== row.content) patch.content = cleaned
+              }
+              const res = row.result
+              if (res && typeof res === 'object') {
+                let touched = false
+                const mapText = <T extends { text?: string | null }>(items: T[] | undefined): T[] | undefined => {
+                  if (!Array.isArray(items)) return items
+                  return items.map((it) => {
+                    const text = typeof it?.text === 'string' ? it.text : null
+                    if (!text) return it
+                    const cleaned = scrub(text)
+                    if (cleaned === text) return it
+                    touched = true
+                    return { ...it, text: cleaned }
+                  })
+                }
+                const answer = typeof res.answer === 'string' ? scrub(res.answer) : res.answer
+                if (typeof res.answer === 'string' && answer !== res.answer) touched = true
+                // grounded[] needs both its own prose AND the quotes hanging off it.
+                const grounded = Array.isArray(res.grounded)
+                  ? mapText(res.grounded)?.map((g) => {
+                      const gq = (g as { quotes?: { text?: string | null }[] }).quotes
+                      if (!Array.isArray(gq)) return g
+                      return { ...g, quotes: mapText(gq) }
+                    })
+                  : res.grounded
+                const next = {
+                  ...res,
+                  answer,
+                  grounded,
+                  nearest: mapText(res.nearest),
+                  judgement: mapText(res.judgement),
+                }
+                if (touched) patch.result = next
+              }
+              if (!patch.content && !patch.result) continue
+              agentTurnsScrubbed++
+              if (args.apply) {
+                const { error } = await admin.from('agent_messages').update(patch).eq('id', row.id)
+                if (error) throw new Error(`scrub agent_messages ${row.id}: ${error.message}`)
+              }
+            }
+            console.log(`stored agent answers carrying the text: ${agentTurnsScrubbed} → ${args.apply ? 'scrubbed' : 'would be scrubbed'}`)
+          }
+        },
+      },
+      {
+        name: 'edited report text',
+        run: async () => {
+          // 7d. Operator edits of a written report. `report_edits.text` is a person's
+          //     own words typed over a block, saved literally (no scrub at write
+          //     time, deliberately) — so an operator who quoted a commenter while
+          //     editing has put that commenter's words in a table nothing else
+          //     reaches: the snapshot's own quotes are refs, and this text is not.
+          //     Same treatment as the report copies, and the snapshot's artifacts are
+          //     staled so the next download re-renders without the words.
+          if (clientIds.length && texts.length) {
+            const stored = await selectAll<{ id: string; snapshot_id: string; text: string }>(() =>
+              admin.from('report_edits').select('id, snapshot_id, text').in('client_id', clientIds).order('id', { ascending: true }),
+            )
+            const touchedSnapshots = new Set<string>()
+            for (const row of stored) {
+              let cleaned = row.text
+              for (const t of texts) cleaned = cleaned.split(t).join('[removed at the commenter\'s request]')
+              if (cleaned === row.text) continue
+              editsScrubbed++
+              touchedSnapshots.add(row.snapshot_id)
+              if (args.apply) {
+                const { error } = await admin.from('report_edits').update({ text: cleaned }).eq('id', row.id)
+                if (error) throw new Error(`scrub report_edits ${row.id}: ${error.message}`)
+              }
+            }
+            if (touchedSnapshots.size) {
+              const staled = await markSnapshotsStale(admin, [...touchedSnapshots], { apply: args.apply })
+              console.log(`edited report text carrying the words: ${editsScrubbed} of ${stored.length} → ${args.apply ? 'scrubbed' : 'would be scrubbed'}, ${staled.artifacts} export(s) ${args.apply ? 'flagged for re-render' : 'would be flagged'}`)
+            } else {
+              console.log(`edited report text carrying the words: 0 of ${stored.length}`)
+            }
+          }
+        },
+      },
+      {
+        name: 'stored post ideas',
+        run: async () => {
+          // 7e. The week's post ideas. Written from comments sent to the model by
+          //     handle: a title or label that copies one is held at write time, but
+          //     what the post should cover is never checked, so it can carry the
+          //     commenter's words (lib/retention/stored-prose.ts). Same treatment.
+          if (clientIds.length && texts.length) {
+            const ideas = await scrubStoredPostIdeas(admin, clientIds, texts, { apply: args.apply })
+            console.log(`stored post ideas carrying the text: ${ideas} → ${args.apply ? 'scrubbed' : 'would be scrubbed'}`)
+          }
+        },
+      },
+    ],
+    erase: {
+      name: 'delete the comments',
+      run: async () => {
+        // 3–4. Dependents + hero quotes, counted; deleted with --apply (cascade).
+        const ids = rows.map((r) => r.id)
+        let evidenceRows = 0
+        let sampleRows = 0
+        for (const part of chunk(ids, 200)) {
+          const [ev, ls] = await Promise.all([
+            admin.from('insight_evidence').select('id', { count: 'exact', head: true }).in('comment_id', part),
+            admin.from('language_samples').select('id', { count: 'exact', head: true }).in('comment_id', part),
+          ])
+          evidenceRows += ev.count ?? 0
+          sampleRows += ls.count ?? 0
+        }
+        const del = await deleteCommentsProperly(admin, rows, { dryRun: !args.apply })
+        console.log(`\nwill ${args.apply ? '' : '(would) '}delete ${del.deleted} comment row(s) → cascades ${evidenceRows} evidence row(s) + ${sampleRows} language sample(s), touching ${del.insightsAffected} insight(s); hero quotes nulled: ${del.heroQuotesNulled}`)
+        // 8. Stored exports (Reports & Exports): a PDF/PNG whose snapshot cited one of
+        //    these voices has the words in a file. deleteCommentsProperly finds those
+        //    snapshots by ref, deletes the files and flags the artifacts stale; the
+        //    next download re-renders without the voice. Copies already downloaded
+        //    or emailed are out of reach — say so in the reply.
+        console.log(`stored exports carrying the voice: ${del.artifactsStaled} → ${args.apply ? 'files deleted, flagged for re-render' : 'would have files deleted + be flagged for re-render'}`)
+      deleted.del = del
+      },
+    },
+  })
 
-  // 6. Suppression — every key variant we know of.
-  const keys = [...new Set([authorKey(args.platform, args.handle), ...exactAuthors.map((a) => authorKey(args.platform, a))].filter((k): k is string => !!k))]
-  console.log(`suppression keys (${args.platform}): ${keys.join(', ')} → ${args.apply ? 'recorded' : 'would be recorded'}`)
-  if (args.apply && keys.length) {
-    const { error } = await admin.from('suppressed_commenters').upsert(
-      keys.map((k) => ({ platform: args.platform, author_key: k, note: args.note || null })),
-      { onConflict: 'platform,author_key' },
-    )
-    if (error) throw new Error(`suppress: ${error.message}`)
+  if (outcome.failed.length) {
+    process.exitCode = 1
+    console.log(`\nNOT FINISHED. Failed: ${outcome.failed.join(', ')}. ${outcome.erased ? 'The comments are deleted.' : 'The comments are NOT deleted.'} Fix the cause and run again with the same arguments; no reply until it finishes.`)
+    return
   }
 
   console.log(`\n--- reply template ---
-We have removed the ${rows.length} comment(s) tied to ${args.handle} on ${args.platform} from Verbatim, together with every quote of them in our analysis${del.heroQuotesNulled ? ' and in report headlines' : ''}, and we have recorded the handle so it is not collected again.
+We have removed the ${rows.length} comment(s) tied to ${args.handle} on ${args.platform} from Verbatim, together with every quote of them in our analysis${deleted.del?.heroQuotesNulled ? ' and in report headlines' : ''}, and we have recorded the handle so it is not collected again.
 What we cannot undo: report emails and exported files already sent or downloaded by our customers before your request, and our AI provider's copy of any analysis input for its own retention period (up to 30 days).${editsScrubbed ? '\nWhere one of our customers had typed your words into a report of their own, we have replaced them and the report will re-print without them.' : ''}
 ${args.apply ? '' : '(DRY RUN — nothing has been changed yet.)'}`)
 }
