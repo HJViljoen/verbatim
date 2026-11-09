@@ -6,8 +6,10 @@ import { deleteCommentsProperly } from '../lib/retention/youtube-refresh-io'
 import { AI_LOG_BODY_RETENTION_DAYS, DEMO_CLIENT_ID } from '../lib/config'
 import { markSnapshotsStale } from '../lib/artifacts'
 import { scrubStoredPlanChecks, scrubStoredPostIdeas } from '../lib/retention/stored-prose'
-import { runErasure, unfinishedMessage, updatesInFlight } from '../lib/retention/erase-run'
-import { ANALYSIS_PROSE_TABLES, deleteSnapshotFiles, filesOfSnapshots, scrubStoredProse, type StoredFile } from '../lib/retention/analysis-prose'
+import { deleteHeldBy, ERASURE_CLOCK_MARGIN_MS, loadRunsSince, runErasure, unfinishedMessage } from '../lib/retention/erase-run'
+import { ANALYSIS_PROSE_TABLES, scrubStoredProse } from '../lib/retention/analysis-prose'
+import { deletePendingSnapshotFiles, recordSnapshotFiles, storedObjectsOf } from '../lib/retention/snapshot-files'
+import { erasedTexts, loadTranslations } from '../lib/retention/erased-texts'
 import { escapeLike, findBackedUpComments, removeBackedUpCopies, scrubRegateBackup } from '../lib/retention/regate-backup-erase'
 import { scrubRawPayloads } from '../lib/retention/raw-payloads-erase'
 
@@ -58,14 +60,17 @@ import { scrubRawPayloads } from '../lib/retention/raw-payloads-erase'
 //      written reads, statement readings, held brief headlines, the frozen
 //      snapshots and the report documents, one step a table. A text of one
 //      word is not looked for there (it would erase other people's words).
-//      A scrubbed snapshot's stored files (PDFs, PNGs, a brief's) are then
-//      deleted and flagged stale (markSnapshotsStale, as 7d and 8), so the next
-//      download re-renders it clean; a delete that fails puts the snapshot
-//      back for a re-run and fails the step.
+//      A snapshot is put on the stored files' pending list before its words
+//      are scrubbed, and every run then deletes every version of every listed
+//      snapshot's files and clears its record (lib/retention/snapshot-files.ts):
+//      a delete that fails stays listed, fails the step, and is retried.
 //   7g. the regate backup's prose (an insight's, an event's), scrubbed the same way.
 //   9. with the delete: the regate backup's copies of these comments and the
 //      rows hanging off them, removed; and not at all while an update is
-//      running for one of the workspaces (lib/retention/erase-run.ts, rule 4).
+//      running for one of the workspaces, or if one started or finished since
+//      this script began (lib/retention/erase-run.ts, rule 4).
+// Every text is looked for in its own words and in its stored English
+// (lib/retention/erased-texts.ts).
 // The ORDER they run in is not that list's (lib/retention/erase-run.ts):
 // matching (1, 2), suppression (6) first, every scrub (5, 7, 7b to 7e) each on
 // its own with a failure logged and the next one run, and the delete (3, 4,
@@ -111,6 +116,9 @@ function demoPseudonyms(author: string): string[] {
 interface CommentRow { id: string; client_id: string; author: string | null; text: string | null; platform: string; video_id: string; comment_id: string }
 
 async function main() {
+  // When this erasure began, for rule 4 (lib/retention/erase-run.ts): an update
+  // that starts or finishes after it holds the delete back.
+  const since = new Date(Date.now() - ERASURE_CLOCK_MARGIN_MS).toISOString()
   const args = parseArgs(process.argv.slice(2))
   const admin = createAdminClient()
   const bare = args.handle.trim().replace(/^@/, '').replace(/^\/?u\//i, '')
@@ -161,11 +169,14 @@ async function main() {
   }
 
   const clientIds = [...byClient.keys()]
-  const texts = rows.map((r) => (r.text ?? '').replace(/\s+/g, ' ').trim()).filter((t) => t.length >= 8)
+  // Each comment's words, and their English where the product translated them.
+  const texts = erasedTexts(rows.map((r) => r.text), await loadTranslations(admin, rows.map((r) => r.id)))
   let editsScrubbed = 0
-  // Stored files built from a snapshot this run scrubbed, deleted (or, on a
-  // dry run, that would be).
-  const snapshotFiles: StoredFile[] = []
+  // Rule 4, at the start: an update already running will hold the delete back.
+  const runningAtStart = deleteHeldBy(await loadRunsSince(admin, clientIds, since), since)
+  if (runningAtStart.length) {
+    console.log(`an update is running for ${runningAtStart.map((l) => `${l.clientId} (run ${l.runId})`).join(', ')}: the scrubs run, the delete will wait for it`)
+  }
   // Filled by the delete step (a holder: an assignment inside a closure is not
   // seen by the type narrowing at the reply template).
   const deleted: { del: Awaited<ReturnType<typeof deleteCommentsProperly>> | null } = { del: null }
@@ -413,19 +424,32 @@ async function main() {
       ...ANALYSIS_PROSE_TABLES.map((spec) => ({
         name: `stored prose: ${spec.table}`,
         run: async () => {
-          if (!clientIds.length || !texts.length) return
           // The share page and "the email as sent" re-render from a snapshot,
           // so scrubbing it reaches them. A PDF or PNG built before the scrub
-          // holds the words: deleted once its snapshot is clean.
+          // holds the words: the snapshot is put on the pending list first,
+          // then every listed snapshot's files go (lib/retention/snapshot-files.ts).
           const isSnapshots = spec.table === 'report_snapshots'
-          const after = isSnapshots
-            ? async (key: Record<string, unknown>) => { snapshotFiles.push(...await deleteSnapshotFiles(admin, String(key.id))) }
-            : undefined
-          const r = await scrubStoredProse(admin, spec, clientIds, texts, { apply: args.apply, after })
-          console.log(`${spec.table} carrying the text: ${r.rows} → ${args.apply ? 'scrubbed' : 'would be scrubbed'}`)
-          if (!isSnapshots || !r.rows) return
-          if (!args.apply) snapshotFiles.push(...await filesOfSnapshots(admin, r.keys.map((k) => String(k.id))))
-          console.log(`   their stored files: ${snapshotFiles.length} ${args.apply ? 'deleted, flagged to re-render' : 'would be deleted and flagged to re-render'}${snapshotFiles.length ? ` (${snapshotFiles.map((f) => f.storage_path).join(', ')})` : ''}`)
+          if (clientIds.length && texts.length) {
+            const before = isSnapshots
+              ? async (row: Record<string, unknown>) => {
+                  await recordSnapshotFiles(admin, { clientId: String(row.client_id), snapshotId: String(row.id), platform: args.platform, authorKey: keys[0] ?? args.handle })
+                }
+              : undefined
+            const r = await scrubStoredProse(admin, spec, clientIds, texts, { apply: args.apply, before })
+            console.log(`${spec.table} carrying the text: ${r.rows} → ${args.apply ? 'scrubbed' : 'would be scrubbed'}`)
+            if (isSnapshots && !args.apply) {
+              for (const k of r.keys) {
+                const paths = await storedObjectsOf(admin, String(k.client_id), String(k.id))
+                if (paths.length) console.log(`   snapshot ${k.id}: ${paths.length} stored file(s) would be deleted (${paths.join(', ')})`)
+              }
+            }
+          }
+          if (!isSnapshots) return
+          // The whole pending list, this request's and any earlier run's that
+          // did not finish, so a delete that failed is tried again here.
+          for (const d of await deletePendingSnapshotFiles(admin, { apply: args.apply })) {
+            console.log(`   snapshot ${d.snapshotId}: ${d.paths.length} stored file(s) ${args.apply ? 'deleted, flagged to re-render' : 'listed from an earlier run, would be deleted'}${d.paths.length ? ` (${d.paths.join(', ')})` : ''}`)
+          }
         },
       })),
       {
@@ -449,18 +473,15 @@ async function main() {
     erase: {
       name: 'delete the comments',
       run: async () => {
-        // Not while an update is running for one of the workspaces
-        // (lib/retention/erase-run.ts, rule 4): prose it writes from these
-        // comments after the scrubs could never be found once they are gone.
-        if (clientIds.length) {
-          const { data, error } = await admin.from('pipeline_runs').select('id, client_id, started_at').in('client_id', clientIds).eq('status', 'running')
-          if (error) throw new Error(`read pipeline_runs: ${error.message}`)
-          const live = updatesInFlight((data ?? []) as { id: string; client_id: string; started_at: string }[])
-          if (live.length) {
-            const which = live.map((l) => `${l.clientId} (run ${l.runId})`).join(', ')
-            if (args.apply) throw new Error(`an update is running for ${which}: it can still write these comments' words after the scrubs. Re-run when it has finished.`)
-            console.log(`an update is running for ${which}: with --apply the delete would wait for it`)
-          }
+        // Not while an update is running for one of the workspaces, nor if one
+        // started or finished since this script began (lib/retention/erase-run.ts,
+        // rule 4): prose it wrote from these comments after the scrubs could
+        // never be found once they are gone.
+        const held = deleteHeldBy(await loadRunsSince(admin, clientIds, since), since)
+        if (held.length) {
+          const which = held.map((l) => `${l.clientId} (run ${l.runId}, ${l.why})`).join(', ')
+          if (args.apply) throw new Error(`an update ran or is running for ${which} since this erasure began: it can have written these comments' words after the scrubs. Re-run when no update is running.`)
+          console.log(`an update ran or is running for ${which}: with --apply the delete would wait`)
         }
         // 9. The regate backup's copies of these comments, and the rows hanging
         //    off them, before the comments themselves (a failure here leaves

@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
 import { fakeDb } from '../test/fake-db'
@@ -65,5 +68,20 @@ describe('an erasure reaches the raw payloads', () => {
 
   it('reads nothing where the table is not in this database', async () => {
     expect(await scrubRawPayloads(fakeDb({}).client as never, 'instagram', KEYS, [ERASED], { apply: true })).toBe(0)
+  })
+})
+
+// A future gather never stores an erased handle's comments in a payload
+// again: the `video_raw` write runs each item through the same rule with the
+// suppression keys (lib/gather/gather.ts, gatePlatform's raw capture).
+describe('the raw capture drops suppressed handles\' comments at write time', () => {
+  it('runs every payload through scrubRawPayload with the platform\'s suppression keys', () => {
+    const src = readFileSync(resolve(__dirname, '../gather/gather.ts'), 'utf8')
+    const write = src.indexOf(".from('video_raw')")
+    const capture = src.lastIndexOf('Step 1 capture', write)
+    const block = src.slice(capture, write)
+    expect(capture).toBeGreaterThan(0)
+    expect(block).toContain('const suppressedKeys = await loadSuppressedKeys(admin, adapter.platform)')
+    expect(block).toContain('scrubRawPayload(rawById.get(v.video_id), adapter.platform, suppressedKeys, [])')
   })
 })

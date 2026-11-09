@@ -8,6 +8,7 @@ import { logAiCall } from '../pipeline/ai-log'
 import { resolveTranscript, gateTranscript, normaliseLang, transcriptColumn } from './transcript'
 import { dedupeBy, round2 } from './util'
 import { loadSuppressedKeys, filterSuppressed } from './suppression'
+import { scrubRawPayload } from '../retention/raw-payloads-erase'
 import { classifyRelevance, type ClassifyResult, type RelevanceMethod } from './relevance'
 import { buildGateVerdictRows, recordGateVerdicts } from './gate-verdicts'
 import { attributeVideos, ATTRIBUTION_JUDGE, ATTRIBUTION_PROMPT_VERSION, type AttributionMethod, type AttributionResult } from './attribution'
@@ -783,6 +784,10 @@ export async function gatePlatform(opts: {
   if (transcriptsEnabled() && !opts.dryRun && toUpsert.length) {
     const rawById = new Map<string, RawItem>()
     for (const s of opts.searches) for (const [id, r] of Object.entries(s.raws ?? {})) if (!rawById.has(id)) rawById.set(id, r)
+    // An erased commenter's comments never enter a stored payload either (an
+    // Instagram item carries its post's latest comments): suppression, as at
+    // ingest, through the erasure's own rule (lib/retention/raw-payloads-erase.ts).
+    const suppressedKeys = await loadSuppressedKeys(admin, adapter.platform)
     const rawRows = toUpsert
       .filter((v) => rawById.has(v.video_id))
       .map((v) => ({
@@ -790,7 +795,7 @@ export async function gatePlatform(opts: {
         run_id: opts.runId,
         platform: adapter.platform,
         video_id: v.video_id,
-        raw: rawById.get(v.video_id),
+        raw: suppressedKeys.size ? scrubRawPayload(rawById.get(v.video_id), adapter.platform, suppressedKeys, []) : rawById.get(v.video_id),
       }))
     if (rawRows.length) {
       const { error } = await admin
