@@ -274,6 +274,18 @@ describe('the rest of a pair row', () => {
     expect(gatherHealth(GATHERS, '2026-09-01')).toEqual({ month: '2026-09-01', runs: 2, partial: 1, searches_short: 0, unplanned: 1 })
     expect(gatherHealth(GATHERS, '2026-08-15')).toEqual({ month: '2026-08-01', runs: 1, partial: 0, searches_short: 0, unplanned: 1 })
   })
+
+  it('a run partial only for Your products gathered in full: no gather flag, and it decides what ran unchanged; a gather error still counts', () => {
+    const kp = [...KP, ...rows('prod0001', '2026-09-20T08:00:00Z', [...KEPT, ...ADDED_9, ...ADDED_13])]
+    const products = gathersOf(kp, [...RUNS, { id: 'prod0001', status: 'partial', error_message: '1 step error: product-readings' }])
+    expect(products.find((g) => g.runId === 'prod0001')?.status).toBe('completed')
+    expect(gatherHealth(products, '2026-09-01').partial).toBe(1) // the fixture's failed 13 Sep gather only, as above
+    expect(decidingGathers(products, '2026-09-09T00:00:00Z', 'prod0001').left.map((g) => g.runId)).toEqual(['5a2ebc43'])
+    const gather = gathersOf(kp, [...RUNS, { id: 'prod0001', status: 'partial', error_message: '2 step errors: gate:youtube, product-readings' }])
+    expect(gather.find((g) => g.runId === 'prod0001')?.status).toBe('partial')
+    expect(gatherHealth(gather, '2026-09-01').partial).toBe(2)
+    expect(decidingGathers(gather, '2026-09-09T00:00:00Z', 'prod0001').left.map((g) => g.runId)).toEqual(['5a2ebc43', 'prod0001'])
+  })
 })
 
 // The staging dry run of measure-comparability (26 Sep, read through the

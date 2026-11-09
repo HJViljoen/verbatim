@@ -15,8 +15,9 @@ import {
 // transcript, the transcript's English, on-screen text) is one text, keyed by
 // the video; a comment is one text, keyed by the comment, dated by its own
 // month. brand_mentions' shape (MF2): one `content` row per video and target
-// (the first field in CONTENT_FIELD_ORDER that places it), one `comment` row
-// per comment and target.
+// (category and product, product_mentions_uniq's key: across fields the
+// stronger placement, at the first field in CONTENT_FIELD_ORDER that places it
+// so), one `comment` row per comment and target.
 //
 // WHICH PLACEMENTS STAND, per text, under one catalogue version
 // (`standingPlacements`):
@@ -121,7 +122,13 @@ function row(clientId: string, version: string, p: TextPlacement, where: {
   }
 }
 
-const targetOf = (p: Pick<TextPlacement, 'placement' | 'groupId' | 'productId'>): string => `${p.placement}|${p.groupId}|${p.productId ?? ''}`
+// A content row's target as product_mentions_uniq keys it: the category and
+// the product, NOT the placement. "unclear" and "unbranded" both carry no
+// product, so a family in one field and a category word in another are one
+// key, and an INSERT holding both is refused whole (23505): Össur's October
+// step failed so on every run from 28 Oct, and the month kept its 18 Oct rows.
+const targetOf = (p: Pick<TextPlacement, 'groupId' | 'productId'>): string => `${p.groupId}|${p.productId ?? ''}`
+const rankOf = (p: Pick<TextPlacement, 'placement'>): number => (p.placement === 'named' ? 3 : p.placement === 'unclear' ? 2 : 1)
 
 /**
  * The rule rows, the rule placements and the confirm items of a set of texts.
@@ -140,23 +147,26 @@ export function planRules(clientId: string, compiled: CompiledCatalogue, content
   }
   for (const videoId of [...byVideo.keys()].sort()) {
     const fields = [...byVideo.get(videoId)!].sort((a, b) => CONTENT_FIELD_ORDER.indexOf(a.field) - CONTENT_FIELD_ORDER.indexOf(b.field))
-    const seen = new Map<string, TextPlacement>()
+    // One row per key (targetOf): the stronger placement, at the first field
+    // that placed it so; the rows keep the order their keys first appeared in.
+    const seen = new Map<string, { p: TextPlacement; field: ProductContentField }>()
     let generic: { field: ProductContentField; text: string; aliases: CompiledAlias[] } | null = null
     const genericAliases = new Map<string, CompiledAlias>()
     for (const f of fields) {
       const r = readText(compiled, f.text)
       for (const p of r.placements) {
         const t = targetOf(p)
-        if (seen.has(t)) continue
-        seen.set(t, p)
-        rows.push(row(clientId, compiled.version, p, { videoId, source: 'content', field: f.field, commentId: null, commentMonth: null }))
+        const had = seen.get(t)
+        if (had && rankOf(had.p) >= rankOf(p)) continue
+        seen.set(t, { p, field: f.field })
       }
       if (r.generic.length) {
         for (const a of r.generic) genericAliases.set(a.aliasId, a)
         if (!generic) generic = { field: f.field, text: f.text, aliases: r.generic }
       }
     }
-    if (seen.size) placed.set(contentKey(videoId), strongestPerGroup([...seen.values()]))
+    for (const { p, field } of seen.values()) rows.push(row(clientId, compiled.version, p, { videoId, source: 'content', field, commentId: null, commentMonth: null }))
+    if (seen.size) placed.set(contentKey(videoId), strongestPerGroup([...seen.values()].map((s) => s.p)))
     if (generic) {
       confirm.push({
         key: contentKey(videoId), source: 'content', videoId, field: generic.field, commentId: null, commentMonth: null,
@@ -188,10 +198,9 @@ export function planRules(clientId: string, compiled: CompiledCatalogue, content
 /** Across a video's fields, the strongest placement per category stands (a
  *  caption naming the product and a transcript saying "liners" is named). */
 function strongestPerGroup(ps: readonly TextPlacement[]): TextPlacement[] {
-  const rank = (p: TextPlacement) => (p.placement === 'named' ? 3 : p.placement === 'unclear' ? 2 : 1)
   const best = new Map<string, number>()
-  for (const p of ps) best.set(p.groupId, Math.max(best.get(p.groupId) ?? 0, rank(p)))
-  return ps.filter((p) => rank(p) === best.get(p.groupId))
+  for (const p of ps) best.set(p.groupId, Math.max(best.get(p.groupId) ?? 0, rankOf(p)))
+  return ps.filter((p) => rankOf(p) === best.get(p.groupId))
 }
 
 /** The unique key of a non-tag row (product_mentions_uniq), for skipping held

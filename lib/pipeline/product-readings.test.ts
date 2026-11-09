@@ -14,7 +14,9 @@ import { catalogueCodes, type Classifier } from '../products/classify'
 import { cataloguePattern, compileCatalogue } from '../products/rules'
 import { fakeAdmin } from '../test/s3-run-fake-admin'
 import { FIXTURE_CATALOGUE, G, P } from '../test/products-fixtures'
-import { planProductReadings, productSpendSoFar, productSummary, runProductMonth } from './product-readings'
+import { gatherCompleted } from '../reading/week-line'
+import { planProductReadings, productSpendSoFar, productStepFailure, productSummary, runProductMonth } from './product-readings'
+import { summariseRunErrors } from './run-errors'
 
 const t = <T extends object>(rows: T[]) => rows.map((r) => ({ client_id: OSSUR_CLIENT_ID, ...r }))
 const SEP = '2026-09-01'
@@ -146,5 +148,81 @@ describe('the product-readings step', () => {
     const f = admin()
     expect(await productSpendSoFar(f.client, 'run-1')).toBe(0.25)
     expect(await productSpendSoFar(f.client, null)).toBe(0)
+  })
+
+  it('writes the month when a video\'s fields place one category two ways (the INSERT takes one row per product_mentions_uniq key)', async () => {
+    // October on Össur from 28 Oct: a video whose caption names a product, whose
+    // hashtags hold a category word and whose translated transcript the
+    // category's family. Both product-less rows carried one unique key, the
+    // database refused the batch (23505), Inngest's retries refused it again,
+    // and the step's catch left the month at its 18 Oct rows.
+    const OCT = '2026-10-01'
+    const video = { id: vid(3), platform: 'youtube', video_id: 'yt3', account_name: 'a3', caption: 'Cheetah Xcel at the track', hashtags: ['runningblade'], transcript: null, transcript_en: 'my new Pro-Flex fits', ocr_text: null }
+    const keyOf = (r: Record<string, unknown>) => ['video_id', 'source', 'comment_id', 'product_id', 'group_id', 'method', 'rule_version', 'catalogue_version'].map((k) => String(r[k] ?? '')).join('|')
+    let held: Record<string, unknown>[] = []
+    const f = fakeAdmin({
+      tables: {
+        month_product_readings: [], product_mentions: [], product_tags: [],
+        month_denominators: t([{ month: OCT, audience: 'industry-other', status: 'filling' }]),
+        videos: t([video]),
+        comments: t([{ id: 'k9', platform: 'youtube', video_id: 'yt3', text: 'so fast', comment_date: '2026-10-20T10:00:00Z', is_low_signal: false }]),
+        clients: [{ id: OSSUR_CLIENT_ID, company_name: 'Össur' }],
+        tracking_configs: t([{ competitor_keywords: [] }]), keyword_performance: [], video_provenance: [], ai_call_log: [],
+      },
+      rpc: {
+        product_catalogue: () => ({ data: FIXTURE_CATALOGUE }),
+        brand_mention_candidates: () => [{ video_id: video.id, source: 'content', field: 'caption', comment_id: null, comment_month: null, excerpt: video.caption }],
+        market_month_videos: () => [{ video_id: video.id, audience: 'industry-other', platform: 'youtube', dated_comments: 1 }],
+      },
+      // product_mentions_uniq, as Postgres holds it: one statement refused whole.
+      refuse: {
+        product_mentions: (rows) => {
+          const keys = rows.map(keyOf)
+          const seen = new Set(held.map(keyOf))
+          return new Set(keys).size < keys.length || keys.some((k) => seen.has(k))
+            ? { code: '23505', message: 'duplicate key value violates unique constraint "product_mentions_uniq"' }
+            : null
+        },
+      },
+    })
+    held = f.tables.product_mentions
+    const r = await runProductMonth(f.client, { clientId: OSSUR_CLIENT_ID, runId: 'run-3', now: '2026-11-08T05:01:02.000Z', month: OCT, budgetUsd: 1, cap: 0 })
+    expect(r).toMatchObject({ status: 'written', ruleRowsInserted: 2 })
+    expect(f.tables.product_mentions.map((m) => [m.placement, m.product_id ?? m.group_id, m.field])).toEqual([
+      ['named', P('Cheetah Xcel'), 'caption'], ['unclear', G('Feet'), 'transcript_en'],
+    ])
+    const feet = f.tables.month_product_readings.find((x) => x.object_id === G('Feet'))!
+    expect(feet).toMatchObject({ month: OCT, k_named: 1, k_any: 1, n: 1, status: 'filling', run_id: 'run-3', read_at: '2026-11-08T05:01:02.000Z' })
+  })
+
+  it('a month the database refuses is recorded on the run with its month and Postgres code, and cuts no week', async () => {
+    // The step throws (Inngest retries it); the pipeline's .catch now hands
+    // productStepFailure's line to noteError instead of only logging it.
+    const f = fakeAdmin({
+      tables: { ...admin().tables, product_mentions: [] },
+      rpc: { product_catalogue: () => ({ data: FIXTURE_CATALOGUE }), brand_mention_candidates: () => [{ video_id: vid(1), source: 'content', field: 'caption', comment_id: null, comment_month: null, excerpt: VIDEOS[0].caption }], market_month_videos: () => [] },
+      refuse: { product_mentions: () => ({ code: '23505', message: 'duplicate key value violates unique constraint "product_mentions_uniq"' }) },
+    })
+    const thrown = await runProductMonth(f.client, { clientId: OSSUR_CLIENT_ID, runId: 'run-1', now: NOW, month: '2026-10-01', budgetUsd: 1, cap: 0 }).catch((e: unknown) => e)
+    expect(thrown).toBeInstanceOf(Error)
+    expect((thrown as Error).message).toBe('product_mentions insert: duplicate key value violates unique constraint "product_mentions_uniq" (code 23505)')
+    const line = productStepFailure('2026-10-01', thrown)
+    expect(line).toBe('2026-10 not written (Postgres 23505): product_mentions insert: duplicate key value violates unique constraint "product_mentions_uniq"')
+
+    // noteError's shape, as close-run stores it: the run reads partial for it,
+    // and a partial run whose only error is this one still completed its gather.
+    const recorded = [`product-readings: ${line}`]
+    expect(summariseRunErrors(1, recorded)).toMatch(/product-readings/)
+    expect(gatherCompleted({ id: 'r', status: 'partial', startedAt: NOW, finishedAt: NOW, errors: recorded })).toBe(true)
+    expect(gatherCompleted({ id: 'r', status: 'partial', startedAt: NOW, finishedAt: NOW, errors: [`plan-product-readings: ${productStepFailure(null, new Error('fetch failed'))}`] })).toBe(true)
+  })
+
+  it('productStepFailure takes the code from the error, its cause or its message, and says none where there is none', () => {
+    expect(productStepFailure('2026-10-01', Object.assign(new Error('canceling statement due to statement timeout'), { code: '57014' })))
+      .toBe('2026-10 not written (Postgres 57014): canceling statement due to statement timeout')
+    expect(productStepFailure('2026-10-01', Object.assign(new Error('step failed'), { cause: { code: 'PGRST205' } })))
+      .toBe('2026-10 not written (Postgres PGRST205): step failed')
+    expect(productStepFailure(null, new Error('selectAll: fetch failed'))).toBe('not planned: selectAll: fetch failed')
+    expect(productStepFailure('2026-09-01', 'plain')).toBe('2026-09 not written: plain')
   })
 })

@@ -725,6 +725,12 @@ export async function storedProductRows(admin: SupabaseClient, clientId: string,
   }
 }
 
+/** A PostgREST error as the product writes throw it: the message and the
+ *  Postgres code where there is one (23505 a unique key), so the run's errors
+ *  name the cause of a month that was not written. */
+export const pgError = (error: { message?: string; code?: string }): string =>
+  `${error.message ?? String(error)}${error.code ? ` (code ${error.code})` : ''}`
+
 /** Upsert on the primary key, one audience-month never split across two
  *  statements (decision K's one-statement promise, chunkByAudienceMonth); the
  *  stale filling rows deleted by their whole key. */
@@ -732,7 +738,7 @@ export async function writeProductRows(admin: SupabaseClient, clientId: string, 
   let written = 0
   for (const part of chunkByAudienceMonth(merged.writes, 500)) {
     const { error } = await admin.from(PRODUCT_READINGS_TABLE).upsert(part, { onConflict: MONTH_PRODUCT_READINGS_ON_CONFLICT })
-    if (error) throw new Error(`${PRODUCT_READINGS_TABLE} upsert: ${(error as { message?: string }).message ?? String(error)}`)
+    if (error) throw new Error(`${PRODUCT_READINGS_TABLE} upsert: ${pgError(error as { message?: string; code?: string })}`)
     written += part.length
   }
   let deleted = 0
@@ -740,7 +746,7 @@ export async function writeProductRows(admin: SupabaseClient, clientId: string, 
     const [kind, id] = (s.objectId ?? '|').split('|')
     const { error } = await admin.from(PRODUCT_READINGS_TABLE).delete()
       .eq('client_id', clientId).eq('month', s.month).eq('audience', s.audience).eq('object_kind', kind).eq('object_id', id).eq('status', 'filling')
-    if (error) throw new Error(`${PRODUCT_READINGS_TABLE} stale delete: ${error.message}`)
+    if (error) throw new Error(`${PRODUCT_READINGS_TABLE} stale delete: ${pgError(error)}`)
     deleted++
   }
   return { written, deleted }

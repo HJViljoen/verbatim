@@ -439,6 +439,19 @@ describe('pickQuote and thinWeek', () => {
     expect(thinWeek({ ...signals, runStatus: 'partial' })).toBe(true)
     expect(thinWeek({ ...signals, run: { ...signals.run, conversations: 120 } })).toBe(true)
   })
+
+  it('a run partial only for Your products is not thin, and says no "finished partially"; any other step still is', () => {
+    const products = { ...signals, runStatus: 'partial', runErrorMessage: '1 step error: product-readings' }
+    expect(thinWeek(products)).toBe(false)
+    expect(thinWeek({ ...products, runErrorMessage: '2 step errors: gate:instagram, product-readings' })).toBe(true)
+    expect(thinWeek({ ...products, runErrorMessage: '1 step error: ocr' })).toBe(true)
+    expect(thinWeek({ ...products, runErrorMessage: null })).toBe(true)
+    // thin for its few conversations, the note gives that reason, not the run's
+    const quiet = { ...products, run: { ...signals.run, conversations: 120 } }
+    const { user } = buildWriterPrompts({ template: SALES_BRIEF, settings: DEFAULT_DOCUMENT_SETTINGS, company: 'Ossur', period: 'p', reader: null, figures: {}, signals: quiet, answers: [], previous: null, thin: thinWeek(quiet) })
+    expect(user).toContain('few conversations in the period')
+    expect(user).not.toContain('finished partially')
+  })
 })
 
 describe('the skeleton walk (2026-09-02)', () => {

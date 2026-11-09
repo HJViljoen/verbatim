@@ -61,6 +61,26 @@ describe('planRules: the rows the rules give', () => {
     expect(plan.placed.get(contentKey(V1))!.map((p) => p.placement).sort()).toEqual(['named', 'unbranded'])
   })
 
+  it('one content row per unique key: a family in one field and a category word in another are one product-less row, the stronger', () => {
+    // Production's shape (Össur, 28 Oct to 8 Nov): the caption names a product,
+    // the hashtags hold a category word, the translated transcript the
+    // category's family. "unclear" and "unbranded" carry no product, so both
+    // rows had one product_mentions_uniq key and the INSERT refused the batch.
+    const p = planRules(OSSUR_CLIENT_ID, compiled, [
+      { videoId: V1, field: 'caption', text: 'Cheetah Xcel at the track' },
+      { videoId: V1, field: 'hashtags', text: 'runningblade amputee' },
+      { videoId: V1, field: 'transcript_en', text: 'my new Pro-Flex fits' },
+    ], [])
+    const keys = p.rows.map(mentionKey)
+    expect(new Set(keys).size).toBe(keys.length)
+    expect(p.rows.map((r) => [r.placement, r.product_id ?? r.group_id, r.field])).toEqual([
+      ['named', P('Cheetah Xcel'), 'caption'],
+      ['unclear', G('Feet'), 'transcript_en'],
+    ])
+    // what stands on the text is unchanged: the category's strongest
+    expect(p.placed.get(contentKey(V1))!.map((x) => x.placement)).toEqual(['named'])
+  })
+
   it('the unique key skips a held row, and differs by method and version', () => {
     const r = plan.rows[0]
     expect(mentionKey(r)).toBe(mentionKey({ ...r }))

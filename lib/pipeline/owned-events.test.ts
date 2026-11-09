@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { detectAccountEvents, weeklyAnchors } from './owned-events'
+import { detectAccountEvents, previousUpdateEnd, weeklyAnchors } from './owned-events'
 
 const snap = (d: string, followers: number, platform = 'instagram') => ({
   platform,
@@ -102,5 +102,20 @@ describe('detectAccountEvents — a post caption bound for the Step 2c prompt', 
     const line = events.find((e) => e.metric === 'post_performance')!.factLine
     expect(line).toContain(`(caption: "${'a'.repeat(119)}👜")`)
     expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(line)).toBe(false)
+  })
+})
+
+describe('previousUpdateEnd: where the owned-events window starts', () => {
+  const rows = (newest: { status: string; error_message?: string | null }) => [
+    { ...newest, completed_at: '2026-11-08T05:13:49Z' },
+    { status: 'completed', completed_at: '2026-11-01T05:32:25Z', error_message: null },
+  ]
+
+  it('a run partial only for Your products is the completed update it was; a run partial for any other step is passed over, as before', () => {
+    expect(previousUpdateEnd(rows({ status: 'partial', error_message: '1 step error: product-readings' }))).toBe('2026-11-08T05:13:49Z')
+    expect(previousUpdateEnd(rows({ status: 'partial', error_message: '1 step error: gate:instagram' }))).toBe('2026-11-01T05:32:25Z')
+    expect(previousUpdateEnd(rows({ status: 'partial', error_message: '2 step errors: ocr, product-readings' }))).toBe('2026-11-01T05:32:25Z')
+    expect(previousUpdateEnd(rows({ status: 'completed' }))).toBe('2026-11-08T05:13:49Z')
+    expect(previousUpdateEnd([])).toBeNull()
   })
 })

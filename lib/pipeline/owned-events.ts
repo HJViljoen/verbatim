@@ -8,6 +8,7 @@ import { allowTokens } from '../prose/scrub'
 import { CALIBRATED_PROSE_RULE, slotScrubber } from './prose-rules'
 import { followerFloorPct } from '../gather/owned'
 import { promptText } from '../gather/transcript'
+import { updateStatus } from '../reading/run-status'
 
 // Step 2c — owned-account events (Architecture/Owned-Data-Plan 2026-07-08).
 // "Code rates, AI explains", a third time: code detects events on the client's
@@ -300,6 +301,17 @@ function buildUserPrompt(
  * "nothing to explain" is cheap by design. A failed/skipped explanation still
  * persists the detected events as unexplained (honest, not silent).
  */
+/**
+ * Where the owned-events window starts: the newest earlier run that closed
+ * as a completed update (`updateStatus`, lib/reading/run-status.ts: a run
+ * partial only for Your products' steps counts, since those are recorded on
+ * the run row from 9 Nov; any other partial run does not, as before). Rows
+ * newest first; null where there is none. Pure.
+ */
+export function previousUpdateEnd(rows: readonly { status: string; completed_at: string | null; error_message?: string | null }[]): string | null {
+  return rows.find((r) => r.completed_at && updateStatus(r) === 'completed')?.completed_at ?? null
+}
+
 export async function runStep2c(args: {
   clientId: string
   runId: string
@@ -315,18 +327,20 @@ export async function runStep2c(args: {
     if (error) throw new Error(`clear account_events: ${error.message}`)
   }
 
-  // Run window: this run's completion back to the previous completed run's.
+  // Run window: this run's completion back to the previous completed run's
+  // (`previousUpdateEnd`: a run partial only for Your products' steps counts
+  // as the completed update it was).
   const { data: run } = await admin
     .from('pipeline_runs').select('id, started_at, completed_at')
     .eq('client_id', clientId).eq('id', runId).maybeSingle()
   if (!run) throw new Error(`run ${runId} not found for client ${clientId}`)
   const windowEnd = (run.completed_at ?? run.started_at) as string
-  const { data: prevRun } = await admin
-    .from('pipeline_runs').select('completed_at')
-    .eq('client_id', clientId).eq('status', 'completed')
+  const prevRuns = await selectAll<{ id: string; status: string; completed_at: string | null; error_message: string | null }>(() => admin
+    .from('pipeline_runs').select('id, status, completed_at, error_message')
+    .eq('client_id', clientId).in('status', ['completed', 'partial'])
     .lt('completed_at', windowEnd)
-    .order('completed_at', { ascending: false }).limit(1).maybeSingle()
-  const windowStart = (prevRun?.completed_at as string | undefined) ?? null
+    .order('completed_at', { ascending: false }).order('id'))
+  const windowStart = previousUpdateEnd(prevRuns)
 
   // selectAll: daily snapshots cross PostgREST's 1000-row cap in ~11 months
   // (3 platforms × 365 days) — a bare select would silently drop the NEWEST

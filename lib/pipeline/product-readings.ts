@@ -10,7 +10,7 @@ import { PRODUCT_CLASSIFY_PASS, runClassifier, type Classifier } from '../produc
 import { readSearchFound, readSearchTerms } from '../products/organic'
 import type { MentionInsert } from '../products/match'
 import {
-  guardFreeze, HELD_COLUMNS, itemsLeft, mergeProductRows, placeProducts, pooledProductMonth, PRODUCT_COMMENT_COLUMNS, PRODUCT_READINGS_TABLE, PRODUCT_VIDEO_COLUMNS,
+  guardFreeze, HELD_COLUMNS, itemsLeft, mergeProductRows, pgError, placeProducts, pooledProductMonth, PRODUCT_COMMENT_COLUMNS, PRODUCT_READINGS_TABLE, PRODUCT_VIDEO_COLUMNS,
   readProductMonthVideos, storedProductRows, writeProductRows, type HeldRow, type ProductCommentRow, type ProductReadIO, type ProductVideoRow,
 } from '../products/readings'
 import {
@@ -186,7 +186,7 @@ export interface ProductMonthResult {
 export async function insertMentions(admin: SupabaseClient, rows: readonly MentionInsert[]): Promise<void> {
   for (const part of chunk(rows, 500)) {
     const { error } = await admin.from(TABLE_PRODUCT_MENTIONS).insert(part)
-    if (error) throw new Error(`${TABLE_PRODUCT_MENTIONS} insert: ${error.message}`)
+    if (error) throw new Error(`${TABLE_PRODUCT_MENTIONS} insert: ${pgError(error)}`)
   }
 }
 
@@ -264,6 +264,27 @@ export const productSummary = (r: ProductMonthResult): string =>
   r.status === 'skipped'
     ? `${r.month.slice(0, 7)}: skipped · ${r.note}`
     : `${r.month.slice(0, 7)}: ${r.ruleRowsInserted} new rule placements, ${r.confirmAsked} generic names checked, ${r.classified} comments classified, ${r.deferred} left for the next run · $${r.costUsd.toFixed(4)} · ${r.written} rows written (${r.frozen} frozen${r.heldOpen ? `; ${r.heldOpen} held filling because items were left: the next run freezes them` : ''}), ${r.keptFrozen} already frozen, ${r.refusedLate} refused as late · ${r.note}`
+
+/**
+ * What the run records (`noteError`) when a product step runs out of
+ * retries: the month (null for the plan), the Postgres code and the message.
+ * Össur's October failed so on three runs from 28 Oct (23505) and nothing
+ * recorded it: the step's `.catch` only logged. The run carries on as before;
+ * the failure now reads in `pipeline_runs.errors` and the partial-run alert,
+ * and both labels are in AFTER_GATHER_STEPS, so no chart week is cut for it.
+ * The code is the error's own, else the one the product writes put in their
+ * message (`pgError`). PURE.
+ */
+export function productStepFailure(month: string | null, e: unknown): string {
+  const message = e instanceof Error ? e.message : String(e)
+  const own = (x: unknown): string | null => {
+    const code = x && typeof x === 'object' ? (x as { code?: unknown }).code : null
+    return typeof code === 'string' && code ? code : null
+  }
+  const code = own(e) ?? own((e as { cause?: unknown } | null)?.cause) ?? /\(code ([0-9A-Z]{5}|PGRST\d{3})\)/.exec(message)?.[1] ?? null
+  const what = month ? `${month.slice(0, 7)} not written` : 'not planned'
+  return `${what}${code ? ` (Postgres ${code})` : ''}: ${code ? message.replace(` (code ${code})`, '') : message}`
+}
 
 /** The run's item cap, for the pipeline's loop (what each month's step may
  *  still send is this less what the earlier months' returns say they sent). */

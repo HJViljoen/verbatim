@@ -111,6 +111,16 @@ describe('weekCadence', () => {
     expect(weekCadence('2026-09-28', PROD_RUNS)).toEqual({ runsInWeek: 1, runsAfter: [1, 1], lateRun: false, offCadence: 0 })
   })
 
+  it('a Sunday update partial only for Your products stays on cadence; partial for any other step it is off, as before', () => {
+    const at = PROD_RUNS.findIndex((r) => (r.startedAt ?? '').startsWith('2026-10-04'))
+    expect(at).toBeGreaterThanOrEqual(0)
+    const withRun = (errorMessage: string) => PROD_RUNS.map((r, i) => (i === at ? { ...r, status: 'partial', errorMessage } : r))
+    expect(weekCadence('2026-09-28', withRun('1 step error: product-readings')).offCadence).toBe(0)
+    expect(weekCadence('2026-09-28', withRun('2 step errors: comments:tiktok:4, product-readings')).offCadence).toBe(1)
+    // the line reads Pass A and classification: their partial keeps counting
+    expect(weekCadence('2026-09-28', withRun('1 step error: classify-meta')).offCadence).toBe(1)
+  })
+
   it("staging's week of 7 Sep was not: Wednesday and Thursday runs, a failed run, a partial one and one still analysing", () => {
     expect(weekCadence('2026-09-07', STAGING_RUNS)).toEqual({ runsInWeek: 2, runsAfter: [2, 1], lateRun: false, offCadence: 5 })
   })
