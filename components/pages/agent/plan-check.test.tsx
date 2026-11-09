@@ -47,11 +47,28 @@ describe('the plan check', () => {
     expect(m).toMatch(/data-tag="tint"[^>]*>Supported</)
     const t = text(node)
     expect(t).toContain('In summary People ask what the product is for')
-    expect(t).toContain('22 conversations: Questions about Ossur pricing, Questions about Ossur performance, How to contact Ossur')
+    expect(t).toContain('At least 22 videos behind it, from these conversations: Questions about Ossur pricing, Questions about Ossur performance, How to contact Ossur')
     // An untested claim stops at its tag; one the document never states says so.
     expect(t).toContain('One ambassador outperforms a roster for recall. Untested Not stated directly in the document.')
     expect(t).not.toMatch(/[·→]|supported ·/)
     expect(m).not.toMatch(/uppercase|font-mono|rounded-full/)
+  })
+
+  it('counts a claim\'s videos as videos and names its conversations apart (9 Nov: "1 conversation:" over five names)', () => {
+    // The live plan check's claim 6: one video behind it, read against five
+    // conversations. The count is `conversationCount`, the distinct videos
+    // behind the claim's quotes (lib/ask/verdicts.ts), the number Your moves
+    // prints as "at least N videos behind it"; the names are its themes.
+    const five = ['Who this prosthesis fits', 'Young amputees and milestones', 'Military amputees and varied levels', 'Young child prosthetic users', 'Rehabilitation and disability audience']
+    const claim = { ...doc.claims.find((c) => c.verdict === 'contradicts')!, conversationCount: 1, themeRefs: five.map((label, i) => ({ themeId: `t${i}`, registryId: `r${i}`, label })) }
+    const t = text(<AgentDocumentView claims={[claim]} quotesByClaim={quotes} />)
+    expect(t).toContain(`At least 1 video behind it, from these conversations: ${five.join(', ')}`)
+    expect(t).not.toMatch(/\b1 conversation\b/)
+    const one = text(<AgentDocumentView claims={[{ ...claim, conversationCount: 7, themeRefs: [claim.themeRefs[0]] }]} quotesByClaim={quotes} />)
+    expect(one).toContain('At least 7 videos behind it, from this conversation: Who this prosthesis fits')
+    const none = text(<AgentDocumentView claims={[{ ...claim, conversationCount: 3, themeRefs: [] }]} quotesByClaim={quotes} />)
+    expect(none).toContain('At least 3 videos behind it.')
+    assertCopyContract(<AgentDocumentView claims={[claim]} quotesByClaim={quotes} />)
   })
 
   it('shades the document with plain spans, says what the shading means, and leaves untested claims plain', () => {

@@ -19,8 +19,10 @@ import type { ClaimResult, Judgement, Verdict } from '@/lib/ask/types'
 // SINCE THE AUDIT DESIGN (7 Nov, Agent-Thread.dc.html): each claim a ruled
 // row with its number, its claim as an h3 and its verdict as a tag
 // (Contradicted the caution pair, Untested the track, Supported the pale
-// yellow); "In summary" a sentence-case label; its conversations "22
-// conversations: A, B, C". The counts by verdict are the figures row's
+// yellow); "In summary" a sentence-case label; its videos and conversations
+// ("At least 22 videos behind it, from these conversations: A, B, C"; the
+// board says "22 conversations: A, B, C", but the number is videos, 9 Nov).
+// The counts by verdict are the figures row's
 // (`planCheckStats`), and "What I'd take from that" is its own tile under the
 // two (`PlanJudgement`). This file sits in the split's client bundle, so its
 // styles come from the kit's import-free `look.ts`.
@@ -100,9 +102,14 @@ export function AgentDocumentView({
                     <p className="m-0 text-[15px] leading-[1.6] text-foreground">{c.theySay}</p>
                   </>
                 )}
+                {/* The count is VIDEOS: `conversationCount` is the distinct
+                    videos behind the claim's quotes (lib/ask/verdicts.ts), a
+                    floor, which Your moves prints as "at least N videos behind
+                    it". The names are the conversations it was read against.
+                    Printed as "1 conversation:" over five names until 9 Nov. */}
                 <p className="m-0 text-[13.5px] leading-[1.55] text-secondary-foreground">
                   <span className="font-semibold text-foreground">
-                    <span data-copy="figure" className="tabular-nums">{c.conversationCount}</span> {c.conversationCount === 1 ? 'conversation' : 'conversations'}{labels.length > 0 ? ':' : null}
+                    At least <span data-copy="figure" className="tabular-nums">{c.conversationCount}</span> {c.conversationCount === 1 ? 'video' : 'videos'} behind it{labels.length > 0 ? `, from ${labels.length === 1 ? 'this conversation' : 'these conversations'}:` : '.'}
                   </span>
                   {labels.length > 0 ? <> {labels.join(', ')}</> : null}
                 </p>
