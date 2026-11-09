@@ -6,7 +6,7 @@ import { deleteCommentsProperly } from '../lib/retention/youtube-refresh-io'
 import { AI_LOG_BODY_RETENTION_DAYS, DEMO_CLIENT_ID } from '../lib/config'
 import { markSnapshotsStale } from '../lib/artifacts'
 import { scrubStoredPlanChecks, scrubStoredPostIdeas } from '../lib/retention/stored-prose'
-import { runErasure } from '../lib/retention/erase-run'
+import { runErasure, unfinishedMessage } from '../lib/retention/erase-run'
 
 // Erase one commenter on request (Tier 1.5, 2026-08-22). The privacy notice
 // says: write with the handle and platform and we will remove the comments tied
@@ -400,9 +400,12 @@ async function main() {
     },
   })
 
-  if (outcome.failed.length) {
+  // A FAILED ERASURE NEVER READS AS A FINISHED ONE: no reply template, the
+  // failed steps named, and exit 1.
+  const unfinished = unfinishedMessage(outcome)
+  if (unfinished) {
+    console.error(`\n${unfinished}`)
     process.exitCode = 1
-    console.log(`\nNOT FINISHED. Failed: ${outcome.failed.join(', ')}. ${outcome.erased ? 'The comments are deleted.' : 'The comments are NOT deleted.'} Fix the cause and run again with the same arguments; no reply until it finishes.`)
     return
   }
 

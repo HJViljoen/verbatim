@@ -1,7 +1,10 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
 import { fakeDb } from '../test/fake-db'
-import { runErasure, type EraseStep } from './erase-run'
+import { runErasure, unfinishedMessage, type EraseStep } from './erase-run'
 import { scrubStoredPlanChecks, scrubStoredPostIdeas } from './stored-prose'
 
 // Review, 9 Nov: a scrub that threw after the comments were deleted skipped
@@ -89,3 +92,43 @@ describe('runErasure', () => {
     expect(JSON.stringify(scrubbedPlan?.values)).not.toContain(ERASED)
   })
 })
+
+// A failed erasure must never look like a finished one: the script exits 1,
+// names what failed, says the comments are not deleted yet, says to re-run,
+// and prints no reply.
+describe('an erasure that did not finish says so', () => {
+  it('names the failed scrubs, says the comments are not deleted yet, and to re-run', () => {
+    const msg = unfinishedMessage({ failed: ['stored Ask answers', 'stored post ideas'], erased: false })!
+    expect(msg).toContain('ERASURE NOT FINISHED')
+    expect(msg).toContain('Failed: stored Ask answers, stored post ideas.')
+    expect(msg).toContain('The comments were NOT deleted yet')
+    expect(msg).toContain('re-run this script with the same arguments')
+    expect(msg).toContain('Send no reply')
+  })
+
+  it('says the comments are deleted where only suppression failed, and still to re-run', () => {
+    const msg = unfinishedMessage({ failed: ['suppression'], erased: true })!
+    expect(msg).toContain('Failed: suppression.')
+    expect(msg).toContain('The comments are deleted.')
+    expect(msg).toContain('re-run')
+  })
+
+  it('says nothing where every step succeeded', () => {
+    expect(unfinishedMessage({ failed: [], erased: true })).toBeNull()
+  })
+
+  it('is what the script prints, to stderr, exiting 1 before any reply', () => {
+    const src = readFileSync(resolve(__dirname, '../../scripts/erase-commenter.ts'), 'utf8')
+    const at = src.indexOf('const unfinished = unfinishedMessage(outcome)')
+    const reply = src.indexOf('--- reply template ---')
+    expect(at).toBeGreaterThan(0)
+    expect(reply).toBeGreaterThan(at)
+    const branch = src.slice(at, reply)
+    expect(branch).toMatch(/console\.error\(`\\n\$\{unfinished\}`\)/)
+    expect(branch).toContain('process.exitCode = 1')
+    expect(branch).toMatch(/return\n\s*\}/)
+    // The delete runs last and only through the runner.
+    expect(src.indexOf('runErasure({')).toBeLessThan(at)
+  })
+})
+

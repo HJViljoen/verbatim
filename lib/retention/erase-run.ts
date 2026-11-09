@@ -50,3 +50,20 @@ export async function runErasure(
   const erased = await attempt(plan.erase)
   return { failed, erased }
 }
+
+/**
+ * What an erasure that did not finish says, last, in place of the reply (the
+ * script prints it to stderr and exits 1). Null where every step succeeded.
+ * It names the steps that failed, says whether the comments were deleted, and
+ * says to re-run, so a failed erasure never reads as a finished one. Pure.
+ */
+export function unfinishedMessage(outcome: EraseOutcome): string | null {
+  if (!outcome.failed.length) return null
+  return [
+    `ERASURE NOT FINISHED. Failed: ${outcome.failed.join(', ')}.`,
+    outcome.erased
+      ? 'The comments are deleted.'
+      : 'The comments were NOT deleted yet: they stay so that a re-run can find their words.',
+    'Fix the cause and re-run this script with the same arguments. Send no reply until a run finishes.',
+  ].join(' ')
+}
