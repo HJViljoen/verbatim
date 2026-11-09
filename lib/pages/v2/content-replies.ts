@@ -242,7 +242,7 @@ export async function loadContentReplies(scope: Scope, opts: { now?: Date } = {}
   const [brand, replies, owned, figures] = await Promise.all([
     soft('replies.brand', readBrand(db, clientId)),
     window
-      ? soft('replies.list', buildReplies({ supabase: db, clientId, runId: week?.runId ?? '', window: { from: window.from, to: window.to, basis: 'content' }, videos: Promise.resolve([]), gate: true }))
+      ? soft('replies.list', buildReplies({ supabase: db, admin: scope.reading.client, clientId, runId: week?.runId ?? '', window: { from: window.from, to: window.to, basis: 'content' }, videos: Promise.resolve([]), gate: true }))
       : Promise.resolve(null),
     soft('replies.owned', ownedPosts({ supabase: db, clientId }, { from: month.month, to: nextMonth(month.month) })),
     soft('replies.elsewhere', readElsewhereFigures(scope, anchor)),

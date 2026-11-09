@@ -1499,7 +1499,7 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
     soft('owned', ownedPosts({ supabase: db, clientId }, { from: since, to: ownedTo(month, week) })),
     soft('playbook', async () => buildPlaybook({ month: month.month, brand: brand ?? 'You', rival: null, videos: await loadPlaybookVideos(db, clientId, month.month), clientSide: 'owned' })),
     repliesWindow
-      ? soft('replies', buildReplies({ supabase: db, clientId, runId: week?.runId ?? '', window: { from: repliesWindow.from, to: repliesWindow.to, basis: 'content' }, videos: Promise.resolve([]), gate: true }))
+      ? soft('replies', buildReplies({ supabase: db, admin, clientId, runId: week?.runId ?? '', window: { from: repliesWindow.from, to: repliesWindow.to, basis: 'content' }, videos: Promise.resolve([]), gate: true }))
       : Promise.resolve(null),
   ])
   const owned = ownedRead ? summariseOwnedPosts(ownedRead.posts, { from: month.month, to: nextMonth(month.month) }) : null

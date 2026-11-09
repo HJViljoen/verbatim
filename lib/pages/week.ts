@@ -1820,7 +1820,7 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
   // THE QUOTE GATE (walkthrough, 29 Sep; lib/quote-gate.ts) on This week's
   // quotes: the reply queue, the flagged-for-awareness rows and For Sales.
   // The weekly report's own calls (`loadWeekParts`) do not pass it.
-  const repliesAhead = buildReplies({ supabase, clientId, runId: anchor.id, window, videos: videosAhead, gate: true })
+  const repliesAhead = buildReplies({ supabase, admin: reading.client, clientId, runId: anchor.id, window, videos: videosAhead, gate: true })
   const salesCitationsAhead = window ? loadSalesCitations(supabase, clientId, window) : undefined
   // Awaited in the sections' wave; this only keeps a failure that lands before
   // then from being an unhandled rejection. That wave still rejects with it.
@@ -2128,7 +2128,7 @@ export async function loadWeekParts(scope: Scope): Promise<WeekParts | null> {
       regime: { clusteringKey: anchor.clustering_key, startedAt: anchor.started_at, date: update.date },
     }),
     buildSales({ supabase, clientId, window, windowVideos: totalVideos(windowRead?.denominators ?? null), subjects }),
-    buildReplies({ supabase, clientId, runId: anchor.id, window, videos: Promise.resolve(videos) }),
+    buildReplies({ supabase, admin: reading.client, clientId, runId: anchor.id, window, videos: Promise.resolve(videos) }),
   ])
   return { update, window, month, cameIn, heard, sales, replies }
 }
@@ -2168,6 +2168,14 @@ const REPLIES_NO_WINDOW =
  */
 export async function buildReplies(input: {
   supabase: SupabaseClient
+  /** The service-role client (the reading handle's), for the one read only it
+   *  may make: `segments_for_videos`, which MF1 grants to service_role alone
+   *  because it is SECURITY DEFINER and takes the tenant as a parameter. The
+   *  session client is refused it ("permission denied for function"), and the
+   *  queue then skipped no noise and read no stored maker label (9 Nov, the
+   *  Content pages). Absent, the segments are read on `supabase`, which is
+   *  right only where that is already the service role (a script, a send). */
+  admin?: SupabaseClient | null
   clientId: string
   runId: string
   window: WeekWindow | null
@@ -2228,7 +2236,7 @@ export async function buildReplies(input: {
     const contextAhead = input.gate
       ? readQuoteContext(supabase, clientId, engageContextWant(printable)).catch(() => null)
       : Promise.resolve(null)
-    const segments = await replySegments(supabase, clientId, candidates.map((c) => c.comment))
+    const segments = await replySegments(supabase, input.admin ?? supabase, clientId, candidates.map((c) => c.comment))
     const unGated = skipNoise(candidates, (c) => c.comment.id, segments.noise)
     const [translations] = await Promise.all([translationsAhead, contextAhead])
     // The context read above is memoised on the client, so the gate's own read
@@ -3788,6 +3796,9 @@ export async function loadHeard(input: {
  */
 async function replySegments(
   supabase: SupabaseClient,
+  /** The client the segments are read on: the service role's (`buildReplies`'
+   *  `admin`). The comments and videos stay on `supabase`. */
+  segmentsClient: SupabaseClient,
   clientId: string,
   held: readonly { id: string; platform?: string | null; videoId?: string | null; videoRowId?: string | null }[],
 ): Promise<{ noise: Set<string>; maker: Set<string> }> {
@@ -3816,7 +3827,7 @@ async function replySegments(
     }))).flat()
     for (const v of videos) uuidOf.set(`${v.platform}::${v.video_id}`, v.id)
     if (uuidOf.size === 0) return out
-    const res = await supabase.rpc(RPC_SEGMENTS_FOR_VIDEOS, { p_client: clientId, p_video_ids: [...new Set(uuidOf.values())] })
+    const res = await segmentsClient.rpc(RPC_SEGMENTS_FOR_VIDEOS, { p_client: clientId, p_video_ids: [...new Set(uuidOf.values())] })
     if (res.error) throw res.error
     const segment = new Map(((res.data ?? []) as { video_id: string; segment: string | null }[]).map((r) => [String(r.video_id), r.segment]))
     for (const c of comments) {
