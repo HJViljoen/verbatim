@@ -40,12 +40,16 @@ export function AgentDocumentSplit({
   segments,
   anchored,
   notice,
+  was = null,
 }: {
   claims: ClaimResult[]
   quotesByClaim: Map<string, (string | QuoteItem)[]>
   segments: Segment[]
   anchored: string[]
   notice: string | null
+  /** The original reading in one sentence, where the claims below are a
+   *  re-reading (`DocumentCheck.was`); null prints nothing. */
+  was?: string | null
 }) {
   const [active, setActive] = useState<string | null>(null)
   const [pane, setPane] = useState<'check' | 'document'>('check')
@@ -84,6 +88,7 @@ export function AgentDocumentSplit({
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(0,6fr)]">
         <section aria-labelledby="plan-check-title" className={cn(CARD_FRAME, 'gap-3.5', pane === 'check' ? null : 'max-lg:hidden')}>
           <h2 id="plan-check-title" className="m-0 mb-1 text-[21px] font-semibold leading-[1.3] text-foreground">The check, claim by claim</h2>
+          {was ? <p className="m-0 mb-1 text-[14px] leading-[1.55] text-secondary-foreground">{was}</p> : null}
           <div ref={listRef}>
             <AgentDocumentView
               claims={claims}

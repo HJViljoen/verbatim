@@ -218,6 +218,20 @@ export function currentReading(
 }
 
 /**
+ * The original reading, said once beside a newer one (Heinrich, 9 Nov): "On 22
+ * Aug this read 2 supported, 8 contradicted, 5 untested." The upload's own day
+ * and its stored counts, as they were read then (not held to a later floor:
+ * it is what the plan read that day). A verdict no claim earned is left out,
+ * the figures row's rule; null where it counted nothing. Pure.
+ */
+export function originalReadingLine(on: string, summary: AskSummary): string | null {
+  const parts = ([[summary.supported, 'supported'], [summary.contradicted, 'contradicted'], [summary.untested, 'untested']] as [number, string][])
+    .filter(([n]) => n > 0)
+    .map(([n, w]) => `${fmtInt(n)} ${w}`)
+  return parts.length ? `On ${appShort(on)} this read ${parts.join(', ')}.` : null
+}
+
+/**
  * What has moved since the plan was uploaded, and how long it has held.
  *
  * THE LAST TRANSITION PER CLAIM, NOT THE LAST EVALUATION'S LIST. A claim that

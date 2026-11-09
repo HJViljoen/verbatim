@@ -86,6 +86,16 @@ describe('the plan check', () => {
     expect(five).toContain('At least 5 videos behind it')
   })
 
+  it('names the original reading once, in a plain sentence, where a re-reading is printed', () => {
+    const was = 'On 22 Aug this read 2 supported, 8 contradicted, 5 untested.'
+    const node = <AgentDocumentSplit claims={doc.claims} quotesByClaim={quotes} segments={doc.segments} anchored={doc.anchored} notice={null} was={was} />
+    const m = render(node)
+    expect(m.split(was)).toHaveLength(2)
+    expect(m).toMatch(/<p class="[^"]*text-\[14px\][^"]*">On 22 Aug this read/)
+    assertCopyContract(node)
+    expect(render(<AgentDocumentSplit claims={doc.claims} quotesByClaim={quotes} segments={doc.segments} anchored={doc.anchored} notice={null} was={null} />)).not.toContain('this read')
+  })
+
   it('shades the document with plain spans, says what the shading means, and leaves untested claims plain', () => {
     const m = render(<AgentDocumentSplit claims={doc.claims} quotesByClaim={quotes} segments={doc.segments} anchored={doc.anchored} notice={null} />)
     expect(m).not.toContain('<mark')

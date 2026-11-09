@@ -111,6 +111,7 @@ export default async function AgentThreadPage({
             segments={doc.segments}
             anchored={doc.anchored}
             notice={doc.notice}
+            was={doc.was}
           />
           <PlanJudgement claims={doc.claims} judgement={doc.judgement} />
           {deleteControl}

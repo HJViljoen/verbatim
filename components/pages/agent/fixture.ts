@@ -705,6 +705,7 @@ export function planCheckFixture(): AgentThreadData {
       claims,
       summary: { supported: 1, contradicted: 3, untested: 2 },
       checkedOn: null,
+      was: null,
       judgement: [
         { text: 'Reframe the category as explained, not assumed. The audience is not arriving fluent in what the products do, who they are for, or what the next step is.', basedOnRefs: ['C1', 'C4'] },
         { text: 'Keep performance-led storytelling, but stop separating mastery from reality. Show what achievement requires: training, setbacks and adjustments.', basedOnRefs: ['C2', 'C5'] },

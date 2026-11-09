@@ -9,7 +9,7 @@ import { appWeekday, fmtInt, longMonth } from '../format'
 import { row, rows as readRows } from './read'
 import { isMissingColumnError } from '../supabase-admin'
 import type { ClaimResult, Judgement, AskSummary } from '../ask/types'
-import { currentReading, loadPlanChecks, PLAN_VERDICT_LABEL, type PlanCheckCard, type PlanEvaluation } from '../ask/plan-cards'
+import { currentReading, loadPlanChecks, originalReadingLine, PLAN_VERDICT_LABEL, type PlanCheckCard, type PlanEvaluation } from '../ask/plan-cards'
 import { normaliseRef, summarise } from '../ask/verdicts'
 import { JUDGEMENT_HEADING, NEAREST_HEADING, OUT_OF_CORPUS_NOTICE, type AgentAnswer } from '../agent/types'
 import { askBasisLine, loadIndexFacts, type AskBasis } from '../agent/basis'
@@ -122,6 +122,10 @@ export interface DocumentCheck {
    *  .run_date` of the newest re-reading); null where they are the upload's,
    *  which the thread's own update dates. */
   checkedOn: string | null
+  /** The original reading in one sentence ("On 22 Aug this read 2 supported,
+   *  8 contradicted, 5 untested."), where a re-reading is printed; null where
+   *  the printed reading is the original. */
+  was: string | null
   judgement: Judgement[]
   quotesByClaim: Record<string, Quote[]>
   segments: Segment[]
@@ -851,8 +855,9 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
       input_text: string | null
       source_filename: string | null
       notice: string | null
+      created_at: string
     }>(await (async () => {
-      const columns = 'claims, summary, judgement, input_text, source_filename'
+      const columns = 'claims, summary, judgement, input_text, source_filename, created_at'
       const read = (cols: string) => supabase
         .from('plan_checks')
         .select(cols)
@@ -909,6 +914,9 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
           ? summarise(claims)
           : { supported: 0, contradicted: 0, untested: 0 })) as AskSummary,
         checkedOn: current.checkedOn,
+        // THE ORIGINAL, ONCE, beside a newer reading: the upload's day and its
+        // stored counts (or its claims counted, where it stored none).
+        was: current.checkedOn ? originalReadingLine(check.created_at, check.summary ?? summarise(stored)) : null,
         judgement: (check.judgement ?? []) as Judgement[],
         quotesByClaim,
         segments,

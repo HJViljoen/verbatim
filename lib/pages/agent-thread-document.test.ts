@@ -138,6 +138,21 @@ describe('a plan-check thread prints the newest reading', () => {
   })
 })
 
+// Heinrich, 9 Nov: the thread shows the newest reading and ONE plain sentence
+// naming the original, from the stored upload: its day and its counts. Nothing
+// where the newest reading is the original.
+describe('a plan-check thread names its original reading once', () => {
+  it('says the upload’s day and counts in one sentence where a re-reading is printed', async () => {
+    const { data } = await load([evaluation('run-nov', '2026-11-08', '2026-11-08T06:00:00.000Z', NOV)])
+    expect(data.document!.was).toBe('On 22 Aug this read 2 supported, 1 untested.')
+  })
+
+  it('prints nothing where the newest reading is the original', async () => {
+    const { data } = await load([])
+    expect(data.document!.was).toBeNull()
+  })
+})
+
 // 9 Nov: claims 6 and 12 of Össur's thread read "Contradicted" on one and
 // three videos, the upload's verdicts from before the five-video floor. A
 // claim under the floor reads untested on the thread, as on Your moves.
