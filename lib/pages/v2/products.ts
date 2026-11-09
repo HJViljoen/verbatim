@@ -184,8 +184,12 @@ export interface ShelfCategoryView {
   /** This month's share against last month's, banded. Null where no
    *  comparison is drawn at all. */
   verdict: Verdict | null
-  /** What most of its videos are about (the top READY subject), where read. */
-  lead: { label: string; k: number } | null
+  /** What most of its videos are about (the top READY subject), where read:
+   *  k of the n it was counted on, the month's set as read now (`Crosses.n`).
+   *  That n can part from `videos`, the stored month row's, between the row's
+   *  last write and today's placements (9 Nov: Sockets & Locks' "19 of 50"
+   *  where the 19 was of 54), so the lead never borrows `videos`. */
+  lead: { label: string; k: number; n: number } | null
   /** Some of the client's subjects are not measured yet (`Crosses.pending`):
    *  with no ready one, the head says SUBJECT_NOT_MEASURED. */
   subjectsPending: boolean
@@ -1143,7 +1147,7 @@ export function buildShelf(input: {
       videos: curr ? curr.k_any : null,
       share: curr && curr.n > 0 ? { k: curr.k_any, n: curr.n } : null,
       verdict: categoryShareVerdict({ group: g, month: m, curr, prev, pair: input.pair }),
-      lead: top && c && c.n > 0 ? { label: top.label, k: top.k } : null,
+      lead: top && c && c.n > 0 ? { label: top.label, k: top.k, n: c.n } : null,
       subjectsPending: (c?.pending?.length ?? 0) > 0 && (curr?.k_any ?? 0) > 0,
       leads: topRanked(c),
       unclear: curr?.k_unclear ?? 0,

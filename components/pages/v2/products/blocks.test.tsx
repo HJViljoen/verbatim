@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { bandVerdict } from '@/lib/reading/verdicts'
-import { ossurProductsFixture, ossurTodayFixture, PRODUCT_IDS, PRODUCTS_FIXTURES } from '@/lib/pages/v2/products-fixture'
-import { type FocusStandout, type GapStandout } from '@/lib/pages/v2/products'
+import { ossurCrosses, ossurProductsFixture, ossurTodayFixture, PRODUCT_IDS, PRODUCTS_FIXTURES } from '@/lib/pages/v2/products-fixture'
+import { setKey, type FocusStandout, type GapStandout } from '@/lib/pages/v2/products'
 import { CatalogueCard, CatalogueFrame, shelfColumn } from './shelf'
 import { emptyTitle, shareWords, StandoutCard, StandoutFrames, Standouts } from './standouts'
 
@@ -84,6 +84,20 @@ describe('the catalogue (E4-Products, "Your catalogue")', () => {
     expect(text).not.toContain('·')
     expect(text).toContain('Counted on every video in your market, including creators’ videos about Össur')
     assertCopyContract(node)
+  })
+
+  it('a column\'s lead is of the videos it was counted on (9 Nov: Sockets & Locks\' "Fit & comfort leads, 19 of 50", the 19 of 54)', () => {
+    // The head's videos are the stored month row's; the lead is counted over
+    // the month's set as read now (the crosses). Where the two part, the lead
+    // keeps its own base and never borrows the stored one.
+    const key = setKey('group', PRODUCT_IDS.liners())
+    const c = ossurCrosses().get(key)!
+    const parted = ossurProductsFixture({}, { crosses: new Map([...ossurCrosses(), [key, { ...c, n: c.n + 4 }]]) })
+    const liners = parted.shelf.find((x) => x.name === 'Liners')!
+    expect(liners.videos).toBe(117)
+    expect(renderText(<>{shelfColumn(liners, 'September').note}</>)).toBe(`Fit & comfort leads, 70 of ${c.n + 4}`)
+    // Where they agree, the line is as it was.
+    expect(renderText(<>{shelfColumn(d.shelf.find((x) => x.name === 'Liners')!, 'September').note}</>)).toBe('Fit & comfort leads, 70 of 117')
   })
 
   it('a column\'s head prints its verdict only where it is an answer, and a quiet column says so', () => {
@@ -225,7 +239,7 @@ describe('ruling U6, as drawn: a provisional subject prints its name and "Not me
     expect(text.match(/What it’s about: Not measured yet/g)).toHaveLength(6)
     assertCopyContract(<CatalogueCard data={d} />)
     // Some ready, some not: the ready one's level, but not "leads" over the rest.
-    const partial = { ...d.shelf[0], lead: { label: 'Fit & comfort', k: 12 }, subjectsPending: true, leads: false }
+    const partial = { ...d.shelf[0], lead: { label: 'Fit & comfort', k: 12, n: 23 }, subjectsPending: true, leads: false }
     expect(renderText(<>{shelfColumn(partial, 'September').note}</>)).toBe('Fit & comfort, 12 of 23')
     expect(renderText(<>{shelfColumn({ ...partial, subjectsPending: false, leads: true }, 'September').note}</>)).toBe('Fit & comfort leads, 12 of 23')
   })

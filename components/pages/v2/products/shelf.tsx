@@ -43,7 +43,7 @@ export function shelfColumn(c: ShelfCategoryView, monthName: string): ShelfColum
     note: c.videos == null || c.videos === 0
       ? null
       : c.lead
-        ? <>{c.lead.label}{c.leads ? ' leads,' : ','} <span data-copy="level">{fmtInt(c.lead.k)} of {fmtInt(c.videos)}</span></>
+        ? <>{c.lead.label}{c.leads ? ' leads,' : ','} <span data-copy="level">{fmtInt(c.lead.k)} of {fmtInt(c.lead.n)}</span></>
         : c.subjectsPending
           ? <span className="text-muted-foreground">What it’s about: {SUBJECT_NOT_MEASURED}</span>
           : null,
