@@ -1978,7 +1978,7 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
     // any section above it.
     repliesAhead,
     // ── §5 · for sales ───────────────────────────────────────────────────
-    buildSales({ supabase, clientId, window, windowVideos, subjects, citations: salesCitationsAhead, gate: true }),
+    buildSales({ supabase, admin: reading.client, clientId, window, windowVideos, subjects, citations: salesCitationsAhead, gate: true }),
     // ── §6's own side ────────────────────────────────────────────────────
     // ONE NARROW READ, IN THE WAVE. The client's own posts in the month are
     // tens of rows on every tenant we have, and §6 is the only section that
@@ -2127,7 +2127,7 @@ export async function loadWeekParts(scope: Scope): Promise<WeekParts | null> {
       supabase, client: reading.client, clientId, runId: anchor.id, month, themedRunId,
       regime: { clusteringKey: anchor.clustering_key, startedAt: anchor.started_at, date: update.date },
     }),
-    buildSales({ supabase, clientId, window, windowVideos: totalVideos(windowRead?.denominators ?? null), subjects }),
+    buildSales({ supabase, admin: reading.client, clientId, window, windowVideos: totalVideos(windowRead?.denominators ?? null), subjects }),
     buildReplies({ supabase, admin: reading.client, clientId, runId: anchor.id, window, videos: Promise.resolve(videos) }),
   ])
   return { update, window, month, cameIn, heard, sales, replies }
@@ -3019,6 +3019,9 @@ export async function loadSubjectQuotes(
   clientId: string,
   subjects: Subject[] | null,
   window: { from: string; to: string },
+  /** The service-role client for the noise filter's segments read
+   *  (`buildSales`' `admin`); absent, `supabase`. */
+  admin?: SupabaseClient | null,
 ): Promise<{ shown: { subject: string; quote: Quote; cite: string; href: string | null }[]; total: number | null; unread: string | null }> {
   if (!subjects || subjects.length === 0) return { shown: [], total: null, unread: QUOTES_UNREAD }
   const nameById = new Map(subjects.map((s) => [s.id, s.name]))
@@ -3074,7 +3077,7 @@ export async function loadSubjectQuotes(
   // NO QUOTE FROM UNDER A VIDEO MARKED NOISE (market-first WP2.7), and the
   // count beside the list is of the quotes it could have shown.
   const okIds = new Set(dayOk.map((p) => p.citation.commentId as string))
-  const noise = await noiseCommentsOf(supabase, clientId, dated.filter((c) => okIds.has(c.id)))
+  const noise = await noiseCommentsOf(supabase, clientId, dated.filter((c) => okIds.has(c.id)), admin ?? supabase)
   const kept = skipNoise(dayOk, (p) => p.citation.commentId, noise)
   const shown = kept.slice(0, NEW_QUOTES_SHOWN)
   const translations = await readTranslations(supabase, shown.map((s) => s.citation.quote))
@@ -3103,6 +3106,12 @@ const SALES_UNREAD_NO_WINDOW =
  *  two things to tell a salesperson about one week. One loader, called twice. */
 export async function buildSales(input: {
   supabase: SupabaseClient
+  /** The service-role client (the reading handle's), for the noise filter's
+   *  `segments_for_videos`, which the session client is refused: This week
+   *  behind /api/export and the weekly report passed the session's, the read
+   *  failed open, and a quote from under a noise video printed. The tenant is
+   *  still the session's (`clientId`). Absent, `supabase` is used. */
+  admin?: SupabaseClient | null
   clientId: string
   window: WeekWindow | null
   windowVideos: number | null
@@ -3147,7 +3156,7 @@ export async function buildSales(input: {
   // NO QUOTE FROM UNDER A VIDEO MARKED NOISE (market-first WP2.7). Only the
   // quotes skip: every count below is still of what was read.
   const [noise, gated] = await Promise.all([
-    noiseVideos(supabase, clientId, cited.map((c) => c.videoUuid)),
+    noiseVideos(input.admin ?? supabase, clientId, cited.map((c) => c.videoUuid)),
     input.gate ? salesGate(supabase, clientId, cited) : Promise.resolve(null),
   ])
   const quotable = (c: SalesCitation): boolean => !noise.has(c.videoUuid) && (gated ? gated.ok(c) : true)

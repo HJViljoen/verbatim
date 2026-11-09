@@ -78,7 +78,16 @@ export interface NoiseComment { id: string; platform: string; video_id: string }
  * video in the same request): no comments read here, so the filter costs the
  * videos read and `noiseVideos` (the deploy-3 read budget).
  */
-export async function noiseCommentsOf(client: SupabaseClient, clientId: string, comments: readonly NoiseComment[]): Promise<Set<string>> {
+export async function noiseCommentsOf(
+  client: SupabaseClient,
+  clientId: string,
+  comments: readonly NoiseComment[],
+  /** The client the segments are read on: the service role's, the only one
+   *  `segments_for_videos` answers (MF1 grants it to service_role alone). The
+   *  videos stay on `client`. Defaults to `client`, right only where that is
+   *  already the service role. */
+  segments: SupabaseClient = client,
+): Promise<Set<string>> {
   if (!segmentRulesEnabled(clientId) || comments.length === 0) return new Set()
   try {
     const native = [...new Set(comments.map((c) => c.video_id).filter(Boolean))]
@@ -88,7 +97,7 @@ export async function noiseCommentsOf(client: SupabaseClient, clientId: string, 
       return (res.data ?? []) as { id: string; platform: string; video_id: string }[]
     }))).flat()
     const uuidOf = new Map(videos.map((v) => [`${v.platform}::${v.video_id}`, v.id]))
-    const noise = await noiseVideos(client, clientId, [...uuidOf.values()])
+    const noise = await noiseVideos(segments, clientId, [...uuidOf.values()])
     if (noise.size === 0) return new Set()
     return new Set(comments
       .filter((c) => noise.has(uuidOf.get(`${c.platform}::${c.video_id}`) ?? ''))

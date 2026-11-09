@@ -700,7 +700,7 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
   // filed under a rival. Fails open — a read error prints the quotes it
   // always printed rather than none.
   const quoteVideoIds = [...new Set(messages.flatMap((m) => (m.result?.grounded ?? []).flatMap((g) => g.quotes.map((q) => q.videoId).filter((v): v is string => Boolean(v)))))]
-  const quoteVideosP = loadQuoteVideos(supabase, clientId, quoteVideoIds)
+  const quoteVideosP = loadQuoteVideos(supabase, scope.reading.client, clientId, quoteVideoIds)
 
   // AS3's index facts and the dates of the updates these answers were given
   // against. Both go out with the wave above rather than after it: round trips
@@ -1099,14 +1099,22 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
  * small reads over the thread's own quotes. FAILS OPEN: a read error leaves a
  * video unknown, and an unknown video's quote is printed as it was.
  */
-async function loadQuoteVideos(supabase: SupabaseClient, clientId: string, videoIds: readonly string[]): Promise<Map<string, AskQuoteVideo>> {
+export async function loadQuoteVideos(
+  supabase: SupabaseClient,
+  /** The service-role client (the reading handle's) for `segments_for_videos`,
+   *  which the session client is refused (9 Nov: a Sealand thread's quotes
+   *  read no segment). The videos stay on `supabase`. */
+  segmentsClient: SupabaseClient,
+  clientId: string,
+  videoIds: readonly string[],
+): Promise<Map<string, AskQuoteVideo>> {
   const out = new Map<string, AskQuoteVideo>()
   if (videoIds.length === 0) return out
   const [videosRes, segmentsRes] = await Promise.all([
     Promise.resolve(supabase.from('videos').select('id, is_competitor, competitor_name').eq('client_id', clientId).in('id', [...videoIds]))
       .catch((e: unknown) => ({ data: null, error: e })),
     segmentRulesEnabled(clientId)
-      ? Promise.resolve(supabase.rpc(RPC_SEGMENTS_FOR_VIDEOS, { p_client: clientId, p_video_ids: [...videoIds] }))
+      ? Promise.resolve(segmentsClient.rpc(RPC_SEGMENTS_FOR_VIDEOS, { p_client: clientId, p_video_ids: [...videoIds] }))
           .catch((e: unknown) => ({ data: null, error: e }))
       : Promise.resolve({ data: [], error: null }),
   ])

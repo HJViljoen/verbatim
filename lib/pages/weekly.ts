@@ -578,13 +578,14 @@ export async function loadWeekly(scope: Scope): Promise<WeeklyData | null> {
   // `isMissingMonthlyReading` guard, the sum is null, and `ForSalesData`
   // carries that as a stated absence — which is what the degraded arm is for.
   const [incoming, sales, arrivals] = await Promise.all([
-    loadIncoming(supabase, clientId, run, overview, window),
+    loadIncoming(supabase, clientId, run, overview, window, scope.reading.client),
     Promise.all([
       loadSubjects(supabase, clientId),
       windowVideosOf(scope.reading, clientId, window),
     ]).then(([subjects, windowVideos]) =>
       buildSales({
         supabase,
+        admin: scope.reading.client,
         clientId,
         // `WeekWindow` carries the BASIS the window was frozen under
         // (`pipeline_runs.window_basis`) — printed nowhere, carried so the
@@ -904,6 +905,8 @@ async function loadIncoming(
   overview: OverviewData,
   /** The update's own frozen window, for the quotes §3 dates by the COMMENT. */
   window: { from: string; to: string } | null,
+  /** The service-role client, for the quotes' noise filter (`loadSubjectQuotes`). */
+  admin: SupabaseClient,
 ): Promise<IncomingBlock> {
   const empty: IncomingBlock = {
     gathered: 0,
@@ -944,7 +947,7 @@ async function loadIncoming(
     // window there are no days for one to have been written in, and the
     // section says that rather than showing none.
     window
-      ? loadSubjects(supabase, clientId).then((subjects) => loadSubjectQuotes(supabase, clientId, subjects, window))
+      ? loadSubjects(supabase, clientId).then((subjects) => loadSubjectQuotes(supabase, clientId, subjects, window, admin))
       : Promise.resolve({
         shown: [] as { subject: string; quote: Quote; cite: string; href: string | null }[],
         total: null as number | null,
