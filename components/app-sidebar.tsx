@@ -18,7 +18,7 @@ import { surfaceForPath, surfacesIn, type NavGroup } from "@/lib/nav"
 //
 //   Dashboard · Market · Voices · Your products · Content · Your moves · Agent
 //   ──
-//   (the operator's rows, operator only) · Studio · Settings
+//   Studio · Settings · (the operator's rows, operator only)
 //
 // One list of seven, the Agent an ordinary row (its filled yellow row is
 // retired), ONE hairline, then the Studio and Settings right under it: no foot
@@ -112,12 +112,15 @@ export function AppSidebar({ header, ops }: { header?: React.ReactNode; ops?: Re
       <SidebarContent className="gap-0 px-3 pt-1.5 pb-4">
         {group("read", "agent")}
         <NavHairline />
-        {/* The operator's rows (operator only, just above the Studio: page
-            review §4) arrive as a slot: who is looking is async, and this
-            component is "use client". Absent for every user who is not a
-            platform admin, so a client's sidebar is exactly the boards'. */}
-        {ops}
         {group("foot")}
+        {/* The operator's rows (operator only) arrive as a slot: who is
+            looking is async, and this component is "use client". They come
+            LAST, under Settings (T1.8, 9 Nov; from 1 Oct they sat just above
+            the Studio, page review §4): they stream in after the nine on a
+            hard load, and at the foot they push none of the nine down.
+            Absent for every user who is not a platform admin, so a client's
+            sidebar is exactly the boards'. */}
+        {ops}
       </SidebarContent>
     </Sidebar>
   )

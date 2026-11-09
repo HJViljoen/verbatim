@@ -1186,10 +1186,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
     surfaces in three unlabelled groups: Dashboard · Market · Voices · Your
     products · Content · Your moves, the Agent, then Studio · Settings (since
     the audit design, 7 Nov, the sidebar draws the first two groups as one
-    list of seven, the Agent an ordinary row, then one hairline, the
-    operator's rows and Studio · Settings, with no foot pinned to the
-    bottom; a client's header is the mark beside its own name, an
-    operator's the switcher). The
+    list of seven, the Agent an ordinary row, then one hairline, Studio ·
+    Settings and, last, the operator's rows (T1.8, 9 Nov: they stream in
+    on a hard load, so at the foot they move no row), with no foot pinned
+    to the bottom; a client's header is the mark beside its own name, an
+    operator's the switcher, and a bone in the name's place while the
+    session resolves). The
     Dashboard is `/dashboard` (nav key `home`, NO page key: page key
     `dashboard` names the legacy module that stored snapshots and Össur's
     digest still render). Market is `/dashboard/market` (page key

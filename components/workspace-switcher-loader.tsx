@@ -1,3 +1,4 @@
+import { cache } from "react"
 import { Bricolage_Grotesque } from "next/font/google"
 import { getSessionContext } from "@/lib/auth"
 import { viewedClientRow } from "@/lib/shell/viewed-client"
@@ -5,6 +6,7 @@ import { listWorkspaces } from "@/lib/workspaces"
 import { WorkspaceSwitcher } from "@/components/workspace-switcher"
 import { VerbatimMark } from "@/components/brand/mark"
 import { SidebarClientName } from "@/components/sidebar-client-name"
+import { Bone } from "@/components/shell/skeleton"
 
 // THE WORDMARK'S FACE (the navigation of 1 Oct: every `Page-*.dc.html` sidebar
 // sets "Verbatim" in Bricolage Grotesque 700). The bold cut alone, latin only,
@@ -14,10 +16,10 @@ import { SidebarClientName } from "@/components/sidebar-client-name"
 const wordmarkFace = Bricolage_Grotesque({ subsets: ["latin"], weight: "700", display: "swap" })
 
 /**
- * The wordmark: the Suspense fallback while the session resolves, and the
- * header for a workspace whose name could not be read. The same 46px row as
- * the client's name and the operator's switcher (the boards' header), so the
- * header never shifts when the name replaces it in place.
+ * The wordmark: the header for a workspace whose name could not be read
+ * (while the session resolves the header is `SidebarNamePending`, T1.8). The
+ * same 46px row as the client's name and the operator's switcher (the boards'
+ * header), so the header never shifts when the name replaces it in place.
  *
  * The mark at 20px and the word at 18px, 7px apart. The mark is the brand
  * yellow (Heinrich, 1 Oct: "at the top left, I want the logo to be yellow");
@@ -46,29 +48,43 @@ export function SidebarWordmark() {
  * with CSS, it is never sent.
  */
 export async function WorkspaceSwitcherLoader() {
-  const { operator } = await getSessionContext()
-  if (!operator) {
-    const row = await viewedClientRow()
-    const name = typeof row?.company_name === "string" && row.company_name.trim() ? row.company_name : null
-    return name ? <SidebarClientName name={name} /> : <SidebarWordmark />
-  }
-  return <WorkspaceSwitcher operator={operator} workspaces={await listWorkspaces()} />
+  const read = await sidebarHeaderRead()
+  if (!read.operator) return read.name ? <SidebarClientName name={read.name} /> : <SidebarWordmark />
+  return <WorkspaceSwitcher operator={read.operator} workspaces={read.workspaces} />
 }
+
+/**
+ * What the sidebar's header prints, read once a request (React `cache()`):
+ * the operator and every workspace for the switcher, else the client's own
+ * name. The operator's rows (`OpsNavLoader`) await this same read, so the
+ * header and the rows, two Suspense boundaries at the two ends of the
+ * sidebar, settle on one promise and land together on a hard load (T1.8,
+ * 9 Nov: the rows came in at 760ms on the session alone, the switcher at
+ * 1,246ms after the workspaces). The same reads as before, no new one.
+ */
+export const sidebarHeaderRead = cache(async () => {
+  const { operator } = await getSessionContext()
+  if (operator) return { operator, workspaces: await listWorkspaces() }
+  const row = await viewedClientRow()
+  const name = typeof row?.company_name === "string" && row.company_name.trim() ? row.company_name : null
+  return { operator: null, name }
+})
 
 /**
  * THE PHONE TOP BAR'S BRAND (depth v2, T9; E1-Dashboard-Phone): the sidebar's
  * wordmark, the same mark, face and sizes, and the workspace's name beside it
  * in the muted ink, cut with an ellipsis where it would crowd the menu button.
- * Without a name (the fallback while the session resolves, or a row that
- * could not be read) it is the wordmark alone, so the bar never shifts by more
- * than the name.
+ * While the session resolves (the layout's fallback, `pending`) a bone stands
+ * where the name lands, as in the sidebar's header (T1.8); without a name (a
+ * row that could not be read) it is the wordmark alone, so the bar never
+ * shifts by more than the name.
  */
-export function PhoneWordmark({ name }: { name?: string | null }) {
+export function PhoneWordmark({ name, pending = false }: { name?: string | null; pending?: boolean }) {
   return (
     <div className="flex min-w-0 items-center gap-[7px]">
       <VerbatimMark size={20} className="shrink-0 text-brand" />
       <span className={`${wordmarkFace.className} shrink-0 text-[18px] leading-[normal] font-bold tracking-[-0.02em] text-foreground`}>Verbatim</span>
-      {name ? <span className="ml-1 min-w-0 truncate text-[13px] text-muted-foreground">{name}</span> : null}
+      {name ? <span className="ml-1 min-w-0 truncate text-[13px] text-muted-foreground">{name}</span> : pending ? <Bone className="ml-1 h-3 w-12" /> : null}
     </div>
   )
 }

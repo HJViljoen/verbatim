@@ -11,11 +11,12 @@ import { NavRow } from "@/components/app-sidebar"
 // hidden with CSS, the markup is never sent to anyone else.
 //
 // It is a group of its own because it is not the client's account: it is about
-// the workspace being viewed, from outside. Since the navigation of 1 Oct it
-// sits just above the Studio (page review §4), drawn with the client rows' own
-// markup (`NavRow`): no label, and the active page a pill rather than the
-// green bar the stripe ban took out. Since the audit design (7 Nov) the
-// sidebar's one hairline sits above it, and it draws none of its own.
+// the workspace being viewed, from outside. It is drawn with the client rows'
+// own markup (`NavRow`): no label, and the active page a pill rather than the
+// green bar the stripe ban took out. Since the audit design (7 Nov) it draws
+// no hairline of its own. Since T1.8 (9 Nov) it sits last, under Settings (it
+// sat just above the Studio from 1 Oct, page review §4), 4px under it as the
+// rows are apart, so its late arrival on a hard load moves no other row.
 
 const OPS = [
   { href: "/dashboard/ops/readiness", label: "Readiness", icon: Gauge },
@@ -28,7 +29,7 @@ const OPS = [
 export function OpsNavGroup() {
   const pathname = usePathname()
   return (
-    <SidebarMenu className="mb-1 gap-1">
+    <SidebarMenu className="mt-1 gap-1">
       {OPS.map((item) => (
         <NavRow key={item.href} item={item} active={pathname === item.href} />
       ))}

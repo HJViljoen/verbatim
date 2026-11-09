@@ -6,7 +6,7 @@ import { render, renderText } from '@/lib/test/render'
 import { AppSidebar } from './app-sidebar'
 import { LogOutButton } from './log-out-button'
 import { OpsNavGroup } from './ops/ops-nav'
-import { SidebarClientName } from './sidebar-client-name'
+import { SidebarClientName, SidebarNamePending } from './sidebar-client-name'
 
 // THE SIDEBAR OF THE AUDIT DESIGN, AS IT PRINTS (the sidebar of every board,
 // Market-After.dc.html the reference). What a static render can pin: the nine
@@ -122,12 +122,14 @@ describe('the sidebar', () => {
     expect(sidebar('/dashboard/reports')).toMatch(/aria-current="page"[^>]*>.*?<span>Studio<\/span>/)
   })
 
-  it('puts the operator\'s group between the Agent and the Studio, under the one hairline, drawn with the same rows', () => {
+  it('puts the operator\'s group last, under Settings, drawn with the same rows, so its late arrival on a hard load moves none of the nine (T1.8)', () => {
     const html = sidebar('/dashboard/ops/readiness', <OpsNavGroup />)
-    expect(html.indexOf('>Readiness<')).toBeGreaterThan(html.indexOf('>Agent<'))
-    expect(html.indexOf('>Readiness<')).toBeLessThan(html.indexOf('>Studio<'))
-    expect(html.indexOf('h-px')).toBeLessThan(html.indexOf('>Readiness<'))
+    expect(html.indexOf('>Readiness<')).toBeGreaterThan(html.indexOf('>Settings<'))
+    expect(html.indexOf('h-px')).toBeLessThan(html.indexOf('>Studio<'))
     expect(html.match(/h-px/g)).toHaveLength(1)
+    // The nine keep their order and come first; the group is 4px under Settings.
+    expect(rows(html).map(([label]) => label)).toEqual(['Dashboard', 'Market', 'Voices', 'Your products', 'Content', 'Your moves', 'Agent', 'Studio', 'Settings', 'Readiness', 'Costs', 'Dad'])
+    expect(render(<SidebarProvider><OpsNavGroup /></SidebarProvider>)).toMatch(/<ul data-slot="sidebar-menu"[^>]*class="[^"]*flex-col mt-1 gap-1"/)
     expect(html).toMatch(/aria-current="page"[^>]*>.*?<span>Readiness<\/span>/)
     expect(renderText(<SidebarProvider><OpsNavGroup /></SidebarProvider>)).not.toContain('Operator')
   })
@@ -136,7 +138,7 @@ describe('the sidebar', () => {
     const html = sidebar('/dashboard/ops/costs', <OpsNavGroup />)
     expect(html).toContain('href="/dashboard/ops/costs"')
     expect(html.indexOf('>Costs<')).toBeGreaterThan(html.indexOf('>Readiness<'))
-    expect(html.indexOf('>Costs<')).toBeLessThan(html.indexOf('>Studio<'))
+    expect(html.indexOf('>Costs<')).toBeGreaterThan(html.indexOf('>Settings<'))
     expect(html).toMatch(/aria-current="page"[^>]*>.*?<span>Costs<\/span>/)
   })
 
@@ -144,7 +146,7 @@ describe('the sidebar', () => {
     const html = sidebar('/dashboard/ops/loan', <OpsNavGroup />)
     expect(html).toContain('href="/dashboard/ops/loan"')
     expect(html.indexOf('>Dad<')).toBeGreaterThan(html.indexOf('>Costs<'))
-    expect(html.indexOf('>Dad<')).toBeLessThan(html.indexOf('>Studio<'))
+    expect(html.indexOf('>Dad<')).toBeGreaterThan(html.indexOf('>Settings<'))
     expect(html).toMatch(/aria-current="page"[^>]*>.*?<span>Dad<\/span>/)
     expect(html.match(/aria-current="page"/g)).toHaveLength(1)
   })
@@ -168,6 +170,38 @@ describe('the header a client sees (the audit design, decision 13)', () => {
     expect(html).toContain('<span class="min-w-0 truncate text-[17px] font-bold tracking-[-0.01em] text-foreground">Össur</span>')
     expect(html).not.toMatch(/<button|lucide-chevrons-up-down|aria-haspopup/)
     expect(renderText(<SidebarClientName name="Össur" />)).toBe('Össur')
+  })
+})
+
+// T1.8 (9 Nov): on a hard load the header showed the "Verbatim" wordmark
+// until the session resolved, then the name replaced it (a blink). The
+// layout's fallback is now the name's own row with a bone where it lands.
+describe('the header while the session resolves (T1.8)', () => {
+  it('is the name\'s own 46px row, the mark where it sits and one bone where the name lands, with no word', () => {
+    const html = render(<SidebarNamePending />)
+    const row = html.match(/^<div [^>]*class="([^"]+)"/)![1]
+    expect(row).toBe(render(<SidebarClientName name="Össur" />).match(/^<div class="([^"]+)"/)![1])
+    expect(html).toMatch(/^<div data-sidebar-name-pending="" class="flex h-\[46px\] min-w-0 items-center gap-3 px-3"><svg[^>]*class="[^"]*shrink-0 text-brand[^"]*"/)
+    expect(html).toContain('<span aria-hidden="true" class="block animate-pulse rounded-[4px] bg-muted h-4 w-16"></span>')
+    expect(renderText(<SidebarNamePending />)).toBe('')
+  })
+
+  it('is the layout\'s fallback, so the sidebar prints no wordmark text while the session resolves', () => {
+    const layout = readFileSync('app/dashboard/layout.tsx', 'utf8')
+    expect(layout).toContain('<Suspense fallback={<SidebarNamePending />}>')
+    expect(layout).not.toContain('fallback={<SidebarWordmark />}')
+    const html = render(<SidebarProvider><AppSidebar header={<SidebarNamePending />} /></SidebarProvider>)
+    expect(html).toContain('data-sidebar-name-pending=""')
+    expect(renderText(<SidebarProvider><AppSidebar header={<SidebarNamePending />} /></SidebarProvider>)).not.toContain('Verbatim')
+  })
+
+  it('lands the operator\'s rows with the header: both loaders await the one request-cached read', () => {
+    const ops = readFileSync('components/ops/ops-nav-loader.tsx', 'utf8')
+    const head = readFileSync('components/workspace-switcher-loader.tsx', 'utf8')
+    expect(ops).toContain('await sidebarHeaderRead()')
+    expect(ops).not.toContain('getSessionContext')
+    expect(head).toContain('export const sidebarHeaderRead = cache(async () => {')
+    expect(head).toContain('const read = await sidebarHeaderRead()')
   })
 })
 

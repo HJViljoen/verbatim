@@ -1,8 +1,16 @@
 import { readFileSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
-import { render } from '@/lib/test/render'
+import { describe, expect, it, vi } from 'vitest'
+import { render, renderText } from '@/lib/test/render'
 import { SidebarProvider } from '@/components/ui/sidebar'
+import { PhoneWordmark } from '@/components/workspace-switcher-loader'
 import { PhoneTopBar } from './phone-bar'
+
+// The wordmark's face is next/font, which only Next's compiler runs; the
+// loaders' reads are never called here.
+vi.mock('next/font/google', () => ({ Bricolage_Grotesque: () => ({ className: 'font-wordmark' }) }))
+vi.mock('@/lib/auth', () => ({ getSessionContext: async () => { throw new Error('not in a render test') } }))
+vi.mock('@/lib/workspaces', () => ({ listWorkspaces: async () => [] }))
+vi.mock('@/components/workspace-switcher', () => ({ WorkspaceSwitcher: () => null }))
 
 // THE PHONE'S TOP BAR (depth v2, T9; E1-Dashboard-Phone's `.ptop`). Below 768
 // the sidebar is a drawer and this bar stands in for it: the wordmark and the
@@ -35,6 +43,20 @@ describe('PhoneTopBar', () => {
   })
 })
 
+// T1.8 (9 Nov): while the session resolves the bar draws a bone where the
+// name lands (13px, 4px after the word), never a bare wordmark that grows.
+describe('PhoneWordmark', () => {
+  it('draws the wordmark and, while the session resolves, a bone where the name lands', () => {
+    const pending = render(<PhoneWordmark pending />)
+    expect(pending).toContain('<span aria-hidden="true" class="block animate-pulse rounded-[4px] bg-muted ml-1 h-3 w-12"></span>')
+    expect(renderText(<PhoneWordmark pending />)).toBe('Verbatim')
+    const named = render(<PhoneWordmark name="Sealand" />)
+    expect(named).toContain('<span class="ml-1 min-w-0 truncate text-[13px] text-muted-foreground">Sealand</span>')
+    expect(named).not.toContain('animate-pulse')
+    expect(render(<PhoneWordmark />)).not.toContain('animate-pulse')
+  })
+})
+
 describe('the dashboard layout on a phone', () => {
   const layout = readFileSync('app/dashboard/layout.tsx', 'utf8')
 
@@ -42,8 +64,9 @@ describe('the dashboard layout on a phone', () => {
     expect(layout).toContain('<PhoneTopBar')
     expect(layout).not.toContain('<SidebarTrigger')
     expect(layout.indexOf('<PhoneTopBar')).toBeLessThan(layout.indexOf('<main className'))
-    // The brand streams: the wordmark at once, the workspace's name after the session.
-    expect(layout).toContain('<Suspense fallback={<PhoneWordmark />}>')
+    // The brand streams: the wordmark and a bone where the name lands at once,
+    // the workspace's name after the session (T1.8).
+    expect(layout).toContain('<Suspense fallback={<PhoneWordmark pending />}>')
     expect(layout).toContain('<PhoneWordmarkLoader />')
   })
 

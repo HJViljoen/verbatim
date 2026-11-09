@@ -4,7 +4,8 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { AccessBannerLoader } from "@/components/access-banner-loader"
 import { OpsNavLoader } from "@/components/ops/ops-nav-loader"
 import { PhoneTopBar } from "@/components/shell/phone-bar"
-import { PhoneWordmark, PhoneWordmarkLoader, SidebarWordmark, WorkspaceSwitcherLoader } from "@/components/workspace-switcher-loader"
+import { PhoneWordmark, PhoneWordmarkLoader, WorkspaceSwitcherLoader } from "@/components/workspace-switcher-loader"
+import { SidebarNamePending } from "@/components/sidebar-client-name"
 
 // Deliberately synchronous: no session, no DB. This layout wraps every
 // dashboard route, and an async layout sits ABOVE each route's loading.tsx
@@ -19,14 +20,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // (integration, 1 Oct; it was 16rem, 25px narrower than drawn).
   return (
     <SidebarProvider style={{ '--sidebar-width': '281px' } as React.CSSProperties}>
-      {/* The sidebar header streams: the shell paints the wordmark immediately
-          and, when the session resolves, the client's own name (the audit
-          design, decision 13) or, for a platform admin only, the tenant
-          switcher replaces it in the same row. Same reason as the banner below:
-          this layout must not await anything. */}
+      {/* The sidebar header streams: the shell paints a quiet placeholder
+          immediately (the mark and a bone where the name lands, no word:
+          T1.8, 9 Nov; it was the "Verbatim" wordmark, which read as a blink
+          on every hard load) and, when the session resolves, the client's own
+          name (the audit design, decision 13) or, for a platform admin only,
+          the tenant switcher replaces it in the same row. The operator's rows
+          await the header's own read (`sidebarHeaderRead`), so both land in
+          one paint. Same reason as the banner below: this layout must not
+          await anything. */}
       <AppSidebar
         header={
-          <Suspense fallback={<SidebarWordmark />}>
+          <Suspense fallback={<SidebarNamePending />}>
             <WorkspaceSwitcherLoader />
           </Suspense>
         }
@@ -68,7 +73,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="relative flex flex-col flex-1 min-w-0 h-dvh overflow-hidden bg-[#F7F6F2]">
         <PhoneTopBar
           brand={
-            <Suspense fallback={<PhoneWordmark />}>
+            <Suspense fallback={<PhoneWordmark pending />}>
               <PhoneWordmarkLoader />
             </Suspense>
           }
