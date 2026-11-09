@@ -70,6 +70,9 @@ interface WarningRule {
   name: string
   /** What is now stale for the client. */
   stale: (at: WarningAt) => string
+  /** What the ops page says happened, where it is not that the step "did not
+   *  finish" (the step budget: nothing failed). */
+  said?: string
 }
 
 const LONG_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
@@ -183,6 +186,13 @@ export const WARNING_STEPS = {
   'keyword-discovery': {
     kind: 'housekeeping', name: 'keyword discovery',
     stale: () => 'This update suggests no new keywords; the next update suggests again.',
+  },
+  // Not a step's failure (9 Nov, lib/pipeline/step-budget.ts): the update
+  // finished, on more of Inngest's 1,000 steps a run than STEP_BUDGET_WARN_AT
+  // leaves room for. Noted before close-run, which writes it.
+  'step-budget': {
+    kind: 'housekeeping', name: 'the update’s steps', said: 'came near Inngest’s limit of steps a run',
+    stale: () => 'Nothing is stale: this update finished, but a bigger one can be stopped before its themes, its read and its email.',
   },
 } as const satisfies Record<string, WarningRule>
 
@@ -357,7 +367,8 @@ export function warningSentence(w: RunWarning): string {
   const kind = w.kind === 'stale-data' ? 'Stale data' : 'Housekeeping'
   const month = monthWords(w.month)
   const where = month ? ` for ${month}` : w.week ? ` for the week of ${appDay(w.week)}` : ''
-  return `${kind}: ${stepName(w.step)}${where} did not finish (${w.cause}). ${w.stale}`
+  const said = (WARNING_STEPS as Record<string, WarningRule>)[w.step]?.said ?? 'did not finish'
+  return `${kind}: ${stepName(w.step)}${where} ${said} (${w.cause}). ${w.stale}`
 }
 
 /** "3 warnings: lens-readings ×2, brand-readings", the shape of

@@ -214,8 +214,10 @@ describe('each classified step warns from its own .catch, and none of them is no
     ["'keyword-discovery'", 'keyword-discovery'],
   ]
 
-  it('every step of the table but the evidence ids is one of these, and each warns under its own label', () => {
-    expect(STEPS.map(([, s]) => s).sort()).toEqual(Object.keys(WARNING_STEPS).filter((s) => s !== 'freeze-months:evidence-ids').sort())
+  it('every step of the table but the evidence ids and the step budget is one of these, and each warns under its own label', () => {
+    // Neither is a step's .catch: the evidence ids warn off the freeze's
+    // return, the step budget off the run's own count (step-budget.test.ts).
+    expect(STEPS.map(([, s]) => s).sort()).toEqual(Object.keys(WARNING_STEPS).filter((s) => s !== 'freeze-months:evidence-ids' && s !== 'step-budget').sort())
     for (const [id, label] of STEPS) {
       const chain = chainOf(id)
       expect(chain, id).toContain(`noteWarning('${label}', e`)

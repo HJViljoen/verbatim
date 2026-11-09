@@ -397,8 +397,11 @@ describe('the pipeline carries write-post-ideas', () => {
   const src = readFileSync(new URL('../../inngest/functions/pipeline.ts', import.meta.url), 'utf8')
   const ids = stepIds(src)
 
-  it('as one additive id in its own position: after write-week-read and the subjects\' reads, immediately before write-longrun-read (75 in all, with the product readings\' two and write-subject-reads)', () => {
-    expect(ids).toHaveLength(75)
+  it('as one additive id in its own position: after write-week-read and the subjects\' reads, immediately before write-longrun-read (70 in all, with the product readings\' two and write-subject-reads)', () => {
+    // 70 since 9 Nov: the seven per-video fan-outs give their wave and batch
+    // ids to fanOut, whose own two step.run calls are what this reads
+    // (lib/pipeline/step-budget.test.ts names every family, 82).
+    expect(ids).toHaveLength(70)
     expect(ids.filter((id) => id === 'write-post-ideas')).toHaveLength(1)
     const at = ids.indexOf('write-post-ideas')
     // lib/written/subject-reads.test.ts pins write-subject-reads (14 Oct).

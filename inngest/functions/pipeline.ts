@@ -18,7 +18,7 @@ import { discoverRunKeywords } from '@/lib/pipeline/keyword-discovery'
 import { CLASSIFY_META_MAX_OUTPUT_TOKENS, planClassifyMetaBatches, runClassifyMetaBatch, type ClassifyMetaResult } from '@/lib/pipeline/classify-meta'
 import { planTranslateBatches, translateBatch } from '@/lib/pipeline/translate'
 import { planQuoteTranslations, translateQuotesBatch } from '@/lib/pipeline/translate-quotes'
-import { planOcrBatches, ocrBatch, planOcrBackfill, ocrBackfillBatch, emptyOcrResult, mentionsMissingColumn } from '@/lib/pipeline/ocr'
+import { planOcrBatches, ocrBatch, planOcrBackfill, ocrBackfillBatch, emptyOcrResult, mentionsMissingColumn, type OcrResult } from '@/lib/pipeline/ocr'
 import { ingestOwnedPosts, supportsOwnedProfile, buildOwnedCensus, entitySlug, type OwnedEntity } from '@/lib/gather/owned'
 import { planTranscriptBackfill, backfillTranscriptsBatch, emptyBackfillTally, mergeTallies, formatTally } from '@/lib/gather/transcript-backfill'
 import { discoverSubreddits } from '@/lib/gather/subreddit-discovery'
@@ -45,6 +45,7 @@ import { briefComposeStep, briefIdeasStep, briefResearchStep, briefWriteStep, pl
 import { BRIEF_ROLES } from '@/lib/reports/briefs/types'
 import { summariseRunErrors, partialRunAlert, passADegradation, isolatedBatchDegradation, runCloseStatus, closingErrors, RUN_ERROR_CAP } from '@/lib/pipeline/run-errors'
 import { alertDue, closeRunWrite, createWarningLog } from '@/lib/pipeline/run-warnings'
+import { CLASSIFY_PARALLEL, COMMENT_BATCH, COMMENT_PARALLEL, countSteps, PASS_A_BATCH, PASS_A_PARALLEL, SEARCH_PARALLEL, settleMembers, stepBudgetCause, THEMES_PARALLEL, waveCount, type MemberOutcome } from '@/lib/pipeline/step-budget'
 import { writeRunCosts, runSpendSoFar } from '@/lib/pipeline/run-costs'
 import { withApifyRunContext, settleApifyRuns } from '@/lib/gather/apify-runs'
 import { decideOpenRun, runIdForEvent, RUN_STALE_AFTER_HOURS, PG_UNIQUE_VIOLATION, type RunningRow } from '@/lib/pipeline/run-guard'
@@ -262,10 +263,60 @@ export const runPipeline = inngest.createFunction(
       )
     },
   },
-  async ({ event, step, attempt, maxAttempts }) => {
+  async ({ event, step: inngestStep, attempt, maxAttempts }) => {
+    // Every step the run makes is counted (lib/pipeline/step-budget.ts): the
+    // body replays from the top at each step boundary and makes the same calls
+    // in the same order, so the count at close-run is the run's own, and a run
+    // that came near Inngest's 1,000 says so (`step-budget`).
+    const stepCounter = countSteps(inngestStep)
+    const step = stepCounter.step
     const clientId = (event.data as { clientId?: string }).clientId
     if (!clientId) throw new Error('pipeline/run.requested missing clientId')
     const options = ((event.data as { options?: PipelineRunOptions }).options) ?? {}
+
+    // ONE STEP A WAVE (9 Nov; Sealand's 8 Nov update ran out of Inngest's
+    // 1,000 steps inside Pass A, lib/pipeline/step-budget.ts). A fan-out's wave
+    // of batches is ONE step, `waveId`, and each batch in it runs with the
+    // arguments, the batch number and the concurrency it had as a step of its
+    // own, so the wave lasts as long as its slowest batch did. A wave never
+    // throws for one batch: a batch that failed inside its wave, or every batch
+    // of a wave that failed as a whole, then runs as a step of its own under
+    // its old id, `memberId`, with Inngest's retries and the fallback its old
+    // `.catch` gave. The results come back in batch order, the order the
+    // loops below always read them in.
+    const fanOut = async <T, R>(f: {
+      waveId: (wave: number, waves: number) => string
+      memberId: (i: number) => string
+      items: readonly T[]
+      parallel: number
+      run: (item: T, i: number) => Promise<R>
+      fallback: (item: T, i: number, e: unknown) => R
+    }): Promise<R[]> => {
+      const out: R[] = []
+      const waves = waveCount(f.items.length, f.parallel)
+      for (let w = 0; w < waves; w++) {
+        const first = w * f.parallel
+        const slice = f.items.slice(first, first + f.parallel)
+        const id = f.waveId(w + 1, waves)
+        const outcomes = await (step
+          .run(id, () => settleMembers(slice, (item, j) => f.run(item, first + j))) as Promise<unknown>)
+          .then((r) => r as MemberOutcome<R>[])
+          .catch((e: unknown) => {
+            console.error(`[${id}] out of retries, so each of its batches runs as a step of its own: ${e instanceof Error ? e.message : String(e)}`)
+            return null
+          })
+        out.push(...await Promise.all(slice.map((item, j): Promise<R> => {
+          const i = first + j
+          const outcome = outcomes?.[j]
+          if (outcome?.ok) return Promise.resolve(outcome.value)
+          if (outcome) console.warn(`[${f.memberId(i)}] failed inside ${id}, so it runs as a step of its own: ${outcome.error}`)
+          return (step.run(f.memberId(i), () => f.run(item, i)) as Promise<unknown>)
+            .then((r) => r as R)
+            .catch((e: unknown) => f.fallback(item, i, e))
+        })))
+      }
+      return out
+    }
 
     // 1. Open the run row (the orchestrator owns the lifecycle the CLI used to).
     //    An analysis-only resume reuses the existing row instead.
@@ -700,28 +751,33 @@ export const runPipeline = inngest.createFunction(
         // wall-clock dominator (each video is its own Apify actor run, and the
         // sequential version drove run 1's ~2.5h). Batches are disjoint video
         // sets and scrapeCommentsBatch writes only its own refs' rows, so
-        // waves are safe. Step IDs unchanged (comments:P:N over the same
-        // batch numbering), so a mid-run replay skips completed batches.
+        // waves are safe. The batch numbering is unchanged (comments:P:N);
+        // since 9 Nov a wave of COMMENT_PARALLEL batches is one step,
+        // `comments-wave:P:W-of-M` (fanOut above), and comments:P:N is the
+        // step a batch takes only when it failed inside its wave. Every kept
+        // YouTube video is a ref (no comment threshold), which made this the
+        // widest fan-out of Sealand's 8 Nov update.
         const commentBatches = Array.from(
           { length: Math.ceil(gate.eligible.length / COMMENT_BATCH) },
           (_, i) => gate.eligible.slice(i * COMMENT_BATCH, (i + 1) * COMMENT_BATCH),
         )
-        for (let w = 0; w < commentBatches.length; w += COMMENT_PARALLEL) {
-          await Promise.all(
-            commentBatches.slice(w, w + COMMENT_PARALLEL).map(async (refs, j) => {
-              try {
-                const r = await step.run(`comments:${platform}:${w + j + 1}`, () =>
-                  withApifyRunContext({ clientId, runId, step: `comments:${platform}:${w + j + 1}` }, () =>
-                    scrapeCommentsBatch({ clientId, runId, platform, refs }),
-                  ),
-                )
-                for (const err of r.errors) noteError(`comments:${platform}:${w + j + 1}`, err)
-              } catch (e) {
-                noteError(`comments:${platform}:${w + j + 1}`, e)
-              }
-            }),
-          )
-        }
+        const commentResults = await fanOut({
+          waveId: (w, n) => `comments-wave:${platform}:${w}-of-${n}`,
+          memberId: (i) => `comments:${platform}:${i + 1}`,
+          items: commentBatches,
+          parallel: COMMENT_PARALLEL,
+          run: (refs, i): Promise<{ errors: string[]; thrown?: unknown }> =>
+            withApifyRunContext({ clientId, runId, step: `comments:${platform}:${i + 1}` }, () =>
+              scrapeCommentsBatch({ clientId, runId, platform, refs }),
+            ),
+          // Out of retries: the step's error, noted as the try/catch around
+          // each batch step noted it.
+          fallback: (_refs, _i, e) => ({ errors: [], thrown: e }),
+        })
+        commentResults.forEach((r, i) => {
+          if ('thrown' in r) noteError(`comments:${platform}:${i + 1}`, r.thrown)
+          else for (const err of r.errors) noteError(`comments:${platform}:${i + 1}`, err)
+        })
         // Owned layer (Wave 2): an ACCOUNT's own recent posts + their comments.
         // The client's, stamped source:'owned', and since 2026-09-09 each
         // tracked competitor's, stamped 'competitor_owned' — same read, same
@@ -792,26 +848,27 @@ export const runPipeline = inngest.createFunction(
               planTranscribeBatches(clientId, runId, platform),
             )
             let isolatedBatches = 0
-            for (let w = 0; w < txBatches.length; w += TRANSCRIBE_PARALLEL) {
-              const wave = await Promise.all(
-                txBatches.slice(w, w + TRANSCRIBE_PARALLEL).map((videoIds, j) =>
-                  step
-                    .run(`transcribe:${platform}:${w + j + 1}-of-${txBatches.length}`, () =>
-                      withApifyRunContext({ clientId, runId, step: `transcribe:${platform}:${w + j + 1}-of-${txBatches.length}` }, () =>
-                        transcribeBatch({ clientId, runId, platform, videoIds, batchNo: w + j + 1 }),
-                      ),
-                    )
-                    // Per-step catch (comments-fan-out precedent): one batch
-                    // exhausting its retries must not abandon the remaining
-                    // waves — hundreds of this run's videos would silently
-                    // stay untranscribed and are never re-planned.
-                    .catch((e: unknown) => ({ transcribed: 0, skipped: 0, isolatedBatches: 0, errors: [`transcribe step failed: ${e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200)}`] })),
+            // One step a wave of TRANSCRIBE_PARALLEL batches since 9 Nov
+            // (`transcribe-wave:P:W-of-M`, fanOut above); a batch's own id is
+            // the step it takes only when it failed inside its wave.
+            const txResults = await fanOut({
+              waveId: (w, n) => `transcribe-wave:${platform}:${w}-of-${n}`,
+              memberId: (i) => `transcribe:${platform}:${i + 1}-of-${txBatches.length}`,
+              items: txBatches,
+              parallel: TRANSCRIBE_PARALLEL,
+              run: (videoIds, i) =>
+                withApifyRunContext({ clientId, runId, step: `transcribe:${platform}:${i + 1}-of-${txBatches.length}` }, () =>
+                  transcribeBatch({ clientId, runId, platform, videoIds, batchNo: i + 1 }),
                 ),
-              )
-              for (const t of wave) {
-                isolatedBatches += t.isolatedBatches
-                for (const err of t.errors) noteError(`transcribe:${platform}`, err)
-              }
+              // Per-batch fallback (comments-fan-out precedent): one batch
+              // exhausting its retries must not abandon the remaining
+              // waves — hundreds of this run's videos would silently
+              // stay untranscribed and are never re-planned.
+              fallback: (_videoIds, _i, e) => ({ transcribed: 0, skipped: 0, isolatedBatches: 0, errors: [`transcribe step failed: ${e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200)}`] }),
+            })
+            for (const t of txResults) {
+              isolatedBatches += t.isolatedBatches
+              for (const err of t.errors) noteError(`transcribe:${platform}`, err)
             }
             // Run-failed caption batches that the isolation pass recovered are
             // ratio-gated, as per-video translate/OCR failures are — on their own
@@ -858,43 +915,44 @@ export const runPipeline = inngest.createFunction(
             )
             ocr.planned += ocrBatches.flat().length
             ocrRemaining = Math.max(0, ocrRemaining - ocrBatches.flat().length)
-            for (let w = 0; w < ocrBatches.length; w += OCR_PARALLEL) {
-              const wave = await Promise.all(
-                ocrBatches.slice(w, w + OCR_PARALLEL).map((videoIds, j) =>
-                  step
-                    .run(`ocr:${platform}:${w + j + 1}-of-${ocrBatches.length}`, () =>
-                      ocrBatch({ clientId, runId, platform: platform as Platform, videoIds, batchNo: w + j + 1 }),
-                    )
-                    // Per-step catch (the transcribe fan-out's precedent): one
-                    // batch out of retries must not abandon the remaining waves.
-                    // Its videos keep a NULL ocr_status and re-plan — but only
-                    // on a platform whose cover survives (YouTube); elsewhere the
-                    // frame is simply gone, which is the honest outcome.
-                    .catch((e: unknown) => ({
-                      ...emptyOcrResult(),
-                      errors: [`ocr step failed: ${e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200)}`],
-                      stepFailed: true,
-                    })),
-                ),
-              )
-              for (const r of wave) {
-                ocr.ok += r.ok
-                ocr.none += r.none
-                ocr.noImage += r.noImage
-                ocr.failed += r.failed
-                ocr.cost += r.costUsd
-                if (r.rateLimited) ocr.rateLimited = true
-                // A batch out of retries IS a run error: its videos got no
-                // attempt and nothing recorded why. Per-VIDEO failures are
-                // ratio-gated below instead (the translate wave's rule) — a
-                // handful of unreachable covers across a whole gather must not
-                // close an otherwise clean run 'partial'.
-                if ('stepFailed' in r) {
-                  ocr.batchesFailed++
-                  for (const err of r.errors) noteError(`ocr:${platform}`, err)
-                } else if (r.errors.length && !ocr.firstError) {
-                  ocr.firstError = r.errors[0]
-                }
+            // One step a wave of OCR_PARALLEL batches since 9 Nov
+            // (`ocr-wave:P:W-of-M`, fanOut above); a batch's own id is the
+            // step it takes only when it failed inside its wave.
+            const ocrResults = await fanOut({
+              waveId: (w, n) => `ocr-wave:${platform}:${w}-of-${n}`,
+              memberId: (i) => `ocr:${platform}:${i + 1}-of-${ocrBatches.length}`,
+              items: ocrBatches,
+              parallel: OCR_PARALLEL,
+              run: (videoIds, i): Promise<OcrResult & { stepFailed?: true }> =>
+                ocrBatch({ clientId, runId, platform: platform as Platform, videoIds, batchNo: i + 1 }),
+              // Per-batch fallback (the transcribe fan-out's precedent): one
+              // batch out of retries must not abandon the remaining waves.
+              // Its videos keep a NULL ocr_status and re-plan — but only
+              // on a platform whose cover survives (YouTube); elsewhere the
+              // frame is simply gone, which is the honest outcome.
+              fallback: (_videoIds, _i, e) => ({
+                ...emptyOcrResult(),
+                errors: [`ocr step failed: ${e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200)}`],
+                stepFailed: true as const,
+              }),
+            })
+            for (const r of ocrResults) {
+              ocr.ok += r.ok
+              ocr.none += r.none
+              ocr.noImage += r.noImage
+              ocr.failed += r.failed
+              ocr.cost += r.costUsd
+              if (r.rateLimited) ocr.rateLimited = true
+              // A batch out of retries IS a run error: its videos got no
+              // attempt and nothing recorded why. Per-VIDEO failures are
+              // ratio-gated below instead (the translate wave's rule) — a
+              // handful of unreachable covers across a whole gather must not
+              // close an otherwise clean run 'partial'.
+              if ('stepFailed' in r) {
+                ocr.batchesFailed++
+                for (const err of r.errors) noteError(`ocr:${platform}`, err)
+              } else if (r.errors.length && !ocr.firstError) {
+                ocr.firstError = r.errors[0]
               }
             }
           } catch (e) {
@@ -990,37 +1048,37 @@ export const runPipeline = inngest.createFunction(
         return [] as string[][]
       })
     const classify = { classified: 0, nulls: 0, cost: 0, errors: 0, lengthHits: 0, lengthSplits: 0, lengthSkipped: 0 }
-    for (let w = 0; w < classifyBatches.length; w += CLASSIFY_PARALLEL) {
-      const wave = await Promise.all(
-        classifyBatches.slice(w, w + CLASSIFY_PARALLEL).map((videoIds, j) =>
-          step
-            .run(`classify:${w + j + 1}-of-${classifyBatches.length}`, () =>
-              runClassifyMetaBatch(clientId, runId, videoIds, w + j + 1),
-            )
-            // Catch on the step promise (transcribe precedent): Inngest's
-            // retries run first; only an out-of-retries batch goes non-fatal,
-            // leaving its rows unclassified and the run status 'partial'.
-            .catch((e): ClassifyMetaResult => {
-              const message = e instanceof Error ? e.message : String(e)
-              console.error(`[classify-meta] batch out of retries: ${message}`)
-              return { requested: videoIds.length, classified: 0, nulls: 0, costUsd: 0, error: message }
-            }),
-        ),
-      )
-      for (const r of wave) {
-        classify.classified += r.classified
-        classify.nulls += r.nulls
-        classify.cost += r.costUsd
-        // A batch that hit the ceiling: split into halves, or (a batch of
-        // one) left unclassified without a split. Counted apart, so a lone
-        // video's overrun never reads as "0 batch(es)".
-        if (r.lengthSplit || (r.lengthSkipped ?? 0) > 0) classify.lengthHits++
-        if (r.lengthSplit) classify.lengthSplits++
-        classify.lengthSkipped += r.lengthSkipped ?? 0
-        if (r.error) {
-          classify.errors++
-          noteError('classify-meta', r.error)
-        }
+    // One step a wave of CLASSIFY_PARALLEL batches since 9 Nov
+    // (`classify-wave:W-of-M`, fanOut above); a batch's own id is the step it
+    // takes only when it failed inside its wave.
+    const classifyResults = await fanOut({
+      waveId: (w, n) => `classify-wave:${w}-of-${n}`,
+      memberId: (i) => `classify:${i + 1}-of-${classifyBatches.length}`,
+      items: classifyBatches,
+      parallel: CLASSIFY_PARALLEL,
+      run: (videoIds, i) => runClassifyMetaBatch(clientId, runId, videoIds, i + 1),
+      // Out of retries (transcribe precedent): Inngest's retries run first;
+      // only an out-of-retries batch goes non-fatal, leaving its rows
+      // unclassified and the run status 'partial'.
+      fallback: (videoIds, _i, e): ClassifyMetaResult => {
+        const message = e instanceof Error ? e.message : String(e)
+        console.error(`[classify-meta] batch out of retries: ${message}`)
+        return { requested: videoIds.length, classified: 0, nulls: 0, costUsd: 0, error: message }
+      },
+    })
+    for (const r of classifyResults) {
+      classify.classified += r.classified
+      classify.nulls += r.nulls
+      classify.cost += r.costUsd
+      // A batch that hit the ceiling: split into halves, or (a batch of
+      // one) left unclassified without a split. Counted apart, so a lone
+      // video's overrun never reads as "0 batch(es)".
+      if (r.lengthSplit || (r.lengthSkipped ?? 0) > 0) classify.lengthHits++
+      if (r.lengthSplit) classify.lengthSplits++
+      classify.lengthSkipped += r.lengthSkipped ?? 0
+      if (r.error) {
+        classify.errors++
+        noteError('classify-meta', r.error)
       }
     }
     // A BATCH THAT RAN INTO THE OUTPUT CEILING IS A FINDING, NOT AN ERROR (13
@@ -1070,29 +1128,30 @@ export const runPipeline = inngest.createFunction(
         })
       backfill.batches = plan.batches.length
       backfill.exhausted = plan.exhausted
-      for (let w = 0; w < plan.batches.length; w += BACKFILL_PARALLEL) {
-        const wave = await Promise.all(
-          plan.batches.slice(w, w + BACKFILL_PARALLEL).map((b, j) =>
-            step
-              .run(`transcript-backfill:${w + j + 1}-of-${plan.batches.length}`, () =>
-                withApifyRunContext({ clientId, runId, step: `transcript-backfill:${w + j + 1}-of-${plan.batches.length}` }, () =>
-                  backfillTranscriptsBatch({ clientId, runId, platform: b.platform, videos: b.videos, batchNo: w + j + 1 }),
-                ),
-              )
-              // Per-step catch (the transcribe fan-out's precedent): one batch
-              // out of retries must not abandon the rest, and its videos simply
-              // keep the status they had.
-              .catch((e: unknown) => ({
-                tally: emptyBackfillTally(), newlyUsable: 0, estUsd: 0,
-                errors: [`transcript-backfill step failed: ${e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200)}`],
-              })),
+      // One step a wave of BACKFILL_PARALLEL batches since 9 Nov
+      // (`transcript-backfill-wave:W-of-M`, fanOut above); a batch's own id is
+      // the step it takes only when it failed inside its wave.
+      const backfillResults = await fanOut({
+        waveId: (w, n) => `transcript-backfill-wave:${w}-of-${n}`,
+        memberId: (i) => `transcript-backfill:${i + 1}-of-${plan.batches.length}`,
+        items: plan.batches,
+        parallel: BACKFILL_PARALLEL,
+        run: (b, i) =>
+          withApifyRunContext({ clientId, runId, step: `transcript-backfill:${i + 1}-of-${plan.batches.length}` }, () =>
+            backfillTranscriptsBatch({ clientId, runId, platform: b.platform, videos: b.videos, batchNo: i + 1 }),
           ),
-        )
-        for (const r of wave) {
-          backfill.tally = mergeTallies(backfill.tally, r.tally)
-          backfill.estUsd += r.estUsd
-          for (const err of r.errors) { backfill.errors++; noteError('transcript-backfill', err) }
-        }
+        // Per-batch fallback (the transcribe fan-out's precedent): one batch
+        // out of retries must not abandon the rest, and its videos simply
+        // keep the status they had.
+        fallback: (_b, _i, e) => ({
+          tally: emptyBackfillTally(), newlyUsable: 0, estUsd: 0,
+          errors: [`transcript-backfill step failed: ${e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200)}`],
+        }),
+      })
+      for (const r of backfillResults) {
+        backfill.tally = mergeTallies(backfill.tally, r.tally)
+        backfill.estUsd += r.estUsd
+        for (const err of r.errors) { backfill.errors++; noteError('transcript-backfill', err) }
       }
       // Videos that needed an attempt and did not get one (a batch out of
       // retries): the precondition is unmet for exactly these, and the run says
@@ -1150,40 +1209,41 @@ export const runPipeline = inngest.createFunction(
       translate.batches = plan.batches.length
       translate.needing = plan.needing
       translate.deferred = plan.deferred
-      for (let w = 0; w < plan.batches.length; w += TRANSLATE_PARALLEL) {
-        const wave = await Promise.all(
-          plan.batches.slice(w, w + TRANSLATE_PARALLEL).map((videoIds, j) =>
-            step
-              .run(`translate:${w + j + 1}-of-${plan.batches.length}`, () =>
-                translateBatch({ clientId, runId, videoIds, batchNo: w + j + 1 }),
-              )
-              // Per-step catch (the transcribe fan-out's precedent): one batch
-              // out of retries must not abandon the rest, and its videos simply
-              // stay untranslated and re-plan next run.
-              .catch((e: unknown) => ({
-                translated: 0, english: 0, skipped: 0, failed: 0, outOfTime: 0, costUsd: 0, rateLimited: false,
-                errors: [`translate step failed: ${e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200)}`],
-                stepFailed: true,
-              })),
-          ),
-        )
-        for (const r of wave) {
-          translate.translated += r.translated
-          translate.english += r.english
-          translate.failed += r.failed
-          translate.skipped += r.skipped
-          // `?? 0`: a step memoised before 29 Oct carries no outOfTime.
-          translate.outOfTime += r.outOfTime ?? 0
-          translate.cost += r.costUsd
-          if (r.rateLimited) translate.rateLimited = true
-          if ('stepFailed' in r) {
-            // A batch out of retries IS a run error: its videos got no attempt
-            // at all and nothing recorded why (the per-video path tombstones).
-            translate.batchesFailed++
-            for (const err of r.errors) noteError('translate', err)
-          } else if (r.errors.length && !firstTranslateError) {
-            firstTranslateError = r.errors[0]
-          }
+      // One step a wave of TRANSLATE_PARALLEL batches since 9 Nov
+      // (`translate-wave:W-of-M`, fanOut above); a batch's own id is the step
+      // it takes only when it failed inside its wave.
+      const translateResults = await fanOut({
+        waveId: (w, n) => `translate-wave:${w}-of-${n}`,
+        memberId: (i) => `translate:${i + 1}-of-${plan.batches.length}`,
+        items: plan.batches,
+        parallel: TRANSLATE_PARALLEL,
+        run: (videoIds, i): Promise<Awaited<ReturnType<typeof translateBatch>> & { stepFailed?: true }> =>
+          translateBatch({ clientId, runId, videoIds, batchNo: i + 1 }),
+        // Per-batch fallback (the transcribe fan-out's precedent): one batch
+        // out of retries must not abandon the rest, and its videos simply
+        // stay untranslated and re-plan next run.
+        fallback: (_videoIds, _i, e) => ({
+          translated: 0, english: 0, skipped: 0, failed: 0, outOfTime: 0, costUsd: 0, rateLimited: false,
+          errors: [`translate step failed: ${e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200)}`],
+          stepFailed: true as const,
+        }),
+      })
+      for (const r of translateResults) {
+        translate.translated += r.translated
+        translate.english += r.english
+        translate.failed += r.failed
+        translate.skipped += r.skipped
+        // `?? 0`: a step memoised before 29 Oct carries no outOfTime.
+        translate.outOfTime += r.outOfTime ?? 0
+        translate.cost += r.costUsd
+        if (r.rateLimited) translate.rateLimited = true
+        if ('stepFailed' in r) {
+          // A batch out of retries IS a run error: its videos got no attempt
+          // at all and nothing recorded why (the per-video path tombstones).
+          translate.batchesFailed++
+          for (const err of r.errors) noteError('translate', err)
+        } else if (r.errors.length && !firstTranslateError) {
+          firstTranslateError = r.errors[0]
         }
       }
       // Per-video failures are ratio-gated, exactly as Pass A's are (Tier 0,
@@ -1252,34 +1312,35 @@ export const runPipeline = inngest.createFunction(
         })
       ocr.backfillNeeding = plan.needing
       ocr.backfillDeferred = plan.deferred
-      for (let w = 0; w < plan.batches.length; w += OCR_PARALLEL) {
-        const wave = await Promise.all(
-          plan.batches.slice(w, w + OCR_PARALLEL).map((videoIds, j) =>
-            step
-              .run(`ocr-backfill:${w + j + 1}-of-${plan.batches.length}`, () =>
-                ocrBackfillBatch({ clientId, runId, videoIds, batchNo: w + j + 1 }),
-              )
-              .catch((e: unknown) => ({
-                ...emptyOcrResult(),
-                errors: [`ocr-backfill step failed: ${e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200)}`],
-                stepFailed: true,
-              })),
-          ),
-        )
-        for (const r of wave) {
-          ocr.ok += r.ok
-          ocr.backfilled += r.ok
-          ocr.none += r.none
-          ocr.noImage += r.noImage
-          ocr.failed += r.failed
-          ocr.cost += r.costUsd
-          if (r.rateLimited) ocr.rateLimited = true
-          if ('stepFailed' in r) {
-            ocr.batchesFailed++
-            for (const err of r.errors) noteError('ocr-backfill', err)
-          } else if (r.errors.length && !ocr.firstError) {
-            ocr.firstError = r.errors[0]
-          }
+      // One step a wave of OCR_PARALLEL batches since 9 Nov
+      // (`ocr-backfill-wave:W-of-M`, fanOut above); a batch's own id is the
+      // step it takes only when it failed inside its wave.
+      const ocrBackfillResults = await fanOut({
+        waveId: (w, n) => `ocr-backfill-wave:${w}-of-${n}`,
+        memberId: (i) => `ocr-backfill:${i + 1}-of-${plan.batches.length}`,
+        items: plan.batches,
+        parallel: OCR_PARALLEL,
+        run: (videoIds, i): Promise<OcrResult & { stepFailed?: true }> =>
+          ocrBackfillBatch({ clientId, runId, videoIds, batchNo: i + 1 }),
+        fallback: (_videoIds, _i, e) => ({
+          ...emptyOcrResult(),
+          errors: [`ocr-backfill step failed: ${e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200)}`],
+          stepFailed: true as const,
+        }),
+      })
+      for (const r of ocrBackfillResults) {
+        ocr.ok += r.ok
+        ocr.backfilled += r.ok
+        ocr.none += r.none
+        ocr.noImage += r.noImage
+        ocr.failed += r.failed
+        ocr.cost += r.costUsd
+        if (r.rateLimited) ocr.rateLimited = true
+        if ('stepFailed' in r) {
+          ocr.batchesFailed++
+          for (const err of r.errors) noteError('ocr-backfill', err)
+        } else if (r.errors.length && !ocr.firstError) {
+          ocr.firstError = r.errors[0]
         }
       }
       if (plan.needing) {
@@ -2482,8 +2543,18 @@ export const runPipeline = inngest.createFunction(
       }
     }
 
+    // The step budget (9 Nov, lib/pipeline/step-budget.ts): a run that came
+    // within STEP_BUDGET_WARN_AT of Inngest's 1,000 steps a run says so on its
+    // own row, a housekeeping warning (the ops readiness page), noted here
+    // because close-run is the step that writes the warnings. The count is the
+    // same on every replay, so the warning is too.
+    const stepsBeforeClose = stepCounter.count()
+    const stepBudget = stepBudgetCause(stepsBeforeClose)
+    if (stepBudget) noteWarning('step-budget', stepBudget)
+
     // 7. Close the run.
     await step.run('close-run', async () => {
+      console.log(`[step-budget] ${stepsBeforeClose} steps before close-run${stepBudget ? `: ${stepBudget}` : ''}`)
       const admin = createAdminClient()
       const completedAt = new Date().toISOString()
       // Did the run take longer than the window it covered, or than the six
@@ -2724,41 +2795,9 @@ const EMPTY_OWNED_PLAN = {
   windowStart: null as string | null,
 }
 
-/** Batch size for the Pass A fan-out. Sized from the 2026-07-03 live failure:
- *  at comment_depth 100 a call runs ~10-20s (batches of 40 timed out at ~15-29
- *  calls, three attempts straight), so 12 ≈ 2-4 min under the 300s cap. */
-const PASS_A_BATCH = 12
-
-/** Videos per comment-scrape step. Each video is its own Apify actor run
- *  (~20-90s incl. actor startup — slower since comment_depth went 25→100), so
- *  3 stays inside the 300s Hobby cap even when every actor runs slow. */
-const COMMENT_BATCH = 3
-
-/** Keyword-search steps dispatched concurrently per wave. Search actors are
- *  heavier than comment actors (a full hashtag/keyword crawl each), so the
- *  wave stays small; a platform's whole keyword set is 5-10 tasks. */
-const SEARCH_PARALLEL = 3
-
-/** Comment-scrape steps dispatched concurrently per wave. Each step runs its
- *  COMMENT_BATCH videos sequentially (one actor at a time), so a wave holds at
- *  most COMMENT_PARALLEL concurrent Apify jobs — far under the Starter plan's
- *  32-concurrent-jobs cap even stacked on a search or transcribe wave. */
-const COMMENT_PARALLEL = 4
-
-/** Pass A batches dispatched concurrently per wave. Step IDs are unchanged by
- *  this (still pass-a:N-of-M over the same memoized plan), so a mid-run deploy
- *  replays completed batches instantly and fans out only the remainder. */
-const PASS_A_PARALLEL = 5
-
-/** Classify-meta batches per wave — 25-video metadata-only calls run ~10-30s,
- *  so 4 abreast stays far under the step cap. */
-const CLASSIFY_PARALLEL = 4
-
-/** Bucket theme steps dispatched concurrently per wave. Each step carries one
- *  gpt-5.4 reasoning=medium merge call (the heavy part, ~95s total across
- *  buckets at run-1 scale) plus a cheap embeddings call, so the wave stays
- *  small for OpenAI headroom; a run has ~3-6 entity buckets. */
-const THEMES_PARALLEL = 2
+// The fan-out widths (PASS_A_BATCH, COMMENT_BATCH, the *_PARALLEL of the
+// searches, comments, Pass A, classification and themes) live in
+// lib/pipeline/step-budget.ts since 9 Nov, beside the step count they decide.
 
 // Eligible video ids (raw comment count >= 5, richest first), chunked into
 // batches. Comments are scanned once and joined in memory — same URL-overflow

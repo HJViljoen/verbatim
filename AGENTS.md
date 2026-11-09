@@ -384,6 +384,34 @@ This version has breaking changes — APIs, conventions, and file structure may 
   briefs or the dead-man's switch, none of which reads the column
   (`lib/pipeline/run-warnings.test.ts` pins each). The class of each step is
   one line of `WARNING_STEPS`; to move a step, change its `kind`.
+- **A run has 1,000 steps, and the per-video fan-outs are one step a WAVE**
+  (9 Nov, `lib/pipeline/step-budget.ts`). Inngest ends a function run at its
+  1,000th step and nothing after it runs: Sealand's 8 Nov update `c5690bb0`
+  (1,440 videos) died that way inside Pass A, with no themes, read, close or
+  report. Seven fan-outs ran one step a batch and grew with every week's videos:
+  comments (3 videos a batch; every kept YouTube video is one, no comment
+  threshold), transcribe, OCR, classify, the transcript backfill, translate
+  and the OCR backfill. Each now runs a wave of its `*_PARALLEL` batches as ONE
+  step through `fanOut` (`comments-wave:P:W-of-M`, `transcribe-wave:P:W-of-M`,
+  `ocr-wave:P:W-of-M`, `classify-wave:W-of-M`, `transcript-backfill-wave:W-of-M`,
+  `translate-wave:W-of-M`, `ocr-backfill-wave:W-of-M`), each batch with its old
+  arguments, batch number and concurrency, so a wave lasts as long as its
+  slowest batch did (the `pass-b` wave precedent). A wave never throws for one
+  batch (`settleMembers`): a batch that failed inside it, or every batch of a
+  wave out of retries, then runs as a step of its own under its OLD id
+  (`comments:P:N`, `transcribe:P:i-of-n`, …) with Inngest's retries and the old
+  fallback, so it gets one attempt more and its siblings never run twice. A
+  STEP-SHAPE CHANGE: the old ids no longer run on a clean run, so deploy it only
+  with no run in flight (both tenants run on Sundays from 06:00 SAST). Counted
+  by first argument, `step.run` / `sendEvent` give 70 ids (fanOut's own two
+  among them); by family, 82 (`STEP_FAMILIES`). `pipelineSteps` counts a run
+  from its widths, an upper bound, and `lib/pipeline/step-budget.test.ts` holds
+  it to every id family of the source (a new id fails it until counted),
+  reproduces 11 Oct (~850, finished), 8 Nov (~1,000 at its 34th Pass A batch)
+  and Össur's 8 Nov (~500), and holds 8 Nov now (~500) and a week three times
+  its size under 900. The run counts its own steps (`countSteps`) and, at 900
+  with close-run's six, notes a housekeeping warning `step-budget` before
+  close-run writes it.
 - **A run's window is frozen once, at `open-run`** (`pipeline_runs.window_start`
   / `window_end` / `window_basis`, rule in `lib/pipeline/window.ts`). Steps read
   it off `OpenRunResult` / `GatherOptions`; no step recomputes the window from
