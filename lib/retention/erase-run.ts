@@ -12,6 +12,13 @@
 //      a scrub needs the comment's words to find them, so while one has failed
 //      the comments stay and a re-run finds them and tries everything again.
 //      Scrubbing twice changes nothing: the words are already replaced.
+//   4. And not while an update is running for one of the workspaces: its
+//      passes may have read the comments already and write prose from them
+//      after the scrubs, and once the comments are deleted nothing can find
+//      those words again (the scrubs search by them). The delete waits, the
+//      comments stay, and a re-run after the update scrubs what it wrote.
+
+import { decideOpenRun, type RunningRow } from '../pipeline/run-guard'
 
 export interface EraseStep {
   name: string
@@ -66,4 +73,23 @@ export function unfinishedMessage(outcome: EraseOutcome): string | null {
       : 'The comments were NOT deleted yet: they stay so that a re-run can find their words.',
     'Fix the cause and re-run this script with the same arguments. Send no reply until a run finishes.',
   ].join(' ')
+}
+
+/**
+ * The updates running now for these workspaces, by the pipeline's own rule
+ * (lib/pipeline/run-guard.ts): a `running` row newer than the stale line. A
+ * row past it is an update that died, and does not hold the delete. Pure.
+ */
+export function updatesInFlight(
+  running: readonly (RunningRow & { client_id: string })[],
+  now: Date = new Date(),
+): { clientId: string; runId: string }[] {
+  const byClient = new Map<string, RunningRow[]>()
+  for (const r of running) byClient.set(r.client_id, [...(byClient.get(r.client_id) ?? []), { id: r.id, started_at: r.started_at }])
+  const out: { clientId: string; runId: string }[] = []
+  for (const [clientId, rows] of byClient) {
+    const d = decideOpenRun(rows, now)
+    if (d.action === 'skip') out.push({ clientId, runId: d.blockingRunId })
+  }
+  return out
 }

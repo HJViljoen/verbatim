@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { fakeDb } from '../test/fake-db'
-import { runErasure, unfinishedMessage, type EraseStep } from './erase-run'
+import { runErasure, unfinishedMessage, updatesInFlight, type EraseStep } from './erase-run'
 import { scrubStoredPlanChecks, scrubStoredPostIdeas } from './stored-prose'
 
 // Review, 9 Nov: a scrub that threw after the comments were deleted skipped
@@ -132,3 +132,41 @@ describe('an erasure that did not finish says so', () => {
   })
 })
 
+
+// Rule 4 (lib/retention/erase-run.ts): the delete waits while an update is
+// running for one of the workspaces. Its passes may have read the comments,
+// and prose they write after the scrubs could never be found once the
+// comments are gone, since the scrubs search by the comments' words.
+describe('the delete waits for an update in flight', () => {
+  const now = new Date('2026-11-09T12:00:00Z')
+  it('holds for a run started inside the stale line, per workspace', () => {
+    expect(updatesInFlight([
+      { id: 'r1', client_id: 'c1', started_at: '2026-11-09T10:30:00Z' },
+      { id: 'r2', client_id: 'c2', started_at: '2026-11-09T01:00:00Z' },
+    ], now)).toEqual([{ clientId: 'c1', runId: 'r1' }])
+  })
+
+  it('does not hold for a run that died (past the pipeline\'s own stale line) or for none', () => {
+    expect(updatesInFlight([{ id: 'r2', client_id: 'c2', started_at: '2026-11-09T05:59:00Z' }], now)).toEqual([])
+    expect(updatesInFlight([], now)).toEqual([])
+  })
+
+  it('is checked in the delete step, before the backup copies and the comments go', () => {
+    const src = readFileSync(resolve(__dirname, '../../scripts/erase-commenter.ts'), 'utf8')
+    const erase = src.indexOf("name: 'delete the comments'")
+    const guard = src.indexOf('updatesInFlight(', erase)
+    const copies = src.indexOf('removeBackedUpCopies(admin', erase)
+    const del = src.indexOf('deleteCommentsProperly(admin', erase)
+    expect(erase).toBeGreaterThan(0)
+    expect(guard).toBeGreaterThan(erase)
+    expect(copies).toBeGreaterThan(guard)
+    expect(del).toBeGreaterThan(copies)
+    // With --apply it throws, so the runner keeps the comments.
+    expect(src.slice(guard, copies)).toMatch(/if \(args\.apply\) throw new Error/)
+    // And every analysis-prose table is a scrub of its own, before the delete.
+    const scrubs = src.indexOf('scrubs: [')
+    const each = src.indexOf('...ANALYSIS_PROSE_TABLES.map(', scrubs)
+    expect(each).toBeGreaterThan(scrubs)
+    expect(each).toBeLessThan(erase)
+  })
+})

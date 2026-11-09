@@ -6,7 +6,10 @@ import { deleteCommentsProperly } from '../lib/retention/youtube-refresh-io'
 import { AI_LOG_BODY_RETENTION_DAYS, DEMO_CLIENT_ID } from '../lib/config'
 import { markSnapshotsStale } from '../lib/artifacts'
 import { scrubStoredPlanChecks, scrubStoredPostIdeas } from '../lib/retention/stored-prose'
-import { runErasure, unfinishedMessage } from '../lib/retention/erase-run'
+import { runErasure, unfinishedMessage, updatesInFlight } from '../lib/retention/erase-run'
+import { ANALYSIS_PROSE_TABLES, filesOfSnapshots, scrubStoredProse } from '../lib/retention/analysis-prose'
+import { escapeLike, findBackedUpComments, removeBackedUpCopies, scrubRegateBackup } from '../lib/retention/regate-backup-erase'
+import { scrubRawPayloads } from '../lib/retention/raw-payloads-erase'
 
 // Erase one commenter on request (Tier 1.5, 2026-08-22). The privacy notice
 // says: write with the handle and platform and we will remove the comments tied
@@ -19,6 +22,9 @@ import { runErasure, unfinishedMessage } from '../lib/retention/erase-run'
 // What it touches, in order:
 //   1. comments rows on that platform whose author matches the handle
 //      (case-insensitive, with or without a leading '@'), across EVERY tenant.
+//   1b. the same author's comments a regate removed and kept in `regate_backup`
+//      for 30 days (lib/retention/regate-backup-erase.ts): their words are looked
+//      for like the live ones', and an undo must never put them back.
 //   2. the demo tenant's clone of those rows. The clone keeps platform +
 //      comment_id unchanged, so it is found by THAT (verified on prod: 156/156
 //      YouTube clones match by comment_id, 0 by pseudonym — source author
@@ -46,15 +52,31 @@ import { runErasure, unfinishedMessage } from '../lib/retention/erase-run'
 //   7e. post_ideas — what a post should cover and its sub-questions' labels
 //      are model prose written from comments sent to the model; scrubbed the
 //      same way.
+//   7f. the analysis's own prose (lib/retention/analysis-prose.ts): insights,
+//      themes and their registry, market and competitive insights,
+//      recommendations, account events, the run's brief, the profiles, the
+//      written reads, statement readings, held brief headlines, the frozen
+//      snapshots and the report documents, one step a table. A text of one
+//      word is not looked for there (it would erase other people's words).
+//      A stored file built from a scrubbed snapshot is LISTED, not touched.
+//   7g. the regate backup's prose (an insight's, an event's), scrubbed the same way.
+//   9. with the delete: the regate backup's copies of these comments and the
+//      rows hanging off them, removed; and not at all while an update is
+//      running for one of the workspaces (lib/retention/erase-run.ts, rule 4).
 // The ORDER they run in is not that list's (lib/retention/erase-run.ts):
 // matching (1, 2), suppression (6) first, every scrub (5, 7, 7b to 7e) each on
 // its own with a failure logged and the next one run, and the delete (3, 4,
 // 8) LAST, only where every scrub succeeded, so a re-run still finds the
 // comments' words. A run that did not finish exits 1 and prints no reply.
-// video_raw is not touched: it never carries comment items (only video-search
-// and transcribe payloads).
+//   7h. video_raw, the raw actor payloads (30 days): an Instagram post's item
+//      very likely carries its latest comments with their authors; this
+//      handle's are dropped and the words scrubbed, on every tenant's rows of
+//      the platform (lib/retention/raw-payloads-erase.ts). Unconfirmed shape:
+//      the step changes nothing where the payload holds no such comment.
 // What it cannot undo, and the reply must say so: reports already emailed;
 // OpenAI's copy of API inputs for its retention period (until zero-data-retention).
+// What it cannot find: a model's paraphrase of the words, or a part of a comment
+// quoted without the rest. It matches a comment's whole text, nothing looser.
 
 interface Args { platform: string; handle: string; apply: boolean; note: string }
 function parseArgs(argv: string[]): Args {
@@ -80,8 +102,8 @@ function demoPseudonyms(author: string): string[] {
 
 // PostgREST turns '*' into '%' inside ilike patterns, so a display name like
 // "**Sarah**" would otherwise match every author containing "sarah" — escape it
-// too, and post-filter in JS for exact (case-insensitive) equality anyway.
-const escapeLike = (s: string) => s.replace(/[\\%_*]/g, (m) => `\\${m}`)
+// too (`escapeLike`), and post-filter in JS for exact (case-insensitive)
+// equality anyway.
 
 interface CommentRow { id: string; client_id: string; author: string | null; text: string | null; platform: string; video_id: string; comment_id: string }
 
@@ -102,6 +124,13 @@ async function main() {
     )
     for (const r of rows) if (r.author && patternSet.has(r.author.trim().toLowerCase())) found.set(r.id, r)
   }
+  // 1b. Comments a regate removed and kept in its backup (30 days): not in
+  //     `comments`, but their words are this person's and an undo would put
+  //     them back.
+  const backupOnly = new Set<string>()
+  for (const b of await findBackedUpComments(admin, args.platform, patterns)) {
+    if (!found.has(b.id)) { found.set(b.id, b); backupOnly.add(b.id) }
+  }
   const exactAuthors = [...new Set([...found.values()].map((r) => r.author).filter((a): a is string => !!a))]
 
   // 2. Demo clones — by comment_id first (the clone keeps it), pseudonyms second.
@@ -121,7 +150,7 @@ async function main() {
   const rows = [...found.values()]
   const byClient = new Map<string, number>()
   for (const r of rows) byClient.set(r.client_id, (byClient.get(r.client_id) ?? 0) + 1)
-  console.log(`comments matched: ${rows.length} (${rows.filter((r) => r.client_id === DEMO_CLIENT_ID).length} of them demo-tenant clones)`)
+  console.log(`comments matched: ${rows.length} (${rows.filter((r) => r.client_id === DEMO_CLIENT_ID).length} of them demo-tenant clones, ${backupOnly.size} only in the regate backup)`)
   for (const [c, n] of byClient) console.log(`   ${c === DEMO_CLIENT_ID ? 'DEMO' : c}: ${n}`)
   console.log(`author strings seen: ${exactAuthors.map((a) => JSON.stringify(a)).join(', ') || '(none)'}`)
   if (!rows.length) {
@@ -131,6 +160,9 @@ async function main() {
   const clientIds = [...byClient.keys()]
   const texts = rows.map((r) => (r.text ?? '').replace(/\s+/g, ' ').trim()).filter((t) => t.length >= 8)
   let editsScrubbed = 0
+  // Stored files built from a snapshot this run scrubbed: they still hold the
+  // words, and this script leaves Storage alone for them (the operator's call).
+  const leftFiles: { id: string; snapshot_id: string }[] = []
   // Filled by the delete step (a holder: an assignment inside a closure is not
   // seen by the type narrowing at the reply template).
   const deleted: { del: Awaited<ReturnType<typeof deleteCommentsProperly>> | null } = { del: null }
@@ -140,12 +172,14 @@ async function main() {
   // run; then the comments are deleted, LAST and only where every scrub
   // succeeded, because a scrub needs their words to find them: while one has
   // failed they stay, and a re-run finds them and tries again.
+  // Every key variant we know of: what suppression records, and what the raw
+  // payloads are searched by.
+  const keys = [...new Set([authorKey(args.platform, args.handle), ...exactAuthors.map((a) => authorKey(args.platform, a))].filter((k): k is string => !!k))]
   const outcome = await runErasure({
     suppress: {
       name: 'suppression',
       run: async () => {
         // 6. Suppression — every key variant we know of.
-        const keys = [...new Set([authorKey(args.platform, args.handle), ...exactAuthors.map((a) => authorKey(args.platform, a))].filter((k): k is string => !!k))]
         console.log(`suppression keys (${args.platform}): ${keys.join(', ')} → ${args.apply ? 'recorded' : 'would be recorded'}`)
         if (args.apply && keys.length) {
           const { error } = await admin.from('suppressed_commenters').upsert(
@@ -371,10 +405,62 @@ async function main() {
           }
         },
       },
+      // 7f. The analysis's own prose (lib/retention/analysis-prose.ts), one
+      //     step a table, so a table that fails is named and the rest still run.
+      ...ANALYSIS_PROSE_TABLES.map((spec) => ({
+        name: `stored prose: ${spec.table}`,
+        run: async () => {
+          if (!clientIds.length || !texts.length) return
+          const r = await scrubStoredProse(admin, spec, clientIds, texts, { apply: args.apply })
+          console.log(`${spec.table} carrying the text: ${r.rows} → ${args.apply ? 'scrubbed' : 'would be scrubbed'}`)
+          if (spec.table !== 'report_snapshots' || !r.rows) return
+          // The share page and "the email as sent" re-render from the snapshot,
+          // so they no longer print the words. A PDF or PNG built before the
+          // scrub still holds them: listed, not deleted or rebuilt here.
+          const files = await filesOfSnapshots(admin, r.keys.map((k) => String(k.id)))
+          leftFiles.push(...files)
+          if (files.length) console.log(`   stored file(s) built from them before the scrub, still carrying the words: ${files.length} (artifact ${files.map((f) => f.id).join(', ')})`)
+        },
+      })),
+      {
+        name: 'regate backup prose',
+        run: async () => {
+          // 7g. The regate backup's prose (lib/retention/regate-backup-erase.ts).
+          if (!clientIds.length || !texts.length) return
+          const n = await scrubRegateBackup(admin, clientIds, texts, { apply: args.apply })
+          console.log(`regate backup prose carrying the text: ${n} → ${args.apply ? 'scrubbed' : 'would be scrubbed'}`)
+        },
+      },
+      {
+        name: 'raw actor payloads',
+        run: async () => {
+          // 7h. On the handle alone, so it runs where no comment matched too.
+          const n = await scrubRawPayloads(admin, args.platform, new Set(keys), texts, { apply: args.apply })
+          console.log(`raw ${args.platform} payloads carrying the handle's comments or words: ${n} → ${args.apply ? 'scrubbed' : 'would be scrubbed'}`)
+        },
+      },
     ],
     erase: {
       name: 'delete the comments',
       run: async () => {
+        // Not while an update is running for one of the workspaces
+        // (lib/retention/erase-run.ts, rule 4): prose it writes from these
+        // comments after the scrubs could never be found once they are gone.
+        if (clientIds.length) {
+          const { data, error } = await admin.from('pipeline_runs').select('id, client_id, started_at').in('client_id', clientIds).eq('status', 'running')
+          if (error) throw new Error(`read pipeline_runs: ${error.message}`)
+          const live = updatesInFlight((data ?? []) as { id: string; client_id: string; started_at: string }[])
+          if (live.length) {
+            const which = live.map((l) => `${l.clientId} (run ${l.runId})`).join(', ')
+            if (args.apply) throw new Error(`an update is running for ${which}: it can still write these comments' words after the scrubs. Re-run when it has finished.`)
+            console.log(`an update is running for ${which}: with --apply the delete would wait for it`)
+          }
+        }
+        // 9. The regate backup's copies of these comments, and the rows hanging
+        //    off them, before the comments themselves (a failure here leaves
+        //    the comments for a re-run to find).
+        const copies = await removeBackedUpCopies(admin, rows.map((r) => r.id), { apply: args.apply })
+        console.log(`regate backup copies: ${copies.comments} comment row(s) + ${copies.dependents} row(s) hanging off them → ${args.apply ? 'deleted' : 'would be deleted'}`)
         // 3–4. Dependents + hero quotes, counted; deleted with --apply (cascade).
         const ids = rows.map((r) => r.id)
         let evidenceRows = 0
@@ -407,6 +493,10 @@ async function main() {
     console.error(`\n${unfinished}`)
     process.exitCode = 1
     return
+  }
+
+  if (leftFiles.length) {
+    console.log(`\nBEFORE THE REPLY: ${leftFiles.length} stored file(s) were built from a snapshot this run scrubbed and still carry the words (artifact ${leftFiles.map((f) => f.id).join(', ')}). This script does not delete or rebuild them; see the runbook.`)
   }
 
   console.log(`\n--- reply template ---
