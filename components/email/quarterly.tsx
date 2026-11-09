@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-head-element, @next/next/no-page-custom-font -- an email document, not a page */
 import type { BlockContext } from '@/lib/blocks/types'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fullDate } from '@/lib/format'
+import { appDay } from '@/lib/format'
 import { QUARTER_PAGE_IN_SENTENCE, quarterPageKindOf } from '@/lib/reports/quarterly'
 import { staleQuarterlySnapshot, type QuarterlySnapshotData } from '@/lib/reports/quarterly-build'
 import { quarterlyBlocksFor } from '@/components/blocks/quarterly'
@@ -128,7 +128,7 @@ export function QuarterlyEmail({ data, shareUrl, appUrl, attached, ctx, preheade
                       <td style={{ padding: '24px 28px 4px' }}>
                         <div style={text.eyebrow}>{data.company} · consumer intelligence</div>
                         <div style={{ fontFamily: FONT.serif, fontSize: 22, fontWeight: 500, lineHeight: '1.25', color: EMAIL.ink, marginTop: 8 }}>{data.subject}</div>
-                        <div style={{ ...text.mono, color: EMAIL.muted, fontSize: 12, marginTop: 6 }}>{data.period} · reading as at {fullDate(data.readingAt)}</div>
+                        <div style={{ ...text.mono, color: EMAIL.muted, fontSize: 12, marginTop: 6 }}>{data.period} · reading as at {appDay(data.readingAt)}</div>
                         {/* NO RULE UNDER THE MASTHEAD (copy de-clutter, ruling E): the
                             cover's own stat card states the six-month gate, and a
                             covering note says it once. */}

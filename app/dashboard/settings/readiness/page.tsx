@@ -4,7 +4,7 @@ import { ReadinessTable } from '@/components/ops/readiness-table'
 import { SettingsFrame } from '@/components/settings-frame'
 import { Card } from '@/components/pages/studio/ui'
 import { canManageTenant, getSessionContext } from '@/lib/auth'
-import { fullDate } from '@/lib/format'
+import { appDay } from '@/lib/format'
 import { gateAccessFor } from '@/lib/gate-record'
 import { computeReadiness } from '@/lib/readiness/compute'
 import { loadReadiness } from '@/lib/readiness/load'
@@ -112,7 +112,7 @@ export default async function SettingsReadinessPage() {
           <ReadinessTable
             rows={view.rows}
             title="What each part of the product needs from this workspace"
-            description={`Read ${fullDate(now.toISOString())}. ${READINESS_CONTACT}`}
+            description={`Read ${appDay(now.toISOString())}. ${READINESS_CONTACT}`}
             nextLabel={CLIENT_NEXT_LABEL}
           />
         </Card>

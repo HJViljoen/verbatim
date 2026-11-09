@@ -148,7 +148,19 @@ export function appWhen(at: string | Date): string {
   return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}, ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`
 }
 
-/** "9 Nov 2026" on the clients' clock. */
+/** "9 Nov" on the clients' clock (`shortDate`'s shape). */
+export function appShort(at: string | Date): string {
+  const d = onAppClock(at)
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`
+}
+
+/** "Mon 9 Nov" on the clients' clock (`weekdayDate`'s shape). */
+export function appWeekday(at: string | Date): string {
+  const d = onAppClock(at)
+  return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`
+}
+
+/** "9 Nov 2026" on the clients' clock (`fullDate`'s shape). */
 export function appDay(at: string | Date): string {
   const d = onAppClock(at)
   return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`

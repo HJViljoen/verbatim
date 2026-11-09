@@ -4,7 +4,7 @@ import { CalendarLine, type CalendarSeries } from '@/components/charts/calendar-
 import { MovementBadge } from '@/components/delta-badge'
 import { sharedPairNote } from '@/lib/calibration'
 import { TileBlock } from '@/components/shell/tile'
-import { fmtInt, fmtPct, longMonth, shortDate } from '@/lib/format'
+import { appShort, fmtInt, fmtPct, longMonth } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { audiencePhrase } from '@/lib/reading/afterwards'
 import type { MoveReading, MoveSeries } from '@/lib/reading/moves'
@@ -159,7 +159,7 @@ function Side({ verdict, mode, control = false, shared = null }: { verdict: Verd
 function Move({ reading, index, mode }: { reading: MoveReading; index: number; mode: RenderMode }) {
   const email = mode === 'email'
   const r = reading
-  const meta = `declared ${shortDate(r.declaredAt)} · ${r.on}`
+  const meta = `declared ${appShort(r.declaredAt)} · ${r.on}`
   const heading = `Move ${fmtInt(index)}: ${r.title}`
   // ONE REFUSAL, SAID ONCE (deploy 1 review, the lead's R3): the move's side
   // and its controls, refused for one pair, show their figures and nothing
@@ -278,7 +278,7 @@ function MarketMove({ read, mode }: { read: MoveMarketRead; mode: RenderMode }) 
     return (
       <div style={{ padding: '6px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
         <div style={{ fontFamily: FONT.sans, fontSize: 12.5, fontWeight: 600, color: EMAIL.ink }}>{read.title}</div>
-        <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>{read.on} · dated {shortDate(read.datedOn ?? read.declaredAt)}</div>
+        <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>{read.on} · dated {appShort(read.datedOn ?? read.declaredAt)}</div>
         {withheld
           ? null
           : on
@@ -291,7 +291,7 @@ function MarketMove({ read, mode }: { read: MoveMarketRead; mode: RenderMode }) 
     <TileBlock className="flex min-w-0 flex-col gap-2.5">
       <span className="flex flex-col gap-0.5">
         <span className="text-[14px] font-semibold text-foreground">{read.title}</span>
-        <span className="text-[12px] text-muted-foreground">{read.on} · dated {shortDate(read.datedOn ?? read.declaredAt)}</span>
+        <span className="text-[12px] text-muted-foreground">{read.on} · dated {appShort(read.datedOn ?? read.declaredAt)}</span>
       </span>
       {withheld ? null : on ? (
         <>

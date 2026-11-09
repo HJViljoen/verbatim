@@ -1,7 +1,7 @@
 import type { Block, BlockContext } from '@/lib/blocks/types'
 import type { PageModule, Renderable, Slide } from '@/lib/renderables/types'
 import { blockContext } from '@/lib/blocks/types'
-import { fullDate } from '@/lib/format'
+import { appDay } from '@/lib/format'
 import { EMAIL } from '@/lib/email/theme'
 import { appBaseUrl } from '@/lib/site'
 import { loadSubjectsPage, selectedNotReady, type SubjectsData } from '@/lib/pages/subjects'
@@ -184,5 +184,5 @@ export const subjectsPage: PageModule<SubjectsData> = {
     ]
   },
   renderables,
-  snapshotTitle: (data) => `Subjects · ${data.brand} · ${fullDate(data.readingAt)}`,
+  snapshotTitle: (data) => `Subjects · ${data.brand} · ${appDay(data.readingAt)}`,
 }

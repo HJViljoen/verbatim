@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { GoLink } from '@/components/v2/ui'
 import { TokenProse } from '@/components/blocks/prose'
 import { pairChipWords } from '@/lib/calibration'
-import { fmtInt, longMonth, shortDate } from '@/lib/format'
+import { appShort, fmtInt, longMonth, shortDate } from '@/lib/format'
 import { pairOnVerdict } from '@/lib/reading/comparability'
 import { nextPairParts, readTheSameWay, rowMeasuresPair, whyNotCompared, type ChangeBlock, type CompareRule, type LedgerLine, type WhyCell } from '@/lib/pages/overview-market/change'
 import { cellReadWith, monthHead, type RecordCell, type RecordGroup, type RecordView, type SearchAside } from '@/lib/settings/what-we-changed'
@@ -390,7 +390,7 @@ export const RULE_STATE_WORDS: Record<CompareRule['state'], string> = { held: 'H
 
 export function WhenCompared({ rules, block, asAt }: { rules: readonly CompareRule[]; block: ChangeBlock; asAt: string | null }) {
   const pair = block.pair
-  const column = pair ? `${longMonth(pair.prevMonth)} against ${longMonth(pair.month)}${asAt ? `, as at ${shortDate(asAt)}` : ''}` : null
+  const column = pair ? `${longMonth(pair.prevMonth)} against ${longMonth(pair.month)}${asAt ? `, as at ${appShort(asAt)}` : ''}` : null
   const cols = 'lg:grid-cols-[24px_minmax(0,1.5fr)_minmax(0,1fr)]'
   return (
     <RecordSection title="When two months are compared" footer={<GoLink href={HOW_TO_READ_HREF}>How to read</GoLink>}>

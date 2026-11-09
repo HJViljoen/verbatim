@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { productReadingsEnabled } from '../config'
-import { longMonth, shortDate } from '../format'
+import { appShort, longMonth } from '../format'
 import { CONTACT_EMAIL } from '../legal'
 import {
   isMissingProductsSchema,
@@ -351,7 +351,7 @@ export function productSettingsView(
   // the rows themselves (`seeded_from`, `created_at`): the earliest seeded
   // category. A list a person built has no such line.
   const seededRows = groups.filter((g) => g.seeded_from).sort((a, b) => a.created_at.localeCompare(b.created_at))
-  const seeded = seededRows[0] ? { from: seededRows[0].seeded_from as string, on: shortDate(seededRows[0].created_at) } : null
+  const seeded = seededRows[0] ? { from: seededRows[0].seeded_from as string, on: appShort(seededRows[0].created_at) } : null
 
   let openView: OpenCategory | null = null
   if (open) {

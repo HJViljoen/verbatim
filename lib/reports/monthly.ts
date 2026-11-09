@@ -1,4 +1,4 @@
-import { fmtInt, fmtPct, longMonth, shortDate, weekdayDate } from '../format'
+import { appShort, fmtInt, fmtPct, longMonth, shortDate, weekdayDate } from '../format'
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { freezeBoundary } from '../reading/monthly'
 import type { Verdict } from '../reading/verdicts'
@@ -318,7 +318,7 @@ export function sentReadingLine(sent: SentReading, live: number): string | null 
       ? `${fmtPct(sent.value)} · ${fmtInt(sent.k)} of ${fmtInt(sent.n)}`
       : fmtPct(sent.value)
     : `${fmtInt(sent.value)} ${sent.unit}`
-  return `the report of ${shortDate(sent.readingAt)} read ${value}`
+  return `the report of ${appShort(sent.readingAt)} read ${value}`
 }
 
 // ---- the record's figures -------------------------------------------------------

@@ -1,5 +1,5 @@
 import { dbSafeJson, dbSafeText } from './db-text'
-import { fullDate } from './format'
+import { appDay } from './format'
 import { isMissingColumnError } from './supabase-admin'
 
 // The configuration change log (Phase 0, design item 16).
@@ -629,5 +629,5 @@ export function changeLogBoundary(firstLoggedAt: string | null | undefined): str
   if (!firstLoggedAt) {
     return 'No configuration change has been recorded yet. Anything shown before the first one is reconstructed from what each update searched: a label, not a record.'
   }
-  return `No change was recorded before ${fullDate(firstLoggedAt)}. Entries before it are reconstructed from what each update searched: a label, not a record.`
+  return `No change was recorded before ${appDay(firstLoggedAt)}. Entries before it are reconstructed from what each update searched: a label, not a record.`
 }

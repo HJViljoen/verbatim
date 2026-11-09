@@ -4,7 +4,7 @@ import { CONFIG_CHANGES_TABLE, isMissingConfigLog, type ConfigChange } from '../
 import { GATE_APPEALS_TABLE, isMissingGateAppeals, type GateAccess } from '../gate-record'
 import { REDDIT_COMMENT_DEPTH_CAP } from '../config'
 import { GATE_DEFAULT_REASONS } from '../gather/gate-verdicts'
-import { fmtInt, fmtPct, fullDate, shortDate } from '../format'
+import { appDay, fmtInt, fmtPct, fullDate, shortDate } from '../format'
 import { selectAll } from '../supabase-admin'
 
 import { memoRead } from './memo'
@@ -1125,8 +1125,8 @@ export function recordLines(input: RecordInputs): string[] {
 
   if (input.comparisonsRefused != null) lines.push(refusedSentence(input.refusals))
 
-  lines.push(`Reading as at ${fullDate(input.readingAt)}.`)
-  lines.push(input.frozenAt == null ? 'No month in this window has been frozen yet; they are still filling.' : `The newest month here was frozen ${fullDate(input.frozenAt)}.`)
+  lines.push(`Reading as at ${appDay(input.readingAt)}.`)
+  lines.push(input.frozenAt == null ? 'No month in this window has been frozen yet; they are still filling.' : `The newest month here was frozen ${appDay(input.frozenAt)}.`)
   return lines
 }
 

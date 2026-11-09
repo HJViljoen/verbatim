@@ -8,7 +8,7 @@ import { RecStatusMenu, RecStatusWord } from '@/components/rec-status'
 import { TileBlock } from '@/components/shell/tile'
 import { TileColumns } from '@/components/shell/page-grid'
 import { INTERPRETATION_LABEL } from '@/lib/prose/interpret'
-import { fmtInt, longMonth, shortDate } from '@/lib/format'
+import { appShort, fmtInt, longMonth, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import { onScreenText } from '@/lib/pages/overview'
@@ -94,7 +94,7 @@ export function provenanceLine(l: LedgerRow): string | null {
  *  artboard sets the stamp in mono under the control where the build set it in
  *  sans inside a sentence (`main.sentence.rec.stamp`). */
 export function decisionStamp(l: LedgerRow): string {
-  return l.decidedAt ? `you marked it on ${shortDate(l.decidedAt)}` : 'no decision recorded'
+  return l.decidedAt ? `you marked it on ${appShort(l.decidedAt)}` : 'no decision recorded'
 }
 
 

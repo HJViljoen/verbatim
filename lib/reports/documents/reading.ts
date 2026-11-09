@@ -1,4 +1,4 @@
-import { fmtInt, fullDate, longMonth, platformLabel, shortDate } from '../../format'
+import { appDay, appShort, fmtInt, fullDate, longMonth, platformLabel } from '../../format'
 import { blockAnswers, mergeFigures } from '../../blocks/types'
 import type { Block } from '../../blocks/types'
 import { freezeBoundary } from '../../reading/monthly'
@@ -145,7 +145,7 @@ export interface BriefReading {
  *  Aug 2026" on the method page, in the email and on every figure's frame; a
  *  brief whose numbers are a month's cannot keep a stamp that names a run. */
 export function briefStamp(r: Pick<BriefReading, 'month' | 'monthStatus' | 'readingAt'>): string {
-  const parts = [monthAndYear(r.month), `reading as at ${fullDate(r.readingAt)}`]
+  const parts = [monthAndYear(r.month), `reading as at ${appDay(r.readingAt)}`]
   if (r.monthStatus === 'filling') parts.push(`still filling until ${fullDate(freezeBoundary(r.month))}`)
   return parts.join(' · ')
 }
@@ -171,7 +171,7 @@ export function briefStamp(r: Pick<BriefReading, 'month' | 'monthStatus' | 'read
 export function briefStampShort(r: Pick<BriefReading, 'month' | 'monthStatus' | 'readingAt'>): string {
   return [
     monthAndYear(r.month),
-    `as at ${shortDate(r.readingAt)}`,
+    `as at ${appShort(r.readingAt)}`,
     r.monthStatus === 'filling' ? 'still filling' : 'frozen',
   ].join(' · ')
 }

@@ -1,6 +1,6 @@
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
-import { fullDate } from '@/lib/format'
+import { appDay } from '@/lib/format'
 import { staleQuarterlySnapshot, type QuarterlySnapshotData } from '@/lib/reports/quarterly-build'
 import { quarterlyBlocksFor } from '@/components/blocks/quarterly'
 import { Slide } from './slide'
@@ -53,7 +53,7 @@ import { withCurrentWords } from '@/lib/reports/legacy-words'
  */
 const QUARTERLY_TYPE_FLOOR = 'deferred' as const
 
-const fmtDate = (d: Date) => fullDate(d.toISOString())
+const fmtDate = (d: Date) => appDay(d.toISOString())
 
 export function QuarterlyDeck({ data, date = fmtDate(new Date()) }: { data: QuarterlySnapshotData; date?: string }) {
   // A snapshot built before the em-dash sweep re-renders in the current words.
@@ -64,7 +64,7 @@ export function QuarterlyDeck({ data, date = fmtDate(new Date()) }: { data: Quar
   const stale = staleQuarterlySnapshot(data)
   const blocks = stale ? [] : quarterlyBlocksFor(data.keys)
   const chrome = {
-    context: `${data.company} · ${data.period} · reading as at ${fullDate(data.readingAt)}`,
+    context: `${data.company} · ${data.period} · reading as at ${appDay(data.readingAt)}`,
     // THE DATE ALONE. The six-month gate is said once, on the cover's stat
     // card beside the count it depends on (copy de-clutter 2026-09-24); eight
     // copies of it in the footer were the loudest repetition in the document.

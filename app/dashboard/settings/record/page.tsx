@@ -15,7 +15,7 @@ import { ScopeStatement } from '@/components/settings/record/header'
 import { commaCite } from '@/components/v2/words'
 import { RejectLogBlock } from '@/components/settings/record/rejects'
 import { canManageTenant, getSessionContext } from '@/lib/auth'
-import { fullDate, longMonth, monthName, shortDate } from '@/lib/format'
+import { appDay, appShort, longMonth, monthName, shortDate } from '@/lib/format'
 import { recordWindow } from '@/lib/pages/overview'
 import { readingHandle } from '@/lib/reading/read'
 import { recordLines, recordRows } from '@/lib/reading/record'
@@ -207,7 +207,7 @@ export default async function SettingsRecordPage() {
       context={[
         tenant,
         delivery.since ? `first update ${shortDate(delivery.since)}` : null,
-        save.lastSavedAt ? `last saved ${shortDate(save.lastSavedAt)}` : null,
+        save.lastSavedAt ? `last saved ${appShort(save.lastSavedAt)}` : null,
       ].filter(Boolean).join(', ')}
     >
       {/* THE PREVIEW'S RHYTHM: each section a tile, 24px apart (market-first
@@ -329,7 +329,7 @@ export default async function SettingsRecordPage() {
  */
 function scopeStatement(tenant: string, lines: readonly string[], readingAt: string): string {
   return [
-    `${tenant}: what this reading covers, as at ${fullDate(readingAt)}.`,
+    `${tenant}: what this reading covers, as at ${appDay(readingAt)}.`,
     '',
     // One line each, with no middle-dot bullet (the audit design), and lib's
     // " · " joins said in commas (the platform mix, `platformMixLine`; the

@@ -7,7 +7,7 @@ import { Sparkline } from '@/components/charts/sparkline'
 import { CountBadge, MOVEMENT_WORDS, MovementBadge } from '@/components/delta-badge'
 import { FigureCell } from '@/components/blocks/frame'
 import { gapLevels, gapLine, sidePct, type Gap } from '@/lib/reading/gap'
-import { appDay, fullDate, monthName, round1, shortDate } from '@/lib/format'
+import { appDay, appShort, fullDate, monthName, round1, shortDate } from '@/lib/format'
 import { nextMonth } from '@/lib/reading/month-key'
 import { platformShareLine } from '@/lib/reading/method'
 import { MOVE_PROMISE } from '@/lib/subjects/types'
@@ -315,7 +315,7 @@ function audiencePills(audiences: string, company: string) {
  * on every other, which is where the artboard puts it too.
  */
 const titleStamp = (data: DocumentSnapshotData): string =>
-  data.reading ? `${data.reading.monthLabel} · ${data.company} · as at ${shortDate(data.reading.readingAt)}` : data.period
+  data.reading ? `${data.reading.monthLabel} · ${data.company} · as at ${appShort(data.reading.readingAt)}` : data.period
 
 /** The footer's stamp: the artboard's short form where there is a reading, and
  *  nothing (so the render date stands) where there is not. */

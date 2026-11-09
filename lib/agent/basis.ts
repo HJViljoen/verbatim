@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { fmtInt, shortDate } from '../format'
+import { appShort, fmtInt } from '../format'
 import { isRivalAudience } from '../rivals'
 import { pooledDenominators } from '../reading/market'
 import { SHARE_BAND } from '../report-bands'
@@ -94,8 +94,8 @@ export function askBasisLine(
     return 'Nothing has been read for this workspace yet, so there is nothing to answer from.'
   }
   const lead = opts.asked
-    ? `${opts.verb ?? 'Answered'} against the update of ${shortDate(basis.updateAt)}`
-    : `Answers are given against the update of ${shortDate(basis.updateAt)}`
+    ? `${opts.verb ?? 'Answered'} against the update of ${appShort(basis.updateAt)}`
+    : `Answers are given against the update of ${appShort(basis.updateAt)}`
 
   // SHORT IS THE LEAD ALONE, and it exists for the page BAR (E-ask fix pass).
   // The four facts printed in the bar's context slot, again in the answer
@@ -134,7 +134,7 @@ export function askBasisLine(
   // already in the other half of this ternary, so the two halves of one
   // sentence spoke two languages and the one a healthy workspace sees was ours.
   const embedded = basis.lastEmbeddedAt
-    ? `indexed as at ${shortDate(basis.lastEmbeddedAt)}`
+    ? `indexed as at ${appShort(basis.lastEmbeddedAt)}`
     : 'when they were indexed is not recorded'
 
   // THE TENSE BREAKS AFTER THE UPDATE. Only the first fact belongs to the

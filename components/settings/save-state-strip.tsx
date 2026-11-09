@@ -1,4 +1,4 @@
-import { shortDate } from '@/lib/format'
+import { appShort } from '@/lib/format'
 import { printNote } from '@/lib/settings/change-log'
 import { NOTHING_PENDING, type SaveState } from '@/lib/settings/save-state'
 
@@ -49,7 +49,7 @@ export function LastSaveStrip({ state, note }: {
       {state.lastSavedAt ? (
         <>
           <span className="font-mono text-[10.5px] leading-[1.4] text-muted-foreground">
-            Last save {shortDate(state.lastSavedAt)}{printNote(note) ? `: ${printNote(note)}` : ''}
+            Last save {appShort(state.lastSavedAt)}{printNote(note) ? `: ${printNote(note)}` : ''}
           </span>
           <span className="font-mono text-[10.5px] leading-[1.4] text-muted-foreground">{breakWords(state)}</span>
         </>
@@ -69,7 +69,7 @@ export function SaveStateLine({ state }: { state: SaveState }) {
       {pending === 0
         ? `${NOTHING_PENDING}`
         : `${pending} change${pending === 1 ? '' : 's'} waiting to be saved: ${state.pending.map((p) => p.field.toLowerCase()).join(', ')}`}
-      {state.lastSavedAt ? <> · last saved <span className="font-mono text-[12px] text-secondary-foreground">{shortDate(state.lastSavedAt)}</span>.</> : '.'}
+      {state.lastSavedAt ? <> · last saved <span className="font-mono text-[12px] text-secondary-foreground">{appShort(state.lastSavedAt)}</span>.</> : '.'}
     </span>
   )
 }

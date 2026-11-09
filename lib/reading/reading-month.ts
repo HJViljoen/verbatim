@@ -1,4 +1,4 @@
-import { fmtInt, longMonth, shortDate, weekdayDate } from '../format'
+import { appShort, fmtInt, longMonth, shortDate, weekdayDate } from '../format'
 import { lastExpectedSlot, type ScheduleConfig, DEFAULT_TZ } from '../pipeline/schedule-due'
 import { SHARE_BAND } from '../report-bands'
 import { thinMonth } from './bands'
@@ -431,7 +431,7 @@ export function monthWords(r: ReadingMonth, videos?: number | null): string {
  */
 export function barLine(r: ReadingMonth): string {
   if (r.asAt == null) return r.nextUpdate ? `no update yet · next update ${weekdayDate(r.nextUpdate)}` : 'no update yet'
-  const asAt = `as at the ${shortDate(r.asAt)} update`
+  const asAt = `as at the ${appShort(r.asAt)} update`
   if (r.paused) return `${asAt} · updates paused`
   return r.nextUpdate ? `${asAt} · next update ${weekdayDate(r.nextUpdate)}` : asAt
 }

@@ -11,7 +11,7 @@ import { provenanceLine } from '@/components/pages/overview/sentence'
 import { DirectionWord } from '@/components/pages/overview/subjects'
 import { DeckFooter } from '@/components/print/report-deck'
 import { Slide } from '@/components/print/slide'
-import { fmtInt, fmtPct, monthName, shortDate } from '@/lib/format'
+import { appShort, fmtInt, fmtPct, monthName } from '@/lib/format'
 import { audienceInLabel, monthlyLineLabel, type AttentionBlock, type LedgerRow, type OverviewData, type SideReading, type SubjectRow } from '@/lib/pages/overview'
 import { GAP_WORDS, gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
 import type { MoveReading } from '@/lib/reading/moves'
@@ -496,7 +496,7 @@ function AttentionCard({ attention }: { attention: AttentionBlock | null }) {
     )
   }
   const size = attention.accountCount
-  const frozen = attention.panel?.frozen_at ? shortDate(attention.panel.frozen_at) : null
+  const frozen = attention.panel?.frozen_at ? appShort(attention.panel.frozen_at) : null
   // Each earlier month over ITS OWN count of videos read, which is the one
   // thing that makes two comment counts comparable at all. The latest month is
   // the card's hero and is not repeated here.
@@ -635,7 +635,7 @@ function Decide({ ledger, company }: { ledger: LedgerRow | null; company: string
       <p className={BODY}>{age}</p>
       <div className="flex items-center gap-2.5">
         <Chip tone={ledger.decidedAt ? 'good' : 'plain'}>
-          {ledger.decidedAt ? `${ledger.statusLabel} · ${shortDate(ledger.decidedAt)}` : `${ledger.statusLabel} · no decision recorded`}
+          {ledger.decidedAt ? `${ledger.statusLabel} · ${appShort(ledger.decidedAt)}` : `${ledger.statusLabel} · no decision recorded`}
         </Chip>
       </div>
     </div>
@@ -1018,7 +1018,7 @@ export function LeadershipSheet({
   // 3rd month") is two direction claims and is refused whatever face it is set
   // in (D1), so there is no honest sentence to put here; leaving the slot empty
   // gives its 26px back to the body and keeps it free for the Studio.
-  const stamp = `${overview.brand} · ${overview.monthStatus === 'filling' ? 'still filling' : 'frozen'} · as at ${shortDate(overview.readingAt)}`
+  const stamp = `${overview.brand} · ${overview.monthStatus === 'filling' ? 'still filling' : 'frozen'} · as at ${appShort(overview.readingAt)}`
   return (
     <Slide
       title={`${data.title} · ${monthAndYear(overview.month)}`}

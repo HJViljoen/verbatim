@@ -334,7 +334,8 @@ async function main() {
     const { createElement } = await import('react')
     const { renderToStaticMarkup } = await import('react-dom/server')
     const { DocumentDeck } = await import('../components/print/document-deck')
-    const date = new Date(readingAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+    const { appDay } = await import('../lib/format')
+    const date = appDay(readingAt)
     const html = renderToStaticMarkup(createElement(DocumentDeck, { data: hydrated, date }))
     const sheets = html.split(/<section[^>]*class="[^"]*\bvb-slide\b[^"]*"[^>]*>/).slice(1).map(sheetText)
 

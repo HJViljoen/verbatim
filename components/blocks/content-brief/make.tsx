@@ -4,7 +4,7 @@ import { BlockMovement } from '@/components/blocks/movement'
 import { BlockQuote } from '@/components/blocks/quote'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fmtInt, fmtPct, fullDate, longMonth } from '@/lib/format'
+import { appDay, fmtInt, fmtPct, longMonth } from '@/lib/format'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { AdviceRow, MarketSurfaceData } from '@/lib/pages/market-surface'
 import { madeInMonth } from '@/lib/pages/market-surface'
@@ -132,7 +132,7 @@ export function provenance(row: AdviceRow): string {
   const parts = [`First raised ${madeInMonth(row.firstMade)}`]
   if (row.monthsRepeated > 1) parts.push(`advised in ${fmtInt(row.monthsRepeated)} months`)
   else if (row.repeatedWithinMonth) parts.push('advised twice, in one month')
-  if (row.status !== 'new') parts.push(row.decidedAt ? `${row.statusLabel} ${fullDate(row.decidedAt)}` : row.statusLabel)
+  if (row.status !== 'new') parts.push(row.decidedAt ? `${row.statusLabel} ${appDay(row.decidedAt)}` : row.statusLabel)
   if (row.grounded && !row.grounded.pruned) parts.push(`grounded in ${fmtInt(row.grounded.videos)} ${row.grounded.videos === 1 ? 'video' : 'videos'}`)
   return parts.join(' · ')
 }

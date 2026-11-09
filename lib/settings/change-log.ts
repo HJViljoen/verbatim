@@ -1,4 +1,4 @@
-import { fullDate, monthName, shortDate } from '../format'
+import { appDay, appShort, monthName } from '../format'
 import { audienceLabel } from '../readiness/types'
 import type { ActorKind, ConfigChange } from '../config-log'
 import { MF1_SURFACES, type LoggedSurface } from '../config-surfaces-mf1'
@@ -354,8 +354,8 @@ export function readChangeLog(args: ReadChangeLogArgs): ChangeLogView {
     return {
       id: change.id,
       on: change.changed_at.slice(0, 10),
-      date: fullDate(change.changed_at),
-      dateShort: shortDate(change.changed_at),
+      date: appDay(change.changed_at),
+      dateShort: appShort(change.changed_at),
       surface: change.surface,
       what: SURFACE_WORDS[change.surface] ?? SURFACE_WORDS.other,
       said: printNote(withNote?.note) || composedNote(change),

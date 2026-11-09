@@ -1,4 +1,4 @@
-import { fullDate, longMonth } from '../format'
+import { appDay, fullDate, longMonth } from '../format'
 import { proseFigures } from '../prose/figures'
 import type { FigureTable as MeasuredFigures } from '../reading/verdicts'
 import { isOpaqueFigureKey, type Figure, type FigureTable } from './types'
@@ -304,7 +304,7 @@ export function readingStampOf(snapshot: ReadingStampRow): ReadingStamp {
 
 /** The one line the archive prints about when an artefact read. */
 export function readingLine(stamp: ReadingStamp): string {
-  const when = fullDate(stamp.at)
+  const when = appDay(stamp.at)
   const head = stamp.inferred ? `built ${when} · no reading date recorded` : `read as at ${when}`
   if (!stamp.month) return head
   return `${stamp.month}${stamp.monthStatus === 'filling' ? ' (still filling)' : ''} · ${head}`

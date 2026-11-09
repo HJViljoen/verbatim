@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { fmtInt, shortDate } from '@/lib/format'
+import { appShort, fmtInt } from '@/lib/format'
 import { DELIVERED_STATUSES, type DeliveryRecord, type DeliveryStat } from '@/lib/settings/delivery'
 import type { ReadingsRecord } from '@/lib/settings/readings'
 import type { UpdateInput } from '@/lib/readiness/types'
@@ -94,7 +94,7 @@ export function DeliveryBlock({
                     `recordLines` states about its own dates, applied to the
                     chips that sit under it. */}
                 <DatePill>
-                  {shortDate(u.startedAt)}
+                  {appShort(u.startedAt)}
                   {DELIVERED_STATUSES.has(u.status) ? '' : ', did not finish'}
                 </DatePill>
               </li>

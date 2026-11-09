@@ -3,7 +3,7 @@ import type { RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { provenanceLine } from '@/components/pages/overview/sentence'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { longMonth, shortDate } from '@/lib/format'
+import { appShort, longMonth } from '@/lib/format'
 import { surface } from '@/lib/nav'
 import { nextMonthlyParts } from '@/lib/reports/monthly'
 import type { LedgerRow } from '@/lib/pages/overview'
@@ -30,7 +30,7 @@ const TITLE = 'What to decide'
 /** "You marked it Working on it on 15 Sep", or where it stands undecided. */
 export function decisionLine(l: LedgerRow): string {
   return l.decidedAt
-    ? `You marked it ${l.statusLabel} on ${shortDate(l.decidedAt)}`
+    ? `You marked it ${l.statusLabel} on ${appShort(l.decidedAt)}`
     : `No decision recorded; it stands at ${l.statusLabel}`
 }
 

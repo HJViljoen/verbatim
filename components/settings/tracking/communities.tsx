@@ -1,6 +1,6 @@
 import { CONTACT_EMAIL } from '@/lib/legal'
 import { Dot, Figure, gridIntrinsic, GridRow, GridTable, Section, SectionHead, SectionNotes } from '@/components/settings/chrome'
-import { shortDate } from '@/lib/format'
+import { appShort } from '@/lib/format'
 import { levelText } from '@/lib/reading/level'
 import { communityWords, type CommunityRow } from '@/lib/settings/communities'
 import { CommunityAction, CommunityAdd } from './community-controls'
@@ -76,7 +76,7 @@ export function CommunitiesSection({
               cells={[
                 <span key="n" className="block truncate text-[12.5px] font-medium">{r.label}</span>,
                 <span key="d" className="block font-mono text-[11.5px] text-muted-foreground">
-                  {r.discoveredAt ? shortDate(`${r.discoveredAt.slice(0, 10)}T00:00:00.000Z`) : ''}
+                  {r.discoveredAt ? appShort(r.discoveredAt) : ''}
                 </span>,
                 <span key="s" className="block text-[12px] text-secondary-foreground">
                   <span className="inline-flex items-center gap-1.5">
@@ -85,7 +85,7 @@ export function CommunitiesSection({
                   </span>
                   {r.probe && (
                     <span className="block font-mono text-[10.5px] text-muted-foreground">
-                      sampled {shortDate(`${r.probe.at.slice(0, 10)}T00:00:00.000Z`)}: {r.probe.kept} of {r.probe.sampled} on topic
+                      sampled {appShort(r.probe.at)}: {r.probe.kept} of {r.probe.sampled} on topic
                     </span>
                   )}
                 </span>,

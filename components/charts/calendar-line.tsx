@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
-import { shortDate, monthName } from '@/lib/format'
+import { appShort, monthName } from '@/lib/format'
 import {
   axisLabels, calendarGeometry, chartId, chartReady, CHART_WAITING, collapseRules, columnTitle, drawsLine,
   figureLines, lastReading, legendEveryMonth, legendMonths, legendStates, lineSegments, MIN_CHART_MONTHS,
@@ -448,7 +448,7 @@ export function CalendarLine({
               </line>
               {printRuleLabels && (
                 <text x={x - 3} y={g.top} textAnchor="end" style={ts(labelSize(screen, 9))} fontFamily={labelFace(screen)} fill="var(--muted-foreground)">
-                  {r.at ? shortDate(r.at) : monthName(r.month)}
+                  {r.at ? appShort(r.at) : monthName(r.month)}
                 </text>
               )}
             </g>

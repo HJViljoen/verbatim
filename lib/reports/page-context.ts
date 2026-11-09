@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { longMonth, shortDate } from '../format'
+import { appShort, longMonth } from '../format'
 import { deliveryRecord, updatesInMonth, type DeliveryRecord } from '../settings/delivery'
 import { freezeStateFor, monthStartOf } from '../reading/monthly'
 import { methodLines, type MethodLines } from '../reading/method'
@@ -159,7 +159,7 @@ export function archivePresets(updates: readonly UpdateInput[], month: string): 
       updates: inMonth.length,
       // `updatesInMonth` hands them back newest first; a dated list reads
       // oldest first, the way the mock draws it ("6, 13, 20, 27 Sep").
-      dates: [...inMonth].reverse().map((u) => shortDate(u.startedAt)),
+      dates: [...inMonth].reverse().map((u) => appShort(u.startedAt)),
     }
   })
   return [

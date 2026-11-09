@@ -11,7 +11,7 @@ import {
   trackSubjectAction,
 } from '@/lib/actions/subjects'
 import { EMPTY_STATE } from '@/lib/subjects/form-state'
-import { fullDate } from '@/lib/format'
+import { appDay } from '@/lib/format'
 import { MOVE_DIRECTIONS, MOVE_PROMISE, type MoveStatus } from '@/lib/subjects/types'
 
 /**
@@ -153,7 +153,7 @@ function DeclaredMove({ move, canChangeStatus }: { move: { id: string; title: st
       <span className="rounded-full bg-inner px-2 py-0.5 text-[11.5px] font-medium text-secondary-foreground">
         {move.status === 'active' ? 'Tracking' : move.status === 'done' ? 'Done' : 'Dropped'} · {move.title}
       </span>
-      <span className="font-mono text-[10.5px] text-muted-foreground">since {fullDate(move.declaredAt)}</span>
+      <span className="font-mono text-[10.5px] text-muted-foreground">since {appDay(move.declaredAt)}</span>
       {!canChangeStatus ? null : move.status === 'active' ? (
         <>
           <button type="button" disabled={pending} onClick={() => set('done')}

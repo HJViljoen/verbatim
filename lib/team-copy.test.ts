@@ -4,6 +4,10 @@ import { describe, expect, it } from 'vitest'
 import { articleFor, canResendInvite, inviteState, memberUpdateStatus, scheduleLine, UPDATE_STATUS_WORDS, withArticle } from './team-copy'
 
 describe('team copy', () => {
+  it('dates an invite\'s expiry on the clients\' clock (9 Nov: 22:30 UTC on 3 Nov is 4 Nov in South Africa)', () => {
+    expect(inviteState('2026-11-03T22:30:00.000Z', '2026-11-01T08:00:00.000Z')).toEqual({ expired: false, line: 'expires 4 Nov 2026' })
+  })
+
   it('puts the right article before a role', () => {
     expect(withArticle('admin')).toBe('an admin')
     expect(withArticle('owner')).toBe('an owner')

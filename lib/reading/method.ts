@@ -1,4 +1,4 @@
-import { fmtInt, fmtPct, fullDate } from '../format'
+import { appDay, fmtInt, fmtPct } from '../format'
 
 import { REDDIT_COMMENT_DEPTH_CAP } from '../config'
 import { totalPlatformMix, totalVideos, type RecordInputs } from './record'
@@ -158,7 +158,7 @@ export function methodLines(inputs: RecordInputs, opts: MethodOptions = {}): Met
   // terminates its items, which is why the left column was always clean. A
   // consumer that prints ONE item on its own line (`footerNote={preparedBy}`)
   // gets a full stop, which is what a footnote reads as anyway.
-  const preparedBy = `${brand ? `Prepared for ${brand} with Verbatim` : 'Prepared by Verbatim'} · ${fullDate(readingAt)}.`
+  const preparedBy = `${brand ? `Prepared for ${brand} with Verbatim` : 'Prepared by Verbatim'} · ${appDay(readingAt)}.`
 
   // COVERAGE IS THE WINDOW'S, and says so. It is the one figure here that is,
   // and a footnote whose five lines are on three clocks with only one of them

@@ -7,7 +7,7 @@ import { MovementBadge } from '@/components/delta-badge'
 import { RecStatusMenu, RecStatusWord } from '@/components/rec-status'
 import { TileBlock } from '@/components/shell/tile'
 import { FLAG_NOTE } from '@/lib/agent/movement'
-import { fmtInt, shortDate } from '@/lib/format'
+import { appShort, fmtInt } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import { openLink } from '@/components/blocks/open-link'
@@ -143,7 +143,7 @@ function StackLabel({ children }: { children: ReactNode }) {
 const FIGURE = 'font-mono text-[11.5px] tabular-nums text-secondary-foreground'
 
 function StatusCell({ row, mode }: { row: AdviceRow; mode: RenderMode }) {
-  const decided = row.decidedAt ? shortDate(row.decidedAt) : null
+  const decided = row.decidedAt ? appShort(row.decidedAt) : null
   if (mode === 'app') {
     return <RecStatusMenu id={row.recommendationId} status={row.status} variant="pill" decidedAt={decided} />
   }

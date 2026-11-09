@@ -1,4 +1,4 @@
-import { longMonth, shortDate } from '../format'
+import { appShort, longMonth } from '../format'
 import type { ConfigActor } from '../config-log'
 
 // Queued tracking edits (market-first decision I, plan §2.10 D5 and WP3.10):
@@ -224,7 +224,7 @@ export function queueSummary(lines: readonly QueueLine[], nowIso: string): strin
 /** "Queued 12 Oct by daniela@sealand.example". */
 export function queuedByWords(line: Pick<QueueLine, 'queuedAt' | 'queuedBy'>): string {
   const who = line.queuedBy.split(' · ')[0]
-  return `queued ${shortDate(line.queuedAt)} by ${who}`
+  return `queued ${appShort(line.queuedAt)} by ${who}`
 }
 
 // ---- The write ---------------------------------------------------------------------

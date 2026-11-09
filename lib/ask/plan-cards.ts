@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { ASK_THEMES_PER_CLAIM } from '../config'
-import { fmtInt, shortDate } from '../format'
+import { appShort, fmtInt } from '../format'
 import { rows as readRows } from '../pages/read'
 import { gateCitedQuotes, gateFor, readPoolContext, type QuoteContext } from '../quote-context'
 import { createCitedQuotePicker, fetchQuotesByAudience, type QuoteRow } from '../quotes'
@@ -234,7 +234,7 @@ export function movedSinceUpload(evaluations: readonly PlanEvaluation[]): PlanMo
   const out: PlanMovedRow[] = []
   for (const [, m] of last) {
     const readings = ordered.length - m.at
-    const when = shortDate(ordered[m.at].runDate)
+    const when = appShort(ordered[m.at].runDate)
     out.push({
       claim: m.claim,
       from: PLAN_VERDICT_LABEL[m.from as ClaimVerdict] ?? m.from,

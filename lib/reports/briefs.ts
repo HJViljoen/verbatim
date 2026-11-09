@@ -1,4 +1,4 @@
-import { shortDate } from '../format'
+import { appShort } from '../format'
 import { ARTEFACT_COPY, isBuildable, type Artefact } from '../settings/artefacts'
 import { CADENCE_COPY, type ScheduleCadence } from '../schedules/types'
 import type { ReadingStamp, SentFigure } from './archive'
@@ -244,7 +244,7 @@ export function briefMonthChip(stamp: ReadingStamp | null): string | null {
  */
 export function briefStamp(stamp: ReadingStamp | null): string | null {
   if (!stamp) return null
-  return stamp.inferred ? `built ${shortDate(stamp.at)}` : `read as at ${shortDate(stamp.at)}`
+  return stamp.inferred ? `built ${appShort(stamp.at)}` : `read as at ${appShort(stamp.at)}`
 }
 
 /**

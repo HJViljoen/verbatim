@@ -4,7 +4,7 @@ import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { openLink } from '@/components/blocks/open-link'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fmtInt, longMonth, shortDate } from '@/lib/format'
+import { appShort, fmtInt, longMonth } from '@/lib/format'
 import { surface } from '@/lib/nav'
 import { ARRIVAL_THEMES_SHOWN, firstHeardThemes, firstHeardWithheld, type ArrivalsBlock } from '@/lib/pages/overview-market/arrivals'
 import type { OverviewData } from '@/lib/pages/overview'
@@ -55,9 +55,9 @@ export function ArrivalsCameIn({ a, month, mode, clock = false }: { a: ArrivalsB
         // counts only those written in the update's own days (4,777 there
         // against 5,199 here), and the two read as a contradiction until each
         // said its clock.
-        <>With the {shortDate(a.run.date)} update: {fig(read.videosFirstRead, mode)} {read.videosFirstRead === 1 ? 'video' : 'videos'} read in your market for the first time, and {fig(read.commentsCaptured, mode)} more {read.commentsCaptured === 1 ? 'comment' : 'comments'} written in {name} came in.{clock ? <> {ARRIVALS_CLOCK_NOTE}</> : null}</>
+        <>With the {appShort(a.run.date)} update: {fig(read.videosFirstRead, mode)} {read.videosFirstRead === 1 ? 'video' : 'videos'} read in your market for the first time, and {fig(read.commentsCaptured, mode)} more {read.commentsCaptured === 1 ? 'comment' : 'comments'} written in {name} came in.{clock ? <> {ARRIVALS_CLOCK_NOTE}</> : null}</>
       ) : (
-        <>Nothing more of {name} came in with the {shortDate(a.run.date)} update.</>
+        <>Nothing more of {name} came in with the {appShort(a.run.date)} update.</>
       )}
       {a.current.month.slice(0, 7) !== month.slice(0, 7) && a.current.videos != null && a.current.updates > 0 ? (
         <> {longMonth(a.current.month)} so far: {fig(a.current.videos, mode)} videos after {fmtInt(a.current.updates)} {a.current.updates === 1 ? 'update' : 'updates'}.</>
@@ -183,7 +183,7 @@ export function arrivalsFigures(a: ArrivalsBlock, month: string): FigureTable {
   const out: FigureTable = {}
   const read = a.months.find((m) => m.month.slice(0, 7) === month.slice(0, 7))
   const name = longMonth(month)
-  const when = `with the ${shortDate(a.run.date)} update`
+  const when = `with the ${appShort(a.run.date)} update`
   if (read) {
     out.arrivals_videos_first_read = { value: read.videosFirstRead, unit: 'videos', label: `videos read in your market for the first time ${when}` }
     out.arrivals_comments_captured = { value: read.commentsCaptured, unit: 'comments', label: `${name} comments that came in ${when}` }

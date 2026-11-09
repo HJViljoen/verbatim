@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import { answerFallback, findingSentence, findingSentenceParts, findingsBaseLine, ownBase, type AnswerMeasure, type FindingMeasure } from '@/lib/agent/measure'
 import { DO_HEADING, NEAREST_HEADING, basedOnLine, saidHeading } from '@/lib/agent/types'
 import { monthlyLineLabel } from '@/lib/pages/overview'
-import { fmtInt, longMonth, monthName, shortDate } from '@/lib/format'
+import { appShort, fmtInt, longMonth, monthName } from '@/lib/format'
 import type { ThreadAnswer, Turn } from '@/lib/pages/agent-thread'
 import type { ObjectReading } from '@/lib/agent/movement'
 import { kindLabel } from '@/lib/reading/kinds'
@@ -597,7 +597,7 @@ export function AnswerTile({
       {/* The question, under the date it was asked. */}
       <div className="flex flex-col gap-1">
         <span className="text-[13px] text-muted-foreground">
-          You asked on <span data-copy="figure" className="tabular-nums">{shortDate(turn.askedAt)}</span>
+          You asked on <span data-copy="figure" className="tabular-nums">{appShort(turn.askedAt)}</span>
         </span>
         <p className="m-0 text-[16px] font-semibold leading-[1.45] text-foreground">{turn.question}</p>
       </div>

@@ -18,7 +18,7 @@ import type { ReportSnapshotData } from '@/lib/reports/types'
 import { BriefDeck } from '@/components/briefs/brief-deck'
 import { briefWordmarkFace } from '@/components/briefs/wordmark-face'
 import { isMonthlyBriefData } from '@/lib/reports/briefs/types'
-import { fullDate } from '@/lib/format'
+import { appDay } from '@/lib/format'
 import { ViewerFrame } from './viewer-frame'
 
 export { viewerHead, viewerStats } from './viewer-frame'
@@ -43,7 +43,7 @@ export { viewerHead, viewerStats } from './viewer-frame'
 // and downloads the PDF; only the way back into the Studio goes.
 export function ReportViewer({ snapshot, closeHref, showStudio = false }: { snapshot: ViewerSnapshot; closeHref: string; showStudio?: boolean }) {
   const { data, builtAt } = snapshot
-  const date = fullDate(builtAt)
+  const date = appDay(builtAt)
 
   let body: ReactNode
   if (isMonthlyBriefData(data)) {

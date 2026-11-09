@@ -9,7 +9,7 @@ import { sharedPairNote } from '@/lib/calibration'
 import { TileColumns } from '@/components/shell/page-grid'
 import { TrackThisSubject } from '@/components/subjects/track-this'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fmtInt, fmtPct, fullDate, longMonth, monthName } from '@/lib/format'
+import { appDay, fmtInt, fmtPct, longMonth, monthName } from '@/lib/format'
 import { DIRECTION_RUN_LABEL, type Direction } from '@/lib/reading/bands'
 import { gapBasisLine, gapLine } from '@/lib/reading/gap'
 import { priorPrintable, type FigureTable, type Verdict, type VerdictPairNote } from '@/lib/reading/verdicts'
@@ -201,7 +201,7 @@ export const subjectsSubject: Block<SubjectsData> = {
     // — the Agent page took no params at all — so the button landed a client on
     // a blank composer. A subject id is not a question either; the question is.
     const href = `${ctx.appUrl}/dashboard/agent?ask=${encodeURIComponent(`How are we seen on ${pane.name}?`)}`
-    const named = `named ${fullDate(pane.namedAt)} · ${fmtInt(pane.index)} of ${fmtInt(pane.of)} subjects`
+    const named = `named ${appDay(pane.namedAt)} · ${fmtInt(pane.index)} of ${fmtInt(pane.of)} subjects`
     // THE CALIBRATION WORD SITS BESIDE THE NAME IT QUALIFIES (design pass):
     // first in the heading's own mono line, "Community & purpose  provisional
     // · named 24 Sep 2026 · 7 of 7 subjects", which is the rail's face for the

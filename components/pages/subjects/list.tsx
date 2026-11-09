@@ -13,7 +13,7 @@ import { NO_READING_YET } from '@/lib/subjects/read-in'
 import { AddSubjectFooter, SubjectEditor } from '@/components/subjects/subject-editor'
 import { MOVEMENT_WORDS } from '@/components/delta-badge'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fmtInt, fmtPct, fullDate, longMonth, shortDate } from '@/lib/format'
+import { appDay, fmtInt, fmtPct, longMonth, shortDate } from '@/lib/format'
 import type { Verdict } from '@/lib/reading/verdicts'
 import { originLine, SUBJECTS_UNREADABLE_WHY, type SubjectRail, type SubjectsData } from '@/lib/pages/subjects'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
@@ -338,7 +338,7 @@ export const subjectsList: Block<SubjectsData> = {
               ) : null
               const named = (
                 <span className={email ? undefined : 'font-mono text-[10.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.faint } : undefined}>
-                  named {fullDate(r.namedAt)}
+                  named {appDay(r.namedAt)}
                 </span>
               )
               return email ? (

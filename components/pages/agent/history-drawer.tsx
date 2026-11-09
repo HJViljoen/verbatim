@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { shortDate } from '@/lib/format'
+import { appShort } from '@/lib/format'
 import type { AskHistory } from '@/lib/pages/agent-thread'
 import { CARD, GO, TBL, TD, TH } from '@/components/v2'
 import { cn } from '@/lib/utils'
@@ -40,7 +40,7 @@ export function EarlierQuestions({ history }: { history: AskHistory | null }) {
                 </Link>
               </td>
               <td className={cn(TD, 'whitespace-nowrap pr-0 text-right tabular-nums text-secondary-foreground')}>
-                <span data-copy="figure">{shortDate(r.askedAt)}</span>
+                <span data-copy="figure">{appShort(r.askedAt)}</span>
               </td>
             </tr>
           ))}

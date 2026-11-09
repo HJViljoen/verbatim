@@ -3,7 +3,7 @@ import { Fragment, type CSSProperties, type ReactElement, type ReactNode } from 
 import { translationLabel, translationNote } from '@/components/quote-block'
 import { FLAG_WORDS, flagWordOf } from '@/components/v2/flag-chip'
 import { nonAnswerParts, signedChange } from '@/components/delta-badge'
-import { fmtInt, platformLabel, shortDate } from '@/lib/format'
+import { appShort, fmtInt, platformLabel, shortDate } from '@/lib/format'
 import { FONT } from '@/lib/email/theme'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
 import { barMonth } from '@/lib/reading/month-label'
@@ -1331,7 +1331,7 @@ export function WeeklyV3Page({ data, appUrl, print = false, fill = false, medica
     moves ? (wide: boolean) => <MovesCard key="moves" part={moves} appUrl={appUrl} print={print} wide={wide} /> : null,
   ].filter((c): c is (wide: boolean) => ReactElement => c != null)
   const cards = makers.map((make, i) => make(i === makers.length - 1 && makers.length % 2 === 1))
-  const read = `Read ${shortDate(data.readingAt)}`
+  const read = `Read ${appShort(data.readingAt)}`
   const brow = framed ? null : (
     <div className="w3-brow">
       <div className="w3-bl">

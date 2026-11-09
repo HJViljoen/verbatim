@@ -12,7 +12,7 @@ import { BlockProportion } from '@/components/blocks/bars'
 import type { CalendarRule, CalendarSeries } from '@/lib/charts/calendar'
 import { TileBlock } from '@/components/shell/tile'
 import { TileColumns } from '@/components/shell/page-grid'
-import { fmtInt, fmtPct, longMonth, monthName, shortDate } from '@/lib/format'
+import { appShort, fmtInt, fmtPct, longMonth, monthName, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { moodLabel } from '@/lib/reading/mood'
 import type { FigureTable, Verdict, VerdictPairNote } from '@/lib/reading/verdicts'
@@ -221,7 +221,7 @@ export function panelNote(a: AttentionBlock | null): string | null {
       // The break carries its own date, so the trailing "panel frozen 3 Sep"
       // clause would be the same fact a second time in the same line.
       parts.push(`${monthName(first.month)} ${fmtInt(first.comments)} comments`)
-      parts.push(`panel re-frozen ${shortDate(frozenAt!)}`)
+      parts.push(`panel re-frozen ${appShort(frozenAt!)}`)
       parts.push(`${monthName(last.month)} ${fmtInt(last.comments)} comments under the new panel`)
       return parts.join(' · ')
     }

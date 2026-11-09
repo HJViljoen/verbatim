@@ -1,7 +1,7 @@
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { appBaseUrl } from '@/lib/site'
-import { shortDate, weekdayDate } from '@/lib/format'
+import { appShort, appWeekday } from '@/lib/format'
 import { loadOverview, longMonth, type OverviewData } from '@/lib/pages/overview'
 import type { PageModule, PrintVariant, Renderable, Slide } from '@/lib/renderables/types'
 import { MARKET_TITLES, OVERVIEW_BLOCKS } from './index'
@@ -97,6 +97,6 @@ export const overviewPage: PageModule<OverviewData> = {
   // snapshot taken before the reading month existed carries no `reading`, and
   // keeps the words it was built with.
   printContext: (d) => d.reading?.asAt
-    ? `${d.brand} · ${longMonth(d.month)} · as at the ${shortDate(d.reading.asAt)} update`
-    : `${d.brand} · ${longMonth(d.month)} · as at ${weekdayDate(d.readingAt)}`,
+    ? `${d.brand} · ${longMonth(d.month)} · as at the ${appShort(d.reading.asAt)} update`
+    : `${d.brand} · ${longMonth(d.month)} · as at ${appWeekday(d.readingAt)}`,
 }

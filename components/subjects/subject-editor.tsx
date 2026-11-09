@@ -15,7 +15,7 @@ import {
 import { EMPTY_STATE } from '@/lib/subjects/form-state'
 import { SUBJECT_WORDS } from '@/lib/calibration'
 import { MovementBadge } from '@/components/delta-badge'
-import { fmtInt, fmtPct, fullDate } from '@/lib/format'
+import { appDay, fmtInt, fmtPct } from '@/lib/format'
 import { levelText } from '@/lib/reading/level'
 import { SUBJECTS_UNREADABLE_WHY, SUPERSEDE_RULE } from '@/lib/pages/subjects'
 import type { Verdict } from '@/lib/reading/verdicts'
@@ -299,7 +299,7 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
                   screen. Settings is a full-width section and keeps the
                   verb. */}
               <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] text-muted-foreground">
-                <span className="font-mono">{variant === 'settings' ? `named ${fullDate(r.namedAt)}` : fullDate(r.namedAt)}</span>
+                <span className="font-mono">{variant === 'settings' ? `named ${appDay(r.namedAt)}` : appDay(r.namedAt)}</span>
                 {variant === 'settings' ? <span>· {r.because}</span> : null}
                 {r.status === 'retired' ? (
                   // A STOPPED SUBJECT IS MARKED AND CARRIES NO CONTROLS. It

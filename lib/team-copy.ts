@@ -1,4 +1,4 @@
-import { fullDate } from './format'
+import { appDay } from './format'
 
 // The Team page's and the invite page's words (29 Sep 2026, the Sealand
 // walkthrough's team fixes). Pure, so the words are tested.
@@ -27,7 +27,7 @@ export interface InviteState {
  */
 export function inviteState(expiresAt: string, now: string): InviteState {
   const expired = Date.parse(expiresAt) <= Date.parse(now)
-  return { expired, line: `${expired ? 'expired' : 'expires'} ${fullDate(expiresAt)}` }
+  return { expired, line: `${expired ? 'expired' : 'expires'} ${appDay(expiresAt)}` }
 }
 
 /** May this inviter resend this invite? The rule `inviteMember` holds: an

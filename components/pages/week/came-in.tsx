@@ -3,7 +3,7 @@ import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { openLink } from '@/components/blocks/open-link'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fmtInt, longMonth, shortDate } from '@/lib/format'
+import { appShort, fmtInt, longMonth } from '@/lib/format'
 import { surface } from '@/lib/nav'
 import { heardAtFloor, heardWithheld, monthPhrase, NEW_THEME_FLOOR, regroupedLine, type MarketCameIn, type WeekData } from '@/lib/pages/week'
 import type { FigureTable } from '@/lib/reading/verdicts'
@@ -47,7 +47,7 @@ function Headline({ m, email }: { m: MarketCameIn; email: boolean }) {
   const month = longMonth(m.month)
   return (
     <>
-      The {shortDate(m.update)} update brought <Fig email={email}>{fmtInt(m.market.videos)}</Fig> {m.market.videos === 1 ? 'video' : 'videos'} and{' '}
+      The {appShort(m.update)} update brought <Fig email={email}>{fmtInt(m.market.videos)}</Fig> {m.market.videos === 1 ? 'video' : 'videos'} and{' '}
       <Fig email={email}>{fmtInt(m.market.comments)}</Fig> {m.market.comments === 1 ? 'comment' : 'comments'} into your market’s {month}.
     </>
   )

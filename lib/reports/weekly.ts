@@ -1,5 +1,5 @@
 import { MAX_FLAGS, baselineLabel, type ThinUpdateReason } from '../reading/anomaly'
-import { fmtInt, fmtPct, fullDate, shortDate } from '../format'
+import { appDay, fmtInt, fmtPct, fullDate, shortDate } from '../format'
 import { longMonth } from '../format'
 import { PRIVACY_LINE, platformShareLine } from '../reading/method'
 import { prevMonth } from '../reading/month-key'
@@ -791,7 +791,7 @@ export function weeklyFooterLines(input: {
     prepared: [
       `Prepared for ${input.company} · with Verbatim`,
       input.updateDate ? `update of ${fullDate(input.updateDate)}` : null,
-      `read ${fullDate(input.readingAt)}`,
+      `read ${appDay(input.readingAt)}`,
     ].filter((s): s is string => s != null).join(' · '),
     mix: share ? `${share} · this update’s ${fmtInt(videos)} ${videos === 1 ? 'video' : 'videos'}` : null,
     privacy: PRIVACY_LINE,

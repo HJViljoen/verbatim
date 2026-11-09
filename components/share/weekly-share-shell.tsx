@@ -1,6 +1,6 @@
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
-import { fullDate } from '@/lib/format'
+import { appDay } from '@/lib/format'
 import { weeklyDateLine, weeklyHeadline } from '@/lib/reports/weekly'
 import { staleWeeklySnapshot, type WeeklySnapshotData } from '@/lib/reports/weekly-build'
 import { weeklyBlocksFor } from '@/components/blocks/weekly'
@@ -40,7 +40,7 @@ export function WeeklyShareShell({ data, appUrl }: { data: WeeklySnapshotData; a
             {/* The email's own date line — the window, and the update behind
                 it — so a forwarded share link and the send it came from say the
                 same thing about which days this is. */}
-            <p className="font-mono text-[11px] text-muted-foreground">{weeklyDateLine(data.period, data.reading.update.previous)} · reading as at {fullDate(data.readingAt)}</p>
+            <p className="font-mono text-[11px] text-muted-foreground">{weeklyDateLine(data.period, data.reading.update.previous)} · reading as at {appDay(data.readingAt)}</p>
           </div>
           {/* The tenant is on the line above, once — never again as the first
               word of the headline (the artboard's own masthead). */}

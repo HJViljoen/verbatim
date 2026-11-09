@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { weekdayDate } from '@/lib/format'
+import { appWeekday } from '@/lib/format'
 import type { Verdict } from '@/lib/ask/types'
 import {
   agentThreadSlides, loadAgentThread, documentPages, findingKey, CLAIMS_PER_SLIDE, GROUNDED_PER_SLIDE,
@@ -46,7 +46,7 @@ function Question({ t, first, d }: { t: Turn; first: boolean; d: D }) {
     <div className="mb-4">
       {!first && <p className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Follow-up</p>}
       <p className="font-serif text-[19px] font-medium leading-snug [text-wrap:pretty]">{t.question}</p>
-      <p className="mt-1 font-mono text-[10.5px] text-muted-foreground">{d.brand} · {weekdayDate(t.askedAt)}</p>
+      <p className="mt-1 font-mono text-[10.5px] text-muted-foreground">{d.brand} · {appWeekday(t.askedAt)}</p>
     </div>
   )
 }
@@ -365,8 +365,8 @@ export const agentPage: PageModule<D> = {
   load: loadAgentThread,
   slides: agentThreadSlides,
   renderables,
-  snapshotTitle: (d) => `${d.kind === 'document' ? 'Document check' : ASK} · ${d.title.slice(0, 80)} · ${weekdayDate(d.createdAt)}`,
-  printContext: (d) => `${d.kind === 'document' ? 'Document check' : ASK} · ${d.brand} · ${weekdayDate(d.createdAt)}`,
+  snapshotTitle: (d) => `${d.kind === 'document' ? 'Document check' : ASK} · ${d.title.slice(0, 80)} · ${appWeekday(d.createdAt)}`,
+  printContext: (d) => `${d.kind === 'document' ? 'Document check' : ASK} · ${d.brand} · ${appWeekday(d.createdAt)}`,
 }
 
 /** A voice's English on paper, under the original with the language stamp,

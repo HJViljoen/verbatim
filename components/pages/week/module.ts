@@ -1,4 +1,4 @@
-import { weekdayDate } from '@/lib/format'
+import { appWeekday } from '@/lib/format'
 import { loadWeek, type WeekData } from '@/lib/pages/week'
 import type { PageModule, Renderable, Slide } from '@/lib/renderables/types'
 import { WEEK_BLOCKS, WEEK_RETIRED_BLOCKS, weekContext } from '.'
@@ -49,5 +49,5 @@ export const weekPage: PageModule<WeekData> = {
   load: loadWeek,
   slides: weekSlides,
   renderables,
-  snapshotTitle: (d) => `This week · ${d.brand} · ${weekdayDate(d.update.date)}`,
+  snapshotTitle: (d) => `This week · ${d.brand} · ${appWeekday(d.update.date)}`,
 }

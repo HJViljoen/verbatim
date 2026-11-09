@@ -6,7 +6,7 @@ import { BlockMovement } from '@/components/blocks/movement'
 import { BlockQuote } from '@/components/blocks/quote'
 import { BlockStat } from '@/components/blocks/stat'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fmtInt, fmtPct, longMonth, shortDate } from '@/lib/format'
+import { appShort, fmtInt, fmtPct, longMonth } from '@/lib/format'
 import { monthPhrase, type Riser, type WeekData } from '@/lib/pages/week'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import { surface } from '@/lib/nav'
@@ -73,7 +73,7 @@ export const weekRising: Block<WeekData> = {
         title={weekRising.title}
         question={weekRising.question}
         mode={mode}
-        meta={`${when === 'this month' ? `${longMonth(r.month)} so far` : `${longMonth(r.month)} to the ${shortDate(data.update.date)} update`} · of ${fmtInt(r.monthOf)} category videos`}
+        meta={`${when === 'this month' ? `${longMonth(r.month)} so far` : `${longMonth(r.month)} to the ${appShort(data.update.date)} update`} · of ${fmtInt(r.monthOf)} category videos`}
         footer={email
           ? <a href={href} style={{ color: EMAIL.ink }}>Open {conversation.label} →</a>
           : <Link href={href} className="hover:underline">Open {conversation.label} →</Link>}
@@ -156,7 +156,7 @@ export const weekRising: Block<WeekData> = {
     // drawn and came back inside their bands.
     return monthPhrase(data.rising.month, data.readingAt) === 'this month'
       ? `Nothing moved clearly in ${longMonth(data.rising.month)}’s reading so far.`
-      : `Nothing moved clearly in ${longMonth(data.rising.month)}’s reading to the ${shortDate(data.update.date)} update.`
+      : `Nothing moved clearly in ${longMonth(data.rising.month)}’s reading to the ${appShort(data.update.date)} update.`
   },
 }
 

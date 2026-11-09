@@ -1,6 +1,6 @@
 import { selectAll } from '../supabase-admin'
 import { rows as readRows } from '../pages/read'
-import { shortDate } from '../format'
+import { appShort } from '../format'
 import { measureInitiative, initiativeLine, wentTheirWay, type ObservationPoint, type RunInWindow } from './measure'
 import { toInitiative, INITIATIVE_ROWS_SHOWN, EMPTY_INITIATIVES, type InitiativeDbRow, type InitiativesData } from './types'
 
@@ -152,7 +152,7 @@ export async function loadInitiatives(
         denominators[run.runId] = buckets.reduce((sum, b) => sum + (perBucket?.get(b) ?? 0), 0)
       }
       const m = measureInitiative(mine, denominators, i.startedAt, runList)
-      const startedLabel = shortDate(i.startedAt)
+      const startedLabel = appShort(i.startedAt)
       return {
         id: i.id,
         title: i.title,

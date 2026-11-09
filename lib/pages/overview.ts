@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { pairChipWords, pairSentence, recStatus, REC_STATUS_LABEL, type RecStatus } from '../calibration'
 import { segmentRulesEnabled } from '../segments/rules'
 import { currentRecommendation } from '../dashboard-tiles'
-import { fmtInt, longMonth, monthName, platformLabel, shortDate } from '../format'
+import { appShort, fmtInt, longMonth, monthName, platformLabel, shortDate } from '../format'
 import { inheritedStatus, REC_DECISIONS_TABLE, type RecDecision } from '../rec-decisions'
 import { composeInterpretation, INTERPRETATION_LABEL, type Interpretation } from '../prose/interpret'
 import { loadSentFigures, objectKey, sentMonthOf, type SentMonth } from '../reports/sent-figures'
@@ -1611,7 +1611,7 @@ export function firstScoringMonth(declaredAt: string): string {
 /** One move, on one line (design §3 OV5, Phase 1). The month in the reader's
  *  form — "the October reading", as the design writes it, not "Oct 2026". */
 export function moveLine(move: Pick<Move, 'title' | 'declared_at'>): string {
-  return `${move.title} · tracked ${shortDate(move.declared_at)} · ${moveScoringClause(move.declared_at)}`
+  return `${move.title} · tracked ${appShort(move.declared_at)} · ${moveScoringClause(move.declared_at)}`
 }
 
 /** The third clause of `moveLine`, alone — so a surface that has already
@@ -1802,7 +1802,7 @@ export function rivalsLead(rows: readonly RivalRow[]): string | null {
   // "tracked until 9 Sep" beside it. A lead sentence that called it "the one
   // rival whose share of attention moved this month" with nothing saying it is
   // no longer tracked would make a claim about a brand we stopped watching.
-  const names = moved.map((r) => (r.retiredAt ? `${r.label} (tracked until ${shortDate(r.retiredAt)})` : r.label))
+  const names = moved.map((r) => (r.retiredAt ? `${r.label} (tracked until ${appShort(r.retiredAt)})` : r.label))
   const who = names.length === 1
     ? names[0]
     : names.length === 2
@@ -2449,7 +2449,7 @@ export async function loadOverview(scope: Scope, options: LoadOverviewOptions = 
     trailing,
     { updates: updatesByMonth[month] ?? 0, firstRunMonth },
   )
-  const updateDates = runsRaw.filter((r) => monthStartOf(r.started_at) === month).map((r) => shortDate(r.started_at))
+  const updateDates = runsRaw.filter((r) => monthStartOf(r.started_at) === month).map((r) => appShort(r.started_at))
   // WHAT SUPPRESSES A BAND. Two gates, one answer for the builders: a thin
   // month, and a month under a third complete (design §3 OV0, "no banded
   // change at all"). The line says which it is; a builder only needs to know

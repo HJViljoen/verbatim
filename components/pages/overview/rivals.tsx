@@ -7,7 +7,7 @@ import { openLink } from '@/components/blocks/open-link'
 import { BlockEmpty, BlockFrame, FigureCell, NoValue } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
 import { sharedPairNote } from '@/lib/calibration'
-import { fmtInt, shortDate } from '@/lib/format'
+import { appShort, fmtInt } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { NOT_OBSERVED, NOT_RECORDED, standingText, type StandingShare } from '@/lib/reading/standings'
 import { priorPrintable, type FigureTable, type Verdict } from '@/lib/reading/verdicts'
@@ -267,7 +267,7 @@ export const overviewRivals: Block<OverviewData> = {
           <div>
             {r.rows.map((row) => (
               <div key={row.audience} style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
-                <strong>{brandLabel(row)}</strong>{row.retiredAt ? <span style={{ color: EMAIL.muted }}> · tracked until {shortDate(row.retiredAt)}</span> : null}
+                <strong>{brandLabel(row)}</strong>{row.retiredAt ? <span style={{ color: EMAIL.muted }}> · tracked until {appShort(row.retiredAt)}</span> : null}
                 <div style={{ marginTop: 2 }}>
                   attention <Share share={row.attention} recorded={r.recorded} mode={mode} /> · content <Share share={row.content} recorded={r.recorded} mode={mode} /> <BlockMovement verdict={row.attentionVerdict} unit="pts" mode={mode} sharedRefusal={shared} />
                 </div>
@@ -313,7 +313,7 @@ export const overviewRivals: Block<OverviewData> = {
                           <span aria-hidden className="size-1.5 flex-none rounded-full" style={{ background: rowInk(r.rows, row) }} />
                           <span className="min-w-0">{brandLabel(row)}</span>
                         </span>
-                        {row.retiredAt ? <span className="ml-1 text-[11px] font-normal text-muted-foreground">tracked until {shortDate(row.retiredAt)}</span> : null}
+                        {row.retiredAt ? <span className="ml-1 text-[11px] font-normal text-muted-foreground">tracked until {appShort(row.retiredAt)}</span> : null}
                       </th>
                       {cols.attention ? <td className="py-1.5 pr-3"><Share share={row.attention} recorded={r.recorded} mode={mode} /></td> : null}
                       {cols.content ? <td className="py-1.5 pr-3"><Share share={row.content} recorded={r.recorded} mode={mode} /></td> : null}

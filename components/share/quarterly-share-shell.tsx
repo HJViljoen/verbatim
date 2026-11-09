@@ -1,6 +1,6 @@
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
-import { fullDate } from '@/lib/format'
+import { appDay } from '@/lib/format'
 import { staleQuarterlySnapshot, type QuarterlySnapshotData } from '@/lib/reports/quarterly-build'
 import { quarterlyBlocksFor } from '@/components/blocks/quarterly'
 import { LinkGuard } from './link-guard'
@@ -41,7 +41,7 @@ export function QuarterlyShareShell({ data, appUrl }: { data: QuarterlySnapshotD
         <header className="flex flex-col gap-3 rounded-lg bg-tile px-6 py-7 shadow-tile md:px-10 md:py-10">
           <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
             <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Prepared by {data.company} · with Verbatim</p>
-            <p className="font-mono text-[11px] text-muted-foreground">{data.period} · reading as at {fullDate(data.readingAt)}</p>
+            <p className="font-mono text-[11px] text-muted-foreground">{data.period} · reading as at {appDay(data.readingAt)}</p>
           </div>
           <h1 className="m-0 max-w-[24ch] font-serif text-[30px] font-medium leading-[1.15] [text-wrap:balance]">{data.title}</h1>
           <p className="m-0 font-mono text-[11px] text-muted-foreground">figures frozen when this was built · quoted voices read live, so a withdrawn comment never travels</p>

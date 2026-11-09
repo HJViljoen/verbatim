@@ -1,6 +1,6 @@
 import { commentVideoKey, type GroupEvidence } from '../../reading/cross'
 import { aboutNamed, type WhoVideo } from '../../brands/attribution'
-import { fmtInt, longMonth, platformLabel, shortDate } from '../../format'
+import { appShort, fmtInt, longMonth, platformLabel, shortDate } from '../../format'
 import type { GateOptions } from '../../quote-gate'
 import { joinedRun } from '../../reading/pairs'
 import { INDUSTRY_AUDIENCE } from '../../rivals'
@@ -541,7 +541,7 @@ export function decisionWord(r: Pick<RecordRow, 'status' | 'statusLabel'>): stri
 
 /** A record row's state: "not decided", or "Accepted since 28 Sep". */
 export function recordState(r: Pick<RecordRow, 'status' | 'statusLabel' | 'decidedAt'>): string {
-  return r.status === 'new' ? 'not decided' : `${decisionWord(r)}${r.decidedAt ? ` since ${shortDate(r.decidedAt)}` : ''}`
+  return r.status === 'new' ? 'not decided' : `${decisionWord(r)}${r.decidedAt ? ` since ${appShort(r.decidedAt)}` : ''}`
 }
 
 /** The history's line: "First suggested 20 Jul. Nobody has decided on it

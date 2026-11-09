@@ -2,7 +2,7 @@ import {
   pairSentence, RECHECK_BUYERS_TOO_FEW, RECHECK_CHECKS_PENDING, RECHECK_FOLLOWS_DEPTH, RECHECK_MOVED,
   RECHECK_TOO_FEW, RECHECK_WITHIN,
 } from '../../calibration'
-import { fmtInt, longMonth, shortDate } from '../../format'
+import { appShort, fmtInt, longMonth, shortDate } from '../../format'
 import { monthShareWord } from '../../provenance/searches'
 import { KIND_LABELS } from '../../reading/kinds'
 import { levelText } from '../../reading/level'
@@ -899,7 +899,7 @@ export function recheckLines(block: Pick<ChangeBlock, 'checks'> & Partial<Pick<C
   // does; the deploy-3 review): the page's latest update, in its tag.
   const out: RecheckLine[] = block.checks.length > 0
     ? block.checks.slice(0, CHECK_LINES_MAX).map((c) => ({ key: `${c.population}:${c.objectKind}:${c.objectId}`, sentence: c.sentence, tag: checkTag(c) }))
-    : [{ key: RECHECK_PENDING_KEY, sentence: RECHECK_CHECKS_PENDING, tag: block.asAt ? `read with the ${shortDate(block.asAt)} update` : null }]
+    : [{ key: RECHECK_PENDING_KEY, sentence: RECHECK_CHECKS_PENDING, tag: block.asAt ? `read with the ${appShort(block.asAt)} update` : null }]
   // The buyers-only line says one thing: that a month is too few to check
   // (the done-when's "too few in August to check"). With 100 or more a side
   // there is no buyers-only check to report before the Buyers view (WP3.3),

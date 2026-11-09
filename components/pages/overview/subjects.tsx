@@ -9,7 +9,7 @@ import { BlockMovement } from '@/components/blocks/movement'
 import { sharedPairNote } from '@/lib/calibration'
 import { Sparkline } from '@/components/charts/sparkline'
 import { valuesSinceBreak } from '@/lib/charts/calendar'
-import { fmtInt, fmtPct, longMonth, shortDate } from '@/lib/format'
+import { appShort, fmtInt, fmtPct, longMonth } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { DIRECTION_RUN_LABEL, type Direction } from '@/lib/reading/bands'
 import { concludedBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
@@ -382,7 +382,7 @@ function Row({ row, mode, appUrl = '', sentLine = null, domain, shared = null }:
  */
 export function subjectsMeta(s: OverviewData['subjects']): string | undefined {
   if (s.rows.length === 0) return undefined
-  const named = s.namedAt ? `${fmtInt(s.rows.length)} named ${shortDate(s.namedAt)}` : `${fmtInt(s.rows.length)} named`
+  const named = s.namedAt ? `${fmtInt(s.rows.length)} named ${appShort(s.namedAt)}` : `${fmtInt(s.rows.length)} named`
   return `${named} · share of videos where the subject came up`
 }
 

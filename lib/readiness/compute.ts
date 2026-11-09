@@ -1,4 +1,4 @@
-import { fmtInt, fmtPct, fullDate, listNames } from '../format'
+import { appDay, fmtInt, fmtPct, fullDate, listNames } from '../format'
 import { changeLogBoundary } from '../config-log'
 import { baselineLabel, BASELINE_MONTHS } from '../reading/anomaly'
 import { shapeCoverage, type MonthCounts } from '../reading/coverage'
@@ -126,9 +126,9 @@ function trackedTerms(i: ReadinessInputs): ReadinessRow {
   // takes the sentence over the moment there is one, because the log is the
   // record.
   const changed = i.changeLog.available && i.changeLog.lastChangeAt
-    ? `last change recorded ${fullDate(i.changeLog.lastChangeAt)}`
+    ? `last change recorded ${appDay(i.changeLog.lastChangeAt)}`
     : t.updatedAt
-      ? `last stamped ${fullDate(t.updatedAt)}; not every edit stamps that date, so they may have changed since`
+      ? `last stamped ${appDay(t.updatedAt)}; not every edit stamps that date, so they may have changed since`
       : 'no edit has ever been stamped on them'
   const detail =
     `${plural(t.brand, 'brand term')}, ${plural(t.competitor, 'rival term')}, ${plural(t.industry, 'category term')}` +
@@ -205,7 +205,7 @@ function embeddings(i: ReadinessInputs): ReadinessRow {
   const detail = total === 0
     ? 'Nothing has been read for this workspace yet, so there is nothing to search.'
     : `${fmtInt(embedded)} of ${fmtInt(total)} findings are searchable (${pct(embedded, total)}) · ` +
-      (lastEmbeddedAt ? `last written ${fullDate(lastEmbeddedAt)}.` : 'no date recorded.')
+      (lastEmbeddedAt ? `last written ${appDay(lastEmbeddedAt)}.` : 'no date recorded.')
 
   return row(
     'searchable-findings', 'Ask', 'every finding searchable, and kept that way',
@@ -396,7 +396,7 @@ function howMuchWasRead(i: ReadinessInputs): ReadinessRow {
   } else if (r.gateFirstAt === null) {
     notes.push('What was looked at and set aside is not recorded at all, so the share left out cannot be drawn for any month.')
   } else {
-    notes.push(`${pct(r.gateRows - r.gateKept, r.gateRows)} of what was looked at was set aside, recorded only from ${fullDate(r.gateFirstAt)}, so no month before that can show it.`)
+    notes.push(`${pct(r.gateRows - r.gateKept, r.gateRows)} of what was looked at was set aside, recorded only from ${appDay(r.gateFirstAt)}, so no month before that can show it.`)
   }
   if (r.unflagged > 0) notes.push(`${fmtInt(r.unflagged)} videos were read before the product recorded which of the three it managed`)
 
@@ -458,7 +458,7 @@ function updateRecord(i: ReadinessInputs): ReadinessRow {
     // "19 updates" and the record "25 on record"; both are right, and each now
     // says which it counts.
     : `${recentSettled.length} of the last ${recent.length} updates finished · ` +
-      `${settled.length < all.length ? `${fmtInt(settled.length)} of ${plural(all.length, 'update')}` : plural(settled.length, 'update')} since ${fullDate((settled.length < all.length ? all.at(-1) ?? first : first)?.startedAt ?? '') || '—'}${settled.length < all.length ? ' finished' : ''}` +
+      `${settled.length < all.length ? `${fmtInt(settled.length)} of ${plural(all.length, 'update')}` : plural(settled.length, 'update')} since ${appDay((settled.length < all.length ? all.at(-1) ?? first : first)?.startedAt ?? '') || '—'}${settled.length < all.length ? ' finished' : ''}` +
       (gap === null ? '.' : `, longest gap ${plural(gap, 'day')}.`)
 
   // The recent updates one line each, newest first — the shape of a run of
@@ -466,7 +466,7 @@ function updateRecord(i: ReadinessInputs): ReadinessRow {
   // count of six out of eight hides whether the two were consecutive.
   const notes = [
     ...recent.map((u) =>
-      `${fullDate(u.startedAt)}: ${updateWord(u.status)}` +
+      `${appDay(u.startedAt)}: ${updateWord(u.status)}` +
       (u.stalled === true ? ' · took longer than the stretch it covered' : '') +
       (i.slotsRecorded ? (u.scheduledFor ? ' · on schedule' : ' · by hand') : '')),
     ...(i.slotsRecorded
@@ -513,7 +513,7 @@ function delivery(i: ReadinessInputs): ReadinessRow {
           ? `${plural(listed.length, 'schedule')} have addresses on them but are switched off, so nothing is sent.`
           : 'No schedule has an address on it, so nothing is sent.'
       : `${plural(live.length, 'schedule')} · ${plural(addresses, 'address', 'addresses')} · ` +
-        (lastSent ? `last sent ${fullDate(lastSent)}.` : 'nothing sent yet.')
+        (lastSent ? `last sent ${appDay(lastSent)}.` : 'nothing sent yet.')
 
   return row(
     'delivery', 'Delivery', 'somewhere for the update to go',

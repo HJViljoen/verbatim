@@ -3,7 +3,7 @@ import { SettingsFrame, SettingsCard } from '@/components/settings-frame'
 import { InitiativeRowForm } from './initiative-row'
 import { getSessionContext } from '@/lib/auth'
 import { settingsBar } from '@/lib/settings/bar'
-import { weekdayDate } from '@/lib/format'
+import { appWeekday } from '@/lib/format'
 import { rows as readRows, row } from '@/lib/pages/read'
 import { toInitiative, type InitiativeDbRow } from '@/lib/initiatives/types'
 import { OldPageBanner } from '@/components/shell/old-page-banner'
@@ -89,7 +89,7 @@ export default async function InitiativesSettingsPage() {
                   key={i.id}
                   initiative={i}
                   themeNames={i.registryIds.map((id) => labelById.get(id) ?? 'a theme no longer heard')}
-                  startedLabel={weekdayDate(i.startedAt)}
+                  startedLabel={appWeekday(i.startedAt)}
                 />
               ))}
             </div>

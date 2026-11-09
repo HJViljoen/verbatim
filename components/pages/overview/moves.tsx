@@ -9,7 +9,7 @@ import { BlockMovement } from '@/components/blocks/movement'
 import { sharedPairNote } from '@/lib/calibration'
 import { TileBlock } from '@/components/shell/tile'
 import { TileColumns } from '@/components/shell/page-grid'
-import { fmtInt, longMonth, shortDate } from '@/lib/format'
+import { appShort, fmtInt, longMonth } from '@/lib/format'
 import { monthStartOf, prevMonth } from '@/lib/reading/month-key'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { CardCount, MoveCandidate, MoveReading } from '@/lib/reading/moves'
@@ -348,7 +348,7 @@ function MoveBody({ row, reading, mode }: { row: MoveRow; reading: MoveReading |
             {reading.on}
           </span>
         ) : null}
-        <span className={email ? undefined : 'font-mono text-[10.5px] text-muted-foreground'}>declared {shortDate(row.declaredAt)}</span>
+        <span className={email ? undefined : 'font-mono text-[10.5px] text-muted-foreground'}>declared {appShort(row.declaredAt)}</span>
       </span>
       {/* THE MOVE'S ONE MOVEMENT CLAIM — yours, and the controls beside it,
           PRINTED BESIDE AND NEVER SUBTRACTED (`main.moves.move1.verdict` /

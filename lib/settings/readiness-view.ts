@@ -1,5 +1,5 @@
 import { CONTACT_EMAIL } from '../legal'
-import { fmtInt, fullDate } from '../format'
+import { appDay, fmtInt, fullDate } from '../format'
 import { summarise, type ReadinessSummary } from '../readiness/compute'
 import type { ReadinessInputs, ReadinessRow } from '../readiness/types'
 import { QUEUE_FLOOR } from './queue'
@@ -176,7 +176,7 @@ function clientRow(r: ReadinessRow, facts: ReadinessFacts): Partial<ClientReadin
     }
     case 'tracked-terms': {
       const t = i?.terms
-      const when = facts.searchChangedAt ? ` · last changed ${fullDate(facts.searchChangedAt)}` : ''
+      const when = facts.searchChangedAt ? ` · last changed ${appDay(facts.searchChangedAt)}` : ''
       return {
         ...(t ? { detail: `${plural(t.brand, 'brand term')}, ${plural(t.competitor, 'rival term')}, ${plural(t.industry, 'category term')}${t.exclude > 0 ? ` and ${plural(t.exclude, 'exclusion')}` : ''}${when}.` } : {}),
         // The change record's boundary is said once, on its own row.
@@ -212,7 +212,7 @@ function clientRow(r: ReadinessRow, facts: ReadinessFacts): Partial<ClientReadin
       const e = i?.embeddings
       if (!e || e.total === 0 || e.embedded < e.total) return {}
       return {
-        detail: `All ${fmtInt(e.total)} findings can be searched by a question on Ask${e.lastEmbeddedAt ? ` · the latest added ${fullDate(e.lastEmbeddedAt)}` : ''}.`,
+        detail: `All ${fmtInt(e.total)} findings can be searched by a question on Ask${e.lastEmbeddedAt ? ` · the latest added ${appDay(e.lastEmbeddedAt)}` : ''}.`,
         unlocks: 'Nothing to do: each update makes its new findings searchable.',
       }
     }
@@ -253,7 +253,7 @@ function clientRow(r: ReadinessRow, facts: ReadinessFacts): Partial<ClientReadin
       const c = i?.changeLog
       if (!c || !c.available || c.rows === 0 || !c.firstLoggedAt) return {}
       return {
-        detail: `Every change is written down as it is made, since ${fullDate(c.firstLoggedAt)}${c.lastChangeAt ? `, the latest on ${fullDate(c.lastChangeAt)}` : ''}. Changes before then were worked out afterwards from what each update searched.`,
+        detail: `Every change is written down as it is made, since ${appDay(c.firstLoggedAt)}${c.lastChangeAt ? `, the latest on ${appDay(c.lastChangeAt)}` : ''}. Changes before then were worked out afterwards from what each update searched.`,
         notes: [],
         unlocks: 'Nothing to do: each change, ours and yours, is listed in Settings › The record.',
       }

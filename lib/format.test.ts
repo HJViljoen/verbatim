@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { fmtInt, fmtCompact, fmtPct, fmtDelta, shortDate, fullDate, longMonth, monthName, weekdayDate, listNames, platformLabel, appWhen, appDay, appDayLong, appDayMonth } from './format'
+import { fmtInt, fmtCompact, fmtPct, fmtDelta, shortDate, fullDate, longMonth, monthName, weekdayDate, listNames, platformLabel, appWhen, appDay, appDayLong, appDayMonth, appShort, appWeekday } from './format'
 
 describe('fmtInt', () => {
   it('adds thousands separators and rounds', () => {
@@ -88,6 +88,12 @@ describe('the clients\' clock (South Africa, UTC+2; 9 Nov, the live-data bugs)',
     expect(appDay('2026-11-03T22:30:00.000Z')).toBe('4 Nov 2026')
     expect(appDayLong('2026-12-31T22:30:00.000Z')).toBe('1 January 2027')
     expect(appDayMonth('2026-11-30T23:59:00.000Z')).toBe('1 December')
+  })
+  it('the short and weekday shapes, on the same clock (a reader\'s "built", "asked", "read as at")', () => {
+    expect(appShort('2026-11-03T22:30:00.000Z')).toBe('4 Nov')
+    expect(appWeekday('2026-11-07T22:30:00.000Z')).toBe('Sun 8 Nov')
+    expect(appShort('2026-08-16T07:07:51Z')).toBe(shortDate('2026-08-16T07:07:51Z'))
+    expect(appWeekday('2026-08-16T07:07:51Z')).toBe(weekdayDate('2026-08-16T07:07:51Z'))
   })
   it('agrees with the UTC day before 22:00 UTC', () => {
     expect(appDay('2026-08-16T07:07:51Z')).toBe(fullDate('2026-08-16T07:07:51Z'))

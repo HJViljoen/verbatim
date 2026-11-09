@@ -12,7 +12,7 @@ import type { ViewerSnapshot } from '@/lib/reports/viewer'
 import { STUDIO_HREF } from '@/lib/studio-visibility'
 import { isMonthlyBriefData, type StoredBriefData } from '@/lib/reports/briefs/types'
 import { STUDIO_REPORTS, type StudioArtefact } from '@/lib/pages/studio'
-import { fmtInt, fullDate, shortDate } from '@/lib/format'
+import { appDay, appShort, fmtInt } from '@/lib/format'
 import { monthLabel } from '@/lib/shell/bar'
 
 // THE VIEWER'S FRAME (the audit design, 7 Nov, Studio-Weekly.dc.html and
@@ -58,7 +58,7 @@ export function viewerStats(view: Pick<ViewerSnapshot, 'data' | 'builtAt' | 'pag
     return [
       { key: 'for', term: 'For', value: briefDef(data)?.forWho ?? data.role },
       ...(market ? [{ key: 'month', term: monthLabel(data.month), value: market }] : []),
-      { key: 'written', term: 'Written', value: fullDate(view.builtAt) },
+      { key: 'written', term: 'Written', value: appDay(view.builtAt) },
       { key: 'length', term: 'Length', value: pages(view.pageCount) },
     ]
   }
@@ -71,11 +71,11 @@ export function viewerStats(view: Pick<ViewerSnapshot, 'data' | 'builtAt' | 'pag
         { key: 'this-week', term: 'This week', value: videosAndComments(n.week) },
         { key: 'month', term: v!.monthGroup, value: videosAndComments(n.month) },
       ] : []),
-      { key: 'read', term: 'Read', value: `${fullDate(data.readingAt || view.builtAt)}, ${pages(view.pageCount)}` },
+      { key: 'read', term: 'Read', value: `${appDay(data.readingAt || view.builtAt)}, ${pages(view.pageCount)}` },
     ]
   }
   return [
-    { key: 'built', term: 'Built', value: fullDate(view.builtAt) },
+    { key: 'built', term: 'Built', value: appDay(view.builtAt) },
     { key: 'length', term: 'Length', value: pages(view.pageCount) },
   ]
 }
@@ -89,7 +89,7 @@ export function viewerHead(view: Pick<ViewerSnapshot, 'data' | 'title' | 'builtA
     return { crumb: 'Monthly briefs', title: briefDef(data)?.name ?? data.title, sub: `${data.company}, ${monthLabel(data.month)}` }
   }
   if (isWeeklyReadData(data)) {
-    return { crumb: `The weekly, ${shortDate(data.readingAt || view.builtAt)}`, title: WEEKLY_READ_TITLE, sub: null }
+    return { crumb: `The weekly, ${appShort(data.readingAt || view.builtAt)}`, title: WEEKLY_READ_TITLE, sub: null }
   }
   return { crumb: view.title, title: view.title, sub: null }
 }

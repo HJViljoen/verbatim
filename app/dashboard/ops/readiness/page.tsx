@@ -4,7 +4,7 @@ import { ReadinessTable } from '@/components/ops/readiness-table'
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
 import { PaneBody, PaneHeader } from '@/components/shell/master-list'
 import { getSessionContext } from '@/lib/auth'
-import { fullDate } from '@/lib/format'
+import { appDay } from '@/lib/format'
 import { computeReadiness, summarise } from '@/lib/readiness/compute'
 import { loadReadiness } from '@/lib/readiness/load'
 import { createAdminClient } from '@/lib/supabase-admin'
@@ -64,7 +64,7 @@ export default async function ReadinessPage() {
           <ReadinessTable
             rows={rows}
             title="This workspace"
-            description={`Read ${fullDate(now.toISOString())}. A month counts when it carries ${inputs.floor} videos, the same floor the product compares on.`}
+            description={`Read ${appDay(now.toISOString())}. A month counts when it carries ${inputs.floor} videos, the same floor the product compares on.`}
           />
         </PaneBody>
       </section>

@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { MOVEMENT_WORDS } from '../../components/delta-badge'
 import { READER_FLAGS } from '../calibration'
-import { fmtInt, fmtPct, fullDate, longMonth, monthName, shortDate } from '../format'
+import { appDay, fmtInt, fmtPct, fullDate, longMonth, monthName, shortDate } from '../format'
 import type { Quote, Scope } from '../renderables/types'
 import { selectAll } from '../supabase-admin'
 import { quarterChange, QUARTER_UNLOCKS_AT } from '../reading/bands'
@@ -1648,7 +1648,7 @@ function buildCover(a: {
       label: `panel comments under ${overview.category.label.toLowerCase()} in ${longMonth(panelMonth.month)}`,
       caption: [
         attention.accountCount != null ? `a fixed panel of ${fmtInt(attention.accountCount)} accounts` : 'a fixed panel of accounts',
-        attention.panel?.frozen_at ? `frozen ${fullDate(attention.panel.frozen_at)}` : null,
+        attention.panel?.frozen_at ? `frozen ${appDay(attention.panel.frozen_at)}` : null,
       ].filter(Boolean).join(' · '),
       verdict: attention.verdict,
     })
@@ -1728,7 +1728,7 @@ function buildCover(a: {
     // The quarter says whether IT is filling; the month clause says which month
     // the month-level pages are of, and whether it is even inside the quarter.
     stamp: [
-      `as at ${fullDate(a.readingAt)}`,
+      `as at ${appDay(a.readingAt)}`,
       quarterFilling(a.quarter, a.readingAt) ? `${quarterLabel(a.quarter, false)} still filling` : null,
       monthBasisClause(overview.month, a.quarter),
     ]

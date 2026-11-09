@@ -3,7 +3,7 @@ import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockRanked } from '@/components/blocks/bars'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fmtInt, fmtPct, longMonth, shortDate } from '@/lib/format'
+import { appShort, fmtInt, fmtPct, longMonth } from '@/lib/format'
 import { monthPhrase, type SubjectWeekRow, type WeekData } from '@/lib/pages/week'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { CalibrationTag } from '@/components/blocks/calibration-tag'
@@ -94,7 +94,7 @@ export const weekSubjects: Block<WeekData> = {
         // to that update.
         meta={when === 'this month'
           ? `${longMonth(s.month)} so far${data.monthStatus === 'filling' ? ' · still filling' : ''}`
-          : `${longMonth(s.month)} to the ${shortDate(data.update.date)} update`}
+          : `${longMonth(s.month)} to the ${appShort(data.update.date)} update`}
         footer={email
           ? <a href={href} style={{ color: EMAIL.ink }}>Open Subjects →</a>
           : <Link href={href} className="hover:underline">Open Subjects →</Link>}

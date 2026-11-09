@@ -2,7 +2,7 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 import type { GateTier } from '@/lib/curation'
 import { glossaryRule, priorityWord } from '@/lib/calibration'
-import { fmtInt, weekdayDate, shortDate, platformLabel } from '@/lib/format'
+import { appShort, fmtInt, platformLabel, weekdayDate } from '@/lib/format'
 import { claimVerdict, claimCountsLine, newsRingChip, type ClaimTone, type ThemeChip } from '@/lib/market-tiles'
 import { HowToRead } from '@/components/how-to-read'
 import { ExportMenu, ExportScope } from '@/components/export-menu'
@@ -148,7 +148,7 @@ const news: R = (d, mode) => {
                   <p className="line-clamp-2 text-[12.5px] font-medium leading-[1.35] group-hover:underline">{n.title}</p>
                   <p className="mt-1 flex items-center gap-2 font-mono text-[10.5px] text-muted-foreground">
                     <span className="shrink-0 font-sans font-medium text-secondary-foreground" title={glossaryRule('news')}>{chip.label}</span>
-                    <span className="truncate">· {n.sourceRef}{n.publishedAt ? ` · ${shortDate(n.publishedAt)}` : ''}</span>
+                    <span className="truncate">· {n.sourceRef}{n.publishedAt ? ` · ${appShort(n.publishedAt)}` : ''}</span>
                   </p>
                 </a>
               </li>

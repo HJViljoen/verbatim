@@ -5,7 +5,7 @@ import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope, Slide } from '../renderables/types'
 import { resolveCitations, type CitationMeta } from '../evidence-cite'
 import { AGENT_MOVEMENT_MONTHS, ASK_THEMES_PER_CLAIM, directionWordsFor } from '../config'
-import { fmtInt, longMonth, weekdayDate } from '../format'
+import { appWeekday, fmtInt, longMonth } from '../format'
 import { row, rows as readRows } from './read'
 import { isMissingColumnError } from '../supabase-admin'
 import type { ClaimResult, Judgement, AskSummary } from '../ask/types'
@@ -1083,13 +1083,13 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
     method: document
       ? {
           company: brand,
-          period: `Asked ${weekdayDate(thread.created_at as string)}`,
+          period: `Asked ${appWeekday(thread.created_at as string)}`,
           platforms,
           videos: null,
           comments: citations.length || null,
           note: `${document.summary.supported} supported · ${document.summary.contradicted} contradicted · ${document.summary.untested} untested.`,
         }
-      : { company: brand, period: `Asked ${weekdayDate(thread.created_at as string)}`, platforms: [], videos: null, comments: null, note: null },
+      : { company: brand, period: `Asked ${appWeekday(thread.created_at as string)}`, platforms: [], videos: null, comments: null, note: null },
   }
 }
 

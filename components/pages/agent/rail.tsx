@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import Link from 'next/link'
-import { fmtInt, shortDate } from '@/lib/format'
+import { appShort, fmtInt } from '@/lib/format'
 import type { NotAnswered } from '@/lib/agent/measure'
 import type { AskHistory, AskReads } from '@/lib/pages/agent-thread'
 import { CARD, EmptyBox, GoLink } from '@/components/v2'
@@ -83,7 +83,7 @@ export function EarlierQuestionsTile({ history, openThread = false }: {
                 <span data-copy="subject" data-slot="ask_extract_title">{r.title}</span>
               </Link>
               <span className="flex flex-wrap items-baseline gap-x-2 text-[13px] text-muted-foreground">
-                <span>answered <span data-copy="figure" className="tabular-nums">{shortDate(r.askedAt)}</span></span>
+                <span>answered <span data-copy="figure" className="tabular-nums">{appShort(r.askedAt)}</span></span>
                 {/* `=== true` on purpose: null is "we did not re-read that plan",
                     which is not "nothing crossed" (`AskHistoryRow.claimCrossed`). */}
                 {r.claimCrossed === true && <span className="font-semibold text-foreground">1 claim crossed</span>}

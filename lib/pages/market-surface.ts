@@ -4,7 +4,7 @@ import { adviceLanding, MOVES_PATH } from './v2/moves-address'
 import { recStatus, REC_STATUS_LABEL, type RecStatus } from '../calibration'
 import { gateTier, type GateTier } from '../curation'
 import { currentTopLineage, recommendationOrder, recUpdateOf, recUpdateTimes } from '../dashboard-tiles'
-import { fmtInt, monthName, shortDate } from '../format'
+import { appShort, fmtInt, monthName } from '../format'
 import { claimVerdictFor, distinctVideos, groundedTier, insightTiers, labelsBySlug, ledgerRows, themeChips, tierCounts, type GroundingThemeRow, type ThemeChip } from '../market-tiles'
 import type { SayVsHearEntry } from '../pipeline/schemas'
 import { loadClaimEchoes, loadMarketMonthVideos } from './claim-echo'
@@ -877,7 +877,7 @@ export function moveTargetLabel(
  * exactly that sentence — which is why nothing here calls it.
  */
 export function moveLedgerLine(move: { title: string; declared_at: string }, on: string): string {
-  return `${move.title} · ${on} · tracked ${shortDate(move.declared_at)} · first scoring lands with the ${longMonth(firstScoringMonth(move.declared_at))} reading.`
+  return `${move.title} · ${on} · tracked ${appShort(move.declared_at)} · first scoring lands with the ${longMonth(firstScoringMonth(move.declared_at))} reading.`
 }
 
 export const MOVES_EMPTY_MK4 =

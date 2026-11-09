@@ -1,6 +1,6 @@
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
-import { fullDate } from '@/lib/format'
+import { appDay } from '@/lib/format'
 import { appBaseUrl } from '@/lib/site'
 import type { MonthlySnapshotData } from '@/lib/reports/monthly-build'
 import { monthlySections } from '@/components/blocks/monthly'
@@ -26,7 +26,7 @@ import { withCurrentWords } from '@/lib/reports/legacy-words'
 //
 // NOT toLocaleDateString: lib/format.ts's own header forbids it, because Intl
 // draws on ICU data that differs between the Node server and the browser.
-const fmtDate = (d: Date) => fullDate(d.toISOString())
+const fmtDate = (d: Date) => appDay(d.toISOString())
 
 export function MonthlyDeck({ data, date = fmtDate(new Date()) }: { data: MonthlySnapshotData; date?: string }) {
   // A snapshot built before the em-dash sweep re-renders in the current words.

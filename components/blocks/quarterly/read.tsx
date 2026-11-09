@@ -3,7 +3,7 @@ import { BlockFrame } from '@/components/blocks/frame'
 import { BlockQuotes } from '@/components/blocks/quote'
 import { TokenProse } from '@/components/blocks/prose'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fullDate } from '@/lib/format'
+import { appDay } from '@/lib/format'
 import { splitSentences } from '@/lib/prose/scrub'
 import { hasQuote } from '@/lib/renderables/quotes-freeze'
 import type { QuarterlyData, ReadPage } from '@/lib/pages/quarterly'
@@ -191,7 +191,7 @@ export const quarterlyRead: Block<QuarterlyData> = {
                       re-analysis. */}
                   {/* All time, on the count (T0a, mechanism 6; QR-12). */}
                   {a.grounded ? <><span data-copy="figure">{a.grounded.line.replace(/,? counted over everything we have read for you.*$/, '')}{a.grounded.pruned ? '' : `, ${GROUNDED_BASIS}`}</span>{' '}</> : null}
-                  {a.status}{a.decidedAt ? ` · you decided ${fullDate(a.decidedAt)}` : ' · no decision yet'}
+                  {a.status}{a.decidedAt ? ` · you decided ${appDay(a.decidedAt)}` : ' · no decision yet'}
                 </Bullet>
               ))
             ) : (

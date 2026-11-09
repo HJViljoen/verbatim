@@ -4,7 +4,7 @@ import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { openLink } from '@/components/blocks/open-link'
 import { TokenProse } from '@/components/blocks/prose'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { longMonth, shortDate } from '@/lib/format'
+import { appShort, longMonth, shortDate } from '@/lib/format'
 import { monthStartOf, nextMonth } from '@/lib/reading/month-key'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { changeLead, nextPairLine, placeInMonth, RECHECK_PENDING_KEY, recheckLines, searchChangesLine, type ChangeBlock, type RecheckLine } from '@/lib/pages/overview-market'
@@ -135,7 +135,7 @@ function MonthStrip({ block }: { block: ChangeBlock }) {
               className={cn('absolute -top-5 whitespace-nowrap font-mono text-[12px] leading-4 text-muted-foreground', kind === 'read' ? '-translate-x-full pr-1.5' : 'pl-1.5')}
               style={{ left: pct(at) }}
             >
-              as at {shortDate(asAt)}
+              as at {appShort(asAt)}
             </span>
           </>
         ) : null}

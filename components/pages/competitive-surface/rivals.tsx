@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
-import { fmtInt, shortDate } from '@/lib/format'
+import { appShort, fmtInt } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { RIVAL_STATE_LINE, type CompetitiveSurfaceData, type RivalOption } from '@/lib/pages/competitive-surface'
@@ -33,7 +33,7 @@ const UNRECORDED =
 function Option({ option, mode }: { option: RivalOption; mode: RenderMode }) {
   const email = mode === 'email'
   const state = RIVAL_STATE_LINE[option.state]
-  const stamp = option.retiredAt ? ` · until ${shortDate(option.retiredAt)}` : ''
+  const stamp = option.retiredAt ? ` · until ${appShort(option.retiredAt)}` : ''
   const body = <>
     {option.name}
     <span className={email ? undefined : 'ml-1.5 text-[11px] font-normal text-muted-foreground'} style={email ? { color: EMAIL.muted } : undefined}>

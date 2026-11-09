@@ -1,6 +1,6 @@
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
-import { fullDate } from '@/lib/format'
+import { appDay } from '@/lib/format'
 import { appBaseUrl } from '@/lib/site'
 import { weeklyRuleIn } from '@/lib/reports/weekly'
 import { staleWeeklySnapshot, type WeeklySnapshotData } from '@/lib/reports/weekly-build'
@@ -30,7 +30,7 @@ import { withCurrentWords } from '@/lib/reports/legacy-words'
 // on ICU data that differs between the Node server and the browser — and it
 // printed "16 Sept 2026" in this footer against "Sep" everywhere else. It is
 // the same rule the WP15 x WP17 longMonth merge conflict was decided on.
-const fmtDate = (d: Date) => fullDate(d.toISOString())
+const fmtDate = (d: Date) => appDay(d.toISOString())
 
 export function WeeklyDeck({ data, date = fmtDate(new Date()) }: { data: WeeklySnapshotData; date?: string }) {
   // A snapshot built before the em-dash sweep re-renders in the current words.
@@ -42,7 +42,7 @@ export function WeeklyDeck({ data, date = fmtDate(new Date()) }: { data: WeeklyS
   // THE RULE ONCE, ON SHEET 1 (copy de-clutter 2026-09-24). Truncated on
   // every footer it read as half a sentence eight times.
   const chromeFor = (first: boolean) => ({
-    context: `${data.company} · ${data.period} · reading as at ${fullDate(data.readingAt)}`,
+    context: `${data.company} · ${data.period} · reading as at ${appDay(data.readingAt)}`,
     footer: (
       <p className="truncate font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
         {first && !stale ? (

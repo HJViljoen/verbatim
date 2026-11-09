@@ -4,7 +4,7 @@ import type { ReadingMonth } from '@/lib/reading/reading-month'
 import { ExportMenu } from '@/components/export-menu'
 import type { StatItem } from '@/components/v2'
 import { surface } from '@/lib/nav'
-import { fmtInt, shortDate, weekdayDate } from '@/lib/format'
+import { appShort, appWeekday, fmtInt } from '@/lib/format'
 import { monthLabel } from '@/lib/shell/bar'
 import type { AgentThreadData } from '@/lib/pages/agent-thread'
 import { THIRTEEN_WORDS, READER_FLAGS } from '@/lib/calibration'
@@ -77,8 +77,8 @@ export function planCheckStats(d: Pick<AgentThreadData, 'title' | 'createdAt' | 
     : []
   return [
     { key: 'plan', term: 'Plan', value: <span data-copy="subject" data-slot="ask_extract_title">{d.title}</span> },
-    { key: 'asked', term: 'Asked', value: weekdayDate(d.createdAt) },
-    { key: 'checked', term: 'Checked against', value: d.basis.updateAt ? `The update of ${shortDate(d.basis.updateAt)}` : 'No update read yet' },
+    { key: 'asked', term: 'Asked', value: appWeekday(d.createdAt) },
+    { key: 'checked', term: 'Checked against', value: d.basis.updateAt ? `The update of ${appShort(d.basis.updateAt)}` : 'No update read yet' },
     {
       key: 'claims',
       term: <><span data-copy="figure">{fmtInt(total)}</span> {total === 1 ? 'claim' : 'claims'}</>,

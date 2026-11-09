@@ -1,4 +1,4 @@
-import { shortDate } from '@/lib/format'
+import { appShort } from '@/lib/format'
 import type { RecStatus } from '@/lib/calibration'
 
 // The lead card's decision, in words: shared by the app's control
@@ -13,7 +13,7 @@ export const LEAD_UNDECIDED = 'Not decided yet'
  *  or null where no decision is recorded. Formatted on the server, so the
  *  control and the page it hydrates on print one day. */
 export function leadStamp(decidedAt: string | null): string | null {
-  return decidedAt ? `you marked it on ${shortDate(decidedAt)}` : null
+  return decidedAt ? `you marked it on ${appShort(decidedAt)}` : null
 }
 
 /** The square beside the word, in the colour the status earns (the ledger

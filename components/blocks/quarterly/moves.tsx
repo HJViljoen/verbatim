@@ -4,7 +4,7 @@ import { BlockCalendar } from '@/components/blocks/calendar'
 import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fmtInt, fmtPct, fullDate, monthName } from '@/lib/format'
+import { appDay, fmtInt, fmtPct, fullDate, monthName } from '@/lib/format'
 import type { CalendarSeries } from '@/lib/charts/calendar'
 import type { MoveReading } from '@/lib/reading/moves'
 import { moveTail, type QuarterlyData } from '@/lib/pages/quarterly'
@@ -103,7 +103,7 @@ function MoveCard({ move, reading, sideOf, mode }: { move: MoveRow; reading: Mov
         className={email ? undefined : 'm-0 flex flex-wrap items-center gap-2 font-mono text-[10.5px] text-muted-foreground'}
         style={email ? { fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted } : undefined}
       >
-        <span>declared {fullDate(move.declaredAt)}</span>
+        <span>declared {appDay(move.declaredAt)}</span>
         <span>·</span>
         <span>{move.on}</span>
       </p>
@@ -230,7 +230,7 @@ export const quarterlyMoves: Block<QuarterlyData> = {
                 <span className={email ? undefined : 'flex min-w-0 flex-col'}>
                   <Stored slot="pass_d_b_recommendation">{a.title}</Stored>
                   <span className={email ? undefined : 'flex flex-wrap items-center gap-1.5'}>
-                    <Chip tone="plain" mode={mode}>{a.statusLabel}{a.decidedAt ? ` · ${fullDate(a.decidedAt)}` : ''}</Chip>
+                    <Chip tone="plain" mode={mode}>{a.statusLabel}{a.decidedAt ? ` · ${appDay(a.decidedAt)}` : ''}</Chip>
                     <span className={email ? undefined : 'font-mono text-[10.5px] text-muted-foreground'}>
                       {monthName(`${a.firstMade.slice(0, 7)}-01`)} · {a.monthsRepeated === 1 ? '1 month' : `${a.monthsRepeated} months`} ·{' '}
                       {a.timesMade === 1 ? '1 update' : `${a.timesMade} updates`}
