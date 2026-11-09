@@ -1,5 +1,5 @@
 import { shortDate } from '../../format'
-import { titleOrBody } from '../../prose/advice-title'
+import { titleFromBody, titleOrBody } from '../../prose/advice-title'
 
 // Your moves' words for a piece of advice that a card, the Dashboard's tile
 // and the weekly email's line (lib/reports/weekly-read-lines.ts) all print.
@@ -21,6 +21,31 @@ export const UNTITLED_ADVICE = 'A piece of advice with no title'
  * now stores by too); `UNTITLED_ADVICE` only where both are blank. Pure.
  */
 export const adviceTitle = (title: string | null | undefined, body?: string | null): string => titleOrBody(title, body) ?? UNTITLED_ADVICE
+
+/** Where Your moves splits an argument into sentences (`whyLead`,
+ *  `argumentParts`). */
+const SENTENCE_BREAK = /(?<=[.!?])\s+(?=[A-Z“"‘'])/
+
+/**
+ * A piece of advice's HEADING and the body under it, said once (9 Nov, the
+ * live-data bugs: the third piece on Your moves read "People judge a device
+ * by whether they can wear it through work…" over "People judge a device by
+ * whether they can wear it through work, clothing, …", the same words twice,
+ * the first time cut). Where the title is the body's own first clause (stored
+ * blank, or stored as the pipeline derives it, `titleFromBody`), the heading
+ * is the body's first sentence, whole and without its full stop, and the body
+ * starts after it (null where nothing is left); a title of its own stands
+ * over the whole body. A HEADING ONLY: the advice's NAME stays `adviceTitle`
+ * wherever it is listed or carried (the record, the crumbs, the Dashboard's
+ * tile, the weekly email, a dated move's default title of 1 to 120
+ * characters). Pure.
+ */
+export function adviceHeading(title: string, body: string | null | undefined): { title: string; body: string | null; fromBody: boolean } {
+  const text = (body ?? '').replace(/\s+/g, ' ').trim()
+  if (!text || title !== titleFromBody(text)) return { title, body: body ?? null, fromBody: false }
+  const [first, ...rest] = text.split(SENTENCE_BREAK)
+  return { title: first.replace(/\.$/u, ''), body: rest.join(' ') || null, fromBody: true }
+}
 
 /** How long the product has been raising one piece of advice, in updates. */
 export interface AdviceHistory {

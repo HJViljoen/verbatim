@@ -30,7 +30,7 @@ import {
   RECOMMENDATION_COLUMNS, subjectsOf, waitingAdvice, type AdviceCard, type Core, type MoveCard,
 } from './moves'
 import {
-  adviceConversationsOf, adviceCrumbs, adviceMenu, adviceNumbersOf, adviceQuotesOf, argumentParts, askAfterMoveHref, LINE_MONTHS,
+  adviceArgument, adviceConversationsOf, adviceCrumbs, adviceMenu, adviceNumbersOf, adviceQuotesOf, askAfterMoveHref, LINE_MONTHS,
   moveCrumbs, moveEvidenceOf, moveFactsOf, moveMenu, recordCrumbs, recordGroupsOf, wouldMoveLineOf, MOVE_EVIDENCE_EMPTY,
   type AdviceConversations, type AdviceNumbers, type AdviceQuote, type LevelCitation, type MoveEvidence, type MoveFacts, type MovePageData,
   type RecordPageData, type WouldMoveLine,
@@ -206,7 +206,11 @@ export interface AdvicePageData {
    *  (null dates it today); absent where the reader may not decide. */
   dating: { today: string; earliest: string } | null
   card: AdviceCard
-  argument: { lead: string | null; rest: string[] }
+  /** The page's h1 where it is not the card's title: the argument's first
+   *  sentence, whole, where the title was cut from it (`adviceArgument`). */
+  heading?: string
+  /** `inTitle`: the heading took the whole argument. */
+  argument: { lead: string | null; rest: string[]; inTitle?: boolean }
   conversations: AdviceConversations | 'unread'
   line: WouldMoveLine | null | 'unread'
   numbers: AdviceNumbers | 'unread'
@@ -379,7 +383,7 @@ export async function loadAdvicePage(scope: Scope, id: string, options: { canDec
     canDecide: options.canDecide,
     dating: decide && datable ? { today, earliest: earliestMoveDay(today) } : null,
     card,
-    argument: argumentParts(r.why),
+    ...adviceArgument(card.title, r.why),
     conversations,
     line,
     numbers,

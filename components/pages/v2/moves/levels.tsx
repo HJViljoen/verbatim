@@ -57,7 +57,7 @@ export function MovesAdvicePage({ page, switcherOpen = false }: { page: AdvicePa
       <LevelBar
         crumbs={page.crumbs}
         level="advice"
-        title={<AdviceTitle card={card} />}
+        title={<AdviceTitle card={{ ...card, title: page.heading ?? card.title }} />}
         tags={<AdviceTags page={page} />}
         stats={adviceStats(page)}
         controls={decide ? <AdviceDecision lineageId={card.lineageId} recommendationId={card.recommendationId} title={card.title} dating={page.dating} /> : null}

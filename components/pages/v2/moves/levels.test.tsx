@@ -11,6 +11,8 @@ import { NO_OTHER_CONVERSATION } from './advice-page'
 import { RAISED_NOW, RECORD_SAME_IDEA_HEAD } from './record-page'
 import { HELD_WORDS } from './move-page'
 import { MovesAdvicePage, MovesMissing, MovesMovePage, MovesRecordPage } from './levels'
+import { titleFromBody } from '@/lib/prose/advice-title'
+import { adviceArgument } from '@/lib/pages/v2/moves-levels'
 
 // YOUR MOVES' LEVEL PAGES, AS THEY PRINT (levels as pages, 17 Oct; the G6
 // boards): a piece of advice (the hub), a dated move (the evidence) and the
@@ -140,6 +142,40 @@ describe('a piece of advice, the hub (G6-Moves-Advice)', () => {
     const withMove = advicePage(adviceWithMoveFixture())
     expect(withMove).toContain('data-move-on-it=""')
     expect(withMove).toContain(`href="/dashboard/moves/${'m-clinic'}"`)
+  })
+})
+
+describe('a piece of advice whose title is its body\'s first clause (9 Nov, the live-data bugs)', () => {
+  const why = 'Buyers weigh a liner by whether it stays put through a full shift, the heat of the afternoon and the walk home without rubbing or slipping. Make fit follow-up a service the clinic books, not a call the wearer has to chase.'
+  const title = titleFromBody(why)!
+  const pageOf = (body: string) => {
+    const said = adviceArgument(titleFromBody(body)!, body)
+    return adviceFixture({ card: { ...adviceFixture().card, title: titleFromBody(body)!, why: body }, heading: said.heading, argument: said.argument })
+  }
+
+  it('heads the page with the first sentence, whole, and leads the argument with the next', () => {
+    expect(title.endsWith('…')).toBe(true)
+    const m = render(<MovesAdvicePage page={pageOf(why)} />)
+    const t = markupText(m)
+    expect(t.match(/Buyers weigh a liner/g)).toHaveLength(1)
+    expect(m).toMatch(/<h1[^>]*>(<[^>]+>)*Buyers weigh a liner by whether it stays put through a full shift, the heat of the afternoon and the walk home without rubbing or slipping</)
+    expect(m).toMatch(/id="hub-head"[^>]*>Make fit follow-up a service the clinic books, not a call the wearer has to chase\.</)
+    expect(t).not.toContain('…')
+    assertCopyContract(m)
+  })
+
+  it('a one-sentence body is the heading, and the argument says so rather than that there is none', () => {
+    const one = 'Offer a fitting check at six weeks so a loose socket is caught before it hurts.'
+    const t = renderText(<MovesAdvicePage page={pageOf(one)} />)
+    expect(t.match(/Offer a fitting check/g)).toHaveLength(1)
+    expect(t).not.toContain('carries no argument')
+    expect(t).toContain('The argument is its title, above.')
+  })
+
+  it('a title of its own keeps its page as it was', () => {
+    const said = adviceArgument('Stand up an access desk', why)
+    expect(said.heading).toBe('Stand up an access desk')
+    expect(said.argument.lead).toBe('Buyers weigh a liner by whether it stays put through a full shift, the heat of the afternoon and the walk home without rubbing or slipping.')
   })
 })
 

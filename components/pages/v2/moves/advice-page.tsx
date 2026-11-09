@@ -135,6 +135,9 @@ function RestsOnRows({ rows }: { rows: readonly RestsOnRow[] }) {
   )
 }
 
+/** Where the page's heading took the whole argument (`adviceArgument`). */
+export const ARGUMENT_IN_TITLE = 'The argument is its title, above.'
+
 /** The argument, one tile: its first sentence as the lead (the hub's
  *  heading), then why (the rest) beside what it rests on. */
 function ArgumentCard({ page }: { page: AdvicePageData }) {
@@ -147,10 +150,11 @@ function ArgumentCard({ page }: { page: AdvicePageData }) {
         ? <h2 id="hub-head" data-copy="stored" data-slot="pass_d_b_recommendation" className="m-0 max-w-[1040px] text-[24px] leading-[1.4] font-semibold tracking-[-0.005em] text-foreground max-sm:text-[20px]">{lead}</h2>
         : (
           // The h1's next heading is an h2 in every state: with no lead the
-          // tile's heading is said to a screen reader only.
+          // tile's heading is said to a screen reader only. Where the page's
+          // heading took the whole argument (`inTitle`), "Why" says so.
           <>
             <h2 className="sr-only">The argument</h2>
-            <EmptyBox>This piece of advice carries no argument we can print.</EmptyBox>
+            {page.argument.inTitle ? null : <EmptyBox>This piece of advice carries no argument we can print.</EmptyBox>}
           </>
         )}
       <div className="grid grid-cols-1 gap-9 border-t border-track pt-[22px] max-sm:gap-6 min-[900px]:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
@@ -158,7 +162,7 @@ function ArgumentCard({ page }: { page: AdvicePageData }) {
           <h3 className={H}>Why</h3>
           {page.argument.rest.length > 0
             ? page.argument.rest.map((p, i) => <p key={i} data-copy="stored" data-slot="pass_d_b_recommendation" className={cn(READ, i === page.argument.rest.length - 1 && page.argument.rest.length > 1 ? 'text-secondary-foreground' : null)}>{p}</p>)
-            : <p className="m-0 text-[15px] text-muted-foreground">{lead ? 'The argument is the line above.' : 'Nothing more is written for it.'}</p>}
+            : <p className="m-0 text-[15px] text-muted-foreground">{lead ? 'The argument is the line above.' : page.argument.inTitle ? ARGUMENT_IN_TITLE : 'Nothing more is written for it.'}</p>}
         </div>
         <div className="flex min-w-0 flex-col gap-2">
           <h3 className={H}>What it rests on</h3>

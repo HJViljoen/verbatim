@@ -12,6 +12,7 @@ import {
   adviceHref, monthLabelOn, streakLabel,
   type AdviceAim, type AdviceCard, type AdviceHistory, type MovesPageData, type ReadingLabel,
 } from '@/lib/pages/v2/moves'
+import { adviceHeading } from '@/lib/pages/v2/advice-words'
 import { streakWords } from '@/lib/pages/v2/moves-levels'
 import { cn } from '@/lib/utils'
 import { AdviceAnswers } from './advice-actions'
@@ -107,7 +108,10 @@ function Fact({ term, wide = false, children }: { term: string; wide?: boolean; 
 }
 
 function AdviceCardView({ card, canDecide, reading, aimFailed }: { card: AdviceCard; canDecide: boolean; reading: ReadingLabel; aimFailed: boolean }) {
-  const lead = whyLead(card.why)
+  // A title cut from its own argument heads the card as that first sentence,
+  // whole, and the lead starts after it: the same words never twice.
+  const said = adviceHeading(card.title, card.why)
+  const lead = whyLead(said.body)
   const href = adviceHref(card.lineageId)
   const h = card.history
   const would = card.aim !== undefined || aimFailed
@@ -115,7 +119,7 @@ function AdviceCardView({ card, canDecide, reading, aimFailed }: { card: AdviceC
     <article id={`advice-${card.lineageId}`} className={cn(CARD, 'flex-1 scroll-mt-6 gap-3')}>
       <Kind card={card} />
       <h3 className={cn('m-0 text-[19px] font-semibold leading-[1.35]', card.untitled ? 'text-muted-foreground' : 'text-foreground')}>
-        <Link href={href} className={ROW}><AdviceTitle card={card} /></Link>
+        <Link href={href} className={ROW}><AdviceTitle card={{ ...card, title: said.title }} /></Link>
       </h3>
       {/* The lead, five lines at most (the board's card): the whole
           argument is on the advice's page. */}

@@ -19,6 +19,7 @@ import {
   convVideoOrder, doingOf, groupCountsOf, platformRows, shownConvVideos, videoQuotes, whoOf,
   type BrandsState, type ConvEvidenceRow, type ConvVideo, type ConvVideoRow, type Doing, type GroupLink, type PersonaLink, type PlatformsBlock,
 } from './market'
+import { adviceHeading } from './advice-words'
 import { ADVICE_RECORD_PATH, MOVES_PATH, advicePath, moveEvidenceHref, movePath, RECORD_GONE_ANCHOR, ADVICE_RECORD_ALL_HREF } from './moves-address'
 import { adviceTitle, axisLine, MOVE_STATUS_LABEL, sharePct, UNTITLED_ADVICE, type AdviceCard, type MoveCard, type MovePoint, type MoveSlot, type RecordRow } from './moves'
 
@@ -119,6 +120,18 @@ export function argumentParts(why: string | null): { lead: string | null; rest: 
   if (!text) return { lead: null, rest: [] }
   const sentences = text.split(/(?<=[.!?])\s+(?=[A-Z“"‘'])/)
   return { lead: sentences[0], rest: whyParagraphs(sentences.slice(1).join(' ')) }
+}
+
+/**
+ * The page's heading and its argument, the same words never twice
+ * (`adviceHeading`): where the title is the argument's own first clause, the
+ * heading is that first sentence whole and the argument starts after it;
+ * `inTitle` where the heading took all of it. Pure.
+ */
+export function adviceArgument(title: string, why: string | null): { heading: string; argument: { lead: string | null; rest: string[]; inTitle?: boolean } } {
+  const said = adviceHeading(title, why)
+  const argument = argumentParts(said.body)
+  return { heading: said.title, argument: said.fromBody && !argument.lead ? { ...argument, inTitle: true } : argument }
 }
 
 // ---- the conversations behind a piece of advice ------------------------------------

@@ -19,6 +19,7 @@ import {
 import { readingMonthLabel } from '@/lib/reading/month-label'
 import { MovesV2Page, MOVES_FIRST_RUN, movesStats } from './index'
 import { AdviceSection } from './advice'
+import { titleFromBody } from '@/lib/prose/advice-title'
 import { MoveMonths, MoveSentence } from './moves'
 import { SAY_FIRST } from './say'
 import { TrackThisSubject } from '@/components/subjects/track-this'
@@ -179,6 +180,18 @@ describe('real data’s edges', () => {
     const markup = render(<AdviceSection data={{ ...base, advice: { ...base.advice, cards: [card] } }} />)
     expect(markupText(markup)).toContain('A piece of advice with no title')
     expect(copyNodes(markup).some((n) => n.kind === 'stored' && n.text === 'A piece of advice with no title')).toBe(false)
+    assertCopyContract(markup)
+  })
+
+  it('advice whose title is its body\'s first clause heads with that sentence once, whole (9 Nov: "…work…" over "…work, clothing, …")', () => {
+    const base = movesFixture()
+    const why = 'Buyers weigh a liner by whether it stays put through a full shift, the heat of the afternoon and the walk home without rubbing or slipping. Make fit follow-up a service the clinic books, not a call the wearer has to chase.'
+    const card = { ...base.advice.cards[0], title: titleFromBody(why)!, why }
+    const markup = render(<AdviceSection data={{ ...base, advice: { ...base.advice, cards: [card] } }} />)
+    const text = markupText(markup)
+    expect(text.match(/Buyers weigh a liner/g)).toHaveLength(1)
+    expect(text).toContain('Buyers weigh a liner by whether it stays put through a full shift, the heat of the afternoon and the walk home without rubbing or slipping Make fit follow-up a service the clinic books')
+    expect(text).not.toContain('…')
     assertCopyContract(markup)
   })
 
