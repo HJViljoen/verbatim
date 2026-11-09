@@ -1,5 +1,6 @@
 import { CARD, CardHead, EmptyBox, GoLink, Label, STACK, STACK_CELL, STACK_HEAD, TBL, TD, TH } from '@/components/v2'
 import { PLAN_EMPTY, type PlanCheckCard, type PlanClaimRow } from '@/lib/ask/plan-cards'
+import { NOBODY_RAISES_IT } from '@/lib/ask/untested'
 import { fmtInt, shortDate } from '@/lib/format'
 import { CHECK_A_PLAN_HREF, PLAN_TITLE, READ_FAILED, leadClaims } from '@/lib/pages/v2/moves'
 import { cn } from '@/lib/utils'
@@ -54,7 +55,7 @@ function ClaimRow({ c }: { c: PlanClaimRow }) {
       <td className={cn(TD, STACK_CELL)}><span data-copy="quote">“{c.claim}”</span></td>
       <td className={cn(TD, STACK_CELL, 'max-sm:text-right', VERDICT_TONE[c.verdict] ?? 'text-foreground')}>{c.verdictLabel}</td>
       <td className={cn(TD, 'whitespace-nowrap pr-0 text-right', STACK_CELL, 'max-sm:col-span-2 max-sm:text-[14px] max-sm:text-secondary-foreground')}>
-        {c.verdict === 'silent' ? <span className="text-muted-foreground">Nobody raises it</span> : <>at least <span data-copy="figure" className="tabular-nums">{fmtInt(c.value.k)}</span><span className="sm:hidden"> videos</span></>}
+        {c.verdict === 'silent' ? <span className="whitespace-normal text-muted-foreground">{c.untested ?? NOBODY_RAISES_IT}</span> : <>at least <span data-copy="figure" className="tabular-nums">{fmtInt(c.value.k)}</span><span className="sm:hidden"> videos</span></>}
       </td>
     </tr>
   )

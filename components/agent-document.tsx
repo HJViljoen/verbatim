@@ -2,6 +2,7 @@ import { Quotes, type QuoteItem } from '@/components/quotes'
 import { CARD_FRAME, LBL, TAG, TAG_TONE } from '@/components/v2/look'
 import { cn } from '@/lib/utils'
 import type { ClaimResult, Judgement, Verdict } from '@/lib/ask/types'
+import { untestedWords } from '@/lib/ask/untested'
 
 // A document, annotated — the agent's other face.
 //
@@ -14,7 +15,8 @@ import type { ClaimResult, Judgement, Verdict } from '@/lib/ask/types'
 // just stay silent."
 //
 // So an untested claim shows its claim and its tag and then stops. No
-// explanation, no filler. The blank is the information.
+// explanation, no filler. The blank is the information. (Since 9 Nov, Heinrich:
+// one line under the tag says whether people raise it at all, `untestedWords`.)
 //
 // SINCE THE AUDIT DESIGN (7 Nov, Agent-Thread.dc.html): each claim a ruled
 // row with its number, its claim as an h3 and its verdict as a tag
@@ -89,7 +91,12 @@ export function AgentDocumentView({
               <p className="m-0 pl-9 text-[13.5px] text-muted-foreground max-sm:pl-0">Not stated directly in the document.</p>
             )}
 
-            {/* Untested stops here. Deliberately. */}
+            {/* Untested says whether people raise it at all, and stops
+                (Heinrich, 9 Nov: "Raised in 3 videos, too few to judge" or
+                "Nobody raises it"; until then it stopped at its tag). */}
+            {c.verdict === 'silent' && (
+              <p className="m-0 pl-9 text-[13.5px] leading-[1.55] text-secondary-foreground max-sm:pl-0">{untestedWords(c)}.</p>
+            )}
             {c.verdict !== 'silent' && (
               <div className="flex flex-col gap-2 pl-9 max-sm:pl-0">
                 {/* The voices lead. The sentence under them is a reading OF

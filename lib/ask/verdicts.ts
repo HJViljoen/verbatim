@@ -172,8 +172,9 @@ export function validateVerdicts(
       ? new Set(quotable.map((id) => grounding.videoByInsightId.get(id)).filter(Boolean) as string[])
       : new Set(picked.flatMap((t) => t.videoIds))
     // THE FLOOR (item 5): a verdict on fewer videos than this is not one.
+    // What it fell short on is kept, so the page can say how many raised it.
     if (videos.size < minVideos) {
-      results.set(key, silentResult(claim))
+      results.set(key, silentResult(claim, videos.size))
       continue
     }
 
@@ -197,7 +198,9 @@ export function validateVerdicts(
   return claims.map((c) => results.get(normaliseRef(c.ref)) ?? silentResult(c))
 }
 
-function silentResult(claim: ExtractedClaim): ClaimResult {
+/** An untested claim. `raisedIn` is the videos found behind it (`ClaimResult
+ *  .raisedIn`): 0 where nothing grounded it. */
+function silentResult(claim: ExtractedClaim, raisedIn = 0): ClaimResult {
   return {
     ref: claim.ref,
     claim: claim.claim,
@@ -207,6 +210,7 @@ function silentResult(claim: ExtractedClaim): ClaimResult {
     themeRefs: [],
     insightIds: [],
     source: claim.source ?? null,
+    raisedIn,
   }
 }
 
@@ -229,7 +233,9 @@ export const verdictStands = (c: ClaimResult): boolean =>
  * it (`holdVerdicts` keeps only a verdict that stood), so this changes none.
  */
 export function toFloor(c: ClaimResult): ClaimResult {
-  return c.verdict === 'silent' || verdictStands(c) ? c : { ...silentResult(c), source: c.source ?? null }
+  return c.verdict === 'silent' || verdictStands(c)
+    ? c
+    : { ...silentResult(c, Number.isFinite(c.conversationCount) ? c.conversationCount : 0), source: c.source ?? null }
 }
 
 /**
@@ -273,7 +279,8 @@ export function holdVerdicts(
       if (f.verdict === 'silent') return freshClaim
       if (p.pending?.verdict === f.verdict) return freshClaim
       const base = p.verdict === 'silent' ? p : { ...silentResult(p), source: p.source ?? null }
-      return { ...base, claim: f.claim, pending: { verdict: f.verdict } }
+      // Untested while a verdict waits: raised in the fresh reading's videos.
+      return { ...base, claim: f.claim, pending: { verdict: f.verdict }, raisedIn: f.conversationCount }
     }
     if (f.verdict === 'silent') return keep(p, f)
     const before = videosOf(p)

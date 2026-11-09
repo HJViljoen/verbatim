@@ -75,6 +75,17 @@ export interface ClaimResult {
    * before the hold, and on any claim nothing is pending for.
    */
   pending?: { verdict: Verdict } | null
+  /**
+   * UNTESTED CLAIMS ONLY: the videos with a comment we can show that the
+   * reading found behind the claim (Heinrich, 9 Nov). 1 to 4 where the floor
+   * turned its verdict away, 0 where nothing grounded it (the model found it
+   * silent, or nothing it cited can be shown), and on a claim the hold leaves
+   * untested while a verdict waits (`pending`), the fresh reading's count.
+   * Counted from what the verdict pass already holds: no model call. Absent on
+   * a claim that earned a verdict, and on every claim stored before 9 Nov,
+   * which prints a line true either way (`untestedWords`).
+   */
+  raisedIn?: number | null
 }
 
 export interface Judgement {

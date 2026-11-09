@@ -11,6 +11,7 @@ import { isMissingColumnError } from '../supabase-admin'
 import type { Counted } from '../reading/verdicts'
 import { PLAN_VERDICT_MIN_VIDEOS, type AskSummary, type ClaimResult, type Judgement, type Verdict as ClaimVerdict } from './types'
 import { summarise, toFloor } from './verdicts'
+import { untestedWords } from './untested'
 
 // "Plans re-checked" — the card Market names absent twice (Phase 1 Block D, D4).
 //
@@ -121,6 +122,10 @@ export interface PlanClaimRow {
    */
   value: Counted
   quote: Quote | null
+  /** An untested claim in words (`untestedWords`): "Raised in 3 videos, too
+   *  few to judge", "Nobody raises it", or "Too few videos to judge" on a
+   *  reading stored before the count was. Null on a claim with a verdict. */
+  untested: string | null
 }
 
 export interface PlanMovedRow {
@@ -345,6 +350,7 @@ export function planCard(input: PlanCardInput): PlanCheckCard {
       n: input.corpusVideos != null && input.corpusVideos >= c.conversationCount ? input.corpusVideos : 0,
     } satisfies Counted,
     quote: c.verdict === 'silent' ? null : input.quoteFor?.(c) ?? null,
+    untested: c.verdict === 'silent' ? untestedWords(c) : null,
   }))
 
   const summary: AskSummary = current.summary ?? {

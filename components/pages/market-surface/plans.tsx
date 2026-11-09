@@ -79,9 +79,15 @@ function Claim({ claim, mode }: { claim: PlanClaimRow; mode: RenderMode }) {
           what retrieval returned and n is every video read to date, so "k of
           n" read as a measured share of the market. The count says what it
           is: at least this many. */}
-      <span data-copy="figure" className="font-mono text-[11px] tabular-nums text-muted-foreground">
-        {`at least ${fmtInt(claim.value.k)} ${claim.value.k === 1 ? 'video' : 'videos'} we can show you a comment from`}
-      </span>
+      {/* An untested lead (only where no claim earned a verdict) says
+          whether people raise it at all, never "at least 0 videos" (9 Nov). */}
+      {claim.verdict === 'silent' && claim.untested
+        ? <span className="text-[12px] text-muted-foreground">{claim.untested}</span>
+        : (
+          <span data-copy="figure" className="font-mono text-[11px] tabular-nums text-muted-foreground">
+            {`at least ${fmtInt(claim.value.k)} ${claim.value.k === 1 ? 'video' : 'videos'} we can show you a comment from`}
+          </span>
+        )}
     </TileBlock>
   )
 }

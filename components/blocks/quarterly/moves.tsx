@@ -308,9 +308,13 @@ export const quarterlyMoves: Block<QuarterlyData> = {
                   mode={mode}
                   label={claim.claim}
                   figure={
-                    claim.value.n > 0
-                      ? <FigureCell mode={mode} value={fmtInt(claim.value.k)} of={`of ${fmtInt(claim.value.n)}`} align="right" />
-                      : <FigureCell mode={mode} value={fmtInt(claim.value.k)} align="right" />
+                    // An untested claim says whether people raise it at all
+                    // (9 Nov), never "0 of 2,359".
+                    claim.verdict === 'silent' && claim.untested
+                      ? <span className={email ? undefined : 'text-muted-foreground'}>{claim.untested}</span>
+                      : claim.value.n > 0
+                        ? <FigureCell mode={mode} value={fmtInt(claim.value.k)} of={`of ${fmtInt(claim.value.n)}`} align="right" />
+                        : <FigureCell mode={mode} value={fmtInt(claim.value.k)} align="right" />
                   }
                   badge={<Chip tone="plain" mode={mode}>{claim.verdictLabel}</Chip>}
                 />

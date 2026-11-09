@@ -96,6 +96,20 @@ describe('the plan check', () => {
     expect(render(<AgentDocumentSplit claims={doc.claims} quotesByClaim={quotes} segments={doc.segments} anchored={doc.anchored} notice={null} was={null} />)).not.toContain('this read')
   })
 
+  it('says whether people raise an untested claim at all, once, under its tag (9 Nov)', () => {
+    const silent = doc.claims.find((c) => c.verdict === 'silent')!
+    const t = (c: typeof silent) => text(<AgentDocumentView claims={[c]} quotesByClaim={quotes} />)
+    expect(t({ ...silent, raisedIn: 3 })).toContain('Untested Raised in 3 videos, too few to judge.')
+    expect(t({ ...silent, raisedIn: 0 })).toContain('Untested Nobody raises it.')
+    expect(t({ ...silent, raisedIn: undefined })).toContain('Untested Too few videos to judge.')
+    expect(t({ ...silent, raisedIn: 3 }).match(/too few to judge/g)).toHaveLength(1)
+    // A claim with a verdict says none of it.
+    expect(t(doc.claims.find((c) => c.verdict === 'contradicts')!)).not.toMatch(/too few|Nobody raises/)
+    const m = render(<AgentDocumentView claims={[{ ...silent, raisedIn: 3 }]} quotesByClaim={quotes} />)
+    expect(m).toMatch(/<p class="[^"]*text-\[13\.5px\][^"]*">Raised in 3 videos, too few to judge\.<\/p>/)
+    assertCopyContract(<AgentDocumentView claims={[{ ...silent, raisedIn: 3 }]} quotesByClaim={quotes} />)
+  })
+
   it('shades the document with plain spans, says what the shading means, and leaves untested claims plain', () => {
     const m = render(<AgentDocumentSplit claims={doc.claims} quotesByClaim={quotes} segments={doc.segments} anchored={doc.anchored} notice={null} />)
     expect(m).not.toContain('<mark')

@@ -8,7 +8,7 @@ import { bansBroken } from '@/components/pages/moves/fixture'
  *  sides (the kit's `InPlacePanel`), not a left stripe. */
 const bans = (markup: string) => bansBroken(markup.replace(/<span[^>]*data-notch=""[^>]*><\/span>/g, ''))
 import { MOVES_WRITE_REFUSED } from '@/lib/moves-access'
-import { PLAN_EMPTY } from '@/lib/ask/plan-cards'
+import { PLAN_EMPTY, planCard } from '@/lib/ask/plan-cards'
 import { FAILED_EXPLAINED } from '@/lib/subjects/calibration-state'
 import {
   movesFixture, movesMemberFixture, movesQuietFixture, movesThinFixture, statementsV2, DESK, MOVE_CARDS, PLAN,
@@ -368,6 +368,15 @@ describe('what you say, the plan and the conclusions', () => {
     const markup = render(<WhatYouSay data={statementsV2()} />)
     expect(markupText(markup)).toContain('You say Videos How it lands So far')
     expect(markup).not.toMatch(/uppercase|font-mono/)
+  })
+
+  it('the plan: an untested claim says whether people raise it at all (9 Nov)', () => {
+    const silent = (ref: string, raisedIn?: number) => ({ ref, claim: `Claim ${ref}`, verdict: 'silent' as const, theySay: null, conversationCount: 0, themeRefs: [], insightIds: [], raisedIn })
+    const plan = planCard({ planId: 'p', title: null, sourceFilename: 'Plan.pdf', uploadedOn: '2026-09-28T09:00:00.000Z', notice: null, corpusVideos: 1699, href: '/dashboard/agent/t', claims: [silent('C1', 3), silent('C2', 0), silent('C3')], summary: null, evaluations: [] })
+    const text = markupText(render(<PlanCard plan={plan} />))
+    expect(text).toContain('“Claim C1” Untested Raised in 3 videos, too few to judge')
+    expect(text).toContain('“Claim C2” Untested Nobody raises it')
+    expect(text).toContain('“Claim C3” Untested Too few videos to judge')
   })
 
   it('the plan: supported of all, the three counts, what changed, the lead claims', () => {

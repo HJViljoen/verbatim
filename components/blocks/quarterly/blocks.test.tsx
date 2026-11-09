@@ -997,6 +997,15 @@ describe('the artboard port (Block D wave 2)', () => {
     expect(t).not.toContain('changes only when the evidence behind it does')
   })
 
+  it('qr.p6.plan · an untested claim says whether people raise it, never a count of none (9 Nov)', () => {
+    const t = text('quarterly.moves')
+    // The fixture's re-reading stored no count, so it says what is true either way.
+    expect(t).toContain('Travellers buy sets, not singles. Too few videos to judge')
+    expect(t).not.toMatch(/Travellers buy sets, not singles\. 0 of/)
+    const counted = { ...data, moves: { ...data.moves, plan: data.moves.plan ? { ...data.moves.plan, claims: data.moves.plan.claims.map((c) => (c.verdict === 'silent' ? { ...c, untested: 'Raised in 3 videos, too few to judge' } : c)) } : null } }
+    expect(text('quarterly.moves', counted)).toContain('Travellers buy sets, not singles. Raised in 3 videos, too few to judge')
+  })
+
   it('qr.p7.method · the record as four paragraphs, in order, with every word kept', () => {
     // Thirteen free-standing lines a pixel apart, each one line long in a
     // 674px column, read as a log beside the artboard's four paragraphs of

@@ -1021,6 +1021,15 @@ describe('MK6 · plans re-checked', () => {
     expect(text).toContain('changes only when the evidence behind it does')
   })
 
+  it('says whether people raise an untested lead claim, never "at least 0 videos" (9 Nov)', () => {
+    const base = marketFixture()
+    const card = base.plans[0]
+    const untested = { ...card, claims: card.claims.map((c) => ({ ...c, verdict: 'silent', verdictLabel: 'Untested', quote: null, value: { k: 0, n: c.value.n }, untested: 'Raised in 2 videos, too few to judge' })) }
+    const text = renderText(marketPlans.render({ ...base, plans: [untested] }, 'app', ctx))
+    expect(text).toContain('Raised in 2 videos, too few to judge')
+    expect(text).not.toMatch(/at least 0 videos/)
+  })
+
   it('says how many plans have been checked when it is drawing one of several', () => {
     const base = marketFixture()
     const two = { ...base, plans: [base.plans[0], { ...base.plans[0], planId: 'pc-2' }] }

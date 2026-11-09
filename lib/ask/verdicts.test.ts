@@ -390,3 +390,46 @@ describe('validateVerdicts — the video floor', () => {
     expect(out[0].verdict).toBe('silent')
   })
 })
+
+// Heinrich, 9 Nov: an untested claim says whether people raise it at all. The
+// reading stores the videos it found behind an untested claim (`raisedIn`), so
+// the pages can say "Raised in 3 videos, too few to judge" or "Nobody raises
+// it". Counted from what the verdict pass already holds: no model call.
+describe('an untested claim stores the videos it was raised in', () => {
+  const floored = (videos: number) => {
+    const t = theme('T', {
+      insightIds: Array.from({ length: videos }, (_, i) => `i-${i}`),
+      videoIds: Array.from({ length: videos }, (_, i) => `v-${i}`),
+    })
+    const raw: RawVerdict[] = [{ claim_ref: 'C1', verdict: 'contradicts', they_say: 'they disagree', theme_refs: ['T1'] }]
+    return validateVerdicts(raw, [claims[0]], new Map([['c1', [t]]]), groundingFor([t]))[0]
+  }
+
+  it('stores the count the floor turned away, 1 to 4', () => {
+    expect([1, 3, PLAN_VERDICT_MIN_VIDEOS - 1].map((n) => [floored(n).verdict, floored(n).raisedIn])).toEqual([
+      ['silent', 1], ['silent', 3], ['silent', PLAN_VERDICT_MIN_VIDEOS - 1],
+    ])
+    // A verdict that stands is counted as before and carries none.
+    expect(floored(PLAN_VERDICT_MIN_VIDEOS)).toMatchObject({ verdict: 'contradicts', conversationCount: PLAN_VERDICT_MIN_VIDEOS })
+    expect(floored(PLAN_VERDICT_MIN_VIDEOS).raisedIn).toBeUndefined()
+  })
+
+  it('stores 0 where nothing grounds it: the model found it silent, or nothing it cited can be shown', () => {
+    const t = theme('T')
+    const silent: RawVerdict[] = [{ claim_ref: 'C1', verdict: 'silent', they_say: null, theme_refs: [] }]
+    expect(validateVerdicts(silent, [claims[0]], new Map([['c1', [t]]]), groundingFor([t]))[0].raisedIn).toBe(0)
+    const unquoted = { ...groundingFor([t]), quotedInsightIds: new Set<string>() }
+    const asserted: RawVerdict[] = [{ claim_ref: 'C1', verdict: 'echoes', they_say: 'yes', theme_refs: ['T1'] }]
+    expect(validateVerdicts(asserted, [claims[0]], new Map([['c1', [t]]]), unquoted)[0].raisedIn).toBe(0)
+    // A claim the model was never asked about is untested on nothing.
+    expect(validateVerdicts([], [claims[0]], new Map(), groundingFor([t]))[0].raisedIn).toBe(0)
+  })
+
+  it('keeps the fresh count on a claim the hold leaves untested while a verdict waits', () => {
+    const untested = { ref: 'C1', claim: 'c', verdict: 'silent' as const, theySay: null, conversationCount: 0, themeRefs: [], insightIds: [], source: null, raisedIn: 0 }
+    const fresh = { ...untested, verdict: 'contradicts' as const, theySay: 'no', conversationCount: 7, insightIds: ['x1'] }
+    const held = holdVerdicts([untested], [fresh], () => new Set(['x']))[0]
+    expect(held).toMatchObject({ verdict: 'silent', pending: { verdict: 'contradicts' }, raisedIn: 7 })
+  })
+})
+

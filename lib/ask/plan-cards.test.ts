@@ -377,3 +377,27 @@ describe('planQuotePicker — a plan claim’s quote passes the quote gate', () 
     expect(second?.text).not.toBe(first?.text)
   })
 })
+
+// Heinrich, 9 Nov: an untested claim says whether people raise it at all, in
+// one set of words every card surface prints (`PlanClaimRow.untested`).
+describe('planCard says what an untested claim is', () => {
+  const card = (claims: ClaimResult[]) => planCard({
+    planId: 'p1', title: null, sourceFilename: null, uploadedOn: '2026-08-20T09:00:00Z', notice: null,
+    corpusVideos: 100, href: '/x', evaluations: [], claims, summary: null,
+  })
+
+  it('raised in a few videos, nobody, or (stored before the count) too few to judge; nothing on a verdict', () => {
+    const rows = card([
+      { ...claim('C1', 'silent', 0), raisedIn: 3 },
+      { ...claim('C2', 'silent', 0), raisedIn: 0 },
+      claim('C3', 'silent', 0),
+      claim('C4', 'echoes', 9),
+    ]).claims
+    expect(rows.map((r) => r.untested)).toEqual(['Raised in 3 videos, too few to judge', 'Nobody raises it', 'Too few videos to judge', null])
+  })
+
+  it('knows the count of a verdict stored before the floor, which today reads untested', () => {
+    expect(card([claim('C1', 'contradicts', 2)]).claims[0]).toMatchObject({ verdictLabel: 'Untested', untested: 'Raised in 2 videos, too few to judge' })
+  })
+})
+

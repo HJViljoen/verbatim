@@ -12,6 +12,7 @@ import { DO_HEADING, JUDGEMENT_HEADING, NEAREST_HEADING, basedOnLine, saidHeadin
 import { askBasisLine } from '@/lib/agent/basis'
 import { surface } from '@/lib/nav'
 import { translationLabel, translationNote } from '@/components/quote-block'
+import { untestedWords } from '@/lib/ask/untested'
 
 // The agent thread on paper (Reports & Exports T11, 2026-08-29). Question
 // mode, in the screen's order (1 Oct): the question and the answer, "What I'd
@@ -253,6 +254,7 @@ function ClaimsPage({ d, page }: { d: D; page: number }) {
               <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-medium ${VERDICT[c.verdict].cls}`}>{VERDICT[c.verdict].label}</span>
             </div>
             {!doc.anchored.includes(c.ref) && <p className="text-[10.5px] text-muted-foreground">Not stated directly in the document.</p>}
+            {c.verdict === 'silent' && <p className="text-[12px] text-muted-foreground">{untestedWords(c)}.</p>}
             {c.verdict !== 'silent' && (
               <div className="space-y-2">
                 {quotes.map((q, k) => <blockquote key={k} className="font-serif text-[12px] leading-[1.45]">“{q.text}”<PdfEnglish q={q} /></blockquote>)}
