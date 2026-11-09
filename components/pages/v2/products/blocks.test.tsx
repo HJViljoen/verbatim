@@ -86,16 +86,22 @@ describe('the catalogue (E4-Products, "Your catalogue")', () => {
     assertCopyContract(node)
   })
 
-  it('a column\'s lead is of the videos it was counted on (9 Nov: Sockets & Locks\' "Fit & comfort leads, 19 of 50", the 19 of 54)', () => {
+  it('a column\'s lead prints only where its base is the head\'s (9 Nov: Sockets & Locks\' "50 videos" over "Fit & comfort leads, 19 of 50", the 19 of 54)', () => {
     // The head's videos are the stored month row's; the lead is counted over
-    // the month's set as read now (the crosses). Where the two part, the lead
-    // keeps its own base and never borrows the stored one.
+    // the month's set as read now (the crosses). Where the two part (a month
+    // row not rewritten since its placements moved), the lead is not printed:
+    // a figure that disagrees with the shelf beside it is not printed at all.
     const key = setKey('group', PRODUCT_IDS.liners())
     const c = ossurCrosses().get(key)!
     const parted = ossurProductsFixture({}, { crosses: new Map([...ossurCrosses(), [key, { ...c, n: c.n + 4 }]]) })
     const liners = parted.shelf.find((x) => x.name === 'Liners')!
     expect(liners.videos).toBe(117)
-    expect(renderText(<>{shelfColumn(liners, 'September').note}</>)).toBe(`Fit & comfort leads, 70 of ${c.n + 4}`)
+    expect(liners.lead).toBeNull()
+    expect(shelfColumn(liners, 'September').note).toBeNull()
+    const text = renderText(<CatalogueCard data={parted} />)
+    expect(text).toContain('Liners 117 videos')
+    expect(text).not.toMatch(/Fit & comfort leads, 70 of/)
+    expect(text).not.toContain(`of ${c.n + 4}`)
     // Where they agree, the line is as it was.
     expect(renderText(<>{shelfColumn(d.shelf.find((x) => x.name === 'Liners')!, 'September').note}</>)).toBe('Fit & comfort leads, 70 of 117')
   })

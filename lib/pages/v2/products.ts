@@ -184,11 +184,11 @@ export interface ShelfCategoryView {
   /** This month's share against last month's, banded. Null where no
    *  comparison is drawn at all. */
   verdict: Verdict | null
-  /** What most of its videos are about (the top READY subject), where read:
-   *  k of the n it was counted on, the month's set as read now (`Crosses.n`).
-   *  That n can part from `videos`, the stored month row's, between the row's
-   *  last write and today's placements (9 Nov: Sockets & Locks' "19 of 50"
-   *  where the 19 was of 54), so the lead never borrows `videos`. */
+  /** What most of its videos are about (the top READY subject), where read
+   *  AND its set is the head's: k of `Crosses.n`, printed only where that n is
+   *  `videos` (the stored month row's). Between the row's last write and
+   *  today's placements the two can part (9 Nov: Sockets & Locks' "50 videos"
+   *  over "19 of 54"); then there is no lead. */
   lead: { label: string; k: number; n: number } | null
   /** Some of the client's subjects are not measured yet (`Crosses.pending`):
    *  with no ready one, the head says SUBJECT_NOT_MEASURED. */
@@ -1141,14 +1141,22 @@ export function buildShelf(input: {
       }))
     const c = input.crosses.get(setKey('group', g.id))
     const top = c?.subjects[0]
+    // THE LEAD PRINTS ONLY ON THE HEAD'S BASE. The head's videos are the
+    // stored month row's (`k_any`); the lead is counted over the month's set
+    // as read now (`Crosses.n`). Where the two part, a month row not yet
+    // rewritten since its placements moved (9 Nov: October's rows, last
+    // written 18 Oct, "50 videos" over "19 of 54"), the head says nothing
+    // about subjects: a figure that disagrees with the shelf beside it is not
+    // printed (the root's `agrees` rule, below).
+    const onHeadBase = c != null && curr != null && c.n === curr.k_any
     return {
       id: g.id,
       name: g.name,
       videos: curr ? curr.k_any : null,
       share: curr && curr.n > 0 ? { k: curr.k_any, n: curr.n } : null,
       verdict: categoryShareVerdict({ group: g, month: m, curr, prev, pair: input.pair }),
-      lead: top && c && c.n > 0 ? { label: top.label, k: top.k, n: c.n } : null,
-      subjectsPending: (c?.pending?.length ?? 0) > 0 && (curr?.k_any ?? 0) > 0,
+      lead: top && c && c.n > 0 && onHeadBase ? { label: top.label, k: top.k, n: c.n } : null,
+      subjectsPending: onHeadBase && (c?.pending?.length ?? 0) > 0 && (curr?.k_any ?? 0) > 0,
       leads: topRanked(c),
       unclear: curr?.k_unclear ?? 0,
       products,
