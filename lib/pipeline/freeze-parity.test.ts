@@ -394,12 +394,17 @@ describe('4 · every new step is non-fatal, so freeze-months always runs after i
       // The product steps also RECORD the failure on the run (9 Nov: Össur's
       // October was refused on three runs with nothing on the run row), under
       // their own labels, both in AFTER_GATHER_STEPS; the run still carries on.
+      // The other eight WARN (9 Nov, lib/pipeline/run-warnings.ts): recorded
+      // in `pipeline_runs.warnings` under their own label, never noteError'd,
+      // so the run's status and every rule that counts are unchanged.
       const rest = src.slice(at)
       const close = rest.search(/\n {4}(?:\}|const |\/\/)/)
       const chain = rest.slice(0, close > 0 ? close : 4000)
+      const label = id.replace(/^['`]|['`:]$/g, '').replace(/:$/, '')
       expect(chain, id).toMatch(id.includes('product-readings')
         ? /\.catch\(\(e\) => \{\s*console\.error\(`[^`]*`\)\s*noteError\('(?:plan-)?product-readings', productStepFailure\((?:null|month), e\)\)\s*return null\s*\}\)/
-        : /\.catch\(\(e\) => \{\s*console\.error\(`[^`]*`\)\s*return null\s*\}\)/)
+        : new RegExp(`\\.catch\\(\\(e\\) => \\{\\s*console\\.error\\(\`[^\`]*\`\\)\\s*noteWarning\\('${label}', e(?:, [^\\n]*)?\\)\\s*return null\\s*\\}\\)`))
+      if (!id.includes('product-readings')) expect(chain, id).not.toContain('noteError(')
     }
   })
 
@@ -530,10 +535,13 @@ describe('6 · trim-stale-memberships: its position, its failure, and the one ta
     expect(between.replace(/\/\/[^\n]*/g, '').replace(/\s+/g, ' ').trim()).toMatch(/^\}\) const segmentPlan = await step$/)
   })
 
-  it('ends in a .catch that logs and returns null, and freeze-months holds its subject side on that null', () => {
+  it('ends in a .catch that logs, warns and returns null, and freeze-months holds its subject side on that null', () => {
     const rest = src.slice(at('trim-stale-memberships'))
     const chain = rest.slice(0, rest.search(/\n {4}(?:\}|const |\/\/)/))
-    expect(chain).toMatch(/\.catch\(\(e\) => \{\s*console\.error\(`[^`]*`\)\s*return null\s*\}\)/)
+    // A warning (lib/pipeline/run-warnings.ts), never noteError'd: the run's
+    // status is unchanged.
+    expect(chain).toMatch(/\.catch\(\(e\) => \{\s*console\.error\(`[^`]*`\)\s*noteWarning\('trim-stale-memberships', e\)\s*return null\s*\}\)/)
+    expect(chain).not.toContain('noteError(')
     expect(src).toContain('const trimmed = await step\n      .run(\'trim-stale-memberships\'')
     expect(src).toContain('const subjectHold = subjectFreezeHold(subjectOutcomes) ?? trimFreezeHold(trimmed)')
     // freeze-months' own body is deploy 5's: it reads subjectHold as it always did.

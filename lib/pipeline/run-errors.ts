@@ -9,6 +9,8 @@
  * persists to `pipeline_runs.errors` / `.error_message`.
  */
 
+import { warningLine, warningSummary, type RunWarning } from './run-warnings'
+
 /**
  * How a run that reached close-run reports itself: any recorded step error
  * demotes 'completed' to 'partial'.
@@ -142,7 +144,8 @@ export function missingRunRows(
 }
 
 /**
- * Operator alert for a run that closed 'partial'.
+ * Operator alert for a run that closed 'partial', or that carries a
+ * stale-data warning (`alertDue`, lib/pipeline/run-warnings.ts).
  *
  * Until 2026-08-16 only 'failed' and zero-video runs alerted, so a degraded
  * run — report delivered, side-layer silently dead — looked identical to a
@@ -168,8 +171,26 @@ export function partialRunAlert(input: {
   rows?: { observations: number; recommendations: number; costs: number; ungroundedRecommendations?: number } | null
   /** The run's own flag, for the observations arm of that rule. */
   themeRegistry?: boolean
+  /** The run's WARNINGS (9 Nov): steps out of retries the run does not
+   *  count. Listed under their own heading, never folded into `recorded` or
+   *  the summary, so "N step errors" keeps counting what the status counts.
+   *  A run with warnings and no counted error gets this same email, headed
+   *  as the completed run it is; absent or empty, the email is exactly as it
+   *  was. */
+  warnings?: readonly RunWarning[]
+  /** Every warning noted, past the store's cap. */
+  warningTotal?: number
 }): { subject: string; text: string } {
   const { runId, clientName, total, recorded, reportSent } = input
+  const warnings = input.warnings ?? []
+  const warningTotal = Math.max(input.warningTotal ?? warnings.length, warnings.length)
+  const stale = warnings.filter((w) => w.kind === 'stale-data')
+  const housekeeping = warnings.filter((w) => w.kind === 'housekeeping')
+  const warningList = [
+    ...stale.map(warningLine),
+    ...(housekeeping.length ? [...(stale.length ? ['Housekeeping, shown on the ops page only:'] : []), ...housekeeping.map(warningLine)] : []),
+    ...(warningTotal > warnings.length ? [`…and ${warningTotal - warnings.length} more not recorded (the cap is ${warnings.length})`] : []),
+  ]
   const listed = recorded.slice(0, ALERT_ERROR_LIST_CAP).map((e) => `- ${e}`)
   const rest = recorded.length - listed.length
   if (rest > 0) listed.push(`…and ${rest} more in pipeline_runs.errors`)
@@ -187,6 +208,32 @@ export function partialRunAlert(input: {
         `${input.rows.recommendations} recommendations, ${input.rows.costs} run_costs row)`,
       ]
 
+  // ONLY WARNINGS: the run closed 'completed'. The same email, in the same
+  // order, its Errors section the warnings and its summary theirs.
+  if (total <= 0) {
+    const n = stale.length
+    const text = [
+      `Run ${runId} for ${clientName} completed, with ${n} stale-data warning${n === 1 ? '' : 's'}: steps the run does not count failed after retries, and what they feed is stale for the client.`,
+      reportSent
+        ? 'The client report was still sent — the run closed completed; the steps below degraded silently.'
+        : 'No client report was requested for this run.',
+      '',
+      `Summary: ${warningSummary(warningTotal, warnings)}`,
+      '',
+      'Warnings:',
+      ...(warningList.length ? warningList : ['- (none recorded)']),
+      ...(input.findings?.length
+        ? ['', 'Also seen, under their ratio and not counted:', ...input.findings.map((f) => `- ${f}`)]
+        : []),
+      '',
+      'What the run left behind:',
+      ...rowLines,
+      '',
+      'Full list: pipeline_runs.warnings. The status, every count and everything the client is sent are unchanged by a warning.',
+    ].join('\n')
+    return { subject: `Verbatim run WARNING — ${clientName}`, text }
+  }
+
   const text = [
     `Run ${runId} for ${clientName} completed but closed PARTIAL: ${total} step${total === 1 ? '' : 's'} failed after retries.`,
     reportSent
@@ -199,6 +246,9 @@ export function partialRunAlert(input: {
     ...(listed.length ? listed : ['- (none recorded)']),
     ...(input.findings?.length
       ? ['', 'Also seen, under their ratio and not counted:', ...input.findings.map((f) => `- ${f}`)]
+      : []),
+    ...(warningList.length
+      ? ['', `Warnings, not counted (${warningSummary(warningTotal, warnings)}):`, ...warningList]
       : []),
     '',
     'What the run left behind:',

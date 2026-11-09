@@ -44,6 +44,7 @@ import { isTestRun } from '@/lib/schedules/due'
 import { briefComposeStep, briefIdeasStep, briefResearchStep, briefWriteStep, planBriefsStep, type BriefWave, type BriefWritten } from '@/lib/reports/briefs/step'
 import { BRIEF_ROLES } from '@/lib/reports/briefs/types'
 import { summariseRunErrors, partialRunAlert, passADegradation, isolatedBatchDegradation, runCloseStatus, closingErrors, RUN_ERROR_CAP } from '@/lib/pipeline/run-errors'
+import { alertDue, closeRunWrite, createWarningLog } from '@/lib/pipeline/run-warnings'
 import { writeRunCosts, runSpendSoFar } from '@/lib/pipeline/run-costs'
 import { withApifyRunContext, settleApifyRuns } from '@/lib/gather/apify-runs'
 import { decideOpenRun, runIdForEvent, RUN_STALE_AFTER_HOURS, PG_UNIQUE_VIOLATION, type RunningRow } from '@/lib/pipeline/run-guard'
@@ -549,6 +550,14 @@ export const runPipeline = inngest.createFunction(
       if (runFindings.length >= RUN_ERROR_CAP) return
       runFindings.push(`${where}: ${detail.slice(0, 300)}`)
     }
+    // WARNINGS (9 Nov): a step out of retries that the run does not count —
+    // the side steps that were logged and nothing else. They never touch
+    // totalErrors, runErrors or the status: close-run writes them to their own
+    // column, `pipeline_runs.warnings`, and a stale-data one sends the run's
+    // one alert (lib/pipeline/run-warnings.ts has the classification).
+    // Declared here for the TDZ reason above: plan-owned's catch uses it.
+    const runWarnings = createWarningLog()
+    const noteWarning = runWarnings.note
 
     // Reddit subreddit discovery (Wave 3): propose communities, probe each
     // against the live relevance gate, persist the survivors. Runs before
@@ -618,7 +627,13 @@ export const runPipeline = inngest.createFunction(
               windowStart: window.since,
             }
           })
-          .catch(() => EMPTY_OWNED_PLAN)
+          .catch((e) => {
+            // Logged and warned, never noteError'd: with no plan, no own-posts
+            // or rival-posts step runs, so nothing else would record it.
+            console.error(`[plan-owned] out of retries, so no own or rival account is read this run: ${e instanceof Error ? e.message : String(e)}`)
+            noteWarning('plan-owned', e, { week: runWindow?.start ?? null })
+            return EMPTY_OWNED_PLAN
+          })
       : EMPTY_OWNED_PLAN
     const ownedHandles = ownedPlan.handles
 
@@ -1414,6 +1429,7 @@ export const runPipeline = inngest.createFunction(
         .run('plan-translate-quotes', () => planQuoteTranslations(clientId))
         .catch((e) => {
           console.error(`[translate-quotes] plan out of retries: ${e instanceof Error ? e.message : String(e)}`)
+          noteWarning('plan-translate-quotes', e)
           return { batches: [] as string[][], needing: 0, deferred: 0, comments: 0 }
         })
       quoteTranslation.needing = plan.needing
@@ -1428,10 +1444,13 @@ export const runPipeline = inngest.createFunction(
               // Per-step catch (the transcribe fan-out's precedent): one batch
               // out of retries must not abandon the rest, and its comments stay
               // uncached and are re-planned next run.
-              .catch((e: unknown) => ({
-                translated: 0, english: 0, cached: 0, failed: commentIds.length, costUsd: 0, rateLimited: false,
-                errors: [`translate-quotes step failed: ${e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200)}`],
-              })),
+              .catch((e: unknown) => {
+                noteWarning('translate-quotes', e)
+                return {
+                  translated: 0, english: 0, cached: 0, failed: commentIds.length, costUsd: 0, rateLimited: false,
+                  errors: [`translate-quotes step failed: ${e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200)}`],
+                }
+              }),
           ),
         )
         for (const r of wave) {
@@ -1479,6 +1498,7 @@ export const runPipeline = inngest.createFunction(
       })
       .catch((e) => {
         console.error(`[embed-insights] out of retries: ${e instanceof Error ? e.message : String(e)}`)
+        noteWarning('embed-insights', e)
         return null
       })
 
@@ -1535,6 +1555,7 @@ export const runPipeline = inngest.createFunction(
       })
       .catch((e) => {
         console.error(`[subject-membership] plan failed, skipping: ${e instanceof Error ? e.message : String(e)}`)
+        noteWarning('plan-subject-membership', e)
         return { subjects: [], coverage: null }
       })
     const subjects = subjectPlan.subjects
@@ -1569,6 +1590,7 @@ export const runPipeline = inngest.createFunction(
         })
         .catch((e) => {
           console.error(`[subject-membership] ${subject.name} out of retries: ${e instanceof Error ? e.message : String(e)}`)
+          noteWarning('subject-membership', e, { subject: subject.name })
           return null
         })
       subjectSpend += r?.costUsd ?? 0
@@ -1723,6 +1745,7 @@ export const runPipeline = inngest.createFunction(
       })
       .catch((e) => {
         console.error(`[trim-stale-memberships] out of retries, so freeze-months writes no subject row this run: ${e instanceof Error ? e.message : String(e)}`)
+        noteWarning('trim-stale-memberships', e)
         return null
       })
 
@@ -1746,6 +1769,7 @@ export const runPipeline = inngest.createFunction(
       })
       .catch((e) => {
         console.error(`[segment-videos] plan failed, skipping: ${e instanceof Error ? e.message : String(e)}`)
+        noteWarning('plan-segment-videos', e)
         return null
       })
     const segmentBatches = segmentPlan?.batches ?? []
@@ -1762,6 +1786,7 @@ export const runPipeline = inngest.createFunction(
         })
         .catch((e) => {
           console.error(`[segment-videos] batch ${i + 1} out of retries: ${e instanceof Error ? e.message : String(e)}`)
+          noteWarning('segment-videos', e)
           return null
         })
     }
@@ -1787,6 +1812,7 @@ export const runPipeline = inngest.createFunction(
       })
       .catch((e) => {
         console.error(`[comparability] plan failed, skipping: ${e instanceof Error ? e.message : String(e)}`)
+        noteWarning('plan-comparability', e)
         return null
       })
     const comparabilityTasks = comparabilityPlan?.tasks ?? []
@@ -1802,6 +1828,7 @@ export const runPipeline = inngest.createFunction(
         })
         .catch((e) => {
           console.error(`[comparability] ${taskLabel(task)} out of retries: ${e instanceof Error ? e.message : String(e)}`)
+          noteWarning('comparability', e, task.kind === 'weeks' ? {} : { month: task.month, prevMonth: task.prevMonth })
           return null
         })
     }
@@ -1823,6 +1850,7 @@ export const runPipeline = inngest.createFunction(
       })
       .catch((e) => {
         console.error(`[lens-readings] plan failed, skipping: ${e instanceof Error ? e.message : String(e)}`)
+        noteWarning('plan-lens-readings', e)
         return null
       })
     const lensMonthsToRead = lensPlan?.months ?? []
@@ -1836,6 +1864,7 @@ export const runPipeline = inngest.createFunction(
         })
         .catch((e) => {
           console.error(`[lens-readings] ${month.slice(0, 7)} out of retries: ${e instanceof Error ? e.message : String(e)}`)
+          noteWarning('lens-readings', e, { month })
           return null
         })
     }
@@ -1856,6 +1885,7 @@ export const runPipeline = inngest.createFunction(
       })
       .catch((e) => {
         console.error(`[brand-readings] plan failed, skipping: ${e instanceof Error ? e.message : String(e)}`)
+        noteWarning('plan-brand-readings', e)
         return null
       })
     const brandMonthsToRead = brandPlan?.months ?? []
@@ -1871,6 +1901,7 @@ export const runPipeline = inngest.createFunction(
         })
         .catch((e) => {
           console.error(`[brand-readings] ${month.slice(0, 7)} out of retries: ${e instanceof Error ? e.message : String(e)}`)
+          noteWarning('brand-readings', e, { month })
           return null
         })
     }
@@ -1938,7 +1969,7 @@ export const runPipeline = inngest.createFunction(
     // A trim that did not finish holds the subject side the same way a short
     // membership pass does (trimFreezeHold, lib/pipeline/stale-analysis.ts).
     const subjectHold = subjectFreezeHold(subjectOutcomes) ?? trimFreezeHold(trimmed)
-    await step
+    const frozen = await step
       .run('freeze-months', async () => {
         const admin = createAdminClient()
         try {
@@ -2049,8 +2080,14 @@ export const runPipeline = inngest.createFunction(
       })
       .catch((e) => {
         console.error(`[freeze-months] out of retries: ${e instanceof Error ? e.message : String(e)}`)
+        noteWarning('freeze-months', e)
         return null
       })
+    // A freeze that ran and lost its evidence ids RETURNS the failure (the log
+    // line inside says so): the months froze and their ids did not, and
+    // nothing revisits them. Read off the memoised return, so a replay notes it
+    // again exactly as a caught step's warning is.
+    if (frozen?.evidenceRefs?.failed) noteWarning('freeze-months:evidence-ids', frozen.evidenceRefs.failed)
 
     // The anomaly check (design item 40, decision S). HERE, between
     // freeze-months and owned-events, for two reasons and not by taste: it
@@ -2100,6 +2137,7 @@ export const runPipeline = inngest.createFunction(
       })
       .catch((e) => {
         console.error(`[anomaly-check] out of retries: ${e instanceof Error ? e.message : String(e)}`)
+        noteWarning('anomaly-check', e, { week: runWindow?.start ?? null })
         return null
       })
 
@@ -2143,6 +2181,7 @@ export const runPipeline = inngest.createFunction(
       })
       .catch((e) => {
         console.error(`[keyword-discovery] out of retries: ${e instanceof Error ? e.message : String(e)}`)
+        noteWarning('keyword-discovery', e)
         return null
       })
 
@@ -2471,12 +2510,16 @@ export const runPipeline = inngest.createFunction(
       // Same "the migration has not landed yet" tolerance as open-run, and it
       // matters more here: this update's error was never read, so a missing
       // `stalled` column would have left the run at 'running' for ever with
-      // nothing said about it.
-      const { error } = await close({ stalled: isStalled({ startedAt, completedAt, window: runWindow }) })
-      if (error && isMissingBookkeepingColumn(error)) {
-        console.warn('[close-run] `stalled` is not in the database yet; closing without it')
-        await close({})
-      } else if (error) {
+      // nothing said about it. The run's warnings ride in their own column
+      // (`warnings`, 20261114090000_run_warnings.sql), probed the same way:
+      // where it is not there yet the write is issued again without it, the
+      // row every run wrote before (`closeRunWrite`). Nothing above reads them.
+      const { error } = await closeRunWrite(
+        close,
+        { stalled: isStalled({ startedAt, completedAt, window: runWindow }), warnings: runWarnings.recorded },
+        isMissingBookkeepingColumn,
+      )
+      if (error) {
         // Any other failure keeps the behaviour it has always had (the error
         // was never read) — but says so, rather than leaving a run at
         // 'running' with no line anywhere. WP9 weighed making it fatal and
@@ -2486,7 +2529,7 @@ export const runPipeline = inngest.createFunction(
         // single number. A row left at 'running' is caught twice as it is — the
         // next run's open sweep closes it after six hours, and the ops check
         // raises run_stuck the following morning.
-        console.error(`[close-run] ${error.message}`)
+        console.error(`[close-run] ${(error as { message?: string }).message ?? String(error)}`)
       }
     })
 
@@ -2589,7 +2632,12 @@ export const runPipeline = inngest.createFunction(
     //    side-layer silently dead — was indistinguishable from a clean one in
     //    the inbox. Non-fatal: an alert hiccup must never demote a completed
     //    run to 'failed' via onFailure.
-    if (totalErrors > 0) {
+    //
+    //    A STALE-DATA WARNING SENDS IT TOO (9 Nov, `alertDue`), on a run that
+    //    closed 'completed' as well: the same step, the same id, the same
+    //    email with the warnings listed, ONE a run however many steps warned
+    //    (Inngest memoises the id). A housekeeping warning alone sends nothing.
+    if (alertDue(totalErrors, runWarnings)) {
       await step
         .run('alert-partial', async () => {
           const admin = createAdminClient()
@@ -2612,6 +2660,8 @@ export const runPipeline = inngest.createFunction(
             reportSent: Boolean(options.sendReport),
             rows,
             themeRegistry: flags.themeRegistry,
+            warnings: runWarnings.recorded,
+            warningTotal: runWarnings.total,
           })
           return sendAlertEmail(subject, text)
         })

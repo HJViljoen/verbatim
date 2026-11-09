@@ -356,6 +356,34 @@ This version has breaking changes — APIs, conventions, and file structure may 
   changed `write-week-read`'s body and not its id (the bullet "The weekly
   read sends only a READY read" below). Re-register
   after ANY function change: `curl -X PUT https://app.verbatimintel.com/api/inngest`.
+- **A side step out of retries WARNS; a warning counts for nothing** (9 Nov,
+  `lib/pipeline/run-warnings.ts`). The steps that were "logged, NOT
+  `noteError`'d" (and `plan-owned`, which did not even log) now also call
+  `noteWarning` from their `.catch`: `plan-owned`, `plan-translate-quotes` /
+  `translate-quotes`, `embed-insights`, `plan-subject-membership` /
+  `subject-membership`, `trim-stale-memberships`, the four deploy-4 families
+  (segments, comparability, lens, brand), `freeze-months` (and its returned
+  `evidenceRefs.failed`), `anomaly-check` and `keyword-discovery`. Same ids,
+  same order (`scripts/pipeline-step-ids.sh origin/main`: no insertion). A
+  warning names the step, its month or week where there is one, the error's
+  code and a scrubbed message (`warningCause`: every quoted part that is not an
+  identifier elided, so no comment text) and what is now stale for the client.
+  It lives in ITS OWN COLUMN, `pipeline_runs.warnings` (migration
+  `20261114090000_run_warnings.sql`, applied by hand; until then close-run
+  writes the row again without it, `closeRunWrite`), never in `errors`:
+  `gatherCompleted` reads `errors` and fails closed on a label it does not
+  know, so a warning there would cut chart weeks. WHAT A WARNING CHANGES: the
+  run's `warnings` and, for a STALE-DATA one, the run's one alert
+  (`alertDue`: the same `alert-partial` step and email, headed "Verbatim run
+  WARNING" on a run that closed `completed`, every warning listed, never more
+  than one email a run); a HOUSEKEEPING one only the ops readiness page (each
+  run's warnings follow its line in the Updates row, `loadReadiness(…,
+  { warnings: true })`, the operator's page alone). Nothing else: not the
+  status, `error_message`, `errors`, `updateStatus`, `thinWeek`, the gathers'
+  run health, the chart weeks, the same-age line, the weekly email, the
+  briefs or the dead-man's switch, none of which reads the column
+  (`lib/pipeline/run-warnings.test.ts` pins each). The class of each step is
+  one line of `WARNING_STEPS`; to move a step, change its `kind`.
 - **A run's window is frozen once, at `open-run`** (`pipeline_runs.window_start`
   / `window_end` / `window_basis`, rule in `lib/pipeline/window.ts`). Steps read
   it off `OpenRunResult` / `GatherOptions`; no step recomputes the window from
