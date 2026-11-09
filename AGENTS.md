@@ -285,7 +285,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
   immediately before `freeze-months`:** `plan-product-readings` and
   `product-readings:${i}-of-${n}`, one month a step
   (`lib/pipeline/freeze-parity.test.ts` pins both, in order, each ending in a
-  `.catch` that logs and returns null). *Placement* (`placeProducts`,
+  `.catch` that logs, records the failure with `noteError` (the month and its
+  Postgres code, `productStepFailure`; since 9 Nov, when Össur's October was
+  refused on three runs with nothing on the run row) and returns null, so the
+  run carries on and reads `partial`). *Placement* (`placeProducts`,
   `lib/products/readings.ts`): the rules first, then a gpt-4.1 confirm of a
   generic name (`needs_confirm`), then a gpt-4.1-mini classifier on comments
   under category-relevant videos. Code checks every answer against the text

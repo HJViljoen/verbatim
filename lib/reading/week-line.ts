@@ -402,8 +402,9 @@ export const AFTER_GATHER_STEPS: readonly string[] = [
   // on the run's week read row.
   'write-subject-reads',
   // Your products (depth v2 T11): read what was gathered, write placements
-  // and month rows, and move no week count. Logged-only today (never
-  // noteError'd); listed so a later counted error cannot cut a week.
+  // and month rows, and move no week count. A step out of retries is
+  // noteError'd since 9 Nov (the month and its Postgres code); listed so that
+  // counted error cannot cut a week.
   'plan-product-readings', 'product-readings',
 ]
 

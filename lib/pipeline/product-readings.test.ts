@@ -14,7 +14,9 @@ import { catalogueCodes, type Classifier } from '../products/classify'
 import { cataloguePattern, compileCatalogue } from '../products/rules'
 import { fakeAdmin } from '../test/s3-run-fake-admin'
 import { FIXTURE_CATALOGUE, G, P } from '../test/products-fixtures'
-import { planProductReadings, productSpendSoFar, productSummary, runProductMonth } from './product-readings'
+import { gatherCompleted } from '../reading/week-line'
+import { planProductReadings, productSpendSoFar, productStepFailure, productSummary, runProductMonth } from './product-readings'
+import { summariseRunErrors } from './run-errors'
 
 const t = <T extends object>(rows: T[]) => rows.map((r) => ({ client_id: OSSUR_CLIENT_ID, ...r }))
 const SEP = '2026-09-01'
@@ -191,5 +193,36 @@ describe('the product-readings step', () => {
     ])
     const feet = f.tables.month_product_readings.find((x) => x.object_id === G('Feet'))!
     expect(feet).toMatchObject({ month: OCT, k_named: 1, k_any: 1, n: 1, status: 'filling', run_id: 'run-3', read_at: '2026-11-08T05:01:02.000Z' })
+  })
+
+  it('a month the database refuses is recorded on the run with its month and Postgres code, and cuts no week', async () => {
+    // The step throws (Inngest retries it); the pipeline's .catch now hands
+    // productStepFailure's line to noteError instead of only logging it.
+    const f = fakeAdmin({
+      tables: { ...admin().tables, product_mentions: [] },
+      rpc: { product_catalogue: () => ({ data: FIXTURE_CATALOGUE }), brand_mention_candidates: () => [{ video_id: vid(1), source: 'content', field: 'caption', comment_id: null, comment_month: null, excerpt: VIDEOS[0].caption }], market_month_videos: () => [] },
+      refuse: { product_mentions: () => ({ code: '23505', message: 'duplicate key value violates unique constraint "product_mentions_uniq"' }) },
+    })
+    const thrown = await runProductMonth(f.client, { clientId: OSSUR_CLIENT_ID, runId: 'run-1', now: NOW, month: '2026-10-01', budgetUsd: 1, cap: 0 }).catch((e: unknown) => e)
+    expect(thrown).toBeInstanceOf(Error)
+    expect((thrown as Error).message).toBe('product_mentions insert: duplicate key value violates unique constraint "product_mentions_uniq" (code 23505)')
+    const line = productStepFailure('2026-10-01', thrown)
+    expect(line).toBe('2026-10 not written (Postgres 23505): product_mentions insert: duplicate key value violates unique constraint "product_mentions_uniq"')
+
+    // noteError's shape, as close-run stores it: the run reads partial for it,
+    // and a partial run whose only error is this one still completed its gather.
+    const recorded = [`product-readings: ${line}`]
+    expect(summariseRunErrors(1, recorded)).toMatch(/product-readings/)
+    expect(gatherCompleted({ id: 'r', status: 'partial', startedAt: NOW, finishedAt: NOW, errors: recorded })).toBe(true)
+    expect(gatherCompleted({ id: 'r', status: 'partial', startedAt: NOW, finishedAt: NOW, errors: [`plan-product-readings: ${productStepFailure(null, new Error('fetch failed'))}`] })).toBe(true)
+  })
+
+  it('productStepFailure takes the code from the error, its cause or its message, and says none where there is none', () => {
+    expect(productStepFailure('2026-10-01', Object.assign(new Error('canceling statement due to statement timeout'), { code: '57014' })))
+      .toBe('2026-10 not written (Postgres 57014): canceling statement due to statement timeout')
+    expect(productStepFailure('2026-10-01', Object.assign(new Error('step failed'), { cause: { code: 'PGRST205' } })))
+      .toBe('2026-10 not written (Postgres PGRST205): step failed')
+    expect(productStepFailure(null, new Error('selectAll: fetch failed'))).toBe('not planned: selectAll: fetch failed')
+    expect(productStepFailure('2026-09-01', 'plain')).toBe('2026-09 not written: plain')
   })
 })

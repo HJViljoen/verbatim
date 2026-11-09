@@ -391,10 +391,15 @@ describe('4 · every new step is non-fatal, so freeze-months always runs after i
       expect(at, id).toBeLessThan(freezeAt)
       last = at
       // The step call, up to its own end: a .catch that logs and returns null.
+      // The product steps also RECORD the failure on the run (9 Nov: Össur's
+      // October was refused on three runs with nothing on the run row), under
+      // their own labels, both in AFTER_GATHER_STEPS; the run still carries on.
       const rest = src.slice(at)
       const close = rest.search(/\n {4}(?:\}|const |\/\/)/)
       const chain = rest.slice(0, close > 0 ? close : 4000)
-      expect(chain, id).toMatch(/\.catch\(\(e\) => \{\s*console\.error\(`[^`]*`\)\s*return null\s*\}\)/)
+      expect(chain, id).toMatch(id.includes('product-readings')
+        ? /\.catch\(\(e\) => \{\s*console\.error\(`[^`]*`\)\s*noteError\('(?:plan-)?product-readings', productStepFailure\((?:null|month), e\)\)\s*return null\s*\}\)/
+        : /\.catch\(\(e\) => \{\s*console\.error\(`[^`]*`\)\s*return null\s*\}\)/)
     }
   })
 

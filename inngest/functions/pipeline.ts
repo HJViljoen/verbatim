@@ -30,7 +30,7 @@ import { planSegmentVideos, runSegmentBatch, segmentSummary, stepSegmentJudge } 
 import { openai } from '@/lib/openai'
 import { lensSummary, planLensReadings, runLensMonth } from '@/lib/pipeline/lens-readings'
 import { brandSummary, planBrandReadings, runBrandMonth } from '@/lib/pipeline/brand-readings'
-import { planProductReadings, PRODUCT_RUN_CAP, productSummary, runProductStep } from '@/lib/pipeline/product-readings'
+import { planProductReadings, PRODUCT_RUN_CAP, productStepFailure, productSummary, runProductStep } from '@/lib/pipeline/product-readings'
 import { openAiConfirmJudge } from '@/lib/brands/confirm'
 import { applyQueuedEdits } from '@/lib/pipeline/tracking-queue'
 import { runPassE } from '@/lib/pipeline/pass-e'
@@ -1888,6 +1888,10 @@ export const runPipeline = inngest.createFunction(
     // dollar cap (read from the ledger inside each step). A month this run
     // would freeze is frozen only from a pass that read it in full; with items
     // left it is written filling and the next run freezes it. One month a step.
+    // A step out of retries is RECORDED (`noteError`: the month and its Postgres
+    // code, `productStepFailure`) and the run carries on: Össur's October was
+    // refused three runs running (28 Oct to 8 Nov) with nothing on the run row.
+    // Both labels are in AFTER_GATHER_STEPS, so a recorded one cuts no week.
     const productPlan = await step
       .run('plan-product-readings', async () => {
         const now = new Date().toISOString()
@@ -1897,6 +1901,7 @@ export const runPipeline = inngest.createFunction(
       })
       .catch((e) => {
         console.error(`[product-readings] plan failed, skipping: ${e instanceof Error ? e.message : String(e)}`)
+        noteError('plan-product-readings', productStepFailure(null, e))
         return null
       })
     const productMonthsToRead = productPlan?.months ?? []
@@ -1912,6 +1917,7 @@ export const runPipeline = inngest.createFunction(
         })
         .catch((e) => {
           console.error(`[product-readings] ${month.slice(0, 7)} out of retries: ${e instanceof Error ? e.message : String(e)}`)
+          noteError('product-readings', productStepFailure(month, e))
           return null
         })
       productItemsAsked += productMonth?.itemsAsked ?? 0
