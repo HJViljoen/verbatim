@@ -162,9 +162,9 @@ export function fitTitle(scrubbed: string, original: string, texts: readonly str
   return (space > 0 ? cut.slice(0, space) : cut).trim() || SHORT_ERASED
 }
 
-/** "There is no post_ideas table here" (its products migration not applied),
- *  and nothing else. */
-function isMissingTable(error: unknown, table: string): boolean {
+/** "There is no such table here" (its migration not applied), and nothing
+ *  else. */
+export function isMissingTable(error: unknown, table: string): boolean {
   const { code, message } = (typeof error === 'object' && error ? error : {}) as { code?: string; message?: string }
   return ['PGRST205', '42P01'].includes(code ?? '') && (message ?? '').includes(table)
 }

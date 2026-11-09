@@ -3,6 +3,8 @@
  * that exercise a reader's I/O glue (market-first WP3.9 and WP3.11).
  *
  * WHAT IT ANSWERS. `from(table)` with `select`, `eq`, `neq`, `in`, `is`,
+ * `ilike` (PostgREST's `%` / `*` and `_` wildcards, `\\` escapes), `match`
+ * (an `eq` per key),
  * `contains` (an array column holding every value given),
  * `not` (`is`, `in`, `eq`; any other operator throws), `or` (eq / is.null /
  * not.is.null), `gte`, `lte`,
@@ -13,6 +15,9 @@
  * answers with a PostgREST-shaped "does not exist" error, so a reader's
  * missing-table guard is exercised by leaving the table out. Every call is
  * recorded, so a test can assert what was (and was not) read.
+ *
+ * A filter or an order on `col->>key` (or `col->key`) reads that key of a
+ * jsonb column, as text for `->>`, as PostgREST does.
  *
  * NOT A DATABASE. No counts beyond `head: true` over the filtered rows, no
  * ordering beyond one column at a time. It is the smallest thing that lets a
@@ -81,6 +86,12 @@ export function fakeDb(
 
     /** A column's value: a `name.col` filter reads the attached row. */
     const val = (r: Row, col: string): unknown => {
+      const path = /^(\w+)->(>?)(\w+)$/.exec(col)
+      if (path) {
+        const o = r[path[1]]
+        const v = o && typeof o === 'object' ? (o as Row)[path[3]] : undefined
+        return path[2] && v != null && typeof v !== 'string' ? (typeof v === 'object' ? JSON.stringify(v) : String(v)) : v
+      }
       if (col in r || !col.includes('.')) return r[col]
       const [rel, field] = [col.slice(0, col.indexOf('.')), col.slice(col.indexOf('.') + 1)]
       const o = r[rel]
@@ -130,8 +141,8 @@ export function fakeDb(
       if (orderCol) {
         const col = orderCol
         rows = [...rows].sort((a, b) => {
-          const x = a[col] as string | number
-          const y = b[col] as string | number
+          const x = val(a, col) as string | number
+          const y = val(b, col) as string | number
           return (x < y ? -1 : x > y ? 1 : 0) * (asc ? 1 : -1)
         })
       }
@@ -158,6 +169,24 @@ export function fakeDb(
         return builder
       },
       eq(col: string, v: unknown) { call.filters.push(`${col}=${String(v)}`); preds.push((r) => val(r, col) === v); return builder },
+      ilike(col: string, pattern: string) {
+        call.filters.push(`${col} ilike ${pattern}`)
+        let re = ''
+        for (let i = 0; i < pattern.length; i++) {
+          const ch = pattern[i]
+          if (ch === '\\' && i + 1 < pattern.length) re += pattern[++i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          else if (ch === '%' || ch === '*') re += '.*'
+          else if (ch === '_') re += '.'
+          else re += ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        }
+        const rx = new RegExp(`^${re}$`, 'is')
+        preds.push((r) => { const v = val(r, col); return typeof v === 'string' && rx.test(v) })
+        return builder
+      },
+      match(q: Row) {
+        for (const [col, v] of Object.entries(q)) { call.filters.push(`${col}=${String(v)}`); preds.push((r) => val(r, col) === v) }
+        return builder
+      },
       neq(col: string, v: unknown) { call.filters.push(`${col}!=${String(v)}`); preds.push((r) => val(r, col) !== v); return builder },
       in(col: string, vs: readonly unknown[]) { call.filters.push(`${col} in ${vs.length}`); const set = new Set(vs); preds.push((r) => set.has(val(r, col))); return builder },
       is(col: string, v: unknown) { call.filters.push(`${col} is ${String(v)}`); preds.push((r) => (val(r, col) ?? null) === v); return builder },
