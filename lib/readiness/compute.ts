@@ -228,10 +228,14 @@ function subjectSet(i: ReadinessInputs): ReadinessRow {
       ? 'No subject has been named for this workspace yet.'
       : `${plural(defined, 'subject')} named.`
 
+  // Named and confirmed in Settings by the workspace's owner (decision E);
+  // ours only where the database has no subjects table at all.
   return row(
     'subject-set', 'Subjects', 'the five to ten subjects this workspace is read against',
-    status, detail, 'engineering',
-    'Phase 1 builds the subject set and the form that names them; nothing can be entered before it.',
+    status, detail, defined === null ? 'engineering' : 'client',
+    defined === null
+      ? 'The subjects table is not in this database yet; the subject set and the form that names it come with it.'
+      : 'Name them in Settings, under Your subjects, and confirm each one; every update then reads them.',
   )
 }
 

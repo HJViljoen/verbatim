@@ -10,6 +10,7 @@ import { TABLE_DENOMINATORS } from '../reading/types'
 import { isMissingRecDecisions, REC_DECISIONS_TABLE } from '../rec-decisions'
 import { SHARE_BAND } from '../report-bands'
 import { YOUTUBE_REFRESH_DUE_DAYS } from '../retention/youtube-refresh'
+import { isMissingSubjects, TABLE_SUBJECTS } from '../subjects/types'
 import type { SessionContext } from '../auth'
 import { selectAll } from '../supabase-admin'
 import type {
@@ -327,7 +328,7 @@ export async function loadReadiness(
     rivals, community, embeddings, months, anomaly, updates,
     readCount, speech, translated, onScreenText, unflagged,
     gateRows, gateKept, gateFirst,
-    schedules, changeLog, recTotal, recLineage, decisions, cohort,
+    schedules, changeLog, recTotal, recLineage, decisions, cohort, subjectsDefined,
   ] = await Promise.all([
     loadRivals(admin, clientId, rivalNames, handles, now.getTime()),
     loadCommunities(admin, clientId, tc?.subreddits),
@@ -351,6 +352,7 @@ export async function loadReadiness(
     headCount(() => recs().not('lineage_id', 'is', null)),
     loadDecisionCount(admin, clientId),
     loadRetentionCohort(admin, clientId),
+    loadSubjectCount(admin, clientId),
   ])
 
   return {
@@ -371,9 +373,9 @@ export async function loadReadiness(
       total: embeddings.total,
       lastEmbeddedAt: embeddings.lastEmbeddedAt,
     },
-    // No subjects table, no subject column, no code — the concept does not
-    // exist yet, which is a different answer from "none named".
-    subjectSet: { defined: null },
+    // The confirmed subjects; null only where the subjects table is not in
+    // this database, which is a different answer from "none named".
+    subjectSet: { defined: subjectsDefined },
     monthly: months === null ? null : { months, tracked: trackedAudiences(rivalNames) },
     anomaly,
     reads: {
@@ -463,6 +465,21 @@ async function loadChangeLog(admin: Admin, clientId: string): Promise<ReadinessI
     firstLoggedAt: (firstRow(first)?.changed_at as string | undefined) ?? null,
     lastChangeAt: (firstRow(last)?.changed_at as string | undefined) ?? null,
   }
+}
+
+/** The workspace's subject set: the subjects confirmed and measured
+ *  (`status = 'active'`, the set `loadActiveSubjects` reads; a proposed one
+ *  measures nothing). Null only where the subjects table is missing. Until 9
+ *  Nov this row was a placeholder from before the subjects shipped, and the
+ *  check said Össur had none while it had six. */
+async function loadSubjectCount(admin: Admin, clientId: string): Promise<number | null> {
+  const { count, error } = await admin.from(TABLE_SUBJECTS)
+    .select('id', { count: 'exact', head: true }).eq('client_id', clientId).eq('status', 'active')
+  if (error) {
+    if (isMissingSubjects(error)) return null
+    throw error
+  }
+  return count ?? 0
 }
 
 /** Decisions the client has recorded, or null when nothing can record one yet. */
