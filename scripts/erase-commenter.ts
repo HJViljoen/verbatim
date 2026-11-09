@@ -7,7 +7,7 @@ import { AI_LOG_BODY_RETENTION_DAYS, DEMO_CLIENT_ID } from '../lib/config'
 import { markSnapshotsStale } from '../lib/artifacts'
 import { scrubStoredPlanChecks, scrubStoredPostIdeas } from '../lib/retention/stored-prose'
 import { runErasure, unfinishedMessage, updatesInFlight } from '../lib/retention/erase-run'
-import { ANALYSIS_PROSE_TABLES, filesOfSnapshots, scrubStoredProse } from '../lib/retention/analysis-prose'
+import { ANALYSIS_PROSE_TABLES, deleteSnapshotFiles, filesOfSnapshots, scrubStoredProse, type StoredFile } from '../lib/retention/analysis-prose'
 import { escapeLike, findBackedUpComments, removeBackedUpCopies, scrubRegateBackup } from '../lib/retention/regate-backup-erase'
 import { scrubRawPayloads } from '../lib/retention/raw-payloads-erase'
 
@@ -58,7 +58,10 @@ import { scrubRawPayloads } from '../lib/retention/raw-payloads-erase'
 //      written reads, statement readings, held brief headlines, the frozen
 //      snapshots and the report documents, one step a table. A text of one
 //      word is not looked for there (it would erase other people's words).
-//      A stored file built from a scrubbed snapshot is LISTED, not touched.
+//      A scrubbed snapshot's stored files (PDFs, PNGs, a brief's) are then
+//      deleted and flagged stale (markSnapshotsStale, as 7d and 8), so the next
+//      download re-renders it clean; a delete that fails puts the snapshot
+//      back for a re-run and fails the step.
 //   7g. the regate backup's prose (an insight's, an event's), scrubbed the same way.
 //   9. with the delete: the regate backup's copies of these comments and the
 //      rows hanging off them, removed; and not at all while an update is
@@ -160,9 +163,9 @@ async function main() {
   const clientIds = [...byClient.keys()]
   const texts = rows.map((r) => (r.text ?? '').replace(/\s+/g, ' ').trim()).filter((t) => t.length >= 8)
   let editsScrubbed = 0
-  // Stored files built from a snapshot this run scrubbed: they still hold the
-  // words, and this script leaves Storage alone for them (the operator's call).
-  const leftFiles: { id: string; snapshot_id: string }[] = []
+  // Stored files built from a snapshot this run scrubbed, deleted (or, on a
+  // dry run, that would be).
+  const snapshotFiles: StoredFile[] = []
   // Filled by the delete step (a holder: an assignment inside a closure is not
   // seen by the type narrowing at the reply template).
   const deleted: { del: Awaited<ReturnType<typeof deleteCommentsProperly>> | null } = { del: null }
@@ -411,15 +414,18 @@ async function main() {
         name: `stored prose: ${spec.table}`,
         run: async () => {
           if (!clientIds.length || !texts.length) return
-          const r = await scrubStoredProse(admin, spec, clientIds, texts, { apply: args.apply })
+          // The share page and "the email as sent" re-render from a snapshot,
+          // so scrubbing it reaches them. A PDF or PNG built before the scrub
+          // holds the words: deleted once its snapshot is clean.
+          const isSnapshots = spec.table === 'report_snapshots'
+          const after = isSnapshots
+            ? async (key: Record<string, unknown>) => { snapshotFiles.push(...await deleteSnapshotFiles(admin, String(key.id))) }
+            : undefined
+          const r = await scrubStoredProse(admin, spec, clientIds, texts, { apply: args.apply, after })
           console.log(`${spec.table} carrying the text: ${r.rows} → ${args.apply ? 'scrubbed' : 'would be scrubbed'}`)
-          if (spec.table !== 'report_snapshots' || !r.rows) return
-          // The share page and "the email as sent" re-render from the snapshot,
-          // so they no longer print the words. A PDF or PNG built before the
-          // scrub still holds them: listed, not deleted or rebuilt here.
-          const files = await filesOfSnapshots(admin, r.keys.map((k) => String(k.id)))
-          leftFiles.push(...files)
-          if (files.length) console.log(`   stored file(s) built from them before the scrub, still carrying the words: ${files.length} (artifact ${files.map((f) => f.id).join(', ')})`)
+          if (!isSnapshots || !r.rows) return
+          if (!args.apply) snapshotFiles.push(...await filesOfSnapshots(admin, r.keys.map((k) => String(k.id))))
+          console.log(`   their stored files: ${snapshotFiles.length} ${args.apply ? 'deleted, flagged to re-render' : 'would be deleted and flagged to re-render'}${snapshotFiles.length ? ` (${snapshotFiles.map((f) => f.storage_path).join(', ')})` : ''}`)
         },
       })),
       {
@@ -493,10 +499,6 @@ async function main() {
     console.error(`\n${unfinished}`)
     process.exitCode = 1
     return
-  }
-
-  if (leftFiles.length) {
-    console.log(`\nBEFORE THE REPLY: ${leftFiles.length} stored file(s) were built from a snapshot this run scrubbed and still carry the words (artifact ${leftFiles.map((f) => f.id).join(', ')}). This script does not delete or rebuild them; see the runbook.`)
   }
 
   console.log(`\n--- reply template ---

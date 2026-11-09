@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import { markSnapshotsStale } from '../artifacts'
 import { isMissingColumnError, selectAll } from '../supabase-admin'
 import { isMissingTable, scrubText } from './stored-prose'
 
@@ -116,7 +117,8 @@ export const ANALYSIS_PROSE_TABLES: readonly ProseTable[] = [
   // lib/reports/reading-stamp.ts:63): every weekly read, brief, document and
   // export freezes the prose above as it stood. The share page and "the email
   // as sent" re-render from here, so scrubbing the snapshot reaches them; a
-  // stored PDF of it does not (the script lists those).
+  // stored PDF or PNG of it does not, and the script deletes those
+  // (`deleteSnapshotFiles`, run as each snapshot's `after`).
   { table: 'report_snapshots', key: ['id'], columns: ['title', 'data', 'workings'] },
   { table: 'reports', key: ['id'], columns: ['sections', 'cover'] },
   // A sent email's subject line.
@@ -169,13 +171,20 @@ export interface ProseScrubResult {
  * One table's rows of these workspaces that carry an erased text, scrubbed
  * (`apply`) or counted (a dry run). Throws on a read or write that fails, so
  * the script's step fails and the comments are not deleted.
+ *
+ * `after` runs once a row is scrubbed (with `apply` only): the snapshots'
+ * stored files are deleted there, AFTER their words are gone, so a download
+ * that re-renders in between can only print the scrubbed snapshot (step 8's
+ * order: the source first, then the files). Where it throws, the row is put
+ * back as it was, so a re-run still finds it by its words and tries again;
+ * the other rows go on, and the call then throws naming every failure.
  */
 export async function scrubStoredProse(
   admin: SupabaseClient,
   spec: ProseTable,
   clientIds: readonly string[],
   texts: readonly string[],
-  opts: { apply: boolean },
+  opts: { apply: boolean; after?: (key: Row) => Promise<void> },
 ): Promise<ProseScrubResult> {
   const needles = proseNeedles(texts)
   const none: ProseScrubResult = { rows: 0, keys: [] }
@@ -191,33 +200,59 @@ export async function scrubStoredProse(
     return q
   })
   const out: ProseScrubResult = { rows: 0, keys: [] }
+  const failed: string[] = []
   for (const row of stored) {
     const patch = scrubProseRow(row, cols, needles)
     if (!patch) continue
     const key = Object.fromEntries(spec.key.map((k) => [k, row[k]]))
     out.rows++
     out.keys.push(key)
-    if (opts.apply) {
-      const { error } = await admin.from(spec.table).update(patch).match(key)
-      if (error) throw new Error(`scrub ${spec.table} ${JSON.stringify(key)}: ${messageOf(error)}`)
+    if (!opts.apply) continue
+    // What the row held, taken before the write, to put it back with.
+    const was = Object.fromEntries(Object.keys(patch).map((c) => [c, structuredClone(row[c])]))
+    const { error } = await admin.from(spec.table).update(patch).match(key)
+    if (error) throw new Error(`scrub ${spec.table} ${JSON.stringify(key)}: ${messageOf(error)}`)
+    if (!opts.after) continue
+    try {
+      await opts.after(key)
+    } catch (e) {
+      const back = await admin.from(spec.table).update(was).match(key)
+      failed.push(`${JSON.stringify(key)}: ${messageOf(e)}${back.error ? ` (and it could not be put back for a re-run: ${messageOf(back.error)})` : ' (put back, so a re-run finds it)'}`)
     }
+  }
+  if (failed.length) throw new Error(`${spec.table}: ${failed.join('; ')}`)
+  return out
+}
+
+export interface StoredFile { id: string; snapshot_id: string; storage_path: string }
+
+/** The stored files (`artifacts`, not yet stale) built from these snapshots:
+ *  what a dry run says would be deleted. Read only. */
+export async function filesOfSnapshots(admin: SupabaseClient, snapshotIds: readonly string[]): Promise<StoredFile[]> {
+  if (!snapshotIds.length) return []
+  const out: StoredFile[] = []
+  for (let i = 0; i < snapshotIds.length; i += 200) {
+    const { data, error } = await admin.from('artifacts').select('id, snapshot_id, storage_path').in('snapshot_id', snapshotIds.slice(i, i + 200)).eq('stale', false)
+    if (error) throw new Error(`read artifacts: ${messageOf(error)}`)
+    out.push(...((data ?? []) as StoredFile[]))
   }
   return out
 }
 
 /**
- * The stored files (`artifacts`, not yet stale) built from these snapshots.
- * Read only: a file made before the scrub still holds the words, and this
- * script does not delete or rewrite Storage for a scrubbed snapshot (the
- * operator's call; the options are in the plan). Returns their ids.
+ * A scrubbed snapshot's stored files (its PDFs and PNGs, a brief's included),
+ * deleted and flagged stale through the path steps 7d and 8 use
+ * (`markSnapshotsStale`): the next download re-renders from the scrubbed
+ * snapshot. Only this snapshot's files. Returns what it deleted; throws naming
+ * the files where the flag or the delete fails.
  */
-export async function filesOfSnapshots(admin: SupabaseClient, snapshotIds: readonly string[]): Promise<{ id: string; snapshot_id: string }[]> {
-  if (!snapshotIds.length) return []
-  const out: { id: string; snapshot_id: string }[] = []
-  for (let i = 0; i < snapshotIds.length; i += 200) {
-    const { data, error } = await admin.from('artifacts').select('id, snapshot_id').in('snapshot_id', snapshotIds.slice(i, i + 200)).eq('stale', false)
-    if (error) throw new Error(`read artifacts: ${messageOf(error)}`)
-    out.push(...((data ?? []) as { id: string; snapshot_id: string }[]))
+export async function deleteSnapshotFiles(admin: SupabaseClient, snapshotId: string): Promise<StoredFile[]> {
+  const files = await filesOfSnapshots(admin, [snapshotId])
+  if (!files.length) return []
+  try {
+    await markSnapshotsStale(admin, [snapshotId], { apply: true })
+  } catch (e) {
+    throw new Error(`stored files of snapshot ${snapshotId} not deleted (${files.map((f) => f.storage_path).join(', ')}): ${messageOf(e)}`)
   }
-  return out
+  return files
 }
