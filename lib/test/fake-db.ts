@@ -33,11 +33,14 @@
  * the test did not hand in is left alone (rows that carry it already keep
  * theirs), and so is any nested embed.
  *
- * AND THE THREE WRITES, for a writer's glue (writing back, the weekly read's
- * send path): `insert(row | rows)` appends to the table (an `id` is made up
+ * AND THE WRITES, for a writer's glue (writing back, the weekly read's
+ * send path, the erasure): `insert(row | rows)` appends to the table (an `id` is made up
  * where the row has none) and hands the rows back through `select` /
- * `single` / `maybeSingle`; `update(patch)` and `delete()` apply to the rows
- * the filters match, when the chain is awaited. Each is recorded with its
+ * `single` / `maybeSingle`; `upsert(row | rows, { onConflict, ignoreDuplicates })`
+ * merges into (or, ignoring duplicates, keeps) the row with the same
+ * `onConflict` columns and appends the rest; `update(patch)` and `delete()`
+ * apply to the rows the filters match, when the chain is awaited. `overlaps`
+ * keeps a row whose array column shares a value with the list. Each is recorded with its
  * rows or patch (`FakeCall.values`), so a test can assert what was written.
  */
 
@@ -45,7 +48,7 @@ type Row = Record<string, unknown>
 
 export interface FakeCall {
   table: string
-  op: 'select' | 'rpc' | 'insert' | 'update' | 'delete'
+  op: 'select' | 'rpc' | 'insert' | 'upsert' | 'update' | 'delete'
   columns?: string
   filters: string[]
   /** The rows an insert wrote, or the patch an update applied. */
@@ -157,6 +160,28 @@ export function fakeDb(
         written = (Array.isArray(v) ? v : [v]).map((r) => ({ ...r, id: r.id ?? `fake-${table}-${++seq}` }))
         call.values = written
         if (table in tables) tables[table].push(...written)
+        return builder
+      },
+      upsert(v: Row | Row[], opts?: { onConflict?: string; ignoreDuplicates?: boolean }) {
+        call.op = 'upsert'
+        const cols = (opts?.onConflict ?? 'id').split(',').map((c) => c.trim())
+        const rows = Array.isArray(v) ? v : [v]
+        call.values = rows
+        const out: Row[] = []
+        if (table in tables) {
+          for (const r of rows) {
+            const hit = tables[table].find((x) => cols.every((c) => x[c] === r[c]))
+            if (hit) { if (!opts?.ignoreDuplicates) Object.assign(hit, r); out.push(hit) }
+            else { const row = { ...r, id: r.id ?? `fake-${table}-${++seq}` }; tables[table].push(row); out.push(row) }
+          }
+        }
+        written = out
+        return builder
+      },
+      overlaps(col: string, vs: readonly unknown[]) {
+        call.filters.push(`${col} overlaps ${vs.length}`)
+        const set = new Set(vs)
+        preds.push((r) => { const have = val(r, col); return Array.isArray(have) && have.some((x) => set.has(x)) })
         return builder
       },
       update(v: Row) { call.op = 'update'; patch = v; call.values = v; return builder },

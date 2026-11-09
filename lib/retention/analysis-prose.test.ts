@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { fakeDb } from '../test/fake-db'
-import { ANALYSIS_PROSE_TABLES, deleteSnapshotFiles, filesOfSnapshots, proseNeedles, scrubJson, scrubProseRow, scrubStoredProse, type ProseTable } from './analysis-prose'
-import { runErasure, unfinishedMessage } from './erase-run'
+import { ANALYSIS_PROSE_TABLES, proseNeedles, scrubJson, scrubProseRow, scrubStoredProse, type ProseTable } from './analysis-prose'
 import { ERASED_WORDS } from './stored-prose'
 
 // An erasure request reaches the analysis's own prose (scripts/erase-commenter.ts,
@@ -83,7 +82,7 @@ describe('every table of analysis prose is scrubbed of the erased words, and onl
     const spec = ANALYSIS_PROSE_TABLES.find((s) => s.table === 'report_snapshots')!
     const db = fakeDb({ report_snapshots: [rowsFor(spec, ERASED, 'c1', 1), rowsFor(spec, OTHER, 'c1', 2)] })
     const r = await scrubStoredProse(db.client as never, spec, ['c1'], [ERASED], { apply: false })
-    expect(r).toEqual({ rows: 1, keys: [{ id: 'report_snapshots-1' }] })
+    expect(r).toEqual({ rows: 1, keys: [{ id: 'report_snapshots-1', client_id: 'c1' }] })
     expect(db.calls.filter((c) => c.op === 'update')).toEqual([])
   })
 
@@ -148,93 +147,55 @@ describe('the match: whole texts of two words or more', () => {
   })
 })
 
-// Option 2 (Heinrich, 9 Nov): a scrubbed snapshot's stored files are deleted
-// and flagged stale (markSnapshotsStale, the path of steps 7d and 8), AFTER
-// its words are gone, so the next download re-renders it clean.
-describe('the stored files of a scrubbed snapshot are deleted, and only those', () => {
+// The snapshots' stored files are put on a pending list just before a
+// snapshot's words are scrubbed (lib/retention/snapshot-files.ts), through
+// `before`: while the row can still be found by the words.
+describe('`before` runs for each carrying row, before its scrub', () => {
   const spec = ANALYSIS_PROSE_TABLES.find((s) => s.table === 'report_snapshots')!
 
-  /** The fake database with a Storage bucket that records removals, and can
-   *  be told to refuse them. */
-  function world(refuse = false) {
-    const tables = {
-      report_snapshots: [rowsFor(spec, ERASED, 'c1', 1), rowsFor(spec, OTHER, 'c1', 2)],
-      artifacts: [
-        { id: 'a1', client_id: 'c1', snapshot_id: 'report_snapshots-1', storage_path: 'c1/s1/page-v1.pdf', stale: false },
-        { id: 'a2', client_id: 'c1', snapshot_id: 'report_snapshots-1', storage_path: 'c1/s1/old-v1.pdf', stale: true },
-        { id: 'a3', client_id: 'c1', snapshot_id: 'report_snapshots-2', storage_path: 'c1/s2/page-v1.pdf', stale: false },
-      ],
-      week_reads: [rowsFor(ANALYSIS_PROSE_TABLES.find((s) => s.table === 'week_reads')!, ERASED, 'c1', 9)],
-    }
+  it('sees the row as it was, with its workspace, and only rows that carry the words', async () => {
+    const tables = { report_snapshots: [rowsFor(spec, ERASED, 'c1', 1), rowsFor(spec, OTHER, 'c1', 2)] }
     const db = fakeDb(tables)
-    const removed: string[] = []
-    const storage = {
-      from: () => ({
-        remove: async (paths: string[]) => {
-          if (refuse) return { data: null, error: { message: 'storage is unreachable' } }
-          removed.push(...paths)
-          return { data: paths, error: null }
-        },
-      }),
-    }
-    const client = { ...(db.client as object), storage } as never
-    return { tables, db, client, removed }
-  }
-  const after = (client: never) => async (key: Record<string, unknown>) => { await deleteSnapshotFiles(client, String(key.id)) }
-
-  it('deletes an affected snapshot\'s PDF and flags it to re-render; an unaffected one is kept', async () => {
-    const w = world()
-    const r = await scrubStoredProse(w.client, spec, ['c1'], [ERASED], { apply: true, after: after(w.client) })
-    expect(r.rows).toBe(1)
-    // The affected snapshot's live file is gone and its row flagged; its
-    // already-stale row is not touched again.
-    expect(w.removed).toEqual(['c1/s1/page-v1.pdf'])
-    expect(w.tables.artifacts.find((a) => a.id === 'a1')!.stale).toBe(true)
-    // The other snapshot's file stays, live.
-    expect(w.tables.artifacts.find((a) => a.id === 'a3')!.stale).toBe(false)
-    expect(w.removed).not.toContain('c1/s2/page-v1.pdf')
-    // The words went first: the snapshot was scrubbed before its file was flagged.
-    const order = w.db.calls.filter((c) => c.op === 'update').map((c) => c.table)
-    expect(order).toEqual(['report_snapshots', 'artifacts'])
-    expect(has(w.tables.report_snapshots[0], ERASED)).toBe(false)
+    const seen: { id: unknown; client: unknown; carried: boolean }[] = []
+    await scrubStoredProse(db.client as never, spec, ['c1'], [ERASED], {
+      apply: true,
+      before: async (row) => { seen.push({ id: row.id, client: row.client_id, carried: has(tables.report_snapshots[0], ERASED) }) },
+    })
+    expect(seen).toEqual([{ id: 'report_snapshots-1', client: 'c1', carried: true }])
+    expect(has(tables.report_snapshots[0], ERASED)).toBe(false)
   })
 
-  it('names what it deleted', async () => {
-    const w = world()
-    expect((await deleteSnapshotFiles(w.client, 'report_snapshots-1')).map((f) => f.storage_path)).toEqual(['c1/s1/page-v1.pdf'])
-    expect(await deleteSnapshotFiles(w.client, 'no-such-snapshot')).toEqual([])
+  it('a `before` that throws leaves the row as it was, so a re-run finds it, and fails the call', async () => {
+    const tables = { report_snapshots: [rowsFor(spec, ERASED, 'c1', 1)] }
+    const db = fakeDb(tables)
+    await expect(scrubStoredProse(db.client as never, spec, ['c1'], [ERASED], { apply: true, before: async () => { throw new Error('cannot record') } })).rejects.toThrow('cannot record')
+    expect(tables.report_snapshots[0]).toEqual(rowsFor(spec, ERASED, 'c1', 1))
   })
 
-  it('a failed delete is reported, the snapshot is put back for a re-run, and the next scrub still runs', async () => {
-    const w = world(true)
-    const logged: string[] = []
-    const outcome = await runErasure({
-      suppress: { name: 'suppression', run: async () => {} },
-      scrubs: [
-        { name: 'stored prose: report_snapshots', run: async () => { await scrubStoredProse(w.client, spec, ['c1'], [ERASED], { apply: true, after: after(w.client) }) } },
-        { name: 'stored prose: week_reads', run: async () => { await scrubStoredProse(w.client, ANALYSIS_PROSE_TABLES.find((s) => s.table === 'week_reads')!, ['c1'], [ERASED], { apply: true }) } },
-      ],
-      erase: { name: 'delete the comments', run: async () => { throw new Error('must not run') } },
-    }, (line) => logged.push(line))
-    expect(outcome).toEqual({ failed: ['stored prose: report_snapshots'], erased: false })
-    // Reported, naming the snapshot and the file it could not delete.
-    expect(logged.join('\n')).toContain('report_snapshots-1')
-    expect(logged.join('\n')).toContain('c1/s1/page-v1.pdf')
-    expect(logged.join('\n')).toContain('storage is unreachable')
-    expect(w.removed).toEqual([])
-    // Put back as it was, so a re-run finds it by its words and tries again.
-    expect(w.tables.report_snapshots[0]).toEqual(rowsFor(spec, ERASED, 'c1', 1))
-    // The next scrub ran.
-    expect(has(w.tables.week_reads[0], ERASED)).toBe(false)
-    expect(unfinishedMessage(outcome)).toContain('NOT deleted')
+  it('is not run on a dry run', async () => {
+    const db = fakeDb({ report_snapshots: [rowsFor(spec, ERASED, 'c1', 1)] })
+    let ran = false
+    await scrubStoredProse(db.client as never, spec, ['c1'], [ERASED], { apply: false, before: async () => { ran = true } })
+    expect(ran).toBe(false)
+  })
+})
+
+describe('whole documents are read in small pages', () => {
+  it('a snapshot, a read, a summary: 50 rows a page; everything else the default', () => {
+    const small = ANALYSIS_PROSE_TABLES.filter((s) => s.pageSize).map((s) => [s.table, s.pageSize])
+    expect(small).toEqual([
+      ['run_summary', 50], ['consumer_profiles', 50], ['week_reads', 50], ['client_statement_readings', 50],
+      ['monthly_briefs', 50], ['report_snapshots', 50], ['reports', 50],
+    ])
   })
 
-  it('a dry run deletes and flags nothing, and lists what it would delete', async () => {
-    const w = world()
-    const r = await scrubStoredProse(w.client, spec, ['c1'], [ERASED], { apply: false, after: after(w.client) })
-    expect(w.removed).toEqual([])
-    expect(w.db.calls.filter((c) => c.op === 'update')).toEqual([])
-    // (The fake hands back whole rows, whatever is selected.)
-    expect((await filesOfSnapshots(w.client, r.keys.map((k) => String(k.id)))).map((f) => f.id)).toEqual(['a1'])
+  it('pages through every row in order of the key, so none is missed or read twice', async () => {
+    const spec = ANALYSIS_PROSE_TABLES.find((s) => s.table === 'week_reads')!
+    const rows = Array.from({ length: 123 }, (_, i) => rowsFor(spec, i % 2 ? ERASED : OTHER, 'c1', 1000 + i))
+    const db = fakeDb({ week_reads: rows })
+    const r = await scrubStoredProse(db.client as never, spec, ['c1'], [ERASED], { apply: false })
+    expect(r.rows).toBe(61)
+    const pages = db.calls.filter((c) => c.table === 'week_reads' && c.op === 'select').length
+    expect(pages).toBe(1 + 3) // the probe, then 50 + 50 + 23
   })
 })

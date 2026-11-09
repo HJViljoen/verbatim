@@ -1,6 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { markSnapshotsStale } from '../artifacts'
 import { isMissingColumnError, selectAll } from '../supabase-admin'
 import { isMissingTable, scrubText } from './stored-prose'
 
@@ -75,7 +74,13 @@ export interface ProseTable {
   table: string
   key: readonly string[]
   columns: readonly string[]
+  /** Rows a page: small where a row is a whole document (a snapshot, a read),
+   *  so one page never runs long enough to time out. Default 1000. */
+  pageSize?: number
 }
+
+/** A page of whole documents. */
+const DOCS = 50
 
 /**
  * Where the analysis keeps prose written from (or after) a commenter's words,
@@ -95,7 +100,7 @@ export const ANALYSIS_PROSE_TABLES: readonly ProseTable[] = [
   // summary (lib/pipeline/run-summary.ts:105); top_insights and
   // wow_highlights are legacy columns an old row can still carry.
   { table: 'market_insights', key: ['id'], columns: ['title', 'description', 'evidence'] },
-  { table: 'run_summary', key: ['id'], columns: ['executive_brief', 'consumer_intelligence_summary', 'say_vs_hear', 'top_insights', 'wow_highlights'] },
+  { table: 'run_summary', key: ['id'], columns: ['executive_brief', 'consumer_intelligence_summary', 'say_vs_hear', 'top_insights', 'wow_highlights'], pageSize: DOCS },
   // Pass C (lib/pipeline/pass-c.ts:394).
   { table: 'competitive_insights', key: ['id'], columns: ['title', 'finding', 'evidence'] },
   // Pass D-b (lib/pipeline/pass-d.ts:919): grounded in verbatim evidence.
@@ -104,23 +109,23 @@ export const ANALYSIS_PROSE_TABLES: readonly ProseTable[] = [
   { table: 'account_events', key: ['id'], columns: ['explanation', 'supporting_theme_labels'] },
   // Pass E (lib/pipeline/pass-e.ts:415): the personas' quotes are dropped
   // before the write, their prose is not.
-  { table: 'consumer_profiles', key: ['id'], columns: ['headline', 'personas', 'dropped'] },
+  { table: 'consumer_profiles', key: ['id'], columns: ['headline', 'personas', 'dropped'], pageSize: DOCS },
   // The written reads (lib/written/store.ts:60): the week's read, the long-run
   // read and the subjects' reads, quotes as refs, prose from the research.
-  { table: 'week_reads', key: ['id'], columns: ['data'] },
+  { table: 'week_reads', key: ['id'], columns: ['data'], pageSize: DOCS },
   // A statement's reading (lib/statements/measure.ts:617): what the market says.
-  { table: 'client_statement_readings', key: ['statement_id', 'month'], columns: ['data'] },
+  { table: 'client_statement_readings', key: ['statement_id', 'month'], columns: ['data'], pageSize: DOCS },
   // The monthly briefs' held headlines (lib/reports/briefs/store.ts:97); the
   // briefs' own words are in their snapshot.
-  { table: 'monthly_briefs', key: ['id'], columns: ['held'] },
+  { table: 'monthly_briefs', key: ['id'], columns: ['held'], pageSize: DOCS },
   // FROZEN ARTEFACTS (lib/snapshots.ts:69, lib/reports/briefs/store.ts:172,
   // lib/reports/reading-stamp.ts:63): every weekly read, brief, document and
   // export freezes the prose above as it stood. The share page and "the email
   // as sent" re-render from here, so scrubbing the snapshot reaches them; a
   // stored PDF or PNG of it does not, and the script deletes those
-  // (`deleteSnapshotFiles`, run as each snapshot's `after`).
-  { table: 'report_snapshots', key: ['id'], columns: ['title', 'data', 'workings'] },
-  { table: 'reports', key: ['id'], columns: ['sections', 'cover'] },
+  // (lib/retention/snapshot-files.ts: recorded as each snapshot's `before`).
+  { table: 'report_snapshots', key: ['id'], columns: ['title', 'data', 'workings'], pageSize: DOCS },
+  { table: 'reports', key: ['id'], columns: ['sections', 'cover'], pageSize: DOCS },
   // A sent email's subject line.
   { table: 'report_sends', key: ['id'], columns: ['subject'] },
 ]
@@ -162,8 +167,7 @@ async function columnsHere(admin: SupabaseClient, spec: ProseTable, clientIds: r
 export interface ProseScrubResult {
   /** Rows that carried an erased text. */
   rows: number
-  /** Their keys, as the spec names them (the snapshots' ids, for the files
-   *  built from them). */
+  /** Their keys, as the spec names them, with their workspace (`client_id`). */
   keys: Row[]
 }
 
@@ -172,19 +176,18 @@ export interface ProseScrubResult {
  * (`apply`) or counted (a dry run). Throws on a read or write that fails, so
  * the script's step fails and the comments are not deleted.
  *
- * `after` runs once a row is scrubbed (with `apply` only): the snapshots'
- * stored files are deleted there, AFTER their words are gone, so a download
- * that re-renders in between can only print the scrubbed snapshot (step 8's
- * order: the source first, then the files). Where it throws, the row is put
- * back as it was, so a re-run still finds it by its words and tries again;
- * the other rows go on, and the call then throws naming every failure.
+ * `before` runs for a row that carries the words, just before it is scrubbed
+ * (with `apply` only): a snapshot is put on the stored files' pending list
+ * there, while it can still be found by the words. Where it throws, that row
+ * and the rest are left as they are and the call throws, so a re-run finds
+ * them again.
  */
 export async function scrubStoredProse(
   admin: SupabaseClient,
   spec: ProseTable,
   clientIds: readonly string[],
   texts: readonly string[],
-  opts: { apply: boolean; after?: (key: Row) => Promise<void> },
+  opts: { apply: boolean; before?: (row: Row) => Promise<void> },
 ): Promise<ProseScrubResult> {
   const needles = proseNeedles(texts)
   const none: ProseScrubResult = { rows: 0, keys: [] }
@@ -193,66 +196,25 @@ export async function scrubStoredProse(
   if (!cols?.length) return none
   // A column list built at run time: typed as '*' (the client is untyped
   // either way), so the rows read as records.
-  const select = [...spec.key, ...cols].join(', ') as '*'
+  const select = [...new Set([...spec.key, 'client_id', ...cols])].join(', ') as '*'
+  // Ordered by the table's own key, so the pages are stable while the rows
+  // are rewritten (a scrub never changes a key).
   const stored = await selectAll<Row>(() => {
     let q = admin.from(spec.table).select(select).in('client_id', [...clientIds])
     for (const k of spec.key) q = q.order(k, { ascending: true })
     return q
-  })
+  }, spec.pageSize ?? 1000)
   const out: ProseScrubResult = { rows: 0, keys: [] }
-  const failed: string[] = []
   for (const row of stored) {
     const patch = scrubProseRow(row, cols, needles)
     if (!patch) continue
     const key = Object.fromEntries(spec.key.map((k) => [k, row[k]]))
     out.rows++
-    out.keys.push(key)
+    out.keys.push({ ...key, client_id: row.client_id })
     if (!opts.apply) continue
-    // What the row held, taken before the write, to put it back with.
-    const was = Object.fromEntries(Object.keys(patch).map((c) => [c, structuredClone(row[c])]))
+    if (opts.before) await opts.before(row)
     const { error } = await admin.from(spec.table).update(patch).match(key)
     if (error) throw new Error(`scrub ${spec.table} ${JSON.stringify(key)}: ${messageOf(error)}`)
-    if (!opts.after) continue
-    try {
-      await opts.after(key)
-    } catch (e) {
-      const back = await admin.from(spec.table).update(was).match(key)
-      failed.push(`${JSON.stringify(key)}: ${messageOf(e)}${back.error ? ` (and it could not be put back for a re-run: ${messageOf(back.error)})` : ' (put back, so a re-run finds it)'}`)
-    }
-  }
-  if (failed.length) throw new Error(`${spec.table}: ${failed.join('; ')}`)
-  return out
-}
-
-export interface StoredFile { id: string; snapshot_id: string; storage_path: string }
-
-/** The stored files (`artifacts`, not yet stale) built from these snapshots:
- *  what a dry run says would be deleted. Read only. */
-export async function filesOfSnapshots(admin: SupabaseClient, snapshotIds: readonly string[]): Promise<StoredFile[]> {
-  if (!snapshotIds.length) return []
-  const out: StoredFile[] = []
-  for (let i = 0; i < snapshotIds.length; i += 200) {
-    const { data, error } = await admin.from('artifacts').select('id, snapshot_id, storage_path').in('snapshot_id', snapshotIds.slice(i, i + 200)).eq('stale', false)
-    if (error) throw new Error(`read artifacts: ${messageOf(error)}`)
-    out.push(...((data ?? []) as StoredFile[]))
   }
   return out
-}
-
-/**
- * A scrubbed snapshot's stored files (its PDFs and PNGs, a brief's included),
- * deleted and flagged stale through the path steps 7d and 8 use
- * (`markSnapshotsStale`): the next download re-renders from the scrubbed
- * snapshot. Only this snapshot's files. Returns what it deleted; throws naming
- * the files where the flag or the delete fails.
- */
-export async function deleteSnapshotFiles(admin: SupabaseClient, snapshotId: string): Promise<StoredFile[]> {
-  const files = await filesOfSnapshots(admin, [snapshotId])
-  if (!files.length) return []
-  try {
-    await markSnapshotsStale(admin, [snapshotId], { apply: true })
-  } catch (e) {
-    throw new Error(`stored files of snapshot ${snapshotId} not deleted (${files.map((f) => f.storage_path).join(', ')}): ${messageOf(e)}`)
-  }
-  return files
 }
