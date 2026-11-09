@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { acceptInvitation, type AcceptState } from './actions'
 import { AUTH_INPUT, AUTH_BUTTON } from '@/components/auth/auth-card'
-import { LegalConsent } from '@/components/legal-consent'
 
 const idleAccept: AcceptState = { ok: false, message: '' }
 
@@ -57,7 +56,6 @@ export function SignupAcceptForm({ token, email }: { token: string; email: strin
         <label className="mb-1 block text-sm font-medium">Set a password</label>
         <Input className={AUTH_INPUT} name="password" type="password" required minLength={8} placeholder="At least 8 characters" disabled={pending} />
       </div>
-      <LegalConsent disabled={pending} />
       <Button type="submit" disabled={pending} className={AUTH_BUTTON}>
         {pending ? 'Creating account…' : 'Accept & create account'}
       </Button>

@@ -17,8 +17,6 @@ export function SiteFooter() {
         <span className="links">
           <Link href="/how-it-works">How it works</Link>
           {USE_CASES_PUBLIC && <Link href="/use-cases">Use cases</Link>}
-          <Link href="/privacy">Privacy</Link>
-          <Link href="/terms">Terms</Link>
           <a href={`${APP_URL}/login`}>Sign in</a>
           <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
         </span>

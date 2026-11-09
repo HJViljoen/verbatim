@@ -33,8 +33,15 @@ describe('the site header and footer', () => {
   it('the footer names the mailbox someone reads, not hello@', () => {
     const html = render(SiteFooter())
     expect(html).toContain('href="mailto:heinrichviljoen@verbatimintel.com"')
-    // One address across the site, the legal pages and the app (lib/legal).
+    // One address across the site and the app (lib/legal).
     expect(html).toContain(`href="mailto:${CONTACT_EMAIL}"`)
     expect(html).not.toContain('hello@verbatimintel.com')
+  })
+
+  it('links no legal page while they are off the site (9 Nov 2026)', () => {
+    for (const html of [render(SiteFooter()), render(SiteNav({ variant: 'dark' })), render(SiteNav({ variant: 'light' }))]) {
+      expect(html).not.toMatch(/href="[^"]*\/(privacy|terms)"/)
+      expect(html).not.toMatch(/>(Privacy|Terms)</)
+    }
   })
 })

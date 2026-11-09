@@ -10,7 +10,7 @@ import { playbooks, USE_CASES_PUBLIC } from './site/_data/playbooks'
 const BASE = 'https://verbatimintel.com'
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const staticPaths = ['', '/how-it-works', ...(USE_CASES_PUBLIC ? ['/use-cases'] : []), '/privacy', '/terms']
+  const staticPaths = ['', '/how-it-works', ...(USE_CASES_PUBLIC ? ['/use-cases'] : [])]
   const playbookPaths = USE_CASES_PUBLIC ? playbooks.map((pb) => `/use-cases/${pb.slug}`) : []
   const lastModified = new Date()
   return [...staticPaths, ...playbookPaths].map((path) => ({

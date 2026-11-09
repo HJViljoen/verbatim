@@ -36,8 +36,8 @@ const emoji = Noto_Color_Emoji({
 });
 
 // Absolute base for the share card (app/opengraph-image.tsx) and the icons.
-// Same source as lib/legal.ts: the apex is the host links are shared from, and
-// it is where NEXT_PUBLIC_SITE_URL points. A preview deployment resolves to
+// The apex is the host links are shared from, and it is where
+// NEXT_PUBLIC_SITE_URL points. A preview deployment resolves to
 // itself instead, so what it unfurls is the card it built. Without this Next
 // falls back to localhost and says so on every build.
 const ORIGIN =

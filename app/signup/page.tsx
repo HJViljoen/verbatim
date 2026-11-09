@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { AuthCard, AUTH_INPUT, AUTH_BUTTON } from '@/components/auth/auth-card'
-import { LegalConsent } from '@/components/legal-consent'
 import { signUp, type SignupState } from './actions'
 
 const idleSignup: SignupState = { ok: false, message: '' }
@@ -36,8 +35,6 @@ export default function SignupPage() {
             <a href="https://verbatimintel.com" className="cursor-pointer text-foreground underline">Request access</a>.
           </p>
         </div>
-
-        <LegalConsent disabled={pending} />
 
         {state.message && (
           <p className="text-sm text-destructive">

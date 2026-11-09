@@ -42,11 +42,9 @@ export async function signUp(_prev: SignupState, formData: FormData): Promise<Si
   const gate = checkSignupCode(String(formData.get('invite_code') ?? ''))
   if (!gate.ok) return { ok: false, message: gate.message }
 
-  // Consent is checked server-side too: the checkbox alone is not a control,
-  // since the action is directly POST-reachable (T0-9).
-  if (!formData.get('accept_terms')) {
-    return { ok: false, message: 'Please accept the terms and privacy notice.' }
-  }
+  // No consent check while the legal pages are off the site (9 Nov 2026,
+  // proxy.ts): the form no longer asks for `accept_terms`, and nothing ever
+  // stored it.
 
   const parsed = schema.safeParse({
     full_name: formData.get('full_name'),
