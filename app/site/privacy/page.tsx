@@ -11,7 +11,7 @@ const CONTACT = CONTACT_EMAIL
 
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Privacy" updated="9 November 2026">
+    <LegalPage title="Privacy" updated="29 September 2026">
       <p>
         Verbatim reads public conversation on social platforms so a brand can understand what its
         market is saying. This page says exactly what that means for the people whose comments we
@@ -110,14 +110,10 @@ export default function PrivacyPage() {
       <p>
         You can ask what we hold about you, ask us to correct or delete it, or object to our
         processing. Write to <a href={`mailto:${CONTACT}`}>{CONTACT}</a> with the handle and platform
-        and within 7 days we will remove the comments tied to it, the quotes we took from them, and
-        any copy of a comment&rsquo;s full wording, in the product and in our stored reports, PDFs
-        included. We also make sure they are not collected again. A summary written from many
-        comments may keep a paraphrase of what was said, without quoting or naming you. Some
-        copies are outside our reach: report emails already sent and files already downloaded.
-        Our providers&rsquo; copies and backups expire on their own schedules. You can also
-        complain to your data protection authority, or in South Africa to the Information
-        Regulator.
+        and within 7 days we will remove the comments tied to it, and any quote of them in the
+        product and in our stored reports, and make sure they are not collected again. Report
+        emails already sent cannot be recalled. You can also complain to your data protection
+        authority, or in South Africa to the Information Regulator.
       </p>
 
       <h2>YouTube</h2>
