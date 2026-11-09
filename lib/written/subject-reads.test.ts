@@ -873,11 +873,12 @@ describe('the pipeline carries write-subject-reads', () => {
   const src = readFileSync(new URL('../../inngest/functions/pipeline.ts', import.meta.url), 'utf8')
   const ids = stepIds(src)
 
-  it('as one additive id in its own position: immediately after write-week-read, immediately before write-post-ideas (70 in all)', () => {
-    // 70 since 9 Nov: the seven per-video fan-outs give their wave and batch
-    // ids to fanOut, whose own two step.run calls are what this reads
-    // (lib/pipeline/step-budget.test.ts names every family, 82).
-    expect(ids).toHaveLength(70)
+  it('as one additive id in its own position: immediately after write-week-read, immediately before write-post-ideas (68 in all by step.run)', () => {
+    // 68 since 9 Nov: the seven per-video fan-outs give their wave and batch
+    // ids to fanOut (lib/pipeline/step-budget.ts) as waveId and memberId,
+    // which this does not read; lib/pipeline/step-budget.test.ts and
+    // scripts/pipeline-step-ids.sh list all 82.
+    expect(ids).toHaveLength(68)
     expect(ids.filter((id) => id === 'write-subject-reads')).toHaveLength(1)
     const at = ids.indexOf('write-subject-reads')
     expect(ids[at - 1]).toBe('write-week-read')

@@ -7,10 +7,13 @@ import {
   TRANSCRIBE_PARALLEL, TRANSLATE_BATCH, TRANSLATE_CAP, TRANSLATE_PARALLEL, TRANSLATE_QUOTES_BATCH,
   TRANSLATE_QUOTES_CALLS_PER_STEP, TRANSLATE_QUOTES_CAP, BACKFILL_CAP, BACKFILL_BATCH_YOUTUBE,
 } from '../config'
+import { BACKFILL_WRITABLE, backfillStillDue, type BackfillRowNow } from '../gather/transcript-backfill'
+import { refsStillToScrape } from '../gather/gather'
 import { runWarning, WARNING_STEPS, warningSentence } from './run-warnings'
 import {
-  CLASSIFY_PARALLEL, COMMENT_PARALLEL, countSteps, INNGEST_STEP_LIMIT, pipelineSteps, settleMembers, STEP_BUDGET_WARN_AT,
-  STEP_FAMILIES, stepBudgetCause, STEPS_AFTER_CLOSE, waveCount, type RunWidths,
+  CLASSIFY_PARALLEL, COMMENT_PARALLEL, countSteps, fanOut, INNGEST_STEP_LIMIT, passABatchRoom, pipelineSteps, settleMembers,
+  STEP_BUDGET_WARN_AT, STEP_FAMILIES, stepBudgetCause, STEPS_AFTER_CLOSE, STEPS_AFTER_PASS_A, WAVE_DEADLINE_MS, waveCount,
+  type RunWidths, type StepRunner,
 } from './step-budget'
 
 // THE STEP BUDGET (9 Nov). Sealand's 8 Nov update `c5690bb0` failed on
@@ -202,42 +205,48 @@ const familyOf = (id: string): string =>
 
 describe('every step id is counted', () => {
   const ids = stepIdsOf(PIPELINE)
-  // fanOut's own two calls take the ids its callers give it.
-  const own = ids.filter((id) => id !== 'id' && id !== 'f.memberId(i)')
 
-  it('finds fanOut\'s two calls and nothing else unnamed', () => {
-    expect(ids.filter((id) => id === 'id' || id === 'f.memberId(i)')).toEqual(['id', 'f.memberId(i)'])
-    for (const id of own) expect(id, id).toMatch(/^['`]|^searchStepId\(task\)$/)
+  it('names every id: a literal, a template or searchStepId(task), 82 in all (fanOut\'s 14 among them)', () => {
+    for (const id of ids) expect(id, id).toMatch(/^['`]|^searchStepId\(task\)$/)
+    expect(ids).toHaveLength(82)
   })
 
   it('names exactly the families the count counts: a new id fails here until pipelineSteps counts it', () => {
-    expect([...new Set(own.map(familyOf))].sort()).toEqual([...STEP_FAMILIES].sort())
+    expect([...new Set(ids.map(familyOf))].sort()).toEqual([...STEP_FAMILIES].sort())
+  })
+
+  it('scripts/pipeline-step-ids.sh reads fanOut\'s ids too, so the pre-deploy diff lists the real ones', () => {
+    const script = readFileSync(join(ROOT, 'scripts', 'pipeline-step-ids.sh'), 'utf8')
+    expect(script).toContain('|\\b(?:waveId|memberId)\\s*:\\s*\\([^)]*\\)\\s*=>\\s*(?=`)/g')
+    // the node program is one single-quoted bash word: no quote inside it
+    const program = script.slice(script.indexOf("node -e '\nconst src"), script.indexOf("' \"$1\""))
+    expect(program.slice("node -e '".length)).not.toContain("'")
   })
 })
 
 describe('the seven per-video fan-outs are one step a wave', () => {
   const FANOUTS: { wave: string; member: string; parallel: string }[] = [
-    { wave: '`comments-wave:${platform}:${w}-of-${n}`', member: '`comments:${platform}:${i + 1}`', parallel: 'COMMENT_PARALLEL' },
-    { wave: '`transcribe-wave:${platform}:${w}-of-${n}`', member: '`transcribe:${platform}:${i + 1}-of-${txBatches.length}`', parallel: 'TRANSCRIBE_PARALLEL' },
-    { wave: '`ocr-wave:${platform}:${w}-of-${n}`', member: '`ocr:${platform}:${i + 1}-of-${ocrBatches.length}`', parallel: 'OCR_PARALLEL' },
-    { wave: '`classify-wave:${w}-of-${n}`', member: '`classify:${i + 1}-of-${classifyBatches.length}`', parallel: 'CLASSIFY_PARALLEL' },
-    { wave: '`transcript-backfill-wave:${w}-of-${n}`', member: '`transcript-backfill:${i + 1}-of-${plan.batches.length}`', parallel: 'BACKFILL_PARALLEL' },
-    { wave: '`translate-wave:${w}-of-${n}`', member: '`translate:${i + 1}-of-${plan.batches.length}`', parallel: 'TRANSLATE_PARALLEL' },
-    { wave: '`ocr-backfill-wave:${w}-of-${n}`', member: '`ocr-backfill:${i + 1}-of-${plan.batches.length}`', parallel: 'OCR_PARALLEL' },
+    { wave: '`comments-wave:${platform}:${w}-of-${n}`', member: '`comments:${platform}:${w + j + 1}`', parallel: 'COMMENT_PARALLEL' },
+    { wave: '`transcribe-wave:${platform}:${w}-of-${n}`', member: '`transcribe:${platform}:${w + j + 1}-of-${txBatches.length}`', parallel: 'TRANSCRIBE_PARALLEL' },
+    { wave: '`ocr-wave:${platform}:${w}-of-${n}`', member: '`ocr:${platform}:${w + j + 1}-of-${ocrBatches.length}`', parallel: 'OCR_PARALLEL' },
+    { wave: '`classify-wave:${w}-of-${n}`', member: '`classify:${w + j + 1}-of-${classifyBatches.length}`', parallel: 'CLASSIFY_PARALLEL' },
+    { wave: '`transcript-backfill-wave:${w}-of-${n}`', member: '`transcript-backfill:${w + j + 1}-of-${plan.batches.length}`', parallel: 'BACKFILL_PARALLEL' },
+    { wave: '`translate-wave:${w}-of-${n}`', member: '`translate:${w + j + 1}-of-${plan.batches.length}`', parallel: 'TRANSLATE_PARALLEL' },
+    { wave: '`ocr-backfill-wave:${w}-of-${n}`', member: '`ocr-backfill:${w + j + 1}-of-${plan.batches.length}`', parallel: 'OCR_PARALLEL' },
   ]
 
-  it('each passes its wave id, its batches\' old ids and its *_PARALLEL to fanOut, in source order', () => {
+  it('each passes its wave id, its batches\' old ids (the text they had) and its *_PARALLEL to fanOut, in source order', () => {
     let last = -1
     for (const f of FANOUTS) {
       const at = PIPELINE.indexOf(`waveId: (w, n) => ${f.wave}`)
       expect(at, f.wave).toBeGreaterThan(last)
-      // The call, from its own `await fanOut({` to its fallback.
-      const open = PIPELINE.lastIndexOf('await fanOut({', at)
+      // The call, from its own `await fanOut(step, {` to its fallback.
+      const open = PIPELINE.lastIndexOf('await fanOut(step, {', at)
       expect(open, f.wave).toBeGreaterThan(last)
       const call = PIPELINE.slice(open, PIPELINE.indexOf('fallback: (', at))
-      expect(call, f.wave).toContain(`memberId: (i) => ${f.member}`)
+      expect(call, f.wave).toContain(`memberId: (w, j) => ${f.member}`)
       expect(call, f.wave).toContain(`parallel: ${f.parallel},`)
-      expect(call.match(/await fanOut\(\{/g), f.wave).toHaveLength(1)
+      expect(call.match(/await fanOut\(step, \{/g), f.wave).toHaveLength(1)
       last = at
     }
   })
@@ -251,14 +260,10 @@ describe('the seven per-video fan-outs are one step a wave', () => {
     expect([COMMENT_PARALLEL, TRANSCRIBE_PARALLEL, OCR_PARALLEL, CLASSIFY_PARALLEL, BACKFILL_PARALLEL, TRANSLATE_PARALLEL]).toEqual([4, 4, 4, 4, 4, 4])
   })
 
-  it('fanOut: the wave settles its batches, a failed wave or batch runs as its own step with the old fallback', () => {
-    const body = PIPELINE.slice(PIPELINE.indexOf('const fanOut = async'), PIPELINE.indexOf('// 1. Open the run row'))
-    expect(body).toContain('.run(id, () => settleMembers(slice, (item, j) => f.run(item, first + j)))')
-    // a wave out of retries: every batch of it on its own
-    expect(body).toMatch(/\.catch\(\(e: unknown\) => \{[\s\S]*?return null\s*\}\)/)
-    expect(body).toContain('if (outcome?.ok) return Promise.resolve(outcome.value)')
-    expect(body).toContain('step.run(f.memberId(i), () => f.run(item, i))')
-    expect(body).toContain('.catch((e: unknown) => f.fallback(item, i, e))')
+  it('the comment batches skip what this run scraped and stop at their wave\'s deadline; the owned layer does neither', () => {
+    expect(PIPELINE).toContain('scrapeCommentsBatch({ clientId, runId, platform, refs, skipScrapedThisRun: true, signal })')
+    expect(PIPELINE.match(/skipScrapedThisRun/g)).toHaveLength(2) // the call and its comment
+    expect(PIPELINE).toContain('scrapeCommentsBatch({ clientId, runId, platform: platform as Platform, refs: ownedRefs.slice(w, w + COMMENT_BATCH), source })')
   })
 })
 
@@ -279,14 +284,14 @@ describe('the run counts its own steps and warns before about 900', () => {
     expect(STEPS_AFTER_CLOSE).toBe(after.length)
   })
 
-  it('the warning is housekeeping, says nothing failed, and comes at 900 steps with close-run\'s and the five after it', () => {
-    expect(WARNING_STEPS['step-budget'].kind).toBe('housekeeping')
+  it('the warning is stale-data, so it alerts, says nothing failed, and comes at 900 steps with close-run\'s and the five after it', () => {
+    expect(WARNING_STEPS['step-budget'].kind).toBe('stale-data')
     expect(stepBudgetCause(STEP_BUDGET_WARN_AT - 1 - STEPS_AFTER_CLOSE - 1)).toBeNull()
     const cause = stepBudgetCause(STEP_BUDGET_WARN_AT - 1 - STEPS_AFTER_CLOSE)!
     expect(cause).toBe('900 of the 1000 steps a run may take, the warning at 900')
     expect(warningSentence(runWarning('step-budget', cause))).toBe(
-      'Housekeeping: the update’s steps came near Inngest’s limit of steps a run (900 of the 1000 steps a run may take, the warning at 900). '
-      + 'Nothing is stale: this update finished, but a bigger one can be stopped before its themes, its read and its email.',
+      'Stale data: the update’s steps came near Inngest’s limit of steps a run (900 of the 1000 steps a run may take, the warning at 900). '
+      + 'This update finished, but the next one this size or larger can be stopped before its themes, its read and its email reach the client.',
     )
   })
 })
@@ -337,5 +342,216 @@ describe('countSteps', () => {
     expect(count()).toBe(3)
     expect(calls[0][0]).toBe(true)
     expect(calls[0][1]).toBe('a')
+  })
+})
+
+// ---- the fresh review (9 Nov): a slow batch, a killed wave, and Pass A ---------
+
+/** Inngest's step tool, enough of it: a step's return is memoised by id, a
+ *  step that throws is retried up to `attempts` times, and `kill(id, n)` makes
+ *  attempt n of a step die after its body ran (the invocation killed at the
+ *  Vercel limit before Inngest stored the result). */
+function fakeStep(attempts = 3) {
+  const memo = new Map<string, unknown>()
+  const runs = new Map<string, number>()
+  const kills = new Map<string, number[]>()
+  const step: StepRunner = {
+    async run(id, fn) {
+      if (memo.has(id)) return memo.get(id)
+      let last: unknown
+      for (let n = 0; n < attempts; n++) {
+        runs.set(id, (runs.get(id) ?? 0) + 1)
+        try {
+          const value = await fn()
+          if (kills.get(id)?.includes(n)) throw new Error('killed at 300 s')
+          memo.set(id, JSON.parse(JSON.stringify(value ?? null)))
+          return memo.get(id)
+        } catch (e) { last = e }
+      }
+      throw last
+    },
+  }
+  return { step, runs, kill: (id: string, ...n: number[]) => kills.set(id, n) }
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+describe('settleMembers: the wave deadline', () => {
+  it('is 240 s: over every 8 Nov batch (the slowest, a backfill, 227 s) and 60 s under Vercel\'s 300', () => {
+    expect(WAVE_DEADLINE_MS).toBe(240_000)
+    expect(WAVE_DEADLINE_MS).toBeGreaterThan(227_000)
+    expect(300_000 - WAVE_DEADLINE_MS).toBe(60_000)
+  })
+
+  it('a batch past the deadline comes back late, its signal aborted; the others come back with their values', async () => {
+    let seen: AbortSignal | undefined
+    const out = await settleMembers([1, 2, 3], async (n, _j, signal) => {
+      if (n === 2) { seen = signal; await sleep(200); return -1 }
+      return n * 10
+    }, 30)
+    expect(out[0]).toEqual({ ok: true, value: 10 })
+    expect(out[1]).toMatchObject({ ok: false, late: true })
+    expect(out[2]).toEqual({ ok: true, value: 30 })
+    expect(seen?.aborted).toBe(true)
+  })
+})
+
+describe('fanOut: a slow batch costs its siblings nothing', () => {
+  it('the wave step runs once, the slow batch runs again alone under its old id, the others once', async () => {
+    const { step, runs } = fakeStep()
+    const calls = new Map<number, number>()
+    const results = await fanOut(step, {
+      waveId: (w, n) => `x-wave:${w}-of-${n}`,
+      memberId: (w, j) => `x:${w + j + 1}`,
+      items: [1, 2, 3, 4],
+      parallel: 4,
+      deadlineMs: 30,
+      run: async (n, _i, signal) => {
+        calls.set(n, (calls.get(n) ?? 0) + 1)
+        if (n === 2 && signal) await sleep(200) // slow inside its wave only
+        return n * 10
+      },
+      fallback: () => -1,
+    })
+    expect(results).toEqual([10, 20, 30, 40])
+    expect(runs.get('x-wave:1-of-1')).toBe(1)
+    expect(runs.get('x:2')).toBe(1)
+    expect([...runs.keys()].sort()).toEqual(['x-wave:1-of-1', 'x:2'])
+    expect(calls.get(1)).toBe(1)
+    expect(calls.get(3)).toBe(1)
+    expect(calls.get(4)).toBe(1)
+  })
+})
+
+describe('a retried wave makes no second actor call for a finished batch', () => {
+  it('comments: a killed wave and its retries scrape each ref once (refsStillToScrape over the stamps)', async () => {
+    const { step, runs, kill } = fakeStep()
+    kill('comments-wave:1-of-1', 0, 1, 2) // killed on every attempt: then each batch alone
+    const stamps = new Map<string, number | null>() // videos.comments_count_at_scrape
+    const actorCalls: string[] = []
+    const batches = [[{ video_id: 'a', comments_count: 9 }, { video_id: 'b', comments_count: 7 }], [{ video_id: 'c', comments_count: 5 }]]
+    await fanOut(step, {
+      waveId: (w, n) => `comments-wave:${w}-of-${n}`,
+      memberId: (w, j) => `comments:youtube:${w + j + 1}`,
+      items: batches,
+      parallel: 4,
+      run: async (refs) => {
+        for (const ref of refsStillToScrape(refs, stamps)) {
+          actorCalls.push(ref.video_id)
+          stamps.set(ref.video_id, ref.comments_count)
+        }
+        return { errors: [] as string[] }
+      },
+      fallback: () => ({ errors: ['out of retries'] }),
+    })
+    expect(runs.get('comments-wave:1-of-1')).toBe(3)
+    expect(runs.get('comments:youtube:1')).toBe(1)
+    expect(actorCalls).toEqual(['a', 'b', 'c'])
+  })
+
+  it('the backfill: a retried batch makes no second actor call, counts no second attempt, and never writes failed over ok', async () => {
+    const { step, kill } = fakeStep()
+    kill('transcript-backfill-wave:1-of-1', 0)
+    const rows = new Map<string, BackfillRowNow>([['v1', { status: null, attempts: 0 }], ['v2', { status: 'failed', attempts: 1 }]])
+    const actorCalls: string[][] = []
+    let pass = 0
+    const results = await fanOut(step, {
+      waveId: (w, n) => `transcript-backfill-wave:${w}-of-${n}`,
+      memberId: (w, j) => `transcript-backfill:${w + j + 1}-of-1`,
+      items: [[{ id: 'v1', attempts: 0 }, { id: 'v2', attempts: 1 }]],
+      parallel: 4,
+      run: async (videos) => {
+        pass++
+        const { due, done } = backfillStillDue(videos, rows)
+        if (due.length) actorCalls.push(due.map((v) => v.id))
+        // the first pass: v1 transcribes ok, v2 fails again; a second pass would fail both
+        for (const v of due) {
+          const row = rows.get(v.id)!
+          const status = pass === 1 && v.id === 'v1' ? 'ok' : 'failed'
+          if (row.status === null || row.status === 'failed' || row.status === 'no_media') rows.set(v.id, { status, attempts: row.attempts + 1 })
+        }
+        return { done: done.map((d) => d.status), due: due.length }
+      },
+      fallback: () => ({ done: [], due: 0 }),
+    })
+    expect(actorCalls).toEqual([['v1', 'v2']])
+    expect(rows.get('v1')).toEqual({ status: 'ok', attempts: 1 })
+    expect(rows.get('v2')).toEqual({ status: 'failed', attempts: 2 })
+    // the retry tallied what the first pass stored
+    expect(results).toEqual([{ done: ['ok', 'failed'], due: 0 }])
+    expect(BACKFILL_WRITABLE).toBe('transcript_status.is.null,transcript_status.in.(failed,no_media)')
+  })
+})
+
+describe('refsStillToScrape and backfillStillDue', () => {
+  it('a gather ref is scraped unless its stamp is its own count, which only this run\'s scrape writes', () => {
+    const refs = [
+      { video_id: 'fresh', comments_count: 12 }, // never stamped
+      { video_id: 'recheck', comments_count: 40 }, // stamped at 30, grew
+      { video_id: 'done', comments_count: 8 }, // stamped by this run
+      { video_id: 'norow', comments_count: 5 },
+    ]
+    const stamps = new Map<string, number | null>([['fresh', null], ['recheck', 30], ['done', 8]])
+    expect(refsStillToScrape(refs, stamps).map((r) => r.video_id)).toEqual(['fresh', 'recheck', 'norow'])
+  })
+
+  it('a backfill video is done once settled or attempted since the plan; one the plan gave no attempts is judged by its status', () => {
+    const now = new Map<string, BackfillRowNow>([
+      ['settled', { status: 'no_speech', attempts: 1 }],
+      ['again', { status: 'failed', attempts: 2 }],
+      ['due', { status: 'failed', attempts: 1 }],
+      ['old-plan', { status: 'failed', attempts: 2 }],
+    ])
+    const r = backfillStillDue([
+      { id: 'settled', attempts: 0 }, { id: 'again', attempts: 1 }, { id: 'due', attempts: 1 }, { id: 'old-plan' }, { id: 'norow', attempts: 0 },
+    ], now)
+    expect(r.due.map((v) => v.id)).toEqual(['due', 'old-plan', 'norow'])
+    expect(r.done.map((d) => [d.video.id, d.status])).toEqual([['settled', 'no_speech'], ['again', 'failed']])
+  })
+})
+
+describe('Pass A: the room the step budget leaves it', () => {
+  /** The steps after Pass A at the caps STEPS_AFTER_PASS_A names. */
+  const tailAtCaps = (() => {
+    const w: RunWidths = {
+      skipGather: true, platforms: [], classifyBatches: 0, transcriptBackfillBatches: 0, translateBatches: 0, ocrBackfillBatches: 0,
+      passABatches: 0, quoteBatches: 15, subjects: 8, themeBuckets: 15, passBChunks: 60, segmentBatches: 10, comparabilityTasks: 10,
+      lensMonths: 4, brandMonths: 4, productMonths: 4, briefWaves: 4,
+    }
+    const { stages } = pipelineSteps(w)
+    return stages.slice(stages.findIndex((s) => s.stage === 'pass-a') + 1).reduce((n, s) => n + s.steps, 0)
+  })()
+
+  it('holds back the most the steps after Pass A can take (122 at their caps, held at 150)', () => {
+    expect(tailAtCaps).toBe(122)
+    expect(STEPS_AFTER_PASS_A).toBeGreaterThanOrEqual(tailAtCaps)
+    expect(passABatchRoom(452)).toBe(398)
+    expect(passABatchRoom(900)).toBe(0)
+  })
+
+  it('cuts the plan where Pass A starts, counted, and says so as a stale-data warning', () => {
+    const at = PIPELINE.indexOf('const passARoom = passABatchRoom(stepCounter.count())')
+    expect(at).toBeGreaterThan(PIPELINE.lastIndexOf(".run('replan-pass-a-ocr'"))
+    expect(at).toBeLessThan(PIPELINE.indexOf('`pass-a:${w + j + 1}-of-${batches.length}`'))
+    expect(PIPELINE).toContain('const batches = passAPlan.batches.length > passARoom ? passAPlan.batches.slice(0, passARoom) : passAPlan.batches')
+    expect(PIPELINE).toContain("noteWarning('pass-a-deferred', ")
+    expect(WARNING_STEPS['pass-a-deferred'].kind).toBe('stale-data')
+  })
+
+  it('the worst cases, a whole-corpus Pass A (a prompt bump or forcePassA; 9 Nov: Sealand 4,762 eligible videos at most, Össur 3,071)', () => {
+    const sealandPassA = Math.ceil(4762 / 12) // 397
+    const ossurPassA = Math.ceil(3071 / 12) // 256
+    const resume = (w: RunWidths): RunWidths => ({ ...w, skipGather: true, platforms: [] })
+    const sealand = { ...sealand8Nov(646), passABatches: sealandPassA, briefWaves: 4 }
+    const ossur = { ...ossur8Nov(362), passABatches: ossurPassA, briefWaves: 4 }
+    // A gathering run: every batch fits the room, and the run stays under the limit.
+    expect(passABatchRoom(beforePassA(sealand, 'waves'))).toBeGreaterThanOrEqual(sealandPassA)
+    expect(pipelineSteps(sealand).total).toBe(867)
+    expect(pipelineSteps(ossur).total).toBe(502)
+    // An analysis-only resume.
+    expect(pipelineSteps(resume(sealand)).total).toBe(537)
+    expect(pipelineSteps(resume(ossur)).total).toBe(354)
+    // Before the waves, the same Sealand run was 1,456 steps.
+    expect(pipelineSteps(sealand, 'batches').total).toBe(1456)
   })
 })

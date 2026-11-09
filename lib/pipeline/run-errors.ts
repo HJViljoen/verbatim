@@ -180,6 +180,9 @@ export function partialRunAlert(input: {
   warnings?: readonly RunWarning[]
   /** Every warning noted, past the store's cap. */
   warningTotal?: number
+  /** Every STALE-DATA warning noted, past the store's cap (9 Nov): the count
+   *  the email states, never the capped list's. */
+  staleTotal?: number
 }): { subject: string; text: string } {
   const { runId, clientName, total, recorded, reportSent } = input
   const warnings = input.warnings ?? []
@@ -211,7 +214,7 @@ export function partialRunAlert(input: {
   // ONLY WARNINGS: the run closed 'completed'. The same email, in the same
   // order, its Errors section the warnings and its summary theirs.
   if (total <= 0) {
-    const n = stale.length
+    const n = Math.max(input.staleTotal ?? stale.length, stale.length)
     const text = [
       `Run ${runId} for ${clientName} completed, with ${n} stale-data warning${n === 1 ? '' : 's'}: steps the run does not count failed after retries, and what they feed is stale for the client.`,
       reportSent

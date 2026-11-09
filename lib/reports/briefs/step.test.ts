@@ -599,11 +599,12 @@ describe('the pipeline carries the month\'s briefs', () => {
     expect(src).toMatch(/runLongRunStep\(admin, \{ clientId, runId, company, lastAttempt: [^}]*, window: closingWindow, testRun \}\)/)
   })
 
-  it('as five additive ids in their own position: after write-longrun-read, immediately before close-run, in this order (70 in all: write-post-ideas and the product readings\' two since depth v2, write-subject-reads since 14 Oct)', () => {
-    // 70 since 9 Nov: the seven per-video fan-outs give their wave and batch
-    // ids to fanOut, whose own two step.run calls are what this reads
-    // (lib/pipeline/step-budget.test.ts names every family, 82).
-    expect(ids).toHaveLength(70)
+  it('as five additive ids in their own position: after write-longrun-read, immediately before close-run, in this order (68 in all by step.run: write-post-ideas and the product readings\' two since depth v2, write-subject-reads since 14 Oct)', () => {
+    // 68 since 9 Nov: the seven per-video fan-outs give their wave and batch
+    // ids to fanOut (lib/pipeline/step-budget.ts) as waveId and memberId,
+    // which this does not read; lib/pipeline/step-budget.test.ts and
+    // scripts/pipeline-step-ids.sh list all 82.
+    expect(ids).toHaveLength(68)
     const at = ids.indexOf('plan-briefs')
     expect(ids[at - 1]).toBe('write-longrun-read')
     expect(ids.slice(at, at + 6)).toEqual([

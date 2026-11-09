@@ -303,11 +303,12 @@ describe('the pipeline carries write-week-read', () => {
   const src = readFileSync(new URL('../../inngest/functions/pipeline.ts', import.meta.url), 'utf8')
   const ids = stepIds(src)
 
-  it('as one additive id, immediately after ask-reevaluate; the subjects\' reads follow it, then the post ideas\' step, the long-run read\'s, the month\'s briefs and close-run (70 in all: the pass-b wave family since 4 Oct, the briefs\' five since 5 Oct, write-post-ideas and the product readings\' two since depth v2, write-subject-reads since 14 Oct)', () => {
-    // 70 since 9 Nov: the seven per-video fan-outs give their wave and batch
-    // ids to fanOut, whose own two step.run calls are what this reads
-    // (lib/pipeline/step-budget.test.ts names every family, 82).
-    expect(ids).toHaveLength(70)
+  it('as one additive id, immediately after ask-reevaluate; the subjects\' reads follow it, then the post ideas\' step, the long-run read\'s, the month\'s briefs and close-run (68 in all by step.run: the pass-b wave family since 4 Oct, the briefs\' five since 5 Oct, write-post-ideas and the product readings\' two since depth v2, write-subject-reads since 14 Oct)', () => {
+    // 68 since 9 Nov: the seven per-video fan-outs give their wave and batch
+    // ids to fanOut (lib/pipeline/step-budget.ts) as waveId and memberId,
+    // which this does not read; lib/pipeline/step-budget.test.ts and
+    // scripts/pipeline-step-ids.sh list all 82.
+    expect(ids).toHaveLength(68)
     expect(ids.filter((id) => id === 'write-week-read')).toHaveLength(1)
     const at = ids.indexOf('write-week-read')
     expect(ids[at - 1]).toBe('ask-reevaluate')

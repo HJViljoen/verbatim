@@ -45,7 +45,7 @@ import { briefComposeStep, briefIdeasStep, briefResearchStep, briefWriteStep, pl
 import { BRIEF_ROLES } from '@/lib/reports/briefs/types'
 import { summariseRunErrors, partialRunAlert, passADegradation, isolatedBatchDegradation, runCloseStatus, closingErrors, RUN_ERROR_CAP } from '@/lib/pipeline/run-errors'
 import { alertDue, closeRunWrite, createWarningLog } from '@/lib/pipeline/run-warnings'
-import { CLASSIFY_PARALLEL, COMMENT_BATCH, COMMENT_PARALLEL, countSteps, PASS_A_BATCH, PASS_A_PARALLEL, SEARCH_PARALLEL, settleMembers, stepBudgetCause, THEMES_PARALLEL, waveCount, type MemberOutcome } from '@/lib/pipeline/step-budget'
+import { CLASSIFY_PARALLEL, COMMENT_BATCH, COMMENT_PARALLEL, countSteps, fanOut, PASS_A_BATCH, PASS_A_PARALLEL, passABatchRoom, SEARCH_PARALLEL, stepBudgetCause, THEMES_PARALLEL } from '@/lib/pipeline/step-budget'
 import { writeRunCosts, runSpendSoFar } from '@/lib/pipeline/run-costs'
 import { withApifyRunContext, settleApifyRuns } from '@/lib/gather/apify-runs'
 import { decideOpenRun, runIdForEvent, RUN_STALE_AFTER_HOURS, PG_UNIQUE_VIOLATION, type RunningRow } from '@/lib/pipeline/run-guard'
@@ -273,50 +273,6 @@ export const runPipeline = inngest.createFunction(
     const clientId = (event.data as { clientId?: string }).clientId
     if (!clientId) throw new Error('pipeline/run.requested missing clientId')
     const options = ((event.data as { options?: PipelineRunOptions }).options) ?? {}
-
-    // ONE STEP A WAVE (9 Nov; Sealand's 8 Nov update ran out of Inngest's
-    // 1,000 steps inside Pass A, lib/pipeline/step-budget.ts). A fan-out's wave
-    // of batches is ONE step, `waveId`, and each batch in it runs with the
-    // arguments, the batch number and the concurrency it had as a step of its
-    // own, so the wave lasts as long as its slowest batch did. A wave never
-    // throws for one batch: a batch that failed inside its wave, or every batch
-    // of a wave that failed as a whole, then runs as a step of its own under
-    // its old id, `memberId`, with Inngest's retries and the fallback its old
-    // `.catch` gave. The results come back in batch order, the order the
-    // loops below always read them in.
-    const fanOut = async <T, R>(f: {
-      waveId: (wave: number, waves: number) => string
-      memberId: (i: number) => string
-      items: readonly T[]
-      parallel: number
-      run: (item: T, i: number) => Promise<R>
-      fallback: (item: T, i: number, e: unknown) => R
-    }): Promise<R[]> => {
-      const out: R[] = []
-      const waves = waveCount(f.items.length, f.parallel)
-      for (let w = 0; w < waves; w++) {
-        const first = w * f.parallel
-        const slice = f.items.slice(first, first + f.parallel)
-        const id = f.waveId(w + 1, waves)
-        const outcomes = await (step
-          .run(id, () => settleMembers(slice, (item, j) => f.run(item, first + j))) as Promise<unknown>)
-          .then((r) => r as MemberOutcome<R>[])
-          .catch((e: unknown) => {
-            console.error(`[${id}] out of retries, so each of its batches runs as a step of its own: ${e instanceof Error ? e.message : String(e)}`)
-            return null
-          })
-        out.push(...await Promise.all(slice.map((item, j): Promise<R> => {
-          const i = first + j
-          const outcome = outcomes?.[j]
-          if (outcome?.ok) return Promise.resolve(outcome.value)
-          if (outcome) console.warn(`[${f.memberId(i)}] failed inside ${id}, so it runs as a step of its own: ${outcome.error}`)
-          return (step.run(f.memberId(i), () => f.run(item, i)) as Promise<unknown>)
-            .then((r) => r as R)
-            .catch((e: unknown) => f.fallback(item, i, e))
-        })))
-      }
-      return out
-    }
 
     // 1. Open the run row (the orchestrator owns the lifecycle the CLI used to).
     //    An analysis-only resume reuses the existing row instead.
@@ -761,14 +717,17 @@ export const runPipeline = inngest.createFunction(
           { length: Math.ceil(gate.eligible.length / COMMENT_BATCH) },
           (_, i) => gate.eligible.slice(i * COMMENT_BATCH, (i + 1) * COMMENT_BATCH),
         )
-        const commentResults = await fanOut({
+        const commentResults = await fanOut(step, {
           waveId: (w, n) => `comments-wave:${platform}:${w}-of-${n}`,
-          memberId: (i) => `comments:${platform}:${i + 1}`,
+          memberId: (w, j) => `comments:${platform}:${w + j + 1}`,
           items: commentBatches,
           parallel: COMMENT_PARALLEL,
-          run: (refs, i): Promise<{ errors: string[]; thrown?: unknown }> =>
+          // skipScrapedThisRun: a batch run again (on its own after its wave,
+          // or a wave retried) makes no second actor call for a ref it
+          // already scraped; `signal` is the wave's deadline.
+          run: (refs, i, signal): Promise<{ errors: string[]; thrown?: unknown }> =>
             withApifyRunContext({ clientId, runId, step: `comments:${platform}:${i + 1}` }, () =>
-              scrapeCommentsBatch({ clientId, runId, platform, refs }),
+              scrapeCommentsBatch({ clientId, runId, platform, refs, skipScrapedThisRun: true, signal }),
             ),
           // Out of retries: the step's error, noted as the try/catch around
           // each batch step noted it.
@@ -851,9 +810,9 @@ export const runPipeline = inngest.createFunction(
             // One step a wave of TRANSCRIBE_PARALLEL batches since 9 Nov
             // (`transcribe-wave:P:W-of-M`, fanOut above); a batch's own id is
             // the step it takes only when it failed inside its wave.
-            const txResults = await fanOut({
+            const txResults = await fanOut(step, {
               waveId: (w, n) => `transcribe-wave:${platform}:${w}-of-${n}`,
-              memberId: (i) => `transcribe:${platform}:${i + 1}-of-${txBatches.length}`,
+              memberId: (w, j) => `transcribe:${platform}:${w + j + 1}-of-${txBatches.length}`,
               items: txBatches,
               parallel: TRANSCRIBE_PARALLEL,
               run: (videoIds, i) =>
@@ -918,9 +877,9 @@ export const runPipeline = inngest.createFunction(
             // One step a wave of OCR_PARALLEL batches since 9 Nov
             // (`ocr-wave:P:W-of-M`, fanOut above); a batch's own id is the
             // step it takes only when it failed inside its wave.
-            const ocrResults = await fanOut({
+            const ocrResults = await fanOut(step, {
               waveId: (w, n) => `ocr-wave:${platform}:${w}-of-${n}`,
-              memberId: (i) => `ocr:${platform}:${i + 1}-of-${ocrBatches.length}`,
+              memberId: (w, j) => `ocr:${platform}:${w + j + 1}-of-${ocrBatches.length}`,
               items: ocrBatches,
               parallel: OCR_PARALLEL,
               run: (videoIds, i): Promise<OcrResult & { stepFailed?: true }> =>
@@ -1051,9 +1010,9 @@ export const runPipeline = inngest.createFunction(
     // One step a wave of CLASSIFY_PARALLEL batches since 9 Nov
     // (`classify-wave:W-of-M`, fanOut above); a batch's own id is the step it
     // takes only when it failed inside its wave.
-    const classifyResults = await fanOut({
+    const classifyResults = await fanOut(step, {
       waveId: (w, n) => `classify-wave:${w}-of-${n}`,
-      memberId: (i) => `classify:${i + 1}-of-${classifyBatches.length}`,
+      memberId: (w, j) => `classify:${w + j + 1}-of-${classifyBatches.length}`,
       items: classifyBatches,
       parallel: CLASSIFY_PARALLEL,
       run: (videoIds, i) => runClassifyMetaBatch(clientId, runId, videoIds, i + 1),
@@ -1131,9 +1090,9 @@ export const runPipeline = inngest.createFunction(
       // One step a wave of BACKFILL_PARALLEL batches since 9 Nov
       // (`transcript-backfill-wave:W-of-M`, fanOut above); a batch's own id is
       // the step it takes only when it failed inside its wave.
-      const backfillResults = await fanOut({
+      const backfillResults = await fanOut(step, {
         waveId: (w, n) => `transcript-backfill-wave:${w}-of-${n}`,
-        memberId: (i) => `transcript-backfill:${i + 1}-of-${plan.batches.length}`,
+        memberId: (w, j) => `transcript-backfill:${w + j + 1}-of-${plan.batches.length}`,
         items: plan.batches,
         parallel: BACKFILL_PARALLEL,
         run: (b, i) =>
@@ -1212,9 +1171,9 @@ export const runPipeline = inngest.createFunction(
       // One step a wave of TRANSLATE_PARALLEL batches since 9 Nov
       // (`translate-wave:W-of-M`, fanOut above); a batch's own id is the step
       // it takes only when it failed inside its wave.
-      const translateResults = await fanOut({
+      const translateResults = await fanOut(step, {
         waveId: (w, n) => `translate-wave:${w}-of-${n}`,
-        memberId: (i) => `translate:${i + 1}-of-${plan.batches.length}`,
+        memberId: (w, j) => `translate:${w + j + 1}-of-${plan.batches.length}`,
         items: plan.batches,
         parallel: TRANSLATE_PARALLEL,
         run: (videoIds, i): Promise<Awaited<ReturnType<typeof translateBatch>> & { stepFailed?: true }> =>
@@ -1315,9 +1274,9 @@ export const runPipeline = inngest.createFunction(
       // One step a wave of OCR_PARALLEL batches since 9 Nov
       // (`ocr-backfill-wave:W-of-M`, fanOut above); a batch's own id is the
       // step it takes only when it failed inside its wave.
-      const ocrBackfillResults = await fanOut({
+      const ocrBackfillResults = await fanOut(step, {
         waveId: (w, n) => `ocr-backfill-wave:${w}-of-${n}`,
-        memberId: (i) => `ocr-backfill:${i + 1}-of-${plan.batches.length}`,
+        memberId: (w, j) => `ocr-backfill:${w + j + 1}-of-${plan.batches.length}`,
         items: plan.batches,
         parallel: OCR_PARALLEL,
         run: (videoIds, i): Promise<OcrResult & { stepFailed?: true }> =>
@@ -1381,7 +1340,20 @@ export const runPipeline = inngest.createFunction(
       }
     }
 
-    const batches = passAPlan.batches
+    // The step budget's one refusal (9 Nov, lib/pipeline/step-budget.ts): Pass
+    // A is still one step a batch and has no cap, and a prompt bump or
+    // `forcePassA` reads the whole corpus. The batches past what the run can
+    // still take (`passABatchRoom`: the 1,000 less the steps so far and the
+    // most the steps after Pass A can take) wait for the next update, richest
+    // first kept, and the run says so (a stale-data warning, so it alerts),
+    // instead of dying at its 1,000th step with nothing published. Counted the
+    // same on every replay, so the cut is too.
+    const passARoom = passABatchRoom(stepCounter.count())
+    const batches = passAPlan.batches.length > passARoom ? passAPlan.batches.slice(0, passARoom) : passAPlan.batches
+    if (batches.length < passAPlan.batches.length) {
+      const deferred = passAPlan.batches.slice(batches.length).flat().length
+      noteWarning('pass-a-deferred', `${deferred} of ${passAPlan.selected} selected videos (${passAPlan.batches.length - batches.length} of ${passAPlan.batches.length} batches) past the run's step room of ${passARoom} batches`)
+    }
     const passA = { analyzed: 0, claimsOnly: 0, skipped: 0, errored: 0, refused: 0, alreadyDone: 0, lengthRetries: 0, rateLimited: false, errors: [] as string[], batchesFailed: 0, insights: 0, languageSamples: 0, cost: 0, planned: passAPlan.selected, considered: passAPlan.considered, unchanged: passAPlan.reasons.unchanged, planReasons: passAPlan.reasons }
     // Batches dispatch in parallel waves — batches are disjoint video sets, so
     // ordering is irrelevant to output; this is purely wall-time (a serial
@@ -2733,6 +2705,7 @@ export const runPipeline = inngest.createFunction(
             themeRegistry: flags.themeRegistry,
             warnings: runWarnings.recorded,
             warningTotal: runWarnings.total,
+            staleTotal: runWarnings.staleData,
           })
           return sendAlertEmail(subject, text)
         })

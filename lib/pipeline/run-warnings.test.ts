@@ -59,6 +59,20 @@ describe('a step out of retries produces a warning', () => {
     expect(RUN_WARNING_CAP).toBe(50)
   })
 
+  it('is capped per class: at the cap a stale-data warning takes the newest housekeeping one\'s place, never the reverse', () => {
+    const log = createWarningLog(3)
+    log.note('embed-insights', new Error('a'))
+    log.note('lens-readings', new Error('b'), { month: '2026-10' })
+    log.note('keyword-discovery', new Error('c'))
+    log.note('brand-readings', new Error('d'), { month: '2026-10' }) // takes keyword-discovery's place
+    log.note('anomaly-check', new Error('e')) // housekeeping at the cap: not stored
+    log.note('freeze-months', new Error('f')) // takes embed-insights' place
+    log.note('segment-videos', new Error('g')) // no housekeeping left to take: not stored
+    expect(log.recorded.map((w) => w.step)).toEqual(['lens-readings', 'brand-readings', 'freeze-months'])
+    expect(log.total).toBe(7)
+    expect(log.staleData).toBe(4)
+  })
+
   it('every step in the table has a class, a name and a stale sentence', () => {
     for (const [step, rule] of Object.entries(WARNING_STEPS)) {
       expect(['stale-data', 'housekeeping'], step).toContain(rule.kind)
@@ -175,7 +189,8 @@ describe('a warning-only run counts exactly as a clean run', () => {
     expect(PIPELINE).toContain("return { runId, status: runCloseStatus(totalErrors),")
     // The warnings travel only to close-run's own column and to the alert.
     const uses = [...PIPELINE.matchAll(/runWarnings\.(\w+)/g)].map((m) => m[1])
-    expect([...new Set(uses)].sort()).toEqual(['note', 'recorded', 'total'])
+    // staleData (9 Nov): the alert states the uncapped stale-data count.
+    expect([...new Set(uses)].sort()).toEqual(['note', 'recorded', 'staleData', 'total'])
   })
 })
 
@@ -214,10 +229,10 @@ describe('each classified step warns from its own .catch, and none of them is no
     ["'keyword-discovery'", 'keyword-discovery'],
   ]
 
-  it('every step of the table but the evidence ids and the step budget is one of these, and each warns under its own label', () => {
-    // Neither is a step's .catch: the evidence ids warn off the freeze's
-    // return, the step budget off the run's own count (step-budget.test.ts).
-    expect(STEPS.map(([, s]) => s).sort()).toEqual(Object.keys(WARNING_STEPS).filter((s) => s !== 'freeze-months:evidence-ids' && s !== 'step-budget').sort())
+  it('every step of the table but the evidence ids and the step budget\'s two is one of these, and each warns under its own label', () => {
+    // None is a step's .catch: the evidence ids warn off the freeze's return,
+    // the step budget's two off the run's own count (step-budget.test.ts).
+    expect(STEPS.map(([, s]) => s).sort()).toEqual(Object.keys(WARNING_STEPS).filter((s) => s !== 'freeze-months:evidence-ids' && s !== 'step-budget' && s !== 'pass-a-deferred').sort())
     for (const [id, label] of STEPS) {
       const chain = chainOf(id)
       expect(chain, id).toContain(`noteWarning('${label}', e`)
@@ -309,6 +324,14 @@ describe('the alert: one a run, on a counted error or a stale-data warning, neve
     expect(text).toContain('Summary: 1 step error: gate:instagram')
     expect(text).toContain('Warnings, not counted (2 warnings: keyword-discovery, lens-readings):')
     expect(text).toContain('- keyword-discovery: boom.')
+  })
+
+  it('states the stale-data count before the cap, not the capped list\'s (a list full of housekeeping said 0)', () => {
+    const l = log('embed-insights', 'keyword-discovery')
+    const { text } = partialRunAlert({
+      runId: 'run-4', clientName: 'Sealand', total: 0, recorded: [], reportSent: true, rows, warnings: l.recorded, warningTotal: 60, staleTotal: 3,
+    })
+    expect(text).toMatch(/^Run run-4 for Sealand completed, with 3 stale-data warnings: /)
   })
 
   it('a partial run without warnings: the email is byte for byte what it was', () => {

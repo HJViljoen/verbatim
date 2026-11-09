@@ -10,6 +10,10 @@
 # diffs the two lists. Completed steps replay by id, so a deploy may only ADD
 # ids in their own positions: zero removals, zero reorderings.
 #
+# Since 9 Nov the seven per-video fan-outs name their ids through fanOut
+# (lib/pipeline/step-budget.ts): each call's `waveId` and `memberId` arrow
+# templates are listed in its place, the wave id before the batch's own.
+#
 # Usage: scripts/pipeline-step-ids.sh [BASE]   (default: mf/d2-int)
 #   --expect-before <id> <id>...  also check that the insertions are exactly
 #       these ids' families (x and plan-x, x:${i}-of-${n}), in this order,
@@ -42,7 +46,12 @@ cp "$FILE" "$tmp/head.ts"
 extract() { # file → one id per line, source order
   node -e '
 const src = require("fs").readFileSync(process.argv[1], "utf8")
-const re = /\bstep\s*\.\s*(run|sendEvent)\s*\(/g
+// Every step id, in source order: the first argument of each step.run /
+// step.sendEvent, and (9 Nov) the waveId and memberId of each fanOut call,
+// the ids lib/pipeline/step-budget.ts fanOut gives its wave steps and the own
+// step under, written at the call site as `waveId: (w, n) => `…`` and
+// `memberId: (w, j) => `…`` (the id of a batch as it was before the waves).
+const re = /\bstep\s*\.\s*(run|sendEvent)\s*\(|\b(?:waveId|memberId)\s*:\s*\([^)]*\)\s*=>\s*(?=`)/g
 const out = []
 let m
 while ((m = re.exec(src))) {

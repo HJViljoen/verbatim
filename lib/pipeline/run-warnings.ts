@@ -189,10 +189,18 @@ export const WARNING_STEPS = {
   },
   // Not a step's failure (9 Nov, lib/pipeline/step-budget.ts): the update
   // finished, on more of Inngest's 1,000 steps a run than STEP_BUDGET_WARN_AT
-  // leaves room for. Noted before close-run, which writes it.
+  // leaves room for. Noted before close-run, which writes it. STALE-DATA, so
+  // it sends the run's alert (the fresh review): a run this near the limit is
+  // one bigger week from losing a client's whole update.
   'step-budget': {
-    kind: 'housekeeping', name: 'the update’s steps', said: 'came near Inngest’s limit of steps a run',
-    stale: () => 'Nothing is stale: this update finished, but a bigger one can be stopped before its themes, its read and its email.',
+    kind: 'stale-data', name: 'the update’s steps', said: 'came near Inngest’s limit of steps a run',
+    stale: () => 'This update finished, but the next one this size or larger can be stopped before its themes, its read and its email reach the client.',
+  },
+  // Not a step's failure either: the step budget cut Pass A where the run
+  // could not take every batch (`passABatchRoom`), before Pass A started.
+  'pass-a-deferred': {
+    kind: 'stale-data', name: 'Pass A', said: 'was cut to the steps the run had left',
+    stale: () => 'The videos past the cut keep their previous analysis until a later update reads them, so this update’s themes and figures do not reflect their re-read.',
   },
 } as const satisfies Record<string, WarningRule>
 
@@ -284,8 +292,23 @@ export function createWarningLog(cap: number = RUN_WARNING_CAP): WarningLog {
   return {
     note(step, e, at) {
       total++
-      if (WARNING_STEPS[step].kind === 'stale-data') staleData++
-      if (recorded.length < cap) recorded.push(runWarning(step, e, at))
+      const stale = WARNING_STEPS[step].kind === 'stale-data'
+      if (stale) staleData++
+      if (recorded.length < cap) {
+        recorded.push(runWarning(step, e, at))
+        return
+      }
+      // CAPPED PER CLASS (9 Nov, the fresh review): at the cap a stale-data
+      // warning takes the place of the newest housekeeping one, so a list that
+      // filled with housekeeping first still names what is stale for the client.
+      if (!stale) return
+      for (let i = recorded.length - 1; i >= 0; i--) {
+        if (recorded[i].kind === 'housekeeping') {
+          recorded.splice(i, 1)
+          recorded.push(runWarning(step, e, at))
+          return
+        }
+      }
     },
     get recorded() { return recorded },
     get total() { return total },

@@ -21,16 +21,22 @@
  * its own (the Pass B precedent, `pass-b:${w}-of-${n}`, 4 Oct). What the run
  * writes is the same; what changes is the number of steps, divided by N.
  *
- * A BATCH THAT FAILS INSIDE ITS WAVE GETS ITS OWN STEP AFTER IT, under the id
- * it had as a step of its own, with Inngest's retries and the fallback its
- * `.catch` always had. A wave never throws for one batch, so its siblings are
- * never run twice; a wave that fails as a whole (the invocation killed, out of
- * retries) sends every batch of it to its own step. So a failing batch has
- * one attempt more than before, and nothing else is different.
+ * A BATCH THAT FAILS OR RUNS LATE INSIDE ITS WAVE GETS ITS OWN STEP AFTER IT,
+ * under the id it had as a step of its own, with Inngest's retries and the
+ * fallback its `.catch` always had. A wave never throws for one batch and
+ * never outlives WAVE_DEADLINE_MS, so a slow batch costs its siblings nothing;
+ * a wave that fails as a whole (out of retries) sends every batch of it to its
+ * own step. The two batch kinds that spent money again when run again,
+ * comments and the transcript backfill, skip what this run already did
+ * (`refsStillToScrape`, `backfillStillDue`), as transcribe, OCR, translate and
+ * classify already did. So a failing batch has one attempt more than before,
+ * and nothing else is different.
  *
  * `pipelineSteps` counts what a run needs from its fan-out widths, the guard
- * `step-budget.test.ts` holds it to every step id in the source, and the run
- * counts its own steps (`countSteps`) and warns at STEP_BUDGET_WARN_AT.
+ * `step-budget.test.ts` holds it to every step id in the source, the run counts
+ * its own steps (`countSteps`) and warns at STEP_BUDGET_WARN_AT, and Pass A,
+ * the one per-video fan-out still one step a batch, is held to the room left
+ * (`passABatchRoom`).
  */
 
 import { BACKFILL_PARALLEL, OCR_PARALLEL, PASS_B_PARALLEL, TRANSCRIBE_PARALLEL, TRANSLATE_PARALLEL } from '../config'
@@ -38,7 +44,8 @@ import { BACKFILL_PARALLEL, OCR_PARALLEL, PASS_B_PARALLEL, TRANSCRIBE_PARALLEL, 
 /** Inngest's ceiling on the steps of one function run. */
 export const INNGEST_STEP_LIMIT = 1000
 
-/** Where a run that finished warns (`step-budget`, a housekeeping warning). */
+/** Where a run that finished warns (`step-budget`, a stale-data warning, so
+ *  the run's alert goes out). */
 export const STEP_BUDGET_WARN_AT = 900
 
 /** Steps a run takes after close-run's own: settle-apify-usage,
@@ -88,28 +95,152 @@ export const THEMES_PARALLEL = 2
 
 // ── The wave ─────────────────────────────────────────────────────────────
 
+/**
+ * How long a wave's batches may take inside the wave's step (9 Nov, the fresh
+ * review). Past it a batch is left to run as a step of its own, so one slow
+ * batch never takes its wave to Vercel's 300 s, where the whole wave would be
+ * killed and retried. MEASURED on 8 Nov's two updates (Sealand `c5690bb0`,
+ * Össur `0c28ac74`; apify_runs and ai_call_log, the slowest batch of each
+ * family): comments 129 s (Reddit; p95 114), transcribe 77 s, cover text 23 s,
+ * classify 15 s, translate 18 s, the transcript backfill 227 s (YouTube; p95
+ * 191). 240 s clears every one of them and leaves 60 s of the 300 for the
+ * replay before the step and the answer after it.
+ */
+export const WAVE_DEADLINE_MS = 240_000
+
 /** One batch's outcome inside its wave step: its value, or its error's
- *  message (a step's return is JSON, so never the Error itself). */
-export type MemberOutcome<R> = { ok: true; value: R } | { ok: false; error: string }
+ *  message (a step's return is JSON, so never the Error itself). `late`: it
+ *  had not finished by the wave's deadline. */
+export type MemberOutcome<R> = { ok: true; value: R } | { ok: false; error: string; late?: true }
 
 /**
  * The batches of one wave, together, inside the wave's step: each one's value,
- * or the message it failed with. NEVER THROWS for a batch, so a wave that one
- * batch failed is not retried and its other batches never run twice; the
- * pipeline gives each failed batch a step of its own after the wave.
+ * or the message it failed with, or `late` where it had not finished by
+ * `deadlineMs`. NEVER THROWS for a batch, so a wave that one batch failed is
+ * not retried and its other batches never run twice; the pipeline gives each
+ * failed or late batch a step of its own after the wave. At the deadline the
+ * `signal` aborts, so a late batch stops STARTING work (a comment batch
+ * starts no further actor); what it already started finishes and is written,
+ * and its own step skips it (`refsStillToScrape`, `backfillStillDue`).
  */
-export async function settleMembers<T, R>(items: readonly T[], run: (item: T, j: number) => Promise<R>): Promise<MemberOutcome<R>[]> {
-  const settled = await Promise.allSettled(items.map((item, j) => run(item, j)))
-  return settled.map((s): MemberOutcome<R> => {
-    if (s.status === 'fulfilled') return { ok: true, value: s.value }
-    const e = s.reason
-    return { ok: false, error: e instanceof Error ? e.message : String(e) }
+export async function settleMembers<T, R>(
+  items: readonly T[],
+  run: (item: T, j: number, signal: AbortSignal) => Promise<R>,
+  deadlineMs: number = WAVE_DEADLINE_MS,
+): Promise<MemberOutcome<R>[]> {
+  if (!items.length) return []
+  const controller = new AbortController()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const late = new Promise<'late'>((resolve) => {
+    timer = setTimeout(() => { controller.abort(); resolve('late') }, deadlineMs)
   })
+  try {
+    return await Promise.all(items.map(async (item, j): Promise<MemberOutcome<R>> => {
+      const settled = Promise.resolve()
+        .then(() => run(item, j, controller.signal))
+        .then(
+          (value): MemberOutcome<R> => ({ ok: true, value }),
+          (e: unknown): MemberOutcome<R> => ({ ok: false, error: e instanceof Error ? e.message : String(e) }),
+        )
+      const first = await Promise.race([settled, late])
+      return first === 'late' ? { ok: false, error: `not finished by the wave's ${deadlineMs / 1000} s deadline`, late: true } : first
+    }))
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 /** The wave steps `members` batches take, `parallel` to a step. */
 export function waveCount(members: number, parallel: number): number {
   return members > 0 ? Math.ceil(members / parallel) : 0
+}
+
+/** The one step tool `fanOut` uses (Inngest's `step`, counted). */
+export interface StepRunner {
+  run(id: string, fn: () => Promise<unknown>): Promise<unknown>
+}
+
+/** A fan-out, as `fanOut` runs it. */
+export interface FanOut<T, R> {
+  /** The wave's step id: its number (from 1) and the wave count. */
+  waveId: (wave: number, waves: number) => string
+  /** A batch's own step id, as it was written before the waves: `w` is its
+   *  wave's first batch index (from 0) and `j` its place in the wave, so
+   *  `${w + j + 1}` is the batch number it always had. */
+  memberId: (w: number, j: number) => string
+  items: readonly T[]
+  parallel: number
+  /** One batch. `signal` is its wave's deadline; a batch run on its own has none. */
+  run: (item: T, i: number, signal?: AbortSignal) => Promise<R>
+  /** The batch's own step out of retries: its old `.catch`. */
+  fallback: (item: T, i: number, e: unknown) => R
+  deadlineMs?: number
+}
+
+/**
+ * ONE STEP A WAVE (9 Nov). A fan-out's wave of batches is ONE step, `waveId`,
+ * and each batch in it runs with the arguments, the batch number and the
+ * concurrency it had as a step of its own, so the wave lasts as long as its
+ * slowest batch did, and no longer than `WAVE_DEADLINE_MS`. A wave never throws
+ * for one batch: a batch that failed or ran late inside its wave, or every
+ * batch of a wave that failed as a whole, then runs as a step of its own under
+ * its old id, `memberId`, with Inngest's retries and the fallback its old
+ * `.catch` gave. The results come back in batch order.
+ */
+export async function fanOut<T, R>(step: StepRunner, f: FanOut<T, R>): Promise<R[]> {
+  const out: R[] = []
+  const waves = waveCount(f.items.length, f.parallel)
+  for (let w = 0; w < waves; w++) {
+    const first = w * f.parallel
+    const slice = f.items.slice(first, first + f.parallel)
+    const id = f.waveId(w + 1, waves)
+    const outcomes = await step
+      .run(id, () => settleMembers(slice, (item, j, signal) => f.run(item, first + j, signal), f.deadlineMs))
+      .then((r) => r as MemberOutcome<R>[])
+      .catch((e: unknown) => {
+        console.error(`[${id}] out of retries, so each of its batches runs as a step of its own: ${e instanceof Error ? e.message : String(e)}`)
+        return null
+      })
+    out.push(...await Promise.all(slice.map((item, j): Promise<R> => {
+      const i = first + j
+      const outcome = outcomes?.[j]
+      if (outcome?.ok) return Promise.resolve(outcome.value)
+      if (outcome) console.warn(`[${f.memberId(first, j)}] ${outcome.late ? 'ran late' : 'failed'} inside ${id}, so it runs as a step of its own: ${outcome.error}`)
+      return step.run(f.memberId(first, j), () => f.run(item, i))
+        .then((r) => r as R)
+        .catch((e: unknown) => f.fallback(item, i, e))
+    })))
+  }
+  return out
+}
+
+// ── Pass A's room ────────────────────────────────────────────────────────
+
+/**
+ * The steps the run can take after Pass A, at most: translate-quotes (its cap,
+ * 15 batches, and its plan), embed-insights, subject membership (8 subjects
+ * and its plan), cross-reference, themes (15 buckets and its plan), Pass B
+ * (60 chunks in waves of 6, the join, persist-themes), the trim, segments (10
+ * batches), comparability (10 tasks), lens, brand and product readings (4
+ * months each and their plans), the twelve close-out reads, the briefs on a
+ * month-closing run (its plan, 4 research waves, ideas, 4 writers, compose)
+ * and close-run with the five after it: 122, held at 150.
+ */
+export const STEPS_AFTER_PASS_A = 150
+
+/**
+ * How many Pass A batches the run can still take, counted where Pass A
+ * starts (9 Nov). PASS A IS STILL ONE STEP A BATCH: a batch takes 2 to 4
+ * minutes, so a wave of five would run into the wave's deadline and cut
+ * analyses in half. It is the one per-video fan-out with no cap, and a Pass A
+ * prompt bump or `forcePassA` reads the whole corpus (Sealand at most 4,762
+ * eligible videos on 9 Nov, 397 batches). So the step budget bounds it here:
+ * the batches past the room wait for the next update (a stale-data warning,
+ * `pass-a-deferred`), richest first kept, rather than the run dying at its
+ * 1,000th step with nothing published. PURE.
+ */
+export function passABatchRoom(stepsSoFar: number): number {
+  return Math.max(0, INNGEST_STEP_LIMIT - stepsSoFar - STEPS_AFTER_PASS_A)
 }
 
 // ── The run's own count ──────────────────────────────────────────────────

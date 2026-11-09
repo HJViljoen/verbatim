@@ -395,23 +395,36 @@ This version has breaking changes — APIs, conventions, and file structure may 
   step through `fanOut` (`comments-wave:P:W-of-M`, `transcribe-wave:P:W-of-M`,
   `ocr-wave:P:W-of-M`, `classify-wave:W-of-M`, `transcript-backfill-wave:W-of-M`,
   `translate-wave:W-of-M`, `ocr-backfill-wave:W-of-M`), each batch with its old
-  arguments, batch number and concurrency, so a wave lasts as long as its
-  slowest batch did (the `pass-b` wave precedent). A wave never throws for one
-  batch (`settleMembers`): a batch that failed inside it, or every batch of a
-  wave out of retries, then runs as a step of its own under its OLD id
-  (`comments:P:N`, `transcribe:P:i-of-n`, …) with Inngest's retries and the old
-  fallback, so it gets one attempt more and its siblings never run twice. A
-  STEP-SHAPE CHANGE: the old ids no longer run on a clean run, so deploy it only
-  with no run in flight (both tenants run on Sundays from 06:00 SAST). Counted
-  by first argument, `step.run` / `sendEvent` give 70 ids (fanOut's own two
-  among them); by family, 82 (`STEP_FAMILIES`). `pipelineSteps` counts a run
-  from its widths, an upper bound, and `lib/pipeline/step-budget.test.ts` holds
-  it to every id family of the source (a new id fails it until counted),
-  reproduces 11 Oct (~850, finished), 8 Nov (~1,000 at its 34th Pass A batch)
-  and Össur's 8 Nov (~500), and holds 8 Nov now (~500) and a week three times
-  its size under 900. The run counts its own steps (`countSteps`) and, at 900
-  with close-run's six, notes a housekeeping warning `step-budget` before
-  close-run writes it.
+  arguments, batch number and concurrency (the `pass-b` wave precedent), and
+  no wave outlives `WAVE_DEADLINE_MS` (240 s: the slowest 8 Nov batch, a
+  transcript backfill, took 227 s; comments 129 s; 60 s left for the replay and
+  the answer). A wave never throws for one batch (`settleMembers`): a batch
+  that failed or ran late inside it, or every batch of a wave out of retries,
+  runs as a step of its own under its OLD id (`comments:P:N`,
+  `transcribe:P:i-of-n`, …, written as before, `${w + j + 1}`) with Inngest's
+  retries and the old fallback, so it gets one attempt more and its siblings
+  never run twice. A batch run again does not pay again: comments skip a ref
+  this run stamped (`refsStillToScrape`, the gather's refs only), the backfill
+  a video settled or attempted since its plan (`backfillStillDue`), and a
+  backfill write never lands on a settled transcript (`BACKFILL_WRITABLE`);
+  transcribe, OCR, translate and classify already re-checked. A STEP-SHAPE
+  CHANGE: the old ids no longer run on a clean run, so deploy it only with no
+  run in flight (both tenants run on Sundays from 06:00 SAST).
+  `scripts/pipeline-step-ids.sh` reads `fanOut`'s `waveId` / `memberId` too:
+  82 ids, the seven wave ids pure insertions before their batches' ids, zero
+  removals, zero reorderings; `step.run` / `sendEvent` first arguments alone
+  give 68. Pass A stays one step a batch (its batches take 2 to 4 minutes) and
+  is the one fan-out with no cap, so where it starts the step budget keeps
+  only the batches the run has room for (`passABatchRoom`: the 1,000 less the
+  steps so far and `STEPS_AFTER_PASS_A`, 150), richest first, and notes a
+  stale-data warning `pass-a-deferred`; a whole-corpus Pass A (9 Nov: Sealand
+  at most 397 batches) fits today. `pipelineSteps` counts a run from its
+  widths, an upper bound, and `lib/pipeline/step-budget.test.ts` holds it to
+  every id family of the source, reproduces 11 Oct (~850, finished), 8 Nov
+  (~1,000 at its 34th Pass A batch) and Össur's 8 Nov (~500), and gives today's
+  worst cases (a whole-corpus Pass A: Sealand 867, 537 on a resume; Össur 502
+  and 354). The run counts its own steps (`countSteps`) and at 900 with
+  close-run's six notes the stale-data warning `step-budget`, so it alerts.
 - **A run's window is frozen once, at `open-run`** (`pipeline_runs.window_start`
   / `window_end` / `window_basis`, rule in `lib/pipeline/window.ts`). Steps read
   it off `OpenRunResult` / `GatherOptions`; no step recomputes the window from

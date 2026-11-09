@@ -909,6 +909,24 @@ export async function gatePlatform(opts: {
   }
 }
 
+/**
+ * Pure: a comment batch's refs this run has not scraped yet (9 Nov, the fresh
+ * review). A scrape stamps its video's baseline at the ref's own count
+ * (`comments_count_at_scrape`, below), and the gather's refs are fresh videos,
+ * never stamped, or growth re-checks, whose stamp is at least RECHECK_MIN_GROWTH
+ * below the count that picked them (`pickRechecks`). So a gather ref whose stamp
+ * EQUALS its count was scraped by this run, by an earlier pass of the same
+ * batch (a retry, or a batch that ran late in its wave and runs on its own), and
+ * is not scraped again. Not for the owned layer's refs, whose count can stand
+ * still between runs. A ref with no row is scraped.
+ */
+export function refsStillToScrape<R extends { video_id: string; comments_count: number }>(
+  refs: readonly R[],
+  stamps: ReadonlyMap<string, number | null>,
+): R[] {
+  return refs.filter((r) => stamps.get(r.video_id) !== r.comments_count)
+}
+
 /** Scrape + upsert comments for a batch of eligible videos. One video failing
  *  keeps the loop going. Batch size is the orchestrator's concern — size it to
  *  the function-duration cap (each video is its own Apify actor run). */
@@ -922,6 +940,11 @@ export async function scrapeCommentsBatch(opts: {
    *  or a tracked competitor's. Default omits the column → DB default
    *  'discovered'. */
   source?: 'owned' | 'competitor_owned'
+  /** The gather's refs only (`refsStillToScrape`): skip what this run already
+   *  scraped, so a batch run again makes no second actor call for it. */
+  skipScrapedThisRun?: boolean
+  /** Aborted at the batch's wave deadline: start no further ref. */
+  signal?: AbortSignal
 }): Promise<{ comments: number; errors: string[] }> {
   const admin = createAdminClient()
   const config = await loadConfig(admin, opts.clientId)
@@ -934,9 +957,22 @@ export async function scrapeCommentsBatch(opts: {
   // through a re-scrape. One read per batch; best-effort (a failed read
   // suppresses nothing rather than failing the gather).
   const suppressedKeys = await loadSuppressedKeys(admin, opts.platform)
+  let refs = opts.refs
+  if (opts.skipScrapedThisRun && !opts.dryRun && refs.length) {
+    const { data, error } = await admin
+      .from('videos')
+      .select('video_id, comments_count_at_scrape')
+      .eq('client_id', opts.clientId)
+      .eq('platform', opts.platform)
+      .in('video_id', refs.map((r) => r.video_id))
+    // A failed read skips nothing: the batch scrapes as it always did.
+    if (error) console.warn(`[${opts.platform}] comment done-check read failed, scraping the whole batch: ${error.message}`)
+    else refs = refsStillToScrape(refs, new Map(((data ?? []) as { video_id: string; comments_count_at_scrape: number | null }[]).map((r) => [r.video_id, r.comments_count_at_scrape])))
+  }
   let suppressedTotal = 0
   let commentCount = 0
-  for (const ref of opts.refs) {
+  for (const ref of refs) {
+    if (opts.signal?.aborted) break
     try {
       let rawComments: RawItem[]
       if (adapter.fetchComments) {

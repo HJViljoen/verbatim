@@ -87,7 +87,10 @@ export interface BackfillCandidate extends TranscriptState {
 
 export interface BackfillBatch {
   platform: Platform
-  videos: { id: string; video_id: string; video_url: string }[]
+  /** `attempts`: the video's transcript attempts when the plan was made (9
+   *  Nov), so a batch run again knows which of its videos this run already
+   *  attempted (`backfillStillDue`). A plan memoised before then has none. */
+  videos: { id: string; video_id: string; video_url: string; attempts?: number }[]
 }
 
 /**
@@ -122,7 +125,7 @@ export function planBackfillBatches(
     for (const part of chunk(list, size)) {
       batches.push({
         platform: platform as Platform,
-        videos: part.map((v) => ({ id: v.id, video_id: v.video_id, video_url: v.video_url! })),
+        videos: part.map((v) => ({ id: v.id, video_id: v.video_id, video_url: v.video_url!, attempts: v.transcript_attempts ?? 0 })),
       })
     }
   }
@@ -186,6 +189,46 @@ export function formatTally(t: BackfillTally): string {
   return `attempted ${t.attempted} · ok ${t.ok} · no_speech ${t.no_speech} · lyrics ${t.lyrics} · garbled ${t.garbled} · failed ${t.failed} · no_media ${t.no_media}`
 }
 
+/** A video's transcript columns as a batch reads them when it starts. */
+export interface BackfillRowNow {
+  status: string | null
+  attempts: number
+}
+
+/**
+ * Pure: which of a batch's videos still need their attempt THIS run (9 Nov, the
+ * fresh review). A batch runs again when its step is retried, or when it ran
+ * late in its wave and runs as a step of its own; before this it paid the
+ * actor again for every video, bumped every video's attempts again, and could
+ * write `failed` over the `ok` the first pass had stored. A video is DONE when
+ * its status is settled (`ok`, `no_speech`, `lyrics`, `garbled`: a verdict
+ * this run reached, since the plan took none of them) or its attempts are past
+ * the plan's (this run attempted it and it failed again); `done` carries its
+ * stored status, so the batch's tally reads as the first pass's did. A video
+ * the plan gave no attempts for (a plan memoised before 9 Nov) is judged by its
+ * status alone, and one with no row is due.
+ */
+export function backfillStillDue<V extends { id: string; attempts?: number }>(
+  videos: readonly V[],
+  now: ReadonlyMap<string, BackfillRowNow>,
+): { due: V[]; done: { video: V; status: string }[] } {
+  const due: V[] = []
+  const done: { video: V; status: string }[] = []
+  for (const v of videos) {
+    const row = now.get(v.id)
+    const settled = row?.status != null && SETTLED_STATUSES.has(row.status)
+    const attempted = row != null && v.attempts != null && row.attempts > v.attempts
+    if (row && (settled || attempted)) done.push({ video: v, status: row.status ?? 'failed' })
+    else due.push(v)
+  }
+  return { due, done }
+}
+
+/** The statuses a backfill write may replace: the ones the plan takes
+ *  (`needsTranscriptAttempt`). A write never lands on a settled transcript,
+ *  so a late or retried pass can never turn an `ok` into `failed`. */
+export const BACKFILL_WRITABLE = 'transcript_status.is.null,transcript_status.in.(failed,no_media)'
+
 export interface BackfillBatchResult {
   tally: BackfillTally
   /** Videos that gained a usable transcript — the reason to re-plan Pass A. */
@@ -207,7 +250,7 @@ export async function backfillTranscriptsBatch(opts: {
   clientId: string
   runId: string
   platform: Platform
-  videos: { id: string; video_id: string; video_url: string }[]
+  videos: { id: string; video_id: string; video_url: string; attempts?: number }[]
   batchNo?: number
   dryRun?: boolean
 }): Promise<BackfillBatchResult> {
@@ -221,20 +264,33 @@ export async function backfillTranscriptsBatch(opts: {
   // the untyped client has no atomic increment; one run is the only writer of a
   // video's transcript columns, so read-then-write is safe here.
   const attemptsById = new Map<string, number>()
+  const nowById = new Map<string, BackfillRowNow>()
   const { data: rows, error: readErr } = await admin
     .from('videos')
-    .select('id, transcript_attempts')
+    .select('id, transcript_attempts, transcript_status')
     .in('id', opts.videos.map((v) => v.id))
   if (readErr) throw new Error(`backfill attempt read: ${readErr.message}`)
-  for (const r of (rows ?? []) as { id: string; transcript_attempts: number | null }[]) {
+  for (const r of (rows ?? []) as { id: string; transcript_attempts: number | null; transcript_status: string | null }[]) {
     attemptsById.set(r.id, r.transcript_attempts ?? 0)
+    nowById.set(r.id, { status: r.transcript_status, attempts: r.transcript_attempts ?? 0 })
   }
 
-  const { results, estUsd } = await transcribeUrls(opts.platform, opts.videos)
-  const gate = { prompt: 0, completion: 0 }
+  // What this run already did for this batch is not done again (a retried or
+  // late batch): no second actor call for it, no second attempt counted, and
+  // its stored outcome tallied as the first pass tallied it.
+  const { due, done } = backfillStillDue(opts.videos, nowById)
   let newlyUsable = 0
+  for (const { status } of done) {
+    tally.attempted++
+    tally[status as keyof BackfillTally] = (tally[status as keyof BackfillTally] ?? 0) + 1
+    if (status === 'ok') newlyUsable++
+  }
+  if (!due.length) return { tally, newlyUsable, estUsd: 0, errors }
 
-  for (const v of opts.videos) {
+  const { results, estUsd } = await transcribeUrls(opts.platform, due)
+  const gate = { prompt: 0, completion: 0 }
+
+  for (const v of due) {
     const outcome = results.get(v.video_id)
     let t: TranscriptResult
     if (!outcome) {
@@ -263,6 +319,7 @@ export async function backfillTranscriptsBatch(opts: {
         transcript_error: t.error ?? null,
       })
       .eq('id', v.id)
+      .or(BACKFILL_WRITABLE)
     if (error) errors.push(`backfill update (${v.video_id}): ${error.message}`)
   }
 
@@ -286,7 +343,7 @@ export async function backfillTranscriptsBatch(opts: {
       call_index: 1000 + (opts.batchNo ?? 1),
       model: 'apify_speech',
       prompt_version: 'transcribe_backfill_v1',
-      request: { platform: opts.platform, videos: opts.videos.length },
+      request: { platform: opts.platform, videos: due.length },
       response: {
         statuses: tally,
         apify_est_usd: estUsd,
