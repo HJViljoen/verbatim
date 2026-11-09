@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { fakeDb } from '../test/fake-db'
-import { runErasure, unfinishedMessage, type EraseStep } from './erase-run'
+import { deleteHeldBy, loadRunsSince, runErasure, unfinishedMessage, updatesInFlight, type EraseStep, type RunRow } from './erase-run'
 import { scrubStoredPlanChecks, scrubStoredPostIdeas } from './stored-prose'
 
 // Review, 9 Nov: a scrub that threw after the comments were deleted skipped
@@ -132,3 +132,119 @@ describe('an erasure that did not finish says so', () => {
   })
 })
 
+
+// Rule 4 (lib/retention/erase-run.ts): the delete waits while an update is
+// running for one of the workspaces. Its passes may have read the comments,
+// and prose they write after the scrubs could never be found once the
+// comments are gone, since the scrubs search by the comments' words.
+describe('the delete waits for an update in flight', () => {
+  const now = new Date('2026-11-09T12:00:00Z')
+  it('holds for a run started inside the stale line, per workspace', () => {
+    expect(updatesInFlight([
+      { id: 'r1', client_id: 'c1', started_at: '2026-11-09T10:30:00Z' },
+      { id: 'r2', client_id: 'c2', started_at: '2026-11-09T01:00:00Z' },
+    ], now)).toEqual([{ clientId: 'c1', runId: 'r1' }])
+  })
+
+  it('does not hold for a run that died (past the pipeline\'s own stale line) or for none', () => {
+    expect(updatesInFlight([{ id: 'r2', client_id: 'c2', started_at: '2026-11-09T05:59:00Z' }], now)).toEqual([])
+    expect(updatesInFlight([], now)).toEqual([])
+  })
+
+  it('is checked in the delete step, before the backup copies and the comments go', () => {
+    const src = readFileSync(resolve(__dirname, '../../scripts/erase-commenter.ts'), 'utf8')
+    const erase = src.indexOf("name: 'delete the comments'")
+    const guard = src.indexOf('deleteHeldBy(await loadRunsSince(admin, clientIds, since), since)', erase)
+    const copies = src.indexOf('removeBackedUpCopies(admin', erase)
+    const del = src.indexOf('deleteCommentsProperly(admin', erase)
+    expect(erase).toBeGreaterThan(0)
+    expect(guard).toBeGreaterThan(erase)
+    expect(copies).toBeGreaterThan(guard)
+    expect(del).toBeGreaterThan(copies)
+    // With --apply it throws, so the runner keeps the comments.
+    expect(src.slice(guard, copies)).toMatch(/if \(args\.apply\) throw new Error/)
+    // And every analysis-prose table is a scrub of its own, before the delete.
+    const scrubs = src.indexOf('scrubs: [')
+    const each = src.indexOf('...ANALYSIS_PROSE_TABLES.map(', scrubs)
+    expect(each).toBeGreaterThan(scrubs)
+    expect(each).toBeLessThan(erase)
+  })
+})
+
+// Rule 4, both ends (fresh review, 9 Nov): a run live when the script starts
+// can write prose after the scrubs and finish before the delete's check. So
+// the delete is held by any run that is running, or that started or finished
+// since the erasure began.
+describe('the delete is held by any update since the erasure began', () => {
+  const since = '2026-11-09T12:00:00.000Z'
+  const now = new Date('2026-11-09T12:30:00Z')
+  const run = (id: string, over: Partial<RunRow>): RunRow => ({ id, client_id: 'c1', status: 'completed', started_at: '2026-11-09T08:00:00Z', completed_at: '2026-11-09T09:00:00Z', ...over })
+
+  it('a run live at the start that finished before the delete holds it', () => {
+    expect(deleteHeldBy([run('r1', { started_at: '2026-11-09T11:40:00Z', completed_at: '2026-11-09T12:10:00Z' })], since, now))
+      .toEqual([{ clientId: 'c1', runId: 'r1', why: 'finished' }])
+  })
+
+  it('so does one that started since, or is running now', () => {
+    expect(deleteHeldBy([
+      run('r2', { started_at: '2026-11-09T12:05:00Z', completed_at: '2026-11-09T12:20:00Z' }),
+      run('r3', { status: 'running', started_at: '2026-11-09T11:50:00Z', completed_at: null }),
+    ], since, now)).toEqual([
+      { clientId: 'c1', runId: 'r2', why: 'started' },
+      { clientId: 'c1', runId: 'r3', why: 'running' },
+    ])
+  })
+
+  it('a run that finished before the erasure began, or one that died, does not', () => {
+    expect(deleteHeldBy([
+      run('r4', {}),
+      run('r5', { status: 'running', started_at: '2026-11-09T02:00:00Z', completed_at: null }),
+    ], since, now)).toEqual([])
+  })
+
+  it('reads the running, the started-since and the finished-since runs of these workspaces only', async () => {
+    const db = fakeDb({ pipeline_runs: [
+      run('r1', { completed_at: '2026-11-09T12:10:00Z' }),
+      run('r2', { client_id: 'c2', started_at: '2026-11-09T12:05:00Z' }),
+      run('r4', {}),
+    ].map((r) => ({ ...r })) })
+    const rows = await loadRunsSince(db.client as never, ['c1'], since)
+    expect([...new Set(rows.map((r) => r.id))]).toEqual(['r1'])
+  })
+
+  it('is checked at the start as well, against the same moment the delete is', () => {
+    const src = readFileSync(resolve(__dirname, '../../scripts/erase-commenter.ts'), 'utf8')
+    const begin = src.indexOf('const since = new Date(Date.now() - ERASURE_CLOCK_MARGIN_MS)')
+    const start = src.indexOf('const runningAtStart = deleteHeldBy(await loadRunsSince(admin, clientIds, since), since)')
+    const run = src.indexOf('const outcome = await runErasure(')
+    expect(begin).toBeGreaterThan(0)
+    expect(begin).toBeLessThan(src.indexOf('parseArgs(process.argv'))
+    expect(start).toBeGreaterThan(begin)
+    expect(start).toBeLessThan(run)
+  })
+})
+
+// Rule 5: the `finish` steps (step 8's stored files) run only once the
+// comments are deleted; one that fails is reported with the comments deleted.
+describe('the finish steps', () => {
+  const step = (name: string, ran: string[], fail = false): EraseStep => ({ name, run: async () => { ran.push(name); if (fail) throw new Error(`${name} broke`) } })
+
+  it('run after the delete, and a failure there says the comments are deleted', async () => {
+    const ran: string[] = []
+    const outcome = await runErasure({
+      suppress: step('suppression', ran), scrubs: [step('scrub', ran)], erase: step('delete', ran), finish: [step('files', ran, true)],
+    }, () => {})
+    expect(ran).toEqual(['suppression', 'scrub', 'delete', 'files'])
+    expect(outcome).toEqual({ failed: ['files'], erased: true })
+    expect(unfinishedMessage(outcome)).toContain('The comments are deleted.')
+  })
+
+  it('do not run where the delete did not', async () => {
+    const ran: string[] = []
+    const outcome = await runErasure({
+      suppress: step('suppression', ran), scrubs: [step('scrub', ran, true)], erase: step('delete', ran), finish: [step('files', ran)],
+    }, () => {})
+    expect(ran).toEqual(['suppression', 'scrub'])
+    expect(outcome.erased).toBe(false)
+  })
+})

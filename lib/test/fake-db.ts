@@ -3,6 +3,8 @@
  * that exercise a reader's I/O glue (market-first WP3.9 and WP3.11).
  *
  * WHAT IT ANSWERS. `from(table)` with `select`, `eq`, `neq`, `in`, `is`,
+ * `ilike` (PostgREST's `%` / `*` and `_` wildcards, `\\` escapes), `match`
+ * (an `eq` per key),
  * `contains` (an array column holding every value given),
  * `not` (`is`, `in`, `eq`; any other operator throws), `or` (eq / is.null /
  * not.is.null), `gte`, `lte`,
@@ -13,6 +15,9 @@
  * answers with a PostgREST-shaped "does not exist" error, so a reader's
  * missing-table guard is exercised by leaving the table out. Every call is
  * recorded, so a test can assert what was (and was not) read.
+ *
+ * A filter or an order on `col->>key` (or `col->key`) reads that key of a
+ * jsonb column, as text for `->>`, as PostgREST does.
  *
  * NOT A DATABASE. No counts beyond `head: true` over the filtered rows, no
  * ordering beyond one column at a time. It is the smallest thing that lets a
@@ -28,11 +33,14 @@
  * the test did not hand in is left alone (rows that carry it already keep
  * theirs), and so is any nested embed.
  *
- * AND THE THREE WRITES, for a writer's glue (writing back, the weekly read's
- * send path): `insert(row | rows)` appends to the table (an `id` is made up
+ * AND THE WRITES, for a writer's glue (writing back, the weekly read's
+ * send path, the erasure): `insert(row | rows)` appends to the table (an `id` is made up
  * where the row has none) and hands the rows back through `select` /
- * `single` / `maybeSingle`; `update(patch)` and `delete()` apply to the rows
- * the filters match, when the chain is awaited. Each is recorded with its
+ * `single` / `maybeSingle`; `upsert(row | rows, { onConflict, ignoreDuplicates })`
+ * merges into (or, ignoring duplicates, keeps) the row with the same
+ * `onConflict` columns and appends the rest; `update(patch)` and `delete()`
+ * apply to the rows the filters match, when the chain is awaited. `overlaps`
+ * keeps a row whose array column shares a value with the list. Each is recorded with its
  * rows or patch (`FakeCall.values`), so a test can assert what was written.
  */
 
@@ -40,7 +48,7 @@ type Row = Record<string, unknown>
 
 export interface FakeCall {
   table: string
-  op: 'select' | 'rpc' | 'insert' | 'update' | 'delete'
+  op: 'select' | 'rpc' | 'insert' | 'upsert' | 'update' | 'delete'
   columns?: string
   filters: string[]
   /** The rows an insert wrote, or the patch an update applied. */
@@ -81,6 +89,12 @@ export function fakeDb(
 
     /** A column's value: a `name.col` filter reads the attached row. */
     const val = (r: Row, col: string): unknown => {
+      const path = /^(\w+)->(>?)(\w+)$/.exec(col)
+      if (path) {
+        const o = r[path[1]]
+        const v = o && typeof o === 'object' ? (o as Row)[path[3]] : undefined
+        return path[2] && v != null && typeof v !== 'string' ? (typeof v === 'object' ? JSON.stringify(v) : String(v)) : v
+      }
       if (col in r || !col.includes('.')) return r[col]
       const [rel, field] = [col.slice(0, col.indexOf('.')), col.slice(col.indexOf('.') + 1)]
       const o = r[rel]
@@ -130,8 +144,8 @@ export function fakeDb(
       if (orderCol) {
         const col = orderCol
         rows = [...rows].sort((a, b) => {
-          const x = a[col] as string | number
-          const y = b[col] as string | number
+          const x = val(a, col) as string | number
+          const y = val(b, col) as string | number
           return (x < y ? -1 : x > y ? 1 : 0) * (asc ? 1 : -1)
         })
       }
@@ -148,6 +162,28 @@ export function fakeDb(
         if (table in tables) tables[table].push(...written)
         return builder
       },
+      upsert(v: Row | Row[], opts?: { onConflict?: string; ignoreDuplicates?: boolean }) {
+        call.op = 'upsert'
+        const cols = (opts?.onConflict ?? 'id').split(',').map((c) => c.trim())
+        const rows = Array.isArray(v) ? v : [v]
+        call.values = rows
+        const out: Row[] = []
+        if (table in tables) {
+          for (const r of rows) {
+            const hit = tables[table].find((x) => cols.every((c) => x[c] === r[c]))
+            if (hit) { if (!opts?.ignoreDuplicates) Object.assign(hit, r); out.push(hit) }
+            else { const row = { ...r, id: r.id ?? `fake-${table}-${++seq}` }; tables[table].push(row); out.push(row) }
+          }
+        }
+        written = out
+        return builder
+      },
+      overlaps(col: string, vs: readonly unknown[]) {
+        call.filters.push(`${col} overlaps ${vs.length}`)
+        const set = new Set(vs)
+        preds.push((r) => { const have = val(r, col); return Array.isArray(have) && have.some((x) => set.has(x)) })
+        return builder
+      },
       update(v: Row) { call.op = 'update'; patch = v; call.values = v; return builder },
       delete() { call.op = 'delete'; removing = true; return builder },
       select(columns?: string, opts?: { count?: string; head?: boolean }) {
@@ -158,6 +194,24 @@ export function fakeDb(
         return builder
       },
       eq(col: string, v: unknown) { call.filters.push(`${col}=${String(v)}`); preds.push((r) => val(r, col) === v); return builder },
+      ilike(col: string, pattern: string) {
+        call.filters.push(`${col} ilike ${pattern}`)
+        let re = ''
+        for (let i = 0; i < pattern.length; i++) {
+          const ch = pattern[i]
+          if (ch === '\\' && i + 1 < pattern.length) re += pattern[++i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          else if (ch === '%' || ch === '*') re += '.*'
+          else if (ch === '_') re += '.'
+          else re += ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+        }
+        const rx = new RegExp(`^${re}$`, 'is')
+        preds.push((r) => { const v = val(r, col); return typeof v === 'string' && rx.test(v) })
+        return builder
+      },
+      match(q: Row) {
+        for (const [col, v] of Object.entries(q)) { call.filters.push(`${col}=${String(v)}`); preds.push((r) => val(r, col) === v) }
+        return builder
+      },
       neq(col: string, v: unknown) { call.filters.push(`${col}!=${String(v)}`); preds.push((r) => val(r, col) !== v); return builder },
       in(col: string, vs: readonly unknown[]) { call.filters.push(`${col} in ${vs.length}`); const set = new Set(vs); preds.push((r) => set.has(val(r, col))); return builder },
       is(col: string, v: unknown) { call.filters.push(`${col} is ${String(v)}`); preds.push((r) => (val(r, col) ?? null) === v); return builder },
