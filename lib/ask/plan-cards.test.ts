@@ -401,3 +401,32 @@ describe('planCard says what an untested claim is', () => {
   })
 })
 
+// Review, 9 Nov: a stored move whose `to` is a verdict under the floor printed
+// "Untested to Contradicted" beside a claim that reads untested, on Market,
+// Your moves and the quarterly. A move is floored with its claim.
+describe('a move is held to the floor its claim is printed by', () => {
+  const ev = (createdAt: string, runDate: string, claims: ClaimResult[], moved: PlanEvaluation['moved']): PlanEvaluation =>
+    ({ createdAt, runDate, moved, claims, summary: null })
+  const card = (evaluations: PlanEvaluation[]) => planCard({
+    planId: 'p1', title: null, sourceFilename: null, uploadedOn: '2026-08-20T09:00:00Z', notice: null,
+    corpusVideos: 100, href: '/x', claims: [claim('C1', 'silent', 0), claim('C2', 'contradicts', 9)], summary: null, evaluations,
+  })
+
+  it('drops a move to a verdict under the floor that leaves the claim where it started', () => {
+    const c = card([ev('2026-09-06T02:00:00Z', '2026-09-06', [claim('C1', 'contradicts', 3), claim('C2', 'contradicts', 9)], [{ ref: 'C1', claim: 'claim C1', from: 'silent', to: 'contradicts' }])])
+    expect(c.claims[0].verdictLabel).toBe('Untested')
+    expect(c.moved).toEqual([])
+  })
+
+  it('floors a move that left a standing verdict for one under the floor', () => {
+    const c = card([ev('2026-09-06T02:00:00Z', '2026-09-06', [claim('C1', 'silent', 0), claim('C2', 'echoes', 2)], [{ ref: 'C2', claim: 'claim C2', from: 'contradicts', to: 'echoes' }])])
+    expect(c.claims[1].verdictLabel).toBe('Untested')
+    expect(c.moved.map((m) => [m.claim, m.from, m.to])).toEqual([['claim C2', 'Contradicted', 'Untested']])
+  })
+
+  it('leaves a move to a verdict that stands as it was', () => {
+    const c = card([ev('2026-09-06T02:00:00Z', '2026-09-06', [claim('C1', 'contradicts', 8), claim('C2', 'contradicts', 9)], [{ ref: 'C1', claim: 'claim C1', from: 'silent', to: 'contradicts' }])])
+    expect(c.moved.map((m) => [m.from, m.to])).toEqual([['Untested', 'Contradicted']])
+  })
+})
+

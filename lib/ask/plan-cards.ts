@@ -10,7 +10,7 @@ import type { Scope } from '../renderables/types'
 import { isMissingColumnError } from '../supabase-admin'
 import type { Counted } from '../reading/verdicts'
 import { PLAN_VERDICT_MIN_VIDEOS, type AskSummary, type ClaimResult, type Judgement, type Verdict as ClaimVerdict } from './types'
-import { summarise, toFloor } from './verdicts'
+import { normaliseRef, summarise, toFloor } from './verdicts'
 import { untestedWords } from './untested'
 
 // "Plans re-checked" — the card Market names absent twice (Phase 1 Block D, D4).
@@ -280,7 +280,15 @@ export function currentJudgement(
  * inclusive — so a claim that moved on the latest reading has held for one,
  * which is the truth and the reason "held 2 updates" is not printed.
  */
-export function movedSinceUpload(evaluations: readonly PlanEvaluation[]): PlanMovedRow[] {
+export function movedSinceUpload(
+  evaluations: readonly PlanEvaluation[],
+  /** The claims as printed (`currentReading`, held to today's floor). A move
+   *  whose `to` is not what its claim prints now (a verdict under the floor,
+   *  which reads untested) is floored with it, and dropped where that leaves
+   *  it where it started: "Untested to Contradicted" never stands beside a
+   *  claim that reads untested. */
+  printed?: readonly ClaimResult[],
+): PlanMovedRow[] {
   const ordered = [...evaluations].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
   const last = new Map<string, { at: number; claim: string; from: string; to: string }>()
   ordered.forEach((e, at) => {
@@ -289,9 +297,13 @@ export function movedSinceUpload(evaluations: readonly PlanEvaluation[]): PlanMo
       last.set(m.ref, { at, claim: m.claim, from: m.from, to: m.to })
     }
   })
+  const printedVerdict = new Map((printed ?? []).filter((c) => c && typeof c.ref === 'string').map((c) => [normaliseRef(c.ref), c.verdict as string]))
 
   const out: PlanMovedRow[] = []
-  for (const [, m] of last) {
+  for (const [ref, stored] of last) {
+    const now = printedVerdict.get(normaliseRef(ref))
+    const m = now && now !== stored.to ? { ...stored, to: now } : stored
+    if (m.to === m.from) continue
     const readings = ordered.length - m.at
     const when = appShort(ordered[m.at].runDate)
     out.push({
@@ -368,7 +380,7 @@ export function planCard(input: PlanCardInput): PlanCheckCard {
     checkedOn: current.checkedOn,
     claims,
     summary,
-    moved: movedSinceUpload(input.evaluations),
+    moved: movedSinceUpload(input.evaluations, current.claims),
     basis: input.corpusVideos != null ? PLAN_CLAIM_BASIS : PLAN_CLAIM_BASIS_UNCOUNTED,
     floorLine: PLAN_FLOOR_LINE,
     caveat: PLAN_HOLD_CAVEAT,
