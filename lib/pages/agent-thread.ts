@@ -9,7 +9,8 @@ import { appWeekday, fmtInt, longMonth } from '../format'
 import { row, rows as readRows } from './read'
 import { isMissingColumnError } from '../supabase-admin'
 import type { ClaimResult, Judgement, AskSummary } from '../ask/types'
-import { loadPlanChecks, PLAN_VERDICT_LABEL, type PlanCheckCard } from '../ask/plan-cards'
+import { currentReading, loadPlanChecks, PLAN_VERDICT_LABEL, type PlanCheckCard, type PlanEvaluation } from '../ask/plan-cards'
+import { normaliseRef, summarise } from '../ask/verdicts'
 import { JUDGEMENT_HEADING, NEAREST_HEADING, OUT_OF_CORPUS_NOTICE, type AgentAnswer } from '../agent/types'
 import { askBasisLine, loadIndexFacts, type AskBasis } from '../agent/basis'
 import {
@@ -113,8 +114,14 @@ export interface DocumentCheck {
    *  limit. Null when the whole document was read, and null where the column
    *  that stores it has not been applied yet. */
   notice: string | null
+  /** The newest re-reading's claims (`currentReading`), the upload's where
+   *  nothing has re-read the plan. */
   claims: ClaimResult[]
   summary: AskSummary
+  /** The update the printed verdicts were read on (`plan_check_evaluations
+   *  .run_date` of the newest re-reading); null where they are the upload's,
+   *  which the thread's own update dates. */
+  checkedOn: string | null
   judgement: Judgement[]
   quotesByClaim: Record<string, Quote[]>
   segments: Segment[]
@@ -818,8 +825,25 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
 
   // A document thread wraps a plan_check; its quotes resolve from stored
   // insight ids — no quote text is kept in either table.
+  //
+  // THE NEWEST READING, NOT THE UPLOAD'S (9 Nov, Össur). `plan_checks.claims`
+  // is the answer written once at upload; `ask-reevaluate` writes every later
+  // reading to `plan_check_evaluations` and never back (lib/ask/reevaluate.ts).
+  // This read took the upload's alone, so the thread printed the 22 Aug
+  // reading while Your moves, through `currentReading`, printed 8 Nov's. Both
+  // now print `currentReading`, over the same evaluation rows `loadPlanChecks`
+  // reads; the read leaves with the check's.
   let document: DocumentCheck | null = null
   if (thread.kind === 'document' && thread.plan_check_id) {
+    // `Promise.resolve` sends it now: a builder left unawaited sends nothing.
+    // A failed read logs and leaves the upload's reading, as the card's does.
+    const evaluationsP = Promise.resolve(
+      supabase.from('plan_check_evaluations')
+        .select('run_date, created_at, moved, claims, summary')
+        .eq('client_id', clientId).eq('plan_check_id', thread.plan_check_id as string)
+        .order('created_at', { ascending: true }),
+    )
+    evaluationsP.catch(() => {})
     const check = row<{
       claims: ClaimResult[] | null
       summary: AskSummary | null
@@ -843,7 +867,25 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
       return isMissingColumnError(withNotice.error, 'notice') ? await read(columns) : withNotice
     })(), 'agentThread.planCheck')
     if (check) {
-      const claims = (check.claims ?? []) as ClaimResult[]
+      const evaluations = readRows<{ run_date: string; created_at: string; moved: PlanEvaluation['moved'] | null; claims: ClaimResult[] | null; summary: AskSummary | null }>(
+        await evaluationsP, 'agentThread.planCheckEvaluations',
+      ).map((e): PlanEvaluation => ({
+        runDate: e.run_date,
+        createdAt: e.created_at,
+        moved: e.moved ?? [],
+        claims: Array.isArray(e.claims) ? e.claims : null,
+        summary: e.summary ?? null,
+      }))
+      const stored = (check.claims ?? []) as ClaimResult[]
+      const current = currentReading(stored, check.summary, evaluations)
+      // THE DOCUMENT'S OWN SENTENCES ARE THE UPLOAD'S. A re-reading reuses the
+      // claims and passes the verdict pass only each one's ref and words, so a
+      // fresh claim carries no `source`; the document is fixed, so its marks
+      // are the upload's, matched on ref.
+      const sourceOf = new Map(stored.map((c) => [normaliseRef(c.ref), c.source ?? null]))
+      const claims = current.checkedOn
+        ? current.claims.map((c) => ({ ...c, source: sourceOf.get(normaliseRef(c.ref)) ?? c.source ?? null }))
+        : current.claims
       const allIds = [...new Set(claims.flatMap((c) => (c.insightIds ?? []).slice(0, ASK_THEMES_PER_CLAIM)))]
       const byAudience = allIds.length ? await fetchQuotesByAudience(supabase, allIds) : new Map()
       const pick = createCitedQuotePicker(byAudience, new Map())
@@ -860,7 +902,13 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
         sourceFilename: (check.source_filename as string | null) ?? null,
         notice: (check.notice as string | null) ?? null,
         claims,
-        summary: (check.summary ?? { supported: 0, contradicted: 0, untested: 0 }) as AskSummary,
+        // The summary travels with the claims it counts: the reading's own,
+        // counted again where the floor changed a claim, or counted from a
+        // re-reading's claims where it stored none (`planCard`'s rule).
+        summary: (current.summary ?? (current.checkedOn
+          ? summarise(claims)
+          : { supported: 0, contradicted: 0, untested: 0 })) as AskSummary,
+        checkedOn: current.checkedOn,
         judgement: (check.judgement ?? []) as Judgement[],
         quotesByClaim,
         segments,

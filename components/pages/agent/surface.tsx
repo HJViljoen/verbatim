@@ -72,13 +72,17 @@ export function AskShell({
 export function planCheckStats(d: Pick<AgentThreadData, 'title' | 'createdAt' | 'basis' | 'document'>): StatItem[] {
   const s = d.document?.summary
   const total = d.document?.claims.length ?? 0
+  const checkedOn = d.document?.checkedOn ?? d.basis.updateAt
   const parts = s
     ? ([[s.supported, 'supported'], [s.contradicted, 'contradicted'], [s.untested, 'untested']] as [number, string][]).filter(([n]) => n > 0)
     : []
   return [
     { key: 'plan', term: 'Plan', value: <span data-copy="subject" data-slot="ask_extract_title">{d.title}</span> },
     { key: 'asked', term: 'Asked', value: appWeekday(d.createdAt) },
-    { key: 'checked', term: 'Checked against', value: d.basis.updateAt ? `The update of ${appShort(d.basis.updateAt)}` : 'No update read yet' },
+    // The update the printed verdicts were read on: the newest re-reading's
+    // (9 Nov: the thread said 22 Aug over 8 Nov's verdicts), else the one the
+    // plan was checked against at upload.
+    { key: 'checked', term: 'Checked against', value: checkedOn ? `The update of ${appShort(checkedOn)}` : 'No update read yet' },
     {
       key: 'claims',
       term: <><span data-copy="figure">{fmtInt(total)}</span> {total === 1 ? 'claim' : 'claims'}</>,
