@@ -288,7 +288,22 @@ This version has breaking changes — APIs, conventions, and file structure may 
   `.catch` that logs, records the failure with `noteError` (the month and its
   Postgres code, `productStepFailure`; since 9 Nov, when Össur's October was
   refused on three runs with nothing on the run row) and returns null, so the
-  run carries on and reads `partial`). *Placement* (`placeProducts`,
+  run carries on). WHAT A RUN PARTIAL ONLY FOR THESE TWO CHANGES: its row
+  (`status` 'partial', the line in `errors`, `error_message` "1 step error:
+  product-readings") and the partial-run alert to `ALERT_EMAIL`, which carries
+  the run's row counts in place of the ops check's 'completed'-only
+  `run_incomplete`; nothing else. Every rule that judges the UPDATE reads it as
+  the completed update it was, through ONE predicate, `updateStatus`
+  (`lib/reading/run-status.ts`, on `error_message`'s counted labels, never
+  `errors`, which carries findings too): a Studio document's thin week and its
+  "finished partially" note (`thinWeek`), the gathers' run health
+  (`gathersOf`: comparability rule 6's `gather` reason and `decidingGathers`),
+  the same-age line's cadence (`weekCadence`) and the owned-events window
+  (`previousUpdateEnd`); the week charts already did, both labels being in
+  `AFTER_GATHER_STEPS`. Readers that list delivered updates (the pages, the
+  Agent, initiatives, statements, readiness, the record) take 'completed' and
+  'partial' alike. A run with any other counted error, from any step, is read
+  exactly as before by all of them. *Placement* (`placeProducts`,
   `lib/products/readings.ts`): the rules first, then a gpt-4.1 confirm of a
   generic name (`needs_confirm`), then a gpt-4.1-mini classifier on comments
   under category-relevant videos. Code checks every answer against the text
@@ -843,7 +858,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
   self-resume without `skipGather` gathers again and keeps its own clock,
   and a run with no `windowEnd` keeps the old rule. **The same-age line
   does not follow** (`weekCadence` in `keepWeekPoints` counts every run, so
-  `cadenceBroken` on a kept read is unchanged): a kept read is never
+  `cadenceBroken` on a kept read is unchanged; its one exception, since 9 Nov,
+  is a run partial only for Your products' steps, read as the completed update
+  it was by `updateStatus`, which no run before then could be, so no kept read
+  moves): a kept read is never
   recomputed, so counting a new way would mix two rules under one
   `method_version`, and an analysis-only run re-runs classification and Pass
   A, which is what the line's shares read and the bars' counts do not. The

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { DOCUMENT_BLOCK_MAX } from '../../config'
 import { CALIBRATED_PROSE_RULE } from '../../pipeline/prose-rules'
+import { updateStatus } from '../../reading/run-status'
 import { isOpaqueFigureKey, type FigureTable } from '../types'
 import type { DocumentTemplate } from './templates'
 import { pageKindsOf } from './sections'
@@ -270,7 +271,7 @@ export function buildWriterPrompts(a: WriterArgs): { system: string; user: strin
   const user = [
     `Company: ${a.company}`,
     `Period: ${a.period}`,
-    a.thin ? `Note: this update was thin (${s.runStatus === 'partial' ? 'the update finished partially' : 'few conversations in the period'}).` : '',
+    a.thin ? `Note: this update was thin (${updateStatus({ status: s.runStatus, error_message: s.runErrorMessage }) === 'partial' ? 'the update finished partially' : 'few conversations in the period'}).` : '',
     a.previous ? `Previous brief, in short: ${a.previous.summary}\nPrevious brief's headlines:\n${a.previous.headlines.map((h) => `- ${h}`).join('\n')}` : 'Previous brief: none, this is the first.',
     `Figures available (cite by placeholder; you do not know their values):\n${figureLines.join('\n')}`,
     monthly

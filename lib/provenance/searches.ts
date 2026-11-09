@@ -1,4 +1,5 @@
 import { activeCommunities } from '../reading/comparability'
+import { updateStatus } from '../reading/run-status'
 import { subredditKey } from '../gather/subreddits'
 import type { ConfigChange } from '../config-log'
 
@@ -40,12 +41,17 @@ export const normTerm = (t: string): string => t.trim().toLowerCase()
 export const searchKey = (platform: string, term: string): string => `${platform}\u0000${normTerm(term)}`
 
 export interface KeywordRow { run_id: string; platform: string; keyword: string; created_at: string }
-export interface RunRow { id: string; status: string | null; config_snapshot?: unknown }
+/** A run row as the gathers read it; `error_message` lets `updateStatus`
+ *  read a run partial only for Your products' steps as the gather it was. */
+export interface RunRow { id: string; status: string | null; config_snapshot?: unknown; error_message?: string | null }
 
 export interface GatherRun {
   runId: string
   /** The first keyword_performance row's time. */
   at: string
+  /** The update's status (`updateStatus`, lib/reading/run-status.ts): a run
+   *  partial only for Your products' steps reads `completed`, since its gather
+   *  ran in full; every other run its own status. */
   status: string | null
   /** (platform, term) keys the gather ran. */
   searches: ReadonlySet<string>
@@ -91,7 +97,7 @@ export function gathersOf(rows: readonly KeywordRow[], runs: readonly RunRow[]):
     .map(([runId, g]) => {
       const run = runById.get(runId)
       const harvested = [...g.terms].some((t) => t.startsWith('r/'))
-      return { runId, at: g.at, status: run?.status ?? null, searches: g.searches, terms: g.terms, planned: plannedSearches(run?.config_snapshot, harvested) }
+      return { runId, at: g.at, status: run ? updateStatus(run) : null, searches: g.searches, terms: g.terms, planned: plannedSearches(run?.config_snapshot, harvested) }
     })
     .sort((a, b) => ms(a.at) - ms(b.at))
 }

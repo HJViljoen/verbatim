@@ -78,7 +78,7 @@ export interface RunReadRow extends RunRow { started_at: string | null; complete
 
 export function readRuns(admin: SupabaseClient, clientId: string, pages: Pages): Promise<RunReadRow[]> {
   return selectAll<RunReadRow>(() =>
-    admin.from('pipeline_runs').select('id, status, started_at, completed_at, config_snapshot').eq('client_id', clientId).order('started_at').order('id'),
+    admin.from('pipeline_runs').select('id, status, started_at, completed_at, config_snapshot, error_message').eq('client_id', clientId).order('started_at').order('id'),
   ).then((r) => counted(pages, r))
 }
 

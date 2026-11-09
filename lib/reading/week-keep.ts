@@ -85,7 +85,8 @@ export function isMissingWeekObject(error: { code?: string; message?: string } |
 
 /** What the capture reads. Each call is one read. */
 export interface WeekCaptureReader {
-  /** The tenant's `pipeline_runs`: id, status, started and finished. */
+  /** The tenant's `pipeline_runs`: id, status, started and finished, and the
+   *  counted steps' `error_message` (`weekCadence`'s update status). */
   runs(): Promise<WeekRun[]>
   /** `market_week_volumes` over [from, to) with comments first captured before the cut. */
   volumes(q: { from: string; to: string; capturedBefore: string }): Promise<MarketWeekRow[]>
@@ -239,9 +240,9 @@ export function supabaseCaptureReader(admin: SupabaseClient, clientId: string): 
   }
   return {
     async runs() {
-      const rows = await selectAll<{ id: string; status: string; started_at: string | null; completed_at: string | null }>(() =>
-        admin.from('pipeline_runs').select('id, status, started_at, completed_at').eq('client_id', clientId).order('started_at').order('id'))
-      return rows.map((r) => ({ id: r.id, status: r.status, startedAt: r.started_at, finishedAt: r.completed_at }))
+      const rows = await selectAll<{ id: string; status: string; started_at: string | null; completed_at: string | null; error_message: string | null }>(() =>
+        admin.from('pipeline_runs').select('id, status, started_at, completed_at, error_message').eq('client_id', clientId).order('started_at').order('id'))
+      return rows.map((r) => ({ id: r.id, status: r.status, startedAt: r.started_at, finishedAt: r.completed_at, errorMessage: r.error_message }))
     },
     async volumes(q) {
       const raw = await rpc<MarketWeekRowRaw>('market_week_volumes', { p_client: clientId, p_from: q.from, p_to: q.to, p_captured_before: q.capturedBefore })

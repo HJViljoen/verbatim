@@ -5,6 +5,7 @@ import type { WeekLineConfig } from '../week-line-config'
 import type { ComparabilityMode, OurChange, OurChangeSurface } from './comparability'
 import { KIND_LABELS } from './kinds'
 import { marketAudiences } from './market'
+import { updateStatus } from './run-status'
 import { bandVerdict, type RefusedReason, type Verdict } from './verdicts'
 import { addDays, dayOf, isoWeekOf, msOfInstant, weekEndInstant, type MarketWeekRow } from './weeks'
 
@@ -261,6 +262,10 @@ export interface WeekRun {
   status: string
   finishedAt: string | null
   startedAt?: string | null
+  /** `pipeline_runs.error_message`, the run's COUNTED steps: `weekCadence`
+   *  reads a run partial only for Your products' steps as the update it was
+   *  (`updateStatus`, lib/reading/run-status.ts). Absent, the status alone. */
+  errorMessage?: string | null
 }
 
 // ---- Ages and cutoffs -------------------------------------------------------------
@@ -323,7 +328,10 @@ export function weekCadence(week: string, runs: readonly WeekRun[]):
     const late = !Number.isNaN(finished) && finished >= windowEnd
     if (late) lateRun = true
     const onDay = new Date(anchor).getUTCDay() === WEEK_LINE_UPDATE_DAY
-    if (r.status !== 'completed' || Number.isNaN(finished) || late || !onDay) offCadence++
+    // The update's status: a run partial only for Your products' steps (a
+    // failure recorded since 9 Nov) is the completed update it was; any other
+    // partial run counts off-cadence exactly as before, the line's own rule.
+    if (updateStatus({ status: r.status, error_message: r.errorMessage }) !== 'completed' || Number.isNaN(finished) || late || !onDay) offCadence++
   }
   return { runsInWeek: counts[0], runsAfter: [counts[1], counts[2]], lateRun, offCadence }
 }

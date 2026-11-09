@@ -1,6 +1,7 @@
 import { DOCUMENT_BLOCK_MAX, DOCUMENT_CITED_COUNT_MIN, DOCUMENT_FINDING_MIN_CONVERSATIONS, DOCUMENT_THIN_CONVERSATIONS } from '../../config'
 import { chunk } from '../../chunk'
 import { readsAsHeroQuote } from '../../quotes'
+import { updateStatus } from '../../reading/run-status'
 import type { Quote, Slide } from '../../renderables/types'
 import type { FigureTable } from '../types'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../../rivals'
@@ -45,8 +46,14 @@ export function allowedTokens(s: Signals, answers: ResearchAnswer[]): string[] {
   ])
 }
 
-export function thinWeek(s: Pick<Signals, 'runStatus' | 'run'>): boolean {
-  return s.runStatus === 'partial' || s.run.conversations < DOCUMENT_THIN_CONVERSATIONS
+/** Did the update finish partially? The update's status (`updateStatus`): a
+ *  run partial only for Your products' steps finished its gather and its
+ *  analysis, and reads as it closed before those were recorded (9 Nov). */
+export const finishedPartially = (s: Pick<Signals, 'runStatus' | 'runErrorMessage'>): boolean =>
+  updateStatus({ status: s.runStatus, error_message: s.runErrorMessage }) === 'partial'
+
+export function thinWeek(s: Pick<Signals, 'runStatus' | 'runErrorMessage' | 'run'>): boolean {
+  return finishedPartially(s) || s.run.conversations < DOCUMENT_THIN_CONVERSATIONS
 }
 
 /**

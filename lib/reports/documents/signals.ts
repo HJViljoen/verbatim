@@ -59,6 +59,10 @@ export interface Signals {
   runId: string
   runDate: string
   runStatus: string
+  /** The run's `error_message` (its counted steps), for `updateStatus`
+   *  (lib/reading/run-status.ts): optional, so signals stored before it read
+   *  as they did. */
+  runErrorMessage?: string | null
   company: string
   brandKeywords: string[]
   industryKeywords: string[]
@@ -152,8 +156,8 @@ export async function loadSignals(
     admin.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     admin.from('tracking_configs').select('brand_keywords, competitor_names, industry_keywords, own_handles, competitor_handles').eq('client_id', clientId).maybeSingle(),
     args.runId
-      ? admin.from('pipeline_runs').select('id, status, started_at, completed_at').eq('id', args.runId).eq('client_id', clientId).maybeSingle()
-      : admin.from('pipeline_runs').select('id, status, started_at, completed_at').eq('client_id', clientId).in('status', ['completed', 'partial']).order('started_at', { ascending: false }).limit(1).maybeSingle(),
+      ? admin.from('pipeline_runs').select('id, status, started_at, completed_at, error_message').eq('id', args.runId).eq('client_id', clientId).maybeSingle()
+      : admin.from('pipeline_runs').select('id, status, started_at, completed_at, error_message').eq('client_id', clientId).in('status', ['completed', 'partial']).order('started_at', { ascending: false }).limit(1).maybeSingle(),
     admin.from('pipeline_runs').select('id').eq('client_id', clientId).eq('status', 'running'),
     selectAll<ThemeHistoryRow>(() =>
       admin.from('themes').select('run_id, registry_id, label, category, bucket, strength_score, evidence_count, first_seen')
@@ -317,6 +321,7 @@ export async function loadSignals(
     runId,
     runDate,
     runStatus: latestRun.status as string,
+    runErrorMessage: (latestRun.error_message as string | null | undefined) ?? null,
     company,
     brandKeywords,
     industryKeywords,
