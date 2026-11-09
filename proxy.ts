@@ -1,6 +1,14 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+// The legal pages are off the site for now (Heinrich, 9 Nov 2026: Verbatim is
+// not trading as a company yet). They come back later, so an address already
+// out there (a bookmark, a search result, a link someone forwarded) goes to the
+// site's home with a 307, which nothing caches, never a 308 and never a 404.
+// The apex path, and the internal /site one that local dev and a preview serve.
+// When the pages return, delete this and its two uses.
+const LEGAL_OFF = /^(\/site)?\/(privacy|terms)$/
+
 export async function proxy(request: NextRequest) {
   const host = (request.headers.get('host') ?? '').toLowerCase()
   const isMarketingHost = host === 'verbatimintel.com' || host === 'www.verbatimintel.com'
@@ -54,6 +62,10 @@ export async function proxy(request: NextRequest) {
       url.host = 'app.verbatimintel.com'
       return NextResponse.redirect(url, 308)
     }
+    if (LEGAL_OFF.test(url.pathname)) {
+      url.pathname = '/'
+      return NextResponse.redirect(url, 307)
+    }
     if (!url.pathname.startsWith('/site')) {
       url.pathname = url.pathname === '/' ? '/site' : `/site${url.pathname}`
       return NextResponse.rewrite(url)
@@ -67,6 +79,12 @@ export async function proxy(request: NextRequest) {
     url.port = ''
     url.pathname = request.nextUrl.pathname.replace(/^\/site/, '') || '/'
     return NextResponse.redirect(url, 308)
+  }
+  // Any other host reaches the site under /site (local dev, a preview).
+  if (LEGAL_OFF.test(request.nextUrl.pathname) && request.nextUrl.pathname.startsWith('/site/')) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/site'
+    return NextResponse.redirect(url, 307)
   }
 
   let supabaseResponse = NextResponse.next({ request })
