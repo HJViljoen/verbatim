@@ -56,7 +56,7 @@ export function levelStanding(): Map<TextKey, StandingText> {
 }
 
 /** The video rows the evidence reads (the board's four first). */
-function sealVideoRows(): Map<string, LevelVideoRow> {
+export function sealVideoRows(): Map<string, LevelVideoRow> {
   const v = sealVideos()
   const own = ownPost()
   const named: [string, Partial<LevelVideoRow>][] = [

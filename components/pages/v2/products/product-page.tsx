@@ -121,10 +121,18 @@ function Comment({ c, hideOnPhone }: { c: NamedComment; hideOnPhone: boolean }) 
   )
 }
 
-/** The video's line under its account: "TikTok, posted 14 Oct", and where
- *  its own words name it as well as comments do, "named in the video". */
-function videoMeta(v: NamedVideo): string {
-  const parts = [v.platform, v.posted ? `posted ${v.posted}` : null, v.inVideo && v.named > 0 && !v.owned ? 'named in the video' : null].filter(Boolean)
+/** The video's line under its account: "TikTok, posted 14 Oct"; where it
+ *  was posted before the month, that people commented on it in the month,
+ *  which is why it is counted there ("posted 29 Sep, commented on in
+ *  October": a month is dated by the comment); and where its own words name
+ *  it as well as comments do, "named in the video". */
+function videoMeta(v: NamedVideo, monthName: string): string {
+  const parts = [
+    v.platform,
+    v.posted ? `posted ${v.posted}` : null,
+    v.postedBefore ? `commented on in ${monthName}` : null,
+    v.inVideo && v.named > 0 && !v.owned ? 'named in the video' : null,
+  ].filter(Boolean)
   return parts.join(', ')
 }
 
@@ -135,13 +143,13 @@ function videoMeta(v: NamedVideo): string {
  *  link breaks inside the card),
  *  how many comments name it, those comments, "Show all". `onceSaid`: the
  *  page has said every video was named only in its own words. */
-function VideoCard({ v, index, all, brand, onceSaid }: { v: NamedVideo; index: number; all: boolean; brand: string; onceSaid: boolean }) {
+function VideoCard({ v, index, all, brand, onceSaid, monthName }: { v: NamedVideo; index: number; all: boolean; brand: string; onceSaid: boolean; monthName: string }) {
   const deskMore = !v.open && v.quotable > PRODUCT_VIDEO_QUOTES
   const phoneMore = !v.open && v.quotable > PRODUCT_VIDEO_QUOTES_PHONE
   const show = showNamedOf(v)
   const note = v.open ? openedNamedNote(v) : null
   const where = v.owned ? 'post' : 'video'
-  const meta = videoMeta(v)
+  const meta = videoMeta(v, monthName)
   return (
     <article id={`video-${v.id}`} data-video-card="" className={cn(CARD, 'scroll-mt-6 gap-3', !all && !v.open && index >= PRODUCT_VIDEOS_SHOWN_PHONE ? 'max-sm:hidden' : null)}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1.5">
@@ -228,7 +236,7 @@ function WhereNamed({ page, d }: { page: ProductPage; d: ProductsLevelData }) {
         <div data-named-unread="" className={CARD}><p className={GAPLINE}>Its videos could not be read just now.</p></div>
       ) : (
         <>
-          {ev.videos.map((v, i) => <VideoCard key={v.id} v={v} index={i} all={ev.all} brand={d.base.client} onceSaid={onceSaid} />)}
+          {ev.videos.map((v, i) => <VideoCard key={v.id} v={v} index={i} all={ev.all} brand={d.base.client} onceSaid={onceSaid} monthName={longMonth(d.base.month)} />)}
           {ev.capped != null ? <p className="m-0 text-[13.5px] text-muted-foreground">The first <span data-copy="figure">{fmtInt(ev.capped)}</span> of <span data-copy="figure">{fmtInt(ev.total)}</span> are listed.</p> : null}
           {ev.more && ev.more.desktop > 0 ? <Link href={ev.more.href} className={cn(CHIP, 'self-start font-semibold no-underline max-sm:hidden')}>Show the other <span data-copy="figure" className="mx-1">{fmtInt(ev.more.desktop)}</span> {ev.more.desktop === 1 ? 'video' : 'videos'}</Link> : null}
           {ev.more && ev.more.phone > 0 ? <Link href={ev.more.href} className={cn(CHIP, 'self-stretch justify-center font-semibold no-underline sm:hidden')}>Show the other <span data-copy="figure" className="mx-1">{fmtInt(ev.more.phone)}</span> {ev.more.phone === 1 ? 'video' : 'videos'}</Link> : null}

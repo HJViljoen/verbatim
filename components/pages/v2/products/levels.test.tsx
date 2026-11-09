@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { PRODUCT_IDS } from '@/lib/pages/v2/products-fixture'
-import { categoryFixture, PRODUCTS_LEVEL_FIXTURES, productFixture } from '@/lib/pages/v2/products-level-fixture'
+import { categoryFixture, PRODUCTS_LEVEL_FIXTURES, productFixture, sealVideoRows } from '@/lib/pages/v2/products-level-fixture'
 import { PRODUCTS_NO_CATALOGUE, PRODUCTS_NOT_ON, setKey, type Crosses } from '@/lib/pages/v2/products'
 import { CATEGORY_MISSING, PRODUCT_MISSING, type ProductsLevelData } from '@/lib/pages/v2/products-levels'
 import { PRODUCT_TAG_COPY } from '@/lib/products/tags'
@@ -238,6 +238,20 @@ describe('a category\'s page, the hub (G4-Products-Category)', () => {
 describe('a product\'s page, the evidence (G4-Products-Product)', () => {
   const d = PRODUCTS_LEVEL_FIXTURES.sealinx()
   const text = renderText(page(d))
+
+  it('says a video posted before the month was commented on in it (9 Nov: Direct Socket\'s "3 in October", two posted in late September)', () => {
+    // A month is dated by the comment (AGENTS.md): a video is in September's
+    // count when it has a comment dated in September, wherever it was posted.
+    const rows = sealVideoRows()
+    const [first] = [...rows.keys()]
+    rows.set(first, { ...rows.get(first)!, upload_date: '2026-08-29' })
+    const t = renderText(page(productFixture({ reads: { videos: rows } })))
+    expect(t).toContain('The Amputee Diaries YouTube, posted 29 Aug, commented on in September, named in the video Watch the video on YouTube')
+    // Posted inside the month: no such words.
+    expect(t).toContain('@stepbystep.amp TikTok, posted 6 Sep')
+    expect(t.match(/commented on in September/g)).toHaveLength(1)
+    expect(text).not.toContain('commented on in')
+  })
 
   it('opens with its figures row (a fourth cell where comments name it) and its one line in code\'s words', () => {
     expect(text).toContain('A product in Liners July August September The last full month September Named in 10 of 839 videos Of the category 10 of 118 about liners Comments naming it 8')

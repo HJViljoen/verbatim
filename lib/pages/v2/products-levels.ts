@@ -280,6 +280,11 @@ export interface NamedVideo {
   account: string | null
   platform: string | null
   posted: string | null
+  /** Posted before the month read: it is in the month's count because people
+   *  commented on it in the month (a month is dated by the comment), which the
+   *  card says beside its posting day. False where the day or the month is not
+   *  known. */
+  postedBefore: boolean
   caption: string | null
   url: string | null
   /** The client's own post: its comments count, its own words never do. */
@@ -663,8 +668,11 @@ export function productEvidence(input: {
   groupId: string
   productId: string
   params: Pick<ProductsParams, 'month'>
+  /** The month read (any day of it names it), for `postedBefore`. */
+  month?: string
 }): ProductEvidence {
   const kept = keptMonth(input.params)
+  const monthStart = input.month ? Date.parse(`${monthStartOf(input.month)}T00:00:00.000Z`) : Number.NaN
   const total = input.order.length
   const inVideoOnly = input.order.filter((o) => o.named === 0).length
   const fewerHref = input.shown.all ? productPageHref(input.groupId, input.productId, kept) : null
@@ -691,6 +699,7 @@ export function productEvidence(input: {
       account: v?.account_name ?? null,
       platform: v?.platform ? platformLabel(v.platform) : null,
       posted: v?.upload_date ? shortDate(v.upload_date) : null,
+      postedBefore: Boolean(v?.upload_date) && Date.parse(v!.upload_date!) < monthStart,
       caption: v?.caption ?? null,
       url: v?.video_url ?? null,
       owned: input.owned.has(id),
@@ -748,7 +757,7 @@ export function buildProductPage(input: {
   const shown = shownVideos(order, params)
   const owned = new Set((input.in.market ?? []).filter((v) => v.owned).map((v) => v.id))
   const evidence = input.reads && input.in.standing
-    ? productEvidence({ order, shown, videos: input.reads.videos, texts: input.reads.named, owned, clientId: input.in.clientId, groupId: g.id, productId: p.id, params })
+    ? productEvidence({ order, shown, videos: input.reads.videos, texts: input.reads.named, owned, clientId: input.in.clientId, groupId: g.id, productId: p.id, params, month })
     : { state: 'unread' as const, total: order.length, videos: [], more: null, capped: null, all: shown.all, fewerHref: null, inVideoOnly: order.filter((o) => o.named === 0).length }
   return {
     id: p.id, name: p.name, groupId: g.id, groupName: g.name,
