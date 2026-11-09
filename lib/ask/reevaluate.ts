@@ -33,6 +33,11 @@ export interface ReevaluationResult {
 /** A judgement rewrite's call cap. The upload's took 14 to 22 s on Össur. */
 export const PLAN_JUDGE_CALL_CAP_MS = 60_000
 
+/** The least of the step's clock a judgement rewrite is started with: more
+ *  than the upload's slowest call (22 s), so one is never begun only to be cut
+ *  off. Under it the rewrite is skipped and the last judgement stands. */
+export const PLAN_JUDGE_MIN_START_MS = 25_000
+
 interface CheckRow {
   id: string
   title: string | null
@@ -58,6 +63,15 @@ export async function reevaluatePlanChecks(
      * an operator's script does not.
      */
     judgeBy?: number | null
+    /**
+     * Where the rewrites go, each as soon as its reading is stored. Given, this
+     * returns with the last reading stored and the caller awaits them (the
+     * weekly step does, after its statements pass, so they run beside it and
+     * take none of its clock); each result's `judged` and `costUsd` are filled
+     * in as its rewrite lands. Absent, this awaits them before it returns.
+     * The promises never reject.
+     */
+    onJudging?: (p: Promise<void>) => void
   },
 ): Promise<ReevaluationResult[]> {
   const { clientId, runId, runDate, companyName } = args
@@ -74,8 +88,9 @@ export async function reevaluatePlanChecks(
   if (!checks.length) return []
 
   const out: ReevaluationResult[] = []
-  /** Each check's reading as stored this run, for its judgement. */
-  const written = new Map<string, ClaimResult[]>()
+  /** Each check's judgement rewrite, started as soon as its reading is stored. */
+  const judging: Promise<void>[] = []
+  const judge = args.judgeBy !== undefined ? judgementWriter(admin, { clientId, runId, companyName, by: args.judgeBy }) : null
   for (const check of checks) {
     const stored = Array.isArray(check.claims) ? check.claims : []
     const claims: ExtractedClaim[] = stored
@@ -150,70 +165,81 @@ export async function reevaluatePlanChecks(
       continue
     }
 
-    out.push({ planCheckId: check.id, title: check.title, moved, summary, costUsd: result.costUsd, judged: false })
-    written.set(check.id, claimsHeld)
+    const row: ReevaluationResult = { planCheckId: check.id, title: check.title, moved, summary, costUsd: result.costUsd, judged: false }
+    out.push(row)
+    // NOW, not after every check: beside the next check's verdict pass, so at
+    // the cap of three the last plan's judgement is not left the scraps of the
+    // clock (review, 9 Nov: after three 35 s verdict passes, under 10 s).
+    if (judge) {
+      const p = judge(row, claimsHeld)
+      judging.push(p)
+      args.onJudging?.(p)
+    }
   }
 
-  if (args.judgeBy !== undefined && written.size > 0) await rewriteJudgements(admin, { clientId, runId, companyName, by: args.judgeBy }, written, out)
+  if (!args.onJudging) await Promise.all(judging)
   return out
 }
 
 /**
- * "What I'd take from that", written again on each reading just stored
- * (Heinrich, 9 Nov: the upload's judgement reasoned from verdicts that have
- * since moved). AFTER every check's verdicts, so the verdict calls start when
- * they always did, and side by side, at most `ASK_REEVALUATE_MAX_CHECKS`
- * calls, each ending by `by`. Stored on the reading's own row
+ * "What I'd take from that", written again on a reading just stored (Heinrich,
+ * 9 Nov: the upload's judgement reasoned from verdicts that have since moved).
+ * One call a check, at most `ASK_REEVALUATE_MAX_CHECKS`, each started as soon
+ * as its reading is stored, with at least `PLAN_JUDGE_MIN_START_MS` of the
+ * clock left, and ending by `by`. Stored on the reading's own row
  * (`plan_check_evaluations.judgement`), so the upload's and every earlier
  * week's stay as written.
  *
- * NEVER A BLANK, NEVER A FAILED RUN. A call that fails, times out or comes
- * back with nothing stores nothing, and the page prints the last judgement
- * written, with its own date. Without the column (its migration not applied)
- * nothing is called, so nothing is spent on a judgement that cannot be kept.
- * Nothing in here throws.
+ * NEVER A BLANK, NEVER A FAILED RUN. A call that fails, times out, is not
+ * started in time or comes back with nothing stores nothing, and the page
+ * prints the last judgement written, with its own date. Without the column
+ * (its migration not applied) nothing is called, so nothing is spent on a
+ * judgement that cannot be kept; the column is probed once, by the first
+ * rewrite, never on a verdict's path. The writer's promises never reject.
  */
-async function rewriteJudgements(
+function judgementWriter(
   admin: ReturnType<typeof import('../supabase-admin').createAdminClient>,
   ctx: { clientId: string; runId: string; companyName: string; by: number | null },
-  written: ReadonlyMap<string, ClaimResult[]>,
-  out: ReevaluationResult[],
-): Promise<void> {
-  try {
-    const probe = await admin.from('plan_check_evaluations').select('judgement').eq('client_id', ctx.clientId).limit(1)
-    if (probe.error) {
-      console.warn(isMissingColumnError(probe.error, 'judgement')
-        ? '[ask-reevaluate] judgement not rewritten: plan_check_evaluations.judgement is not applied yet'
-        : `[ask-reevaluate] judgement not rewritten: ${(probe.error as { message?: string }).message ?? probe.error}`)
-      return
-    }
-  } catch (e) {
-    console.warn(`[ask-reevaluate] judgement not rewritten: ${e instanceof Error ? e.message : String(e)}`)
-    return
-  }
-  await Promise.all([...written].map(async ([planCheckId, claims]) => {
+): (row: ReevaluationResult, claims: ClaimResult[]) => Promise<void> {
+  let columnReady: Promise<boolean> | null = null
+  const probe = async (): Promise<boolean> => {
     try {
-      const request = callOptionsWithin(ctx.by, Date.now(), PLAN_JUDGE_CALL_CAP_MS)
+      const res = await admin.from('plan_check_evaluations').select('judgement').eq('client_id', ctx.clientId).limit(1)
+      if (!res.error) return true
+      console.warn(isMissingColumnError(res.error, 'judgement')
+        ? '[ask-reevaluate] judgement not rewritten: plan_check_evaluations.judgement is not applied yet'
+        : `[ask-reevaluate] judgement not rewritten: ${(res.error as { message?: string }).message ?? res.error}`)
+      return false
+    } catch (e) {
+      console.warn(`[ask-reevaluate] judgement not rewritten: ${e instanceof Error ? e.message : String(e)}`)
+      return false
+    }
+  }
+  return async (row, claims) => {
+    try {
+      columnReady ??= probe()
+      if (!(await columnReady)) return
+      const now = Date.now()
+      const request = ctx.by != null && ctx.by - now < PLAN_JUDGE_MIN_START_MS ? null : callOptionsWithin(ctx.by, now, PLAN_JUDGE_CALL_CAP_MS)
       if (!request) {
-        console.warn(`[ask-reevaluate] judgement not rewritten for ${planCheckId}: too little of the step left`)
+        console.warn(`[ask-reevaluate] judgement not rewritten for ${row.planCheckId}: too little of the step left`)
         return
       }
       const judged = await judgePass(admin, { clientId: ctx.clientId, runId: ctx.runId, companyName: ctx.companyName, claims, request })
-      const row = out.find((r) => r.planCheckId === planCheckId)
-      if (row) row.costUsd += judged.costUsd
+      row.costUsd += judged.costUsd
       if (!judged.ok || judged.judgement.length === 0) return
       const { error } = await admin.from('plan_check_evaluations')
         .update({ judgement: judged.judgement })
-        .eq('plan_check_id', planCheckId).eq('run_id', ctx.runId)
+        .eq('plan_check_id', row.planCheckId).eq('run_id', ctx.runId)
       if (error) {
-        console.error(`[ask-reevaluate] judgement write failed for ${planCheckId}: ${(error as { message?: string }).message ?? error}`)
+        console.error(`[ask-reevaluate] judgement write failed for ${row.planCheckId}: ${(error as { message?: string }).message ?? error}`)
         return
       }
-      if (row) row.judged = true
+      row.judged = true
     } catch (e) {
-      console.error(`[ask-reevaluate] judgement not rewritten for ${planCheckId}: ${e instanceof Error ? e.message : String(e)}`)
+      console.error(`[ask-reevaluate] judgement not rewritten for ${row.planCheckId}: ${e instanceof Error ? e.message : String(e)}`)
     }
-  }))
+  }
 }
 
 /**

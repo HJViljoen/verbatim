@@ -2192,6 +2192,10 @@ export const runPipeline = inngest.createFunction(
             admin.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
             admin.from('pipeline_runs').select('started_at').eq('id', runId).maybeSingle(),
           ])
+          // The plans' judgement rewrites, each started as its plan's reading
+          // is stored and awaited after the statements pass below, so they run
+          // beside it and take none of its clock.
+          const judging: Promise<void>[] = []
           const results = await reevaluatePlanChecks(admin, {
             clientId,
             runId,
@@ -2199,9 +2203,9 @@ export const runPipeline = inngest.createFunction(
             companyName: (client?.company_name as string) ?? 'the client',
             // "What I'd take from that" written again on each new reading
             // (Heinrich, 9 Nov): at most one call a check
-            // (ASK_REEVALUATE_MAX_CHECKS, 3), each ending early enough that the
-            // statements pass below keeps its whole budget.
+            // (ASK_REEVALUATE_MAX_CHECKS, 3), each ending by the step's limit.
             judgeBy: planJudgeDeadline(stepStartedAt),
+            onJudging: (p) => { judging.push(p) },
           })
           // YOUR STATEMENTS (pages build, MOVES): the client's own claims,
           // re-measured on this run's month in the same step that re-reads its
@@ -2235,7 +2239,8 @@ export const runPipeline = inngest.createFunction(
               console.error(`[statements] not measured: ${e instanceof Error ? e.message : String(e)}`)
             }
           }
-          return { checks: results.length, moved: results.reduce((n, r) => n + r.moved.length, 0), statements }
+          await Promise.allSettled(judging)
+          return { checks: results.length, moved: results.reduce((n, r) => n + r.moved.length, 0), judged: results.filter((r) => r.judged).length, statements }
         })
         .catch((e) => {
           console.error(`[ask-reevaluate] out of retries: ${e instanceof Error ? e.message : String(e)}`)

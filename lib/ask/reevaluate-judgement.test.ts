@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ClaimResult, Judgement } from './types'
 
@@ -16,7 +16,8 @@ vi.mock('./engine', () => ({
 }))
 vi.mock('../quotes', () => ({ fetchInsightsByIds: () => Promise.resolve([]) }))
 
-const { reevaluatePlanChecks, PLAN_JUDGE_CALL_CAP_MS } = await import('./reevaluate')
+const { reevaluatePlanChecks, PLAN_JUDGE_CALL_CAP_MS, PLAN_JUDGE_MIN_START_MS } = await import('./reevaluate')
+const { planJudgeDeadline, statementsBudget, STATEMENTS_STEP_BUDGET_MS } = await import('../statements/measure')
 
 const claim = (ref: string, verdict: ClaimResult['verdict'], videos: number): ClaimResult => ({
   ref,
@@ -81,16 +82,10 @@ describe('ask-reevaluate writes the judgement again on each new reading', () => 
       Promise.resolve({ claims: x.claims.map((c) => claim(c.ref, 'contradicts', 11)), costUsd: 0.06 }))
   })
 
-  it('makes one call a check on the reading it stored, after every verdict, and keeps it on that reading’s row', async () => {
-    const order: string[] = []
-    verdictPass.mockImplementation((_a: unknown, x: { claims: { ref: string }[] }) => {
-      order.push('verdict')
-      return Promise.resolve({ claims: x.claims.map((c) => claim(c.ref, 'contradicts', 11)), costUsd: 0.06 })
-    })
-    judgePass.mockImplementation(() => { order.push('judge'); return Promise.resolve({ judgement: JUDGEMENT, costUsd: 0.03, ok: true }) })
+  it('makes one call a check on the reading it stored, and keeps it on that reading’s row', async () => {
+    judgePass.mockResolvedValue({ judgement: JUDGEMENT, costUsd: 0.03, ok: true })
     const writes: Write[] = []
     const out = await reevaluatePlanChecks(admin(writes) as never, { ...args, judgeBy: null })
-    expect(order).toEqual(['verdict', 'verdict', 'judge', 'judge'])
     expect(judgePass).toHaveBeenCalledTimes(2)
     // The judgement reads the reading just STORED, after the hold: plan one's
     // fresh "contradicted" on 11 videos had 2 new ones, so its supported on 9
@@ -146,3 +141,77 @@ describe('ask-reevaluate writes the judgement again on each new reading', () => 
     expect(out.map((r) => r.judged)).toEqual([false, false])
   })
 })
+
+// Review, 9 Nov: at the cap of three plans, judgements started only after every
+// verdict pass would get the scraps of the clock. Each starts as soon as its
+// plan's reading is stored, beside the next verdict pass, and the step awaits
+// them after its statements pass, so that pass starts when it always did.
+describe('the judgement rewrites, on the step’s clock', () => {
+  const T0 = Date.UTC(2026, 10, 15, 5, 0, 0)
+  const threeChecks = (writes: Write[]) => {
+    const a = admin(writes)
+    const from = a.from.bind(a)
+    return {
+      from(table: string) {
+        const b = from(table) as Record<string, unknown>
+        if (table !== 'plan_checks') return b
+        const rows = ['pc1', 'pc2', 'pc3'].map((id) => ({ id, title: id, claims: [claim('C1', 'echoes', 9)] }))
+        const chain: Record<string, unknown> = {}
+        for (const m of ['select', 'eq', 'order', 'limit']) chain[m] = () => chain
+        chain.then = (r: (v: unknown) => unknown) => Promise.resolve({ data: rows, error: null }).then(r)
+        return chain
+      },
+    }
+  }
+  const after = <T,>(ms: number, v: T) => new Promise<T>((r) => setTimeout(() => r(v), ms))
+
+  beforeEach(() => {
+    vi.useFakeTimers({ now: T0 })
+    verdictPass.mockReset()
+    judgePass.mockReset()
+    // Össur's 8 Nov verdict passes took 34 and 36 s; the upload's judgement 14 and 22 s.
+    verdictPass.mockImplementation((_a: unknown, x: { claims: { ref: string }[] }) =>
+      after(35_000, { claims: x.claims.map((c) => claim(c.ref, 'echoes', 9)), costUsd: 0.06 }))
+  })
+  afterEach(() => { vi.useRealTimers() })
+
+  it('writes all three at the cap, each beside the next verdict pass, and leaves the statements pass its whole budget', async () => {
+    const started: { at: number; timeout: number }[] = []
+    const ended: number[] = []
+    judgePass.mockImplementation((_a: unknown, x: { request: { timeout: number } }) => {
+      started.push({ at: Date.now() - T0, timeout: x.request.timeout })
+      return after(20_000, { judgement: JUDGEMENT, costUsd: 0.03, ok: true }).then((v) => { ended.push(Date.now() - T0); return v })
+    })
+    const judging: Promise<void>[] = []
+    let returnedAt = -1
+    const run = reevaluatePlanChecks(threeChecks([]) as never, { ...args, judgeBy: planJudgeDeadline(T0), onJudging: (p) => { judging.push(p) } })
+      .then((out) => { returnedAt = Date.now() - T0; return out })
+    await vi.advanceTimersByTimeAsync(105_000)
+    const out = await run
+    // The readings are stored when they always were, and the statements pass
+    // after them starts with every millisecond it had before.
+    expect(returnedAt).toBe(105_000)
+    expect(statementsBudget(T0, T0 + returnedAt)).toBe(STATEMENTS_STEP_BUDGET_MS)
+    await vi.advanceTimersByTimeAsync(20_000)
+    await Promise.all(judging)
+    expect(started.map((s) => s.at)).toEqual([35_000, 70_000, 105_000])
+    expect(started.every((s) => s.timeout === PLAN_JUDGE_CALL_CAP_MS)).toBe(true)
+    expect(ended).toEqual([55_000, 90_000, 125_000])
+    expect(Math.max(...ended)).toBeLessThanOrEqual(planJudgeDeadline(T0) - T0)
+    expect(out.map((r) => r.judged)).toEqual([true, true, true])
+  })
+
+  it('starts none with less than 25 s of its clock left, and that plan keeps its last judgement', async () => {
+    judgePass.mockImplementation(() => after(20_000, { judgement: JUDGEMENT, costUsd: 0.03, ok: true }))
+    const writes: Write[] = []
+    // A clock that ends 20 s after the third reading is stored.
+    const run = reevaluatePlanChecks(threeChecks(writes) as never, { ...args, judgeBy: T0 + 125_000 })
+    await vi.advanceTimersByTimeAsync(130_000)
+    const out = await run
+    expect(PLAN_JUDGE_MIN_START_MS).toBe(25_000)
+    expect(judgePass).toHaveBeenCalledTimes(2)
+    expect(out.map((r) => r.judged)).toEqual([true, true, false])
+    expect(writes.filter((w) => w.op === 'update').map((w) => w.filters.find((f) => f.startsWith('plan_check_id')))).toEqual(['plan_check_id=pc1', 'plan_check_id=pc2'])
+  })
+})
+

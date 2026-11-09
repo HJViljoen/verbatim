@@ -134,16 +134,14 @@ describe('the prompts', () => {
 
 // ---- Bounded in the weekly run (integration, lead's ruling 10) ------------------
 
-// The plans' judgement rewrites (Heinrich, 9 Nov) run inside the same step,
-// after the re-checks and before this pass: ending by `planJudgeDeadline`, they
-// leave the statements pass every millisecond it has today.
-describe('planJudgeDeadline: the judgement rewrites leave the statements pass its budget', () => {
-  it('ends early enough that the pass still gets its whole budget', () => {
+// The plans' judgement rewrites (Heinrich, 9 Nov) run BESIDE this pass, never
+// before it: the step awaits them after it, so it starts when it always did,
+// and they end by the step's own limit, inside the route's 300 s.
+describe('planJudgeDeadline: the judgement rewrites end inside the step', () => {
+  it('ends by the step’s limit, less a margin for their writes', () => {
     const start = 1_000_000
-    expect(statementsBudget(start, planJudgeDeadline(start))).toBe(STATEMENTS_STEP_BUDGET_MS)
-    // With the margin for the writes spent too.
-    expect(statementsBudget(start, planJudgeDeadline(start) + 5_000)).toBe(STATEMENTS_STEP_BUDGET_MS)
-    expect(planJudgeDeadline(start) - start).toBe(115_000)
+    expect(planJudgeDeadline(start) - start).toBe(265_000)
+    expect(planJudgeDeadline(start)).toBeLessThanOrEqual(start + ASK_REEVALUATE_LIMIT_MS)
   })
 })
 

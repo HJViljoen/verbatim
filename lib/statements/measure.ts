@@ -101,13 +101,16 @@ export function statementsBudget(stepStartedAt: number, now: number): number {
 /**
  * The instant the plans' judgement rewrites must end by, from the STEP's
  * start (Heinrich, 9 Nov: "What I'd take from that" written again weekly).
- * Early enough that the statements pass after them keeps every millisecond
- * `statementsBudget` gives it today: started by here, it still gets its full
- * `STATEMENTS_STEP_BUDGET_MS`. The margin covers the judgements' writes. Pure.
+ * They run BESIDE the verdict passes and this pass, never before it: each
+ * starts as its plan's reading is stored, and the step awaits them after this
+ * pass, so this pass starts when the last reading is stored, exactly as
+ * before, and `statementsBudget` gives it what it always did. They end by the
+ * step's own limit, less a margin for their writes, so the step still ends
+ * inside the route's 300 s. Pure.
  */
 export const PLAN_JUDGE_WRITE_MARGIN_MS = 5_000
 export function planJudgeDeadline(stepStartedAt: number): number {
-  return stepStartedAt + ASK_REEVALUATE_LIMIT_MS - STATEMENTS_STEP_BUDGET_MS - PLAN_JUDGE_WRITE_MARGIN_MS
+  return stepStartedAt + ASK_REEVALUATE_LIMIT_MS - PLAN_JUDGE_WRITE_MARGIN_MS
 }
 
 /** A model call's cap, and the least time worth starting one with. */
