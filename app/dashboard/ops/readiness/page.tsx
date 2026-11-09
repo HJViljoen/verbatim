@@ -40,8 +40,11 @@ export default async function ReadinessPage() {
   // Service role: the discard record is superadmin-only by policy, and the
   // change log and the decision ledger are closed to a session that is not
   // inside the workspace it is reading.
+  // `warnings`: each recent update's warnings (steps out of retries the run
+  // does not count) follow its line in the Updates row. The operator's page
+  // alone asks; the client's Settings › Readiness reads as before.
   const now = new Date()
-  const inputs = await loadReadiness(createAdminClient(), clientId, now)
+  const inputs = await loadReadiness(createAdminClient(), clientId, now, { warnings: true })
   const rows = computeReadiness(inputs)
   const summary = summarise(rows)
 

@@ -1,3 +1,5 @@
+import type { RunWarning } from '../pipeline/run-warnings'
+
 // Readiness — what each block of the product needs from this workspace, what is
 // there, who fixes it (Phase 0 WP10, design item 18, decision D9).
 //
@@ -211,6 +213,10 @@ export interface UpdateInput {
   completedAt: string | null
   scheduledFor?: string | null
   stalled?: boolean | null
+  /** The run's warnings (`pipeline_runs.warnings`, lib/pipeline/run-warnings.ts),
+   *  loaded for the operator's page alone (`loadReadiness`'s `warnings`
+   *  option). Absent, the row reads exactly as it did. */
+  warnings?: RunWarning[]
 }
 
 export interface DeliveryInput {
@@ -298,6 +304,10 @@ export interface ReadinessInputs {
   updates: UpdateInput[]
   /** Whether the slot each update served is recorded at all. */
   slotsRecorded: boolean
+  /** Whether the updates' warnings were asked for and are recorded: absent
+   *  where they were not asked for (the client's Settings, documents), false
+   *  where the operator asked and the column is not there yet. */
+  warningsRecorded?: boolean
   delivery: DeliveryInput
   changeLog: ChangeLogInput
   recommendations: RecommendationInput

@@ -1,4 +1,5 @@
 import { appDay, fmtInt, fmtPct, fullDate, listNames } from '../format'
+import { warningSentence } from '../pipeline/run-warnings'
 import { changeLogBoundary } from '../config-log'
 import { baselineLabel, BASELINE_MONTHS } from '../reading/anomaly'
 import { shapeCoverage, type MonthCounts } from '../reading/coverage'
@@ -464,14 +465,24 @@ function updateRecord(i: ReadinessInputs): ReadinessRow {
   // The recent updates one line each, newest first — the shape of a run of
   // weeks is the thing an operator is actually reading this row for, and a
   // count of six out of eight hides whether the two were consecutive.
+  //
+  // A run's WARNINGS follow its line, one plain sentence each
+  // (`warningSentence`): only where the operator's page loaded them, so the
+  // client's Settings and the documents read exactly as before. They change
+  // neither the line's word nor the row's status: a warning counts for nothing.
   const notes = [
-    ...recent.map((u) =>
+    ...recent.flatMap((u) => [
       `${appDay(u.startedAt)}: ${updateWord(u.status)}` +
       (u.stalled === true ? ' · took longer than the stretch it covered' : '') +
-      (i.slotsRecorded ? (u.scheduledFor ? ' · on schedule' : ' · by hand') : '')),
+      (i.slotsRecorded ? (u.scheduledFor ? ' · on schedule' : ' · by hand') : ''),
+      ...(u.warnings ?? []).map(warningSentence),
+    ]),
     ...(i.slotsRecorded
       ? []
       : ['Which scheduled slot each update served is not recorded yet, so a missed slot cannot be told from a manual update.']),
+    ...(i.warningsRecorded === false
+      ? ['Warnings are not recorded on updates yet, so a step that failed without changing an update’s status cannot be shown here.']
+      : []),
   ]
 
   return row(

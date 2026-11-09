@@ -5,6 +5,7 @@ import { GATE_APPEALS_TABLE, isMissingGateAppeals, type GateAccess } from '../ga
 import { parseSubreddits, subredditKey } from '../gather/subreddits'
 import { ANOMALY_CHECKS_TABLE, ANOMALY_FLAGS_TABLE, isMissingAnomalyFlags } from '../pipeline/anomaly-check'
 import { isMissingBookkeepingColumn } from '../pipeline/run-bookkeeping'
+import { isMissingWarningsColumn, parseRunWarnings, type RunWarning } from '../pipeline/run-warnings'
 import { isMissingMonthlyReading } from '../reading/monthly'
 import { TABLE_DENOMINATORS } from '../reading/types'
 import { isMissingRecDecisions, REC_DECISIONS_TABLE } from '../rec-decisions'
@@ -110,6 +111,13 @@ async function slotsAreRecorded(admin: Admin): Promise<boolean> {
   return true
 }
 
+/** The updates with their warnings attached; `recorded` false where the
+ *  column is not there yet. */
+function withWarnings(rows: UpdateInput[], warnings: Map<string, RunWarning[]> | null): { rows: UpdateInput[]; recorded: boolean } {
+  if (warnings === null) return { rows, recorded: false }
+  return { rows: rows.map((u) => (warnings.has(u.id) ? { ...u, warnings: warnings.get(u.id) } : u)), recorded: true }
+}
+
 async function loadUpdates(admin: Admin, clientId: string, withBookkeeping: boolean): Promise<UpdateInput[]> {
   type Row = {
     id: string; status: string; started_at: string; completed_at: string | null
@@ -136,6 +144,29 @@ async function loadUpdates(admin: Admin, clientId: string, withBookkeeping: bool
     scheduledFor: r.scheduled_for ?? null,
     stalled: r.stalled ?? null,
   }))
+}
+
+/**
+ * The newest `limit` runs' warnings, by run id, for the operator's page; null
+ * where `pipeline_runs.warnings` is not there yet (20261114090000_run_warnings
+ * .sql not applied), which the page says rather than reading as "none". The
+ * probe is the read itself, on the raw error, as `slotsAreRecorded`'s is. Any
+ * other error throws: "no warning" and "we could not look" are different
+ * answers.
+ */
+export async function loadRunWarnings(admin: Admin, clientId: string, limit: number): Promise<Map<string, RunWarning[]> | null> {
+  const { data, error } = await admin.from('pipeline_runs').select('id, warnings').eq('client_id', clientId)
+    .order('started_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(limit)
+  if (isMissingWarningsColumn(error)) return null
+  if (error) throw error
+  const out = new Map<string, RunWarning[]>()
+  for (const r of (data ?? []) as { id: string; warnings: unknown }[]) {
+    const warnings = parseRunWarnings(r.warnings)
+    if (warnings.length) out.set(r.id, warnings)
+  }
+  return out
 }
 
 /** The stored monthly reading, or null when its migration has not landed and
@@ -283,7 +314,7 @@ export async function loadReadiness(
   admin: Admin,
   clientId: string,
   now: Date = new Date(),
-  options: { gate?: GateAccess } = {},
+  options: { gate?: GateAccess; warnings?: boolean } = {},
 ): Promise<ReadinessInputs> {
   const nowIso = now.toISOString()
 
@@ -335,7 +366,11 @@ export async function loadReadiness(
     embeddingCoverage(admin, clientId),
     loadMonths(admin, clientId),
     loadAnomaly(admin, clientId),
-    loadUpdates(admin, clientId, slotsRecorded),
+    loadUpdates(admin, clientId, slotsRecorded)
+      // The runs' warnings: the operator's page alone asks (the ops readiness
+      // page). Settings › Readiness and the documents never do, so their rows
+      // read exactly as before.
+      .then(async (rows) => (options.warnings ? withWarnings(rows, await loadRunWarnings(admin, clientId, RECENT_UPDATES)) : { rows, recorded: undefined })),
     headCount(analysed),
     headCount(() => analysed().eq('analyzed_with_transcript', true)),
     headCount(() => analysed().eq('analyzed_with_translation', true)),
@@ -389,8 +424,9 @@ export async function loadReadiness(
       gateFirstAt: (gateFirst?.created_at as string | undefined) ?? null,
       gateReadable,
     },
-    updates,
+    updates: updates.rows,
     slotsRecorded,
+    ...(updates.recorded === undefined ? {} : { warningsRecorded: updates.recorded }),
     delivery: {
       period: (tc?.report_period as string | undefined) ?? 'weekly',
       schedules: (schedules as { name: string; active: boolean; recipients: string[] | null; last_sent_at: string | null }[])
