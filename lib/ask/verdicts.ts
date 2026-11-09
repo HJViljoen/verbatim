@@ -216,6 +216,23 @@ export const verdictStands = (c: ClaimResult): boolean =>
   c.verdict !== 'silent' && c.conversationCount >= PLAN_VERDICT_MIN_VIDEOS
 
 /**
+ * A stored claim read by today's floor: a supported or contradicted verdict on
+ * fewer than `PLAN_VERDICT_MIN_VIDEOS` videos reads untested, exactly as
+ * `validateVerdicts` writes such a claim today (`silentResult`). Pure; a claim
+ * the floor does not touch comes back as the same object.
+ *
+ * READ-TIME, BECAUSE THE STORE IS OLDER THAN THE FLOOR (9 Nov, Össur). The
+ * floor rose from one quotable video to five on 29 Sep, and nothing rewrites a
+ * stored answer: an upload's `plan_checks.claims`, or a re-reading of a check
+ * the sweep no longer reaches (`ASK_REEVALUATE_MAX_CHECKS`), still carries
+ * "Contradicted" on one video. A re-reading made since then is already held to
+ * it (`holdVerdicts` keeps only a verdict that stood), so this changes none.
+ */
+export function toFloor(c: ClaimResult): ClaimResult {
+  return c.verdict === 'silent' || verdictStands(c) ? c : { ...silentResult(c), source: c.source ?? null }
+}
+
+/**
  * Hold each claim's verdict unless the evidence behind it has moved
  * (walkthrough item 5).
  *

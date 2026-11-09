@@ -10,6 +10,7 @@ import type { Scope } from '../renderables/types'
 import { isMissingColumnError } from '../supabase-admin'
 import type { Counted } from '../reading/verdicts'
 import { PLAN_VERDICT_MIN_VIDEOS, type AskSummary, type ClaimResult, type Verdict as ClaimVerdict } from './types'
+import { summarise, toFloor } from './verdicts'
 
 // "Plans re-checked" — the card Market names absent twice (Phase 1 Block D, D4).
 //
@@ -196,16 +197,24 @@ export function currentReading(
   const newest = [...evaluations]
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .find((e) => Array.isArray(e.claims) && e.claims.length > 0)
-  if (!newest) return { claims: [...stored], summary: storedSummary, checkedOn: null }
-  return {
-    claims: (newest.claims ?? []).filter((c) => c && typeof c.claim === 'string'),
-    // The summary travels with the claims it counts. A re-evaluation that
-    // stored claims and no summary gets one derived in `planCard`, never the
-    // upload's — three numbers counting a different reading are worse than
-    // none.
-    summary: newest.summary ?? null,
-    checkedOn: newest.runDate,
-  }
+  const reading = !newest
+    ? { claims: [...stored], summary: storedSummary, checkedOn: null }
+    : {
+        claims: (newest.claims ?? []).filter((c) => c && typeof c.claim === 'string'),
+        // The summary travels with the claims it counts. A re-evaluation that
+        // stored claims and no summary gets one derived in `planCard`, never the
+        // upload's — three numbers counting a different reading are worse than
+        // none.
+        summary: newest.summary ?? null,
+        checkedOn: newest.runDate,
+      }
+  // TODAY'S FLOOR, ON EVERY READING PRINTED (`toFloor`): a stored verdict on
+  // fewer than five videos reads untested, and the summary is counted again
+  // from the claims it changed. A reading it changes nothing in is printed as
+  // stored.
+  const claims = reading.claims.map((c) => (c ? toFloor(c) : c))
+  if (claims.every((c, i) => c === reading.claims[i])) return reading
+  return { claims, summary: summarise(claims), checkedOn: reading.checkedOn }
 }
 
 /**

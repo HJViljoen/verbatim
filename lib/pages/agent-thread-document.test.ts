@@ -137,3 +137,23 @@ describe('a plan-check thread prints the newest reading', () => {
     expect(checkedAgainst(data)).toBe('The update of 21 Aug')
   })
 })
+
+// 9 Nov: claims 6 and 12 of Össur's thread read "Contradicted" on one and
+// three videos, the upload's verdicts from before the five-video floor. A
+// claim under the floor reads untested on the thread, as on Your moves.
+describe('a plan-check thread holds every claim to today’s floor', () => {
+  it('reads an upload’s verdict on fewer than five videos as untested, counts the summary again, and keeps its mark', async () => {
+    const thin = [UPLOAD[0], { ...UPLOAD[1], verdict: 'contradicts' as const, conversationCount: 1 }, { ...UPLOAD[2], verdict: 'echoes' as const, conversationCount: 3, theySay: 'x', insightIds: ['up-2'] }]
+    const db = fakeDb({ ...tables([]), plan_checks: [{ ...tables([]).plan_checks[0], claims: thin, summary: { supported: 2, contradicted: 1, untested: 0 } }] })
+    const data = (await loadAgentThread({ supabase: db.client as never, clientId: CLIENT, reading: { client: db.client, clientId: CLIENT } as never, params: { thread: THREAD } }))!
+    const doc = data.document!
+    expect(doc.claims.map((c) => [c.ref, c.verdict, c.conversationCount, c.theySay])).toEqual([
+      ['C1', 'echoes', 6, 'What people say about C1.'], ['C2', 'silent', 0, null], ['C3', 'silent', 0, null],
+    ])
+    expect(doc.summary).toEqual({ supported: 1, contradicted: 0, untested: 2 })
+    expect(Object.keys(doc.quotesByClaim)).toEqual(['C1'])
+    expect(doc.anchored.sort()).toEqual(['C1', 'C2', 'C3'])
+    expect(data.method.note).toBe('1 supported · 0 contradicted · 2 untested.')
+  })
+})
+

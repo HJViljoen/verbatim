@@ -152,7 +152,7 @@ describe('currentReading — the card prints the newest re-reading, not the uplo
   it('skips an evaluation that stored no claims, in any order', () => {
     const out = currentReading([claim('C1', 'echoes', 9)], null, [
       ev('2026-09-13T02:00:00Z', '2026-09-13', null),
-      ev('2026-09-06T02:00:00Z', '2026-09-06', [claim('C1', 'contradicts', 3)]),
+      ev('2026-09-06T02:00:00Z', '2026-09-06', [claim('C1', 'contradicts', 5)]),
     ])
     expect(out.claims[0].verdict).toBe('contradicts')
     expect(out.checkedOn).toBe('2026-09-06')
@@ -171,6 +171,57 @@ describe('currentReading — the card prints the newest re-reading, not the uplo
       summary: { supported: 1, contradicted: 0, untested: 0 },
       evaluations: [ev('2026-09-13T02:00:00Z', '2026-09-13', [claim('C1', 'silent', 0)])],
     }).summary).toEqual({ supported: 0, contradicted: 0, untested: 1 })
+  })
+})
+
+// 9 Nov, Össur's live plan check: claims 6 and 12 of the 22 Aug upload read
+// "Contradicted" on one and three videos. The floor rose from one quotable
+// video to five on 29 Sep and nothing rewrites a stored answer, so every
+// reading printed is held to today's floor when it is read.
+describe('currentReading holds a stored reading to today’s floor', () => {
+  const ev = (createdAt: string, runDate: string, claims: ClaimResult[] | null, summary: PlanEvaluation['summary'] = null): PlanEvaluation =>
+    ({ createdAt, runDate, moved: [], claims, summary })
+
+  it('reads a verdict on fewer than five videos as untested, and counts the summary again', () => {
+    const stored = [claim('C1', 'contradicts', 22, ['i1']), claim('C2', 'contradicts', 1, ['i2']), claim('C3', 'echoes', 3, ['i3']), claim('C4', 'silent', 0)]
+    const out = currentReading(stored, { supported: 1, contradicted: 2, untested: 1 }, [])
+    expect(out.claims.map((c) => [c.ref, c.verdict, c.conversationCount])).toEqual([
+      ['C1', 'contradicts', 22], ['C2', 'silent', 0], ['C3', 'silent', 0], ['C4', 'silent', 0],
+    ])
+    // Untested as the engine writes it under the floor: no reading of the
+    // conversation, no themes and no evidence of its own.
+    expect(out.claims[1]).toMatchObject({ theySay: null, themeRefs: [], insightIds: [] })
+    expect(out.summary).toEqual({ supported: 0, contradicted: 1, untested: 3 })
+    expect(out.checkedOn).toBeNull()
+  })
+
+  it('holds a re-reading written before the floor to it too, and keeps its date', () => {
+    const out = currentReading([claim('C1', 'echoes', 9)], null, [
+      ev('2026-09-13T02:00:00Z', '2026-09-13', [claim('C1', 'contradicts', 4), claim('C2', 'echoes', 6)], { supported: 1, contradicted: 1, untested: 0 }),
+    ])
+    expect(out.claims.map((c) => c.verdict)).toEqual(['silent', 'echoes'])
+    expect(out.summary).toEqual({ supported: 1, contradicted: 0, untested: 1 })
+    expect(out.checkedOn).toBe('2026-09-13')
+  })
+
+  it('stands at exactly five videos, and prints a reading the floor changes nothing in as stored', () => {
+    const stored = [claim('C1', 'contradicts', 5), claim('C2', 'silent', 0)]
+    const summary = { supported: 0, contradicted: 1, untested: 1 }
+    const out = currentReading(stored, summary, [])
+    expect(out.claims[0]).toBe(stored[0])
+    expect(out.summary).toBe(summary)
+  })
+
+  it('prints the floored claim as the card’s untested row: its word, no quote, no count', () => {
+    const card = planCard({
+      planId: 'p1', title: null, sourceFilename: null, uploadedOn: '2026-08-20T09:00:00Z', notice: null,
+      corpusVideos: 100, href: '/x', evaluations: [],
+      claims: [claim('C1', 'contradicts', 1, ['i1'])],
+      summary: { supported: 0, contradicted: 1, untested: 0 },
+      quoteFor: (c) => ({ ref: `e:${c.ref}`, text: 'they said this' }),
+    })
+    expect(card.claims[0]).toMatchObject({ verdict: 'silent', verdictLabel: 'Untested', quote: null, value: { k: 0, n: 100 } })
+    expect(card.summary).toEqual({ supported: 0, contradicted: 0, untested: 1 })
   })
 })
 
@@ -226,7 +277,7 @@ describe('planCard', () => {
   it('shows no quote on an untested claim', () => {
     const card = planCard({
       ...base,
-      claims: [claim('C1', 'silent', 0, ['i1']), claim('C2', 'contradicts', 3, ['i2'])],
+      claims: [claim('C1', 'silent', 0, ['i1']), claim('C2', 'contradicts', 5, ['i2'])],
       summary: null,
       quoteFor: (c) => ({ ref: `e:${c.ref}`, text: 'they said this' }),
     })

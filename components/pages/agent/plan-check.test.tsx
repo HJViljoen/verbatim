@@ -5,6 +5,7 @@ import { StatStrip } from '@/components/v2'
 import { AgentDocumentView, leadSentence, PlanJudgement } from '@/components/agent-document'
 import { AgentDocumentSplit, SHADING_LINE } from '@/components/agent-document-split'
 import { askSub, planCheckStats } from './surface'
+import { toFloor } from '@/lib/ask/verdicts'
 import { planCheckFixture } from './fixture'
 
 // The plan check (the audit design, 7 Nov, Agent-Thread.dc.html): the figures
@@ -69,6 +70,20 @@ describe('the plan check', () => {
     const none = text(<AgentDocumentView claims={[{ ...claim, conversationCount: 3, themeRefs: [] }]} quotesByClaim={quotes} />)
     expect(none).toContain('At least 3 videos behind it.')
     assertCopyContract(<AgentDocumentView claims={[claim]} quotesByClaim={quotes} />)
+  })
+
+  it('says a claim under the floor is untested, once, in the tag\'s word, and nothing more (9 Nov: "Contradicted" on one video)', () => {
+    // Össur's claims 6 and 12 as stored at upload: contradicted on one and
+    // three videos. `currentReading` holds every printed reading to today's
+    // five-video floor (`toFloor`), so the thread draws them as untested.
+    const thin = { ...doc.claims.find((c) => c.verdict === 'contradicts')!, conversationCount: 1 }
+    const t = text(<AgentDocumentView claims={[toFloor(thin)]} quotesByClaim={quotes} />)
+    expect(t.match(/Untested/g)).toHaveLength(1)
+    expect(t).not.toMatch(/Contradicted|At least|In summary|behind it/)
+    // A claim at the floor keeps its verdict and its count.
+    const five = text(<AgentDocumentView claims={[toFloor({ ...thin, conversationCount: 5 })]} quotesByClaim={quotes} />)
+    expect(five).toContain('Contradicted')
+    expect(five).toContain('At least 5 videos behind it')
   })
 
   it('shades the document with plain spans, says what the shading means, and leaves untested claims plain', () => {
