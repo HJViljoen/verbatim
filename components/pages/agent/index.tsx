@@ -275,6 +275,7 @@ function DocJudgement({ d }: { d: D }) {
   const numberOf = new Map(doc.claims.map((c, i) => [c.ref, i + 1]))
   return (
     <div className="max-w-[46rem] space-y-3 rounded-lg bg-muted p-4">
+      {doc.judgementWritten ? <p className="text-[12px] text-muted-foreground">{doc.judgementWritten}</p> : null}
       {doc.judgement.map((j, i) => {
         const cites = (j.basedOnRefs ?? []).map((r) => numberOf.get(r)).filter((n): n is number => !!n).sort((x, y) => x - y)
         return (

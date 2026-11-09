@@ -9,7 +9,7 @@ import type { Quote } from '../renderables/types'
 import type { Scope } from '../renderables/types'
 import { isMissingColumnError } from '../supabase-admin'
 import type { Counted } from '../reading/verdicts'
-import { PLAN_VERDICT_MIN_VIDEOS, type AskSummary, type ClaimResult, type Verdict as ClaimVerdict } from './types'
+import { PLAN_VERDICT_MIN_VIDEOS, type AskSummary, type ClaimResult, type Judgement, type Verdict as ClaimVerdict } from './types'
 import { summarise, toFloor } from './verdicts'
 
 // "Plans re-checked" — the card Market names absent twice (Phase 1 Block D, D4).
@@ -171,6 +171,10 @@ export interface PlanEvaluation {
    *  read here carries none either. */
   claims?: ClaimResult[] | null
   summary?: AskSummary | null
+  /** "What I'd take from that" as written again on that reading
+   *  (`plan_check_evaluations.judgement`); null where that week's rewrite was
+   *  not made, and absent where the column is not read or not applied. */
+  judgement?: Judgement[] | null
 }
 
 /**
@@ -229,6 +233,33 @@ export function originalReadingLine(on: string, summary: AskSummary): string | n
     .filter(([n]) => n > 0)
     .map(([n, w]) => `${fmtInt(n)} ${w}`)
   return parts.length ? `On ${appShort(on)} this read ${parts.join(', ')}.` : null
+}
+
+/**
+ * The day "What I'd take from that" was written, and on which reading
+ * (Heinrich, 9 Nov: it is written again on each update's reading): "Written 8
+ * Nov, on that update's reading." for a re-reading's, "Written 22 Aug, on the
+ * plan's first reading." for the upload's. Pure.
+ */
+export function judgementWrittenLine(on: string, reading: 'update' | 'upload'): string {
+  return `Written ${appShort(on)}, on ${reading === 'update' ? 'that update’s reading' : 'the plan’s first reading'}.`
+}
+
+/**
+ * The judgement a plan-check thread prints: the newest one written on a
+ * re-reading, else the upload's. A week whose rewrite was not made stored none,
+ * so the one before it stands, with its own date: never a blank where one was
+ * ever written. Pure.
+ */
+export function currentJudgement(
+  upload: { judgement: readonly Judgement[]; on: string },
+  evaluations: readonly PlanEvaluation[],
+): { judgement: Judgement[]; written: string | null } {
+  const rewritten = [...evaluations]
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .find((e) => Array.isArray(e.judgement) && e.judgement.length > 0)
+  if (rewritten) return { judgement: [...(rewritten.judgement ?? [])], written: judgementWrittenLine(rewritten.runDate, 'update') }
+  return { judgement: [...upload.judgement], written: upload.judgement.length ? judgementWrittenLine(upload.on, 'upload') : null }
 }
 
 /**

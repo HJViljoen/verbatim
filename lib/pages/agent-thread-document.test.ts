@@ -153,6 +153,78 @@ describe('a plan-check thread names its original reading once', () => {
   })
 })
 
+// Heinrich, 9 Nov: "What I'd take from that" is written again on each update's
+// reading and dated. The thread prints the newest one written, with its own
+// date; a week whose rewrite failed stored none, so the one before it stands;
+// with none rewritten, the upload's, dated by the upload.
+describe('a plan-check thread prints the newest judgement written, dated', () => {
+  const UPLOAD_JUDGEMENT = [{ text: 'The upload’s view.', basedOnRefs: ['C1'] }]
+  const withJudgement = (e: ReturnType<typeof evaluation>, judgement: unknown) => ({ ...e, judgement })
+  const loadWith = async (evaluations: Record<string, unknown>[], wrap?: (c: unknown) => unknown) => {
+    const t = tables(evaluations)
+    const db = fakeDb({ ...t, plan_checks: [{ ...t.plan_checks[0], judgement: UPLOAD_JUDGEMENT }] })
+    const client = wrap ? wrap(db.client) : db.client
+    return (await loadAgentThread({ supabase: client as never, clientId: CLIENT, reading: { client, clientId: CLIENT } as never, params: { thread: THREAD } }))!.document!
+  }
+
+  it('prints the newest re-reading’s judgement and the day it was written on', async () => {
+    const doc = await loadWith([
+      withJudgement(evaluation('run-sep', '2026-09-13', '2026-09-13T06:00:00.000Z', SEP), [{ text: 'September’s view.', basedOnRefs: ['C2'] }]),
+      withJudgement(evaluation('run-nov', '2026-11-08', '2026-11-08T06:00:00.000Z', NOV), [{ text: 'November’s view.', basedOnRefs: ['C3'] }]),
+    ])
+    expect(doc.judgement.map((j) => j.text)).toEqual(['November’s view.'])
+    expect(doc.judgementWritten).toBe('Written 8 Nov, on that update’s reading.')
+  })
+
+  it('keeps the last one written, with its own date, where this week’s rewrite stored none', async () => {
+    const doc = await loadWith([
+      withJudgement(evaluation('run-sep', '2026-09-13', '2026-09-13T06:00:00.000Z', SEP), [{ text: 'September’s view.', basedOnRefs: ['C2'] }]),
+      withJudgement(evaluation('run-nov', '2026-11-08', '2026-11-08T06:00:00.000Z', NOV), null),
+    ])
+    expect(doc.judgement.map((j) => j.text)).toEqual(['September’s view.'])
+    expect(doc.judgementWritten).toBe('Written 13 Sep, on that update’s reading.')
+    // The verdicts are still the newest reading's.
+    expect(doc.checkedOn).toBe('2026-11-08')
+  })
+
+  it('prints the upload’s, dated by the upload, where none was rewritten', async () => {
+    const doc = await loadWith([evaluation('run-nov', '2026-11-08', '2026-11-08T06:00:00.000Z', NOV)])
+    expect(doc.judgement).toEqual(UPLOAD_JUDGEMENT)
+    expect(doc.judgementWritten).toBe('Written 22 Aug, on the plan’s first reading.')
+  })
+
+  it('reads the re-readings without the column until its migration is applied', async () => {
+    // PostgREST's answer to a select naming a column that is not there.
+    const missingJudgement = (c: unknown) => new Proxy(c as object, {
+      get(target, key) {
+        const v = Reflect.get(target, key)
+        if (key !== 'from') return v
+        return (table: string) => {
+          const b = (v as (t: string) => Record<string, unknown>)(table)
+          if (table !== 'plan_check_evaluations') return b
+          return new Proxy(b, {
+            get(bt, k) {
+              const bv = Reflect.get(bt, k)
+              if (k !== 'select') return bv
+              return (cols: string) => {
+                if (!cols.includes('judgement')) return (bv as (c: string) => unknown)(cols)
+                const failed = { data: null, error: { code: '42703', message: 'column plan_check_evaluations.judgement does not exist' } }
+                const chain: Record<string, unknown> = { then: (r: (v: unknown) => unknown) => Promise.resolve(failed).then(r) }
+                for (const m of ['eq', 'order']) chain[m] = () => chain
+                return chain
+              }
+            },
+          })
+        }
+      },
+    })
+    const doc = await loadWith([evaluation('run-nov', '2026-11-08', '2026-11-08T06:00:00.000Z', NOV)], missingJudgement)
+    expect(doc.checkedOn).toBe('2026-11-08')
+    expect(doc.claims.map((c) => c.verdict)).toEqual(['echoes', 'contradicts', 'echoes'])
+    expect(doc.judgement).toEqual(UPLOAD_JUDGEMENT)
+  })
+})
+
 // 9 Nov: claims 6 and 12 of Össur's thread read "Contradicted" on one and
 // three videos, the upload's verdicts from before the five-video floor. A
 // claim under the floor reads untested on the thread, as on Your moves.

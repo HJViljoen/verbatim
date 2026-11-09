@@ -110,6 +110,15 @@ describe('the plan check', () => {
     expect(m).toMatch(/<button type="button" aria-pressed="true"[^>]*>The check<\/button>/)
   })
 
+  it('dates what it would do once, under its heading: the day and the reading it was written on (9 Nov)', () => {
+    const written = 'Written 8 Nov, on that update’s reading.'
+    const node = <PlanJudgement claims={doc.claims} judgement={doc.judgement} written={written} />
+    const m = render(node)
+    expect(m.split(written)).toHaveLength(2)
+    expect(m).toMatch(/<\/h2><p class="[^"]*text-\[14px\][^"]*">Written 8 Nov, on that update’s reading\.<\/p>/)
+    assertCopyContract(node)
+  })
+
   it('takes what it would do as its own tile, each first sentence in bold, each tracing its claims', () => {
     const node = <PlanJudgement claims={doc.claims} judgement={doc.judgement} />
     const m = render(node)
@@ -117,6 +126,7 @@ describe('the plan check', () => {
     expect(m).toMatch(/<span class="font-semibold">Reframe the category as explained, not assumed\.<\/span>/)
     expect(text(node)).toContain('Reasoning from claims 1, 4 above.')
     expect(render(<PlanJudgement claims={doc.claims} judgement={[]} />)).toBe('')
+    expect(render(node)).not.toContain('Written')
     expect(leadSentence('One sentence only.')).toBeNull()
     expect(leadSentence('First one. Second one.')).toEqual({ lead: 'First one.', rest: 'Second one.' })
   })

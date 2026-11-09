@@ -8,7 +8,7 @@ import { CALIBRATED_PROSE_RULE, stripThemeRefs } from '../pipeline/prose-rules'
 import { embedTexts } from '../pipeline/cluster'
 import { bucketByAudienceId, fetchInsightsByIds, fetchLiveBucketsByAudience, fetchQuotesByAudience, scopeToClientVoices } from '../quotes'
 import { normaliseRef, shortlistThemes, summarise, validateJudgement, validateVerdicts, type AskTheme, type RawVerdict } from './verdicts'
-import type { AskResult, ClaimResult, ExtractedClaim } from './types'
+import type { AskResult, ClaimResult, ExtractedClaim, Judgement } from './types'
 
 // The Ask engine — one pipeline, three faces (test an idea, check a plan,
 // later: talk to the consumer). All three reduce to the same question:
@@ -362,13 +362,43 @@ export async function runAsk(
 
   // 4. Judgement — a separate call, so a proposal cannot leak into the evidence
   // register under instruction pressure. It sees the grounded findings.
-  const judgeUser = validated
+  const judged = await judgePass(admin, { clientId, runId, companyName, claims: validated, persist })
+  costUsd += judged.costUsd
+  const judgement = judged.judgement
+
+  return { claims: validated, summary, judgement, costUsd, title, clipped }
+}
+
+/**
+ * The judgement half: the model's own view of a reading, in its own register
+ * ("What I'd take from that"). ONE call, `SYNTHESIS_MODEL` with
+ * `buildJudgePrompt`, validated against the claims it reasons from and its
+ * theme handles stripped.
+ *
+ * Exported because the weekly re-reading writes it again on the newest
+ * reading (`reevaluatePlanChecks`, Heinrich 9 Nov), with exactly the upload's
+ * model, prompt and guard rails. Never throws: judgement is additive, and a
+ * failed call is `ok: false` with no judgement, logged as the upload's was.
+ */
+export async function judgePass(
+  admin: ReturnType<typeof import('../supabase-admin').createAdminClient>,
+  args: {
+    clientId: string; runId: string; companyName: string; claims: ClaimResult[]; persist?: boolean
+    /** The SDK's options for the call where the caller holds it to time
+     *  (`callOptionsWithin`); absent, the SDK's defaults, as the upload has. */
+    request?: { timeout?: number; maxRetries?: number }
+  },
+): Promise<{ judgement: Judgement[]; costUsd: number; ok: boolean }> {
+  const { clientId, runId, companyName, claims } = args
+  const persist = args.persist !== false
+  const judgeUser = claims
     .map((c) => `[${c.ref}] ${c.claim}\n   verdict: ${c.verdict}${c.theySay ? `\n   audience: ${c.theySay}` : ''}`)
     .join('\n\n')
   const judgeSystem = buildJudgePrompt(companyName)
   const startedJudge = Date.now()
   let judged: z.infer<typeof JudgeSchema> | null = null
-  usage = { prompt_tokens: 0, completion_tokens: 0 }
+  let usage = { prompt_tokens: 0, completion_tokens: 0 }
+  let costUsd = 0
   try {
     const completion = await openai.chat.completions.parse({
       model: SYNTHESIS_MODEL,
@@ -378,7 +408,7 @@ export async function runAsk(
         { role: 'user', content: judgeUser },
       ],
       response_format: zodResponseFormat(JudgeSchema, 'ask_judge'),
-    })
+    }, args.request)
     judged = completion.choices[0]?.message?.parsed ?? null
     if (completion.usage) usage = { prompt_tokens: completion.usage.prompt_tokens, completion_tokens: completion.usage.completion_tokens }
   } catch (e) {
@@ -390,10 +420,9 @@ export async function runAsk(
     costUsd += estimateCost(SYNTHESIS_MODEL, usage.prompt_tokens, usage.completion_tokens)
     if (persist) await logAiCall(admin, { clientId, runId, pass: 'ask_judge', callIndex: 1, model: SYNTHESIS_MODEL, promptVersion: PROMPT_VERSION_JUDGE, systemPrompt: judgeSystem, userPrompt: judgeUser, response: judged, error: null, usage, durationMs: Date.now() - startedJudge, validationStatus: 'ok' })
   }
-  const judgement = validateJudgement(judged?.judgement ?? [], validated).map((j) => ({
+  const judgement = validateJudgement(judged?.judgement ?? [], claims).map((j) => ({
     ...j,
     text: stripThemeRefs(j.text),
   }))
-
-  return { claims: validated, summary, judgement, costUsd, title, clipped }
+  return { judgement, costUsd, ok: judged != null }
 }

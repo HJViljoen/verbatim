@@ -13,6 +13,7 @@ import {
   readingFrom,
   scrubSays,
   statementMonth,
+  planJudgeDeadline,
   statementsBudget,
   ASK_REEVALUATE_LIMIT_MS,
   STATEMENTS_STEP_BUDGET_MS,
@@ -132,6 +133,19 @@ describe('the prompts', () => {
 })
 
 // ---- Bounded in the weekly run (integration, lead's ruling 10) ------------------
+
+// The plans' judgement rewrites (Heinrich, 9 Nov) run inside the same step,
+// after the re-checks and before this pass: ending by `planJudgeDeadline`, they
+// leave the statements pass every millisecond it has today.
+describe('planJudgeDeadline: the judgement rewrites leave the statements pass its budget', () => {
+  it('ends early enough that the pass still gets its whole budget', () => {
+    const start = 1_000_000
+    expect(statementsBudget(start, planJudgeDeadline(start))).toBe(STATEMENTS_STEP_BUDGET_MS)
+    // With the margin for the writes spent too.
+    expect(statementsBudget(start, planJudgeDeadline(start) + 5_000)).toBe(STATEMENTS_STEP_BUDGET_MS)
+    expect(planJudgeDeadline(start) - start).toBe(115_000)
+  })
+})
 
 describe('statementsBudget: what the plan re-checks leave of ask-reevaluate', () => {
   it('its own budget when the re-checks were quick', () => {

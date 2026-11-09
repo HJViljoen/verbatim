@@ -113,7 +113,7 @@ export default async function AgentThreadPage({
             notice={doc.notice}
             was={doc.was}
           />
-          <PlanJudgement claims={doc.claims} judgement={doc.judgement} />
+          <PlanJudgement claims={doc.claims} judgement={doc.judgement} written={doc.judgementWritten} />
           {deleteControl}
         </PageFrame>
       </ExportScope>

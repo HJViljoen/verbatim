@@ -35,7 +35,7 @@ import { openAiConfirmJudge } from '@/lib/brands/confirm'
 import { applyQueuedEdits } from '@/lib/pipeline/tracking-queue'
 import { runPassE } from '@/lib/pipeline/pass-e'
 import { reevaluatePlanChecks } from '@/lib/ask/reevaluate'
-import { measureStatements, measureSummary, statementMonth, statementsBudget } from '@/lib/statements/measure'
+import { measureStatements, measureSummary, planJudgeDeadline, statementMonth, statementsBudget } from '@/lib/statements/measure'
 import { runWeekReadStep } from '@/lib/written/step'
 import { runSubjectReadsStep } from '@/lib/written/subject-reads-step'
 import { runLongRunStep } from '@/lib/written/longrun'
@@ -2197,6 +2197,11 @@ export const runPipeline = inngest.createFunction(
             runId,
             runDate: ((run?.started_at as string | null) ?? new Date().toISOString()).slice(0, 10),
             companyName: (client?.company_name as string) ?? 'the client',
+            // "What I'd take from that" written again on each new reading
+            // (Heinrich, 9 Nov): at most one call a check
+            // (ASK_REEVALUATE_MAX_CHECKS, 3), each ending early enough that the
+            // statements pass below keeps its whole budget.
+            judgeBy: planJudgeDeadline(stepStartedAt),
           })
           // YOUR STATEMENTS (pages build, MOVES): the client's own claims,
           // re-measured on this run's month in the same step that re-reads its

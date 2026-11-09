@@ -136,12 +136,21 @@ export function leadSentence(text: string): { lead: string; rest: string } | nul
  * (the board's), two proposals to a row from 768, each ruled at the top, its
  * first sentence in bold, then the claims it reasons from.
  */
-export function PlanJudgement({ claims, judgement }: { claims: ClaimResult[]; judgement: Judgement[] }) {
+export function PlanJudgement({ claims, judgement, written = null }: {
+  claims: ClaimResult[]
+  judgement: Judgement[]
+  /** When and on which reading it was written ("Written 8 Nov, on that
+   *  update's reading."), said once under the heading; null prints none. */
+  written?: string | null
+}) {
   if (judgement.length === 0) return null
   const numberOf = new Map(claims.map((c, i) => [c.ref, i + 1]))
   return (
     <section aria-labelledby="plan-take-title" data-plan-judgement="" className={cn(CARD_FRAME, 'gap-4')}>
-      <h2 id="plan-take-title" className="m-0 text-[21px] font-semibold leading-[1.3] text-foreground">What I&rsquo;d take from that</h2>
+      <div className="flex flex-col gap-1">
+        <h2 id="plan-take-title" className="m-0 text-[21px] font-semibold leading-[1.3] text-foreground">What I&rsquo;d take from that</h2>
+        {written ? <p className="m-0 text-[14px] leading-[1.5] text-muted-foreground">{written}</p> : null}
+      </div>
       <div className="grid grid-cols-1 gap-x-10 gap-y-5 md:grid-cols-2">
         {judgement.map((j, i) => {
           const cites = (j.basedOnRefs ?? [])

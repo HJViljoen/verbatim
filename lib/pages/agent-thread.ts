@@ -9,7 +9,7 @@ import { appWeekday, fmtInt, longMonth } from '../format'
 import { row, rows as readRows } from './read'
 import { isMissingColumnError } from '../supabase-admin'
 import type { ClaimResult, Judgement, AskSummary } from '../ask/types'
-import { currentReading, loadPlanChecks, originalReadingLine, PLAN_VERDICT_LABEL, type PlanCheckCard, type PlanEvaluation } from '../ask/plan-cards'
+import { currentJudgement, currentReading, loadPlanChecks, originalReadingLine, PLAN_VERDICT_LABEL, type PlanCheckCard, type PlanEvaluation } from '../ask/plan-cards'
 import { normaliseRef, summarise } from '../ask/verdicts'
 import { JUDGEMENT_HEADING, NEAREST_HEADING, OUT_OF_CORPUS_NOTICE, type AgentAnswer } from '../agent/types'
 import { askBasisLine, loadIndexFacts, type AskBasis } from '../agent/basis'
@@ -126,7 +126,12 @@ export interface DocumentCheck {
    *  8 contradicted, 5 untested."), where a re-reading is printed; null where
    *  the printed reading is the original. */
   was: string | null
+  /** The newest "What I'd take from that" written: a re-reading's, else the
+   *  upload's (`currentJudgement`). */
   judgement: Judgement[]
+  /** When and on which reading it was written ("Written 8 Nov, on that
+   *  update's reading."); null where there is no judgement. */
+  judgementWritten: string | null
   quotesByClaim: Record<string, Quote[]>
   segments: Segment[]
   anchored: string[]
@@ -841,12 +846,18 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
   if (thread.kind === 'document' && thread.plan_check_id) {
     // `Promise.resolve` sends it now: a builder left unawaited sends nothing.
     // A failed read logs and leaves the upload's reading, as the card's does.
-    const evaluationsP = Promise.resolve(
+    // `judgement` arrives with its own migration (20261113090000) and a deploy
+    // can land first: a failure naming that column re-reads without it, the
+    // `notice` precedent below, and the upload's judgement prints as before.
+    const readEvaluations = (cols: string) => Promise.resolve(
       supabase.from('plan_check_evaluations')
-        .select('run_date, created_at, moved, claims, summary')
+        .select(cols)
         .eq('client_id', clientId).eq('plan_check_id', thread.plan_check_id as string)
         .order('created_at', { ascending: true }),
     )
+    const evaluationColumns = 'run_date, created_at, moved, claims, summary'
+    const evaluationsP = readEvaluations(`${evaluationColumns}, judgement`)
+      .then((res) => (isMissingColumnError(res.error, 'judgement') ? readEvaluations(evaluationColumns) : res))
     evaluationsP.catch(() => {})
     const check = row<{
       claims: ClaimResult[] | null
@@ -872,7 +883,7 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
       return isMissingColumnError(withNotice.error, 'notice') ? await read(columns) : withNotice
     })(), 'agentThread.planCheck')
     if (check) {
-      const evaluations = readRows<{ run_date: string; created_at: string; moved: PlanEvaluation['moved'] | null; claims: ClaimResult[] | null; summary: AskSummary | null }>(
+      const evaluations = readRows<{ run_date: string; created_at: string; moved: PlanEvaluation['moved'] | null; claims: ClaimResult[] | null; summary: AskSummary | null; judgement?: Judgement[] | null }>(
         await evaluationsP, 'agentThread.planCheckEvaluations',
       ).map((e): PlanEvaluation => ({
         runDate: e.run_date,
@@ -880,6 +891,7 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
         moved: e.moved ?? [],
         claims: Array.isArray(e.claims) ? e.claims : null,
         summary: e.summary ?? null,
+        judgement: Array.isArray(e.judgement) ? e.judgement : null,
       }))
       const stored = (check.claims ?? []) as ClaimResult[]
       const current = currentReading(stored, check.summary, evaluations)
@@ -917,7 +929,10 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
         // THE ORIGINAL, ONCE, beside a newer reading: the upload's day and its
         // stored counts (or its claims counted, where it stored none).
         was: current.checkedOn ? originalReadingLine(check.created_at, check.summary ?? summarise(stored)) : null,
-        judgement: (check.judgement ?? []) as Judgement[],
+        ...(() => {
+          const j = currentJudgement({ judgement: (check.judgement ?? []) as Judgement[], on: check.created_at }, evaluations)
+          return { judgement: j.judgement, judgementWritten: j.written }
+        })(),
         quotesByClaim,
         segments,
         anchored: [...anchored],

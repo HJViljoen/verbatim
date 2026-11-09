@@ -98,6 +98,18 @@ export function statementsBudget(stepStartedAt: number, now: number): number {
   return left >= STATEMENTS_MIN_MS ? left : 0
 }
 
+/**
+ * The instant the plans' judgement rewrites must end by, from the STEP's
+ * start (Heinrich, 9 Nov: "What I'd take from that" written again weekly).
+ * Early enough that the statements pass after them keeps every millisecond
+ * `statementsBudget` gives it today: started by here, it still gets its full
+ * `STATEMENTS_STEP_BUDGET_MS`. The margin covers the judgements' writes. Pure.
+ */
+export const PLAN_JUDGE_WRITE_MARGIN_MS = 5_000
+export function planJudgeDeadline(stepStartedAt: number): number {
+  return stepStartedAt + ASK_REEVALUATE_LIMIT_MS - STATEMENTS_STEP_BUDGET_MS - PLAN_JUDGE_WRITE_MARGIN_MS
+}
+
 /** A model call's cap, and the least time worth starting one with. */
 export const STATEMENT_CALL_CAP_MS = 60_000
 export const STATEMENT_CALL_FLOOR_MS = 5_000
