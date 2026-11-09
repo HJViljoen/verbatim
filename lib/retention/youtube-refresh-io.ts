@@ -50,7 +50,18 @@ export interface VideoRefreshSummary {
 export async function deleteCommentsProperly(
   admin: SupabaseClient,
   rows: { id: string; client_id: string; text: string | null }[],
-  opts: { dryRun?: boolean } = {},
+  opts: {
+    dryRun?: boolean
+    /** The erase script's alone (scripts/erase-commenter.ts, step 8): the
+     *  snapshots citing these voices are handed here BEFORE the comments are
+     *  deleted, to go on the erasure's pending list
+     *  (lib/retention/snapshot-files.ts), and their files are NOT flagged
+     *  here; the caller deletes them from the list after the delete, and a
+     *  later run retries a delete that failed. Returns how many stored files
+     *  were recorded. Without it (the nightly YouTube refresh) the files are
+     *  flagged and deleted here, after the delete, as always. */
+    recordSnapshots?: (snapshots: { id: string; client_id: string }[]) => Promise<number>
+  } = {},
 ): Promise<{ deleted: number; insightsAffected: number; heroQuotesNulled: number; artifactsStaled: number }> {
   if (!rows.length) return { deleted: 0, insightsAffected: 0, heroQuotesNulled: 0, artifactsStaled: 0 }
   const ids = rows.map((r) => r.id)
@@ -96,20 +107,33 @@ export async function deleteCommentsProperly(
     ...heroHits.map((h) => `h:${h.table}:${h.id}`),
   ]
   const snapshotIds = new Set<string>()
+  const snapshotClient = new Map<string, string>()
   for (const part of chunk(refs, 150)) {
-    const { data, error } = await admin.from('report_snapshots').select('id').overlaps('evidence_ids', part)
+    // The nightly refresh reads `id` alone, as it always has.
+    const { data, error } = opts.recordSnapshots
+      ? await admin.from('report_snapshots').select('id, client_id').overlaps('evidence_ids', part)
+      : await admin.from('report_snapshots').select('id').overlaps('evidence_ids', part)
     if (error) throw new Error(`find snapshots: ${error.message}`)
-    for (const r of (data ?? []) as { id: string }[]) snapshotIds.add(r.id)
+    for (const r of (data ?? []) as { id: string; client_id?: string }[]) {
+      snapshotIds.add(r.id)
+      if (r.client_id) snapshotClient.set(r.id, r.client_id)
+    }
   }
   if (opts.dryRun) {
     const would = await markSnapshotsStale(admin, [...snapshotIds], { apply: false })
     return { deleted: ids.length, insightsAffected: insights.size, heroQuotesNulled: heroHits.length, artifactsStaled: would.artifacts }
   }
+  // The erase script's pending list, written before anything is deleted: a
+  // failure here leaves every comment for a re-run to find.
+  const recorded = opts.recordSnapshots
+    ? await opts.recordSnapshots([...snapshotIds].map((id) => ({ id, client_id: snapshotClient.get(id) ?? '' })))
+    : 0
   const heroQuotesNulled = await nullHeroQuotes(admin, heroHits)
   for (const part of chunk(ids, CHUNK)) {
     const { error } = await admin.from('comments').delete().in('id', part)
     if (error) throw new Error(`delete comments: ${error.message}`)
   }
+  if (opts.recordSnapshots) return { deleted: ids.length, insightsAffected: insights.size, heroQuotesNulled, artifactsStaled: recorded }
   const staled = await markSnapshotsStale(admin, [...snapshotIds], { apply: true })
   return { deleted: ids.length, insightsAffected: insights.size, heroQuotesNulled, artifactsStaled: staled.artifacts }
 }

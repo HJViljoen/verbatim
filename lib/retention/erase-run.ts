@@ -20,6 +20,11 @@
 //      deleted nothing can find those words again (the scrubs search by
 //      them). The delete waits, the comments stay, and a re-run after the
 //      update scrubs what it wrote.
+//   5. Then, and only once the comments are deleted, the `finish` steps: the
+//      stored files of the snapshots that cite them (step 8) go from the
+//      erasure's pending list, after their source is gone. One that fails is
+//      reported with the comments deleted; the list keeps the files, and a
+//      re-run deletes them (lib/retention/snapshot-files.ts).
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 
@@ -38,7 +43,7 @@ export interface EraseOutcome {
 }
 
 export async function runErasure(
-  plan: { suppress: EraseStep; scrubs: readonly EraseStep[]; erase: EraseStep },
+  plan: { suppress: EraseStep; scrubs: readonly EraseStep[]; erase: EraseStep; finish?: readonly EraseStep[] },
   log: (line: string) => void = (line) => console.error(line),
 ): Promise<EraseOutcome> {
   const failed: string[] = []
@@ -60,6 +65,7 @@ export async function runErasure(
     return { failed, erased: false }
   }
   const erased = await attempt(plan.erase)
+  if (erased) for (const step of plan.finish ?? []) await attempt(step)
   return { failed, erased }
 }
 

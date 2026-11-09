@@ -4,7 +4,6 @@ import { createAdminClient, selectAll } from '../lib/supabase-admin'
 import { authorKey, handleVariants } from '../lib/gather/suppression'
 import { deleteCommentsProperly } from '../lib/retention/youtube-refresh-io'
 import { AI_LOG_BODY_RETENTION_DAYS, DEMO_CLIENT_ID } from '../lib/config'
-import { markSnapshotsStale } from '../lib/artifacts'
 import { scrubStoredPlanChecks, scrubStoredPostIdeas } from '../lib/retention/stored-prose'
 import { deleteHeldBy, ERASURE_CLOCK_MARGIN_MS, loadRunsSince, runErasure, unfinishedMessage } from '../lib/retention/erase-run'
 import { ANALYSIS_PROSE_TABLES, scrubStoredProse } from '../lib/retention/analysis-prose'
@@ -189,6 +188,15 @@ async function main() {
   // Every key variant we know of: what suppression records, and what the raw
   // payloads are searched by.
   const keys = [...new Set([authorKey(args.platform, args.handle), ...exactAuthors.map((a) => authorKey(args.platform, a))].filter((k): k is string => !!k))]
+  // A snapshot whose stored files this erasure must delete goes on the pending
+  // list first (lib/retention/snapshot-files.ts), under this handle's key.
+  const recordFiles = (clientId: string, snapshotId: string) =>
+    recordSnapshotFiles(admin, { clientId, snapshotId, platform: args.platform, authorKey: keys[0] ?? args.handle })
+  const printFiles = (snapshotId: string, paths: string[], listedEarlier = false) => {
+    if (!paths.length) return
+    const what = args.apply ? 'deleted, flagged to re-render' : listedEarlier ? 'listed by an earlier run, would be deleted' : 'would be deleted'
+    console.log(`   snapshot ${snapshotId}: ${paths.length} stored file(s) ${what} (${paths.join(', ')})`)
+  }
   const outcome = await runErasure({
     suppress: {
       name: 'suppression',
@@ -379,31 +387,32 @@ async function main() {
           //     time, deliberately) — so an operator who quoted a commenter while
           //     editing has put that commenter's words in a table nothing else
           //     reaches: the snapshot's own quotes are refs, and this text is not.
-          //     Same treatment as the report copies, and the snapshot's artifacts are
-          //     staled so the next download re-renders without the words.
+          //     Same treatment as the report copies, and the snapshot's stored files
+          //     go through the pending list (lib/retention/snapshot-files.ts): the
+          //     snapshot is recorded before its edit is scrubbed, then every
+          //     listed snapshot's files are deleted, and a delete that fails is
+          //     retried by the next run.
           if (clientIds.length && texts.length) {
-            const stored = await selectAll<{ id: string; snapshot_id: string; text: string }>(() =>
-              admin.from('report_edits').select('id, snapshot_id, text').in('client_id', clientIds).order('id', { ascending: true }),
+            const stored = await selectAll<{ id: string; client_id: string; snapshot_id: string; text: string }>(() =>
+              admin.from('report_edits').select('id, client_id, snapshot_id, text').in('client_id', clientIds).order('id', { ascending: true }),
             )
-            const touchedSnapshots = new Set<string>()
+            const touched = new Map<string, string>()
             for (const row of stored) {
               let cleaned = row.text
               for (const t of texts) cleaned = cleaned.split(t).join('[removed at the commenter\'s request]')
               if (cleaned === row.text) continue
               editsScrubbed++
-              touchedSnapshots.add(row.snapshot_id)
+              if (args.apply && !touched.has(row.snapshot_id)) await recordFiles(row.client_id, row.snapshot_id)
+              touched.set(row.snapshot_id, row.client_id)
               if (args.apply) {
                 const { error } = await admin.from('report_edits').update({ text: cleaned }).eq('id', row.id)
                 if (error) throw new Error(`scrub report_edits ${row.id}: ${error.message}`)
               }
             }
-            if (touchedSnapshots.size) {
-              const staled = await markSnapshotsStale(admin, [...touchedSnapshots], { apply: args.apply })
-              console.log(`edited report text carrying the words: ${editsScrubbed} of ${stored.length} → ${args.apply ? 'scrubbed' : 'would be scrubbed'}, ${staled.artifacts} export(s) ${args.apply ? 'flagged for re-render' : 'would be flagged'}`)
-            } else {
-              console.log(`edited report text carrying the words: 0 of ${stored.length}`)
-            }
+            console.log(`edited report text carrying the words: ${editsScrubbed} of ${stored.length}${editsScrubbed ? ` → ${args.apply ? 'scrubbed' : 'would be scrubbed'}` : ''}`)
+            if (!args.apply) for (const [snapshotId, clientId] of touched) printFiles(snapshotId, await storedObjectsOf(admin, clientId, snapshotId))
           }
+          if (args.apply) for (const d of await deletePendingSnapshotFiles(admin, { apply: true })) printFiles(d.snapshotId, d.paths)
         },
       },
       {
@@ -431,25 +440,18 @@ async function main() {
           const isSnapshots = spec.table === 'report_snapshots'
           if (clientIds.length && texts.length) {
             const before = isSnapshots
-              ? async (row: Record<string, unknown>) => {
-                  await recordSnapshotFiles(admin, { clientId: String(row.client_id), snapshotId: String(row.id), platform: args.platform, authorKey: keys[0] ?? args.handle })
-                }
+              ? async (row: Record<string, unknown>) => { await recordFiles(String(row.client_id), String(row.id)) }
               : undefined
             const r = await scrubStoredProse(admin, spec, clientIds, texts, { apply: args.apply, before })
             console.log(`${spec.table} carrying the text: ${r.rows} → ${args.apply ? 'scrubbed' : 'would be scrubbed'}`)
             if (isSnapshots && !args.apply) {
-              for (const k of r.keys) {
-                const paths = await storedObjectsOf(admin, String(k.client_id), String(k.id))
-                if (paths.length) console.log(`   snapshot ${k.id}: ${paths.length} stored file(s) would be deleted (${paths.join(', ')})`)
-              }
+              for (const k of r.keys) printFiles(String(k.id), await storedObjectsOf(admin, String(k.client_id), String(k.id)))
             }
           }
           if (!isSnapshots) return
           // The whole pending list, this request's and any earlier run's that
           // did not finish, so a delete that failed is tried again here.
-          for (const d of await deletePendingSnapshotFiles(admin, { apply: args.apply })) {
-            console.log(`   snapshot ${d.snapshotId}: ${d.paths.length} stored file(s) ${args.apply ? 'deleted, flagged to re-render' : 'listed from an earlier run, would be deleted'}${d.paths.length ? ` (${d.paths.join(', ')})` : ''}`)
-          }
+          for (const d of await deletePendingSnapshotFiles(admin, { apply: args.apply })) printFiles(d.snapshotId, d.paths, !args.apply)
         },
       })),
       {
@@ -500,17 +502,39 @@ async function main() {
           evidenceRows += ev.count ?? 0
           sampleRows += ls.count ?? 0
         }
-        const del = await deleteCommentsProperly(admin, rows, { dryRun: !args.apply })
+        // Step 8's snapshots (those citing these voices by ref) go on the
+        // pending list before anything is deleted; their files go after the
+        // delete, in the `finish` step, and a failure there is retried by the
+        // next run. The nightly refresh passes no recorder and is unchanged.
+        const del = await deleteCommentsProperly(admin, rows, {
+          dryRun: !args.apply,
+          recordSnapshots: async (snapshots) => {
+            let n = 0
+            for (const s of snapshots) n += await recordFiles(s.client_id, s.id)
+            return n
+          },
+        })
         console.log(`\nwill ${args.apply ? '' : '(would) '}delete ${del.deleted} comment row(s) → cascades ${evidenceRows} evidence row(s) + ${sampleRows} language sample(s), touching ${del.insightsAffected} insight(s); hero quotes nulled: ${del.heroQuotesNulled}`)
         // 8. Stored exports (Reports & Exports): a PDF/PNG whose snapshot cited one of
         //    these voices has the words in a file. deleteCommentsProperly finds those
-        //    snapshots by ref, deletes the files and flags the artifacts stale; the
-        //    next download re-renders without the voice. Copies already downloaded
-        //    or emailed are out of reach — say so in the reply.
-        console.log(`stored exports carrying the voice: ${del.artifactsStaled} → ${args.apply ? 'files deleted, flagged for re-render' : 'would have files deleted + be flagged for re-render'}`)
+        //    snapshots by ref and records them on the pending list before the delete;
+        //    the `finish` step deletes every version of their files after it, and
+        //    the next download re-renders without the voice. Copies already
+        //    downloaded or emailed are out of reach — say so in the reply.
+        console.log(`stored exports carrying the voice: ${del.artifactsStaled} → ${args.apply ? 'recorded, deleted next (below)' : 'would be deleted and flagged for re-render'}`)
       deleted.del = del
       },
     },
+    finish: [
+      {
+        name: 'stored files of snapshots citing the comments',
+        run: async () => {
+          // After the delete: the pending list, step 8's snapshots on it. A
+          // failure keeps them listed, and the next run deletes them.
+          for (const d of await deletePendingSnapshotFiles(admin, { apply: args.apply })) printFiles(d.snapshotId, d.paths, !args.apply)
+        },
+      },
+    ],
   })
 
   // A FAILED ERASURE NEVER READS AS A FINISHED ONE: no reply template, the

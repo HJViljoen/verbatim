@@ -70,19 +70,29 @@ function world(over: { runs?: Record<string, unknown>[] } = {}) {
     artifacts: [
       { id: 'a1', client_id: 'c1', snapshot_id: 'report_snapshots-1', storage_path: 'c1/report_snapshots-1/page-v2.pdf', stale: false },
       { id: 'a4', client_id: 'c1', snapshot_id: 'report_snapshots-4', storage_path: 'c1/report_snapshots-4/page-v1.pdf', stale: false },
+      { id: 'a9', client_id: 'c1', snapshot_id: 'report_snapshots-9', storage_path: 'c1/report_snapshots-9/page-v1.pdf', stale: false },
     ],
     erasure_pending_files: [],
   }
-  const objects = new Set(['c1/report_snapshots-1/page-v1.pdf', 'c1/report_snapshots-1/page-v2.pdf', 'c1/report_snapshots-4/page-v1.pdf'])
+  // Step 8's case: a snapshot whose prose is another person's but which cites
+  // the erased comment by ref, so its file prints the quote.
+  tables.report_snapshots.push({ id: 'report_snapshots-9', client_id: 'c1', title: 'Fit', data: carrying('data', OTHER), workings: null, evidence_ids: ['c:k1'] })
+  const objects = new Set(['c1/report_snapshots-1/page-v1.pdf', 'c1/report_snapshots-1/page-v2.pdf', 'c1/report_snapshots-4/page-v1.pdf', 'c1/report_snapshots-9/page-v1.pdf'])
+  // Storage refuses a delete of any path this says, until told otherwise.
+  const refuse = { path: (_p: string) => false }
   const storage = {
     from: () => ({
       list: async (folder: string) => ({ data: [...objects].filter((p) => p.startsWith(`${folder}/`)).map((p) => ({ name: p.slice(folder.length + 1), id: p })), error: null }),
-      remove: async (ps: string[]) => { for (const p of ps) objects.delete(p); return { data: ps, error: null } },
+      remove: async (ps: string[]) => {
+        if (ps.some((p) => refuse.path(p))) return { data: null, error: { message: 'storage is unreachable' } }
+        for (const p of ps) objects.delete(p)
+        return { data: ps, error: null }
+      },
     }),
   }
   const db = fakeDb(tables)
   holder.client = { ...(db.client as object), storage }
-  return { tables, objects }
+  return { tables, objects, refuse }
 }
 
 /** Runs the script as `node scripts/erase-commenter.ts …` would, and waits
@@ -163,6 +173,51 @@ describe('the erase script reaches every place it is meant to (end to end)', () 
     const run = await runScript(['--platform', 'youtube', '--handle', '@SockFan'])
     expect(run.out).toContain('DRY RUN')
     expect(JSON.stringify(w.tables)).toBe(before)
-    expect(w.objects.size).toBe(3)
+    expect(w.objects.size).toBe(4)
+  })
+})
+
+// Steps 7d and 8 delete through the pending list too: a delete that fails is
+// retried by the next run, even once nothing finds the snapshot by the words.
+describe('a failed 7d or step 8 delete is retried on the next run (end to end)', () => {
+  it('7d: an edited report\'s file that will not delete keeps the comments; the re-run deletes it', async () => {
+    const w = world()
+    w.refuse.path = (p) => p.startsWith('c1/report_snapshots-4/')
+    const first = await runScript(['--platform', 'youtube', '--handle', '@SockFan', '--apply'])
+    expect(first.exitCode).toBe(1)
+    expect(first.err).toContain('Failed: edited report text')
+    expect(first.err).toContain('The comments were NOT deleted yet')
+    expect(w.tables.comments.map((c) => c.id)).toEqual(['k1', 'k4', 'k2'])
+    expect(w.tables.report_edits[0].text).not.toContain(ERASED)
+    expect([...w.objects]).toContain('c1/report_snapshots-4/page-v1.pdf')
+    expect(w.tables.erasure_pending_files.map((p) => p.snapshot_id)).toEqual(['report_snapshots-4'])
+
+    w.refuse.path = () => false
+    const second = await runScript(['--platform', 'youtube', '--handle', '@SockFan', '--apply'])
+    expect(second.err).toBe('')
+    expect(second.out).toContain('--- reply template ---')
+    expect([...w.objects]).toEqual([])
+    expect(w.tables.erasure_pending_files).toEqual([])
+    expect(w.tables.comments.map((c) => c.id)).toEqual(['k2'])
+  })
+
+  it('8: a citing snapshot\'s file that will not delete after the comments are gone; the re-run, with no comment left, deletes it', async () => {
+    const w = world()
+    w.refuse.path = (p) => p.startsWith('c1/report_snapshots-9/')
+    const first = await runScript(['--platform', 'youtube', '--handle', '@SockFan', '--apply'])
+    expect(first.exitCode).toBe(1)
+    expect(first.err).toContain('Failed: stored files of snapshots citing the comments')
+    expect(first.err).toContain('The comments are deleted.')
+    expect(w.tables.comments.map((c) => c.id)).toEqual(['k2'])
+    expect([...w.objects]).toEqual(['c1/report_snapshots-9/page-v1.pdf'])
+    expect(w.tables.erasure_pending_files.map((p) => p.snapshot_id)).toEqual(['report_snapshots-9'])
+
+    w.refuse.path = () => false
+    const second = await runScript(['--platform', 'youtube', '--handle', '@SockFan', '--apply'])
+    expect(second.out).toContain('nothing to erase')
+    expect(second.err).toBe('')
+    expect(second.out).toMatch(/snapshot report_snapshots-9: 1 stored file\(s\) deleted/)
+    expect([...w.objects]).toEqual([])
+    expect(w.tables.erasure_pending_files).toEqual([])
   })
 })

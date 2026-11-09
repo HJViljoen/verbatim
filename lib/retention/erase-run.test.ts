@@ -223,3 +223,28 @@ describe('the delete is held by any update since the erasure began', () => {
     expect(start).toBeLessThan(run)
   })
 })
+
+// Rule 5: the `finish` steps (step 8's stored files) run only once the
+// comments are deleted; one that fails is reported with the comments deleted.
+describe('the finish steps', () => {
+  const step = (name: string, ran: string[], fail = false): EraseStep => ({ name, run: async () => { ran.push(name); if (fail) throw new Error(`${name} broke`) } })
+
+  it('run after the delete, and a failure there says the comments are deleted', async () => {
+    const ran: string[] = []
+    const outcome = await runErasure({
+      suppress: step('suppression', ran), scrubs: [step('scrub', ran)], erase: step('delete', ran), finish: [step('files', ran, true)],
+    }, () => {})
+    expect(ran).toEqual(['suppression', 'scrub', 'delete', 'files'])
+    expect(outcome).toEqual({ failed: ['files'], erased: true })
+    expect(unfinishedMessage(outcome)).toContain('The comments are deleted.')
+  })
+
+  it('do not run where the delete did not', async () => {
+    const ran: string[] = []
+    const outcome = await runErasure({
+      suppress: step('suppression', ran), scrubs: [step('scrub', ran, true)], erase: step('delete', ran), finish: [step('files', ran)],
+    }, () => {})
+    expect(ran).toEqual(['suppression', 'scrub'])
+    expect(outcome.erased).toBe(false)
+  })
+})
