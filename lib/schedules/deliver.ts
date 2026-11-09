@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { appDayLong } from '../format'
 import { artifactFilename, logExport, replaceArtifactFile, storeArtifact, type ArtifactRow } from '../artifacts'
 import { sendReportEmail, sendReviewEmail, type AlsoPublished, type EmailAttachment } from '../email'
 import { EMAIL_IMAGE_TILES, renderDigestEmail } from '../email/digest'
@@ -180,7 +181,7 @@ export async function readyForReview(
     to: reviewers.to,
     companyName: (client?.company_name as string | undefined) ?? '',
     reportTitle: (report?.title as string | undefined) ?? (reportId ? snapRow.title : schedule?.name ?? snapRow.title),
-    builtOn: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }),
+    builtOn: appDayLong(new Date()),
     studioUrl: `${a.baseUrl}/dashboard/studio${item ? `?item=${encodeURIComponent(item)}` : ''}`,
     forOperator: reviewers.audience === 'operator',
     editable: reportId != null,

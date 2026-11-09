@@ -1,4 +1,5 @@
 import { DocumentBriefEmail } from '../../components/email/document-brief'
+import { appDayLong } from '../format'
 import { renderStaticHtml } from './render-html'
 import { applyEdits, type BlockEdit } from '../reports/documents/edits'
 import type { DocumentSnapshotData } from '../reports/documents/types'
@@ -24,7 +25,7 @@ export interface RenderDocumentEmailArgs {
  *  day it was written. No delta words: a brief is the same report each time. */
 export function documentSubject(data: DocumentSnapshotData): string {
   const d = new Date(data.generatedAt)
-  const day = Number.isNaN(d.getTime()) ? data.period : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+  const day = Number.isNaN(d.getTime()) ? data.period : appDayLong(d)
   return `${data.company}: ${data.title.toLowerCase()}, ${day}`
 }
 

@@ -7,7 +7,7 @@ import { Sparkline } from '@/components/charts/sparkline'
 import { CountBadge, MOVEMENT_WORDS, MovementBadge } from '@/components/delta-badge'
 import { FigureCell } from '@/components/blocks/frame'
 import { gapLevels, gapLine, sidePct, type Gap } from '@/lib/reading/gap'
-import { fullDate, monthName, round1, shortDate } from '@/lib/format'
+import { appDay, fullDate, monthName, round1, shortDate } from '@/lib/format'
 import { nextMonth } from '@/lib/reading/month-key'
 import { platformShareLine } from '@/lib/reading/method'
 import { MOVE_PROMISE } from '@/lib/subjects/types'
@@ -44,7 +44,8 @@ import { withCurrentWords } from '@/lib/reports/legacy-words'
 // some PDF viewers draw as a grey slab (Heinrich's screenshots, 2026-08-30).
 // Depth on paper is the hairline; the ambient shadow stays on screen.
 
-const fmtDate = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+// The day it was printed, on the clients' clock (`appDay`), never the server's.
+const fmtDate = (d: Date) => appDay(d)
 const fmtCount = (n: number) => new Intl.NumberFormat('en-US').format(n)
 const PLATFORM: Record<string, string> = { tiktok: 'TikTok', instagram: 'Instagram', youtube: 'YouTube', reddit: 'Reddit' }
 

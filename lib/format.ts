@@ -127,6 +127,45 @@ export function weekdayDate(iso: string): string {
   return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`
 }
 
+// ---- the clients' clock ----------------------------------------------------------
+//
+// A time of day, or the day of something WE did (built, sent, made, viewed,
+// expires, a trial's end), is printed on the clients' clock: South Africa,
+// UTC+2 all year (Africa/Johannesburg keeps no daylight saving; the Costs
+// page's rule, lib/costs/dates.ts), so it is applied by offset and never
+// through Intl, and server and browser agree. Until 9 Nov eleven formatters
+// named no zone, so Vercel (UTC) printed the Studio's clock two hours behind a
+// laptop in Cape Town, and dated a build after 22:00 UTC the day before. A
+// period dated by the comment stays UTC (`shortDate`, `fullDate`, the months).
+
+const APP_OFFSET_MS = 2 * 60 * 60 * 1000
+const onAppClock = (at: string | Date): Date => new Date((typeof at === 'string' ? Date.parse(at) : at.getTime()) + APP_OFFSET_MS)
+const pad2 = (n: number): string => String(n).padStart(2, '0')
+
+/** "9 Nov, 09:05" on the clients' clock. */
+export function appWhen(at: string | Date): string {
+  const d = onAppClock(at)
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}, ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`
+}
+
+/** "9 Nov 2026" on the clients' clock. */
+export function appDay(at: string | Date): string {
+  const d = onAppClock(at)
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`
+}
+
+/** "9 November 2026" on the clients' clock. */
+export function appDayLong(at: string | Date): string {
+  const d = onAppClock(at)
+  return `${d.getUTCDate()} ${LONG_MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`
+}
+
+/** "9 November" on the clients' clock. */
+export function appDayMonth(at: string | Date): string {
+  const d = onAppClock(at)
+  return `${d.getUTCDate()} ${LONG_MONTHS[d.getUTCMonth()]}`
+}
+
 /** Capitalise the first letter — for platform/enum fallbacks only. */
 export const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 

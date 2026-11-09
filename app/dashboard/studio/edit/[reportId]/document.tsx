@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { appDay, appWhen } from '@/lib/format'
 import { PageFrame, PageBar, BarPill } from '@/components/shell/page-grid'
 import { DocumentBuildControl } from '@/components/documents/build-control'
 import { DocumentEditor } from '@/components/documents/document-editor'
@@ -19,7 +20,8 @@ import { BUILD_PHASE_WORDS } from '@/lib/reports/documents/builds'
 // pages on the right, editable in place, the workings beside them on
 // request. Before the first build the page says so and offers Build.
 
-const fmtWhen = (iso: string) => new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+// On the clients' clock, never the server's (Vercel is UTC): `appWhen`.
+const fmtWhen = (iso: string) => appWhen(iso)
 
 export async function DocumentStudioPage({ report, clientId }: { report: ReportRow; clientId: string }) {
   const admin = createAdminClient()
@@ -61,7 +63,7 @@ export async function DocumentStudioPage({ report, clientId }: { report: ReportR
             : 'a check flagged this build'
       }
       const built = new Date(data.generatedAt)
-      const date = Number.isNaN(built.getTime()) ? undefined : built.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+      const date = Number.isNaN(built.getTime()) ? undefined : appDay(built)
       editor = (
         <DocumentEditor key={snapshot.id} snapshotId={snapshot.id} data={data} workings={workings} editedIds={edits.map((e) => e.block_id)}
           deck={<DocumentDeck data={data} date={date} />} />

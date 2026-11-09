@@ -2,6 +2,7 @@
 
 import { useId, useState, useTransition } from 'react'
 import Link from 'next/link'
+import { appDayMonth } from '@/lib/format'
 import { useRouter } from 'next/navigation'
 import { LoaderCircle } from 'lucide-react'
 import { deleteSchedule, saveSchedule } from '@/app/dashboard/studio/actions'
@@ -170,7 +171,7 @@ export function ScheduleForm({ reportId, starterKey = null, reportTitle, schedul
     }
   }
 
-  const readyOn = ready?.readyAt ? new Date(ready.readyAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' }) : null
+  const readyOn = ready?.readyAt ? appDayMonth(ready.readyAt) : null
   const published = Boolean(ready?.publishedAt) && !ready?.stalled
   const canPublish = Boolean(ready) && !ready?.stalled && !published && !isDocument
   // One yellow at a time: a build waiting for review makes Send it the act.

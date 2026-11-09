@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { appDay } from '../../format'
 import { DOCUMENT_BUILD_BUDGET_USD, DOCUMENT_QUESTIONS_MAX } from '../../config'
 import { createSnapshot } from '../../snapshots'
 import { collectQuoteRefs, freezeQuotes, resolveQuotes } from '../../renderables/quotes-freeze'
@@ -437,5 +438,5 @@ export function briefPeriod(signals: Pick<Signals, 'reading' | 'runDate'>): stri
 export function periodOf(runDate: string): string {
   const d = new Date(runDate)
   if (Number.isNaN(d.getTime())) return 'This update'
-  return `Update of ${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
+  return `Update of ${appDay(d)}`
 }

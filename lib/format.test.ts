@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { fmtInt, fmtCompact, fmtPct, fmtDelta, shortDate, fullDate, longMonth, monthName, weekdayDate, listNames, platformLabel } from './format'
+import { fmtInt, fmtCompact, fmtPct, fmtDelta, shortDate, fullDate, longMonth, monthName, weekdayDate, listNames, platformLabel, appWhen, appDay, appDayLong, appDayMonth } from './format'
 
 describe('fmtInt', () => {
   it('adds thousands separators and rounds', () => {
@@ -73,6 +73,26 @@ describe('dates (UTC-anchored)', () => {
     expect(fullDate('2020-10-01T12:00:00Z')).toBe('1 Oct 2020')
     // 23:59 on 31 Dec UTC is still 31 Dec, whatever the server's zone says.
     expect(fullDate('2026-12-31T23:59:59Z')).toBe('31 Dec 2026')
+  })
+})
+
+describe('the clients\' clock (South Africa, UTC+2; 9 Nov, the live-data bugs)', () => {
+  // The same instant on any server: Vercel runs in UTC, a laptop in Cape Town
+  // in SAST, and these never read the machine's zone.
+  it('prints a time of day two hours ahead of UTC, in the en-GB shape the Studio used', () => {
+    expect(appWhen('2026-11-09T07:05:00.000Z')).toBe('9 Nov, 09:05')
+    expect(appWhen(new Date('2026-11-09T07:05:00.000Z'))).toBe('9 Nov, 09:05')
+  })
+  it('dates an instant after 22:00 UTC on the next day, as a client reads it', () => {
+    expect(appWhen('2026-11-03T22:30:00.000Z')).toBe('4 Nov, 00:30')
+    expect(appDay('2026-11-03T22:30:00.000Z')).toBe('4 Nov 2026')
+    expect(appDayLong('2026-12-31T22:30:00.000Z')).toBe('1 January 2027')
+    expect(appDayMonth('2026-11-30T23:59:00.000Z')).toBe('1 December')
+  })
+  it('agrees with the UTC day before 22:00 UTC', () => {
+    expect(appDay('2026-08-16T07:07:51Z')).toBe(fullDate('2026-08-16T07:07:51Z'))
+    expect(appDayLong('2026-08-31T12:00:00Z')).toBe('31 August 2026')
+    expect(appDayMonth('2026-08-31T12:00:00Z')).toBe('31 August')
   })
 })
 

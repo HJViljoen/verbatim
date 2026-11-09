@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { appWhen } from '@/lib/format'
 import { canManageTenant, type SessionContext } from '@/lib/auth'
 import { isMissingPublishColumns, onPlatform, publishedNotEmailed, PUBLISHED_NOT_EMAILED } from '@/lib/schedules/platform-state'
 import type { ReactNode } from 'react'
@@ -50,7 +51,8 @@ import { cn } from '@/lib/utils'
 // while a build waits). What each control does is unchanged.
 
 const BASE = '/dashboard/studio'
-const fmtWhen = (iso: string) => new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+// On the clients' clock, never the server's (Vercel is UTC): `appWhen`.
+const fmtWhen = (iso: string) => appWhen(iso)
 const fmtBytes = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1000))} KB`)
 
 interface Report { id: string; kind: ReportKind; template_key: string | null; title: string; audience: string; cover: CoverSpec; status: 'draft' | 'built'; sections: ReportSection[]; latest_snapshot_id: string | null; updated_at: string }

@@ -1,4 +1,5 @@
 import { Fragment } from 'react'
+import { appDay } from '@/lib/format'
 import { pageModule } from '@/components/pages/registry'
 import { CoverSlide } from '@/components/print/cover-slide'
 import { Slide } from '@/components/print/slide'
@@ -16,7 +17,8 @@ import type { ReportSnapshotData } from '@/lib/reports/types'
 // right, and at the foot only "Created by {company} with Verbatim", the date
 // and the page number. The method note stays on single-page exports.
 
-const fmtDate = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+// The day it was printed, on the clients' clock (`appDay`), never the server's.
+const fmtDate = (d: Date) => appDay(d)
 
 /**
  * The line along the foot of every sheet.

@@ -1,4 +1,5 @@
 import { getSessionContext } from '@/lib/auth'
+import { appDay } from '@/lib/format'
 import { settingsBar } from '@/lib/settings/bar'
 import { billingAccess, type BillingClient } from '@/lib/billing'
 import { isStripeConfigured } from '@/lib/stripe'
@@ -98,7 +99,7 @@ export default async function BillingPage({
     { key: 'plan', term: 'Plan', value: byAgreement ? TRIAL_BY_AGREEMENT_LABEL : planLabel(client.plan) },
     { key: 'access', term: 'Access', value: byAgreement ? 'Full access' : accessLabel },
     ...(client.trial_ends_at && access.reason === 'trialing'
-      ? [{ key: 'trial', term: 'Trial ends', value: new Date(client.trial_ends_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) }]
+      ? [{ key: 'trial', term: 'Trial ends', value: appDay(client.trial_ends_at) }]
       : []),
   ]
 

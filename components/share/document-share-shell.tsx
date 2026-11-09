@@ -1,4 +1,5 @@
 import { LinkGuard } from '@/components/share/link-guard'
+import { appDay } from '@/lib/format'
 import { DocumentDeck } from '@/components/print/document-deck'
 import { FitWidth } from '@/components/reports/fit-width'
 import { audienceLabel } from '@/lib/reports/cover'
@@ -25,7 +26,7 @@ export function DocumentShareShell({ data, appUrl }: { data: DocumentSnapshotDat
   // and this header (fix pass, package E-marketing).
   const pages = documentSheetCount(data)
   const built = new Date(data.generatedAt)
-  const date = Number.isNaN(built.getTime()) ? undefined : built.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  const date = Number.isNaN(built.getTime()) ? undefined : appDay(built)
   return (
     <LinkGuard appUrl={appUrl}>
       <div className="mx-auto flex w-full max-w-[1216px] flex-col gap-6 px-4 py-8 md:px-6">

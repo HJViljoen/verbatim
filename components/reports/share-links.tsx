@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { appDay, appWhen } from '@/lib/format'
 import { LoaderCircle } from 'lucide-react'
 import { revokeShareLink } from '@/app/dashboard/studio/actions'
 import { BTN_SECONDARY, BTN_SM, EMPTY, INPUT, LBL, STACK, STACK_CELL, STACK_HEAD, STACK_ROW, TBL, TD, TH } from '@/components/v2/look'
@@ -20,8 +21,10 @@ export interface ShareLinkView {
   buildAt: string
 }
 
-const fmt = (iso: string) => new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
-const fmtDay = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+// On the clients' clock by hand, so the server's render (UTC on Vercel) and
+// the browser's agree: `appWhen`, `appDay`.
+const fmt = (iso: string) => appWhen(iso)
+const fmtDay = (iso: string) => appDay(iso)
 
 /** Create a link to the latest build; list every link with its views; revoke.
  *  Since the audit design (7 Nov, Studio.dc.html): labelled Expires and
