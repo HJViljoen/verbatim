@@ -502,8 +502,9 @@ async function main() {
   }
 
   console.log(`\n--- reply template ---
-We have removed the ${rows.length} comment(s) tied to ${args.handle} on ${args.platform} from Verbatim, together with every quote of them in our analysis${deleted.del?.heroQuotesNulled ? ' and in report headlines' : ''}, and we have recorded the handle so it is not collected again.
-What we cannot undo: report emails and exported files already sent or downloaded by our customers before your request, and our AI provider's copy of any analysis input for its own retention period (up to 30 days).${editsScrubbed ? '\nWhere one of our customers had typed your words into a report of their own, we have replaced them and the report will re-print without them.' : ''}
+We have removed the ${rows.length} comment(s) tied to ${args.handle} on ${args.platform} from Verbatim, together with the quotes we took from them${deleted.del?.heroQuotesNulled ? ' (report headlines included)' : ''} and any copy of a comment's full wording, in the product and in our stored reports, PDFs included. We have recorded the handle so it is not collected again.
+A summary written from many comments may keep a paraphrase of what was said, without quoting or naming you.
+What we cannot undo: report emails already sent and files already downloaded by our customers before your request. Our providers' copies and backups expire on their own schedules; our AI provider keeps analysis inputs for up to 30 days.${editsScrubbed ? '\nWhere one of our customers had typed your words into a report of their own, we have replaced them and the report will re-print without them.' : ''}
 ${args.apply ? '' : '(DRY RUN — nothing has been changed yet.)'}`)
 }
 
