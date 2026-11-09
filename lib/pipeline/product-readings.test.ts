@@ -147,4 +147,49 @@ describe('the product-readings step', () => {
     expect(await productSpendSoFar(f.client, 'run-1')).toBe(0.25)
     expect(await productSpendSoFar(f.client, null)).toBe(0)
   })
+
+  it('writes the month when a video\'s fields place one category two ways (the INSERT takes one row per product_mentions_uniq key)', async () => {
+    // October on Össur from 28 Oct: a video whose caption names a product, whose
+    // hashtags hold a category word and whose translated transcript the
+    // category's family. Both product-less rows carried one unique key, the
+    // database refused the batch (23505), Inngest's retries refused it again,
+    // and the step's catch left the month at its 18 Oct rows.
+    const OCT = '2026-10-01'
+    const video = { id: vid(3), platform: 'youtube', video_id: 'yt3', account_name: 'a3', caption: 'Cheetah Xcel at the track', hashtags: ['runningblade'], transcript: null, transcript_en: 'my new Pro-Flex fits', ocr_text: null }
+    const keyOf = (r: Record<string, unknown>) => ['video_id', 'source', 'comment_id', 'product_id', 'group_id', 'method', 'rule_version', 'catalogue_version'].map((k) => String(r[k] ?? '')).join('|')
+    let held: Record<string, unknown>[] = []
+    const f = fakeAdmin({
+      tables: {
+        month_product_readings: [], product_mentions: [], product_tags: [],
+        month_denominators: t([{ month: OCT, audience: 'industry-other', status: 'filling' }]),
+        videos: t([video]),
+        comments: t([{ id: 'k9', platform: 'youtube', video_id: 'yt3', text: 'so fast', comment_date: '2026-10-20T10:00:00Z', is_low_signal: false }]),
+        clients: [{ id: OSSUR_CLIENT_ID, company_name: 'Össur' }],
+        tracking_configs: t([{ competitor_keywords: [] }]), keyword_performance: [], video_provenance: [], ai_call_log: [],
+      },
+      rpc: {
+        product_catalogue: () => ({ data: FIXTURE_CATALOGUE }),
+        brand_mention_candidates: () => [{ video_id: video.id, source: 'content', field: 'caption', comment_id: null, comment_month: null, excerpt: video.caption }],
+        market_month_videos: () => [{ video_id: video.id, audience: 'industry-other', platform: 'youtube', dated_comments: 1 }],
+      },
+      // product_mentions_uniq, as Postgres holds it: one statement refused whole.
+      refuse: {
+        product_mentions: (rows) => {
+          const keys = rows.map(keyOf)
+          const seen = new Set(held.map(keyOf))
+          return new Set(keys).size < keys.length || keys.some((k) => seen.has(k))
+            ? { code: '23505', message: 'duplicate key value violates unique constraint "product_mentions_uniq"' }
+            : null
+        },
+      },
+    })
+    held = f.tables.product_mentions
+    const r = await runProductMonth(f.client, { clientId: OSSUR_CLIENT_ID, runId: 'run-3', now: '2026-11-08T05:01:02.000Z', month: OCT, budgetUsd: 1, cap: 0 })
+    expect(r).toMatchObject({ status: 'written', ruleRowsInserted: 2 })
+    expect(f.tables.product_mentions.map((m) => [m.placement, m.product_id ?? m.group_id, m.field])).toEqual([
+      ['named', P('Cheetah Xcel'), 'caption'], ['unclear', G('Feet'), 'transcript_en'],
+    ])
+    const feet = f.tables.month_product_readings.find((x) => x.object_id === G('Feet'))!
+    expect(feet).toMatchObject({ month: OCT, k_named: 1, k_any: 1, n: 1, status: 'filling', run_id: 'run-3', read_at: '2026-11-08T05:01:02.000Z' })
+  })
 })
