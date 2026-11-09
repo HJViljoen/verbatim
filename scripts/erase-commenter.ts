@@ -5,6 +5,7 @@ import { authorKey, handleVariants } from '../lib/gather/suppression'
 import { deleteCommentsProperly } from '../lib/retention/youtube-refresh-io'
 import { AI_LOG_BODY_RETENTION_DAYS, DEMO_CLIENT_ID } from '../lib/config'
 import { markSnapshotsStale } from '../lib/artifacts'
+import { scrubStoredPlanChecks, scrubStoredPostIdeas } from '../lib/retention/stored-prose'
 
 // Erase one commenter on request (Tier 1.5, 2026-08-22). The privacy notice
 // says: write with the handle and platform and we will remove the comments tied
@@ -35,12 +36,15 @@ import { markSnapshotsStale } from '../lib/artifacts'
 //      the handle back (lib/gather/suppression.ts filters at ingest).
 //   7. weekly_reports.html_content — the stored copy of every report we sent —
 //      scrubbed of the erased text (raw and HTML-escaped forms), best-effort.
-//   7b. plan_checks / plan_check_evaluations — an Ask answer's `theySay` is
-//      model prose written after the model was shown real comments, so it can
-//      carry the commenter's words even though no quote field is stored.
-//      Scrubbed the same way. (The insight ids those rows store resolve through
-//      evidence rows already deleted in step 3, so the live quote panel goes
-//      empty on its own.)
+//   7b. plan_checks / plan_check_evaluations — an Ask answer's `theySay` and
+//      its judgement are model prose written after the model was shown real
+//      comments, so they can carry the commenter's words even though no quote
+//      field is stored. Scrubbed the same way. (The insight ids those rows
+//      store resolve through evidence rows already deleted in step 3, so the
+//      live quote panel goes empty on its own.)
+//   7e. post_ideas — what a post should cover and its sub-questions' labels
+//      are model prose written from comments sent to the model; scrubbed the
+//      same way.
 // video_raw is not touched: it never carries comment items (only video-search
 // and transcribe payloads).
 // What it cannot undo, and the reply must say so: reports already emailed;
@@ -184,39 +188,18 @@ async function main() {
     console.log(`stored report copies carrying the text: ${reportsScrubbed} of ${reports.length} → ${args.apply ? 'scrubbed' : 'would be scrubbed'}`)
   }
 
-  // 7b. Stored Ask answers. `plan_checks.claims[].theySay` and its
-  //     re-evaluations are model prose written AFTER the model was shown real
-  //     comments, so they can carry a commenter's words even though no quote
-  //     field is stored. Nothing else reaches them: there is no FK, and the
-  //     insight ids they store resolve through evidence rows that this script
-  //     has already deleted. Same treatment as the report copies — replace the
-  //     text in place, best effort.
+  // 7b. Stored Ask answers. A plan check's model prose is written AFTER the
+  //     model was shown real comments, so it can carry a commenter's words even
+  //     though no quote field is stored: each claim's `theySay` and, since
+  //     9 Nov, the judgement ("What I'd take from that", written from those
+  //     readings), on the upload's row and on every re-reading's
+  //     (lib/retention/stored-prose.ts). Nothing else reaches them: there is no
+  //     FK, and the insight ids they store resolve through evidence rows that
+  //     this script has already deleted. Same treatment as the report copies:
+  //     replace the text in place, best effort.
   let askAnswersScrubbed = 0
   if (clientIds.length && texts.length) {
-    for (const table of ['plan_checks', 'plan_check_evaluations'] as const) {
-      const stored = await selectAll<{ id: string; claims: { theySay?: string | null }[] | null }>(() =>
-        admin.from(table).select('id, claims').in('client_id', clientIds).order('id', { ascending: true }),
-      )
-      for (const row of stored) {
-        const claims = Array.isArray(row.claims) ? row.claims : []
-        let touched = false
-        const next = claims.map((c) => {
-          const said = typeof c?.theySay === 'string' ? c.theySay : null
-          if (!said) return c
-          let cleaned = said
-          for (const t of texts) cleaned = cleaned.split(t).join('[removed at the commenter\'s request]')
-          if (cleaned === said) return c
-          touched = true
-          return { ...c, theySay: cleaned }
-        })
-        if (!touched) continue
-        askAnswersScrubbed++
-        if (args.apply) {
-          const { error } = await admin.from(table).update({ claims: next }).eq('id', row.id)
-          if (error) throw new Error(`scrub ${table} ${row.id}: ${error.message}`)
-        }
-      }
-    }
+    askAnswersScrubbed = await scrubStoredPlanChecks(admin, clientIds, texts, { apply: args.apply })
     console.log(`stored Ask answers carrying the text: ${askAnswersScrubbed} → ${args.apply ? 'scrubbed' : 'would be scrubbed'}`)
   }
 
@@ -342,6 +325,15 @@ async function main() {
     } else {
       console.log(`edited report text carrying the words: 0 of ${stored.length}`)
     }
+  }
+
+  // 7e. The week's post ideas. Written from comments sent to the model by
+  //     handle: a title or label that copies one is held at write time, but
+  //     what the post should cover is never checked, so it can carry the
+  //     commenter's words (lib/retention/stored-prose.ts). Same treatment.
+  if (clientIds.length && texts.length) {
+    const ideas = await scrubStoredPostIdeas(admin, clientIds, texts, { apply: args.apply })
+    console.log(`stored post ideas carrying the text: ${ideas} → ${args.apply ? 'scrubbed' : 'would be scrubbed'}`)
   }
 
   // 6. Suppression — every key variant we know of.
