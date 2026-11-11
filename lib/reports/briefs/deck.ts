@@ -995,7 +995,8 @@ export function findingPlan(f: BriefFinding): FindingPlan {
   const body = BODY_HEIGHT - heardForH(f)
   const headline = f.headline.length > 70 ? 28 : 31
   const headH = heightOf(f.headline, FINDING_LEFT, headline, 1.2, 'bold') + 14
-  const heard = (heardIn(f) ? 30 : 0) + (f.subjectLine ? 3 + heightOf(f.subjectLine, FINDING_LEFT, 13, 1.25) : 0)
+  // The heard line, its base line (13px, 3px apart) and the subject line.
+  const heard = (heardIn(f) ? 30 : 0) + (f.base ? 3 + 17 : 0) + (f.subjectLine ? 3 + heightOf(f.subjectLine, FINDING_LEFT, 13, 1.25) : 0)
   const practiceH = (size: number, n: number) => (n ? 26 + f.practice.slice(0, n).reduce((m, t) => m + heightOf(t, FINDING_LEFT - 16, size, 1.5) + 6, 0) : 0)
   const sawH = (size: number) => f.saw.reduce((n, p) => n + heightOf(p, FINDING_LEFT, size, 1.58) + 14, 0)
   let saw = 16

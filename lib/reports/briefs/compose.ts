@@ -820,19 +820,7 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
   // filed under: that set the company's own posts and the posts naming it
   // against a rival's naming alone (the blind-report check, 9 Nov).
   function shares(): BriefSection | null {
-    const n = a.naming
-    if (!n || !a.brandsCounted.client || n.rows.length < 2) return null
-    const items: BriefItem[] = n.rows.map((b) => ({
-      title: b.you ? `${co} (you)` : b.label,
-      text: `Named in ${fmtInt(b.comments)} of ${month}'s ${fmtInt(n.comments)} comments, and without being asked in ${fmtInt(b.videos)} of ${fmtInt(n.videos)} videos.`,
-      ...(b.platforms.length ? { detail: b.platforms.slice(0, 3).join(', ') } : {}),
-      ...(b.you ? { you: true } : {}),
-      measure: { named: { comments: { k: b.comments, n: n.comments }, videos: { k: b.videos, n: n.videos } } },
-    }))
-    return section('leadership.shares', [{ items }], {
-      sub: `Who named each brand in ${month}: comments on the videos we read, and videos no brand search of ours found. Each brand's own posts are left out.`,
-      lines: namingNotes(n, co, month),
-    })
+    return a.brandsCounted.client && a.naming ? namingSection(a.naming, co, a.month) : null
   }
 
   // ---- leadership: what holds so far ---------------------------------------------------------------
@@ -962,6 +950,28 @@ export function wordsIn(phrase: string, text: string): boolean {
     const root = w.length > 4 ? w.slice(0, Math.max(3, w.length - 2)) : w.replace(/s$/, '')
     return have.some((h) => h.startsWith(root))
   })
+}
+
+/** "Where {company} stands against its rivals" from the month's naming: each
+ *  brand's comments naming it and videos naming it unasked, each with its
+ *  base, where it was named, and the notes. Null with fewer than two brands.
+ *  Pure. */
+export function namingSection(n: BriefNaming, company: string, monthStart: string): BriefSection | null {
+  if (n.rows.length < 2) return null
+  const month = longMonth(monthStart)
+  const items: BriefItem[] = n.rows.map((b) => ({
+    title: b.you ? `${company} (you)` : b.label,
+    text: `Named in ${fmtInt(b.comments)} of ${month}'s ${fmtInt(n.comments)} comments, and without being asked in ${fmtInt(b.videos)} of ${fmtInt(n.videos)} videos.`,
+    ...(b.platforms.length ? { detail: b.platforms.slice(0, 3).join(', ') } : {}),
+    ...(b.you ? { you: true } : {}),
+    measure: { named: { comments: { k: b.comments, n: n.comments }, videos: { k: b.videos, n: n.videos } } },
+  }))
+  const spec = ROLE_SECTIONS.leadership.find((x) => x.key === 'leadership.shares')!
+  return {
+    key: 'leadership.shares', title: sectionTitle(spec, company), groups: [{ items }],
+    sub: `Who named each brand in ${month}: comments on the videos we read, and videos no brand search of ours found. Each brand's own posts are left out.`,
+    lines: namingNotes(n, company, month),
+  }
 }
 
 /** Below this many videos, a brand's naming is few voices, and said so. */
