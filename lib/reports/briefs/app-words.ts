@@ -142,7 +142,7 @@ export function recordLine(m: Pick<BriefMoves, 'record' | 'waitingCount'>): stri
 export function adviceDetail(a: Pick<BriefAdvice, 'firstMade' | 'aim'>, month: string): string {
   const raised = `First raised ${shortDate(`${a.firstMade.slice(0, 10)}T00:00:00.000Z`)}`
   if (!a.aim) return raised
-  const level = a.aim.k != null && a.aim.n != null ? `, ${fmtInt(a.aim.k)} of the ${fmtInt(a.aim.n)} category videos in ${longMonth(month)}` : ''
+  const level = a.aim.k != null && a.aim.n != null ? `, ${fmtInt(a.aim.k)} of ${fmtInt(a.aim.n)} category videos in ${longMonth(month)}` : ''
   return `${raised} · would move ${a.aim.label}${level}`
 }
 

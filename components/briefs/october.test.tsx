@@ -102,7 +102,7 @@ describe('Leadership: Your moves (Brief-Leadership-07)', () => {
     const t = text(p)
     expect(t).toContain('Waiting for a decision 4')
     expect(t).toContain('01 Create an Össur Access Navigator for new amputees and caregivers')
-    expect(t).toContain('First raised 12 Oct · would move Where can I get one, 41 of 902 videos in October')
+    expect(t).toContain('First raised 12 Oct · would move Where can I get one, 41 of 902 category videos in October')
     expect(t).toContain('Moves you dated · 1')
     expect(t).toContain('Dated 5 Oct · Done · read on Cost and affordability frustration')
     expect(t).toContain('August Left off the line')

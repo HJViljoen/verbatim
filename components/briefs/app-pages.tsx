@@ -392,7 +392,7 @@ function AdviceDetail({ a, month, appUrl }: { a: NonNullable<BriefSection['moves
     <div style={{ fontSize: 13, lineHeight: 1.45, color: P.muted }}>
       First raised {shortDate(`${a.firstMade.slice(0, 10)}T00:00:00.000Z`)} · would move{' '}
       <A href={a.aim.href} appUrl={appUrl} style={{ color: P.ink, fontWeight: 600 }}><span data-copy="subject" data-slot="pass_b_theme">{a.aim.label}</span></A>
-      {a.aim.k != null && a.aim.n != null ? <>, <span data-copy="level" style={{ fontFamily: MONO }}>{fmtInt(a.aim.k)} of {fmtInt(a.aim.n)}</span> videos in {longMonth(month)}</> : null}
+      {a.aim.k != null && a.aim.n != null ? <>, <span data-copy="level" style={{ fontFamily: MONO }}>{fmtInt(a.aim.k)} of {fmtInt(a.aim.n)}</span> category videos in {longMonth(month)}</> : null}
     </div>
   )
 }

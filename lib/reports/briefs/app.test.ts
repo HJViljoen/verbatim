@@ -323,7 +323,7 @@ describe('Your moves: the advice waiting, the moves dated, the record', () => {
     expect(folded.waitingCount).toBe(3)
     expect(flat.waiting.every((a) => !a.title.startsWith('Create a guided'))).toBe(true)
     expect(recordLine(flat)).toBe('65 pieces of advice since 13 June: 1 decided, 4 waiting.')
-    expect(adviceDetail(flat.waiting[0], OCT)).toBe('First raised 12 Oct · would move Where can I get one, 41 of the 902 category videos in October')
+    expect(adviceDetail(flat.waiting[0], OCT)).toBe('First raised 12 Oct · would move Where can I get one, 41 of 902 category videos in October')
   })
 
   it('reads the record and the current advice from the ledger, the move that compares first', () => {
