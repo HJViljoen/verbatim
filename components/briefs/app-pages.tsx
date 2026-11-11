@@ -3,7 +3,7 @@ import { MOVEMENT_WORDS } from '@/components/delta-badge'
 import { fmtInt, longMonth, platformLabel, shortDate } from '@/lib/format'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
 import {
-  accountsLine, adviceDetail, categoryProducts, followedAccounts, ideaReadLine, inTheirVideos, moveLine, multipleText, NO_RECIPE, ownTouchWords, recipeLabel, recordLine, slotWords, whoAsks,
+  accountsLine, adviceDetail, AIM_BASE, aimLevel, categoryProducts, followedAccounts, ideaReadLine, inTheirVideos, moveLine, multipleText, NO_RECIPE, ownTouchWords, recipeLabel, recordLine, slotWords, whoAsks,
 } from '@/lib/reports/briefs/app-words'
 import { continuedTitle, groupRows, quoteCite, quoteWords } from '@/lib/reports/briefs/deck'
 import type { BriefGroup, BriefHookTable, BriefItem, BriefSection, BriefVerdict, StoredBriefData } from '@/lib/reports/briefs/types'
@@ -384,15 +384,17 @@ export function MovesPage({ appUrl, s, sub }: AppPageProps) {
   )
 }
 
-/** "First raised 12 Oct · would move {label}, 41 of 902 videos in October"
- *  (`adviceDetail`), the label and the level marked. */
+/** "Raised 12 Oct · would move {label}, 41 of 902 category videos read in
+ *  October" (`adviceDetail`), the label and the level marked; no count where
+ *  the month holds no reading (`aimLevel`). */
 function AdviceDetail({ a, month, appUrl }: { a: NonNullable<BriefSection['moves']>['waiting'][number]; month: string; appUrl: string }) {
   if (!a.aim) return <div data-copy="figure" style={{ fontSize: 13, lineHeight: 1.45, color: P.muted }}>{adviceDetail(a, month)}</div>
+  const level = aimLevel(a.aim)
   return (
     <div style={{ fontSize: 13, lineHeight: 1.45, color: P.muted }}>
-      First raised {shortDate(`${a.firstMade.slice(0, 10)}T00:00:00.000Z`)} · would move{' '}
+      Raised {shortDate(`${a.firstMade.slice(0, 10)}T00:00:00.000Z`)} · would move{' '}
       <A href={a.aim.href} appUrl={appUrl} style={{ color: P.ink, fontWeight: 600 }}><span data-copy="subject" data-slot="pass_b_theme">{a.aim.label}</span></A>
-      {a.aim.k != null && a.aim.n != null ? <>, <span data-copy="level" style={{ fontFamily: MONO }}>{fmtInt(a.aim.k)} of {fmtInt(a.aim.n)}</span> category videos in {longMonth(month)}</> : null}
+      {level ? <>, <span data-copy="level" style={{ fontFamily: MONO }}>{fmtInt(level.k)} of {fmtInt(level.n)}</span> {AIM_BASE} in {longMonth(month)}</> : null}
     </div>
   )
 }

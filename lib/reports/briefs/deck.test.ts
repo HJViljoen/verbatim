@@ -3,10 +3,13 @@ import { describe, expect, it } from 'vitest'
 import { briefFixture, finding, item, quote } from '../../../components/briefs/fixture'
 import { PRINT_UNDRAWN_SECTIONS, UNDRAWN_SECTIONS, printsSection } from './canvas'
 import {
-  cardsEvidence, FEW_VOICES, findingBaseLine,
+  cardsEvidence, FEW_VOICES, findingBaseLine, H, HEARD_FOR_FLOOR, heardForBase, heardForH, monthSpan,
   BODY_HEIGHT, PAGE_MIN_ITEMS, PAGE_NEEDS, chipRows, contentsOf, deckPages, distinctChips, findingPlan, fitItems, footnoteOf, heightOf, ideasArgued, inShortSizes, linesOf, pairColumn,
   planDeck, printedSections, productPhrases, quoteCite, subtitleOf, tagLine, writtenOn,
 } from './deck'
+import { adviceDetail } from './app-words'
+import { sameWords } from './inshort'
+import { BRAND_MIN_VIDEOS } from './sections'
 import type { BriefRole, BriefSection, MonthlyBriefData, SectionKey } from './types'
 
 // The deck's pages (pure): the canvas's page set and order for each role, the
@@ -493,12 +496,58 @@ describe('a finding\'s base in print', () => {
   })
 })
 
+describe('what each brand is heard for, and on what (the re-check, 11 Nov)', () => {
+  const chips = [{ name: 'Rival', you: false, phrase: 'Travel packs' }, { name: 'Acme', you: true, phrase: 'Clean-up days' }]
+  const oct = { fromApp: [] }
+  it('each chip\'s videos about its brand, few voices said', () => {
+    expect(heardForBase({ heardFor: chips.map((c, k) => ({ ...c, videos: [12, 5][k] })) }, oct)).toBe('Each from the videos about that brand in what this brief heard: Rival 12, Acme 5 · few voices: Acme.')
+    expect(heardForBase({ heardFor: chips.map((c) => ({ ...c, videos: 4 })) }, oct)).toBe('Each from the videos about that brand in what this brief heard: Rival 4, Acme 4 · few voices.')
+  })
+  it('a chip saved without its count says the floor every chip passed', () => {
+    expect(heardForBase({ heardFor: chips }, oct)).toBe('Each from at least three videos about that brand, in what this brief heard.')
+    expect(HEARD_FOR_FLOOR).toBe(BRAND_MIN_VIDEOS)
+  })
+  it('none with no chips, and none on the September canvas', () => {
+    expect(heardForBase({ heardFor: [] }, oct)).toBeNull()
+    expect(heardForBase({ heardFor: chips }, {})).toBeNull()
+  })
+  it('the finding makes room for it', () => {
+    const f = finding('Acme is heard for clean-up days', { heardFor: chips })
+    expect(heardForH(f, heardForBase(f, oct))).toBeGreaterThan(heardForH(f))
+  })
+})
+
+describe('a piece of advice\'s height, its label bold and its level in mono', () => {
+  it('a line the plain measure holds to one line is two where they widen it', () => {
+    const a = { title: 'Stand up an access desk', firstMade: '2026-10-18', aim: { label: 'Cost blocks tent access and repair', k: 33, n: 744, href: null } }
+    const detail = adviceDetail(a, '2026-10-01')
+    const head = 27 + heightOf(a.title, 616, 20, 1.35, true) + 5
+    expect(heightOf(detail, 616, 13, 1.45)).toBeCloseTo(13 * 1.45)
+    expect(H.advice(a, '2026-10-01')).toBeCloseTo(head + 2 * 13 * 1.45)
+    expect(H.advice({ ...a, aim: { ...a.aim, label: 'Cost' } }, '2026-10-01')).toBeCloseTo(head + 13 * 1.45)
+  })
+})
+
 describe('what a card section\'s cards rest on', () => {
   const sec = (videos: number[], titled = true): BriefSection => ({ key: 'sales.care', title: 'Language', groups: [{ items: videos.map((v, k) => item(titled ? `Card ${k + 1}` : '', 'Buyers ask.', { videos: v })) }] })
   const months = { heardMonths: ['2026-08-01', '2026-09-01', '2026-10-01'] }
   it('the range of videos, the months, and few voices where every card is under ten', () => {
-    expect(cardsEvidence(sec([3, 4, 3]), months)).toBe('Each rests on 3 to 4 videos heard in August, September and October · few voices.')
-    expect(cardsEvidence(sec([12]), months)).toBe('It rests on 12 videos heard in August, September and October.')
+    expect(cardsEvidence(sec([3, 4, 3]), months)).toBe('Each rests on 3 to 4 videos from August to October · few voices.')
+    expect(cardsEvidence(sec([12]), months)).toBe('It rests on 12 videos from August to October.')
+    expect(cardsEvidence(sec([12]), { heardMonths: ['2026-10-01'] })).toBe('It rests on 12 videos in October.')
+  })
+  it('says the months as a span where they run in a row (the re-check, 11 Nov), and lists them where they do not', () => {
+    expect(monthSpan(['August', 'September', 'October'])).toBe('from August to October')
+    expect(monthSpan(['November', 'December', 'January'])).toBe('from November to January')
+    expect(monthSpan(['October'])).toBe('in October')
+    expect(monthSpan(['July', 'September', 'October'])).toBe('in July, September and October')
+    expect(monthSpan([])).toBe('')
+  })
+  it('a line the In short check read in the older wording is the same line now', () => {
+    expect(sameWords('Buyers hesitate. Each rests on 3 to 4 videos heard in August, September and October · few voices.')).toBe(sameWords('Buyers hesitate. Each rests on 3 to 4 videos from August to October · few voices.'))
+    expect(sameWords('It rests on 1 video heard in October.')).toBe('It rests on 1 video in October.')
+    // Only the base's months: the finding's own heard line is not touched.
+    expect(sameWords('Heard in August, September and October')).toBe('Heard in August, September and October')
   })
   it('names the few-voice cards where only some are', () => {
     expect(cardsEvidence(sec([4, 22]), {})).toBe('Each rests on 4 to 22 videos · few voices: “Card 1”.')

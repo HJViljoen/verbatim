@@ -884,10 +884,12 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
       const rival = isYou ? null : groundedRival(String(w.brand ?? ''), a.rivals, ids.map((id) => byId.get(id)?.text ?? ''))
       if (!isYou && !rival) { held.push({ what: `heard_for: ${w.brand}`, reason: 'not the company or a tracked rival a cited point names' }); continue }
       const about: About = isYou ? 'client' : `rival:${rival}`
-      if (videosAbout(ids, about) < BRAND_MIN_VIDEOS) { held.push({ what: `heard_for: ${w.brand}`, reason: `only ${videosAbout(ids, about)} of its videos are about it` }); continue }
+      const videos = videosAbout(ids, about)
+      if (videos < BRAND_MIN_VIDEOS) { held.push({ what: `heard_for: ${w.brand}`, reason: `only ${videos} of its videos are about it` }); continue }
       if (a.meaning.best(phrase, ids.map((id) => byId.get(id)!.text)) < FIT.question) { held.push({ what: `heard_for: ${w.brand}`, reason: 'the phrase says nothing its points say' }); continue }
-      if (isYou) you = { name: co, you: true, phrase }
-      else if (!out.some((x) => x.name === rival)) out.push({ name: rival!, you: false, phrase })
+      // Its count is the chips' base line (deck.ts `heardForBase`).
+      if (isYou) you = { name: co, you: true, phrase, videos }
+      else if (!out.some((x) => x.name === rival)) out.push({ name: rival!, you: false, phrase, videos })
     }
     const chips = [...out.slice(0, EXTRA_MAX.heardFor - (you ? 1 : 0)), ...(you ? [you] : [])]
     return chips.length >= HEARD_FOR_MIN ? chips : null

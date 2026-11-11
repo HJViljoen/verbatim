@@ -11,6 +11,7 @@ import {
   type AdviceAim, type MoveCard, type ReadingLabel,
 } from '../../pages/v2/moves'
 import { adviceTitle } from '../../pages/v2/advice-words'
+import { titleFromBody } from '../../prose/advice-title'
 import { ADVICE_RECORD_ALL_HREF, MOVES_PATH } from '../../pages/v2/moves-address'
 import { productsHref } from '../../pages/v2/products-address'
 import type { ProductsData, ShelfCategoryView, Standout } from '../../pages/v2/products'
@@ -26,7 +27,7 @@ import { monthStartOf, prevMonth } from '../../reading/month-key'
 import type { Verdict } from '../../reading/verdicts'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, isRivalAudience } from '../../rivals'
 import { firstSentenceOf } from '../weekly-read-v3'
-import { andList, APP_TITLES, buyerNamesNote, daysLong, GROUPS_ARE_NOT_BUYERS, namedNotes, numberWord, voicesMonthHref, withMonth, yyyymm } from './app-words'
+import { aimLevel, andList, APP_TITLES, buyerNamesNote, daysLong, GROUPS_ARE_NOT_BUYERS, namedNotes, numberWord, productsFoot, voicesMonthHref, withMonth, yyyymm } from './app-words'
 import type { StandingFact } from '../../written/types'
 import type {
   BriefAdvice, BriefGroup, BriefHookRow, BriefHooks, BriefHookTable, BriefIdea, BriefIdeas, BriefItem, BriefMove, BriefMoves, BriefNamed, BriefNamedRow,
@@ -488,8 +489,14 @@ export function movesOf(a: {
   aimHref?: (aim: AdviceAim) => string | null
 }): BriefMovesIn {
   const month = monthStartOf(a.month)
-  const pool = currentAdvice(a.rows.map((r) => ({ ...r, inLatest: r.inLatest === true }))).map((r) => {
+  // A piece with no title of its own is named by its body's first clause,
+  // cut at about seventy characters (`adviceTitle`): an observation, cut off,
+  // not advice to decide on (the re-check, 11 Nov: "People judge a device by
+  // whether they can wear it through work…"). It stays on Your moves, and in
+  // the record's count.
+  const pool = currentAdvice(a.rows.filter((r) => hasOwnTitle(r.title, r.why)).map((r) => ({ ...r, inLatest: r.inLatest === true }))).map((r) => {
     const aim = a.aims.get(r.lineageId) ?? null
+    const level = aim ? aimLevel(aim.level) : null
     return {
       lineageId: r.lineageId,
       // Named as Your moves names it everywhere: its stored title, else its
@@ -499,7 +506,8 @@ export function movesOf(a: {
       status: r.status,
       inLatest: r.inLatest,
       firstMade: r.firstMade,
-      aim: aim ? { label: aim.label, k: aim.level?.k ?? null, n: aim.level?.n ?? null, href: a.aimHref?.(aim) ?? null } : null,
+      // No count where the month holds no reading of it (`aimLevel`).
+      aim: aim ? { label: aim.label, k: level?.k ?? null, n: level?.n ?? null, href: a.aimHref?.(aim) ?? null } : null,
       // At the brief's month, as each figure beside it is (`?month=`).
       href: withMonth(a.adviceHref(r.lineageId), month),
     }
@@ -518,6 +526,13 @@ export function movesOf(a: {
     moves,
     record: { total: a.rows.length, decided: a.rows.filter((r) => r.status !== 'new').length, since: firsts[0] ?? null, href: withMonth(ADVICE_RECORD_ALL_HREF, month) },
   }
+}
+
+/** Whether a piece of advice has a title of its own: stored, and not its
+ *  body's first clause as the pipeline derives it (`titleFromBody`). Pure. */
+export function hasOwnTitle(title: string | null | undefined, body: string | null | undefined): boolean {
+  const t = (title ?? '').trim()
+  return t !== '' && t !== titleFromBody(body)
 }
 
 // ---- From the parts to the brief's sections (pure) ------------------------------------
@@ -574,7 +589,7 @@ export function productsSection(p: BriefProducts | null): BriefSection | null {
     sub: p.videos != null && p.market
       ? `${came}, and ${fmtInt(p.videos)} of the ${fmtInt(p.market)} videos we read in ${m}, your own posts and posts about you included, were about them or their categories, a product named or not.`
       : `${came}.`,
-    foot: 'Counted on every video in your market, the comments on your own posts included. What your own posts say is never counted.',
+    foot: productsFoot(p),
     link: { href: p.href, text: 'Open Your products →' },
   })
 }

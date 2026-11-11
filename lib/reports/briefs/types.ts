@@ -590,7 +590,13 @@ export interface BriefFinding {
   subjectLine?: string
   /** "What each brand is heard for" (the Leadership finding's chips): each
    *  brand with the idea it is heard for, the company last and dark. */
-  heardFor?: { name: string; you: boolean; phrase: string }[]
+  heardFor?: {
+    name: string; you: boolean; phrase: string
+    /** The videos about the brand in the points the chip stands on: the
+     *  chips' base line (deck.ts `heardForBase`). Absent in a brief saved
+     *  before it. */
+    videos?: number
+  }[]
   /** ADDITIVE (9 Nov): its videos in the brief's month, of every video read
    *  in that month: the base printed under it, with a few-voices tag below
    *  `FEW_VOICES` (deck.ts). */

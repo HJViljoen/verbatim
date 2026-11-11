@@ -508,8 +508,8 @@ describe('the canvas\'s components, each from material that stands', () => {
     ] })
     const { data } = composeBrief(input('leadership', o, LEAD, {}, LABOUT))
     expect(data.findings[0].heardFor).toEqual([
-      { name: 'Rival', you: false, phrase: 'Travel packs that last' },
-      { name: 'Acme', you: true, phrase: 'Clean-up days and team values' },
+      { name: 'Rival', you: false, phrase: 'Travel packs that last', videos: 6 },
+      { name: 'Acme', you: true, phrase: 'Clean-up days and team values', videos: 5 },
     ])
     expect(data.held).toContainEqual({ what: 'heard_for: Osprey', reason: 'not the company or a tracked rival a cited point names' })
   })
@@ -621,10 +621,10 @@ describe('the October canvas: the pages read from the app (`fromApp`)', () => {
     const lead = octoberFixture('leadership')
     const sales = octoberFixture('sales')
     const [, pointed] = pointToSalesGroups([sales, lead])
-    expect(pointed.fromApp!.find((s) => s.key === 'leadership.groups')!.foot).toBe(`“First-time buyer” is Voices’ name for a group of people asking about or considering a purchase; its count is of videos, not purchases. Each update describes the groups afresh, so no count is set against September. ${SALES_GROUPS_LINE}`)
+    expect(pointed.fromApp!.find((s) => s.key === 'leadership.groups')!.foot).toBe(`“First-time buyer” is Voices’ name for a group of people asking questions about a purchase, some of them considering one; its count is of videos, not purchases. Each update describes the groups afresh, so no count is set against September. ${SALES_GROUPS_LINE}`)
     const noGroups = { ...sales, fromApp: [] }
     const [, alone] = pointToSalesGroups([noGroups, pointed])
-    expect(alone.fromApp!.find((s) => s.key === 'leadership.groups')!.foot).toBe('“First-time buyer” is Voices’ name for a group of people asking about or considering a purchase; its count is of videos, not purchases. Each update describes the groups afresh, so no count is set against September.')
+    expect(alone.fromApp!.find((s) => s.key === 'leadership.groups')!.foot).toBe('“First-time buyer” is Voices’ name for a group of people asking questions about a purchase, some of them considering one; its count is of videos, not purchases. Each update describes the groups afresh, so no count is set against September.')
     // Idempotent, and a set with no Sales brief is not judged.
     expect(pointToSalesGroups([sales, pointed])[1]).toBe(pointed)
     expect(pointToSalesGroups([lead])[0]).toBe(lead)

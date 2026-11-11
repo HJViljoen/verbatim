@@ -2,9 +2,9 @@ import { aboutName } from '../../brands/labels'
 import { fmtInt, longMonth } from '../../format'
 import { monthsPhrase } from '../../written/month'
 import { languageName } from './markdown'
-import { adviceDetail, alsoInMarket, buyersSub, ideaReadLine, inTheirVideos, moveLine, namedNotes, ownTouchWords, pageHref, recordLine, whoAsks } from './app-words'
+import { adviceDetail, aimLevel, alsoInMarket, buyersSub, ideaReadLine, inTheirVideos, moveLine, namedNotes, ownTouchWords, pageHref, productsFoot, recordLine, whoAsks } from './app-words'
 import { canvasOf, findingsAfter, printsSection, V2_PAGES } from './canvas'
-import type { BriefFinding, BriefGroup, BriefIdea, BriefIdeas, BriefItem, BriefProducts, BriefQuote, BriefRole, BriefSection, StoredBriefData, SectionKey } from './types'
+import type { BriefAdvice, BriefFinding, BriefGroup, BriefIdea, BriefIdeas, BriefItem, BriefProducts, BriefQuote, BriefRole, BriefSection, StoredBriefData, SectionKey } from './types'
 import { APP_SECTION_KEYS, BRIEF_NAME, BRIEF_ROLES } from './types'
 
 // The brief as pages (pure): which page holds what, in the order the canvas
@@ -156,6 +156,42 @@ export const findingBaseLine = (f: Pick<BriefFinding, 'base'>, month: string): s
   return f.base.k < FEW_VOICES ? `${line} · few voices` : line
 }
 
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
+/** When a page's cards were heard, from the months' names: "from August to
+ *  October" for months in a row, "in October" for one, else "in July,
+ *  September and October" (the re-check, 11 Nov: "videos heard in August,
+ *  September and October" read as each card heard in every month). Pure. */
+export function monthSpan(names: readonly string[]): string {
+  if (names.length === 0) return ''
+  if (names.length === 1) return `in ${names[0]}`
+  const at = names.map((n) => MONTH_NAMES.indexOf(n))
+  const inRow = at.every((x, k) => x >= 0 && (k === 0 || x === (at[k - 1] + 1) % 12))
+  return inRow ? `from ${names[0]} to ${names[names.length - 1]}` : `in ${andList(names)}`
+}
+
+/** The floor every brand chip passed (compose.ts `heardFor`: `BRAND_MIN_VIDEOS`,
+ *  pinned equal in deck.test.ts): said where a chip was saved without its
+ *  count. */
+export const HEARD_FOR_FLOOR = 3
+
+/** The base under "What each brand is heard for" (the re-check, 11 Nov: the
+ *  chips printed with none): each chip's videos about its brand in what the
+ *  brief heard, few voices said; where a chip was saved without its count,
+ *  the floor every chip passed. Null with no chips, and on the September
+ *  canvas (it draws byte for byte as before). Pure. */
+export function heardForBase(f: Pick<BriefFinding, 'heardFor'>, d: Partial<Pick<StoredBriefData, 'fromApp'>>): string | null {
+  const chips = f.heardFor ?? []
+  if (chips.length === 0 || d.fromApp === undefined) return null
+  const counted = chips.filter((c): c is typeof c & { videos: number } => typeof c.videos === 'number')
+  if (counted.length < chips.length) return `Each from at least ${numberWordLower(HEARD_FOR_FLOOR)} videos about that brand, in what this brief heard.`
+  const few = counted.filter((c) => c.videos < FEW_VOICES)
+  const fewLine = few.length === 0 ? '' : few.length === counted.length ? ' · few voices' : ` · few voices: ${andList(few.map((c) => c.name))}`
+  return `Each from the videos about that brand in what this brief heard: ${counted.map((c) => `${c.name} ${fmtInt(c.videos)}`).join(', ')}${fewLine}.`
+}
+
+const numberWordLower = (n: number): string => (['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'][n] ?? fmtInt(n))
+
 /** "Who is buying, continued". */
 export const continuedTitle = (title: string): string => `${title}, continued`
 
@@ -231,8 +267,7 @@ const CARD_SECTIONS: ReadonlySet<SectionKey> = new Set<SectionKey>([
   'leadership.weigh', 'leadership.risks', 'leadership.decisions',
 ])
 
-/** "Each rests on 3 to 9 videos heard in August, September and October ·
- *  few voices.": what the cards a page prints rest on, few voices said where
+/** "Each rests on 3 to 9 videos from August to October · few voices.": what the cards a page prints rest on, few voices said where
  *  every card is under `FEW_VOICES`, or the cards that are named. Null on a
  *  section that is not a card section, or whose cards carry no count. Pure. */
 export function cardsEvidence(s: BriefSection, d: Partial<Pick<StoredBriefData, 'heardMonths'>>): string | null {
@@ -243,7 +278,7 @@ export function cardsEvidence(s: BriefSection, d: Partial<Pick<StoredBriefData, 
   const lo = Math.min(...vs)
   const hi = Math.max(...vs)
   const span = lo === hi ? `${fmtInt(lo)} ${lo === 1 ? 'video' : 'videos'}` : `${fmtInt(lo)} to ${fmtInt(hi)} videos`
-  const when = d.heardMonths?.length ? ` heard in ${monthsPhrase([...d.heardMonths])}` : ''
+  const when = d.heardMonths?.length ? ` ${monthSpan(d.heardMonths.map((m) => longMonth(m)))}` : ''
   const fewTitled = items.filter((i) => (i.videos as number) < FEW_VOICES && i.title).map((i) => `“${i.title}”`)
   const few = vs.every((v) => v < FEW_VOICES) ? ' · few voices' : fewTitled.length ? ` · few voices: ${andList(fewTitled)}` : ''
   return `${items.length === 1 ? 'It rests on' : 'Each rests on'} ${span}${when}${few}.`
@@ -509,7 +544,15 @@ export const H = {
   },
   /** A piece of advice waiting, on Your moves' left column (616 for the
    *  words beside the number). */
-  advice: (title: string, detail: string): number => 27 + heightOf(title, 616, 20, 1.35, true) + 5 + heightOf(detail, 616, 13, 1.45),
+  /** A piece of advice waiting: its title, and the line under it, whose
+   *  label is set bold and whose level is set in mono (app-pages.tsx
+   *  `AdviceDetail`), measured narrower by what they add (11 Nov: a line the
+   *  plain measure held to one line drew two). */
+  advice: (a: Pick<BriefAdvice, 'title' | 'firstMade' | 'aim'>, month: string): number => {
+    const level = aimLevel(a.aim)
+    const wider = (a.aim ? a.aim.label.length * (BOLD_CHAR - CHAR) : 0) + (level ? `${fmtInt(level.k)} of ${fmtInt(level.n)}`.length * (MONO_CHAR - CHAR) : 0)
+    return 27 + heightOf(a.title, 616, 20, 1.35, true) + 5 + heightOf(adviceDetail(a, month), 616 - wider * 13, 13, 1.45)
+  },
   /** A dated move's dark card, in the right column (406 inside it). */
   moveCard: (m: { title: string; line: string; sentence: string; verdict: boolean; axis: string | null }): number =>
     36 + 15 + 9 + heightOf(m.title, 406, 21, 1.25, 'bold') + 9 + heightOf(m.line, 406, 13, 1.45) + 9 + 4 + 72 + 9 + heightOf(m.sentence, 406, 15, 1.5)
@@ -934,7 +977,7 @@ export function planSection(s: BriefSection, companion: BriefSection | null, d: 
       const m = s.moves
       if (!m) return [page(s)]
       const col = BODY_HEIGHT - titleH(sub) - 16 - appFootH(s)
-      const rows = fitItems(m.waiting, (a) => H.advice(a.title, adviceDetail(a, m.month)), col - 24, max)
+      const rows = fitItems(m.waiting, (a) => H.advice(a, m.month), col - 24, max)
       const move = m.moves[0] ?? null
       const card = (axis: string | null) => (move ? H.moveCard({ title: move.title, line: moveLine(move), sentence: move.sentence, verdict: move.verdict != null, axis }) + 16 : 0)
       const keepAxis = !move?.axis || card(move.axis) + H.record(recordLine(m)) <= col
@@ -945,10 +988,13 @@ export function planSection(s: BriefSection, companion: BriefSection | null, d: 
       // standouts while they fit the panel, the page's four at most.
       const p = s.products
       if (!p) return [page(s)]
-      const top = BODY_HEIGHT - titleH(sub) - 16 - appFootH(s)
+      // Its foot is code's, said from its base as it draws (`productsFoot`),
+      // a saved brief's too (the re-check, 11 Nov).
+      const said = { ...s, foot: productsFoot(p) }
+      const top = BODY_HEIGHT - titleH(sub) - 16 - appFootH(said)
       const rows = fitItems(p.categories, H.category, top - 40, max)
       const standouts = fitItems(p.standouts, (x) => H.standout(x.name, x.text), top - 22 - 15 - 8, 4)
-      return [page({ ...s, products: { ...p, categories: rows, standouts } })]
+      return [page({ ...said, products: { ...p, categories: rows, standouts } })]
     }
     case 'marketing.named': {
       // The brands while they fit over the notes, up to seven, your row kept.
@@ -1036,11 +1082,13 @@ const FINDING_LEFT = 658
 const FINDING_RIGHT = 454
 
 /** The height of "What each brand is heard for" under a finding. Pure. */
-export const heardForH = (f: Pick<BriefFinding, 'heardFor'>): number => {
+export const heardForH = (f: Pick<BriefFinding, 'heardFor'>, base: string | null = null): number => {
   const chips = f.heardFor ?? []
   if (chips.length === 0) return 0
   const w = (W - 12 * (chips.length - 1)) / chips.length - 32
-  return 16 + 4 + 14 + 8 + 24 + 15 + 3 + Math.max(...chips.map((c) => heightOf(c.phrase, w, 16, 1.3)))
+  // The base line under the chips: 13px, 6px under them.
+  const baseH = base ? 6 + heightOf(base, W, 13, 1.45) : 0
+  return 16 + 4 + 14 + 8 + 24 + 15 + 3 + Math.max(...chips.map((c) => heightOf(c.phrase, w, 16, 1.3))) + baseH
 }
 
 /**
@@ -1050,9 +1098,9 @@ export const heardForH = (f: Pick<BriefFinding, 'heardFor'>): number => {
  * where the words are long, and a voice or a practice line that fits nowhere
  * does not print, rather than run off the sheet or onto a second page. Pure.
  */
-export function findingPlan(f: BriefFinding): FindingPlan {
+export function findingPlan(f: BriefFinding, d: Partial<Pick<StoredBriefData, 'fromApp'>> = {}): FindingPlan {
   const quotes = (f.quotes as (BriefQuote & { english?: string | null })[]).filter((q) => q && quoteWords(q))
-  const body = BODY_HEIGHT - heardForH(f)
+  const body = BODY_HEIGHT - heardForH(f, heardForBase(f, d))
   const headline = f.headline.length > 70 ? 28 : 31
   const headH = heightOf(f.headline, FINDING_LEFT, headline, 1.2, 'bold') + 14
   // The heard line, its base line (13px, 3px apart) and the subject line.
@@ -1282,7 +1330,7 @@ export function planDeck(d: StoredBriefData): { pages: DeckPage[]; left: LeftOut
   else left.push({ key: 'in_short', title: 'In short', why: 'missing: the summary' })
   const findings = () => d.findings.forEach((f, index) => {
     const eyebrow = d.findings.length === 1 ? 'The finding' : `Finding ${index + 1} of ${d.findings.length}`
-    pages.push(linked({ eyebrow, toc: f.short || f.headline, body: { kind: 'finding', finding: f, index, of: d.findings.length, plan: findingPlan(f) } }, pageHref('finding', d.month)))
+    pages.push(linked({ eyebrow, toc: f.short || f.headline, body: { kind: 'finding', finding: f, index, of: d.findings.length, plan: findingPlan(f, d) } }, pageHref('finding', d.month)))
   })
   const appKeys = new Set(APP_SECTION_KEYS)
   const ordered = v2

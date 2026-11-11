@@ -69,7 +69,10 @@
 // NO database: the set is copied, each brief drawn again without them, its
 // evidence ids and pages as now drawn, the struck refs recorded in set.json,
 // and the checks --from makes run on it. Either way the folder is one
-// --write --from stores as it is.
+// --write --from stores as it is. With --redraw the file may also strike a
+// writer's sentence, whole: { "role": "marketing", "sentence": "…", "why":
+// "…" }, its words in one place of that brief alone (the re-check, 11 Nov),
+// recorded in set.json's struckSentences.
 //
 // --write --from <dir> stores a dry build's saved briefs AS THEY ARE, with no
 // model call: the same snapshots and ledger rows --write stores, under the
@@ -110,7 +113,7 @@ import { briefMarkdown } from '../lib/reports/briefs/markdown'
 import { ROLE_SECTIONS, printsSection, sectionTitle } from '../lib/reports/briefs/sections'
 import { canvasOf } from '../lib/reports/briefs/canvas'
 import { BRIEF_AFTER_RESEARCH_USD, BRIEF_SET_BUDGET_USD } from '../lib/reports/briefs/step'
-import { SAVED_SET_FILE, checkSavedSet, savedFileSchema, savedSetOf, savedSetSchema, withoutQuotes, type QuoteExclusion, type SavedFile, type SavedSet } from '../lib/reports/briefs/saved'
+import { SAVED_SET_FILE, checkSavedSet, savedFileSchema, savedSetOf, savedSetSchema, withoutQuotes, withoutSentences, type QuoteExclusion, type SavedFile, type SavedSet, type SentenceStrike } from '../lib/reports/briefs/saved'
 import { briefPrints, monthBriefsWritten, monthlyBriefsApplied, storeBriefSet } from '../lib/reports/briefs/store'
 import { BRIEF_NAME, BRIEF_ROLES, storedBrief, type BriefRole, type MonthlyBriefData } from '../lib/reports/briefs/types'
 import { appSectionsFor, subjectsSection } from '../lib/reports/briefs/app'
@@ -235,6 +238,7 @@ async function main() {
   if (!research.window) throw new Error('the research has no window')
   console.log(`Research: ${research.answers.filter((a) => a.grounded.length > 0).length} of ${questions.length} questions answered · $${research.costUsd.toFixed(3)} · ${Math.round((Date.now() - started) / 1000)} s`)
   const grounded = await groundBriefResearch(db, inputs, research.answers, questions, research.window)
+  if (excluded.sentences.length) console.warn(`--exclude-quotes: ${excluded.sentences.length} entr${excluded.sentences.length === 1 ? 'y strikes a sentence' : 'ies strike sentences'}, which only a saved set has: strike ${excluded.sentences.length === 1 ? 'it' : 'them'} with --redraw.`)
   if (excluded.text.length) console.warn(`--exclude-quotes: ${excluded.text.length} entr${excluded.text.length === 1 ? 'y names' : 'ies name'} words, which a dry build cannot match before it picks; strike them with --redraw.`)
   const set = await writeBriefSet(db, inputs, questions, grounded, { log: write, researchCostUsd: research.costUsd, excluded: excluded.refs.map((x) => x.ref) })
   // A month read as of an earlier instant says the day its figures were read
@@ -310,22 +314,25 @@ async function drawPages(db: SupabaseClient, a: { clientId: string; month: strin
   console.log(`Nothing was written to any database and no model was called. The pages are in ${dir}.`)
 }
 
-/** The voices to strike, read from --exclude-quotes' file: by ref, or by
- *  words (matched on a saved set's texts alone). */
-function readExclusions(file: string): { refs: QuoteExclusion[]; text: { text: string; why: string }[] } {
-  if (!file) return { refs: [], text: [] }
+/** What to strike, read from --exclude-quotes' file: voices by ref, or by
+ *  words (matched on a saved set's texts alone); and a writer's sentences,
+ *  by the brief and any of their words (--redraw alone). */
+function readExclusions(file: string): { refs: QuoteExclusion[]; text: { text: string; why: string }[]; sentences: SentenceStrike[] } {
+  if (!file) return { refs: [], text: [], sentences: [] }
   const raw = JSON.parse(readFileSync(resolve(process.cwd(), file), 'utf8')) as unknown
   if (!Array.isArray(raw)) throw new Error(`${file}: not a JSON list`)
   const refs: QuoteExclusion[] = []
   const text: { text: string; why: string }[] = []
-  for (const x of raw as { ref?: unknown; text?: unknown; why?: unknown }[]) {
+  const sentences: SentenceStrike[] = []
+  for (const x of raw as { ref?: unknown; text?: unknown; role?: unknown; sentence?: unknown; why?: unknown }[]) {
     const why = typeof x.why === 'string' && x.why.trim() ? x.why.trim() : ''
     if (!why) throw new Error(`${file}: every entry says why it is struck`)
     if (typeof x.ref === 'string' && /^[a-z]:.+/.test(x.ref)) refs.push({ ref: x.ref, why })
     else if (typeof x.text === 'string' && x.text.trim().length >= 8) text.push({ text: x.text.trim(), why })
-    else throw new Error(`${file}: an entry names neither a ref nor eight characters of words`)
+    else if (typeof x.sentence === 'string' && x.sentence.trim().length >= 8 && BRIEF_ROLES.includes(x.role as BriefRole)) sentences.push({ role: x.role as BriefRole, words: x.sentence.trim(), why })
+    else throw new Error(`${file}: an entry names neither a ref, eight characters of a voice's words, nor a brief's role and eight characters of its sentence`)
   }
-  return { refs, text }
+  return { refs, text, sentences }
 }
 
 /**
@@ -346,12 +353,14 @@ async function redraw(a: { clientId: string; month: string; runId: string; from:
     if (hits.length !== 1) throw new Error(`--exclude-quotes: "${t.text.slice(0, 40)}…" matches ${hits.length} voices in the saved set, not one`)
     return { ref: hits[0], why: t.why }
   })
-  const struck = withoutQuotes({ manifest, files }, [...a.excluded.refs, ...byText])
+  const struck = withoutSentences(withoutQuotes({ manifest, files }, [...a.excluded.refs, ...byText]), a.excluded.sentences)
   mkdirSync(a.to, { recursive: true })
   for (const r of BRIEF_ROLES) writeFileSync(join(a.to, struck.manifest.roles[r].file), `${JSON.stringify(struck.files[r], null, 2)}\n`)
   writeFileSync(join(a.to, SAVED_SET_FILE), `${JSON.stringify(struck.manifest, null, 2)}\n`)
   const printed = new Set(BRIEF_ROLES.flatMap((r) => collectQuoteRefs(files[r].data)))
   for (const x of [...a.excluded.refs, ...byText]) console.log(`Struck ${x.ref}${printed.has(x.ref) ? '' : ' (the set did not print it)'}: ${x.why}`)
+  const n = a.excluded.sentences.length
+  for (const x of n ? (struck.manifest.struckSentences ?? []).slice(-n) : []) console.log(`Struck from the ${BRIEF_NAME[x.role]}: "${x.sentence}" (${x.why})`)
   await drawSaved(struck, { clientId: a.clientId, runId: a.runId, month: a.month, company: manifest.company }, a.to)
   console.log('No model was called and no database was read or written.')
 }

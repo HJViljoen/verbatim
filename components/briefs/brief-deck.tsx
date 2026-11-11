@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { fmtInt } from '@/lib/format'
 import {
-  SHEET, contentsOf, continuedTitle, deckPages, findingBaseLine, heardIn, ideasArgued, monthYear, pairColumn, quoteCite, quoteWords, tagLine, writtenOn,
+  SHEET, contentsOf, continuedTitle, deckPages, findingBaseLine, heardForBase, heardIn, ideasArgued, monthYear, pairColumn, quoteCite, quoteWords, tagLine, writtenOn,
   type DeckPage, type FindingPlan,
 } from '@/lib/reports/briefs/deck'
 import { BRIEF_LENS, BRIEF_NAME, type BriefFinding, type BriefItem, type BriefRole, type BriefSection, type SayHearStatus, type StoredBriefData } from '@/lib/reports/briefs/types'
@@ -174,6 +174,7 @@ function Finding({ ctx, f, plan }: { ctx: Ctx; f: BriefFinding; plan: FindingPla
   const heard = heardIn(f)
   const base = findingBaseLine(f, data.month)
   const chips = f.heardFor ?? []
+  const chipsBase = heardForBase(f, data)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%' }}>
       <div style={{ display: 'flex', gap: 48, flexGrow: 1, minHeight: 0 }}>
@@ -217,6 +218,7 @@ function Finding({ ctx, f, plan }: { ctx: Ctx; f: BriefFinding; plan: FindingPla
               </div>
             ))}
           </div>
+          {chipsBase ? <div data-copy="figure" style={{ fontSize: 13, lineHeight: 1.45, color: P.muted, marginTop: -2 }}>{chipsBase}</div> : null}
         </div>
       ) : null}
     </div>

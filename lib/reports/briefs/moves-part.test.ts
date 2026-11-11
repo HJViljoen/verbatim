@@ -61,13 +61,13 @@ describe('the leadership brief\'s "would move" is read on the run the brief is b
     expect(db.calls.find((c) => c.table === 'themes' && c.columns === 'supporting_insight_ids, registry_id')?.filters).toContain(`run_id=${CLOSING}`)
   })
 
-  it('without the run (the page\'s rule), the update before is read: the "0 of" the brief printed', async () => {
+  it('without the run (the page\'s rule), the update before is read: its 0 is no reading in the month, so no count (the re-check, 11 Nov)', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-11-05T06:30:00.000Z'))
     const db = fakeDb(tables() as never)
     const part = await loadMovesPart(db.client as never, { clientId: CLIENT, month: '2026-10-01' })
     vi.useRealTimers()
-    expect(part?.pool.map((p) => p.aim)).toEqual([{ label: 'Price requests before purchase', k: 0, n: 300, href: null }])
+    expect(part?.pool.map((p) => p.aim)).toEqual([{ label: 'Price requests before purchase', k: null, n: null, href: null }])
   })
 })
 

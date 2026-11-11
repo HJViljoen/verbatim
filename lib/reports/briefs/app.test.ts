@@ -12,12 +12,12 @@ import type { GroupProducts } from '../../pages/v2/voices'
 import type { Verdict } from '../../reading/verdicts'
 import { fact } from '../../written/test-fixtures'
 import {
-  appSectionsFor, briefVerdict, buyersSection, groupsSection, hooksOf, hooksSection, ideasOf, ideasSection, moveOf, moveSentence, movesOf, movesSection, namedByNaming, namedNotes, namedOf, namedSection,
+  appSectionsFor, briefVerdict, buyersSection, groupsSection, hasOwnTitle, hooksOf, hooksSection, ideasOf, ideasSection, moveOf, moveSentence, movesOf, movesSection, namedByNaming, namedNotes, namedOf, namedSection,
   MATCHED_BASIS, peopleOf, productsOf, productsSection, RESPONSE_BASIS, standoutOf, subjectsSection, subjectWords, type MatchedHooks,
 } from './app'
 import { OSSUR_APP, OSSUR_MOVES, OSSUR_PEOPLE, OSSUR_SUBJECT_FACTS, OSSUR_SUBJECT_READS, SEALAND_APP, SEALAND_NAMED } from './app-fixture'
 import {
-  accountsLine, adviceDetail, alsoInMarket, appLines, buyerNamesNote, buyersSub, daysLong, ideaReadLine, inTheirVideos, moveLine, multipleText, ownTouchWords, pageHref, recordLine, slotWords, voicesMonthHref, withMonth,
+  accountsLine, adviceDetail, aimLevel, alsoInMarket, appLines, buyerNamesNote, buyersSub, daysLong, ideaReadLine, inTheirVideos, moveLine, multipleText, ownTouchWords, pageHref, productsFoot, recordLine, slotWords, voicesMonthHref, withMonth,
 } from './app-words'
 import type { BriefNaming } from './naming'
 import type { BriefNamed } from './types'
@@ -75,7 +75,7 @@ describe('Voices: the groups (Leadership\'s Who is in your market, Sales\' Who i
     const lead = groupsSection(OSSUR_PEOPLE)!
     expect(lead.key).toBe('leadership.groups')
     expect(lead.sub).toBe('Five groups comment in your market, as Voices describes them, each counted by the videos it commented on, not by purchases. A video can hold more than one group, so the counts overlap.')
-    expect(lead.foot).toBe('“First-time buyer” is Voices’ name for a group of people asking about or considering a purchase; its count is of videos, not purchases. Each update describes the groups afresh, so no count is set against September.')
+    expect(lead.foot).toBe('“First-time buyer” is Voices’ name for a group of people asking questions about a purchase, some of them considering one; its count is of videos, not purchases. Each update describes the groups afresh, so no count is set against September.')
     expect(lead.link).toEqual({ href: '/dashboard/voices?month=2026-10', text: 'Open the groups on Voices →' })
     expect(appLines(lead).join(' ')).not.toMatch(/%/)
     const sales = buyersSection(OSSUR_PEOPLE)!
@@ -323,7 +323,10 @@ describe('Your moves: the advice waiting, the moves dated, the record', () => {
     expect(folded.waitingCount).toBe(3)
     expect(flat.waiting.every((a) => !a.title.startsWith('Create a guided'))).toBe(true)
     expect(recordLine(flat)).toBe('65 pieces of advice since 13 June: 1 decided, 4 waiting.')
-    expect(adviceDetail(flat.waiting[0], OCT)).toBe('First raised 12 Oct · would move Where can I get one, 41 of 902 category videos in October')
+    expect(adviceDetail(flat.waiting[0], OCT)).toBe('Raised 12 Oct · would move Where can I get one, 41 of 902 category videos read in October')
+    // A level of 0 is no reading of it in the month: no count (the re-check, 11 Nov).
+    expect(adviceDetail({ ...flat.waiting[0], aim: { ...flat.waiting[0].aim!, k: 0 } }, OCT)).toBe('Raised 12 Oct · would move Where can I get one')
+    expect(adviceDetail({ ...flat.waiting[0], aim: { ...flat.waiting[0].aim!, k: null, n: null } }, OCT)).toBe('Raised 12 Oct · would move Where can I get one')
   })
 
   it('reads the record and the current advice from the ledger, the move that compares first', () => {
@@ -416,21 +419,48 @@ describe('the pages each role reads from the app (`appSectionsFor`, the compose 
   })
 })
 
-describe('a piece of advice is named by `adviceTitle`, as everywhere', () => {
-  it('a blank stored title takes its body\'s first clause', () => {
+describe('a piece of advice prints by a title of its own (the re-check, 11 Nov)', () => {
+  const why = 'Owners judge a tent by whether it stays up through wind, rain, cold nights and a whole week of moving camp without a repair.'
+  const row = (lineageId: string, title: string) => ({ lineageId, title, why, status: 'new', inLatest: true, firstMade: '2026-10-12' })
+  it('a blank stored title, or one the pipeline cut from the body, is not printed: an observation, cut off; the record still counts it', () => {
     const m = movesOf({
       month: OCT,
-      rows: [{ lineageId: 'a', title: '', why: 'Daily wear issues such as socket pain, sweat and skin irritation need one clear answer page, written with owners.', status: 'new', inLatest: true, firstMade: '2026-10-12' }],
+      rows: [row('a', ''), row('b', adviceTitle('', why)), row('c', 'Publish one storm-test page')],
       aims: new Map(), cards: [], adviceHref: (id) => `/dashboard/moves/advice/${id}`,
     })
-    expect(m.pool[0].title).toBe(adviceTitle('', m.pool[0].why))
-    expect(m.pool[0].title).not.toBe('')
+    expect(adviceTitle('', why).endsWith('…')).toBe(true)
+    expect(m.pool.map((p) => p.title)).toEqual(['Publish one storm-test page'])
+    expect(m.record.total).toBe(3)
+  })
+  it('a title of its own is one stored and not its body\'s first clause', () => {
+    expect(hasOwnTitle('Publish one storm-test page', why)).toBe(true)
+    expect(hasOwnTitle('  ', why)).toBe(false)
+    expect(hasOwnTitle(adviceTitle('', why), why)).toBe(false)
+  })
+  it('a level of 0 (read in another month, not this one) carries no count', () => {
+    const m = movesOf({
+      month: OCT,
+      rows: [row('c', 'Publish one storm-test page'), row('d', 'Open a repair desk')],
+      aims: new Map([['c', { label: 'Storms', month: OCT, level: { k: 0, n: 744 } }], ['d', { label: 'Repairs', month: OCT, level: { k: 33, n: 744 } }]]),
+      cards: [], adviceHref: (id) => `/dashboard/moves/advice/${id}`,
+    })
+    expect(m.pool.map((p) => p.aim)).toEqual([{ label: 'Storms', k: null, n: null, href: null }, { label: 'Repairs', k: 33, n: 744, href: null }])
+    expect(aimLevel({ k: 0, n: 744 })).toBeNull()
+    expect(aimLevel({ k: 5, n: 0 })).toBeNull()
+    expect(aimLevel({ k: 5, n: 744 })).toEqual({ k: 5, n: 744 })
+  })
+})
+
+describe('Your products\' foot says the base its line names (the re-check, 11 Nov)', () => {
+  it('the videos read, your own posts included', () => {
+    expect(productsFoot({ month: OCT, market: 786 })).toBe('Counted on the 786 videos we read in October, your own posts included: on what their comments say, never on what your own posts say.')
+    expect(productsFoot({ month: OCT, market: null })).toBe('Counted on the videos we read in October, your own posts included: on what their comments say, never on what your own posts say.')
   })
 })
 
 describe('words for what a count is (11 Nov)', () => {
   it('a group named for buying is said to count videos, not purchases', () => {
-    expect(buyerNamesNote([{ name: 'Caretaker' }, { name: 'First-time buyer' }])).toBe('“First-time buyer” is Voices’ name for a group of people asking about or considering a purchase; its count is of videos, not purchases.')
+    expect(buyerNamesNote([{ name: 'Caretaker' }, { name: 'First-time buyer' }])).toBe('“First-time buyer” is Voices’ name for a group of people asking questions about a purchase, some of them considering one; its count is of videos, not purchases.')
     expect(buyerNamesNote([{ name: 'Caretaker' }, { name: 'Long-term user' }])).toBeNull()
   })
   it('the accounts we follow, by name', () => {

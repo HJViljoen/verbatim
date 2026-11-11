@@ -157,7 +157,7 @@ const finding = z.strictObject({
   ideaId: z.string(), headline: z.string(), basedOn: z.array(z.string()), saw: z.array(z.string()), means: z.string(), practice: z.array(z.string()),
   months: z.array(z.strictObject({ month: z.string(), videos: z.number() })), videos: z.number(), who: z.array(aboutPart), quotes: z.array(quote),
   short: z.string().optional(), subjectLine: z.string().optional(),
-  heardFor: z.array(z.strictObject({ name: z.string(), you: z.boolean(), phrase: z.string() })).optional(),
+  heardFor: z.array(z.strictObject({ name: z.string(), you: z.boolean(), phrase: z.string(), videos: z.number().int().nonnegative().optional() })).optional(),
   base: z.strictObject({ k: z.number(), n: z.number() }).optional(),
 })
 
@@ -215,8 +215,86 @@ export const savedSetSchema = z.strictObject({
   /** The voices an operator struck out, with why (`withoutQuotes`; the
    *  dry build's `--exclude-quotes`): the record, never read to draw. */
   excludedQuotes: z.array(z.strictObject({ ref: z.string(), why: z.string() })).optional(),
+  /** The writer's sentences an operator struck out, each whole, with why
+   *  (`withoutSentences`; `--redraw`'s `--exclude-quotes` file): the record,
+   *  never read to draw. */
+  struckSentences: z.array(z.strictObject({ role, sentence: z.string(), why: z.string() })).optional(),
 })
 export type SavedSet = z.infer<typeof savedSetSchema>
+
+/** A printed sentence an operator strikes out of one brief: any of its
+ *  words, matched in exactly one place, and why. */
+export interface SentenceStrike { role: BriefRole; words: string; why: string }
+
+/** Where a sentence ends (Your moves' break, advice-words.ts). */
+const SENTENCE_BREAK = /(?<=[.!?])\s+(?=[A-Z“"‘'])/
+
+/**
+ * A brief with one printed sentence struck, whole (pure): the one string of
+ * its data that holds `words`, without the sentence that holds them; a list's
+ * entry left empty goes. Throws where the words are in no string or in more
+ * than one, in more than one sentence of it, or where the strike would leave
+ * a field that is not a list's entry empty (the page could not stand).
+ */
+export function briefWithoutSentence(d: MonthlyBriefData, words: string): { data: MonthlyBriefData; sentence: string } {
+  const hits: string[] = []
+  const find = (node: unknown, at: string): void => {
+    if (typeof node === 'string') { if (node.includes(words)) hits.push(at); return }
+    if (Array.isArray(node)) node.forEach((x, k) => find(x, `${at}[${k}]`))
+    else if (node && typeof node === 'object') for (const [k, v] of Object.entries(node)) find(v, `${at}.${k}`)
+  }
+  find(d, 'data')
+  if (hits.length !== 1) throw new Error(`"${words.slice(0, 40)}…" is in ${hits.length} of the brief's strings, not one${hits.length ? `: ${hits.join(', ')}` : ''}`)
+  let sentence = ''
+  const cut = (text: string): string => {
+    const parts = text.split(SENTENCE_BREAK)
+    const at = parts.filter((s) => s.includes(words))
+    if (at.length !== 1) throw new Error(`"${words.slice(0, 40)}…" is in ${at.length} sentences of ${hits[0]}, not one`)
+    sentence = at[0]
+    return parts.filter((s) => s !== sentence).join(' ').trim()
+  }
+  const walk = (node: unknown, inList: boolean): unknown => {
+    if (typeof node === 'string') {
+      if (!node.includes(words)) return node
+      const left = cut(node)
+      if (!left && !inList) throw new Error(`striking "${words.slice(0, 40)}…" leaves ${hits[0]} empty`)
+      return left
+    }
+    if (Array.isArray(node)) return node.map((x) => walk(x, true)).filter((x, k) => !(x === '' && typeof node[k] === 'string' && node[k].includes(words)))
+    if (node && typeof node === 'object') return Object.fromEntries(Object.entries(node).map(([k, v]) => [k, walk(v, false)]))
+    return node
+  }
+  return { data: walk(d, false) as MonthlyBriefData, sentence }
+}
+
+/**
+ * A saved set with writer's sentences struck out, with no model call (pure):
+ * each named brief without them (`briefWithoutSentence`), its evidence ids
+ * and pages as the deck now draws them, and the struck sentences recorded in
+ * the set (added to any recorded before). The In short check's record is
+ * kept as it is: `--from` checks it still holds on the struck brief, and
+ * refuses the set where it does not.
+ */
+export function withoutSentences(saved: { manifest: SavedSet; files: Record<BriefRole, SavedFile> }, strikes: readonly SentenceStrike[]): { manifest: SavedSet; files: Record<BriefRole, SavedFile> } {
+  const files = { ...saved.files }
+  const roles = { ...saved.manifest.roles }
+  const recorded = [...(saved.manifest.struckSentences ?? [])]
+  for (const x of strikes) {
+    const f = files[x.role]
+    const { data, sentence } = briefWithoutSentence(f.data, x.words)
+    files[x.role] = { ...f, data }
+    recorded.push({ role: x.role, sentence, why: x.why })
+  }
+  for (const r of new Set(strikes.map((x) => x.role))) {
+    const prints = saved.manifest.roles[r].status === 'ready' && briefPrints(files[r].data)
+    roles[r] = {
+      ...saved.manifest.roles[r],
+      evidenceIds: prints ? briefSnapshotRow(files[r].data).evidenceIds : [],
+      pages: prints ? deckHeaders(hydrateBrief(files[r].data, wordsOfFiles([files[r]]))) : [],
+    }
+  }
+  return { manifest: { ...saved.manifest, roles, ...(recorded.length ? { struckSentences: recorded } : {}) }, files }
+}
 
 /** A voice an operator strikes out of a set, and why. */
 export interface QuoteExclusion { ref: string; why: string }

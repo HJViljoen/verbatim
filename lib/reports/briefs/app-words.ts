@@ -107,11 +107,21 @@ export const followedAccounts = (company: string, n: number): string =>
 
 /** A group Voices names for buying ("First-time buyer"), said for what it
  *  counts (the fresh check, 11 Nov: its people are mostly asking about or
- *  considering a purchase). Null where no group's name says so. Pure. */
+ *  considering a purchase; the re-check, 11 Nov: 1 November's First-time
+ *  buyer rests on 289 questions to 167 comments weighing a purchase, so the
+ *  questions are said first). Null where no group's name says so. Pure. */
 export function buyerNamesNote(groups: readonly Pick<BriefGroup, 'name'>[]): string | null {
   const named = groups.map((g) => g.name).filter((n) => /\bbuy(?:er|ers|ing)?\b|\bcustomers?\b|\bshoppers?\b|\bpurchas/i.test(n))
   if (named.length === 0) return null
-  return `${andList(named.map((n) => `“${n}”`))} ${named.length === 1 ? 'is Voices’ name for a group' : 'are Voices’ names for groups'} of people asking about or considering a purchase; ${named.length === 1 ? 'its count is' : 'their counts are'} of videos, not purchases.`
+  return `${andList(named.map((n) => `“${n}”`))} ${named.length === 1 ? 'is Voices’ name for a group' : 'are Voices’ names for groups'} of people asking questions about a purchase, some of them considering one; ${named.length === 1 ? 'its count is' : 'their counts are'} of videos, not purchases.`
+}
+
+/** Your products' foot: what its counts stand on, the base its line under
+ *  the title names (the re-check, 11 Nov: "every video in your market" under
+ *  a base of the videos read, your own posts in it). Pure. */
+export function productsFoot(p: Pick<BriefProducts, 'month' | 'market'>): string {
+  const on = p.market ? `the ${fmtInt(p.market)} videos we read in ${longMonth(p.month)}` : `the videos we read in ${longMonth(p.month)}`
+  return `Counted on ${on}, your own posts included: on what their comments say, never on what your own posts say.`
 }
 
 export function buyersSub(month: string, groups: number, shown: number): string {
@@ -137,12 +147,33 @@ export function recordLine(m: Pick<BriefMoves, 'record' | 'waitingCount'>): stri
   return `${fmtInt(r.total)} ${r.total === 1 ? 'piece' : 'pieces'} of advice${since}: ${fmtInt(r.decided)} decided, ${fmtInt(m.waitingCount)} waiting.`
 }
 
-/** A piece of advice's line under its title: "First raised 12 Oct · would
- *  move Where can I get one, 41 of 902 videos in October". Pure. */
+/** What a piece of advice would move, counted: null where the month holds
+ *  no reading of its conversation. A month's reading row is never written at
+ *  zero, so a 0 is Your moves' "read in another month, not in this one"
+ *  (`readMoveLevels`), which a brief never prints as a count (the re-check,
+ *  11 Nov: "0 of 744" for a conversation the month's clustering did not
+ *  read). Pure. */
+export function aimLevel(aim: { k: number | null; n: number | null } | null | undefined): { k: number; n: number } | null {
+  if (!aim || aim.k == null || aim.n == null || aim.k <= 0 || aim.n <= 0) return null
+  return { k: aim.k, n: aim.n }
+}
+
+/** What an advice level counts (the re-check, 11 Nov: "744 category videos
+ *  in October" are the category's videos whose comments were read that
+ *  month, "the videos we read" as the brief says it elsewhere; Content's
+ *  "2,090 category videos posted in October" are its uploads). One word
+ *  more, not three: the line stays one line under Your moves' four pieces. */
+export const AIM_BASE = 'category videos read'
+
+/** A piece of advice's line under its title: "Raised 12 Oct · would move
+ *  Where can I get one, 41 of 902 category videos read in October" (not
+ *  "First raised": the line says what its count is of in the room the word
+ *  took, one line under Your moves' four pieces, 11 Nov). Pure. */
 export function adviceDetail(a: Pick<BriefAdvice, 'firstMade' | 'aim'>, month: string): string {
-  const raised = `First raised ${shortDate(`${a.firstMade.slice(0, 10)}T00:00:00.000Z`)}`
+  const raised = `Raised ${shortDate(`${a.firstMade.slice(0, 10)}T00:00:00.000Z`)}`
   if (!a.aim) return raised
-  const level = a.aim.k != null && a.aim.n != null ? `, ${fmtInt(a.aim.k)} of ${fmtInt(a.aim.n)} category videos in ${longMonth(month)}` : ''
+  const at = aimLevel(a.aim)
+  const level = at ? `, ${fmtInt(at.k)} of ${fmtInt(at.n)} ${AIM_BASE} in ${longMonth(month)}` : ''
   return `${raised} · would move ${a.aim.label}${level}`
 }
 
