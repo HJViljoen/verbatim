@@ -58,6 +58,19 @@
 // supabase/migrations/20261107093000_monthly_briefs.sql first). A --write
 // calls the models again, so its words are not a dry build's.
 //
+// --exclude-quotes <file> strikes voices out (the fresh check, 11 Nov: a
+// re-check flags a quote that does not carry its claim, and dropping it must
+// not cost another paid run). The file is a JSON list of { "ref": "e:…",
+// "why": "…" } (a saved brief's `texts` names each ref's words), or
+// { "text": "…", "why": "…" } where the words occur in one voice alone. On a
+// dry build the voices, and every other citation of the same comments, are
+// never picked (the pool takes the next). With --redraw <saved dir>
+// --designed <new dir> they are struck from a saved set with NO model call and
+// NO database: the set is copied, each brief drawn again without them, its
+// evidence ids and pages as now drawn, the struck refs recorded in set.json,
+// and the checks --from makes run on it. Either way the folder is one
+// --write --from stores as it is.
+//
 // --write --from <dir> stores a dry build's saved briefs AS THEY ARE, with no
 // model call: the same snapshots and ledger rows --write stores, under the
 // same one-per-client-month-role rule and --replace. Before it stores
@@ -97,7 +110,7 @@ import { briefMarkdown } from '../lib/reports/briefs/markdown'
 import { ROLE_SECTIONS, printsSection, sectionTitle } from '../lib/reports/briefs/sections'
 import { canvasOf } from '../lib/reports/briefs/canvas'
 import { BRIEF_AFTER_RESEARCH_USD, BRIEF_SET_BUDGET_USD } from '../lib/reports/briefs/step'
-import { SAVED_SET_FILE, checkSavedSet, savedSetOf, type SavedFile } from '../lib/reports/briefs/saved'
+import { SAVED_SET_FILE, checkSavedSet, savedFileSchema, savedSetOf, savedSetSchema, withoutQuotes, type QuoteExclusion, type SavedFile, type SavedSet } from '../lib/reports/briefs/saved'
 import { briefPrints, monthBriefsWritten, monthlyBriefsApplied, storeBriefSet } from '../lib/reports/briefs/store'
 import { BRIEF_NAME, BRIEF_ROLES, storedBrief, type BriefRole, type MonthlyBriefData } from '../lib/reports/briefs/types'
 import { appSectionsFor, subjectsSection } from '../lib/reports/briefs/app'
@@ -112,7 +125,7 @@ const flag = (name: string, fallback = ''): string => {
 }
 const has = (name: string): boolean => args.includes(`--${name}`)
 for (const a of args) {
-  if (a.startsWith('--') && !['client', 'month', 'run', 'as-of', 'out', 'designed', 'plan', 'pages', 'write', 'replace', 'from'].includes(a.slice(2))) {
+  if (a.startsWith('--') && !['client', 'month', 'run', 'as-of', 'out', 'designed', 'plan', 'pages', 'write', 'replace', 'from', 'exclude-quotes', 'redraw'].includes(a.slice(2))) {
     console.error(`unknown flag: ${a}`)
     process.exit(2)
   }
@@ -150,7 +163,7 @@ async function main() {
   const runId = flag('run')
   const fromDir = flag('from')
   if (!/^[0-9a-f-]{36}$/.test(clientId) || !/^\d{4}-\d{2}$/.test(monthArg) || !/^[0-9a-f-]{36}$/.test(runId) || (has('from') && !fromDir)) {
-    console.error('Usage: scripts/monthly-briefs.ts --client <uuid> --month YYYY-MM --run <uuid> [--as-of <instant>] [--out <dir>] [--designed <dir>] [--plan | --pages] [--write [--replace] [--from <dir>]]')
+    console.error('Usage: scripts/monthly-briefs.ts --client <uuid> --month YYYY-MM --run <uuid> [--as-of <instant>] [--exclude-quotes <file>] [--out <dir>] [--designed <dir>] [--plan | --pages | --redraw <saved dir> --designed <new dir>] [--write [--replace] [--from <dir>]]')
     process.exit(2)
   }
   if (fromDir && (!has('write') || has('plan'))) {
@@ -162,6 +175,12 @@ async function main() {
   if (asOfArg && !Number.isFinite(Date.parse(asOfArg))) {
     console.error(`--as-of ${asOfArg} is not an instant (2026-11-01T05:32:26Z).`)
     process.exit(2)
+  }
+  const excluded = readExclusions(flag('exclude-quotes'))
+  if (has('redraw')) {
+    // No model and no database: the saved set, voices struck, drawn again.
+    await redraw({ clientId, month, runId, from: resolve(process.cwd(), flag('redraw')), to: resolve(process.cwd(), flag('designed')), excluded })
+    return
   }
   const write = has('write')
   const db = admin()
@@ -216,7 +235,11 @@ async function main() {
   if (!research.window) throw new Error('the research has no window')
   console.log(`Research: ${research.answers.filter((a) => a.grounded.length > 0).length} of ${questions.length} questions answered · $${research.costUsd.toFixed(3)} · ${Math.round((Date.now() - started) / 1000)} s`)
   const grounded = await groundBriefResearch(db, inputs, research.answers, questions, research.window)
-  const set = await writeBriefSet(db, inputs, questions, grounded, { log: write, researchCostUsd: research.costUsd })
+  if (excluded.text.length) console.warn(`--exclude-quotes: ${excluded.text.length} entr${excluded.text.length === 1 ? 'y names' : 'ies name'} words, which a dry build cannot match before it picks; strike them with --redraw.`)
+  const set = await writeBriefSet(db, inputs, questions, grounded, { log: write, researchCostUsd: research.costUsd, excluded: excluded.refs.map((x) => x.ref) })
+  // A month read as of an earlier instant says the day its figures were read
+  // (the month's tables are read as they stand today).
+  if (asOfArg) for (const r of BRIEF_ROLES) set.briefs[r].data.readOn = new Date().toISOString().slice(0, 10)
   console.log(`Ideas: ${set.allocation.ideas.map((i) => `${i.id} → ${i.home} (${i.videos} videos): ${i.headline}`).join(' | ') || 'none'}`)
   if (set.allocation.held.length) console.log(`Held ideas: ${set.allocation.held.map((h) => `${h.headline} [${h.reason}]`).join(' | ')}`)
   console.log(`In short check: ${set.inShort.items.length} sentences read against the printed pages, ${set.inShort.dropped.length} dropped, $${set.inShort.costUsd.toFixed(4)}.`)
@@ -242,7 +265,7 @@ async function main() {
 
   // The designed briefs, drawn as the product draws them, and saved for
   // --from: always on a dry build, and on --write where --designed is given.
-  if (designedDir) await drawDesigned(set, { clientId, runId, month, company, asOf: now.toISOString(), costByRole }, designedDir)
+  if (designedDir) await drawDesigned(set, { clientId, runId, month, company, asOf: now.toISOString(), costByRole, excludedQuotes: excluded.refs }, designedDir)
 
   if (write) {
     const rows = await storeBriefSet(db, { clientId, runId, month, asOf: now.toISOString(), briefs, costUsd: costByRole })
@@ -287,10 +310,56 @@ async function drawPages(db: SupabaseClient, a: { clientId: string; month: strin
   console.log(`Nothing was written to any database and no model was called. The pages are in ${dir}.`)
 }
 
+/** The voices to strike, read from --exclude-quotes' file: by ref, or by
+ *  words (matched on a saved set's texts alone). */
+function readExclusions(file: string): { refs: QuoteExclusion[]; text: { text: string; why: string }[] } {
+  if (!file) return { refs: [], text: [] }
+  const raw = JSON.parse(readFileSync(resolve(process.cwd(), file), 'utf8')) as unknown
+  if (!Array.isArray(raw)) throw new Error(`${file}: not a JSON list`)
+  const refs: QuoteExclusion[] = []
+  const text: { text: string; why: string }[] = []
+  for (const x of raw as { ref?: unknown; text?: unknown; why?: unknown }[]) {
+    const why = typeof x.why === 'string' && x.why.trim() ? x.why.trim() : ''
+    if (!why) throw new Error(`${file}: every entry says why it is struck`)
+    if (typeof x.ref === 'string' && /^[a-z]:.+/.test(x.ref)) refs.push({ ref: x.ref, why })
+    else if (typeof x.text === 'string' && x.text.trim().length >= 8) text.push({ text: x.text.trim(), why })
+    else throw new Error(`${file}: an entry names neither a ref nor eight characters of words`)
+  }
+  return { refs, text }
+}
+
+/**
+ * --redraw: a saved set copied into a new folder with voices struck, drawn
+ * again, and put through the checks --from makes. NO model call and NO
+ * database. Words are matched on the set's own texts (the voice's words or
+ * its English), each to exactly one ref, or the redraw stops.
+ */
+async function redraw(a: { clientId: string; month: string; runId: string; from: string; to: string; excluded: ReturnType<typeof readExclusions> }): Promise<void> {
+  if (!a.to || a.to === a.from) throw new Error('--redraw needs --designed <a new folder>')
+  if (holdsBuild(a.to)) throw new Error(`${a.to} holds a build already: pass --designed <a new folder>`)
+  const read = readSaved(a.from)
+  const manifest = savedSetSchema.parse(read.manifest)
+  const files = Object.fromEntries(BRIEF_ROLES.map((r) => [r, savedFileSchema.parse(read.files[r])])) as Record<BriefRole, SavedFile>
+  const byText = a.excluded.text.map((t) => {
+    const hits = [...new Set(BRIEF_ROLES.flatMap((r) => Object.entries(files[r].texts)
+      .filter(([, w]) => w.text.includes(t.text) || (w.english ?? '').includes(t.text)).map(([ref]) => ref)))]
+    if (hits.length !== 1) throw new Error(`--exclude-quotes: "${t.text.slice(0, 40)}…" matches ${hits.length} voices in the saved set, not one`)
+    return { ref: hits[0], why: t.why }
+  })
+  const struck = withoutQuotes({ manifest, files }, [...a.excluded.refs, ...byText])
+  mkdirSync(a.to, { recursive: true })
+  for (const r of BRIEF_ROLES) writeFileSync(join(a.to, struck.manifest.roles[r].file), `${JSON.stringify(struck.files[r], null, 2)}\n`)
+  writeFileSync(join(a.to, SAVED_SET_FILE), `${JSON.stringify(struck.manifest, null, 2)}\n`)
+  const printed = new Set(BRIEF_ROLES.flatMap((r) => collectQuoteRefs(files[r].data)))
+  for (const x of [...a.excluded.refs, ...byText]) console.log(`Struck ${x.ref}${printed.has(x.ref) ? '' : ' (the set did not print it)'}: ${x.why}`)
+  await drawSaved(struck, { clientId: a.clientId, runId: a.runId, month: a.month, company: manifest.company }, a.to)
+  console.log('No model was called and no database was read or written.')
+}
+
 /** Who named each brand, as the standing prints it (naming.ts). */
 function namingLine(n: BriefNaming | null): string {
   if (!n) return 'Naming: not read (no standing, no named brands).'
-  return `Naming: of ${n.comments} comments and ${n.videos} videos no brand search found (own posts' ${n.ownComments} comments out): ${n.rows.map((r) => `${r.label} ${r.comments} comments, ${r.videos} videos`).join(' · ')}`
+  return `Naming: of ${n.comments} comments and ${n.videos} videos no brand search found (own posts out): ${n.rows.map((r) => `${r.label} ${r.comments} comments, ${r.videos} videos`).join(' · ')}`
 }
 
 /** The instant the month is read as of: --as-of, else now. */
@@ -378,20 +447,27 @@ async function storeFrom(db: SupabaseClient, a: { clientId: string; month: strin
  * read back and put through the checks --from makes, so the build says
  * whether --from will take it.
  */
-async function drawDesigned(set: BriefSet, a: { clientId: string; runId: string; month: string; company: string; asOf: string; costByRole: Record<BriefRole, number> }, dir: string): Promise<void> {
+async function drawDesigned(set: BriefSet, a: { clientId: string; runId: string; month: string; company: string; asOf: string; costByRole: Record<BriefRole, number>; excludedQuotes: QuoteExclusion[] }, dir: string): Promise<void> {
   mkdirSync(dir, { recursive: true })
   const saved = savedSetOf({
     clientId: a.clientId, company: set.inputs.company, month: a.month, runId: a.runId, asOf: a.asOf, costUsd: set.costUsd, costByRole: a.costByRole,
-    ideas: set.allocation.ideas,
+    ideas: set.allocation.ideas, excludedQuotes: a.excludedQuotes,
     briefs: BRIEF_ROLES.map((r) => ({ data: set.briefs[r].data, texts: textsFor(set, set.briefs[r].data), printed: set.briefs[r].printed })),
   })
   for (const r of BRIEF_ROLES) writeFileSync(join(dir, saved.manifest.roles[r].file), `${JSON.stringify(saved.files[r], null, 2)}\n`)
   writeFileSync(join(dir, SAVED_SET_FILE), `${JSON.stringify(saved.manifest, null, 2)}\n`)
+  await drawSaved(saved, a, dir)
+}
+
+/** Draw a saved set's briefs into `dir` (a PDF and a PNG a page each, a thin
+ *  role not drawn), say what each leaves out, and read the folder back
+ *  through the checks --from makes, saying whether it will take it. */
+async function drawSaved(saved: { manifest: SavedSet; files: Record<BriefRole, SavedFile> }, a: { clientId: string; runId: string; month: string; company: string }, dir: string): Promise<void> {
   const clipped: string[] = []
   for (const r of BRIEF_ROLES) {
     const d = saved.files[r].data
     if (saved.manifest.roles[r].status !== 'ready') { console.log(`Not drawn: ${BRIEF_NAME[r]} is thin (saved, with what it held).`); continue }
-    const out = await renderBriefLocal({ data: d, texts: saved.files[r].texts }, dir, { name: r, built: a.asOf, pdf: true })
+    const out = await renderBriefLocal({ data: d, texts: saved.files[r].texts }, dir, { name: r, built: saved.manifest.asOf, pdf: true })
     console.log(`Drawn: ${BRIEF_NAME[r]}, ${out.pages} pages${out.clipped.length ? `, CLIPPING on ${out.clipped.map((c) => `page ${c.page} (${c.px}px)`).join(', ')}` : ''}: ${out.pdf}`)
     if (out.clipped.length) clipped.push(`the ${BRIEF_NAME[r]} clips`)
     // The canvas's pages that do not print, and why: left out as thin, or

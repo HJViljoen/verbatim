@@ -167,5 +167,7 @@ describe('talk about the company, never under its posts', () => {
     expect(talkAboutNotUnder('Comments under the company’s own Instagram posts ask for prices.', 'Acme')).toBe('Comments about Acme ask for prices.')
     expect(talkAboutNotUnder('Praise sits on Acme\'s posts and elsewhere.', 'Acme')).toBe('Praise sits in talk about Acme and elsewhere.')
     expect(talkAboutNotUnder('People ask what Acme costs.', 'Acme')).toBe('People ask what Acme costs.')
+    // Only a platform's name may stand before "posts", never any word.
+    expect(talkAboutNotUnder('People under Acme\'s recent posts ask.', 'Acme')).toBe('People under Acme\'s recent posts ask.')
   })
 })

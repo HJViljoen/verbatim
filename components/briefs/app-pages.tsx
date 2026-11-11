@@ -3,7 +3,7 @@ import { MOVEMENT_WORDS } from '@/components/delta-badge'
 import { fmtInt, longMonth, platformLabel, shortDate } from '@/lib/format'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
 import {
-  adviceDetail, categoryProducts, ideaReadLine, inTheirVideos, moveLine, multipleText, NO_RECIPE, ownTouchWords, recipeLabel, recordLine, slotWords, whoAsks,
+  accountsLine, adviceDetail, categoryProducts, followedAccounts, ideaReadLine, inTheirVideos, moveLine, multipleText, NO_RECIPE, ownTouchWords, recipeLabel, recordLine, slotWords, whoAsks,
 } from '@/lib/reports/briefs/app-words'
 import { continuedTitle, groupRows, quoteCite, quoteWords } from '@/lib/reports/briefs/deck'
 import type { BriefGroup, BriefHookTable, BriefItem, BriefSection, BriefVerdict, StoredBriefData } from '@/lib/reports/briefs/types'
@@ -466,34 +466,43 @@ export function NamedPage({ appUrl, s, sub }: AppPageProps) {
   const verdictW = verdictSlotWidth(n.rows.map((r) => r.verdict))
   const notes = s.lines ?? []
   const grid = { display: 'grid', gridTemplateColumns: 'repeat(24, minmax(0, 1fr))', gap: 20 } as const
+  // Praised and complained, and what a brand is talked about for, print only
+  // where the rows carry them (the brief's own naming carries neither: they
+  // stood on unlike bases, 11 Nov).
+  const crosses = n.rows.some((r) => r.praised || r.top)
+  const span = { brand: crosses ? 5 : 7, named: crosses ? 8 : 17 }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%' }}>
       <TitleBlock title={s.title} sub={sub} />
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         <div style={{ ...grid, paddingBottom: 6, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: P.muted }}>
-          <div style={{ gridColumn: 'span 5' }}>Brand</div>
-          <div style={{ gridColumn: 'span 8' }}>Named without being asked</div>
-          <div style={{ gridColumn: 'span 5' }}>Praised · complained</div>
-          <div style={{ gridColumn: 'span 6' }}>Talked about for</div>
+          <div style={{ gridColumn: `span ${span.brand}` }}>Brand</div>
+          <div style={{ gridColumn: `span ${span.named}` }}>Named outside our searches</div>
+          {crosses ? <div style={{ gridColumn: 'span 5' }}>Praised · complained</div> : null}
+          {crosses ? <div style={{ gridColumn: 'span 6' }}>Talked about for</div> : null}
         </div>
         {n.rows.map((r) => (
           <div key={r.label} style={{ ...grid, alignItems: 'center', padding: '10px 0', borderTop: `1px solid ${P.hair}` }}>
-            <div style={{ gridColumn: 'span 5' }}>
+            <div style={{ gridColumn: `span ${span.brand}` }}>
               <A href={r.href} appUrl={appUrl} style={{ fontSize: 16, fontWeight: 600, color: r.you ? P.gold : P.ink }}>{r.you ? `${r.label} (you)` : r.label}</A>
             </div>
-            <div style={{ gridColumn: 'span 8', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ gridColumn: `span ${span.named}`, display: 'flex', alignItems: 'center', gap: 12 }}>
               <Track pct={(100 * r.named.k) / most} color={r.you ? P.gold : P.rival} />
               <div data-copy="level" style={{ flexShrink: 0, width: 76, fontFamily: MONO, fontSize: 14 }}>
                 <span style={{ fontWeight: 500 }}>{fmtInt(r.named.k)}</span> <span style={{ color: P.muted }}>of {fmtInt(r.named.n)}</span>
               </div>
               <VerdictText v={r.verdict} width={verdictW || undefined} />
             </div>
-            <div data-copy="level" style={{ gridColumn: 'span 5', fontFamily: MONO, fontSize: 14 }}>
-              {r.praised && r.complained ? <>{fmtInt(r.praised.k)} · {fmtInt(r.complained.k)} <span style={{ color: P.muted }}>of {fmtInt(r.praised.n)}</span></> : null}
-            </div>
-            <div style={{ gridColumn: 'span 6', fontSize: 14 }}>
-              {r.top ? <><span data-copy="quote" style={{ fontWeight: 600 }}>{r.top.label}</span> <span data-copy="level" style={{ fontFamily: MONO, color: P.muted }}>{fmtInt(r.top.k)} of {fmtInt(r.top.n)}</span></> : null}
-            </div>
+            {crosses ? (
+              <div data-copy="level" style={{ gridColumn: 'span 5', fontFamily: MONO, fontSize: 14 }}>
+                {r.praised && r.complained ? <>{fmtInt(r.praised.k)} · {fmtInt(r.complained.k)} <span style={{ color: P.muted }}>of {fmtInt(r.praised.n)}</span></> : null}
+              </div>
+            ) : null}
+            {crosses ? (
+              <div style={{ gridColumn: 'span 6', fontSize: 14 }}>
+                {r.top ? <><span data-copy="quote" style={{ fontWeight: 600 }}>{r.top.label}</span> <span data-copy="level" style={{ fontFamily: MONO, color: P.muted }}>{fmtInt(r.top.k)} of {fmtInt(r.top.n)}</span></> : null}
+              </div>
+            ) : null}
           </div>
         ))}
         {s.also ? <div data-copy="figure" style={{ paddingTop: 10, borderTop: `1px solid ${P.hair}`, fontSize: 14, color: P.muted }}>{s.also}</div> : null}
@@ -539,7 +548,7 @@ export function IdeasPage({ appUrl, s, sub }: AppPageProps) {
                   counts in ink as the board sets them. */}
               {read && x.month ? (
                 <div data-copy="level" style={{ fontFamily: MONO, fontSize: 13, lineHeight: 1.5, color: P.muted }}>
-                  {x.read ? <><span style={{ color: P.ink, fontWeight: 500 }}>{fmtInt(x.read.k)}</span> of {fmtInt(x.read.n)} videos, {i.read.label} · </> : null}
+                  {x.read ? <><span style={{ color: P.ink, fontWeight: 500 }}>{fmtInt(x.read.k)}</span> of {fmtInt(x.read.n)} videos in your market, {i.read.label} · </> : null}
                   <span style={{ color: P.ink, fontWeight: 500 }}>{fmtInt(x.month.k)}</span> of {fmtInt(x.month.n)} in {longMonth(i.month)}
                 </div>
               ) : null}
@@ -610,7 +619,7 @@ export function IdeasPage({ appUrl, s, sub }: AppPageProps) {
  *  where some have none ("35 of Sealand's 37 posts"), and the line says
  *  which kind: 35 and 33 once read as two more totals beside "Your posts in
  *  October: 37" (5 Nov). */
-function HookTable({ t, label, read, company, rival, ownTotal }: { t: BriefHookTable; label: string; read: string; company: string; rival: string | null; ownTotal: number | null }) {
+function HookTable({ t, label, read, company, rival, ownTotal, month }: { t: BriefHookTable; label: string; read: string; company: string; rival: string | null; ownTotal: number | null; month: string }) {
   const own = t.ownOf != null
   const showRival = rival != null && t.rivalOf != null
   const cols = { label: 4, cat: showRival ? 7 : own ? 10 : 13, own: 3, rival: 3, eng: 3 }
@@ -619,7 +628,9 @@ function HookTable({ t, label, read, company, rival, ownTotal }: { t: BriefHookT
     : `${fmtInt(t.ownOf ?? 0)} ${company} ${t.ownOf === 1 ? 'post' : 'posts'}`
   const counts = [
     ...(own ? [ownPart] : []),
-    ...(showRival ? [`${fmtInt(t.rivalOf!)} ${rival} ${t.rivalOf === 1 ? 'video' : 'videos'}`] : []),
+    // The rival's column is every video about it, its accounts' and others'
+    // (the playbook's rival audience), never only its posts (11 Nov).
+    ...(showRival ? [`${fmtInt(t.rivalOf!)} ${t.rivalOf === 1 ? 'video' : 'videos'} about ${rival}, its accounts’ and others’`] : []),
   ]
   const head = { display: 'grid', gridTemplateColumns: 'repeat(20, minmax(0, 1fr))', gap: 14, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: P.muted } as const
   return (
@@ -629,10 +640,10 @@ function HookTable({ t, label, read, company, rival, ownTotal }: { t: BriefHookT
           <div style={{ gridColumn: `span ${cols.label}` }}>{label}</div>
           <div style={{ gridColumn: `span ${cols.cat}` }}>The category</div>
           {own ? <div style={{ gridColumn: `span ${cols.own}`, textAlign: 'right' }}>{company}</div> : null}
-          {showRival ? <div style={{ gridColumn: `span ${cols.rival}`, textAlign: 'right' }}>{rival}</div> : null}
+          {showRival ? <div style={{ gridColumn: `span ${cols.rival}`, textAlign: 'right' }}>About {rival}</div> : null}
           <div style={{ gridColumn: `span ${cols.eng}`, textAlign: 'right' }}>Response</div>
         </div>
-        <div data-copy="figure" style={{ fontSize: 12, color: P.muted }}>Shares of {fmtInt(t.of)} category videos{counts.length ? ` · counts of ${counts.join(' and ')}` : ''}, each with {read} read</div>
+        <div data-copy="figure" style={{ fontSize: 12, color: P.muted }}>Shares of the {fmtInt(t.of)} category videos posted in {month}{counts.length ? ` · counts of ${counts.join(' and ')}` : ''}, each with {read} read</div>
       </div>
       {t.rows.map((r) => (
         <div key={r.label} style={{ display: 'grid', gridTemplateColumns: 'repeat(20, minmax(0, 1fr))', gap: 14, alignItems: 'center', padding: '8px 0', borderTop: `1px solid ${P.hair}` }}>
@@ -660,8 +671,8 @@ export function HooksPage({ data, appUrl, s, sub }: AppPageProps) {
       <TitleBlock title={s.title} sub={sub} />
       <div style={{ display: 'flex', gap: 40, flexGrow: 1, minHeight: 0 }}>
         <div style={{ flex: 1.85, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>
-          {h.formats ? <HookTable t={h.formats} label="Format" read="a format" company={data.company} rival={h.rival} ownTotal={p?.total ?? null} /> : null}
-          {h.openings ? <HookTable t={h.openings} label="Opening" read="an opening" company={data.company} rival={h.rival} ownTotal={p?.total ?? null} /> : null}
+          {h.formats ? <HookTable t={h.formats} label="Format" read="a format" company={data.company} rival={h.rival} ownTotal={p?.total ?? null} month={month} /> : null}
+          {h.openings ? <HookTable t={h.openings} label="Opening" read="an opening" company={data.company} rival={h.rival} ownTotal={p?.total ?? null} month={month} /> : null}
         </div>
         {p ? (
           <div style={{ flex: 1, minWidth: 0, background: P.ground, borderRadius: 16, padding: '16px 22px', display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -670,7 +681,9 @@ export function HooksPage({ data, appUrl, s, sub }: AppPageProps) {
               <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <div data-copy="figure" style={{ fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em', fontSize: 40, fontWeight: 600, lineHeight: 1.1 }}>{fmtInt(p.total)}</div>
                 <div data-copy="figure" style={{ fontSize: 13, lineHeight: 1.4, color: P.muted }}>
-                  posts on your own accounts{p.byPlatform.length ? ` · ${p.byPlatform.map((x) => `${platformLabel(x.platform)} ${fmtInt(x.posts)}`).join(', ')}` : ''}
+                  {p.accounts?.length
+                    ? `posts on ${followedAccounts(data.company, p.accounts.length)}: ${accountsLine(p.accounts)}`
+                    : `posts on your own accounts${p.byPlatform.length ? ` · ${p.byPlatform.map((x) => `${platformLabel(x.platform)} ${fmtInt(x.posts)}`).join(', ')}` : ''}`}
                 </div>
               </div>
               {p.response ? (

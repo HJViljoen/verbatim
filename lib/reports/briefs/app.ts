@@ -26,7 +26,7 @@ import { monthStartOf, prevMonth } from '../../reading/month-key'
 import type { Verdict } from '../../reading/verdicts'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, isRivalAudience } from '../../rivals'
 import { firstSentenceOf } from '../weekly-read-v3'
-import { andList, APP_TITLES, daysLong, GROUPS_ARE_NOT_BUYERS, namedNotes, numberWord, voicesMonthHref, withMonth, yyyymm } from './app-words'
+import { andList, APP_TITLES, buyerNamesNote, daysLong, GROUPS_ARE_NOT_BUYERS, namedNotes, numberWord, voicesMonthHref, withMonth, yyyymm } from './app-words'
 import type { StandingFact } from '../../written/types'
 import type {
   BriefAdvice, BriefGroup, BriefHookRow, BriefHooks, BriefHookTable, BriefIdea, BriefIdeas, BriefItem, BriefMove, BriefMoves, BriefNamed, BriefNamedRow,
@@ -330,8 +330,11 @@ export function ideasOf(page: Pick<ContentPageData, 'ideas' | 'asked'>, rows: re
       own: { state: c.own.state, touched: c.own.touched, posts: c.own.posts, since: c.own.since },
       asks,
       asksOf: row?.cover.asked?.videos ?? null,
-      format: c.format ? { label: c.format.label, multiple: c.format.multiple } : null,
-      opening: c.opening ? { label: c.opening.label, multiple: c.opening.multiple } : null,
+      // The suggestion, not its multiple: Content's idea multiples pool the
+      // platforms, where the brief's measure is platform by platform (the
+      // fresh check, 11 Nov), so the brief prints no figure for them.
+      format: c.format ? { label: c.format.label, multiple: null } : null,
+      opening: c.opening ? { label: c.opening.label, multiple: null } : null,
       href: c.id ? `${CONTENT_PATH}/ideas/${encodeURIComponent(c.id)}` : CONTENT_PATH,
     }
   }).filter((i) => i.id && i.title.trim())
@@ -390,7 +393,11 @@ export const HOOK_OPENING_ROWS = 4
  * posts in {month}" (`postsBlock`, `mixSentence`). Null where neither table
  * has a row. Pure.
  */
-export function hooksOf(a: { month: string; rival: string | null; playbook: PlaybookBlock | null; posts: PostsBlock | null; sentence: readonly SentencePart[] | null; matched?: MatchedHooks | null }): BriefHooks | null {
+export function hooksOf(a: {
+  month: string; rival: string | null; playbook: PlaybookBlock | null; posts: PostsBlock | null; sentence: readonly SentencePart[] | null; matched?: MatchedHooks | null
+  /** The accounts we follow that posted, each with its posts. */
+  accounts?: readonly { platform: string; account: string; posts: number }[] | null
+}): BriefHooks | null {
   if (!a.playbook || a.playbook.unread) return null
   const m = a.matched ?? null
   const formats = hookTable(a.playbook, 'formats', HOOK_FORMAT_ROWS, m?.kinds)
@@ -406,6 +413,7 @@ export function hooksOf(a: { month: string; rival: string | null; playbook: Play
     posts: p ? {
       total: p.total,
       byPlatform: p.byPlatform,
+      ...(a.accounts?.length ? { accounts: [...a.accounts] } : {}),
       response: m ? m.posts.response : p.response,
       ...(m ? { platforms: m.posts.platforms } : {}),
       sentence: sentence(a.sentence),
@@ -524,7 +532,7 @@ export function groupsSection(p: BriefPeople | null): BriefSection | null {
   return appSection('leadership.groups', {
     people: p,
     sub: `${numberWord(n)} ${n === 1 ? 'group comments' : 'groups comment'} in your market, as Voices describes them, ${GROUPS_ARE_NOT_BUYERS}. A video can hold more than one group, so the counts overlap.`,
-    foot: `Each update describes the groups afresh, so no count is set against ${longMonth(prevMonth(p.month))}.`,
+    foot: [buyerNamesNote(p.groups), `Each update describes the groups afresh, so no count is set against ${longMonth(prevMonth(p.month))}.`].filter(Boolean).join(' '),
     link: { href: voicesMonthHref(p.month), text: 'Open the groups on Voices →' },
   })
 }
@@ -564,7 +572,7 @@ export function productsSection(p: BriefProducts | null): BriefSection | null {
   return appSection('marketing.products', {
     products: p,
     sub: p.videos != null && p.market
-      ? `${came}, and ${fmtInt(p.videos)} of your market’s ${fmtInt(p.market)} videos were about them or their categories, a product named or not.`
+      ? `${came}, and ${fmtInt(p.videos)} of the ${fmtInt(p.market)} videos we read in ${m}, your own posts and posts about you included, were about them or their categories, a product named or not.`
       : `${came}.`,
     foot: 'Counted on every video in your market, the comments on your own posts included. What your own posts say is never counted.',
     link: { href: p.href, text: 'Open Your products →' },
@@ -572,53 +580,51 @@ export function productsSection(p: BriefProducts | null): BriefSection | null {
 }
 
 /** Voices' brands table re-counted by the brief's naming (naming.ts): every
- *  brand's "named without being asked" on ONE base, the videos no brand
- *  search of ours found (the company's own name searches out of it too), and
- *  the company's own row KEPT (the blind-report check, 9 Nov: Ottobock printed
- *  as "named most" because Össur's row was left out, and Össur's count kept
- *  the posts our search for it found). Praised and complained, and what a
- *  brand is talked about for, stay Voices' (over every video naming it); a
- *  month-pair verdict was read on the old base and is not carried. Null
- *  without naming, or with fewer than two brands. Pure. */
+ *  brand's naming on ONE base, the videos we read that none of our brand
+ *  searches found (the company's own name searches out of it too), and the
+ *  company's own row KEPT (the blind-report check, 9 Nov: Ottobock printed as
+ *  "named most" because Össur's row was left out). Praised and complained,
+ *  and what a brand is talked about for, are NOT carried: Voices counts them
+ *  over each brand's own audience, so two brands' rows stood on unlike bases
+ *  (the fresh check, 11 Nov). A brand Voices counts and nobody named, or
+ *  whose name it finds nowhere, is still said ("not named"). A month-pair
+ *  verdict was read on the old base and is not carried. Null without naming,
+ *  or with fewer than two brands. Pure. */
 export function namedByNaming(n: BriefNamed | null, naming: BriefNaming | null): BriefNamed | null {
   if (!naming || naming.rows.length < 2) return null
   const voices = new Map((n?.rows ?? []).map((r) => [r.you ? 'client' : r.label.trim().toLowerCase(), r]))
-  const rows: BriefNamedRow[] = naming.rows.map((b) => {
-    const v = voices.get(b.you ? 'client' : b.label.trim().toLowerCase()) ?? null
-    return {
-      label: b.label,
-      you: b.you,
-      named: { k: b.videos, n: naming.videos },
-      verdict: null,
-      praised: v?.praised ?? null,
-      complained: v?.complained ?? null,
-      top: v?.top ?? null,
-      href: v?.href ?? voicesMonthHref(naming.month),
-    }
-  })
-  return {
-    month: naming.month,
-    base: naming.videos,
-    rows,
-    notNamed: rows.filter((r) => r.named.k === 0).map((r) => r.label),
-    href: n?.href ?? voicesMonthHref(naming.month),
-  }
+  const rows: BriefNamedRow[] = naming.rows.map((b) => ({
+    label: b.label,
+    you: b.you,
+    named: { k: b.videos, n: naming.videos },
+    verdict: null,
+    praised: null,
+    complained: null,
+    top: null,
+    href: voices.get(b.you ? 'client' : b.label.trim().toLowerCase())?.href ?? voicesMonthHref(naming.month),
+  }))
+  const named = new Set(rows.filter((r) => r.named.k > 0).map((r) => r.label.trim().toLowerCase()))
+  const notNamed = [...new Set([...rows.filter((r) => r.named.k === 0).map((r) => r.label), ...(n?.notNamed ?? [])])]
+    .filter((label) => !named.has(label.trim().toLowerCase()))
+  return { month: naming.month, base: naming.videos, rows, notNamed, href: n?.href ?? voicesMonthHref(naming.month) }
 }
 
 /** "Who gets named without being asked" (Marketing): only where the brands
  *  are counted, on the brief's naming (`namedByNaming`): a set read with no
- *  naming (null) prints no page. Voices' table as it is only where no naming
- *  was asked for at all (undefined: a fixture's page). Pure. */
+ *  naming (null) prints no page, and says why in what it held (compose.ts).
+ *  Voices' table as it is only where no naming was asked for at all
+ *  (undefined: a fixture's page). Pure. */
 export function namedSection(n: BriefNamed | null, company: string, naming?: BriefNaming | null): BriefSection | null {
   const named = naming === undefined ? n : namedByNaming(n, naming)
   if (!named) return null
   const m = longMonth(named.month)
+  const crosses = named.rows.some((r) => r.praised || r.top)
   return appSection('marketing.named', {
     named,
-    sub: `Of the ${fmtInt(named.base)} videos we read in ${m} that no brand search of ours found, each brand's own posts left out, how many named each brand; then, over every video in your market naming it, what people did.`,
+    sub: `Of the ${fmtInt(named.base)} videos we read in ${m} that none of our brand searches found, how many named each brand. Posts on the accounts we follow for each brand are left out.${crosses ? ' Then, over every video in your market naming it, what people did.' : ''}`,
     lines: namedNotes(named, company),
-    ...(named.notNamed.length ? { also: `Not named without being asked in ${m}: ${andList(named.notNamed)}.` } : {}),
-    foot: 'Praised and complained, and what each brand is talked about for, are counted over every video in your market naming it, and are about anything in the video.',
+    ...(named.notNamed.length ? { also: `Not named outside our searches in ${m}: ${andList(named.notNamed)}.` } : {}),
+    ...(crosses ? { foot: 'Praised and complained, and what each brand is talked about for, are counted over every video in your market naming it, and are about anything in the video.' } : {}),
     link: { href: named.href, text: 'Open the brands on Voices →' },
   })
 }

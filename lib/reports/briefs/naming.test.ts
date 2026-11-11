@@ -32,7 +32,6 @@ describe('namingOf', () => {
     const n = namingOf({ month: OCT, brands: BRANDS, videos, searched, mentions })!
     expect(n.comments).toBe(150)
     expect(n.videos).toBe(3)
-    expect(n.ownComments).toBe(100)
     expect(n.rows).toEqual([
       { brandKey: 'client', label: 'Acme', you: true, comments: 2, videos: 2, platforms: ['Reddit', 'TikTok'] },
       { brandKey: 'r1', label: 'Rival', you: false, comments: 2, videos: 1, platforms: ['YouTube'] },

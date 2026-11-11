@@ -15,7 +15,7 @@ import type { QuoteResolution } from '../../renderables/types'
 import { adviceText } from '../../pages/advice-shortlist'
 import { overlapOfSmaller, referencesFor } from './allocate'
 import { appSectionsFor, subjectsSection, type BriefAppInputs } from './app'
-import { appLines, multipleText, SALES_GROUPS_LINE } from './app-words'
+import { accountsLine, appLines, followedAccounts, multipleText, SALES_GROUPS_LINE, type AccountPosts } from './app-words'
 import { canvasOf } from './canvas'
 import { printedSections } from './deck'
 import { APP_SECTION_KEYS } from './types'
@@ -89,6 +89,9 @@ export interface OwnPostCount {
   you: boolean
   posts: number
   five: number
+  /** The brand's accounts we follow that posted in the month, each with its
+   *  posts, the most first. Absent on inputs read before it. */
+  accounts?: AccountPosts[]
 }
 
 /** The month's long-run read, as much as "What holds so far" prints: its
@@ -166,6 +169,8 @@ export interface ComposeInput {
   /** Who named each brand in the month (naming.ts): Leadership's standing
    *  and its In short figure. Null or absent: neither prints. */
   naming?: BriefNaming | null
+  /** Why the naming could not be read, where it could not: said in `held`. */
+  namingUnread?: string | null
   /** Which brands the product counts talk for (the hand-checked brand rules,
    *  lib/brands/precision.ts): the client, and the rivals by name. A tenant
    *  whose brands are not counted (Össur today: its Competitive page is empty)
@@ -215,7 +220,13 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
   const held: MonthlyBriefData['held'] = []
   const scrubbed: { field: string; sentence: string; rule: string }[] = []
   const productNames = hyphenatedNames(a.points.map((p) => p.text))
-  const polish = (s: string) => varySubjects(tradeOff(talkAboutNotUnder(restoreNames(s, productNames), co)))
+  const polish = (s: string) => {
+    const named = restoreNames(s, productNames)
+    const about = talkAboutNotUnder(named, co)
+    // Said as talk about the company, and recorded as the scrub records a drop.
+    if (about !== named) scrubbed.push({ field: 'polish', sentence: named, rule: 'talk under the company\'s posts said as talk about it' })
+    return varySubjects(tradeOff(about))
+  }
   const scrub = (raw: string, max: number, f: BriefField, where: string, o: { maxSentences?: number; whole?: boolean } = {}) => {
     const r = scrubBriefText(raw ?? '', max, { company: co, field: f, ...o })
     counts = addCounts(counts, r.counts)
@@ -252,6 +263,17 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
   /** The writer's sentences on the subjects, once scrubbed (`sentencesOf`). */
   let subjectSentences: Map<string, string> | null = null
 
+  /** The company's products a text names that came up on fewer than
+   *  `PRODUCT_MIN_VIDEOS` of the month's videos (Your products' own counts;
+   *  none where the page was not read). A product is named by its full name
+   *  or by its last word where that word is its own ("Terra", "Pivot"; never
+   *  a part's generic word, a size or a model number). */
+  function thinProducts(text: string): { name: string; videos: number }[] {
+    const products = (a.app?.products?.categories ?? []).flatMap((c) => c.products)
+    const lower = text.toLowerCase()
+    return products.filter((p) => p.videos < PRODUCT_MIN_VIDEOS && namesProduct(lower, p.name)).map((p) => ({ name: p.name, videos: p.videos }))
+  }
+
   // ---- findings --------------------------------------------------------------------------
   const findings: BriefFinding[] = []
   for (const idea of mine) {
@@ -269,6 +291,11 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
     }).join(' ')).filter(Boolean).join('\n\n')
     const short = shortBrand(idea.headline)
     if (short) { held.push({ what: idea.headline, reason: `only ${videosAbout(idea.points, short.about)} of its videos are about ${short.name}` }); continue }
+    // A headline leans on a product of the company's only where the month's
+    // own counts carry it (the fresh check, 11 Nov: "especially Pro-Flex Terra
+    // and Pivot", Pivot on two of the month's videos).
+    const thin = thinProducts(idea.headline)
+    if (thin.length) { held.push({ what: idea.headline, reason: `it names ${thin.map((p) => `${p.name}, on ${p.videos} of the month's videos`).join(' and ')}` }); continue }
     const saw = heardOnly(run(w.saw, BRIEF_MAX.saw, 'market', `${idea.id}.saw`), `${idea.id}.saw`).split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean)
     const means = run(w.means, BRIEF_MAX.means, 'interpret', `${idea.id}.means`)
     if (saw.length === 0 || !means) { held.push({ what: idea.headline, reason: 'the scrub left no saw or no means' }); continue }
@@ -277,7 +304,7 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
     const name = w.short ? run(w.short, EXTRA_MAX.short, 'headline', `${idea.id}.short`, { whole: true }) : ''
     const ev = evidenceOf(idea.points)
     const part = subjectLineOf(idea.points)
-    const base = findingBase(ev.months)
+    const base = findingBase(idea.points)
     findings.push({
       ideaId: idea.id,
       headline: polish(idea.headline),
@@ -296,15 +323,19 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
     })
   }
 
-  /** A finding's videos in the brief's month, of every video read in it (all
-   *  of the month's audiences, the company's own posts included, as a
-   *  finding's counted videos are): its base in print (the blind-report check,
-   *  9 Nov: findings on 3 to 9 of 766 videos printed with no base). */
-  function findingBase(months: readonly { month: string; videos: number }[]): BriefFinding['base'] | null {
-    const n = (a.audiences ?? []).reduce((t, r) => t + r.videos, 0)
+  /** A finding's videos in the brief's month that are in the market (its
+   *  posts by and about the company aside), of the market's videos that
+   *  month: its base in print, on the In short's own base (the blind-report
+   *  check, 9 Nov: findings on 3 to 9 videos printed with no base; the fresh
+   *  check, 11 Nov: one base, one label, in every brief). */
+  function findingBase(pointIds: readonly string[]): BriefFinding['base'] | null {
+    const n = a.market?.videos ?? 0
     if (n <= 0) return null
-    const k = months.filter((m) => monthStartOf(m.month) === monthStartOf(a.month)).reduce((t, m) => t + m.videos, 0)
-    return { k, n }
+    const m = monthStartOf(a.month)
+    const pts = pointIds.map((id) => byId.get(id)).filter((p): p is GroundedPoint => p != null)
+    const audienceOf = new Map(whoOf(pts.map((p) => p.id)).map((v) => [v.id, v.audience]))
+    const ids = new Set(pts.flatMap((p) => Object.entries(p.monthVideoIds).filter(([k]) => monthStartOf(k) === m).flatMap(([, vs]) => vs)))
+    return { k: [...ids].filter((id) => audienceOf.get(id) !== CLIENT_AUDIENCE).length, n }
   }
 
   /** "Part of Buying & delivery, the biggest subject in your market: 23% of
@@ -667,11 +698,11 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
     const youIdea = youLine && youRaw?.idea ? run(youRaw.idea, Math.round(EXTRA_MAX.youIdea * SLACK), 'headline', 'you.idea', { whole: true }) : ''
     const you: BriefItem | null = youLine && youIdea ? { ...youLine, title: co, pill: youIdea, you: true } : null
     const rows = (a.posts ?? []).filter((r) => r.posts > 0)
-      .map((r) => ({ name: r.name, you: r.you, posts: r.posts, five: Math.min(r.five, r.posts), pct: Math.round((Math.min(r.five, r.posts) / r.posts) * 100) }))
+      .map((r) => ({ name: r.name, you: r.you, posts: r.posts, five: Math.min(r.five, r.posts), pct: Math.round((Math.min(r.five, r.posts) / r.posts) * 100), ...(r.accounts?.length ? { accounts: accountsLine(r.accounts) } : {}) }))
       .sort((x, y) => Number(y.you) - Number(x.you) || y.pct - x.pct || y.posts - x.posts || x.name.localeCompare(y.name))
     const items = [...p.items, ...(you ? [you] : [])]
     if (items.length === 0 && rows.length === 0) return null
-    return section('marketing.rivals', items.length ? [{ items }] : [], rows.length ? { posts: { title: `Own posts published in ${month}`, rows } } : {})
+    return section('marketing.rivals', items.length ? [{ items }] : [], rows.length ? { posts: { title: `Posts in ${month} on the accounts we follow`, rows } } : {})
   }
 
   // ---- content: hooks and formats that work (counted) ---------------------------------------------
@@ -820,6 +851,7 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
   // filed under: that set the company's own posts and the posts naming it
   // against a rival's naming alone (the blind-report check, 9 Nov).
   function shares(): BriefSection | null {
+    if (a.namingUnread) held.push({ what: 'leadership.shares', reason: `who named each brand could not be read: ${a.namingUnread}` })
     return a.brandsCounted.client && a.naming ? namingSection(a.naming, co, a.month) : null
   }
 
@@ -861,6 +893,7 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
     return chips.length >= HEARD_FOR_MIN ? chips : null
   }
 
+  if (a.role === 'marketing' && a.namingUnread && a.app !== undefined) held.push({ what: 'marketing.named', reason: `who named each brand could not be read: ${a.namingUnread}` })
   const { sections, held: sectionHeld } = selectRoleSections(a.role, built)
   for (const h of sectionHeld) held.push(h)
 
@@ -883,7 +916,15 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
   }
 
   // ---- in short (filtered against what printed, at the set level: summaryAgainstPrinted) --------
-  const summary = run(a.written?.in_short ?? '', BRIEF_MAX.summary, 'interpret', 'in_short', { maxSentences: BRIEF_MAX.summarySentences })
+  // In short, too, names a product only where the month's counts carry it:
+  // such a sentence drops before the rest is polished, so nothing after it
+  // points back at it.
+  const shortRaw = splitSentences(a.written?.in_short ?? '').filter((x) => {
+    const thin = thinProducts(x)
+    if (thin.length) scrubbed.push({ field: 'in_short', sentence: x, rule: `names ${thin.map((p) => `${p.name} (${p.videos} videos)`).join(' and ')}` })
+    return thin.length === 0
+  }).join(' ')
+  const summary = run(shortRaw, BRIEF_MAX.summary, 'interpret', 'in_short', { maxSentences: BRIEF_MAX.summarySentences })
   const data: MonthlyBriefData = {
     version: 1,
     kind: 'monthly_brief',
@@ -961,7 +1002,7 @@ export function namingSection(n: BriefNaming, company: string, monthStart: strin
   const month = longMonth(monthStart)
   const items: BriefItem[] = n.rows.map((b) => ({
     title: b.you ? `${company} (you)` : b.label,
-    text: `Named in ${fmtInt(b.comments)} of ${month}'s ${fmtInt(n.comments)} comments, and without being asked in ${fmtInt(b.videos)} of ${fmtInt(n.videos)} videos.`,
+    text: `Named in ${fmtInt(b.comments)} of the ${fmtInt(n.comments)} comments on the ${fmtInt(n.read)} videos we read in ${month}, and in ${fmtInt(b.videos)} of the ${fmtInt(n.videos)} of them none of our brand searches found.`,
     ...(b.platforms.length ? { detail: b.platforms.slice(0, 3).join(', ') } : {}),
     ...(b.you ? { you: true } : {}),
     measure: { named: { comments: { k: b.comments, n: n.comments }, videos: { k: b.videos, n: n.videos } } },
@@ -969,9 +1010,26 @@ export function namingSection(n: BriefNaming, company: string, monthStart: strin
   const spec = ROLE_SECTIONS.leadership.find((x) => x.key === 'leadership.shares')!
   return {
     key: 'leadership.shares', title: sectionTitle(spec, company), groups: [{ items }],
-    sub: `Who named each brand in ${month}: comments on the videos we read, and videos no brand search of ours found. Each brand's own posts are left out.`,
+    sub: `Who named each brand in ${month}: the ${fmtInt(n.comments)} comments on the ${fmtInt(n.read)} videos we read, and the ${fmtInt(n.videos)} of those videos none of our brand searches found. Posts on the accounts we follow for each brand are left out.`,
     lines: namingNotes(n, company, month),
   }
+}
+
+/** A product of the company's a headline or In short may lean on comes up on
+ *  at least this many of the month's videos. */
+export const PRODUCT_MIN_VIDEOS = 3
+
+const GENERIC_PART = /^(?:foot|feet|knee|knees|liner|liners|socket|sockets|lock|hand|hands|arm|brace|sleeve|system|pro|plus|lite|xc|xt)$/i
+/** Does a (lower-cased) text name this product: its full name, or its last
+ *  word where that word is its own (four letters or more, no digit, not a
+ *  part's generic word)? Pure. */
+export function namesProduct(lowerText: string, name: string): boolean {
+  const n = name.trim().toLowerCase()
+  if (!n) return false
+  const has = (w: string) => new RegExp(`(?<![\\p{L}\\p{N}])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`, 'u').test(lowerText)
+  if (has(n)) return true
+  const last = n.split(/[\s-]+/).pop() ?? ''
+  return last.length >= 4 && !/\d/.test(last) && !GENERIC_PART.test(last) && last !== n && has(last)
 }
 
 /** Below this many videos, a brand's naming is few voices, and said so. */
@@ -984,20 +1042,19 @@ export function namingNotes(n: BriefNaming, company: string, month: string): str
   const you = n.rows.find((r) => r.you)
   const rivals = n.rows.filter((r) => !r.you)
   if (!you || rivals.length === 0) return []
-  const them = (f: (r: BriefNaming['rows'][number]) => number) => andList(rivals.map((r) => `${r.label} in ${fmtInt(f(r))}`))
+  const them = (f: (r: BriefNaming['rows'][number]) => number) => andList(rivals.map((r) => `${fmtInt(f(r))} named ${r.label}`))
   const out = [
-    `${company} was named in ${fmtInt(you.comments)} of ${month}'s ${fmtInt(n.comments)} comments, ${them((r) => r.comments)}.`,
-    `Of the ${fmtInt(n.videos)} videos no brand search of ours found, ${company} was named without being asked in ${fmtInt(you.videos)}, ${them((r) => r.videos)}.`,
+    `Of the ${fmtInt(n.comments)} comments on the ${fmtInt(n.read)} videos we read in ${month}, ${fmtInt(you.comments)} named ${company}; ${them((r) => r.comments)}.`,
+    `Of the ${fmtInt(n.videos)} videos none of our brand searches found, ${fmtInt(you.videos)} named ${company}; ${them((r) => r.videos)}.`,
   ]
-  if (n.ownComments > 0) out.push(`${company}'s own posts drew ${fmtInt(n.ownComments)} comments in ${month}. They are left out here, as every brand's own posts are.`)
-  if (n.rows.every((r) => r.videos < FEW_NAMING_VIDEOS)) out.push(`Few voices: no brand was named without being asked in ${numberWord(FEW_NAMING_VIDEOS)} or more videos.`)
+  if (n.rows.every((r) => r.videos < FEW_NAMING_VIDEOS)) out.push(`Few voices: no brand was named in ${numberWord(FEW_NAMING_VIDEOS)} or more of the videos our searches did not find.`)
   return out
 }
 
 /** The figures In short prints, each from a count code holds: the market's
  *  month for everyone, then one that belongs to the reader (the canvas's
  *  two). Pure. */
-export function figuresFor(a: Pick<ComposeInput, 'role' | 'company' | 'month' | 'market' | 'subjects' | 'ownPosts' | 'playbook'> & Partial<Pick<ComposeInput, 'naming' | 'brandsCounted' | 'app'>>): BriefFigure[] {
+export function figuresFor(a: Pick<ComposeInput, 'role' | 'company' | 'month' | 'market' | 'subjects' | 'ownPosts' | 'playbook'> & Partial<Pick<ComposeInput, 'naming' | 'brandsCounted' | 'app' | 'posts'>>): BriefFigure[] {
   const month = longMonth(a.month)
   const out: BriefFigure[] = []
   if (a.market?.videos) {
@@ -1009,7 +1066,12 @@ export function figuresFor(a: Pick<ComposeInput, 'role' | 'company' | 'month' | 
     const top = (a.subjects ?? []).map((s) => s.fact).filter((f) => f.calibration === 'ready' && f.level && f.level.n > 0 && f.rank === 1)[0]
     if (top?.level) out.push({ value: pct0(top.level.k, top.level.n), label: `of them about ${top.name}, the biggest subject` })
   }
-  if (a.role === 'marketing' && a.ownPosts != null && a.ownPosts > 0) out.push({ value: fmtInt(a.ownPosts), label: `posts ${a.company} published in ${month}` })
+  // Its own posts, on the accounts we follow, by name (never "published": its
+  // regional accounts and other networks are not followed).
+  const accounts = (a.posts ?? []).find((r) => r.you)?.accounts ?? []
+  if (a.role === 'marketing' && a.ownPosts != null && a.ownPosts > 0) {
+    out.push({ value: fmtInt(a.ownPosts), label: accounts.length ? `posts in ${month} on ${followedAccounts(a.company, accounts.length)}: ${accountsLine(accounts, false)}` : `posts in ${month} on the ${a.company} accounts we follow` })
+  }
   // Content's own figure: its posts' response, each post against a typical
   // video on its own platform (app-load.ts `loadHooksPart`). Never the
   // category's engagement pooled across platforms: entertainment's 3.7%
@@ -1020,7 +1082,7 @@ export function figuresFor(a: Pick<ComposeInput, 'role' | 'company' | 'month' | 
   const you = a.naming?.rows.find((r) => r.you)
   const rival = a.naming?.rows.find((r) => !r.you)
   if (a.role === 'leadership' && a.naming && a.brandsCounted?.client && you && rival) {
-    out.push({ value: fmtInt(you.comments), label: `of ${month}'s ${fmtInt(a.naming.comments)} comments named ${a.company}; ${rival.label} was named in ${fmtInt(rival.comments)}` })
+    out.push({ value: fmtInt(you.comments), label: `of the ${fmtInt(a.naming.comments)} comments on the ${fmtInt(a.naming.read)} videos we read in ${month} named ${a.company}; ${fmtInt(rival.comments)} named ${rival.label}` })
   }
   return out
 }

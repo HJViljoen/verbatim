@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { briefFixture } from '../../../components/briefs/fixture'
 import { collectQuoteRefs } from '../../renderables/quotes-freeze'
 import { printedLines, printedPages, summarySentences } from './inshort'
-import { checkSavedSet, savedSetOf, type SavedFile } from './saved'
+import { checkSavedSet, savedSetOf, withoutQuotes, type SavedFile } from './saved'
 import { briefLedgerRow, briefSnapshotRow } from './store'
 import { BRIEF_ROLES, type BriefRole, type MonthlyBriefData } from './types'
 
@@ -83,6 +83,25 @@ describe('a dry build saved for --from', () => {
     const out = checkSavedSet(x, EXPECT)
     expect(out.problems).toEqual([])
     expect(out.set?.briefs.find((d) => d.role === 'content')?.held).toEqual([{ what: 'content.questions: one', reason: 'thin' }])
+  })
+})
+
+describe('voices struck out of a saved set, with no model call (--redraw --exclude-quotes)', () => {
+  it('takes them out wherever they print, with their words; evidence ids and pages as now drawn; recorded; and --from takes it', () => {
+    const x = fixtureSet()
+    const sales = collectQuoteRefs(x.files.sales.data)
+    expect(sales.length).toBeGreaterThan(0)
+    const struck = sales[0]
+    const out = withoutQuotes(x, [{ ref: struck, why: 'does not carry its claim' }, { ref: 'e:never-printed', why: 'flagged elsewhere' }])
+    expect(collectQuoteRefs(out.files.sales.data)).not.toContain(struck)
+    expect(out.files.sales.texts[struck]).toBeUndefined()
+    expect(out.manifest.roles.sales.evidenceIds).not.toContain(struck)
+    expect(out.manifest.excludedQuotes).toEqual([{ ref: struck, why: 'does not carry its claim' }, { ref: 'e:never-printed', why: 'flagged elsewhere' }])
+    // The other briefs are as they were.
+    expect(out.files.content.data).toEqual(x.files.content.data)
+    expect(checkSavedSet(JSON.parse(JSON.stringify(out)), EXPECT).problems).toEqual([])
+    // Striking again adds to the record, never twice.
+    expect(withoutQuotes(out, [{ ref: struck, why: 'again' }]).manifest.excludedQuotes).toHaveLength(2)
   })
 })
 

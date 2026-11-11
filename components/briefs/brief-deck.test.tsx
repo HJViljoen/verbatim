@@ -218,3 +218,11 @@ describe('a page left out (Heinrich, 12 Oct: thin pages are left out)', () => {
     expect(words).not.toContain('reused or recycled')
   })
 })
+
+describe('a brief read later than it closed (11 Nov)', () => {
+  it('says the day its figures were read, beside the day it was written, where they differ', () => {
+    const d = briefFixture('sales')
+    expect(renderText(<BriefDeck data={{ ...d, readOn: '2026-10-12' }} builtAt={BUILT} />)).toContain('Created by Acme with Verbatim · 5 October 2026 · figures as read on 12 October 2026')
+    expect(renderText(<BriefDeck data={{ ...d, readOn: '2026-10-05' }} builtAt={BUILT} />)).not.toContain('figures as read')
+  })
+})

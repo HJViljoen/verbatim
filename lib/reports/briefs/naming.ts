@@ -54,12 +54,11 @@ export interface BriefNaming {
   /** Comments dated in the month on the videos we read, every brand's own
    *  posts left out: every row's comments "of". */
   comments: number
+  /** The videos those comments are on (`comments`' base). */
+  read: number
   /** Those videos, less every video a brand search of ours found: every
    *  row's videos "of". */
   videos: number
-  /** The company's own posts' comments dated in the month, left out of both
-   *  bases (said once, so the old share is not looked for). */
-  ownComments: number
   /** The company first, then its rivals, the most named first. */
   rows: BriefNamingRow[]
 }
@@ -123,8 +122,8 @@ export function namingOf(input: {
   return {
     month,
     comments: read.reduce((n, v) => n + v.comments, 0),
+    read: read.length,
     videos: unasked.length,
-    ownComments: videos.filter((v) => v.owner === 'client').reduce((n, v) => n + v.comments, 0),
     rows: [rowOf(client), ...theirs],
   }
 }

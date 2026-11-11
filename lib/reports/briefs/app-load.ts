@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { postIdeasEnabled, productReadingsEnabled, subjectReadsEnabled } from '../../config'
 import { buildPlaybook, loadPlaybookVideos, type PlaybookVideo } from '../../pages/playbook'
 import { loadContentPage, mixSentence, OWN_RESPONSE_MIN, postsBlock, typicalRate, worksBlock, type ContentMonth, type WorksRow } from '../../pages/v2/content'
+import { buildAdviceRows, loadDecisions } from '../../pages/market-surface'
 import { readCited, readCore, readMoveCards, waitingAdvice } from '../../pages/v2/moves'
 import { adviceHref } from '../../pages/v2/moves'
 import { loadProducts } from '../../pages/v2/products'
@@ -28,7 +29,7 @@ import {
   hooksOf, ideasOf, movesOf, namedOf, peopleOf, productsOf,
   type BriefAppInputs, type BriefMovesIn, type BriefSubjectRead,
 } from './app'
-import { yyyymm } from './app-words'
+import { accountsOf, yyyymm } from './app-words'
 import { matchedKinds, matchedPosts, platformTypicals } from './benchmark'
 import { leftMs, type BriefClock } from './clock'
 import type { BriefHooks, BriefIdeas, BriefNamed, BriefPeople, BriefProducts } from './types'
@@ -127,7 +128,11 @@ export async function loadSubjectReads(admin: SupabaseClient, a: { clientId: str
  * the products named in its videos) and its brands table. Voices' own reads,
  * as `loadVoices` composes them, with the month given.
  */
-export async function loadVoicesParts(admin: SupabaseClient, a: { clientId: string; month: string; now: string }): Promise<{ people: BriefPeople | null; named: BriefNamed | null }> {
+export async function loadVoicesParts(admin: SupabaseClient, a: {
+  clientId: string; month: string; now: string
+  /** By hand for a closed month: the groups as its closing run described them. */
+  pinRun?: string | null
+}): Promise<{ people: BriefPeople | null; named: BriefNamed | null }> {
   const handle = readingHandle(a.clientId, admin)
   const month = monthStartOf(a.month)
   const params = { month: yyyymm(month) }
@@ -136,7 +141,7 @@ export async function loadVoicesParts(admin: SupabaseClient, a: { clientId: stri
   // groups' pages (as on Voices, `failed`) and never the brands'.
   const [rivals, read, pair] = await Promise.all([
     loadMarketRivalAudiences(admin, a.clientId),
-    loadLatestProfile(handle).catch((e: unknown) => { console.warn(`[briefs] Voices' profile: ${e instanceof Error ? e.message : String(e)}`); return undefined }),
+    loadLatestProfile(handle, { runId: a.pinRun ?? null }).catch((e: unknown) => { console.warn(`[briefs] Voices' profile: ${e instanceof Error ? e.message : String(e)}`); return undefined }),
     loadPairOn(handle, a.now),
   ])
   const profile = read ?? null
@@ -225,6 +230,7 @@ export async function loadHooksPart(admin: SupabaseClient, a: { clientId: string
   return hooksOf({
     month, rival: a.rival, playbook, posts: postsBlock({ owned, typical: typicalRate(playbook), month: cm }), sentence,
     matched: { kinds, posts: matchedPosts(owned?.posts ?? [], typicals, OWN_RESPONSE_MIN) },
+    accounts: accountsOf(owned?.posts ?? []),
   })
 }
 
@@ -253,11 +259,17 @@ export async function loadMovesPart(admin: SupabaseClient, a: {
   /** Where that run holds no themes: the newest themed run as of the brief
    *  (`themedRunAsOf`, build.ts). */
   themedRun?: string | null
+  /** By hand for a closed month: the advice, its decisions and the moves as
+   *  they stood at this instant (the closing run's), not the newest run's
+   *  (the fresh check, 11 Nov: October's brief printed advice first raised
+   *  on 8 November). */
+  asOf?: string | null
 }): Promise<BriefMovesIn | null> {
   const month = monthStartOf(a.month)
   const scope: Scope = { supabase: admin, reading: readingHandle(a.clientId, admin), clientId: a.clientId, params: { [MONTH_PARAM]: yyyymm(month) } }
-  const core = await readCore(scope)
-  if (!core || monthStartOf(core.month) !== month) return null
+  const now = await readCore(scope)
+  if (!now || monthStartOf(now.month) !== month) return null
+  const core = a.asOf ? await coreAsOf(admin, a.clientId, now, a.asOf) : now
   const waiting = waitingAdvice(core.adviceRows, null)
   const byLineage = new Map(core.adviceRows.map((r) => [r.lineageId, r]))
   const moveLineages = (core.moves ?? []).filter((m) => m.kind === 'advice' && m.lineage_id).map((m) => m.lineage_id as string)
@@ -272,6 +284,20 @@ export async function loadMovesPart(admin: SupabaseClient, a: {
     cards: read.cards,
     adviceHref,
   })
+}
+
+/** Your moves' core as it stood at `at`: the advice written by then, the
+ *  decisions made by then, the moves dated by then. */
+async function coreAsOf(admin: SupabaseClient, clientId: string, core: NonNullable<Awaited<ReturnType<typeof readCore>>>, at: string): Promise<typeof core> {
+  const by = (t: string | null | undefined) => !!t && Date.parse(t) <= Date.parse(at)
+  const copies = core.copies.filter((c) => by(c.created_at))
+  const decisions = await loadDecisions(admin, clientId)
+  return {
+    ...core,
+    copies,
+    adviceRows: buildAdviceRows(copies, decisions ? decisions.filter((d) => by(d.decided_at)) : null),
+    moves: core.moves ? core.moves.filter((m) => by(m.declared_at)) : null,
+  }
 }
 
 /**
@@ -311,11 +337,11 @@ export async function loadBriefAppParts(
   }
   const [subjectReads, voices, products, ideas, hooks, moves] = await Promise.all([
     softWithin('subject reads', () => loadSubjectReads(admin, { clientId: a.clientId, runId: a.runId, month, standing: a.standing }), ms),
-    softWithin('groups and brands', () => loadVoicesParts(admin, { clientId: a.clientId, month, now }), ms),
+    softWithin('groups and brands', () => loadVoicesParts(admin, { clientId: a.clientId, month, now, pinRun: a.pinRun ? a.runId : null }), ms),
     softWithin('products', () => loadProductsPart(admin, { clientId: a.clientId, company: a.company, month, now }), ms),
     softWithin('post ideas', () => loadIdeasPart(admin, { clientId: a.clientId, month, now: a.now, pinRun: a.pinRun ? a.runId : null }), ms),
     softWithin('formats and openings', () => loadHooksPart(admin, { clientId: a.clientId, company: a.company, month, rival: a.rival, videos: a.videos }), ms),
-    softWithin('advice and moves', () => loadMovesPart(admin, { clientId: a.clientId, month, runId: a.runId, themedRun: a.themedRun ?? null }), ms),
+    softWithin('advice and moves', () => loadMovesPart(admin, { clientId: a.clientId, month, runId: a.runId, themedRun: a.themedRun ?? null, asOf: a.pinRun ? now : null }), ms),
   ])
   return { ...none, subjectReads, people: voices?.people ?? null, named: voices?.named ?? null, products, ideas, hooks, moves }
 }

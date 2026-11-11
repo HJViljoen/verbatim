@@ -278,7 +278,7 @@ export interface BriefSection {
   shares?: { comments: ShareBar; videos: ShareBar | null }
   /** Each brand's own posts published in the month, and how many drew five or
    *  more comments (How rivals are heard): code's counts. */
-  posts?: { title: string; rows: { name: string; you: boolean; posts: number; five: number; pct: number }[] }
+  posts?: { title: string; rows: { name: string; you: boolean; posts: number; five: number; pct: number; accounts?: string }[] }
   /** The company's position in one line (What holds so far): the writer's. */
   position?: BriefItem | null
   /** The rival whose column a table carries beside the company's (Hooks and
@@ -549,6 +549,9 @@ export interface BriefHooks {
   posts: {
     total: number
     byPlatform: { platform: string; posts: number }[]
+    /** ADDITIVE (11 Nov): the accounts we follow that posted, each with its
+     *  posts. */
+    accounts?: { platform: string; account: string; posts: number }[]
     /** Each post against a typical market video ON ITS OWN PLATFORM, the
      *  median of those multiples (app-load.ts `loadHooksPart`). */
     response: { multiple: number; rated: number } | null
@@ -648,6 +651,11 @@ export interface MonthlyBriefData {
    * and would throw), draws a brief that has them as it always drew one.
    */
   fromApp?: BriefSection[]
+  /** ADDITIVE (11 Nov): `YYYY-MM-DD`, the day its figures were read, where a
+   *  closed month was rebuilt later than it closed (scripts/monthly-briefs.ts
+   *  --as-of): the month's tables may have been read again since, so the
+   *  footer says when (the fresh check, 11 Nov). */
+  readOn?: string
   /** What was written and does not print, and why: the operator's, never a
    *  reader's. */
   held: { what: string; reason: string }[]

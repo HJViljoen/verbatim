@@ -105,6 +105,7 @@ const videoKey = (e: Pick<DatedEvidence, 'video'>) => `${e.video.platform.toLowe
 
 export class QuotePool {
   private readonly used = new Set<string>()
+  private readonly excludedComments = new Set<string>()
   private readonly words = new Map<string, { text: string; english: string | null; lang: string | null }>()
 
   constructor(
@@ -128,6 +129,16 @@ export class QuotePool {
       if (!id || !this.o.whole.has(id)) return false
     }
     return true
+  }
+
+  /** Voices an operator struck out (`--exclude-quotes`): never picked, and
+   *  neither is any other citation of the same comment. */
+  exclude(refs: readonly string[]): void {
+    const ids = new Set(refs.map((r) => /^e:(.+)$/.exec(r)?.[1]).filter((x): x is string => !!x))
+    for (const rows of this.counted.values()) {
+      for (const e of rows) if (ids.has(e.evidenceId)) this.excludedComments.add(e.commentId)
+    }
+    for (const r of refs) this.used.add(r)
   }
 
   /** Refs another write of the set already prints: never picked here. */
@@ -155,7 +166,7 @@ export class QuotePool {
         const ref = quoteRef.evidence(e.evidenceId)
         if (seen.has(ref) || this.used.has(ref)) continue
         seen.add(ref)
-        if (isOwnAccount(e) || videos.has(videoKey(e))) continue
+        if (isOwnAccount(e) || videos.has(videoKey(e)) || this.excludedComments.has(e.commentId)) continue
         if (this.o.month && !inMonthWindow(e.commentDate, this.o.month)) continue
         if (this.o.whole && !this.o.whole.has(e.evidenceId)) continue
         // A voice printed as one brand's ("On Cotopaxi") is talk about it.

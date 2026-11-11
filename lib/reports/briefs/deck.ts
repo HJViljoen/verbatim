@@ -146,12 +146,13 @@ export const heardIn = (f: Pick<BriefFinding, 'months'>): string => {
  *  base line says so (the blind-report check, 9 Nov). */
 export const FEW_VOICES = 10
 
-/** "On 7 of the 786 videos read in October · few voices": a finding's videos
- *  in the brief's month, of every video read in it. Empty where the finding
+/** "On 7 of the 768 videos in your market in October · few voices": a
+ *  finding's videos in the market in the brief's month, of the market's
+ *  videos then (In short's base, said the same way). Empty where the finding
  *  carries no base (one stored before it). Pure. */
 export const findingBaseLine = (f: Pick<BriefFinding, 'base'>, month: string): string => {
   if (!f.base) return ''
-  const line = `On ${f.base.k === 0 ? 'none' : fmtInt(f.base.k)} of the ${fmtInt(f.base.n)} videos read in ${longMonth(month)}`
+  const line = `On ${f.base.k === 0 ? 'none' : fmtInt(f.base.k)} of the ${fmtInt(f.base.n)} videos in your market in ${longMonth(month)}`
   return f.base.k < FEW_VOICES ? `${line} · few voices` : line
 }
 
@@ -203,7 +204,7 @@ export const EYEBROW: Readonly<Record<SectionKey, string>> = {
   // The October canvas (the boards' eyebrows, 18 Oct).
   'sales.groups': 'Who is in your market',
   'marketing.products': 'Your products',
-  'marketing.named': 'Named without being asked',
+  'marketing.named': 'Named outside our searches',
   'content.ideas': 'What to post next',
   'content.hooks': 'Hooks and formats',
   'leadership.subjects': 'Where the market stands',
@@ -220,10 +221,47 @@ export const CONTENTS: Partial<Readonly<Record<SectionKey, string>>> = {
 
 export const eyebrowOf = (key: SectionKey, company: string): string => EYEBROW[key].replace(/\{company\}/g, company)
 
+/** The writer's card sections, whose cards rest on a few videos each: their
+ *  subtitle says how many (the fresh check, 11 Nov: cards on 3 to 9 videos
+ *  printed with no base and no few-voices mark). */
+const CARD_SECTIONS: ReadonlySet<SectionKey> = new Set<SectionKey>([
+  'sales.stops', 'sales.settle', 'sales.triggers', 'sales.rivals', 'sales.care',
+  'marketing.believe', 'marketing.say_hear', 'marketing.rivals',
+  'content.questions', 'content.watch', 'content.more', 'content.confusion',
+  'leadership.weigh', 'leadership.risks', 'leadership.decisions',
+])
+
+/** "Each rests on 3 to 9 videos heard in August, September and October ·
+ *  few voices.": what the cards a page prints rest on, few voices said where
+ *  every card is under `FEW_VOICES`, or the cards that are named. Null on a
+ *  section that is not a card section, or whose cards carry no count. Pure. */
+export function cardsEvidence(s: BriefSection, d: Partial<Pick<StoredBriefData, 'heardMonths'>>): string | null {
+  if (!CARD_SECTIONS.has(s.key)) return null
+  const items = s.groups.flatMap((g) => g.items).filter((i) => typeof i.videos === 'number' && i.videos > 0)
+  if (items.length === 0) return null
+  const vs = items.map((i) => i.videos as number)
+  const lo = Math.min(...vs)
+  const hi = Math.max(...vs)
+  const span = lo === hi ? `${fmtInt(lo)} ${lo === 1 ? 'video' : 'videos'}` : `${fmtInt(lo)} to ${fmtInt(hi)} videos`
+  const when = d.heardMonths?.length ? ` heard in ${monthsPhrase([...d.heardMonths])}` : ''
+  const fewTitled = items.filter((i) => (i.videos as number) < FEW_VOICES && i.title).map((i) => `“${i.title}”`)
+  const few = vs.every((v) => v < FEW_VOICES) ? ' · few voices' : fewTitled.length ? ` · few voices: ${andList(fewTitled)}` : ''
+  return `${items.length === 1 ? 'It rests on' : 'Each rests on'} ${span}${when}${few}.`
+}
+
 /** The muted line under a section's title, where the canvas has one: what the
  *  section is, said plainly (code's words, never a claim), or the line code
- *  wrote from counts. Pure. */
-export function subtitleOf(s: BriefSection, d: Pick<StoredBriefData, 'company' | 'noun' | 'month'>, all?: BriefSection): string | null {
+ *  wrote from counts; then, on a card section, what its cards rest on
+ *  (`cardsEvidence`). Pure. */
+export function subtitleOf(s: BriefSection, d: Pick<StoredBriefData, 'company' | 'noun' | 'month'> & Partial<Pick<StoredBriefData, 'heardMonths' | 'fromApp'>>, all?: BriefSection): string | null {
+  const sub = canvasSubtitle(s, d, all)
+  // The October canvas only: a brief drawn on v1 (September's) draws byte for
+  // byte as before (components/briefs/september-golden.test.tsx).
+  const ev = d.fromApp !== undefined ? cardsEvidence(s, d) : null
+  return ev ? (sub ? `${sub} ${ev}` : ev) : sub
+}
+
+function canvasSubtitle(s: BriefSection, d: Pick<StoredBriefData, 'company' | 'noun' | 'month'>, all?: BriefSection): string | null {
   const p = productPhrases(d.company, d.noun)
   switch (s.key) {
     case 'sales.buyers': {
@@ -693,7 +731,16 @@ export function planSection(s: BriefSection, companion: BriefSection | null, d: 
       // The table: its label, the header (its "Five or more comments" wraps
       // to two lines), and a row 32px as Chrome draws it (measured on
       // Sealand's September, 12 Oct), counted at 33 to err high.
-      const rows = (s.posts?.rows ?? []).slice(0, Math.max(0, Math.floor((room - 6 - 15 - 8 - 34) / 33)))
+      // A row naming its accounts under the brand (11 Nov) takes their lines
+      // too: 12px at 1.35 in a quarter of the table.
+      const rowH = (r: { accounts?: string }) => 33 + (r.accounts ? 2 + heightOf(r.accounts, (W - 16 * 23) / 4, 12, 1.35) : 0)
+      const rows: NonNullable<BriefSection['posts']>['rows'] = []
+      let used = 6 + 15 + 8 + 34
+      for (const r of s.posts?.rows ?? []) {
+        if (used + rowH(r) > room) break
+        used += rowH(r)
+        rows.push(r)
+      }
       const out = only(s, shown)
       if (s.posts) out.posts = rows.length ? { ...s.posts, rows } : undefined
       if (!out.posts) delete out.posts
@@ -1007,7 +1054,7 @@ export function findingPlan(f: BriefFinding): FindingPlan {
   const headline = f.headline.length > 70 ? 28 : 31
   const headH = heightOf(f.headline, FINDING_LEFT, headline, 1.2, 'bold') + 14
   // The heard line, its base line (13px, 3px apart) and the subject line.
-  const heard = (heardIn(f) ? 30 : 0) + (f.base ? 3 + 17 : 0) + (f.subjectLine ? 3 + heightOf(f.subjectLine, FINDING_LEFT, 13, 1.25) : 0)
+  const heard = (heardIn(f) ? 30 : 0) + (f.base ? (heardIn(f) ? 3 : 14) + 17 : 0) + (f.subjectLine ? 3 + heightOf(f.subjectLine, FINDING_LEFT, 13, 1.25) : 0)
   const practiceH = (size: number, n: number) => (n ? 26 + f.practice.slice(0, n).reduce((m, t) => m + heightOf(t, FINDING_LEFT - 16, size, 1.5) + 6, 0) : 0)
   const sawH = (size: number) => f.saw.reduce((n, p) => n + heightOf(p, FINDING_LEFT, size, 1.58) + 14, 0)
   let saw = 16

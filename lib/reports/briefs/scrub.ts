@@ -254,7 +254,9 @@ export function hyphenatedNames(texts: readonly string[]): string[] {
 export function talkAboutNotUnder(text: string, company: string): string {
   const co = company.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   if (!co) return text
-  const whose = `(?:${co}['’]s|the company['’]s)\\s+(?:own\\s+)?(?:[A-Z][a-z]+\\s+)?posts`
+  // A platform's name may stand before "posts"; no other word may (under
+  // the case-blind flag a capital-letter class would take any word).
+  const whose = `(?:${co}['’]s|the company['’]s)\\s+(?:own\\s+)?(?:(?:instagram|tiktok|youtube|reddit|facebook|linkedin)\\s+)?posts`
   return text
     .replace(new RegExp(`\\b(people|viewers|buyers|owners|commenters|users)\\s+(?:under|on)\\s+${whose}`, 'giu'), (_m, who: string) => `${who} talking about ${company}`)
     .replace(new RegExp(`\\b(comments|questions|talk)\\s+(?:under|on)\\s+${whose}`, 'giu'), (_m, what: string) => `${what} about ${company}`)

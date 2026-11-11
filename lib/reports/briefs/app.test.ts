@@ -17,7 +17,7 @@ import {
 } from './app'
 import { OSSUR_APP, OSSUR_MOVES, OSSUR_PEOPLE, OSSUR_SUBJECT_FACTS, OSSUR_SUBJECT_READS, SEALAND_APP, SEALAND_NAMED } from './app-fixture'
 import {
-  adviceDetail, alsoInMarket, appLines, buyersSub, daysLong, ideaReadLine, inTheirVideos, moveLine, multipleText, ownTouchWords, pageHref, recordLine, slotWords, voicesMonthHref, withMonth,
+  accountsLine, adviceDetail, alsoInMarket, appLines, buyerNamesNote, buyersSub, daysLong, ideaReadLine, inTheirVideos, moveLine, multipleText, ownTouchWords, pageHref, recordLine, slotWords, voicesMonthHref, withMonth,
 } from './app-words'
 import type { BriefNaming } from './naming'
 import type { BriefNamed } from './types'
@@ -75,7 +75,7 @@ describe('Voices: the groups (Leadership\'s Who is in your market, Sales\' Who i
     const lead = groupsSection(OSSUR_PEOPLE)!
     expect(lead.key).toBe('leadership.groups')
     expect(lead.sub).toBe('Five groups comment in your market, as Voices describes them, each counted by the videos it commented on, not by purchases. A video can hold more than one group, so the counts overlap.')
-    expect(lead.foot).toBe('Each update describes the groups afresh, so no count is set against September.')
+    expect(lead.foot).toBe('“First-time buyer” is Voices’ name for a group of people asking about or considering a purchase; its count is of videos, not purchases. Each update describes the groups afresh, so no count is set against September.')
     expect(lead.link).toEqual({ href: '/dashboard/voices?month=2026-10', text: 'Open the groups on Voices →' })
     expect(appLines(lead).join(' ')).not.toMatch(/%/)
     const sales = buyersSection(OSSUR_PEOPLE)!
@@ -112,38 +112,43 @@ describe('Voices: the brands named without being asked (Marketing)', () => {
 
   it('writes the notes from the counts: the company beside its rivals, never "named most" over a table without it', () => {
     expect(namedNotes(SEALAND_NAMED, 'Sealand')).toEqual([
-      'Of the 941 videos, Sealand was named without being asked in 2, The North Face in 11 and Cotopaxi in 8.',
+      'Of the 941 videos none of our brand searches found, Sealand was named in 2, The North Face in 11 and Cotopaxi in 8.',
       'Of the 52 videos in your market naming Cotopaxi in any way, 27 held praise in their comments and 32 a complaint, about anything in the video.',
     ])
     const quiet = { ...SEALAND_NAMED, rows: SEALAND_NAMED.rows.map((r) => (r.you ? { ...r, named: { k: 0, n: 941 } } : r)) }
-    expect(namedNotes(quiet, 'Sealand')[0]).toBe('Of the 941 videos, Sealand was named without being asked in none, The North Face in 11 and Cotopaxi in 8.')
+    expect(namedNotes(quiet, 'Sealand')[0]).toBe('Of the 941 videos none of our brand searches found, Sealand was named in none, The North Face in 11 and Cotopaxi in 8.')
     const few = { ...SEALAND_NAMED, rows: SEALAND_NAMED.rows.map((r) => ({ ...r, named: { k: Math.min(r.named.k, 7), n: 941 } })) }
-    expect(namedNotes(few, 'Sealand')).toContain('Few voices: no brand was named without being asked in ten or more of them.')
+    expect(namedNotes(few, 'Sealand')).toContain('Few voices: no brand was named in ten or more of them.')
     const s = namedSection(SEALAND_NAMED, 'Sealand')!
-    expect(s.also).toBe('Not named without being asked in October: Freedom of Movement.')
-    expect(s.sub).toMatch(/^Of the 941 videos we read in October that no brand search of ours found/)
+    expect(s.also).toBe('Not named outside our searches in October: Freedom of Movement.')
+    expect(s.sub).toMatch(/^Of the 941 videos we read in October that none of our brand searches found/)
     expect(namedSection(null, 'Össur')).toBeNull()
   })
 
-  it('on the brief\'s naming: one base for every brand, the company\'s own row kept, Voices\' praise beside it, no verdict; none without naming', () => {
+  it('on the brief\'s naming: one base for every brand, the company\'s own row kept, no unlike-base praise, no verdict; "not named" brands kept; none without naming', () => {
     const naming: BriefNaming = {
-      month: OCT, comments: 22_249, videos: 698, ownComments: 124,
+      month: OCT, comments: 22_249, read: 778, videos: 698,
       rows: [
         { brandKey: 'client', label: 'Össur', you: true, comments: 20, videos: 8, platforms: ['Reddit', 'Instagram'] },
         { brandKey: 'r1', label: 'Ottobock', you: false, comments: 20, videos: 6, platforms: ['TikTok'] },
       ],
     }
     const voices: BriefNamed = {
-      month: OCT, base: 704, notNamed: [], href: '/dashboard/voices?month=2026-10',
+      month: OCT, base: 704, notNamed: ['Old School', 'Ottobock'], href: '/dashboard/voices?month=2026-10',
       rows: [{ label: 'Ottobock', you: false, named: { k: 7, n: 704 }, verdict: { state: 'too_little_data', change: null, band: null }, praised: { k: 39, n: 63 }, complained: { k: 23, n: 63 }, top: null, href: '/dashboard/voices/brands/r1?month=2026-10' }],
     }
     const n = namedByNaming(voices, naming)!
     expect(n.base).toBe(698)
-    expect(n.rows.map((r) => [r.label, r.you, r.named.k, r.named.n, r.verdict, r.praised?.k ?? null])).toEqual([['Össur', true, 8, 698, null, null], ['Ottobock', false, 6, 698, null, 39]])
+    expect(n.rows.map((r) => [r.label, r.you, r.named.k, r.named.n, r.verdict, r.praised, r.top])).toEqual([['Össur', true, 8, 698, null, null, null], ['Ottobock', false, 6, 698, null, null, null]])
+    // A brand Voices counts and nobody named stays said; one the naming counts is not.
+    expect(n.notNamed).toEqual(['Old School'])
     const s = namedSection(voices, 'Össur', naming)!
-    expect(s.lines?.[0]).toBe('Of the 698 videos, Össur was named without being asked in 8, Ottobock in 6.')
-    expect(s.lines).toContain('Few voices: no brand was named without being asked in ten or more of them.')
-    expect(s.lines?.join(' ')).not.toMatch(/named most/)
+    expect(s.lines).toEqual([
+      'Of the 698 videos none of our brand searches found, Össur was named in 8, Ottobock in 6.',
+      'Few voices: no brand was named in ten or more of them.',
+    ])
+    expect(s.sub).toBe('Of the 698 videos we read in October that none of our brand searches found, how many named each brand. Posts on the accounts we follow for each brand are left out.')
+    expect(s.foot).toBeUndefined()
     expect(namedSection(voices, 'Össur', null)).toBeNull()
   })
 })
@@ -193,12 +198,13 @@ describe('Content: what to post next (the month-closing run\'s ideas)', () => {
     expect(first.asks.length).toBe(4)
     expect(first.asks.map((a) => a.videos)).toEqual([...first.asks.map((a) => a.videos)].sort((a, b) => b - a))
     expect(first.asksOf).toBe(23)
-    expect(first.format).toEqual({ label: 'Tutorial', multiple: expect.any(Number) })
+    // The suggestion, never its pooled multiple.
+    expect(first.format).toEqual({ label: 'Tutorial', multiple: null })
     expect(first.opening?.label).toBe('Open with a question')
     expect(first.href).toBe(`/dashboard/content/ideas/${first.id}`)
     expect(i.asked.map((a) => [a.label, a.videos])).toEqual([['How a socket should fit as a child grows', 17], ['Which knee suits my activity level', 14], ['Looking after the skin under a liner', 13]])
     expect(i.replies).toBe('/dashboard/content/replies?period=month')
-    expect(ideaReadLine(first, i)).toBe('48 of 640 videos, 14 Sep to 11 Oct · 31 of 318 in October')
+    expect(ideaReadLine(first, i)).toBe('48 of 640 videos in your market, 14 Sep to 11 Oct · 31 of 318 in October')
     expect(ideaReadLine({ read: first.read, month: null }, i)).toBeNull()
     expect(ownTouchWords(first.own)).toMatch(/^None of your \d+ posts since August touched on it$/)
   })
@@ -222,7 +228,8 @@ describe('Content: what to post next (the month-closing run\'s ideas)', () => {
 
   it('the sub says the days the ideas read, in full', () => {
     const i = ideasOf(page, OSSUR_IDEA_ROWS, { month: OCT, medical: true })!
-    expect(ideasSection(i)!.sub).toBe('From questions people asked 14 September to 11 October that none of your posts since August had touched on, the most videos first. 1× is a typical market video on the question.')
+    // The ideas' multiples pool the platforms: the brief prints none.
+    expect(ideasSection(i)!.sub).toBe('From questions people asked 14 September to 11 October that none of your posts since August had touched on, the most videos first.')
     expect(daysLong('2026-10-04T00:00:00.000Z', '2026-11-01T00:00:00.000Z')).toBe('4 to 31 October')
   })
 })
@@ -316,7 +323,7 @@ describe('Your moves: the advice waiting, the moves dated, the record', () => {
     expect(folded.waitingCount).toBe(3)
     expect(flat.waiting.every((a) => !a.title.startsWith('Create a guided'))).toBe(true)
     expect(recordLine(flat)).toBe('65 pieces of advice since 13 June: 1 decided, 4 waiting.')
-    expect(adviceDetail(flat.waiting[0], OCT)).toBe('First raised 12 Oct · would move Where can I get one, 41 of 902 videos in October')
+    expect(adviceDetail(flat.waiting[0], OCT)).toBe('First raised 12 Oct · would move Where can I get one, 41 of the 902 category videos in October')
   })
 
   it('reads the record and the current advice from the ledger, the move that compares first', () => {
@@ -418,5 +425,16 @@ describe('a piece of advice is named by `adviceTitle`, as everywhere', () => {
     })
     expect(m.pool[0].title).toBe(adviceTitle('', m.pool[0].why))
     expect(m.pool[0].title).not.toBe('')
+  })
+})
+
+describe('words for what a count is (11 Nov)', () => {
+  it('a group named for buying is said to count videos, not purchases', () => {
+    expect(buyerNamesNote([{ name: 'Caretaker' }, { name: 'First-time buyer' }])).toBe('“First-time buyer” is Voices’ name for a group of people asking about or considering a purchase; its count is of videos, not purchases.')
+    expect(buyerNamesNote([{ name: 'Caretaker' }, { name: 'Long-term user' }])).toBeNull()
+  })
+  it('the accounts we follow, by name', () => {
+    expect(accountsLine([{ platform: 'instagram', account: 'acme', posts: 24 }, { platform: 'tiktok', account: 'acme_co', posts: 11 }, { platform: 'youtube', account: 'ACME', posts: 5 }]))
+      .toBe('Instagram @acme 24, TikTok @acme_co 11 and YouTube ACME 5')
   })
 })

@@ -163,6 +163,13 @@ describe('the quotes a brief for one month prints', () => {
     expect(inMonthWindow('2026-11-01T00:00:00Z', OCT)).toBe(false)
   })
 
+  it('a voice an operator struck never prints, nor another citation of the same comment', () => {
+    const again = { ...oct, evidenceId: `${oct.evidenceId}-b`, insightId: 'i2' }
+    const p = new QuotePool(new Map([['G1', [oct, again, sep]]]), { clientId: CLIENT, company: 'Acme', brandsOf: new Map(), meaning: words() })
+    p.exclude([`e:${oct.evidenceId}`])
+    expect(p.pick(['G1'], 'straps held up daily walking month', 2).map((q) => q.ref)).toEqual([`e:${sep.evidenceId}`])
+  })
+
   it('"on the company\'s own post" only on its own account\'s post, never on another post that names it', () => {
     const named = cite({ insight: 'i1', video: 'm3', audience: 'client', date: '2026-10-08T10:00:00Z', text: 'The straps held up through a month of daily walking on my Acme pack.' })
     const own = cite({ insight: 'i1', video: 'm4', audience: 'client', date: '2026-10-09T10:00:00Z', text: 'The straps on the Acme pack held up through a whole month of daily walking.' })

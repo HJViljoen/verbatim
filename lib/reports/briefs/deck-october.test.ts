@@ -35,9 +35,9 @@ describe('the page set on the October canvas, each role', () => {
 
   it('Marketing: Your products (Össur) or Who gets named (Sealand) after how rivals are heard', () => {
     expect(eyebrows(octoberFixture('marketing')).slice(-2)).toEqual(['How rivals are heard', 'Your products'])
-    expect(eyebrows(octoberFixture('marketing', { tenant: 'sealand' })).slice(-2)).toEqual(['How rivals are heard', 'Named without being asked'])
+    expect(eyebrows(octoberFixture('marketing', { tenant: 'sealand' })).slice(-2)).toEqual(['How rivals are heard', 'Named outside our searches'])
     const both = octoberFixture('marketing', { app: app({ named: SEALAND_NAMED }) })
-    expect(eyebrows(both).slice(-2)).toEqual(['Your products', 'Named without being asked'])
+    expect(eyebrows(both).slice(-2)).toEqual(['Your products', 'Named outside our searches'])
   })
 
   it('Content: What to post next stands where The questions people ask stood, and Hooks and formats is Content\'s measure', () => {
@@ -148,7 +148,7 @@ describe('a thin page is left out (PAGE_NEEDS), and a partial landing prints the
   it('Sealand: no products page, no moves where none were read, brands named where counted', () => {
     expect(eyebrows(octoberFixture('leadership', { tenant: 'sealand' }))).not.toContain('Your moves')
     expect(eyebrows(octoberFixture('marketing', { tenant: 'sealand' }))).not.toContain('Your products')
-    expect(eyebrows(octoberFixture('marketing', { app: { ...SEALAND_APP, named: null } }))).not.toContain('Named without being asked')
+    expect(eyebrows(octoberFixture('marketing', { app: { ...SEALAND_APP, named: null } }))).not.toContain('Named outside our searches')
   })
 })
 

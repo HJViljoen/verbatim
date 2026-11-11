@@ -80,7 +80,7 @@ function Frame({ ctx, page, children }: { ctx: Ctx; page: DeckPage; children: Re
       </div>
       <div data-brief-body="" style={{ flexGrow: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>{children}</div>
       <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 12, borderTop: `1px solid ${P.hair}`, fontSize: 12, color: P.muted }}>
-        <div>Created by {data.company} with Verbatim{ctx.date ? ` · ${ctx.date}` : ''}</div>
+        <div>Created by {data.company} with Verbatim{ctx.date ? ` · ${ctx.date}` : ''}{data.readOn && writtenOn(`${data.readOn}T12:00:00.000Z`) !== ctx.date ? ` · figures as read on ${writtenOn(`${data.readOn}T12:00:00.000Z`)}` : ''}</div>
         <div style={{ fontFamily: MONO }}>{page.n} / {ctx.total}</div>
       </div>
     </div>
@@ -190,9 +190,9 @@ function Finding({ ctx, f, plan }: { ctx: Ctx; f: BriefFinding; plan: FindingPla
           ) : null}
           {placed('left').map((q, k) => <QuotePanel key={k} q={q} company={data.company} size={15} pad="14px 18px" />)}
           <div style={{ flexGrow: 1 }} />
-          {heard ? (
+          {heard || base ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              <div data-copy="figure" style={{ fontSize: 13, color: P.muted }}>{heard}</div>
+              {heard ? <div data-copy="figure" style={{ fontSize: 13, color: P.muted }}>{heard}</div> : null}
               {base ? <div data-copy="figure" style={{ fontSize: 13, color: P.muted }}>{base}</div> : null}
               {f.subjectLine ? <div data-copy="figure" style={{ fontSize: 13, color: P.ink }}>{f.subjectLine}</div> : null}
             </div>
@@ -554,7 +554,14 @@ function RivalsHeardPage({ ctx, s, sub, footnote }: PageProps) {
             </div>
             {posts.map((r, k) => (
               <div key={k} style={{ display: 'grid', gridTemplateColumns: 'repeat(24, minmax(0, 1fr))', gap: 16, alignItems: 'center', padding: '6px 0', borderTop: `1px solid ${P.hair}` }}>
-                <div style={{ gridColumn: 'span 6', fontSize: 15, fontWeight: r.you ? 700 : 600, color: r.you ? P.gold : P.ink }}>{r.you ? `${r.name} (you)` : r.name}</div>
+                {r.accounts ? (
+                  <div style={{ gridColumn: 'span 6', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <div style={{ fontSize: 15, fontWeight: r.you ? 700 : 600, color: r.you ? P.gold : P.ink }}>{r.you ? `${r.name} (you)` : r.name}</div>
+                    <div data-copy="figure" style={{ fontSize: 12, lineHeight: 1.35, color: P.muted }}>{r.accounts}</div>
+                  </div>
+                ) : (
+                  <div style={{ gridColumn: 'span 6', fontSize: 15, fontWeight: r.you ? 700 : 600, color: r.you ? P.gold : P.ink }}>{r.you ? `${r.name} (you)` : r.name}</div>
+                )}
                 <div data-copy="figure" style={{ gridColumn: 'span 3', textAlign: 'right', fontFamily: MONO, fontSize: 14 }}>{r.posts}</div>
                 <div data-copy="figure" style={{ gridColumn: 'span 3', textAlign: 'right', fontFamily: MONO, fontSize: 14 }}>{r.five}</div>
                 <div style={{ gridColumn: 'span 12', display: 'flex', alignItems: 'center', gap: 12, paddingLeft: 12 }}>
@@ -854,7 +861,7 @@ function SharesPage({ s, sub }: PageProps) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(20, minmax(0, 1fr))', gap: 16, paddingBottom: 6, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: P.muted }}>
             <div style={{ gridColumn: named ? 'span 5' : 'span 6' }}>Brand</div>
             <div style={{ gridColumn: named ? 'span 5' : 'span 3', textAlign: 'right' }}>{named ? 'Comments naming it' : 'Comments'}</div>
-            <div style={{ gridColumn: named ? 'span 5' : 'span 3', textAlign: 'right' }}>{named ? 'Named unasked' : 'Videos'}</div>
+            <div style={{ gridColumn: named ? 'span 5' : 'span 3', textAlign: 'right' }}>{named ? 'Videos outside our searches' : 'Videos'}</div>
             <div style={{ gridColumn: named ? 'span 5' : 'span 8', paddingLeft: 12 }}>{named ? 'Where' : 'Where it is talked about'}</div>
           </div>
           {allItems(s).map((i, k) => (
