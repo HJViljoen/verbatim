@@ -3,8 +3,9 @@ import { aboutNamed, type WhoVideo } from '../../brands/attribution'
 import type { About } from '../../brands/labels'
 import { fmtInt, longMonth } from '../../format'
 import type { PlaybookBlock } from '../../pages/playbook'
-import { kindLabel } from '../../reading/kinds'
-import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, isRivalAudience, rivalNameOf } from '../../rivals'
+import { marketKindLabel } from '../../pages/overview-market/kinds'
+import { monthStartOf } from '../../reading/month-key'
+import { CLIENT_AUDIENCE, isRivalAudience } from '../../rivals'
 import { splitSentences } from '../../prose/scrub'
 import type { StandingFact } from '../../written/types'
 import type { WeekScrubCounts } from '../../written/scrub'
@@ -14,17 +15,18 @@ import type { QuoteResolution } from '../../renderables/types'
 import { adviceText } from '../../pages/advice-shortlist'
 import { overlapOfSmaller, referencesFor } from './allocate'
 import { appSectionsFor, subjectsSection, type BriefAppInputs } from './app'
-import { appLines, SALES_GROUPS_LINE } from './app-words'
+import { appLines, multipleText, SALES_GROUPS_LINE } from './app-words'
 import { canvasOf } from './canvas'
 import { printedSections } from './deck'
 import { APP_SECTION_KEYS } from './types'
 import { unionOf } from './ground'
 import { FIT, type Meaning } from './meaning'
 import { itemKey } from './repeats'
+import type { BriefNaming } from './naming'
 import type { QuotePool } from './quotes'
-import { addCounts, hyphenatedNames, restoreNames, scrubBriefText, tradeOff, varySubjects, ZERO_COUNTS, type BriefField } from './scrub'
+import { addCounts, hyphenatedNames, restoreNames, scrubBriefText, talkAboutNotUnder, tradeOff, varySubjects, ZERO_COUNTS, type BriefField } from './scrub'
 import { BRAND_MIN_VIDEOS, ITEM_MIN_VIDEOS, ROLE_SECTIONS, groundedRival, printsSection, sectionSays, sectionTitle, selectRoleSections, standingItems } from './sections'
-import type { AllocatedIdea, Allocation, BriefFigure, BriefFinding, BriefItem, BriefQuote, BriefRole, BriefSection, GroundedPoint, MonthlyBriefData, SectionKey, ShareBar } from './types'
+import type { AllocatedIdea, Allocation, BriefFigure, BriefFinding, BriefItem, BriefQuote, BriefRole, BriefSection, GroundedPoint, MonthlyBriefData, SectionKey } from './types'
 import { BRIEF_NAME, BRIEF_ROLES, SAY_HEAR_STATUSES, type SayHearStatus } from './types'
 import { BRIEF_MAX, BRIEF_PROMPT_VERSION, EXTRA_MAX, PARTS, partCaps, partOf, type BriefLineOutput, type BriefOutput, type BriefPartItem, type BriefWordsGroup } from './write'
 
@@ -161,6 +163,9 @@ export interface ComposeInput {
    *  that runs a giveaway or a competition), which a share line flags. */
   giveaway: { posts: number; comments: number } | null
   playbook: PlaybookBlock | null
+  /** Who named each brand in the month (naming.ts): Leadership's standing
+   *  and its In short figure. Null or absent: neither prints. */
+  naming?: BriefNaming | null
   /** Which brands the product counts talk for (the hand-checked brand rules,
    *  lib/brands/precision.ts): the client, and the rivals by name. A tenant
    *  whose brands are not counted (Össur today: its Competitive page is empty)
@@ -184,16 +189,12 @@ export interface ComposeInput {
   costUsd: number
 }
 
-const pct1 = (k: number, n: number): string => `${(Math.round((k / n) * 1000) / 10).toFixed(1)}%`
 const pct0 = (k: number, n: number): string => `${Math.round((k / n) * 100)}%`
 const BIGGEST = ['biggest', 'second biggest', 'third biggest', 'fourth biggest', 'fifth biggest', 'sixth biggest', 'seventh biggest', 'eighth biggest']
-const ORDINAL = ['first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth']
 const NUMBER = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
 /** "five", or the digits past ten. */
 export const numberWord = (n: number): string => NUMBER[n] ?? fmtInt(n)
 const firstSentence = (s: string): string => splitSentences(s)[0] ?? s
-const PLATFORM: Readonly<Record<string, string>> = { tiktok: 'TikTok', instagram: 'Instagram', youtube: 'YouTube', reddit: 'Reddit' }
-const platformName = (p: string): string => PLATFORM[p.toLowerCase()] ?? p
 /** "A, B and C". */
 const andList = (xs: readonly string[]): string => (xs.length <= 1 ? xs[0] ?? '' : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`)
 /** A share with one decimal, its ".0" kept off a whole number ("77%", "13.5%"). */
@@ -214,7 +215,7 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
   const held: MonthlyBriefData['held'] = []
   const scrubbed: { field: string; sentence: string; rule: string }[] = []
   const productNames = hyphenatedNames(a.points.map((p) => p.text))
-  const polish = (s: string) => varySubjects(tradeOff(restoreNames(s, productNames)))
+  const polish = (s: string) => varySubjects(tradeOff(talkAboutNotUnder(restoreNames(s, productNames), co)))
   const scrub = (raw: string, max: number, f: BriefField, where: string, o: { maxSentences?: number; whole?: boolean } = {}) => {
     const r = scrubBriefText(raw ?? '', max, { company: co, field: f, ...o })
     counts = addCounts(counts, r.counts)
@@ -276,6 +277,7 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
     const name = w.short ? run(w.short, EXTRA_MAX.short, 'headline', `${idea.id}.short`, { whole: true }) : ''
     const ev = evidenceOf(idea.points)
     const part = subjectLineOf(idea.points)
+    const base = findingBase(ev.months)
     findings.push({
       ideaId: idea.id,
       headline: polish(idea.headline),
@@ -290,7 +292,19 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
       quotes: a.quotes.pick(idea.points, `${idea.headline}. ${saw.join(' ')}`, 2),
       ...(name && !shortBrand(name) ? { short: name } : {}),
       ...(part ? { subjectLine: part } : {}),
+      ...(base ? { base } : {}),
     })
+  }
+
+  /** A finding's videos in the brief's month, of every video read in it (all
+   *  of the month's audiences, the company's own posts included, as a
+   *  finding's counted videos are): its base in print (the blind-report check,
+   *  9 Nov: findings on 3 to 9 of 766 videos printed with no base). */
+  function findingBase(months: readonly { month: string; videos: number }[]): BriefFinding['base'] | null {
+    const n = (a.audiences ?? []).reduce((t, r) => t + r.videos, 0)
+    if (n <= 0) return null
+    const k = months.filter((m) => monthStartOf(m.month) === monthStartOf(a.month)).reduce((t, m) => t + m.videos, 0)
+    return { k, n }
   }
 
   /** "Part of Buying & delivery, the biggest subject in your market: 23% of
@@ -790,7 +804,7 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
   /** A subject's own strict-gated voice, where it is not printed already. */
   function subjectQuote(fact: StandingFact): BriefQuote | null {
     const q = fact.quoteRef
-    if (!q?.ref || a.quotes.picked().includes(q.ref)) return null
+    if (!q?.ref || a.quotes.picked().includes(q.ref) || !a.quotes.mayPrint(q.ref, q.date)) return null
     a.quotes.spend([q.ref])
     return { ref: q.ref, text: '', date: q.date, platform: q.platform, about: 'market', ownPost: false, lang: null }
   }
@@ -802,20 +816,22 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
   }
 
   // ---- leadership: where the company stands against its rivals -----------------------------------
+  // By who names each brand (naming.ts), never by the bucket its talk is
+  // filed under: that set the company's own posts and the posts naming it
+  // against a rival's naming alone (the blind-report check, 9 Nov).
   function shares(): BriefSection | null {
-    const s = brandShares(a)
-    if (!s) return null
-    const items: BriefItem[] = s.brands.map((b) => ({
-      title: b.you ? `${co} (you)` : b.name,
-      text: `${pct1(b.comments, s.base.comments)} of ${month}'s comments and ${pct1(b.videos, s.base.videos)} of its videos.`,
-      ...(b.where ? { detail: b.where } : {}),
+    const n = a.naming
+    if (!n || !a.brandsCounted.client || n.rows.length < 2) return null
+    const items: BriefItem[] = n.rows.map((b) => ({
+      title: b.you ? `${co} (you)` : b.label,
+      text: `Named in ${fmtInt(b.comments)} of ${month}'s ${fmtInt(n.comments)} comments, and without being asked in ${fmtInt(b.videos)} of ${fmtInt(n.videos)} videos.`,
+      ...(b.platforms.length ? { detail: b.platforms.slice(0, 3).join(', ') } : {}),
       ...(b.you ? { you: true } : {}),
-      measure: { comments: Math.round((b.comments / s.base.comments) * 1000) / 10, videos: Math.round((b.videos / s.base.videos) * 1000) / 10 },
+      measure: { named: { comments: { k: b.comments, n: n.comments }, videos: { k: b.videos, n: n.videos } } },
     }))
     return section('leadership.shares', [{ items }], {
-      sub: `Share of ${month}'s conversation: ${fmtInt(s.base.comments)} comments and ${fmtInt(s.base.videos)} videos, ${co}'s own posts included.`,
-      shares: { comments: s.bars.comments, videos: s.bars.videos },
-      lines: s.notes,
+      sub: `Who named each brand in ${month}: comments on the videos we read, and videos no brand search of ours found. Each brand's own posts are left out.`,
+      lines: namingNotes(n, co, month),
     })
   }
 
@@ -875,7 +891,7 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
         if (v) vectors.set(r.lineageId, [...v])
       }
     }
-    return appSectionsFor(a.role, { company: co, app, subjects: subjectsPage, vectors: vectors.size ? vectors : null })
+    return appSectionsFor(a.role, { company: co, app, subjects: subjectsPage, vectors: vectors.size ? vectors : null, naming: a.naming })
   }
 
   // ---- in short (filtered against what printed, at the set level: summaryAgainstPrinted) --------
@@ -901,21 +917,29 @@ export function composeBrief(a: ComposeInput): { data: MonthlyBriefData; counts:
   return { data, counts, scrubbed }
 }
 
+/** What the praise bar counts, said under the bars where it prints. */
+export const PRAISE_IS = 'Praise is of anything in a video, the person in it as well as the product.'
+
 /** What people did in the comments, and the mood, as the canvas's bars:
  *  shares only over enough videos (`marketLevel`'s floor). Pure. */
 export function marketKinds(m: MarketKindsIn | null | undefined, monthStart: string): Pick<BriefSection, 'kinds' | 'mood'> {
   const month = longMonth(monthStart)
   if (!m || m.n == null || m.n < KIND_MIN_N) return {}
   const n = m.n
-  const rows = m.kinds.filter((r) => r.k != null && r.k >= KIND_MIN_K)
+  const top = m.kinds.filter((r) => r.k != null && r.k >= KIND_MIN_K)
     .sort((x, y) => (y.k ?? 0) - (x.k ?? 0)).slice(0, 3)
-    .map((r) => ({ label: kindLabel(r.kind), pct: pctShort(((r.k ?? 0) / n) * 100) }))
+  // Praise is the market's label (decision K, "Praising it"), and its base
+  // says what it counts: praise of anything in a video, the person in it as
+  // much as the product (the blind-report check, 9 Nov: about half of
+  // October's was admiration of the person, printed as "Saying it worked").
+  const praiseShown = top.some((r) => r.kind === 'praise')
+  const rows = top.map((r) => ({ label: marketKindLabel(r.kind), pct: pctShort(((r.k ?? 0) / n) * 100) }))
   const judged = m.judged ?? 0
   const mood = judged >= KIND_MIN_N && m.mood.every((r) => r.k != null)
     ? m.mood.map((r) => ({ mood: r.mood, label: `${r.mood[0].toUpperCase()}${r.mood.slice(1)}`, pct: pctShort(((r.k ?? 0) / judged) * 100) }))
     : []
   return {
-    ...(rows.length ? { kinds: { base: `Share of the ${fmtInt(n)} videos in your market in ${month}`, rows } } : {}),
+    ...(rows.length ? { kinds: { base: `Share of the ${fmtInt(n)} videos in your market in ${month}${praiseShown ? `. ${PRAISE_IS}` : ''}`, rows } } : {}),
     ...(mood.length ? { mood: { base: judged === n ? `The same ${fmtInt(n)} videos` : `${fmtInt(judged)} of the same ${fmtInt(n)} videos`, rows: mood } } : {}),
   }
 }
@@ -940,64 +964,30 @@ export function wordsIn(phrase: string, text: string): boolean {
   })
 }
 
-/** The brands' shares of the month's comments and videos, the company's own
- *  posts included (the canvas's "Where {company} stands against its rivals"),
- *  where the product counts the company's talk and a rival's. Null otherwise.
- *  Pure. */
-export function brandShares(a: Pick<ComposeInput, 'company' | 'audiences' | 'rivals' | 'brandsCounted' | 'giveaway'>): {
-  base: { comments: number; videos: number }
-  brands: { name: string; you: boolean; comments: number; videos: number; where: string }[]
-  bars: { comments: ShareBar; videos: ShareBar }
-  notes: string[]
-} | null {
-  const rows = a.audiences ?? []
-  const co = a.company
-  const client = rows.find((r) => r.audience === CLIENT_AUDIENCE) ?? null
-  if (!a.brandsCounted.client || !client || client.comments <= 0) return null
-  const counted = (name: string) => a.brandsCounted.rivals.some((n) => n.toLowerCase() === name.toLowerCase()) && a.rivals.some((n) => n.toLowerCase() === name.toLowerCase())
-  const rivals = rows.filter((r) => isRivalAudience(r.audience) && r.videos > 0 && counted(rivalNameOf(r.audience) ?? ''))
-  if (rivals.length === 0) return null
-  const base = { comments: rows.reduce((n, r) => n + r.comments, 0), videos: rows.reduce((n, r) => n + r.videos, 0) }
-  if (base.comments <= 0 || base.videos <= 0) return null
-  // Uncounted rivals' talk is in the rest, which is then more than the category.
-  const restIsCategory = rows.every((r) => r.audience === CLIENT_AUDIENCE || r.audience === INDUSTRY_AUDIENCE || rivals.includes(r))
-  const restName = restIsCategory ? 'the rest of the category' : 'the rest'
-  const platformsOf = (r: AudienceRow) => Object.entries(r.platforms ?? {}).filter(([, v]) => Number(v) > 0).sort((x, y) => Number(y[1]) - Number(x[1]) || x[0].localeCompare(y[0])).map(([p]) => platformName(p))
-  const brands = [
-    { name: co, you: true, comments: client.comments, videos: client.videos, where: platformsOf(client).length ? `Its own ${andList(platformsOf(client).slice(0, 3))} posts` : '' },
-    ...rivals.map((r) => ({ name: rivalNameOf(r.audience) ?? r.audience, you: false, comments: r.comments, videos: r.videos, where: platformsOf(r).slice(0, 3).join(', ') })),
-  ].sort((x, y) => y.comments - x.comments || y.videos - x.videos || x.name.localeCompare(y.name))
-  const pct = (k: number, n: number) => Math.round((k / n) * 1000) / 10
-  const bar = (k: 'comments' | 'videos'): ShareBar => {
-    const c = pct(client[k], base[k])
-    const r = pct(rivals.reduce((n, x) => n + x[k], 0), base[k])
-    const rest = Math.max(0, Math.round((100 - c - r) * 10) / 10)
-    const its = rivals.length === 1 ? 'its rival' : `its ${numberWord(rivals.length)} rivals`
-    return { client: c, rivals: r, rest, line: `${co} ${c.toFixed(1)}% · ${its} ${r.toFixed(1)}% · ${restName} ${rest.toFixed(1)}%` }
-  }
-  const bars = { comments: bar('comments'), videos: bar('videos') }
-  // The notes, code's: the company's place among these brands (with the
-  // giveaway posts said where they carried its comments), the brands
-  // together against the rest, and where each is talked about.
-  const notes: string[] = []
-  const at = brands.findIndex((b) => b.you)
-  const top = brands[0]
-  const all = `these ${numberWord(brands.length)} brands`
-  const g = a.giveaway && a.giveaway.comments > 0 ? a.giveaway : null
-  notes.push(`${co} holds ${bars.comments.client.toFixed(1)}% of the month's comments, ${at === 0 ? `the most of ${all}` : `${ORDINAL[at] ?? fmtInt(at + 1)} of ${all}, behind ${top.name}'s ${pct(top.comments, base.comments).toFixed(1)}%`}.${g ? ` ${fmtInt(g.comments)} of ${co}'s comments were on ${g.posts === 1 ? 'one giveaway post' : `${fmtInt(g.posts)} giveaway posts`}.` : ''}`)
-  notes.push(`${co} and ${rivals.length === 1 ? 'its rival' : `its ${numberWord(rivals.length)} rivals`} together hold ${(Math.round((bars.comments.client + bars.comments.rivals) * 10) / 10).toFixed(1)}% of the month's comments. ${restName[0].toUpperCase()}${restName.slice(1)} holds ${bars.comments.rest.toFixed(1)}%.`)
-  const own = brands.find((b) => b.you)!.where
-  const rivalPlatforms = new Map<string, number>()
-  for (const r of rivals) for (const [p, v] of Object.entries(r.platforms ?? {})) rivalPlatforms.set(platformName(p), (rivalPlatforms.get(platformName(p)) ?? 0) + Number(v))
-  const theirs = [...rivalPlatforms.entries()].filter(([, v]) => v > 0).sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0])).slice(0, 3).map(([p]) => p)
-  if (own && theirs.length) notes.push(`${co}'s comments sit under ${own.replace(/^Its/, 'its')}. ${rivals.length === 1 ? 'Its rival is' : 'Its rivals are'} talked about on ${andList(theirs)}.`)
-  return { base, brands, bars, notes }
+/** Below this many videos, a brand's naming is few voices, and said so. */
+export const FEW_NAMING_VIDEOS = 10
+
+/** The notes beside the standing (code's), each with its base: the
+ *  comments, the videos named without being asked, the company's own posts
+ *  left out, and few voices where they are. Pure. */
+export function namingNotes(n: BriefNaming, company: string, month: string): string[] {
+  const you = n.rows.find((r) => r.you)
+  const rivals = n.rows.filter((r) => !r.you)
+  if (!you || rivals.length === 0) return []
+  const them = (f: (r: BriefNaming['rows'][number]) => number) => andList(rivals.map((r) => `${r.label} in ${fmtInt(f(r))}`))
+  const out = [
+    `${company} was named in ${fmtInt(you.comments)} of ${month}'s ${fmtInt(n.comments)} comments, ${them((r) => r.comments)}.`,
+    `Of the ${fmtInt(n.videos)} videos no brand search of ours found, ${company} was named without being asked in ${fmtInt(you.videos)}, ${them((r) => r.videos)}.`,
+  ]
+  if (n.ownComments > 0) out.push(`${company}'s own posts drew ${fmtInt(n.ownComments)} comments in ${month}. They are left out here, as every brand's own posts are.`)
+  if (n.rows.every((r) => r.videos < FEW_NAMING_VIDEOS)) out.push(`Few voices: no brand was named without being asked in ${numberWord(FEW_NAMING_VIDEOS)} or more videos.`)
+  return out
 }
 
 /** The figures In short prints, each from a count code holds: the market's
  *  month for everyone, then one that belongs to the reader (the canvas's
  *  two). Pure. */
-export function figuresFor(a: Pick<ComposeInput, 'role' | 'company' | 'month' | 'market' | 'subjects' | 'ownPosts' | 'playbook'> & Partial<Pick<ComposeInput, 'audiences' | 'rivals' | 'brandsCounted' | 'giveaway'>>): BriefFigure[] {
+export function figuresFor(a: Pick<ComposeInput, 'role' | 'company' | 'month' | 'market' | 'subjects' | 'ownPosts' | 'playbook'> & Partial<Pick<ComposeInput, 'naming' | 'brandsCounted' | 'app'>>): BriefFigure[] {
   const month = longMonth(a.month)
   const out: BriefFigure[] = []
   if (a.market?.videos) {
@@ -1010,19 +1000,17 @@ export function figuresFor(a: Pick<ComposeInput, 'role' | 'company' | 'month' | 
     if (top?.level) out.push({ value: pct0(top.level.k, top.level.n), label: `of them about ${top.name}, the biggest subject` })
   }
   if (a.role === 'marketing' && a.ownPosts != null && a.ownPosts > 0) out.push({ value: fmtInt(a.ownPosts), label: `posts ${a.company} published in ${month}` })
-  if (a.role === 'content' && a.playbook && !a.playbook.unread) {
-    const cat = a.playbook.formats.sides[0]
-    const overall = cat?.median.value ?? null
-    const listed = a.playbook.formats.keys.slice(0, FORMAT_ROWS).map((k) => ({ label: k.label, row: cat?.byKey[k.key] ?? null })).filter((r): r is { label: string; row: NonNullable<typeof r.row> } => r.row != null)
-    const best = listed.filter(({ row }) => row.engagement.median != null && row.engagement.n >= FORMAT_LINE_MIN_RATED && row.engagement.band != null && overall != null && row.engagement.band.low > overall)
-      .sort((x, y) => (y.row.engagement.median ?? 0) - (x.row.engagement.median ?? 0))[0]
-    if (best && overall != null) out.push({ value: `${best.row.engagement.median!.toFixed(1)}%`, label: `median engagement on the category's ${best.label.toLowerCase()} videos, against ${overall.toFixed(1)}% for all its videos` })
-  }
-  if (a.role === 'leadership' && a.audiences && a.brandsCounted) {
-    const s = brandShares({ company: a.company, audiences: a.audiences, rivals: a.rivals ?? [], brandsCounted: a.brandsCounted, giveaway: a.giveaway ?? null })
-    const you = s?.brands.find((b) => b.you)
-    const top = s?.brands.find((b) => !b.you)
-    if (s && you && top) out.push({ value: `${s.bars.comments.client.toFixed(1)}%`, label: `of ${month}'s comments were under ${a.company}'s posts; ${top.name} held ${(Math.round((top.comments / s.base.comments) * 1000) / 10).toFixed(1)}%` })
+  // Content's own figure: its posts' response, each post against a typical
+  // video on its own platform (app-load.ts `loadHooksPart`). Never the
+  // category's engagement pooled across platforms: entertainment's 3.7%
+  // against 2.5% was mostly TikTok's rates against YouTube's.
+  const response = a.app?.hooks?.posts?.response
+  if (a.role === 'content' && response) out.push({ value: multipleText(response.multiple), label: `response of your ${month} posts, each against a typical video on its own platform` })
+  // Leadership's: who named the company, against its rival (naming.ts).
+  const you = a.naming?.rows.find((r) => r.you)
+  const rival = a.naming?.rows.find((r) => !r.you)
+  if (a.role === 'leadership' && a.naming && a.brandsCounted?.client && you && rival) {
+    out.push({ value: fmtInt(you.comments), label: `of ${month}'s ${fmtInt(a.naming.comments)} comments named ${a.company}; ${rival.label} was named in ${fmtInt(rival.comments)}` })
   }
   return out
 }

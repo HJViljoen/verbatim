@@ -41,6 +41,7 @@ const measure = z.strictObject({
   pct: z.number().optional(), median: z.number().nullable().optional(), above: z.boolean().optional(),
   own: z.number().nullable().optional(), ownOf: z.number().nullable().optional(), rival: z.number().nullable().optional(), rivalOf: z.number().nullable().optional(),
   comments: z.number().optional(), videos: z.number().optional(),
+  named: z.strictObject({ comments: z.strictObject({ k: z.number(), n: z.number() }), videos: z.strictObject({ k: z.number(), n: z.number() }) }).optional(),
 })
 const item = z.strictObject({
   title: z.string().optional(), text: z.string(), detail: z.string().optional(), tag: z.string().optional(),
@@ -120,8 +121,10 @@ const hooks = z.strictObject({
   month: z.string(), rival: z.string().nullable(), formats: hookTable.nullable(), openings: hookTable.nullable(),
   posts: z.strictObject({
     total: z.number(), byPlatform: z.array(z.strictObject({ platform: z.string(), posts: z.number() })),
-    response: z.strictObject({ multiple: z.number(), rated: z.number() }).nullable(), sentence: z.string().nullable(),
-    best: z.strictObject({ platform: z.string(), date: z.string(), format: z.string().nullable(), multiple: z.number(), href: z.string() }).nullable(),
+    response: z.strictObject({ multiple: z.number(), rated: z.number() }).nullable(),
+    platforms: z.array(z.strictObject({ platform: z.string(), multiple: z.number(), rated: z.number() })).optional(),
+    sentence: z.string().nullable(),
+    best: z.strictObject({ platform: z.string(), date: z.string(), format: z.string().nullable(), multiple: z.number(), href: z.string(), views: z.number().optional() }).nullable(),
     href: z.string(),
   }).nullable(),
   basis: z.string(), href: z.string(),
@@ -154,6 +157,7 @@ const finding = z.strictObject({
   months: z.array(z.strictObject({ month: z.string(), videos: z.number() })), videos: z.number(), who: z.array(aboutPart), quotes: z.array(quote),
   short: z.string().optional(), subjectLine: z.string().optional(),
   heardFor: z.array(z.strictObject({ name: z.string(), you: z.boolean(), phrase: z.string() })).optional(),
+  base: z.strictObject({ k: z.number(), n: z.number() }).optional(),
 })
 
 /** A composed brief as this code builds it, and as a dry build saves it: the

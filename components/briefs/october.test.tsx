@@ -123,23 +123,23 @@ describe('Leadership: Your moves (Brief-Leadership-07)', () => {
   })
 })
 
-describe('Sales: Who is buying (Brief-Sales-05, -06)', () => {
+describe('Sales: Who is in your market (Brief-Sales-05, -06; never "Who is buying")', () => {
   it('two groups a sheet, what they want, what stops them, what tips them, and what is in their videos; the fifth named', () => {
     const d = octoberFixture('sales')
-    const first = text(page(d, 'Who is buying'))
-    expect(first).toContain('Five groups comment in your market in October, as Voices describes them. The four in the most videos are here.')
+    const first = text(page(d, 'Who is in your market'))
+    expect(first).toContain('Five groups comment in your market in October, as Voices describes them, each counted by the videos it commented on, not by purchases. The four in the most videos are here.')
     expect(first).toContain('Caretaker 100 of 902 videos in October')
     expect(first).toContain('What tips them')
     expect(first).toContain('In their videos Talks most about Community & encouragement, 22 of their 100 videos. None of your products came up in them. Open in Voices →')
     expect(first).toContain('Your products in them: Pro-Flex Terra and Direct Socket.')
-    const second = text(page(d, 'Who is buying, continued'))
+    const second = text(page(d, 'Who is in your market, continued'))
     expect(second).toContain('Also in your market: Long-term user, in 50 of October’s videos.')
     expect(second).toContain('Open Long-term user in Voices →')
     expect(second).not.toContain('For a sale')
   })
 
   it('Sealand: products off, so no products line', () => {
-    expect(text(page(octoberFixture('sales', { tenant: 'sealand' }), 'Who is buying'))).not.toMatch(/Your products in them|None of your products/)
+    expect(text(page(octoberFixture('sales', { tenant: 'sealand' }), 'Who is in your market'))).not.toMatch(/Your products in them|None of your products/)
   })
 })
 
@@ -159,7 +159,9 @@ describe('Marketing: Your products in the conversation (Brief-Marketing-05) and 
     expect(t).toContain('The North Face 11 of 941 too few to compare 15 · 9 of 31 Comfort 9 of 31')
     expect(t).toContain('Sealand (you) 2 of 941')
     expect(t).toContain('Not named without being asked in October: Freedom of Movement.')
-    expect(t).toContain('The North Face and Cotopaxi were named most without being asked: in 11 and 8 of the 941 videos.')
+    // The company beside its rivals, never "named most" over its absence.
+    expect(t).toContain('Of the 941 videos, Sealand was named without being asked in 2, The North Face in 11 and Cotopaxi in 8.')
+    expect(t).not.toContain('named most')
     expect(p).toMatch(/data-copy="verdict"[^>]*>too few to compare/)
   })
 

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { DatedEvidence } from '../../written/evidence'
 import { groundPoint, groundedPointOf, pointText, unionOf } from './ground'
 import { Meaning, stemsOf, wordsSim } from './meaning'
-import { QuotePool } from './quotes'
+import { inMonthWindow, isWholeComment, QuotePool } from './quotes'
 import { cite } from './test-fixtures'
 
 // A tenant with no market lexicon and no maker rule: the gate's quality rules
@@ -131,6 +131,46 @@ describe('the quotes a set prints, by meaning', () => {
     const [q] = p.pick(['G1'], 'straps lasted daily walks')
     expect(q.lang).toBe('es')
     expect(p.textOf(q.ref)?.english).toBe('The straps lasted a whole month of daily walks.')
+  })
+})
+
+describe('the quotes a brief for one month prints', () => {
+  const OCT = { from: '2026-10-01T00:00:00.000Z', to: '2026-11-01T00:00:00.000Z' }
+  const sep = cite({ insight: 'i1', video: 'm1', date: '2026-09-21T10:00:00Z', text: 'The straps held up after a month of daily walking and I would buy it again.' })
+  const oct = cite({ insight: 'i1', video: 'm2', date: '2026-10-07T10:00:00Z', text: 'The straps held up through a whole month of daily walking for me as well.' })
+
+  it('quotes only the brief\'s month', () => {
+    const p = new QuotePool(new Map([['G1', [sep, oct]]]), { clientId: CLIENT, company: 'Acme', brandsOf: new Map(), meaning: words(), month: OCT })
+    expect(p.pick(['G1'], 'straps held up daily walking month', 2).map((q) => q.date)).toEqual(['2026-10-07'])
+  })
+
+  it('quotes a whole comment only: an excerpt cut from a longer comment never prints', () => {
+    const p = new QuotePool(new Map([['G1', [sep, oct]]]), { clientId: CLIENT, company: 'Acme', brandsOf: new Map(), meaning: words(), whole: new Set([sep.evidenceId]) })
+    expect(p.pick(['G1'], 'straps held up daily walking month', 2).map((q) => q.ref)).toEqual([`e:${sep.evidenceId}`])
+    // A cut that drops the sentence turning the claim round is not whole.
+    expect(isWholeComment('The straps are rubbish, they say', 'The straps are rubbish, they say. Only my neighbour thinks so.')).toBe(false)
+    expect(isWholeComment('so  GOOD!! :)', 'So good')).toBe(true)
+    expect(isWholeComment('', '')).toBe(false)
+    expect(isWholeComment('anything', null)).toBe(false)
+  })
+
+  it('a voice picked elsewhere prints only by the same rules', () => {
+    const p = new QuotePool(new Map([['G1', [oct]]]), { clientId: CLIENT, company: 'Acme', brandsOf: new Map(), meaning: words(), month: OCT, whole: new Set([oct.evidenceId]) })
+    expect(p.mayPrint(`e:${oct.evidenceId}`, '2026-10-07')).toBe(true)
+    expect(p.mayPrint(`e:${oct.evidenceId}`, '2026-09-30')).toBe(false)
+    expect(p.mayPrint('e:not-checked', '2026-10-07')).toBe(false)
+    expect(inMonthWindow('2026-10-31T23:59:59Z', OCT)).toBe(true)
+    expect(inMonthWindow('2026-11-01T00:00:00Z', OCT)).toBe(false)
+  })
+
+  it('"on the company\'s own post" only on its own account\'s post, never on another post that names it', () => {
+    const named = cite({ insight: 'i1', video: 'm3', audience: 'client', date: '2026-10-08T10:00:00Z', text: 'The straps held up through a month of daily walking on my Acme pack.' })
+    const own = cite({ insight: 'i1', video: 'm4', audience: 'client', date: '2026-10-09T10:00:00Z', text: 'The straps on the Acme pack held up through a whole month of daily walking.' })
+    own.video = { ...own.video, owned: true }
+    const p = new QuotePool(new Map([['G1', [named, own]]]), { clientId: CLIENT, company: 'Acme', brandsOf: new Map(), meaning: words() })
+    const qs = p.pick(['G1'], 'straps held up daily walking month pack', 2)
+    expect(qs).toHaveLength(2)
+    expect(qs.map((q) => [p.textOf(q.ref)?.text.includes('my Acme'), q.ownPost])).toEqual(expect.arrayContaining([[true, false], [false, true]]))
   })
 })
 

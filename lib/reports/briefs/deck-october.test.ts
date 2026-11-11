@@ -18,10 +18,10 @@ const left = (d: MonthlyBriefData) => planDeck(d).left.map((l) => `${l.key}: ${l
 const app = (over: Partial<BriefAppInputs>): BriefAppInputs => ({ ...OSSUR_APP, ...over })
 
 describe('the page set on the October canvas, each role', () => {
-  it('Sales: Who is buying is Voices\' groups on two sheets, in place of the writer\'s buyer types', () => {
+  it('Sales: Who is in your market is Voices\' groups on two sheets, in place of the writer\'s buyer types (never "Who is buying": a group is not a count of buyers)', () => {
     const d = octoberFixture('sales')
     expect(canvasOf(d)).toBe('v2')
-    expect(eyebrows(d)).toEqual(['Cover', 'In short', 'The finding', 'Who is buying', 'Who is buying, continued', 'What stops them', 'What tips them into buying', 'Who buyers compare you with', 'Language to handle with care'])
+    expect(eyebrows(d)).toEqual(['Cover', 'In short', 'The finding', 'Who is in your market', 'Who is in your market, continued', 'What stops them', 'What tips them into buying', 'Who buyers compare you with', 'Language to handle with care'])
     const sheets = printedSections(d).filter((s) => s.key === 'sales.groups')
     expect(sheets.map((s) => s.people!.groups.map((g) => g.name))).toEqual([['Caretaker', 'First-time buyer'], ['Athlete', 'New amputee']])
     // The fifth is named at the foot of the last sheet, with its page.
@@ -86,7 +86,7 @@ describe('a thin page is left out (PAGE_NEEDS), and a partial landing prints the
     // A lone group too short to fill a sheet is not drawn alone (v1's buyer rule).
     expect(left(role('sales', { people: one }))).toContain('sales.groups: nothing fits its page')
     expect(left(role('leadership', { people: one }))).toContain('leadership.groups: 1 of the 2 groups a page needs')
-    expect(eyebrows(role('sales', { people: null }))).not.toContain('Who is buying')
+    expect(eyebrows(role('sales', { people: null }))).not.toContain('Who is in your market')
   })
 
   it('three groups: two on the sheet, the third named rather than alone on a sheet it would not fill', () => {

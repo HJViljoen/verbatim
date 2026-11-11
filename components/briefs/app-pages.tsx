@@ -676,7 +676,11 @@ export function HooksPage({ data, appUrl, s, sub }: AppPageProps) {
               {p.response ? (
                 <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <div data-copy="figure" style={{ fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em', fontSize: 40, fontWeight: 600, lineHeight: 1.1 }}>{multipleText(p.response.multiple)}</div>
-                  <div data-copy="figure" style={{ fontSize: 13, lineHeight: 1.4, color: P.muted }}>response of your typical post against the market’s, from {fmtInt(p.response.rated)} of {fmtInt(p.total)} with a response figure</div>
+                  <div data-copy="figure" style={{ fontSize: 13, lineHeight: 1.4, color: P.muted }}>
+                    {p.platforms
+                      ? <>response of your typical post, each against a typical video on its own platform, from {fmtInt(p.response.rated)} of {fmtInt(p.total)} with a response figure{p.platforms.length > 1 ? ` · ${p.platforms.map((x) => `${platformLabel(x.platform)} ${multipleText(x.multiple)} (${fmtInt(x.rated)})`).join(', ')}` : ''}</>
+                      : <>response of your typical post against the market’s, from {fmtInt(p.response.rated)} of {fmtInt(p.total)} with a response figure</>}
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -692,7 +696,7 @@ export function HooksPage({ data, appUrl, s, sub }: AppPageProps) {
                   <span data-copy="figure">Your {(p.best.format ?? 'post').toLowerCase()} on {platformLabel(p.best.platform)}, {shortDate(`${p.best.date.slice(0, 10)}T00:00:00.000Z`)}</span>
                 </A>
                 <div data-copy="figure" style={{ fontSize: 13, color: P.muted }}>
-                  {platformLabel(p.best.platform)} · {shortDate(`${p.best.date.slice(0, 10)}T00:00:00.000Z`)}{p.best.format ? ` · ${p.best.format}` : ''} · <span style={{ fontFamily: MONO, color: P.ink }}>{multipleText(p.best.multiple)}</span>
+                  {platformLabel(p.best.platform)} · {shortDate(`${p.best.date.slice(0, 10)}T00:00:00.000Z`)}{p.best.format ? ` · ${p.best.format}` : ''}{p.best.views != null ? ` · ${fmtInt(p.best.views)} views` : ''} · <span style={{ fontFamily: MONO, color: P.ink }}>{multipleText(p.best.multiple)}</span>
                 </div>
               </div>
             ) : null}

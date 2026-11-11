@@ -1,6 +1,5 @@
 import { quoteGate, readableEnglish } from '../../quote-gate'
 import { quoteRef } from '../../renderables/quotes-freeze'
-import { CLIENT_AUDIENCE } from '../../rivals'
 import { gateInputOf, type DatedEvidence } from '../../written/evidence'
 import { isOwnAccount } from '../../written/pool'
 import { quoteForm, FORM_VALUE } from '../../written/substance'
@@ -29,6 +28,19 @@ import type { BriefQuote } from './types'
 // once is spent, and the picks for one item come from one call that takes a
 // video once.
 //
+// ONLY THE MONTH'S VOICES, AND ONLY WHOLE COMMENTS (the blind-report check,
+// 9 Nov). A brief about October quotes October: a voice dated outside the
+// pool's `month` never prints (9 of October's 16 printed quotes were from
+// August or September). And a voice prints only where its excerpt is the
+// whole comment (`whole`, read in build.ts against `comments.text`): one
+// October excerpt kept a claim and dropped the comment's next sentence, which
+// said only one person held it, and so turned its meaning round. Neither option is given
+// by a test that builds a pool by hand; the brief set always gives both.
+//
+// ON THE COMPANY'S OWN POST means its own account's post (`video.owned`,
+// `videos.source = 'owned'`), never the client audience: a user's Reddit
+// thread naming the company printed as "on Össur's own post".
+//
 // THE WORDS STAY IN MEMORY. A picked quote leaves as a `BriefQuote` with
 // `text: ''`; `textOf` hands the words to a renderer and to nothing else.
 
@@ -56,6 +68,30 @@ export interface PoolOptions {
   company: string
   brandsOf: ReadonlyMap<string, readonly string[]>
   meaning: Meaning
+  /** The brief's month, half-open instants: a voice dated outside it never
+   *  prints. Absent: any date (a test's pool). */
+  month?: { from: string; to: string } | null
+  /** The evidence ids whose excerpt is the whole comment: no other prints.
+   *  Absent: not checked (a test's pool). */
+  whole?: ReadonlySet<string> | null
+}
+
+/** A comment's words for the whole-comment test: case, punctuation, emoji
+ *  and spacing aside. */
+const wordsOnly = (s: string): string => s.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+
+/** Is the excerpt the whole comment, its words in full (case, punctuation,
+ *  emoji and spacing aside)? An excerpt cut from a longer comment is not, so
+ *  it never prints: a cut can turn a comment's meaning round. Pure. */
+export function isWholeComment(excerpt: string, comment: string | null | undefined): boolean {
+  const a = wordsOnly(excerpt)
+  return a !== '' && comment != null && a === wordsOnly(comment)
+}
+
+/** Is a comment's date inside the brief's month (half-open)? Pure. */
+export const inMonthWindow = (date: string, month: { from: string; to: string }): boolean => {
+  const t = Date.parse(date)
+  return Number.isFinite(t) && t >= Date.parse(month.from) && t < Date.parse(month.to)
 }
 
 interface Scored {
@@ -79,6 +115,19 @@ export class QuotePool {
   /** The words behind a picked ref, for a renderer. */
   textOf(ref: string): { text: string; english: string | null; lang: string | null } | null {
     return this.words.get(ref) ?? null
+  }
+
+  /** May a voice picked elsewhere (a subject's own, `StandingFact.quoteRef`)
+   *  print beside this pool's? Only one dated in the brief's month whose
+   *  excerpt is the whole comment, by the pool's own rules: a ref the whole
+   *  set does not hold is not known to be whole, so it does not. */
+  mayPrint(ref: string, date: string | null): boolean {
+    if (this.o.month && (!date || !inMonthWindow(date.length === 10 ? `${date}T00:00:00.000Z` : date, this.o.month))) return false
+    if (this.o.whole) {
+      const id = /^e:(.+)$/.exec(ref)?.[1]
+      if (!id || !this.o.whole.has(id)) return false
+    }
+    return true
   }
 
   /** Refs another write of the set already prints: never picked here. */
@@ -107,6 +156,8 @@ export class QuotePool {
         if (seen.has(ref) || this.used.has(ref)) continue
         seen.add(ref)
         if (isOwnAccount(e) || videos.has(videoKey(e))) continue
+        if (this.o.month && !inMonthWindow(e.commentDate, this.o.month)) continue
+        if (this.o.whole && !this.o.whole.has(e.evidenceId)) continue
         // A voice printed as one brand's ("On Cotopaxi") is talk about it.
         if (about && aboutCitation(e, this.o.brandsOf, this.o.company) !== about) continue
         const j = asJudged(e, gate)
@@ -131,7 +182,7 @@ export class QuotePool {
       date: s.e.commentDate ? s.e.commentDate.slice(0, 10) : null,
       platform: s.e.video.platform,
       about: aboutCitation(s.e, this.o.brandsOf, this.o.company),
-      ownPost: s.e.video.audience === CLIENT_AUDIENCE,
+      ownPost: s.e.video.owned === true,
       lang: translated ? s.e.lang ?? null : null,
     }
   }

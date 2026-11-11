@@ -25,7 +25,9 @@ export const APP_TITLES: Readonly<Partial<Record<SectionKey, string>>> = {
   'leadership.subjects': 'Where the market stands',
   'leadership.groups': 'Who is in your market',
   'leadership.moves': 'Your moves',
-  'sales.groups': 'Who is buying',
+  // Not "Who is buying" (the blind-report check, 9 Nov): a group's count is
+  // every video its people commented on, curious as well as buying.
+  'sales.groups': 'Who is in your market',
   'marketing.products': 'Your products in the conversation',
   'marketing.named': 'Who gets named without being asked',
   'content.ideas': 'What to post next',
@@ -63,8 +65,13 @@ export function inTheirVideos(g: Pick<BriefGroup, 'top' | 'products' | 'videos'>
 
 /** The sub of Who is buying's first sheet: every group the month holds, and
  *  how many print. Pure. */
+/** What a group's count is, said wherever the groups print (the blind-report
+ *  check, 9 Nov: "First-time buyer: 121 of 766 videos" read as 121 videos of
+ *  buyers, where most of them were people asking how a device works). */
+export const GROUPS_ARE_NOT_BUYERS = 'each counted by the videos it commented on, not by purchases'
+
 export function buyersSub(month: string, groups: number, shown: number): string {
-  const all = `${numberWord(groups)} ${groups === 1 ? 'group comments' : 'groups comment'} in your market in ${longMonth(month)}, as Voices describes them.`
+  const all = `${numberWord(groups)} ${groups === 1 ? 'group comments' : 'groups comment'} in your market in ${longMonth(month)}, as Voices describes them, ${GROUPS_ARE_NOT_BUYERS}.`
   return shown >= groups ? all : `${all} The ${numberWord(shown).toLowerCase()} in the most videos are here.`
 }
 
@@ -149,16 +156,26 @@ export const NO_RECIPE = 'No format stands out on this question yet'
 
 /** The three notes under the brands table (code's), over the rows the
  *  table prints. Pure. */
+/** Below this many videos named without being asked, a brand's count is few
+ *  voices, and the notes say so. */
+export const FEW_NAMED = 10
+
+/** The notes under the brands table (code's), over the rows the table
+ *  prints: the company's count beside its rivals' on the one base (never "named
+ *  most" over a table without the company: the blind-report check, 9 Nov),
+ *  few voices where every count is, and what the praise and complaints count.
+ *  Pure. */
 export function namedNotes(n: BriefNamed, company: string): string[] {
   const rivals = [...n.rows].filter((r) => !r.you).sort((x, y) => y.named.k - x.named.k || x.label.localeCompare(y.label))
   const out: string[] = []
-  const top = rivals.filter((r) => r.named.k > 0).slice(0, 2)
-  if (top.length === 2) out.push(`${top[0].label} and ${top[1].label} were named most without being asked: in ${fmtInt(top[0].named.k)} and ${fmtInt(top[1].named.k)} of the ${fmtInt(n.base)} videos.`)
-  else if (top.length === 1) out.push(`${top[0].label} was named most without being asked: in ${fmtInt(top[0].named.k)} of the ${fmtInt(n.base)} videos.`)
   const you = n.rows.find((r) => r.you)
-  if (you) out.push(you.named.k > 0 ? `${company} was named without being asked in ${fmtInt(you.named.k)} of them.` : `${company} was not named without being asked in ${longMonth(n.month)}.`)
+  const count = (k: number) => (k === 0 ? 'none' : fmtInt(k))
+  const theirs = andList(rivals.slice(0, 2).map((r) => `${r.label} in ${count(r.named.k)}`))
+  if (you) out.push(`Of the ${fmtInt(n.base)} videos, ${company} was named without being asked in ${count(you.named.k)}${theirs ? `, ${theirs}` : ''}.`)
+  else if (rivals.length) out.push(`Of the ${fmtInt(n.base)} videos, ${theirs}.`)
+  if (n.rows.length && n.rows.every((r) => r.named.k < FEW_NAMED)) out.push(`Few voices: no brand was named without being asked in ${numberWord(FEW_NAMED).toLowerCase()} or more of them.`)
   const widest = [...rivals].filter((r) => r.praised && r.complained && r.praised.n > 0).sort((x, y) => (y.praised?.n ?? 0) - (x.praised?.n ?? 0) || x.label.localeCompare(y.label))[0]
-  if (widest?.praised && widest.complained) out.push(`Of the ${fmtInt(widest.praised.n)} videos naming ${widest.label} in any way, people praised it in ${fmtInt(widest.praised.k)} and complained in ${fmtInt(widest.complained.k)}.`)
+  if (widest?.praised && widest.complained) out.push(`Of the ${fmtInt(widest.praised.n)} videos in your market naming ${widest.label} in any way, ${fmtInt(widest.praised.k)} held praise in their comments and ${fmtInt(widest.complained.k)} a complaint, about anything in the video.`)
   return out
 }
 

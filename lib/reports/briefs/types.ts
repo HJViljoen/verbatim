@@ -224,6 +224,11 @@ export interface BriefMeasure {
   /** A brand's share of the month's comments and of its videos, 0 to 100. */
   comments?: number
   videos?: number
+  /** ADDITIVE (9 Nov): a brand's naming in the month (naming.ts), each with
+   *  its base: the comments naming it, and the videos naming it that no brand
+   *  search of ours found. Where present, the standing prints these and no
+   *  share. */
+  named?: { comments: { k: number; n: number }; videos: { k: number; n: number } }
 }
 
 /** One share bar of "Where {company} stands against its rivals": the company,
@@ -544,9 +549,15 @@ export interface BriefHooks {
   posts: {
     total: number
     byPlatform: { platform: string; posts: number }[]
+    /** Each post against a typical market video ON ITS OWN PLATFORM, the
+     *  median of those multiples (app-load.ts `loadHooksPart`). */
     response: { multiple: number; rated: number } | null
+    /** ADDITIVE (9 Nov): the same, platform by platform. */
+    platforms?: { platform: string; multiple: number; rated: number }[]
     sentence: string | null
-    best: { platform: string; date: string; format: string | null; multiple: number; href: string } | null
+    /** The highest of those multiples among posts with `BEST_MIN_VIEWS`
+     *  views or more (`views` ADDITIVE, 9 Nov). */
+    best: { platform: string; date: string; format: string | null; multiple: number; href: string; views?: number } | null
     href: string
   } | null
   /** What the response is, said once (Content's own words). */
@@ -577,6 +588,10 @@ export interface BriefFinding {
   /** "What each brand is heard for" (the Leadership finding's chips): each
    *  brand with the idea it is heard for, the company last and dark. */
   heardFor?: { name: string; you: boolean; phrase: string }[]
+  /** ADDITIVE (9 Nov): its videos in the brief's month, of every video read
+   *  in that month: the base printed under it, with a few-voices tag below
+   *  `FEW_VOICES` (deck.ts). */
+  base?: { k: number; n: number }
 }
 
 export interface BriefFigure {

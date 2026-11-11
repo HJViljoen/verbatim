@@ -4,6 +4,7 @@ import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { readQuoteContext } from '../quote-context'
 import { quoteGate, type GateOptions, type GateVerdict, type QuoteVideo } from '../quote-gate'
 import { readTranslations, readingOf } from '../quotes'
+import { OWNED_SOURCE } from '../reading/owned'
 import { quoteRef } from '../renderables/quotes-freeze'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, loadTrackedRivals, rivalKey } from '../rivals'
 import type { QuoteRef } from './types'
@@ -72,6 +73,10 @@ export interface DatedEvidence {
     /** `videos.analyzed_lane`: 'full' is the read lane (M13). */
     lane: string | null
     accountName: string | null
+    /** The company's own post (`videos.source = 'owned'`, the one read of
+     *  "your posts", lib/reading/owned.ts), never `is_client`, which a
+     *  creator's video naming the brand carries too. Absent is false. */
+    owned?: boolean
   }
   /** What the gate reads about the video, or null where it was not found
    *  (the gate then refuses the quote: `no_video`). */
@@ -95,6 +100,7 @@ type EmbeddedVideo = {
   is_competitor: boolean | null
   competitor_name: string | null
   account_name: string | null
+  source?: string | null
 }
 
 type EmbeddedInsight = {
@@ -121,7 +127,7 @@ type EmbeddedInsight = {
 
 const EVIDENCE_SELECT = [
   'id, category, description, theme,',
-  'videos(id, platform, video_id, analyzed_lane, is_client, is_competitor, competitor_name, account_name),',
+  'videos(id, platform, video_id, analyzed_lane, is_client, is_competitor, competitor_name, account_name, source),',
   'insight_evidence!inner(id, quote, relevance_rank, comment_id, redacted,',
   'comments!inner(id, comment_date, platform, video_id, author))',
 ].join(' ')
@@ -171,6 +177,7 @@ export function flattenEvidence(rows: readonly EmbeddedInsight[], opts: { keepRe
           audience: audienceOfVideo(v),
           lane: v.analyzed_lane ?? null,
           accountName: v.account_name ?? null,
+          ...(v.source === OWNED_SOURCE ? { owned: true } : {}),
         },
       })
     }

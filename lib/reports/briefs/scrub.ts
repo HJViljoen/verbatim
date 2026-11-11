@@ -243,6 +243,24 @@ export function hyphenatedNames(texts: readonly string[]): string[] {
   return [...out]
 }
 
+/**
+ * Talk about the company, never talk "under its posts" (the blind-report
+ * check, 9 Nov): "People under Össur's posts name feet first" stood on users'
+ * threads naming Össur. The writer is shown talk about the company, most of
+ * it on other people's posts, and never which posts are its own (write.ts
+ * `whoWords`), so a sentence that places the talk under the company's posts
+ * says it as talk about the company instead. Pure.
+ */
+export function talkAboutNotUnder(text: string, company: string): string {
+  const co = company.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  if (!co) return text
+  const whose = `(?:${co}['’]s|the company['’]s)\\s+(?:own\\s+)?(?:[A-Z][a-z]+\\s+)?posts`
+  return text
+    .replace(new RegExp(`\\b(people|viewers|buyers|owners|commenters|users)\\s+(?:under|on)\\s+${whose}`, 'giu'), (_m, who: string) => `${who} talking about ${company}`)
+    .replace(new RegExp(`\\b(comments|questions|talk)\\s+(?:under|on)\\s+${whose}`, 'giu'), (_m, what: string) => `${what} about ${company}`)
+    .replace(new RegExp(`\\b(?:under|on)\\s+${whose}`, 'giu'), `in talk about ${company}`)
+}
+
 /** One spelling of trade-off. Pure. */
 export const tradeOff = (text: string): string => text.replace(/\btrade[\s]?offs\b/gi, 'trade-offs').replace(/\btrade[\s]?off\b/gi, 'trade-off')
 

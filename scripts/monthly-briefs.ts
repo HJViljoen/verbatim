@@ -4,7 +4,14 @@
 // steps existed (September 2026: scripts/backfill-briefs-september.sh).
 //
 //   node --env-file=.env.local --import tsx scripts/monthly-briefs.ts \
-//     --client <uuid> --month YYYY-MM --run <uuid> [--out <dir>] [--designed <dir>] [--plan | --pages] [--write [--replace] [--from <dir>]]
+//     --client <uuid> --month YYYY-MM --run <uuid> [--as-of <ISO instant>] [--out <dir>] [--designed <dir>] [--plan | --pages] [--write [--replace] [--from <dir>]]
+//
+// --as-of reads the month as of that instant, not now: the newest themed run
+// and the research's frame are the ones then (pass the closing run's finish
+// to rebuild a closed month as the pipeline read it; the rows themselves are
+// today's). Either way the app's month pages are read as the run --run names
+// left them (its week row's subject reads, its post ideas, its moves), never
+// the newest run's, which for a closed month is the next month's.
 //
 // --run is the run that closed the month: the briefs are stored under it, as
 // the pipeline stores them under its own run.
@@ -94,6 +101,7 @@ import { SAVED_SET_FILE, checkSavedSet, savedSetOf, type SavedFile } from '../li
 import { briefPrints, monthBriefsWritten, monthlyBriefsApplied, storeBriefSet } from '../lib/reports/briefs/store'
 import { BRIEF_NAME, BRIEF_ROLES, storedBrief, type BriefRole, type MonthlyBriefData } from '../lib/reports/briefs/types'
 import { appSectionsFor, subjectsSection } from '../lib/reports/briefs/app'
+import type { BriefNaming } from '../lib/reports/briefs/naming'
 import { marketKinds } from '../lib/reports/briefs/compose'
 import { closesMonth, endedMonthOf, themedRunAsOf } from '../lib/written/longrun'
 
@@ -104,7 +112,7 @@ const flag = (name: string, fallback = ''): string => {
 }
 const has = (name: string): boolean => args.includes(`--${name}`)
 for (const a of args) {
-  if (a.startsWith('--') && !['client', 'month', 'run', 'out', 'designed', 'plan', 'pages', 'write', 'replace', 'from'].includes(a.slice(2))) {
+  if (a.startsWith('--') && !['client', 'month', 'run', 'as-of', 'out', 'designed', 'plan', 'pages', 'write', 'replace', 'from'].includes(a.slice(2))) {
     console.error(`unknown flag: ${a}`)
     process.exit(2)
   }
@@ -142,7 +150,7 @@ async function main() {
   const runId = flag('run')
   const fromDir = flag('from')
   if (!/^[0-9a-f-]{36}$/.test(clientId) || !/^\d{4}-\d{2}$/.test(monthArg) || !/^[0-9a-f-]{36}$/.test(runId) || (has('from') && !fromDir)) {
-    console.error('Usage: scripts/monthly-briefs.ts --client <uuid> --month YYYY-MM --run <uuid> [--out <dir>] [--designed <dir>] [--plan | --pages] [--write [--replace] [--from <dir>]]')
+    console.error('Usage: scripts/monthly-briefs.ts --client <uuid> --month YYYY-MM --run <uuid> [--as-of <instant>] [--out <dir>] [--designed <dir>] [--plan | --pages] [--write [--replace] [--from <dir>]]')
     process.exit(2)
   }
   if (fromDir && (!has('write') || has('plan'))) {
@@ -150,6 +158,11 @@ async function main() {
     process.exit(2)
   }
   const month = monthStartOf(`${monthArg}-01T00:00:00.000Z`)
+  const asOfArg = flag('as-of')
+  if (asOfArg && !Number.isFinite(Date.parse(asOfArg))) {
+    console.error(`--as-of ${asOfArg} is not an instant (2026-11-01T05:32:26Z).`)
+    process.exit(2)
+  }
   const write = has('write')
   const db = admin()
   const company = (await probe(db, clientId)).trim()
@@ -190,14 +203,15 @@ async function main() {
     process.exit(4)
   }
 
-  // The research reads the newest themed run (the themes table holds no other).
-  const now = new Date()
+  // The research reads the newest themed run as of --as-of (now by default).
+  const now = asOfOf()
   const researchRun = (await themedRunAsOf(db, clientId, now.toISOString())) ?? runId
   if (researchRun !== runId) console.warn(`The newest themed run is ${researchRun}, not ${runId}: the research reads its themes; the briefs are stored under ${runId}.`)
   const started = Date.now()
-  const inputs = await loadBriefSetInputs(db, { clientId, month, now, runId: researchRun })
+  const inputs = await loadBriefSetInputs(db, { clientId, month, now, runId: researchRun, appRun: runId })
   const questions = questionsFor(inputs)
   console.log(`Inputs: ${inputs.company} · market ${inputs.market?.videos ?? '?'} videos · rivals ${inputs.rivals.join(', ') || 'none'} · ${questions.length} questions`)
+  console.log(namingLine(inputs.naming ?? null))
   const research = await researchBriefSet(db, inputs, questions, { now, budgetUsd: BRIEF_SET_BUDGET_USD - BRIEF_AFTER_RESEARCH_USD, parallel: 3, persist: write })
   if (!research.window) throw new Error('the research has no window')
   console.log(`Research: ${research.answers.filter((a) => a.grounded.length > 0).length} of ${questions.length} questions answered · $${research.costUsd.toFixed(3)} · ${Math.round((Date.now() - started) / 1000)} s`)
@@ -243,12 +257,13 @@ async function main() {
  * writer's pages are not built). Into a folder of its own.
  */
 async function drawPages(db: SupabaseClient, a: { clientId: string; month: string; runId: string; company: string }): Promise<void> {
-  const now = new Date()
+  const now = asOfOf()
   const researchRun = (await themedRunAsOf(db, a.clientId, now.toISOString())) ?? a.runId
-  const inputs = await loadBriefSetInputs(db, { clientId: a.clientId, month: a.month, now, runId: researchRun })
+  const inputs = await loadBriefSetInputs(db, { clientId: a.clientId, month: a.month, now, runId: researchRun, appRun: a.runId })
   const app = inputs.app ?? null
   const parts: [string, unknown][] = [['subject reads', app?.subjectReads], ['groups', app?.people], ['brands named', app?.named], ['products', app?.products], ['post ideas', app?.ideas], ['formats and openings', app?.hooks], ['advice and moves', app?.moves]]
-  console.log(`Read from the app for ${longMonth(a.month)} (run ${researchRun}): ${parts.map(([name, v]) => `${name} ${v ? 'read' : 'none'}`).join(' · ')}`)
+  console.log(`Read from the app for ${longMonth(a.month)} (run ${a.runId}): ${parts.map(([name, v]) => `${name} ${v ? 'read' : 'none'}`).join(' · ')}`)
+  console.log(namingLine(inputs.naming ?? null))
   const subjects = subjectsSection({
     month: a.month, subjects: inputs.standing.map((fact, n) => ({ id: `S${n + 1}`, fact })), reads: app?.subjectReads ?? null,
     sentenceOf: () => '', voiceOf: () => null, panel: marketKinds(inputs.kinds ?? null, a.month),
@@ -259,7 +274,7 @@ async function drawPages(db: SupabaseClient, a: { clientId: string; month: strin
     process.exit(4)
   }
   for (const role of BRIEF_ROLES) {
-    const fromApp = appSectionsFor(role, { company: inputs.company, app, subjects, vectors: null })
+    const fromApp = appSectionsFor(role, { company: inputs.company, app, subjects, vectors: null, naming: inputs.naming ?? null })
     if (fromApp.length === 0) { console.log(`${BRIEF_NAME[role]}: nothing read from the app prints.`); continue }
     const data: MonthlyBriefData = {
       version: 1, kind: 'monthly_brief', role, title: `${BRIEF_NAME[role]} · ${longMonth(a.month)}`, company: inputs.company, noun: inputs.noun, month: a.month,
@@ -270,6 +285,18 @@ async function drawPages(db: SupabaseClient, a: { clientId: string; month: strin
     for (const l of out.left) if (l.key !== 'in_short') console.log(`  left out: ${l.title} (${l.why})`)
   }
   console.log(`Nothing was written to any database and no model was called. The pages are in ${dir}.`)
+}
+
+/** Who named each brand, as the standing prints it (naming.ts). */
+function namingLine(n: BriefNaming | null): string {
+  if (!n) return 'Naming: not read (no standing, no named brands).'
+  return `Naming: of ${n.comments} comments and ${n.videos} videos no brand search found (own posts' ${n.ownComments} comments out): ${n.rows.map((r) => `${r.label} ${r.comments} comments, ${r.videos} videos`).join(' · ')}`
+}
+
+/** The instant the month is read as of: --as-of, else now. */
+function asOfOf(): Date {
+  const at = flag('as-of')
+  return at ? new Date(at) : new Date()
 }
 
 /** "Össur" → "ossur": a tenant's folder. */

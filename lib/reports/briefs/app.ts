@@ -17,6 +17,8 @@ import type { ProductsData, ShelfCategoryView, Standout } from '../../pages/v2/p
 import { voicesGroupHref } from '../../pages/v2/voices-address'
 import type { GroupProducts, VoicesBrands, VoicesGroups } from '../../pages/v2/voices'
 import type { PlaybookBlock } from '../../pages/playbook'
+import { BEST_MIN_VIEWS, type matchedPosts } from './benchmark'
+import type { BriefNaming } from './naming'
 import { subquestionCounts, type PostIdeaRow } from '../../post-ideas/types'
 import type { Persona } from '../../profile-tiles'
 import { inlineMonth } from '../../reading/month-label'
@@ -24,7 +26,7 @@ import { monthStartOf, prevMonth } from '../../reading/month-key'
 import type { Verdict } from '../../reading/verdicts'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, isRivalAudience } from '../../rivals'
 import { firstSentenceOf } from '../weekly-read-v3'
-import { andList, APP_TITLES, daysLong, namedNotes, numberWord, voicesMonthHref, withMonth, yyyymm } from './app-words'
+import { andList, APP_TITLES, daysLong, GROUPS_ARE_NOT_BUYERS, namedNotes, numberWord, voicesMonthHref, withMonth, yyyymm } from './app-words'
 import type { StandingFact } from '../../written/types'
 import type {
   BriefAdvice, BriefGroup, BriefHookRow, BriefHooks, BriefHookTable, BriefIdea, BriefIdeas, BriefItem, BriefMove, BriefMoves, BriefNamed, BriefNamedRow,
@@ -32,7 +34,7 @@ import type {
 } from './types'
 
 export {
-  adviceDetail, alsoInMarket, andList, APP_TITLES, appLines, buyersSub, categoryProducts, dayLong, daysLong, ideaReadLine, inTheirVideos, moveLine, multipleText, NO_RECIPE,
+  adviceDetail, alsoInMarket, andList, APP_TITLES, appLines, buyersSub, GROUPS_ARE_NOT_BUYERS, categoryProducts, dayLong, daysLong, ideaReadLine, inTheirVideos, moveLine, multipleText, NO_RECIPE,
   namedNotes, numberWord, ownTouchWords, pageHref, recipeLabel, recordLine, SALES_GROUPS_LINE, slotWords, voicesMonthHref, whoAsks, withMonth,
 } from './app-words'
 
@@ -131,8 +133,18 @@ export function briefVerdict(v: Verdict | null | undefined): BriefVerdict | null
 }
 
 /** What Content says about how a response is read (`worksBasis`' second
- *  sentence: lib/reports/briefs/app.test.ts pins it equal). */
+ *  sentence: lib/reports/briefs/app.test.ts pins it equal). The brief's own
+ *  measure, platform by platform, says `MATCHED_BASIS` instead. */
 export const RESPONSE_BASIS = 'Response is each kind’s median against the market’s median video; Reddit is left out of response.'
+/** How the brief reads a response (benchmark.ts): each video against a
+ *  typical one on its own platform. */
+export const MATCHED_BASIS = `Response is each video against a typical category video on its own platform, published the same month, then the median; Reddit is left out. Best this month needs ${fmtInt(BEST_MIN_VIEWS)} views or more.`
+
+/** Content's measure re-read platform by platform (benchmark.ts). */
+export interface MatchedHooks {
+  kinds: { formats: ReadonlyMap<string, { multiple: number; rated: number }>; hooks: ReadonlyMap<string, { multiple: number; rated: number }> }
+  posts: ReturnType<typeof matchedPosts>
+}
 
 // ---- From the pages' data to the parts a step carries (pure) --------------------------
 
@@ -347,7 +359,7 @@ export function ideasOf(page: Pick<ContentPageData, 'ideas' | 'asked'>, rows: re
 /** The rows a table prints: the formats (or openings) with a response
  *  figure, the category's most common first (Content's own set,
  *  `worksRows`), each with the company's posts and the rival's videos. */
-function hookTable(playbook: PlaybookBlock, key: 'formats' | 'hooks', n: number): BriefHookTable | null {
+function hookTable(playbook: PlaybookBlock, key: 'formats' | 'hooks', n: number, matched?: MatchedHooks['kinds'] | null): BriefHookTable | null {
   const matrix = playbook[key]
   const market = matrix.sides.find((s) => s.audience === INDUSTRY_AUDIENCE)
   if (!market || market.of === 0) return null
@@ -359,7 +371,8 @@ function hookTable(playbook: PlaybookBlock, key: 'formats' | 'hooks', n: number)
       share: r.share ?? 0,
       own: own ? own.byKey[r.key]?.value.k ?? 0 : null,
       rival: rival ? rival.byKey[r.key]?.value.k ?? 0 : null,
-      multiple: r.multiple,
+      // Platform by platform where the brief measured it so (benchmark.ts).
+      multiple: matched ? matched[key].get(r.key)?.multiple ?? null : r.multiple,
     }))
     .sort((x, y) => y.share - x.share || x.label.localeCompare(y.label))
     .slice(0, n)
@@ -377,10 +390,11 @@ export const HOOK_OPENING_ROWS = 4
  * posts in {month}" (`postsBlock`, `mixSentence`). Null where neither table
  * has a row. Pure.
  */
-export function hooksOf(a: { month: string; rival: string | null; playbook: PlaybookBlock | null; posts: PostsBlock | null; sentence: readonly SentencePart[] | null }): BriefHooks | null {
+export function hooksOf(a: { month: string; rival: string | null; playbook: PlaybookBlock | null; posts: PostsBlock | null; sentence: readonly SentencePart[] | null; matched?: MatchedHooks | null }): BriefHooks | null {
   if (!a.playbook || a.playbook.unread) return null
-  const formats = hookTable(a.playbook, 'formats', HOOK_FORMAT_ROWS)
-  const openings = hookTable(a.playbook, 'hooks', HOOK_OPENING_ROWS)
+  const m = a.matched ?? null
+  const formats = hookTable(a.playbook, 'formats', HOOK_FORMAT_ROWS, m?.kinds)
+  const openings = hookTable(a.playbook, 'hooks', HOOK_OPENING_ROWS, m?.kinds)
   if (!formats && !openings) return null
   const rivalSide = a.playbook.formats.sides.find((s) => isRivalAudience(s.audience) && !s.unread && s.of > 0) ?? null
   const p = a.posts && !a.posts.unread ? a.posts : null
@@ -392,14 +406,23 @@ export function hooksOf(a: { month: string; rival: string | null; playbook: Play
     posts: p ? {
       total: p.total,
       byPlatform: p.byPlatform,
-      response: p.response,
+      response: m ? m.posts.response : p.response,
+      ...(m ? { platforms: m.posts.platforms } : {}),
       sentence: sentence(a.sentence),
-      best: p.best && p.best.multiple != null
-        ? { platform: p.best.platform, date: p.best.date, format: p.best.format, multiple: p.best.multiple, href: contentPostsHref({ post: p.best.id }) }
-        : null,
+      best: m
+        ? (m.posts.best
+          ? {
+            platform: m.posts.best.post.platform, date: m.posts.best.post.upload_date,
+            format: m.posts.best.post.classified_type ? formatLabel(m.posts.best.post.classified_type) : null,
+            multiple: m.posts.best.multiple, href: contentPostsHref({ post: m.posts.best.post.id }), views: Number(m.posts.best.post.views) || 0,
+          }
+          : null)
+        : p.best && p.best.multiple != null
+          ? { platform: p.best.platform, date: p.best.date, format: p.best.format, multiple: p.best.multiple, href: contentPostsHref({ post: p.best.id }) }
+          : null,
       href: contentPostsHref({ all: true }),
     } : null,
-    basis: RESPONSE_BASIS,
+    basis: m ? MATCHED_BASIS : RESPONSE_BASIS,
     href: `${CONTENT_PATH}#${WORKS_ANCHOR}`,
   }
 }
@@ -500,7 +523,7 @@ export function groupsSection(p: BriefPeople | null): BriefSection | null {
   const n = p.groups.length
   return appSection('leadership.groups', {
     people: p,
-    sub: `${numberWord(n)} ${n === 1 ? 'group comments' : 'groups comment'} in your market, as Voices describes them. A video can hold more than one group, so the counts overlap.`,
+    sub: `${numberWord(n)} ${n === 1 ? 'group comments' : 'groups comment'} in your market, as Voices describes them, ${GROUPS_ARE_NOT_BUYERS}. A video can hold more than one group, so the counts overlap.`,
     foot: `Each update describes the groups afresh, so no count is set against ${longMonth(prevMonth(p.month))}.`,
     link: { href: voicesMonthHref(p.month), text: 'Open the groups on Voices →' },
   })
@@ -548,17 +571,55 @@ export function productsSection(p: BriefProducts | null): BriefSection | null {
   })
 }
 
+/** Voices' brands table re-counted by the brief's naming (naming.ts): every
+ *  brand's "named without being asked" on ONE base, the videos no brand
+ *  search of ours found (the company's own name searches out of it too), and
+ *  the company's own row KEPT (the blind-report check, 9 Nov: Ottobock printed
+ *  as "named most" because Össur's row was left out, and Össur's count kept
+ *  the posts our search for it found). Praised and complained, and what a
+ *  brand is talked about for, stay Voices' (over every video naming it); a
+ *  month-pair verdict was read on the old base and is not carried. Null
+ *  without naming, or with fewer than two brands. Pure. */
+export function namedByNaming(n: BriefNamed | null, naming: BriefNaming | null): BriefNamed | null {
+  if (!naming || naming.rows.length < 2) return null
+  const voices = new Map((n?.rows ?? []).map((r) => [r.you ? 'client' : r.label.trim().toLowerCase(), r]))
+  const rows: BriefNamedRow[] = naming.rows.map((b) => {
+    const v = voices.get(b.you ? 'client' : b.label.trim().toLowerCase()) ?? null
+    return {
+      label: b.label,
+      you: b.you,
+      named: { k: b.videos, n: naming.videos },
+      verdict: null,
+      praised: v?.praised ?? null,
+      complained: v?.complained ?? null,
+      top: v?.top ?? null,
+      href: v?.href ?? voicesMonthHref(naming.month),
+    }
+  })
+  return {
+    month: naming.month,
+    base: naming.videos,
+    rows,
+    notNamed: rows.filter((r) => r.named.k === 0).map((r) => r.label),
+    href: n?.href ?? voicesMonthHref(naming.month),
+  }
+}
+
 /** "Who gets named without being asked" (Marketing): only where the brands
- *  are counted. Pure. */
-export function namedSection(n: BriefNamed | null, company: string): BriefSection | null {
-  if (!n) return null
+ *  are counted, on the brief's naming (`namedByNaming`): a set read with no
+ *  naming (null) prints no page. Voices' table as it is only where no naming
+ *  was asked for at all (undefined: a fixture's page). Pure. */
+export function namedSection(n: BriefNamed | null, company: string, naming?: BriefNaming | null): BriefSection | null {
+  const named = naming === undefined ? n : namedByNaming(n, naming)
+  if (!named) return null
+  const m = longMonth(named.month)
   return appSection('marketing.named', {
-    named: n,
-    sub: `Of the ${fmtInt(n.base)} videos in your market in ${longMonth(n.month)} that no brand search of ours found, how many named each brand; then, over every video naming it, what people did.`,
-    lines: namedNotes(n, company),
-    ...(n.notNamed.length ? { also: `Not named without being asked in ${longMonth(n.month)}: ${andList(n.notNamed)}.` } : {}),
-    foot: 'Praised and complained, and what each brand is talked about for, are counted over every video naming it.',
-    link: { href: n.href, text: 'Open the brands on Voices →' },
+    named,
+    sub: `Of the ${fmtInt(named.base)} videos we read in ${m} that no brand search of ours found, each brand's own posts left out, how many named each brand; then, over every video in your market naming it, what people did.`,
+    lines: namedNotes(named, company),
+    ...(named.notNamed.length ? { also: `Not named without being asked in ${m}: ${andList(named.notNamed)}.` } : {}),
+    foot: 'Praised and complained, and what each brand is talked about for, are counted over every video in your market naming it, and are about anything in the video.',
+    link: { href: named.href, text: 'Open the brands on Voices →' },
   })
 }
 
@@ -578,7 +639,7 @@ export function hooksSection(h: BriefHooks | null): BriefSection | null {
   if (!h) return null
   return appSection('content.hooks', {
     hooks: h,
-    sub: `Videos published in ${longMonth(h.month)}, by format and by how they open, as Content reads them: 1× is a typical video in your market.`,
+    sub: `Videos published in ${longMonth(h.month)}, by format and by how they open: 1× is a typical video in your market on the same platform.`,
     link: { href: h.href, text: 'What works →' },
   })
 }
@@ -651,12 +712,12 @@ export function subjectsSection(a: {
  *  sentences), its groups and its moves (folded by `vectors`); Sales' groups;
  *  Marketing's products and named brands; Content's ideas and its measure.
  *  Pure. */
-export function appSectionsFor(role: BriefRole, a: { company: string; app: BriefAppInputs | null; subjects: BriefSection | null; vectors: ReadonlyMap<string, number[]> | null }): BriefSection[] {
+export function appSectionsFor(role: BriefRole, a: { company: string; app: BriefAppInputs | null; subjects: BriefSection | null; vectors: ReadonlyMap<string, number[]> | null; naming?: BriefNaming | null }): BriefSection[] {
   const app = a.app
   const out: Record<BriefRole, (BriefSection | null)[]> = {
     leadership: [a.subjects, groupsSection(app?.people ?? null), movesSection(app?.moves ?? null, a.vectors)],
     sales: [buyersSection(app?.people ?? null)],
-    marketing: [productsSection(app?.products ?? null), namedSection(app?.named ?? null, a.company)],
+    marketing: [productsSection(app?.products ?? null), namedSection(app?.named ?? null, a.company, a.naming)],
     content: [ideasSection(app?.ideas ?? null), hooksSection(app?.hooks ?? null)],
   }
   return out[role].filter((x): x is BriefSection => x != null)

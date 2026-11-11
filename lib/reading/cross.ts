@@ -1050,6 +1050,8 @@ export type Tracking = {
   own_handles?: Record<string, string> | null
   competitor_handles?: Record<string, Record<string, string>> | null
   watched_brands?: string[] | null
+  /** The company's own name searches (read with the rest, `select('*')`). */
+  brand_keywords?: string[] | null
 }
 
 const norm = (s: string): string => s.trim().toLowerCase()

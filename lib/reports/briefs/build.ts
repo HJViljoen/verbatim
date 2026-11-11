@@ -5,6 +5,7 @@ import { askWindow } from '../../agent/scope'
 import { loadCommentNamings, namesByComment, trackedBrands, type WhoVideo } from '../../brands/attribution'
 import { brandCountState } from '../../brands/precision'
 import { WHAT_THEY_SELL } from '../../pages/market-frame'
+import { chunk, UUID_IN_CHUNK } from '../../chunk'
 import { buildPlaybook, loadPlaybookVideos, type PlaybookBlock } from '../../pages/playbook'
 import type { SayVsHearEntry } from '../../pipeline/schemas'
 import { marketAudiences, pooledDenominators } from '../../reading/market'
@@ -31,6 +32,7 @@ import type { BriefAppInputs } from './app'
 import { loadBriefAppParts } from './app-load'
 import { composeBrief, footnotesOnlyPrinted, namedAcross, pointToSalesGroups, summaryAgainstPrinted, SHARE_MIN_VIDEOS, type AudienceRow, type LongRunIn, type MarketKindsIn, type OwnPostCount, type QuoteWordsOf } from './compose'
 import { Meaning } from './meaning'
+import { loadNaming, type BriefNaming } from './naming'
 import { applyRepeats, REPEATS_IDEA_CHARS, repeatItemsOf, verdictsOf, type RepeatItem, type RepeatsOutput, type RepeatVerdict } from './repeats'
 import { capText } from '../documents/scrub'
 import { splitSentences } from '../../prose/scrub'
@@ -43,7 +45,7 @@ import { groundPoint, groundedPointOf } from './ground'
 import { applyInShort, inShortItems, printedLines, printedPages, type InShortDrop, type InShortItem, type InShortOutput } from './inshort'
 import { BRIEF_MODEL, checkInShort, draftIdeas, judgeRepeats, writeBrief } from './model'
 import { allBriefQuestions, type BriefQuestion } from './questions'
-import { QuotePool } from './quotes'
+import { QuotePool, inMonthWindow, isWholeComment } from './quotes'
 import type { Allocation, BriefRole, GroundedPoint, IdeaDraft, MonthlyBriefData } from './types'
 import { callOptions, checkBudget, type BriefClock } from './clock'
 import { BRIEF_NAME, BRIEF_ROLES, isBriefRole } from './types'
@@ -109,6 +111,10 @@ export interface BriefSetInputs {
    *  Absent on inputs read before it (a plan carried across the deploy): the
    *  briefs are then drawn on the 12 Oct canvas, as they were. */
   app?: BriefAppInputs | null
+  /** ADDITIVE (9 Nov): who named each brand in the month (naming.ts):
+   *  Leadership's standing and Marketing's named brands. Absent on inputs
+   *  read before it, and null where not read: neither prints. */
+  naming?: BriefNaming | null
 }
 
 /** What people did in the comments and the mood, for the month, pooled over
@@ -235,6 +241,11 @@ export async function loadBriefSetInputs(
     /** `plan-briefs`' clock: the app's pages are read inside it
      *  (app-load.ts `appPartsBudgetMs`). None by hand. */
     clock?: BriefClock | null
+    /** By hand, for a month already closed: the run that closed it. The
+     *  app's month pages are read as that run left them (its week row's
+     *  subject reads, its post ideas and its moves), not as the newest run's.
+     *  The pipeline passes none: its run is the closing run. */
+    appRun?: string | null
   },
 ): Promise<BriefSetInputs> {
   const { clientId } = opts
@@ -285,7 +296,10 @@ export async function loadBriefSetInputs(
   const longRun = await loadMonthLongRun(admin, clientId, month).catch(warn('long-run read'))
   // The October canvas's pages, read from the app for the month (no model
   // call; each part on its own).
-  const app = await loadBriefAppParts(admin, { clientId, company, month, now: opts.now, runId, themedRun: themedRunId ?? null, standing, rival: rivals[0] ?? null, videos, clock: opts.clock ?? null })
+  const app = await loadBriefAppParts(admin, { clientId, company, month, now: opts.now, runId: opts.appRun ?? runId, pinRun: !!opts.appRun, themedRun: themedRunId ?? null, standing, rival: rivals[0] ?? null, videos, clock: opts.clock ?? null })
+  // Who named each brand (naming.ts): only where the company's own name is
+  // counted, as the standing always was (`brandsCountedFor`).
+  const naming = brandsCountedFor(clientId, company, tracked).client ? await loadNaming(admin, { clientId, month }).catch(warn('naming')) : null
   return {
     clientId,
     company,
@@ -309,6 +323,7 @@ export async function loadBriefSetInputs(
     posts,
     longRun,
     app,
+    naming,
   }
 }
 
@@ -363,12 +378,41 @@ export interface Grounded {
   counted: Map<string, DatedEvidence[]>
   whoVideos: Map<string, WhoVideo[]>
   brandsOf: Map<string, string[]>
+  /** The month's citations whose excerpt is the whole comment
+   *  (`wholeInMonth`): the only voices the set may print. Absent on a set a
+   *  test builds by hand (the pool then does not check). */
+  whole?: Set<string>
+}
+
+/**
+ * The citations dated in the brief's month whose excerpt is the whole comment
+ * (quotes.ts `isWholeComment`, against `comments.text`): a voice an October
+ * brief may print. One read of the month's cited comments' words, a chunk at a
+ * time; the words are compared here and kept nowhere. A read that fails
+ * leaves the set empty, so the briefs print no voice rather than a cut one.
+ */
+export async function wholeInMonth(admin: SupabaseClient, clientId: string, evidence: readonly DatedEvidence[], month: string): Promise<Set<string>> {
+  const window = monthWindow(month)
+  const mine = evidence.filter((e) => !e.redacted && e.text && inMonthWindow(e.commentDate, window))
+  const ids = [...new Set(mine.map((e) => e.commentId))]
+  const text = new Map<string, string>()
+  try {
+    for (const part of chunk(ids, UUID_IN_CHUNK)) {
+      const res = await admin.from('comments').select('id, text').eq('client_id', clientId).in('id', part)
+      if (res.error) throw new Error(res.error.message)
+      for (const r of (res.data ?? []) as { id: string; text: string | null }[]) if (r.text) text.set(String(r.id), r.text)
+    }
+  } catch (e) {
+    warn('the cited comments\' words (no voice prints)')(e)
+    return new Set()
+  }
+  return new Set(mine.filter((e) => isWholeComment(e.text, text.get(e.commentId))).map((e) => e.evidenceId))
 }
 
 /** Every point's evidence over the research window, counted. */
 export async function groundBriefResearch(
   admin: SupabaseClient,
-  i: Pick<BriefSetInputs, 'clientId' | 'company' | 'brands' | 'rivalAudiences'>,
+  i: Pick<BriefSetInputs, 'clientId' | 'company' | 'brands' | 'rivalAudiences'> & Partial<Pick<BriefSetInputs, 'month'>>,
   answers: readonly ResearchAnswer[],
   questions: readonly BriefQuestion[],
   window: { from: string; to: string },
@@ -385,7 +429,8 @@ export async function groundBriefResearch(
   const roleOf = new Map(questions.map((q) => [q.id, q.role]))
   const byInsight = new Map<string, DatedEvidence[]>()
   for (const e of evidence) byInsight.set(e.insightId, [...(byInsight.get(e.insightId) ?? []), e])
-  const out: Grounded = { points: [], counted: new Map(), whoVideos: new Map(), brandsOf }
+  const whole = i.month ? await wholeInMonth(admin, i.clientId, evidence, i.month) : undefined
+  const out: Grounded = { points: [], counted: new Map(), whoVideos: new Map(), brandsOf, ...(whole ? { whole } : {}) }
   for (const p of points) {
     const role = roleOf.get(p.questionId)
     if (!role) continue
@@ -596,7 +641,11 @@ export async function writeBriefSet(
   const brands = [i.company, ...i.tracked]
   const counted = brandsCountedFor(i.clientId, i.company, i.tracked)
   const composeAll = (meaning: Meaning, verdicts: readonly RepeatVerdict[] | null, ideaTexts: ReadonlyMap<string, string> = new Map()) => {
-    const quotes = new QuotePool(grounded.counted, { clientId: i.clientId, company: i.company, brandsOf: grounded.brandsOf, meaning })
+    const quotes = new QuotePool(grounded.counted, {
+      clientId: i.clientId, company: i.company, brandsOf: grounded.brandsOf, meaning,
+      // The month's voices, whole comments only (quotes.ts).
+      month: monthWindow(i.month), whole: grounded.whole ?? null,
+    })
     quotes.spend(opts.spent ?? [])
     const out = {} as Record<BriefRole, ReturnType<typeof composeBrief>>
     for (const role of roles) {
@@ -604,7 +653,7 @@ export async function writeBriefSet(
         role, company: i.company, month: i.month, noun: i.noun, allocation, points: grounded.points, whoVideos: grounded.whoVideos, quotes, meaning,
         written: raws[role].raw, rivals: i.tracked, claims: role === 'marketing' ? claims : undefined, subjects, insightSubjects,
         audiences: i.audiences, market: i.market, ownPosts: i.context?.posts.month ?? null, giveaway: i.giveaway ?? null, playbook: i.playbook,
-        kinds: i.kinds ?? null, posts: i.posts ?? null, longRun: i.longRun ?? null,
+        kinds: i.kinds ?? null, posts: i.posts ?? null, longRun: i.longRun ?? null, naming: i.naming ?? null,
         ...(i.app !== undefined ? { app: i.app } : {}),
         model: BRIEF_MODEL, costUsd: raws[role].costUsd, brandsCounted: counted,
       })

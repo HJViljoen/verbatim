@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { briefFixture, finding, item, quote } from '../../../components/briefs/fixture'
 import { PRINT_UNDRAWN_SECTIONS, UNDRAWN_SECTIONS, printsSection } from './canvas'
 import {
+  FEW_VOICES, findingBaseLine,
   BODY_HEIGHT, PAGE_MIN_ITEMS, PAGE_NEEDS, chipRows, contentsOf, deckPages, distinctChips, findingPlan, fitItems, footnoteOf, heightOf, ideasArgued, inShortSizes, linesOf, pairColumn,
   planDeck, printedSections, productPhrases, quoteCite, subtitleOf, tagLine, writtenOn,
 } from './deck'
@@ -459,5 +460,14 @@ describe('the lines code writes', () => {
 
   it('dates the footer by the day the brief was written', () => {
     expect(writtenOn('2026-10-05T08:00:00.000Z')).toBe('5 October 2026')
+  })
+})
+
+describe('a finding\'s base in print', () => {
+  it('its videos in the brief\'s month, of every video read then, few voices under ten; nothing for a brief stored before it', () => {
+    expect(findingBaseLine({ base: { k: 7, n: 786 } }, '2026-10-01')).toBe('On 7 of the 786 videos read in October · few voices')
+    expect(findingBaseLine({ base: { k: FEW_VOICES, n: 786 } }, '2026-10-01')).toBe('On 10 of the 786 videos read in October')
+    expect(findingBaseLine({ base: { k: 0, n: 786 } }, '2026-10-01')).toBe('On none of the 786 videos read in October · few voices')
+    expect(findingBaseLine({}, '2026-10-01')).toBe('')
   })
 })

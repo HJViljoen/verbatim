@@ -142,6 +142,19 @@ export const heardIn = (f: Pick<BriefFinding, 'months'>): string => {
   return months.length ? `Heard in ${monthsPhrase(months)}` : ''
 }
 
+/** A finding on fewer of the month's videos than this is few voices, and its
+ *  base line says so (the blind-report check, 9 Nov). */
+export const FEW_VOICES = 10
+
+/** "On 7 of the 786 videos read in October · few voices": a finding's videos
+ *  in the brief's month, of every video read in it. Empty where the finding
+ *  carries no base (one stored before it). Pure. */
+export const findingBaseLine = (f: Pick<BriefFinding, 'base'>, month: string): string => {
+  if (!f.base) return ''
+  const line = `On ${f.base.k === 0 ? 'none' : fmtInt(f.base.k)} of the ${fmtInt(f.base.n)} videos read in ${longMonth(month)}`
+  return f.base.k < FEW_VOICES ? `${line} · few voices` : line
+}
+
 /** "Who is buying, continued". */
 export const continuedTitle = (title: string): string => `${title}, continued`
 
@@ -188,7 +201,7 @@ export const EYEBROW: Readonly<Record<SectionKey, string>> = {
   'leadership.decisions': 'Questions for the business',
   'leadership.holds': 'What holds so far',
   // The October canvas (the boards' eyebrows, 18 Oct).
-  'sales.groups': 'Who is buying',
+  'sales.groups': 'Who is in your market',
   'marketing.products': 'Your products',
   'marketing.named': 'Named without being asked',
   'content.ideas': 'What to post next',
@@ -1112,7 +1125,8 @@ export const PAGE_NEEDS: Readonly<Record<SectionKey, PageNeed>> = {
     ],
   },
   'leadership.shares': rows('brands', [
-    piece('The shares of comments and videos', (p) => !!p.section.shares?.comments && !!p.section.shares.videos),
+    // The shares (a brief stored before 9 Nov), or each brand's naming.
+    piece('The shares of comments and videos', (p) => (!!p.section.shares?.comments && !!p.section.shares.videos) || items(p.section).some((i) => i.measure?.named != null)),
     piece('The notes', (p) => (p.section.lines?.length ?? 0) > 0),
   ]),
   'leadership.weigh': rows('items', [

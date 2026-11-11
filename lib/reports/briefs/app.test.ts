@@ -12,13 +12,15 @@ import type { GroupProducts } from '../../pages/v2/voices'
 import type { Verdict } from '../../reading/verdicts'
 import { fact } from '../../written/test-fixtures'
 import {
-  appSectionsFor, briefVerdict, buyersSection, groupsSection, hooksOf, hooksSection, ideasOf, ideasSection, moveOf, moveSentence, movesOf, movesSection, namedNotes, namedOf, namedSection,
-  peopleOf, productsOf, productsSection, RESPONSE_BASIS, standoutOf, subjectsSection, subjectWords,
+  appSectionsFor, briefVerdict, buyersSection, groupsSection, hooksOf, hooksSection, ideasOf, ideasSection, moveOf, moveSentence, movesOf, movesSection, namedByNaming, namedNotes, namedOf, namedSection,
+  MATCHED_BASIS, peopleOf, productsOf, productsSection, RESPONSE_BASIS, standoutOf, subjectsSection, subjectWords, type MatchedHooks,
 } from './app'
 import { OSSUR_APP, OSSUR_MOVES, OSSUR_PEOPLE, OSSUR_SUBJECT_FACTS, OSSUR_SUBJECT_READS, SEALAND_APP, SEALAND_NAMED } from './app-fixture'
 import {
   adviceDetail, alsoInMarket, appLines, buyersSub, daysLong, ideaReadLine, inTheirVideos, moveLine, multipleText, ownTouchWords, pageHref, recordLine, slotWords, voicesMonthHref, withMonth,
 } from './app-words'
+import type { BriefNaming } from './naming'
+import type { BriefNamed } from './types'
 
 // The October canvas's parts, from the app pages' own data (the pages' fixtures:
 // Össur-shaped and Sealand-shaped), and the sections they make. Pure.
@@ -72,14 +74,14 @@ describe('Voices: the groups (Leadership\'s Who is in your market, Sales\' Who i
   it('makes Leadership\'s overview and Sales\' Who is buying: counts, never shares or a change', () => {
     const lead = groupsSection(OSSUR_PEOPLE)!
     expect(lead.key).toBe('leadership.groups')
-    expect(lead.sub).toBe('Five groups comment in your market, as Voices describes them. A video can hold more than one group, so the counts overlap.')
+    expect(lead.sub).toBe('Five groups comment in your market, as Voices describes them, each counted by the videos it commented on, not by purchases. A video can hold more than one group, so the counts overlap.')
     expect(lead.foot).toBe('Each update describes the groups afresh, so no count is set against September.')
     expect(lead.link).toEqual({ href: '/dashboard/voices?month=2026-10', text: 'Open the groups on Voices →' })
     expect(appLines(lead).join(' ')).not.toMatch(/%/)
     const sales = buyersSection(OSSUR_PEOPLE)!
     expect(sales.key).toBe('sales.groups')
-    expect(buyersSub(OCT, 5, 4)).toBe('Five groups comment in your market in October, as Voices describes them. The four in the most videos are here.')
-    expect(buyersSub(OCT, 4, 4)).toBe('Four groups comment in your market in October, as Voices describes them.')
+    expect(buyersSub(OCT, 5, 4)).toBe('Five groups comment in your market in October, as Voices describes them, each counted by the videos it commented on, not by purchases. The four in the most videos are here.')
+    expect(buyersSub(OCT, 4, 4)).toBe('Four groups comment in your market in October, as Voices describes them, each counted by the videos it commented on, not by purchases.')
     expect(alsoInMarket(OCT, [{ name: 'Long-term user', videos: 50 }])).toBe('Also in your market: Long-term user, in 50 of October’s videos.')
     expect(alsoInMarket(OCT, [])).toBeNull()
     expect(groupsSection(null)).toBeNull()
@@ -108,18 +110,41 @@ describe('Voices: the brands named without being asked (Marketing)', () => {
     expect(briefVerdict({ state: 'moved', changePts: -3.1, bandPts: 1.2 } as unknown as Verdict)).toEqual({ state: 'moved', change: -3.1, band: 1.2 })
   })
 
-  it('writes the three notes from the counts, the company\'s own row said either way', () => {
+  it('writes the notes from the counts: the company beside its rivals, never "named most" over a table without it', () => {
     expect(namedNotes(SEALAND_NAMED, 'Sealand')).toEqual([
-      'The North Face and Cotopaxi were named most without being asked: in 11 and 8 of the 941 videos.',
-      'Sealand was named without being asked in 2 of them.',
-      'Of the 52 videos naming Cotopaxi in any way, people praised it in 27 and complained in 32.',
+      'Of the 941 videos, Sealand was named without being asked in 2, The North Face in 11 and Cotopaxi in 8.',
+      'Of the 52 videos in your market naming Cotopaxi in any way, 27 held praise in their comments and 32 a complaint, about anything in the video.',
     ])
     const quiet = { ...SEALAND_NAMED, rows: SEALAND_NAMED.rows.map((r) => (r.you ? { ...r, named: { k: 0, n: 941 } } : r)) }
-    expect(namedNotes(quiet, 'Sealand')[1]).toBe('Sealand was not named without being asked in October.')
+    expect(namedNotes(quiet, 'Sealand')[0]).toBe('Of the 941 videos, Sealand was named without being asked in none, The North Face in 11 and Cotopaxi in 8.')
+    const few = { ...SEALAND_NAMED, rows: SEALAND_NAMED.rows.map((r) => ({ ...r, named: { k: Math.min(r.named.k, 7), n: 941 } })) }
+    expect(namedNotes(few, 'Sealand')).toContain('Few voices: no brand was named without being asked in ten or more of them.')
     const s = namedSection(SEALAND_NAMED, 'Sealand')!
     expect(s.also).toBe('Not named without being asked in October: Freedom of Movement.')
-    expect(s.sub).toMatch(/^Of the 941 videos in your market in October that no brand search of ours found/)
+    expect(s.sub).toMatch(/^Of the 941 videos we read in October that no brand search of ours found/)
     expect(namedSection(null, 'Össur')).toBeNull()
+  })
+
+  it('on the brief\'s naming: one base for every brand, the company\'s own row kept, Voices\' praise beside it, no verdict; none without naming', () => {
+    const naming: BriefNaming = {
+      month: OCT, comments: 22_249, videos: 698, ownComments: 124,
+      rows: [
+        { brandKey: 'client', label: 'Össur', you: true, comments: 20, videos: 8, platforms: ['Reddit', 'Instagram'] },
+        { brandKey: 'r1', label: 'Ottobock', you: false, comments: 20, videos: 6, platforms: ['TikTok'] },
+      ],
+    }
+    const voices: BriefNamed = {
+      month: OCT, base: 704, notNamed: [], href: '/dashboard/voices?month=2026-10',
+      rows: [{ label: 'Ottobock', you: false, named: { k: 7, n: 704 }, verdict: { state: 'too_little_data', change: null, band: null }, praised: { k: 39, n: 63 }, complained: { k: 23, n: 63 }, top: null, href: '/dashboard/voices/brands/r1?month=2026-10' }],
+    }
+    const n = namedByNaming(voices, naming)!
+    expect(n.base).toBe(698)
+    expect(n.rows.map((r) => [r.label, r.you, r.named.k, r.named.n, r.verdict, r.praised?.k ?? null])).toEqual([['Össur', true, 8, 698, null, null], ['Ottobock', false, 6, 698, null, 39]])
+    const s = namedSection(voices, 'Össur', naming)!
+    expect(s.lines?.[0]).toBe('Of the 698 videos, Össur was named without being asked in 8, Ottobock in 6.')
+    expect(s.lines).toContain('Few voices: no brand was named without being asked in ten or more of them.')
+    expect(s.lines?.join(' ')).not.toMatch(/named most/)
+    expect(namedSection(voices, 'Össur', null)).toBeNull()
   })
 })
 
@@ -231,7 +256,27 @@ describe('Content: hooks and formats, on Content\'s measure', () => {
     expect(h.posts!.sentence).toBe('7 of your 15 posts in October')
     expect(h.posts!.best?.href).toMatch(/^\/dashboard\/content\/posts\?post=/)
     expect(h.basis).toBe(RESPONSE_BASIS)
-    expect(hooksSection(h)!.sub).toBe('Videos published in October, by format and by how they open, as Content reads them: 1× is a typical video in your market.')
+    expect(hooksSection(h)!.sub).toBe('Videos published in October, by format and by how they open: 1× is a typical video in your market on the same platform.')
+  })
+
+  it('platform by platform where the brief measured it so: each kind\'s multiple, your posts by platform, the best post with its views', () => {
+    const matched: MatchedHooks = {
+      kinds: { formats: new Map([['story', { multiple: 1.2, rated: 6 }]]), hooks: new Map() },
+      posts: {
+        response: { multiple: 0.7, rated: 27 },
+        platforms: [{ platform: 'instagram', multiple: 0.8, rated: 16 }, { platform: 'tiktok', multiple: 0.7, rated: 11 }],
+        best: { post: { id: 'p1', platform: 'instagram', upload_date: '2026-10-14', classified_type: 'testimonial', engagement_rate: 6, views: 4_900 }, multiple: 1.6 },
+      },
+    }
+    const h = hooksOf({ month: OCT, rival: 'Ottobock', playbook, posts: postsBlock({ owned: OSSUR_OWNED, typical: 3, month }), sentence: null, matched })!
+    expect(h.formats!.rows.map((r) => [r.label, r.multiple])).toEqual([['Promotional', null], ['Story', 1.2], ['Tutorial', null]])
+    expect(h.posts!.response).toEqual({ multiple: 0.7, rated: 27 })
+    expect(h.posts!.platforms).toEqual(matched.posts.platforms)
+    expect(h.posts!.best).toEqual({ platform: 'instagram', date: '2026-10-14', format: 'Testimonial', multiple: 1.6, href: '/dashboard/content/posts?post=p1#post-p1', views: 4_900 })
+    expect(h.basis).toBe(MATCHED_BASIS)
+    expect(MATCHED_BASIS).toMatch(/own platform/)
+    // No post with the views: no best.
+    expect(hooksOf({ month: OCT, rival: null, playbook, posts: postsBlock({ owned: OSSUR_OWNED, typical: 3, month }), sentence: null, matched: { ...matched, posts: { ...matched.posts, best: null } } })!.posts!.best).toBeNull()
   })
 
   it('Content\'s own words for the response, and its multiples, one source', () => {
