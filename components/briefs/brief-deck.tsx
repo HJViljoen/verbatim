@@ -663,11 +663,11 @@ function FormatsPage({ ctx, s, sub }: PageProps) {
 
 /** What viewers come for, and what loses them: the lead in the serif, then
  *  the two columns (Brief-Content-06). */
-function WatchPage({ s, footnote }: PageProps) {
+function WatchPage({ s, sub, footnote }: PageProps) {
   const cols = [s.groups.find((g) => pairColumn(g.label) === 0) ?? null, s.groups.find((g) => pairColumn(g.label) === 1) ?? null]
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 22, height: '100%' }}>
-      <TitleBlock title={s.title} />
+      <TitleBlock title={s.title} sub={sub} />
       {s.lead ? <p {...STORED} style={{ margin: 0, fontFamily: SERIF, fontSize: 23, fontWeight: 500, lineHeight: 1.5, maxWidth: 1080 }}>{s.lead}</p> : null}
       <div style={{ display: 'flex', gap: 48, flexGrow: 1, minHeight: 0 }}>
         {cols.map((g, c) => (
@@ -716,10 +716,10 @@ function MorePage({ ctx, s, sub, footnote }: PageProps) {
 
 /** Where the confusion starts: the lead in the serif, where it starts, then
  *  a card a confusion (Brief-Content-08). */
-function ConfusionPage({ s, footnote }: PageProps) {
+function ConfusionPage({ s, sub, footnote }: PageProps) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 22, height: '100%' }}>
-      <TitleBlock title={s.title} />
+      <TitleBlock title={s.title} sub={sub} />
       {s.lead ? <p {...STORED} style={{ margin: 0, fontFamily: SERIF, fontSize: 26, fontWeight: 500, lineHeight: 1.45, maxWidth: 1100 }}>{s.lead}</p> : null}
       {s.note ? <p {...STORED} style={{ margin: 0, fontSize: 19, lineHeight: 1.55, maxWidth: 1040 }}>{s.note}</p> : null}
       <div style={{ flexGrow: 1 }} />
@@ -939,11 +939,11 @@ function WeighPage({ ctx, s, footnote }: PageProps) {
 
 /** The risks, in business terms: dark risk cards, and the questions for the
  *  business under them (Brief-Leadership-07). */
-function RisksPage({ s, companion }: PageProps) {
+function RisksPage({ s, sub, companion }: PageProps) {
   const questions = companion ? allItems(companion) : []
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18, height: '100%' }}>
-      <TitleBlock title={s.title} />
+      <TitleBlock title={s.title} sub={sub} />
       <div style={{ display: 'flex', gap: 20 }}>
         {allItems(s).map((i, k) => (
           <div key={k} style={{ flex: 1, minWidth: 0, background: P.ink, color: '#FFFFFF', borderRadius: 16, padding: '22px 26px', display: 'flex', flexDirection: 'column', gap: 10 }}>

@@ -757,7 +757,9 @@ export function planSection(s: BriefSection, companion: BriefSection | null, d: 
       return [page(s)]
     case 'content.watch': {
       const lead = s.lead ? 22 + heightOf(s.lead, 1080, 23, 1.5, true) : 0
-      const room = BODY_HEIGHT - 37 - lead - 22 - 23 - foot(all, (W - 48) / 2)
+      // The title is the canvas's 37 with no sub; on the October canvas its
+      // sub says what the cards rest on (`cardsEvidence`).
+      const room = BODY_HEIGHT - (sub ? titleH(sub) : 37) - lead - 22 - 23 - foot(all, (W - 48) / 2)
       const left = s.groups.filter((g) => pairColumn(g.label) === 0).flatMap((g) => g.items)
       const right = s.groups.filter((g) => pairColumn(g.label) === 1).flatMap((g) => g.items)
       return [page(only(s, [...fitItems(left, H.watch, room, 3), ...fitItems(right, H.watch, room, 3)]))]
@@ -775,7 +777,7 @@ export function planSection(s: BriefSection, companion: BriefSection | null, d: 
         const n = Math.max(1, xs.length)
         // The title, the lead and the note each with its gap, and the
         // spacer's gap and the cards' under it.
-        return 37 + lead + note + 22 + 22 + Math.max(...xs.map((i) => H.confusion(i, (W - 14 * (n - 1)) / n))) + foot(xs)
+        return (sub ? titleH(sub) : 37) + lead + note + 22 + 22 + Math.max(...xs.map((i) => H.confusion(i, (W - 14 * (n - 1)) / n))) + foot(xs)
       }
       // Where it starts is a main piece of the page (PAGE_NEEDS): where it
       // does not fit over the cards, a card goes before it does (the rest
@@ -826,7 +828,7 @@ export function planSection(s: BriefSection, companion: BriefSection | null, d: 
         for (let k = 0; k < xs.length; k += 2) h += Math.max(...xs.slice(k, k + 2).map(H.decision))
         return h
       }
-      while (qs.length && 37 + 18 + cards + qH(qs) > BODY_HEIGHT) qs = qs.slice(0, -1)
+      while (qs.length && (sub ? titleH(sub) : 37) + 18 + cards + qH(qs) > BODY_HEIGHT) qs = qs.slice(0, -1)
       return [page(only(s, shown), { companion: companion && qs.length ? only(companion, qs) : null })]
     }
     case 'leadership.holds': {
