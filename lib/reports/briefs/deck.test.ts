@@ -146,6 +146,27 @@ describe('the canvas\'s counts: what does not fit stays in the stored brief', ()
     const quoted = shown(d, 'sales.triggers').filter((i) => i.quote)
     expect(quoted.map((i) => i.title)).toEqual(['Back to school', 'Money in hand', 'The design that lands'])
   })
+
+  it('a moment\'s voices go where they do not fit under tall moments and a footnote (the spacer\'s two gaps counted)', () => {
+    // Three moments as tall as October's: a two-line title, seven lines of
+    // text in a fifth of the page; a footnote under them; a four-line voice.
+    const text = 'Buyers say the moment comes when the pack they carry every day gives out, when a strap tears, when a zip stops closing on the way to work, or when a long trip asks for more room.'
+    const voice = 'It will not take that long and then you will have your new pack. And it will really be better for you. You will carry it quite quickly. Then no one will see the old one anymore.'
+    const tall = () => {
+      const d = briefFixture('sales')
+      d.sections.find((s) => s.key === 'sales.triggers')!.groups[0].items = [
+        item('Ready after the old one', text, { quote: quote(voice, { date: '2026-10-17' }) }),
+        item('A better day out', text, { quote: quote('Why not a lighter one to make it easy', { date: '2026-10-17' }) }),
+        item('Pack usefulness moment', text, { tag: 'Argued in the Leadership brief' }),
+      ]
+      return d
+    }
+    expect(shown(tall(), 'sales.triggers').filter((i) => i.quote)).toEqual([])
+    // Short moments leave room for the same voices.
+    const short = tall()
+    for (const i of short.sections.find((s) => s.key === 'sales.triggers')!.groups[0].items) i.text = 'Buyers say a strap tears.'
+    expect(shown(short, 'sales.triggers').filter((i) => i.quote).map((i) => i.title)).toEqual(['Ready after the old one', 'A better day out'])
+  })
 })
 
 describe('thin pages are left out (Heinrich, 12 Oct)', () => {

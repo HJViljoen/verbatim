@@ -415,7 +415,13 @@ export const H = {
   },
   stop: (i: BriefItem): number => 25 + Math.max(heightOf(i.title ?? '', 196, 18, 1.3, 'bold'), heightOf(i.text, 490, 15, 1.55)),
   settle: (i: BriefItem): number => 15 + heightOf(i.text, 350, 14, 1.5),
-  trigger: (i: BriefItem, w: number): number => 28 + 10 + heightOf(i.title ?? '', w, 19, 1.25, 'bold') + 10 + heightOf(i.text, w, 15, 1.55),
+  // A moment's column is a fifth of the page, where whole words leave more of
+  // each line empty than a wide column does, and its title at 19px 700 runs
+  // wider than a title's average: so its measure is taken narrower, as the
+  // heard card's is (11 Nov, measured in Chrome on Össur's October moments:
+  // a 21-character title on two lines, 180 characters of text on seven, the
+  // number row 31px).
+  trigger: (i: BriefItem, w: number): number => 31 + 10 + heightOf(i.title ?? '', w * 0.87, 19, 1.25, 'bold') + 10 + heightOf(i.text, w * 0.87, 15, 1.55),
   triggerQuote: (q: BriefQuote): number => 19 + quoteH(q, (W - 40) / 3, 15, [14, 18]),
   rival: (i: BriefItem, w: number): number => {
     const inner = w - 46
@@ -610,7 +616,12 @@ export function planSection(s: BriefSection, companion: BriefSection | null, d: 
       const shown = all.slice(0, max)
       const w = (W - 24 * 4) / 5
       const tallest = Math.max(...shown.map((i) => H.trigger(i, w)))
-      const room = BODY_HEIGHT - titleH(sub) - 22 - tallest - 22 - foot(shown)
+      // The page is a column 22 apart: the title, the moments, the footnote
+      // where there is one, a spacer, then the voices, so a gap stands on
+      // each side of the spacer (11 Nov: Össur's October voices ran 13px past
+      // the body, the footnote and the spacer's two gaps not counted).
+      const note = footnoteOf(only(s, shown))
+      const room = BODY_HEIGHT - titleH(sub) - 22 - tallest - (note ? 22 + heightOf(note, W, 13, 1.35) : 0) - 22 - 22
       // A voice a moment, the row as tall as its tallest.
       let quoted = shown.filter((i) => i.quote && quoteWords(i.quote as BriefQuote & { english?: string | null }))
       while (quoted.length && Math.max(...quoted.map((i) => H.triggerQuote(i.quote!))) > room) quoted = quoted.slice(0, -1)
