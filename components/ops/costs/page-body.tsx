@@ -27,9 +27,13 @@ export function CostsPageBody({ data, finance, pdfUrls, now }: {
     clientNames: new Map(data.clients.map((c) => [c.id, c.name])),
     pdfUrls,
   })
+  // "Owed to you" is ONE figure on the page: the invoices' balances for the
+  // clients that have invoices, the hand-kept unpaid amount for the rest
+  // (lib/costs/view.ts), the same in this tile and in the summary below.
+  const owedToYouZar = buildCostsView(data, { owedByClientZar: view.summary.owedByClientZar }).owedToYouZar
   const top = (
     <>
-      <MoneyInSummary view={view} usdZar={usdZar} />
+      <MoneyInSummary view={view} usdZar={usdZar} owedToYouZar={owedToYouZar} />
       <Invoices view={view} today={data.today} usdZar={usdZar} now={now} />
       <div className="grid grid-cols-1 gap-[22px] xl:grid-cols-2">
         <Payments view={view} today={data.today} />

@@ -58,6 +58,20 @@ describe('Ops → Costs with Money in', () => {
     expect(text).toContain('Owes R18,375 on its invoices')
   })
 
+  it('prints one "Owed to you": with a client that has no invoices, both figures add its hand-kept amount', () => {
+    const other = '00000000-0000-0000-0000-0000000000b2'
+    const data: CostsData = {
+      ...DATA,
+      clients: [...DATA.clients, { id: other, name: 'Beta', isActive: true, trialEndsAt: null, reportPeriod: null }],
+      plans: [...DATA.plans, { id: 'plan-b', clientId: other, name: null, stage: 'paying', price: 100, currency: 'ZAR', unpaidAmount: 1000, note: null, trialEndsOn: null, cadence: 'none', costPerRunUsd: null }],
+    }
+    const t = renderText(<CostsPageBody data={data} finance={FINANCE} now={NOW} />)
+    // R18,375 on the invoices + R1,000 kept by hand for Beta
+    expect(t.match(/Owed to you R19,375/g)?.length).toBe(2)
+    expect(t).toContain('R15,750 of it overdue · R1,000 of it kept by hand, for clients with no invoices')
+    expect(t).not.toMatch(/Owed to you R18,375/)
+  })
+
   it('lists each invoice with its state, what it replaces and what it owes', () => {
     expect(text).toContain('Invoice 0110 December 2026 Open Acme SA Issued 17 Nov 2026 Due 30 Nov 2026')
     expect(text).toContain('Invoice 0106 September 2026 Overdue Acme SA Issued 17 Nov 2026 Due on receipt Replaces 0102')

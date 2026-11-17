@@ -33,13 +33,21 @@ function Big({ zar, usdZar, signed = false }: { zar: number; usdZar: number; sig
   )
 }
 
-export function MoneyInSummary({ view, usdZar }: { view: MoneyView; usdZar: number }) {
+/** `owedToYouZar` is the page's one "Owed to you" (the summary below prints
+ *  the same): the invoices' balances, plus the hand-kept unpaid amount of any
+ *  client with no invoices yet. */
+export function MoneyInSummary({ view, usdZar, owedToYouZar }: { view: MoneyView; usdZar: number; owedToYouZar: number }) {
   const s = view.summary
+  const byHand = Math.round(owedToYouZar - s.owedToYouZar)
+  const subs = [
+    s.overdueZar > 0 ? `${fmtZar(s.overdueZar)} of it overdue` : 'Nothing overdue',
+    ...(byHand > 0 ? [`${fmtZar(byHand)} of it kept by hand, for clients with no invoices`] : []),
+  ]
   return (
     <Card className={PAD}>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <Figure label="Owed to you" sub={s.overdueZar > 0 ? `${fmtZar(s.overdueZar)} of it overdue` : 'Nothing overdue'}>
-          <Big zar={s.owedToYouZar} usdZar={usdZar} />
+        <Figure label="Owed to you" sub={subs.join(' · ')}>
+          <Big zar={owedToYouZar} usdZar={usdZar} />
         </Figure>
         <Figure label="Due in the next 30 days" sub="Overdue included">
           <Big zar={s.dueNext30Zar} usdZar={usdZar} />
