@@ -4,8 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { costsAdmin } from '@/lib/costs/access'
 import { todayJhb } from '@/lib/costs/dates'
 import { callAdmin } from '@/lib/finance/daily-io'
-import { parseExpectedForm, parsePaymentForm, parseProfileForm } from '@/lib/finance/forms'
-import { profileToRow } from '@/lib/finance/rows'
+import { parseExpectedForm, parsePaymentForm, parseProfileForm, profileUpdate } from '@/lib/finance/forms'
 import { sendInvoice, supabaseSendPort } from '@/lib/finance/send'
 import { createAdminClient } from '@/lib/supabase-admin'
 import type { CostsActionState } from './actions'
@@ -144,7 +143,8 @@ export async function saveProfile(_prev: CostsActionState, f: FormData): Promise
   if (!parsed.ok) return parsed
   const { error } = await createAdminClient()
     .from('fin_billing_profiles')
-    .update({ ...profileToRow(parsed.value), updated_at: now() })
+    // the one-off note and the hold only when changed here (lib/finance/forms.ts profileUpdate)
+    .update({ ...profileUpdate(parsed.value, f), updated_at: now() })
     .eq('id', id)
   if (error) return failed('save the billing profile', error)
   revalidatePath(PATH)

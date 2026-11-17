@@ -225,6 +225,11 @@ export function ProfileEdit({ profile }: { profile: BillingProfile }) {
   return (
     <form onSubmit={keep(dispatch)} className="flex flex-col gap-3 rounded-[10px] bg-inner px-4 py-4">
       <input type="hidden" name="id" value={profile.id} />
+      {/* What the form was loaded with: a send may clear the note and the
+          hold meanwhile, and a save that did not touch them must not put
+          them back (lib/finance/forms.ts profileUpdate). */}
+      <input type="hidden" name="noteOnceWas" value={profile.noteOnce ?? ''} />
+      <input type="hidden" name="holdNextWas" value={profile.holdNext ? 'on' : ''} />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Made out to"><input name="billTo" required defaultValue={profile.billTo} className={INPUT} /></Field>
         <Field label="Subject line"><input name="subjectLine" defaultValue={profile.subjectLine} className={INPUT} /></Field>

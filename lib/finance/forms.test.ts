@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseEmails, parseExpectedForm, parseMoneyCents, parsePaymentForm, parseProfileForm } from './forms'
+import { parseEmails, parseExpectedForm, parseMoneyCents, parsePaymentForm, parseProfileForm, profileUpdate } from './forms'
 
 // The Money in forms, read. Made-up names.
 
@@ -80,5 +80,35 @@ describe('a billing profile', () => {
     expect(msg({ emailTo: '' })).toMatch(/at least one address/)
     expect(msg({ emailCc: 'not-an-address' })).toMatch(/not an email address/)
     expect(msg({ sendMode: 'sometimes' })).toMatch(/how it is sent/)
+  })
+})
+
+describe('saving the billing editor', () => {
+  const base = {
+    billTo: 'Acme SA', currency: 'ZAR', fxRate: '17.50', issueDay: '15', dueRule: 'end_of_prev_month', sendMode: 'auto',
+    'lines.0.description': 'Widget hosting', 'lines.0.unitUsd': '80', 'lines.0.qty': '1', emailTo: 'ap@acme.test', emailCc: '', emailBcc: '',
+    active: 'on',
+  }
+  const save = (o: Record<string, string>) => {
+    const f = form({ ...base, ...o })
+    const parsed = parseProfileForm(f)
+    if (!parsed.ok) throw new Error(parsed.message)
+    return profileUpdate(parsed.value, f)
+  }
+
+  it('leaves the one-off note and the hold alone when they were not changed (a send may have cleared them since)', () => {
+    const row = save({ noteOnce: 'One line.', noteOnceWas: 'One line.', holdNext: 'on', holdNextWas: 'on' })
+    expect(row).not.toHaveProperty('note_once')
+    expect(row).not.toHaveProperty('hold_next')
+    expect(row).toMatchObject({ bill_to: 'Acme SA', fx_rate: 17.5 })
+    // untouched and empty: still not written
+    expect(save({ noteOnce: '', noteOnceWas: '', holdNext: '', holdNextWas: '' })).not.toHaveProperty('note_once')
+  })
+
+  it('writes them when the operator changed them', () => {
+    expect(save({ noteOnce: 'A new line.', noteOnceWas: '' })).toMatchObject({ note_once: 'A new line.' })
+    expect(save({ noteOnce: '', noteOnceWas: 'Old line.' })).toMatchObject({ note_once: null })
+    expect(save({ holdNext: 'on', holdNextWas: '' })).toMatchObject({ hold_next: true })
+    expect(save({ holdNext: '', holdNextWas: 'on' })).toMatchObject({ hold_next: false })
   })
 })

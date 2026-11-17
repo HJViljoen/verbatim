@@ -1,5 +1,6 @@
 import { day, text, type FormLike, type Parsed } from '@/lib/costs/forms'
 import { parseRandCents } from '@/lib/family-loan/money'
+import { profileToRow } from './rows'
 import {
   DUE_RULES, FIN_CURRENCIES, SEND_MODES,
   type BillingProfile, type DueRule, type FinCurrency, type ProfileLine, type SendMode,
@@ -135,4 +136,19 @@ export function parseProfileForm(f: FormLike): Parsed<ProfileFields> {
       noteOnce: text(f, 'noteOnce', 1000),
     },
   }
+}
+
+/**
+ * The columns a save of the billing editor writes. The one-off note and the
+ * hold are written ONLY when the operator changed them on the form (it
+ * carries what it was loaded with, `noteOnceWas` and `holdNextWas`): both are
+ * also cleared by a send, and a form opened before that send must not put
+ * them back by being saved unchanged.
+ */
+export function profileUpdate(fields: ProfileFields, f: FormLike): Record<string, unknown> {
+  const row = profileToRow(fields)
+  const flagOf = (k: string) => ['on', 'true', '1'].includes(String(f.get(k) ?? ''))
+  if ((text(f, 'noteOnce', 1000) ?? '') === (text(f, 'noteOnceWas', 1000) ?? '')) delete row.note_once
+  if (flagOf('holdNext') === flagOf('holdNextWas')) delete row.hold_next
+  return row
 }
