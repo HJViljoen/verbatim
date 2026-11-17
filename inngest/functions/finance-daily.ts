@@ -2,7 +2,7 @@ import { inngest } from '@/inngest/client'
 import { sendAlertEmail } from '@/lib/email'
 import { holdNotices, nudgeNotices, planSends, runDay } from '@/lib/finance/daily'
 import {
-  allProfiles, callAdmin, issueAll, ledgerRows, tellOperator, unfinishedInvoices,
+  allProfiles, callAdmin, issueAll, ledgerRows, refreshFx, syncApify, tellOperator, unfinishedInvoices,
 } from '@/lib/finance/daily-io'
 import { applyPayments } from '@/lib/finance/ledger'
 import { createAdminClient } from '@/lib/supabase-admin'
@@ -27,6 +27,11 @@ import { createAdminClient } from '@/lib/supabase-admin'
 //                       tap (D1), each said once (fin_notices)
 //   'nudge'             one email to the operator for invoices past due or past
 //                       their promised day, each said once
+//   'fx'                the dollar's rate on the cost side, while fx_auto is on
+//                       (lib/finance/vendors/fx.ts; invoices keep their fixed rate)
+//   'apify-usage'       Apify's own figure for this billing cycle
+//                       (lib/finance/vendors/apify.ts). Neither alerts: the page
+//                       shows the day each was last read.
 // Anything that failed is in one alert at the end ('alert'). Nothing here ever
 // emails a client but the send route, and only for an auto profile not held.
 
@@ -70,6 +75,9 @@ export const financeDaily = inngest.createFunction(
       return tellOperator(admin, 'nudge', nudgeNotices(invoices, applyPayments(invoices, payments, today), today))
     })
 
+    const fx = await step.run('fx', () => refreshFx(createAdminClient()))
+    const apify = await step.run('apify-usage', () => syncApify(createAdminClient()))
+
     if (problems.length) {
       await step.run('alert', () => sendAlertEmail(
         `Verbatim finance: ${problems.length === 1 ? 'a problem' : `${problems.length} problems`} on ${today}`,
@@ -85,6 +93,8 @@ export const financeDaily = inngest.createFunction(
       sent: plan.send.map((s) => s.number),
       held: held.told,
       nudged: nudged.told,
+      fx,
+      apify,
       problems,
     }
   },

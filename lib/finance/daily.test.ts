@@ -93,7 +93,7 @@ describe('the job', () => {
 
   it('keeps its step ids in order, and never prints or emails a client inside a step', () => {
     const ids = [...src.matchAll(/step\.run\(\s*[`'"]([^`'":$]+)/g)].map((m) => m[1])
-    expect(ids).toEqual(['day', 'issue', 'plan-print', 'print', 'plan-send', 'send', 'tell-held', 'nudge', 'alert'])
+    expect(ids).toEqual(['day', 'issue', 'plan-print', 'print', 'plan-send', 'send', 'tell-held', 'nudge', 'fx', 'apify-usage', 'alert'])
     expect(src).not.toMatch(/withBrowser|printInvoicePdf|sendInvoiceEmail|sendInvoice\(/)
     expect(src).toContain('/api/admin/finance/invoices/${d.id}/render')
     expect(src).toContain('/api/admin/finance/invoices/${s.id}/send')

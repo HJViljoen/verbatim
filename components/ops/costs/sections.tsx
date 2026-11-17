@@ -4,7 +4,7 @@ import {
 } from 'lucide-react'
 import { Card, CardTitle } from '@/components/pages/studio/ui'
 import { PageBar, PageFrame } from '@/components/shell/page-grid'
-import { addDays, daysBetween, fmtDay, fmtWeekday } from '@/lib/costs/dates'
+import { addDays, daysBetween, fmtDay, fmtWeekday, todayJhb } from '@/lib/costs/dates'
 import type { Charge } from '@/lib/costs/dates'
 import type { FixedLine, Scenario } from '@/lib/costs/forecast'
 import type { CostsData, RecentRun } from '@/lib/costs/load'
@@ -204,6 +204,9 @@ export function ApifyCycle({ view, data }: { view: CostsView; data: CostsData })
           {c.daysElapsed < 4 ? ' Early in the cycle, so the pace is rough.' : ''}
         </p>
         <p className="m-0 text-muted-foreground">
+          {data.apifyCycleSource === 'api' && data.apifyApiReadAt
+            ? `Apify's own figure, read ${fmtDay(todayJhb(new Date(data.apifyApiReadAt)))}. `
+            : 'From the runs Verbatim recorded. '}
           The plan expects {fmtUsd(view.apifyPlannedUsd)} a cycle: today&rsquo;s clients&rsquo; runs and {fmtUsd(data.settings.extraApifyUsd)} of snapshots and tests.
           {view.apifyPlannedUsd < data.settings.apifyPlanUsd ? ` Apify bills ${fmtUsd(data.settings.apifyPlanUsd)}, its plan fee, whatever is used under it.` : ''}
         </p>
@@ -529,7 +532,7 @@ export function CostsBody({ data }: { data: CostsData }) {
     <PageFrame>
       <PageBar
         title="Costs"
-        line={<>What Verbatim costs to run, and the month ahead · rand first, dollars alongside at R{rates.usdZar.toFixed(2)} to the dollar</>}
+        line={<>What Verbatim costs to run, and the month ahead · rand first, dollars alongside at R{rates.usdZar.toFixed(2)} to the dollar{data.settings.fxAuto && data.settings.fxOn ? ` (ECB, ${fmtDay(data.settings.fxOn)})` : ''}</>}
       />
       <Summary view={view} rates={rates} prospectsCounted={data.settings.countProspects} />
       <div className="grid grid-cols-1 gap-[22px] xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">

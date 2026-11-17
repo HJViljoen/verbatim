@@ -33,30 +33,20 @@ export interface FinanceData {
   profiles: BillingProfile[]
   invoices: Invoice[]
   payments: Payment[]
-  /** Apify's own figure for the cycle that began on this day, if synced. */
-  apifyCycleUsd: { periodStart: string; usd: number; fetchedAt: string } | null
-  /** Whether the dollar rate refreshes itself, and the day it last did. */
-  fx: { auto: boolean; on: string | null }
 }
 
-export async function loadFinance(admin: Admin, apifyCycleStart: string): Promise<FinanceData> {
-  const [issuerRes, profilesRes, invoicesRes, paymentsRes, vendorRes, fxRes] = await Promise.all([
+export async function loadFinance(admin: Admin): Promise<FinanceData> {
+  const [issuerRes, profilesRes, invoicesRes, paymentsRes] = await Promise.all([
     admin.from('fin_issuer').select('*').eq('id', true).maybeSingle(),
     admin.from('fin_billing_profiles').select('*').order('created_at'),
     admin.from('fin_invoices').select('*').order('issued_on', { ascending: false }).order('number', { ascending: false }).limit(1000),
     admin.from('fin_payments').select('*').order('received_on', { ascending: false }).limit(1000),
-    admin.from('fin_vendor_usage').select('*').eq('vendor', 'apify').eq('period_start', apifyCycleStart).maybeSingle(),
-    admin.from('cost_settings').select('fx_auto, fx_on').eq('id', true).maybeSingle(),
   ])
-  const vendor = check<Row | null>('fin_vendor_usage', vendorRes)
-  const fx = check<Row | null>('cost_settings', fxRes)
   return {
     issuer: issuerFromRow(check<Row | null>('fin_issuer', issuerRes)),
     profiles: check<Row[]>('fin_billing_profiles', profilesRes).map(profileFromRow),
     invoices: check<Row[]>('fin_invoices', invoicesRes).map(invoiceFromRow),
     payments: check<Row[]>('fin_payments', paymentsRes).map(paymentFromRow),
-    apifyCycleUsd: vendor ? { periodStart: String(vendor.period_start), usd: Number(vendor.usd ?? 0), fetchedAt: String(vendor.fetched_at) } : null,
-    fx: { auto: fx?.fx_auto === undefined || fx?.fx_auto === null ? true : Boolean(fx.fx_auto), on: fx?.fx_on ? String(fx.fx_on).slice(0, 10) : null },
   }
 }
 

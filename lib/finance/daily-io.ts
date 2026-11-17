@@ -6,6 +6,8 @@ import { issueDue, type Issued } from './issue'
 import { check } from './load'
 import { invoiceFromRow, paymentFromRow, profileFromRow } from './rows'
 import type { BillingProfile, Invoice, Payment } from './types'
+import { fetchApifyUsage } from './vendors/apify'
+import { fetchUsdZar } from './vendors/fx'
 
 // The daily job's reads and writes (inngest/functions/finance-daily.ts). I/O
 // glue: the decisions are lib/finance/daily.ts and the modules it names.
@@ -101,5 +103,38 @@ export async function callAdmin<T extends object>(path: string, body: unknown = 
     return { ok: r.ok, status: r.status, json }
   } catch (e) {
     return { ok: false, status: 0, json: { error: e instanceof Error ? e.message : String(e) } as Partial<T> & { error?: string } }
+  }
+}
+
+/** The dollar's rate on the cost side, refreshed while cost_settings.fx_auto
+ *  is on (the page's switch). Invoices keep their profile's fixed rate. */
+export async function refreshFx(admin: Admin): Promise<{ skipped?: string; rate?: number; on?: string; error?: string }> {
+  try {
+    const s = check<Row | null>('cost_settings', await admin.from('cost_settings').select('fx_auto').eq('id', true).maybeSingle())
+    if (s && s.fx_auto === false) return { skipped: 'set by hand' }
+    const fx = await fetchUsdZar()
+    const { error } = await admin.from('cost_settings')
+      .upsert({ id: true, usd_zar: fx.rate, fx_on: fx.on, updated_at: new Date().toISOString() }, { onConflict: 'id' })
+    if (error) throw new Error(error.message)
+    return { rate: fx.rate, on: fx.on }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) }
+  }
+}
+
+/** Apify's own figure for this billing cycle (fin_vendor_usage). */
+export async function syncApify(admin: Admin): Promise<{ skipped?: string; periodStart?: string; usd?: number; error?: string }> {
+  const token = process.env.APIFY_TOKEN
+  if (!token) return { skipped: 'no APIFY_TOKEN' }
+  try {
+    const u = await fetchApifyUsage(token)
+    const { error } = await admin.from('fin_vendor_usage').upsert(
+      { vendor: 'apify', period_start: u.periodStart, period_end: u.periodEnd, usd: u.usd, fetched_at: new Date().toISOString() },
+      { onConflict: 'vendor,period_start' },
+    )
+    if (error) throw new Error(error.message)
+    return { periodStart: u.periodStart, usd: u.usd }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) }
   }
 }
