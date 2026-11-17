@@ -314,7 +314,15 @@ This version has breaking changes — APIs, conventions, and file structure may 
   one of its products in the comment or the video (else it reads as the
   category in general), and a category-in-general answer must name the
   category; paraphrase placements
-  are off (`MODEL_PLACES_PARAPHRASE`). Placements are appended to
+  are off (`MODEL_PLACES_PARAPHRASE`). Both prompts describe the tenant's
+  own market (`productDomainFor`, `PRODUCT_DOMAIN_BY_CLIENT` in
+  `lib/products/classify.ts`, 17 Nov; until then every tenant's said
+  "prosthetics, orthotics and mobility" and the confirm read a category word
+  as a prosthetic product): Össur's entry is the old prompts byte for byte,
+  pinned in `classify.test.ts`, so its stored answers stay the question they
+  answered; a tenant with no entry gets neutral words. No entry moves the
+  answers' key (catalogue version and `PRODUCT_MODEL_RULE_VERSION`), so change
+  a tenant's words before its back-read. Placements are appended to
   `product_mentions`. The client's own words never place: every content
   field of a `source='owned'` video (account, caption, hashtags, transcript,
   `transcript_en`, OCR; `contentFields`), and any comment written by the
