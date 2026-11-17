@@ -225,7 +225,7 @@ export function BillForm({ bill, onDone }: { bill?: Bill; onDone: () => void }) 
 
 // ---- Clients and prospects -------------------------------------------------------
 
-export function PlanItem({ plan, rates, today }: { plan: PlanView; rates: Rates; today: string }) {
+export function PlanItem({ plan, rates, today, invoicedOwedZar }: { plan: PlanView; rates: Rates; today: string; invoicedOwedZar?: number }) {
   const [editing, setEditing] = useState(false)
   const [removed, remove, removing] = useAction(deletePlan)
   if (editing) return <PlanForm plan={plan} onDone={() => setEditing(false)} />
@@ -266,7 +266,10 @@ export function PlanItem({ plan, rates, today }: { plan: PlanView; rates: Rates;
           </span>
         ) : null}
       </p>
-      {plan.unpaidAmount > 0 ? (
+      {/* An invoiced client owes what its invoices say (Money in, above). */}
+      {invoicedOwedZar !== undefined ? (
+        invoicedOwedZar > 0 ? <p className="m-0 text-[13px] font-medium text-negative">Owes {fmtZar(invoicedOwedZar)} on its invoices</p> : null
+      ) : plan.unpaidAmount > 0 ? (
         <p className="m-0 text-[13px] font-medium text-negative">
           Owes {fmtNative(plan.unpaidAmount, plan.currency)}
           {plan.currency !== 'ZAR' ? ` (${fmtZar(toZar(plan.unpaidAmount, plan.currency, rates))})` : ''}
@@ -373,7 +376,7 @@ export function BalanceForm({ balanceUsd, balanceOn, today }: { balanceUsd: numb
 
 // ---- The forecast's switches -----------------------------------------------------
 
-export function ToggleButton({ name, on, label }: { name: 'countShared' | 'countProspects'; on: boolean; label: string }) {
+export function ToggleButton({ name, on, label }: { name: 'countShared' | 'countProspects' | 'fxAuto'; on: boolean; label: string }) {
   const [state, action, pending] = useAction(setToggle)
   return (
     <form action={action} className="inline-flex items-center gap-2">

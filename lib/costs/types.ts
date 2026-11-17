@@ -88,6 +88,11 @@ export interface CostSettings {
   openaiBalanceOn: string | null
   countShared: boolean
   countProspects: boolean
+  /** The dollar rate refreshes itself daily (finance-daily's 'fx' step).
+   *  False where the finance migration is not applied yet. */
+  fxAuto: boolean
+  /** The day the ECB published the rate in usd_zar, when it refreshed itself. */
+  fxOn: string | null
 }
 
 /** The migration's column defaults: what the page assumes before the row is
@@ -104,6 +109,8 @@ export const DEFAULT_SETTINGS: CostSettings = {
   openaiBalanceOn: null,
   countShared: true,
   countProspects: false,
+  fxAuto: false,
+  fxOn: null,
 }
 
 /** One row of `cost_client_plans`. A prospect has no clientId. */

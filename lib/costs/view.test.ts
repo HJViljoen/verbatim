@@ -69,6 +69,8 @@ describe('the page, decided', () => {
     recentRuns: [],
     apifyCycle: billingCycle('2026-10-09', 9),
     apifyCycleSpendUsd: 2,
+    apifyCycleSource: 'runs',
+    apifyApiReadAt: null,
     openaiSinceBalanceUsd: 0,
   }
   const v = buildCostsView(data)
