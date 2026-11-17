@@ -2,7 +2,7 @@ import { addMonths, todayJhb } from '@/lib/costs/dates'
 import { longDate } from './email'
 import type { Ledger } from './ledger'
 import { fmtMoney } from './money'
-import { monthOf } from './periods'
+import { monthOf, periodLabel } from './periods'
 import { PROD_REF } from './prod'
 import type { BillingProfile, Invoice, NoticeKind } from './types'
 
@@ -145,4 +145,23 @@ export function noticeEmail(kind: 'hold' | 'nudge', notices: readonly Notice[], 
       'This goes to you only, never to the client.',
     ].join('\n'),
   }
+}
+
+/** The days of the month a missed month is said again: weekly, not daily,
+ *  since the page has no button that bills a month already begun. */
+export const MISSED_MONTH_DAYS = [1, 8, 15, 22, 29] as const
+
+/**
+ * Active profiles with no live invoice for the month `today` is in. The job
+ * never bills a month that has begun, so a month whose issue days all went by
+ * (the job down, the invoice voided, the profile switched on late) stays
+ * unbilled unless someone says so. Said on MISSED_MONTH_DAYS only.
+ */
+export function missedMonthLines(profiles: readonly BillingProfile[], invoices: readonly Invoice[], today: string): string[] {
+  if (!(MISSED_MONTH_DAYS as readonly number[]).includes(Number(today.slice(8, 10)))) return []
+  const month = monthOf(today)
+  return profiles
+    .filter((p) => p.active && p.lines.length > 0)
+    .filter((p) => !invoices.some((i) => i.kind === 'invoice' && i.clientId === p.clientId && i.periodStart === month && i.status !== 'credited' && i.status !== 'void'))
+    .map((p) => `${p.billTo} has no invoice for ${periodLabel(month)}. The daily job never bills a month that has begun, so it stays unbilled unless you issue one by hand; to skip the month on purpose, pause the billing profile. This reminder repeats weekly.`)
 }

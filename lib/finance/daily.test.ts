@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { attentionLines, holdNotices, noticeEmail, nudgeNotices, planSends, runDay } from './daily'
+import { attentionLines, holdNotices, missedMonthLines, noticeEmail, nudgeNotices, planSends, runDay } from './daily'
 import { PROFILE, invoice, yearOfInvoices } from './fixtures'
 import { PROD_REF } from './prod'
 import { nextBillablePeriod } from './periods'
@@ -120,6 +120,31 @@ describe('what the operator is told', () => {
     const all = [...payments, { id: 'p', clientId: invoices[0].clientId, receivedOn: '2026-11-20', amount: 18375, currency: 'ZAR' as const, reference: null, note: null }]
     expect(nudgeNotices(invoices, applyPayments(invoices, all, '2026-12-05'), '2026-12-05')).toEqual([])
     expect(nudgeNotices([READY], applyPayments([READY], [], '2027-02-01'), '2027-02-01')).toEqual([])
+  })
+})
+
+describe('a month nobody billed', () => {
+  const { invoices } = yearOfInvoices()
+
+  it('says nothing while the month in hand has its invoice', () => {
+    // 1 Dec: December is 0110
+    expect(missedMonthLines([PROFILE], invoices, '2026-12-01')).toEqual([])
+  })
+
+  it('says so, weekly, when the month in hand has no live invoice', () => {
+    // 1 Jan: no January invoice (its issue days went by)
+    expect(missedMonthLines([PROFILE], invoices, '2027-01-01')).toEqual([
+      'Acme SA has no invoice for January 2027. The daily job never bills a month that has begun, so it stays unbilled unless you issue one by hand; to skip the month on purpose, pause the billing profile. This reminder repeats weekly.',
+    ])
+    expect(missedMonthLines([PROFILE], invoices, '2027-01-02')).toEqual([])
+    expect(missedMonthLines([PROFILE], invoices, '2027-01-08')).toHaveLength(1)
+    // a void December counts as no December
+    const voided = invoices.map((i) => (i.number === '0110' ? { ...i, status: 'void' as const } : i))
+    expect(missedMonthLines([PROFILE], voided, '2026-12-08')).toHaveLength(1)
+  })
+
+  it('says nothing for a paused profile', () => {
+    expect(missedMonthLines([{ ...PROFILE, active: false }], invoices, '2027-01-01')).toEqual([])
   })
 })
 

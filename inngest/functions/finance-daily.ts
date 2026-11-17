@@ -1,6 +1,6 @@
 import { inngest } from '@/inngest/client'
 import { sendAlertEmail } from '@/lib/email'
-import { attentionLines, holdNotices, nudgeNotices, planSends, runDay } from '@/lib/finance/daily'
+import { attentionLines, holdNotices, missedMonthLines, nudgeNotices, planSends, runDay } from '@/lib/finance/daily'
 import {
   allProfiles, callAdmin, issueAll, ledgerRows, refreshFx, syncApify, tellOperator, unfinishedInvoices,
 } from '@/lib/finance/daily-io'
@@ -29,7 +29,8 @@ import { createAdminClient } from '@/lib/supabase-admin'
 //   'tell-held'         one email to the operator for invoices waiting for a
 //                       tap (D1), each said once (fin_notices)
 //   'nudge'             one email to the operator for invoices past due or past
-//                       their promised day, each said once
+//                       their promised day, each said once; and, weekly, any
+//                       active profile with no invoice for the month it is in
 //   'fx'                the dollar's rate on the cost side, while fx_auto is on
 //                       (lib/finance/vendors/fx.ts; invoices keep their fixed rate)
 //   'apify-usage'       Apify's own figure for this billing cycle
@@ -81,8 +82,11 @@ export const financeDaily = inngest.createFunction(
     const nudged = await step.run('nudge', async () => {
       const admin = createAdminClient()
       const { invoices, payments } = await ledgerRows(admin)
-      return tellOperator(admin, 'nudge', nudgeNotices(invoices, applyPayments(invoices, payments, today), today))
+      const told = await tellOperator(admin, 'nudge', nudgeNotices(invoices, applyPayments(invoices, payments, today), today))
+      return { ...told, missed: missedMonthLines(await allProfiles(admin), invoices, today) }
     })
+    // A month nobody billed (the job never back-fills one): in the alert, weekly.
+    problems.push(...nudged.missed)
 
     const fx = await step.run('fx', () => refreshFx(createAdminClient()))
     const apify = await step.run('apify-usage', () => syncApify(createAdminClient()))
