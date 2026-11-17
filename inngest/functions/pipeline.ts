@@ -44,7 +44,7 @@ import { isTestRun } from '@/lib/schedules/due'
 import { briefComposeStep, briefIdeasStep, briefResearchStep, briefWriteStep, planBriefsStep, type BriefWave, type BriefWritten } from '@/lib/reports/briefs/step'
 import { BRIEF_ROLES } from '@/lib/reports/briefs/types'
 import { summariseRunErrors, partialRunAlert, passADegradation, isolatedBatchDegradation, runCloseStatus, closingErrors, RUN_ERROR_CAP } from '@/lib/pipeline/run-errors'
-import { alertDue, closeRunWrite, createWarningLog } from '@/lib/pipeline/run-warnings'
+import { alertDue, closeRunWrite, createWarningLog, reopenRunWrite } from '@/lib/pipeline/run-warnings'
 import { CLASSIFY_PARALLEL, COMMENT_BATCH, COMMENT_PARALLEL, countSteps, fanOut, PASS_A_BATCH, PASS_A_PARALLEL, passABatchRoom, SEARCH_PARALLEL, stepBudgetCause, THEMES_PARALLEL } from '@/lib/pipeline/step-budget'
 import { writeRunCosts, runSpendSoFar } from '@/lib/pipeline/run-costs'
 import { withApifyRunContext, settleApifyRuns } from '@/lib/gather/apify-runs'
@@ -421,11 +421,13 @@ export const runPipeline = inngest.createFunction(
           scheduledFor: options.scheduledFor,
           resume: { hasConfigSnapshot: windowInput.hasConfigSnapshot },
         })
-        const reopen = (extra: Record<string, unknown>) =>
+        // The last attempt's `errors` and `warnings` are cleared with its
+        // `error_message` (`reopenRunWrite`, 17 Nov).
+        const reopen = (extra: Record<string, unknown>) => reopenRunWrite((cleared) =>
           admin
             .from('pipeline_runs')
-            .update({ status: 'running', error_message: null, completed_at: null, started_at: new Date().toISOString(), flags, options, ...extra })
-            .eq('id', resumeRunId).eq('client_id', clientId)
+            .update({ status: 'running', error_message: null, ...cleared, completed_at: null, started_at: new Date().toISOString(), flags, options, ...extra })
+            .eq('id', resumeRunId).eq('client_id', clientId))
         let { error } = await reopen({ stalled: false, ...bookkeeping(true) })
         if (error && isMissingClusteringKeyColumn(error)) {
           console.warn('[open-run] pipeline_runs.clustering_key is not in the database yet; reopening without it (the window is still frozen)')
@@ -655,7 +657,7 @@ export const runPipeline = inngest.createFunction(
     // waves inside the loop and the YouTube backfill wave after it, so the run
     // summary carries one number per verdict rather than one per platform.
     const ocr = {
-      ok: 0, none: 0, noImage: 0, failed: 0, cost: 0, rateLimited: false, batchesFailed: 0,
+      ok: 0, none: 0, noImage: 0, failed: 0, outOfTime: 0, cost: 0, rateLimited: false, batchesFailed: 0,
       backfilled: 0, backfillNeeding: 0, backfillDeferred: 0, planned: 0,
       firstError: undefined as string | undefined,
     }
@@ -902,6 +904,8 @@ export const runPipeline = inngest.createFunction(
               ocr.none += r.none
               ocr.noImage += r.noImage
               ocr.failed += r.failed
+              // `?? 0`: a step memoised before 17 Nov carries no outOfTime.
+              ocr.outOfTime += r.outOfTime ?? 0
               ocr.cost += r.costUsd
               if (r.rateLimited) ocr.rateLimited = true
               // A batch out of retries IS a run error: its videos got no
@@ -1296,6 +1300,7 @@ export const runPipeline = inngest.createFunction(
         ocr.none += r.none
         ocr.noImage += r.noImage
         ocr.failed += r.failed
+        ocr.outOfTime += r.outOfTime ?? 0
         ocr.cost += r.costUsd
         if (r.rateLimited) ocr.rateLimited = true
         if ('stepFailed' in r) {
@@ -1324,9 +1329,9 @@ export const runPipeline = inngest.createFunction(
       )
       if (ocrDegraded && ocr.batchesFailed === 0) noteError('ocr', ocrDegraded)
       else if (ocr.failed > 0) console.warn(`[ocr] ${ocr.failed} cover read(s) failed${ocr.batchesFailed ? ' (batch steps already recorded)' : ` under the ${PASS_A_ERROR_RATIO * 100}% ratio`}. First: ${ocr.firstError ?? ''}`)
-      if (ocr.ok + ocr.none + ocr.noImage + ocr.failed > 0) {
+      if (ocr.ok + ocr.none + ocr.noImage + ocr.failed + ocr.outOfTime > 0) {
         console.log(
-          `[ocr] ${ocr.ok} with text · ${ocr.none} no legible text · ${ocr.noImage} no cover · ${ocr.failed} failed · ~$${ocr.cost.toFixed(3)}`,
+          `[ocr] ${ocr.ok} with text · ${ocr.none} no legible text · ${ocr.noImage} no cover · ${ocr.failed} failed · ${ocr.outOfTime} left by the step clock · ~$${ocr.cost.toFixed(3)}`,
         )
       }
       // On-screen text changes what Pass A sees on exactly the videos that

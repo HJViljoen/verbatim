@@ -487,6 +487,53 @@ export const OCR_MAX_IMAGE_BYTES = 8 * 1024 * 1024
  *  fetch times out. */
 export const OCR_FETCH_TIMEOUT_MS = 8_000
 
+/** One cover read's output ceiling, its per-attempt timeout and its SDK
+ *  retries (17 Nov). None existed: the call ran on the SDK's defaults, ten
+ *  minutes and two silent retries, with no output limit but gpt-4.1-mini's own
+ *  32,768 tokens. On 17 Nov Sealand's resumed run `d8a15862` met Instagram
+ *  covers that sent the model into a loop inside its structured output: each
+ *  read generated for about five minutes, `ocr:instagram:16-of-17` hit
+ *  Vercel's 300 s on all three attempts and the run failed with a 504 (the
+ *  TRANSLATE_CALL_CAP_MS story, on the cover-text call). The ledger, every OCR
+ *  call to 17 Nov (17,056): output p50 11 tokens, p99 137, p99.9 336, max
+ *  1,977, and the two largest (1,977 and 1,004) are themselves degenerate
+ *  lists that ended on their own, stored clipped to OCR_MAX_CHARS; duration
+ *  max 10.9 s (the cover fetch included). gpt-4.1-mini is not a reasoning
+ *  model, so the ceiling counts only the answer.
+ *
+ *  So 4,000 tokens, twice the largest answer ever returned: no read the
+ *  ledger holds comes near it, and nothing below it changes (the ceiling cuts
+ *  an answer, it does not alter one). A loop reaches it in 37 s at the 109
+ *  tokens a second the 17 Nov loops ran at, 59 s at the slowest rate on the
+ *  ledger, and stops with finish_reason 'length': a 200 the SDK does not
+ *  retry, which `ocrOne` stamps `failed` as one of the video's
+ *  OCR_MAX_ATTEMPTS. The timeout, 90 s an attempt, is eight times the slowest
+ *  real read and above the ceiling's 59 s, so a loop ends on the ceiling, not
+ *  on a timeout the SDK would retry. One retry, not the SDK's two, rides out
+ *  a passing 429 or 5xx; two retries of a hung 90 s attempt would be 270 s,
+ *  more than a batch's whole clock (OCR_STEP_BUDGET_MS). */
+export const OCR_MAX_OUTPUT_TOKENS = 4_000
+export const OCR_CALL_CAP_MS = 90_000
+export const OCR_MAX_RETRIES = 1
+
+/** How long an OCR batch's cover reads may run, from the batch's start, and
+ *  the least that must be left to start one (17 Nov, the translate step
+ *  clock's rule). A batch reads its OCR_BATCH covers one after another, so a
+ *  per-call limit alone does not bound it: eight looping covers at the
+ *  ceiling's 59 s plus each fetch's 8 s would be 536 s. Each call is held to
+ *  the lesser of OCR_CALL_CAP_MS and what is left, and aborted at the budget
+ *  whatever it is doing (an SDK retry and its Retry-After sleep included), so
+ *  the batch's reads end by 240 s, then at most one video's two writes. That
+ *  is WAVE_DEADLINE_MS, the wave's own deadline, with the same 60 s of the
+ *  route's 300 s left for the replay before the step and the answer after it.
+ *  A cover not started for want of time, or whose call the clock cut, is not
+ *  stamped and costs none of its attempts: it is read next where any cover
+ *  the wave's deadline left is (the batch's own step, for a batch its wave
+ *  left late, else the next run that plans it). The floor holds a fetch's 8 s
+ *  and the slowest real read. */
+export const OCR_STEP_BUDGET_MS = 240_000
+export const OCR_CALL_FLOOR_MS = 20_000
+
 /** Max characters of extracted text STORED per video. A cover frame carries a
  *  hook card, not an essay; 600 is a generous ceiling that bounds a runaway
  *  model output before it reaches the DB. */

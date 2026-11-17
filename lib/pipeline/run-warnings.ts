@@ -359,6 +359,28 @@ export async function closeRunWrite(
   return { error, wrote: 'all' }
 }
 
+/**
+ * open-run's REOPEN write (a resume, `options.runId`), with the error fields
+ * cleared (17 Nov). It cleared only `error_message`; `errors` and `warnings`
+ * are written by close-run alone, so a resumed run that then failed showed the
+ * last attempt's list beside this attempt's message (Sealand's `d8a15862`:
+ * the 15 Nov crash note in `errors` under 17 Nov's 504). Nothing in a run
+ * writes either column before close-run, and open-run is the first step,
+ * memoised once it returns, so clearing them here loses nothing the current
+ * attempt wrote. `[]` is both columns' default (`warnings` is NOT NULL).
+ * Where `warnings` is not there yet the same write goes again without it,
+ * close-run's probe; any other error is returned as it came, for open-run's
+ * own fallbacks.
+ */
+export async function reopenRunWrite<E>(
+  reopen: (cleared: Record<string, unknown>) => PromiseLike<{ error: E | null }>,
+): Promise<{ error: E | null }> {
+  const first = await reopen({ errors: [], warnings: [] })
+  if (!first.error || !isMissingWarningsColumn(first.error)) return first
+  console.warn('[open-run] `warnings` is not in the database yet (20261114090000_run_warnings.sql); reopening without clearing it')
+  return reopen({ errors: [] })
+}
+
 /** A stored `warnings` value read back: the entries that have the shape,
  *  any other value as none. PURE. */
 export function parseRunWarnings(raw: unknown): RunWarning[] {

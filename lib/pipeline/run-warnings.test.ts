@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { closingErrors, partialRunAlert, runCloseStatus, summariseRunErrors } from './run-errors'
 import {
-  alertDue, closeRunWrite, createWarningLog, isMissingWarningsColumn, parseRunWarnings, runWarning, warningCause, warningSentence,
+  alertDue, closeRunWrite, createWarningLog, isMissingWarningsColumn, parseRunWarnings, reopenRunWrite, runWarning, warningCause, warningSentence,
   WARNING_STEPS, RUN_WARNING_CAP, type RunWarning, type WarningStep,
 } from './run-warnings'
 import { isMissingBookkeepingColumn } from './run-bookkeeping'
@@ -384,6 +384,56 @@ describe('closeRunWrite: the column probe', () => {
     expect(closeRun).toContain('await closeRunWrite(')
     expect(closeRun).toContain('warnings: runWarnings.recorded }')
     expect(closeRun).toContain('isMissingBookkeepingColumn,')
+  })
+})
+
+// ---- a reopened run starts clean (17 Nov) --------------------------------------------
+
+describe('reopenRunWrite: a resumed run starts with no errors and no warnings', () => {
+  const missing = (column: string, code = '42703') => ({ code, message: code === '42703' ? `column "${column}" of relation "pipeline_runs" does not exist` : `Could not find the '${column}' column of 'pipeline_runs' in the schema cache` })
+
+  it('clears both lists in the one reopen write', async () => {
+    const reopen = vi.fn(async () => ({ error: null }))
+    expect(await reopenRunWrite(reopen)).toEqual({ error: null })
+    expect(reopen.mock.calls).toEqual([[{ errors: [], warnings: [] }]])
+  })
+
+  it('before the warnings migration: the same write again, still clearing errors', async () => {
+    for (const code of ['42703', 'PGRST204']) {
+      const reopen = vi.fn(async (cleared: Record<string, unknown>) => ({ error: 'warnings' in cleared ? missing('warnings', code) : null }))
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      expect(await reopenRunWrite(reopen)).toEqual({ error: null })
+      expect(reopen.mock.calls).toEqual([[{ errors: [], warnings: [] }], [{ errors: [] }]])
+    }
+  })
+
+  it('any other error comes back as it came, for open-run’s own fallbacks', async () => {
+    for (const other of [{ code: '23505', message: 'duplicate key value violates unique constraint' }, missing('clustering_key'), missing('stalled')]) {
+      const reopen = vi.fn(async () => ({ error: other }))
+      expect(await reopenRunWrite(reopen)).toEqual({ error: other })
+      expect(reopen).toHaveBeenCalledTimes(1)
+    }
+  })
+
+  it('open-run’s reopen goes through it on every fallback, keyed on the run, with error_message still cleared', () => {
+    const reopenAt = PIPELINE.indexOf('const reopen = (extra')
+    const reopen = PIPELINE.slice(reopenAt, PIPELINE.indexOf('let { error } = await reopen(', reopenAt))
+    expect(reopen).toContain('reopenRunWrite((cleared) =>')
+    expect(reopen).toContain("status: 'running', error_message: null, ...cleared,")
+    // the fallbacks may drop bookkeeping keys, never the cleared fields
+    expect(reopen.indexOf('...cleared')).toBeLessThan(reopen.indexOf('...extra'))
+    expect(reopen).toContain(".eq('id', resumeRunId).eq('client_id', clientId)")
+  })
+
+  it('loses nothing the current attempt wrote: close-run is the only run-row write that carries errors or warnings', () => {
+    const updates = [...PIPELINE.matchAll(/from\('pipeline_runs'\)\s*\.update\(\{([\s\S]*?)\}\)/g)].map((m) => m[1])
+    expect(updates).toHaveLength(5) // onFailure, the stale sweep, the reopen, mark-failed, close-run
+    const carrying = updates.filter((u) => /\b(errors|warnings):/.test(u))
+    expect(carrying).toHaveLength(1)
+    expect(carrying[0]).toContain('errors: closingErrors(totalErrors, runErrors, runFindings)')
+    // and open-run, which clears them, is the run's first step
+    expect(PIPELINE.indexOf("step.run('open-run'")).toBeLessThan(PIPELINE.indexOf("step.run('close-run'"))
+    expect(PIPELINE.indexOf("step.run('open-run'")).toBe(PIPELINE.indexOf('step.run('))
   })
 })
 
