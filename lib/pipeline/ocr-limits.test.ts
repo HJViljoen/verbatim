@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { APIConnectionTimeoutError } from 'openai'
+import OpenAI, { APIConnectionTimeoutError } from 'openai'
 import { LengthFinishReasonError } from 'openai/core/error'
 
 // THE COVER READ'S LIMITS (17 Nov). Sealand's resumed run `d8a15862` failed
@@ -8,8 +10,12 @@ import { LengthFinishReasonError } from 'openai/core/error'
 // output, and the call had no output ceiling, a ten-minute timeout and two
 // silent retries. These pin the ceiling, the timeout and the retry the call
 // now carries, the batch's clock, and that a loop or a timeout is stamped as
-// one of the video's OCR attempts, never thrown out of the step. No network,
-// no model: the database is lib/test/fake-db.ts, the SDK is a stub.
+// one of the video's OCR attempts, never thrown out of the step. And (the
+// review of f5778a15) that a batch reads the covers it has tried least first,
+// that a batch its clock stopped inside its wave gets its own step, once, and
+// that what is still unread then is a warning. No network, no model: the
+// database is lib/test/fake-db.ts, the SDK is a stub (the real client only
+// where its retry timing is the point, over a fetch that never answers).
 
 const h = vi.hoisted(() => ({ db: null as unknown, parse: vi.fn() }))
 vi.mock('../supabase-admin', async (orig) => {
@@ -23,18 +29,24 @@ vi.mock('../openai', async (orig) => {
 
 import { fakeDb, type FakeDb } from '../test/fake-db'
 import {
-  buildOcrPrompt, needsOcr, ocrBackfillBatch, ocrBatch, ocrCallOptions, ocrCoverFrame, ocrCutByClock, resetOcrColumnCache,
+  buildOcrPrompt, emptyOcrResult, needsOcr, ocrBackfillBatch, ocrBatch, ocrCallOptions, ocrCoverFrame, ocrCutByClock,
+  resetOcrColumnCache, type OcrResult,
 } from './ocr'
 import {
   ANALYSIS_TEMPERATURE, OCR_BATCH, OCR_CALL_CAP_MS, OCR_CALL_FLOOR_MS, OCR_FETCH_TIMEOUT_MS, OCR_MAX_ATTEMPTS,
   OCR_MAX_OUTPUT_TOKENS, OCR_MAX_RETRIES, OCR_MODEL, OCR_STEP_BUDGET_MS,
 } from '../config'
-import { WAVE_DEADLINE_MS } from './step-budget'
+import { fanOut, WAVE_DEADLINE_MS } from './step-budget'
+import { untilAborted } from './translate'
+import { runWarning, warningSentence, WARNING_STEPS } from './run-warnings'
 
 const CLIENT = 'ac16988e-0000-4000-8000-0000000000aa'
 const RUN = 'd8a15862-0000-4000-8000-000000000001'
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0])
 const LENGTH = 'Could not parse response content as the length limit was reached'
+const PIPELINE = readFileSync(join(__dirname, '..', '..', 'inngest', 'functions', 'pipeline.ts'), 'utf8')
+/** The cover urls fetched, in order: which video each read was. */
+const fetched: string[] = []
 
 const answer = (lines: string[]) => ({
   choices: [{ message: { refusal: null, parsed: { lines } } }],
@@ -44,7 +56,11 @@ const answer = (lines: string[]) => ({
 beforeEach(() => {
   resetOcrColumnCache()
   h.parse.mockReset()
-  vi.stubGlobal('fetch', vi.fn(async () => new Response(PNG, { status: 200, headers: { 'content-type': 'image/png' } })))
+  fetched.length = 0
+  vi.stubGlobal('fetch', vi.fn(async (url: unknown) => {
+    fetched.push(String(url))
+    return new Response(PNG, { status: 200, headers: { 'content-type': 'image/png' } })
+  }))
   vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
@@ -65,9 +81,9 @@ describe('the limits, against the ledger (every OCR call to 17 Nov: 17,056)', ()
     expect(OCR_CALL_CAP_MS).toBeGreaterThan(8 * 10_900)
   })
 
-  it('one retry, and a hung read with its retry still fits a batch started on time', () => {
-    expect(OCR_MAX_RETRIES).toBe(1)
-    expect((OCR_MAX_RETRIES + 1) * OCR_CALL_CAP_MS).toBeLessThan(OCR_STEP_BUDGET_MS - OCR_CALL_FLOOR_MS)
+  it('two retries, the SDK default and the translate step\'s: three hung attempts would pass the clock, which is what ends them', () => {
+    expect(OCR_MAX_RETRIES).toBe(2)
+    expect((OCR_MAX_RETRIES + 1) * OCR_CALL_CAP_MS).toBeGreaterThan(OCR_STEP_BUDGET_MS)
   })
 
   it('the batch clock is the wave deadline, so the route keeps its 60 s for the replay and the answer', () => {
@@ -280,5 +296,170 @@ describe('the batch clock: no batch of covers outlives OCR_STEP_BUDGET_MS', () =
     const r = await ocrBackfillBatch({ clientId: CLIENT, runId: RUN, videoIds: ['y1', 'y2'], batchNo: 1, now: () => t })
     expect(r).toMatchObject({ none: 1, outOfTime: 1 })
     expect(rows[1].ocr_status).toBeNull()
+  })
+
+  it('confirmed on the real SDK: three attempts and their backoff pass the clock, and the clock ends them', async () => {
+    // Scaled 1:1000: 90 ms attempts, OCR_MAX_RETRIES retries, a 240 ms clock,
+    // over a fetch that never answers (each attempt ends on its timeout).
+    const attempts: number[] = []
+    const hang = (async (_url: unknown, init?: RequestInit) => {
+      attempts.push(Date.now())
+      return new Promise<Response>((_, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })))
+      })
+    }) as typeof fetch
+    const client = new OpenAI({ apiKey: 'test', fetch: hang })
+    const body = { model: OCR_MODEL, messages: [{ role: 'user' as const, content: 'x' }] }
+    const t0 = Date.now()
+    await expect(client.chat.completions.create(body, { timeout: 90, maxRetries: OCR_MAX_RETRIES })).rejects.toThrow(/timed out/i)
+    const unbounded = Date.now() - t0
+    expect(attempts).toHaveLength(OCR_MAX_RETRIES + 1)
+    // 3 × 90 ms plus the SDK's backoff (0.5 s and 1 s, less up to a quarter's jitter)
+    expect(unbounded).toBeGreaterThan(1_000)
+    const clock = AbortSignal.timeout(240)
+    const t1 = Date.now()
+    await expect(untilAborted(client.chat.completions.create(body, { timeout: 90, maxRetries: OCR_MAX_RETRIES, signal: clock }), clock))
+      .rejects.toThrow(/aborted/i)
+    // ended at the clock, inside the backoff sleep the SDK's signal cannot reach
+    expect(Date.now() - t1).toBeLessThan(1_000)
+  })
+})
+
+// ---- the review of f5778a15: what the clock leaves is read, or said ---------------
+
+/** A parse stub on the fake clock: a cover whose url names a loop runs to the
+ *  ceiling at the slowest rate on the ledger (or to its shortened timeout); any
+ *  other reads in 3 s. Reads are sequential in a batch, so the last cover
+ *  fetched is the one being read. */
+const LOOP_MS = Math.ceil((OCR_MAX_OUTPUT_TOKENS / 68) * 1000)
+function clockedParse(clock: { t: number }) {
+  return async (_body: unknown, request: { timeout: number }) => {
+    const start = clock.t
+    if (!/loop/.test(fetched.at(-1) ?? '')) { clock.t += 3_000; return answer(['TEXT']) }
+    clock.t += Math.min(LOOP_MS, request.timeout)
+    throw clock.t - start < LOOP_MS ? new APIConnectionTimeoutError() : new LengthFinishReasonError()
+  }
+}
+const idOf = (url: string) => /\/v\/([^/.]+)\.jpg$/.exec(url)?.[1] ?? /\/vi\/([^/]+)\//.exec(url)?.[1] ?? url
+
+describe('a batch reads the covers it has tried least first', () => {
+  it('never-tried first, then by attempts, the raw items\' order within a count', async () => {
+    const { rows } = instagramBatch(['a', 'b', 'c', 'd'], {
+      a: { ocr_status: 'failed', ocr_attempts: 2 },
+      c: { ocr_status: 'no_image', ocr_attempts: 1 },
+    })
+    h.parse.mockResolvedValue(answer(['TEXT']))
+    const r = await ocrBatch({ clientId: CLIENT, runId: RUN, platform: 'instagram', videoIds: rows.map((x) => x.video_id), batchNo: 1 })
+    expect(fetched.map(idOf)).toEqual(['b', 'd', 'c', 'a'])
+    // the same covers read, the same answers stored: only the order moved
+    expect(r).toMatchObject({ ok: 4, failed: 0, outOfTime: 0 })
+    expect(rows.map((x) => x.ocr_status)).toEqual(['ok', 'ok', 'ok', 'ok'])
+  })
+
+  it('the backfill too', async () => {
+    const rows = [
+      { client_id: CLIENT, platform: 'youtube', video_id: 'y1', ocr_text: null, ocr_status: 'failed', ocr_attempts: 1 },
+      { client_id: CLIENT, platform: 'youtube', video_id: 'y2', ocr_text: null, ocr_status: null, ocr_attempts: 0 },
+    ]
+    h.db = fakeDb({ videos: rows, ai_call_log: [] }).client
+    h.parse.mockResolvedValue(answer([]))
+    await ocrBackfillBatch({ clientId: CLIENT, runId: RUN, videoIds: ['y1', 'y2'], batchNo: 1 })
+    expect(fetched.map(idOf)).toEqual(['y2', 'y1'])
+  })
+
+  it('so a batch\'s own step reads the never-tried covers before this run\'s loops (4 loops, then 4 never tried)', async () => {
+    const ids = ['loop1', 'loop2', 'loop3', 'loop4', 'new1', 'new2', 'new3', 'new4']
+    const tried = Object.fromEntries(ids.slice(0, 4).map((id) => [id, { ocr_status: 'failed', ocr_attempts: 1, ocr_error: LENGTH }]))
+    const { byId } = instagramBatch(ids, tried)
+    const clock = { t: 0 }
+    h.parse.mockImplementation(clockedParse(clock))
+    // its own step: no wave signal, a fresh clock
+    const r = await ocrBatch({ clientId: CLIENT, runId: RUN, platform: 'instagram', videoIds: ids, batchNo: 16, now: () => clock.t })
+    // new1-4 in 12 s; loops at 12, 71 and 130 s; the fourth, at 189 s, has 51 s left and is cut
+    expect(fetched.map(idOf)).toEqual(['new1', 'new2', 'new3', 'new4', 'loop1', 'loop2', 'loop3', 'loop4'])
+    expect(r).toMatchObject({ ok: 4, failed: 3, outOfTime: 1 })
+    for (const id of ['new1', 'new2', 'new3', 'new4']) expect(byId(id).ocr_status, id).toBe('ok')
+    expect(['loop1', 'loop2', 'loop3', 'loop4'].map((id) => byId(id).ocr_attempts)).toEqual([2, 2, 2, 1])
+    expect(clock.t).toBeLessThanOrEqual(OCR_STEP_BUDGET_MS)
+  })
+})
+
+describe('a batch its clock stopped inside its wave gets its own step, once', () => {
+  /** fanOut over one batch, wired as the pipeline wires the gather-time OCR. */
+  async function runWave(ids: string[], clock: { t: number }) {
+    const runs: string[] = []
+    const step = { run: async (id: string, fn: () => Promise<unknown>) => { runs.push(id); return fn() } }
+    const results = await fanOut<string[], OcrResult>(step, {
+      waveId: (w, n) => `ocr-wave:instagram:${w}-of-${n}`,
+      memberId: (w, j) => `ocr:instagram:${w + j + 1}-of-1`,
+      items: [ids],
+      parallel: 4,
+      run: (videoIds, i, signal) => ocrBatch({ clientId: CLIENT, runId: RUN, platform: 'instagram', videoIds, batchNo: i + 1, signal, now: () => clock.t }),
+      unfinished: (r) => (r.outOfTime ?? 0) > 0,
+      fallback: () => emptyOcrResult(),
+    })
+    return { runs, results }
+  }
+
+  it('6 loops then 2: the wave stops at 236 s with 4 unread and comes back ok; its own step reads the 2', async () => {
+    const ids = ['loop1', 'loop2', 'loop3', 'loop4', 'loop5', 'loop6', 'ok7', 'ok8']
+    const { byId } = instagramBatch(ids)
+    const clock = { t: 0 }
+    h.parse.mockImplementation(clockedParse(clock))
+    const { runs, results } = await runWave(ids, clock)
+    expect(runs).toEqual(['ocr-wave:instagram:1-of-1', 'ocr:instagram:1-of-1'])
+    expect(byId('ok7').ocr_status).toBe('ok')
+    expect(byId('ok8').ocr_status).toBe('ok')
+    // own step: loop5, loop6, ok7, ok8 (never tried), then loop1 again; loop2 is cut at the clock
+    expect(results).toHaveLength(1)
+    expect(results[0]).toMatchObject({ ok: 2, failed: 3, outOfTime: 3 })
+    expect(ids.map((id) => byId(id).ocr_attempts)).toEqual([2, 1, 1, 1, 1, 1, 1, 1])
+    // and its own step's leftovers are its result: no third pass
+    expect(runs.filter((id) => id === 'ocr:instagram:1-of-1')).toHaveLength(1)
+  })
+
+  it('a batch its clock did not stop comes back from its wave as before, with no step of its own', async () => {
+    const { rows } = instagramBatch(['a', 'b'])
+    h.parse.mockResolvedValue(answer(['TEXT']))
+    const { runs, results } = await runWave(rows.map((x) => x.video_id), { t: 0 })
+    expect(runs).toEqual(['ocr-wave:instagram:1-of-1'])
+    expect(results[0]).toMatchObject({ ok: 2, outOfTime: 0 })
+  })
+
+  it('a wave memoised before the clock (no outOfTime) is done, as it was', () => {
+    const memoised = { ...emptyOcrResult() } as Partial<OcrResult>
+    delete memoised.outOfTime
+    const unfinished = (r: Partial<OcrResult>) => (r.outOfTime ?? 0) > 0
+    expect(unfinished(memoised)).toBe(false)
+  })
+
+  it('the pipeline wires it on both OCR fan-outs, and not on any other', () => {
+    const wiring = 'unfinished: (r) => (r.outOfTime ?? 0) > 0,'
+    expect(PIPELINE.split(wiring)).toHaveLength(3)
+    for (const wave of ['`ocr-wave:${platform}:${w}-of-${n}`', '`ocr-backfill-wave:${w}-of-${n}`']) {
+      const at = PIPELINE.indexOf(`waveId: (w, n) => ${wave}`)
+      const call = PIPELINE.slice(at, PIPELINE.indexOf('fallback: (', at))
+      expect(call, wave).toContain(wiring)
+    }
+  })
+})
+
+describe('what the clock still leaves is a housekeeping warning, outside the failure ratio', () => {
+  it('names the count, and is housekeeping: on the run row and the ops page, no alert', () => {
+    expect(WARNING_STEPS['ocr-out-of-time'].kind).toBe('housekeeping')
+    const w = runWarning('ocr-out-of-time', '3 covers not read')
+    expect(w).toMatchObject({ step: 'ocr-out-of-time', kind: 'housekeeping', cause: '3 covers not read' })
+    expect(warningSentence(w)).toBe(
+      'Housekeeping: the on-screen text reads ran out of their clock (3 covers not read). Those videos are analysed without their on-screen text until a later update reads their covers: YouTube’s through the backfill, TikTok’s and Instagram’s only if it gathers the video again.',
+    )
+  })
+
+  it('the pipeline notes it after both OCR fan-outs, from the final count, and keeps it out of the ratio', () => {
+    const note = "if (ocr.outOfTime > 0) noteWarning('ocr-out-of-time', `${ocr.outOfTime} ${ocr.outOfTime === 1 ? 'cover' : 'covers'} not read`)"
+    expect(PIPELINE).toContain(note)
+    expect(PIPELINE.indexOf(note)).toBeGreaterThan(PIPELINE.indexOf('for (const r of ocrBackfillResults)'))
+    expect(PIPELINE).toContain('{ attempted: ocr.ok + ocr.none + ocr.noImage + ocr.failed, errored: ocr.failed,')
+    // a warning, never a counted error
+    expect(PIPELINE).not.toMatch(/noteError\([^)]*outOfTime/)
   })
 })

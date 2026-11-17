@@ -509,12 +509,15 @@ export const OCR_FETCH_TIMEOUT_MS = 8_000
  *  retry, which `ocrOne` stamps `failed` as one of the video's
  *  OCR_MAX_ATTEMPTS. The timeout, 90 s an attempt, is eight times the slowest
  *  real read and above the ceiling's 59 s, so a loop ends on the ceiling, not
- *  on a timeout the SDK would retry. One retry, not the SDK's two, rides out
- *  a passing 429 or 5xx; two retries of a hung 90 s attempt would be 270 s,
- *  more than a batch's whole clock (OCR_STEP_BUDGET_MS). */
+ *  on a timeout the SDK would retry. Two retries, the SDK's default and the
+ *  translate step's under the same clock, ride out a passing 429 or 5xx (with
+ *  one, a passing 429 comes out `rateLimited` more often, which degrades the
+ *  run). The batch's clock, not the count, bounds them: three hung 90 s
+ *  attempts and their backoff would pass 270 s, and the clock's signal and
+ *  `untilAborted` end the call at OCR_STEP_BUDGET_MS whatever it is doing. */
 export const OCR_MAX_OUTPUT_TOKENS = 4_000
 export const OCR_CALL_CAP_MS = 90_000
-export const OCR_MAX_RETRIES = 1
+export const OCR_MAX_RETRIES = 2
 
 /** How long an OCR batch's cover reads may run, from the batch's start, and
  *  the least that must be left to start one (17 Nov, the translate step
@@ -527,10 +530,12 @@ export const OCR_MAX_RETRIES = 1
  *  is WAVE_DEADLINE_MS, the wave's own deadline, with the same 60 s of the
  *  route's 300 s left for the replay before the step and the answer after it.
  *  A cover not started for want of time, or whose call the clock cut, is not
- *  stamped and costs none of its attempts: it is read next where any cover
- *  the wave's deadline left is (the batch's own step, for a batch its wave
- *  left late, else the next run that plans it). The floor holds a fetch's 8 s
- *  and the slowest real read. */
+ *  stamped and costs none of its attempts. A batch reads the covers it has
+ *  tried least first, so a cover that loops is the one left. A batch that
+ *  leaves any inside its wave runs again as a step of its own, as a late one
+ *  does (fanOut's `unfinished`), once; what that step leaves is the run's
+ *  housekeeping warning `ocr-out-of-time`, and the next run that plans it
+ *  reads it. The floor holds a fetch's 8 s and the slowest real read. */
 export const OCR_STEP_BUDGET_MS = 240_000
 export const OCR_CALL_FLOOR_MS = 20_000
 

@@ -180,6 +180,11 @@ export interface FanOut<T, R> {
   /** The batch's own step out of retries: its old `.catch`. */
   fallback: (item: T, i: number, e: unknown) => R
   deadlineMs?: number
+  /** A batch that came back inside its wave but left work its own clock did
+   *  not reach (the cover text's, 17 Nov): it runs as a step of its own, as a
+   *  late one does, ONCE. What that step leaves is its result, never run
+   *  again. Absent, a batch that came back is done. */
+  unfinished?: (value: R) => boolean
 }
 
 /**
@@ -190,7 +195,8 @@ export interface FanOut<T, R> {
  * for one batch: a batch that failed or ran late inside its wave, or every
  * batch of a wave that failed as a whole, then runs as a step of its own under
  * its old id, `memberId`, with Inngest's retries and the fallback its old
- * `.catch` gave. The results come back in batch order.
+ * `.catch` gave; so does a batch that came back saying it is `unfinished`.
+ * The results come back in batch order.
  */
 export async function fanOut<T, R>(step: StepRunner, f: FanOut<T, R>): Promise<R[]> {
   const out: R[] = []
@@ -209,8 +215,10 @@ export async function fanOut<T, R>(step: StepRunner, f: FanOut<T, R>): Promise<R
     out.push(...await Promise.all(slice.map((item, j): Promise<R> => {
       const i = first + j
       const outcome = outcomes?.[j]
-      if (outcome?.ok) return Promise.resolve(outcome.value)
-      if (outcome) console.warn(`[${f.memberId(first, j)}] ${outcome.late ? 'ran late' : 'failed'} inside ${id}, so it runs as a step of its own: ${outcome.error}`)
+      if (outcome?.ok) {
+        if (!f.unfinished?.(outcome.value)) return Promise.resolve(outcome.value)
+        console.warn(`[${f.memberId(first, j)}] left work undone inside ${id}, so it runs as a step of its own`)
+      } else if (outcome) console.warn(`[${f.memberId(first, j)}] ${outcome.late ? 'ran late' : 'failed'} inside ${id}, so it runs as a step of its own: ${outcome.error}`)
       return step.run(f.memberId(first, j), () => f.run(item, i))
         .then((r) => r as R)
         .catch((e: unknown) => f.fallback(item, i, e))

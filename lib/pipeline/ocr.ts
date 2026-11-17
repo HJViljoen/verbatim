@@ -665,8 +665,13 @@ export async function ocrBatch(opts: {
     }
   }
 
+  // Fewest attempts first, the raw items' order within a count (17 Nov): a
+  // pass that runs out of clock leaves covers it has tried, never one it has
+  // not (`sort` is stable). Loops cluster by account, and a batch's own step
+  // once re-read this run's looping covers first and never reached the rest.
+  const order = [...rawRows].sort((a, b) => (attempts.get(a.video_id) ?? 0) - (attempts.get(b.video_id) ?? 0))
   let callIndex = (opts.batchNo ?? 1) * 1000
-  for (const row of rawRows) {
+  for (const row of order) {
     if (opts.signal?.aborted) break
     if (done.has(row.video_id)) { out.skipped++; continue }
     // Out of time is not a failure of the frame: nothing is stamped, and the
@@ -769,8 +774,10 @@ export async function ocrBackfillBatch(opts: {
     rows.push(...((data ?? []) as typeof rows))
   }
 
+  // Fewest attempts first, as `ocrBatch`.
+  const order = [...rows].sort((a, b) => (a.ocr_attempts ?? 0) - (b.ocr_attempts ?? 0))
   let callIndex = (opts.batchNo ?? 1) * 1000
-  for (const row of rows) {
+  for (const row of order) {
     if (opts.signal?.aborted) break
     if (!needsOcr(row, { durableCover: true })) { out.skipped++; continue }
     const request = ocrCallOptions(deadline, now())

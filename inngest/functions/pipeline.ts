@@ -888,6 +888,10 @@ export const runPipeline = inngest.createFunction(
               // `signal` is the wave's deadline: past it the batch writes no row.
               run: (videoIds, i, signal): Promise<OcrResult & { stepFailed?: true }> =>
                 ocrBatch({ clientId, runId, platform: platform as Platform, videoIds, batchNo: i + 1, signal }),
+              // A batch whose clock left covers unread inside its wave runs
+              // again as its own step, once (17 Nov). `?? 0`: a wave memoised
+              // before then carries no outOfTime.
+              unfinished: (r) => (r.outOfTime ?? 0) > 0,
               // Per-batch fallback (the transcribe fan-out's precedent): one
               // batch out of retries must not abandon the remaining waves.
               // Its videos keep a NULL ocr_status and re-plan — but only
@@ -1288,6 +1292,8 @@ export const runPipeline = inngest.createFunction(
         // `signal` is the wave's deadline: past it the batch writes no row.
         run: (videoIds, i, signal): Promise<OcrResult & { stepFailed?: true }> =>
           ocrBackfillBatch({ clientId, runId, videoIds, batchNo: i + 1, signal }),
+        // As the gather-time wave's: left covers unread, so its own step, once.
+        unfinished: (r) => (r.outOfTime ?? 0) > 0,
         fallback: (_videoIds, _i, e) => ({
           ...emptyOcrResult(),
           errors: [`ocr-backfill step failed: ${e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200)}`],
@@ -1329,6 +1335,10 @@ export const runPipeline = inngest.createFunction(
       )
       if (ocrDegraded && ocr.batchesFailed === 0) noteError('ocr', ocrDegraded)
       else if (ocr.failed > 0) console.warn(`[ocr] ${ocr.failed} cover read(s) failed${ocr.batchesFailed ? ' (batch steps already recorded)' : ` under the ${PASS_A_ERROR_RATIO * 100}% ratio`}. First: ${ocr.firstError ?? ''}`)
+      // Covers still unread when a batch's own step ran out of clock (17 Nov):
+      // never attempted, so outside the ratio above, which judges reads, and
+      // a warning rather than an error, so a clock never turns a run partial.
+      if (ocr.outOfTime > 0) noteWarning('ocr-out-of-time', `${ocr.outOfTime} ${ocr.outOfTime === 1 ? 'cover' : 'covers'} not read`)
       if (ocr.ok + ocr.none + ocr.noImage + ocr.failed + ocr.outOfTime > 0) {
         console.log(
           `[ocr] ${ocr.ok} with text · ${ocr.none} no legible text · ${ocr.noImage} no cover · ${ocr.failed} failed · ${ocr.outOfTime} left by the step clock · ~$${ocr.cost.toFixed(3)}`,

@@ -196,6 +196,14 @@ export const WARNING_STEPS = {
     kind: 'stale-data', name: 'the update’s steps', said: 'came near Inngest’s limit of steps a run',
     stale: () => 'This update finished, but the next one this size or larger can be stopped before its themes, its read and its email reach the client.',
   },
+  // Not a step's failure: covers an OCR batch's clock left unread after its
+  // own step (17 Nov, OCR_STEP_BUDGET_MS). Never attempted, so outside the
+  // OCR failure ratio; housekeeping, because a video without its on-screen
+  // text is analysed as one whose cover read failed is, and that is no alert.
+  'ocr-out-of-time': {
+    kind: 'housekeeping', name: 'the on-screen text reads', said: 'ran out of their clock',
+    stale: () => 'Those videos are analysed without their on-screen text until a later update reads their covers: YouTube’s through the backfill, TikTok’s and Instagram’s only if it gathers the video again.',
+  },
   // Not a step's failure either: the step budget cut Pass A where the run
   // could not take every batch (`passABatchRoom`), before Pass A started.
   'pass-a-deferred': {
