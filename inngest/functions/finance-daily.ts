@@ -61,7 +61,7 @@ export const financeDaily = inngest.createFunction(
 
     const plan = await step.run('plan-send', async () => {
       const admin = createAdminClient()
-      const p = planSends(await unfinishedInvoices(admin), await allProfiles(admin))
+      const p = planSends(await unfinishedInvoices(admin), await allProfiles(admin), today)
       return { send: p.send.map((i) => ({ id: i.id, number: i.number })), held: holdNotices(p.hold), attention: attentionLines(p.attention) }
     })
     // What the job will not send (it may have gone, or its last send failed):

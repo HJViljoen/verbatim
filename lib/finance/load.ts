@@ -58,6 +58,10 @@ export interface InvoiceContext {
   /** A credit note: the invoice that replaced the one it cancels. */
   replacement: Invoice | null
   profile: BillingProfile | null
+  /** The newest month its profile has a live invoice for: the invoice a
+   *  profile's hold is holding (lib/finance/send.ts clears the hold only
+   *  when that one is sent). */
+  profileNewestPeriod: string | null
 }
 
 /** One invoice and everything its page and its email print. Null when there
@@ -74,21 +78,27 @@ export async function loadInvoiceContext(admin: Admin, id: string): Promise<Invo
   const issuer = issuerFromRow(check<Row | null>('fin_issuer', issuerRes))
   if (!issuer) throw new Error('finance: no issuer row (fin_issuer); run the backfill or fill it in on the page')
 
-  const [relatedRes, replacementRes, profileRes] = await Promise.all([
+  const [relatedRes, replacementRes, profileRes, newestRes] = await Promise.all([
     invoice.relatesTo ? admin.from('fin_invoices').select('*').eq('id', invoice.relatesTo).maybeSingle() : Promise.resolve(null),
     invoice.kind === 'credit_note' && invoice.relatesTo
       ? admin.from('fin_invoices').select('*').eq('relates_to', invoice.relatesTo).eq('kind', 'invoice').neq('status', 'void').limit(1).maybeSingle()
       : Promise.resolve(null),
     invoice.profileId ? admin.from('fin_billing_profiles').select('*').eq('id', invoice.profileId).maybeSingle() : Promise.resolve(null),
+    invoice.profileId
+      ? admin.from('fin_invoices').select('period_start').eq('profile_id', invoice.profileId).eq('kind', 'invoice')
+        .not('period_start', 'is', null).not('status', 'in', '(credited,void)').order('period_start', { ascending: false }).limit(1).maybeSingle()
+      : Promise.resolve(null),
   ])
   const rel = relatedRes ? check<Row | null>('fin_invoices', relatedRes) : null
   const rep = replacementRes ? check<Row | null>('fin_invoices', replacementRes) : null
   const prof = profileRes ? check<Row | null>('fin_billing_profiles', profileRes) : null
+  const newest = newestRes ? check<Row | null>('fin_invoices', newestRes) : null
   return {
     invoice,
     issuer,
     related: rel ? invoiceFromRow(rel) : null,
     replacement: rep ? invoiceFromRow(rep) : null,
     profile: prof ? profileFromRow(prof) : null,
+    profileNewestPeriod: newest?.period_start ? String(newest.period_start).slice(0, 10) : null,
   }
 }

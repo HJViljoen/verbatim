@@ -1,7 +1,8 @@
-import { todayJhb } from '@/lib/costs/dates'
+import { addMonths, todayJhb } from '@/lib/costs/dates'
 import { longDate } from './email'
 import type { Ledger } from './ledger'
 import { fmtMoney } from './money'
+import { monthOf } from './periods'
 import type { BillingProfile, Invoice, NoticeKind } from './types'
 
 // The daily job's decisions (inngest/functions/finance-daily.ts), pure: which
@@ -21,9 +22,11 @@ export function runDay(now: Date, injected: unknown, vercelEnv: string | undefin
 }
 
 export interface SendPlan {
-  /** Ready invoices of profiles that send themselves (D1: auto, not held). */
+  /** The upcoming month's ready invoice of each profile that sends itself
+   *  (D1: auto, not held). */
   send: Invoice[]
-  /** Ready invoices waiting for the operator's tap: held, or a review profile. */
+  /** Ready invoices waiting for the operator's tap: held, a review profile, a
+   *  paused one, or any invoice that is not the upcoming month's. */
   hold: Invoice[]
   /** Invoices the job will not touch and the operator must look at: one that
    *  may have gone (unconfirmed, or a send that crashed), one in flight, and
@@ -32,13 +35,20 @@ export interface SendPlan {
 }
 
 /**
- * Who sends what. Only invoices the job issued (a profile's) are considered.
+ * Who sends what, on `today`. Only invoices the job issued (a profile's) are
+ * considered, and ONLY THE UPCOMING MONTH'S INVOICE SENDS ITSELF: the one for
+ * next month, which the job issues in the days before that month starts. Any
+ * other ready invoice (an older month held and never sent, one printed too
+ * late) waits for the operator's tap, however the profile is set, so a hold
+ * lifted in March never sends January.
+ *
  * NOTHING THAT MAY HAVE GONE IS SENT AGAIN BY THE JOB: an unconfirmed
  * invoice, a `sending` one (in flight, or crashed), and any invoice whose
  * last send failed wait for the operator, who checks the Bcc copy and taps
  * (lib/finance/send.ts). A paused profile's ready invoice waits too.
  */
-export function planSends(invoices: readonly Invoice[], profiles: readonly BillingProfile[]): SendPlan {
+export function planSends(invoices: readonly Invoice[], profiles: readonly BillingProfile[], today: string): SendPlan {
+  const upcoming = addMonths(monthOf(today), 1)
   const byId = new Map(profiles.map((p) => [p.id, p]))
   const out: SendPlan = { send: [], hold: [], attention: [] }
   for (const i of invoices) {
@@ -49,7 +59,7 @@ export function planSends(invoices: readonly Invoice[], profiles: readonly Billi
     if (i.sendError) { out.attention.push({ invoice: i, why: `its last send failed: ${i.sendError}` }); continue }
     const p = byId.get(i.profileId)
     if (!p) continue
-    if (p.active && p.sendMode === 'auto' && !p.holdNext) out.send.push(i)
+    if (p.active && p.sendMode === 'auto' && !p.holdNext && i.periodStart === upcoming) out.send.push(i)
     else out.hold.push(i)
   }
   return out

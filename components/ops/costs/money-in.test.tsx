@@ -17,7 +17,7 @@ vi.mock('@/app/dashboard/ops/costs/actions', () => {
 })
 vi.mock('@/app/dashboard/ops/costs/money-actions', () => {
   const ok = async () => ({ ok: true, message: '' })
-  return { recordPayment: ok, deletePayment: ok, setExpected: ok, printInvoice: ok, sendInvoiceNow: ok, sendInvoiceTest: ok, saveProfile: ok, setHold: ok }
+  return { recordPayment: ok, deletePayment: ok, setExpected: ok, printInvoice: ok, sendInvoiceNow: ok, sendInvoiceTest: ok, saveProfile: ok, setHold: ok, voidInvoice: ok }
 })
 
 const TODAY = '2026-11-18'
@@ -98,10 +98,13 @@ describe('Ops → Costs with Money in', () => {
     const ready = invoice({ number: '0111', status: 'ready', currency: 'ZAR', total: 2625, periodStart: '2027-01-01', periodLabel: 'January 2027', issuedOn: '2026-12-15', dueOn: '2026-12-31', profileId: PROFILE.id, pdfPath: 'c/0111.pdf', sentAt: null })
     const t = renderText(<CostsPageBody data={DATA} finance={{ ...FINANCE, invoices: [ready, ...invoices] }} pdfUrls={new Map([['c/0111.pdf', 'https://signed.test/x']])} now={NOW} />)
     expect(t).toContain('Invoice 0111 January 2027 Not sent Held for you')
-    expect(t).toContain('Send… Print again Send a test to me')
+    expect(t).toContain('Send… Print again Send a test to me Void…')
+    // sent, credited and paid invoices (all of the base year) cannot be voided
+    expect(text).not.toContain('Void…')
     const editors = readFileSync(new URL('./money-editors.tsx', import.meta.url), 'utf8')
     expect(editors).not.toMatch(/window\.confirm|confirm\(/)
     expect(editors).toContain('Send invoice {invoice.number} to {recipients} now?')
+    expect(editors).toContain('Voiding gives ${invoice.periodLabel} back: the daily job issues it again, under a new number, on its next run before the month starts. To skip a month, pause the billing profile instead.')
   })
 
   it('shows an invoice that may have gone, offers only a confirmed Send again, and says the job leaves it alone', () => {

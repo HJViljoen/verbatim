@@ -4,7 +4,7 @@ import { startTransition, useActionState, useState, type FormEvent } from 'react
 import { buttonClass } from '@/components/pages/studio/ui'
 import type { CostsActionState } from '@/app/dashboard/ops/costs/actions'
 import {
-  deletePayment, printInvoice, recordPayment, saveProfile, sendInvoiceNow, sendInvoiceTest, setExpected, setHold,
+  deletePayment, printInvoice, recordPayment, saveProfile, sendInvoiceNow, sendInvoiceTest, setExpected, setHold, voidInvoice,
 } from '@/app/dashboard/ops/costs/money-actions'
 import { DUE_RULE_LABEL, DUE_RULES, FIN_CURRENCIES, SEND_MODE_LABEL, SEND_MODES, type BillingProfile, type FinCurrency, type Invoice } from '@/lib/finance/types'
 import { cn } from '@/lib/utils'
@@ -38,7 +38,7 @@ function keep(dispatch: (f: FormData) => void) {
 // ---- One invoice's buttons ------------------------------------------------------
 
 export interface InvoiceActionsProps {
-  invoice: Pick<Invoice, 'id' | 'number' | 'kind' | 'status' | 'expectedOn' | 'pdfPath'>
+  invoice: Pick<Invoice, 'id' | 'number' | 'kind' | 'status' | 'expectedOn' | 'pdfPath' | 'periodLabel' | 'periodStart'>
   /** Who a real send goes to, said in the question before it goes. */
   recipients: string
   /** The invoice still owes something (Expected date makes sense). */
@@ -50,13 +50,33 @@ export interface InvoiceActionsProps {
 
 export function InvoiceActions({ invoice, recipients, owed, unsure }: InvoiceActionsProps) {
   const [armed, setArmed] = useState(false)
+  const [voiding, setVoiding] = useState(false)
   const [sent, send, sending] = useAction(sendInvoiceNow, () => setArmed(false))
+  const [voided, voidIt, voidPending] = useAction(voidInvoice, () => setVoiding(false))
   const [tested, test, testing] = useAction(sendInvoiceTest)
   const [printed, print, printing] = useAction(printInvoice)
-  const answer = [sent, tested, printed].find((s) => s.message) ?? IDLE
+  const answer = [sent, tested, printed, voided].find((s) => s.message) ?? IDLE
   const canSend = invoice.kind === 'invoice' && invoice.pdfPath !== null && (invoice.status === 'ready' || unsure)
   const canPrint = invoice.status === 'draft' || invoice.status === 'ready'
   const canTest = invoice.pdfPath !== null && invoice.status !== 'void'
+  const canVoid = invoice.kind === 'invoice' && (invoice.status === 'draft' || invoice.status === 'ready')
+
+  if (voiding) {
+    return (
+      <form action={voidIt} className="flex flex-wrap items-center gap-2 rounded-[10px] bg-inner px-3 py-2.5">
+        <input type="hidden" name="id" value={invoice.id} />
+        <span className="text-[13px]">
+          Void invoice {invoice.number}?{' '}
+          {invoice.periodStart
+            ? `Voiding gives ${invoice.periodLabel} back: the daily job issues it again, under a new number, on its next run before the month starts. To skip a month, pause the billing profile instead.`
+            : 'Voiding withdraws it for good.'}
+        </span>
+        <button type="submit" autoFocus disabled={voidPending} className={cn(buttonClass('secondary', 'small'), 'text-negative')}>{voidPending ? 'Voiding…' : 'Void it'}</button>
+        <button type="button" onClick={() => setVoiding(false)} className={buttonClass('ghost', 'small')}>Keep it</button>
+        <Said ok={voided.ok} message={voided.ok ? '' : voided.message} />
+      </form>
+    )
+  }
 
   if (armed) {
     return (
@@ -98,6 +118,7 @@ export function InvoiceActions({ invoice, recipients, owed, unsure }: InvoiceAct
             <button type="submit" disabled={testing} className={buttonClass('secondary', 'small')}>{testing ? 'Sending test…' : 'Send a test to me'}</button>
           </form>
         ) : null}
+        {canVoid ? <button type="button" onClick={() => setVoiding(true)} className={buttonClass('ghost', 'small')}>Void…</button> : null}
       </div>
       {invoice.kind === 'invoice' && owed ? <ExpectedForm id={invoice.id} expectedOn={invoice.expectedOn} /> : null}
       <Said ok={answer.ok} message={answer.message} />

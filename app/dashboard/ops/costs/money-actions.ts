@@ -102,6 +102,29 @@ export async function sendInvoiceNow(_prev: CostsActionState, f: FormData): Prom
   return { ok: r.ok, message: r.message }
 }
 
+/**
+ * Withdraw an invoice not sent yet (draft or ready). Its month is given back:
+ * the daily job issues that month again, under a new number, on its next run
+ * before the month starts. One that may have gone (unconfirmed) or was sent
+ * cannot be voided here.
+ */
+export async function voidInvoice(_prev: CostsActionState, f: FormData): Promise<CostsActionState> {
+  if (!(await costsAdmin())) return NOT_FOUND
+  const id = idOf(f)
+  if (!id) return { ok: false, message: 'No such invoice.' }
+  const { data, error } = await createAdminClient()
+    .from('fin_invoices')
+    .update({ status: 'void', updated_at: now() })
+    .eq('id', id)
+    .eq('kind', 'invoice')
+    .in('status', ['draft', 'ready'])
+    .select('number')
+  if (error) return failed('void it', error)
+  revalidatePath(PATH)
+  if (!data || data.length === 0) return { ok: false, message: 'Only an invoice not sent yet can be voided. Reload to see it.' }
+  return { ok: true, message: `Invoice ${String(data[0].number)} is void.` }
+}
+
 /** The same email and PDF to ALERT_EMAIL alone. Changes nothing. */
 export async function sendInvoiceTest(_prev: CostsActionState, f: FormData): Promise<CostsActionState> {
   if (!(await costsAdmin())) return NOT_FOUND

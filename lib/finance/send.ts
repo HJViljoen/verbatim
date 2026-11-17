@@ -27,9 +27,10 @@ import { STALE_CLAIM_MS, mayHaveGone } from './types'
 // the SAME idempotency key, `fin-invoice-<id>`, so within Resend's 24 hours a
 // retry of an email it did accept is answered, not sent twice.
 //
-// After a send: the profile's hold is cleared (D1: the held invoice's tap is
-// the go-ahead for the months after) and its one-off note too, if the email
-// carried it. A failed send changes neither.
+// After a send: the profile's hold is cleared when the invoice sent IS the
+// held one (its newest month: D1, that tap is the go-ahead for the months
+// after; sending an older invoice by hand leaves the hold alone), and its
+// one-off note, if the email carried it. A failed send changes neither.
 //
 // A TEST send (the page's "Send a test to me") is the same email and PDF to
 // ALERT_EMAIL alone: no claim, no status, nothing cleared.
@@ -56,8 +57,9 @@ export interface SendPort {
   /** sending → unconfirmed with the reason (it may have gone), while the
    *  claim is still this caller's. */
   markUnsure(id: string, claimedAt: string, error: string): Promise<void>
-  /** Clear the profile's hold, and its one-off note if it is still the one sent. */
-  afterSent(profileId: string, sentNote: string | null): Promise<void>
+  /** Clear the profile's hold (when `clearHold`), and its one-off note if it
+   *  is still the one sent. */
+  afterSent(profileId: string, done: { clearHold: boolean; sentNote: string | null }): Promise<void>
   operator(): string[]
   now(): Date
 }
@@ -126,8 +128,14 @@ export async function sendInvoice(port: SendPort, id: string, opts: { test?: boo
     return { ok: false, message: `Invoice ${inv.number} may or may not have gone: ${result.error}. Check your Bcc copy before sending it again.` }
   }
   await port.markSent(id, claimedAt, result.id, port.now().toISOString())
-  // The stored note, not the trimmed one the email printed: the clear matches on it.
-  if (inv.profileId) await port.afterSent(inv.profileId, mail.noteOnce ? (ctx.profile?.noteOnce ?? null) : null)
+  if (inv.profileId) {
+    await port.afterSent(inv.profileId, {
+      // the held invoice is the profile's newest month; an older one sent by hand lifts no hold
+      clearHold: Boolean(ctx.profile?.holdNext && inv.periodStart && inv.periodStart === ctx.profileNewestPeriod),
+      // the stored note, not the trimmed one the email printed: the clear matches on it
+      sentNote: mail.noteOnce ? (ctx.profile?.noteOnce ?? null) : null,
+    })
+  }
   return { ok: true, messageId: result.id, message: `Invoice ${inv.number} sent to ${[...mail.to, ...mail.cc].join(', ')}.` }
 }
 
@@ -194,10 +202,12 @@ export function supabaseSendPort(admin: Admin): SendPort {
         .eq('send_claimed_at', claimedAt)
       if (error) console.error(`[finance] mark ${id} unconfirmed failed:`, error.message)
     },
-    async afterSent(profileId, sentNote) {
+    async afterSent(profileId, { clearHold, sentNote }) {
       const at = new Date().toISOString()
-      const hold = await admin.from('fin_billing_profiles').update({ hold_next: false, updated_at: at }).eq('id', profileId)
-      if (hold.error) console.error(`[finance] clear hold on ${profileId} failed:`, hold.error.message)
+      if (clearHold) {
+        const hold = await admin.from('fin_billing_profiles').update({ hold_next: false, updated_at: at }).eq('id', profileId)
+        if (hold.error) console.error(`[finance] clear hold on ${profileId} failed:`, hold.error.message)
+      }
       if (sentNote) {
         const note = await admin.from('fin_billing_profiles').update({ note_once: null, updated_at: at }).eq('id', profileId).eq('note_once', sentNote)
         if (note.error) console.error(`[finance] clear note on ${profileId} failed:`, note.error.message)

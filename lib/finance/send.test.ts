@@ -24,13 +24,13 @@ const JAN: Invoice = invoice({
  *  the database does it: a check and a write with nothing in between. */
 type EmailAnswer = { sent: true; id: string } | { sent: false; error: string; definite: boolean }
 
-function fakePort(opts: { invoice?: Invoice; profile?: BillingProfile; email?: (m: InvoiceMail) => Promise<EmailAnswer>; now?: Date; operator?: string[] } = {}) {
+function fakePort(opts: { invoice?: Invoice; profile?: BillingProfile; email?: (m: InvoiceMail) => Promise<EmailAnswer>; now?: Date; operator?: string[]; newest?: string | null } = {}) {
   const row: Invoice = { ...(opts.invoice ?? JAN) }
   const profile: BillingProfile = { ...(opts.profile ?? PROFILE) }
   const sent: InvoiceMail[] = []
   let n = 0
   const port: SendPort = {
-    load: async () => ({ invoice: { ...row }, issuer: ISSUER, related: null, replacement: null, profile: { ...profile } } satisfies InvoiceContext),
+    load: async () => ({ invoice: { ...row }, issuer: ISSUER, related: null, replacement: null, profile: { ...profile }, profileNewestPeriod: opts.newest === undefined ? '2027-01-01' : opts.newest } satisfies InvoiceContext),
     claim: async (_id, claimedAt, { retakeUnsure, staleBefore }) => {
       const free = row.status === 'ready'
         || (retakeUnsure && (row.status === 'unconfirmed' || (row.status === 'sending' && row.sendClaimedAt !== null && row.sendClaimedAt < staleBefore)))
@@ -56,9 +56,9 @@ function fakePort(opts: { invoice?: Invoice; profile?: BillingProfile; email?: (
       if (row.status !== 'sending' || row.sendClaimedAt !== claimedAt) return
       Object.assign(row, { status: 'unconfirmed', sendError: error, sendClaimedAt: null })
     },
-    afterSent: async (_pid, note) => {
-      profile.holdNext = false
-      if (note !== null && profile.noteOnce === note) profile.noteOnce = null
+    afterSent: async (_pid, { clearHold, sentNote }) => {
+      if (clearHold) profile.holdNext = false
+      if (sentNote !== null && profile.noteOnce === sentNote) profile.noteOnce = null
     },
     operator: () => opts.operator ?? ['operator@verbatim.test'],
     now: () => opts.now ?? new Date('2026-12-15T05:00:00.000Z'),
@@ -143,6 +143,18 @@ describe('sending an invoice', () => {
     expect(sent[0].idempotencyKey).toBe(`fin-invoice-${JAN.id}`)
   })
 
+  it('lifts the hold only when the held invoice itself (the newest month) is sent', async () => {
+    // February is the newest month and is held; sending January by hand leaves the hold on
+    const older = fakePort({ newest: '2027-02-01' })
+    expect((await sendInvoice(older.port, JAN.id)).ok).toBe(true)
+    expect(older.profile.holdNext).toBe(true)
+    // the one-off note went with that email, so it is cleared all the same
+    expect(older.profile.noteOnce).toBeNull()
+    const held = fakePort({ newest: '2027-01-01' })
+    await sendInvoice(held.port, JAN.id)
+    expect(held.profile.holdNext).toBe(false)
+  })
+
   it('refuses a second send: one email, whether the second comes after or during the first', async () => {
     const after = fakePort()
     await sendInvoice(after.port, JAN.id)
@@ -205,7 +217,7 @@ describe('sending an invoice', () => {
     expect(accepted).toHaveLength(1) // it reached the service; the answer was lost
     expect(row.status).toBe('unconfirmed')
     // the next morning: an auto profile, not held, and the job still leaves it alone
-    const plan = planSends([row], [{ ...PROFILE, holdNext: false }])
+    const plan = planSends([row], [{ ...PROFILE, holdNext: false }], '2026-12-16')
     expect(plan.send).toEqual([])
     expect(attentionLines(plan.attention)).toEqual([
       expect.stringMatching(/^Invoice 0111 \(Acme SA, January 2027\) was not sent by the job: may have gone: .*Check your Bcc copy/),

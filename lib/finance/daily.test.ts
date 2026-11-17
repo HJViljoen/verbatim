@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { attentionLines, holdNotices, noticeEmail, nudgeNotices, planSends, runDay } from './daily'
 import { PROFILE, invoice, yearOfInvoices } from './fixtures'
+import { nextBillablePeriod } from './periods'
 import { applyPayments } from './ledger'
 import type { Invoice } from './types'
 
@@ -26,20 +27,42 @@ describe('the day a run acts for', () => {
 
 describe('who sends what', () => {
   it('holds the next invoice for a tap while hold_next is on (D1), and sends it once it is off', () => {
-    expect(planSends([READY], [PROFILE])).toEqual({ send: [], hold: [READY], attention: [] })
-    expect(planSends([READY], [{ ...PROFILE, holdNext: false }])).toEqual({ send: [READY], hold: [], attention: [] })
+    expect(planSends([READY], [PROFILE], '2026-12-15')).toEqual({ send: [], hold: [READY], attention: [] })
+    expect(planSends([READY], [{ ...PROFILE, holdNext: false }], '2026-12-15')).toEqual({ send: [READY], hold: [], attention: [] })
   })
 
   it('never sends for a review profile or a paused one', () => {
-    expect(planSends([READY], [{ ...PROFILE, holdNext: false, sendMode: 'review' }])).toEqual({ send: [], hold: [READY], attention: [] })
-    expect(planSends([READY], [{ ...PROFILE, holdNext: false, active: false }])).toEqual({ send: [], hold: [READY], attention: [] })
+    expect(planSends([READY], [{ ...PROFILE, holdNext: false, sendMode: 'review' }], '2026-12-15')).toEqual({ send: [], hold: [READY], attention: [] })
+    expect(planSends([READY], [{ ...PROFILE, holdNext: false, active: false }], '2026-12-15')).toEqual({ send: [], hold: [READY], attention: [] })
   })
 
   it('leaves alone what it did not issue, has no PDF for, or is already done', () => {
     const p = { ...PROFILE, holdNext: false }
-    expect(planSends([{ ...READY, profileId: null }], [p]).send).toEqual([])
-    expect(planSends([{ ...READY, pdfPath: null }], [p]).send).toEqual([])
-    expect(planSends([{ ...READY, status: 'sent' }, { ...READY, status: 'draft' }], [p]).send).toEqual([])
+    expect(planSends([{ ...READY, profileId: null }], [p], '2026-12-15').send).toEqual([])
+    expect(planSends([{ ...READY, pdfPath: null }], [p], '2026-12-15').send).toEqual([])
+    expect(planSends([{ ...READY, status: 'sent' }, { ...READY, status: 'draft' }], [p], '2026-12-15').send).toEqual([])
+  })
+
+  it('sends only the upcoming month\'s invoice by itself; an older ready one waits for a tap whatever the profile says', () => {
+    const p = { ...PROFILE, holdNext: false }
+    // 15 Dec: January is the upcoming month
+    expect(planSends([READY], [p], '2026-12-15').send).toEqual([READY])
+    // January held and never sent; on 15 Jan the hold is lifted and February
+    // is issued: February sends itself, January does not
+    const feb = { ...READY, id: 'feb', number: '0112', periodStart: '2027-02-01', periodLabel: 'February 2027', issuedOn: '2027-01-15' }
+    const plan = planSends([READY, feb], [p], '2027-01-15')
+    expect(plan.send.map((i) => i.number)).toEqual(['0112'])
+    expect(plan.hold.map((i) => i.number)).toEqual(['0111'])
+    // printed only once January had begun: it waits too
+    expect(planSends([READY], [p], '2027-01-02')).toMatchObject({ send: [], hold: [READY] })
+    // a span that is not one month (past costs) never sends itself
+    expect(planSends([{ ...READY, periodStart: null }], [p], '2026-12-15').send).toEqual([])
+  })
+
+  it('gives a voided month back: the job issues it again, under a new number, before the month starts', () => {
+    // billed periods leave void (and credited) invoices out (lib/finance/issue.ts billedPeriods)
+    expect(nextBillablePeriod(PROFILE, [], '2026-12-16')?.periodStart).toBe('2027-01-01')
+    expect(nextBillablePeriod(PROFILE, ['2027-01-01'], '2026-12-16')).toBeNull()
   })
 
   it('never sends what may have gone, is in flight, or failed last time: it lists them for the operator', () => {
@@ -47,7 +70,7 @@ describe('who sends what', () => {
     const unsure = { ...READY, status: 'unconfirmed' as const, sendError: 'No clear answer from the email service (timeout); it may have gone.' }
     const inFlight = { ...READY, number: '0112', status: 'sending' as const, sendClaimedAt: '2026-12-15T05:00:00.000Z' }
     const failed = { ...READY, number: '0113', sendError: 'domain not verified' }
-    const plan = planSends([unsure, inFlight, failed], [p])
+    const plan = planSends([unsure, inFlight, failed], [p], '2026-12-15')
     expect(plan.send).toEqual([])
     expect(plan.hold).toEqual([])
     expect(plan.attention.map((a) => a.invoice.number)).toEqual(['0111', '0112', '0113'])
