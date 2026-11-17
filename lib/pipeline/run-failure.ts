@@ -18,6 +18,10 @@ import { RUN_STALE_AFTER_HOURS } from './run-guard'
 //
 // The client's name is read for the alert only, and a read that fails or finds
 // nothing names the client by the id the event carries, never "?".
+//
+// An error's text is cut to a line (`errorText`) before it goes in the thrown
+// error or the alert: postgrest-js puts a body that is not JSON whole into
+// `error.message`, so a Cloudflare 520 arrives as its HTML error page.
 
 /** The failure handler's reads and writes, injected (the pipeline passes the
  *  admin client's; the tests pass their own). */
@@ -46,15 +50,35 @@ export const FAILURE_HANDLER_ATTEMPTS = 2
 
 const messageOf = (e: unknown): string => (e instanceof Error ? e.message : typeof e === 'object' && e && 'message' in e ? String((e as { message: unknown }).message) : String(e))
 
+/** The most of an error's text the alert carries. */
+export const ERROR_TEXT_MAX = 300
+
+/** An error's text as one short line: an HTML page's comments, scripts,
+ *  styles and tags dropped, its whitespace collapsed, cut at ERROR_TEXT_MAX.
+ *  A tag is `<` then a letter, `/` or `!`, so "a < b" is kept. PURE. */
+export function errorText(message: string): string {
+  const text = message
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, ' ')
+    .replace(/<[a-zA-Z/!][^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return text.length > ERROR_TEXT_MAX ? `${text.slice(0, ERROR_TEXT_MAX - 1).trimEnd()}…` : text
+}
+
+/** An error's text, null where there is none; markup with no text in it is
+ *  still an error. */
+const errorTextOf = (message: string | null | undefined): string | null => (message ? errorText(message) || '(no text)' : null)
+
 /** Mark the run failed, then alert; throws only for a failed update before the
  *  last attempt (see the header). */
 export async function handleRunFailure(io: RunFailureIO, a: RunFailureArgs): Promise<{ marked: boolean }> {
   const lastAttempt = a.attempt >= (a.maxAttempts ?? FAILURE_HANDLER_ATTEMPTS) - 1
   let markError: string | null
   try {
-    markError = (await io.markFailed()).error?.message ?? null
+    markError = errorTextOf((await io.markFailed()).error?.message)
   } catch (e) {
-    markError = messageOf(e)
+    markError = errorTextOf(messageOf(e))
   }
   if (markError && !lastAttempt) throw new Error(`run-pipeline onFailure: the run row could not be marked failed (${markError}); retrying`)
 
@@ -63,9 +87,9 @@ export async function handleRunFailure(io: RunFailureIO, a: RunFailureArgs): Pro
   try {
     const read = await io.companyName()
     name = read.name?.trim() || null
-    nameError = read.error?.message ?? null
+    nameError = errorTextOf(read.error?.message)
   } catch (e) {
-    nameError = messageOf(e)
+    nameError = errorTextOf(messageOf(e))
   }
   const { subject, body } = runFailedAlert({ ...a, name, nameError, markError })
   await io.alert(subject, body)

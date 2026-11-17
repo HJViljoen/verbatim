@@ -46,8 +46,9 @@ import {
 // NON-FATAL (the deploy-4 precedent): each step ends in a `.catch` that logs
 // and returns null, so a failed one never stops freeze-months; and a no-op,
 // reading nothing and spending nothing, until the products migration is
-// applied, for a tenant with no catalogue (Sealand today), and wherever
-// PRODUCT_READINGS_ENABLED is off (every tenant until Heinrich turns one on).
+// applied, for a tenant with no catalogue (its seed not loaded), and wherever
+// PRODUCT_READINGS_ENABLED is off for the tenant (on only once its catalogue
+// is loaded and its back-read written).
 // A model failure never throws (runClassifier's rule): its items wait for the
 // next run. A database failure throws, and Inngest retries the step; the
 // rows already written are held and not re-asked.

@@ -18,6 +18,7 @@ import { commentKey, contentKey, planRules, type QueueItem } from './match'
 import { compileCatalogue } from './rules'
 import { seedCatalogue } from './seed'
 import { OSSUR_PRODUCTS } from '../../scripts/seeds/ossur-products'
+import { SEALAND_PRODUCTS } from '../../scripts/seeds/sealand-products'
 
 // The model calls' contract on fixtures (depth v2 T11 "done when"): what each
 // call is shown, how its answers become rows, what the checks refuse, and the
@@ -93,7 +94,7 @@ describe('what the model is shown', () => {
 // answers (product_mentions, keyed by catalogue_version and
 // PRODUCT_MODEL_RULE_VERSION) are never asked again, and its months compare
 // like for like only while the question is the same. Captured by running the
-// builders at b2fa2a8a, BEFORE the per-tenant words existed, and pasting the
+// builders at dd547395, BEFORE the per-tenant words existed, and pasting the
 // output: deliberately not a second call to a builder.
 const OSSUR_CLASSIFY_SYSTEM_FIXTURE = `You read social-media comments about prosthetics, orthotics and mobility, and decide which part of Össur's catalogue each one is about. Össur is a company; its catalogue lists its products by category, each with a code.
 
@@ -144,7 +145,7 @@ const OSSUR_CONFIRM_USER_FIXTURE = `1. WORD "Unity" = Össur's product Unity (So
 2. WORD "socket" = the kind of product in Sockets (a prosthetic or orthotic product) | TEXT: unity is strength, and my eye socket hurts
 3. WORD "Unity" = Össur's product Unity (Sockets) | TEXT: unity is strength, and my eye socket hurts`
 /** sha256 of the classifier's system prompt over the real seed
- *  (scripts/seeds/ossur-products.ts), captured at b2fa2a8a. A change to that
+ *  (scripts/seeds/ossur-products.ts), captured at dd547395. A change to that
  *  seed changes it too; re-capture it only from code that leaves the frame
  *  above unchanged. */
 const OSSUR_CLASSIFY_SYSTEM_SEED_SHA256 = '9cc1d60f760da0ae6bb6b327906ce4a8ecee3e773de44ca00eaee680b09f746e'
@@ -165,6 +166,41 @@ describe('Össur\'s prompts are the ones its stored answers were asked with', ()
     expect(PRODUCT_CLASSIFY_PROMPT_VERSION).toBe('product_classify_v1')
     expect(PRODUCT_MODEL_RULE_VERSION).toBe('product_rules_v1+product_classify_v1')
     expect([PRODUCT_CLASSIFY_MODEL, PRODUCT_CONFIRM_MODEL]).toEqual(['gpt-4.1-mini', 'gpt-4.1'])
+  })
+})
+
+// SEALAND'S PROMPTS, BY HASH (17 Nov), over the real seed
+// (scripts/seeds/sealand-products.ts): what its back-read is asked with, and
+// so what every later month must be asked with, as Össur's are above. Its
+// stored answers are keyed by catalogue_version and PRODUCT_MODEL_RULE_VERSION,
+// and neither moves when Sealand's entry in PRODUCT_DOMAIN_BY_CLIENT does: a
+// change to that entry after its back-read is written needs a
+// PRODUCT_MODEL_RULE_VERSION bump (a new PRODUCT_CLASSIFY_PROMPT_VERSION,
+// which reads every tenant's texts again), or its months stop comparing like
+// for like. A change to the seed moves the classifier's hash and the catalogue
+// version with it (its texts are asked again under the new version); re-capture
+// then. The name is the clients row's company_name, 'Sealand'.
+const SEALAND_CLASSIFY_SYSTEM_SEED_SHA256 = '920dbeabdd65f7a6fb8d74bbf375b74131db1f1b85ae95d9393f4949f811702e'
+const SEALAND_CONFIRM_SYSTEM_SHA256 = '0672c969ada55af83dbb232dde3320bdd2379be3286f79105eb951e2271c7f36'
+const SEALAND_CONFIRM_USER_SEED_SHA256 = '07b3b56c548e3bd30d6602658110e17617d855d11860a77c87f1c33b461829fd'
+
+describe('Sealand\'s prompts are the ones its back-read is asked with', () => {
+  const seed = seedCatalogue(SEALAND_PRODUCTS)
+  const seedCompiled = compileCatalogue(seed, SEALAND_CLIENT_ID)
+  const sha = (s: string) => createHash('sha256').update(s).digest('hex')
+  it('the classifier\'s system prompt over the real seed', () => {
+    expect(sha(buildSystemPrompt('Sealand', seed, SEALAND_CLIENT_ID))).toBe(SEALAND_CLASSIFY_SYSTEM_SEED_SHA256)
+  })
+
+  it('the confirm\'s system prompt, and its words\' meanings over the real seed', () => {
+    expect(sha(buildConfirmSystemPrompt('Sealand', SEALAND_CLIENT_ID))).toBe(SEALAND_CONFIRM_SYSTEM_SHA256)
+    const qs = confirmQuestions(planRules(SEALAND_CLIENT_ID, seedCompiled, [], [
+      { commentId: 'm1', videoId: V, month: '2026-10-04', text: 'This Rad Rev Moon Bag is the best' },
+      { commentId: 'm2', videoId: V, month: '2026-10-05', text: 'I have a Ponto Crew Sweater and Quarter Zip' },
+      { commentId: 'm3', videoId: V, month: '2026-10-06', text: 'got a hero backpack for my son' },
+    ]).confirm)
+    expect(qs.map((x) => x.alias.alias)).toEqual(['Moon Bag', 'Quarter Zip', 'Hero Backpack'])
+    expect(sha(buildConfirmUserPrompt(qs, seedCompiled, 'Sealand', SEALAND_CLIENT_ID))).toBe(SEALAND_CONFIRM_USER_SEED_SHA256)
   })
 })
 

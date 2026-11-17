@@ -55,8 +55,8 @@ export function voicesPart(top: TopVoices | null | undefined): WeeklyVoicesPart 
 }
 
 /** Your products: only a `ready` tile (switched on, the month read, a
- *  catalogue, something came up). Off for a tenant (Sealand), nothing at all:
- *  no part, no placeholder. */
+ *  catalogue, something came up). For a tenant switched off or with no
+ *  catalogue, nothing at all: no part, no placeholder. */
 export function productsPart(top: TopProducts | null | undefined): WeeklyProductsPart | null {
   if (!top || top.state !== 'ready' || top.note === 'failed') return null
   const cameUp = top.cameUpProducts ?? []

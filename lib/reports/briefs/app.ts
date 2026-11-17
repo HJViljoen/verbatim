@@ -257,8 +257,8 @@ export function standoutOf(s: Standout, month: string, company: string): BriefSt
  * month read, a catalogue): each category with videos, the most first, its
  * videos naming one of the company's products (`k_named`, pooled over every
  * audience: `named`), its products that came up with the shelf's first-month
- * mark, and the page's strict standouts. Null in any other state (Sealand: no
- * catalogue; a tenant switched off). Pure.
+ * mark, and the page's strict standouts. Null in any other state (a tenant
+ * with no catalogue, or switched off, or its month unread). Pure.
  */
 export function productsOf(d: Pick<ProductsData, 'state' | 'month' | 'header' | 'market' | 'shelf' | 'standouts'>, company: string, namedOfCategory: (id: string) => number | null): BriefProducts | null {
   if (d.state !== 'ready' || !d.header) return null
