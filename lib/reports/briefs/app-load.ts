@@ -161,7 +161,7 @@ export async function loadVoicesParts(admin: SupabaseClient, a: { clientId: stri
   }
 }
 
-/** Your products for the month (Össur only, behind `PRODUCT_READINGS_ENABLED`):
+/** Your products for the month (behind `PRODUCT_READINGS_ENABLED`):
  *  the page's own load, and the month's rows for each category's videos
  *  naming one of the company's products. */
 export async function loadProductsPart(admin: SupabaseClient, a: { clientId: string; company: string; month: string; now: string }): Promise<BriefProducts | null> {

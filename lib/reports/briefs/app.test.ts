@@ -123,7 +123,7 @@ describe('Voices: the brands named without being asked (Marketing)', () => {
   })
 })
 
-describe('Your products (Össur only, behind PRODUCT_READINGS_ENABLED)', () => {
+describe('Your products (behind PRODUCT_READINGS_ENABLED)', () => {
   it('each category with videos, the most first, the videos naming yours, its products with the shelf\'s first-month mark, the strict standouts', () => {
     const d = ossurTodayFixture()
     const p = productsOf(d, 'Össur', (id) => (d.shelf.find((c) => c.id === id)?.name === 'Feet' ? 4 : 0))!
@@ -139,7 +139,7 @@ describe('Your products (Össur only, behind PRODUCT_READINGS_ENABLED)', () => {
     expect(p.href).toBe('/dashboard/products?month=2026-09')
   })
 
-  it('switched off, not applied, no catalogue or a failed read: no page (Sealand)', () => {
+  it('switched off, not applied, no catalogue or a failed read: no page (a tenant switched off)', () => {
     expect(productsOf(ossurTodayFixture({ over: { enabled: false } }), 'Össur', () => 0)).toBeNull()
     expect(productsSection(null)).toBeNull()
   })

@@ -468,7 +468,7 @@ describe('5 · the other freeze-path hunks', () => {
     expect(path.size).toBe(39)
   })
 
-  it('lib/config.ts: the spend switches and the products steps\' switch are read by nothing on the path; the spend switches are off for every tenant, products on for Össur alone (13 Oct)', async () => {
+  it('lib/config.ts: the spend switches and the products steps\' switch are read by nothing on the path; the spend switches are off for every tenant, products on for Össur (13 Oct) and Sealand', async () => {
     for (const name of ['SEGMENT_JUDGE_ENABLED', 'BRAND_CONFIRM_ENABLED', 'segmentJudgeEnabled', 'brandConfirmEnabled', 'PRODUCT_READINGS_ENABLED', 'productReadingsEnabled']) {
       expect(uses(name), name).toEqual(['lib/config.ts'])
     }
@@ -478,7 +478,7 @@ describe('5 · the other freeze-path hunks', () => {
     // The products steps write their own tables; the switch is read by nothing
     // on the freeze path (above), so turning a tenant on moves nothing this
     // path freezes.
-    expect(Object.entries(config.PRODUCT_READINGS_ENABLED).filter(([, on]) => on).map(([id]) => id)).toEqual([config.OSSUR_CLIENT_ID])
+    expect(Object.entries(config.PRODUCT_READINGS_ENABLED).filter(([, on]) => on).map(([id]) => id).sort()).toEqual([config.OSSUR_CLIENT_ID, config.SEALAND_CLIENT_ID].sort())
   })
 
   it('lib/subjects/types.ts: SUBJECTS_MAX (8 to 10) is read by nothing on the path, and by nothing that writes a row without a person or an operator asking', () => {

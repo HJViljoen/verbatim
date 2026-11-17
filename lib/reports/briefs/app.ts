@@ -531,7 +531,7 @@ export function movesSection(m: BriefMovesIn | null, vectors: ReadonlyMap<string
   })
 }
 
-/** "Your products in the conversation" (Marketing): Össur only, behind
+/** "Your products in the conversation" (Marketing): behind
  *  `PRODUCT_READINGS_ENABLED` (the part is read only where the page is
  *  ready). Pure. */
 export function productsSection(p: BriefProducts | null): BriefSection | null {

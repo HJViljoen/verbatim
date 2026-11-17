@@ -1877,7 +1877,11 @@ export const brandConfirmEnabled = (clientId: string): boolean => BRAND_CONFIRM_
  * lib/config.test.ts, as the two switches above are.
  */
 export const PRODUCT_READINGS_ENABLED: Readonly<Record<string, boolean>> = {
-  [SEALAND_CLIENT_ID]: false,
+  // Sealand: its catalogue (scripts/seeds/sealand-products.ts, compiled 17
+  // Nov) is loaded and its back-read written, one month a read (June to
+  // September frozen, October and November open, written before 30 Nov).
+  // This line goes live only after both.
+  [SEALAND_CLIENT_ID]: true,
   // On 13 Oct: the Össur catalogue (pc1_a630b2cdb5a8c01f) is loaded and its
   // back-read written (June to August frozen, September and October open).
   [OSSUR_CLIENT_ID]: true,
