@@ -6,27 +6,27 @@ import { checkSeed, insertOrder, lit, seedSql, seedUploads, type Seed, type Seed
 
 const C = '00000000-0000-0000-0000-00000000c11e'
 const line = (description: string, unit: number, qty = 1) => ({ description, qty, unit_price: unit, amount: unit * qty })
-const usd = [line('Widget hosting', 100), line('Data feeds', 105)]
-const zar = [line('Widget hosting', 1800), line('Data feeds', 1890)]
+const usd = [line('Widget hosting', 80), line('Data feeds', 70)]
+const zar = [line('Widget hosting', 1400), line('Data feeds', 1225)]
 const inv = (o: Partial<SeedInvoice> & Pick<SeedInvoice, 'number'>): SeedInvoice => ({
   client_id: C, bill_to: 'Acme SA', period_label: 'September 2026', period_start: '2026-09-01', issued_on: '2026-09-02',
-  currency: 'USD', lines: usd, total: 205, status: 'sent', ...o,
+  currency: 'USD', lines: usd, total: 150, status: 'sent', ...o,
 })
 
 const SEED: Seed = {
   issuer: { name: 'Jane Doe', address_lines: ['1 Test Street'], email: 'jane@example.test', bank_lines: [{ label: 'Bank', value: "Example Bank's branch" }], email_from: 'Jane Doe <jane@verbatim.test>', reply_to: 'jane@example.test' },
   profiles: [{
-    client_id: C, bill_to: 'Acme SA', currency: 'ZAR', fx_rate: 18, lines: [{ description: 'Widget hosting', unit_usd: 100, qty: 1 }],
+    client_id: C, bill_to: 'Acme SA', currency: 'ZAR', fx_rate: 17.5, lines: [{ description: 'Widget hosting', unit_usd: 80, qty: 1 }],
     issue_day: 15, due_rule: 'end_of_prev_month', send_mode: 'auto', hold_next: true, email_to: ['ap@acme.test'], note_once: 'One line.',
   }],
   invoices: [
     // out of order on purpose: the replacement and the credit note before what they relate to
-    inv({ number: '0003', currency: 'ZAR', lines: zar, total: 3690, issued_on: '2026-11-17', relates_to: '0002', pdf_file: 'Invoice-0003.pdf' }),
+    inv({ number: '0003', currency: 'ZAR', lines: zar, total: 2625, issued_on: '2026-11-17', relates_to: '0002', pdf_file: 'Invoice-0003.pdf' }),
     inv({ number: 'CN-0001', relates_to: '0002', issued_on: '2026-11-17', pdf_file: 'CN-0001.pdf' }),
     inv({ number: '0002', status: 'credited', pdf_file: 'Invoice-0002.pdf' }),
     inv({ number: '0001', period_start: '2026-06-01', period_label: 'June 2026', issued_on: '2026-06-19' }),
   ],
-  payments: [{ client_id: C, received_on: '2026-08-08', amount: 205, currency: 'USD', reference: 'INV-0001' }],
+  payments: [{ client_id: C, received_on: '2026-08-08', amount: 150, currency: 'USD', reference: 'INV-0001' }],
   counters: { invoice: 4, credit_note: 2 },
 }
 
@@ -39,7 +39,7 @@ describe('the seed', () => {
     const broken: Seed = {
       ...SEED,
       invoices: [
-        inv({ number: '0002', status: 'sent', total: 200 }),
+        inv({ number: '0002', status: 'sent', total: 140 }),
         inv({ number: 'CN-0001', relates_to: '0002' }),
         inv({ number: '0004', relates_to: '0099', period_start: '2026-09-15' }),
         inv({ number: '0005', period_start: '2026-10-01' }),
@@ -48,7 +48,7 @@ describe('the seed', () => {
       counters: { invoice: 6, credit_note: 1 },
     }
     expect(checkSeed(broken)).toEqual([
-      'invoice 0002: lines come to 205, total says 200',
+      'invoice 0002: lines come to 150, total says 140',
       'invoice 0004: period_start is not a first of the month',
       'invoice 0006: a second live invoice for 2026-10-01',
       'invoice 0002: credit note CN-0001 cancels it, so its status must be credited',
@@ -92,7 +92,7 @@ describe('the seed', () => {
   it('quotes a literal safely', () => {
     expect(lit("O'Brien'); drop table x; --")).toBe("'O''Brien''); drop table x; --'")
     expect(lit(null)).toBe('null')
-    expect(lit(18)).toBe('18')
+    expect(lit(17.5)).toBe('17.5')
     expect(() => lit(Number.NaN)).toThrow()
   })
 })

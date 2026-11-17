@@ -55,7 +55,7 @@ export interface Notice {
   line: string
 }
 
-/** "0011, January 2027, R3,690.00, due 31 December 2026". */
+/** "0123 (Acme, March 2027): R1,234.00, due 28 February 2027". */
 function describe(i: Invoice, balance?: number): string {
   const owed = balance !== undefined && balance !== i.total ? `${fmtMoney(balance, i.currency)} of ${fmtMoney(i.total, i.currency)}` : fmtMoney(i.total, i.currency)
   return `${i.number} (${i.billTo}, ${i.periodLabel}): ${owed}, due ${i.dueOn ? longDate(i.dueOn) : `on receipt (issued ${longDate(i.issuedOn)})`}`

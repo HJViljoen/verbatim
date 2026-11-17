@@ -130,7 +130,7 @@ export function PaymentForm({ payers, today }: { payers: { id: string; name: str
       </div>
       <div className="grid grid-cols-[minmax(0,1fr)_96px] gap-3">
         <Field label="Amount" hint="As the bank statement shows it">
-          <input name="amount" inputMode="decimal" autoComplete="off" required placeholder="29 520.00" className={INPUT} />
+          <input name="amount" inputMode="decimal" autoComplete="off" required placeholder="1 234.00" className={INPUT} />
         </Field>
         <Field label="Currency">
           <select name="currency" value={currency} onChange={(e) => setCurrency(e.target.value as FinCurrency)} className={INPUT}>
@@ -138,7 +138,7 @@ export function PaymentForm({ payers, today }: { payers: { id: string; name: str
           </select>
         </Field>
       </div>
-      <Field label="Reference" hint="Optional: the statement's reference, like INV-0010">
+      <Field label="Reference" hint="Optional: the statement's reference, like INV-0123">
         <input name="reference" autoComplete="off" maxLength={200} className={INPUT} />
       </Field>
       <div className="flex flex-wrap items-center gap-2">

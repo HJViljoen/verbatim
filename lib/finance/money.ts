@@ -3,7 +3,7 @@ import type { BillingProfile, FinCurrency, InvoiceLine } from './types'
 
 // Money on an invoice. Every sum is taken in whole cents, so a month's lines
 // add up to the printed total to the cent and a ledger never drifts. The
-// printed form is the Costs page's own (`fmtNative`: "R3,690.00", "$205.00",
+// printed form is the Costs page's own (`fmtNative`: "R1,234.00", "$56.78",
 // a real minus below zero). Pure.
 
 /** A stored amount (numeric(12,2), as PostgREST hands it over) in cents. */
@@ -11,12 +11,12 @@ export function centsOf(amount: unknown): number {
   return Math.round(Number(amount) * 100)
 }
 
-/** "R3,690.00", "$205.00", "−$205.00". */
+/** "R1,234.00", "$56.78", "−$56.78". */
 export function fmtMoney(amount: number, currency: FinCurrency): string {
   return fmtNative(amount, currency)
 }
 
-/** 1025 → "1,025.00": a dollar figure inside a sentence. */
+/** 1234 → "1,234.00": a dollar figure inside a sentence. */
 function plain(amount: number): string {
   const cents = Math.round(Math.abs(amount) * 100)
   return `${Math.floor(cents / 100).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${String(cents % 100).padStart(2, '0')}`
@@ -58,7 +58,7 @@ export function priceMonth(profile: Pick<BillingProfile, 'lines' | 'currency' | 
   }
 }
 
-/** "Converted from USD 205.00 at a fixed rate of R18.00 / USD 1.00." */
+/** "Converted from USD 100.00 at a fixed rate of R17.50 / USD 1.00." */
 export function fxNote(totalUsd: number, rate: number): string {
   return `Converted from USD ${plain(totalUsd)} at a fixed rate of R${plain(rate)} / USD 1.00.`
 }

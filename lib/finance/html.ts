@@ -141,10 +141,10 @@ export interface RenderContext {
   replacement?: Pick<Invoice, 'number' | 'currency' | 'total'> | null
 }
 
-/** The payment reference an invoice asks for: "INV-0011". */
+/** The payment reference an invoice asks for: "INV-0123". */
 export const paymentReference = (number: string): string => `INV-${number}`
 
-/** "Invoice 0011", "Credit note CN-0005". */
+/** "Invoice 0123", "Credit note CN-0012". */
 export const documentName = (i: Pick<Invoice, 'kind' | 'number'>): string =>
   `${i.kind === 'credit_note' ? 'Credit note' : 'Invoice'} ${i.number}`
 
@@ -271,7 +271,7 @@ ${pay}
 `
 }
 
-/** The PDF's file name: "Invoice-0011-Acme-SA-ZAR-2026-12-15.pdf". */
+/** The PDF's file name: "Invoice-0123-Acme-SA-ZAR-2027-02-15.pdf". */
 export function pdfFileName(i: Pick<Invoice, 'kind' | 'number' | 'billTo' | 'currency' | 'issuedOn'>): string {
   const who = i.billTo.normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '')
   return `${i.kind === 'credit_note' ? 'CreditNote' : 'Invoice'}-${i.number}-${who || 'client'}-${i.currency}-${i.issuedOn}.pdf`

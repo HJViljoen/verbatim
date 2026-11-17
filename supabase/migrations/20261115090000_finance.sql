@@ -75,7 +75,8 @@ create table if not exists public.fin_billing_profiles (
   currency text not null default 'ZAR' check (currency in ('ZAR', 'USD')),
   -- Rand per dollar the dollar-priced lines are invoiced at. Fixed by
   -- agreement, never the live rate (cost_settings.usd_zar is the cost side's).
-  fx_rate numeric(8,4) not null default 18 check (fx_rate > 0),
+  -- No default: the agreed rate is always written by whoever makes the row.
+  fx_rate numeric(8,4) not null check (fx_rate > 0),
   -- [{description, unit_usd, qty}]: a month's lines, priced in dollars.
   lines jsonb not null default '[]'::jsonb check (jsonb_typeof(lines) = 'array'),
   subject_line text not null default '',
@@ -109,7 +110,7 @@ comment on table public.fin_billing_profiles is
 
 create table if not exists public.fin_invoices (
   id uuid primary key default gen_random_uuid(),
-  -- '0011', 'CN-0005': zero-padded, unique across both kinds.
+  -- '0123', 'CN-0012': zero-padded, unique across both kinds.
   number text not null unique check (number ~ '^(CN-)?[0-9]{4,}$'),
   kind text not null default 'invoice' check (kind in ('invoice', 'credit_note')),
   client_id uuid not null references public.clients(id) on delete restrict,

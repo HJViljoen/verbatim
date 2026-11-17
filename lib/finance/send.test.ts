@@ -14,8 +14,8 @@ import type { BillingProfile, Invoice } from './types'
 
 const JAN: Invoice = invoice({
   id: '00000000-0000-0000-0000-0000000000aa',
-  number: '0011', currency: 'ZAR', total: 3690, periodStart: '2027-01-01', periodLabel: 'January 2027',
-  issuedOn: '2026-12-15', dueOn: '2026-12-31', status: 'ready', pdfPath: 'client/0011.pdf', profileId: PROFILE.id, sentAt: null,
+  number: '0111', currency: 'ZAR', total: 2625, periodStart: '2027-01-01', periodLabel: 'January 2027',
+  issuedOn: '2026-12-15', dueOn: '2026-12-31', status: 'ready', pdfPath: 'client/0111.pdf', profileId: PROFILE.id, sentAt: null,
 })
 
 /** A port over one invoice row and one profile, with the claim done the way
@@ -65,22 +65,22 @@ describe('the invoice email', () => {
     expect(m.to).toEqual(['ap@acme.test'])
     expect(m.cc).toEqual(['buyer@acme.test', 'finance@acme.test'])
     expect(m.bcc).toEqual(['jane@example.test'])
-    expect(m.subject).toBe('Invoice 0011 for January 2027')
+    expect(m.subject).toBe('Invoice 0111 for January 2027')
     expect(m.text).toBe([
       'Hi John,',
-      'Please find attached invoice 0011 for January 2027: R3,690.00, due by 31 December 2026. The details and the bank account are on the invoice.',
+      'Please find attached invoice 0111 for January 2027: R2,625.00, due by 31 December 2026. The details and the bank account are on the invoice.',
       'Invoices now come from my Verbatim address; the bank details are unchanged.',
       'Thank you,\nJane Doe',
     ].join('\n\n'))
     expect(m.html).toContain('<p style="margin:0 0 14px">Hi John,</p>')
     expect(m.html).toContain('Thank you,<br>Jane Doe')
-    expect(m.filename).toBe('Invoice-0011-Acme-SA-ZAR-2026-12-15.pdf')
+    expect(m.filename).toBe('Invoice-0111-Acme-SA-ZAR-2026-12-15.pdf')
     expect(m.noteOnce).toBe('Invoices now come from my Verbatim address; the bank details are unchanged.')
   })
 
   it('leaves the one-off line out once it is cleared, and says "on receipt" with no due date', () => {
     const m = invoiceEmail({ ...JAN, dueOn: null }, ISSUER, { ...PROFILE, noteOnce: null, emailGreeting: null })
-    expect(m.text).toBe('Hello,\n\nPlease find attached invoice 0011 for January 2027: R3,690.00, due on receipt. The details and the bank account are on the invoice.\n\nThank you,\nJane Doe')
+    expect(m.text).toBe('Hello,\n\nPlease find attached invoice 0111 for January 2027: R2,625.00, due on receipt. The details and the bank account are on the invoice.\n\nThank you,\nJane Doe')
     expect(m.noteOnce).toBeNull()
   })
 
@@ -89,7 +89,7 @@ describe('the invoice email', () => {
     expect(m.to).toEqual(['operator@verbatim.test'])
     expect(m.cc).toEqual([])
     expect(m.bcc).toEqual([])
-    expect(m.subject).toBe('[Test] Invoice 0011 for January 2027')
+    expect(m.subject).toBe('[Test] Invoice 0111 for January 2027')
   })
 
   it('refuses to build an email with no sender or no recipient', () => {
@@ -101,20 +101,20 @@ describe('the invoice email', () => {
 })
 
 describe('issuing a month', () => {
-  it('asks the database for January at R3,690, due 31 December, billed in advance', () => {
+  it('asks the database for January at R2,625, due 31 December, billed in advance', () => {
     const month = nextBillablePeriod(PROFILE, [], '2026-12-15')
     expect(month).not.toBeNull()
     const args = issueArgs(PROFILE, month as NonNullable<typeof month>)
     expect(args).toMatchObject({
       p_profile_id: PROFILE.id, p_period_start: '2027-01-01', p_period_label: 'January 2027', p_issued_on: '2026-12-15',
-      p_due_on: '2026-12-31', p_total: 3690, p_fx_note: 'Converted from USD 205.00 at a fixed rate of R18.00 / USD 1.00.',
+      p_due_on: '2026-12-31', p_total: 2625, p_fx_note: 'Converted from USD 150.00 at a fixed rate of R17.50 / USD 1.00.',
       p_note: 'Billed monthly in advance: payment is due by the last day of the month before the billing period.',
     })
     expect(args.p_lines).toEqual([
-      { description: PROFILE.lines[0].description, qty: 1, unit: 'month', unit_price: 1800, amount: 1800 },
-      { description: PROFILE.lines[1].description, qty: 1, unit: 'month', unit_price: 540, amount: 540 },
-      { description: PROFILE.lines[2].description, qty: 1, unit: 'month', unit_price: 450, amount: 450 },
-      { description: PROFILE.lines[3].description, qty: 1, unit: 'month', unit_price: 900, amount: 900 },
+      { description: PROFILE.lines[0].description, qty: 1, unit: 'month', unit_price: 1400, amount: 1400 },
+      { description: PROFILE.lines[1].description, qty: 1, unit: 'month', unit_price: 700, amount: 700 },
+      { description: PROFILE.lines[2].description, qty: 1, unit: 'month', unit_price: 350, amount: 350 },
+      { description: PROFILE.lines[3].description, qty: 1, unit: 'month', unit_price: 175, amount: 175 },
     ])
   })
 })
@@ -130,7 +130,7 @@ describe('sending an invoice', () => {
     expect(profile.noteOnce).toBeNull()
     expect(sent).toHaveLength(1)
     expect(sent[0]).toMatchObject({ to: ['ap@acme.test'], cc: ['buyer@acme.test', 'finance@acme.test'], bcc: ['jane@example.test'] })
-    expect(sent[0].attachments).toEqual([{ filename: 'Invoice-0011-Acme-SA-ZAR-2026-12-15.pdf', content: Buffer.from('%PDF-1.4 test'), contentType: 'application/pdf' }])
+    expect(sent[0].attachments).toEqual([{ filename: 'Invoice-0111-Acme-SA-ZAR-2026-12-15.pdf', content: Buffer.from('%PDF-1.4 test'), contentType: 'application/pdf' }])
     expect(sent[0].idempotencyKey).toBe(`fin-invoice-${JAN.id}-2026-12-15T05:00:00.000Z`)
   })
 
@@ -138,7 +138,7 @@ describe('sending an invoice', () => {
     const after = fakePort()
     await sendInvoice(after.port, JAN.id)
     const again = await sendInvoice(after.port, JAN.id)
-    expect(again).toEqual({ ok: false, message: 'Invoice 0011 was sent already.' })
+    expect(again).toEqual({ ok: false, message: 'Invoice 0111 was sent already.' })
     expect(after.sent).toHaveLength(1)
 
     // Two at once: the email of the first is still in flight when the second
@@ -160,7 +160,7 @@ describe('sending an invoice', () => {
   it('puts a refused send back to ready with the reason, and keeps the hold and the note', async () => {
     const { port, row, profile } = fakePort({ email: async () => ({ sent: false, error: 'domain not verified' }) })
     const r = await sendInvoice(port, JAN.id)
-    expect(r).toEqual({ ok: false, message: 'Invoice 0011 did not send: domain not verified' })
+    expect(r).toEqual({ ok: false, message: 'Invoice 0111 did not send: domain not verified' })
     expect(row).toMatchObject({ status: 'ready', sendError: 'domain not verified', sendClaimedAt: null, emailMessageId: null })
     expect(profile.holdNext).toBe(true)
     expect(profile.noteOnce).not.toBeNull()
@@ -195,7 +195,7 @@ describe('sending an invoice', () => {
     const r = await sendInvoice(port, JAN.id, { test: true })
     expect(r).toMatchObject({ ok: true, message: 'Test sent to operator@verbatim.test.' })
     expect(sent).toHaveLength(1)
-    expect(sent[0]).toMatchObject({ to: ['operator@verbatim.test'], cc: [], bcc: [], subject: '[Test] Invoice 0011 for January 2027' })
+    expect(sent[0]).toMatchObject({ to: ['operator@verbatim.test'], cc: [], bcc: [], subject: '[Test] Invoice 0111 for January 2027' })
     expect(sent[0].attachments).toHaveLength(1)
     expect(row.status).toBe('sent')
     expect(profile.holdNext).toBe(true)

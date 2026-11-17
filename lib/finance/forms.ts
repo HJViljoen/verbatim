@@ -25,7 +25,7 @@ const EMAIL = /^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+$/
 /** The largest single payment the form takes: R10 million. */
 export const MAX_PAYMENT_CENTS = 10_000_000 * 100
 
-/** A typed amount in cents: "R29 520", "29,520.00", "$205" → cents; blank
+/** A typed amount in cents: "R1 234", "1,234.00", "$56" → cents; blank
  *  null; unreadable undefined. The rand reader (lib/family-loan/money.ts),
  *  with a leading dollar sign taken off too. */
 export function parseMoneyCents(raw: unknown): number | null | undefined {
@@ -46,7 +46,7 @@ export function parsePaymentForm(f: FormLike, today: string): Parsed<PaymentFiel
   if (!(FIN_CURRENCIES as readonly string[]).includes(currency)) return { ok: false, message: 'Pick the currency it came in.' }
   const cents = parseMoneyCents(f.get('amount'))
   if (cents === null) return { ok: false, message: 'Give the amount.' }
-  if (cents === undefined) return { ok: false, message: 'The amount must be a number with cents, like 29520 or 3690.00.' }
+  if (cents === undefined) return { ok: false, message: 'The amount must be a number with cents, like 1234 or 1234.50.' }
   if (cents <= 0) return { ok: false, message: 'The amount must be more than nothing.' }
   if (cents > MAX_PAYMENT_CENTS) return { ok: false, message: 'That is more than 10 million. Check the amount.' }
   return {
@@ -98,7 +98,7 @@ export function parseProfileForm(f: FormLike): Parsed<ProfileFields> {
   const currency = String(f.get('currency') ?? '')
   if (!(FIN_CURRENCIES as readonly string[]).includes(currency)) return { ok: false, message: 'Pick the currency it is invoiced in.' }
   const fxRate = Number(String(f.get('fxRate') ?? '').trim().replace(/^R ?/i, '').replace(',', '.'))
-  if (!Number.isFinite(fxRate) || fxRate <= 0 || fxRate >= 1000) return { ok: false, message: 'Give the fixed rate in rand per dollar, like 18.' }
+  if (!Number.isFinite(fxRate) || fxRate <= 0 || fxRate >= 1000) return { ok: false, message: 'Give the fixed rate in rand per dollar, like 17.50.' }
   const lines = parseLines(f)
   if (typeof lines === 'string') return { ok: false, message: lines }
   if (lines.length === 0) return { ok: false, message: 'Add at least one line.' }

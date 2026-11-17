@@ -62,7 +62,7 @@ insert into public.clients (id, company_name) values
   ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'Example Ltd');
 insert into public.fin_billing_profiles (id, client_id, bill_to, currency, fx_rate, lines, subject_line, send_mode, hold_next,
                                         email_to, your_ref, email_greeting)
-values ('cccccccc-cccc-cccc-cccc-cccccccccccc', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Acme SA', 'ZAR', 18,
+values ('cccccccc-cccc-cccc-cccc-cccccccccccc', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Acme SA', 'ZAR', 17.5,
         '[{"description": "Widget service", "unit_usd": 100, "qty": 1}]', 'Monthly services', 'auto', true,
         array['ap@acme.test'], 'Jane Doe', 'Hi Jane');
 
@@ -147,8 +147,8 @@ begin
   exception when check_violation then null;
   end;
   -- the backfill sets a counter past the hand-made invoices
-  update public.fin_counters set next_no = 11 where kind = 'credit_note';
-  if public.fin_take_number('credit_note') <> 11 then raise exception 'a set counter is not honoured'; end if;
+  update public.fin_counters set next_no = 41 where kind = 'credit_note';
+  if public.fin_take_number('credit_note') <> 41 then raise exception 'a set counter is not honoured'; end if;
 end $$;
 
 -- ── 4. A month is invoiced once ─────────────────────────────────────────────
@@ -160,26 +160,26 @@ declare
   c record;
 begin
   update public.fin_counters set next_no = 1 where kind = 'credit_note';
-  insert into public.fin_counters (kind, next_no) values ('invoice', 11);
+  insert into public.fin_counters (kind, next_no) values ('invoice', 121);
 
   select * into a from public.fin_issue_invoice('cccccccc-cccc-cccc-cccc-cccccccccccc', '2027-01-01', 'January 2027',
-    '2026-12-15', '2026-12-31', '[{"description": "Widget service", "qty": 1, "unit": "month", "unit_price": 1800, "amount": 1800}]',
-    1800, 'Converted from USD 100.00 at a fixed rate of R18.00 / USD 1.00.', null);
-  if not a.created or a.invoice_number <> '0011' then raise exception 'first issue: % %', a.created, a.invoice_number; end if;
+    '2026-12-15', '2026-12-31', '[{"description": "Widget service", "qty": 1, "unit": "month", "unit_price": 1750, "amount": 1750}]',
+    1750, 'Converted from USD 100.00 at a fixed rate of R17.50 / USD 1.00.', null);
+  if not a.created or a.invoice_number <> '0121' then raise exception 'first issue: % %', a.created, a.invoice_number; end if;
 
   select * into b from public.fin_issue_invoice('cccccccc-cccc-cccc-cccc-cccccccccccc', '2027-01-01', 'January 2027',
-    '2026-12-15', '2026-12-31', '[]', 1800, null, null);
-  if b.created or b.invoice_id <> a.invoice_id or b.invoice_number <> '0011' then
+    '2026-12-15', '2026-12-31', '[]', 1750, null, null);
+  if b.created or b.invoice_id <> a.invoice_id or b.invoice_number <> '0121' then
     raise exception 'second issue for the month: created % number %', b.created, b.invoice_number;
   end if;
-  if (select next_no from public.fin_counters where kind = 'invoice') <> 12 then
+  if (select next_no from public.fin_counters where kind = 'invoice') <> 122 then
     raise exception 'the second call burned a number: next is %', (select next_no from public.fin_counters where kind = 'invoice');
   end if;
   if (select count(*) from public.fin_invoices) <> 1 then raise exception 'two invoices for one month'; end if;
 
   -- the issued row carries the profile's words and starts as a draft
   if not exists (select 1 from public.fin_invoices where id = a.invoice_id and status = 'draft' and bill_to = 'Acme SA'
-                 and your_ref = 'Jane Doe' and currency = 'ZAR' and total = 1800.00 and due_on = '2026-12-31'
+                 and your_ref = 'Jane Doe' and currency = 'ZAR' and total = 1750.00 and due_on = '2026-12-31'
                  and profile_id = 'cccccccc-cccc-cccc-cccc-cccccccccccc') then
     raise exception 'the issued invoice does not carry the profile';
   end if;
@@ -194,8 +194,8 @@ begin
 
   -- the next month is its own
   select * into c from public.fin_issue_invoice('cccccccc-cccc-cccc-cccc-cccccccccccc', '2027-02-01', 'February 2027',
-    '2027-01-15', '2027-01-31', '[]', 1800, null, null);
-  if not c.created or c.invoice_number <> '0012' then raise exception 'next month: % %', c.created, c.invoice_number; end if;
+    '2027-01-15', '2027-01-31', '[]', 1750, null, null);
+  if not c.created or c.invoice_number <> '0122' then raise exception 'next month: % %', c.created, c.invoice_number; end if;
 
   -- another client's January is not this client's
   insert into public.fin_invoices (number, client_id, bill_to, period_label, period_start, issued_on, currency, total, status)
@@ -206,42 +206,42 @@ begin
   insert into public.fin_invoices (number, kind, client_id, bill_to, period_label, period_start, issued_on, currency, total,
                                    relates_to, status)
   values ('CN-0001', 'credit_note', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Acme SA', 'January 2027', '2027-01-01',
-          '2026-12-20', 'ZAR', 1800, a.invoice_id, 'sent');
+          '2026-12-20', 'ZAR', 1750, a.invoice_id, 'sent');
   update public.fin_invoices set status = 'credited' where id = a.invoice_id;
   insert into public.fin_invoices (number, client_id, bill_to, period_label, period_start, issued_on, currency, total,
                                    relates_to, status)
-  values ('0901', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Acme SA', 'January 2027', '2027-01-01', '2026-12-20', 'ZAR', 1800,
+  values ('0901', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Acme SA', 'January 2027', '2027-01-01', '2026-12-20', 'ZAR', 1750,
           a.invoice_id, 'sent');
   -- …and fin_issue_invoice now answers with the replacement
   select * into b from public.fin_issue_invoice('cccccccc-cccc-cccc-cccc-cccccccccccc', '2027-01-01', 'January 2027',
-    '2026-12-15', '2026-12-31', '[]', 1800, null, null);
+    '2026-12-15', '2026-12-31', '[]', 1750, null, null);
   if b.created or b.invoice_number <> '0901' then raise exception 'after the credit: % %', b.created, b.invoice_number; end if;
 
   -- a void invoice gives its month back as well
   update public.fin_invoices set status = 'void' where id = c.invoice_id;
   select * into c from public.fin_issue_invoice('cccccccc-cccc-cccc-cccc-cccccccccccc', '2027-02-01', 'February 2027',
-    '2027-01-15', '2027-01-31', '[]', 1800, null, null);
-  if not c.created or c.invoice_number <> '0013' then
+    '2027-01-15', '2027-01-31', '[]', 1750, null, null);
+  if not c.created or c.invoice_number <> '0123' then
     raise exception 'after the void: % %', c.created, c.invoice_number;
   end if;
 
   -- a counter set too low clashes on the number: that is an error the caller
   -- sees, never a quiet "already billed", and it leaves nothing behind
-  update public.fin_counters set next_no = 11 where kind = 'invoice';
+  update public.fin_counters set next_no = 121 where kind = 'invoice';
   begin
     perform public.fin_issue_invoice('cccccccc-cccc-cccc-cccc-cccccccccccc', '2027-03-01', 'March 2027',
-      '2027-02-15', '2027-02-28', '[]', 1800, null, null);
+      '2027-02-15', '2027-02-28', '[]', 1750, null, null);
     raise exception 'a taken number was issued again';
   exception when unique_violation then null;
   end;
   if exists (select 1 from public.fin_invoices where period_start = '2027-03-01') then raise exception 'a clash left a March row'; end if;
-  update public.fin_counters set next_no = 14 where kind = 'invoice';
+  update public.fin_counters set next_no = 124 where kind = 'invoice';
 
   -- a paused profile issues nothing
   update public.fin_billing_profiles set active = false where id = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
   begin
     perform public.fin_issue_invoice('cccccccc-cccc-cccc-cccc-cccccccccccc', '2027-03-01', 'March 2027',
-      '2027-02-15', '2027-02-28', '[]', 1800, null, null);
+      '2027-02-15', '2027-02-28', '[]', 1750, null, null);
     raise exception 'an inactive profile issued';
   exception when raise_exception then
     if sqlerrm not like '%not active%' then raise; end if;
@@ -267,7 +267,7 @@ begin
   foreach bad in array array[
     -- a credit note relates to an invoice, and is numbered CN-
     base || '(''CN-0009'', ''credit_note'', ''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''Acme SA'', ''x'', null, ''2026-01-01'', null, ''ZAR'', 1, null, ''sent'')',
-    base || '(''0098'', ''credit_note'', ''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''Acme SA'', ''x'', null, ''2026-01-01'', null, ''ZAR'', 1, (select id from public.fin_invoices where number = ''0011''), ''sent'')',
+    base || '(''0098'', ''credit_note'', ''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''Acme SA'', ''x'', null, ''2026-01-01'', null, ''ZAR'', 1, (select id from public.fin_invoices where number = ''0121''), ''sent'')',
     base || '(''CN-0098'', ''invoice'', ''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''Acme SA'', ''x'', null, ''2026-01-01'', null, ''ZAR'', 1, null, ''sent'')',
     -- a number is digits, four at least
     base || '(''11'', ''invoice'', ''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''Acme SA'', ''x'', null, ''2026-01-01'', null, ''ZAR'', 1, null, ''sent'')',
@@ -279,7 +279,7 @@ begin
     base || '(''0094'', ''invoice'', ''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''Acme SA'', ''x'', null, ''2026-01-10'', null, ''EUR'', 1, null, ''sent'')',
     base || '(''0093'', ''invoice'', ''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''Acme SA'', ''x'', null, ''2026-01-10'', null, ''ZAR'', 1, null, ''paid'')',
     -- a number once, across both kinds
-    base || '(''0011'', ''invoice'', ''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''Acme SA'', ''x'', null, ''2026-01-10'', null, ''ZAR'', 1, null, ''sent'')',
+    base || '(''0121'', ''invoice'', ''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''Acme SA'', ''x'', null, ''2026-01-10'', null, ''ZAR'', 1, null, ''sent'')',
     -- a client that does not exist
     base || '(''0092'', ''invoice'', ''dddddddd-dddd-dddd-dddd-dddddddddddd'', ''Acme SA'', ''x'', null, ''2026-01-10'', null, ''ZAR'', 1, null, ''sent'')',
     -- payments: positive, dated, in a currency the code knows
@@ -287,8 +287,10 @@ begin
     'insert into public.fin_payments (client_id, received_on, amount, currency) values (''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', null, 10, ''ZAR'')',
     'insert into public.fin_payments (client_id, received_on, amount, currency) values (''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''2026-01-01'', 10, ''GBP'')',
     -- a profile: one per client, an issue day a short month has
-    'insert into public.fin_billing_profiles (client_id, bill_to) values (''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''Acme again'')',
-    'insert into public.fin_billing_profiles (client_id, bill_to, issue_day) values (''bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'', ''Example'', 31)',
+    'insert into public.fin_billing_profiles (client_id, bill_to, fx_rate) values (''aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'', ''Acme again'', 17.5)',
+    'insert into public.fin_billing_profiles (client_id, bill_to, fx_rate, issue_day) values (''bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'', ''Example'', 17.5, 31)',
+    -- the agreed rate is always given: there is no default
+    'insert into public.fin_billing_profiles (client_id, bill_to) values (''bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'', ''Example'')',
     -- one issuer row
     'insert into public.fin_issuer (id, name) values (false, ''Jane Doe'')'
   ] loop
@@ -305,7 +307,7 @@ begin
   values ('Jane Doe', array['1 Test Street', 'Testville'], '[{"label": "Bank", "value": "Example Bank"}]',
           'Jane Doe <jane@example.test>', 'jane@example.test');
   insert into public.fin_payments (client_id, received_on, amount, currency, reference)
-  values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2026-12-20', 1800.00, 'ZAR', 'INV-0901');
+  values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2026-12-20', 1750.00, 'ZAR', 'INV-0901');
   insert into public.fin_vendor_usage (vendor, period_start, period_end, usd) values ('apify', '2026-11-09', '2026-12-08', 0.53);
   insert into public.fin_vendor_usage (vendor, period_start, period_end, usd) values ('apify', '2026-11-09', '2026-12-08', 0.71)
   on conflict (vendor, period_start) do update set usd = excluded.usd;

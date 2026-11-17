@@ -7,13 +7,13 @@ const form = (o: Record<string, string>) => ({ get: (k: string) => (k in o ? o[k
 const CLIENT = '00000000-0000-0000-0000-00000000c11e'
 
 describe('a payment', () => {
-  const ok = { clientId: CLIENT, receivedOn: '2026-11-28', amount: 'R29 520.00', currency: 'ZAR', reference: 'INV-0006' }
+  const ok = { clientId: CLIENT, receivedOn: '2026-11-28', amount: 'R12 345.00', currency: 'ZAR', reference: 'INV-0106' }
 
   it('reads what the bank statement says', () => {
     expect(parsePaymentForm(form(ok), '2026-11-28')).toEqual({
-      ok: true, value: { clientId: CLIENT, receivedOn: '2026-11-28', amount: 29520, currency: 'ZAR', reference: 'INV-0006', note: null },
+      ok: true, value: { clientId: CLIENT, receivedOn: '2026-11-28', amount: 12345, currency: 'ZAR', reference: 'INV-0106', note: null },
     })
-    expect(parsePaymentForm(form({ ...ok, amount: '$205', currency: 'USD' }), '2026-11-28')).toMatchObject({ ok: true, value: { amount: 205, currency: 'USD' } })
+    expect(parsePaymentForm(form({ ...ok, amount: '$150', currency: 'USD' }), '2026-11-28')).toMatchObject({ ok: true, value: { amount: 150, currency: 'USD' } })
     expect(parsePaymentForm(form({ ...ok, amount: '1 250,50' }), '2026-11-28')).toMatchObject({ ok: true, value: { amount: 1250.5 } })
   })
 
@@ -41,13 +41,13 @@ describe('the other fields', () => {
     expect(parseEmails('ap@acme.test, Buyer@Acme.test;finance@acme.test  ap@acme.test')).toEqual(['ap@acme.test', 'buyer@acme.test', 'finance@acme.test'])
     expect(parseEmails('')).toEqual([])
     expect(parseEmails('ap@acme.test, nobody')).toBeUndefined()
-    expect(parseMoneyCents('$1,025.00')).toBe(102500)
+    expect(parseMoneyCents('$1,234.00')).toBe(123400)
   })
 })
 
 describe('a billing profile', () => {
   const ok = {
-    billTo: 'Acme SA', currency: 'ZAR', fxRate: '18', issueDay: '15', dueRule: 'end_of_prev_month', sendMode: 'auto',
+    billTo: 'Acme SA', currency: 'ZAR', fxRate: '17.50', issueDay: '15', dueRule: 'end_of_prev_month', sendMode: 'auto',
     'lines.0.description': 'Widget hosting', 'lines.0.unitUsd': '100', 'lines.0.qty': '1',
     'lines.1.description': 'Data feeds', 'lines.1.unitUsd': '30.50', 'lines.1.qty': '',
     'lines.2.description': '', 'lines.2.unitUsd': '', 'lines.2.qty': '1',
@@ -60,7 +60,7 @@ describe('a billing profile', () => {
     expect(r).toEqual({
       ok: true,
       value: {
-        active: true, billTo: 'Acme SA', currency: 'ZAR', fxRate: 18, subjectLine: 'Monthly services', issueDay: 15,
+        active: true, billTo: 'Acme SA', currency: 'ZAR', fxRate: 17.5, subjectLine: 'Monthly services', issueDay: 15,
         dueRule: 'end_of_prev_month', sendMode: 'auto', holdNext: true,
         lines: [{ description: 'Widget hosting', unitUsd: 100, qty: 1 }, { description: 'Data feeds', unitUsd: 30.5, qty: 1 }],
         emailTo: ['ap@acme.test'], emailCc: ['buyer@acme.test'], emailBcc: [], yourRef: 'John Smith', emailGreeting: 'Hi John', noteOnce: null,

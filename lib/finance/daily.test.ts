@@ -9,8 +9,8 @@ import type { Invoice } from './types'
 // them). Made-up names.
 
 const READY: Invoice = invoice({
-  number: '0011', currency: 'ZAR', total: 3690, periodStart: '2027-01-01', periodLabel: 'January 2027', issuedOn: '2026-12-15',
-  dueOn: '2026-12-31', status: 'ready', pdfPath: 'c/0011.pdf', profileId: PROFILE.id, sentAt: null,
+  number: '0111', currency: 'ZAR', total: 2625, periodStart: '2027-01-01', periodLabel: 'January 2027', issuedOn: '2026-12-15',
+  dueOn: '2026-12-31', status: 'ready', pdfPath: 'c/0111.pdf', profileId: PROFILE.id, sentAt: null,
 })
 
 describe('the day a run acts for', () => {
@@ -48,34 +48,34 @@ describe('who sends what', () => {
 describe('what the operator is told', () => {
   it('says a held invoice once, by the day it was issued, with a link to Ops → Costs', () => {
     const n = holdNotices([READY])
-    expect(n).toEqual([{ invoiceId: READY.id, number: '0011', kind: 'ready', onDay: '2026-12-15', line: '0011 (Acme SA, January 2027): R3,690.00, due 31 December 2026' }])
+    expect(n).toEqual([{ invoiceId: READY.id, number: '0111', kind: 'ready', onDay: '2026-12-15', line: '0111 (Acme SA, January 2027): R2,625.00, due 31 December 2026' }])
     const mail = noticeEmail('hold', n, 'https://app.example.test/dashboard/ops/costs')
-    expect(mail.subject).toBe('Invoice 0011 is ready and waiting for you')
+    expect(mail.subject).toBe('Invoice 0111 is ready and waiting for you')
     expect(mail.text).toContain('Nothing goes to the client until you press Send on Ops → Costs.')
-    expect(mail.text).toContain('• 0011 (Acme SA, January 2027): R3,690.00, due 31 December 2026')
+    expect(mail.text).toContain('• 0111 (Acme SA, January 2027): R2,625.00, due 31 December 2026')
     expect(mail.text).toContain('Open it: https://app.example.test/dashboard/ops/costs')
   })
 
   it('nudges each unpaid invoice once past its due date, and once on its promised day', () => {
     const { invoices, payments } = yearOfInvoices()
-    const withPromise = invoices.map((i) => (i.number === '0010' ? { ...i, expectedOn: '2026-11-28' } : i))
+    const withPromise = invoices.map((i) => (i.number === '0110' ? { ...i, expectedOn: '2026-11-28' } : i))
     const on17 = nudgeNotices(withPromise, applyPayments(withPromise, payments, '2026-11-17'), '2026-11-17')
     expect(on17).toEqual([]) // due on receipt on the 17th: not late on the 17th
     const on28 = nudgeNotices(withPromise, applyPayments(withPromise, payments, '2026-11-28'), '2026-11-28')
     expect(on28.map((n) => [n.number, n.kind, n.onDay])).toEqual([
-      ['0006', 'overdue', '2026-11-17'], ['0007', 'overdue', '2026-11-17'], ['0008', 'overdue', '2026-11-17'],
-      ['0009', 'overdue', '2026-11-17'], ['0010', 'expected', '2026-11-28'],
+      ['0106', 'overdue', '2026-11-17'], ['0107', 'overdue', '2026-11-17'], ['0108', 'overdue', '2026-11-17'],
+      ['0109', 'overdue', '2026-11-17'], ['0110', 'expected', '2026-11-28'],
     ])
     const mail = noticeEmail('nudge', on28, 'https://app.example.test/dashboard/ops/costs')
     expect(mail.subject).toBe('Money owed: 5 invoices unpaid')
-    expect(mail.text).toContain('• 0007 (Acme SA, Past costs (prior to August 2026)): R14,760.00, due on receipt (issued 17 November 2026)')
+    expect(mail.text).toContain('• 0107 (Acme SA, Past costs (prior to August 2026)): R7,875.00, due on receipt (issued 17 November 2026)')
     expect(mail.text).toContain('promised for 28 November 2026')
     expect(mail.text).toContain('never to the client')
   })
 
   it('says nothing about what is paid, credited or not yet sent', () => {
     const { invoices, payments } = yearOfInvoices()
-    const all = [...payments, { id: 'p', clientId: invoices[0].clientId, receivedOn: '2026-11-20', amount: 29520, currency: 'ZAR' as const, reference: null, note: null }]
+    const all = [...payments, { id: 'p', clientId: invoices[0].clientId, receivedOn: '2026-11-20', amount: 18375, currency: 'ZAR' as const, reference: null, note: null }]
     expect(nudgeNotices(invoices, applyPayments(invoices, all, '2026-12-05'), '2026-12-05')).toEqual([])
     expect(nudgeNotices([READY], applyPayments([READY], [], '2027-02-01'), '2027-02-01')).toEqual([])
   })
