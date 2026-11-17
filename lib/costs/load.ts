@@ -54,8 +54,13 @@ export interface CostsData {
   usage: UsageRow[]
   recentRuns: RecentRun[]
   apifyCycle: Cycle
-  /** Apify spend recorded since the cycle began. */
+  /** Apify spend in this cycle: Apify's own figure when the daily job has
+   *  read it (fin_vendor_usage), else what the runs recorded since the cycle
+   *  began. */
   apifyCycleSpendUsd: number
+  /** Where apifyCycleSpendUsd came from, and when Apify's figure was read. */
+  apifyCycleSource: 'api' | 'runs'
+  apifyApiReadAt: string | null
   /** OpenAI spend logged since the balance day began (every call, transcripts
    *  included), or null with no balance entered. */
   openaiSinceBalanceUsd: number | null
@@ -120,13 +125,18 @@ export async function loadCosts(admin: Admin, now: Date): Promise<CostsData> {
   // Second wave: two windows that depend on the settings row.
   const apifyCycle = billingCycle(today, settings.apifyCycleDay)
   const spend = (from: string) => admin.rpc('cost_spend_between', { p_from: jhbDayStart(from), p_to: now.toISOString() })
-  const [cycleRes, balanceRes] = await Promise.all([
+  const [cycleRes, balanceRes, vendorRes] = await Promise.all([
     spend(apifyCycle.start),
     settings.openaiBalanceOn ? spend(settings.openaiBalanceOn) : Promise.resolve(null),
+    admin.from('fin_vendor_usage').select('usd, fetched_at').eq('vendor', 'apify').eq('period_start', apifyCycle.start).maybeSingle(),
   ])
   const byVendor = (rows: Row[]) => new Map(rows.map((r) => [String(r.vendor), Number(r.usd ?? 0)]))
   const cycle = byVendor(check<Row[]>('cost_spend_between', cycleRes))
   const balance = balanceRes ? byVendor(check<Row[]>('cost_spend_between', balanceRes)) : null
+  // Apify's own figure, once the finance migration is in and the job has read
+  // it; until then (no table, no row) the runs' own record, as before.
+  const vendor = vendorRes.error ? null : (vendorRes.data as Row | null)
+  if (vendorRes.error && !MISSING.has(vendorRes.error.code ?? '')) console.error('costs: fin_vendor_usage:', vendorRes.error.message)
 
   return {
     today,
@@ -138,7 +148,9 @@ export async function loadCosts(admin: Admin, now: Date): Promise<CostsData> {
     usage,
     recentRuns,
     apifyCycle,
-    apifyCycleSpendUsd: cycle.get('apify') ?? 0,
+    apifyCycleSpendUsd: vendor ? Number(vendor.usd ?? 0) : (cycle.get('apify') ?? 0),
+    apifyCycleSource: vendor ? 'api' : 'runs',
+    apifyApiReadAt: vendor?.fetched_at ? String(vendor.fetched_at) : null,
     // What draws on the prepaid credit: every logged call, transcripts
     // included. A transcript row's cost is OpenAI tokens on both paths
     // (whisper-1, and the speech actor's content check); the actor's own

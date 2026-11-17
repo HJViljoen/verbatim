@@ -368,6 +368,71 @@ export async function sendReportEmail(report: ReportEmail): Promise<{ sent: bool
   }
 }
 
+export interface InvoiceMail {
+  /** The issuer's own sender ("Name <address>" on the verified domain), not
+   *  EMAIL_FROM: an invoice is from the person who issues it. */
+  from: string
+  replyTo?: string | null
+  to: string[]
+  cc?: string[]
+  bcc?: string[]
+  subject: string
+  text: string
+  html: string
+  attachments: EmailAttachment[]
+  /** Resend's Idempotency-Key: a retry of the same send is not sent twice. */
+  idempotencyKey: string
+}
+
+/**
+ * Whether Resend's refusal means the email was certainly NOT accepted: a 4xx
+ * answer (validation, a bad sender, a missing key, a rate or quota limit) is
+ * given before anything is queued. A 409 is an idempotency clash, which can
+ * follow an attempt that WAS accepted, and a 5xx, a missing status or a throw
+ * (a timeout, a dropped connection) says nothing either way: those are
+ * "unknown", and the invoice is not sent again without a person (pure).
+ */
+export function invoiceFailureIsDefinite(error: { statusCode?: number | null } | null | undefined): boolean {
+  const code = error?.statusCode
+  return typeof code === 'number' && code >= 400 && code < 500 && code !== 409
+}
+
+// An invoice to a client (Finance, 2026-11-17; lib/finance/send.ts). Unlike
+// the other sends here it REPORTS a failure instead of swallowing it, and
+// says whether the failure is DEFINITE (nothing was sent: the invoice may be
+// sent again) or not (it may have gone: a person checks first). Unconfigured
+// is a definite failure.
+export async function sendInvoiceEmail(mail: InvoiceMail): Promise<{ sent: true; id: string } | { sent: false; error: string; definite: boolean }> {
+  if (!resend) {
+    console.log(`[email:stub] invoice "${mail.subject}" -> ${mail.to.join(', ')}`)
+    return { sent: false, error: 'Email is not configured here (RESEND_API_KEY is not set).', definite: true }
+  }
+  try {
+    const { data, error } = await resend.emails.send(
+      {
+        from: mail.from,
+        to: mail.to,
+        ...(mail.cc?.length ? { cc: mail.cc } : {}),
+        ...(mail.bcc?.length ? { bcc: mail.bcc } : {}),
+        ...(mail.replyTo ? { replyTo: mail.replyTo } : {}),
+        subject: mail.subject,
+        text: mail.text,
+        html: mail.html,
+        attachments: mail.attachments.map((a) => ({ filename: a.filename, content: a.content, ...(a.contentType ? { contentType: a.contentType } : {}) })),
+      },
+      { idempotencyKey: mail.idempotencyKey },
+    )
+    if (error || !data?.id) {
+      console.error('[email] invoice send failed:', error)
+      return { sent: false, error: error?.message ?? 'The email service gave no answer.', definite: invoiceFailureIsDefinite(error) }
+    }
+    return { sent: true, id: data.id }
+  } catch (err) {
+    console.error('[email] invoice send threw:', err)
+    return { sent: false, error: err instanceof Error ? err.message : 'The email service gave no answer.', definite: false }
+  }
+}
+
 /** Who the invite says it is from, as the body names them: the person's name
  *  when we have one, else their address, else nobody.
  *
