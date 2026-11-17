@@ -5,8 +5,8 @@ import { nextBillablePeriod, type BillableMonth } from './periods'
 import { linesToJson } from './rows'
 import type { BillingProfile } from './types'
 
-// Issuing a month's invoice (the daily job's first step, and the page's
-// "Issue now"). The pure part decides the month and the lines; the database
+// Issuing a month's invoice (the daily job's 'issue' step; nothing else
+// issues one). The pure part decides the month and the lines; the database
 // takes the number and inserts in one transaction (fin_issue_invoice), so a
 // month already billed answers with its invoice and no number is burned. Run
 // twice for one day, it makes one invoice.

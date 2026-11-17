@@ -76,7 +76,7 @@ export async function loadInvoiceContext(admin: Admin, id: string): Promise<Invo
   if (!row) return null
   const invoice = invoiceFromRow(row)
   const issuer = issuerFromRow(check<Row | null>('fin_issuer', issuerRes))
-  if (!issuer) throw new Error('finance: no issuer row (fin_issuer); run the backfill or fill it in on the page')
+  if (!issuer) throw new Error('finance: no issuer row (fin_issuer); run scripts/finance-backfill.ts')
 
   const [relatedRes, replacementRes, profileRes, newestRes] = await Promise.all([
     invoice.relatesTo ? admin.from('fin_invoices').select('*').eq('id', invoice.relatesTo).maybeSingle() : Promise.resolve(null),
