@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { attentionLines, holdNotices, noticeEmail, nudgeNotices, planSends, runDay } from './daily'
 import { PROFILE, invoice, yearOfInvoices } from './fixtures'
+import { PROD_REF } from './prod'
 import { nextBillablePeriod } from './periods'
 import { applyPayments } from './ledger'
 import type { Invoice } from './types'
@@ -15,13 +16,19 @@ const READY: Invoice = invoice({
 })
 
 describe('the day a run acts for', () => {
-  it('is today in Johannesburg, or an injected day anywhere but production', () => {
+  it('is today in Johannesburg, or an injected day only away from the real books', () => {
     const now = new Date('2026-12-14T22:30:00.000Z') // 00:30 on the 15th in Johannesburg
-    expect(runDay(now, undefined, 'production')).toEqual({ today: '2026-12-15', injected: false })
-    expect(runDay(now, '2027-03-15', 'production')).toEqual({ today: '2026-12-15', injected: false })
-    expect(runDay(now, '2026-12-15', 'preview')).toEqual({ today: '2026-12-15', injected: true })
-    expect(runDay(now, '2026-12-15', undefined)).toEqual({ today: '2026-12-15', injected: true })
-    expect(runDay(now, '15 Dec', undefined)).toEqual({ today: '2026-12-15', injected: false })
+    const staging = 'https://stagingref.supabase.co'
+    const prodDb = `https://${PROD_REF}.supabase.co`
+    expect(runDay(now, undefined, { vercelEnv: 'production', supabaseUrl: prodDb })).toEqual({ today: '2026-12-15', injected: false })
+    expect(runDay(now, '2027-03-15', { vercelEnv: 'production', supabaseUrl: prodDb })).toEqual({ today: '2026-12-15', injected: false })
+    // a dev server or a preview on production's database (.env.local): refused too
+    expect(runDay(now, '2027-03-15', { vercelEnv: undefined, supabaseUrl: prodDb })).toEqual({ today: '2026-12-15', injected: false })
+    expect(runDay(now, '2027-03-15', { vercelEnv: 'preview', supabaseUrl: prodDb })).toEqual({ today: '2026-12-15', injected: false })
+    expect(runDay(now, '2027-03-15', { vercelEnv: 'production', supabaseUrl: staging })).toEqual({ today: '2026-12-15', injected: false })
+    // a rehearsal on another database
+    expect(runDay(now, '2027-03-15', { vercelEnv: 'preview', supabaseUrl: staging })).toEqual({ today: '2027-03-15', injected: true })
+    expect(runDay(now, '15 Dec', { vercelEnv: undefined, supabaseUrl: staging })).toEqual({ today: '2026-12-15', injected: false })
   })
 })
 

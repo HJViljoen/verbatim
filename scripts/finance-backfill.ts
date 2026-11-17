@@ -5,6 +5,7 @@ import { createAdminClient } from '../lib/supabase-admin'
 import { INVOICE_BUCKET } from '../lib/finance/html'
 import { applyPayments } from '../lib/finance/ledger'
 import { fmtMoney } from '../lib/finance/money'
+import { PROD_REF } from '../lib/finance/prod'
 import { checkSeed, insertOrder, seedSql, seedUploads, type Seed } from '../lib/finance/seed'
 import type { Invoice, Payment } from '../lib/finance/types'
 
@@ -35,8 +36,6 @@ import type { Invoice, Payment } from '../lib/finance/types'
  *   PROD_DB_URL=postgresql://… node --env-file=.env.local --import tsx \
  *     scripts/finance-backfill.ts --seed <seed> --apply --target PROD_DB_URL --i-mean-prod
  */
-
-const PROD_REF = 'mkwjlckescdveosvrvaq'
 
 function arg(name: string): string | null {
   const i = process.argv.indexOf(name)

@@ -3,6 +3,7 @@ import { longDate } from './email'
 import type { Ledger } from './ledger'
 import { fmtMoney } from './money'
 import { monthOf } from './periods'
+import { PROD_REF } from './prod'
 import type { BillingProfile, Invoice, NoticeKind } from './types'
 
 // The daily job's decisions (inngest/functions/finance-daily.ts), pure: which
@@ -12,12 +13,18 @@ import type { BillingProfile, Invoice, NoticeKind } from './types'
 
 /**
  * The day the run acts for: today in Johannesburg, or an injected day for a
- * rehearsal. An injected day is honoured everywhere BUT production, so a
- * stray event can never bill a month early on the real books.
+ * rehearsal. An injected day is refused on the production deployment AND
+ * wherever the database is production's (a dev server on .env.local reads
+ * the real books), so a stray event can never bill a month early on them.
  */
-export function runDay(now: Date, injected: unknown, vercelEnv: string | undefined): { today: string; injected: boolean } {
+export function runDay(
+  now: Date,
+  injected: unknown,
+  env: { vercelEnv: string | undefined; supabaseUrl: string | undefined },
+): { today: string; injected: boolean } {
   const ok = typeof injected === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(injected) && !Number.isNaN(Date.parse(`${injected}T00:00:00Z`))
-  if (ok && vercelEnv !== 'production') return { today: injected, injected: true }
+  const realBooks = env.vercelEnv === 'production' || (env.supabaseUrl ?? '').includes(PROD_REF)
+  if (ok && !realBooks) return { today: injected, injected: true }
   return { today: todayJhb(now), injected: false }
 }
 

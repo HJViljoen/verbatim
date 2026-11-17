@@ -10,8 +10,9 @@ import { createAdminClient } from '@/lib/supabase-admin'
 // finance-daily (Finance, 2026-11-17): the month's invoice makes and sends
 // itself, billed in advance, and the operator hears about money owed.
 // 07:00 SAST every day; or on `finance/daily.run` with an optional
-// `{ today: 'YYYY-MM-DD' }` for a rehearsal (ignored in production, so a stray
-// event never bills a month early: lib/finance/daily.ts runDay).
+// `{ today: 'YYYY-MM-DD' }` for a rehearsal (ignored in production and
+// wherever the database is production's, so a stray event never bills a
+// month early: lib/finance/daily.ts runDay).
 //
 // Steps (ids are a stability contract, see AGENTS.md):
 //   'day'               the day the run acts for
@@ -45,7 +46,10 @@ export const financeDaily = inngest.createFunction(
     triggers: [{ cron: 'TZ=Africa/Johannesburg 0 7 * * *' }, { event: 'finance/daily.run' }],
   },
   async ({ event, step }) => {
-    const day = await step.run('day', () => runDay(new Date(), (event?.data as { today?: unknown } | undefined)?.today, process.env.VERCEL_ENV))
+    const day = await step.run('day', () => runDay(new Date(), (event?.data as { today?: unknown } | undefined)?.today, {
+      vercelEnv: process.env.VERCEL_ENV,
+      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    }))
     const { today } = day
     const problems: string[] = []
 
