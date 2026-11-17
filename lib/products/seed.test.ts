@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import { OSSUR_PRODUCTS } from '../../scripts/seeds/ossur-products'
-import { OSSUR_CLIENT_ID } from '../config'
+import { SEALAND_PRODUCTS } from '../../scripts/seeds/sealand-products'
+import { OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../config'
 import { FIXTURE_SEED } from '../test/products-fixtures'
 import { compileCatalogue } from './rules'
 import { seedCatalogue, seedId, seedProblems, seedRows, type CatalogueSeed } from './seed'
@@ -77,6 +78,45 @@ describe('the Össur seed (scripts/seeds/ossur-products.ts, for Heinrich\'s revi
       expect(at, p.name).toBeGreaterThan(0)
       const before = src.slice(0, at).split('\n').slice(-4).join('\n')
       expect(before, p.name).toMatch(/\/\/ https:\/\/(www|media)\.ossur\.com\//)
+    }
+  })
+})
+
+describe('the Sealand seed (scripts/seeds/sealand-products.ts, for review)', () => {
+  const rows = seedRows(SEALAND_PRODUCTS)
+  const aliases = new Set(rows.aliases.map((a) => a.alias.toLowerCase()))
+  const flagged = new Set(rows.aliases.filter((a) => a.needsConfirm).map((a) => a.alias.toLowerCase()))
+
+  it('loads: no problem, every alias compiled, the bag categories shoppers name', () => {
+    expect(seedProblems(SEALAND_PRODUCTS)).toEqual([])
+    expect(compileCatalogue(seedCatalogue(SEALAND_PRODUCTS), SEALAND_CLIENT_ID).refused).toEqual([])
+    const names = rows.groups.map((g) => g.name.toLowerCase())
+    for (const want of ['backpacks', 'crossbody', 'duffels', 'totes', 'laptop']) expect(names.some((n) => n.includes(want)), want).toBe(true)
+    expect(SEALAND_PRODUCTS.seededFrom).toBe('sealandgear.com')
+  })
+
+  it('flags the names that are plain descriptions, other brands\' or another topic\'s', () => {
+    for (const g of [
+      'moon bag', 'mini crossbody', 'messenger crossbody', 'roamer backpack', 'roamer', 'buddy backpack', 'hero backpack', 'hero pro',
+      'zeplin', 'nomad duffel', 'large wheelie', 'toastie', 'family tote', 'canvas tote', 'slim laptop bag', 'trail mate', 'boxy tee', 'quarter zip',
+    ]) expect(flagged.has(g), g).toBe(true)
+  })
+
+  it('no category word is generic (the confirm reads one as a prosthetic product), and the words that read wrong are left out', () => {
+    expect(rows.aliases.filter((a) => a.kind === 'category_word' && a.needsConfirm).map((a) => a.alias)).toEqual([])
+    for (const out of ['bag', 'tote', 'totes', 'cap', 'carry-on', 'keychain', 'wallet', 'water bottle', 'laptop sleeve', 'card holder', 'key ring', 'cool bag']) {
+      expect(aliases.has(out), out).toBe(false)
+    }
+  })
+
+  it('carries a source page above every product', async () => {
+    const { readFileSync } = await import('node:fs')
+    const src = readFileSync(new URL('../../scripts/seeds/sealand-products.ts', import.meta.url), 'utf8')
+    for (const p of rows.products) {
+      const at = src.indexOf(`name: '${p.name.replace(/'/g, "\\'")}'`)
+      expect(at, p.name).toBeGreaterThan(0)
+      const before = src.slice(0, at).split('\n').slice(-5).join('\n')
+      expect(before, p.name).toMatch(/\/\/ https:\/\/sealandgear\.com\/products\//)
     }
   })
 })
