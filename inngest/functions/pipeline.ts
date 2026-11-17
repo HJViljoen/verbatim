@@ -49,6 +49,7 @@ import { CLASSIFY_PARALLEL, COMMENT_BATCH, COMMENT_PARALLEL, countSteps, fanOut,
 import { writeRunCosts, runSpendSoFar } from '@/lib/pipeline/run-costs'
 import { withApifyRunContext, settleApifyRuns } from '@/lib/gather/apify-runs'
 import { decideOpenRun, runIdForEvent, RUN_STALE_AFTER_HOURS, PG_UNIQUE_VIOLATION, type RunningRow } from '@/lib/pipeline/run-guard'
+import { handleRunFailure } from '@/lib/pipeline/run-failure'
 import { persistRunNews } from '@/lib/news/persist'
 import { persistThemes, loadThemes } from '@/lib/pipeline/themes'
 import { writeRunSummary } from '@/lib/pipeline/run-summary'
@@ -238,29 +239,28 @@ export const runPipeline = inngest.createFunction(
     // A function-level failure (a step out of retries) would otherwise strand
     // the run row at 'running' forever — pages and monitors need a terminal
     // state (found live: the first cloud run's gather timeouts did exactly this).
-    onFailure: async ({ event }) => {
+    //
+    // An update that fails throws before the last attempt, so Inngest runs
+    // the handler again, and the alert names the client by its id where its
+    // name cannot be read (lib/pipeline/run-failure.ts; 15 Nov, d8a15862).
+    onFailure: async ({ event, attempt, maxAttempts }) => {
       const original = (event.data as { event?: { data?: { clientId?: string; options?: PipelineRunOptions } } }).event
       const clientId = original?.data?.clientId
       if (!clientId) return
       const message = (event.data as { error?: { message?: string } }).error?.message ?? 'pipeline function failed'
       const admin = createAdminClient()
-      await admin.from('pipeline_runs')
-        .update({ status: 'failed', error_message: message, completed_at: new Date().toISOString() })
-        .eq('client_id', clientId).eq('status', 'running')
       // Operator alert — before this, a dead run was only ever a DB row
       // nobody was looking at (scheduled runs are unattended).
-      const { data: client } = await admin.from('clients')
-        .select('company_name').eq('id', clientId).maybeSingle()
-      await sendAlertEmail(
-        `Verbatim run FAILED — ${client?.company_name ?? clientId}`,
-        `Pipeline run failed after retries.\n\nClient: ${client?.company_name ?? '?'} (${clientId})\nError: ${message}\n\nResume lever: POST /api/admin/trigger-run with options {runId, skipGather:true}.` +
-          // A resume without sendReport is a MANUAL run (5 Oct): its weekly
-          // read goes in the past issues and nobody, the reviewer included,
-          // is emailed. A scheduled run's resume must say it is one.
-          (original?.data?.options?.sendReport
-            ? ` This was a SCHEDULED run: add "sendReport": true to those options, so its report runs as scheduled and the review email still goes out.`
-            : ''),
-      )
+      await handleRunFailure({
+        markFailed: () => admin.from('pipeline_runs')
+          .update({ status: 'failed', error_message: message, completed_at: new Date().toISOString() })
+          .eq('client_id', clientId).eq('status', 'running'),
+        companyName: async () => {
+          const { data, error } = await admin.from('clients').select('company_name').eq('id', clientId).maybeSingle()
+          return { name: (data as { company_name?: string | null } | null)?.company_name ?? null, error }
+        },
+        alert: sendAlertEmail,
+      }, { clientId, message, scheduled: Boolean(original?.data?.options?.sendReport), attempt, maxAttempts })
     },
   },
   async ({ event, step: inngestStep, attempt, maxAttempts }) => {
