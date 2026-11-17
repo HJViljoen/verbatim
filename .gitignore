@@ -54,3 +54,7 @@ scratch-*
 
 # graphify knowledge graph (local tool output; rebuildable)
 graphify-out/
+
+# The finance backfill seed holds real names, addresses and bank lines. It
+# lives outside the repository (scripts/finance-backfill.ts --seed); never here.
+finance-seed*.json
