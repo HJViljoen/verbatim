@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   BACKFILL_PARALLEL, GATHER_MAX_SEARCHES_PER_RUN, OCR_BACKFILL_CAP, OCR_BATCH, OCR_CAP, OCR_PARALLEL,
@@ -420,6 +420,68 @@ describe('fanOut: a slow batch costs its siblings nothing', () => {
     expect(calls.get(1)).toBe(1)
     expect(calls.get(3)).toBe(1)
     expect(calls.get(4)).toBe(1)
+  })
+})
+
+describe('fanOut: an unfinished batch, merged or not (17 Nov, the cover text\'s clock)', () => {
+  // Inside its wave a batch returns n; on its own, n * 100. 1 says it is unfinished.
+  const base = {
+    waveId: (w: number, n: number) => `x-wave:${w}-of-${n}`,
+    memberId: (w: number, j: number) => `x:${w + j + 1}`,
+    items: [1, 2],
+    parallel: 4,
+    run: async (n: number, _i: number, signal?: AbortSignal) => (signal ? n : n * 100),
+    unfinished: (v: number) => v === 1,
+    fallback: () => -1,
+  }
+
+  it('with a merge: its own step once, and the two values as one', async () => {
+    const { step, runs } = fakeStep()
+    const merge = vi.fn((inWave: number, own: number) => inWave + own)
+    expect(await fanOut(step, { ...base, merge })).toEqual([101, 2])
+    expect([...runs.keys()].sort()).toEqual(['x-wave:1-of-1', 'x:1'])
+    expect(merge.mock.calls).toEqual([[1, 100]])
+  })
+
+  it('without a merge, its own step\'s value stands alone, as a late batch\'s always has', async () => {
+    const { step, runs } = fakeStep()
+    expect(await fanOut(step, base)).toEqual([100, 2])
+    expect([...runs.keys()].sort()).toEqual(['x-wave:1-of-1', 'x:1'])
+  })
+
+  it('without `unfinished`, a batch that came back is done, merge or not', async () => {
+    const { step, runs } = fakeStep()
+    const merge = vi.fn((a: number, b: number) => a + b)
+    expect(await fanOut(step, { ...base, unfinished: undefined, merge })).toEqual([1, 2])
+    expect([...runs.keys()]).toEqual(['x-wave:1-of-1'])
+    expect(merge).not.toHaveBeenCalled()
+  })
+
+  it('a late or failed batch has no wave value, so nothing is merged into its own step\'s', async () => {
+    const { step } = fakeStep()
+    const merge = vi.fn((a: number, b: number) => a + b)
+    const out = await fanOut(step, {
+      ...base,
+      items: [1, 2, 3],
+      deadlineMs: 30,
+      merge,
+      unfinished: () => false,
+      run: async (n: number, _i: number, signal?: AbortSignal) => {
+        if (signal && n === 2) await sleep(200) // late
+        if (signal && n === 3) throw new Error('boom') // failed
+        return signal ? n : n * 100
+      },
+    })
+    expect(out).toEqual([1, 200, 300])
+    expect(merge).not.toHaveBeenCalled()
+  })
+
+  it('an unfinished batch whose own step is out of retries takes its fallback, unmerged', async () => {
+    const { step, kill } = fakeStep()
+    kill('x:1', 0, 1, 2)
+    const merge = vi.fn((a: number, b: number) => a + b)
+    expect(await fanOut(step, { ...base, merge })).toEqual([-1, 2])
+    expect(merge).not.toHaveBeenCalled()
   })
 })
 

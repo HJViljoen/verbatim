@@ -18,7 +18,7 @@ import { discoverRunKeywords } from '@/lib/pipeline/keyword-discovery'
 import { CLASSIFY_META_MAX_OUTPUT_TOKENS, planClassifyMetaBatches, runClassifyMetaBatch, type ClassifyMetaResult } from '@/lib/pipeline/classify-meta'
 import { planTranslateBatches, translateBatch } from '@/lib/pipeline/translate'
 import { planQuoteTranslations, translateQuotesBatch } from '@/lib/pipeline/translate-quotes'
-import { planOcrBatches, ocrBatch, planOcrBackfill, ocrBackfillBatch, emptyOcrResult, mentionsMissingColumn, type OcrResult } from '@/lib/pipeline/ocr'
+import { planOcrBatches, ocrBatch, planOcrBackfill, ocrBackfillBatch, emptyOcrResult, mergeOcrResults, mentionsMissingColumn, type OcrResult } from '@/lib/pipeline/ocr'
 import { ingestOwnedPosts, supportsOwnedProfile, buildOwnedCensus, entitySlug, type OwnedEntity } from '@/lib/gather/owned'
 import { planTranscriptBackfill, backfillTranscriptsBatch, emptyBackfillTally, mergeTallies, formatTally } from '@/lib/gather/transcript-backfill'
 import { discoverSubreddits } from '@/lib/gather/subreddit-discovery'
@@ -890,8 +890,10 @@ export const runPipeline = inngest.createFunction(
                 ocrBatch({ clientId, runId, platform: platform as Platform, videoIds, batchNo: i + 1, signal }),
               // A batch whose clock left covers unread inside its wave runs
               // again as its own step, once (17 Nov). `?? 0`: a wave memoised
-              // before then carries no outOfTime.
+              // before then carries no outOfTime. Its wave pass's reads count
+              // with its own step's.
               unfinished: (r) => (r.outOfTime ?? 0) > 0,
+              merge: mergeOcrResults,
               // Per-batch fallback (the transcribe fan-out's precedent): one
               // batch out of retries must not abandon the remaining waves.
               // Its videos keep a NULL ocr_status and re-plan — but only
@@ -1294,6 +1296,7 @@ export const runPipeline = inngest.createFunction(
           ocrBackfillBatch({ clientId, runId, videoIds, batchNo: i + 1, signal }),
         // As the gather-time wave's: left covers unread, so its own step, once.
         unfinished: (r) => (r.outOfTime ?? 0) > 0,
+        merge: mergeOcrResults,
         fallback: (_videoIds, _i, e) => ({
           ...emptyOcrResult(),
           errors: [`ocr-backfill step failed: ${e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200)}`],

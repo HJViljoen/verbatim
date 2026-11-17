@@ -460,6 +460,30 @@ export function emptyOcrResult(): OcrResult {
   return { ok: 0, none: 0, noImage: 0, skipped: 0, failed: 0, outOfTime: 0, costUsd: 0, rateLimited: false, errors: [], samples: [] }
 }
 
+/**
+ * A batch's wave pass and its own step's, as one result (fanOut's `merge`,
+ * for a batch its clock stopped inside its wave). Every read either made is
+ * counted, cost and errors included, and a 429 either saw stands. What is
+ * still unread is the own step's alone, and so are the skips the wave pass
+ * did not make: the own step skips what the wave read, so the covers done
+ * before the run are the wave pass's `skipped`. PURE.
+ */
+export function mergeOcrResults<R extends OcrResult>(inWave: R, own: R): R {
+  return {
+    ...own,
+    ok: inWave.ok + own.ok,
+    none: inWave.none + own.none,
+    noImage: inWave.noImage + own.noImage,
+    skipped: inWave.skipped,
+    failed: inWave.failed + own.failed,
+    outOfTime: own.outOfTime,
+    costUsd: inWave.costUsd + own.costUsd,
+    rateLimited: inWave.rateLimited || own.rateLimited,
+    errors: [...inWave.errors, ...own.errors],
+    samples: [...inWave.samples, ...own.samples],
+  }
+}
+
 /** One video's cover through the model and into the row. Shared by the
  *  gather-time wave and the YouTube backfill — the only thing that differs
  *  between them is where the image URL came from. */

@@ -185,6 +185,9 @@ export interface FanOut<T, R> {
    *  late one does, ONCE. What that step leaves is its result, never run
    *  again. Absent, a batch that came back is done. */
   unfinished?: (value: R) => boolean
+  /** An `unfinished` batch's two values as one result: its wave pass's and
+   *  its own step's. Absent, its own step's replaces the wave pass's. PURE. */
+  merge?: (inWave: R, own: R) => R
 }
 
 /**
@@ -219,8 +222,12 @@ export async function fanOut<T, R>(step: StepRunner, f: FanOut<T, R>): Promise<R
         if (!f.unfinished?.(outcome.value)) return Promise.resolve(outcome.value)
         console.warn(`[${f.memberId(first, j)}] left work undone inside ${id}, so it runs as a step of its own`)
       } else if (outcome) console.warn(`[${f.memberId(first, j)}] ${outcome.late ? 'ran late' : 'failed'} inside ${id}, so it runs as a step of its own: ${outcome.error}`)
+      // An unfinished batch's wave pass did real work: `merge` adds it to its
+      // own step's. Both are memoised, so a replay merges the same two. A late
+      // or failed batch has no wave value, and its own step's stands alone.
+      const wavePass = outcome?.ok ? [outcome.value] as const : null
       return step.run(f.memberId(first, j), () => f.run(item, i))
-        .then((r) => r as R)
+        .then((r) => (wavePass && f.merge ? f.merge(wavePass[0], r as R) : r as R))
         .catch((e: unknown) => f.fallback(item, i, e))
     })))
   }

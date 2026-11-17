@@ -29,12 +29,12 @@ vi.mock('../openai', async (orig) => {
 
 import { fakeDb, type FakeDb } from '../test/fake-db'
 import {
-  buildOcrPrompt, emptyOcrResult, needsOcr, ocrBackfillBatch, ocrBatch, ocrCallOptions, ocrCoverFrame, ocrCutByClock,
-  resetOcrColumnCache, type OcrResult,
+  buildOcrPrompt, emptyOcrResult, mergeOcrResults, needsOcr, ocrBackfillBatch, ocrBatch, ocrCallOptions, ocrCoverFrame,
+  ocrCutByClock, resetOcrColumnCache, type OcrResult,
 } from './ocr'
 import {
   ANALYSIS_TEMPERATURE, OCR_BATCH, OCR_CALL_CAP_MS, OCR_CALL_FLOOR_MS, OCR_FETCH_TIMEOUT_MS, OCR_MAX_ATTEMPTS,
-  OCR_MAX_OUTPUT_TOKENS, OCR_MAX_RETRIES, OCR_MODEL, OCR_STEP_BUDGET_MS,
+  OCR_MAX_OUTPUT_TOKENS, OCR_MAX_RETRIES, OCR_MODEL, OCR_STEP_BUDGET_MS, estimateCost,
 } from '../config'
 import { fanOut, WAVE_DEADLINE_MS } from './step-budget'
 import { untilAborted } from './translate'
@@ -385,10 +385,16 @@ describe('a batch reads the covers it has tried least first', () => {
 })
 
 describe('a batch its clock stopped inside its wave gets its own step, once', () => {
-  /** fanOut over one batch, wired as the pipeline wires the gather-time OCR. */
-  async function runWave(ids: string[], clock: { t: number }) {
+  /** fanOut over one batch, wired as the pipeline wires the gather-time OCR,
+   *  on a step that memoises by id through JSON, as Inngest does. */
+  async function runWave(ids: string[], clock: { t: number }, memo = new Map<string, unknown>()) {
     const runs: string[] = []
-    const step = { run: async (id: string, fn: () => Promise<unknown>) => { runs.push(id); return fn() } }
+    const step = {
+      run: async (id: string, fn: () => Promise<unknown>) => {
+        if (!memo.has(id)) { runs.push(id); memo.set(id, JSON.parse(JSON.stringify(await fn()))) }
+        return memo.get(id)
+      },
+    }
     const results = await fanOut<string[], OcrResult>(step, {
       waveId: (w, n) => `ocr-wave:instagram:${w}-of-${n}`,
       memberId: (w, j) => `ocr:instagram:${w + j + 1}-of-1`,
@@ -396,26 +402,74 @@ describe('a batch its clock stopped inside its wave gets its own step, once', ()
       parallel: 4,
       run: (videoIds, i, signal) => ocrBatch({ clientId: CLIENT, runId: RUN, platform: 'instagram', videoIds, batchNo: i + 1, signal, now: () => clock.t }),
       unfinished: (r) => (r.outOfTime ?? 0) > 0,
+      merge: mergeOcrResults,
       fallback: () => emptyOcrResult(),
     })
-    return { runs, results }
+    return { runs, results, memo }
   }
+  const READ_USD = estimateCost(OCR_MODEL, 5261, 18)
 
   it('6 loops then 2: the wave stops at 236 s with 4 unread and comes back ok; its own step reads the 2', async () => {
     const ids = ['loop1', 'loop2', 'loop3', 'loop4', 'loop5', 'loop6', 'ok7', 'ok8']
     const { byId } = instagramBatch(ids)
     const clock = { t: 0 }
     h.parse.mockImplementation(clockedParse(clock))
-    const { runs, results } = await runWave(ids, clock)
+    const { runs, results, memo } = await runWave(ids, clock)
     expect(runs).toEqual(['ocr-wave:instagram:1-of-1', 'ocr:instagram:1-of-1'])
     expect(byId('ok7').ocr_status).toBe('ok')
     expect(byId('ok8').ocr_status).toBe('ok')
     // own step: loop5, loop6, ok7, ok8 (never tried), then loop1 again; loop2 is cut at the clock
-    expect(results).toHaveLength(1)
-    expect(results[0]).toMatchObject({ ok: 2, failed: 3, outOfTime: 3 })
+    const own = memo.get('ocr:instagram:1-of-1') as OcrResult
+    expect(own).toMatchObject({ ok: 2, failed: 3, outOfTime: 3 })
     expect(ids.map((id) => byId(id).ocr_attempts)).toEqual([2, 1, 1, 1, 1, 1, 1, 1])
-    // and its own step's leftovers are its result: no third pass
+    // the run's tally: the wave's four stamps and the own step's three, its reads' cost, its unread
+    expect(results).toHaveLength(1)
+    expect(results[0]).toMatchObject({ ok: 2, failed: 4 + 3, outOfTime: 3, rateLimited: false })
+    expect(results[0].errors).toHaveLength(7)
+    expect(results[0].costUsd).toBeCloseTo(2 * READ_USD, 10)
+    // and its own step's leftovers are final: no third pass
     expect(runs.filter((id) => id === 'ocr:instagram:1-of-1')).toHaveLength(1)
+  })
+
+  it('a 429 inside the wave survives the merge, with the wave\'s reads and their cost', async () => {
+    // rl1 is rate-limited once (not stamped), ok2 reads, four loops take the
+    // clock to 239 s, and ok7 is left; the own step reads rl1 and ok7.
+    const ids = ['rl1', 'ok2', 'loop3', 'loop4', 'loop5', 'loop6', 'ok7']
+    const { byId } = instagramBatch(ids)
+    const clock = { t: 0 }
+    let limited = false
+    const clocked = clockedParse(clock)
+    h.parse.mockImplementation(async (body: unknown, request: { timeout: number }) => {
+      if (!limited && /rl1/.test(fetched.at(-1) ?? '')) {
+        limited = true
+        clock.t += 1_000
+        throw Object.assign(new Error('429 Rate limit reached for gpt-4.1-mini'), { status: 429 })
+      }
+      return clocked(body, request)
+    })
+    const { memo, results } = await runWave(ids, clock)
+    const wave = (memo.get('ocr-wave:instagram:1-of-1') as { ok: true; value: OcrResult }[])[0].value
+    const own = memo.get('ocr:instagram:1-of-1') as OcrResult
+    expect(wave).toMatchObject({ ok: 1, failed: 5, outOfTime: 1, rateLimited: true })
+    expect(own).toMatchObject({ ok: 2, failed: 3, outOfTime: 1, rateLimited: false })
+    expect(results[0]).toMatchObject({ ok: 3, failed: 8, outOfTime: 1, rateLimited: true, skipped: 0 })
+    expect(results[0].costUsd).toBeCloseTo(3 * READ_USD, 10)
+    expect(results[0].errors[0]).toMatch(/^ocr \(rl1\): 429 Rate limit/)
+    expect(byId('rl1')).toMatchObject({ ocr_status: 'ok', ocr_attempts: 1 })
+  })
+
+  it('a replay merges the same two memoised values, and reads nothing', async () => {
+    const ids = ['loop1', 'loop2', 'loop3', 'loop4', 'loop5', 'loop6', 'ok7', 'ok8']
+    instagramBatch(ids)
+    const clock = { t: 0 }
+    h.parse.mockImplementation(clockedParse(clock))
+    const first = await runWave(ids, clock)
+    h.parse.mockClear()
+    fetched.length = 0
+    const replay = await runWave(ids, clock, first.memo)
+    expect(replay.runs).toEqual([])
+    expect(h.parse).not.toHaveBeenCalled()
+    expect(replay.results).toEqual(first.results)
   })
 
   it('a batch its clock did not stop comes back from its wave as before, with no step of its own', async () => {
@@ -433,14 +487,24 @@ describe('a batch its clock stopped inside its wave gets its own step, once', ()
     expect(unfinished(memoised)).toBe(false)
   })
 
-  it('the pipeline wires it on both OCR fan-outs, and not on any other', () => {
-    const wiring = 'unfinished: (r) => (r.outOfTime ?? 0) > 0,'
-    expect(PIPELINE.split(wiring)).toHaveLength(3)
+  it('the pipeline wires it, and the merge, on both OCR fan-outs and on no other', () => {
+    const wiring = ['unfinished: (r) => (r.outOfTime ?? 0) > 0,', 'merge: mergeOcrResults,']
+    for (const w of wiring) expect(PIPELINE.split(w), w).toHaveLength(3)
+    expect(PIPELINE.match(/\bunfinished: /g)).toHaveLength(2)
+    expect(PIPELINE.match(/\bmerge: /g)).toHaveLength(2)
     for (const wave of ['`ocr-wave:${platform}:${w}-of-${n}`', '`ocr-backfill-wave:${w}-of-${n}`']) {
       const at = PIPELINE.indexOf(`waveId: (w, n) => ${wave}`)
       const call = PIPELINE.slice(at, PIPELINE.indexOf('fallback: (', at))
-      expect(call, wave).toContain(wiring)
+      for (const w of wiring) expect(call, wave).toContain(w)
     }
+  })
+
+  it('mergeOcrResults: counts, cost and errors added, a 429 kept, the unread and the skips the own step did not make', () => {
+    const inWave = { ...emptyOcrResult(), ok: 1, none: 2, noImage: 1, skipped: 3, failed: 4, outOfTime: 4, costUsd: 0.25, rateLimited: true, errors: ['a'] }
+    const own = { ...emptyOcrResult(), ok: 2, none: 1, skipped: 6, failed: 3, outOfTime: 1, costUsd: 0.5, errors: ['b'] }
+    expect(mergeOcrResults(inWave, own)).toEqual({
+      ok: 3, none: 3, noImage: 1, skipped: 3, failed: 7, outOfTime: 1, costUsd: 0.75, rateLimited: true, errors: ['a', 'b'], samples: [],
+    })
   })
 })
 
