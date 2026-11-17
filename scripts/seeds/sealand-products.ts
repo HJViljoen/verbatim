@@ -33,13 +33,14 @@ import type { CatalogueSeed } from '../../lib/products/seed'
 // bags (lib/pages/market-frame.ts) and clothing talk in it is buyer-adjacent
 // (lib/segments/hints.ts).
 //
-// NO CATEGORY WORD IS GENERIC, on purpose: the confirm call's prompt
-// (lib/products/classify.ts buildConfirmSystemPrompt) reads a category word as
-// "a prosthetic or orthotic product", so for Sealand it answers no to every one
-// (17 Nov: "I just carry a small sling with my passport" read false). A word
-// here either places by rule or is left out. The generic PRODUCT names are
-// confirmed as Sealand's or not, which that prompt reads right ("Got the
-// Sealand Moon Bag" true, "This Rad Rev Moon Bag" false).
+// NO CATEGORY WORD IS GENERIC, on purpose: a word here either places by rule
+// or is left out. Until 17 Nov the confirm call's prompt (lib/products/classify.ts
+// buildConfirmSystemPrompt) read a category word as "a prosthetic or orthotic
+// product" and answered no to every one ("I just carry a small sling with my
+// passport" read false); it now reads Sealand's own market (productDomainFor),
+// but no word was re-measured as generic since. The generic PRODUCT names are
+// confirmed as Sealand's or not ("Got the Sealand Moon Bag" true, "This Rad Rev
+// Moon Bag" false).
 //
 // MEASURED (the dry run of 17 Nov, June to November, one month a read, and its
 // recorded reads replayed): every word below read by hand on a sample; the
@@ -72,7 +73,9 @@ export const SEALAND_PRODUCTS: CatalogueSeed = {
   groups: [
     {
       name: 'Backpacks',
-      words: ['backpack', 'daypack', 'rucksack'],
+      // 'luggage pass-through' is a backpack's sleeve for a suitcase handle: the longer match takes that talk out of
+      // Duffels & Travel's 'luggage'
+      words: ['backpack', 'daypack', 'rucksack', 'back pack', 'day pack', 'luggage pass-through'],
       // The Hero range (the store's "Hero Bags" collection, /collections/commuter):
       // "hero backpack" is also any superhero kids' backpack, so the confirm reads it
       families: [{ alias: 'Hero Backpack', needsConfirm: true }],
@@ -102,13 +105,14 @@ export const SEALAND_PRODUCTS: CatalogueSeed = {
         // "sling" is a bag in about 99 in 100 of its 712 uses in the dry run (the verb, "sling it over the shoulder",
         // and a gun sling are the rest), so it places by rule
         'cross-body', 'cross-body bag', 'sling bag', 'sling', 'bum bag', 'fanny pack', 'belt bag',
-        'waist bag', 'hip bag', 'hip pack', 'chest bag', 'messenger bag',
+        'waist bag', 'hip bag', 'hip pack', 'chest bag', 'messenger bag', 'waist pack', 'cross-bodies',
       ],
       products: [
-        // https://sealandgear.com/products/majitex-moon-bag (titled "Moon Crossbody - MajiTex"; Sealand calls the Moon
-        // its most popular bag, and its older Recycled and Upcycled Moon Bag pages are indexed but not in the sitemap)
-        // generic: "moon bag" is South African for any bum bag, and a crypto "moonbag" (the pattern reads both spellings)
-        { name: 'Moon Bag', needsConfirm: true, aliases: ['Moon Crossbody', 'Sealand Moon Bag', { alias: 'Moon Bags', needsConfirm: true }] },
+        // Sealand calls the Moon its most popular bag; its older Recycled and Upcycled Moon Bag pages are indexed but not
+        // in the sitemap. Generic: "moon crossbody" is any half-moon crossbody, a common style; "moon bag" is South African
+        // for any bum bag, a crypto "moonbag" (the pattern reads both spellings), and Freedom of Movement's "Recycled Moonbag".
+        // https://sealandgear.com/products/majitex-moon-bag (titled "Moon Crossbody - MajiTex", the store's current name)
+        { name: 'Moon Crossbody', needsConfirm: true, aliases: [{ alias: 'Moon Bag', needsConfirm: true }, { alias: 'Moon Bags', needsConfirm: true }, 'Sealand Moon Bag', 'Sealand Moon Crossbody'] },
         // https://sealandgear.com/products/recycled-mini-crossbody-bag (also upcycled-mini-crossbody-bag,
         // yacht-sail-mini-crossbody, majitex-mini-crossbody, mini-crossbody-customisable)
         // generic: every brand sells a "mini crossbody"
@@ -131,14 +135,16 @@ export const SEALAND_PRODUCTS: CatalogueSeed = {
       name: 'Duffels & Travel',
       words: [
         'duffel', 'duffle', 'weekender bag', 'travel bag', 'holdall', 'gym bag', 'luggage', 'suitcase', 'wheelie bag',
-        'carry-on bag', 'cabin bag', 'toiletry bag', 'wash bag', 'dopp kit', 'packing cube',
+        'carry-on bag', 'cabin bag', 'toiletry bag', 'wash bag', 'dopp kit', 'packing cube', 'toiletry kit', 'toiletries bag',
+        'roller bag', 'rolling bag',
       ],
       products: [
         // https://sealandgear.com/products/yacht-sail-nomad-duffel-small (27L; also majitex-nomad-duffel)
         // generic: "nomad duffel" is other brands' name too
-        { name: 'Nomad Duffel', needsConfirm: true, aliases: ['Sealand Nomad Duffel'] },
+        // the matcher never equates "duffel" and "duffle", so both spellings are names
+        { name: 'Nomad Duffel', needsConfirm: true, aliases: ['Sealand Nomad Duffel', 'Sealand Nomad Duffle', { alias: 'Nomad Duffle', needsConfirm: true }] },
         // https://sealandgear.com/products/dune-duffel-majitex (42L; also dune-duffel-customisable)
-        { name: 'Dune Duffel' },
+        { name: 'Dune Duffel', aliases: ['Dune Duffle'] },
         // https://sealandgear.com/products/recycled-wheelie-bag (titled "Large Wheelie - ECONYL®")
         // generic: a wheelie is a bike trick
         { name: 'Large Wheelie', needsConfirm: true },
@@ -203,10 +209,10 @@ export const SEALAND_PRODUCTS: CatalogueSeed = {
         { name: 'Dash Cardholder', needsConfirm: true },
         // https://sealandgear.com/products/upcycled-keezy-key-organiser (a key ring, per the indexed page)
         // "Keezy" alone is also an app and a rapper's name
-        { name: 'Keezy Key Organiser', aliases: ['Keezy Key Ring', { alias: 'Keezy', needsConfirm: true }] },
+        { name: 'Keezy Key Organiser', aliases: ['Keezy Key Organizer', 'Keezy Key Ring', { alias: 'Keezy', needsConfirm: true }] },
         // https://sealandgear.com/products/protect-our-paths-trail-mate-pouch-kite (a clip-on litter pouch for hikes)
         // generic: "trail mate" is a hiking companion
-        { name: 'Trail Mate', needsConfirm: true, aliases: ['Trail Mate Pouch', 'Protect Our Paths Trail Mate'] },
+        { name: 'Trail Mate', needsConfirm: true, aliases: ['Trail Mate Pouch', 'Protect Our Paths Trail Mate', { alias: 'Trail Mates', needsConfirm: true }] },
         // https://sealandgear.com/products/circular-co-x-sealand-750ml-water-bottle (a collab; also
         // circulor-co-x-sealand-1l-water-bottle-ssteel)
         // generic: Circular&Co sells its own bottles, so the confirm reads which
@@ -215,7 +221,9 @@ export const SEALAND_PRODUCTS: CatalogueSeed = {
     },
     {
       name: 'Headwear',
-      words: ['bucket hat', 'trucker cap', 'trucker hat', 'baseball cap', 'running cap', 'dad hat', 'snapback', 'beanie'],
+      // not "snapback": postpartum slang ("snapping back" after a birth) as much as a cap; no hit so far, but a closed
+      // month freezes with whatever it read
+      words: ['bucket hat', 'trucker cap', 'trucker hat', 'baseball cap', 'running cap', 'dad hat', 'dad cap', 'beanie'],
       products: [
         // https://sealandgear.com/products/recycled-run-cap (also recycled-run-cap-1, -2, -3, -army-green-eucalyptus,
         // -hazy-pink-clay-bone, -petrol-camel-khaki, -orange-embroided, recycled-lifestyle-cap-black-embroided)

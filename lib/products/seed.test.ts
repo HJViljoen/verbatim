@@ -97,14 +97,14 @@ describe('the Sealand seed (scripts/seeds/sealand-products.ts, for review)', () 
 
   it('flags the names that are plain descriptions, other brands\' or another topic\'s', () => {
     for (const g of [
-      'moon bag', 'mini crossbody', 'messenger crossbody', 'roamer backpack', 'roamer', 'buddy backpack', 'hero backpack', 'hero pro',
-      'zeplin', 'nomad duffel', 'large wheelie', 'toastie', 'family tote', 'canvas tote', 'slim laptop bag', 'trail mate', 'boxy tee', 'quarter zip',
+      'moon crossbody', 'moon bag', 'moon bags', 'mini crossbody', 'messenger crossbody', 'roamer backpack', 'roamer', 'buddy backpack', 'hero backpack', 'hero pro',
+      'zeplin', 'nomad duffel', 'nomad duffle', 'large wheelie', 'toastie', 'family tote', 'canvas tote', 'slim laptop bag', 'trail mate', 'trail mates', 'boxy tee', 'quarter zip',
     ]) expect(flagged.has(g), g).toBe(true)
   })
 
-  it('no category word is generic (the confirm reads one as a prosthetic product), and the words that read wrong are left out', () => {
+  it('no category word is generic (each places by rule or is left out), and the words that read wrong are left out', () => {
     expect(rows.aliases.filter((a) => a.kind === 'category_word' && a.needsConfirm).map((a) => a.alias)).toEqual([])
-    for (const out of ['bag', 'tote', 'totes', 'cap', 'carry-on', 'keychain', 'wallet', 'water bottle', 'laptop sleeve', 'card holder', 'key ring', 'cool bag']) {
+    for (const out of ['bag', 'tote', 'totes', 'cap', 'carry-on', 'keychain', 'wallet', 'water bottle', 'laptop sleeve', 'card holder', 'key ring', 'cool bag', 'snapback']) {
       expect(aliases.has(out), out).toBe(false)
     }
   })
