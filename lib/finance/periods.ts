@@ -67,3 +67,20 @@ export function nextBillablePeriod(
 export function fmtInvoiceDate(day: string): string {
   return `${day.slice(8, 10)}.${day.slice(5, 7)}.${day.slice(0, 4)}`
 }
+
+/**
+ * The next month a profile will invoice, for the page: the first month that
+ * has not started and is not billed (next month, or the one after once next
+ * month is billed), with the day it issues. Null for a paused profile.
+ */
+export function upcomingIssue(
+  profile: Pick<BillingProfile, 'active' | 'issueDay' | 'dueRule' | 'lines'>,
+  billed: readonly string[],
+  today: string,
+): { periodStart: string; periodLabel: string; issueOn: string; dueOn: string | null } | null {
+  if (!profile.active || profile.lines.length === 0) return null
+  let periodStart = addMonths(monthOf(today), 1)
+  while (billed.includes(periodStart)) periodStart = addMonths(periodStart, 1)
+  const issueOn = issueDateFor(periodStart, profile.issueDay)
+  return { periodStart, periodLabel: periodLabel(periodStart), issueOn: issueOn < today ? today : issueOn, dueOn: dueDateFor(periodStart, profile.dueRule) }
+}

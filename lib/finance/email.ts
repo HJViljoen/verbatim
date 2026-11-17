@@ -69,7 +69,7 @@ ${paragraphs.map((p) => `    <p style="margin:0 0 14px">${escapeHtml(p).replace(
     to,
     cc: opts.test ? [] : (profile?.emailCc ?? []),
     bcc: opts.test ? [] : (profile?.emailBcc ?? []),
-    subject: `${opts.test ? '[Test] ' : ''}${name} — ${inv.periodLabel}`,
+    subject: `${opts.test ? '[Test] ' : ''}${name} for ${inv.periodLabel}`,
     text,
     html,
     filename: pdfFileName(inv),

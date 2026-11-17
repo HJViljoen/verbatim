@@ -23,6 +23,10 @@ export type DueRule = (typeof DUE_RULES)[number]
 export const SEND_MODES = ['auto', 'review'] as const
 export type SendMode = (typeof SEND_MODES)[number]
 
+/** A send claimed longer ago than this crashed between the claim and the
+ *  answer; Send may take it again (lib/finance/send.ts). */
+export const STALE_CLAIM_MS = 10 * 60 * 1000
+
 export const NOTICE_KINDS = ['ready', 'overdue', 'expected'] as const
 export type NoticeKind = (typeof NOTICE_KINDS)[number]
 

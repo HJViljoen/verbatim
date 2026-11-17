@@ -3,7 +3,8 @@ import { operatorEmails } from '@/lib/schedules/members'
 import type { createAdminClient } from '@/lib/supabase-admin'
 import { EmailNotReady, invoiceEmail } from './email'
 import { loadInvoiceContext, type InvoiceContext } from './load'
-import { BUCKET } from './render'
+import { INVOICE_BUCKET } from './html'
+import { STALE_CLAIM_MS } from './types'
 
 // Sending an invoice (D2: Resend from the issuer's own address, reply-to and
 // Bcc as the rows say). CLAIM BEFORE SEND, the report_sends discipline:
@@ -27,7 +28,7 @@ import { BUCKET } from './render'
 
 type Admin = ReturnType<typeof createAdminClient>
 
-export const STALE_CLAIM_MS = 10 * 60 * 1000
+export { STALE_CLAIM_MS }
 
 export type SendResult = { ok: true; messageId: string; message: string } | { ok: false; message: string }
 
@@ -131,7 +132,7 @@ export function supabaseSendPort(admin: Admin): SendPort {
       return (data?.length ?? 0) > 0
     },
     async download(path) {
-      const { data, error } = await admin.storage.from(BUCKET).download(path)
+      const { data, error } = await admin.storage.from(INVOICE_BUCKET).download(path)
       if (error || !data) throw new Error(`The PDF could not be read (${error?.message ?? 'no file'}).`)
       return Buffer.from(await data.arrayBuffer())
     },

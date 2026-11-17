@@ -1,5 +1,5 @@
 import type { createAdminClient } from '@/lib/supabase-admin'
-import { invoiceHtml, pdfStoragePath } from './html'
+import { INVOICE_BUCKET, invoiceHtml, pdfStoragePath } from './html'
 import { loadInvoiceContext, type InvoiceContext } from './load'
 import { pdfPageCount, printInvoicePdf } from './pdf'
 import type { InvoiceStatus } from './types'
@@ -12,8 +12,6 @@ import type { InvoiceStatus } from './types'
 // what the client holds.
 
 type Admin = ReturnType<typeof createAdminClient>
-
-export const BUCKET = 'invoices'
 
 /** The statuses a print may run in. */
 export const PRINTABLE: readonly InvoiceStatus[] = ['draft', 'ready']
@@ -39,7 +37,7 @@ export async function renderInvoice(admin: Admin, id: string): Promise<{ pdfPath
   if (pages !== 1) throw new RenderRefused(`Invoice ${inv.number} printed on ${pages} pages, not one.`, 422)
 
   const pdfPath = pdfStoragePath(inv)
-  const up = await admin.storage.from(BUCKET).upload(pdfPath, pdf, { contentType: 'application/pdf', upsert: true })
+  const up = await admin.storage.from(INVOICE_BUCKET).upload(pdfPath, pdf, { contentType: 'application/pdf', upsert: true })
   if (up.error) throw new Error(`finance: upload ${pdfPath}: ${up.error.message}`)
 
   const now = new Date().toISOString()

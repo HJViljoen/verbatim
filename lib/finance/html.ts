@@ -179,6 +179,7 @@ export function invoiceHtml(inv: Invoice, ctx: RenderContext): string {
   ]
 
   const subject = inv.subjectLine.trim()
+    // em-dash-ok: the hand-made credit notes' own subject line, ported as it was sent
     || (credit && related ? `Credit note — cancels invoice ${related.number} (${related.currency}) in full` : '')
 
   const items = inv.lines
@@ -204,11 +205,14 @@ ${[...issuer.bankLines.map((b) => [b.label, b.value]), ['Payment reference', pay
     .join('\n')}
   </table>`
 
+  // em-dash-ok: the hand-made invoices' own document title (the PDF's title), ported as it was sent
+  const title = `${documentName(inv)} — ${inv.billTo}`
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>${e(documentName(inv))} — ${e(inv.billTo)}</title>
+<title>${e(title)}</title>
 ${CSS}
 </head>
 <body>
@@ -272,6 +276,9 @@ export function pdfFileName(i: Pick<Invoice, 'kind' | 'number' | 'billTo' | 'cur
   const who = i.billTo.normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '')
   return `${i.kind === 'credit_note' ? 'CreditNote' : 'Invoice'}-${i.number}-${who || 'client'}-${i.currency}-${i.issuedOn}.pdf`
 }
+
+/** The private storage bucket the PDFs live in (20261115090000_finance.sql). */
+export const INVOICE_BUCKET = 'invoices'
 
 /** Where its PDF lives in the private `invoices` bucket. */
 export const pdfStoragePath = (i: Pick<Invoice, 'clientId' | 'number'>): string => `${i.clientId}/${i.number}.pdf`

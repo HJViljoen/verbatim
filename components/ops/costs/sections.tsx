@@ -12,6 +12,8 @@ import { fmtNative, fmtUsd, fmtZar, toZar, type Rates } from '@/lib/costs/money'
 import { RUN_CADENCE_LABEL, STAGE_LABEL } from '@/lib/costs/types'
 import type { Pivot } from '@/lib/costs/usage'
 import { buildCostsView, type CostsView } from '@/lib/costs/view'
+import { fmtMoney } from '@/lib/finance/money'
+import type { MoneyInItem } from '@/lib/finance/view'
 import { cn } from '@/lib/utils'
 import { AddBill, AddProspect, BalanceForm, BillItem, PlanItem, SettingsForm, ToggleButton } from './editors'
 import { Pill, StagePill, ZarUsd } from './fields'
@@ -99,11 +101,19 @@ export function Summary({ view, rates, prospectsCounted }: { view: CostsView; ra
 
 // ---- Coming up -------------------------------------------------------------------
 
-export function ComingUp({ charges, data, rates }: { charges: Charge[]; data: CostsData; rates: Rates }) {
+/** A row of Coming up: a bill's charge (money out) or money in. */
+type Upcoming = { out: Charge; in?: never; date: string } | { in: MoneyInItem; out?: never; date: string }
+
+export function ComingUp({ charges, data, rates, moneyIn = [] }: { charges: Charge[]; data: CostsData; rates: Rates; moneyIn?: MoneyInItem[] }) {
   const owed = data.bills.filter((b) => b.overdueAmount > 0)
   const total = charges.filter((c) => !c.late).reduce((s, c) => s + toZar(c.amount ?? 0, c.currency, rates), 0)
+  const coming = moneyIn.filter((m) => !m.late).reduce((s, m) => s + m.zar, 0)
+  const rows: Upcoming[] = [
+    ...charges.map((c): Upcoming => ({ out: c, date: c.date })),
+    ...moneyIn.map((m): Upcoming => ({ in: m, date: m.date })),
+  ].sort((a, b) => a.date.localeCompare(b.date))
   return (
-    <Section icon={CalendarClock} title="Coming up" meta={<span>Next 60 days · {fmtZar(total)}</span>}>
+    <Section icon={CalendarClock} title="Coming up" meta={<span>Next 60 days · {fmtZar(total)} out{moneyIn.length ? ` · ${fmtZar(coming)} in` : ''}</span>}>
       {owed.length ? (
         <div className="flex flex-col gap-1.5 rounded-[10px] bg-negative/12 px-4 py-3 text-[13px]">
           {owed.map((b) => (
@@ -114,11 +124,30 @@ export function ComingUp({ charges, data, rates }: { charges: Charge[]; data: Co
           ))}
         </div>
       ) : null}
-      {charges.length === 0 ? (
+      {rows.length === 0 ? (
         <p className="m-0 text-[13px] text-muted-foreground">Nothing charges in the next 60 days.</p>
       ) : (
         <ol className="m-0 flex list-none flex-col p-0">
-          {charges.map((c, i) => {
+          {rows.map((r, i) => {
+            if (r.in) {
+              const m = r.in
+              const days = daysBetween(data.today, m.date)
+              return (
+                <li key={`in-${m.label}-${m.date}`} className="grid grid-cols-[76px_minmax(0,1fr)_auto] items-baseline gap-3 border-t border-border py-2.5 first:border-t-0 first:pt-0">
+                  <span className={cn('font-mono text-[12px] tabular-nums', m.late ? 'font-semibold text-negative' : 'text-secondary-foreground')}>{fmtWeekday(m.date)}</span>
+                  <span className="flex min-w-0 flex-wrap items-center gap-1.5 text-[13.5px]">
+                    <span className="font-medium">{m.label}</span>
+                    <Pill tone="soft">Money in</Pill>
+                    {m.late ? <Pill tone="bad">Date passed</Pill> : days >= 0 && days <= 7 ? <Pill tone="faint">{days === 0 ? 'Today' : `In ${days} days`}</Pill> : null}
+                  </span>
+                  <span className="text-right text-[13px] tabular-nums">
+                    <span className="font-medium">+{fmtZar(m.zar)}</span>
+                    {m.currency !== 'ZAR' ? <span className="ml-1.5 text-muted-foreground">{fmtMoney(m.amount, m.currency)}</span> : null}
+                  </span>
+                </li>
+              )
+            }
+            const c = r.out
             const days = daysBetween(data.today, c.date)
             return (
               <li key={`${c.billId}-${c.date}-${i}`} className="grid grid-cols-[76px_minmax(0,1fr)_auto] items-baseline gap-3 border-t border-border py-2.5 first:border-t-0 first:pt-0">
@@ -383,7 +412,7 @@ export function Clients({ view, data, rates }: { view: CostsView; data: CostsDat
   return (
     <Section icon={Users} title="Clients and prospects" meta={<span>What each pays, and how often it runs</span>}>
       <div className="grid grid-cols-1 gap-2.5 xl:grid-cols-2">
-        {view.plans.map((p) => <PlanItem key={p.key} plan={p} rates={rates} today={data.today} />)}
+        {view.plans.map((p) => <PlanItem key={p.key} plan={p} rates={rates} today={data.today} invoicedOwedZar={p.clientId ? view.invoicedOwedZar.get(p.clientId) : undefined} />)}
       </div>
       <div><AddProspect /></div>
     </Section>
@@ -512,9 +541,13 @@ export function RecentRuns({ runs, rates }: { runs: RecentRun[]; rates: Rates })
 
 // ---- Assumptions -----------------------------------------------------------------
 
-export function Assumptions({ data }: { data: CostsData }) {
+export function Assumptions({ data, fxSwitch = false }: { data: CostsData; fxSwitch?: boolean }) {
   return (
-    <Section icon={SlidersHorizontal} title="Assumptions">
+    <Section
+      icon={SlidersHorizontal}
+      title="Assumptions"
+      meta={fxSwitch ? <ToggleButton name="fxAuto" on={data.settings.fxAuto} label="Refresh the dollar rate daily" /> : undefined}
+    >
       <SettingsForm settings={data.settings} />
     </Section>
   )
@@ -523,10 +556,21 @@ export function Assumptions({ data }: { data: CostsData }) {
 
 // ---- The page --------------------------------------------------------------------
 
+/** What Money in adds to the page (components/ops/costs/page-body.tsx): its
+ *  sections at the top, its rows in Coming up, and each invoiced client's
+ *  balance for "Owed to you". */
+export interface MoneyParts {
+  top: ReactNode
+  comingUp: MoneyInItem[]
+  owedByClientZar: ReadonlyMap<string, number>
+  /** The finance migration is in: the rate's self-refresh switch exists. */
+  fxSwitch: boolean
+}
+
 /** The whole page from its loaded rows: what app/dashboard/ops/costs/page.tsx
  *  renders once the operator is checked. */
-export function CostsBody({ data }: { data: CostsData }) {
-  const view = buildCostsView(data)
+export function CostsBody({ data, money }: { data: CostsData; money?: MoneyParts }) {
+  const view = buildCostsView(data, { owedByClientZar: money?.owedByClientZar })
   const rates = { usdZar: data.settings.usdZar, eurZar: data.settings.eurZar }
   return (
     <PageFrame>
@@ -534,9 +578,10 @@ export function CostsBody({ data }: { data: CostsData }) {
         title="Costs"
         line={<>What Verbatim costs to run, and the month ahead · rand first, dollars alongside at R{rates.usdZar.toFixed(2)} to the dollar{data.settings.fxAuto && data.settings.fxOn ? ` (ECB, ${fmtDay(data.settings.fxOn)})` : ''}</>}
       />
+      {money?.top}
       <Summary view={view} rates={rates} prospectsCounted={data.settings.countProspects} />
       <div className="grid grid-cols-1 gap-[22px] xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
-        <ComingUp charges={view.upcoming} data={data} rates={rates} />
+        <ComingUp charges={view.upcoming} data={data} rates={rates} moneyIn={money?.comingUp} />
         <div className="flex min-w-0 flex-col gap-[22px]">
           <OpenaiCredit view={view} data={data} />
           <ApifyCycle view={view} data={data} />
@@ -547,7 +592,7 @@ export function CostsBody({ data }: { data: CostsData }) {
       <Clients view={view} data={data} rates={rates} />
       <Spend view={view} rates={rates} />
       <RecentRuns runs={data.recentRuns} rates={rates} />
-      <Assumptions data={data} />
+      <Assumptions data={data} fxSwitch={money?.fxSwitch ?? false} />
     </PageFrame>
   )
 }

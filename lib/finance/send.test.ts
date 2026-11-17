@@ -65,7 +65,7 @@ describe('the invoice email', () => {
     expect(m.to).toEqual(['ap@acme.test'])
     expect(m.cc).toEqual(['buyer@acme.test', 'finance@acme.test'])
     expect(m.bcc).toEqual(['jane@example.test'])
-    expect(m.subject).toBe('Invoice 0011 — January 2027')
+    expect(m.subject).toBe('Invoice 0011 for January 2027')
     expect(m.text).toBe([
       'Hi John,',
       'Please find attached invoice 0011 for January 2027: R3,690.00, due by 31 December 2026. The details and the bank account are on the invoice.',
@@ -89,7 +89,7 @@ describe('the invoice email', () => {
     expect(m.to).toEqual(['operator@verbatim.test'])
     expect(m.cc).toEqual([])
     expect(m.bcc).toEqual([])
-    expect(m.subject).toBe('[Test] Invoice 0011 — January 2027')
+    expect(m.subject).toBe('[Test] Invoice 0011 for January 2027')
   })
 
   it('refuses to build an email with no sender or no recipient', () => {
@@ -195,7 +195,7 @@ describe('sending an invoice', () => {
     const r = await sendInvoice(port, JAN.id, { test: true })
     expect(r).toMatchObject({ ok: true, message: 'Test sent to operator@verbatim.test.' })
     expect(sent).toHaveLength(1)
-    expect(sent[0]).toMatchObject({ to: ['operator@verbatim.test'], cc: [], bcc: [], subject: '[Test] Invoice 0011 — January 2027' })
+    expect(sent[0]).toMatchObject({ to: ['operator@verbatim.test'], cc: [], bcc: [], subject: '[Test] Invoice 0011 for January 2027' })
     expect(sent[0].attachments).toHaveLength(1)
     expect(row.status).toBe('sent')
     expect(profile.holdNext).toBe(true)
