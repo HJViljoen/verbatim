@@ -384,14 +384,28 @@ export interface InvoiceMail {
   idempotencyKey: string
 }
 
+/**
+ * Whether Resend's refusal means the email was certainly NOT accepted: a 4xx
+ * answer (validation, a bad sender, a missing key, a rate or quota limit) is
+ * given before anything is queued. A 409 is an idempotency clash, which can
+ * follow an attempt that WAS accepted, and a 5xx, a missing status or a throw
+ * (a timeout, a dropped connection) says nothing either way: those are
+ * "unknown", and the invoice is not sent again without a person (pure).
+ */
+export function invoiceFailureIsDefinite(error: { statusCode?: number | null } | null | undefined): boolean {
+  const code = error?.statusCode
+  return typeof code === 'number' && code >= 400 && code < 500 && code !== 409
+}
+
 // An invoice to a client (Finance, 2026-11-17; lib/finance/send.ts). Unlike
-// the other sends here it REPORTS a failure instead of swallowing it: the
-// caller puts the invoice back to `ready` with the reason, so a send that did
-// not happen is never recorded as sent. Unconfigured is a failure too.
-export async function sendInvoiceEmail(mail: InvoiceMail): Promise<{ sent: true; id: string } | { sent: false; error: string }> {
+// the other sends here it REPORTS a failure instead of swallowing it, and
+// says whether the failure is DEFINITE (nothing was sent: the invoice may be
+// sent again) or not (it may have gone: a person checks first). Unconfigured
+// is a definite failure.
+export async function sendInvoiceEmail(mail: InvoiceMail): Promise<{ sent: true; id: string } | { sent: false; error: string; definite: boolean }> {
   if (!resend) {
     console.log(`[email:stub] invoice "${mail.subject}" -> ${mail.to.join(', ')}`)
-    return { sent: false, error: 'Email is not configured here (RESEND_API_KEY is not set).' }
+    return { sent: false, error: 'Email is not configured here (RESEND_API_KEY is not set).', definite: true }
   }
   try {
     const { data, error } = await resend.emails.send(
@@ -410,12 +424,12 @@ export async function sendInvoiceEmail(mail: InvoiceMail): Promise<{ sent: true;
     )
     if (error || !data?.id) {
       console.error('[email] invoice send failed:', error)
-      return { sent: false, error: error?.message ?? 'The email provider did not accept it.' }
+      return { sent: false, error: error?.message ?? 'The email service gave no answer.', definite: invoiceFailureIsDefinite(error) }
     }
     return { sent: true, id: data.id }
   } catch (err) {
     console.error('[email] invoice send threw:', err)
-    return { sent: false, error: err instanceof Error ? err.message : 'The email could not be sent.' }
+    return { sent: false, error: err instanceof Error ? err.message : 'The email service gave no answer.', definite: false }
   }
 }
 

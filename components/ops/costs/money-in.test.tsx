@@ -104,6 +104,17 @@ describe('Ops → Costs with Money in', () => {
     expect(editors).toContain('Send invoice {invoice.number} to {recipients} now?')
   })
 
+  it('shows an invoice that may have gone, offers only a confirmed Send again, and says the job leaves it alone', () => {
+    const unsure = invoice({ number: '0111', status: 'unconfirmed', currency: 'ZAR', total: 2625, periodStart: '2027-01-01', periodLabel: 'January 2027', issuedOn: '2026-12-15', dueOn: '2026-12-31', profileId: PROFILE.id, pdfPath: 'c/0111.pdf', sentAt: null, sendError: 'No clear answer from the email service (timeout); it may have gone.' })
+    const t = renderText(<CostsPageBody data={DATA} finance={{ ...FINANCE, invoices: [unsure, ...invoices] }} now={NOW} />)
+    expect(t).toContain('Invoice 0111 January 2027 May have gone')
+    expect(t).toContain('It may have gone (No clear answer from the email service (timeout); it may have gone.). The daily job will not send it again.')
+    expect(t).toContain('Send again…')
+    const editors = readFileSync(new URL('./money-editors.tsx', import.meta.url), 'utf8')
+    expect(editors).toContain('Check your Bcc copy in Gmail first: it may already have gone.')
+    expect(editors).toContain('<input type="hidden" name="confirmUnsure" value="1" />')
+  })
+
   it('says so, and keeps the costs, before the finance migration is in', () => {
     const t = renderText(<CostsPageBody data={DATA} finance={null} now={NOW} />)
     expect(t).toContain('Money in: the finance tables are not in this database yet.')

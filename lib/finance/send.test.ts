@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 import type { InvoiceMail } from '@/lib/email'
 import { invoiceEmail, longDate } from './email'
 import { ISSUER, PROFILE, invoice } from './fixtures'
+import { attentionLines, planSends } from './daily'
 import { issueArgs } from './issue'
 import type { InvoiceContext } from './load'
 import { nextBillablePeriod } from './periods'
-import { STALE_CLAIM_MS, sendInvoice, type SendPort } from './send'
+import { STALE_CLAIM_MS, mayHaveGone, sendInvoice, sendKey, type SendPort } from './send'
+import { invoiceFailureIsDefinite } from '@/lib/email'
 import type { BillingProfile, Invoice } from './types'
 
 // Issuing and sending, with the database, storage and email as an in-memory
@@ -20,15 +22,18 @@ const JAN: Invoice = invoice({
 
 /** A port over one invoice row and one profile, with the claim done the way
  *  the database does it: a check and a write with nothing in between. */
-function fakePort(opts: { invoice?: Invoice; profile?: BillingProfile; email?: (m: InvoiceMail) => Promise<{ sent: true; id: string } | { sent: false; error: string }>; now?: Date; operator?: string[] } = {}) {
+type EmailAnswer = { sent: true; id: string } | { sent: false; error: string; definite: boolean }
+
+function fakePort(opts: { invoice?: Invoice; profile?: BillingProfile; email?: (m: InvoiceMail) => Promise<EmailAnswer>; now?: Date; operator?: string[] } = {}) {
   const row: Invoice = { ...(opts.invoice ?? JAN) }
   const profile: BillingProfile = { ...(opts.profile ?? PROFILE) }
   const sent: InvoiceMail[] = []
   let n = 0
   const port: SendPort = {
     load: async () => ({ invoice: { ...row }, issuer: ISSUER, related: null, replacement: null, profile: { ...profile } } satisfies InvoiceContext),
-    claim: async (_id, claimedAt, staleBefore) => {
-      const free = row.status === 'ready' || (row.status === 'sending' && row.sendClaimedAt !== null && row.sendClaimedAt < staleBefore)
+    claim: async (_id, claimedAt, { retakeUnsure, staleBefore }) => {
+      const free = row.status === 'ready'
+        || (retakeUnsure && (row.status === 'unconfirmed' || (row.status === 'sending' && row.sendClaimedAt !== null && row.sendClaimedAt < staleBefore)))
       if (!free) return false
       row.status = 'sending'
       row.sendClaimedAt = claimedAt
@@ -46,6 +51,10 @@ function fakePort(opts: { invoice?: Invoice; profile?: BillingProfile; email?: (
     release: async (_id, claimedAt, error) => {
       if (row.status !== 'sending' || row.sendClaimedAt !== claimedAt) return
       Object.assign(row, { status: 'ready', sendError: error, sendClaimedAt: null })
+    },
+    markUnsure: async (_id, claimedAt, error) => {
+      if (row.status !== 'sending' || row.sendClaimedAt !== claimedAt) return
+      Object.assign(row, { status: 'unconfirmed', sendError: error, sendClaimedAt: null })
     },
     afterSent: async (_pid, note) => {
       profile.holdNext = false
@@ -131,7 +140,7 @@ describe('sending an invoice', () => {
     expect(sent).toHaveLength(1)
     expect(sent[0]).toMatchObject({ to: ['ap@acme.test'], cc: ['buyer@acme.test', 'finance@acme.test'], bcc: ['jane@example.test'] })
     expect(sent[0].attachments).toEqual([{ filename: 'Invoice-0111-Acme-SA-ZAR-2026-12-15.pdf', content: Buffer.from('%PDF-1.4 test'), contentType: 'application/pdf' }])
-    expect(sent[0].idempotencyKey).toBe(`fin-invoice-${JAN.id}-2026-12-15T05:00:00.000Z`)
+    expect(sent[0].idempotencyKey).toBe(`fin-invoice-${JAN.id}`)
   })
 
   it('refuses a second send: one email, whether the second comes after or during the first', async () => {
@@ -157,8 +166,8 @@ describe('sending an invoice', () => {
     expect(during.row.status).toBe('sent')
   })
 
-  it('puts a refused send back to ready with the reason, and keeps the hold and the note', async () => {
-    const { port, row, profile } = fakePort({ email: async () => ({ sent: false, error: 'domain not verified' }) })
+  it('puts a send the service certainly refused back to ready with the reason, and keeps the hold and the note', async () => {
+    const { port, row, profile } = fakePort({ email: async () => ({ sent: false, error: 'domain not verified', definite: true }) })
     const r = await sendInvoice(port, JAN.id)
     expect(r).toEqual({ ok: false, message: 'Invoice 0111 did not send: domain not verified' })
     expect(row).toMatchObject({ status: 'ready', sendError: 'domain not verified', sendClaimedAt: null, emailMessageId: null })
@@ -166,21 +175,70 @@ describe('sending an invoice', () => {
     expect(profile.noteOnce).not.toBeNull()
   })
 
-  it('puts a send that threw back to ready too', async () => {
-    const { port, row } = fakePort({ email: async () => { throw new Error('socket hang up') } })
-    expect((await sendInvoice(port, JAN.id)).ok).toBe(false)
-    expect(row).toMatchObject({ status: 'ready', sendError: 'socket hang up' })
+  it('marks a send with no clear answer unconfirmed: it may have gone, and it is not sent again without a person', async () => {
+    // A timeout after the service accepted the email: the answer is lost.
+    const timedOut = fakePort({ email: async () => { throw new Error('The operation timed out') } })
+    const r = await sendInvoice(timedOut.port, JAN.id)
+    expect(r.ok).toBe(false)
+    expect(r.message).toMatch(/may or may not have gone.*Check your Bcc copy/)
+    expect(timedOut.row).toMatchObject({ status: 'unconfirmed', sendClaimedAt: null })
+    expect(timedOut.row.sendError).toMatch(/it may have gone/)
+    expect(timedOut.profile.holdNext).toBe(true)
+    // a 5xx and a 409 say nothing either way
+    const fiveHundred = fakePort({ email: async () => ({ sent: false, error: 'internal server error', definite: false }) })
+    await sendInvoice(fiveHundred.port, JAN.id)
+    expect(fiveHundred.row.status).toBe('unconfirmed')
+
+    // Send again without the operator's confirmation: refused, nothing sent.
+    const again = await sendInvoice(timedOut.port, JAN.id)
+    expect(again).toEqual({ ok: false, message: 'Invoice 0111 may already have gone. Check your Bcc copy first; send it again only if it is not there.' })
+    expect(timedOut.sent).toHaveLength(1)
   })
 
-  it('takes a crashed send again only once it is stale, under the same key', async () => {
+  it('after a timeout once the email was accepted, the next daily run sends nothing and alerts', async () => {
+    const accepted: InvoiceMail[] = []
+    const { port, row } = fakePort({
+      profile: { ...PROFILE, holdNext: false },
+      email: async (m) => { accepted.push(m); throw new Error('The operation timed out') },
+    })
+    await sendInvoice(port, JAN.id)
+    expect(accepted).toHaveLength(1) // it reached the service; the answer was lost
+    expect(row.status).toBe('unconfirmed')
+    // the next morning: an auto profile, not held, and the job still leaves it alone
+    const plan = planSends([row], [{ ...PROFILE, holdNext: false }])
+    expect(plan.send).toEqual([])
+    expect(attentionLines(plan.attention)).toEqual([
+      expect.stringMatching(/^Invoice 0111 \(Acme SA, January 2027\) was not sent by the job: may have gone: .*Check your Bcc copy/),
+    ])
+  })
+
+  it('sends an unconfirmed invoice again once the operator confirms, under the same idempotency key', async () => {
+    const { port, row, sent } = fakePort({ invoice: { ...JAN, status: 'unconfirmed', sendError: 'No clear answer' } })
+    const r = await sendInvoice(port, JAN.id, { confirmUnsure: true })
+    expect(r.ok).toBe(true)
+    expect(row).toMatchObject({ status: 'sent', sendError: null })
+    expect(sent[0].idempotencyKey).toBe(sendKey(JAN.id))
+  })
+
+  it('treats a crashed send (a stale claim) as one that may have gone', async () => {
     const claimedAt = '2026-12-15T05:00:00.000Z'
     const stuck = { ...JAN, status: 'sending' as const, sendClaimedAt: claimedAt }
     const early = fakePort({ invoice: stuck, now: new Date(Date.parse(claimedAt) + STALE_CLAIM_MS - 1000) })
-    expect((await sendInvoice(early.port, JAN.id)).ok).toBe(false)
+    expect((await sendInvoice(early.port, JAN.id, { confirmUnsure: true })).message).toMatch(/already being sent/)
     expect(early.sent).toHaveLength(0)
     const late = fakePort({ invoice: stuck, now: new Date(Date.parse(claimedAt) + STALE_CLAIM_MS + 1000) })
-    expect((await sendInvoice(late.port, JAN.id)).ok).toBe(true)
-    expect(late.sent[0].idempotencyKey).toBe(`fin-invoice-${JAN.id}-${claimedAt}`)
+    expect(mayHaveGone(stuck, late.port.now())).toBe(true)
+    expect((await sendInvoice(late.port, JAN.id)).message).toMatch(/may already have gone/)
+    expect(late.sent).toHaveLength(0)
+    expect((await sendInvoice(late.port, JAN.id, { confirmUnsure: true })).ok).toBe(true)
+    expect(late.sent[0].idempotencyKey).toBe(`fin-invoice-${JAN.id}`)
+  })
+
+  it('reads a failure as definite only when the service refused before accepting', () => {
+    for (const code of [400, 401, 403, 404, 422, 429]) expect(invoiceFailureIsDefinite({ statusCode: code })).toBe(true)
+    for (const code of [409, 500, 502, 503]) expect(invoiceFailureIsDefinite({ statusCode: code })).toBe(false)
+    expect(invoiceFailureIsDefinite({ statusCode: null })).toBe(false)
+    expect(invoiceFailureIsDefinite(null)).toBe(false)
   })
 
   it('will not send a draft, an invoice with no PDF, or a void one', async () => {

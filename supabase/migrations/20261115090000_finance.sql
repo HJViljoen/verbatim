@@ -134,10 +134,12 @@ create table if not exists public.fin_invoices (
   total numeric(12,2) not null check (total >= 0),
   relates_to uuid references public.fin_invoices(id) on delete restrict,
   -- draft: issued, no PDF yet. ready: PDF printed, not sent. sending: an
-  -- email is in flight (claimed). sent. credited: a credit note cancels it.
-  -- void: never sent and withdrawn.
+  -- email is in flight (claimed). unconfirmed: the email service gave no
+  -- clear answer, so it may have gone; only a person, having checked the Bcc
+  -- copy, sends it again. sent. credited: a credit note cancels it. void:
+  -- never sent and withdrawn.
   status text not null default 'draft'
-    check (status in ('draft', 'ready', 'sending', 'sent', 'credited', 'void')),
+    check (status in ('draft', 'ready', 'sending', 'unconfirmed', 'sent', 'credited', 'void')),
   -- The day the client's accounts team said it would pay.
   expected_on date,
   sent_at timestamptz,
@@ -146,7 +148,8 @@ create table if not exists public.fin_invoices (
   -- The last send's failure, cleared by a successful one.
   send_error text,
   -- When the email in flight was claimed: a claim older than ten minutes is
-  -- a crashed send, and Send may take it again.
+  -- a send that crashed, and only a person may take it again (it may have
+  -- gone).
   send_claimed_at timestamptz,
   -- Printed under the lines after the currency sentence and the fx note.
   note text,

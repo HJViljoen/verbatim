@@ -43,17 +43,18 @@ export interface InvoiceActionsProps {
   recipients: string
   /** The invoice still owes something (Expected date makes sense). */
   owed: boolean
-  /** A claim older than ten minutes: a send that crashed may be retried. */
-  staleSend: boolean
+  /** It may already have gone (unconfirmed, or a send that crashed): Send
+   *  asks the operator to check the Bcc copy first. */
+  unsure: boolean
 }
 
-export function InvoiceActions({ invoice, recipients, owed, staleSend }: InvoiceActionsProps) {
+export function InvoiceActions({ invoice, recipients, owed, unsure }: InvoiceActionsProps) {
   const [armed, setArmed] = useState(false)
   const [sent, send, sending] = useAction(sendInvoiceNow, () => setArmed(false))
   const [tested, test, testing] = useAction(sendInvoiceTest)
   const [printed, print, printing] = useAction(printInvoice)
   const answer = [sent, tested, printed].find((s) => s.message) ?? IDLE
-  const canSend = invoice.kind === 'invoice' && invoice.pdfPath !== null && (invoice.status === 'ready' || staleSend)
+  const canSend = invoice.kind === 'invoice' && invoice.pdfPath !== null && (invoice.status === 'ready' || unsure)
   const canPrint = invoice.status === 'draft' || invoice.status === 'ready'
   const canTest = invoice.pdfPath !== null && invoice.status !== 'void'
 
@@ -61,8 +62,18 @@ export function InvoiceActions({ invoice, recipients, owed, staleSend }: Invoice
     return (
       <form action={send} className="flex flex-wrap items-center gap-2 rounded-[10px] bg-inner px-3 py-2.5">
         <input type="hidden" name="id" value={invoice.id} />
-        <span className="text-[13px]">Send invoice {invoice.number} to {recipients} now?</span>
-        <button type="submit" autoFocus disabled={sending} className={buttonClass('primary', 'small')}>{sending ? 'Sending…' : 'Send it'}</button>
+        {unsure ? (
+          <>
+            <input type="hidden" name="confirmUnsure" value="1" />
+            <span className="text-[13px]">
+              <strong className="font-semibold">Check your Bcc copy in Gmail first: it may already have gone.</strong>{' '}
+              Send invoice {invoice.number} to {recipients} again only if it is not there.
+            </span>
+          </>
+        ) : (
+          <span className="text-[13px]">Send invoice {invoice.number} to {recipients} now?</span>
+        )}
+        <button type="submit" autoFocus disabled={sending} className={buttonClass('primary', 'small')}>{sending ? 'Sending…' : unsure ? 'It did not go: send it' : 'Send it'}</button>
         <button type="button" onClick={() => setArmed(false)} className={buttonClass('ghost', 'small')}>Not yet</button>
         <Said ok={sent.ok} message={sent.ok ? '' : sent.message} />
       </form>
@@ -72,7 +83,7 @@ export function InvoiceActions({ invoice, recipients, owed, staleSend }: Invoice
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
-        {canSend ? <button type="button" onClick={() => setArmed(true)} className={buttonClass('primary', 'small')}>Send…</button> : null}
+        {canSend ? <button type="button" onClick={() => setArmed(true)} className={buttonClass('primary', 'small')}>{unsure ? 'Send again…' : 'Send…'}</button> : null}
         {canPrint ? (
           <form action={print}>
             <input type="hidden" name="id" value={invoice.id} />

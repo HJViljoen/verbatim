@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { holdNotices, noticeEmail, nudgeNotices, planSends, runDay } from './daily'
+import { attentionLines, holdNotices, noticeEmail, nudgeNotices, planSends, runDay } from './daily'
 import { PROFILE, invoice, yearOfInvoices } from './fixtures'
 import { applyPayments } from './ledger'
 import type { Invoice } from './types'
@@ -26,13 +26,13 @@ describe('the day a run acts for', () => {
 
 describe('who sends what', () => {
   it('holds the next invoice for a tap while hold_next is on (D1), and sends it once it is off', () => {
-    expect(planSends([READY], [PROFILE])).toEqual({ send: [], hold: [READY] })
-    expect(planSends([READY], [{ ...PROFILE, holdNext: false }])).toEqual({ send: [READY], hold: [] })
+    expect(planSends([READY], [PROFILE])).toEqual({ send: [], hold: [READY], attention: [] })
+    expect(planSends([READY], [{ ...PROFILE, holdNext: false }])).toEqual({ send: [READY], hold: [], attention: [] })
   })
 
   it('never sends for a review profile or a paused one', () => {
-    expect(planSends([READY], [{ ...PROFILE, holdNext: false, sendMode: 'review' }])).toEqual({ send: [], hold: [READY] })
-    expect(planSends([READY], [{ ...PROFILE, holdNext: false, active: false }])).toEqual({ send: [], hold: [READY] })
+    expect(planSends([READY], [{ ...PROFILE, holdNext: false, sendMode: 'review' }])).toEqual({ send: [], hold: [READY], attention: [] })
+    expect(planSends([READY], [{ ...PROFILE, holdNext: false, active: false }])).toEqual({ send: [], hold: [READY], attention: [] })
   })
 
   it('leaves alone what it did not issue, has no PDF for, or is already done', () => {
@@ -40,8 +40,20 @@ describe('who sends what', () => {
     expect(planSends([{ ...READY, profileId: null }], [p]).send).toEqual([])
     expect(planSends([{ ...READY, pdfPath: null }], [p]).send).toEqual([])
     expect(planSends([{ ...READY, status: 'sent' }, { ...READY, status: 'draft' }], [p]).send).toEqual([])
-    // a send that crashed mid-way is offered again (the claim decides)
-    expect(planSends([{ ...READY, status: 'sending' }], [p]).send).toHaveLength(1)
+  })
+
+  it('never sends what may have gone, is in flight, or failed last time: it lists them for the operator', () => {
+    const p = { ...PROFILE, holdNext: false }
+    const unsure = { ...READY, status: 'unconfirmed' as const, sendError: 'No clear answer from the email service (timeout); it may have gone.' }
+    const inFlight = { ...READY, number: '0112', status: 'sending' as const, sendClaimedAt: '2026-12-15T05:00:00.000Z' }
+    const failed = { ...READY, number: '0113', sendError: 'domain not verified' }
+    const plan = planSends([unsure, inFlight, failed], [p])
+    expect(plan.send).toEqual([])
+    expect(plan.hold).toEqual([])
+    expect(plan.attention.map((a) => a.invoice.number)).toEqual(['0111', '0112', '0113'])
+    const lines = attentionLines(plan.attention)
+    expect(lines[0]).toBe('Invoice 0111 (Acme SA, January 2027) was not sent by the job: may have gone: No clear answer from the email service (timeout); it may have gone.. Check your Bcc copy, then use Send on Ops → Costs if it did not go.')
+    expect(lines[2]).toContain('its last send failed: domain not verified')
   })
 })
 

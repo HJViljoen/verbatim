@@ -4,7 +4,7 @@ import { fmtDay } from '@/lib/costs/dates'
 import { fmtUsd, fmtZar } from '@/lib/costs/money'
 import { LEDGER_STATE_LABEL, type LedgerState } from '@/lib/finance/ledger'
 import { fmtMoney } from '@/lib/finance/money'
-import { DUE_RULE_LABEL, SEND_MODE_LABEL, STALE_CLAIM_MS } from '@/lib/finance/types'
+import { DUE_RULE_LABEL, SEND_MODE_LABEL, mayHaveGone } from '@/lib/finance/types'
 import type { MoneyView } from '@/lib/finance/view'
 import { cn } from '@/lib/utils'
 import { Pill } from './fields'
@@ -69,14 +69,14 @@ export function Invoices({ view, today, usdZar, now }: { view: MoneyView; today:
         <ol className="m-0 flex list-none flex-col p-0">
           {view.invoices.map(({ invoice: i, balance: b, relatedNumber, pdfUrl, waiting, autoSends }) => {
             const credit = i.kind === 'credit_note'
-            const stale = i.status === 'sending' && i.sendClaimedAt !== null && now.getTime() - Date.parse(i.sendClaimedAt) >= STALE_CLAIM_MS
+            const unsure = mayHaveGone(i, now)
             return (
               <li key={i.id} className="grid grid-cols-1 gap-x-6 gap-y-2 border-t border-border py-3.5 first:border-t-0 first:pt-0 lg:grid-cols-[minmax(0,1fr)_auto]">
                 <div className="flex min-w-0 flex-col gap-1.5">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-mono text-[14px] font-semibold tabular-nums">{credit ? i.number : `Invoice ${i.number}`}</span>
                     <span className="text-[13.5px]">{i.periodLabel}</span>
-                    <Pill tone={STATE_TONE[b.state]}>{credit ? 'Credit note' : i.status === 'draft' ? 'Not printed' : i.status === 'sending' ? 'Sending' : LEDGER_STATE_LABEL[b.state]}</Pill>
+                    <Pill tone={unsure ? 'bad' : STATE_TONE[b.state]}>{credit ? 'Credit note' : unsure ? 'May have gone' : i.status === 'draft' ? 'Not printed' : i.status === 'sending' ? 'Sending' : LEDGER_STATE_LABEL[b.state]}</Pill>
                     {b.partPaid && b.state !== 'part' ? <Pill tone="soft">Part-paid</Pill> : null}
                     {waiting ? <Pill tone="soft">Held for you</Pill> : null}
                     {i.status === 'ready' && autoSends ? <Pill tone="faint">Sends itself</Pill> : null}
@@ -91,14 +91,19 @@ export function Invoices({ view, today, usdZar, now }: { view: MoneyView; today:
                     {i.expectedOn && b.balanceCents > 0 ? <span className={i.expectedOn < today ? 'text-negative' : undefined}>Promised for {fmtDay(i.expectedOn)}</span> : null}
                     {pdfUrl ? <a href={pdfUrl} target="_blank" rel="noreferrer" className="font-medium text-foreground underline-offset-2 hover:underline">PDF</a> : null}
                   </p>
-                  {i.sendError && (i.status === 'ready' || i.status === 'sending') ? (
-                    <p className="m-0 text-[12.5px] text-negative">The last send did not go: {i.sendError}</p>
+                  {i.sendError && i.status === 'ready' ? (
+                    <p className="m-0 text-[12.5px] text-negative">The last send did not go: {i.sendError} The daily job will not retry it; Send does.</p>
+                  ) : null}
+                  {unsure ? (
+                    <p className="m-0 text-[12.5px] text-negative">
+                      It may have gone{i.sendError ? ` (${i.sendError})` : ' (the send stopped half-way)'}. The daily job will not send it again.
+                    </p>
                   ) : null}
                   <InvoiceActions
                     invoice={i}
                     recipients={(i.profileId ? recipients.get(i.profileId) : null) || 'the client'}
                     owed={b.balanceCents > 0}
-                    staleSend={stale}
+                    unsure={unsure}
                   />
                 </div>
                 <div className="text-left text-[13px] tabular-nums lg:text-right">

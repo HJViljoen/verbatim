@@ -1,6 +1,6 @@
 import { inngest } from '@/inngest/client'
 import { sendAlertEmail } from '@/lib/email'
-import { holdNotices, nudgeNotices, planSends, runDay } from '@/lib/finance/daily'
+import { attentionLines, holdNotices, nudgeNotices, planSends, runDay } from '@/lib/finance/daily'
 import {
   allProfiles, callAdmin, issueAll, ledgerRows, refreshFx, syncApify, tellOperator, unfinishedInvoices,
 } from '@/lib/finance/daily-io'
@@ -20,7 +20,9 @@ import { createAdminClient } from '@/lib/supabase-admin'
 //   'plan-print'        the drafts still to print
 //   'print:<number>'    one per draft: fetches the render route (Chromium runs
 //                       there, never in a step)
-//   'plan-send'         which ready invoices send themselves and which wait
+//   'plan-send'         which ready invoices send themselves and which wait;
+//                       one that may have gone, is in flight or whose last send
+//                       failed is never sent by the job, only listed in 'alert'
 //   'send:<number>'     one per auto invoice: fetches the send route (claim,
 //                       email with the PDF, record)
 //   'tell-held'         one email to the operator for invoices waiting for a
@@ -60,8 +62,11 @@ export const financeDaily = inngest.createFunction(
     const plan = await step.run('plan-send', async () => {
       const admin = createAdminClient()
       const p = planSends(await unfinishedInvoices(admin), await allProfiles(admin))
-      return { send: p.send.map((i) => ({ id: i.id, number: i.number })), held: holdNotices(p.hold) }
+      return { send: p.send.map((i) => ({ id: i.id, number: i.number })), held: holdNotices(p.hold), attention: attentionLines(p.attention) }
     })
+    // What the job will not send (it may have gone, or its last send failed):
+    // the operator's, every run until they act.
+    problems.push(...plan.attention)
     for (const s of plan.send) {
       const r = await step.run(`send:${s.number}`, () => callAdmin<{ ok?: boolean; message?: string }>(`/api/admin/finance/invoices/${s.id}/send`))
       if (!r.ok || !r.json.ok) problems.push(`Invoice ${s.number} did not send: ${r.json.message ?? r.status}`)

@@ -25,25 +25,40 @@ export interface SendPlan {
   send: Invoice[]
   /** Ready invoices waiting for the operator's tap: held, or a review profile. */
   hold: Invoice[]
+  /** Invoices the job will not touch and the operator must look at: one that
+   *  may have gone (unconfirmed, or a send that crashed), one in flight, and
+   *  one whose last send failed. Listed in the run's alert, every run. */
+  attention: { invoice: Invoice; why: string }[]
 }
 
 /**
- * Who sends what. Only invoices the job issued (a profile's) are considered;
- * a `sending` one whose claim went stale is retried like a ready one. A
- * paused profile's ready invoice waits.
+ * Who sends what. Only invoices the job issued (a profile's) are considered.
+ * NOTHING THAT MAY HAVE GONE IS SENT AGAIN BY THE JOB: an unconfirmed
+ * invoice, a `sending` one (in flight, or crashed), and any invoice whose
+ * last send failed wait for the operator, who checks the Bcc copy and taps
+ * (lib/finance/send.ts). A paused profile's ready invoice waits too.
  */
 export function planSends(invoices: readonly Invoice[], profiles: readonly BillingProfile[]): SendPlan {
   const byId = new Map(profiles.map((p) => [p.id, p]))
-  const out: SendPlan = { send: [], hold: [] }
+  const out: SendPlan = { send: [], hold: [], attention: [] }
   for (const i of invoices) {
-    if (i.kind !== 'invoice' || !i.profileId || !i.pdfPath) continue
-    if (i.status !== 'ready' && i.status !== 'sending') continue
+    if (i.kind !== 'invoice' || !i.profileId) continue
+    if (i.status === 'unconfirmed') { out.attention.push({ invoice: i, why: `may have gone: ${i.sendError ?? 'no clear answer from the email service'}` }); continue }
+    if (i.status === 'sending') { out.attention.push({ invoice: i, why: 'a send started and has not finished; if it is still so in ten minutes it may have gone' }); continue }
+    if (i.status !== 'ready' || !i.pdfPath) continue
+    if (i.sendError) { out.attention.push({ invoice: i, why: `its last send failed: ${i.sendError}` }); continue }
     const p = byId.get(i.profileId)
     if (!p) continue
     if (p.active && p.sendMode === 'auto' && !p.holdNext) out.send.push(i)
-    else if (i.status === 'ready') out.hold.push(i)
+    else out.hold.push(i)
   }
   return out
+}
+
+/** The alert's lines for invoices that need the operator. */
+export function attentionLines(attention: SendPlan['attention']): string[] {
+  return attention.map(({ invoice: i, why }) =>
+    `Invoice ${i.number} (${i.billTo}, ${i.periodLabel}) was not sent by the job: ${why}. Check your Bcc copy, then use Send on Ops → Costs if it did not go.`)
 }
 
 export interface Notice {

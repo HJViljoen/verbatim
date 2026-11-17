@@ -11,8 +11,10 @@ export const INVOICE_KINDS = ['invoice', 'credit_note'] as const
 export type InvoiceKind = (typeof INVOICE_KINDS)[number]
 
 /** draft: issued, no PDF yet. ready: printed, not sent. sending: an email is
- *  in flight. sent. credited: a credit note cancels it. void: withdrawn. */
-export const INVOICE_STATUSES = ['draft', 'ready', 'sending', 'sent', 'credited', 'void'] as const
+ *  in flight. unconfirmed: the email service gave no clear answer, so it may
+ *  have gone (a person decides). sent. credited: a credit note cancels it.
+ *  void: withdrawn. */
+export const INVOICE_STATUSES = ['draft', 'ready', 'sending', 'unconfirmed', 'sent', 'credited', 'void'] as const
 export type InvoiceStatus = (typeof INVOICE_STATUSES)[number]
 
 /** end_of_prev_month: billed in advance, due by the last day of the month
@@ -24,8 +26,16 @@ export const SEND_MODES = ['auto', 'review'] as const
 export type SendMode = (typeof SEND_MODES)[number]
 
 /** A send claimed longer ago than this crashed between the claim and the
- *  answer; Send may take it again (lib/finance/send.ts). */
+ *  answer; it may have gone, so only a person may send it again
+ *  (lib/finance/send.ts). */
 export const STALE_CLAIM_MS = 10 * 60 * 1000
+
+/** Whether an invoice may have gone: unconfirmed, or a send that crashed (a
+ *  claim older than STALE_CLAIM_MS). Only a person sends one again. */
+export function mayHaveGone(inv: { status: string; sendClaimedAt: string | null }, now: Date): boolean {
+  if (inv.status === 'unconfirmed') return true
+  return inv.status === 'sending' && inv.sendClaimedAt !== null && now.getTime() - Date.parse(inv.sendClaimedAt) >= STALE_CLAIM_MS
+}
 
 export const NOTICE_KINDS = ['ready', 'overdue', 'expected'] as const
 export type NoticeKind = (typeof NOTICE_KINDS)[number]

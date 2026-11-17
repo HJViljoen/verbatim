@@ -90,12 +90,14 @@ export async function printInvoice(_prev: CostsActionState, f: FormData): Promis
   return r.ok ? { ok: true, message: 'Printed.' } : { ok: false, message: r.json.error ?? `Could not print it (${r.status}).` }
 }
 
-/** Send it to the client (the page's Send, after it asked). Clears the hold. */
+/** Send it to the client (the page's Send, after it asked). An invoice that
+ *  may already have gone is sent again only when the form says the operator
+ *  checked the Bcc copy and confirmed (`confirmUnsure`). */
 export async function sendInvoiceNow(_prev: CostsActionState, f: FormData): Promise<CostsActionState> {
   if (!(await costsAdmin())) return NOT_FOUND
   const id = idOf(f)
   if (!id) return { ok: false, message: 'No such invoice.' }
-  const r = await sendInvoice(supabaseSendPort(createAdminClient()), id)
+  const r = await sendInvoice(supabaseSendPort(createAdminClient()), id, { confirmUnsure: f.get('confirmUnsure') === '1' })
   revalidatePath(PATH)
   return { ok: r.ok, message: r.message }
 }

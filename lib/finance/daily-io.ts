@@ -46,7 +46,7 @@ export async function unfinishedInvoices(admin: Admin): Promise<Invoice[]> {
   return check<Row[]>('fin_invoices', await admin
     .from('fin_invoices')
     .select('*')
-    .in('status', ['draft', 'ready', 'sending'])
+    .in('status', ['draft', 'ready', 'sending', 'unconfirmed'])
     .not('profile_id', 'is', null)
     .order('number')
     .limit(1000)).map(invoiceFromRow)
