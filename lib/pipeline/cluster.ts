@@ -49,25 +49,54 @@ export interface ClusterOptions {
  *  number over there would drift the moment either moved. */
 export const EMBED_BATCH = 512
 
+/** Embeddings requests the clustering keeps in flight at once (18 Nov).
+ *  One at a time, Sealand's 10,743-insight industry-other is 21 requests and
+ *  about 32 s of its 255 s step (34.2 s measured from a laptop on 18 Nov; a
+ *  512-text request runs about 1.5 s in production's ai_call_log `embed`
+ *  rows), a request more every 512 insights. Four at a time is the same
+ *  requests, so the same vectors in the same order and the same tokens inside
+ *  the same minute (a bucket's pass fits in one either way), in about a
+ *  quarter of the time. */
+export const CLUSTER_EMBED_PARALLEL = 4
+
 /** Embed texts, preserving input order. Returns [] for empty input.
- *  Chunked (EMBED_BATCH) and sequential: a bucket is a handful of requests,
- *  and the pipeline shares a 5-slot concurrency with everything else. A failed
- *  chunk throws — the Inngest step retries the whole step. */
-export async function embedTexts(texts: string[], request?: { timeout?: number; maxRetries?: number }): Promise<number[][]> {
+ *  Chunked (EMBED_BATCH), and sequential unless the caller asks for
+ *  `parallel` requests in flight: the requests and their order of results
+ *  are the same either way, only how many wait at once differs. A failed
+ *  chunk throws — the Inngest step retries the whole step — and no further
+ *  chunk is started after it. */
+export async function embedTexts(
+  texts: string[],
+  request?: { timeout?: number; maxRetries?: number },
+  parallel = 1,
+): Promise<number[][]> {
   if (texts.length === 0) return []
-  const out: number[][] = []
-  for (const part of chunk(texts, EMBED_BATCH)) {
-    // `request`: the SDK's per-call options, where a caller holds the call to
-    // time (the week read's step, lib/written/deadline.ts); absent, its defaults.
-    const res = await openai.embeddings.create({ model: EMBEDDING_MODEL, input: part }, request)
-    if (res.data.length !== part.length) {
-      throw new Error(`embedTexts: ${EMBEDDING_MODEL} returned ${res.data.length} vectors for ${part.length} inputs`)
+  const parts = chunk(texts, EMBED_BATCH)
+  const vectors: number[][][] = new Array(parts.length)
+  let next = 0
+  let failed = false
+  const worker = async () => {
+    while (!failed && next < parts.length) {
+      const p = next++
+      const part = parts[p]
+      try {
+        // `request`: the SDK's per-call options, where a caller holds the call to
+        // time (the week read's step, lib/written/deadline.ts); absent, its defaults.
+        const res = await openai.embeddings.create({ model: EMBEDDING_MODEL, input: part }, request)
+        if (res.data.length !== part.length) {
+          throw new Error(`embedTexts: ${EMBEDDING_MODEL} returned ${res.data.length} vectors for ${part.length} inputs`)
+        }
+        // The API returns items with an `index`; sort to be order-safe. The index
+        // is per-REQUEST, so sort within the chunk and keep chunks in place — never across.
+        vectors[p] = [...res.data].sort((a, b) => a.index - b.index).map((d) => d.embedding)
+      } catch (e) {
+        failed = true
+        throw e
+      }
     }
-    // The API returns items with an `index`; sort to be order-safe. The index
-    // is per-REQUEST, so sort within the chunk and append — never across.
-    for (const d of [...res.data].sort((a, b) => a.index - b.index)) out.push(d.embedding)
   }
-  return out
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(parallel, parts.length)) }, worker))
+  return vectors.flat()
 }
 
 export function cosine(a: number[], b: number[]): number {
@@ -425,7 +454,7 @@ export async function clusterInsightsWithCentroids(
 
   // embedding
   const threshold = opts.threshold ?? CLUSTER_SIMILARITY_THRESHOLD
-  const vecs = await embedTexts(insights.map(embedInput))
+  const vecs = await embedTexts(insights.map(embedInput), undefined, CLUSTER_EMBED_PARALLEL)
   const groups = averageLinkageClusters(vecs, threshold)
   return {
     clusters: groups.map((idxs) => idxs.map((i) => insights[i])),
