@@ -38,9 +38,15 @@
  *
  * ONE SMALL READ a platform (`loadSearchHistory`): the tenant's last
  * SEARCH_VOLUME_FETCH_RUNS runs with their `keyword_performance` rows for the
- * platform embedded, one PostgREST statement on the (client_id, run_id) index,
- * inside the platform's existing `gate:<platform>` step, so no step id moves.
- * It never throws: a failed read is no check, logged.
+ * platform embedded, one PostgREST statement (`pipeline_runs` by client_id,
+ * `keyword_performance` by run_id), inside the platform's existing
+ * `gate:<platform>` step, so no step id moves. It never throws and is capped
+ * at SEARCH_VOLUME_READ_MS: a failed or slow read is no check, logged.
+ *
+ * A COLLAPSE THAT LASTS GOES QUIET: collapsed runs join the baseline, so the
+ * warning fires for one or two runs and then stops (simulated at the 22 Nov
+ * level: Sealand silent from 6 Dec, Ossur from 13 Dec). Silence after a
+ * warning is not a recovery; compare the found counts.
  */
 
 import { platformLabel } from '../format'
@@ -59,6 +65,8 @@ export const SEARCH_VOLUME_COLLAPSE_RATIO = 0.25
 export const SEARCH_VOLUME_WINDOW_FACTOR = 2
 /** Runs read, so that up to HISTORY_RUNS survive the comparable filter. */
 export const SEARCH_VOLUME_FETCH_RUNS = 8
+/** The history read's own deadline (the gate step's 300 s cap is shared). */
+export const SEARCH_VOLUME_READ_MS = 10_000
 
 const DAY_MS = 86_400_000
 
@@ -200,6 +208,10 @@ export async function loadSearchHistory(
       .eq('keyword_performance.platform', args.platform)
       .order('started_at', { ascending: false })
       .limit(SEARCH_VOLUME_FETCH_RUNS)
+      // The read sits after the gate's paid classification inside one step,
+      // so it must never be what pushes that step to its cap: an abort comes
+      // back as `error` (postgrest-js does not throw) and is no check.
+      .abortSignal(AbortSignal.timeout(SEARCH_VOLUME_READ_MS))
     if (error) throw new Error(error.message)
     return comparableHistory(historyFromRows((data ?? []) as unknown as HistoryRow[]), days)
   } catch (e) {

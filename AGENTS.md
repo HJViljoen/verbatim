@@ -406,9 +406,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
   median of its last 4 comparable runs (uncapped, found more than 0, window
   within 2× of this run's), with at least 3 of them and a median of at least
   50. The history is one embedded read inside the platform's existing
-  `gate:<platform>` step (no new id: 82 = 82), never a throw; a capped or
-  unwindowed run is not judged. Not an error: the status and every rule that
-  judges a run are unchanged.
+  `gate:<platform>` step (no new id: 82 = 82), capped at 10 s, never a throw;
+  a capped or unwindowed run is not judged. Not an error: the status and
+  every rule that judges a run are unchanged. A collapse that lasts goes
+  quiet after one or two runs (collapsed runs join the baseline), so silence
+  after the warning is not a recovery.
 - **A run has 1,000 steps, and the per-video fan-outs are one step a WAVE**
   (9 Nov, `lib/pipeline/step-budget.ts`). Inngest ends a function run at its
   1,000th step and nothing after it runs: Sealand's 8 Nov update `c5690bb0`
