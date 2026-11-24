@@ -1084,8 +1084,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
   again: only where no rebuild can email anyone twice (`runnerClaimDecision`,
   `holdsBeforeEmail`, `lib/schedules/claim.ts`: every weekly read, a block
   artefact under review, on a row that never stood `ready`). A document
-  build's claim, a digest and a delivery that died (`claimed` with `ready_at`)
-  answer as before. The build's reads end by `WEEKLY_READ_BUILD_MS` (120 s) or
+  build's claim and a digest answer as before. A delivery that died
+  (`claimed` with `ready_at`) is never rebuilt, young or stale (before 24 Nov
+  a stale one was): the Studio's stalled-row Send is the way out. The build's reads end by `WEEKLY_READ_BUILD_MS` (120 s) or
   throw, so a stall is a `failed` send and an alert, and a send still
   `claimed` past the stale window is the daily ops check's `send_stuck`
   (`lib/schedules/send-claim.test.ts`). Every other schedule still

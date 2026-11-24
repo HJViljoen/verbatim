@@ -138,6 +138,9 @@ export async function claimSend(admin: SupabaseClient, schedule: Pick<ScheduleRo
       .update({ status: 'claimed', claimed_at: new Date(now).toISOString(), error: null, recipients: schedule.recipients, schedule_name: schedule.name })
       .eq('id', row.id)
       .eq('claimed_at', row.claimed_at)
+      // Standing a row `ready` leaves claimed_at alone, so the status is part
+      // of the compare-and-set: a row that turned `ready` meanwhile is kept.
+      .eq('status', row.status)
       .select('id')
       .maybeSingle()
     if (error) throw new Error(`send: reclaim failed: ${error.message}`)
