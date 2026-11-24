@@ -201,7 +201,8 @@ async function loadInputs(now: Date): Promise<HealthInputs> {
     // Every status, not just 'sent': a 'ready' row is a review hold waiting on
     // a human and 'skipped' means the schedule had no recipients — neither is a
     // missed update. Filtered on claimed_at because a held row has no sent_at.
-    admin.from('report_sends').select('run_id, sent_at, status').gte('claimed_at', since),
+    // The id, owner, name and claim time name a send that stopped partway.
+    admin.from('report_sends').select('id, client_id, schedule_name, run_id, sent_at, status, claimed_at').gte('claimed_at', since),
   ])
   for (const [what, res] of [['clients', clientsRes], ['tracking_configs', configsRes], ['pipeline_runs', runsRes], ['report_sends', sendsRes]] as const) {
     if (res.error) throw new Error(`reading ${what}: ${res.error.message}`)
@@ -228,8 +229,8 @@ async function loadInputs(now: Date): Promise<HealthInputs> {
       })),
       now,
     ),
-    reportSends: ((sendsRes.data ?? []) as { run_id: string | null; sent_at: string | null; status: string | null }[])
-      .map((s) => ({ runId: s.run_id, sentAt: s.sent_at, status: s.status })),
+    reportSends: ((sendsRes.data ?? []) as { id: string; client_id: string | null; schedule_name: string | null; run_id: string | null; sent_at: string | null; status: string | null; claimed_at: string | null }[])
+      .map((s) => ({ runId: s.run_id, sentAt: s.sent_at, status: s.status, id: s.id, clientId: s.client_id, scheduleName: s.schedule_name, claimedAt: s.claimed_at })),
   }
 }
 

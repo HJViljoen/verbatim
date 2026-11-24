@@ -1075,7 +1075,20 @@ This version has breaking changes — APIs, conventions, and file structure may 
   `send:<scheduleId>` step finds the row `ready` (`waiting`) and only
   publishes it, a no-op once it is there, so there is never a second build or
   review email; a publish that is refused answers 500 with one
-  `unpublished` alert, and the retry publishes. Every other schedule still
+  `unpublished` alert, and the retry publishes. A retry that finds the row
+  still `claimed` and young (22 Nov: Sealand's attempt was killed at the
+  route's 300 s mid-build, and the retry's 200 "skipped" stranded the row)
+  answers 409 `in_progress` with `retryAt`, and the step throws
+  `RetryAfterError` to come back once the claim is stale
+  (`SCHEDULE_CLAIM_STALE_MS` and a minute), takes the row over and builds
+  again: only where no rebuild can email anyone twice (`runnerClaimDecision`,
+  `holdsBeforeEmail`, `lib/schedules/claim.ts`: every weekly read, a block
+  artefact under review, on a row that never stood `ready`). A document
+  build's claim, a digest and a delivery that died (`claimed` with `ready_at`)
+  answer as before. The build's reads end by `WEEKLY_READ_BUILD_MS` (120 s) or
+  throw, so a stall is a `failed` send and an alert, and a send still
+  `claimed` past the stale window is the daily ops check's `send_stuck`
+  (`lib/schedules/send-claim.test.ts`). Every other schedule still
   skips with "no recipients". A review schedule's email goes to the
   OPERATOR (`ALERT_EMAIL`), not the members, wherever the Studio is hidden from
   the tenant or its sending is locked (`reviewAudience`,

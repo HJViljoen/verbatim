@@ -13,6 +13,7 @@ import { billingAccess, type BillingClient } from '../billing'
 import { cadenceReliability } from '../pipeline/cadence'
 import { missingRunRows } from '../pipeline/run-errors'
 import { DISPATCH_WAIT_CAP_MS, lastDailySlot, lastExpectedSlot, type ScheduleConfig } from '../pipeline/schedule-due'
+import { sendDidNotFinish } from '../schedules/copy'
 
 /** keepWarm runs every 5 min; 30 min means six consecutive misses. */
 export const INNGEST_SILENT_MS = 30 * 60_000
@@ -142,6 +143,13 @@ export interface HealthReportSend {
   /** report_sends.status — 'sent', 'ready' (held for review) and 'skipped' (no
    *  recipients) all mean the send path did as it was told. */
   status: string | null
+  /** For a send that stopped partway (`send_stuck`): which row, whose, and
+   *  when it was claimed. Absent on a caller that does not read them, which
+   *  is never a finding. */
+  id?: string
+  clientId?: string | null
+  scheduleName?: string | null
+  claimedAt?: string | null
 }
 
 export interface HealthInputs {
@@ -161,6 +169,7 @@ export type FindingKind =
   | 'run_stuck'
   | 'run_incomplete'
   | 'report_missed'
+  | 'send_stuck'
 
 export interface Finding {
   kind: FindingKind
@@ -341,6 +350,28 @@ export function assessPipelineHealth(inputs: HealthInputs): Finding[] {
     })
   }
 
+  // 6. A send that stopped partway (22 Nov: Sealand's weekly issue). An
+  //    attempt killed mid-build leaves its row 'claimed' with no failed mark
+  //    and no alert, and the missed-report rule above cannot see it: it waits
+  //    three hours, and any other send of the same run settles the run.
+  //    Past the claim's stale window (`sendDidNotFinish`) nothing is still
+  //    on it, so it is named, over the same two mornings as a missed report.
+  //    Named only: the step's own retry already rebuilt what was safe to
+  //    rebuild (lib/schedules/claim.ts), and what is left here may have
+  //    emailed the list before it stopped, or was meant to email nobody,
+  //    which the row does not record.
+  for (const s of inputs.reportSends) {
+    if (!s.status || !s.claimedAt || !sendDidNotFinish(s.status, s.claimedAt, now)) continue
+    const age = now - Date.parse(s.claimedAt)
+    if (!(age <= REPORT_MISSED_WINDOW_MS)) continue
+    findings.push({
+      kind: 'send_stuck',
+      clientId: s.clientId ?? undefined,
+      clientName: s.clientId ? nameById.get(s.clientId) : undefined,
+      detail: `send ${s.id ?? '?'} for "${s.scheduleName ?? '?'}" (run ${s.runId ?? '?'}) has been 'claimed' since ${s.claimedAt} (${ago(age)}): the attempt that claimed it stopped partway and nothing finished it`,
+    })
+  }
+
   return findings
 }
 
@@ -354,6 +385,7 @@ const HEADINGS: Record<FindingKind, string> = {
   run_stuck: 'A run is stuck',
   run_incomplete: 'An update finished without its record',
   report_missed: 'A finished update reached nobody',
+  send_stuck: 'A send stopped partway',
 }
 
 /** The operator email for one check. Leads with the two things to do first,

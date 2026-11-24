@@ -505,6 +505,64 @@ describe('assessPipelineHealth — an owed report that never went out', () => {
   })
 })
 
+describe('assessPipelineHealth — a send that stopped partway (22 Nov)', () => {
+  const client = { id: 'c1', name: 'Sealand', billing: comped, config: { report_period: 'paused', report_day: null } }
+  const send = (claimedAt: string, status = 'claimed') => ({
+    id: 'send-491c201a', clientId: 'c1', scheduleName: 'This week in your market', runId: 'r47', sentAt: null, status, claimedAt,
+  })
+
+  it("names a send still 'claimed' past the claim's stale window, by client, schedule, run and claim time", () => {
+    // Sealand's Sunday issue: claimed at 07:57:45Z, the check at 10:00Z.
+    const f = assessPipelineHealth(inputs({ clients: [client], reportSends: [send(agoMin(122))] }))
+    expect(kinds(f)).toEqual(['send_stuck'])
+    expect(f[0]).toMatchObject({ clientId: 'c1', clientName: 'Sealand' })
+    expect(f[0].detail).toContain('send-491c201a')
+    expect(f[0].detail).toContain('"This week in your market"')
+    expect(f[0].detail).toContain('run r47')
+    expect(f[0].detail).toContain(agoMin(122))
+  })
+
+  it('leaves a claim inside the stale window alone: something may still be on it', () => {
+    expect(assessPipelineHealth(inputs({ clients: [client], reportSends: [send(agoMin(29))] }))).toEqual([])
+  })
+
+  it('says nothing of a send that finished, whatever its age', () => {
+    for (const status of ['sent', 'ready', 'skipped', 'failed']) {
+      expect(assessPipelineHealth(inputs({ clients: [client], reportSends: [send(agoH(5), status)] }))).toEqual([])
+    }
+  })
+
+  it('stops naming it after two mornings, as a missed report', () => {
+    expect(kinds(assessPipelineHealth(inputs({ clients: [client], reportSends: [send(agoH(47))] })))).toEqual(['send_stuck'])
+    expect(assessPipelineHealth(inputs({ clients: [client], reportSends: [send(agoH(49))] }))).toEqual([])
+  })
+
+  it('is no finding where the caller read no claim time', () => {
+    expect(assessPipelineHealth(inputs({ reportSends: [{ runId: 'r47', sentAt: null, status: 'claimed' }] }))).toEqual([])
+  })
+
+  it('is caught even where another send of the same run settled it for the missed-report rule', () => {
+    const run = { id: 'r47', clientId: 'c1', status: 'completed', options: { sendReport: true }, startedAt: agoH(5), completedAt: agoH(4) }
+    const f = assessPipelineHealth(inputs({
+      clients: [client], runs: [run],
+      reportSends: [{ runId: 'r47', sentAt: agoH(4), status: 'sent' }, send(agoH(4))],
+    }))
+    expect(kinds(f)).toEqual(['send_stuck'])
+  })
+
+  it('the daily route reads what the rule names (a send it reads without its claim time is never one)', () => {
+    const src = readFileSync(new URL('../../app/api/cron/ops-check/route.ts', import.meta.url), 'utf8')
+    expect(src).toMatch(/from\('report_sends'\)\.select\('[^']*\bid, client_id, schedule_name\b[^']*\bclaimed_at\b[^']*'\)/)
+    expect(src).toContain('id: s.id, clientId: s.client_id, scheduleName: s.schedule_name, claimedAt: s.claimed_at')
+  })
+
+  it('reaches the ops email under its own heading', () => {
+    const f = assessPipelineHealth(inputs({ clients: [client], reportSends: [send(agoMin(122))] }))
+    const { text } = formatOpsEmail(f, NOW)
+    expect(text).toContain('• A send stopped partway [Sealand]: send send-491c201a')
+  })
+})
+
 describe('formatOpsEmail', () => {
   it('names every finding and leads with the two first moves', () => {
     const { subject, text } = formatOpsEmail(
