@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { MoveSentence } from '@/components/pages/v2/moves/moves'
 import { MEDICAL_LINE } from '@/lib/post-ideas/medical'
 import { MOVE_CARDS } from '@/lib/pages/v2/moves-fixture'
-import { moveSentence } from '@/lib/reports/briefs/app'
+import { moveSentence, namedSection } from '@/lib/reports/briefs/app'
 import { OSSUR_APP, SEALAND_APP, WORST_APP } from '@/lib/reports/briefs/app-fixture'
 import { deckPages } from '@/lib/reports/briefs/deck'
 import { BRIEF_ROLES, type BriefRole, type MonthlyBriefData } from '@/lib/reports/briefs/types'
@@ -102,7 +102,7 @@ describe('Leadership: Your moves (Brief-Leadership-07)', () => {
     const t = text(p)
     expect(t).toContain('Waiting for a decision 4')
     expect(t).toContain('01 Create an Össur Access Navigator for new amputees and caregivers')
-    expect(t).toContain('First raised 12 Oct · would move Where can I get one, 41 of 902 videos in October')
+    expect(t).toContain('Raised 12 Oct · would move Where can I get one, 41 of 902 category videos read in October')
     expect(t).toContain('Moves you dated · 1')
     expect(t).toContain('Dated 5 Oct · Done · read on Cost and affordability frustration')
     expect(t).toContain('August Left off the line')
@@ -123,30 +123,30 @@ describe('Leadership: Your moves (Brief-Leadership-07)', () => {
   })
 })
 
-describe('Sales: Who is buying (Brief-Sales-05, -06)', () => {
+describe('Sales: Who is in your market (Brief-Sales-05, -06; never "Who is buying")', () => {
   it('two groups a sheet, what they want, what stops them, what tips them, and what is in their videos; the fifth named', () => {
     const d = octoberFixture('sales')
-    const first = text(page(d, 'Who is buying'))
-    expect(first).toContain('Five groups comment in your market in October, as Voices describes them. The four in the most videos are here.')
+    const first = text(page(d, 'Who is in your market'))
+    expect(first).toContain('Five groups comment in your market in October, as Voices describes them, each counted by the videos it commented on, not by purchases. The four in the most videos are here.')
     expect(first).toContain('Caretaker 100 of 902 videos in October')
     expect(first).toContain('What tips them')
     expect(first).toContain('In their videos Talks most about Community & encouragement, 22 of their 100 videos. None of your products came up in them. Open in Voices →')
     expect(first).toContain('Your products in them: Pro-Flex Terra and Direct Socket.')
-    const second = text(page(d, 'Who is buying, continued'))
+    const second = text(page(d, 'Who is in your market, continued'))
     expect(second).toContain('Also in your market: Long-term user, in 50 of October’s videos.')
     expect(second).toContain('Open Long-term user in Voices →')
     expect(second).not.toContain('For a sale')
   })
 
   it('Sealand: products off, so no products line', () => {
-    expect(text(page(octoberFixture('sales', { tenant: 'sealand' }), 'Who is buying'))).not.toMatch(/Your products in them|None of your products/)
+    expect(text(page(octoberFixture('sales', { tenant: 'sealand' }), 'Who is in your market'))).not.toMatch(/Your products in them|None of your products/)
   })
 })
 
 describe('Marketing: Your products in the conversation (Brief-Marketing-05) and Who gets named without being asked (-06)', () => {
   it('Össur: each category, its videos, yours named, the products that came up, first-time marks, what stands out', () => {
     const t = text(page(octoberFixture('marketing'), 'Your products'))
-    expect(t).toContain('5 of your 65 products came up by name in October, and 151 of your market’s 902 videos were about them or their categories, a product named or not.')
+    expect(t).toContain('5 of your 65 products came up by name in October, and 151 of the 902 videos we read in October, your own posts and posts about you included, were about them or their categories, a product named or not.')
     expect(t).toContain('Feet 30 6 Pro-Flex Terra 3 · Pro-Flex XC 2 · Pro-Flex LP Align 1 First time')
     expect(t).toContain('Hands 48 0 None by name')
     expect(t).toContain('Praise in the comments Liners 13 of the 26 videos about liners have praise in their comments.')
@@ -154,12 +154,14 @@ describe('Marketing: Your products in the conversation (Brief-Marketing-05) and 
   })
 
   it('Sealand: each counted brand named unprompted with its verdict, praised and complained, what it is talked about for, the notes', () => {
-    const p = page(octoberFixture('marketing', { tenant: 'sealand' }), 'Named without being asked')
+    const p = page(octoberFixture('marketing', { tenant: 'sealand' }), 'Named outside our searches')
     const t = text(p)
     expect(t).toContain('The North Face 11 of 941 too few to compare 15 · 9 of 31 Comfort 9 of 31')
     expect(t).toContain('Sealand (you) 2 of 941')
-    expect(t).toContain('Not named without being asked in October: Freedom of Movement.')
-    expect(t).toContain('The North Face and Cotopaxi were named most without being asked: in 11 and 8 of the 941 videos.')
+    expect(t).toContain('Not named outside our searches in October: Freedom of Movement.')
+    // The company beside its rivals, never "named most" over its absence.
+    expect(t).toContain('Of the 941 videos none of our brand searches found, Sealand was named in 2, The North Face in 11 and Cotopaxi in 8.')
+    expect(t).not.toContain('named most')
     expect(p).toMatch(/data-copy="verdict"[^>]*>too few to compare/)
   })
 
@@ -167,17 +169,17 @@ describe('Marketing: Your products in the conversation (Brief-Marketing-05) and 
     const d = octoberFixture('marketing', { tenant: 'sealand' })
     const rows = d.fromApp!.find((s) => s.key === 'marketing.named')!.named!.rows
     expect(rows.filter((r) => r.verdict).length).toBe(1)
-    const slots = [...page(d, 'Named without being asked').matchAll(/<span[^>]*data-verdict-slot=""[^>]*>/g)].map((m) => /width:(\d+)px/.exec(m[0])?.[1])
+    const slots = [...page(d, 'Named outside our searches').matchAll(/<span[^>]*data-verdict-slot=""[^>]*>/g)].map((m) => /width:(\d+)px/.exec(m[0])?.[1])
     expect(slots).toHaveLength(rows.length)
     expect(new Set(slots).size).toBe(1)
     expect(Number(slots[0])).toBe(verdictSlotWidth(rows.map((r) => r.verdict)))
     // No verdict in the table: no slot.
     const none = octoberFixture('marketing', { app: { ...SEALAND_APP, named: { ...SEALAND_APP.named!, rows: rows.map((r) => ({ ...r, verdict: null })) } } })
-    expect(page(none, 'Named without being asked')).not.toContain('data-verdict-slot')
+    expect(page(none, 'Named outside our searches')).not.toContain('data-verdict-slot')
   })
 
   it('Össur, brands not counted: no named page; Sealand, no catalogue: no products page', () => {
-    expect(deckPages(octoberFixture('marketing')).map((x) => x.eyebrow)).not.toContain('Named without being asked')
+    expect(deckPages(octoberFixture('marketing')).map((x) => x.eyebrow)).not.toContain('Named outside our searches')
     expect(deckPages(octoberFixture('marketing', { tenant: 'sealand' })).map((x) => x.eyebrow)).not.toContain('Your products')
   })
 })
@@ -188,7 +190,7 @@ describe('Content: What to post next (Brief-Content-04) and Hooks and formats (-
     const p = page(d, 'What to post next')
     const t = text(p)
     expect(t).toContain('From questions people asked 4 to 31 October that none of your posts since August had touched on, the most videos first. 1× is a typical market video on the question.')
-    expect(t).toContain('23 of 841 videos, 4 to 31 Oct · 26 of 902 in October')
+    expect(t).toContain('23 of 841 videos in your market, 4 to 31 Oct · 26 of 902 in October')
     expect(t).toContain('Who\'s asking Long-term user, New amputee')
     expect(t).toContain('None of your 15 posts since August touched on it')
     expect(t).toContain('What they want to know · of 14 videos')
@@ -209,8 +211,8 @@ describe('Content: What to post next (Brief-Content-04) and Hooks and formats (-
     const posts = { ...hooks.posts!, total: 37 }
     const fromApp = d.fromApp!.map((s) => (s.key === 'content.hooks' ? { ...s, hooks: { ...hooks, posts, formats: { ...hooks.formats!, ownOf: 35 }, openings: hooks.openings ? { ...hooks.openings, ownOf: 33 } : null } } : s))
     const t = text(page({ ...d, fromApp }, 'Hooks and formats'))
-    expect(t).toContain('counts of 35 of Össur’s 37 posts and 182 Ottobock videos, each with a format read')
-    if (hooks.openings) expect(t).toMatch(/counts of 33 of Össur’s 37 posts[^,]*, each with an opening read/)
+    expect(t).toContain('counts of 35 of Össur’s 37 posts and 182 videos about Ottobock, its accounts’ and others’, each with a format read')
+    if (hooks.openings) expect(t).toMatch(/counts of 33 of Össur’s 37 posts and [^·]*, each with an opening read/)
   })
 
   it('Sealand: not a medical market, no medical line', () => {
@@ -219,7 +221,7 @@ describe('Content: What to post next (Brief-Content-04) and Hooks and formats (-
 
   it('Hooks and formats: the category\'s share, your posts and the rival\'s, the response; your posts in the month, the best by its kind and day', () => {
     const t = text(page(octoberFixture('content'), 'Hooks and formats'))
-    expect(t).toContain('Shares of 1,024 category videos · counts of 15 Össur posts and 182 Ottobock videos, each with a format read')
+    expect(t).toContain('Shares of the 1,024 category videos posted in October · counts of 15 Össur posts and 182 videos about Ottobock, its accounts’ and others’, each with a format read')
     expect(t).toContain('Story 40.1% 1 41 1.3×')
     expect(t).toContain('Your posts in October')
     expect(t).toContain('posts on your own accounts · Instagram 7, TikTok 4, YouTube 4')
@@ -238,5 +240,23 @@ describe('no ideas, no moves, no groups: those pages are left out and the rest p
       expect(deckPages(d).length).toBeGreaterThan(2)
     }
     void SEALAND_APP
+  })
+})
+
+describe('the brief\'s own naming on the named page (11 Nov)', () => {
+  it('one base for every brand, no unlike-base columns, the company\'s row kept', () => {
+    const d = octoberFixture('marketing', { tenant: 'sealand' })
+    const named = namedSection(SEALAND_APP.named, 'Sealand', {
+      month: '2026-10-01', comments: 9_000, read: 990, videos: 941,
+      rows: [
+        { brandKey: 'client', label: 'Sealand', you: true, comments: 3, videos: 2, platforms: ['Instagram'] },
+        { brandKey: 'r1', label: 'Cotopaxi', you: false, comments: 9, videos: 8, platforms: ['TikTok'] },
+      ],
+    })!
+    const fromApp = d.fromApp!.map((s) => (s.key === 'marketing.named' ? named : s))
+    const t = text(page({ ...d, fromApp }, 'Named outside our searches'))
+    expect(t).toContain('Sealand (you) 2 of 941')
+    expect(t).toContain('Cotopaxi 8 of 941')
+    expect(t).not.toMatch(/Praised · complained|Talked about for/)
   })
 })

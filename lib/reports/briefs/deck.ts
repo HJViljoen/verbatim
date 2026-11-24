@@ -2,9 +2,9 @@ import { aboutName } from '../../brands/labels'
 import { fmtInt, longMonth } from '../../format'
 import { monthsPhrase } from '../../written/month'
 import { languageName } from './markdown'
-import { adviceDetail, alsoInMarket, buyersSub, ideaReadLine, inTheirVideos, moveLine, namedNotes, ownTouchWords, pageHref, recordLine, whoAsks } from './app-words'
+import { adviceDetail, aimLevel, alsoInMarket, buyersSub, ideaReadLine, inTheirVideos, moveLine, namedNotes, ownTouchWords, pageHref, productsFoot, recordLine, whoAsks } from './app-words'
 import { canvasOf, findingsAfter, printsSection, V2_PAGES } from './canvas'
-import type { BriefFinding, BriefGroup, BriefIdea, BriefIdeas, BriefItem, BriefProducts, BriefQuote, BriefRole, BriefSection, StoredBriefData, SectionKey } from './types'
+import type { BriefAdvice, BriefFinding, BriefGroup, BriefIdea, BriefIdeas, BriefItem, BriefProducts, BriefQuote, BriefRole, BriefSection, StoredBriefData, SectionKey } from './types'
 import { APP_SECTION_KEYS, BRIEF_NAME, BRIEF_ROLES } from './types'
 
 // The brief as pages (pure): which page holds what, in the order the canvas
@@ -142,6 +142,56 @@ export const heardIn = (f: Pick<BriefFinding, 'months'>): string => {
   return months.length ? `Heard in ${monthsPhrase(months)}` : ''
 }
 
+/** A finding on fewer of the month's videos than this is few voices, and its
+ *  base line says so (the blind-report check, 9 Nov). */
+export const FEW_VOICES = 10
+
+/** "On 7 of the 768 videos in your market in October · few voices": a
+ *  finding's videos in the market in the brief's month, of the market's
+ *  videos then (In short's base, said the same way). Empty where the finding
+ *  carries no base (one stored before it). Pure. */
+export const findingBaseLine = (f: Pick<BriefFinding, 'base'>, month: string): string => {
+  if (!f.base) return ''
+  const line = `On ${f.base.k === 0 ? 'none' : fmtInt(f.base.k)} of the ${fmtInt(f.base.n)} videos in your market in ${longMonth(month)}`
+  return f.base.k < FEW_VOICES ? `${line} · few voices` : line
+}
+
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
+/** When a page's cards were heard, from the months' names: "from August to
+ *  October" for months in a row, "in October" for one, else "in July,
+ *  September and October" (the re-check, 11 Nov: "videos heard in August,
+ *  September and October" read as each card heard in every month). Pure. */
+export function monthSpan(names: readonly string[]): string {
+  if (names.length === 0) return ''
+  if (names.length === 1) return `in ${names[0]}`
+  const at = names.map((n) => MONTH_NAMES.indexOf(n))
+  const inRow = at.every((x, k) => x >= 0 && (k === 0 || x === (at[k - 1] + 1) % 12))
+  return inRow ? `from ${names[0]} to ${names[names.length - 1]}` : `in ${andList(names)}`
+}
+
+/** The floor every brand chip passed (compose.ts `heardFor`: `BRAND_MIN_VIDEOS`,
+ *  pinned equal in deck.test.ts): said where a chip was saved without its
+ *  count. */
+export const HEARD_FOR_FLOOR = 3
+
+/** The base under "What each brand is heard for" (the re-check, 11 Nov: the
+ *  chips printed with none): each chip's videos about its brand in what the
+ *  brief heard, few voices said; where a chip was saved without its count,
+ *  the floor every chip passed. Null with no chips, and on the September
+ *  canvas (it draws byte for byte as before). Pure. */
+export function heardForBase(f: Pick<BriefFinding, 'heardFor'>, d: Partial<Pick<StoredBriefData, 'fromApp'>>): string | null {
+  const chips = f.heardFor ?? []
+  if (chips.length === 0 || d.fromApp === undefined) return null
+  const counted = chips.filter((c): c is typeof c & { videos: number } => typeof c.videos === 'number')
+  if (counted.length < chips.length) return `Each from at least ${numberWordLower(HEARD_FOR_FLOOR)} videos about that brand, in what this brief heard.`
+  const few = counted.filter((c) => c.videos < FEW_VOICES)
+  const fewLine = few.length === 0 ? '' : few.length === counted.length ? ' · few voices' : ` · few voices: ${andList(few.map((c) => c.name))}`
+  return `Each from the videos about that brand in what this brief heard: ${counted.map((c) => `${c.name} ${fmtInt(c.videos)}`).join(', ')}${fewLine}.`
+}
+
+const numberWordLower = (n: number): string => (['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'][n] ?? fmtInt(n))
+
 /** "Who is buying, continued". */
 export const continuedTitle = (title: string): string => `${title}, continued`
 
@@ -188,9 +238,9 @@ export const EYEBROW: Readonly<Record<SectionKey, string>> = {
   'leadership.decisions': 'Questions for the business',
   'leadership.holds': 'What holds so far',
   // The October canvas (the boards' eyebrows, 18 Oct).
-  'sales.groups': 'Who is buying',
+  'sales.groups': 'Who is in your market',
   'marketing.products': 'Your products',
-  'marketing.named': 'Named without being asked',
+  'marketing.named': 'Named outside our searches',
   'content.ideas': 'What to post next',
   'content.hooks': 'Hooks and formats',
   'leadership.subjects': 'Where the market stands',
@@ -207,10 +257,46 @@ export const CONTENTS: Partial<Readonly<Record<SectionKey, string>>> = {
 
 export const eyebrowOf = (key: SectionKey, company: string): string => EYEBROW[key].replace(/\{company\}/g, company)
 
+/** The writer's card sections, whose cards rest on a few videos each: their
+ *  subtitle says how many (the fresh check, 11 Nov: cards on 3 to 9 videos
+ *  printed with no base and no few-voices mark). */
+const CARD_SECTIONS: ReadonlySet<SectionKey> = new Set<SectionKey>([
+  'sales.stops', 'sales.settle', 'sales.triggers', 'sales.rivals', 'sales.care',
+  'marketing.believe', 'marketing.say_hear', 'marketing.rivals',
+  'content.questions', 'content.watch', 'content.more', 'content.confusion',
+  'leadership.weigh', 'leadership.risks', 'leadership.decisions',
+])
+
+/** "Each rests on 3 to 9 videos from August to October · few voices.": what the cards a page prints rest on, few voices said where
+ *  every card is under `FEW_VOICES`, or the cards that are named. Null on a
+ *  section that is not a card section, or whose cards carry no count. Pure. */
+export function cardsEvidence(s: BriefSection, d: Partial<Pick<StoredBriefData, 'heardMonths'>>): string | null {
+  if (!CARD_SECTIONS.has(s.key)) return null
+  const items = s.groups.flatMap((g) => g.items).filter((i) => typeof i.videos === 'number' && i.videos > 0)
+  if (items.length === 0) return null
+  const vs = items.map((i) => i.videos as number)
+  const lo = Math.min(...vs)
+  const hi = Math.max(...vs)
+  const span = lo === hi ? `${fmtInt(lo)} ${lo === 1 ? 'video' : 'videos'}` : `${fmtInt(lo)} to ${fmtInt(hi)} videos`
+  const when = d.heardMonths?.length ? ` ${monthSpan(d.heardMonths.map((m) => longMonth(m)))}` : ''
+  const fewTitled = items.filter((i) => (i.videos as number) < FEW_VOICES && i.title).map((i) => `“${i.title}”`)
+  const few = vs.every((v) => v < FEW_VOICES) ? ' · few voices' : fewTitled.length ? ` · few voices: ${andList(fewTitled)}` : ''
+  return `${items.length === 1 ? 'It rests on' : 'Each rests on'} ${span}${when}${few}.`
+}
+
 /** The muted line under a section's title, where the canvas has one: what the
  *  section is, said plainly (code's words, never a claim), or the line code
- *  wrote from counts. Pure. */
-export function subtitleOf(s: BriefSection, d: Pick<StoredBriefData, 'company' | 'noun' | 'month'>, all?: BriefSection): string | null {
+ *  wrote from counts; then, on a card section, what its cards rest on
+ *  (`cardsEvidence`). Pure. */
+export function subtitleOf(s: BriefSection, d: Pick<StoredBriefData, 'company' | 'noun' | 'month'> & Partial<Pick<StoredBriefData, 'heardMonths' | 'fromApp'>>, all?: BriefSection): string | null {
+  const sub = canvasSubtitle(s, d, all)
+  // The October canvas only: a brief drawn on v1 (September's) draws byte for
+  // byte as before (components/briefs/september-golden.test.tsx).
+  const ev = d.fromApp !== undefined ? cardsEvidence(s, d) : null
+  return ev ? (sub ? `${sub} ${ev}` : ev) : sub
+}
+
+function canvasSubtitle(s: BriefSection, d: Pick<StoredBriefData, 'company' | 'noun' | 'month'>, all?: BriefSection): string | null {
   const p = productPhrases(d.company, d.noun)
   switch (s.key) {
     case 'sales.buyers': {
@@ -402,7 +488,13 @@ export const H = {
   },
   stop: (i: BriefItem): number => 25 + Math.max(heightOf(i.title ?? '', 196, 18, 1.3, 'bold'), heightOf(i.text, 490, 15, 1.55)),
   settle: (i: BriefItem): number => 15 + heightOf(i.text, 350, 14, 1.5),
-  trigger: (i: BriefItem, w: number): number => 28 + 10 + heightOf(i.title ?? '', w, 19, 1.25, 'bold') + 10 + heightOf(i.text, w, 15, 1.55),
+  // A moment's column is a fifth of the page, where whole words leave more of
+  // each line empty than a wide column does, and its title at 19px 700 runs
+  // wider than a title's average: so its measure is taken narrower, as the
+  // heard card's is (11 Nov, measured in Chrome on Össur's October moments:
+  // a 21-character title on two lines, 180 characters of text on seven, the
+  // number row 31px).
+  trigger: (i: BriefItem, w: number): number => 31 + 10 + heightOf(i.title ?? '', w * 0.87, 19, 1.25, 'bold') + 10 + heightOf(i.text, w * 0.87, 15, 1.55),
   triggerQuote: (q: BriefQuote): number => 19 + quoteH(q, (W - 40) / 3, 15, [14, 18]),
   rival: (i: BriefItem, w: number): number => {
     const inner = w - 46
@@ -452,7 +544,15 @@ export const H = {
   },
   /** A piece of advice waiting, on Your moves' left column (616 for the
    *  words beside the number). */
-  advice: (title: string, detail: string): number => 27 + heightOf(title, 616, 20, 1.35, true) + 5 + heightOf(detail, 616, 13, 1.45),
+  /** A piece of advice waiting: its title, and the line under it, whose
+   *  label is set bold and whose level is set in mono (app-pages.tsx
+   *  `AdviceDetail`), measured narrower by what they add (11 Nov: a line the
+   *  plain measure held to one line drew two). */
+  advice: (a: Pick<BriefAdvice, 'title' | 'firstMade' | 'aim'>, month: string): number => {
+    const level = aimLevel(a.aim)
+    const wider = (a.aim ? a.aim.label.length * (BOLD_CHAR - CHAR) : 0) + (level ? `${fmtInt(level.k)} of ${fmtInt(level.n)}`.length * (MONO_CHAR - CHAR) : 0)
+    return 27 + heightOf(a.title, 616, 20, 1.35, true) + 5 + heightOf(adviceDetail(a, month), 616 - wider * 13, 13, 1.45)
+  },
   /** A dated move's dark card, in the right column (406 inside it). */
   moveCard: (m: { title: string; line: string; sentence: string; verdict: boolean; axis: string | null }): number =>
     36 + 15 + 9 + heightOf(m.title, 406, 21, 1.25, 'bold') + 9 + heightOf(m.line, 406, 13, 1.45) + 9 + 4 + 72 + 9 + heightOf(m.sentence, 406, 15, 1.5)
@@ -597,7 +697,12 @@ export function planSection(s: BriefSection, companion: BriefSection | null, d: 
       const shown = all.slice(0, max)
       const w = (W - 24 * 4) / 5
       const tallest = Math.max(...shown.map((i) => H.trigger(i, w)))
-      const room = BODY_HEIGHT - titleH(sub) - 22 - tallest - 22 - foot(shown)
+      // The page is a column 22 apart: the title, the moments, the footnote
+      // where there is one, a spacer, then the voices, so a gap stands on
+      // each side of the spacer (11 Nov: Össur's October voices ran 13px past
+      // the body, the footnote and the spacer's two gaps not counted).
+      const note = footnoteOf(only(s, shown))
+      const room = BODY_HEIGHT - titleH(sub) - 22 - tallest - (note ? 22 + heightOf(note, W, 13, 1.35) : 0) - 22 - 22
       // A voice a moment, the row as tall as its tallest.
       let quoted = shown.filter((i) => i.quote && quoteWords(i.quote as BriefQuote & { english?: string | null }))
       while (quoted.length && Math.max(...quoted.map((i) => H.triggerQuote(i.quote!))) > room) quoted = quoted.slice(0, -1)
@@ -669,7 +774,16 @@ export function planSection(s: BriefSection, companion: BriefSection | null, d: 
       // The table: its label, the header (its "Five or more comments" wraps
       // to two lines), and a row 32px as Chrome draws it (measured on
       // Sealand's September, 12 Oct), counted at 33 to err high.
-      const rows = (s.posts?.rows ?? []).slice(0, Math.max(0, Math.floor((room - 6 - 15 - 8 - 34) / 33)))
+      // A row naming its accounts under the brand (11 Nov) takes their lines
+      // too: 12px at 1.35 in a quarter of the table.
+      const rowH = (r: { accounts?: string }) => 33 + (r.accounts ? 2 + heightOf(r.accounts, (W - 16 * 23) / 4, 12, 1.35) : 0)
+      const rows: NonNullable<BriefSection['posts']>['rows'] = []
+      let used = 6 + 15 + 8 + 34
+      for (const r of s.posts?.rows ?? []) {
+        if (used + rowH(r) > room) break
+        used += rowH(r)
+        rows.push(r)
+      }
       const out = only(s, shown)
       if (s.posts) out.posts = rows.length ? { ...s.posts, rows } : undefined
       if (!out.posts) delete out.posts
@@ -686,7 +800,9 @@ export function planSection(s: BriefSection, companion: BriefSection | null, d: 
       return [page(s)]
     case 'content.watch': {
       const lead = s.lead ? 22 + heightOf(s.lead, 1080, 23, 1.5, true) : 0
-      const room = BODY_HEIGHT - 37 - lead - 22 - 23 - foot(all, (W - 48) / 2)
+      // The title is the canvas's 37 with no sub; on the October canvas its
+      // sub says what the cards rest on (`cardsEvidence`).
+      const room = BODY_HEIGHT - (sub ? titleH(sub) : 37) - lead - 22 - 23 - foot(all, (W - 48) / 2)
       const left = s.groups.filter((g) => pairColumn(g.label) === 0).flatMap((g) => g.items)
       const right = s.groups.filter((g) => pairColumn(g.label) === 1).flatMap((g) => g.items)
       return [page(only(s, [...fitItems(left, H.watch, room, 3), ...fitItems(right, H.watch, room, 3)]))]
@@ -704,7 +820,7 @@ export function planSection(s: BriefSection, companion: BriefSection | null, d: 
         const n = Math.max(1, xs.length)
         // The title, the lead and the note each with its gap, and the
         // spacer's gap and the cards' under it.
-        return 37 + lead + note + 22 + 22 + Math.max(...xs.map((i) => H.confusion(i, (W - 14 * (n - 1)) / n))) + foot(xs)
+        return (sub ? titleH(sub) : 37) + lead + note + 22 + 22 + Math.max(...xs.map((i) => H.confusion(i, (W - 14 * (n - 1)) / n))) + foot(xs)
       }
       // Where it starts is a main piece of the page (PAGE_NEEDS): where it
       // does not fit over the cards, a card goes before it does (the rest
@@ -755,7 +871,7 @@ export function planSection(s: BriefSection, companion: BriefSection | null, d: 
         for (let k = 0; k < xs.length; k += 2) h += Math.max(...xs.slice(k, k + 2).map(H.decision))
         return h
       }
-      while (qs.length && 37 + 18 + cards + qH(qs) > BODY_HEIGHT) qs = qs.slice(0, -1)
+      while (qs.length && (sub ? titleH(sub) : 37) + 18 + cards + qH(qs) > BODY_HEIGHT) qs = qs.slice(0, -1)
       return [page(only(s, shown), { companion: companion && qs.length ? only(companion, qs) : null })]
     }
     case 'leadership.holds': {
@@ -861,7 +977,7 @@ export function planSection(s: BriefSection, companion: BriefSection | null, d: 
       const m = s.moves
       if (!m) return [page(s)]
       const col = BODY_HEIGHT - titleH(sub) - 16 - appFootH(s)
-      const rows = fitItems(m.waiting, (a) => H.advice(a.title, adviceDetail(a, m.month)), col - 24, max)
+      const rows = fitItems(m.waiting, (a) => H.advice(a, m.month), col - 24, max)
       const move = m.moves[0] ?? null
       const card = (axis: string | null) => (move ? H.moveCard({ title: move.title, line: moveLine(move), sentence: move.sentence, verdict: move.verdict != null, axis }) + 16 : 0)
       const keepAxis = !move?.axis || card(move.axis) + H.record(recordLine(m)) <= col
@@ -872,10 +988,13 @@ export function planSection(s: BriefSection, companion: BriefSection | null, d: 
       // standouts while they fit the panel, the page's four at most.
       const p = s.products
       if (!p) return [page(s)]
-      const top = BODY_HEIGHT - titleH(sub) - 16 - appFootH(s)
+      // Its foot is code's, said from its base as it draws (`productsFoot`),
+      // a saved brief's too (the re-check, 11 Nov).
+      const said = { ...s, foot: productsFoot(p) }
+      const top = BODY_HEIGHT - titleH(sub) - 16 - appFootH(said)
       const rows = fitItems(p.categories, H.category, top - 40, max)
       const standouts = fitItems(p.standouts, (x) => H.standout(x.name, x.text), top - 22 - 15 - 8, 4)
-      return [page({ ...s, products: { ...p, categories: rows, standouts } })]
+      return [page({ ...said, products: { ...p, categories: rows, standouts } })]
     }
     case 'marketing.named': {
       // The brands while they fit over the notes, up to seven, your row kept.
@@ -963,11 +1082,13 @@ const FINDING_LEFT = 658
 const FINDING_RIGHT = 454
 
 /** The height of "What each brand is heard for" under a finding. Pure. */
-export const heardForH = (f: Pick<BriefFinding, 'heardFor'>): number => {
+export const heardForH = (f: Pick<BriefFinding, 'heardFor'>, base: string | null = null): number => {
   const chips = f.heardFor ?? []
   if (chips.length === 0) return 0
   const w = (W - 12 * (chips.length - 1)) / chips.length - 32
-  return 16 + 4 + 14 + 8 + 24 + 15 + 3 + Math.max(...chips.map((c) => heightOf(c.phrase, w, 16, 1.3)))
+  // The base line under the chips: 13px, 6px under them.
+  const baseH = base ? 6 + heightOf(base, W, 13, 1.45) : 0
+  return 16 + 4 + 14 + 8 + 24 + 15 + 3 + Math.max(...chips.map((c) => heightOf(c.phrase, w, 16, 1.3))) + baseH
 }
 
 /**
@@ -977,12 +1098,13 @@ export const heardForH = (f: Pick<BriefFinding, 'heardFor'>): number => {
  * where the words are long, and a voice or a practice line that fits nowhere
  * does not print, rather than run off the sheet or onto a second page. Pure.
  */
-export function findingPlan(f: BriefFinding): FindingPlan {
+export function findingPlan(f: BriefFinding, d: Partial<Pick<StoredBriefData, 'fromApp'>> = {}): FindingPlan {
   const quotes = (f.quotes as (BriefQuote & { english?: string | null })[]).filter((q) => q && quoteWords(q))
-  const body = BODY_HEIGHT - heardForH(f)
+  const body = BODY_HEIGHT - heardForH(f, heardForBase(f, d))
   const headline = f.headline.length > 70 ? 28 : 31
   const headH = heightOf(f.headline, FINDING_LEFT, headline, 1.2, 'bold') + 14
-  const heard = (heardIn(f) ? 30 : 0) + (f.subjectLine ? 3 + heightOf(f.subjectLine, FINDING_LEFT, 13, 1.25) : 0)
+  // The heard line, its base line (13px, 3px apart) and the subject line.
+  const heard = (heardIn(f) ? 30 : 0) + (f.base ? (heardIn(f) ? 3 : 14) + 17 : 0) + (f.subjectLine ? 3 + heightOf(f.subjectLine, FINDING_LEFT, 13, 1.25) : 0)
   const practiceH = (size: number, n: number) => (n ? 26 + f.practice.slice(0, n).reduce((m, t) => m + heightOf(t, FINDING_LEFT - 16, size, 1.5) + 6, 0) : 0)
   const sawH = (size: number) => f.saw.reduce((n, p) => n + heightOf(p, FINDING_LEFT, size, 1.58) + 14, 0)
   let saw = 16
@@ -1112,7 +1234,8 @@ export const PAGE_NEEDS: Readonly<Record<SectionKey, PageNeed>> = {
     ],
   },
   'leadership.shares': rows('brands', [
-    piece('The shares of comments and videos', (p) => !!p.section.shares?.comments && !!p.section.shares.videos),
+    // The shares (a brief stored before 9 Nov), or each brand's naming.
+    piece('The shares of comments and videos', (p) => (!!p.section.shares?.comments && !!p.section.shares.videos) || items(p.section).some((i) => i.measure?.named != null)),
     piece('The notes', (p) => (p.section.lines?.length ?? 0) > 0),
   ]),
   'leadership.weigh': rows('items', [
@@ -1207,7 +1330,7 @@ export function planDeck(d: StoredBriefData): { pages: DeckPage[]; left: LeftOut
   else left.push({ key: 'in_short', title: 'In short', why: 'missing: the summary' })
   const findings = () => d.findings.forEach((f, index) => {
     const eyebrow = d.findings.length === 1 ? 'The finding' : `Finding ${index + 1} of ${d.findings.length}`
-    pages.push(linked({ eyebrow, toc: f.short || f.headline, body: { kind: 'finding', finding: f, index, of: d.findings.length, plan: findingPlan(f) } }, pageHref('finding', d.month)))
+    pages.push(linked({ eyebrow, toc: f.short || f.headline, body: { kind: 'finding', finding: f, index, of: d.findings.length, plan: findingPlan(f, d) } }, pageHref('finding', d.month)))
   })
   const appKeys = new Set(APP_SECTION_KEYS)
   const ordered = v2

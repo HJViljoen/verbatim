@@ -3,9 +3,13 @@ import { describe, expect, it } from 'vitest'
 import { briefFixture, finding, item, quote } from '../../../components/briefs/fixture'
 import { PRINT_UNDRAWN_SECTIONS, UNDRAWN_SECTIONS, printsSection } from './canvas'
 import {
+  cardsEvidence, FEW_VOICES, findingBaseLine, H, HEARD_FOR_FLOOR, heardForBase, heardForH, monthSpan,
   BODY_HEIGHT, PAGE_MIN_ITEMS, PAGE_NEEDS, chipRows, contentsOf, deckPages, distinctChips, findingPlan, fitItems, footnoteOf, heightOf, ideasArgued, inShortSizes, linesOf, pairColumn,
   planDeck, printedSections, productPhrases, quoteCite, subtitleOf, tagLine, writtenOn,
 } from './deck'
+import { adviceDetail } from './app-words'
+import { sameWords } from './inshort'
+import { BRAND_MIN_VIDEOS } from './sections'
 import type { BriefRole, BriefSection, MonthlyBriefData, SectionKey } from './types'
 
 // The deck's pages (pure): the canvas's page set and order for each role, the
@@ -144,6 +148,27 @@ describe('the canvas\'s counts: what does not fit stays in the stored brief', ()
     const d = briefFixture('sales')
     const quoted = shown(d, 'sales.triggers').filter((i) => i.quote)
     expect(quoted.map((i) => i.title)).toEqual(['Back to school', 'Money in hand', 'The design that lands'])
+  })
+
+  it('a moment\'s voices go where they do not fit under tall moments and a footnote (the spacer\'s two gaps counted)', () => {
+    // Three moments as tall as October's: a two-line title, seven lines of
+    // text in a fifth of the page; a footnote under them; a four-line voice.
+    const text = 'Buyers say the moment comes when the pack they carry every day gives out, when a strap tears, when a zip stops closing on the way to work, or when a long trip asks for more room.'
+    const voice = 'It will not take that long and then you will have your new pack. And it will really be better for you. You will carry it quite quickly. Then no one will see the old one anymore.'
+    const tall = () => {
+      const d = briefFixture('sales')
+      d.sections.find((s) => s.key === 'sales.triggers')!.groups[0].items = [
+        item('Ready after the old one', text, { quote: quote(voice, { date: '2026-10-17' }) }),
+        item('A better day out', text, { quote: quote('Why not a lighter one to make it easy', { date: '2026-10-17' }) }),
+        item('Pack usefulness moment', text, { tag: 'Argued in the Leadership brief' }),
+      ]
+      return d
+    }
+    expect(shown(tall(), 'sales.triggers').filter((i) => i.quote)).toEqual([])
+    // Short moments leave room for the same voices.
+    const short = tall()
+    for (const i of short.sections.find((s) => s.key === 'sales.triggers')!.groups[0].items) i.text = 'Buyers say a strap tears.'
+    expect(shown(short, 'sales.triggers').filter((i) => i.quote).map((i) => i.title)).toEqual(['Ready after the old one', 'A better day out'])
   })
 })
 
@@ -459,5 +484,79 @@ describe('the lines code writes', () => {
 
   it('dates the footer by the day the brief was written', () => {
     expect(writtenOn('2026-10-05T08:00:00.000Z')).toBe('5 October 2026')
+  })
+})
+
+describe('a finding\'s base in print', () => {
+  it('its videos in the brief\'s month, of every video read then, few voices under ten; nothing for a brief stored before it', () => {
+    expect(findingBaseLine({ base: { k: 7, n: 786 } }, '2026-10-01')).toBe('On 7 of the 786 videos in your market in October · few voices')
+    expect(findingBaseLine({ base: { k: FEW_VOICES, n: 786 } }, '2026-10-01')).toBe('On 10 of the 786 videos in your market in October')
+    expect(findingBaseLine({ base: { k: 0, n: 786 } }, '2026-10-01')).toBe('On none of the 786 videos in your market in October · few voices')
+    expect(findingBaseLine({}, '2026-10-01')).toBe('')
+  })
+})
+
+describe('what each brand is heard for, and on what (the re-check, 11 Nov)', () => {
+  const chips = [{ name: 'Rival', you: false, phrase: 'Travel packs' }, { name: 'Acme', you: true, phrase: 'Clean-up days' }]
+  const oct = { fromApp: [] }
+  it('each chip\'s videos about its brand, few voices said', () => {
+    expect(heardForBase({ heardFor: chips.map((c, k) => ({ ...c, videos: [12, 5][k] })) }, oct)).toBe('Each from the videos about that brand in what this brief heard: Rival 12, Acme 5 · few voices: Acme.')
+    expect(heardForBase({ heardFor: chips.map((c) => ({ ...c, videos: 4 })) }, oct)).toBe('Each from the videos about that brand in what this brief heard: Rival 4, Acme 4 · few voices.')
+  })
+  it('a chip saved without its count says the floor every chip passed', () => {
+    expect(heardForBase({ heardFor: chips }, oct)).toBe('Each from at least three videos about that brand, in what this brief heard.')
+    expect(HEARD_FOR_FLOOR).toBe(BRAND_MIN_VIDEOS)
+  })
+  it('none with no chips, and none on the September canvas', () => {
+    expect(heardForBase({ heardFor: [] }, oct)).toBeNull()
+    expect(heardForBase({ heardFor: chips }, {})).toBeNull()
+  })
+  it('the finding makes room for it', () => {
+    const f = finding('Acme is heard for clean-up days', { heardFor: chips })
+    expect(heardForH(f, heardForBase(f, oct))).toBeGreaterThan(heardForH(f))
+  })
+})
+
+describe('a piece of advice\'s height, its label bold and its level in mono', () => {
+  it('a line the plain measure holds to one line is two where they widen it', () => {
+    const a = { title: 'Stand up an access desk', firstMade: '2026-10-18', aim: { label: 'Cost blocks tent access and repair', k: 33, n: 744, href: null } }
+    const detail = adviceDetail(a, '2026-10-01')
+    const head = 27 + heightOf(a.title, 616, 20, 1.35, true) + 5
+    expect(heightOf(detail, 616, 13, 1.45)).toBeCloseTo(13 * 1.45)
+    expect(H.advice(a, '2026-10-01')).toBeCloseTo(head + 2 * 13 * 1.45)
+    expect(H.advice({ ...a, aim: { ...a.aim, label: 'Cost' } }, '2026-10-01')).toBeCloseTo(head + 13 * 1.45)
+  })
+})
+
+describe('what a card section\'s cards rest on', () => {
+  const sec = (videos: number[], titled = true): BriefSection => ({ key: 'sales.care', title: 'Language', groups: [{ items: videos.map((v, k) => item(titled ? `Card ${k + 1}` : '', 'Buyers ask.', { videos: v })) }] })
+  const months = { heardMonths: ['2026-08-01', '2026-09-01', '2026-10-01'] }
+  it('the range of videos, the months, and few voices where every card is under ten', () => {
+    expect(cardsEvidence(sec([3, 4, 3]), months)).toBe('Each rests on 3 to 4 videos from August to October · few voices.')
+    expect(cardsEvidence(sec([12]), months)).toBe('It rests on 12 videos from August to October.')
+    expect(cardsEvidence(sec([12]), { heardMonths: ['2026-10-01'] })).toBe('It rests on 12 videos in October.')
+  })
+  it('says the months as a span where they run in a row (the re-check, 11 Nov), and lists them where they do not', () => {
+    expect(monthSpan(['August', 'September', 'October'])).toBe('from August to October')
+    expect(monthSpan(['November', 'December', 'January'])).toBe('from November to January')
+    expect(monthSpan(['October'])).toBe('in October')
+    expect(monthSpan(['July', 'September', 'October'])).toBe('in July, September and October')
+    expect(monthSpan([])).toBe('')
+  })
+  it('a line the In short check read in the older wording is the same line now', () => {
+    expect(sameWords('Buyers hesitate. Each rests on 3 to 4 videos heard in August, September and October · few voices.')).toBe(sameWords('Buyers hesitate. Each rests on 3 to 4 videos from August to October · few voices.'))
+    expect(sameWords('It rests on 1 video heard in October.')).toBe('It rests on 1 video in October.')
+    // Only the base's months: the finding's own heard line is not touched.
+    expect(sameWords('Heard in August, September and October')).toBe('Heard in August, September and October')
+  })
+  it('names the few-voice cards where only some are', () => {
+    expect(cardsEvidence(sec([4, 22]), {})).toBe('Each rests on 4 to 22 videos · few voices: “Card 1”.')
+  })
+  it('only the writer\'s card sections, and only on the October canvas', () => {
+    expect(cardsEvidence({ ...sec([3]), key: 'leadership.shares' }, months)).toBeNull()
+    const d = briefFixture('sales')
+    const care = d.sections.find((x) => x.key === 'sales.care')!
+    expect(subtitleOf(care, d)).toBe('Words buyers hear as a promise, and what they already think of them.')
+    expect(subtitleOf(care, { ...d, fromApp: [] })).toMatch(/^Words buyers hear as a promise, and what they already think of them\. Each rests on /)
   })
 })

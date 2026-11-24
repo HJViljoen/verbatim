@@ -35,15 +35,21 @@ import { selectAll } from '../supabase-admin'
 /** Terms are compared trimmed and lowercased. */
 export const normTerm = (t: string): string => t.trim().toLowerCase()
 
+/** A search bucket a gather runs: the rival's names, or the company's own
+ *  (`brand`: its name, `tracking_configs.brand_keywords`). */
+export type SearchBucket = 'competitor' | 'brand'
+
 /** The rival searches: every term a gather ran in the rival bucket, and every
- *  term configured as one now. */
+ *  term configured as one now (or the company's own name searches, with
+ *  `bucket` 'brand'). */
 export function rivalSearchTerms(
   runTerms: readonly { keyword: string | null; bucket?: string | null }[],
   configured: readonly string[] | null | undefined,
+  bucket: SearchBucket = 'competitor',
 ): Set<string> {
   const out = new Set<string>()
   for (const r of runTerms) {
-    if (r.keyword && (r.bucket == null || r.bucket === 'competitor')) out.add(normTerm(r.keyword))
+    if (r.keyword && (r.bucket == null || r.bucket === bucket)) out.add(normTerm(r.keyword))
   }
   for (const t of configured ?? []) if (t.trim()) out.add(normTerm(t))
   out.delete('')
@@ -121,6 +127,9 @@ export async function readRivalFound(
   clientId: string,
   configured: readonly string[] | null | undefined,
   charge?: ReadCharge,
+  /** 'brand': the videos the company's own name searches found instead (the
+   *  monthly briefs' standing leaves both out; lib/reports/briefs/naming.ts). */
+  bucket: SearchBucket = 'competitor',
 ): Promise<RivalFound> {
   let pages = 0
   // selectAll calls the builder once per page: the charge goes first.
@@ -130,8 +139,8 @@ export async function readRivalFound(
     return build()
   }
   const runTerms = await selectAll<{ id: string; keyword: string | null; bucket: string | null }>(page('the rival searches', () =>
-    client.from('keyword_performance').select('id, keyword, bucket').eq('client_id', clientId).eq('bucket', 'competitor').order('id')))
-  const terms = rivalSearchTerms(runTerms, configured)
+    client.from('keyword_performance').select('id, keyword, bucket').eq('client_id', clientId).eq('bucket', bucket).order('id')))
+  const terms = rivalSearchTerms(runTerms, configured, bucket)
   const spellings = overlapSpellings(runTerms, configured)
   if (terms.size === 0 || spellings.length === 0) return { terms, videos: new Set(), pages }
   const literal = pgTextArray(spellings)

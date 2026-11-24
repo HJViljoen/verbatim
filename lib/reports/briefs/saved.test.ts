@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { briefFixture } from '../../../components/briefs/fixture'
 import { collectQuoteRefs } from '../../renderables/quotes-freeze'
 import { printedLines, printedPages, summarySentences } from './inshort'
-import { checkSavedSet, savedSetOf, type SavedFile } from './saved'
+import { briefWithoutSentence, checkSavedSet, savedSetOf, withoutQuotes, withoutSentences, type SavedFile } from './saved'
 import { briefLedgerRow, briefSnapshotRow } from './store'
 import { BRIEF_ROLES, type BriefRole, type MonthlyBriefData } from './types'
 
@@ -83,6 +83,58 @@ describe('a dry build saved for --from', () => {
     const out = checkSavedSet(x, EXPECT)
     expect(out.problems).toEqual([])
     expect(out.set?.briefs.find((d) => d.role === 'content')?.held).toEqual([{ what: 'content.questions: one', reason: 'thin' }])
+  })
+})
+
+describe('voices struck out of a saved set, with no model call (--redraw --exclude-quotes)', () => {
+  it('takes them out wherever they print, with their words; evidence ids and pages as now drawn; recorded; and --from takes it', () => {
+    const x = fixtureSet()
+    const sales = collectQuoteRefs(x.files.sales.data)
+    expect(sales.length).toBeGreaterThan(0)
+    const struck = sales[0]
+    const out = withoutQuotes(x, [{ ref: struck, why: 'does not carry its claim' }, { ref: 'e:never-printed', why: 'flagged elsewhere' }])
+    expect(collectQuoteRefs(out.files.sales.data)).not.toContain(struck)
+    expect(out.files.sales.texts[struck]).toBeUndefined()
+    expect(out.manifest.roles.sales.evidenceIds).not.toContain(struck)
+    expect(out.manifest.excludedQuotes).toEqual([{ ref: struck, why: 'does not carry its claim' }, { ref: 'e:never-printed', why: 'flagged elsewhere' }])
+    // The other briefs are as they were.
+    expect(out.files.content.data).toEqual(x.files.content.data)
+    expect(checkSavedSet(JSON.parse(JSON.stringify(out)), EXPECT).problems).toEqual([])
+    // Striking again adds to the record, never twice.
+    expect(withoutQuotes(out, [{ ref: struck, why: 'again' }]).manifest.excludedQuotes).toHaveLength(2)
+  })
+})
+
+describe('a writer\'s sentence struck out of a saved set, with no model call (--redraw, 11 Nov)', () => {
+  const twoSentences = (d: MonthlyBriefData) => {
+    const at = d.findings[0].saw.findIndex((p) => p.split(/(?<=[.!?])\s+(?=[A-Z])/).length >= 2)
+    const [first, second] = d.findings[0].saw[at].split(/(?<=[.!?])\s+(?=[A-Z])/)
+    return { at, first, second }
+  }
+  it('takes the whole sentence out, the rest of its paragraph kept; recorded; and --from takes it where no In short sentence read it', () => {
+    const x = fixtureSet((b) => { b.marketing.data.inShort.summary = '' })
+    const { at, first, second } = twoSentences(x.files.marketing.data)
+    const words = second.slice(4, 40)
+    const out = withoutSentences(x, [{ role: 'marketing', words, why: 'its source says otherwise' }])
+    expect(out.files.marketing.data.findings[0].saw[at]).not.toContain(words)
+    expect(out.files.marketing.data.findings[0].saw[at].startsWith(first)).toBe(true)
+    expect(out.manifest.struckSentences).toEqual([{ role: 'marketing', sentence: second, why: 'its source says otherwise' }])
+    expect(out.files.sales.data).toEqual(x.files.sales.data)
+    expect(checkSavedSet(JSON.parse(JSON.stringify(out)), EXPECT).problems).toEqual([])
+  })
+  it('--from refuses it where the In short check read the line the sentence was in', () => {
+    const x = fixtureSet()
+    const { second } = twoSentences(x.files.sales.data)
+    const out = withoutSentences(x, [{ role: 'sales', words: second.slice(4, 40), why: 'its source says otherwise' }])
+    expect(problems(JSON.parse(JSON.stringify(out))).join(' ')).toMatch(/In short check read no longer prints/)
+  })
+  it('strikes nothing where the words are in no string, in more than one, or the strike would empty a field', () => {
+    const x = fixtureSet()
+    expect(() => withoutSentences(x, [{ role: 'sales', words: 'words this brief never printed', why: 'x' }])).toThrow(/in 0 of the brief's strings/)
+    const d = x.files.sales.data
+    expect(() => briefWithoutSentence(d, d.findings[0].headline.slice(0, 20))).toThrow(/leaves data\.findings\[0\]\.headline empty|of the brief's strings, not one/)
+    const one = { ...d, findings: [{ ...d.findings[0], saw: ['Owners ask about storms.', 'Owners ask about rain.'] }] }
+    expect(briefWithoutSentence(one, 'about storms').data.findings[0].saw).toEqual(['Owners ask about rain.'])
   })
 })
 

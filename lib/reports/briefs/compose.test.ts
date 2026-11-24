@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest'
 import type { WhoVideo } from '../../brands/attribution'
 import { fact } from '../../written/test-fixtures'
 import { allocateIdeas } from './allocate'
-import { composeBrief, figuresFor, footnotesOnlyPrinted, namedAcross, pointToSalesGroups, repeatsAcross, summaryAgainstPrinted, type AudienceRow, type ComposeInput } from './compose'
+import { composeBrief, figuresFor, footnotesOnlyPrinted, namedAcross, namesProduct, pointToSalesGroups, PRAISE_IS, repeatsAcross, summaryAgainstPrinted, type AudienceRow, type ComposeInput } from './compose'
+import type { BriefNaming } from './naming'
 import type { BriefAppInputs } from './app'
 import { OSSUR_MOVES, OSSUR_PEOPLE } from './app-fixture'
 import { SALES_GROUPS_LINE } from './app-words'
@@ -94,7 +95,7 @@ describe('composing one brief', () => {
     expect(data.findings[0].practice).toEqual(['A buyer who asks about shipping has chosen the product.'])
     // What was heard about a brand rests on videos about it.
     expect(data.findings[0].saw).toEqual(['Buyers ask where to order and who ships to them.', 'They ask about delivery too.'])
-    expect(scrubbed).toContainEqual({ field: 'I1.saw', sentence: 'People under Acme\'s posts ask for the price.', rule: 'names Acme on 0 videos about it' })
+    expect(scrubbed).toContainEqual({ field: 'I1.saw', sentence: 'People talking about Acme ask for the price.', rule: 'names Acme on 0 videos about it' })
     expect(scrubbed).toContainEqual(expect.objectContaining({ field: 'in_short', rule: 'now reads as' }))
   })
 
@@ -196,29 +197,48 @@ describe('leadership', () => {
     expect(data.held).toContainEqual({ what: 'decisions: How long do owners wait for repairs?', reason: 'says what "Repair waits" says' })
   })
 
-  it('where the company stands against its rivals: each brand a share of the month\'s comments and videos, its own posts included, the bars, the table and the notes, a giveaway said', () => {
+  it('where the company stands against its rivals: by who names each brand, each count with its base, own posts out, never the bucket share', () => {
     const audiences: AudienceRow[] = [
-      { audience: 'client', videos: 10, comments: 256, platforms: { instagram: 10 } },
-      { audience: 'competitor:Rival', videos: 42, comments: 650, platforms: { reddit: 30, youtube: 12 } },
-      { audience: 'competitor:Tiny', videos: 1, comments: 3, platforms: { tiktok: 1 } },
-      { audience: 'industry-other', videos: 388, comments: 10500, platforms: { tiktok: 200 } },
+      { audience: 'client', videos: 18, comments: 236, platforms: { instagram: 9, reddit: 4, tiktok: 4, youtube: 1 } },
+      { audience: 'competitor:Rival', videos: 24, comments: 470, platforms: { tiktok: 11 } },
+      { audience: 'industry-other', videos: 744, comments: 21_667, platforms: { tiktok: 307 } },
     ]
-    const { data } = composeBrief(input('leadership', out, POINTS, { audiences, rivals: ['Rival', 'Tiny'], giveaway: { posts: 1, comments: 149 } }))
+    const naming: BriefNaming = {
+      month: SEP, comments: 22_249, read: 778, videos: 698,
+      rows: [
+        { brandKey: 'client', label: 'Acme', you: true, comments: 20, videos: 8, platforms: ['Reddit', 'Instagram', 'YouTube'] },
+        { brandKey: 'r1', label: 'Rival', you: false, comments: 20, videos: 6, platforms: ['TikTok', 'Instagram'] },
+      ],
+    }
+    const { data } = composeBrief(input('leadership', out, POINTS, { audiences, rivals: ['Rival'], naming }))
     const shares = data.sections.find((s) => s.key === 'leadership.shares')!
     expect(shares.title).toBe('Where Acme stands against its rivals')
-    expect(shares.sub).toBe("Share of September's conversation: 11,409 comments and 441 videos, Acme's own posts included.")
-    expect(shares.groups[0].items.map((i) => [i.title, i.measure?.comments, i.measure?.videos, i.detail])).toEqual([
-      ['Rival', 5.7, 9.5, 'Reddit, YouTube'],
-      ['Acme (you)', 2.2, 2.3, 'Its own Instagram posts'],
-      ['Tiny', 0, 0.2, 'TikTok'],
+    expect(shares.sub).toBe('Who named each brand in September: the 22,249 comments on the 778 videos we read, and the 698 of those videos none of our brand searches found. Posts on the accounts we follow for each brand are left out.')
+    expect(shares.shares).toBeUndefined()
+    expect(shares.groups[0].items.map((i) => [i.title, i.measure?.named, i.detail])).toEqual([
+      ['Acme (you)', { comments: { k: 20, n: 22_249 }, videos: { k: 8, n: 698 } }, 'Reddit, Instagram, YouTube'],
+      ['Rival', { comments: { k: 20, n: 22_249 }, videos: { k: 6, n: 698 } }, 'TikTok, Instagram'],
     ])
-    expect(shares.shares?.comments.line).toBe('Acme 2.2% · its two rivals 5.7% · the rest of the category 92.1%')
+    // No "its own … posts": nothing here is called the company's but its own.
+    expect(JSON.stringify(shares)).not.toMatch(/own (Instagram|Reddit|TikTok)|under Acme's posts|% of the month's comments/)
+    // Every count with its base, said once and the same way (the fresh check, 11 Nov).
     expect(shares.lines).toEqual([
-      "Acme holds 2.2% of the month's comments, second of these three brands, behind Rival's 5.7%. 149 of Acme's comments were on one giveaway post.",
-      "Acme and its two rivals together hold 7.9% of the month's comments. The rest of the category holds 92.1%.",
-      "Acme's comments sit under its own Instagram posts. Its rivals are talked about on Reddit, YouTube and TikTok.",
+      'Of the 22,249 comments on the 778 videos we read in September, 20 named Acme; 20 named Rival.',
+      'Of the 698 videos none of our brand searches found, 8 named Acme; 6 named Rival.',
+      'Few voices: no brand was named in ten or more of the videos our searches did not find.',
     ])
-    expect(data.inShort.figures[1]).toEqual({ value: '2.2%', label: "of September's comments were under Acme's posts; Rival held 5.7%" })
+    expect(data.inShort.figures[1]).toEqual({ value: '20', label: 'of the 22,249 comments on the 778 videos we read in September named Acme; 20 named Rival' })
+    // A naming read that failed is said in what the brief holds, never silent.
+    const failed = composeBrief(input('leadership', out, POINTS, { audiences, rivals: ['Rival'], naming: null, namingUnread: 'timed out' })).data
+    expect(failed.sections.find((s) => s.key === 'leadership.shares')).toBeUndefined()
+    expect(failed.held).toContainEqual({ what: 'leadership.shares', reason: 'who named each brand could not be read: timed out' })
+  })
+
+  it('no standing without the naming read, whatever the buckets hold', () => {
+    const audiences = [{ audience: 'client', videos: 19, comments: 150 }, { audience: 'competitor:Rival', videos: 42, comments: 650 }]
+    const { data } = composeBrief(input('leadership', out, POINTS, { audiences, rivals: ['Rival'] }))
+    expect(data.sections.find((s) => s.key === 'leadership.shares')).toBeUndefined()
+    expect(data.inShort.figures).toHaveLength(1)
   })
 
   it('no share of talk by brand where the product does not count the brands', () => {
@@ -228,12 +248,44 @@ describe('leadership', () => {
   })
 })
 
+describe('a product the month\'s counts do not carry', () => {
+  it('names a product by its full name or its own last word, never a generic part, a size or a number', () => {
+    const t = 'acme is talked about as a foot brand, especially pro-flex terra and pivot'
+    expect(['Pro-Flex Pivot', 'Pro-Flex Terra', 'Pro-Flex XC', 'Total Knee 2100', 'Power Knee', 'Navii'].filter((n) => namesProduct(t, n))).toEqual(['Pro-Flex Pivot', 'Pro-Flex Terra'])
+    expect(namesProduct('the pivotal moment', 'Pro-Flex Pivot')).toBe(false)
+  })
+
+  it('a finding whose headline leans on one is held, and In short drops the sentence', () => {
+    const app = { month: SEP, subjectReads: null, people: null, named: null, ideas: null, hooks: null, moves: null, products: {
+      month: SEP, cameUp: 2, products: 10, videos: 20, market: 900, standouts: [], href: '/p',
+      categories: [{ id: 'f', name: 'Feet', videos: 20, named: 10, href: '/p/f', products: [
+        { name: 'Pro-Flex Terra', videos: 8, first: false, href: '/p/f/t' }, { name: 'Pro-Flex Pivot', videos: 2, first: false, href: '/p/f/p' },
+      ] }],
+    } }
+    const pts = [...POINTS]
+    const lean = (headline: string) => {
+      const x = input('sales', salesOut({ in_short: 'Buyers ask for Pro-Flex Pivot by name. Buyers stall when the route is hidden.' }), pts, { app })
+      return composeBrief({ ...x, allocation: { ...x.allocation, ideas: x.allocation.ideas.map((i) => (i.home === 'sales' ? { ...i, headline } : i)) } }).data
+    }
+    const held = lean('Buyers stall over Pro-Flex Pivot')
+    expect(held.findings).toEqual([])
+    expect(held.held).toContainEqual({ what: 'Buyers stall over Pro-Flex Pivot', reason: 'it names Pro-Flex Pivot, on 2 of the month\'s videos' })
+    expect(held.inShort.summary).toBe('Buyers stall when the route is hidden.')
+    expect(lean('Buyers stall over Pro-Flex Terra').findings).toHaveLength(1)
+  })
+})
+
 describe('the figures In short prints', () => {
   it('the market for every reader, then the reader\'s own: never a figure for an uncalibrated subject, never a share by brand', () => {
     const subjects = [{ id: 'S1', fact: fact({ subjectId: 's1', name: 'Cost & access', calibration: 'provisional', level: null, rank: 0 }) }]
     const base = { company: 'Össur', month: SEP, market: { videos: 430, comments: 11000 }, subjects, ownPosts: 19, playbook: null }
     expect(figuresFor({ ...base, role: 'sales' })).toEqual([{ value: '430', label: 'videos in your market in September' }])
-    expect(figuresFor({ ...base, role: 'marketing' })[1]).toEqual({ value: '19', label: 'posts Össur published in September' })
+    expect(figuresFor({ ...base, role: 'marketing' })[1]).toEqual({ value: '19', label: 'posts in September on the Össur accounts we follow' })
+    // The accounts by name, where they were read: never "published" (its
+    // regional accounts are not followed; the fresh check, 11 Nov).
+    const accounts = [{ platform: 'instagram', account: 'acme', posts: 12 }, { platform: 'tiktok', account: 'acme_co', posts: 5 }, { platform: 'youtube', account: 'ACME', posts: 2 }]
+    expect(figuresFor({ ...base, role: 'marketing', posts: [{ name: 'Össur', you: true, posts: 19, five: 3, accounts }] })[1])
+      .toEqual({ value: '19', label: 'posts in September on the three Össur accounts we follow: Instagram @acme, TikTok @acme_co and YouTube ACME' })
     expect(figuresFor({ ...base, role: 'leadership' })).toEqual([{ value: '430', label: 'videos and 11,000 comments in your market in September' }])
     // The Sales figure: the biggest ready subject.
     const ready = [{ id: 'S1', fact: fact({ subjectId: 's1', name: 'Buying & delivery', calibration: 'ready', level: { k: 99, n: 430 }, rank: 1 }) }]
@@ -425,7 +477,7 @@ describe('the canvas\'s components, each from material that stands', () => {
     expect(data.sections.find((x) => x.key === 'marketing.say_hear')!.groups[0].items[0]).toMatchObject({ title: 'We run beach clean-up days.', status: 'heard_back' })
     const rivals = data.sections.find((x) => x.key === 'marketing.rivals')!
     expect(rivals.groups[0].items[0]).toMatchObject({ title: 'Acme', pill: 'Values', you: true })
-    expect(rivals.posts).toEqual({ title: 'Own posts published in September', rows: [
+    expect(rivals.posts).toEqual({ title: 'Posts in September on the accounts we follow', rows: [
       { name: 'Acme', you: true, posts: 25, five: 11, pct: 44 },
       { name: 'Rival', you: false, posts: 20, five: 15, pct: 75 },
     ] })
@@ -456,8 +508,8 @@ describe('the canvas\'s components, each from material that stands', () => {
     ] })
     const { data } = composeBrief(input('leadership', o, LEAD, {}, LABOUT))
     expect(data.findings[0].heardFor).toEqual([
-      { name: 'Rival', you: false, phrase: 'Travel packs that last' },
-      { name: 'Acme', you: true, phrase: 'Clean-up days and team values' },
+      { name: 'Rival', you: false, phrase: 'Travel packs that last', videos: 6 },
+      { name: 'Acme', you: true, phrase: 'Clean-up days and team values', videos: 5 },
     ])
     expect(data.held).toContainEqual({ what: 'heard_for: Osprey', reason: 'not the company or a tracked rival a cited point names' })
   })
@@ -481,11 +533,22 @@ describe('the canvas\'s components, each from material that stands', () => {
     const o = lout({ subjects: [{ subject: 'S1', sentence: 'People compare running packs.' }] })
     const kinds = { n: 400, judged: 380, kinds: [{ kind: 'praise', k: 290 }, { kind: 'question', k: 200 }, { kind: 'pain_point', k: 150 }, { kind: 'objection', k: 8 }], mood: [{ mood: 'positive', k: 290 }, { mood: 'mixed', k: 50 }, { mood: 'neutral', k: 30 }, { mood: 'negative', k: 10 }] }
     const m = composeBrief(input('leadership', o, LEAD, { subjects, kinds }, LABOUT)).data.sections.find((x) => x.key === 'leadership.market')!
-    expect(m.kinds).toEqual({ base: 'Share of the 400 videos in your market in September', rows: [{ label: 'Saying it worked', pct: 72.5 }, { label: 'Asking how it works', pct: 50 }, { label: 'Hitting a problem', pct: 37.5 }] })
+    // Praise is the market's label (decision K), and the base says it counts
+    // praise of anything in a video, never that a product worked.
+    expect(m.kinds).toEqual({ base: `Share of the 400 videos in your market in September. ${PRAISE_IS}`, rows: [{ label: 'Praising it', pct: 72.5 }, { label: 'Asking how it works', pct: 50 }, { label: 'Hitting a problem', pct: 37.5 }] })
     expect(m.mood?.base).toBe('380 of the same 400 videos')
     expect(m.mood?.rows.map((r) => r.pct)).toEqual([76.3, 13.2, 7.9, 2.6])
     const thin = composeBrief(input('leadership', o, LEAD, { subjects, kinds: { ...kinds, n: 80 } }, LABOUT)).data.sections.find((x) => x.key === 'leadership.market')!
     expect(thin.kinds).toBeUndefined()
+  })
+
+  it('a finding carries its base: its videos in your market in the brief\'s month, of your market\'s videos then (In short\'s base)', () => {
+    const { data } = composeBrief(input('sales', salesOut(), POINTS))
+    const f = data.findings[0]
+    expect(f.base?.n).toBe(900)
+    expect(f.base!.k).toBeGreaterThan(0)
+    expect(f.base!.k).toBeLessThanOrEqual(f.months.find((m) => m.month === SEP)?.videos ?? 0)
+    expect(composeBrief(input('sales', salesOut(), POINTS, { market: null })).data.findings[0].base).toBeUndefined()
   })
 
   it('a finding is part of the ready subject half its insights are members of, and says so with the level', () => {
@@ -558,10 +621,10 @@ describe('the October canvas: the pages read from the app (`fromApp`)', () => {
     const lead = octoberFixture('leadership')
     const sales = octoberFixture('sales')
     const [, pointed] = pointToSalesGroups([sales, lead])
-    expect(pointed.fromApp!.find((s) => s.key === 'leadership.groups')!.foot).toBe(`Each update describes the groups afresh, so no count is set against September. ${SALES_GROUPS_LINE}`)
+    expect(pointed.fromApp!.find((s) => s.key === 'leadership.groups')!.foot).toBe(`“First-time buyer” is Voices’ name for a group of people asking questions about a purchase, some of them considering one; its count is of videos, not purchases. Each update describes the groups afresh, so no count is set against September. ${SALES_GROUPS_LINE}`)
     const noGroups = { ...sales, fromApp: [] }
     const [, alone] = pointToSalesGroups([noGroups, pointed])
-    expect(alone.fromApp!.find((s) => s.key === 'leadership.groups')!.foot).toBe('Each update describes the groups afresh, so no count is set against September.')
+    expect(alone.fromApp!.find((s) => s.key === 'leadership.groups')!.foot).toBe('“First-time buyer” is Voices’ name for a group of people asking questions about a purchase, some of them considering one; its count is of videos, not purchases. Each update describes the groups afresh, so no count is set against September.')
     // Idempotent, and a set with no Sales brief is not judged.
     expect(pointToSalesGroups([sales, pointed])[1]).toBe(pointed)
     expect(pointToSalesGroups([lead])[0]).toBe(lead)

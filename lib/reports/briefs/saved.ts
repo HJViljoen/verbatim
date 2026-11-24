@@ -41,6 +41,7 @@ const measure = z.strictObject({
   pct: z.number().optional(), median: z.number().nullable().optional(), above: z.boolean().optional(),
   own: z.number().nullable().optional(), ownOf: z.number().nullable().optional(), rival: z.number().nullable().optional(), rivalOf: z.number().nullable().optional(),
   comments: z.number().optional(), videos: z.number().optional(),
+  named: z.strictObject({ comments: z.strictObject({ k: z.number(), n: z.number() }), videos: z.strictObject({ k: z.number(), n: z.number() }) }).optional(),
 })
 const item = z.strictObject({
   title: z.string().optional(), text: z.string(), detail: z.string().optional(), tag: z.string().optional(),
@@ -120,8 +121,11 @@ const hooks = z.strictObject({
   month: z.string(), rival: z.string().nullable(), formats: hookTable.nullable(), openings: hookTable.nullable(),
   posts: z.strictObject({
     total: z.number(), byPlatform: z.array(z.strictObject({ platform: z.string(), posts: z.number() })),
-    response: z.strictObject({ multiple: z.number(), rated: z.number() }).nullable(), sentence: z.string().nullable(),
-    best: z.strictObject({ platform: z.string(), date: z.string(), format: z.string().nullable(), multiple: z.number(), href: z.string() }).nullable(),
+    accounts: z.array(z.strictObject({ platform: z.string(), account: z.string(), posts: z.number() })).optional(),
+    response: z.strictObject({ multiple: z.number(), rated: z.number() }).nullable(),
+    platforms: z.array(z.strictObject({ platform: z.string(), multiple: z.number(), rated: z.number() })).optional(),
+    sentence: z.string().nullable(),
+    best: z.strictObject({ platform: z.string(), date: z.string(), format: z.string().nullable(), multiple: z.number(), href: z.string(), views: z.number().optional() }).nullable(),
     href: z.string(),
   }).nullable(),
   basis: z.string(), href: z.string(),
@@ -143,7 +147,7 @@ const section = z.strictObject({
   kinds: z.strictObject({ base: z.string(), rows: z.array(z.strictObject({ label: z.string(), pct: z.number() })) }).optional(),
   mood: z.strictObject({ base: z.string(), rows: z.array(z.strictObject({ mood: z.string(), label: z.string(), pct: z.number() })) }).optional(),
   shares: z.strictObject({ comments: shareBar, videos: shareBar.nullable() }).optional(),
-  posts: z.strictObject({ title: z.string(), rows: z.array(z.strictObject({ name: z.string(), you: z.boolean(), posts: z.number(), five: z.number(), pct: z.number() })) }).optional(),
+  posts: z.strictObject({ title: z.string(), rows: z.array(z.strictObject({ name: z.string(), you: z.boolean(), posts: z.number(), five: z.number(), pct: z.number(), accounts: z.string().optional() })) }).optional(),
   position: item.nullable().optional(),
   rival: z.string().optional(),
   link: z.strictObject({ href: z.string(), text: z.string() }).optional(), foot: z.string().optional(),
@@ -153,7 +157,8 @@ const finding = z.strictObject({
   ideaId: z.string(), headline: z.string(), basedOn: z.array(z.string()), saw: z.array(z.string()), means: z.string(), practice: z.array(z.string()),
   months: z.array(z.strictObject({ month: z.string(), videos: z.number() })), videos: z.number(), who: z.array(aboutPart), quotes: z.array(quote),
   short: z.string().optional(), subjectLine: z.string().optional(),
-  heardFor: z.array(z.strictObject({ name: z.string(), you: z.boolean(), phrase: z.string() })).optional(),
+  heardFor: z.array(z.strictObject({ name: z.string(), you: z.boolean(), phrase: z.string(), videos: z.number().int().nonnegative().optional() })).optional(),
+  base: z.strictObject({ k: z.number(), n: z.number() }).optional(),
 })
 
 /** A composed brief as this code builds it, and as a dry build saves it: the
@@ -166,7 +171,7 @@ export const savedBriefSchema = z.strictObject({
     figures: z.array(z.strictObject({ value: z.string(), label: z.string() })),
     also: z.array(z.strictObject({ headline: z.string(), brief: role })),
   }),
-  findings: z.array(finding), sections: z.array(section), fromApp: z.array(section).optional(),
+  findings: z.array(finding), sections: z.array(section), fromApp: z.array(section).optional(), readOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   held: z.array(z.strictObject({ what: z.string(), reason: z.string() })),
   promptVersion: z.string(), model: z.string(), costUsd: z.number(),
 })
@@ -207,8 +212,141 @@ export const savedSetSchema = z.strictObject({
   /** The month's ideas and the brief each was homed in. */
   ideas: z.array(z.strictObject({ id: z.string(), headline: z.string(), home: role })),
   roles: z.strictObject({ sales: savedRole, marketing: savedRole, content: savedRole, leadership: savedRole }),
+  /** The voices an operator struck out, with why (`withoutQuotes`; the
+   *  dry build's `--exclude-quotes`): the record, never read to draw. */
+  excludedQuotes: z.array(z.strictObject({ ref: z.string(), why: z.string() })).optional(),
+  /** The writer's sentences an operator struck out, each whole, with why
+   *  (`withoutSentences`; `--redraw`'s `--exclude-quotes` file): the record,
+   *  never read to draw. */
+  struckSentences: z.array(z.strictObject({ role, sentence: z.string(), why: z.string() })).optional(),
 })
 export type SavedSet = z.infer<typeof savedSetSchema>
+
+/** A printed sentence an operator strikes out of one brief: any of its
+ *  words, matched in exactly one place, and why. */
+export interface SentenceStrike { role: BriefRole; words: string; why: string }
+
+/** Where a sentence ends (Your moves' break, advice-words.ts). */
+const SENTENCE_BREAK = /(?<=[.!?])\s+(?=[A-Z“"‘'])/
+
+/**
+ * A brief with one printed sentence struck, whole (pure): the one string of
+ * its data that holds `words`, without the sentence that holds them; a list's
+ * entry left empty goes. Throws where the words are in no string or in more
+ * than one, in more than one sentence of it, or where the strike would leave
+ * a field that is not a list's entry empty (the page could not stand).
+ */
+export function briefWithoutSentence(d: MonthlyBriefData, words: string): { data: MonthlyBriefData; sentence: string } {
+  const hits: string[] = []
+  const find = (node: unknown, at: string): void => {
+    if (typeof node === 'string') { if (node.includes(words)) hits.push(at); return }
+    if (Array.isArray(node)) node.forEach((x, k) => find(x, `${at}[${k}]`))
+    else if (node && typeof node === 'object') for (const [k, v] of Object.entries(node)) find(v, `${at}.${k}`)
+  }
+  find(d, 'data')
+  if (hits.length !== 1) throw new Error(`"${words.slice(0, 40)}…" is in ${hits.length} of the brief's strings, not one${hits.length ? `: ${hits.join(', ')}` : ''}`)
+  let sentence = ''
+  const cut = (text: string): string => {
+    const parts = text.split(SENTENCE_BREAK)
+    const at = parts.filter((s) => s.includes(words))
+    if (at.length !== 1) throw new Error(`"${words.slice(0, 40)}…" is in ${at.length} sentences of ${hits[0]}, not one`)
+    sentence = at[0]
+    return parts.filter((s) => s !== sentence).join(' ').trim()
+  }
+  const walk = (node: unknown, inList: boolean): unknown => {
+    if (typeof node === 'string') {
+      if (!node.includes(words)) return node
+      const left = cut(node)
+      if (!left && !inList) throw new Error(`striking "${words.slice(0, 40)}…" leaves ${hits[0]} empty`)
+      return left
+    }
+    if (Array.isArray(node)) return node.map((x) => walk(x, true)).filter((x, k) => !(x === '' && typeof node[k] === 'string' && node[k].includes(words)))
+    if (node && typeof node === 'object') return Object.fromEntries(Object.entries(node).map(([k, v]) => [k, walk(v, false)]))
+    return node
+  }
+  return { data: walk(d, false) as MonthlyBriefData, sentence }
+}
+
+/**
+ * A saved set with writer's sentences struck out, with no model call (pure):
+ * each named brief without them (`briefWithoutSentence`), its evidence ids
+ * and pages as the deck now draws them, and the struck sentences recorded in
+ * the set (added to any recorded before). The In short check's record is
+ * kept as it is: `--from` checks it still holds on the struck brief, and
+ * refuses the set where it does not.
+ */
+export function withoutSentences(saved: { manifest: SavedSet; files: Record<BriefRole, SavedFile> }, strikes: readonly SentenceStrike[]): { manifest: SavedSet; files: Record<BriefRole, SavedFile> } {
+  const files = { ...saved.files }
+  const roles = { ...saved.manifest.roles }
+  const recorded = [...(saved.manifest.struckSentences ?? [])]
+  for (const x of strikes) {
+    const f = files[x.role]
+    const { data, sentence } = briefWithoutSentence(f.data, x.words)
+    files[x.role] = { ...f, data }
+    recorded.push({ role: x.role, sentence, why: x.why })
+  }
+  for (const r of new Set(strikes.map((x) => x.role))) {
+    const prints = saved.manifest.roles[r].status === 'ready' && briefPrints(files[r].data)
+    roles[r] = {
+      ...saved.manifest.roles[r],
+      evidenceIds: prints ? briefSnapshotRow(files[r].data).evidenceIds : [],
+      pages: prints ? deckHeaders(hydrateBrief(files[r].data, wordsOfFiles([files[r]]))) : [],
+    }
+  }
+  return { manifest: { ...saved.manifest, roles, ...(recorded.length ? { struckSentences: recorded } : {}) }, files }
+}
+
+/** A voice an operator strikes out of a set, and why. */
+export interface QuoteExclusion { ref: string; why: string }
+
+/** Is this node a stored quote (a ref and where it was heard)? */
+const isQuoteNode = (x: unknown): x is { ref: string } => !!x && typeof x === 'object' && typeof (x as { ref?: unknown }).ref === 'string' && 'ownPost' in (x as object)
+
+/** A brief with the struck voices taken out wherever they print (a finding's
+ *  quotes, a section's or an item's voice, a section's voices). Pure. */
+export function briefWithout(d: MonthlyBriefData, refs: ReadonlySet<string>): MonthlyBriefData {
+  const walk = (node: unknown): unknown => {
+    if (Array.isArray(node)) return node.filter((x) => !(isQuoteNode(x) && refs.has(x.ref))).map(walk)
+    if (node && typeof node === 'object') {
+      const out: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(node)) {
+        if (isQuoteNode(v) && refs.has(v.ref)) continue
+        out[k] = walk(v)
+      }
+      return out
+    }
+    return node
+  }
+  return walk(d) as MonthlyBriefData
+}
+
+/**
+ * A saved set with voices struck out, with no model call (pure): each brief
+ * without them, their words out of its texts, its evidence ids and pages as
+ * the deck now draws them, and the struck refs recorded in the set (added to
+ * any recorded before). `--from` then stores it as it stores any saved set.
+ * A ref the set does not print is recorded and changes nothing.
+ */
+export function withoutQuotes(saved: { manifest: SavedSet; files: Record<BriefRole, SavedFile> }, exclude: readonly QuoteExclusion[]): { manifest: SavedSet; files: Record<BriefRole, SavedFile> } {
+  const refs = new Set(exclude.map((x) => x.ref))
+  const files = {} as Record<BriefRole, SavedFile>
+  const roles = { ...saved.manifest.roles }
+  for (const r of BRIEF_ROLES) {
+    const f = saved.files[r]
+    const data = briefWithout(f.data, refs)
+    const texts = Object.fromEntries(Object.entries(f.texts).filter(([ref]) => !refs.has(ref)))
+    files[r] = { data, texts }
+    const prints = saved.manifest.roles[r].status === 'ready' && briefPrints(data)
+    roles[r] = {
+      ...saved.manifest.roles[r],
+      evidenceIds: prints ? briefSnapshotRow(data).evidenceIds : [],
+      pages: prints ? deckHeaders(hydrateBrief(data, wordsOfFiles([files[r]]))) : [],
+    }
+  }
+  const before = saved.manifest.excludedQuotes ?? []
+  const recorded = [...before, ...exclude.filter((x) => !before.some((b) => b.ref === x.ref))]
+  return { manifest: { ...saved.manifest, roles, ...(recorded.length ? { excludedQuotes: recorded } : {}) }, files }
+}
 
 /** The page headers a deck draws, in order ("Cover" for the cover). Pure. */
 export const deckHeaders = (d: Parameters<typeof planDeck>[0]): string[] => planDeck(d).pages.map((p) => p.eyebrow || 'Cover')
@@ -230,6 +368,8 @@ const wordsOfFiles = (files: readonly SavedFile[]): QuoteWordsOf => {
 export function savedSetOf(a: {
   clientId: string; company: string; month: string; runId: string; asOf: string; costUsd: number
   costByRole: Readonly<Record<BriefRole, number>>
+  /** The voices the build was told never to print (`--exclude-quotes`). */
+  excludedQuotes?: readonly QuoteExclusion[]
   ideas: readonly Pick<AllocatedIdea, 'id' | 'headline' | 'home'>[]
   briefs: readonly { data: MonthlyBriefData; texts: SavedFile['texts']; printed: { read: string[]; kept: string[] } }[]
 }): { manifest: SavedSet; files: Record<BriefRole, SavedFile> } {
@@ -255,6 +395,7 @@ export function savedSetOf(a: {
       costUsd: Math.round(a.costUsd * 10_000) / 10_000,
       ideas: a.ideas.map((x) => ({ id: x.id, headline: x.headline, home: x.home })),
       roles,
+      ...(a.excludedQuotes?.length ? { excludedQuotes: a.excludedQuotes.map((x) => ({ ref: x.ref, why: x.why })) } : {}),
     },
     files,
   }

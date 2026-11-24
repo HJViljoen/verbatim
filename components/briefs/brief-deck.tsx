@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
+import { fmtInt } from '@/lib/format'
 import {
-  SHEET, contentsOf, continuedTitle, deckPages, heardIn, ideasArgued, monthYear, pairColumn, quoteCite, quoteWords, tagLine, writtenOn,
+  SHEET, contentsOf, continuedTitle, deckPages, findingBaseLine, heardForBase, heardIn, ideasArgued, monthYear, pairColumn, quoteCite, quoteWords, tagLine, writtenOn,
   type DeckPage, type FindingPlan,
 } from '@/lib/reports/briefs/deck'
 import { BRIEF_LENS, BRIEF_NAME, type BriefFinding, type BriefItem, type BriefRole, type BriefSection, type SayHearStatus, type StoredBriefData } from '@/lib/reports/briefs/types'
@@ -79,7 +80,7 @@ function Frame({ ctx, page, children }: { ctx: Ctx; page: DeckPage; children: Re
       </div>
       <div data-brief-body="" style={{ flexGrow: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>{children}</div>
       <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 12, borderTop: `1px solid ${P.hair}`, fontSize: 12, color: P.muted }}>
-        <div>Created by {data.company} with Verbatim{ctx.date ? ` · ${ctx.date}` : ''}</div>
+        <div>Created by {data.company} with Verbatim{ctx.date ? ` · ${ctx.date}` : ''}{data.readOn && writtenOn(`${data.readOn}T12:00:00.000Z`) !== ctx.date ? ` · figures as read on ${writtenOn(`${data.readOn}T12:00:00.000Z`)}` : ''}</div>
         <div style={{ fontFamily: MONO }}>{page.n} / {ctx.total}</div>
       </div>
     </div>
@@ -171,7 +172,9 @@ function Finding({ ctx, f, plan }: { ctx: Ctx; f: BriefFinding; plan: FindingPla
   const quotes = (f.quotes as ResolvedBriefQuote[]).filter((q) => q?.text)
   const placed = (where: 'right' | 'left') => quotes.filter((_q, k) => plan.quotes[k] === where)
   const heard = heardIn(f)
+  const base = findingBaseLine(f, data.month)
   const chips = f.heardFor ?? []
+  const chipsBase = heardForBase(f, data)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%' }}>
       <div style={{ display: 'flex', gap: 48, flexGrow: 1, minHeight: 0 }}>
@@ -188,9 +191,10 @@ function Finding({ ctx, f, plan }: { ctx: Ctx; f: BriefFinding; plan: FindingPla
           ) : null}
           {placed('left').map((q, k) => <QuotePanel key={k} q={q} company={data.company} size={15} pad="14px 18px" />)}
           <div style={{ flexGrow: 1 }} />
-          {heard ? (
+          {heard || base ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              <div data-copy="figure" style={{ fontSize: 13, color: P.muted }}>{heard}</div>
+              {heard ? <div data-copy="figure" style={{ fontSize: 13, color: P.muted }}>{heard}</div> : null}
+              {base ? <div data-copy="figure" style={{ fontSize: 13, color: P.muted }}>{base}</div> : null}
               {f.subjectLine ? <div data-copy="figure" style={{ fontSize: 13, color: P.ink }}>{f.subjectLine}</div> : null}
             </div>
           ) : null}
@@ -214,6 +218,7 @@ function Finding({ ctx, f, plan }: { ctx: Ctx; f: BriefFinding; plan: FindingPla
               </div>
             ))}
           </div>
+          {chipsBase ? <div data-copy="figure" style={{ fontSize: 13, lineHeight: 1.45, color: P.muted, marginTop: -2 }}>{chipsBase}</div> : null}
         </div>
       ) : null}
     </div>
@@ -551,7 +556,14 @@ function RivalsHeardPage({ ctx, s, sub, footnote }: PageProps) {
             </div>
             {posts.map((r, k) => (
               <div key={k} style={{ display: 'grid', gridTemplateColumns: 'repeat(24, minmax(0, 1fr))', gap: 16, alignItems: 'center', padding: '6px 0', borderTop: `1px solid ${P.hair}` }}>
-                <div style={{ gridColumn: 'span 6', fontSize: 15, fontWeight: r.you ? 700 : 600, color: r.you ? P.gold : P.ink }}>{r.you ? `${r.name} (you)` : r.name}</div>
+                {r.accounts ? (
+                  <div style={{ gridColumn: 'span 6', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <div style={{ fontSize: 15, fontWeight: r.you ? 700 : 600, color: r.you ? P.gold : P.ink }}>{r.you ? `${r.name} (you)` : r.name}</div>
+                    <div data-copy="figure" style={{ fontSize: 12, lineHeight: 1.35, color: P.muted }}>{r.accounts}</div>
+                  </div>
+                ) : (
+                  <div style={{ gridColumn: 'span 6', fontSize: 15, fontWeight: r.you ? 700 : 600, color: r.you ? P.gold : P.ink }}>{r.you ? `${r.name} (you)` : r.name}</div>
+                )}
                 <div data-copy="figure" style={{ gridColumn: 'span 3', textAlign: 'right', fontFamily: MONO, fontSize: 14 }}>{r.posts}</div>
                 <div data-copy="figure" style={{ gridColumn: 'span 3', textAlign: 'right', fontFamily: MONO, fontSize: 14 }}>{r.five}</div>
                 <div style={{ gridColumn: 'span 12', display: 'flex', alignItems: 'center', gap: 12, paddingLeft: 12 }}>
@@ -653,11 +665,11 @@ function FormatsPage({ ctx, s, sub }: PageProps) {
 
 /** What viewers come for, and what loses them: the lead in the serif, then
  *  the two columns (Brief-Content-06). */
-function WatchPage({ s, footnote }: PageProps) {
+function WatchPage({ s, sub, footnote }: PageProps) {
   const cols = [s.groups.find((g) => pairColumn(g.label) === 0) ?? null, s.groups.find((g) => pairColumn(g.label) === 1) ?? null]
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 22, height: '100%' }}>
-      <TitleBlock title={s.title} />
+      <TitleBlock title={s.title} sub={sub} />
       {s.lead ? <p {...STORED} style={{ margin: 0, fontFamily: SERIF, fontSize: 23, fontWeight: 500, lineHeight: 1.5, maxWidth: 1080 }}>{s.lead}</p> : null}
       <div style={{ display: 'flex', gap: 48, flexGrow: 1, minHeight: 0 }}>
         {cols.map((g, c) => (
@@ -706,10 +718,10 @@ function MorePage({ ctx, s, sub, footnote }: PageProps) {
 
 /** Where the confusion starts: the lead in the serif, where it starts, then
  *  a card a confusion (Brief-Content-08). */
-function ConfusionPage({ s, footnote }: PageProps) {
+function ConfusionPage({ s, sub, footnote }: PageProps) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 22, height: '100%' }}>
-      <TitleBlock title={s.title} />
+      <TitleBlock title={s.title} sub={sub} />
       {s.lead ? <p {...STORED} style={{ margin: 0, fontFamily: SERIF, fontSize: 26, fontWeight: 500, lineHeight: 1.45, maxWidth: 1100 }}>{s.lead}</p> : null}
       {s.note ? <p {...STORED} style={{ margin: 0, fontSize: 19, lineHeight: 1.55, maxWidth: 1040 }}>{s.note}</p> : null}
       <div style={{ flexGrow: 1 }} />
@@ -833,6 +845,10 @@ function ShareBarRow({ label, bar }: { label: string; bar: NonNullable<BriefSect
  *  comments and videos, the brands' table, and the notes (Brief-Leadership-04). */
 function SharesPage({ s, sub }: PageProps) {
   const notes = s.lines ?? []
+  // Each brand's naming, each count of its base (naming.ts, 9 Nov); a brief
+  // stored before it carries the shares.
+  const named = allItems(s).some((i) => i.measure?.named != null)
+  const cell = (l: { k: number; n: number } | undefined) => (l ? <>{fmtInt(l.k)} <span style={{ color: P.muted }}>of {fmtInt(l.n)}</span></> : null)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18, height: '100%' }}>
       <TitleBlock title={s.title} sub={sub} />
@@ -845,17 +861,26 @@ function SharesPage({ s, sub }: PageProps) {
       <div style={{ display: 'flex', gap: 40, flexGrow: 1, minHeight: 0, alignItems: 'flex-start' }}>
         <div style={{ flex: 1.5, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(20, minmax(0, 1fr))', gap: 16, paddingBottom: 6, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: P.muted }}>
-            <div style={{ gridColumn: 'span 6' }}>Brand</div>
-            <div style={{ gridColumn: 'span 3', textAlign: 'right' }}>Comments</div>
-            <div style={{ gridColumn: 'span 3', textAlign: 'right' }}>Videos</div>
-            <div style={{ gridColumn: 'span 8', paddingLeft: 12 }}>Where it is talked about</div>
+            <div style={{ gridColumn: named ? 'span 5' : 'span 6' }}>Brand</div>
+            <div style={{ gridColumn: named ? 'span 5' : 'span 3', textAlign: 'right' }}>{named ? 'Comments naming it' : 'Comments'}</div>
+            <div style={{ gridColumn: named ? 'span 5' : 'span 3', textAlign: 'right' }}>{named ? 'Videos outside our searches' : 'Videos'}</div>
+            <div style={{ gridColumn: named ? 'span 5' : 'span 8', paddingLeft: 12 }}>{named ? 'Where' : 'Where it is talked about'}</div>
           </div>
           {allItems(s).map((i, k) => (
             <div key={k} style={{ display: 'grid', gridTemplateColumns: 'repeat(20, minmax(0, 1fr))', gap: 16, alignItems: 'center', padding: '10px 0', borderTop: `1px solid ${P.hair}` }}>
-              <div style={{ gridColumn: 'span 6', fontSize: 16, fontWeight: i.you ? 700 : 600, color: i.you ? P.gold : P.ink }}>{i.title}</div>
-              <div data-copy="figure" style={{ gridColumn: 'span 3', textAlign: 'right', fontFamily: MONO, fontSize: 15 }}>{(i.measure?.comments ?? 0).toFixed(1)}%</div>
-              <div data-copy="figure" style={{ gridColumn: 'span 3', textAlign: 'right', fontFamily: MONO, fontSize: 15 }}>{(i.measure?.videos ?? 0).toFixed(1)}%</div>
-              <div style={{ gridColumn: 'span 8', fontSize: 14, color: P.muted, paddingLeft: 12 }}>{i.detail ?? ''}</div>
+              <div style={{ gridColumn: named ? 'span 5' : 'span 6', fontSize: 16, fontWeight: i.you ? 700 : 600, color: i.you ? P.gold : P.ink }}>{i.title}</div>
+              {named ? (
+                <>
+                  <div data-copy="level" style={{ gridColumn: 'span 5', textAlign: 'right', fontFamily: MONO, fontSize: 15 }}>{cell(i.measure?.named?.comments)}</div>
+                  <div data-copy="level" style={{ gridColumn: 'span 5', textAlign: 'right', fontFamily: MONO, fontSize: 15 }}>{cell(i.measure?.named?.videos)}</div>
+                </>
+              ) : (
+                <>
+                  <div data-copy="figure" style={{ gridColumn: 'span 3', textAlign: 'right', fontFamily: MONO, fontSize: 15 }}>{(i.measure?.comments ?? 0).toFixed(1)}%</div>
+                  <div data-copy="figure" style={{ gridColumn: 'span 3', textAlign: 'right', fontFamily: MONO, fontSize: 15 }}>{(i.measure?.videos ?? 0).toFixed(1)}%</div>
+                </>
+              )}
+              <div style={{ gridColumn: named ? 'span 5' : 'span 8', fontSize: 14, color: P.muted, paddingLeft: 12 }}>{i.detail ?? ''}</div>
             </div>
           ))}
         </div>
@@ -916,11 +941,11 @@ function WeighPage({ ctx, s, footnote }: PageProps) {
 
 /** The risks, in business terms: dark risk cards, and the questions for the
  *  business under them (Brief-Leadership-07). */
-function RisksPage({ s, companion }: PageProps) {
+function RisksPage({ s, sub, companion }: PageProps) {
   const questions = companion ? allItems(companion) : []
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18, height: '100%' }}>
-      <TitleBlock title={s.title} />
+      <TitleBlock title={s.title} sub={sub} />
       <div style={{ display: 'flex', gap: 20 }}>
         {allItems(s).map((i, k) => (
           <div key={k} style={{ flex: 1, minWidth: 0, background: P.ink, color: '#FFFFFF', borderRadius: 16, padding: '22px 26px', display: 'flex', flexDirection: 'column', gap: 10 }}>

@@ -1050,6 +1050,8 @@ export type Tracking = {
   own_handles?: Record<string, string> | null
   competitor_handles?: Record<string, Record<string, string>> | null
   watched_brands?: string[] | null
+  /** The company's own name searches (read with the rest, `select('*')`). */
+  brand_keywords?: string[] | null
 }
 
 const norm = (s: string): string => s.trim().toLowerCase()
@@ -1234,9 +1236,13 @@ export interface GroupProfileRow {
 
 /** The tenant's latest profile (`consumer_profiles`, newest `run_date`), or
  *  null where Pass E has never written one. */
-export async function loadLatestProfile(handle: ReadingHandle): Promise<GroupProfileRow | null> {
-  const res = await handle.client.from('consumer_profiles').select('personas, run_id, run_date')
-    .eq('client_id', handle.clientId).order('run_date', { ascending: false }).limit(1).maybeSingle()
+export async function loadLatestProfile(handle: ReadingHandle, opts: { runId?: string | null } = {}): Promise<GroupProfileRow | null> {
+  // `runId`: the profile one run wrote (a closed month's briefs, rebuilt by
+  // hand, read the groups as its closing run described them). Absent: the
+  // newest.
+  let q = handle.client.from('consumer_profiles').select('personas, run_id, run_date').eq('client_id', handle.clientId)
+  if (opts.runId) q = q.eq('run_id', opts.runId)
+  const res = await q.order('run_date', { ascending: false }).limit(1).maybeSingle()
   if (res.error) throw fail('profile', res.error)
   return (res.data as GroupProfileRow | null) ?? null
 }

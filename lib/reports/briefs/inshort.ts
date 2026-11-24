@@ -5,7 +5,7 @@ import { collectQuoteRefs, resolveQuotes } from '../../renderables/quotes-freeze
 import type { QuoteResolution } from '../../renderables/types'
 import type { QuoteWordsOf } from './compose'
 import { appLines } from './app-words'
-import { distinctChips, heardIn, ideasArgued, planDeck, tagLine, type DeckPage } from './deck'
+import { distinctChips, heardForBase, heardIn, ideasArgued, monthSpan, planDeck, tagLine, type DeckPage } from './deck'
 import type { BriefRole, MonthlyBriefData, StoredBriefData } from './types'
 import { APP_SECTION_KEYS, BRIEF_LENS, BRIEF_NAME, BRIEF_ROLES } from './types'
 
@@ -107,7 +107,7 @@ export function printedPages(d: StoredBriefData, words?: QuoteWordsOf): PrintedP
         page: p.eyebrow,
         lines: [
           f.headline, ...f.saw, `${BRIEF_LENS[h.role]}: ${f.means}`, ...f.practice.slice(0, b.plan.practice), heardIn(f), f.subjectLine,
-          ...(f.heardFor?.length ? [`What each brand is heard for: ${f.heardFor.map((c) => `${c.name}, ${c.phrase}`).join('; ')}`] : []),
+          ...(f.heardFor?.length ? [`What each brand is heard for: ${f.heardFor.map((c) => `${c.name}, ${c.phrase}`).join('; ')}`, heardForBase(f, h)] : []),
         ].map((x) => (x ?? '').trim()).filter(Boolean),
       })
       continue
@@ -210,10 +210,16 @@ export const summarySentences = (summary: string): string[] => splitSentences(su
  *  before either (the September v2 build) still matches the line that prints
  *  now. Pure. */
 export function sameWords(line: string): string {
-  const plain = line.replace(/[“”]/g, '')
+  // A card page's base as code said it before 11 Nov ("videos heard in
+  // August, September and October") is the same line as it says it now
+  // ("videos from August to October", deck.ts `monthSpan`): the words
+  // changed, not what they say.
+  const plain = line.replace(/[“”]/g, '').replace(OLD_HEARD_IN, (_m, v: string, list: string) => ` ${v} ${monthSpan(list.split(/, | and /))}`)
   const at = plain.indexOf(': ')
   return at < 0 ? plain : `${plain.slice(0, at + 2)}${distinctChips(plain.slice(at + 2).split(', ')).join(', ')}`
 }
+
+const OLD_HEARD_IN = / (videos?) heard in ((?:[A-Z][a-z]+, )*[A-Z][a-z]+(?: and [A-Z][a-z]+)?)/g
 
 /** Is every sentence of a stored summary one the check found printed, and
  *  does every line the check read still print (`sameWords`)? What a stored

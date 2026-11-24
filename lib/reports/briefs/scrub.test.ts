@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { briefBreaks, hyphenatedNames, restoreNames, scrubBriefText, tradeOff, varySubjects } from './scrub'
+import { briefBreaks, hyphenatedNames, restoreNames, scrubBriefText, talkAboutNotUnder, tradeOff, varySubjects } from './scrub'
 
 const clean = (text: string, field: 'market' | 'interpret' | 'headline' = 'market') =>
   scrubBriefText(text, 2000, { company: 'Acme', field }).text
@@ -158,5 +158,16 @@ describe('what survives, put right', () => {
     // Not a subject: a shared opening that is not a plural before a verb.
     expect(varySubjects('The price matters. The price is shown.')).toBe('The price matters. The price is shown.')
     expect(varySubjects('Comfort matters. Comfort wins.')).toBe('Comfort matters. Comfort wins.')
+  })
+})
+
+describe('talk about the company, never under its posts', () => {
+  it('says talk placed under the company\'s posts as talk about it', () => {
+    expect(talkAboutNotUnder('People under Acme\'s posts name feet first. They point to two models.', 'Acme')).toBe('People talking about Acme name feet first. They point to two models.')
+    expect(talkAboutNotUnder('Comments under the company’s own Instagram posts ask for prices.', 'Acme')).toBe('Comments about Acme ask for prices.')
+    expect(talkAboutNotUnder('Praise sits on Acme\'s posts and elsewhere.', 'Acme')).toBe('Praise sits in talk about Acme and elsewhere.')
+    expect(talkAboutNotUnder('People ask what Acme costs.', 'Acme')).toBe('People ask what Acme costs.')
+    // Only a platform's name may stand before "posts", never any word.
+    expect(talkAboutNotUnder('People under Acme\'s recent posts ask.', 'Acme')).toBe('People under Acme\'s recent posts ask.')
   })
 })

@@ -25,9 +25,13 @@ export const APP_TITLES: Readonly<Partial<Record<SectionKey, string>>> = {
   'leadership.subjects': 'Where the market stands',
   'leadership.groups': 'Who is in your market',
   'leadership.moves': 'Your moves',
-  'sales.groups': 'Who is buying',
+  // Not "Who is buying" (the blind-report check, 9 Nov): a group's count is
+  // every video its people commented on, curious as well as buying.
+  'sales.groups': 'Who is in your market',
   'marketing.products': 'Your products in the conversation',
-  'marketing.named': 'Who gets named without being asked',
+  // "Without being asked" said what it means (the fresh check, 11 Nov): in
+  // videos none of our brand searches found.
+  'marketing.named': 'Who gets named outside our searches',
   'content.ideas': 'What to post next',
   'content.hooks': 'Hooks and formats that work',
 }
@@ -63,8 +67,65 @@ export function inTheirVideos(g: Pick<BriefGroup, 'top' | 'products' | 'videos'>
 
 /** The sub of Who is buying's first sheet: every group the month holds, and
  *  how many print. Pure. */
+/** What a group's count is, said wherever the groups print (the blind-report
+ *  check, 9 Nov: "First-time buyer: 121 of 766 videos" read as 121 videos of
+ *  buyers, where most of them were people asking how a device works). */
+export const GROUPS_ARE_NOT_BUYERS = 'each counted by the videos it commented on, not by purchases'
+
+/** One of a brand's accounts we follow, with its posts in the month. */
+export interface AccountPosts { platform: string; account: string; posts: number }
+
+/** The accounts a brand's posts came from, each with its posts, the most
+ *  first. Pure. */
+export function accountsOf(vs: readonly { platform: string | null; account_name: string | null }[]): AccountPosts[] {
+  const by = new Map<string, AccountPosts>()
+  for (const v of vs) {
+    if (!v.platform || !v.account_name?.trim()) continue
+    const key = `${v.platform}::${v.account_name.trim()}`
+    const at = by.get(key) ?? { platform: v.platform, account: v.account_name.trim(), posts: 0 }
+    at.posts += 1
+    by.set(key, at)
+  }
+  return [...by.values()].sort((a, b) => b.posts - a.posts || a.platform.localeCompare(b.platform) || a.account.localeCompare(b.account))
+}
+
+/** "Instagram @acme", "YouTube ACME": an account as it is named on its
+ *  platform. Pure. */
+export const accountName = (a: Pick<AccountPosts, 'platform' | 'account'>): string =>
+  `${platformLabel(a.platform)} ${/^(?:instagram|tiktok)$/i.test(a.platform) && !a.account.startsWith('@') ? '@' : ''}${a.account}`
+
+/** "Instagram @acme 24, TikTok @acme_co 11 and YouTube ACME 5". Pure. */
+export const accountsLine = (xs: readonly AccountPosts[], counts = true): string =>
+  andList(xs.map((a) => `${accountName(a)}${counts ? ` ${fmtInt(a.posts)}` : ''}`))
+
+/** "the three Össur accounts we follow": what a brand's own posts are (the
+ *  fresh check, 11 Nov: "40 posts Össur published" read as all of Össur's
+ *  posts, where its regional accounts and other networks are not followed).
+ *  Pure. */
+export const followedAccounts = (company: string, n: number): string =>
+  `the ${numberWord(n).toLowerCase()} ${company} ${n === 1 ? 'account' : 'accounts'} we follow`
+
+/** A group Voices names for buying ("First-time buyer"), said for what it
+ *  counts (the fresh check, 11 Nov: its people are mostly asking about or
+ *  considering a purchase; the re-check, 11 Nov: 1 November's First-time
+ *  buyer rests on 289 questions to 167 comments weighing a purchase, so the
+ *  questions are said first). Null where no group's name says so. Pure. */
+export function buyerNamesNote(groups: readonly Pick<BriefGroup, 'name'>[]): string | null {
+  const named = groups.map((g) => g.name).filter((n) => /\bbuy(?:er|ers|ing)?\b|\bcustomers?\b|\bshoppers?\b|\bpurchas/i.test(n))
+  if (named.length === 0) return null
+  return `${andList(named.map((n) => `“${n}”`))} ${named.length === 1 ? 'is Voices’ name for a group' : 'are Voices’ names for groups'} of people asking questions about a purchase, some of them considering one; ${named.length === 1 ? 'its count is' : 'their counts are'} of videos, not purchases.`
+}
+
+/** Your products' foot: what its counts stand on, the base its line under
+ *  the title names (the re-check, 11 Nov: "every video in your market" under
+ *  a base of the videos read, your own posts in it). Pure. */
+export function productsFoot(p: Pick<BriefProducts, 'month' | 'market'>): string {
+  const on = p.market ? `the ${fmtInt(p.market)} videos we read in ${longMonth(p.month)}` : `the videos we read in ${longMonth(p.month)}`
+  return `Counted on ${on}, your own posts included: on what their comments say, never on what your own posts say.`
+}
+
 export function buyersSub(month: string, groups: number, shown: number): string {
-  const all = `${numberWord(groups)} ${groups === 1 ? 'group comments' : 'groups comment'} in your market in ${longMonth(month)}, as Voices describes them.`
+  const all = `${numberWord(groups)} ${groups === 1 ? 'group comments' : 'groups comment'} in your market in ${longMonth(month)}, as Voices describes them, ${GROUPS_ARE_NOT_BUYERS}.`
   return shown >= groups ? all : `${all} The ${numberWord(shown).toLowerCase()} in the most videos are here.`
 }
 
@@ -86,12 +147,33 @@ export function recordLine(m: Pick<BriefMoves, 'record' | 'waitingCount'>): stri
   return `${fmtInt(r.total)} ${r.total === 1 ? 'piece' : 'pieces'} of advice${since}: ${fmtInt(r.decided)} decided, ${fmtInt(m.waitingCount)} waiting.`
 }
 
-/** A piece of advice's line under its title: "First raised 12 Oct · would
- *  move Where can I get one, 41 of 902 videos in October". Pure. */
+/** What a piece of advice would move, counted: null where the month holds
+ *  no reading of its conversation. A month's reading row is never written at
+ *  zero, so a 0 is Your moves' "read in another month, not in this one"
+ *  (`readMoveLevels`), which a brief never prints as a count (the re-check,
+ *  11 Nov: "0 of 744" for a conversation the month's clustering did not
+ *  read). Pure. */
+export function aimLevel(aim: { k: number | null; n: number | null } | null | undefined): { k: number; n: number } | null {
+  if (!aim || aim.k == null || aim.n == null || aim.k <= 0 || aim.n <= 0) return null
+  return { k: aim.k, n: aim.n }
+}
+
+/** What an advice level counts (the re-check, 11 Nov: "744 category videos
+ *  in October" are the category's videos whose comments were read that
+ *  month, "the videos we read" as the brief says it elsewhere; Content's
+ *  "2,090 category videos posted in October" are its uploads). One word
+ *  more, not three: the line stays one line under Your moves' four pieces. */
+export const AIM_BASE = 'category videos read'
+
+/** A piece of advice's line under its title: "Raised 12 Oct · would move
+ *  Where can I get one, 41 of 902 category videos read in October" (not
+ *  "First raised": the line says what its count is of in the room the word
+ *  took, one line under Your moves' four pieces, 11 Nov). Pure. */
 export function adviceDetail(a: Pick<BriefAdvice, 'firstMade' | 'aim'>, month: string): string {
-  const raised = `First raised ${shortDate(`${a.firstMade.slice(0, 10)}T00:00:00.000Z`)}`
+  const raised = `Raised ${shortDate(`${a.firstMade.slice(0, 10)}T00:00:00.000Z`)}`
   if (!a.aim) return raised
-  const level = a.aim.k != null && a.aim.n != null ? `, ${fmtInt(a.aim.k)} of ${fmtInt(a.aim.n)} videos in ${longMonth(month)}` : ''
+  const at = aimLevel(a.aim)
+  const level = at ? `, ${fmtInt(at.k)} of ${fmtInt(at.n)} ${AIM_BASE} in ${longMonth(month)}` : ''
   return `${raised} · would move ${a.aim.label}${level}`
 }
 
@@ -123,7 +205,7 @@ export const categoryProducts = (c: BriefProducts['categories'][number]): string
 export function ideaReadLine(x: Pick<BriefIdea, 'read' | 'month'>, i: Pick<BriefIdeas, 'read' | 'month'>): string | null {
   if (!x.month) return null
   const month = `${fmtInt(x.month.k)} of ${fmtInt(x.month.n)} in ${longMonth(i.month)}`
-  return x.read ? `${fmtInt(x.read.k)} of ${fmtInt(x.read.n)} videos, ${i.read.label} · ${month}` : month
+  return x.read ? `${fmtInt(x.read.k)} of ${fmtInt(x.read.n)} videos in your market, ${i.read.label} · ${month}` : month
 }
 
 /** Whether the company's posts touched on an idea's question, in Content's
@@ -147,18 +229,26 @@ export const recipeLabel = (x: Pick<BriefIdea, 'format' | 'opening'>): string | 
 /** The board's line where code chose neither. */
 export const NO_RECIPE = 'No format stands out on this question yet'
 
-/** The three notes under the brands table (code's), over the rows the
- *  table prints. Pure. */
+/** Below this many videos named without being asked, a brand's count is few
+ *  voices, and the notes say so. */
+export const FEW_NAMED = 10
+
+/** The notes under the brands table (code's), over the rows the table
+ *  prints: the company's count beside its rivals' on the one base (never "named
+ *  most" over a table without the company: the blind-report check, 9 Nov),
+ *  few voices where every count is, and what the praise and complaints count.
+ *  Pure. */
 export function namedNotes(n: BriefNamed, company: string): string[] {
   const rivals = [...n.rows].filter((r) => !r.you).sort((x, y) => y.named.k - x.named.k || x.label.localeCompare(y.label))
   const out: string[] = []
-  const top = rivals.filter((r) => r.named.k > 0).slice(0, 2)
-  if (top.length === 2) out.push(`${top[0].label} and ${top[1].label} were named most without being asked: in ${fmtInt(top[0].named.k)} and ${fmtInt(top[1].named.k)} of the ${fmtInt(n.base)} videos.`)
-  else if (top.length === 1) out.push(`${top[0].label} was named most without being asked: in ${fmtInt(top[0].named.k)} of the ${fmtInt(n.base)} videos.`)
   const you = n.rows.find((r) => r.you)
-  if (you) out.push(you.named.k > 0 ? `${company} was named without being asked in ${fmtInt(you.named.k)} of them.` : `${company} was not named without being asked in ${longMonth(n.month)}.`)
+  const count = (k: number) => (k === 0 ? 'none' : fmtInt(k))
+  const theirs = andList(rivals.slice(0, 2).map((r) => `${r.label} in ${count(r.named.k)}`))
+  if (you) out.push(`Of the ${fmtInt(n.base)} videos none of our brand searches found, ${company} was named in ${count(you.named.k)}${theirs ? `, ${theirs}` : ''}.`)
+  else if (rivals.length) out.push(`Of the ${fmtInt(n.base)} videos none of our brand searches found, ${theirs}.`)
+  if (n.rows.length && n.rows.every((r) => r.named.k < FEW_NAMED)) out.push(`Few voices: no brand was named in ${numberWord(FEW_NAMED).toLowerCase()} or more of them.`)
   const widest = [...rivals].filter((r) => r.praised && r.complained && r.praised.n > 0).sort((x, y) => (y.praised?.n ?? 0) - (x.praised?.n ?? 0) || x.label.localeCompare(y.label))[0]
-  if (widest?.praised && widest.complained) out.push(`Of the ${fmtInt(widest.praised.n)} videos naming ${widest.label} in any way, people praised it in ${fmtInt(widest.praised.k)} and complained in ${fmtInt(widest.complained.k)}.`)
+  if (widest?.praised && widest.complained) out.push(`Of the ${fmtInt(widest.praised.n)} videos in your market naming ${widest.label} in any way, ${fmtInt(widest.praised.k)} held praise in their comments and ${fmtInt(widest.complained.k)} a complaint, about anything in the video.`)
   return out
 }
 
@@ -228,7 +318,7 @@ export function appLines(s: BriefSection): string[] {
     for (const x of s.products.standouts) out.push(`${x.label}: ${x.name}. ${x.text}`)
   }
   if (s.named) {
-    for (const r of s.named.rows) out.push(`${r.you ? `${r.label} (you)` : r.label}: named without being asked in ${fmtInt(r.named.k)} of ${fmtInt(r.named.n)}${r.praised && r.complained ? `; praised ${fmtInt(r.praised.k)}, complained ${fmtInt(r.complained.k)} of ${fmtInt(r.praised.n)}` : ''}${r.top ? `; talked about for ${r.top.label}` : ''}`)
+    for (const r of s.named.rows) out.push(`${r.you ? `${r.label} (you)` : r.label}: named outside our searches in ${fmtInt(r.named.k)} of ${fmtInt(r.named.n)}${r.praised && r.complained ? `; praised ${fmtInt(r.praised.k)}, complained ${fmtInt(r.complained.k)} of ${fmtInt(r.praised.n)}` : ''}${r.top ? `; talked about for ${r.top.label}` : ''}`)
   }
   if (s.ideas) {
     for (const i of s.ideas.ideas) {

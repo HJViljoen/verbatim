@@ -3,6 +3,7 @@ import { fmtInt, longMonth } from '../../format'
 import { monthsPhrase } from '../../written/month'
 import { appLines } from './app-words'
 import { canvasOf, findingsAfter, printsSection, V2_PAGES, type Canvas } from './canvas'
+import { findingBaseLine } from './deck'
 import type { BriefFinding, BriefQuote, BriefSection, MonthlyBriefData } from './types'
 import { BRIEF_LENS, BRIEF_NAME } from './types'
 
@@ -63,7 +64,7 @@ function quoteBlock(q: BriefQuote | null | undefined, textOf: TextOf, company: s
   return [`> "${words}"`, `> ${quoteSource(q, company, noun)}`, '']
 }
 
-function findingBlock(f: BriefFinding, role: MonthlyBriefData['role'], textOf: TextOf, company: string, noun: string | null): string[] {
+function findingBlock(f: BriefFinding, role: MonthlyBriefData['role'], textOf: TextOf, company: string, noun: string | null, month: string): string[] {
   const heard = f.months.filter((m) => m.videos > 0).map((m) => m.month)
   return [
     `## ${f.headline}`,
@@ -74,6 +75,7 @@ function findingBlock(f: BriefFinding, role: MonthlyBriefData['role'], textOf: T
     ...(f.practice.length ? ['**In practice**', ...f.practice.map((p) => `- ${p}`), ''] : []),
     ...f.quotes.flatMap((q) => quoteBlock(q, textOf, company, noun)),
     `_Heard in ${monthsPhrase(heard)}, on ${whoLine(f.videos, f.who, company, noun)}._`,
+    ...(f.base ? ['', `_${findingBaseLine(f, month)}_`] : []),
     ...(f.subjectLine ? ['', `_${f.subjectLine}_`] : []),
     ...(f.heardFor?.length ? ['', `**What each brand is heard for:** ${f.heardFor.map((c) => `${c.name}: ${c.phrase}`).join(' · ')}`] : []),
     '',
@@ -137,7 +139,7 @@ export function briefMarkdown(d: MonthlyBriefData, textOf: TextOf, noun: string 
   }
   const canvas = canvasOf(d)
   const before = new Set(findingsAfter(d.role, canvas))
-  const findings = d.findings.flatMap((f) => findingBlock(f, d.role, textOf, co, noun))
+  const findings = d.findings.flatMap((f) => findingBlock(f, d.role, textOf, co, noun, d.month))
   // The October canvas: its pages in their order (the app's and the writer's),
   // then what the writer wrote that it does not print.
   const ordered = canvas === 'v2'

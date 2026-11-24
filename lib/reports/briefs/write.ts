@@ -34,7 +34,11 @@ import { BRIEF_LENS, BRIEF_NAME, BRIEF_ROLES } from './types'
 // only, nothing about how anything was found.
 
 export const IDEAS_PROMPT_VERSION = 'brief_ideas_v1'
-export const BRIEF_PROMPT_VERSION = 'monthly_brief_v2'
+// v3 (the blind-report check, 9 Nov): talk about the company is "talk about
+// {company}", never "{company}'s own posts" (`whoWords`), and the house style
+// no longer offers "people under the company's posts". Only the record: nothing
+// reads the version to decide how a brief prints.
+export const BRIEF_PROMPT_VERSION = 'monthly_brief_v3'
 
 /** Field caps, in characters, and list lengths. Compose and scrub hold the
  *  writer to every one. */
@@ -83,7 +87,10 @@ export function heardWord(videos: number): string {
  *  the rest of the market. */
 export function whoWords(who: readonly AboutPart[], company: string, noun: string | null): string {
   const market = marketLabelsOf(noun).inline
-  const names = who.filter((p) => p.videos > 0).map((p) => (p.about === 'market' ? market : p.about === 'client' ? `${company}'s own posts and talk about ${company}` : aboutName(p.about, { client: company }) ?? ''))
+  // Talk about the company, never "its own posts": the part counts every
+  // video naming it, most of them other people's (the blind-report check,
+  // 9 Nov: a user's Reddit thread was written up as talk under Össur's posts).
+  const names = who.filter((p) => p.videos > 0).map((p) => (p.about === 'market' ? market : p.about === 'client' ? `talk about ${company}` : aboutName(p.about, { client: company }) ?? ''))
   return names.filter(Boolean).join('; ') || market
 }
 
@@ -107,9 +114,9 @@ function houseStyle(company: string): string[] {
     'House style:',
     `- Plain language for a busy person at ${company}. Short sentences. Concrete nouns: the thing people name, in the market's own words. No consultant abstractions: never "a fit problem", "legible", "positioning", "is tested against", "lens", "value proposition", "use case", "consideration", "resonates", "narrative", "friction", "ecosystem", "landscape", "journey", "funnel". Name the thing instead.`,
     '- Literal words, never an idiom or a figure of speech ("earns its place", "credible in the hand", "in the same breath"). Say the literal thing.',
-    '- Open every paragraph and every item with its own subject ("Buyers", "Owners", "People under the company\'s posts"), never with "They", "This", "Also" or "It" pointing back, because a sentence before it may be deleted. Inside a paragraph, write normally and vary the sentences. A question is written as the person asks it.',
-    `- The analytical third person ("buyers ask", "owners report", "people under ${company}'s posts praise"), claims rather than hedges. Never "we", "our", "us" or "you"; never address the reader. No headings, no bullet points inside a field, no exclamation marks. Never open two sentences in a row with the same words.`,
-    '- Say whose talk it is where it matters: buyers of other brands, owners of a named rival, people under the company\'s own posts. Name brands and products plainly. Never name a person or an account.',
+    '- Open every paragraph and every item with its own subject ("Buyers", "Owners", "People talking about the company"), never with "They", "This", "Also" or "It" pointing back, because a sentence before it may be deleted. Inside a paragraph, write normally and vary the sentences. A question is written as the person asks it.',
+    `- The analytical third person ("buyers ask", "owners report", "people talking about ${company} praise"), claims rather than hedges. Never "we", "our", "us" or "you"; never address the reader. No headings, no bullet points inside a field, no exclamation marks. Never open two sentences in a row with the same words.`,
+    '- Say whose talk it is where it matters: buyers of other brands, owners of a named rival, people talking about the company. Never say talk sat under the company\'s own posts, or call any post the company\'s: talk about the company is mostly on other people\'s posts. Name brands and products plainly. Never name a person or an account.',
     '- The market only. Never mention how anything was found, gathered, collected, searched, read, counted or checked. Never mention research, data, sources, samples, coverage, searches, updates, platforms, evidence, a reading, this service, a tool, a model, AI or Verbatim, and never write "this brief", "this report" or "this month\'s brief". Never say how sure anything is, and never say what is unclear, unsettled or missing: if something cannot be said, leave it out. A sentence that does any of this is deleted before anyone reads it.',
     '- NO TIME COMPARISONS. Everything here is what people said across the months named, read as one body of talk. Never compare one month with another or with "earlier", "before", "the past" or "last month"; never say anything is "now" so, "no longer" so, "increasingly", "settling", "shifting", "becoming", "emerging", "for the first time" or "new". Never write "first brief". A sentence that does is deleted.',
     '- Never say how big a thing is or how it ranks against another ("the main complaint", "the top concern", "more than"): code prints the counts.',

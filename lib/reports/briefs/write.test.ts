@@ -125,9 +125,9 @@ describe('material in words', () => {
   it('how widely a point was heard, never a count', () => {
     expect([heardWord(20), heardWord(6), heardWord(3), heardWord(1)]).toEqual(['heard widely', 'heard on several videos', 'heard on a few videos', 'barely heard'])
   })
-  it('whose talk, by name, the market in the product\'s one wording', () => {
+  it('whose talk, by name, the market in the product\'s one wording; talk about the company is never "its own posts"', () => {
     expect(whoWords([{ about: 'client', videos: 2 }, { about: 'rival:Ottobock', videos: 3 }, { about: 'market', videos: 9 }], 'Össur', null))
-      .toBe("Össur's own posts and talk about Össur; Ottobock; others in your market")
+      .toBe('talk about Össur; Ottobock; others in your market')
     expect(whoWords([{ about: 'market', videos: 9 }], 'Acme', 'bags')).toBe('other bags in your market')
   })
 })

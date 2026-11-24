@@ -224,6 +224,11 @@ export interface BriefMeasure {
   /** A brand's share of the month's comments and of its videos, 0 to 100. */
   comments?: number
   videos?: number
+  /** ADDITIVE (9 Nov): a brand's naming in the month (naming.ts), each with
+   *  its base: the comments naming it, and the videos naming it that no brand
+   *  search of ours found. Where present, the standing prints these and no
+   *  share. */
+  named?: { comments: { k: number; n: number }; videos: { k: number; n: number } }
 }
 
 /** One share bar of "Where {company} stands against its rivals": the company,
@@ -273,7 +278,7 @@ export interface BriefSection {
   shares?: { comments: ShareBar; videos: ShareBar | null }
   /** Each brand's own posts published in the month, and how many drew five or
    *  more comments (How rivals are heard): code's counts. */
-  posts?: { title: string; rows: { name: string; you: boolean; posts: number; five: number; pct: number }[] }
+  posts?: { title: string; rows: { name: string; you: boolean; posts: number; five: number; pct: number; accounts?: string }[] }
   /** The company's position in one line (What holds so far): the writer's. */
   position?: BriefItem | null
   /** The rival whose column a table carries beside the company's (Hooks and
@@ -544,9 +549,18 @@ export interface BriefHooks {
   posts: {
     total: number
     byPlatform: { platform: string; posts: number }[]
+    /** ADDITIVE (11 Nov): the accounts we follow that posted, each with its
+     *  posts. */
+    accounts?: { platform: string; account: string; posts: number }[]
+    /** Each post against a typical market video ON ITS OWN PLATFORM, the
+     *  median of those multiples (app-load.ts `loadHooksPart`). */
     response: { multiple: number; rated: number } | null
+    /** ADDITIVE (9 Nov): the same, platform by platform. */
+    platforms?: { platform: string; multiple: number; rated: number }[]
     sentence: string | null
-    best: { platform: string; date: string; format: string | null; multiple: number; href: string } | null
+    /** The highest of those multiples among posts with `BEST_MIN_VIEWS`
+     *  views or more (`views` ADDITIVE, 9 Nov). */
+    best: { platform: string; date: string; format: string | null; multiple: number; href: string; views?: number } | null
     href: string
   } | null
   /** What the response is, said once (Content's own words). */
@@ -576,7 +590,17 @@ export interface BriefFinding {
   subjectLine?: string
   /** "What each brand is heard for" (the Leadership finding's chips): each
    *  brand with the idea it is heard for, the company last and dark. */
-  heardFor?: { name: string; you: boolean; phrase: string }[]
+  heardFor?: {
+    name: string; you: boolean; phrase: string
+    /** The videos about the brand in the points the chip stands on: the
+     *  chips' base line (deck.ts `heardForBase`). Absent in a brief saved
+     *  before it. */
+    videos?: number
+  }[]
+  /** ADDITIVE (9 Nov): its videos in the brief's month, of every video read
+   *  in that month: the base printed under it, with a few-voices tag below
+   *  `FEW_VOICES` (deck.ts). */
+  base?: { k: number; n: number }
 }
 
 export interface BriefFigure {
@@ -633,6 +657,11 @@ export interface MonthlyBriefData {
    * and would throw), draws a brief that has them as it always drew one.
    */
   fromApp?: BriefSection[]
+  /** ADDITIVE (11 Nov): `YYYY-MM-DD`, the day its figures were read, where a
+   *  closed month was rebuilt later than it closed (scripts/monthly-briefs.ts
+   *  --as-of): the month's tables may have been read again since, so the
+   *  footer says when (the fresh check, 11 Nov). */
+  readOn?: string
   /** What was written and does not print, and why: the operator's, never a
    *  reader's. */
   held: { what: string; reason: string }[]

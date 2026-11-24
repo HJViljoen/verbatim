@@ -1258,11 +1258,11 @@ export async function soft<T>(what: string, p: PromiseLike<T> | (() => PromiseLi
 
 /** The ideas, and whether the table is there at all (`loadPostIdeas` answers
  *  [] for both; one probe tells them apart, only when it does). */
-export async function readIdeas(db: SupabaseClient, clientId: string): Promise<{ state: IdeasState; rows: PostIdeaRow[] }> {
+export async function readIdeas(db: SupabaseClient, clientId: string, runId?: string): Promise<{ state: IdeasState; rows: PostIdeaRow[] }> {
   // Switched off for this workspace (T13's switch, lib/config.ts): no read at
   // all, and no stored idea prints, older ones included.
   if (!postIdeasEnabled(clientId)) return { state: 'not_on', rows: [] }
-  const rows = await loadPostIdeas(db, clientId)
+  const rows = await loadPostIdeas(db, clientId, runId)
   if (rows.length > 0) return { state: 'ready', rows }
   const probe = await db.from(TABLE_POST_IDEAS).select('run_id').eq('client_id', clientId).limit(1)
   if (probe.error) {
@@ -1462,7 +1462,13 @@ const counted = (themes: Map<string, number> | null | undefined, id: string, n: 
  * path); `scope.reading` the window readings, the published read and the
  * subjects (the service role, the tenant pinned by the session).
  */
-export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): Promise<ContentPageData> {
+export async function loadContentPage(scope: Scope, opts: {
+  now?: Date
+  /** The page as one run left it, for a month that run closed (the monthly
+   *  briefs rebuilt by hand, lib/reports/briefs/app-load.ts): that run's
+   *  ideas and the month's published read. Absent everywhere else. */
+  pin?: { runId: string; month: string }
+} = {}): Promise<ContentPageData> {
   const db = scope.supabase as SupabaseClient
   const { clientId } = scope
   const admin = scope.reading.client
@@ -1471,8 +1477,8 @@ export async function loadContentPage(scope: Scope, opts: { now?: Date } = {}): 
 
   // ---- wave 1
   const [ideasRead, published, brand, personas, rivals] = await Promise.all([
-    soft('ideas', readIdeas(db, clientId)),
-    soft('published', loadPublishedWeekRead(admin, clientId)),
+    soft('ideas', readIdeas(db, clientId, opts.pin?.runId)),
+    soft('published', loadPublishedWeekRead(admin, clientId, opts.pin ? { month: opts.pin.month } : {})),
     soft('brand', readBrand(db, clientId)),
     soft('personas', readPersonas(db, clientId)),
     soft('rivals', loadTrackedRivals(db, clientId)),
