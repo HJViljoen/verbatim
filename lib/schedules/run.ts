@@ -33,7 +33,7 @@ import { printsMedicalLine } from '../post-ideas/medical'
 import { alertWeeklyRead } from './weekly-read-alert'
 import { deliverSend, readyForReview } from './deliver'
 import { resolveScheduleReport } from './resolve'
-import { claimDecision, pruneInlineImages, weeklyReadPath, type ExistingSend } from './claim'
+import { claimRetryAt, holdsBeforeEmail, pruneInlineImages, runnerClaimDecision, weeklyReadPath, type ExistingSend } from './claim'
 import { publishSend, type PublishOutcome } from './publish'
 import { pipelineActor, type ConfigActor } from '../config-log'
 import { cadenceWordOf } from './types'
@@ -94,8 +94,11 @@ export interface RunScheduleArgs {
 }
 
 export interface RunScheduleResult {
-  /** 'enqueued': a written report's build has started and will deliver itself. */
-  status: 'sent' | 'ready' | 'enqueued' | 'already_sent' | 'skipped' | 'failed' | 'preview'
+  /** 'enqueued': a written report's build has started and will deliver itself.
+   *  'in_progress': another attempt holds this update's claim; at `retryAt`
+   *  it is stale and the next call takes it over (lib/schedules/claim.ts). */
+  status: 'sent' | 'ready' | 'enqueued' | 'already_sent' | 'skipped' | 'failed' | 'preview' | 'in_progress'
+  retryAt?: string
   sendId?: string
   snapshotId?: string
   artifactId?: string
@@ -109,17 +112,26 @@ export interface RunScheduleResult {
   error?: string
 }
 
-type Claim = { status: 'claimed'; id: string } | { status: 'already_sent' | 'waiting' | 'skipped'; id: string }
+type Claim =
+  | { status: 'claimed'; id: string }
+  | { status: 'already_sent' | 'waiting' | 'skipped'; id: string }
+  /** Another attempt holds it: come back at `retryAt` (`runnerClaimDecision`). */
+  | { status: 'in_progress'; id: string; retryAt: string }
 
 /** The row for (schedule, run): new → claimed; sent → already_sent; a young
- *  claim → skipped; failed / skipped / stale → taken over. The takeover is a
- *  compare-and-set on claimed_at, so two workers reading the same failed row
- *  cannot both take it. */
-export async function claimSend(admin: SupabaseClient, schedule: Pick<ScheduleRow, 'id' | 'client_id' | 'name' | 'recipients'>, runId: string, now = Date.now()): Promise<Claim> {
-  const { data: existing } = await admin.from('report_sends').select('id, status, claimed_at').eq('schedule_id', schedule.id).eq('run_id', runId).maybeSingle()
+ *  claim → skipped, or in_progress where the runner may come back for it
+ *  (`runnerClaimDecision`); failed / skipped / stale → taken over. The
+ *  takeover is a compare-and-set on claimed_at, so two workers reading the
+ *  same failed row cannot both take it. */
+export async function claimSend(admin: SupabaseClient, schedule: Pick<ScheduleRow, 'id' | 'client_id' | 'name' | 'recipients' | 'starter_key' | 'review'> & { artefact?: string | null }, runId: string, now = Date.now()): Promise<Claim> {
+  const holds = holdsBeforeEmail(schedule)
+  // Someone else claimed it a moment ago (a lost race below): theirs is young.
+  const theirs = (id: string): Claim => (holds ? { status: 'in_progress', id, retryAt: claimRetryAt(now) } : { status: 'skipped', id })
+  const { data: existing } = await admin.from('report_sends').select('id, status, claimed_at, ready_at').eq('schedule_id', schedule.id).eq('run_id', runId).maybeSingle()
   const row = existing as ExistingSend | null
   if (row) {
-    const decision = claimDecision(row, now)
+    const decision = runnerClaimDecision(row, holds, now)
+    if (decision === 'in_progress') return { status: decision, id: row.id, retryAt: claimRetryAt(row.claimed_at) }
     if (decision !== 'takeover') return { status: decision, id: row.id }
     const { data: taken, error } = await admin
       .from('report_sends')
@@ -129,7 +141,7 @@ export async function claimSend(admin: SupabaseClient, schedule: Pick<ScheduleRo
       .select('id')
       .maybeSingle()
     if (error) throw new Error(`send: reclaim failed: ${error.message}`)
-    return taken ? { status: 'claimed', id: row.id } : { status: 'skipped', id: row.id }
+    return taken ? { status: 'claimed', id: row.id } : theirs(row.id)
   }
   const { data, error } = await admin
     .from('report_sends')
@@ -139,8 +151,8 @@ export async function claimSend(admin: SupabaseClient, schedule: Pick<ScheduleRo
   if (error || !data) {
     // The unique constraint fired: another worker claimed it between our read and our insert.
     if (error?.code === '23505') {
-      const { data: theirs } = await admin.from('report_sends').select('id').eq('schedule_id', schedule.id).eq('run_id', runId).maybeSingle()
-      return { status: 'skipped', id: (theirs as { id: string } | null)?.id ?? '' }
+      const { data: other } = await admin.from('report_sends').select('id').eq('schedule_id', schedule.id).eq('run_id', runId).maybeSingle()
+      return theirs((other as { id: string } | null)?.id ?? '')
     }
     throw new Error(`send: claim failed: ${error?.message ?? 'no row'}`)
   }
@@ -263,6 +275,9 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
         if (out.status === 'refused') return { status: 'failed', sendId: claim.id, ms: ms(), error: `Built and held, and not added to the past issues: ${out.error}` }
       }
       return { status: 'ready', sendId: claim.id, ms: ms() }
+    }
+    if (claim.status === 'in_progress') {
+      return { status: 'in_progress', sendId: claim.id, retryAt: claim.retryAt, ms: ms(), error: 'Another attempt is building this update now. If that attempt stopped partway, the update can be built again 30 minutes after it began.' }
     }
     if (claim.status !== 'claimed') return { status: claim.status, sendId: claim.id, ms: ms() }
     sendId = claim.id

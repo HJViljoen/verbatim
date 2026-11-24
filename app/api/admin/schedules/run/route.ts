@@ -43,8 +43,11 @@ export async function POST(request: Request) {
 
   const r = await runSchedule({ admin, schedule: data as ScheduleRow, runId, baseUrl: appBaseUrl(), renderBaseUrl: renderBaseUrl(appBaseUrl()), mode: 'send', noEmail })
   // The HTML never leaves the runner here; the row and the snapshot are the record.
+  // 'in_progress' is 409, never 200 (22 Nov): another attempt holds the claim,
+  // and the step must come back at `retryAt` (inngest/functions/report.ts),
+  // not record a success over a row nobody may ever finish.
   return NextResponse.json(
-    { status: r.status, sendId: r.sendId, snapshotId: r.snapshotId, artifactId: r.artifactId, shareUrl: r.shareUrl, subject: r.subject, ms: r.ms, error: r.error },
-    { status: r.status === 'failed' ? 500 : 200 },
+    { status: r.status, sendId: r.sendId, snapshotId: r.snapshotId, artifactId: r.artifactId, shareUrl: r.shareUrl, subject: r.subject, ms: r.ms, error: r.error, retryAt: r.retryAt },
+    { status: r.status === 'failed' ? 500 : r.status === 'in_progress' ? 409 : 200 },
   )
 }

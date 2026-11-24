@@ -1,10 +1,12 @@
 import { SCHEDULE_CLAIM_STALE_MS } from '../config'
 import type { EmailAttachment } from '../email'
+import { sendsBlockArtefact, sendsWeeklyRead } from './artefact'
+import type { ScheduleRow } from './types'
 
 /** The pure rules of the runner (lib/schedules/run.ts), kept apart from it
  *  so they can be tested without the render and email modules. */
 
-export interface ExistingSend { id: string; status: string; claimed_at: string }
+export interface ExistingSend { id: string; status: string; claimed_at: string; ready_at?: string | null }
 export type ClaimDecision = 'already_sent' | 'waiting' | 'skipped' | 'takeover'
 
 /** What to do with the row that already exists for (schedule, run): sent →
@@ -17,6 +19,48 @@ export function claimDecision(row: ExistingSend, now = Date.now()): ClaimDecisio
   if (row.status === 'ready') return 'waiting'
   if (row.status === 'claimed' && now - new Date(row.claimed_at).getTime() < SCHEDULE_CLAIM_STALE_MS) return 'skipped'
   return 'takeover'
+}
+
+/**
+ * A CLAIM LEFT BY AN ATTEMPT THAT DIED (22 Nov: Sealand's weekly issue). The
+ * route that claimed it was killed at its 300 s without marking the row, the
+ * `send:<scheduleId>` step's retry found the claim young, answered skipped
+ * (200), and Inngest recorded success: nothing ever looked at the row again.
+ *
+ * The runner's answer to a young claim, then, where it may come back for it:
+ * 'in_progress' (the route answers 409, and the step retries at
+ * `claimRetryAt`, when `claimDecision` calls the claim stale and every route
+ * that could hold it, 300 s at most, is long dead). Only where coming back
+ * can email nobody twice (`holds`): a schedule that stands its build `ready`
+ * before any email to anyone (every weekly read, and a block artefact under
+ * review), on a row that never stood `ready`, so the dead attempt emailed
+ * nobody. A row that stood ready and is claimed again is a delivery, which
+ * may have emailed the list before it died: never rebuilt here, young or
+ * stale (the Studio offers its Send once the claim is cold). Every other
+ * schedule (a document build holds its claim for many minutes in Inngest and
+ * fails it itself; a digest or a block artefact without review emails the list
+ * before its row records anything) answers exactly as before. Pure.
+ */
+export type RunnerClaimDecision = ClaimDecision | 'in_progress'
+
+export function runnerClaimDecision(row: ExistingSend, holds: boolean, now = Date.now()): RunnerClaimDecision {
+  const decision = claimDecision(row, now)
+  if (!holds || row.status !== 'claimed') return decision
+  if (row.ready_at) return 'skipped'
+  return decision === 'skipped' ? 'in_progress' : decision
+}
+
+/** Whether a schedule's every email waits on its build standing `ready`
+ *  (`runnerClaimDecision`): the weekly read on every path, a block artefact
+ *  under review. Never a document or a digest: those need their report. */
+export function holdsBeforeEmail(schedule: Pick<ScheduleRow, 'starter_key' | 'review'> & { artefact?: string | null }): boolean {
+  return sendsWeeklyRead(schedule) || (schedule.review && sendsBlockArtefact(schedule))
+}
+
+/** When a claim made at `claimedAt` is stale for `claimDecision`, and a
+ *  minute more for the clocks: the time a retry may come back and take it. */
+export function claimRetryAt(claimedAt: string | number): string {
+  return new Date(new Date(claimedAt).getTime() + SCHEDULE_CLAIM_STALE_MS + 60_000).toISOString()
 }
 
 /**

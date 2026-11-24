@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createSnapshot } from '../snapshots'
+import { within } from './briefs/clock'
 import { flagPrints } from '../reading/week-lead'
 import { loadWeekRead } from '../written/store'
 import type { WeekReadData } from '../written/types'
@@ -209,6 +210,21 @@ async function loadParts(admin: SupabaseClient, a: { clientId: string; runId: st
   }
 }
 
+/**
+ * THE BUILD'S READS, HELD TO TIME (22 Nov). Sealand's issue stalled about
+ * 0.3 s into its build, after one burst of the parts' reads, which catch a
+ * failure but had no clock: the route was killed at its 300 s with the send
+ * still `claimed`, no failed row and no alert. Every read below now ends by
+ * this many ms from the build's start, or the build throws
+ * (`WeekReadTimeoutError`), which the runner's catch turns into a `failed`
+ * send and the operator's alert (lib/schedules/run.ts), and which the step's
+ * retry then takes over. The reads take seconds on a normal week; the render,
+ * the publish and the emails after them keep the rest of the route's 300 s.
+ * A read that lost is left to settle on its own, its answer unused: nothing
+ * is written until every read is in.
+ */
+export const WEEKLY_READ_BUILD_MS = 120_000
+
 /** Load the run's read, refuse one that may not go out, read the ready
  *  subjects' own reads, every page's part and the month-closing line as they
  *  stand now, freeze them together. No rendering here: Chromium and the
@@ -224,8 +240,12 @@ export async function snapshotWeeklyRead(args: {
   parts?: (admin: SupabaseClient, a: { clientId: string; runId: string; read: WeekReadData }) => Promise<WeeklyReadPartsOf>
   /** The ready subjects' reader, for a test. */
   readySubjects?: (admin: SupabaseClient, clientId: string) => Promise<ReadonlySet<string>>
+  /** The reads' time (`WEEKLY_READ_BUILD_MS`), for a test. */
+  deadlineMs?: number
 }): Promise<{ snapshotId: string; data: WeeklyReadSnapshotData; evidenceIds: string[] }> {
-  const row = await loadWeekRead(args.admin, { clientId: args.clientId, runId: args.runId, kind: 'week' })
+  const until = Date.now() + (args.deadlineMs ?? WEEKLY_READ_BUILD_MS)
+  const held = <T>(read: Promise<T>): Promise<T> => within(read, until - Date.now(), "the weekly read's build")
+  const row = await held(loadWeekRead(args.admin, { clientId: args.clientId, runId: args.runId, kind: 'week' }))
   const state = weekReadSendState(row)
   if (!state.ok) throw new WeeklyReadNotReadyError(state.reason, state.message)
   const stored = row!.data!
@@ -233,10 +253,10 @@ export async function snapshotWeeklyRead(args: {
   // whose check has not passed (`printableWeekRead`).
   const subjectFlagged = stored.version === 2 && (stored.unusual?.flags ?? []).some((f) => f.objectKind === 'subject')
   const read = subjectFlagged
-    ? printableWeekRead(stored, await (args.readySubjects ?? readySubjectsFor)(args.admin, args.clientId).catch(() => new Set<string>()))
+    ? printableWeekRead(stored, await held((args.readySubjects ?? readySubjectsFor)(args.admin, args.clientId).catch(() => new Set<string>())))
     : stored
-  const parts = await (args.parts ?? loadParts)(args.admin, { clientId: args.clientId, runId: args.runId, read })
-    .catch((): WeeklyReadPartsOf => ({ subjects: [], pages: {}, monthClose: null }))
+  const parts = await held((args.parts ?? loadParts)(args.admin, { clientId: args.clientId, runId: args.runId, read })
+    .catch((): WeeklyReadPartsOf => ({ subjects: [], pages: {}, monthClose: null })))
   const data = weeklyReadSnapshotData({ company: args.company, runId: args.runId, read, writtenAt: row!.created_at, parts })
   const snap = await createSnapshot(args.admin, {
     clientId: args.clientId,

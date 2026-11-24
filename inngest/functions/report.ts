@@ -1,3 +1,4 @@
+import { RetryAfterError } from 'inngest'
 import { inngest } from '@/inngest/client'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { appBaseUrl } from '@/lib/site'
@@ -28,7 +29,10 @@ import type { ScheduleRow } from '@/lib/schedules/types'
 // sit in the account's 5-slot concurrency budget next to the pipeline itself.
 // A step throws when the runner reports a failure, so Inngest retries it —
 // safe, because the runner claims (schedule, run) before it renders and a
-// failed row may be taken over. A step out of retries is caught here so the
+// failed row may be taken over. A 409 (another attempt's young claim, such as
+// this step's last attempt killed at the route's 300 s) retries when that
+// claim goes stale, so the retry takes the row over instead of recording a
+// success over it (22 Nov). A step out of retries is caught here so the
 // workspace's other schedules still go out.
 //
 // Steps (ids are a stability contract — see AGENTS.md): 'find-due-schedules',
@@ -75,7 +79,14 @@ export const sendWeeklyReport = inngest.createFunction(
             headers: { 'content-type': 'application/json', 'x-admin-key': process.env.ADMIN_API_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY ?? '' },
             body: JSON.stringify({ scheduleId: s.id, runId, ...(s.noEmail ? { noEmail: true } : {}) }),
           })
-          const j = (await r.json().catch(() => ({}))) as { status?: string; ms?: number; error?: string }
+          const j = (await r.json().catch(() => ({}))) as { status?: string; ms?: number; error?: string; retryAt?: string }
+          // ANOTHER ATTEMPT HOLDS THE CLAIM (409, 22 Nov): most likely this
+          // step's own last attempt, killed at the route's 300 s with the row
+          // still claimed. Come back when the claim is stale, and the runner
+          // takes it over and builds again; Inngest's own backoff would spend
+          // every retry inside the 30 minutes, where the claim is still young.
+          const retryAt = r.status === 409 && j.retryAt ? Date.parse(j.retryAt) : NaN
+          if (Number.isFinite(retryAt)) throw new RetryAfterError(`schedules/run 409: ${j.error ?? j.status ?? 'in progress'}`, new Date(retryAt))
           if (!r.ok) throw new Error(`schedules/run ${r.status}: ${j.error ?? j.status ?? 'no body'}`)
           return { status: j.status ?? 'ok', ms: j.ms, error: j.error }
         })
