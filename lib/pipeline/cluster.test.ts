@@ -368,10 +368,11 @@ describe('averageLinkageClusters vs the 11 Sep code (cluster-oracle.ts)', () => 
   // A SPEED GUARD, relative so a loaded machine moves both sides: the fill at
   // the embedding's 1,536 dimensions measured 5.2x faster than the 11 Sep
   // fill (Sealand's 10,743-insight bucket, 18 Nov: 11.7 s against 68.1 s on
-  // an M4). The bound is 2x, there to catch the day the kernel is "tidied"
-  // back into one accumulator a pair, not to read a 10% regression from;
-  // the best of three of each, interleaved.
-  it('fills the triangle at least twice as fast as the 11 Sep fill (n=600, dim=1536)', () => {
+  // an M4). The bound is 1.4x, there to catch the day the kernel is "tidied"
+  // back into one accumulator a pair (about 1x), not to read a 10% regression
+  // from; the best of three of each, interleaved. Shared CI runners measured
+  // 2.6x, 2.3x and 1.7x on three pushes (24 Nov), so 2x flaked.
+  it('fills the triangle clearly faster than the 11 Sep fill (n=600, dim=1536)', () => {
     const vecs = float32Vecs(600, 1536, 11)
     let oldMs = Infinity
     let newMs = Infinity
@@ -384,6 +385,6 @@ describe('averageLinkageClusters vs the 11 Sep code (cluster-oracle.ts)', () => 
       newMs = Math.min(newMs, performance.now() - t)
     }
     console.log(`[cluster] fill n=600 dim=1536: 11 Sep ${oldMs.toFixed(0)} ms, triangle ${newMs.toFixed(0)} ms (${(oldMs / newMs).toFixed(1)}x)`)
-    expect(newMs * 2).toBeLessThan(oldMs)
+    expect(newMs * 1.4).toBeLessThan(oldMs)
   }, 60_000)
 })
