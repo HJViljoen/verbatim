@@ -45,6 +45,12 @@ export const instagram: PlatformAdapter = {
   // Baseline (unwindowed) runs are dated here too, exactly as TikTok's
   // `dateRange` and YouTube's `publishedAfter` already are — a search bound is
   // the platform's, not the run's.
+  //
+  // ⚠️ From about 17 Nov 2026 `posts` returns 1 to 9 items a search, not its
+  // 70: Instagram's hashtag page no longer hands out a dense recent feed. Not
+  // the build (0.0.844, the last good run's, does the same, as do 0.0.873 and
+  // 0.99.2963) and not the actor (`instagram-hashtag-scraper` gives 70 spread
+  // over nine years). Tested 24 Nov; `lib/pipeline/search-volume.ts` warns on it.
   searchVariants: ['reels', 'posts'] as const,
 
   videoSearch(config, terms, limit, opts) {
