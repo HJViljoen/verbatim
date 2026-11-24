@@ -394,6 +394,21 @@ This version has breaking changes — APIs, conventions, and file structure may 
   briefs or the dead-man's switch, none of which reads the column
   (`lib/pipeline/run-warnings.test.ts` pins each). The class of each step is
   one line of `WARNING_STEPS`; to move a step, change its `kind`.
+  **A platform's search volume collapsing WARNS too** (24 Nov,
+  `lib/pipeline/search-volume.ts`, stale-data `search-volume`, so it sends
+  the run's alert): from about 17 Nov Instagram's hashtag pages stopped
+  giving the scraper a dense recent feed (`apify/instagram-scraper` posts
+  mode 70 → 1 to 9 a search on every build, 0.0.844 included, and
+  `instagram-hashtag-scraper`'s 70 span nine years; 24 Nov tests), every call
+  SUCCEEDED and both tenants' runs closed `completed` with nothing said. A
+  platform warns when this run's found (Σ `keyword_performance.videos_found`,
+  counted off the memoised searches, `searchFound`) is under a quarter of the
+  median of its last 4 comparable runs (uncapped, found more than 0, window
+  within 2× of this run's), with at least 3 of them and a median of at least
+  50. The history is one embedded read inside the platform's existing
+  `gate:<platform>` step (no new id: 82 = 82), never a throw; a capped or
+  unwindowed run is not judged. Not an error: the status and every rule that
+  judges a run are unchanged.
 - **A run has 1,000 steps, and the per-video fan-outs are one step a WAVE**
   (9 Nov, `lib/pipeline/step-budget.ts`). Inngest ends a function run at its
   1,000th step and nothing after it runs: Sealand's 8 Nov update `c5690bb0`

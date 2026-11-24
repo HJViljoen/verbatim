@@ -45,6 +45,7 @@ import { briefComposeStep, briefIdeasStep, briefResearchStep, briefWriteStep, pl
 import { BRIEF_ROLES } from '@/lib/reports/briefs/types'
 import { summariseRunErrors, partialRunAlert, passADegradation, isolatedBatchDegradation, runCloseStatus, closingErrors, RUN_ERROR_CAP } from '@/lib/pipeline/run-errors'
 import { alertDue, closeRunWrite, createWarningLog, reopenRunWrite } from '@/lib/pipeline/run-warnings'
+import { loadSearchHistory, searchFound, searchVolumeCause, searchVolumeCollapse, searchVolumeJudged } from '@/lib/pipeline/search-volume'
 import { CLASSIFY_PARALLEL, COMMENT_BATCH, COMMENT_PARALLEL, countSteps, fanOut, PASS_A_BATCH, PASS_A_PARALLEL, passABatchRoom, SEARCH_PARALLEL, stepBudgetCause, THEMES_PARALLEL } from '@/lib/pipeline/step-budget'
 import { writeRunCosts, runSpendSoFar } from '@/lib/pipeline/run-costs'
 import { withApifyRunContext, settleApifyRuns } from '@/lib/gather/apify-runs'
@@ -698,13 +699,22 @@ export const runPipeline = inngest.createFunction(
           )
           searches.push(...wave)
         }
+        // The search volume's history rides in the gate's own step (24 Nov,
+        // lib/pipeline/search-volume.ts): one small read, never a throw, no
+        // new step id. A memoised gate from before it has none: no check.
         const gate = await step.run(`gate:${platform}`, () =>
-          withApifyRunContext({ clientId, runId, step: `gate:${platform}` }, () =>
-            gatePlatform({ clientId, runId, platform, searches, videoLimit: options.videoLimit, period: runPeriod ?? undefined, window: runWindow }),
-          ),
+          withApifyRunContext({ clientId, runId, step: `gate:${platform}` }, async () => {
+            const gated = await gatePlatform({ clientId, runId, platform, searches, videoLimit: options.videoLimit, period: runPeriod ?? undefined, window: runWindow })
+            const searchHistory = searchVolumeJudged(options, runWindow)
+              ? await loadSearchHistory(createAdminClient(), { clientId, runId, platform, window: runWindow })
+              : null
+            return { ...gated, searchHistory }
+          }),
         )
         totalVideos += gate.videosKept
         for (const err of gate.errors) noteError(`gate:${platform}`, err)
+        const searchCollapse = searchVolumeCollapse(platform, searchFound(searches), gate.searchHistory ?? null)
+        if (searchCollapse) noteWarning('search-volume', searchVolumeCause(searchCollapse), { week: runWindow?.start ?? null, platform })
         // Comment batches dispatch in parallel waves — this loop is the run's
         // wall-clock dominator (each video is its own Apify actor run, and the
         // sequential version drove run 1's ~2.5h). Batches are disjoint video

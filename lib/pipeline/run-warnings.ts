@@ -26,7 +26,7 @@
  * what is now stale for the client. PURE apart from the column test.
  */
 
-import { appDay } from '../format'
+import { appDay, platformLabel } from '../format'
 import { isMissingColumnError } from '../supabase-admin'
 
 /** Hard cap on stored warnings, `RUN_ERROR_CAP`'s 50 (restated: run-errors
@@ -49,6 +49,8 @@ export interface RunWarning {
   week?: string
   /** The subject it affects, by its name, where there is one. */
   subject?: string
+  /** The platform it affects ('instagram'), where there is one. */
+  platform?: string
   /** The error's code and message, scrubbed of quoted text (`warningCause`). */
   cause: string
   /** What is now stale for the client, as a sentence. */
@@ -62,6 +64,7 @@ export interface WarningAt {
   prevMonth?: string | null
   week?: string | null
   subject?: string | null
+  platform?: string | null
 }
 
 interface WarningRule {
@@ -210,6 +213,20 @@ export const WARNING_STEPS = {
     kind: 'stale-data', name: 'Pass A', said: 'was cut to the steps the run had left',
     stale: () => 'The videos past the cut keep their previous analysis until a later update reads them, so this update’s themes and figures do not reflect their re-read.',
   },
+  // Not a step's failure either (24 Nov, lib/pipeline/search-volume.ts): a
+  // platform's searches found under a quarter of their usual videos, every
+  // call having succeeded (Instagram's hashtag pages from about 17 Nov).
+  // Noted after the platform's gate. STALE-DATA, so the run's alert says it:
+  // the week's figures for that platform rest on a fraction of its videos.
+  'search-volume': {
+    kind: 'stale-data', name: 'the search volume', said: 'fell far below its usual level',
+    stale: (at) => {
+      const p = at.platform ? platformLabel(at.platform) : null
+      return p
+        ? `This update read far fewer ${p} videos than usual, so its ${p} figures, and every share that counts them, are thin and do not compare with the weeks before.`
+        : 'This update read far fewer videos than usual on one platform, so its figures there are thin and do not compare with the weeks before.'
+    },
+  },
 } as const satisfies Record<string, WarningRule>
 
 export type WarningStep = keyof typeof WARNING_STEPS
@@ -275,6 +292,7 @@ export function runWarning(step: WarningStep, e: unknown, at: WarningAt = {}): R
     ...(month ? { month } : {}),
     ...(week ? { week } : {}),
     ...(at.subject ? { subject: at.subject } : {}),
+    ...(at.platform ? { platform: at.platform } : {}),
     cause: warningCause(e),
     stale: rule.stale(at),
   }
@@ -404,6 +422,7 @@ export function parseRunWarnings(raw: unknown): RunWarning[] {
       ...(typeof r.month === 'string' ? { month: r.month } : {}),
       ...(typeof r.week === 'string' ? { week: r.week } : {}),
       ...(typeof r.subject === 'string' ? { subject: r.subject } : {}),
+      ...(typeof r.platform === 'string' ? { platform: r.platform } : {}),
     })
   }
   return out
