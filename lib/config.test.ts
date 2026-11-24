@@ -214,10 +214,11 @@ describe('SEGMENT_JUDGE_ENABLED and BRAND_CONFIRM_ENABLED', () => {
 // catalogue is reviewed and loaded and its back-read written. A yes is a diff
 // to this test. The cap and the hard dollar cap are pinned with it.
 describe('PRODUCT_READINGS_ENABLED', () => {
-  it('is on for Össur alone (13 Oct: catalogue loaded, back-read written), off for every other tenant and an unknown one', () => {
+  it('is on for Össur (13 Oct) and Sealand (each: catalogue loaded, back-read written), off for every other tenant and an unknown one', () => {
     expect(Object.keys(PRODUCT_READINGS_ENABLED).sort()).toEqual([OSSUR_CLIENT_ID, SEALAND_CLIENT_ID].sort())
     expect(productReadingsEnabled(OSSUR_CLIENT_ID)).toBe(true)
-    for (const id of [SEALAND_CLIENT_ID, DEMO_CLIENT_ID, 'not-a-tenant']) expect(productReadingsEnabled(id)).toBe(false)
+    expect(productReadingsEnabled(SEALAND_CLIENT_ID)).toBe(true)
+    for (const id of [DEMO_CLIENT_ID, 'not-a-tenant']) expect(productReadingsEnabled(id)).toBe(false)
   })
 
   it('caps the classifier at 3,000 items and $0.75 a run', () => {

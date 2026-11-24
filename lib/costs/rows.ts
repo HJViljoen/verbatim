@@ -106,6 +106,8 @@ export function settingsFromRow(r: Row | null | undefined): CostSettings {
     openaiBalanceOn: day(r.openai_balance_on),
     countShared: r.count_shared === undefined ? DEFAULT_SETTINGS.countShared : Boolean(r.count_shared),
     countProspects: Boolean(r.count_prospects),
+    fxAuto: r.fx_auto === true,
+    fxOn: day(r.fx_on),
   }
 }
 

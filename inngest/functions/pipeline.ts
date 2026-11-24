@@ -18,7 +18,7 @@ import { discoverRunKeywords } from '@/lib/pipeline/keyword-discovery'
 import { CLASSIFY_META_MAX_OUTPUT_TOKENS, planClassifyMetaBatches, runClassifyMetaBatch, type ClassifyMetaResult } from '@/lib/pipeline/classify-meta'
 import { planTranslateBatches, translateBatch } from '@/lib/pipeline/translate'
 import { planQuoteTranslations, translateQuotesBatch } from '@/lib/pipeline/translate-quotes'
-import { planOcrBatches, ocrBatch, planOcrBackfill, ocrBackfillBatch, emptyOcrResult, mentionsMissingColumn, type OcrResult } from '@/lib/pipeline/ocr'
+import { planOcrBatches, ocrBatch, planOcrBackfill, ocrBackfillBatch, emptyOcrResult, mergeOcrResults, mentionsMissingColumn, type OcrResult } from '@/lib/pipeline/ocr'
 import { ingestOwnedPosts, supportsOwnedProfile, buildOwnedCensus, entitySlug, type OwnedEntity } from '@/lib/gather/owned'
 import { planTranscriptBackfill, backfillTranscriptsBatch, emptyBackfillTally, mergeTallies, formatTally } from '@/lib/gather/transcript-backfill'
 import { discoverSubreddits } from '@/lib/gather/subreddit-discovery'
@@ -44,11 +44,12 @@ import { isTestRun } from '@/lib/schedules/due'
 import { briefComposeStep, briefIdeasStep, briefResearchStep, briefWriteStep, planBriefsStep, type BriefWave, type BriefWritten } from '@/lib/reports/briefs/step'
 import { BRIEF_ROLES } from '@/lib/reports/briefs/types'
 import { summariseRunErrors, partialRunAlert, passADegradation, isolatedBatchDegradation, runCloseStatus, closingErrors, RUN_ERROR_CAP } from '@/lib/pipeline/run-errors'
-import { alertDue, closeRunWrite, createWarningLog } from '@/lib/pipeline/run-warnings'
+import { alertDue, closeRunWrite, createWarningLog, reopenRunWrite } from '@/lib/pipeline/run-warnings'
 import { CLASSIFY_PARALLEL, COMMENT_BATCH, COMMENT_PARALLEL, countSteps, fanOut, PASS_A_BATCH, PASS_A_PARALLEL, passABatchRoom, SEARCH_PARALLEL, stepBudgetCause, THEMES_PARALLEL } from '@/lib/pipeline/step-budget'
 import { writeRunCosts, runSpendSoFar } from '@/lib/pipeline/run-costs'
 import { withApifyRunContext, settleApifyRuns } from '@/lib/gather/apify-runs'
 import { decideOpenRun, runIdForEvent, RUN_STALE_AFTER_HOURS, PG_UNIQUE_VIOLATION, type RunningRow } from '@/lib/pipeline/run-guard'
+import { handleRunFailure } from '@/lib/pipeline/run-failure'
 import { persistRunNews } from '@/lib/news/persist'
 import { persistThemes, loadThemes } from '@/lib/pipeline/themes'
 import { writeRunSummary } from '@/lib/pipeline/run-summary'
@@ -238,29 +239,28 @@ export const runPipeline = inngest.createFunction(
     // A function-level failure (a step out of retries) would otherwise strand
     // the run row at 'running' forever — pages and monitors need a terminal
     // state (found live: the first cloud run's gather timeouts did exactly this).
-    onFailure: async ({ event }) => {
+    //
+    // An update that fails throws before the last attempt, so Inngest runs
+    // the handler again, and the alert names the client by its id where its
+    // name cannot be read (lib/pipeline/run-failure.ts; 15 Nov, d8a15862).
+    onFailure: async ({ event, attempt, maxAttempts }) => {
       const original = (event.data as { event?: { data?: { clientId?: string; options?: PipelineRunOptions } } }).event
       const clientId = original?.data?.clientId
       if (!clientId) return
       const message = (event.data as { error?: { message?: string } }).error?.message ?? 'pipeline function failed'
       const admin = createAdminClient()
-      await admin.from('pipeline_runs')
-        .update({ status: 'failed', error_message: message, completed_at: new Date().toISOString() })
-        .eq('client_id', clientId).eq('status', 'running')
       // Operator alert — before this, a dead run was only ever a DB row
       // nobody was looking at (scheduled runs are unattended).
-      const { data: client } = await admin.from('clients')
-        .select('company_name').eq('id', clientId).maybeSingle()
-      await sendAlertEmail(
-        `Verbatim run FAILED — ${client?.company_name ?? clientId}`,
-        `Pipeline run failed after retries.\n\nClient: ${client?.company_name ?? '?'} (${clientId})\nError: ${message}\n\nResume lever: POST /api/admin/trigger-run with options {runId, skipGather:true}.` +
-          // A resume without sendReport is a MANUAL run (5 Oct): its weekly
-          // read goes in the past issues and nobody, the reviewer included,
-          // is emailed. A scheduled run's resume must say it is one.
-          (original?.data?.options?.sendReport
-            ? ` This was a SCHEDULED run: add "sendReport": true to those options, so its report runs as scheduled and the review email still goes out.`
-            : ''),
-      )
+      await handleRunFailure({
+        markFailed: () => admin.from('pipeline_runs')
+          .update({ status: 'failed', error_message: message, completed_at: new Date().toISOString() })
+          .eq('client_id', clientId).eq('status', 'running'),
+        companyName: async () => {
+          const { data, error } = await admin.from('clients').select('company_name').eq('id', clientId).maybeSingle()
+          return { name: (data as { company_name?: string | null } | null)?.company_name ?? null, error }
+        },
+        alert: sendAlertEmail,
+      }, { clientId, message, scheduled: Boolean(original?.data?.options?.sendReport), attempt, maxAttempts })
     },
   },
   async ({ event, step: inngestStep, attempt, maxAttempts }) => {
@@ -421,11 +421,13 @@ export const runPipeline = inngest.createFunction(
           scheduledFor: options.scheduledFor,
           resume: { hasConfigSnapshot: windowInput.hasConfigSnapshot },
         })
-        const reopen = (extra: Record<string, unknown>) =>
+        // The last attempt's `errors` and `warnings` are cleared with its
+        // `error_message` (`reopenRunWrite`, 17 Nov).
+        const reopen = (extra: Record<string, unknown>) => reopenRunWrite((cleared) =>
           admin
             .from('pipeline_runs')
-            .update({ status: 'running', error_message: null, completed_at: null, started_at: new Date().toISOString(), flags, options, ...extra })
-            .eq('id', resumeRunId).eq('client_id', clientId)
+            .update({ status: 'running', error_message: null, ...cleared, completed_at: null, started_at: new Date().toISOString(), flags, options, ...extra })
+            .eq('id', resumeRunId).eq('client_id', clientId))
         let { error } = await reopen({ stalled: false, ...bookkeeping(true) })
         if (error && isMissingClusteringKeyColumn(error)) {
           console.warn('[open-run] pipeline_runs.clustering_key is not in the database yet; reopening without it (the window is still frozen)')
@@ -655,7 +657,7 @@ export const runPipeline = inngest.createFunction(
     // waves inside the loop and the YouTube backfill wave after it, so the run
     // summary carries one number per verdict rather than one per platform.
     const ocr = {
-      ok: 0, none: 0, noImage: 0, failed: 0, cost: 0, rateLimited: false, batchesFailed: 0,
+      ok: 0, none: 0, noImage: 0, failed: 0, outOfTime: 0, cost: 0, rateLimited: false, batchesFailed: 0,
       backfilled: 0, backfillNeeding: 0, backfillDeferred: 0, planned: 0,
       firstError: undefined as string | undefined,
     }
@@ -886,6 +888,12 @@ export const runPipeline = inngest.createFunction(
               // `signal` is the wave's deadline: past it the batch writes no row.
               run: (videoIds, i, signal): Promise<OcrResult & { stepFailed?: true }> =>
                 ocrBatch({ clientId, runId, platform: platform as Platform, videoIds, batchNo: i + 1, signal }),
+              // A batch whose clock left covers unread inside its wave runs
+              // again as its own step, once (17 Nov). `?? 0`: a wave memoised
+              // before then carries no outOfTime. Its wave pass's reads count
+              // with its own step's.
+              unfinished: (r) => (r.outOfTime ?? 0) > 0,
+              merge: mergeOcrResults,
               // Per-batch fallback (the transcribe fan-out's precedent): one
               // batch out of retries must not abandon the remaining waves.
               // Its videos keep a NULL ocr_status and re-plan — but only
@@ -902,6 +910,8 @@ export const runPipeline = inngest.createFunction(
               ocr.none += r.none
               ocr.noImage += r.noImage
               ocr.failed += r.failed
+              // `?? 0`: a step memoised before 17 Nov carries no outOfTime.
+              ocr.outOfTime += r.outOfTime ?? 0
               ocr.cost += r.costUsd
               if (r.rateLimited) ocr.rateLimited = true
               // A batch out of retries IS a run error: its videos got no
@@ -1284,6 +1294,9 @@ export const runPipeline = inngest.createFunction(
         // `signal` is the wave's deadline: past it the batch writes no row.
         run: (videoIds, i, signal): Promise<OcrResult & { stepFailed?: true }> =>
           ocrBackfillBatch({ clientId, runId, videoIds, batchNo: i + 1, signal }),
+        // As the gather-time wave's: left covers unread, so its own step, once.
+        unfinished: (r) => (r.outOfTime ?? 0) > 0,
+        merge: mergeOcrResults,
         fallback: (_videoIds, _i, e) => ({
           ...emptyOcrResult(),
           errors: [`ocr-backfill step failed: ${e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200)}`],
@@ -1296,6 +1309,7 @@ export const runPipeline = inngest.createFunction(
         ocr.none += r.none
         ocr.noImage += r.noImage
         ocr.failed += r.failed
+        ocr.outOfTime += r.outOfTime ?? 0
         ocr.cost += r.costUsd
         if (r.rateLimited) ocr.rateLimited = true
         if ('stepFailed' in r) {
@@ -1324,9 +1338,13 @@ export const runPipeline = inngest.createFunction(
       )
       if (ocrDegraded && ocr.batchesFailed === 0) noteError('ocr', ocrDegraded)
       else if (ocr.failed > 0) console.warn(`[ocr] ${ocr.failed} cover read(s) failed${ocr.batchesFailed ? ' (batch steps already recorded)' : ` under the ${PASS_A_ERROR_RATIO * 100}% ratio`}. First: ${ocr.firstError ?? ''}`)
-      if (ocr.ok + ocr.none + ocr.noImage + ocr.failed > 0) {
+      // Covers still unread when a batch's own step ran out of clock (17 Nov):
+      // never attempted, so outside the ratio above, which judges reads, and
+      // a warning rather than an error, so a clock never turns a run partial.
+      if (ocr.outOfTime > 0) noteWarning('ocr-out-of-time', `${ocr.outOfTime} ${ocr.outOfTime === 1 ? 'cover' : 'covers'} not read`)
+      if (ocr.ok + ocr.none + ocr.noImage + ocr.failed + ocr.outOfTime > 0) {
         console.log(
-          `[ocr] ${ocr.ok} with text · ${ocr.none} no legible text · ${ocr.noImage} no cover · ${ocr.failed} failed · ~$${ocr.cost.toFixed(3)}`,
+          `[ocr] ${ocr.ok} with text · ${ocr.none} no legible text · ${ocr.noImage} no cover · ${ocr.failed} failed · ${ocr.outOfTime} left by the step clock · ~$${ocr.cost.toFixed(3)}`,
         )
       }
       // On-screen text changes what Pass A sees on exactly the videos that

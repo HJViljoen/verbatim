@@ -72,10 +72,11 @@ import { loadActiveSubjects } from '../../subjects/membership'
 // catalogue words, t12-handcheck.md decision 1).
 //
 // FOUR HONEST STATES BEFORE ANY COUNT: the migration is not applied
-// (`not_applied`, production today), the client has no catalogue
-// (`no_catalogue`, Sealand), the products step is not switched on for the
-// tenant (`not_on`, PRODUCT_READINGS_ENABLED, every tenant today), and the
-// month has not been read (`unread`). Each says so and links to Settings, in
+// (`not_applied`), the client has no catalogue (`no_catalogue`, a tenant whose
+// seed is not loaded), the products step is not switched on for the tenant
+// (`not_on`, PRODUCT_READINGS_ENABLED, on per tenant only once its catalogue is
+// loaded and its back-read written), and the month has not been read
+// (`unread`). Each says so and links to Settings, in
 // the board's frame (the parity pass, 13 Oct night): the four places empty,
 // and the catalogue card over the catalogue itself where there is one.
 //
@@ -103,7 +104,7 @@ export function productsBasis(client: string): string {
 
 /** The not-applied state (production today): the tables are not there. */
 export const PRODUCTS_NOT_APPLIED = 'Your products are not switched on for this workspace yet.'
-/** No catalogue (Sealand today). */
+/** No catalogue (a tenant whose seed is not loaded). */
 export const PRODUCTS_NO_CATALOGUE = 'Add the products you sell, and the names people use for them, and this page can show what your market says about each one.'
 /** The switch is off for the tenant. */
 export const PRODUCTS_NOT_ON = 'We have your product list. Reading what your market says about it is not switched on for this workspace yet.'

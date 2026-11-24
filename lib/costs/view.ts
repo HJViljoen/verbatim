@@ -46,6 +46,9 @@ export interface CostsView {
   /** What the forecast expects Apify usage to be in a cycle. */
   apifyPlannedUsd: number
   owedToYouZar: number
+  /** Each invoiced client's balance in rand (lib/finance), which replaces its
+   *  hand-kept unpaid amount wherever the page shows one. */
+  invoicedOwedZar: ReadonlyMap<string, number>
   owedByYouZar: number
   usageByVendor: Pivot
   usageByClient: Pivot
@@ -107,7 +110,12 @@ export function planViews(data: Pick<CostsData, 'clients' | 'plans' | 'measured'
   return out
 }
 
-export function buildCostsView(data: CostsData): CostsView {
+/**
+ * The page's figures. `owedByClientZar` is each invoiced client's balance from
+ * the finance ledger (lib/finance/summary.ts): for those clients it replaces
+ * the hand-kept `unpaid_amount`, which stays the answer for the rest.
+ */
+export function buildCostsView(data: CostsData, opts: { owedByClientZar?: ReadonlyMap<string, number> } = {}): CostsView {
   const plans = planViews(data)
   const fixed = fixedCosts(data.bills, data.settings)
   const f = forecast(
@@ -144,8 +152,16 @@ export function buildCostsView(data: CostsData): CostsView {
     openaiMonthlyBurnUsd,
     pace: apifyPace(data.apifyCycleSpendUsd, data.apifyCycle, data.settings.apifyCapUsd, data.today),
     apifyPlannedUsd: f.now.apifyUsageUsd,
-    // A prospect is not a client yet, so it owes nothing.
-    owedToYouZar: owedToYouZar(plans.filter((p) => p.stage !== 'prospect'), data.settings),
+    // A prospect is not a client yet, so it owes nothing. An invoiced client
+    // owes what its invoices say (in rand already).
+    owedToYouZar: owedToYouZar(
+      plans.filter((p) => p.stage !== 'prospect').map((p) => {
+        const invoiced = p.clientId ? opts.owedByClientZar?.get(p.clientId) : undefined
+        return invoiced === undefined ? p : { unpaidAmount: invoiced, currency: 'ZAR' as const }
+      }),
+      data.settings,
+    ),
+    invoicedOwedZar: opts.owedByClientZar ?? new Map(),
     owedByYouZar: owedByYouZar(data.bills, data.settings),
     usageByVendor: pivot(data.usage, months, 'vendor'),
     usageByClient: pivot(data.usage, months, 'client'),

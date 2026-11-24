@@ -41,6 +41,9 @@ const nextConfig: NextConfig = {
     '/api/schedules/\\[id\\]/preview': ['./node_modules/react-dom/**/*'],
     // A month's department brief prints on its first download (T8 wired).
     '/api/briefs/\\[snapshotId\\]/pdf': ['./node_modules/@sparticuz/chromium/bin/**/*'],
+    // Finance (2026-11-17): an invoice prints its one-page PDF here; the daily
+    // job fetches it (Chromium never runs in an Inngest step).
+    '/api/admin/finance/invoices/\\[id\\]/render': ['./node_modules/@sparticuz/chromium/bin/**/*'],
     // The OG card reads its two Bricolage weights off disk by PATH rather than
     // through `new URL(..., import.meta.url)`: webpack's shim for that hands
     // `readFile` a URL object node:fs does not recognise, which broke

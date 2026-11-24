@@ -1,12 +1,14 @@
+import { createHash } from 'node:crypto'
+
 import { describe, expect, it, vi } from 'vitest'
 
 const h = vi.hoisted(() => ({ parse: vi.fn(async () => { throw new Error('no model call in a test') }) }))
 vi.mock('../openai', () => ({ openai: { chat: { completions: { parse: h.parse } } } }))
 
-import { OSSUR_CLIENT_ID } from '../config'
+import { OSSUR_CLIENT_ID, PRODUCT_READINGS_ENABLED, SEALAND_CLIENT_ID } from '../config'
 import { FIXTURE_CATALOGUE, G, P } from '../test/products-fixtures'
 import {
-  batchItems, buildConfirmSystemPrompt, buildConfirmUserPrompt, buildSystemPrompt, buildUserPrompt, callUsd, catalogueCodes, CLASSIFY_BATCH,
+  batchItems, buildConfirmSystemPrompt, DEFAULT_PRODUCT_DOMAIN, PRODUCT_DOMAIN_BY_CLIENT, productDomainFor, buildConfirmUserPrompt, buildSystemPrompt, buildUserPrompt, callUsd, catalogueCodes, CLASSIFY_BATCH,
   classifyRows, confirmQuestions, confirmRows, estimateBatchUsd, estimateTokens, modelFor, MODEL_PLACES_PARAPHRASE, planCalls,
   PRODUCT_CLASSIFY_MODEL, PRODUCT_CLASSIFY_PROMPT_VERSION, PRODUCT_CONFIRM_MODEL, PRODUCT_MODEL_RULE_VERSION, runClassifier,
   squashName, withinOneEdit, wordsName,
@@ -16,6 +18,7 @@ import { commentKey, contentKey, planRules, type QueueItem } from './match'
 import { compileCatalogue } from './rules'
 import { seedCatalogue } from './seed'
 import { OSSUR_PRODUCTS } from '../../scripts/seeds/ossur-products'
+import { SEALAND_PRODUCTS } from '../../scripts/seeds/sealand-products'
 
 // The model calls' contract on fixtures (depth v2 T11 "done when"): what each
 // call is shown, how its answers become rows, what the checks refuse, and the
@@ -54,7 +57,7 @@ describe('what the model is shown', () => {
   })
 
   it('the classifier\'s system prompt: the client, the catalogue, the rules, and no comment', () => {
-    const s = buildSystemPrompt('Össur', FIXTURE_CATALOGUE)
+    const s = buildSystemPrompt('Össur', FIXTURE_CATALOGUE, OSSUR_CLIENT_ID)
     for (const w of ['Össur', 'C1 Liners', 'P1 Iceross Seal-In X5 (also: sealin x5)', 'families here: Iceross', 'words for it: liner, prosthetic liner', 'MOST COMMENTS ARE NONE', '"words"', '"sure"']) {
       expect(s).toContain(w)
     }
@@ -79,10 +82,178 @@ describe('what the model is shown', () => {
   it('the confirm asks one word at a time, with what it would mean', () => {
     const qs = confirmQuestions(generic)
     expect(qs.map((x) => x.alias.alias)).toEqual(['Unity', 'socket', 'Unity'])
-    const u = buildConfirmUserPrompt(qs, compiled, 'Össur')
+    const u = buildConfirmUserPrompt(qs, compiled, 'Össur', OSSUR_CLIENT_ID)
     expect(u).toContain(`1. WORD "Unity" = Össur's product Unity (Sockets) | TEXT: my unity pump keeps hissing`)
     expect(u).toContain('2. WORD "socket" = the kind of product in Sockets (a prosthetic or orthotic product)')
-    expect(buildConfirmSystemPrompt('Össur')).toMatch(/means: false if the word is used in any other sense/)
+    expect(buildConfirmSystemPrompt('Össur', OSSUR_CLIENT_ID)).toMatch(/means: false if the word is used in any other sense/)
+  })
+})
+
+// ÖSSUR'S PROMPTS, BYTE FOR BYTE (17 Nov). The product prompts' domain words
+// are per tenant (`productDomainFor`), and Össur's must not move: its stored
+// answers (product_mentions, keyed by catalogue_version and
+// PRODUCT_MODEL_RULE_VERSION) are never asked again, and its months compare
+// like for like only while the question is the same. Captured by running the
+// builders at dd547395, BEFORE the per-tenant words existed, and pasting the
+// output: deliberately not a second call to a builder.
+const OSSUR_CLASSIFY_SYSTEM_FIXTURE = `You read social-media comments about prosthetics, orthotics and mobility, and decide which part of Össur's catalogue each one is about. Össur is a company; its catalogue lists its products by category, each with a code.
+
+CATALOGUE
+C1 Liners (words for it: liner, prosthetic liner); Össur's product families here: Iceross
+  P1 Iceross Seal-In X5 (also: sealin x5)
+  P2 Iceross Comfort (also: Comfort)
+C2 Feet (words for it: prosthetic feet, prosthetic foot, running blade); Össur's product families here: Pro-Flex
+  P3 Pro-Flex XC
+  P4 Pro-Flex XC Torsion
+  P5 Cheetah Xcel
+C3 Knees (words for it: microprocessor knee, prosthetic knee)
+  P6 Rheo Knee (also: rheo)
+  P7 Total Knee
+  P8 Power Knee
+C4 Sockets (words for it: prosthetic socket, socket)
+  P9 Direct Socket
+  P10 Unity
+
+For EACH numbered comment, answer one placement:
+- "named": the comment itself is about one or more of Össur's listed products specifically. It names the product (or another name, a misspelling, a translation), or says "this foot", "that knee", "it" about the ONE Össur product the video names. Give the product codes in "products".
+- "unclear": the comment is about a Össur product of one category without saying which: it names Össur or one of its product families together with that kind of product ("my Össur liner"), or says "it" about a video that names several Össur products of that category. Give the category code in "category".
+- "unbranded": the comment is about that KIND of product itself, in general or another company's: how it fits, feels, works, lasts, costs, where to get it. The comment has to name or plainly describe the device or the part (the socket, the liner, the sleeve, the foot, the knee, the hand, the brace, the blade, the pin, the valve). Give the category code in "category".
+- "none": everything else. MOST COMMENTS ARE NONE: reactions, praise, thanks, jokes, questions about the person, their body, story, health, amputation or surgery, walking, sport, shoes, socks or clothes, the video, other topics, and prosthetics or limbs in general ("my leg", "my prosthesis", "your arm", "bigger legs") when no one category's device or part is named.
+
+Rules:
+- "words": copy, exactly as written, the few words of the comment that name the product or the device ("my proflex", "the liner", "that knee"). For "none", null.
+- "sure": true only when the comment leaves no doubt. A placement you are not sure of is "none".
+- A comment counts only for what IT says. The video is context for "it" and "this", never a reason by itself.
+- Never name a product the comment does not name or point at. Never answer "named" from a category word alone, a film character, or a body part.
+- When unsure between "named" and "unclear", answer "unclear"; between "unclear" and "unbranded", "unbranded"; between a category and "none", "none".
+- Comments may be in any language. Read them as written.
+
+Examples (not from the items):
+- "Iceross Seal-In X5 feels great on hills" → named, products ["P1"], words "Iceross Seal-In X5", sure
+- "How long does it last?" under a video naming only Iceross Seal-In X5 → named, products ["P1"], words "it", sure
+- "My liner always makes me sweat" → unbranded, category "C1", words "My liner", sure
+- "Is it comfortable?" under a video about liners in general → none
+- "You are so strong 💪", "I just got my first prosthetic leg", "You need an Iron Man arm", "It takes me longer to put my shoes on", "Can you get taller legs?" → none
+
+Return one entry per comment, with n matching its number. Never merge, reorder or drop entries.`
+const OSSUR_CONFIRM_SYSTEM = `You check single words in social-media texts about prosthetics, orthotics and mobility.
+Each numbered item gives a WORD, what it would mean as part of Össur's catalogue, and the TEXT it appears in.
+Answer means: true ONLY if, in this text, the word refers to that catalogue item: Össur's product or product family, or, for a kind of product, that prosthetic or orthotic product.
+Answer means: false if the word is used in any other sense: an ordinary word in English or in another language (Italian "proprio", "rebound" in sport), a person's or a place's name, another company's product, software or a game, a body part ("eye socket", "shoulder blade"), dental braces, tools, or anything else.
+When unsure, false. Return one entry per item, with n matching its number.`
+const OSSUR_CONFIRM_USER_FIXTURE = `1. WORD "Unity" = Össur's product Unity (Sockets) | TEXT: my unity pump keeps hissing
+2. WORD "socket" = the kind of product in Sockets (a prosthetic or orthotic product) | TEXT: unity is strength, and my eye socket hurts
+3. WORD "Unity" = Össur's product Unity (Sockets) | TEXT: unity is strength, and my eye socket hurts`
+/** sha256 of the classifier's system prompt over the real seed
+ *  (scripts/seeds/ossur-products.ts), captured at dd547395. A change to that
+ *  seed changes it too; re-capture it only from code that leaves the frame
+ *  above unchanged. */
+const OSSUR_CLASSIFY_SYSTEM_SEED_SHA256 = '9cc1d60f760da0ae6bb6b327906ce4a8ecee3e773de44ca00eaee680b09f746e'
+
+describe('Össur\'s prompts are the ones its stored answers were asked with', () => {
+  it('the classifier\'s system prompt, byte for byte', () => {
+    expect(buildSystemPrompt('Össur', FIXTURE_CATALOGUE, OSSUR_CLIENT_ID)).toBe(OSSUR_CLASSIFY_SYSTEM_FIXTURE)
+    const seed = buildSystemPrompt('Össur', seedCatalogue(OSSUR_PRODUCTS), OSSUR_CLIENT_ID)
+    expect(createHash('sha256').update(seed).digest('hex')).toBe(OSSUR_CLASSIFY_SYSTEM_SEED_SHA256)
+  })
+
+  it('the confirm\'s system prompt and its words\' meanings, byte for byte', () => {
+    expect(buildConfirmSystemPrompt('Össur', OSSUR_CLIENT_ID)).toBe(OSSUR_CONFIRM_SYSTEM)
+    expect(buildConfirmUserPrompt(confirmQuestions(generic), compiled, 'Össur', OSSUR_CLIENT_ID)).toBe(OSSUR_CONFIRM_USER_FIXTURE)
+  })
+
+  it('its answers are keyed as before: the same prompt version and rule version, so none is asked again', () => {
+    expect(PRODUCT_CLASSIFY_PROMPT_VERSION).toBe('product_classify_v1')
+    expect(PRODUCT_MODEL_RULE_VERSION).toBe('product_rules_v1+product_classify_v1')
+    expect([PRODUCT_CLASSIFY_MODEL, PRODUCT_CONFIRM_MODEL]).toEqual(['gpt-4.1-mini', 'gpt-4.1'])
+  })
+})
+
+// SEALAND'S PROMPTS, BY HASH (17 Nov), over the real seed
+// (scripts/seeds/sealand-products.ts): what its back-read is asked with, and
+// so what every later month must be asked with, as Össur's are above. Its
+// stored answers are keyed by catalogue_version and PRODUCT_MODEL_RULE_VERSION,
+// and neither moves when Sealand's entry in PRODUCT_DOMAIN_BY_CLIENT does: a
+// change to that entry after its back-read is written needs a
+// PRODUCT_MODEL_RULE_VERSION bump (a new PRODUCT_CLASSIFY_PROMPT_VERSION,
+// which reads every tenant's texts again), or its months stop comparing like
+// for like. A change to the seed moves the classifier's hash and the catalogue
+// version with it (its texts are asked again under the new version); re-capture
+// then. The name is the clients row's company_name, 'Sealand'.
+const SEALAND_CLASSIFY_SYSTEM_SEED_SHA256 = '920dbeabdd65f7a6fb8d74bbf375b74131db1f1b85ae95d9393f4949f811702e'
+const SEALAND_CONFIRM_SYSTEM_SHA256 = '0672c969ada55af83dbb232dde3320bdd2379be3286f79105eb951e2271c7f36'
+const SEALAND_CONFIRM_USER_SEED_SHA256 = '07b3b56c548e3bd30d6602658110e17617d855d11860a77c87f1c33b461829fd'
+
+describe('Sealand\'s prompts are the ones its back-read is asked with', () => {
+  const seed = seedCatalogue(SEALAND_PRODUCTS)
+  const seedCompiled = compileCatalogue(seed, SEALAND_CLIENT_ID)
+  const sha = (s: string) => createHash('sha256').update(s).digest('hex')
+  it('the classifier\'s system prompt over the real seed', () => {
+    expect(sha(buildSystemPrompt('Sealand', seed, SEALAND_CLIENT_ID))).toBe(SEALAND_CLASSIFY_SYSTEM_SEED_SHA256)
+  })
+
+  it('the confirm\'s system prompt, and its words\' meanings over the real seed', () => {
+    expect(sha(buildConfirmSystemPrompt('Sealand', SEALAND_CLIENT_ID))).toBe(SEALAND_CONFIRM_SYSTEM_SHA256)
+    const qs = confirmQuestions(planRules(SEALAND_CLIENT_ID, seedCompiled, [], [
+      { commentId: 'm1', videoId: V, month: '2026-10-04', text: 'This Rad Rev Moon Bag is the best' },
+      { commentId: 'm2', videoId: V, month: '2026-10-05', text: 'I have a Ponto Crew Sweater and Quarter Zip' },
+      { commentId: 'm3', videoId: V, month: '2026-10-06', text: 'got a hero backpack for my son' },
+    ]).confirm)
+    expect(qs.map((x) => x.alias.alias)).toEqual(['Moon Bag', 'Quarter Zip', 'Hero Backpack'])
+    expect(sha(buildConfirmUserPrompt(qs, seedCompiled, 'Sealand', SEALAND_CLIENT_ID))).toBe(SEALAND_CONFIRM_USER_SEED_SHA256)
+  })
+})
+
+describe('every other tenant reads its own market, never Össur\'s', () => {
+  // A small catalogue in Sealand's shape (not the real seed, which is under review).
+  const bags = seedCatalogue({
+    seededFrom: 'sealandgear.com',
+    compiledOn: '2026-11-17',
+    groups: [
+      { name: 'Backpacks', words: ['backpack', 'daypack'], products: [{ name: 'Buddy Backpack', needsConfirm: true }] },
+      { name: 'Crossbody & Hip Bags', words: [{ alias: 'sling', needsConfirm: true }, 'bum bag'], products: [{ name: 'Moon Bag', needsConfirm: true }] },
+    ],
+  })
+  const bagsCompiled = compileCatalogue(bags, SEALAND_CLIENT_ID)
+  const slings = planRules(SEALAND_CLIENT_ID, bagsCompiled, [], [
+    { commentId: 's1', videoId: V, month: '2026-10-04', text: 'I just carry a small sling with my passport' },
+    { commentId: 's2', videoId: V, month: '2026-10-05', text: 'got the moon bag in black' },
+  ]).confirm
+  const OSSUR_WORDS = /prosthet|orthot|amput|mobility|\blimbs?\b|\bknee\b|\bfoot\b|\bliner\b|\bsocket\b|Iron Man|proflex|proprio/i
+  const DEMO = '00000000-0000-4000-8000-00000000d3e0'
+
+  it('Sealand: bags, its parts and its near misses, in both prompts', () => {
+    const s = buildSystemPrompt('Sealand', bags, SEALAND_CLIENT_ID)
+    const c = buildConfirmSystemPrompt('Sealand', SEALAND_CLIENT_ID)
+    const u = buildConfirmUserPrompt(confirmQuestions(slings), bagsCompiled, 'Sealand', SEALAND_CLIENT_ID)
+    for (const p of [s, c, u]) expect(p).not.toMatch(OSSUR_WORDS)
+    expect(s).toContain('You read social-media comments about bags, backpacks and travel gear')
+    expect(s).toContain('says "this bag", "that backpack", "it" about the ONE Sealand product')
+    expect(s).toContain('bags or gear in general ("my bag", "nice bag"')
+    expect(c).toContain('or, for a kind of product, an item of that kind, whoever makes it.')
+    // Its own line for names that are plain descriptions; Össur's prompt has none (pinned above).
+    expect(c).toContain('Such a name means the catalogue item only where the text makes it that company\'s')
+    expect(PRODUCT_DOMAIN_BY_CLIENT[OSSUR_CLIENT_ID].confirmRule).toBeUndefined()
+    expect(u).toContain('1. WORD "sling" = the kind of product in Crossbody & Hip Bags (an item of that kind, any maker\'s) | TEXT: I just carry a small sling with my passport')
+    expect(u).toContain('WORD "Moon Bag" = Sealand\'s product Moon Bag (Crossbody & Hip Bags)')
+  })
+
+  it('a tenant with no entry gets the market in no one\'s words', () => {
+    expect(productDomainFor(DEMO)).toBe(DEFAULT_PRODUCT_DOMAIN)
+    for (const p of [buildSystemPrompt('Acme', bags, DEMO), buildConfirmSystemPrompt('Acme', DEMO), buildConfirmUserPrompt(confirmQuestions(slings), bagsCompiled, 'Acme', DEMO)]) {
+      expect(p).not.toMatch(OSSUR_WORDS)
+    }
+  })
+
+  it('every tenant Your products is on for has its own words', () => {
+    for (const [id, on] of Object.entries(PRODUCT_READINGS_ENABLED)) if (on) expect(PRODUCT_DOMAIN_BY_CLIENT[id], id).toBeDefined()
+    expect(productDomainFor(OSSUR_CLIENT_ID)).toBe(PRODUCT_DOMAIN_BY_CLIENT[OSSUR_CLIENT_ID])
+  })
+
+  it('the calls a run plans carry the tenant\'s words', () => {
+    const calls = planCalls([classify(q(1, 'x')), { kind: 'confirm', item: slings[0] }], { clientId: SEALAND_CLIENT_ID, clientName: 'Sealand', catalogue: bags, compiled: bagsCompiled, videos })
+    expect(calls.map((x) => x.kind)).toEqual(['confirm', 'classify'])
+    for (const x of calls) expect(x.system).toContain('bags, backpacks and travel gear')
   })
 })
 
@@ -234,7 +405,7 @@ describe('pricing', () => {
   it('batches CLASSIFY_BATCH items a call; the confirm calls come first and keep a text\'s words together', () => {
     expect(CLASSIFY_BATCH).toBe(25)
     expect(batchItems(Array.from({ length: 60 }, (_, i) => i)).map((b) => b.length)).toEqual([25, 25, 10])
-    const calls = planCalls([classify(q(1, 'x')), { kind: 'confirm', item: generic[1] }, { kind: 'confirm', item: generic[0] }], { clientName: 'Össur', catalogue: FIXTURE_CATALOGUE, compiled, videos })
+    const calls = planCalls([classify(q(1, 'x')), { kind: 'confirm', item: generic[1] }, { kind: 'confirm', item: generic[0] }], { clientId: OSSUR_CLIENT_ID, clientName: 'Össur', catalogue: FIXTURE_CATALOGUE, compiled, videos })
     expect(calls.map((c) => [c.kind, c.items.length, c.questions?.length ?? null])).toEqual([['confirm', 2, 3], ['classify', 1, null]])
     expect(callUsd(calls[0]).usd).toBeGreaterThan(0)
   })
@@ -269,7 +440,7 @@ describe('runClassifier: the calls, the hard cap and the clock', () => {
   })
 
   it('stops before a wave whose worst case would pass the budget, and defers the rest', async () => {
-    const one = callUsd(planCalls(items.slice(0, 25), { clientName: 'Össur', catalogue: FIXTURE_CATALOGUE, compiled, videos })[0]).usd
+    const one = callUsd(planCalls(items.slice(0, 25), { clientId: OSSUR_CLIENT_ID, clientName: 'Össur', catalogue: FIXTURE_CATALOGUE, compiled, videos })[0]).usd
     const call = vi.fn(answerAll)
     const r = await runClassifier({ ...base, items, budgetUsd: one * 1.5, classifier: call, parallel: 1 })
     expect(call).toHaveBeenCalledTimes(1)

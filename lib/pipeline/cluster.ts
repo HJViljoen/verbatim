@@ -49,25 +49,54 @@ export interface ClusterOptions {
  *  number over there would drift the moment either moved. */
 export const EMBED_BATCH = 512
 
+/** Embeddings requests the clustering keeps in flight at once (18 Nov).
+ *  One at a time, Sealand's 10,743-insight industry-other is 21 requests and
+ *  about 32 s of its 255 s step (34.2 s measured from a laptop on 18 Nov; a
+ *  512-text request runs about 1.5 s in production's ai_call_log `embed`
+ *  rows), a request more every 512 insights. Four at a time is the same
+ *  requests, so the same vectors in the same order and the same tokens inside
+ *  the same minute (a bucket's pass fits in one either way), in about a
+ *  quarter of the time. */
+export const CLUSTER_EMBED_PARALLEL = 4
+
 /** Embed texts, preserving input order. Returns [] for empty input.
- *  Chunked (EMBED_BATCH) and sequential: a bucket is a handful of requests,
- *  and the pipeline shares a 5-slot concurrency with everything else. A failed
- *  chunk throws — the Inngest step retries the whole step. */
-export async function embedTexts(texts: string[], request?: { timeout?: number; maxRetries?: number }): Promise<number[][]> {
+ *  Chunked (EMBED_BATCH), and sequential unless the caller asks for
+ *  `parallel` requests in flight: the requests and their order of results
+ *  are the same either way, only how many wait at once differs. A failed
+ *  chunk throws — the Inngest step retries the whole step — and no further
+ *  chunk is started after it. */
+export async function embedTexts(
+  texts: string[],
+  request?: { timeout?: number; maxRetries?: number },
+  parallel = 1,
+): Promise<number[][]> {
   if (texts.length === 0) return []
-  const out: number[][] = []
-  for (const part of chunk(texts, EMBED_BATCH)) {
-    // `request`: the SDK's per-call options, where a caller holds the call to
-    // time (the week read's step, lib/written/deadline.ts); absent, its defaults.
-    const res = await openai.embeddings.create({ model: EMBEDDING_MODEL, input: part }, request)
-    if (res.data.length !== part.length) {
-      throw new Error(`embedTexts: ${EMBEDDING_MODEL} returned ${res.data.length} vectors for ${part.length} inputs`)
+  const parts = chunk(texts, EMBED_BATCH)
+  const vectors: number[][][] = new Array(parts.length)
+  let next = 0
+  let failed = false
+  const worker = async () => {
+    while (!failed && next < parts.length) {
+      const p = next++
+      const part = parts[p]
+      try {
+        // `request`: the SDK's per-call options, where a caller holds the call to
+        // time (the week read's step, lib/written/deadline.ts); absent, its defaults.
+        const res = await openai.embeddings.create({ model: EMBEDDING_MODEL, input: part }, request)
+        if (res.data.length !== part.length) {
+          throw new Error(`embedTexts: ${EMBEDDING_MODEL} returned ${res.data.length} vectors for ${part.length} inputs`)
+        }
+        // The API returns items with an `index`; sort to be order-safe. The index
+        // is per-REQUEST, so sort within the chunk and keep chunks in place — never across.
+        vectors[p] = [...res.data].sort((a, b) => a.index - b.index).map((d) => d.embedding)
+      } catch (e) {
+        failed = true
+        throw e
+      }
     }
-    // The API returns items with an `index`; sort to be order-safe. The index
-    // is per-REQUEST, so sort within the chunk and append — never across.
-    for (const d of [...res.data].sort((a, b) => a.index - b.index)) out.push(d.embedding)
   }
-  return out
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(parallel, parts.length)) }, worker))
+  return vectors.flat()
 }
 
 export function cosine(a: number[], b: number[]): number {
@@ -137,24 +166,152 @@ export const EMBED_INPUT_VERSION = 'embed_input_v1'
  *  linkages — a constructed binary-vector case does diverge. The realistic tie
  *  source is duplicate insight text embedding identically, and 1200 seeded
  *  cases at dim 16 with 15% exact duplicates produced no divergence.
+ *
+ *  The similarities (18 Nov): an upper triangle, filled several pairs a pass.
+ *  The n×n matrix this replaced held every pair twice and recomputed both
+ *  norms for every pair. At Sealand's 10,743-insight industry-other (run
+ *  d8a15862) that was a 923 MB buffer and about 150 s of the step (193 s
+ *  before the first merge call, less about 45 s of load and embeddings), so
+ *  57 of its last two attempts' 76 merge calls were aborted at the deadline.
+ *  On the same vectors on an M4 the fill took 68.1 s and now takes 11.7 s,
+ *  in a 461 MB triangle (scripts/cluster-bench.ts). The output is the old
+ *  code's bit for bit, not merely its clusters: every pair's value is the same
+ *  IEEE arithmetic in the same order, and the loop the same decisions
+ *  (cluster-oracle.ts holds the old code, cluster.test.ts holds the two
+ *  together).
  */
 export function averageLinkageClusters(vecs: number[][], threshold: number): number[][] {
   const n = vecs.length
   if (n === 0) return []
+  return linkTriangle(similarityTriangle(vecs), n, threshold)
+}
 
-  // sim[a * n + b] = average cross-pair similarity between clusters a and b.
-  // Flat and Float64 so a 2283-insight bucket is one 42MB buffer, not 2283
-  // heap arrays. Only indices flagged active are meaningful.
-  const sim = new Float64Array(n * n)
+/** Columns of the triangle the fill holds in cache while every row above them
+ *  passes over: 32 vectors of 1,536 doubles are 384 KB, inside the L2 of any
+ *  server core, so each column is read from memory once a block, not once a
+ *  row. Changes speed only, never a value. */
+const FILL_BLOCK = 32
+
+/** Where pair (a, b), a < b, sits in the upper triangle: `rowOffsets(n)[a] + b`.
+ *  Row a holds b = a+1 … n-1, so the triangle is n(n-1)/2 long. An Int32
+ *  holds every offset up to n = 65,535, whose triangle is 17 GB, past any
+ *  instance's memory; past it the offsets would wrap, so it refuses. */
+function rowOffsets(n: number): Int32Array {
+  if (n > 65_535) throw new Error(`rowOffsets: ${n} vectors is past the triangle's index (65,535)`)
+  const off = new Int32Array(n)
+  for (let a = 0; a < n; a++) off[a] = a * n - (a * (a + 1)) / 2 - a - 1
+  return off
+}
+
+/**
+ * Every pair's `cosine`, as the upper triangle `linkTriangle` reads, and equal
+ * to `cosine(vecs[a], vecs[b])` in every bit.
+ *
+ * Why it is the same number: `cosine` sums `a[i] * a[i]`, `b[i] * b[i]` and
+ * `a[i] * b[i]` in three separate accumulators, each in index order, and
+ * returns `dot / (sqrt(na) * sqrt(nb))`, or 0 where either sum is 0. Here each
+ * vector's sum of squares is the first accumulator, computed once in the same
+ * order; each dot product is the third, also in index order and starting from
+ * 0; and the last line is the same expression. Nothing is normalised in
+ * advance (a unit vector's dot product is a DIFFERENT rounding of the same
+ * number, which can sit either side of the threshold).
+ *
+ * Why it is faster: one dot product is a chain of dependent adds, so the CPU
+ * waits on each add before the next. The kernel runs eight such chains at
+ * once, two rows by four columns, each still in index order, and reads each
+ * row and column value once for four or two pairs; the column blocks keep the
+ * columns in cache. Two by four needs eleven live registers, inside the
+ * sixteen an x86-64 core has. It reads `vecs` where they are: a copy into one
+ * flat buffer measured no faster and would hold the bucket's vectors twice.
+ */
+export function similarityTriangle(vecs: number[][]): Float64Array {
+  const n = vecs.length
+  const dim = n > 0 ? vecs[0].length : 0
+  const sq = new Float64Array(n)
+  const root = new Float64Array(n)
   for (let a = 0; a < n; a++) {
-    for (let b = a + 1; b < n; b++) {
-      const s = cosine(vecs[a], vecs[b])
-      sim[a * n + b] = s
-      sim[b * n + a] = s
+    const v = vecs[a]
+    if (v.length !== dim) throw new Error(`similarityTriangle: vector ${a} has ${v.length} dimensions, vector 0 has ${dim}`)
+    let s = 0
+    for (let d = 0; d < dim; d++) s += v[d] * v[d]
+    sq[a] = s
+    root[a] = Math.sqrt(s)
+  }
+  const off = rowOffsets(n)
+  const tri = new Float64Array((n * (n - 1)) / 2)
+
+  const put = (a: number, b: number, dot: number) => {
+    tri[off[a] + b] = sq[a] === 0 || sq[b] === 0 ? 0 : dot / (root[a] * root[b])
+  }
+  const one = (a: number, b: number) => {
+    const x = vecs[a]
+    const y = vecs[b]
+    let dot = 0
+    for (let d = 0; d < dim; d++) dot += x[d] * y[d]
+    put(a, b, dot)
+  }
+  // Rows r and r+1 against columns j … j+3, all above both rows.
+  const twoByFour = (r: number, j: number) => {
+    const x = vecs[r]
+    const y = vecs[r + 1]
+    const c0 = vecs[j]
+    const c1 = vecs[j + 1]
+    const c2 = vecs[j + 2]
+    const c3 = vecs[j + 3]
+    let p0 = 0, p1 = 0, p2 = 0, p3 = 0, q0 = 0, q1 = 0, q2 = 0, q3 = 0
+    for (let d = 0; d < dim; d++) {
+      const xd = x[d]
+      const yd = y[d]
+      let w = c0[d]
+      p0 += xd * w
+      q0 += yd * w
+      w = c1[d]
+      p1 += xd * w
+      q1 += yd * w
+      w = c2[d]
+      p2 += xd * w
+      q2 += yd * w
+      w = c3[d]
+      p3 += xd * w
+      q3 += yd * w
     }
+    put(r, j, p0); put(r, j + 1, p1); put(r, j + 2, p2); put(r, j + 3, p3)
+    put(r + 1, j, q0); put(r + 1, j + 1, q1); put(r + 1, j + 2, q2); put(r + 1, j + 3, q3)
   }
 
-  const members: number[][] = vecs.map((_, i) => [i])
+  // Each block of columns [lo, hi), against every row below its end: row r
+  // takes columns max(lo, r+1) … hi-1, so every pair a < b is filled once.
+  for (let lo = 0; lo < n; lo += FILL_BLOCK) {
+    const hi = Math.min(n, lo + FILL_BLOCK)
+    let r = 0
+    for (; r + 2 < hi; r += 2) {
+      if (r + 1 >= lo) one(r, r + 1) // the one column row r has and row r+1 does not
+      let j = Math.max(lo, r + 2)
+      for (; j + 3 < hi; j += 4) twoByFour(r, j)
+      for (; j < hi; j++) {
+        one(r, j)
+        one(r + 1, j)
+      }
+    }
+    for (; r < hi - 1; r++) for (let j = Math.max(lo, r + 1); j < hi; j++) one(r, j)
+  }
+  return tri
+}
+
+/**
+ * The nearest-neighbour chain over a `similarityTriangle`, which it consumes
+ * (merged clusters' similarities are written over it). The 11 Sep loop line
+ * for line, with each `sim[a * n + b]` read from or written to the one place
+ * the triangle keeps that pair: a neighbour is still sought in ascending
+ * index order with the same strict `>`, and a merge still writes the same
+ * size-weighted mean, once where the matrix wrote it twice.
+ */
+export function linkTriangle(tri: Float64Array, n: number, threshold: number): number[][] {
+  if (n === 0) return []
+  if (tri.length !== (n * (n - 1)) / 2) throw new Error(`linkTriangle: a triangle of ${tri.length} is not n=${n}'s`)
+  const off = rowOffsets(n)
+
+  const members: number[][] = Array.from({ length: n }, (_, i) => [i])
   const size = new Int32Array(n).fill(1)
   const active = new Uint8Array(n).fill(1)
   const done: number[][] = []
@@ -171,12 +328,21 @@ export function averageLinkageClusters(vecs: number[][], threshold: number): num
 
     // Nearest active neighbour of the chain's head. Ties go to the lowest
     // index — a fixed rule, so the chain cannot cycle between equal pairs.
+    // Below a, the pair is in row b's column a; above it, in row a.
     let best = -1
     let bestSim = -Infinity
-    const rowA = a * n
-    for (let b = 0; b < n; b++) {
-      if (b === a || !active[b]) continue
-      const s = sim[rowA + b]
+    for (let b = 0; b < a; b++) {
+      if (!active[b]) continue
+      const s = tri[off[b] + a]
+      if (s > bestSim) {
+        bestSim = s
+        best = b
+      }
+    }
+    const rowA = off[a]
+    for (let b = a + 1; b < n; b++) {
+      if (!active[b]) continue
+      const s = tri[rowA + b]
       if (s > bestSim) {
         bestSim = s
         best = b
@@ -208,12 +374,11 @@ export function averageLinkageClusters(vecs: number[][], threshold: number): num
     // Merge `best` into `a`; update average similarity by size-weighted mean.
     const sizeA = size[a]
     const sizeB = size[best]
-    const rowB = best * n
     for (let c = 0; c < n; c++) {
       if (c === a || c === best || !active[c]) continue
-      const s = (sizeA * sim[rowA + c] + sizeB * sim[rowB + c]) / (sizeA + sizeB)
-      sim[rowA + c] = s
-      sim[c * n + a] = s
+      const ac = c < a ? off[c] + a : off[a] + c
+      const bc = c < best ? off[c] + best : off[best] + c
+      tri[ac] = (sizeA * tri[ac] + sizeB * tri[bc]) / (sizeA + sizeB)
     }
     members[a] = members[a].concat(members[best])
     size[a] = sizeA + sizeB
@@ -289,7 +454,7 @@ export async function clusterInsightsWithCentroids(
 
   // embedding
   const threshold = opts.threshold ?? CLUSTER_SIMILARITY_THRESHOLD
-  const vecs = await embedTexts(insights.map(embedInput))
+  const vecs = await embedTexts(insights.map(embedInput), undefined, CLUSTER_EMBED_PARALLEL)
   const groups = averageLinkageClusters(vecs, threshold)
   return {
     clusters: groups.map((idxs) => idxs.map((i) => insights[i])),

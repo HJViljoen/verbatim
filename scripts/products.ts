@@ -469,7 +469,7 @@ async function backRead(admin: SupabaseClient, args: ProductsArgs, ration: Ratio
   })
   const priceAll = !mode.write ? priceItems(
     [...pass.confirm.map((item) => ({ kind: 'confirm' as const, item })), ...pass.queue.map((item) => ({ kind: 'classify' as const, item }))],
-    clientName, catalogue, pass.compiled, new Map([...pass.videoRows].map(([id, v]) => [id, { videoId: id, caption: v.caption, names: [] }])),
+    args.clientId, clientName, catalogue, pass.compiled, new Map([...pass.videoRows].map(([id, v]) => [id, { videoId: id, caption: v.caption, names: [] }])),
   ) : null
   const avgQueuePerVideo = pass.relevant.size ? pass.queue.length / pass.relevant.size : 0
   const perItem = priceAll && pass.confirm.length + pass.queue.length > 0 ? priceAll.usd / (pass.confirm.length + pass.queue.length) : 0

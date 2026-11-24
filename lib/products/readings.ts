@@ -300,11 +300,11 @@ const monthsIn = (from: string, to: string): string[] => {
 }
 
 /** The price of asking these items, from their prompts. PURE. */
-export function priceItems(items: readonly ClassifyItem[], clientName: string, catalogue: ProductCatalogue, compiled: CompiledCatalogue, videos: ReadonlyMap<string, VideoContext>): { calls: number; inputTokens: number; outputTokens: number; usd: number } {
+export function priceItems(items: readonly ClassifyItem[], clientId: string, clientName: string, catalogue: ProductCatalogue, compiled: CompiledCatalogue, videos: ReadonlyMap<string, VideoContext>): { calls: number; inputTokens: number; outputTokens: number; usd: number } {
   let input = 0
   let output = 0
   let usd = 0
-  const calls = planCalls(items, { clientName, catalogue, compiled, videos })
+  const calls = planCalls(items, { clientId, clientName, catalogue, compiled, videos })
   for (const c of calls) {
     const e = callUsd(c)
     input += e.input
@@ -419,7 +419,7 @@ export async function placeProducts(args: {
   const ask = async (items: ClassifyItem[], contexts: ReadonlyMap<string, VideoContext>): Promise<RunClassifyResult | null> => {
     if (items.length === 0) return null
     if (!args.ask) {
-      const p = priceItems(items, args.clientName, catalogue, compiled, contexts)
+      const p = priceItems(items, args.clientId, args.clientName, catalogue, compiled, contexts)
       priceUsd += p.usd
       priced.calls += p.calls
       priced.inputTokens += p.inputTokens
@@ -499,7 +499,7 @@ export async function placeProducts(args: {
   const queue = fullQueue.slice(0, Math.max(0, cap))
   const classifyResult = await ask(queue.map((item) => ({ kind: 'classify' as const, item })), contexts)
   if (args.ask && fullQueue.length > queue.length) {
-    priceUsd += priceItems(fullQueue.slice(queue.length).map((item) => ({ kind: 'classify' as const, item })), args.clientName, catalogue, compiled, contexts).usd
+    priceUsd += priceItems(fullQueue.slice(queue.length).map((item) => ({ kind: 'classify' as const, item })), args.clientId, args.clientName, catalogue, compiled, contexts).usd
   }
 
   // 7. The months.

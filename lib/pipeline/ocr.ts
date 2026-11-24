@@ -7,11 +7,13 @@ import { openai } from '../openai'
 import { adapters } from '../gather/platforms'
 import type { Platform, PlatformAdapter, RawItem } from '../gather/types'
 import {
-  ANALYSIS_TEMPERATURE, OCR_BACKFILL_CAP, OCR_BATCH, OCR_CAP, OCR_FETCH_TIMEOUT_MS, OCR_IMAGE_DETAIL, OCR_MAX_ATTEMPTS,
-  OCR_MAX_IMAGE_BYTES, OCR_MAX_CHARS, OCR_MODEL, estimateCost,
+  ANALYSIS_TEMPERATURE, OCR_BACKFILL_CAP, OCR_BATCH, OCR_CALL_CAP_MS, OCR_CALL_FLOOR_MS, OCR_CAP, OCR_FETCH_TIMEOUT_MS,
+  OCR_IMAGE_DETAIL, OCR_MAX_ATTEMPTS, OCR_MAX_IMAGE_BYTES, OCR_MAX_CHARS, OCR_MAX_OUTPUT_TOKENS, OCR_MAX_RETRIES, OCR_MODEL,
+  OCR_STEP_BUDGET_MS, estimateCost,
 } from '../config'
 import { logAiCall } from './ai-log'
 import { isMissingColumnError } from './classify-meta'
+import { untilAborted } from './translate'
 
 // On-screen text from the COVER FRAME (WP7b, 2026-09-12).
 //
@@ -294,15 +296,52 @@ async function fetchCoverAsDataUri(imageUrl: string): Promise<string> {
   return `data:${type};base64,${bytes.toString('base64')}`
 }
 
+/** The SDK's options for one cover read. A batch's carry its clock's `signal`. */
+export interface OcrRequest { timeout: number; maxRetries: number; signal?: AbortSignal }
+
+/**
+ * The options for a batch's next cover read, which must end by `deadline`, or
+ * null where too little is left to start one (OCR_CALL_FLOOR_MS). Each
+ * attempt is held to the lesser of OCR_CALL_CAP_MS and what is left, and the
+ * whole call, its retry and that retry's backoff included, ends at the
+ * deadline itself (the signal, and `untilAborted` for the backoff): the
+ * translate step clock's rule (`translateCallOptions`), on the OCR constants.
+ */
+export function ocrCallOptions(deadline: number, now: number): Required<OcrRequest> | null {
+  const left = deadline - now
+  if (left < OCR_CALL_FLOOR_MS) return null
+  return { timeout: Math.min(OCR_CALL_CAP_MS, left), maxRetries: OCR_MAX_RETRIES, signal: AbortSignal.timeout(left) }
+}
+
+/** Did the batch's clock end this read, rather than anything about the frame?
+ *  The deadline's abort, or the SDK's timeout ("Request timed out.") on an
+ *  attempt the deadline had shortened below its cap. translate's `cutByClock`
+ *  less its /aborted/: here that would also take the cover fetch's own 8 s
+ *  timeout ("The operation was aborted due to timeout"), a failed read that is
+ *  stamped, for the clock's in a batch's last 90 s. */
+export function ocrCutByClock(request: Required<OcrRequest>, e: unknown): boolean {
+  if (request.signal.aborted) return true
+  const msg = e instanceof Error ? e.message : String(e)
+  return request.timeout < OCR_CALL_CAP_MS && /timed out/i.test(msg)
+}
+
 /** One cover frame through the model. Returns the text blocks it read and what
- *  the call cost; throws only on a failure the caller should record per video. */
-export async function ocrCoverFrame(imageUrl: string): Promise<OcrOutcome> {
+ *  the call cost; throws only on a failure the caller should record per video.
+ *  Without a `request` (no batch clock) the call keeps its ceiling, its
+ *  timeout and its one retry. */
+export async function ocrCoverFrame(
+  imageUrl: string,
+  request: OcrRequest = { timeout: OCR_CALL_CAP_MS, maxRetries: OCR_MAX_RETRIES },
+): Promise<OcrOutcome> {
   const prompt = buildOcrPrompt()
   const startedAt = Date.now()
   const dataUri = await fetchCoverAsDataUri(imageUrl)
-  const completion = await openai.chat.completions.parse({
+  const completion = await untilAborted(openai.chat.completions.parse({
     model: OCR_MODEL,
     temperature: ANALYSIS_TEMPERATURE,
+    // A looping answer stops here, inside a minute, and throws the SDK's
+    // length error, which ocrOne stamps as one attempt (OCR_MAX_OUTPUT_TOKENS).
+    max_completion_tokens: OCR_MAX_OUTPUT_TOKENS,
     messages: [
       { role: 'system', content: prompt.system },
       {
@@ -314,7 +353,7 @@ export async function ocrCoverFrame(imageUrl: string): Promise<OcrOutcome> {
       },
     ],
     response_format: zodResponseFormat(ocrSchema, 'on_screen_text'),
-  })
+  }, request), request.signal)
   const msg = completion.choices[0]?.message
   const parsed = msg?.parsed
   if (!parsed) throw new Error(msg?.refusal ?? 'no parsed on-screen text')
@@ -404,6 +443,9 @@ export interface OcrResult {
   noImage: number
   skipped: number
   failed: number
+  /** Not read: the batch's clock (OCR_STEP_BUDGET_MS) ran out before its turn
+   *  or cut its call short. Not stamped, so it costs none of its attempts. */
+  outOfTime: number
   costUsd: number
   /** True when a 429 was seen — a fact about the account, not the corpus. */
   rateLimited: boolean
@@ -415,7 +457,31 @@ export interface OcrResult {
 }
 
 export function emptyOcrResult(): OcrResult {
-  return { ok: 0, none: 0, noImage: 0, skipped: 0, failed: 0, costUsd: 0, rateLimited: false, errors: [], samples: [] }
+  return { ok: 0, none: 0, noImage: 0, skipped: 0, failed: 0, outOfTime: 0, costUsd: 0, rateLimited: false, errors: [], samples: [] }
+}
+
+/**
+ * A batch's wave pass and its own step's, as one result (fanOut's `merge`,
+ * for a batch its clock stopped inside its wave). Every read either made is
+ * counted, cost and errors included, and a 429 either saw stands. What is
+ * still unread is the own step's alone, and so are the skips the wave pass
+ * did not make: the own step skips what the wave read, so the covers done
+ * before the run are the wave pass's `skipped`. PURE.
+ */
+export function mergeOcrResults<R extends OcrResult>(inWave: R, own: R): R {
+  return {
+    ...own,
+    ok: inWave.ok + own.ok,
+    none: inWave.none + own.none,
+    noImage: inWave.noImage + own.noImage,
+    skipped: inWave.skipped,
+    failed: inWave.failed + own.failed,
+    outOfTime: own.outOfTime,
+    costUsd: inWave.costUsd + own.costUsd,
+    rateLimited: inWave.rateLimited || own.rateLimited,
+    errors: [...inWave.errors, ...own.errors],
+    samples: [...inWave.samples, ...own.samples],
+  }
 }
 
 /** One video's cover through the model and into the row. Shared by the
@@ -435,6 +501,8 @@ async function ocrOne(
     dryRun?: boolean
     /** The batch's wave deadline (`ocrBatch`): past it the row is not written. */
     signal?: AbortSignal
+    /** This read's options on the batch's clock (`ocrCallOptions`). */
+    request: Required<OcrRequest>
   },
   out: OcrResult,
 ): Promise<void> {
@@ -461,7 +529,7 @@ async function ocrOne(
 
   let r: OcrOutcome
   try {
-    r = await ocrCoverFrame(opts.imageUrl)
+    r = await ocrCoverFrame(opts.imageUrl, opts.request)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     // A cover WE cannot use — HEIC, a host off the allowlist, an empty or
@@ -474,6 +542,15 @@ async function ocrOne(
       if (opts.dryRun) out.samples.push(`- ${opts.platform} ${opts.videoId}\n  cover: ${opts.imageUrl}\n  no_image — ${msg}`)
       const err = await write({ ocr_text: null, ocr_status: 'no_image', ocr_error: msg.slice(0, 300), ocr_attempts: opts.attempts + 1 })
       if (err) { out.errors.push(`ocr write (${opts.videoId}): ${err}`); out.noImage--; out.failed++ }
+      return
+    }
+    // Ended by the batch's clock: a fact about the step, not the frame, so it
+    // costs none of the video's attempts and is read next time (translate's
+    // rule). A full-length timeout and the output ceiling are the video's,
+    // and fall through to be stamped below.
+    if (ocrCutByClock(opts.request, e)) {
+      out.outOfTime++
+      if (opts.dryRun) out.samples.push(`- ${opts.platform} ${opts.videoId}\n  cover: ${opts.imageUrl}\n  out of time — ${msg.slice(0, 200)}`)
       return
     }
     out.failed++
@@ -538,7 +615,9 @@ async function ocrOne(
  * Read the cover frames of one batch of this run's videos and write the results.
  *
  * Sequential within the batch (8 × one small image call ≈ 16s, wide margin under
- * the 300s step cap) and idempotent: the selection rule is re-checked on the
+ * the 300s step cap), on one clock (OCR_STEP_BUDGET_MS from the batch's start,
+ * `ocrCallOptions`, 17 Nov: one looping cover once held a batch to Vercel's
+ * 300 s on every attempt), and idempotent: the selection rule is re-checked on the
  * freshly-read rows, so an Inngest step retry skips what the first attempt
  * already wrote. A per-video failure is stamped onto its own row and counted —
  * it never sinks the batch, and the video is simply analysed without on-screen
@@ -557,7 +636,11 @@ export async function ocrBatch(opts: {
    *  further cover and writes no row: a late `failed` here would land over
    *  that step's `ok`. */
   signal?: AbortSignal
+  /** Seam for the clock, for the offline tests. Production passes none. */
+  now?: () => number
 }): Promise<OcrResult> {
+  const now = opts.now ?? Date.now
+  const deadline = now() + OCR_STEP_BUDGET_MS
   const admin = createAdminClient()
   const out = emptyOcrResult()
   const adapter = adapters[opts.platform]
@@ -606,10 +689,19 @@ export async function ocrBatch(opts: {
     }
   }
 
+  // Fewest attempts first, the raw items' order within a count (17 Nov): a
+  // pass that runs out of clock leaves covers it has tried, never one it has
+  // not (`sort` is stable). Loops cluster by account, and a batch's own step
+  // once re-read this run's looping covers first and never reached the rest.
+  const order = [...rawRows].sort((a, b) => (attempts.get(a.video_id) ?? 0) - (attempts.get(b.video_id) ?? 0))
   let callIndex = (opts.batchNo ?? 1) * 1000
-  for (const row of rawRows) {
+  for (const row of order) {
     if (opts.signal?.aborted) break
     if (done.has(row.video_id)) { out.skipped++; continue }
+    // Out of time is not a failure of the frame: nothing is stamped, and the
+    // batch's own step or the next run reads it.
+    const request = ocrCallOptions(deadline, now())
+    if (!request) { out.outOfTime++; continue }
     callIndex++
     await ocrOne(admin, {
       clientId: opts.clientId,
@@ -621,6 +713,7 @@ export async function ocrBatch(opts: {
       callIndex,
       dryRun: opts.dryRun,
       signal: opts.signal,
+      request,
     }, out)
   }
   return out
@@ -674,7 +767,11 @@ export async function ocrBackfillBatch(opts: {
   dryRun?: boolean
   /** As `ocrBatch`'s: the batch's wave deadline. */
   signal?: AbortSignal
+  /** As `ocrBatch`'s: the clock, for the offline tests. */
+  now?: () => number
 }): Promise<OcrResult> {
+  const now = opts.now ?? Date.now
+  const deadline = now() + OCR_STEP_BUDGET_MS
   const admin = createAdminClient()
   const out = emptyOcrResult()
   const platform: Platform = 'youtube'
@@ -701,10 +798,14 @@ export async function ocrBackfillBatch(opts: {
     rows.push(...((data ?? []) as typeof rows))
   }
 
+  // Fewest attempts first, as `ocrBatch`.
+  const order = [...rows].sort((a, b) => (a.ocr_attempts ?? 0) - (b.ocr_attempts ?? 0))
   let callIndex = (opts.batchNo ?? 1) * 1000
-  for (const row of rows) {
+  for (const row of order) {
     if (opts.signal?.aborted) break
     if (!needsOcr(row, { durableCover: true })) { out.skipped++; continue }
+    const request = ocrCallOptions(deadline, now())
+    if (!request) { out.outOfTime++; continue }
     callIndex++
     await ocrOne(admin, {
       clientId: opts.clientId,
@@ -716,6 +817,7 @@ export async function ocrBackfillBatch(opts: {
       callIndex,
       dryRun: opts.dryRun,
       signal: opts.signal,
+      request,
     }, out)
   }
   return out

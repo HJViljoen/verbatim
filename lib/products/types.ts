@@ -278,8 +278,9 @@ export interface ProductCatalogue {
 }
 
 /** `ready`: a catalogue to place under. `empty`: the client has no active
- *  category (nothing to place; Sealand today). `missing`: the migration is not
- *  applied yet, so a step no-ops and Settings says it is not ready. */
+ *  category (nothing to place; a tenant whose seed is not loaded). `missing`:
+ *  the migration is not applied yet, so a step no-ops and Settings says it is
+ *  not ready. */
 export type CatalogueRead =
   | { state: 'ready'; catalogue: ProductCatalogue }
   | { state: 'empty' }

@@ -314,7 +314,15 @@ This version has breaking changes — APIs, conventions, and file structure may 
   one of its products in the comment or the video (else it reads as the
   category in general), and a category-in-general answer must name the
   category; paraphrase placements
-  are off (`MODEL_PLACES_PARAPHRASE`). Placements are appended to
+  are off (`MODEL_PLACES_PARAPHRASE`). Both prompts describe the tenant's
+  own market (`productDomainFor`, `PRODUCT_DOMAIN_BY_CLIENT` in
+  `lib/products/classify.ts`, 17 Nov; until then every tenant's said
+  "prosthetics, orthotics and mobility" and the confirm read a category word
+  as a prosthetic product): Össur's entry is the old prompts byte for byte,
+  pinned in `classify.test.ts`, so its stored answers stay the question they
+  answered; a tenant with no entry gets neutral words. No entry moves the
+  answers' key (catalogue version and `PRODUCT_MODEL_RULE_VERSION`), so change
+  a tenant's words before its back-read. Placements are appended to
   `product_mentions`. The client's own words never place: every content
   field of a `source='owned'` video (account, caption, hashtags, transcript,
   `transcript_en`, OCR; `contentFields`), and any comment written by the
@@ -343,7 +351,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
   for a tenant with no catalogue, and while `PRODUCT_READINGS_ENABLED` is
   off for the tenant. It is ON for Össur since 13 Oct (its catalogue loaded
   and its back-read written: June to August frozen, September and October
-  open) and off for Sealand, which has no catalogue (`lib/config.ts`,
+  open) and for Sealand once its catalogue (`scripts/seeds/sealand-products.ts`,
+  compiled 17 Nov) is loaded and its back-read written, one month a read
+  (six months in one scan hit the statement timeout) (`lib/config.ts`,
   pinned in `lib/config.test.ts`): turn a tenant on only after its seed is
   loaded and its back-read written. *Caps:* `PRODUCT_CLASSIFY_CAP` (3,000
   items a run), `PRODUCT_CLASSIFY_BUDGET_USD` ($0.75, read from
@@ -1106,7 +1116,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
   videos with its one-liner, the other groups by name, and the two brands
   named most unprompted only where `brandsState` is ready), Your products
   (`topProducts`, only a `ready` tile, so behind `PRODUCT_READINGS_ENABLED`
-  and absent for Sealand: how many of the catalogue came up, the videos about
+  and absent for a tenant switched off: how many of the catalogue came up, the videos about
   them or their categories, up to five products most videos first with
   their category, videos, page and the first-time mark, and every category's
   videos; `TopProducts` widened additively by `cameUpOf` over the page's own
@@ -2384,8 +2394,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
     no month is read. A quiet product says nobody named it, how many did
     last month and the way there; its facts say "Nothing to read in a quiet
     month". `PRODUCT_READINGS_ENABLED` is ON FOR ÖSSUR since 13 Oct (its
-    catalogue loaded and back-read written) and off for Sealand, which has
-    no catalogue: Sealand's level pages print the no-catalogue line.
+    catalogue loaded and back-read written) and for Sealand once its
+    catalogue is loaded and its back-read written; a tenant with no catalogue
+    prints the no-catalogue line on its level pages.
     ISOLATION: every level read filters on the session's client and reads
     only the page's own set (`products-statements.test.ts` pins it with
     another workspace's rows in every table, and fails with a filter

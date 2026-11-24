@@ -196,9 +196,9 @@ export async function saveOpenaiBalance(_prev: CostsActionState, f: FormData): P
   return { ok: true, message: 'Saved.' }
 }
 
-const TOGGLES = { countShared: 'count_shared', countProspects: 'count_prospects' } as const
+const TOGGLES = { countShared: 'count_shared', countProspects: 'count_prospects', fxAuto: 'fx_auto' } as const
 
-/** Flips one of the forecast's two switches. */
+/** Flips one of the forecast's switches, or the dollar rate's self-refresh. */
 export async function setToggle(_prev: CostsActionState, f: FormData): Promise<CostsActionState> {
   if (!(await costsAdmin())) return NOT_FOUND
   const key = String(f.get('key') ?? '') as keyof typeof TOGGLES

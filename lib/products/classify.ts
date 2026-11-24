@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { zodResponseFormat } from 'openai/helpers/zod'
 import { z } from 'zod'
 
-import { estimateCost } from '../config'
+import { estimateCost, OSSUR_CLIENT_ID, SEALAND_CLIENT_ID } from '../config'
 import { dbSafeText } from '../db-text'
 import { openai } from '../openai'
 import { logAiCall } from '../pipeline/ai-log'
@@ -48,7 +48,8 @@ import type { ProductCatalogue } from './types'
 // An answer whose number is outside the batch or repeated, or whose code is
 // unknown, writes no row, and the text is offered again next run.
 //
-// WHAT IT SEES: the client's name, its catalogue (categories, products, the
+// WHAT IT SEES: the client's name, its market in its own words
+// (`productDomainFor`), its catalogue (categories, products, the
 // other names people use), each item's text, and for a comment under a video
 // whose content names the client's products, those names (for "it" and
 // "this"). Never a caption, and never another comment.
@@ -174,40 +175,140 @@ function catalogueLines(clientName: string, catalogue: ProductCatalogue): string
   return lines
 }
 
+// ---- the market's words, per tenant ---------------------------------------------------
+
+/**
+ * The words both prompts describe a tenant's market in. Until 17 Nov they
+ * said "prosthetics, orthotics and mobility" for every tenant, and the
+ * confirm read every category word as "a prosthetic or orthotic product"
+ * (Sealand's probe, "I just carry a small sling with my passport", read
+ * false). Per tenant, the `WHAT_THEY_SELL` pattern (lib/pages/market-frame.ts),
+ * whose one noun ("bags") is too narrow for a prompt: Sealand's catalogue
+ * holds caps and clothes too, and the prompt needs the parts, the near
+ * misses and the other senses of the market's words. Read it through
+ * `productDomainFor`, never the map.
+ *
+ * ÖSSUR'S ENTRY IS THE PROMPTS AS THEY WERE, byte for byte (classify.test.ts
+ * pins both against the strings captured before this map existed). Stored
+ * answers are keyed by the catalogue version and PRODUCT_MODEL_RULE_VERSION,
+ * which no entry moves, so a text answered is never asked again under any
+ * entry: change a tenant's words before its back-read, or with a new
+ * PRODUCT_CLASSIFY_PROMPT_VERSION (which reads every tenant's texts again).
+ */
+export interface ProductDomain {
+  /** What the texts are about ("prosthetics, orthotics and mobility"). */
+  topic: string
+  /** The words that point at the ONE product a video names. */
+  pointers: string
+  /** What an "unbranded" comment must name or plainly describe. */
+  device: string
+  /** What "none" covers, after "reactions, praise, thanks, jokes, ". */
+  none: string
+  /** What "words" copies, with examples. */
+  words: string
+  /** What "named" is never answered from. */
+  neverNamedFrom: string
+  /** The "named" example, after the product's name. */
+  namedExample: string
+  /** The "none" examples, each in quotation marks. */
+  noneExamples: string
+  /** The confirm: what a category word is true for. */
+  kindIs: string
+  /** The confirm: a category word's meaning, in its brackets. */
+  kindNote: string
+  /** The confirm: the senses that are false. */
+  otherSenses: string
+  /** The confirm: one more rule, its own line after the false senses
+   *  (Sealand's plain-description names). Össur's prompt has none. */
+  confirmRule?: string
+}
+
+export const PRODUCT_DOMAIN_BY_CLIENT: Readonly<Record<string, ProductDomain>> = {
+  [OSSUR_CLIENT_ID]: {
+    topic: 'prosthetics, orthotics and mobility',
+    pointers: '"this foot", "that knee", "it"',
+    device: 'the device or the part (the socket, the liner, the sleeve, the foot, the knee, the hand, the brace, the blade, the pin, the valve)',
+    none: 'questions about the person, their body, story, health, amputation or surgery, walking, sport, shoes, socks or clothes, the video, other topics, and prosthetics or limbs in general ("my leg", "my prosthesis", "your arm", "bigger legs") when no one category\'s device or part is named',
+    words: 'the product or the device ("my proflex", "the liner", "that knee")',
+    neverNamedFrom: 'a category word alone, a film character, or a body part',
+    namedExample: 'feels great on hills',
+    noneExamples: '"You are so strong 💪", "I just got my first prosthetic leg", "You need an Iron Man arm", "It takes me longer to put my shoes on", "Can you get taller legs?"',
+    kindIs: 'that prosthetic or orthotic product',
+    kindNote: 'a prosthetic or orthotic product',
+    otherSenses: 'an ordinary word in English or in another language (Italian "proprio", "rebound" in sport), a person\'s or a place\'s name, another company\'s product, software or a game, a body part ("eye socket", "shoulder blade"), dental braces, tools, or anything else',
+  },
+  [SEALAND_CLIENT_ID]: {
+    topic: 'bags, backpacks and travel gear, and the caps and clothes bag brands also make',
+    pointers: '"this bag", "that backpack", "it"',
+    device: 'the item or a part of it (the bag, the backpack, the duffel, the straps, the zip, the pockets, the laptop sleeve, the lining, the fabric, the cap, the jacket)',
+    none: 'questions about the person, their story, looks or outfit, their trip, the place, packing in general, the video, other topics, and bags or gear in general ("my bag", "nice bag", "what\'s in my bag", "I need a new bag") when no one category\'s kind of item is named',
+    words: 'the product or the kind of item ("my moon bag", "the duffel", "that backpack")',
+    neverNamedFrom: 'a category word alone, a film character, or a plain description of a bag or a garment',
+    namedExample: 'has held up for years',
+    noneExamples: '"Love this 😍", "I just bought my first proper bag", "You need a Mary Poppins bag", "Packing takes me longer than the trip", "Where is this beach?"',
+    kindIs: 'an item of that kind, whoever makes it',
+    kindNote: 'an item of that kind, any maker\'s',
+    otherSenses: 'an ordinary word in English or in another language (the "moon", a "buddy", a "toastie" to eat), a person\'s, a place\'s or a band\'s name, software or a game, a sling for an injured arm or a gun, the same words for another maker\'s bag or garment ("my Patagonia quarter zip", "a canvas tote from the supermarket"), or anything else',
+    // 17 Nov hand check: "I have a Ponto Crew Sweater and Quarter Zip" read
+    // as the catalogue's Quarter Zip on one run of two without this line.
+    confirmRule: 'Many of these product names are also plain descriptions of any bag or garment ("Quarter Zip", "Canvas Tote", "Moon Bag"). Such a name means the catalogue item only where the text makes it that company\'s: false where another brand is named for it, and false where it could as well be anyone\'s.',
+  },
+}
+
+/** A tenant with no entry: the market in no one's words. */
+export const DEFAULT_PRODUCT_DOMAIN: ProductDomain = {
+  topic: 'a company\'s products and the market around them',
+  pointers: '"this one", "that one", "it"',
+  device: 'the product or a part of it',
+  none: 'questions about the person, their story, the video, other topics, and things in general when no one category\'s product or part is named',
+  words: 'the product or the kind of product ("my new one", "that one")',
+  neverNamedFrom: 'a category word alone, a film character, or a plain description',
+  namedExample: 'has held up for years',
+  noneExamples: '"Love this 😍", "Where is this?", "You look great", "What camera do you use?"',
+  kindIs: 'a product of that kind, whoever makes it',
+  kindNote: 'a product of that kind, any maker\'s',
+  otherSenses: 'an ordinary word in English or in another language, a person\'s or a place\'s name, another company\'s product, software or a game, or anything else',
+}
+
+/** The words a tenant's product prompts use. */
+export const productDomainFor = (clientId: string): ProductDomain => PRODUCT_DOMAIN_BY_CLIENT[clientId] ?? DEFAULT_PRODUCT_DOMAIN
+
 /** The classifier's system prompt for a catalogue: the same for every call of
- *  a run (so the provider's prompt cache can reuse it). PURE. */
-export function buildSystemPrompt(clientName: string, catalogue: ProductCatalogue): string {
+ *  a run (so the provider's prompt cache can reuse it), in the tenant's
+ *  words (`productDomainFor`). PURE. */
+export function buildSystemPrompt(clientName: string, catalogue: ProductCatalogue, clientId: string): string {
+  const d = productDomainFor(clientId)
   const codes = catalogueCodes(catalogue)
   const firstProduct = catalogue.products.find((p) => codes.productOf.has(p.id))
   const pcode = firstProduct ? codes.productOf.get(firstProduct.id)! : 'P1'
   const firstGroup = catalogue.groups.find((g) => g.id === codes.group.get('C1'))
   const word = (firstGroup && aliasesOf(catalogue, { group: firstGroup.id }, ['category_word'])[0]) || 'product'
   return [
-    `You read social-media comments about prosthetics, orthotics and mobility, and decide which part of ${clientName}'s catalogue each one is about. ${clientName} is a company; its catalogue lists its products by category, each with a code.`,
+    `You read social-media comments about ${d.topic}, and decide which part of ${clientName}'s catalogue each one is about. ${clientName} is a company; its catalogue lists its products by category, each with a code.`,
     '',
     'CATALOGUE',
     ...catalogueLines(clientName, catalogue),
     '',
     'For EACH numbered comment, answer one placement:',
-    `- "named": the comment itself is about one or more of ${clientName}'s listed products specifically. It names the product (or another name, a misspelling, a translation), or says "this foot", "that knee", "it" about the ONE ${clientName} product the video names. Give the product codes in "products".`,
+    `- "named": the comment itself is about one or more of ${clientName}'s listed products specifically. It names the product (or another name, a misspelling, a translation), or says ${d.pointers} about the ONE ${clientName} product the video names. Give the product codes in "products".`,
     `- "unclear": the comment is about a ${clientName} product of one category without saying which: it names ${clientName} or one of its product families together with that kind of product ("my ${clientName} ${word}"), or says "it" about a video that names several ${clientName} products of that category. Give the category code in "category".`,
-    `- "unbranded": the comment is about that KIND of product itself, in general or another company's: how it fits, feels, works, lasts, costs, where to get it. The comment has to name or plainly describe the device or the part (the socket, the liner, the sleeve, the foot, the knee, the hand, the brace, the blade, the pin, the valve). Give the category code in "category".`,
-    '- "none": everything else. MOST COMMENTS ARE NONE: reactions, praise, thanks, jokes, questions about the person, their body, story, health, amputation or surgery, walking, sport, shoes, socks or clothes, the video, other topics, and prosthetics or limbs in general ("my leg", "my prosthesis", "your arm", "bigger legs") when no one category\'s device or part is named.',
+    `- "unbranded": the comment is about that KIND of product itself, in general or another company's: how it fits, feels, works, lasts, costs, where to get it. The comment has to name or plainly describe ${d.device}. Give the category code in "category".`,
+    `- "none": everything else. MOST COMMENTS ARE NONE: reactions, praise, thanks, jokes, ${d.none}.`,
     '',
     'Rules:',
-    '- "words": copy, exactly as written, the few words of the comment that name the product or the device ("my proflex", "the liner", "that knee"). For "none", null.',
+    `- "words": copy, exactly as written, the few words of the comment that name ${d.words}. For "none", null.`,
     '- "sure": true only when the comment leaves no doubt. A placement you are not sure of is "none".',
     '- A comment counts only for what IT says. The video is context for "it" and "this", never a reason by itself.',
-    '- Never name a product the comment does not name or point at. Never answer "named" from a category word alone, a film character, or a body part.',
+    `- Never name a product the comment does not name or point at. Never answer "named" from ${d.neverNamedFrom}.`,
     '- When unsure between "named" and "unclear", answer "unclear"; between "unclear" and "unbranded", "unbranded"; between a category and "none", "none".',
     '- Comments may be in any language. Read them as written.',
     '',
     'Examples (not from the items):',
-    `- "${firstProduct?.name ?? 'The product'} feels great on hills" → named, products ["${pcode}"], words "${firstProduct?.name ?? 'The product'}", sure`,
+    `- "${firstProduct?.name ?? 'The product'} ${d.namedExample}" → named, products ["${pcode}"], words "${firstProduct?.name ?? 'The product'}", sure`,
     `- "How long does it last?" under a video naming only ${firstProduct?.name ?? 'one product'} → named, products ["${pcode}"], words "it", sure`,
     `- "My ${word} always makes me sweat" → unbranded, category "C1", words "My ${word}", sure`,
     `- "Is it comfortable?" under a video about ${word}s in general → none`,
-    '- "You are so strong 💪", "I just got my first prosthetic leg", "You need an Iron Man arm", "It takes me longer to put my shoes on", "Can you get taller legs?" → none',
+    `- ${d.noneExamples} → none`,
     '',
     'Return one entry per comment, with n matching its number. Never merge, reorder or drop entries.',
   ].join('\n')
@@ -235,22 +336,25 @@ export function buildUserPrompt(items: readonly ClassifyItem[], videos: Readonly
   return [...(videoLines.length ? ['VIDEOS', ...videoLines, ''] : []), 'COMMENTS', ...itemLines].join('\n')
 }
 
-/** The confirm call's system prompt. PURE. */
-export function buildConfirmSystemPrompt(clientName: string): string {
+/** The confirm call's system prompt, in the tenant's words
+ *  (`productDomainFor`). PURE. */
+export function buildConfirmSystemPrompt(clientName: string, clientId: string): string {
+  const d = productDomainFor(clientId)
   return [
-    'You check single words in social-media texts about prosthetics, orthotics and mobility.',
+    `You check single words in social-media texts about ${d.topic}.`,
     `Each numbered item gives a WORD, what it would mean as part of ${clientName}'s catalogue, and the TEXT it appears in.`,
-    `Answer means: true ONLY if, in this text, the word refers to that catalogue item: ${clientName}'s product or product family, or, for a kind of product, that prosthetic or orthotic product.`,
-    'Answer means: false if the word is used in any other sense: an ordinary word in English or in another language (Italian "proprio", "rebound" in sport), a person\'s or a place\'s name, another company\'s product, software or a game, a body part ("eye socket", "shoulder blade"), dental braces, tools, or anything else.',
+    `Answer means: true ONLY if, in this text, the word refers to that catalogue item: ${clientName}'s product or product family, or, for a kind of product, ${d.kindIs}.`,
+    `Answer means: false if the word is used in any other sense: ${d.otherSenses}.`,
+    ...(d.confirmRule ? [d.confirmRule] : []),
     'When unsure, false. Return one entry per item, with n matching its number.',
   ].join('\n')
 }
 
 /** What a generic word would mean, in a confirm line. */
-function meaning(a: CompiledAlias, compiled: CompiledCatalogue, clientName: string): string {
+function meaning(a: CompiledAlias, compiled: CompiledCatalogue, clientName: string, d: ProductDomain): string {
   const group = compiled.groupName.get(a.groupId) ?? ''
   if (a.productId) return `${clientName}'s product ${compiled.productName.get(a.productId) ?? a.alias} (${group})`
-  if (a.kind === 'category_word') return `the kind of product in ${group} (a prosthetic or orthotic product)`
+  if (a.kind === 'category_word') return `the kind of product in ${group} (${d.kindNote})`
   return `${clientName}'s product family ${a.alias} (${group})`
 }
 
@@ -261,8 +365,9 @@ export interface ConfirmQuestion { item: ConfirmItem; alias: CompiledAlias }
 export const confirmQuestions = (items: readonly ConfirmItem[]): ConfirmQuestion[] => items.flatMap((item) => item.aliases.map((alias) => ({ item, alias })))
 
 /** The confirm call's user message. PURE. */
-export function buildConfirmUserPrompt(questions: readonly ConfirmQuestion[], compiled: CompiledCatalogue, clientName: string): string {
-  return questions.map((q, i) => `${i + 1}. WORD "${q.alias.alias}" = ${meaning(q.alias, compiled, clientName)} | TEXT: ${oneLine(q.item.text, ITEM_CHARS)}`).join('\n')
+export function buildConfirmUserPrompt(questions: readonly ConfirmQuestion[], compiled: CompiledCatalogue, clientName: string, clientId: string): string {
+  const d = productDomainFor(clientId)
+  return questions.map((q, i) => `${i + 1}. WORD "${q.alias.alias}" = ${meaning(q.alias, compiled, clientName, d)} | TEXT: ${oneLine(q.item.text, ITEM_CHARS)}`).join('\n')
 }
 
 export const classifySchema = z.object({
@@ -564,11 +669,11 @@ interface PlannedCall { kind: ClassifyKind; items: ClassifyItem[]; system: strin
 
 /** The calls a list of items makes: the confirm questions first, then the
  *  comments, CLASSIFY_BATCH a call. PURE. */
-export function planCalls(items: readonly ClassifyItem[], ctx: { clientName: string; catalogue: ProductCatalogue; compiled: CompiledCatalogue; videos: ReadonlyMap<string, VideoContext> }): PlannedCall[] {
+export function planCalls(items: readonly ClassifyItem[], ctx: { clientId: string; clientName: string; catalogue: ProductCatalogue; compiled: CompiledCatalogue; videos: ReadonlyMap<string, VideoContext> }): PlannedCall[] {
   const confirmItems = items.filter((x): x is Extract<ClassifyItem, { kind: 'confirm' }> => x.kind === 'confirm')
   const classifyItems = items.filter((x) => x.kind === 'classify')
   const calls: PlannedCall[] = []
-  const confirmSystem = buildConfirmSystemPrompt(ctx.clientName)
+  const confirmSystem = buildConfirmSystemPrompt(ctx.clientName, ctx.clientId)
   // A confirm batch holds whole texts (every question of a text in one call),
   // about CLASSIFY_BATCH questions a call.
   let batch: Extract<ClassifyItem, { kind: 'confirm' }>[] = []
@@ -576,7 +681,7 @@ export function planCalls(items: readonly ClassifyItem[], ctx: { clientName: str
   const flush = () => {
     if (!batch.length) return
     const questions = confirmQuestions(batch.map((b) => b.item))
-    calls.push({ kind: 'confirm', items: batch, system: confirmSystem, user: buildConfirmUserPrompt(questions, ctx.compiled, ctx.clientName), questions })
+    calls.push({ kind: 'confirm', items: batch, system: confirmSystem, user: buildConfirmUserPrompt(questions, ctx.compiled, ctx.clientName, ctx.clientId), questions })
     batch = []
     size = 0
   }
@@ -586,7 +691,7 @@ export function planCalls(items: readonly ClassifyItem[], ctx: { clientName: str
     size += it.item.aliases.length
   }
   flush()
-  const system = buildSystemPrompt(ctx.clientName, ctx.catalogue)
+  const system = buildSystemPrompt(ctx.clientName, ctx.catalogue, ctx.clientId)
   for (const b of batchItems(classifyItems)) calls.push({ kind: 'classify', items: b, system, user: buildUserPrompt(b, ctx.videos) })
   return calls
 }
@@ -626,7 +731,7 @@ export async function runClassifier(args: {
   const now = args.now ?? Date.now
   const codes = catalogueCodes(args.catalogue)
   const check: CheckContext = { catalogue: args.catalogue, compiled: args.compiled, videos: args.videos }
-  const calls = planCalls(args.items, { clientName: args.clientName, catalogue: args.catalogue, compiled: args.compiled, videos: args.videos })
+  const calls = planCalls(args.items, { clientId: args.clientId, clientName: args.clientName, catalogue: args.catalogue, compiled: args.compiled, videos: args.videos })
   const parallel = Math.max(1, args.parallel ?? 4)
   let callIndex = 0
   let w = 0
