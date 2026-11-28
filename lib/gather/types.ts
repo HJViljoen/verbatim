@@ -240,8 +240,20 @@ export interface PlatformAdapter {
    * present, the orchestrator uses this instead of `videoSearch` + Apify. YouTube
    * uses it to call the official Data API; the returned items feed `normaliseVideo`
    * exactly like Apify dataset items would.
+   *
+   * Instagram has it too (28 Nov 2026, TikHub's hashtag feed) AND keeps
+   * `videoSearch`: its search is routed (gather.ts `searchOne`, the provider
+   * router), native first and Apify last, so there it does not win outright.
+   * `opts` carries the variant and community `videoSearch` gets, and `note`,
+   * for a plain-words line the search's run warning should carry (a feed cut
+   * short). YouTube ignores all three.
    */
-  fetchVideos?(config: GatherConfig, terms: string[], limit: number): Promise<RawItem[]>
+  fetchVideos?(
+    config: GatherConfig,
+    terms: string[],
+    limit: number,
+    opts?: { variant?: SearchVariant; community?: string; note?: (message: string) => void },
+  ): Promise<RawItem[]>
   /** Native (non-Apify) source: fetch one video's raw comment items directly. */
   fetchComments?(video: VideoRef, config: GatherConfig): Promise<RawItem[]>
   /**

@@ -1,4 +1,4 @@
-import { providerLabel } from './transport'
+import { ProviderError, providerLabel } from './transport'
 
 // The provider router (28 Nov 2026): a job's sources in order, the first that
 // gives a non-empty answer wins, and every source passed over says why in a
@@ -41,7 +41,10 @@ export async function firstWorking<T>(
       notes.push(next ? `${name} found nothing, so the search also tried ${next}` : `${name} found nothing either`)
     } catch (e) {
       lastError = e
-      notes.push(next ? `${name} did not work (${reasonOf(e)}), so the search used ${next}` : `${name} did not work either (${reasonOf(e)})`)
+      // Not set up, or over budget: nothing was tried, so nothing failed.
+      const skipped = e instanceof ProviderError && e.kind === 'unavailable'
+      const what = skipped ? `${name} was skipped` : `${name} did not work`
+      notes.push(next ? `${what} (${reasonOf(e)}), so the search used ${next}` : `${what}${skipped ? '' : ' either'} (${reasonOf(e)})`)
     }
   }
   if (empty) return { ...empty, notes }

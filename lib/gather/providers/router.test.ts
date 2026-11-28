@@ -31,6 +31,11 @@ describe('firstWorking', () => {
     expect(r.notes).toEqual(['TikHub did not work (TikHub answered HTTP 502), so the search used Apify'])
   })
 
+  it('says a source that was not set up was skipped, not that it failed', async () => {
+    const r = await firstWorking([boom('tikhub', new ProviderError('unavailable', 'TikHub is not set up')), ok('apify', ['z'])], isEmpty)
+    expect(r.notes).toEqual(['TikHub was skipped (TikHub is not set up), so the search used Apify'])
+  })
+
   it('moves on when the first finds nothing', async () => {
     const r = await firstWorking([ok('tikhub', []), ok('apify', ['z'])], isEmpty)
     expect(r).toEqual({ result: ['z'], provider: 'apify', notes: ['TikHub found nothing, so the search also tried Apify'] })

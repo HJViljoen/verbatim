@@ -1,7 +1,10 @@
 import { createAdminClient, selectAll } from '../supabase-admin'
 import { chunk } from '../chunk'
-import { ANALYSIS_MODEL, REDDIT_COMMENT_SCRAPE_CAP, redditDiscoveryEnabled, periodSince, RECHECK_MIN_GROWTH, RECHECK_CAP, RECHECK_WINDOW_DAYS, TRANSCRIBE_CAP, TRANSCRIBE_BATCH, TRANSCRIBE_MODEL, CONTENT_GATE_MODEL, WHISPER_PER_MINUTE, ASSEMBLYAI_PER_MINUTE, YT_TRANSCRIPT_PER_ITEM_USD, estimateCost, transcriptsEnabled, GATHER_MAX_SEARCHES_PER_RUN, GATHER_MAX_VIDEOS_PER_SEARCH, GATHER_MAX_COMMENT_DEPTH } from '../config'
+import { ANALYSIS_MODEL, REDDIT_COMMENT_SCRAPE_CAP, redditDiscoveryEnabled, periodSince, RECHECK_MIN_GROWTH, RECHECK_CAP, RECHECK_WINDOW_DAYS, TRANSCRIBE_CAP, TRANSCRIBE_BATCH, TRANSCRIBE_MODEL, CONTENT_GATE_MODEL, WHISPER_PER_MINUTE, ASSEMBLYAI_PER_MINUTE, YT_TRANSCRIPT_PER_ITEM_USD, estimateCost, transcriptsEnabled, GATHER_MAX_SEARCHES_PER_RUN, GATHER_MAX_VIDEOS_PER_SEARCH, GATHER_MAX_COMMENT_DEPTH, RUN_SCRAPE_BUDGET_USD, SEARCH_STEP_BUDGET_MS } from '../config'
 import { runActor, isActorRunFailedError } from './apify'
+import { firstWorking, providerOrder, type Attempt, type RouteKey } from './providers/router'
+import { ProviderError, providerTransport } from './providers/transport'
+import { providerSpendForRun } from './providers/ledger'
 import { adapters } from './platforms'
 import { parseSubreddits, activeSubreddits, subredditLabel } from './subreddits'
 import { logAiCall } from '../pipeline/ai-log'
@@ -271,6 +274,12 @@ export interface SearchResult {
    *  populated when TRANSCRIPTS_ENABLED — otherwise the default path is
    *  unchanged and nothing extra is serialised between Inngest steps. */
   raws?: Record<string, RawItem>
+  /** What a routed search (Instagram, 28 Nov 2026) has to say about its
+   *  sources, in plain words, once each: a provider passed over and why, a
+   *  feed cut short. Absent when there is nothing to say, and on every
+   *  platform that is not routed. The pipeline makes each distinct one a run
+   *  warning (`summariseSearchNotes`). */
+  notes?: string[]
 }
 
 /** What a platform's gate hands the comment-scrape steps. */
@@ -400,6 +409,7 @@ export async function searchOne(opts: {
   /** The run's frozen window — the adapters' date/enum search bound. */
   window?: RunWindow | null
 }): Promise<SearchResult> {
+  const startedAt = Date.now()
   const admin = createAdminClient()
   const config = await loadConfig(admin, opts.clientId)
   if (opts.maxVideos) config.max_videos = opts.maxVideos
@@ -412,10 +422,22 @@ export async function searchOne(opts: {
   if (!adapter) throw new Error(`no adapter for ${opts.platform}`)
   const ctx: NormaliseCtx = { clientId: opts.clientId, runId: opts.runId, config }
 
-  // Native-API platforms (YouTube) fetch their own items; Apify platforms build
-  // an actor+input the orchestrator runs. Exactly one path exists per adapter.
+  // A ROUTED platform (Instagram, 28 Nov 2026) tries its sources in order,
+  // native first and Apify last (`routedSearch`). Every other platform has
+  // exactly one path, as before: native-API platforms (YouTube) fetch their
+  // own items, Apify platforms build an actor+input the orchestrator runs.
   let raw: RawItem[]
-  if (adapter.fetchVideos) {
+  let notes: string[] = []
+  const route = ROUTED_SEARCH[opts.platform]
+  if (route) {
+    const routed = await routedSearch({
+      key: route, adapter, config, keyword: opts.keyword, variant: opts.variant, community: opts.community,
+      runId: opts.runId, startedAt,
+    })
+    raw = routed.raw
+    notes = routed.notes
+    if (notes.length) console.warn(`[search] ${opts.platform} ${opts.keyword}${opts.variant ? ` ${opts.variant}` : ''} via ${routed.provider}: ${notes.join(' | ')}`)
+  } else if (adapter.fetchVideos) {
     raw = await adapter.fetchVideos(config, [opts.keyword], config.max_videos)
   } else if (adapter.videoSearch) {
     const { actor, input } = adapter.videoSearch(config, [opts.keyword], config.max_videos, {
@@ -444,7 +466,86 @@ export async function searchOne(opts: {
     raws = {}
     for (const p of paired) raws[p.video.video_id] = p.raw
   }
-  return { keyword: opts.keyword, bucket: opts.bucket, videos, raws }
+  return { keyword: opts.keyword, bucket: opts.bucket, videos, raws, ...(notes.length ? { notes: [...new Set(notes)] } : {}) }
+}
+
+/** The platforms whose search goes through the provider router (28 Nov 2026).
+ *  Every other platform keeps its one source: YouTube its own API, TikTok and
+ *  Reddit Apify. */
+const ROUTED_SEARCH: Partial<Record<Platform, RouteKey>> = { instagram: 'instagram.search' }
+
+/** Below this much time spent before it, an Apify fallback is called exactly
+ *  as it always was (its own 300 s default): the native source was skipped or
+ *  failed at once. */
+const APIFY_LATE_AFTER_MS = 10_000
+/** An Apify run given less than this is not worth starting. */
+const APIFY_MIN_TIMEOUT_SECS = 30
+/** runActor's own grace past the actor's timeout (15 s), and the dataset read. */
+const APIFY_OVERHEAD_MS = 20_000
+
+export interface RoutedSearchDeps {
+  runActor: typeof runActor
+  spendSoFar: (runId: string) => Promise<number>
+  now: () => number
+}
+
+/**
+ * One routed search: the job's sources in `providerOrder` (env
+ * GATHER_<KEY>_PROVIDERS), the first non-empty answer wins (`firstWorking`).
+ *
+ * - The native source (TikHub) is skipped, with a note, when it is not set up
+ *   or this run's direct-provider spend has reached RUN_SCRAPE_BUDGET_USD.
+ *   Either way, and when it fails or finds nothing, the search goes on to
+ *   Apify, so an unconfigured, down, out-of-credit or changed provider leaves
+ *   the search what it was before, plus a note.
+ * - Apify, last, is called exactly as before unless the native source already
+ *   spent time; then it gets what is left of SEARCH_STEP_BUDGET_MS as its
+ *   timeout, so the step stays inside the route's 300 s, and is not started
+ *   at all with under 30 s left (the native answer, empty, stands).
+ *
+ * Returns the raw items, the source that gave them and every note, the hook's
+ * own (a feed cut short) first.
+ */
+export async function routedSearch(
+  args: {
+    key: RouteKey
+    adapter: PlatformAdapter
+    config: GatherConfig
+    keyword: string
+    variant?: SearchVariant
+    community?: string
+    runId: string
+    /** When the step's work began (its clock). */
+    startedAt: number
+  },
+  deps: RoutedSearchDeps = { runActor, spendSoFar: providerSpendForRun, now: Date.now },
+): Promise<{ raw: RawItem[]; provider: string; notes: string[] }> {
+  const { adapter, config, keyword, variant, community } = args
+  const hookNotes: string[] = []
+  const sources: Record<string, () => Promise<RawItem[]>> = {
+    tikhub: async () => {
+      if (!adapter.fetchVideos) throw new Error(`the ${adapter.platform} adapter has no native search`)
+      if (!providerTransport('tikhub')) throw new ProviderError('unavailable', 'TikHub is not set up')
+      if ((await deps.spendSoFar(args.runId)) >= RUN_SCRAPE_BUDGET_USD) {
+        throw new ProviderError('unavailable', `this update’s direct scraping spend reached its limit of $${RUN_SCRAPE_BUDGET_USD}`)
+      }
+      return adapter.fetchVideos(config, [keyword], config.max_videos, { variant, community, note: (m) => hookNotes.push(m) })
+    },
+    apify: async () => {
+      if (!adapter.videoSearch) throw new Error(`the ${adapter.platform} adapter has no Apify search`)
+      const { actor, input } = adapter.videoSearch(config, [keyword], config.max_videos, { community, variant })
+      const spent = deps.now() - args.startedAt
+      if (spent < APIFY_LATE_AFTER_MS) return deps.runActor(actor, input)
+      const timeoutSecs = Math.floor((SEARCH_STEP_BUDGET_MS - spent - APIFY_OVERHEAD_MS) / 1000)
+      if (timeoutSecs < APIFY_MIN_TIMEOUT_SECS) throw new Error('there was not enough time left in the step to start it')
+      return deps.runActor(actor, input, { timeoutSecs: Math.min(300, timeoutSecs) })
+    },
+  }
+  const attempts: Attempt<RawItem[]>[] = providerOrder(args.key)
+    .filter((p) => sources[p])
+    .map((p) => ({ provider: p, run: sources[p] }))
+  const { result, provider, notes } = await firstWorking(attempts, (r) => r.length === 0)
+  return { raw: result, provider, notes: [...hookNotes, ...notes] }
 }
 
 /**

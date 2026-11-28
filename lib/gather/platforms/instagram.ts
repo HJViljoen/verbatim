@@ -1,7 +1,8 @@
-import type { PlatformAdapter } from '../types'
-import { APIFY_ACTORS, COMMENT_THRESHOLD, periodSince } from '../../config'
+import type { GatherConfig, PlatformAdapter } from '../types'
+import { APIFY_ACTORS, COMMENT_THRESHOLD, IG_HASHTAG_DEADLINE_MS, IG_HASHTAG_MAX_PAGES, periodSince } from '../../config'
 import { num, str, first, getPath, toDateOnly, cleanHashtag, engagementRate } from '../util'
 import { tagVideo } from '../tagging'
+import { fetchHashtagFeed } from '../providers/tikhub-instagram'
 
 // Instagram adapter. Discovery runs on the flagship apify/instagram-scraper
 // (2026-09-09): hashtag pages by `directUrls`, one `resultsType` per call,
@@ -30,6 +31,13 @@ function contentFormat(v: Record<string, unknown>): string {
   if (type === 'Sidecar') return 'Carousel'
   if (type === 'Image') return 'Post'
   return 'Reel'
+}
+
+/** The search's lower bound, 'YYYY-MM-DD': the run's frozen window when there
+ *  is one, else the period's. ONE function for both sources (the Apify actor's
+ *  `onlyPostsNewerThan`, TikHub's window filter), so they cannot drift. */
+function searchSince(config: GatherConfig): string {
+  return config.window?.start?.slice(0, 10) ?? periodSince(config.report_period)
 }
 
 export const instagram: PlatformAdapter = {
@@ -68,9 +76,28 @@ export const instagram: PlatformAdapter = {
         // so it gets the exact lower bound. A baseline run has none: it keeps
         // the period-derived date, exactly as before (a search bound is the
         // platform's, not the run's).
-        onlyPostsNewerThan: config.window?.start?.slice(0, 10) ?? periodSince(config.report_period),
+        onlyPostsNewerThan: searchSince(config),
       },
     }
+  },
+
+  // The native source (28 Nov 2026): TikHub's hashtag feed, paged and kept to
+  // the same lower bound the actor gets. searchOne routes Instagram's search
+  // through the provider router, so this runs FIRST and `videoSearch` + Apify
+  // only when it fails or finds nothing (lib/gather/providers/router.ts).
+  // Variant `reels` asks for the reels feed and `posts` for the recent feed,
+  // the pair that gave the most distinct recent posts on 28 Nov (the reels
+  // feed carries photos and carousels too); the step ids keep their variants.
+  async fetchVideos(config, terms, limit, opts) {
+    const tag = cleanHashtag(terms[0] ?? '')
+    if (!tag) return []
+    const feed = (opts?.variant ?? 'reels') === 'posts' ? 'recent' : 'reels'
+    const r = await fetchHashtagFeed({
+      tag, feed, since: searchSince(config), limit,
+      maxPages: IG_HASHTAG_MAX_PAGES, deadlineMs: IG_HASHTAG_DEADLINE_MS,
+    })
+    if (r.partial) opts?.note?.(r.partial)
+    return r.items
   },
 
   normaliseVideo(raw, ctx) {
