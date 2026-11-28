@@ -1,12 +1,15 @@
-import type { PlatformAdapter } from '../types'
-import { APIFY_ACTORS, COMMENT_THRESHOLD, periodSince } from '../../config'
+import type { GatherConfig, PlatformAdapter } from '../types'
+import { APIFY_ACTORS, COMMENT_THRESHOLD, IG_HASHTAG_DEADLINE_MS, IG_HASHTAG_MAX_PAGES, periodSince } from '../../config'
 import { num, str, first, getPath, toDateOnly, cleanHashtag, engagementRate } from '../util'
 import { tagVideo } from '../tagging'
+import { fetchHashtagFeed } from '../providers/tikhub-instagram'
 
-// Instagram adapter. Discovery runs on the flagship apify/instagram-scraper
-// (2026-09-09): hashtag pages by `directUrls`, one `resultsType` per call,
-// `resultsLimit` per url, `onlyPostsNewerThan` for the window. IG exposes no
-// share count; reels (only) carry plays; the id is the post shortcode.
+// Instagram adapter. Discovery runs on TikHub's hashtag feed first and the
+// flagship apify/instagram-scraper last (2026-11-28, `fetchVideos` and
+// `videoSearch` below). The actor (2026-09-09): hashtag pages by `directUrls`,
+// one `resultsType` per call, `resultsLimit` per url, `onlyPostsNewerThan` for
+// the window. IG exposes no share count; reels (only) carry plays; the id is
+// the post shortcode.
 //
 // Comments (2026-07-05): moved off apify/instagram-comment-scraper (returned 0
 // for every video) to the flagship apify/instagram-scraper in `comments` mode —
@@ -32,6 +35,13 @@ function contentFormat(v: Record<string, unknown>): string {
   return 'Reel'
 }
 
+/** The search's lower bound, 'YYYY-MM-DD': the run's frozen window when there
+ *  is one, else the period's. ONE function for both sources (the Apify actor's
+ *  `onlyPostsNewerThan`, TikHub's window filter), so they cannot drift. */
+function searchSince(config: GatherConfig): string {
+  return config.window?.start?.slice(0, 10) ?? periodSince(config.report_period)
+}
+
 export const instagram: PlatformAdapter = {
   platform: 'instagram',
 
@@ -46,11 +56,14 @@ export const instagram: PlatformAdapter = {
   // `dateRange` and YouTube's `publishedAfter` already are — a search bound is
   // the platform's, not the run's.
   //
-  // ⚠️ From about 17 Nov 2026 `posts` returns 1 to 9 items a search, not its
-  // 70: Instagram's hashtag page no longer hands out a dense recent feed. Not
-  // the build (0.0.844, the last good run's, does the same, as do 0.0.873 and
-  // 0.99.2963) and not the actor (`instagram-hashtag-scraper` gives 70 spread
-  // over nine years). Tested 24 Nov; `lib/pipeline/search-volume.ts` warns on it.
+  // 28 Nov 2026: this actor search is now the FALLBACK. From about 17 Nov its
+  // `posts` mode returned 1 to 9 items a search, not 70, on every build
+  // (Instagram's hashtag page stopped handing out a dense recent feed; tested
+  // 24 Nov), so discovery collapsed. TikHub's hashtag feed, paged and filtered
+  // to the window, recovered about seven times more recent posts in a live
+  // test, so it runs first (`fetchVideos`) and this runs only when TikHub is
+  // not set up, over budget, failing or empty. The variants, and so the step
+  // ids, are unchanged.
   searchVariants: ['reels', 'posts'] as const,
 
   videoSearch(config, terms, limit, opts) {
@@ -68,9 +81,28 @@ export const instagram: PlatformAdapter = {
         // so it gets the exact lower bound. A baseline run has none: it keeps
         // the period-derived date, exactly as before (a search bound is the
         // platform's, not the run's).
-        onlyPostsNewerThan: config.window?.start?.slice(0, 10) ?? periodSince(config.report_period),
+        onlyPostsNewerThan: searchSince(config),
       },
     }
+  },
+
+  // The native source (28 Nov 2026): TikHub's hashtag feed, paged and kept to
+  // the same lower bound the actor gets. searchOne routes Instagram's search
+  // through the provider router, so this runs FIRST and `videoSearch` + Apify
+  // only when it fails or finds nothing (lib/gather/providers/router.ts).
+  // Variant `reels` asks for the reels feed and `posts` for the recent feed,
+  // the pair that gave the most distinct recent posts on 28 Nov (the reels
+  // feed carries photos and carousels too); the step ids keep their variants.
+  async fetchVideos(config, terms, limit, opts) {
+    const tag = cleanHashtag(terms[0] ?? '')
+    if (!tag) return []
+    const feed = (opts?.variant ?? 'reels') === 'posts' ? 'recent' : 'reels'
+    const r = await fetchHashtagFeed({
+      tag, feed, since: searchSince(config), limit,
+      maxPages: IG_HASHTAG_MAX_PAGES, deadlineMs: IG_HASHTAG_DEADLINE_MS,
+    })
+    if (r.partial) opts?.note?.(r.partial)
+    return r.items
   },
 
   normaliseVideo(raw, ctx) {
@@ -196,10 +228,10 @@ export const instagram: PlatformAdapter = {
     }
   },
 
-  // null = scrape comments for every IG video found (don't gate on comments_count).
-  // Proven working on the 2026-07-09 Sealand run (5,840 comments), so the
-  // no-gate re-validation stance is retired. Same bar as TikTok: on that run a
-  // ≥5 gate skips ~35% of IG comment scrapes (the cost driver — one paid actor
-  // run per video) while losing ~2.5% of comments.
+  // A video needs COMMENT_THRESHOLD (5) comments for a comment scrape, the
+  // same bar as TikTok. It was null (scrape every IG video) until comments were
+  // proven working on the 2026-07-09 Sealand run (5,840 comments): on that run
+  // a ≥5 gate skips ~35% of IG comment scrapes (the cost driver — one paid
+  // actor run per video) while losing ~2.5% of comments.
   commentThreshold: COMMENT_THRESHOLD,
 }

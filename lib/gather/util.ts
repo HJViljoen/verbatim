@@ -62,8 +62,20 @@ export const engagementRate = (
   comments: number,
 ): number | null => (views && views > 0 ? round2(((likes + shares + comments) / views) * 100) : null)
 
-/** Instagram hashtags must be alphanumeric — strip '#', spaces, punctuation. */
-export const cleanHashtag = (s: string): string => s.replace(/[^a-z0-9]/gi, '')
+/**
+ * A keyword as an Instagram hashtag: lowercase letters, digits and `_`, with
+ * '#', spaces, punctuation and emoji dropped.
+ *
+ * Accents on Latin letters are FOLDED (28 Nov 2026), not deleted: the old
+ * ASCII-only filter turned 'Össur' into 'ssur', a tag nobody uses, and turned
+ * a keyword in any non-Latin script into nothing at all. Only marks on a Latin
+ * letter are folded, because in other scripts the mark is part of the letter
+ * (Japanese が, Hindi हि, Russian й): those keep their marks and are
+ * recomposed (NFC), so Korean comes back as syllables rather than loose jamo.
+ */
+export const cleanHashtag = (s: string): string =>
+  (s.toLowerCase().normalize('NFD').replace(/(\p{Script=Latin})\p{M}+/gu, '$1')
+    .match(/\p{L}\p{M}*|[\p{Nd}_]/gu) ?? []).join('').normalize('NFC')
 
 /** Stable dedupe by a string key, keeping first occurrence. */
 export const dedupeBy = <T>(arr: T[], key: (x: T) => string): T[] => {

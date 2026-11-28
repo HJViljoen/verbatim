@@ -227,6 +227,20 @@ export const WARNING_STEPS = {
         : 'This update read far fewer videos than usual on one platform, so its figures there are thin and do not compare with the weeks before.'
     },
   },
+  // Not a step's failure either (28 Nov, lib/gather/providers/): a routed
+  // search (Instagram: TikHub first, Apify last) passed a source over or cut
+  // a feed short, and said why in its notes. Noted after the platform's
+  // searches, one warning a distinct reason with how many searches it covers.
+  // HOUSEKEEPING, so no alert email: every search still ran, at worst on the
+  // Apify path it had before, and `search-volume` alerts on its own when what
+  // the searches found collapses.
+  'search-provider': {
+    kind: 'housekeeping', name: 'a search’s scraping source', said: 'was passed over or cut short',
+    stale: (at) => {
+      const p = at.platform ? `${platformLabel(at.platform)} ` : ''
+      return `Those ${p}searches still ran. One that fell back used the older Apify scraper, which has found far fewer recent posts since mid-November, and one cut short kept what it had found, so this update may hold fewer ${p}posts than it could.`
+    },
+  },
 } as const satisfies Record<string, WarningRule>
 
 export type WarningStep = keyof typeof WARNING_STEPS

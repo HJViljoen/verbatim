@@ -106,8 +106,8 @@ const POSTS = [
 
 describe('instagram.videoSearch — dated hashtag search, one variant per call', () => {
   it('asks the flagship actor for a tag URL with a date bound', () => {
-    // cleanHashtag strips '#', spaces and punctuation; case is the actor's
-    // problem (Instagram tag URLs are case-insensitive).
+    // cleanHashtag strips '#', spaces and punctuation and lowercases
+    // (Instagram tag URLs are case-insensitive).
     const { input } = instagram.videoSearch!(config, ['#upcycled bag'], 40, { variant: 'reels' })
     expect(input.directUrls).toEqual(['https://www.instagram.com/explore/tags/upcycledbag/'])
     expect(input.resultsType).toBe('reels')
