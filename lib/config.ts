@@ -1188,6 +1188,33 @@ export const GATHER_MAX_SEARCHES_PER_RUN = 120
 export const GATHER_MAX_VIDEOS_PER_SEARCH = 100
 export const GATHER_MAX_COMMENT_DEPTH = 500
 
+// --- Direct scraping providers (2026-11-28, lib/gather/providers/) -----------
+// Instagram's hashtag search runs on TikHub's hashtag feed first and Apify
+// second. The feed is not date-ordered and not date-limited (pages reach back
+// years), so it is paged and filtered to the run's window; these bound how far.
+
+/** Pages of one hashtag feed (30 items on the first, 20 after). The 28 Nov live
+ *  test paged 8 deep to recover about seven times Apify's recent posts. At
+ *  $0.002 a page that is at most $0.016 a search. */
+export const IG_HASHTAG_MAX_PAGES = Number(process.env.IG_HASHTAG_MAX_PAGES ?? 8)
+
+/** How long one hashtag feed may page for. Calls took p50 8.9 s and p95 17 s
+ *  (reels slower: p95 23 s), so 8 pages fit, and the search step stays inside
+ *  the route's 300 s with time left for the Apify fallback when the first page
+ *  fails. A feed cut short keeps what it has and says so. */
+export const IG_HASHTAG_DEADLINE_MS = Number(process.env.IG_HASHTAG_DEADLINE_MS ?? 200_000)
+
+/** A SOFT budget on one run's direct-provider spend (provider_calls). At or
+ *  above it, a search skips the provider, says so, and uses Apify. The hard
+ *  caps are the page cap above and treg's capped, prepaid token. */
+export const RUN_SCRAPE_BUDGET_USD = Number(process.env.RUN_SCRAPE_BUDGET_USD ?? 10)
+
+/** What one search step may take in all, under the route's 300 s
+ *  (app/api/inngest/route.ts maxDuration), with room left for loading the
+ *  config and normalising. An Apify fallback that starts late gets what is left
+ *  of it as its timeout. */
+export const SEARCH_STEP_BUDGET_MS = 280_000
+
 /** Pass A failure tolerance (Tier 0, 2026-08-18). A run whose live Pass A
  *  calls failed above this share of attempts — or that saw ANY 429 (rate
  *  limit / exhausted credits) — closes 'partial' and alerts, instead of
