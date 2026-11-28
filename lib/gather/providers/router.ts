@@ -82,11 +82,13 @@ export function providerOrder(key: RouteKey): string[] {
  * A platform's search notes as run warnings: each distinct note once, with how
  * many of the platform's searches it covers, so sixty searches that all fell
  * back for one reason make one warning, not sixty. Notes never name the
- * keyword for exactly that reason. In first-seen order. PURE.
+ * keyword for exactly that reason. The count leads, because a warning's
+ * cause is held to 200 characters and a long reason loses its tail. In
+ * first-seen order. PURE.
  */
 export function summariseSearchNotes(searches: readonly { notes?: readonly string[] }[]): string[] {
   const counts = new Map<string, number>()
   for (const s of searches) for (const n of new Set(s.notes ?? [])) counts.set(n, (counts.get(n) ?? 0) + 1)
   const total = searches.length
-  return [...counts].map(([note, n]) => `${note} (${n} of ${total} searches)`)
+  return [...counts].map(([note, n]) => `${n} of ${total} ${total === 1 ? 'search' : 'searches'}: ${note}`)
 }

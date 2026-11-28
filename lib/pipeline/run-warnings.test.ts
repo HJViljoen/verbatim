@@ -233,7 +233,7 @@ describe('each classified step warns from its own .catch, and none of them is no
     // None is a step's .catch: the evidence ids warn off the freeze's return,
     // the step budget's two off the run's own count (step-budget.test.ts),
     // the OCR clock off the OCR tally (ocr-limits.test.ts).
-    expect(STEPS.map(([, s]) => s).sort()).toEqual(Object.keys(WARNING_STEPS).filter((s) => s !== 'freeze-months:evidence-ids' && s !== 'step-budget' && s !== 'pass-a-deferred' && s !== 'ocr-out-of-time' && s !== 'search-volume').sort())
+    expect(STEPS.map(([, s]) => s).sort()).toEqual(Object.keys(WARNING_STEPS).filter((s) => s !== 'freeze-months:evidence-ids' && s !== 'step-budget' && s !== 'pass-a-deferred' && s !== 'ocr-out-of-time' && s !== 'search-volume' && s !== 'search-provider').sort())
     for (const [id, label] of STEPS) {
       const chain = chainOf(id)
       expect(chain, id).toContain(`noteWarning('${label}', e`)

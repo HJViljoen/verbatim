@@ -49,6 +49,7 @@ import { loadSearchHistory, searchFound, searchVolumeCause, searchVolumeCollapse
 import { CLASSIFY_PARALLEL, COMMENT_BATCH, COMMENT_PARALLEL, countSteps, fanOut, PASS_A_BATCH, PASS_A_PARALLEL, passABatchRoom, SEARCH_PARALLEL, stepBudgetCause, THEMES_PARALLEL } from '@/lib/pipeline/step-budget'
 import { writeRunCosts, runSpendSoFar } from '@/lib/pipeline/run-costs'
 import { withApifyRunContext, settleApifyRuns } from '@/lib/gather/apify-runs'
+import { summariseSearchNotes } from '@/lib/gather/providers/router'
 import { decideOpenRun, runIdForEvent, RUN_STALE_AFTER_HOURS, PG_UNIQUE_VIOLATION, type RunningRow } from '@/lib/pipeline/run-guard'
 import { handleRunFailure } from '@/lib/pipeline/run-failure'
 import { persistRunNews } from '@/lib/news/persist'
@@ -699,6 +700,12 @@ export const runPipeline = inngest.createFunction(
           )
           searches.push(...wave)
         }
+        // A routed search's notes (28 Nov, lib/gather/providers/: Instagram
+        // on TikHub first, Apify last): a source passed over and why, a feed
+        // cut short. One housekeeping warning a distinct reason, counted over
+        // the platform's searches; they ride in each memoised search, so a
+        // replay notes them again. No step, and never an error.
+        for (const note of summariseSearchNotes(searches)) noteWarning('search-provider', note, { week: runWindow?.start ?? null, platform })
         // The search volume's history rides in the gate's own step (24 Nov,
         // lib/pipeline/search-volume.ts): one small read, never a throw, no
         // new step id. A memoised gate from before it has none: no check.

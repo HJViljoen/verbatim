@@ -411,6 +411,20 @@ This version has breaking changes — APIs, conventions, and file structure may 
   every rule that judges a run are unchanged. A collapse that lasts goes
   quiet after one or two runs (collapsed runs join the baseline), so silence
   after the warning is not a recovery.
+  **Instagram's search runs on TikHub first and Apify last** (28 Nov,
+  `lib/gather/providers/`, Build 1 of
+  `~/.claude/plans/verbatim-scrape-providers-plan.md`): TikHub's hashtag feed,
+  paged up to `IG_HASHTAG_MAX_PAGES` (8) and filtered to the window, through
+  `TIKHUB_API_KEY` directly or `TREG_API_KEY` through treg; neither set, over
+  `RUN_SCRAPE_BUDGET_USD`, down, or empty, and the search makes the Apify call
+  it always made (`routedSearch` in `searchOne`; YouTube, TikTok and Reddit
+  untouched). Rollback is `GATHER_INSTAGRAM_SEARCH_PROVIDERS=apify`. A source
+  passed over or a feed cut short rides back in `SearchResult.notes`, and the
+  pipeline notes the HOUSEKEEPING warning `search-provider` once a distinct
+  reason with its count of searches, after the search waves and before
+  `gate:<platform>`: no alert email, no step (82 = 82). Spend is one
+  `provider_calls` row a feed (migration `20261128090000_provider_calls.sql`,
+  by hand; before it the write warns and the budget reads 0).
 - **A run has 1,000 steps, and the per-video fan-outs are one step a WAVE**
   (9 Nov, `lib/pipeline/step-budget.ts`). Inngest ends a function run at its
   1,000th step and nothing after it runs: Sealand's 8 Nov update `c5690bb0`

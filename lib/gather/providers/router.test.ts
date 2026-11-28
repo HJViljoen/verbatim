@@ -1,6 +1,9 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { firstWorking, providerOrder, providerOrderEnv, summariseSearchNotes, type Attempt } from './router'
 import { ProviderError } from './transport'
+import { alertDue, createWarningLog, parseRunWarnings, runWarning, warningSentence, WARNING_STEPS } from '../../pipeline/run-warnings'
 
 // The provider router (28 Nov 2026): order, failover, and the notes a run
 // warning is made of.
@@ -116,12 +119,53 @@ describe('summariseSearchNotes — one warning a reason, not one a search', () =
     const a = 'TikHub did not work (TikHub is not set up), so the search used Apify'
     const b = 'TikHub found nothing, so the search also tried Apify'
     expect(summariseSearchNotes([{ notes: [a] }, { notes: [a, b] }, {}, { notes: [a, a] }])).toEqual([
-      `${a} (3 of 4 searches)`,
-      `${b} (1 of 4 searches)`,
+      `3 of 4 searches: ${a}`,
+      `1 of 4 searches: ${b}`,
     ])
+    expect(summariseSearchNotes([{ notes: [b] }])).toEqual([`1 of 1 search: ${b}`])
   })
 
   it('is empty when no search left a note', () => {
     expect(summariseSearchNotes([{}, { notes: [] }])).toEqual([])
+  })
+})
+
+describe('the run warning a search note becomes', () => {
+  const note = summariseSearchNotes([{ notes: ['TikHub was skipped (TikHub is not set up), so the search used Apify'] }, {}])[0]
+
+  it('is housekeeping, so it never sends the run’s alert email on its own', () => {
+    expect(WARNING_STEPS['search-provider'].kind).toBe('housekeeping')
+    const log = createWarningLog()
+    log.note('search-provider', note, { week: '2026-11-22T04:00:00Z', platform: 'instagram' })
+    expect(alertDue(0, log)).toBe(false)
+    expect(log.recorded).toEqual([{
+      step: 'search-provider',
+      kind: 'housekeeping',
+      week: '2026-11-22',
+      platform: 'instagram',
+      cause: '1 of 2 searches: TikHub was skipped (TikHub is not set up), so the search used Apify',
+      stale: 'Those Instagram searches still ran. One that fell back used the older Apify scraper, which has found far fewer recent posts since mid-November, and one cut short kept what it had found, so this update may hold fewer Instagram posts than it could.',
+    }])
+  })
+
+  it('reads as a plain sentence on the ops page', () => {
+    const w = runWarning('search-provider', note, { week: '2026-11-22T04:00:00Z', platform: 'instagram' })
+    expect(parseRunWarnings([w])).toEqual([w])
+    expect(warningSentence(w)).toBe(
+      'Housekeeping: a search’s scraping source for the week of 22 Nov 2026 was passed over or cut short (1 of 2 searches: TikHub was skipped (TikHub is not set up), so the search used Apify). Those Instagram searches still ran. One that fell back used the older Apify scraper, which has found far fewer recent posts since mid-November, and one cut short kept what it had found, so this update may hold fewer Instagram posts than it could.',
+    )
+  })
+})
+
+describe('the pipeline', () => {
+  const PIPELINE = readFileSync(join(__dirname, '..', '..', '..', 'inngest', 'functions', 'pipeline.ts'), 'utf8')
+
+  it('notes the searches’ notes after the search waves and before the gate, as warnings, in no step of their own', () => {
+    const from = PIPELINE.indexOf('searches.push(...wave)')
+    const lines = PIPELINE.slice(from, PIPELINE.indexOf('const gate = await step.run(`gate:${platform}`', from))
+    expect(lines).toContain("for (const note of summariseSearchNotes(searches)) noteWarning('search-provider', note, { week: runWindow?.start ?? null, platform })")
+    expect(PIPELINE.match(/noteWarning\('search-provider'/g)).toHaveLength(1)
+    expect(PIPELINE).not.toContain("noteError('search-provider'")
+    expect(PIPELINE).not.toMatch(/\.run\(['`]search-provider/)
   })
 })
