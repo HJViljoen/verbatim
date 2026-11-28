@@ -30,7 +30,7 @@ vi.mock('../../supabase-admin', async (orig) => ({
   },
 }))
 
-import { recordProviderCall, providerSpendForRun, type ProviderCallRow } from './ledger'
+import { recordProviderCall, providerSpendForRun, tapProviderCalls, type ProviderCallRow } from './ledger'
 import { withApifyRunContext } from '../apify-runs'
 
 const ROW: ProviderCallRow = {
@@ -56,6 +56,17 @@ describe('recordProviderCall', () => {
   it('writes one row with the run, the step and the cost to the micro-dollar', async () => {
     await withApifyRunContext({ clientId: 'C', runId: 'R', step: 'search:instagram:bag:reels' }, () => recordProviderCall(ROW))
     expect(h.inserted).toEqual([{ ...ROW, client_id: 'C', run_id: 'R', step: 'search:instagram:bag:reels', cost_usd: 0.006 }])
+  })
+
+  it('hands every row to a tap, context or not, and still writes nothing without one', async () => {
+    const seen: ProviderCallRow[] = []
+    tapProviderCalls((r) => seen.push(r))
+    await recordProviderCall(ROW)
+    tapProviderCalls(() => { throw new Error('tap broke') })
+    await expect(recordProviderCall(ROW)).resolves.toBeUndefined()
+    tapProviderCalls(null)
+    expect(seen).toEqual([ROW])
+    expect(h.inserted).toHaveLength(0)
   })
 
   it('never throws: a refused write and a broken client are logged', async () => {

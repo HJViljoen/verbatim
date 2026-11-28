@@ -424,7 +424,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
   reason with its count of searches, after the search waves and before
   `gate:<platform>`: no alert email, no step (82 = 82). Spend is one
   `provider_calls` row a feed (migration `20261128090000_provider_calls.sql`,
-  by hand; before it the write warns and the budget reads 0).
+  by hand; before it the write warns and the budget reads 0). Dry run, the
+  Instagram search alone, nothing written (it reads the config and SPENDS):
+  `node --env-file=.env.local --import tsx scripts/ig-search-dry-run.ts
+  --client <uuid> --since <YYYY-MM-DD>`.
 - **A run has 1,000 steps, and the per-video fan-outs are one step a WAVE**
   (9 Nov, `lib/pipeline/step-budget.ts`). Inngest ends a function run at its
   1,000th step and nothing after it runs: Sealand's 8 Nov update `c5690bb0`

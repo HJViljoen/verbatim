@@ -27,8 +27,23 @@ export type ProviderCallRow = {
 /** How long the budget read may hold a search step up. */
 const SPEND_READ_MS = 10_000
 
+type Tap = (row: ProviderCallRow) => void
+let tap: Tap | null = null
+
+/** Hand every finished job's row to `fn` as well, in a run context or not:
+ *  how the dry run (scripts/ig-search-dry-run.ts) sees what each feed paged
+ *  and cost while writing nothing. null removes it. */
+export function tapProviderCalls(fn: Tap | null): void {
+  tap = fn
+}
+
 /** Write one row for a finished provider job. Never throws. */
 export async function recordProviderCall(row: ProviderCallRow): Promise<void> {
+  try {
+    tap?.(row)
+  } catch (e) {
+    console.warn(`[provider-calls] tap threw: ${e instanceof Error ? e.message : String(e)}`)
+  }
   const ctx = getApifyRunContext()
   if (!ctx || !ctx.clientId) return
   try {
